@@ -4,10 +4,13 @@ import {
   LayoutDashboard, ShoppingCart, PackageOpen, ReceiptText, FileText, ClipboardPlus, Users, Truck, Pill, FlaskConical,
   Boxes, PackagePlus, History, CalendarClock, PencilRuler, ScrollText, Wallet, Tags, Landmark, ArrowLeftRight, HandCoins,
   ArrowDownLeft, ArrowUpRight, BookOpen, BarChart3, Settings as SettingsIcon, Search, Sun, Moon, Menu, LogOut, ChevronDown,
-  CornerDownLeft, User, Plus, BellRing, ShoppingBag, Tag, FileUp, Building2, Send, ShieldCheck,
+  CornerDownLeft, User, Plus, BellRing, ShoppingBag, Tag, FileUp, Building2, Send, ShieldCheck, Clock, BookMarked, MessagesSquare, UserCog,
 } from 'lucide-react';
 import { useStore, daysUntil } from './store.jsx';
 import Auth from './pages/Auth.jsx';
+import { Logo } from './logo.jsx';
+import { unreadCount } from './pages/Chat.jsx';
+const OwnerConsole = lazy(() => import('./pages/OwnerConsole.jsx'));
 
 // Pages load on demand so the app opens fast, even on low-end PCs and phones
 const page = (loader, name = 'default') => lazy(() => loader().then((m) => ({ default: m[name] })));
@@ -34,54 +37,62 @@ const P = {
   Labels: page(() => import('./pages/Labels.jsx')),
   Import: page(() => import('./pages/Import.jsx')),
   Reorder: page(() => import('./pages/Reorder.jsx')),
+  Shifts: page(() => import('./pages/Shifts.jsx')),
+  Chat: page(() => import('./pages/Chat.jsx')),
+  DrugInfo: page(() => import('./pages/DrugInfo.jsx')),
+  Users: page(() => import('./pages/Users.jsx')),
 };
 
-// [path, label, Icon, shortcut, badge, element]
+// [path, label, Icon, shortcut, badge, element, permission, feature]
 const NAV = [
   { items: [['/', 'Dashboard', LayoutDashboard, null, null, <P.Dashboard />]] },
   { group: 'Sales', items: [
-    ['/pos', 'POS – Retail', ShoppingCart, 'F2', null, <P.POS mode="retail" />],
-    ['/pos/wholesale', 'POS – Wholesale', PackageOpen, 'F3', null, <P.POS mode="wholesale" key="w" />],
-    ['/sales', 'Sales History', ReceiptText, 'F6', null, <P.Sales />],
-    ['/proformas', 'Proformas', FileText, null, null, <P.Proformas />],
-    ['/prescriptions', 'Prescriptions', ClipboardPlus, null, null, <P.Prescriptions />],
+    ['/pos', 'POS – Retail', ShoppingCart, 'F2', null, <P.POS mode="retail" />, 'pos.sell'],
+    ['/pos/wholesale', 'POS – Wholesale', PackageOpen, 'F3', null, <P.POS mode="wholesale" key="w" />, 'pos.wholesale', 'wholesale'],
+    ['/sales', 'Sales History', ReceiptText, 'F6', null, <P.Sales />, 'sales.view'],
+    ['/shifts', 'Shifts & Cash-up', Clock, null, null, <P.Shifts />, 'shifts', 'shifts'],
+    ['/proformas', 'Proformas', FileText, null, null, <P.Proformas />, 'proformas', 'proformas'],
+    ['/prescriptions', 'Prescriptions & Refills', ClipboardPlus, null, null, <P.Prescriptions />, 'prescriptions', 'prescriptions'],
+    ['/drug-info', 'Drug Information', BookMarked, null, null, <P.DrugInfo />, null, 'drugInfo'],
   ] },
   { group: 'People', items: [
-    ['/customers', 'Customers', Users, null, null, <P.Customers />],
-    ['/suppliers', 'Suppliers', Truck, null, null, <P.Suppliers />],
-    ['/reminders', 'Reminders', BellRing, null, null, <P.Reminders />],
+    ['/customers', 'Customers', Users, null, null, <P.Customers />, 'customers'],
+    ['/suppliers', 'Suppliers', Truck, null, null, <P.Suppliers />, 'suppliers'],
+    ['/chat', 'Chat & Messages', MessagesSquare, null, 'chat', <P.Chat />, 'chat', 'chat'],
+    ['/reminders', 'Reminders', BellRing, null, null, <P.Reminders />, 'reminders', 'reminders'],
   ] },
   { group: 'Medicine Inventory', items: [
-    ['/medicines', 'Medicine List', Pill, null, null, <P.MedicineList />],
-    ['/formulations', 'Formulations', FlaskConical, null, null, <P.Formulations />],
-    ['/inventory', 'Inventory', Boxes, 'F7', 'low', <P.StockLevels />],
-    ['/add-stock', 'Add Stock', PackagePlus, 'F4', null, <P.AddStock />],
-    ['/purchases', 'Purchase History', History, null, null, <P.Purchases />],
-    ['/expiry', 'Expiring / Expired', CalendarClock, null, 'expiry', <P.Expiry />],
-    ['/reorder', 'Reorder & Dead Stock', ShoppingBag, null, null, <P.Reorder />],
-    ['/quick-edit', 'Quick Edit', PencilRuler, null, null, <P.QuickEdit />],
-    ['/stock-card', 'Stock Card', ScrollText, null, null, <P.StockCard />],
-    ['/labels', 'Barcode Labels', Tag, null, null, <P.Labels />],
-    ['/import', 'Import Medicines', FileUp, null, null, <P.Import />],
+    ['/medicines', 'Medicine List', Pill, null, null, <P.MedicineList />, 'inventory.view'],
+    ['/formulations', 'Formulations', FlaskConical, null, null, <P.Formulations />, 'medicines.manage'],
+    ['/inventory', 'Inventory', Boxes, 'F7', 'low', <P.StockLevels />, 'inventory.view'],
+    ['/add-stock', 'Add Stock', PackagePlus, 'F4', null, <P.AddStock />, 'stock.receive'],
+    ['/purchases', 'Purchase History', History, null, null, <P.Purchases />, 'stock.receive'],
+    ['/expiry', 'Expiring / Expired', CalendarClock, null, 'expiry', <P.Expiry />, 'inventory.view'],
+    ['/reorder', 'Reorder & Dead Stock', ShoppingBag, null, null, <P.Reorder />, 'stock.receive', 'reorder'],
+    ['/quick-edit', 'Quick Edit', PencilRuler, null, null, <P.QuickEdit />, 'medicines.manage'],
+    ['/stock-card', 'Stock Card', ScrollText, null, null, <P.StockCard />, 'inventory.view'],
+    ['/labels', 'Barcode Labels', Tag, null, null, <P.Labels />, 'medicines.manage', 'labels'],
+    ['/import', 'Import Medicines', FileUp, null, null, <P.Import />, 'medicines.manage', 'import'],
   ] },
   { group: 'Branches', items: [
-    ['/branches', 'All Branches', Building2, null, null, <P.Branches />],
-    ['/transfers', 'Stock Transfers', Send, null, 'transfers', <P.Transfers />],
+    ['/branches', 'All Branches', Building2, null, null, <P.Branches />, 'branches.view', 'branches'],
+    ['/transfers', 'Stock Transfers', Send, null, 'transfers', <P.Transfers />, 'transfers', 'branches'],
   ] },
-  { group: 'Finance', roles: ['admin', 'pharmacist'], items: [
-    ['/expenses', 'Expenses', Wallet, null, null, <P.Expenses />],
-    ['/expense-categories', 'Expense Categories', Tags, null, null, <P.ExpenseCategories />],
-    ['/banks', 'Banks', Landmark, null, null, <P.Banks />],
-    ['/bank-tx', 'Deposits & Withdrawals', ArrowLeftRight, null, null, <P.BankTx />],
-    ['/loans', 'Loans', HandCoins, null, null, <P.Loans />],
-    ['/debtors', 'Debtors', ArrowDownLeft, null, null, <P.Debtors />],
-    ['/creditors', 'Creditors', ArrowUpRight, null, null, <P.Creditors />],
-    ['/cash-book', 'Cash Book', BookOpen, null, null, <P.CashBook />],
+  { group: 'Finance', items: [
+    ['/expenses', 'Expenses', Wallet, null, null, <P.Expenses />, 'finance', 'finance'],
+    ['/expense-categories', 'Expense Categories', Tags, null, null, <P.ExpenseCategories />, 'finance', 'finance'],
+    ['/banks', 'Banks', Landmark, null, null, <P.Banks />, 'finance', 'finance'],
+    ['/bank-tx', 'Deposits & Withdrawals', ArrowLeftRight, null, null, <P.BankTx />, 'finance', 'finance'],
+    ['/loans', 'Loans', HandCoins, null, null, <P.Loans />, 'finance', 'finance'],
+    ['/debtors', 'Debtors', ArrowDownLeft, null, null, <P.Debtors />, 'finance', 'finance'],
+    ['/creditors', 'Creditors', ArrowUpRight, null, null, <P.Creditors />, 'finance', 'finance'],
+    ['/cash-book', 'Cash Book', BookOpen, null, null, <P.CashBook />, 'finance', 'finance'],
   ] },
-  { group: 'Insights', roles: ['admin', 'pharmacist'], items: [['/reports', 'Reports', BarChart3, null, null, <P.Reports />]] },
-  { group: 'System', roles: ['admin'], items: [
-    ['/settings', 'Settings & Sync', SettingsIcon, null, null, <P.Settings />],
-    ['/audit', 'Audit Log', ShieldCheck, null, null, <P.Audit />],
+  { group: 'Insights', items: [['/reports', 'Reports', BarChart3, null, null, <P.Reports />, 'reports', 'reports']] },
+  { group: 'System', items: [
+    ['/users', 'Users & Roles', UserCog, null, null, <P.Users />, 'users.manage'],
+    ['/settings', 'Settings & Sync', SettingsIcon, null, null, <P.Settings />, 'settings.manage'],
+    ['/audit', 'Audit Log', ShieldCheck, null, null, <P.Audit />, 'audit'],
   ] },
 ];
 
@@ -182,13 +193,16 @@ function Shell() {
   const [palette, setPalette] = useState(false);
   const [collapsed, setCollapsed] = useState(() => { try { return JSON.parse(localStorage.getItem('pharmapos-nav')) || {}; } catch { return {}; } });
 
-  const groups = NAV.filter((g) => !g.roles || g.roles.includes(user.role));
+  const { can, features } = useStore();
+  // Show only what this person's role may use and what is switched on for this pharmacy
+  const groups = NAV.map((g) => ({ ...g, items: g.items.filter(([, , , , , , perm, feat]) => (!perm || can(perm)) && (!feat || features[feat] !== false)) })).filter((g) => g.items.length);
   const pages = groups.flatMap((g) => g.items.map(([to, label, Icon, key]) => ({ to, label, Icon, key })));
   const counts = useMemo(() => ({
     expiry: products.filter((p) => p.expiry && p.stock > 0 && daysUntil(p.expiry) <= (db.settings.expiryWarnDays || 90)).length,
     low: products.filter((p) => p.stock <= (p.reorder || 0) && p.reorder > 0).length,
     transfers: db.transfers.filter((t) => t.toId === branchId && t.status === 'In transit').length,
-  }), [products, db.settings.expiryWarnDays, db.transfers, branchId]);
+    chat: unreadCount(db, user),
+  }), [products, db.settings.expiryWarnDays, db.transfers, db.messages, branchId, user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => setDrawer(false), [location.pathname]);
   useEffect(() => {
@@ -213,7 +227,7 @@ function Shell() {
     <div className={'shell' + (drawer ? ' drawer-open' : '')}>
       <div className="drawer-bg" onClick={() => setDrawer(false)} />
       <aside className="sidebar">
-        <div className="brand"><span className="logo"><Plus size={20} strokeWidth={3} /></span> RxPOS</div>
+        <div className="brand"><Logo size={34} /> <span className="wordmark">Rx<span className="brand-accent">POS</span></span></div>
         <div className="store-name">{db.settings.name}</div>
         <nav>
           {groups.map((g, i) => (
@@ -265,8 +279,27 @@ function Shell() {
   );
 }
 
-export default function App() {
+/** Fade out the splash screen (index.html) once RxPOS is ready, after its short intro animation. */
+function useHideSplash() {
+  useEffect(() => {
+    const s = document.getElementById('splash');
+    if (!s) return;
+    const wait = Math.max(0, 900 - performance.now());
+    const t = setTimeout(() => { s.classList.add('done'); setTimeout(() => s.remove(), 400); }, wait);
+    return () => clearTimeout(t);
+  }, []);
+}
+
+function Gate() {
   const { user } = useStore();
+  const location = useLocation();
+  // The owner console works without signing in to a pharmacy (it has its own owner key)
+  if (location.pathname === '/owner') return <Suspense fallback={<div className="loading"><div className="spinner" /></div>}><OwnerConsole /></Suspense>;
+  return user ? <Shell /> : <Auth />;
+}
+
+export default function App() {
   useTheme();
-  return <HashRouter>{user ? <Shell /> : <Auth />}</HashRouter>;
+  useHideSplash();
+  return <HashRouter><Gate /></HashRouter>;
 }

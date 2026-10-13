@@ -13,7 +13,7 @@ try { const t = localStorage.getItem('pharmapos-theme'); if (t) document.documen
 class ErrorBoundary extends React.Component {
   state = { error: null };
   static getDerivedStateFromError(error) { return { error }; }
-  componentDidCatch(error, info) { console.error(error, info); }
+  componentDidCatch(error, info) { console.error(error, info); document.getElementById('splash')?.remove(); /* never hide the recovery screen */ }
   async exportData() {
     // Last-resort rescue: download whatever is stored on this device
     const data = {};

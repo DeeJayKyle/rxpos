@@ -70,16 +70,18 @@ export default function Import() {
     try {
       const { default: cat } = await import('../data/catalog.json');
       const have = new Set(db.products.map((p) => p.name.trim().toLowerCase()));
-      const fresh = cat.rows.filter((r) => !have.has(r[0].toLowerCase()));
+      // Catalog items have fixed ids (cat-1, cat-2…) like the cloud copy, so the catalog can never be added twice
+      const ids = new Set(db.products.map((p) => p.id));
+      const fresh = cat.rows.map((r, i) => [...r, 'cat-' + (i + 1)]).filter((r) => !ids.has(r[8]) && !have.has(r[0].toLowerCase()));
       if (!(await ask({ title: `Add ${fresh.length.toLocaleString()} medicines?`, message: `${(cat.rows.length - fresh.length).toLocaleString()} are already in your list and will be skipped. Prices come from a typical Ugandan price list. Review them in Quick Edit. No stock is added.`, confirmText: 'Add medicines' }))) return;
       const forms = new Set(db.formulations.map((f) => f.name));
       const used = new Set(db.products.map((p) => p.barcode).filter(Boolean));
       update((d) => {
         for (const f of cat.forms) if (!forms.has(f)) put(d, 'formulations', { id: 'form-' + f.toLowerCase().replace(/\W+/g, '-'), name: f });
-        for (const [name, generic, form, price, wholesale, cost, barcode, unit] of fresh) {
+        for (const [name, generic, form, price, wholesale, cost, barcode, unit, id] of fresh) {
           const code = barcode && !used.has(barcode) ? barcode : newInternalBarcode(used);
           used.add(code);
-          d.products.push({ id: uid(), name, generic, form, price, wholesale: wholesale || price, cost: cost || Math.round((wholesale || price) * 0.8), barcode: code, unit, reorder: 0, updatedAt: new Date().toISOString(), fromCatalog: true });
+          d.products.push({ id, name, generic, form, price, wholesale: wholesale || price, cost: cost || Math.round((wholesale || price) * 0.8), barcode: code, unit, reorder: 0, updatedAt: new Date().toISOString(), fromCatalog: true });
         }
         audit(d, user, 'Catalog imported', `${fresh.length} medicines added from the standard catalog`, branchId);
       });

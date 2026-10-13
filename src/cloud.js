@@ -30,7 +30,11 @@ async function call(cfg, path, { method = 'GET', body, timeout = 20000 } = {}) {
 }
 
 /** Sign in to the cloud with a staff account → { token, user } */
-export const cloudLogin = (url, email, password) => call({ url: cleanUrl(url) }, '/api/login', { method: 'POST', body: { email, password } });
+export const cloudLogin = (url, email, password, tenant) => call({ url: cleanUrl(url) }, '/api/login', { method: 'POST', body: { email, password, tenant: tenant || undefined } });
+export const forgotPassword = (url, body) => call({ url: cleanUrl(url) }, '/api/password/forgot', { method: 'POST', body });
+export const resetPassword = (url, body) => call({ url: cleanUrl(url) }, '/api/password/reset', { method: 'POST', body });
+// Owner console (RxPOS vendor): the owner key is sent as the bearer token
+export const ownerApi = (url, ownerKey, path, body) => call({ url: cleanUrl(url), key: ownerKey }, '/api/owner' + path, { method: body ? 'POST' : 'GET', body, timeout: 30000 });
 export const cloudConfig = (cfg) => call(cfg, '/api/config', { timeout: 8000 });
 export const payRequest = (cfg, body) => call(cfg, '/api/pay/request', { method: 'POST', body, timeout: 30000 });
 export const payStatus = (cfg, provider, ref) => call(cfg, `/api/pay/status?provider=${provider}&ref=${encodeURIComponent(ref)}`);

@@ -1,15 +1,17 @@
 import { useEffect, useState } from 'react';
-import { Store, Printer, MessageSquareText, Cloud, Users as UsersIcon, DatabaseBackup, CheckCircle2, XCircle, Smartphone, UserPlus } from 'lucide-react';
-import { useStore, makePassword, uid, put, audit, downloadFile, today, addSampleData, listSnapshots, loadSnapshot } from '../store.jsx';
-import { Modal, Tabs } from '../ui.jsx';
+import { Store, Printer, MessageSquareText, Cloud, Users as UsersIcon, DatabaseBackup, CheckCircle2, XCircle, Smartphone, SlidersHorizontal, CreditCard, Plus, Trash2, Eraser, RotateCcw, ShieldAlert } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { FEATURES } from '../access.js';
+import { useStore, uid, audit, downloadFile, today, addSampleData, listSnapshots, loadSnapshot, defaultSettings, eraseData, DEFAULT_PAYMENT_METHODS, now } from '../store.jsx';
+import { Tabs } from '../ui.jsx';
 import { ask, askText, toast } from '../feedback.jsx';
 import { cloudConfig, cloudLogin, cleanUrl, DEFAULT_CLOUD } from '../cloud.js';
 
 export default function Settings() {
-  const { db, update, setDb, saveSettings, user, syncCfg, saveSyncCfg, syncStatus, syncNow, branchId, setBranchId } = useStore();
+  const { db, update, setDb, saveSettings, user, syncCfg, saveSyncCfg, syncStatus, syncNow, branchId, setBranchId, can } = useStore();
+  const licence = db.license?.[0]?.features || {};
   const [tab, setTab] = useState('general');
   const [s, setS] = useState(db.settings);
-  const [newUser, setNewUser] = useState(null);
   const [hub, setHub] = useState({ url: syncCfg.url || DEFAULT_CLOUD, key: syncCfg.account ? '' : syncCfg.key, email: '', password: '', how: syncCfg.account ? 'account' : 'key' });
   const [cfg, setCfg] = useState(null);
   const [snaps, setSnaps] = useState(null);
@@ -26,27 +28,6 @@ export default function Settings() {
     toast('Settings saved');
   };
 
-  const addUser = async (e) => {
-    e.preventDefault();
-    const email = newUser.email.trim().toLowerCase();
-    if (db.users.some((u) => u.email === email)) return toast('A user with that email already exists', 'error');
-    if (newUser.password.length < 8) return toast('Use a password of at least 8 characters', 'error');
-    const pw = await makePassword(newUser.password);
-    update((d) => {
-      put(d, 'users', { id: uid(), name: newUser.name, email, role: newUser.role, phone: newUser.phone, ...pw });
-      audit(d, user, 'User added', `${newUser.name} (${newUser.role})`, branchId);
-    });
-    setNewUser(null);
-    toast(`${newUser.name} can now sign in${syncCfg.url ? ' on any device' : ''}`);
-  };
-
-  const resetPassword = async (u) => {
-    const pw = await askText({ title: `New password for ${u.name}`, type: 'password', minLength: 8, confirmText: 'Set password' });
-    if (!pw) return;
-    const fields = await makePassword(pw);
-    update((d) => { put(d, 'users', { ...u, ...fields }); audit(d, user, 'Password reset', u.name, branchId); });
-    toast('Password updated');
-  };
 
   const restore = async (data, label) => {
     if (!data?.products || !data.users || !data.movements) return toast('That is not a valid RxPOS backup', 'error');
@@ -87,7 +68,7 @@ export default function Settings() {
   return (
     <div className="page">
       <div className="page-head"><div><h1>Settings</h1><div className="sub">{db.settings.name}</div></div></div>
-      <Tabs value={tab} onChange={setTab} tabs={[['general', 'Pharmacy'], ['receipts', 'Receipts & stock'], ['messages', 'Messages'], ['online', 'Online & payments'], ['users', 'Users'], ['backup', 'Backup']]} />
+      <Tabs value={tab} onChange={setTab} tabs={[['general', 'Pharmacy'], ['features', 'Features'], ['payments', 'Payment methods'], ['receipts', 'Receipts & stock'], ['messages', 'Messages & recovery'], ['online', 'Online & Mobile Money'], ['backup', 'Data & backup']]} />
 
       {tab === 'general' && (
         <form className="card" onSubmit={submitSettings}>
@@ -139,9 +120,70 @@ export default function Settings() {
           <p className="muted small">Placeholders: {'{name} {pharmacy} {medicine} {date} {amount}'}. Keep SMS under 160 characters to pay for one message.</p>
           <label className="field full"><span>Refill reminder</span><textarea rows={3} value={s.smsRefill || ''} onChange={(e) => setS({ ...s, smsRefill: e.target.value })} /><small className="muted">{(s.smsRefill || '').length} characters</small></label>
           <label className="field full"><span>Payment reminder</span><textarea rows={3} value={s.smsDebt || ''} onChange={(e) => setS({ ...s, smsDebt: e.target.value })} /><small className="muted">{(s.smsDebt || '').length} characters</small></label>
+          <h3 style={{ marginTop: 18 }}>Password recovery & client details</h3>
+          <div className="form-grid">
+            <label className="field"><span>Administrator's WhatsApp (staff who forget their password message this number)</span><input inputMode="tel" placeholder="07XX XXX XXX" value={s.adminWhatsApp || ''} onChange={(e) => setS({ ...s, adminWhatsApp: e.target.value })} /></label>
+            <label className="field"><span>Client details at the POS</span>
+              <select value={s.clientCapture || 'optional'} onChange={(e) => setS({ ...s, clientCapture: e.target.value })}>
+                <option value="off">Off: walk-in sales only</option>
+                <option value="optional">Optional: cashier may add/choose a client</option>
+                <option value="required">Required: every sale needs a client</option>
+              </select></label>
+          </div>
+          <p className="muted small">Staff can also reset their password themselves with a code sent to their email (Gmail works) or phone, once email/SMS sending is switched on in the cloud.</p>
           <div className="form-actions"><button className="btn primary">Save</button></div>
         </form>
       )}
+
+      {tab === 'features' && (
+        <form className="card" onSubmit={submitSettings}>
+          <h3><SlidersHorizontal size={18} />Features</h3>
+          <p className="muted small">Switch off parts of RxPOS this pharmacy doesn't use. They disappear from every device's menu. Features greyed out are not included in this pharmacy's RxPOS plan.</p>
+          <div className="perm-grid">
+            {FEATURES.map(([k, label, hint]) => {
+              const allowed = licence[k] !== false;
+              return (
+                <label key={k} className={'field check' + (allowed ? '' : ' dim')} title={allowed ? '' : 'Not included in this pharmacy\'s plan'}>
+                  <input type="checkbox" disabled={!allowed} checked={allowed && s.features?.[k] !== false} onChange={(e) => setS({ ...s, features: { ...(s.features || {}), [k]: e.target.checked } })} />
+                  <span>{label}{hint && <small className="muted"> · {hint}</small>}</span>
+                </label>
+              );
+            })}
+          </div>
+          {s.features?.branches === false && db.branches.length > 1 && <p className="text-warn small">Single-branch mode hides the other branches; their data is kept.</p>}
+          <div className="form-actions"><button className="btn primary">Save</button></div>
+        </form>
+      )}
+
+      {tab === 'payments' && (() => {
+        const methods = s.paymentMethods?.length ? s.paymentMethods : DEFAULT_PAYMENT_METHODS;
+        const setMethods = (m) => setS({ ...s, paymentMethods: m });
+        return (
+          <form className="card" onSubmit={submitSettings}>
+            <h3><CreditCard size={18} />Payment methods at the POS</h3>
+            <p className="muted small">Add or remove ways customers can pay. The type decides how RxPOS treats it: <b>Cash</b> asks for the amount tendered and gives change; <b>Mobile Money</b> can send a payment request to the customer's phone; <b>Credit</b> puts the balance on the customer's account; <b>Other</b> just records it.</p>
+            <table className="lines">
+              <thead><tr><th>Name shown on the POS & receipt</th><th>Type</th><th /></tr></thead>
+              <tbody>
+                {methods.map((m, i) => (
+                  <tr key={m.id}>
+                    <td><input value={m.name} onChange={(e) => setMethods(methods.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} required /></td>
+                    <td><select value={m.type} onChange={(e) => setMethods(methods.map((x, j) => (j === i ? { ...x, type: e.target.value } : x)))}>
+                      <option value="cash">Cash</option><option value="momo">Mobile Money</option><option value="credit">Credit (pay later)</option><option value="other">Other (card, bank, insurance…)</option>
+                    </select></td>
+                    <td><button type="button" className="icon-btn" title="Delete" disabled={methods.length <= 1} onClick={() => setMethods(methods.filter((_, j) => j !== i))}><Trash2 size={16} /></button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="row gap" style={{ marginTop: 10 }}>
+              <button type="button" className="btn sm ghost" onClick={() => setMethods([...methods, { id: uid(), name: '', type: 'other' }])}><Plus size={14} />Add payment method</button>
+              <button type="button" className="btn sm ghost" onClick={() => setMethods(DEFAULT_PAYMENT_METHODS)}><RotateCcw size={14} />Defaults</button>
+            </div>
+            <div className="form-actions"><button className="btn primary">Save</button></div>
+          </form>
+        );
+      })()}
 
       {tab === 'online' && (
         <>
@@ -187,33 +229,6 @@ export default function Settings() {
         </>
       )}
 
-      {tab === 'users' && (
-        <div className="card">
-          <div className="row between"><h3><UsersIcon size={18} />Users</h3><button className="btn sm primary" onClick={() => setNewUser({ name: '', email: '', phone: '', role: 'cashier', password: '' })}><UserPlus size={14} />Add user</button></div>
-          <table>
-            <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th /></tr></thead>
-            <tbody>
-              {db.users.map((u) => (
-                <tr key={u.id} className={u.disabled ? 'dim' : ''}>
-                  <td><strong>{u.name}</strong>{u.algo !== 'pbkdf2' && <span className="badge warn" title="Signs in with an old password format; it upgrades at next sign-in">old password</span>}</td><td>{u.email}</td>
-                  <td>
-                    <select value={u.role} disabled={u.id === user.id} onChange={(e) => update((d) => { put(d, 'users', { ...u, role: e.target.value }); audit(d, user, 'Role changed', `${u.name}: ${u.role} → ${e.target.value}`, branchId); })}>
-                      <option value="admin">admin</option><option value="pharmacist">pharmacist</option><option value="cashier">cashier</option>
-                    </select>
-                  </td>
-                  <td>{u.disabled ? 'Disabled' : 'Active'}</td>
-                  <td className="actions">
-                    <button className="btn sm ghost" onClick={() => resetPassword(u)}>Reset password</button>
-                    {u.id !== user.id && <button className="btn sm danger" onClick={() => update((d) => { put(d, 'users', { ...u, disabled: !u.disabled }); audit(d, user, u.disabled ? 'User enabled' : 'User disabled', u.name, branchId); })}>{u.disabled ? 'Enable' : 'Disable'}</button>}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <p className="muted small"><b>admin</b> – everything, including users, settings and branches; <b>pharmacist</b> – everything except settings; <b>cashier</b> – selling, stock and customers (no finance, reports, refunds or stock adjustments). Every user signs in with their own account on any connected device, and their actions are recorded in the Audit Log.</p>
-        </div>
-      )}
-
       {tab === 'backup' && (
         <div className="card">
           <h3><DatabaseBackup size={18} />Backup & restore</h3>
@@ -229,27 +244,39 @@ export default function Settings() {
             {snaps?.map((d) => <button key={d} className="btn sm ghost" onClick={async () => restore(await loadSnapshot(d), `the snapshot from ${d}`)}>{new Date(d).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}</button>)}
             {snaps && !snaps.length && <span className="muted small">The first snapshot is taken a few seconds after you start working today.</span>}
           </div>
+          {can('data.reset') && (
+            <div className="danger-zone">
+              <h3><ShieldAlert size={18} />Danger zone</h3>
+              <div className="row between gap">
+                <div><strong>Restore default settings</strong><p className="muted small">Receipt, stock, message, payment-method and feature settings go back to factory defaults. Pharmacy name, address, phone, TIN and licence are kept.</p></div>
+                <button type="button" className="btn ghost" onClick={async () => {
+                  if (!(await ask({ title: 'Restore default settings?', message: 'All settings except your pharmacy details go back to factory defaults on every device.', confirmText: 'Restore defaults', danger: true }))) return;
+                  const keep = Object.fromEntries(['name', 'address', 'phone', 'tin', 'license', 'currency', 'adminWhatsApp'].map((k) => [k, db.settings[k]]));
+                  const next = { ...defaultSettings(), ...keep };
+                  saveSettings(next); setS(next);
+                  update((d) => audit(d, user, 'Settings restored to defaults', '', branchId));
+                  toast('Default settings restored');
+                }}><RotateCcw size={16} />Restore defaults</button>
+              </div>
+              <div className="row between gap">
+                <div><strong>Erase all data</strong><p className="muted small">Deletes sales, stock, batches, customers, suppliers, finance records, prescriptions, messages, shifts and other users on <b>every connected device</b>. Your own account and roles are kept. Export a backup first.</p></div>
+                <button type="button" className="btn danger-solid" onClick={async () => {
+                  const keepMedicines = await ask({ title: 'Keep the medicine list?', message: 'Choose “Keep medicines” to erase everything except your medicines and prices (stock becomes zero). Choose “Cancel” to stop.', confirmText: 'Keep medicines' });
+                  if (!keepMedicines) return;
+                  const typed = await askText({ title: 'Type ERASE to confirm', message: 'This cannot be undone (except from a backup or snapshot).', confirmText: 'Erase all data' });
+                  if (typed?.trim().toUpperCase() !== 'ERASE') return typed && toast('Nothing was erased', 'info');
+                  downloadFile(`rxpos-before-erase-${today()}.json`, JSON.stringify(db), 'application/json');
+                  let n = 0;
+                  update((d) => { n = eraseData(d, { keepMedicines: true, keepUserId: user.id }); audit(d, user, 'All data erased', `kept medicines; ${n} records removed`, branchId); });
+                  setTimeout(syncNow, 500);
+                  toast('All data erased. A backup file was downloaded first.');
+                }}><Eraser size={16} />Erase all data</button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
-      {newUser && (
-        <Modal title="Add user" onClose={() => setNewUser(null)}>
-          <form onSubmit={addUser}>
-            <div className="form-grid">
-              <label className="field"><span>Name</span><input required value={newUser.name} onChange={(e) => setNewUser({ ...newUser, name: e.target.value })} /></label>
-              <label className="field"><span>Email (used to sign in)</span><input type="email" required value={newUser.email} onChange={(e) => setNewUser({ ...newUser, email: e.target.value })} /></label>
-              <label className="field"><span>Phone</span><input value={newUser.phone} onChange={(e) => setNewUser({ ...newUser, phone: e.target.value })} /></label>
-              <label className="field"><span>Role</span>
-                <select value={newUser.role} onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}>
-                  <option value="cashier">cashier</option><option value="pharmacist">pharmacist</option><option value="admin">admin</option>
-                </select>
-              </label>
-              <label className="field"><span>Password (8+ characters)</span><input type="password" autoComplete="new-password" required value={newUser.password} onChange={(e) => setNewUser({ ...newUser, password: e.target.value })} /></label>
-            </div>
-            <div className="form-actions"><button type="button" className="btn ghost" onClick={() => setNewUser(null)}>Cancel</button><button className="btn primary">Add user</button></div>
-          </form>
-        </Modal>
-      )}
     </div>
   );
 }

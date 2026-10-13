@@ -1,20 +1,25 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useLocation, Link } from 'react-router-dom';
-import { ShoppingCart, Trash2, FileText, Printer, AlertTriangle, ScanBarcode, Smartphone, Loader2, CheckCircle2 } from 'lucide-react';
-import { useStore, uid, now, daysUntil, put, move, allocate, audit, normalizePhone } from '../store.jsx';
+import { ShoppingCart, Trash2, FileText, Printer, AlertTriangle, ScanBarcode, Smartphone, Loader2, CheckCircle2, UserPlus, Tag, BookMarked, Repeat } from 'lucide-react';
+import { DrugInfoPanel, genericKey } from './DrugInfo.jsx';
+import { useStore, uid, now, daysUntil, put, move, allocate, audit, normalizePhone, DEFAULT_PAYMENT_METHODS } from '../store.jsx';
 import { CASH } from '../finance.js';
 import { Modal, SearchBox } from '../ui.jsx';
 import { toast, ask } from '../feedback.jsx';
 import { payRequest, payStatus, guessNetwork, cloudConfig } from '../cloud.js';
 import { Receipt } from './Sales.jsx';
 
-const PAYMENTS = ['Cash', 'Mobile Money', 'Card', 'Bank Transfer', 'Insurance', 'Credit'];
 // Receipt numbers must be unique across synced devices, so they are time-based rather than sequential
 export const docNumber = (prefix) => prefix + Date.now().toString(36).toUpperCase().slice(-6) + Math.floor(Math.random() * 36).toString(36).toUpperCase();
 
 export default function POS({ mode = 'retail' }) {
-  const { db, products, update, user, fmt, batchesOf, branchId, syncCfg } = useStore();
+  const { db, products, update, user, fmt, batchesOf, branchId, syncCfg, features, can } = useStore();
   const [momo, setMomo] = useState(null);
+  const [newClient, setNewClient] = useState(null);   // quick 'add client' form
+  const [labelFor, setLabelFor] = useState(null);     // cart line whose dispensing directions are being edited
+  const [infoFor, setInfoFor] = useState(null);       // medicine whose drug information is shown
+  const [subs, setSubs] = useState(null);             // { p, list } substitutes for an out-of-stock medicine
+  const capture = db.settings.clientCapture || 'optional';
   const [payCfg, setPayCfg] = useState(null); // which mobile money networks the cloud has switched on
   const location = useLocation();
   const wholesale = mode === 'wholesale';
@@ -24,7 +29,10 @@ export default function POS({ mode = 'retail' }) {
   const [cart, setCart] = useState([]);
   const [customerId, setCustomerId] = useState('walk-in');
   const [discount, setDiscount] = useState(0);
-  const [payment, setPayment] = useState('Cash');
+  // Payment methods come from Settings → Payment methods; their type decides the behaviour
+  const methods = (db.settings.paymentMethods?.length ? db.settings.paymentMethods : DEFAULT_PAYMENT_METHODS).filter((m) => m.type !== 'momo' || features.momo !== false);
+  const [payment, setPayment] = useState(methods[0]?.name || 'Cash');
+  const ptype = methods.find((m) => m.name === payment)?.type || 'other';
   const [tendered, setTendered] = useState('');
   const [done, setDone] = useState(null);
   const searchRef = useRef();
@@ -64,7 +72,12 @@ export default function POS({ mode = 'retail' }) {
     .slice(0, 80), [products, category, q, ql]);
 
   const add = async (p) => {
-    if (p.stock <= 0) return toast(`${p.name} is out of stock at ${branchName}`, 'error');
+    if (p.stock <= 0) {
+      const g = genericKey(p.generic || p.name);
+      const list = g ? products.filter((x) => x.id !== p.id && x.stock > 0 && genericKey(x.generic || x.name) === g).slice(0, 8) : [];
+      if (list.length) return setSubs({ p, list });
+      return toast(`${p.name} is out of stock at ${branchName}`, 'error');
+    }
     // FEFO: sell from the earliest-expiring batch; expired batches are only used if the pharmacist confirms
     const sellable = batchesOf(p.id).filter((b) => b.qty > 0 && (!b.expiry || daysUntil(b.expiry) >= 0)).reduce((a, b) => a + b.qty, 0);
     const inCart = cart.find((l) => l.id === p.id);
@@ -105,11 +118,12 @@ export default function POS({ mode = 'retail' }) {
 
   const checkout = async () => {
     if (!cart.length) return;
-    const credit = payment === 'Credit';
+    const credit = ptype === 'credit';
     if (credit && customerId === 'walk-in') return toast('Select a registered customer for a credit sale', 'warn');
-    if (payment === 'Cash' && tendered !== '' && change < 0) return toast('Amount tendered is less than the total', 'error');
+    if (capture === 'required' && customerId === 'walk-in') return toast('Choose or add the client for this sale', 'warn');
+    if (ptype === 'cash' && tendered !== '' && change < 0) return toast('Amount tendered is less than the total', 'error');
     if (cart.some((l) => l.rx) && !(await ask({ title: 'Prescription-only medicine', message: 'Confirm that a valid prescription has been checked for the Rx items in this sale.', confirmText: 'Prescription verified' }))) return;
-    if (payment === 'Mobile Money') {
+    if (ptype === 'momo') {
       const phone = normalizePhone(customer?.phone || '');
       if (syncCfg.url && navigator.onLine) cloudConfig(syncCfg).then(setPayCfg).catch(() => setPayCfg({}));
       return setMomo({ phone: customer?.phone || '', network: phone ? guessNetwork(phone) : 'mtn', stage: 'enter', ref: '', manualRef: '' });
@@ -118,18 +132,18 @@ export default function POS({ mode = 'retail' }) {
   };
 
   const finalize = (extra = {}) => {
-    const credit = payment === 'Credit';
+    const credit = ptype === 'credit';
     const paid = credit ? Math.min(Number(tendered) || 0, total) : total;
     // Split each line across batches, earliest expiry first
-    const items = cart.map(({ id, name, price, cost, qty, allowExpired }) => ({
-      id, name, price: Number(price), cost, qty,
+    const items = cart.map(({ id, name, price, cost, qty, allowExpired, directions }) => ({
+      id, name, price: Number(price), cost, qty, ...(directions ? { directions } : {}),
       alloc: allocate(batchesOf(id), qty, { allowExpired }).map(({ batchId, qty: q, batch, expiry }) => ({ batchId, qty: q, batch, expiry })),
     }));
     const sale = {
       id: uid(), number: docNumber('R'), date: now(), type: mode, branchId,
       items, subtotal, discount: disc, tax, total, payment, paid,
-      tendered: payment === 'Cash' ? Number(tendered) || total : paid,
-      bankId: payment === 'Cash' || credit ? CASH : db.settings.nonCashBankId || CASH,
+      tendered: ptype === 'cash' ? Number(tendered) || total : paid,
+      bankId: ptype === 'cash' || credit ? CASH : db.settings.nonCashBankId || CASH,
       customerId, customerName: customer?.name || 'Walk-in Customer', cashier: user.name, status: 'completed', ...extra,
     };
     update((d) => {
@@ -142,7 +156,7 @@ export default function POS({ mode = 'retail' }) {
     window.history.replaceState({}, '');
     setDone(sale);
     setMomo(null);
-    setCart([]); setDiscount(0); setTendered(''); setCustomerId('walk-in'); setPayment('Cash');
+    setCart([]); setDiscount(0); setTendered(''); setCustomerId('walk-in'); setPayment(methods[0]?.name || 'Cash');
     if (db.settings.autoPrint) setTimeout(() => window.print(), 350);
   };
 
@@ -260,15 +274,24 @@ export default function POS({ mode = 'retail' }) {
           <h3>Current sale {items > 0 && <span className="badge">{items} item{items === 1 ? '' : 's'}</span>}</h3>
           {cart.length > 0 && <button className="btn sm ghost" onClick={() => setCart([])}><Trash2 size={14} />Clear</button>}
         </div>
-        <select value={customerId} onChange={(e) => setCustomerId(e.target.value)} aria-label="Customer">
-          {db.customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
+        {capture !== 'off' && (
+          <div className="row gap">
+            <select className="grow" value={customerId} onChange={(e) => setCustomerId(e.target.value)} aria-label="Client">
+              {db.customers.map((c) => <option key={c.id} value={c.id}>{c.id === 'walk-in' ? (capture === 'required' ? '— choose a client —' : 'Walk-in (no client details)') : `${c.name}${c.phone ? ' · ' + c.phone : ''}`}</option>)}
+            </select>
+            {can('customers') && <button className="btn ghost" title="Add a new client" onClick={() => setNewClient({ name: '', phone: '', allergies: '' })}><UserPlus size={16} /></button>}
+          </div>
+        )}
         {customer?.allergies && <div className="error"><AlertTriangle size={14} /> Allergies: {customer.allergies}</div>}
         <div className="cart-lines">
           {cart.map((l) => (
             <div key={l.id} className="cart-line">
               <div className="grow"><strong>{l.name}</strong>{l.rx && <span className="badge">Rx</span>}
-                <small className="muted">@ <input className="price-input" type="number" step="any" aria-label="Unit price" value={l.price} onChange={(e) => setLine(l.id, { price: e.target.value })} /></small>
+                <small className="muted">@ <input className="price-input" type="number" step="any" aria-label="Unit price" disabled={!can('pos.price_edit')} value={l.price} onChange={(e) => setLine(l.id, { price: e.target.value })} /></small>
+                <div className="line-tools">
+                  <button className={'link-btn small' + (l.directions ? ' text-ok' : '')} onClick={() => setLabelFor(l)}><Tag size={12} />{l.directions ? 'Directions ✓' : 'Directions / label'}</button>
+                  {features.drugInfo !== false && <button className="link-btn small" onClick={() => setInfoFor(products.find((p) => p.id === l.id) || l)}><BookMarked size={12} />Drug info</button>}
+                </div>
               </div>
               <div className="qty">
                 <button onClick={() => (l.qty > 1 ? setQty(l.id, l.qty - 1) : setCart(cart.filter((x) => x.id !== l.id)))} aria-label="Less">−</button>
@@ -287,13 +310,13 @@ export default function POS({ mode = 'retail' }) {
           <div className="row between grand"><span>Total</span><span className="num">{fmt(total)}</span></div>
         </div>
         <div className="pay-methods">
-          {PAYMENTS.map((p) => <button key={p} className={'chip' + (payment === p ? ' active' : '')} onClick={() => setPayment(p)}>{p}</button>)}
+          {methods.map((m) => <button key={m.id} className={'chip' + (payment === m.name ? ' active' : '')} onClick={() => setPayment(m.name)}>{m.name}</button>)}
         </div>
-        {(payment === 'Cash' || payment === 'Credit') && (
+        {(ptype === 'cash' || ptype === 'credit') && (
           <div className="row between">
-            <label className="field grow"><span>{payment === 'Credit' ? 'Paid now (rest on credit)' : 'Amount tendered'}</span>
+            <label className="field grow"><span>{ptype === 'credit' ? 'Paid now (rest on credit)' : 'Amount tendered'}</span>
               <input type="number" step="any" value={tendered} onChange={(e) => setTendered(e.target.value)} /></label>
-            {payment === 'Cash'
+            {ptype === 'cash'
               ? <div className="change">Change<br /><strong>{fmt(Math.max(change, 0))}</strong></div>
               : <div className="change">On credit<br /><strong className="text-warn">{fmt(Math.max(total - (Number(tendered) || 0), 0))}</strong></div>}
           </div>
@@ -344,6 +367,75 @@ export default function POS({ mode = 'retail' }) {
               </div>
             </div>
           )}
+        </Modal>
+      )}
+
+      {newClient && (
+        <Modal title={<><UserPlus size={18} /> New client</>} onClose={() => setNewClient(null)}>
+          <form className="stack" onSubmit={(e) => {
+            e.preventDefault();
+            const c = { id: uid(), name: newClient.name.trim(), phone: newClient.phone.trim(), whatsapp: newClient.phone.trim(), allergies: newClient.allergies.trim() };
+            update((d) => { put(d, 'customers', c); });
+            setCustomerId(c.id); setNewClient(null); toast(`${c.name} added`);
+          }}>
+            <label className="field"><span>Name</span><input autoFocus required value={newClient.name} onChange={(e) => setNewClient({ ...newClient, name: e.target.value })} /></label>
+            <label className="field"><span>Phone / WhatsApp (optional)</span><input inputMode="tel" placeholder="07XX XXX XXX" value={newClient.phone} onChange={(e) => setNewClient({ ...newClient, phone: e.target.value })} /></label>
+            <label className="field"><span>Allergies (optional)</span><input value={newClient.allergies} onChange={(e) => setNewClient({ ...newClient, allergies: e.target.value })} /></label>
+            <div className="form-actions"><button type="button" className="btn ghost" onClick={() => setNewClient(null)}>Cancel</button><button className="btn primary">Add & select</button></div>
+          </form>
+        </Modal>
+      )}
+
+      {subs && (
+        <Modal title={<><Repeat size={18} /> {subs.p.name} is out of stock</>} onClose={() => setSubs(null)}>
+          <p className="muted">In-stock alternatives with the same active ingredient:</p>
+          <div className="stack">
+            {subs.list.map((x) => (
+              <button key={x.id} className="product" onClick={() => { setSubs(null); add(x); }}>
+                <strong>{x.name}</strong>
+                <div className="row between"><span className="price">{fmt(priceOf(x))}</span><span className="muted small">{x.stock} in stock</span></div>
+              </button>
+            ))}
+          </div>
+        </Modal>
+      )}
+
+      {labelFor && (() => {
+        const line = cart.find((l) => l.id === labelFor.id) || labelFor;
+        const d = line.directions || { dose: '', freq: '', days: '', notes: [], patient: customer && customer.id !== 'walk-in' ? customer.name : '' };
+        const setD = (patch) => setLine(line.id, { directions: { ...d, ...patch } });
+        const WARN = ['Take after meals', 'Take before meals', 'May cause drowsiness. Do not drive', 'Complete the full course', 'Shake well before use', 'Keep in a fridge (2–8 °C)', 'Avoid alcohol', 'For external use only'];
+        const text = [d.dose, d.freq, d.days && `for ${d.days} days`].filter(Boolean).join(' ');
+        return (
+          <Modal title={<><Tag size={18} /> Directions – {line.name}</>} onClose={() => setLabelFor(null)} wide>
+            <div className="form-grid">
+              <label className="field"><span>Dose</span><input list="dose-list" placeholder="e.g. 1 tablet" value={d.dose} onChange={(e) => setD({ dose: e.target.value })} /></label>
+              <label className="field"><span>How often</span><input list="freq-list" placeholder="e.g. 3 times a day" value={d.freq} onChange={(e) => setD({ freq: e.target.value })} /></label>
+              <label className="field"><span>For how many days</span><input type="number" min="0" value={d.days} onChange={(e) => setD({ days: e.target.value })} /></label>
+              <label className="field"><span>Patient name</span><input value={d.patient} onChange={(e) => setD({ patient: e.target.value })} /></label>
+            </div>
+            <datalist id="dose-list">{['1 tablet', '2 tablets', '½ tablet', '1 capsule', '5 ml', '10 ml', '2.5 ml', '1 sachet', '2 drops', 'Apply thinly'].map((x) => <option key={x} value={x} />)}</datalist>
+            <datalist id="freq-list">{['once a day', 'twice a day', '3 times a day', '4 times a day', 'every 8 hours', 'at night', 'when needed (max 4 times a day)'].map((x) => <option key={x} value={x} />)}</datalist>
+            <div className="ref-links">{WARN.map((w) => <button key={w} type="button" className={'chip' + (d.notes.includes(w) ? ' active' : '')} onClick={() => setD({ notes: d.notes.includes(w) ? d.notes.filter((x) => x !== w) : [...d.notes, w] })}>{w}</button>)}</div>
+            <div className="dispense-label print-area">
+              <strong>{db.settings.name}</strong>{db.settings.phone && <span> · {db.settings.phone}</span>}
+              <div className="dl-drug">{line.name} <span>× {line.qty}</span></div>
+              <div className="dl-dir">{text || 'Directions…'}</div>
+              {d.notes.length > 0 && <div className="dl-notes">{d.notes.join(' · ')}</div>}
+              <div className="dl-foot"><span>{d.patient || 'Patient'}</span><span>{new Date().toLocaleDateString()}</span></div>
+            </div>
+            <div className="form-actions">
+              <button className="btn ghost" onClick={() => { setLine(line.id, { directions: undefined }); setLabelFor(null); }}>Clear</button>
+              <button className="btn ghost" onClick={() => window.print()}><Printer size={16} />Print label</button>
+              <button className="btn primary" onClick={() => setLabelFor(null)}>Done</button>
+            </div>
+          </Modal>
+        );
+      })()}
+
+      {infoFor && (
+        <Modal title={<><BookMarked size={18} /> {infoFor.name}</>} onClose={() => setInfoFor(null)} wide>
+          <DrugInfoPanel name={infoFor.name} generic={infoFor.generic} compact />
         </Modal>
       )}
 

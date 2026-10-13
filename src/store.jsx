@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { idbGet, idbSet, idbDel, idbKeys } from './idb.js';
 import { createSync } from './sync.js';
+import { featureSet, permissionsOf } from './access.js';
 
 const SESSION_KEY = 'pharmapos-session';
 
@@ -8,7 +9,7 @@ const SESSION_KEY = 'pharmapos-session';
 export const TABLES = [
   'products', 'formulations', 'customers', 'suppliers', 'sales', 'proformas', 'purchases', 'movements',
   'prescriptions', 'expenses', 'expenseCategories', 'banks', 'bankTx', 'loans', 'payments', 'users',
-  'batches', 'branches', 'transfers', 'audit', 'purchaseOrders',
+  'batches', 'branches', 'transfers', 'audit', 'purchaseOrders', 'roles', 'messages', 'shifts', 'license',
 ];
 // What is persisted on the device, one IndexedDB key per part
 const PARTS = [...TABLES, 'settings', '_tomb'];
@@ -58,6 +59,26 @@ export function del(d, table, id) {
   d[table] = d[table].filter((x) => x.id !== id);
   d._tomb.push({ t: table, id, at: now() });
 }
+/**
+ * Erase the pharmacy's data on every device (deletions sync): sales, stock, customers, suppliers, finance, users…
+ * Always keeps: the person doing it (so they can still sign in), roles, the licence and the built-in defaults
+ * (walk-in customer, cash drawer, main branch). keepMedicines also keeps products, formulations and expense categories.
+ */
+export function eraseData(d, { keepMedicines = true, keepUserId } = {}) {
+  const keepTables = new Set(['license', 'roles', ...(keepMedicines ? ['products', 'formulations', 'expenseCategories'] : [])]);
+  const keepIds = { customers: 'walk-in', banks: 'cash-drawer', branches: MAIN_BRANCH, users: keepUserId };
+  let n = 0;
+  for (const t of TABLES) {
+    if (keepTables.has(t)) continue;
+    const gone = d[t].filter((r) => r.id !== keepIds[t]);
+    if (!gone.length) continue;
+    const at = now();
+    d[t] = d[t].filter((r) => r.id === keepIds[t]);
+    for (const r of gone) d._tomb.push({ t, id: r.id, at });
+    n += gone.length;
+  }
+  return n;
+}
 /** Record a stock movement. Stock is always the sum of movements, so devices that worked offline merge safely. */
 export function move(d, { productId, qty, type, ref = '', note = '', user = '', batchId = null, branchId = MAIN_BRANCH }) {
   return put(d, 'movements', { id: uid(), productId, qty: Number(qty), type, ref, note, user, batchId, branchId, date: now() });
@@ -100,6 +121,28 @@ export function allocate(batches, qty, { allowExpired = false } = {}) {
 const FORMS = ['Tablets', 'Capsules', 'Syrups', 'Suspensions', 'Injectables', 'Infusions', 'Creams', 'Ointments', 'Gels', 'Drops', 'Eye Drops', 'Ear Drops', 'Inhalers', 'Sachets', 'Suppositories', 'Pessaries', 'Lotions', 'Powders', 'Devices', 'Surgicals', 'Cosmetics', 'Supplements', 'Sundries', 'Others'];
 const EXPENSE_CATS = ['Rent', 'Salaries', 'Electricity', 'Water', 'Transport', 'Airtime & Internet', 'Licenses & Fees', 'Repairs', 'Stationery', 'Other'];
 
+export const DEFAULT_PAYMENT_METHODS = [
+  { id: 'cash', name: 'Cash', type: 'cash' },
+  { id: 'momo', name: 'Mobile Money', type: 'momo' },
+  { id: 'card', name: 'Card', type: 'other' },
+  { id: 'bank', name: 'Bank Transfer', type: 'other' },
+  { id: 'insurance', name: 'Insurance', type: 'other' },
+  { id: 'credit', name: 'Credit', type: 'credit' },
+];
+
+/** Factory defaults for settings (also used by "Restore default settings") */
+export function defaultSettings() {
+  return {
+    name: 'My Pharmacy', address: '', phone: '', license: '', currency: 'UGX', decimals: 0, taxRate: 0,
+    wholesaleMarkup: 25, retailMarkup: 50, expiryWarnDays: 90,
+    receiptFooter: 'Thank you for your purchase. Get well soon!', paperWidth: 80, autoPrint: false,
+    leadDays: 7, coverDays: 30, deadDays: 90,
+    smsRefill: 'Hello {name}, this is {pharmacy}. Your refill of {medicine} is due on {date}. Reply or visit us to collect. Get well soon!',
+    smsDebt: 'Hello {name}, this is a friendly reminder from {pharmacy} that your balance of {amount} is due. Thank you.',
+    paymentMethods: DEFAULT_PAYMENT_METHODS, clientCapture: 'optional', features: {}, adminWhatsApp: '',
+  };
+}
+
 function blankDb() {
   const t0 = '2000-01-01T00:00:00.000Z';
   const d = Object.fromEntries(TABLES.map((t) => [t, []]));
@@ -108,15 +151,8 @@ function blankDb() {
   d.customers = [{ id: 'walk-in', name: 'Walk-in Customer', phone: '', updatedAt: t0 }];
   d.banks = [{ id: 'cash-drawer', name: 'Cash at hand', account: '', opening: 0, updatedAt: t0 }];
   d.branches = [{ id: MAIN_BRANCH, name: 'Main branch', address: '', updatedAt: t0 }];
-  d.settings = {
-    name: 'My Pharmacy', address: '', phone: '', license: '', currency: 'UGX', decimals: 0, taxRate: 0,
-    wholesaleMarkup: 25, retailMarkup: 50, expiryWarnDays: 90,
-    receiptFooter: 'Thank you for your purchase. Get well soon!', paperWidth: 80, autoPrint: false,
-    leadDays: 7, coverDays: 30, deadDays: 90,
-    smsRefill: 'Hello {name}, this is {pharmacy}. Your refill of {medicine} is due on {date}. Reply or visit us to collect. Get well soon!',
-    smsDebt: 'Hello {name}, this is a friendly reminder from {pharmacy} that your balance of {amount} is due. Thank you.',
-    updatedAt: t0,
-  };
+  d.settings = { ...defaultSettings(), updatedAt: t0 };
+
   d._tomb = [];
   return d;
 }
@@ -329,12 +365,15 @@ export function StoreProvider({ children }) {
   }, [db?.settings]);
 
   const branch = db?.branches.find((b) => b.id === branchId) || db?.branches[0];
+  const features = useMemo(() => (db ? featureSet(db) : {}), [db?.license, db?.settings]); // eslint-disable-line react-hooks/exhaustive-deps
+  const perms = useMemo(() => (db && user ? permissionsOf(db, user.role) : new Set()), [db?.roles, user]); // eslint-disable-line react-hooks/exhaustive-deps
+  const can = useCallback((p) => perms.has(p), [perms]);
 
   if (!db || !syncCfg) return <div className="loading"><div className="spinner" />Loading RxPOS…</div>;
 
   return (
     <Ctx.Provider value={{ db, setDb, update, upsert, remove, saveSettings, user, setUser, fmt, products, stockIndex, batchesOf,
-      branchId, branch, setBranchId, syncCfg, saveSyncCfg, syncStatus, syncNow }}>
+      branchId, branch, setBranchId, syncCfg, saveSyncCfg, syncStatus, syncNow, features, can }}>
       {children}
     </Ctx.Provider>
   );

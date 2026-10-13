@@ -30,7 +30,7 @@ export function Receipt({ sale }) {
         <tbody>
           {sale.items.map((i) => (
             <tr key={i.id}>
-              <td>{i.name}<br /><small>{i.qty} × {fmt(i.price)}{i.alloc?.length === 1 && i.alloc[0].batch ? ` · B/N ${i.alloc[0].batch}` : ''}{i.alloc?.[0]?.expiry ? ` · Exp ${i.alloc[0].expiry}` : ''}</small></td>
+              <td>{i.name}<br /><small>{i.qty} × {fmt(i.price)}{i.alloc?.length === 1 && i.alloc[0].batch ? ` · B/N ${i.alloc[0].batch}` : ''}{i.alloc?.[0]?.expiry ? ` · Exp ${i.alloc[0].expiry}` : ''}</small>{i.directions && <><br /><small className="receipt-dir">{[i.directions.dose, i.directions.freq, i.directions.days && `for ${i.directions.days} days`].filter(Boolean).join(' ')}{i.directions.notes?.length ? ` · ${i.directions.notes.join(', ')}` : ''}</small></>}</td>
               <td className="num">{fmt(i.qty * i.price)}</td>
             </tr>
           ))}

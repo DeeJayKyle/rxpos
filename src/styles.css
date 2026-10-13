@@ -502,3 +502,83 @@ details input { width: 100%; }
   .pos-cart { scroll-margin-top: 70px; }
 }
 .product strong, .cart-line strong { overflow-wrap: anywhere; }
+
+/* ---------- v1.3 additions ---------- */
+.logo-mark { display: inline-grid; flex-shrink: 0; filter: drop-shadow(0 6px 14px rgba(16, 185, 129, .35)); }
+.logo-mark svg { width: 100%; height: 100%; display: block; }
+.brand-accent { color: #34d399; }
+.brand.big .brand-accent { color: var(--primary); }
+.link-btn { background: none; border: 0; padding: 0; font: inherit; color: var(--primary); cursor: pointer; display: inline-flex; align-items: center; gap: 4px; text-align: left; }
+.link-btn:hover { text-decoration: underline; }
+.link-btn.small { font-size: 12px; }
+.auth-card .link-btn { align-self: center; font-size: 13px; }
+.line-tools { display: flex; gap: 12px; margin-top: 4px; flex-wrap: wrap; }
+.receipt-dir { font-style: italic; }
+.dim { opacity: .55; }
+
+/* permissions & features grids */
+.perm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px 18px; margin: 12px 0; }
+.perm-group { display: flex; flex-direction: column; gap: 6px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; padding: 12px; }
+.perm-group .field.check span { font-weight: 500; color: var(--text); }
+
+/* cash-up */
+.cash-count { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+
+/* danger zone */
+.danger-zone { margin-top: 24px; border: 1px solid var(--danger); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 14px; background: color-mix(in srgb, var(--danger-soft) 40%, transparent); }
+.danger-zone h3 { color: var(--danger); margin: 0; }
+.danger-zone p { margin: 4px 0 0; max-width: 640px; }
+
+/* owner console */
+.owner { min-height: 100vh; }
+.owner .topbar { position: sticky; }
+.keybox { font-family: ui-monospace, Consolas, monospace; background: var(--surface-2); border: 1px dashed var(--border-strong); border-radius: 10px; padding: 10px 12px; word-break: break-all; font-size: 15px; }
+.owner-login { grid-template-columns: 1fr; }
+
+/* chat */
+.chat-page { height: calc(100vh - 61px); }
+.chat { display: grid; grid-template-columns: 280px 1fr; gap: 16px; flex: 1; min-height: 0; }
+.chat-list { display: flex; flex-direction: column; gap: 10px; min-height: 0; padding: 12px; }
+.chat-convs { display: flex; flex-direction: column; gap: 2px; overflow-y: auto; }
+.chat-conv { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; font: inherit; color: var(--text); background: none; border: 0; padding: 9px 10px; border-radius: 10px; cursor: pointer; }
+.chat-conv:hover { background: var(--surface-2); }
+.chat-conv.active { background: var(--primary-soft); color: var(--primary-ink); }
+.chat-conv svg { color: var(--muted); flex-shrink: 0; }
+.chat-main { display: flex; flex-direction: column; min-height: 0; gap: 10px; padding: 14px; }
+.chat-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+.chat-messages { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 4px; }
+.bubble { max-width: min(560px, 80%); padding: 9px 12px; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--border); align-self: flex-start; white-space: pre-wrap; overflow-wrap: anywhere; }
+.bubble.mine { align-self: flex-end; background: var(--primary-soft); border-color: transparent; }
+.bubble.whatsapp { border-left: 3px solid #25d366; }
+.bubble.sms { border-left: 3px solid #6366f1; }
+.bubble.reply { border-left: 3px solid #f59e0b; }
+.bubble-from { font-size: 12px; font-weight: 700; color: var(--primary); margin-bottom: 2px; }
+.bubble-meta { font-size: 11px; color: var(--muted); margin-top: 4px; }
+.chat-compose { display: flex; flex-direction: column; gap: 8px; }
+.chat-compose.row { flex-direction: row; }
+.chat-compose textarea { resize: vertical; }
+
+/* drug information */
+.druginfo { display: flex; flex-direction: column; gap: 12px; }
+.druginfo-title { font-size: 18px; text-transform: capitalize; }
+.druginfo-sections { display: flex; flex-direction: column; gap: 6px; }
+.druginfo-sections details { border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; background: var(--surface-2); }
+.druginfo-sections summary { font-weight: 650; cursor: pointer; }
+.druginfo-sections p { margin: 8px 0 2px; line-height: 1.55; font-size: 13.5px; }
+.ref-links { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* dispensing label (≈ 70 × 40 mm) */
+.dispense-label { width: 70mm; min-height: 40mm; border: 1px dashed var(--border-strong); border-radius: 6px; padding: 3mm; margin-top: 12px; background: #fff; color: #000; font-family: Arial, sans-serif; font-size: 9pt; display: flex; flex-direction: column; gap: 2px; }
+.dispense-label .dl-drug { font-weight: 800; font-size: 11pt; }
+.dispense-label .dl-drug span { font-weight: 600; }
+.dispense-label .dl-dir { font-size: 12pt; font-weight: 700; border-top: 1px solid #000; border-bottom: 1px solid #000; padding: 2px 0; }
+.dispense-label .dl-notes { font-size: 8.5pt; }
+.dispense-label .dl-foot { display: flex; justify-content: space-between; font-size: 8pt; margin-top: auto; }
+@media print { .dispense-label.print-area { width: 70mm; border: none; margin: 0; } .druginfo-print.print-area { width: 190mm; } .druginfo-print details { break-inside: avoid; } .druginfo-print details > p { display: block; } }
+
+@media (max-width: 900px) {
+  .chat { grid-template-columns: 1fr; }
+  .chat-list { max-height: 34vh; }
+  .chat-page { height: auto; }
+  .chat-main { min-height: 60vh; }
+}

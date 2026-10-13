@@ -1,12 +1,22 @@
 import { useMemo, useState } from 'react';
-import { Building2, Plus, Truck, PackageCheck, Send, Pencil, MapPin } from 'lucide-react';
-import { useStore, today, uid, now, put, move, audit, allocate, MAIN_BRANCH } from '../store.jsx';
+import { Building2, Plus, Truck, PackageCheck, Send, Pencil, MapPin, Trash2 } from 'lucide-react';
+import { useStore, today, uid, now, put, del, move, audit, allocate, MAIN_BRANCH } from '../store.jsx';
 import { Modal, RecordForm, Tabs, Empty, SearchBox, Stat } from '../ui.jsx';
 import { toast, ask } from '../feedback.jsx';
 
 /** Owner view: every branch side by side, plus branch management. */
 export default function Branches() {
-  const { db, stockIndex, fmt, upsert, branchId, setBranchId, user } = useStore();
+  const { db, stockIndex, fmt, upsert, update, branchId, setBranchId, user, can } = useStore();
+  const admin = can('settings.manage');
+  const removeBranch = async (b) => {
+    const stock = db.products.reduce((a, p) => a + Math.max(stockIndex.product.get(b.id + '|' + p.id) || 0, 0), 0);
+    if (stock > 0) return toast(`${b.name} still has ${stock} items in stock. Transfer them to another branch first.`, 'warn');
+    if (db.transfers.some((t) => t.status === 'In transit' && (t.toId === b.id || t.fromId === b.id))) return toast('There are transfers in transit to or from this branch', 'warn');
+    if (!(await ask({ title: `Delete ${b.name}?`, message: 'Its past sales stay in your reports. Devices set to this branch switch to the main branch.', confirmText: 'Delete branch', danger: true }))) return;
+    update((d) => { del(d, 'branches', b.id); audit(d, user, 'Branch deleted', b.name, branchId); });
+    if (branchId === b.id) setBranchId('main');
+    toast(`${b.name} deleted`);
+  };
   const [edit, setEdit] = useState(null);
   const month = today().slice(0, 7);
 
@@ -33,7 +43,7 @@ export default function Branches() {
     <div className="page">
       <div className="page-head">
         <div><h1>Branches</h1><div className="sub">All branches at a glance · this device works as <strong>{db.branches.find((b) => b.id === branchId)?.name}</strong></div></div>
-        {user.role === 'admin' && <button className="btn primary" onClick={() => setEdit({ id: uid(), _new: true })}><Plus size={16} />Add branch</button>}
+        {admin && <button className="btn primary" onClick={() => setEdit({ id: uid(), _new: true })}><Plus size={16} />Add branch</button>}
       </div>
       <div className="stats">
         <Stat label="Sales today – all branches" value={fmt(totals.today)} icon={Building2} tone="teal" />
@@ -45,7 +55,7 @@ export default function Branches() {
           <div key={b.id} className={'card branch-card' + (b.id === branchId ? ' current' : '')}>
             <div className="row between">
               <h3><Building2 size={18} />{b.name}</h3>
-              {user.role === 'admin' && <button className="icon-btn" title="Edit" onClick={() => setEdit(b)}><Pencil size={15} /></button>}
+              {admin && <span><button className="icon-btn" title="Edit" onClick={() => setEdit(b)}><Pencil size={15} /></button>{b.id !== 'main' && <button className="icon-btn" title="Delete branch" onClick={() => removeBranch(b)}><Trash2 size={15} /></button>}</span>}
             </div>
             {b.address && <p className="muted small"><MapPin size={12} /> {b.address}</p>}
             <div className="kv"><span>Today</span><strong>{fmt(b.today)}</strong><small className="muted">{b.todayN} sales</small></div>
