@@ -30,7 +30,11 @@ $choice = Read-Host 'Choose 1-4'
 switch ($choice) {
   '1' {
     Write-Host "`nOn momodeveloper.mtn.com: Products -> Collections -> Subscribe, then Profile -> copy the Collections PRIMARY KEY." -ForegroundColor Yellow
-    $sub = Read-Secret 'Paste the Collections primary key'
+    for (;;) {
+      $sub = (Read-Secret 'Paste the Collections primary key') -replace '\s', ''
+      if ($sub -match '^[0-9a-fA-F]{32}$') { break }
+      Write-Host "That key has $($sub.Length) characters; MTN keys are 32 letters/numbers (0-9, a-f). Click 'Show' next to Primary key, copy all of it, and try again (right-click pastes here)." -ForegroundColor Red
+    }
     $base = 'https://sandbox.momodeveloper.mtn.com'
     $user = [guid]::NewGuid().ToString()
     Write-Host 'Creating your sandbox API user...'
