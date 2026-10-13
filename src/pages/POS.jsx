@@ -27,10 +27,24 @@ export default function POS({ mode = 'retail' }) {
   const [tendered, setTendered] = useState('');
   const [done, setDone] = useState(null);
   const searchRef = useRef();
+  const cartRef = useRef();
+  const chargeRef = useRef();
+  const [cartInView, setCartInView] = useState(true);
   const warn = db.settings.expiryWarnDays || 90;
 
-  useEffect(() => { searchRef.current?.querySelector('input')?.focus(); }, []);
-  const focusSearch = () => searchRef.current?.querySelector('input')?.focus();
+  // Phones: know whether the cart is on screen, so a floating cart bar can appear when it isn't
+  useEffect(() => {
+    if (!chargeRef.current || typeof IntersectionObserver !== 'function') return;
+    // The bottom 90 px are covered by the phone's bottom navigation, so they don't count as visible
+    const io = new IntersectionObserver(([e]) => setCartInView(e.isIntersecting), { threshold: 0.9, rootMargin: '0px 0px -90px 0px' });
+    io.observe(chargeRef.current);
+    return () => io.disconnect();
+  }, []);
+
+  // Keep the cursor in the search box for barcode scanners on PCs; on touch screens that would pop up the keyboard after every tap
+  const touch = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+  const focusSearch = () => { if (!touch) searchRef.current?.querySelector('input')?.focus(); };
+  useEffect(() => { focusSearch(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load a proforma into the cart (from Proformas → "Sell")
   useEffect(() => {
@@ -231,7 +245,15 @@ export default function POS({ mode = 'retail' }) {
         </div>
       </section>
 
-      <section className="pos-cart card">
+      {cart.length > 0 && !cartInView && (
+        <button className="cart-bar" onClick={() => cartRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
+          <ShoppingCart size={18} />
+          <span className="grow">{items} item{items === 1 ? '' : 's'} · <strong>{fmt(total)}</strong></span>
+          <span className="cart-bar-cta">Review & charge</span>
+        </button>
+      )}
+
+      <section className="pos-cart card" ref={cartRef}>
         <div className="cart-head">
           <h3>Current sale {items > 0 && <span className="badge">{items} item{items === 1 ? '' : 's'}</span>}</h3>
           {cart.length > 0 && <button className="btn sm ghost" onClick={() => setCart([])}><Trash2 size={14} />Clear</button>}
@@ -276,7 +298,7 @@ export default function POS({ mode = 'retail' }) {
         )}
         <div className="row gap">
           <button className="btn ghost" onClick={saveProforma} disabled={!cart.length} title="F10"><FileText size={16} />Proforma</button>
-          <button className="btn primary grow big" onClick={checkout} disabled={!cart.length} title="F9">Charge {fmt(total)}</button>
+          <button ref={chargeRef} className="btn primary grow big" onClick={checkout} disabled={!cart.length} title="F9">Charge {fmt(total)}</button>
         </div>
       </section>
 
