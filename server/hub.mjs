@@ -52,16 +52,40 @@ function backup() {
 backup();
 setInterval(backup, 6 * 3600e3);
 
-function authorized(req) {
-  const got = Buffer.from((req.headers.authorization || '').replace(/^Bearer /, ''));
-  const want = Buffer.from(KEY);
-  return got.length === want.length && crypto.timingSafeEqual(got, want);
+// ---- auth: the sync key (full access) or a staff sign-in token (same scheme as the cloud worker) ----
+const ADMIN_ONLY = new Set(['users', 'settings', 'branches']);
+const b64url = (buf) => Buffer.from(buf).toString('base64url');
+const sign = (body) => crypto.createHmac('sha256', 'token:' + KEY).update(body).digest('base64url');
+
+function authenticate(req) {
+  const got = (req.headers.authorization || '').replace(/^Bearer /, '');
+  if (got.startsWith('u.')) {
+    const [, body, sig] = got.split('.');
+    if (!body || !sig || sig.length !== sign(body).length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(sign(body)))) return null;
+    const p = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
+    return p.exp > Date.now() ? { role: p.role, name: p.name } : null;
+  }
+  const a = Buffer.from(got), b = Buffer.from(KEY);
+  return a.length === b.length && crypto.timingSafeEqual(a, b) ? { role: 'admin', name: 'sync key' } : null;
 }
 
-function sync({ deviceId, since = 0, changes = [] }) {
+function login({ email, password }) {
+  const e = String(email || '').trim().toLowerCase();
+  const u = Object.values(state.rows).filter((r) => r.t === 'users' && !r.deleted).map((r) => r.rec).find((x) => x && x.email === e && !x.disabled);
+  const pw = String(password || '');
+  const ok = u && (u.algo === 'pbkdf2'
+    ? crypto.pbkdf2Sync(pw, Buffer.from(u.salt, 'base64'), u.iter || 100000, 32, 'sha256').toString('hex') === u.hash
+    : crypto.createHash('sha256').update('pharmapos:' + pw).digest('hex') === u.hash);
+  if (!ok) return [401, { error: 'Wrong email or password, or this account has not been synced to the hub yet.' }];
+  const body = b64url(JSON.stringify({ sub: u.id, name: u.name, role: u.role, exp: Date.now() + 30 * 864e5 }));
+  return [200, { token: 'u.' + body + '.' + sign(body), user: { id: u.id, name: u.name, email: u.email, role: u.role } }];
+}
+
+function sync({ deviceId, since = 0, changes = [] }, who) {
   let applied = 0;
   for (const ch of changes) {
     if (!ch || typeof ch.t !== 'string' || ch.id == null || typeof ch.at !== 'string') continue;
+    if (who.role !== 'admin' && ADMIN_ONLY.has(ch.t)) continue; // only admins change users, settings, branches
     const k = ch.t + '|' + ch.id;
     const cur = state.rows[k];
     if (cur && cur.at >= ch.at) continue; // last writer wins
@@ -95,21 +119,27 @@ const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://x');
   if (req.method === 'OPTIONS') return send(res, 204, '');
   if (url.pathname === '/api/health') return send(res, 200, { ok: true, app: 'pharmapos-hub', rows: Object.keys(state.rows).length });
-  if (url.pathname === '/api/sync' && req.method === 'POST') {
-    if (!authorized(req)) return send(res, 401, { error: 'Wrong sync key' });
+  if ((url.pathname === '/api/sync' || url.pathname === '/api/login') && req.method === 'POST') {
+    const who = url.pathname === '/api/sync' ? authenticate(req) : null;
+    if (url.pathname === '/api/sync' && !who) return send(res, 401, { error: 'Not signed in (wrong sync key or expired sign-in)' });
     const chunks = [];
     let size = 0;
     req.on('data', (c) => { size += c.length; if (size > 50e6) req.destroy(); else chunks.push(c); });
     req.on('end', () => {
       try {
         const body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
+        if (url.pathname === '/api/login') { const [code, out] = login(body); return send(res, code, out); }
         if (!body.deviceId) return send(res, 400, { error: 'Missing deviceId' });
-        send(res, 200, sync(body));
+        send(res, 200, sync(body, who));
       } catch (e) {
         send(res, 400, { error: 'Bad request: ' + e.message });
       }
     });
     return;
+  }
+  if (url.pathname === '/api/config') {
+    if (!authenticate(req)) return send(res, 401, { error: 'Not signed in' });
+    return send(res, 200, { mtn: false, airtel: false, sms: false, hub: 'local' });
   }
   // Static web app
   if (req.method !== 'GET') return send(res, 405, { error: 'Method not allowed' });

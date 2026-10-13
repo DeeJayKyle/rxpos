@@ -16,6 +16,7 @@ export default function Prescriptions() {
         { key: 'facility', label: 'Hospital / clinic' },
         { key: 'diagnosis', label: 'Diagnosis' },
         { key: 'status', label: 'Status', type: 'select', options: ['Pending', 'Dispensed', 'Cancelled'] },
+        { key: 'refillDays', label: 'Refill every (days) – for reminders', type: 'number', placeholder: 'e.g. 30' },
         { key: 'medications', label: 'Medications, dose & directions', type: 'textarea', full: true, required: true },
         { key: 'notes', label: 'Pharmacist notes / counselling', type: 'textarea', full: true },
       ]}
@@ -25,6 +26,7 @@ export default function Prescriptions() {
         { label: 'Prescriber', key: 'doctor' },
         { label: 'Medications', render: (r) => <span className="clip">{r.medications}</span> },
         { label: 'Status', render: (r) => <span className={'badge ' + statusClass[r.status]}>{r.status}</span> },
+        { label: 'Refill', render: (r) => (r.refillDays ? `every ${r.refillDays} days` : '—') },
       ]}
       extraActions={(r) => r.status === 'Pending' && (
         <button className="btn sm primary" onClick={() => upsert('prescriptions', { ...r, status: 'Dispensed', dispensedOn: today() })}>Dispense</button>

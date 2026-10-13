@@ -8,9 +8,11 @@ const SESSION_KEY = 'pharmapos-session';
 export const TABLES = [
   'products', 'formulations', 'customers', 'suppliers', 'sales', 'proformas', 'purchases', 'movements',
   'prescriptions', 'expenses', 'expenseCategories', 'banks', 'bankTx', 'loans', 'payments', 'users',
+  'batches', 'branches', 'transfers', 'audit', 'purchaseOrders',
 ];
 // What is persisted on the device, one IndexedDB key per part
 const PARTS = [...TABLES, 'settings', '_tomb'];
+export const MAIN_BRANCH = 'main';
 
 export async function listSnapshots() {
   return (await idbKeys()).filter((k) => String(k).startsWith('snap:')).sort().reverse().map((k) => k.slice(5));
@@ -21,13 +23,30 @@ export const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().to
 export const now = () => new Date().toISOString();
 export const today = () => new Date().toISOString().slice(0, 10);
 export const daysUntil = (date) => Math.ceil((new Date(date) - new Date(today())) / 864e5);
+export const daysSince = (date) => Math.floor((Date.now() - new Date(date)) / 864e5);
 
+// ---------- passwords ----------
+const hex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+/** Legacy (v1.0/1.1) unsalted hash — still accepted at sign-in, then upgraded. */
 export async function hashPassword(pw) {
-  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('pharmapos:' + pw));
-  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+  return hex(await crypto.subtle.digest('SHA-256', new TextEncoder().encode('pharmapos:' + pw)));
+}
+async function pbkdf2(pw, salt) {
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(pw), 'PBKDF2', false, ['deriveBits']);
+  const saltBytes = Uint8Array.from(atob(salt), (c) => c.charCodeAt(0));
+  return hex(await crypto.subtle.deriveBits({ name: 'PBKDF2', salt: saltBytes, iterations: 100000, hash: 'SHA-256' }, key, 256));
+}
+/** Salted, slow hash for new and changed passwords: returns fields to store on the user record. */
+export async function makePassword(pw) {
+  const salt = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(16))));
+  return { algo: 'pbkdf2', salt, hash: await pbkdf2(pw, salt) };
+}
+export async function verifyPassword(u, pw) {
+  if (!u?.hash) return false;
+  return u.algo === 'pbkdf2' ? (await pbkdf2(pw, u.salt)) === u.hash : (await hashPassword(pw)) === u.hash;
 }
 
-// ---- draft helpers (used inside update(d => …)) ----
+// ---------- draft helpers (used inside update(d => …)) ----------
 export function put(d, table, rec) {
   const r = { ...rec, id: rec.id || uid(), updatedAt: now() };
   const i = d[table].findIndex((x) => x.id === r.id);
@@ -39,59 +58,94 @@ export function del(d, table, id) {
   d[table] = d[table].filter((x) => x.id !== id);
   d._tomb.push({ t: table, id, at: now() });
 }
-/** Record a stock movement. Stock is always the sum of movements, so devices can merge safely. */
-export function move(d, { productId, qty, type, ref = '', note = '', user = '' }) {
-  return put(d, 'movements', { id: uid(), productId, qty: Number(qty), type, ref, note, user, date: now() });
+/** Record a stock movement. Stock is always the sum of movements, so devices that worked offline merge safely. */
+export function move(d, { productId, qty, type, ref = '', note = '', user = '', batchId = null, branchId = MAIN_BRANCH }) {
+  return put(d, 'movements', { id: uid(), productId, qty: Number(qty), type, ref, note, user, batchId, branchId, date: now() });
+}
+/** Create a batch (lot) for a product; reuses an existing batch with the same number and expiry. */
+export function addBatch(d, { productId, batch, expiry, cost }) {
+  const code = String(batch || '').trim();
+  const existing = d.batches.find((b) => b.productId === productId && b.batch === code && (b.expiry || '') === (expiry || ''));
+  if (existing) return existing;
+  return put(d, 'batches', { id: uid(), productId, batch: code || 'B' + today().replace(/-/g, '').slice(2), expiry: expiry || '', cost: Number(cost) || 0, received: today() });
+}
+/** Append to the audit trail (who did what, when, where). */
+export function audit(d, user, action, details = '', branchId = MAIN_BRANCH) {
+  put(d, 'audit', { id: uid(), date: now(), user: user?.name || user || '', action, details, branchId });
+}
+/**
+ * First-expiry-first-out: split `qty` across batches (sorted by expiry) and return [{batchId, qty, batch, expiry}].
+ * Expired batches are skipped unless allowExpired.
+ */
+export function allocate(batches, qty, { allowExpired = false } = {}) {
+  const out = [];
+  let left = qty;
+  const ok = (b) => allowExpired || !b.expiry || daysUntil(b.expiry) >= 0;
+  for (const b of batches) {
+    if (left <= 0) break;
+    if (b.qty <= 0 || !ok(b)) continue;
+    const take = Math.min(b.qty, left);
+    out.push({ batchId: b.id, qty: take, batch: b.batch, expiry: b.expiry });
+    left -= take;
+  }
+  // Anything left (stock not yet recorded) is booked against the next sellable batch so totals stay right
+  if (left > 0) {
+    const b = batches.find(ok) || batches[0];
+    out.push({ batchId: b?.id || null, qty: left, batch: b?.batch || '', expiry: b?.expiry || '' });
+  }
+  return out;
 }
 
 // Fixed ids so the same defaults created on two devices merge instead of duplicating
-const FORMS = ['Tablet', 'Capsule', 'Syrup', 'Suspension', 'Injection', 'Infusion', 'Cream', 'Ointment', 'Gel', 'Drops', 'Inhaler', 'Sachet', 'Suppository', 'Pessary', 'Lotion', 'Powder', 'Device', 'Sundry'];
+const FORMS = ['Tablets', 'Capsules', 'Syrups', 'Suspensions', 'Injectables', 'Infusions', 'Creams', 'Ointments', 'Gels', 'Drops', 'Eye Drops', 'Ear Drops', 'Inhalers', 'Sachets', 'Suppositories', 'Pessaries', 'Lotions', 'Powders', 'Devices', 'Surgicals', 'Cosmetics', 'Supplements', 'Sundries', 'Others'];
 const EXPENSE_CATS = ['Rent', 'Salaries', 'Electricity', 'Water', 'Transport', 'Airtime & Internet', 'Licenses & Fees', 'Repairs', 'Stationery', 'Other'];
 
 function blankDb() {
   const t0 = '2000-01-01T00:00:00.000Z';
   const d = Object.fromEntries(TABLES.map((t) => [t, []]));
-  d.formulations = FORMS.map((name) => ({ id: 'form-' + name.toLowerCase(), name, updatedAt: t0 }));
+  d.formulations = FORMS.map((name) => ({ id: 'form-' + name.toLowerCase().replace(/\W+/g, '-'), name, updatedAt: t0 }));
   d.expenseCategories = EXPENSE_CATS.map((name) => ({ id: 'expcat-' + name.toLowerCase().replace(/\W+/g, '-'), name, updatedAt: t0 }));
   d.customers = [{ id: 'walk-in', name: 'Walk-in Customer', phone: '', updatedAt: t0 }];
   d.banks = [{ id: 'cash-drawer', name: 'Cash at hand', account: '', opening: 0, updatedAt: t0 }];
+  d.branches = [{ id: MAIN_BRANCH, name: 'Main branch', address: '', updatedAt: t0 }];
   d.settings = {
     name: 'My Pharmacy', address: '', phone: '', license: '', currency: 'UGX', decimals: 0, taxRate: 0,
     wholesaleMarkup: 25, retailMarkup: 50, expiryWarnDays: 90,
-    receiptFooter: 'Thank you for your purchase. Get well soon!', updatedAt: t0,
+    receiptFooter: 'Thank you for your purchase. Get well soon!', paperWidth: 80, autoPrint: false,
+    leadDays: 7, coverDays: 30, deadDays: 90,
+    smsRefill: 'Hello {name}, this is {pharmacy}. Your refill of {medicine} is due on {date}. Reply or visit us to collect. Get well soon!',
+    smsDebt: 'Hello {name}, this is a friendly reminder from {pharmacy} that your balance of {amount} is due. Thank you.',
+    updatedAt: t0,
   };
   d._tomb = [];
   return d;
 }
 
 const SAMPLE = [
-  ['Paracetamol 500mg', 'Paracetamol', 'Analgesic', 'Tablet', 30, 50, 100, 1200, 200, 400],
-  ['Amoxicillin 500mg', 'Amoxicillin', 'Antibiotic', 'Capsule', 120, 180, 250, 600, 100, 200, true],
-  ['Ibuprofen 400mg', 'Ibuprofen', 'NSAID', 'Tablet', 40, 70, 100, 800, 150, 25],
-  ['Metformin 500mg', 'Metformin', 'Antidiabetic', 'Tablet', 60, 90, 150, 90, 120, 300, true],
-  ['Amlodipine 5mg', 'Amlodipine', 'Antihypertensive', 'Tablet', 50, 80, 150, 400, 100, 500, true],
-  ['Omeprazole 20mg', 'Omeprazole', 'PPI', 'Capsule', 70, 110, 200, 350, 80, 60],
-  ['ORS Sachet', 'Oral Rehydration Salts', 'Electrolyte', 'Sachet', 300, 400, 500, 40, 50, 700],
-  ['Cough Syrup 100ml', 'Dextromethorphan', 'Antitussive', 'Syrup', 3500, 4500, 6000, 60, 20, 15],
-  ['Vitamin C 1000mg', 'Ascorbic acid', 'Supplement', 'Tablet', 80, 120, 200, 500, 100, 365],
-  ['Artemether/Lumefantrine 20/120', 'Artemether/Lumefantrine', 'Antimalarial', 'Tablet', 4000, 5500, 7000, 75, 30, 240, true],
+  ['Paracetamol 500mg', 'Paracetamol', 'Analgesic', 'Tablets', 30, 50, 100, 1200, 200, 400],
+  ['Amoxicillin 500mg', 'Amoxicillin', 'Antibiotic', 'Capsules', 120, 180, 250, 600, 100, 200, true],
+  ['Ibuprofen 400mg', 'Ibuprofen', 'NSAID', 'Tablets', 40, 70, 100, 800, 150, 25],
+  ['Metformin 500mg', 'Metformin', 'Antidiabetic', 'Tablets', 60, 90, 150, 90, 120, 300, true],
+  ['Amlodipine 5mg', 'Amlodipine', 'Antihypertensive', 'Tablets', 50, 80, 150, 400, 100, 500, true],
+  ['Omeprazole 20mg', 'Omeprazole', 'PPI', 'Capsules', 70, 110, 200, 350, 80, 60],
+  ['ORS Sachet', 'Oral Rehydration Salts', 'Electrolyte', 'Sachets', 300, 400, 500, 40, 50, 700],
+  ['Cough Syrup 100ml', 'Dextromethorphan', 'Antitussive', 'Syrups', 3500, 4500, 6000, 60, 20, 15],
+  ['Vitamin C 1000mg', 'Ascorbic acid', 'Supplement', 'Tablets', 80, 120, 200, 500, 100, 365],
+  ['Artemether/Lumefantrine 20/120', 'Artemether/Lumefantrine', 'Antimalarial', 'Tablets', 4000, 5500, 7000, 75, 30, 240, true],
 ];
 
-export function addSampleData(d, user) {
-  SAMPLE.forEach(([name, generic, category, form, cost, wholesale, price, stock, reorder, expDays, rx]) => {
-    const p = put(d, 'products', {
-      name, generic, category, form, cost, wholesale, price, reorder, unit: form === 'Syrup' ? 'Bottle' : 'Piece',
-      barcode: '', batch: 'B' + Math.floor(1000 + Math.random() * 9000),
-      expiry: new Date(Date.now() + expDays * 864e5).toISOString().slice(0, 10), rx: !!rx,
-    });
-    move(d, { productId: p.id, qty: stock, type: 'Opening stock', user });
+export function addSampleData(d, user, branchId = MAIN_BRANCH) {
+  SAMPLE.forEach(([name, generic, category, form, cost, wholesale, price, stock, reorder, expDays, rx], i) => {
+    const p = put(d, 'products', { name, generic, category, form, cost, wholesale, price, reorder, unit: 'Piece', barcode: '62000000' + String(1000 + i), rx: !!rx });
+    const b = addBatch(d, { productId: p.id, batch: 'B' + Math.floor(1000 + Math.random() * 9000), expiry: new Date(Date.now() + expDays * 864e5).toISOString().slice(0, 10), cost });
+    move(d, { productId: p.id, qty: stock, type: 'Opening stock', user, batchId: b.id, branchId });
   });
   put(d, 'suppliers', { name: 'Sample Wholesale Ltd', contact: '', phone: '', email: '', address: '' });
 }
 
 function draft(db) {
   const d = { ...db, settings: { ...db.settings }, _tomb: db._tomb.slice() };
-  TABLES.forEach((t) => (d[t] = db[t].slice()));
+  TABLES.forEach((t) => (d[t] = (db[t] || []).slice()));
   return d;
 }
 
@@ -101,7 +155,7 @@ export function mergeRemote(db, changes) {
   const index = {};
   for (const ch of changes) {
     if (ch.t === 'settings') {
-      if (!d.settings.updatedAt || ch.at > d.settings.updatedAt) d.settings = { ...ch.rec, updatedAt: ch.at };
+      if (!d.settings.updatedAt || ch.at > d.settings.updatedAt) d.settings = { ...d.settings, ...ch.rec, updatedAt: ch.at };
       continue;
     }
     if (!d[ch.t]) continue;
@@ -115,7 +169,7 @@ export function mergeRemote(db, changes) {
     else { d[ch.t].push({ ...ch.rec, updatedAt: ch.at }); index[ch.t].set(ch.id, d[ch.t].length - 1); }
   }
   // newest first, like local inserts
-  ['sales', 'purchases', 'expenses', 'payments', 'bankTx', 'proformas', 'prescriptions'].forEach((t) =>
+  ['sales', 'purchases', 'expenses', 'payments', 'bankTx', 'proformas', 'prescriptions', 'transfers', 'audit', 'purchaseOrders'].forEach((t) =>
     d[t].sort((a, b) => String(b.date || '').localeCompare(String(a.date || ''))));
   return d;
 }
@@ -126,7 +180,7 @@ export function StoreProvider({ children }) {
   const [db, setDb] = useState(null);
   const [syncCfg, setSyncCfgState] = useState(null);
   const [syncStatus, setSyncStatus] = useState({ state: 'off' });
-  const [user, setUser] = useState(() => {
+  const [user, setUserState] = useState(() => {
     try { return JSON.parse(sessionStorage.getItem(SESSION_KEY)); } catch { return null; }
   });
   const dbRef = useRef(null);
@@ -145,9 +199,10 @@ export function StoreProvider({ children }) {
       } catch (e) { console.error(e); }
       const base = blankDb();
       const loaded = saved ? { ...base, ...saved, settings: { ...base.settings, ...saved.settings } } : base;
+      if (!loaded.branches.length) loaded.branches = base.branches;
       if (saved) PARTS.forEach((k) => { if (saved[k] !== undefined) savedRefs.current[k] = loaded[k]; });
       setDb(loaded);
-      setSyncCfgState(cfg || { deviceId: uid(), url: '', key: '', pushedAt: '', cursor: 0 });
+      setSyncCfgState({ deviceId: uid(), url: '', key: '', pushedAt: '', cursor: 0, branchId: MAIN_BRANCH, ...(cfg || {}) });
     })();
   }, []);
 
@@ -183,13 +238,6 @@ export function StoreProvider({ children }) {
     return () => clearTimeout(t);
   }, [db]);
 
-  useEffect(() => {
-    try {
-      if (user) sessionStorage.setItem(SESSION_KEY, JSON.stringify(user));
-      else sessionStorage.removeItem(SESSION_KEY);
-    } catch {}
-  }, [user]);
-
   const saveSyncCfg = useCallback((cfg) => {
     setSyncCfgState(cfg);
     idbSet('sync', cfg).catch(console.error);
@@ -199,6 +247,18 @@ export function StoreProvider({ children }) {
   const upsert = useCallback((table, rec) => update((d) => { put(d, table, rec); }), [update]);
   const remove = useCallback((table, id) => update((d) => { del(d, table, id); }), [update]);
   const saveSettings = useCallback((s) => update((d) => { d.settings = { ...s, updatedAt: now() }; }), [update]);
+
+  const branchId = syncCfg?.branchId || MAIN_BRANCH;
+  const setBranchId = useCallback((id) => saveSyncCfg({ ...cfgRef.current, branchId: id }), [saveSyncCfg]);
+
+  const setUser = useCallback((u) => {
+    try {
+      if (u) sessionStorage.setItem(SESSION_KEY, JSON.stringify(u));
+      else sessionStorage.removeItem(SESSION_KEY);
+    } catch {}
+    if (u && !user) update((d) => audit(d, u, 'Signed in', navigator.userAgent.includes('Electron') ? 'Desktop app' : window.Capacitor ? 'Android app' : 'Browser', branchId));
+    setUserState(u);
+  }, [user, update, branchId]);
 
   // background sync with the hub (when configured)
   const syncRef = useRef(null);
@@ -218,13 +278,49 @@ export function StoreProvider({ children }) {
   }, [hasCfg, syncCfg?.url, syncCfg?.key, saveSyncCfg]);
   const syncNow = useCallback(() => syncRef.current?.run(), []);
 
-  // derived stock levels
-  const stock = useMemo(() => {
-    const m = {};
-    db?.movements.forEach((mv) => (m[mv.productId] = (m[mv.productId] || 0) + mv.qty));
-    return m;
+  // ---------- derived stock: per branch, per batch ----------
+  const stockIndex = useMemo(() => {
+    const batch = new Map(); // `${branch}|${batchId}` → qty
+    const product = new Map(); // `${branch}|${productId}` → qty
+    const total = new Map(); // productId → qty across all branches
+    for (const mv of db?.movements || []) {
+      const br = mv.branchId || MAIN_BRANCH;
+      const bk = br + '|' + (mv.batchId || 'lb-' + mv.productId);
+      const pk = br + '|' + mv.productId;
+      batch.set(bk, (batch.get(bk) || 0) + mv.qty);
+      product.set(pk, (product.get(pk) || 0) + mv.qty);
+      total.set(mv.productId, (total.get(mv.productId) || 0) + mv.qty);
+    }
+    return { batch, product, total };
   }, [db?.movements]);
-  const products = useMemo(() => db?.products.map((p) => ({ ...p, stock: stock[p.id] || 0 })) || [], [db?.products, stock]);
+
+  const batchMeta = useMemo(() => {
+    const m = new Map();
+    for (const b of db?.batches || []) { if (!m.has(b.productId)) m.set(b.productId, []); m.get(b.productId).push(b); }
+    return m;
+  }, [db?.batches]);
+
+  const productById = useMemo(() => new Map((db?.products || []).map((p) => [p.id, p])), [db?.products]);
+
+  /** Batches of a product at a branch with their quantities, earliest expiry first (FEFO order). */
+  const batchesOf = useCallback((pid, br = branchId) => {
+    const p = productById.get(pid);
+    const list = (batchMeta.get(pid) || []).map((b) => ({ ...b, qty: stockIndex.batch.get(br + '|' + b.id) || 0 }));
+    const legacy = stockIndex.batch.get(br + '|lb-' + pid);
+    if (legacy) list.push({ id: 'lb-' + pid, productId: pid, batch: p?.batch || '—', expiry: p?.expiry || '', cost: p?.cost || 0, qty: legacy, legacy: true });
+    return list.sort((a, b) => (a.expiry || '9999').localeCompare(b.expiry || '9999'));
+  }, [batchMeta, stockIndex, productById, branchId]);
+
+  // Products as seen from this device's branch: stock here, and the next batch to sell (earliest expiry with stock)
+  const products = useMemo(() => (db?.products || []).map((p) => {
+    const stock = stockIndex.product.get(branchId + '|' + p.id) || 0;
+    let next = null;
+    for (const b of batchMeta.get(p.id) || []) {
+      if ((stockIndex.batch.get(branchId + '|' + b.id) || 0) > 0 && (!next || (b.expiry || '9999') < (next.expiry || '9999'))) next = b;
+    }
+    if (!next && (stockIndex.batch.get(branchId + '|lb-' + p.id) || 0) > 0) next = { batch: p.batch, expiry: p.expiry };
+    return { ...p, stock, totalStock: stockIndex.total.get(p.id) || 0, batch: next?.batch ?? p.batch, expiry: next?.expiry ?? p.expiry };
+  }), [db?.products, stockIndex, batchMeta, branchId]);
 
   const fmt = useCallback((n) => {
     const s = db?.settings || {};
@@ -232,11 +328,13 @@ export function StoreProvider({ children }) {
     return `${s.currency || ''} ${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: dec, maximumFractionDigits: dec })}`.trim();
   }, [db?.settings]);
 
-  if (!db || !syncCfg) return <div className="loading">Loading PharmaPOS…</div>;
+  const branch = db?.branches.find((b) => b.id === branchId) || db?.branches[0];
+
+  if (!db || !syncCfg) return <div className="loading"><div className="spinner" />Loading PharmaPOS…</div>;
 
   return (
-    <Ctx.Provider value={{ db, setDb, update, upsert, remove, saveSettings, user, setUser, fmt, products, stock,
-      syncCfg, saveSyncCfg, syncStatus, syncNow }}>
+    <Ctx.Provider value={{ db, setDb, update, upsert, remove, saveSettings, user, setUser, fmt, products, stockIndex, batchesOf,
+      branchId, branch, setBranchId, syncCfg, saveSyncCfg, syncStatus, syncNow }}>
       {children}
     </Ctx.Provider>
   );
@@ -246,7 +344,7 @@ export const useStore = () => useContext(Ctx);
 
 export function downloadFile(name, content, type = 'text/plain') {
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([content], { type }));
+  a.href = URL.createObjectURL(content instanceof Blob ? content : new Blob([content], { type }));
   a.download = name;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
@@ -271,3 +369,15 @@ export function supplierBalance(db, id) {
   const paid = db.payments.filter((p) => p.kind === 'supplier' && p.partyId === id).reduce((a, p) => a + p.amount, 0);
   return owed - paid;
 }
+
+/** Normalise a Ugandan (or international) phone number to 2567XXXXXXXX form. */
+export function normalizePhone(phone, country = '256') {
+  let p = String(phone || '').replace(/[^\d+]/g, '');
+  if (p.startsWith('+')) p = p.slice(1);
+  if (p.startsWith('00')) p = p.slice(2);
+  if (p.startsWith('0')) p = country + p.slice(1);
+  if (p.length === 9) p = country + p;
+  return p;
+}
+/** Fill {placeholders} in a message template. */
+export const fillTemplate = (tpl, vars) => String(tpl || '').replace(/\{(\w+)\}/g, (m, k) => (vars[k] ?? m));

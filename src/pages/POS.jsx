@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useLocation, Link } from 'react-router-dom';
-import { ShoppingCart, Trash2, FileText, Printer, AlertTriangle, ScanBarcode } from 'lucide-react';
-import { useStore, uid, now, daysUntil, put, move } from '../store.jsx';
+import { ShoppingCart, Trash2, FileText, Printer, AlertTriangle, ScanBarcode, Smartphone, Loader2, CheckCircle2 } from 'lucide-react';
+import { useStore, uid, now, daysUntil, put, move, allocate, audit, normalizePhone } from '../store.jsx';
 import { CASH } from '../finance.js';
 import { Modal, SearchBox } from '../ui.jsx';
 import { toast, ask } from '../feedback.jsx';
+import { payRequest, payStatus, guessNetwork } from '../cloud.js';
 import { Receipt } from './Sales.jsx';
 
 const PAYMENTS = ['Cash', 'Mobile Money', 'Card', 'Bank Transfer', 'Insurance', 'Credit'];
@@ -12,7 +13,8 @@ const PAYMENTS = ['Cash', 'Mobile Money', 'Card', 'Bank Transfer', 'Insurance', 
 export const docNumber = (prefix) => prefix + Date.now().toString(36).toUpperCase().slice(-6) + Math.floor(Math.random() * 36).toString(36).toUpperCase();
 
 export default function POS({ mode = 'retail' }) {
-  const { db, products, update, user, fmt } = useStore();
+  const { db, products, update, user, fmt, batchesOf, branchId, syncCfg } = useStore();
+  const [momo, setMomo] = useState(null);
   const location = useLocation();
   const wholesale = mode === 'wholesale';
   const priceOf = (p) => (wholesale ? p.wholesale || p.price : p.price);
@@ -47,14 +49,20 @@ export default function POS({ mode = 'retail' }) {
     .slice(0, 80), [products, category, q, ql]);
 
   const add = async (p) => {
-    if (p.stock <= 0) return toast(`${p.name} is out of stock`, 'error');
-    if (p.expiry && daysUntil(p.expiry) < 0 && !(await ask({ title: 'Expired medicine', message: `${p.name} (batch ${p.batch || '—'}) expired on ${p.expiry}. Add it anyway?`, confirmText: 'Add anyway', danger: true }))) return;
+    if (p.stock <= 0) return toast(`${p.name} is out of stock at ${branchName}`, 'error');
+    // FEFO: sell from the earliest-expiring batch; expired batches are only used if the pharmacist confirms
+    const sellable = batchesOf(p.id).filter((b) => b.qty > 0 && (!b.expiry || daysUntil(b.expiry) >= 0)).reduce((a, b) => a + b.qty, 0);
     const inCart = cart.find((l) => l.id === p.id);
+    let allowExpired = inCart?.allowExpired || false;
+    if (!allowExpired && (inCart?.qty || 0) >= sellable) {
+      if (!(await ask({ title: 'Only expired stock left', message: `All remaining ${p.name} stock has expired. Sell expired stock anyway?`, confirmText: 'Sell expired', danger: true }))) return;
+      allowExpired = true;
+    }
     if (inCart && inCart.qty >= p.stock) return toast(`Only ${p.stock} ${p.name} in stock`, 'warn');
     setCart((c) => {
       const line = c.find((l) => l.id === p.id);
-      if (line) return c.map((l) => (l.id === p.id ? { ...l, qty: Math.min(l.qty + 1, p.stock) } : l));
-      return [...c, { id: p.id, name: p.name, price: priceOf(p), cost: p.cost, qty: 1, max: p.stock, rx: p.rx }];
+      if (line) return c.map((l) => (l.id === p.id ? { ...l, allowExpired, qty: Math.min(l.qty + 1, p.stock) } : l));
+      return [...c, { id: p.id, name: p.name, price: priceOf(p), cost: p.cost, qty: 1, max: p.stock, rx: p.rx, allowExpired }];
     });
     setQ('');
     focusSearch();
@@ -78,30 +86,76 @@ export default function POS({ mode = 'retail' }) {
   const customer = db.customers.find((c) => c.id === customerId);
   const items = cart.reduce((a, l) => a + l.qty, 0);
 
+  const branchName = db.branches.find((b) => b.id === branchId)?.name || 'this branch';
+
   const checkout = async () => {
     if (!cart.length) return;
     const credit = payment === 'Credit';
     if (credit && customerId === 'walk-in') return toast('Select a registered customer for a credit sale', 'warn');
     if (payment === 'Cash' && tendered !== '' && change < 0) return toast('Amount tendered is less than the total', 'error');
     if (cart.some((l) => l.rx) && !(await ask({ title: 'Prescription-only medicine', message: 'Confirm that a valid prescription has been checked for the Rx items in this sale.', confirmText: 'Prescription verified' }))) return;
+    if (payment === 'Mobile Money') {
+      const phone = normalizePhone(customer?.phone || '');
+      return setMomo({ phone: customer?.phone || '', network: phone ? guessNetwork(phone) : 'mtn', stage: 'enter', ref: '', manualRef: '' });
+    }
+    finalize();
+  };
+
+  const finalize = (extra = {}) => {
+    const credit = payment === 'Credit';
     const paid = credit ? Math.min(Number(tendered) || 0, total) : total;
+    // Split each line across batches, earliest expiry first
+    const items = cart.map(({ id, name, price, cost, qty, allowExpired }) => ({
+      id, name, price: Number(price), cost, qty,
+      alloc: allocate(batchesOf(id), qty, { allowExpired }).map(({ batchId, qty: q, batch, expiry }) => ({ batchId, qty: q, batch, expiry })),
+    }));
     const sale = {
-      id: uid(), number: docNumber('R'), date: now(), type: mode,
-      items: cart.map(({ id, name, price, cost, qty }) => ({ id, name, price: Number(price), cost, qty })),
-      subtotal, discount: disc, tax, total, payment, paid,
+      id: uid(), number: docNumber('R'), date: now(), type: mode, branchId,
+      items, subtotal, discount: disc, tax, total, payment, paid,
       tendered: payment === 'Cash' ? Number(tendered) || total : paid,
       bankId: payment === 'Cash' || credit ? CASH : db.settings.nonCashBankId || CASH,
-      customerId, customerName: customer?.name || 'Walk-in Customer', cashier: user.name, status: 'completed',
+      customerId, customerName: customer?.name || 'Walk-in Customer', cashier: user.name, status: 'completed', ...extra,
     };
     update((d) => {
       put(d, 'sales', sale);
-      sale.items.forEach((i) => move(d, { productId: i.id, qty: -i.qty, type: 'Sale', ref: sale.number, user: user.name }));
+      for (const i of items) for (const a of i.alloc) move(d, { productId: i.id, qty: -a.qty, type: 'Sale', ref: sale.number, user: user.name, batchId: a.batchId, branchId });
       const pf = location.state?.proforma;
       if (pf) put(d, 'proformas', { ...d.proformas.find((x) => x.id === pf.id), status: 'Converted', saleNumber: sale.number });
+      if (disc > 0) audit(d, user, 'Discount given', `${sale.number}: ${fmt(disc)}`, branchId);
     });
     window.history.replaceState({}, '');
     setDone(sale);
+    setMomo(null);
     setCart([]); setDiscount(0); setTendered(''); setCustomerId('walk-in'); setPayment('Cash');
+    if (db.settings.autoPrint) setTimeout(() => window.print(), 350);
+  };
+
+  // Mobile Money: ask the customer's phone to approve the payment, then poll until approved/declined
+  const pollRef = useRef(0);
+  const sendMomo = async () => {
+    const phone = normalizePhone(momo.phone);
+    if (phone.length < 12) return toast('Enter the customer’s mobile money number', 'warn');
+    setMomo((m) => ({ ...m, stage: 'waiting', error: '' }));
+    const run = ++pollRef.current;
+    try {
+      const reference = 'PP' + Date.now().toString(36).toUpperCase();
+      const { ref } = await payRequest(syncCfg, { provider: momo.network, phone, amount: total, reference, note: `${db.settings.name} payment` });
+      setMomo((m) => ({ ...m, ref }));
+      for (let i = 0; i < 45 && run === pollRef.current; i++) {
+        await new Promise((r) => setTimeout(r, 4000));
+        if (run !== pollRef.current) return;
+        const s = await payStatus(syncCfg, momo.network, ref).catch(() => ({ status: 'PENDING' }));
+        if (s.status === 'SUCCESSFUL') {
+          setMomo((m) => ({ ...m, stage: 'paid' }));
+          toast('Mobile Money payment received');
+          return finalize({ momo: { provider: momo.network, phone, ref, txid: s.txid || '' } });
+        }
+        if (s.status === 'FAILED') return setMomo((m) => ({ ...m, stage: 'enter', error: 'The customer declined or the payment failed' + (s.reason ? `: ${s.reason}` : '') }));
+      }
+      if (run === pollRef.current) setMomo((m) => ({ ...m, stage: 'enter', error: 'No answer from the customer’s phone. Try again or record the payment manually.' }));
+    } catch (e) {
+      setMomo((m) => ({ ...m, stage: 'enter', error: e.message }));
+    }
   };
 
   const saveProforma = () => {
@@ -225,6 +279,42 @@ export default function POS({ mode = 'retail' }) {
           <button className="btn primary grow big" onClick={checkout} disabled={!cart.length} title="F9">Charge {fmt(total)}</button>
         </div>
       </section>
+
+      {momo && (
+        <Modal title={<><Smartphone size={18} /> Mobile Money – {fmt(total)}</>} onClose={() => { pollRef.current++; setMomo(null); }}>
+          {momo.stage === 'waiting' ? (
+            <div className="cart-empty">
+              <Loader2 size={40} className="spin" />
+              <strong>Waiting for the customer to approve on their phone…</strong>
+              <span className="muted">They should see a prompt to enter their {momo.network === 'airtel' ? 'Airtel Money' : 'MTN MoMo'} PIN.</span>
+              <button className="btn ghost" onClick={() => { pollRef.current++; setMomo((m) => ({ ...m, stage: 'enter' })); }}>Cancel</button>
+            </div>
+          ) : momo.stage === 'paid' ? (
+            <div className="cart-empty"><CheckCircle2 size={44} className="text-ok" /><strong>Payment received</strong></div>
+          ) : (
+            <div className="stack">
+              <div className="form-grid">
+                <label className="field"><span>Customer’s mobile money number</span>
+                  <input autoFocus inputMode="tel" placeholder="07XX XXX XXX" value={momo.phone}
+                    onChange={(e) => setMomo({ ...momo, phone: e.target.value, network: guessNetwork(normalizePhone(e.target.value)) })} /></label>
+                <label className="field"><span>Network</span>
+                  <select value={momo.network} onChange={(e) => setMomo({ ...momo, network: e.target.value })}>
+                    <option value="mtn">MTN MoMo</option><option value="airtel">Airtel Money</option>
+                  </select></label>
+              </div>
+              {momo.error && <div className="error">{momo.error}</div>}
+              <button className="btn primary big" onClick={sendMomo} disabled={!syncCfg.url}><Smartphone size={18} />Send payment request to phone</button>
+              {!syncCfg.url && <small className="muted">Connect this device to the PharmaPOS cloud (Settings → Online sync) to send payment requests.</small>}
+              <div className="divider"><span>or the customer already paid</span></div>
+              <div className="row gap">
+                <input className="grow" placeholder="Transaction ID from the SMS" value={momo.manualRef} onChange={(e) => setMomo({ ...momo, manualRef: e.target.value })} />
+                <button className="btn ghost" disabled={momo.manualRef.trim().length < 4}
+                  onClick={() => finalize({ momo: { provider: momo.network, phone: normalizePhone(momo.phone), txid: momo.manualRef.trim(), manual: true } })}>Record payment</button>
+              </div>
+            </div>
+          )}
+        </Modal>
+      )}
 
       {done && (
         <Modal title={done.proforma ? 'Proforma saved' : 'Sale complete ✓'} onClose={() => { setDone(null); focusSearch(); }}>

@@ -426,4 +426,65 @@ table.lines input, table.lines select { width: 100%; min-width: 80px; padding: 7
   .print-area { position: fixed; left: 0; top: 0; width: 80mm; background: #fff; color: #000; }
   .no-print { display: none; }
 }
+/* ---------- v1.2 additions ---------- */
+.spin { animation: spin 1s linear infinite; color: var(--primary); }
+.nowrap { white-space: nowrap; }
+.divider { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; }
+.divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+.disabled-link { opacity: .45; pointer-events: none; }
+.info-notice { background: var(--primary-soft); color: var(--primary-ink); }
+.notice { display: flex; align-items: center; gap: 8px; }
+.branch-pill { text-decoration: none; color: var(--text); }
+.branch-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+.branch-card { display: flex; flex-direction: column; gap: 8px; }
+.branch-card h3 { margin: 0; }
+.branch-card.current { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
+.kv { display: flex; align-items: baseline; gap: 8px; justify-content: space-between; border-bottom: 1px dashed var(--border); padding: 4px 0; }
+.kv span { color: var(--muted); font-size: 13px; }
+.kv strong { margin-left: auto; font-variant-numeric: tabular-nums; }
+.status-line { display: flex; align-items: center; gap: 8px; font-weight: 550; }
+.status-line.ok { color: var(--ok); }
+.status-line.off { color: var(--muted); }
+.hero-card { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; }
+.hero-card > svg { color: var(--primary); flex-shrink: 0; }
+.hero-card h3 { margin-bottom: 6px; }
+.dropzone { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 48px 20px; border: 2px dashed var(--border-strong); cursor: pointer; text-align: center; transition: border-color .15s, background .15s; }
+.dropzone:hover { border-color: var(--primary); background: var(--primary-soft); }
+.dropzone > svg { color: var(--primary); }
+details summary { cursor: pointer; margin-bottom: 6px; }
+details input { width: 100%; }
+
+/* Receipts */
+.receipt-title { font-size: 16px; }
+.receipt-tag { font-weight: 800; letter-spacing: .08em; margin: 4px 0; }
+.receipt-rule { border-top: 1px dashed var(--border-strong); margin: 4px 0; }
+.receipt-barcode { display: flex; justify-content: center; margin-top: 8px; }
+.receipt-barcode .barcode { width: 75%; max-width: 260px; height: 46px; }
+.receipt p { margin: 6px 0 0; }
+
+/* Barcode labels */
+.barcode { display: block; width: 100%; height: auto; }
+.label-sheet { display: flex; flex-wrap: wrap; gap: 6px; max-height: 70vh; overflow: auto; background: var(--surface-2); padding: 10px; border-radius: 10px; }
+.label { width: var(--lw); height: var(--lh); background: #fff; color: #000; border: 1px dashed #cbd5e1; border-radius: 4px; padding: 1.2mm 1.6mm; display: flex; flex-direction: column; justify-content: space-between; overflow: hidden; font-family: 'Inter Variable', Arial, sans-serif; }
+.label .barcode { height: 45%; min-height: 0; flex: 1; }
+.label-shop { font-size: 6.5pt; text-transform: uppercase; letter-spacing: .04em; opacity: .7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.label-name { font-size: 8pt; font-weight: 700; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.label-foot { display: flex; justify-content: space-between; align-items: baseline; font-size: 7pt; gap: 4px; }
+.label-foot strong { font-size: 9.5pt; }
+.labels-38x25 .label-shop { display: none; }
+.po-doc h2 { margin: 0 0 6px; }
+
+@media print {
+  .receipt { background: #fff !important; color: #000 !important; border-radius: 0; padding: 2mm; font-size: 11px; }
+  .receipt .muted { color: #000 !important; }
+  .print-area.paper-58 { width: 58mm; }
+  .print-area.paper-80 { width: 80mm; }
+  .print-area.paper-210 { width: 190mm; font-size: 13px; }
+  .label-sheet.print-area { width: auto; max-height: none; overflow: visible; background: #fff; padding: 0; gap: 0; border-radius: 0; }
+  .label-sheet .label { border: none; page-break-inside: avoid; break-inside: avoid; }
+  .labels-a4.print-area { width: 190mm; gap: 0 2.5mm; }
+  .po-doc.print-area { width: 190mm; color: #000; }
+  .po-doc th, .po-doc td { color: #000; background: none; }
+}
+
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }

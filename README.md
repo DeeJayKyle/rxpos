@@ -1,18 +1,24 @@
 # PharmaPOS
 
-Pharmacy point of sale and management system that works **offline** and **online**.
-Runs as a Windows desktop app or in any browser, and keeps all your PCs and branches in sync through a PharmaPOS Hub.
+Pharmacy point of sale and management system that works **offline** and **online**: on Windows PCs, Android phones and in any browser,
+across all your branches.
+
+**Live:** https://pharmapos.pharmapos.workers.dev (Cloudflare, free plan).
 
 ## Features
 
 | Area | What you get |
 | --- | --- |
-| Sales | POS – Retail (F2), POS – Wholesale (F3), barcode scanning, cash / mobile money / card / bank / insurance / **credit** sales, discounts, VAT, printable receipts, proformas (F10) with one-click conversion to a sale, refunds, sales history (F6) |
-| Medicine inventory | Medicine list (retail + wholesale prices, auto-pricing by markup), formulations, inventory levels (F7), add stock / goods received (F4), purchase history, soon expiring & expired (with write-off), quick edit (spreadsheet-style price editing), stock card with running balance, stock counts and adjustments |
-| People | Customers (allergies, insurance, credit limit), suppliers, prescriptions (record & dispense) |
-| Finance | Expenses & categories, banks & accounts with live balances, deposits / withdrawals / transfers, loans & repayments, debtors (customers owe), creditors (we owe suppliers), cash book |
-| Reports | Dashboard (today's sales & expenses, monthly sales, sales vs expenses, 30-day trend, top 10), sales report, sales by product, purchase report, expenses report, stock valuation, income statement, CSV export everywhere |
-| System | Users & roles (admin / pharmacist / cashier), backup & restore, offline-first sync |
+| Sales | POS – Retail (F2) & Wholesale (F3), barcode scanning, **MTN MoMo & Airtel Money payment requests** (customer approves on their phone), cash / card / bank / insurance / credit, discounts, VAT, 58/80 mm thermal receipts with barcode (auto-print option), proformas (F10), refunds back into the same batches, sales history (F6) |
+| Batches & expiry | Every delivery is a **batch** with its own expiry; sales use **first-expiry-first-out** automatically; expired stock is blocked unless the pharmacist confirms; per-batch stock card, counts, adjustments and write-offs |
+| Medicine inventory | 9,700-item **standard catalog** in one click, **Excel/CSV import** with column matching, medicine list, formulations, inventory (F7), add stock (F4), purchase history, quick edit, **barcode label printing** (Code 128, any label size / A4 sheets) |
+| Reorder | **Smart reorder suggestions** from real sales velocity, lead time and target cover; **dead-stock report**; purchase orders (print / WhatsApp to supplier) that receive straight into Add Stock |
+| Branches | Unlimited branches, stock per branch, **stock transfers** (in transit → received, shortages recorded), owner overview of every branch, branch filters in sales & reports |
+| People | Customers (allergies, insurance, credit limit), suppliers, prescriptions with refill intervals, **refill & debt reminders by WhatsApp or SMS** |
+| Finance | Expenses & categories, banks with live balances, deposits / withdrawals / transfers, loans, debtors, creditors, cash book |
+| Reports | Dashboard (today vs yesterday, 30-day trend, sales vs expenses, top 10), sales, sales by product, purchases, expenses, stock valuation, income statement, CSV export everywhere |
+| Security | Individual staff accounts (salted PBKDF2 passwords), roles (admin / pharmacist / cashier) enforced on the server, **audit log** of sign-ins, refunds, discounts, price changes, adjustments, write-offs, transfers and user changes |
+| Reliability | Works fully offline, syncs every 30 s, per-table storage, 7 daily on-device snapshots, crash-recovery screen, dark mode, Ctrl+K search |
 
 ## How offline + online works
 
@@ -96,6 +102,37 @@ cloudflared tunnel --url http://localhost:8686
 
 The quick tunnel prints a random `https://….trycloudflare.com` address that changes on every restart. For a permanent address, add a domain to a free Cloudflare account and create a named tunnel.
 Downside: online access only works while that PC is on and connected, so prefer Coolify for branches in other towns.
+
+## Staff accounts & connecting devices
+
+1. On the **owner's first device**: Settings → Online & payments → *With the sync key*: enter the cloud address and the sync key
+   (stored in `Documents\PharmaPOS-SYNC-KEY.txt` on the PC that set up the cloud). This uploads your data, including staff accounts.
+2. Add staff in Settings → Users (each person gets their own email + password and role).
+3. On any other PC, phone or browser: **Join with my account** using their own email and password. No shared key needed.
+   Cashiers can't change users, settings or branches, even if they tamper with their device; the cloud refuses it.
+
+## Mobile Money (MTN MoMo, Airtel Money) and SMS
+
+Payments and SMS go through the cloud so your API keys never sit on the shop PCs. Add these as **Secrets** in
+Cloudflare → Workers & Pages → `pharmapos` → Settings → Variables and Secrets (or `npx wrangler secret put NAME`):
+
+| Service | Get keys from | Secrets |
+| --- | --- | --- |
+| MTN MoMo (Collections) | momodeveloper.mtn.com → subscribe to *Collections*; for live use apply for MTN Uganda MoMo API go-live | `MTN_SUBSCRIPTION_KEY`, `MTN_API_USER`, `MTN_API_KEY`, `MTN_ENV` = `sandbox` or `production`, optional `MTN_TARGET` (default `mtnuganda`) |
+| Airtel Money (Collections) | developers.airtel.africa → create an app with *Collection* product | `AIRTEL_CLIENT_ID`, `AIRTEL_CLIENT_SECRET`, `AIRTEL_ENV` = `uat` or `production`, optional `AIRTEL_COUNTRY` (UG), `AIRTEL_CURRENCY` (UGX) |
+| SMS | africastalking.com → API key (username `sandbox` for testing) | `AT_USERNAME`, `AT_API_KEY`, optional `AT_SENDER_ID` |
+
+Settings → Online & payments shows a green tick for each service once its keys work. Until then the POS records Mobile Money
+by transaction ID, and reminders go out by WhatsApp (free, no keys needed).
+
+## App signing & stores
+
+* **Android:** every build is signed with the PharmaPOS release key (GitHub secrets `ANDROID_KEYSTORE_B64`, `ANDROID_KEYSTORE_PASSWORD`,
+  `ANDROID_KEY_ALIAS`; a backup is in `Documents\PharmaPOS-Android-Signing` on the setup PC. **Keep that folder safe**: it's needed for every update).
+  Releases contain `PharmaPOS-Android.apk` (install directly) and `PharmaPOS-GooglePlay.aab` (upload to Google Play Console:
+  one-time US$25 developer account → Create app → Production → upload the .aab).
+* **Windows:** to remove the "unknown publisher" warning, buy a code-signing certificate (or use Azure Trusted Signing) and add it as
+  secrets `WINDOWS_CERT_B64` (the .pfx, base64) and `WINDOWS_CERT_PASSWORD`. The build signs automatically when they exist.
 
 ## Development
 

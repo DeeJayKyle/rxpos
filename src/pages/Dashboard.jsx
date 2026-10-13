@@ -1,18 +1,18 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Banknote, Wallet, CalendarClock, PackageX, Pill, Coins, Users, ShoppingCart, PackagePlus, ReceiptText } from 'lucide-react';
-import { useStore, today, daysUntil } from '../store.jsx';
+import { useStore, today, daysUntil, MAIN_BRANCH } from '../store.jsx';
 import { Stat, BarChart, AreaChart, Empty } from '../ui.jsx';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const dayKey = (offset) => new Date(Date.now() - offset * 864e5).toISOString().slice(0, 10);
 
 export default function Dashboard() {
-  const { db, products, fmt, user } = useStore();
+  const { db, products, fmt, user, branchId } = useStore();
   const warn = db.settings.expiryWarnDays || 90;
 
   const m = useMemo(() => {
-    const valid = db.sales.filter((s) => s.status !== 'refunded');
+    const valid = db.sales.filter((s) => s.status !== 'refunded' && (s.branchId || MAIN_BRANCH) === branchId);
     // One pass to bucket sales and expenses by day and month
     const byDay = {}, byMonth = {}, top = {};
     const thisMonth = today().slice(0, 7);
@@ -28,7 +28,7 @@ export default function Dashboard() {
       (byMonth[mo] ??= { n: 0, total: 0, exp: 0 }); byMonth[mo].exp += e.amount;
     }
     return { byDay, byMonth, top: Object.values(top).sort((a, b) => b.amount - a.amount).slice(0, 10) };
-  }, [db.sales, db.expenses]);
+  }, [db.sales, db.expenses, branchId]);
 
   const t = m.byDay[today()] || { n: 0, total: 0, exp: 0 };
   const y = m.byDay[dayKey(1)] || { n: 0, total: 0, exp: 0 };

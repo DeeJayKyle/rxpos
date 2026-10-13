@@ -1,15 +1,22 @@
 import { useState } from 'react';
-import { useStore, uid, today, put, move, downloadFile, toCSV } from '../store.jsx';
+import { useLocation } from 'react-router-dom';
+import { useStore, uid, today, put, move, addBatch, audit, downloadFile, toCSV } from '../store.jsx';
 import { CASH } from '../finance.js';
 import { Modal } from '../ui.jsx';
 import { toast } from '../feedback.jsx';
 
-/** Receive stock from a supplier: logs stock-in movements and updates cost/prices/batch/expiry. */
+/** Receive stock from a supplier: every line becomes a batch (number + expiry) at this branch. */
 export function AddStock() {
-  const { db, products, update, fmt, user } = useStore();
+  const { db, products, update, fmt, user, branchId } = useStore();
+  const location = useLocation();
   const blankLine = () => ({ key: uid(), productId: '', qty: 1, cost: 0, price: '', batch: '', expiry: '' });
   const blank = () => ({ supplierId: '', invoice: '', date: today(), paid: '', bankId: CASH, lines: [blankLine()] });
-  const [form, setForm] = useState(blank);
+  // Pre-filled from a purchase order (Reorder → Receive)
+  const [form, setForm] = useState(() => {
+    const po = location.state?.po;
+    if (!po) return blank();
+    return { ...blank(), supplierId: po.supplierId || '', poId: po.id, lines: po.items.map((i) => ({ ...blankLine(), productId: i.productId, qty: i.qty, cost: i.cost || 0, price: products.find((p) => p.id === i.productId)?.price || '' })) };
+  });
   const [q, setQ] = useState('');
   const [saved, setSaved] = useState(null);
 
@@ -29,11 +36,12 @@ export function AddStock() {
     e.preventDefault();
     const lines = form.lines.filter((l) => l.productId && Number(l.qty) > 0);
     if (!lines.length) return toast('Add at least one medicine', 'warn');
+    if (lines.some((l) => !l.expiry)) return toast('Enter the expiry date for every line (needed for first-expiry-first-out)', 'warn');
     const supplier = db.suppliers.find((s) => s.id === form.supplierId);
     const paid = form.paid === '' ? total : Math.min(Number(form.paid), total);
     const purchase = {
       id: uid(), number: 'GRN' + Date.now().toString(36).toUpperCase().slice(-6), supplierId: form.supplierId, supplierName: supplier?.name || '—',
-      invoice: form.invoice, date: form.date, receivedBy: user.name, total, paid, bankId: form.bankId,
+      invoice: form.invoice, date: form.date, receivedBy: user.name, total, paid, bankId: form.bankId, branchId,
       items: lines.map((l) => ({ productId: l.productId, name: products.find((p) => p.id === l.productId)?.name, qty: Number(l.qty), cost: Number(l.cost), batch: l.batch, expiry: l.expiry })),
     };
     update((d) => {
@@ -41,12 +49,19 @@ export function AddStock() {
       lines.forEach((l) => {
         const p = d.products.find((x) => x.id === l.productId);
         if (!p) return;
-        move(d, { productId: p.id, qty: Number(l.qty), type: 'Purchase', ref: purchase.invoice || purchase.number, user: user.name });
-        put(d, 'products', {
-          ...p, cost: Number(l.cost) || p.cost, price: Number(l.price) || p.price,
-          batch: l.batch || p.batch, expiry: l.expiry || p.expiry,
-        });
+        const b = addBatch(d, { productId: p.id, batch: l.batch, expiry: l.expiry, cost: l.cost });
+        move(d, { productId: p.id, qty: Number(l.qty), type: 'Purchase', ref: purchase.invoice || purchase.number, user: user.name, batchId: b.id, branchId });
+        const price = Number(l.price) || p.price;
+        if (Number(l.cost) !== p.cost || price !== p.price) {
+          put(d, 'products', { ...p, cost: Number(l.cost) || p.cost, price });
+          if (price !== p.price) audit(d, user, 'Price changed', `${p.name}: ${fmt(p.price)} → ${fmt(price)} (on receiving)`, branchId);
+        }
       });
+      if (form.poId) {
+        const po = d.purchaseOrders.find((x) => x.id === form.poId);
+        if (po) put(d, 'purchaseOrders', { ...po, status: 'Received', receivedAt: today(), purchaseId: purchase.id });
+      }
+      audit(d, user, 'Stock received', `${purchase.number} from ${purchase.supplierName}: ${lines.length} lines, ${fmt(total)}`, branchId);
     });
     setSaved(purchase);
     setForm(blank());

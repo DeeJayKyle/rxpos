@@ -4,7 +4,7 @@ import {
   LayoutDashboard, ShoppingCart, PackageOpen, ReceiptText, FileText, ClipboardPlus, Users, Truck, Pill, FlaskConical,
   Boxes, PackagePlus, History, CalendarClock, PencilRuler, ScrollText, Wallet, Tags, Landmark, ArrowLeftRight, HandCoins,
   ArrowDownLeft, ArrowUpRight, BookOpen, BarChart3, Settings as SettingsIcon, Search, Sun, Moon, Menu, LogOut, ChevronDown,
-  CornerDownLeft, User, Plus,
+  CornerDownLeft, User, Plus, BellRing, ShoppingBag, Tag, FileUp, Building2, Send, ShieldCheck,
 } from 'lucide-react';
 import { useStore, daysUntil } from './store.jsx';
 import Auth from './pages/Auth.jsx';
@@ -28,6 +28,12 @@ const P = {
   Loans: page(fin, 'Loans'), Debtors: page(fin, 'Debtors'), Creditors: page(fin, 'Creditors'), CashBook: page(fin, 'CashBook'),
   Reports: page(() => import('./pages/Reports.jsx')),
   Settings: page(() => import('./pages/Settings.jsx')),
+  Branches: page(() => import('./pages/Branches.jsx')), Transfers: page(() => import('./pages/Branches.jsx'), 'Transfers'),
+  Audit: page(() => import('./pages/Audit.jsx')),
+  Reminders: page(() => import('./pages/Reminders.jsx')),
+  Labels: page(() => import('./pages/Labels.jsx')),
+  Import: page(() => import('./pages/Import.jsx')),
+  Reorder: page(() => import('./pages/Reorder.jsx')),
 };
 
 // [path, label, Icon, shortcut, badge, element]
@@ -40,7 +46,11 @@ const NAV = [
     ['/proformas', 'Proformas', FileText, null, null, <P.Proformas />],
     ['/prescriptions', 'Prescriptions', ClipboardPlus, null, null, <P.Prescriptions />],
   ] },
-  { group: 'People', items: [['/customers', 'Customers', Users, null, null, <P.Customers />], ['/suppliers', 'Suppliers', Truck, null, null, <P.Suppliers />]] },
+  { group: 'People', items: [
+    ['/customers', 'Customers', Users, null, null, <P.Customers />],
+    ['/suppliers', 'Suppliers', Truck, null, null, <P.Suppliers />],
+    ['/reminders', 'Reminders', BellRing, null, null, <P.Reminders />],
+  ] },
   { group: 'Medicine Inventory', items: [
     ['/medicines', 'Medicine List', Pill, null, null, <P.MedicineList />],
     ['/formulations', 'Formulations', FlaskConical, null, null, <P.Formulations />],
@@ -48,8 +58,15 @@ const NAV = [
     ['/add-stock', 'Add Stock', PackagePlus, 'F4', null, <P.AddStock />],
     ['/purchases', 'Purchase History', History, null, null, <P.Purchases />],
     ['/expiry', 'Expiring / Expired', CalendarClock, null, 'expiry', <P.Expiry />],
+    ['/reorder', 'Reorder & Dead Stock', ShoppingBag, null, null, <P.Reorder />],
     ['/quick-edit', 'Quick Edit', PencilRuler, null, null, <P.QuickEdit />],
     ['/stock-card', 'Stock Card', ScrollText, null, null, <P.StockCard />],
+    ['/labels', 'Barcode Labels', Tag, null, null, <P.Labels />],
+    ['/import', 'Import Medicines', FileUp, null, null, <P.Import />],
+  ] },
+  { group: 'Branches', items: [
+    ['/branches', 'All Branches', Building2, null, null, <P.Branches />],
+    ['/transfers', 'Stock Transfers', Send, null, 'transfers', <P.Transfers />],
   ] },
   { group: 'Finance', roles: ['admin', 'pharmacist'], items: [
     ['/expenses', 'Expenses', Wallet, null, null, <P.Expenses />],
@@ -62,7 +79,10 @@ const NAV = [
     ['/cash-book', 'Cash Book', BookOpen, null, null, <P.CashBook />],
   ] },
   { group: 'Insights', roles: ['admin', 'pharmacist'], items: [['/reports', 'Reports', BarChart3, null, null, <P.Reports />]] },
-  { group: 'System', roles: ['admin'], items: [['/settings', 'Settings & Sync', SettingsIcon, null, null, <P.Settings />]] },
+  { group: 'System', roles: ['admin'], items: [
+    ['/settings', 'Settings & Sync', SettingsIcon, null, null, <P.Settings />],
+    ['/audit', 'Audit Log', ShieldCheck, null, null, <P.Audit />],
+  ] },
 ];
 
 const SHORTCUTS = { F2: '/pos', F3: '/pos/wholesale', F4: '/add-stock', F6: '/sales', F7: '/inventory' };
@@ -154,7 +174,7 @@ function CommandPalette({ open, onClose, pages }) {
 }
 
 function Shell() {
-  const { db, products, user, setUser } = useStore();
+  const { db, products, user, setUser, branchId, branch } = useStore();
   const navigate = useNavigate();
   const location = useLocation();
   const [theme, toggleTheme] = useTheme();
@@ -166,8 +186,9 @@ function Shell() {
   const pages = groups.flatMap((g) => g.items.map(([to, label, Icon, key]) => ({ to, label, Icon, key })));
   const counts = useMemo(() => ({
     expiry: products.filter((p) => p.expiry && p.stock > 0 && daysUntil(p.expiry) <= (db.settings.expiryWarnDays || 90)).length,
-    low: products.filter((p) => p.stock <= (p.reorder || 0)).length,
-  }), [products, db.settings.expiryWarnDays]);
+    low: products.filter((p) => p.stock <= (p.reorder || 0) && p.reorder > 0).length,
+    transfers: db.transfers.filter((t) => t.toId === branchId && t.status === 'In transit').length,
+  }), [products, db.settings.expiryWarnDays, db.transfers, branchId]);
 
   useEffect(() => setDrawer(false), [location.pathname]);
   useEffect(() => {
@@ -219,6 +240,7 @@ function Shell() {
           <button className="icon-btn menu-btn" aria-label="Menu" onClick={() => setDrawer(true)}><Menu size={20} /></button>
           <button className="search-trigger" onClick={() => setPalette(true)}><Search size={16} /><span>Search medicines, customers, receipts…</span><kbd>Ctrl K</kbd></button>
           <div className="spacer grow" />
+          {db.branches.length > 1 && <NavLink to="/branches" className="pill branch-pill" title="Branch this device works as"><Building2 size={14} />{branch?.name}</NavLink>}
           <SyncPill />
           <button className="icon-btn" title={theme === 'dark' ? 'Light mode' : 'Dark mode'} onClick={toggleTheme}>{theme === 'dark' ? <Sun size={19} /> : <Moon size={19} />}</button>
         </header>

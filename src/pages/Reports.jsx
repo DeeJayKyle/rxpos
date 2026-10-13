@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useStore, today, downloadFile, toCSV, daysUntil } from '../store.jsx';
+import { useStore, today, downloadFile, toCSV, daysUntil, MAIN_BRANCH } from '../store.jsx';
 import { Stat, Tabs, BarChart } from '../ui.jsx';
 
 const sumBy = (arr, key, val) => {
@@ -13,7 +13,9 @@ export default function Reports() {
   const [tab, setTab] = useState('sales');
   const [from, setFrom] = useState(today().slice(0, 8) + '01');
   const [to, setTo] = useState(today());
-  const inRange = (x) => String(x.date).slice(0, 10) >= from && String(x.date).slice(0, 10) <= to;
+  const [branch, setBranch] = useState('all');
+  const inBranch = (x) => branch === 'all' || (x.branchId || MAIN_BRANCH) === branch;
+  const inRange = (x) => String(x.date).slice(0, 10) >= from && String(x.date).slice(0, 10) <= to && inBranch(x);
 
   const sales = db.sales.filter((s) => s.status !== 'refunded' && inRange(s));
   const refunds = db.sales.filter((s) => s.status === 'refunded' && inRange(s));
@@ -41,6 +43,12 @@ export default function Reports() {
 
   const Range = (
     <div className="row gap">
+      {db.branches.length > 1 && (
+        <select value={branch} onChange={(e) => setBranch(e.target.value)} aria-label="Branch">
+          <option value="all">All branches</option>
+          {db.branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+        </select>
+      )}
       <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /><span>to</span><input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
     </div>
   );

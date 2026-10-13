@@ -1,7 +1,7 @@
 {
   "name": "pharmapos",
   "productName": "PharmaPOS",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "PharmaPOS - pharmacy point of sale and inventory management",
   "author": "PharmaPOS",
   "license": "MIT",
@@ -24,7 +24,8 @@
     "lucide-react": "1.48.0",
     "react": "18.3.1",
     "react-dom": "18.3.1",
-    "react-router-dom": "6.26.2"
+    "react-router-dom": "6.26.2",
+    "read-excel-file": "9.3.10"
   },
   "devDependencies": {
     "@capacitor/cli": "6.2.2",
