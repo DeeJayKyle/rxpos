@@ -5,7 +5,7 @@ import { useStore, uid, now, daysUntil, put, move, allocate, audit, normalizePho
 import { CASH } from '../finance.js';
 import { Modal, SearchBox } from '../ui.jsx';
 import { toast, ask } from '../feedback.jsx';
-import { payRequest, payStatus, guessNetwork } from '../cloud.js';
+import { payRequest, payStatus, guessNetwork, cloudConfig } from '../cloud.js';
 import { Receipt } from './Sales.jsx';
 
 const PAYMENTS = ['Cash', 'Mobile Money', 'Card', 'Bank Transfer', 'Insurance', 'Credit'];
@@ -15,6 +15,7 @@ export const docNumber = (prefix) => prefix + Date.now().toString(36).toUpperCas
 export default function POS({ mode = 'retail' }) {
   const { db, products, update, user, fmt, batchesOf, branchId, syncCfg } = useStore();
   const [momo, setMomo] = useState(null);
+  const [payCfg, setPayCfg] = useState(null); // which mobile money networks the cloud has switched on
   const location = useLocation();
   const wholesale = mode === 'wholesale';
   const priceOf = (p) => (wholesale ? p.wholesale || p.price : p.price);
@@ -110,6 +111,7 @@ export default function POS({ mode = 'retail' }) {
     if (cart.some((l) => l.rx) && !(await ask({ title: 'Prescription-only medicine', message: 'Confirm that a valid prescription has been checked for the Rx items in this sale.', confirmText: 'Prescription verified' }))) return;
     if (payment === 'Mobile Money') {
       const phone = normalizePhone(customer?.phone || '');
+      if (syncCfg.url && navigator.onLine) cloudConfig(syncCfg).then(setPayCfg).catch(() => setPayCfg({}));
       return setMomo({ phone: customer?.phone || '', network: phone ? guessNetwork(phone) : 'mtn', stage: 'enter', ref: '', manualRef: '' });
     }
     finalize();
@@ -325,7 +327,14 @@ export default function POS({ mode = 'retail' }) {
                   </select></label>
               </div>
               {momo.error && <div className="error">{momo.error}</div>}
-              <button className="btn primary big" onClick={sendMomo} disabled={!syncCfg.url}><Smartphone size={18} />Send payment request to phone</button>
+              {payCfg && !payCfg[momo.network] ? (
+                // This network isn't connected on the cloud (e.g. Airtel): go straight to recording the customer's transaction ID
+                <div className="notice info-notice">
+                  {momo.network === 'airtel' ? 'Airtel Money' : 'MTN MoMo'} isn't connected for automatic requests. Ask the customer to pay to your merchant number, then enter the transaction ID from their SMS below.
+                </div>
+              ) : (
+                <button className="btn primary big" onClick={sendMomo} disabled={!syncCfg.url || !navigator.onLine}><Smartphone size={18} />Send payment request to phone</button>
+              )}
               {!syncCfg.url && <small className="muted">Connect this device to the RxPOS cloud (Settings → Online sync) to send payment requests.</small>}
               <div className="divider"><span>or the customer already paid</span></div>
               <div className="row gap">
