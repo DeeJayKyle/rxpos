@@ -186,6 +186,20 @@ const mtn = {
   },
 };
 
+// Airtel only accepts calls from whitelisted server IPs. Workers have no fixed IP, so when AIRTEL_RELAY_URL is set
+// every Airtel call goes through the RxPOS relay (relay/airtel-relay.mjs) running on a VM with a static IP.
+async function airtelFetch(env, url, init = {}) {
+  if (!env.AIRTEL_RELAY_URL) return fetch(url, init);
+  const r = await fetch(env.AIRTEL_RELAY_URL.replace(/\/+$/, '') + '/forward', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Relay-Key': env.AIRTEL_RELAY_KEY || '' },
+    body: JSON.stringify({ url, method: init.method || 'GET', headers: init.headers || {}, body: init.body }),
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error('Airtel relay: ' + (j.error || r.status));
+  return new Response(j.body, { status: j.status });
+}
+
 const airtel = {
   enabled: (env) => !!(env.AIRTEL_CLIENT_ID && env.AIRTEL_CLIENT_SECRET),
   cfg(env) {
@@ -194,7 +208,7 @@ const airtel = {
   token(env) {
     const c = airtel.cfg(env);
     return cachedToken('airtel', async () => {
-      const r = await fetch(c.base + '/auth/oauth2/token', { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: '*/*' }, body: JSON.stringify({ client_id: env.AIRTEL_CLIENT_ID, client_secret: env.AIRTEL_CLIENT_SECRET, grant_type: 'client_credentials' }) });
+      const r = await airtelFetch(env, c.base + '/auth/oauth2/token', { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: '*/*' }, body: JSON.stringify({ client_id: env.AIRTEL_CLIENT_ID, client_secret: env.AIRTEL_CLIENT_SECRET, grant_type: 'client_credentials' }) });
       if (!r.ok) throw new Error(`Airtel sign-in failed (${r.status})`);
       const j = await r.json();
       return { value: j.access_token, ttl: Number(j.expires_in) || 3000 };
@@ -204,7 +218,7 @@ const airtel = {
   async request(env, { phone, amount, reference }) {
     const c = airtel.cfg(env);
     const id = reference.replace(/[^A-Za-z0-9]/g, '').slice(0, 20) + Date.now().toString(36).slice(-4).toUpperCase();
-    const r = await fetch(c.base + '/merchant/v1/payments/', {
+    const r = await airtelFetch(env, c.base + '/merchant/v1/payments/', {
       method: 'POST', headers: await airtel.headers(env, c),
       body: JSON.stringify({ reference: reference.slice(0, 64), subscriber: { country: c.country, currency: c.currency, msisdn: phone.replace(/^256/, '') }, transaction: { amount: Math.round(amount), country: c.country, currency: c.currency, id } }),
     });
@@ -214,7 +228,7 @@ const airtel = {
   },
   async status(env, ref) {
     const c = airtel.cfg(env);
-    const r = await fetch(`${c.base}/standard/v1/payments/${ref}`, { headers: await airtel.headers(env, c) });
+    const r = await airtelFetch(env, `${c.base}/standard/v1/payments/${ref}`, { headers: await airtel.headers(env, c) });
     const j = await r.json().catch(() => ({}));
     const s = j.data?.transaction?.status;
     return { status: s === 'TS' ? 'SUCCESSFUL' : s === 'TF' || s === 'TE' ? 'FAILED' : 'PENDING', reason: j.data?.transaction?.message || '', txid: j.data?.transaction?.airtel_money_id || '' };

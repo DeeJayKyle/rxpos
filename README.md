@@ -125,6 +125,22 @@ Cloudflare → Workers & Pages → `pharmapos` → Settings → Variables and Se
 Settings → Online & payments shows a green tick for each service once its keys work. Until then the POS records Mobile Money
 by transaction ID, and reminders go out by WhatsApp (free, no keys needed).
 
+### Airtel Money needs a fixed server IP (the relay)
+
+Airtel only accepts API calls from server IP addresses whitelisted on its developer portal. Cloudflare Workers have no fixed
+outgoing IP, so Airtel calls go through a tiny relay (`relay/airtel-relay.mjs`) on a VM with a static IP. Oracle Cloud's
+*Always Free* tier is enough. The relay only accepts requests carrying its secret key and only forwards to Airtel's own API hosts.
+
+1. Create an Ubuntu VM with a public IP (Oracle Cloud → Compute → Create instance, Always Free shape) using `Documents\pharmapos-oracle-ssh-key.pub`.
+2. Copy the relay and run the installer (sets up Node.js, Caddy HTTPS on `<ip>.sslip.io`, a systemd service and the firewall):
+   ```bash
+   scp -i ~/.ssh/pharmapos_oracle relay/airtel-relay.mjs ubuntu@<ip>:/tmp/
+   ssh -i ~/.ssh/pharmapos_oracle ubuntu@<ip> "sudo mkdir -p /opt/rxpos-relay && sudo cp /tmp/airtel-relay.mjs /opt/rxpos-relay/ && sudo RELAY_SOURCE=file:///opt/rxpos-relay/airtel-relay.mjs bash -s" < relay/setup-relay.sh
+   ```
+3. Add the printed values as Cloudflare secrets `AIRTEL_RELAY_URL` and `AIRTEL_RELAY_KEY`, and whitelist the printed `PUBLIC_IP` on
+   developers.airtel.ug → your app → Settings → Server IP Allowed List. Then add the Collection-APIs product and run
+   `deploy\setup-mobile-money.ps1` → option 3.
+
 ## App signing & stores
 
 * **Android:** every build is signed with the RxPOS release key (GitHub secrets `ANDROID_KEYSTORE_B64`, `ANDROID_KEYSTORE_PASSWORD`,
