@@ -21,6 +21,7 @@ function ensureSchema(db) {
     db.prepare('CREATE TABLE IF NOT EXISTS rows (k TEXT PRIMARY KEY, t TEXT NOT NULL, id TEXT NOT NULL, rec TEXT, deleted INTEGER NOT NULL DEFAULT 0, at TEXT NOT NULL, seq INTEGER NOT NULL, origin TEXT)'),
     db.prepare('CREATE INDEX IF NOT EXISTS rows_seq ON rows(seq)'),
     db.prepare('CREATE INDEX IF NOT EXISTS rows_t ON rows(t)'),
+    db.prepare('CREATE TABLE IF NOT EXISTS login_fail (email TEXT PRIMARY KEY, n INTEGER NOT NULL, until INTEGER NOT NULL DEFAULT 0)'),
   ]).catch((e) => { schemaReady = null; throw e; });
   return schemaReady;
 }
@@ -75,12 +76,28 @@ async function verifyPassword(u, pw) {
   return hex(await crypto.subtle.digest('SHA-256', te.encode('pharmapos:' + pw))) === u.hash;
 }
 
+const MAX_FAILS = 5;
+const LOCK_MINUTES = 15;
+
 async function login(env, { email, password }) {
   await ensureSchema(env.DB);
-  const e = String(email || '').trim().toLowerCase();
+  const e = String(email || '').trim().toLowerCase().slice(0, 200);
+  // Brute-force protection: after MAX_FAILS wrong passwords the email is locked for LOCK_MINUTES
+  const fail = await env.DB.prepare('SELECT n, until FROM login_fail WHERE email = ?1').bind(e).first();
+  if (fail && fail.until > Date.now()) {
+    const mins = Math.ceil((fail.until - Date.now()) / 60000);
+    return json({ error: `Too many wrong passwords. Try again in ${mins} minute${mins === 1 ? '' : 's'}, or ask your administrator to reset your password.` }, 429);
+  }
   const { results } = await env.DB.prepare("SELECT rec FROM rows WHERE t = 'users' AND deleted = 0").all();
   const u = results.map((r) => JSON.parse(r.rec)).find((x) => x && x.email === e && !x.disabled);
-  if (!u || !(await verifyPassword(u, String(password || '')))) return json({ error: 'Wrong email or password, or this account has not been synced to the cloud yet.' }, 401);
+  if (!u || !(await verifyPassword(u, String(password || '')))) {
+    const n = (fail && fail.until <= Date.now() && fail.until > 0 ? 0 : fail?.n || 0) + 1;
+    const until = n >= MAX_FAILS ? Date.now() + LOCK_MINUTES * 60000 : 0;
+    await env.DB.prepare('INSERT INTO login_fail (email, n, until) VALUES (?1, ?2, ?3) ON CONFLICT(email) DO UPDATE SET n = ?2, until = ?3')
+      .bind(e, until ? 0 : n, until).run();
+    return json({ error: until ? `Too many wrong passwords. Sign-in is locked for ${LOCK_MINUTES} minutes.` : `Wrong email or password (${MAX_FAILS - n} attempt${MAX_FAILS - n === 1 ? '' : 's'} left before a ${LOCK_MINUTES}-minute lock).` }, until ? 429 : 401);
+  }
+  if (fail) await env.DB.prepare('DELETE FROM login_fail WHERE email = ?1').bind(e).run();
   const token = await signToken(env, { sub: u.id, name: u.name, role: u.role, exp: Date.now() + TOKEN_DAYS * 864e5 });
   return json({ token, user: { id: u.id, name: u.name, email: u.email, role: u.role } });
 }
