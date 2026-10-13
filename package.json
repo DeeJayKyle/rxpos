@@ -1,0 +1,52 @@
+{
+  "name": "pharmapos",
+  "productName": "PharmaPOS",
+  "version": "1.0.0",
+  "description": "PharmaPOS - pharmacy point of sale and inventory management",
+  "author": "PharmaPOS",
+  "license": "MIT",
+  "private": true,
+  "main": "electron/main.cjs",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "electron": "electron .",
+    "electron:dev": "vite build && electron .",
+    "dist:win": "vite build && electron-builder --win --publish never",
+    "hub": "node server/hub.mjs"
+  },
+  "dependencies": {
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "react-router-dom": "6.26.2"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "4.3.1",
+    "electron": "31.4.0",
+    "electron-builder": "24.13.3",
+    "vite": "5.4.8"
+  },
+  "build": {
+    "appId": "io.github.pharmapos",
+    "productName": "PharmaPOS",
+    "directories": { "output": "release" },
+    "files": ["dist/**/*", "electron/**/*", "server/**/*", "build/icon.png", "package.json"],
+    "win": {
+      "target": [
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
+      ],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "PharmaPOS"
+    },
+    "portable": { "artifactName": "PharmaPOS-Portable-${version}.exe" }
+  }
+}
