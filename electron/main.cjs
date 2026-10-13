@@ -3,7 +3,9 @@ const path = require('path');
 const { pathToFileURL } = require('url');
 
 // Keep using the data folder from before the rename (PharmaPOS → RxPOS) so offline data, sign-ins and settings carry over
-app.setPath('userData', path.join(app.getPath('appData'), 'PharmaPOS'));
+// A preloaded edition names its own folder (package.json rxposDataDir) so it can sit beside the standard app
+const { rxposDataDir } = require('../package.json');
+app.setPath('userData', path.join(app.getPath('appData'), rxposDataDir || 'PharmaPOS'));
 
 // `RxPOS.exe --hub --key=YOUR-SECRET [--port 8686]` runs this PC as the sync hub for other devices (no window).
 const HUB_MODE = process.argv.includes('--hub');
@@ -54,7 +56,7 @@ if (HUB_MODE) {
     ])
   );
 
-  if (process.platform === 'win32') app.setAppUserModelId('io.github.pharmapos');
+  if (process.platform === 'win32') app.setAppUserModelId(rxposDataDir ? 'io.github.pharmapos.' + rxposDataDir.toLowerCase() : 'io.github.pharmapos');
   app.whenReady().then(() => {
     createWindow();
     app.on('activate', () => BrowserWindow.getAllWindows().length === 0 && createWindow());

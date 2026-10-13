@@ -4,9 +4,10 @@ import {
   LayoutDashboard, ShoppingCart, PackageOpen, ReceiptText, FileText, ClipboardPlus, Users, Truck, Pill, FlaskConical,
   Boxes, PackagePlus, History, CalendarClock, PencilRuler, ScrollText, Wallet, Tags, Landmark, ArrowLeftRight, HandCoins,
   ArrowDownLeft, ArrowUpRight, BookOpen, BarChart3, Settings as SettingsIcon, Search, Sun, Moon, Menu, LogOut, ChevronDown,
-  CornerDownLeft, User, Plus, BellRing, ShoppingBag, Tag, FileUp, Building2, Send, ShieldCheck, Clock, BookMarked, MessagesSquare, UserCog,
+  CornerDownLeft, User, Plus, BellRing, ShoppingBag, Tag, FileUp, Building2, Send, ShieldCheck, Clock, BookMarked, MessagesSquare, UserCog, KeyRound,
 } from 'lucide-react';
-import { useStore, daysUntil } from './store.jsx';
+import { useStore, daysUntil, makePassword, put, audit } from './store.jsx';
+import { askText, toast } from './feedback.jsx';
 import Auth from './pages/Auth.jsx';
 import { Logo } from './logo.jsx';
 import { unreadCount } from './pages/Chat.jsx';
@@ -185,7 +186,7 @@ function CommandPalette({ open, onClose, pages }) {
 }
 
 function Shell() {
-  const { db, products, user, setUser, branchId, branch } = useStore();
+  const { db, products, user, setUser, branchId, branch, update } = useStore();
   const navigate = useNavigate();
   const location = useLocation();
   const [theme, toggleTheme] = useTheme();
@@ -221,6 +222,28 @@ function Shell() {
   });
   const title = pages.find((p) => p.to === location.pathname)?.label || 'RxPOS';
   useEffect(() => { document.title = `${title} · RxPOS`; }, [title]);
+  // Change my own password; staff brought over from another system must set their own on first sign-in
+  const me = db.users.find((u) => u.id === user.id);
+  const changePassword = async (forced) => {
+    for (;;) {
+      const pw = await askText({ title: forced ? `Welcome, ${user.name.split(/s+/)[0]}. Set your own password` : 'Change my password', message: forced ? 'You signed in with a temporary password. Choose a new one (8+ characters) that only you know.' : 'New password (8+ characters)', type: 'password', minLength: 8, confirmText: 'Next' });
+      if (!pw) return;
+      const again = await askText({ title: 'Type the new password again', type: 'password', minLength: 8, confirmText: 'Save password' });
+      if (again === null) return;
+      if (again !== pw) { toast('The two passwords did not match. Try again.', 'error'); continue; }
+      const fields = await makePassword(pw);
+      update((d) => {
+        const u = d.users.find((x) => x.id === user.id);
+        if (!u) return;
+        const { mustChangePassword, ...rest } = u; // eslint-disable-line no-unused-vars
+        put(d, 'users', { ...rest, ...fields });
+        audit(d, user, 'Password changed', user.name, branchId);
+      });
+      return toast('Password changed');
+    }
+  };
+  const asked = useRef(false);
+  useEffect(() => { if (me?.mustChangePassword && !asked.current) { asked.current = true; changePassword(true); } }, [me?.mustChangePassword]); // eslint-disable-line react-hooks/exhaustive-deps
   const initials = user.name.split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
 
   return (
@@ -246,6 +269,7 @@ function Shell() {
         <div className="user-box">
           <span className="avatar">{initials}</span>
           <div className="grow"><strong>{user.name}</strong><small>{user.role}</small></div>
+          <button className="icon-btn" title="Change my password" onClick={() => changePassword(false)}><KeyRound size={17} /></button>
           <button className="icon-btn" title="Log out" onClick={() => setUser(null)}><LogOut size={17} /></button>
         </div>
       </aside>

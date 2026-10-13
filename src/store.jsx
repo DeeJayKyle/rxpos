@@ -233,6 +233,8 @@ export function StoreProvider({ children }) {
         if (parts.some((p) => p !== undefined)) saved = Object.fromEntries(PARTS.map((k, i) => [k, parts[i]]).filter(([, v]) => v !== undefined));
         else saved = await idbGet('db'); // data saved by version 1.0
       } catch (e) { console.error(e); }
+      // A preloaded edition (built with RXPOS_SEED) starts from the pharmacy's own data instead of an empty store
+      if (!saved && window.__RXPOS_SEED__) { const { _meta, ...seed } = window.__RXPOS_SEED__; saved = seed; } // eslint-disable-line no-unused-vars
       const base = blankDb();
       const loaded = saved ? { ...base, ...saved, settings: { ...base.settings, ...saved.settings } } : base;
       if (!loaded.branches.length) loaded.branches = base.branches;

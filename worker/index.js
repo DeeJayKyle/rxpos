@@ -20,6 +20,15 @@ const MAIN = 'main';
 const GUARDED = { users: 'users.manage', roles: 'users.manage', settings: 'settings.manage', branches: 'settings.manage' };
 const SERVER_ONLY = new Set(['license']);
 
+/** Anyone may update their own user record (e.g. change their password), but never their role, status, branch or email. */
+async function ownProfileEdit(db, tenant, who, ch) {
+  if (!who.uid || String(ch.id) !== String(who.uid) || ch.deleted || !ch.rec) return false;
+  const row = await db.prepare('SELECT rec FROM records WHERE tenant = ?1 AND k = ?2 AND deleted = 0').bind(tenant, 'users|' + ch.id).first();
+  if (!row) return false;
+  const old = JSON.parse(row.rec || '{}');
+  return ['role', 'disabled', 'branchId', 'email'].every((f) => (old[f] ?? null) === (ch.rec[f] ?? null));
+}
+
 let schemaReady = null;
 function ensureSchema(db) {
   schemaReady ??= db.batch([
@@ -250,7 +259,7 @@ async function sync(env, body, who) {
     const perm = GUARDED[ch.t];
     if (perm) {
       allowed[perm] ??= await roleCan(env, tenant, who.role, perm);
-      if (!allowed[perm]) { refused++; continue; }
+      if (!allowed[perm] && !(ch.t === 'users' && (await ownProfileEdit(db, tenant, who, ch)))) { refused++; continue; }
     }
     const id = String(ch.id);
     stmts.push(upsert.bind(tenant, ch.t + '|' + id, ch.t, id, ch.deleted ? null : JSON.stringify(ch.rec ?? null), ch.deleted ? 1 : 0, ch.at, deviceId));
