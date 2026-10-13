@@ -19,11 +19,18 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - run: npm run dist:win
+      # Optional: add repo secrets WINDOWS_CERT_B64 (.pfx as base64) + WINDOWS_CERT_PASSWORD to sign the installer
+      - name: Code-signing certificate (only when configured)
+        shell: bash
         env:
-          # Optional: add these repo secrets (a .pfx code-signing certificate as base64 + its password) to sign the installer
-          CSC_LINK: ${{ secrets.WINDOWS_CERT_B64 }}
-          CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+          CERT: ${{ secrets.WINDOWS_CERT_B64 }}
+          CERT_PASS: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: |
+          if [ -n "$CERT" ]; then
+            echo "CSC_LINK=$CERT" >> "$GITHUB_ENV"
+            echo "CSC_KEY_PASSWORD=$CERT_PASS" >> "$GITHUB_ENV"
+          fi
+      - run: npm run dist:win
       - name: Upload installer
         uses: actions/upload-artifact@v4
         with:
@@ -123,7 +130,8 @@ jobs:
             cp app/build/outputs/apk/debug/app-debug.apk ../PharmaPOS-Android.apk
             exit 0
           fi
-          echo "$KS_B64" | base64 -d > release.jks
+          printf '%s' "$KS_B64" | tr -d '\r\n ' | base64 -d > release.jks
+          KS_PASS=$(printf '%s' "$KS_PASS" | tr -d '\r\n'); KS_ALIAS=$(printf '%s' "$KS_ALIAS" | tr -d '\r\n'); export KS_PASS KS_ALIAS
           ./gradlew assembleRelease bundleRelease --no-daemon
           BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)
           $BT/zipalign -f -p 4 app/build/outputs/apk/release/app-release-unsigned.apk aligned.apk
