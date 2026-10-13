@@ -10,7 +10,7 @@ const defaultHub = () => (/^https:$/.test(location.protocol) && !/localhost|127\
 export default function Auth() {
   const { db, update, setUser, syncCfg, saveSyncCfg, syncNow, syncStatus } = useStore();
   const firstRun = db.users.length === 0;
-  const [mode, setMode] = useState(firstRun && /workers\.dev$/.test(location.hostname) ? 'account' : 'new');
+  const [mode, setMode] = useState(firstRun && /(workers|pages)\.dev$/.test(location.hostname) ? 'account' : 'new');
   const [form, setForm] = useState({ name: '', pharmacy: '', email: '', password: '', confirm: '', sample: true, url: syncCfg.url || defaultHub(), key: '' });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -76,7 +76,7 @@ export default function Auth() {
   return (
     <div className="auth-bg">
       <section className="auth-hero">
-        <div className="brand"><span className="logo"><Plus size={20} strokeWidth={3} /></span> PharmaPOS</div>
+        <div className="brand"><span className="logo"><Plus size={20} strokeWidth={3} /></span> RxPOS</div>
         <div>
           <h1>Run your pharmacy <em>anywhere</em>, even offline.</h1>
           <ul>
@@ -86,11 +86,11 @@ export default function Auth() {
             <li><ShieldCheck size={18} />Batch & expiry tracking, audit trail, finance and reports built in</li>
           </ul>
         </div>
-        <small style={{ opacity: .6 }}>© {new Date().getFullYear()} PharmaPOS</small>
+        <small style={{ opacity: .6 }}>© {new Date().getFullYear()} RxPOS</small>
       </section>
       <div className="auth-side">
         <div className="auth-card">
-          <div className="brand big"><span className="logo"><Plus size={20} strokeWidth={3} /></span> PharmaPOS</div>
+          <div className="brand big"><span className="logo"><Plus size={20} strokeWidth={3} /></span> RxPOS</div>
           {!firstRun ? (
             <form onSubmit={login} className="stack">
               <p className="muted center">Sign in to {db.settings.name}</p>

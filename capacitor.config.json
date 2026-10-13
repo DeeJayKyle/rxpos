@@ -1,6 +1,6 @@
 {
   "appId": "io.github.pharmapos",
-  "appName": "PharmaPOS",
+  "appName": "RxPOS",
   "webDir": "dist",
   "android": {
     "allowMixedContent": true

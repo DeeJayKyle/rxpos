@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// PharmaPOS Hub: keeps every PharmaPOS device (desktop apps and browsers) in sync, and serves the web app.
+// RxPOS Hub: keeps every RxPOS device (desktop apps and browsers) in sync, and serves the web app.
 // No dependencies; needs Node.js 18+.
 //
 //   PHARMAPOS_SYNC_KEY=choose-a-long-secret node server/hub.mjs [--port 8686] [--data ./hub-data]
@@ -151,7 +151,7 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`PharmaPOS Hub running on http://0.0.0.0:${PORT}`);
+  console.log(`RxPOS Hub running on http://0.0.0.0:${PORT}`);
   console.log(`Data: ${DATA_DIR}`);
-  console.log('Link devices in PharmaPOS → Settings → Sync with this address and your sync key.');
+  console.log('Link devices in RxPOS → Settings → Sync with this address and your sync key.');
 });

@@ -1,9 +1,9 @@
-# PharmaPOS
+# RxPOS
 
 Pharmacy point of sale and management system that works **offline** and **online**: on Windows PCs, Android phones and in any browser,
 across all your branches.
 
-**Live:** https://pharmapos.pharmapos.workers.dev (Cloudflare, free plan).
+**Live:** https://rxpos.pages.dev (Cloudflare, free plan). The older address https://pharmapos.pharmapos.workers.dev also keeps working.
 
 ## Features
 
@@ -24,12 +24,12 @@ across all your branches.
 
 * Every device (desktop app or browser) keeps its **full database locally** (IndexedDB) and works with no network.
 * Stock is never stored as a single number: every sale, purchase, refund and adjustment is a **stock movement**, and stock is the sum of movements. That lets devices that sold offline merge without losing sales.
-* When a device is linked to a **PharmaPOS Hub** (Settings → Online sync), it pushes its changes and pulls everyone else's every 30 seconds, and as soon as the connection comes back. Conflicting edits to the same record: the latest edit wins.
+* When a device is linked to a **RxPOS Hub** (Settings → Online sync), it pushes its changes and pulls everyone else's every 30 seconds, and as soon as the connection comes back. Conflicting edits to the same record: the latest edit wins.
 * The browser version installs a service worker, so it opens even without internet.
 
 ## Installing the desktop app (Windows)
 
-Download the latest `PharmaPOS Setup x.y.z.exe` (installer) or `PharmaPOS-Portable-x.y.z.exe` from this repository's **Releases** page (or from the latest **Actions** run → *PharmaPOS-Windows* artifact).
+Download the latest `RxPOS Setup x.y.z.exe` (installer) or `RxPOS-Portable-x.y.z.exe` from this repository's **Releases** page (or from the latest **Actions** run → *RxPOS-Windows* artifact).
 If Windows SmartScreen warns about an unknown publisher, choose *More info → Run anyway* (the app isn't code-signed).
 
 ## Running the Hub (for sync and online browser access)
@@ -39,7 +39,7 @@ Pick a strong secret (12+ characters) as the **sync key**. Everyone who has it c
 **On the main Windows PC (same building / LAN), no extra software needed:**
 
 ```bat
-"%LOCALAPPDATA%\Programs\PharmaPOS\PharmaPOS.exe" --hub --key=YOUR-SECRET-KEY
+"%LOCALAPPDATA%\Programs\RxPOS\RxPOS.exe" --hub --key=YOUR-SECRET-KEY
 ```
 
 Other devices then link to `http://<main-PC-IP>:8686`. Allow port 8686 through Windows Firewall.
@@ -50,10 +50,10 @@ Other devices then link to `http://<main-PC-IP>:8686`. Allow port 8686 through W
 PHARMAPOS_SYNC_KEY=YOUR-SECRET-KEY node server/hub.mjs --port 8686 --data ./hub-data
 ```
 
-Put it behind HTTPS (e.g. Caddy, nginx, or a host such as Render/Railway/Fly.io). Open `https://your-hub-address` in any browser to use PharmaPOS online. The hub serves the web app too.
-The `PharmaPOS-Hub.zip` artifact from GitHub Actions contains everything needed. The hub keeps daily backups in `hub-data/backups`.
+Put it behind HTTPS (e.g. Caddy, nginx, or a host such as Render/Railway/Fly.io). Open `https://your-hub-address` in any browser to use RxPOS online. The hub serves the web app too.
+The `RxPOS-Hub.zip` artifact from GitHub Actions contains everything needed. The hub keeps daily backups in `hub-data/backups`.
 
-## Putting PharmaPOS online (recommended: Cloudflare, free, no card, no server)
+## Putting RxPOS online (recommended: Cloudflare, free, no card, no server)
 
 The repo is ready for **Cloudflare Workers + D1** (free plan: 100,000 requests/day, 5 GB database, no credit card).
 One deployment serves the web app *and* the sync hub on a free `https://pharmapos.<your-name>.workers.dev` address,
@@ -64,7 +64,7 @@ on Cloudflare's global network (with servers in Africa), redeploying automatical
    * Build command: `npm ci && npm run build`  ·  Deploy command: `npx wrangler deploy`
    * The D1 database is created automatically on the first deploy.
 3. After it deploys: **your Worker → Settings → Variables and Secrets → Add** → type *Secret*, name `SYNC_KEY`, value = a long secret (12+ characters). Save and redeploy.
-4. Open `https://pharmapos.<your-name>.workers.dev`. That is PharmaPOS online. On Android/desktop browsers use *Install app / Add to Home screen*.
+4. Open `https://pharmapos.<your-name>.workers.dev`. That is RxPOS online. On Android/desktop browsers use *Install app / Add to Home screen*.
 5. On every PC and phone: **Settings → Online sync** → that address + the same `SYNC_KEY`.
 
 Check it: `https://pharmapos.<your-name>.workers.dev/api/health` → `"configured": true`.
@@ -84,7 +84,7 @@ and redeploys on every push. The hub then runs 24/7 on a server, not depending o
 6. **Persistent storage:** *Storages → + Add → Volume*, destination path **`/data`**. Without this, data is lost on redeploy.
 7. **Domain:** keep Coolify's free generated `*.sslip.io` address, or enter your own domain. Coolify gets a Let's Encrypt HTTPS certificate automatically.
 8. **Deploy.** Then:
-   * open `https://<your-hub-address>` in any browser (phone, laptop, branch) to use PharmaPOS online. It keeps working offline once opened;
+   * open `https://<your-hub-address>` in any browser (phone, laptop, branch) to use RxPOS online. It keeps working offline once opened;
    * in each desktop app: *Settings → Online sync* → `https://<your-hub-address>` + the sync key.
 
 Health check: `https://<your-hub-address>/api/health`. Backups: `/data/backups` inside the volume (daily, 30 kept). Coolify can also back up volumes.
@@ -96,7 +96,7 @@ The same image runs on any Docker host: `docker compose up -d` (put `PHARMAPOS_S
 If you'd rather not run a server, [cloudflared](https://github.com/cloudflare/cloudflared) (open source, free tier) publishes the main PC's hub on an HTTPS address without opening router ports:
 
 ```bat
-"%LOCALAPPDATA%\Programs\PharmaPOS\PharmaPOS.exe" --hub --key=YOUR-SECRET-KEY
+"%LOCALAPPDATA%\Programs\RxPOS\RxPOS.exe" --hub --key=YOUR-SECRET-KEY
 cloudflared tunnel --url http://localhost:8686
 ```
 
@@ -127,9 +127,9 @@ by transaction ID, and reminders go out by WhatsApp (free, no keys needed).
 
 ## App signing & stores
 
-* **Android:** every build is signed with the PharmaPOS release key (GitHub secrets `ANDROID_KEYSTORE_B64`, `ANDROID_KEYSTORE_PASSWORD`,
+* **Android:** every build is signed with the RxPOS release key (GitHub secrets `ANDROID_KEYSTORE_B64`, `ANDROID_KEYSTORE_PASSWORD`,
   `ANDROID_KEY_ALIAS`; a backup is in `Documents\PharmaPOS-Android-Signing` on the setup PC. **Keep that folder safe**: it's needed for every update).
-  Releases contain `PharmaPOS-Android.apk` (install directly) and `PharmaPOS-GooglePlay.aab` (upload to Google Play Console:
+  Releases contain `RxPOS-Android.apk` (install directly) and `RxPOS-GooglePlay.aab` (upload to Google Play Console:
   one-time US$25 developer account → Create app → Production → upload the .aab).
 * **Windows:** to remove the "unknown publisher" warning, buy a code-signing certificate (or use Azure Trusted Signing) and add it as
   secrets `WINDOWS_CERT_B64` (the .pfx, base64) and `WINDOWS_CERT_PASSWORD`. The build signs automatically when they exist.

@@ -1,6 +1,6 @@
 {
-  "name": "PharmaPOS",
-  "short_name": "PharmaPOS",
+  "name": "RxPOS",
+  "short_name": "RxPOS",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#f8fafc",

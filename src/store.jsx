@@ -330,7 +330,7 @@ export function StoreProvider({ children }) {
 
   const branch = db?.branches.find((b) => b.id === branchId) || db?.branches[0];
 
-  if (!db || !syncCfg) return <div className="loading"><div className="spinner" />Loading PharmaPOS…</div>;
+  if (!db || !syncCfg) return <div className="loading"><div className="spinner" />Loading RxPOS…</div>;
 
   return (
     <Ctx.Provider value={{ db, setDb, update, upsert, remove, saveSettings, user, setUser, fmt, products, stockIndex, batchesOf,

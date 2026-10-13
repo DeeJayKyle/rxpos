@@ -1,4 +1,4 @@
-// PharmaPOS service worker: lets the browser version open and run with no connection.
+// RxPOS service worker: lets the browser version open and run with no connection.
 // App files: network first (so updates arrive), falling back to cache when offline. Sync API calls are never cached.
 const CACHE = 'pharmapos-v1';
 

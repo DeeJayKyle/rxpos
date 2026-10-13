@@ -2,7 +2,10 @@ const { app, BrowserWindow, Menu, shell } = require('electron');
 const path = require('path');
 const { pathToFileURL } = require('url');
 
-// `PharmaPOS.exe --hub --key=YOUR-SECRET [--port 8686]` runs this PC as the sync hub for other devices (no window).
+// Keep using the data folder from before the rename (PharmaPOS → RxPOS) so offline data, sign-ins and settings carry over
+app.setPath('userData', path.join(app.getPath('appData'), 'PharmaPOS'));
+
+// `RxPOS.exe --hub --key=YOUR-SECRET [--port 8686]` runs this PC as the sync hub for other devices (no window).
 const HUB_MODE = process.argv.includes('--hub');
 
 if (HUB_MODE) {
@@ -26,7 +29,7 @@ if (HUB_MODE) {
       height: 860,
       minWidth: 1024,
       minHeight: 680,
-      title: 'PharmaPOS',
+      title: 'RxPOS',
       backgroundColor: '#f4f7f9',
       autoHideMenuBar: true,
       icon: path.join(__dirname, '..', 'build', 'icon.png'),

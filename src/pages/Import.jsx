@@ -5,7 +5,7 @@ import { Tabs, Empty } from '../ui.jsx';
 import { toast, ask } from '../feedback.jsx';
 import { newInternalBarcode } from '../barcode.jsx';
 
-// Columns PharmaPOS understands, with the header names people commonly use for them
+// Columns RxPOS understands, with the header names people commonly use for them
 const TARGETS = [
   ['name', 'Medicine / trade name', /^(name|item|product|medicine|drug|trade ?name|brand|description|item ?name)/i, true],
   ['generic', 'Generic name', /generic|inn|active/i],

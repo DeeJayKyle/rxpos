@@ -304,7 +304,7 @@ export default function POS({ mode = 'retail' }) {
               </div>
               {momo.error && <div className="error">{momo.error}</div>}
               <button className="btn primary big" onClick={sendMomo} disabled={!syncCfg.url}><Smartphone size={18} />Send payment request to phone</button>
-              {!syncCfg.url && <small className="muted">Connect this device to the PharmaPOS cloud (Settings → Online sync) to send payment requests.</small>}
+              {!syncCfg.url && <small className="muted">Connect this device to the RxPOS cloud (Settings → Online sync) to send payment requests.</small>}
               <div className="divider"><span>or the customer already paid</span></div>
               <div className="row gap">
                 <input className="grow" placeholder="Transaction ID from the SMS" value={momo.manualRef} onChange={(e) => setMomo({ ...momo, manualRef: e.target.value })} />

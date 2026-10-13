@@ -49,7 +49,7 @@ export default function Settings() {
   };
 
   const restore = async (data, label) => {
-    if (!data?.products || !data.users || !data.movements) return toast('That is not a valid PharmaPOS backup', 'error');
+    if (!data?.products || !data.users || !data.movements) return toast('That is not a valid RxPOS backup', 'error');
     if (!(await ask({ title: 'Replace all data on this device?', message: `Everything on this device will be replaced with ${label}. Export a backup first if unsure.`, confirmText: 'Restore', danger: true }))) return;
     setDb({ ...data, _tomb: data._tomb || [] });
     toast('Data restored');
@@ -148,7 +148,7 @@ export default function Settings() {
           <form className="card" onSubmit={connect}>
             <h3><Cloud size={18} />Online sync</h3>
             <p className="muted">
-              PharmaPOS always works offline on this device. Connected devices share stock, sales and customers across all branches, every 30 seconds
+              RxPOS always works offline on this device. Connected devices share stock, sales and customers across all branches, every 30 seconds
               whenever there is internet; sales made offline are sent when it returns.
             </p>
             <div className="sync-info">
@@ -156,7 +156,7 @@ export default function Settings() {
               {syncCfg.lastSync && <span>Last sync: {new Date(syncCfg.lastSync).toLocaleString()}</span>}
               {syncStatus.error && <span className="text-danger">{syncStatus.error}</span>}
             </div>
-            <Tabs value={hub.how} onChange={(how) => setHub({ ...hub, how })} tabs={[['account', 'With my PharmaPOS account'], ['key', 'With the sync key (admin)']]} />
+            <Tabs value={hub.how} onChange={(how) => setHub({ ...hub, how })} tabs={[['account', 'With my RxPOS account'], ['key', 'With the sync key (admin)']]} />
             <div className="form-grid" style={{ marginTop: 12 }}>
               <label className="field"><span>Cloud address</span><input value={hub.url} onChange={(e) => setHub({ ...hub, url: e.target.value })} required /></label>
               {hub.how === 'account' ? (

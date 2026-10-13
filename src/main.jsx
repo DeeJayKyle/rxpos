@@ -31,7 +31,7 @@ class ErrorBoundary extends React.Component {
         <p>Your data is safe on this device. Reload to continue. If this keeps happening, download a copy of your data and contact support.</p>
         <pre>{String(this.state.error?.message || this.state.error)}</pre>
         <div className="row gap">
-          <button className="btn primary" onClick={() => location.reload()}>Reload PharmaPOS</button>
+          <button className="btn primary" onClick={() => location.reload()}>Reload RxPOS</button>
           <button className="btn ghost" onClick={() => this.exportData()}>Download my data</button>
         </div>
       </div>

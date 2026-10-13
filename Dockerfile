@@ -1,4 +1,4 @@
-# PharmaPOS Hub: sync server + web app, for Coolify or any Docker host.
+# RxPOS Hub: sync server + web app, for Coolify or any Docker host.
 # Data lives in /data; mount a persistent volume there.
 FROM node:20-alpine AS build
 WORKDIR /app

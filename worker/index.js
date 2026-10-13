@@ -1,6 +1,6 @@
-// PharmaPOS cloud on Cloudflare Workers (free plan) + D1.
+// RxPOS cloud on Cloudflare Workers (free plan) + D1.
 //   /api/sync    offline-first sync (same protocol as server/hub.mjs)
-//   /api/login   staff sign in with their PharmaPOS email + password → device token (no shared key needed)
+//   /api/login   staff sign in with their RxPOS email + password → device token (no shared key needed)
 //   /api/config  which integrations are switched on
 //   /api/pay/*   MTN MoMo + Airtel Money "request to pay" (customer approves on their phone)
 //   /api/sms     SMS via Africa's Talking
@@ -261,7 +261,7 @@ export default {
         if (!p?.enabled(env)) return json({ error: `${body.provider === 'airtel' ? 'Airtel Money' : 'MTN MoMo'} is not set up on the server yet.` }, 400);
         const amount = Number(body.amount);
         if (!(amount > 0) || !body.phone) return json({ error: 'Phone and amount are required' }, 400);
-        const ref = await p.request(env, { phone: String(body.phone).replace(/\D/g, ''), amount, reference: String(body.reference || 'PharmaPOS'), note: String(body.note || 'PharmaPOS payment') });
+        const ref = await p.request(env, { phone: String(body.phone).replace(/\D/g, ''), amount, reference: String(body.reference || 'RxPOS'), note: String(body.note || 'RxPOS payment') });
         return json({ ref, provider: body.provider });
       }
       if (path === '/api/pay/status') {

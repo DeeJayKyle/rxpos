@@ -1,4 +1,4 @@
-// Offline-first sync with a PharmaPOS hub (server/hub.mjs).
+// Offline-first sync with a RxPOS hub (server/hub.mjs).
 // Each device keeps its full database locally and works without a network. When a hub is configured,
 // every 30 s (and when the connection comes back) it pushes records changed since the last push and
 // pulls everything other devices changed since its cursor. Conflicts: last writer (updatedAt) wins per record.

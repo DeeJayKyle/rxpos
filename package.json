@@ -1,9 +1,9 @@
 {
   "name": "pharmapos",
-  "productName": "PharmaPOS",
-  "version": "1.2.0",
-  "description": "PharmaPOS - pharmacy point of sale and inventory management",
-  "author": "PharmaPOS",
+  "productName": "RxPOS",
+  "version": "1.2.1",
+  "description": "RxPOS - pharmacy point of sale and inventory management",
+  "author": "RxPOS",
   "license": "MIT",
   "private": true,
   "main": "electron/main.cjs",
@@ -37,7 +37,7 @@
   },
   "build": {
     "appId": "io.github.pharmapos",
-    "productName": "PharmaPOS",
+    "productName": "RxPOS",
     "directories": {
       "output": "release"
     },
@@ -70,10 +70,10 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "PharmaPOS"
+      "shortcutName": "RxPOS"
     },
     "portable": {
-      "artifactName": "PharmaPOS-Portable-${version}.exe"
+      "artifactName": "RxPOS-Portable-${version}.exe"
     }
   }
 }

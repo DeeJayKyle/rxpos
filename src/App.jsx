@@ -205,15 +205,15 @@ function Shell() {
     try { localStorage.setItem('pharmapos-nav', JSON.stringify(next)); } catch {}
     return next;
   });
-  const title = pages.find((p) => p.to === location.pathname)?.label || 'PharmaPOS';
-  useEffect(() => { document.title = `${title} · PharmaPOS`; }, [title]);
+  const title = pages.find((p) => p.to === location.pathname)?.label || 'RxPOS';
+  useEffect(() => { document.title = `${title} · RxPOS`; }, [title]);
   const initials = user.name.split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
 
   return (
     <div className={'shell' + (drawer ? ' drawer-open' : '')}>
       <div className="drawer-bg" onClick={() => setDrawer(false)} />
       <aside className="sidebar">
-        <div className="brand"><span className="logo"><Plus size={20} strokeWidth={3} /></span> PharmaPOS</div>
+        <div className="brand"><span className="logo"><Plus size={20} strokeWidth={3} /></span> RxPOS</div>
         <div className="store-name">{db.settings.name}</div>
         <nav>
           {groups.map((g, i) => (

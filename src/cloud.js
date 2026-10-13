@@ -1,6 +1,6 @@
-// Calls to the PharmaPOS cloud (Cloudflare Worker) for things that need the internet:
+// Calls to the RxPOS cloud (Cloudflare Worker) for things that need the internet:
 // staff sign-in, Mobile Money payment requests and SMS. Sync itself lives in sync.js.
-export const DEFAULT_CLOUD = 'https://pharmapos.pharmapos.workers.dev';
+export const DEFAULT_CLOUD = 'https://rxpos.pages.dev';
 
 export const cleanUrl = (u) => {
   let url = String(u || '').trim().replace(/\/+$/, '');
@@ -9,7 +9,7 @@ export const cleanUrl = (u) => {
 };
 
 async function call(cfg, path, { method = 'GET', body, timeout = 20000 } = {}) {
-  if (!cfg?.url) throw new Error('This device is not connected to the PharmaPOS cloud. Set it up in Settings → Online sync.');
+  if (!cfg?.url) throw new Error('This device is not connected to the RxPOS cloud. Set it up in Settings → Online sync.');
   if (!navigator.onLine) throw new Error('No internet connection right now.');
   const ctl = new AbortController();
   const t = setTimeout(() => ctl.abort(), timeout);
