@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store.jsx';
 import { Modal } from '../ui.jsx';
 import { Receipt } from './Sales.jsx';
+import { ask } from '../feedback.jsx';
 
 export default function Proformas() {
   const { db, remove, fmt } = useStore();
@@ -32,7 +33,7 @@ export default function Proformas() {
                 <td className="actions">
                   <button className="btn sm ghost" onClick={() => setView(p)}>View</button>
                   {p.status !== 'Converted' && <button className="btn sm primary" onClick={() => sell(p)}>Sell</button>}
-                  <button className="btn sm danger" onClick={() => confirm('Delete this proforma?') && remove('proformas', p.id)}>Delete</button>
+                  <button className="btn sm danger" onClick={async () => (await ask({ title: 'Delete this proforma?', confirmText: 'Delete', danger: true })) && remove('proformas', p.id)}>Delete</button>
                 </td>
               </tr>
             ))}

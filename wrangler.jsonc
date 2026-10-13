@@ -1,0 +1,18 @@
+// Cloudflare Workers config: web app (dist/) + sync API (worker/index.js) + D1 database.
+// Deploy: connect this GitHub repo in Cloudflare → Workers & Pages → Create → Import a repository.
+//   Build command: npm ci && npm run build      Deploy command: npx wrangler deploy
+// Then add the secret SYNC_KEY (Settings → Variables and Secrets). The D1 database is created automatically.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "pharmapos",
+  "main": "worker/index.js",
+  "compatibility_date": "2026-09-01",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [{ "binding": "DB" }],
+  "observability": { "enabled": true }
+}

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Plus, Zap, WifiOff, MonitorSmartphone, ShieldCheck } from 'lucide-react';
 import { useStore, hashPassword, uid, put, addSampleData } from '../store.jsx';
 import { Tabs } from '../ui.jsx';
 
@@ -47,8 +48,22 @@ export default function Auth() {
 
   return (
     <div className="auth-bg">
+      <section className="auth-hero">
+        <div className="brand"><span className="logo"><Plus size={20} strokeWidth={3} /></span> PharmaPOS</div>
+        <div>
+          <h1>Run your pharmacy <em>anywhere</em>, even offline.</h1>
+          <ul>
+            <li><Zap size={18} />Lightning-fast checkout with barcode scanning and keyboard shortcuts</li>
+            <li><WifiOff size={18} />Keeps selling when the internet is down, then syncs automatically</li>
+            <li><MonitorSmartphone size={18} />One system on Windows PCs, Android phones and the web</li>
+            <li><ShieldCheck size={18} />Expiry alerts, stock cards, finance and reports built in</li>
+          </ul>
+        </div>
+        <small style={{ opacity: .6 }}>© {new Date().getFullYear()} PharmaPOS</small>
+      </section>
+      <div className="auth-side">
       <div className="auth-card">
-        <div className="brand big"><span className="logo">✚</span> PharmaPOS</div>
+        <div className="brand big"><span className="logo"><Plus size={20} strokeWidth={3} /></span> PharmaPOS</div>
         {!firstRun ? (
           <form onSubmit={login} className="stack">
             <p className="muted center">Sign in to {db.settings.name}</p>
@@ -85,6 +100,7 @@ export default function Auth() {
           </>
         )}
         <p className="muted small center">Works offline. Data is kept on this device{syncCfg.url ? ' and synced with your hub' : ''}.</p>
+      </div>
       </div>
     </div>
   );

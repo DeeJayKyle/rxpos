@@ -1,6 +1,8 @@
 import { useState, useMemo } from 'react';
+import { useLocation } from 'react-router-dom';
 import { CrudPage, Tabs, Modal } from '../ui.jsx';
 import { useStore, daysUntil, put, move, downloadFile, toCSV } from '../store.jsx';
+import { ask, toast } from '../feedback.jsx';
 
 const expiryClass = (p, warn) => {
   if (!p.expiry) return '';
@@ -116,9 +118,10 @@ export function Expiry() {
     .filter((p) => p.expiry && p.stock > 0)
     .filter((p) => (tab === 'expired' ? daysUntil(p.expiry) < 0 : daysUntil(p.expiry) >= 0 && daysUntil(p.expiry) <= warn))
     .sort((a, b) => a.expiry.localeCompare(b.expiry));
-  const writeOff = (p) => {
-    if (!confirm(`Write off ${p.stock} units of ${p.name} (batch ${p.batch}) as expired?`)) return;
+  const writeOff = async (p) => {
+    if (!(await ask({ title: 'Write off expired stock?', message: `${p.stock} units of ${p.name} (batch ${p.batch || '—'}) will be removed from stock.`, confirmText: 'Write off', danger: true }))) return;
     update((d) => { move(d, { productId: p.id, qty: -p.stock, type: 'Expired write-off', ref: p.batch, user: user.name }); });
+    toast(`${p.name} written off`);
   };
   return (
     <div className="page">
@@ -204,7 +207,8 @@ export function QuickEdit() {
 /** Every stock movement for a medicine with running balance, plus manual adjustments (stock count). */
 export function StockCard() {
   const { db, products, update, user } = useStore();
-  const [id, setId] = useState(products[0]?.id || '');
+  const location = useLocation();
+  const [id, setId] = useState(location.state?.productId || products[0]?.id || '');
   const [q, setQ] = useState('');
   const [adjust, setAdjust] = useState(null);
   const p = products.find((x) => x.id === id);

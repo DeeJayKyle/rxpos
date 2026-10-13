@@ -32,3 +32,22 @@ export async function idbSet(key, value) {
     tx.onerror = () => reject(tx.error);
   });
 }
+
+export async function idbDel(key) {
+  const db = await conn();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, 'readwrite');
+    tx.objectStore(STORE).delete(key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+export async function idbKeys() {
+  const db = await conn();
+  return new Promise((resolve, reject) => {
+    const r = db.transaction(STORE).objectStore(STORE).getAllKeys();
+    r.onsuccess = () => resolve(r.result);
+    r.onerror = () => reject(r.error);
+  });
+}

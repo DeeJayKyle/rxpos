@@ -5,6 +5,7 @@
 import { TABLES, now } from './store.jsx';
 
 const INTERVAL = 30000;
+const PUSH_BATCH = 400;
 
 export function collectChanges(db, since) {
   const out = [];
@@ -38,13 +39,17 @@ export function createSync({ getDb, getCfg, saveCfg, applyRemote, onStatus }) {
     try {
       const started = now();
       const changes = collectChanges(getDb(), cfg.pushedAt);
-      let cursor = cfg.cursor || 0, first = true, pulled = 0;
+      // Push in batches (the cloud hub accepts up to 500 per request); every reply also carries a page of remote changes
+      const batches = [];
+      for (let i = 0; i < changes.length; i += PUSH_BATCH) batches.push(changes.slice(i, i + PUSH_BATCH));
+      let cursor = cfg.cursor || 0, sent = 0, pulled = 0;
       for (;;) {
-        const r = await post(cfg.url, cfg.key, { deviceId: cfg.deviceId, since: cursor, changes: first ? changes : [] });
-        first = false;
+        const r = await post(cfg.url, cfg.key, { deviceId: cfg.deviceId, since: cursor, changes: batches[sent] || [] });
+        sent++;
         if (r.changes.length) { applyRemote(r.changes); pulled += r.changes.length; }
         cursor = r.cursor;
-        if (!r.more) break;
+        if (sent >= batches.length && !r.more) break;
+        if (sent > 1 && batches.length > 1) onStatus({ state: 'syncing', progress: `Uploaded ${Math.min(sent * PUSH_BATCH, changes.length)} of ${changes.length}` });
       }
       const next = { ...cfg, pushedAt: started, cursor, lastSync: now(), lastError: '' };
       saveCfg(next);

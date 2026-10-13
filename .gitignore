@@ -4,3 +4,7 @@ release/
 hub-data/
 *.log
 .env
+
+.dev.vars
+.wrangler/
+android/

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useStore, uid, today, put, move, downloadFile, toCSV } from '../store.jsx';
 import { CASH } from '../finance.js';
 import { Modal } from '../ui.jsx';
+import { toast } from '../feedback.jsx';
 
 /** Receive stock from a supplier: logs stock-in movements and updates cost/prices/batch/expiry. */
 export function AddStock() {
@@ -27,7 +28,7 @@ export function AddStock() {
   const save = (e) => {
     e.preventDefault();
     const lines = form.lines.filter((l) => l.productId && Number(l.qty) > 0);
-    if (!lines.length) return alert('Add at least one medicine.');
+    if (!lines.length) return toast('Add at least one medicine', 'warn');
     const supplier = db.suppliers.find((s) => s.id === form.supplierId);
     const paid = form.paid === '' ? total : Math.min(Number(form.paid), total);
     const purchase = {

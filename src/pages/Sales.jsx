@@ -1,6 +1,8 @@
 import { useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useStore, downloadFile, toCSV, put, move, now } from '../store.jsx';
 import { Modal } from '../ui.jsx';
+import { ask, toast } from '../feedback.jsx';
 
 export function Receipt({ sale }) {
   const { db, fmt } = useStore();
@@ -38,7 +40,8 @@ export function Receipt({ sale }) {
 
 export default function Sales() {
   const { db, update, fmt, user } = useStore();
-  const [q, setQ] = useState('');
+  const location = useLocation();
+  const [q, setQ] = useState(location.state?.q || '');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [view, setView] = useState(null);
@@ -48,13 +51,14 @@ export default function Sales() {
     (!from || s.date.slice(0, 10) >= from) && (!to || s.date.slice(0, 10) <= to));
   const valid = rows.filter((s) => s.status !== 'refunded');
 
-  const refund = (sale) => {
-    if (!confirm(`Refund ${sale.number} and return items to stock?`)) return;
+  const refund = async (sale) => {
+    if (!(await ask({ title: `Refund ${sale.number}?`, message: `${fmt(sale.total)} will be refunded and the items returned to stock.`, confirmText: 'Refund', danger: true }))) return;
     update((d) => {
       put(d, 'sales', { ...sale, status: 'refunded', refundedBy: user.name, refundedAt: now() });
       sale.items.forEach((i) => move(d, { productId: i.id, qty: i.qty, type: 'Refund', ref: sale.number, user: user.name }));
     });
     setView(null);
+    toast(`${sale.number} refunded and items returned to stock`);
   };
 
   const exportRows = rows.map((s) => ({ receipt: s.number, date: s.date, type: s.type || 'retail', customer: s.customerName, cashier: s.cashier, payment: s.payment, items: s.items.length, discount: s.discount, tax: s.tax, total: s.total, paid: s.paid ?? s.total, status: s.status }));

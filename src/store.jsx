@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { idbGet, idbSet } from './idb.js';
+import { idbGet, idbSet, idbDel, idbKeys } from './idb.js';
 import { createSync } from './sync.js';
 
 const SESSION_KEY = 'pharmapos-session';
@@ -9,6 +9,13 @@ export const TABLES = [
   'products', 'formulations', 'customers', 'suppliers', 'sales', 'proformas', 'purchases', 'movements',
   'prescriptions', 'expenses', 'expenseCategories', 'banks', 'bankTx', 'loans', 'payments', 'users',
 ];
+// What is persisted on the device, one IndexedDB key per part
+const PARTS = [...TABLES, 'settings', '_tomb'];
+
+export async function listSnapshots() {
+  return (await idbKeys()).filter((k) => String(k).startsWith('snap:')).sort().reverse().map((k) => k.slice(5));
+}
+export const loadSnapshot = (date) => idbGet('snap:' + date);
 
 export const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-5);
 export const now = () => new Date().toISOString();
@@ -125,21 +132,54 @@ export function StoreProvider({ children }) {
   const dbRef = useRef(null);
   dbRef.current = db;
 
-  // load
+  // load: each table is stored under its own key so a sale only rewrites the tables it touched
+  const savedRefs = useRef({});
   useEffect(() => {
     (async () => {
       let saved = null, cfg = null;
-      try { saved = await idbGet('db'); cfg = await idbGet('sync'); } catch (e) { console.error(e); }
+      try {
+        cfg = await idbGet('sync');
+        const parts = await Promise.all(PARTS.map((k) => idbGet('t:' + k)));
+        if (parts.some((p) => p !== undefined)) saved = Object.fromEntries(PARTS.map((k, i) => [k, parts[i]]).filter(([, v]) => v !== undefined));
+        else saved = await idbGet('db'); // data saved by version 1.0
+      } catch (e) { console.error(e); }
       const base = blankDb();
-      setDb(saved ? { ...base, ...saved, settings: { ...base.settings, ...saved.settings } } : base);
+      const loaded = saved ? { ...base, ...saved, settings: { ...base.settings, ...saved.settings } } : base;
+      if (saved) PARTS.forEach((k) => { if (saved[k] !== undefined) savedRefs.current[k] = loaded[k]; });
+      setDb(loaded);
       setSyncCfgState(cfg || { deviceId: uid(), url: '', key: '', pushedAt: '', cursor: 0 });
     })();
   }, []);
 
-  // save (debounced)
+  // save changed tables (debounced), and flush immediately when the app is hidden or closed
   useEffect(() => {
     if (!db) return;
-    const t = setTimeout(() => idbSet('db', db).catch(console.error), 300);
+    const save = () => {
+      for (const k of PARTS) {
+        if (savedRefs.current[k] === db[k]) continue;
+        savedRefs.current[k] = db[k];
+        idbSet('t:' + k, db[k]).catch((e) => { savedRefs.current[k] = null; console.error(e); });
+      }
+    };
+    const t = setTimeout(save, 250);
+    const flush = () => document.visibilityState === 'hidden' && save();
+    document.addEventListener('visibilitychange', flush);
+    window.addEventListener('pagehide', save);
+    return () => { clearTimeout(t); document.removeEventListener('visibilitychange', flush); window.removeEventListener('pagehide', save); };
+  }, [db]);
+
+  // Daily on-device snapshot (last 7 kept) so a mistake can be undone even without a hub or manual backup
+  useEffect(() => {
+    if (!db || !db.users.length) return;
+    const key = 'snap:' + today();
+    const t = setTimeout(async () => {
+      try {
+        if (await idbGet(key)) return;
+        await idbSet(key, db);
+        const snaps = (await idbKeys()).filter((k) => String(k).startsWith('snap:')).sort();
+        for (const old of snaps.slice(0, -7)) await idbDel(old);
+      } catch (e) { console.error(e); }
+    }, 5000);
     return () => clearTimeout(t);
   }, [db]);
 

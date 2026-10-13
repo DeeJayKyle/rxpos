@@ -1,6 +1,7 @@
-import { useState } from 'react';
-import { useStore, hashPassword, uid, put, downloadFile, today, addSampleData } from '../store.jsx';
+import { useEffect, useState } from 'react';
+import { useStore, hashPassword, uid, put, downloadFile, today, addSampleData, listSnapshots, loadSnapshot } from '../store.jsx';
 import { Modal } from '../ui.jsx';
+import { ask, askText, toast } from '../feedback.jsx';
 
 export default function Settings() {
   const { db, update, setDb, saveSettings, user, syncCfg, saveSyncCfg, syncStatus, syncNow } = useStore();
@@ -15,37 +16,47 @@ export default function Settings() {
     saveSettings({ ...s, taxRate: num('taxRate'), decimals: num('decimals'), retailMarkup: num('retailMarkup'), wholesaleMarkup: num('wholesaleMarkup'), expiryWarnDays: num('expiryWarnDays') || 90 });
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
+    toast('Settings saved');
   };
 
   const addUser = async (e) => {
     e.preventDefault();
     const email = newUser.email.trim().toLowerCase();
-    if (db.users.some((u) => u.email === email)) return alert('A user with that email already exists.');
-    if (newUser.password.length < 6) return alert('Password must be at least 6 characters.');
+    if (db.users.some((u) => u.email === email)) return toast('A user with that email already exists', 'error');
+    if (newUser.password.length < 6) return toast('Password must be at least 6 characters', 'error');
     const hash = await hashPassword(newUser.password);
     update((d) => { put(d, 'users', { id: uid(), name: newUser.name, email, role: newUser.role, hash }); });
     setNewUser(null);
+    toast(`${newUser.name} can now sign in`);
   };
 
   const resetPassword = async (u) => {
-    const pw = prompt(`New password for ${u.name} (min 6 characters):`);
+    const pw = await askText({ title: `New password for ${u.name}`, type: 'password', minLength: 6, confirmText: 'Set password' });
     if (!pw) return;
-    if (pw.length < 6) return alert('Password must be at least 6 characters.');
     const hash = await hashPassword(pw);
     update((d) => { put(d, 'users', { ...u, hash }); });
+    toast('Password updated');
+  };
+
+  const restore = async (data, label) => {
+    if (!data?.products || !data.users || !data.movements) return toast('That is not a valid PharmaPOS backup', 'error');
+    if (!(await ask({ title: 'Replace all data on this device?', message: `Everything on this device will be replaced with ${label}. Export a backup first if unsure.`, confirmText: 'Restore', danger: true }))) return;
+    setDb({ ...data, _tomb: data._tomb || [] });
+    toast('Data restored');
   };
 
   const importBackup = (file) => {
     const r = new FileReader();
     r.onload = () => {
-      try {
-        const data = JSON.parse(r.result);
-        if (!data.products || !data.users || !data.movements) throw new Error();
-        if (confirm('Replace ALL data on this device with this backup?')) setDb({ ...data, _tomb: data._tomb || [] });
-      } catch { alert('That file is not a valid PharmaPOS backup.'); }
+      let data = null;
+      try { data = JSON.parse(r.result); } catch {}
+      restore(data, `the backup “${file.name}”`);
     };
     r.readAsText(file);
   };
+
+  const [snaps, setSnaps] = useState(null);
+  useEffect(() => { listSnapshots().then(setSnaps).catch(() => setSnaps([])); }, []);
 
   const connectHub = (e) => {
     e.preventDefault();
@@ -89,14 +100,14 @@ export default function Settings() {
       </form>
 
       <form className="card" onSubmit={connectHub}>
-        <h3>Online sync (PharmaPOS Hub)</h3>
+        <h3>Online sync</h3>
         <p className="muted">
-          PharmaPOS always works offline on this device. To share data between PCs, branches and browsers, run a PharmaPOS Hub
-          (on the main PC for the same building, or on a server for online access) and link every device to it. Changes sync every 30 seconds
-          whenever there is a connection; sales made offline are sent when the connection returns.
+          PharmaPOS always works offline on this device. Link every PC, phone and browser to the same hub to share stock, sales and
+          customers across branches. Changes sync every 30 seconds whenever there is a connection; sales made offline are sent when it returns.
+          {location.protocol === 'https:' && !location.hostname.includes('localhost') && <> This web app's own address works as the hub: <code>{location.origin}</code></>}
         </p>
         <div className="form-grid">
-          <label className="field"><span>Hub address</span><input placeholder="192.168.1.20:8686 or https://hub.example.com" value={hub.url} onChange={(e) => setHub({ ...hub, url: e.target.value })} /></label>
+          <label className="field"><span>Hub address</span><input placeholder="https://pharmapos.yourname.workers.dev" value={hub.url} onChange={(e) => setHub({ ...hub, url: e.target.value })} /></label>
           <label className="field"><span>Sync key</span><input type="password" value={hub.key} onChange={(e) => setHub({ ...hub, key: e.target.value })} /></label>
         </div>
         <div className="sync-info">
@@ -143,7 +154,15 @@ export default function Settings() {
         <div className="row gap">
           <button className="btn primary" onClick={() => downloadFile(`pharmapos-backup-${today()}.json`, JSON.stringify(db), 'application/json')}>Export backup</button>
           <label className="btn ghost">Import backup<input type="file" accept=".json" hidden onChange={(e) => e.target.files[0] && importBackup(e.target.files[0])} /></label>
-          <button className="btn ghost" onClick={() => confirm('Add 10 sample medicines?') && update((d) => addSampleData(d, user.name))}>Add sample medicines</button>
+          <button className="btn ghost" onClick={async () => (await ask({ title: 'Add 10 sample medicines?', confirmText: 'Add' })) && (update((d) => addSampleData(d, user.name)), toast('Sample medicines added'))}>Add sample medicines</button>
+        </div>
+        <h3 style={{ marginTop: 20 }}>Automatic daily snapshots</h3>
+        <p className="muted small">PharmaPOS keeps a copy of all data from each of the last 7 days on this device. Restore one to undo a mistake.</p>
+        <div className="row gap">
+          {snaps?.map((d) => (
+            <button key={d} className="btn sm ghost" onClick={async () => restore(await loadSnapshot(d), `the snapshot from ${d}`)}>{new Date(d).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}</button>
+          ))}
+          {snaps && !snaps.length && <span className="muted small">The first snapshot is taken a few seconds after you start working today.</span>}
         </div>
       </div>
 

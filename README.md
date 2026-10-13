@@ -47,7 +47,23 @@ PHARMAPOS_SYNC_KEY=YOUR-SECRET-KEY node server/hub.mjs --port 8686 --data ./hub-
 Put it behind HTTPS (e.g. Caddy, nginx, or a host such as Render/Railway/Fly.io). Open `https://your-hub-address` in any browser to use PharmaPOS online. The hub serves the web app too.
 The `PharmaPOS-Hub.zip` artifact from GitHub Actions contains everything needed. The hub keeps daily backups in `hub-data/backups`.
 
-## Putting PharmaPOS online (recommended: Coolify)
+## Putting PharmaPOS online (recommended: Cloudflare, free, no card, no server)
+
+The repo is ready for **Cloudflare Workers + D1** (free plan: 100,000 requests/day, 5 GB database, no credit card).
+One deployment serves the web app *and* the sync hub on a free `https://pharmapos.<your-name>.workers.dev` address,
+on Cloudflare's global network (with servers in Africa), redeploying automatically on every push to GitHub.
+
+1. Create a free account at **dash.cloudflare.com/sign-up**.
+2. **Workers & Pages → Create → Import a repository** → connect GitHub → choose `pharmapos`.
+   * Build command: `npm ci && npm run build`  ·  Deploy command: `npx wrangler deploy`
+   * The D1 database is created automatically on the first deploy.
+3. After it deploys: **your Worker → Settings → Variables and Secrets → Add** → type *Secret*, name `SYNC_KEY`, value = a long secret (12+ characters). Save and redeploy.
+4. Open `https://pharmapos.<your-name>.workers.dev`. That is PharmaPOS online. On Android/desktop browsers use *Install app / Add to Home screen*.
+5. On every PC and phone: **Settings → Online sync** → that address + the same `SYNC_KEY`.
+
+Check it: `https://pharmapos.<your-name>.workers.dev/api/health` → `"configured": true`.
+
+## Alternative: your own server with Coolify
 
 [Coolify](https://github.com/coollabsio/coolify) (open source, Apache-2.0) is a self-hosted Heroku/Vercel alternative.
 It deploys the hub straight from this private GitHub repo, gives it HTTPS automatically, keeps the data on a persistent disk,
