@@ -1,4 +1,4 @@
-# PharmaPOS – connect MTN MoMo / Airtel Money / SMS to your Cloudflare cloud.
+# PharmaPOS - connect MTN MoMo / Airtel Money / SMS to your Cloudflare cloud.
 # Run from the pharmapos folder:   powershell -ExecutionPolicy Bypass -File deploy\setup-mobile-money.ps1
 # Keys are typed here (hidden) and stored only as encrypted Cloudflare secrets. Nothing is saved on this PC.
 $ErrorActionPreference = 'Stop'
@@ -20,9 +20,9 @@ function Save-Secrets($map) {
   } finally { Remove-Item $tmp -Force -ErrorAction SilentlyContinue }
 }
 
-Write-Host "`n  PharmaPOS – Mobile Money & SMS setup`n" -ForegroundColor Cyan
-Write-Host '  1) MTN MoMo – SANDBOX (testing, free, no real money)'
-Write-Host '  2) MTN MoMo – LIVE (after MTN Uganda approves your business)'
+Write-Host "`n  PharmaPOS - Mobile Money & SMS setup`n" -ForegroundColor Cyan
+Write-Host '  1) MTN MoMo - SANDBOX (testing, free, no real money)'
+Write-Host '  2) MTN MoMo - LIVE (after MTN Uganda approves your business)'
 Write-Host '  3) Airtel Money'
 Write-Host "  4) SMS (Africa's Talking)`n"
 $choice = Read-Host 'Choose 1-4'
