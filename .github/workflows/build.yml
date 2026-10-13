@@ -58,3 +58,18 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: out/PharmaPOS-Hub.zip
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build hub image
+        run: docker build -t pharmapos-hub .
+      - name: Smoke test
+        run: |
+          docker run -d --name hub -e PHARMAPOS_SYNC_KEY=ci-smoke-test-key -p 8686:8686 pharmapos-hub
+          for i in $(seq 1 20); do curl -fs http://localhost:8686/api/health && break; sleep 1; done
+          curl -fs http://localhost:8686/ | grep -q PharmaPOS
+          curl -fs -X POST http://localhost:8686/api/sync -H 'Authorization: Bearer ci-smoke-test-key' -H 'Content-Type: application/json' \
+            -d '{"deviceId":"ci","since":0,"changes":[{"t":"products","id":"x","rec":{"id":"x"},"at":"2026-01-01T00:00:00.000Z"}]}' | grep -q '"applied":1'
+          docker logs hub

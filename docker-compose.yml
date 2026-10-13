@@ -1,0 +1,14 @@
+# docker compose up -d   (set PHARMAPOS_SYNC_KEY in a .env file next to this file first)
+services:
+  hub:
+    build: .
+    restart: unless-stopped
+    environment:
+      PHARMAPOS_SYNC_KEY: ${PHARMAPOS_SYNC_KEY:?Set PHARMAPOS_SYNC_KEY to a secret of 12+ characters}
+    ports:
+      - "8686:8686"
+    volumes:
+      - hub-data:/data
+
+volumes:
+  hub-data:
