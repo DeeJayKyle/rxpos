@@ -1,6 +1,5 @@
-import { Phone } from 'lucide-react';
 import { CrudPage } from '../ui.jsx';
-import { telLink } from '../calls.jsx';
+import { CallMenu } from '../calls.jsx';
 import { useStore, customerBalance, supplierBalance } from '../store.jsx';
 
 export function Customers() {
@@ -24,7 +23,7 @@ export function Customers() {
       ]}
       columns={[
         { label: 'Name', key: 'name' },
-        { label: 'Phone', render: (c) => (c.phone ? <a className="phone-link" href={telLink(c.phone)} title="Call"><Phone size={13} /> {c.phone}</a> : '—') },
+        { label: 'Phone', render: (c) => (c.phone ? <span className="row gap">{c.phone}<CallMenu compact person={c} /></span> : '—') },
         { label: 'Type', key: 'type' },
         { label: 'Allergies', render: (c) => (c.allergies ? <span className="text-danger">{c.allergies}</span> : '—') },
         { label: 'Total bought', num: true, render: (c) => fmt(spent(c.id)) },
@@ -51,7 +50,7 @@ export function Suppliers() {
       columns={[
         { label: 'Company', key: 'name' },
         { label: 'Contact', key: 'contact' },
-        { label: 'Phone', render: (s) => (s.phone ? <a className="phone-link" href={telLink(s.phone)} title="Call"><Phone size={13} /> {s.phone}</a> : '—') },
+        { label: 'Phone', render: (s) => (s.phone ? <span className="row gap">{s.phone}<CallMenu compact person={s} /></span> : '—') },
         { label: 'Total purchased', num: true, render: (s) => fmt(purchased(s.id)) },
         { label: 'We owe', num: true, render: (s) => { const b = supplierBalance(db, s.id); return b > 0 ? <span className="text-warn">{fmt(b)}</span> : '—'; } },
       ]}

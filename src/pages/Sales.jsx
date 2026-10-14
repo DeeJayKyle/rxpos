@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Download, Printer, Undo2, Eye } from 'lucide-react';
-import { useStore, downloadFile, toCSV, put, move, now, audit, MAIN_BRANCH } from '../store.jsx';
+import { Download, Printer, Undo2, Eye, Pencil, Trash2, Plus } from 'lucide-react';
+import { useStore, downloadFile, toCSV, put, move, now, audit, allocate, MAIN_BRANCH, DEFAULT_PAYMENT_METHODS } from '../store.jsx';
 import { Modal, SearchBox, Empty } from '../ui.jsx';
 import { ask, toast } from '../feedback.jsx';
 import { Barcode } from '../barcode.jsx';
@@ -54,11 +54,12 @@ export function Receipt({ sale }) {
 }
 
 export default function Sales() {
-  const { db, update, fmt, user, branchId } = useStore();
+  const { db, update, fmt, user, branchId, can } = useStore();
   const location = useLocation();
   const [q, setQ] = useState(location.state?.q || '');
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
+  const [from, setFrom] = useState(location.state?.from || '');
+  const [to, setTo] = useState(location.state?.to || '');
+  const [editing, setEditing] = useState(null);
   const [branch, setBranch] = useState(user.role === 'cashier' ? branchId : 'all');
   const [view, setView] = useState(null);
 
@@ -115,22 +116,128 @@ export default function Sales() {
                 <td>{s.customerName}</td><td>{s.cashier}</td><td>{s.payment}{s.momo?.txid ? <><br /><small className="muted">{s.momo.txid}</small></> : null}</td>
                 <td><span className={'badge ' + (s.status === 'refunded' ? 'danger' : 'ok')}>{s.status}</span></td>
                 <td className="num">{fmt(s.total)}</td>
-                <td className="actions"><button className="btn sm ghost" onClick={() => setView(s)}><Eye size={14} />View</button></td>
+                <td className="actions"><button className="btn sm ghost" onClick={() => setView(s)}><Eye size={14} />View</button>{s.status !== 'refunded' && can('sales.edit') && <button className="btn sm ghost" onClick={() => setEditing(s)}><Pencil size={14} />Edit</button>}{s.editedAt && <small className="muted" title={`Edited by ${s.editedBy} ${new Date(s.editedAt).toLocaleString()}`}> · edited</small>}</td>
               </tr>
             ))}
             {!rows.length && <Empty colSpan={9}>No sales found</Empty>}
           </tbody>
         </table>
       </div>
+      {editing && <SaleEditor sale={editing} onClose={() => setEditing(null)} />}
       {view && (
         <Modal title={`Receipt ${view.number}`} onClose={() => setView(null)}>
           <Receipt sale={view} />
           <div className="form-actions no-print">
+            {view.status !== 'refunded' && can('sales.edit') && <button className="btn ghost" onClick={() => { setEditing(view); setView(null); }}><Pencil size={16} />Edit sale</button>}
             {view.status !== 'refunded' && user.role !== 'cashier' && <button className="btn danger" onClick={() => refund(view)}><Undo2 size={16} />Refund</button>}
             <button className="btn primary" onClick={() => window.print()}><Printer size={16} />Print</button>
           </div>
         </Modal>
       )}
     </div>
+  );
+}
+
+/** Admin, manager or pharmacist: correct a past sale. Stock is returned to / taken from the right batches. */
+function SaleEditor({ sale, onClose }) {
+  const { db, products, fmt, update, user, batchesOf } = useStore();
+  const methods = db.settings.paymentMethods?.length ? db.settings.paymentMethods : DEFAULT_PAYMENT_METHODS;
+  const rate = sale.tax > 0 && sale.subtotal - (sale.discount || 0) > 0 ? sale.tax / (sale.subtotal - (sale.discount || 0)) : 0;
+  const [f, setF] = useState(() => ({ customerId: sale.customerId || 'walk-in', payment: sale.payment, discount: sale.discount || 0, paid: sale.paid ?? sale.total, reason: '', items: sale.items.map((i) => ({ ...i })) }));
+  const [q, setQ] = useState('');
+  const br = sale.branchId || MAIN_BRANCH;
+  const subtotal = f.items.reduce((a, i) => a + Number(i.qty || 0) * Number(i.price || 0), 0);
+  const disc = Math.min(Number(f.discount) || 0, subtotal);
+  const tax = (subtotal - disc) * rate;
+  const total = subtotal - disc + tax;
+  const ptype = methods.find((m) => m.name === f.payment)?.type || (f.payment === 'Credit' ? 'credit' : 'cash');
+  const setItem = (k, patch) => setF((x) => ({ ...x, items: x.items.map((i, n) => (n === k ? { ...i, ...patch } : i)) }));
+  const matches = q.trim() ? products.filter((p) => p.stock > 0 && `${p.name} ${p.generic} ${p.barcode}`.toLowerCase().includes(q.toLowerCase()) && !f.items.some((i) => i.id === p.id)).slice(0, 8) : [];
+  const save = (e) => {
+    e.preventDefault();
+    if (!f.items.some((i) => Number(i.qty) > 0)) return toast('A sale needs at least one item. To cancel the whole sale, refund it.', 'warn');
+    if (!f.reason.trim()) return toast('Say why the sale is being changed', 'warn');
+    for (const i of f.items) {
+      const o = sale.items.find((x) => x.id === i.id);
+      const extra = Number(i.qty) - (o?.qty || 0);
+      const have = batchesOf(i.id, br).reduce((a, b) => a + Math.max(b.qty, 0), 0);
+      if (extra > have) return toast(`Only ${have} more ${i.name} in stock`, 'error');
+    }
+    const customer = db.customers.find((c) => c.id === f.customerId);
+    update((d) => {
+      const old = new Map(sale.items.map((i) => [i.id, i]));
+      const items = [];
+      for (const it of f.items) {
+        const o = old.get(it.id);
+        const q0 = o?.qty || 0, q1 = Math.max(0, Math.round(Number(it.qty) || 0));
+        let alloc = (o?.alloc || []).map((a) => ({ ...a }));
+        if (q1 > q0) {
+          for (const a of allocate(batchesOf(it.id, br), q1 - q0)) {
+            move(d, { productId: it.id, qty: -a.qty, type: 'Sale edit', ref: sale.number, user: user.name, batchId: a.batchId, branchId: br });
+            const same = alloc.find((x) => x.batchId === a.batchId);
+            if (same) same.qty += a.qty; else alloc.push({ batchId: a.batchId, qty: a.qty, batch: a.batch, expiry: a.expiry });
+          }
+        } else if (q1 < q0) {
+          let back = q0 - q1;
+          if (!alloc.length) { move(d, { productId: it.id, qty: back, type: 'Sale edit', ref: sale.number, user: user.name, batchId: null, branchId: br }); back = 0; }
+          for (const a of [...alloc].reverse()) {
+            if (back <= 0) break;
+            const take = Math.min(a.qty, back);
+            move(d, { productId: it.id, qty: take, type: 'Sale edit', ref: sale.number, user: user.name, batchId: a.batchId, branchId: br });
+            a.qty -= take; back -= take;
+          }
+          alloc = alloc.filter((a) => a.qty > 0);
+        }
+        if (q1 > 0) items.push({ ...it, qty: q1, price: Number(it.price) || 0, alloc });
+        old.delete(it.id);
+      }
+      for (const o of old.values()) { // removed lines: everything back to stock
+        const parts = o.alloc?.length ? o.alloc : [{ batchId: null, qty: o.qty }];
+        for (const a of parts) move(d, { productId: o.id, qty: a.qty, type: 'Sale edit', ref: sale.number, user: user.name, batchId: a.batchId, branchId: br });
+      }
+      const paid = ptype === 'credit' ? Math.min(Number(f.paid) || 0, total) : total;
+      put(d, 'sales', { ...sale, items, subtotal, discount: disc, tax, total, payment: f.payment, paid, tendered: ptype === 'cash' ? Math.max(sale.tendered || 0, total) : paid,
+        customerId: f.customerId, customerName: customer?.name || 'Walk-in Customer', editedBy: user.name, editedAt: now(),
+        edits: [...(sale.edits || []), { at: now(), by: user.name, reason: f.reason.trim(), before: { total: sale.total, items: sale.items.map((i) => `${i.qty}× ${i.name} @ ${i.price}`).join(', ') } }] });
+      audit(d, user, 'Sale edited', `${sale.number}: ${fmt(sale.total)} → ${fmt(total)} (${f.reason.trim()})`, br);
+    });
+    toast(`${sale.number} updated; stock adjusted`);
+    onClose();
+  };
+  return (
+    <Modal title={`Edit sale ${sale.number}`} onClose={onClose} wide>
+      <form onSubmit={save} className="stack">
+        <div className="form-grid">
+          <label className="field"><span>Customer</span><select value={f.customerId} onChange={(e) => setF({ ...f, customerId: e.target.value })}>{db.customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
+          <label className="field"><span>Payment</span><select value={f.payment} onChange={(e) => setF({ ...f, payment: e.target.value })}>{[...new Set([...methods.map((m) => m.name), sale.payment])].map((m) => <option key={m}>{m}</option>)}</select></label>
+        </div>
+        <table className="lines">
+          <thead><tr><th>Medicine</th><th>Qty</th><th>Unit price</th><th className="num">Line total</th><th /></tr></thead>
+          <tbody>
+            {f.items.map((i, k) => (
+              <tr key={i.id}>
+                <td>{i.name}</td>
+                <td><input type="number" min="0" value={i.qty} onChange={(e) => setItem(k, { qty: e.target.value })} /></td>
+                <td><input type="number" min="0" step="any" value={i.price} onChange={(e) => setItem(k, { price: e.target.value })} /></td>
+                <td className="num">{fmt(Number(i.qty || 0) * Number(i.price || 0))}</td>
+                <td><button type="button" className="icon-btn" title="Remove" onClick={() => setF({ ...f, items: f.items.filter((_, n) => n !== k) })}><Trash2 size={15} /></button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div className="picker">
+          <SearchBox value={q} onChange={setQ} placeholder="Add a medicine to this sale…" />
+          {matches.length > 0 && <div className="picker-list">{matches.map((p) => <button type="button" key={p.id} onClick={() => { setF({ ...f, items: [...f.items, { id: p.id, name: p.name, price: p.price, cost: p.cost, qty: 1, alloc: [] }] }); setQ(''); }}><Plus size={13} /> {p.name} <small className="muted">{p.stock} in stock · {fmt(p.price)}</small></button>)}</div>}
+        </div>
+        <div className="form-grid">
+          <label className="field"><span>Discount</span><input type="number" min="0" step="any" value={f.discount} onChange={(e) => setF({ ...f, discount: e.target.value })} /></label>
+          {ptype === 'credit' && <label className="field"><span>Amount paid (rest on credit)</span><input type="number" min="0" step="any" value={f.paid} onChange={(e) => setF({ ...f, paid: e.target.value })} /></label>}
+          <label className="field full"><span>Reason for the change (kept in the audit log)</span><input required value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} placeholder="e.g. wrong quantity entered, price correction" /></label>
+        </div>
+        <div className="totals"><div className="row between"><span className="muted">Was</span><span className="num">{fmt(sale.total)}</span></div><div className="row between grand"><span>New total</span><span className="num">{fmt(total)}</span></div></div>
+        {sale.edits?.length > 0 && <details className="muted small"><summary>Earlier changes ({sale.edits.length})</summary>{sale.edits.map((x, n) => <p key={n}>{new Date(x.at).toLocaleString()} · {x.by}: {x.reason} (was {fmt(x.before.total)})</p>)}</details>}
+        <div className="form-actions"><button type="button" className="btn ghost" onClick={onClose}>Cancel</button><button className="btn primary">Save changes</button></div>
+      </form>
+    </Modal>
   );
 }

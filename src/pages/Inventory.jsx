@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Download, Barcode as BarcodeIcon, SlidersHorizontal, Save, Undo2 } from 'lucide-react';
+import { Download, Barcode as BarcodeIcon, SlidersHorizontal, Save, Undo2, Pencil } from 'lucide-react';
 import { CrudPage, Tabs, Modal, SearchBox, Empty } from '../ui.jsx';
 import { useStore, daysUntil, put, move, addBatch, audit, downloadFile, toCSV, MAIN_BRANCH } from '../store.jsx';
 import { ask, toast } from '../feedback.jsx';
@@ -84,10 +84,12 @@ export function Formulations() {
 }
 
 export function StockLevels() {
-  const { db, products, fmt, batchesOf, branch } = useStore();
+  const { db, products, fmt, batchesOf, branch, can } = useStore();
+  const location = useLocation();
   const [q, setQ] = useState('');
-  const [filter, setFilter] = useState('instock');
+  const [filter, setFilter] = useState(location.state?.filter || 'instock');
   const [open, setOpen] = useState(null);
+  const [editing, setEditing] = useState(null);
   const warn = db.settings.expiryWarnDays || 90;
   const multi = db.branches.length > 1;
   const ql = q.toLowerCase();
@@ -108,7 +110,7 @@ export function StockLevels() {
       <Tabs tabs={[['instock', 'In stock'], ['low', 'Low stock'], ['out', 'Out of stock'], ['all', 'All']]} value={filter} onChange={setFilter} />
       <div className="card table-wrap">
         <table>
-          <thead><tr><th>Medicine</th><th>Next batch</th><th>Expiry</th><th>Shelf</th><th className="num">Reorder at</th><th className="num">In stock</th>{multi && <th className="num">All branches</th>}<th className="num">Value (cost)</th></tr></thead>
+          <thead><tr><th>Medicine</th><th>Next batch</th><th>Expiry</th><th>Shelf</th><th className="num">Reorder at</th><th className="num">In stock</th>{multi && <th className="num">All branches</th>}<th className="num">Value (cost)</th>{can('inventory.edit') && <th />}</tr></thead>
           <tbody>
             {rows.slice(0, 500).map((p) => (
               <tr key={p.id} onClick={() => setOpen(p)} style={{ cursor: 'pointer' }}>
@@ -118,12 +120,14 @@ export function StockLevels() {
                 <td className="num"><span className={p.stock <= 0 ? 'badge danger' : p.stock <= (p.reorder || 0) ? 'badge warn' : ''}>{p.stock}</span></td>
                 {multi && <td className="num muted">{p.totalStock}</td>}
                 <td className="num">{fmt(Math.max(p.stock, 0) * (p.cost || 0))}</td>
+                {can('inventory.edit') && <td className="actions"><button className="btn sm ghost" onClick={(e) => { e.stopPropagation(); setEditing(p); }}><Pencil size={14} />Edit</button></td>}
               </tr>
             ))}
             {!rows.length && <Empty colSpan={8}>Nothing here</Empty>}
           </tbody>
         </table>
       </div>
+      {editing && <InventoryEditor product={editing} onClose={() => setEditing(null)} />}
       {open && (
         <Modal title={`${open.name} – batches at ${branch?.name}`} onClose={() => setOpen(null)} wide>
           <table>
@@ -187,7 +191,9 @@ export function QuickEdit() {
   const [q, setQ] = useState('');
   const [edits, setEdits] = useState({});
   const ql = q.toLowerCase();
-  const rows = products.filter((p) => !q || `${p.name} ${p.generic} ${p.barcode}`.toLowerCase().includes(ql)).slice(0, 300);
+  // Only medicines this pharmacy actually has (not the whole built-in catalog)
+  const stocked = products.filter((p) => p.stock > 0 || p.totalStock > 0);
+  const rows = stocked.filter((p) => !q || `${p.name} ${p.generic} ${p.barcode}`.toLowerCase().includes(ql)).slice(0, 300);
   const val = (p, k) => edits[p.id]?.[k] ?? p[k] ?? '';
   const set = (p, k, v) => setEdits((e) => ({ ...e, [p.id]: { ...e[p.id], [k]: v } }));
   const count = Object.keys(edits).length;
@@ -218,7 +224,7 @@ export function QuickEdit() {
   return (
     <div className="page">
       <div className="page-head">
-        <div><h1>Quick Edit</h1><div className="sub">Edit many prices at once, then save</div></div>
+        <div><h1>Quick Edit</h1><div className="sub">{stocked.length.toLocaleString()} medicines in stock · edit many prices at once, then save</div></div>
         <div className="row gap">
           <SearchBox value={q} onChange={setQ} />
           <button className="btn ghost" onClick={fillBarcodes}><BarcodeIcon size={16} />Generate missing barcodes</button>
@@ -230,6 +236,7 @@ export function QuickEdit() {
         <table className="lines">
           <thead><tr><th>Medicine</th>{cols.map(([k, l]) => <th key={k}>{l}</th>)}<th className="num">Margin</th></tr></thead>
           <tbody>
+            {!rows.length && <Empty colSpan={8}>{stocked.length ? 'Nothing matches' : 'No medicines in stock yet. Receive stock with Add Stock first.'}</Empty>}
             {rows.map((p) => {
               const price = Number(val(p, 'price')), cost = Number(val(p, 'cost'));
               return (
@@ -249,9 +256,10 @@ export function QuickEdit() {
 
 /** Every stock movement for a medicine at this branch with running balance, plus counts/adjustments per batch. */
 export function StockCard() {
-  const { db, products, update, user, batchesOf, branchId, branch } = useStore();
+  const { db, products, update, user, batchesOf, branchId, branch, can } = useStore();
   const location = useLocation();
-  const [id, setId] = useState(location.state?.productId || products[0]?.id || '');
+  const stocked = useMemo(() => products.filter((x) => x.stock > 0 || x.totalStock > 0), [products]);
+  const [id, setId] = useState(location.state?.productId || stocked[0]?.id || '');
   const [q, setQ] = useState('');
   const [adjust, setAdjust] = useState(null);
   const p = products.find((x) => x.id === id);
@@ -263,7 +271,9 @@ export function StockCard() {
       .sort((a, b) => a.date.localeCompare(b.date)).map((m) => ({ ...m, bal: (bal += m.qty) }));
   }, [db.movements, id, branchId]);
   const ql = q.toLowerCase();
-  const options = products.filter((x) => !q || x.name.toLowerCase().includes(ql)).slice(0, 300);
+  // Only medicines in stock (plus the one opened from elsewhere), not the whole built-in catalog
+  const options = stocked.filter((x) => !q || `${x.name} ${x.generic || ''} ${x.barcode || ''}`.toLowerCase().includes(ql)).slice(0, 300);
+  if (p && !options.some((x) => x.id === p.id)) options.unshift(p);
 
   const saveAdjust = (e) => {
     e.preventDefault();
@@ -284,11 +294,11 @@ export function StockCard() {
   return (
     <div className="page">
       <div className="page-head">
-        <div><h1>Stock Card</h1><div className="sub">{branch?.name}</div></div>
+        <div><h1>Stock Card</h1><div className="sub">{branch?.name} · {stocked.length.toLocaleString()} medicines in stock</div></div>
         <div className="row gap">
           <SearchBox value={q} onChange={setQ} placeholder="Find medicine…" />
           <select value={id} onChange={(e) => setId(e.target.value)}>{options.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select>
-          {p && user.role !== 'cashier' && <button className="btn primary" onClick={() => setAdjust({ mode: 'count', batchId: batches[0]?.id || 'new', counted: batches[0]?.qty || 0, qty: 1, reason: '', newBatch: '', newExpiry: '' })}><SlidersHorizontal size={16} />Count / adjust</button>}
+          {p && p.stock > 0 && can('stock.adjust') && <button className="btn primary" onClick={() => setAdjust({ mode: 'count', batchId: batches[0]?.id || 'new', counted: batches[0]?.qty || 0, qty: 1, reason: '', newBatch: '', newExpiry: '' })}><SlidersHorizontal size={16} />Count / adjust</button>}
         </div>
       </div>
       {p && (
@@ -320,7 +330,7 @@ export function StockCard() {
             <Tabs tabs={[['count', 'Physical count'], ['add', 'Add'], ['remove', 'Remove']]} value={adjust.mode} onChange={(mode) => setAdjust({ ...adjust, mode })} />
             <label className="field"><span>Batch</span>
               <select value={adjust.batchId} onChange={(e) => setAdjust({ ...adjust, batchId: e.target.value, counted: batches.find((b) => b.id === e.target.value)?.qty || 0 })}>
-                {batches.map((b) => <option key={b.id} value={b.id}>{b.batch} · exp {b.expiry || '—'} · {b.qty} in stock</option>)}
+                {batches.filter((b) => b.qty > 0 || adjust.mode === 'add').map((b) => <option key={b.id} value={b.id}>{b.batch} · exp {b.expiry || '—'} · {b.qty} in stock</option>)}
                 {adjust.mode === 'add' && <option value="new">+ New batch…</option>}
               </select>
             </label>
@@ -339,5 +349,65 @@ export function StockCard() {
         </Modal>
       )}
     </div>
+  );
+}
+
+/** Admin & manager: edit an item's details and its batches (number, expiry, quantity) in one place */
+function InventoryEditor({ product, onClose }) {
+  const { db, fmt, update, user, batchesOf, branchId } = useStore();
+  const [p, setP] = useState(() => ({ name: product.name, generic: product.generic || '', form: product.form || '', cost: product.cost || 0, wholesale: product.wholesale || 0, price: product.price || 0, reorder: product.reorder || 0, shelf: product.shelf || '' }));
+  const [rows, setRows] = useState(() => batchesOf(product.id).filter((b) => b.qty !== 0).map((b) => ({ ...b, newQty: b.qty, newBatch: b.batch, newExpiry: b.expiry || '' })));
+  const [reason, setReason] = useState('');
+  const setRow = (k, patch) => setRows((r) => r.map((x, n) => (n === k ? { ...x, ...patch } : x)));
+  const save = (e) => {
+    e.preventDefault();
+    const qtyChanges = rows.filter((r) => Number(r.newQty) !== r.qty);
+    if (qtyChanges.length && !reason.trim()) return toast('Give a reason for the quantity change', 'warn');
+    update((d) => {
+      const cur = d.products.find((x) => x.id === product.id) || product;
+      const num = (v) => Number(v) || 0;
+      const next = { ...cur, ...p, cost: num(p.cost), wholesale: num(p.wholesale), price: num(p.price), reorder: num(p.reorder) };
+      put(d, 'products', next);
+      if (next.price !== cur.price) audit(d, user, 'Price changed', `${cur.name}: ${fmt(cur.price)} → ${fmt(next.price)} (inventory edit)`, branchId);
+      for (const r of rows) {
+        if (!r.legacy && (r.newBatch !== r.batch || r.newExpiry !== (r.expiry || ''))) {
+          const b = d.batches.find((x) => x.id === r.id);
+          if (b) put(d, 'batches', { ...b, batch: r.newBatch.trim() || b.batch, expiry: r.newExpiry });
+        }
+        const diff = Math.round(Number(r.newQty) || 0) - r.qty;
+        if (diff) move(d, { productId: product.id, qty: diff, type: 'Inventory edit', note: reason.trim(), user: user.name, batchId: r.legacy ? null : r.id, branchId });
+      }
+      audit(d, user, 'Inventory edited', `${next.name}${qtyChanges.length ? `: ${qtyChanges.map((r) => `${r.batch} ${r.qty}→${r.newQty}`).join(', ')} (${reason.trim()})` : ''}`, branchId);
+    });
+    toast(`${p.name} saved`);
+    onClose();
+  };
+  const f = (k, label, type = 'text') => <label className="field"><span>{label}</span><input type={type} step="any" value={p[k]} onChange={(e) => setP({ ...p, [k]: e.target.value })} /></label>;
+  return (
+    <Modal title={`Edit ${product.name}`} onClose={onClose} wide>
+      <form onSubmit={save} className="stack">
+        <div className="form-grid">
+          {f('name', 'Name')}{f('generic', 'Generic name')}{f('form', 'Formulation')}{f('shelf', 'Shelf / location')}
+          {f('cost', 'Cost price', 'number')}{f('wholesale', 'Wholesale price', 'number')}{f('price', 'Retail price', 'number')}{f('reorder', 'Reorder level', 'number')}
+        </div>
+        <h3>Batches at this branch</h3>
+        <table className="lines">
+          <thead><tr><th>Batch no.</th><th>Expiry</th><th className="num">System qty</th><th>Actual qty</th></tr></thead>
+          <tbody>
+            {rows.map((r, k) => (
+              <tr key={r.id}>
+                <td><input value={r.newBatch} disabled={r.legacy} onChange={(e) => setRow(k, { newBatch: e.target.value })} /></td>
+                <td><input type="date" value={r.newExpiry} disabled={r.legacy} onChange={(e) => setRow(k, { newExpiry: e.target.value })} /></td>
+                <td className="num">{r.qty}</td>
+                <td><input type="number" min="0" value={r.newQty} onChange={(e) => setRow(k, { newQty: e.target.value })} /></td>
+              </tr>
+            ))}
+            {!rows.length && <Empty colSpan={4}>No stock at this branch. Use Add Stock to receive it.</Empty>}
+          </tbody>
+        </table>
+        <label className="field"><span>Reason for quantity changes (kept in the audit log)</span><input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. stock take, damaged, found extra" /></label>
+        <div className="form-actions"><button type="button" className="btn ghost" onClick={onClose}>Cancel</button><button className="btn primary">Save</button></div>
+      </form>
+    </Modal>
   );
 }

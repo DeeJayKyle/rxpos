@@ -4,6 +4,7 @@
 // the background), straight away when the internet comes back or the app is reopened.
 // Conflicts: last writer (updatedAt) wins per record.
 import { TABLES, now, isUntouchedBase, BASE_AT } from './store.jsx';
+import { liveUp } from './live.js';
 
 const ACTIVE = 10000;
 const BACKGROUND = 60000;
@@ -79,9 +80,11 @@ export function createSync({ getDb, getCfg, saveCfg, applyRemote, onStatus }) {
     }
   }
 
+  // The live connection tells us the moment something changes, so then we only need a slow safety-net pull
   const schedule = () => {
-    clearInterval(timer);
-    timer = setInterval(run, document.visibilityState === 'hidden' ? BACKGROUND : ACTIVE);
+    clearTimeout(timer);
+    const delay = document.visibilityState === 'hidden' ? BACKGROUND : liveUp() ? 60000 : ACTIVE;
+    timer = setTimeout(() => { run(); schedule(); }, delay);
   };
   const onVisible = () => { schedule(); if (document.visibilityState === 'visible') run(); };
   const onOnline = () => run();
@@ -96,7 +99,7 @@ export function createSync({ getDb, getCfg, saveCfg, applyRemote, onStatus }) {
     run,
     stop() {
       stopped = true;
-      clearInterval(timer);
+      clearTimeout(timer);
       clearTimeout(first);
       window.removeEventListener('online', onOnline);
       window.removeEventListener('offline', onOffline);

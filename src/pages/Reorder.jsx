@@ -1,14 +1,15 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ShoppingBag, PackageX, ClipboardList, MessageCircle, Printer, PackageCheck, Download } from 'lucide-react';
+import { ShoppingBag, PackageX, ClipboardList, MessageCircle, Printer, PackageCheck, Download, Wand2 } from 'lucide-react';
 import { useStore, daysSince, uid, now, put, del, audit, downloadFile, toCSV, normalizePhone, MAIN_BRANCH } from '../store.jsx';
 import { Tabs, Empty, Modal, Stat } from '../ui.jsx';
 import { toast, ask } from '../feedback.jsx';
 import { whatsappLink } from '../cloud.js';
+import { computeReorderLevels, applyReorderLevels, reorderSettings } from '../reorder.js';
 
 /** Smart reorder suggestions, dead stock and purchase orders. */
 export default function Reorder() {
-  const { db, products, fmt, update, user, branchId, branch } = useStore();
+  const { db, products, fmt, update, user, branchId, branch, can } = useStore();
   const navigate = useNavigate();
   const s = db.settings;
   const [tab, setTab] = useState('reorder');
@@ -18,6 +19,7 @@ export default function Reorder() {
   const [deadDays, setDeadDays] = useState(s.deadDays || 90);
   const [picked, setPicked] = useState({});
   const [viewPo, setViewPo] = useState(null);
+  const [levels, setLevels] = useState(null); // preview of automatic reorder levels
 
   // Sales velocity per product at this branch, and last sale date
   const velocity = useMemo(() => {
@@ -108,8 +110,24 @@ export default function Reorder() {
             <label className="field"><span>Order enough for (days)</span><input type="number" min="1" value={cover} onChange={(e) => setCover(e.target.value)} /></label>
             <div className="grow" />
             <button className="btn ghost" onClick={() => downloadFile('reorder.csv', toCSV(chosen.map((r) => ({ medicine: r.p.name, inStock: r.p.stock, soldPerDay: r.perDay.toFixed(2), daysLeft: isFinite(r.daysLeft) ? Math.floor(r.daysLeft) : '', orderQty: r.qty, supplier: r.buy?.supplierName || '', lastCost: r.buy?.cost || r.p.cost }))), 'text/csv')}><Download size={16} />CSV</button>
+            {can('medicines.manage') && <button className="btn ghost" onClick={() => setLevels(computeReorderLevels(db, products, db.settings, branchId))}><Wand2 size={16} />Set reorder levels from sales</button>}
             <button className="btn primary" disabled={!chosen.length} onClick={createPOs}><ClipboardList size={16} />Create purchase orders ({chosen.length})</button>
           </div>
+          {levels && (() => { const c = reorderSettings(db.settings); return (
+            <Modal title="Reorder levels from sales" onClose={() => setLevels(null)} wide>
+              <p className="muted small">Level = average daily sales over the last {c.days} days × (lead time {c.lead} + safety {c.safety} days). Only medicines that sold are changed. {c.on ? 'RxPOS also does this automatically every week.' : 'Weekly automatic updates are off (Settings → Receipts & stock).'}</p>
+              <div className="table-wrap" style={{ maxHeight: '50vh' }}>
+                <table>
+                  <thead><tr><th>Medicine</th><th className="num">Sold ({c.days} d)</th><th className="num">Per day</th><th className="num">Now</th><th className="num">New level</th></tr></thead>
+                  <tbody>
+                    {levels.map((r) => <tr key={r.p.id}><td>{r.p.name}</td><td className="num">{r.sold}</td><td className="num">{r.perDay.toFixed(1)}</td><td className="num">{r.p.reorder || 0}</td><td className="num"><strong>{r.level}</strong></td></tr>)}
+                    {!levels.length && <Empty colSpan={5}>All reorder levels already match recent sales.</Empty>}
+                  </tbody>
+                </table>
+              </div>
+              <div className="form-actions"><button className="btn ghost" onClick={() => setLevels(null)}>Cancel</button>
+                <button className="btn primary" disabled={!levels.length} onClick={() => { applyReorderLevels(update, user, branchId, levels); toast(`${levels.length} reorder levels updated`); setLevels(null); }}>Apply {levels.length} change{levels.length === 1 ? '' : 's'}</button></div>
+            </Modal>); })()}
           <div className="card table-wrap">
             <table>
               <thead><tr><th /><th>Medicine</th><th className="num">In stock</th><th className="num">Sells / day</th><th className="num">Days left</th><th>Last supplier</th><th className="num">Order qty</th><th className="num">Est. cost</th></tr></thead>

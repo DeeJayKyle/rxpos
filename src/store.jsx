@@ -3,6 +3,7 @@ import { idbGet, idbSet, idbDel, idbKeys } from './idb.js';
 import { createSync } from './sync.js';
 import { featureSet, permissionsOf } from './access.js';
 import { platformName } from './platform.js';
+import { connectLive, disconnectLive, onLive } from './live.js';
 
 const SESSION_KEY = 'pharmapos-session';
 
@@ -349,6 +350,13 @@ export function StoreProvider({ children }) {
     return syncRef.current.stop;
   }, [hasCfg, syncCfg?.url, syncCfg?.key, saveSyncCfg]);
   const syncNow = useCallback(() => syncRef.current?.run(), []);
+  useEffect(() => {
+    if (!syncCfg?.key?.startsWith('u.') || !user) { disconnectLive(); return; }
+    connectLive(syncCfg);
+    let t;
+    const off = onLive((m) => { if (m.type === 'changed' || m.type === 'open') { clearTimeout(t); t = setTimeout(() => syncRef.current?.run(), 250); } });
+    return () => { off(); clearTimeout(t); };
+  }, [syncCfg?.url, syncCfg?.key, syncCfg?.deviceId, !!user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /**
    * Link this device to a pharmacy after a cloud sign-in. If the device held another pharmacy's data (or old

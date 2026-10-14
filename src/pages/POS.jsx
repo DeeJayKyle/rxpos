@@ -304,8 +304,8 @@ export default function POS({ mode = 'retail' }) {
           {!cart.length && <div className="cart-empty"><ShoppingCart size={40} /><span>Tap a medicine or scan a barcode to start a sale</span></div>}
         </div>
         <div className="totals">
-          <div className="row between"><span className="muted">Subtotal</span><span className="num">{fmt(subtotal)}</span></div>
-          <div className="row between"><span className="muted">Discount</span><input type="number" min="0" step="any" className="small-input" value={discount} onChange={(e) => setDiscount(e.target.value)} /></div>
+          <div className="row between gap"><span className="muted">Subtotal <b className="num">{fmt(subtotal)}</b></span>
+            <span className="row gap"><span className="muted">Discount</span><input type="number" min="0" step="any" className="small-input" value={discount} onChange={(e) => setDiscount(e.target.value)} /></span></div>
           {tax > 0 && <div className="row between"><span className="muted">Tax ({db.settings.taxRate}%)</span><span className="num">{fmt(tax)}</span></div>}
           <div className="row between grand"><span>Total</span><span className="num">{fmt(total)}</span></div>
         </div>

@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { X, Search, Download, Plus, Pencil, Trash2, Inbox, TrendingUp, TrendingDown } from 'lucide-react';
@@ -145,9 +146,11 @@ export function CrudPage({ title, subtitle, singular, table, fields, columns, bl
   );
 }
 
-export function Stat({ label, value, sub, tone, icon: Icon, delta }) {
+export function Stat({ label, value, sub, tone, icon: Icon, delta, to, state }) {
+  const navigate = useNavigate();
+  const go = to ? () => navigate(to, state ? { state } : undefined) : undefined;
   return (
-    <div className={'card stat ' + (tone || '')}>
+    <div className={'card stat ' + (tone || '') + (to ? ' link' : '')} onClick={go} role={to ? 'link' : undefined} tabIndex={to ? 0 : undefined} onKeyDown={to ? (e) => e.key === 'Enter' && go() : undefined}>
       {Icon && <span className="stat-icon"><Icon size={20} /></span>}
       <small>{label}</small>
       <strong>{value}</strong>

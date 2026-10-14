@@ -187,6 +187,7 @@ function TenantAdmin({ id, api, url, onBack }) {
   const [userEdit, setUserEdit] = useState(null);
   const [branchEdit, setBranchEdit] = useState(null);
   const [secrets, setSecrets] = useState({});
+  const [testTo, setTestTo] = useState('');
   const [shownKey, setShownKey] = useState(null);
 
   const load = async () => {
@@ -320,6 +321,14 @@ function TenantAdmin({ id, api, url, onBack }) {
                 </div></div>
               ))}
               <div className="form-actions"><button className="btn primary" disabled={busy}>Save keys</button></div>
+              <div className="notice small">
+                <b>Africa's Talking (SMS):</b> create a free account at africastalking.com → open your team → Create App (the app's name is the <b>Username</b>) → Settings → API Key → generate, then paste both above and save.
+                New accounts start in "sandbox" (use the username <code>sandbox</code> for testing); top up and go live to text real phones. A Sender ID is optional (it needs approval).
+              </div>
+              <div className="row gap">
+                <input placeholder="Your phone, e.g. 0772 123456" value={testTo} onChange={(e) => setTestTo(e.target.value)} />
+                <button type="button" className="btn ghost" disabled={busy || !t.payments.sms} title={t.payments.sms ? '' : 'Save the Africa’s Talking keys first'} onClick={async () => { setBusy(true); try { const j = await api(`/tenants/${t.id}/test-sms`, { to: testTo }); toast(j.sent ? 'Test SMS sent' : 'SMS provider answered: ' + (j.recipients?.[0]?.status || 'not sent'), j.sent ? 'success' : 'warn'); } catch (e) { toast(e.message, 'error'); } finally { setBusy(false); } }}>Send test SMS</button>
+              </div>
             </form>
           )
         )}

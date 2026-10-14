@@ -81,6 +81,9 @@ export default function Settings() {
             {field('leadDays', 'Supplier lead time (days)', 'number')}
             {field('coverDays', 'Reorder enough stock for (days)', 'number')}
             {field('deadDays', 'Dead stock after no sales for (days)', 'number')}
+            <label className="field check"><input type="checkbox" checked={s.autoReorder !== false} onChange={(e) => setS({ ...s, autoReorder: e.target.checked })} /><span>Set reorder levels automatically every week from sales</span></label>
+            {field('autoReorderDays', 'Use sales from the last (days)', 'number', { placeholder: '30' })}
+            {field('safetyDays', 'Safety stock (extra days of sales)', 'number', { placeholder: '7' })}
           </div>
           <p className="muted small">Tip: in the print dialog choose your thermal printer, set margins to “None” and scale to 100%. For silent printing on the desktop app, set the thermal printer as the Windows default printer.</p>
           <div className="form-actions"><button className="btn primary">Save</button></div>

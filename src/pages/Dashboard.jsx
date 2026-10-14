@@ -62,10 +62,10 @@ export default function Dashboard() {
       </div>
 
       <div className="stats">
-        <Stat label="Today's sales" value={fmt(t.total)} sub={`${t.n} sale${t.n === 1 ? '' : 's'} · vs yesterday`} delta={delta} tone="teal" icon={Banknote} />
-        <Stat label="Today's expenses" value={fmt(t.exp)} sub={`Net ${fmt(t.total - t.exp)}`} tone="red" icon={Wallet} />
-        <Stat label="Soon expiring" value={<Link to="/expiry">{expiring.length}</Link>} sub={`${expired.length} already expired`} tone="amber" icon={CalendarClock} />
-        <Stat label="Low stock" value={<Link to="/inventory">{lowStock.length}</Link>} sub="at or below reorder level" tone="violet" icon={PackageX} />
+        <Stat to="/sales" state={{ from: today(), to: today() }} label="Today's sales" value={fmt(t.total)} sub={`${t.n} sale${t.n === 1 ? '' : 's'} · vs yesterday`} delta={delta} tone="teal" icon={Banknote} />
+        <Stat to="/expenses" label="Today's expenses" value={fmt(t.exp)} sub={`Net ${fmt(t.total - t.exp)}`} tone="red" icon={Wallet} />
+        <Stat to="/expiry" label="Soon expiring" value={expiring.length} sub={`${expired.length} already expired`} tone="amber" icon={CalendarClock} />
+        <Stat to="/inventory" state={{ filter: 'low' }} label="Low stock" value={lowStock.length} sub="at or below reorder level" tone="violet" icon={PackageX} />
       </div>
 
       {(features.weather !== false || (features.promos !== false && promote.length > 0)) && (
@@ -101,10 +101,10 @@ export default function Dashboard() {
       </div>
 
       <div className="stats">
-        <Stat label="Products" value={products.length.toLocaleString()} icon={Pill} />
-        <Stat label="Inventory value" value={fmt(stockValue)} sub="at cost price" icon={Coins} />
-        <Stat label="Customers" value={db.customers.length.toLocaleString()} icon={Users} />
-        <Stat label="This month" value={fmt(m.byMonth[today().slice(0, 7)]?.total)} sub={`${m.byMonth[today().slice(0, 7)]?.n || 0} sales`} icon={ReceiptText} />
+        <Stat to="/medicines" label="Products" value={products.length.toLocaleString()} icon={Pill} />
+        <Stat to="/inventory" label="Inventory value" value={fmt(stockValue)} sub="at cost price" icon={Coins} />
+        <Stat to="/customers" label="Customers" value={db.customers.length.toLocaleString()} icon={Users} />
+        <Stat to="/sales" state={{ from: today().slice(0, 7) + '-01', to: today() }} label="This month" value={fmt(m.byMonth[today().slice(0, 7)]?.total)} sub={`${m.byMonth[today().slice(0, 7)]?.n || 0} sales`} icon={ReceiptText} />
       </div>
 
       <div className="grid2">

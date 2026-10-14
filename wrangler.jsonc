@@ -18,5 +18,8 @@
   "vars": { "DB_BACKEND": "turso", "PUBLIC_URL": "https://rxpos.pages.dev" },
   // Cloudflare Workers AI (open models) for prescription reading and drug quizzes
   "ai": { "binding": "AI" },
+  // Live connection per pharmacy: instant sync notifications and call set-up (worker/live.js)
+  "durable_objects": { "bindings": [{ "name": "HUB", "class_name": "TenantHub" }] },
+  "migrations": [{ "tag": "v1-live", "new_sqlite_classes": ["TenantHub"] }],
   "observability": { "enabled": true }
 }

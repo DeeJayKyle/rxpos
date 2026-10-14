@@ -4,7 +4,8 @@ import { useStore, uid, now, put, normalizePhone } from '../store.jsx';
 import { Tabs, Empty } from '../ui.jsx';
 import { toast } from '../feedback.jsx';
 import { sendSms, whatsappLink, cloudConfig } from '../cloud.js';
-import { startCall, telLink } from '../calls.jsx';
+import { CallMenu } from '../calls.jsx';
+import { liveUp } from '../live.js';
 import { uploadAttachment, Attachment, VoiceRecorder, ATTACH_ACCEPT, fileSize } from '../attach.jsx';
 
 const READ_KEY = 'rxpos-chat-read';
@@ -29,7 +30,8 @@ export default function Chat() {
   const endRef = useRef();
 
   // Near real-time while the chat is open: sync every 8 seconds
-  useEffect(() => { const t = setInterval(() => syncNow(), 8000); return () => clearInterval(t); }, [syncNow]);
+  // without the live line, check for new messages every 8 s while the chat is open (with it they arrive instantly)
+  useEffect(() => { const t = setInterval(() => !liveUp() && syncNow(), 8000); return () => clearInterval(t); }, [syncNow]);
   useEffect(() => { if (syncCfg.url) cloudConfig(syncCfg).then((c) => setSmsReady(!!c.sms)).catch(() => {}); }, [syncCfg]);
 
   const messages = useMemo(() => db.messages.filter((m) => m.conv === conv).sort((a, b) => a.date.localeCompare(b.date)), [db.messages, conv]);
@@ -79,9 +81,9 @@ export default function Chat() {
           {tab === 'team' ? (
             <div className="chat-convs">
               <button className={'chat-conv' + (conv === 'team' ? ' active' : '')} onClick={() => setConv('team')}><Hash size={16} /><span className="grow">General</span>{unread('team') > 0 && <span className="count">{unread('team')}</span>}</button>
-              <div className="nav-title">Direct messages</div>
+              <div className="nav-title">Private chats</div>
               {staff.map((u) => { const c = dmId(user.id, u.id); return (
-                <button key={u.id} className={'chat-conv' + (conv === c ? ' active' : '')} onClick={() => setConv(c)}><UserIcon size={16} /><span className="grow">{u.name}</span>{unread(c) > 0 && <span className="count">{unread(c)}</span>}<span className="icon-btn sm" role="button" title={`Call ${u.name}`} onClick={(e) => { e.stopPropagation(); startCall({ id: u.id, name: u.name }); }}><Phone size={14} /></span></button>
+                <div key={u.id} role="button" tabIndex={0} className={'chat-conv' + (conv === c ? ' active' : '')} onClick={() => setConv(c)} onKeyDown={(e) => e.key === 'Enter' && setConv(c)}><UserIcon size={16} /><span className="grow">{u.name}</span>{unread(c) > 0 && <span className="count">{unread(c)}</span>}<CallMenu compact person={{ ...u, staff: true }} /></div>
               ); })}
               {!staff.length && <p className="muted small">Add staff in Users & Roles to message them.</p>}
             </div>
@@ -97,8 +99,18 @@ export default function Chat() {
         </aside>
         <section className="chat-main card">
           <div className="chat-head"><strong className="grow">{title}</strong>{client && <span className="muted small">{client.phone || client.whatsapp || 'No phone number saved'}</span>}
-            {client && (client.phone || client.whatsapp) && <a className="btn sm ghost" href={telLink(client.phone || client.whatsapp)}><Phone size={14} />Call</a>}
-            {conv.startsWith('dm:') && (() => { const u = db.users.find((x) => conv.includes(x.id) && x.id !== user.id); return u ? <button className="btn sm ghost" onClick={() => startCall({ id: u.id, name: u.name })}><Phone size={14} />Call</button> : null; })()}</div>
+            {client && <CallMenu person={client} />}
+            {conv.startsWith('dm:') && (() => { const u = db.users.find((x) => conv.includes(x.id) && x.id !== user.id); return u ? <CallMenu person={{ ...u, staff: true }} /> : null; })()}</div>
+          {!client && (
+            <div className="chat-to">
+              <span className="muted small">Chat with</span>
+              <select value={conv} onChange={(e) => setConv(e.target.value)} aria-label="Chat with">
+                <option value="team">👥 Whole team (everyone sees it)</option>
+                <optgroup label="Private (only the two of you)">{staff.map((u) => <option key={u.id} value={dmId(user.id, u.id)}>🔒 {u.name}</option>)}</optgroup>
+              </select>
+              <span className={'badge ' + (conv === 'team' ? 'ok' : 'warn')}>{conv === 'team' ? 'Team' : 'Private'}</span>
+            </div>
+          )}
           <div className="chat-messages">
             {messages.map((m) => {
               const mine = m.fromId === user.id;

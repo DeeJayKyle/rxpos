@@ -19,6 +19,7 @@ import CATALOG from '../src/data/catalog.json' with { type: 'json' };
 import { createClient } from '@libsql/client/web';
 import { d1FromLibsql } from './libsql-d1.js';
 import { isOwner, ownerAuthRoutes, ownerAccount, verifyGoogle, getConfig } from './owner-auth.js';
+export { TenantHub } from './live.js';
 
 // Database: Cloudflare D1 (binding DB) by default, or libSQL / Turso when DB_BACKEND = "turso"
 // (secrets TURSO_URL + TURSO_AUTH_TOKEN). The rest of the code doesn't know the difference.
@@ -86,6 +87,7 @@ function ensureSchema(db) {
     if (!have.has('tenants_slug')) ddl.push('CREATE UNIQUE INDEX tenants_slug ON tenants(slug)');
     if (!have.has('login_fail')) ddl.push('CREATE TABLE login_fail (email TEXT PRIMARY KEY, n INTEGER NOT NULL, until INTEGER NOT NULL DEFAULT 0)');
     if (!have.has('rtc')) ddl.push('CREATE TABLE rtc (id INTEGER PRIMARY KEY AUTOINCREMENT, tenant TEXT NOT NULL, to_uid TEXT NOT NULL, from_uid TEXT NOT NULL, from_name TEXT, type TEXT NOT NULL, call_id TEXT NOT NULL, data TEXT, at INTEGER NOT NULL)');
+    if (!have.has('rtc_to')) ddl.push('CREATE INDEX rtc_to ON rtc(tenant, to_uid, id)'); // instant look-up of calls waiting for a person
     if (!have.has('file_chunks')) ddl.push('CREATE TABLE file_chunks (tenant TEXT NOT NULL, id TEXT NOT NULL, n INTEGER NOT NULL, data BLOB NOT NULL, PRIMARY KEY (tenant, id, n))');
     if (!have.has('files')) ddl.push('CREATE TABLE files (tenant TEXT NOT NULL, id TEXT NOT NULL, name TEXT, type TEXT, size INTEGER, chunks INTEGER, by_uid TEXT, at INTEGER, PRIMARY KEY (tenant, id))');
     if (!have.has('owner_config')) ddl.push('CREATE TABLE owner_config (k TEXT PRIMARY KEY, v TEXT NOT NULL)');
@@ -348,6 +350,7 @@ async function sync(env, body, who) {
   }
   let applied = 0;
   if (stmts.length) for (const r of await db.batch(stmts)) applied += r.meta.changes || 0;
+  if (applied && env.HUB) await env.HUB.get(env.HUB.idFromName(tenant)).fetch('https://hub/notify', { method: 'POST', body: JSON.stringify({ from: deviceId }) }).catch(() => {});
 
   const { results } = await db
     .prepare('SELECT t, id, rec, deleted, at, seq FROM records WHERE tenant = ?1 AND seq > ?2 AND origin IS NOT ?3 ORDER BY seq LIMIT ?4')
@@ -631,6 +634,12 @@ async function owner(env, req, url, body) {
     await db.prepare('UPDATE tenants SET secrets = ?2 WHERE id = ?1').bind(t.id, JSON.stringify(cur)).run();
     return json({ tenant: await view(await tenantById(env, t.id)) });
   }
+  if (sub === 'test-sms' && req.method === 'POST') {
+    const to = String(body.to || '').replace(/\D/g, '');
+    if (to.length < 9) return json({ error: 'Enter the phone number to send the test to.' }, 400);
+    const res = await sendSms(providerEnv(env, t), { to: [to.startsWith('0') ? '256' + to.slice(1) : to], message: `RxPOS test: SMS for ${t.name} is working.` });
+    return res;
+  }
   if (sub === 'reset' && req.method === 'POST') {
     if (body.confirm !== (t.slug || t.id)) return json({ error: `Type the web address "${t.slug || t.id}" to confirm.` }, 400);
     const now = new Date().toISOString();
@@ -782,7 +791,7 @@ async function rtc(env, req, url, body, who) {
   if (!who.uid) return json({ error: 'Sign in with your own account to make calls.' }, 403);
   if (req.method === 'POST') {
     const type = String(body.type || '');
-    if (!['offer', 'answer', 'hangup', 'decline', 'busy'].includes(type) || !body.to || !body.callId) return json({ error: 'Bad call message' }, 400);
+    if (!['ring', 'offer', 'answer', 'hangup', 'decline', 'busy'].includes(type) || !body.to || !body.callId) return json({ error: 'Bad call message' }, 400);
     const data = body.data ? JSON.stringify(body.data).slice(0, 60000) : null;
     await db.prepare('INSERT INTO rtc (tenant, to_uid, from_uid, from_name, type, call_id, data, at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)')
       .bind(who.tenant, String(body.to), who.uid, who.name || '', type, String(body.callId).slice(0, 60), data, Date.now()).run();
@@ -856,13 +865,14 @@ const NEAR = /uganda|kenya|tanzania|rwanda|burundi|south sudan|congo|ethiopia|so
 async function healthAlerts() {
   const cache = caches.default;
   const key = new Request('https://rxpos.cache/health-alerts-v1');
-  const hit = await cache.match(key);
+  const hit = await cache.match(key).catch(() => null);
   if (hit) return hit;
-  const r = await fetch('https://www.who.int/api/news/diseaseoutbreaknews?sf_culture=en&$orderby=PublicationDateAndTime%20desc&$top=12&$select=Title,PublicationDateAndTime,UrlName', { headers: { Accept: 'application/json' } });
-  if (!r.ok) return json({ error: 'WHO alerts unavailable right now' }, 502);
+  let r;
+  try { r = await fetch('https://www.who.int/api/news/diseaseoutbreaknews?sf_culture=en&$orderby=PublicationDateAndTime%20desc&$top=12&$select=Title,PublicationDateAndTime,UrlName', { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(8000) }); } catch { r = null; }
+  if (!r?.ok) return json({ error: 'WHO alerts are unavailable right now', items: [] }, 502);
   const items = ((await r.json()).value || []).map((x) => ({ title: x.Title, date: String(x.PublicationDateAndTime).slice(0, 10), url: 'https://www.who.int/emergencies/disease-outbreak-news/item/' + x.UrlName, near: NEAR.test(x.Title) }));
   const res = new Response(JSON.stringify({ source: 'World Health Organization – Disease Outbreak News', items }), { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=10800', ...cors } });
-  await cache.put(key, res.clone());
+  await cache.put(key, res.clone()).catch(() => {});
   return res;
 }
 
@@ -953,6 +963,15 @@ export default {
       if (cm) {
         if (!safeEqual(cm[2], await calendarSig(env, cm[1]))) return json({ error: 'Not found' }, 404);
         return await calendarFeed(env, cm[1]);
+      }
+      if (path === '/api/live') {
+        if (!env.HUB) return json({ error: 'Live connection not available' }, 503);
+        const fake = new Request(req.url, { headers: { Authorization: 'Bearer ' + (url.searchParams.get('token') || '') } });
+        const who = await authenticate(fake, env);
+        if (!who?.uid) return json({ error: 'Not signed in' }, 401);
+        const u = new URL('https://hub/live');
+        u.search = new URLSearchParams({ uid: who.uid, name: who.name || '', device: url.searchParams.get('device') || '' }).toString();
+        return env.HUB.get(env.HUB.idFromName(who.tenant)).fetch(new Request(u, req));
       }
       const body = req.method === 'POST' ? await req.json().catch(() => null) : null;
       if (req.method === 'POST' && !body) return json({ error: 'Bad request' }, 400);

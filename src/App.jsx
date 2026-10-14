@@ -15,6 +15,7 @@ import { Spotlight, HourlyReminder, NotificationBell, AlertWatcher, MessageWatch
 import { PopupHost } from './notify.jsx';
 import { CallManager } from './calls.jsx';
 import { WeeklyPopup } from './pages/Weekly.jsx';
+import { AutoReorder } from './reorder.js';
 import { isWeb } from './platform.js';
 import { applyTheme, savedTheme, saveTheme, allowedThemes } from './themes.js';
 const OwnerConsole = lazy(() => import('./pages/OwnerConsole.jsx'));
@@ -363,6 +364,7 @@ function Shell() {
       <PopupHost />
       <CallManager />
       <WeeklyPopup />
+      <AutoReorder />
       <FirstDownload />
     </div>
   );

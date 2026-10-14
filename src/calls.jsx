@@ -1,8 +1,10 @@
 // In-app voice calls between staff (WebRTC, audio goes directly between the two devices; the RxPOS cloud only passes
 // the short call set-up messages). Calls to clients use the phone's own dialler (tel: links).
 import { useEffect, useRef, useState } from 'react';
-import { Phone, PhoneOff, PhoneIncoming, Mic, MicOff } from 'lucide-react';
-import { useStore, uid } from './store.jsx';
+import { Phone, PhoneOff, PhoneIncoming, Mic, MicOff, MessageCircle, Wifi } from 'lucide-react';
+import { useStore, uid, normalizePhone } from './store.jsx';
+import { liveSend, liveUp, onLive } from './live.js';
+import { whatsappLink } from './cloud.js';
 import { playSound } from './notify.jsx';
 import { toast } from './feedback.jsx';
 
@@ -11,7 +13,45 @@ export const startCall = (peer) => window.dispatchEvent(new CustomEvent('rxpos-c
 /** Phone link for a client */
 export const telLink = (phone) => 'tel:' + String(phone || '').replace(/[^\d+]/g, '');
 
+/** "Call" button with a choice: in-app call (colleagues, over the internet), WhatsApp, or a normal phone call */
+export function CallMenu({ person, label = 'Call', compact }) {
+  const { syncCfg } = useStore();
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    const off = (e) => !ref.current?.contains(e.target) && setOpen(false);
+    window.addEventListener('pointerdown', off);
+    return () => window.removeEventListener('pointerdown', off);
+  }, [open]);
+  const phone = person.phone || person.whatsapp || '';
+  const wa = normalizePhone(person.whatsapp || person.phone || '');
+  const inApp = !!(person.id && person.staff && syncCfg?.key?.startsWith('u.'));
+  if (!inApp && !phone) return null;
+  const stop = (e) => e.stopPropagation();
+  return (
+    <span className="call-menu" ref={ref} onClick={stop}>
+      <button type="button" className={compact ? 'icon-btn sm' : 'btn sm ghost'} title={`Call ${person.name}`} onClick={() => setOpen((o) => !o)}><Phone size={14} />{!compact && label}</button>
+      {open && (
+        <span className="call-pop">
+          {inApp && <button type="button" onClick={() => { setOpen(false); startCall({ id: person.id, name: person.name }); }}><Wifi size={15} /><span><b>In-app call</b><small>Free, over the internet</small></span></button>}
+          {wa.length >= 12 && <a href={whatsappLink(wa, '')} target="_blank" rel="noreferrer" onClick={() => setOpen(false)}><MessageCircle size={15} /><span><b>WhatsApp</b><small>Opens the chat; tap the call button</small></span></a>}
+          {phone && <a href={telLink(phone)} onClick={() => setOpen(false)}><Phone size={15} /><span><b>Phone call</b><small>{phone}</small></span></a>}
+        </span>
+      )}
+    </span>
+  );
+}
+
 async function signal(cfg, body) {
+  if (body && liveSend({ type: 'rtc', kind: body.type, to: body.to, callId: body.callId, data: body.data })) {
+    lastSent.set(body.callId + ':' + body.type, body);
+    return { ok: true, live: true };
+  }
+  return httpSignal(cfg, body);
+}
+const lastSent = new Map(); // in case the other device isn't on the live line: resend over HTTP
+async function httpSignal(cfg, body) {
   const r = await fetch(cfg.url + '/api/rtc', { method: body ? 'POST' : 'GET', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + cfg.key }, body: body ? JSON.stringify(body) : undefined });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(j.error || 'Call service unavailable');
@@ -21,14 +61,14 @@ const gathered = (pc) => new Promise((resolve) => {
   if (pc.iceGatheringState === 'complete') return resolve();
   const done = () => { if (pc.iceGatheringState === 'complete') { pc.removeEventListener('icegatheringstatechange', done); resolve(); } };
   pc.addEventListener('icegatheringstatechange', done);
-  setTimeout(resolve, 3000); // enough candidates by now
+  setTimeout(resolve, 900); // local + public (STUN) candidates arrive well within this; don't keep the caller waiting
 });
 
 export function CallManager() {
   const { syncCfg, user, db } = useStore();
   const [call, setCall] = useState(null); // { id, peer, dir, status, muted, startedAt, offer }
   const [, tick] = useState(0);
-  const pcRef = useRef(null), streamRef = useRef(null), audioRef = useRef(null), sinceRef = useRef(0), callRef = useRef(null), ringRef = useRef(null), iceRef = useRef(null);
+  const pcRef = useRef(null), streamRef = useRef(null), audioRef = useRef(null), sinceRef = useRef(0), callRef = useRef(null), ringRef = useRef(null), iceRef = useRef(null), acceptRef = useRef(false);
   callRef.current = call;
   const can = !!(syncCfg?.url && syncCfg?.key?.startsWith('u.'));
 
@@ -40,6 +80,7 @@ export function CallManager() {
     setTimeout(() => setCall((c) => (c && c.status === status ? null : c)), 1800);
   };
   const ice = async () => iceRef.current || (iceRef.current = (await fetch(syncCfg.url + '/api/rtc/config', { headers: { Authorization: 'Bearer ' + syncCfg.key } }).then((r) => r.json())).iceServers);
+  useEffect(() => { if (can) ice().catch(() => { iceRef.current = null; }); }, [can]); // eslint-disable-line react-hooks/exhaustive-deps
   const newPc = async (c) => {
     const pc = new RTCPeerConnection({ iceServers: await ice() });
     streamRef.current = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
@@ -65,6 +106,7 @@ export function CallManager() {
       if (!navigator.mediaDevices?.getUserMedia) return toast('This device cannot make in-app calls', 'error');
       const c = { id: uid(), peer, dir: 'out', status: 'calling', muted: false };
       setCall(c);
+      signal(syncCfg, { type: 'ring', to: peer.id, callId: c.id }).catch(() => {}); // rings straight away
       try {
         const pc = await newPc(c);
         await pc.setLocalDescription(await pc.createOffer());
@@ -78,17 +120,29 @@ export function CallManager() {
     return () => window.removeEventListener('rxpos-call', onStart);
   }, [can, syncCfg]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // incoming messages (poll: every 3 s, every second during a call)
+  // incoming call messages: instantly over the live line …
+  useEffect(() => {
+    if (!can) return;
+    return onLive((m) => {
+      if (m.type === 'rtc') onMessage({ type: m.kind, call_id: m.call_id, from_uid: m.from_uid, from_name: m.from_name, data: m.data, at: m.at });
+      if (m.type === 'rtc-offline') { // that colleague isn't on the live line (older app or poor network): send by HTTP instead
+        for (const [k, body] of lastSent) if (k.startsWith(m.call_id + ':')) { httpSignal(syncCfg, body).catch(() => {}); lastSent.delete(k); }
+      }
+    });
+  }, [can, syncCfg?.key]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // … and by polling only while the live line is down
   useEffect(() => {
     if (!can) return;
     let stop = false, t;
     const poll = async () => {
+      if (liveUp()) { if (!stop) t = setTimeout(poll, 4000); return; }
       try {
         const r = await fetch(`${syncCfg.url}/api/rtc?since=${sinceRef.current}`, { headers: { Authorization: 'Bearer ' + syncCfg.key } });
         const j = await r.json();
         if (r.ok) { for (const m of j.messages) await onMessage(m); sinceRef.current = j.last || sinceRef.current; }
       } catch {}
-      if (!stop && document.visibilityState !== 'hidden') t = setTimeout(poll, callRef.current ? 1000 : 3000);
+      if (!stop && document.visibilityState !== 'hidden') t = setTimeout(poll, callRef.current ? 600 : 1500);
       else if (!stop) t = setTimeout(poll, 8000);
     };
     poll();
@@ -97,10 +151,17 @@ export function CallManager() {
 
   const onMessage = async (m) => {
     const c = callRef.current;
-    if (m.type === 'offer') {
-      if (c) return signal(syncCfg, { type: 'busy', to: m.from_uid, callId: m.call_id }).catch(() => {});
+    if (m.type === 'offer' && c && c.id === m.call_id && c.dir === 'in') {
+      // the connection details follow the ring a moment later
+      const next = { ...c, offer: m.data };
+      callRef.current = next; setCall(next);
+      if (acceptRef.current) { acceptRef.current = false; answer(next); }
+      return;
+    }
+    if (m.type === 'ring' || m.type === 'offer') {
+      if (c) return c.id === m.call_id ? undefined : signal(syncCfg, { type: 'busy', to: m.from_uid, callId: m.call_id }).catch(() => {});
       if (Date.now() - m.at > 40000) return;
-      setCall({ id: m.call_id, peer: { id: m.from_uid, name: m.from_name || db.users.find((u) => u.id === m.from_uid)?.name || 'Colleague' }, dir: 'in', status: 'ringing', offer: m.data, muted: false });
+      setCall({ id: m.call_id, peer: { id: m.from_uid, name: m.from_name || db.users.find((u) => u.id === m.from_uid)?.name || 'Colleague' }, dir: 'in', status: 'ringing', offer: m.type === 'offer' ? m.data : null, muted: false });
       playSound('ring');
       clearInterval(ringRef.current);
       ringRef.current = setInterval(() => playSound('ring'), 3000);
@@ -113,10 +174,14 @@ export function CallManager() {
     if (m.type === 'hangup') cleanup();
   };
 
-  const accept = async () => {
+  const accept = () => {
     const c = callRef.current;
     clearInterval(ringRef.current);
     setCall({ ...c, status: 'connecting' });
+    if (!c.offer) { acceptRef.current = true; return; } // answered before the details arrived: connect as soon as they do
+    answer(c);
+  };
+  const answer = async (c) => {
     try {
       const pc = await newPc(c);
       await pc.setRemoteDescription(c.offer);
