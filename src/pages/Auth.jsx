@@ -75,7 +75,7 @@ export default function Auth() {
 
   const codeField = (
     <label className="field"><span>Pharmacy web address or code</span>
-      <input value={form.code} onChange={set('code')} placeholder="e.g. pharmcare-hub" autoCapitalize="none" spellCheck={false} /></label>
+      <input value={form.code} onChange={set('code')} placeholder="e.g. citycare-ntinda" autoCapitalize="none" spellCheck={false} /></label>
   );
 
   const forgotPanel = () => (

@@ -46,24 +46,30 @@ async function adminChangeRefused(db, tenant, ch) {
 }
 
 let schemaReady = null;
+/**
+ * Create whatever tables/indexes are missing. It only reads when everything exists, so it costs no D1 writes
+ * (the free plan allows 100,000 row writes a day, and every index multiplies the cost of each record write).
+ */
 function ensureSchema(db) {
-  schemaReady ??= db.batch([
-    db.prepare(`CREATE TABLE IF NOT EXISTS records (tenant TEXT NOT NULL, k TEXT NOT NULL, t TEXT NOT NULL, id TEXT NOT NULL, rec TEXT,
-      deleted INTEGER NOT NULL DEFAULT 0, at TEXT NOT NULL, seq INTEGER NOT NULL, origin TEXT, PRIMARY KEY (tenant, k))`),
-    db.prepare('CREATE INDEX IF NOT EXISTS records_seq ON records(tenant, seq)'),
-    db.prepare('CREATE INDEX IF NOT EXISTS records_t ON records(tenant, t)'),
-    db.prepare(`CREATE TABLE IF NOT EXISTS tenants (id TEXT PRIMARY KEY, name TEXT NOT NULL, key_hash TEXT UNIQUE, features TEXT NOT NULL DEFAULT '{}',
-      status TEXT NOT NULL DEFAULT 'active', secrets TEXT NOT NULL DEFAULT '{}', notes TEXT, created_at TEXT NOT NULL)`),
-    db.prepare('CREATE TABLE IF NOT EXISTS login_fail (email TEXT PRIMARY KEY, n INTEGER NOT NULL, until INTEGER NOT NULL DEFAULT 0)'),
-    db.prepare('CREATE TABLE IF NOT EXISTS reset_codes (k TEXT PRIMARY KEY, code_hash TEXT NOT NULL, expires INTEGER NOT NULL, tries INTEGER NOT NULL DEFAULT 0, sent INTEGER NOT NULL DEFAULT 0, window_start INTEGER NOT NULL DEFAULT 0)'),
-  ]).then(async () => {
-    // v1.4: every pharmacy gets a web address /<slug> (older databases get the column added once)
-    await db.prepare('ALTER TABLE tenants ADD COLUMN slug TEXT').run().catch(() => {});
-    await db.prepare('CREATE UNIQUE INDEX IF NOT EXISTS tenants_slug ON tenants(slug)').run();
-    // Fast MAX(seq) for every write, and fast sign-in lookups across pharmacies (keeps D1 reads tiny)
-    await db.prepare('CREATE INDEX IF NOT EXISTS records_gseq ON records(seq)').run();
-    await db.prepare('CREATE INDEX IF NOT EXISTS records_type ON records(t, deleted)').run();
-  }).catch((e) => { schemaReady = null; throw e; });
+  schemaReady ??= (async () => {
+    const { results } = await db.prepare("SELECT name, sql FROM sqlite_master WHERE type IN ('table', 'index')").all();
+    const have = new Map(results.map((r) => [r.name, r.sql || '']));
+    const ddl = [];
+    if (!have.has('records')) ddl.push(`CREATE TABLE records (tenant TEXT NOT NULL, k TEXT NOT NULL, t TEXT NOT NULL, id TEXT NOT NULL, rec TEXT,
+      deleted INTEGER NOT NULL DEFAULT 0, at TEXT NOT NULL, seq INTEGER NOT NULL, origin TEXT, PRIMARY KEY (tenant, k))`);
+    if (!have.has('records_seq')) ddl.push('CREATE INDEX records_seq ON records(tenant, seq)');
+    if (!have.has('records_t')) ddl.push('CREATE INDEX records_t ON records(tenant, t)');
+    if (!have.has('records_gseq')) ddl.push('CREATE INDEX records_gseq ON records(seq)'); // fast MAX(seq) on every write
+    if (have.has('records_type')) ddl.push('DROP INDEX records_type'); // not worth its write cost
+    if (!have.has('tenants')) ddl.push(`CREATE TABLE tenants (id TEXT PRIMARY KEY, name TEXT NOT NULL, key_hash TEXT UNIQUE, features TEXT NOT NULL DEFAULT '{}',
+      status TEXT NOT NULL DEFAULT 'active', secrets TEXT NOT NULL DEFAULT '{}', notes TEXT, created_at TEXT NOT NULL, slug TEXT)`);
+    else if (!/\bslug\b/.test(have.get('tenants'))) ddl.push('ALTER TABLE tenants ADD COLUMN slug TEXT');
+    if (!have.has('tenants_slug')) ddl.push('CREATE UNIQUE INDEX tenants_slug ON tenants(slug)');
+    if (!have.has('login_fail')) ddl.push('CREATE TABLE login_fail (email TEXT PRIMARY KEY, n INTEGER NOT NULL, until INTEGER NOT NULL DEFAULT 0)');
+    if (!have.has('reset_codes')) ddl.push('CREATE TABLE reset_codes (k TEXT PRIMARY KEY, code_hash TEXT NOT NULL, expires INTEGER NOT NULL, tries INTEGER NOT NULL DEFAULT 0, sent INTEGER NOT NULL DEFAULT 0, window_start INTEGER NOT NULL DEFAULT 0)');
+    // dropping an old index is optional: never let it block the API (e.g. when the daily write limit is reached)
+    for (const sql of ddl) await db.prepare(sql).run().catch((e) => { if (!sql.startsWith('DROP')) throw e; });
+  })().catch((e) => { schemaReady = null; throw e; });
   return schemaReady;
 }
 
@@ -115,12 +121,16 @@ const DEFAULT_FEATURES = { branches: true, wholesale: true, proformas: true, pre
   promos: true, hourly: true, calendar: true, weather: true };
 
 /** The original single-pharmacy deployment becomes tenant "main", keyed by the SYNC_KEY secret. */
+let mainChecked = false; // once per Worker instance; writes only if the main pharmacy is missing or its key changed
 async function ensureMainTenant(env) {
-  if (!env.SYNC_KEY || env.__mainChecked) return;
+  if (!env.SYNC_KEY || mainChecked) return;
   const h = await sha256(env.SYNC_KEY);
-  await env.DB.prepare("INSERT INTO tenants (id, name, key_hash, features, created_at) VALUES ('main', 'Main pharmacy', ?1, ?2, ?3) ON CONFLICT(id) DO UPDATE SET key_hash = ?1")
-    .bind(h, JSON.stringify(DEFAULT_FEATURES), new Date().toISOString()).run();
-  env.__mainChecked = true;
+  const cur = await env.DB.prepare("SELECT key_hash FROM tenants WHERE id = 'main'").first('key_hash');
+  if (cur !== h) {
+    await env.DB.prepare("INSERT INTO tenants (id, name, key_hash, features, created_at) VALUES ('main', 'Main pharmacy', ?1, ?2, ?3) ON CONFLICT(id) DO UPDATE SET key_hash = ?1")
+      .bind(h, JSON.stringify(DEFAULT_FEATURES), new Date().toISOString()).run();
+  }
+  mainChecked = true;
 }
 const tenantById = (env, id) => env.DB.prepare('SELECT * FROM tenants WHERE id = ?1').bind(id).first();
 /** A pharmacy by its web address (slug) or its code */

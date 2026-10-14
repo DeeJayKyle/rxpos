@@ -3,7 +3,7 @@
 Pharmacy point of sale and management system that works **offline** and **online**: on Windows PCs, Android phones and in any browser,
 across all your branches.
 
-**Live:** https://rxpos.pages.dev (Cloudflare, free plan). Each pharmacy has its own address, e.g. https://rxpos.pages.dev/pharmcare-hub.
+**Live:** https://rxpos.pages.dev (Cloudflare, free plan). Each pharmacy has its own address, e.g. https://rxpos.pages.dev/citycare-ntinda.
 The **owner console** (web only) is at https://rxpos.pages.dev/#/owner.
 
 ## Features
