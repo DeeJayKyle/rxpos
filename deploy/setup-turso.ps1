@@ -4,6 +4,7 @@
 # The token is sent straight to Cloudflare as a secret; it is not saved on this PC.
 
 $ErrorActionPreference = 'Stop'
+Set-Location (Split-Path $PSScriptRoot -Parent)  # the pharmapos folder, where wrangler.jsonc is
 Write-Host ''
 Write-Host 'RxPOS - Turso database setup' -ForegroundColor Cyan
 Write-Host '1. Sign in at https://app.turso.tech (GitHub or Google works).'
