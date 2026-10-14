@@ -1,6 +1,6 @@
 // Roles, permissions and feature switches.
 // A user's role (e.g. "dispenser") maps to a list of permission keys. Admin always has everything.
-// Features can be switched off by the RxPOS owner per client pharmacy (licence) and by the pharmacy admin (settings).
+// Features are switched on or off per pharmacy by the RxPOS owner only (owner console → licence).
 
 export const PERMISSIONS = [
   ['Selling', [
@@ -34,8 +34,8 @@ export const PERMISSIONS = [
     ['branches.view', 'See all branches'],
     ['audit', 'Audit log'],
     ['users.manage', 'Manage users & roles'],
-    ['settings.manage', 'Settings, branches, payment methods'],
-    ['data.reset', 'Erase data / restore defaults'],
+    ['settings.manage', 'Settings & payment methods'],
+    ['data.reset', 'Restore default settings'],
   ]],
 ];
 export const ALL_PERMISSIONS = PERMISSIONS.flatMap(([, list]) => list.map(([k]) => k));
@@ -64,14 +64,17 @@ export const FEATURES = [
   ['momo', 'Mobile Money payments'],
   ['drugInfo', 'Drug information & references'],
   ['shifts', 'Shifts & close-of-day cash-up'],
+  ['promos', 'Idle-screen promotions & WhatsApp sharing', 'Shown only when the app is idle'],
+  ['hourly', 'Hourly time reminders'],
+  ['calendar', 'Calendar & calendar sync', 'Google / Outlook / phone'],
+  ['weather', 'Weather & storage temperature log'],
 ];
 export const DEFAULT_FEATURES = Object.fromEntries(FEATURES.map(([k]) => [k, true]));
 
-/** Effective features: the owner's licence sets what's allowed; the pharmacy admin can switch allowed ones off. */
+/** Effective features: exactly what the RxPOS owner set for this pharmacy (anything new defaults to on). */
 export function featureSet(db) {
   const lic = db.license?.[0]?.features || {};
-  const local = db.settings?.features || {};
-  return Object.fromEntries(FEATURES.map(([k]) => [k, lic[k] !== false && local[k] !== false]));
+  return Object.fromEntries(FEATURES.map(([k]) => [k, lic[k] !== false]));
 }
 
 /** Roles in use: defaults, overridden/extended by the pharmacy's own role records. */

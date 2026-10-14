@@ -3,7 +3,8 @@
 Pharmacy point of sale and management system that works **offline** and **online**: on Windows PCs, Android phones and in any browser,
 across all your branches.
 
-**Live:** https://rxpos.pages.dev (Cloudflare, free plan). The older address https://pharmapos.pharmapos.workers.dev also keeps working.
+**Live:** https://rxpos.pages.dev (Cloudflare, free plan). Each pharmacy has its own address, e.g. https://rxpos.pages.dev/pharmcare-hub.
+The **owner console** (web only) is at https://rxpos.pages.dev/#/owner.
 
 ## Features
 
@@ -17,14 +18,17 @@ across all your branches.
 | People | Customers (allergies, insurance, credit limit), suppliers, prescriptions with refill intervals, **refill & debt reminders by WhatsApp or SMS** |
 | Finance | Expenses & categories, banks with live balances, deposits / withdrawals / transfers, loans, debtors, creditors, cash book |
 | Reports | Dashboard (today vs yesterday, 30-day trend, sales vs expenses, top 10), sales, sales by product, purchases, expenses, stock valuation, income statement, CSV export everywhere |
-| Security | Individual staff accounts (salted PBKDF2 passwords), roles (admin / pharmacist / cashier) enforced on the server, **audit log** of sign-ins, refunds, discounts, price changes, adjustments, write-offs, transfers and user changes |
-| Reliability | Works fully offline, syncs every 30 s, per-table storage, 7 daily on-device snapshots, crash-recovery screen, dark mode, Ctrl+K search |
+| Security | Accounts created by the owner (administrators) and each pharmacy's admin (staff), salted PBKDF2 passwords, first-sign-in password change, roles & permissions enforced on the server, **audit log** |
+| Engagement | **Idle-screen promotions** (short expiry, slow movers, high value, best margin) with one-tap **WhatsApp sharing**, "Promote today" on the dashboard, **hourly reminders** with a soft chime, notification bell |
+| Planner | **Calendar** with team events, refills due and expiring stock; subscribe in **Google Calendar / Outlook / phone** (private ICS link) |
+| Storage | **Weather** for the pharmacy's town (Open-Meteo), storage advice, **fridge / room temperature log** with safe ranges and trend |
+| Reliability | Works fully offline after the first sign-in, pushes changes within seconds and pulls every 10 s, 7 daily on-device snapshots, crash-recovery screen, dark mode, Ctrl+K search |
 
 ## How offline + online works
 
 * Every device (desktop app or browser) keeps its **full database locally** (IndexedDB) and works with no network.
 * Stock is never stored as a single number: every sale, purchase, refund and adjustment is a **stock movement**, and stock is the sum of movements. That lets devices that sold offline merge without losing sales.
-* When a device is linked to a **RxPOS Hub** (Settings → Online sync), it pushes its changes and pulls everyone else's every 30 seconds, and as soon as the connection comes back. Conflicting edits to the same record: the latest edit wins.
+* The first sign-in on a device (needs internet) downloads the pharmacy. After that it works offline, pushes its changes about 1.5 s after they are made, pulls everyone else's every 10 s (60 s in the background), and syncs immediately when the connection comes back. Conflicting edits to the same record: the latest edit wins.
 * The browser version installs a service worker, so it opens even without internet.
 
 ## Installing the desktop app (Windows)
@@ -103,13 +107,20 @@ cloudflared tunnel --url http://localhost:8686
 The quick tunnel prints a random `https://….trycloudflare.com` address that changes on every restart. For a permanent address, add a domain to a free Cloudflare account and create a named tunnel.
 Downside: online access only works while that PC is on and connected, so prefer Coolify for branches in other towns.
 
-## Staff accounts & connecting devices
+## Pharmacies, the owner console & signing in
 
-1. On the **owner's first device**: Settings → Online & payments → *With the sync key*: enter the cloud address and the sync key
-   (stored in `Documents\PharmaPOS-SYNC-KEY.txt` on the PC that set up the cloud). This uploads your data, including staff accounts.
-2. Add staff in Settings → Users (each person gets their own email + password and role).
-3. On any other PC, phone or browser: **Join with my account** using their own email and password. No shared key needed.
-   Cashiers can't change users, settings or branches, even if they tamper with their device; the cloud refuses it.
+Only the RxPOS owner creates pharmacies. Open **https://rxpos.pages.dev/#/owner** (web only) with the owner key
+(`OWNER_KEY` secret; a copy is kept in `Documents\RxPOS-Data\RxPOS-OWNER-KEY.txt` on the setup PC).
+
+1. **New pharmacy** → name, web address (e.g. `/citycare-ntinda`), extra branches, features, and the **administrator account**
+   (temporary password; they choose their own at first sign-in). Copy or WhatsApp the welcome message.
+2. Open a pharmacy to: edit its name, web address and notes; switch **features** on/off; add/edit/disable/delete **staff**
+   (including more admins); add/rename/delete **branches**; browse, search, edit, add or delete **any record**; **export** all data or
+   **import** a backup; set its own Mobile Money / SMS keys; issue a sync key; **reset** its data; **delete** it; suspend/reactivate it.
+3. The pharmacy's administrator signs in at its web address (or in the Windows/Android app with the same email and password)
+   and adds the other staff in **Users & Roles**. Admins cannot create other admins, add branches or change features: the cloud refuses it.
+
+The Windows and Android apps only sign in to existing accounts; they have no "new pharmacy", branch or feature settings.
 
 ## Mobile Money (MTN MoMo, Airtel Money) and SMS
 
@@ -144,7 +155,7 @@ outgoing IP, so Airtel calls go through a tiny relay (`relay/airtel-relay.mjs`) 
 ## App signing & stores
 
 * **Android:** every build is signed with the RxPOS release key (GitHub secrets `ANDROID_KEYSTORE_B64`, `ANDROID_KEYSTORE_PASSWORD`,
-  `ANDROID_KEY_ALIAS`; a backup is in `Documents\PharmaPOS-Android-Signing` on the setup PC. **Keep that folder safe**: it's needed for every update).
+  `ANDROID_KEY_ALIAS`). Keep an offline copy of the keystore somewhere safe: it's needed for every Google Play update.
   Releases contain `RxPOS-Android.apk` (install directly) and `RxPOS-GooglePlay.aab` (upload to Google Play Console:
   one-time US$25 developer account → Create app → Production → upload the .aab).
 * **Windows:** to remove the "unknown publisher" warning, buy a code-signing certificate (or use Azure Trusted Signing) and add it as

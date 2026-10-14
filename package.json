@@ -1,7 +1,7 @@
 {
   "name": "pharmapos",
   "productName": "RxPOS",
-  "version": "1.3.1",
+  "version": "1.4.0",
   "description": "RxPOS - pharmacy point of sale and inventory management",
   "author": "RxPOS",
   "license": "MIT",

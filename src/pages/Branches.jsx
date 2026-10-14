@@ -1,23 +1,12 @@
 import { useMemo, useState } from 'react';
-import { Building2, Plus, Truck, PackageCheck, Send, Pencil, MapPin, Trash2 } from 'lucide-react';
-import { useStore, today, uid, now, put, del, move, audit, allocate, MAIN_BRANCH } from '../store.jsx';
-import { Modal, RecordForm, Tabs, Empty, SearchBox, Stat } from '../ui.jsx';
+import { Building2, Truck, PackageCheck, Send, MapPin } from 'lucide-react';
+import { useStore, today, uid, now, put, move, audit, allocate, MAIN_BRANCH } from '../store.jsx';
+import { Modal, Tabs, Empty, SearchBox, Stat } from '../ui.jsx';
 import { toast, ask } from '../feedback.jsx';
 
-/** Owner view: every branch side by side, plus branch management. */
+/** Every branch side by side. Branches themselves are added and removed by the RxPOS owner (owner console). */
 export default function Branches() {
-  const { db, stockIndex, fmt, upsert, update, branchId, setBranchId, user, can } = useStore();
-  const admin = can('settings.manage');
-  const removeBranch = async (b) => {
-    const stock = db.products.reduce((a, p) => a + Math.max(stockIndex.product.get(b.id + '|' + p.id) || 0, 0), 0);
-    if (stock > 0) return toast(`${b.name} still has ${stock} items in stock. Transfer them to another branch first.`, 'warn');
-    if (db.transfers.some((t) => t.status === 'In transit' && (t.toId === b.id || t.fromId === b.id))) return toast('There are transfers in transit to or from this branch', 'warn');
-    if (!(await ask({ title: `Delete ${b.name}?`, message: 'Its past sales stay in your reports. Devices set to this branch switch to the main branch.', confirmText: 'Delete branch', danger: true }))) return;
-    update((d) => { del(d, 'branches', b.id); audit(d, user, 'Branch deleted', b.name, branchId); });
-    if (branchId === b.id) setBranchId('main');
-    toast(`${b.name} deleted`);
-  };
-  const [edit, setEdit] = useState(null);
+  const { db, stockIndex, fmt, branchId, setBranchId } = useStore();
   const month = today().slice(0, 7);
 
   const stats = useMemo(() => {
@@ -43,7 +32,6 @@ export default function Branches() {
     <div className="page">
       <div className="page-head">
         <div><h1>Branches</h1><div className="sub">All branches at a glance · this device works as <strong>{db.branches.find((b) => b.id === branchId)?.name}</strong></div></div>
-        {admin && <button className="btn primary" onClick={() => setEdit({ id: uid(), _new: true })}><Plus size={16} />Add branch</button>}
       </div>
       <div className="stats">
         <Stat label="Sales today – all branches" value={fmt(totals.today)} icon={Building2} tone="teal" />
@@ -53,10 +41,7 @@ export default function Branches() {
       <div className="branch-grid">
         {stats.map((b) => (
           <div key={b.id} className={'card branch-card' + (b.id === branchId ? ' current' : '')}>
-            <div className="row between">
-              <h3><Building2 size={18} />{b.name}</h3>
-              {admin && <span><button className="icon-btn" title="Edit" onClick={() => setEdit(b)}><Pencil size={15} /></button>{b.id !== 'main' && <button className="icon-btn" title="Delete branch" onClick={() => removeBranch(b)}><Trash2 size={15} /></button>}</span>}
-            </div>
+            <h3><Building2 size={18} />{b.name}</h3>
             {b.address && <p className="muted small"><MapPin size={12} /> {b.address}</p>}
             <div className="kv"><span>Today</span><strong>{fmt(b.today)}</strong><small className="muted">{b.todayN} sales</small></div>
             <div className="kv"><span>This month</span><strong>{fmt(b.month)}</strong></div>
@@ -67,13 +52,7 @@ export default function Branches() {
           </div>
         ))}
       </div>
-      {edit && (
-        <Modal title={edit._new ? 'Add branch' : 'Edit branch'} onClose={() => setEdit(null)}>
-          <RecordForm initial={edit} onCancel={() => setEdit(null)}
-            fields={[{ key: 'name', label: 'Branch name', required: true }, { key: 'address', label: 'Address / town' }, { key: 'phone', label: 'Phone' }, { key: 'manager', label: 'Manager' }]}
-            onSave={({ _new, ...b }) => { upsert('branches', b); toast(_new ? `${b.name} added` : 'Branch saved'); setEdit(null); }} />
-        </Modal>
-      )}
+      <p className="muted small">To add, rename or remove a branch, contact your RxPOS provider.</p>
     </div>
   );
 }
@@ -141,7 +120,7 @@ export function Transfers() {
         <div><h1>Stock Transfers</h1><div className="sub">{incoming.filter((t) => t.status === 'In transit').length} incoming waiting to be received</div></div>
         <button className="btn primary" disabled={!others.length} onClick={() => setCreating({ toId: others[0]?.id || '', note: '', lines: [] })}><Send size={16} />New transfer</button>
       </div>
-      {!others.length && <div className="notice">Add another branch first (Branches → Add branch).</div>}
+      {!others.length && <div className="notice">Transfers need a second branch. Ask your RxPOS provider to add one.</div>}
       <Tabs tabs={[['incoming', 'Incoming'], ['outgoing', 'Sent']]} value={tab} onChange={setTab} />
       <div className="card table-wrap">
         <table>

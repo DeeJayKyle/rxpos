@@ -4,13 +4,15 @@ import {
   LayoutDashboard, ShoppingCart, PackageOpen, ReceiptText, FileText, ClipboardPlus, Users, Truck, Pill, FlaskConical,
   Boxes, PackagePlus, History, CalendarClock, PencilRuler, ScrollText, Wallet, Tags, Landmark, ArrowLeftRight, HandCoins,
   ArrowDownLeft, ArrowUpRight, BookOpen, BarChart3, Settings as SettingsIcon, Search, Sun, Moon, Menu, LogOut, ChevronDown,
-  CornerDownLeft, User, Plus, BellRing, ShoppingBag, Tag, FileUp, Building2, Send, ShieldCheck, Clock, BookMarked, MessagesSquare, UserCog, KeyRound,
+  CornerDownLeft, User, Plus, BellRing, ShoppingBag, Tag, FileUp, Building2, Send, ShieldCheck, Clock, BookMarked, MessagesSquare, UserCog, KeyRound, CalendarDays, Thermometer,
 } from 'lucide-react';
 import { useStore, daysUntil, makePassword, put, audit } from './store.jsx';
 import { askText, toast } from './feedback.jsx';
 import Auth from './pages/Auth.jsx';
 import { Logo } from './logo.jsx';
 import { unreadCount } from './pages/Chat.jsx';
+import { Spotlight, HourlyReminder, NotificationBell } from './engage.jsx';
+import { isWeb } from './platform.js';
 const OwnerConsole = lazy(() => import('./pages/OwnerConsole.jsx'));
 
 // Pages load on demand so the app opens fast, even on low-end PCs and phones
@@ -42,6 +44,8 @@ const P = {
   Chat: page(() => import('./pages/Chat.jsx')),
   DrugInfo: page(() => import('./pages/DrugInfo.jsx')),
   Users: page(() => import('./pages/Users.jsx')),
+  Calendar: page(() => import('./pages/Calendar.jsx')),
+  Storage: page(() => import('./pages/Storage.jsx')),
 };
 
 // [path, label, Icon, shortcut, badge, element, permission, feature]
@@ -61,6 +65,7 @@ const NAV = [
     ['/suppliers', 'Suppliers', Truck, null, null, <P.Suppliers />, 'suppliers'],
     ['/chat', 'Chat & Messages', MessagesSquare, null, 'chat', <P.Chat />, 'chat', 'chat'],
     ['/reminders', 'Reminders', BellRing, null, null, <P.Reminders />, 'reminders', 'reminders'],
+    ['/calendar', 'Calendar', CalendarDays, null, null, <P.Calendar />, null, 'calendar'],
   ] },
   { group: 'Medicine Inventory', items: [
     ['/medicines', 'Medicine List', Pill, null, null, <P.MedicineList />, 'inventory.view'],
@@ -74,6 +79,7 @@ const NAV = [
     ['/stock-card', 'Stock Card', ScrollText, null, null, <P.StockCard />, 'inventory.view'],
     ['/labels', 'Barcode Labels', Tag, null, null, <P.Labels />, 'medicines.manage', 'labels'],
     ['/import', 'Import Medicines', FileUp, null, null, <P.Import />, 'medicines.manage', 'import'],
+    ['/storage', 'Weather & Storage', Thermometer, null, null, <P.Storage />, 'inventory.view', 'weather'],
   ] },
   { group: 'Branches', items: [
     ['/branches', 'All Branches', Building2, null, null, <P.Branches />, 'branches.view', 'branches'],
@@ -92,7 +98,7 @@ const NAV = [
   { group: 'Insights', items: [['/reports', 'Reports', BarChart3, null, null, <P.Reports />, 'reports', 'reports']] },
   { group: 'System', items: [
     ['/users', 'Users & Roles', UserCog, null, null, <P.Users />, 'users.manage'],
-    ['/settings', 'Settings & Sync', SettingsIcon, null, null, <P.Settings />, 'settings.manage'],
+    ['/settings', 'Settings', SettingsIcon, null, null, <P.Settings />, 'settings.manage'],
     ['/audit', 'Audit Log', ShieldCheck, null, null, <P.Audit />, 'audit'],
   ] },
 ];
@@ -119,14 +125,14 @@ function useOnline() {
 }
 
 function SyncPill() {
-  const { syncStatus, syncNow } = useStore();
+  const { syncStatus, syncNow, setUser } = useStore();
   const online = useOnline();
   const s = syncStatus.state;
   const label = s === 'off' ? (online ? 'On this device' : 'Offline')
     : s === 'ok' ? 'Synced ' + new Date(syncStatus.lastSync).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    : s === 'syncing' ? (syncStatus.progress || 'Syncing…') : s === 'offline' ? 'Offline – will sync' : 'Sync error';
+    : s === 'syncing' ? (syncStatus.progress || 'Syncing…') : s === 'offline' ? 'Offline – will sync' : syncStatus.expired ? 'Sign in again' : 'Sync error';
   const tone = s === 'ok' ? 'ok' : s === 'error' ? 'danger' : s === 'syncing' ? 'syncing' : s === 'offline' || !online ? 'warn' : '';
-  return <button className={'pill ' + tone} title={syncStatus.error || 'Sync now'} onClick={syncNow}><i />{label}</button>;
+  return <button className={'pill ' + tone} title={syncStatus.error || 'Sync now'} onClick={() => (syncStatus.expired ? setUser(null) : syncNow())}><i />{label}</button>;
 }
 
 /** Ctrl+K: jump to any page, medicine, customer or receipt */
@@ -280,6 +286,7 @@ function Shell() {
           <div className="spacer grow" />
           {db.branches.length > 1 && <NavLink to="/branches" className="pill branch-pill" title="Branch this device works as"><Building2 size={14} />{branch?.name}</NavLink>}
           <SyncPill />
+          <NotificationBell />
           <button className="icon-btn" title={theme === 'dark' ? 'Light mode' : 'Dark mode'} onClick={toggleTheme}>{theme === 'dark' ? <Sun size={19} /> : <Moon size={19} />}</button>
         </header>
         <main className="content">
@@ -299,6 +306,22 @@ function Shell() {
         <button onClick={() => setDrawer(true)}><Menu size={20} />More</button>
       </nav>
       <CommandPalette open={palette} onClose={() => setPalette(false)} pages={pages} />
+      <Spotlight />
+      <HourlyReminder />
+      <FirstDownload />
+    </div>
+  );
+}
+
+/** The first sign-in on a device downloads the whole pharmacy: show progress instead of empty pages */
+function FirstDownload() {
+  const { syncStatus, db } = useStore();
+  if (!(syncStatus.first && syncStatus.state === 'syncing') || db.products.length > 50) return null;
+  return (
+    <div className="first-sync">
+      <div className="spinner" />
+      <h3>Setting up {db.settings.name !== 'My Pharmacy' ? db.settings.name : 'your pharmacy'} on this device…</h3>
+      <p className="muted">{syncStatus.progress || 'Downloading medicines, stock and staff. This happens only once.'}</p>
     </div>
   );
 }
@@ -317,8 +340,8 @@ function useHideSplash() {
 function Gate() {
   const { user } = useStore();
   const location = useLocation();
-  // The owner console works without signing in to a pharmacy (it has its own owner key)
-  if (location.pathname === '/owner') return <Suspense fallback={<div className="loading"><div className="spinner" /></div>}><OwnerConsole /></Suspense>;
+  // The owner console is web-only and works without signing in to a pharmacy (it has its own owner key)
+  if (location.pathname === '/owner' && isWeb) return <Suspense fallback={<div className="loading"><div className="spinner" /></div>}><OwnerConsole /></Suspense>;
   return user ? <Shell /> : <Auth />;
 }
 

@@ -13,6 +13,6 @@
     "not_found_handling": "single-page-application",
     "run_worker_first": ["/api/*"]
   },
-  "d1_databases": [{ "binding": "DB" }],
+  "d1_databases": [{ "binding": "DB", "database_name": "pharmapos-db", "database_id": "a68d2d61-c865-4a2b-9a83-65d20a0927f0", "migrations_dir": "migrations" }],
   "observability": { "enabled": true }
 }

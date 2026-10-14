@@ -7,6 +7,10 @@
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
     <link rel="manifest" href="./manifest.webmanifest" />
     <title>RxPOS</title>
+    <script>
+      // Pharmacy web addresses are /<pharmacy> (no trailing slash, so ./assets resolve from the site root)
+      if (/^\/[a-z0-9-]+\/+$/.test(location.pathname)) location.replace(location.pathname.replace(/\/+$/, '') + location.search + location.hash);
+    </script>
     <style>
       /* Splash: shown instantly while the app loads, removed by main.jsx once RxPOS is ready */
       #splash { position: fixed; inset: 0; z-index: 9999; display: grid; place-items: center; align-content: center; gap: 18px;

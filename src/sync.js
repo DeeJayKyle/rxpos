@@ -1,10 +1,12 @@
-// Offline-first sync with a RxPOS hub (server/hub.mjs).
-// Each device keeps its full database locally and works without a network. When a hub is configured,
-// every 30 s (and when the connection comes back) it pushes records changed since the last push and
-// pulls everything other devices changed since its cursor. Conflicts: last writer (updatedAt) wins per record.
+// Offline-first sync with the RxPOS cloud.
+// Each device keeps its full database locally and works without a network. Changes are pushed a moment after they
+// are made (store.jsx), and the device pulls what others changed every 10 s while the app is in use (every 60 s in
+// the background), straight away when the internet comes back or the app is reopened.
+// Conflicts: last writer (updatedAt) wins per record.
 import { TABLES, now } from './store.jsx';
 
-const INTERVAL = 30000;
+const ACTIVE = 10000;
+const BACKGROUND = 60000;
 const PUSH_BATCH = 400;
 
 export function collectChanges(db, since) {
@@ -16,30 +18,39 @@ export function collectChanges(db, since) {
 }
 
 async function post(url, key, body) {
-  const res = await fetch(url.replace(/\/+$/, '') + '/api/sync', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
-    body: JSON.stringify(body),
-  });
-  const j = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(j.error || `Hub replied ${res.status}`);
-  return j;
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 45000);
+  try {
+    const res = await fetch(url.replace(/\/+$/, '') + '/api/sync', {
+      method: 'POST', signal: ctl.signal,
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
+      body: JSON.stringify(body),
+    });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) throw Object.assign(new Error(j.error || `Cloud replied ${res.status}`), { status: res.status });
+    return j;
+  } catch (e) {
+    throw e.name === 'AbortError' ? new Error('The cloud took too long to answer') : e;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export function createSync({ getDb, getCfg, saveCfg, applyRemote, onStatus }) {
-  let busy = false, timer = null, stopped = false;
+  let busy = false, again = false, timer = null, stopped = false;
 
   async function run() {
     const cfg = getCfg();
     if (!cfg.url || !cfg.key) { onStatus({ state: 'off' }); return; }
-    if (busy || stopped) return;
+    if (stopped) return;
+    if (busy) { again = true; return; } // a change came in while syncing: go round once more afterwards
     if (!navigator.onLine) { onStatus({ state: 'offline', lastSync: cfg.lastSync }); return; }
     busy = true;
-    onStatus({ state: 'syncing', lastSync: cfg.lastSync });
+    onStatus({ state: 'syncing', lastSync: cfg.lastSync, first: !cfg.lastSync });
     try {
       const started = now();
       const changes = collectChanges(getDb(), cfg.pushedAt);
-      // Push in batches (the cloud hub accepts up to 500 per request); every reply also carries a page of remote changes
+      // Push in batches (the cloud accepts up to 500 per request); every reply also carries a page of remote changes
       const batches = [];
       for (let i = 0; i < changes.length; i += PUSH_BATCH) batches.push(changes.slice(i, i + PUSH_BATCH));
       let cursor = cfg.cursor || 0, sent = 0, pulled = 0;
@@ -49,25 +60,32 @@ export function createSync({ getDb, getCfg, saveCfg, applyRemote, onStatus }) {
         if (r.changes.length) { applyRemote(r.changes); pulled += r.changes.length; }
         cursor = r.cursor;
         if (sent >= batches.length && !r.more) break;
-        if (sent > 1 && batches.length > 1) onStatus({ state: 'syncing', progress: `Uploaded ${Math.min(sent * PUSH_BATCH, changes.length)} of ${changes.length}` });
+        onStatus({ state: 'syncing', first: !cfg.lastSync, progress: batches.length > 1 && sent < batches.length ? `Uploading ${Math.min(sent * PUSH_BATCH, changes.length)} of ${changes.length}` : `Downloading… ${pulled.toLocaleString()} records` });
       }
-      const next = { ...cfg, pushedAt: started, cursor, lastSync: now(), lastError: '' };
+      const next = { ...getCfg(), pushedAt: started, cursor, lastSync: now(), lastError: '' };
       saveCfg(next);
       onStatus({ state: 'ok', lastSync: next.lastSync, pushed: changes.length, pulled });
     } catch (e) {
-      saveCfg({ ...cfg, lastError: e.message });
-      onStatus({ state: 'error', error: e.message, lastSync: cfg.lastSync });
+      saveCfg({ ...getCfg(), lastError: e.message });
+      onStatus({ state: 'error', error: e.status === 401 ? 'Sign-in expired. Sign out and sign in again to keep syncing.' : e.message, lastSync: cfg.lastSync, expired: e.status === 401 });
     } finally {
       busy = false;
+      if (again && !stopped) { again = false; setTimeout(run, 200); }
     }
   }
 
+  const schedule = () => {
+    clearInterval(timer);
+    timer = setInterval(run, document.visibilityState === 'hidden' ? BACKGROUND : ACTIVE);
+  };
+  const onVisible = () => { schedule(); if (document.visibilityState === 'visible') run(); };
   const onOnline = () => run();
   const onOffline = () => getCfg().url && onStatus({ state: 'offline', lastSync: getCfg().lastSync });
   window.addEventListener('online', onOnline);
   window.addEventListener('offline', onOffline);
-  timer = setInterval(run, INTERVAL);
-  const first = setTimeout(run, 1500);
+  document.addEventListener('visibilitychange', onVisible);
+  schedule();
+  const first = setTimeout(run, 300);
 
   return {
     run,
@@ -77,6 +95,7 @@ export function createSync({ getDb, getCfg, saveCfg, applyRemote, onStatus }) {
       clearTimeout(first);
       window.removeEventListener('online', onOnline);
       window.removeEventListener('offline', onOffline);
+      document.removeEventListener('visibilitychange', onVisible);
     },
   };
 }

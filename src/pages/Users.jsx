@@ -11,8 +11,11 @@ export default function Users() {
   const [tab, setTab] = useState('users');
   const [edit, setEdit] = useState(null);
   const [roleEdit, setRoleEdit] = useState(null);
-  const roles = rolesOf(db);
-  const roleName = (id) => roles.find((r) => r.id === id)?.name || id;
+  const allRoles = rolesOf(db);
+  // Administrator accounts are created by the RxPOS owner; here admins manage everyone else
+  const roles = (u) => allRoles.filter((r) => r.id !== 'admin' || u?.role === 'admin');
+  const isAdminRow = (u) => u.role === 'admin' && u.id !== user.id;
+  const roleName = (id) => allRoles.find((r) => r.id === id)?.name || id;
 
   const saveUser = async (e) => {
     e.preventDefault();
@@ -46,7 +49,7 @@ export default function Users() {
     e.preventDefault();
     const id = roleEdit.id || roleEdit.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
     if (!id) return toast('Give the role a name', 'warn');
-    if (roleEdit._new && roles.some((r) => r.id === id)) return toast('A role with that name exists', 'error');
+    if (roleEdit._new && allRoles.some((r) => r.id === id)) return toast('A role with that name exists', 'error');
     update((d) => {
       put(d, 'roles', { id, name: roleEdit.name.trim(), permissions: [...roleEdit.permissions] });
       audit(d, user, roleEdit._new ? 'Role created' : 'Role permissions changed', `${roleEdit.name}: ${roleEdit.permissions.length} permissions`, branchId);
@@ -68,7 +71,7 @@ export default function Users() {
           ? <button className="btn primary" onClick={() => setEdit({ _new: true, id: uid(), name: '', email: '', phone: '', whatsapp: '', role: 'cashier', branchId, password: '' })}><UserPlus size={16} />Add user</button>
           : <button className="btn primary" onClick={() => setRoleEdit({ _new: true, name: '', permissions: new Set(['pos.sell', 'sales.view', 'shifts', 'customers', 'chat']) })}><Plus size={16} />New role</button>}
       </div>
-      <Tabs tabs={[['users', `Users (${db.users.length})`], ['roles', `Roles & permissions (${roles.length})`]]} value={tab} onChange={setTab} />
+      <Tabs tabs={[['users', `Users (${db.users.length})`], ['roles', `Roles & permissions (${allRoles.length})`]]} value={tab} onChange={setTab} />
 
       {tab === 'users' && (
         <div className="card table-wrap">
@@ -84,10 +87,12 @@ export default function Users() {
                   {db.branches.length > 1 && <td>{db.branches.find((b) => b.id === u.branchId)?.name || 'Any'}</td>}
                   <td>{u.disabled ? 'Disabled' : 'Active'}</td>
                   <td className="actions">
+                    {isAdminRow(u) ? <small className="muted">Managed by RxPOS provider</small> : <>
                     <button className="btn sm ghost" onClick={() => setEdit({ ...u, password: '' })}>Edit</button>
                     <button className="btn sm ghost" onClick={() => resetPassword(u)}><KeyRound size={14} />Password</button>
-                    {u.id !== user.id && <button className="btn sm ghost" onClick={() => update((d) => { put(d, 'users', { ...u, disabled: !u.disabled }); audit(d, user, u.disabled ? 'User enabled' : 'User disabled', u.name, branchId); })}>{u.disabled ? 'Enable' : 'Disable'}</button>}
-                    {u.id !== user.id && <button className="btn sm danger" title="Delete" onClick={() => removeUser(u)}><Trash2 size={14} /></button>}
+                    </>}
+                    {u.id !== user.id && !isAdminRow(u) && <button className="btn sm ghost" onClick={() => update((d) => { put(d, 'users', { ...u, disabled: !u.disabled }); audit(d, user, u.disabled ? 'User enabled' : 'User disabled', u.name, branchId); })}>{u.disabled ? 'Enable' : 'Disable'}</button>}
+                    {u.id !== user.id && !isAdminRow(u) && <button className="btn sm danger" title="Delete" onClick={() => removeUser(u)}><Trash2 size={14} /></button>}
                   </td>
                 </tr>
               ))}
@@ -99,7 +104,7 @@ export default function Users() {
 
       {tab === 'roles' && (
         <div className="branch-grid">
-          {roles.map((r) => (
+          {allRoles.map((r) => (
             <div key={r.id} className="card branch-card">
               <div className="row between"><h3><ShieldCheck size={18} />{r.name}</h3>{r.builtIn && <span className="badge">built-in</span>}</div>
               <p className="muted small">{r.id === 'admin' ? 'Everything, always.' : `${r.permissions.length} permissions`} · {db.users.filter((u) => u.role === r.id).length} user(s)</p>
@@ -125,7 +130,7 @@ export default function Users() {
               <label className="field"><span>Phone (SMS recovery)</span><input inputMode="tel" value={edit.phone || ''} onChange={(e) => setEdit({ ...edit, phone: e.target.value })} placeholder="07XX XXX XXX" /></label>
               <label className="field"><span>WhatsApp number</span><input inputMode="tel" value={edit.whatsapp || ''} onChange={(e) => setEdit({ ...edit, whatsapp: e.target.value })} placeholder="Same as phone if empty" /></label>
               <label className="field"><span>Role</span>
-                <select value={edit.role} disabled={edit.id === user.id} onChange={(e) => setEdit({ ...edit, role: e.target.value })}>{roles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}</select></label>
+                <select value={edit.role} disabled={edit.id === user.id} onChange={(e) => setEdit({ ...edit, role: e.target.value })}>{roles(db.users.find((u) => u.id === edit.id)).map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}</select></label>
               {db.branches.length > 1 && (
                 <label className="field"><span>Home branch</span>
                   <select value={edit.branchId || ''} onChange={(e) => setEdit({ ...edit, branchId: e.target.value })}><option value="">Any branch</option>{db.branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select></label>

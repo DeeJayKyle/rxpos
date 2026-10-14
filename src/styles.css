@@ -582,3 +582,116 @@ details input { width: 100%; }
   .chat-page { height: auto; }
   .chat-main { min-height: 60vh; }
 }
+
+/* ---------- v1.4: notifications, hourly card, idle spotlight ---------- */
+.bell { position: relative; }
+.bell .icon-btn { position: relative; }
+.bell-dot { position: absolute; top: 2px; right: 0; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px; background: var(--warn); color: #fff; font-size: 10.5px; font-weight: 700; display: grid; place-items: center; }
+.bell-dot.danger { background: var(--danger); }
+.bell-menu { position: absolute; right: 0; top: calc(100% + 8px); width: min(360px, calc(100vw - 24px)); background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow-lg); padding: 6px; z-index: 60; animation: pop-in .14s ease-out; }
+.bell-head { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); padding: 8px 10px 4px; }
+.bell-item { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; font: inherit; color: var(--text); background: none; border: 0; border-radius: 10px; padding: 9px 10px; cursor: pointer; }
+.bell-item:hover { background: var(--surface-2); }
+.bell-item span { flex: 1; }
+.bell-item.danger svg:first-child { color: var(--danger); }
+.bell-item.warn svg:first-child { color: var(--warn); }
+.bell-item.info svg:first-child { color: var(--primary); }
+@keyframes pop-in { from { opacity: 0; transform: translateY(-4px) scale(.98); } }
+
+.hour-card { position: fixed; top: 70px; right: 18px; width: min(360px, calc(100vw - 36px)); z-index: 90; background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--primary); border-radius: 14px; box-shadow: var(--shadow-lg); padding: 10px; animation: slide-in .35s cubic-bezier(.2, .9, .3, 1.2); }
+.hour-head { display: flex; align-items: center; gap: 8px; padding: 4px 6px 8px; color: var(--primary-ink); }
+.hour-head strong { flex: 1; font-size: 15px; color: var(--text); }
+@keyframes slide-in { from { opacity: 0; transform: translateX(30px); } }
+
+.spotlight { position: fixed; inset: 0; z-index: 120; display: grid; place-items: center; align-content: center; gap: 16px; padding: 20px;
+  background: radial-gradient(900px 600px at 50% 30%, rgba(13, 148, 136, .55), rgba(5, 15, 25, .92)); backdrop-filter: blur(6px); animation: fade-in .5s ease-out; cursor: pointer; }
+.spot-hint { color: rgba(255, 255, 255, .7); font-size: 13px; letter-spacing: .04em; margin: 0; }
+.spot-card { position: relative; cursor: default; width: min(880px, 100%); display: grid; grid-template-columns: 300px 1fr; gap: 28px; align-items: center; padding: 30px;
+  border-radius: 26px; color: #fff; overflow: hidden; box-shadow: 0 40px 90px -20px rgba(0, 0, 0, .6); animation: spot-in .6s cubic-bezier(.2, .9, .3, 1.15);
+  background: linear-gradient(135deg, #0f766e, #0891b2); }
+.spot-card.tone-amber { background: linear-gradient(135deg, #b45309, #e11d48); }
+.spot-card.tone-violet { background: linear-gradient(135deg, #5b21b6, #0e7490); }
+.spot-card.tone-green { background: linear-gradient(135deg, #047857, #0d9488 60%, #65a30d); }
+.spot-art { position: relative; height: 260px; display: grid; place-items: center; border-radius: 22px; background: rgba(255, 255, 255, .12); }
+.spot-art svg { position: relative; z-index: 1; filter: drop-shadow(0 18px 30px rgba(0, 0, 0, .35)); animation: float 4s ease-in-out infinite; }
+.spot-art .bubble { position: absolute; border-radius: 50%; background: rgba(255, 255, 255, .18); animation: float 6s ease-in-out infinite; }
+.spot-art .b1 { width: 90px; height: 90px; top: 14px; left: 18px; }
+.spot-art .b2 { width: 46px; height: 46px; bottom: 26px; right: 30px; animation-delay: -2s; }
+.spot-art .b3 { width: 24px; height: 24px; top: 40px; right: 56px; animation-delay: -4s; }
+.spot-kind { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 999px; background: rgba(255, 255, 255, .18); font-size: 12.5px; font-weight: 600; }
+.spot-body h2 { font-size: clamp(26px, 4vw, 40px); line-height: 1.08; margin: 14px 0 6px; letter-spacing: -.02em; }
+.spot-generic { opacity: .85; margin: 0 0 10px; }
+.spot-price { font-size: clamp(30px, 5vw, 48px); font-weight: 800; letter-spacing: -.02em; }
+.spot-note { opacity: .9; margin: 6px 0 18px; }
+.spot-card .btn.ghost { color: #fff; border-color: rgba(255, 255, 255, .35); background: rgba(255, 255, 255, .08); }
+.spot-card .btn.primary { background: #fff; color: #0f172a; box-shadow: none; }
+.spot-dots { position: absolute; left: 30px; bottom: 14px; display: flex; gap: 6px; }
+.spot-dots i { width: 7px; height: 7px; border-radius: 50%; background: rgba(255, 255, 255, .35); }
+.spot-dots i.on { background: #fff; width: 20px; border-radius: 4px; }
+@keyframes spot-in { from { opacity: 0; transform: translateY(24px) scale(.97); } }
+@keyframes float { 50% { transform: translateY(-10px); } }
+@keyframes fade-in { from { opacity: 0; } }
+@media (max-width: 720px) { .spot-card { grid-template-columns: 1fr; padding: 20px; gap: 16px; } .spot-art { height: 150px; } .spot-art svg { width: 84px; height: 84px; } }
+
+.first-sync { position: fixed; inset: 0; z-index: 110; display: grid; place-items: center; align-content: center; gap: 10px; text-align: center; padding: 24px; background: color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: blur(4px); }
+.first-sync h3 { margin: 8px 0 0; }
+
+/* dashboard: promotions & weather */
+.promo-list { display: flex; flex-direction: column; }
+.promo-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.promo-row:last-child { border-bottom: 0; }
+.promo-row .grow { display: flex; flex-direction: column; min-width: 0; }
+.promo-row strong { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.weather h3 { display: flex; align-items: center; gap: 6px; margin: 0; }
+.weather-now { display: flex; align-items: center; gap: 16px; margin: 12px 0 8px; color: var(--primary); }
+.weather-now > div { color: var(--text); }
+.weather-temp { font-size: 38px; font-weight: 800; letter-spacing: -.03em; line-height: 1; }
+.weather.compact .weather-temp { font-size: 32px; }
+.weather-meta { display: flex; flex-wrap: wrap; gap: 8px 16px; color: var(--muted); font-size: 13px; }
+.weather-meta span { display: inline-flex; align-items: center; gap: 5px; }
+.advice { display: flex; gap: 8px; align-items: flex-start; margin-top: 10px; padding: 8px 10px; border-radius: 10px; font-size: 13px; }
+.advice.warn { background: var(--warn-soft); color: var(--warn); }
+.advice.danger { background: var(--danger-soft); color: var(--danger); }
+.advice svg { flex: none; margin-top: 2px; }
+.stats.tight { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.spark { width: 100%; height: 140px; display: block; margin: 8px 0; }
+.spark-band { fill: var(--ok-soft); }
+.spark-line { fill: none; stroke: var(--primary); stroke-width: 2.5; vector-effect: non-scaling-stroke; }
+.spark-dot { fill: var(--primary); }
+.spark-bad { fill: var(--danger); }
+tr.row-bad td { color: var(--danger); }
+
+/* calendar */
+.cal-layout { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; align-items: start; }
+.cal-nav h3 { margin: 0; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; margin-top: 12px; }
+.cal-head { font-size: 11.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); text-align: center; padding: 4px 0; }
+.cal-day { min-height: 92px; display: flex; flex-direction: column; gap: 3px; align-items: stretch; text-align: left; font: inherit; color: var(--text); background: var(--surface-2); border: 1px solid transparent; border-radius: 10px; padding: 6px; cursor: pointer; overflow: hidden; }
+.cal-day:hover { border-color: var(--border-strong); }
+.cal-day.out { opacity: .45; }
+.cal-day.today .cal-num { background: var(--accent-grad); color: #fff; }
+.cal-day.sel { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
+.cal-num { align-self: flex-start; font-weight: 600; font-size: 12.5px; min-width: 24px; height: 24px; display: grid; place-items: center; border-radius: 12px; }
+.cal-ev { display: block; font-size: 11px; padding: 2px 6px; border-radius: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: var(--primary-soft); color: var(--primary-ink); }
+.cal-ev.violet { background: var(--violet-soft); color: var(--violet); }
+.cal-ev.amber { background: var(--warn-soft); color: var(--warn); }
+.cal-more { font-size: 11px; color: var(--muted); }
+.agenda { display: flex; flex-direction: column; gap: 8px; }
+.agenda-item { display: flex; align-items: center; gap: 8px; padding: 10px; border-radius: 10px; background: var(--surface-2); border-left: 3px solid var(--primary); }
+.agenda-item.violet { border-left-color: var(--violet); }
+.agenda-item.amber { border-left-color: var(--warn); }
+.agenda-item .grow { display: flex; flex-direction: column; min-width: 0; }
+.legend .cal-ev { display: inline-flex; align-items: center; gap: 4px; }
+@media (max-width: 1100px) { .cal-layout { grid-template-columns: 1fr; } }
+@media (max-width: 600px) { .cal-day { min-height: 56px; padding: 4px; } .cal-ev { font-size: 0; height: 6px; padding: 0; } .cal-more { display: none; } }
+
+/* sign-in & owner console */
+.auth-title { display: flex; align-items: center; justify-content: center; gap: 6px; font-weight: 600; color: var(--text); }
+.tenant-card { cursor: pointer; transition: transform .12s ease, box-shadow .12s ease; }
+.tenant-card:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
+.tenant-url { display: inline-flex; align-items: center; gap: 4px; color: var(--primary); text-decoration: none; word-break: break-all; }
+.slug-input { display: flex; align-items: center; border: 1px solid var(--border-strong); border-radius: 10px; overflow: hidden; background: var(--surface); }
+.slug-input span { padding: 0 2px 0 10px; color: var(--muted); white-space: nowrap; font-size: 13px; }
+.slug-input input { border: 0 !important; box-shadow: none !important; padding-left: 2px; min-width: 0; flex: 1; }
+.json-edit { width: 100%; font-family: ui-monospace, Consolas, monospace; font-size: 13px; line-height: 1.5; }
+.badge.warn { background: var(--warn-soft); color: var(--warn); margin-left: 6px; }

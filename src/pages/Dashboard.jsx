@@ -1,14 +1,19 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Banknote, Wallet, CalendarClock, PackageX, Pill, Coins, Users, ShoppingCart, PackagePlus, ReceiptText } from 'lucide-react';
+import { Banknote, Wallet, CalendarClock, PackageX, Pill, Coins, Users, ShoppingCart, PackagePlus, ReceiptText, Share2, Megaphone } from 'lucide-react';
 import { useStore, today, daysUntil, MAIN_BRANCH } from '../store.jsx';
 import { Stat, BarChart, AreaChart, Empty } from '../ui.jsx';
+import { useInsights, shareText } from '../engage.jsx';
+import { whatsappLink } from '../cloud.js';
+import { WeatherCard } from './Storage.jsx';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const dayKey = (offset) => new Date(Date.now() - offset * 864e5).toISOString().slice(0, 10);
 
 export default function Dashboard() {
-  const { db, products, fmt, user, branchId } = useStore();
+  const { db, products, fmt, user, branchId, features } = useStore();
+  const ins = useInsights();
+  const promote = [ins.shortExpiry[0], ins.highMargin[0], ins.slow[0], ins.highMargin[1], ins.shortExpiry[1]].filter(Boolean).filter((x, i, a) => a.findIndex((y) => y.p.id === x.p.id) === i).slice(0, 4);
   const warn = db.settings.expiryWarnDays || 90;
 
   const m = useMemo(() => {
@@ -35,7 +40,7 @@ export default function Dashboard() {
   const delta = y.total ? ((t.total - y.total) / y.total) * 100 : null;
   const expiring = products.filter((p) => p.expiry && p.stock > 0 && daysUntil(p.expiry) >= 0 && daysUntil(p.expiry) <= warn);
   const expired = products.filter((p) => p.expiry && p.stock > 0 && daysUntil(p.expiry) < 0);
-  const lowStock = products.filter((p) => p.stock <= (p.reorder || 0));
+  const lowStock = products.filter((p) => p.reorder > 0 && p.stock <= p.reorder);
   const stockValue = products.reduce((a, p) => a + Math.max(p.stock, 0) * (p.cost || 0), 0);
   const year = new Date().getFullYear();
   const monthRows = MONTHS.map((name, i) => ({ name, k: `${year}-${String(i + 1).padStart(2, '0')}` })).filter((r) => r.k <= today().slice(0, 7)).reverse();
@@ -63,6 +68,26 @@ export default function Dashboard() {
         <Stat label="Soon expiring" value={<Link to="/expiry">{expiring.length}</Link>} sub={`${expired.length} already expired`} tone="amber" icon={CalendarClock} />
         <Stat label="Low stock" value={<Link to="/inventory">{lowStock.length}</Link>} sub="at or below reorder level" tone="violet" icon={PackageX} />
       </div>
+
+      {(features.weather !== false || (features.promos !== false && promote.length > 0)) && (
+        <div className="grid2">
+          {features.promos !== false && promote.length > 0 && (
+            <div className="card">
+              <h3><Megaphone size={17} />Promote today</h3>
+              <div className="promo-list">
+                {promote.map((x) => (
+                  <div key={x.p.id} className="promo-row">
+                    <div className="grow"><strong>{x.p.name}</strong><small className="muted">{x.staff} · {x.note}</small></div>
+                    <span className="num">{fmt(x.p.price)}</span>
+                    <a className="icon-btn" title="Share on WhatsApp" target="_blank" rel="noreferrer" href={whatsappLink('', shareText(x.p, db.settings, fmt))}><Share2 size={16} /></a>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {features.weather !== false && <WeatherCard compact />}
+        </div>
+      )}
 
       <div className="grid2">
         <div className="card">

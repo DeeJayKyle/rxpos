@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, useCallback, useMemo, u
 import { idbGet, idbSet, idbDel, idbKeys } from './idb.js';
 import { createSync } from './sync.js';
 import { featureSet, permissionsOf } from './access.js';
+import { platformName } from './platform.js';
 
 const SESSION_KEY = 'pharmapos-session';
 
@@ -9,7 +10,7 @@ const SESSION_KEY = 'pharmapos-session';
 export const TABLES = [
   'products', 'formulations', 'customers', 'suppliers', 'sales', 'proformas', 'purchases', 'movements',
   'prescriptions', 'expenses', 'expenseCategories', 'banks', 'bankTx', 'loans', 'payments', 'users',
-  'batches', 'branches', 'transfers', 'audit', 'purchaseOrders', 'roles', 'messages', 'shifts', 'license',
+  'batches', 'branches', 'transfers', 'audit', 'purchaseOrders', 'roles', 'messages', 'shifts', 'license', 'events', 'tempLogs',
 ];
 // What is persisted on the device, one IndexedDB key per part
 const PARTS = [...TABLES, 'settings', '_tomb'];
@@ -233,8 +234,6 @@ export function StoreProvider({ children }) {
         if (parts.some((p) => p !== undefined)) saved = Object.fromEntries(PARTS.map((k, i) => [k, parts[i]]).filter(([, v]) => v !== undefined));
         else saved = await idbGet('db'); // data saved by version 1.0
       } catch (e) { console.error(e); }
-      // A preloaded edition (built with RXPOS_SEED) starts from the pharmacy's own data instead of an empty store
-      if (!saved && window.__RXPOS_SEED__) { const { _meta, ...seed } = window.__RXPOS_SEED__; saved = seed; } // eslint-disable-line no-unused-vars
       const base = blankDb();
       const loaded = saved ? { ...base, ...saved, settings: { ...base.settings, ...saved.settings } } : base;
       if (!loaded.branches.length) loaded.branches = base.branches;
@@ -281,7 +280,10 @@ export function StoreProvider({ children }) {
     idbSet('sync', cfg).catch(console.error);
   }, []);
 
-  const update = useCallback((fn) => setDb((prev) => { const d = draft(prev); fn(d); return d; }), []);
+  // Every local change is pushed to the cloud a moment later (debounced), so other devices see it within seconds
+  const pushTimer = useRef(null);
+  const queuePush = useCallback(() => { clearTimeout(pushTimer.current); pushTimer.current = setTimeout(() => syncRef.current?.run(), 1500); }, []);
+  const update = useCallback((fn) => { setDb((prev) => { const d = draft(prev); fn(d); return d; }); queuePush(); }, [queuePush]);
   const upsert = useCallback((table, rec) => update((d) => { put(d, table, rec); }), [update]);
   const remove = useCallback((table, id) => update((d) => { del(d, table, id); }), [update]);
   const saveSettings = useCallback((s) => update((d) => { d.settings = { ...s, updatedAt: now() }; }), [update]);
@@ -294,7 +296,7 @@ export function StoreProvider({ children }) {
       if (u) sessionStorage.setItem(SESSION_KEY, JSON.stringify(u));
       else sessionStorage.removeItem(SESSION_KEY);
     } catch {}
-    if (u && !user) update((d) => audit(d, u, 'Signed in', navigator.userAgent.includes('Electron') ? 'Desktop app' : window.Capacitor ? 'Android app' : 'Browser', branchId));
+    if (u && !user) update((d) => audit(d, u, 'Signed in', platformName, branchId));
     setUserState(u);
   }, [user, update, branchId]);
 
@@ -315,6 +317,24 @@ export function StoreProvider({ children }) {
     return syncRef.current.stop;
   }, [hasCfg, syncCfg?.url, syncCfg?.key, saveSyncCfg]);
   const syncNow = useCallback(() => syncRef.current?.run(), []);
+
+  /**
+   * Link this device to a pharmacy after a cloud sign-in. If the device held another pharmacy's data (or old
+   * device-only data), that is kept aside as a backup on the device and the store starts clean, then downloads.
+   */
+  const linkPharmacy = useCallback(async ({ url, token, account, tenant, slug, pharmacy }) => {
+    const cur = cfgRef.current || {};
+    const other = cur.tenant ? cur.tenant !== tenant : (dbRef.current?.users.length || 0) > 0;
+    if (other) {
+      try { await idbSet('backup:' + (cur.tenant || 'device') + ':' + now().slice(0, 19), dbRef.current); } catch (e) { console.error(e); }
+      for (const k of await idbKeys().catch(() => [])) if (String(k).startsWith('snap:')) await idbDel(k).catch(() => {});
+      setDb(blankDb());
+    }
+    const next = { ...cur, url, key: token, account, tenant, slug, pharmacy, ...(other || cur.url !== url ? { cursor: 0, pushedAt: '', lastSync: '' } : {}) };
+    saveSyncCfg(next);
+    cfgRef.current = next; // the sync engine restarts with the new sign-in and downloads straight away
+    return other || !cur.lastSync;
+  }, [saveSyncCfg]);
 
   // ---------- derived stock: per branch, per batch ----------
   const stockIndex = useMemo(() => {
@@ -375,7 +395,7 @@ export function StoreProvider({ children }) {
 
   return (
     <Ctx.Provider value={{ db, setDb, update, upsert, remove, saveSettings, user, setUser, fmt, products, stockIndex, batchesOf,
-      branchId, branch, setBranchId, syncCfg, saveSyncCfg, syncStatus, syncNow, features, can }}>
+      branchId, branch, setBranchId, syncCfg, saveSyncCfg, syncStatus, syncNow, linkPharmacy, features, can }}>
       {children}
     </Ctx.Provider>
   );

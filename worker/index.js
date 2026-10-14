@@ -6,27 +6,43 @@
 //   /api/config            which integrations are switched on for this pharmacy
 //   /api/pay/*             MTN MoMo + Airtel Money "request to pay" with THIS pharmacy's own merchant keys
 //   /api/sms               SMS via Africa's Talking
-//   /api/owner/*           owner console (vendor): create/suspend client pharmacies, features, keys, data reset
+//   /api/owner/*           owner console (vendor, web only): create pharmacies with their admin, web address, branches,
+//                          features and keys; open, edit, export, import, reset or delete any pharmacy's data
+//   /api/pharmacy/:slug    public name of the pharmacy at a web address (rxpos.pages.dev/<slug>)
+//   /api/calendar/...ics   private calendar feed (events, refills due, expiring stock) for Google/Outlook/phones
 // Everything else is the web app, served from ./dist.
 //
 // Secrets: SYNC_KEY (the original "main" pharmacy), OWNER_KEY (owner console), optional BREVO_API_KEY + BREVO_SENDER_EMAIL
 // (+ BREVO_SENDER_NAME) for password emails, and payment/SMS keys for the main pharmacy (MTN_*, AIRTEL_*, AT_*).
 // Other pharmacies' payment/SMS keys are stored per pharmacy (owner console → client → Payments & SMS).
-const PAGE = 1000;
+const PAGE = 2500;
 const MAX_PUSH = 500;
 const TOKEN_DAYS = 30;
 const MAIN = 'main';
 // Tables only some roles may change; the server enforces it whatever a device sends
-const GUARDED = { users: 'users.manage', roles: 'users.manage', settings: 'settings.manage', branches: 'settings.manage' };
-const SERVER_ONLY = new Set(['license']);
+const GUARDED = { users: 'users.manage', roles: 'users.manage', settings: 'settings.manage' };
+// Only the RxPOS owner (owner console) may change these: the licence/features and the pharmacy's branches
+const SERVER_ONLY = new Set(['license', 'branches']);
+
+const existingRec = async (db, tenant, t, id) => {
+  const row = await db.prepare('SELECT rec FROM records WHERE tenant = ?1 AND k = ?2 AND deleted = 0').bind(tenant, t + '|' + id).first();
+  return row ? JSON.parse(row.rec || 'null') : null;
+};
 
 /** Anyone may update their own user record (e.g. change their password), but never their role, status, branch or email. */
 async function ownProfileEdit(db, tenant, who, ch) {
   if (!who.uid || String(ch.id) !== String(who.uid) || ch.deleted || !ch.rec) return false;
-  const row = await db.prepare('SELECT rec FROM records WHERE tenant = ?1 AND k = ?2 AND deleted = 0').bind(tenant, 'users|' + ch.id).first();
-  if (!row) return false;
-  const old = JSON.parse(row.rec || '{}');
+  const old = await existingRec(db, tenant, 'users', ch.id);
+  if (!old) return false;
   return ['role', 'disabled', 'branchId', 'email'].every((f) => (old[f] ?? null) === (ch.rec[f] ?? null));
+}
+
+/** Administrator accounts are created only by the owner: a pharmacy may not add, promote to, or delete an admin. */
+async function adminChangeRefused(db, tenant, ch) {
+  const old = await existingRec(db, tenant, 'users', ch.id);
+  if (ch.deleted) return old?.role === 'admin';
+  if (ch.rec?.role !== 'admin') return false;
+  return old?.role !== 'admin';
 }
 
 let schemaReady = null;
@@ -40,7 +56,14 @@ function ensureSchema(db) {
       status TEXT NOT NULL DEFAULT 'active', secrets TEXT NOT NULL DEFAULT '{}', notes TEXT, created_at TEXT NOT NULL)`),
     db.prepare('CREATE TABLE IF NOT EXISTS login_fail (email TEXT PRIMARY KEY, n INTEGER NOT NULL, until INTEGER NOT NULL DEFAULT 0)'),
     db.prepare('CREATE TABLE IF NOT EXISTS reset_codes (k TEXT PRIMARY KEY, code_hash TEXT NOT NULL, expires INTEGER NOT NULL, tries INTEGER NOT NULL DEFAULT 0, sent INTEGER NOT NULL DEFAULT 0, window_start INTEGER NOT NULL DEFAULT 0)'),
-  ]).catch((e) => { schemaReady = null; throw e; });
+  ]).then(async () => {
+    // v1.4: every pharmacy gets a web address /<slug> (older databases get the column added once)
+    await db.prepare('ALTER TABLE tenants ADD COLUMN slug TEXT').run().catch(() => {});
+    await db.prepare('CREATE UNIQUE INDEX IF NOT EXISTS tenants_slug ON tenants(slug)').run();
+    // Fast MAX(seq) for every write, and fast sign-in lookups across pharmacies (keeps D1 reads tiny)
+    await db.prepare('CREATE INDEX IF NOT EXISTS records_gseq ON records(seq)').run();
+    await db.prepare('CREATE INDEX IF NOT EXISTS records_type ON records(t, deleted)').run();
+  }).catch((e) => { schemaReady = null; throw e; });
   return schemaReady;
 }
 
@@ -88,7 +111,8 @@ async function verifyPassword(u, pw) {
 
 // ---------- tenants ----------
 const DEFAULT_FEATURES = { branches: true, wholesale: true, proformas: true, prescriptions: true, finance: true, reports: true, reminders: true,
-  chat: true, labels: true, import: true, reorder: true, transfers: true, momo: true, drugInfo: true, shifts: true };
+  chat: true, labels: true, import: true, reorder: true, transfers: true, momo: true, drugInfo: true, shifts: true,
+  promos: true, hourly: true, calendar: true, weather: true };
 
 /** The original single-pharmacy deployment becomes tenant "main", keyed by the SYNC_KEY secret. */
 async function ensureMainTenant(env) {
@@ -99,6 +123,11 @@ async function ensureMainTenant(env) {
   env.__mainChecked = true;
 }
 const tenantById = (env, id) => env.DB.prepare('SELECT * FROM tenants WHERE id = ?1').bind(id).first();
+/** A pharmacy by its web address (slug) or its code */
+const tenantByCode = (env, code) => env.DB.prepare('SELECT * FROM tenants WHERE slug = ?1 OR id = ?1 ORDER BY slug = ?1 DESC LIMIT 1').bind(code).first();
+const slugify = (s) => String(s || '').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
+const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/;
+const RESERVED = new Set(['api', 'owner', 'assets', 'index', 'sw', 'manifest', 'favicon', 'admin', 'login', 'app', 'www']);
 
 /** → { tenant, role, name, uid } for a valid pharmacy sync key or staff token; null otherwise */
 async function authenticate(req, env) {
@@ -110,7 +139,7 @@ async function authenticate(req, env) {
     if (p) who = { tenant: p.tn || MAIN, role: p.role, name: p.name, uid: p.sub };
   } else {
     const t = await env.DB.prepare('SELECT id FROM tenants WHERE key_hash = ?1').bind(await sha256(got)).first();
-    if (t) who = { tenant: t.id, role: 'admin', name: 'sync key' };
+    if (t) who = { tenant: t.id, role: 'admin', name: 'sync key', viaKey: true };
   }
   if (!who) return null;
   const t = await tenantById(env, who.tenant);
@@ -150,7 +179,8 @@ async function findUsers(env, email, tenant) {
 
 async function pickUser(env, body) {
   const email = String(body.email || '').trim().toLowerCase().slice(0, 200);
-  const tenant = body.tenant ? String(body.tenant).trim().toLowerCase() : '';
+  const code = body.tenant ? String(body.tenant).trim().toLowerCase() : '';
+  const tenant = code ? (await tenantByCode(env, code))?.id || code : '';
   const found = await findUsers(env, email, tenant);
   if (found.length > 1) throw httpError(409, 'This email is used at more than one pharmacy. Enter your pharmacy code to continue.');
   return { email, tenant: found[0]?.tenant || tenant || MAIN, match: found[0] };
@@ -175,7 +205,7 @@ async function login(env, body) {
   if (fail) await env.DB.prepare('DELETE FROM login_fail WHERE email = ?1').bind(lockKey).run();
   const u = match.u;
   const token = await signToken(env, { sub: u.id, tn: match.tenant, name: u.name, role: u.role, exp: Date.now() + TOKEN_DAYS * 864e5 });
-  return json({ token, tenant: match.tenant, pharmacy: t.name, user: { id: u.id, name: u.name, email: u.email, role: u.role } });
+  return json({ token, tenant: match.tenant, slug: t.slug || match.tenant, pharmacy: t.name, user: { id: u.id, name: u.name, email: u.email, role: u.role } });
 }
 
 const mask = (s, keep = 3) => (s.length <= keep ? '***' : s.slice(0, keep) + '***' + s.slice(-2));
@@ -255,11 +285,12 @@ async function sync(env, body, who) {
   let refused = 0;
   for (const ch of changes) {
     if (!ch || typeof ch.t !== 'string' || ch.id == null || typeof ch.at !== 'string') continue;
-    if (SERVER_ONLY.has(ch.t)) { refused++; continue; }
+    if (SERVER_ONLY.has(ch.t) && !who.viaKey) { refused++; continue; }
     const perm = GUARDED[ch.t];
-    if (perm) {
+    if (perm && !who.viaKey) {
       allowed[perm] ??= await roleCan(env, tenant, who.role, perm);
       if (!allowed[perm] && !(ch.t === 'users' && (await ownProfileEdit(db, tenant, who, ch)))) { refused++; continue; }
+      if (ch.t === 'users' && (await adminChangeRefused(db, tenant, ch))) { refused++; continue; }
     }
     const id = String(ch.id);
     stmts.push(upsert.bind(tenant, ch.t + '|' + id, ch.t, id, ch.deleted ? null : JSON.stringify(ch.rec ?? null), ch.deleted ? 1 : 0, ch.at, deviceId));
@@ -273,7 +304,7 @@ async function sync(env, body, who) {
     .all();
   const more = results.length > PAGE;
   const page = more ? results.slice(0, PAGE) : results;
-  const cursor = more ? page[page.length - 1].seq : ((await db.prepare('SELECT MAX(seq) m FROM records').first('m')) || 0);
+  const cursor = more ? page[page.length - 1].seq : Math.max((await db.prepare('SELECT MAX(seq) m FROM records WHERE tenant = ?1').bind(tenant).first('m')) || 0, Number(since) || 0);
   // Build the response by hand so records stored as JSON text are not parsed and re-serialised (keeps CPU low)
   const items = page.map((r) => `{"t":${JSON.stringify(r.t)},"id":${JSON.stringify(r.id)},"at":${JSON.stringify(r.at)},"deleted":${r.deleted ? 'true' : 'false'},"rec":${r.rec ?? 'null'}}`);
   return json(`{"changes":[${items.join(',')}],"cursor":${cursor},"more":${more},"applied":${applied},"refused":${refused},"tenant":${JSON.stringify(tenant)}}`);
@@ -397,80 +428,280 @@ async function sendSms(env, { to, message }) {
 }
 
 // ---------- owner console (vendor) ----------
+// Only the RxPOS owner (OWNER_KEY) creates pharmacies, their administrators and branches, sets their features and
+// web address, and can open, edit, export, import, reset or delete any pharmacy's data.
 const SECRET_FIELDS = ['MTN_SUBSCRIPTION_KEY', 'MTN_API_USER', 'MTN_API_KEY', 'MTN_ENV', 'MTN_TARGET', 'AIRTEL_CLIENT_ID', 'AIRTEL_CLIENT_SECRET', 'AIRTEL_ENV', 'AT_USERNAME', 'AT_API_KEY', 'AT_SENDER_ID'];
-const KEEP_ON_RESET = "('products','formulations','expenseCategories','license','roles')";
+const KEEP_ON_RESET = "('products','formulations','expenseCategories','license','roles','branches','users','settings')";
+const TABLE_RE = /^[A-Za-z]{2,30}$/;
+const publicUser = ({ hash, salt, algo, iter, ...u }) => u; // eslint-disable-line no-unused-vars
+
+async function passwordFields(pw) {
+  if (String(pw).length < 8) throw httpError(400, 'Use a password of at least 8 characters.');
+  const salt = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(16))));
+  return { algo: 'pbkdf2', salt, iter: 100000, hash: await pbkdf2(String(pw), salt) };
+}
+
+async function checkSlug(env, slug, exceptId = '') {
+  if (!SLUG_RE.test(slug) || RESERVED.has(slug)) throw httpError(400, 'Web address: 2-40 lowercase letters, numbers or dashes, e.g. "citycare-ntinda".');
+  const clash = await env.DB.prepare('SELECT id FROM tenants WHERE (slug = ?1 OR id = ?1) AND id != ?2').bind(slug, exceptId).first();
+  if (clash) throw httpError(409, 'That web address is already used by another pharmacy.');
+  return slug;
+}
+
+/** Write many records as the server in one batch (owner edits and imports reach devices at their next sync). */
+async function serverWriteMany(env, tenant, items) {
+  const db = env.DB;
+  const stmt = db.prepare(`INSERT INTO records (tenant, k, t, id, rec, deleted, at, origin, seq) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'server', (SELECT COALESCE(MAX(seq), 0) + 1 FROM records))
+    ON CONFLICT(tenant, k) DO UPDATE SET rec = excluded.rec, deleted = excluded.deleted, at = excluded.at, origin = 'server', seq = excluded.seq`);
+  const now = new Date().toISOString();
+  const stmts = items.map(({ t, id, rec, deleted }) => {
+    const at = now;
+    return stmt.bind(tenant, t + '|' + id, t, String(id), deleted ? null : JSON.stringify({ ...rec, id: String(id), updatedAt: at }), deleted ? 1 : 0, at);
+  });
+  for (let i = 0; i < stmts.length; i += 100) await db.batch(stmts.slice(i, i + 100));
+  return stmts.length;
+}
+
+async function tenantUsers(env, tenant) {
+  const { results } = await env.DB.prepare("SELECT rec FROM records WHERE tenant = ?1 AND t = 'users' AND deleted = 0").bind(tenant).all();
+  return results.map((r) => JSON.parse(r.rec)).filter(Boolean);
+}
 
 async function owner(env, req, url, body) {
   if (!env.OWNER_KEY || env.OWNER_KEY.length < 20) throw httpError(503, 'The owner console is not enabled (OWNER_KEY secret missing).');
   if (!safeEqual((req.headers.get('Authorization') || '').replace(/^Bearer /, ''), env.OWNER_KEY)) throw httpError(401, 'Wrong owner key.');
   const db = env.DB;
-  const parts = url.pathname.split('/').slice(3); // /api/owner/<...>
+  const parts = url.pathname.split('/').slice(3).map(decodeURIComponent); // /api/owner/<...>
   const view = async (t) => {
-    const s = await db.prepare("SELECT COUNT(*) n, MAX(at) last, SUM(t = 'products' AND deleted = 0) products, SUM(t = 'users' AND deleted = 0) users, SUM(t = 'sales' AND deleted = 0) sales FROM records WHERE tenant = ?1").bind(t.id).first();
+    const s = await db.prepare("SELECT COUNT(*) n, MAX(at) last, SUM(t = 'products' AND deleted = 0) products, SUM(t = 'users' AND deleted = 0) users, SUM(t = 'sales' AND deleted = 0) sales, SUM(t = 'branches' AND deleted = 0) branches FROM records WHERE tenant = ?1").bind(t.id).first();
     const secrets = JSON.parse(t.secrets || '{}');
-    return { id: t.id, name: t.name, status: t.status, notes: t.notes || '', created: t.created_at, features: { ...DEFAULT_FEATURES, ...JSON.parse(t.features || '{}') },
-      stats: { records: s.n || 0, products: s.products || 0, users: s.users || 0, sales: s.sales || 0, lastActivity: s.last || null },
+    return { id: t.id, slug: t.slug || t.id, name: t.name, status: t.status, notes: t.notes || '', created: t.created_at, features: { ...DEFAULT_FEATURES, ...JSON.parse(t.features || '{}') },
+      stats: { records: s.n || 0, products: s.products || 0, users: s.users || 0, sales: s.sales || 0, branches: s.branches || 0, lastActivity: s.last || null },
       payments: { mtn: t.id === MAIN ? mtn.enabled(env) : mtn.enabled(secrets), airtel: t.id === MAIN ? airtel.enabled(env) : airtel.enabled(secrets), sms: t.id === MAIN ? !!env.AT_API_KEY : !!secrets.AT_API_KEY } };
   };
 
+  // ----- list & create -----
   if (parts[0] === 'tenants' && !parts[1] && req.method === 'GET') {
     const { results } = await db.prepare('SELECT * FROM tenants ORDER BY created_at').all();
     return json({ tenants: await Promise.all(results.map(view)) });
   }
   if (parts[0] === 'tenants' && !parts[1] && req.method === 'POST') {
-    const id = String(body.id || '').trim().toLowerCase();
-    if (!/^[a-z0-9][a-z0-9-]{1,23}$/.test(id)) return json({ error: 'Pharmacy code: 2-24 lowercase letters, numbers or dashes (e.g. "jbm-kampala").' }, 400);
-    if (await tenantById(env, id)) return json({ error: 'That pharmacy code is already used.' }, 409);
+    const name = String(body.name || '').trim().slice(0, 80);
+    if (!name) return json({ error: 'Enter the pharmacy name.' }, 400);
+    const slug = await checkSlug(env, String(body.slug || slugify(name)).trim().toLowerCase());
+    if (await tenantById(env, slug)) return json({ error: 'That web address is already used.' }, 409);
+    const admin = body.admin || {};
+    const email = String(admin.email || '').trim().toLowerCase();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return json({ error: "Enter the administrator's email." }, 400);
+    const pw = await passwordFields(admin.password || '');
     const key = randomKey();
     const features = JSON.stringify({ ...DEFAULT_FEATURES, ...(body.features || {}) });
-    await db.prepare('INSERT INTO tenants (id, name, key_hash, features, notes, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)')
-      .bind(id, String(body.name || id).slice(0, 80), await sha256(key), features, String(body.notes || '').slice(0, 500), new Date().toISOString()).run();
-    const t = await tenantById(env, id);
+    await db.prepare('INSERT INTO tenants (id, name, key_hash, features, notes, created_at, slug) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?1)')
+      .bind(slug, name, await sha256(key), features, String(body.notes || '').slice(0, 500), new Date().toISOString()).run();
+    const t = await tenantById(env, slug);
     await writeLicense(env, t);
-    if (body.copyCatalogFrom) {
-      // Give the new pharmacy the standard medicine list (no stock, no prices changed)
-      await db.prepare(`INSERT INTO records (tenant, k, t, id, rec, deleted, at, origin, seq)
+    const branches = [{ id: 'main', name: String(body.mainBranch || 'Main branch').slice(0, 60), address: String(body.address || '').slice(0, 120) },
+      ...(Array.isArray(body.branches) ? body.branches : []).filter((b) => b?.name).slice(0, 20).map((b, i) => ({ id: 'br-' + slugify(b.name).slice(0, 20) + '-' + i, name: String(b.name).slice(0, 60), address: String(b.address || '').slice(0, 120) }))];
+    const adminId = 'u-' + randomKey(10);
+    await serverWriteMany(env, slug, [
+      ...branches.map((b) => ({ t: 'branches', id: b.id, rec: b })),
+      { t: 'settings', id: 'settings', rec: { name, address: String(body.address || ''), phone: String(body.phone || ''), currency: 'UGX', decimals: 0 } },
+      { t: 'users', id: adminId, rec: { name: String(admin.name || 'Administrator').slice(0, 80), email, phone: String(admin.phone || ''), role: 'admin', ...pw, mustChangePassword: !!admin.mustChange } },
+      { t: 'audit', id: crypto.randomUUID(), rec: { date: new Date().toISOString(), user: 'RxPOS owner', action: 'Pharmacy created', details: `${name} · admin ${email}`, branchId: 'main' } },
+    ]);
+    if (body.catalog !== false) {
+      // Start with the standard medicine list from the main pharmacy (no stock, standard prices)
+      await db.prepare(`INSERT OR IGNORE INTO records (tenant, k, t, id, rec, deleted, at, origin, seq)
         SELECT ?1, k, t, id, rec, 0, at, 'server', seq FROM records WHERE tenant = ?2 AND deleted = 0 AND t IN ('products','formulations','expenseCategories') AND (t != 'products' OR id LIKE 'cat-%')`)
-        .bind(id, String(body.copyCatalogFrom)).run();
+        .bind(slug, MAIN).run();
     }
-    return json({ tenant: await view(t), syncKey: key, note: 'Give this sync key to the pharmacy owner. It is shown only once.' });
+    return json({ tenant: await view(t), syncKey: key });
   }
-  const t = parts[1] && (await tenantById(env, parts[1]));
-  if (!t) return json({ error: 'No such pharmacy.' }, 404);
 
-  if (parts[2] === undefined && req.method === 'POST') {
-    const name = body.name != null ? String(body.name).slice(0, 80) : t.name;
+  const t = parts[1] && (await tenantById(env, parts[1]));
+  if (parts[0] !== 'tenants' || !t) return json({ error: 'No such pharmacy.' }, 404);
+  const sub = parts[2];
+
+  // ----- details -----
+  if (!sub && req.method === 'GET') {
+    const users = (await tenantUsers(env, t.id)).map(publicUser);
+    const { results: br } = await db.prepare("SELECT rec FROM records WHERE tenant = ?1 AND t = 'branches' AND deleted = 0").bind(t.id).all();
+    const { results: tables } = await db.prepare('SELECT t, COUNT(*) n FROM records WHERE tenant = ?1 AND deleted = 0 GROUP BY t ORDER BY t').bind(t.id).all();
+    const settings = await existingRec(db, t.id, 'settings', 'settings');
+    return json({ tenant: await view(t), users, branches: br.map((r) => JSON.parse(r.rec)), tables, settings });
+  }
+  if (!sub && req.method === 'POST') {
+    const name = body.name != null ? String(body.name).trim().slice(0, 80) || t.name : t.name;
+    const slug = body.slug != null && body.slug !== (t.slug || t.id) ? await checkSlug(env, String(body.slug).trim().toLowerCase(), t.id) : t.slug || t.id;
     const status = ['active', 'suspended'].includes(body.status) ? body.status : t.status;
     const features = body.features ? JSON.stringify({ ...JSON.parse(t.features || '{}'), ...body.features }) : t.features;
     const notes = body.notes != null ? String(body.notes).slice(0, 500) : t.notes;
-    await db.prepare('UPDATE tenants SET name = ?2, status = ?3, features = ?4, notes = ?5 WHERE id = ?1').bind(t.id, name, status, features, notes).run();
+    await db.prepare('UPDATE tenants SET name = ?2, status = ?3, features = ?4, notes = ?5, slug = ?6 WHERE id = ?1').bind(t.id, name, status, features, notes, slug).run();
     const u = await tenantById(env, t.id);
     await writeLicense(env, u);
+    if (name !== t.name) {
+      const s = (await existingRec(db, t.id, 'settings', 'settings')) || {};
+      await serverWriteMany(env, t.id, [{ t: 'settings', id: 'settings', rec: { ...s, name } }]);
+    }
     return json({ tenant: await view(u) });
   }
-  if (parts[2] === 'rotate-key' && req.method === 'POST') {
+  if (sub === 'delete' && req.method === 'POST') {
+    if (t.id === MAIN) return json({ error: 'The main pharmacy cannot be deleted. Use "Reset data" instead.' }, 400);
+    if (body.confirm !== (t.slug || t.id)) return json({ error: `Type the web address "${t.slug || t.id}" to confirm.` }, 400);
+    const r = await db.prepare('DELETE FROM records WHERE tenant = ?1').bind(t.id).run();
+    await db.batch([
+      db.prepare('DELETE FROM tenants WHERE id = ?1').bind(t.id),
+      db.prepare("DELETE FROM login_fail WHERE email LIKE ?1 || ':%'").bind(t.id),
+      db.prepare("DELETE FROM reset_codes WHERE k LIKE ?1 || ':%'").bind(t.id),
+    ]);
+    return json({ ok: true, deleted: r.meta.changes || 0 });
+  }
+  if (sub === 'rotate-key' && req.method === 'POST') {
     if (t.id === MAIN) return json({ error: 'The main pharmacy key is the SYNC_KEY secret; change it with "wrangler secret put SYNC_KEY".' }, 400);
     const key = randomKey();
     await db.prepare('UPDATE tenants SET key_hash = ?2 WHERE id = ?1').bind(t.id, await sha256(key)).run();
-    return json({ syncKey: key, note: 'The old key stops working now. Devices must reconnect with this key or with staff accounts.' });
+    return json({ syncKey: key, note: 'The old key stops working now. Staff signed in with their own accounts are not affected.' });
   }
-  if (parts[2] === 'secrets' && req.method === 'POST') {
+  if (sub === 'secrets' && req.method === 'POST') {
     if (t.id === MAIN) return json({ error: 'The main pharmacy uses the Cloudflare secrets (deploy\\setup-mobile-money.ps1).' }, 400);
     const cur = JSON.parse(t.secrets || '{}');
     for (const f of SECRET_FIELDS) if (body[f] !== undefined) { if (body[f] === '') delete cur[f]; else cur[f] = String(body[f]).trim(); }
     await db.prepare('UPDATE tenants SET secrets = ?2 WHERE id = ?1').bind(t.id, JSON.stringify(cur)).run();
     return json({ tenant: await view(await tenantById(env, t.id)) });
   }
-  if (parts[2] === 'reset' && req.method === 'POST') {
-    if (body.confirm !== t.id) return json({ error: 'Type the pharmacy code to confirm.' }, 400);
+  if (sub === 'reset' && req.method === 'POST') {
+    if (body.confirm !== (t.slug || t.id)) return json({ error: `Type the web address "${t.slug || t.id}" to confirm.` }, 400);
     const now = new Date().toISOString();
-    const keep = body.keepMedicines === false ? "('license','roles')" : KEEP_ON_RESET;
+    const keep = body.keepMedicines === false ? "('license','roles','branches','users','settings')" : KEEP_ON_RESET;
     const m = (await db.prepare('SELECT COALESCE(MAX(seq), 0) m FROM records').first('m')) || 0;
     const r = await db.prepare(`UPDATE records SET deleted = 1, rec = NULL, at = ?2, origin = 'reset', seq = seq + ?3 WHERE tenant = ?1 AND deleted = 0 AND t NOT IN ${keep}
-      AND NOT (t = 'customers' AND id = 'walk-in') AND NOT (t = 'banks' AND id = 'cash-drawer') AND NOT (t = 'branches' AND id = 'main')`).bind(t.id, now, m).run();
+      AND NOT (t = 'customers' AND id = 'walk-in') AND NOT (t = 'banks' AND id = 'cash-drawer')`).bind(t.id, now, m).run();
     return json({ ok: true, cleared: r.meta.changes || 0 });
   }
+
+  // ----- staff accounts (the owner creates each pharmacy's administrators) -----
+  if (sub === 'users' && req.method === 'POST' && !parts[3]) {
+    const u = body.user || {};
+    const email = String(u.email || '').trim().toLowerCase();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return json({ error: 'Enter a valid email.' }, 400);
+    const users = await tenantUsers(env, t.id);
+    const id = String(u.id || 'u-' + randomKey(10));
+    if (users.some((x) => x.email === email && x.id !== id)) return json({ error: 'Another user at this pharmacy has that email.' }, 409);
+    const old = users.find((x) => x.id === id) || {};
+    if (!old.id && !u.password) return json({ error: 'Set a password for the new user.' }, 400);
+    const rec = { ...old, name: String(u.name || old.name || '').slice(0, 80), email, phone: String(u.phone ?? old.phone ?? ''), role: String(u.role || old.role || 'cashier'),
+      branchId: u.branchId ?? old.branchId ?? '', disabled: !!u.disabled, ...(u.password ? { ...(await passwordFields(u.password)), mustChangePassword: !!u.mustChange } : {}) };
+    await serverWriteMany(env, t.id, [{ t: 'users', id, rec }, { t: 'audit', id: crypto.randomUUID(), rec: { date: new Date().toISOString(), user: 'RxPOS owner', action: old.id ? 'User updated by owner' : 'User created by owner', details: `${rec.name} (${rec.role})`, branchId: 'main' } }]);
+    return json({ user: publicUser({ ...rec, id }) });
+  }
+  if (sub === 'users' && parts[4] === 'delete' && req.method === 'POST') {
+    await serverWriteMany(env, t.id, [{ t: 'users', id: parts[3], deleted: true }]);
+    return json({ ok: true });
+  }
+
+  // ----- branches -----
+  if (sub === 'branches' && req.method === 'POST' && !parts[3]) {
+    const b = body.branch || {};
+    if (!String(b.name || '').trim()) return json({ error: 'Enter the branch name.' }, 400);
+    const id = String(b.id || 'br-' + slugify(b.name).slice(0, 20) + '-' + randomKey(4).toLowerCase());
+    const old = (await existingRec(db, t.id, 'branches', id)) || {};
+    const rec = { ...old, name: String(b.name).trim().slice(0, 60), address: String(b.address ?? old.address ?? '').slice(0, 120), phone: String(b.phone ?? old.phone ?? ''), manager: String(b.manager ?? old.manager ?? '') };
+    await serverWriteMany(env, t.id, [{ t: 'branches', id, rec }]);
+    return json({ branch: { ...rec, id } });
+  }
+  if (sub === 'branches' && parts[4] === 'delete' && req.method === 'POST') {
+    if (parts[3] === 'main') return json({ error: 'The main branch cannot be deleted.' }, 400);
+    await serverWriteMany(env, t.id, [{ t: 'branches', id: parts[3], deleted: true }]);
+    return json({ ok: true });
+  }
+
+  // ----- data browser: see and change any record -----
+  if (sub === 'records' && req.method === 'GET') {
+    const table = url.searchParams.get('t') || '';
+    if (!TABLE_RE.test(table)) return json({ error: 'Choose a table.' }, 400);
+    const q = (url.searchParams.get('q') || '').trim().slice(0, 80);
+    const offset = Math.max(0, Number(url.searchParams.get('offset')) || 0);
+    const where = 'tenant = ?1 AND t = ?2 AND deleted = 0' + (q ? ' AND rec LIKE ?3' : '');
+    const args = q ? [t.id, table, '%' + q + '%'] : [t.id, table];
+    const total = await db.prepare(`SELECT COUNT(*) n FROM records WHERE ${where}`).bind(...args).first('n');
+    const { results } = await db.prepare(`SELECT id, at, rec FROM records WHERE ${where} ORDER BY at DESC LIMIT 50 OFFSET ${offset}`).bind(...args).all();
+    const rows = results.map((r) => `{"id":${JSON.stringify(r.id)},"at":${JSON.stringify(r.at)},"rec":${r.rec ?? 'null'}}`);
+    return json(`{"total":${total || 0},"rows":[${rows.join(',')}]}`);
+  }
+  if (sub === 'records' && req.method === 'POST') {
+    const items = (Array.isArray(body.records) ? body.records : [body]).filter((x) => x && TABLE_RE.test(x.t || '') && x.id != null && x.t !== 'license');
+    if (!items.length) return json({ error: 'Nothing to save.' }, 400);
+    if (items.length > 500) return json({ error: 'Send at most 500 records at a time.' }, 413);
+    for (const x of items) if (x.t === 'users' && x.rec?.password) { Object.assign(x.rec, await passwordFields(x.rec.password)); delete x.rec.password; }
+    const n = await serverWriteMany(env, t.id, items.map((x) => ({ t: x.t, id: x.id, rec: x.rec || {}, deleted: !!x.deleted })));
+    return json({ ok: true, written: n });
+  }
+  if (sub === 'export' && req.method === 'GET') {
+    const { results } = await db.prepare('SELECT t, rec FROM records WHERE tenant = ?1 AND deleted = 0 ORDER BY t').bind(t.id).all();
+    const groups = {};
+    for (const r of results) (groups[r.t] ??= []).push(r.rec);
+    const settings = groups.settings?.[0] || '{}';
+    delete groups.settings;
+    const out = Object.entries(groups).map(([k, v]) => `${JSON.stringify(k)}:[${v.join(',')}]`);
+    return json(`{${out.join(',')}${out.length ? ',' : ''}"settings":${settings},"_meta":{"pharmacy":${JSON.stringify(t.name)},"exportedAt":"${new Date().toISOString()}"}}`);
+  }
   return json({ error: 'Not found' }, 404);
+}
+
+// ---------- calendar feed (subscribe in Google Calendar, Outlook or the phone's calendar) ----------
+async function calendarSig(env, tenant) {
+  const sig = await crypto.subtle.sign('HMAC', await hmacKey(env), te.encode('calendar:' + tenant));
+  return b64url(sig).slice(0, 24);
+}
+const icsText = (s) => String(s || '').replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+const icsDate = (d) => d.replace(/-/g, '');
+const addDays = (date, n) => new Date(new Date(date).getTime() + n * 864e5).toISOString().slice(0, 10);
+
+async function calendarFeed(env, tenant) {
+  const db = env.DB;
+  const t = await tenantById(env, tenant);
+  const rows = async (table) => (await db.prepare('SELECT rec FROM records WHERE tenant = ?1 AND t = ?2 AND deleted = 0').bind(tenant, table).all()).results.map((r) => JSON.parse(r.rec)).filter(Boolean);
+  const today = new Date().toISOString().slice(0, 10);
+  const horizon = addDays(today, 365);
+  const ev = [];
+  for (const e of await rows('events')) if (e.date) ev.push({ uid: 'ev-' + e.id, date: e.date, time: e.time, end: e.endTime, title: e.title, notes: e.notes, repeat: ['daily', 'weekly', 'monthly', 'yearly'].includes(e.repeat) ? e.repeat : '' });
+  const customers = new Map((await rows('customers')).map((c) => [c.id, c.name]));
+  for (const p of await rows('prescriptions')) {
+    if (!p.refillDays || p.status !== 'Dispensed') continue;
+    const due = addDays(p.dispensedOn || p.date, Number(p.refillDays));
+    if (due >= addDays(today, -30) && due <= horizon) ev.push({ uid: 'rx-' + p.id + '-' + due, date: due, title: `Refill due: ${customers.get(p.customerId) || 'patient'}`, notes: p.medications });
+  }
+  // Expiring stock (only batches that still have stock)
+  const { results: stock } = await db.prepare("SELECT json_extract(rec, '$.batchId') b, SUM(json_extract(rec, '$.qty')) q FROM records WHERE tenant = ?1 AND t = 'movements' AND deleted = 0 GROUP BY b HAVING q > 0").bind(tenant).all();
+  const inStock = new Map(stock.map((s) => [s.b, s.q]));
+  const batches = (await rows('batches')).filter((b) => b.expiry && b.expiry <= addDays(today, 180) && b.expiry >= addDays(today, -7) && inStock.get(b.id) > 0);
+  if (batches.length) {
+    const ids = [...new Set(batches.map((b) => b.productId))];
+    const names = new Map();
+    for (let i = 0; i < ids.length; i += 90) {
+      const chunk = ids.slice(i, i + 90);
+      const { results } = await db.prepare(`SELECT id, json_extract(rec, '$.name') name FROM records WHERE tenant = ?1 AND t = 'products' AND id IN (${chunk.map((_, j) => '?' + (j + 2)).join(',')})`).bind(tenant, ...chunk).all();
+      for (const r of results) names.set(r.id, r.name);
+    }
+    for (const b of batches) ev.push({ uid: 'exp-' + b.id, date: b.expiry, title: `Expires: ${names.get(b.productId) || 'medicine'} (batch ${b.batch}, ${inStock.get(b.id)} left)` });
+  }
+  const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+/, '');
+  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//RxPOS//Pharmacy calendar//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
+    `X-WR-CALNAME:${icsText((t?.name || 'Pharmacy') + ' · RxPOS')}`, 'REFRESH-INTERVAL;VALUE=DURATION:PT1H', 'X-PUBLISHED-TTL:PT1H'];
+  for (const e of ev) {
+    lines.push('BEGIN:VEVENT', `UID:${e.uid}@rxpos`, `DTSTAMP:${stamp}`);
+    if (e.time) {
+      const start = icsDate(e.date) + 'T' + e.time.replace(':', '') + '00';
+      const endT = e.end && e.end > e.time ? e.end : `${String(Math.min(23, Number(e.time.slice(0, 2)) + 1)).padStart(2, '0')}${e.time.slice(2)}`;
+      lines.push(`DTSTART:${start}`, `DTEND:${icsDate(e.date)}T${endT.replace(':', '')}00`);
+    } else lines.push(`DTSTART;VALUE=DATE:${icsDate(e.date)}`, `DTEND;VALUE=DATE:${icsDate(addDays(e.date, 1))}`);
+    if (e.repeat) lines.push(`RRULE:FREQ=${e.repeat.toUpperCase()}`);
+    lines.push(`SUMMARY:${icsText(e.title)}`);
+    if (e.notes) lines.push(`DESCRIPTION:${icsText(e.notes)}`);
+    lines.push('END:VEVENT');
+  }
+  lines.push('END:VCALENDAR');
+  return new Response(lines.join('\r\n'), { headers: { 'Content-Type': 'text/calendar; charset=utf-8', 'Cache-Control': 'max-age=900', ...cors } });
 }
 
 export default {
@@ -482,7 +713,18 @@ export default {
     try {
       await ensureSchema(env.DB);
       await ensureMainTenant(env);
-      if (path === '/api/health') return json({ ok: true, app: 'rxpos-cloud', configured: (env.SYNC_KEY || '').length >= 12, multiPharmacy: true });
+      if (path === '/api/health') return json({ ok: true, app: 'rxpos-cloud', configured: (env.SYNC_KEY || '').length >= 12, multiPharmacy: true, version: 4 });
+      // Public: the name behind a pharmacy's web address, for its sign-in page
+      const pm = path.match(/^\/api\/pharmacy\/([a-z0-9-]{1,40})$/);
+      if (pm) {
+        const t = await tenantByCode(env, pm[1]);
+        return t ? json({ id: t.id, slug: t.slug || t.id, name: t.name, status: t.status }) : json({ error: 'No pharmacy at this address. Check the link with your RxPOS provider.' }, 404);
+      }
+      const cm = path.match(/^\/api\/calendar\/([a-z0-9-]{1,40})\/([A-Za-z0-9_-]{24})\.ics$/);
+      if (cm) {
+        if (!safeEqual(cm[2], await calendarSig(env, cm[1]))) return json({ error: 'Not found' }, 404);
+        return await calendarFeed(env, cm[1]);
+      }
       const body = req.method === 'POST' ? await req.json().catch(() => null) : null;
       if (req.method === 'POST' && !body) return json({ error: 'Bad request' }, 400);
       if (path === '/api/login' && req.method === 'POST') return await login(env, body);
@@ -495,7 +737,8 @@ export default {
       const penv = providerEnv(env, who.tenantRow);
 
       if (path === '/api/sync' && req.method === 'POST') return await sync(env, body, who);
-      if (path === '/api/config') return json({ tenant: who.tenant, pharmacy: who.tenantRow.name, mtn: mtn.enabled(penv), airtel: airtel.enabled(penv), sms: !!(penv.AT_USERNAME && penv.AT_API_KEY), email: !!(env.BREVO_API_KEY && env.BREVO_SENDER_EMAIL), mtnEnv: penv.MTN_ENV || 'sandbox', airtelEnv: penv.AIRTEL_ENV || 'uat', role: who.role });
+      if (path === '/api/config') return json({ tenant: who.tenant, slug: who.tenantRow.slug || who.tenant, pharmacy: who.tenantRow.name, mtn: mtn.enabled(penv), airtel: airtel.enabled(penv), sms: !!(penv.AT_USERNAME && penv.AT_API_KEY), email: !!(env.BREVO_API_KEY && env.BREVO_SENDER_EMAIL), mtnEnv: penv.MTN_ENV || 'sandbox', airtelEnv: penv.AIRTEL_ENV || 'uat', role: who.role });
+      if (path === '/api/calendar-link') return json({ url: `${url.origin}/api/calendar/${who.tenant}/${await calendarSig(env, who.tenant)}.ics` });
       if (path === '/api/pay/request' && req.method === 'POST') {
         const p = PROVIDERS[body.provider];
         if (!p?.enabled(penv)) return json({ error: `${body.provider === 'airtel' ? 'Airtel Money' : 'MTN MoMo'} is not set up for this pharmacy yet.` }, 400);

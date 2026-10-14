@@ -1,6 +1,10 @@
 // Calls to the RxPOS cloud (Cloudflare Worker) for things that need the internet:
 // staff sign-in, Mobile Money payment requests and SMS. Sync itself lives in sync.js.
+import { isNative } from './platform.js';
+
 export const DEFAULT_CLOUD = 'https://rxpos.pages.dev';
+/** The cloud this app talks to: the site itself on the web, the RxPOS cloud in the desktop and Android apps. */
+export const cloudUrl = () => (!isNative && /^https?:$/.test(location.protocol) && !import.meta.env.DEV ? location.origin : DEFAULT_CLOUD);
 
 export const cleanUrl = (u) => {
   let url = String(u || '').trim().replace(/\/+$/, '');
@@ -34,7 +38,10 @@ export const cloudLogin = (url, email, password, tenant) => call({ url: cleanUrl
 export const forgotPassword = (url, body) => call({ url: cleanUrl(url) }, '/api/password/forgot', { method: 'POST', body });
 export const resetPassword = (url, body) => call({ url: cleanUrl(url) }, '/api/password/reset', { method: 'POST', body });
 // Owner console (RxPOS vendor): the owner key is sent as the bearer token
-export const ownerApi = (url, ownerKey, path, body) => call({ url: cleanUrl(url), key: ownerKey }, '/api/owner' + path, { method: body ? 'POST' : 'GET', body, timeout: 30000 });
+export const ownerApi = (url, ownerKey, path, body) => call({ url: cleanUrl(url), key: ownerKey }, '/api/owner' + path, { method: body ? 'POST' : 'GET', body, timeout: 60000 });
+/** Public name of the pharmacy at a web address (for its sign-in page) */
+export const pharmacyInfo = (url, slug) => call({ url: cleanUrl(url) }, '/api/pharmacy/' + encodeURIComponent(slug), { timeout: 8000 });
+export const calendarLink = (cfg) => call(cfg, '/api/calendar-link', { timeout: 8000 });
 export const cloudConfig = (cfg) => call(cfg, '/api/config', { timeout: 8000 });
 export const payRequest = (cfg, body) => call(cfg, '/api/pay/request', { method: 'POST', body, timeout: 30000 });
 export const payStatus = (cfg, provider, ref) => call(cfg, `/api/pay/status?provider=${provider}&ref=${encodeURIComponent(ref)}`);
