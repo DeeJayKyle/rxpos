@@ -56,7 +56,7 @@ function toDate(v) {
 }
 
 export default function Import() {
-  const { db, update, user, branchId, fmt } = useStore();
+  const { db, update, user, branchId, fmt, features } = useStore();
   const [tab, setTab] = useState('catalog');
   const [sheet, setSheet] = useState(null); // { headers, rows, fileName }
   const [map, setMap] = useState({});
@@ -182,7 +182,9 @@ export default function Import() {
             <h3>9,710 medicines & sundries, ready to sell</h3>
             <p className="muted">Trade and generic names, formulations, retail and wholesale prices from a typical Ugandan pharmacy price list. Medicines already in your list are skipped. Stock is added later with Add Stock or the Excel import.</p>
           </div>
-          <button className="btn primary big" disabled={busy} onClick={importCatalog}>{busy ? 'Loading…' : 'Add standard catalog'}</button>
+          {features.catalog !== false
+            ? <span className="badge ok">Already included: built into RxPOS</span>
+            : <button className="btn primary big" disabled={busy} onClick={importCatalog}>{busy ? 'Loading…' : 'Add standard catalog'}</button>}
         </div>
       )}
 

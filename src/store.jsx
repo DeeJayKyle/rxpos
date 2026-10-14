@@ -10,7 +10,7 @@ const SESSION_KEY = 'pharmapos-session';
 export const TABLES = [
   'products', 'formulations', 'customers', 'suppliers', 'sales', 'proformas', 'purchases', 'movements',
   'prescriptions', 'expenses', 'expenseCategories', 'banks', 'bankTx', 'loans', 'payments', 'users',
-  'batches', 'branches', 'transfers', 'audit', 'purchaseOrders', 'roles', 'messages', 'shifts', 'license', 'events', 'tempLogs',
+  'batches', 'branches', 'transfers', 'audit', 'purchaseOrders', 'roles', 'messages', 'shifts', 'license', 'events', 'tempLogs', 'catalogHidden',
 ];
 // What is persisted on the device, one IndexedDB key per part
 const PARTS = [...TABLES, 'settings', '_tomb'];
@@ -59,6 +59,37 @@ export function put(d, table, rec) {
 export function del(d, table, id) {
   d[table] = d[table].filter((x) => x.id !== id);
   d._tomb.push({ t: table, id, at: now() });
+  // a standard-catalog medicine is built into the app: remember that this pharmacy removed it
+  if (table === 'products' && isBaseId(id)) put(d, 'catalogHidden', { id });
+}
+
+// ---------- standard catalog (built into the app, shared by every pharmacy) ----------
+// The 9,710 standard medicines are not stored per pharmacy in the cloud. Each device lays them underneath the
+// pharmacy's own medicines; only medicines a pharmacy adds or changes are synced. That keeps cloud writes tiny.
+export const BASE_AT = '2000-01-01T00:00:00.000Z';
+export const isBaseId = (id) => /^cat-\d+$/.test(String(id));
+/** Untouched catalog items never leave the device */
+export const isUntouchedBase = (r) => r._base && r.updatedAt === BASE_AT;
+let catalog = null;
+export async function loadCatalog() {
+  if (!catalog) catalog = (await import('./data/catalog.json')).default;
+  return catalog;
+}
+const baseProduct = ([name, generic, form, price, wholesale, cost, barcode, unit], i) => ({
+  id: 'cat-' + (i + 1), name, generic, form, price, wholesale: wholesale || price, cost: cost || Math.round((wholesale || price) * 0.8),
+  barcode: barcode || '2' + String(i + 1).padStart(11, '0'), unit, reorder: 0, fromCatalog: true, _base: true, updatedAt: BASE_AT,
+});
+/** Add (or remove, if the owner switched the catalog off) the built-in medicines. Returns the same object when nothing changes. */
+export function withCatalog(d, cat = catalog) {
+  if (!cat || !d) return d;
+  const on = d.license?.[0]?.features?.catalog !== false;
+  const hidden = new Set((d.catalogHidden || []).map((h) => h.id));
+  const keep = d.products.filter((p) => !(isUntouchedBase(p) && (!on || hidden.has(p.id))));
+  const have = new Set(keep.map((p) => p.id));
+  const add = [];
+  if (on) cat.rows.forEach((r, i) => { const id = 'cat-' + (i + 1); if (!have.has(id) && !hidden.has(id)) add.push(baseProduct(r, i)); });
+  if (!add.length && keep.length === d.products.length) return d;
+  return { ...d, products: add.length ? keep.concat(add) : keep };
 }
 /**
  * Erase the pharmacy's data on every device (deletions sync): sales, stock, customers, suppliers, finance, users…
@@ -239,6 +270,7 @@ export function StoreProvider({ children }) {
       if (!loaded.branches.length) loaded.branches = base.branches;
       if (saved) PARTS.forEach((k) => { if (saved[k] !== undefined) savedRefs.current[k] = loaded[k]; });
       setDb(loaded);
+      loadCatalog().then((cat) => setDb((prev) => withCatalog(prev, cat))).catch(console.error);
       setSyncCfgState({ deviceId: uid(), url: '', key: '', pushedAt: '', cursor: 0, branchId: MAIN_BRANCH, ...(cfg || {}) });
     })();
   }, []);
@@ -311,7 +343,7 @@ export function StoreProvider({ children }) {
       getDb: () => dbRef.current,
       getCfg: () => cfgRef.current,
       saveCfg: saveSyncCfg,
-      applyRemote: (changes) => setDb((prev) => mergeRemote(prev, changes)),
+      applyRemote: (changes) => setDb((prev) => withCatalog(mergeRemote(prev, changes))),
       onStatus: setSyncStatus,
     });
     return syncRef.current.stop;
@@ -328,7 +360,7 @@ export function StoreProvider({ children }) {
     if (other) {
       try { await idbSet('backup:' + (cur.tenant || 'device') + ':' + now().slice(0, 19), dbRef.current); } catch (e) { console.error(e); }
       for (const k of await idbKeys().catch(() => [])) if (String(k).startsWith('snap:')) await idbDel(k).catch(() => {});
-      setDb(blankDb());
+      setDb(withCatalog(blankDb()));
     }
     const next = { ...cur, url, key: token, account, tenant, slug, pharmacy, ...(other || cur.url !== url ? { cursor: 0, pushedAt: '', lastSync: '' } : {}) };
     saveSyncCfg(next);

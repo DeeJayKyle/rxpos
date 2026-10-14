@@ -50,6 +50,7 @@ export const DEFAULT_ROLES = [
 ].map((r) => ({ ...r, updatedAt: t0 }));
 
 export const FEATURES = [
+  ['catalog', 'Standard medicine catalog (9,710 items)', 'Built into the app'],
   ['branches', 'Multiple branches & transfers', 'Off = single-branch pharmacy'],
   ['wholesale', 'Wholesale POS & prices'],
   ['proformas', 'Proformas / quotations'],

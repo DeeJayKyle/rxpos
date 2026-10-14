@@ -3,7 +3,7 @@
 // are made (store.jsx), and the device pulls what others changed every 10 s while the app is in use (every 60 s in
 // the background), straight away when the internet comes back or the app is reopened.
 // Conflicts: last writer (updatedAt) wins per record.
-import { TABLES, now } from './store.jsx';
+import { TABLES, now, isUntouchedBase, BASE_AT } from './store.jsx';
 
 const ACTIVE = 10000;
 const BACKGROUND = 60000;
@@ -11,7 +11,12 @@ const PUSH_BATCH = 400;
 
 export function collectChanges(db, since) {
   const out = [];
-  for (const t of TABLES) for (const r of db[t]) if (!since || r.updatedAt > since) out.push({ t, id: r.id, rec: r, at: r.updatedAt });
+  for (const t of TABLES) for (const r of db[t]) {
+    if (since && r.updatedAt <= since) continue;
+    if (isUntouchedBase(r) || r.updatedAt === BASE_AT) continue; // built-in catalog medicines and untouched defaults: every device already has them
+    const { _base, ...rec } = r; // eslint-disable-line no-unused-vars
+    out.push({ t, id: r.id, rec, at: r.updatedAt });
+  }
   for (const x of db._tomb) if (!since || x.at > since) out.push({ t: x.t, id: x.id, deleted: true, at: x.at });
   if (!since || db.settings.updatedAt > since) out.push({ t: 'settings', id: 'settings', rec: db.settings, at: db.settings.updatedAt });
   return out;

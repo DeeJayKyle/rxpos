@@ -8,3 +8,4 @@ hub-data/
 .dev.vars
 .wrangler/
 android/
+.harness*

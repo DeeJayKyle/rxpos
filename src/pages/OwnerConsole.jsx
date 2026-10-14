@@ -68,7 +68,7 @@ export default function OwnerConsole() {
     try {
       const c = creating;
       const j = await api('/tenants', {
-        name: c.name.trim(), slug: c.slug, address: c.address, phone: c.phone, notes: c.notes, features: c.features, catalog: c.catalog,
+        name: c.name.trim(), slug: c.slug, address: c.address, phone: c.phone, notes: c.notes, features: c.features,
         branches: c.branches.split(',').map((x) => x.trim()).filter(Boolean).map((name) => ({ name })),
         admin: { name: c.adminName, email: c.adminEmail, phone: c.adminPhone, password: c.adminPassword, mustChange: c.mustChange },
       });
@@ -90,7 +90,7 @@ export default function OwnerConsole() {
       <div className="page">
         <div className="page-head">
           <div><h1>Client pharmacies</h1><div className="sub">Each pharmacy has its own web address, data, staff, branches, features and payment keys.</div></div>
-          <button className="btn primary" onClick={() => setCreating({ name: '', slug: '', slugEdited: false, address: '', phone: '', notes: '', branches: '', adminName: '', adminEmail: '', adminPhone: '', adminPassword: genPassword(), mustChange: true, features: { ...DEFAULT_FEATURES }, catalog: true })}><Plus size={16} />New pharmacy</button>
+          <button className="btn primary" onClick={() => setCreating({ name: '', slug: '', slugEdited: false, address: '', phone: '', notes: '', branches: '', adminName: '', adminEmail: '', adminPhone: '', adminPassword: genPassword(), mustChange: true, features: { ...DEFAULT_FEATURES } })}><Plus size={16} />New pharmacy</button>
         </div>
         <div className="stats">
           <Stat label="Pharmacies" value={tenants?.length ?? '…'} icon={Building2} tone="teal" />
@@ -137,7 +137,6 @@ export default function OwnerConsole() {
             </div>
             <h3>Features</h3>
             <FeatureGrid value={creating.features} onChange={(features) => setCreating({ ...creating, features })} />
-            <label className="field check"><input type="checkbox" checked={creating.catalog} onChange={(e) => setCreating({ ...creating, catalog: e.target.checked })} /><span>Start with the standard 9,710-medicine catalog</span></label>
             <div className="form-actions"><button type="button" className="btn ghost" onClick={() => setCreating(null)}>Cancel</button><button className="btn primary" disabled={busy}>{busy ? 'Creating…' : 'Create pharmacy'}</button></div>
           </form>
         </Modal>

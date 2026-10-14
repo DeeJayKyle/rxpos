@@ -15,6 +15,21 @@
 // Secrets: SYNC_KEY (the original "main" pharmacy), OWNER_KEY (owner console), optional BREVO_API_KEY + BREVO_SENDER_EMAIL
 // (+ BREVO_SENDER_NAME) for password emails, and payment/SMS keys for the main pharmacy (MTN_*, AIRTEL_*, AT_*).
 // Other pharmacies' payment/SMS keys are stored per pharmacy (owner console → client → Payments & SMS).
+import CATALOG from '../src/data/catalog.json' with { type: 'json' };
+import { createClient } from '@libsql/client/web';
+import { d1FromLibsql } from './libsql-d1.js';
+
+// Database: Cloudflare D1 (binding DB) by default, or libSQL / Turso when DB_BACKEND = "turso"
+// (secrets TURSO_URL + TURSO_AUTH_TOKEN). The rest of the code doesn't know the difference.
+let turso = null;
+function tursoDb(env) {
+  if (env.TURSO_TEST_DB) return env.TURSO_TEST_DB; // tests: a local libSQL file instead of Turso
+  if (!env.TURSO_URL) throw httpError(503, 'TURSO_URL is not set');
+  if (!turso || turso.url !== env.TURSO_URL) turso = { url: env.TURSO_URL, db: d1FromLibsql(createClient({ url: env.TURSO_URL, authToken: env.TURSO_AUTH_TOKEN })) };
+  return turso.db;
+}
+const withDatabase = (env) => ({ ...env, D1: env.DB, DB: env.DB_BACKEND === 'turso' ? tursoDb(env) : env.DB });
+
 const PAGE = 2500;
 const MAX_PUSH = 500;
 const TOKEN_DAYS = 30;
@@ -45,13 +60,13 @@ async function adminChangeRefused(db, tenant, ch) {
   return old?.role !== 'admin';
 }
 
-let schemaReady = null;
+const schemaReady = new WeakMap();
 /**
  * Create whatever tables/indexes are missing. It only reads when everything exists, so it costs no D1 writes
  * (the free plan allows 100,000 row writes a day, and every index multiplies the cost of each record write).
  */
 function ensureSchema(db) {
-  schemaReady ??= (async () => {
+  if (!schemaReady.has(db)) schemaReady.set(db, (async () => {
     const { results } = await db.prepare("SELECT name, sql FROM sqlite_master WHERE type IN ('table', 'index')").all();
     const have = new Map(results.map((r) => [r.name, r.sql || '']));
     const ddl = [];
@@ -69,8 +84,8 @@ function ensureSchema(db) {
     if (!have.has('reset_codes')) ddl.push('CREATE TABLE reset_codes (k TEXT PRIMARY KEY, code_hash TEXT NOT NULL, expires INTEGER NOT NULL, tries INTEGER NOT NULL DEFAULT 0, sent INTEGER NOT NULL DEFAULT 0, window_start INTEGER NOT NULL DEFAULT 0)');
     // dropping an old index is optional: never let it block the API (e.g. when the daily write limit is reached)
     for (const sql of ddl) await db.prepare(sql).run().catch((e) => { if (!sql.startsWith('DROP')) throw e; });
-  })().catch((e) => { schemaReady = null; throw e; });
-  return schemaReady;
+  })().catch((e) => { schemaReady.delete(db); throw e; }));
+  return schemaReady.get(db);
 }
 
 const cors = {
@@ -116,7 +131,7 @@ async function verifyPassword(u, pw) {
 }
 
 // ---------- tenants ----------
-const DEFAULT_FEATURES = { branches: true, wholesale: true, proformas: true, prescriptions: true, finance: true, reports: true, reminders: true,
+const DEFAULT_FEATURES = { catalog: true, branches: true, wholesale: true, proformas: true, prescriptions: true, finance: true, reports: true, reminders: true,
   chat: true, labels: true, import: true, reorder: true, transfers: true, momo: true, drugInfo: true, shifts: true,
   promos: true, hourly: true, calendar: true, weather: true };
 
@@ -482,6 +497,7 @@ async function owner(env, req, url, body) {
   if (!safeEqual((req.headers.get('Authorization') || '').replace(/^Bearer /, ''), env.OWNER_KEY)) throw httpError(401, 'Wrong owner key.');
   const db = env.DB;
   const parts = url.pathname.split('/').slice(3).map(decodeURIComponent); // /api/owner/<...>
+  if (parts[0] === 'move-to-turso') return moveToTurso(env, req, body);
   const view = async (t) => {
     const s = await db.prepare("SELECT COUNT(*) n, MAX(at) last, SUM(t = 'products' AND deleted = 0) products, SUM(t = 'users' AND deleted = 0) users, SUM(t = 'sales' AND deleted = 0) sales, SUM(t = 'branches' AND deleted = 0) branches FROM records WHERE tenant = ?1").bind(t.id).first();
     const secrets = JSON.parse(t.secrets || '{}');
@@ -505,7 +521,8 @@ async function owner(env, req, url, body) {
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return json({ error: "Enter the administrator's email." }, 400);
     const pw = await passwordFields(admin.password || '');
     const key = randomKey();
-    const features = JSON.stringify({ ...DEFAULT_FEATURES, ...(body.features || {}) });
+    // The standard catalog is built into the apps (feature "catalog"), so nothing is copied: creating a pharmacy costs a few writes
+    const features = JSON.stringify({ ...DEFAULT_FEATURES, ...(body.features || {}), ...(body.catalog === false ? { catalog: false } : {}) });
     await db.prepare('INSERT INTO tenants (id, name, key_hash, features, notes, created_at, slug) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?1)')
       .bind(slug, name, await sha256(key), features, String(body.notes || '').slice(0, 500), new Date().toISOString()).run();
     const t = await tenantById(env, slug);
@@ -519,12 +536,6 @@ async function owner(env, req, url, body) {
       { t: 'users', id: adminId, rec: { name: String(admin.name || 'Administrator').slice(0, 80), email, phone: String(admin.phone || ''), role: 'admin', ...pw, mustChangePassword: !!admin.mustChange } },
       { t: 'audit', id: crypto.randomUUID(), rec: { date: new Date().toISOString(), user: 'RxPOS owner', action: 'Pharmacy created', details: `${name} · admin ${email}`, branchId: 'main' } },
     ]);
-    if (body.catalog !== false) {
-      // Start with the standard medicine list from the main pharmacy (no stock, standard prices)
-      await db.prepare(`INSERT OR IGNORE INTO records (tenant, k, t, id, rec, deleted, at, origin, seq)
-        SELECT ?1, k, t, id, rec, 0, at, 'server', seq FROM records WHERE tenant = ?2 AND deleted = 0 AND t IN ('products','formulations','expenseCategories') AND (t != 'products' OR id LIKE 'cat-%')`)
-        .bind(slug, MAIN).run();
-    }
     return json({ tenant: await view(t), syncKey: key });
   }
 
@@ -658,6 +669,30 @@ async function owner(env, req, url, body) {
   return json({ error: 'Not found' }, 404);
 }
 
+// ---------- one-time copy of the whole cloud from D1 to Turso (owner only, in steps of 500 records) ----------
+async function moveToTurso(env, req, body) {
+  if (!env.TURSO_URL || !env.TURSO_AUTH_TOKEN) return json({ error: 'Add the TURSO_URL and TURSO_AUTH_TOKEN secrets first.' }, 400);
+  const src = env.D1, dst = tursoDb(env);
+  await ensureSchema(dst);
+  const count = async (db) => ({
+    tenants: await db.prepare('SELECT COUNT(*) n FROM tenants').first('n'),
+    records: await db.prepare('SELECT COUNT(*) n FROM records').first('n'),
+    maxSeq: (await db.prepare('SELECT MAX(seq) m FROM records').first('m')) || 0,
+  });
+  if (req.method === 'GET') return json({ d1: await count(src), turso: await count(dst), using: env.DB_BACKEND === 'turso' ? 'turso' : 'd1' });
+  if (body.step === 'tenants') {
+    const { results } = await src.prepare('SELECT * FROM tenants').all();
+    await dst.batch(results.map((t) => dst.prepare('INSERT OR REPLACE INTO tenants (id, name, key_hash, features, status, secrets, notes, created_at, slug) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)')
+      .bind(t.id, t.name, t.key_hash, t.features, t.status, t.secrets, t.notes, t.created_at, t.slug)));
+    return json({ copied: results.length, done: true });
+  }
+  const after = Number(body.after) || 0;
+  const { results } = await src.prepare('SELECT tenant, k, t, id, rec, deleted, at, seq, origin FROM records WHERE seq > ?1 ORDER BY seq LIMIT 500').bind(after).all();
+  if (results.length) await dst.batch(results.map((r) => dst.prepare('INSERT OR REPLACE INTO records (tenant, k, t, id, rec, deleted, at, seq, origin) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)')
+    .bind(r.tenant, r.k, r.t, r.id, r.rec, r.deleted, r.at, r.seq, r.origin)));
+  return json({ copied: results.length, last: results.at(-1)?.seq ?? after, done: results.length < 500 });
+}
+
 // ---------- calendar feed (subscribe in Google Calendar, Outlook or the phone's calendar) ----------
 async function calendarSig(env, tenant) {
   const sig = await crypto.subtle.sign('HMAC', await hmacKey(env), te.encode('calendar:' + tenant));
@@ -693,6 +728,7 @@ async function calendarFeed(env, tenant) {
       const { results } = await db.prepare(`SELECT id, json_extract(rec, '$.name') name FROM records WHERE tenant = ?1 AND t = 'products' AND id IN (${chunk.map((_, j) => '?' + (j + 2)).join(',')})`).bind(tenant, ...chunk).all();
       for (const r of results) names.set(r.id, r.name);
     }
+    for (const id of ids) if (!names.has(id) && /^cat-\d+$/.test(id)) names.set(id, CATALOG.rows[Number(id.slice(4)) - 1]?.[0]); // built-in catalog
     for (const b of batches) ev.push({ uid: 'exp-' + b.id, date: b.expiry, title: `Expires: ${names.get(b.productId) || 'medicine'} (batch ${b.batch}, ${inStock.get(b.id)} left)` });
   }
   const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+/, '');
@@ -715,15 +751,17 @@ async function calendarFeed(env, tenant) {
 }
 
 export default {
-  async fetch(req, env) {
+  async fetch(req, rawEnv) {
     const url = new URL(req.url);
     const path = url.pathname;
-    if (!path.startsWith('/api/')) return env.ASSETS.fetch(req);
+    if (!path.startsWith('/api/')) return rawEnv.ASSETS.fetch(req);
+    let env;
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
     try {
+      env = withDatabase(rawEnv);
       await ensureSchema(env.DB);
       await ensureMainTenant(env);
-      if (path === '/api/health') return json({ ok: true, app: 'rxpos-cloud', configured: (env.SYNC_KEY || '').length >= 12, multiPharmacy: true, version: 4 });
+      if (path === '/api/health') return json({ ok: true, app: 'rxpos-cloud', configured: (env.SYNC_KEY || '').length >= 12, multiPharmacy: true, version: 5, database: env.DB_BACKEND === 'turso' ? 'turso' : 'd1' });
       // Public: the name behind a pharmacy's web address, for its sign-in page
       const pm = path.match(/^\/api\/pharmacy\/([a-z0-9-]{1,40})$/);
       if (pm) {

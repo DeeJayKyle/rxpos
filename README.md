@@ -122,6 +122,18 @@ Only the RxPOS owner creates pharmacies. Open **https://rxpos.pages.dev/#/owner*
 
 The Windows and Android apps only sign in to existing accounts; they have no "new pharmacy", branch or feature settings.
 
+## Database: Cloudflare D1 or Turso (libSQL)
+
+The cloud runs on Cloudflare D1 by default. To move it to [Turso](https://turso.tech) (open-source libSQL, MIT; free plan about
+10 million row writes a month instead of D1's 100,000 a day):
+
+1. Create a database and a read/write token at app.turso.tech, then run `deploysetup-turso.ps1` (stores `TURSO_URL` and `TURSO_AUTH_TOKEN` as Cloudflare secrets).
+2. Copy everything: `node scripts/move-to-turso.mjs https://rxpos.pages.dev <owner key file>` (stops with "OK" when both sides match).
+3. Set `"DB_BACKEND": "turso"` in `wrangler.jsonc` and `npx wrangler deploy`. To go back, set it to `""` and deploy.
+
+The standard 9,710-medicine catalog is built into the apps, so it is never stored per pharmacy: creating a pharmacy costs a few
+records, and only medicines a pharmacy adds or changes are synced. `node worker/test-harness.mjs` runs the cloud locally on libSQL files for tests.
+
 ## Mobile Money (MTN MoMo, Airtel Money) and SMS
 
 Payments and SMS go through the cloud so your API keys never sit on the shop PCs. Add these as **Secrets** in
