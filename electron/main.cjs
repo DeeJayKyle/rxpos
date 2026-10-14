@@ -23,24 +23,40 @@ if (HUB_MODE) {
   if (!app.requestSingleInstanceLock()) app.quit();
 
   let win = null;
+  // Remember the window's size, position and maximised state between runs
+  const fs = require('fs');
+  const stateFile = path.join(app.getPath('userData'), 'window-state.json');
+  const readState = () => { try { return JSON.parse(fs.readFileSync(stateFile, 'utf8')); } catch { return {}; } };
   function createWindow() {
+    const st = readState();
     win = new BrowserWindow({
-      width: 1366,
-      height: 860,
+      width: st.width || 1366,
+      height: st.height || 860,
+      x: st.x, y: st.y,
       minWidth: 1024,
       minHeight: 680,
       title: 'RxPOS',
-      backgroundColor: '#f4f7f9',
+      backgroundColor: '#0b1220',
       autoHideMenuBar: true,
+      show: false,
       icon: path.join(__dirname, '..', 'build', 'icon.png'),
-      webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
+      webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: false, backgroundThrottling: false },
     });
+    if (st.maximized) win.maximize();
+    win.once('ready-to-show', () => win.show());
+    const save = () => { try { fs.writeFileSync(stateFile, JSON.stringify({ ...win.getNormalBounds(), maximized: win.isMaximized() })); } catch {} };
+    win.on('close', save);
     win.loadFile(path.join(__dirname, '..', 'dist', 'index.html'));
-    // Open external links in the default browser, never inside the app window
+    // Open web links in the default browser and tel:/mailto:/WhatsApp links in their own apps, never inside the app window
     win.webContents.setWindowOpenHandler(({ url }) => {
-      if (url.startsWith('http')) shell.openExternal(url);
+      if (/^(https?|tel|mailto|whatsapp):/.test(url)) shell.openExternal(url);
       return { action: 'deny' };
     });
+    win.webContents.on('will-navigate', (e, url) => {
+      if (!url.startsWith('file:')) { e.preventDefault(); if (/^(https?|tel|mailto|whatsapp):/.test(url)) shell.openExternal(url); }
+    });
+    // Camera (prescription photos), microphone (calls, voice notes), notifications: allowed for the app's own pages
+    win.webContents.session.setPermissionRequestHandler((wc, permission, cb) => cb(['media', 'notifications', 'geolocation', 'clipboard-read', 'clipboard-sanitized-write'].includes(permission)));
   }
 
   app.on('second-instance', () => {

@@ -18,7 +18,7 @@
 import CATALOG from '../src/data/catalog.json' with { type: 'json' };
 import { createClient } from '@libsql/client/web';
 import { d1FromLibsql } from './libsql-d1.js';
-import { isOwner, ownerAuthRoutes, ownerAccount } from './owner-auth.js';
+import { isOwner, ownerAuthRoutes, ownerAccount, verifyGoogle, getConfig } from './owner-auth.js';
 
 // Database: Cloudflare D1 (binding DB) by default, or libSQL / Turso when DB_BACKEND = "turso"
 // (secrets TURSO_URL + TURSO_AUTH_TOKEN). The rest of the code doesn't know the difference.
@@ -78,10 +78,16 @@ function ensureSchema(db) {
     if (!have.has('records_gseq')) ddl.push('CREATE INDEX records_gseq ON records(seq)'); // fast MAX(seq) on every write
     if (have.has('records_type')) ddl.push('DROP INDEX records_type'); // not worth its write cost
     if (!have.has('tenants')) ddl.push(`CREATE TABLE tenants (id TEXT PRIMARY KEY, name TEXT NOT NULL, key_hash TEXT UNIQUE, features TEXT NOT NULL DEFAULT '{}',
-      status TEXT NOT NULL DEFAULT 'active', secrets TEXT NOT NULL DEFAULT '{}', notes TEXT, created_at TEXT NOT NULL, slug TEXT)`);
-    else if (!/\bslug\b/.test(have.get('tenants'))) ddl.push('ALTER TABLE tenants ADD COLUMN slug TEXT');
+      status TEXT NOT NULL DEFAULT 'active', secrets TEXT NOT NULL DEFAULT '{}', notes TEXT, created_at TEXT NOT NULL, slug TEXT, branding TEXT)`);
+    else {
+      if (!/\bslug\b/.test(have.get('tenants'))) ddl.push('ALTER TABLE tenants ADD COLUMN slug TEXT');
+      if (!/\bbranding\b/.test(have.get('tenants'))) ddl.push('ALTER TABLE tenants ADD COLUMN branding TEXT'); // logo and allowed themes, set by the owner
+    }
     if (!have.has('tenants_slug')) ddl.push('CREATE UNIQUE INDEX tenants_slug ON tenants(slug)');
     if (!have.has('login_fail')) ddl.push('CREATE TABLE login_fail (email TEXT PRIMARY KEY, n INTEGER NOT NULL, until INTEGER NOT NULL DEFAULT 0)');
+    if (!have.has('rtc')) ddl.push('CREATE TABLE rtc (id INTEGER PRIMARY KEY AUTOINCREMENT, tenant TEXT NOT NULL, to_uid TEXT NOT NULL, from_uid TEXT NOT NULL, from_name TEXT, type TEXT NOT NULL, call_id TEXT NOT NULL, data TEXT, at INTEGER NOT NULL)');
+    if (!have.has('file_chunks')) ddl.push('CREATE TABLE file_chunks (tenant TEXT NOT NULL, id TEXT NOT NULL, n INTEGER NOT NULL, data BLOB NOT NULL, PRIMARY KEY (tenant, id, n))');
+    if (!have.has('files')) ddl.push('CREATE TABLE files (tenant TEXT NOT NULL, id TEXT NOT NULL, name TEXT, type TEXT, size INTEGER, chunks INTEGER, by_uid TEXT, at INTEGER, PRIMARY KEY (tenant, id))');
     if (!have.has('owner_config')) ddl.push('CREATE TABLE owner_config (k TEXT PRIMARY KEY, v TEXT NOT NULL)');
     if (!have.has('reset_codes')) ddl.push('CREATE TABLE reset_codes (k TEXT PRIMARY KEY, code_hash TEXT NOT NULL, expires INTEGER NOT NULL, tries INTEGER NOT NULL DEFAULT 0, sent INTEGER NOT NULL DEFAULT 0, window_start INTEGER NOT NULL DEFAULT 0)');
     // dropping an old index is optional: never let it block the API (e.g. when the daily write limit is reached)
@@ -135,7 +141,7 @@ async function verifyPassword(u, pw) {
 // ---------- tenants ----------
 const DEFAULT_FEATURES = { catalog: true, branches: true, wholesale: true, proformas: true, prescriptions: true, finance: true, reports: true, reminders: true,
   chat: true, labels: true, import: true, reorder: true, transfers: true, momo: true, drugInfo: true, shifts: true,
-  promos: true, hourly: true, calendar: true, weather: true };
+  promos: true, hourly: true, calendar: true, weather: true, ai: true };
 
 /** The original single-pharmacy deployment becomes tenant "main", keyed by the SYNC_KEY secret. */
 let mainChecked = false; // once per Worker instance; writes only if the main pharmacy's sync key changed
@@ -188,7 +194,8 @@ async function serverWrite(env, tenant, t, id, rec, deleted = false) {
     ON CONFLICT(tenant, k) DO UPDATE SET rec = excluded.rec, deleted = excluded.deleted, at = excluded.at, origin = 'server', seq = excluded.seq`)
     .bind(tenant, t + '|' + id, t, id, deleted ? null : JSON.stringify({ ...rec, id, updatedAt: at }), deleted ? 1 : 0, at).run();
 }
-const writeLicense = (env, t) => serverWrite(env, t.id, 'license', 'license', { tenant: t.id, name: t.name, status: t.status, features: { ...DEFAULT_FEATURES, ...JSON.parse(t.features || '{}') } });
+const brandingOf = (t) => { try { return JSON.parse(t.branding || '{}'); } catch { return {}; } };
+const writeLicense = (env, t) => serverWrite(env, t.id, 'license', 'license', { tenant: t.id, name: t.name, status: t.status, features: { ...DEFAULT_FEATURES, ...JSON.parse(t.features || '{}') }, branding: brandingOf(t) });
 
 // ---------- login & password recovery ----------
 const MAX_FAILS = 5;
@@ -288,6 +295,25 @@ async function resetPassword(env, body) {
   await serverWrite(env, match.tenant, 'audit', crypto.randomUUID(), { date: new Date().toISOString(), user: u.name, action: 'Password reset (forgot password)', details: 'via ' + (body.channel || 'email') + ' code', branchId: 'main' });
   await env.DB.batch([env.DB.prepare('DELETE FROM reset_codes WHERE k = ?1').bind(k), env.DB.prepare('DELETE FROM login_fail WHERE email = ?1').bind(k)]);
   return json({ ok: true });
+}
+
+/** Forgot password: prove the account's Gmail / Google address with "Sign in with Google", then choose a new password */
+async function resetWithGoogle(env, body) {
+  const cfg = await getConfig(env.DB);
+  if (!cfg.google_client_id) return json({ error: 'Google sign-in is not set up yet. Ask your administrator to reset your password.' }, 400);
+  const pw = String(body.password || '');
+  if (pw.length < 8) return json({ error: 'Use a password of at least 8 characters.' }, 400);
+  let email;
+  try { email = await verifyGoogle(body.credential, cfg.google_client_id); } catch (e) { return json({ error: e.message }, 401); }
+  const { tenant, match } = await pickUser(env, { email, tenant: body.tenant });
+  if (!match) return json({ error: `No RxPOS account uses ${email}. Use the Google account whose Gmail is on your RxPOS account.` }, 404);
+  const salt = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(16))));
+  const u = { ...match.u, algo: 'pbkdf2', salt, iter: 100000, hash: await pbkdf2(pw, salt) };
+  delete u.mustChangePassword;
+  await serverWrite(env, match.tenant, 'users', u.id, u);
+  await serverWrite(env, match.tenant, 'audit', crypto.randomUUID(), { date: new Date().toISOString(), user: u.name, action: 'Password reset (Google)', details: email, branchId: 'main' });
+  await env.DB.prepare('DELETE FROM login_fail WHERE email = ?1').bind(tenant + ':' + email).run();
+  return json({ ok: true, email });
 }
 
 // ---------- sync ----------
@@ -502,7 +528,7 @@ async function owner(env, req, url, body) {
   const view = async (t) => {
     const s = await db.prepare("SELECT COUNT(*) n, MAX(at) last, SUM(t = 'products' AND deleted = 0) products, SUM(t = 'users' AND deleted = 0) users, SUM(t = 'sales' AND deleted = 0) sales, SUM(t = 'branches' AND deleted = 0) branches FROM records WHERE tenant = ?1").bind(t.id).first();
     const secrets = JSON.parse(t.secrets || '{}');
-    return { id: t.id, slug: t.slug || t.id, name: t.name, status: t.status, notes: t.notes || '', created: t.created_at, features: { ...DEFAULT_FEATURES, ...JSON.parse(t.features || '{}') },
+    return { id: t.id, slug: t.slug || t.id, name: t.name, status: t.status, notes: t.notes || '', created: t.created_at, features: { ...DEFAULT_FEATURES, ...JSON.parse(t.features || '{}') }, branding: brandingOf(t),
       stats: { records: s.n || 0, products: s.products || 0, users: s.users || 0, sales: s.sales || 0, branches: s.branches || 0, lastActivity: s.last || null },
       payments: { mtn: t.id === MAIN ? mtn.enabled(env) : mtn.enabled(secrets), airtel: t.id === MAIN ? airtel.enabled(env) : airtel.enabled(secrets), sms: t.id === MAIN ? !!env.AT_API_KEY : !!secrets.AT_API_KEY } };
   };
@@ -558,7 +584,22 @@ async function owner(env, req, url, body) {
     const status = ['active', 'suspended'].includes(body.status) ? body.status : t.status;
     const features = body.features ? JSON.stringify({ ...JSON.parse(t.features || '{}'), ...body.features }) : t.features;
     const notes = body.notes != null ? String(body.notes).slice(0, 500) : t.notes;
-    await db.prepare('UPDATE tenants SET name = ?2, status = ?3, features = ?4, notes = ?5, slug = ?6 WHERE id = ?1').bind(t.id, name, status, features, notes, slug).run();
+    let branding = brandingOf(t);
+    if (body.branding) {
+      const b = body.branding;
+      if (b.logo !== undefined) {
+        if (b.logo && (!/^data:image\/(png|jpeg|webp|svg\+xml);base64,/.test(b.logo) || b.logo.length > 200000)) return json({ error: 'The logo must be a PNG, JPG, WebP or SVG image under about 150 KB.' }, 400);
+        branding.logo = b.logo || undefined;
+      }
+      if (b.themes !== undefined) {
+        const list = Array.isArray(b.themes) ? b.themes.map(String).filter((x) => /^[a-z0-9-]{2,30}$/.test(x)).slice(0, 60) : [];
+        if (list.length && list.length < 3) return json({ error: 'Allow at least 3 themes (or all).' }, 400);
+        branding.themes = list.length ? list : undefined;
+      }
+      if (b.defaultTheme !== undefined) branding.defaultTheme = String(b.defaultTheme || '') || undefined;
+      branding = JSON.parse(JSON.stringify(branding));
+    }
+    await db.prepare('UPDATE tenants SET name = ?2, status = ?3, features = ?4, notes = ?5, slug = ?6, branding = ?7 WHERE id = ?1').bind(t.id, name, status, features, notes, slug, JSON.stringify(branding)).run();
     const u = await tenantById(env, t.id);
     await writeLicense(env, u);
     if (name !== t.name) {
@@ -693,6 +734,138 @@ async function moveToTurso(env, req, body) {
   return json({ copied: results.length, last: results.at(-1)?.seq ?? after, done: results.length < 500 });
 }
 
+// ---------- attachments in team messages (photos, PDFs, videos, audio, spreadsheets, voice notes) ----------
+// Stored in the pharmacy's own database in pieces of up to 700 KB; links are signed so only people given the link can open them.
+const MAX_FILE = 15 * 1024 * 1024;
+const FILE_TYPES = /^(image\/|video\/|audio\/|application\/pdf$|text\/csv$|application\/vnd\.ms-excel$|application\/vnd\.openxmlformats-officedocument\.(spreadsheetml|wordprocessingml|presentationml)\.|application\/msword$|application\/vnd\.oasis\.opendocument\.)/;
+async function fileSig(env, tenant, id) {
+  const sig = await crypto.subtle.sign('HMAC', await hmacKey(env), te.encode('file:' + tenant + ':' + id));
+  return b64url(sig).slice(0, 24);
+}
+async function uploadChunk(env, body, who) {
+  const db = env.DB;
+  const id = String(body.id || ''), n = Number(body.n), chunks = Number(body.chunks), size = Number(body.size);
+  if (!/^[A-Za-z0-9_-]{8,40}$/.test(id) || !(n >= 0) || !(chunks >= 1) || n >= chunks || chunks > 40) return json({ error: 'Bad upload' }, 400);
+  if (!(size > 0) || size > MAX_FILE) return json({ error: 'Files can be up to 15 MB.' }, 413);
+  const type = String(body.type || 'application/octet-stream').split(';')[0];
+  if (!FILE_TYPES.test(type)) return json({ error: 'That kind of file can’t be shared here.' }, 415);
+  const bytes = Uint8Array.from(atob(String(body.data || '')), (c) => c.charCodeAt(0));
+  if (!bytes.length || bytes.length > 800 * 1024) return json({ error: 'Bad upload piece' }, 400);
+  await db.prepare('INSERT OR REPLACE INTO file_chunks (tenant, id, n, data) VALUES (?1, ?2, ?3, ?4)').bind(who.tenant, id, n, bytes).run();
+  if (n === chunks - 1) {
+    await db.prepare('INSERT OR REPLACE INTO files (tenant, id, name, type, size, chunks, by_uid, at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)')
+      .bind(who.tenant, id, String(body.name || 'file').slice(0, 120), type, size, chunks, who.uid || '', Date.now()).run();
+    return json({ ok: true, done: true, path: '/api/files/' + who.tenant + '/' + id + '/' + (await fileSig(env, who.tenant, id)) });
+  }
+  return json({ ok: true });
+}
+async function downloadFile(env, tenant, id, sig) {
+  if (!safeEqual(sig, await fileSig(env, tenant, id))) return json({ error: 'Not found' }, 404);
+  const meta = await env.DB.prepare('SELECT name, type, size, chunks FROM files WHERE tenant = ?1 AND id = ?2').bind(tenant, id).first();
+  if (!meta) return json({ error: 'Not found' }, 404);
+  const { results } = await env.DB.prepare('SELECT data FROM file_chunks WHERE tenant = ?1 AND id = ?2 ORDER BY n').bind(tenant, id).all();
+  const parts = results.map((r) => new Uint8Array(r.data));
+  const out = new Uint8Array(parts.reduce((a, p) => a + p.length, 0));
+  let o = 0; for (const p of parts) { out.set(p, o); o += p.length; }
+  const safeName = String(meta.name).replace(/[^\w. -]+/g, '_');
+  return new Response(out, { headers: { 'Content-Type': meta.type, 'Content-Length': String(out.length), 'Content-Disposition': 'inline; filename="' + safeName + '"', 'Cache-Control': 'private, max-age=31536000, immutable', ...cors } });
+}
+
+// ---------- in-app voice calls between staff (WebRTC; the cloud only passes the call set-up messages) ----------
+async function rtc(env, req, url, body, who) {
+  const db = env.DB;
+  if (url.pathname.endsWith('/config')) {
+    const ice = [{ urls: ['stun:stun.cloudflare.com:3478', 'stun:stun.l.google.com:19302'] }];
+    if (env.TURN_URLS) ice.push({ urls: env.TURN_URLS.split(','), username: env.TURN_USERNAME, credential: env.TURN_CREDENTIAL });
+    return json({ iceServers: ice });
+  }
+  if (!who.uid) return json({ error: 'Sign in with your own account to make calls.' }, 403);
+  if (req.method === 'POST') {
+    const type = String(body.type || '');
+    if (!['offer', 'answer', 'hangup', 'decline', 'busy'].includes(type) || !body.to || !body.callId) return json({ error: 'Bad call message' }, 400);
+    const data = body.data ? JSON.stringify(body.data).slice(0, 60000) : null;
+    await db.prepare('INSERT INTO rtc (tenant, to_uid, from_uid, from_name, type, call_id, data, at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)')
+      .bind(who.tenant, String(body.to), who.uid, who.name || '', type, String(body.callId).slice(0, 60), data, Date.now()).run();
+    return json({ ok: true });
+  }
+  // GET: messages for me since an id (kept 2 minutes)
+  const since = Number(url.searchParams.get('since')) || 0;
+  const { results } = await db.prepare('SELECT id, from_uid, from_name, type, call_id, data, at FROM rtc WHERE tenant = ?1 AND to_uid = ?2 AND id > ?3 AND at > ?4 ORDER BY id LIMIT 50')
+    .bind(who.tenant, who.uid, since, Date.now() - 120000).all();
+  if (Math.random() < 0.02) await db.prepare('DELETE FROM rtc WHERE at < ?1').bind(Date.now() - 600000).run();
+  const last = since || (await db.prepare('SELECT MAX(id) m FROM rtc').first('m')) || 0;
+  return json({ messages: results.map((r) => ({ ...r, data: r.data ? JSON.parse(r.data) : null })), last: results.at(-1)?.id ?? last });
+}
+
+// ---------- AI (Cloudflare Workers AI, open models): prescription reading & drug quizzes ----------
+// Mistral Small 3.1 (open source, Apache-2.0): reads images (typed & handwritten text) and writes well
+const VISION = '@cf/mistralai/mistral-small-3.1-24b-instruct';
+const TEXT = VISION;
+const firstJson = (text, open = '{') => {
+  // Some models already return parsed JSON instead of text
+  if (text && typeof text === 'object') {
+    if (open === '[' && !Array.isArray(text)) return Object.values(text).find(Array.isArray) || [];
+    return text;
+  }
+  text = String(text || '');
+  const close = open === '{' ? '}' : ']';
+  const a = text.indexOf(open), b = text.lastIndexOf(close);
+  if (a < 0 || b < a) throw new Error('The AI answer could not be read. Try again.');
+  return JSON.parse(text.slice(a, b + 1));
+};
+async function runAi(env, model, input) {
+  try { return await env.AI.run(model, input); }
+  catch (e) {
+    // Meta's licence for Llama 3.2 Vision has to be accepted once per account
+    if (/agree/i.test(e.message)) { await env.AI.run(model, { prompt: 'agree' }).catch(() => {}); return env.AI.run(model, input); }
+    throw e;
+  }
+}
+async function ai(env, path, body, who) {
+  if (!env.AI) return json({ error: 'AI is not set up on this cloud.' }, 503);
+  const lic = JSON.parse(who.tenantRow.features || '{}');
+  if (lic.ai === false) return json({ error: 'AI features are switched off for this pharmacy.' }, 403);
+  if (path === '/api/ai/prescription') {
+    const m = /^data:image\/(jpeg|png|webp);base64,(.+)$/.exec(String(body.image || ''));
+    if (!m || m[2].length > 2_000_000) return json({ error: 'Send a JPG or PNG photo under 1.5 MB.' }, 400);
+    const prompt = 'You are helping a pharmacist in Uganda read a medical prescription (typed or handwritten). Read every medicine on it. ' +
+      'Reply with ONLY this JSON, no other text: {"patient":"","prescriber":"","facility":"","date":"","diagnosis":"","medicines":[{"name":"","strength":"","form":"","dose":"","frequency":"","duration":"","quantity":"","unclear":false}],"notes":""}. ' +
+      'Use generic or brand names exactly as written; expand common abbreviations (tds = three times a day, bd = twice a day, od = once a day, prn = when needed, stat = immediately). Set "unclear": true for anything hard to read. Leave unknown fields empty.';
+    const out = await runAi(env, VISION, { messages: [{ role: 'user', content: [{ type: 'text', text: prompt }, { type: 'image_url', image_url: { url: body.image } }] }], max_tokens: 900, temperature: 0.1 });
+    const parsed = firstJson(out.response);
+    parsed.medicines = (Array.isArray(parsed.medicines) ? parsed.medicines : []).filter((x) => x && x.name).slice(0, 15);
+    return json({ ...parsed, model: VISION });
+  }
+  if (path === '/api/ai/quiz') {
+    const drugs = (Array.isArray(body.drugs) ? body.drugs : []).map((d) => String(d).slice(0, 60)).filter(Boolean).slice(0, 10);
+    if (drugs.length < 2) return json({ error: 'Need at least two medicines.' }, 400);
+    const n = Math.min(10, Math.max(3, Number(body.count) || 8));
+    const prompt = `Write ${n} multiple-choice questions to train pharmacy staff in Uganda about these medicines: ${drugs.join(', ')}. ` +
+      'Cover what each is used for, important side effects, key counselling points, and common interactions or cautions. Use accurate, standard pharmacology (WHO / BNF level). ' +
+      'Reply with ONLY a JSON array, no other text: [{"q":"question","options":["A","B","C","D"],"answer":0,"explain":"one short sentence why"}]. "answer" is the index (0-3) of the correct option. Each question has exactly 4 options and only one correct answer.';
+    const out = await runAi(env, TEXT, { messages: [{ role: 'system', content: 'You are a careful clinical pharmacist and educator.' }, { role: 'user', content: prompt }], max_tokens: 2200, temperature: 0.4 });
+    const qs = firstJson(out.response, '[').filter((x) => x && x.q && Array.isArray(x.options) && x.options.length === 4 && x.answer >= 0 && x.answer < 4).slice(0, n);
+    if (!qs.length) return json({ error: 'The AI did not produce a usable quiz. Try again.' }, 502);
+    return json({ questions: qs, model: TEXT });
+  }
+  return json({ error: 'Not found' }, 404);
+}
+
+// ---------- health alerts (WHO Disease Outbreak News) ----------
+const NEAR = /uganda|kenya|tanzania|rwanda|burundi|south sudan|congo|ethiopia|somalia|africa/i;
+async function healthAlerts() {
+  const cache = caches.default;
+  const key = new Request('https://rxpos.cache/health-alerts-v1');
+  const hit = await cache.match(key);
+  if (hit) return hit;
+  const r = await fetch('https://www.who.int/api/news/diseaseoutbreaknews?sf_culture=en&$orderby=PublicationDateAndTime%20desc&$top=12&$select=Title,PublicationDateAndTime,UrlName', { headers: { Accept: 'application/json' } });
+  if (!r.ok) return json({ error: 'WHO alerts unavailable right now' }, 502);
+  const items = ((await r.json()).value || []).map((x) => ({ title: x.Title, date: String(x.PublicationDateAndTime).slice(0, 10), url: 'https://www.who.int/emergencies/disease-outbreak-news/item/' + x.UrlName, near: NEAR.test(x.Title) }));
+  const res = new Response(JSON.stringify({ source: 'World Health Organization – Disease Outbreak News', items }), { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=10800', ...cors } });
+  await cache.put(key, res.clone());
+  return res;
+}
+
 // ---------- calendar feed (subscribe in Google Calendar, Outlook or the phone's calendar) ----------
 async function calendarSig(env, tenant) {
   const sig = await crypto.subtle.sign('HMAC', await hmacKey(env), te.encode('calendar:' + tenant));
@@ -762,12 +935,20 @@ export default {
       await ensureSchema(env.DB);
       await ensureMainTenant(env);
       if (path === '/api/health') return json({ ok: true, app: 'rxpos-cloud', configured: (env.SYNC_KEY || '').length >= 12, multiPharmacy: true, version: 5, database: env.DB_BACKEND === 'turso' ? 'turso' : 'd1' });
+      // Public: latest WHO Disease Outbreak News (cached 3 h); outbreaks in or near Uganda are flagged
+      if (path === '/api/health-alerts') return await healthAlerts();
+      if (path === '/api/geo') {
+        const cf = req.cf || {};
+        return cf.latitude ? json({ lat: Number(cf.latitude), lon: Number(cf.longitude), city: cf.city || '', region: cf.region || '', country: cf.country || '' }) : json({ error: 'Location unknown' }, 404);
+      }
       // Public: the name behind a pharmacy's web address, for its sign-in page
       const pm = path.match(/^\/api\/pharmacy\/([a-z0-9-]{1,40})$/);
       if (pm) {
         const t = await tenantByCode(env, pm[1]);
-        return t ? json({ id: t.id, slug: t.slug || t.id, name: t.name, status: t.status }) : json({ error: 'No pharmacy at this address. Check the link with your RxPOS provider.' }, 404);
+        return t ? json({ id: t.id, slug: t.slug || t.id, name: t.name, status: t.status, logo: brandingOf(t).logo || null }) : json({ error: 'No pharmacy at this address. Check the link with your RxPOS provider.' }, 404);
       }
+      const fm = path.match(/^\/api\/files\/([a-z0-9-]{1,40})\/([A-Za-z0-9_-]{8,40})\/([A-Za-z0-9_-]{24})$/);
+      if (fm && req.method === 'GET') return await downloadFile(env, fm[1], fm[2], fm[3]);
       const cm = path.match(/^\/api\/calendar\/([a-z0-9-]{1,40})\/([A-Za-z0-9_-]{24})\.ics$/);
       if (cm) {
         if (!safeEqual(cm[2], await calendarSig(env, cm[1]))) return json({ error: 'Not found' }, 404);
@@ -778,6 +959,8 @@ export default {
       if (path === '/api/login' && req.method === 'POST') return await login(env, body);
       if (path === '/api/password/forgot' && req.method === 'POST') return await forgotPassword(env, body);
       if (path === '/api/password/reset' && req.method === 'POST') return await resetPassword(env, body);
+      if (path === '/api/google-client') { const c = await getConfig(env.DB); return json({ clientId: c.google_client_id || null }); }
+      if (path === '/api/password/google' && req.method === 'POST') return await resetWithGoogle(env, body);
       if (path.startsWith('/api/owner/')) return await owner(env, req, url, body);
       if (path.startsWith('/api/owner-auth/')) return await ownerAuthRoutes(env, req, url, body || {}, { json, safeEqual });
 
@@ -787,6 +970,9 @@ export default {
 
       if (path === '/api/sync' && req.method === 'POST') return await sync(env, body, who);
       if (path === '/api/config') return json({ tenant: who.tenant, slug: who.tenantRow.slug || who.tenant, pharmacy: who.tenantRow.name, mtn: mtn.enabled(penv), airtel: airtel.enabled(penv), sms: !!(penv.AT_USERNAME && penv.AT_API_KEY), email: !!(env.BREVO_API_KEY && env.BREVO_SENDER_EMAIL), mtnEnv: penv.MTN_ENV || 'sandbox', airtelEnv: penv.AIRTEL_ENV || 'uat', role: who.role });
+      if (path === '/api/rtc' || path === '/api/rtc/config') return await rtc(env, req, url, body, who);
+      if (path === '/api/files' && req.method === 'POST') return await uploadChunk(env, body, who);
+      if (path.startsWith('/api/ai/') && req.method === 'POST') return await ai(env, path, body, who);
       if (path === '/api/calendar-link') return json({ url: `${url.origin}/api/calendar/${who.tenant}/${await calendarSig(env, who.tenant)}.ics` });
       if (path === '/api/pay/request' && req.method === 'POST') {
         const p = PROVIDERS[body.provider];

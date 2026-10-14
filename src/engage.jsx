@@ -4,11 +4,13 @@
 //  • Hourly reminder: a soft chime and a short card at the top of each hour with what needs doing.
 //  • Notification bell: today's alerts in one place.
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Bell, CalendarClock, PackageX, Repeat, CalendarDays, Thermometer, X, Share2, ChevronRight, ChevronLeft, Clock, Pill, Syringe, Droplet, FlaskConical, Sparkles, Tablets, Bandage, TrendingUp, Hourglass, Gem, Timer } from 'lucide-react';
-import { useStore, daysUntil, daysSince, today } from './store.jsx';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
+import { Bell, CalendarClock, PackageX, Repeat, CalendarDays, Thermometer, X, Share2, ChevronRight, ChevronLeft, Clock, Pill, Syringe, Droplet, FlaskConical, Sparkles, Tablets, Bandage, TrendingUp, Hourglass, Gem, Timer, ThermometerSun, CloudRain, MessagesSquare, HeartPulse, Users } from 'lucide-react';
+import { useStore, daysUntil, daysSince, today, put } from './store.jsx';
 import { whatsappLink } from './cloud.js';
-import { storageLimits } from './weather.js';
+import { storageLimits, useWeather, sixHourReadings } from './weather.js';
+import { popup, systemNotify, soundsOn, setSounds } from './notify.jsx';
+import { tipFor } from './data/health-tips.js';
 
 const addDays = (date, n) => new Date(new Date(date).getTime() + n * 864e5).toISOString().slice(0, 10);
 
@@ -140,7 +142,9 @@ export function Spotlight() {
 
 // ---------- today's alerts ----------
 export function useAlerts() {
-  const { db, products, can } = useStore();
+  const { db, products, can, features } = useStore();
+  const ins = useInsights();
+  const [{ data: wx }] = useWeather(db.settings);
   return useMemo(() => {
     const t = today();
     const warn = db.settings.expiryWarnDays || 90;
@@ -151,16 +155,25 @@ export function useAlerts() {
     const refills = db.prescriptions.filter((r) => r.status === 'Dispensed' && r.refillDays && addDays(r.dispensedOn || r.date, Number(r.refillDays)) <= t).length;
     const events = db.events.filter((e) => e.date === t);
     const lim = storageLimits(db.settings);
-    const lastReading = [...db.tempLogs].sort((a, b) => String(b.at).localeCompare(String(a.at)))[0];
+    const lastReading = [...db.tempLogs].filter((r) => r.place !== 'Outside').sort((a, b) => String(b.at).localeCompare(String(a.at)))[0];
     const badReading = lastReading && ((lastReading.place === 'Fridge' && (lastReading.temp < lim.fridgeMin || lastReading.temp > lim.fridgeMax)) || (lastReading.place !== 'Fridge' && lastReading.temp > lim.roomMax));
-    if (expired && can('inventory.view')) out.push({ tone: 'danger', Icon: CalendarClock, text: `${expired} item${expired > 1 ? 's' : ''} expired but still in stock`, to: '/expiry' });
-    if (expSoon && can('inventory.view')) out.push({ tone: 'warn', Icon: CalendarClock, text: `${expSoon} item${expSoon > 1 ? 's' : ''} expire within 30 days: sell first`, to: '/expiry' });
-    if (low && can('inventory.view')) out.push({ tone: 'warn', Icon: PackageX, text: `${low} item${low > 1 ? 's' : ''} at or below reorder level`, to: '/reorder' });
-    if (refills && can('prescriptions')) out.push({ tone: 'info', Icon: Repeat, text: `${refills} refill${refills > 1 ? 's' : ''} due: remind the patients`, to: '/reminders' });
-    for (const e of events) out.push({ tone: 'info', Icon: CalendarDays, text: `${e.time ? e.time + ' · ' : ''}${e.title}`, to: '/calendar' });
-    if (badReading) out.push({ tone: 'danger', Icon: Thermometer, text: `${lastReading.place} reading ${lastReading.temp}°C is out of range`, to: '/storage' });
+    const inv = can('inventory.view');
+    if (expired && inv) out.push({ key: 'expired', tone: 'danger', Icon: CalendarClock, text: `${expired} item${expired > 1 ? 's' : ''} expired but still in stock`, to: '/expiry', n: expired });
+    if (expSoon && inv) out.push({ key: 'expiring', tone: 'warn', Icon: CalendarClock, text: `${expSoon} item${expSoon > 1 ? 's expire' : ' expires'} within 30 days: sell first`, to: '/expiry', n: expSoon });
+    if (low && inv) out.push({ key: 'low', tone: 'warn', Icon: PackageX, text: `${low} item${low > 1 ? 's' : ''} at or below reorder level`, to: '/reorder', n: low });
+    if (ins.slow.length && inv) out.push({ key: 'slow', tone: 'info', Icon: Timer, text: `${ins.slow.length}${ins.slow.length >= 10 ? '+' : ''} slow-moving items: recommend or promote them`, to: '/reorder', n: ins.slow.length });
+    if (refills && can('prescriptions')) out.push({ key: 'refills', tone: 'info', Icon: Repeat, text: `${refills} refill${refills > 1 ? 's' : ''} due: remind the patients`, to: '/reminders', n: refills });
+    for (const e of events) out.push({ key: 'ev-' + e.id, tone: 'info', Icon: CalendarDays, text: `${e.time ? e.time + ' · ' : ''}${e.title}`, to: '/calendar', n: 1 });
+    if (badReading) out.push({ key: 'reading-' + lastReading.id, tone: 'danger', Icon: Thermometer, text: `${lastReading.place} reading ${lastReading.temp}°C is out of range`, to: '/storage', n: 1 });
+    if (wx && features.weather !== false) {
+      const now = wx.current?.temperature_2m, max = wx.daily?.temperature_2m_max?.[1];
+      if (now >= lim.hotAlert || max >= lim.hotAlert) out.push({ key: 'hot', tone: 'danger', Icon: ThermometerSun, text: now >= lim.hotAlert ? `It's ${Math.round(now)}°C outside: keep medicines cool and check the room thermometer` : `Up to ${Math.round(max)}°C expected today: keep medicines cool`, to: '/storage', n: 1 });
+      const rainToday = wx.daily?.precipitation_probability_max?.[1], rainTomorrow = wx.daily?.precipitation_probability_max?.[2];
+      if (rainToday >= 60) out.push({ key: 'rain', tone: 'info', Icon: CloudRain, text: `Rain likely today (${rainToday}%): protect deliveries and keep stock off the floor`, to: '/storage', n: 1 });
+      else if (rainTomorrow >= 60) out.push({ key: 'rain-tomorrow', tone: 'info', Icon: CloudRain, text: `Rain likely tomorrow (${rainTomorrow}%)`, to: '/storage', n: 1 });
+    }
     return out;
-  }, [db.prescriptions, db.events, db.tempLogs, db.settings, products, can]);
+  }, [db.prescriptions, db.events, db.tempLogs, db.settings, products, can, ins.slow, wx, features.weather]);
 }
 
 export function NotificationBell() {
@@ -187,74 +200,145 @@ export function NotificationBell() {
             <button key={i} className={'bell-item ' + a.tone} onClick={() => { setOpen(false); navigate(a.to); }}><a.Icon size={16} /><span>{a.text}</span><ChevronRight size={14} /></button>
           ))}
           {!alerts.length && <div className="empty">All clear. Nothing needs attention.</div>}
+          <label className="bell-sound"><input type="checkbox" defaultChecked={soundsOn()} onChange={(e) => setSounds(e.target.checked)} /> Sounds on this device</label>
         </div>
       )}
     </div>
   );
 }
 
-// ---------- hourly reminder ----------
-function chime() {
+const quietNow = (s) => {
+  const h = new Date().getHours(), from = Number(s.quietFrom ?? 21), to = Number(s.quietTo ?? 7);
+  return from > to ? h >= from || h < to : h >= from && h < to;
+};
+const seenKey = 'rxpos-announced';
+const announced = () => { try { const j = JSON.parse(localStorage.getItem(seenKey) || '{}'); return j.day === today() ? j : { day: today(), keys: {} }; } catch { return { day: today(), keys: {} }; } };
+
+/** Pop-up + sound when an alert appears (or grows), at most once per kind per day */
+export function AlertWatcher() {
+  const { db } = useStore();
+  const alerts = useAlerts();
+  useEffect(() => {
+    if (quietNow(db.settings) || !alerts.length) return;
+    const seen = announced();
+    const fresh = alerts.filter((a) => (seen.keys[a.key] ?? -1) < a.n);
+    if (!fresh.length) return;
+    const t = setTimeout(() => {
+      for (const a of fresh) seen.keys[a.key] = a.n;
+      try { localStorage.setItem(seenKey, JSON.stringify(seen)); } catch {}
+      const top = fresh.slice(0, 3);
+      popup({ id: 'alerts', tone: top.some((a) => a.tone === 'danger') ? 'danger' : 'warn', icon: Bell, title: fresh.length === 1 ? 'Needs attention' : `${fresh.length} things need attention`, sound: 'alert',
+        render: (close) => <div className="popup-list">{top.map((a) => <Link key={a.key} className={'bell-item ' + a.tone} to={a.to} onClick={close}><a.Icon size={15} /><span>{a.text}</span></Link>)}</div> });
+      systemNotify('RxPOS', top.map((a) => a.text).join('\n'));
+    }, 4000); // let the first sync settle
+    return () => clearTimeout(t);
+  }, [alerts, db.settings]);
+  return null;
+}
+
+/** Pop-up + sound for new team messages (and client replies logged by colleagues) */
+export function MessageWatcher() {
+  const { db, user } = useStore();
+  const location = useLocation();
+  const since = useRef(null);
+  useEffect(() => {
+    const mine = (m) => !m.auto && m.fromId !== user.id && (m.conv === 'team' || (m.conv.startsWith('dm:') && m.conv.includes(user.id)) || (m.conv.startsWith('client:') && m.channel === 'reply'));
+    const latest = db.messages.reduce((a, m) => (m.date > a ? m.date : a), '');
+    if (since.current === null) { since.current = latest; return; } // don't announce old messages on start
+    const fresh = db.messages.filter((m) => m.date > since.current && mine(m)).sort((a, b) => a.date.localeCompare(b.date));
+    since.current = latest > since.current ? latest : since.current;
+    if (!fresh.length || location.pathname === '/chat') return;
+    const m = fresh[fresh.length - 1];
+    const where = m.conv === 'team' ? 'General' : m.conv.startsWith('dm:') ? 'Direct message' : 'Client reply';
+    popup({ id: 'msg', tone: 'info', icon: MessagesSquare, title: `${m.fromName || 'Message'} · ${where}`, body: (fresh.length > 1 ? `(${fresh.length} new) ` : '') + (m.attachment ? (m.attachment.voice ? '🎤 Voice note' : '📎 ' + m.attachment.name) + (m.text && m.text !== 'Voice note' ? ': ' : '') : '') + (m.text === 'Voice note' && m.attachment?.voice ? '' : String(m.text || '').slice(0, 180)), to: '/chat', sound: 'message' });
+    systemNotify(`${m.fromName}: ${where}`, String(m.text).slice(0, 120));
+  }, [db.messages]); // eslint-disable-line react-hooks/exhaustive-deps
+  return null;
+}
+
+/** Outside temperature & humidity logged automatically every 6 hours (from the weather service; no gaps when the app was closed) */
+export function WeatherLogger() {
+  const { db, update, branchId, features } = useStore();
+  const [{ data, place }] = useWeather(db.settings);
+  useEffect(() => {
+    if (!data || features.weather === false) return;
+    const have = new Set(db.tempLogs.map((r) => r.id));
+    const add = sixHourReadings(data).map((r) => ({ id: `wx-${branchId}-${r.time.slice(0, 13)}`, ...r }))
+      .filter((r) => !have.has(r.id));
+    if (!add.length) return;
+    update((d) => { for (const r of add) put(d, 'tempLogs', { id: r.id, at: r.time + ':00', place: 'Outside', temp: Math.round(r.temp * 10) / 10, humidity: Math.round(r.humidity), by: 'Automatic (weather)', note: place?.name || '', auto: true, branchId }); });
+  }, [data, branchId]); // eslint-disable-line react-hooks/exhaustive-deps
+  return null;
+}
+
+// ---------- hourly reminder, room/fridge readings (06, 12, 18), daily greetings (08, 14, 16) ----------
+const GREET_SLOTS = { 8: 'morning', 14: 'afternoon', 16: 'afternoon' };
+let healthAlertCache = null;
+async function whoAlerts(cfg) {
+  if (healthAlertCache && Date.now() - healthAlertCache.at < 3 * 3600e3) return healthAlertCache.items;
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    [[880, 0], [1318.5, 0.18]].forEach(([f, at]) => {
-      const o = ctx.createOscillator(), g = ctx.createGain();
-      o.type = 'sine'; o.frequency.value = f;
-      g.gain.setValueAtTime(0.0001, ctx.currentTime + at);
-      g.gain.exponentialRampToValueAtTime(0.18, ctx.currentTime + at + 0.02);
-      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + at + 0.9);
-      o.connect(g).connect(ctx.destination); o.start(ctx.currentTime + at); o.stop(ctx.currentTime + at + 1);
-    });
-    setTimeout(() => ctx.close(), 1500);
-  } catch {}
+    const base = cfg?.url || (location.protocol.startsWith('http') ? location.origin : '');
+    const r = await fetch(base + '/api/health-alerts', { signal: AbortSignal.timeout(8000) });
+    const j = await r.json();
+    healthAlertCache = { at: Date.now(), items: j.items || [] };
+    return healthAlertCache.items;
+  } catch { return healthAlertCache?.items || []; }
+}
+
+export function greetingMessage(settings, slot, date = today()) {
+  const tip = tipFor(date, slot);
+  const hello = slot === 8 ? 'Good morning' : 'Good afternoon';
+  return { tip, text: `${hello} from ${settings.name || 'your pharmacy'}! 💚\n\nHealth tip: ${tip.text} (Source: ${tip.source})\n\n${settings.phone ? `Questions? Call or WhatsApp us on ${settings.phone}. ` : ''}Get well, stay well.` };
 }
 
 export function HourlyReminder() {
-  const { db, features } = useStore();
+  const { db, features, update, user, branchId, syncCfg } = useStore();
   const alerts = useAlerts();
-  const alertsRef = useRef(alerts);
-  alertsRef.current = alerts;
-  const [card, setCard] = useState(null);
-  const on = features.hourly !== false && db.settings.hourlyChime !== false;
-  const quietFrom = Number(db.settings.quietFrom ?? 21), quietTo = Number(db.settings.quietTo ?? 7);
-  const sound = db.settings.hourlySound !== false;
+  const ref = useRef({});
+  ref.current = { alerts, db, user, branchId, syncCfg };
+  const hourlyOn = features.hourly !== false && db.settings.hourlyChime !== false;
+  const greetOn = db.settings.dailyGreetings !== false;
+  const quietFrom = db.settings.quietFrom, quietTo = db.settings.quietTo;
 
   useEffect(() => {
-    if (!on) return;
     let t;
     const arm = () => {
-      const now = new Date();
-      const next = new Date(now); next.setMinutes(0, 0, 0); next.setHours(now.getHours() + 1);
-      t = setTimeout(fire, next - now + 500);
+      const now = new Date(), next = new Date(now);
+      next.setMinutes(0, 0, 0); next.setHours(now.getHours() + 1);
+      t = setTimeout(fire, next - now + 800);
     };
-    const fire = () => {
-      const h = new Date().getHours();
-      const quiet = quietFrom > quietTo ? h >= quietFrom || h < quietTo : h >= quietFrom && h < quietTo;
-      if (!quiet) {
-        const time = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-        const extra = [];
-        if (h === 9 || h === 15) extra.push({ tone: 'info', Icon: Thermometer, text: 'Record the fridge and room temperature', to: '/storage' });
-        const items = [...alertsRef.current.slice(0, 3), ...extra];
-        setCard({ time, items, at: Date.now() });
-        if (sound) chime();
-        if (document.visibilityState === 'hidden' && 'Notification' in window && Notification.permission === 'granted') {
-          try { new Notification(`RxPOS · ${time}`, { body: items.map((x) => x.text).join('\n') || 'All clear. Have a good hour!', icon: './favicon.svg', tag: 'rxpos-hourly' }); } catch {}
-        }
-      }
+    const fire = async () => {
       arm();
+      const { db: d0, alerts: al } = ref.current;
+      const h = new Date().getHours();
+      if (quietNow(d0.settings)) return;
+      const time = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      if (greetOn && GREET_SLOTS[h]) return greet(h, time);
+      if (!hourlyOn) return;
+      const items = al.slice(0, 3);
+      if ([6, 12, 18].includes(h) && features.weather !== false) items.unshift({ key: 'read', tone: 'info', Icon: Thermometer, text: 'Time to record the room and fridge temperature & humidity', to: '/storage' });
+      popup({ id: 'hour', tone: 'info', icon: Clock, title: `It's ${time}`, sound: 'chime', ttl: 20000,
+        render: (close) => items.length ? <div className="popup-list">{items.map((a, i) => <Link key={i} className={'bell-item ' + a.tone} to={a.to} onClick={close}><a.Icon size={15} /><span>{a.text}</span></Link>)}</div> : <p className="popup-body">All clear. Have a good hour!</p> });
+      systemNotify(`RxPOS · ${time}`, items.map((x) => x.text).join('\n') || 'All clear.');
+    };
+    const greet = async (h, time) => {
+      const { db: d0, user: u, branchId: br, syncCfg: cfg } = ref.current;
+      const g = greetingMessage(d0.settings, h);
+      const who = (await whoAlerts(cfg)).filter((x) => x.near).slice(0, 2);
+      const alertText = who.length ? `\n\n⚠️ Health alert (WHO): ${who.map((x) => x.title).join('; ')}` : '';
+      // One shared team post per pharmacy and slot (same id on every device)
+      update((d) => { put(d, 'messages', { id: `auto-${today()}-${h}`, date: new Date().toISOString(), fromId: 'rxpos', fromName: 'RxPOS', conv: 'team', branchId: br, channel: 'team', auto: true, text: g.text.replace(/\n\n(Questions\?.*)$/s, '') + alertText }); });
+      popup({ id: 'greet', tone: 'ok', icon: HeartPulse, wide: true, sticky: true, sound: 'chime', title: `${h === 8 ? 'Good morning' : 'Good afternoon'}, ${u.name.split(' ')[0]} · ${time}`,
+        render: () => (
+          <div className="greet">
+            <p className="popup-body"><b>Health tip</b> · {g.tip.text} <small className="muted">Source: {g.tip.source}</small></p>
+            {who.map((x) => <p key={x.url} className="popup-body warn-text"><b>WHO alert</b> · <a href={x.url} target="_blank" rel="noreferrer">{x.title}</a> <small className="muted">{x.date}</small></p>)}
+            <p className="muted small">Share today's message with clients (one tap, free):</p>
+          </div>),
+        actions: [{ label: 'Share on WhatsApp', icon: Share2, primary: true, href: whatsappLink('', g.text), keep: true }, { label: 'Send to client list', icon: Users, to: '/messages' }] });
     };
     arm();
     return () => clearTimeout(t);
-  }, [on, quietFrom, quietTo, sound]);
-
-  useEffect(() => { if (!card) return; const t = setTimeout(() => setCard(null), 20000); return () => clearTimeout(t); }, [card]);
-  const navigate = useNavigate();
-  if (!card) return null;
-  return (
-    <div className="hour-card" role="status">
-      <div className="hour-head"><Clock size={18} /><strong>It's {card.time}</strong><button className="icon-btn" onClick={() => setCard(null)} aria-label="Dismiss"><X size={16} /></button></div>
-      {card.items.length ? card.items.map((a, i) => <button key={i} className={'bell-item ' + a.tone} onClick={() => { setCard(null); navigate(a.to); }}><a.Icon size={15} /><span>{a.text}</span></button>)
-        : <p className="muted small">All clear. Have a good hour!</p>}
-    </div>
-  );
+  }, [hourlyOn, greetOn, quietFrom, quietTo, features.weather]); // eslint-disable-line react-hooks/exhaustive-deps
+  return null;
 }

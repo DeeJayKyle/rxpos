@@ -6,9 +6,10 @@ import { StoreProvider } from './store.jsx';
 import { FeedbackHost } from './feedback.jsx';
 import { idbGet, idbKeys } from './idb.js';
 import './styles.css';
+import { applyTheme, savedTheme } from './themes.js';
 
 // Apply the saved theme before first paint (no flash)
-try { const t = localStorage.getItem('pharmapos-theme'); if (t) document.documentElement.dataset.theme = t; } catch {}
+applyTheme(savedTheme() || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
 
 class ErrorBoundary extends React.Component {
   state = { error: null };

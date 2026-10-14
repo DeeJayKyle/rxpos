@@ -8,6 +8,7 @@ import { toast, ask, askText } from '../feedback.jsx';
 import { Logo } from '../logo.jsx';
 import { downloadFile, today } from '../store.jsx';
 import { isWeb } from '../platform.js';
+import { THEMES } from '../themes.js';
 
 const KEY = 'rxpos-owner-key';
 /** GitHub mark (brand icons are not in lucide) */
@@ -229,7 +230,7 @@ function TenantAdmin({ id, api, url, onBack }) {
             <button className="btn danger" onClick={deletePharmacy}><Trash2 size={16} />Delete</button>
           </div>
         </div>
-        <Tabs value={tab} onChange={setTab} tabs={[['overview', 'Overview'], ['features', 'Features'], ['staff', `Staff (${d.users.length})`], ['branches', `Branches (${d.branches.length})`], ['data', 'Data'], ['payments', 'Payments & SMS'], ['danger', 'Reset / delete']]} />
+        <Tabs value={tab} onChange={setTab} tabs={[['overview', 'Overview'], ['features', 'Features'], ['brand', 'Look & logo'], ['staff', `Staff (${d.users.length})`], ['branches', `Branches (${d.branches.length})`], ['data', 'Data'], ['payments', 'Payments & SMS'], ['danger', 'Reset / delete']]} />
 
         {tab === 'overview' && (
           <>
@@ -251,6 +252,8 @@ function TenantAdmin({ id, api, url, onBack }) {
             </form>
           </>
         )}
+
+        {tab === 'brand' && <BrandingTab t={t} onSave={(branding, msg) => doing(() => api('/tenants/' + t.id, { branding }), msg)} busy={busy} />}
 
         {tab === 'features' && (
           <div className="card">
@@ -614,5 +617,73 @@ function OwnerAccount({ api, onClose }) {
       </form>
       <p className="muted small">The master key in <b>RxPOS-OWNER-KEY.txt</b> always works as an emergency key. Keep that file somewhere safe.</p>
     </Modal>
+  );
+}
+
+/** Make an uploaded logo small (max 256 px PNG) so it loads fast everywhere */
+function shrinkImage(file) {
+  return new Promise((resolve, reject) => {
+    if (file.type === 'image/svg+xml' && file.size < 120000) { const r = new FileReader(); r.onload = () => resolve(r.result); r.onerror = reject; r.readAsDataURL(file); return; }
+    const img = new Image();
+    img.onload = () => {
+      const k = Math.min(1, 256 / Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      resolve(c.toDataURL('image/png'));
+      URL.revokeObjectURL(img.src);
+    };
+    img.onerror = () => reject(new Error('That file is not an image'));
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+/** Owner: the pharmacy's logo and the colour themes its staff may choose from */
+function BrandingTab({ t, onSave, busy }) {
+  const b = t.branding || {};
+  const [logo, setLogo] = useState(b.logo || '');
+  const [themes, setThemes] = useState(() => new Set(b.themes?.length ? b.themes : THEMES.map((x) => x.id)));
+  const [def, setDef] = useState(b.defaultTheme || '');
+  const pick = async (file) => { try { const d = await shrinkImage(file); if (d.length > 200000) throw new Error('That logo is too large even after resizing. Use a simpler image.'); setLogo(d); } catch (e) { toast(e.message, 'error'); } };
+  const toggle = (id) => { const n = new Set(themes); n.has(id) ? n.delete(id) : n.add(id); setThemes(n); };
+  const all = themes.size === THEMES.length;
+  return (
+    <div className="stack">
+      <div className="card">
+        <h3>Logo</h3>
+        <div className="row gap brand-row">
+          <div className="logo-preview">{logo ? <img src={logo} alt="Pharmacy logo" /> : <Logo size={64} />}</div>
+          <div className="stack">
+            <p className="muted small">Shown on the pharmacy's sign-in page, the app menu and printed receipts. PNG, JPG or SVG; square works best.</p>
+            <div className="row gap">
+              <label className="btn ghost"><Upload size={16} />Choose image<input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden onChange={(e) => e.target.files[0] && pick(e.target.files[0])} /></label>
+              {logo && <button className="btn ghost" onClick={() => setLogo('')}><Trash2 size={16} />Use the RxPOS logo</button>}
+            </div>
+          </div>
+        </div>
+        <div className="form-actions"><button className="btn primary" disabled={busy || logo === (b.logo || '')} onClick={() => onSave({ logo }, 'Logo saved. Devices show it at their next sync.')}>Save logo</button></div>
+      </div>
+      <div className="card">
+        <div className="row between"><h3>Themes this pharmacy can use</h3>
+          <button className="btn sm ghost" onClick={() => setThemes(all ? new Set(['light', 'dark', 'clinic-blue']) : new Set(THEMES.map((x) => x.id)))}>{all ? 'Choose a few' : 'Allow all'}</button></div>
+        <p className="muted small">Staff pick from these with the palette button. Allow at least 3. {themes.size} of {THEMES.length} allowed.</p>
+        <div className="theme-grid">
+          {THEMES.map((x) => (
+            <label key={x.id} className={'theme-card' + (themes.has(x.id) ? ' on' : '')}>
+              <input type="checkbox" checked={themes.has(x.id)} onChange={() => toggle(x.id)} />
+              <span className="theme-demo" style={{ background: x.c.bg, borderColor: x.c.borderStrong }}>
+                <i style={{ background: x.c.sidebar }} /><b style={{ background: x.c.surface, borderColor: x.c.border }}><em style={{ background: `linear-gradient(135deg, ${x.c.primary}, ${x.c.primary2})` }} /><u style={{ background: x.c.muted }} /></b>
+              </span>
+              <span className="theme-name">{x.name}<small className="muted">{x.base}{x.inspired && x.inspired !== x.name ? ' · ' + x.inspired : ''}</small></span>
+            </label>
+          ))}
+        </div>
+        <div className="form-grid">
+          <label className="field"><span>Default theme for new devices</span>
+            <select value={def} onChange={(e) => setDef(e.target.value)}><option value="">Device decides (light / dark)</option>{THEMES.filter((x) => themes.has(x.id)).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
+        </div>
+        <div className="form-actions"><button className="btn primary" disabled={busy || themes.size < 3} onClick={() => onSave({ themes: all ? [] : [...themes], defaultTheme: themes.has(def) ? def : '' }, 'Themes saved')}>Save themes</button></div>
+      </div>
+    </div>
   );
 }

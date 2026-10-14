@@ -15,6 +15,7 @@ export function Receipt({ sale }) {
   return (
     <div className={'receipt print-area paper-' + (s.paperWidth || 80)}>
       <div className="center">
+        {db.license?.[0]?.branding?.logo && <img className="receipt-logo" src={db.license[0].branding.logo} alt="" />}
         <strong className="receipt-title">{s.name}</strong>
         {db.branches.length > 1 && branch && <div>{branch.name}</div>}
         {(branch?.address || s.address) && <div>{branch?.address || s.address}</div>}

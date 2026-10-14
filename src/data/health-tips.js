@@ -1,0 +1,61 @@
+// Short health tips for daily greetings (team & clients). Written for RxPOS from the public guidance of the named
+// organisations (World Health Organization, Uganda Ministry of Health, US CDC, UNICEF); each tip names its source.
+export const HEALTH_TIPS = [
+  ['Sleep under an insecticide-treated mosquito net every night, especially children and pregnant women, to prevent malaria.', 'WHO / Uganda MoH'],
+  ['A fever can be malaria. Get tested before treatment, and finish the full course of medicine you are given.', 'WHO / Uganda MoH'],
+  ['Wash your hands with soap and clean water before eating, before preparing food and after using the toilet.', 'WHO'],
+  ['Drink safe water: boil it or treat it, and store it in a clean covered container.', 'WHO / UNICEF'],
+  ['For diarrhoea, give oral rehydration salts (ORS) and zinc, keep breastfeeding, and seek care if there is blood or the child is very weak.', 'WHO / UNICEF'],
+  ['Take antibiotics only when prescribed by a health worker, and complete the full course. Misuse makes infections harder to treat.', 'WHO'],
+  ['Never share antibiotics or use leftovers. Ask your pharmacist before taking any medicine.', 'WHO'],
+  ['Keep all medicines out of the reach and sight of children.', 'WHO'],
+  ['Check the expiry date on every medicine. Do not use medicines that are expired, discoloured or damaged.', 'Uganda MoH'],
+  ['Store medicines in a cool, dry place away from direct sunlight unless the label says otherwise.', 'WHO'],
+  ['Know your blood pressure. Have it checked at least once a year, more often if you are over 40.', 'WHO'],
+  ['Eat less salt: aim for under one teaspoon (5 g) a day to protect your heart and blood pressure.', 'WHO'],
+  ['Eat at least five portions of fruit and vegetables every day.', 'WHO'],
+  ['Cut down on sugary drinks; water is the best drink for your body.', 'WHO'],
+  ['Be active: adults need at least 150 minutes of moderate activity a week, such as brisk walking.', 'WHO'],
+  ['If you live with diabetes, take your medicines daily, check your feet every day and keep your clinic visits.', 'WHO'],
+  ['Know your HIV status. Testing is free at government health facilities.', 'Uganda MoH'],
+  ['People living with HIV who take their treatment every day can live long, healthy lives and protect their partners.', 'WHO / UNAIDS'],
+  ['A cough for two weeks or more could be TB. Get tested; TB is curable with the full course of treatment.', 'WHO / Uganda MoH'],
+  ['Cover your mouth and nose with a tissue or your elbow when you cough or sneeze.', 'WHO'],
+  ['Make sure children receive all their vaccines on time. Keep the child health card safe.', 'UNICEF / Uganda MoH'],
+  ['Breastfeed babies exclusively for the first six months; continue with other foods up to two years and beyond.', 'WHO / UNICEF'],
+  ['Pregnant women should start antenatal care early and attend at least eight contacts.', 'WHO'],
+  ['Take iron and folic acid during pregnancy as advised by your health worker.', 'WHO'],
+  ['Do not smoke. Quitting tobacco at any age improves your health quickly.', 'WHO'],
+  ['Limit alcohol. Less is better for your health, and none while pregnant.', 'WHO'],
+  ['Protect your skin and eyes from strong sun; wear a hat and drink enough water on hot days.', 'WHO'],
+  ['Get enough sleep: most adults need 7 to 9 hours a night.', 'CDC'],
+  ['Talk to someone you trust when you feel stressed or low. Mental health is part of good health.', 'WHO'],
+  ['Brush your teeth twice a day with fluoride toothpaste and limit sugary snacks.', 'WHO'],
+  ['Wash fruit and vegetables with safe water before eating them.', 'WHO'],
+  ['Keep food safe: keep raw and cooked food separate, and cook meat thoroughly.', 'WHO'],
+  ['Clear standing water around your home to reduce mosquito breeding.', 'Uganda MoH'],
+  ['Use a condom correctly every time to prevent HIV and other sexually transmitted infections.', 'WHO'],
+  ['Rest your eyes: every 20 minutes at a screen, look at something far away for 20 seconds.', 'CDC'],
+  ['Take medicines exactly as prescribed: the right dose, at the right time, for the right number of days.', 'WHO'],
+  ['Tell your pharmacist about all the medicines and herbal products you take to avoid harmful interactions.', 'WHO'],
+  ['Do not drive or operate machines after taking medicines that make you drowsy.', 'WHO'],
+  ['If you have high blood pressure, take your medicine every day even when you feel well.', 'WHO'],
+  ['Check your weight and waist size; a healthy weight lowers the risk of diabetes and heart disease.', 'WHO'],
+  ['Wear a helmet on boda-bodas and buckle your seat belt in cars.', 'WHO / Uganda MoH'],
+  ['Dispose of old medicines safely: return them to the pharmacy instead of throwing them in the latrine or bin.', 'Uganda MoH'],
+  ['Mothers: watch for danger signs after birth (heavy bleeding, fever, severe headache) and go to a health facility at once.', 'WHO'],
+  ['For a child with fast or difficult breathing, seek care immediately; it may be pneumonia.', 'WHO / UNICEF'],
+  ['Wash hands and avoid touching sick animals or bush meat during disease outbreaks.', 'WHO / Uganda MoH'],
+  ['During an Ebola or Marburg outbreak, avoid contact with the blood or body fluids of sick people and report suspected cases on 0800 100 066.', 'Uganda MoH'],
+  ['Deworm children every six months as recommended by your health worker.', 'WHO / Uganda MoH'],
+  ['Vitamin A supplements protect young children; ask at your health facility.', 'UNICEF'],
+  ['Get screened for cervical cancer: women aged 30 to 49 should be checked regularly.', 'WHO / Uganda MoH'],
+  ['Hepatitis B is preventable with a vaccine. Get tested and vaccinated.', 'WHO / Uganda MoH'],
+];
+
+/** Deterministic tip for a date and slot, so every device in a pharmacy shows the same one */
+export function tipFor(date, slot) {
+  const n = [...String(date) + slot].reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) >>> 0, 7);
+  const [text, source] = HEALTH_TIPS[n % HEALTH_TIPS.length];
+  return { text, source };
+}

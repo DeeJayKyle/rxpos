@@ -4,15 +4,19 @@ import {
   LayoutDashboard, ShoppingCart, PackageOpen, ReceiptText, FileText, ClipboardPlus, Users, Truck, Pill, FlaskConical,
   Boxes, PackagePlus, History, CalendarClock, PencilRuler, ScrollText, Wallet, Tags, Landmark, ArrowLeftRight, HandCoins,
   ArrowDownLeft, ArrowUpRight, BookOpen, BarChart3, Settings as SettingsIcon, Search, Sun, Moon, Menu, LogOut, ChevronDown,
-  CornerDownLeft, User, Plus, BellRing, ShoppingBag, Tag, FileUp, Building2, Send, ShieldCheck, Clock, BookMarked, MessagesSquare, UserCog, KeyRound, CalendarDays, Thermometer,
+  CornerDownLeft, User, Plus, BellRing, ShoppingBag, Tag, FileUp, Building2, Send, ShieldCheck, Clock, BookMarked, MessagesSquare, UserCog, KeyRound, CalendarDays, Thermometer, Palette, ScanText, GraduationCap, Megaphone, CalendarRange,
 } from 'lucide-react';
 import { useStore, daysUntil, makePassword, put, audit } from './store.jsx';
 import { askText, toast } from './feedback.jsx';
 import Auth from './pages/Auth.jsx';
-import { Logo } from './logo.jsx';
+import { BrandLogo } from './logo.jsx';
 import { unreadCount } from './pages/Chat.jsx';
-import { Spotlight, HourlyReminder, NotificationBell } from './engage.jsx';
+import { Spotlight, HourlyReminder, NotificationBell, AlertWatcher, MessageWatcher, WeatherLogger } from './engage.jsx';
+import { PopupHost } from './notify.jsx';
+import { CallManager } from './calls.jsx';
+import { WeeklyPopup } from './pages/Weekly.jsx';
 import { isWeb } from './platform.js';
+import { applyTheme, savedTheme, saveTheme, allowedThemes } from './themes.js';
 const OwnerConsole = lazy(() => import('./pages/OwnerConsole.jsx'));
 
 // Pages load on demand so the app opens fast, even on low-end PCs and phones
@@ -45,6 +49,10 @@ const P = {
   DrugInfo: page(() => import('./pages/DrugInfo.jsx')),
   Users: page(() => import('./pages/Users.jsx')),
   Calendar: page(() => import('./pages/Calendar.jsx')),
+  Scan: page(() => import('./pages/Scan.jsx')),
+  Quiz: page(() => import('./pages/Quiz.jsx')),
+  Messages: page(() => import('./pages/Messages.jsx')),
+  Weekly: page(() => import('./pages/Weekly.jsx')),
   Storage: page(() => import('./pages/Storage.jsx')),
 };
 
@@ -58,13 +66,16 @@ const NAV = [
     ['/shifts', 'Shifts & Cash-up', Clock, null, null, <P.Shifts />, 'shifts', 'shifts'],
     ['/proformas', 'Proformas', FileText, null, null, <P.Proformas />, 'proformas', 'proformas'],
     ['/prescriptions', 'Prescriptions & Refills', ClipboardPlus, null, null, <P.Prescriptions />, 'prescriptions', 'prescriptions'],
+    ['/scan', 'Scan Prescription', ScanText, null, null, <P.Scan />, 'prescriptions', 'ai'],
     ['/drug-info', 'Drug Information', BookMarked, null, null, <P.DrugInfo />, null, 'drugInfo'],
+    ['/quiz', 'Drug Quiz', GraduationCap, null, null, <P.Quiz />, null, 'drugInfo'],
   ] },
   { group: 'People', items: [
     ['/customers', 'Customers', Users, null, null, <P.Customers />, 'customers'],
     ['/suppliers', 'Suppliers', Truck, null, null, <P.Suppliers />, 'suppliers'],
     ['/chat', 'Chat & Messages', MessagesSquare, null, 'chat', <P.Chat />, 'chat', 'chat'],
     ['/reminders', 'Reminders', BellRing, null, null, <P.Reminders />, 'reminders', 'reminders'],
+    ['/messages', 'Messages & SMS', Megaphone, null, null, <P.Messages />, 'reminders', 'reminders'],
     ['/calendar', 'Calendar', CalendarDays, null, null, <P.Calendar />, null, 'calendar'],
   ] },
   { group: 'Medicine Inventory', items: [
@@ -95,7 +106,7 @@ const NAV = [
     ['/creditors', 'Creditors', ArrowUpRight, null, null, <P.Creditors />, 'finance', 'finance'],
     ['/cash-book', 'Cash Book', BookOpen, null, null, <P.CashBook />, 'finance', 'finance'],
   ] },
-  { group: 'Insights', items: [['/reports', 'Reports', BarChart3, null, null, <P.Reports />, 'reports', 'reports']] },
+  { group: 'Insights', items: [['/weekly', 'Weekly Summary', CalendarRange, null, null, <P.Weekly />, 'reports', 'reports'], ['/reports', 'Reports', BarChart3, null, null, <P.Reports />, 'reports', 'reports']] },
   { group: 'System', items: [
     ['/users', 'Users & Roles', UserCog, null, null, <P.Users />, 'users.manage'],
     ['/settings', 'Settings', SettingsIcon, null, null, <P.Settings />, 'settings.manage'],
@@ -105,13 +116,44 @@ const NAV = [
 
 const SHORTCUTS = { F2: '/pos', F3: '/pos/wholesale', F4: '/add-stock', F6: '/sales', F7: '/inventory' };
 
+/** The device's colour theme (any theme the owner allows for this pharmacy) */
 function useTheme() {
-  const [theme, setTheme] = useState(() => document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+  const [theme, setTheme] = useState(() => savedTheme() || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+  useEffect(() => { applyTheme(theme); saveTheme(theme); }, [theme]);
+  return [theme, setTheme];
+}
+
+function ThemePicker({ theme, setTheme }) {
+  const { db } = useStore();
+  const branding = db.license?.[0]?.branding;
+  const list = allowedThemes(branding);
+  const [open, setOpen] = useState(false);
+  const ref = useRef();
+  // Keep within what the owner allows for this pharmacy
+  useEffect(() => { if (list.length && !list.some((t) => t.id === theme)) setTheme(branding?.defaultTheme && list.some((t) => t.id === branding.defaultTheme) ? branding.defaultTheme : list[0].id); }, [branding]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-    try { localStorage.setItem('pharmapos-theme', theme); } catch {}
-  }, [theme]);
-  return [theme, () => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))];
+    if (!open) return;
+    const off = (e) => !ref.current?.contains(e.target) && setOpen(false);
+    window.addEventListener('pointerdown', off);
+    return () => window.removeEventListener('pointerdown', off);
+  }, [open]);
+  return (
+    <div className="bell" ref={ref}>
+      <button className="icon-btn" title="Theme" onClick={() => setOpen((o) => !o)}><Palette size={19} /></button>
+      {open && (
+        <div className="bell-menu theme-menu">
+          <div className="bell-head">Theme</div>
+          {list.map((t) => (
+            <button key={t.id} className={'theme-item' + (t.id === theme ? ' on' : '')} onClick={() => { setTheme(t.id); setOpen(false); }}>
+              <span className="swatch" style={{ background: `linear-gradient(135deg, ${t.c.surface} 0 45%, ${t.c.primary} 45% 72%, ${t.c.primary2} 72%)`, borderColor: t.c.borderStrong }} />
+              <span className="grow">{t.name}{t.inspired && t.inspired !== t.name && <small className="muted"> · {t.inspired}</small>}</span>
+              {t.base === 'dark' ? <Moon size={13} /> : <Sun size={13} />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function useOnline() {
@@ -124,15 +166,22 @@ function useOnline() {
   return online;
 }
 
-function SyncPill() {
+/** Live clock (with seconds). The dot shows the connection: green = up to date, amber = offline, red = needs attention. */
+function ClockPill() {
   const { syncStatus, syncNow, setUser } = useStore();
   const online = useOnline();
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => { const t = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(t); }, []);
   const s = syncStatus.state;
-  const label = s === 'off' ? (online ? 'On this device' : 'Offline')
-    : s === 'ok' ? 'Synced ' + new Date(syncStatus.lastSync).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    : s === 'syncing' ? (syncStatus.progress || 'Syncing…') : s === 'offline' ? 'Offline – will sync' : syncStatus.expired ? 'Sign in again' : 'Sync error';
-  const tone = s === 'ok' ? 'ok' : s === 'error' ? 'danger' : s === 'syncing' ? 'syncing' : s === 'offline' || !online ? 'warn' : '';
-  return <button className={'pill ' + tone} title={syncStatus.error || 'Sync now'} onClick={() => (syncStatus.expired ? setUser(null) : syncNow())}><i />{label}</button>;
+  const tone = syncStatus.expired || s === 'error' ? 'danger' : s === 'offline' || !online ? 'warn' : s === 'syncing' ? 'syncing' : 'ok';
+  const tip = syncStatus.expired ? 'Signed out of the cloud: click to sign in again' : s === 'error' ? syncStatus.error : !online || s === 'offline' ? 'Offline: your work is saved and goes up when the internet is back'
+    : syncStatus.lastSync ? 'Up to date ' + new Date(syncStatus.lastSync).toLocaleTimeString() : 'Connecting…';
+  return (
+    <button className={'pill clock ' + tone} title={tip} onClick={() => (syncStatus.expired ? setUser(null) : syncNow())}>
+      <i /><span className="clock-time">{now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+      <span className="clock-date">{now.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })}</span>
+    </button>
+  );
 }
 
 /** Ctrl+K: jump to any page, medicine, customer or receipt */
@@ -195,7 +244,7 @@ function Shell() {
   const { db, products, user, setUser, branchId, branch, update } = useStore();
   const navigate = useNavigate();
   const location = useLocation();
-  const [theme, toggleTheme] = useTheme();
+  const [theme, setTheme] = useTheme();
   const [drawer, setDrawer] = useState(false);
   const [palette, setPalette] = useState(false);
   const [collapsed, setCollapsed] = useState(() => { try { return JSON.parse(localStorage.getItem('pharmapos-nav')) || {}; } catch { return {}; } });
@@ -256,7 +305,7 @@ function Shell() {
     <div className={'shell' + (drawer ? ' drawer-open' : '')}>
       <div className="drawer-bg" onClick={() => setDrawer(false)} />
       <aside className="sidebar">
-        <div className="brand"><Logo size={34} /> <span className="wordmark">Rx<span className="brand-accent">POS</span></span></div>
+        <div className="brand"><BrandLogo src={db.license?.[0]?.branding?.logo} size={34} /> <span className="wordmark">Rx<span className="brand-accent">POS</span></span></div>
         <div className="store-name">{db.settings.name}</div>
         <nav>
           {groups.map((g, i) => (
@@ -285,9 +334,9 @@ function Shell() {
           <button className="search-trigger" onClick={() => setPalette(true)}><Search size={16} /><span>Search medicines, customers, receipts…</span><kbd>Ctrl K</kbd></button>
           <div className="spacer grow" />
           {db.branches.length > 1 && <NavLink to="/branches" className="pill branch-pill" title="Branch this device works as"><Building2 size={14} />{branch?.name}</NavLink>}
-          <SyncPill />
+          <ClockPill />
           <NotificationBell />
-          <button className="icon-btn" title={theme === 'dark' ? 'Light mode' : 'Dark mode'} onClick={toggleTheme}>{theme === 'dark' ? <Sun size={19} /> : <Moon size={19} />}</button>
+          <ThemePicker theme={theme} setTheme={setTheme} />
         </header>
         <main className="content">
           <Suspense fallback={<div className="page"><div className="skeleton" /><div className="skeleton" style={{ height: 280 }} /></div>}>
@@ -308,6 +357,12 @@ function Shell() {
       <CommandPalette open={palette} onClose={() => setPalette(false)} pages={pages} />
       <Spotlight />
       <HourlyReminder />
+      <AlertWatcher />
+      <MessageWatcher />
+      <WeatherLogger />
+      <PopupHost />
+      <CallManager />
+      <WeeklyPopup />
       <FirstDownload />
     </div>
   );
@@ -346,7 +401,6 @@ function Gate() {
 }
 
 export default function App() {
-  useTheme();
   useHideSplash();
   return <HashRouter><Gate /></HashRouter>;
 }

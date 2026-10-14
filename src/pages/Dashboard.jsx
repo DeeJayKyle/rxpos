@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Banknote, Wallet, CalendarClock, PackageX, Pill, Coins, Users, ShoppingCart, PackagePlus, ReceiptText, Share2, Megaphone } from 'lucide-react';
+import { Banknote, Wallet, CalendarClock, PackageX, Pill, Coins, Users, ShoppingCart, ReceiptText, Share2, Megaphone } from 'lucide-react';
 import { useStore, today, daysUntil, MAIN_BRANCH } from '../store.jsx';
 import { Stat, BarChart, AreaChart, Empty } from '../ui.jsx';
 import { useInsights, shareText } from '../engage.jsx';
@@ -57,7 +57,6 @@ export default function Dashboard() {
           <div className="sub">{new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} · {db.settings.name}</div>
         </div>
         <div className="row gap">
-          <Link className="btn ghost" to="/add-stock"><PackagePlus size={16} />Add stock</Link>
           <Link className="btn primary" to="/pos"><ShoppingCart size={16} />New sale</Link>
         </div>
       </div>

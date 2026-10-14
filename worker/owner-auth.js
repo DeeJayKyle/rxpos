@@ -56,7 +56,7 @@ async function checkPassword(cfg, pw) {
 
 // ---------- Google: verify the ID token from "Sign in with Google" ----------
 let googleKeys = null;
-async function verifyGoogle(credential, clientId) {
+export async function verifyGoogle(credential, clientId) {
   const [h, p, s] = String(credential || '').split('.');
   if (!h || !p || !s) throw new Error('Google sign-in failed.');
   const header = JSON.parse(new TextDecoder().decode(fromB64url(h)));
@@ -90,10 +90,12 @@ export async function ownerAuthRoutes(env, req, url, body, { json, safeEqual }) 
   if (path === '/login' && req.method === 'POST') {
     const lock = 'owner:';
     const fail = await db.prepare('SELECT n, until FROM login_fail WHERE email = ?1').bind(lock).first();
-    if (fail && fail.until > Date.now()) return json({ error: `Too many wrong tries. Try again in ${Math.ceil((fail.until - Date.now()) / 60000)} minutes, or sign in with Google / GitHub.` }, 429);
     const secret = String(body.password || '');
+    // The master key (long and random) always works, even during a lock: it is the emergency way back in
+    const master = safeEqual(secret, env.OWNER_KEY);
+    if (!master && fail && fail.until > Date.now()) return json({ error: `Too many wrong tries. Try again in ${Math.ceil((fail.until - Date.now()) / 60000)} minutes, sign in with Google / GitHub, or use the master key.` }, 429);
     let via = null;
-    if (safeEqual(secret, env.OWNER_KEY)) via = 'master key';
+    if (master) via = 'master key';
     else if (await checkPassword(cfg, secret)) via = 'password';
     if (!via) {
       const n = (fail && fail.until <= Date.now() && fail.until > 0 ? 0 : fail?.n || 0) + 1;

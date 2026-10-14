@@ -13,6 +13,11 @@ export const LOGO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64
   <rect x="27" y="18" width="10" height="28" rx="5" transform="rotate(45 32 32)" fill="none" stroke="#fff" stroke-width="1.6"/>
 </svg>`;
 
+/** The pharmacy's own logo (set by the owner) or the RxPOS mark */
+export function BrandLogo({ src, size = 34 }) {
+  return src ? <img className="logo-mark logo-img" src={src} alt="" style={{ width: size, height: size }} /> : <Logo size={size} />;
+}
+
 export function Logo({ size = 34, className = '' }) {
   return <span className={'logo-mark ' + className} style={{ width: size, height: size }} dangerouslySetInnerHTML={{ __html: LOGO_SVG }} aria-hidden="true" />;
 }

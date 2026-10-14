@@ -115,28 +115,36 @@ export default function Settings() {
             {features.hourly !== false && <>
               <label className="field check"><input type="checkbox" checked={s.hourlyChime !== false} onChange={(e) => setS({ ...s, hourlyChime: e.target.checked })} /><span>Hourly time reminder with today's to-dos</span></label>
               <label className="field check"><input type="checkbox" checked={s.hourlySound !== false} onChange={(e) => setS({ ...s, hourlySound: e.target.checked })} /><span>Play a soft chime</span></label>
+              <label className="field check"><input type="checkbox" checked={s.dailyGreetings !== false} onChange={(e) => setS({ ...s, dailyGreetings: e.target.checked })} /><span>Daily greeting, health tip and WHO health alerts to the team at 8 am, 2 pm and 4 pm (with one-tap sharing to clients on WhatsApp)</span></label>
               <label className="field"><span>Quiet from (hour, 0-23)</span><input type="number" min="0" max="23" value={s.quietFrom ?? 21} onChange={(e) => setS({ ...s, quietFrom: e.target.value })} /></label>
               <label className="field"><span>Quiet until (hour, 0-23)</span><input type="number" min="0" max="23" value={s.quietTo ?? 7} onChange={(e) => setS({ ...s, quietTo: e.target.value })} /></label>
             </>}
           </div>
+          <p className="muted small">Pop-ups with a sound appear for short-expiry and low stock, slow movers, hot weather (from {s.hotAlert || 30}°C), rain forecasts and new messages. Turn sounds off on a device from the bell menu.</p>
           {'Notification' in window && (
             <p className="muted small">Desktop notifications when RxPOS is in the background: <strong>{Notification.permission === 'granted' ? 'on' : Notification.permission === 'denied' ? 'blocked in this browser' : 'off'}</strong>
               {Notification.permission === 'default' && <> · <button type="button" className="link-btn" onClick={() => Notification.requestPermission().then(() => setS({ ...s }))}>Turn on</button></>}</p>
           )}
           {features.weather !== false && <>
             <h3 style={{ marginTop: 18 }}><MapPin size={18} />Weather location</h3>
-            <p className="muted small">Currently: <strong>{(s.weatherPlace || DEFAULT_PLACE).name}</strong>. Weather from Open-Meteo (free, no account).</p>
-            <div className="picker"><div className="row gap">
+            <label className="field"><span>Weather location</span>
+              <select value={s.weatherMode || 'device'} onChange={(e) => setS({ ...s, weatherMode: e.target.value })}>
+                <option value="device">Where each device is (GPS, or its internet connection)</option>
+                <option value="fixed">A fixed town (choose below)</option>
+              </select></label>
+            {s.weatherMode === 'fixed' && <p className="muted small">Town: <strong>{(s.weatherPlace || DEFAULT_PLACE).name}</strong>. Weather from Open-Meteo (free, no account).</p>}
+            {s.weatherMode === 'fixed' && <div className="picker"><div className="row gap">
               <input placeholder="Search your town, e.g. Mbarara" value={placeQ} onChange={(e) => setPlaceQ(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && findPlace(e)} />
               <button type="button" className="btn ghost" onClick={findPlace}><Search size={16} />Find</button>
             </div>
-            {places && <div className="picker-list">{places.map((p) => <button type="button" key={p.name + p.lat} onClick={() => { setS({ ...s, weatherPlace: p }); setPlaces(null); setPlaceQ(''); }}>{p.name}</button>)}{!places.length && <span className="muted small">No place found</span>}</div>}</div>
+            {places && <div className="picker-list">{places.map((p) => <button type="button" key={p.name + p.lat} onClick={() => { setS({ ...s, weatherPlace: p }); setPlaces(null); setPlaceQ(''); }}>{p.name}</button>)}{!places.length && <span className="muted small">No place found</span>}</div>}</div>}
             <h3 style={{ marginTop: 18 }}><Thermometer size={18} />Storage limits</h3>
             <div className="form-grid">
               <label className="field"><span>Room: lowest (°C)</span><input type="number" value={s.roomMin ?? lim.roomMin} onChange={(e) => setS({ ...s, roomMin: e.target.value })} /></label>
               <label className="field"><span>Room: highest (°C)</span><input type="number" value={s.roomMax ?? lim.roomMax} onChange={(e) => setS({ ...s, roomMax: e.target.value })} /></label>
               <label className="field"><span>Fridge: lowest (°C)</span><input type="number" value={s.fridgeMin ?? lim.fridgeMin} onChange={(e) => setS({ ...s, fridgeMin: e.target.value })} /></label>
               <label className="field"><span>Fridge: highest (°C)</span><input type="number" value={s.fridgeMax ?? lim.fridgeMax} onChange={(e) => setS({ ...s, fridgeMax: e.target.value })} /></label>
+              <label className="field"><span>Hot-weather alert from (°C)</span><input type="number" value={s.hotAlert ?? lim.hotAlert} onChange={(e) => setS({ ...s, hotAlert: e.target.value })} /></label>
               <label className="field"><span>Humidity: highest (%)</span><input type="number" value={s.humidityMax ?? lim.humidityMax} onChange={(e) => setS({ ...s, humidityMax: e.target.value })} /></label>
             </div>
           </>}

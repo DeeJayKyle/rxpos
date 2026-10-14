@@ -10,7 +10,7 @@ const SESSION_KEY = 'pharmapos-session';
 export const TABLES = [
   'products', 'formulations', 'customers', 'suppliers', 'sales', 'proformas', 'purchases', 'movements',
   'prescriptions', 'expenses', 'expenseCategories', 'banks', 'bankTx', 'loans', 'payments', 'users',
-  'batches', 'branches', 'transfers', 'audit', 'purchaseOrders', 'roles', 'messages', 'shifts', 'license', 'events', 'tempLogs', 'catalogHidden',
+  'batches', 'branches', 'transfers', 'audit', 'purchaseOrders', 'roles', 'messages', 'shifts', 'license', 'events', 'tempLogs', 'catalogHidden', 'quizResults',
 ];
 // What is persisted on the device, one IndexedDB key per part
 const PARTS = [...TABLES, 'settings', '_tomb'];

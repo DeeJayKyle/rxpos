@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Zap, WifiOff, MonitorSmartphone, ShieldCheck, Mail, MessageSquareText, MessageCircle, ArrowLeft, Crown, Building2, LogIn } from 'lucide-react';
 import { useStore, verifyPassword, makePassword, put, normalizePhone } from '../store.jsx';
-import { Logo } from '../logo.jsx';
+import { Logo, BrandLogo } from '../logo.jsx';
 import { toast } from '../feedback.jsx';
-import { cloudLogin, cloudUrl, forgotPassword, resetPassword, whatsappLink, pharmacyInfo } from '../cloud.js';
-import { isWeb, pharmacySlugFromUrl } from '../platform.js';
+import { cloudLogin, cloudUrl, forgotPassword, resetPassword, whatsappLink, pharmacyInfo, googleClient, resetWithGoogle, DEFAULT_CLOUD } from '../cloud.js';
+import { isWeb, isNative, pharmacySlugFromUrl } from '../platform.js';
 
 const LAST_EMAIL = 'rxpos-last-email';
 const networkFailure = (e) => e instanceof TypeError || /took too long|No internet|Failed to fetch|NetworkError/i.test(e.message);
@@ -17,19 +17,19 @@ export default function Auth() {
   const { db, update, setUser, syncCfg, linkPharmacy } = useStore();
   const url = cloudUrl();
   const slug = pharmacySlugFromUrl();
-  const [pharmacy, setPharmacy] = useState(() => (syncCfg.tenant && (!slug || slug === syncCfg.slug) ? { name: syncCfg.pharmacy || db.settings.name, slug: syncCfg.slug } : null));
+  const [pharmacy, setPharmacy] = useState(() => (syncCfg.tenant && (!slug || slug === syncCfg.slug) ? { name: syncCfg.pharmacy || db.settings.name, slug: syncCfg.slug, logo: db.license?.[0]?.branding?.logo } : null));
   const [form, setForm] = useState(() => ({ email: (() => { try { return localStorage.getItem(LAST_EMAIL) || ''; } catch { return ''; } })(), password: '', code: slug || syncCfg.slug || '', otp: '', newPassword: '' }));
   const [needCode, setNeedCode] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const [forgot, setForgot] = useState(null); // { stage: 'ask' | 'code', channel, hint }
+  const [forgot, setForgot] = useState(() => (location.hash.startsWith('#/forgot') ? { stage: 'ask' } : null)); // { stage: 'ask' | 'code', channel, hint }
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
   const run = async (fn) => { setError(''); setBusy(true); try { await fn(); } catch (e) { setError(e.message); } finally { setBusy(false); } };
 
   // The pharmacy behind this web address (rxpos.pages.dev/<pharmacy>)
   useEffect(() => {
     if (!slug || (pharmacy && pharmacy.slug === slug)) return;
-    pharmacyInfo(url, slug).then((p) => setPharmacy({ name: p.name, slug: p.slug })).catch((e) => setPharmacy({ error: e.message }));
+    pharmacyInfo(url, slug).then((p) => setPharmacy({ name: p.name, slug: p.slug, logo: p.logo })).catch((e) => setPharmacy({ error: e.message }));
   }, [slug]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const signIn = (e) => { e.preventDefault(); run(async () => {
@@ -87,7 +87,8 @@ export default function Auth() {
           <label className="field"><span>Your email</span><input type="email" value={form.email} onChange={set('email')} required autoFocus /></label>
           {(needCode || !slug) && codeField}
           {error && <div className="error">{error}</div>}
-          <button type="button" className="btn primary block" disabled={busy || !navigator.onLine} onClick={() => sendCode('email')}><Mail size={16} />Email me a code (Gmail works)</button>
+          <GoogleReset url={url} code={form.code.trim().toLowerCase()} slug={slug || syncCfg.slug} onDone={(email) => { setForm((x) => ({ ...x, email, password: '' })); setForgot(null); toast('Password changed with Google. Sign in with the new password.', 'success'); }} />
+          <button type="button" className="btn ghost block" disabled={busy || !navigator.onLine} onClick={() => sendCode('email')}><Mail size={16} />Email me a code</button>
           <button type="button" className="btn ghost block" disabled={busy || !navigator.onLine} onClick={() => sendCode('sms')}><MessageSquareText size={16} />Send a code by SMS</button>
           <a className={'btn ghost block' + (adminPhone.length < 12 ? ' disabled-link' : '')} target="_blank" rel="noreferrer"
             href={adminPhone.length >= 12 ? whatsappLink(adminPhone, `Hello, this is ${form.email || '(my email)'}. I forgot my RxPOS password at ${db.settings.name}. Please reset it for me.`) : undefined}>
@@ -125,7 +126,7 @@ export default function Auth() {
       </section>
       <div className="auth-side">
         <div className="auth-card">
-          <div className="brand big"><Logo size={44} /> <span className="wordmark">Rx<span className="brand-accent">POS</span></span></div>
+          <div className="brand big"><BrandLogo src={pharmacy?.logo} size={44} /> <span className="wordmark">Rx<span className="brand-accent">POS</span></span></div>
           {forgot ? forgotPanel() : (
             <form onSubmit={signIn} className="stack">
               {pharmacy?.error ? <div className="error">{pharmacy.error}</div> : <p className="muted center auth-title"><Building2 size={15} /> {title}</p>}
@@ -140,6 +141,40 @@ export default function Auth() {
           <p className="muted small center">Accounts are created by your pharmacy's administrator. {syncCfg.tenant ? 'Works offline on this device after signing in.' : 'The first sign-in on a device needs the internet.'}</p>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Forgot password → prove your Gmail / Google account, then choose a new password */
+function GoogleReset({ url, code, slug, onDone }) {
+  const [clientId, setClientId] = useState(null);
+  const [pw, setPw] = useState('');
+  const [err, setErr] = useState('');
+  const ref = useRef(null), pwRef = useRef('');
+  pwRef.current = pw;
+  useEffect(() => { if (navigator.onLine) googleClient(url).then((j) => setClientId(j.clientId)).catch(() => {}); }, [url]);
+  useEffect(() => {
+    if (!clientId || isNative || !ref.current) return;
+    const render = () => {
+      window.google.accounts.id.initialize({ client_id: clientId, callback: async ({ credential }) => {
+        setErr('');
+        if (pwRef.current.length < 8) { setErr('Type your new password (8+ characters) first, then press the Google button.'); return; }
+        try { const j = await resetWithGoogle(url, { credential, tenant: code || slug || undefined, password: pwRef.current }); onDone(j.email); } catch (e) { setErr(e.message); }
+      } });
+      window.google.accounts.id.renderButton(ref.current, { theme: 'outline', size: 'large', text: 'continue_with', width: 280 });
+    };
+    if (window.google?.accounts?.id) { render(); return; }
+    const sc = document.createElement('script'); sc.src = 'https://accounts.google.com/gsi/client'; sc.async = true; sc.onload = render; document.head.appendChild(sc);
+  }, [clientId]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!clientId) return null;
+  if (isNative) return <a className="btn ghost block" href={DEFAULT_CLOUD + '/' + (slug || '') + '#/forgot'} target="_blank" rel="noreferrer">Reset with Google (opens the web page)</a>;
+  return (
+    <div className="google-reset">
+      <p className="muted small center">Reset with the Google (Gmail) account on your RxPOS profile:</p>
+      <input type="password" autoComplete="new-password" placeholder="New password (8+ characters)" value={pw} onChange={(e) => setPw(e.target.value)} />
+      <div className="google-btn" ref={ref} />
+      {err && <div className="error">{err}</div>}
+      <div className="or-line"><span>or</span></div>
     </div>
   );
 }

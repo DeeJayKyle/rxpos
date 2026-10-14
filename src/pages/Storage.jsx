@@ -3,18 +3,15 @@ import { Thermometer, Droplets, Wind, RefreshCw, Plus, MapPin, Snowflake, Wareho
 import { useStore, uid, put, del, audit, now, today } from '../store.jsx';
 import { Modal, Empty, Stat } from '../ui.jsx';
 import { toast, ask } from '../feedback.jsx';
-import { fetchWeather, cachedWeather, describe, storageLimits, storageAdvice, DEFAULT_PLACE } from '../weather.js';
+import { useWeather, describe, storageLimits, storageAdvice } from '../weather.js';
 
-const PLACES = [['Room', Warehouse], ['Fridge', Snowflake], ['Store', Warehouse]];
+const PLACES = [['Room', Warehouse], ['Fridge', Snowflake], ['Store', Warehouse], ['Outside', SunIcon]];
 
 /** Weather card used on the dashboard and on this page */
 export function WeatherCard({ compact }) {
   const { db } = useStore();
-  const place = db.settings.weatherPlace || DEFAULT_PLACE;
-  const [w, setW] = useState(() => cachedWeather()?.data || null);
-  const [err, setErr] = useState('');
-  const load = (force) => fetchWeather(place, { force }).then((d) => { setW(d); setErr(''); }).catch((e) => setErr(navigator.onLine ? e.message : 'Offline: showing the last reading'));
-  useEffect(() => { load(false); const t = setInterval(() => load(false), 15 * 60000); return () => clearInterval(t); }, [place.lat, place.lon]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [{ place, data: w, error: err }, refresh] = useWeather(db.settings);
+  const load = () => refresh();
   const limits = storageLimits(db.settings);
   const cur = w?.current;
   const [label, Icon] = cur ? describe(cur.weather_code) : ['—', SunIcon];
@@ -22,8 +19,8 @@ export function WeatherCard({ compact }) {
   return (
     <div className={'card weather' + (compact ? ' compact' : '')}>
       <div className="row between">
-        <h3><MapPin size={16} />{place.name}</h3>
-        {!compact && <button className="icon-btn" title="Refresh" onClick={() => load(true)}><RefreshCw size={16} /></button>}
+        <h3><MapPin size={16} />{place?.name || 'Finding your location…'}{place?.source === 'gps' && <small className="muted"> · GPS</small>}</h3>
+        {!compact && <button className="icon-btn" title="Refresh" onClick={load}><RefreshCw size={16} /></button>}
       </div>
       {cur ? (
         <>
@@ -66,8 +63,8 @@ export default function Storage() {
   const limits = storageLimits(db.settings);
   const [place, setPlace] = useState('Fridge');
   const [adding, setAdding] = useState(null);
-  const inRange = (r) => (r.place === 'Fridge' ? r.temp >= limits.fridgeMin && r.temp <= limits.fridgeMax : r.temp <= limits.roomMax && r.temp >= limits.roomMin - 5)
-    && (r.humidity == null || r.humidity === '' || r.humidity <= limits.humidityMax);
+  const inRange = (r) => r.place === 'Outside' || ((r.place === 'Fridge' ? r.temp >= limits.fridgeMin && r.temp <= limits.fridgeMax : r.temp <= limits.roomMax && r.temp >= limits.roomMin - 5)
+    && (r.humidity == null || r.humidity === '' || r.humidity <= limits.humidityMax));
   const logs = useMemo(() => db.tempLogs.filter((r) => (r.branchId || 'main') === branchId).sort((a, b) => String(a.at).localeCompare(String(b.at))), [db.tempLogs, branchId]);
   const series = logs.filter((r) => r.place === place).slice(-30).map((r) => ({ ...r, bad: !inRange(r) }));
   const todays = logs.filter((r) => String(r.at).slice(0, 10) === today());
@@ -100,7 +97,7 @@ export default function Storage() {
           <div className="tabs">{PLACES.map(([p]) => <button key={p} className={'tab' + (p === place ? ' active' : '')} onClick={() => setPlace(p)}>{p}</button>)}</div></div>
         <Sparkline points={series} min={Math.min(...series.map((r) => r.temp), place === 'Fridge' ? limits.fridgeMin - 2 : limits.roomMin - 3)} max={Math.max(...series.map((r) => r.temp), place === 'Fridge' ? limits.fridgeMax + 2 : limits.roomMax + 3)}
           lo={place === 'Fridge' ? limits.fridgeMin : limits.roomMin} hi={place === 'Fridge' ? limits.fridgeMax : limits.roomMax} />
-        <p className="muted small">Safe range shaded: fridge {limits.fridgeMin}–{limits.fridgeMax}°C, room {limits.roomMin}–{limits.roomMax}°C, humidity up to {limits.humidityMax}%. Change these in Settings → Alerts & storage. RxPOS reminds you to record readings at 9 am and 3 pm.</p>
+        <p className="muted small">Safe range shaded: fridge {limits.fridgeMin}–{limits.fridgeMax}°C, room {limits.roomMin}–{limits.roomMax}°C, humidity up to {limits.humidityMax}%. Change these in Settings → Alerts & storage. Outside temperature and humidity are logged automatically every 6 hours (00:00, 06:00, 12:00, 18:00); RxPOS reminds you to record the room and fridge at 06:00, 12:00 and 18:00.</p>
       </div>
       <div className="card table-wrap">
         <table>

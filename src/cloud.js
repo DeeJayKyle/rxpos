@@ -37,6 +37,8 @@ async function call(cfg, path, { method = 'GET', body, timeout = 20000 } = {}) {
 export const cloudLogin = (url, email, password, tenant) => call({ url: cleanUrl(url) }, '/api/login', { method: 'POST', body: { email, password, tenant: tenant || undefined } });
 export const forgotPassword = (url, body) => call({ url: cleanUrl(url) }, '/api/password/forgot', { method: 'POST', body });
 export const resetPassword = (url, body) => call({ url: cleanUrl(url) }, '/api/password/reset', { method: 'POST', body });
+export const googleClient = (url) => call({ url: cleanUrl(url) }, '/api/google-client', { timeout: 10000 });
+export const resetWithGoogle = (url, body) => call({ url: cleanUrl(url) }, '/api/password/google', { method: 'POST', body, timeout: 30000 });
 // Owner console (RxPOS vendor): the owner key is sent as the bearer token
 export const ownerApi = (url, ownerKey, path, body) => call({ url: cleanUrl(url), key: ownerKey }, '/api/owner' + path, { method: body ? 'POST' : 'GET', body, timeout: 60000 });
 // Owner sign-in (password / master key, Google, GitHub)
@@ -46,6 +48,9 @@ export const ownerGoogleLogin = (url, credential) => call({ url: cleanUrl(url) }
 /** Public name of the pharmacy at a web address (for its sign-in page) */
 export const pharmacyInfo = (url, slug) => call({ url: cleanUrl(url) }, '/api/pharmacy/' + encodeURIComponent(slug), { timeout: 8000 });
 export const calendarLink = (cfg) => call(cfg, '/api/calendar-link', { timeout: 8000 });
+// AI (Cloudflare Workers AI): read a prescription photo; make a drug quiz
+export const aiPrescription = (cfg, image) => call(cfg, '/api/ai/prescription', { method: 'POST', body: { image }, timeout: 90000 });
+export const aiQuiz = (cfg, drugs, count = 8) => call(cfg, '/api/ai/quiz', { method: 'POST', body: { drugs, count }, timeout: 90000 });
 export const cloudConfig = (cfg) => call(cfg, '/api/config', { timeout: 8000 });
 export const payRequest = (cfg, body) => call(cfg, '/api/pay/request', { method: 'POST', body, timeout: 30000 });
 export const payStatus = (cfg, provider, ref) => call(cfg, `/api/pay/status?provider=${provider}&ref=${encodeURIComponent(ref)}`);

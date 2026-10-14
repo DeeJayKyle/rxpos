@@ -69,6 +69,7 @@ export const FEATURES = [
   ['hourly', 'Hourly time reminders'],
   ['calendar', 'Calendar & calendar sync', 'Google / Outlook / phone'],
   ['weather', 'Weather & storage temperature log'],
+  ['ai', 'AI prescription reading & drug quizzes', 'Cloudflare Workers AI'],
 ];
 export const DEFAULT_FEATURES = Object.fromEntries(FEATURES.map(([k]) => [k, true]));
 
