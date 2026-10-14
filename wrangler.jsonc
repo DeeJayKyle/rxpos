@@ -15,6 +15,6 @@
   },
   "d1_databases": [{ "binding": "DB", "database_name": "pharmapos-db", "database_id": "a68d2d61-c865-4a2b-9a83-65d20a0927f0", "migrations_dir": "migrations" }],
   // Database: "" = Cloudflare D1 (binding DB); "turso" = libSQL/Turso (secrets TURSO_URL, TURSO_AUTH_TOKEN; see deploy/setup-turso.ps1)
-  "vars": { "DB_BACKEND": "turso" },
+  "vars": { "DB_BACKEND": "turso", "PUBLIC_URL": "https://rxpos.pages.dev" },
   "observability": { "enabled": true }
 }

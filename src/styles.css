@@ -695,3 +695,6 @@ tr.row-bad td { color: var(--danger); }
 .slug-input input { border: 0 !important; box-shadow: none !important; padding-left: 2px; min-width: 0; flex: 1; }
 .json-edit { width: 100%; font-family: ui-monospace, Consolas, monospace; font-size: 13px; line-height: 1.5; }
 .badge.warn { background: var(--warn-soft); color: var(--warn); margin-left: 6px; }
+.or-line { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
+.or-line::before, .or-line::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+.google-btn { display: flex; justify-content: center; min-height: 44px; }

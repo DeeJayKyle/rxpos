@@ -18,6 +18,7 @@
 import CATALOG from '../src/data/catalog.json' with { type: 'json' };
 import { createClient } from '@libsql/client/web';
 import { d1FromLibsql } from './libsql-d1.js';
+import { isOwner, ownerAuthRoutes, ownerAccount } from './owner-auth.js';
 
 // Database: Cloudflare D1 (binding DB) by default, or libSQL / Turso when DB_BACKEND = "turso"
 // (secrets TURSO_URL + TURSO_AUTH_TOKEN). The rest of the code doesn't know the difference.
@@ -81,6 +82,7 @@ function ensureSchema(db) {
     else if (!/\bslug\b/.test(have.get('tenants'))) ddl.push('ALTER TABLE tenants ADD COLUMN slug TEXT');
     if (!have.has('tenants_slug')) ddl.push('CREATE UNIQUE INDEX tenants_slug ON tenants(slug)');
     if (!have.has('login_fail')) ddl.push('CREATE TABLE login_fail (email TEXT PRIMARY KEY, n INTEGER NOT NULL, until INTEGER NOT NULL DEFAULT 0)');
+    if (!have.has('owner_config')) ddl.push('CREATE TABLE owner_config (k TEXT PRIMARY KEY, v TEXT NOT NULL)');
     if (!have.has('reset_codes')) ddl.push('CREATE TABLE reset_codes (k TEXT PRIMARY KEY, code_hash TEXT NOT NULL, expires INTEGER NOT NULL, tries INTEGER NOT NULL DEFAULT 0, sent INTEGER NOT NULL DEFAULT 0, window_start INTEGER NOT NULL DEFAULT 0)');
     // dropping an old index is optional: never let it block the API (e.g. when the daily write limit is reached)
     for (const sql of ddl) await db.prepare(sql).run().catch((e) => { if (!sql.startsWith('DROP')) throw e; });
@@ -492,10 +494,11 @@ async function tenantUsers(env, tenant) {
 
 async function owner(env, req, url, body) {
   if (!env.OWNER_KEY || env.OWNER_KEY.length < 20) throw httpError(503, 'The owner console is not enabled (OWNER_KEY secret missing).');
-  if (!safeEqual((req.headers.get('Authorization') || '').replace(/^Bearer /, ''), env.OWNER_KEY)) throw httpError(401, 'Wrong owner key.');
+  if (!(await isOwner(env, (req.headers.get('Authorization') || '').replace(/^Bearer /, ''), safeEqual))) throw httpError(401, 'Owner sign-in expired or wrong. Sign in again.');
   const db = env.DB;
   const parts = url.pathname.split('/').slice(3).map(decodeURIComponent); // /api/owner/<...>
   if (parts[0] === 'move-to-turso') return moveToTurso(env, req, body);
+  if (parts[0] === 'account') return ownerAccount(env, req, url, body || {}, { json });
   const view = async (t) => {
     const s = await db.prepare("SELECT COUNT(*) n, MAX(at) last, SUM(t = 'products' AND deleted = 0) products, SUM(t = 'users' AND deleted = 0) users, SUM(t = 'sales' AND deleted = 0) sales, SUM(t = 'branches' AND deleted = 0) branches FROM records WHERE tenant = ?1").bind(t.id).first();
     const secrets = JSON.parse(t.secrets || '{}');
@@ -776,6 +779,7 @@ export default {
       if (path === '/api/password/forgot' && req.method === 'POST') return await forgotPassword(env, body);
       if (path === '/api/password/reset' && req.method === 'POST') return await resetPassword(env, body);
       if (path.startsWith('/api/owner/')) return await owner(env, req, url, body);
+      if (path.startsWith('/api/owner-auth/')) return await ownerAuthRoutes(env, req, url, body || {}, { json, safeEqual });
 
       const who = await authenticate(req, env);
       if (!who) return json({ error: 'Not signed in (wrong sync key or expired sign-in)' }, 401);

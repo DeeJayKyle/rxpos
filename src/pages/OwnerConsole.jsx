@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Crown, Plus, RefreshCw, KeyRound, PauseCircle, PlayCircle, Eraser, Copy, Smartphone, LogOut, Building2, ArrowLeft, Users, Database, SlidersHorizontal,
-  Trash2, Download, Upload, Globe, Pencil, Search, ShieldAlert, MessageCircle, ExternalLink, Wand2, Eye } from 'lucide-react';
+  Trash2, Download, Upload, Globe, Pencil, Search, ShieldAlert, MessageCircle, ExternalLink, Wand2, Eye, UserCog, Mail, LockKeyhole } from 'lucide-react';
 import { FEATURES, DEFAULT_FEATURES, DEFAULT_ROLES } from '../access.js';
-import { ownerApi, cleanUrl, cloudUrl, whatsappLink } from '../cloud.js';
+import { ownerApi, cleanUrl, cloudUrl, whatsappLink, ownerAuthConfig, ownerLogin, ownerGoogleLogin } from '../cloud.js';
 import { Modal, Empty, Stat, Tabs } from '../ui.jsx';
 import { toast, ask, askText } from '../feedback.jsx';
 import { Logo } from '../logo.jsx';
@@ -10,6 +10,8 @@ import { downloadFile, today } from '../store.jsx';
 import { isWeb } from '../platform.js';
 
 const KEY = 'rxpos-owner-key';
+/** GitHub mark (brand icons are not in lucide) */
+const Github = ({ size = 16 }) => <svg width={size} height={size} viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>;
 const slugify = (s) => String(s || '').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
 const genPassword = () => { const w = ['Amber', 'Cedar', 'Coral', 'Delta', 'Falcon', 'Harbor', 'Indigo', 'Jade', 'Lotus', 'Maple', 'Nova', 'Orchid', 'River', 'Sage', 'Tulip', 'Willow']; const r = (n) => crypto.getRandomValues(new Uint32Array(1))[0] % n; return `${w[r(16)]}-${1000 + r(9000)}-${w[r(16)]}`; };
 const label = (r) => r?.name || r?.title || r?.number || r?.email || r?.action || r?.batch || r?.type || '';
@@ -17,23 +19,30 @@ const label = (r) => r?.name || r?.title || r?.number || r?.email || r?.action |
 /** RxPOS owner console (web only): create and manage every client pharmacy. */
 export default function OwnerConsole() {
   const url = cleanUrl(cloudUrl());
+  // Owner session token (or the master key) for this browser tab
   const [ownerKey, setOwnerKey] = useState(() => { try { return sessionStorage.getItem(KEY) || ''; } catch { return ''; } });
-  const [draftKey, setDraftKey] = useState('');
   const [tenants, setTenants] = useState(null);
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(null); // tenant id being managed
   const [creating, setCreating] = useState(null);
   const [created, setCreated] = useState(null);
+  const [account, setAccount] = useState(false);
 
   const api = (path, body) => ownerApi(url, ownerKey, path, body);
+  const signOut = () => { try { sessionStorage.removeItem(KEY); } catch {} setOwnerKey(''); setTenants(null); setOpen(null); };
   const load = async (key = ownerKey) => {
     if (!key) return;
     setBusy(true);
     try { const j = await ownerApi(url, key, '/tenants'); setTenants(j.tenants); }
-    catch (e) { toast(e.message, 'error'); if (/owner key/i.test(e.message)) { setOwnerKey(''); sessionStorage.removeItem(KEY); } }
+    catch (e) { toast(e.message, 'error'); if (/sign in again|owner key|expired/i.test(e.message)) signOut(); }
     finally { setBusy(false); }
   };
   useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const signedIn = (token, mustSetPassword) => {
+    try { sessionStorage.setItem(KEY, token); } catch {}
+    setOwnerKey(token); load(token);
+    if (mustSetPassword) { setAccount(true); toast('Signed in with the master key. Set your own owner password now.', 'info'); }
+  };
 
   if (!isWeb) return (
     <div className="auth-bg owner-login"><div className="auth-side" style={{ gridColumn: '1 / -1' }}><div className="auth-card">
@@ -42,25 +51,7 @@ export default function OwnerConsole() {
       <a className="btn ghost block" href="#/">← Back to RxPOS</a>
     </div></div></div>
   );
-
-  const signIn = async (e) => {
-    e.preventDefault();
-    try { await ownerApi(url, draftKey.trim(), '/tenants'); sessionStorage.setItem(KEY, draftKey.trim()); setOwnerKey(draftKey.trim()); setDraftKey(''); load(draftKey.trim()); }
-    catch (err) { toast(err.message, 'error'); }
-  };
-  if (!ownerKey) return (
-    <div className="auth-bg owner-login">
-      <div className="auth-side" style={{ gridColumn: '1 / -1' }}>
-        <form className="auth-card" onSubmit={signIn}>
-          <div className="brand big"><Logo size={40} /> RxPOS</div>
-          <p className="muted center"><Crown size={14} /> Owner console: create and manage the pharmacies using RxPOS</p>
-          <label className="field"><span>Owner key</span><input type="password" autoFocus value={draftKey} onChange={(e) => setDraftKey(e.target.value)} required /></label>
-          <button className="btn primary block">Open console</button>
-          <a className="muted small center" href="#/">← Back to RxPOS</a>
-        </form>
-      </div>
-    </div>
-  );
+  if (!ownerKey) return <OwnerSignIn url={url} onSignedIn={signedIn} />;
 
   const create = async (e) => {
     e.preventDefault();
@@ -86,7 +77,8 @@ export default function OwnerConsole() {
   const active = tenants?.filter((t) => t.status === 'active').length || 0;
   return (
     <div className="owner">
-      <OwnerBar busy={busy} onRefresh={() => load()} onLock={() => { sessionStorage.removeItem(KEY); setOwnerKey(''); setTenants(null); }} />
+      <OwnerBar busy={busy} onRefresh={() => load()} onLock={signOut}><button className="btn ghost" onClick={() => setAccount(true)}><UserCog size={16} />Owner account</button></OwnerBar>
+      {account && <OwnerAccount api={api} onClose={() => setAccount(false)} />}
       <div className="page">
         <div className="page-head">
           <div><h1>Client pharmacies</h1><div className="sub">Each pharmacy has its own web address, data, staff, branches, features and payment keys.</div></div>
@@ -494,5 +486,133 @@ function DataBrowser({ t, tables, api, onChanged }) {
         </Modal>
       )}
     </>
+  );
+}
+
+/** Owner sign-in: own password (or the master key), Google, GitHub */
+function OwnerSignIn({ url, onSignedIn }) {
+  const [cfg, setCfg] = useState(null);
+  const [pw, setPw] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const googleRef = useRef(null);
+
+  useEffect(() => {
+    // Back from "Sign in with GitHub": #/owner?ot=<session> or ?oerr=<message>
+    const q = new URLSearchParams(location.hash.split('?')[1] || '');
+    if (q.get('ot') || q.get('oerr')) history.replaceState(null, '', location.pathname + '#/owner');
+    if (q.get('ot')) { onSignedIn(q.get('ot')); return; }
+    if (q.get('oerr')) setError(q.get('oerr'));
+    ownerAuthConfig(url).then(setCfg).catch((e) => setError(e.message));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // "Sign in with Google" button (Google Identity Services)
+  useEffect(() => {
+    if (!cfg?.google || !googleRef.current) return;
+    const render = () => {
+      window.google.accounts.id.initialize({ client_id: cfg.google.clientId, callback: async ({ credential }) => {
+        setBusy(true); setError('');
+        try { const j = await ownerGoogleLogin(url, credential); onSignedIn(j.token); } catch (e) { setError(e.message); } finally { setBusy(false); }
+      } });
+      window.google.accounts.id.renderButton(googleRef.current, { theme: 'filled_blue', size: 'large', text: 'continue_with', width: 300 });
+    };
+    if (window.google?.accounts?.id) { render(); return; }
+    const sc = document.createElement('script');
+    sc.src = 'https://accounts.google.com/gsi/client'; sc.async = true; sc.onload = render;
+    sc.onerror = () => setError('Could not load Google sign-in. Check the internet connection.');
+    document.head.appendChild(sc);
+  }, [cfg]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const submit = async (e) => {
+    e.preventDefault(); setBusy(true); setError('');
+    try { const j = await ownerLogin(url, pw); onSignedIn(j.token, j.mustSetPassword); } catch (err) { setError(err.message); } finally { setBusy(false); }
+  };
+  return (
+    <div className="auth-bg owner-login">
+      <div className="auth-side" style={{ gridColumn: '1 / -1' }}>
+        <form className="auth-card" onSubmit={submit}>
+          <div className="brand big"><Logo size={40} /> RxPOS</div>
+          <p className="muted center"><Crown size={14} /> Owner console: create and manage the pharmacies using RxPOS</p>
+          <label className="field"><span>{cfg?.password ? 'Owner password' : 'Owner key'}</span>
+            <input type="password" autoFocus autoComplete="current-password" value={pw} onChange={(e) => setPw(e.target.value)} required /></label>
+          {error && <div className="error">{error}</div>}
+          <button className="btn primary block" disabled={busy}><LockKeyhole size={16} />{busy ? 'Checking…' : 'Sign in'}</button>
+          {(cfg?.google || cfg?.github) && <div className="or-line"><span>or</span></div>}
+          {cfg?.google && <div className="google-btn" ref={googleRef} />}
+          {cfg?.github && <a className="btn ghost block" href={url + '/api/owner-auth/github/start'}><Github size={16} />Continue with GitHub</a>}
+          <details className="muted small"><summary>Forgot the password?</summary>
+            <p>{cfg?.google || cfg?.github ? 'Sign in with your linked Google or GitHub account above, then set a new password in Owner account. ' : ''}
+              You can always sign in with the master key saved in <b>Documents\RxPOS-Data\RxPOS-OWNER-KEY.txt</b> on the setup PC (paste it in the box above).</p></details>
+          <a className="muted small center" href="#/">← Back to RxPOS</a>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+/** Owner account: own password, and Google / GitHub accounts that can sign in (recovery) */
+function OwnerAccount({ api, onClose }) {
+  const [a, setA] = useState(null);
+  const [pw, setPw] = useState({ current: '', password: '', confirm: '' });
+  const [links, setLinks] = useState({});
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    api('/account').then((j) => { setA(j); setLinks({ googleEmail: j.googleEmail, googleClientId: j.googleClientId, githubLogin: j.githubLogin, githubClientId: j.githubClientId, githubClientSecret: '' }); })
+      .catch((e) => toast(e.message, 'error'));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const save = async (body, ok) => { setBusy(true); try { const j = await api('/account', body); setA(j); toast(ok); return true; } catch (e) { toast(e.message, 'error'); return false; } finally { setBusy(false); } };
+  const copy = (t) => navigator.clipboard?.writeText(t).then(() => toast('Copied'), () => {});
+  if (!a) return <Modal title="Owner account" onClose={onClose}><div className="skeleton" /></Modal>;
+  const f = (k, lbl, extra = {}) => <label className="field"><span>{lbl}</span><input value={links[k] ?? ''} onChange={(e) => setLinks({ ...links, [k]: e.target.value })} autoComplete="off" {...extra} /></label>;
+  return (
+    <Modal title="Owner account" onClose={onClose} wide>
+      <form className="stack" onSubmit={async (e) => {
+        e.preventDefault();
+        if (pw.password !== pw.confirm) { toast('The two new passwords do not match', 'error'); return; }
+        if (await save({ password: pw.password, current: pw.current }, 'Owner password saved. Use it to sign in from now on.')) setPw({ current: '', password: '', confirm: '' });
+      }}>
+        <h3><LockKeyhole size={17} />{a.hasPassword ? 'Change your owner password' : 'Set your own owner password'}</h3>
+        <div className="form-grid">
+          {a.hasPassword && <label className="field"><span>Current password</span><input type="password" autoComplete="current-password" value={pw.current} onChange={(e) => setPw({ ...pw, current: e.target.value })} required /></label>}
+          <label className="field"><span>New password (10+ characters)</span><input type="password" autoComplete="new-password" minLength={10} value={pw.password} onChange={(e) => setPw({ ...pw, password: e.target.value })} required /></label>
+          <label className="field"><span>Type it again</span><input type="password" autoComplete="new-password" minLength={10} value={pw.confirm} onChange={(e) => setPw({ ...pw, confirm: e.target.value })} required /></label>
+        </div>
+        <div className="form-actions"><button className="btn primary" disabled={busy}>Save password</button></div>
+      </form>
+
+      <form className="stack" onSubmit={(e) => { e.preventDefault(); save({ googleEmail: links.googleEmail, googleClientId: links.googleClientId }, 'Google sign-in saved'); }}>
+        <h3><Mail size={17} />Sign in with Google (Gmail) {a.googleEmail && a.googleClientId ? <span className="badge ok">on</span> : <span className="badge">off</span>}</h3>
+        <div className="form-grid">
+          {f('googleEmail', 'Your Gmail / Google account', { type: 'email', placeholder: 'you@gmail.com' })}
+          {f('googleClientId', 'Google OAuth client ID', { placeholder: '…apps.googleusercontent.com' })}
+        </div>
+        <details className="muted small"><summary>How to get the Google client ID (free, once)</summary>
+          <ol><li>Open <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noreferrer">Google Cloud console → APIs & Services → Credentials</a> (sign in with your Google account; create a project named RxPOS if asked).</li>
+            <li>OAuth consent screen: External, app name RxPOS, your email. Add yourself as a test user (or publish the app).</li>
+            <li>Create credentials → OAuth client ID → Web application. Authorised JavaScript origins: <code>{a.origin}</code> <button type="button" className="link-btn" onClick={() => copy(a.origin)}>copy</button></li>
+            <li>Copy the Client ID into the box above and save.</li></ol></details>
+        <div className="form-actions"><button className="btn primary" disabled={busy}>Save Google sign-in</button></div>
+      </form>
+
+      <form className="stack" onSubmit={(e) => {
+        e.preventDefault();
+        const body = { githubLogin: links.githubLogin, githubClientId: links.githubClientId };
+        if (links.githubClientSecret) body.githubClientSecret = links.githubClientSecret;
+        save(body, 'GitHub sign-in saved').then((ok) => ok && setLinks((l) => ({ ...l, githubClientSecret: '' })));
+      }}>
+        <h3><Github size={17} />Sign in with GitHub {a.githubLogin && a.githubClientId && a.githubSecretSet ? <span className="badge ok">on</span> : <span className="badge">off</span>}</h3>
+        <div className="form-grid">
+          {f('githubLogin', 'Your GitHub username', { placeholder: 'e.g. DeeJayKyle' })}
+          {f('githubClientId', 'GitHub OAuth app client ID')}
+          {f('githubClientSecret', a.githubSecretSet ? 'Client secret (saved; type to replace)' : 'GitHub OAuth app client secret', { type: 'password' })}
+        </div>
+        <details className="muted small"><summary>How to create the GitHub OAuth app (free, once)</summary>
+          <ol><li>Open <a href="https://github.com/settings/developers" target="_blank" rel="noreferrer">GitHub → Settings → Developer settings → OAuth Apps</a> → New OAuth App.</li>
+            <li>Name RxPOS, Homepage URL <code>{a.origin}</code>, Authorization callback URL <code>{a.githubCallback}</code> <button type="button" className="link-btn" onClick={() => copy(a.githubCallback)}>copy</button></li>
+            <li>Register, copy the Client ID, then Generate a new client secret and paste both above.</li></ol></details>
+        <div className="form-actions"><button className="btn primary" disabled={busy}>Save GitHub sign-in</button></div>
+      </form>
+      <p className="muted small">The master key in <b>RxPOS-OWNER-KEY.txt</b> always works as an emergency key. Keep that file somewhere safe.</p>
+    </Modal>
   );
 }

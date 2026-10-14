@@ -39,6 +39,10 @@ export const forgotPassword = (url, body) => call({ url: cleanUrl(url) }, '/api/
 export const resetPassword = (url, body) => call({ url: cleanUrl(url) }, '/api/password/reset', { method: 'POST', body });
 // Owner console (RxPOS vendor): the owner key is sent as the bearer token
 export const ownerApi = (url, ownerKey, path, body) => call({ url: cleanUrl(url), key: ownerKey }, '/api/owner' + path, { method: body ? 'POST' : 'GET', body, timeout: 60000 });
+// Owner sign-in (password / master key, Google, GitHub)
+export const ownerAuthConfig = (url) => call({ url: cleanUrl(url) }, '/api/owner-auth/config', { timeout: 15000 });
+export const ownerLogin = (url, password) => call({ url: cleanUrl(url) }, '/api/owner-auth/login', { method: 'POST', body: { password }, timeout: 30000 });
+export const ownerGoogleLogin = (url, credential) => call({ url: cleanUrl(url) }, '/api/owner-auth/google', { method: 'POST', body: { credential }, timeout: 30000 });
 /** Public name of the pharmacy at a web address (for its sign-in page) */
 export const pharmacyInfo = (url, slug) => call({ url: cleanUrl(url) }, '/api/pharmacy/' + encodeURIComponent(slug), { timeout: 8000 });
 export const calendarLink = (cfg) => call(cfg, '/api/calendar-link', { timeout: 8000 });
