@@ -136,15 +136,13 @@ const DEFAULT_FEATURES = { catalog: true, branches: true, wholesale: true, profo
   promos: true, hourly: true, calendar: true, weather: true };
 
 /** The original single-pharmacy deployment becomes tenant "main", keyed by the SYNC_KEY secret. */
-let mainChecked = false; // once per Worker instance; writes only if the main pharmacy is missing or its key changed
+let mainChecked = false; // once per Worker instance; writes only if the main pharmacy's sync key changed
 async function ensureMainTenant(env) {
   if (!env.SYNC_KEY || mainChecked) return;
   const h = await sha256(env.SYNC_KEY);
   const cur = await env.DB.prepare("SELECT key_hash FROM tenants WHERE id = 'main'").first('key_hash');
-  if (cur !== h) {
-    await env.DB.prepare("INSERT INTO tenants (id, name, key_hash, features, created_at) VALUES ('main', 'Main pharmacy', ?1, ?2, ?3) ON CONFLICT(id) DO UPDATE SET key_hash = ?1")
-      .bind(h, JSON.stringify(DEFAULT_FEATURES), new Date().toISOString()).run();
-  }
+  // Never re-creates "main": if the owner deleted it, it stays deleted (pharmacies are created in the owner console)
+  if (cur && cur !== h) await env.DB.prepare("UPDATE tenants SET key_hash = ?1 WHERE id = 'main'").bind(h).run();
   mainChecked = true;
 }
 const tenantById = (env, id) => env.DB.prepare('SELECT * FROM tenants WHERE id = ?1').bind(id).first();
@@ -567,7 +565,6 @@ async function owner(env, req, url, body) {
     return json({ tenant: await view(u) });
   }
   if (sub === 'delete' && req.method === 'POST') {
-    if (t.id === MAIN) return json({ error: 'The main pharmacy cannot be deleted. Use "Reset data" instead.' }, 400);
     if (body.confirm !== (t.slug || t.id)) return json({ error: `Type the web address "${t.slug || t.id}" to confirm.` }, 400);
     const r = await db.prepare('DELETE FROM records WHERE tenant = ?1').bind(t.id).run();
     await db.batch([

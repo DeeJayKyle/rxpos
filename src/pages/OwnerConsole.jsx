@@ -213,6 +213,13 @@ function TenantAdmin({ id, api, url, onBack }) {
   const saveUser = (e) => { e.preventDefault(); const { _new, ...user } = userEdit; doing(async () => { await api(`/tenants/${t.id}/users`, { user }); setUserEdit(null); }, _new ? `${user.name} can now sign in` : 'User saved'); };
   const deleteUser = async (u) => (await ask({ title: `Delete ${u.name}?`, message: 'They can no longer sign in on any device.', danger: true, confirmText: 'Delete' })) && doing(() => api(`/tenants/${t.id}/users/${encodeURIComponent(u.id)}/delete`, {}), 'User deleted');
   const saveBranch = (e) => { e.preventDefault(); doing(async () => { await api(`/tenants/${t.id}/branches`, { branch: branchEdit }); setBranchEdit(null); }, 'Branch saved'); };
+  const deletePharmacy = async () => {
+    const typed = await askText({ title: `Delete ${t.name} for ever?`, message: `Its web address, staff accounts, branches and all its data are removed from the cloud. Devices signed in to it stop syncing. Type "${t.slug}" to confirm.`, confirmText: 'Delete pharmacy' });
+    if (!typed) return;
+    setBusy(true);
+    try { const j = await api(`/tenants/${t.id}/delete`, { confirm: typed.trim() }); toast(`${t.name} deleted (${j.deleted.toLocaleString()} records)`); onBack(); }
+    catch (e) { toast(e.message, 'error'); setBusy(false); }
+  };
   const deleteBranch = async (b) => (await ask({ title: `Delete ${b.name}?`, message: 'Its past sales stay in the reports. Move its stock to another branch first.', danger: true, confirmText: 'Delete' })) && doing(() => api(`/tenants/${t.id}/branches/${encodeURIComponent(b.id)}/delete`, {}), 'Branch deleted');
 
   return (
@@ -227,6 +234,7 @@ function TenantAdmin({ id, api, url, onBack }) {
               ? <button className="btn ghost" onClick={async () => (await ask({ title: `Suspend ${t.name}?`, message: 'Its staff cannot sign in or sync until you reactivate it. Data is kept.', danger: true, confirmText: 'Suspend' })) && doing(() => api('/tenants/' + t.id, { status: 'suspended' }), 'Suspended')}><PauseCircle size={16} />Suspend</button>
               : <button className="btn primary" onClick={() => doing(() => api('/tenants/' + t.id, { status: 'active' }), 'Reactivated')}><PlayCircle size={16} />Reactivate</button>}
             <a className="btn ghost" href={address} target="_blank" rel="noreferrer"><ExternalLink size={16} />Open</a>
+            <button className="btn danger" onClick={deletePharmacy}><Trash2 size={16} />Delete</button>
           </div>
         </div>
         <Tabs value={tab} onChange={setTab} tabs={[['overview', 'Overview'], ['features', 'Features'], ['staff', `Staff (${d.users.length})`], ['branches', `Branches (${d.branches.length})`], ['data', 'Data'], ['payments', 'Payments & SMS'], ['danger', 'Reset / delete']]} />
@@ -339,15 +347,10 @@ function TenantAdmin({ id, api, url, onBack }) {
                 if (typed) doing(async () => { const j = await api(`/tenants/${t.id}/reset`, { confirm: typed.trim(), keepMedicines }); toast(`${j.cleared} records erased`); });
               }}><Eraser size={16} />Reset data</button>
             </div>
-            {t.id !== 'main' && (
-              <div className="row between gap">
-                <div><strong>Delete pharmacy</strong><p className="muted small">Removes the pharmacy, its web address, staff and all its data from the cloud. Cannot be undone.</p></div>
-                <button className="btn danger-solid" onClick={async () => {
-                  const typed = await askText({ title: `Type "${t.slug}" to delete ${t.name} for ever`, confirmText: 'Delete pharmacy' });
-                  if (typed) { setBusy(true); try { await api(`/tenants/${t.id}/delete`, { confirm: typed.trim() }); toast(`${t.name} deleted`); onBack(); } catch (e) { toast(e.message, 'error'); setBusy(false); } }
-                }}><Trash2 size={16} />Delete pharmacy</button>
-              </div>
-            )}
+            <div className="row between gap">
+              <div><strong>Delete pharmacy</strong><p className="muted small">Removes the pharmacy, its web address, staff and all its data from the cloud. Cannot be undone. Download a backup first (Data tab → Export all).</p></div>
+              <button className="btn danger-solid" onClick={deletePharmacy}><Trash2 size={16} />Delete pharmacy</button>
+            </div>
           </div>
         )}
       </div>
