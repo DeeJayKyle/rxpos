@@ -18,7 +18,7 @@
 import CATALOG from '../src/data/catalog.json' with { type: 'json' };
 import { createClient } from '@libsql/client/web';
 import { d1FromLibsql } from './libsql-d1.js';
-import { isOwner, ownerAuthRoutes, ownerAccount, verifyGoogle, getConfig } from './owner-auth.js';
+import { isOwner, ownerAuthRoutes, ownerAccount, verifyGoogle, getConfig, ownerMainLogin, ownerMainFail } from './owner-auth.js';
 export { TenantHub } from './live.js';
 import { backup, restore } from './backup.js';
 
@@ -228,6 +228,22 @@ async function pickUser(env, body) {
 }
 
 async function login(env, body) {
+  // The owner can sign in here too (main page, no pharmacy chosen): owner email + owner password → owner console
+  if (!body.tenant) {
+    const own = await ownerMainLogin(env, body.email, body.password);
+    if (own) {
+      const res = await pharmacyLogin(env, body, own.match ? own.token : null);
+      if ((res.status === 401 || res.status === 429) && own.owner && !own.locked) await ownerMainFail(env); // wrong owner password and no staff account opened either
+      if (res.status === 401 && own.locked) return json({ error: 'Too many wrong passwords. Owner sign-in is locked for a few minutes; use the master key on the owner page.' }, 429);
+      return res;
+    }
+  }
+  return pharmacyLogin(env, body, null);
+}
+
+/** Staff sign-in. ownerToken: set when the same email + password is also the owner's (then the owner console is offered). */
+async function pharmacyLogin(env, body, ownerToken) {
+  const OWNER_CHOICE = { code: '__owner__', name: 'RxPOS owner', role: 'owner' };
   // One email at several pharmacies and no pharmacy chosen: the password decides which accounts are theirs, and if it
   // opens more than one the person picks the pharmacy. Nothing is revealed before the password is right.
   if (!body.tenant) {
@@ -242,6 +258,7 @@ async function login(env, body) {
       }
       const ok = [];
       for (const f of found.slice(0, 10)) if (await verifyPassword(f.u, String(body.password || ''))) ok.push(f);
+      if (!ok.length && ownerToken) return json({ owner: { token: ownerToken } });
       if (!ok.length) {
         const n = (fail && fail.until <= Date.now() && fail.until > 0 ? 0 : fail?.n || 0) + 1;
         const until = n >= MAX_FAILS ? Date.now() + LOCK_MINUTES * 60000 : 0;
@@ -254,7 +271,8 @@ async function login(env, body) {
         const t = await tenantById(env, f.tenant);
         if (t && t.status === 'active') choices.push({ code: t.slug || t.id, name: t.name, role: f.u.role || '' });
       }
-      if (!choices.length) return json({ error: 'This pharmacy account is suspended. Please contact your RxPOS provider.' }, 403);
+      if (!choices.length && !ownerToken) return json({ error: 'This pharmacy account is suspended. Please contact your RxPOS provider.' }, 403);
+      if (ownerToken) return json({ choose: [...choices.sort((a, b) => a.name.localeCompare(b.name)), OWNER_CHOICE], ownerToken });
       if (choices.length > 1) return json({ choose: choices.sort((a, b) => a.name.localeCompare(b.name)) });
       body = { ...body, tenant: choices[0].code };
     }
@@ -263,18 +281,22 @@ async function login(env, body) {
   const lockKey = tenant + ':' + email;
   const fail = await env.DB.prepare('SELECT n, until FROM login_fail WHERE email = ?1').bind(lockKey).first();
   if (fail && fail.until > Date.now()) {
+    if (ownerToken) return json({ owner: { token: ownerToken } }); // staff account locked, but this is the owner's correct password
     const mins = Math.ceil((fail.until - Date.now()) / 60000);
     return json({ error: `Too many wrong passwords. Try again in ${mins} minute${mins === 1 ? '' : 's'}, or use "Forgot password".` }, 429);
   }
   if (!match || !(await verifyPassword(match.u, String(body.password || '')))) {
+    if (ownerToken) return json({ owner: { token: ownerToken } }); // it is the owner's password: straight to the owner console
     const n = (fail && fail.until <= Date.now() && fail.until > 0 ? 0 : fail?.n || 0) + 1;
     const until = n >= MAX_FAILS ? Date.now() + LOCK_MINUTES * 60000 : 0;
     await env.DB.prepare('INSERT INTO login_fail (email, n, until) VALUES (?1, ?2, ?3) ON CONFLICT(email) DO UPDATE SET n = ?2, until = ?3').bind(lockKey, until ? 0 : n, until).run();
     return json({ error: until ? `Too many wrong passwords. Sign-in is locked for ${LOCK_MINUTES} minutes.` : `Wrong email or password (${MAX_FAILS - n} attempt${MAX_FAILS - n === 1 ? '' : 's'} left before a ${LOCK_MINUTES}-minute lock).` }, until ? 429 : 401);
   }
   const t = await tenantById(env, match.tenant);
-  if (!t || t.status !== 'active') return json({ error: 'This pharmacy account is suspended. Please contact your RxPOS provider.' }, 403);
+  if (!t || t.status !== 'active') return ownerToken ? json({ owner: { token: ownerToken } }) : json({ error: 'This pharmacy account is suspended. Please contact your RxPOS provider.' }, 403);
   if (fail) await env.DB.prepare('DELETE FROM login_fail WHERE email = ?1').bind(lockKey).run();
+  // the same email and password is also the owner's: let them choose the pharmacy or the owner console
+  if (ownerToken) return json({ choose: [{ code: t.slug || t.id, name: t.name, role: match.u.role || '' }, OWNER_CHOICE], ownerToken });
   const u = match.u;
   const token = await signToken(env, { sub: u.id, tn: match.tenant, name: u.name, role: u.role, exp: Date.now() + TOKEN_DAYS * 864e5 });
   return json({ token, tenant: match.tenant, slug: t.slug || match.tenant, pharmacy: t.name, user: { id: u.id, name: u.name, email: u.email, role: u.role } });

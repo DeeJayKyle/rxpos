@@ -21,6 +21,7 @@ const SUITES = [
   ['stale sign-ins', 'stale-token.mjs', []],
   ['batch 17 features', 'v17.mjs', ['.output/v17']],
   ['backup & restore', 'backup-test.mjs', []],
+  ['owner on main page', 'owner-main-login.mjs', ['.output/owner-main']],
 ];
 const only = process.argv[2];
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));

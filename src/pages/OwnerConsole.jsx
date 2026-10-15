@@ -569,7 +569,7 @@ function OwnerAccount({ api, onClose }) {
   const [links, setLinks] = useState({});
   const [busy, setBusy] = useState(false);
   useEffect(() => {
-    api('/account').then((j) => { setA(j); setLinks({ googleEmail: j.googleEmail, googleClientId: j.googleClientId, githubLogin: j.githubLogin, githubClientId: j.githubClientId, githubClientSecret: '' }); })
+    api('/account').then((j) => { setA(j); setLinks({ email: j.email, googleEmail: j.googleEmail, googleClientId: j.googleClientId, githubLogin: j.githubLogin, githubClientId: j.githubClientId, githubClientSecret: '' }); })
       .catch((e) => toast(e.message, 'error'));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const save = async (body, ok) => { setBusy(true); try { const j = await api('/account', body); setA(j); toast(ok); return true; } catch (e) { toast(e.message, 'error'); return false; } finally { setBusy(false); } };
@@ -578,6 +578,13 @@ function OwnerAccount({ api, onClose }) {
   const f = (k, lbl, extra = {}) => <label className="field"><span>{lbl}</span><input value={links[k] ?? ''} onChange={(e) => setLinks({ ...links, [k]: e.target.value })} autoComplete="off" {...extra} /></label>;
   return (
     <Modal title="Owner account" onClose={onClose} wide>
+      <form className="stack" onSubmit={(e) => { e.preventDefault(); save({ email: links.email || '' }, links.email ? 'Owner email saved: sign in on the main page with it and your owner password' : 'Owner email removed'); }}>
+        <h3><Mail size={17} />Owner email {a.email ? <span className="badge ok">on</span> : <span className="badge">off</span>}</h3>
+        <p className="muted small">With this email and your owner password you can sign in on the main page ({location.host}) and go straight to managing your pharmacies. If you also work at a pharmacy with the same email, your password decides where you go (or you choose when they are the same).</p>
+        <div className="form-grid">{f('email', 'Owner email', { type: 'email', placeholder: 'you@gmail.com' })}</div>
+        <div className="form-actions"><button className="btn primary" disabled={busy}>Save email</button></div>
+      </form>
+
       <form className="stack" onSubmit={async (e) => {
         e.preventDefault();
         if (pw.password !== pw.confirm) { toast('The two new passwords do not match', 'error'); return; }

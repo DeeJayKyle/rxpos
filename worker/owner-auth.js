@@ -3,7 +3,8 @@
 //  • "Sign in with Google" (Gmail) and "Sign in with GitHub" to get back in when the password is forgotten
 //  • the OWNER_KEY secret still works as the emergency master key
 // A successful sign-in returns a 12-hour owner session token ("o.<payload>.<signature>").
-// Settings live in the owner_config table: pw, google_email, google_client_id, github_login, github_client_id, github_client_secret.
+// Settings live in the owner_config table: pw, email, google_email, google_client_id, github_login, github_client_id, github_client_secret.
+// "email" lets the owner sign in on the main page (rxposug.com) with that email + the owner password.
 
 const te = new TextEncoder();
 const b64url = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -52,6 +53,29 @@ async function checkPassword(cfg, pw) {
   if (!cfg.pw) return false;
   const { salt, hash } = JSON.parse(cfg.pw);
   return (await pbkdf2(pw, salt)) === hash;
+}
+
+/**
+ * Main sign-in page: is this the owner's email and password? Doesn't count wrong tries itself (the caller does that
+ * only when nothing else matched, so the owner's own staff sign-ins never lock the owner out).
+ * → { match: true, token } | { locked: true } | { owner: true } (owner email, wrong password) | null (not the owner's email)
+ */
+export async function ownerMainLogin(env, email, password) {
+  if (!env.OWNER_KEY || env.OWNER_KEY.length < 20) return null;
+  const cfg = await getConfig(env.DB);
+  if (!cfg.email || !cfg.pw || String(email || '').trim().toLowerCase() !== cfg.email.toLowerCase()) return null;
+  const fail = await env.DB.prepare('SELECT n, until FROM login_fail WHERE email = ?1').bind('owner:').first();
+  if (fail && fail.until > Date.now()) return { locked: true };
+  if (!(await checkPassword(cfg, String(password || '')))) return { owner: true };
+  if (fail) await env.DB.prepare('DELETE FROM login_fail WHERE email = ?1').bind('owner:').run();
+  return { match: true, token: await ownerSession(env, 'password') };
+}
+/** Count a wrong owner password tried on the main page */
+export async function ownerMainFail(env) {
+  const fail = await env.DB.prepare('SELECT n, until FROM login_fail WHERE email = ?1').bind('owner:').first();
+  const n = (fail && fail.until <= Date.now() && fail.until > 0 ? 0 : fail?.n || 0) + 1;
+  const until = n >= MAX_FAILS ? Date.now() + LOCK_MINUTES * 60000 : 0;
+  await env.DB.prepare('INSERT INTO login_fail (email, n, until) VALUES (?1, ?2, ?3) ON CONFLICT(email) DO UPDATE SET n = ?2, until = ?3').bind('owner:', until ? 0 : n, until).run();
 }
 
 // ---------- Google: verify the ID token from "Sign in with Google" ----------
@@ -147,7 +171,7 @@ export async function ownerAccount(env, req, url, body, { json }) {
   const cfg = await getConfig(db);
   const publicUrl = (env.PUBLIC_URL || url.origin).replace(/\/+$/, '');
   const view = (c) => ({
-    hasPassword: !!c.pw, googleEmail: c.google_email || '', googleClientId: c.google_client_id || '',
+    hasPassword: !!c.pw, email: c.email || '', googleEmail: c.google_email || '', googleClientId: c.google_client_id || '',
     githubLogin: c.github_login || '', githubClientId: c.github_client_id || '', githubSecretSet: !!c.github_client_secret,
     githubCallback: publicUrl + '/api/owner-auth/github/callback', origin: publicUrl,
   });
@@ -159,10 +183,12 @@ export async function ownerAccount(env, req, url, body, { json }) {
     const salt = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(16))));
     await setConfig(db, { pw: JSON.stringify({ salt, hash: await pbkdf2(pw, salt) }) });
   }
-  const allowed = { googleEmail: 'google_email', googleClientId: 'google_client_id', githubLogin: 'github_login', githubClientId: 'github_client_id', githubClientSecret: 'github_client_secret' };
+  const allowed = { email: 'email', googleEmail: 'google_email', googleClientId: 'google_client_id', githubLogin: 'github_login', githubClientId: 'github_client_id', githubClientSecret: 'github_client_secret' };
   const updates = {};
   for (const [k, col] of Object.entries(allowed)) if (body[k] !== undefined) updates[col] = String(body[k]).trim();
   if (updates.google_email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(updates.google_email)) return json({ error: 'Enter a valid Google (Gmail) address.' }, 400);
+  if (updates.email) updates.email = updates.email.toLowerCase();
+  if (updates.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(updates.email)) return json({ error: 'Enter a valid email for the owner.' }, 400);
   if (Object.keys(updates).length) await setConfig(db, updates);
   return json(view(await getConfig(db)));
 }

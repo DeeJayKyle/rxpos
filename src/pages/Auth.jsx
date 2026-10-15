@@ -21,6 +21,13 @@ export default function Auth() {
   const [form, setForm] = useState(() => ({ email: (() => { try { return localStorage.getItem(LAST_EMAIL) || ''; } catch { return ''; } })(), password: '', code: slug || '', otp: '', newPassword: '' }));
   const [needCode, setNeedCode] = useState(false);
   const [choices, setChoices] = useState(null); // pharmacies this email + password opens
+  const [ownerToken, setOwnerToken] = useState(''); // set when the same email + password is also the RxPOS owner's
+  // The owner's email and password open the owner console (web only: it isn't part of the apps)
+  const openOwner = (token) => {
+    if (!isWeb) throw new Error(`That is the RxPOS owner account. Open ${DEFAULT_CLOUD.replace(/^https?:\/\//, '')} in a web browser to manage pharmacies.`);
+    try { sessionStorage.setItem('rxpos-owner-key', token); } catch {}
+    location.hash = '#/owner';
+  };
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [forgot, setForgot] = useState(() => (location.hash.startsWith('#/forgot') ? { stage: 'ask' } : null)); // { stage: 'ask' | 'code', channel, hint }
@@ -44,7 +51,8 @@ export default function Auth() {
     if (navigator.onLine) {
       try {
         const r = await cloudLogin(url, email, form.password, code);
-        if (r.choose) { setChoices(r.choose); return; } // registered at several pharmacies: let them pick
+        if (r.owner) { openOwner(r.owner.token); return; }
+        if (r.choose) { setChoices(r.choose); setOwnerToken(r.ownerToken || ''); return; } // several pharmacies (or also the owner): let them pick
         await finish(r, email);
         return;
       } catch (err) {
@@ -80,6 +88,7 @@ export default function Auth() {
     setUser(r.user);
   };
   const choose = (c) => run(async () => {
+    if (c.code === '__owner__') { openOwner(ownerToken); return; }
     const email = form.email.trim().toLowerCase();
     const r = await cloudLogin(url, email, form.password, c.code);
     setChoices(null);
@@ -134,7 +143,7 @@ export default function Auth() {
             <li><ShieldCheck size={18} />Batch & expiry tracking, drug information, audit trail, finance and reports built in</li>
           </ul>
         </div>
-        <small style={{ opacity: .6 }}>© {new Date().getFullYear()} RxPOS{isWeb && <> · <a href="#/owner" style={{ color: 'inherit' }}><Crown size={11} /> Owner console</a></>}</small>
+        <small style={{ opacity: .6 }}>© {new Date().getFullYear()} RxPOS{isWeb && <> · <a href="#/owner" style={{ color: 'inherit' }}><Crown size={11} /> Owner</a></>}</small>
       </section>
       <div className="auth-side">
         <div className="auth-card">
@@ -142,12 +151,12 @@ export default function Auth() {
           {choices ? (
             <div className="stack">
               <button type="button" className="btn sm ghost" style={{ alignSelf: 'flex-start' }} onClick={() => { setChoices(null); setError(''); }} disabled={busy}><ArrowLeft size={14} />Back</button>
-              <p className="center auth-title"><strong>Which pharmacy?</strong><br /><span className="muted small">{form.email} works at {choices.length} pharmacies</span></p>
+              <p className="center auth-title"><strong>{choices.some((c) => c.code === '__owner__') ? 'Where to?' : 'Which pharmacy?'}</strong><br /><span className="muted small">{choices.some((c) => c.code === '__owner__') ? `Choose where to sign in as ${form.email}` : `${form.email} works at ${choices.length} pharmacies`}</span></p>
               <div className="pharmacy-choices">
                 {choices.map((c) => (
                   <button key={c.code} type="button" className={'pharmacy-choice' + ((c.code === syncCfg.slug) ? ' current' : '')} onClick={() => choose(c)} disabled={busy}>
-                    <Building2 size={18} />
-                    <span className="grow"><strong>{c.name}</strong><small className="muted">{c.code}{c.role ? ` · ${c.role}` : ''}{c.code === syncCfg.slug ? ' · this device' : ''}</small></span>
+                    {c.code === '__owner__' ? <Crown size={18} /> : <Building2 size={18} />}
+                    <span className="grow"><strong>{c.name}</strong><small className="muted">{c.code === '__owner__' ? 'Manage all pharmacies' : <>{c.code}{c.role ? ` · ${c.role}` : ''}{c.code === syncCfg.slug ? ' · this device' : ''}</>}</small></span>
                     <LogIn size={16} />
                   </button>
                 ))}
