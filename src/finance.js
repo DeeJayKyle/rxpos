@@ -6,11 +6,13 @@ export function ledger(db) {
   const e = [];
   const acct = (x) => x || CASH;
   for (const s of db.sales) {
+    if (s.imported) continue; // history copied from the old system: its money was handled there
     const paid = s.paid ?? s.total;
     if (paid > 0) e.push({ date: s.date, desc: `Sale ${s.number}${s.customerName ? ' – ' + s.customerName : ''}`, in: paid, out: 0, account: acct(s.bankId), kind: 'Sales' });
     if (s.status === 'refunded') e.push({ date: s.refundedAt || s.date, desc: `Refund ${s.number}`, in: 0, out: paid, account: acct(s.bankId), kind: 'Refunds' });
   }
   for (const p of db.purchases) {
+    if (p.imported) continue;
     const paid = p.paid ?? p.total;
     if (paid > 0) e.push({ date: p.date, desc: `Purchase ${p.invoice || ''} – ${p.supplierName}`, in: 0, out: paid, account: acct(p.bankId), kind: 'Purchases' });
   }

@@ -154,7 +154,7 @@ export default function Purchases() {
               <tr key={p.id}>
                 <td>{p.date}</td><td>{p.number}</td><td>{p.supplierName}</td><td>{p.invoice}</td><td>{p.items.length}</td><td>{p.receivedBy}</td>
                 <td className="num">{fmt(p.total)}</td><td className="num">{p.total - (p.paid ?? p.total) > 0 ? <span className="text-warn">{fmt(p.total - p.paid)}</span> : '—'}</td>
-                <td className="actions"><button className="btn sm ghost" onClick={() => setView(p)}>View</button>{can('purchases.edit') && <button className="btn sm ghost" onClick={() => setEditing(p)}><Pencil size={14} />Edit</button>}{p.editedAt && <small className="muted"> · edited</small>}</td>
+                <td className="actions"><button className="btn sm ghost" onClick={() => setView(p)}>View</button>{can('purchases.edit') && !p.imported && <button className="btn sm ghost" onClick={() => setEditing(p)}><Pencil size={14} />Edit</button>}{p.editedAt && <small className="muted"> · edited</small>}</td>
               </tr>
             ))}
             {!rows.length && <tr><td colSpan={9} className="empty">No purchases recorded</td></tr>}

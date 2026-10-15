@@ -116,7 +116,7 @@ export default function Sales() {
                 <td>{s.customerName}</td><td>{s.cashier}</td><td>{s.payment}{s.momo?.txid ? <><br /><small className="muted">{s.momo.txid}</small></> : null}</td>
                 <td><span className={'badge ' + (s.status === 'refunded' ? 'danger' : 'ok')}>{s.status}</span></td>
                 <td className="num">{fmt(s.total)}</td>
-                <td className="actions"><button className="btn sm ghost" onClick={() => setView(s)}><Eye size={14} />View</button>{s.status !== 'refunded' && can('sales.edit') && <button className="btn sm ghost" onClick={() => setEditing(s)}><Pencil size={14} />Edit</button>}{s.editedAt && <small className="muted" title={`Edited by ${s.editedBy} ${new Date(s.editedAt).toLocaleString()}`}> · edited</small>}</td>
+                <td className="actions"><button className="btn sm ghost" onClick={() => setView(s)}><Eye size={14} />View</button>{s.status !== 'refunded' && !s.imported && can('sales.edit') && <button className="btn sm ghost" onClick={() => setEditing(s)}><Pencil size={14} />Edit</button>}{s.editedAt && <small className="muted" title={`Edited by ${s.editedBy} ${new Date(s.editedAt).toLocaleString()}`}> · edited</small>}</td>
               </tr>
             ))}
             {!rows.length && <Empty colSpan={9}>No sales found</Empty>}
@@ -128,8 +128,9 @@ export default function Sales() {
         <Modal title={`Receipt ${view.number}`} onClose={() => setView(null)}>
           <Receipt sale={view} />
           <div className="form-actions no-print">
-            {view.status !== 'refunded' && can('sales.edit') && <button className="btn ghost" onClick={() => { setEditing(view); setView(null); }}><Pencil size={16} />Edit sale</button>}
-            {view.status !== 'refunded' && user.role !== 'cashier' && <button className="btn danger" onClick={() => refund(view)}><Undo2 size={16} />Refund</button>}
+            {view.status !== 'refunded' && !view.imported && can('sales.edit') && <button className="btn ghost" onClick={() => { setEditing(view); setView(null); }}><Pencil size={16} />Edit sale</button>}
+            {view.imported && <small className="muted">Copied from {view.imported} — view only</small>}
+            {view.status !== 'refunded' && !view.imported && user.role !== 'cashier' && <button className="btn danger" onClick={() => refund(view)}><Undo2 size={16} />Refund</button>}
             <button className="btn primary" onClick={() => window.print()}><Printer size={16} />Print</button>
           </div>
         </Modal>
