@@ -19,6 +19,8 @@
   // Password-reset emails go through Brevo (free plan): the API key is the secret BREVO_API_KEY (wrangler secret put BREVO_API_KEY)
   // Own domain for the apps (api.rxposug.com); the free workers.dev address stays on for devices set up before
   "workers_dev": true,
+  // Mondays 06:00 UTC: keep the Brevo API key active (worker/index.js → scheduled)
+  "triggers": { "crons": ["0 6 * * 1"] },
   "routes": [{ "pattern": "api.rxposug.com", "custom_domain": true }],
   // Cloudflare Workers AI (open models) for prescription reading and drug quizzes
   "ai": { "binding": "AI" },

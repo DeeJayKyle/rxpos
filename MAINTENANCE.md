@@ -27,6 +27,7 @@ Keep every login in a password manager (e.g. Bitwarden, free and open source): G
 | Android keystore (`ANDROID_KEYSTORE_B64`, password, alias) | Signing every Android build, **required for every Google Play update** | GitHub secrets. **Keep an offline copy**: losing it means the Play app can never be updated |
 | `WINDOWS_CERT_B64`, `WINDOWS_CERT_PASSWORD` | Optional Windows code signing | GitHub secrets (not set yet) |
 | Owner password, Google client ID, GitHub OAuth app | Owner console sign-in | Owner console → Account (stored in the database) |
+| `BREVO_API_KEY` | Password-reset emails from no-reply@rxposug.com (Brevo free plan, 300/day; account herbjay8@gmail.com) | Worker secret. Brevo disables keys unused for 90 days: a weekly Worker cron (Mondays) keeps it active. If emails stop, make a new key in Brevo → SMTP & API and replace the secret |
 | MoMo / Airtel / Africa's Talking keys | Payments and SMS per pharmacy | Owner console → pharmacy → Payments & SMS |
 
 Never put a secret in the code, a commit, a chat or a screenshot.
@@ -126,6 +127,11 @@ When `rxposug.com` (or another domain) is bought in the same Cloudflare account:
 `wrangler.jsonc` and `DEFAULT_CLOUD` in `src/cloud.js` to the new address, add it to the Google sign-in origins and the
 GitHub OAuth callback, deploy and release (keep `rxpos.pages.dev` working for devices set up earlier).
 Renewal is yearly: turn on auto-renew in Cloudflare → Domain Registration.
+
+## 9b. Email
+
+* **Receiving:** Cloudflare Email Routing forwards info@rxposug.com to herbjay8@gmail.com (dashboard → rxposug.com → Email → Email Routing).
+* **Sending (password codes):** Brevo, domain rxposug.com authenticated (DNS: brevo-code TXT, brevo1/brevo2._domainkey CNAMEs, _dmarc TXT; keep them). Sender "RxPOS" <no-reply@rxposug.com> (vars `BREVO_SENDER_EMAIL`, `BREVO_SENDER_NAME` in wrangler.jsonc). Delivery log: Brevo → Transactional → Logs.
 
 ## 10. Limits and health
 

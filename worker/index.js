@@ -1014,6 +1014,10 @@ async function calendarFeed(env, tenant) {
 }
 
 export default {
+  // Weekly: use the Brevo key once so Brevo never disables it for 90 days of inactivity (password emails are rare)
+  async scheduled(event, env, ctx) {
+    if (env.BREVO_API_KEY) ctx.waitUntil(fetch('https://api.brevo.com/v3/account', { headers: { 'api-key': env.BREVO_API_KEY, Accept: 'application/json' } }).then((r) => console.log('brevo keep-alive', r.status)).catch((e) => console.log('brevo keep-alive failed', e.message)));
+  },
   async fetch(req, rawEnv) {
     const url = new URL(req.url);
     const path = url.pathname;
