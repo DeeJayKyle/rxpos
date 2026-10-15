@@ -1,5 +1,5 @@
 # RxPOS - connect MTN MoMo / Airtel Money / SMS to your Cloudflare cloud.
-# Run from the pharmapos folder:   powershell -ExecutionPolicy Bypass -File deploy\setup-mobile-money.ps1
+# Run from the rxpos folder:   powershell -ExecutionPolicy Bypass -File deploy\setup-mobile-money.ps1
 # Keys are typed here (hidden) and stored only as encrypted Cloudflare secrets. Nothing is saved on this PC.
 $ErrorActionPreference = 'Stop'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -40,7 +40,7 @@ switch ($choice) {
     Write-Host 'Creating your sandbox API user...'
     Invoke-RestMethod "$base/v1_0/apiuser" -Method Post -ContentType 'application/json' `
       -Headers @{ 'X-Reference-Id' = $user; 'Ocp-Apim-Subscription-Key' = $sub } `
-      -Body '{"providerCallbackHost":"pharmapos.pharmapos.workers.dev"}' | Out-Null
+      -Body '{"providerCallbackHost":"api.rxposug.com"}' | Out-Null
     $apiKey = (Invoke-RestMethod "$base/v1_0/apiuser/$user/apikey" -Method Post -Headers @{ 'Ocp-Apim-Subscription-Key' = $sub }).apiKey
     Write-Host 'Checking the credentials work...'
     $basic = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("${user}:${apiKey}"))

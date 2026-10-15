@@ -1,5 +1,5 @@
 {
-  "appId": "io.github.pharmapos",
+  "appId": "io.github.rxpos",
   "appName": "RxPOS",
   "webDir": "dist",
   "android": {

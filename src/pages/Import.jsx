@@ -167,7 +167,7 @@ export default function Import() {
     toast('Import finished');
   };
 
-  const template = () => downloadFile('pharmapos-import-template.csv', toCSV([{ Name: 'Paracetamol 500mg', Generic: 'Paracetamol', Formulation: 'Tablets', Category: 'Analgesic', Barcode: '', Unit: 'Tablet', Cost: 30, 'Retail price': 100, 'Wholesale price': 50, 'Reorder level': 200, Stock: 1000, Batch: 'PCM2401', Expiry: '2027-06-30' }]), 'text/csv');
+  const template = () => downloadFile('rxpos-import-template.csv', toCSV([{ Name: 'Paracetamol 500mg', Generic: 'Paracetamol', Formulation: 'Tablets', Category: 'Analgesic', Barcode: '', Unit: 'Tablet', Cost: 30, 'Retail price': 100, 'Wholesale price': 50, 'Reorder level': 200, Stock: 1000, Batch: 'PCM2401', Expiry: '2027-06-30' }]), 'text/csv');
 
   return (
     <div className="page">

@@ -57,9 +57,9 @@ jobs:
       - run: npm run build
       - name: Package web app + hub
         run: |
-          mkdir -p out/pharmapos-hub
-          cp -r dist server package.json out/pharmapos-hub/
-          cd out && zip -r RxPOS-Hub.zip pharmapos-hub
+          mkdir -p out/rxpos-hub
+          cp -r dist server package.json out/rxpos-hub/
+          cd out && zip -r RxPOS-Hub.zip rxpos-hub
       - uses: actions/upload-artifact@v4
         with:
           name: RxPOS-Hub
@@ -75,10 +75,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build hub image
-        run: docker build -t pharmapos-hub .
+        run: docker build -t rxpos-hub .
       - name: Smoke test
         run: |
-          docker run -d --name hub -e PHARMAPOS_SYNC_KEY=ci-smoke-test-key -p 8686:8686 pharmapos-hub
+          docker run -d --name hub -e RXPOS_SYNC_KEY=ci-smoke-test-key -p 8686:8686 rxpos-hub
           for i in $(seq 1 20); do curl -fs http://localhost:8686/api/health && break; sleep 1; done
           curl -fs http://localhost:8686/ | grep -q RxPOS
           curl -fs -X POST http://localhost:8686/api/sync -H 'Authorization: Bearer ci-smoke-test-key' -H 'Content-Type: application/json' \

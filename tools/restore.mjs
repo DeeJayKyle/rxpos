@@ -31,7 +31,7 @@ for (const t of data.tenants) console.log(`  ${t.id}${t.slug && t.slug !== t.id 
 if (val('--json')) { fs.writeFileSync(val('--json'), JSON.stringify(data, null, 1)); console.log('Saved plain JSON to', val('--json'), '(it contains password hashes and keys: keep it private)'); }
 
 if (flag('--restore')) {
-  const API = (process.env.RXPOS_API || 'https://pharmapos.pharmapos.workers.dev').replace(/\/+$/, '');
+  const API = (process.env.RXPOS_API || 'https://api.rxposug.com').replace(/\/+$/, '');
   const KEY = process.env.OWNER_KEY;
   if (!KEY) throw new Error('Set OWNER_KEY to restore');
   const send = async (part, rows, size = 500) => {

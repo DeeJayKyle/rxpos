@@ -10,9 +10,9 @@ const HUB_MODE = process.argv.includes('--hub');
 
 if (HUB_MODE) {
   const keyArg = process.argv.find((a) => a.startsWith('--key='));
-  if (keyArg) process.env.PHARMAPOS_SYNC_KEY = keyArg.slice('--key='.length);
+  if (keyArg) process.env.RXPOS_SYNC_KEY = keyArg.slice('--key='.length);
   app.whenReady().then(() => {
-    process.env.PHARMAPOS_DATA ||= path.join(app.getPath('userData'), 'hub-data');
+    process.env.RXPOS_DATA ||= path.join(app.getPath('userData'), 'hub-data');
     import(pathToFileURL(path.join(__dirname, '..', 'server', 'hub.mjs')).href).catch((e) => {
       console.error(e);
       app.quit();
@@ -70,7 +70,7 @@ if (HUB_MODE) {
     ])
   );
 
-  if (process.platform === 'win32') app.setAppUserModelId('io.github.pharmapos');
+  if (process.platform === 'win32') app.setAppUserModelId('io.github.rxpos');
   app.whenReady().then(() => {
     createWindow();
     app.on('activate', () => BrowserWindow.getAllWindows().length === 0 && createWindow());

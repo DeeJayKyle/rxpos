@@ -15,7 +15,7 @@ const ALL_MEDS = process.argv.includes('--all-medicines') || process.argv.includ
 const MIRROR = process.argv.includes('--mirror');
 const [TENANT, FOLDER] = process.argv.slice(2).filter((a) => !a.startsWith('--'));
 if (!TENANT || !FOLDER) throw new Error('Usage: node tools/rxtera/sync.mjs <tenant-id> <data-folder> [--dry] [--all-medicines] [--mirror]');
-const BASE = (process.env.RXPOS_API || 'https://pharmapos.pharmapos.workers.dev').replace(/\/+$/, '') + '/api/owner/tenants';
+const BASE = (process.env.RXPOS_API || 'https://api.rxposug.com').replace(/\/+$/, '') + '/api/owner/tenants';
 const API = BASE + '/' + TENANT;
 const DIR = fs.existsSync(FOLDER) ? path.resolve(FOLDER) : path.join(process.env.LOCALAPPDATA || '.', 'Temp/rxm', FOLDER);
 const KEY = process.env.OWNER_KEY || fs.readFileSync(path.join(os.homedir(), 'Documents/RxPOS-Data/RxPOS-OWNER-KEY.txt'), 'utf8')

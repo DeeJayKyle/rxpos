@@ -21,7 +21,7 @@ class ErrorBoundary extends React.Component {
     for (const k of await idbKeys().catch(() => [])) if (String(k).startsWith('t:')) data[k.slice(2)] = await idbGet(k).catch(() => null);
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([JSON.stringify(data)], { type: 'application/json' }));
-    a.download = 'pharmapos-rescue.json';
+    a.download = 'rxpos-rescue.json';
     a.click();
   }
   render() {

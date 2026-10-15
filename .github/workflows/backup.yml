@@ -22,7 +22,7 @@ jobs:
           node-version: 22
       - name: Download and encrypt
         env:
-          RXPOS_API: https://pharmapos.pharmapos.workers.dev
+          RXPOS_API: https://api.rxposug.com
           OWNER_KEY: ${{ secrets.OWNER_KEY }}
           BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
         run: node tools/backup.mjs backups

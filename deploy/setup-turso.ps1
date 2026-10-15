@@ -1,10 +1,10 @@
 # RxPOS: connect the cloud to a Turso (libSQL) database.
-# Run from the pharmapos folder:  powershell -ExecutionPolicy Bypass -File deploy\setup-turso.ps1
+# Run from the rxpos folder:  powershell -ExecutionPolicy Bypass -File deploy\setup-turso.ps1
 # You need: the database URL (libsql://....turso.io) and a database token from app.turso.tech.
 # The token is sent straight to Cloudflare as a secret; it is not saved on this PC.
 
 $ErrorActionPreference = 'Stop'
-Set-Location (Split-Path $PSScriptRoot -Parent)  # the pharmapos folder, where wrangler.jsonc is
+Set-Location (Split-Path $PSScriptRoot -Parent)  # the rxpos folder, where wrangler.jsonc is
 Write-Host ''
 Write-Host 'RxPOS - Turso database setup' -ForegroundColor Cyan
 Write-Host '1. Sign in at https://app.turso.tech (GitHub or Google works).'

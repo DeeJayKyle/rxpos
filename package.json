@@ -1,5 +1,5 @@
 {
-  "name": "pharmapos",
+  "name": "rxpos",
   "productName": "RxPOS",
   "version": "1.0.0",
   "description": "RxPOS - pharmacy point of sale and inventory management",
@@ -46,7 +46,7 @@
     "wrangler": "4.142.0"
   },
   "build": {
-    "appId": "io.github.pharmapos",
+    "appId": "io.github.rxpos",
     "productName": "RxPOS",
     "directories": {
       "output": "release"

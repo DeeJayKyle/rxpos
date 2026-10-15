@@ -9,8 +9,8 @@ RxPOS itself needs nothing but the accounts below: apps, sync and the cloud keep
 |---|---|---|
 | Code, history, app builds, nightly backups | GitHub `DeeJayKyle/rxpos` (private) | GitHub |
 | Website + pharmacy addresses (`rxpos.pages.dev/<pharmacy>`) | Cloudflare Pages project **rxpos** | Cloudflare |
-| Cloud API, sync, live connection, AI | Cloudflare Worker **pharmapos** (`pharmapos.pharmapos.workers.dev`) | Cloudflare |
-| Database | Turso database **rxpos** (Ireland). Old Cloudflare D1 `pharmapos-db` kept as a fallback | Turso / Cloudflare |
+| Cloud API, sync, live connection, AI | Cloudflare Worker at **api.rxposug.com** (internal name `pharmapos`, kept so no secret has to be re-entered; also answers at `pharmapos.pharmapos.workers.dev`) | Cloudflare |
+| Database | Turso database **rxpos** (Ireland). Old Cloudflare D1 `pharmapos-db` (empty) kept as a fallback | Turso / Cloudflare |
 | Windows / Android / Hub downloads | GitHub Releases → `v1.0.0` | GitHub |
 
 Keep every login in a password manager (e.g. Bitwarden, free and open source): GitHub, Cloudflare, Turso, Google
@@ -49,7 +49,7 @@ as can open-source AI coding tools (Aider, Cline, OpenCode) or Claude.
 ## 3. Setting up a PC to work on it
 
 1. Install **Node.js 22+**, **Git** and **Chrome** (tests use it). Optional: GitHub CLI (`gh`).
-2. `git clone https://github.com/DeeJayKyle/rxpos.git pharmapos && cd pharmapos && npm ci`
+2. `git clone https://github.com/DeeJayKyle/rxpos.git rxpos && cd rxpos && npm ci`
 3. `npx wrangler login` (Cloudflare) once, to deploy.
 4. On Windows set `git config core.autocrlf input` **before** cloning (or after: `git rm --cached -r . && git reset --hard`).
 
@@ -67,11 +67,11 @@ as can open-source AI coding tools (Aider, Cline, OpenCode) or Claude.
 ```bash
 npx wrangler deploy                                              # the cloud (Worker)
 npm run build && npx wrangler pages deploy dist --project-name rxpos --branch main   # the website
-curl https://pharmapos.pharmapos.workers.dev/api/health          # → "ok": true, "database": "turso"
+curl https://api.rxposug.com/api/health          # → "ok": true, "database": "turso"
 ```
 
 The website change reaches browsers at once. Installed apps get it with the next release (section 6).
-To undo a bad Worker deploy: Cloudflare dashboard → Workers → pharmapos → Deployments → roll back
+To undo a bad Worker deploy: Cloudflare dashboard → Workers → pharmapos (= api.rxposug.com) → Deployments → roll back
 (or `npx wrangler rollback`). For the website: Pages → rxpos → Deployments → an earlier one → Rollback.
 
 ## 6. Releasing the apps (kept at version 1.0.0)
@@ -137,13 +137,13 @@ Renewal is yearly: turn on auto-renew in Cloudflare → Domain Registration.
 
 * Free plans: Cloudflare Workers 100,000 requests/day (an idle device uses about 3,000/day), Turso about 10 million
   writes/month, Workers AI a daily free allowance. For several busy branches move to Workers Paid (US$5/month).
-* Health: `https://pharmapos.pharmapos.workers.dev/api/health`. Live logs: `npx wrangler tail`.
+* Health: `https://api.rxposug.com/api/health`. Live logs: `npx wrangler tail`.
   Usage: Cloudflare dashboard → Workers → pharmapos → Metrics; Turso → app.turso.tech → Usage.
 
 ## 11. Known quirks
 
 * The owner console's *Export* is too heavy for very large pharmacies (Worker CPU limit, error 1102): use the backup instead.
-* If `Documents/pharmapos` disappears, clone it again from GitHub (nothing is lost: everything is pushed).
+* If `Documents/rxpos` disappears, clone it again from GitHub (nothing is lost: everything is pushed).
 * `package.json` must be saved without a BOM (don't edit it in Windows PowerShell; use an editor or Node).
 * Switching the database back to D1: set `"DB_BACKEND": ""` in `wrangler.jsonc` and deploy (D1 holds older data only).
 

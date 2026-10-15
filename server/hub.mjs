@@ -2,7 +2,7 @@
 // RxPOS Hub: keeps every RxPOS device (desktop apps and browsers) in sync, and serves the web app.
 // No dependencies; needs Node.js 18+.
 //
-//   PHARMAPOS_SYNC_KEY=choose-a-long-secret node server/hub.mjs [--port 8686] [--data ./hub-data]
+//   RXPOS_SYNC_KEY=choose-a-long-secret node server/hub.mjs [--port 8686] [--data ./hub-data]
 //
 // Run it on the main PC (LAN) or on any server/VPS (online). Devices link to it in Settings → Sync.
 import http from 'node:http';
@@ -14,13 +14,13 @@ import { fileURLToPath } from 'node:url';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i > 0 ? process.argv[i + 1] : d; };
 const PORT = Number(arg('port', process.env.PORT || 8686));
-const DATA_DIR = path.resolve(arg('data', process.env.PHARMAPOS_DATA || path.join(here, '..', 'hub-data')));
+const DATA_DIR = path.resolve(arg('data', process.env.RXPOS_DATA || process.env.PHARMAPOS_DATA || path.join(here, '..', 'hub-data')));
 const WEB_DIR = path.resolve(arg('web', path.join(here, '..', 'dist')));
-const KEY = process.env.PHARMAPOS_SYNC_KEY || '';
+const KEY = process.env.RXPOS_SYNC_KEY || process.env.PHARMAPOS_SYNC_KEY || '';
 const PAGE = 2000;
 
 if (KEY.length < 12) {
-  console.error('Set PHARMAPOS_SYNC_KEY to a secret of at least 12 characters, e.g.\n  PHARMAPOS_SYNC_KEY=my-long-secret-key node server/hub.mjs');
+  console.error('Set RXPOS_SYNC_KEY to a secret of at least 12 characters, e.g.\n  RXPOS_SYNC_KEY=my-long-secret-key node server/hub.mjs');
   process.exit(1);
 }
 
@@ -118,7 +118,7 @@ function send(res, code, body, type = 'application/json') {
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://x');
   if (req.method === 'OPTIONS') return send(res, 204, '');
-  if (url.pathname === '/api/health') return send(res, 200, { ok: true, app: 'pharmapos-hub', rows: Object.keys(state.rows).length });
+  if (url.pathname === '/api/health') return send(res, 200, { ok: true, app: 'rxpos-hub', rows: Object.keys(state.rows).length });
   if ((url.pathname === '/api/sync' || url.pathname === '/api/login') && req.method === 'POST') {
     const who = url.pathname === '/api/sync' ? authenticate(req) : null;
     if (url.pathname === '/api/sync' && !who) return send(res, 401, { error: 'Not signed in (wrong sync key or expired sign-in)' });

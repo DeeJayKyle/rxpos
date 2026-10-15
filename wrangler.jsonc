@@ -4,6 +4,8 @@
 // Then add the secret SYNC_KEY (Settings → Variables and Secrets). The D1 database is created automatically.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
+  // Internal Cloudflare names kept from before the rename (never shown; renaming would need every secret re-entered).
+  // Everyone reaches it as api.rxposug.com / rxposug.com.
   "name": "pharmapos",
   "main": "worker/index.js",
   "compatibility_date": "2026-09-01",

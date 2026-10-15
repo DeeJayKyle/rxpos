@@ -1,5 +1,5 @@
 // Download the whole RxPOS cloud (every pharmacy, record and chat attachment) into one encrypted file.
-//   RXPOS_API=https://pharmapos.pharmapos.workers.dev OWNER_KEY=… BACKUP_PASSPHRASE=… node tools/backup.mjs [out-dir]
+//   RXPOS_API=https://api.rxposug.com OWNER_KEY=… BACKUP_PASSPHRASE=… node tools/backup.mjs [out-dir]
 // The file is gzip-compressed JSON encrypted with AES-256-GCM (key from the passphrase via scrypt).
 // Decrypt / put back with tools/restore.mjs. Runs every night in GitHub Actions (.github/workflows/backup.yml).
 import fs from 'node:fs';
@@ -7,7 +7,7 @@ import path from 'node:path';
 import zlib from 'node:zlib';
 import crypto from 'node:crypto';
 
-const API = (process.env.RXPOS_API || 'https://pharmapos.pharmapos.workers.dev').replace(/\/+$/, '');
+const API = (process.env.RXPOS_API || 'https://api.rxposug.com').replace(/\/+$/, '');
 const KEY = process.env.OWNER_KEY;
 const PASS = process.env.BACKUP_PASSPHRASE;
 if (!KEY || !PASS) { console.error('Set OWNER_KEY and BACKUP_PASSPHRASE'); process.exit(2); }

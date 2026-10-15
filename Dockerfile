@@ -10,7 +10,7 @@ RUN npm run build
 
 FROM node:20-alpine
 WORKDIR /app
-ENV NODE_ENV=production PORT=8686 PHARMAPOS_DATA=/data
+ENV NODE_ENV=production PORT=8686 RXPOS_DATA=/data
 COPY --from=build /app/dist ./dist
 COPY server ./server
 COPY package.json ./

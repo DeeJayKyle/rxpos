@@ -51,7 +51,7 @@ Other devices then link to `http://<main-PC-IP>:8686`. Allow port 8686 through W
 **On a server (online access from anywhere), needs Node.js 18+:**
 
 ```bash
-PHARMAPOS_SYNC_KEY=YOUR-SECRET-KEY node server/hub.mjs --port 8686 --data ./hub-data
+RXPOS_SYNC_KEY=YOUR-SECRET-KEY node server/hub.mjs --port 8686 --data ./hub-data
 ```
 
 Put it behind HTTPS (e.g. Caddy, nginx, or a host such as Render/Railway/Fly.io). Open `https://your-hub-address` in any browser to use RxPOS online. The hub serves the web app too.
@@ -60,18 +60,18 @@ The `RxPOS-Hub.zip` artifact from GitHub Actions contains everything needed. The
 ## Putting RxPOS online (recommended: Cloudflare, free, no card, no server)
 
 The repo is ready for **Cloudflare Workers + D1** (free plan: 100,000 requests/day, 5 GB database, no credit card).
-One deployment serves the web app *and* the sync hub on a free `https://pharmapos.<your-name>.workers.dev` address,
+One deployment serves the web app *and* the sync hub on a free `https://<worker-name>.<your-name>.workers.dev` address (ours: api.rxposug.com),
 on Cloudflare's global network (with servers in Africa), redeploying automatically on every push to GitHub.
 
 1. Create a free account at **dash.cloudflare.com/sign-up**.
-2. **Workers & Pages → Create → Import a repository** → connect GitHub → choose `pharmapos`.
+2. **Workers & Pages → Create → Import a repository** → connect GitHub → choose `rxpos`.
    * Build command: `npm ci && npm run build`  ·  Deploy command: `npx wrangler deploy`
    * The D1 database is created automatically on the first deploy.
 3. After it deploys: **your Worker → Settings → Variables and Secrets → Add** → type *Secret*, name `SYNC_KEY`, value = a long secret (12+ characters). Save and redeploy.
-4. Open `https://pharmapos.<your-name>.workers.dev`. That is RxPOS online. On Android/desktop browsers use *Install app / Add to Home screen*.
+4. Open your Worker address (ours: `https://rxposug.com`). That is RxPOS online. On Android/desktop browsers use *Install app / Add to Home screen*.
 5. On every PC and phone: **Settings → Online sync** → that address + the same `SYNC_KEY`.
 
-Check it: `https://pharmapos.<your-name>.workers.dev/api/health` → `"configured": true`.
+Check it: `https://api.rxposug.com/api/health` → `"configured": true`.
 
 ## Alternative: your own server with Coolify
 
@@ -82,9 +82,9 @@ and redeploys on every push. The hub then runs 24/7 on a server, not depending o
 1. **Get a small Linux server** (1 vCPU / 1–2 GB RAM is plenty). Free option: Oracle Cloud *Always Free* ARM VM. Cheap options: Hetzner, Contabo, DigitalOcean (about US$4–6/month).
 2. **Install Coolify** on it (one command, from the Coolify docs):
    `curl -fsSL https://cdn.coollabs.io/coolify/install.sh | sudo bash`, then open `http://<server-ip>:8000` and create the admin account.
-3. **Connect GitHub:** *Sources → + Add → GitHub App*, and give it access to the private `pharmapos` repository.
-4. **Create the app:** *Projects → + New → Private Repository (GitHub App)* → `pharmapos`, branch `main`, **Build Pack: Dockerfile**, port **8686**.
-5. **Environment variable:** `PHARMAPOS_SYNC_KEY` = a long secret (mark it *secret*).
+3. **Connect GitHub:** *Sources → + Add → GitHub App*, and give it access to the private `rxpos` repository.
+4. **Create the app:** *Projects → + New → Private Repository (GitHub App)* → `rxpos`, branch `main`, **Build Pack: Dockerfile**, port **8686**.
+5. **Environment variable:** `RXPOS_SYNC_KEY` = a long secret (mark it *secret*).
 6. **Persistent storage:** *Storages → + Add → Volume*, destination path **`/data`**. Without this, data is lost on redeploy.
 7. **Domain:** keep Coolify's free generated `*.sslip.io` address, or enter your own domain. Coolify gets a Let's Encrypt HTTPS certificate automatically.
 8. **Deploy.** Then:
@@ -93,7 +93,7 @@ and redeploys on every push. The hub then runs 24/7 on a server, not depending o
 
 Health check: `https://<your-hub-address>/api/health`. Backups: `/data/backups` inside the volume (daily, 30 kept). Coolify can also back up volumes.
 
-The same image runs on any Docker host: `docker compose up -d` (put `PHARMAPOS_SYNC_KEY=...` in a `.env` file).
+The same image runs on any Docker host: `docker compose up -d` (put `RXPOS_SYNC_KEY=...` in a `.env` file).
 
 ### Alternative: keep the hub on the main PC, reachable online (Cloudflare Tunnel)
 
@@ -137,7 +137,7 @@ records, and only medicines a pharmacy adds or changes are synced. `node worker/
 ## Mobile Money (MTN MoMo, Airtel Money) and SMS
 
 Payments and SMS go through the cloud so your API keys never sit on the shop PCs. Add these as **Secrets** in
-Cloudflare → Workers & Pages → `pharmapos` → Settings → Variables and Secrets (or `npx wrangler secret put NAME`):
+Cloudflare → Workers & Pages → `pharmapos` (the Worker's internal name) → Settings → Variables and Secrets (or `npx wrangler secret put NAME`):
 
 | Service | Get keys from | Secrets |
 | --- | --- | --- |
@@ -154,11 +154,11 @@ Airtel only accepts API calls from server IP addresses whitelisted on its develo
 outgoing IP, so Airtel calls go through a tiny relay (`relay/airtel-relay.mjs`) on a VM with a static IP. Oracle Cloud's
 *Always Free* tier is enough. The relay only accepts requests carrying its secret key and only forwards to Airtel's own API hosts.
 
-1. Create an Ubuntu VM with a public IP (Oracle Cloud → Compute → Create instance, Always Free shape) using `Documents\pharmapos-oracle-ssh-key.pub`.
+1. Create an Ubuntu VM with a public IP (Oracle Cloud → Compute → Create instance, Always Free shape) using `Documents\rxpos-oracle-ssh-key.pub`.
 2. Copy the relay and run the installer (sets up Node.js, Caddy HTTPS on `<ip>.sslip.io`, a systemd service and the firewall):
    ```bash
-   scp -i ~/.ssh/pharmapos_oracle relay/airtel-relay.mjs ubuntu@<ip>:/tmp/
-   ssh -i ~/.ssh/pharmapos_oracle ubuntu@<ip> "sudo mkdir -p /opt/rxpos-relay && sudo cp /tmp/airtel-relay.mjs /opt/rxpos-relay/ && sudo RELAY_SOURCE=file:///opt/rxpos-relay/airtel-relay.mjs bash -s" < relay/setup-relay.sh
+   scp -i ~/.ssh/rxpos_oracle relay/airtel-relay.mjs ubuntu@<ip>:/tmp/
+   ssh -i ~/.ssh/rxpos_oracle ubuntu@<ip> "sudo mkdir -p /opt/rxpos-relay && sudo cp /tmp/airtel-relay.mjs /opt/rxpos-relay/ && sudo RELAY_SOURCE=file:///opt/rxpos-relay/airtel-relay.mjs bash -s" < relay/setup-relay.sh
    ```
 3. Add the printed values as Cloudflare secrets `AIRTEL_RELAY_URL` and `AIRTEL_RELAY_KEY`, and whitelist the printed `PUBLIC_IP` on
    developers.airtel.ug → your app → Settings → Server IP Allowed List. Then add the Collection-APIs product and run
@@ -182,7 +182,7 @@ npm install
 npm run dev          # web app at http://localhost:5173
 npm run electron:dev # desktop app
 npm run dist:win     # Windows installer → release/
-npm run hub          # sync hub (set PHARMAPOS_SYNC_KEY first)
+npm run hub          # sync hub (set RXPOS_SYNC_KEY first)
 ```
 
 GitHub Actions (`.github/workflows/build.yml`) builds the Windows installer and the hub package on every push to `main`.
