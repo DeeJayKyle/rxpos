@@ -3,8 +3,8 @@
 Pharmacy point of sale and management system that works **offline** and **online**: on Windows PCs, Android phones and in any browser,
 across all your branches.
 
-**Live:** https://rxpos.pages.dev (Cloudflare, free plan). Each pharmacy has its own address, e.g. https://rxpos.pages.dev/citycare-ntinda.
-The **owner console** (web only) is at https://rxpos.pages.dev/#/owner.
+**Live:** https://rxposug.com. Each pharmacy has its own address, e.g. https://rxposug.com/citycare-ntinda.
+The **owner** signs in on https://rxposug.com with the owner email and password (or the master key at https://rxposug.com/#/owner).
 
 ## Features
 
@@ -109,7 +109,7 @@ Downside: online access only works while that PC is on and connected, so prefer 
 
 ## Pharmacies, the owner console & signing in
 
-Only the RxPOS owner creates pharmacies. Open **https://rxpos.pages.dev/#/owner** (web only) with the owner key
+Only the RxPOS owner creates pharmacies. Open **https://rxposug.com/#/owner** (web only) with the owner key
 (`OWNER_KEY` secret; a copy is kept in `Documents\RxPOS-Data\RxPOS-OWNER-KEY.txt` on the setup PC).
 
 1. **New pharmacy** → name, web address (e.g. `/citycare-ntinda`), extra branches, features, and the **administrator account**
@@ -128,7 +128,7 @@ The cloud runs on Cloudflare D1 by default. To move it to [Turso](https://turso.
 10 million row writes a month instead of D1's 100,000 a day):
 
 1. Create a database and a read/write token at app.turso.tech, then run `deploysetup-turso.ps1` (stores `TURSO_URL` and `TURSO_AUTH_TOKEN` as Cloudflare secrets).
-2. Copy everything: `node scripts/move-to-turso.mjs https://rxpos.pages.dev <owner key file>` (stops with "OK" when both sides match).
+2. Copy everything: `node scripts/move-to-turso.mjs https://api.rxposug.com <owner key file>` (stops with "OK" when both sides match).
 3. Set `"DB_BACKEND": "turso"` in `wrangler.jsonc` and `npx wrangler deploy`. To go back, set it to `""` and deploy.
 
 The standard 9,710-medicine catalog is built into the apps, so it is never stored per pharmacy: creating a pharmacy costs a few

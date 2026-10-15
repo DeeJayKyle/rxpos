@@ -2,7 +2,7 @@
 //   node scripts/move-to-turso.mjs <cloud address> <owner key file>
 // After it reports equal counts, set DB_BACKEND = "turso" (wrangler.jsonc vars) and deploy.
 import fs from 'node:fs';
-const [base = 'https://rxpos.pages.dev', keyFile] = process.argv.slice(2);
+const [base = 'https://api.rxposug.com', keyFile] = process.argv.slice(2);
 const key = (keyFile ? fs.readFileSync(keyFile, 'utf8') : process.env.OWNER_KEY || '').split(/\s+/).filter((w) => /^[A-Za-z0-9_-]{20,}$/.test(w)).sort((a, b) => b.length - a.length)[0];
 if (!key) throw new Error('Owner key not found');
 const api = async (body) => {

@@ -8,8 +8,8 @@ RxPOS itself needs nothing but the accounts below: apps, sync and the cloud keep
 | Part | Where | Account |
 |---|---|---|
 | Code, history, app builds, nightly backups | GitHub `DeeJayKyle/rxpos` (private) | GitHub |
-| Website + pharmacy addresses (`rxpos.pages.dev/<pharmacy>`) | Cloudflare Pages project **rxpos** | Cloudflare |
-| Cloud API, sync, live connection, AI | Cloudflare Worker at **api.rxposug.com** (internal name `pharmapos`, kept so no secret has to be re-entered; also answers at `pharmapos.pharmapos.workers.dev`) | Cloudflare |
+| Website + pharmacy addresses (`rxposug.com/<pharmacy>`) | Cloudflare Pages project **rxpos** (its free rxpos.pages.dev address redirects to rxposug.com; `functions/_middleware.js`) | Cloudflare |
+| Cloud API, sync, live connection, AI | Cloudflare Worker at **api.rxposug.com** (internal name `pharmapos`, kept so no secret has to be re-entered; its free workers.dev address is switched off) | Cloudflare |
 | Database | Turso database **rxpos** (Ireland). Old Cloudflare D1 `pharmapos-db` (empty) kept as a fallback | Turso / Cloudflare |
 | Windows / Android / Hub downloads | GitHub Releases → `v1.0.0` | GitHub |
 
@@ -37,7 +37,7 @@ Never put a secret in the code, a commit, a chat or a screenshot.
 ```
 src/            the app (React): pages/, store.jsx (data + sync), sync.js, live.js, pdf.js, invoiceScan.js …
 worker/         the cloud (Cloudflare Worker): index.js (API), live.js (live connection), owner-auth.js, backup.js
-functions/      Cloudflare Pages proxy: /api on rxpos.pages.dev → the Worker
+functions/      Cloudflare Pages: /api on rxposug.com → the Worker; _middleware.js sends rxpos.pages.dev to rxposug.com
 electron/       the Windows app shell          server/  the self-hosted Hub
 tests/          automated tests (npm test)     tools/   backup.mjs, restore.mjs, rxtera/ (copying from Rxtera)
 .github/workflows/  build.yml (apps + releases), backup.yml (nightly backup)
@@ -125,7 +125,7 @@ Each device also keeps its own full copy of its pharmacy, plus daily snapshots: 
 When `rxposug.com` (or another domain) is bought in the same Cloudflare account: Pages → rxpos → Custom domains → add
 `rxposug.com` and `www.rxposug.com`; Worker → Settings → Domains → add `api.rxposug.com`. Then set `PUBLIC_URL` in
 `wrangler.jsonc` and `DEFAULT_CLOUD` in `src/cloud.js` to the new address, add it to the Google sign-in origins and the
-GitHub OAuth callback, deploy and release (keep `rxpos.pages.dev` working for devices set up earlier).
+GitHub OAuth callback, deploy and release (devices set up on an old address move to the new one by themselves on their next start: src/store.jsx).
 Renewal is yearly: turn on auto-renew in Cloudflare → Domain Registration.
 
 ## 9b. Email

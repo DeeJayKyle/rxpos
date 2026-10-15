@@ -34,7 +34,7 @@ export default function Auth() {
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
   const run = async (fn) => { setError(''); setBusy(true); try { await fn(); } catch (e) { setError(e.message); } finally { setBusy(false); } };
 
-  // The pharmacy behind this web address (rxpos.pages.dev/<pharmacy>)
+  // The pharmacy behind this web address (rxposug.com/<pharmacy>)
   useEffect(() => {
     if (!slug || (pharmacy && pharmacy.slug === slug)) return;
     pharmacyInfo(url, slug).then((p) => setPharmacy({ name: p.name, slug: p.slug, logo: p.logo })).catch((e) => setPharmacy({ error: e.message }));

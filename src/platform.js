@@ -6,7 +6,7 @@ export const isWeb = !isNative;
 export const platformName = isElectron ? 'Desktop app' : isAndroid ? 'Android app' : 'Browser';
 export const isTouch = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
 
-/** On the web every pharmacy has its own address, e.g. rxpos.pages.dev/citycare-ntinda → "citycare-ntinda". */
+/** On the web every pharmacy has its own address, e.g. rxposug.com/citycare-ntinda → "citycare-ntinda". */
 export function pharmacySlugFromUrl() {
   if (isNative || typeof location === 'undefined') return '';
   const first = location.pathname.split('/').filter(Boolean)[0] || '';

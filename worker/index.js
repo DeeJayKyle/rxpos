@@ -8,7 +8,7 @@
 //   /api/sms               SMS via Africa's Talking
 //   /api/owner/*           owner console (vendor, web only): create pharmacies with their admin, web address, branches,
 //                          features and keys; open, edit, export, import, reset or delete any pharmacy's data
-//   /api/pharmacy/:slug    public name of the pharmacy at a web address (rxpos.pages.dev/<slug>)
+//   /api/pharmacy/:slug    public name of the pharmacy at a web address (rxposug.com/<slug>)
 //   /api/calendar/...ics   private calendar feed (events, refills due, expiring stock) for Google/Outlook/phones
 // Everything else is the web app, served from ./dist.
 //

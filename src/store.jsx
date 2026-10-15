@@ -4,6 +4,7 @@ import { createSync } from './sync.js';
 import { featureSet, permissionsOf } from './access.js';
 import { platformName } from './platform.js';
 import { connectLive, disconnectLive, onLive } from './live.js';
+import { DEFAULT_CLOUD } from './cloud.js';
 
 const SESSION_KEY = 'pharmapos-session';
 
@@ -302,7 +303,9 @@ export function StoreProvider({ children }) {
       if (saved) PARTS.forEach((k) => { if (saved[k] !== undefined) savedRefs.current[k] = loaded[k]; });
       setDb(loaded);
       loadCatalog().then((cat) => setDb((prev) => withCatalog(prev, cat))).catch(console.error);
-      setSyncCfgState({ deviceId: uid(), url: '', key: '', pushedAt: '', cursor: 0, branchId: MAIN_BRANCH, ...(cfg || {}) });
+      // devices set up on the old free addresses (rxpos.pages.dev, *.workers.dev) move to rxposug.com
+      const moved = cfg?.url && /rxpos\.pages\.dev|pharmapos\.pharmapos\.workers\.dev/.test(cfg.url) ? { url: DEFAULT_CLOUD } : {};
+      setSyncCfgState({ deviceId: uid(), url: '', key: '', pushedAt: '', cursor: 0, branchId: MAIN_BRANCH, ...(cfg || {}), ...moved });
     })();
   }, []);
 
