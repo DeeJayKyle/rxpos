@@ -1,10 +1,10 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useLocation, Link } from 'react-router-dom';
-import { ShoppingCart, Trash2, FileText, Printer, AlertTriangle, ScanBarcode, Smartphone, Loader2, CheckCircle2, UserPlus, Tag, BookMarked, Repeat } from 'lucide-react';
+import { ShoppingCart, Trash2, X, FileText, Printer, AlertTriangle, ScanBarcode, Smartphone, Loader2, CheckCircle2, UserPlus, Tag, BookMarked, Repeat } from 'lucide-react';
 import { DrugInfoPanel, genericKey } from './DrugInfo.jsx';
 import { useStore, uid, now, daysUntil, put, move, allocate, audit, normalizePhone, DEFAULT_PAYMENT_METHODS } from '../store.jsx';
 import { CASH } from '../finance.js';
-import { Modal, SearchBox } from '../ui.jsx';
+import { Modal, SearchBox, ReceiptPdfButton } from '../ui.jsx';
 import { toast, ask } from '../feedback.jsx';
 import { payRequest, payStatus, guessNetwork, cloudConfig } from '../cloud.js';
 import { Receipt } from './Sales.jsx';
@@ -27,6 +27,10 @@ export default function POS({ mode = 'retail' }) {
   const [q, setQ] = useState('');
   const [category, setCategory] = useState('');
   const [cart, setCart] = useState([]);
+  const [picked, setPicked] = useState(() => new Set()); // lines ticked on the current sale
+  const togglePick = (id) => setPicked((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const removeLines = (ids) => { const drop = new Set(ids); setCart((c) => c.filter((l) => !drop.has(l.id))); setPicked((s) => new Set([...s].filter((id) => !drop.has(id)))); };
+  useEffect(() => { if (!cart.length && picked.size) setPicked(new Set()); }, [cart.length]); // eslint-disable-line react-hooks/exhaustive-deps
   const [customerId, setCustomerId] = useState('walk-in');
   const [discount, setDiscount] = useState(0);
   // Payment methods come from Settings → Payment methods; their type decides the behaviour
@@ -272,7 +276,14 @@ export default function POS({ mode = 'retail' }) {
       <section className="pos-cart card" ref={cartRef}>
         <div className="cart-head">
           <h3>Current sale {items > 0 && <span className="badge">{items} item{items === 1 ? '' : 's'}</span>}</h3>
-          {cart.length > 0 && <button className="btn sm ghost" onClick={() => setCart([])}><Trash2 size={14} />Clear</button>}
+          {cart.length > 0 && (
+            <div className="row gap cart-tools">
+              {cart.length > 1 && <label className="check small" title="Tick every line"><input type="checkbox" checked={picked.size === cart.length} onChange={(e) => setPicked(e.target.checked ? new Set(cart.map((l) => l.id)) : new Set())} /><span>All</span></label>}
+              {picked.size > 0
+                ? <button className="btn sm danger" onClick={() => removeLines([...picked])}><Trash2 size={14} />Remove {picked.size === 1 ? 'item' : `${picked.size} items`}</button>
+                : <button className="btn sm ghost" onClick={() => { setCart([]); setPicked(new Set()); }}><Trash2 size={14} />Clear all</button>}
+            </div>
+          )}
         </div>
         {capture !== 'off' && (
           <div className="row gap">
@@ -285,7 +296,8 @@ export default function POS({ mode = 'retail' }) {
         {customer?.allergies && <div className="error"><AlertTriangle size={14} /> Allergies: {customer.allergies}</div>}
         <div className="cart-lines">
           {cart.map((l) => (
-            <div key={l.id} className="cart-line">
+            <div key={l.id} className={'cart-line' + (picked.has(l.id) ? ' picked' : '')}>
+              <input type="checkbox" className="line-check" checked={picked.has(l.id)} onChange={() => togglePick(l.id)} aria-label={`Select ${l.name}`} />
               <div className="grow"><strong>{l.name}</strong>{l.rx && <span className="badge">Rx</span>}
                 <small className="muted">@ <input className="price-input" type="number" step="any" aria-label="Unit price" disabled={!can('pos.price_edit')} value={l.price} onChange={(e) => setLine(l.id, { price: e.target.value })} /></small>
                 <div className="line-tools">
@@ -294,11 +306,12 @@ export default function POS({ mode = 'retail' }) {
                 </div>
               </div>
               <div className="qty">
-                <button onClick={() => (l.qty > 1 ? setQty(l.id, l.qty - 1) : setCart(cart.filter((x) => x.id !== l.id)))} aria-label="Less">−</button>
+                <button onClick={() => (l.qty > 1 ? setQty(l.id, l.qty - 1) : removeLines([l.id]))} aria-label="Less">−</button>
                 <input type="number" min="1" max={l.max} value={l.qty} onChange={(e) => setQty(l.id, e.target.value)} aria-label="Quantity" />
                 <button onClick={() => setQty(l.id, l.qty + 1)} aria-label="More">+</button>
               </div>
               <span className="num line-total">{fmt(l.price * l.qty)}</span>
+              <button className="icon-btn line-remove" title={`Remove ${l.name}`} aria-label={`Remove ${l.name}`} onClick={() => removeLines([l.id])}><X size={15} /></button>
             </div>
           ))}
           {!cart.length && <div className="cart-empty"><ShoppingCart size={40} /><span>Tap a medicine or scan a barcode to start a sale</span></div>}
@@ -444,6 +457,7 @@ export default function POS({ mode = 'retail' }) {
           <Receipt sale={done} />
           <div className="form-actions no-print">
             <button className="btn ghost" onClick={() => { setDone(null); focusSearch(); }}>New sale</button>
+            <ReceiptPdfButton sale={done} />
             <button className="btn primary" onClick={() => window.print()}><Printer size={16} />Print</button>
           </div>
         </Modal>

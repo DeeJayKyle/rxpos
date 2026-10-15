@@ -1,6 +1,6 @@
-import { useState } from 'react';
-import { useStore, today, downloadFile, toCSV, daysUntil, MAIN_BRANCH } from '../store.jsx';
-import { Stat, Tabs, BarChart } from '../ui.jsx';
+import { useState, useRef } from 'react';
+import { useStore, today, dayOf, localDate, downloadFile, toCSV, daysUntil, MAIN_BRANCH } from '../store.jsx';
+import { Stat, Tabs, BarChart, PdfButton } from '../ui.jsx';
 
 const sumBy = (arr, key, val) => {
   const m = {};
@@ -11,11 +11,13 @@ const sumBy = (arr, key, val) => {
 export default function Reports() {
   const { db, products, fmt } = useStore();
   const [tab, setTab] = useState('sales');
+  const pageRef = useRef(null);
+  const TAB_NAMES = { sales: 'Sales Report', products: 'Sales by Product', purchases: 'Purchase Report', expenses: 'Expenses Report', stock: 'Stock Valuation', income: 'Income Statement' };
   const [from, setFrom] = useState(today().slice(0, 8) + '01');
   const [to, setTo] = useState(today());
   const [branch, setBranch] = useState('all');
   const inBranch = (x) => branch === 'all' || (x.branchId || MAIN_BRANCH) === branch;
-  const inRange = (x) => String(x.date).slice(0, 10) >= from && String(x.date).slice(0, 10) <= to && inBranch(x);
+  const inRange = (x) => dayOf(x.date) >= from && dayOf(x.date) <= to && inBranch(x);
 
   const sales = db.sales.filter((s) => s.status !== 'refunded' && inRange(s));
   const refunds = db.sales.filter((s) => s.status === 'refunded' && inRange(s));
@@ -30,8 +32,8 @@ export default function Reports() {
 
   const days = [];
   for (let d = new Date(from); d <= new Date(to) && days.length < 366; d = new Date(d.getTime() + 864e5)) {
-    const key = d.toISOString().slice(0, 10);
-    days.push({ label: key, values: [sales.filter((s) => s.date.slice(0, 10) === key).reduce((a, s) => a + s.total, 0)] });
+    const key = localDate(d);
+    days.push({ label: key, values: [sales.filter((s) => dayOf(s.date) === key).reduce((a, s) => a + s.total, 0)] });
   }
 
   const byProduct = {};
@@ -54,8 +56,8 @@ export default function Reports() {
   );
 
   return (
-    <div className="page">
-      <div className="page-head"><h1>Reports</h1>{tab !== 'stock' && Range}</div>
+    <div className="page" ref={pageRef}>
+      <div className="page-head"><h1>Reports</h1><div className="row gap wrap">{tab !== 'stock' && Range}<PdfButton target={pageRef} title={TAB_NAMES[tab]} subtitle={tab === 'stock' ? `As at ${new Date().toLocaleDateString()}` : `${from} to ${to}`} /></div></div>
       <Tabs value={tab} onChange={setTab} tabs={[['sales', 'Sales Report'], ['products', 'Sales by Product'], ['purchases', 'Purchase Report'], ['expenses', 'Expenses Report'], ['stock', 'Stock Valuation'], ['income', 'Income Statement']]} />
 
       {tab === 'sales' && (

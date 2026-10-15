@@ -1,17 +1,17 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Banknote, Wallet, CalendarClock, PackageX, Pill, Coins, Users, ShoppingCart, ReceiptText, Share2, Megaphone } from 'lucide-react';
-import { useStore, today, daysUntil, MAIN_BRANCH } from '../store.jsx';
+import { useStore, today, localDate, dayOf, isLowStock, expiryCounts, MAIN_BRANCH } from '../store.jsx';
 import { Stat, BarChart, AreaChart, Empty } from '../ui.jsx';
 import { useInsights, shareText } from '../engage.jsx';
 import { whatsappLink } from '../cloud.js';
 import { WeatherCard } from './Storage.jsx';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-const dayKey = (offset) => new Date(Date.now() - offset * 864e5).toISOString().slice(0, 10);
+const dayKey = (offset) => { const d = new Date(); d.setDate(d.getDate() - offset); return localDate(d); };
 
 export default function Dashboard() {
-  const { db, products, fmt, user, branchId, features } = useStore();
+  const { db, products, fmt, user, branchId, features, batchesOf, day } = useStore();
   const ins = useInsights();
   const promote = [ins.shortExpiry[0], ins.highMargin[0], ins.slow[0], ins.highMargin[1], ins.shortExpiry[1]].filter(Boolean).filter((x, i, a) => a.findIndex((y) => y.p.id === x.p.id) === i).slice(0, 4);
   const warn = db.settings.expiryWarnDays || 90;
@@ -22,29 +22,29 @@ export default function Dashboard() {
     const byDay = {}, byMonth = {}, top = {};
     const thisMonth = today().slice(0, 7);
     for (const s of valid) {
-      const d = String(s.date).slice(0, 10), mo = d.slice(0, 7);
+      const d = dayOf(s.date), mo = d.slice(0, 7);
       (byDay[d] ??= { n: 0, total: 0, exp: 0 }); byDay[d].n++; byDay[d].total += s.total;
       (byMonth[mo] ??= { n: 0, total: 0, exp: 0 }); byMonth[mo].n++; byMonth[mo].total += s.total;
       if (mo === thisMonth) for (const i of s.items) { (top[i.name] ??= { name: i.name, qty: 0, amount: 0 }); top[i.name].qty += i.qty; top[i.name].amount += i.qty * i.price; }
     }
     for (const e of db.expenses) {
-      const d = String(e.date).slice(0, 10), mo = d.slice(0, 7);
+      const d = dayOf(e.date), mo = d.slice(0, 7);
       (byDay[d] ??= { n: 0, total: 0, exp: 0 }); byDay[d].exp += e.amount;
       (byMonth[mo] ??= { n: 0, total: 0, exp: 0 }); byMonth[mo].exp += e.amount;
     }
     return { byDay, byMonth, top: Object.values(top).sort((a, b) => b.amount - a.amount).slice(0, 10) };
-  }, [db.sales, db.expenses, branchId]);
+  }, [db.sales, db.expenses, branchId, day]);
 
   const t = m.byDay[today()] || { n: 0, total: 0, exp: 0 };
   const y = m.byDay[dayKey(1)] || { n: 0, total: 0, exp: 0 };
   const delta = y.total ? ((t.total - y.total) / y.total) * 100 : null;
-  const expiring = products.filter((p) => p.expiry && p.stock > 0 && daysUntil(p.expiry) >= 0 && daysUntil(p.expiry) <= warn);
-  const expired = products.filter((p) => p.expiry && p.stock > 0 && daysUntil(p.expiry) < 0);
-  const lowStock = products.filter((p) => p.reorder > 0 && p.stock <= p.reorder);
+  // only medicines in stock: every batch with stock left is checked, not just the next one to sell
+  const exp = useMemo(() => expiryCounts(products, batchesOf, warn), [products, batchesOf, warn, day]); // eslint-disable-line react-hooks/exhaustive-deps
+  const lowStock = products.filter(isLowStock);
   const stockValue = products.reduce((a, p) => a + Math.max(p.stock, 0) * (p.cost || 0), 0);
   const year = new Date().getFullYear();
   const monthRows = MONTHS.map((name, i) => ({ name, k: `${year}-${String(i + 1).padStart(2, '0')}` })).filter((r) => r.k <= today().slice(0, 7)).reverse();
-  const last6 = Array.from({ length: 6 }, (_, i) => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 5 + i); return d.toISOString().slice(0, 7); });
+  const last6 = Array.from({ length: 6 }, (_, i) => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 5 + i); return localDate(d).slice(0, 7); });
   const trend = Array.from({ length: 30 }, (_, i) => { const k = dayKey(29 - i); return { label: new Date(k).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }), value: m.byDay[k]?.total || 0 }; });
   const hour = new Date().getHours();
   const greet = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
@@ -64,8 +64,8 @@ export default function Dashboard() {
       <div className="stats">
         <Stat to="/sales" state={{ from: today(), to: today() }} label="Today's sales" value={fmt(t.total)} sub={`${t.n} sale${t.n === 1 ? '' : 's'} · vs yesterday`} delta={delta} tone="teal" icon={Banknote} />
         <Stat to="/expenses" label="Today's expenses" value={fmt(t.exp)} sub={`Net ${fmt(t.total - t.exp)}`} tone="red" icon={Wallet} />
-        <Stat to="/expiry" label="Soon expiring" value={expiring.length} sub={`${expired.length} already expired`} tone="amber" icon={CalendarClock} />
-        <Stat to="/inventory" state={{ filter: 'low' }} label="Low stock" value={lowStock.length} sub="at or below reorder level" tone="violet" icon={PackageX} />
+        <Stat to="/expiry" label="Soon expiring" value={exp.soon} sub={`${exp.expired} already expired`} tone="amber" icon={CalendarClock} />
+        <Stat to="/inventory" state={{ filter: 'low' }} label="Low stock" value={lowStock.length} sub="in stock, at or below reorder level" tone="violet" icon={PackageX} />
       </div>
 
       {(features.weather !== false || (features.promos !== false && promote.length > 0)) && (

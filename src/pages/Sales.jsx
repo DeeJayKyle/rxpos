@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Download, Printer, Undo2, Eye, Pencil, Trash2, Plus } from 'lucide-react';
-import { useStore, downloadFile, toCSV, put, move, now, audit, allocate, MAIN_BRANCH, DEFAULT_PAYMENT_METHODS } from '../store.jsx';
-import { Modal, SearchBox, Empty } from '../ui.jsx';
+import { Download, Printer, Undo2, Eye, Pencil, Trash2, Plus, History } from 'lucide-react';
+import { useStore, dayOf, downloadFile, toCSV, put, move, now, audit, allocate, MAIN_BRANCH, DEFAULT_PAYMENT_METHODS } from '../store.jsx';
+import { Modal, SearchBox, Empty, PdfButton, ReceiptPdfButton } from '../ui.jsx';
 import { ask, toast } from '../feedback.jsx';
 import { Barcode } from '../barcode.jsx';
 
@@ -62,12 +62,13 @@ export default function Sales() {
   const [editing, setEditing] = useState(null);
   const [branch, setBranch] = useState(user.role === 'cashier' ? branchId : 'all');
   const [view, setView] = useState(null);
+  const [onlyEdited, setOnlyEdited] = useState(false);
 
   const ql = q.toLowerCase();
   const rows = db.sales.filter((s) =>
     (branch === 'all' || (s.branchId || MAIN_BRANCH) === branch) &&
     (!q || [s.number, s.customerName, s.cashier, s.payment, s.type, s.momo?.txid].join(' ').toLowerCase().includes(ql)) &&
-    (!from || s.date.slice(0, 10) >= from) && (!to || s.date.slice(0, 10) <= to));
+    (!from || dayOf(s.date) >= from) && (!to || dayOf(s.date) <= to) && (!onlyEdited || s.edits?.length > 0));
   const valid = rows.filter((s) => s.status !== 'refunded');
 
   const refund = async (sale) => {
@@ -98,10 +99,15 @@ export default function Sales() {
               {db.branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
             </select>
           )}
+          <button type="button" className={"chip" + (onlyEdited ? " active" : "")} onClick={() => setOnlyEdited((v) => !v)} title="Show only sales that were changed after they were made"><History size={13} /> Edited only</button>
           <SearchBox value={q} onChange={setQ} placeholder="Receipt, customer, cashier…" />
           <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} title="From" />
           <input type="date" value={to} onChange={(e) => setTo(e.target.value)} title="To" />
           <button className="btn ghost" onClick={() => downloadFile('sales.csv', toCSV(exportRows), 'text/csv')}><Download size={16} />CSV</button>
+          <PdfButton title="Sales history" subtitle={[from || to ? `${from || 'start'} to ${to || 'today'}` : 'All dates', q && `search "${q}"`, onlyEdited && 'edited sales only', `${valid.length} sales · ${fmt(valid.reduce((a, s) => a + s.total, 0))}`].filter(Boolean).join(' · ')}
+            data={() => [{ head: ['Receipt', 'Date', 'Customer', 'Cashier', 'Payment', 'Status', 'Total'], numeric: [6],
+              body: rows.map((s) => [s.number, new Date(s.date).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }), s.customerName, s.cashier, s.payment, s.status + (s.edits?.length ? ' (edited)' : ''), fmt(s.total)]),
+              foot: ['', '', '', '', '', 'Total (excl. refunds)', fmt(valid.reduce((a, s) => a + s.total, 0))] }]} />
         </div>
       </div>
       <div className="card table-wrap">
@@ -109,14 +115,14 @@ export default function Sales() {
           <thead><tr><th>Receipt</th><th>Date</th>{db.branches.length > 1 && <th>Branch</th>}<th>Customer</th><th>Cashier</th><th>Payment</th><th>Status</th><th className="num">Total</th><th /></tr></thead>
           <tbody>
             {rows.slice(0, 500).map((s) => (
-              <tr key={s.id} className={s.status === 'refunded' ? 'dim' : ''}>
+              <tr key={s.id} className={(s.status === 'refunded' ? 'dim' : '') + (s.edits?.length ? ' edited-row' : '')} title={s.edits?.length ? `Edited ${s.edits.length}× · last by ${s.editedBy || s.edits.at(-1).by}` : undefined}>
                 <td><strong>{s.number}</strong><br /><small className="muted cap">{s.type || 'retail'}</small></td>
                 <td>{new Date(s.date).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</td>
                 {db.branches.length > 1 && <td>{branchName(s.branchId)}</td>}
                 <td>{s.customerName}</td><td>{s.cashier}</td><td>{s.payment}{s.momo?.txid ? <><br /><small className="muted">{s.momo.txid}</small></> : null}</td>
-                <td><span className={'badge ' + (s.status === 'refunded' ? 'danger' : 'ok')}>{s.status}</span></td>
+                <td><span className={'badge ' + (s.status === 'refunded' ? 'danger' : 'ok')}>{s.status}</span>{s.edits?.length > 0 && <><br /><button type="button" className="badge warn edited-badge" onClick={() => setView(s)} title="See what was changed and by whom"><History size={11} /> Edited{s.edits.length > 1 ? ` ×${s.edits.length}` : ''}</button></>}</td>
                 <td className="num">{fmt(s.total)}</td>
-                <td className="actions"><button className="btn sm ghost" onClick={() => setView(s)}><Eye size={14} />View</button>{s.status !== 'refunded' && !s.imported && can('sales.edit') && <button className="btn sm ghost" onClick={() => setEditing(s)}><Pencil size={14} />Edit</button>}{s.editedAt && <small className="muted" title={`Edited by ${s.editedBy} ${new Date(s.editedAt).toLocaleString()}`}> · edited</small>}</td>
+                <td className="actions"><button className="btn sm ghost" onClick={() => setView(s)}><Eye size={14} />View</button>{s.status !== 'refunded' && can('sales.edit') && <button className="btn sm ghost" onClick={() => setEditing(s)}><Pencil size={14} />Edit</button>}</td>
               </tr>
             ))}
             {!rows.length && <Empty colSpan={9}>No sales found</Empty>}
@@ -127,10 +133,12 @@ export default function Sales() {
       {view && (
         <Modal title={`Receipt ${view.number}`} onClose={() => setView(null)}>
           <Receipt sale={view} />
+          <EditHistory sale={view} />
           <div className="form-actions no-print">
-            {view.status !== 'refunded' && !view.imported && can('sales.edit') && <button className="btn ghost" onClick={() => { setEditing(view); setView(null); }}><Pencil size={16} />Edit sale</button>}
-            {view.imported && <small className="muted">Copied from {view.imported} — view only</small>}
+            {view.status !== 'refunded' && can('sales.edit') && <button className="btn ghost" onClick={() => { setEditing(view); setView(null); }}><Pencil size={16} />Edit sale</button>}
+            {view.imported && <small className="muted">Copied from {view.imported}</small>}
             {view.status !== 'refunded' && !view.imported && user.role !== 'cashier' && <button className="btn danger" onClick={() => refund(view)}><Undo2 size={16} />Refund</button>}
+            <ReceiptPdfButton sale={view} />
             <button className="btn primary" onClick={() => window.print()}><Printer size={16} />Print</button>
           </div>
         </Modal>
@@ -154,11 +162,12 @@ function SaleEditor({ sale, onClose }) {
   const ptype = methods.find((m) => m.name === f.payment)?.type || (f.payment === 'Credit' ? 'credit' : 'cash');
   const setItem = (k, patch) => setF((x) => ({ ...x, items: x.items.map((i, n) => (n === k ? { ...i, ...patch } : i)) }));
   const matches = q.trim() ? products.filter((p) => p.stock > 0 && `${p.name} ${p.generic} ${p.barcode}`.toLowerCase().includes(q.toLowerCase()) && !f.items.some((i) => i.id === p.id)).slice(0, 8) : [];
+  const recordOnly = !!sale.imported; // copied from another system: correct the record, today's stock is not touched
   const save = (e) => {
     e.preventDefault();
     if (!f.items.some((i) => Number(i.qty) > 0)) return toast('A sale needs at least one item. To cancel the whole sale, refund it.', 'warn');
     if (!f.reason.trim()) return toast('Say why the sale is being changed', 'warn');
-    for (const i of f.items) {
+    if (!recordOnly) for (const i of f.items) {
       const o = sale.items.find((x) => x.id === i.id);
       const extra = Number(i.qty) - (o?.qty || 0);
       const have = batchesOf(i.id, br).reduce((a, b) => a + Math.max(b.qty, 0), 0);
@@ -172,7 +181,7 @@ function SaleEditor({ sale, onClose }) {
         const o = old.get(it.id);
         const q0 = o?.qty || 0, q1 = Math.max(0, Math.round(Number(it.qty) || 0));
         let alloc = (o?.alloc || []).map((a) => ({ ...a }));
-        if (q1 > q0) {
+        if (recordOnly) { /* history only */ } else if (q1 > q0) {
           for (const a of allocate(batchesOf(it.id, br), q1 - q0)) {
             move(d, { productId: it.id, qty: -a.qty, type: 'Sale edit', ref: sale.number, user: user.name, batchId: a.batchId, branchId: br });
             const same = alloc.find((x) => x.batchId === a.batchId);
@@ -192,17 +201,17 @@ function SaleEditor({ sale, onClose }) {
         if (q1 > 0) items.push({ ...it, qty: q1, price: Number(it.price) || 0, alloc });
         old.delete(it.id);
       }
-      for (const o of old.values()) { // removed lines: everything back to stock
+      if (!recordOnly) for (const o of old.values()) { // removed lines: everything back to stock
         const parts = o.alloc?.length ? o.alloc : [{ batchId: null, qty: o.qty }];
         for (const a of parts) move(d, { productId: o.id, qty: a.qty, type: 'Sale edit', ref: sale.number, user: user.name, batchId: a.batchId, branchId: br });
       }
       const paid = ptype === 'credit' ? Math.min(Number(f.paid) || 0, total) : total;
       put(d, 'sales', { ...sale, items, subtotal, discount: disc, tax, total, payment: f.payment, paid, tendered: ptype === 'cash' ? Math.max(sale.tendered || 0, total) : paid,
         customerId: f.customerId, customerName: customer?.name || 'Walk-in Customer', editedBy: user.name, editedAt: now(),
-        edits: [...(sale.edits || []), { at: now(), by: user.name, reason: f.reason.trim(), before: { total: sale.total, items: sale.items.map((i) => `${i.qty}× ${i.name} @ ${i.price}`).join(', ') } }] });
+        edits: [...(sale.edits || []), { at: now(), by: user.name, role: user.role, reason: f.reason.trim(), recordOnly, before: saleSnapshot(sale), after: saleSnapshot({ items, total, payment: f.payment, discount: disc, customerName: customer?.name || 'Walk-in Customer', paid }) }] });
       audit(d, user, 'Sale edited', `${sale.number}: ${fmt(sale.total)} → ${fmt(total)} (${f.reason.trim()})`, br);
     });
-    toast(`${sale.number} updated; stock adjusted`);
+    toast(recordOnly ? `${sale.number} corrected (record only)` : `${sale.number} updated; stock adjusted`);
     onClose();
   };
   return (
@@ -236,9 +245,48 @@ function SaleEditor({ sale, onClose }) {
           <label className="field full"><span>Reason for the change (kept in the audit log)</span><input required value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} placeholder="e.g. wrong quantity entered, price correction" /></label>
         </div>
         <div className="totals"><div className="row between"><span className="muted">Was</span><span className="num">{fmt(sale.total)}</span></div><div className="row between grand"><span>New total</span><span className="num">{fmt(total)}</span></div></div>
-        {sale.edits?.length > 0 && <details className="muted small"><summary>Earlier changes ({sale.edits.length})</summary>{sale.edits.map((x, n) => <p key={n}>{new Date(x.at).toLocaleString()} · {x.by}: {x.reason} (was {fmt(x.before.total)})</p>)}</details>}
+        {recordOnly && <div className="notice small">This sale was copied from {sale.imported}. Changes correct the record only; stock is not moved.</div>}
+        {sale.edits?.length > 0 && <details className="small"><summary className="muted">Earlier changes ({sale.edits.length})</summary><EditHistory sale={sale} bare /></details>}
         <div className="form-actions"><button type="button" className="btn ghost" onClick={onClose}>Cancel</button><button className="btn primary">Save changes</button></div>
       </form>
     </Modal>
   );
+}
+
+/** What a sale looked like, for the edit history */
+export const saleSnapshot = (s) => ({
+  total: Number(s.total) || 0, payment: s.payment || '', discount: Number(s.discount) || 0, customer: s.customerName || '',
+  items: (s.items || []).map((i) => `${i.qty}× ${i.name} @ ${i.price}`).join(', '),
+});
+
+/** Who changed a sale, when, why, and what it was before and after */
+export function EditHistory({ sale, bare }) {
+  const { fmt } = useStore();
+  const edits = sale.edits || [];
+  if (!edits.length) return null;
+  const rows = edits.map((x, n) => {
+    const before = x.before || (x.oldTotal != null ? { total: x.oldTotal } : null);
+    const after = x.after || edits[n + 1]?.before || (x.newTotal != null ? { total: x.newTotal } : n === edits.length - 1 ? saleSnapshot(sale) : null);
+    return { ...x, before, after };
+  }).reverse();
+  const diff = (b, a, k) => b && a && b[k] !== undefined && a[k] !== undefined && String(b[k]) !== String(a[k]);
+  const body = (
+    <ol className="edit-history">
+      {rows.map((x, n) => (
+        <li key={n}>
+          <div className="row between gap wrap"><strong>{x.by || 'Unknown'}{x.role ? <small className="muted cap"> · {x.role}</small> : null}</strong><small className="muted">{new Date(x.at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</small></div>
+          {x.reason && <div className="small">Reason: {x.reason}</div>}
+          {x.recordOnly && <div className="small muted">Record only (stock not moved)</div>}
+          <table className="small edit-diff"><tbody>
+            <tr><th>Total</th><td>{x.before ? fmt(x.before.total) : '—'}</td><td>→</td><td className={diff(x.before, x.after, 'total') ? 'changed' : ''}>{x.after ? fmt(x.after.total) : '—'}</td></tr>
+            {(x.before?.items || x.after?.items) && <tr><th>Items</th><td>{x.before?.items || '—'}</td><td>→</td><td className={diff(x.before, x.after, 'items') ? 'changed' : ''}>{x.after?.items || '—'}</td></tr>}
+            {diff(x.before, x.after, 'payment') && <tr><th>Payment</th><td>{x.before.payment}</td><td>→</td><td className="changed">{x.after.payment}</td></tr>}
+            {diff(x.before, x.after, 'customer') && <tr><th>Customer</th><td>{x.before.customer}</td><td>→</td><td className="changed">{x.after.customer}</td></tr>}
+            {diff(x.before, x.after, 'discount') && <tr><th>Discount</th><td>{fmt(x.before.discount)}</td><td>→</td><td className="changed">{fmt(x.after.discount)}</td></tr>}
+          </tbody></table>
+        </li>
+      ))}
+    </ol>
+  );
+  return bare ? body : <div className="card edit-card no-print"><h4><History size={15} /> Edit history ({edits.length})</h4>{body}</div>;
 }

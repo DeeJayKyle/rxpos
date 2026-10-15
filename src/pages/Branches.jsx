@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Building2, Truck, PackageCheck, Send, MapPin } from 'lucide-react';
-import { useStore, today, uid, now, put, move, audit, allocate, MAIN_BRANCH } from '../store.jsx';
+import { useStore, today, dayOf, uid, now, put, move, audit, allocate, MAIN_BRANCH } from '../store.jsx';
 import { Modal, Tabs, Empty, SearchBox, Stat } from '../ui.jsx';
 import { toast, ask } from '../feedback.jsx';
 
@@ -20,8 +20,8 @@ export default function Branches() {
         if (q <= reorder.get(p.id)) low++;
       }
       const sales = db.sales.filter((s) => s.status !== 'refunded' && (s.branchId || MAIN_BRANCH) === b.id);
-      const todays = sales.filter((s) => s.date.slice(0, 10) === today());
-      const monthly = sales.filter((s) => s.date.slice(0, 7) === month);
+      const todays = sales.filter((s) => dayOf(s.date) === today());
+      const monthly = sales.filter((s) => dayOf(s.date).slice(0, 7) === month);
       return { ...b, stockValue, low, today: todays.reduce((a, s) => a + s.total, 0), todayN: todays.length, month: monthly.reduce((a, s) => a + s.total, 0) };
     });
   }, [db.branches, db.products, db.sales, stockIndex, month]);

@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Trophy, Star, BarChart3, Users, Receipt, Coins } from 'lucide-react';
 import { useStore, MAIN_BRANCH } from '../store.jsx';
-import { Stat, BarChart, Empty } from '../ui.jsx';
+import { Stat, BarChart, Empty, PdfButton } from '../ui.jsx';
 import { popup } from '../notify.jsx';
 
 const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -98,14 +98,16 @@ export default function WeeklyReport() {
   const [branch, setBranch] = useState(user.role === 'cashier' ? branchId : 'all');
   const start = weekStart(new Date(), offset);
   const w = useMemo(() => weeklyStats(db, start, branch), [db.sales, offset, branch]); // eslint-disable-line react-hooks/exhaustive-deps
+  const weekRef = useRef(null);
   return (
-    <div className="page">
+    <div className="page" ref={weekRef}>
       <div className="page-head">
         <div><h1>Weekly summary</h1><div className="sub">{w.start} → {w.end} · compared with the week before</div></div>
         <div className="row gap">
           {db.branches.length > 1 && <select value={branch} onChange={(e) => setBranch(e.target.value)}><option value="all">All branches</option>{db.branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select>}
           <button className="btn ghost" onClick={() => setOffset(offset - 1)}><ChevronLeft size={16} />Earlier</button>
           <button className="btn ghost" disabled={offset >= 0} onClick={() => setOffset(offset + 1)}>Later<ChevronRight size={16} /></button>
+          <PdfButton target={weekRef} title="Weekly summary" subtitle={`${w.start} → ${w.end}`} />
         </div>
       </div>
       <div className="stats">

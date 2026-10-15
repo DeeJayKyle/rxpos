@@ -1,7 +1,8 @@
 import { useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import { X, Search, Download, Plus, Pencil, Trash2, Inbox, TrendingUp, TrendingDown } from 'lucide-react';
+import { X, Search, Download, Plus, Pencil, Trash2, Inbox, TrendingUp, TrendingDown, FileDown, Loader2 } from 'lucide-react';
+import { pagePdf, receiptPdf } from './pdf.js';
 import { useStore, uid, downloadFile, toCSV } from './store.jsx';
 import { ask, toast } from './feedback.jsx';
 
@@ -228,4 +229,30 @@ export function AreaChart({ data, fmt, height = 170 }) {
       <div className="row between muted small" style={{ marginTop: 6 }}><span>{data[0]?.label}</span><span>{data[data.length - 1]?.label}</span></div>
     </div>
   );
+}
+
+/** "PDF" button: exports what is on screen inside `target` (a ref), or the rows given in `data` */
+export function PdfButton({ target, title, subtitle, file, data, label = 'PDF', className = 'btn ghost' }) {
+  const { db } = useStore();
+  const [busy, setBusy] = useState(false);
+  const go = async () => {
+    setBusy(true);
+    try { const name = await pagePdf(target?.current || null, { title, subtitle, file, db, data: typeof data === 'function' ? data() : data }); toast(`Saved ${name}`); }
+    catch (e) { toast(e.message || 'The PDF could not be made', 'error'); }
+    finally { setBusy(false); }
+  };
+  return <button type="button" className={className} onClick={go} disabled={busy} title="Download as PDF">{busy ? <Loader2 size={16} className="spin" /> : <FileDown size={16} />}{label}</button>;
+}
+
+/** Download a receipt / proforma as a PDF */
+export function ReceiptPdfButton({ sale, className = 'btn ghost', label = 'PDF' }) {
+  const { db, fmt } = useStore();
+  const [busy, setBusy] = useState(false);
+  const go = async () => {
+    setBusy(true);
+    try { const name = await receiptPdf(sale, { db, fmt }); toast(`Saved ${name}`); }
+    catch (e) { toast(e.message || 'The PDF could not be made', 'error'); }
+    finally { setBusy(false); }
+  };
+  return <button type="button" className={className} onClick={go} disabled={busy} title="Download the receipt as a PDF">{busy ? <Loader2 size={16} className="spin" /> : <FileDown size={16} />}{label}</button>;
 }

@@ -24,9 +24,39 @@ export const loadSnapshot = (date) => idbGet('snap:' + date);
 
 export const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-5);
 export const now = () => new Date().toISOString();
-export const today = () => new Date().toISOString().slice(0, 10);
+const pad2 = (n) => String(n).padStart(2, '0');
+/** YYYY-MM-DD of a moment in this device's local time (Uganda is UTC+3, so UTC dates would roll over at 3 am) */
+export const localDate = (d = new Date()) => { const x = new Date(d); return `${x.getFullYear()}-${pad2(x.getMonth() + 1)}-${pad2(x.getDate())}`; };
+export const today = () => localDate();
+/** The local day a record belongs to: plain dates ("2026-10-15") stay as they are, timestamps are converted */
+export const dayOf = (v) => { const s = String(v || ''); return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : s ? localDate(s) : ''; };
+export const monthOf = (v) => dayOf(v).slice(0, 7);
 export const daysUntil = (date) => Math.ceil((new Date(date) - new Date(today())) / 864e5);
 export const daysSince = (date) => Math.floor((Date.now() - new Date(date)) / 864e5);
+
+// ---------- stock alerts: only medicines actually in stock count ----------
+/** Low stock: in stock, but at or below its reorder level (never-stocked medicines are not "low") */
+export const isLowStock = (p) => p.stock > 0 && p.reorder > 0 && p.stock <= p.reorder;
+/** Every batch with stock left that expires within `warn` days (soon) or has expired (expired) */
+export function expiryBatches(products, batchesOf, warn) {
+  const soon = [], expired = [];
+  for (const p of products) {
+    if (!(p.stock > 0)) continue;
+    for (const b of batchesOf(p.id)) {
+      if (!(b.qty > 0) || !b.expiry) continue;
+      const days = daysUntil(b.expiry);
+      if (days < 0) expired.push({ ...b, p, days });
+      else if (days <= warn) soon.push({ ...b, p, days });
+    }
+  }
+  const byExpiry = (a, b) => a.expiry.localeCompare(b.expiry);
+  return { soon: soon.sort(byExpiry), expired: expired.sort(byExpiry) };
+}
+/** Number of different medicines with stock expiring soon / already expired */
+export const expiryCounts = (products, batchesOf, warn) => {
+  const { soon, expired } = expiryBatches(products, batchesOf, warn);
+  return { soon: new Set(soon.map((b) => b.p.id)).size, expired: new Set(expired.map((b) => b.p.id)).size, soonBatches: soon, expiredBatches: expired };
+};
 
 // ---------- passwords ----------
 const hex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
@@ -206,7 +236,7 @@ const SAMPLE = [
 export function addSampleData(d, user, branchId = MAIN_BRANCH) {
   SAMPLE.forEach(([name, generic, category, form, cost, wholesale, price, stock, reorder, expDays, rx], i) => {
     const p = put(d, 'products', { name, generic, category, form, cost, wholesale, price, reorder, unit: 'Piece', barcode: '62000000' + String(1000 + i), rx: !!rx });
-    const b = addBatch(d, { productId: p.id, batch: 'B' + Math.floor(1000 + Math.random() * 9000), expiry: new Date(Date.now() + expDays * 864e5).toISOString().slice(0, 10), cost });
+    const b = addBatch(d, { productId: p.id, batch: 'B' + Math.floor(1000 + Math.random() * 9000), expiry: localDate(Date.now() + expDays * 864e5), cost });
     move(d, { productId: p.id, qty: stock, type: 'Opening stock', user, batchId: b.id, branchId });
   });
   put(d, 'suppliers', { name: 'Sample Wholesale Ltd', contact: '', phone: '', email: '', address: '' });
@@ -431,11 +461,19 @@ export function StoreProvider({ children }) {
   const perms = useMemo(() => (db && user ? permissionsOf(db, user.role) : new Set()), [db?.roles, user]); // eslint-disable-line react-hooks/exhaustive-deps
   const can = useCallback((p) => perms.has(p), [perms]);
 
+  // Today's figures start again at local midnight, even on a screen that stays open overnight
+  const [day, setDay] = useState(today);
+  useEffect(() => {
+    const n = new Date(); const next = new Date(n.getFullYear(), n.getMonth(), n.getDate() + 1, 0, 0, 2);
+    const t = setTimeout(() => setDay(today()), next - n);
+    return () => clearTimeout(t);
+  }, [day]);
+
   if (!db || !syncCfg) return <div className="loading"><div className="spinner" />Loading RxPOS…</div>;
 
   return (
     <Ctx.Provider value={{ db, setDb, update, upsert, remove, saveSettings, user, setUser, fmt, products, stockIndex, batchesOf,
-      branchId, branch, setBranchId, syncCfg, saveSyncCfg, syncStatus, syncNow, linkPharmacy, features, can }}>
+      branchId, branch, setBranchId, syncCfg, saveSyncCfg, syncStatus, syncNow, linkPharmacy, features, can, day }}>
       {children}
     </Ctx.Provider>
   );

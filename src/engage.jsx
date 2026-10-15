@@ -6,13 +6,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { Bell, CalendarClock, PackageX, Repeat, CalendarDays, Thermometer, X, Share2, ChevronRight, ChevronLeft, Clock, Pill, Syringe, Droplet, FlaskConical, Sparkles, Tablets, Bandage, TrendingUp, Hourglass, Gem, Timer, ThermometerSun, CloudRain, MessagesSquare, HeartPulse, Users } from 'lucide-react';
-import { useStore, daysUntil, daysSince, today, put } from './store.jsx';
+import { useStore, daysUntil, daysSince, today, dayOf, put, isLowStock, expiryCounts } from './store.jsx';
 import { whatsappLink } from './cloud.js';
 import { storageLimits, useWeather, sixHourReadings } from './weather.js';
 import { popup, systemNotify, soundsOn, setSounds } from './notify.jsx';
 import { tipFor } from './data/health-tips.js';
 
-const addDays = (date, n) => new Date(new Date(date).getTime() + n * 864e5).toISOString().slice(0, 10);
+const addDays = (date, n) => new Date(new Date(date).getTime() + n * 864e5).toISOString().slice(0, 10); // plain dates: UTC arithmetic is exact
 
 // ---------- what to promote ----------
 export function useInsights() {
@@ -24,7 +24,7 @@ export function useInsights() {
     let oldest = today();
     for (const s of db.sales) {
       if (s.status === 'refunded') continue;
-      const d = String(s.date).slice(0, 10);
+      const d = dayOf(s.date);
       if (d < oldest) oldest = d;
       for (const i of s.items) if ((lastSold.get(i.id) || '') < d) lastSold.set(i.id, d);
     }
@@ -142,16 +142,16 @@ export function Spotlight() {
 
 // ---------- today's alerts ----------
 export function useAlerts() {
-  const { db, products, can, features } = useStore();
+  const { db, products, can, features, batchesOf, day } = useStore();
   const ins = useInsights();
   const [{ data: wx }] = useWeather(db.settings);
   return useMemo(() => {
     const t = today();
     const warn = db.settings.expiryWarnDays || 90;
     const out = [];
-    const expired = products.filter((p) => p.stock > 0 && p.expiry && daysUntil(p.expiry) < 0).length;
-    const expSoon = products.filter((p) => p.stock > 0 && p.expiry && daysUntil(p.expiry) >= 0 && daysUntil(p.expiry) <= Math.min(warn, 30)).length;
-    const low = products.filter((p) => p.reorder > 0 && p.stock <= p.reorder).length;
+    const ec = expiryCounts(products, batchesOf, Math.min(warn, 30));
+    const expired = ec.expired, expSoon = ec.soon;
+    const low = products.filter(isLowStock).length;
     const refills = db.prescriptions.filter((r) => r.status === 'Dispensed' && r.refillDays && addDays(r.dispensedOn || r.date, Number(r.refillDays)) <= t).length;
     const events = db.events.filter((e) => e.date === t);
     const lim = storageLimits(db.settings);
@@ -173,7 +173,7 @@ export function useAlerts() {
       else if (rainTomorrow >= 60) out.push({ key: 'rain-tomorrow', tone: 'info', Icon: CloudRain, text: `Rain likely tomorrow (${rainTomorrow}%)`, to: '/storage', n: 1 });
     }
     return out;
-  }, [db.prescriptions, db.events, db.tempLogs, db.settings, products, can, ins.slow, wx, features.weather]);
+  }, [db.prescriptions, db.events, db.tempLogs, db.settings, products, batchesOf, day, can, ins.slow, wx, features.weather]);
 }
 
 export function NotificationBell() {

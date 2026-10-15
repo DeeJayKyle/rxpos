@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { GraduationCap, Sparkles, CheckCircle2, XCircle, Trophy, RotateCcw, Loader2, WifiOff } from 'lucide-react';
-import { useStore, uid, now, put, today } from '../store.jsx';
+import { useStore, uid, now, put, today, dayOf } from '../store.jsx';
 import { Empty } from '../ui.jsx';
 import { toast } from '../feedback.jsx';
 import { aiQuiz } from '../cloud.js';
@@ -60,7 +60,7 @@ export default function Quiz() {
   const month = today().slice(0, 7);
   const board = useMemo(() => {
     const m = new Map();
-    for (const r of db.quizResults.filter((x) => String(x.date).slice(0, 7) === month)) { const e = m.get(r.userId) || { name: r.userName, score: 0, total: 0, n: 0 }; e.score += r.score; e.total += r.total; e.n++; m.set(r.userId, e); }
+    for (const r of db.quizResults.filter((x) => dayOf(x.date).slice(0, 7) === month)) { const e = m.get(r.userId) || { name: r.userName, score: 0, total: 0, n: 0 }; e.score += r.score; e.total += r.total; e.n++; m.set(r.userId, e); }
     return [...m.values()].sort((a, b) => b.score / b.total - a.score / a.total || b.n - a.n);
   }, [db.quizResults, month]);
 

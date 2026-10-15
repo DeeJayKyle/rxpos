@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Thermometer, Droplets, Wind, RefreshCw, Plus, MapPin, Snowflake, Warehouse, Sun as SunIcon, AlertTriangle, Trash2 } from 'lucide-react';
-import { useStore, uid, put, del, audit, now, today } from '../store.jsx';
+import { useStore, uid, put, del, audit, now, today, dayOf } from '../store.jsx';
 import { Modal, Empty, Stat } from '../ui.jsx';
 import { toast, ask } from '../feedback.jsx';
 import { useWeather, describe, storageLimits, storageAdvice } from '../weather.js';
@@ -67,7 +67,7 @@ export default function Storage() {
     && (r.humidity == null || r.humidity === '' || r.humidity <= limits.humidityMax));
   const logs = useMemo(() => db.tempLogs.filter((r) => (r.branchId || 'main') === branchId).sort((a, b) => String(a.at).localeCompare(String(b.at))), [db.tempLogs, branchId]);
   const series = logs.filter((r) => r.place === place).slice(-30).map((r) => ({ ...r, bad: !inRange(r) }));
-  const todays = logs.filter((r) => String(r.at).slice(0, 10) === today());
+  const todays = logs.filter((r) => dayOf(r.at) === today());
   const last = (p) => [...logs].reverse().find((r) => r.place === p);
   const bad = logs.filter((r) => !inRange(r)).length;
 

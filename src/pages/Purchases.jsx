@@ -1,16 +1,44 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Pencil, Trash2 } from 'lucide-react';
+import { Pencil, Trash2, ScanText, Camera, FileUp, Loader2, AlertTriangle, CheckCircle2, X } from 'lucide-react';
 import { useStore, uid, today, now, put, move, addBatch, audit, downloadFile, toCSV, MAIN_BRANCH } from '../store.jsx';
 import { CASH } from '../finance.js';
-import { Modal } from '../ui.jsx';
+import { Modal, PdfButton } from '../ui.jsx';
 import { toast } from '../feedback.jsx';
+import { invoicePages, readInvoice, matchProduct, matchSupplier, normDate } from '../invoiceScan.js';
 
 /** Receive stock from a supplier: every line becomes a batch (number + expiry) at this branch. */
 export function AddStock() {
-  const { db, products, update, fmt, user, branchId } = useStore();
+  const { db, products, update, fmt, user, branchId, syncCfg } = useStore();
   const location = useLocation();
   const blankLine = () => ({ key: uid(), productId: '', qty: 1, cost: 0, price: '', batch: '', expiry: '' });
+  const [scanOpen, setScanOpen] = useState(false);
+  const [scanned, setScanned] = useState(null); // { pages, supplier, invoiceNo, total } after an invoice was read
+  const [checked, setChecked] = useState(false); // the person confirms they checked the scanned lines
+  // Put what was read off the invoice on the panel: nothing is saved until "Receive stock"
+  const applyScan = (r, pages) => {
+    const sup = matchSupplier(r.supplier, db.suppliers);
+    const lines = r.items.map((it) => {
+      const p = matchProduct(it.name, products);
+      const qty = it.qty || 1;
+      const cost = it.unitCost || (it.lineTotal && qty ? Math.round((it.lineTotal / qty) * 100) / 100 : 0);
+      return { ...blankLine(), productId: p?.id || '', qty, cost, price: p?.price || '', batch: it.batch || '', expiry: normDate(it.expiry), read: { name: it.name, unclear: it.unclear, matched: !!p } };
+    });
+    setForm((f) => {
+      const keep = f.lines.filter((l) => l.productId);
+      return { ...f, supplierId: sup?.id || f.supplierId, invoice: r.invoiceNo || f.invoice, date: normDate(r.date, { endOfMonth: false }) || f.date, lines: keep.length || lines.length ? [...keep, ...lines] : [blankLine()] };
+    });
+    setScanned({ pages, supplier: r.supplier, supplierMatched: !!sup, invoiceNo: r.invoiceNo, total: r.total, lines: lines.length, unmatched: lines.filter((l) => !l.productId).length, unclear: lines.filter((l) => l.read.unclear).length });
+    setChecked(false);
+    setScanOpen(false);
+  };
+  const addScannedSupplier = () => {
+    const id = uid();
+    update((d) => { put(d, 'suppliers', { id, name: scanned.supplier, contact: '', phone: '', email: '', address: '' }); });
+    setForm((f) => ({ ...f, supplierId: id }));
+    setScanned((s) => ({ ...s, supplierMatched: true }));
+    toast(`Supplier ${scanned.supplier} added`);
+  };
   const blank = () => ({ supplierId: '', invoice: '', date: today(), paid: '', bankId: CASH, lines: [blankLine()] });
   // Pre-filled from a purchase order (Reorder → Receive)
   const [form, setForm] = useState(() => {
@@ -35,7 +63,13 @@ export function AddStock() {
 
   const save = (e) => {
     e.preventDefault();
-    const lines = form.lines.filter((l) => l.productId && Number(l.qty) > 0);
+    const unpicked = form.lines.filter((l) => l.read && !l.productId && Number(l.qty) > 0);
+    if (unpicked.length) return toast(`Choose the medicine for ${unpicked.length} line${unpicked.length > 1 ? 's' : ''} read from the invoice (or remove ${unpicked.length > 1 ? 'them' : 'it'})`, 'warn');
+    if (scanned && !checked) return toast('Tick "I have checked every line against the invoice" before saving', 'warn');
+    // lines read off the invoice that are new to this pharmacy become new medicines
+    const fresh = new Map();
+    for (const l of form.lines) if (l.productId === '__new__') fresh.set(l.key, uid());
+    const lines = form.lines.map((l) => (l.productId === '__new__' ? { ...l, productId: fresh.get(l.key), newName: l.read?.name } : l)).filter((l) => l.productId && Number(l.qty) > 0);
     if (!lines.length) return toast('Add at least one medicine', 'warn');
     if (lines.some((l) => !l.expiry)) return toast('Enter the expiry date for every line (needed for first-expiry-first-out)', 'warn');
     const supplier = db.suppliers.find((s) => s.id === form.supplierId);
@@ -43,9 +77,11 @@ export function AddStock() {
     const purchase = {
       id: uid(), number: 'GRN' + Date.now().toString(36).toUpperCase().slice(-6), supplierId: form.supplierId, supplierName: supplier?.name || '—',
       invoice: form.invoice, date: form.date, receivedBy: user.name, total, paid, bankId: form.bankId, branchId,
-      items: lines.map((l) => ({ productId: l.productId, name: products.find((p) => p.id === l.productId)?.name, qty: Number(l.qty), cost: Number(l.cost), batch: l.batch, expiry: l.expiry })),
+      items: lines.map((l) => ({ productId: l.productId, name: l.newName || products.find((p) => p.id === l.productId)?.name, qty: Number(l.qty), cost: Number(l.cost), batch: l.batch, expiry: l.expiry })),
+      ...(scanned ? { scanned: true } : {}),
     };
     update((d) => {
+      for (const l of lines) if (l.newName && !d.products.some((x) => x.id === l.productId)) put(d, 'products', { id: l.productId, name: l.newName, generic: '', form: 'Others', unit: 'Unit', price: Number(l.price) || 0, wholesale: Number(l.price) || 0, cost: Number(l.cost) || 0, reorder: 0 });
       lines.forEach((l, n) => {
         const p = d.products.find((x) => x.id === l.productId);
         if (!p) return;
@@ -63,15 +99,32 @@ export function AddStock() {
         if (po) put(d, 'purchaseOrders', { ...po, status: 'Received', receivedAt: today(), purchaseId: purchase.id });
       }
       put(d, 'purchases', purchase);
-      audit(d, user, 'Stock received', `${purchase.number} from ${purchase.supplierName}: ${lines.length} lines, ${fmt(total)}`, branchId);
+      audit(d, user, 'Stock received', `${purchase.number} from ${purchase.supplierName}: ${lines.length} lines, ${fmt(total)}${scanned ? ' (scanned invoice, checked by ' + user.name + ')' : ''}${fresh.size ? `, ${fresh.size} new medicine${fresh.size > 1 ? 's' : ''}` : ''}`, branchId);
     });
     setSaved(purchase);
     setForm(blank());
+    setScanned(null); setChecked(false);
   };
 
   return (
     <div className="page">
-      <div className="page-head"><h1>Add Stock</h1></div>
+      <div className="page-head"><h1>Add Stock</h1><button type="button" className="btn ghost" onClick={() => setScanOpen(true)}><ScanText size={16} />Scan invoice</button></div>
+      {scanOpen && <InvoiceScanner cfg={syncCfg} onClose={() => setScanOpen(false)} onRead={applyScan} />}
+      {scanned && (
+        <div className="notice scan-notice">
+          <div className="row between gap wrap">
+            <strong><ScanText size={15} /> Filled from a scanned invoice{scanned.invoiceNo ? ` (no. ${scanned.invoiceNo})` : ''}: check every line before saving</strong>
+            <button type="button" className="link-btn small" onClick={() => { setScanned(null); setChecked(false); setForm(blank()); }}>Discard</button>
+          </div>
+          <div className="small">
+            {scanned.lines} line{scanned.lines === 1 ? '' : 's'} read{scanned.total ? ` · invoice total ${fmt(scanned.total)} (here ${fmt(total)})` : ''}
+            {scanned.unmatched > 0 && <span className="text-warn"> · {scanned.unmatched} not matched to a medicine: choose one or add it as new</span>}
+            {scanned.unclear > 0 && <span className="text-warn"> · {scanned.unclear} hard to read</span>}
+          </div>
+          {scanned.supplier && !scanned.supplierMatched && <div className="small">Supplier on the invoice: <strong>{scanned.supplier}</strong> (not in your list) <button type="button" className="btn sm ghost" onClick={addScannedSupplier}>Add this supplier</button></div>}
+          <div className="scan-thumbs">{scanned.pages.map((src, n) => <a key={n} href={src} target="_blank" rel="noreferrer" title={`Page ${n + 1}: open to compare`}><img src={src} alt={`Invoice page ${n + 1}`} /></a>)}</div>
+        </div>
+      )}
       {saved && <div className="notice">Received {saved.items.length} item(s) worth {fmt(saved.total)} from {saved.supplierName}. {saved.paid < saved.total && `${fmt(saved.total - saved.paid)} added to creditors.`}</div>}
       <form className="card" onSubmit={save}>
         <div className="form-grid">
@@ -94,14 +147,16 @@ export function AddStock() {
             <tbody>
               {form.lines.map((l) => (
                 <tr key={l.key}>
-                  <td>
+                  <td className={l.read && (!l.productId || l.read.unclear) ? 'scan-check' : ''}>
                     <select value={l.productId} onChange={(e) => {
                       const p = products.find((x) => x.id === e.target.value);
-                      setLine(l.key, { productId: e.target.value, cost: p?.cost || 0, price: p?.price || '' });
+                      setLine(l.key, p ? { productId: e.target.value, cost: l.read ? l.cost : p.cost || 0, price: p.price || '' } : { productId: e.target.value });
                     }}>
                       <option value="">Select medicine…</option>
+                      {l.read && <option value="__new__">➕ Add as new medicine: {l.read.name}</option>}
                       {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                     </select>
+                    {l.read && <small className={'scan-read' + (!l.productId || l.read.unclear ? ' text-warn' : ' muted')}>{!l.productId ? <AlertTriangle size={11} /> : l.read.unclear ? <AlertTriangle size={11} /> : <CheckCircle2 size={11} />} Invoice: {l.read.name}{l.read.unclear ? ' (hard to read)' : ''}</small>}
                   </td>
                   <td><input type="number" min="1" value={l.qty} onChange={(e) => setLine(l.key, { qty: e.target.value })} /></td>
                   <td><input type="number" step="any" value={l.cost} onChange={(e) => setLine(l.key, { cost: e.target.value })} /></td>
@@ -122,9 +177,10 @@ export function AddStock() {
             <select value={form.bankId} onChange={(e) => setForm({ ...form, bankId: e.target.value })}>{db.banks.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select>
           </label>
         </div>
+        {scanned && <label className="field check scan-confirm"><input type="checkbox" checked={checked} onChange={(e) => setChecked(e.target.checked)} /><span>I have checked every line against the invoice (medicine, quantity, cost, batch and expiry)</span></label>}
         <div className="form-actions">
           <strong className="grow">Total: {fmt(total)}</strong>
-          <button className="btn primary">Receive stock</button>
+          <button className="btn primary" disabled={!!scanned && !checked}>Receive stock</button>
         </div>
       </form>
     </div>
@@ -137,16 +193,18 @@ export default function Purchases() {
   const [editing, setEditing] = useState(null);
   const [q, setQ] = useState('');
   const rows = db.purchases.filter((p) => !q || [p.supplierName, p.invoice, p.number].join(' ').toLowerCase().includes(q.toLowerCase()));
+  const histRef = useRef(null);
   return (
     <div className="page">
       <div className="page-head">
         <h1>Purchase History</h1>
         <div className="row gap">
+          <PdfButton target={histRef} title="Purchase history" subtitle={`${rows.length} deliveries · ${fmt(rows.reduce((a, p) => a + (p.total || 0), 0))}`} />
           <input className="search" placeholder="Search…" value={q} onChange={(e) => setQ(e.target.value)} />
           <button className="btn ghost" onClick={() => downloadFile('purchases.csv', toCSV(rows.map((p) => ({ date: p.date, number: p.number, supplier: p.supplierName, invoice: p.invoice, items: p.items.length, total: p.total, paid: p.paid ?? p.total, receivedBy: p.receivedBy }))), 'text/csv')}>Export CSV</button>
         </div>
       </div>
-      <div className="card table-wrap">
+      <div className="card table-wrap" ref={histRef}>
         <table>
           <thead><tr><th>Date</th><th>GRN</th><th>Supplier</th><th>Invoice</th><th>Items</th><th>Received by</th><th className="num">Total</th><th className="num">Unpaid</th><th /></tr></thead>
           <tbody>
@@ -255,6 +313,48 @@ function PurchaseEditor({ purchase, onClose }) {
         <div className="totals"><div className="row between"><span className="muted">Was</span><span className="num">{fmt(purchase.total)}</span></div><div className="row between grand"><span>New total</span><span className="num">{fmt(total)}</span></div></div>
         <div className="form-actions"><button type="button" className="btn ghost" onClick={onClose}>Cancel</button><button className="btn primary">Save changes</button></div>
       </form>
+    </Modal>
+  );
+}
+
+/** Photo or PDF of a supplier invoice → read by AI → handed back for the person to check on the Add Stock panel */
+function InvoiceScanner({ cfg, onClose, onRead }) {
+  const [pages, setPages] = useState([]);
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState('');
+  const choose = async (file) => {
+    if (!file) return;
+    setBusy('Opening…');
+    try {
+      const r = await invoicePages(file);
+      setPages(r.pages);
+      setNote(r.total > r.pages.length ? `Only the first ${r.pages.length} of ${r.total} pages will be read.` : '');
+    } catch (e) { toast(e.message || 'That file could not be opened', 'error'); }
+    finally { setBusy(''); }
+  };
+  const read = async () => {
+    if (!navigator.onLine) return toast('Reading an invoice needs the internet.', 'warn');
+    try {
+      const r = await readInvoice(cfg, pages, (n, of) => setBusy(of > 1 ? `Reading page ${n} of ${of}…` : 'Reading the invoice…'));
+      if (!r.items.length) { toast('No medicine lines could be read. Try a sharper, straighter photo.', 'warn'); return; }
+      onRead(r, pages);
+    } catch (e) { toast(e.message || 'The invoice could not be read', 'error'); }
+    finally { setBusy(''); }
+  };
+  return (
+    <Modal title="Scan a supplier invoice" onClose={busy ? () => {} : onClose} wide>
+      <p className="muted small">Take a photo of the invoice or delivery note, or choose an image or PDF. RxPOS reads the lines and fills in Add Stock for you to check. Nothing is saved until you press <strong>Receive stock</strong>.</p>
+      <div className="row gap wrap">
+        <label className="btn ghost"><Camera size={16} />Take photo<input hidden type="file" accept="image/*" capture="environment" onChange={(e) => choose(e.target.files[0])} /></label>
+        <label className="btn ghost"><FileUp size={16} />Choose image or PDF<input hidden type="file" accept="image/*,application/pdf,.pdf" onChange={(e) => choose(e.target.files[0])} /></label>
+        {pages.length > 0 && <button type="button" className="btn sm ghost" onClick={() => setPages([])} disabled={!!busy}><X size={14} />Clear</button>}
+      </div>
+      {note && <p className="small text-warn">{note}</p>}
+      {pages.length > 0 && <div className="scan-thumbs big">{pages.map((src, n) => <img key={n} src={src} alt={`Page ${n + 1}`} />)}</div>}
+      <div className="form-actions">
+        <button type="button" className="btn ghost" onClick={onClose} disabled={!!busy}>Cancel</button>
+        <button type="button" className="btn primary" disabled={!pages.length || !!busy} onClick={read}>{busy ? <><Loader2 size={16} className="spin" />{busy}</> : <><ScanText size={16} />Read invoice</>}</button>
+      </div>
     </Modal>
   );
 }

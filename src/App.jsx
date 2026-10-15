@@ -6,7 +6,7 @@ import {
   ArrowDownLeft, ArrowUpRight, BookOpen, BarChart3, Settings as SettingsIcon, Search, Sun, Moon, Menu, LogOut, ChevronDown,
   CornerDownLeft, User, Plus, BellRing, ShoppingBag, Tag, FileUp, Building2, Send, ShieldCheck, Clock, BookMarked, MessagesSquare, UserCog, KeyRound, CalendarDays, Thermometer, Palette, ScanText, GraduationCap, Megaphone, CalendarRange,
 } from 'lucide-react';
-import { useStore, daysUntil, makePassword, put, audit } from './store.jsx';
+import { useStore, makePassword, put, audit, isLowStock, expiryCounts } from './store.jsx';
 import { askText, toast } from './feedback.jsx';
 import Auth from './pages/Auth.jsx';
 import { BrandLogo } from './logo.jsx';
@@ -250,16 +250,16 @@ function Shell() {
   const [palette, setPalette] = useState(false);
   const [collapsed, setCollapsed] = useState(() => { try { return JSON.parse(localStorage.getItem('pharmapos-nav')) || {}; } catch { return {}; } });
 
-  const { can, features } = useStore();
+  const { can, features, batchesOf, day } = useStore();
   // Show only what this person's role may use and what is switched on for this pharmacy
   const groups = NAV.map((g) => ({ ...g, items: g.items.filter(([, , , , , , perm, feat]) => (!perm || can(perm)) && (!feat || features[feat] !== false)) })).filter((g) => g.items.length);
   const pages = groups.flatMap((g) => g.items.map(([to, label, Icon, key]) => ({ to, label, Icon, key })));
   const counts = useMemo(() => ({
-    expiry: products.filter((p) => p.expiry && p.stock > 0 && daysUntil(p.expiry) <= (db.settings.expiryWarnDays || 90)).length,
-    low: products.filter((p) => p.stock <= (p.reorder || 0) && p.reorder > 0).length,
+    expiry: (() => { const c = expiryCounts(products, batchesOf, db.settings.expiryWarnDays || 90); return c.soon + c.expired; })(),
+    low: products.filter(isLowStock).length,
     transfers: db.transfers.filter((t) => t.toId === branchId && t.status === 'In transit').length,
     chat: unreadCount(db, user),
-  }), [products, db.settings.expiryWarnDays, db.transfers, db.messages, branchId, user]); // eslint-disable-line react-hooks/exhaustive-deps
+  }), [products, batchesOf, db.settings.expiryWarnDays, db.transfers, db.messages, branchId, user, day]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => setDrawer(false), [location.pathname]);
   useEffect(() => {

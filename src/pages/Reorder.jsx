@@ -50,7 +50,7 @@ export default function Reorder() {
     const target = Math.ceil(perDay * (Number(lead) + Number(cover)));
     const qty = Math.max(0, target - Math.max(p.stock, 0), p.stock <= (p.reorder || 0) && perDay === 0 && p.reorder ? p.reorder * 2 - p.stock : 0);
     return { p, perDay, daysLeft, qty, buy: lastBuy.get(p.id) };
-  }).filter((r) => r.qty > 0 && (r.daysLeft <= Number(lead) + Number(cover) || r.p.stock <= (r.p.reorder || 0)))
+  }).filter((r) => r.qty > 0 && (r.p.stock > 0 || r.perDay > 0) && (r.daysLeft <= Number(lead) + Number(cover) || r.p.stock <= (r.p.reorder || 0)))
     .sort((a, b) => a.daysLeft - b.daysLeft), [products, velocity, window_, lead, cover, lastBuy]);
 
   const dead = useMemo(() => products.filter((p) => p.stock > 0).map((p) => {

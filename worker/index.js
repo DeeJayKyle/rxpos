@@ -227,6 +227,37 @@ async function pickUser(env, body) {
 }
 
 async function login(env, body) {
+  // One email at several pharmacies and no pharmacy chosen: the password decides which accounts are theirs, and if it
+  // opens more than one the person picks the pharmacy. Nothing is revealed before the password is right.
+  if (!body.tenant) {
+    const email0 = String(body.email || '').trim().toLowerCase().slice(0, 200);
+    const found = await findUsers(env, email0, '');
+    if (found.length > 1) {
+      const key = '*:' + email0;
+      const fail = await env.DB.prepare('SELECT n, until FROM login_fail WHERE email = ?1').bind(key).first();
+      if (fail && fail.until > Date.now()) {
+        const mins = Math.ceil((fail.until - Date.now()) / 60000);
+        return json({ error: `Too many wrong passwords. Try again in ${mins} minute${mins === 1 ? '' : 's'}, or use "Forgot password".` }, 429);
+      }
+      const ok = [];
+      for (const f of found.slice(0, 10)) if (await verifyPassword(f.u, String(body.password || ''))) ok.push(f);
+      if (!ok.length) {
+        const n = (fail && fail.until <= Date.now() && fail.until > 0 ? 0 : fail?.n || 0) + 1;
+        const until = n >= MAX_FAILS ? Date.now() + LOCK_MINUTES * 60000 : 0;
+        await env.DB.prepare('INSERT INTO login_fail (email, n, until) VALUES (?1, ?2, ?3) ON CONFLICT(email) DO UPDATE SET n = ?2, until = ?3').bind(key, until ? 0 : n, until).run();
+        return json({ error: until ? `Too many wrong passwords. Sign-in is locked for ${LOCK_MINUTES} minutes.` : `Wrong email or password (${MAX_FAILS - n} attempt${MAX_FAILS - n === 1 ? '' : 's'} left before a ${LOCK_MINUTES}-minute lock).` }, until ? 429 : 401);
+      }
+      if (fail) await env.DB.prepare('DELETE FROM login_fail WHERE email = ?1').bind(key).run();
+      const choices = [];
+      for (const f of ok) {
+        const t = await tenantById(env, f.tenant);
+        if (t && t.status === 'active') choices.push({ code: t.slug || t.id, name: t.name, role: f.u.role || '' });
+      }
+      if (!choices.length) return json({ error: 'This pharmacy account is suspended. Please contact your RxPOS provider.' }, 403);
+      if (choices.length > 1) return json({ choose: choices.sort((a, b) => a.name.localeCompare(b.name)) });
+      body = { ...body, tenant: choices[0].code };
+    }
+  }
   const { email, tenant, match } = await pickUser(env, body);
   const lockKey = tenant + ':' + email;
   const fail = await env.DB.prepare('SELECT n, until FROM login_fail WHERE email = ?1').bind(lockKey).first();
@@ -850,6 +881,22 @@ async function ai(env, path, body, who) {
     const parsed = firstJson(out.response);
     parsed.medicines = (Array.isArray(parsed.medicines) ? parsed.medicines : []).filter((x) => x && x.name).slice(0, 15);
     return json({ ...parsed, model: VISION });
+  }
+  if (path === '/api/ai/invoice') {
+    // one page of a supplier's invoice / delivery note (PDF pages are turned into images on the device)
+    const m = /^data:image\/(jpeg|png|webp);base64,(.+)$/.exec(String(body.image || ''));
+    if (!m || m[2].length > 2_000_000) return json({ error: 'Send a JPG or PNG image under 1.5 MB.' }, 400);
+    const prompt = 'You are helping a pharmacy in Uganda enter a supplier invoice (or delivery note) into stock. Read this page carefully, including every product line in the table. ' +
+      'Reply with ONLY this JSON, no other text: {"supplier":"","invoiceNo":"","date":"","items":[{"name":"","batch":"","expiry":"","qty":0,"unitCost":0,"lineTotal":0,"unclear":false}],"total":0}. ' +
+      'Rules: "supplier" is the company that issued the invoice (not the buyer). "date" and "expiry" as YYYY-MM-DD (an expiry like 06/2028 or Jun-28 means the last day of that month). ' +
+      '"name" is the product as written including strength and pack (e.g. "Amoxicillin 500mg caps 10x10"). "qty" is the quantity supplied, "unitCost" the price per unit/pack before the line total, "lineTotal" the amount for that line; plain numbers without commas or currency. ' +
+      'Include every product line once; skip subtotal, tax, discount and total rows. Set "unclear": true for any line you could not read with confidence. Leave unknown fields empty or 0.';
+    const out = await runAi(env, VISION, { messages: [{ role: 'user', content: [{ type: 'text', text: prompt }, { type: 'image_url', image_url: { url: body.image } }] }], max_tokens: 2500, temperature: 0.1 });
+    const parsed = firstJson(out.response);
+    const num = (v) => Number(String(v ?? '').replace(/[^0-9.-]/g, '')) || 0;
+    parsed.items = (Array.isArray(parsed.items) ? parsed.items : []).filter((x) => x && x.name).slice(0, 80)
+      .map((x) => ({ name: String(x.name).slice(0, 120), batch: String(x.batch || '').slice(0, 40), expiry: String(x.expiry || '').slice(0, 20), qty: num(x.qty), unitCost: num(x.unitCost), lineTotal: num(x.lineTotal), unclear: !!x.unclear }));
+    return json({ supplier: String(parsed.supplier || '').slice(0, 120), invoiceNo: String(parsed.invoiceNo || '').slice(0, 40), date: String(parsed.date || '').slice(0, 20), items: parsed.items, total: num(parsed.total), model: VISION });
   }
   if (path === '/api/ai/quiz') {
     const drugs = (Array.isArray(body.drugs) ? body.drugs : []).map((d) => String(d).slice(0, 60)).filter(Boolean).slice(0, 10);

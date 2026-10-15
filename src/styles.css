@@ -855,3 +855,42 @@ tr.row-bad td { color: var(--danger); }
 .call-pop small { color: var(--muted); font-size: 11.5px; }
 .chat-to { display: flex; align-items: center; gap: 8px; padding: 6px 0 8px; border-bottom: 1px solid var(--border); margin-bottom: 6px; flex-wrap: wrap; }
 .chat-to select { flex: 1; min-width: 180px; }
+
+/* current sale: tick lines to remove them, or remove one with ✕ */
+.cart-tools { align-items: center; }
+.cart-tools .check { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+.cart-line .line-check { width: 18px; height: 18px; flex: none; margin: 2px 2px 0 0; accent-color: var(--primary); cursor: pointer; }
+.cart-line.picked { background: var(--danger-soft); border-radius: 8px; }
+.cart-line .line-remove { flex: none; color: var(--muted); }
+.cart-line .line-remove:hover { color: var(--danger); }
+
+/* edited sales stand out in Sales History */
+tr.edited-row > td { background: var(--warn-soft); }
+tr.edited-row > td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
+.edited-badge { border: 0; cursor: pointer; margin-top: 4px; display: inline-flex; align-items: center; gap: 3px; font: inherit; font-size: 11px; }
+.edit-card { margin-top: 12px; padding: 12px 14px; }
+.edit-card h4 { display: flex; align-items: center; gap: 6px; margin: 0 0 8px; }
+.edit-history { margin: 0; padding-left: 18px; display: grid; gap: 10px; }
+.edit-diff { width: 100%; margin-top: 4px; border-collapse: collapse; }
+.edit-diff th { text-align: left; font-weight: 600; color: var(--muted); width: 80px; vertical-align: top; padding: 2px 6px 2px 0; }
+.edit-diff td { vertical-align: top; padding: 2px 4px; word-break: break-word; }
+.edit-diff td.changed { color: var(--warn); font-weight: 600; }
+
+/* scanned supplier invoice on Add Stock */
+.scan-notice { display: grid; gap: 6px; }
+.scan-notice strong { display: inline-flex; align-items: center; gap: 6px; }
+.scan-thumbs { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+.scan-thumbs img { height: 72px; border-radius: 6px; border: 1px solid var(--border, #e2e8f0); background: #fff; }
+.scan-thumbs.big img { height: 220px; max-width: 100%; object-fit: contain; }
+td.scan-check { background: var(--warn-soft); }
+.scan-read { display: flex; align-items: center; gap: 3px; margin-top: 3px; line-height: 1.25; }
+.text-warn { color: var(--warn); }
+.scan-confirm { margin-top: 12px; }
+
+/* sign in: one email at several pharmacies */
+.pharmacy-choices { display: grid; gap: 8px; }
+.pharmacy-choice { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface, #fff); color: inherit; font: inherit; cursor: pointer; }
+.pharmacy-choice:hover:not(:disabled) { border-color: var(--primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 15%, transparent); }
+.pharmacy-choice.current { border-color: var(--primary); }
+.pharmacy-choice .grow { display: grid; }
+.pharmacy-choice svg { color: var(--primary); flex: none; }

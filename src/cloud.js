@@ -50,6 +50,7 @@ export const pharmacyInfo = (url, slug) => call({ url: cleanUrl(url) }, '/api/ph
 export const calendarLink = (cfg) => call(cfg, '/api/calendar-link', { timeout: 8000 });
 // AI (Cloudflare Workers AI): read a prescription photo; make a drug quiz
 export const aiPrescription = (cfg, image) => call(cfg, '/api/ai/prescription', { method: 'POST', body: { image }, timeout: 90000 });
+export const aiInvoice = (cfg, image) => call(cfg, '/api/ai/invoice', { method: 'POST', body: { image }, timeout: 120000 });
 export const aiQuiz = (cfg, drugs, count = 8) => call(cfg, '/api/ai/quiz', { method: 'POST', body: { drugs, count }, timeout: 90000 });
 export const cloudConfig = (cfg) => call(cfg, '/api/config', { timeout: 8000 });
 export const payRequest = (cfg, body) => call(cfg, '/api/pay/request', { method: 'POST', body, timeout: 30000 });

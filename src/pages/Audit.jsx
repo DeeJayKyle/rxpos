@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Download, ShieldCheck } from 'lucide-react';
-import { useStore, downloadFile, toCSV, MAIN_BRANCH } from '../store.jsx';
+import { useStore, dayOf, downloadFile, toCSV, MAIN_BRANCH } from '../store.jsx';
 import { SearchBox, Empty } from '../ui.jsx';
 
 /** Who did what, when and where. Entries sync from every device and cannot be edited in the app. */
@@ -14,7 +14,7 @@ export default function Audit() {
   const actions = useMemo(() => [...new Set(db.audit.map((a) => a.action))].sort(), [db.audit]);
   const branch = (id) => db.branches.find((b) => b.id === (id || MAIN_BRANCH))?.name || '';
   const ql = q.toLowerCase();
-  const rows = db.audit.filter((a) => (!who || a.user === who) && (!action || a.action === action) && (!from || a.date.slice(0, 10) >= from) &&
+  const rows = db.audit.filter((a) => (!who || a.user === who) && (!action || a.action === action) && (!from || dayOf(a.date) >= from) &&
     (!q || `${a.user} ${a.action} ${a.details}`.toLowerCase().includes(ql)));
 
   return (

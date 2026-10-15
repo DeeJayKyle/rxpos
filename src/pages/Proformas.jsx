@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store.jsx';
-import { Modal } from '../ui.jsx';
+import { Modal, ReceiptPdfButton } from '../ui.jsx';
 import { Receipt } from './Sales.jsx';
 import { ask } from '../feedback.jsx';
 
@@ -44,7 +44,7 @@ export default function Proformas() {
       {view && (
         <Modal title={`Proforma ${view.number}`} onClose={() => setView(null)}>
           <Receipt sale={{ ...view, proforma: true }} />
-          <div className="form-actions no-print"><button className="btn primary" onClick={() => window.print()}>Print</button></div>
+          <div className="form-actions no-print"><ReceiptPdfButton sale={{ ...view, proforma: true }} /><button className="btn primary" onClick={() => window.print()}>Print</button></div>
         </Modal>
       )}
     </div>

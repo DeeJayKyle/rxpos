@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { CrudPage, Modal, RecordForm } from '../ui.jsx';
-import { useStore, today, uid, put, customerBalance, supplierBalance, downloadFile, toCSV } from '../store.jsx';
+import { useStore, today, dayOf, uid, put, customerBalance, supplierBalance, downloadFile, toCSV } from '../store.jsx';
 import { CASH, ledger, accountBalances, loanBalance } from '../finance.js';
 
 const METHODS = ['Cash', 'Mobile Money', 'Bank Transfer', 'Cheque', 'Card'];
@@ -204,8 +204,8 @@ export function CashBook() {
   const bank = db.banks.find((b) => b.id === account);
   let bal = Number(bank?.opening) || 0;
   const all = ledger(db).filter((e) => e.account === account).map((e) => ({ ...e, bal: (bal += e.in - e.out) }));
-  const rows = all.filter((e) => String(e.date).slice(0, 10) >= from && String(e.date).slice(0, 10) <= to);
-  const opening = rows.length ? rows[0].bal - rows[0].in + rows[0].out : (all.filter((e) => String(e.date).slice(0, 10) < from).pop()?.bal ?? (Number(bank?.opening) || 0));
+  const rows = all.filter((e) => dayOf(e.date) >= from && dayOf(e.date) <= to);
+  const opening = rows.length ? rows[0].bal - rows[0].in + rows[0].out : (all.filter((e) => dayOf(e.date) < from).pop()?.bal ?? (Number(bank?.opening) || 0));
   return (
     <div className="page">
       <div className="page-head">

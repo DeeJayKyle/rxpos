@@ -18,8 +18,9 @@ export default function Auth() {
   const url = cloudUrl();
   const slug = pharmacySlugFromUrl();
   const [pharmacy, setPharmacy] = useState(() => (syncCfg.tenant && (!slug || slug === syncCfg.slug) ? { name: syncCfg.pharmacy || db.settings.name, slug: syncCfg.slug, logo: db.license?.[0]?.branding?.logo } : null));
-  const [form, setForm] = useState(() => ({ email: (() => { try { return localStorage.getItem(LAST_EMAIL) || ''; } catch { return ''; } })(), password: '', code: slug || syncCfg.slug || '', otp: '', newPassword: '' }));
+  const [form, setForm] = useState(() => ({ email: (() => { try { return localStorage.getItem(LAST_EMAIL) || ''; } catch { return ''; } })(), password: '', code: slug || '', otp: '', newPassword: '' }));
   const [needCode, setNeedCode] = useState(false);
+  const [choices, setChoices] = useState(null); // pharmacies this email + password opens
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [forgot, setForgot] = useState(() => (location.hash.startsWith('#/forgot') ? { stage: 'ask' } : null)); // { stage: 'ask' | 'code', channel, hint }
@@ -37,14 +38,14 @@ export default function Auth() {
     const code = form.code.trim().toLowerCase();
     const local = db.users.find((x) => x.email === email && !x.disabled);
     const sameStore = !code || [syncCfg.tenant, syncCfg.slug].includes(code);
+    setChoices(null);
     try { localStorage.setItem(LAST_EMAIL, email); } catch {}
 
     if (navigator.onLine) {
       try {
         const r = await cloudLogin(url, email, form.password, code);
-        await linkPharmacy({ url, token: r.token, account: email, tenant: r.tenant, slug: r.slug, pharmacy: r.pharmacy });
-        if (isWeb && r.slug && slug !== r.slug) history.replaceState(null, '', '/' + r.slug + location.hash);
-        setUser(r.user);
+        if (r.choose) { setChoices(r.choose); return; } // registered at several pharmacies: let them pick
+        await finish(r, email);
         return;
       } catch (err) {
         if (/more than one pharmacy/i.test(err.message)) { setNeedCode(true); throw err; }
@@ -73,6 +74,17 @@ export default function Auth() {
     setForm((f) => ({ ...f, password: '', otp: '', newPassword: '' }));
   }); };
 
+  const finish = async (r, email) => {
+    await linkPharmacy({ url, token: r.token, account: email, tenant: r.tenant, slug: r.slug, pharmacy: r.pharmacy });
+    if (isWeb && r.slug && slug !== r.slug) history.replaceState(null, '', '/' + r.slug + location.hash);
+    setUser(r.user);
+  };
+  const choose = (c) => run(async () => {
+    const email = form.email.trim().toLowerCase();
+    const r = await cloudLogin(url, email, form.password, c.code);
+    setChoices(null);
+    await finish(r, email);
+  });
   const codeField = (
     <label className="field"><span>Pharmacy web address or code</span>
       <input value={form.code} onChange={set('code')} placeholder="e.g. citycare-ntinda" autoCapitalize="none" spellCheck={false} /></label>
@@ -127,12 +139,28 @@ export default function Auth() {
       <div className="auth-side">
         <div className="auth-card">
           <div className="brand big"><BrandLogo src={pharmacy?.logo} size={44} /> <span className="wordmark">Rx<span className="brand-accent">POS</span></span></div>
-          {forgot ? forgotPanel() : (
+          {choices ? (
+            <div className="stack">
+              <button type="button" className="btn sm ghost" style={{ alignSelf: 'flex-start' }} onClick={() => { setChoices(null); setError(''); }} disabled={busy}><ArrowLeft size={14} />Back</button>
+              <p className="center auth-title"><strong>Which pharmacy?</strong><br /><span className="muted small">{form.email} works at {choices.length} pharmacies</span></p>
+              <div className="pharmacy-choices">
+                {choices.map((c) => (
+                  <button key={c.code} type="button" className={'pharmacy-choice' + ((c.code === syncCfg.slug) ? ' current' : '')} onClick={() => choose(c)} disabled={busy}>
+                    <Building2 size={18} />
+                    <span className="grow"><strong>{c.name}</strong><small className="muted">{c.code}{c.role ? ` · ${c.role}` : ''}{c.code === syncCfg.slug ? ' · this device' : ''}</small></span>
+                    <LogIn size={16} />
+                  </button>
+                ))}
+              </div>
+              {error && <div className="error">{error}</div>}
+              {busy && <p className="muted small center">Signing in…</p>}
+            </div>
+          ) : forgot ? forgotPanel() : (
             <form onSubmit={signIn} className="stack">
               {pharmacy?.error ? <div className="error">{pharmacy.error}</div> : <p className="muted center auth-title"><Building2 size={15} /> {title}</p>}
               <label className="field"><span>Email</span><input type="email" autoComplete="username" value={form.email} onChange={set('email')} required autoFocus={!form.email} /></label>
               <label className="field"><span>Password</span><input type="password" autoComplete="current-password" value={form.password} onChange={set('password')} required autoFocus={!!form.email} /></label>
-              {(needCode || (!slug && !syncCfg.tenant)) && (needCode ? codeField : <details><summary className="muted small">My email is used at more than one pharmacy</summary>{codeField}</details>)}
+              {needCode && codeField}
               {error && <div className="error">{error}</div>}
               <button className="btn primary block" disabled={busy}><LogIn size={16} />{busy ? 'Signing in…' : 'Sign in'}</button>
               <button type="button" className="link-btn" onClick={() => { setForgot({ stage: 'ask' }); setError(''); }}>Forgot password?</button>

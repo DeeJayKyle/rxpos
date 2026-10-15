@@ -1,7 +1,7 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Download, Barcode as BarcodeIcon, SlidersHorizontal, Save, Undo2, Pencil } from 'lucide-react';
-import { CrudPage, Tabs, Modal, SearchBox, Empty } from '../ui.jsx';
+import { CrudPage, Tabs, Modal, SearchBox, Empty, PdfButton } from '../ui.jsx';
 import { useStore, daysUntil, put, move, addBatch, audit, downloadFile, toCSV, MAIN_BRANCH } from '../store.jsx';
 import { ask, toast } from '../feedback.jsx';
 import { newInternalBarcode } from '../barcode.jsx';
@@ -88,6 +88,7 @@ export function StockLevels() {
   const location = useLocation();
   const [q, setQ] = useState('');
   const [filter, setFilter] = useState(location.state?.filter || 'instock');
+  const listRef = useRef(null);
   const [open, setOpen] = useState(null);
   const [editing, setEditing] = useState(null);
   const warn = db.settings.expiryWarnDays || 90;
@@ -105,10 +106,11 @@ export function StockLevels() {
         <div className="row gap">
           <SearchBox value={q} onChange={setQ} />
           <button className="btn ghost" onClick={() => downloadFile('inventory.csv', toCSV(rows.flatMap((p) => batchesOf(p.id).filter((b) => b.qty).map((b) => ({ name: p.name, generic: p.generic, form: p.form, batch: b.batch, expiry: b.expiry, qty: b.qty, cost: b.cost || p.cost, price: p.price, value: b.qty * (b.cost || p.cost) })))), 'text/csv')}><Download size={16} />CSV</button>
+          <PdfButton target={listRef} title={{ instock: 'Stock in hand', low: 'Low stock', out: 'Out of stock', all: 'All medicines' }[filter]} subtitle={`${branch?.name || ''} · ${rows.length} items · ${fmt(total)} at cost · ${fmt(retail)} at retail`} />
         </div>
       </div>
       <Tabs tabs={[['instock', 'In stock'], ['low', 'Low stock'], ['out', 'Out of stock'], ['all', 'All']]} value={filter} onChange={setFilter} />
-      <div className="card table-wrap">
+      <div className="card table-wrap" ref={listRef}>
         <table>
           <thead><tr><th>Medicine</th><th>Next batch</th><th>Expiry</th><th>Shelf</th><th className="num">Reorder at</th><th className="num">In stock</th>{multi && <th className="num">All branches</th>}<th className="num">Value (cost)</th>{can('inventory.edit') && <th />}</tr></thead>
           <tbody>
@@ -149,6 +151,7 @@ export function StockLevels() {
 export function Expiry() {
   const { db, products, update, fmt, user, batchesOf, branchId } = useStore();
   const [tab, setTab] = useState('soon');
+  const expRef = useRef(null);
   const warn = db.settings.expiryWarnDays || 90;
   const rows = useMemo(() => products.filter((p) => p.stock > 0).flatMap((p) => batchesOf(p.id).filter((b) => b.qty > 0 && b.expiry).map((b) => ({ ...b, p, days: daysUntil(b.expiry) })))
     .filter((r) => (tab === 'expired' ? r.days < 0 : r.days >= 0 && r.days <= warn))
@@ -163,9 +166,10 @@ export function Expiry() {
   };
   return (
     <div className="page">
-      <div className="page-head"><div><h1>Expiring / Expired</h1><div className="sub">{rows.length} batches · {fmt(rows.reduce((a, r) => a + r.qty * (r.cost || r.p.cost), 0))} at cost</div></div></div>
+      <div className="page-head"><div><h1>Expiring / Expired</h1><div className="sub">{rows.length} batches · {fmt(rows.reduce((a, r) => a + r.qty * (r.cost || r.p.cost), 0))} at cost</div></div>
+        <PdfButton target={expRef} title={tab === 'expired' ? 'Expired stock' : `Expiring within ${warn} days`} subtitle={`${rows.length} batches in stock · ${fmt(rows.reduce((a, r) => a + r.qty * (r.cost || r.p.cost), 0))} at cost`} /></div>
       <Tabs tabs={[['soon', `Expiring within ${warn} days`], ['expired', 'Expired']]} value={tab} onChange={setTab} />
-      <div className="card table-wrap">
+      <div className="card table-wrap" ref={expRef}>
         <table>
           <thead><tr><th>Medicine</th><th>Batch</th><th>Expiry</th><th>When</th><th className="num">Qty</th><th className="num">Value</th><th /></tr></thead>
           <tbody>
