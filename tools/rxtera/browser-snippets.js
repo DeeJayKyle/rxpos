@@ -84,7 +84,8 @@ window.rxMedicines = async () => {
 // rxMedicines()
 
 // ── 4. /salesreport: every sale line, half a month at a time (newest first, stops after 3 empty months) ────────
-window.rxSalesReport = async (fromYear, fromMonth) => {
+// maxMonths: stop after that many months (nightly refresh: 2 = this month and last); default: until 3 empty months
+window.rxSalesReport = async (fromYear, fromMonth, maxMonths = Infinity) => {
   const set = (name, val) => { const el = document.querySelector(`[wire\\:model="${name}"]`); el.value = val; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); };
   const bank = document.querySelector('[wire\\:model="bank"]'); set('bank', [...bank.options].find((o) => /^all$/i.test(o.text.trim())).value); // the default is "Cash" only!
   const pad = (n) => String(n).padStart(2, '0'), norm = (s) => s.replace(/\s+/g, ' ');
@@ -96,7 +97,7 @@ window.rxSalesReport = async (fromYear, fromMonth) => {
     return [...document.querySelectorAll('table tbody tr')].map((r) => [...r.cells].map((c) => c.innerText.trim())).filter((c) => c.length >= 9);
   };
   const now = new Date(); let y = fromYear || now.getFullYear(), m = fromMonth || now.getMonth() + 1, empty = 0;
-  while (empty < 3) {
+  for (let done = 0; empty < 3 && done < maxMonths; done++) {
     const key = `${y}-${pad(m)}`, last = new Date(y, m, 0).getDate();
     const rows = [...await run(`${key}-01`, `${key}-15`), ...await run(`${key}-16`, `${key}-${last}`)];
     console.log(key, rows.length, 'lines');
@@ -104,21 +105,24 @@ window.rxSalesReport = async (fromYear, fromMonth) => {
     if (--m === 0) { m = 12; y--; }
   }
 };
-// rxSalesReport()   ← keep this tab in front while it runs (background tabs are slowed down)
+// rxSalesReport()          ← everything (first copy); keep this tab in front while it runs
+// rxSalesReport(0, 0, 2)   ← nightly: this month and last month only
 
 // ── 5. DataTables lists: /stock/sale/history → 'saleheads', /stock/history → 'purchaseheads' ───────────────────
-window.rxTable = async (name, size = 500) => {
+// maxRows: newest rows only (big pharmacies: Rxtera serves this list slowly)
+window.rxTable = async (name, size = 500, maxRows = Infinity) => {
   const tbl = document.querySelector('table[id]'); const dt = $('#' + tbl.id).DataTable(); const all = [];
   for (let start = 0; ; start += size) {
     const prm = { ...dt.ajax.params(), start, length: size };
     const j = await (await fetch(dt.ajax.url() + (dt.ajax.url().includes('?') ? '&' : '?') + $.param(prm), { headers: { 'X-Requested-With': 'XMLHttpRequest', Accept: 'application/json' } })).json();
     all.push(...j.data.map((r) => (name === 'purchaseheads' ? [r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7]] : r)));
     console.log(name, all.length, 'of', j.recordsTotal);
-    if (j.data.length < size) break;
+    if (j.data.length < size || all.length >= maxRows) break;
   }
   await rxSend(name, all);
 };
-// rxTable('saleheads')      ← on /stock/sale/history
+// rxTable('saleheads')            ← on /stock/sale/history (all sales)
+// rxTable('saleheads', 500, 3000) ← nightly: newest 3,000 sales only
 // rxTable('purchaseheads')  ← on /stock/history
 
 // ── 6. /stock/debit-notes → 'debitnotes', /stock/credit-notes → 'creditnotes' (with each note's details) ───────
