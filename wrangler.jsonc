@@ -15,7 +15,8 @@
   },
   "d1_databases": [{ "binding": "DB", "database_name": "pharmapos-db", "database_id": "a68d2d61-c865-4a2b-9a83-65d20a0927f0", "migrations_dir": "migrations" }],
   // Database: "" = Cloudflare D1 (binding DB); "turso" = libSQL/Turso (secrets TURSO_URL, TURSO_AUTH_TOKEN; see deploy/setup-turso.ps1)
-  "vars": { "DB_BACKEND": "turso", "PUBLIC_URL": "https://rxposug.com" },
+  "vars": { "DB_BACKEND": "turso", "PUBLIC_URL": "https://rxposug.com", "BREVO_SENDER_EMAIL": "no-reply@rxposug.com", "BREVO_SENDER_NAME": "RxPOS" },
+  // Password-reset emails go through Brevo (free plan): the API key is the secret BREVO_API_KEY (wrangler secret put BREVO_API_KEY)
   // Own domain for the apps (api.rxposug.com); the free workers.dev address stays on for devices set up before
   "workers_dev": true,
   "routes": [{ "pattern": "api.rxposug.com", "custom_domain": true }],

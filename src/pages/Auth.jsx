@@ -175,7 +175,6 @@ export default function Auth() {
               <button type="button" className="link-btn" onClick={() => { setForgot({ stage: 'ask' }); setError(''); }}>Forgot password?</button>
             </form>
           )}
-          <p className="muted small center">Accounts are created by your pharmacy's administrator. {syncCfg.tenant ? 'Works offline on this device after signing in.' : 'The first sign-in on a device needs the internet.'}</p>
         </div>
       </div>
     </div>
