@@ -178,6 +178,12 @@ async function authenticate(req, env) {
   const t = await tenantById(env, who.tenant);
   if (!t) return null;
   if (t.status !== 'active') throw httpError(403, 'This pharmacy account is suspended. Please contact your RxPOS provider.');
+  // A staff token only counts while that person still exists (and isn't disabled) in this pharmacy: removed staff are
+  // signed out at once, and a device from a deleted pharmacy can't push its old data into a new one with the same address
+  if (who.uid) {
+    const u = await env.DB.prepare('SELECT rec FROM records WHERE tenant = ?1 AND k = ?2 AND deleted = 0').bind(who.tenant, 'users|' + who.uid).first();
+    if (!u || JSON.parse(u.rec || '{}').disabled) return null;
+  }
   return { ...who, tenantRow: t };
 }
 
