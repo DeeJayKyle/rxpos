@@ -1,13 +1,13 @@
 // One live WebSocket per device to the pharmacy's cloud hub (see worker/live.js).
 // Brings instant "something changed, pull now" notices and call set-up messages. If it drops, RxPOS falls back to
 // regular syncing and polling, and reconnects in the background.
-import { DEFAULT_CLOUD } from './cloud.js';
+import { LIVE_CLOUD, OWN_SITES } from './cloud.js';
 
 const listeners = new Set();
 let ws = null, cfgKey = '', retry = 0, timer = null, pinger = null, wanted = false;
 
 /** WebSockets go straight to the Worker (the Pages site only forwards normal requests) */
-const liveBase = (url) => (url === DEFAULT_CLOUD ? 'https://pharmapos.pharmapos.workers.dev' : url).replace(/^http/, 'ws');
+const liveBase = (url) => (OWN_SITES.includes(String(url).replace(/\/+$/, '')) ? LIVE_CLOUD : url).replace(/^http/, 'ws');
 
 export const onLive = (fn) => { listeners.add(fn); return () => listeners.delete(fn); };
 export const liveUp = () => ws?.readyState === 1;

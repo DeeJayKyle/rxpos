@@ -2,7 +2,10 @@
 // staff sign-in, Mobile Money payment requests and SMS. Sync itself lives in sync.js.
 import { isNative } from './platform.js';
 
-export const DEFAULT_CLOUD = 'https://rxpos.pages.dev';
+export const DEFAULT_CLOUD = 'https://rxposug.com';
+/** The Worker itself (live connection). The website addresses below only forward normal requests to it. */
+export const LIVE_CLOUD = 'https://api.rxposug.com';
+export const OWN_SITES = ['https://rxposug.com', 'https://www.rxposug.com', 'https://rxpos.pages.dev'];
 /** The cloud this app talks to: the site itself on the web, the RxPOS cloud in the desktop and Android apps. */
 export const cloudUrl = () => (!isNative && /^https?:$/.test(location.protocol) && !import.meta.env.DEV ? location.origin : DEFAULT_CLOUD);
 
