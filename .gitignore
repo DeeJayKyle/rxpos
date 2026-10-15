@@ -13,3 +13,4 @@ tests/.state/
 tests/.output/
 backups/
 *.rxbak
+tests/*.png

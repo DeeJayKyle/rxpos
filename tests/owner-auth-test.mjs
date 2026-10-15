@@ -1,5 +1,7 @@
 // Owner account & recovery: node owner-auth-test.mjs <base> <masterKey>
 import puppeteer from 'puppeteer-core';
+import { mkdirSync } from 'node:fs';
+mkdirSync('.output', { recursive: true });
 import { CHROME } from './chrome.mjs';
 const [base, master] = process.argv.slice(2);
 let pass = 0, fail = 0;
@@ -67,7 +69,7 @@ const errors = []; p.on('pageerror', (e) => errors.push(e.message));
 await p.goto(base + '/#/owner', { waitUntil: 'domcontentloaded' }); await new Promise((r) => setTimeout(r, 3000));
 const t = await p.evaluate(() => document.body.innerText);
 check('sign-in page shows password, Google and GitHub options', /Owner password/.test(t) && /Continue with GitHub/.test(t) && !!(await p.$('.google-btn')) && /Forgot the password/.test(t));
-await p.screenshot({ path: 'owner-signin.png' });
+await p.screenshot({ path: '.output/owner-signin.png' });
 await p.goto('about:blank'); await p.goto(base + '/#/owner?oerr=GitHub%20user%20x%20is%20not%20the%20owner', { waitUntil: 'domcontentloaded' }); await new Promise((r) => setTimeout(r, 2500));
 check('GitHub errors are shown on the sign-in page', /is not the owner/.test(await p.evaluate(() => document.body.innerText)));
 await p.goto('about:blank'); await p.goto(base + '/#/owner?ot=' + encodeURIComponent(tok), { waitUntil: 'domcontentloaded' }); await new Promise((r) => setTimeout(r, 3000));
@@ -75,7 +77,7 @@ check('returning from GitHub with a session opens the console', /Client pharmaci
 await p.evaluate(() => [...document.querySelectorAll('button')].find((x) => x.textContent.includes('Owner account')).click()); await new Promise((r) => setTimeout(r, 1200));
 const m = await p.evaluate(() => document.querySelector('.modal')?.innerText || '');
 check('Owner account panel: password, Google, GitHub', /Change your owner password/.test(m) && /Sign in with Google/.test(m) && /Sign in with GitHub/.test(m));
-await p.screenshot({ path: 'owner-account.png' });
+await p.screenshot({ path: '.output/owner-account.png' });
 console.log(`\nerrors: ${errors.length ? errors.slice(0, 3).join(' | ') : 'none'}`);
 console.log(`${pass} passed, ${fail} failed`);
 await b.close();
