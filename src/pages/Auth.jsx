@@ -143,7 +143,7 @@ export default function Auth() {
             <li><ShieldCheck size={18} />Batch & expiry tracking, drug information, audit trail, finance and reports built in</li>
           </ul>
         </div>
-        <small style={{ opacity: .6 }}>© {new Date().getFullYear()} RxPOS{isWeb && <> · <a href="#/owner" style={{ color: 'inherit' }}><Crown size={11} /> Owner</a></>}</small>
+        <small style={{ opacity: .6 }}>© {new Date().getFullYear()} RxPOS</small>
       </section>
       <div className="auth-side">
         <div className="auth-card">

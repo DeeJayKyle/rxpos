@@ -39,7 +39,7 @@ const errors = []; p.on('pageerror', (e) => errors.push(e.message));
 await owner('/tenants/' + t.id + '/users', { user: { id: (await owner('/tenants/' + t.id)).users?.find?.((u) => u.email === 'boss@test.rx')?.id, email: 'boss@test.rx', password: 'staff-pass-123' } });
 await p.goto(base + '/', { waitUntil: 'networkidle2' }); await wait(800);
 const footer = await p.evaluate(() => document.querySelector('.auth-hero small')?.innerText || '');
-check('front page link says "Owner" (no "console")', /Owner/.test(footer) && !/console/i.test(footer), footer);
+check('front page has no owner link (owners sign in with the normal form)', !/owner|console/i.test(footer) && !(await p.$('a[href="#/owner"]')), footer);
 await p.type('input[type=email]', 'boss@test.rx'); await p.type('input[type=password]', 'owner-pass-12345');
 await p.evaluate(() => [...document.querySelectorAll('button')].find((x) => x.textContent.includes('Sign in')).click());
 let ok = false; for (let i = 0; i < 40 && !ok; i++) { await wait(300); ok = await p.evaluate(() => location.hash.startsWith('#/owner') && /Kansanga Test Pharmacy/.test(document.body.innerText)); }
