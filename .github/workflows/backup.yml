@@ -1,0 +1,34 @@
+name: Nightly cloud backup
+
+# Every night at 02:00 Uganda time (23:00 UTC) the whole cloud is downloaded, encrypted with BACKUP_PASSPHRASE and kept
+# for 30 days as a download on this run (Actions → Nightly cloud backup → the run → Artifacts).
+# Needs repository secrets OWNER_KEY and BACKUP_PASSPHRASE. Restore with tools/restore.mjs (see MAINTENANCE.md).
+on:
+  schedule:
+    - cron: '0 23 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Download and encrypt
+        env:
+          RXPOS_API: https://pharmapos.pharmapos.workers.dev
+          OWNER_KEY: ${{ secrets.OWNER_KEY }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: node tools/backup.mjs backups
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rxpos-backup-${{ github.run_id }}
+          path: backups/*.rxbak
+          retention-days: 30
+          if-no-files-found: error

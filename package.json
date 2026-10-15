@@ -15,7 +15,10 @@
     "electron": "electron .",
     "electron:dev": "vite build && electron .",
     "dist:win": "vite build && electron-builder --win --publish never",
-    "hub": "node server/hub.mjs"
+    "hub": "node server/hub.mjs",
+    "test": "node tests/run-all.mjs",
+    "backup": "node tools/backup.mjs",
+    "restore": "node tools/restore.mjs"
   },
   "dependencies": {
     "@capacitor/android": "6.2.2",
@@ -38,6 +41,7 @@
     "@vitejs/plugin-react": "4.3.1",
     "electron": "31.4.0",
     "electron-builder": "24.13.3",
+    "puppeteer-core": "25.12.0",
     "vite": "5.4.8",
     "wrangler": "4.142.0"
   },

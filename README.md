@@ -175,6 +175,8 @@ outgoing IP, so Airtel calls go through a tiny relay (`relay/airtel-relay.mjs`) 
 
 ## Development
 
+**Running, changing, testing, releasing, backing up and restoring RxPOS: see [MAINTENANCE.md](MAINTENANCE.md).** `npm test` runs every automated check against a throw-away local cloud.
+
 ```bash
 npm install
 npm run dev          # web app at http://localhost:5173

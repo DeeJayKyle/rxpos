@@ -9,3 +9,7 @@ hub-data/
 .wrangler/
 android/
 .harness*
+tests/.state/
+tests/.output/
+backups/
+*.rxbak

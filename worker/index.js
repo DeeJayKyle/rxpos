@@ -20,6 +20,7 @@ import { createClient } from '@libsql/client/web';
 import { d1FromLibsql } from './libsql-d1.js';
 import { isOwner, ownerAuthRoutes, ownerAccount, verifyGoogle, getConfig } from './owner-auth.js';
 export { TenantHub } from './live.js';
+import { backup, restore } from './backup.js';
 
 // Database: Cloudflare D1 (binding DB) by default, or libSQL / Turso when DB_BACKEND = "turso"
 // (secrets TURSO_URL + TURSO_AUTH_TOKEN). The rest of the code doesn't know the difference.
@@ -564,6 +565,8 @@ async function owner(env, req, url, body) {
   const db = env.DB;
   const parts = url.pathname.split('/').slice(3).map(decodeURIComponent); // /api/owner/<...>
   if (parts[0] === 'move-to-turso') return moveToTurso(env, req, body);
+  if (parts[0] === 'backup' && req.method === 'GET') return backup(env, url, json);
+  if (parts[0] === 'restore' && req.method === 'POST') return restore(env, body, json);
   if (parts[0] === 'account') return ownerAccount(env, req, url, body || {}, { json });
   const view = async (t) => {
     const s = await db.prepare("SELECT COUNT(*) n, MAX(at) last, SUM(t = 'products' AND deleted = 0) products, SUM(t = 'users' AND deleted = 0) users, SUM(t = 'sales' AND deleted = 0) sales, SUM(t = 'branches' AND deleted = 0) branches FROM records WHERE tenant = ?1").bind(t.id).first();
@@ -656,6 +659,8 @@ async function owner(env, req, url, body) {
       db.prepare("DELETE FROM login_fail WHERE email LIKE ?1 || ':%'").bind(t.id),
       db.prepare("DELETE FROM reset_codes WHERE k LIKE ?1 || ':%'").bind(t.id),
     ]);
+    // its chat attachments go too (personal data must not outlive the pharmacy)
+    await db.batch([db.prepare('DELETE FROM file_chunks WHERE tenant = ?1').bind(t.id), db.prepare('DELETE FROM files WHERE tenant = ?1').bind(t.id)]).catch(() => {});
     return json({ ok: true, deleted: r.meta.changes || 0 });
   }
   if (sub === 'rotate-key' && req.method === 'POST') {
