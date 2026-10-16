@@ -22,7 +22,7 @@ Sign in to Rxtera, press F12 → Console, and paste from `browser-snippets.js`:
 
 | Open this Rxtera page | Paste | Saves |
 |---|---|---|
-| any page | section 0 (setup, with your token) then section 1 | `other`, `extra`, `logo` |
+| any page | section 0 (setup, with your token) then section 1 | `other`, `extra` (Rxtera's logo is never copied) |
 | `/quickedit` | 0, section 2, then `rxPaged('quickedit')` | stock batches (qty, cost, batch, expiry) |
 | `/costhistory` | 0, 2, then `rxPaged('costhistory')` | every delivery line |
 | `/medicine-list` | 0, section 3, then `rxMedicines()` | every medicine with prices |

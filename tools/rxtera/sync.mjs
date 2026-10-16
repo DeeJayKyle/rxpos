@@ -3,7 +3,7 @@
 //   e.g. node tools/rxtera/sync.mjs mcb-pharma mcb --mirror --dry
 //   reads   <data-folder>/*.json (a path, or a name under %LOCALAPPDATA%/Temp/rxm) saved by receiver.cjs — see README.md
 //   writes  the RxPOS cloud (RXPOS_API) through the owner API. Owner key: OWNER_KEY, or Documents/RxPOS-Data/RxPOS-OWNER-KEY.txt
-// Optional files (used when present): saleheads, creditnotes, purchaselines, purchaseheads, debitnotes, extra, stockcount-N, logo
+// Optional files (used when present): saleheads, creditnotes, purchaselines, purchaseheads, debitnotes, extra, stockcount-N (Rxtera's logo is never copied)
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -370,11 +370,5 @@ if (MIRROR) { // only Rxtera's medicines: switch off RxPOS's built-in standard c
   const list = await call(BASE); const t = (list.tenants || []).find((x) => x.id === TENANT);
   if (t && t.features?.catalog !== false) { await call(API, { method: 'POST', body: JSON.stringify({ features: { catalog: false } }) }); console.log('built-in catalog switched off'); }
 }
-// ---------- pharmacy look: Rxtera's logo, only if the pharmacy has none yet ----------
-if (exists('logo.json')) {
-  const list = await call(BASE);
-  const t = (list.tenants || []).find((x) => x.id === TENANT);
-  const logo = read('logo.json').data;
-  if (t && !t.branding?.logo && logo) { await call(API, { method: 'POST', body: JSON.stringify({ branding: { logo } }) }); console.log('logo set'); }
-}
+// Rxtera's logo is never copied into RxPOS (owner's decision, 16 Oct 2026): a logo.json in the folder is ignored.
 console.log('done');

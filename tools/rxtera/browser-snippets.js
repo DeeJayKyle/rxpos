@@ -29,8 +29,7 @@ window.rxSleep = (ms) => new Promise((r) => setTimeout(r, ms));
   };
   await rxSend('other', { customers: await grab('/customers'), suppliers: await grab('/suppliers'), users: await grab('/users'), expiry: await grab('/expiry'), expired: await grab('/expired'), creditReport: await grab('/reports/credit-report'), debitReport: await grab('/reports/debit-report') });
   await rxSend('extra', { formulations: await grab('/formulations'), banks: await grab('/bank'), loans: await grab('/loans'), deposits: await grab('/deposit'), expenses: await grab('/expenses'), expenseCategories: await grab('/expensescategory'), stockCounts: await grab('/stock/counting') });
-  const logo = document.querySelector('aside img, .brand-link img')?.src; // the pharmacy's logo
-  if (logo) { const b = await (await fetch(logo)).blob(); const data = await new Promise((r) => { const f = new FileReader(); f.onload = () => r(f.result); f.readAsDataURL(b); }); await rxSend('logo', { data }); }
+  // Rxtera's logo is never copied (owner's decision, 16 Oct 2026).
 })();
 
 // ── 2. pages with a "show N" list that pages with Next: open /quickedit, then /costhistory, and paste on each ──
