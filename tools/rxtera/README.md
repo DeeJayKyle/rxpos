@@ -48,7 +48,7 @@ node tools/rxtera/sync.mjs <rxpos-pharmacy-id> <data-folder> --new-only # only e
 - The owner key is taken from `OWNER_KEY`, or from `Documents/RxPOS-Data/RxPOS-OWNER-KEY.txt`.
 - Stock is set to exactly Rxtera's quantities. Past sales and purchases are history only (`imported: 'Rxtera'`):
   they count in reports but not in today's cash, and correcting them doesn't move stock.
-- `--new-only` (JBM's scheduled sync, 12 am / 12 pm / 8 pm) adds new sales, purchases, expenses, customers, suppliers,
+- `--new-only` (JBM's scheduled sync, 12 am / 10 am / 2 pm / 6 pm / 10 pm) adds new sales, purchases, expenses, customers, suppliers,
   medicines and batches (with opening stock for new batches). Existing records and existing stock are never touched.
 - `--mirror` keeps staff accounts, roles, settings, branches, chat and the audit trail; everything else that
   isn't in Rxtera is removed, and the built-in medicine catalog is switched off for that pharmacy.
