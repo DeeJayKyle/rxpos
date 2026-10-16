@@ -1,5 +1,5 @@
 // Rxtera → RxPOS pharmacy: everything Rxtera holds. Re-runnable: fixed ids, only changed records are written.
-// Usage: node tools/rxtera/sync.mjs <tenant-id> <data-folder> [--dry] [--all-medicines] [--mirror]
+// Usage: node tools/rxtera/sync.mjs <tenant-id> <data-folder> [--dry] [--all-medicines] [--mirror | --new-only]
 //   e.g. node tools/rxtera/sync.mjs mcb-pharma mcb --mirror --dry
 //   reads   <data-folder>/*.json (a path, or a name under %LOCALAPPDATA%/Temp/rxm) saved by receiver.cjs — see README.md
 //   writes  the RxPOS cloud (RXPOS_API) through the owner API. Owner key: OWNER_KEY, or Documents/RxPOS-Data/RxPOS-OWNER-KEY.txt
@@ -13,6 +13,9 @@ const DRY = process.argv.includes('--dry');
 const ALL_MEDS = process.argv.includes('--all-medicines') || process.argv.includes('--mirror');
 // --mirror: the pharmacy becomes an exact copy of Rxtera. Everything else is removed (staff, roles, settings, branches, chat and the audit trail stay)
 const MIRROR = process.argv.includes('--mirror');
+// --new-only: add only what RxPOS doesn't have yet (new sales, purchases, expenses, medicines, batches…); never edit or remove
+const NEW_ONLY = process.argv.includes('--new-only');
+if (NEW_ONLY && MIRROR) throw new Error('Use either --new-only or --mirror, not both');
 const [TENANT, FOLDER] = process.argv.slice(2).filter((a) => !a.startsWith('--'));
 if (!TENANT || !FOLDER) throw new Error('Usage: node tools/rxtera/sync.mjs <tenant-id> <data-folder> [--dry] [--all-medicines] [--mirror]');
 const BASE = (process.env.RXPOS_API || 'https://api.rxposug.com').replace(/\/+$/, '') + '/api/owner/tenants';
@@ -53,7 +56,8 @@ const loadTable = async (t) => { const rows = []; for (let off = 0; ; off += 50)
 const SENT = path.join(DIR, 'sent.json');
 const sent = { sales: {}, purchases: {}, ...(exists('sent.json') ? read('sent.json') : {}) };
 const cur = {};
-for (const t of ['products', 'batches', 'movements', 'suppliers', 'customers', 'formulations', 'expenseCategories', 'expenses', 'banks', 'audit', 'users']) cur[t] = await loadTable(t);
+// (--new-only never corrects existing stock, so it skips reading the long stock-movement history)
+for (const t of ['products', 'batches', 'movements', 'suppliers', 'customers', 'formulations', 'expenseCategories', 'expenses', 'banks', 'audit', 'users']) cur[t] = NEW_ONLY && t === 'movements' ? [] : await loadTable(t);
 const has = (t) => new Map((cur[t] || []).map((r) => [r.id, r]));
 const curProducts = has('products'), curBatches = has('batches'), curCust = has('customers'), curSupp = has('suppliers');
 
@@ -347,8 +351,31 @@ if (MIRROR) {
   for (const t of ['payments', 'loans', 'bankTx', 'proformas', 'purchaseOrders', 'prescriptions', 'transfers', 'catalogHidden']) for (const r of await loadTable(t)) drop(t, r.id);
 }
 
+// ---------- --new-only: only entries RxPOS doesn't have yet (owner's choice, 16 Oct 2026) ----------
+// Nothing already in RxPOS is changed or removed: no edits to old sales/purchases/expenses, no stock corrections.
+// New batches get their opening stock; existing batches keep the stock RxPOS has.
+if (NEW_ONLY) {
+  const known = (t) => {
+    if (t === 'sales' || t === 'purchases') return (id) => id in sent[t];
+    const ids = new Set((cur[t] || []).map((r) => r.id));
+    return (id) => ids.has(id);
+  };
+  const isKnown = {};
+  const newBatches = new Set(out.filter((o) => o.t === 'batches' && !curBatches.has(o.id)).map((o) => o.id));
+  const kept = out.filter((o) => {
+    if (o.deleted) return false;
+    if (o.t === 'movements') return o.rec.type === 'Opening stock' && newBatches.has(o.rec.batchId);
+    isKnown[o.t] = isKnown[o.t] || known(o.t);
+    return !isKnown[o.t](o.id);
+  });
+  out.length = 0;
+  out.push(...kept);
+  for (const k of Object.keys(stats)) delete stats[k];
+  for (const o of out) stats[o.t === 'movements' ? 'newBatchStock' : 'new ' + o.t] = (stats[o.t === 'movements' ? 'newBatchStock' : 'new ' + o.t] || 0) + 1;
+}
+
 // ---------- send ----------
-const order = ['payments', 'loans', 'bankTx', 'proformas', 'purchaseOrders', 'prescriptions', 'transfers', 'catalogHidden', 'formulations', 'products', 'batches', 'suppliers', 'customers', 'movements', 'expenseCategories', 'banks', 'expenses', 'audit', 'purchases', 'sales'];
+const order =['payments', 'loans', 'bankTx', 'proformas', 'purchaseOrders', 'prescriptions', 'transfers', 'catalogHidden', 'formulations', 'products', 'batches', 'suppliers', 'customers', 'movements', 'expenseCategories', 'banks', 'expenses', 'audit', 'purchases', 'sales'];
 out.sort((a, b) => order.indexOf(a.t) - order.indexOf(b.t));
 console.log(JSON.stringify({ medicines: names.size, stockBatches: target.size, rxteraInvoices: inv.size, saleLines: saleLines.length, toWrite: stats }));
 const unmatched = saleLines.filter((l) => l[4] && !pid.get(norm(l[4]))).length;
