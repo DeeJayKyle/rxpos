@@ -1,5 +1,5 @@
 // Rxtera → RxPOS pharmacy: everything Rxtera holds. Re-runnable: fixed ids, only changed records are written.
-// Usage: node tools/rxtera/sync.mjs <tenant-id> <data-folder> [--dry] [--all-medicines] [--mirror | --new-only]
+// Usage: node tools/rxtera/sync.mjs <tenant-id> <data-folder> [--dry] [--all-medicines] [--mirror | --new-only [--match-stock]]
 //   e.g. node tools/rxtera/sync.mjs mcb-pharma mcb --mirror --dry
 //   reads   <data-folder>/*.json (a path, or a name under %LOCALAPPDATA%/Temp/rxm) saved by receiver.cjs — see README.md
 //   writes  the RxPOS cloud (RXPOS_API) through the owner API. Owner key: OWNER_KEY, or Documents/RxPOS-Data/RxPOS-OWNER-KEY.txt
@@ -16,6 +16,10 @@ const MIRROR = process.argv.includes('--mirror');
 // --new-only: add only what RxPOS doesn't have yet (new sales, purchases, expenses, medicines, batches…); never edit or remove
 const NEW_ONLY = process.argv.includes('--new-only');
 if (NEW_ONLY && MIRROR) throw new Error('Use either --new-only or --mirror, not both');
+// --match-stock (with --new-only): also set every batch's stock to Rxtera's Quick Edit quantity (owner's choice, 17 Oct 2026).
+// Only stock movements are added; old sales, purchases and expenses are still never edited or removed.
+const MATCH_STOCK = NEW_ONLY && process.argv.includes('--match-stock');
+const MAX_STOCK_FIXES = 400; // more batches than this to correct in one run means something is off: stop (--force-stock to allow)
 const [TENANT, FOLDER] = process.argv.slice(2).filter((a) => !a.startsWith('--'));
 if (!TENANT || !FOLDER) throw new Error('Usage: node tools/rxtera/sync.mjs <tenant-id> <data-folder> [--dry] [--all-medicines] [--mirror]');
 const BASE = (process.env.RXPOS_API || 'https://api.rxposug.com').replace(/\/+$/, '') + '/api/owner/tenants';
@@ -56,8 +60,8 @@ const loadTable = async (t) => { const rows = []; for (let off = 0; ; off += 50)
 const SENT = path.join(DIR, 'sent.json');
 const sent = { sales: {}, purchases: {}, ...(exists('sent.json') ? read('sent.json') : {}) };
 const cur = {};
-// (--new-only never corrects existing stock, so it skips reading the long stock-movement history)
-for (const t of ['products', 'batches', 'movements', 'suppliers', 'customers', 'formulations', 'expenseCategories', 'expenses', 'banks', 'audit', 'users']) cur[t] = NEW_ONLY && t === 'movements' ? [] : await loadTable(t);
+// (--new-only without --match-stock never corrects existing stock, so it skips reading the long stock-movement history)
+for (const t of ['products', 'batches', 'movements', 'suppliers', 'customers', 'formulations', 'expenseCategories', 'expenses', 'banks', 'audit', 'users']) cur[t] = NEW_ONLY && !MATCH_STOCK && t === 'movements' ? [] : await loadTable(t);
 const has = (t) => new Map((cur[t] || []).map((r) => [r.id, r]));
 const curProducts = has('products'), curBatches = has('batches'), curCust = has('customers'), curSupp = has('suppliers');
 
@@ -353,7 +357,7 @@ if (MIRROR) {
 
 // ---------- --new-only: only entries RxPOS doesn't have yet (owner's choice, 16 Oct 2026) ----------
 // Nothing already in RxPOS is changed or removed: no edits to old sales/purchases/expenses, no stock corrections.
-// New batches get their opening stock; existing batches keep the stock RxPOS has.
+// New batches get their opening stock; existing batches keep the stock RxPOS has (unless --match-stock).
 if (NEW_ONLY) {
   const known = (t) => {
     if (t === 'sales' || t === 'purchases') return (id) => id in sent[t];
@@ -364,14 +368,19 @@ if (NEW_ONLY) {
   const newBatches = new Set(out.filter((o) => o.t === 'batches' && !curBatches.has(o.id)).map((o) => o.id));
   const kept = out.filter((o) => {
     if (o.deleted) return false;
-    if (o.t === 'movements') return o.rec.type === 'Opening stock' && newBatches.has(o.rec.batchId);
+    if (o.t === 'movements') return MATCH_STOCK || (o.rec.type === 'Opening stock' && newBatches.has(o.rec.batchId));
     isKnown[o.t] = isKnown[o.t] || known(o.t);
     return !isKnown[o.t](o.id);
   });
   out.length = 0;
   out.push(...kept);
   for (const k of Object.keys(stats)) delete stats[k];
-  for (const o of out) stats[o.t === 'movements' ? 'newBatchStock' : 'new ' + o.t] = (stats[o.t === 'movements' ? 'newBatchStock' : 'new ' + o.t] || 0) + 1;
+  const label = (o) => (o.t !== 'movements' ? 'new ' + o.t : newBatches.has(o.rec.batchId) ? 'newBatchStock' : 'stockMatched');
+  for (const o of out) stats[label(o)] = (stats[label(o)] || 0) + 1;
+  if ((stats.stockMatched || 0) > MAX_STOCK_FIXES && !process.argv.includes('--force-stock')) {
+    console.log(JSON.stringify({ toWrite: stats }));
+    throw new Error(`${stats.stockMatched} batches would get a stock correction (limit ${MAX_STOCK_FIXES}): check quickedit.json, nothing was written`);
+  }
 }
 
 // ---------- send ----------

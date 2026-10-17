@@ -43,13 +43,17 @@ node tools/rxtera/sync.mjs <rxpos-pharmacy-id> <data-folder> --dry      # shows 
 node tools/rxtera/sync.mjs <rxpos-pharmacy-id> <data-folder>            # stocked/sold medicines + history
 node tools/rxtera/sync.mjs <rxpos-pharmacy-id> <data-folder> --mirror   # exact copy: also removes what Rxtera doesn't have
 node tools/rxtera/sync.mjs <rxpos-pharmacy-id> <data-folder> --new-only # only entries RxPOS doesn't have yet; never edits or removes
+node tools/rxtera/sync.mjs <rxpos-pharmacy-id> <data-folder> --new-only --match-stock # same, and stock levels set to Rxtera's
 ```
 
 - The owner key is taken from `OWNER_KEY`, or from `Documents/RxPOS-Data/RxPOS-OWNER-KEY.txt`.
 - Stock is set to exactly Rxtera's quantities. Past sales and purchases are history only (`imported: 'Rxtera'`):
   they count in reports but not in today's cash, and correcting them doesn't move stock.
 - `--new-only` (JBM's scheduled sync, 12 am / 10 am / 2 pm / 6 pm / 10 pm) adds new sales, purchases, expenses, customers, suppliers,
-  medicines and batches (with opening stock for new batches). Existing records and existing stock are never touched.
+  medicines and batches (with opening stock for new batches). Existing records are never touched.
+- `--match-stock` (with `--new-only`; JBM since 17 Oct 2026) also adds "Stock sync" moves so every batch holds exactly
+  Rxtera's Quick Edit quantity (copied sales are history only and don't take stock off by themselves). Read `/quickedit`
+  on every run. It refuses to correct more than 400 batches in one go (`--force-stock` overrides).
 - `--mirror` keeps staff accounts, roles, settings, branches, chat and the audit trail; everything else that
   isn't in Rxtera is removed, and the built-in medicine catalog is switched off for that pharmacy.
 - `<data-folder>/sent.json` remembers what was already sent, so a refresh only writes changes. Don't delete it.
