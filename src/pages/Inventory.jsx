@@ -2,7 +2,7 @@ import { useState, useMemo, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Download, Barcode as BarcodeIcon, SlidersHorizontal, Save, Undo2, Pencil } from 'lucide-react';
 import { CrudPage, Tabs, Modal, SearchBox, Empty, PdfButton } from '../ui.jsx';
-import { useStore, daysUntil, put, move, addBatch, audit, downloadFile, toCSV, MAIN_BRANCH } from '../store.jsx';
+import { useStore, daysUntil, put, move, addBatch, audit, downloadFile, toCSV, batchValue, stockValue, MAIN_BRANCH } from '../store.jsx';
 import { ask, toast } from '../feedback.jsx';
 import { newInternalBarcode } from '../barcode.jsx';
 
@@ -97,16 +97,17 @@ export function StockLevels() {
   const rows = products.filter((p) =>
     (!q || `${p.name} ${p.generic} ${p.barcode} ${p.category}`.toLowerCase().includes(ql)) &&
     (filter === 'all' || (filter === 'instock' && p.stock > 0) || (filter === 'low' && p.stock <= (p.reorder || 0) && p.stock > 0) || (filter === 'out' && p.stock <= 0)));
-  const total = rows.reduce((a, p) => a + Math.max(p.stock, 0) * (p.cost || 0), 0);
+  const sv = useMemo(() => stockValue(rows, batchesOf), [rows, batchesOf]); // at each batch's cost, expired apart
+  const total = sv.value;
   const retail = rows.reduce((a, p) => a + Math.max(p.stock, 0) * (p.price || 0), 0);
   return (
     <div className="page">
       <div className="page-head">
-        <div><h1>Inventory</h1><div className="sub">{branch?.name} · {rows.length.toLocaleString()} items · {fmt(total)} at cost · {fmt(retail)} at retail</div></div>
+        <div><h1>Inventory</h1><div className="sub">{branch?.name} · {rows.length.toLocaleString()} items · {fmt(total)} at cost · {fmt(retail)} at retail{sv.expired > 0 && <> · <span className="text-danger">{fmt(sv.expired)} expired (not included)</span></>}</div></div>
         <div className="row gap">
           <SearchBox value={q} onChange={setQ} />
           <button className="btn ghost" onClick={() => downloadFile('inventory.csv', toCSV(rows.flatMap((p) => batchesOf(p.id).filter((b) => b.qty).map((b) => ({ name: p.name, generic: p.generic, form: p.form, batch: b.batch, expiry: b.expiry, qty: b.qty, cost: b.cost || p.cost, price: p.price, value: b.qty * (b.cost || p.cost) })))), 'text/csv')}><Download size={16} />CSV</button>
-          <PdfButton target={listRef} title={{ instock: 'Stock in hand', low: 'Low stock', out: 'Out of stock', all: 'All medicines' }[filter]} subtitle={`${branch?.name || ''} · ${rows.length} items · ${fmt(total)} at cost · ${fmt(retail)} at retail`} />
+          <PdfButton target={listRef} title={{ instock: 'Stock in hand', low: 'Low stock', out: 'Out of stock', all: 'All medicines' }[filter]} subtitle={`${branch?.name || ''} · ${rows.length} items · ${fmt(total)} at cost · ${fmt(retail)} at retail${sv.expired > 0 ? ` · ${fmt(sv.expired)} expired (not included)` : ''}`} />
         </div>
       </div>
       <Tabs tabs={[['instock', 'In stock'], ['low', 'Low stock'], ['out', 'Out of stock'], ['all', 'All']]} value={filter} onChange={setFilter} />
@@ -121,7 +122,7 @@ export function StockLevels() {
                 <td className="num">{p.reorder}</td>
                 <td className="num"><span className={p.stock <= 0 ? 'badge danger' : p.stock <= (p.reorder || 0) ? 'badge warn' : ''}>{p.stock}</span></td>
                 {multi && <td className="num muted">{p.totalStock}</td>}
-                <td className="num">{fmt(Math.max(p.stock, 0) * (p.cost || 0))}</td>
+                <td className="num">{(() => { const v = batchValue(p, batchesOf); return <>{fmt(v.value)}{v.expired > 0 && <><br /><small className="text-danger">+ {fmt(v.expired)} expired</small></>}</>; })()}</td>
                 {can('inventory.edit') && <td className="actions"><button className="btn sm ghost" onClick={(e) => { e.stopPropagation(); setEditing(p); }}><Pencil size={14} />Edit</button></td>}
               </tr>
             ))}

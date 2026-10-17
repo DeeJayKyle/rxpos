@@ -1,32 +1,31 @@
 import { useMemo, useState } from 'react';
 import { Building2, Truck, PackageCheck, Send, MapPin } from 'lucide-react';
-import { useStore, today, dayOf, uid, now, put, move, audit, allocate, MAIN_BRANCH } from '../store.jsx';
+import { useStore, today, dayOf, uid, now, put, move, audit, allocate, batchValue, MAIN_BRANCH } from '../store.jsx';
 import { Modal, Tabs, Empty, SearchBox, Stat } from '../ui.jsx';
 import { toast, ask } from '../feedback.jsx';
 
 /** Every branch side by side. Branches themselves are added and removed by the RxPOS owner (owner console). */
 export default function Branches() {
-  const { db, stockIndex, fmt, branchId, setBranchId } = useStore();
+  const { db, stockIndex, fmt, branchId, setBranchId, batchesOf } = useStore();
   const month = today().slice(0, 7);
 
   const stats = useMemo(() => {
-    const cost = new Map(db.products.map((p) => [p.id, p.cost || 0]));
     const reorder = new Map(db.products.map((p) => [p.id, p.reorder || 0]));
     return db.branches.map((b) => {
-      let stockValue = 0, low = 0;
+      let stockValue = 0, expired = 0, low = 0;
       for (const p of db.products) {
         const q = stockIndex.product.get(b.id + '|' + p.id) || 0;
-        stockValue += Math.max(q, 0) * cost.get(p.id);
+        if (q > 0) { const v = batchValue(p, batchesOf, b.id); stockValue += v.value; expired += v.expired; }
         if (q <= reorder.get(p.id)) low++;
       }
       const sales = db.sales.filter((s) => s.status !== 'refunded' && (s.branchId || MAIN_BRANCH) === b.id);
       const todays = sales.filter((s) => dayOf(s.date) === today());
       const monthly = sales.filter((s) => dayOf(s.date).slice(0, 7) === month);
-      return { ...b, stockValue, low, today: todays.reduce((a, s) => a + s.total, 0), todayN: todays.length, month: monthly.reduce((a, s) => a + s.total, 0) };
+      return { ...b, stockValue, expired, low, today: todays.reduce((a, s) => a + s.total, 0), todayN: todays.length, month: monthly.reduce((a, s) => a + s.total, 0) };
     });
-  }, [db.branches, db.products, db.sales, stockIndex, month]);
+  }, [db.branches, db.products, db.sales, stockIndex, batchesOf, month]);
 
-  const totals = stats.reduce((a, b) => ({ today: a.today + b.today, month: a.month + b.month, stock: a.stock + b.stockValue }), { today: 0, month: 0, stock: 0 });
+  const totals = stats.reduce((a, b) => ({ today: a.today + b.today, month: a.month + b.month, stock: a.stock + b.stockValue, expired: a.expired + b.expired }), { today: 0, month: 0, stock: 0, expired: 0 });
 
   return (
     <div className="page">
@@ -36,7 +35,7 @@ export default function Branches() {
       <div className="stats">
         <Stat label="Sales today – all branches" value={fmt(totals.today)} icon={Building2} tone="teal" />
         <Stat label="Sales this month" value={fmt(totals.month)} tone="violet" />
-        <Stat label="Stock value – all branches" value={fmt(totals.stock)} sub="at cost" />
+        <Stat label="Stock value – all branches" value={fmt(totals.stock)} sub={`at cost · expired ${fmt(totals.expired)} not included`} />
       </div>
       <div className="branch-grid">
         {stats.map((b) => (
@@ -45,7 +44,7 @@ export default function Branches() {
             {b.address && <p className="muted small"><MapPin size={12} /> {b.address}</p>}
             <div className="kv"><span>Today</span><strong>{fmt(b.today)}</strong><small className="muted">{b.todayN} sales</small></div>
             <div className="kv"><span>This month</span><strong>{fmt(b.month)}</strong></div>
-            <div className="kv"><span>Stock value</span><strong>{fmt(b.stockValue)}</strong></div>
+            <div className="kv"><span>Stock value</span><strong>{fmt(b.stockValue)}</strong>{b.expired > 0 && <small className="muted">+ {fmt(b.expired)} expired</small>}</div>
             <div className="kv"><span>Low / out of stock</span><strong className={b.low ? 'text-warn' : ''}>{b.low}</strong></div>
             {b.id === branchId ? <span className="badge ok">This device</span>
               : <button className="btn sm ghost" onClick={async () => (await ask({ title: `Switch this device to ${b.name}?`, message: 'Sales, stock and receipts on this device will be recorded for that branch.', confirmText: 'Switch' })) && (setBranchId(b.id), toast(`This device now works as ${b.name}`))}>Use on this device</button>}

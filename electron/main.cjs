@@ -65,7 +65,13 @@ if (HUB_MODE) {
 
   Menu.setApplicationMenu(
     Menu.buildFromTemplate([
-      { label: 'File', submenu: [{ role: 'reload' }, { type: 'separator' }, { role: 'quit' }] },
+      // Refresh = sync now and update the page in place (src/refresh.jsx); Reload app restarts the page
+      { label: 'File', submenu: [
+        { label: 'Refresh', accelerator: 'F5', click: (_i, w) => w?.webContents.executeJavaScript("window.dispatchEvent(new Event('rxpos-refresh'))").catch(() => {}) },
+        { label: 'Refresh', accelerator: 'CmdOrCtrl+R', visible: false, acceleratorWorksWhenHidden: true, click: (_i, w) => w?.webContents.executeJavaScript("window.dispatchEvent(new Event('rxpos-refresh'))").catch(() => {}) },
+        { label: 'Reload app', accelerator: 'CmdOrCtrl+Shift+R', click: (_i, w) => w?.webContents.reloadIgnoringCache() },
+        { type: 'separator' }, { role: 'quit' },
+      ] },
       { label: 'View', submenu: [{ role: 'zoomIn' }, { role: 'zoomOut' }, { role: 'resetZoom' }, { role: 'togglefullscreen' }, { role: 'toggleDevTools' }] },
     ])
   );

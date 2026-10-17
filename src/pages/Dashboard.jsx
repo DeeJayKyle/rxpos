@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Banknote, Wallet, CalendarClock, PackageX, Pill, Coins, Users, ShoppingCart, ReceiptText, Share2, Megaphone } from 'lucide-react';
-import { useStore, today, localDate, dayOf, isLowStock, expiryCounts, MAIN_BRANCH } from '../store.jsx';
+import { useStore, today, localDate, dayOf, isLowStock, expiryCounts, stockValue, MAIN_BRANCH } from '../store.jsx';
 import { Stat, BarChart, AreaChart, Empty } from '../ui.jsx';
 import { useInsights, shareText } from '../engage.jsx';
 import { whatsappLink } from '../cloud.js';
@@ -41,7 +41,8 @@ export default function Dashboard() {
   // only medicines in stock: every batch with stock left is checked, not just the next one to sell
   const exp = useMemo(() => expiryCounts(products, batchesOf, warn), [products, batchesOf, warn, day]); // eslint-disable-line react-hooks/exhaustive-deps
   const lowStock = products.filter(isLowStock);
-  const stockValue = products.reduce((a, p) => a + Math.max(p.stock, 0) * (p.cost || 0), 0);
+  // at each batch's own cost, expired stock not included (shown apart)
+  const sv = useMemo(() => stockValue(products, batchesOf), [products, batchesOf, day]); // eslint-disable-line react-hooks/exhaustive-deps
   const year = new Date().getFullYear();
   const monthRows = MONTHS.map((name, i) => ({ name, k: `${year}-${String(i + 1).padStart(2, '0')}` })).filter((r) => r.k <= today().slice(0, 7)).reverse();
   const last6 = Array.from({ length: 6 }, (_, i) => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 5 + i); return localDate(d).slice(0, 7); });
@@ -102,7 +103,7 @@ export default function Dashboard() {
 
       <div className="stats">
         <Stat to="/medicines" label="Products" value={products.length.toLocaleString()} icon={Pill} />
-        <Stat to="/inventory" label="Inventory value" value={fmt(stockValue)} sub="at cost price" icon={Coins} />
+        <Stat to="/inventory" label="Inventory value" value={fmt(sv.value)} sub={`at cost · expired ${fmt(sv.expired)} not included`} icon={Coins} />
         <Stat to="/customers" label="Customers" value={db.customers.length.toLocaleString()} icon={Users} />
         <Stat to="/sales" state={{ from: today().slice(0, 7) + '-01', to: today() }} label="This month" value={fmt(m.byMonth[today().slice(0, 7)]?.total)} sub={`${m.byMonth[today().slice(0, 7)]?.n || 0} sales`} icon={ReceiptText} />
       </div>

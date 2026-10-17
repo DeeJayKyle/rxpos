@@ -104,6 +104,7 @@ const cors = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'Authorization, Content-Type',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Max-Age': '86400', // browsers remember the permission check for a day: one round trip less per sync
 };
 const json = (body, status = 200) =>
   new Response(typeof body === 'string' ? body : JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...cors } });
@@ -411,15 +412,22 @@ async function sync(env, body, who) {
   }
   let applied = 0;
   if (stmts.length) for (const r of await db.batch(stmts)) applied += r.meta.changes || 0;
-  if (applied && env.HUB) await env.HUB.get(env.HUB.idFromName(tenant)).fetch('https://hub/notify', { method: 'POST', body: JSON.stringify({ from: deviceId }) }).catch(() => {});
+  // Tell the pharmacy's other devices to pull, while this reply is being prepared (not one after the other)
+  const notified = applied && env.HUB ? env.HUB.get(env.HUB.idFromName(tenant)).fetch('https://hub/notify', { method: 'POST', body: JSON.stringify({ from: deviceId }) }).catch(() => {}) : null;
 
-  const { results } = await db
-    .prepare('SELECT t, id, rec, deleted, at, seq FROM records WHERE tenant = ?1 AND seq > ?2 AND origin IS NOT ?3 ORDER BY seq LIMIT ?4')
-    .bind(tenant, Number(since) || 0, deviceId, PAGE + 1)
-    .all();
+  // The page of changes and the latest sequence number are read in one transaction: one round trip to the database
+  // instead of two, and both see the same moment (a record saved in between can't be skipped)
+  const [pageRes, maxRes] = await db.batch([
+    db.prepare('SELECT t, id, rec, deleted, at, seq FROM records WHERE tenant = ?1 AND seq > ?2 AND origin IS NOT ?3 ORDER BY seq LIMIT ?4')
+      .bind(tenant, Number(since) || 0, deviceId, PAGE + 1),
+    db.prepare('SELECT MAX(seq) m FROM records WHERE tenant = ?1').bind(tenant),
+  ], 'read');
+  const results = pageRes.results || [];
+  const maxSeq = maxRes.results?.[0]?.m;
   const more = results.length > PAGE;
   const page = more ? results.slice(0, PAGE) : results;
-  const cursor = more ? page[page.length - 1].seq : Math.max((await db.prepare('SELECT MAX(seq) m FROM records WHERE tenant = ?1').bind(tenant).first('m')) || 0, Number(since) || 0);
+  const cursor = more ? page[page.length - 1].seq : Math.max(maxSeq || 0, Number(since) || 0);
+  await notified;
   // Build the response by hand so records stored as JSON text are not parsed and re-serialised (keeps CPU low)
   const items = page.map((r) => `{"t":${JSON.stringify(r.t)},"id":${JSON.stringify(r.id)},"at":${JSON.stringify(r.at)},"deleted":${r.deleted ? 'true' : 'false'},"rec":${r.rec ?? 'null'}}`);
   return json(`{"changes":[${items.join(',')}],"cursor":${cursor},"more":${more},"applied":${applied},"refused":${refused},"tenant":${JSON.stringify(tenant)}}`);

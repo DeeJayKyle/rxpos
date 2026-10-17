@@ -1,16 +1,20 @@
 // One live WebSocket per device to the pharmacy's cloud hub (see worker/live.js).
 // Brings instant "something changed, pull now" notices and call set-up messages. If it drops, RxPOS falls back to
 // regular syncing and polling, and reconnects in the background.
+// Phones and sleeping PCs often leave a socket that looks open but is dead, so it is pinged every 20 s and replaced if
+// no answer comes back within 15 s; coming back to the app (or the internet returning) reconnects straight away.
 import { LIVE_CLOUD, OWN_SITES } from './cloud.js';
 
+const PING_EVERY = 20000;
+const DEAD_AFTER = 15000;
 const listeners = new Set();
-let ws = null, cfgKey = '', retry = 0, timer = null, pinger = null, wanted = false;
+let ws = null, cfgKey = '', retry = 0, timer = null, pinger = null, wanted = false, lastHeard = 0, openFn = null;
 
 /** WebSockets go straight to the Worker (the Pages site only forwards normal requests) */
 const liveBase = (url) => (OWN_SITES.includes(String(url).replace(/\/+$/, '')) ? LIVE_CLOUD : url).replace(/^http/, 'ws');
 
 export const onLive = (fn) => { listeners.add(fn); return () => listeners.delete(fn); };
-export const liveUp = () => ws?.readyState === 1;
+export const liveUp = () => ws?.readyState === 1 && Date.now() - lastHeard < PING_EVERY + DEAD_AFTER;
 export function liveSend(obj) {
   if (!liveUp()) return false;
   try { ws.send(JSON.stringify(obj)); return true; } catch { return false; }
@@ -24,22 +28,33 @@ export function connectLive(cfg) {
   if (!key) return;
   wanted = true;
   const open = () => {
-    timer = null;
-    if (!wanted || !navigator.onLine) { timer = setTimeout(open, 5000); return; }
+    clearTimeout(timer); timer = null;
+    if (!wanted) return;
+    if (!navigator.onLine) { timer = setTimeout(open, 5000); return; }
     const u = `${liveBase(cfg.url)}/api/live?token=${encodeURIComponent(cfg.key)}&device=${encodeURIComponent(cfg.deviceId || '')}`;
     let s;
     try { s = new WebSocket(u); } catch { timer = setTimeout(open, 10000); return; }
     ws = s;
     s.onopen = () => {
       retry = 0;
+      lastHeard = Date.now();
       listeners.forEach((f) => f({ type: 'open' }));
       clearInterval(pinger);
-      pinger = setInterval(() => { try { s.send('ping'); } catch {} }, 45000); // keeps mobile networks from dropping the line
+      pinger = setInterval(() => {
+        if (Date.now() - lastHeard > PING_EVERY + DEAD_AFTER) { try { s.close(); } catch {} return; } // silent line: replace it
+        try { s.send('ping'); } catch {}
+      }, PING_EVERY);
     };
-    s.onmessage = (e) => { if (e.data === 'pong') return; let m; try { m = JSON.parse(e.data); } catch { return; } listeners.forEach((f) => f(m)); };
+    s.onmessage = (e) => {
+      lastHeard = Date.now();
+      if (e.data === 'pong') return;
+      let m; try { m = JSON.parse(e.data); } catch { return; }
+      listeners.forEach((f) => f(m));
+    };
     s.onclose = () => {
       clearInterval(pinger);
-      if (ws === s) ws = null;
+      if (ws !== s && ws !== null) return; // an old line closing after it was replaced
+      ws = null;
       listeners.forEach((f) => f({ type: 'closed' }));
       if (wanted) timer = setTimeout(open, Math.min(30000, 1000 * 2 ** retry++));
     };
@@ -48,10 +63,17 @@ export function connectLive(cfg) {
   openFn = open;
   open();
   window.addEventListener('online', reconnectNow);
+  document.addEventListener('visibilitychange', onVisible);
 }
-let openFn = null;
+
 /** Internet is back: try again straight away instead of waiting for the back-off */
-function reconnectNow() { if (wanted && !ws && openFn) { clearTimeout(timer); retry = 0; openFn(); } }
+function reconnectNow() { if (wanted && openFn && !liveUp()) { if (ws) { const s = ws; ws = null; try { s.close(); } catch {} } retry = 0; openFn(); } }
+/** Back to the app (phone unlocked, window restored): check the line at once */
+function onVisible() {
+  if (document.visibilityState !== 'visible' || !wanted) return;
+  if (!liveUp()) reconnectNow();
+  else try { ws.send('ping'); } catch {}
+}
 
 export function disconnectLive() {
   wanted = false;
@@ -59,4 +81,5 @@ export function disconnectLive() {
   if (ws) { const s = ws; ws = null; try { s.close(); } catch {} }
   cfgKey = ''; openFn = null;
   window.removeEventListener('online', reconnectNow);
+  document.removeEventListener('visibilitychange', onVisible);
 }

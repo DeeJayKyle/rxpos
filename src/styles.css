@@ -894,3 +894,12 @@ td.scan-check { background: var(--warn-soft); }
 .pharmacy-choice.current { border-color: var(--primary); }
 .pharmacy-choice .grow { display: grid; }
 .pharmacy-choice svg { color: var(--primary); flex: none; }
+
+/* Pull-to-refresh (Android app, touch screens) and F5 refresh indicator — src/refresh.jsx */
+.ptr { position: fixed; top: calc(env(safe-area-inset-top, 0px) - 34px); left: 50%; z-index: 90; width: 44px; height: 44px; border-radius: 50%;
+  background: var(--surface); border: 1px solid var(--border); box-shadow: 0 6px 20px -6px rgba(0, 0, 0, .35); display: grid; place-items: center;
+  color: var(--primary); pointer-events: none; transition: opacity .15s; }
+.ptr-hint { position: absolute; top: 50px; font-size: 11px; font-weight: 600; color: var(--muted, #64748b); white-space: nowrap; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0; }
+/* the Android app draws its own pull-to-refresh, so stop the WebView's overscroll glow from fighting it */
+html.is-android, html.is-android body { overscroll-behavior-y: contain; }

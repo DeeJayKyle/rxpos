@@ -53,6 +53,21 @@ export function expiryBatches(products, batchesOf, warn) {
   const byExpiry = (a, b) => a.expiry.localeCompare(b.expiry);
   return { soon: soon.sort(byExpiry), expired: expired.sort(byExpiry) };
 }
+/** Stock value of one medicine at each batch's own cost (the medicine's cost if a batch has none); expired stock kept apart */
+export function batchValue(p, batchesOf, br) {
+  let value = 0, expired = 0;
+  for (const b of batchesOf(p.id, br)) {
+    if (!(b.qty > 0)) continue;
+    const v = b.qty * (b.cost || p.cost || 0);
+    if (b.expiry && daysUntil(b.expiry) < 0) expired += v; else value += v;
+  }
+  return { value, expired };
+}
+/** Inventory value of many medicines: { value (not expired), expired } */
+export const stockValue = (products, batchesOf, br) => products.reduce((a, p) => {
+  const v = batchValue(p, batchesOf, br);
+  return { value: a.value + v.value, expired: a.expired + v.expired };
+}, { value: 0, expired: 0 });
 /** Number of different medicines with stock expiring soon / already expired */
 export const expiryCounts = (products, batchesOf, warn) => {
   const { soon, expired } = expiryBatches(products, batchesOf, warn);
@@ -268,9 +283,12 @@ export function mergeRemote(db, changes) {
     } else if (local) d[ch.t][i] = { ...ch.rec, updatedAt: ch.at };
     else { d[ch.t].push({ ...ch.rec, updatedAt: ch.at }); index[ch.t].set(ch.id, d[ch.t].length - 1); }
   }
-  // newest first, like local inserts
-  ['sales', 'purchases', 'expenses', 'payments', 'bankTx', 'proformas', 'prescriptions', 'transfers', 'audit', 'purchaseOrders'].forEach((t) =>
-    d[t].sort((a, b) => String(b.date || '').localeCompare(String(a.date || ''))));
+  // newest first, like local inserts (only the lists that received something: re-sorting 40,000 sales on every
+  // small sync made phones lag)
+  const touched = new Set(changes.map((c) => c.t));
+  ['sales', 'purchases', 'expenses', 'payments', 'bankTx', 'proformas', 'prescriptions', 'transfers', 'audit', 'purchaseOrders'].forEach((t) => {
+    if (touched.has(t)) d[t].sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+  });
   return d;
 }
 
@@ -346,9 +364,16 @@ export function StoreProvider({ children }) {
     idbSet('sync', cfg).catch(console.error);
   }, []);
 
-  // Every local change is pushed to the cloud a moment later (debounced), so other devices see it within seconds
+  // Every local change is pushed to the cloud almost at once (0.4 s, so a burst of edits goes up together; never
+  // later than 1.5 s after the first one), and other devices are told over the live connection to pull it
   const pushTimer = useRef(null);
-  const queuePush = useCallback(() => { clearTimeout(pushTimer.current); pushTimer.current = setTimeout(() => syncRef.current?.run(), 1500); }, []);
+  const pushFirst = useRef(0);
+  const queuePush = useCallback(() => {
+    clearTimeout(pushTimer.current);
+    if (!pushFirst.current) pushFirst.current = Date.now();
+    const wait = Math.max(0, Math.min(400, 1500 - (Date.now() - pushFirst.current)));
+    pushTimer.current = setTimeout(() => { pushFirst.current = 0; syncRef.current?.run(); }, wait);
+  }, []);
   const update = useCallback((fn) => { setDb((prev) => { const d = draft(prev); fn(d); return d; }); queuePush(); }, [queuePush]);
   const upsert = useCallback((table, rec) => update((d) => { put(d, table, rec); }), [update]);
   const remove = useCallback((table, id) => update((d) => { del(d, table, id); }), [update]);
@@ -387,7 +412,7 @@ export function StoreProvider({ children }) {
     if (!syncCfg?.key?.startsWith('u.') || !user) { disconnectLive(); return; }
     connectLive(syncCfg);
     let t;
-    const off = onLive((m) => { if (m.type === 'changed' || m.type === 'open') { clearTimeout(t); t = setTimeout(() => syncRef.current?.run(), 250); } });
+    const off = onLive((m) => { if (m.type === 'changed' || m.type === 'open') { clearTimeout(t); t = setTimeout(() => syncRef.current?.run(), 30); } });
     return () => { off(); clearTimeout(t); };
   }, [syncCfg?.url, syncCfg?.key, syncCfg?.deviceId, !!user]); // eslint-disable-line react-hooks/exhaustive-deps
 

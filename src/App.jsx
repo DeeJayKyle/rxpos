@@ -17,6 +17,7 @@ import { CallManager } from './calls.jsx';
 import { WeeklyPopup } from './pages/Weekly.jsx';
 import { AutoReorder } from './reorder.js';
 import { isWeb } from './platform.js';
+import RefreshHost from './refresh.jsx';
 import { applyTheme, savedTheme, saveTheme, allowedThemes } from './themes.js';
 const OwnerConsole = lazy(() => import('./pages/OwnerConsole.jsx'));
 
@@ -242,7 +243,7 @@ function CommandPalette({ open, onClose, pages }) {
 }
 
 function Shell() {
-  const { db, products, user, setUser, branchId, branch, update } = useStore();
+  const { db, products, user, setUser, branchId, branch, update, syncNow } = useStore();
   const navigate = useNavigate();
   const location = useLocation();
   const [theme, setTheme] = useTheme();
@@ -357,6 +358,7 @@ function Shell() {
       </nav>
       <CommandPalette open={palette} onClose={() => setPalette(false)} pages={pages} />
       <Spotlight />
+      <RefreshHost refresh={syncNow} />
       <HourlyReminder />
       <AlertWatcher />
       <MessageWatcher />

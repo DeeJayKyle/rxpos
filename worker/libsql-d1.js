@@ -20,10 +20,10 @@ class Statement {
 export function d1FromLibsql(client) {
   return {
     prepare: (sql) => new Statement(client, sql),
-    // D1 runs a batch as one transaction; so does libSQL's batch in "write" mode
-    async batch(stmts) {
+    // D1 runs a batch as one transaction; so does libSQL's batch ("write" by default, "read" for read-only batches)
+    async batch(stmts, mode = 'write') {
       if (!stmts.length) return [];
-      const out = await client.batch(stmts.map((s) => s.stmt), 'write');
+      const out = await client.batch(stmts.map((s) => s.stmt), mode);
       return out.map((rs) => ({ results: toObjects(rs), meta: { changes: rs.rowsAffected } }));
     },
   };
