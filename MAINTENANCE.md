@@ -135,10 +135,28 @@ Renewal is yearly: turn on auto-renew in Cloudflare → Domain Registration.
 
 ## 10. Limits and health
 
-* Free plans: Cloudflare Workers 100,000 requests/day (an idle device uses about 3,000/day), Turso about 10 million
-  writes/month, Workers AI a daily free allowance. For several busy branches move to Workers Paid (US$5/month).
+* Free plans: Cloudflare Workers 100,000 requests/day (a device on the live connection uses about 3,000/day; one with
+  the app open but no live connection checks every 5 s, up to ~17,000/day), Turso about 10 million writes/month,
+  Workers AI a daily free allowance. For several busy branches move to Workers Paid (US$5/month).
 * Health: `https://api.rxposug.com/api/health`. Live logs: `npx wrangler tail`.
   Usage: Cloudflare dashboard → Workers → pharmapos → Metrics; Turso → app.turso.tech → Usage.
+* **Uptime monitor** (`worker/uptime.js`, Worker cron every 5 minutes): checks the database and rxposug.com /
+  www.rxposug.com and emails the owner email (owner console → Account) when something breaks, hourly while it stays
+  broken, and when it works again. Test email: `POST /api/owner/uptime-test` with the owner key. State is the
+  `uptime` row in `owner_config`. It runs on Cloudflare, so it cannot report a full Cloudflare outage
+  (watch https://www.cloudflarestatus.com, or add an outside monitor such as Uptime Kuma on another server).
+
+## 10b. How fast sync works (src/sync.js, src/live.js, worker/live.js)
+
+* A change is pushed 0.4 s after it is made (never later than 1.5 s after the first of a burst), straight to
+  `api.rxposug.com` (the website only forwards /api, so the apps skip it). The Worker writes it and tells the
+  pharmacy's other devices over their live WebSocket (`TenantHub` Durable Object); they pull at once.
+* The live line is pinged every 20 s; no answer within 15 s → it is replaced. Coming back to the app, the window
+  getting focus or the internet returning reconnects and pulls straight away. Without a live line the app checks
+  every 5 s while open, every 60 s in the background.
+* Refresh by hand (`src/refresh.jsx`): **Android** pull down from the top of a page; **Windows** F5 / Ctrl+R or
+  File → Refresh (sync in place), Ctrl+Shift+R reloads the app; **web** the browser's own refresh. The clock pill in
+  the top bar also syncs when clicked.
 
 ## 11. Known quirks
 
@@ -149,4 +167,7 @@ Renewal is yearly: turn on auto-renew in Cloudflare → Domain Registration.
 
 ## 12. Copying a pharmacy from Rxtera
 
-See `tools/rxtera/README.md`.
+See `tools/rxtera/README.md`. JBM PHARMACY (`rxposug.com/jbm`, pharmacy id `mcb-pharma`) is refreshed **only when
+the owner asks** (no schedule): `node tools/rxtera/sync.mjs mcb-pharma <data-folder> --new-only --match-stock` adds
+new sales, purchases and expenses and keeps stock equal to Rxtera's non-expired stock; nothing older is edited or
+deleted and Rxtera's logo is never copied.
