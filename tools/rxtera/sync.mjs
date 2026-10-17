@@ -142,6 +142,9 @@ for (const [k, { name, generic }] of names) {
 // ---------- batches + stock (RxPOS stock is set to exactly what Rxtera holds) ----------
 const arrival = new Map(ch.map((r) => [norm(r[0]) + '|' + r[2] + '|' + r[6], r[8]]));
 const target = new Map(); // batchId → qty
+// --match-stock: expired batches are written off in RxPOS, so their stock is kept at 0 (owner's decision, 17 Oct 2026)
+const UG_TODAY = new Date(Date.now() + 3 * 3600e3).toISOString().slice(0, 10);
+const isExpired = (e) => MATCH_STOCK && /^\d{4}-\d{2}-\d{2}/.test(String(e || '')) && String(e).slice(0, 10) < UG_TODAY;
 // the same batch can appear more than once in Rxtera (separate deliveries): one batch here, weighted cost
 const qeAgg = new Map();
 for (const r of qe) { const key = norm(r[0]) + '|' + r[4] + '|' + r[6]; const g = qeAgg.get(key); if (!g) qeAgg.set(key, [...r]); else { const q = num(g[5]) + num(r[5]); g[3] = q ? (num(g[3]) * num(g[5]) + num(r[3]) * num(r[5])) / q : num(r[3]); g[5] = q; } }
@@ -151,9 +154,19 @@ for (const r of qeAgg.values()) {
   const key = k + '|' + r[4] + '|' + r[6];
   const id = 'rx-b-' + h(key);
   batchByKey.set(key, id);
-  target.set(id, num(r[5]));
+  target.set(id, isExpired(r[6]) ? 0 : num(r[5]));
   const rec = { id, productId: pid.get(k), batch: r[4] || 'RX', expiry: r[6] || '', cost: r2(num(r[3])), received: arrival.get(key) || TODAY };
   if (!same(curBatches.get(id), rec, ['productId', 'batch', 'expiry', 'cost']) && !out.some((o) => o.id === id)) { out.push({ t: 'batches', id, rec }); bump('batches'); }
+}
+// --match-stock: batches Rxtera holds but leaves out of Quick Edit still count (taken from the delivery list's "Qty Available")
+if (MATCH_STOCK) for (const r of ch) {
+  const k = norm(r[0]), key = k + '|' + r[2] + '|' + r[6];
+  if (batchByKey.has(key) || !(num(r[4]) > 0) || !pid.get(k)) continue;
+  const id = 'rx-b-' + h(key);
+  batchByKey.set(key, id);
+  target.set(id, isExpired(r[6]) ? 0 : num(r[4]));
+  const rec = { id, productId: pid.get(k), batch: r[2] || 'RX', expiry: r[6] || '', cost: r2(num(r[3])), received: r[8] || TODAY };
+  if (!same(curBatches.get(id), rec, ['productId', 'batch', 'expiry', 'cost'])) { out.push({ t: 'batches', id, rec }); bump('batches'); }
 }
 // mirror: only stock moves made by this tool for batches Rxtera still holds count; every other move is removed
 const keptMoves = MIRROR ? (cur.movements || []).filter((m) => String(m.id).startsWith('rx-m-') && target.has(m.batchId)) : cur.movements || [];
@@ -387,6 +400,7 @@ if (NEW_ONLY) {
 const order =['payments', 'loans', 'bankTx', 'proformas', 'purchaseOrders', 'prescriptions', 'transfers', 'catalogHidden', 'formulations', 'products', 'batches', 'suppliers', 'customers', 'movements', 'expenseCategories', 'banks', 'expenses', 'audit', 'purchases', 'sales'];
 out.sort((a, b) => order.indexOf(a.t) - order.indexOf(b.t));
 console.log(JSON.stringify({ medicines: names.size, stockBatches: target.size, rxteraInvoices: inv.size, saleLines: saleLines.length, toWrite: stats }));
+if (process.env.SHOW_STOCK) for (const o of out) if (o.t === 'movements' || o.t === 'batches') console.log(o.t, o.id, JSON.stringify(o.rec).slice(0, 200));
 const unmatched = saleLines.filter((l) => l[4] && !pid.get(norm(l[4]))).length;
 if (unmatched) console.log('sale lines without a medicine:', unmatched);
 if (DRY) process.exit(0);
