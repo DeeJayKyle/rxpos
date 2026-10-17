@@ -21,6 +21,7 @@ import { d1FromLibsql } from './libsql-d1.js';
 import { isOwner, ownerAuthRoutes, ownerAccount, verifyGoogle, getConfig, ownerMainLogin, ownerMainFail } from './owner-auth.js';
 export { TenantHub } from './live.js';
 import { backup, restore } from './backup.js';
+import { uptimeCheck } from './uptime.js';
 
 // Database: Cloudflare D1 (binding DB) by default, or libSQL / Turso when DB_BACKEND = "turso"
 // (secrets TURSO_URL + TURSO_AUTH_TOKEN). The rest of the code doesn't know the difference.
@@ -590,6 +591,7 @@ async function owner(env, req, url, body) {
   if (parts[0] === 'backup' && req.method === 'GET') return backup(env, url, json);
   if (parts[0] === 'restore' && req.method === 'POST') return restore(env, body, json);
   if (parts[0] === 'account') return ownerAccount(env, req, url, body || {}, { json });
+  if (parts[0] === 'uptime-test' && req.method === 'POST') return json(await uptimeCheck(env, { test: true }));
   const view = async (t) => {
     const s = await db.prepare("SELECT COUNT(*) n, MAX(at) last, SUM(t = 'products' AND deleted = 0) products, SUM(t = 'users' AND deleted = 0) users, SUM(t = 'sales' AND deleted = 0) sales, SUM(t = 'branches' AND deleted = 0) branches FROM records WHERE tenant = ?1").bind(t.id).first();
     const secrets = JSON.parse(t.secrets || '{}');
@@ -1014,8 +1016,10 @@ async function calendarFeed(env, tenant) {
 }
 
 export default {
-  // Weekly: use the Brevo key once so Brevo never disables it for 90 days of inactivity (password emails are rare)
+  // Every 5 minutes: uptime watch (worker/uptime.js). Mondays 06:00 UTC: use the Brevo key once so Brevo never
+  // disables it for 90 days of inactivity (password emails are rare).
   async scheduled(event, env, ctx) {
+    if (event.cron !== '0 6 * * 1') { ctx.waitUntil(uptimeCheck(withDatabase(env)).then((r) => console.log('uptime', JSON.stringify(r))).catch((e) => console.log('uptime check failed', e.message))); return; }
     if (env.BREVO_API_KEY) ctx.waitUntil(fetch('https://api.brevo.com/v3/account', { headers: { 'api-key': env.BREVO_API_KEY, Accept: 'application/json' } }).then((r) => console.log('brevo keep-alive', r.status)).catch((e) => console.log('brevo keep-alive failed', e.message)));
   },
   async fetch(req, rawEnv) {
