@@ -7,6 +7,9 @@ import { connectLive, disconnectLive, onLive } from './live.js';
 import { DEFAULT_CLOUD } from './cloud.js';
 
 const SESSION_KEY = 'pharmapos-session';
+// "Remember me": the sign-in survives closing the app on this device for 30 days (otherwise it ends with the session)
+const REMEMBER_KEY = 'rxpos-remember';
+const REMEMBER_DAYS = 30;
 
 // Every synced table. Records carry `updatedAt`; deletions leave a tombstone in `_tomb`.
 export const TABLES = [
@@ -309,7 +312,14 @@ export function StoreProvider({ children }) {
   const [syncCfg, setSyncCfgState] = useState(null);
   const [syncStatus, setSyncStatus] = useState({ state: 'off' });
   const [user, setUserState] = useState(() => {
-    try { return JSON.parse(sessionStorage.getItem(SESSION_KEY)); } catch { return null; }
+    try {
+      const s = JSON.parse(sessionStorage.getItem(SESSION_KEY));
+      if (s) return s;
+      const r = JSON.parse(localStorage.getItem(REMEMBER_KEY));
+      if (r?.user && r.until > Date.now()) return r.user;
+      localStorage.removeItem(REMEMBER_KEY);
+    } catch { /* storage blocked */ }
+    return null;
   });
   const dbRef = useRef(null);
   dbRef.current = db;
@@ -392,11 +402,14 @@ export function StoreProvider({ children }) {
   const branchId = syncCfg?.branchId || MAIN_BRANCH;
   const setBranchId = useCallback((id) => saveSyncCfg({ ...cfgRef.current, branchId: id }), [saveSyncCfg]);
 
-  const setUser = useCallback((u) => {
+  const setUser = useCallback((u, { remember } = {}) => {
     try {
-      if (u) sessionStorage.setItem(SESSION_KEY, JSON.stringify(u));
-      else sessionStorage.removeItem(SESSION_KEY);
-    } catch {}
+      if (u) {
+        sessionStorage.setItem(SESSION_KEY, JSON.stringify(u));
+        if (remember) localStorage.setItem(REMEMBER_KEY, JSON.stringify({ user: u, until: Date.now() + REMEMBER_DAYS * 864e5 }));
+        else if (remember === false) localStorage.removeItem(REMEMBER_KEY);
+      } else { sessionStorage.removeItem(SESSION_KEY); localStorage.removeItem(REMEMBER_KEY); } // signing out always forgets
+    } catch { /* storage blocked */ }
     if (u && !user) update((d) => audit(d, u, 'Signed in', platformName, branchId));
     setUserState(u);
   }, [user, update, branchId]);

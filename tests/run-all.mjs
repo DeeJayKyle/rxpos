@@ -12,6 +12,7 @@ const root = path.resolve(here, '..');
 const BASE = 'http://localhost:8790';
 const OWNER = 'local-owner-key-0123456789abcdef';
 const SUITES = [
+  ['theme contrast', 'contrast-test.mjs', []],
   ['owner sign-in', 'owner-auth-test.mjs', []],
   ['cloud rules', 'v14-api.mjs', []],
   ['shared catalog', 'catalog-test.mjs', []],
@@ -24,6 +25,8 @@ const SUITES = [
   ['owner on main page', 'owner-main-login.mjs', ['.output/owner-main']],
   ['stock in & stock take', 'v18.mjs', ['.output/v18']],
   ['two-step sign-in', 'v19-twostep.mjs', ['.output/v19']],
+  ['screen tour', 'ui-tour.mjs', ['.output/tour']],
+  ['crash reports', 'v20-crash.mjs', ['.output/v20']],
   // the Windows app's self-update needs a screen: Windows itself, or xvfb-run on Linux
   ...(process.platform === 'win32' || fs.existsSync('/usr/bin/xvfb-run') ? [['windows self-update', 'electron-update.mjs', []]] : []),
 ];

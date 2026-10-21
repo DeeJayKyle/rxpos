@@ -4,7 +4,7 @@ import { ShoppingCart, Trash2, X, FileText, Printer, AlertTriangle, ScanBarcode,
 import { DrugInfoPanel, genericKey } from './DrugInfo.jsx';
 import { useStore, uid, now, daysUntil, put, move, allocate, audit, normalizePhone, DEFAULT_PAYMENT_METHODS } from '../store.jsx';
 import { CASH } from '../finance.js';
-import { Modal, SearchBox, ReceiptPdfButton } from '../ui.jsx';
+import { Modal, SearchBox, ReceiptPdfButton, PageTip } from '../ui.jsx';
 import { toast, ask } from '../feedback.jsx';
 import { payRequest, payStatus, guessNetwork, cloudConfig } from '../cloud.js';
 import { Receipt } from './Sales.jsx';
@@ -41,6 +41,11 @@ export default function POS({ mode = 'retail' }) {
   const [active, setActive] = useState(0);  // highlighted medicine card (arrow keys)
   const [help, setHelp] = useState(false);
   const [cam, setCam] = useState(false); // camera barcode scanner
+  // Phones and tablets: the sale is a sheet docked at the bottom (total and Charge always in reach), slid up to edit it
+  const [narrow, setNarrow] = useState(() => typeof matchMedia === 'function' && matchMedia('(max-width: 900px)').matches);
+  useEffect(() => { const m = matchMedia('(max-width: 900px)'); const f = () => setNarrow(m.matches); m.addEventListener?.('change', f); return () => m.removeEventListener?.('change', f); }, []);
+  const [sheet, setSheet] = useState(false);
+  const [swipe, setSwipe] = useState(null); // { id, x0, y0, dx } while a cart line is being swiped
   const [cdForm, setCdForm] = useState(null); // controlled-drug details being filled in
   const cdRef = useRef(null); // the details for this sale, once given
   // Payment methods come from Settings → Payment methods; their type decides the behaviour
@@ -264,6 +269,7 @@ export default function POS({ mode = 'retail' }) {
     window.history.replaceState({}, '');
     setDone(sale);
     setMomo(null);
+    setSheet(false);
     clearSale();
     if (db.settings.autoPrint) setTimeout(() => window.print(), 350);
   };
@@ -351,9 +357,13 @@ export default function POS({ mode = 'retail' }) {
             <button className="icon-btn" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts" onClick={() => setHelp(true)}><Keyboard size={19} /></button>
           </div>
         </div>
+        <PageTip id="pos" title="Selling quickly">
+          {touch ? 'Tap a medicine to add it. The sale waits at the bottom with the total and Charge; tap it to see the lines, swipe a line left to remove it. The camera button scans barcodes.'
+            : 'Type or scan to add, ↑↓←→ and Enter to pick. Alt+H holds a sale while you serve the next customer, F9 charges. Press ? for every shortcut.'}
+        </PageTip>
         <div className="row gap search-row">
           <div ref={searchRef} onKeyDown={onSearchKey} className="grow">
-            <SearchBox big value={q} onChange={setQ} placeholder="Search medicine or scan barcode…  (F8)" />
+            <SearchBox big value={q} onChange={setQ} placeholder={touch ? "Search medicine or scan barcode…" : "Search medicine or scan barcode…  (F8)"} />
           </div>
           <CameraButton className="btn ghost big cam-btn" onClick={() => setCam(true)} />
         </div>
@@ -389,7 +399,7 @@ export default function POS({ mode = 'retail' }) {
         </div>
       </section>
 
-      {cart.length > 0 && !cartInView && (
+      {!narrow && cart.length > 0 && !cartInView && (
         <button className="cart-bar" onClick={() => cartRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
           <ShoppingCart size={18} />
           <span className="grow">{items} item{items === 1 ? '' : 's'} · <strong>{fmt(total)}</strong></span>
@@ -397,7 +407,15 @@ export default function POS({ mode = 'retail' }) {
         </button>
       )}
 
-      <section className="pos-cart card" ref={cartRef}>
+      {narrow && sheet && <div className="sheet-bg" onClick={() => setSheet(false)} aria-hidden="true" />}
+      <section className={'pos-cart card' + (narrow ? ' sheet' + (sheet ? ' open' : '') : '')} ref={cartRef}>
+        {narrow && (
+          <div className="sheet-handle" role="button" tabIndex={0} aria-expanded={sheet} aria-label={sheet ? 'Hide the sale' : 'Show the sale'} onClick={() => setSheet((x) => !x)} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setSheet((x) => !x)}>
+            <ShoppingCart size={18} />
+            <span className="grow"><strong>{items ? `${items} item${items === 1 ? '' : 's'}` : 'No items yet'}</strong>{held.length > 0 && <small className="muted"> · {held.length} on hold</small>}<br /><span className="sheet-total">{fmt(total)}</span></span>
+            <button className="btn primary" disabled={!cart.length} onClick={(e) => { e.stopPropagation(); if (!sheet) setSheet(true); checkout(); }}>Charge</button>
+          </div>
+        )}
         <div className="cart-head">
           <h3>Current sale {items > 0 && <span className="badge">{items} item{items === 1 ? '' : 's'}</span>}</h3>
           {cart.length > 0 && (
@@ -432,7 +450,11 @@ export default function POS({ mode = 'retail' }) {
         {customer?.allergies && <div className="error"><AlertTriangle size={14} /> Allergies: {customer.allergies}</div>}
         <div className="cart-lines">
           {cart.map((l) => (
-            <div key={l.id} className={'cart-line' + (picked.has(l.id) ? ' picked' : '') + (cart.length > 1 && lineAt?.id === l.id && cursor >= 0 ? ' cursor' : '')} onClick={() => setCursor(cart.indexOf(l))}>
+            <div key={l.id} style={swipe?.id === l.id && swipe.dx < 0 ? { transform: `translateX(${swipe.dx}px)`, opacity: Math.max(0.35, 1 + swipe.dx / 220) } : undefined}
+              onTouchStart={(e) => setSwipe({ id: l.id, x0: e.touches[0].clientX, y0: e.touches[0].clientY, dx: 0 })}
+              onTouchMove={(e) => setSwipe((w) => { if (!w || w.id !== l.id) return w; const dx = e.touches[0].clientX - w.x0, dy = e.touches[0].clientY - w.y0; return Math.abs(dx) > Math.abs(dy) ? { ...w, dx: Math.min(0, dx) } : { ...w, dx: 0 }; })}
+              onTouchEnd={() => { if (swipe?.id === l.id && swipe.dx < -90) removeLines([l.id]); setSwipe(null); }}
+              className={'cart-line' + (picked.has(l.id) ? ' picked' : '') + (cart.length > 1 && lineAt?.id === l.id && cursor >= 0 ? ' cursor' : '')} onClick={() => setCursor(cart.indexOf(l))}>
               <input type="checkbox" className="line-check" checked={picked.has(l.id)} onChange={() => togglePick(l.id)} aria-label={`Select ${l.name}`} />
               <div className="grow"><strong>{l.name}</strong>{l.rx && <span className="badge">Rx</span>}
                 {Number(l.price) < (l.cost || 0) && <small className="text-danger below-cost"> below cost{can('reports') ? ` (${fmt(l.cost)})` : ''}</small>}
@@ -484,7 +506,7 @@ export default function POS({ mode = 'retail' }) {
         <div className="row gap">
           <button className="btn ghost" onClick={saveProforma} disabled={!cart.length} title="F10"><FileText size={16} />Proforma</button>
           <button className="btn ghost" onClick={holdSale} disabled={!cart.length} title="Alt+H"><PauseCircle size={16} />Hold</button>
-          <button ref={chargeRef} className="btn primary grow big" onClick={checkout} disabled={!cart.length} title="F9">Charge {fmt(total)}</button>
+          <button ref={chargeRef} className={'btn primary grow big' + (narrow ? ' charge-dup' : '')} onClick={checkout} disabled={!cart.length} title="F9">Charge {fmt(total)}</button>
         </div>
       </section>
 

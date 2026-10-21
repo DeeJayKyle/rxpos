@@ -89,6 +89,7 @@ function ensureSchema(db) {
       if (!/\bbranding\b/.test(have.get('tenants'))) ddl.push('ALTER TABLE tenants ADD COLUMN branding TEXT'); // logo and allowed themes, set by the owner
     }
     if (!have.has('tenants_slug')) ddl.push('CREATE UNIQUE INDEX tenants_slug ON tenants(slug)');
+    if (!have.has('client_errors')) ddl.push('CREATE TABLE client_errors (tenant TEXT NOT NULL, k TEXT NOT NULL, message TEXT, stack TEXT, page TEXT, build INTEGER, platform TEXT, kind TEXT, count INTEGER NOT NULL DEFAULT 1, devices INTEGER NOT NULL DEFAULT 1, first_at TEXT, last_at TEXT, PRIMARY KEY (tenant, k))'); // crash reports from devices (src/crash.js)
     if (!have.has('twofa')) ddl.push(twoStepDdl); // two-step sign-in secrets (worker/twostep.js), never synced
     if (!have.has('login_fail')) ddl.push('CREATE TABLE login_fail (email TEXT PRIMARY KEY, n INTEGER NOT NULL, until INTEGER NOT NULL DEFAULT 0)');
     if (!have.has('rtc')) ddl.push('CREATE TABLE rtc (id INTEGER PRIMARY KEY AUTOINCREMENT, tenant TEXT NOT NULL, to_uid TEXT NOT NULL, from_uid TEXT NOT NULL, from_name TEXT, type TEXT NOT NULL, call_id TEXT NOT NULL, data TEXT, at INTEGER NOT NULL)');
@@ -661,6 +662,16 @@ async function owner(env, req, url, body) {
   if (parts[0] !== 'tenants' || !t) return json({ error: 'No such pharmacy.' }, 404);
   const sub = parts[2];
 
+  // ----- crash reports from this pharmacy's devices -----
+  if (sub === 'errors' && req.method === 'GET') {
+    const { results } = await db.prepare('SELECT k, message, stack, page, build, platform, kind, count, devices, first_at, last_at FROM client_errors WHERE tenant = ?1 ORDER BY last_at DESC LIMIT 200').bind(t.id).all();
+    return json({ errors: results });
+  }
+  if (sub === 'errors' && req.method === 'POST' && body?.clear) {
+    await db.prepare('DELETE FROM client_errors WHERE tenant = ?1' + (body.k ? ' AND k = ?2' : '')).bind(...[t.id, ...(body.k ? [String(body.k)] : [])]).run();
+    return json({ ok: true });
+  }
+
   // ----- details -----
   if (!sub && req.method === 'GET') {
     const users = (await tenantUsers(env, t.id)).map(publicUser);
@@ -1108,6 +1119,18 @@ export default {
 
       if (path === '/api/sync' && req.method === 'POST') return await sync(env, body, who);
       if (path === '/api/config') return json({ tenant: who.tenant, slug: who.tenantRow.slug || who.tenant, pharmacy: who.tenantRow.name, mtn: mtn.enabled(penv), airtel: airtel.enabled(penv), sms: !!(penv.AT_USERNAME && penv.AT_API_KEY), email: !!(env.BREVO_API_KEY && env.BREVO_SENDER_EMAIL), mtnEnv: penv.MTN_ENV || 'sandbox', airtelEnv: penv.AIRTEL_ENV || 'uat', role: who.role });
+      // Crash reports from this pharmacy's devices (src/crash.js): the same error is one row with a count
+      if (path === '/api/errors' && req.method === 'POST') {
+        const list = Array.isArray(body?.errors) ? body.errors.slice(0, 20) : [];
+        const up = env.DB.prepare(`INSERT INTO client_errors (tenant, k, message, stack, page, build, platform, kind, first_at, last_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9)
+          ON CONFLICT(tenant, k) DO UPDATE SET count = count + 1, devices = devices + 1, last_at = excluded.last_at, build = excluded.build, page = excluded.page, platform = excluded.platform`);
+        const s = (v, n) => String(v ?? '').slice(0, n);
+        const stmts = list.filter((e) => e && e.key && e.message).map((e) => up.bind(who.tenant, s(e.key, 40), s(e.message, 300), s(e.stack, 3000), s(e.page, 80), Number(e.build) || 0, s(e.platform, 40), s(e.kind, 20), new Date().toISOString()));
+        if (stmts.length) await env.DB.batch(stmts);
+        // keep the 300 most recent kinds of error per pharmacy
+        await env.DB.prepare('DELETE FROM client_errors WHERE tenant = ?1 AND k NOT IN (SELECT k FROM client_errors WHERE tenant = ?1 ORDER BY last_at DESC LIMIT 300)').bind(who.tenant).run();
+        return json({ ok: true, saved: stmts.length });
+      }
       if (path === '/api/2fa' || path.startsWith('/api/2fa/')) return await twoStepRoutes(env, req, path, body, who, { json, roleCan, existingRec, serverWriteMany,
         audit: (action, details) => ({ t: 'audit', id: crypto.randomUUID(), rec: { date: new Date().toISOString(), user: who.name || '', action, details, branchId: 'main' } }) });
       // Today's owner summary for this pharmacy: preview (GET) or email it now to the addresses in Settings (POST)

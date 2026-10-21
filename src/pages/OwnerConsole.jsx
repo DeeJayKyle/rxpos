@@ -231,7 +231,7 @@ function TenantAdmin({ id, api, url, onBack }) {
             <button className="btn danger" onClick={deletePharmacy}><Trash2 size={16} />Delete</button>
           </div>
         </div>
-        <Tabs value={tab} onChange={setTab} tabs={[['overview', 'Overview'], ['features', 'Features'], ['brand', 'Look & logo'], ['staff', `Staff (${d.users.length})`], ['branches', `Branches (${d.branches.length})`], ['data', 'Data'], ['payments', 'Payments & SMS'], ['danger', 'Reset / delete']]} />
+        <Tabs value={tab} onChange={setTab} tabs={[['overview', 'Overview'], ['features', 'Features'], ['brand', 'Look & logo'], ['staff', `Staff (${d.users.length})`], ['branches', `Branches (${d.branches.length})`], ['data', 'Data'], ['payments', 'Payments & SMS'], ['errors', 'Device errors'], ['danger', 'Reset / delete']]} />
 
         {tab === 'overview' && (
           <>
@@ -307,6 +307,7 @@ function TenantAdmin({ id, api, url, onBack }) {
           </>
         )}
 
+        {tab === 'errors' && <DeviceErrors t={t} api={api} />}
         {tab === 'data' && <DataBrowser t={t} tables={d.tables} api={api} onChanged={load} />}
 
         {tab === 'payments' && (
@@ -700,6 +701,37 @@ function BrandingTab({ t, onSave, busy }) {
         </div>
         <div className="form-actions"><button className="btn primary" disabled={busy || themes.size < 3} onClick={() => onSave({ themes: all ? [] : [...themes], defaultTheme: themes.has(def) ? def : '' }, 'Themes saved')}>Save themes</button></div>
       </div>
+    </div>
+  );
+}
+
+/** Errors reported by this pharmacy's devices (src/crash.js), the same error grouped with how often and where */
+function DeviceErrors({ t, api }) {
+  const [list, setList] = useState(null);
+  const [open, setOpen] = useState(null);
+  const load = () => api('/tenants/' + t.id + '/errors').then((r) => setList(r.errors || [])).catch((e) => { toast(e.message, 'error'); setList([]); });
+  useEffect(() => { load(); }, [t.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const clear = async (k) => { await api('/tenants/' + t.id + '/errors', { clear: true, ...(k ? { k } : {}) }); load(); };
+  if (!list) return <div className="card"><div className="skeleton" /></div>;
+  return (
+    <div className="card table-wrap">
+      <div className="row between gap"><p className="muted small">Errors on this pharmacy's devices, reported privately to the RxPOS cloud (no sales or patient data). The same error is one row.</p>
+        {list.length > 0 && <button className="btn sm ghost" onClick={() => clear()}>Clear all</button>}</div>
+      <table>
+        <thead><tr><th>Error</th><th>Page</th><th>Device</th><th className="num">Times</th><th>Last seen</th><th /></tr></thead>
+        <tbody>
+          {list.map((e) => (
+            <tr key={e.k}>
+              <td><strong>{e.message}</strong><br /><small className="muted">{e.kind} · build {e.build || '—'}</small>
+                {open === e.k && <pre className="error-stack">{e.stack || 'No stack'}</pre>}</td>
+              <td>{e.page}</td><td>{e.platform}</td><td className="num">{e.count}</td>
+              <td>{new Date(e.last_at).toLocaleString()}<br /><small className="muted">first {new Date(e.first_at).toLocaleDateString()}</small></td>
+              <td className="actions"><button className="btn sm ghost" onClick={() => setOpen(open === e.k ? null : e.k)}>{open === e.k ? 'Hide' : 'Details'}</button><button className="btn sm ghost" onClick={() => clear(e.k)}>Fixed</button></td>
+            </tr>
+          ))}
+          {!list.length && <tr><td colSpan={6} className="empty">No errors reported. 🎉</td></tr>}
+        </tbody>
+      </table>
     </div>
   );
 }

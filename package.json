@@ -1,7 +1,7 @@
 {
   "name": "rxpos",
   "productName": "RxPOS",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "RxPOS - pharmacy point of sale and inventory management",
   "author": "RxPOS",
   "license": "MIT",
@@ -42,7 +42,7 @@
     "@capacitor/cli": "6.2.2",
     "@libsql/client": "0.18.0",
     "@vitejs/plugin-react": "4.3.1",
-    "electron": "31.4.0",
+    "electron": "43.7.8",
     "electron-builder": "24.13.3",
     "puppeteer-core": "25.12.0",
     "vite": "5.4.8",

@@ -16,6 +16,8 @@ export function WeatherCard({ compact }) {
   const cur = w?.current;
   const [label, Icon] = cur ? describe(cur.weather_code) : ['—', SunIcon];
   const advice = storageAdvice(cur, limits);
+  // on the dashboard a card with nothing to show is left out instead of waiting there
+  if (compact && !cur && err) return null;
   return (
     <div className={'card weather' + (compact ? ' compact' : '')}>
       <div className="row between">
@@ -36,7 +38,7 @@ export function WeatherCard({ compact }) {
           </div>
           {advice.map(([tone, text], i) => <div key={i} className={'advice ' + tone}><AlertTriangle size={14} />{text}</div>)}
         </>
-      ) : <p className="muted small">{err || 'Loading weather…'}</p>}
+      ) : err ? <div className="row gap"><p className="muted small grow">{err}</p><button className="btn sm ghost" onClick={load}><RefreshCw size={14} />Try again</button></div> : <div className="skeleton" style={{ height: 64 }} aria-label="Loading weather" />}
       {err && cur && <p className="muted small">{err}</p>}
     </div>
   );

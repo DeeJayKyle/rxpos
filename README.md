@@ -17,6 +17,8 @@ The **owner** signs in on https://rxposug.com with the owner email and password 
 | Suppliers & money | **Returns to supplier** (credit note or refund), **supplier price comparison** (Reorder buys from the cheapest), **profit & margins** report with price check, **daily owner summary** email at 9 pm (preview / WhatsApp share in Settings) |
 | Safety | **Controlled drugs register** (patient, prescriber, prescription recorded at the POS; running balances), **batch recall lookup**, **two-step sign-in** with an authenticator app |
 | Scanning & packs | **Camera barcode scanning** (POS, Add Stock, Stock Count scan-to-count), **sell / receive by pack** (strip, box) with stock kept in tablets |
+| Design & access | Every colour theme checked and adjusted to **WCAG AA contrast**; phone POS with the sale **docked at the bottom** (swipe a line to remove); Add Stock as cards on phones; first-visit tips and empty pages that say what to do next; **Remember me** for 30 days on personal devices |
+| Support | **Private crash reports**: errors on any device reach the owner console (Device errors), without personal data; Windows app on a supported Electron (43) |
 | Reorder | **Smart reorder suggestions** from real sales velocity, lead time and target cover; **dead-stock report**; purchase orders (print / WhatsApp to supplier) that receive straight into Add Stock |
 | Branches | Unlimited branches, stock per branch, **stock transfers** (in transit → received, shortages recorded), owner overview of every branch, branch filters in sales & reports |
 | People | Customers (allergies, insurance, credit limit), suppliers, prescriptions with refill intervals, **refill & debt reminders by WhatsApp or SMS** |

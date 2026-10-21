@@ -57,7 +57,7 @@ export async function fetchWeather(place, { force = false } = {}) {
     hourly: 'temperature_2m,relative_humidity_2m,precipitation_probability',
     daily: 'temperature_2m_max,temperature_2m_min,precipitation_probability_max,uv_index_max,weather_code',
   }).toString();
-  const r = await fetch(u);
+  const r = await fetch(u, { signal: AbortSignal.timeout(10000) }).catch(() => { throw new Error('The weather service did not answer. Check the internet connection.'); });
   if (!r.ok) throw new Error('Weather service unavailable');
   const data = await r.json();
   write(CACHE, { key, at: Date.now(), data, place });

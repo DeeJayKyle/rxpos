@@ -125,7 +125,7 @@ export default function Sales() {
                 <td className="actions"><button className="btn sm ghost" onClick={() => setView(s)}><Eye size={14} />View</button>{s.status !== 'refunded' && can('sales.edit') && <button className="btn sm ghost" onClick={() => setEditing(s)}><Pencil size={14} />Edit</button>}</td>
               </tr>
             ))}
-            {!rows.length && <Empty colSpan={9}>No sales found</Empty>}
+            {!rows.length && (db.sales.length ? <Empty colSpan={9}>No sales match. Try another receipt number, customer or date.</Empty> : <Empty colSpan={9} action={{ label: 'Open the POS', to: '/pos' }}>No sales yet. Every sale rung up at the POS appears here with its receipt, to reprint, refund or correct.</Empty>)}
           </tbody>
         </table>
       </div>

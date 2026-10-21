@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store.jsx';
-import { Modal, ReceiptPdfButton } from '../ui.jsx';
+import { Modal, ReceiptPdfButton, Empty } from '../ui.jsx';
 import { Receipt } from './Sales.jsx';
 import { ask } from '../feedback.jsx';
 
@@ -37,7 +37,7 @@ export default function Proformas() {
                 </td>
               </tr>
             ))}
-            {!rows.length && <tr><td colSpan={7} className="empty">No proformas</td></tr>}
+            {!rows.length && <Empty colSpan={7} action={db.proformas.length ? undefined : { label: 'Open the POS', to: '/pos' }}>{db.proformas.length ? 'No proformas match' : 'No proformas yet. Build a sale at the POS and press Proforma (F10) to give a customer a quotation; sell it later in one tap.'}</Empty>}
           </tbody>
         </table>
       </div>

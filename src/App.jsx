@@ -21,6 +21,7 @@ import RefreshHost from './refresh.jsx';
 import { startUpdates, onUpdate, applyUpdate, justUpdated, LABEL } from './update.js';
 import { applyTheme, savedTheme, saveTheme, allowedThemes } from './themes.js';
 import { TwoStepModal } from './twostep.jsx';
+import { setCrashCloud } from './crash.js';
 const OwnerConsole = lazy(() => import('./pages/OwnerConsole.jsx'));
 
 // Pages load on demand so the app opens fast, even on low-end PCs and phones
@@ -258,7 +259,13 @@ function Shell() {
   const [drawer, setDrawer] = useState(false);
   const [palette, setPalette] = useState(false);
   const [twoStepOpen, setTwoStepOpen] = useState(false);
-  const [collapsed, setCollapsed] = useState(() => { try { return JSON.parse(localStorage.getItem('pharmapos-nav')) || {}; } catch { return {}; } });
+  useEffect(() => { setCrashCloud(syncCfg?.url && syncCfg?.key ? { url: syncCfg.url, key: syncCfg.key } : null); }, [syncCfg?.url, syncCfg?.key]);
+  // Menu groups: someone who never folded the menu starts with only Sales open (plus the page they are on), so
+  // ~45 pages don't all compete for attention; their own choices are remembered after that
+  const [collapsed, setCollapsed] = useState(() => {
+    try { const saved = JSON.parse(localStorage.getItem('pharmapos-nav')); if (saved) return saved; } catch { /* first visit */ }
+    return Object.fromEntries(NAV.filter((g) => g.group && g.group !== 'Sales').map((g) => [g.group, true]));
+  });
 
   const { can, features, batchesOf, day } = useStore();
   // Show only what this person's role may use and what is switched on for this pharmacy
@@ -321,9 +328,9 @@ function Shell() {
         <nav>
           {groups.map((g, i) => (
             <div key={i} className="nav-group">
-              {g.group && <button className="nav-title" onClick={() => toggleGroup(g.group)}>{g.group}<ChevronDown size={13} style={{ transform: collapsed[g.group] ? 'rotate(-90deg)' : '', transition: 'transform .15s' }} /></button>}
-              {!collapsed[g.group] && g.items.map(([to, label, Icon, key, badge]) => (
-                <NavLink key={to} to={to} end>
+              {g.group && <button className="nav-title" aria-expanded={!collapsed[g.group]} onClick={() => toggleGroup(g.group)}>{g.group}<ChevronDown size={13} style={{ transform: collapsed[g.group] ? 'rotate(-90deg)' : '', transition: 'transform .15s' }} /></button>}
+              {g.items.map(([to, label, Icon, key, badge]) => (
+                <NavLink key={to} to={to} end hidden={collapsed[g.group] && !g.items.some(([t]) => t === location.pathname) && !(badge && counts[badge] > 0)}>
                   <Icon size={17} /><span className="grow">{label}</span>
                   {badge && counts[badge] > 0 && <span className="count">{counts[badge]}</span>}
                   {key && <kbd>{key}</kbd>}
