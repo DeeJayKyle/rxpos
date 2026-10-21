@@ -20,6 +20,7 @@ import { isWeb } from './platform.js';
 import RefreshHost from './refresh.jsx';
 import { startUpdates, onUpdate, applyUpdate, justUpdated, LABEL } from './update.js';
 import { applyTheme, savedTheme, saveTheme, allowedThemes } from './themes.js';
+import { TwoStepModal } from './twostep.jsx';
 const OwnerConsole = lazy(() => import('./pages/OwnerConsole.jsx'));
 
 // Pages load on demand so the app opens fast, even on low-end PCs and phones
@@ -250,12 +251,13 @@ function CommandPalette({ open, onClose, pages }) {
 }
 
 function Shell() {
-  const { db, products, user, setUser, branchId, branch, update, syncNow } = useStore();
+  const { db, products, user, setUser, branchId, branch, update, syncNow, syncCfg } = useStore();
   const navigate = useNavigate();
   const location = useLocation();
   const [theme, setTheme] = useTheme();
   const [drawer, setDrawer] = useState(false);
   const [palette, setPalette] = useState(false);
+  const [twoStepOpen, setTwoStepOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(() => { try { return JSON.parse(localStorage.getItem('pharmapos-nav')) || {}; } catch { return {}; } });
 
   const { can, features, batchesOf, day } = useStore();
@@ -334,6 +336,7 @@ function Shell() {
           <span className="avatar">{initials}</span>
           <div className="grow"><strong>{user.name}</strong><small>{user.role}</small></div>
           <button className="icon-btn" title="Change my password" onClick={() => changePassword(false)}><KeyRound size={17} /></button>
+          {syncCfg?.key?.startsWith('u.') && <button className={'icon-btn' + (me?.twoFactor ? ' text-ok' : '')} title={me?.twoFactor ? 'Two-step sign-in is on' : 'Two-step sign-in'} onClick={() => setTwoStepOpen(true)}><ShieldCheck size={17} /></button>}
           <button className="icon-btn" title="Log out" onClick={() => setUser(null)}><LogOut size={17} /></button>
         </div>
       </aside>
@@ -376,6 +379,7 @@ function Shell() {
       <AutoReorder />
       <FirstDownload />
       <UpdateHost />
+      {twoStepOpen && <TwoStepModal onClose={() => setTwoStepOpen(false)} />}
     </div>
   );
 }

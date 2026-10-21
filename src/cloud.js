@@ -37,7 +37,7 @@ async function call(cfg, path, { method = 'GET', body, timeout = 20000 } = {}) {
 }
 
 /** Sign in to the cloud with a staff account → { token, user } */
-export const cloudLogin = (url, email, password, tenant) => call({ url: cleanUrl(url) }, '/api/login', { method: 'POST', body: { email, password, tenant: tenant || undefined } });
+export const cloudLogin = (url, email, password, tenant, otp) => call({ url: cleanUrl(url) }, '/api/login', { method: 'POST', body: { email, password, tenant: tenant || undefined, otp: otp || undefined } });
 export const forgotPassword = (url, body) => call({ url: cleanUrl(url) }, '/api/password/forgot', { method: 'POST', body });
 export const resetPassword = (url, body) => call({ url: cleanUrl(url) }, '/api/password/reset', { method: 'POST', body });
 export const googleClient = (url) => call({ url: cleanUrl(url) }, '/api/google-client', { timeout: 10000 });
@@ -72,3 +72,6 @@ export const whatsappLink = (phone, text) => `https://wa.me/${String(phone).repl
 
 /** Today's owner summary (worker/summary.js): preview, or email it now to the addresses in Settings */
 export const daySummary = (cfg, send = false) => call(cfg, '/api/summary', { method: send ? 'POST' : 'GET', body: send ? {} : undefined });
+
+/** Two-step sign-in for the signed-in person (worker/twostep.js) */
+export const twoStep = (cfg, path = '', body) => call(cfg, '/api/2fa' + path, { method: body ? 'POST' : 'GET', body });
