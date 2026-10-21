@@ -1058,3 +1058,4 @@ code.key { font-size: 12px; background: var(--surface-2); padding: 2px 6px; bord
   .table-wrap:has(> table.stock-lines) { overflow: visible; }
 }
 @media (max-width: 700px) { .table-wrap > table.stock-lines td:first-child { padding-left: 0; } }
+.sidebar nav a[hidden] { display: none; }
