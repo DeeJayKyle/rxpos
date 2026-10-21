@@ -7,5 +7,14 @@
   },
   "server": {
     "androidScheme": "https"
+  },
+  "plugins": {
+    "CapacitorUpdater": {
+      "autoUpdate": false,
+      "resetWhenUpdate": true,
+      "appReadyTimeout": 20000,
+      "statsUrl": "",
+      "channelUrl": ""
+    }
   }
 }

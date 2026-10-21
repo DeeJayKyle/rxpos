@@ -1036,6 +1036,11 @@ export default {
     if (!path.startsWith('/api/')) return rawEnv.ASSETS.fetch(req);
     let env;
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
+    // Public: the current app build, for devices updating themselves (src/update.js); needs no database
+    if (path === '/api/version') {
+      const r = await rawEnv.ASSETS.fetch(new URL('/version.json', url));
+      return r.ok ? json(await r.text()) : json({ error: 'No version information' }, 404);
+    }
     try {
       env = withDatabase(rawEnv);
       await ensureSchema(env.DB);

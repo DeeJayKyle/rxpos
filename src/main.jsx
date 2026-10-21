@@ -8,6 +8,7 @@ import { idbGet, idbKeys } from './idb.js';
 import './styles.css';
 import { applyTheme, savedTheme } from './themes.js';
 import { isAndroid } from './platform.js';
+import { startUpdates } from './update.js';
 
 // The Android app draws its own pull-to-refresh (src/refresh.jsx)
 if (isAndroid) document.documentElement.classList.add('is-android');
@@ -54,6 +55,10 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     </ErrorBoundary>
   </React.StrictMode>
 );
+
+// Self-updates start with the app (also on the sign-in screen): the new build reports that it started, so the
+// Windows and Android updaters keep it instead of rolling back
+startUpdates();
 
 // Ask the browser not to evict our offline database when the device is low on space
 navigator.storage?.persist?.().catch(() => {});

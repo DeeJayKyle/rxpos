@@ -101,6 +101,7 @@ jobs:
       - run: npm run build
       - name: Create Android project
         run: |
+          rm -rf dist/updates   # the update archive is for devices already installed, not inside the APK
           npx cap add android
           npx cap sync android
       - name: Android permissions (camera for prescriptions, microphone for calls & voice notes, location for weather)

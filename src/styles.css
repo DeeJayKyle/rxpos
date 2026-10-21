@@ -980,3 +980,7 @@ table.keys td { padding: 7px 6px; } table.keys td:first-child { white-space: now
 /* Long lists: the browser skips drawing cards that are off screen (smoother scrolling on low-end phones) */
 .count-row { content-visibility: auto; contain-intrinsic-size: auto 150px; }
 .product-grid .product { content-visibility: auto; contain-intrinsic-size: auto 120px; }
+
+/* Self-update: a small pill when a new version is downloaded */
+.update-pill { position: fixed; left: 16px; bottom: 16px; z-index: 60; display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: 13px; font-weight: 650; padding: 9px 14px; border-radius: 99px; border: 0; cursor: pointer; color: #fff; background: var(--accent-grad); box-shadow: var(--shadow-lg); }
+@media (max-width: 900px) { .update-pill { bottom: 84px; } }
