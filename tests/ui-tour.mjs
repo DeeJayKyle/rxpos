@@ -57,6 +57,15 @@ await shoot('desktop-dark');
 await P.evaluate(() => localStorage.setItem('pharmapos-theme', 'light'));
 await P.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true, deviceScaleFactor: 2 }); await P.reload({ waitUntil: 'networkidle2' }); await wait(1500);
 await shoot('phone');
+// phone POS: the sale is a sheet docked at the bottom with the total and Charge in reach
+await P.goto(base + '/' + slug + '#/pos', { waitUntil: 'networkidle2' }); await wait(1200);
+await P.tap('.product-grid .product');
+await wait(400);
+check('phone POS: the docked sale shows the item count and total', /1 item/.test(await P.evaluate(() => document.querySelector('.sheet-handle')?.innerText || '')) && /UGX 1,200/.test(await P.evaluate(() => document.querySelector('.sheet-handle')?.innerText || '')));
+await P.screenshot({ path: path.join(out, 'phone-pos-docked.png') });
+await P.tap('.sheet-handle .grow'); await wait(500);
+check('tapping it slides the full sale up', await P.evaluate(() => document.querySelector('.pos-cart.sheet.open') !== null));
+await P.screenshot({ path: path.join(out, 'phone-pos-sheet.png') });
 check('no page errors', errors.length === 0, errors.slice(0, 3).join(' | '));
 await b.close();
 await owner('/tenants/' + tid + '/delete', { confirm: slug });

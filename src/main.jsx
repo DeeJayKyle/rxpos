@@ -9,6 +9,7 @@ import './styles.css';
 import { applyTheme, savedTheme } from './themes.js';
 import { isAndroid } from './platform.js';
 import { startUpdates } from './update.js';
+import { startCrashReports, reportError } from './crash.js';
 
 // The Android app draws its own pull-to-refresh (src/refresh.jsx)
 if (isAndroid) document.documentElement.classList.add('is-android');
@@ -19,7 +20,7 @@ applyTheme(savedTheme() || (matchMedia('(prefers-color-scheme: dark)').matches ?
 class ErrorBoundary extends React.Component {
   state = { error: null };
   static getDerivedStateFromError(error) { return { error }; }
-  componentDidCatch(error, info) { console.error(error, info); document.getElementById('splash')?.remove(); /* never hide the recovery screen */ }
+  componentDidCatch(error, info) { console.error(error, info); reportError(error, { kind: 'crash', componentStack: info?.componentStack }); document.getElementById('splash')?.remove(); /* never hide the recovery screen */ }
   async exportData() {
     // Last-resort rescue: download whatever is stored on this device
     const data = {};
@@ -59,6 +60,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 // Self-updates start with the app (also on the sign-in screen): the new build reports that it started, so the
 // Windows and Android updaters keep it instead of rolling back
 startUpdates();
+startCrashReports(); // private error reports to the pharmacy's own cloud (src/crash.js)
 
 // Ask the browser not to evict our offline database when the device is low on space
 navigator.storage?.persist?.().catch(() => {});

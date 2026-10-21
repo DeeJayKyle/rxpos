@@ -1,6 +1,6 @@
 import { useState, useRef, useMemo } from 'react';
 import { AlertTriangle } from 'lucide-react';
-import { Empty } from '../ui.jsx';
+import { Empty, PageTip } from '../ui.jsx';
 import { useStore, today, dayOf, localDate, downloadFile, toCSV, daysUntil, MAIN_BRANCH } from '../store.jsx';
 import { Stat, Tabs, BarChart, PdfButton } from '../ui.jsx';
 
@@ -60,6 +60,7 @@ export default function Reports() {
   return (
     <div className="page" ref={pageRef}>
       <div className="page-head"><h1>Reports</h1><div className="row gap wrap">{tab !== 'stock' && Range}<PdfButton target={pageRef} title={TAB_NAMES[tab]} subtitle={tab === 'stock' ? `As at ${new Date().toLocaleDateString()}` : `${from} to ${to}`} /></div></div>
+      <PageTip id="reports" title="Reading your figures">Pick the dates at the top right. Profit &amp; margins shows what each medicine earns and lists prices below your target margin; every table exports to PDF or CSV.</PageTip>
       <Tabs value={tab} onChange={setTab} tabs={[['sales', 'Sales Report'], ['products', 'Sales by Product'], ['purchases', 'Purchase Report'], ['expenses', 'Expenses Report'], ['profit', 'Profit & margins'], ['stock', 'Stock Valuation'], ['income', 'Income Statement']]} />
 
       {tab === 'sales' && (

@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import { X, Search, Download, Plus, Pencil, Trash2, Inbox, TrendingUp, TrendingDown, FileDown, Loader2 } from 'lucide-react';
+import { X, Search, Download, Plus, Pencil, Trash2, Inbox, Lightbulb, TrendingUp, TrendingDown, FileDown, Loader2 } from 'lucide-react';
 import { pagePdf, receiptPdf } from './pdf.js';
 import { useStore, uid, downloadFile, toCSV } from './store.jsx';
 import { ask, toast } from './feedback.jsx';
@@ -79,8 +79,15 @@ export function SearchBox({ value, onChange, placeholder = 'Search…', big }) {
   );
 }
 
-export function Empty({ children = 'Nothing here yet', colSpan }) {
-  const body = <div className="cart-empty"><Inbox size={34} /><span>{children}</span></div>;
+/** An empty page or table: what belongs here and, when given, the one thing to do next */
+export function Empty({ children = 'Nothing here yet', colSpan, action, icon: Icon = Inbox }) {
+  const navigate = useNavigate();
+  const body = (
+    <div className="cart-empty">
+      <Icon size={34} /><span>{children}</span>
+      {action && <button type="button" className="btn sm primary" onClick={() => (action.to ? navigate(action.to) : action.onClick?.())}>{action.label}</button>}
+    </div>
+  );
   return colSpan ? <tr><td colSpan={colSpan} className="empty">{body}</td></tr> : body;
 }
 
@@ -292,4 +299,19 @@ export function ReceiptPdfButton({ sale, className = 'btn ghost', label = 'PDF' 
     finally { setBusy(false); }
   };
   return <button type="button" className={className} onClick={go} disabled={busy} title="Download the receipt as a PDF">{busy ? <Loader2 size={16} className="spin" /> : <FileDown size={16} />}{label}</button>;
+}
+
+/** A tip shown the first time someone opens a page; dismissed once, remembered on this device */
+export function PageTip({ id, title, children }) {
+  const key = 'rxpos-tip:' + id;
+  const [open, setOpen] = useState(() => { try { return !localStorage.getItem(key); } catch { return false; } });
+  if (!open) return null;
+  const close = () => { try { localStorage.setItem(key, '1'); } catch { /* storage blocked */ } setOpen(false); };
+  return (
+    <div className="page-tip" role="note">
+      <Lightbulb size={18} />
+      <div className="grow"><strong>{title}</strong><div className="small">{children}</div></div>
+      <button type="button" className="btn sm ghost" onClick={close}>Got it</button>
+    </div>
+  );
 }

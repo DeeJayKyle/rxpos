@@ -1059,3 +1059,42 @@ code.key { font-size: 12px; background: var(--surface-2); padding: 2px 6px; bord
 }
 @media (max-width: 700px) { .table-wrap > table.stock-lines td:first-child { padding-left: 0; } }
 .sidebar nav a[hidden] { display: none; }
+.error-stack { white-space: pre-wrap; font-size: 11px; max-height: 220px; overflow: auto; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; margin-top: 6px; }
+
+/* ---------- POS on phones & tablets: the sale as a bottom sheet ---------- */
+.sheet-handle, .sheet-bg { display: none; }
+@media (max-width: 900px) {
+  .pos { padding-bottom: 180px; }
+  .pos .product-grid { max-height: none; }
+  .pos-cart.sheet {
+    position: fixed; left: 0; right: 0; bottom: calc(62px + env(safe-area-inset-bottom)); z-index: 39; margin: 0;
+    max-height: calc(100dvh - 150px); overflow: auto; overscroll-behavior: contain; padding: 0 16px 16px; border-radius: 20px 20px 0 0;
+    transform: translateY(calc(100% - 74px)); transition: transform .28s cubic-bezier(.2, .8, .2, 1); box-shadow: 0 -14px 40px -14px rgba(15, 23, 42, .35);
+  }
+  .pos-cart.sheet.open { transform: none; }
+  .sheet-handle {
+    position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 12px; margin: 0 -16px 4px; padding: 18px 16px 12px;
+    background: var(--surface); border-bottom: 1px solid var(--border); border-radius: 20px 20px 0 0; cursor: pointer; line-height: 1.25;
+  }
+  .sheet-handle::before { content: ''; position: absolute; top: 7px; left: 50%; width: 40px; height: 4px; margin-left: -20px; border-radius: 9px; background: var(--border-strong); }
+  .sheet-handle > svg { color: var(--primary-text); flex: none; }
+  .sheet-total { font-size: 18px; font-weight: 750; font-variant-numeric: tabular-nums; }
+  .sheet-handle .btn { padding: 11px 20px; font-size: 15px; }
+  .sheet-bg { display: block; position: fixed; inset: 0; z-index: 38; background: rgba(2, 6, 23, .35); animation: fade .2s ease-out; }
+  .cart-line { transition: transform .15s ease, opacity .15s ease; touch-action: pan-y; }
+}
+@keyframes fade { from { opacity: 0; } }
+/* bigger targets for fingers */
+@media (pointer: coarse) {
+  .qty button { min-width: 42px; min-height: 42px; font-size: 18px; }
+  .qty input { min-height: 42px; }
+  .chip { padding: 9px 14px; }
+}
+
+/* first-visit tips and empty pages with a next step */
+.page-tip { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border-radius: var(--radius-sm); background: var(--primary-soft); color: var(--primary-ink); border: 1px solid color-mix(in srgb, var(--primary) 25%, transparent); animation: rise .2s ease-out; }
+.page-tip > svg { flex: none; margin-top: 1px; }
+.page-tip strong { display: block; margin-bottom: 2px; }
+.page-tip .small { line-height: 1.5; }
+.pos-products .page-tip { margin-bottom: 4px; }
+.cart-empty .btn { margin-top: 4px; }

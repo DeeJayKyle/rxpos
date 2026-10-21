@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { Pencil, Trash2, ScanText, Camera, FileUp, Loader2, AlertTriangle, CheckCircle2, X, Plus, RotateCcw, Sparkles } from 'lucide-react';
 import { useStore, uid, today, now, put, move, addBatch, audit, downloadFile, toCSV, markupPrice, daysUntil, supplierPrices, MAIN_BRANCH } from '../store.jsx';
 import { CASH } from '../finance.js';
-import { Modal, PdfButton, Tabs, Empty } from '../ui.jsx';
+import { Modal, PdfButton, Tabs, Empty, PageTip } from '../ui.jsx';
 import { ask, toast } from '../feedback.jsx';
 import { newInternalBarcode } from '../barcode.jsx';
 import { invoicePages, readInvoice, matchProduct, matchSupplier, normDate } from '../invoiceScan.js';
@@ -241,6 +241,7 @@ export function AddStock() {
         addNew('', code); setCam(false);
         return 'New barcode: type the medicine name';
       }} />}
+      <PageTip id="add-stock" title="Receiving a delivery">Search or scan each medicine (not in the list? type its name and choose “Add as a new medicine”). Type the line total from the invoice: the unit cost and the retail price work themselves out, and you can still change the price. Scan invoice reads a photo for you.</PageTip>
       {scanOpen && <InvoiceScanner cfg={syncCfg} onClose={() => setScanOpen(false)} onRead={applyScan} />}
       {restored && !scanned && (
         <div className="notice info-notice row between gap wrap">
@@ -396,7 +397,7 @@ export default function Purchases() {
                 <td className="actions"><button className="btn sm ghost" onClick={() => setView(p)}>View</button>{can('purchases.edit') && !p.imported && <button className="btn sm ghost" onClick={() => setEditing(p)}><Pencil size={14} />Edit</button>}{p.editedAt && <small className="muted"> · edited</small>}</td>
               </tr>
             ))}
-            {!rows.length && <tr><td colSpan={9} className="empty">No purchases recorded</td></tr>}
+            {!rows.length && (db.purchases.length ? <Empty colSpan={9}>No deliveries match</Empty> : <Empty colSpan={9} action={{ label: 'Add stock', to: '/add-stock' }}>No deliveries yet. Each delivery you receive in Add Stock is kept here with its invoice, to view or correct.</Empty>)}
           </tbody>
         </table>
       </div>}

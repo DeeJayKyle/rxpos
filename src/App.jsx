@@ -21,6 +21,7 @@ import RefreshHost from './refresh.jsx';
 import { startUpdates, onUpdate, applyUpdate, justUpdated, LABEL } from './update.js';
 import { applyTheme, savedTheme, saveTheme, allowedThemes } from './themes.js';
 import { TwoStepModal } from './twostep.jsx';
+import { setCrashCloud } from './crash.js';
 const OwnerConsole = lazy(() => import('./pages/OwnerConsole.jsx'));
 
 // Pages load on demand so the app opens fast, even on low-end PCs and phones
@@ -258,6 +259,7 @@ function Shell() {
   const [drawer, setDrawer] = useState(false);
   const [palette, setPalette] = useState(false);
   const [twoStepOpen, setTwoStepOpen] = useState(false);
+  useEffect(() => { setCrashCloud(syncCfg?.url && syncCfg?.key ? { url: syncCfg.url, key: syncCfg.key } : null); }, [syncCfg?.url, syncCfg?.key]);
   // Menu groups: someone who never folded the menu starts with only Sales open (plus the page they are on), so
   // ~45 pages don't all compete for attention; their own choices are remembered after that
   const [collapsed, setCollapsed] = useState(() => {
