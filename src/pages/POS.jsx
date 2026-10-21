@@ -124,10 +124,10 @@ export default function POS({ mode = 'retail' }) {
       if (!(await ask({ title: 'Only expired stock left', message: `All remaining ${p.name} stock has expired. Sell expired stock anyway?`, confirmText: 'Sell expired', danger: true }))) return;
       allowExpired = true;
     }
-    if (inCart && inCart.qty >= p.stock) return toast(`Only ${p.stock} ${p.name} in stock`, 'warn');
+    if (inCart && inCart.qty + (inCart.pack?.size || 1) > p.stock) return toast(`Only ${p.stock} ${p.unit || 'units'} of ${p.name} in stock`, 'warn');
     setCart((c) => {
       const line = c.find((l) => l.id === p.id);
-      if (line) return c.map((l) => (l.id === p.id ? { ...l, allowExpired, qty: Math.min(l.qty + 1, p.stock) } : l));
+      if (line) return c.map((l) => (l.id === p.id ? { ...l, allowExpired, qty: Math.min(l.qty + (l.pack?.size || 1), p.stock) } : l));
       return [...c, { id: p.id, name: p.name, price: priceOf(p), cost: p.cost, qty: 1, max: p.stock, rx: p.rx, controlled: !!p.controlled, allowExpired }];
     });
     setQ('');
@@ -151,6 +151,23 @@ export default function POS({ mode = 'retail' }) {
 
   const setLine = (id, patch) => setCart((c) => c.map((l) => (l.id === id ? { ...l, ...patch } : l)));
   const setQty = (id, qty) => setCart((c) => c.map((l) => (l.id === id ? { ...l, qty: Math.max(1, Math.min(Number(qty) || 1, l.max)) } : l)));
+  // Packs (strip, box…): stock and line.qty stay in the medicine's smallest unit; a pack line counts whole packs
+  const packsOf = (id) => products.find((p) => p.id === id)?.packs?.filter((k) => k.name && Number(k.size) > 1) || [];
+  const stepOf = (l) => l.pack?.size || 1;
+  const setCount = (l, n) => {
+    const size = stepOf(l), most = Math.floor(l.max / size);
+    if (Number(n) > most) toast(`Only ${most} ${l.pack ? l.pack.name.toLowerCase() + (most === 1 ? '' : 's') : 'in stock'} in stock`, 'warn');
+    setQty(l.id, Math.max(1, Math.min(Math.round(Number(n) || 1), Math.max(1, most))) * size);
+  };
+  const choosePack = (l, name) => {
+    const p = products.find((x) => x.id === l.id);
+    const k = packsOf(l.id).find((x) => x.name === name);
+    if (!k) return setLine(l.id, { pack: null, price: priceOf(p), qty: Math.max(1, Math.min(l.qty, l.max)) });
+    const size = Number(k.size);
+    if (size > l.max) return toast(`Not a whole ${k.name.toLowerCase()} in stock (${l.max} left)`, 'warn');
+    const packPrice = Number(k.price) || priceOf(p) * size;
+    setLine(l.id, { pack: { name: k.name, size, price: packPrice }, price: packPrice / size, qty: size });
+  };
   const subtotal = cart.reduce((a, l) => a + l.price * l.qty, 0);
   const disc = Math.min(Number(discount) || 0, subtotal);
   const tax = ((subtotal - disc) * (Number(db.settings.taxRate) || 0)) / 100;
@@ -225,8 +242,9 @@ export default function POS({ mode = 'retail' }) {
     const credit = ptype === 'credit';
     const paid = credit ? Math.min(Number(tendered) || 0, total) : total;
     // Split each line across batches, earliest expiry first
-    const items = cart.map((l) => ({ ...l, controlled: isCd(l) })).map(({ id, name, price, cost, qty, allowExpired, directions, controlled }) => ({
+    const items = cart.map((l) => ({ ...l, controlled: isCd(l) })).map(({ id, name, price, cost, qty, allowExpired, directions, controlled, pack }) => ({
       id, name, price: Number(price), cost, qty, ...(directions ? { directions } : {}), ...(controlled ? { controlled: true } : {}),
+      ...(pack ? { pack: { name: pack.name, size: pack.size, count: qty / pack.size, price: Number(price) * pack.size } } : {}),
       alloc: allocate(batchesOf(id), qty, { allowExpired }).map(({ batchId, qty: q, batch, expiry }) => ({ batchId, qty: q, batch, expiry })),
     }));
     const sale = {
@@ -310,7 +328,7 @@ export default function POS({ mode = 'retail' }) {
       else if (e.key === '?' && !typing && !(inSearch && q)) { e.preventDefault(); setHelp(true); }
       else if ((e.key === '+' || e.key === '-') && inSearch && !q && lineAt) {
         e.preventDefault();
-        if (e.key === '-' && lineAt.qty <= 1) removeLines([lineAt.id]); else setQty(lineAt.id, lineAt.qty + (e.key === '+' ? 1 : -1));
+        if (e.key === '-' && lineAt.qty <= stepOf(lineAt)) removeLines([lineAt.id]); else setCount(lineAt, lineAt.qty / stepOf(lineAt) + (e.key === '+' ? 1 : -1));
       }
       else if (e.key === 'Delete' && (inSearch && !q || !typing) && lineAt) { e.preventDefault(); removeLines([lineAt.id]); setCursor(-1); }
     };
@@ -418,16 +436,26 @@ export default function POS({ mode = 'retail' }) {
               <input type="checkbox" className="line-check" checked={picked.has(l.id)} onChange={() => togglePick(l.id)} aria-label={`Select ${l.name}`} />
               <div className="grow"><strong>{l.name}</strong>{l.rx && <span className="badge">Rx</span>}
                 {Number(l.price) < (l.cost || 0) && <small className="text-danger below-cost"> below cost{can('reports') ? ` (${fmt(l.cost)})` : ''}</small>}
-                <small className="muted">@ <input className="price-input" type="number" step="any" aria-label="Unit price" disabled={!can('pos.price_edit')} value={l.price} onChange={(e) => setLine(l.id, { price: e.target.value })} /></small>
+                <small className="muted">
+                  {packsOf(l.id).length > 0 && (
+                    <select className="pack-select" value={l.pack?.name || ''} onChange={(e) => choosePack(l, e.target.value)} aria-label="Sell by">
+                      <option value="">{products.find((p) => p.id === l.id)?.unit || 'Unit'}</option>
+                      {packsOf(l.id).map((k) => <option key={k.name} value={k.name}>{k.name} ({k.size})</option>)}
+                    </select>
+                  )}
+                  @ {l.pack
+                    ? <input className="price-input" type="number" step="any" aria-label="Pack price" disabled={!can('pos.price_edit')} value={Math.round(l.price * l.pack.size * 100) / 100} onChange={(e) => setLine(l.id, { price: Number(e.target.value) / l.pack.size, pack: { ...l.pack, price: Number(e.target.value) } })} />
+                    : <input className="price-input" type="number" step="any" aria-label="Unit price" disabled={!can('pos.price_edit')} value={l.price} onChange={(e) => setLine(l.id, { price: e.target.value })} />}
+                </small>
                 <div className="line-tools">
                   <button className={'link-btn small' + (l.directions ? ' text-ok' : '')} onClick={() => setLabelFor(l)}><Tag size={12} />{l.directions ? 'Directions ✓' : 'Directions / label'}</button>
                   {features.drugInfo !== false && <button className="link-btn small" onClick={() => setInfoFor(products.find((p) => p.id === l.id) || l)}><BookMarked size={12} />Drug info</button>}
                 </div>
               </div>
               <div className="qty">
-                <button onClick={() => (l.qty > 1 ? setQty(l.id, l.qty - 1) : removeLines([l.id]))} aria-label="Less">−</button>
-                <input type="number" min="1" max={l.max} value={l.qty} onChange={(e) => setQty(l.id, e.target.value)} aria-label="Quantity" />
-                <button onClick={() => setQty(l.id, l.qty + 1)} aria-label="More">+</button>
+                <button onClick={() => (l.qty > stepOf(l) ? setCount(l, l.qty / stepOf(l) - 1) : removeLines([l.id]))} aria-label="Less">−</button>
+                <input type="number" min="1" value={l.qty / stepOf(l)} onChange={(e) => setCount(l, e.target.value)} aria-label="Quantity" />
+                <button onClick={() => setCount(l, l.qty / stepOf(l) + 1)} aria-label="More">+</button>
               </div>
               <span className="num line-total">{fmt(l.price * l.qty)}</span>
               <button className="icon-btn line-remove" title={`Remove ${l.name}`} aria-label={`Remove ${l.name}`} onClick={() => removeLines([l.id])}><X size={15} /></button>

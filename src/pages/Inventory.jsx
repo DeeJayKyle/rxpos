@@ -15,6 +15,7 @@ const UNITS = ['Piece', 'Tablet', 'Strip', 'Pack', 'Box', 'Bottle', 'Tube', 'Via
 
 export function MedicineList() {
   const { db, products, update, fmt, user, branchId } = useStore();
+  const [packsFor, setPacksFor] = useState(null);
   const s = db.settings;
   const fields = [
     { key: 'name', label: 'Medicine name', required: true },
@@ -56,10 +57,13 @@ export function MedicineList() {
     });
   };
   return (
+    <>
+    {packsFor && <PacksEditor product={packsFor} onClose={() => setPacksFor(null)} />}
     <CrudPage
       title="Medicine List" singular="Medicine" table="products" rows={products} fields={fields} onSave={onSave}
       subtitle={`${products.length.toLocaleString()} medicines and items`}
       blank={{ form: 'Tablets', unit: 'Piece', reorder: 10, rx: false }}
+      extraActions={(p) => <button className="btn sm ghost" title="Sell or receive by strip, box…" onClick={() => setPacksFor(p)}>Packs{p.packs?.length ? ` (${p.packs.length})` : ''}</button>}
       columns={[
         { label: 'Medicine', render: (p) => <><strong>{p.name}</strong> {p.rx && <span className="badge">Rx</span>}{p.chronic && <span className="badge ok">Chronic</span>}{p.controlled && <span className="badge danger">CD</span>}<br /><small className="muted">{[p.generic, p.strength, p.barcode].filter(Boolean).join(' · ')}</small></> },
         { label: 'Formulation', key: 'form' },
@@ -69,6 +73,7 @@ export function MedicineList() {
         { label: 'Stock', num: true, render: (p) => <span className={p.stock <= 0 ? 'badge danger' : p.stock <= (p.reorder || 0) ? 'badge warn' : ''}>{p.stock}</span> },
       ]}
     />
+    </>
   );
 }
 
@@ -417,6 +422,52 @@ function InventoryEditor({ product, onClose }) {
         </table>
         <label className="field"><span>Reason for quantity changes (kept in the audit log)</span><input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. stock take, damaged, found extra" /></label>
         <div className="form-actions"><button type="button" className="btn ghost" onClick={onClose}>Cancel</button><button className="btn primary">Save</button></div>
+      </form>
+    </Modal>
+  );
+}
+
+/**
+ * Pack sizes for a medicine: stock is always kept in its smallest unit (e.g. tablets); a pack is a number of those
+ * units with its own price (blank = unit price × size). The POS can sell, and Add Stock receive, by pack.
+ */
+export function PacksEditor({ product, onClose }) {
+  const { db, update, user, branchId, fmt } = useStore();
+  const [rows, setRows] = useState(() => (product.packs?.length ? product.packs : [{ name: 'Strip', size: 10, price: '' }]).map((k) => ({ ...k, price: k.price ?? '' })));
+  const unit = product.unit || 'Unit';
+  const set = (n, patch) => setRows((r) => r.map((x, i) => (i === n ? { ...x, ...patch } : x)));
+  const save = (e) => {
+    e.preventDefault();
+    const packs = rows.filter((k) => k.name.trim() && Number(k.size) > 1).map((k) => ({ name: k.name.trim(), size: Math.round(Number(k.size)), price: k.price === '' ? null : Number(k.price) || null }));
+    if (new Set(packs.map((k) => k.name.toLowerCase())).size !== packs.length) return toast('Each pack needs its own name', 'warn');
+    update((d) => {
+      const cur = d.products.find((x) => x.id === product.id) || product;
+      const { stock, totalStock, ...rest } = cur; // eslint-disable-line no-unused-vars
+      put(d, 'products', { ...rest, packs });
+      audit(d, user, 'Pack sizes changed', `${product.name}: ${packs.map((k) => `${k.name} = ${k.size} ${unit}`).join(', ') || 'none'}`, branchId);
+    });
+    toast(`${product.name}: pack sizes saved`);
+    onClose();
+  };
+  return (
+    <Modal title={`Pack sizes – ${product.name}`} onClose={onClose}>
+      <form className="stack" onSubmit={save}>
+        <p className="muted small">Stock is counted in <strong>{unit}</strong>s ({fmt(product.price)} each). Add the packs you sell or receive, e.g. Strip = 10, Box = 100. Leave the price blank for {unit.toLowerCase()} price × size.</p>
+        <table className="lines">
+          <thead><tr><th>Pack name</th><th>{unit}s in it</th><th>Pack price</th><th /></tr></thead>
+          <tbody>
+            {rows.map((k, n) => (
+              <tr key={n}>
+                <td><input value={k.name} onChange={(e) => set(n, { name: e.target.value })} placeholder="Strip / Box / Bottle" aria-label="Pack name" /></td>
+                <td><input type="number" min="2" value={k.size} onChange={(e) => set(n, { size: e.target.value })} aria-label="Units in the pack" /></td>
+                <td><input type="number" min="0" step="any" value={k.price} placeholder={String((product.price || 0) * (Number(k.size) || 0))} onChange={(e) => set(n, { price: e.target.value })} aria-label="Pack price" /></td>
+                <td><button type="button" className="icon-btn" aria-label="Remove pack" onClick={() => setRows((r) => r.filter((_, i) => i !== n))}>×</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <button type="button" className="btn sm ghost" onClick={() => setRows((r) => [...r, { name: '', size: '', price: '' }])}>+ Add pack</button>
+        <div className="form-actions"><button type="button" className="btn ghost" onClick={onClose}>Cancel</button><button className="btn primary">Save packs</button></div>
       </form>
     </Modal>
   );
