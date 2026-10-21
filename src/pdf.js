@@ -72,7 +72,7 @@ export async function receiptPdf(sale, { db, fmt }) {
       const amt = money(fmt, i.qty * i.price);
       const nameLines = doc.splitTextToSize(i.name || '', inner - doc.getTextWidth(amt) - 2);
       nameLines.forEach((t, n) => { doc.text(t, M, y + 2.5); if (!n) doc.text(amt, W - M, y + 2.5, { align: 'right' }); y += lh; });
-      const meta = [`${i.qty} × ${money(fmt, i.price)}`, i.alloc?.length === 1 && i.alloc[0].batch ? 'B/N ' + i.alloc[0].batch : '', i.alloc?.[0]?.expiry ? 'Exp ' + i.alloc[0].expiry : ''].filter(Boolean).join(' · ');
+      const meta = [i.pack ? `${i.pack.count} × ${i.pack.name} (${i.pack.size}) @ ${money(fmt, i.pack.price)}` : `${i.qty} × ${money(fmt, i.price)}`, i.alloc?.length === 1 && i.alloc[0].batch ? 'B/N ' + i.alloc[0].batch : '', i.alloc?.[0]?.expiry ? 'Exp ' + i.alloc[0].expiry : ''].filter(Boolean).join(' · ');
       doc.setFontSize(fs - 1); doc.setTextColor(90);
       for (const t of doc.splitTextToSize(meta, inner)) { doc.text(t, M, y + 2.3); y += (fs - 1) * 0.42; }
       if (i.directions) {

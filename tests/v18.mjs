@@ -246,6 +246,92 @@ const prof = await A.evaluate(() => document.querySelector('.page')?.innerText.r
 check('Reports → Profit & margins: gross profit and margin over the period', /Gross profit UGX [\d,]+/i.test(prof) && /Gross margin \d+%/i.test(prof), prof.slice(0, 200));
 check('price check lists a medicine below the 20% target margin (Cipro 500 → 520 = 4%) with the price that would reach it (625)', /Ciprofloxacin 500mg tabs UGX 500 UGX 520 4% UGX 625/.test(prof), prof.match(/Price check.{0,200}/)?.[0]);
 
+// ---------- returns to supplier ----------
+{
+  const before = (await stockOf())['Panadol Extra tabs'];
+  await go('/returns'); await clickText('.page-head button', /New return/); await wait(400);
+  await A.select('.modal select', 'sup-km');
+  await A.type('.modal .picker input', 'Panadol'); await A.keyboard.press('Enter'); await wait(300);
+  await setVal('.modal input[aria-label="Quantity returned"]', 5);
+  await A.evaluate(() => { const s = document.querySelector('.modal select[aria-label="Reason"]'); s.value = 'Damaged'; s.dispatchEvent(new Event('change', { bubbles: true })); });
+  await clickText('.modal button', /Save return/); await wait(1200);
+  const row = await A.evaluate(() => document.querySelector('tbody tr')?.innerText.replace(/\s+/g, ' ') || '');
+  check('a return to the supplier is saved with its credit note value (5 × 500)', /Kampala Medics/.test(row) && /Credit note/.test(row) && /UGX 2,500/.test(row), row);
+  const after = (await stockOf())['Panadol Extra tabs'];
+  check('returned stock leaves the batch (Panadol −5)', after === before - 5, `${before} → ${after}`);
+  await go('/stock-card');
+  await A.evaluate(() => { const s = [...document.querySelectorAll('select')].find((x) => [...x.options].some((o) => o.value === 'p-pan')); s.value = 'p-pan'; s.dispatchEvent(new Event('change', { bubbles: true })); }); await wait(500);
+  check('the stock card shows it as a "Supplier return"', /Supplier return/.test(await A.evaluate(() => document.querySelector('tbody')?.innerText || '')));
+}
+
+// ---------- controlled drugs register & batch recall ----------
+{
+  await owner('/tenants/' + tid + '/records', { records: [P('p-amox', 'Amoxyl 500mg caps', { shelf: 'A1', barcode: '6001001', controlled: true, price: 1200, cost: 800 })] });
+  await A.click('.pill.clock'); await wait(3000);
+  await go('/pos'); await wait(500);
+  await A.focus('.pos-products input.search'); await A.keyboard.type('6001001'); await A.keyboard.press('Enter'); await wait(400);
+  await A.keyboard.down('Alt'); await A.keyboard.press('1'); await A.keyboard.up('Alt'); // cash
+  await A.keyboard.press('F9'); await wait(500);
+  const asked = await A.evaluate(() => /register details/.test(document.querySelector('.modal')?.innerText || ''));
+  check('selling a controlled drug asks for patient, prescriber and prescription', asked);
+  const fill = async (label, v) => A.evaluate((l, val) => { const f = [...document.querySelectorAll('.modal label.field')].find((x) => x.innerText.startsWith(l)); const i = f.querySelector('input'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(i, val); i.dispatchEvent(new Event('input', { bubbles: true })); }, label, v);
+  await fill("Patient's name", 'Jane Nakato'); await fill("Patient's ID", 'CM90012345'); await fill('Prescriber', 'Dr Okello'); await fill("Prescriber's registration", 'UMDPC-4411'); await fill('Prescription no.', 'RX-2201');
+  await clickText('.modal button', /Record & continue/); await wait(1500);
+  check('…then the sale completes', /Sale complete/.test(await A.evaluate(() => document.querySelector('.modal h3')?.innerText || '')));
+  await clickText('.modal button', /New sale/); await wait(300);
+  await go('/controlled'); await wait(500);
+  const reg = await A.evaluate(() => document.querySelector('tbody')?.innerText.replace(/\s+/g, ' ') || '');
+  check('the register shows the sale with patient, ID, prescriber and prescription, and the running balance', /Sale/.test(reg) && /Jane Nakato/.test(reg) && /CM90012345/.test(reg) && /Dr Okello \(UMDPC-4411\)/.test(reg) && /Rx RX-2201/.test(reg), reg.slice(0, 200));
+  await clickText('.tab', /Batch recall/); await wait(300);
+  await A.type('.search-wrap input', 'B-AMOX'); await wait(500);
+  const rec = await A.evaluate(() => document.querySelector('.page')?.innerText.replace(/\s+/g, ' ') || '');
+  check('batch recall lookup lists who received batch B-AMOX', /Amoxyl 500mg caps · batch B-AMOX/.test(rec) && /Jane Nakato/.test(rec), rec.slice(0, 250));
+}
+
+// ---------- daily owner summary ----------
+{
+  const r = await fetch(base + '/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'sam@test.rx', password: 'sam-pass-123' }) }).then((x) => x.json());
+  const sum = await fetch(base + '/api/summary', { headers: { Authorization: 'Bearer ' + r.token } }).then((x) => x.json());
+  check("daily summary: today's sales, payment split, profit, best sellers and stock to watch", /daily summary for \d{4}-\d{2}-\d{2}/.test(sum.text || '') && /Sales: UGX [\d,]+ \(\d+ sales?\)/.test(sum.text) && /Gross profit/.test(sum.text) && /Best sellers:/.test(sum.text) && /Amoxyl/.test(sum.text), (sum.text || sum.error || '').slice(0, 300));
+  await go('/settings'); await clickText('.tab', /Alerts/); await wait(300);
+  await clickText('button', /Preview today's summary/); await wait(1500);
+  check('Settings → Alerts previews the summary with a WhatsApp share button', /Sales: UGX/.test(await A.evaluate(() => document.querySelector('.summary-preview')?.innerText || '')) && !!(await A.$('a[href^="https://wa.me/?text="]')));
+}
+
+// ---------- pack sizes: sell and receive by the strip ----------
+{
+  await go('/medicines'); await A.type('.page-head input.search', 'Ciprofloxacin'); await wait(400);
+  await clickText('tbody button', /^Packs/); await wait(300);
+  await setVal('.modal input[aria-label="Pack name"]', 'Strip'); await setVal('.modal input[aria-label="Units in the pack"]', 10); await setVal('.modal input[aria-label="Pack price"]', 4800);
+  await clickText('.modal button', /Save packs/); await wait(600);
+  const before = (await stockOf())['Ciprofloxacin 500mg tabs'];
+  await go('/pos'); await wait(500);
+  await A.focus('.pos-products input.search'); await A.keyboard.type('6001003'); await A.keyboard.press('Enter'); await wait(400);
+  await A.evaluate(() => { const l = [...document.querySelectorAll('.cart-line')].find((x) => /Ciprofloxacin/.test(x.innerText)); const s2 = l.querySelector('select[aria-label="Sell by"]'); s2.value = 'Strip'; s2.dispatchEvent(new Event('change', { bubbles: true })); }); await wait(200);
+  await A.evaluate(() => [...document.querySelectorAll('.cart-line')].find((x) => /Ciprofloxacin/.test(x.innerText)).querySelector('button[aria-label=More]').click()); await wait(200);
+  const line = await A.evaluate(() => [...document.querySelectorAll('.cart-line')].find((x) => /Ciprofloxacin/.test(x.innerText))?.innerText.replace(/\s+/g, ' '));
+  check('POS sells by the strip: 2 strips at 4,800 = 9,600', /UGX 9,600/.test(line || ''), line);
+  await A.keyboard.down('Alt'); await A.keyboard.press('1'); await A.keyboard.up('Alt');
+  await clickText('button', /^Charge/); await wait(1500);
+  const receipt = await A.evaluate(() => document.querySelector('.modal')?.innerText.replace(/\s+/g, ' ') || '');
+  check('the receipt says 2 × Strip (10)', /2 × Strip \(10\) @ UGX 4,800/.test(receipt), receipt.slice(0, 200));
+  await clickText('.modal button', /New sale/); await wait(300);
+  const mid = (await stockOf())['Ciprofloxacin 500mg tabs'];
+  check('stock goes down in tablets (20)', mid === before - 20, `${before} → ${mid}`);
+  await go('/add-stock'); await A.evaluate(() => document.querySelectorAll('button[aria-label="Remove line"]').forEach((x) => x.click())); await wait(300);
+  await A.select('form.card select', 'sup-km');
+  await A.type('.picker input', 'Ciprofloxacin'); await A.keyboard.press('Enter'); await wait(300);
+  await A.evaluate(() => { const s2 = document.querySelector('table.lines tbody tr select[aria-label="Received as"]'); s2.value = 'Strip'; s2.dispatchEvent(new Event('change', { bubbles: true })); }); await wait(200);
+  await setVal('table.lines tbody tr:nth-child(1) input[aria-label="Quantity"]', 2);
+  await setVal('table.lines tbody tr:nth-child(1) input[aria-label="Line total"]', 8000);
+  await setVal('table.lines tbody tr:nth-child(1) input[aria-label="Batch number"]', 'B-CIP');
+  await setVal('table.lines tbody tr:nth-child(1) input[aria-label="Expiry date"]', '2028-06-30'); await wait(200);
+  check('Add Stock receives by the strip and shows the tablets (2 strips = 20)', /= 20 units/.test(await A.evaluate(() => document.querySelector('table.lines tbody tr')?.innerText || '')));
+  await clickText('button', /Receive stock/); await wait(1500);
+  const after = (await stockOf())['Ciprofloxacin 500mg tabs'];
+  check('received strips add tablets to stock (+20)', after === mid + 20, `${mid} → ${after}`);
+}
+
 // ---------- camera barcode scanning (Chrome's fake camera shows a Code 128 barcode for 6001003, Ciprofloxacin) ----------
 {
   const PAT = ('212222 222122 222221 121223 121322 131222 122213 122312 132212 221213 221312 231212 112232 122132 122231 113222 123122 123221 223211 221132 221231 213212 223112 312131 311222 321122 321221 312212 322112 322211 212123 212321 232121 111323 131123 131321 112313 132113 132311 211313 231113 231311 112133 112331 132131 113123 113321 133121 313121 211331 231131 213113 213311 213131 311123 311321 331121 312113 312311 332111 314111 221411 431111 111224 111422 121124 121421 141122 141221 112214 112412 122114 122411 142112 142211 241211 221114 413111 241112 134111 111242 121142 121241 114212 124112 124211 411212 421112 421211 212141 214121 412121 111143 111341 131141 114113 114311 411113 411311 113141 114131 311141 411131 211412 211214 211232 2331112').split(' ');

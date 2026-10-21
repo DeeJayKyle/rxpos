@@ -22,8 +22,9 @@
   // Only our own domain: api.rxposug.com (the free workers.dev address and preview URLs are switched off)
   "workers_dev": false,
   "preview_urls": false,
-  // Every 5 minutes: uptime watch (worker/uptime.js). Mondays 06:00 UTC: keep the Brevo API key active (worker/index.js → scheduled)
-  "triggers": { "crons": ["*/5 * * * *", "0 6 * * 1"] },
+  // Every 5 minutes: uptime watch (worker/uptime.js). Mondays 06:00 UTC: keep the Brevo API key active (worker/index.js → scheduled).
+  // Daily 18:00 UTC (21:00 in Uganda): owner summary emails (worker/summary.js)
+  "triggers": { "crons": ["*/5 * * * *", "0 6 * * 1", "0 18 * * *"] },
   "routes": [{ "pattern": "api.rxposug.com", "custom_domain": true }],
   // Cloudflare Workers AI (open models) for prescription reading and drug quizzes
   "ai": { "binding": "AI" },

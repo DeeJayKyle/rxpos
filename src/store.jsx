@@ -13,7 +13,7 @@ export const TABLES = [
   'products', 'formulations', 'customers', 'suppliers', 'sales', 'proformas', 'purchases', 'movements',
   'prescriptions', 'expenses', 'expenseCategories', 'banks', 'bankTx', 'loans', 'payments', 'users',
   'batches', 'branches', 'transfers', 'audit', 'purchaseOrders', 'roles', 'messages', 'shifts', 'license', 'events', 'tempLogs', 'catalogHidden', 'quizResults',
-  'stockCounts', 'countItems',
+  'stockCounts', 'countItems', 'supplierReturns',
 ];
 // What is persisted on the device, one IndexedDB key per part
 const PARTS = [...TABLES, 'settings', '_tomb'];
@@ -296,7 +296,7 @@ export function mergeRemote(db, changes) {
   // newest first, like local inserts (only the lists that received something: re-sorting 40,000 sales on every
   // small sync made phones lag)
   const touched = new Set(changes.map((c) => c.t));
-  ['sales', 'purchases', 'expenses', 'payments', 'bankTx', 'proformas', 'prescriptions', 'transfers', 'audit', 'purchaseOrders', 'stockCounts'].forEach((t) => {
+  ['sales', 'purchases', 'expenses', 'payments', 'bankTx', 'proformas', 'prescriptions', 'transfers', 'audit', 'purchaseOrders', 'stockCounts', 'supplierReturns'].forEach((t) => {
     if (touched.has(t)) d[t].sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
   });
   return d;
@@ -558,11 +558,12 @@ export function customerBalance(db, id) {
   const paid = db.payments.filter((p) => p.kind === 'customer' && p.partyId === id).reduce((a, p) => a + p.amount, 0);
   return credit - paid;
 }
-/** Amount we owe a supplier: purchases minus amounts paid on them and later payments. */
+/** Amount we owe a supplier: purchases minus amounts paid on them, later payments and credit notes for returns. */
 export function supplierBalance(db, id) {
   const owed = db.purchases.filter((p) => p.supplierId === id).reduce((a, p) => a + (p.total - (p.paid ?? p.total)), 0);
   const paid = db.payments.filter((p) => p.kind === 'supplier' && p.partyId === id).reduce((a, p) => a + p.amount, 0);
-  return owed - paid;
+  const credits = (db.supplierReturns || []).filter((r) => r.supplierId === id && r.settle === 'credit').reduce((a, r) => a + (r.total || 0), 0);
+  return owed - paid - credits;
 }
 
 /** Normalise a Ugandan (or international) phone number to 2567XXXXXXXX form. */

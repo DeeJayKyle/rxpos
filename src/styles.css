@@ -1024,3 +1024,13 @@ body { font-feature-settings: 'cv11', 'ss01', 'ss03'; text-rendering: optimizeLe
 .camscan-last.ok { background: var(--ok-soft); color: var(--ok); }
 .camscan-last.warn { background: var(--warn-soft); color: var(--warn); }
 .cam-count { flex: none; white-space: nowrap; }
+.summary-preview { white-space: pre-wrap; font: 13px/1.55 inherit; font-family: inherit; background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; margin-top: 12px; max-height: 420px; overflow: auto; }
+.pack-select { margin-top: 4px; padding: 3px 6px; font-size: 12px; border-radius: 7px; min-width: 0; width: auto; }
+.cart-line .pack-select { margin: 0 4px 0 0; }
+.otp-input { text-align: center; font-size: 28px; letter-spacing: .4em; font-weight: 700; font-variant-numeric: tabular-nums; padding: 12px; }
+.qr-wrap { display: grid; place-items: center; }
+.qr { width: 200px; height: 200px; border-radius: 12px; border: 1px solid var(--border); }
+code.key { font-size: 12px; background: var(--surface-2); padding: 2px 6px; border-radius: 6px; user-select: all; }
+.twostep-head { display: grid; justify-items: center; gap: 4px; text-align: center; }
+.twostep-head svg { color: var(--primary); margin-bottom: 2px; }
+.twostep-head strong { font-size: 17px; }

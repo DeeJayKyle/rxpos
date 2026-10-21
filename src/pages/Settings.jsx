@@ -3,7 +3,7 @@ import { Store, Printer, MessageSquareText, Cloud, DatabaseBackup, CheckCircle2,
 import { useStore, uid, audit, downloadFile, today, defaultSettings, DEFAULT_PAYMENT_METHODS } from '../store.jsx';
 import { Tabs } from '../ui.jsx';
 import { ask, toast } from '../feedback.jsx';
-import { cloudConfig } from '../cloud.js';
+import { cloudConfig, daySummary } from '../cloud.js';
 import { searchPlaces, DEFAULT_PLACE, storageLimits } from '../weather.js';
 import { isWeb, platformName } from '../platform.js';
 import { LABEL, onUpdate, checkForUpdate, applyUpdate } from '../update.js';
@@ -118,6 +118,7 @@ export default function Settings() {
         </form>
       )}
 
+      {tab === 'alerts' && <DailySummary s={s} setS={setS} onSave={submitSettings} />}
       {tab === 'alerts' && (
         <form className="card" onSubmit={submitSettings}>
           <h3><BellRing size={18} />Idle promotions & reminders</h3>
@@ -266,5 +267,38 @@ function AppVersion() {
         {u.status === 'ready' && <button className="btn primary" onClick={applyUpdate}>Update now</button>}
       </div>
     </div>
+  );
+}
+
+/** Daily owner summary: emailed every evening at 21:00 to the addresses here; preview, send now or share on WhatsApp */
+function DailySummary({ s, setS, onSave }) {
+  const { syncCfg, can } = useStore();
+  const [preview, setPreview] = useState(null);
+  const [busy, setBusy] = useState('');
+  const run = async (send) => {
+    setBusy(send ? 'send' : 'preview');
+    try {
+      const r = await daySummary(syncCfg, send);
+      setPreview(r.text);
+      if (send) toast(r.sent ? `Summary emailed to ${r.sent} address${r.sent > 1 ? 'es' : ''}` : r.error || 'Add an email address first, then save', r.sent ? 'success' : 'warn');
+    } catch (e) { toast(e.message, 'error'); }
+    finally { setBusy(''); }
+  };
+  if (!can('reports')) return null;
+  return (
+    <form className="card" onSubmit={onSave}>
+      <h3><MessageSquareText size={18} />Daily summary for the owner</h3>
+      <p className="muted small">Every evening at 9 pm: the day's sales and how they were paid, profit, expenses, refunds, each branch, best sellers, and stock expiring or running low.</p>
+      <div className="form-grid">
+        <label className="field full"><span>Email it to (up to 5 addresses, separated by commas)</span><input type="text" inputMode="email" value={s.summaryEmails || ''} onChange={(e) => setS({ ...s, summaryEmails: e.target.value })} placeholder="owner@example.com" /></label>
+      </div>
+      <div className="row gap">
+        <button className="btn primary">Save</button>
+        <button type="button" className="btn ghost" disabled={!!busy} onClick={() => run(false)}>{busy === 'preview' ? 'Loading…' : "Preview today's summary"}</button>
+        <button type="button" className="btn ghost" disabled={!!busy} onClick={() => run(true)}>{busy === 'send' ? 'Sending…' : 'Email it now'}</button>
+        {preview && <a className="btn ghost" href={`https://wa.me/?text=${encodeURIComponent(preview)}`} target="_blank" rel="noreferrer">Share on WhatsApp</a>}
+      </div>
+      {preview && <pre className="summary-preview">{preview}</pre>}
+    </form>
   );
 }

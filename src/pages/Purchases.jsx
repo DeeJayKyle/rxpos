@@ -15,6 +15,8 @@ const round2 = (n) => Math.round(n * 100) / 100;
 const numOrBlank = (n) => (n === '' || n == null || !Number.isFinite(Number(n)) ? '' : String(round2(Number(n))));
 /** Unit cost exactly as entered: a line typed as a total keeps total ÷ qty unrounded, so qty × cost = the invoice total */
 const unitCost = (l) => (l.by === 'total' && l.total !== '' && Number(l.qty) > 0 ? Number(l.total) / Number(l.qty) : Number(l.cost) || 0);
+/** Cost of one selling unit: a line received by the box divides the box cost by the units in a box */
+const baseCost = (l) => unitCost(l) / (Number(l.recvSize) || 1);
 const lineTotal = (l) => (l.by === 'total' && l.total !== '' ? Number(l.total) || 0 : (Number(l.qty) || 0) * (Number(l.cost) || 0));
 
 /**
@@ -33,8 +35,8 @@ function editLine(l, patch, priceFor) {
   if ('price' in patch) n.auto = patch.price === ''; // clearing the price hands it back to the markup
   const costChanged = 'cost' in patch || 'total' in patch || ('qty' in patch && n.by === 'total');
   // a medicine already in the list never gets a lower price on its own: the higher of today's price and cost + markup
-  if (n.auto && (costChanged || patch.price === '' || patch.reprice) && unitCost(n) > 0) {
-    const worked = priceFor(unitCost(n));
+  if (n.auto && (costChanged || patch.price === '' || patch.reprice || 'recvSize' in patch) && baseCost(n) > 0) {
+    const worked = priceFor(baseCost(n));
     n.kept = Number(n.basePrice) > worked;
     n.price = String(n.kept ? Number(n.basePrice) : worked); n.derived = true;
   }
@@ -181,7 +183,7 @@ export function AddStock() {
     if (noExpiry) return toast(`Enter the expiry date for ${nameOf(noExpiry)} (needed for first-expiry-first-out)`, 'warn');
     const expired = lines.find((l) => daysUntil(l.expiry) < 0);
     if (expired) return toast(`${nameOf(expired)}: the expiry date ${expired.expiry} has already passed. Check the date on the pack.`, 'error');
-    const below = lines.filter((l) => Number(l.price) > 0 && Number(l.price) < unitCost(l));
+    const below = lines.filter((l) => Number(l.price) > 0 && Number(l.price) < baseCost(l));
     if (below.length && !(await ask({ title: 'Selling below cost?', message: `${below.map(nameOf).slice(0, 5).join(', ')}${below.length > 5 ? '…' : ''}: the retail price is lower than the cost. Receive anyway?`, confirmText: 'Receive anyway' }))) return;
 
     const supplier = db.suppliers.find((x) => x.id === form.supplierId);
@@ -190,7 +192,8 @@ export function AddStock() {
     const purchase = {
       id: uid(), number: 'GRN' + Date.now().toString(36).toUpperCase().slice(-6), supplierId: form.supplierId, supplierName: supplier?.name || '—',
       invoice: form.invoice.trim(), date: form.date || today(), receivedBy: user.name, total, paid, bankId: form.bankId, branchId,
-      items: lines.map((l) => ({ productId: idOf(l), name: nameOf(l), qty: Number(l.qty), cost: unitCost(l), batch: l.batch.trim(), expiry: l.expiry, ...(l.productId === NEW ? { added: true } : {}) })),
+      items: lines.map((l) => ({ productId: idOf(l), name: nameOf(l), qty: Number(l.qty) * (Number(l.recvSize) || 1), cost: baseCost(l), batch: l.batch.trim(), expiry: l.expiry, ...(l.productId === NEW ? { added: true } : {}),
+        ...(Number(l.recvSize) > 1 ? { pack: { name: l.recvPack, size: Number(l.recvSize), count: Number(l.qty), cost: unitCost(l) } } : {}) })),
       ...(scanned ? { scanned: true } : {}),
     };
     update((d) => {
@@ -207,10 +210,10 @@ export function AddStock() {
       lines.forEach((l, n) => {
         const p = d.products.find((x) => x.id === idOf(l));
         if (!p) return;
-        const cost = unitCost(l);
+        const cost = baseCost(l);
         const b = addBatch(d, { productId: p.id, batch: l.batch, expiry: l.expiry, cost });
         purchase.items[n].batchId = b.id;
-        move(d, { productId: p.id, qty: Number(l.qty), type: 'Purchase', ref: purchase.invoice || purchase.number, user: user.name, batchId: b.id, branchId });
+        move(d, { productId: p.id, qty: purchase.items[n].qty, type: 'Purchase', ref: purchase.invoice || purchase.number, user: user.name, batchId: b.id, branchId });
         const price = Number(l.price) || p.price;
         if (cost !== p.cost || price !== p.price) {
           put(d, 'products', { ...p, cost: cost || p.cost, price });
@@ -289,7 +292,8 @@ export function AddStock() {
             <tbody>
               {form.lines.map((l) => {
                 const p = l.productId && l.productId !== NEW ? products.find((x) => x.id === l.productId) : null;
-                const cost = unitCost(l), price = Number(l.price) || 0;
+                const cost = baseCost(l), price = Number(l.price) || 0;
+                const packs = (p?.packs || []).filter((k) => k.name && Number(k.size) > 1);
                 const markup = cost > 0 && price > 0 ? Math.round(((price - cost) / cost) * 100) : null;
                 return (
                   <tr key={l.key} className={l.productId === NEW ? 'new-line' : ''}>
@@ -310,7 +314,15 @@ export function AddStock() {
                       )}
                       {l.read && <small className={'scan-read' + (!l.productId || l.read.unclear ? ' text-warn' : ' muted')}>{!l.productId || l.read.unclear ? <AlertTriangle size={11} /> : <CheckCircle2 size={11} />} Invoice: {l.read.name}{l.read.unclear ? ' (hard to read)' : ''}</small>}
                     </td>
-                    <td><input type="number" min="1" step="any" inputMode="decimal" value={l.qty} onChange={(e) => setLine(l.key, { qty: e.target.value })} aria-label="Quantity" /></td>
+                    <td><input type="number" min="1" step="any" inputMode="decimal" value={l.qty} onChange={(e) => setLine(l.key, { qty: e.target.value })} aria-label="Quantity" />
+                      {packs.length > 0 && (
+                        <select className="pack-select" value={l.recvPack || ''} aria-label="Received as" onChange={(e) => { const k = packs.find((x) => x.name === e.target.value); setLine(l.key, { recvPack: k?.name || '', recvSize: k ? Number(k.size) : 1 }); }}>
+                          <option value="">{p.unit || 'Unit'}s</option>
+                          {packs.map((k) => <option key={k.name} value={k.name}>{k.name}s of {k.size}</option>)}
+                        </select>
+                      )}
+                      {Number(l.recvSize) > 1 && <small className="price-hint muted">= {(Number(l.qty) || 0) * l.recvSize} {(p?.unit || 'unit').toLowerCase()}s</small>}
+                    </td>
                     <td><input type="number" min="0" step="any" inputMode="decimal" placeholder="0" value={l.cost} onChange={(e) => setLine(l.key, { cost: e.target.value })} aria-label="Unit cost" />
                       {(() => { const best = (prices.get(l.productId) || []).find((o) => o.supplierId !== form.supplierId); return best && cost > 0 && best.cost < cost ? <small className="price-hint text-warn" title={`Last bought from ${best.supplierName} on ${best.date}`}>{best.supplierName}: {fmt(best.cost)}</small> : null; })()}
                     </td>

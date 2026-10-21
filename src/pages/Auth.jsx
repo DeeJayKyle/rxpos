@@ -7,6 +7,9 @@ import { cloudLogin, cloudUrl, forgotPassword, resetPassword, whatsappLink, phar
 import { isWeb, isNative, pharmacySlugFromUrl } from '../platform.js';
 
 const LAST_EMAIL = 'rxpos-last-email';
+// This device passed two-step sign-in for this person, so it may sign them in offline
+const trustKey = (tenant, uid) => `rxpos-2fa-ok:${tenant || 'device'}:${uid}`;
+const trusted = (tenant, uid) => { try { return localStorage.getItem(trustKey(tenant, uid)) === '1'; } catch { return false; } };
 const networkFailure = (e) => e instanceof TypeError || /took too long|No internet|Failed to fetch|NetworkError/i.test(e.message);
 
 /**
@@ -20,6 +23,8 @@ export default function Auth() {
   const [pharmacy, setPharmacy] = useState(() => (syncCfg.tenant && (!slug || slug === syncCfg.slug) ? { name: syncCfg.pharmacy || db.settings.name, slug: syncCfg.slug, logo: db.license?.[0]?.branding?.logo } : null));
   const [form, setForm] = useState(() => ({ email: (() => { try { return localStorage.getItem(LAST_EMAIL) || ''; } catch { return ''; } })(), password: '', code: slug || '', otp: '', newPassword: '' }));
   const [needCode, setNeedCode] = useState(false);
+  const [twoStep, setTwoStep] = useState(null); // { tenant } while the authenticator code is asked
+  const [totp, setTotp] = useState('');
   const [choices, setChoices] = useState(null); // pharmacies this email + password opens
   const [ownerToken, setOwnerToken] = useState(''); // set when the same email + password is also the RxPOS owner's
   // The owner's email and password open the owner console (web only: it isn't part of the apps)
@@ -50,7 +55,8 @@ export default function Auth() {
 
     if (navigator.onLine) {
       try {
-        const r = await cloudLogin(url, email, form.password, code);
+        const r = await cloudLogin(url, email, form.password, twoStep ? twoStep.tenant : code, twoStep ? totp : undefined);
+        if (r.twoFactor) { setTwoStep({ tenant: code }); setTotp(''); return; }
         if (r.owner) { openOwner(r.owner.token); return; }
         if (r.choose) { setChoices(r.choose); setOwnerToken(r.ownerToken || ''); return; } // several pharmacies (or also the owner): let them pick
         await finish(r, email);
@@ -63,6 +69,7 @@ export default function Auth() {
     }
     if (!local || !sameStore) throw new Error('No internet connection. The first sign-in on a device needs the internet to download your pharmacy.');
     if (!(await verifyPassword(local, form.password))) throw new Error('Wrong email or password.');
+    if (local.twoFactor && !trusted(syncCfg.tenant, local.id)) throw new Error('You use two-step sign-in, and this device has not been signed in with your code yet. Connect to the internet once to sign in here.');
     if (local.algo !== 'pbkdf2') { const pw = await makePassword(form.password); update((d) => { put(d, 'users', { ...local, ...pw }); }); }
     setUser({ id: local.id, name: local.name, email: local.email, role: local.role });
   }); };
@@ -84,6 +91,8 @@ export default function Auth() {
 
   const finish = async (r, email) => {
     await linkPharmacy({ url, token: r.token, account: email, tenant: r.tenant, slug: r.slug, pharmacy: r.pharmacy });
+    if (twoStep) try { localStorage.setItem(trustKey(r.tenant, r.user.id), '1'); } catch { /* storage blocked */ }
+    setTwoStep(null);
     if (isWeb && r.slug && slug !== r.slug) history.replaceState(null, '', '/' + r.slug + location.hash);
     setUser(r.user);
   };
@@ -92,6 +101,7 @@ export default function Auth() {
     const email = form.email.trim().toLowerCase();
     const r = await cloudLogin(url, email, form.password, c.code);
     setChoices(null);
+    if (r.twoFactor) { setTwoStep({ tenant: c.code }); setTotp(''); return; }
     await finish(r, email);
   });
   const codeField = (
@@ -164,6 +174,15 @@ export default function Auth() {
               {error && <div className="error">{error}</div>}
               {busy && <p className="muted small center">Signing in…</p>}
             </div>
+          ) : twoStep ? (
+            <form onSubmit={signIn} className="stack">
+              <button type="button" className="btn sm ghost" style={{ alignSelf: 'flex-start' }} onClick={() => { setTwoStep(null); setError(''); }} disabled={busy}><ArrowLeft size={14} />Back</button>
+              <div className="center twostep-head"><ShieldCheck size={26} /><strong>Two-step sign-in</strong><span className="muted small">Type the 6-digit code from the authenticator app on your phone</span></div>
+              <input className="otp-input" value={totp} onChange={(e) => setTotp(e.target.value.replace(/\D/g, '').slice(0, 6))} inputMode="numeric" autoComplete="one-time-code" placeholder="000000" autoFocus aria-label="Authenticator code" required minLength={6} />
+              {error && <div className="error">{error}</div>}
+              <button className="btn primary block" disabled={busy || totp.length !== 6}><LogIn size={16} />{busy ? 'Checking…' : 'Sign in'}</button>
+              <p className="muted small center">Lost your phone? Your administrator can switch two-step sign-in off for you (Users &amp; Roles).</p>
+            </form>
           ) : forgot ? forgotPanel() : (
             <form onSubmit={signIn} className="stack">
               {pharmacy?.error ? <div className="error">{pharmacy.error}</div> : <p className="muted center auth-title"><Building2 size={15} /> {title}</p>}

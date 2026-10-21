@@ -4,10 +4,11 @@ import { useStore, makePassword, uid, put, del, audit, normalizePhone } from '..
 import { PERMISSIONS, rolesOf, DEFAULT_ROLES } from '../access.js';
 import { Modal, Tabs, Empty } from '../ui.jsx';
 import { ask, askText, toast } from '../feedback.jsx';
+import { twoStep } from '../cloud.js';
 
 /** Staff accounts and roles. Every person signs in with their own email; roles decide what they can do. */
 export default function Users() {
-  const { db, update, user, branchId } = useStore();
+  const { db, update, user, branchId, syncCfg } = useStore();
   const [tab, setTab] = useState('users');
   const [edit, setEdit] = useState(null);
   const [roleEdit, setRoleEdit] = useState(null);
@@ -32,6 +33,10 @@ export default function Users() {
     setEdit(null);
   };
 
+  const resetTwoStep = async (u) => {
+    if (!(await ask({ title: `Switch off two-step sign-in for ${u.name}?`, message: 'Only if they lost their phone. They sign in with the password and can set it up again.', confirmText: 'Switch off', danger: true }))) return;
+    try { await twoStep(syncCfg, '/reset', { uid: u.id }); toast(`Two-step sign-in switched off for ${u.name}`); } catch (e) { toast(e.message, 'error'); }
+  };
   const resetPassword = async (u) => {
     const pw = await askText({ title: `New password for ${u.name}`, type: 'password', minLength: 8, confirmText: 'Set password' });
     if (!pw) return;
@@ -80,7 +85,7 @@ export default function Users() {
             <tbody>
               {db.users.map((u) => (
                 <tr key={u.id} className={u.disabled ? 'dim' : ''}>
-                  <td><strong>{u.name}</strong>{u.id === user.id && <span className="badge">you</span>}</td>
+                  <td><strong>{u.name}</strong>{u.id === user.id && <span className="badge">you</span>}{u.twoFactor && <span className="badge ok" title="Two-step sign-in is on"><ShieldCheck size={11} />2-step</span>}</td>
                   <td>{u.email}</td>
                   <td>{u.phone || '—'}{u.whatsapp && u.whatsapp !== u.phone ? <><br /><small className="muted">WA {u.whatsapp}</small></> : null}</td>
                   <td><span className="badge">{roleName(u.role)}</span></td>
@@ -92,6 +97,7 @@ export default function Users() {
                     <button className="btn sm ghost" onClick={() => resetPassword(u)}><KeyRound size={14} />Password</button>
                     </>}
                     {u.id !== user.id && !isAdminRow(u) && <button className="btn sm ghost" onClick={() => update((d) => { put(d, 'users', { ...u, disabled: !u.disabled }); audit(d, user, u.disabled ? 'User enabled' : 'User disabled', u.name, branchId); })}>{u.disabled ? 'Enable' : 'Disable'}</button>}
+                    {u.twoFactor && u.id !== user.id && <button className="btn sm ghost" title="They lost their phone: switch two-step sign-in off so they can sign in with the password, then set it up again" onClick={() => resetTwoStep(u)}>Reset 2-step</button>}
                     {u.id !== user.id && !isAdminRow(u) && <button className="btn sm danger" title="Delete" onClick={() => removeUser(u)}><Trash2 size={14} /></button>}
                   </td>
                 </tr>

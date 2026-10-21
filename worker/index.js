@@ -22,6 +22,8 @@ import { isOwner, ownerAuthRoutes, ownerAccount, verifyGoogle, getConfig, ownerM
 export { TenantHub } from './live.js';
 import { backup, restore } from './backup.js';
 import { uptimeCheck } from './uptime.js';
+import { dailySummaries } from './summary.js';
+import { twoStepDdl, twoStepOf, totpCheck, markUsed, twoStepRoutes } from './twostep.js';
 
 // Database: Cloudflare D1 (binding DB) by default, or libSQL / Turso when DB_BACKEND = "turso"
 // (secrets TURSO_URL + TURSO_AUTH_TOKEN). The rest of the code doesn't know the difference.
@@ -87,6 +89,7 @@ function ensureSchema(db) {
       if (!/\bbranding\b/.test(have.get('tenants'))) ddl.push('ALTER TABLE tenants ADD COLUMN branding TEXT'); // logo and allowed themes, set by the owner
     }
     if (!have.has('tenants_slug')) ddl.push('CREATE UNIQUE INDEX tenants_slug ON tenants(slug)');
+    if (!have.has('twofa')) ddl.push(twoStepDdl); // two-step sign-in secrets (worker/twostep.js), never synced
     if (!have.has('login_fail')) ddl.push('CREATE TABLE login_fail (email TEXT PRIMARY KEY, n INTEGER NOT NULL, until INTEGER NOT NULL DEFAULT 0)');
     if (!have.has('rtc')) ddl.push('CREATE TABLE rtc (id INTEGER PRIMARY KEY AUTOINCREMENT, tenant TEXT NOT NULL, to_uid TEXT NOT NULL, from_uid TEXT NOT NULL, from_name TEXT, type TEXT NOT NULL, call_id TEXT NOT NULL, data TEXT, at INTEGER NOT NULL)');
     if (!have.has('rtc_to')) ddl.push('CREATE INDEX rtc_to ON rtc(tenant, to_uid, id)'); // instant look-up of calls waiting for a person
@@ -296,10 +299,23 @@ async function pharmacyLogin(env, body, ownerToken) {
   }
   const t = await tenantById(env, match.tenant);
   if (!t || t.status !== 'active') return ownerToken ? json({ owner: { token: ownerToken } }) : json({ error: 'This pharmacy account is suspended. Please contact your RxPOS provider.' }, 403);
-  if (fail) await env.DB.prepare('DELETE FROM login_fail WHERE email = ?1').bind(lockKey).run();
   // the same email and password is also the owner's: let them choose the pharmacy or the owner console
   if (ownerToken) return json({ choose: [{ code: t.slug || t.id, name: t.name, role: match.u.role || '' }, OWNER_CHOICE], ownerToken });
   const u = match.u;
+  // two-step sign-in: the password was right; now the code from the person's authenticator app
+  const tf = await twoStepOf(env, match.tenant, u.id);
+  if (tf?.enabled) {
+    if (!body.otp) return json({ twoFactor: true });
+    const step = await totpCheck(tf.secret, body.otp, tf.last_step);
+    if (step < 0) {
+      const n = (fail && fail.until <= Date.now() && fail.until > 0 ? 0 : fail?.n || 0) + 1;
+      const until = n >= MAX_FAILS ? Date.now() + LOCK_MINUTES * 60000 : 0;
+      await env.DB.prepare('INSERT INTO login_fail (email, n, until) VALUES (?1, ?2, ?3) ON CONFLICT(email) DO UPDATE SET n = ?2, until = ?3').bind(lockKey, until ? 0 : n, until).run();
+      return json({ twoFactor: true, error: until ? `Too many wrong codes. Sign-in is locked for ${LOCK_MINUTES} minutes.` : 'That code is not right. Type the newest code from your authenticator app.' }, until ? 429 : 401);
+    }
+    await markUsed(env, match.tenant, u.id, step);
+  }
+  if (fail) await env.DB.prepare('DELETE FROM login_fail WHERE email = ?1').bind(lockKey).run(); // only once the code is right too
   const token = await signToken(env, { sub: u.id, tn: match.tenant, name: u.name, role: u.role, exp: Date.now() + TOKEN_DAYS * 864e5 });
   return json({ token, tenant: match.tenant, slug: t.slug || match.tenant, pharmacy: t.name, user: { id: u.id, name: u.name, email: u.email, role: u.role } });
 }
@@ -1027,6 +1043,8 @@ export default {
   // Every 5 minutes: uptime watch (worker/uptime.js). Mondays 06:00 UTC: use the Brevo key once so Brevo never
   // disables it for 90 days of inactivity (password emails are rare).
   async scheduled(event, env, ctx) {
+    // 18:00 UTC = 21:00 in Uganda: each pharmacy's daily summary email (worker/summary.js)
+    if (event.cron === '0 18 * * *') { ctx.waitUntil(dailySummaries(withDatabase(env)).then((r) => console.log('daily summaries', r.map((x) => `${x.tenant}:${x.sent}${x.error ? ' ' + x.error : ''}`).join(', '))).catch((e) => console.log('daily summaries failed', e.message))); return; }
     if (event.cron !== '0 6 * * 1') { ctx.waitUntil(uptimeCheck(withDatabase(env)).then((r) => console.log('uptime', JSON.stringify(r))).catch((e) => console.log('uptime check failed', e.message))); return; }
     if (env.BREVO_API_KEY) ctx.waitUntil(fetch('https://api.brevo.com/v3/account', { headers: { 'api-key': env.BREVO_API_KEY, Accept: 'application/json' } }).then((r) => console.log('brevo keep-alive', r.status)).catch((e) => console.log('brevo keep-alive failed', e.message)));
   },
@@ -1090,6 +1108,14 @@ export default {
 
       if (path === '/api/sync' && req.method === 'POST') return await sync(env, body, who);
       if (path === '/api/config') return json({ tenant: who.tenant, slug: who.tenantRow.slug || who.tenant, pharmacy: who.tenantRow.name, mtn: mtn.enabled(penv), airtel: airtel.enabled(penv), sms: !!(penv.AT_USERNAME && penv.AT_API_KEY), email: !!(env.BREVO_API_KEY && env.BREVO_SENDER_EMAIL), mtnEnv: penv.MTN_ENV || 'sandbox', airtelEnv: penv.AIRTEL_ENV || 'uat', role: who.role });
+      if (path === '/api/2fa' || path.startsWith('/api/2fa/')) return await twoStepRoutes(env, req, path, body, who, { json, roleCan, existingRec, serverWriteMany,
+        audit: (action, details) => ({ t: 'audit', id: crypto.randomUUID(), rec: { date: new Date().toISOString(), user: who.name || '', action, details, branchId: 'main' } }) });
+      // Today's owner summary for this pharmacy: preview (GET) or email it now to the addresses in Settings (POST)
+      if (path === '/api/summary') {
+        if (!who.viaKey && !(await roleCan(env, who.tenant, who.role, 'reports'))) return json({ error: 'Only staff who can see reports' }, 403);
+        const [r] = await dailySummaries(env, { tenantId: who.tenant, dry: req.method !== 'POST' });
+        return json(r ? { day: r.day, text: r.text, to: r.to, sent: r.sent, error: r.error } : { error: 'No pharmacy' }, r ? 200 : 404);
+      }
       if (path === '/api/rtc' || path === '/api/rtc/config') return await rtc(env, req, url, body, who);
       if (path === '/api/files' && req.method === 'POST') return await uploadChunk(env, body, who);
       if (path.startsWith('/api/ai/') && req.method === 'POST') return await ai(env, path, body, who);

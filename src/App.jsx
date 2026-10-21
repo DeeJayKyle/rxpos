@@ -3,7 +3,7 @@ import { HashRouter, Routes, Route, NavLink, Navigate, useNavigate, useLocation 
 import {
   LayoutDashboard, ShoppingCart, PackageOpen, ReceiptText, FileText, ClipboardPlus, Users, Truck, Pill, FlaskConical,
   Boxes, PackagePlus, History, CalendarClock, PencilRuler, ScrollText, Wallet, Tags, Landmark, ArrowLeftRight, HandCoins,
-  ArrowDownLeft, ArrowUpRight, ClipboardCheck, RefreshCw, BookOpen, BarChart3, Settings as SettingsIcon, Search, Sun, Moon, Menu, LogOut, ChevronDown,
+  ArrowDownLeft, ArrowUpRight, ClipboardCheck, RefreshCw, Undo2, ShieldPlus, BookOpen, BarChart3, Settings as SettingsIcon, Search, Sun, Moon, Menu, LogOut, ChevronDown,
   CornerDownLeft, User, Plus, BellRing, ShoppingBag, Tag, FileUp, Building2, Send, ShieldCheck, Clock, BookMarked, MessagesSquare, UserCog, KeyRound, CalendarDays, Thermometer, Palette, ScanText, GraduationCap, Megaphone, CalendarRange,
 } from 'lucide-react';
 import { useStore, makePassword, put, audit, isLowStock, expiryCounts } from './store.jsx';
@@ -20,6 +20,7 @@ import { isWeb } from './platform.js';
 import RefreshHost from './refresh.jsx';
 import { startUpdates, onUpdate, applyUpdate, justUpdated, LABEL } from './update.js';
 import { applyTheme, savedTheme, saveTheme, allowedThemes } from './themes.js';
+import { TwoStepModal } from './twostep.jsx';
 const OwnerConsole = lazy(() => import('./pages/OwnerConsole.jsx'));
 
 // Pages load on demand so the app opens fast, even on low-end PCs and phones
@@ -58,6 +59,8 @@ const P = {
   Weekly: page(() => import('./pages/Weekly.jsx')),
   Storage: page(() => import('./pages/Storage.jsx')),
   StockCount: page(() => import('./pages/StockCount.jsx')),
+  Returns: page(() => import('./pages/Returns.jsx')),
+  Controlled: page(() => import('./pages/Controlled.jsx')),
 };
 
 // [path, label, Icon, shortcut, badge, element, permission, feature]
@@ -87,8 +90,10 @@ const NAV = [
     ['/formulations', 'Formulations', FlaskConical, null, null, <P.Formulations />, 'medicines.manage'],
     ['/inventory', 'Inventory', Boxes, 'F7', 'low', <P.StockLevels />, 'inventory.view'],
     ['/add-stock', 'Add Stock', PackagePlus, 'F4', null, <P.AddStock />, 'stock.receive'],
+    ['/returns', 'Returns to Supplier', Undo2, null, null, <P.Returns />, ['stock.receive', 'stock.adjust']],
     ['/purchases', 'Purchase History', History, null, null, <P.Purchases />, 'stock.receive'],
     ['/stock-count', 'Stock Count', ClipboardCheck, null, null, <P.StockCount />, ['stock.count', 'stock.adjust']],
+    ['/controlled', 'Controlled Drugs & Recalls', ShieldPlus, null, null, <P.Controlled />, 'inventory.view'],
     ['/expiry', 'Expiring / Expired', CalendarClock, null, 'expiry', <P.Expiry />, 'inventory.view'],
     ['/reorder', 'Reorder & Dead Stock', ShoppingBag, null, null, <P.Reorder />, 'stock.receive', 'reorder'],
     ['/quick-edit', 'Quick Edit', PencilRuler, null, null, <P.QuickEdit />, 'medicines.manage'],
@@ -246,12 +251,13 @@ function CommandPalette({ open, onClose, pages }) {
 }
 
 function Shell() {
-  const { db, products, user, setUser, branchId, branch, update, syncNow } = useStore();
+  const { db, products, user, setUser, branchId, branch, update, syncNow, syncCfg } = useStore();
   const navigate = useNavigate();
   const location = useLocation();
   const [theme, setTheme] = useTheme();
   const [drawer, setDrawer] = useState(false);
   const [palette, setPalette] = useState(false);
+  const [twoStepOpen, setTwoStepOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(() => { try { return JSON.parse(localStorage.getItem('pharmapos-nav')) || {}; } catch { return {}; } });
 
   const { can, features, batchesOf, day } = useStore();
@@ -330,6 +336,7 @@ function Shell() {
           <span className="avatar">{initials}</span>
           <div className="grow"><strong>{user.name}</strong><small>{user.role}</small></div>
           <button className="icon-btn" title="Change my password" onClick={() => changePassword(false)}><KeyRound size={17} /></button>
+          {syncCfg?.key?.startsWith('u.') && <button className={'icon-btn' + (me?.twoFactor ? ' text-ok' : '')} title={me?.twoFactor ? 'Two-step sign-in is on' : 'Two-step sign-in'} onClick={() => setTwoStepOpen(true)}><ShieldCheck size={17} /></button>}
           <button className="icon-btn" title="Log out" onClick={() => setUser(null)}><LogOut size={17} /></button>
         </div>
       </aside>
@@ -372,6 +379,7 @@ function Shell() {
       <AutoReorder />
       <FirstDownload />
       <UpdateHost />
+      {twoStepOpen && <TwoStepModal onClose={() => setTwoStepOpen(false)} />}
     </div>
   );
 }
