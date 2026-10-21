@@ -2,7 +2,7 @@ import { useState, useMemo, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Download, Barcode as BarcodeIcon, SlidersHorizontal, Save, Undo2, Pencil } from 'lucide-react';
 import { CrudPage, Tabs, Modal, SearchBox, Empty, PdfButton } from '../ui.jsx';
-import { useStore, daysUntil, put, move, addBatch, audit, downloadFile, toCSV, batchValue, stockValue, MAIN_BRANCH } from '../store.jsx';
+import { useStore, daysUntil, put, move, addBatch, audit, downloadFile, toCSV, batchValue, stockValue, markupPrice, MAIN_BRANCH } from '../store.jsx';
 import { ask, toast } from '../feedback.jsx';
 import { newInternalBarcode } from '../barcode.jsx';
 
@@ -40,8 +40,8 @@ export function MedicineList() {
     // batch/expiry shown in lists are derived from the batches; keep the product's own (legacy) values
     const orig = db.products.find((x) => x.id === p.id);
     p.batch = orig?.batch; p.expiry = orig?.expiry;
-    if (!p.price) p.price = Math.round(p.cost * (1 + s.retailMarkup / 100));
-    if (!p.wholesale) p.wholesale = Math.round(p.cost * (1 + s.wholesaleMarkup / 100));
+    if (!p.price) p.price = markupPrice(p.cost, s.retailMarkup, s.priceRound);
+    if (!p.wholesale) p.wholesale = markupPrice(p.cost, s.wholesaleMarkup, s.priceRound);
     if (!p.barcode) p.barcode = newInternalBarcode(new Set(db.products.map((x) => x.barcode)));
     update((d) => {
       put(d, 'products', p);

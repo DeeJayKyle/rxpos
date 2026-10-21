@@ -13,6 +13,7 @@ export const TABLES = [
   'products', 'formulations', 'customers', 'suppliers', 'sales', 'proformas', 'purchases', 'movements',
   'prescriptions', 'expenses', 'expenseCategories', 'banks', 'bankTx', 'loans', 'payments', 'users',
   'batches', 'branches', 'transfers', 'audit', 'purchaseOrders', 'roles', 'messages', 'shifts', 'license', 'events', 'tempLogs', 'catalogHidden', 'quizResults',
+  'stockCounts', 'countItems',
 ];
 // What is persisted on the device, one IndexedDB key per part
 const PARTS = [...TABLES, 'settings', '_tomb'];
@@ -34,6 +35,15 @@ export const dayOf = (v) => { const s = String(v || ''); return /^\d{4}-\d{2}-\d
 export const monthOf = (v) => dayOf(v).slice(0, 7);
 export const daysUntil = (date) => Math.ceil((new Date(date) - new Date(today())) / 864e5);
 export const daysSince = (date) => Math.floor((Date.now() - new Date(date)) / 864e5);
+
+// ---------- pricing ----------
+/** Selling price from a cost and a markup (%), rounded to the nearest unit or up to the pharmacy's price step (e.g. 50) */
+export function markupPrice(cost, markup, step = 0) {
+  const raw = (Number(cost) || 0) * (1 + (Number(markup) || 0) / 100);
+  if (!(raw > 0)) return 0;
+  const st = Number(step) || 0;
+  return st > 1 ? Math.ceil(raw / st) * st : Math.round(raw);
+}
 
 // ---------- stock alerts: only medicines actually in stock count ----------
 /** Low stock: in stock, but at or below its reorder level (never-stocked medicines are not "low") */
@@ -213,7 +223,7 @@ export const DEFAULT_PAYMENT_METHODS = [
 export function defaultSettings() {
   return {
     name: 'My Pharmacy', address: '', phone: '', license: '', currency: 'UGX', decimals: 0, taxRate: 0,
-    wholesaleMarkup: 25, retailMarkup: 50, expiryWarnDays: 90,
+    wholesaleMarkup: 25, retailMarkup: 50, priceRound: 0, expiryWarnDays: 90,
     receiptFooter: 'Thank you for your purchase. Get well soon!', paperWidth: 80, autoPrint: false,
     leadDays: 7, coverDays: 30, deadDays: 90,
     smsRefill: 'Hello {name}, this is {pharmacy}. Your refill of {medicine} is due on {date}. Reply or visit us to collect. Get well soon!',
@@ -286,7 +296,7 @@ export function mergeRemote(db, changes) {
   // newest first, like local inserts (only the lists that received something: re-sorting 40,000 sales on every
   // small sync made phones lag)
   const touched = new Set(changes.map((c) => c.t));
-  ['sales', 'purchases', 'expenses', 'payments', 'bankTx', 'proformas', 'prescriptions', 'transfers', 'audit', 'purchaseOrders'].forEach((t) => {
+  ['sales', 'purchases', 'expenses', 'payments', 'bankTx', 'proformas', 'prescriptions', 'transfers', 'audit', 'purchaseOrders', 'stockCounts'].forEach((t) => {
     if (touched.has(t)) d[t].sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
   });
   return d;

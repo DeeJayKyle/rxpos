@@ -28,6 +28,7 @@ export const PERMISSIONS = [
     ['stock.receive', 'Receive stock, purchase orders, reorder'],
     ['purchases.edit', 'Edit past purchases (quantities, costs, batches)'],
     ['inventory.edit', 'Edit inventory (batches, expiry, quantities, prices)'],
+    ['stock.count', 'Count stock (stock take); posting needs the next permission'],
     ['stock.adjust', 'Stock counts, adjustments, write-offs'],
     ['transfers', 'Stock transfers between branches'],
   ]],
@@ -47,8 +48,8 @@ const t0 = '2000-01-01T00:00:00.000Z';
 export const DEFAULT_ROLES = [
   { id: 'admin', name: 'Administrator', builtIn: true, permissions: ALL_PERMISSIONS },
   { id: 'manager', name: 'Manager', builtIn: true, permissions: ALL_PERMISSIONS.filter((p) => !['settings.manage', 'data.reset'].includes(p)) },
-  { id: 'pharmacist', name: 'Pharmacist', builtIn: true, permissions: ['pos.sell', 'pos.wholesale', 'pos.discount', 'sales.view', 'sales.refund', 'sales.edit', 'purchases.edit', 'proformas', 'shifts', 'prescriptions', 'customers', 'suppliers', 'reminders', 'chat', 'inventory.view', 'medicines.manage', 'stock.receive', 'stock.adjust', 'transfers', 'reports'] },
-  { id: 'dispenser', name: 'Dispenser', builtIn: true, permissions: ['pos.sell', 'sales.view', 'shifts', 'prescriptions', 'customers', 'chat', 'inventory.view'] },
+  { id: 'pharmacist', name: 'Pharmacist', builtIn: true, permissions: ['pos.sell', 'pos.wholesale', 'pos.discount', 'sales.view', 'sales.refund', 'sales.edit', 'purchases.edit', 'proformas', 'shifts', 'prescriptions', 'customers', 'suppliers', 'reminders', 'chat', 'inventory.view', 'medicines.manage', 'stock.receive', 'stock.count', 'stock.adjust', 'transfers', 'reports'] },
+  { id: 'dispenser', name: 'Dispenser', builtIn: true, permissions: ['pos.sell', 'sales.view', 'shifts', 'prescriptions', 'customers', 'chat', 'inventory.view', 'stock.count'] },
   { id: 'cashier', name: 'Cashier', builtIn: true, permissions: ['pos.sell', 'sales.view', 'shifts', 'customers', 'chat'] },
 ].map((r) => ({ ...r, updatedAt: t0 }));
 

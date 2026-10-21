@@ -22,6 +22,7 @@ const SUITES = [
   ['batch 17 features', 'v17.mjs', ['.output/v17']],
   ['backup & restore', 'backup-test.mjs', []],
   ['owner on main page', 'owner-main-login.mjs', ['.output/owner-main']],
+  ['stock in & stock take', 'v18.mjs', ['.output/v18']],
 ];
 const only = process.argv[2];
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -33,7 +34,15 @@ const bin = (p) => path.join(root, 'node_modules', p);
 console.log('Building the app and starting a local cloud…');
 const build = spawn(process.execPath, [bin('vite/bin/vite.js'), 'build'], { cwd: root, stdio: 'ignore' });
 await new Promise((r) => build.on('exit', r));
-const cloud = spawn(process.execPath, [bin('wrangler/bin/wrangler.js'), 'dev', '--port', '8790', '--persist-to', state, '--var', 'DB_BACKEND:', '--var', 'SYNC_KEY:local-main-key-0123456789abcdef',
+// Workers AI only runs on Cloudflare, so without a Cloudflare sign-in the local cloud starts from a copy of the config
+// without it (everything else runs locally; only AI reading / quizzes are unavailable)
+const cfgArgs = [];
+if (!process.env.CLOUDFLARE_API_TOKEN) {
+  const cfg = fs.readFileSync(path.join(root, 'wrangler.jsonc'), 'utf8').replace(/^\s*"ai":.*$/m, '');
+  fs.writeFileSync(path.join(root, 'wrangler.test.jsonc'), cfg);
+  cfgArgs.push('-c', 'wrangler.test.jsonc');
+}
+const cloud = spawn(process.execPath, [bin('wrangler/bin/wrangler.js'), 'dev', ...cfgArgs, '--port', '8790', '--persist-to', state, '--var', 'DB_BACKEND:', '--var', 'SYNC_KEY:local-main-key-0123456789abcdef',
   '--var', `OWNER_KEY:${OWNER}`, '--var', `PUBLIC_URL:${BASE}`], { cwd: root, stdio: 'ignore' });
 const stop = () => { try { process.platform === 'win32' ? spawn('taskkill', ['/pid', String(cloud.pid), '/T', '/F'], { stdio: 'ignore' }) : cloud.kill('SIGTERM'); } catch { /* already gone */ } };
 process.on('exit', stop);
