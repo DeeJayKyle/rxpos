@@ -506,7 +506,7 @@ export default function POS({ mode = 'retail' }) {
         <div className="row gap">
           <button className="btn ghost" onClick={saveProforma} disabled={!cart.length} title="F10"><FileText size={16} />Proforma</button>
           <button className="btn ghost" onClick={holdSale} disabled={!cart.length} title="Alt+H"><PauseCircle size={16} />Hold</button>
-          <button ref={chargeRef} className="btn primary grow big" onClick={checkout} disabled={!cart.length} title="F9">Charge {fmt(total)}</button>
+          <button ref={chargeRef} className={'btn primary grow big' + (narrow ? ' charge-dup' : '')} onClick={checkout} disabled={!cart.length} title="F9">Charge {fmt(total)}</button>
         </div>
       </section>
 

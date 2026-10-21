@@ -1101,3 +1101,18 @@ code.key { font-size: 12px; background: var(--surface-2); padding: 2px 6px; bord
 .remember-row { gap: 8px; flex-wrap: wrap; }
 .remember-row .check { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
 .remember-note { margin: -6px 0 0; }
+@media (max-width: 900px) {
+  /* the docked bar already has Charge */
+  .pos-cart.sheet .charge-dup { display: none; }
+  /* a cart line on a phone: name and remove on top; price, quantity and line total underneath */
+  .pos-cart.sheet .cart-line { display: grid; grid-template-columns: auto 1fr auto auto; grid-template-areas: 'check name name x' 'check info qty total'; gap: 6px 10px; align-items: center; padding: 10px 0; }
+  .pos-cart.sheet .cart-line .line-check { grid-area: check; align-self: start; margin-top: 3px; }
+  .pos-cart.sheet .cart-line > .grow { display: contents; }
+  .pos-cart.sheet .cart-line > .grow > strong { grid-area: name; font-size: 15px; }
+  .pos-cart.sheet .cart-line > .grow > small.muted { grid-area: info; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin: 0; }
+  .pos-cart.sheet .cart-line > .grow > .line-tools, .pos-cart.sheet .cart-line > .grow > .below-cost { grid-column: 2 / -1; margin: 0; }
+  .pos-cart.sheet .cart-line .qty { grid-area: qty; }
+  .pos-cart.sheet .cart-line .line-total { grid-area: total; width: auto; min-width: 74px; }
+  .pos-cart.sheet .cart-line .line-remove { grid-area: x; }
+  .pos-cart.sheet .price-input { width: 84px; }
+}
