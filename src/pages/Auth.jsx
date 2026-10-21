@@ -7,6 +7,7 @@ import { cloudLogin, cloudUrl, forgotPassword, resetPassword, whatsappLink, phar
 import { isWeb, isNative, pharmacySlugFromUrl } from '../platform.js';
 
 const LAST_EMAIL = 'rxpos-last-email';
+const REMEMBER_CHOICE = 'rxpos-remember-choice';
 // This device passed two-step sign-in for this person, so it may sign them in offline
 const trustKey = (tenant, uid) => `rxpos-2fa-ok:${tenant || 'device'}:${uid}`;
 const trusted = (tenant, uid) => { try { return localStorage.getItem(trustKey(tenant, uid)) === '1'; } catch { return false; } };
@@ -23,6 +24,8 @@ export default function Auth() {
   const [pharmacy, setPharmacy] = useState(() => (syncCfg.tenant && (!slug || slug === syncCfg.slug) ? { name: syncCfg.pharmacy || db.settings.name, slug: syncCfg.slug, logo: db.license?.[0]?.branding?.logo } : null));
   const [form, setForm] = useState(() => ({ email: (() => { try { return localStorage.getItem(LAST_EMAIL) || ''; } catch { return ''; } })(), password: '', code: slug || '', otp: '', newPassword: '' }));
   const [needCode, setNeedCode] = useState(false);
+  const [remember, setRemember] = useState(() => { try { return localStorage.getItem(REMEMBER_CHOICE) === '1'; } catch { return false; } });
+  const keepChoice = (v) => { setRemember(v); try { localStorage.setItem(REMEMBER_CHOICE, v ? '1' : '0'); } catch { /* ignore */ } };
   const [twoStep, setTwoStep] = useState(null); // { tenant } while the authenticator code is asked
   const [totp, setTotp] = useState('');
   const [choices, setChoices] = useState(null); // pharmacies this email + password opens
@@ -71,7 +74,7 @@ export default function Auth() {
     if (!(await verifyPassword(local, form.password))) throw new Error('Wrong email or password.');
     if (local.twoFactor && !trusted(syncCfg.tenant, local.id)) throw new Error('You use two-step sign-in, and this device has not been signed in with your code yet. Connect to the internet once to sign in here.');
     if (local.algo !== 'pbkdf2') { const pw = await makePassword(form.password); update((d) => { put(d, 'users', { ...local, ...pw }); }); }
-    setUser({ id: local.id, name: local.name, email: local.email, role: local.role });
+    setUser({ id: local.id, name: local.name, email: local.email, role: local.role }, { remember });
   }); };
 
   // ---- forgotten password ----
@@ -94,7 +97,7 @@ export default function Auth() {
     if (twoStep) try { localStorage.setItem(trustKey(r.tenant, r.user.id), '1'); } catch { /* storage blocked */ }
     setTwoStep(null);
     if (isWeb && r.slug && slug !== r.slug) history.replaceState(null, '', '/' + r.slug + location.hash);
-    setUser(r.user);
+    setUser(r.user, { remember });
   };
   const choose = (c) => run(async () => {
     if (c.code === '__owner__') { openOwner(ownerToken); return; }
@@ -189,9 +192,13 @@ export default function Auth() {
               <label className="field"><span>Email</span><input type="email" autoComplete="username" value={form.email} onChange={set('email')} required autoFocus={!form.email} /></label>
               <label className="field"><span>Password</span><input type="password" autoComplete="current-password" value={form.password} onChange={set('password')} required autoFocus={!!form.email} /></label>
               {needCode && codeField}
+              <div className="row between remember-row">
+                <label className="check small"><input type="checkbox" checked={remember} onChange={(e) => keepChoice(e.target.checked)} /><span>Remember me for 30 days</span></label>
+                <button type="button" className="link-btn small" onClick={() => { setForgot({ stage: 'ask' }); setError(''); }}>Forgot password?</button>
+              </div>
+              {remember && <p className="muted small remember-note">Stays signed in on this device. Leave it off on a shared computer.</p>}
               {error && <div className="error">{error}</div>}
               <button className="btn primary block" disabled={busy}><LogIn size={16} />{busy ? 'Signing in…' : 'Sign in'}</button>
-              <button type="button" className="link-btn" onClick={() => { setForgot({ stage: 'ask' }); setError(''); }}>Forgot password?</button>
             </form>
           )}
         </div>
