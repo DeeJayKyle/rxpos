@@ -68,7 +68,7 @@ export default function Reports() {
             <Stat label="Discounts given" value={fmt(sales.reduce((a, s) => a + (s.discount || 0), 0))} />
             <Stat label="Refunds" value={fmt(refunds.reduce((a, s) => a + s.total, 0))} sub={`${refunds.length} receipts`} />
           </div>
-          <div className="card"><h3>Daily sales</h3><BarChart fmt={fmt} data={days} series={[{ name: 'Sales', className: 'teal' }]} /></div>
+          <div className="card"><h3>Daily sales</h3><BarChart fmt={fmt} data={days} series={[{ name: 'Sales' }]} /></div>
           <div className="grid2">
             <div className="card"><h3>By payment method</h3><table><tbody>
               {sumBy(sales, (s) => s.payment, (s) => s.total).map(([k, v]) => <tr key={k}><td>{k}</td><td className="num">{fmt(v)}</td></tr>)}

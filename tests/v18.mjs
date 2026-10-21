@@ -26,6 +26,9 @@ await owner('/tenants/' + tid + '/records', { records: [
   P('p-pan', 'Panadol Extra tabs', { shelf: 'A1', barcode: '6001002' }), B('b-pan1', 'p-pan', '2027-12-31'), M('m-pan1', 'p-pan', 50, 'b-pan1'), B('b-pan2', 'p-pan', '2028-12-31'), M('m-pan2', 'p-pan', 30, 'b-pan2'),
   P('p-cip', 'Ciprofloxacin 500mg tabs', { shelf: 'B2', barcode: '6001003' }), B('b-cip', 'p-cip', '2028-06-30'), M('m-cip', 'p-cip', 60, 'b-cip'),
   { t: 'suppliers', id: 'sup-km', rec: { name: 'Kampala Medics', phone: '0700000001' } },
+  // two weeks of sales and expenses, so the dashboard charts have something to draw
+  ...Array.from({ length: 14 }, (_, i) => ({ t: 'sales', id: 'hist-s' + i, rec: { number: 'H' + i, date: iso(i + 0.2), type: 'retail', branchId: 'main', items: [{ id: 'p-cip', name: 'Ciprofloxacin 500mg tabs', qty: 1, price: 1000, cost: 500, alloc: [] }], subtotal: 1000, discount: 0, tax: 0, total: 40000 + ((i * 37) % 9) * 9000, payment: 'Cash', paid: 40000 + ((i * 37) % 9) * 9000, customerId: 'walk-in', customerName: 'Walk-in Customer', cashier: 'Sam Admin', status: 'completed' } })),
+  ...Array.from({ length: 5 }, (_, i) => ({ t: 'expenses', id: 'hist-e' + i, rec: { date: new Date(Date.now() - i * 6 * 864e5).toISOString().slice(0, 10), category: 'Rent', amount: 60000 + i * 15000, note: 'test', bankId: 'cash-drawer' } })),
 ] });
 await owner('/tenants/' + tid, { features: { catalog: false } });
 
@@ -46,6 +49,17 @@ await A.goto(base + '/' + slug, { waitUntil: 'networkidle2' }); await wait(800);
 await A.type('input[type=email]', 'sam@test.rx'); await A.type('input[type=password]', 'sam-pass-123');
 await A.evaluate(() => [...document.querySelectorAll('button')].find((x) => x.textContent.includes('Sign in')).click());
 await until(A, () => !!document.querySelector('.sidebar'), 20000); await wait(4000);
+
+// ---------- dashboard charts (screenshots for a visual check) ----------
+await go('/'); await wait(1500);
+const plot = await A.$('.chart-plot');
+if (plot) { const bx = await plot.boundingBox(); await A.mouse.move(bx.x + bx.width * 0.7, bx.y + bx.height / 2); await wait(300); }
+check('dashboard sales chart shows a tooltip with the day\'s sales on hover', /Sales/.test(await A.evaluate(() => document.querySelector('.chart-tooltip')?.innerText || '')));
+await A.screenshot({ path: path.join(out, '0-dashboard-light.png') });
+await A.evaluate(() => localStorage.setItem('pharmapos-theme', 'dark')); await A.reload({ waitUntil: 'networkidle2' }); await wait(1500);
+{ const p2 = await A.$('.chart-plot'); if (p2) { const bx = await p2.boundingBox(); await A.mouse.move(bx.x + bx.width * 0.7, bx.y + bx.height / 2); await wait(300); } }
+await A.screenshot({ path: path.join(out, '0-dashboard-dark.png') });
+await A.evaluate(() => localStorage.setItem('pharmapos-theme', 'light')); await A.reload({ waitUntil: 'networkidle2' }); await wait(1000);
 
 // ---------- Add Stock ----------
 await go('/add-stock');

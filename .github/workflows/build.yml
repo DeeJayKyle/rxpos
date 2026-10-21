@@ -104,6 +104,10 @@ jobs:
           rm -rf dist/updates   # the update archive is for devices already installed, not inside the APK
           npx cap add android
           npx cap sync android
+          # The self-update plugin asks for WorkManager 2.10, which needs Android API 35 to compile; 2.9 has every
+          # class it uses and builds with Capacitor 6 (compileSdk 34)
+          printf '\nallprojects { configurations.all { resolutionStrategy { force "androidx.work:work-runtime:2.9.1" } } }\n' >> android/build.gradle
+          tail -2 android/build.gradle
       - name: Android permissions (camera for prescriptions, microphone for calls & voice notes, location for weather)
         run: |
           M=android/app/src/main/AndroidManifest.xml

@@ -117,7 +117,7 @@ export default function WeeklyReport() {
         <Stat label="Gross profit" value={fmt(w.profit)} delta={pct(w.profit, w.prevProfit)} sub="sales − cost − discounts" tone="amber" icon={TrendingUp} />
       </div>
       <div className="grid2">
-        <div className="card"><h3>Sales by day</h3><BarChart data={w.byDay} fmt={fmt} series={[{ name: 'This week', className: 'teal' }, { name: 'Week before', className: 'violet' }]} height={190} /></div>
+        <div className="card"><h3>Sales by day</h3><BarChart data={w.byDay} fmt={fmt} series={[{ name: 'This week' }, { name: 'Week before' }]} height={190} /></div>
         <div className="card"><h3><Trophy size={17} />Top sellers</h3>{w.top.length ? <HBars rows={w.top} fmt={fmt} note={(r) => `· ${r.qty}`} /> : <Empty>No sales this week</Empty>}</div>
       </div>
       <div className="grid2">
