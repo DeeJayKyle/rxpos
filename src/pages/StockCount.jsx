@@ -3,6 +3,7 @@ import { ClipboardCheck, Plus, Minus, ArrowLeft, Check, EyeOff, Eye, Search, Sca
 import { useStore, uid, now, today, put, del, move, addBatch, audit, downloadFile, toCSV, daysUntil } from '../store.jsx';
 import { Modal, Tabs, Empty, PdfButton } from '../ui.jsx';
 import { ask, toast } from '../feedback.jsx';
+import { CameraButton, CameraScanner } from '../camscan.jsx';
 
 /*
  * Stock take: count what is physically on the shelves and make RxPOS match it.
@@ -185,6 +186,8 @@ function CountSheet({ count, onBack }) {
   const [reveal, setReveal] = useState(false);
   const [review, setReview] = useState(false);
   const [limit, setLimit] = useState(150);
+  const [cam, setCam] = useState(null); // camera scanner: 'find' an item, or 'count' (each scan counts one pack)
+  const tally = cam === 'count';
   const searchRef = useRef(null);
   const sheetRef = useRef(null);
   const blind = count.blind && !reveal && !readOnly;
@@ -223,6 +226,30 @@ function CountSheet({ count, onBack }) {
     if (!ids.includes(code.id)) addToCount(code);
     setTab('all'); setQ(code.barcode && code.barcode.toLowerCase() === ql ? code.name : q);
     setTimeout(() => { const el = document.querySelector(`[data-count-row="${code.id}"] [data-count-input]`); el?.focus(); el?.select?.(); el?.scrollIntoView({ block: 'center' }); }, 60);
+  };
+  /** One more pack of this medicine, on its earliest-expiry batch (scan-to-count) */
+  const tallyOne = (p) => {
+    const bs = systemBatches(batchesOf, p.id);
+    if (!bs.length) return `${p.name}: no batch recorded here. Add the batch you find on its card`;
+    const it = itemBy.get(p.id);
+    const lines = bs.map((b, i) => {
+      const saved = it?.lines.find((l) => l.batchId === b.id);
+      if (i > 0) return saved || { key: b.id, batchId: b.id, batch: b.batch, expiry: b.expiry || '', cost: b.cost || p.cost || 0, sys: b.qty, qty: b.qty, skipped: true };
+      const counted = saved && !saved.skipped ? numOr(saved.qty) : 0;
+      return { key: b.id, batchId: b.id, batch: b.batch, expiry: b.expiry || '', cost: b.cost || p.cost || 0, sys: saved && !saved.skipped ? saved.sys : b.qty, qty: counted + 1 };
+    });
+    for (const l of it?.lines || []) if (!lines.some((x) => x.batchId && x.batchId === l.batchId)) lines.push(l);
+    saveItem(p, lines);
+    return `${p.name}: ${lines[0].qty} counted (batch ${lines[0].batch})`;
+  };
+  const onCameraCode = (code) => {
+    const p = products.find((x) => x.barcode && x.barcode === code);
+    if (!p) return false;
+    if (!ids.includes(p.id)) addToCount(p);
+    if (tally) return tallyOne(p);
+    setCam(null); setTab('all'); setQ(p.name);
+    setTimeout(() => { const el = document.querySelector(`[data-count-row="${p.id}"] [data-count-input]`); el?.focus(); el?.select?.(); el?.scrollIntoView({ block: 'center' }); }, 120);
+    return p.name;
   };
   const addToCount = (p) => {
     update((d) => { const c = d.stockCounts.find((x) => x.id === count.id); if (c && !c.productIds.includes(p.id)) put(d, 'stockCounts', { ...c, productIds: [...c.productIds, p.id] }); });
@@ -270,8 +297,12 @@ function CountSheet({ count, onBack }) {
           <ScanLine size={20} />
           <input ref={searchRef} autoFocus className="search big" placeholder="Scan a barcode or type a medicine name, then Enter" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onSearchKey} />
           {q && <button className="icon-btn" aria-label="Clear search" onClick={() => { setQ(''); searchRef.current?.focus(); }}>×</button>}
+          <CameraButton className="btn ghost cam-btn" label="Scan to find an item" onClick={() => setCam('find')} />
+          {navigator.mediaDevices?.getUserMedia && <button type="button" className="btn ghost cam-count" title="Scan & count: each scan counts one pack" onClick={() => setCam('count')}><ScanLine size={16} />Scan &amp; count</button>}
         </div>
       )}
+      {cam && <CameraScanner title={tally ? 'Scan & count: each scan counts one pack' : 'Scan to find an item'} onClose={() => setCam(null)} onCode={onCameraCode} continuous={tally}
+        extra={tally && <p className="small muted">Each pack goes on its earliest-expiry batch; set other batches on the item's card.</p>} />}
       {outside.length > 0 && (
         <div className="card outside">
           <small className="muted">Not on this count's list. Tap to add and count it:</small>

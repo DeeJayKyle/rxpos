@@ -108,6 +108,9 @@ jobs:
           # class it uses and builds with Capacitor 6 (compileSdk 34)
           printf '\nallprojects { configurations.all { resolutionStrategy { force "androidx.work:work-runtime:2.9.1" } } }\n' >> android/build.gradle
           tail -2 android/build.gradle
+          # …and needs Android 6.0 (API 23) or newer (Capacitor 6 alone allows 5.1)
+          sed -i 's/minSdkVersion = 22/minSdkVersion = 23/' android/variables.gradle
+          grep -n minSdkVersion android/variables.gradle
       - name: Android permissions (camera for prescriptions, microphone for calls & voice notes, location for weather)
         run: |
           M=android/app/src/main/AndroidManifest.xml

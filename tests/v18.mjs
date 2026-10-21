@@ -223,6 +223,46 @@ if (await A.$('.update-pill')) await A.click('.update-pill');
 check('"Update" reloads the app onto the new build', await reloaded);
 await wait(1500);
 
+// ---------- camera barcode scanning (Chrome's fake camera shows a Code 128 barcode for 6001003, Ciprofloxacin) ----------
+{
+  const PAT = ('212222 222122 222221 121223 121322 131222 122213 122312 132212 221213 221312 231212 112232 122132 122231 113222 123122 123221 223211 221132 221231 213212 223112 312131 311222 321122 321221 312212 322112 322211 212123 212321 232121 111323 131123 131321 112313 132113 132311 211313 231113 231311 112133 112331 132131 113123 113321 133121 313121 211331 231131 213113 213311 213131 311123 311321 331121 312113 312311 332111 314111 221411 431111 111224 111422 121124 121421 141122 141221 112214 112412 122114 122411 142112 142211 241211 221114 413111 241112 134111 111242 121142 121241 114212 124112 124211 411212 421112 421211 212141 214121 412121 111143 111341 131141 114113 114311 411113 411311 113141 114131 311141 411131 211412 211214 211232 2331112').split(' ');
+  const text = '6001003', codes = [104, ...[...text].map((c) => c.charCodeAt(0) - 32)];
+  codes.push(codes.reduce((a, c, i) => a + c * (i || 1), 0) % 103, 106);
+  const widths = codes.flatMap((c) => [...PAT[c]].map(Number));
+  const W = 640, H = 480, mod = 3, x0 = Math.round((W - widths.reduce((a, b) => a + b, 0) * mod) / 2);
+  const Y = Buffer.alloc(W * H, 235);
+  let x = x0; widths.forEach((w, i) => { if (i % 2 === 0) for (let yy = 140; yy < 340; yy++) Y.fill(16, yy * W + x, yy * W + x + w * mod); x += w * mod; });
+  const UV = Buffer.alloc((W / 2) * (H / 2) * 2, 128);
+  const frames = [Buffer.from(`YUV4MPEG2 W${W} H${H} F10:1 Ip A1:1 C420jpeg\n`)];
+  for (let f = 0; f < 10; f++) frames.push(Buffer.from('FRAME\n'), Y, UV);
+  const cam = path.resolve(out, 'barcode.y4m'); fs.writeFileSync(cam, Buffer.concat(frames));
+  const bc = await puppeteer.launch({ executablePath: CHROME, headless: true, args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', `--use-file-for-fake-video-capture=${cam}`] });
+  const C = await (await bc.createBrowserContext()).newPage(); await C.setViewport({ width: 1280, height: 860 });
+  C.on('pageerror', (e) => errors.push(e.message));
+  await C.goto(base + '/' + slug, { waitUntil: 'networkidle2' }); await wait(800);
+  await C.type('input[type=email]', 'sam@test.rx'); await C.type('input[type=password]', 'sam-pass-123');
+  await C.evaluate(() => [...document.querySelectorAll('button')].find((x) => x.textContent.includes('Sign in')).click());
+  await until(C, () => !!document.querySelector('.sidebar'), 20000); await wait(3000);
+  await C.goto(base + '/' + slug + '#/pos', { waitUntil: 'networkidle2' }); await wait(1200);
+  await C.evaluate(() => { for (const b of document.querySelectorAll('.sale-tab-x')) b.remove(); });
+  const before = await C.evaluate(() => [...document.querySelectorAll('.cart-line strong')].filter((x) => /Ciprofloxacin/.test(x.innerText)).length);
+  await C.click('.cam-btn');
+  const read = await until(C, () => /Ciprofloxacin 500mg tabs added/.test(document.querySelector('.camscan-last')?.innerText || ''), 25000);
+  check('camera scan at the POS reads the barcode and adds the medicine', read, await C.evaluate(() => document.querySelector('.camscan-last, .camscan-msg')?.innerText || 'nothing read'));
+  await C.evaluate(() => [...document.querySelectorAll('.modal button')].find((x) => /Done/.test(x.innerText))?.click()); await wait(400);
+  check('…it is on the sale', (await C.evaluate(() => [...document.querySelectorAll('.cart-line strong')].some((x) => /Ciprofloxacin/.test(x.innerText)))) || before > 0);
+  // scan-to-count in a stock count
+  await C.goto(base + '/' + slug + '#/stock-count', { waitUntil: 'networkidle2' }); await wait(1000);
+  await C.evaluate(() => [...document.querySelectorAll('.page-head button')].find((x) => /New stock count/.test(x.innerText)).click()); await wait(400);
+  await C.evaluate(() => [...document.querySelectorAll('.modal .scope-opt')].find((x) => /Scan as you go/.test(x.innerText)).click()); await wait(200);
+  await C.evaluate(() => [...document.querySelectorAll('.modal button')].find((x) => /Start counting/.test(x.innerText)).click()); await wait(1200);
+  await C.click('.count-search .cam-count');
+  const counted = await until(C, () => /Ciprofloxacin 500mg tabs: \d+ counted/.test(document.querySelector('.camscan-last')?.innerText || ''), 25000);
+  check('scan-to-count: each scan of the pack counts it on the stock count', counted, await C.evaluate(() => document.querySelector('.camscan-last')?.innerText || ''));
+  await C.screenshot({ path: path.join(out, '4-camera.png') });
+  await bc.close();
+}
+
 check('no page errors', errors.length === 0, errors.slice(0, 3).join(' | '));
 await b.close();
 await owner('/tenants/' + tid + '/delete', { confirm: slug });

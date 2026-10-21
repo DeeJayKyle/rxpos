@@ -7,6 +7,7 @@ import { Modal, PdfButton } from '../ui.jsx';
 import { ask, toast } from '../feedback.jsx';
 import { newInternalBarcode } from '../barcode.jsx';
 import { invoicePages, readInvoice, matchProduct, matchSupplier, normDate } from '../invoiceScan.js';
+import { CameraButton, CameraScanner } from '../camscan.jsx';
 
 const NEW = '__new__'; // a line for a medicine that is not in the list yet
 const FORMS = ['Tablets', 'Capsules', 'Syrups', 'Suspensions', 'Injectables', 'Creams', 'Ointments', 'Drops', 'Sachets', 'Devices', 'Surgicals', 'Others'];
@@ -110,6 +111,7 @@ export function AddStock() {
   const [restored, setRestored] = useState(restoredDraft.current);
   const [q, setQ] = useState('');
   const [saved, setSaved] = useState(null);
+  const [cam, setCam] = useState(false);
   const searchRef = useRef(null);
   const nameRefs = useRef({});
 
@@ -133,8 +135,8 @@ export function AddStock() {
     return empty?.key || line.key;
   };
   const pick = (p) => placeLine(lineFor(p, {}, form.markup));
-  const addNew = (name) => {
-    const key = placeLine({ ...blankLine(), productId: NEW, name: name.trim() });
+  const addNew = (name, barcode = '') => {
+    const key = placeLine({ ...blankLine(), productId: NEW, name: name.trim(), ...(barcode ? { barcode } : {}) });
     setTimeout(() => nameRefs.current[key]?.focus(), 30);
   };
   const onSearchKey = (e) => {
@@ -196,7 +198,7 @@ export function AddStock() {
         if (l.productId !== NEW) continue;
         const id = idOf(l);
         if (d.products.some((x) => x.id === id)) continue;
-        const cost = unitCost(l), barcode = newInternalBarcode(used);
+        const cost = unitCost(l), barcode = l.barcode && !used.has(l.barcode) ? l.barcode : newInternalBarcode(used);
         used.add(barcode);
         put(d, 'products', { id, name: nameOf(l), generic: '', form: l.form || 'Others', unit: 'Unit', price: Number(l.price), wholesale: markupPrice(cost, s.wholesaleMarkup, s.priceRound) || Number(l.price), cost, reorder: 0, barcode });
         audit(d, user, 'Medicine added', `${nameOf(l)} (on receiving ${purchase.number})`, branchId);
@@ -229,6 +231,12 @@ export function AddStock() {
   return (
     <div className="page">
       <div className="page-head"><h1>Add Stock</h1><button type="button" className="btn ghost" onClick={() => setScanOpen(true)}><ScanText size={16} />Scan invoice</button></div>
+      {cam && <CameraScanner title="Scan medicines into the delivery" onClose={() => setCam(false)} onCode={(code) => {
+        const p = products.find((x) => x.barcode && x.barcode === code);
+        if (p) { pick(p); return `${p.name} added`; }
+        addNew('', code); setCam(false);
+        return 'New barcode: type the medicine name';
+      }} />}
       {scanOpen && <InvoiceScanner cfg={syncCfg} onClose={() => setScanOpen(false)} onRead={applyScan} />}
       {restored && !scanned && (
         <div className="notice info-notice row between gap wrap">
@@ -264,7 +272,8 @@ export function AddStock() {
           <label className="field"><span>Date</span><input type="date" value={form.date} max={today()} onChange={(e) => setForm({ ...form, date: e.target.value })} /></label>
           <label className="field"><span>Retail markup for worked-out prices (%)</span><input type="number" min="0" step="any" value={form.markup} onChange={(e) => setMarkup(e.target.value)} /></label>
         </div>
-        <div className="picker">
+        <div className="picker row gap search-row">
+          <CameraButton className="btn ghost cam-btn" onClick={() => setCam(true)} />
           <input ref={searchRef} className="search big" placeholder="Search or scan a medicine to add… (Enter adds the first match)" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onSearchKey} />
           {ql && (
             <div className="picker-list">
