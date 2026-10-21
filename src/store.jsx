@@ -223,7 +223,7 @@ export const DEFAULT_PAYMENT_METHODS = [
 export function defaultSettings() {
   return {
     name: 'My Pharmacy', address: '', phone: '', license: '', currency: 'UGX', decimals: 0, taxRate: 0,
-    wholesaleMarkup: 25, retailMarkup: 50, priceRound: 0, expiryWarnDays: 90,
+    wholesaleMarkup: 25, retailMarkup: 50, priceRound: 0, minMargin: 20, expiryWarnDays: 90,
     receiptFooter: 'Thank you for your purchase. Get well soon!', paperWidth: 80, autoPrint: false,
     leadDays: 7, coverDays: 30, deadDays: 90,
     smsRefill: 'Hello {name}, this is {pharmacy}. Your refill of {medicine} is due on {date}. Reply or visit us to collect. Get well soon!',
@@ -532,6 +532,24 @@ export function toCSV(rows) {
   const cols = Object.keys(rows[0]);
   const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
   return [cols.join(','), ...rows.map((r) => cols.map((c) => esc(r[c])).join(','))].join('\n');
+}
+
+/** What each supplier last charged for each medicine: productId → [{ supplierId, supplierName, cost, date }], cheapest first */
+export function supplierPrices(purchases) {
+  const m = new Map();
+  for (const p of purchases) {
+    if (!p.supplierId) continue;
+    for (const i of p.items || []) {
+      if (!(i.cost > 0)) continue;
+      let per = m.get(i.productId);
+      if (!per) m.set(i.productId, (per = new Map()));
+      const cur = per.get(p.supplierId);
+      if (!cur || String(p.date) >= String(cur.date)) per.set(p.supplierId, { supplierId: p.supplierId, supplierName: p.supplierName, cost: i.cost, date: p.date });
+    }
+  }
+  const out = new Map();
+  for (const [k, per] of m) out.set(k, [...per.values()].sort((a, b) => a.cost - b.cost));
+  return out;
 }
 
 /** Amount a customer owes: credit sales minus payments received. */

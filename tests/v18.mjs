@@ -26,6 +26,13 @@ await owner('/tenants/' + tid + '/records', { records: [
   P('p-pan', 'Panadol Extra tabs', { shelf: 'A1', barcode: '6001002' }), B('b-pan1', 'p-pan', '2027-12-31'), M('m-pan1', 'p-pan', 50, 'b-pan1'), B('b-pan2', 'p-pan', '2028-12-31'), M('m-pan2', 'p-pan', 30, 'b-pan2'),
   P('p-cip', 'Ciprofloxacin 500mg tabs', { shelf: 'B2', barcode: '6001003' }), B('b-cip', 'p-cip', '2028-06-30'), M('m-cip', 'p-cip', 60, 'b-cip'),
   { t: 'suppliers', id: 'sup-km', rec: { name: 'Kampala Medics', phone: '0700000001' } },
+  { t: 'suppliers', id: 'sup-np', rec: { name: 'Nile Pharma', phone: '0700000002' } },
+  // the same medicine from two suppliers: Nile Pharma is cheaper
+  { t: 'purchases', id: 'old-p1', rec: { number: 'GRN-OLD1', supplierId: 'sup-km', supplierName: 'Kampala Medics', date: new Date(Date.now() - 20 * 864e5).toISOString().slice(0, 10), items: [{ productId: 'p-pan', name: 'Panadol Extra tabs', qty: 10, cost: 520 }], total: 5200, paid: 5200, branchId: 'main', imported: 'test' } },
+  { t: 'purchases', id: 'old-p2', rec: { number: 'GRN-OLD2', supplierId: 'sup-np', supplierName: 'Nile Pharma', date: new Date(Date.now() - 10 * 864e5).toISOString().slice(0, 10), items: [{ productId: 'p-pan', name: 'Panadol Extra tabs', qty: 10, cost: 450 }], total: 4500, paid: 4500, branchId: 'main', imported: 'test' } },
+  // two weeks of sales and expenses, so the dashboard charts have something to draw
+  ...Array.from({ length: 14 }, (_, i) => ({ t: 'sales', id: 'hist-s' + i, rec: { number: 'H' + i, date: iso(i + 0.2), type: 'retail', branchId: 'main', items: [{ id: 'p-cip', name: 'Ciprofloxacin 500mg tabs', qty: 1, price: 1000, cost: 500, alloc: [] }], subtotal: 1000, discount: 0, tax: 0, total: 40000 + ((i * 37) % 9) * 9000, payment: 'Cash', paid: 40000 + ((i * 37) % 9) * 9000, customerId: 'walk-in', customerName: 'Walk-in Customer', cashier: 'Sam Admin', status: 'completed' } })),
+  ...Array.from({ length: 5 }, (_, i) => ({ t: 'expenses', id: 'hist-e' + i, rec: { date: new Date(Date.now() - i * 6 * 864e5).toISOString().slice(0, 10), category: 'Rent', amount: 60000 + i * 15000, note: 'test', bankId: 'cash-drawer' } })),
 ] });
 await owner('/tenants/' + tid, { features: { catalog: false } });
 
@@ -46,6 +53,17 @@ await A.goto(base + '/' + slug, { waitUntil: 'networkidle2' }); await wait(800);
 await A.type('input[type=email]', 'sam@test.rx'); await A.type('input[type=password]', 'sam-pass-123');
 await A.evaluate(() => [...document.querySelectorAll('button')].find((x) => x.textContent.includes('Sign in')).click());
 await until(A, () => !!document.querySelector('.sidebar'), 20000); await wait(4000);
+
+// ---------- dashboard charts (screenshots for a visual check) ----------
+await go('/'); await wait(1500);
+const plot = await A.$('.chart-plot');
+if (plot) { const bx = await plot.boundingBox(); await A.mouse.move(bx.x + bx.width * 0.7, bx.y + bx.height / 2); await wait(300); }
+check('dashboard sales chart shows a tooltip with the day\'s sales on hover', /Sales/.test(await A.evaluate(() => document.querySelector('.chart-tooltip')?.innerText || '')));
+await A.screenshot({ path: path.join(out, '0-dashboard-light.png') });
+await A.evaluate(() => localStorage.setItem('pharmapos-theme', 'dark')); await A.reload({ waitUntil: 'networkidle2' }); await wait(1500);
+{ const p2 = await A.$('.chart-plot'); if (p2) { const bx = await p2.boundingBox(); await A.mouse.move(bx.x + bx.width * 0.7, bx.y + bx.height / 2); await wait(300); } }
+await A.screenshot({ path: path.join(out, '0-dashboard-dark.png') });
+await A.evaluate(() => localStorage.setItem('pharmapos-theme', 'light')); await A.reload({ waitUntil: 'networkidle2' }); await wait(1000);
 
 // ---------- Add Stock ----------
 await go('/add-stock');
@@ -208,6 +226,65 @@ const reloaded = A.waitForNavigation({ waitUntil: 'networkidle2', timeout: 15000
 if (await A.$('.update-pill')) await A.click('.update-pill');
 check('"Update" reloads the app onto the new build', await reloaded);
 await wait(1500);
+
+// ---------- supplier price comparison ----------
+await go('/purchases'); await clickText('.tab', /Supplier prices/); await wait(400);
+const sp = await A.evaluate(() => [...document.querySelectorAll('tbody tr')].find((r) => /Panadol/.test(r.innerText))?.innerText.replace(/\s+/g, ' ') || '');
+check('Purchase History → Supplier prices: Panadol cheapest at Nile Pharma (450) vs Kampala Medics (520), 16% gap', /Nile Pharma UGX 450/.test(sp) && /Kampala Medics: UGX 520/.test(sp) && /16%/.test(sp), sp);
+await go('/add-stock'); await A.select('form.card select', 'sup-km');
+await A.type('.picker input', 'Panadol'); await A.keyboard.press('Enter'); await wait(300);
+await setVal('table.lines tbody tr:nth-child(1) input[aria-label="Unit cost"]', 520); await wait(200);
+check('Add Stock warns when another supplier sold it cheaper', /Nile Pharma: UGX 450/.test(await A.evaluate(() => document.querySelector('table.lines tbody tr')?.innerText || '')));
+await clickText('button', /Start again|Discard/);
+
+// ---------- profit & margins ----------
+await owner('/tenants/' + tid + '/records', { records: [P('p-cip', 'Ciprofloxacin 500mg tabs', { shelf: 'B2', barcode: '6001003', price: 520 })] });
+await A.click('.pill.clock'); await wait(3000);
+await go('/reports'); await clickText('.tab', /Profit & margins/); await wait(500);
+await setVal('.page-head input[type=date]', new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10)); await wait(500);
+const prof = await A.evaluate(() => document.querySelector('.page')?.innerText.replace(/\s+/g, ' ') || '');
+check('Reports → Profit & margins: gross profit and margin over the period', /Gross profit UGX [\d,]+/i.test(prof) && /Gross margin \d+%/i.test(prof), prof.slice(0, 200));
+check('price check lists a medicine below the 20% target margin (Cipro 500 → 520 = 4%) with the price that would reach it (625)', /Ciprofloxacin 500mg tabs UGX 500 UGX 520 4% UGX 625/.test(prof), prof.match(/Price check.{0,200}/)?.[0]);
+
+// ---------- camera barcode scanning (Chrome's fake camera shows a Code 128 barcode for 6001003, Ciprofloxacin) ----------
+{
+  const PAT = ('212222 222122 222221 121223 121322 131222 122213 122312 132212 221213 221312 231212 112232 122132 122231 113222 123122 123221 223211 221132 221231 213212 223112 312131 311222 321122 321221 312212 322112 322211 212123 212321 232121 111323 131123 131321 112313 132113 132311 211313 231113 231311 112133 112331 132131 113123 113321 133121 313121 211331 231131 213113 213311 213131 311123 311321 331121 312113 312311 332111 314111 221411 431111 111224 111422 121124 121421 141122 141221 112214 112412 122114 122411 142112 142211 241211 221114 413111 241112 134111 111242 121142 121241 114212 124112 124211 411212 421112 421211 212141 214121 412121 111143 111341 131141 114113 114311 411113 411311 113141 114131 311141 411131 211412 211214 211232 2331112').split(' ');
+  const text = '6001003', codes = [104, ...[...text].map((c) => c.charCodeAt(0) - 32)];
+  codes.push(codes.reduce((a, c, i) => a + c * (i || 1), 0) % 103, 106);
+  const widths = codes.flatMap((c) => [...PAT[c]].map(Number));
+  const W = 640, H = 480, mod = 3, x0 = Math.round((W - widths.reduce((a, b) => a + b, 0) * mod) / 2);
+  const Y = Buffer.alloc(W * H, 235);
+  let x = x0; widths.forEach((w, i) => { if (i % 2 === 0) for (let yy = 140; yy < 340; yy++) Y.fill(16, yy * W + x, yy * W + x + w * mod); x += w * mod; });
+  const UV = Buffer.alloc((W / 2) * (H / 2) * 2, 128);
+  const frames = [Buffer.from(`YUV4MPEG2 W${W} H${H} F10:1 Ip A1:1 C420jpeg\n`)];
+  for (let f = 0; f < 10; f++) frames.push(Buffer.from('FRAME\n'), Y, UV);
+  const cam = path.resolve(out, 'barcode.y4m'); fs.writeFileSync(cam, Buffer.concat(frames));
+  const bc = await puppeteer.launch({ executablePath: CHROME, headless: true, args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', `--use-file-for-fake-video-capture=${cam}`] });
+  const C = await (await bc.createBrowserContext()).newPage(); await C.setViewport({ width: 1280, height: 860 });
+  C.on('pageerror', (e) => errors.push(e.message));
+  await C.goto(base + '/' + slug, { waitUntil: 'networkidle2' }); await wait(800);
+  await C.type('input[type=email]', 'sam@test.rx'); await C.type('input[type=password]', 'sam-pass-123');
+  await C.evaluate(() => [...document.querySelectorAll('button')].find((x) => x.textContent.includes('Sign in')).click());
+  await until(C, () => !!document.querySelector('.sidebar'), 20000); await wait(3000);
+  await C.goto(base + '/' + slug + '#/pos', { waitUntil: 'networkidle2' }); await wait(1200);
+  await C.evaluate(() => { for (const b of document.querySelectorAll('.sale-tab-x')) b.remove(); });
+  const before = await C.evaluate(() => [...document.querySelectorAll('.cart-line strong')].filter((x) => /Ciprofloxacin/.test(x.innerText)).length);
+  await C.click('.cam-btn');
+  const read = await until(C, () => /Ciprofloxacin 500mg tabs added/.test(document.querySelector('.camscan-last')?.innerText || ''), 25000);
+  check('camera scan at the POS reads the barcode and adds the medicine', read, await C.evaluate(() => document.querySelector('.camscan-last, .camscan-msg')?.innerText || 'nothing read'));
+  await C.evaluate(() => [...document.querySelectorAll('.modal button')].find((x) => /Done/.test(x.innerText))?.click()); await wait(400);
+  check('…it is on the sale', (await C.evaluate(() => [...document.querySelectorAll('.cart-line strong')].some((x) => /Ciprofloxacin/.test(x.innerText)))) || before > 0);
+  // scan-to-count in a stock count
+  await C.goto(base + '/' + slug + '#/stock-count', { waitUntil: 'networkidle2' }); await wait(1000);
+  await C.evaluate(() => [...document.querySelectorAll('.page-head button')].find((x) => /New stock count/.test(x.innerText)).click()); await wait(400);
+  await C.evaluate(() => [...document.querySelectorAll('.modal .scope-opt')].find((x) => /Scan as you go/.test(x.innerText)).click()); await wait(200);
+  await C.evaluate(() => [...document.querySelectorAll('.modal button')].find((x) => /Start counting/.test(x.innerText)).click()); await wait(1200);
+  await C.click('.count-search .cam-count');
+  const counted = await until(C, () => /Ciprofloxacin 500mg tabs: \d+ counted/.test(document.querySelector('.camscan-last')?.innerText || ''), 25000);
+  check('scan-to-count: each scan of the pack counts it on the stock count', counted, await C.evaluate(() => document.querySelector('.camscan-last')?.innerText || ''));
+  await C.screenshot({ path: path.join(out, '4-camera.png') });
+  await bc.close();
+}
 
 check('no page errors', errors.length === 0, errors.slice(0, 3).join(' | '));
 await b.close();

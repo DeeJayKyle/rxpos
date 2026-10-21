@@ -96,7 +96,7 @@ export default function Dashboard() {
         </div>
         <div className="card">
           <h3>Sales vs expenses</h3>
-          <BarChart fmt={fmt} series={[{ name: 'Sales', className: 'teal' }, { name: 'Expenses', className: 'red' }]}
+          <BarChart fmt={fmt} series={[{ name: 'Sales' }, { name: 'Expenses' }]}
             data={last6.map((k) => ({ label: MONTHS[Number(k.slice(5)) - 1].slice(0, 3) + ' ' + k.slice(2, 4), values: [m.byMonth[k]?.total || 0, m.byMonth[k]?.exp || 0] }))} height={170} />
         </div>
       </div>

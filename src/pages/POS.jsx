@@ -8,6 +8,7 @@ import { Modal, SearchBox, ReceiptPdfButton } from '../ui.jsx';
 import { toast, ask } from '../feedback.jsx';
 import { payRequest, payStatus, guessNetwork, cloudConfig } from '../cloud.js';
 import { Receipt } from './Sales.jsx';
+import { CameraButton, CameraScanner } from '../camscan.jsx';
 
 // Receipt numbers must be unique across synced devices, so they are time-based rather than sequential
 export const docNumber = (prefix) => prefix + Date.now().toString(36).toUpperCase().slice(-6) + Math.floor(Math.random() * 36).toString(36).toUpperCase();
@@ -39,6 +40,7 @@ export default function POS({ mode = 'retail' }) {
   const [cursor, setCursor] = useState(-1); // cart line chosen with Alt+↑/↓ (−1 = the last one)
   const [active, setActive] = useState(0);  // highlighted medicine card (arrow keys)
   const [help, setHelp] = useState(false);
+  const [cam, setCam] = useState(false); // camera barcode scanner
   // Payment methods come from Settings → Payment methods; their type decides the behaviour
   const methods = (db.settings.paymentMethods?.length ? db.settings.paymentMethods : DEFAULT_PAYMENT_METHODS).filter((m) => m.type !== 'momo' || features.momo !== false);
   const [payment, setPayment] = useState(methods[0]?.name || 'Cash');
@@ -320,8 +322,11 @@ export default function POS({ mode = 'retail' }) {
             <button className="icon-btn" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts" onClick={() => setHelp(true)}><Keyboard size={19} /></button>
           </div>
         </div>
-        <div ref={searchRef} onKeyDown={onSearchKey}>
-          <SearchBox big value={q} onChange={setQ} placeholder="Search medicine or scan barcode…  (F8)" />
+        <div className="row gap search-row">
+          <div ref={searchRef} onKeyDown={onSearchKey} className="grow">
+            <SearchBox big value={q} onChange={setQ} placeholder="Search medicine or scan barcode…  (F8)" />
+          </div>
+          <CameraButton className="btn ghost big cam-btn" onClick={() => setCam(true)} />
         </div>
         {categories.length > 1 && (
           <div className="chips-row">
@@ -400,6 +405,7 @@ export default function POS({ mode = 'retail' }) {
             <div key={l.id} className={'cart-line' + (picked.has(l.id) ? ' picked' : '') + (cart.length > 1 && lineAt?.id === l.id && cursor >= 0 ? ' cursor' : '')} onClick={() => setCursor(cart.indexOf(l))}>
               <input type="checkbox" className="line-check" checked={picked.has(l.id)} onChange={() => togglePick(l.id)} aria-label={`Select ${l.name}`} />
               <div className="grow"><strong>{l.name}</strong>{l.rx && <span className="badge">Rx</span>}
+                {Number(l.price) < (l.cost || 0) && <small className="text-danger below-cost"> below cost{can('reports') ? ` (${fmt(l.cost)})` : ''}</small>}
                 <small className="muted">@ <input className="price-input" type="number" step="any" aria-label="Unit price" disabled={!can('pos.price_edit')} value={l.price} onChange={(e) => setLine(l.id, { price: e.target.value })} /></small>
                 <div className="line-tools">
                   <button className={'link-btn small' + (l.directions ? ' text-ok' : '')} onClick={() => setLabelFor(l)}><Tag size={12} />{l.directions ? 'Directions ✓' : 'Directions / label'}</button>
@@ -552,6 +558,15 @@ export default function POS({ mode = 'retail' }) {
         <Modal title={<><BookMarked size={18} /> {infoFor.name}</>} onClose={() => setInfoFor(null)} wide>
           <DrugInfoPanel name={infoFor.name} generic={infoFor.generic} compact />
         </Modal>
+      )}
+
+      {cam && (
+        <CameraScanner title="Scan items into the sale" onClose={() => { setCam(false); focusSearch(); }} onCode={(code) => {
+          const p = products.find((x) => x.barcode && x.barcode === code);
+          if (!p) return false;
+          add(p);
+          return `${p.name} added`;
+        }} />
       )}
 
       {help && (

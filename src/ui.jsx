@@ -173,32 +173,62 @@ export function Tabs({ tabs, value, onChange }) {
   );
 }
 
-/** Vertical bar chart: data = [{label, values: [n, …]}], series = [{name, className}] */
-export function BarChart({ data, series, fmt, height = 180 }) {
-  const max = Math.max(1, ...data.flatMap((d) => d.values));
-  const [hover, setHover] = useState(null);
+/** Short money for chart axes: 1.2M, 350K, 900 */
+export const compact = (n) => {
+  const a = Math.abs(n);
+  return a >= 1e9 ? (n / 1e9).toFixed(a >= 1e10 ? 0 : 1) + 'B' : a >= 1e6 ? (n / 1e6).toFixed(a >= 1e7 ? 0 : 1) + 'M' : a >= 1e3 ? Math.round(n / 1e3) + 'K' : String(Math.round(n));
+};
+/** A rounded axis top so grid lines fall on tidy numbers */
+const niceMax = (v) => { if (v <= 0) return 1; const p = 10 ** Math.floor(Math.log10(v)); return [1, 2, 2.5, 5, 10].map((m) => m * p).find((x) => x >= v); };
+
+/** Chart frame: y-axis values on recessive grid lines, the plot, first / last x labels, an empty state */
+function ChartFrame({ max, height, empty, first, last, children }) {
   return (
-    <div>
-      <div className="chart-tip">{hover ? <><strong>{hover.label}</strong> · {hover.values.map((v, i) => `${series[i].name} ${fmt(v)}`).join(' · ')}</> : ' '}</div>
-      <div className="bars" style={{ height }} onMouseLeave={() => setHover(null)}>
-        {data.map((d) => (
-          <div key={d.label} className="bar-group" onMouseEnter={() => setHover(d)}>
-            {d.values.map((v, i) => <div key={i} className={'bar-fill ' + series[i].className} style={{ height: `${(v / max) * 100}%` }} />)}
-          </div>
-        ))}
+    <div className="chart">
+      <div className="chart-plot" style={{ height }}>
+        <div className="chart-grid" aria-hidden="true">{[1, 0.5, 0].map((f) => <div key={f} style={{ bottom: `${f * 100}%` }}><span>{compact(max * f)}</span></div>)}</div>
+        {children}
+        {empty && <div className="chart-empty">{empty}</div>}
       </div>
-      <div className="row between muted small" style={{ marginTop: 6 }}><span>{data[0]?.label}</span><span>{data[data.length - 1]?.label}</span></div>
-      {series.length > 1 && <div className="legend">{series.map((s) => <span key={s.name}><i className={'bar-fill ' + s.className} />{s.name}</span>)}</div>}
+      <div className="chart-x"><span>{first}</span><span>{last}</span></div>
+    </div>
+  );
+}
+
+/** Vertical bar chart: data = [{label, values: [n, …]}], series = [{name}] (colours follow the series order) */
+export function BarChart({ data, series, fmt, height = 180, empty = 'Nothing recorded in this period yet' }) {
+  const max = niceMax(Math.max(0, ...data.flatMap((d) => d.values)));
+  const [hover, setHover] = useState(null);
+  const none = !data.some((d) => d.values.some((v) => v > 0));
+  return (
+    <div onMouseLeave={() => setHover(null)}>
+      <ChartFrame max={max} height={height} empty={none && empty} first={data[0]?.label} last={data[data.length - 1]?.label}>
+        <div className="bars">
+          {data.map((d, n) => (
+            <div key={d.label} className={'bar-group' + (hover === n ? ' on' : '')} onMouseEnter={() => setHover(n)} onFocus={() => setHover(n)} tabIndex={0}
+              aria-label={`${d.label}: ${d.values.map((v, i) => `${series[i].name} ${fmt(v)}`).join(', ')}`}>
+              {d.values.map((v, i) => <div key={i} className={'bar-fill s' + (i + 1)} style={{ height: v > 0 ? `max(2px, ${(v / max) * 100}%)` : 0 }} />)}
+              {hover === n && (
+                <div className={'chart-tooltip' + (n > data.length * 0.6 ? ' left' : '')} role="status">
+                  <strong>{d.label}</strong>
+                  {d.values.map((v, i) => <span key={i}><i className={'viz-swatch s' + (i + 1)} />{series[i].name}<b>{fmt(v)}</b></span>)}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </ChartFrame>
+      {series.length > 1 && <div className="legend chart-legend">{series.map((x, i) => <span key={x.name}><i className={'viz-swatch s' + (i + 1)} />{x.name}</span>)}</div>}
     </div>
   );
 }
 
 /** Smooth area chart for a single series: data = [{label, value}] */
-export function AreaChart({ data, fmt, height = 170 }) {
+export function AreaChart({ data, fmt, height = 170, empty = 'No sales in this period yet' }) {
   const [hover, setHover] = useState(null);
-  const W = 600, H = height, pad = 6;
-  const max = Math.max(1, ...data.map((d) => d.value));
-  const pts = data.map((d, i) => [pad + (i * (W - pad * 2)) / Math.max(1, data.length - 1), H - pad - (d.value / max) * (H - pad * 2 - 10)]);
+  const W = 600, H = height;
+  const max = niceMax(Math.max(0, ...data.map((d) => d.value)));
+  const pts = data.map((d, i) => [(i * W) / Math.max(1, data.length - 1), H - (d.value / max) * H]);
   const path = pts.map((p, i) => {
     if (!i) return `M${p[0]},${p[1]}`;
     const [x0, y0] = pts[i - 1];
@@ -211,22 +241,29 @@ export function AreaChart({ data, fmt, height = 170 }) {
     const i = Math.round(((e.clientX - r.left) / r.width) * (data.length - 1));
     setHover(Math.max(0, Math.min(data.length - 1, i)));
   };
+  const h = hover != null ? pts[hover] : null;
   return (
     <div>
-      <div className="chart-tip">{hover != null ? <><strong>{data[hover].label}</strong> · {fmt(data[hover].value)}</> : <>Total <strong>{fmt(total)}</strong></>}</div>
-      <svg className="area-chart" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ height: H }} onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
-        <defs>
-          <linearGradient id="areaFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--primary)" stopOpacity=".32" />
-            <stop offset="100%" stopColor="var(--primary)" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        {[0.25, 0.5, 0.75].map((f) => <line key={f} className="grid" x1="0" x2={W} y1={H * f} y2={H * f} />)}
-        {pts.length > 1 && <path d={`${path} L${pts[pts.length - 1][0]},${H} L${pts[0][0]},${H} Z`} fill="url(#areaFill)" />}
-        {pts.length > 1 && <path className="line" d={path} vectorEffect="non-scaling-stroke" />}
-        {hover != null && <><line className="grid" x1={pts[hover][0]} x2={pts[hover][0]} y1="0" y2={H} /><circle className="dot" cx={pts[hover][0]} cy={pts[hover][1]} r="4" vectorEffect="non-scaling-stroke" /></>}
-      </svg>
-      <div className="row between muted small" style={{ marginTop: 6 }}><span>{data[0]?.label}</span><span>{data[data.length - 1]?.label}</span></div>
+      <div className="chart-total">Total <strong>{fmt(total)}</strong></div>
+      <ChartFrame max={max} height={H} empty={!total && empty} first={data[0]?.label} last={data[data.length - 1]?.label}>
+        <svg className="area-chart" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ height: H }} onMouseMove={onMove} onMouseLeave={() => setHover(null)} role="img" aria-label={`Sales, total ${fmt(total)}`}>
+          <defs>
+            <linearGradient id="areaFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="var(--viz-1)" stopOpacity=".22" />
+              <stop offset="100%" stopColor="var(--viz-1)" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          {total > 0 && pts.length > 1 && <path d={`${path} L${W},${H} L0,${H} Z`} fill="url(#areaFill)" />}
+          {total > 0 && pts.length > 1 && <path className="line" d={path} vectorEffect="non-scaling-stroke" />}
+          {h && total > 0 && <line className="crosshair" x1={h[0]} x2={h[0]} y1="0" y2={H} vectorEffect="non-scaling-stroke" />}
+        </svg>
+        {h && total > 0 && <>
+          <i className="area-dot" style={{ left: `${(h[0] / W) * 100}%`, top: `${(h[1] / H) * 100}%` }} />
+          <div className={'chart-tooltip' + (hover > data.length * 0.6 ? ' left' : '')} style={{ left: `${(h[0] / W) * 100}%`, top: `${(h[1] / H) * 100}%` }} role="status">
+            <strong>{data[hover].label}</strong><span><i className="viz-swatch s1" />Sales<b>{fmt(data[hover].value)}</b></span>
+          </div>
+        </>}
+      </ChartFrame>
     </div>
   );
 }

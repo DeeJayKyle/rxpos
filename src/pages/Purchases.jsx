@@ -1,12 +1,13 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Pencil, Trash2, ScanText, Camera, FileUp, Loader2, AlertTriangle, CheckCircle2, X, Plus, RotateCcw, Sparkles } from 'lucide-react';
-import { useStore, uid, today, now, put, move, addBatch, audit, downloadFile, toCSV, markupPrice, daysUntil, MAIN_BRANCH } from '../store.jsx';
+import { useStore, uid, today, now, put, move, addBatch, audit, downloadFile, toCSV, markupPrice, daysUntil, supplierPrices, MAIN_BRANCH } from '../store.jsx';
 import { CASH } from '../finance.js';
-import { Modal, PdfButton } from '../ui.jsx';
+import { Modal, PdfButton, Tabs, Empty } from '../ui.jsx';
 import { ask, toast } from '../feedback.jsx';
 import { newInternalBarcode } from '../barcode.jsx';
 import { invoicePages, readInvoice, matchProduct, matchSupplier, normDate } from '../invoiceScan.js';
+import { CameraButton, CameraScanner } from '../camscan.jsx';
 
 const NEW = '__new__'; // a line for a medicine that is not in the list yet
 const FORMS = ['Tablets', 'Capsules', 'Syrups', 'Suspensions', 'Injectables', 'Creams', 'Ointments', 'Drops', 'Sachets', 'Devices', 'Surgicals', 'Others'];
@@ -110,10 +111,12 @@ export function AddStock() {
   const [restored, setRestored] = useState(restoredDraft.current);
   const [q, setQ] = useState('');
   const [saved, setSaved] = useState(null);
+  const [cam, setCam] = useState(false);
   const searchRef = useRef(null);
   const nameRefs = useRef({});
 
   const priceFor = priceAt(form.markup);
+  const prices = useMemo(() => supplierPrices(db.purchases), [db.purchases]);
   // The line dropdowns list this pharmacy's own and stocked medicines only (the 9,710-item catalog in every dropdown
   // made typing slow on phones); anything in the catalog is still found with the search box above
   const ownList = useMemo(() => products.filter((p) => !p.fromCatalog || p.stock > 0 || p.totalStock > 0 || !p._base).sort((a, b) => a.name.localeCompare(b.name)), [products]);
@@ -133,8 +136,8 @@ export function AddStock() {
     return empty?.key || line.key;
   };
   const pick = (p) => placeLine(lineFor(p, {}, form.markup));
-  const addNew = (name) => {
-    const key = placeLine({ ...blankLine(), productId: NEW, name: name.trim() });
+  const addNew = (name, barcode = '') => {
+    const key = placeLine({ ...blankLine(), productId: NEW, name: name.trim(), ...(barcode ? { barcode } : {}) });
     setTimeout(() => nameRefs.current[key]?.focus(), 30);
   };
   const onSearchKey = (e) => {
@@ -196,7 +199,7 @@ export function AddStock() {
         if (l.productId !== NEW) continue;
         const id = idOf(l);
         if (d.products.some((x) => x.id === id)) continue;
-        const cost = unitCost(l), barcode = newInternalBarcode(used);
+        const cost = unitCost(l), barcode = l.barcode && !used.has(l.barcode) ? l.barcode : newInternalBarcode(used);
         used.add(barcode);
         put(d, 'products', { id, name: nameOf(l), generic: '', form: l.form || 'Others', unit: 'Unit', price: Number(l.price), wholesale: markupPrice(cost, s.wholesaleMarkup, s.priceRound) || Number(l.price), cost, reorder: 0, barcode });
         audit(d, user, 'Medicine added', `${nameOf(l)} (on receiving ${purchase.number})`, branchId);
@@ -229,6 +232,12 @@ export function AddStock() {
   return (
     <div className="page">
       <div className="page-head"><h1>Add Stock</h1><button type="button" className="btn ghost" onClick={() => setScanOpen(true)}><ScanText size={16} />Scan invoice</button></div>
+      {cam && <CameraScanner title="Scan medicines into the delivery" onClose={() => setCam(false)} onCode={(code) => {
+        const p = products.find((x) => x.barcode && x.barcode === code);
+        if (p) { pick(p); return `${p.name} added`; }
+        addNew('', code); setCam(false);
+        return 'New barcode: type the medicine name';
+      }} />}
       {scanOpen && <InvoiceScanner cfg={syncCfg} onClose={() => setScanOpen(false)} onRead={applyScan} />}
       {restored && !scanned && (
         <div className="notice info-notice row between gap wrap">
@@ -264,7 +273,8 @@ export function AddStock() {
           <label className="field"><span>Date</span><input type="date" value={form.date} max={today()} onChange={(e) => setForm({ ...form, date: e.target.value })} /></label>
           <label className="field"><span>Retail markup for worked-out prices (%)</span><input type="number" min="0" step="any" value={form.markup} onChange={(e) => setMarkup(e.target.value)} /></label>
         </div>
-        <div className="picker">
+        <div className="picker row gap search-row">
+          <CameraButton className="btn ghost cam-btn" onClick={() => setCam(true)} />
           <input ref={searchRef} className="search big" placeholder="Search or scan a medicine to add… (Enter adds the first match)" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onSearchKey} />
           {ql && (
             <div className="picker-list">
@@ -301,7 +311,9 @@ export function AddStock() {
                       {l.read && <small className={'scan-read' + (!l.productId || l.read.unclear ? ' text-warn' : ' muted')}>{!l.productId || l.read.unclear ? <AlertTriangle size={11} /> : <CheckCircle2 size={11} />} Invoice: {l.read.name}{l.read.unclear ? ' (hard to read)' : ''}</small>}
                     </td>
                     <td><input type="number" min="1" step="any" inputMode="decimal" value={l.qty} onChange={(e) => setLine(l.key, { qty: e.target.value })} aria-label="Quantity" /></td>
-                    <td><input type="number" min="0" step="any" inputMode="decimal" placeholder="0" value={l.cost} onChange={(e) => setLine(l.key, { cost: e.target.value })} aria-label="Unit cost" /></td>
+                    <td><input type="number" min="0" step="any" inputMode="decimal" placeholder="0" value={l.cost} onChange={(e) => setLine(l.key, { cost: e.target.value })} aria-label="Unit cost" />
+                      {(() => { const best = (prices.get(l.productId) || []).find((o) => o.supplierId !== form.supplierId); return best && cost > 0 && best.cost < cost ? <small className="price-hint text-warn" title={`Last bought from ${best.supplierName} on ${best.date}`}>{best.supplierName}: {fmt(best.cost)}</small> : null; })()}
+                    </td>
                     <td><input type="number" min="0" step="any" inputMode="decimal" placeholder="Total amount" className={l.by === 'total' ? 'typed' : ''} value={l.total} onChange={(e) => setLine(l.key, { total: e.target.value })} aria-label="Line total" /></td>
                     <td>
                       <input type="number" min="0" step="any" inputMode="decimal" placeholder={cost > 0 ? String(priceFor(cost)) : ''} value={l.price} onChange={(e) => setLine(l.key, { price: e.target.value })} aria-label="New retail price" />
@@ -343,6 +355,7 @@ export function AddStock() {
 
 export default function Purchases() {
   const { db, fmt, can } = useStore();
+  const [tab, setTab] = useState('history');
   const [view, setView] = useState(null);
   const [editing, setEditing] = useState(null);
   const [q, setQ] = useState('');
@@ -358,7 +371,9 @@ export default function Purchases() {
           <button className="btn ghost" onClick={() => downloadFile('purchases.csv', toCSV(rows.map((p) => ({ date: p.date, number: p.number, supplier: p.supplierName, invoice: p.invoice, items: p.items.length, total: p.total, paid: p.paid ?? p.total, receivedBy: p.receivedBy }))), 'text/csv')}>Export CSV</button>
         </div>
       </div>
-      <div className="card table-wrap" ref={histRef}>
+      <Tabs tabs={[['history', 'Deliveries'], ['prices', 'Supplier prices']]} value={tab} onChange={setTab} />
+      {tab === 'prices' && <SupplierPrices q={q} />}
+      {tab === 'history' && <div className="card table-wrap" ref={histRef}>
         <table>
           <thead><tr><th>Date</th><th>GRN</th><th>Supplier</th><th>Invoice</th><th>Items</th><th>Received by</th><th className="num">Total</th><th className="num">Unpaid</th><th /></tr></thead>
           <tbody>
@@ -372,7 +387,7 @@ export default function Purchases() {
             {!rows.length && <tr><td colSpan={9} className="empty">No purchases recorded</td></tr>}
           </tbody>
         </table>
-      </div>
+      </div>}
       {editing && <PurchaseEditor purchase={editing} onClose={() => setEditing(null)} />}
       {view && (
         <Modal title={`Purchase ${view.number || ''}`} onClose={() => setView(null)} wide>
@@ -510,5 +525,36 @@ function InvoiceScanner({ cfg, onClose, onRead }) {
         <button type="button" className="btn primary" disabled={!pages.length || !!busy} onClick={read}>{busy ? <><Loader2 size={16} className="spin" />{busy}</> : <><ScanText size={16} />Read invoice</>}</button>
       </div>
     </Modal>
+  );
+}
+
+/** Each medicine bought from more than one supplier: what each charged last time, cheapest first */
+function SupplierPrices({ q }) {
+  const { db, fmt } = useStore();
+  const ref = useRef(null);
+  const names = useMemo(() => new Map(db.products.map((p) => [p.id, p.name])), [db.products]);
+  const rows = useMemo(() => [...supplierPrices(db.purchases)].filter(([, list]) => list.length > 1)
+    .map(([pid, list]) => ({ pid, name: names.get(pid) || '—', list, gap: list[list.length - 1].cost - list[0].cost, pct: Math.round(((list[list.length - 1].cost - list[0].cost) / list[0].cost) * 100) }))
+    .filter((r) => !q || r.name.toLowerCase().includes(q.toLowerCase()))
+    .sort((a, b) => b.pct - a.pct), [db.purchases, names, q]);
+  return (
+    <div className="card table-wrap" ref={ref}>
+      <div className="row between gap"><p className="muted small">Medicines you have bought from more than one supplier, with the price each charged last time. Reorder buys from the cheapest by default.</p>
+        <PdfButton target={ref} title="Supplier prices" subtitle={`${rows.length} medicines with more than one supplier`} /></div>
+      <table>
+        <thead><tr><th>Medicine</th><th>Cheapest</th><th>Others (last price)</th><th className="num">Price gap</th></tr></thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.pid}>
+              <td><strong>{r.name}</strong></td>
+              <td><span className="badge ok">{r.list[0].supplierName}</span> {fmt(r.list[0].cost)}<br /><small className="muted">{r.list[0].date}</small></td>
+              <td>{r.list.slice(1).map((o) => <div key={o.supplierId} className="small">{o.supplierName}: <strong>{fmt(o.cost)}</strong> <span className="muted">({o.date})</span></div>)}</td>
+              <td className="num"><strong className={r.pct >= 10 ? 'text-warn' : ''}>{r.pct}%</strong><br /><small className="muted">{fmt(r.gap)} per unit</small></td>
+            </tr>
+          ))}
+          {!rows.length && <Empty colSpan={4}>Buy the same medicine from two suppliers and their prices are compared here.</Empty>}
+        </tbody>
+      </table>
+    </div>
   );
 }
