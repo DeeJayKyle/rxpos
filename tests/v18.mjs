@@ -188,6 +188,27 @@ await A.keyboard.press('?'); await wait(300);
 check('? shows the list of POS shortcuts', /Alt\+H/.test(await A.evaluate(() => document.querySelector('.modal')?.innerText || '')));
 await A.screenshot({ path: path.join(out, '3-pos.png'), fullPage: true });
 
+// ---------- self-update (web) ----------
+await go('/settings'); await clickText('.tab', /Data & backup/); await wait(400);
+const ver = await A.evaluate(() => document.querySelector('.card strong')?.innerText || '');
+check('Settings shows the app version (1.0 and the build)', /RxPOS 1\.0 · \d{4}-\d{2}-\d{2}/.test(ver), ver);
+const myBuild = await A.evaluate(() => fetch('./version.json').then((r) => r.json()).then((m) => m.build));
+check('the site publishes version.json with the build and a file list', myBuild > 1e9, myBuild);
+const apiVer = await fetch(base + '/api/version').then(async (r) => ({ cors: r.headers.get('access-control-allow-origin'), ...(await r.json()) })).catch((e) => ({ error: e.message }));
+check('/api/version answers apps on other addresses (Android) with the same build, CORS allowed', apiVer.build === myBuild && apiVer.cors === '*' && /^updates\/web-\d+\.zip$/.test(apiVer.zip || ''), JSON.stringify({ b: apiVer.build, c: apiVer.cors, z: apiVer.zip, e: apiVer.error }));
+const zipOk = await fetch(base + '/' + apiVer.zip).then((r) => r.ok && r.headers.get('content-length') !== '0').catch(() => false);
+check('the update archive for Android can be downloaded', zipOk);
+await A.setRequestInterception(true);
+const onReq = (req) => (req.url().includes('/version.json') ? req.respond({ status: 200, contentType: 'application/json', body: JSON.stringify({ version: '1.0.0', build: myBuild + 3600, label: '1.0 · newer', shell: 1, files: [] }) }) : req.continue());
+A.on('request', onReq);
+await clickText('button', /Check for updates/); await wait(1200);
+check('a newer build is noticed and offered ("update ready")', !!(await A.$('.update-pill')) && /New version ready/.test(await A.evaluate(() => document.body.innerText)), await A.evaluate(() => [...document.querySelectorAll('.card')].find((c) => /App version/.test(c.innerText))?.innerText.replace(/\s+/g, ' ')));
+A.off('request', onReq); await A.setRequestInterception(false);
+const reloaded = A.waitForNavigation({ waitUntil: 'networkidle2', timeout: 15000 }).then(() => true).catch(() => false);
+if (await A.$('.update-pill')) await A.click('.update-pill');
+check('"Update" reloads the app onto the new build', await reloaded);
+await wait(1500);
+
 check('no page errors', errors.length === 0, errors.slice(0, 3).join(' | '));
 await b.close();
 await owner('/tenants/' + tid + '/delete', { confirm: slug });

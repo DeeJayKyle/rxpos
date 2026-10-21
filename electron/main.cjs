@@ -23,6 +23,7 @@ if (HUB_MODE) {
   if (!app.requestSingleInstanceLock()) app.quit();
 
   let win = null;
+  const updater = require('./updater.cjs');
   // Remember the window's size, position and maximised state between runs
   const fs = require('fs');
   const stateFile = path.join(app.getPath('userData'), 'window-state.json');
@@ -40,12 +41,13 @@ if (HUB_MODE) {
       autoHideMenuBar: true,
       show: false,
       icon: path.join(__dirname, '..', 'build', 'icon.png'),
-      webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: false, backgroundThrottling: false },
+      webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: false, backgroundThrottling: false, preload: path.join(__dirname, 'preload.cjs') },
     });
     if (st.maximized) win.maximize();
     win.once('ready-to-show', () => win.show());
     const save = () => { try { fs.writeFileSync(stateFile, JSON.stringify({ ...win.getNormalBounds(), maximized: win.isMaximized() })); } catch {} };
     win.on('close', save);
+    updater.attach(win);
     win.loadFile(path.join(__dirname, '..', 'dist', 'index.html'));
     // Open web links in the default browser and tel:/mailto:/WhatsApp links in their own apps, never inside the app window
     win.webContents.setWindowOpenHandler(({ url }) => {
@@ -78,6 +80,7 @@ if (HUB_MODE) {
 
   if (process.platform === 'win32') app.setAppUserModelId('io.github.rxpos');
   app.whenReady().then(() => {
+    updater.register(); // newest downloaded build, served under the installed files' addresses
     createWindow();
     app.on('activate', () => BrowserWindow.getAllWindows().length === 0 && createWindow());
   });

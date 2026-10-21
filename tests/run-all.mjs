@@ -23,6 +23,8 @@ const SUITES = [
   ['backup & restore', 'backup-test.mjs', []],
   ['owner on main page', 'owner-main-login.mjs', ['.output/owner-main']],
   ['stock in & stock take', 'v18.mjs', ['.output/v18']],
+  // the Windows app's self-update needs a screen: Windows itself, or xvfb-run on Linux
+  ...(process.platform === 'win32' || fs.existsSync('/usr/bin/xvfb-run') ? [['windows self-update', 'electron-update.mjs', []]] : []),
 ];
 const only = process.argv[2];
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));

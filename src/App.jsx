@@ -3,7 +3,7 @@ import { HashRouter, Routes, Route, NavLink, Navigate, useNavigate, useLocation 
 import {
   LayoutDashboard, ShoppingCart, PackageOpen, ReceiptText, FileText, ClipboardPlus, Users, Truck, Pill, FlaskConical,
   Boxes, PackagePlus, History, CalendarClock, PencilRuler, ScrollText, Wallet, Tags, Landmark, ArrowLeftRight, HandCoins,
-  ArrowDownLeft, ArrowUpRight, ClipboardCheck, BookOpen, BarChart3, Settings as SettingsIcon, Search, Sun, Moon, Menu, LogOut, ChevronDown,
+  ArrowDownLeft, ArrowUpRight, ClipboardCheck, RefreshCw, BookOpen, BarChart3, Settings as SettingsIcon, Search, Sun, Moon, Menu, LogOut, ChevronDown,
   CornerDownLeft, User, Plus, BellRing, ShoppingBag, Tag, FileUp, Building2, Send, ShieldCheck, Clock, BookMarked, MessagesSquare, UserCog, KeyRound, CalendarDays, Thermometer, Palette, ScanText, GraduationCap, Megaphone, CalendarRange,
 } from 'lucide-react';
 import { useStore, makePassword, put, audit, isLowStock, expiryCounts } from './store.jsx';
@@ -18,6 +18,7 @@ import { WeeklyPopup } from './pages/Weekly.jsx';
 import { AutoReorder } from './reorder.js';
 import { isWeb } from './platform.js';
 import RefreshHost from './refresh.jsx';
+import { startUpdates, onUpdate, applyUpdate, justUpdated, LABEL } from './update.js';
 import { applyTheme, savedTheme, saveTheme, allowedThemes } from './themes.js';
 const OwnerConsole = lazy(() => import('./pages/OwnerConsole.jsx'));
 
@@ -370,8 +371,17 @@ function Shell() {
       <WeeklyPopup />
       <AutoReorder />
       <FirstDownload />
+      <UpdateHost />
     </div>
   );
+}
+
+/** Self-updates: start checking, show a small "update ready" pill, and say once that RxPOS was updated */
+function UpdateHost() {
+  const [u, setU] = useState({ status: 'current' });
+  useEffect(() => { startUpdates(); if (justUpdated()) toast(`RxPOS updated (${LABEL})`, 'info'); return onUpdate(setU); }, []);
+  if (u.status !== 'ready') return null;
+  return <button className="update-pill" onClick={applyUpdate} title="It also switches by itself when nothing is in progress"><RefreshCw size={14} />New version ready · Update</button>;
 }
 
 /** The first sign-in on a device downloads the whole pharmacy: show progress instead of empty pages */

@@ -25,6 +25,16 @@ The **owner** signs in on https://rxposug.com with the owner email and password 
 | Storage | **Weather** for the pharmacy's town (Open-Meteo), storage advice, **fridge / room temperature log** with safe ranges and trend |
 | Reliability | Works fully offline after the first sign-in, pushes changes within seconds and pulls every 10 s, 7 daily on-device snapshots, crash-recovery screen, dark mode, Ctrl+K search |
 
+## Automatic updates
+
+Every device keeps itself on the newest version published at rxposug.com (deployed from `main`); nobody reinstalls anything.
+
+* **Browser / installed web app:** checks every 10 minutes and when it comes back to the screen; the new version is applied when nothing is in progress (no open sale, dialog or typing) or while the app is in the background.
+* **Windows app:** downloads only the files that changed (each checked by SHA-256), switches when idle or at the next start, and goes back to the previous version by itself if a new one fails to start (`electron/updater.cjs`).
+* **Android app:** downloads the new version in the background and switches at the next start or when idle, with the same automatic roll-back (Capgo updater, `src/update.js`).
+* The version stays **1.0**; each build is identified by its commit time (shown in Settings → Data & backup → App version, with *Check for updates*).
+* A new installer / APK is only needed when the native app itself changes (a new permission or plugin): raise `shell` in `scripts/release-files.mjs` and `SHELL` in `src/update.js` / `electron/updater.cjs`, and older apps say that a new installer is needed.
+
 ## How offline + online works
 
 * Every device (desktop app or browser) keeps its **full database locally** (IndexedDB) and works with no network.

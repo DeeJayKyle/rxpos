@@ -22,7 +22,7 @@ const trim = async () => {
 
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
-  if (e.request.method !== 'GET' || url.origin !== location.origin || url.pathname.startsWith('/api/')) return;
+  if (e.request.method !== 'GET' || url.origin !== location.origin || url.pathname.startsWith('/api/') || url.pathname.endsWith('/version.json')) return; // the update check always asks the network
   if (/\/assets\/[^/]+-[\w-]{8,}\.\w+$/.test(url.pathname)) {
     e.respondWith(caches.open(ASSETS).then((c) => c.match(e.request).then((hit) => hit || fetch(e.request).then((res) => {
       if (res.ok) { c.put(e.request, res.clone()).then(trim).catch(() => {}); }

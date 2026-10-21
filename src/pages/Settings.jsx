@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Store, Printer, MessageSquareText, Cloud, DatabaseBackup, CheckCircle2, XCircle, Smartphone, CreditCard, Plus, Trash2, RotateCcw, ShieldAlert, BellRing, MapPin, Search, Thermometer } from 'lucide-react';
+import { Store, Printer, MessageSquareText, Cloud, DatabaseBackup, CheckCircle2, XCircle, Smartphone, CreditCard, Plus, Trash2, RotateCcw, ShieldAlert, BellRing, MapPin, Search, Thermometer, RefreshCw } from 'lucide-react';
 import { useStore, uid, audit, downloadFile, today, defaultSettings, DEFAULT_PAYMENT_METHODS } from '../store.jsx';
 import { Tabs } from '../ui.jsx';
 import { ask, toast } from '../feedback.jsx';
 import { cloudConfig } from '../cloud.js';
 import { searchPlaces, DEFAULT_PLACE, storageLimits } from '../weather.js';
 import { isWeb, platformName } from '../platform.js';
+import { LABEL, onUpdate, checkForUpdate, applyUpdate } from '../update.js';
 
 export default function Settings() {
   const { db, update, saveSettings, user, syncCfg, syncStatus, syncNow, branchId, setBranchId, can, features } = useStore();
@@ -218,6 +219,7 @@ export default function Settings() {
         </>
       )}
 
+      {tab === 'backup' && <AppVersion />}
       {tab === 'backup' && (
         <div className="card">
           <h3><DatabaseBackup size={18} />Backup</h3>
@@ -243,6 +245,25 @@ export default function Settings() {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/** Which build this device runs, and its self-update (src/update.js) */
+function AppVersion() {
+  const [u, setU] = useState({ status: 'current' });
+  useEffect(() => onUpdate(setU), []);
+  const msg = { checking: 'Checking…', downloading: 'Downloading the new version…', ready: `New version ready (${u.latest?.label || ''}): it switches over when nothing is in progress`,
+    shell: 'A new app installer is needed for the newest version: download it from your RxPOS provider', error: u.error, current: u.latest ? 'Up to date' : 'Checks for updates automatically' }[u.status];
+  return (
+    <div className="card">
+      <h3><RefreshCw size={18} />App version</h3>
+      <p><strong>RxPOS {LABEL}</strong> · {platformName}</p>
+      <p className={'small ' + (u.status === 'error' || u.status === 'shell' ? 'text-warn' : 'muted')}>{msg}</p>
+      <div className="row gap">
+        <button className="btn ghost" disabled={u.status === 'checking' || u.status === 'downloading'} onClick={() => checkForUpdate().then((r) => r.status === 'current' && toast('RxPOS is up to date', 'info'))}><RefreshCw size={16} />Check for updates</button>
+        {u.status === 'ready' && <button className="btn primary" onClick={applyUpdate}>Update now</button>}
+      </div>
     </div>
   );
 }
