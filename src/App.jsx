@@ -3,7 +3,7 @@ import { HashRouter, Routes, Route, NavLink, Navigate, useNavigate, useLocation 
 import {
   LayoutDashboard, ShoppingCart, PackageOpen, ReceiptText, FileText, ClipboardPlus, Users, Truck, Pill, FlaskConical,
   Boxes, PackagePlus, History, CalendarClock, PencilRuler, ScrollText, Wallet, Tags, Landmark, ArrowLeftRight, HandCoins,
-  ArrowDownLeft, ArrowUpRight, ClipboardCheck, RefreshCw, BookOpen, BarChart3, Settings as SettingsIcon, Search, Sun, Moon, Menu, LogOut, ChevronDown,
+  ArrowDownLeft, ArrowUpRight, ClipboardCheck, RefreshCw, Undo2, BookOpen, BarChart3, Settings as SettingsIcon, Search, Sun, Moon, Menu, LogOut, ChevronDown,
   CornerDownLeft, User, Plus, BellRing, ShoppingBag, Tag, FileUp, Building2, Send, ShieldCheck, Clock, BookMarked, MessagesSquare, UserCog, KeyRound, CalendarDays, Thermometer, Palette, ScanText, GraduationCap, Megaphone, CalendarRange,
 } from 'lucide-react';
 import { useStore, makePassword, put, audit, isLowStock, expiryCounts } from './store.jsx';
@@ -58,6 +58,7 @@ const P = {
   Weekly: page(() => import('./pages/Weekly.jsx')),
   Storage: page(() => import('./pages/Storage.jsx')),
   StockCount: page(() => import('./pages/StockCount.jsx')),
+  Returns: page(() => import('./pages/Returns.jsx')),
 };
 
 // [path, label, Icon, shortcut, badge, element, permission, feature]
@@ -87,6 +88,7 @@ const NAV = [
     ['/formulations', 'Formulations', FlaskConical, null, null, <P.Formulations />, 'medicines.manage'],
     ['/inventory', 'Inventory', Boxes, 'F7', 'low', <P.StockLevels />, 'inventory.view'],
     ['/add-stock', 'Add Stock', PackagePlus, 'F4', null, <P.AddStock />, 'stock.receive'],
+    ['/returns', 'Returns to Supplier', Undo2, null, null, <P.Returns />, ['stock.receive', 'stock.adjust']],
     ['/purchases', 'Purchase History', History, null, null, <P.Purchases />, 'stock.receive'],
     ['/stock-count', 'Stock Count', ClipboardCheck, null, null, <P.StockCount />, ['stock.count', 'stock.adjust']],
     ['/expiry', 'Expiring / Expired', CalendarClock, null, 'expiry', <P.Expiry />, 'inventory.view'],

@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Download, Barcode as BarcodeIcon, SlidersHorizontal, Save, Undo2, Pencil } from 'lucide-react';
 import { CrudPage, Tabs, Modal, SearchBox, Empty, PdfButton } from '../ui.jsx';
 import { useStore, daysUntil, put, move, addBatch, audit, downloadFile, toCSV, batchValue, stockValue, markupPrice, MAIN_BRANCH } from '../store.jsx';
@@ -150,7 +150,8 @@ export function StockLevels() {
 
 /** Soon expiring / expired — per batch, so a medicine with several deliveries shows each lot separately. */
 export function Expiry() {
-  const { db, products, update, fmt, user, batchesOf, branchId } = useStore();
+  const { db, products, update, fmt, user, batchesOf, branchId, can } = useStore();
+  const navigate = useNavigate();
   const [tab, setTab] = useState('soon');
   const expRef = useRef(null);
   const warn = db.settings.expiryWarnDays || 90;
@@ -179,7 +180,10 @@ export function Expiry() {
                 <td><strong>{r.p.name}</strong></td><td>{r.batch}</td><td className={expiryClass(r.expiry, warn)}>{r.expiry}</td>
                 <td className={expiryClass(r.expiry, warn)}>{r.days < 0 ? `${-r.days} days ago` : r.days === 0 ? 'today' : `in ${r.days} days`}</td>
                 <td className="num">{r.qty}</td><td className="num">{fmt(r.qty * (r.cost || r.p.cost))}</td>
-                <td className="actions">{tab === 'expired' && user.role !== 'cashier' && <button className="btn sm danger" onClick={() => writeOff(r)}>Write off</button>}</td>
+                <td className="actions">
+                  {(can('stock.receive') || can('stock.adjust')) && <button className="btn sm ghost" title="Send it back to the supplier for a credit note or refund" onClick={() => navigate('/returns', { state: { returnBatch: { productId: r.p.id, batchId: r.id, reason: r.days < 0 ? 'Expired' : 'Short expiry' } } })}>Return</button>}
+                  {tab === 'expired' && user.role !== 'cashier' && <button className="btn sm danger" onClick={() => writeOff(r)}>Write off</button>}
+                </td>
               </tr>
             ))}
             {!rows.length && <Empty colSpan={7}>{tab === 'expired' ? 'No expired stock 🎉' : 'Nothing expiring soon 🎉'}</Empty>}

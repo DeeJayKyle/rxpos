@@ -16,6 +16,9 @@ export function ledger(db) {
     const paid = p.paid ?? p.total;
     if (paid > 0) e.push({ date: p.date, desc: `Purchase ${p.invoice || ''} – ${p.supplierName}`, in: 0, out: paid, account: acct(p.bankId), kind: 'Purchases' });
   }
+  for (const r of db.supplierReturns || []) {
+    if (r.settle === 'cash' && r.total > 0) e.push({ date: r.date, desc: `Refund for return ${r.number} – ${r.supplierName}`, in: r.total, out: 0, account: acct(r.bankId), kind: 'Supplier returns' });
+  }
   for (const x of db.expenses) {
     const cat = db.expenseCategories.find((c) => c.id === x.categoryId)?.name || 'Expense';
     e.push({ date: x.date, desc: `${cat}: ${x.description || ''}`, in: 0, out: x.amount, account: acct(x.bankId), kind: 'Expenses' });
