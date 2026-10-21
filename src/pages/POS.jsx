@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useLocation, Link } from 'react-router-dom';
-import { ShoppingCart, Trash2, X, FileText, Printer, AlertTriangle, ScanBarcode, Smartphone, Loader2, CheckCircle2, UserPlus, Tag, BookMarked, Repeat, PauseCircle, Keyboard, Plus } from 'lucide-react';
+import { ShoppingCart, Trash2, X, FileText, Printer, AlertTriangle, ScanBarcode, Smartphone, Loader2, CheckCircle2, UserPlus, Tag, BookMarked, Repeat, PauseCircle, Keyboard, Plus, ClipboardList } from 'lucide-react';
 import { DrugInfoPanel, genericKey } from './DrugInfo.jsx';
 import { useStore, uid, now, daysUntil, put, move, allocate, audit, normalizePhone, DEFAULT_PAYMENT_METHODS } from '../store.jsx';
 import { CASH } from '../finance.js';
@@ -41,6 +41,8 @@ export default function POS({ mode = 'retail' }) {
   const [active, setActive] = useState(0);  // highlighted medicine card (arrow keys)
   const [help, setHelp] = useState(false);
   const [cam, setCam] = useState(false); // camera barcode scanner
+  const [cdForm, setCdForm] = useState(null); // controlled-drug details being filled in
+  const cdRef = useRef(null); // the details for this sale, once given
   // Payment methods come from Settings → Payment methods; their type decides the behaviour
   const methods = (db.settings.paymentMethods?.length ? db.settings.paymentMethods : DEFAULT_PAYMENT_METHODS).filter((m) => m.type !== 'momo' || features.momo !== false);
   const [payment, setPayment] = useState(methods[0]?.name || 'Cash');
@@ -126,7 +128,7 @@ export default function POS({ mode = 'retail' }) {
     setCart((c) => {
       const line = c.find((l) => l.id === p.id);
       if (line) return c.map((l) => (l.id === p.id ? { ...l, allowExpired, qty: Math.min(l.qty + 1, p.stock) } : l));
-      return [...c, { id: p.id, name: p.name, price: priceOf(p), cost: p.cost, qty: 1, max: p.stock, rx: p.rx, allowExpired }];
+      return [...c, { id: p.id, name: p.name, price: priceOf(p), cost: p.cost, qty: 1, max: p.stock, rx: p.rx, controlled: !!p.controlled, allowExpired }];
     });
     setQ('');
     focusSearch();
@@ -162,6 +164,7 @@ export default function POS({ mode = 'retail' }) {
   // ---- sales on hold: serve the next customer while one is still deciding, then switch back ----
   const snapshot = () => ({ id: uid(), at: now(), cart, customerId, discount, payment, tendered });
   function loadSale(x) {
+    cdRef.current = null;
     // stock may have moved while the sale was on hold: each line's limit is today's stock
     setCart((x.cart || []).map((l) => { const p = products.find((y) => y.id === l.id); return p ? { ...l, max: p.stock, qty: Math.min(l.qty, Math.max(1, p.stock)) } : l; })); setCustomerId(x.customerId || 'walk-in'); setDiscount(x.discount || 0);
     setPayment(methods.some((m) => m.name === x.payment) ? x.payment : methods[0]?.name || 'Cash'); setTendered(x.tendered || ''); setPicked(new Set()); setCursor(-1);
@@ -193,6 +196,9 @@ export default function POS({ mode = 'retail' }) {
     return c && c.id !== 'walk-in' ? c.name.split(/\s+/)[0] : h.cart[0]?.name.split(/\s+/).slice(0, 2).join(' ') || 'Sale';
   };
   const heldTotal = (h) => h.cart.reduce((a, l) => a + l.price * l.qty, 0) - (Number(h.discount) || 0);
+  // Rx / controlled status comes from the medicine as it is now (a line may have been rung up before it was changed)
+  const isRx = (l) => !!(products.find((p) => p.id === l.id)?.rx ?? l.rx);
+  const isCd = (l) => !!(products.find((p) => p.id === l.id)?.controlled ?? l.controlled);
   const lineAt = cursor >= 0 && cursor < cart.length ? cart[cursor] : cart[cart.length - 1];
 
   const checkout = async () => {
@@ -201,7 +207,12 @@ export default function POS({ mode = 'retail' }) {
     if (credit && customerId === 'walk-in') return toast('Select a registered customer for a credit sale', 'warn');
     if (capture === 'required' && customerId === 'walk-in') return toast('Choose or add the client for this sale', 'warn');
     if (ptype === 'cash' && tendered !== '' && change < 0) return toast('Amount tendered is less than the total', 'error');
-    if (cart.some((l) => l.rx) && !(await ask({ title: 'Prescription-only medicine', message: 'Confirm that a valid prescription has been checked for the Rx items in this sale.', confirmText: 'Prescription verified' }))) return;
+    // controlled drugs: patient, prescriber and prescription go in the register (asked once per sale)
+    if (cart.some(isCd) && !cdRef.current) {
+      const c = customer && customer.id !== 'walk-in' ? customer : null;
+      return setCdForm({ patient: c?.name || '', idNo: c?.phone || '', prescriber: '', prescriberReg: '', rxNo: '' });
+    }
+    if (cart.some(isRx) && !cart.some(isCd) && !(await ask({ title: 'Prescription-only medicine', message: 'Confirm that a valid prescription has been checked for the Rx items in this sale.', confirmText: 'Prescription verified' }))) return;
     if (ptype === 'momo') {
       const phone = normalizePhone(customer?.phone || '');
       if (syncCfg.url && navigator.onLine) cloudConfig(syncCfg).then(setPayCfg).catch(() => setPayCfg({}));
@@ -214,8 +225,8 @@ export default function POS({ mode = 'retail' }) {
     const credit = ptype === 'credit';
     const paid = credit ? Math.min(Number(tendered) || 0, total) : total;
     // Split each line across batches, earliest expiry first
-    const items = cart.map(({ id, name, price, cost, qty, allowExpired, directions }) => ({
-      id, name, price: Number(price), cost, qty, ...(directions ? { directions } : {}),
+    const items = cart.map((l) => ({ ...l, controlled: isCd(l) })).map(({ id, name, price, cost, qty, allowExpired, directions, controlled }) => ({
+      id, name, price: Number(price), cost, qty, ...(directions ? { directions } : {}), ...(controlled ? { controlled: true } : {}),
       alloc: allocate(batchesOf(id), qty, { allowExpired }).map(({ batchId, qty: q, batch, expiry }) => ({ batchId, qty: q, batch, expiry })),
     }));
     const sale = {
@@ -223,7 +234,7 @@ export default function POS({ mode = 'retail' }) {
       items, subtotal, discount: disc, tax, total, payment, paid,
       tendered: ptype === 'cash' ? Number(tendered) || total : paid,
       bankId: ptype === 'cash' || credit ? CASH : db.settings.nonCashBankId || CASH,
-      customerId, customerName: customer?.name || 'Walk-in Customer', cashier: user.name, status: 'completed', ...extra,
+      customerId, customerName: customer?.name || 'Walk-in Customer', cashier: user.name, status: 'completed', ...(cart.some(isCd) && cdRef.current ? { controlled: cdRef.current } : {}), ...extra,
     };
     update((d) => {
       put(d, 'sales', sale);
@@ -283,7 +294,7 @@ export default function POS({ mode = 'retail' }) {
   // Alt+←/→ switch held sales, Alt+↑/↓ choose a cart line, +/− its quantity, Delete removes it, Alt+1…9 payment method
   useEffect(() => {
     const onKey = (e) => {
-      if (done || momo || newClient || labelFor || infoFor || subs) return;
+      if (done || momo || newClient || labelFor || infoFor || subs || cdForm || cam || help) return;
       const inSearch = e.target.tagName === 'INPUT' && searchRef.current?.contains(e.target);
       const typing = /INPUT|TEXTAREA|SELECT/.test(e.target.tagName) && !inSearch;
       if (e.key === 'F8') { e.preventDefault(); focusSearch(); }
@@ -347,6 +358,7 @@ export default function POS({ mode = 'retail' }) {
                 </div>
                 <div className="tags">
                   {p.rx && <span className="badge">Rx</span>}
+                  {p.controlled && <span className="badge danger">CD</span>}
                   {d < 0 && <span className="badge danger">Expired</span>}
                   {d >= 0 && d <= warn && <span className="badge warn">Exp {d}d</span>}
                 </div>
@@ -567,6 +579,26 @@ export default function POS({ mode = 'retail' }) {
           add(p);
           return `${p.name} added`;
         }} />
+      )}
+
+      {cdForm && (
+        <Modal title={<><ClipboardList size={18} /> Controlled drug: register details</>} onClose={() => setCdForm(null)}>
+          <form className="stack" onSubmit={(e) => {
+            e.preventDefault();
+            cdRef.current = { patient: cdForm.patient.trim(), idNo: cdForm.idNo.trim(), prescriber: cdForm.prescriber.trim(), prescriberReg: cdForm.prescriberReg.trim(), rxNo: cdForm.rxNo.trim() };
+            setCdForm(null); checkout();
+          }}>
+            <p className="muted small">{cart.filter(isCd).map((l) => `${l.name} × ${l.qty}`).join(', ')}: recorded in the controlled drugs register.</p>
+            <div className="form-grid">
+              <label className="field"><span>Patient's name</span><input autoFocus required value={cdForm.patient} onChange={(e) => setCdForm({ ...cdForm, patient: e.target.value })} /></label>
+              <label className="field"><span>Patient's ID no. or phone</span><input required value={cdForm.idNo} onChange={(e) => setCdForm({ ...cdForm, idNo: e.target.value })} /></label>
+              <label className="field"><span>Prescriber</span><input required value={cdForm.prescriber} onChange={(e) => setCdForm({ ...cdForm, prescriber: e.target.value })} placeholder="Dr …" /></label>
+              <label className="field"><span>Prescriber's registration no.</span><input value={cdForm.prescriberReg} onChange={(e) => setCdForm({ ...cdForm, prescriberReg: e.target.value })} /></label>
+              <label className="field"><span>Prescription no.</span><input required value={cdForm.rxNo} onChange={(e) => setCdForm({ ...cdForm, rxNo: e.target.value })} /></label>
+            </div>
+            <div className="form-actions"><button type="button" className="btn ghost" onClick={() => setCdForm(null)}>Cancel</button><button className="btn primary">Record &amp; continue</button></div>
+          </form>
+        </Modal>
       )}
 
       {help && (

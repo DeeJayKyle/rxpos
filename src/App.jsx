@@ -3,7 +3,7 @@ import { HashRouter, Routes, Route, NavLink, Navigate, useNavigate, useLocation 
 import {
   LayoutDashboard, ShoppingCart, PackageOpen, ReceiptText, FileText, ClipboardPlus, Users, Truck, Pill, FlaskConical,
   Boxes, PackagePlus, History, CalendarClock, PencilRuler, ScrollText, Wallet, Tags, Landmark, ArrowLeftRight, HandCoins,
-  ArrowDownLeft, ArrowUpRight, ClipboardCheck, RefreshCw, Undo2, BookOpen, BarChart3, Settings as SettingsIcon, Search, Sun, Moon, Menu, LogOut, ChevronDown,
+  ArrowDownLeft, ArrowUpRight, ClipboardCheck, RefreshCw, Undo2, ShieldPlus, BookOpen, BarChart3, Settings as SettingsIcon, Search, Sun, Moon, Menu, LogOut, ChevronDown,
   CornerDownLeft, User, Plus, BellRing, ShoppingBag, Tag, FileUp, Building2, Send, ShieldCheck, Clock, BookMarked, MessagesSquare, UserCog, KeyRound, CalendarDays, Thermometer, Palette, ScanText, GraduationCap, Megaphone, CalendarRange,
 } from 'lucide-react';
 import { useStore, makePassword, put, audit, isLowStock, expiryCounts } from './store.jsx';
@@ -59,6 +59,7 @@ const P = {
   Storage: page(() => import('./pages/Storage.jsx')),
   StockCount: page(() => import('./pages/StockCount.jsx')),
   Returns: page(() => import('./pages/Returns.jsx')),
+  Controlled: page(() => import('./pages/Controlled.jsx')),
 };
 
 // [path, label, Icon, shortcut, badge, element, permission, feature]
@@ -91,6 +92,7 @@ const NAV = [
     ['/returns', 'Returns to Supplier', Undo2, null, null, <P.Returns />, ['stock.receive', 'stock.adjust']],
     ['/purchases', 'Purchase History', History, null, null, <P.Purchases />, 'stock.receive'],
     ['/stock-count', 'Stock Count', ClipboardCheck, null, null, <P.StockCount />, ['stock.count', 'stock.adjust']],
+    ['/controlled', 'Controlled Drugs & Recalls', ShieldPlus, null, null, <P.Controlled />, 'inventory.view'],
     ['/expiry', 'Expiring / Expired', CalendarClock, null, 'expiry', <P.Expiry />, 'inventory.view'],
     ['/reorder', 'Reorder & Dead Stock', ShoppingBag, null, null, <P.Reorder />, 'stock.receive', 'reorder'],
     ['/quick-edit', 'Quick Edit', PencilRuler, null, null, <P.QuickEdit />, 'medicines.manage'],

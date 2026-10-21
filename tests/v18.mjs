@@ -264,6 +264,30 @@ check('price check lists a medicine below the 20% target margin (Cipro 500 → 5
   check('the stock card shows it as a "Supplier return"', /Supplier return/.test(await A.evaluate(() => document.querySelector('tbody')?.innerText || '')));
 }
 
+// ---------- controlled drugs register & batch recall ----------
+{
+  await owner('/tenants/' + tid + '/records', { records: [P('p-amox', 'Amoxyl 500mg caps', { shelf: 'A1', barcode: '6001001', controlled: true, price: 1200, cost: 800 })] });
+  await A.click('.pill.clock'); await wait(3000);
+  await go('/pos'); await wait(500);
+  await A.focus('.pos-products input.search'); await A.keyboard.type('6001001'); await A.keyboard.press('Enter'); await wait(400);
+  await A.keyboard.down('Alt'); await A.keyboard.press('1'); await A.keyboard.up('Alt'); // cash
+  await A.keyboard.press('F9'); await wait(500);
+  const asked = await A.evaluate(() => /register details/.test(document.querySelector('.modal')?.innerText || ''));
+  check('selling a controlled drug asks for patient, prescriber and prescription', asked);
+  const fill = async (label, v) => A.evaluate((l, val) => { const f = [...document.querySelectorAll('.modal label.field')].find((x) => x.innerText.startsWith(l)); const i = f.querySelector('input'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(i, val); i.dispatchEvent(new Event('input', { bubbles: true })); }, label, v);
+  await fill("Patient's name", 'Jane Nakato'); await fill("Patient's ID", 'CM90012345'); await fill('Prescriber', 'Dr Okello'); await fill("Prescriber's registration", 'UMDPC-4411'); await fill('Prescription no.', 'RX-2201');
+  await clickText('.modal button', /Record & continue/); await wait(1500);
+  check('…then the sale completes', /Sale complete/.test(await A.evaluate(() => document.querySelector('.modal h3')?.innerText || '')));
+  await clickText('.modal button', /New sale/); await wait(300);
+  await go('/controlled'); await wait(500);
+  const reg = await A.evaluate(() => document.querySelector('tbody')?.innerText.replace(/\s+/g, ' ') || '');
+  check('the register shows the sale with patient, ID, prescriber and prescription, and the running balance', /Sale/.test(reg) && /Jane Nakato/.test(reg) && /CM90012345/.test(reg) && /Dr Okello \(UMDPC-4411\)/.test(reg) && /Rx RX-2201/.test(reg), reg.slice(0, 200));
+  await clickText('.tab', /Batch recall/); await wait(300);
+  await A.type('.search-wrap input', 'B-AMOX'); await wait(500);
+  const rec = await A.evaluate(() => document.querySelector('.page')?.innerText.replace(/\s+/g, ' ') || '');
+  check('batch recall lookup lists who received batch B-AMOX', /Amoxyl 500mg caps · batch B-AMOX/.test(rec) && /Jane Nakato/.test(rec), rec.slice(0, 250));
+}
+
 // ---------- camera barcode scanning (Chrome's fake camera shows a Code 128 barcode for 6001003, Ciprofloxacin) ----------
 {
   const PAT = ('212222 222122 222221 121223 121322 131222 122213 122312 132212 221213 221312 231212 112232 122132 122231 113222 123122 123221 223211 221132 221231 213212 223112 312131 311222 321122 321221 312212 322112 322211 212123 212321 232121 111323 131123 131321 112313 132113 132311 211313 231113 231311 112133 112331 132131 113123 113321 133121 313121 211331 231131 213113 213311 213131 311123 311321 331121 312113 312311 332111 314111 221411 431111 111224 111422 121124 121421 141122 141221 112214 112412 122114 122411 142112 142211 241211 221114 413111 241112 134111 111242 121142 121241 114212 124112 124211 411212 421112 421211 212141 214121 412121 111143 111341 131141 114113 114311 411113 411311 113141 114131 311141 411131 211412 211214 211232 2331112').split(' ');

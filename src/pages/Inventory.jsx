@@ -34,6 +34,7 @@ export function MedicineList() {
     { key: 'openingExpiry', label: 'Opening stock expiry', type: 'date', hidden: (r) => !r._new },
     { key: 'rx', label: 'Prescription only (Rx)', type: 'checkbox' },
     { key: 'chronic', label: 'Chronic medicine (refill reminders)', type: 'checkbox' },
+    { key: 'controlled', label: 'Controlled drug (register: patient & prescriber recorded at sale)', type: 'checkbox' },
   ];
   const onSave = (rec, isNew, before) => {
     const { openingStock, openingBatch, openingExpiry, totalStock, ...p } = rec;
@@ -60,7 +61,7 @@ export function MedicineList() {
       subtitle={`${products.length.toLocaleString()} medicines and items`}
       blank={{ form: 'Tablets', unit: 'Piece', reorder: 10, rx: false }}
       columns={[
-        { label: 'Medicine', render: (p) => <><strong>{p.name}</strong> {p.rx && <span className="badge">Rx</span>}{p.chronic && <span className="badge ok">Chronic</span>}<br /><small className="muted">{[p.generic, p.strength, p.barcode].filter(Boolean).join(' · ')}</small></> },
+        { label: 'Medicine', render: (p) => <><strong>{p.name}</strong> {p.rx && <span className="badge">Rx</span>}{p.chronic && <span className="badge ok">Chronic</span>}{p.controlled && <span className="badge danger">CD</span>}<br /><small className="muted">{[p.generic, p.strength, p.barcode].filter(Boolean).join(' · ')}</small></> },
         { label: 'Formulation', key: 'form' },
         { label: 'Cost', num: true, render: (p) => fmt(p.cost) },
         { label: 'Wholesale', num: true, render: (p) => fmt(p.wholesale) },
