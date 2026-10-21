@@ -353,7 +353,7 @@ export default function POS({ mode = 'retail' }) {
         </div>
         <div className="row gap search-row">
           <div ref={searchRef} onKeyDown={onSearchKey} className="grow">
-            <SearchBox big value={q} onChange={setQ} placeholder="Search medicine or scan barcode…  (F8)" />
+            <SearchBox big value={q} onChange={setQ} placeholder={touch ? "Search medicine or scan barcode…" : "Search medicine or scan barcode…  (F8)"} />
           </div>
           <CameraButton className="btn ghost big cam-btn" onClick={() => setCam(true)} />
         </div>

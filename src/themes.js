@@ -43,6 +43,44 @@ const hexToRgb = (h) => { const n = parseInt(h.slice(1), 16); return [(n >> 16) 
 const rgba = (h, a) => `rgba(${hexToRgb(h).join(', ')}, ${a})`;
 const mix = (h, w, t) => { const a = hexToRgb(h), b = hexToRgb(w); return '#' + a.map((v, i) => Math.round(v + (b[i] - v) * t).toString(16).padStart(2, '0')).join(''); };
 
+// ---- contrast: every theme is made readable (WCAG AA, 4.5:1 for text) when it is applied ----
+const lum = (h) => { const [r, g, b] = hexToRgb(h).map((x) => { x /= 255; return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+export const contrast = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+const INK = '#0b1220';
+/** Move a colour towards black or white until it reads on every background given */
+function readable(fg, bgs, toward, min = 4.5) {
+  let c = fg;
+  for (let i = 0; i < 30 && Math.min(...bgs.map((b) => contrast(c, b))) < min; i++) c = mix(c, toward, 0.06);
+  return c;
+}
+/** Button gradient and its text colour: white or dark ink, whichever reads better; the colours deepen until it passes */
+function accent(p1, p2, dark) {
+  const score = (on, a, b) => Math.min(contrast(on, a), contrast(on, b));
+  // light themes keep the classic white-on-colour button (the colour deepens); dark themes use whichever reads better
+  const on = !dark || score('#ffffff', p1, p2) >= score(INK, p1, p2) ? '#ffffff' : INK;
+  const toward = on === '#ffffff' ? '#000000' : '#ffffff';
+  let a = p1, b = p2;
+  for (let i = 0; i < 30 && score(on, a, b) < 4.5; i++) { if (contrast(on, a) < 4.5) a = mix(a, toward, 0.05); if (contrast(on, b) < 4.5) b = mix(b, toward, 0.05); }
+  return { a, b, on };
+}
+
+/** The CSS variables of a theme (pure, so it can be checked) */
+export function themeVars(t) {
+  const c = t.c, dark = t.base === 'dark';
+  const btn = accent(c.primary, c.primary2, dark);
+  return {
+    '--bg': c.bg, '--surface': c.surface, '--surface-2': c.surface2, '--border': c.border, '--border-strong': c.borderStrong,
+    '--text': c.text, '--muted': readable(c.muted, [c.bg, c.surface, c.surface2], dark ? '#ffffff' : '#000000'), '--primary': c.primary, '--primary-2': c.primary2,
+    '--primary-text': readable(c.primary, [c.surface, c.surface2], dark ? '#ffffff' : '#000000'),
+    '--on-accent': btn.on, '--accent-grad': `linear-gradient(135deg, ${btn.a} 0%, ${btn.b} 100%)`,
+    '--primary-dark': dark ? mix(c.primary, '#000000', 0.12) : mix(c.primary, '#000000', 0.18),
+    '--primary-soft': dark ? rgba(c.primary, 0.14) : mix(c.primary, '#ffffff', 0.84),
+    '--primary-ink': dark ? mix(c.primary, '#ffffff', 0.25) : mix(c.primary, '#000000', 0.35),
+    '--bg-grad': `radial-gradient(1100px 560px at 100% -10%, ${rgba(c.primary, dark ? 0.12 : 0.13)} 0%, transparent 60%), radial-gradient(850px 500px at -10% 110%, ${rgba(c.primary2, dark ? 0.1 : 0.1)} 0%, transparent 55%)`,
+    '--sidebar': c.sidebar, '--sidebar-2': c.sidebar2,
+  };
+}
+
 /** Apply a theme to the page (CSS variables on <html>) */
 export function applyTheme(id) {
   const t = themeById(id);
@@ -50,17 +88,7 @@ export function applyTheme(id) {
   const root = document.documentElement;
   root.dataset.theme = t.base;
   root.dataset.palette = t.id;
-  const v = {
-    '--bg': c.bg, '--surface': c.surface, '--surface-2': c.surface2, '--border': c.border, '--border-strong': c.borderStrong,
-    '--text': c.text, '--muted': c.muted, '--primary': c.primary, '--primary-2': c.primary2,
-    '--primary-dark': dark ? mix(c.primary, '#000000', 0.12) : mix(c.primary, '#000000', 0.18),
-    '--primary-soft': dark ? rgba(c.primary, 0.14) : mix(c.primary, '#ffffff', 0.84),
-    '--primary-ink': dark ? mix(c.primary, '#ffffff', 0.25) : mix(c.primary, '#000000', 0.35),
-    '--accent-grad': `linear-gradient(135deg, ${c.primary} 0%, ${c.primary2} 100%)`,
-    '--bg-grad': `radial-gradient(1100px 560px at 100% -10%, ${rgba(c.primary, dark ? 0.12 : 0.13)} 0%, transparent 60%), radial-gradient(850px 500px at -10% 110%, ${rgba(c.primary2, dark ? 0.1 : 0.1)} 0%, transparent 55%)`,
-    '--sidebar': c.sidebar, '--sidebar-2': c.sidebar2,
-  };
-  for (const [k, val] of Object.entries(v)) root.style.setProperty(k, val);
+  for (const [k, val] of Object.entries(themeVars(t))) root.style.setProperty(k, val);
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', dark ? c.sidebar : c.primary);
 }
 

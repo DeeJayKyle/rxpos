@@ -297,7 +297,7 @@ export function AddStock() {
                 const markup = cost > 0 && price > 0 ? Math.round(((price - cost) / cost) * 100) : null;
                 return (
                   <tr key={l.key} className={l.productId === NEW ? 'new-line' : ''}>
-                    <td className={l.read && (!l.productId || l.read.unclear) ? 'scan-check' : ''}>
+                    <td data-label="Medicine" className={'line-med' + (l.read && (!l.productId || l.read.unclear) ? ' scan-check' : '')}>
                       {l.productId === NEW ? (
                         <div className="new-med">
                           <div className="row gap"><span className="badge ok"><Sparkles size={11} />New</span><button type="button" className="link-btn small" onClick={() => replaceLine(l.key, { ...l, productId: '' })}>choose existing</button></div>
@@ -314,7 +314,7 @@ export function AddStock() {
                       )}
                       {l.read && <small className={'scan-read' + (!l.productId || l.read.unclear ? ' text-warn' : ' muted')}>{!l.productId || l.read.unclear ? <AlertTriangle size={11} /> : <CheckCircle2 size={11} />} Invoice: {l.read.name}{l.read.unclear ? ' (hard to read)' : ''}</small>}
                     </td>
-                    <td><input type="number" min="1" step="any" inputMode="decimal" value={l.qty} onChange={(e) => setLine(l.key, { qty: e.target.value })} aria-label="Quantity" />
+                    <td data-label="Qty"><input type="number" min="1" step="any" inputMode="decimal" value={l.qty} onChange={(e) => setLine(l.key, { qty: e.target.value })} aria-label="Quantity" />
                       {packs.length > 0 && (
                         <select className="pack-select" value={l.recvPack || ''} aria-label="Received as" onChange={(e) => { const k = packs.find((x) => x.name === e.target.value); setLine(l.key, { recvPack: k?.name || '', recvSize: k ? Number(k.size) : 1 }); }}>
                           <option value="">{p.unit || 'Unit'}s</option>
@@ -323,11 +323,11 @@ export function AddStock() {
                       )}
                       {Number(l.recvSize) > 1 && <small className="price-hint muted">= {(Number(l.qty) || 0) * l.recvSize} {(p?.unit || 'unit').toLowerCase()}s</small>}
                     </td>
-                    <td><input type="number" min="0" step="any" inputMode="decimal" placeholder="0" value={l.cost} onChange={(e) => setLine(l.key, { cost: e.target.value })} aria-label="Unit cost" />
+                    <td data-label="Unit cost"><input type="number" min="0" step="any" inputMode="decimal" placeholder="0" value={l.cost} onChange={(e) => setLine(l.key, { cost: e.target.value })} aria-label="Unit cost" />
                       {(() => { const best = (prices.get(l.productId) || []).find((o) => o.supplierId !== form.supplierId); return best && cost > 0 && best.cost < cost ? <small className="price-hint text-warn" title={`Last bought from ${best.supplierName} on ${best.date}`}>{best.supplierName}: {fmt(best.cost)}</small> : null; })()}
                     </td>
-                    <td><input type="number" min="0" step="any" inputMode="decimal" placeholder="Total amount" className={l.by === 'total' ? 'typed' : ''} value={l.total} onChange={(e) => setLine(l.key, { total: e.target.value })} aria-label="Line total" /></td>
-                    <td>
+                    <td data-label="Line total"><input type="number" min="0" step="any" inputMode="decimal" placeholder="Total amount" className={l.by === 'total' ? 'typed' : ''} value={l.total} onChange={(e) => setLine(l.key, { total: e.target.value })} aria-label="Line total" /></td>
+                    <td data-label="Retail price">
                       <input type="number" min="0" step="any" inputMode="decimal" placeholder={cost > 0 ? String(priceFor(cost)) : ''} value={l.price} onChange={(e) => setLine(l.key, { price: e.target.value })} aria-label="New retail price" />
                       <small className="price-hint">
                         {l.auto && l.derived ? <span className="muted">{l.kept ? 'kept (higher than +' + (form.markup || 0) + '%)' : `auto · +${form.markup || 0}%`}</span> : !l.auto ? <button type="button" className="link-btn small" title="Work the price out from the cost again" onClick={() => setLine(l.key, { price: '' })}><RotateCcw size={10} /> auto</button> : null}
@@ -335,9 +335,9 @@ export function AddStock() {
                         {p && price !== p.price && p.price > 0 && <span className="muted"> · was {fmt(p.price)}</span>}
                       </small>
                     </td>
-                    <td><input value={l.batch} placeholder="Batch no." onChange={(e) => replaceLine(l.key, { ...l, batch: e.target.value })} aria-label="Batch number" /></td>
-                    <td><input type="date" value={l.expiry} min={today()} onChange={(e) => replaceLine(l.key, { ...l, expiry: e.target.value })} aria-label="Expiry date" /></td>
-                    <td><button type="button" className="icon-btn" title="Remove line" aria-label="Remove line" onClick={() => setForm((f) => ({ ...f, lines: f.lines.length > 1 ? f.lines.filter((x) => x.key !== l.key) : [blankLine()] }))}><X size={15} /></button></td>
+                    <td data-label="Batch"><input value={l.batch} placeholder="Batch no." onChange={(e) => replaceLine(l.key, { ...l, batch: e.target.value })} aria-label="Batch number" /></td>
+                    <td data-label="Expiry"><input type="date" value={l.expiry} min={today()} onChange={(e) => replaceLine(l.key, { ...l, expiry: e.target.value })} aria-label="Expiry date" /></td>
+                    <td className="line-x"><button type="button" className="icon-btn" title="Remove line" aria-label="Remove line" onClick={() => setForm((f) => ({ ...f, lines: f.lines.length > 1 ? f.lines.filter((x) => x.key !== l.key) : [blankLine()] }))}><X size={15} /></button></td>
                   </tr>
                 );
               })}
@@ -347,7 +347,7 @@ export function AddStock() {
         <div className="row gap">
           <button type="button" className="btn sm ghost" onClick={() => setForm((f) => ({ ...f, lines: [...f.lines, blankLine()] }))}>+ Add line</button>
           <button type="button" className="btn sm ghost" onClick={() => addNew('')}><Sparkles size={14} />New medicine</button>
-          <small className="muted grow">Type the unit cost or the line total from the invoice; the other is worked out. Retail prices follow the markup until you type your own.</small>
+          <small className="muted grow line-help">Type the unit cost or the line total from the invoice; the other is worked out. Retail prices follow the markup until you type your own.</small>
         </div>
         <div className="form-grid" style={{ marginTop: 16 }}>
           <label className="field"><span>Amount paid now (blank = paid in full)</span><input type="number" min="0" step="any" value={form.paid} onChange={(e) => setForm({ ...form, paid: e.target.value })} /></label>
