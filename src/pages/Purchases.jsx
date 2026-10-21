@@ -1,28 +1,74 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Pencil, Trash2, ScanText, Camera, FileUp, Loader2, AlertTriangle, CheckCircle2, X } from 'lucide-react';
-import { useStore, uid, today, now, put, move, addBatch, audit, downloadFile, toCSV, MAIN_BRANCH } from '../store.jsx';
+import { Pencil, Trash2, ScanText, Camera, FileUp, Loader2, AlertTriangle, CheckCircle2, X, Plus, RotateCcw, Sparkles } from 'lucide-react';
+import { useStore, uid, today, now, put, move, addBatch, audit, downloadFile, toCSV, markupPrice, daysUntil, MAIN_BRANCH } from '../store.jsx';
 import { CASH } from '../finance.js';
 import { Modal, PdfButton } from '../ui.jsx';
-import { toast } from '../feedback.jsx';
+import { ask, toast } from '../feedback.jsx';
+import { newInternalBarcode } from '../barcode.jsx';
 import { invoicePages, readInvoice, matchProduct, matchSupplier, normDate } from '../invoiceScan.js';
+
+const NEW = '__new__'; // a line for a medicine that is not in the list yet
+const FORMS = ['Tablets', 'Capsules', 'Syrups', 'Suspensions', 'Injectables', 'Creams', 'Ointments', 'Drops', 'Sachets', 'Devices', 'Surgicals', 'Others'];
+const round2 = (n) => Math.round(n * 100) / 100;
+const numOrBlank = (n) => (n === '' || n == null || !Number.isFinite(Number(n)) ? '' : String(round2(Number(n))));
+/** Unit cost exactly as entered: a line typed as a total keeps total ÷ qty unrounded, so qty × cost = the invoice total */
+const unitCost = (l) => (l.by === 'total' && l.total !== '' && Number(l.qty) > 0 ? Number(l.total) / Number(l.qty) : Number(l.cost) || 0);
+const lineTotal = (l) => (l.by === 'total' && l.total !== '' ? Number(l.total) || 0 : (Number(l.qty) || 0) * (Number(l.cost) || 0));
+
+/**
+ * Apply an edit to a line. Quantity, unit cost and line total stay in step (type whichever the invoice shows), and the
+ * retail price follows the cost at the chosen markup until the person types a price of their own.
+ */
+function editLine(l, patch, priceFor) {
+  const n = { ...l, ...patch };
+  const qty = Number(n.qty) || 0;
+  if ('total' in patch) { n.by = 'total'; n.cost = patch.total !== '' && qty > 0 ? numOrBlank(Number(patch.total) / qty) : ''; }
+  else if ('cost' in patch) { n.by = 'unit'; n.total = patch.cost !== '' ? numOrBlank(Number(patch.cost) * qty) : ''; }
+  else if ('qty' in patch) {
+    if (n.by === 'total' && n.total !== '') n.cost = qty > 0 ? numOrBlank(Number(n.total) / qty) : '';
+    else if (n.cost !== '') n.total = numOrBlank(Number(n.cost) * qty);
+  }
+  if ('price' in patch) n.auto = patch.price === ''; // clearing the price hands it back to the markup
+  const costChanged = 'cost' in patch || 'total' in patch || ('qty' in patch && n.by === 'total');
+  // a medicine already in the list never gets a lower price on its own: the higher of today's price and cost + markup
+  if (n.auto && (costChanged || patch.price === '' || patch.reprice) && unitCost(n) > 0) {
+    const worked = priceFor(unitCost(n));
+    n.kept = Number(n.basePrice) > worked;
+    n.price = String(n.kept ? Number(n.basePrice) : worked); n.derived = true;
+  }
+  delete n.reprice;
+  return n;
+}
 
 /** Receive stock from a supplier: every line becomes a batch (number + expiry) at this branch. */
 export function AddStock() {
   const { db, products, update, fmt, user, branchId, syncCfg } = useStore();
   const location = useLocation();
-  const blankLine = () => ({ key: uid(), productId: '', qty: 1, cost: 0, price: '', batch: '', expiry: '' });
+  const s = db.settings;
+  const draftKey = 'rxpos-addstock-draft:' + (syncCfg.tenant || 'device') + ':' + branchId;
+  const blankLine = () => ({ key: uid(), productId: '', name: '', form: 'Tablets', qty: 1, cost: '', total: '', price: '', auto: true, by: 'unit', batch: '', expiry: '' });
   const [scanOpen, setScanOpen] = useState(false);
   const [scanned, setScanned] = useState(null); // { pages, supplier, invoiceNo, total } after an invoice was read
   const [checked, setChecked] = useState(false); // the person confirms they checked the scanned lines
+  const blank = () => ({ supplierId: '', invoice: '', date: today(), paid: '', bankId: CASH, markup: s.retailMarkup ?? 50, lines: [blankLine()] });
+  const priceAt = (markup) => (cost) => markupPrice(cost, markup, s.priceRound);
+  // A line for a medicine already in the list: its current cost and price, with the totals worked out
+  const lineFor = (p, extra = {}, markup = s.retailMarkup) => {
+    const l = { ...blankLine(), productId: p.id, cost: numOrBlank(p.cost || ''), price: p.price ? String(p.price) : '', basePrice: p.price || 0, derived: false, ...extra };
+    if (!l.price && unitCost(l) > 0) { l.price = String(priceAt(markup)(unitCost(l))); l.derived = true; }
+    return { ...l, total: l.cost !== '' ? numOrBlank(Number(l.cost) * Number(l.qty || 0)) : '' };
+  };
   // Put what was read off the invoice on the panel: nothing is saved until "Receive stock"
   const applyScan = (r, pages) => {
     const sup = matchSupplier(r.supplier, db.suppliers);
     const lines = r.items.map((it) => {
       const p = matchProduct(it.name, products);
       const qty = it.qty || 1;
-      const cost = it.unitCost || (it.lineTotal && qty ? Math.round((it.lineTotal / qty) * 100) / 100 : 0);
-      return { ...blankLine(), productId: p?.id || '', qty, cost, price: p?.price || '', batch: it.batch || '', expiry: normDate(it.expiry), read: { name: it.name, unclear: it.unclear, matched: !!p } };
+      const base = { qty, batch: it.batch || '', expiry: normDate(it.expiry), read: { name: it.name, unclear: it.unclear, matched: !!p } };
+      const cost = it.unitCost || (it.lineTotal && qty ? it.lineTotal / qty : 0);
+      const l = p ? lineFor(p, base, form.markup) : { ...blankLine(), ...base, name: it.name || '' };
+      return it.lineTotal && !it.unitCost ? editLine(l, { total: String(it.lineTotal) }, priceAt(form.markup)) : editLine(l, { cost: numOrBlank(cost) }, priceAt(form.markup));
     });
     setForm((f) => {
       const keep = f.lines.filter((l) => l.productId);
@@ -36,62 +82,136 @@ export function AddStock() {
     const id = uid();
     update((d) => { put(d, 'suppliers', { id, name: scanned.supplier, contact: '', phone: '', email: '', address: '' }); });
     setForm((f) => ({ ...f, supplierId: id }));
-    setScanned((s) => ({ ...s, supplierMatched: true }));
+    setScanned((x) => ({ ...x, supplierMatched: true }));
     toast(`Supplier ${scanned.supplier} added`);
   };
-  const blank = () => ({ supplierId: '', invoice: '', date: today(), paid: '', bankId: CASH, lines: [blankLine()] });
-  // Pre-filled from a purchase order (Reorder → Receive)
+  // Pre-filled from a purchase order (Reorder → Receive), else an unfinished delivery left on this device
+  const restoredDraft = useRef(false);
   const [form, setForm] = useState(() => {
     const po = location.state?.po;
-    if (!po) return blank();
-    return { ...blank(), supplierId: po.supplierId || '', poId: po.id, lines: po.items.map((i) => ({ ...blankLine(), productId: i.productId, qty: i.qty, cost: i.cost || 0, price: products.find((p) => p.id === i.productId)?.price || '' })) };
+    if (po) return { ...blank(), supplierId: po.supplierId || '', poId: po.id, lines: po.items.map((i) => { const p = products.find((x) => x.id === i.productId); return p ? lineFor(p, { qty: i.qty, ...(i.cost ? { cost: numOrBlank(i.cost), total: numOrBlank(i.cost * i.qty) } : {}) }) : null; }).filter(Boolean) };
+    try {
+      const d = JSON.parse(localStorage.getItem(draftKey));
+      const lines = (d?.lines || []).filter((l) => l.productId === NEW || products.some((p) => p.id === l.productId));
+      if (lines.length) { restoredDraft.current = true; return { ...blank(), ...d, lines }; }
+    } catch { /* no draft */ }
+    return blank();
   });
+  // Keep the unfinished delivery on this device, so a reload, a power cut or a trip to another page loses nothing
+  useEffect(() => {
+    const t = setTimeout(() => {
+      try {
+        if (form.lines.some((l) => l.productId)) localStorage.setItem(draftKey, JSON.stringify(form));
+        else localStorage.removeItem(draftKey);
+      } catch { /* storage full or blocked: the panel still works */ }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [form, draftKey]);
+  const [restored, setRestored] = useState(restoredDraft.current);
   const [q, setQ] = useState('');
   const [saved, setSaved] = useState(null);
+  const searchRef = useRef(null);
+  const nameRefs = useRef({});
 
-  const setLine = (key, patch) => setForm((f) => ({ ...f, lines: f.lines.map((l) => (l.key === key ? { ...l, ...patch } : l)) }));
-  const total = form.lines.reduce((a, l) => a + Number(l.qty) * Number(l.cost), 0);
-  const matches = q ? products.filter((p) => [p.name, p.generic, p.barcode].join(' ').toLowerCase().includes(q.toLowerCase())).slice(0, 8) : [];
+  const priceFor = priceAt(form.markup);
+  // The line dropdowns list this pharmacy's own and stocked medicines only (the 9,710-item catalog in every dropdown
+  // made typing slow on phones); anything in the catalog is still found with the search box above
+  const ownList = useMemo(() => products.filter((p) => !p.fromCatalog || p.stock > 0 || p.totalStock > 0 || !p._base).sort((a, b) => a.name.localeCompare(b.name)), [products]);
+  const setLine = (key, patch) => setForm((f) => ({ ...f, lines: f.lines.map((l) => (l.key === key ? editLine(l, patch, priceAt(f.markup)) : l)) }));
+  const replaceLine = (key, line) => setForm((f) => ({ ...f, lines: f.lines.map((l) => (l.key === key ? { ...line, key } : l)) }));
+  const setMarkup = (markup) => setForm((f) => ({ ...f, markup, lines: f.lines.map((l) => (l.auto && l.derived ? editLine(l, { reprice: true }, priceAt(markup)) : l)) }));
+  const total = form.lines.reduce((a, l) => a + (l.productId ? lineTotal(l) : 0), 0);
+  const ql = q.trim().toLowerCase();
+  const matches = ql ? products.filter((p) => [p.name, p.generic, p.barcode].join(' ').toLowerCase().includes(ql)).sort((a, b) => (b.stock > 0) - (a.stock > 0)).slice(0, 8) : [];
+  const exactName = ql && products.some((p) => p.name.trim().toLowerCase() === ql);
 
-  const pick = (p) => {
+  const placeLine = (line) => {
     const empty = form.lines.find((l) => !l.productId);
-    const line = { productId: p.id, cost: p.cost || 0, price: p.price || '', batch: '', expiry: '' };
-    if (empty) setLine(empty.key, line);
-    else setForm((f) => ({ ...f, lines: [...f.lines, { ...blankLine(), ...line }] }));
+    if (empty) replaceLine(empty.key, line);
+    else setForm((f) => ({ ...f, lines: [...f.lines, line] }));
     setQ('');
+    return empty?.key || line.key;
   };
+  const pick = (p) => placeLine(lineFor(p, {}, form.markup));
+  const addNew = (name) => {
+    const key = placeLine({ ...blankLine(), productId: NEW, name: name.trim() });
+    setTimeout(() => nameRefs.current[key]?.focus(), 30);
+  };
+  const onSearchKey = (e) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    if (!ql) return;
+    const code = products.find((p) => p.barcode && p.barcode.toLowerCase() === ql);
+    if (code || matches[0]) pick(code || matches[0]);
+    else if (ql.length > 1) addNew(q);
+  };
+  const chooseProduct = (l, id) => {
+    if (id === NEW) { replaceLine(l.key, { ...l, productId: NEW, name: l.name || l.read?.name || '', auto: true }); setTimeout(() => nameRefs.current[l.key]?.focus(), 30); return; }
+    const p = products.find((x) => x.id === id);
+    if (!p) return replaceLine(l.key, { ...l, productId: '' });
+    // a scanned line keeps the cost read off the invoice
+    const next = lineFor(p, { qty: l.qty, batch: l.batch, expiry: l.expiry, read: l.read }, form.markup);
+    replaceLine(l.key, l.read && (l.cost !== '' || l.total !== '') ? editLine(next, l.by === 'total' ? { total: l.total } : { cost: l.cost }, priceFor) : next);
+  };
+  const discard = () => { setForm(blank()); setScanned(null); setChecked(false); setRestored(false); try { localStorage.removeItem(draftKey); } catch { /* ignore */ } };
 
-  const save = (e) => {
+  const save = async (e) => {
     e.preventDefault();
     const unpicked = form.lines.filter((l) => l.read && !l.productId && Number(l.qty) > 0);
-    if (unpicked.length) return toast(`Choose the medicine for ${unpicked.length} line${unpicked.length > 1 ? 's' : ''} read from the invoice (or remove ${unpicked.length > 1 ? 'them' : 'it'})`, 'warn');
+    if (unpicked.length) return toast(`Choose the medicine for ${unpicked.length} line${unpicked.length > 1 ? 's' : ''} read from the invoice, add ${unpicked.length > 1 ? 'them' : 'it'} as new, or remove ${unpicked.length > 1 ? 'them' : 'it'}`, 'warn');
     if (scanned && !checked) return toast('Tick "I have checked every line against the invoice" before saving', 'warn');
-    // lines read off the invoice that are new to this pharmacy become new medicines
-    const fresh = new Map();
-    for (const l of form.lines) if (l.productId === '__new__') fresh.set(l.key, uid());
-    const lines = form.lines.map((l) => (l.productId === '__new__' ? { ...l, productId: fresh.get(l.key), newName: l.read?.name } : l)).filter((l) => l.productId && Number(l.qty) > 0);
+    const lines = form.lines.filter((l) => l.productId && Number(l.qty) > 0);
     if (!lines.length) return toast('Add at least one medicine', 'warn');
-    if (lines.some((l) => !l.expiry)) return toast('Enter the expiry date for every line (needed for first-expiry-first-out)', 'warn');
-    const supplier = db.suppliers.find((s) => s.id === form.supplierId);
-    const paid = form.paid === '' ? total : Math.min(Number(form.paid), total);
+    if (form.lines.some((l) => l.productId && !(Number(l.qty) > 0))) return toast('Every line needs a quantity above 0 (or remove the line)', 'warn');
+    // new medicines: a name that isn't already in the list (the same new name on two lines is one medicine)
+    const freshIds = new Map();
+    for (const l of lines.filter((x) => x.productId === NEW)) {
+      const name = l.name.trim().replace(/\s+/g, ' ');
+      if (name.length < 2) return toast('Type the name of the new medicine', 'warn');
+      const dup = products.find((p) => p.name.trim().toLowerCase() === name.toLowerCase());
+      if (dup) return toast(`"${dup.name}" is already in your medicine list. Choose it from the list instead of adding it again.`, 'warn');
+      if (!(Number(l.price) > 0)) return toast(`Enter a retail price for ${name} (or its cost, and the price is worked out)`, 'warn');
+      if (!freshIds.has(name.toLowerCase())) freshIds.set(name.toLowerCase(), uid());
+    }
+    const nameOf = (l) => (l.productId === NEW ? l.name.trim().replace(/\s+/g, ' ') : products.find((p) => p.id === l.productId)?.name);
+    const noExpiry = lines.find((l) => !l.expiry);
+    if (noExpiry) return toast(`Enter the expiry date for ${nameOf(noExpiry)} (needed for first-expiry-first-out)`, 'warn');
+    const expired = lines.find((l) => daysUntil(l.expiry) < 0);
+    if (expired) return toast(`${nameOf(expired)}: the expiry date ${expired.expiry} has already passed. Check the date on the pack.`, 'error');
+    const below = lines.filter((l) => Number(l.price) > 0 && Number(l.price) < unitCost(l));
+    if (below.length && !(await ask({ title: 'Selling below cost?', message: `${below.map(nameOf).slice(0, 5).join(', ')}${below.length > 5 ? '…' : ''}: the retail price is lower than the cost. Receive anyway?`, confirmText: 'Receive anyway' }))) return;
+
+    const supplier = db.suppliers.find((x) => x.id === form.supplierId);
+    const paid = form.paid === '' ? total : Math.max(0, Math.min(Number(form.paid) || 0, total));
+    const idOf = (l) => (l.productId === NEW ? freshIds.get(nameOf(l).toLowerCase()) : l.productId);
     const purchase = {
       id: uid(), number: 'GRN' + Date.now().toString(36).toUpperCase().slice(-6), supplierId: form.supplierId, supplierName: supplier?.name || '—',
-      invoice: form.invoice, date: form.date, receivedBy: user.name, total, paid, bankId: form.bankId, branchId,
-      items: lines.map((l) => ({ productId: l.productId, name: l.newName || products.find((p) => p.id === l.productId)?.name, qty: Number(l.qty), cost: Number(l.cost), batch: l.batch, expiry: l.expiry })),
+      invoice: form.invoice.trim(), date: form.date || today(), receivedBy: user.name, total, paid, bankId: form.bankId, branchId,
+      items: lines.map((l) => ({ productId: idOf(l), name: nameOf(l), qty: Number(l.qty), cost: unitCost(l), batch: l.batch.trim(), expiry: l.expiry, ...(l.productId === NEW ? { added: true } : {}) })),
       ...(scanned ? { scanned: true } : {}),
     };
     update((d) => {
-      for (const l of lines) if (l.newName && !d.products.some((x) => x.id === l.productId)) put(d, 'products', { id: l.productId, name: l.newName, generic: '', form: 'Others', unit: 'Unit', price: Number(l.price) || 0, wholesale: Number(l.price) || 0, cost: Number(l.cost) || 0, reorder: 0 });
+      const used = new Set(d.products.map((x) => x.barcode).filter(Boolean));
+      for (const l of lines) {
+        if (l.productId !== NEW) continue;
+        const id = idOf(l);
+        if (d.products.some((x) => x.id === id)) continue;
+        const cost = unitCost(l), barcode = newInternalBarcode(used);
+        used.add(barcode);
+        put(d, 'products', { id, name: nameOf(l), generic: '', form: l.form || 'Others', unit: 'Unit', price: Number(l.price), wholesale: markupPrice(cost, s.wholesaleMarkup, s.priceRound) || Number(l.price), cost, reorder: 0, barcode });
+        audit(d, user, 'Medicine added', `${nameOf(l)} (on receiving ${purchase.number})`, branchId);
+      }
       lines.forEach((l, n) => {
-        const p = d.products.find((x) => x.id === l.productId);
+        const p = d.products.find((x) => x.id === idOf(l));
         if (!p) return;
-        const b = addBatch(d, { productId: p.id, batch: l.batch, expiry: l.expiry, cost: l.cost });
+        const cost = unitCost(l);
+        const b = addBatch(d, { productId: p.id, batch: l.batch, expiry: l.expiry, cost });
         purchase.items[n].batchId = b.id;
         move(d, { productId: p.id, qty: Number(l.qty), type: 'Purchase', ref: purchase.invoice || purchase.number, user: user.name, batchId: b.id, branchId });
         const price = Number(l.price) || p.price;
-        if (Number(l.cost) !== p.cost || price !== p.price) {
-          put(d, 'products', { ...p, cost: Number(l.cost) || p.cost, price });
-          if (price !== p.price) audit(d, user, 'Price changed', `${p.name}: ${fmt(p.price)} → ${fmt(price)} (on receiving)`, branchId);
+        if (cost !== p.cost || price !== p.price) {
+          put(d, 'products', { ...p, cost: cost || p.cost, price });
+          if (price !== p.price && l.productId !== NEW) audit(d, user, 'Price changed', `${p.name}: ${fmt(p.price)} → ${fmt(price)} (on receiving)`, branchId);
         }
       });
       if (form.poId) {
@@ -99,22 +219,28 @@ export function AddStock() {
         if (po) put(d, 'purchaseOrders', { ...po, status: 'Received', receivedAt: today(), purchaseId: purchase.id });
       }
       put(d, 'purchases', purchase);
-      audit(d, user, 'Stock received', `${purchase.number} from ${purchase.supplierName}: ${lines.length} lines, ${fmt(total)}${scanned ? ' (scanned invoice, checked by ' + user.name + ')' : ''}${fresh.size ? `, ${fresh.size} new medicine${fresh.size > 1 ? 's' : ''}` : ''}`, branchId);
+      audit(d, user, 'Stock received', `${purchase.number} from ${purchase.supplierName}: ${lines.length} lines, ${fmt(total)}${scanned ? ' (scanned invoice, checked by ' + user.name + ')' : ''}${freshIds.size ? `, ${freshIds.size} new medicine${freshIds.size > 1 ? 's' : ''}` : ''}`, branchId);
     });
     setSaved(purchase);
-    setForm(blank());
-    setScanned(null); setChecked(false);
+    discard();
+    searchRef.current?.focus();
   };
 
   return (
     <div className="page">
       <div className="page-head"><h1>Add Stock</h1><button type="button" className="btn ghost" onClick={() => setScanOpen(true)}><ScanText size={16} />Scan invoice</button></div>
       {scanOpen && <InvoiceScanner cfg={syncCfg} onClose={() => setScanOpen(false)} onRead={applyScan} />}
+      {restored && !scanned && (
+        <div className="notice info-notice row between gap wrap">
+          <span><RotateCcw size={15} /> Your unfinished delivery was kept on this device. Carry on, or start again.</span>
+          <span className="row gap"><button type="button" className="btn sm ghost" onClick={() => setRestored(false)}>Carry on</button><button type="button" className="btn sm ghost" onClick={discard}>Start again</button></span>
+        </div>
+      )}
       {scanned && (
         <div className="notice scan-notice">
           <div className="row between gap wrap">
             <strong><ScanText size={15} /> Filled from a scanned invoice{scanned.invoiceNo ? ` (no. ${scanned.invoiceNo})` : ''}: check every line before saving</strong>
-            <button type="button" className="link-btn small" onClick={() => { setScanned(null); setChecked(false); setForm(blank()); }}>Discard</button>
+            <button type="button" className="link-btn small" onClick={discard}>Discard</button>
           </div>
           <div className="small">
             {scanned.lines} line{scanned.lines === 1 ? '' : 's'} read{scanned.total ? ` · invoice total ${fmt(scanned.total)} (here ${fmt(total)})` : ''}
@@ -125,61 +251,89 @@ export function AddStock() {
           <div className="scan-thumbs">{scanned.pages.map((src, n) => <a key={n} href={src} target="_blank" rel="noreferrer" title={`Page ${n + 1}: open to compare`}><img src={src} alt={`Invoice page ${n + 1}`} /></a>)}</div>
         </div>
       )}
-      {saved && <div className="notice">Received {saved.items.length} item(s) worth {fmt(saved.total)} from {saved.supplierName}. {saved.paid < saved.total && `${fmt(saved.total - saved.paid)} added to creditors.`}</div>}
+      {saved && <div className="notice">Received {saved.items.length} item(s) worth {fmt(saved.total)} from {saved.supplierName}{saved.items.some((i) => i.added) ? ` (${saved.items.filter((i) => i.added).length} new medicine${saved.items.filter((i) => i.added).length > 1 ? 's' : ''} added to the list)` : ''}. {saved.paid < saved.total && `${fmt(saved.total - saved.paid)} added to creditors.`}</div>}
       <form className="card" onSubmit={save}>
         <div className="form-grid">
           <label className="field"><span>Supplier</span>
             <select value={form.supplierId} onChange={(e) => setForm({ ...form, supplierId: e.target.value })} required>
               <option value="">—</option>
-              {db.suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              {db.suppliers.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
             </select>
           </label>
           <label className="field"><span>Invoice no.</span><input value={form.invoice} onChange={(e) => setForm({ ...form, invoice: e.target.value })} /></label>
-          <label className="field"><span>Date</span><input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></label>
+          <label className="field"><span>Date</span><input type="date" value={form.date} max={today()} onChange={(e) => setForm({ ...form, date: e.target.value })} /></label>
+          <label className="field"><span>Retail markup for worked-out prices (%)</span><input type="number" min="0" step="any" value={form.markup} onChange={(e) => setMarkup(e.target.value)} /></label>
         </div>
         <div className="picker">
-          <input className="search big" placeholder="Search medicine to add…" value={q} onChange={(e) => setQ(e.target.value)} />
-          {matches.length > 0 && <div className="picker-list">{matches.map((p) => <button type="button" key={p.id} onClick={() => pick(p)}>{p.name} <small className="muted">{p.stock} in stock · cost {fmt(p.cost)}</small></button>)}</div>}
+          <input ref={searchRef} className="search big" placeholder="Search or scan a medicine to add… (Enter adds the first match)" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onSearchKey} />
+          {ql && (
+            <div className="picker-list">
+              {matches.map((p) => <button type="button" key={p.id} onClick={() => pick(p)}>{p.name} <small className="muted">{p.stock} in stock · cost {fmt(p.cost)} · retail {fmt(p.price)}</small></button>)}
+              {!exactName && ql.length > 1 && <button type="button" className="picker-new" onClick={() => addNew(q)}><Plus size={14} /> Add <strong>“{q.trim()}”</strong> as a new medicine</button>}
+            </div>
+          )}
         </div>
         <div className="table-wrap">
-          <table className="lines">
-            <thead><tr><th>Medicine</th><th>Qty</th><th>Unit cost</th><th>New retail price</th><th>Batch</th><th>Expiry</th><th className="num">Line total</th><th /></tr></thead>
+          <table className="lines stock-lines">
+            <thead><tr><th>Medicine</th><th>Qty</th><th>Unit cost</th><th>Line total</th><th>New retail price</th><th>Batch</th><th>Expiry</th><th /></tr></thead>
             <tbody>
-              {form.lines.map((l) => (
-                <tr key={l.key}>
-                  <td className={l.read && (!l.productId || l.read.unclear) ? 'scan-check' : ''}>
-                    <select value={l.productId} onChange={(e) => {
-                      const p = products.find((x) => x.id === e.target.value);
-                      setLine(l.key, p ? { productId: e.target.value, cost: l.read ? l.cost : p.cost || 0, price: p.price || '' } : { productId: e.target.value });
-                    }}>
-                      <option value="">Select medicine…</option>
-                      {l.read && <option value="__new__">➕ Add as new medicine: {l.read.name}</option>}
-                      {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                    </select>
-                    {l.read && <small className={'scan-read' + (!l.productId || l.read.unclear ? ' text-warn' : ' muted')}>{!l.productId ? <AlertTriangle size={11} /> : l.read.unclear ? <AlertTriangle size={11} /> : <CheckCircle2 size={11} />} Invoice: {l.read.name}{l.read.unclear ? ' (hard to read)' : ''}</small>}
-                  </td>
-                  <td><input type="number" min="1" value={l.qty} onChange={(e) => setLine(l.key, { qty: e.target.value })} /></td>
-                  <td><input type="number" step="any" value={l.cost} onChange={(e) => setLine(l.key, { cost: e.target.value })} /></td>
-                  <td><input type="number" step="any" value={l.price} onChange={(e) => setLine(l.key, { price: e.target.value })} /></td>
-                  <td><input value={l.batch} onChange={(e) => setLine(l.key, { batch: e.target.value })} /></td>
-                  <td><input type="date" value={l.expiry} onChange={(e) => setLine(l.key, { expiry: e.target.value })} /></td>
-                  <td className="num">{fmt(Number(l.qty) * Number(l.cost))}</td>
-                  <td><button type="button" className="icon-btn" onClick={() => setForm({ ...form, lines: form.lines.filter((x) => x.key !== l.key) })}>×</button></td>
-                </tr>
-              ))}
+              {form.lines.map((l) => {
+                const p = l.productId && l.productId !== NEW ? products.find((x) => x.id === l.productId) : null;
+                const cost = unitCost(l), price = Number(l.price) || 0;
+                const markup = cost > 0 && price > 0 ? Math.round(((price - cost) / cost) * 100) : null;
+                return (
+                  <tr key={l.key} className={l.productId === NEW ? 'new-line' : ''}>
+                    <td className={l.read && (!l.productId || l.read.unclear) ? 'scan-check' : ''}>
+                      {l.productId === NEW ? (
+                        <div className="new-med">
+                          <div className="row gap"><span className="badge ok"><Sparkles size={11} />New</span><button type="button" className="link-btn small" onClick={() => replaceLine(l.key, { ...l, productId: '' })}>choose existing</button></div>
+                          <input ref={(el) => (nameRefs.current[l.key] = el)} placeholder="New medicine name, e.g. Action Tabs 4s" value={l.name} onChange={(e) => replaceLine(l.key, { ...l, name: e.target.value })} aria-label="New medicine name" />
+                          <select value={l.form} onChange={(e) => replaceLine(l.key, { ...l, form: e.target.value })} aria-label="Formulation">{FORMS.map((f) => <option key={f}>{f}</option>)}</select>
+                        </div>
+                      ) : (
+                        <select value={l.productId} onChange={(e) => chooseProduct(l, e.target.value)}>
+                          <option value="">Select medicine…</option>
+                          <option value={NEW}>➕ New medicine (not in the list){l.read?.name ? `: ${l.read.name}` : ''}</option>
+                          {p && !ownList.includes(p) && <option value={p.id}>{p.name}</option>}
+                          {ownList.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+                        </select>
+                      )}
+                      {l.read && <small className={'scan-read' + (!l.productId || l.read.unclear ? ' text-warn' : ' muted')}>{!l.productId || l.read.unclear ? <AlertTriangle size={11} /> : <CheckCircle2 size={11} />} Invoice: {l.read.name}{l.read.unclear ? ' (hard to read)' : ''}</small>}
+                    </td>
+                    <td><input type="number" min="1" step="any" inputMode="decimal" value={l.qty} onChange={(e) => setLine(l.key, { qty: e.target.value })} aria-label="Quantity" /></td>
+                    <td><input type="number" min="0" step="any" inputMode="decimal" placeholder="0" value={l.cost} onChange={(e) => setLine(l.key, { cost: e.target.value })} aria-label="Unit cost" /></td>
+                    <td><input type="number" min="0" step="any" inputMode="decimal" placeholder="Total amount" className={l.by === 'total' ? 'typed' : ''} value={l.total} onChange={(e) => setLine(l.key, { total: e.target.value })} aria-label="Line total" /></td>
+                    <td>
+                      <input type="number" min="0" step="any" inputMode="decimal" placeholder={cost > 0 ? String(priceFor(cost)) : ''} value={l.price} onChange={(e) => setLine(l.key, { price: e.target.value })} aria-label="New retail price" />
+                      <small className="price-hint">
+                        {l.auto && l.derived ? <span className="muted">{l.kept ? 'kept (higher than +' + (form.markup || 0) + '%)' : `auto · +${form.markup || 0}%`}</span> : !l.auto ? <button type="button" className="link-btn small" title="Work the price out from the cost again" onClick={() => setLine(l.key, { price: '' })}><RotateCcw size={10} /> auto</button> : null}
+                        {markup !== null && <span className={markup < 0 ? 'text-danger' : 'muted'}> {markup < 0 ? 'below cost' : `margin ${markup}%`}</span>}
+                        {p && price !== p.price && p.price > 0 && <span className="muted"> · was {fmt(p.price)}</span>}
+                      </small>
+                    </td>
+                    <td><input value={l.batch} placeholder="Batch no." onChange={(e) => replaceLine(l.key, { ...l, batch: e.target.value })} aria-label="Batch number" /></td>
+                    <td><input type="date" value={l.expiry} min={today()} onChange={(e) => replaceLine(l.key, { ...l, expiry: e.target.value })} aria-label="Expiry date" /></td>
+                    <td><button type="button" className="icon-btn" title="Remove line" aria-label="Remove line" onClick={() => setForm((f) => ({ ...f, lines: f.lines.length > 1 ? f.lines.filter((x) => x.key !== l.key) : [blankLine()] }))}><X size={15} /></button></td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
-        <button type="button" className="btn sm ghost" onClick={() => setForm({ ...form, lines: [...form.lines, blankLine()] })}>+ Add line</button>
+        <div className="row gap">
+          <button type="button" className="btn sm ghost" onClick={() => setForm((f) => ({ ...f, lines: [...f.lines, blankLine()] }))}>+ Add line</button>
+          <button type="button" className="btn sm ghost" onClick={() => addNew('')}><Sparkles size={14} />New medicine</button>
+          <small className="muted grow">Type the unit cost or the line total from the invoice; the other is worked out. Retail prices follow the markup until you type your own.</small>
+        </div>
         <div className="form-grid" style={{ marginTop: 16 }}>
-          <label className="field"><span>Amount paid now (blank = paid in full)</span><input type="number" step="any" value={form.paid} onChange={(e) => setForm({ ...form, paid: e.target.value })} /></label>
+          <label className="field"><span>Amount paid now (blank = paid in full)</span><input type="number" min="0" step="any" value={form.paid} onChange={(e) => setForm({ ...form, paid: e.target.value })} /></label>
           <label className="field"><span>Paid from</span>
             <select value={form.bankId} onChange={(e) => setForm({ ...form, bankId: e.target.value })}>{db.banks.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select>
           </label>
         </div>
         {scanned && <label className="field check scan-confirm"><input type="checkbox" checked={checked} onChange={(e) => setChecked(e.target.checked)} /><span>I have checked every line against the invoice (medicine, quantity, cost, batch and expiry)</span></label>}
         <div className="form-actions">
-          <strong className="grow">Total: {fmt(total)}</strong>
+          <div className="grow"><strong>Total: {fmt(total)}</strong>{form.paid !== '' && Number(form.paid) < total && <small className="text-warn"> · {fmt(total - Math.max(0, Number(form.paid) || 0))} on credit</small>}</div>
           <button className="btn primary" disabled={!!scanned && !checked}>Receive stock</button>
         </div>
       </form>

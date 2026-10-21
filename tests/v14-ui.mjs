@@ -89,7 +89,9 @@ check('branch added by owner appears on the device', await until(p, () => docume
 // ---------- calendar, storage, weather ----------
 await p.goto(base + '/mukono-health-pharmacy#/calendar', { waitUntil: 'networkidle2' }); await wait(800);
 await clickText(p, 'Add event'); await wait(300);
-await fill(p, 'What', 'Supplier delivery', '.modal'); await fill(p, 'Starts', '1000', '.modal');
+await fill(p, 'What', 'Supplier delivery', '.modal');
+// time boxes are typed differently in 12- and 24-hour locales: set the value directly so the test passes on any computer
+await p.evaluate(() => { const el = document.querySelector('.modal input[type=time]'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, '10:00'); el.dispatchEvent(new Event('input', { bubbles: true })); });
 await p.evaluate(() => [...document.querySelectorAll('.modal button')].find((x) => x.textContent.trim() === 'Save').click()); await wait(800);
 check('calendar event added', /Supplier delivery/.test(await text(p)));
 check('calendar subscription link shown', await until(p, () => /\.ics/.test(document.querySelector('.keybox')?.textContent || ''), 10000));

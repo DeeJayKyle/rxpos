@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useLocation, Link } from 'react-router-dom';
-import { ShoppingCart, Trash2, X, FileText, Printer, AlertTriangle, ScanBarcode, Smartphone, Loader2, CheckCircle2, UserPlus, Tag, BookMarked, Repeat } from 'lucide-react';
+import { ShoppingCart, Trash2, X, FileText, Printer, AlertTriangle, ScanBarcode, Smartphone, Loader2, CheckCircle2, UserPlus, Tag, BookMarked, Repeat, PauseCircle, Keyboard, Plus } from 'lucide-react';
 import { DrugInfoPanel, genericKey } from './DrugInfo.jsx';
 import { useStore, uid, now, daysUntil, put, move, allocate, audit, normalizePhone, DEFAULT_PAYMENT_METHODS } from '../store.jsx';
 import { CASH } from '../finance.js';
@@ -33,6 +33,12 @@ export default function POS({ mode = 'retail' }) {
   useEffect(() => { if (!cart.length && picked.size) setPicked(new Set()); }, [cart.length]); // eslint-disable-line react-hooks/exhaustive-deps
   const [customerId, setCustomerId] = useState('walk-in');
   const [discount, setDiscount] = useState(0);
+  // Sales on hold (one per waiting customer) and the sale being rung up, kept on this device so a reload loses nothing
+  const holdKey = `rxpos-pos:${syncCfg.tenant || 'device'}:${branchId}:${mode}`;
+  const [held, setHeld] = useState(() => { try { return JSON.parse(localStorage.getItem(holdKey))?.held || []; } catch { return []; } });
+  const [cursor, setCursor] = useState(-1); // cart line chosen with Alt+↑/↓ (−1 = the last one)
+  const [active, setActive] = useState(0);  // highlighted medicine card (arrow keys)
+  const [help, setHelp] = useState(false);
   // Payment methods come from Settings → Payment methods; their type decides the behaviour
   const methods = (db.settings.paymentMethods?.length ? db.settings.paymentMethods : DEFAULT_PAYMENT_METHODS).filter((m) => m.type !== 'momo' || features.momo !== false);
   const [payment, setPayment] = useState(methods[0]?.name || 'Cash');
@@ -40,6 +46,7 @@ export default function POS({ mode = 'retail' }) {
   const [tendered, setTendered] = useState('');
   const [done, setDone] = useState(null);
   const searchRef = useRef();
+  const gridRef = useRef();
   const cartRef = useRef();
   const chargeRef = useRef();
   const [cartInView, setCartInView] = useState(true);
@@ -59,6 +66,21 @@ export default function POS({ mode = 'retail' }) {
   const focusSearch = () => { if (!touch) searchRef.current?.querySelector('input')?.focus(); };
   useEffect(() => { focusSearch(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Bring back the sale that was being rung up (unless a proforma is being loaded)
+  useEffect(() => {
+    if (location.state?.proforma) return;
+    try {
+      const cur = JSON.parse(localStorage.getItem(holdKey))?.current;
+      if (cur?.cart?.length) loadSale(cur);
+    } catch { /* nothing saved */ }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const t = setTimeout(() => {
+      try { localStorage.setItem(holdKey, JSON.stringify({ held, current: cart.length ? snapshot() : null })); } catch { /* storage blocked */ }
+    }, 250);
+    return () => clearTimeout(t);
+  }); // after every change
+
   // Load a proforma into the cart (from Proformas → "Sell")
   useEffect(() => {
     const pf = location.state?.proforma;
@@ -74,6 +96,14 @@ export default function POS({ mode = 'retail' }) {
     .filter((p) => (!category || p.category === category) && (!q || `${p.name} ${p.generic} ${p.barcode} ${p.category}`.toLowerCase().includes(ql)))
     .sort((a, b) => (b.stock > 0) - (a.stock > 0))
     .slice(0, 80), [products, category, q, ql]);
+  useEffect(() => setActive(0), [q, category]);
+  // how many cards fit across the grid, so ↑/↓ move by a whole row
+  const gridCols = () => { const el = gridRef.current; return el ? Math.max(1, getComputedStyle(el).gridTemplateColumns.split(' ').length) : 1; };
+  const moveActive = (by) => setActive((a) => {
+    const n = Math.max(0, Math.min(results.length - 1, a + by));
+    setTimeout(() => gridRef.current?.children[n]?.scrollIntoView({ block: 'nearest' }));
+    return n;
+  });
 
   const add = async (p) => {
     if (p.stock <= 0) {
@@ -101,10 +131,17 @@ export default function POS({ mode = 'retail' }) {
   };
 
   const onSearchKey = (e) => {
-    if (e.key === 'Escape') setQ('');
+    if (e.altKey || e.ctrlKey) return;
+    if (e.key === 'Escape') { setQ(''); setActive(0); }
+    else if (e.key === 'ArrowDown') { e.preventDefault(); moveActive(gridCols()); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); moveActive(-gridCols()); }
+    else if (e.key === 'ArrowRight' && (q === '' || e.target.selectionStart === q.length)) { e.preventDefault(); moveActive(1); }
+    else if (e.key === 'ArrowLeft' && q === '') { e.preventDefault(); moveActive(-1); }
     if (e.key !== 'Enter') return;
     const exact = products.find((p) => p.barcode && p.barcode === q.trim());
     if (exact) add(exact);
+    else if (/^\d{6,}$/.test(q.trim())) toast(`No medicine has the barcode ${q.trim()}`, 'warn'); // a scan that matched nothing: never guess
+    else if (results[active] && (q || active > 0)) add(results[active]);
     else if (results.length === 1) add(results[0]);
   };
 
@@ -119,6 +156,42 @@ export default function POS({ mode = 'retail' }) {
   const items = cart.reduce((a, l) => a + l.qty, 0);
 
   const branchName = db.branches.find((b) => b.id === branchId)?.name || 'this branch';
+
+  // ---- sales on hold: serve the next customer while one is still deciding, then switch back ----
+  const snapshot = () => ({ id: uid(), at: now(), cart, customerId, discount, payment, tendered });
+  function loadSale(x) {
+    // stock may have moved while the sale was on hold: each line's limit is today's stock
+    setCart((x.cart || []).map((l) => { const p = products.find((y) => y.id === l.id); return p ? { ...l, max: p.stock, qty: Math.min(l.qty, Math.max(1, p.stock)) } : l; })); setCustomerId(x.customerId || 'walk-in'); setDiscount(x.discount || 0);
+    setPayment(methods.some((m) => m.name === x.payment) ? x.payment : methods[0]?.name || 'Cash'); setTendered(x.tendered || ''); setPicked(new Set()); setCursor(-1);
+  }
+  const clearSale = () => loadSale({});
+  const holdSale = () => {
+    if (!cart.length) return toast('Nothing to hold: the sale is empty', 'info');
+    setHeld((h) => [...h, snapshot()]);
+    clearSale(); focusSearch();
+    toast('Sale on hold. Tap it above the sale to carry on.', 'info');
+  };
+  const resumeSale = (id) => {
+    const x = held.find((h) => h.id === id);
+    if (!x) return;
+    setHeld((h) => [...h.filter((y) => y.id !== id), ...(cart.length ? [snapshot()] : [])]);
+    loadSale(x); focusSearch();
+  };
+  // Alt+→ / Alt+←: go round the held sales (the current one goes on hold in its place)
+  const cycleSale = (dir) => {
+    if (!held.length) return;
+    const x = dir > 0 ? held[0] : held[held.length - 1];
+    const rest = dir > 0 ? held.slice(1) : held.slice(0, -1);
+    const cur = cart.length ? [snapshot()] : [];
+    setHeld(dir > 0 ? [...rest, ...cur] : [...cur, ...rest]);
+    loadSale(x); focusSearch();
+  };
+  const heldLabel = (h) => {
+    const c = db.customers.find((x) => x.id === h.customerId);
+    return c && c.id !== 'walk-in' ? c.name.split(/\s+/)[0] : h.cart[0]?.name.split(/\s+/).slice(0, 2).join(' ') || 'Sale';
+  };
+  const heldTotal = (h) => h.cart.reduce((a, l) => a + l.price * l.qty, 0) - (Number(h.discount) || 0);
+  const lineAt = cursor >= 0 && cursor < cart.length ? cart[cursor] : cart[cart.length - 1];
 
   const checkout = async () => {
     if (!cart.length) return;
@@ -160,7 +233,7 @@ export default function POS({ mode = 'retail' }) {
     window.history.replaceState({}, '');
     setDone(sale);
     setMomo(null);
-    setCart([]); setDiscount(0); setTendered(''); setCustomerId('walk-in'); setPayment(methods[0]?.name || 'Cash');
+    clearSale();
     if (db.settings.autoPrint) setTimeout(() => window.print(), 350);
   };
 
@@ -201,21 +274,32 @@ export default function POS({ mode = 'retail' }) {
     };
     update((d) => { put(d, 'proformas', pf); });
     setDone({ ...pf, proforma: true });
-    setCart([]); setDiscount(0);
+    clearSale();
   };
 
-  // POS keyboard: F8 search, F9 / Ctrl+Enter complete, F10 proforma, +/- last item qty
+  // POS keyboard (also listed under the ? button): F8 search, F9 / Ctrl+Enter charge, F10 proforma, Alt+H hold,
+  // Alt+←/→ switch held sales, Alt+↑/↓ choose a cart line, +/− its quantity, Delete removes it, Alt+1…9 payment method
   useEffect(() => {
     const onKey = (e) => {
-      if (done) return;
+      if (done || momo || newClient || labelFor || infoFor || subs) return;
+      const inSearch = e.target.tagName === 'INPUT' && searchRef.current?.contains(e.target);
+      const typing = /INPUT|TEXTAREA|SELECT/.test(e.target.tagName) && !inSearch;
       if (e.key === 'F8') { e.preventDefault(); focusSearch(); }
       else if (e.key === 'F9' || (e.ctrlKey && e.key === 'Enter')) { e.preventDefault(); checkout(); }
       else if (e.key === 'F10') { e.preventDefault(); saveProforma(); }
-      else if ((e.key === '+' || e.key === '-') && e.target.tagName === 'INPUT' && searchRef.current?.contains(e.target) && !q && cart.length) {
+      else if (e.altKey && e.key.toLowerCase() === 'h') { e.preventDefault(); holdSale(); }
+      else if (e.altKey && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) { e.preventDefault(); cycleSale(e.key === 'ArrowRight' ? 1 : -1); }
+      else if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown') && cart.length) {
         e.preventDefault();
-        const last = cart[cart.length - 1];
-        setQty(last.id, last.qty + (e.key === '+' ? 1 : -1));
+        setCursor((c) => { const cur = c >= 0 && c < cart.length ? c : cart.length - 1; return Math.max(0, Math.min(cart.length - 1, cur + (e.key === 'ArrowDown' ? 1 : -1))); });
       }
+      else if (e.altKey && /^[1-9]$/.test(e.key) && methods[Number(e.key) - 1]) { e.preventDefault(); setPayment(methods[Number(e.key) - 1].name); }
+      else if (e.key === '?' && !typing && !(inSearch && q)) { e.preventDefault(); setHelp(true); }
+      else if ((e.key === '+' || e.key === '-') && inSearch && !q && lineAt) {
+        e.preventDefault();
+        if (e.key === '-' && lineAt.qty <= 1) removeLines([lineAt.id]); else setQty(lineAt.id, lineAt.qty + (e.key === '+' ? 1 : -1));
+      }
+      else if (e.key === 'Delete' && (inSearch && !q || !typing) && lineAt) { e.preventDefault(); removeLines([lineAt.id]); setCursor(-1); }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -226,9 +310,14 @@ export default function POS({ mode = 'retail' }) {
       <section className="pos-products">
         <div className="row between gap">
           <h2 className="pos-title"><ShoppingCart size={22} /> Point of sale</h2>
-          <div className="mode-switch">
-            <Link to="/pos" className={!wholesale ? 'on' : ''}>Retail</Link>
-            <Link to="/pos/wholesale" className={wholesale ? 'on' : ''}>Wholesale</Link>
+          <div className="row gap">
+            {features.wholesale !== false && can('pos.wholesale') && (
+              <div className="mode-switch">
+                <Link to="/pos" className={!wholesale ? 'on' : ''}>Retail <kbd>F2</kbd></Link>
+                <Link to="/pos/wholesale" className={wholesale ? 'on' : ''}>Wholesale <kbd>F3</kbd></Link>
+              </div>
+            )}
+            <button className="icon-btn" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts" onClick={() => setHelp(true)}><Keyboard size={19} /></button>
           </div>
         </div>
         <div ref={searchRef} onKeyDown={onSearchKey}>
@@ -240,11 +329,11 @@ export default function POS({ mode = 'retail' }) {
             {categories.map((c) => <button key={c} className={'chip' + (category === c ? ' active' : '')} onClick={() => setCategory(category === c ? '' : c)}>{c}</button>)}
           </div>
         )}
-        <div className="product-grid">
-          {results.map((p) => {
+        <div className="product-grid" ref={gridRef}>
+          {results.map((p, i) => {
             const d = p.expiry ? daysUntil(p.expiry) : 999;
             return (
-              <button key={p.id} className={'product' + (p.stock <= 0 ? ' disabled' : '')} onClick={() => add(p)}>
+              <button key={p.id} className={'product' + (p.stock <= 0 ? ' disabled' : '') + (i === active && !touch ? ' active' : '')} onClick={() => add(p)} onMouseEnter={() => setActive(i)}>
                 <strong>{p.name}</strong>
                 <small className="muted">{[p.generic, p.form].filter(Boolean).join(' · ')}</small>
                 <div className="row between">
@@ -285,6 +374,18 @@ export default function POS({ mode = 'retail' }) {
             </div>
           )}
         </div>
+        <div className="sale-tabs" role="tablist" aria-label="Sales">
+          <button role="tab" aria-selected="true" className="sale-tab on"><ShoppingCart size={13} />{cart.length ? `Now · ${fmt(total)}` : 'New sale'}</button>
+          {held.map((h, i) => (
+            <span key={h.id} className="sale-tab-wrap">
+              <button role="tab" aria-selected="false" className="sale-tab" title={`Carry on with this sale${i === 0 ? ' (Alt+→)' : i === held.length - 1 ? ' (Alt+←)' : ''}`} onClick={() => resumeSale(h.id)}>
+                <PauseCircle size={13} />{heldLabel(h)} · {fmt(heldTotal(h))}
+              </button>
+              <button className="sale-tab-x" aria-label={`Discard held sale ${heldLabel(h)}`} title="Discard this held sale" onClick={async () => { if (await ask({ title: 'Discard this held sale?', message: `${h.cart.length} item(s) · ${fmt(heldTotal(h))}`, confirmText: 'Discard', danger: true })) setHeld((x) => x.filter((y) => y.id !== h.id)); }}><X size={11} /></button>
+            </span>
+          ))}
+          <button className="sale-tab add" disabled={!cart.length} title="Put this sale on hold and start another (Alt+H)" onClick={holdSale}><Plus size={13} />Hold &amp; new</button>
+        </div>
         {capture !== 'off' && (
           <div className="row gap">
             <select className="grow" value={customerId} onChange={(e) => setCustomerId(e.target.value)} aria-label="Client">
@@ -296,7 +397,7 @@ export default function POS({ mode = 'retail' }) {
         {customer?.allergies && <div className="error"><AlertTriangle size={14} /> Allergies: {customer.allergies}</div>}
         <div className="cart-lines">
           {cart.map((l) => (
-            <div key={l.id} className={'cart-line' + (picked.has(l.id) ? ' picked' : '')}>
+            <div key={l.id} className={'cart-line' + (picked.has(l.id) ? ' picked' : '') + (cart.length > 1 && lineAt?.id === l.id && cursor >= 0 ? ' cursor' : '')} onClick={() => setCursor(cart.indexOf(l))}>
               <input type="checkbox" className="line-check" checked={picked.has(l.id)} onChange={() => togglePick(l.id)} aria-label={`Select ${l.name}`} />
               <div className="grow"><strong>{l.name}</strong>{l.rx && <span className="badge">Rx</span>}
                 <small className="muted">@ <input className="price-input" type="number" step="any" aria-label="Unit price" disabled={!can('pos.price_edit')} value={l.price} onChange={(e) => setLine(l.id, { price: e.target.value })} /></small>
@@ -323,7 +424,7 @@ export default function POS({ mode = 'retail' }) {
           <div className="row between grand"><span>Total</span><span className="num">{fmt(total)}</span></div>
         </div>
         <div className="pay-methods">
-          {methods.map((m) => <button key={m.id} className={'chip' + (payment === m.name ? ' active' : '')} onClick={() => setPayment(m.name)}>{m.name}</button>)}
+          {methods.map((m, i) => <button key={m.id} className={'chip' + (payment === m.name ? ' active' : '')} onClick={() => setPayment(m.name)} title={i < 9 ? `Alt+${i + 1}` : undefined}>{m.name}{i < 9 && !touch && <kbd>{i + 1}</kbd>}</button>)}
         </div>
         {(ptype === 'cash' || ptype === 'credit') && (
           <div className="row between">
@@ -336,6 +437,7 @@ export default function POS({ mode = 'retail' }) {
         )}
         <div className="row gap">
           <button className="btn ghost" onClick={saveProforma} disabled={!cart.length} title="F10"><FileText size={16} />Proforma</button>
+          <button className="btn ghost" onClick={holdSale} disabled={!cart.length} title="Alt+H"><PauseCircle size={16} />Hold</button>
           <button ref={chargeRef} className="btn primary grow big" onClick={checkout} disabled={!cart.length} title="F9">Charge {fmt(total)}</button>
         </div>
       </section>
@@ -449,6 +551,20 @@ export default function POS({ mode = 'retail' }) {
       {infoFor && (
         <Modal title={<><BookMarked size={18} /> {infoFor.name}</>} onClose={() => setInfoFor(null)} wide>
           <DrugInfoPanel name={infoFor.name} generic={infoFor.generic} compact />
+        </Modal>
+      )}
+
+      {help && (
+        <Modal title={<><Keyboard size={18} /> POS shortcuts</>} onClose={() => { setHelp(false); focusSearch(); }}>
+          <table className="keys">
+            <tbody>
+              {[['Type or scan', 'Find a medicine (barcode adds it straight away)'], ['↑ ↓ ← →', 'Move through the medicines'], ['Enter', 'Add the highlighted medicine'], ['Esc', 'Clear the search'],
+                ['+ / −', 'More / fewer of the chosen cart line'], ['Alt+↑ / Alt+↓', 'Choose a cart line'], ['Delete', 'Remove the chosen cart line'],
+                ['Alt+1 … Alt+9', 'Payment method (number shown on each)'], ['F9 or Ctrl+Enter', 'Charge'], ['F10', 'Save as proforma'],
+                ['Alt+H', 'Put the sale on hold and serve the next customer'], ['Alt+← / Alt+→', 'Switch between held sales'],
+                ['F2 / F3', 'Retail / wholesale'], ['F8', 'Back to the search box'], ['Ctrl+K', 'Search everything'], ['?', 'This list']].map(([k, v]) => <tr key={k}><td><kbd>{k}</kbd></td><td>{v}</td></tr>)}
+            </tbody>
+          </table>
         </Modal>
       )}
 

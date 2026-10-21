@@ -903,3 +903,80 @@ td.scan-check { background: var(--warn-soft); }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0; }
 /* the Android app draws its own pull-to-refresh, so stop the WebView's overscroll glow from fighting it */
 html.is-android, html.is-android body { overscroll-behavior-y: contain; }
+
+/* ---------- Add Stock: new medicines, worked-out prices ---------- */
+.picker-list .picker-new { color: var(--primary-ink); background: var(--primary-soft); display: flex; align-items: center; gap: 6px; }
+.stock-lines td { vertical-align: top; }
+.stock-lines tr.new-line { background: color-mix(in srgb, var(--ok-soft) 45%, transparent); }
+.stock-lines input.typed { border-color: var(--primary); }
+.new-med { display: grid; gap: 6px; min-width: 210px; }
+.new-med .badge { margin: 0; }
+.price-hint { display: block; margin-top: 3px; font-size: 11px; line-height: 1.3; white-space: nowrap; }
+.warn-notice { background: var(--warn-soft); color: var(--warn); display: grid; gap: 8px; }
+.notice svg { vertical-align: -2px; }
+
+/* ---------- Stock count (stock take) ---------- */
+.count-steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.count-steps > div { display: flex; gap: 12px; align-items: flex-start; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; }
+.count-steps b { flex: none; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--accent-grad); color: #fff; }
+.count-steps span { display: grid; gap: 2px; } .count-steps small { color: var(--muted); }
+.count-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+.count-card { text-align: left; font: inherit; color: var(--text); cursor: pointer; display: grid; gap: 8px; transition: border-color .12s, transform .12s; }
+.count-card:hover { border-color: var(--primary); transform: translateY(-1px); }
+.progress { height: 8px; border-radius: 99px; background: var(--surface-2); overflow: hidden; }
+.progress.big { height: 12px; margin-top: 10px; }
+.progress i { display: block; height: 100%; background: var(--accent-grad); border-radius: inherit; transition: width .3s; }
+.count-search { position: sticky; top: 0; z-index: 4; display: flex; align-items: center; gap: 10px; background: var(--surface); border: 2px solid var(--primary); border-radius: var(--radius); padding: 6px 12px; box-shadow: var(--shadow); }
+.count-search > svg { color: var(--primary); flex: none; }
+.count-search input { border: 0; box-shadow: none !important; flex: 1; font-size: 17px; background: transparent; }
+.outside .row { margin-top: 8px; }
+.outside .chip { display: inline-flex; align-items: center; gap: 6px; }
+.count-list { display: grid; gap: 10px; }
+.count-row { padding: 14px 16px; display: grid; gap: 10px; border-left: 4px solid var(--border-strong); }
+.count-row.ok { border-left-color: var(--ok); }
+.count-row.off { border-left-color: var(--warn); }
+.count-head { display: flex; align-items: center; gap: 12px; }
+.count-head .grow { display: grid; gap: 2px; }
+.count-sys { text-align: center; display: grid; line-height: 1.1; }
+.count-sys small { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.count-sys b { font-size: 18px; font-variant-numeric: tabular-nums; }
+.count-lines { display: grid; gap: 8px; }
+.count-line { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.stepper { display: inline-flex; align-items: stretch; border: 1px solid var(--border-strong); border-radius: 12px; overflow: hidden; background: var(--surface); }
+.stepper button { width: 44px; border: 0; background: var(--surface-2); color: var(--text); cursor: pointer; display: grid; place-items: center; }
+.stepper button:hover { background: var(--primary-soft); color: var(--primary-ink); }
+.stepper input { width: 96px; border: 0; border-radius: 0; text-align: center; font-size: 18px; font-weight: 650; padding: 10px 6px; box-shadow: none !important; }
+.count-actions { gap: 6px; }
+.found-batch { display: grid; grid-template-columns: 1fr 1fr 90px auto auto; gap: 8px; align-items: center; }
+.scope-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; }
+.scope-opt { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; }
+.scope-opt.on { border-color: var(--primary); background: var(--primary-soft); }
+.scope-opt .grow { display: grid; gap: 4px; }
+.scope-opt select, .scope-opt input[type='number'] { margin-top: 4px; }
+.count-stats { margin-bottom: 14px; }
+@media (max-width: 640px) {
+  .found-batch { grid-template-columns: 1fr 1fr; }
+  .count-line { justify-content: space-between; }
+  .stepper input { width: 80px; }
+}
+
+/* ---------- POS: held sales as tabs, keyboard highlight ---------- */
+.product.active { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
+.sale-tabs { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: thin; }
+.sale-tab, .sale-tab-x { font: inherit; font-size: 12.5px; font-weight: 600; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); cursor: pointer; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.sale-tab { border-radius: 99px; padding: 6px 11px; }
+.sale-tab.on { background: var(--primary-soft); color: var(--primary-ink); border-color: var(--primary); }
+.sale-tab.add { border-style: dashed; color: var(--muted); }
+.sale-tab:disabled { opacity: .45; cursor: default; }
+.sale-tab-wrap { display: inline-flex; }
+.sale-tab-wrap .sale-tab { border-radius: 99px 0 0 99px; border-right: 0; background: var(--warn-soft); }
+.sale-tab-x { border-radius: 0 99px 99px 0; padding: 6px 8px; color: var(--muted); background: var(--warn-soft); }
+.sale-tab-x:hover { color: var(--danger); }
+.cart-line.cursor { outline: 2px solid var(--primary); outline-offset: -2px; border-radius: 10px; }
+.chip kbd, .mode-switch kbd { margin-left: 6px; font-size: 10px; opacity: .6; }
+table.keys td { padding: 7px 6px; } table.keys td:first-child { white-space: nowrap; width: 1%; }
+.count-stats { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+
+/* Long lists: the browser skips drawing cards that are off screen (smoother scrolling on low-end phones) */
+.count-row { content-visibility: auto; contain-intrinsic-size: auto 150px; }
+.product-grid .product { content-visibility: auto; contain-intrinsic-size: auto 120px; }

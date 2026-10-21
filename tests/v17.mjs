@@ -256,7 +256,7 @@ const filled = await until(A, () => !document.querySelector('.modal') && documen
 check('#4 the invoice page was sent to the reader as an image', aiCalls === 1 && /^data:image\/jpeg;base64,/.test(aiImage), aiCalls);
 const form = await A.evaluate(() => ({
   supplier: document.querySelector('select')?.selectedOptions[0]?.text, invoice: [...document.querySelectorAll('input')].find((i) => i.value === 'KM-5521')?.value, date: document.querySelector('input[type=date]')?.value,
-  lines: [...document.querySelectorAll('table.lines tbody tr')].map((tr) => { const ins = tr.querySelectorAll('input'); return { med: tr.querySelector('select').selectedOptions[0]?.text, qty: ins[0].value, cost: ins[1].value, batch: ins[3].value, exp: ins[4].value, read: tr.querySelector('.scan-read')?.innerText.trim() }; }),
+  lines: [...document.querySelectorAll('table.lines tbody tr')].map((tr) => { const v = (l) => tr.querySelector(`input[aria-label="${l}"]`)?.value; return { med: tr.querySelector('select').selectedOptions[0]?.text, qty: v('Quantity'), cost: v('Unit cost'), total: v('Line total'), price: v('New retail price'), batch: v('Batch number'), exp: v('Expiry date'), read: tr.querySelector('.scan-read')?.innerText.trim() }; }),
   saveDisabled: [...document.querySelectorAll('button')].find((x) => /Receive stock/.test(x.innerText))?.disabled,
   notice: document.querySelector('.scan-notice')?.innerText.replace(/\s+/g, ' '),
 }));
@@ -267,11 +267,16 @@ check('#4 nothing can be saved until the person ticks that they checked it', for
 await A.screenshot({ path: path.join(out, '4-scanned-invoice.png'), fullPage: true });
 // the person corrects the scan: unknown line becomes a new medicine, Panadol qty fixed to 12
 await A.evaluate(() => {
+  const sel = document.querySelectorAll('table.lines tbody tr')[2].querySelector('select'); sel.value = '__new__'; sel.dispatchEvent(new Event('change', { bubbles: true }));
+});
+await wait(300);
+const newLine = await A.evaluate(() => { const tr = document.querySelectorAll('table.lines tbody tr')[2]; return { name: tr.querySelector('input[aria-label="New medicine name"]')?.value, price: tr.querySelector('input[aria-label="New retail price"]')?.value }; });
+check('#4 "New medicine" keeps the name read off the invoice, and the retail price is worked out from the cost (1200 + 50% = 1800)', /QWERTAZOL/.test(newLine.name || '') && newLine.price === '1800', JSON.stringify(newLine));
+await A.evaluate(() => {
   const rows = document.querySelectorAll('table.lines tbody tr');
-  const sel = rows[2].querySelector('select'); sel.value = '__new__'; sel.dispatchEvent(new Event('change', { bubbles: true }));
   const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
-  const q = rows[1].querySelectorAll('input')[0]; set.call(q, '12'); q.dispatchEvent(new Event('input', { bubbles: true }));
-  const p = rows[2].querySelectorAll('input')[2]; set.call(p, '2500'); p.dispatchEvent(new Event('input', { bubbles: true }));
+  const q = rows[1].querySelector('input[aria-label="Quantity"]'); set.call(q, '12'); q.dispatchEvent(new Event('input', { bubbles: true }));
+  const p = rows[2].querySelector('input[aria-label="New retail price"]'); set.call(p, '2500'); p.dispatchEvent(new Event('input', { bubbles: true }));
 });
 await A.evaluate(() => document.querySelector('.scan-confirm input').click()); await wait(300);
 await clickText(A, 'button', /Receive stock/); await wait(1500);

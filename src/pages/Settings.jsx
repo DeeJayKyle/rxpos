@@ -20,7 +20,7 @@ export default function Settings() {
   const submitSettings = (e) => {
     e?.preventDefault();
     const num = (k, d = 0) => (s[k] === '' || s[k] == null ? d : Number(s[k]) || 0);
-    saveSettings({ ...s, taxRate: num('taxRate'), decimals: num('decimals'), retailMarkup: num('retailMarkup', 50), wholesaleMarkup: num('wholesaleMarkup', 25),
+    saveSettings({ ...s, taxRate: num('taxRate'), decimals: num('decimals'), retailMarkup: num('retailMarkup', 50), wholesaleMarkup: num('wholesaleMarkup', 25), priceRound: num('priceRound'),
       expiryWarnDays: num('expiryWarnDays', 90), paperWidth: num('paperWidth', 80), leadDays: num('leadDays', 7), coverDays: num('coverDays', 30), deadDays: num('deadDays', 90),
       idleMinutes: num('idleMinutes', 3), quietFrom: num('quietFrom', 21), quietTo: num('quietTo', 7) });
     update((d) => audit(d, user, 'Settings changed', tab, branchId));
@@ -54,6 +54,12 @@ export default function Settings() {
             {field('taxRate', 'Tax / VAT rate (%)', 'number')}
             {field('retailMarkup', 'Default retail markup (%)', 'number')}
             {field('wholesaleMarkup', 'Default wholesale markup (%)', 'number')}
+            <label className="field"><span>Round worked-out prices</span>
+              <select value={String(s.priceRound || 0)} onChange={(e) => setS({ ...s, priceRound: Number(e.target.value) })}>
+                <option value="0">To the nearest unit</option>
+                {[10, 50, 100, 500].map((n) => <option key={n} value={n}>Up to the next {n}</option>)}
+              </select>
+            </label>
             <label className="field"><span>Non-cash sales go to</span>
               <select value={s.nonCashBankId || 'cash-drawer'} onChange={(e) => setS({ ...s, nonCashBankId: e.target.value })}>{db.banks.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select>
             </label>
