@@ -288,6 +288,16 @@ check('price check lists a medicine below the 20% target margin (Cipro 500 → 5
   check('batch recall lookup lists who received batch B-AMOX', /Amoxyl 500mg caps · batch B-AMOX/.test(rec) && /Jane Nakato/.test(rec), rec.slice(0, 250));
 }
 
+// ---------- daily owner summary ----------
+{
+  const r = await fetch(base + '/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'sam@test.rx', password: 'sam-pass-123' }) }).then((x) => x.json());
+  const sum = await fetch(base + '/api/summary', { headers: { Authorization: 'Bearer ' + r.token } }).then((x) => x.json());
+  check("daily summary: today's sales, payment split, profit, best sellers and stock to watch", /daily summary for \d{4}-\d{2}-\d{2}/.test(sum.text || '') && /Sales: UGX [\d,]+ \(\d+ sales?\)/.test(sum.text) && /Gross profit/.test(sum.text) && /Best sellers:/.test(sum.text) && /Amoxyl/.test(sum.text), (sum.text || sum.error || '').slice(0, 300));
+  await go('/settings'); await clickText('.tab', /Alerts/); await wait(300);
+  await clickText('button', /Preview today's summary/); await wait(1500);
+  check('Settings → Alerts previews the summary with a WhatsApp share button', /Sales: UGX/.test(await A.evaluate(() => document.querySelector('.summary-preview')?.innerText || '')) && !!(await A.$('a[href^="https://wa.me/?text="]')));
+}
+
 // ---------- camera barcode scanning (Chrome's fake camera shows a Code 128 barcode for 6001003, Ciprofloxacin) ----------
 {
   const PAT = ('212222 222122 222221 121223 121322 131222 122213 122312 132212 221213 221312 231212 112232 122132 122231 113222 123122 123221 223211 221132 221231 213212 223112 312131 311222 321122 321221 312212 322112 322211 212123 212321 232121 111323 131123 131321 112313 132113 132311 211313 231113 231311 112133 112331 132131 113123 113321 133121 313121 211331 231131 213113 213311 213131 311123 311321 331121 312113 312311 332111 314111 221411 431111 111224 111422 121124 121421 141122 141221 112214 112412 122114 122411 142112 142211 241211 221114 413111 241112 134111 111242 121142 121241 114212 124112 124211 411212 421112 421211 212141 214121 412121 111143 111341 131141 114113 114311 411113 411311 113141 114131 311141 411131 211412 211214 211232 2331112').split(' ');

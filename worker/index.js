@@ -22,6 +22,7 @@ import { isOwner, ownerAuthRoutes, ownerAccount, verifyGoogle, getConfig, ownerM
 export { TenantHub } from './live.js';
 import { backup, restore } from './backup.js';
 import { uptimeCheck } from './uptime.js';
+import { dailySummaries } from './summary.js';
 
 // Database: Cloudflare D1 (binding DB) by default, or libSQL / Turso when DB_BACKEND = "turso"
 // (secrets TURSO_URL + TURSO_AUTH_TOKEN). The rest of the code doesn't know the difference.
@@ -1027,6 +1028,8 @@ export default {
   // Every 5 minutes: uptime watch (worker/uptime.js). Mondays 06:00 UTC: use the Brevo key once so Brevo never
   // disables it for 90 days of inactivity (password emails are rare).
   async scheduled(event, env, ctx) {
+    // 18:00 UTC = 21:00 in Uganda: each pharmacy's daily summary email (worker/summary.js)
+    if (event.cron === '0 18 * * *') { ctx.waitUntil(dailySummaries(withDatabase(env)).then((r) => console.log('daily summaries', r.map((x) => `${x.tenant}:${x.sent}${x.error ? ' ' + x.error : ''}`).join(', '))).catch((e) => console.log('daily summaries failed', e.message))); return; }
     if (event.cron !== '0 6 * * 1') { ctx.waitUntil(uptimeCheck(withDatabase(env)).then((r) => console.log('uptime', JSON.stringify(r))).catch((e) => console.log('uptime check failed', e.message))); return; }
     if (env.BREVO_API_KEY) ctx.waitUntil(fetch('https://api.brevo.com/v3/account', { headers: { 'api-key': env.BREVO_API_KEY, Accept: 'application/json' } }).then((r) => console.log('brevo keep-alive', r.status)).catch((e) => console.log('brevo keep-alive failed', e.message)));
   },
@@ -1090,6 +1093,12 @@ export default {
 
       if (path === '/api/sync' && req.method === 'POST') return await sync(env, body, who);
       if (path === '/api/config') return json({ tenant: who.tenant, slug: who.tenantRow.slug || who.tenant, pharmacy: who.tenantRow.name, mtn: mtn.enabled(penv), airtel: airtel.enabled(penv), sms: !!(penv.AT_USERNAME && penv.AT_API_KEY), email: !!(env.BREVO_API_KEY && env.BREVO_SENDER_EMAIL), mtnEnv: penv.MTN_ENV || 'sandbox', airtelEnv: penv.AIRTEL_ENV || 'uat', role: who.role });
+      // Today's owner summary for this pharmacy: preview (GET) or email it now to the addresses in Settings (POST)
+      if (path === '/api/summary') {
+        if (!who.viaKey && !(await roleCan(env, who.tenant, who.role, 'reports'))) return json({ error: 'Only staff who can see reports' }, 403);
+        const [r] = await dailySummaries(env, { tenantId: who.tenant, dry: req.method !== 'POST' });
+        return json(r ? { day: r.day, text: r.text, to: r.to, sent: r.sent, error: r.error } : { error: 'No pharmacy' }, r ? 200 : 404);
+      }
       if (path === '/api/rtc' || path === '/api/rtc/config') return await rtc(env, req, url, body, who);
       if (path === '/api/files' && req.method === 'POST') return await uploadChunk(env, body, who);
       if (path.startsWith('/api/ai/') && req.method === 'POST') return await ai(env, path, body, who);

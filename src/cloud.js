@@ -69,3 +69,6 @@ export function guessNetwork(msisdn) {
 
 /** WhatsApp click-to-chat link (works on phone and desktop, no API needed) */
 export const whatsappLink = (phone, text) => `https://wa.me/${String(phone).replace(/\D/g, '')}?text=${encodeURIComponent(text)}`;
+
+/** Today's owner summary (worker/summary.js): preview, or email it now to the addresses in Settings */
+export const daySummary = (cfg, send = false) => call(cfg, '/api/summary', { method: send ? 'POST' : 'GET', body: send ? {} : undefined });
