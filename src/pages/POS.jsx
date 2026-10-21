@@ -405,6 +405,7 @@ export default function POS({ mode = 'retail' }) {
             <div key={l.id} className={'cart-line' + (picked.has(l.id) ? ' picked' : '') + (cart.length > 1 && lineAt?.id === l.id && cursor >= 0 ? ' cursor' : '')} onClick={() => setCursor(cart.indexOf(l))}>
               <input type="checkbox" className="line-check" checked={picked.has(l.id)} onChange={() => togglePick(l.id)} aria-label={`Select ${l.name}`} />
               <div className="grow"><strong>{l.name}</strong>{l.rx && <span className="badge">Rx</span>}
+                {Number(l.price) < (l.cost || 0) && <small className="text-danger below-cost"> below cost{can('reports') ? ` (${fmt(l.cost)})` : ''}</small>}
                 <small className="muted">@ <input className="price-input" type="number" step="any" aria-label="Unit price" disabled={!can('pos.price_edit')} value={l.price} onChange={(e) => setLine(l.id, { price: e.target.value })} /></small>
                 <div className="line-tools">
                   <button className={'link-btn small' + (l.directions ? ' text-ok' : '')} onClick={() => setLabelFor(l)}><Tag size={12} />{l.directions ? 'Directions ✓' : 'Directions / label'}</button>

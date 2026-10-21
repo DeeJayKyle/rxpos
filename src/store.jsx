@@ -223,7 +223,7 @@ export const DEFAULT_PAYMENT_METHODS = [
 export function defaultSettings() {
   return {
     name: 'My Pharmacy', address: '', phone: '', license: '', currency: 'UGX', decimals: 0, taxRate: 0,
-    wholesaleMarkup: 25, retailMarkup: 50, priceRound: 0, expiryWarnDays: 90,
+    wholesaleMarkup: 25, retailMarkup: 50, priceRound: 0, minMargin: 20, expiryWarnDays: 90,
     receiptFooter: 'Thank you for your purchase. Get well soon!', paperWidth: 80, autoPrint: false,
     leadDays: 7, coverDays: 30, deadDays: 90,
     smsRefill: 'Hello {name}, this is {pharmacy}. Your refill of {medicine} is due on {date}. Reply or visit us to collect. Get well soon!',

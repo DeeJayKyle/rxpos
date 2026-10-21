@@ -1,4 +1,6 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo } from 'react';
+import { AlertTriangle } from 'lucide-react';
+import { Empty } from '../ui.jsx';
 import { useStore, today, dayOf, localDate, downloadFile, toCSV, daysUntil, MAIN_BRANCH } from '../store.jsx';
 import { Stat, Tabs, BarChart, PdfButton } from '../ui.jsx';
 
@@ -12,7 +14,7 @@ export default function Reports() {
   const { db, products, fmt } = useStore();
   const [tab, setTab] = useState('sales');
   const pageRef = useRef(null);
-  const TAB_NAMES = { sales: 'Sales Report', products: 'Sales by Product', purchases: 'Purchase Report', expenses: 'Expenses Report', stock: 'Stock Valuation', income: 'Income Statement' };
+  const TAB_NAMES = { profit: 'Profit & Margins', sales: 'Sales Report', products: 'Sales by Product', purchases: 'Purchase Report', expenses: 'Expenses Report', stock: 'Stock Valuation', income: 'Income Statement' };
   const [from, setFrom] = useState(today().slice(0, 8) + '01');
   const [to, setTo] = useState(today());
   const [branch, setBranch] = useState('all');
@@ -58,7 +60,7 @@ export default function Reports() {
   return (
     <div className="page" ref={pageRef}>
       <div className="page-head"><h1>Reports</h1><div className="row gap wrap">{tab !== 'stock' && Range}<PdfButton target={pageRef} title={TAB_NAMES[tab]} subtitle={tab === 'stock' ? `As at ${new Date().toLocaleDateString()}` : `${from} to ${to}`} /></div></div>
-      <Tabs value={tab} onChange={setTab} tabs={[['sales', 'Sales Report'], ['products', 'Sales by Product'], ['purchases', 'Purchase Report'], ['expenses', 'Expenses Report'], ['stock', 'Stock Valuation'], ['income', 'Income Statement']]} />
+      <Tabs value={tab} onChange={setTab} tabs={[['sales', 'Sales Report'], ['products', 'Sales by Product'], ['purchases', 'Purchase Report'], ['expenses', 'Expenses Report'], ['profit', 'Profit & margins'], ['stock', 'Stock Valuation'], ['income', 'Income Statement']]} />
 
       {tab === 'sales' && (
         <>
@@ -142,6 +144,7 @@ export default function Reports() {
         );
       })()}
 
+      {tab === 'profit' && <ProfitReport sales={sales} />}
       {tab === 'income' && (
         <div className="card statement">
           <h3>Income statement · {from} to {to}</h3>
@@ -160,5 +163,67 @@ export default function Reports() {
         </div>
       )}
     </div>
+  );
+}
+
+/** Profit per medicine and per category over the period, and a check of today's prices against the target margin */
+function ProfitReport({ sales }) {
+  const { db, products, fmt } = useStore();
+  const [by, setBy] = useState('product');
+  const target = Number(db.settings.minMargin ?? 20);
+  const byId = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
+  const rows = useMemo(() => {
+    const m = new Map();
+    for (const s of sales) for (const i of s.items) {
+      const p = byId.get(i.id);
+      const key = by === 'product' ? i.id || i.name : (p?.category || p?.form || 'Other');
+      const r = m.get(key) || { key, name: by === 'product' ? i.name : key, qty: 0, revenue: 0, cost: 0 };
+      // the line's share of a sale discount comes off its revenue
+      const share = s.subtotal > 0 ? (i.qty * i.price) / s.subtotal : 0;
+      r.qty += i.qty; r.revenue += i.qty * i.price - (s.discount || 0) * share; r.cost += i.qty * (i.cost || 0);
+      m.set(key, r);
+    }
+    return [...m.values()].map((r) => ({ ...r, profit: r.revenue - r.cost, margin: r.revenue > 0 ? ((r.revenue - r.cost) / r.revenue) * 100 : 0 })).sort((a, b) => b.profit - a.profit);
+  }, [sales, byId, by]);
+  const tot = rows.reduce((a, r) => ({ revenue: a.revenue + r.revenue, cost: a.cost + r.cost }), { revenue: 0, cost: 0 });
+  // today's prices: in-stock medicines selling below cost or below the target margin
+  const check = useMemo(() => products.filter((p) => p.stock > 0 && p.price > 0 && p.cost > 0)
+    .map((p) => ({ p, margin: ((p.price - p.cost) / p.price) * 100 })).filter((r) => r.margin < target).sort((a, b) => a.margin - b.margin), [products, target]);
+  const low = (m) => (m < 0 ? 'text-danger' : m < target ? 'text-warn' : '');
+  return (
+    <>
+      <div className="stats">
+        <Stat label="Gross profit" value={fmt(tot.revenue - tot.cost)} sub={`on ${fmt(tot.revenue)} sales`} />
+        <Stat label="Gross margin" value={(tot.revenue ? Math.round(((tot.revenue - tot.cost) / tot.revenue) * 100) : 0) + '%'} sub={`target ${target}% (Settings)`} />
+        <Stat label="Priced below cost" value={check.filter((r) => r.margin < 0).length} sub="in stock now" tone={check.some((r) => r.margin < 0) ? 'red' : ''} />
+        <Stat label={`Below ${target}% margin`} value={check.filter((r) => r.margin >= 0).length} sub="in stock now" tone="amber" />
+      </div>
+      {check.length > 0 && (
+        <div className="card table-wrap">
+          <h3><AlertTriangle size={17} /> Price check: {check.length} medicine{check.length === 1 ? '' : 's'} below the {target}% margin</h3>
+          <table>
+            <thead><tr><th>Medicine</th><th className="num">Cost</th><th className="num">Retail</th><th className="num">Margin</th><th className="num">Price for {target}%</th><th className="num">In stock</th></tr></thead>
+            <tbody>{check.slice(0, 100).map(({ p, margin }) => (
+              <tr key={p.id}><td><strong>{p.name}</strong></td><td className="num">{fmt(p.cost)}</td><td className="num">{fmt(p.price)}</td>
+                <td className={'num ' + low(margin)}><strong>{margin < 0 ? 'below cost' : Math.round(margin) + '%'}</strong></td>
+                <td className="num">{fmt(Math.ceil(p.cost / (1 - target / 100)))}</td><td className="num">{p.stock}</td></tr>
+            ))}</tbody>
+          </table>
+          <p className="muted small">Change prices in Quick Edit. The margin here is profit as a share of the selling price.</p>
+        </div>
+      )}
+      <div className="card table-wrap">
+        <div className="row between gap"><h3>Profit by {by === 'product' ? 'medicine' : 'category'}</h3>
+          <div className="row gap"><Tabs tabs={[['product', 'Medicine'], ['category', 'Category']]} value={by} onChange={setBy} />
+            <button className="btn sm ghost" onClick={() => downloadFile(`profit-by-${by}.csv`, toCSV(rows.map((r) => ({ [by]: r.name, qty: r.qty, revenue: Math.round(r.revenue), cost: Math.round(r.cost), profit: Math.round(r.profit), marginPct: r.margin.toFixed(1) }))), 'text/csv')}>Export CSV</button></div></div>
+        <table>
+          <thead><tr><th>{by === 'product' ? 'Medicine' : 'Category'}</th><th className="num">Qty</th><th className="num">Sales</th><th className="num">Cost</th><th className="num">Profit</th><th className="num">Margin</th></tr></thead>
+          <tbody>
+            {rows.slice(0, 300).map((r) => <tr key={r.key}><td>{r.name}</td><td className="num">{r.qty}</td><td className="num">{fmt(r.revenue)}</td><td className="num">{fmt(r.cost)}</td><td className={'num ' + (r.profit < 0 ? 'text-danger' : '')}>{fmt(r.profit)}</td><td className={'num ' + low(r.margin)}>{Math.round(r.margin)}%</td></tr>)}
+            {!rows.length && <Empty colSpan={6}>No sales in this period</Empty>}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }
