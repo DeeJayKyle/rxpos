@@ -26,6 +26,10 @@ await owner('/tenants/' + tid + '/records', { records: [
   P('p-pan', 'Panadol Extra tabs', { shelf: 'A1', barcode: '6001002' }), B('b-pan1', 'p-pan', '2027-12-31'), M('m-pan1', 'p-pan', 50, 'b-pan1'), B('b-pan2', 'p-pan', '2028-12-31'), M('m-pan2', 'p-pan', 30, 'b-pan2'),
   P('p-cip', 'Ciprofloxacin 500mg tabs', { shelf: 'B2', barcode: '6001003' }), B('b-cip', 'p-cip', '2028-06-30'), M('m-cip', 'p-cip', 60, 'b-cip'),
   { t: 'suppliers', id: 'sup-km', rec: { name: 'Kampala Medics', phone: '0700000001' } },
+  { t: 'suppliers', id: 'sup-np', rec: { name: 'Nile Pharma', phone: '0700000002' } },
+  // the same medicine from two suppliers: Nile Pharma is cheaper
+  { t: 'purchases', id: 'old-p1', rec: { number: 'GRN-OLD1', supplierId: 'sup-km', supplierName: 'Kampala Medics', date: new Date(Date.now() - 20 * 864e5).toISOString().slice(0, 10), items: [{ productId: 'p-pan', name: 'Panadol Extra tabs', qty: 10, cost: 520 }], total: 5200, paid: 5200, branchId: 'main', imported: 'test' } },
+  { t: 'purchases', id: 'old-p2', rec: { number: 'GRN-OLD2', supplierId: 'sup-np', supplierName: 'Nile Pharma', date: new Date(Date.now() - 10 * 864e5).toISOString().slice(0, 10), items: [{ productId: 'p-pan', name: 'Panadol Extra tabs', qty: 10, cost: 450 }], total: 4500, paid: 4500, branchId: 'main', imported: 'test' } },
   // two weeks of sales and expenses, so the dashboard charts have something to draw
   ...Array.from({ length: 14 }, (_, i) => ({ t: 'sales', id: 'hist-s' + i, rec: { number: 'H' + i, date: iso(i + 0.2), type: 'retail', branchId: 'main', items: [{ id: 'p-cip', name: 'Ciprofloxacin 500mg tabs', qty: 1, price: 1000, cost: 500, alloc: [] }], subtotal: 1000, discount: 0, tax: 0, total: 40000 + ((i * 37) % 9) * 9000, payment: 'Cash', paid: 40000 + ((i * 37) % 9) * 9000, customerId: 'walk-in', customerName: 'Walk-in Customer', cashier: 'Sam Admin', status: 'completed' } })),
   ...Array.from({ length: 5 }, (_, i) => ({ t: 'expenses', id: 'hist-e' + i, rec: { date: new Date(Date.now() - i * 6 * 864e5).toISOString().slice(0, 10), category: 'Rent', amount: 60000 + i * 15000, note: 'test', bankId: 'cash-drawer' } })),
@@ -222,6 +226,16 @@ const reloaded = A.waitForNavigation({ waitUntil: 'networkidle2', timeout: 15000
 if (await A.$('.update-pill')) await A.click('.update-pill');
 check('"Update" reloads the app onto the new build', await reloaded);
 await wait(1500);
+
+// ---------- supplier price comparison ----------
+await go('/purchases'); await clickText('.tab', /Supplier prices/); await wait(400);
+const sp = await A.evaluate(() => [...document.querySelectorAll('tbody tr')].find((r) => /Panadol/.test(r.innerText))?.innerText.replace(/\s+/g, ' ') || '');
+check('Purchase History → Supplier prices: Panadol cheapest at Nile Pharma (450) vs Kampala Medics (520), 16% gap', /Nile Pharma UGX 450/.test(sp) && /Kampala Medics: UGX 520/.test(sp) && /16%/.test(sp), sp);
+await go('/add-stock'); await A.select('form.card select', 'sup-km');
+await A.type('.picker input', 'Panadol'); await A.keyboard.press('Enter'); await wait(300);
+await setVal('table.lines tbody tr:nth-child(1) input[aria-label="Unit cost"]', 520); await wait(200);
+check('Add Stock warns when another supplier sold it cheaper', /Nile Pharma: UGX 450/.test(await A.evaluate(() => document.querySelector('table.lines tbody tr')?.innerText || '')));
+await clickText('button', /Start again|Discard/);
 
 // ---------- camera barcode scanning (Chrome's fake camera shows a Code 128 barcode for 6001003, Ciprofloxacin) ----------
 {

@@ -534,6 +534,24 @@ export function toCSV(rows) {
   return [cols.join(','), ...rows.map((r) => cols.map((c) => esc(r[c])).join(','))].join('\n');
 }
 
+/** What each supplier last charged for each medicine: productId → [{ supplierId, supplierName, cost, date }], cheapest first */
+export function supplierPrices(purchases) {
+  const m = new Map();
+  for (const p of purchases) {
+    if (!p.supplierId) continue;
+    for (const i of p.items || []) {
+      if (!(i.cost > 0)) continue;
+      let per = m.get(i.productId);
+      if (!per) m.set(i.productId, (per = new Map()));
+      const cur = per.get(p.supplierId);
+      if (!cur || String(p.date) >= String(cur.date)) per.set(p.supplierId, { supplierId: p.supplierId, supplierName: p.supplierName, cost: i.cost, date: p.date });
+    }
+  }
+  const out = new Map();
+  for (const [k, per] of m) out.set(k, [...per.values()].sort((a, b) => a.cost - b.cost));
+  return out;
+}
+
 /** Amount a customer owes: credit sales minus payments received. */
 export function customerBalance(db, id) {
   const credit = db.sales.filter((s) => s.customerId === id && s.status !== 'refunded').reduce((a, s) => a + (s.total - (s.paid ?? s.total)), 0);

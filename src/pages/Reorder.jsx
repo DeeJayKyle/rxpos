@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ShoppingBag, PackageX, ClipboardList, MessageCircle, Printer, PackageCheck, Download, Wand2 } from 'lucide-react';
-import { useStore, daysSince, uid, now, put, del, audit, downloadFile, toCSV, normalizePhone, MAIN_BRANCH } from '../store.jsx';
+import { useStore, daysSince, uid, now, put, del, audit, downloadFile, toCSV, normalizePhone, supplierPrices, MAIN_BRANCH } from '../store.jsx';
 import { Tabs, Empty, Modal, Stat } from '../ui.jsx';
 import { toast, ask } from '../feedback.jsx';
 import { whatsappLink } from '../cloud.js';
@@ -20,6 +20,8 @@ export default function Reorder() {
   const [picked, setPicked] = useState({});
   const [viewPo, setViewPo] = useState(null);
   const [levels, setLevels] = useState(null); // preview of automatic reorder levels
+  const [from, setFrom] = useState('cheapest'); // buy each medicine from its cheapest or its last supplier
+  const [chosenSup, setChosenSup] = useState({}); // productId → supplierId picked by hand
 
   // Sales velocity per product at this branch, and last sale date
   const velocity = useMemo(() => {
@@ -43,15 +45,22 @@ export default function Reorder() {
       for (const i of p.items) m.set(i.productId, { supplierId: p.supplierId, supplierName: p.supplierName, cost: i.cost, date: p.date });
     return m;
   }, [db.purchases]);
+  const prices = useMemo(() => supplierPrices(db.purchases), [db.purchases]);
+  /** Where to buy a medicine: picked by hand, else its cheapest (or last) supplier */
+  const buyFor = (pid) => {
+    const list = prices.get(pid) || [];
+    const hand = chosenSup[pid] && list.find((x) => x.supplierId === chosenSup[pid]);
+    return hand || (from === 'cheapest' ? list[0] : null) || lastBuy.get(pid);
+  };
 
   const suggestions = useMemo(() => products.map((p) => {
     const perDay = (velocity.sold.get(p.id) || 0) / window_;
     const daysLeft = perDay > 0 ? p.stock / perDay : Infinity;
     const target = Math.ceil(perDay * (Number(lead) + Number(cover)));
     const qty = Math.max(0, target - Math.max(p.stock, 0), p.stock <= (p.reorder || 0) && perDay === 0 && p.reorder ? p.reorder * 2 - p.stock : 0);
-    return { p, perDay, daysLeft, qty, buy: lastBuy.get(p.id) };
+    return { p, perDay, daysLeft, qty, buy: buyFor(p.id), options: prices.get(p.id) || [] };
   }).filter((r) => r.qty > 0 && (r.p.stock > 0 || r.perDay > 0) && (r.daysLeft <= Number(lead) + Number(cover) || r.p.stock <= (r.p.reorder || 0)))
-    .sort((a, b) => a.daysLeft - b.daysLeft), [products, velocity, window_, lead, cover, lastBuy]);
+    .sort((a, b) => a.daysLeft - b.daysLeft), [products, velocity, window_, lead, cover, lastBuy, prices, from, chosenSup]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const dead = useMemo(() => products.filter((p) => p.stock > 0).map((p) => {
     const last = velocity.lastSale.get(p.id);
@@ -128,16 +137,27 @@ export default function Reorder() {
               <div className="form-actions"><button className="btn ghost" onClick={() => setLevels(null)}>Cancel</button>
                 <button className="btn primary" disabled={!levels.length} onClick={() => { applyReorderLevels(update, user, branchId, levels); toast(`${levels.length} reorder levels updated`); setLevels(null); }}>Apply {levels.length} change{levels.length === 1 ? '' : 's'}</button></div>
             </Modal>); })()}
+          <div className="row gap">
+            <span className="muted small">Order each medicine from</span>
+            <Tabs tabs={[['cheapest', 'Cheapest supplier'], ['last', 'Last supplier']]} value={from} onChange={(v) => { setFrom(v); setChosenSup({}); }} />
+          </div>
           <div className="card table-wrap">
             <table>
-              <thead><tr><th /><th>Medicine</th><th className="num">In stock</th><th className="num">Sells / day</th><th className="num">Days left</th><th>Last supplier</th><th className="num">Order qty</th><th className="num">Est. cost</th></tr></thead>
+              <thead><tr><th /><th>Medicine</th><th className="num">In stock</th><th className="num">Sells / day</th><th className="num">Days left</th><th>Buy from</th><th className="num">Order qty</th><th className="num">Est. cost</th></tr></thead>
               <tbody>
                 {suggestions.map((r) => (
                   <tr key={r.p.id}>
                     <td><input type="checkbox" checked={picked[r.p.id] ?? true} onChange={(e) => setPicked({ ...picked, [r.p.id]: e.target.checked })} /></td>
                     <td><strong>{r.p.name}</strong></td><td className="num">{r.p.stock}</td><td className="num">{r.perDay.toFixed(1)}</td>
                     <td className={'num ' + (r.daysLeft <= Number(lead) ? 'text-danger' : 'text-warn')}>{isFinite(r.daysLeft) ? Math.floor(r.daysLeft) : '—'}</td>
-                    <td>{r.buy?.supplierName || <span className="muted">—</span>}</td>
+                    <td>
+                      {r.options.length > 1 ? (
+                        <select value={r.buy?.supplierId || ''} onChange={(e) => setChosenSup({ ...chosenSup, [r.p.id]: e.target.value })} aria-label={`Supplier for ${r.p.name}`}>
+                          {r.options.map((o, n) => <option key={o.supplierId} value={o.supplierId}>{n === 0 ? '★ ' : ''}{o.supplierName} · {fmt(o.cost)}</option>)}
+                        </select>
+                      ) : r.buy?.supplierName || <span className="muted">—</span>}
+                      {r.options.length > 1 && r.buy && r.buy.cost > r.options[0].cost && <small className="text-warn"> {fmt(r.buy.cost - r.options[0].cost)} more than {r.options[0].supplierName}</small>}
+                    </td>
                     <td className="num"><strong>{r.qty}</strong></td><td className="num">{fmt(r.qty * (r.buy?.cost || r.p.cost || 0))}</td>
                   </tr>
                 ))}
