@@ -14,6 +14,8 @@ const OWNER = 'local-owner-key-0123456789abcdef';
 const SUITES = [
   ['secret helper (unit)', 'unit-secret.mjs', []],
   ['safe file urls (unit)', 'unit-safeurl.mjs', []],
+  ['refill rules (unit)', 'unit-rxrules.mjs', []],
+  ['crash scrub (unit)', 'unit-scrub.mjs', []],
   ['theme contrast', 'contrast-test.mjs', []],
   ['owner sign-in', 'owner-auth-test.mjs', []],
   ['cloud rules', 'v14-api.mjs', []],

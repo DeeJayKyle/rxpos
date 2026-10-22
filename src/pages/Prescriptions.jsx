@@ -1,5 +1,6 @@
 import { Repeat } from 'lucide-react';
 import { CrudPage } from '../ui.jsx';
+import { canRecordRefill } from '../rxrules.js';
 import { useStore, today, audit } from '../store.jsx';
 import { toast, ask } from '../feedback.jsx';
 
@@ -13,7 +14,7 @@ export default function Prescriptions() {
 
   const refill = async (r) => {
     const used = Number(r.refillsUsed || 0), allowed = Number(r.refillsAllowed || 0);
-    if (allowed && used >= allowed) return toast('All refills on this prescription have been used. A new prescription is needed.', 'warn');
+    if (!canRecordRefill(r)) return toast(allowed ? 'All refills on this prescription have been used. A new prescription is needed.' : 'This prescription allows no refills. A new prescription is needed.', 'warn');
     if (!(await ask({ title: `Record refill ${used + 1}${allowed ? ` of ${allowed}` : ''}?`, message: 'Dispense the medicines at the POS as usual; this logs the refill and sets the next reminder date.', confirmText: 'Record refill' }))) return;
     const next = { ...r, refillsUsed: used + 1, refillDates: [...(r.refillDates || []), today()], dispensedOn: today(), status: allowed && used + 1 >= allowed ? 'Completed' : 'Dispensed' };
     update((d) => {

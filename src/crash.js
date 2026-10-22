@@ -11,8 +11,12 @@ let cfg = null, flushing = false;
 const read = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } };
 const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* storage blocked */ } };
 const hash = (s) => { let h = 0; for (let i = 0; i < s.length; i++) h = (Math.imul(31, h) + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36); };
-// Keep code locations, drop anything that could carry data (long numbers, emails, phone numbers)
-const scrub = (s, n) => String(s || '').replace(/[\w.+-]+@[\w-]+\.[\w.]+/g, '[email]').replace(/\b\d{6,}\b/g, '[n]').slice(0, n);
+// Keep code locations, drop anything that could carry data (long numbers, emails, phone numbers incl. spaced/dashed)
+export const scrub = (s, n) => String(s || '')
+  .replace(/[\w.+-]+@[\w-]+\.[\w.]+/g, '[email]')
+  .replace(/\d[\d\s-]{7,}\d/g, '[n]') // 0772 123 456 / 0772-123-456
+  .replace(/\b\d{6,}\b/g, '[n]')
+  .slice(0, n);
 
 /** Record an error; sent when the device is linked to the cloud and online */
 export function reportError(error, extra = {}) {

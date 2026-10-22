@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { MessageCircle, MessageSquareText, Send, BellRing } from 'lucide-react';
 import { useStore, customerBalance, fillTemplate, normalizePhone, put, audit, daysUntil, now } from '../store.jsx';
+import { reminderActive } from '../rxrules.js';
 import { Tabs, Empty } from '../ui.jsx';
 import { toast, ask } from '../feedback.jsx';
 import { cloudConfig, sendSms, whatsappLink } from '../cloud.js';
@@ -23,7 +24,7 @@ export default function Reminders() {
     const chronic = new Map(db.products.filter((p) => p.chronic).map((p) => [p.id, p]));
     // 1) prescriptions with a refill interval
     for (const r of db.prescriptions) {
-      if (!r.refillDays || r.status === 'Cancelled') continue;
+      if (!reminderActive(r)) continue;
       const due = addDays(r.dispensedOn || r.date, Number(r.refillDays));
       out.set(r.customerId + '|rx' + r.id, { customerId: r.customerId, medicine: (r.medications || '').split('\n')[0].slice(0, 60), due });
     }
