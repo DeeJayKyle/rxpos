@@ -25,6 +25,30 @@ export function askText(opts) {
 
 const ICONS = { success: CheckCircle2, error: XCircle, warn: AlertTriangle, info: Info };
 
+/** One toast. Success/info fade on their own; errors and warnings stay until dismissed and announce as alerts.
+ *  The auto-dismiss timer pauses while the pointer is over the toast or it has keyboard focus. */
+function Toast({ t, onClose }) {
+  const Icon = ICONS[t.tone] || Info;
+  const sticky = t.tone === 'error' || t.tone === 'warn';
+  const paused = useRef(false);
+  useEffect(() => {
+    if (sticky) return undefined;
+    let id;
+    const arm = () => { id = setTimeout(() => { if (paused.current) arm(); else onClose(); }, 3500); };
+    arm();
+    return () => clearTimeout(id);
+  }, [sticky]); // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <div className={'toast ' + t.tone} role={sticky ? 'alert' : 'status'} aria-live={sticky ? 'assertive' : 'polite'}
+      tabIndex={0}
+      onMouseEnter={() => { paused.current = true; }} onMouseLeave={() => { paused.current = false; }}
+      onFocus={() => { paused.current = true; }} onBlur={() => { paused.current = false; }}>
+      <Icon size={18} /><span>{t.message}</span>
+      <button className="icon-btn" aria-label="Dismiss" onClick={onClose}><X size={16} /></button>
+    </div>
+  );
+}
+
 export function FeedbackHost() {
   const [toasts, setToasts] = useState([]);
   const [dialog, setDialog] = useState(null);
@@ -34,8 +58,7 @@ export function FeedbackHost() {
   useEffect(() => {
     listener = (ev) => {
       if (ev.type === 'toast') {
-        setToasts((t) => [...t.slice(-3), ev.item]);
-        setTimeout(() => setToasts((t) => t.filter((x) => x.id !== ev.item.id)), ev.item.tone === 'error' ? 6000 : 3500);
+        setToasts((t) => [...t.slice(-3), ev.item]); // each toast dismisses itself (errors/warnings stay; see Toast)
       } else {
         setValue('');
         setDialog(ev.item);
@@ -51,16 +74,8 @@ export function FeedbackHost() {
 
   return (
     <>
-      <div className="toasts" role="status" aria-live="polite">
-        {toasts.map((t) => {
-          const Icon = ICONS[t.tone] || Info;
-          return (
-            <div key={t.id} className={'toast ' + t.tone}>
-              <Icon size={18} /><span>{t.message}</span>
-              <button className="icon-btn" aria-label="Dismiss" onClick={() => setToasts((x) => x.filter((y) => y.id !== t.id))}><X size={16} /></button>
-            </div>
-          );
-        })}
+      <div className="toasts">
+        {toasts.map((t) => <Toast key={t.id} t={t} onClose={() => setToasts((x) => x.filter((y) => y.id !== t.id))} />)}
       </div>
       {dialog && (
         <div className="modal-bg" onMouseDown={(e) => e.target === e.currentTarget && close(dialog.input ? null : false)}
@@ -74,8 +89,8 @@ export function FeedbackHost() {
               : <input ref={inputRef} type={dialog.type || 'text'} value={value} onChange={(e) => setValue(e.target.value)} placeholder={dialog.placeholder} />)}
             {dialog.input && dialog.minLength && <small className="muted">At least {dialog.minLength} characters</small>}
             <div className="form-actions">
-              <button type="button" className="btn ghost" onClick={() => close(dialog.input ? null : false)}>Cancel</button>
-              <button className={'btn ' + (dialog.danger ? 'danger-solid' : 'primary')} disabled={tooShort} autoFocus={!dialog.input}>{dialog.confirmText || 'Confirm'}</button>
+              <button type="button" className="btn ghost" autoFocus={dialog.danger && !dialog.input} onClick={() => close(dialog.input ? null : false)}>Cancel</button>
+              <button className={'btn ' + (dialog.danger ? 'danger-solid' : 'primary')} disabled={tooShort} autoFocus={!dialog.danger && !dialog.input}>{dialog.confirmText || 'Confirm'}</button>
             </div>
           </form>
         </div>

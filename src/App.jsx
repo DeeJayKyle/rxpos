@@ -306,7 +306,7 @@ function Shell() {
   const me = db.users.find((u) => u.id === user.id);
   const changePassword = async (forced) => {
     for (;;) {
-      const pw = await askText({ title: forced ? `Welcome, ${user.name.split(/s+/)[0]}. Set your own password` : 'Change my password', message: forced ? 'You signed in with a temporary password. Choose a new one (8+ characters) that only you know.' : 'New password (8+ characters)', type: 'password', minLength: 8, confirmText: 'Next' });
+      const pw = await askText({ title: forced ? `Welcome, ${user.name.split(/\s+/)[0]}. Set your own password` : 'Change my password', message: forced ? 'You signed in with a temporary password. Choose a new one (8+ characters) that only you know.' : 'New password (8+ characters)', type: 'password', minLength: 8, confirmText: 'Next' });
       if (!pw) return;
       const again = await askText({ title: 'Type the new password again', type: 'password', minLength: 8, confirmText: 'Save password' });
       if (again === null) return;

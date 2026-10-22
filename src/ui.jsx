@@ -26,10 +26,10 @@ export function Modal({ title, onClose, children, wide }) {
 }
 
 export function Field({ f, value, onChange }) {
-  const common = { id: f.key, required: f.required, value: value ?? '', onChange: (e) => onChange(e.target.value), placeholder: f.placeholder };
+  const common = { id: f.key, required: f.required, value: value ?? '', onChange: (e) => onChange(e.target.value), placeholder: f.placeholder, autoFocus: f.autoFocus };
   let input;
   if (f.type === 'checkbox')
-    input = <input id={f.key} type="checkbox" checked={!!value} onChange={(e) => onChange(e.target.checked)} />;
+    input = <input id={f.key} type="checkbox" autoFocus={f.autoFocus} checked={!!value} onChange={(e) => onChange(e.target.checked)} />;
   else if (f.type === 'select')
     input = (
       <select {...common}>

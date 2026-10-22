@@ -122,7 +122,7 @@ export default function Auth() {
           <p className="muted center">We'll send a 6-digit code to the email or phone saved on your account.</p>
           <label className="field"><span>Your email</span><input type="email" value={form.email} onChange={set('email')} required autoFocus /></label>
           {(needCode || !slug) && codeField}
-          {error && <div className="error">{error}</div>}
+          {error && <div className="error" role="alert">{error}</div>}
           <GoogleReset url={url} code={form.code.trim().toLowerCase()} slug={slug || syncCfg.slug} onDone={(email) => { setForm((x) => ({ ...x, email, password: '' })); setForgot(null); toast('Password changed with Google. Sign in with the new password.', 'success'); }} />
           <button type="button" className="btn ghost block" disabled={busy || !navigator.onLine} onClick={() => sendCode('email')}><Mail size={16} />Email me a code</button>
           <button type="button" className="btn ghost block" disabled={busy || !navigator.onLine} onClick={() => sendCode('sms')}><MessageSquareText size={16} />Send a code by SMS</button>
@@ -136,7 +136,7 @@ export default function Auth() {
           <div className="notice">{forgot.message}{forgot.hint ? ` (${forgot.hint})` : ''}</div>
           <label className="field"><span>6-digit code</span><input inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={form.otp} onChange={set('otp')} required autoFocus /></label>
           <label className="field"><span>New password (8+ characters)</span><PasswordInput autoComplete="new-password" value={form.newPassword} onChange={set('newPassword')} required /></label>
-          {error && <div className="error">{error}</div>}
+          {error && <div className="error" role="alert">{error}</div>}
           <button className="btn primary block" disabled={busy}>{busy ? 'Saving…' : 'Set new password'}</button>
           <button type="button" className="btn sm ghost" onClick={() => setForgot({ stage: 'ask' })}>Didn't get it? Try again</button>
         </form>
@@ -176,7 +176,7 @@ export default function Auth() {
                   </button>
                 ))}
               </div>
-              {error && <div className="error">{error}</div>}
+              {error && <div className="error" role="alert">{error}</div>}
               {busy && <p className="muted small center">Signing in…</p>}
             </div>
           ) : twoStep ? (
@@ -184,13 +184,13 @@ export default function Auth() {
               <button type="button" className="btn sm ghost" style={{ alignSelf: 'flex-start' }} onClick={() => { setTwoStep(null); setError(''); }} disabled={busy}><ArrowLeft size={14} />Back</button>
               <div className="center twostep-head"><ShieldCheck size={26} /><strong>Two-step sign-in</strong><span className="muted small">Type the 6-digit code from the authenticator app on your phone</span></div>
               <input className="otp-input" value={totp} onChange={(e) => setTotp(e.target.value.replace(/\D/g, '').slice(0, 6))} inputMode="numeric" autoComplete="one-time-code" placeholder="000000" autoFocus aria-label="Authenticator code" required minLength={6} />
-              {error && <div className="error">{error}</div>}
+              {error && <div className="error" role="alert">{error}</div>}
               <button className="btn primary block" disabled={busy || totp.length !== 6}><LogIn size={16} />{busy ? 'Checking…' : 'Sign in'}</button>
               <p className="muted small center">Lost your phone? Your administrator can switch two-step sign-in off for you (Users &amp; Roles).</p>
             </form>
           ) : forgot ? forgotPanel() : (
             <form onSubmit={signIn} className="stack">
-              {pharmacy?.error ? <div className="error">{pharmacy.error}</div> : <p className="muted center auth-title"><Building2 size={15} /> {title}</p>}
+              {pharmacy?.error ? <div className="error" role="alert">{pharmacy.error}</div> : <p className="muted center auth-title"><Building2 size={15} /> {title}</p>}
               <label className="field"><span>Email or username</span><input type="text" inputMode="email" autoComplete="username" autoCapitalize="none" spellCheck={false} value={form.email} onChange={set('email')} required autoFocus={!form.email} /></label>
               <label className="field"><span>Password</span><PasswordInput autoComplete="current-password" value={form.password} onChange={set('password')} required autoFocus={!!form.email} /></label>
               {(needCode || (isUsername && !slug)) && codeField}
@@ -199,7 +199,7 @@ export default function Auth() {
                 <button type="button" className="link-btn small" onClick={() => { setForgot({ stage: 'ask' }); setError(''); }}>Forgot password?</button>
               </div>
               {remember && <p className="muted small remember-note">Stays signed in on this device. Leave it off on a shared computer.</p>}
-              {error && <div className="error">{error}</div>}
+              {error && <div className="error" role="alert">{error}</div>}
               <button className="btn primary block" disabled={busy}><LogIn size={16} />{busy ? 'Signing in…' : 'Sign in'}</button>
             </form>
           )}
@@ -237,7 +237,7 @@ function GoogleReset({ url, code, slug, onDone }) {
       <p className="muted small center">Reset with the Google (Gmail) account on your RxPOS profile:</p>
       <PasswordInput autoComplete="new-password" placeholder="New password (8+ characters)" value={pw} onChange={(e) => setPw(e.target.value)} />
       <div className="google-btn" ref={ref} />
-      {err && <div className="error">{err}</div>}
+      {err && <div className="error" role="alert">{err}</div>}
       <div className="or-line"><span>or</span></div>
     </div>
   );
