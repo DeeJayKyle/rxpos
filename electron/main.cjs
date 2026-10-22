@@ -64,6 +64,14 @@ if (HUB_MODE) {
     });
     // Camera (prescription photos), microphone (calls, voice notes), notifications: allowed for the app's own pages
     win.webContents.session.setPermissionRequestHandler((wc, permission, cb) => cb(['media', 'notifications', 'geolocation', 'clipboard-read', 'clipboard-sanitized-write'].includes(permission)));
+    // Content-Security-Policy for the app window: its own files plus the RxPOS cloud and the weather service, nothing else.
+    const CSP = "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; "
+      + "script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; "
+      + "media-src 'self' blob: https:; font-src 'self' data:; worker-src 'self' blob:; "
+      + "connect-src 'self' https://rxposug.com https://www.rxposug.com https://api.rxposug.com wss://api.rxposug.com https://api.open-meteo.com https://geocoding-api.open-meteo.com";
+    win.webContents.session.webRequest.onHeadersReceived((details, cb) => {
+      cb({ responseHeaders: { ...details.responseHeaders, 'Content-Security-Policy': [CSP], 'X-Content-Type-Options': ['nosniff'] } });
+    });
   }
 
   app.on('second-instance', () => showWindow());

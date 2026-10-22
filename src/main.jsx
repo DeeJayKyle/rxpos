@@ -12,6 +12,12 @@ import { startUpdates } from './update.js';
 import { startDevice } from './device.js';
 import { startCrashReports, reportError } from './crash.js';
 
+// Pharmacy web addresses are /<pharmacy> with no trailing slash; drop a stray one for a clean URL.
+// (Kept here rather than as an inline <script> in index.html so the web Content-Security-Policy can forbid inline scripts.)
+if (!isAndroid && typeof location !== 'undefined' && /^\/[a-z0-9-]+\/+$/.test(location.pathname)) {
+  location.replace(location.pathname.replace(/\/+$/, '') + location.search + location.hash);
+}
+
 // The Android app draws its own pull-to-refresh (src/refresh.jsx)
 if (isAndroid) document.documentElement.classList.add('is-android');
 

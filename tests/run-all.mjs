@@ -34,6 +34,7 @@ const SUITES = [
   ['username & ABC report', 'v22-username-abc.mjs', ['.output/v22']],
   ['server permissions', 'v23-perms.mjs', []],
   ['file uploads', 'v24-files.mjs', []],
+  ['security headers', 'v25-headers.mjs', []],
   // the Windows app's self-update needs a screen: Windows itself, or xvfb-run on Linux
   ...(process.platform === 'win32' || fs.existsSync('/usr/bin/xvfb-run') ? [['windows self-update', 'electron-update.mjs', []]] : []),
 ];
