@@ -1,13 +1,13 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useLocation, Link } from 'react-router-dom';
-import { ShoppingCart, Trash2, X, FileText, Printer, AlertTriangle, ScanBarcode, Smartphone, Loader2, CheckCircle2, UserPlus, Tag, BookMarked, Repeat, PauseCircle, Keyboard, Plus, ClipboardList } from 'lucide-react';
+import { ShoppingCart, Trash2, X, FileText, Printer, AlertTriangle, ScanBarcode, Smartphone, Loader2, CheckCircle2, UserPlus, Tag, BookMarked, Repeat, PauseCircle, Keyboard, Plus, ClipboardList, MessageCircle, MessageSquareText } from 'lucide-react';
 import { DrugInfoPanel, genericKey } from './DrugInfo.jsx';
 import { useStore, uid, now, daysUntil, put, move, allocate, audit, normalizePhone, DEFAULT_PAYMENT_METHODS } from '../store.jsx';
 import { CASH } from '../finance.js';
 import { Modal, SearchBox, ReceiptPdfButton, PageTip } from '../ui.jsx';
 import { toast, ask } from '../feedback.jsx';
-import { payRequest, payStatus, guessNetwork, cloudConfig } from '../cloud.js';
-import { Receipt } from './Sales.jsx';
+import { payRequest, payStatus, guessNetwork, cloudConfig, whatsappLink, sendSms } from '../cloud.js';
+import { Receipt, receiptText } from './Sales.jsx';
 import { CameraButton, CameraScanner } from '../camscan.jsx';
 
 // Receipt numbers must be unique across synced devices, so they are time-based rather than sequential
@@ -668,6 +668,7 @@ export default function POS({ mode = 'retail' }) {
       {done && (
         <Modal title={done.proforma ? 'Proforma saved' : 'Sale complete ✓'} onClose={() => { setDone(null); focusSearch(); }}>
           <Receipt sale={done} />
+          {!done.proforma && <SendReceipt sale={done} />}
           <div className="form-actions no-print">
             <button className="btn ghost" onClick={() => { setDone(null); focusSearch(); }}>New sale</button>
             <ReceiptPdfButton sale={done} />
@@ -675,6 +676,34 @@ export default function POS({ mode = 'retail' }) {
           </div>
         </Modal>
       )}
+    </div>
+  );
+}
+
+
+/** After a sale: send the receipt to the customer by WhatsApp (free) or SMS (if set up). */
+function SendReceipt({ sale }) {
+  const { db, fmt, syncCfg } = useStore();
+  const saved = db.customers.find((c) => c.id === sale.customerId);
+  const [phone, setPhone] = useState(saved?.whatsapp || saved?.phone || '');
+  const [smsReady, setSmsReady] = useState(false);
+  const [sent, setSent] = useState('');
+  useEffect(() => { if (syncCfg?.url && navigator.onLine) cloudConfig(syncCfg).then((c) => setSmsReady(!!c.sms)).catch(() => {}); }, [syncCfg]);
+  const text = receiptText(sale, db.settings, fmt);
+  const wa = normalizePhone(phone);
+  const sms = async () => {
+    try { await sendSms(syncCfg, [wa], text); setSent('sms'); toast('Receipt sent by SMS'); } catch (e) { toast(e.message, 'error'); }
+  };
+  return (
+    <div className="send-receipt no-print">
+      <span className="muted small">Send the receipt to the customer</span>
+      <div className="row gap wrap">
+        <input className="grow" inputMode="tel" placeholder="Customer phone e.g. 0772 123 456" value={phone} onChange={(e) => setPhone(e.target.value)} style={{ minWidth: 180 }} />
+        <a className={'btn sm ' + (wa.length >= 12 ? 'primary' : 'ghost disabled-link')} target="_blank" rel="noreferrer"
+          href={wa.length >= 12 ? whatsappLink(wa, text) : undefined} onClick={() => wa.length >= 12 && setSent('wa')}><MessageCircle size={15} />WhatsApp</a>
+        <button type="button" className="btn sm ghost" disabled={!smsReady || wa.length < 12} title={smsReady ? '' : 'SMS is not set up yet (Settings → Online & Mobile Money)'} onClick={sms}><MessageSquareText size={15} />SMS</button>
+      </div>
+      {sent && <span className="text-ok small">{sent === 'sms' ? '✓ Sent by SMS' : '✓ Opened WhatsApp with the receipt'}</span>}
     </div>
   );
 }

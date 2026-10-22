@@ -191,7 +191,7 @@ export default function Auth() {
           ) : forgot ? forgotPanel() : (
             <form onSubmit={signIn} className="stack">
               {pharmacy?.error ? <div className="error">{pharmacy.error}</div> : <p className="muted center auth-title"><Building2 size={15} /> {title}</p>}
-              <label className="field"><span>Email or username</span><input type="text" inputMode={isUsername ? 'text' : 'email'} autoComplete="username" autoCapitalize="none" spellCheck={false} value={form.email} onChange={set('email')} required autoFocus={!form.email} /></label>
+              <label className="field"><span>Email or username</span><input type={isUsername ? 'text' : 'email'} inputMode={isUsername ? 'text' : 'email'} autoComplete="username" autoCapitalize="none" spellCheck={false} value={form.email} onChange={set('email')} required autoFocus={!form.email} /></label>
               <label className="field"><span>Password</span><PasswordInput autoComplete="current-password" value={form.password} onChange={set('password')} required autoFocus={!!form.email} /></label>
               {(needCode || (isUsername && !slug)) && codeField}
               <div className="row between remember-row">

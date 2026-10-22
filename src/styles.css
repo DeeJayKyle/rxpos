@@ -1409,3 +1409,7 @@ tbody tr:nth-child(6) { animation-delay: .1s; } tbody tr:nth-child(7) { animatio
 .abc.b { background: #d97706; }
 .abc.c { background: #94a3b8; }
 td .abc { margin-left: 8px; vertical-align: middle; }
+
+/* Send receipt to customer (POS sale-complete) */
+.send-receipt { display: flex; flex-direction: column; gap: 6px; padding: 12px 0 2px; margin-top: 10px; border-top: 1px dashed var(--border); }
+.disabled-link { opacity: .5; pointer-events: none; }
