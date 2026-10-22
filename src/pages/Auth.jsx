@@ -5,6 +5,7 @@ import { Logo, BrandLogo } from '../logo.jsx';
 import { toast } from '../feedback.jsx';
 import { cloudLogin, cloudUrl, forgotPassword, resetPassword, whatsappLink, pharmacyInfo, googleClient, resetWithGoogle, DEFAULT_CLOUD } from '../cloud.js';
 import { isWeb, isNative, pharmacySlugFromUrl } from '../platform.js';
+import { PasswordInput } from '../password.jsx';
 
 const LAST_EMAIL = 'rxpos-last-email';
 const REMEMBER_CHOICE = 'rxpos-remember-choice';
@@ -133,7 +134,7 @@ export default function Auth() {
         <form onSubmit={confirmReset} className="stack">
           <div className="notice">{forgot.message}{forgot.hint ? ` (${forgot.hint})` : ''}</div>
           <label className="field"><span>6-digit code</span><input inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={form.otp} onChange={set('otp')} required autoFocus /></label>
-          <label className="field"><span>New password (8+ characters)</span><input type="password" autoComplete="new-password" value={form.newPassword} onChange={set('newPassword')} required /></label>
+          <label className="field"><span>New password (8+ characters)</span><PasswordInput autoComplete="new-password" value={form.newPassword} onChange={set('newPassword')} required /></label>
           {error && <div className="error">{error}</div>}
           <button className="btn primary block" disabled={busy}>{busy ? 'Saving…' : 'Set new password'}</button>
           <button type="button" className="btn sm ghost" onClick={() => setForgot({ stage: 'ask' })}>Didn't get it? Try again</button>
@@ -190,7 +191,7 @@ export default function Auth() {
             <form onSubmit={signIn} className="stack">
               {pharmacy?.error ? <div className="error">{pharmacy.error}</div> : <p className="muted center auth-title"><Building2 size={15} /> {title}</p>}
               <label className="field"><span>Email</span><input type="email" autoComplete="username" value={form.email} onChange={set('email')} required autoFocus={!form.email} /></label>
-              <label className="field"><span>Password</span><input type="password" autoComplete="current-password" value={form.password} onChange={set('password')} required autoFocus={!!form.email} /></label>
+              <label className="field"><span>Password</span><PasswordInput autoComplete="current-password" value={form.password} onChange={set('password')} required autoFocus={!!form.email} /></label>
               {needCode && codeField}
               <div className="row between remember-row">
                 <label className="check small"><input type="checkbox" checked={remember} onChange={(e) => keepChoice(e.target.checked)} /><span>Remember me for 30 days</span></label>
@@ -233,7 +234,7 @@ function GoogleReset({ url, code, slug, onDone }) {
   return (
     <div className="google-reset">
       <p className="muted small center">Reset with the Google (Gmail) account on your RxPOS profile:</p>
-      <input type="password" autoComplete="new-password" placeholder="New password (8+ characters)" value={pw} onChange={(e) => setPw(e.target.value)} />
+      <PasswordInput autoComplete="new-password" placeholder="New password (8+ characters)" value={pw} onChange={(e) => setPw(e.target.value)} />
       <div className="google-btn" ref={ref} />
       {err && <div className="error">{err}</div>}
       <div className="or-line"><span>or</span></div>

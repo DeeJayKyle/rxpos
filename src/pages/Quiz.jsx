@@ -68,7 +68,7 @@ export default function Quiz() {
   const picked = quiz?.picked[quiz?.i];
   return (
     <div className="page">
-      <div className="page-head"><div><h1>Drug quiz</h1><div className="sub">Short quizzes about the medicines you stock. See the right answers and climb the team board.</div></div></div>
+      <div className="page-head"><div><h1>Drug quiz</h1><div className="sub">Quick quizzes on the medicines you stock. Learn the right answers and see who tops the team board.</div></div></div>
       <div className="grid2">
         <div className="card stack quiz">
           {!quiz && (

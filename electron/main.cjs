@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, shell } = require('electron');
+const { app, BrowserWindow, Menu, shell, Tray, nativeImage, ipcMain } = require('electron');
 const path = require('path');
 const { pathToFileURL } = require('url');
 
@@ -46,7 +46,12 @@ if (HUB_MODE) {
     if (st.maximized) win.maximize();
     win.once('ready-to-show', () => win.show());
     const save = () => { try { fs.writeFileSync(stateFile, JSON.stringify({ ...win.getNormalBounds(), maximized: win.isMaximized() })); } catch {} };
-    win.on('close', save);
+    win.on('query-session-end', () => { quitting = true; }); // Windows shutting down or signing out: really close
+    win.on('close', (e) => {
+      save();
+      // "Keep running in the tray" (This device): closing hides the window so messages and calls still arrive
+      if (keepInTray && !quitting) { e.preventDefault(); win.hide(); showTray(); }
+    });
     updater.attach(win);
     win.loadFile(path.join(__dirname, '..', 'dist', 'index.html'));
     // Open web links in the default browser and tel:/mailto:/WhatsApp links in their own apps, never inside the app window
@@ -61,9 +66,37 @@ if (HUB_MODE) {
     win.webContents.session.setPermissionRequestHandler((wc, permission, cb) => cb(['media', 'notifications', 'geolocation', 'clipboard-read', 'clipboard-sanitized-write'].includes(permission)));
   }
 
-  app.on('second-instance', () => {
-    if (win) { if (win.isMinimized()) win.restore(); win.focus(); }
+  app.on('second-instance', () => showWindow());
+
+  // ---------- tray, taskbar badge and notifications (src/badges.js) ----------
+  let tray = null, keepInTray = false, quitting = false, unread = 0;
+  app.on('before-quit', () => { quitting = true; });
+  function showWindow() {
+    if (!win) return;
+    if (!win.isVisible()) win.show();
+    if (win.isMinimized()) win.restore();
+    win.focus();
+  }
+  function showTray() {
+    if (tray) return;
+    tray = new Tray(nativeImage.createFromPath(path.join(__dirname, '..', 'build', 'icon.png')).resize({ width: 16, height: 16 }));
+    tray.setToolTip('RxPOS');
+    tray.setContextMenu(Menu.buildFromTemplate([{ label: 'Open RxPOS', click: showWindow }, { type: 'separator' }, { label: 'Quit RxPOS', click: () => { quitting = true; app.quit(); } }]));
+    tray.on('click', showWindow);
+    if (!readState().trayHint) {
+      tray.displayBalloon?.({ title: 'RxPOS is still running', content: 'New messages and calls will still pop up. Right-click this icon to quit.', iconType: 'info' });
+      try { fs.writeFileSync(stateFile, JSON.stringify({ ...readState(), trayHint: true })); } catch {}
+    }
+  }
+  ipcMain.on('rxpos:tray', (_e, on) => { keepInTray = !!on; if (!on && tray) { tray.destroy(); tray = null; } });
+  ipcMain.on('rxpos:badge', (_e, n, png) => {
+    unread = n | 0;
+    app.setBadgeCount?.(unread);
+    if (process.platform === 'win32' && win) win.setOverlayIcon(unread && png ? nativeImage.createFromDataURL(png) : null, unread ? `${unread} unread` : '');
+    tray?.setToolTip(unread ? `RxPOS · ${unread} unread` : 'RxPOS');
   });
+  ipcMain.on('rxpos:attention', () => { if (win && !win.isFocused()) win.flashFrame(true); });
+  ipcMain.on('rxpos:show', showWindow);
 
   Menu.setApplicationMenu(
     Menu.buildFromTemplate([

@@ -84,7 +84,7 @@ export default function Storage() {
   return (
     <div className="page">
       <div className="page-head">
-        <div><h1>Weather & Storage</h1><div className="sub">Outside weather and your fridge / room temperature log (cold chain)</div></div>
+        <div><h1>Weather & Storage</h1><div className="sub">The weather outside, plus your fridge and room readings to keep the cold chain safe</div></div>
         <button className="btn primary" onClick={() => setAdding({ place, temp: '', humidity: '', note: '' })}><Plus size={16} />Record reading</button>
       </div>
       <div className="grid2">

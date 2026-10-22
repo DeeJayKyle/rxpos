@@ -219,12 +219,10 @@ check('the update archive for Android can be downloaded', zipOk);
 await A.setRequestInterception(true);
 const onReq = (req) => (req.url().includes('/version.json') ? req.respond({ status: 200, contentType: 'application/json', body: JSON.stringify({ version: '1.0.0', build: myBuild + 3600, label: '1.0 · newer', shell: 1, files: [] }) }) : req.continue());
 A.on('request', onReq);
-await clickText('button', /Check for updates/); await wait(1200);
-check('a newer build is noticed and offered ("update ready")', !!(await A.$('.update-pill')) && /New version ready/.test(await A.evaluate(() => document.body.innerText)), await A.evaluate(() => [...document.querySelectorAll('.card')].find((c) => /App version/.test(c.innerText))?.innerText.replace(/\s+/g, ' ')));
-A.off('request', onReq); await A.setRequestInterception(false);
 const reloaded = A.waitForNavigation({ waitUntil: 'networkidle2', timeout: 15000 }).then(() => true).catch(() => false);
-if (await A.$('.update-pill')) await A.click('.update-pill');
-check('"Update" reloads the app onto the new build', await reloaded);
+await clickText('button', /Update to the latest version/);
+check('"Update to the latest version" finds the newer build and reloads the app onto it', await reloaded);
+A.off('request', onReq); await A.setRequestInterception(false);
 await wait(1500);
 
 // ---------- supplier price comparison ----------

@@ -19,13 +19,15 @@ The **owner** signs in on https://rxposug.com with the owner email and password 
 | Scanning & packs | **Camera barcode scanning** (POS, Add Stock, Stock Count scan-to-count), **sell / receive by pack** (strip, box) with stock kept in tablets |
 | Design & access | Every colour theme checked and adjusted to **WCAG AA contrast**; phone POS with the sale **docked at the bottom** (swipe a line to remove); Add Stock as cards on phones; first-visit tips and empty pages that say what to do next; **Remember me** for 30 days on personal devices |
 | Support | **Private crash reports**: errors on any device reach the owner console (Device errors), without personal data; Windows app on a supported Electron (43) |
+| Chat & calls | Team and private chats with **reply, emoji reactions, edit, delete for everyone / for me, forward, copy, pin, star, search** and **blue read ticks**; photos, files and voice notes; swipe right to reply and long-press for the menu on phones; full-screen chats on phones like WhatsApp. **In-app voice calls** that keep trying through a weak signal and log "Missed voice call" / "Voice call · 2:31" in the chat |
+| This device | Every person's own page (menu → System → This device & Updates): **Update to the latest version** in one tap, phone / desktop layout, text size, double-tap zoom, screen rotation (Android), **a sound per kind of notice** (built-in tones or your own MP3), notifications with the **unread count on the app / taskbar icon**, and keeping the Windows app running in the tray |
 | Reorder | **Smart reorder suggestions** from real sales velocity, lead time and target cover; **dead-stock report**; purchase orders (print / WhatsApp to supplier) that receive straight into Add Stock |
 | Branches | Unlimited branches, stock per branch, **stock transfers** (in transit → received, shortages recorded), owner overview of every branch, branch filters in sales & reports |
 | People | Customers (allergies, insurance, credit limit), suppliers, prescriptions with refill intervals, **refill & debt reminders by WhatsApp or SMS** |
 | Finance | Expenses & categories, banks with live balances, deposits / withdrawals / transfers, loans, debtors, creditors, cash book |
 | Reports | Dashboard (today vs yesterday, 30-day trend, sales vs expenses, top 10), sales, sales by product, purchases, expenses, stock valuation, income statement, CSV export everywhere |
 | Security | Accounts created by the owner (administrators) and each pharmacy's admin (staff), salted PBKDF2 passwords, first-sign-in password change, roles & permissions enforced on the server, **audit log** |
-| Engagement | **Idle-screen promotions** (short expiry, slow movers, high value, best margin) with one-tap **WhatsApp sharing**, "Promote today" on the dashboard, **hourly reminders** with a soft chime, notification bell |
+| Engagement | **Idle-screen shop window**: medicines worth recommending (short expiry, slow movers, high value, best margin) and health tips, each with a picture; browse with arrows, swipes, thumbnails or the keyboard, pause, or close; one-tap **WhatsApp sharing**, "Promote today" on the dashboard, **hourly reminders** with a soft chime, notification bell |
 | Planner | **Calendar** with team events, refills due and expiring stock; subscribe in **Google Calendar / Outlook / phone** (private ICS link) |
 | Storage | **Weather** for the pharmacy's town (Open-Meteo), storage advice, **fridge / room temperature log** with safe ranges and trend |
 | Reliability | Works fully offline after the first sign-in, pushes changes within seconds and pulls every 10 s, 7 daily on-device snapshots, crash-recovery screen, dark mode, Ctrl+K search |
@@ -37,7 +39,7 @@ Every device keeps itself on the newest version published at rxposug.com (deploy
 * **Browser / installed web app:** checks every 10 minutes and when it comes back to the screen; the new version is applied when nothing is in progress (no open sale, dialog or typing) or while the app is in the background.
 * **Windows app:** downloads only the files that changed (each checked by SHA-256), switches when idle or at the next start, and goes back to the previous version by itself if a new one fails to start (`electron/updater.cjs`).
 * **Android app:** downloads the new version in the background and switches at the next start or when idle, with the same automatic roll-back (Capgo updater, `src/update.js`).
-* The version stays **1.0**; each build is identified by its commit time (shown in Settings → Data & backup → App version, with *Check for updates*).
+* The version stays **1.0**; each build is identified by its commit time (shown on **This device**, with **Update to the latest version**, which fetches and switches straight away).
 * A new installer / APK is only needed when the native app itself changes (a new permission or plugin): raise `shell` in `scripts/release-files.mjs` and `SHELL` in `src/update.js` / `electron/updater.cjs`, and older apps say that a new installer is needed.
 
 ## How offline + online works
@@ -149,6 +151,20 @@ The cloud runs on Cloudflare D1 by default. To move it to [Turso](https://turso.
 
 The standard 9,710-medicine catalog is built into the apps, so it is never stored per pharmacy: creating a pharmacy costs a few
 records, and only medicines a pharmacy adds or changes are synced. `node worker/test-harness.mjs` runs the cloud locally on libSQL files for tests.
+
+## In-app calls across networks (TURN relay)
+
+Calls go straight between the two devices. On the same Wi-Fi, or on most home and office internet, that just works. Phones on
+mobile data often sit behind the network's own firewall, and then a **relay** is needed. Cloudflare runs one with a free monthly
+allowance:
+
+1. Cloudflare dashboard → **Realtime** (called *Calls* on older dashboards) → **TURN Server** → *Create* (any name).
+2. Copy the **Turn Token ID** and **API Token** it shows.
+3. Add them as secrets on the Worker: `TURN_KEY_ID` and `TURN_KEY_API_TOKEN` (Workers & Pages → `pharmapos` → Settings →
+   Variables and Secrets, or `npx wrangler secret put TURN_KEY_ID`).
+
+The cloud then hands each call short-lived relay logins. Any other TURN server works too: `TURN_URLS` (comma separated),
+`TURN_USERNAME`, `TURN_CREDENTIAL`.
 
 ## Mobile Money (MTN MoMo, Airtel Money) and SMS
 

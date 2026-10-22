@@ -119,7 +119,7 @@ await A.screenshot({ path: out + '/06-quiz.png' });
 
 // scan page renders, matching works on the AI result
 await A.goto(base + '/' + slug + '#/scan', { waitUntil: 'networkidle2' }); await wait(800);
-check('scan prescription page', /Take a photo/.test(await A.evaluate(() => document.body.innerText)));
+check('scan prescription page', /Snap the prescription/.test(await A.evaluate(() => document.body.innerText)));
 
 // ----- chat: attachment, voice note, message pop-up, call -----
 const ctxB = await b.createBrowserContext();
@@ -132,7 +132,7 @@ await B.evaluate(() => [...document.querySelectorAll('button')].find((x) => x.te
 await A.goto(base + '/' + slug + '#/', { waitUntil: 'networkidle2' }); await wait(2500);
 // Dan posts a team message → Bea gets a pop-up
 await B.goto(base + '/' + slug + '#/chat', { waitUntil: 'networkidle2' }); await wait(1500);
-await B.type('.chat-compose input:not([type=file])', 'Fridge delivery arriving at 3pm'); await B.keyboard.press('Enter'); await wait(500);
+await B.type('.chat-compose textarea', 'Fridge delivery arriving at 3pm'); await B.keyboard.press('Enter'); await wait(500);
 check('new team message pops up on another device', await (async () => { for (let i = 0; i < 30; i++) { if (await A.evaluate(() => /Fridge delivery/.test(document.querySelector('.popups')?.innerText || ''))) return true; await wait(700); } return false; })());
 // attachment (png) from Dan
 const fileInput = await B.$('.chat-compose input[type=file]');
@@ -140,7 +140,7 @@ fs.writeFileSync(out + '/pic.png', Buffer.from(LOGO.split(',')[1], 'base64'));
 await fileInput.uploadFile(out + '/pic.png'); await wait(3000);
 check('photo shared in chat', await B.evaluate(() => !!document.querySelector('.att-img img')));
 // voice note from Dan
-await B.evaluate(() => [...document.querySelectorAll('.chat-compose button')].find((x) => x.textContent.includes('Voice')).click()); await wait(2500);
+await B.evaluate(() => document.querySelector('.chat-compose button[aria-label="Record a voice note"]').click()); await wait(2500);
 await B.evaluate(() => [...document.querySelectorAll('.voice-rec button')].find((x) => x.textContent.includes('Stop')).click()); await wait(800);
 await B.evaluate(() => [...document.querySelectorAll('.voice-rec button')].find((x) => x.textContent.includes('Send')).click()); await wait(3500);
 check('voice note recorded and shared', await B.evaluate(() => !!document.querySelector('.att-audio audio')));

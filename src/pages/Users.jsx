@@ -5,6 +5,7 @@ import { PERMISSIONS, rolesOf, DEFAULT_ROLES } from '../access.js';
 import { Modal, Tabs, Empty } from '../ui.jsx';
 import { ask, askText, toast } from '../feedback.jsx';
 import { twoStep } from '../cloud.js';
+import { PasswordInput } from '../password.jsx';
 
 /** Staff accounts and roles. Every person signs in with their own email; roles decide what they can do. */
 export default function Users() {
@@ -141,7 +142,7 @@ export default function Users() {
                 <label className="field"><span>Home branch</span>
                   <select value={edit.branchId || ''} onChange={(e) => setEdit({ ...edit, branchId: e.target.value })}><option value="">Any branch</option>{db.branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select></label>
               )}
-              {edit._new && <label className="field"><span>Password (8+ characters)</span><input type="password" autoComplete="new-password" required value={edit.password} onChange={(e) => setEdit({ ...edit, password: e.target.value })} /></label>}
+              {edit._new && <label className="field"><span>Password (8+ characters)</span><PasswordInput autoComplete="new-password" required value={edit.password} onChange={(e) => setEdit({ ...edit, password: e.target.value })} /></label>}
             </div>
             {edit.phone && normalizePhone(edit.phone).length < 12 && <p className="text-warn small">Check the phone number. It should look like 0772 123 456.</p>}
             <div className="form-actions"><button type="button" className="btn ghost" onClick={() => setEdit(null)}>Cancel</button><button className="btn primary">{edit._new ? 'Add user' : 'Save'}</button></div>

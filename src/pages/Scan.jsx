@@ -93,7 +93,7 @@ export default function Scan() {
 
   return (
     <div className="page">
-      <div className="page-head"><div><h1>Scan a prescription</h1><div className="sub">Take a photo; AI reads it (typed or handwritten) and finds what you have in stock or alternatives</div></div></div>
+      <div className="page-head"><div><h1>Scan a prescription</h1><div className="sub">Snap the prescription. RxPOS reads it, typed or handwritten, and shows what you have on the shelf or what could replace it</div></div></div>
       <div className="grid2">
         <div className="card stack">
           {camera ? (

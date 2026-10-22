@@ -113,6 +113,35 @@ jobs:
           done
           grep -q 'android.hardware.camera"' $M || sed -i 's#</manifest>#    <uses-feature android:name="android.hardware.camera" android:required="false" />\n</manifest>#' $M
           grep uses-permission $M
+      - name: Screen rotation, pinch zoom and desktop view (This device page)
+        run: |
+          M=android/app/src/main/AndroidManifest.xml
+          # follow the phone's own auto-rotate switch, all four directions; RxPOS can lock it from This device
+          grep -q 'screenOrientation' $M || sed -i 's#<activity#<activity android:screenOrientation="fullUser"#' $M
+          grep -n 'screenOrientation' $M
+          A=$(find android/app/src/main/java -name MainActivity.java)
+          PKG=$(sed -n 's/^package \(.*\);/\1/p' $A)
+          cat > $A <<JAVA
+          package $PKG;
+
+          import android.os.Bundle;
+          import android.webkit.WebSettings;
+          import com.getcapacitor.BridgeActivity;
+
+          public class MainActivity extends BridgeActivity {
+              @Override
+              public void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  WebSettings s = getBridge().getWebView().getSettings();
+                  s.setSupportZoom(true);            // pinch to zoom
+                  s.setBuiltInZoomControls(true);
+                  s.setDisplayZoomControls(false);   // no +/- buttons on screen
+                  s.setUseWideViewPort(true);        // lets "Desktop view" lay the page out at PC width
+                  s.setLoadWithOverviewMode(true);
+              }
+          }
+          JAVA
+          cat $A
       - name: App icon
         run: |
           command -v convert || (sudo apt-get update && sudo apt-get install -y imagemagick)

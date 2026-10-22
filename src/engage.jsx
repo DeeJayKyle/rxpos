@@ -5,12 +5,14 @@
 //  • Notification bell: today's alerts in one place.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
-import { Bell, CalendarClock, PackageX, Repeat, CalendarDays, Thermometer, X, Share2, ChevronRight, ChevronLeft, Clock, Pill, Syringe, Droplet, FlaskConical, Sparkles, Tablets, Bandage, TrendingUp, Hourglass, Gem, Timer, ThermometerSun, CloudRain, MessagesSquare, HeartPulse, Users } from 'lucide-react';
+import { Bell, CalendarClock, PackageX, Repeat, CalendarDays, Thermometer, X, Share2, ChevronRight, ChevronLeft, Clock, TrendingUp, Hourglass, Gem, Timer, ThermometerSun, CloudRain, MessagesSquare, HeartPulse, Users, PhoneMissed, Play, Pause } from 'lucide-react';
 import { useStore, daysUntil, daysSince, today, dayOf, put, isLowStock, expiryCounts } from './store.jsx';
 import { whatsappLink } from './cloud.js';
 import { storageLimits, useWeather, sixHourReadings } from './weather.js';
 import { popup, systemNotify, soundsOn, setSounds } from './notify.jsx';
-import { tipFor } from './data/health-tips.js';
+import { tipFor, HEALTH_TIPS } from './data/health-tips.js';
+import { ProductArt, TipArt } from './idleart.jsx';
+import { messagePreview } from './pages/Chat.jsx';
 
 const addDays = (date, n) => new Date(new Date(date).getTime() + n * 864e5).toISOString().slice(0, 10); // plain dates: UTC arithmetic is exact
 
@@ -49,17 +51,6 @@ const KIND = {
   value: { label: 'Premium', Icon: Gem, tone: 'teal' },
   margin: { label: 'Top margin', Icon: TrendingUp, tone: 'green' },
 };
-const formIcon = (form = '') => {
-  const f = form.toLowerCase();
-  if (/inject|infusion|vaccine/.test(f)) return Syringe;
-  if (/syrup|suspension|drop|lotion|liquid/.test(f)) return Droplet;
-  if (/cream|ointment|gel|cosmetic/.test(f)) return Sparkles;
-  if (/capsule|tablet/.test(f)) return Pill;
-  if (/surgical|device|sundr/.test(f)) return Bandage;
-  if (/powder|sachet/.test(f)) return FlaskConical;
-  if (/tablet/.test(f)) return Tablets;
-  return Pill;
-};
 
 export function shareText(p, settings, fmt) {
   const where = [settings.name, settings.address].filter(Boolean).join(', ');
@@ -80,7 +71,9 @@ function useIdle(ms, enabled) {
     };
     const onActivity = (e) => {
       if (!idleRef.current) return arm();
-      if (e.type === 'pointermove' || e.type === 'wheel') return; // looking is fine; a tap or a key closes it
+      if (e.type === 'pointermove' || e.type === 'wheel') return; // looking is fine
+      // browsing the slides (arrows, swipes, the thumbnails, keys ← → space) keeps it open; outside taps and other keys close it
+      if (e.target?.closest?.('.spot-stage') || (e.type === 'keydown' && ['ArrowLeft', 'ArrowRight', ' ', 'Tab', 'Enter'].includes(e.key))) return;
       // close just after the tap ends, so the tap lands on the overlay and never clicks what is underneath
       setTimeout(() => { idleRef.current = false; setIdle(false); arm(); }, 250);
     };
@@ -93,49 +86,91 @@ function useIdle(ms, enabled) {
   return [idle, () => armRef.current()];
 }
 
-/** Idle-screen promotions */
+/** Idle screen: the pharmacy's own "shop window". Medicines worth recommending, mixed with health tips, each with a
+ *  picture. Browse with the arrows, a swipe, the thumbnails or the keyboard; it moves on by itself every 8 seconds. */
 export function Spotlight() {
   const { db, fmt, features } = useStore();
   const minutes = Number(db.settings.idleMinutes ?? 3);
   const [idle, wake] = useIdle(Math.max(minutes, 0.5) * 60000, features.promos !== false && minutes > 0);
   const ins = useInsights();
   const slides = useMemo(() => {
-    // interleave the lists so the slideshow mixes kinds
+    // interleave the lists so the slideshow mixes kinds, with a health tip after every third medicine
     const lists = [ins.shortExpiry, ins.highMargin, ins.slow, ins.highValue];
-    const out = [], seen = new Set();
-    for (let i = 0; i < 10; i++) for (const l of lists) if (l[i] && !seen.has(l[i].p.id)) { seen.add(l[i].p.id); out.push(l[i]); }
+    const items = [], seen = new Set();
+    for (let i = 0; i < 10; i++) for (const l of lists) if (l[i] && !seen.has(l[i].p.id)) { seen.add(l[i].p.id); items.push({ ...l[i], id: l[i].p.id }); }
+    const start = Math.floor(Date.now() / 864e5) * 3;
+    const tips = Array.from({ length: 5 }, (_, i) => HEALTH_TIPS[(start + i) % HEALTH_TIPS.length]).map(([text, source], i) => ({ kind: 'tip', id: 'tip' + i, text, source }));
+    const out = [];
+    items.slice(0, 18).forEach((x, i) => { out.push(x); if (i % 3 === 2 && tips.length) out.push(tips.shift()); });
+    if (tips.length === 5) out.push(...tips.slice(0, items.length ? 2 : 5)); // few medicines to show: still mix in some tips
     return out;
   }, [ins]);
   const [i, setI] = useState(0);
-  useEffect(() => { if (!idle) return; setI(0); const t = setInterval(() => setI((x) => x + 1), 7000); return () => clearInterval(t); }, [idle]);
+  const [dir, setDir] = useState(1);
+  const [paused, setPaused] = useState(false);
+  const swipe = useRef(null), strip = useRef(null);
+  const go = (n, d = n > i ? 1 : -1) => { setDir(d); setI((n + slides.length) % slides.length); };
+  const next = () => go(i + 1, 1), prev = () => go(i - 1, -1);
+  useEffect(() => { if (idle) { setI(0); setPaused(false); } }, [idle]);
+  useEffect(() => { if (!idle || paused || slides.length < 2) return; const t = setTimeout(next, 8000); return () => clearTimeout(t); }); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!idle) return;
+    const onKey = (e) => { if (e.key === 'ArrowRight') next(); else if (e.key === 'ArrowLeft') prev(); else if (e.key === ' ') { e.preventDefault(); setPaused((v) => !v); } };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
+  useEffect(() => { strip.current?.querySelector('.on')?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' }); }, [i]);
   if (!idle || !slides.length) return null;
   const s = slides[i % slides.length];
-  const k = KIND[s.kind];
-  const FormIcon = formIcon(s.p.form);
-  const stop = (e) => e.stopPropagation();
+  const tone = s.kind === 'tip' ? 'sky' : KIND[s.kind].tone;
+  const hour = new Date().getHours();
   return (
-    <div className="spotlight" onClick={wake} role="dialog" aria-label="Product spotlight">
-      <div className={'spot-card tone-' + k.tone} key={s.p.id} onPointerDown={stop} onClick={stop}>
-        <div className="spot-art" aria-hidden="true">
-          <span className="bubble b1" /><span className="bubble b2" /><span className="bubble b3" />
-          <FormIcon size={120} strokeWidth={1.3} />
+    <div className="spotlight" role="dialog" aria-label="Shop window" onClick={(e) => e.target === e.currentTarget && wake()}>
+      <div className="spot-stage">
+        <div className="spot-top">
+          <div className="spot-progress">{slides.map((x, j) => <i key={x.id} className={j < i ? 'done' : j === i ? 'on' + (paused ? ' paused' : '') : ''} onClick={() => go(j)} />)}</div>
+          <span className="spot-count">{i + 1} / {slides.length}</span>
+          <button className="spot-icon" onClick={() => setPaused((v) => !v)} aria-label={paused ? 'Play' : 'Pause'} title={paused ? 'Play' : 'Pause'}>{paused ? <Play size={18} /> : <Pause size={18} />}</button>
+          <button className="spot-icon spot-close" onClick={wake} aria-label="Close" title="Close (Esc)"><X size={20} /><span>Close</span></button>
         </div>
-        <div className="spot-body">
-          <span className="spot-kind"><k.Icon size={15} />{k.label} · {s.staff}</span>
-          <h2>{s.p.name}</h2>
-          {s.p.generic && s.p.generic !== s.p.name && <p className="spot-generic">{s.p.generic}{s.p.form ? ` · ${s.p.form}` : ''}</p>}
-          <div className="spot-price">{fmt(s.p.price)}</div>
-          <p className="spot-note">{s.note}</p>
-          <div className="row gap">
-            <a className="btn primary" target="_blank" rel="noreferrer" href={whatsappLink('', shareText(s.p, db.settings, fmt))}><Share2 size={16} />Share on WhatsApp</a>
-            <button className="btn ghost" onClick={() => setI((x) => x + slides.length - 1)}><ChevronLeft size={16} /></button>
-            <button className="btn ghost" onClick={() => setI((x) => x + 1)}><ChevronRight size={16} /></button>
-            <button className="btn ghost" onClick={wake}><X size={16} />Close</button>
+        <div className="spot-row">
+          <button className="spot-arrow" onClick={prev} aria-label="Previous"><ChevronLeft size={26} /></button>
+          <div className={'spot-card tone-' + tone + (dir > 0 ? ' from-right' : ' from-left')} key={s.id}
+            onPointerDown={(e) => { swipe.current = e.clientX; }} onPointerUp={(e) => { const dx = e.clientX - (swipe.current ?? e.clientX); swipe.current = null; if (Math.abs(dx) > 50) (dx < 0 ? next : prev)(); }}>
+            <div className="spot-art" aria-hidden="true">
+              <span className="orb o1" /><span className="orb o2" /><span className="orb o3" />
+              {s.kind === 'tip' ? <TipArt text={s.text} /> : <ProductArt p={s.p} />}
+            </div>
+            {s.kind === 'tip' ? (
+              <div className="spot-body">
+                <span className="spot-kind"><HeartPulse size={15} />{hour < 12 ? 'Morning' : hour < 17 ? 'Afternoon' : 'Evening'} health tip</span>
+                <h2 className="spot-tip">{s.text}</h2>
+                <p className="spot-note">Source: {s.source}. Ask the pharmacist if you have questions.</p>
+                <div className="row gap"><a className="btn primary" target="_blank" rel="noreferrer" href={whatsappLink('', `💚 Health tip from ${db.settings.name || 'your pharmacy'}: ${s.text} (${s.source})`)}><Share2 size={16} />Share this tip</a></div>
+              </div>
+            ) : (() => { const k = KIND[s.kind]; return (
+              <div className="spot-body">
+                <span className="spot-kind"><k.Icon size={15} />{k.label} · {s.staff}</span>
+                <h2>{s.p.name}</h2>
+                {s.p.generic && s.p.generic !== s.p.name && <p className="spot-generic">{s.p.generic}{s.p.form ? ` · ${s.p.form}` : ''}</p>}
+                <div className="spot-price">{fmt(s.p.price)}</div>
+                <p className="spot-note">{s.note}</p>
+                <div className="row gap"><a className="btn primary" target="_blank" rel="noreferrer" href={whatsappLink('', shareText(s.p, db.settings, fmt))}><Share2 size={16} />Share on WhatsApp</a></div>
+              </div>
+            ); })()}
           </div>
+          <button className="spot-arrow" onClick={next} aria-label="Next"><ChevronRight size={26} /></button>
         </div>
-        <div className="spot-dots">{slides.slice(0, 12).map((x, j) => <i key={x.p.id} className={j === i % slides.length ? 'on' : ''} />)}</div>
+        <div className="spot-strip" ref={strip}>
+          {slides.map((x, j) => (
+            <button key={x.id} className={'spot-thumb tone-' + (x.kind === 'tip' ? 'sky' : KIND[x.kind].tone) + (j === i ? ' on' : '')} onClick={() => go(j)} title={x.kind === 'tip' ? 'Health tip' : x.p.name}>
+              <span className="thumb-art">{x.kind === 'tip' ? <TipArt text={x.text} size={34} /> : <ProductArt p={x.p} size={34} />}</span>
+              <span className="thumb-name">{x.kind === 'tip' ? 'Health tip' : x.p.name}</span>
+            </button>
+          ))}
+        </div>
       </div>
-      <p className="spot-hint">{db.settings.name} · touch anywhere to continue working</p>
+      <p className="spot-hint">{db.settings.name} · tap outside or press Esc to get back to work</p>
     </div>
   );
 }
@@ -199,7 +234,7 @@ export function NotificationBell() {
           {alerts.map((a, i) => (
             <button key={i} className={'bell-item ' + a.tone} onClick={() => { setOpen(false); navigate(a.to); }}><a.Icon size={16} /><span>{a.text}</span><ChevronRight size={14} /></button>
           ))}
-          {!alerts.length && <div className="empty">All clear. Nothing needs attention.</div>}
+          {!alerts.length && <div className="empty">All quiet. Nothing needs you right now.</div>}
           <label className="bell-sound"><input type="checkbox" defaultChecked={soundsOn()} onChange={(e) => setSounds(e.target.checked)} /> Sounds on this device</label>
         </div>
       )}
@@ -242,16 +277,17 @@ export function MessageWatcher() {
   const location = useLocation();
   const since = useRef(null);
   useEffect(() => {
-    const mine = (m) => !m.auto && m.fromId !== user.id && (m.conv === 'team' || (m.conv.startsWith('dm:') && m.conv.includes(user.id)) || (m.conv.startsWith('client:') && m.channel === 'reply'));
+    const mine = (m) => !m.auto && !m.deleted && m.call?.status !== 'done' && m.fromId !== user.id && (m.conv === 'team' || (m.conv.startsWith('dm:') && m.conv.includes(user.id)) || (m.conv.startsWith('client:') && m.channel === 'reply'));
     const latest = db.messages.reduce((a, m) => (m.date > a ? m.date : a), '');
     if (since.current === null) { since.current = latest; return; } // don't announce old messages on start
     const fresh = db.messages.filter((m) => m.date > since.current && mine(m)).sort((a, b) => a.date.localeCompare(b.date));
     since.current = latest > since.current ? latest : since.current;
     if (!fresh.length || location.pathname === '/chat') return;
     const m = fresh[fresh.length - 1];
-    const where = m.conv === 'team' ? 'General' : m.conv.startsWith('dm:') ? 'Direct message' : 'Client reply';
-    popup({ id: 'msg', tone: 'info', icon: MessagesSquare, title: `${m.fromName || 'Message'} · ${where}`, body: (fresh.length > 1 ? `(${fresh.length} new) ` : '') + (m.attachment ? (m.attachment.voice ? '🎤 Voice note' : '📎 ' + m.attachment.name) + (m.text && m.text !== 'Voice note' ? ': ' : '') : '') + (m.text === 'Voice note' && m.attachment?.voice ? '' : String(m.text || '').slice(0, 180)), to: '/chat', sound: 'message' });
-    systemNotify(`${m.fromName}: ${where}`, String(m.text).slice(0, 120));
+    const where = m.conv === 'team' ? 'General' : m.conv.startsWith('dm:') ? 'Private' : 'Client reply';
+    const body = (fresh.length > 1 ? `(${fresh.length} new) ` : '') + messagePreview(m).slice(0, 180);
+    popup({ id: 'msg', tone: m.call ? 'warn' : 'info', icon: m.call ? PhoneMissed : MessagesSquare, title: m.call ? `${m.fromName} tried to call you` : `${m.fromName || 'Message'} · ${where}`, body: m.call ? 'Missed voice call' : body, to: '/chat', sound: 'message' });
+    systemNotify(m.call ? `Missed call from ${m.fromName}` : `${m.fromName} · ${where}`, m.call ? 'Open RxPOS to call back' : messagePreview(m).slice(0, 120), { tag: 'msg' });
   }, [db.messages]); // eslint-disable-line react-hooks/exhaustive-deps
   return null;
 }
@@ -318,7 +354,7 @@ export function HourlyReminder() {
       const items = al.slice(0, 3);
       if ([6, 12, 18].includes(h) && features.weather !== false) items.unshift({ key: 'read', tone: 'info', Icon: Thermometer, text: 'Time to record the room and fridge temperature & humidity', to: '/storage' });
       popup({ id: 'hour', tone: 'info', icon: Clock, title: `It's ${time}`, sound: 'chime', ttl: 20000,
-        render: (close) => items.length ? <div className="popup-list">{items.map((a, i) => <Link key={i} className={'bell-item ' + a.tone} to={a.to} onClick={close}><a.Icon size={15} /><span>{a.text}</span></Link>)}</div> : <p className="popup-body">All clear. Have a good hour!</p> });
+        render: (close) => items.length ? <div className="popup-list">{items.map((a, i) => <Link key={i} className={'bell-item ' + a.tone} to={a.to} onClick={close}><a.Icon size={15} /><span>{a.text}</span></Link>)}</div> : <p className="popup-body">Nothing waiting on you. Enjoy the next hour.</p> });
       systemNotify(`RxPOS · ${time}`, items.map((x) => x.text).join('\n') || 'All clear.');
     };
     const greet = async (h, time) => {

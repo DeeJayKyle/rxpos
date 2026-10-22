@@ -2,6 +2,7 @@
 // and block the page). Call toast()/ask()/askText() from anywhere; <FeedbackHost/> renders them.
 import { useEffect, useRef, useState } from 'react';
 import { CheckCircle2, AlertTriangle, XCircle, Info, X } from 'lucide-react';
+import { PasswordInput } from './password.jsx';
 
 let listener = null;
 let seq = 0;
@@ -68,9 +69,9 @@ export function FeedbackHost() {
             <div className={'dialog-icon ' + (dialog.danger ? 'danger' : 'info')}>{dialog.danger ? <AlertTriangle size={22} /> : <Info size={22} />}</div>
             <h3>{dialog.title || (dialog.danger ? 'Are you sure?' : 'Please confirm')}</h3>
             {dialog.message && <p className="muted">{dialog.message}</p>}
-            {dialog.input && (
-              <input ref={inputRef} type={dialog.type || 'text'} value={value} onChange={(e) => setValue(e.target.value)} placeholder={dialog.placeholder} />
-            )}
+            {dialog.input && (dialog.type === 'password'
+              ? <PasswordInput ref={inputRef} value={value} onChange={(e) => setValue(e.target.value)} placeholder={dialog.placeholder} />
+              : <input ref={inputRef} type={dialog.type || 'text'} value={value} onChange={(e) => setValue(e.target.value)} placeholder={dialog.placeholder} />)}
             {dialog.input && dialog.minLength && <small className="muted">At least {dialog.minLength} characters</small>}
             <div className="form-actions">
               <button type="button" className="btn ghost" onClick={() => close(dialog.input ? null : false)}>Cancel</button>
