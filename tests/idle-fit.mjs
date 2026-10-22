@@ -18,7 +18,7 @@ await owner('/tenants/' + t.tenant.id + '/records', { records: recs });
 const b = await puppeteer.launch({ executablePath: CHROME, headless: true });
 const p = await b.newPage();
 await p.goto(base + '/' + slug, { waitUntil: 'networkidle2' }); await wait(800);
-await p.type('input[type=email]', 'fay@test.rx'); await p.type('input[type=password]', 'fay-pass-123');
+await p.type('input[autocomplete=username]', 'fay@test.rx'); await p.type('input[type=password]', 'fay-pass-123');
 await p.evaluate(() => [...document.querySelectorAll('button')].find((x) => x.textContent.includes('Sign in')).click());
 await p.waitForSelector('.sidebar', { timeout: 20000 }); await wait(4000);
 await p.goto(base + '/' + slug + '#/settings', { waitUntil: 'networkidle2' }); await wait(800);

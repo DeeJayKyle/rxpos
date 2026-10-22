@@ -71,7 +71,7 @@ const newPage = async (tz) => {
 };
 const signIn = async (p, email, pw, where = '/' + slug) => {
   await p.goto(base + where, { waitUntil: 'networkidle2' }); await wait(800);
-  await p.type('input[type=email]', email); await p.type('input[type=password]', pw);
+  await p.type('input[autocomplete=username]', email); await p.type('input[type=password]', pw);
   await p.evaluate(() => [...document.querySelectorAll('button')].find((x) => x.textContent.includes('Sign in')).click());
 };
 const go = async (p, h) => { await p.goto(base + '/' + slug + '#' + h, { waitUntil: 'networkidle2' }); await wait(1200); };

@@ -41,7 +41,7 @@ const signIn = async (email, pw) => {
   const p = await ctx.newPage(); await p.setViewport({ width: 1366, height: 860 });
   p.on('pageerror', (e) => errors.push(email + ': ' + e.message));
   await p.goto(base + '/' + slug, { waitUntil: 'networkidle2' }); await wait(1000);
-  await p.type('input[type=email]', email); await p.type('input[type=password]', pw);
+  await p.type('input[autocomplete=username]', email); await p.type('input[type=password]', pw);
   await p.evaluate(() => [...document.querySelectorAll('button')].find((x) => x.textContent.includes('Sign in')).click());
   await until(p, () => !!document.querySelector('.sidebar'), 20000); await wait(5000);
   return p;

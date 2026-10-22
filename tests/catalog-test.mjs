@@ -20,7 +20,7 @@ const signIn = async () => {
   const p = await ctx.newPage(); await p.setViewport({ width: 1366, height: 860 });
   p.on('pageerror', (e) => errors.push(e.message));
   await p.goto(base + '/' + slug, { waitUntil: 'networkidle2' }); await wait(1200);
-  await p.type('input[type=email]', 'kat@test.rx'); await p.type('input[type=password]', 'kat-pass-123');
+  await p.type('input[autocomplete=username]', 'kat@test.rx'); await p.type('input[type=password]', 'kat-pass-123');
   await p.evaluate(() => [...document.querySelectorAll('button')].find((x) => x.textContent.includes('Sign in')).click());
   await wait(5000);
   return p;
