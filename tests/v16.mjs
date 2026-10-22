@@ -137,9 +137,9 @@ check('reorder level saved on the medicine', await A.evaluate(() => [...document
 
 // #3 chat audience
 await go(A, '/chat');
-check('chat lets you choose whole team or a private chat', await A.evaluate(() => { const s = document.querySelector('.chat-to select'); return !!s && /Whole team/.test(s.innerText) && /Dee Dispenser/.test(s.innerText); }));
-await A.select('.chat-to select', await A.evaluate(() => [...document.querySelector('.chat-to select').options].find((o) => o.text.includes('Dee')).value)); await wait(400);
-check('choosing a colleague switches to a private chat', /Private/.test(await A.evaluate(() => document.querySelector('.chat-to .badge')?.innerText || '')));
+check('chat lets you choose whole team or a private chat', await A.evaluate(() => { const t = [...document.querySelectorAll('.chat-conv')].map((x) => x.innerText).join('|'); return /General/.test(t) && /Dee Dispenser/.test(t); }));
+await A.evaluate(() => [...document.querySelectorAll('.chat-conv')].find((x) => /Dee Dispenser/.test(x.innerText)).click()); await wait(400);
+check('choosing a colleague switches to a private chat', /Dee Dispenser/.test(await A.evaluate(() => document.querySelector('.chat-title')?.innerText || '')));
 // #4 call menu
 await A.evaluate(() => document.querySelector('.chat-head .call-menu button').click()); await wait(300);
 const menu = await A.evaluate(() => document.querySelector('.call-pop')?.innerText || '');
@@ -154,7 +154,7 @@ check('customer call menu offers WhatsApp and phone call', /WhatsApp/.test(cmenu
 const B = await signIn('dee@test.rx', 'dee-pass-123');
 await go(B, '/');
 await go(A, '/chat');
-await A.select('.chat-to select', await A.evaluate(() => [...document.querySelector('.chat-to select').options].find((o) => o.text.includes('Dee')).value)); await wait(300);
+await A.evaluate(() => [...document.querySelectorAll('.chat-conv')].find((x) => /Dee Dispenser/.test(x.innerText)).click()); await wait(300);
 await A.evaluate(() => document.querySelector('.chat-head .call-menu button').click()); await wait(200);
 const t0 = Date.now();
 await A.evaluate(() => [...document.querySelectorAll('.call-pop button')].find((x) => x.textContent.includes('In-app')).click());
