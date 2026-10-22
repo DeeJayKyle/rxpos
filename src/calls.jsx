@@ -262,7 +262,7 @@ export function CallManager() {
   useEffect(() => { if (call?.status !== 'live') return; const t = setInterval(() => tick((n) => n + 1), 1000); return () => clearInterval(t); }, [call?.status]);
 
   const secs = call?.startedAt ? Math.floor((Date.now() - call.startedAt) / 1000) : 0;
-  const label = call && ({ calling: 'Ringing…', ringing: 'Incoming voice call', connecting: 'Connecting…', live: call.weak ? 'Reconnecting…' : fmtSecs(secs), ended: secs ? `Call ended · ${fmtSecs(secs)}` : 'Call ended', declined: 'Busy right now', busy: 'On another call', 'no answer': 'No answer', missed: 'Missed call', failed: 'Call failed' }[call.status] || call.status);
+  const label = call && ({ calling: 'Ringing…', ringing: 'Incoming call', connecting: 'Connecting…', live: call.weak ? 'Reconnecting…' : fmtSecs(secs), ended: secs ? `Call ended · ${fmtSecs(secs)}` : 'Call ended', declined: 'Busy right now', busy: 'On another call', 'no answer': 'No answer', missed: 'Missed call', failed: 'Call failed' }[call.status] || call.status);
   const initials = call?.peer.name.split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
   // one <audio> element for the whole life of the app, so the voice never cuts when the screen changes
   return (
