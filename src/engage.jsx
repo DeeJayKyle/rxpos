@@ -11,6 +11,7 @@ import { whatsappLink } from './cloud.js';
 import { storageLimits, useWeather, sixHourReadings } from './weather.js';
 import { popup, systemNotify, soundsOn, setSounds } from './notify.jsx';
 import { tipFor, HEALTH_TIPS } from './data/health-tips.js';
+import { isFeaturable } from './promote.js';
 import { ProductArt, TipArt } from './idleart.jsx';
 import { messagePreview } from './pages/Chat.jsx';
 
@@ -21,7 +22,8 @@ export function useInsights() {
   const { db, products } = useStore();
   return useMemo(() => {
     const warn = db.settings.expiryWarnDays || 90;
-    const inStock = products.filter((p) => p.stock > 0 && p.price > 0);
+    // The idle screen faces customers, so never feature prescription-only or controlled medicines.
+    const inStock = products.filter(isFeaturable);
     const lastSold = new Map();
     let oldest = today();
     for (const s of db.sales) {
@@ -150,11 +152,11 @@ export function Spotlight() {
               </div>
             ) : (() => { const k = KIND[s.kind]; return (
               <div className="spot-body">
-                <span className="spot-kind"><k.Icon size={15} />{k.label} · {s.staff}</span>
+                <span className="spot-kind"><k.Icon size={15} />Available now</span>
                 <h2>{s.p.name}</h2>
                 {s.p.generic && s.p.generic !== s.p.name && <p className="spot-generic">{s.p.generic}{s.p.form ? ` · ${s.p.form}` : ''}</p>}
                 <div className="spot-price">{fmt(s.p.price)}</div>
-                <p className="spot-note">{s.note}</p>
+                <p className="spot-note">In stock at {db.settings.name || 'our pharmacy'} — ask our pharmacist for advice.</p>
                 <div className="row gap"><a className="btn primary" target="_blank" rel="noreferrer" href={whatsappLink('', shareText(s.p, db.settings, fmt))}><Share2 size={16} />Share on WhatsApp</a></div>
               </div>
             ); })()}

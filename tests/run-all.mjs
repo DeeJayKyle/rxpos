@@ -16,6 +16,7 @@ const SUITES = [
   ['safe file urls (unit)', 'unit-safeurl.mjs', []],
   ['refill rules (unit)', 'unit-rxrules.mjs', []],
   ['crash scrub (unit)', 'unit-scrub.mjs', []],
+  ['idle promote (unit)', 'unit-promote.mjs', []],
   ['theme contrast', 'contrast-test.mjs', []],
   ['owner sign-in', 'owner-auth-test.mjs', []],
   ['cloud rules', 'v14-api.mjs', []],

@@ -38,8 +38,16 @@ for (const [w, h, mobile] of [[1920, 1080], [1366, 768], [1280, 600], [1024, 768
   if (!ok) bad++;
   console.log(ok ? 'PASS' : 'FAIL', `${w}x${h}`, JSON.stringify(r));
   await p.screenshot({ path: `${out}/idle-${w}x${h}.png` });
+  if (w === 1920) {
+    // the idle window faces customers: it must not reveal margin, expiry or slow-mover notes
+    let txt = '';
+    for (let k = 0; k < 14; k++) { txt += ' ' + (await p.evaluate(() => document.querySelector('.spotlight')?.innerText || '')); await p.evaluate(() => document.querySelector('.spot-arrow[aria-label="Next"]')?.click()); await wait(200); }
+    const clean = !/\bmargin\b|Expires in|No sale for|Top margin|Slow mover/i.test(txt);
+    console.log(clean ? 'PASS' : 'FAIL', 'idle window hides confidential margin/expiry notes');
+    if (!clean) bad++;
+  }
   await p.keyboard.press('Escape'); await wait(400);
 }
 await b.close(); await owner('/tenants/' + t.tenant.id + '/delete', { confirm: slug });
-console.log(`\n${8 - bad} passed, ${bad} failed`);
+console.log(`\n${9 - bad} passed, ${bad} failed`);
 process.exit(bad ? 1 : 0);
