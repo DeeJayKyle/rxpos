@@ -860,7 +860,17 @@ async function moveToTurso(env, req, body) {
 // ---------- attachments in team messages (photos, PDFs, videos, audio, spreadsheets, voice notes) ----------
 // Stored in the pharmacy's own database in pieces of up to 700 KB; links are signed so only people given the link can open them.
 const MAX_FILE = 15 * 1024 * 1024;
-const FILE_TYPES = /^(image\/|video\/|audio\/|application\/pdf$|text\/csv$|application\/vnd\.ms-excel$|application\/vnd\.openxmlformats-officedocument\.(spreadsheetml|wordprocessingml|presentationml)\.|application\/msword$|application\/vnd\.oasis\.opendocument\.)/;
+// Images are restricted to raster formats and never SVG: an SVG served inline on the app origin is a stored-XSS vector.
+const IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
+const FILE_TYPES = /^(image\/(png|jpeg|webp|gif)$|video\/|audio\/|application\/pdf$|text\/csv$|application\/vnd\.ms-excel$|application\/vnd\.openxmlformats-officedocument\.(spreadsheetml|wordprocessingml|presentationml)\.|application\/msword$|application\/vnd\.oasis\.opendocument\.)/;
+/** The first bytes really are the image type they claim (so a .png that is actually SVG/HTML is rejected). */
+function imageMagicOk(type, b) {
+  if (type === 'image/png') return b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47;
+  if (type === 'image/jpeg') return b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff;
+  if (type === 'image/gif') return b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x38;
+  if (type === 'image/webp') return b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 && b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50;
+  return false;
+}
 async function fileSig(env, tenant, id) {
   const sig = await crypto.subtle.sign('HMAC', await hmacKey(env), te.encode('file:' + tenant + ':' + id));
   return b64url(sig).slice(0, 24);
@@ -874,6 +884,8 @@ async function uploadChunk(env, body, who) {
   if (!FILE_TYPES.test(type)) return json({ error: 'That kind of file can’t be shared here.' }, 415);
   const bytes = Uint8Array.from(atob(String(body.data || '')), (c) => c.charCodeAt(0));
   if (!bytes.length || bytes.length > 800 * 1024) return json({ error: 'Bad upload piece' }, 400);
+  // The first piece of an image must have that image's magic bytes, so a disguised SVG/HTML can't be stored.
+  if (n === 0 && IMAGE_TYPES.has(type) && !imageMagicOk(type, bytes)) return json({ error: 'That image could not be read.' }, 415);
   await db.prepare('INSERT OR REPLACE INTO file_chunks (tenant, id, n, data) VALUES (?1, ?2, ?3, ?4)').bind(who.tenant, id, n, bytes).run();
   if (n === chunks - 1) {
     await db.prepare('INSERT OR REPLACE INTO files (tenant, id, name, type, size, chunks, by_uid, at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)')
@@ -891,7 +903,18 @@ async function downloadFile(env, tenant, id, sig) {
   const out = new Uint8Array(parts.reduce((a, p) => a + p.length, 0));
   let o = 0; for (const p of parts) { out.set(p, o); o += p.length; }
   const safeName = String(meta.name).replace(/[^\w. -]+/g, '_');
-  return new Response(out, { headers: { 'Content-Type': meta.type, 'Content-Length': String(out.length), 'Content-Disposition': 'inline; filename="' + safeName + '"', 'Cache-Control': 'private, max-age=31536000, immutable', ...cors } });
+  // Raster images may show inline; everything else downloads. Either way nosniff + a locked-down CSP stop the browser
+  // from treating the bytes as script/HTML on the app's origin.
+  const inline = IMAGE_TYPES.has(meta.type);
+  return new Response(out, { headers: {
+    'Content-Type': meta.type,
+    'Content-Length': String(out.length),
+    'Content-Disposition': (inline ? 'inline' : 'attachment') + '; filename="' + safeName + '"',
+    'X-Content-Type-Options': 'nosniff',
+    'Content-Security-Policy': "sandbox; default-src 'none'; style-src 'unsafe-inline'",
+    'Cache-Control': 'private, max-age=31536000, immutable',
+    ...cors,
+  } });
 }
 
 /** Short-lived relay logins from Cloudflare Realtime TURN, shared by every call for a few hours */

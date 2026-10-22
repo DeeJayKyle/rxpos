@@ -13,6 +13,7 @@ const BASE = 'http://localhost:8790';
 const OWNER = 'local-owner-key-0123456789abcdef';
 const SUITES = [
   ['secret helper (unit)', 'unit-secret.mjs', []],
+  ['safe file urls (unit)', 'unit-safeurl.mjs', []],
   ['theme contrast', 'contrast-test.mjs', []],
   ['owner sign-in', 'owner-auth-test.mjs', []],
   ['cloud rules', 'v14-api.mjs', []],
@@ -32,6 +33,7 @@ const SUITES = [
   ['idle screen fit', 'idle-fit.mjs', ['.output/fit']],
   ['username & ABC report', 'v22-username-abc.mjs', ['.output/v22']],
   ['server permissions', 'v23-perms.mjs', []],
+  ['file uploads', 'v24-files.mjs', []],
   // the Windows app's self-update needs a screen: Windows itself, or xvfb-run on Linux
   ...(process.platform === 'win32' || fs.existsSync('/usr/bin/xvfb-run') ? [['windows self-update', 'electron-update.mjs', []]] : []),
 ];

@@ -1,6 +1,7 @@
 // Attachments for team messages: upload (in pieces), show (photo, video, audio, PDF, spreadsheet…) and record voice notes.
 import { useEffect, useRef, useState } from 'react';
 import { FileText, FileSpreadsheet, FileVideo, FileAudio, File as FileIcon, Download, Mic, Square, Send, X, Trash2 } from 'lucide-react';
+import { safeFileUrl } from './safeurl.js';
 
 export const ATTACH_ACCEPT = 'image/*,video/*,audio/*,application/pdf,.csv,.xls,.xlsx,.ods,.doc,.docx,.ppt,.pptx';
 export const MAX_FILE = 15 * 1024 * 1024;
@@ -36,7 +37,8 @@ const iconFor = (t) => (/sheet|excel|csv|spreadsheet/.test(t) ? FileSpreadsheet 
 
 /** Show an attachment inside a chat bubble */
 export function Attachment({ a, base }) {
-  const url = (base || '') + a.path;
+  const url = safeFileUrl(base, a.path);
+  if (!url) return <span className="att-file muted"><FileIcon size={18} /> {a.name || 'Attachment'} (can’t be shown)</span>;
   if (/^image\//.test(a.type)) return <a href={url} target="_blank" rel="noreferrer" className="att-img"><img src={url} alt={a.name} loading="lazy" /></a>;
   if (/^video\//.test(a.type)) return <video className="att-video" src={url} controls preload="metadata" />;
   if (/^audio\//.test(a.type)) return <div className="att-audio">{a.voice && <Mic size={14} />}<audio src={url} controls preload="metadata" />{a.duration ? <small className="muted">{a.duration}s</small> : null}</div>;
