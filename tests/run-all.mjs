@@ -49,8 +49,12 @@ fs.rmSync(state, { recursive: true, force: true });
 // run the tools with node directly: no shell, so folders with spaces in their names work
 const bin = (p) => path.join(root, 'node_modules', p);
 console.log('Building the app and starting a local cloud…');
-const build = spawn(process.execPath, [bin('vite/bin/vite.js'), 'build'], { cwd: root, stdio: 'ignore' });
-await new Promise((r) => build.on('exit', r));
+const build = spawn(process.execPath, [bin('vite/bin/vite.js'), 'build'], { cwd: root });
+let buildOut = '';
+build.stdout.on('data', (d) => { buildOut += d; });
+build.stderr.on('data', (d) => { buildOut += d; });
+const buildCode = await new Promise((r) => build.on('exit', r));
+if (buildCode !== 0) { console.error('The app build failed (exit ' + buildCode + '):\n' + buildOut); process.exit(1); }
 // Workers AI only runs on Cloudflare, so without a Cloudflare sign-in the local cloud starts from a copy of the config
 // without it (everything else runs locally; only AI reading / quizzes are unavailable)
 const cfgArgs = [];
@@ -88,7 +92,7 @@ for (const [label, file, extra] of SUITES) {
   const passed = m ? +m[1] : 0, failed = m ? +m[2] : 1;
   results.push({ label, passed, failed: out.code && !failed ? 1 : failed });
   console.log(`${failed || out.code ? '✗' : '✓'} ${label.padEnd(20)} ${passed} passed, ${failed} failed  (${Math.round((Date.now() - t0) / 1000)} s)`);
-  for (const line of out.buf.split('\n').filter((l) => /^(FAIL|Error|s+at |[A-Za-z]*Error:)/.test(l)).slice(0, 8)) console.log('    ' + line.slice(0, 220));
+  for (const line of out.buf.split('\n').filter((l) => /^(FAIL|Error|\s+at |[A-Za-z]*Error:)/.test(l)).slice(0, 8)) console.log('    ' + line.slice(0, 220));
 }
 const total = results.reduce((a, r) => ({ p: a.p + r.passed, f: a.f + r.failed }), { p: 0, f: 0 });
 console.log(`\n${total.p} passed, ${total.f} failed`);

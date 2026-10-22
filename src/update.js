@@ -43,7 +43,7 @@ export async function checkForUpdate() {
     if (isAndroid) {
       set({ status: 'downloading', latest });
       const u = await plugin();
-      const b = await u.download({ url: `${DEFAULT_CLOUD}/${latest.zip}`, version: String(latest.build) });
+      const b = await u.download({ url: `${DEFAULT_CLOUD}/${latest.zip}`, version: String(latest.build), checksum: latest.zipSha256 });
       bundleId = b.id;
       await u.next({ id: b.id }); // used at the next start even if it is never idle before then
     } else {

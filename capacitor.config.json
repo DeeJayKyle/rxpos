@@ -2,9 +2,7 @@
   "appId": "io.github.rxpos",
   "appName": "RxPOS",
   "webDir": "dist",
-  "android": {
-    "allowMixedContent": true
-  },
+  "android": {},
   "server": {
     "androidScheme": "https"
   },
