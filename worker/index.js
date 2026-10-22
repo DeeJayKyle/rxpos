@@ -24,6 +24,7 @@ import { backup, restore } from './backup.js';
 import { uptimeCheck } from './uptime.js';
 import { dailySummaries } from './summary.js';
 import { twoStepDdl, twoStepOf, totpCheck, markUsed, twoStepRoutes } from './twostep.js';
+import { tokenSecret, purposeLabel } from './secret.js';
 
 // Database: Cloudflare D1 (binding DB) by default, or libSQL / Turso when DB_BACKEND = "turso"
 // (secrets TURSO_URL + TURSO_AUTH_TOKEN). The rest of the code doesn't know the difference.
@@ -58,12 +59,17 @@ async function ownProfileEdit(db, tenant, who, ch) {
   return ['role', 'disabled', 'branchId', 'email'].every((f) => (old[f] ?? null) === (ch.rec[f] ?? null));
 }
 
-/** Administrator accounts are created only by the owner: a pharmacy may not add, promote to, or delete an admin. */
-async function adminChangeRefused(db, tenant, ch) {
+/**
+ * Only an admin may write a record whose current OR new role is admin. This stops a staff member with users.manage
+ * from editing, disabling, deleting, demoting, re-hashing or promoting-to an administrator account — an admin account
+ * can only be changed by another admin (or the owner, who authenticates with the pharmacy sync key).
+ */
+async function adminChangeRefused(db, tenant, ch, who) {
   const old = await existingRec(db, tenant, 'users', ch.id);
-  if (ch.deleted) return old?.role === 'admin';
-  if (ch.rec?.role !== 'admin') return false;
-  return old?.role !== 'admin';
+  const touchesAdmin = old?.role === 'admin' || (!ch.deleted && ch.rec?.role === 'admin');
+  if (!touchesAdmin) return false;
+  const writerIsAdmin = who?.viaKey || who?.role === 'admin';
+  return !writerIsAdmin;
 }
 
 const schemaReady = new WeakMap();
@@ -122,7 +128,8 @@ const hex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart
 const sha256 = async (s) => hex(await crypto.subtle.digest('SHA-256', te.encode(s)));
 const randomKey = (n = 28) => b64url(crypto.getRandomValues(new Uint8Array(32))).replace(/[-_]/g, '').slice(0, n);
 const safeEqual = (a, b) => { const x = te.encode(String(a)), y = te.encode(String(b)); return x.byteLength === y.byteLength && crypto.subtle.timingSafeEqual(x, y); };
-const hmacKey = (env) => crypto.subtle.importKey('raw', te.encode('token:' + env.SYNC_KEY), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify']);
+// Refuses to build a signing key without a strong secret, so tokens can never be forged against a missing/weak one.
+const hmacKey = (env) => crypto.subtle.importKey('raw', te.encode(purposeLabel('token') + tokenSecret(env)), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify']);
 
 async function signToken(env, payload) {
   const body = b64url(te.encode(JSON.stringify(payload)));
@@ -428,7 +435,7 @@ async function sync(env, body, who) {
     if (perm && !who.viaKey) {
       allowed[perm] ??= await roleCan(env, tenant, who.role, perm);
       if (!allowed[perm] && !(ch.t === 'users' && (await ownProfileEdit(db, tenant, who, ch)))) { refused++; continue; }
-      if (ch.t === 'users' && (await adminChangeRefused(db, tenant, ch))) { refused++; continue; }
+      if (ch.t === 'users' && (await adminChangeRefused(db, tenant, ch, who))) { refused++; continue; }
     }
     const id = String(ch.id);
     stmts.push(upsert.bind(tenant, ch.t + '|' + id, ch.t, id, ch.deleted ? null : JSON.stringify(ch.rec ?? null), ch.deleted ? 1 : 0, ch.at, deviceId));
