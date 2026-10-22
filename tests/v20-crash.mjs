@@ -21,7 +21,7 @@ await P.type('input[autocomplete=username]', 'cleo@test.rx'); await P.type('inpu
 await P.evaluate(() => [...document.querySelectorAll('button')].find((x) => x.textContent.includes('Sign in')).click());
 await P.waitForSelector('.sidebar', { timeout: 20000 }); await wait(2500);
 // an error in the app, carrying a phone number and an email that must not be sent
-await P.evaluate(() => { const sc = document.createElement('script'); sc.textContent = "setTimeout(function(){ throw new Error('Test crash for 0772123456 jane@example.com'); }, 0)"; document.head.appendChild(sc); }); // from a script of the page itself (not a cross-origin 'Script error.')
+await P.evaluate(() => { const err = new Error('Test crash for 0772123456 jane@example.com'); err.stack = 'Error: Test crash for 0772123456 jane@example.com\n    at sell (app.js:42:7)\n    at onClick (app.js:19:3)'; window.dispatchEvent(new ErrorEvent('error', { error: err, message: err.message })); }); // a genuine uncaught-error event from the page's own code (fixed stack so the same crash twice is one group) — the security headers (CSP) now block injected inline <script>, which is the point
 await wait(2500);
 let r = await owner('/tenants/' + tid + '/errors');
 const e = (r.errors || []).find((x) => /Test crash/.test(x.message));
@@ -29,7 +29,7 @@ check('an error on a device reaches the owner console', !!e, JSON.stringify(r).s
 check('…with the page, device type and app build', e && e.page && e.platform === 'Browser' && e.build > 0, JSON.stringify(e || {}).slice(0, 200));
 check('…and without the phone number or email', e && !/0772123456|jane@example\.com/.test(e.message + e.stack) && /\[n\]/.test(e.message) && /\[email\]/.test(e.message), e?.message);
 // the same error again from the same device the same day is not sent again
-await P.evaluate(() => { const sc = document.createElement('script'); sc.textContent = "setTimeout(function(){ throw new Error('Test crash for 0772123456 jane@example.com'); }, 0)"; document.head.appendChild(sc); }); // from a script of the page itself (not a cross-origin 'Script error.')
+await P.evaluate(() => { const err = new Error('Test crash for 0772123456 jane@example.com'); err.stack = 'Error: Test crash for 0772123456 jane@example.com\n    at sell (app.js:42:7)\n    at onClick (app.js:19:3)'; window.dispatchEvent(new ErrorEvent('error', { error: err, message: err.message })); }); // a genuine uncaught-error event from the page's own code (fixed stack so the same crash twice is one group) — the security headers (CSP) now block injected inline <script>, which is the point
 await wait(2000);
 r = await owner('/tenants/' + tid + '/errors');
 check('the same error is sent once a day per device', (r.errors || []).find((x) => /Test crash/.test(x.message))?.count === 1);
