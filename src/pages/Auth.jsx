@@ -23,7 +23,7 @@ export default function Auth() {
   const url = cloudUrl();
   const slug = pharmacySlugFromUrl();
   const [pharmacy, setPharmacy] = useState(() => (syncCfg.tenant && (!slug || slug === syncCfg.slug) ? { name: syncCfg.pharmacy || db.settings.name, slug: syncCfg.slug, logo: db.license?.[0]?.branding?.logo } : null));
-  const [form, setForm] = useState(() => ({ email: (() => { try { return localStorage.getItem(LAST_EMAIL) || ''; } catch { return ''; } })(), password: '', code: slug || '', otp: '', newPassword: '' }));
+  const [form, setForm] = useState(() => ({ email: (() => { try { return localStorage.getItem(LAST_EMAIL) || ''; } catch { return ''; } })(), password: '', code: slug || syncCfg.slug || '', otp: '', newPassword: '' }));
   const [needCode, setNeedCode] = useState(false);
   const [remember, setRemember] = useState(() => { try { return localStorage.getItem(REMEMBER_CHOICE) === '1'; } catch { return false; } });
   const keepChoice = (v) => { setRemember(v); try { localStorage.setItem(REMEMBER_CHOICE, v ? '1' : '0'); } catch { /* ignore */ } };
@@ -49,10 +49,11 @@ export default function Auth() {
     pharmacyInfo(url, slug).then((p) => setPharmacy({ name: p.name, slug: p.slug, logo: p.logo })).catch((e) => setPharmacy({ error: e.message }));
   }, [slug]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const isUsername = form.email.trim().length > 0 && !form.email.includes('@');
   const signIn = (e) => { e.preventDefault(); run(async () => {
     const email = form.email.trim().toLowerCase();
     const code = form.code.trim().toLowerCase();
-    const local = db.users.find((x) => x.email === email && !x.disabled);
+    const local = db.users.find((x) => !x.disabled && (x.email === email || (x.username || '').toLowerCase() === email));
     const sameStore = !code || [syncCfg.tenant, syncCfg.slug].includes(code);
     setChoices(null);
     try { localStorage.setItem(LAST_EMAIL, email); } catch {}
@@ -190,9 +191,9 @@ export default function Auth() {
           ) : forgot ? forgotPanel() : (
             <form onSubmit={signIn} className="stack">
               {pharmacy?.error ? <div className="error">{pharmacy.error}</div> : <p className="muted center auth-title"><Building2 size={15} /> {title}</p>}
-              <label className="field"><span>Email</span><input type="email" autoComplete="username" value={form.email} onChange={set('email')} required autoFocus={!form.email} /></label>
+              <label className="field"><span>Email or username</span><input type="text" inputMode={isUsername ? 'text' : 'email'} autoComplete="username" autoCapitalize="none" spellCheck={false} value={form.email} onChange={set('email')} required autoFocus={!form.email} /></label>
               <label className="field"><span>Password</span><PasswordInput autoComplete="current-password" value={form.password} onChange={set('password')} required autoFocus={!!form.email} /></label>
-              {needCode && codeField}
+              {(needCode || (isUsername && !slug)) && codeField}
               <div className="row between remember-row">
                 <label className="check small"><input type="checkbox" checked={remember} onChange={(e) => keepChoice(e.target.checked)} /><span>Remember me for 30 days</span></label>
                 <button type="button" className="link-btn small" onClick={() => { setForgot({ stage: 'ask' }); setError(''); }}>Forgot password?</button>

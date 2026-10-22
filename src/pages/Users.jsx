@@ -22,12 +22,16 @@ export default function Users() {
   const saveUser = async (e) => {
     e.preventDefault();
     const email = edit.email.trim().toLowerCase();
-    if (db.users.some((u) => u.email === email && u.id !== edit.id)) return toast('Another user already has that email', 'error');
+    const username = (edit.username || '').trim().toLowerCase();
+    if (!email && !username) return toast('Give the person an email or a username to sign in with', 'error');
+    if (username && !/^[a-z0-9._-]{3,30}$/.test(username)) return toast('A username is 3–30 letters, numbers, dot, dash or underscore (no spaces)', 'error');
+    if (email && db.users.some((u) => u.email === email && u.id !== edit.id)) return toast('Another user already has that email', 'error');
+    if (username && db.users.some((u) => (u.username || '').toLowerCase() === username && u.id !== edit.id)) return toast('Another user already has that username', 'error');
     if (edit._new && edit.password.length < 8) return toast('Use a password of at least 8 characters', 'error');
     const { _new, password, ...rec } = edit;
     const pw = _new ? await makePassword(password) : {};
     update((d) => {
-      put(d, 'users', { ...(d.users.find((u) => u.id === rec.id) || {}), ...rec, email, phone: rec.phone?.trim(), whatsapp: rec.whatsapp?.trim(), ...pw });
+      put(d, 'users', { ...(d.users.find((u) => u.id === rec.id) || {}), ...rec, email, username, phone: rec.phone?.trim(), whatsapp: rec.whatsapp?.trim(), ...pw });
       audit(d, user, _new ? 'User added' : 'User updated', `${rec.name} (${roleName(rec.role)})`, branchId);
     });
     toast(_new ? `${rec.name} can now sign in` : 'User saved');
@@ -74,7 +78,7 @@ export default function Users() {
       <div className="page-head">
         <div><h1>Users & Roles</h1><div className="sub">Each person signs in with their own account. Roles decide what they can see and do.</div></div>
         {tab === 'users'
-          ? <button className="btn primary" onClick={() => setEdit({ _new: true, id: uid(), name: '', email: '', phone: '', whatsapp: '', role: 'cashier', branchId, password: '' })}><UserPlus size={16} />Add user</button>
+          ? <button className="btn primary" onClick={() => setEdit({ _new: true, id: uid(), name: '', email: '', username: '', phone: '', whatsapp: '', role: 'cashier', branchId, password: '' })}><UserPlus size={16} />Add user</button>
           : <button className="btn primary" onClick={() => setRoleEdit({ _new: true, name: '', permissions: new Set(['pos.sell', 'sales.view', 'shifts', 'customers', 'chat']) })}><Plus size={16} />New role</button>}
       </div>
       <Tabs tabs={[['users', `Users (${db.users.length})`], ['roles', `Roles & permissions (${allRoles.length})`]]} value={tab} onChange={setTab} />
@@ -133,7 +137,8 @@ export default function Users() {
           <form onSubmit={saveUser}>
             <div className="form-grid">
               <label className="field"><span>Full name</span><input required value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} /></label>
-              <label className="field"><span>Email (Gmail works) – used to sign in and recover the password</span><input type="email" required value={edit.email} onChange={(e) => setEdit({ ...edit, email: e.target.value })} /></label>
+              <label className="field"><span>Email {edit.username?.trim() ? '(optional)' : ''} – signs in and recovers the password</span><input type="email" value={edit.email} onChange={(e) => setEdit({ ...edit, email: e.target.value })} placeholder="name@example.com" /></label>
+              <label className="field"><span>Username (optional) – sign in with this and the pharmacy name, no email needed</span><input value={edit.username || ''} autoCapitalize="none" spellCheck={false} onChange={(e) => setEdit({ ...edit, username: e.target.value })} placeholder="e.g. mary" /></label>
               <label className="field"><span>Phone (SMS recovery)</span><input inputMode="tel" value={edit.phone || ''} onChange={(e) => setEdit({ ...edit, phone: e.target.value })} placeholder="07XX XXX XXX" /></label>
               <label className="field"><span>WhatsApp number</span><input inputMode="tel" value={edit.whatsapp || ''} onChange={(e) => setEdit({ ...edit, whatsapp: e.target.value })} placeholder="Same as phone if empty" /></label>
               <label className="field"><span>Role</span>

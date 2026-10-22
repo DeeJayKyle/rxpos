@@ -216,18 +216,24 @@ const writeLicense = (env, t) => serverWrite(env, t.id, 'license', 'license', { 
 const MAX_FAILS = 5;
 const LOCK_MINUTES = 15;
 
-async function findUsers(env, email, tenant) {
+// A person signs in with their email, or with a username their pharmacy gave them. A username is matched only inside
+// its own pharmacy (two shops may each have a "mary"), so it always comes with a pharmacy code.
+const identOf = (s) => String(s || '').trim().toLowerCase().slice(0, 200);
+const userMatches = (u, ident) => u && !u.disabled && (identOf(u.email) === ident || (u.username && identOf(u.username) === ident));
+
+async function findUsers(env, ident, tenant) {
   const q = tenant
     ? env.DB.prepare("SELECT tenant, rec FROM records WHERE t = 'users' AND deleted = 0 AND tenant = ?1").bind(tenant)
     : env.DB.prepare("SELECT tenant, rec FROM records WHERE t = 'users' AND deleted = 0");
   const { results } = await q.all();
-  return results.map((r) => ({ tenant: r.tenant, u: JSON.parse(r.rec) })).filter((x) => x.u && x.u.email === email && !x.u.disabled);
+  return results.map((r) => ({ tenant: r.tenant, u: JSON.parse(r.rec) })).filter((x) => userMatches(x.u, ident));
 }
 
 async function pickUser(env, body) {
-  const email = String(body.email || '').trim().toLowerCase().slice(0, 200);
+  const email = identOf(body.email);
   const code = body.tenant ? String(body.tenant).trim().toLowerCase() : '';
   const tenant = code ? (await tenantByCode(env, code))?.id || code : '';
+  if (email && !email.includes('@') && !tenant) throw httpError(400, 'Enter your pharmacy name or code together with your username.');
   const found = await findUsers(env, email, tenant);
   if (found.length > 1) throw httpError(409, 'This email is used at more than one pharmacy. Enter your pharmacy code to continue.');
   return { email, tenant: found[0]?.tenant || tenant || MAIN, match: found[0] };
@@ -252,7 +258,7 @@ async function pharmacyLogin(env, body, ownerToken) {
   const OWNER_CHOICE = { code: '__owner__', name: 'RxPOS owner', role: 'owner' };
   // One email at several pharmacies and no pharmacy chosen: the password decides which accounts are theirs, and if it
   // opens more than one the person picks the pharmacy. Nothing is revealed before the password is right.
-  if (!body.tenant) {
+  if (!body.tenant && String(body.email || '').includes('@')) {
     const email0 = String(body.email || '').trim().toLowerCase().slice(0, 200);
     const found = await findUsers(env, email0, '');
     if (found.length > 1) {

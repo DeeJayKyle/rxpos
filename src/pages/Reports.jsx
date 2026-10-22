@@ -1,5 +1,5 @@
 import { useState, useRef, useMemo } from 'react';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Boxes, Crown, TrendingDown, PackageX } from 'lucide-react';
 import { Empty, PageTip } from '../ui.jsx';
 import { useStore, today, dayOf, localDate, downloadFile, toCSV, daysUntil, MAIN_BRANCH } from '../store.jsx';
 import { Stat, Tabs, BarChart, PdfButton } from '../ui.jsx';
@@ -14,7 +14,7 @@ export default function Reports() {
   const { db, products, fmt } = useStore();
   const [tab, setTab] = useState('sales');
   const pageRef = useRef(null);
-  const TAB_NAMES = { profit: 'Profit & Margins', sales: 'Sales Report', products: 'Sales by Product', purchases: 'Purchase Report', expenses: 'Expenses Report', stock: 'Stock Valuation', income: 'Income Statement' };
+  const TAB_NAMES = { profit: 'Profit & Margins', sales: 'Sales Report', products: 'Sales by Product', consumption: 'Consumption (ABC)', purchases: 'Purchase Report', expenses: 'Expenses Report', stock: 'Stock Valuation', income: 'Income Statement' };
   const [from, setFrom] = useState(today().slice(0, 8) + '01');
   const [to, setTo] = useState(today());
   const [branch, setBranch] = useState('all');
@@ -61,7 +61,7 @@ export default function Reports() {
     <div className="page" ref={pageRef}>
       <div className="page-head"><h1>Reports</h1><div className="row gap wrap">{tab !== 'stock' && Range}<PdfButton target={pageRef} title={TAB_NAMES[tab]} subtitle={tab === 'stock' ? `As at ${new Date().toLocaleDateString()}` : `${from} to ${to}`} /></div></div>
       <PageTip id="reports" title="Reading your figures">Pick the dates at the top right. Profit &amp; margins shows what each medicine earns and lists prices below your target margin; every table exports to PDF or CSV.</PageTip>
-      <Tabs value={tab} onChange={setTab} tabs={[['sales', 'Sales Report'], ['products', 'Sales by Product'], ['purchases', 'Purchase Report'], ['expenses', 'Expenses Report'], ['profit', 'Profit & margins'], ['stock', 'Stock Valuation'], ['income', 'Income Statement']]} />
+      <Tabs value={tab} onChange={setTab} tabs={[['sales', 'Sales Report'], ['products', 'Sales by Product'], ['consumption', 'Consumption (ABC)'], ['purchases', 'Purchase Report'], ['expenses', 'Expenses Report'], ['profit', 'Profit & margins'], ['stock', 'Stock Valuation'], ['income', 'Income Statement']]} />
 
       {tab === 'sales' && (
         <>
@@ -98,6 +98,8 @@ export default function Reports() {
           </table>
         </div>
       )}
+
+      {tab === 'consumption' && <ConsumptionReport sales={sales} from={from} to={to} />}
 
       {tab === 'purchases' && (
         <>
@@ -225,6 +227,106 @@ function ProfitReport({ sales }) {
           </tbody>
         </table>
       </div>
+    </>
+  );
+}
+
+/** Consumption & ABC analysis: how much of each medicine was used in the period, ranked A/B/C by value, so the few
+ *  items that tie up most of the money (class A) get the closest watch. Also flags fast movers about to run out and
+ *  stock that didn't move at all. */
+function ConsumptionReport({ sales, from, to }) {
+  const { db, products, fmt } = useStore();
+  const [showIdle, setShowIdle] = useState(false);
+  const byId = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
+  const periodDays = Math.max(1, Math.round((new Date(to) - new Date(from)) / 864e5) + 1);
+
+  const { rows, totalValue, idle } = useMemo(() => {
+    const m = new Map();
+    for (const s of sales) for (const i of s.items) {
+      const p = byId.get(i.id);
+      const key = i.id || i.name;
+      const r = m.get(key) || { id: i.id, name: i.name, form: p?.form || '', qty: 0, revenue: 0, cost: p?.cost || i.cost || 0, stock: p?.stock ?? null };
+      r.qty += i.qty; r.revenue += i.qty * i.price;
+      if (p?.cost) r.cost = p.cost;
+      m.set(key, r);
+    }
+    const list = [...m.values()].map((r) => ({ ...r, value: r.qty * r.cost, perDay: r.qty / periodDays }))
+      .map((r) => ({ ...r, daysLeft: r.perDay > 0 && r.stock != null ? r.stock / r.perDay : null }))
+      .sort((a, b) => b.value - a.value);
+    const total = list.reduce((a, r) => a + r.value, 0) || 1;
+    let cum = 0;
+    // An item belongs to A/B by where it starts, so the single biggest item is always A even if it alone passes 80%.
+    for (const r of list) { const before = (cum / total) * 100; cum += r.value; r.cumPct = (cum / total) * 100; r.cls = before < 80 ? 'A' : before < 95 ? 'B' : 'C'; }
+    // medicines in stock that sold nothing this period
+    const sold = new Set(list.map((r) => r.id));
+    const idleRows = products.filter((p) => p.stock > 0 && !sold.has(p.id)).map((p) => ({ id: p.id, name: p.name, form: p.form || '', stock: p.stock, value: p.stock * (p.cost || 0) })).sort((a, b) => b.value - a.value);
+    return { rows: list, totalValue: list.reduce((a, r) => a + r.value, 0), idle: idleRows };
+  }, [sales, byId, products, periodDays]);
+
+  const classCount = (c) => rows.filter((r) => r.cls === c).length;
+  const classValue = (c) => rows.reduce((a, r) => (r.cls === c ? a + r.value : a), 0);
+  const soonOut = rows.filter((r) => r.daysLeft != null && r.daysLeft < 14).sort((a, b) => a.daysLeft - b.daysLeft);
+  const exportRows = rows.map((r) => ({ class: r.cls, medicine: r.name, form: r.form, usedInPeriod: r.qty, perDay: r.perDay.toFixed(2), costValue: Math.round(r.value), revenue: Math.round(r.revenue), shareOfValuePct: (r.value / (totalValue || 1) * 100).toFixed(1), inStock: r.stock ?? '', daysOfStockLeft: r.daysLeft == null ? '' : Math.round(r.daysLeft) }));
+
+  return (
+    <>
+      <div className="stats">
+        <Stat label="Consumption (at cost)" value={fmt(totalValue)} sub={`${rows.reduce((a, r) => a + r.qty, 0).toLocaleString()} units · ${periodDays} days`} icon={Boxes} />
+        <Stat label="Class A" value={classCount('A')} sub={`${fmt(classValue('A'))} · the vital few`} tone="violet" icon={Crown} />
+        <Stat label="Running out (<14 days)" value={soonOut.length} sub="at this rate" tone={soonOut.length ? 'amber' : ''} icon={TrendingDown} />
+        <Stat label="Not sold (in stock)" value={idle.length} sub={`${fmt(idle.reduce((a, r) => a + r.value, 0))} tied up`} tone={idle.length ? 'red' : ''} icon={PackageX} />
+      </div>
+
+      {soonOut.length > 0 && (
+        <div className="card table-wrap">
+          <h3><TrendingDown size={17} /> Fast movers about to run out</h3>
+          <table>
+            <thead><tr><th>Medicine</th><th className="num">Used/day</th><th className="num">In stock</th><th className="num">Days left</th></tr></thead>
+            <tbody>{soonOut.slice(0, 20).map((r) => (
+              <tr key={r.id}><td><strong>{r.name}</strong>{r.cls === 'A' && <span className="abc a">A</span>}</td><td className="num">{r.perDay.toFixed(1)}</td><td className="num">{r.stock}</td>
+                <td className="num"><strong className={r.daysLeft < 7 ? 'text-danger' : 'text-warn'}>{Math.round(r.daysLeft)}</strong></td></tr>
+            ))}</tbody>
+          </table>
+          <p className="muted small">Based on how fast each item sold in this period. Reorder the class A items first.</p>
+        </div>
+      )}
+
+      <div className="card table-wrap">
+        <div className="row between pad gap wrap">
+          <h3>Consumption by medicine (A/B/C by value)</h3>
+          <button className="btn sm ghost" onClick={() => downloadFile(`consumption-abc-${from}-to-${to}.csv`, toCSV(exportRows), 'text/csv')}>Export CSV</button>
+        </div>
+        <table>
+          <thead><tr><th>Class</th><th>Medicine</th><th className="num">Used</th><th className="num">Per day</th><th className="num">Value (cost)</th><th className="num">Share</th><th className="num">In stock</th><th className="num">Days left</th></tr></thead>
+          <tbody>
+            {rows.slice(0, 500).map((r) => (
+              <tr key={r.id || r.name}>
+                <td><span className={'abc ' + r.cls.toLowerCase()}>{r.cls}</span></td>
+                <td><strong>{r.name}</strong>{r.form ? <><br /><small className="muted">{r.form}</small></> : null}</td>
+                <td className="num">{r.qty}</td><td className="num">{r.perDay.toFixed(1)}</td>
+                <td className="num">{fmt(r.value)}</td><td className="num muted">{(r.value / (totalValue || 1) * 100).toFixed(1)}%</td>
+                <td className="num">{r.stock ?? '—'}</td>
+                <td className="num">{r.daysLeft == null ? '—' : <span className={r.daysLeft < 14 ? 'text-warn' : ''}>{Math.round(r.daysLeft)}</span>}</td>
+              </tr>
+            ))}
+            {!rows.length && <Empty colSpan={8}>Nothing was sold in this period</Empty>}
+          </tbody>
+        </table>
+        <p className="muted small">Class <b>A</b> is the top 80% of consumption value — few items, most of the money, so watch them closely. <b>B</b> is the next 15%, <b>C</b> the last 5%. Value is units used × cost.</p>
+      </div>
+
+      {idle.length > 0 && (
+        <div className="card table-wrap">
+          <div className="row between pad gap"><h3><PackageX size={17} /> In stock but not sold this period ({idle.length})</h3>
+            <button className="btn sm ghost" onClick={() => setShowIdle((v) => !v)}>{showIdle ? 'Hide' : 'Show'}</button></div>
+          {showIdle && (
+            <table>
+              <thead><tr><th>Medicine</th><th className="num">In stock</th><th className="num">Tied up (cost)</th></tr></thead>
+              <tbody>{idle.slice(0, 300).map((r) => <tr key={r.id}><td>{r.name}{r.form ? <> · <small className="muted">{r.form}</small></> : null}</td><td className="num">{r.stock}</td><td className="num">{fmt(r.value)}</td></tr>)}</tbody>
+            </table>
+          )}
+        </div>
+      )}
     </>
   );
 }

@@ -1402,3 +1402,10 @@ tbody tr:nth-child(6) { animation-delay: .1s; } tbody tr:nth-child(7) { animatio
 
 .promo-row .grow strong, .promo-row .grow small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .page > *, .grid2 > *, .stats > * { min-width: 0; }
+
+/* ABC class badges (Consumption report) */
+.abc { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 7px; font-size: 12px; font-weight: 800; color: #fff; margin-left: 6px; }
+.abc.a { background: var(--viz-1, #0d9488); }
+.abc.b { background: #d97706; }
+.abc.c { background: #94a3b8; }
+td .abc { margin-left: 8px; vertical-align: middle; }
