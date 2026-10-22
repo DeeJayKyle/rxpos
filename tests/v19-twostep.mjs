@@ -49,7 +49,7 @@ const b = await puppeteer.launch({ executablePath: CHROME, headless: true });
 const P = await (await b.createBrowserContext()).newPage(); await P.setViewport({ width: 1200, height: 860 });
 const errors = []; P.on('pageerror', (e) => errors.push(e.message));
 await P.goto(base + '/' + slug, { waitUntil: 'networkidle2' }); await wait(800);
-await P.type('input[type=email]', 'tess@test.rx'); await P.type('input[type=password]', 'tess-pass-123');
+await P.type('input[autocomplete=username]', 'tess@test.rx'); await P.type('input[type=password]', 'tess-pass-123');
 await P.evaluate(() => [...document.querySelectorAll('button')].find((x) => x.textContent.includes('Sign in')).click());
 check('the sign-in screen asks for the authenticator code', await until(P, () => !!document.querySelector('input[aria-label="Authenticator code"]')));
 await P.screenshot({ path: path.join(out, '1-code-step.png') });

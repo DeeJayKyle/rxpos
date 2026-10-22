@@ -67,7 +67,7 @@ await A.setGeolocation({ latitude: 0.3136, longitude: 32.5811 });
 const errors = []; A.on('pageerror', (e) => errors.push('A: ' + e.message));
 await A.goto(base + '/' + slug, { waitUntil: 'networkidle2' }); await wait(1200);
 check('sign-in shows the pharmacy logo', await A.evaluate((l) => !!document.querySelector(`img[src="${l}"]`), LOGO));
-await A.type('input[type=email]', 'bea@test.rx'); await A.type('input[type=password]', 'bea-pass-123');
+await A.type('input[autocomplete=username]', 'bea@test.rx'); await A.type('input[type=password]', 'bea-pass-123');
 await A.evaluate(() => [...document.querySelectorAll('button')].find((x) => x.textContent.includes('Sign in')).click());
 await wait(6000);
 const top = await A.evaluate(() => document.querySelector('.topbar')?.innerText || '');
@@ -127,7 +127,7 @@ await ctxB.overridePermissions(base, ['microphone', 'notifications']);
 const B = await ctxB.newPage(); await B.setViewport({ width: 1100, height: 800 });
 B.on('pageerror', (e) => errors.push('B: ' + e.message));
 await B.goto(base + '/' + slug, { waitUntil: 'networkidle2' }); await wait(1000);
-await B.type('input[type=email]', 'dan@test.rx'); await B.type('input[type=password]', 'dan-pass-123');
+await B.type('input[autocomplete=username]', 'dan@test.rx'); await B.type('input[type=password]', 'dan-pass-123');
 await B.evaluate(() => [...document.querySelectorAll('button')].find((x) => x.textContent.includes('Sign in')).click()); await wait(6000);
 await A.goto(base + '/' + slug + '#/', { waitUntil: 'networkidle2' }); await wait(2500);
 // Dan posts a team message → Bea gets a pop-up

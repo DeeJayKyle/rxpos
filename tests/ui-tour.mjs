@@ -37,7 +37,7 @@ P.on('pageerror', (e) => errors.push(e.message));
 await P.setViewport({ width: 1440, height: 900 });
 await P.goto(base + '/' + slug, { waitUntil: 'networkidle2' }); await wait(800);
 await P.screenshot({ path: path.join(out, 'signin.png') });
-await P.type('input[type=email]', 'grace@test.rx'); await P.type('input[type=password]', 'grace-pass-123');
+await P.type('input[autocomplete=username]', 'grace@test.rx'); await P.type('input[type=password]', 'grace-pass-123');
 await P.evaluate(() => [...document.querySelectorAll('button')].find((x) => x.textContent.includes('Sign in')).click());
 await P.waitForSelector('.sidebar', { timeout: 20000 }); await wait(4000);
 await P.evaluate(() => document.querySelectorAll('.popups button, .popup button').forEach((x) => /close|dismiss|later|×/i.test(x.textContent + x.ariaLabel) && x.click()));

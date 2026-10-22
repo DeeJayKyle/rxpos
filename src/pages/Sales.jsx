@@ -290,3 +290,25 @@ export function EditHistory({ sale, bare }) {
   );
   return bare ? body : <div className="card edit-card no-print"><h4><History size={15} /> Edit history ({edits.length})</h4>{body}</div>;
 }
+
+/** A plain-text receipt for sending to the customer on WhatsApp or SMS */
+export function receiptText(sale, s, fmt) {
+  const L = [];
+  L.push(`*${s.name || 'Pharmacy'}*`);
+  if (s.address) L.push(s.address);
+  if (s.phone) L.push('Tel: ' + s.phone);
+  L.push(`Receipt ${sale.number} · ${new Date(sale.date).toLocaleString()}`);
+  if (sale.customerName && sale.customerName !== 'Walk-in Customer') L.push('Customer: ' + sale.customerName);
+  L.push('--------------------------------');
+  for (const i of sale.items) L.push(`${i.qty} × ${i.name} — ${fmt(i.qty * i.price)}`);
+  L.push('--------------------------------');
+  if (sale.discount > 0) L.push(`Subtotal: ${fmt(sale.subtotal)}`);
+  if (sale.discount > 0) L.push(`Discount: -${fmt(sale.discount)}`);
+  if (sale.tax > 0) L.push(`Tax: ${fmt(sale.tax)}`);
+  L.push(`*TOTAL: ${fmt(sale.total)}*`);
+  L.push(`Paid (${sale.payment}): ${fmt(sale.paid ?? sale.total)}`);
+  if ((sale.paid ?? sale.total) < sale.total) L.push(`Balance: ${fmt(sale.total - (sale.paid ?? sale.total))}`);
+  L.push('');
+  L.push(s.receiptFooter || 'Thank you. Get well soon!');
+  return L.join('\n');
+}

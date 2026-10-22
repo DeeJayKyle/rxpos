@@ -50,7 +50,7 @@ const toastText = () => A.evaluate(() => [...document.querySelectorAll('.toast')
 const stockOf = async () => { await go('/inventory'); await clickText('.tab', /^All$/); await wait(300); return A.evaluate(() => Object.fromEntries([...document.querySelectorAll('tbody tr')].filter((r) => r.cells.length > 5).map((r) => [r.cells[0].innerText.split('\n')[0].trim(), Number(r.cells[5].innerText.trim())]))); };
 
 await A.goto(base + '/' + slug, { waitUntil: 'networkidle2' }); await wait(800);
-await A.type('input[type=email]', 'sam@test.rx'); await A.type('input[type=password]', 'sam-pass-123');
+await A.type('input[autocomplete=username]', 'sam@test.rx'); await A.type('input[type=password]', 'sam-pass-123');
 await A.evaluate(() => [...document.querySelectorAll('button')].find((x) => x.textContent.includes('Sign in')).click());
 await until(A, () => !!document.querySelector('.sidebar'), 20000); await wait(4000);
 
@@ -347,7 +347,7 @@ check('price check lists a medicine below the 20% target margin (Cipro 500 → 5
   const C = await (await bc.createBrowserContext()).newPage(); await C.setViewport({ width: 1280, height: 860 });
   C.on('pageerror', (e) => errors.push(e.message));
   await C.goto(base + '/' + slug, { waitUntil: 'networkidle2' }); await wait(800);
-  await C.type('input[type=email]', 'sam@test.rx'); await C.type('input[type=password]', 'sam-pass-123');
+  await C.type('input[autocomplete=username]', 'sam@test.rx'); await C.type('input[type=password]', 'sam-pass-123');
   await C.evaluate(() => [...document.querySelectorAll('button')].find((x) => x.textContent.includes('Sign in')).click());
   await until(C, () => !!document.querySelector('.sidebar'), 20000); await wait(3000);
   await C.goto(base + '/' + slug + '#/pos', { waitUntil: 'networkidle2' }); await wait(1200);

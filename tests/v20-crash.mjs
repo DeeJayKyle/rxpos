@@ -17,7 +17,7 @@ const slug = t.tenant.slug, tid = t.tenant.id;
 const b = await puppeteer.launch({ executablePath: CHROME, headless: true });
 const P = await (await b.createBrowserContext()).newPage();
 await P.goto(base + '/' + slug, { waitUntil: 'networkidle2' }); await wait(800);
-await P.type('input[type=email]', 'cleo@test.rx'); await P.type('input[type=password]', 'cleo-pass-123');
+await P.type('input[autocomplete=username]', 'cleo@test.rx'); await P.type('input[type=password]', 'cleo-pass-123');
 await P.evaluate(() => [...document.querySelectorAll('button')].find((x) => x.textContent.includes('Sign in')).click());
 await P.waitForSelector('.sidebar', { timeout: 20000 }); await wait(2500);
 // an error in the app, carrying a phone number and an email that must not be sent
@@ -54,8 +54,8 @@ check('"Fixed" removes it from the list', !(r.errors || []).some((x) => /Test cr
   const signIn = async (remember) => {
     const p = await ctx.newPage();
     await p.goto(base + '/' + slug, { waitUntil: 'networkidle2' }); await wait(800);
-    await p.evaluate(() => { const i = document.querySelector('input[type=email]'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(i, ''); i.dispatchEvent(new Event('input', { bubbles: true })); });
-    await p.type('input[type=email]', 'cleo@test.rx'); await p.type('input[type=password]', 'cleo-pass-123');
+    await p.evaluate(() => { const i = document.querySelector('input[autocomplete=username]'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(i, ''); i.dispatchEvent(new Event('input', { bubbles: true })); });
+    await p.type('input[autocomplete=username]', 'cleo@test.rx'); await p.type('input[type=password]', 'cleo-pass-123');
     const box = await p.$('.remember-row input[type=checkbox]');
     if ((await box.evaluate((x) => x.checked)) !== remember) await box.click();
     await p.evaluate(() => [...document.querySelectorAll('button')].find((x) => x.textContent.includes('Sign in')).click());

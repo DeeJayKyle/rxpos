@@ -32,7 +32,7 @@ const signIn = async (email, pw) => {
   p.on('pageerror', (e) => errors.push(e.message));
   await p.setViewport({ width: 1366, height: 860 });
   await p.goto(base + '/' + slug, { waitUntil: 'networkidle2' }); await wait(800);
-  await p.type('input[type=email]', email); await p.type('input[type=password]', pw);
+  await p.type('input[autocomplete=username]', email); await p.type('input[type=password]', pw);
   // the eye shows the password, and hides it again
   if (email.startsWith('ada')) {
     await p.click('.pw-eye');

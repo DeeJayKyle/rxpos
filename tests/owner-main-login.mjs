@@ -40,7 +40,7 @@ await owner('/tenants/' + t.id + '/users', { user: { id: (await owner('/tenants/
 await p.goto(base + '/', { waitUntil: 'networkidle2' }); await wait(800);
 const footer = await p.evaluate(() => document.querySelector('.auth-hero small')?.innerText || '');
 check('front page has no owner link (owners sign in with the normal form)', !/owner|console/i.test(footer) && !(await p.$('a[href="#/owner"]')), footer);
-await p.type('input[type=email]', 'boss@test.rx'); await p.type('input[type=password]', 'owner-pass-12345');
+await p.type('input[autocomplete=username]', 'boss@test.rx'); await p.type('input[type=password]', 'owner-pass-12345');
 await p.evaluate(() => [...document.querySelectorAll('button')].find((x) => x.textContent.includes('Sign in')).click());
 let ok = false; for (let i = 0; i < 40 && !ok; i++) { await wait(300); ok = await p.evaluate(() => location.hash.startsWith('#/owner') && /Kansanga Test Pharmacy/.test(document.body.innerText)); }
 check('signing in on the main page with the owner details opens the owner console', ok, await p.evaluate(() => location.href + ' ' + document.body.innerText.slice(0, 80)));
