@@ -60,16 +60,19 @@ async function ownProfileEdit(db, tenant, who, ch) {
 }
 
 /**
- * Only an admin may write a record whose current OR new role is admin. This stops a staff member with users.manage
- * from editing, disabling, deleting, demoting, re-hashing or promoting-to an administrator account — an admin account
- * can only be changed by another admin (or the owner, who authenticates with the pharmacy sync key).
+ * Who may touch administrator accounts:
+ *  - Creating a new admin, or promoting someone to admin: the RxPOS owner only (via the pharmacy sync key). A
+ *    pharmacy — even its own admin — cannot mint admins.
+ *  - Editing, disabling, deleting, demoting or re-hashing an EXISTING admin: an admin (or the owner) only, never a
+ *    staff member who merely has users.manage. (An admin editing their own record is an admin writer, so it is allowed.)
  */
 async function adminChangeRefused(db, tenant, ch, who) {
   const old = await existingRec(db, tenant, 'users', ch.id);
-  const touchesAdmin = old?.role === 'admin' || (!ch.deleted && ch.rec?.role === 'admin');
-  if (!touchesAdmin) return false;
-  const writerIsAdmin = who?.viaKey || who?.role === 'admin';
-  return !writerIsAdmin;
+  const ownerWrite = !!who?.viaKey;
+  const makingAdmin = !ch.deleted && ch.rec?.role === 'admin' && old?.role !== 'admin';
+  if (makingAdmin) return !ownerWrite; // only the owner creates or promotes admins
+  if (old?.role === 'admin') return !(ownerWrite || who?.role === 'admin'); // changing an existing admin needs an admin
+  return false;
 }
 
 const schemaReady = new WeakMap();
@@ -246,22 +249,22 @@ async function pickUser(env, body) {
   return { email, tenant: found[0]?.tenant || tenant || MAIN, match: found[0] };
 }
 
-async function login(env, body) {
+async function login(env, body, ip) {
   // The owner can sign in here too (main page, no pharmacy chosen): owner email + owner password → owner console
   if (!body.tenant) {
     const own = await ownerMainLogin(env, body.email, body.password);
     if (own) {
-      const res = await pharmacyLogin(env, body, own.match ? own.token : null);
+      const res = await pharmacyLogin(env, body, own.match ? own.token : null, ip);
       if ((res.status === 401 || res.status === 429) && own.owner && !own.locked) await ownerMainFail(env); // wrong owner password and no staff account opened either
       if (res.status === 401 && own.locked) return json({ error: 'Too many wrong passwords. Owner sign-in is locked for a few minutes; use the master key on the owner page.' }, 429);
       return res;
     }
   }
-  return pharmacyLogin(env, body, null);
+  return pharmacyLogin(env, body, null, ip);
 }
 
 /** Staff sign-in. ownerToken: set when the same email + password is also the owner's (then the owner console is offered). */
-async function pharmacyLogin(env, body, ownerToken) {
+async function pharmacyLogin(env, body, ownerToken, ip = 'noip') {
   const OWNER_CHOICE = { code: '__owner__', name: 'RxPOS owner', role: 'owner' };
   // One email at several pharmacies and no pharmacy chosen: the password decides which accounts are theirs, and if it
   // opens more than one the person picks the pharmacy. Nothing is revealed before the password is right.
@@ -269,7 +272,7 @@ async function pharmacyLogin(env, body, ownerToken) {
     const email0 = String(body.email || '').trim().toLowerCase().slice(0, 200);
     const found = await findUsers(env, email0, '');
     if (found.length > 1) {
-      const key = '*:' + email0;
+      const key = ip + '|*:' + email0;
       const fail = await env.DB.prepare('SELECT n, until FROM login_fail WHERE email = ?1').bind(key).first();
       if (fail && fail.until > Date.now()) {
         const mins = Math.ceil((fail.until - Date.now()) / 60000);
@@ -297,7 +300,7 @@ async function pharmacyLogin(env, body, ownerToken) {
     }
   }
   const { email, tenant, match } = await pickUser(env, body);
-  const lockKey = tenant + ':' + email;
+  const lockKey = ip + '|' + tenant + ':' + email;
   const fail = await env.DB.prepare('SELECT n, until FROM login_fail WHERE email = ?1').bind(lockKey).first();
   if (fail && fail.until > Date.now()) {
     if (ownerToken) return json({ owner: { token: ownerToken } }); // staff account locked, but this is the owner's correct password
@@ -334,6 +337,9 @@ async function pharmacyLogin(env, body, ownerToken) {
   return json({ token, tenant: match.tenant, slug: t.slug || match.tenant, pharmacy: t.name, user: { id: u.id, name: u.name, email: u.email, role: u.role } });
 }
 
+/** The caller's IP (Cloudflare sets CF-Connecting-IP); a fixed fallback keeps local/dev working. */
+const clientIp = (req) => (req && (req.headers.get('CF-Connecting-IP') || req.headers.get('X-Forwarded-For') || '').split(',')[0].trim()) || 'noip';
+
 const mask = (s, keep = 3) => (s.length <= keep ? '***' : s.slice(0, keep) + '***' + s.slice(-2));
 
 async function sendEmail(env, to, subject, text) {
@@ -345,17 +351,35 @@ async function sendEmail(env, to, subject, text) {
   if (!r.ok) throw httpError(502, 'The email could not be sent (' + r.status + ').');
 }
 
-async function forgotPassword(env, body) {
+const RESET_PER_ACCOUNT = 3, RESET_PER_TENANT = 20; // reset codes per hour
+
+/** The running count of reset sends for a key in the current hour window. */
+async function resetWindow(env, k) {
+  const row = await env.DB.prepare('SELECT sent, window_start FROM reset_codes WHERE k = ?1').bind(k).first();
+  const windowStart = row && Date.now() - row.window_start < 3600e3 ? row.window_start : Date.now();
+  const sent = row && windowStart === row.window_start ? row.sent : 0;
+  return { windowStart, sent };
+}
+/** A prepared statement that increments a reset-send counter row (used in a batch). */
+const bumpResetStmt = (env, k, w) => env.DB.prepare("INSERT INTO reset_codes (k, code_hash, expires, tries, sent, window_start) VALUES (?1, '', 0, 0, 1, ?2) ON CONFLICT(k) DO UPDATE SET sent = ?3, window_start = ?2").bind(k, w.windowStart, w.sent + 1);
+const bumpReset = (env, k, w) => bumpResetStmt(env, k, w).run();
+
+async function forgotPassword(env, body, ip = 'noip') {
   const { email, tenant, match } = await pickUser(env, body);
   const channel = body.channel === 'sms' ? 'sms' : 'email';
   // Same answer whether or not the account exists, so this can't be used to discover staff emails
   const generic = { sent: true, channel, message: channel === 'sms' ? 'If that account has a phone number, a code is on its way by SMS.' : 'If that account exists, a code is on its way to its email inbox.' };
-  if (!match) return json(generic);
+  // Per-IP cap first — applies even when the account doesn't exist, so the endpoint can't be used to fan out sends.
+  const iw = await resetWindow(env, '__reset_ip__:' + ip);
+  if (iw.sent >= RESET_PER_TENANT) return json({ error: 'Too many reset codes requested. Try again later.' }, 429);
+  if (!match) { await bumpReset(env, '__reset_ip__:' + ip, iw); return json(generic); }
   const k = tenant + ':' + email;
-  const row = await env.DB.prepare('SELECT sent, window_start FROM reset_codes WHERE k = ?1').bind(k).first();
-  const windowStart = row && Date.now() - row.window_start < 3600e3 ? row.window_start : Date.now();
-  const sent = row && windowStart === row.window_start ? row.sent : 0;
-  if (sent >= 3) return json({ error: 'Too many reset codes requested. Try again in an hour or ask your administrator.' }, 429);
+  // Per-account AND per-tenant caps, so one account can't be spammed and a whole pharmacy can't be used to burn SMS credit.
+  const tenantKey = '__reset_tenant__:' + match.tenant;
+  const tw = await resetWindow(env, tenantKey);
+  if (tw.sent >= RESET_PER_TENANT) return json({ error: 'Too many reset codes requested for this pharmacy. Try again later or ask your administrator.' }, 429);
+  const { windowStart, sent } = await resetWindow(env, k);
+  if (sent >= RESET_PER_ACCOUNT) return json({ error: 'Too many reset codes requested. Try again in an hour or ask your administrator.' }, 429);
   const code = String(crypto.getRandomValues(new Uint32Array(1))[0] % 1000000).padStart(6, '0');
   const t = await tenantById(env, match.tenant);
   const text = `Your RxPOS password reset code for ${t?.name || 'your pharmacy'} is ${code}. It expires in 15 minutes. If you did not ask for this, ignore this message.`;
@@ -367,8 +391,12 @@ async function forgotPassword(env, body) {
   } else {
     await sendEmail(env, match.u.email, 'Your RxPOS password reset code', text);
   }
-  await env.DB.prepare('INSERT INTO reset_codes (k, code_hash, expires, tries, sent, window_start) VALUES (?1, ?2, ?3, 0, ?4, ?5) ON CONFLICT(k) DO UPDATE SET code_hash = ?2, expires = ?3, tries = 0, sent = ?4, window_start = ?5')
-    .bind(k, await sha256(k + ':' + code), Date.now() + 15 * 60000, sent + 1, windowStart).run();
+  await env.DB.batch([
+    env.DB.prepare('INSERT INTO reset_codes (k, code_hash, expires, tries, sent, window_start) VALUES (?1, ?2, ?3, 0, ?4, ?5) ON CONFLICT(k) DO UPDATE SET code_hash = ?2, expires = ?3, tries = 0, sent = ?4, window_start = ?5')
+      .bind(k, await sha256(k + ':' + code), Date.now() + 15 * 60000, sent + 1, windowStart),
+    bumpResetStmt(env, tenantKey, tw),
+    bumpResetStmt(env, '__reset_ip__:' + ip, iw),
+  ]);
   return json({ ...generic, hint: channel === 'sms' ? mask(String(match.u.phone || ''), 4) : mask(match.u.email) });
 }
 
@@ -387,7 +415,7 @@ async function resetPassword(env, body) {
   const u = { ...match.u, algo: 'pbkdf2', salt, iter: 100000, hash: await pbkdf2(pw, salt) };
   await serverWrite(env, match.tenant, 'users', u.id, u);
   await serverWrite(env, match.tenant, 'audit', crypto.randomUUID(), { date: new Date().toISOString(), user: u.name, action: 'Password reset (forgot password)', details: 'via ' + (body.channel || 'email') + ' code', branchId: 'main' });
-  await env.DB.batch([env.DB.prepare('DELETE FROM reset_codes WHERE k = ?1').bind(k), env.DB.prepare('DELETE FROM login_fail WHERE email = ?1').bind(k)]);
+  await env.DB.batch([env.DB.prepare('DELETE FROM reset_codes WHERE k = ?1').bind(k), env.DB.prepare("DELETE FROM login_fail WHERE email LIKE '%|' || ?1").bind(k)]);
   return json({ ok: true });
 }
 
@@ -406,7 +434,7 @@ async function resetWithGoogle(env, body) {
   delete u.mustChangePassword;
   await serverWrite(env, match.tenant, 'users', u.id, u);
   await serverWrite(env, match.tenant, 'audit', crypto.randomUUID(), { date: new Date().toISOString(), user: u.name, action: 'Password reset (Google)', details: email, branchId: 'main' });
-  await env.DB.prepare('DELETE FROM login_fail WHERE email = ?1').bind(tenant + ':' + email).run();
+  await env.DB.prepare("DELETE FROM login_fail WHERE email LIKE '%|' || ?1").bind(tenant + ':' + email).run();
   return json({ ok: true, email });
 }
 
@@ -728,7 +756,7 @@ async function owner(env, req, url, body) {
     const r = await db.prepare('DELETE FROM records WHERE tenant = ?1').bind(t.id).run();
     await db.batch([
       db.prepare('DELETE FROM tenants WHERE id = ?1').bind(t.id),
-      db.prepare("DELETE FROM login_fail WHERE email LIKE ?1 || ':%'").bind(t.id),
+      db.prepare("DELETE FROM login_fail WHERE email LIKE '%|' || ?1 || ':%'").bind(t.id),
       db.prepare("DELETE FROM reset_codes WHERE k LIKE ?1 || ':%'").bind(t.id),
     ]);
     // its chat attachments go too (personal data must not outlive the pharmacy)
@@ -1160,8 +1188,8 @@ export default {
       }
       const body = req.method === 'POST' ? await req.json().catch(() => null) : null;
       if (req.method === 'POST' && !body) return json({ error: 'Bad request' }, 400);
-      if (path === '/api/login' && req.method === 'POST') return await login(env, body);
-      if (path === '/api/password/forgot' && req.method === 'POST') return await forgotPassword(env, body);
+      if (path === '/api/login' && req.method === 'POST') return await login(env, body, clientIp(req));
+      if (path === '/api/password/forgot' && req.method === 'POST') return await forgotPassword(env, body, clientIp(req));
       if (path === '/api/password/reset' && req.method === 'POST') return await resetPassword(env, body);
       if (path === '/api/google-client') { const c = await getConfig(env.DB); return json({ clientId: c.google_client_id || null }); }
       if (path === '/api/password/google' && req.method === 'POST') return await resetWithGoogle(env, body);

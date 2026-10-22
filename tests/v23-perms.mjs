@@ -60,6 +60,10 @@ check('manager can still edit a non-admin user', r.applied === 1 && r.refused ==
 r = await push(alTok, 'dev-al2', [{ t: 'users', id: admin.id, at: now(), rec: { ...admin, name: 'Al Renamed' } }]);
 check('an admin can still edit an admin', r.applied === 1 && r.refused === 0, JSON.stringify({ a: r.applied, ref: r.refused }));
 
+// 8) even a pharmacy ADMIN may not mint a new admin (only the RxPOS owner does)
+r = await push(alTok, 'dev-al3', [{ t: 'users', id: 'u-newadmin', at: now(), rec: { name: 'Sneaky Admin', email: 'sneak@test.rx', role: 'admin' } }]);
+check('0.5 a pharmacy admin cannot create another admin', r.applied === 0 && r.refused === 1, JSON.stringify({ a: r.applied, ref: r.refused }));
+
 await owner('/tenants/' + tid + '/delete', { confirm: slug });
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
