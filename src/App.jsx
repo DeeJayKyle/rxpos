@@ -4,7 +4,7 @@ import {
   LayoutDashboard, ShoppingCart, PackageOpen, ReceiptText, FileText, ClipboardPlus, Users, Truck, Pill, FlaskConical,
   Boxes, PackagePlus, History, CalendarClock, PencilRuler, ScrollText, Wallet, Tags, Landmark, ArrowLeftRight, HandCoins,
   ArrowDownLeft, ArrowUpRight, ClipboardCheck, RefreshCw, Undo2, ShieldPlus, BookOpen, BarChart3, Settings as SettingsIcon, Search, Sun, Moon, Menu, LogOut, ChevronDown,
-  CornerDownLeft, User, Plus, BellRing, ShoppingBag, Tag, FileUp, Building2, Send, ShieldCheck, Clock, BookMarked, MessagesSquare, UserCog, KeyRound, CalendarDays, Thermometer, Palette, ScanText, GraduationCap, Megaphone, CalendarRange,
+  CornerDownLeft, User, Plus, BellRing, ShoppingBag, Tag, FileUp, Building2, Send, ShieldCheck, Clock, BookMarked, MessagesSquare, UserCog, KeyRound, CalendarDays, Thermometer, Palette, MonitorSmartphone, ScanText, GraduationCap, Megaphone, CalendarRange,
 } from 'lucide-react';
 import { useStore, makePassword, put, audit, isLowStock, expiryCounts } from './store.jsx';
 import { askText, toast } from './feedback.jsx';
@@ -22,6 +22,7 @@ import { startUpdates, onUpdate, applyUpdate, justUpdated, LABEL } from './updat
 import { applyTheme, savedTheme, saveTheme, allowedThemes } from './themes.js';
 import { TwoStepModal } from './twostep.jsx';
 import { setCrashCloud } from './crash.js';
+import { setBadge } from './badges.js';
 const OwnerConsole = lazy(() => import('./pages/OwnerConsole.jsx'));
 
 // Pages load on demand so the app opens fast, even on low-end PCs and phones
@@ -62,6 +63,7 @@ const P = {
   StockCount: page(() => import('./pages/StockCount.jsx')),
   Returns: page(() => import('./pages/Returns.jsx')),
   Controlled: page(() => import('./pages/Controlled.jsx')),
+  Device: page(() => import('./pages/Device.jsx')),
 };
 
 // [path, label, Icon, shortcut, badge, element, permission, feature]
@@ -122,6 +124,7 @@ const NAV = [
     ['/users', 'Users & Roles', UserCog, null, null, <P.Users />, 'users.manage'],
     ['/settings', 'Settings', SettingsIcon, null, null, <P.Settings />, 'settings.manage'],
     ['/audit', 'Audit Log', ShieldCheck, null, null, <P.Audit />, 'audit'],
+    ['/device', 'This Device & Updates', MonitorSmartphone, null, 'update', <P.Device />],
   ] },
 ];
 
@@ -271,12 +274,16 @@ function Shell() {
   // Show only what this person's role may use and what is switched on for this pharmacy
   const groups = NAV.map((g) => ({ ...g, items: g.items.filter(([, , , , , , perm, feat]) => (!perm || [].concat(perm).some(can)) && (!feat || features[feat] !== false)) })).filter((g) => g.items.length);
   const pages = groups.flatMap((g) => g.items.map(([to, label, Icon, key]) => ({ to, label, Icon, key })));
+  const [updReady, setUpdReady] = useState(false);
+  useEffect(() => onUpdate((u) => setUpdReady(u.status === 'ready')), []);
   const counts = useMemo(() => ({
+    update: updReady ? 1 : 0,
     expiry: (() => { const c = expiryCounts(products, batchesOf, db.settings.expiryWarnDays || 90); return c.soon + c.expired; })(),
     low: products.filter(isLowStock).length,
     transfers: db.transfers.filter((t) => t.toId === branchId && t.status === 'In transit').length,
     chat: unreadCount(db, user),
-  }), [products, batchesOf, db.settings.expiryWarnDays, db.transfers, db.messages, branchId, user, day]); // eslint-disable-line react-hooks/exhaustive-deps
+  }), [products, batchesOf, db.settings.expiryWarnDays, db.transfers, db.messages, branchId, user, day, updReady]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => setBadge(counts.chat + counts.transfers), [counts.chat, counts.transfers]); // the number on the app / taskbar icon
 
   useEffect(() => setDrawer(false), [location.pathname]);
   useEffect(() => {

@@ -9,6 +9,7 @@ import { Logo } from '../logo.jsx';
 import { downloadFile, today } from '../store.jsx';
 import { isWeb } from '../platform.js';
 import { THEMES } from '../themes.js';
+import { PasswordInput } from '../password.jsx';
 
 const KEY = 'rxpos-owner-key';
 /** GitHub mark (brand icons are not in lucide) */
@@ -318,7 +319,7 @@ function TenantAdmin({ id, api, url, onBack }) {
                 ['Airtel Money', [['AIRTEL_CLIENT_ID', 'Client ID'], ['AIRTEL_CLIENT_SECRET', 'Client secret'], ['AIRTEL_ENV', 'Environment: uat or production']]],
                 ["SMS (Africa's Talking)", [['AT_USERNAME', 'Username'], ['AT_API_KEY', 'API key'], ['AT_SENDER_ID', 'Sender ID (optional)']]]].map(([title, fields]) => (
                 <div key={title}><h3><Smartphone size={16} />{title}</h3><div className="form-grid">
-                  {fields.map(([k, l]) => <label key={k} className="field"><span>{l}</span><input type={/KEY|SECRET/.test(k) ? 'password' : 'text'} autoComplete="off" value={secrets[k] ?? ''} onChange={(e) => setSecrets({ ...secrets, [k]: e.target.value })} /></label>)}
+                  {fields.map(([k, l]) => <label key={k} className="field"><span>{l}</span>{/KEY|SECRET/.test(k) ? <PasswordInput autoComplete="off" value={secrets[k] ?? ''} onChange={(e) => setSecrets({ ...secrets, [k]: e.target.value })} /> : <input type="text" autoComplete="off" value={secrets[k] ?? ''} onChange={(e) => setSecrets({ ...secrets, [k]: e.target.value })} />}</label>)}
                 </div></div>
               ))}
               <div className="form-actions"><button className="btn primary" disabled={busy}>Save keys</button></div>
@@ -547,7 +548,7 @@ function OwnerSignIn({ url, onSignedIn }) {
           <div className="brand big"><Logo size={40} /> RxPOS</div>
           <p className="muted center"><Crown size={14} /> Owner console: create and manage the pharmacies using RxPOS</p>
           <label className="field"><span>{cfg?.password ? 'Owner password' : 'Owner key'}</span>
-            <input type="password" autoFocus autoComplete="current-password" value={pw} onChange={(e) => setPw(e.target.value)} required /></label>
+            <PasswordInput autoFocus autoComplete="current-password" value={pw} onChange={(e) => setPw(e.target.value)} required /></label>
           {error && <div className="error">{error}</div>}
           <button className="btn primary block" disabled={busy}><LockKeyhole size={16} />{busy ? 'Checking…' : 'Sign in'}</button>
           {(cfg?.google || cfg?.github) && <div className="or-line"><span>or</span></div>}
@@ -593,9 +594,9 @@ function OwnerAccount({ api, onClose }) {
       }}>
         <h3><LockKeyhole size={17} />{a.hasPassword ? 'Change your owner password' : 'Set your own owner password'}</h3>
         <div className="form-grid">
-          {a.hasPassword && <label className="field"><span>Current password</span><input type="password" autoComplete="current-password" value={pw.current} onChange={(e) => setPw({ ...pw, current: e.target.value })} required /></label>}
-          <label className="field"><span>New password (10+ characters)</span><input type="password" autoComplete="new-password" minLength={10} value={pw.password} onChange={(e) => setPw({ ...pw, password: e.target.value })} required /></label>
-          <label className="field"><span>Type it again</span><input type="password" autoComplete="new-password" minLength={10} value={pw.confirm} onChange={(e) => setPw({ ...pw, confirm: e.target.value })} required /></label>
+          {a.hasPassword && <label className="field"><span>Current password</span><PasswordInput autoComplete="current-password" value={pw.current} onChange={(e) => setPw({ ...pw, current: e.target.value })} required /></label>}
+          <label className="field"><span>New password (10+ characters)</span><PasswordInput autoComplete="new-password" minLength={10} value={pw.password} onChange={(e) => setPw({ ...pw, password: e.target.value })} required /></label>
+          <label className="field"><span>Type it again</span><PasswordInput autoComplete="new-password" minLength={10} value={pw.confirm} onChange={(e) => setPw({ ...pw, confirm: e.target.value })} required /></label>
         </div>
         <div className="form-actions"><button className="btn primary" disabled={busy}>Save password</button></div>
       </form>

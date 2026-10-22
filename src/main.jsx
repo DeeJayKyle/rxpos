@@ -9,6 +9,7 @@ import './styles.css';
 import { applyTheme, savedTheme } from './themes.js';
 import { isAndroid } from './platform.js';
 import { startUpdates } from './update.js';
+import { startDevice } from './device.js';
 import { startCrashReports, reportError } from './crash.js';
 
 // The Android app draws its own pull-to-refresh (src/refresh.jsx)
@@ -60,6 +61,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 // Self-updates start with the app (also on the sign-in screen): the new build reports that it started, so the
 // Windows and Android updaters keep it instead of rolling back
 startUpdates();
+startDevice(); // this device's layout, text size, rotation and tray (src/device.js)
 startCrashReports(); // private error reports to the pharmacy's own cloud (src/crash.js)
 
 // Ask the browser not to evict our offline database when the device is low on space

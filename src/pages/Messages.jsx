@@ -65,7 +65,7 @@ export default function Messages() {
 
   return (
     <div className="page">
-      <div className="page-head"><div><h1>Messages & SMS</h1><div className="sub">Your own messages to clients by WhatsApp (free, one tap each) or SMS</div></div></div>
+      <div className="page-head"><div><h1>Messages & SMS</h1><div className="sub">Send your clients a note on WhatsApp (free, one tap each) or by SMS</div></div></div>
       <Tabs tabs={[['send', 'Send a message'], ['templates', `Templates (${templates.length})`]]} value={tab} onChange={setTab} />
       {tab === 'send' && (
         <div className="grid2">

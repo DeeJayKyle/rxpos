@@ -12,7 +12,7 @@ export default function Controlled() {
   const [tab, setTab] = useState('register');
   return (
     <div className="page">
-      <div className="page-head"><div><h1>Controlled Drugs &amp; Recalls</h1><div className="sub">Register with running balances · batch recall lookup</div></div></div>
+      <div className="page-head"><div><h1>Controlled Drugs &amp; Recalls</h1><div className="sub">Every dose in and out with a running balance, plus a quick batch look-up for recalls</div></div></div>
       <Tabs tabs={[['register', 'Controlled drugs register'], ['recall', 'Batch recall lookup']]} value={tab} onChange={setTab} />
       {tab === 'register' ? <Register /> : <Recall />}
     </div>

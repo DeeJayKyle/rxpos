@@ -6,7 +6,7 @@ import { ask, toast } from '../feedback.jsx';
 import { cloudConfig, daySummary } from '../cloud.js';
 import { searchPlaces, DEFAULT_PLACE, storageLimits } from '../weather.js';
 import { isWeb, platformName } from '../platform.js';
-import { LABEL, onUpdate, checkForUpdate, applyUpdate } from '../update.js';
+import { Updates } from './Device.jsx';
 
 export default function Settings() {
   const { db, update, saveSettings, user, syncCfg, syncStatus, syncNow, branchId, setBranchId, can, features } = useStore();
@@ -221,7 +221,7 @@ export default function Settings() {
         </>
       )}
 
-      {tab === 'backup' && <AppVersion />}
+      {tab === 'backup' && <Updates />}
       {tab === 'backup' && (
         <div className="card">
           <h3><DatabaseBackup size={18} />Backup</h3>
@@ -252,24 +252,6 @@ export default function Settings() {
 }
 
 /** Which build this device runs, and its self-update (src/update.js) */
-function AppVersion() {
-  const [u, setU] = useState({ status: 'current' });
-  useEffect(() => onUpdate(setU), []);
-  const msg = { checking: 'Checking…', downloading: 'Downloading the new version…', ready: `New version ready (${u.latest?.label || ''}): it switches over when nothing is in progress`,
-    shell: 'A new app installer is needed for the newest version: download it from your RxPOS provider', error: u.error, current: u.latest ? 'Up to date' : 'Checks for updates automatically' }[u.status];
-  return (
-    <div className="card">
-      <h3><RefreshCw size={18} />App version</h3>
-      <p><strong>RxPOS {LABEL}</strong> · {platformName}</p>
-      <p className={'small ' + (u.status === 'error' || u.status === 'shell' ? 'text-warn' : 'muted')}>{msg}</p>
-      <div className="row gap">
-        <button className="btn ghost" disabled={u.status === 'checking' || u.status === 'downloading'} onClick={() => checkForUpdate().then((r) => r.status === 'current' && toast('RxPOS is up to date', 'info'))}><RefreshCw size={16} />Check for updates</button>
-        {u.status === 'ready' && <button className="btn primary" onClick={applyUpdate}>Update now</button>}
-      </div>
-    </div>
-  );
-}
-
 /** Daily owner summary: emailed every evening at 21:00 to the addresses here; preview, send now or share on WhatsApp */
 function DailySummary({ s, setS, onSave }) {
   const { syncCfg, can } = useStore();

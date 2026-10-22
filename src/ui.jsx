@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { X, Search, Download, Plus, Pencil, Trash2, Inbox, Lightbulb, TrendingUp, TrendingDown, FileDown, Loader2 } from 'lucide-react';
 import { pagePdf, receiptPdf } from './pdf.js';
@@ -84,7 +84,7 @@ export function Empty({ children = 'Nothing here yet', colSpan, action, icon: Ic
   const navigate = useNavigate();
   const body = (
     <div className="cart-empty">
-      <Icon size={34} /><span>{children}</span>
+      <span className="empty-art" aria-hidden="true"><i /><i /><Icon size={30} /></span><span>{children}</span>
       {action && <button type="button" className="btn sm primary" onClick={() => (action.to ? navigate(action.to) : action.onClick?.())}>{action.label}</button>}
     </div>
   );
@@ -154,6 +154,28 @@ export function CrudPage({ title, subtitle, singular, table, fields, columns, bl
   );
 }
 
+/** Numbers on the dashboard roll up to their value the first time they appear (text stays as given) */
+export function CountUp({ value, ms = 700 }) {
+  const str = String(value ?? '');
+  const m = str.match(/-?[\d,]*\.?\d+/);
+  const target = m ? Number(m[0].replace(/,/g, '')) : NaN;
+  const [shown, setShown] = useState(() => (isFinite(target) && !matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : target));
+  const first = useRef(true);
+  useEffect(() => {
+    if (!isFinite(target)) return;
+    if (!first.current) { setShown(target); return; }
+    first.current = false;
+    let raf, t0;
+    const step = (t) => { t0 ??= t; const k = Math.min(1, (t - t0) / ms); setShown(target * (1 - (1 - k) ** 3)); if (k < 1) raf = requestAnimationFrame(step); };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [target]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!m || !isFinite(target) || /^-?0\d/.test(m[0]) || /[:/]\d/.test(str)) return str; // times, dates and codes stay as they are
+  const dec = (m[0].split('.')[1] || '').length;
+  const txt = shown.toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+  return str.replace(m[0], m[0].includes(',') ? txt : txt.replace(/,/g, ''));
+}
+
 export function Stat({ label, value, sub, tone, icon: Icon, delta, to, state }) {
   const navigate = useNavigate();
   const go = to ? () => navigate(to, state ? { state } : undefined) : undefined;
@@ -161,7 +183,7 @@ export function Stat({ label, value, sub, tone, icon: Icon, delta, to, state }) 
     <div className={'card stat ' + (tone || '') + (to ? ' link' : '')} onClick={go} role={to ? 'link' : undefined} tabIndex={to ? 0 : undefined} onKeyDown={to ? (e) => e.key === 'Enter' && go() : undefined}>
       {Icon && <span className="stat-icon"><Icon size={20} /></span>}
       <small>{label}</small>
-      <strong>{value}</strong>
+      <strong><CountUp value={value} /></strong>
       <span className="muted small">
         {delta != null && isFinite(delta) && (
           <span className={'delta ' + (delta >= 0 ? 'up' : 'down')}>{delta >= 0 ? <TrendingUp size={13} /> : <TrendingDown size={13} />}{Math.abs(Math.round(delta))}% </span>

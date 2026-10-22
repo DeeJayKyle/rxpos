@@ -66,6 +66,14 @@ export async function applyUpdate() {
   else location.reload();
 }
 
+/** The "Update now" button: get the newest build and switch to it straight away (the open sale and drafts are kept) */
+export async function updateNow() {
+  if (!BUILD) return { status: 'error', error: 'This is a development copy: updates come from the build instead' };
+  if (state.status !== 'ready') await checkForUpdate();
+  if (state.status === 'ready') { await applyUpdate(); return state; }
+  return state;
+}
+
 // ---- when is it safe to switch? ----
 let lastInput = Date.now();
 const busy = () => {

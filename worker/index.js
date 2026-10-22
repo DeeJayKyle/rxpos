@@ -881,18 +881,37 @@ async function downloadFile(env, tenant, id, sig) {
   return new Response(out, { headers: { 'Content-Type': meta.type, 'Content-Length': String(out.length), 'Content-Disposition': 'inline; filename="' + safeName + '"', 'Cache-Control': 'private, max-age=31536000, immutable', ...cors } });
 }
 
+/** Short-lived relay logins from Cloudflare Realtime TURN, shared by every call for a few hours */
+let turnCache = null;
+async function cloudflareTurn(env) {
+  if (!env.TURN_KEY_ID || !env.TURN_KEY_API_TOKEN) return null;
+  if (turnCache && turnCache.until > Date.now()) return turnCache.servers;
+  const r = await fetch(`https://rtc.live.cloudflare.com/v1/turn/keys/${env.TURN_KEY_ID}/credentials/generate-ice-servers`, {
+    method: 'POST', headers: { Authorization: 'Bearer ' + env.TURN_KEY_API_TOKEN, 'Content-Type': 'application/json' }, body: JSON.stringify({ ttl: 86400 }),
+  });
+  if (!r.ok) throw new Error('TURN ' + r.status);
+  const j = await r.json();
+  const servers = [].concat(j.iceServers || []).filter((x) => x.username); // keep the relay entries; STUN is added above
+  turnCache = { servers, until: Date.now() + 6 * 3600e3 };
+  return servers;
+}
+
 // ---------- in-app voice calls between staff (WebRTC; the cloud only passes the call set-up messages) ----------
 async function rtc(env, req, url, body, who) {
   const db = env.DB;
   if (url.pathname.endsWith('/config')) {
     const ice = [{ urls: ['stun:stun.cloudflare.com:3478', 'stun:stun.l.google.com:19302'] }];
+    // A relay (TURN) is what makes calls work between phones on mobile data and strict office networks.
+    // Cloudflare's own TURN service (free allowance): secrets TURN_KEY_ID + TURN_KEY_API_TOKEN. Or any TURN server: TURN_URLS etc.
+    const relay = await cloudflareTurn(env).catch(() => null);
+    if (relay) ice.push(...relay);
     if (env.TURN_URLS) ice.push({ urls: env.TURN_URLS.split(','), username: env.TURN_USERNAME, credential: env.TURN_CREDENTIAL });
-    return json({ iceServers: ice });
+    return json({ iceServers: ice, relay: !!(relay || env.TURN_URLS) });
   }
   if (!who.uid) return json({ error: 'Sign in with your own account to make calls.' }, 403);
   if (req.method === 'POST') {
     const type = String(body.type || '');
-    if (!['ring', 'offer', 'answer', 'hangup', 'decline', 'busy'].includes(type) || !body.to || !body.callId) return json({ error: 'Bad call message' }, 400);
+    if (!['ring', 'offer', 'answer', 'hangup', 'decline', 'busy', 'ice', 'reoffer', 'reanswer'].includes(type) || !body.to || !body.callId) return json({ error: 'Bad call message' }, 400);
     const data = body.data ? JSON.stringify(body.data).slice(0, 60000) : null;
     await db.prepare('INSERT INTO rtc (tenant, to_uid, from_uid, from_name, type, call_id, data, at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)')
       .bind(who.tenant, String(body.to), who.uid, who.name || '', type, String(body.callId).slice(0, 60), data, Date.now()).run();
