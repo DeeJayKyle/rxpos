@@ -74,12 +74,14 @@ function authenticate(req) {
   return a.length === b.length && crypto.timingSafeEqual(a, b) ? { role: 'admin', name: 'sync key' } : null;
 }
 
-function login({ email, password }) {
+// 2.8 async PBKDF2 so a sign-in doesn't block the single-threaded hub while hashing
+const pbkdf2 = (pw, salt, iter) => new Promise((resolve, reject) => crypto.pbkdf2(pw, salt, iter, 32, 'sha256', (err, dk) => (err ? reject(err) : resolve(dk))));
+async function login({ email, password }) {
   const e = String(email || '').trim().toLowerCase();
   const u = Object.values(state.rows).filter((r) => r.t === 'users' && !r.deleted).map((r) => r.rec).find((x) => x && x.email === e && !x.disabled);
   const pw = String(password || '');
   const ok = u && (u.algo === 'pbkdf2'
-    ? crypto.pbkdf2Sync(pw, Buffer.from(u.salt, 'base64'), u.iter || 100000, 32, 'sha256').toString('hex') === u.hash
+    ? (await pbkdf2(pw, Buffer.from(u.salt, 'base64'), u.iter || 100000)).toString('hex') === u.hash
     : crypto.createHash('sha256').update('pharmapos:' + pw).digest('hex') === u.hash);
   if (!ok) return [401, { error: 'Wrong email or password, or this account has not been synced to the hub yet.' }];
   const body = b64url(JSON.stringify({ sub: u.id, name: u.name, role: u.role, exp: Date.now() + 30 * 864e5 }));
@@ -127,6 +129,7 @@ function send(res, code, body, type = 'application/json') {
 }
 
 const server = http.createServer((req, res) => {
+ try { // 2.8 never let a malformed request (e.g. a bad %-escape in the path) crash the single-process hub
   const url = new URL(req.url, 'http://x');
   if (req.method === 'OPTIONS') return send(res, 204, '');
   if (url.pathname === '/api/health') return send(res, 200, { ok: true, app: 'rxpos-hub', rows: Object.keys(state.rows).length });
@@ -139,7 +142,7 @@ const server = http.createServer((req, res) => {
     req.on('end', () => {
       try {
         const body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
-        if (url.pathname === '/api/login') { const [code, out] = login(body); return send(res, code, out); }
+        if (url.pathname === '/api/login') { login(body).then(([code, out]) => send(res, code, out)).catch((e) => send(res, 400, { error: 'Bad request: ' + e.message })); return; }
         if (!body.deviceId) return send(res, 400, { error: 'Missing deviceId' });
         send(res, 200, sync(body, who));
       } catch (e) {
@@ -154,11 +157,15 @@ const server = http.createServer((req, res) => {
   }
   // Static web app
   if (req.method !== 'GET') return send(res, 405, { error: 'Method not allowed' });
-  let file = path.normalize(path.join(WEB_DIR, decodeURIComponent(url.pathname)));
-  if (!file.startsWith(WEB_DIR)) return send(res, 403, { error: 'Forbidden' });
+  let decoded; try { decoded = decodeURIComponent(url.pathname); } catch { return send(res, 400, { error: 'Bad path' }); }
+  let file = path.normalize(path.join(WEB_DIR, decoded));
+  // 2.8 robust traversal check: path.relative, not startsWith (which a sibling dir sharing the prefix could slip past)
+  const rel = path.relative(WEB_DIR, file);
+  if (rel.startsWith('..') || path.isAbsolute(rel)) return send(res, 403, { error: 'Forbidden' });
   if (!fs.existsSync(file) || fs.statSync(file).isDirectory()) file = path.join(WEB_DIR, 'index.html');
   if (!fs.existsSync(file)) return send(res, 404, 'Web app not built. Run "npm run build" first.', 'text/plain');
   send(res, 200, fs.readFileSync(file), MIME[path.extname(file)] || 'application/octet-stream');
+ } catch (e) { try { send(res, 500, { error: 'Server error' }); } catch { /* response already sent */ } }
 });
 
 server.listen(PORT, () => {
