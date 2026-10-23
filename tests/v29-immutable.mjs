@@ -51,6 +51,13 @@ r = await push(caxTok, 'dev-cax', [{ t: 'customers', id: 'c1', at: now(), rec: {
 r = await push(caxTok, 'dev-cax', [{ t: 'customers', id: 'c1', at: later(60000), rec: { id: 'c1', name: 'Jane Doe' } }]);
 check('a mutable record (customer) can still be updated', r.applied === 1, JSON.stringify({ a: r.applied, ref: r.refused }));
 
+// ----- 1.3 a wild/future device clock is clamped to server time -----
+r = await push(caxTok, 'dev-cax', [{ t: 'customers', id: 'future', at: '2099-01-01T00:00:00.000Z', rec: { id: 'future', name: 'Future' } }]);
+check('a future-dated record is accepted', r.applied === 1);
+rows = await pullAll(caxTok, 'dev-clock');
+const fut = rows.find((x) => x.t === 'customers' && x.id === 'future');
+check('1.3 the stored timestamp is clamped to about now, not the year 2099', fut && new Date(fut.at).getFullYear() <= new Date().getFullYear() + 1, fut?.at);
+
 await owner('/tenants/' + tid + '/delete', { confirm: slug });
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

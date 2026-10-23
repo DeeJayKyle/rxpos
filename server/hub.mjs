@@ -57,6 +57,7 @@ const ADMIN_ONLY = new Set(['users', 'settings', 'branches']);
 // Password secrets stay on the hub and are never sent to a device (0.2); a device verifies its own users offline
 // with a local device-bound verifier (src/offline.js), not with these fields.
 const USER_SECRETS = ['hash', 'salt', 'algo', 'iter'];
+const CLOCK_SKEW_MS = 5 * 60000; // 1.3 clamp a device clock this far ahead of server time at most
 const stripUserSecrets = (t, rec) => { if (t !== 'users' || !rec) return rec; const o = { ...rec }; for (const f of USER_SECRETS) delete o[f]; return o; };
 const b64url = (buf) => Buffer.from(buf).toString('base64url');
 const sign = (body) => crypto.createHmac('sha256', 'token:' + KEY).update(body).digest('base64url');
@@ -91,12 +92,15 @@ function sync({ deviceId, since = 0, changes = [] }, who) {
     if (!ch || typeof ch.t !== 'string' || ch.id == null || typeof ch.at !== 'string') continue;
     if (who.role !== 'admin' && ADMIN_ONLY.has(ch.t)) continue; // only admins change users, settings, branches
     const k = ch.t + '|' + ch.id;
+    // 1.3 clamp a device's clock to server time (+ a little skew), so a wrong/future clock can't win forever
+    const atMs = Date.parse(ch.at);
+    const at = atMs <= Date.now() + CLOCK_SKEW_MS ? ch.at : new Date(Date.now() + CLOCK_SKEW_MS).toISOString();
     const cur = state.rows[k];
-    if (cur && cur.at >= ch.at) continue; // last writer wins
+    if (cur && cur.at >= at) continue; // last writer wins
     let rec = ch.deleted ? undefined : ch.rec;
     // a device no longer holds password secrets, so a user edit arrives without them: keep what the hub stores (0.2)
     if (ch.t === 'users' && rec && !rec.hash && cur?.rec) { rec = { ...rec }; for (const f of USER_SECRETS) if (cur.rec[f] !== undefined) rec[f] = cur.rec[f]; }
-    state.rows[k] = { t: ch.t, id: ch.id, rec, deleted: !!ch.deleted, at: ch.at, seq: ++state.seq, origin: deviceId };
+    state.rows[k] = { t: ch.t, id: ch.id, rec, deleted: !!ch.deleted, at, seq: ++state.seq, origin: deviceId };
     applied++;
   }
   if (applied) save();

@@ -56,6 +56,7 @@ const SERVER_ONLY = new Set(['license', 'branches']);
 const INSERT_ONLY = new Set(['audit', 'movements', 'controlled']);
 const MAX_REC_BYTES = 256 * 1024; // one record's JSON (file chunks are stored elsewhere); rejects absurd payloads
 const MAX_TENANT_RECORDS = 2_000_000; // a safety ceiling per pharmacy so one device can't fill the database
+const CLOCK_SKEW_MS = 5 * 60000; // 1.3 how far ahead of server time a device's clock may be before it is clamped
 
 const existingRec = async (db, tenant, t, id) => {
   const row = await db.prepare('SELECT rec FROM records WHERE tenant = ?1 AND k = ?2 AND deleted = 0').bind(tenant, t + '|' + id).first();
@@ -547,8 +548,12 @@ async function sync(env, body, who) {
       tenantCount++;
     }
     const k = ch.t + '|' + id;
-    if (INSERT_ONLY.has(ch.t)) stmts.push(insertOnly.bind(tenant, k, ch.t, id, body, ch.at, deviceId));
-    else stmts.push(upsert.bind(tenant, k, ch.t, id, body, ch.deleted ? 1 : 0, ch.at, deviceId));
+    // 1.3 clamp a device's clock to server time plus a little skew. A wrong or deliberately future-dated clock can
+    // otherwise win last-writer-wins forever and leave a record that no normal edit can ever overwrite.
+    const atMs = Date.parse(ch.at);
+    const at = atMs <= Date.now() + CLOCK_SKEW_MS ? ch.at : new Date(Date.now() + CLOCK_SKEW_MS).toISOString();
+    if (INSERT_ONLY.has(ch.t)) stmts.push(insertOnly.bind(tenant, k, ch.t, id, body, at, deviceId));
+    else stmts.push(upsert.bind(tenant, k, ch.t, id, body, ch.deleted ? 1 : 0, at, deviceId));
   }
   let applied = 0;
   if (stmts.length) for (const r of await db.batch(stmts)) applied += r.meta.changes || 0;
