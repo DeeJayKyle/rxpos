@@ -28,7 +28,9 @@ export async function listSnapshots() {
 }
 export const loadSnapshot = (date) => idbGet('snap:' + date);
 
-export const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-5);
+// id helper lives in ids.js (pure, unit-tested); imported for use here and re-exported so existing imports work.
+import { uid } from './ids.js';
+export { uid };
 export const now = () => new Date().toISOString();
 // Date helpers live in dates.js (pure, unit-tested); imported for use here and re-exported so existing imports from
 // store.jsx keep working.

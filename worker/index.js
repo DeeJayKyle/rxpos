@@ -781,7 +781,7 @@ async function owner(env, req, url, body) {
     const adminId = 'u-' + randomKey(10);
     await serverWriteMany(env, slug, [
       ...branches.map((b) => ({ t: 'branches', id: b.id, rec: b })),
-      { t: 'settings', id: 'settings', rec: { name, address: String(body.address || ''), phone: String(body.phone || ''), currency: 'UGX', decimals: 0 } },
+      { t: 'settings', id: 'settings', rec: { name, address: String(body.address || ''), phone: String(body.phone || ''), currency: 'UGX', decimals: 0, locale: 'en-UG', timezone: 'Africa/Kampala' } },
       { t: 'users', id: adminId, rec: { name: String(admin.name || 'Administrator').slice(0, 80), email, phone: String(admin.phone || ''), role: 'admin', ...pw, mustChangePassword: !!admin.mustChange } },
       { t: 'audit', id: crypto.randomUUID(), rec: { date: new Date().toISOString(), user: 'RxPOS owner', action: 'Pharmacy created', details: `${name} · admin ${email}`, branchId: 'main' } },
     ]);
