@@ -29,12 +29,16 @@ function register() {
   root = path.join(app.getPath('userData'), 'web');
   stateFile = path.join(root, 'state.json');
   state = { ...state, ...(readJson(stateFile) || {}) };
+  const within = (base, p) => { const r = path.relative(base, p); return r === '' || (!r.startsWith('..') && !path.isAbsolute(r)); };
   protocol.handle('file', (req) => {
     let target = fileURLToPath(req.url);
     const rel = path.relative(dist, target);
     if (rel && !rel.startsWith('..') && !path.isAbsolute(rel)) {
       for (const dir of sources()) { const f = path.join(dir, rel); if (fs.existsSync(f)) { target = f; break; } }
     }
+    // 1.7 only serve files from the installed app folder (dist) or a downloaded build (root); never arbitrary disk
+    // paths reached by traversal or an absolute file:// URL.
+    if (!within(dist, target) && !within(root, target)) return new Response('Not found', { status: 404 });
     return net.fetch(pathToFileURL(target).href, { bypassCustomProtocolHandlers: true });
   });
   ipcMain.on('rxpos:ready', () => {

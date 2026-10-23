@@ -62,8 +62,12 @@ if (HUB_MODE) {
     win.webContents.on('will-navigate', (e, url) => {
       if (!url.startsWith('file:')) { e.preventDefault(); if (/^(https?|tel|mailto|whatsapp):/.test(url)) shell.openExternal(url); }
     });
-    // Camera (prescription photos), microphone (calls, voice notes), notifications: allowed for the app's own pages
-    win.webContents.session.setPermissionRequestHandler((wc, permission, cb) => cb(['media', 'notifications', 'geolocation', 'clipboard-read', 'clipboard-sanitized-write'].includes(permission)));
+    // Camera (prescription photos), microphone (calls, voice notes), notifications: allowed only for the app's own
+    // local pages (1.7 checks the requesting origin, so a navigated-to remote page can never request them).
+    win.webContents.session.setPermissionRequestHandler((wc, permission, cb, details) => {
+      const own = String(details?.requestingUrl || '').startsWith('file://');
+      cb(own && ['media', 'notifications', 'geolocation', 'clipboard-read', 'clipboard-sanitized-write'].includes(permission));
+    });
     // Content-Security-Policy for the app window: its own files plus the RxPOS cloud and the weather service, nothing else.
     const CSP = "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; "
       + "script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; "
@@ -115,7 +119,8 @@ if (HUB_MODE) {
         { label: 'Reload app', accelerator: 'CmdOrCtrl+Shift+R', click: (_i, w) => w?.webContents.reloadIgnoringCache() },
         { type: 'separator' }, { role: 'quit' },
       ] },
-      { label: 'View', submenu: [{ role: 'zoomIn' }, { role: 'zoomOut' }, { role: 'resetZoom' }, { role: 'togglefullscreen' }, { role: 'toggleDevTools' }] },
+      // DevTools only in development, never in a packaged production build (1.7)
+      { label: 'View', submenu: [{ role: 'zoomIn' }, { role: 'zoomOut' }, { role: 'resetZoom' }, { role: 'togglefullscreen' }, ...(app.isPackaged ? [] : [{ role: 'toggleDevTools' }])] },
     ])
   );
 
