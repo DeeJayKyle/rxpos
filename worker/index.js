@@ -51,6 +51,17 @@ const existingRec = async (db, tenant, t, id) => {
   return row ? JSON.parse(row.rec || 'null') : null;
 };
 
+// Password secrets live only on the server (0.2). Devices receive user records without them, so a lost device — or a
+// copy of its stored data — no longer exposes every staff member's password hash. A device still verifies its own
+// users offline with a device-bound verifier it keeps locally (src/offline.js), never with these synced fields.
+const USER_SECRETS = ['hash', 'salt', 'algo', 'iter'];
+// Strip the secrets from a stored record's JSON before it is sent to a device (users only; everything else untouched).
+const stripUserSecrets = (t, recJson) => {
+  if (recJson == null) return 'null';
+  if (t !== 'users') return recJson;
+  try { const o = JSON.parse(recJson); for (const f of USER_SECRETS) delete o[f]; return JSON.stringify(o); } catch { return recJson; }
+};
+
 /** Anyone may update their own user record (e.g. change their password), but never their role, status, branch or email. */
 async function ownProfileEdit(db, tenant, who, ch) {
   if (!who.uid || String(ch.id) !== String(who.uid) || ch.deleted || !ch.rec) return false;
@@ -466,7 +477,14 @@ async function sync(env, body, who) {
       if (ch.t === 'users' && (await adminChangeRefused(db, tenant, ch, who))) { refused++; continue; }
     }
     const id = String(ch.id);
-    stmts.push(upsert.bind(tenant, ch.t + '|' + id, ch.t, id, ch.deleted ? null : JSON.stringify(ch.rec ?? null), ch.deleted ? 1 : 0, ch.at, deviceId));
+    let rec = ch.rec;
+    // Devices no longer hold password secrets, so a user edit (a rename, a role change) arrives without them: keep
+    // whatever the server already stores. A real password set/change/reset still carries a fresh hash and wins. (0.2)
+    if (ch.t === 'users' && !ch.deleted && rec && !rec.hash) {
+      const old = await existingRec(db, tenant, 'users', id);
+      if (old) { rec = { ...rec }; for (const f of USER_SECRETS) if (old[f] !== undefined) rec[f] = old[f]; }
+    }
+    stmts.push(upsert.bind(tenant, ch.t + '|' + id, ch.t, id, ch.deleted ? null : JSON.stringify(rec ?? null), ch.deleted ? 1 : 0, ch.at, deviceId));
   }
   let applied = 0;
   if (stmts.length) for (const r of await db.batch(stmts)) applied += r.meta.changes || 0;
@@ -487,7 +505,7 @@ async function sync(env, body, who) {
   const cursor = more ? page[page.length - 1].seq : Math.max(maxSeq || 0, Number(since) || 0);
   await notified;
   // Build the response by hand so records stored as JSON text are not parsed and re-serialised (keeps CPU low)
-  const items = page.map((r) => `{"t":${JSON.stringify(r.t)},"id":${JSON.stringify(r.id)},"at":${JSON.stringify(r.at)},"deleted":${r.deleted ? 'true' : 'false'},"rec":${r.rec ?? 'null'}}`);
+  const items = page.map((r) => `{"t":${JSON.stringify(r.t)},"id":${JSON.stringify(r.id)},"at":${JSON.stringify(r.at)},"deleted":${r.deleted ? 'true' : 'false'},"rec":${stripUserSecrets(r.t, r.rec)}}`);
   return json(`{"changes":[${items.join(',')}],"cursor":${cursor},"more":${more},"applied":${applied},"refused":${refused},"tenant":${JSON.stringify(tenant)}}`);
 }
 

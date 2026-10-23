@@ -4,10 +4,11 @@ import {
   LayoutDashboard, ShoppingCart, PackageOpen, ReceiptText, FileText, ClipboardPlus, Users, Truck, Pill, FlaskConical,
   Boxes, PackagePlus, History, CalendarClock, PencilRuler, ScrollText, Wallet, Tags, Landmark, ArrowLeftRight, HandCoins,
   ArrowDownLeft, ArrowUpRight, ClipboardCheck, RefreshCw, Undo2, ShieldPlus, BookOpen, BarChart3, Settings as SettingsIcon, Search, Sun, Moon, Menu, LogOut, ChevronDown,
-  CornerDownLeft, User, Plus, BellRing, ShoppingBag, Tag, FileUp, Building2, Send, ShieldCheck, Clock, BookMarked, MessagesSquare, UserCog, KeyRound, CalendarDays, Thermometer, Palette, MonitorSmartphone, ScanText, GraduationCap, Megaphone, CalendarRange,
+  CornerDownLeft, User, Plus, BellRing, ShoppingBag, Tag, FileUp, Building2, Send, ShieldCheck, Clock, BookMarked, MessagesSquare, UserCog, KeyRound, CalendarDays, Thermometer, Palette, MonitorSmartphone, ScanText, GraduationCap, Megaphone, CalendarRange, LockKeyhole,
 } from 'lucide-react';
 import { useStore, makePassword, put, audit, isLowStock, expiryCounts } from './store.jsx';
-import { askText, toast } from './feedback.jsx';
+import { askText, ask, toast } from './feedback.jsx';
+import { hasPin, setPin, clearPin } from './offline.js';
 import Auth from './pages/Auth.jsx';
 import { BrandLogo } from './logo.jsx';
 import { unreadCount } from './pages/Chat.jsx';
@@ -322,6 +323,23 @@ function Shell() {
       return toast('Password changed');
     }
   };
+  // Quick device PIN (0.2): a per-device offline shortcut, stored only on this device, never synced.
+  const [pinSet, setPinSet] = useState(() => hasPin(syncCfg?.tenant, user.id));
+  const manageDevicePin = async () => {
+    const tenant = syncCfg?.tenant;
+    if (hasPin(tenant, user.id)) {
+      if (await ask({ title: 'Remove this device’s quick PIN?', message: 'You will sign in with your full password on this device. You can set a new PIN any time.', confirmText: 'Remove PIN', danger: true })) {
+        clearPin(tenant, user.id); setPinSet(false); toast('PIN removed from this device');
+      }
+      return;
+    }
+    const pin = await askText({ title: 'Set a quick PIN for this device', message: 'A 4–8 digit PIN signs you in on this device, even offline, without typing your full password. It is kept on this device only, never synced.', type: 'password', minLength: 4, confirmText: 'Next' });
+    if (!pin) return;
+    const again = await askText({ title: 'Type the PIN again', type: 'password', minLength: 4, confirmText: 'Save PIN' });
+    if (again === null) return;
+    if (again !== pin) return toast('The two PINs did not match. Try again.', 'error');
+    try { await setPin(tenant, user.id, pin); setPinSet(true); toast('Quick PIN set for this device'); } catch (e) { toast(e.message, 'error'); }
+  };
   const asked = useRef(false);
   useEffect(() => { if (me?.mustChangePassword && !asked.current) { asked.current = true; changePassword(true); } }, [me?.mustChangePassword]); // eslint-disable-line react-hooks/exhaustive-deps
   const initials = user.name.split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
@@ -350,6 +368,7 @@ function Shell() {
           <span className="avatar">{initials}</span>
           <div className="grow"><strong>{user.name}</strong><small>{user.role}</small></div>
           <button className="icon-btn" title="Change my password" onClick={() => changePassword(false)}><KeyRound size={17} /></button>
+          <button className={'icon-btn' + (pinSet ? ' text-ok' : '')} title={pinSet ? 'Quick PIN is set for this device' : 'Set a quick PIN for this device'} onClick={manageDevicePin}><LockKeyhole size={17} /></button>
           {syncCfg?.key?.startsWith('u.') && <button className={'icon-btn' + (me?.twoFactor ? ' text-ok' : '')} title={me?.twoFactor ? 'Two-step sign-in is on' : 'Two-step sign-in'} onClick={() => setTwoStepOpen(true)}><ShieldCheck size={17} /></button>}
           <button className="icon-btn" title="Log out" onClick={() => setUser(null)}><LogOut size={17} /></button>
         </div>

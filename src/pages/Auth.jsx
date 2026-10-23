@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Zap, WifiOff, MonitorSmartphone, ShieldCheck, Mail, MessageSquareText, MessageCircle, ArrowLeft, Crown, Building2, LogIn } from 'lucide-react';
-import { useStore, verifyPassword, makePassword, put, normalizePhone } from '../store.jsx';
+import { useStore, verifyPassword, normalizePhone } from '../store.jsx';
+import { rememberOffline, verifyOffline, hasPin, verifyPin } from '../offline.js';
 import { Logo, BrandLogo } from '../logo.jsx';
 import { toast } from '../feedback.jsx';
 import { cloudLogin, cloudUrl, forgotPassword, resetPassword, whatsappLink, pharmacyInfo, googleClient, resetWithGoogle, DEFAULT_CLOUD } from '../cloud.js';
@@ -19,7 +20,7 @@ const networkFailure = (e) => e instanceof TypeError || /took too long|No intern
  * The first sign-in on a device needs the internet and downloads the pharmacy; after that it also works offline.
  */
 export default function Auth() {
-  const { db, update, setUser, syncCfg, linkPharmacy } = useStore();
+  const { db, setUser, syncCfg, linkPharmacy } = useStore();
   const url = cloudUrl();
   const slug = pharmacySlugFromUrl();
   const [pharmacy, setPharmacy] = useState(() => (syncCfg.tenant && (!slug || slug === syncCfg.slug) ? { name: syncCfg.pharmacy || db.settings.name, slug: syncCfg.slug, logo: db.license?.[0]?.branding?.logo } : null));
@@ -40,6 +41,8 @@ export default function Auth() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [forgot, setForgot] = useState(() => (location.hash.startsWith('#/forgot') ? { stage: 'ask' } : null)); // { stage: 'ask' | 'code', channel, hint }
+  const [pinMode, setPinMode] = useState(false); // entering a quick device PIN instead of the password
+  const [pin, setPin] = useState('');
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
   const run = async (fn) => { setError(''); setBusy(true); try { await fn(); } catch (e) { setError(e.message); } finally { setBusy(false); } };
 
@@ -73,9 +76,12 @@ export default function Auth() {
       }
     }
     if (!local || !sameStore) throw new Error('No internet connection. The first sign-in on a device needs the internet to download your pharmacy.');
-    if (!(await verifyPassword(local, form.password))) throw new Error('Wrong email or password.');
+    // Offline: verify against this device's own verifier. A device synced before 0.2 may still carry the old synced
+    // hash, so accept that too and let verifyOffline upgrade it to a device-salted verifier for next time.
+    const offlineOk = (await verifyOffline(syncCfg.tenant, local.id, form.password)) || (await verifyPassword(local, form.password));
+    if (!offlineOk) throw new Error('Wrong email or password.');
     if (local.twoFactor && !trusted(syncCfg.tenant, local.id)) throw new Error('You use two-step sign-in, and this device has not been signed in with your code yet. Connect to the internet once to sign in here.');
-    if (local.algo !== 'pbkdf2') { const pw = await makePassword(form.password); update((d) => { put(d, 'users', { ...local, ...pw }); }); }
+    await rememberOffline(syncCfg.tenant, local.id, form.password); // keep this device able to sign in offline next time
     setUser({ id: local.id, name: local.name, email: local.email, role: local.role }, { remember });
   }); };
 
@@ -96,6 +102,7 @@ export default function Auth() {
 
   const finish = async (r, email) => {
     await linkPharmacy({ url, token: r.token, account: email, tenant: r.tenant, slug: r.slug, pharmacy: r.pharmacy });
+    await rememberOffline(r.tenant, r.user.id, form.password); // this device can now sign this person in offline
     if (twoStep) try { localStorage.setItem(trustKey(r.tenant, r.user.id), '1'); } catch { /* storage blocked */ }
     setTwoStep(null);
     if (isWeb && r.slug && slug !== r.slug) history.replaceState(null, '', '/' + r.slug + location.hash);
@@ -109,6 +116,22 @@ export default function Auth() {
     if (r.twoFactor) { setTwoStep({ tenant: c.code }); setTotp(''); return; }
     await finish(r, email);
   });
+  // The person whose quick PIN this device holds for the typed email/username (offline sign-in shortcut).
+  const pinUser = (() => {
+    const e = form.email.trim().toLowerCase();
+    if (!e) return null;
+    const u = db.users.find((x) => !x.disabled && (x.email === e || (x.username || '').toLowerCase() === e));
+    return u && hasPin(syncCfg.tenant, u.id) ? u : null;
+  })();
+  const signInPin = (e) => { e.preventDefault(); run(async () => {
+    if (!pinUser) throw new Error('No PIN is set on this device for that account.');
+    if (pinUser.twoFactor && !trusted(syncCfg.tenant, pinUser.id)) throw new Error('You use two-step sign-in, and this device has not been signed in with your code yet. Use your password.');
+    const r = await verifyPin(syncCfg.tenant, pinUser.id, pin);
+    if (!r.ok) throw new Error(r.left > 0 ? `Wrong PIN. ${r.left} ${r.left === 1 ? 'try' : 'tries'} left.` : 'Too many wrong PINs. Sign in with your password.');
+    setPin(''); setPinMode(false);
+    setUser({ id: pinUser.id, name: pinUser.name, email: pinUser.email, role: pinUser.role }, { remember });
+  }); };
+
   const codeField = (
     <label className="field"><span>Pharmacy web address or code</span>
       <input value={form.code} onChange={set('code')} placeholder="e.g. citycare-ntinda" autoCapitalize="none" spellCheck={false} /></label>
@@ -188,7 +211,15 @@ export default function Auth() {
               <button className="btn primary block" disabled={busy || totp.length !== 6}><LogIn size={16} />{busy ? 'Checking…' : 'Sign in'}</button>
               <p className="muted small center">Lost your phone? Your administrator can switch two-step sign-in off for you (Users &amp; Roles).</p>
             </form>
-          ) : forgot ? forgotPanel() : (
+          ) : forgot ? forgotPanel() : pinMode ? (
+            <form onSubmit={signInPin} className="stack">
+              <button type="button" className="btn sm ghost" style={{ alignSelf: 'flex-start' }} onClick={() => { setPinMode(false); setPin(''); setError(''); }} disabled={busy}><ArrowLeft size={14} />Use password instead</button>
+              <div className="center twostep-head"><ShieldCheck size={26} /><strong>Quick PIN</strong><span className="muted small">Enter the PIN set on this device{pinUser?.name ? ` for ${pinUser.name}` : ''}</span></div>
+              <input className="otp-input" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 8))} inputMode="numeric" autoComplete="off" placeholder="PIN" autoFocus aria-label="Device PIN" required minLength={4} />
+              {error && <div className="error" role="alert">{error}</div>}
+              <button className="btn primary block" disabled={busy || pin.length < 4}><LogIn size={16} />{busy ? 'Checking…' : 'Sign in'}</button>
+            </form>
+          ) : (
             <form onSubmit={signIn} className="stack">
               {pharmacy?.error ? <div className="error" role="alert">{pharmacy.error}</div> : <p className="muted center auth-title"><Building2 size={15} /> {title}</p>}
               <label className="field"><span>Email or username</span><input type="text" inputMode="email" autoComplete="username" autoCapitalize="none" spellCheck={false} value={form.email} onChange={set('email')} required autoFocus={!form.email} /></label>
@@ -201,6 +232,7 @@ export default function Auth() {
               {remember && <p className="muted small remember-note">Stays signed in on this device. Leave it off on a shared computer.</p>}
               {error && <div className="error" role="alert">{error}</div>}
               <button className="btn primary block" disabled={busy}><LogIn size={16} />{busy ? 'Signing in…' : 'Sign in'}</button>
+              {pinUser && <button type="button" className="btn ghost block" onClick={() => { setPinMode(true); setError(''); }}><ShieldCheck size={16} />Use the PIN for this device</button>}
             </form>
           )}
         </div>

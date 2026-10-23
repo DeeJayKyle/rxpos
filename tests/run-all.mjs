@@ -17,6 +17,7 @@ const SUITES = [
   ['refill rules (unit)', 'unit-rxrules.mjs', []],
   ['crash scrub (unit)', 'unit-scrub.mjs', []],
   ['idle promote (unit)', 'unit-promote.mjs', []],
+  ['offline sign-in (unit)', 'unit-offline.mjs', []],
   ['theme contrast', 'contrast-test.mjs', []],
   ['owner sign-in', 'owner-auth-test.mjs', []],
   ['cloud rules', 'v14-api.mjs', []],
@@ -39,6 +40,8 @@ const SUITES = [
   ['file uploads', 'v24-files.mjs', []],
   ['security headers', 'v25-headers.mjs', []],
   ['rate limits', 'v26-ratelimit.mjs', []],
+  ['sync hides secrets', 'v27-secrets.mjs', []],
+  ['offline sign-in & PIN', 'v28-pin.mjs', ['.output/v28']],
   // the Windows app's self-update needs a screen: Windows itself, or xvfb-run on Linux
   ...(process.platform === 'win32' || fs.existsSync('/usr/bin/xvfb-run') ? [['windows self-update', 'electron-update.mjs', []]] : []),
 ];

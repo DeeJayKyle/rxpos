@@ -54,6 +54,10 @@ setInterval(backup, 6 * 3600e3);
 
 // ---- auth: the sync key (full access) or a staff sign-in token (same scheme as the cloud worker) ----
 const ADMIN_ONLY = new Set(['users', 'settings', 'branches']);
+// Password secrets stay on the hub and are never sent to a device (0.2); a device verifies its own users offline
+// with a local device-bound verifier (src/offline.js), not with these fields.
+const USER_SECRETS = ['hash', 'salt', 'algo', 'iter'];
+const stripUserSecrets = (t, rec) => { if (t !== 'users' || !rec) return rec; const o = { ...rec }; for (const f of USER_SECRETS) delete o[f]; return o; };
 const b64url = (buf) => Buffer.from(buf).toString('base64url');
 const sign = (body) => crypto.createHmac('sha256', 'token:' + KEY).update(body).digest('base64url');
 
@@ -89,7 +93,10 @@ function sync({ deviceId, since = 0, changes = [] }, who) {
     const k = ch.t + '|' + ch.id;
     const cur = state.rows[k];
     if (cur && cur.at >= ch.at) continue; // last writer wins
-    state.rows[k] = { t: ch.t, id: ch.id, rec: ch.deleted ? undefined : ch.rec, deleted: !!ch.deleted, at: ch.at, seq: ++state.seq, origin: deviceId };
+    let rec = ch.deleted ? undefined : ch.rec;
+    // a device no longer holds password secrets, so a user edit arrives without them: keep what the hub stores (0.2)
+    if (ch.t === 'users' && rec && !rec.hash && cur?.rec) { rec = { ...rec }; for (const f of USER_SECRETS) if (cur.rec[f] !== undefined) rec[f] = cur.rec[f]; }
+    state.rows[k] = { t: ch.t, id: ch.id, rec, deleted: !!ch.deleted, at: ch.at, seq: ++state.seq, origin: deviceId };
     applied++;
   }
   if (applied) save();
@@ -99,7 +106,7 @@ function sync({ deviceId, since = 0, changes = [] }, who) {
   const page = out.slice(0, PAGE);
   // Cursor: everything up to here has been delivered (rows from this device are skipped, not missed)
   const cursor = out.length > PAGE ? page[page.length - 1].seq : state.seq;
-  return { changes: page.map(({ t, id, rec, deleted, at }) => ({ t, id, rec, deleted, at })), cursor, more: out.length > PAGE, applied };
+  return { changes: page.map(({ t, id, rec, deleted, at }) => ({ t, id, rec: stripUserSecrets(t, rec), deleted, at })), cursor, more: out.length > PAGE, applied };
 }
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.ico': 'image/x-icon' };
