@@ -150,7 +150,9 @@ const sha256 = async (s) => hex(await crypto.subtle.digest('SHA-256', te.encode(
 const randomKey = (n = 28) => b64url(crypto.getRandomValues(new Uint8Array(32))).replace(/[-_]/g, '').slice(0, n);
 const safeEqual = (a, b) => { const x = te.encode(String(a)), y = te.encode(String(b)); return x.byteLength === y.byteLength && crypto.subtle.timingSafeEqual(x, y); };
 // Refuses to build a signing key without a strong secret, so tokens can never be forged against a missing/weak one.
-const hmacKey = (env) => crypto.subtle.importKey('raw', te.encode(purposeLabel('token') + tokenSecret(env)), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify']);
+// The purpose is mixed into the key so a signature for one use (a sign-in token) can't be replayed as another
+// (a live-connection ticket). (1.2)
+const hmacKey = (env, purpose = 'token') => crypto.subtle.importKey('raw', te.encode(purposeLabel(purpose) + tokenSecret(env)), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify']);
 
 async function signToken(env, payload) {
   const body = b64url(te.encode(JSON.stringify(payload)));
@@ -161,6 +163,22 @@ async function readToken(env, token) {
   const [, body, sig] = token.split('.');
   if (!body || !sig) return null;
   if (!(await crypto.subtle.verify('HMAC', await hmacKey(env), fromB64url(sig), te.encode(body)))) return null;
+  const p = JSON.parse(new TextDecoder().decode(fromB64url(body)));
+  return p.exp > Date.now() ? p : null;
+}
+
+// Short-lived ticket for the live WebSocket (1.2): the long-lived sign-in token stays out of the ws:// URL (and so out
+// of proxy/server access logs and history). Signed with the 'live' key, valid for two minutes.
+const LIVE_TICKET_MS = 120000;
+async function signTicket(env, payload) {
+  const body = b64url(te.encode(JSON.stringify(payload)));
+  const sig = await crypto.subtle.sign('HMAC', await hmacKey(env, 'live'), te.encode(body));
+  return body + '.' + b64url(sig);
+}
+async function readTicket(env, ticket) {
+  const [body, sig] = String(ticket || '').split('.');
+  if (!body || !sig) return null;
+  if (!(await crypto.subtle.verify('HMAC', await hmacKey(env, 'live'), fromB64url(sig), te.encode(body)))) return null;
   const p = JSON.parse(new TextDecoder().decode(fromB64url(body)));
   return p.exp > Date.now() ? p : null;
 }
@@ -217,7 +235,11 @@ async function authenticate(req, env) {
   // signed out at once, and a device from a deleted pharmacy can't push its old data into a new one with the same address
   if (who.uid) {
     const u = await env.DB.prepare('SELECT rec FROM records WHERE tenant = ?1 AND k = ?2 AND deleted = 0').bind(who.tenant, 'users|' + who.uid).first();
-    if (!u || JSON.parse(u.rec || '{}').disabled) return null;
+    const rec = u ? JSON.parse(u.rec || '{}') : null;
+    if (!rec || rec.disabled) return null;
+    // 1.2 trust the role on the user record, not the one baked into the token: a demotion takes effect on the next
+    // request instead of lingering until the token expires. (This record is already read for the disabled check.)
+    if (rec.role) who.role = rec.role;
   }
   return { ...who, tenantRow: t };
 }
@@ -1229,8 +1251,11 @@ export default {
       }
       if (path === '/api/live') {
         if (!env.HUB) return json({ error: 'Live connection not available' }, 503);
-        const fake = new Request(req.url, { headers: { Authorization: 'Bearer ' + (url.searchParams.get('token') || '') } });
-        const who = await authenticate(fake, env);
+        // Prefer a short-lived ticket (1.2); fall back to the bearer token for devices on an older build.
+        const ticket = url.searchParams.get('ticket');
+        let who = null;
+        if (ticket) { const p = await readTicket(env, ticket).catch(() => null); if (p) who = { tenant: p.tn, uid: p.sub, name: p.name }; }
+        else { const fake = new Request(req.url, { headers: { Authorization: 'Bearer ' + (url.searchParams.get('token') || '') } }); who = await authenticate(fake, env); }
         if (!who?.uid) return json({ error: 'Not signed in' }, 401);
         const u = new URL('https://hub/live');
         u.search = new URLSearchParams({ uid: who.uid, name: who.name || '', device: url.searchParams.get('device') || '' }).toString();
@@ -1251,6 +1276,11 @@ export default {
       const penv = providerEnv(env, who.tenantRow);
 
       if (path === '/api/sync' && req.method === 'POST') return await sync(env, body, who);
+      // A short-lived ticket to open the live WebSocket without putting the sign-in token in the URL (1.2)
+      if (path === '/api/live-ticket' && req.method === 'POST') {
+        if (!who.uid) return json({ error: 'Not available for this connection' }, 400);
+        return json({ ticket: await signTicket(env, { sub: who.uid, tn: who.tenant, name: who.name || '', exp: Date.now() + LIVE_TICKET_MS }) });
+      }
       if (path === '/api/config') return json({ tenant: who.tenant, slug: who.tenantRow.slug || who.tenant, pharmacy: who.tenantRow.name, mtn: mtn.enabled(penv), airtel: airtel.enabled(penv), sms: !!(penv.AT_USERNAME && penv.AT_API_KEY), email: !!(env.BREVO_API_KEY && env.BREVO_SENDER_EMAIL), mtnEnv: penv.MTN_ENV || 'sandbox', airtelEnv: penv.AIRTEL_ENV || 'uat', role: who.role });
       // Crash reports from this pharmacy's devices (src/crash.js): the same error is one row with a count
       if (path === '/api/errors' && req.method === 'POST') {

@@ -64,6 +64,18 @@ check('an admin can still edit an admin', r.applied === 1 && r.refused === 0, JS
 r = await push(alTok, 'dev-al3', [{ t: 'users', id: 'u-newadmin', at: now(), rec: { name: 'Sneaky Admin', email: 'sneak@test.rx', role: 'admin' } }]);
 check('0.5 a pharmacy admin cannot create another admin', r.applied === 0 && r.refused === 1, JSON.stringify({ a: r.applied, ref: r.refused }));
 
+// 9) 1.2 a role change takes effect on an already-issued token: demote the manager to cashier (loses users.manage),
+// then the manager's EXISTING token may no longer edit another user — the role is read from the record, not the token.
+await push(alTok, 'dev-al4', [{ t: 'users', id: meg.id, at: now(), rec: { ...meg, role: 'cashier' } }]);
+r = await push(megTok, 'dev-meg2', [{ t: 'users', id: cax.id, at: now(), rec: { ...cax, name: 'Cax Again' } }]);
+check('1.2 a demoted user’s existing token loses the old role’s access', r.applied === 0 && r.refused === 1, JSON.stringify({ a: r.applied, ref: r.refused }));
+
+// 10) 1.2 the live WebSocket authenticates with a short-lived ticket, not the long-lived sign-in token in the URL
+const lt = await api('/api/live-ticket', {}, alTok);
+check('1.2 a signed-in device is issued a live-connection ticket', !!lt.ticket && lt.ticket !== alTok, JSON.stringify(Object.keys(lt)));
+const lt0 = await api('/api/live-ticket', {});
+check('1.2 a live ticket needs a signed-in device', lt0.status === 401);
+
 await owner('/tenants/' + tid + '/delete', { confirm: slug });
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

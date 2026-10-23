@@ -27,11 +27,19 @@ export function connectLive(cfg) {
   cfgKey = key;
   if (!key) return;
   wanted = true;
-  const open = () => {
+  const open = async () => {
     clearTimeout(timer); timer = null;
     if (!wanted) return;
     if (!navigator.onLine) { timer = setTimeout(open, 5000); return; }
-    const u = `${liveBase(cfg.url)}/api/live?token=${encodeURIComponent(cfg.key)}&device=${encodeURIComponent(cfg.deviceId || '')}`;
+    // Open with a short-lived ticket so the long-lived sign-in token never appears in the ws:// URL (1.2).
+    // An older cloud without the ticket endpoint still works: fall back to the token.
+    let auth = `token=${encodeURIComponent(cfg.key)}`;
+    try {
+      const r = await fetch(`${cfg.url}/api/live-ticket`, { method: 'POST', headers: { Authorization: 'Bearer ' + cfg.key } });
+      if (r.ok) { const j = await r.json().catch(() => ({})); if (j.ticket) auth = `ticket=${encodeURIComponent(j.ticket)}`; }
+    } catch { /* offline or old cloud: use the token below */ }
+    if (!wanted) return;
+    const u = `${liveBase(cfg.url)}/api/live?${auth}&device=${encodeURIComponent(cfg.deviceId || '')}`;
     let s;
     try { s = new WebSocket(u); } catch { timer = setTimeout(open, 10000); return; }
     ws = s;
