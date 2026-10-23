@@ -562,20 +562,22 @@ async function sync(env, body, who) {
 
   // The page of changes and the latest sequence number are read in one transaction: one round trip to the database
   // instead of two, and both see the same moment (a record saved in between can't be skipped)
-  const [pageRes, maxRes] = await db.batch([
+  const [pageRes, maxRes, epochRes] = await db.batch([
     db.prepare('SELECT t, id, rec, deleted, at, seq FROM records WHERE tenant = ?1 AND seq > ?2 AND origin IS NOT ?3 ORDER BY seq LIMIT ?4')
       .bind(tenant, Number(since) || 0, deviceId, PAGE + 1),
     db.prepare('SELECT MAX(seq) m FROM records WHERE tenant = ?1').bind(tenant),
+    db.prepare("SELECT v FROM owner_config WHERE k = 'epoch'"), // 1.4 database epoch (changes on a restore)
   ], 'read');
   const results = pageRes.results || [];
   const maxSeq = maxRes.results?.[0]?.m;
+  const epoch = epochRes.results?.[0]?.v || '0';
   const more = results.length > PAGE;
   const page = more ? results.slice(0, PAGE) : results;
   const cursor = more ? page[page.length - 1].seq : Math.max(maxSeq || 0, Number(since) || 0);
   await notified;
   // Build the response by hand so records stored as JSON text are not parsed and re-serialised (keeps CPU low)
   const items = page.map((r) => `{"t":${JSON.stringify(r.t)},"id":${JSON.stringify(r.id)},"at":${JSON.stringify(r.at)},"deleted":${r.deleted ? 'true' : 'false'},"rec":${stripUserSecrets(r.t, r.rec)}}`);
-  return json(`{"changes":[${items.join(',')}],"cursor":${cursor},"more":${more},"applied":${applied},"refused":${refused},"tenant":${JSON.stringify(tenant)}}`);
+  return json(`{"changes":[${items.join(',')}],"cursor":${cursor},"more":${more},"applied":${applied},"refused":${refused},"epoch":${JSON.stringify(epoch)},"tenant":${JSON.stringify(tenant)}}`);
 }
 
 // ---------- Mobile Money (per pharmacy) ----------

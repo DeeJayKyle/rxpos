@@ -75,15 +75,20 @@ export function createSync({ getDb, getCfg, saveCfg, applyRemote, onStatus }) {
       const batches = [];
       for (let i = 0; i < changes.length; i += PUSH_BATCH) batches.push(changes.slice(i, i + PUSH_BATCH));
       let cursor = cfg.cursor || 0, sent = 0, pulled = 0;
+      let epoch = cfg.epoch;
       for (;;) {
         const r = await post(cfg.url, cfg.key, { deviceId: cfg.deviceId, since: cursor, changes: batches[sent] || [] });
         sent++;
+        // 1.4 the cloud was restored from a backup: its database epoch changed, so re-pull everything from the start
+        // and merge (last-writer-wins). Restored rows keep their old sequence numbers, below this device's cursor.
+        if (r.epoch !== undefined && epoch !== undefined && r.epoch !== epoch) { epoch = r.epoch; cursor = 0; continue; }
+        epoch = r.epoch ?? epoch;
         if (r.changes.length) { applyRemote(r.changes); pulled += r.changes.length; }
         cursor = r.cursor;
         if (sent >= batches.length && !r.more) break;
         onStatus({ state: 'syncing', first: !cfg.lastSync, progress: batches.length > 1 && sent < batches.length ? `Uploading ${Math.min(sent * PUSH_BATCH, changes.length)} of ${changes.length}` : `Downloading… ${pulled.toLocaleString()} records` });
       }
-      const next = { ...getCfg(), pushedAt: started, cursor, lastSync: now(), lastError: '' };
+      const next = { ...getCfg(), pushedAt: started, cursor, epoch, lastSync: now(), lastError: '' };
       saveCfg(next);
       result = { state: 'ok', lastSync: next.lastSync, pushed: changes.length, pulled };
     } catch (e) {

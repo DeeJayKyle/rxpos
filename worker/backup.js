@@ -64,5 +64,8 @@ export async function restore(env, body, json) {
     stmts = rows.map((c) => db.prepare('INSERT OR REPLACE INTO file_chunks (tenant, id, n, data) VALUES (?1, ?2, ?3, ?4)').bind(c.tenant, c.id, c.n, unb64(c.data)));
   } else return json({ error: 'Unknown part' }, 400);
   for (let i = 0; i < stmts.length; i += 100) await db.batch(stmts.slice(i, i + 100));
+  // 1.4 restored rows carry their old seq, below device cursors, so devices would never pull them. Bump the database
+  // epoch: every device sees it change on its next sync and re-pulls from the start, then merges (last-writer-wins).
+  await db.prepare("INSERT INTO owner_config (k, v) VALUES ('epoch', ?1) ON CONFLICT(k) DO UPDATE SET v = ?1").bind(String(Date.now())).run();
   return json({ ok: true, restored: stmts.length });
 }

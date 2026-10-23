@@ -47,6 +47,7 @@ const SUITES = [
   ['offline sign-in & PIN', 'v28-pin.mjs', ['.output/v28']],
   ['append-only tables', 'v29-immutable.mjs', []],
   ['pay & sms gated', 'v30-paysms.mjs', []],
+  ['restore epoch', 'v31-restore.mjs', []],
   // the Windows app's self-update needs a screen: Windows itself, or xvfb-run on Linux
   ...(process.platform === 'win32' || fs.existsSync('/usr/bin/xvfb-run') ? [['windows self-update', 'electron-update.mjs', []]] : []),
 ];
