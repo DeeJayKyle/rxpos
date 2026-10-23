@@ -12,5 +12,16 @@ for (const t of THEMES) {
   for (const [n, x, y] of pairs) { const r = contrast(x, y); check(`${t.name}: ${n}`, r >= 4.5, r.toFixed(2)); }
 }
 console.log(`PASS  ${THEMES.length} themes checked`);
+
+// Status colours (1.10): the fixed light-theme status inks must read on white and on their soft background.
+// (Values mirror src/styles.css :root — keep them in step.)
+const WHITE = '#ffffff';
+const STATUS = [
+  ['ok on white', '#047857', WHITE], ['ok on ok-soft', '#047857', '#d1fae5'],
+  ['danger on white', '#be123c', WHITE], ['danger on danger-soft', '#be123c', '#ffe4e6'],
+  ['warn on white', '#c2410c', WHITE], ['warn on warn-soft', '#c2410c', '#ffedd5'],
+];
+for (const [n, x, y] of STATUS) { const r = contrast(x, y); check(`status: ${n}`, r >= 4.5, r.toFixed(2)); }
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

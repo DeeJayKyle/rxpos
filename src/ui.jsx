@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useId } from 'react';
 import { useLocation } from 'react-router-dom';
 import { X, Search, Download, Plus, Pencil, Trash2, Inbox, Lightbulb, TrendingUp, TrendingDown, FileDown, Loader2 } from 'lucide-react';
 import { pagePdf, receiptPdf } from './pdf.js';
@@ -26,10 +26,13 @@ export function Modal({ title, onClose, children, wide }) {
 }
 
 export function Field({ f, value, onChange }) {
-  const common = { id: f.key, required: f.required, value: value ?? '', onChange: (e) => onChange(e.target.value), placeholder: f.placeholder, autoFocus: f.autoFocus };
+  // A unique id per field instance (1.10): f.key alone collides when two forms on a page share a key, which breaks
+  // the label-to-input link and aria wiring.
+  const id = useId();
+  const common = { id, required: f.required, value: value ?? '', onChange: (e) => onChange(e.target.value), placeholder: f.placeholder, autoFocus: f.autoFocus };
   let input;
   if (f.type === 'checkbox')
-    input = <input id={f.key} type="checkbox" autoFocus={f.autoFocus} checked={!!value} onChange={(e) => onChange(e.target.checked)} />;
+    input = <input id={id} type="checkbox" autoFocus={f.autoFocus} checked={!!value} onChange={(e) => onChange(e.target.checked)} />;
   else if (f.type === 'select')
     input = (
       <select {...common}>
@@ -40,7 +43,7 @@ export function Field({ f, value, onChange }) {
   else if (f.type === 'textarea') input = <textarea rows={3} {...common} />;
   else input = <input type={f.type || 'text'} step={f.type === 'number' ? 'any' : undefined} min={f.type === 'number' ? f.min ?? 0 : undefined} {...common} />;
   return (
-    <label className={'field' + (f.type === 'checkbox' ? ' check' : '') + (f.full ? ' full' : '')} htmlFor={f.key}>
+    <label className={'field' + (f.type === 'checkbox' ? ' check' : '') + (f.full ? ' full' : '')} htmlFor={id}>
       <span>{f.label}{f.required && <b className="text-danger"> *</b>}</span>
       {input}
     </label>

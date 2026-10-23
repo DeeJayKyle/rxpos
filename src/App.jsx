@@ -289,6 +289,8 @@ function Shell() {
   useEffect(() => setDrawer(false), [location.pathname]);
   useEffect(() => {
     const onKey = (e) => {
+      // 1.10 don't fire global navigation/command shortcuts while a dialog or modal is open
+      if (document.querySelector('.modal-bg')) return;
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); setPalette(true); }
       else if (SHORTCUTS[e.key]) { e.preventDefault(); navigate(SHORTCUTS[e.key]); }
     };

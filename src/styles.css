@@ -16,11 +16,11 @@
   --accent-grad: linear-gradient(135deg, #0f766e 0%, #0e7490 100%);
   --on-accent: #ffffff;
   --primary-text: #0f766e;
-  --danger: #e11d48;
+  --danger: #be123c; /* darkened from #e11d48 so "danger" text meets WCAG AA on white and on --danger-soft (1.10) */
   --danger-soft: #ffe4e6;
   --warn: #c2410c;
   --warn-soft: #ffedd5;
-  --ok: #059669;
+  --ok: #047857; /* darkened from #059669 so "ok" text meets WCAG AA on white and on --ok-soft (1.10) */
   --ok-soft: #d1fae5;
   --violet: #7c3aed;
   --violet-soft: #ede9fe;
