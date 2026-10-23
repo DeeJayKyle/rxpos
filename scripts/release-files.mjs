@@ -18,7 +18,7 @@ export function buildInfo(root = process.cwd()) {
   if (!build) build = Math.floor(Date.now() / 1000);
   const d = new Date(build * 1000);
   const pad = (n) => String(n).padStart(2, '0');
-  const label = `1.0 · ${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())} UTC`;
+  const label = `1.1 · ${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())} UTC`;
   return { build, commit, label };
 }
 
