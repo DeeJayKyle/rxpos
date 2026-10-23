@@ -25,6 +25,10 @@ import { uptimeCheck } from './uptime.js';
 import { dailySummaries } from './summary.js';
 import { twoStepDdl, twoStepOf, totpCheck, markUsed, twoStepRoutes } from './twostep.js';
 import { tokenSecret, purposeLabel } from './secret.js';
+import { DEFAULT_ROLES } from '../src/access.js';
+// The built-in roles (cashier, dispenser, pharmacist, manager) live only in the app; they aren't stored as records.
+// The server needs their permissions too, so a permission check doesn't wrongly refuse a built-in role (1.1/1.9).
+const DEFAULT_ROLE_PERMS = Object.fromEntries(DEFAULT_ROLES.map((r) => [r.id, new Set(r.permissions)]));
 
 // Database: Cloudflare D1 (binding DB) by default, or libSQL / Turso when DB_BACKEND = "turso"
 // (secrets TURSO_URL + TURSO_AUTH_TOKEN). The rest of the code doesn't know the difference.
@@ -249,7 +253,9 @@ async function roleCan(env, tenant, role, perm) {
   if (role === 'admin') return true;
   const r = await env.DB.prepare("SELECT rec FROM records WHERE tenant = ?1 AND t = 'roles' AND id = ?2 AND deleted = 0").bind(tenant, role).first();
   const rec = r?.rec ? JSON.parse(r.rec) : null;
-  return !!rec?.permissions?.includes(perm);
+  // A stored (customised) role wins; otherwise fall back to the built-in role's permissions.
+  if (rec?.permissions) return rec.permissions.includes(perm);
+  return DEFAULT_ROLE_PERMS[role]?.has(perm) || false;
 }
 
 /** Write a record from the server (license, password reset, owner actions) so devices pick it up on their next sync. */
@@ -392,6 +398,10 @@ async function sendEmail(env, to, subject, text) {
 }
 
 const RESET_PER_ACCOUNT = 3, RESET_PER_TENANT = 20; // reset codes per hour
+// Payments and SMS (1.9): a sane ceiling and an hourly per-pharmacy cap. Generous for a busy counter; a per-tenant
+// override can come later. resetWindow/bumpReset below are a generic hourly per-key counter, reused here.
+const MAX_PAY_UGX = 20_000_000; // one Mobile Money request
+const PAY_PER_TENANT = 240, SMS_PER_TENANT = 240; // per hour, per pharmacy
 
 /** The running count of reset sends for a key in the current hour window. */
 async function resetWindow(env, k) {
@@ -1307,20 +1317,32 @@ export default {
       if (path.startsWith('/api/ai/') && req.method === 'POST') return await ai(env, path, body, who);
       if (path === '/api/calendar-link') return json({ url: `${url.origin}/api/calendar/${who.tenant}/${await calendarSig(env, who.tenant)}.ics` });
       if (path === '/api/pay/request' && req.method === 'POST') {
+        if (!who.viaKey && !(await roleCan(env, who.tenant, who.role, 'pos.sell'))) return json({ error: 'You are not allowed to take payments.' }, 403); // 1.9
         const p = PROVIDERS[body.provider];
         if (!p?.enabled(penv)) return json({ error: `${body.provider === 'airtel' ? 'Airtel Money' : 'MTN MoMo'} is not set up for this pharmacy yet.` }, 400);
         const amount = Number(body.amount);
         if (!(amount > 0) || !body.phone) return json({ error: 'Phone and amount are required' }, 400);
+        if (amount > MAX_PAY_UGX) return json({ error: 'That amount is above the single-payment limit.' }, 400); // 1.9 cap
+        const w = await resetWindow(env, '__pay__:' + who.tenant); // 1.9 per-pharmacy hourly cap
+        if (w.sent >= PAY_PER_TENANT) return json({ error: 'Too many payment requests right now. Please try again shortly.' }, 429);
+        await bumpReset(env, '__pay__:' + who.tenant, w);
         const ref = await p.request(penv, { phone: String(body.phone).replace(/\D/g, ''), amount, reference: String(body.reference || 'RxPOS'), note: String(body.note || 'RxPOS payment') });
         return json({ ref, provider: body.provider });
       }
       if (path === '/api/pay/status') {
+        if (!who.viaKey && !(await roleCan(env, who.tenant, who.role, 'pos.sell'))) return json({ error: 'You are not allowed to take payments.' }, 403); // 1.9
         const p = PROVIDERS[url.searchParams.get('provider')];
         const ref = url.searchParams.get('ref');
         if (!p || !ref) return json({ error: 'provider and ref required' }, 400);
         return json(await p.status(penv, ref));
       }
-      if (path === '/api/sms' && req.method === 'POST') return await sendSms(penv, body);
+      if (path === '/api/sms' && req.method === 'POST') {
+        if (!who.viaKey && !(await roleCan(env, who.tenant, who.role, 'reminders'))) return json({ error: 'You are not allowed to send messages.' }, 403); // 1.9
+        const w = await resetWindow(env, '__sms__:' + who.tenant); // 1.9 per-pharmacy hourly cap
+        if (w.sent >= SMS_PER_TENANT) return json({ error: 'Too many messages right now. Please try again shortly.' }, 429);
+        await bumpReset(env, '__sms__:' + who.tenant, w);
+        return await sendSms(penv, body);
+      }
       return json({ error: 'Not found' }, 404);
     } catch (e) {
       return json({ error: e.message || 'Server error' }, e.status || 500);
