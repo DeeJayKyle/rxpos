@@ -209,7 +209,7 @@ await A.screenshot({ path: path.join(out, '3-pos.png'), fullPage: true });
 // ---------- self-update (web) ----------
 await go('/settings'); await clickText('.tab', /Data & backup/); await wait(400);
 const ver = await A.evaluate(() => document.querySelector('.card strong')?.innerText || '');
-check('Settings shows the app version (1.0 and the build)', /RxPOS 1\.0 · \d{4}-\d{2}-\d{2}/.test(ver), ver);
+check('Settings shows the app version and the build', /RxPOS 1\.\d · \d{4}-\d{2}-\d{2}/.test(ver), ver);
 const myBuild = await A.evaluate(() => fetch('./version.json').then((r) => r.json()).then((m) => m.build));
 check('the site publishes version.json with the build and a file list', myBuild > 1e9, myBuild);
 const apiVer = await fetch(base + '/api/version').then(async (r) => ({ cors: r.headers.get('access-control-allow-origin'), ...(await r.json()) })).catch((e) => ({ error: e.message }));

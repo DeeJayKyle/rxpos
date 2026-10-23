@@ -45,6 +45,13 @@ const MAIN = 'main';
 const GUARDED = { users: 'users.manage', roles: 'users.manage', settings: 'settings.manage' };
 // Only the RxPOS owner (owner console) may change these: the licence/features and the pharmacy's branches
 const SERVER_ONLY = new Set(['license', 'branches']);
+// Append-only tables (1.1): the server accepts new rows but never an update or a delete, so an audit trail, a stock
+// movement or a controlled-drug entry cannot be rewritten or erased from a device. Corrections are new rows (a
+// reversing movement, a fresh audit line). `tempLogs` and `sales` stay editable — the app has a Delete-reading
+// button and an "Edit past sales" permission, so forcing them append-only would break shipped features.
+const INSERT_ONLY = new Set(['audit', 'movements', 'controlled']);
+const MAX_REC_BYTES = 256 * 1024; // one record's JSON (file chunks are stored elsewhere); rejects absurd payloads
+const MAX_TENANT_RECORDS = 2_000_000; // a safety ceiling per pharmacy so one device can't fill the database
 
 const existingRec = async (db, tenant, t, id) => {
   const row = await db.prepare('SELECT rec FROM records WHERE tenant = ?1 AND k = ?2 AND deleted = 0').bind(tenant, t + '|' + id).first();
@@ -464,9 +471,17 @@ async function sync(env, body, who) {
      ON CONFLICT(tenant, k) DO UPDATE SET rec = excluded.rec, deleted = excluded.deleted, at = excluded.at, origin = excluded.origin, seq = excluded.seq
      WHERE excluded.at > records.at`
   );
+  // Append-only insert (1.1): a new row only — an existing key is left untouched, so an audit/movement/controlled
+  // row can never be overwritten, and a delete of one is refused before we get here.
+  const insertOnly = db.prepare(
+    `INSERT INTO records (tenant, k, t, id, rec, deleted, at, origin, seq)
+     VALUES (?1, ?2, ?3, ?4, ?5, 0, ?6, ?7, (SELECT COALESCE(MAX(seq), 0) + 1 FROM records))
+     ON CONFLICT(tenant, k) DO NOTHING`
+  );
   const allowed = {};
   const stmts = [];
   let refused = 0;
+  let tenantCount = null; // counted once, only if we actually insert new rows (quota guard)
   for (const ch of changes) {
     if (!ch || typeof ch.t !== 'string' || ch.id == null || typeof ch.at !== 'string') continue;
     if (SERVER_ONLY.has(ch.t) && !who.viaKey) { refused++; continue; }
@@ -484,7 +499,24 @@ async function sync(env, body, who) {
       const old = await existingRec(db, tenant, 'users', id);
       if (old) { rec = { ...rec }; for (const f of USER_SECRETS) if (old[f] !== undefined) rec[f] = old[f]; }
     }
-    stmts.push(upsert.bind(tenant, ch.t + '|' + id, ch.t, id, ch.deleted ? null : JSON.stringify(rec ?? null), ch.deleted ? 1 : 0, ch.at, deviceId));
+    // 1.1 append-only tables: refuse any delete or overwrite, and stamp the actor + server time on audit rows so the
+    // trail cannot be back-dated or attributed to someone else from a device.
+    if (INSERT_ONLY.has(ch.t)) {
+      if (ch.deleted) { refused++; continue; }
+      // stamp the real actor + server time on a staff device's audit row; the trusted pharmacy key (owner/enrolment)
+      // keeps the record it sends
+      if (ch.t === 'audit' && rec && !who.viaKey) rec = { ...rec, user: who.name || rec.user || '', date: new Date().toISOString() };
+    }
+    const body = ch.deleted ? null : JSON.stringify(rec ?? null);
+    if (body && body.length > MAX_REC_BYTES) { refused++; continue; } // 1.1 reject an oversized record
+    if (!ch.deleted) { // 1.1 per-tenant record ceiling, counted at most once per request
+      if (tenantCount === null) tenantCount = (await db.prepare('SELECT COUNT(*) n FROM records WHERE tenant = ?1').bind(tenant).first('n')) || 0;
+      if (tenantCount >= MAX_TENANT_RECORDS) { refused++; continue; }
+      tenantCount++;
+    }
+    const k = ch.t + '|' + id;
+    if (INSERT_ONLY.has(ch.t)) stmts.push(insertOnly.bind(tenant, k, ch.t, id, body, ch.at, deviceId));
+    else stmts.push(upsert.bind(tenant, k, ch.t, id, body, ch.deleted ? 1 : 0, ch.at, deviceId));
   }
   let applied = 0;
   if (stmts.length) for (const r of await db.batch(stmts)) applied += r.meta.changes || 0;
