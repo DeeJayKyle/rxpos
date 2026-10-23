@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
     tags: ['v*']
+  pull_request:
+    branches: [main]
   workflow_dispatch:
     inputs:
       release:
@@ -15,6 +17,22 @@ permissions:
   contents: read
 
 jobs:
+  # Fast, browser-free checks on every push and pull request (review Phase 1.8). The full browser/cloud suite
+  # (puppeteer + wrangler + xvfb Electron) is heavier to wire into CI and is tracked as a follow-up.
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Unit tests
+        run: for f in tests/unit-*.mjs; do echo "== $f =="; node "$f" || exit 1; done
+      - name: App builds
+        run: npm run build
+
   windows:
     runs-on: windows-latest
     steps:
@@ -195,7 +213,7 @@ jobs:
   # One release with everything, after all builds: on a version tag push, or a manual run with "release" filled in
   # (the workflow then creates the tag itself at this commit)
   release:
-    needs: [windows, web, android]
+    needs: [unit, windows, web, android]
     permissions:
       contents: write
     if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.release != '')
