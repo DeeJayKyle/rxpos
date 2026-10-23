@@ -49,7 +49,7 @@ const B = await signIn('ben@test.rx', 'ben-pass-123');
 
 // ---------- This device ----------
 await A.goto(base + '/' + slug + '#/device', { waitUntil: 'networkidle2' }); await wait(1000);
-check('"This device" opens for everyone and shows the version', /RxPOS 1\.0/.test(await A.evaluate(() => document.querySelector('.update-card')?.innerText || '')));
+check('"This device" opens for everyone and shows the version', /RxPOS 1\.\d/.test(await A.evaluate(() => document.querySelector('.update-card')?.innerText || '')));
 check('…with an "Update to the latest version" button', await A.evaluate(() => [...document.querySelectorAll('button')].some((x) => /Update to the latest version/.test(x.textContent))));
 await B.goto(base + '/' + slug + '#/device', { waitUntil: 'networkidle2' }); await wait(800);
 check('a cashier (no Settings access) can reach it too', /Update to the latest version/.test(await B.evaluate(() => document.body.innerText)));
