@@ -4,6 +4,7 @@ import { ShoppingCart, Trash2, X, FileText, Printer, AlertTriangle, ScanBarcode,
 import { DrugInfoPanel, genericKey } from './DrugInfo.jsx';
 import { useStore, uid, now, daysUntil, put, move, allocate, audit, normalizePhone, DEFAULT_PAYMENT_METHODS } from '../store.jsx';
 import { CASH } from '../finance.js';
+import { cartSubtotal, taxOf, round } from '../money.js';
 import { Modal, SearchBox, ReceiptPdfButton, PageTip } from '../ui.jsx';
 import { toast, ask } from '../feedback.jsx';
 import { payRequest, payStatus, guessNetwork, cloudConfig, whatsappLink, sendSms } from '../cloud.js';
@@ -173,10 +174,13 @@ export default function POS({ mode = 'retail' }) {
     const packPrice = Number(k.price) || priceOf(p) * size;
     setLine(l.id, { pack: { name: k.name, size, price: packPrice }, price: packPrice / size, qty: size });
   };
-  const subtotal = cart.reduce((a, l) => a + l.price * l.qty, 0);
-  const disc = Math.min(Number(discount) || 0, subtotal);
-  const tax = ((subtotal - disc) * (Number(db.settings.taxRate) || 0)) / 100;
-  const total = subtotal - disc + tax;
+  // Integer-shilling money math (1.5): each line rounds, then they sum, so a pack-split price can't leave a floating
+  // tail on the stored total, and tax rounds once.
+  const money = Number(db.settings.decimals ?? 0);
+  const subtotal = cartSubtotal(cart, money);
+  const disc = Math.min(round(Number(discount) || 0, money), subtotal);
+  const tax = taxOf(subtotal - disc, db.settings.taxRate, { decimals: money });
+  const total = round(subtotal - disc + tax, money);
   const change = (Number(tendered) || 0) - total;
   const customer = db.customers.find((c) => c.id === customerId);
   const items = cart.reduce((a, l) => a + l.qty, 0);

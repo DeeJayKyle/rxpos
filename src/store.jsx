@@ -5,6 +5,7 @@ import { featureSet, permissionsOf } from './access.js';
 import { platformName } from './platform.js';
 import { connectLive, disconnectLive, onLive } from './live.js';
 import { DEFAULT_CLOUD } from './cloud.js';
+import { formatMoney } from './money.js';
 
 const SESSION_KEY = 'pharmapos-session';
 // "Remember me": the sign-in survives closing the app on this device for 30 days (otherwise it ends with the session)
@@ -503,8 +504,8 @@ export function StoreProvider({ children }) {
 
   const fmt = useCallback((n) => {
     const s = db?.settings || {};
-    const dec = Number(s.decimals ?? 0);
-    return `${s.currency || ''} ${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: dec, maximumFractionDigits: dec })}`.trim();
+    // The pharmacy's own locale (default en-UG), not the device's, so grouping/decimals are the same on every device (1.5)
+    return formatMoney(n, { currency: s.currency || '', decimals: Number(s.decimals ?? 0), locale: s.locale || 'en-UG' });
   }, [db?.settings]);
 
   const branch = db?.branches.find((b) => b.id === branchId) || db?.branches[0];

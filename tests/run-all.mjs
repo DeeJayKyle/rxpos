@@ -18,6 +18,7 @@ const SUITES = [
   ['crash scrub (unit)', 'unit-scrub.mjs', []],
   ['idle promote (unit)', 'unit-promote.mjs', []],
   ['offline sign-in (unit)', 'unit-offline.mjs', []],
+  ['money math (unit)', 'unit-money.mjs', []],
   ['theme contrast', 'contrast-test.mjs', []],
   ['owner sign-in', 'owner-auth-test.mjs', []],
   ['cloud rules', 'v14-api.mjs', []],
