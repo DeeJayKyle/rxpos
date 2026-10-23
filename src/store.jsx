@@ -30,15 +30,10 @@ export const loadSnapshot = (date) => idbGet('snap:' + date);
 
 export const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-5);
 export const now = () => new Date().toISOString();
-const pad2 = (n) => String(n).padStart(2, '0');
-/** YYYY-MM-DD of a moment in this device's local time (Uganda is UTC+3, so UTC dates would roll over at 3 am) */
-export const localDate = (d = new Date()) => { const x = new Date(d); return `${x.getFullYear()}-${pad2(x.getMonth() + 1)}-${pad2(x.getDate())}`; };
-export const today = () => localDate();
-/** The local day a record belongs to: plain dates ("2026-10-15") stay as they are, timestamps are converted */
-export const dayOf = (v) => { const s = String(v || ''); return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : s ? localDate(s) : ''; };
-export const monthOf = (v) => dayOf(v).slice(0, 7);
-export const daysUntil = (date) => Math.ceil((new Date(date) - new Date(today())) / 864e5);
-export const daysSince = (date) => Math.floor((Date.now() - new Date(date)) / 864e5);
+// Date helpers live in dates.js (pure, unit-tested); imported for use here and re-exported so existing imports from
+// store.jsx keep working.
+import { localDate, today, dayOf, monthOf, daysUntil, daysSince } from './dates.js';
+export { localDate, today, dayOf, monthOf, daysUntil, daysSince };
 
 // ---------- pricing ----------
 /** Selling price from a cost and a markup (%), rounded to the nearest unit or up to the pharmacy's price step (e.g. 50) */
@@ -187,28 +182,8 @@ export function addBatch(d, { productId, batch, expiry, cost }) {
 export function audit(d, user, action, details = '', branchId = MAIN_BRANCH) {
   put(d, 'audit', { id: uid(), date: now(), user: user?.name || user || '', action, details, branchId });
 }
-/**
- * First-expiry-first-out: split `qty` across batches (sorted by expiry) and return [{batchId, qty, batch, expiry}].
- * Expired batches are skipped unless allowExpired.
- */
-export function allocate(batches, qty, { allowExpired = false } = {}) {
-  const out = [];
-  let left = qty;
-  const ok = (b) => allowExpired || !b.expiry || daysUntil(b.expiry) >= 0;
-  for (const b of batches) {
-    if (left <= 0) break;
-    if (b.qty <= 0 || !ok(b)) continue;
-    const take = Math.min(b.qty, left);
-    out.push({ batchId: b.id, qty: take, batch: b.batch, expiry: b.expiry });
-    left -= take;
-  }
-  // Anything left (stock not yet recorded) is booked against the next sellable batch so totals stay right
-  if (left > 0) {
-    const b = batches.find(ok) || batches[0];
-    out.push({ batchId: b?.id || null, qty: left, batch: b?.batch || '', expiry: b?.expiry || '' });
-  }
-  return out;
-}
+// FEFO allocation lives in fefo.js (pure, unit-tested); re-exported so existing imports from store.jsx keep working.
+export { allocate } from './fefo.js';
 
 // Fixed ids so the same defaults created on two devices merge instead of duplicating
 const FORMS = ['Tablets', 'Capsules', 'Syrups', 'Suspensions', 'Injectables', 'Infusions', 'Creams', 'Ointments', 'Gels', 'Drops', 'Eye Drops', 'Ear Drops', 'Inhalers', 'Sachets', 'Suppositories', 'Pessaries', 'Lotions', 'Powders', 'Devices', 'Surgicals', 'Cosmetics', 'Supplements', 'Sundries', 'Others'];

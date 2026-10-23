@@ -6,7 +6,7 @@ import { useStore, uid, now, daysUntil, put, move, allocate, audit, normalizePho
 import { CASH } from '../finance.js';
 import { cartSubtotal, taxOf, round } from '../money.js';
 import { Modal, SearchBox, ReceiptPdfButton, PageTip } from '../ui.jsx';
-import { toast, ask } from '../feedback.jsx';
+import { toast, ask, askText } from '../feedback.jsx';
 import { payRequest, payStatus, guessNetwork, cloudConfig, whatsappLink, sendSms } from '../cloud.js';
 import { Receipt, receiptText } from './Sales.jsx';
 import { CameraButton, CameraScanner } from '../camscan.jsx';
@@ -126,15 +126,20 @@ export default function POS({ mode = 'retail' }) {
     const sellable = batchesOf(p.id).filter((b) => b.qty > 0 && (!b.expiry || daysUntil(b.expiry) >= 0)).reduce((a, b) => a + b.qty, 0);
     const inCart = cart.find((l) => l.id === p.id);
     let allowExpired = inCart?.allowExpired || false;
+    let expiredReason = inCart?.expiredReason || '';
     if (!allowExpired && (inCart?.qty || 0) >= sellable) {
       if (!(await ask({ title: 'Only expired stock left', message: `All remaining ${p.name} stock has expired. Sell expired stock anyway?`, confirmText: 'Sell expired', danger: true }))) return;
+      // 1.6 selling expired stock needs a recorded reason; it is audited and flags the sale at checkout
+      const reason = await askText({ title: 'Why sell expired stock?', message: 'This is written to the audit log and flags the sale.', confirmText: 'Confirm', minLength: 3 });
+      if (!reason) return;
       allowExpired = true;
+      expiredReason = reason;
     }
     if (inCart && inCart.qty + (inCart.pack?.size || 1) > p.stock) return toast(`Only ${p.stock} ${p.unit || 'units'} of ${p.name} in stock`, 'warn');
     setCart((c) => {
       const line = c.find((l) => l.id === p.id);
-      if (line) return c.map((l) => (l.id === p.id ? { ...l, allowExpired, qty: Math.min(l.qty + (l.pack?.size || 1), p.stock) } : l));
-      return [...c, { id: p.id, name: p.name, price: priceOf(p), cost: p.cost, qty: 1, max: p.stock, rx: p.rx, controlled: !!p.controlled, allowExpired }];
+      if (line) return c.map((l) => (l.id === p.id ? { ...l, allowExpired, expiredReason, qty: Math.min(l.qty + (l.pack?.size || 1), p.stock) } : l));
+      return [...c, { id: p.id, name: p.name, price: priceOf(p), cost: p.cost, qty: 1, max: p.stock, rx: p.rx, controlled: !!p.controlled, allowExpired, expiredReason }];
     });
     setQ('');
     focusSearch();
@@ -261,14 +266,17 @@ export default function POS({ mode = 'retail' }) {
       items, subtotal, discount: disc, tax, total, payment, paid,
       tendered: ptype === 'cash' ? Number(tendered) || total : paid,
       bankId: ptype === 'cash' || credit ? CASH : db.settings.nonCashBankId || CASH,
-      customerId, customerName: customer?.name || 'Walk-in Customer', cashier: user.name, status: 'completed', ...(cart.some(isCd) && cdRef.current ? { controlled: cdRef.current } : {}), ...extra,
+      customerId, customerName: customer?.name || 'Walk-in Customer', cashier: user.name, status: 'completed', ...(cart.some(isCd) && cdRef.current ? { controlled: cdRef.current } : {}), ...(cart.some((l) => l.allowExpired) ? { expiredOverride: true } : {}), ...extra,
     };
+    const expiredLines = cart.filter((l) => l.allowExpired); // 1.6
     update((d) => {
       put(d, 'sales', sale);
       for (const i of items) for (const a of i.alloc) move(d, { productId: i.id, qty: -a.qty, type: 'Sale', ref: sale.number, user: user.name, batchId: a.batchId, branchId });
       const pf = location.state?.proforma;
       if (pf) put(d, 'proformas', { ...d.proformas.find((x) => x.id === pf.id), status: 'Converted', saleNumber: sale.number });
       if (disc > 0) audit(d, user, 'Discount given', `${sale.number}: ${fmt(disc)}`, branchId);
+      // 1.6 an expired-stock sale is recorded in the audit log, with the pharmacist's reason per medicine
+      if (expiredLines.length) audit(d, user, 'Expired stock sold', `${sale.number}: ${expiredLines.map((l) => `${l.name} (${l.expiredReason || 'no reason given'})`).join('; ')}`, branchId);
     });
     window.history.replaceState({}, '');
     setDone(sale);

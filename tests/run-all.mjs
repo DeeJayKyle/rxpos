@@ -19,6 +19,8 @@ const SUITES = [
   ['idle promote (unit)', 'unit-promote.mjs', []],
   ['offline sign-in (unit)', 'unit-offline.mjs', []],
   ['money math (unit)', 'unit-money.mjs', []],
+  ['fefo allocate (unit)', 'unit-fefo.mjs', []],
+  ['date helpers (unit)', 'unit-dates.mjs', []],
   ['theme contrast', 'contrast-test.mjs', []],
   ['owner sign-in', 'owner-auth-test.mjs', []],
   ['cloud rules', 'v14-api.mjs', []],
