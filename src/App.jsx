@@ -175,7 +175,7 @@ function ThemePicker({ theme, setTheme, style, setStyle }) {
           ))}
           <div className="bell-head">Style</div>
           {STYLES.map((s) => (
-            <button key={s.id} className={'theme-item' + (s.id === style ? ' on' : '')} onClick={() => { setStyle(s.id); setOpen(false); }}>
+            <button key={s.id} className={'style-item' + (s.id === style ? ' on' : '')} onClick={() => { setStyle(s.id); setOpen(false); }}>
               <span className={'swatch style-swatch surface-' + s.id} />
               <span className="grow">{s.name}<small className="muted"> · {s.hint}</small></span>
             </button>

@@ -722,9 +722,9 @@ tr.row-bad td { color: var(--danger); }
 .pill.clock .clock-date { color: var(--muted); font-weight: 500; }
 @media (max-width: 700px) { .pill.clock .clock-date { display: none; } }
 .theme-menu { max-height: min(70vh, 520px); overflow: auto; width: 290px; }
-.theme-item { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; border: 0; border-radius: 10px; background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
-.theme-item:hover { background: var(--surface-2); }
-.theme-item.on { background: var(--primary-soft); color: var(--primary-ink); font-weight: 600; }
+.theme-item, .style-item { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; border: 0; border-radius: 10px; background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.theme-item:hover, .style-item:hover { background: var(--surface-2); }
+.theme-item.on, .style-item.on { background: var(--primary-soft); color: var(--primary-ink); font-weight: 600; }
 .swatch { width: 26px; height: 26px; border-radius: 8px; border: 1px solid; flex: none; }
 .theme-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin: 10px 0 14px; }
 .theme-card { display: flex; flex-direction: column; gap: 6px; padding: 8px; border: 1.5px solid var(--border); border-radius: 12px; cursor: pointer; position: relative; }

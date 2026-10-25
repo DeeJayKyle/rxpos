@@ -15,7 +15,7 @@ const clickSignIn = (p) => p.evaluate(() => [...document.querySelectorAll('form 
 const surfaceAttr = (p) => p.evaluate(() => document.documentElement.getAttribute('data-surface'));
 const pillShadow = (p) => p.evaluate(() => { const el = document.querySelector('.pill'); return el ? getComputedStyle(el).boxShadow : ''; });
 const openMenu = (p) => p.evaluate(() => document.querySelector('button[title="Theme"]')?.click());
-const pickStyle = (p, name) => p.evaluate((name) => { const b = [...document.querySelectorAll('.theme-menu .theme-item')].find((x) => x.textContent.includes(name)); b?.click(); return !!b; }, name);
+const pickStyle = (p, name) => p.evaluate((name) => { const b = [...document.querySelectorAll('.theme-menu .style-item')].find((x) => x.textContent.includes(name)); b?.click(); return !!b; }, name);
 
 const STYLES = [['Glassmorphism', 'glass'], ['Claymorphism', 'clay'], ['Skeuomorphism', 'skeuomorphism'], ['Neumorphism', 'neumorphism']];
 
