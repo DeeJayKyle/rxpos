@@ -21,6 +21,7 @@ import { isWeb } from './platform.js';
 import RefreshHost from './refresh.jsx';
 import { startUpdates, onUpdate, applyUpdate, justUpdated, LABEL } from './update.js';
 import { applyTheme, savedTheme, saveTheme, allowedThemes } from './themes.js';
+import { STYLES, applyStyle, savedStyle, saveStyle } from './surface.js';
 import { TwoStepModal } from './twostep.jsx';
 import { setCrashCloud } from './crash.js';
 import { setBadge } from './badges.js';
@@ -138,7 +139,14 @@ function useTheme() {
   return [theme, setTheme];
 }
 
-function ThemePicker({ theme, setTheme }) {
+/** The device's surface style (glass, clay, skeuomorphism, neumorphism, or flat) */
+function useSurface() {
+  const [style, setStyle] = useState(() => savedStyle());
+  useEffect(() => { applyStyle(style); saveStyle(style); }, [style]);
+  return [style, setStyle];
+}
+
+function ThemePicker({ theme, setTheme, style, setStyle }) {
   const { db } = useStore();
   const branding = db.license?.[0]?.branding;
   const list = allowedThemes(branding);
@@ -163,6 +171,13 @@ function ThemePicker({ theme, setTheme }) {
               <span className="swatch" style={{ background: `linear-gradient(135deg, ${t.c.surface} 0 45%, ${t.c.primary} 45% 72%, ${t.c.primary2} 72%)`, borderColor: t.c.borderStrong }} />
               <span className="grow">{t.name}{t.inspired && t.inspired !== t.name && <small className="muted"> · {t.inspired}</small>}</span>
               {t.base === 'dark' ? <Moon size={13} /> : <Sun size={13} />}
+            </button>
+          ))}
+          <div className="bell-head">Style</div>
+          {STYLES.map((s) => (
+            <button key={s.id} className={'theme-item' + (s.id === style ? ' on' : '')} onClick={() => { setStyle(s.id); setOpen(false); }}>
+              <span className={'swatch style-swatch surface-' + s.id} />
+              <span className="grow">{s.name}<small className="muted"> · {s.hint}</small></span>
             </button>
           ))}
         </div>
@@ -260,6 +275,7 @@ function Shell() {
   const navigate = useNavigate();
   const location = useLocation();
   const [theme, setTheme] = useTheme();
+  const [surface, setSurface] = useSurface();
   const [drawer, setDrawer] = useState(false);
   const [palette, setPalette] = useState(false);
   const [twoStepOpen, setTwoStepOpen] = useState(false);
@@ -383,7 +399,7 @@ function Shell() {
           {db.branches.length > 1 && <NavLink to="/branches" className="pill branch-pill" title="Branch this device works as"><Building2 size={14} />{branch?.name}</NavLink>}
           <ClockPill />
           <NotificationBell />
-          <ThemePicker theme={theme} setTheme={setTheme} />
+          <ThemePicker theme={theme} setTheme={setTheme} style={surface} setStyle={setSurface} />
         </header>
         <main className="content">
           <Suspense fallback={<div className="page"><div className="skeleton" /><div className="skeleton" style={{ height: 280 }} /></div>}>

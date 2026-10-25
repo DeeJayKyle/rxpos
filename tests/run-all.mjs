@@ -46,6 +46,7 @@ const SUITES = [
   ['rate limits', 'v26-ratelimit.mjs', []],
   ['sync hides secrets', 'v27-secrets.mjs', []],
   ['offline sign-in & PIN', 'v28-pin.mjs', ['.output/v28']],
+  ['surface styles', 'v32-surface.mjs', ['.output/v32']],
   ['append-only tables', 'v29-immutable.mjs', []],
   ['pay & sms gated', 'v30-paysms.mjs', []],
   ['restore epoch', 'v31-restore.mjs', []],

@@ -1413,3 +1413,143 @@ td .abc { margin-left: 8px; vertical-align: middle; }
 /* Send receipt to customer (POS sale-complete) */
 .send-receipt { display: flex; flex-direction: column; gap: 6px; padding: 12px 0 2px; margin-top: 10px; border-top: 1px dashed var(--border); }
 .disabled-link { opacity: .5; pointer-events: none; }
+
+/* ============================================================================
+   Switchable surface styles (src/surface.js). A look-and-feel layer chosen by
+   the user, applied as [data-surface="…"] on <html>. Only surfaces change
+   (background, border, shadow, blur); colour tokens and text colours stay the
+   active theme's, so contrast holds in every palette and in light and dark.
+   "flat" is the default look and needs no rules. Each style sets its own shadow
+   variables (dark = drop shadow, light = top highlight) and tunes them for the
+   dark base, so shadows stay dark and highlights stay light in both.
+   ============================================================================ */
+
+/* ---- 1. Glassmorphism: frosted, translucent panels over the page gradient ---- */
+[data-surface="glass"] {
+  --glass-bg: color-mix(in srgb, var(--surface) 60%, transparent);
+  --glass-border: color-mix(in srgb, #ffffff 30%, transparent);
+  --glass-shadow: 0 10px 34px -14px rgba(2, 6, 23, .5);
+}
+:root[data-theme="dark"][data-surface="glass"] { --glass-border: color-mix(in srgb, #ffffff 14%, transparent); }
+[data-surface="glass"] .card,
+[data-surface="glass"] .stat,
+[data-surface="glass"] .modal,
+[data-surface="glass"] .bell-menu,
+[data-surface="glass"] .pill,
+[data-surface="glass"] .btn.ghost {
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
+  backdrop-filter: blur(14px) saturate(1.3);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow), inset 0 1px 0 color-mix(in srgb, #ffffff 25%, transparent);
+}
+[data-surface="glass"] input,
+[data-surface="glass"] select,
+[data-surface="glass"] textarea {
+  background: color-mix(in srgb, var(--surface) 45%, transparent);
+  border-color: var(--glass-border);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+
+/* ---- 2. Claymorphism: soft, puffy, rounded shapes ---- */
+[data-surface="clay"] {
+  --clay-r: 22px;
+  --clay-drop: color-mix(in srgb, var(--text) 16%, transparent);
+  --clay-hi: color-mix(in srgb, #ffffff 65%, transparent);
+  --clay-inset-dark: color-mix(in srgb, var(--text) 10%, transparent);
+}
+:root[data-theme="dark"][data-surface="clay"] { --clay-hi: color-mix(in srgb, #ffffff 10%, transparent); --clay-drop: rgba(0, 0, 0, .5); }
+[data-surface="clay"] .card,
+[data-surface="clay"] .stat,
+[data-surface="clay"] .modal,
+[data-surface="clay"] .pill,
+[data-surface="clay"] .btn {
+  border: none;
+  border-radius: var(--clay-r);
+  box-shadow:
+    10px 10px 22px var(--clay-drop),
+    -6px -6px 16px var(--clay-hi),
+    inset 3px 3px 7px var(--clay-hi),
+    inset -5px -5px 12px var(--clay-inset-dark);
+}
+[data-surface="clay"] input,
+[data-surface="clay"] select,
+[data-surface="clay"] textarea {
+  border: none;
+  border-radius: 14px;
+  box-shadow: inset 4px 4px 9px var(--clay-inset-dark), inset -4px -4px 9px var(--clay-hi);
+}
+[data-surface="clay"] .btn.primary { box-shadow: 8px 8px 18px var(--clay-drop), inset 2px 2px 6px color-mix(in srgb, #ffffff 35%, transparent); }
+
+/* ---- 3. Skeuomorphism: tactile, with depth, bevels and top-lit gradients ---- */
+[data-surface="skeuomorphism"] {
+  --sk-hi: color-mix(in srgb, #ffffff 55%, transparent);
+  --sk-top: color-mix(in srgb, #ffffff 12%, var(--surface));
+}
+:root[data-theme="dark"][data-surface="skeuomorphism"] { --sk-hi: color-mix(in srgb, #ffffff 16%, transparent); --sk-top: color-mix(in srgb, #ffffff 7%, var(--surface)); }
+[data-surface="skeuomorphism"] .card,
+[data-surface="skeuomorphism"] .stat,
+[data-surface="skeuomorphism"] .modal,
+[data-surface="skeuomorphism"] .bell-menu,
+[data-surface="skeuomorphism"] .pill {
+  background: linear-gradient(to bottom, var(--sk-top), var(--surface));
+  border: 1px solid var(--border-strong);
+  box-shadow: inset 0 1px 0 var(--sk-hi), 0 2px 3px rgba(0, 0, 0, .18), 0 10px 20px -10px rgba(0, 0, 0, .3);
+}
+[data-surface="skeuomorphism"] input,
+[data-surface="skeuomorphism"] select,
+[data-surface="skeuomorphism"] textarea {
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, .14);
+}
+[data-surface="skeuomorphism"] .btn {
+  background: linear-gradient(to bottom, var(--sk-top), var(--surface));
+  border: 1px solid var(--border-strong);
+  box-shadow: inset 0 1px 0 var(--sk-hi), 0 2px 0 var(--border-strong), 0 4px 7px -2px rgba(0, 0, 0, .3);
+}
+[data-surface="skeuomorphism"] .btn.primary {
+  background: linear-gradient(to bottom, color-mix(in srgb, #ffffff 24%, var(--primary)) 0%, var(--primary) 55%, var(--primary-dark) 100%);
+  border-color: var(--primary-dark);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .45), 0 2px 0 var(--primary-dark), 0 5px 9px -2px rgba(0, 0, 0, .35);
+}
+[data-surface="skeuomorphism"] .btn:active:not(:disabled) { box-shadow: inset 0 2px 5px rgba(0, 0, 0, .3); }
+
+/* ---- 4. Neumorphism: soft extruded shapes, monochrome, low contrast ---- */
+[data-surface="neumorphism"] {
+  --nm-dark: rgba(163, 177, 198, .5);
+  --nm-light: #ffffff;
+  --nm-r: 16px;
+}
+:root[data-theme="dark"][data-surface="neumorphism"] { --nm-dark: rgba(0, 0, 0, .55); --nm-light: rgba(255, 255, 255, .045); }
+[data-surface="neumorphism"] .card,
+[data-surface="neumorphism"] .stat,
+[data-surface="neumorphism"] .modal,
+[data-surface="neumorphism"] .bell-menu,
+[data-surface="neumorphism"] .pill,
+[data-surface="neumorphism"] .btn.ghost {
+  background: var(--bg);
+  border: none;
+  border-radius: var(--nm-r);
+  box-shadow: 6px 6px 13px var(--nm-dark), -6px -6px 13px var(--nm-light);
+}
+[data-surface="neumorphism"] input,
+[data-surface="neumorphism"] select,
+[data-surface="neumorphism"] textarea {
+  background: var(--bg);
+  border: none;
+  box-shadow: inset 3px 3px 7px var(--nm-dark), inset -3px -3px 7px var(--nm-light);
+}
+[data-surface="neumorphism"] .btn:active:not(:disabled),
+[data-surface="neumorphism"] .pill:active {
+  box-shadow: inset 4px 4px 9px var(--nm-dark), inset -4px -4px 9px var(--nm-light);
+}
+[data-surface="neumorphism"] .btn.primary { box-shadow: 5px 5px 12px var(--nm-dark), -5px -5px 12px var(--nm-light); }
+
+/* ---- style picker swatches (the little preview squares in the Theme/Style menu) ---- */
+.style-swatch { background: var(--surface); border: 1px solid var(--border-strong); }
+.style-swatch.surface-glass { background: color-mix(in srgb, var(--primary) 30%, transparent); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); border-color: color-mix(in srgb, #fff 40%, transparent); }
+.style-swatch.surface-clay { border: none; box-shadow: 2px 2px 4px rgba(0, 0, 0, .25), -2px -2px 4px rgba(255, 255, 255, .5), inset 1px 1px 2px rgba(255, 255, 255, .5); border-radius: 7px; }
+.style-swatch.surface-skeuomorphism { background: linear-gradient(to bottom, color-mix(in srgb, #fff 30%, var(--surface)), var(--surface)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .6), 0 1px 2px rgba(0, 0, 0, .3); }
+.style-swatch.surface-neumorphism { background: var(--bg); border: none; box-shadow: 2px 2px 4px rgba(163, 177, 198, .6), -2px -2px 4px #fff; }

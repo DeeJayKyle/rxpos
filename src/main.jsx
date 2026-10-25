@@ -7,6 +7,7 @@ import { FeedbackHost } from './feedback.jsx';
 import { idbGet, idbKeys } from './idb.js';
 import './styles.css';
 import { applyTheme, savedTheme } from './themes.js';
+import { applyStyle, savedStyle } from './surface.js';
 import { isAndroid } from './platform.js';
 import { startUpdates } from './update.js';
 import { startDevice } from './device.js';
@@ -21,8 +22,9 @@ if (!isAndroid && typeof location !== 'undefined' && /^\/[a-z0-9-]+\/+$/.test(lo
 // The Android app draws its own pull-to-refresh (src/refresh.jsx)
 if (isAndroid) document.documentElement.classList.add('is-android');
 
-// Apply the saved theme before first paint (no flash)
+// Apply the saved theme and surface style before first paint (no flash)
 applyTheme(savedTheme() || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+applyStyle(savedStyle());
 
 class ErrorBoundary extends React.Component {
   state = { error: null };
