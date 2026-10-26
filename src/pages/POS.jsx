@@ -504,7 +504,7 @@ export default function POS({ mode = 'retail' }) {
           <div className="row between grand"><span>Total</span><span className="num bump" key={total}>{fmt(total)}</span></div>
         </div>
         <div className="pay-methods">
-          {methods.map((m, i) => <button key={m.id} className={'chip' + (payment === m.name ? ' active' : '')} onClick={() => setPayment(m.name)} title={i < 9 ? `Alt+${i + 1}` : undefined}>{m.name}{i < 9 && !touch && <kbd>{i + 1}</kbd>}</button>)}
+          {methods.map((m, i) => <button key={m.id} className={'chip pay-' + (m.type || 'other') + (payment === m.name ? ' active' : '')} onClick={() => setPayment(m.name)} title={i < 9 ? `Alt+${i + 1}` : undefined}>{m.name}{i < 9 && !touch && <kbd>{i + 1}</kbd>}</button>)}
         </div>
         {(ptype === 'cash' || ptype === 'credit') && (
           <div className="row between">

@@ -1638,6 +1638,30 @@ th { font-size: 11px; letter-spacing: .06em; }
 .share-bar i { display: block; height: 100%; border-radius: inherit; transform-origin: left; animation: share-grow var(--dur-chart) var(--ease-out) both; }
 @keyframes share-grow { from { transform: scaleX(0); } }
 .share-bar .c0 { background: var(--viz-1); } .share-bar .c1 { background: var(--viz-2); } .share-bar .c2 { background: #f3b34c; } .share-bar .c3 { background: var(--violet-accent); } .share-bar .c4 { background: var(--muted); }
+.donut { position: relative; width: 168px; margin: 0 auto 12px; }
+.donut svg { display: block; width: 100%; transform: rotate(0deg); }
+.donut circle { fill: none; stroke-width: 5.5; }
+.donut-track { stroke: var(--surface-2); }
+.donut-seg { stroke-linecap: butt; animation: donut-in var(--dur-chart) var(--ease-out) both; transform-origin: center; }
+.donut-seg.c0 { stroke: var(--viz-1); } .donut-seg.c1 { stroke: var(--viz-2); } .donut-seg.c2 { stroke: #f3b34c; } .donut-seg.c3 { stroke: var(--violet-accent); } .donut-seg.c4 { stroke: var(--muted); }
+@keyframes donut-in { from { opacity: 0; transform: rotate(-30deg) scale(.92); } }
+.donut-total { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; gap: 2px; }
+.donut-total small { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.donut-total strong { font-size: 14px; }
+
+/* POS payment buttons coloured by kind (cash · mobile money · credit · other); the active one is filled */
+.pay-methods .chip { --pay: var(--blue); --pay-on: #ffffff; display: inline-flex; align-items: center; gap: 6px; }
+.pay-methods .chip.pay-cash { --pay: #047857; }
+.pay-methods .chip.pay-momo { --pay: #f3b34c; --pay-on: #1f1300; }
+.pay-methods .chip.pay-credit { --pay: #6d28d9; }
+:root[data-theme='dark'] .pay-methods .chip.pay-cash { --pay: #16a36a; --pay-on: #04140d; }
+:root[data-theme='dark'] .pay-methods .chip.pay-credit { --pay: #8456f5; }
+:root[data-theme='dark'] .pay-methods .chip:not(.pay-cash):not(.pay-momo):not(.pay-credit) { --pay: #267bff; --pay-on: #030d1f; }
+.pay-methods .chip::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--pay); flex: none; }
+.pay-methods .chip:hover { border-color: var(--pay); }
+.pay-methods .chip.active { background: var(--pay); color: var(--pay-on); border-color: transparent; box-shadow: 0 6px 14px -8px var(--pay); }
+.pay-methods .chip.active::before { background: currentColor; }
+.pay-methods .chip.active kbd { color: inherit; border-color: currentColor; opacity: .7; }
 .share-pct { display: inline-block; width: 44px; text-align: right; font-size: 12px; font-weight: 650; color: var(--muted); font-variant-numeric: tabular-nums; }
 
 /* POS: value bump on change, payment press, success check after the sale is saved */

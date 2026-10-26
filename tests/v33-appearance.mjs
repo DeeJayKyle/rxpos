@@ -85,6 +85,15 @@ await openMenu(p); await wait(200);
 await p.evaluate(() => document.querySelector('.accent-opt[aria-label="Theme colour"]')?.click()); await wait(300);
 check('Theme colour removes the accent', (await html(p)).accent === '' && (await p.evaluate(() => localStorage.getItem('rxpos-accent'))) === null);
 
+// ---- POS payment buttons coloured by kind; Reports payment donut ----
+await p.goto(base + '/' + slug + '#/pos', { waitUntil: 'networkidle2' }); await wait(1200);
+const chips = await p.evaluate(() => [...document.querySelectorAll('.pay-methods .chip')].map((c) => [c.textContent.replace(/\d$/, '').trim(), [...c.classList].find((k) => k.startsWith('pay-')), getComputedStyle(c).backgroundColor]));
+check('POS: payment buttons carry their kind (Cash = cash, Mobile Money = momo)', chips.some(([n, k]) => n === 'Cash' && k === 'pay-cash') && chips.some(([n, k]) => n === 'Mobile Money' && k === 'pay-momo'), JSON.stringify(chips));
+check('POS: the chosen payment button is filled with its colour', await p.evaluate(() => { const a = document.querySelector('.pay-methods .chip.active'); return !!a && getComputedStyle(a).backgroundColor !== getComputedStyle(document.querySelector('.pay-methods .chip:not(.active)')).backgroundColor; }));
+await p.goto(base + '/' + slug + '#/reports', { waitUntil: 'networkidle2' }); await wait(1200);
+check('Reports: payment donut shows the period total with one segment per method', await p.evaluate(() => /3,000/.test(document.querySelector('.donut-total')?.textContent || '') && document.querySelectorAll('.donut-seg').length === 1));
+await p.screenshot({ path: `${out}/reports-light.png` });
+
 // ---- phone: two-up KPIs, three alert tiles in a row, Sell button in the bar ----
 await p.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
 await p.goto(base + '/' + slug + '#/', { waitUntil: 'networkidle2' }); await wait(1500);

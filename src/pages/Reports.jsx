@@ -10,6 +10,26 @@ const sumBy = (arr, key, val) => {
   return Object.entries(m).sort((a, b) => b[1] - a[1]);
 };
 
+/** Share of each part as a ring (same order and colours as the share bars in the table beside it) */
+function Donut({ parts, fmt }) {
+  const all = parts.reduce((a, [, v]) => a + v, 0);
+  if (!all) return null;
+  const R = 15.9155; // circumference 100, so each share is its own dash length
+  let at = 0;
+  return (
+    <div className="donut" role="img" aria-label={parts.map(([k, v]) => `${k} ${Math.round((v / all) * 100)}%`).join(', ')}>
+      <svg viewBox="0 0 42 42">
+        <circle className="donut-track" cx="21" cy="21" r={R} />
+        {parts.map(([k, v], i) => {
+          const len = (v / all) * 100, off = 25 - at; at += len;
+          return <circle key={k} className={'donut-seg c' + (i % 5)} cx="21" cy="21" r={R} strokeDasharray={`${Math.max(len - (parts.length > 1 ? 0.6 : 0), 0)} ${100 - len + (parts.length > 1 ? 0.6 : 0)}`} strokeDashoffset={off} />;
+        })}
+      </svg>
+      <div className="donut-total"><small>Total</small><strong className="num">{fmt(all)}</strong></div>
+    </div>
+  );
+}
+
 export default function Reports() {
   const { db, products, fmt } = useStore();
   const [tab, setTab] = useState('sales');
@@ -73,7 +93,9 @@ export default function Reports() {
           </div>
           <div className="card"><h3>Daily sales</h3><BarChart key={from + to + branch} fmt={fmt} data={days} series={[{ name: 'Sales' }]} /></div>
           <div className="grid2">
-            <div className="card"><h3>By payment method</h3><table className="share-table"><tbody>
+            <div className="card"><h3>By payment method</h3>
+              <Donut parts={sumBy(sales, (s) => s.payment, (s) => s.total)} fmt={fmt} />
+              <table className="share-table"><tbody>
               {(() => { const all = sales.reduce((a, s) => a + s.total, 0); return sumBy(sales, (s) => s.payment, (s) => s.total).map(([k, v], i) => (
                 <tr key={k}><td>{k}</td>
                   <td className="share"><span className="share-bar" aria-hidden="true"><i className={'c' + (i % 5)} style={{ width: `${all ? (v / all) * 100 : 0}%` }} /></span><span className="share-pct">{all ? Math.round((v / all) * 100) : 0}%</span></td>
