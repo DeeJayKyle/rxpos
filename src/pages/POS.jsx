@@ -598,6 +598,7 @@ export default function POS({ mode = 'retail' }) {
                 <button className="btn primary big" onClick={sendMomo} disabled={!syncCfg.url || !navigator.onLine}><Smartphone size={18} />Send payment request to phone</button>
               )}
               {!syncCfg.url && <small className="muted">Connect this device to the RxPOS cloud (Settings → Online sync) to send payment requests.</small>}
+              {syncCfg.url && !navigator.onLine && <small className="muted">No internet: payment requests to the phone need it. If the customer pays to your merchant number, enter the transaction ID below; the receipt shows it as recorded by staff, not confirmed by the network.</small>}
               <div className="divider"><span>or the customer already paid</span></div>
               <div className="row gap">
                 <input className="grow" placeholder="Transaction ID from the SMS" value={momo.manualRef} onChange={(e) => setMomo({ ...momo, manualRef: e.target.value })} />
