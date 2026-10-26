@@ -90,7 +90,7 @@ await A.keyboard.press('Escape'); await wait(500);
 const name1 = before1[0];
 const s0 = await stockOf(name1);
 await go(A, '/sales');
-await A.evaluate(() => [...document.querySelectorAll('tbody tr')][0].querySelector('button[class*="ghost"]:nth-of-type(2)')?.click());
+await A.evaluate(() => [...[...document.querySelectorAll('tbody tr')][0].querySelectorAll('button')].find((x) => /^Edit$/.test(x.textContent.trim()))?.click());
 await wait(600);
 check('sale editor opens for the admin', await A.evaluate(() => /Edit sale/.test(document.querySelector('.modal')?.innerText || '')));
 await A.evaluate(() => { const r = document.querySelectorAll('.modal tbody tr'); const q = r[0].querySelector('input'); const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; set.call(q, '1'); q.dispatchEvent(new Event('input', { bubbles: true })); r[r.length - 1].querySelector('button[title="Remove"]').click(); });
