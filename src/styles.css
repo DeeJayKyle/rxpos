@@ -1445,7 +1445,7 @@ body { text-rendering: optimizeLegibility; }
 .btn { min-height: 38px; }
 .btn.sm { min-height: 30px; }
 .btn.big { min-height: var(--touch); }
-.card { border-radius: var(--radius); padding: var(--space-4) calc(var(--space-4) + 2px); }
+.card { border-radius: var(--radius); }
 .card h3 { font-size: 14.5px; }
 .card h3 > svg { color: var(--primary-text); }
 .modal { border-radius: var(--radius-lg); }
@@ -1552,8 +1552,9 @@ th { font-size: 11px; letter-spacing: .06em; }
 @media (max-width: 520px) {
   .welcome .btn.big { width: 100%; }
   .welcome > .row { width: 100%; }
-  .stats { gap: var(--space-2); }
-  .stat { min-height: 96px; padding: var(--space-3); }
+  .stats { gap: var(--space-2); grid-template-columns: 1fr 1fr; }
+  .stat { min-height: 96px; padding: var(--space-3); border-top-width: 2px !important; }
+  .promo-row .grow small { white-space: normal; flex-wrap: wrap; row-gap: 2px; }
   .stat small { font-size: 10.5px; }
   .stat strong { font-size: 19px; }
   .stat .stat-icon ~ small, .stat .stat-icon ~ strong { padding-right: 0; }
