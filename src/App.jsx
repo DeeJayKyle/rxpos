@@ -20,7 +20,7 @@ import { AutoReorder } from './reorder.js';
 import { isWeb } from './platform.js';
 import RefreshHost from './refresh.jsx';
 import { startUpdates, onUpdate, applyUpdate, justUpdated, LABEL } from './update.js';
-import { applyTheme, savedTheme, saveTheme, allowedThemes } from './themes.js';
+import { applyTheme, saveTheme, allowedThemes, savedMode, saveMode, systemDark, paletteFor, startupTheme } from './themes.js';
 import { STYLES, applyStyle, savedStyle, saveStyle } from './surface.js';
 import { TwoStepModal } from './twostep.jsx';
 import { setCrashCloud } from './crash.js';
@@ -132,11 +132,13 @@ const NAV = [
 
 const SHORTCUTS = { F2: '/pos', F3: '/pos/wholesale', F4: '/add-stock', F6: '/sales', F7: '/inventory' };
 
-/** The device's colour theme (any theme the owner allows for this pharmacy) */
+/** The device's colour theme (any theme the owner allows for this pharmacy) and whether it follows the system */
 function useTheme() {
-  const [theme, setTheme] = useState(() => savedTheme() || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+  const [theme, setTheme] = useState(startupTheme);
+  const [mode, setMode] = useState(savedMode);
   useEffect(() => { applyTheme(theme); saveTheme(theme); }, [theme]);
-  return [theme, setTheme];
+  useEffect(() => saveMode(mode), [mode]);
+  return [theme, setTheme, mode, setMode];
 }
 
 /** The device's surface style (glass, clay, skeuomorphism, neumorphism, or flat) */
@@ -146,14 +148,27 @@ function useSurface() {
   return [style, setStyle];
 }
 
-function ThemePicker({ theme, setTheme, style, setStyle }) {
+function ThemePicker({ theme, setTheme, mode, setMode, style, setStyle }) {
   const { db } = useStore();
   const branding = db.license?.[0]?.branding;
   const list = allowedThemes(branding);
   const [open, setOpen] = useState(false);
   const ref = useRef();
+  const current = list.find((t) => t.id === theme);
   // Keep within what the owner allows for this pharmacy
   useEffect(() => { if (list.length && !list.some((t) => t.id === theme)) setTheme(branding?.defaultTheme && list.some((t) => t.id === branding.defaultTheme) ? branding.defaultTheme : list[0].id); }, [branding]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Follow system: light or dark with the operating system, live when it changes
+  useEffect(() => {
+    if (mode !== 'system') return;
+    const follow = () => setTheme(paletteFor(systemDark() ? 'dark' : 'light', list, branding?.defaultTheme));
+    follow();
+    const mq = matchMedia('(prefers-color-scheme: dark)');
+    mq.addEventListener?.('change', follow);
+    return () => mq.removeEventListener?.('change', follow);
+  }, [mode, branding]); // eslint-disable-line react-hooks/exhaustive-deps
+  const pickBase = (base) => { setMode(''); if (current?.base !== base) setTheme(paletteFor(base, list, branding?.defaultTheme)); };
+  const MODES = [['light', 'Light', Sun], ['dark', 'Dark', Moon], ['system', 'System', MonitorSmartphone]];
+  const activeMode = mode === 'system' ? 'system' : current?.base;
   useEffect(() => {
     if (!open) return;
     const off = (e) => !ref.current?.contains(e.target) && setOpen(false);
@@ -162,12 +177,19 @@ function ThemePicker({ theme, setTheme, style, setStyle }) {
   }, [open]);
   return (
     <div className="bell" ref={ref}>
-      <button className="icon-btn" title="Theme" onClick={() => setOpen((o) => !o)}><Palette size={19} /></button>
+      <button className="icon-btn" title="Theme" aria-label="Theme" aria-expanded={open} onClick={() => setOpen((o) => !o)}><Palette size={19} /></button>
       {open && (
         <div className="bell-menu theme-menu">
+          <div className="bell-head">Appearance</div>
+          <div className="mode-toggle" role="radiogroup" aria-label="Appearance">
+            {MODES.map(([id, label, Icon]) => (
+              <button key={id} role="radio" aria-checked={activeMode === id} className={'mode-opt' + (activeMode === id ? ' on' : '')}
+                onClick={() => (id === 'system' ? setMode('system') : pickBase(id))}><Icon size={14} />{label}</button>
+            ))}
+          </div>
           <div className="bell-head">Theme</div>
           {list.map((t) => (
-            <button key={t.id} className={'theme-item' + (t.id === theme ? ' on' : '')} onClick={() => { setTheme(t.id); setOpen(false); }}>
+            <button key={t.id} className={'theme-item' + (t.id === theme ? ' on' : '')} onClick={() => { setMode(''); setTheme(t.id); setOpen(false); }}>
               <span className="swatch" style={{ background: `linear-gradient(135deg, ${t.c.surface} 0 45%, ${t.c.primary} 45% 72%, ${t.c.primary2} 72%)`, borderColor: t.c.borderStrong }} />
               <span className="grow">{t.name}{t.inspired && t.inspired !== t.name && <small className="muted"> · {t.inspired}</small>}</span>
               {t.base === 'dark' ? <Moon size={13} /> : <Sun size={13} />}
@@ -274,7 +296,7 @@ function Shell() {
   const { db, products, user, setUser, branchId, branch, update, syncNow, syncCfg } = useStore();
   const navigate = useNavigate();
   const location = useLocation();
-  const [theme, setTheme] = useTheme();
+  const [theme, setTheme, themeMode, setThemeMode] = useTheme();
   const [surface, setSurface] = useSurface();
   const [drawer, setDrawer] = useState(false);
   const [palette, setPalette] = useState(false);
@@ -399,7 +421,7 @@ function Shell() {
           {db.branches.length > 1 && <NavLink to="/branches" className="pill branch-pill" title="Branch this device works as"><Building2 size={14} />{branch?.name}</NavLink>}
           <ClockPill />
           <NotificationBell />
-          <ThemePicker theme={theme} setTheme={setTheme} style={surface} setStyle={setSurface} />
+          <ThemePicker theme={theme} setTheme={setTheme} mode={themeMode} setMode={setThemeMode} style={surface} setStyle={setSurface} />
         </header>
         <main className="content">
           <Suspense fallback={<div className="page"><div className="skeleton" /><div className="skeleton" style={{ height: 280 }} /></div>}>
@@ -410,12 +432,12 @@ function Shell() {
           </Suspense>
         </main>
       </div>
-      <nav className="bottom-nav">
-        <NavLink to="/" end><LayoutDashboard size={20} />Home</NavLink>
-        <NavLink to="/inventory"><Boxes size={20} />Stock</NavLink>
-        <NavLink to="/pos" className="fab"><ShoppingCart size={22} />Sell</NavLink>
-        <NavLink to="/sales"><ReceiptText size={20} />Sales</NavLink>
-        <button onClick={() => setDrawer(true)}><Menu size={20} />More</button>
+      <nav className="bottom-nav" aria-label="Main">
+        <NavLink to="/" end><LayoutDashboard size={20} /><span>Home</span></NavLink>
+        <NavLink to="/inventory"><Boxes size={20} /><span>Stock</span></NavLink>
+        <NavLink to="/pos" className="fab"><span className="fab-icon"><ShoppingCart size={22} /></span><span>Sell</span></NavLink>
+        <NavLink to="/sales"><ReceiptText size={20} /><span>Sales</span></NavLink>
+        <button onClick={() => setDrawer(true)} aria-expanded={drawer}><Menu size={20} /><span>More</span></button>
       </nav>
       <CommandPalette open={palette} onClose={() => setPalette(false)} pages={pages} />
       <Spotlight />

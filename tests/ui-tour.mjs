@@ -52,9 +52,9 @@ const shoot = async (tag) => {
   }
 };
 await shoot('desktop-light');
-await P.evaluate(() => localStorage.setItem('pharmapos-theme', 'dark')); await P.reload({ waitUntil: 'networkidle2' }); await wait(1500);
+await P.evaluate(() => localStorage.setItem('pharmapos-theme', 'hybrid-dark')); await P.reload({ waitUntil: 'networkidle2' }); await wait(1500);
 await shoot('desktop-dark');
-await P.evaluate(() => localStorage.setItem('pharmapos-theme', 'light'));
+await P.evaluate(() => localStorage.setItem('pharmapos-theme', 'hybrid-light'));
 await P.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true, deviceScaleFactor: 2 }); await P.reload({ waitUntil: 'networkidle2' }); await wait(1500);
 await shoot('phone');
 // phone POS: the sale is a sheet docked at the bottom with the total and Charge in reach

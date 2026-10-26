@@ -22,6 +22,7 @@ const SUITES = [
   ['fefo allocate (unit)', 'unit-fefo.mjs', []],
   ['date helpers (unit)', 'unit-dates.mjs', []],
   ['record ids (unit)', 'unit-ids.mjs', []],
+  ['theme choice (unit)', 'unit-theme.mjs', []],
   ['theme contrast', 'contrast-test.mjs', []],
   ['owner sign-in', 'owner-auth-test.mjs', []],
   ['cloud rules', 'v14-api.mjs', []],
