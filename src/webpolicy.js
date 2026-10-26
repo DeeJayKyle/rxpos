@@ -12,7 +12,7 @@
 import { isWeb } from './platform.js';
 
 const PREFS = [/^pharmapos-theme$/, /^rxpos-theme-mode$/, /^rxpos-accent$/, /^rxpos-surface-style$/, /^rxpos-rail$/, /^pharmapos-nav$/,
-  /^rxpos-tip:/, /^rxpos-device$/, /^rxpos-sound/, /^rxpos-pos-favs:/, /^rxpos-weekly-/, /^rxpos-announced$/];
+  /^rxpos-tip:/, /^rxpos-device$/, /^rxpos-sound/, /^rxpos-pos-favs:/, /^rxpos-weekly-/, /^rxpos-announced$/, /^rxpos-colour$/];
 export const isPref = (k) => PREFS.some((r) => r.test(String(k)));
 // the browser's own functions, kept before storage is routed below, so these always reach the real localStorage
 const proto = typeof Storage !== 'undefined' ? Storage.prototype : null;

@@ -348,3 +348,54 @@ export function PageTip({ id, title, children }) {
     </div>
   );
 }
+
+/** What kind of payment a method name is (for its colour): cash, momo, card, credit or '' (other) */
+export function payKind(name, methods = []) {
+  const m = methods.find((x) => x.name === name);
+  const t = m?.type || '';
+  if (t === 'cash' || t === 'momo' || t === 'credit') return t;
+  if (/card|visa|master/i.test(name || '') || m?.id === 'card') return 'card';
+  if (/momo|mobile money|airtel|mtn/i.test(name || '')) return 'momo';
+  return /^cash$/i.test(name || '') ? 'cash' : '';
+}
+/** A payment method as a labelled colour chip (the label always shows: colour is never the only cue) */
+export function PayChip({ name }) {
+  const { db } = useStore();
+  return <span className={'pay-chip ' + payKind(name, db.settings.paymentMethods || [])}>{name || '—'}</span>;
+}
+
+/** Page through a long list: "Show N per page" and page buttons. Returns the rows of the current page. */
+export function usePages(rows, initial = 25) {
+  const [size, setSize] = useState(initial);
+  const [page, setPage] = useState(1);
+  const pages = Math.max(1, Math.ceil(rows.length / size));
+  const at = Math.min(page, pages);
+  return { rows: rows.slice((at - 1) * size, at * size), page: at, pages, size, setSize: (n) => { setSize(n); setPage(1); }, setPage, total: rows.length };
+}
+export function Pager({ p, sizes = [25, 50, 100] }) {
+  if (p.total <= sizes[0]) return null;
+  const nums = [...new Set([1, p.page - 1, p.page, p.page + 1, p.pages])].filter((n) => n >= 1 && n <= p.pages).sort((a, b) => a - b);
+  return (
+    <div className="pager no-print">
+      <label className="muted small">Show <select value={p.size} onChange={(e) => p.setSize(Number(e.target.value))}>{sizes.map((n) => <option key={n}>{n}</option>)}</select> per page · {((p.page - 1) * p.size + 1).toLocaleString()}–{Math.min(p.page * p.size, p.total).toLocaleString()} of {p.total.toLocaleString()}</label>
+      <span className="pager-btns">
+        <button className="btn sm ghost" disabled={p.page === 1} onClick={() => p.setPage(p.page - 1)} aria-label="Previous page">‹</button>
+        {nums.map((n, i) => <span key={n}>{i && n - nums[i - 1] > 1 ? <span className="muted"> … </span> : null}<button className={'btn sm ' + (n === p.page ? 'primary' : 'ghost')} aria-current={n === p.page ? 'page' : undefined} onClick={() => p.setPage(n)}>{n}</button></span>)}
+        <button className="btn sm ghost" disabled={p.page === p.pages} onClick={() => p.setPage(p.page + 1)} aria-label="Next page">›</button>
+      </span>
+    </div>
+  );
+}
+
+/** Click-to-sort column headers: const s = useSort(rows, { date: (r) => r.date }, 'date'); <SortTh s={s} k="date">Date</SortTh> */
+export function useSort(rows, keys, initial, dir = -1) {
+  const [by, setBy] = useState(initial);
+  const [d, setD] = useState(dir);
+  const get = keys[by];
+  const sorted = get ? [...rows].sort((a, b) => { const x = get(a), y = get(b); return (x < y ? -1 : x > y ? 1 : 0) * d; }) : rows;
+  return { rows: sorted, by, dir: d, sort: (k) => { if (k === by) setD(-d); else { setBy(k); setD(k === initial ? dir : 1); } } };
+}
+export function SortTh({ s, k, children, className = '' }) {
+  const on = s.by === k;
+  return <th className={className + ' sortable'} aria-sort={on ? (s.dir > 0 ? 'ascending' : 'descending') : 'none'}><button type="button" className="th-sort" onClick={() => s.sort(k)}>{children}<span aria-hidden="true">{on ? (s.dir > 0 ? ' ▲' : ' ▼') : ' ↕'}</span></button></th>;
+}

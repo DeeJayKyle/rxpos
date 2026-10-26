@@ -2,7 +2,8 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import { ShoppingCart, Trash2, X, FileText, Printer, AlertTriangle, ScanBarcode, Smartphone, Loader2, CheckCircle2, UserPlus, Tag, BookMarked, Repeat, PauseCircle, Keyboard, Plus, ClipboardList, MessageCircle, MessageSquareText, Star } from 'lucide-react';
 import { DrugInfoPanel, genericKey } from './DrugInfo.jsx';
-import { useStore, uid, now, daysUntil, put, move, allocate, audit, normalizePhone, DEFAULT_PAYMENT_METHODS } from '../store.jsx';
+import { useStore, uid, now, daysUntil, put, del, move, allocate, audit, normalizePhone, DEFAULT_PAYMENT_METHODS } from '../store.jsx';
+import { draftsFor, saleDraft } from '../drafts.js';
 import { CASH } from '../finance.js';
 import { cartSubtotal, taxOf, round, formatQty } from '../money.js';
 import { searchProducts, searchKey } from '../search.js';
@@ -40,9 +41,21 @@ export default function POS({ mode = 'retail' }) {
   useEffect(() => { if (!cart.length && picked.size) setPicked(new Set()); }, [cart.length]); // eslint-disable-line react-hooks/exhaustive-deps
   const [customerId, setCustomerId] = useState('walk-in');
   const [discount, setDiscount] = useState(0);
-  // Sales on hold (one per waiting customer) and the sale being rung up, kept on this device so a reload loses nothing
+  // The sale being rung up is kept on this device so a reload loses nothing. Sales on hold (one per waiting customer)
+  // are synced drafts (src/drafts.js): they belong to the person who held them and follow them to another device.
   const holdKey = `rxpos-pos:${syncCfg.tenant || 'device'}:${branchId}:${mode}`;
-  const [held, setHeld] = useState(() => { try { return JSON.parse(localStorage.getItem(holdKey))?.held || []; } catch { return []; } });
+  const heldDrafts = draftsFor(db, { user, branchId, kind: 'sale', mode });
+  const held = heldDrafts.map((d) => d.data);
+  const custName = (id) => db.customers.find((c) => c.id === id)?.name;
+  const asDraft = (snap, order) => saleDraft(snap, { user, branchId, mode, customerName: custName(snap.customerId), order });
+  /** Change the held sales in one saved step: take some out, put some in (at the end, or `first` at the front) */
+  const changeHeld = (out = [], add = [], first = false) => {
+    const lo = Math.min(Date.now(), ...heldDrafts.map((d) => d.order || 0));
+    return update((d) => {
+      for (const id of out) if (d.drafts.some((x) => x.id === id)) del(d, 'drafts', id);
+      add.forEach((snap, i) => put(d, 'drafts', asDraft(snap, first ? lo - add.length + i : Date.now() + i)));
+    }).catch((e) => { toast('The held sales could not be saved: ' + e.message, 'error'); throw e; });
+  };
   const [cursor, setCursor] = useState(-1); // cart line chosen with Alt+↑/↓ (−1 = the last one)
   const [active, setActive] = useState(0);  // highlighted medicine card (arrow keys)
   const [help, setHelp] = useState(false);
@@ -85,13 +98,22 @@ export default function POS({ mode = 'retail' }) {
   useEffect(() => {
     if (location.state?.proforma) return;
     try {
-      const cur = JSON.parse(localStorage.getItem(holdKey))?.current;
-      if (cur?.cart?.length) loadSale(cur);
+      const saved = JSON.parse(localStorage.getItem(holdKey));
+      // sales held on this device before 1.7 become synced drafts once
+      if (saved?.held?.length) changeHeld([], saved.held).then(() => localStorage.setItem(holdKey, JSON.stringify({ current: saved.current || null })), () => {});
+      const resume = location.state?.resumeDraft && (db.drafts || []).find((x) => x.id === location.state.resumeDraft);
+      if (resume) {
+        // Sales History → Held sales → Continue / Take over: the open sale (if any) goes on hold in its place
+        const cur = saved?.current?.cart?.length ? [saved.current] : [];
+        changeHeld([resume.id], cur).then(() => loadSale(resume.data), () => {});
+        return;
+      }
+      if (saved?.current?.cart?.length) loadSale(saved.current);
     } catch { /* nothing saved */ }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const t = setTimeout(() => {
-      try { localStorage.setItem(holdKey, JSON.stringify({ held, current: cart.length ? snapshot() : null })); } catch { /* storage blocked */ }
+      try { localStorage.setItem(holdKey, JSON.stringify({ current: cart.length ? snapshot() : null })); } catch { /* storage blocked */ }
     }, 250);
     return () => clearTimeout(t);
   }); // after every change
@@ -224,25 +246,23 @@ export default function POS({ mode = 'retail' }) {
     setPayment(methods.some((m) => m.name === x.payment) ? x.payment : methods[0]?.name || 'Cash'); setTendered(x.tendered || ''); setPicked(new Set()); setCursor(-1);
   }
   const clearSale = () => loadSale({});
-  const holdSale = () => {
+  const holdSale = async () => {
     if (!cart.length) return toast('Nothing to hold: the sale is empty', 'info');
-    setHeld((h) => [...h, snapshot()]);
+    try { await changeHeld([], [snapshot()]); } catch { return; }
     clearSale(); focusSearch();
-    toast('Sale on hold. Tap it above the sale to carry on.', 'info');
+    toast('Sale on hold. Tap it above the sale to carry on (also in Sales History → Held sales).', 'info');
   };
-  const resumeSale = (id) => {
+  const resumeSale = async (id) => {
     const x = held.find((h) => h.id === id);
     if (!x) return;
-    setHeld((h) => [...h.filter((y) => y.id !== id), ...(cart.length ? [snapshot()] : [])]);
+    try { await changeHeld([id], cart.length ? [snapshot()] : []); } catch { return; }
     loadSale(x); focusSearch();
   };
   // Alt+→ / Alt+←: go round the held sales (the current one goes on hold in its place)
-  const cycleSale = (dir) => {
+  const cycleSale = async (dir) => {
     if (!held.length) return;
     const x = dir > 0 ? held[0] : held[held.length - 1];
-    const rest = dir > 0 ? held.slice(1) : held.slice(0, -1);
-    const cur = cart.length ? [snapshot()] : [];
-    setHeld(dir > 0 ? [...rest, ...cur] : [...cur, ...rest]);
+    try { await changeHeld([x.id], cart.length ? [snapshot()] : [], dir < 0); } catch { return; }
     loadSale(x); focusSearch();
   };
   const heldLabel = (h) => {
@@ -490,7 +510,7 @@ export default function POS({ mode = 'retail' }) {
               <button role="tab" aria-selected="false" className="sale-tab" title={`Carry on with this sale${i === 0 ? ' (Alt+→)' : i === held.length - 1 ? ' (Alt+←)' : ''}`} onClick={() => resumeSale(h.id)}>
                 <PauseCircle size={13} />{heldLabel(h)} · {fmt(heldTotal(h))}
               </button>
-              <button className="sale-tab-x" aria-label={`Discard held sale ${heldLabel(h)}`} title="Discard this held sale" onClick={async () => { if (await ask({ title: 'Discard this held sale?', message: `${h.cart.length} item(s) · ${fmt(heldTotal(h))}`, confirmText: 'Discard', danger: true })) setHeld((x) => x.filter((y) => y.id !== h.id)); }}><X size={11} /></button>
+              <button className="sale-tab-x" aria-label={`Discard held sale ${heldLabel(h)}`} title="Discard this held sale" onClick={async () => { if (await ask({ title: 'Discard this held sale?', message: `${h.cart.length} item(s) · ${fmt(heldTotal(h))}`, confirmText: 'Discard', danger: true })) update((d) => { del(d, 'drafts', h.id); audit(d, user, 'Draft discarded', `Held sale "${heldLabel(h)}" (${h.cart.length} items, ${fmt(heldTotal(h))})`, branchId); }).catch((e) => toast(e.message, 'error')); }}><X size={11} /></button>
             </span>
           ))}
           <button className="sale-tab add" disabled={!cart.length} title="Put this sale on hold and start another (Alt+H)" onClick={holdSale}><Plus size={13} />Hold &amp; new</button>

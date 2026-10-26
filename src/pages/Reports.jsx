@@ -1,4 +1,6 @@
 import { useState, useRef, useMemo } from 'react';
+import { useLocation } from 'react-router-dom';
+import SalesLines from './SalesLines.jsx';
 import { AlertTriangle, Boxes, Crown, TrendingDown, PackageX, Banknote, Receipt, Percent, Undo2 } from 'lucide-react';
 import { Empty, PageTip } from '../ui.jsx';
 import { formatQty } from '../money.js';
@@ -33,11 +35,12 @@ function Donut({ parts, fmt }) {
 
 export default function Reports() {
   const { db, products, fmt, batchesOf } = useStore();
-  const [tab, setTab] = useState('sales');
+  const location = useLocation();
+  const [tab, setTab] = useState(location.state?.tab || 'sales');
   const pageRef = useRef(null);
-  const TAB_NAMES = { profit: 'Profit & Margins', sales: 'Sales Report', products: 'Sales by Product', consumption: 'Consumption (ABC)', purchases: 'Purchase Report', expenses: 'Expenses Report', stock: 'Stock Valuation', income: 'Income Statement' };
-  const [from, setFrom] = useState(today().slice(0, 8) + '01');
-  const [to, setTo] = useState(today());
+  const TAB_NAMES = { profit: 'Profit & Margins', sales: 'Sales Report', lines: 'Sales lines', products: 'Sales by Product', consumption: 'Consumption (ABC)', purchases: 'Purchase Report', expenses: 'Expenses Report', stock: 'Stock Valuation', income: 'Income Statement' };
+  const [from, setFrom] = useState(location.state?.from || today().slice(0, 8) + '01');
+  const [to, setTo] = useState(location.state?.to || today());
   const [branch, setBranch] = useState('all');
   const inBranch = (x) => branch === 'all' || (x.branchId || MAIN_BRANCH) === branch;
   const inRange = (x) => dayOf(x.date) >= from && dayOf(x.date) <= to && inBranch(x);
@@ -80,9 +83,9 @@ export default function Reports() {
 
   return (
     <div className="page" ref={pageRef}>
-      <div className="page-head"><h1>Reports</h1><div className="row gap wrap">{tab !== 'stock' && Range}<PdfButton target={pageRef} title={TAB_NAMES[tab]} subtitle={tab === 'stock' ? `As at ${new Date().toLocaleDateString()}` : `${from} to ${to}`} /></div></div>
+      <div className="page-head"><h1>Reports</h1><div className="row gap wrap">{tab !== 'stock' && Range}{tab !== 'lines' && <PdfButton target={pageRef} title={TAB_NAMES[tab]} subtitle={tab === 'stock' ? `As at ${new Date().toLocaleDateString()}` : `${from} to ${to}`} />}</div></div>
       <PageTip id="reports" title="Reading your figures">Pick the dates at the top right. Profit &amp; margins shows what each medicine earns and lists prices below your target margin; every table exports to PDF or CSV.</PageTip>
-      <Tabs value={tab} onChange={setTab} tabs={[['sales', 'Sales Report'], ['products', 'Sales by Product'], ['consumption', 'Consumption (ABC)'], ['purchases', 'Purchase Report'], ['expenses', 'Expenses Report'], ['profit', 'Profit & margins'], ['stock', 'Stock Valuation'], ['income', 'Income Statement']]} />
+      <Tabs value={tab} onChange={setTab} tabs={[['sales', 'Sales Report'], ['lines', 'Sales lines'], ['products', 'Sales by Product'], ['consumption', 'Consumption (ABC)'], ['purchases', 'Purchase Report'], ['expenses', 'Expenses Report'], ['profit', 'Profit & margins'], ['stock', 'Stock Valuation'], ['income', 'Income Statement']]} />
 
       {tab === 'sales' && (
         <>
@@ -125,6 +128,8 @@ export default function Reports() {
           </table>
         </div>
       )}
+
+      {tab === 'lines' && <SalesLines from={from} to={to} branch={branch} initial={{ medicine: location.state?.medicine }} />}
 
       {tab === 'consumption' && <ConsumptionReport sales={sales} from={from} to={to} />}
 

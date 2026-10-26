@@ -2,13 +2,16 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Pencil, Trash2, ScanText, Camera, FileUp, Loader2, AlertTriangle, CheckCircle2, X, Plus, RotateCcw, Sparkles } from 'lucide-react';
 import { isWeb } from '../platform.js';
-import { useStore, uid, today, now, put, move, addBatch, audit, downloadFile, toCSV, markupPrice, daysUntil, supplierPrices, MAIN_BRANCH } from '../store.jsx';
+import { useStore, uid, today, now, put, del, move, addBatch, audit, downloadFile, toCSV, markupPrice, daysUntil, supplierPrices, MAIN_BRANCH } from '../store.jsx';
 import { CASH } from '../finance.js';
-import { Modal, PdfButton, Tabs, Empty, PageTip } from '../ui.jsx';
+import { Modal, PdfButton, Tabs, Empty, PageTip, usePages, Pager, useSort, SortTh } from '../ui.jsx';
 import { ask, toast } from '../feedback.jsx';
 import { newInternalBarcode } from '../barcode.jsx';
 import { invoicePages, readInvoice, matchProduct, matchSupplier, normDate } from '../invoiceScan.js';
 import { CameraButton, CameraScanner } from '../camscan.jsx';
+import { deliveryDraft, draftsFor, isOld } from '../drafts.js';
+import DraftsList, { useDraftCount } from './Drafts.jsx';
+import { Link, useNavigate } from 'react-router-dom';
 
 const NEW = '__new__'; // a line for a medicine that is not in the list yet
 const FORMS = ['Tablets', 'Capsules', 'Syrups', 'Suspensions', 'Injectables', 'Creams', 'Ointments', 'Drops', 'Sachets', 'Devices', 'Surgicals', 'Others'];
@@ -55,7 +58,7 @@ export function AddStock() {
   const [scanOpen, setScanOpen] = useState(false);
   const [scanned, setScanned] = useState(null); // { pages, supplier, invoiceNo, total } after an invoice was read
   const [checked, setChecked] = useState(false); // the person confirms they checked the scanned lines
-  const blank = () => ({ supplierId: '', invoice: '', date: today(), paid: '', bankId: CASH, markup: s.retailMarkup ?? 50, lines: [blankLine()] });
+  const blank = () => ({ supplierId: '', invoice: '', date: today(), paid: '', bankId: CASH, notes: '', markup: s.retailMarkup ?? 50, lines: [blankLine()] });
   const priceAt = (markup) => (cost) => markupPrice(cost, markup, s.priceRound);
   // A line for a medicine already in the list: its current cost and price, with the totals worked out
   const lineFor = (p, extra = {}, markup = s.retailMarkup) => {
@@ -93,6 +96,9 @@ export function AddStock() {
   const restoredDraft = useRef(false);
   const pendingDraft = useRef(null); // a draft whose medicines haven't arrived yet (the web version downloads afresh after a reload)
   const [form, setForm] = useState(() => {
+    // a saved delivery draft being continued (Purchase History → Drafts → Continue)
+    const dr = location.state?.draftId && (db.drafts || []).find((x) => x.id === location.state.draftId);
+    if (dr) return { ...blank(), ...dr.data, draftId: dr.id, draftStartedAt: dr.startedAt, lines: dr.data.lines?.length ? dr.data.lines.map((l) => ({ ...l, key: l.key || uid() })) : [blankLine()] };
     const po = location.state?.po;
     if (po) return { ...blank(), supplierId: po.supplierId || '', poId: po.id, lines: po.items.map((i) => { const p = products.find((x) => x.id === i.productId); return p ? lineFor(p, { qty: i.qty, ...(i.cost ? { cost: numOrBlank(i.cost), total: numOrBlank(i.cost * i.qty) } : {}) }) : null; }).filter(Boolean) };
     try {
@@ -177,6 +183,18 @@ export function AddStock() {
   };
   const discard = () => { setForm(blank()); setScanned(null); setChecked(false); setRestored(false); try { localStorage.removeItem(draftKey); } catch { /* ignore */ } };
 
+  // Keep this delivery as a draft (synced, so it can be finished later or on another device) and start a fresh one
+  const saveDraft = async () => {
+    if (!form.lines.some((l) => l.productId)) return toast('Add at least one medicine before saving a draft', 'warn');
+    const supplier = db.suppliers.find((x) => x.id === form.supplierId);
+    const { draftId, draftStartedAt, ...rest } = form;
+    const rec = deliveryDraft(rest, { id: draftId || uid(), user, branchId, supplierName: supplier?.name, total, startedAt: draftStartedAt });
+    try { await update((d) => { put(d, 'drafts', rec); }); } catch (err) { return toast('The draft was NOT saved: ' + err.message, 'error'); }
+    toast(`Delivery saved as a draft${scanned ? ' (the invoice photos stay on this device only)' : ''}. Find it in Purchase History → Drafts.`);
+    discard();
+  };
+  const myDrafts = draftsFor(db, { user, branchId, kind: 'delivery' }).filter((x) => x.id !== form.draftId);
+
   const save = async (e) => {
     e.preventDefault();
     const unpicked = form.lines.filter((l) => l.read && !l.productId && Number(l.qty) > 0);
@@ -208,12 +226,13 @@ export function AddStock() {
     const idOf = (l) => (l.productId === NEW ? freshIds.get(nameOf(l).toLowerCase()) : l.productId);
     const purchase = {
       id: uid(), number: 'GRN' + Date.now().toString(36).toUpperCase().slice(-6), supplierId: form.supplierId, supplierName: supplier?.name || '—',
-      invoice: form.invoice.trim(), date: form.date || today(), receivedBy: user.name, total, paid, bankId: form.bankId, branchId,
+      invoice: form.invoice.trim(), notes: (form.notes || '').trim(), date: form.date || today(), receivedBy: user.name, total, paid, bankId: form.bankId, branchId,
       items: lines.map((l) => ({ productId: idOf(l), name: nameOf(l), qty: Number(l.qty) * (Number(l.recvSize) || 1), cost: baseCost(l), batch: l.batch.trim(), expiry: l.expiry, ...(l.productId === NEW ? { added: true } : {}),
         ...(Number(l.recvSize) > 1 ? { pack: { name: l.recvPack, size: Number(l.recvSize), count: Number(l.qty), cost: unitCost(l) } } : {}) })),
       ...(scanned ? { scanned: true } : {}),
     };
-    update((d) => {
+    try { await update((d) => {
+      if (form.draftId && d.drafts.some((x) => x.id === form.draftId)) del(d, 'drafts', form.draftId); // the draft is done: it became this delivery
       const used = new Set(d.products.map((x) => x.barcode).filter(Boolean));
       for (const l of lines) {
         if (l.productId !== NEW) continue;
@@ -243,7 +262,7 @@ export function AddStock() {
       }
       put(d, 'purchases', purchase);
       audit(d, user, 'Stock received', `${purchase.number} from ${purchase.supplierName}: ${lines.length} lines, ${fmt(total)}${scanned ? ' (scanned invoice, checked by ' + user.name + ')' : ''}${freshIds.size ? `, ${freshIds.size} new medicine${freshIds.size > 1 ? 's' : ''}` : ''}`, branchId);
-    });
+    }); } catch (err) { return toast('The delivery was NOT received: ' + err.message + ' Nothing was added to stock; the lines are still here to try again.', 'error'); }
     setSaved(purchase);
     discard();
     searchRef.current?.focus();
@@ -258,6 +277,8 @@ export function AddStock() {
         addNew('', code); setCam(false);
         return 'New barcode: type the medicine name';
       }} />}
+      {form.draftId && <div className="notice info-notice">Continuing a saved draft. Receiving it removes it from Drafts; "Save as draft" keeps your changes in it.</div>}
+      {myDrafts.length > 0 && <div className="notice info-notice row gap wrap">You have {myDrafts.length} saved deliver{myDrafts.length === 1 ? 'y' : 'ies'}{myDrafts.some((x) => isOld(x)) ? ', one waiting over a day' : ''}.<Link to="/purchases" state={{ tab: 'drafts' }}>Open drafts</Link></div>}
       <PageTip id="add-stock" title="Receiving a delivery">Search or scan each medicine (not in the list? type its name and choose “Add as a new medicine”). Type the line total from the invoice: the unit cost and the retail price work themselves out, and you can still change the price. Scan invoice reads a photo for you.</PageTip>
       {scanOpen && <InvoiceScanner cfg={syncCfg} onClose={() => setScanOpen(false)} onRead={applyScan} />}
       {restored && !scanned && (
@@ -372,10 +393,12 @@ export function AddStock() {
           <label className="field"><span>Paid from</span>
             <select value={form.bankId} onChange={(e) => setForm({ ...form, bankId: e.target.value })}>{db.banks.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select>
           </label>
+          <label className="field full"><span>Notes (optional)</span><input value={form.notes || ''} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="e.g. 2 cartons short, supplier to deliver Friday" /></label>
         </div>
         {scanned && <label className="field check scan-confirm"><input type="checkbox" checked={checked} onChange={(e) => setChecked(e.target.checked)} /><span>I have checked every line against the invoice (medicine, quantity, cost, batch and expiry)</span></label>}
         <div className="form-actions">
           <div className="grow"><strong>Total: {fmt(total)}</strong>{form.paid !== '' && Number(form.paid) < total && <small className="text-warn"> · {fmt(total - Math.max(0, Number(form.paid) || 0))} on credit</small>}</div>
+          <button type="button" className="btn ghost" onClick={saveDraft} title="Keep this delivery to finish later (also from another device)">Save as draft</button>
           <button className="btn primary" disabled={!!scanned && !checked}>Receive stock</button>
         </div>
       </form>
@@ -385,11 +408,19 @@ export function AddStock() {
 
 export default function Purchases() {
   const { db, fmt, can } = useStore();
-  const [tab, setTab] = useState('history');
+  const location = useLocation();
+  const [tab, setTab] = useState(location.state?.tab || 'history');
+  const draftCount = useDraftCount('delivery');
   const [view, setView] = useState(null);
   const [editing, setEditing] = useState(null);
   const [q, setQ] = useState('');
-  const rows = db.purchases.filter((p) => !q || [p.supplierName, p.invoice, p.number].join(' ').toLowerCase().includes(q.toLowerCase()));
+  const [pf, setPf] = useState({ from: '', to: '', supplier: '' });
+  const payType = (p) => { const paid = p.paid ?? p.total; return paid <= 0 ? 'Credit' : (db.banks.find((b) => b.id === p.bankId)?.name || 'Cash') + (paid < p.total ? ' + credit' : ''); };
+  const suppliers = [...new Set(db.purchases.map((p) => p.supplierName).filter(Boolean))].sort();
+  const rows = db.purchases.filter((p) => (!q || [p.supplierName, p.invoice, p.number, p.notes, p.receivedBy].join(' ').toLowerCase().includes(q.toLowerCase()))
+    && (!pf.from || p.date >= pf.from) && (!pf.to || p.date <= pf.to) && (!pf.supplier || p.supplierName === pf.supplier));
+  const sorted = useSort(rows, { date: (p) => p.date + (p.number || ''), number: (p) => p.number || '', supplier: (p) => p.supplierName || '', invoice: (p) => p.invoice || '', total: (p) => p.total, by: (p) => p.receivedBy || '' }, 'date');
+  const page = usePages(sorted.rows, 25);
   const histRef = useRef(null);
   return (
     <div className="page">
@@ -398,30 +429,40 @@ export default function Purchases() {
         <div className="row gap">
           <PdfButton target={histRef} title="Purchase history" subtitle={`${rows.length} deliveries · ${fmt(rows.reduce((a, p) => a + (p.total || 0), 0))}`} />
           <input className="search" placeholder="Search…" value={q} onChange={(e) => setQ(e.target.value)} />
-          <button className="btn ghost" onClick={() => downloadFile('purchases.csv', toCSV(rows.map((p) => ({ date: p.date, number: p.number, supplier: p.supplierName, invoice: p.invoice, items: p.items.length, total: p.total, paid: p.paid ?? p.total, receivedBy: p.receivedBy }))), 'text/csv')}>Export CSV</button>
+          <button className="btn ghost" onClick={() => downloadFile('purchases.csv', toCSV(rows.map((p) => ({ date: p.date, number: p.number, supplier: p.supplierName, invoice: p.invoice, paymentType: payType(p), items: p.items.length, total: p.total, paid: p.paid ?? p.total, receivedBy: p.receivedBy, notes: p.notes || '' }))), 'text/csv')}>Export CSV</button>
         </div>
       </div>
-      <Tabs tabs={[['history', 'Deliveries'], ['prices', 'Supplier prices']]} value={tab} onChange={setTab} />
+      <Tabs tabs={[['history', 'Deliveries'], ['drafts', <>Drafts{draftCount > 0 && <span className="badge-count">{draftCount}</span>}</>], ['prices', 'Supplier prices']]} value={tab} onChange={setTab} />
+      {tab === 'drafts' && <DraftsList kind="delivery" />}
       {tab === 'prices' && <SupplierPrices q={q} />}
+      {tab === 'history' && <div className="report-filters">
+        <label>From<input type="date" value={pf.from} onChange={(e) => setPf({ ...pf, from: e.target.value })} /></label>
+        <label>To<input type="date" value={pf.to} onChange={(e) => setPf({ ...pf, to: e.target.value })} /></label>
+        <label>Supplier<select value={pf.supplier} onChange={(e) => setPf({ ...pf, supplier: e.target.value })}><option value="">All</option>{suppliers.map((x) => <option key={x}>{x}</option>)}</select></label>
+      </div>}
       {tab === 'history' && <div className="card table-wrap" ref={histRef}>
         <table>
-          <thead><tr><th>Date</th><th>GRN</th><th>Supplier</th><th>Invoice</th><th>Items</th><th>Received by</th><th className="num">Total</th><th className="num">Unpaid</th><th /></tr></thead>
+          <thead><tr><SortTh s={sorted} k="date">Date</SortTh><SortTh s={sorted} k="number">GRN</SortTh><SortTh s={sorted} k="supplier">Supplier</SortTh><th>Payment type</th><SortTh s={sorted} k="invoice">Invoice</SortTh><th>Items</th><SortTh s={sorted} k="by">Received by</SortTh><th>Notes</th><SortTh s={sorted} k="total" className="num">Total</SortTh><th className="num">Unpaid</th><th /></tr></thead>
           <tbody>
-            {rows.map((p) => (
+            {page.rows.map((p) => (
               <tr key={p.id}>
-                <td>{p.date}</td><td>{p.number}</td><td>{p.supplierName}</td><td>{p.invoice}</td><td>{p.items.length}</td><td>{p.receivedBy}</td>
-                <td className="num">{fmt(p.total)}</td><td className="num">{p.total - (p.paid ?? p.total) > 0 ? <span className="text-warn">{fmt(p.total - p.paid)}</span> : '—'}</td>
-                <td className="actions"><button className="btn sm ghost" onClick={() => setView(p)}>View</button>{can('purchases.edit') && !p.imported && <button className="btn sm ghost" onClick={() => setEditing(p)}><Pencil size={14} />Edit</button>}{p.editedAt && <small className="muted"> · edited</small>}</td>
+                <td>{p.date}</td><td>{p.number}</td><td>{p.supplierName}</td><td>{payType(p)}</td><td>{p.invoice}</td><td>{p.items.length}</td><td>{p.receivedBy}</td>
+                <td className="muted notes-cell" title={p.notes || undefined}>{p.notes || '—'}</td>
+                <td className="num"><strong>{fmt(p.total)}</strong></td><td className="num">{p.total - (p.paid ?? p.total) > 0 ? <span className="text-warn">{fmt(p.total - p.paid)}</span> : '—'}</td>
+                <td className="actions"><div className="row-acts"><button className="btn sm ghost" onClick={() => setView(p)}>View</button>{can('purchases.edit') && !p.imported && <button className="btn sm ghost act-edit" onClick={() => setEditing(p)}><Pencil size={14} />Edit</button>}</div>{p.editedAt && <small className="muted">edited</small>}</td>
               </tr>
             ))}
-            {!rows.length && (db.purchases.length ? <Empty colSpan={9}>No deliveries match</Empty> : <Empty colSpan={9} action={{ label: 'Add stock', to: '/add-stock' }}>No deliveries yet. Each delivery you receive in Add Stock is kept here with its invoice, to view or correct.</Empty>)}
+            {!rows.length && (db.purchases.length ? <Empty colSpan={11}>No deliveries match</Empty> : <Empty colSpan={11} action={{ label: 'Add stock', to: '/add-stock' }}>No deliveries yet. Each delivery you receive in Add Stock is kept here with its invoice, to view or correct.</Empty>)}
+            {rows.length > 0 && <tr className="total-row"><td colSpan={8}>Total · {rows.length.toLocaleString()} deliveries</td><td className="num">{fmt(rows.reduce((a, p) => a + (p.total || 0), 0))}</td><td className="num">{fmt(rows.reduce((a, p) => a + Math.max(0, p.total - (p.paid ?? p.total)), 0))}</td><td /></tr>}
           </tbody>
         </table>
+        <Pager p={page} />
       </div>}
       {editing && <PurchaseEditor purchase={editing} onClose={() => setEditing(null)} />}
       {view && (
         <Modal title={`Purchase ${view.number || ''}`} onClose={() => setView(null)} wide>
-          <p className="muted">{view.supplierName} · invoice {view.invoice || '—'} · {view.date}</p>
+          <p className="muted">{view.supplierName} · invoice {view.invoice || '—'} · {view.date} · {payType(view)}</p>
+          {view.notes && <p><strong>Notes:</strong> {view.notes}</p>}
           <table>
             <thead><tr><th>Medicine</th><th>Batch</th><th>Expiry</th><th className="num">Qty</th><th className="num">Cost</th><th className="num">Total</th></tr></thead>
             <tbody>{view.items.map((i, n) => <tr key={n}><td>{i.name}</td><td>{i.batch}</td><td>{i.expiry}</td><td className="num">{i.qty}</td><td className="num">{fmt(i.cost)}</td><td className="num">{fmt(i.qty * i.cost)}</td></tr>)}</tbody>
@@ -437,7 +478,7 @@ export default function Purchases() {
 function PurchaseEditor({ purchase, onClose }) {
   const { db, fmt, update, user, batchesOf } = useStore();
   const br = purchase.branchId || MAIN_BRANCH;
-  const [f, setF] = useState(() => ({ supplierId: purchase.supplierId || '', invoice: purchase.invoice || '', date: purchase.date, paid: purchase.paid ?? purchase.total, reason: '', items: purchase.items.map((i) => ({ ...i })) }));
+  const [f, setF] = useState(() => ({ supplierId: purchase.supplierId || '', invoice: purchase.invoice || '', notes: purchase.notes || '', date: purchase.date, paid: purchase.paid ?? purchase.total, reason: '', items: purchase.items.map((i) => ({ ...i })) }));
   const total = f.items.reduce((a, i) => a + Number(i.qty || 0) * Number(i.cost || 0), 0);
   const setItem = (k, patch) => setF((x) => ({ ...x, items: x.items.map((i, n) => (n === k ? { ...i, ...patch } : i)) }));
   const findBatch = (d, i) => (i.batchId && d.batches.find((b) => b.id === i.batchId)) || d.batches.find((b) => b.productId === i.productId && b.batch === String(i.batch || '').trim() && (b.expiry || '') === (i.expiry || ''));
@@ -475,7 +516,7 @@ function PurchaseEditor({ purchase, onClose }) {
         if (qty > 0) items.push({ ...i, qty, cost, batchId });
       });
       const newTotal = items.reduce((a, i) => a + i.qty * i.cost, 0);
-      put(d, 'purchases', { ...purchase, supplierId: f.supplierId, supplierName: supplier?.name || purchase.supplierName, invoice: f.invoice, date: f.date, items, total: newTotal,
+      put(d, 'purchases', { ...purchase, supplierId: f.supplierId, supplierName: supplier?.name || purchase.supplierName, invoice: f.invoice, notes: f.notes.trim(), date: f.date, items, total: newTotal,
         paid: Math.min(Number(f.paid) || 0, newTotal), editedBy: user.name, editedAt: now(),
         edits: [...(purchase.edits || []), { at: now(), by: user.name, reason: f.reason.trim(), before: { total: purchase.total } }] });
       audit(d, user, 'Purchase edited', `${purchase.number}: ${fmt(purchase.total)} → ${fmt(newTotal)} (${f.reason.trim()})`, br);
@@ -489,6 +530,7 @@ function PurchaseEditor({ purchase, onClose }) {
         <div className="form-grid">
           <label className="field"><span>Supplier</span><select value={f.supplierId} onChange={(e) => setF({ ...f, supplierId: e.target.value })}><option value="">—</option>{db.suppliers.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
           <label className="field"><span>Invoice no.</span><input value={f.invoice} onChange={(e) => setF({ ...f, invoice: e.target.value })} /></label>
+          <label className="field"><span>Notes</span><input value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} /></label>
           <label className="field"><span>Date</span><input type="date" value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })} /></label>
           <label className="field"><span>Amount paid</span><input type="number" min="0" step="any" value={f.paid} onChange={(e) => setF({ ...f, paid: e.target.value })} /></label>
         </div>

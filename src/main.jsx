@@ -9,6 +9,7 @@ import { idbGet, idbKeys } from './idb.js';
 import './styles.css';
 import { applyTheme, startupTheme, savedAccent } from './themes.js';
 import { applyStyle, savedStyle } from './surface.js';
+import { applyLevel, savedLevel } from './vivid.js';
 import { isAndroid, isNative } from './platform.js';
 import { startUpdates } from './update.js';
 import { startDevice } from './device.js';
@@ -29,6 +30,7 @@ if (isAndroid) document.documentElement.classList.add('is-android');
 // Apply the saved theme and surface style before first paint (no flash)
 applyTheme(startupTheme(), savedAccent());
 applyStyle(savedStyle());
+applyLevel(savedLevel());
 
 class ErrorBoundary extends React.Component {
   state = { error: null };

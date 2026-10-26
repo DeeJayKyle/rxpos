@@ -23,6 +23,7 @@ import RefreshHost from './refresh.jsx';
 import { startUpdates, onUpdate, applyUpdate, justUpdated, LABEL } from './update.js';
 import { applyTheme, saveTheme, allowedThemes, savedMode, saveMode, systemDark, paletteFor, startupTheme, ACCENTS, savedAccent, saveAccent, withAccent } from './themes.js';
 import { STYLES, applyStyle, savedStyle, saveStyle } from './surface.js';
+import { LEVELS, applyLevel, savedLevel, saveLevel } from './vivid.js';
 import { TwoStepModal } from './twostep.jsx';
 import { setCrashCloud } from './crash.js';
 import { setBadge } from './badges.js';
@@ -150,6 +151,22 @@ function useSurface() {
   return [style, setStyle];
 }
 
+/** The device's colour level: Calm (standard) or Vivid (src/vivid.js) */
+function useLevel() {
+  const [level, setLevel] = useState(() => savedLevel());
+  useEffect(() => { applyLevel(level); saveLevel(level); }, [level]);
+  return [level, setLevel];
+}
+function ColourLevel({ onPick }) {
+  const [level, setLevel] = useLevel();
+  return LEVELS.map((l) => (
+    <button key={l.id} className={'style-item' + (l.id === level ? ' on' : '')} onClick={() => { setLevel(l.id); onPick(); }}>
+      <span className={'swatch level-swatch level-' + l.id} />
+      <span className="grow">{l.name}<small className="muted"> · {l.hint}</small></span>
+    </button>
+  ));
+}
+
 function ThemePicker({ theme, setTheme, mode, setMode, accent, setAccent, style, setStyle }) {
   const { db } = useStore();
   const branding = db.license?.[0]?.branding;
@@ -208,6 +225,8 @@ function ThemePicker({ theme, setTheme, mode, setMode, accent, setAccent, style,
               {t.base === 'dark' ? <Moon size={13} /> : <Sun size={13} />}
             </button>
           ))}
+          <div className="bell-head">Colour</div>
+          <ColourLevel onPick={() => setOpen(false)} />
           <div className="bell-head">Style</div>
           {STYLES.map((s) => (
             <button key={s.id} className={'style-item' + (s.id === style ? ' on' : '')} onClick={() => { setStyle(s.id); setOpen(false); }}>
@@ -417,10 +436,12 @@ function Shell() {
   useEffect(() => { if (me?.mustChangePassword && !asked.current) { asked.current = true; changePassword(true); } }, [me?.mustChangePassword]); // eslint-disable-line react-hooks/exhaustive-deps
   // Signing out never deletes unsent work: the Windows and Android apps keep it and send it later;
   // the web version keeps nothing, so it asks before letting it go
-  const { pending: unsent } = useStore();
+  const { pending: unsent, db: dbNow } = useStore();
   const signOut = async () => {
+    const mine = (dbNow.drafts || []).filter((d) => d.userId === user.id).length;
     const out = await setUser(null, { confirmLoss: (n) => ask({ title: `${n} change(s) haven't reached the cloud`, message: 'This browser keeps nothing on the computer, so signing out now loses them. Stay signed in until the internet is back, or sign out anyway.', confirmText: 'Sign out anyway', cancelText: 'Stay signed in', danger: true }) });
     if (out && keepsData() && unsent) toast(`${unsent} change(s) are kept on this device and will be sent when someone signs in again.`, 'info');
+    else if (out && mine) toast(`Your ${mine} held sale${mine === 1 ? '' : 's'}/draft${mine === 1 ? '' : 's'} stay saved: continue ${mine === 1 ? 'it' : 'them'} after signing in, on any device.`, 'info');
   };
   const initials = user.name.split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
 

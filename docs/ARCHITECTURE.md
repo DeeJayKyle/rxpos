@@ -164,3 +164,24 @@ Rollback: the Worker can be rolled back to 1.5.1 (it ignores the `sync_ops` tabl
 last-writer-wins without dedup). An app rolled back to 1.5.1 reads its kept 1.5 copy (still present for 14 days), so
 before rolling back an app make sure its changes are synced (top bar shows Synced), or use "Restore the copy from
 before the upgrade" first.
+
+## 11. 1.7 additions: reports, colour and drafts
+
+- **Drafts** (`src/drafts.js`, `src/pages/Drafts.jsx`): held sales and unfinished deliveries are records in the synced
+  `drafts` table, `{ id, kind: 'sale' | 'delivery', branchId, mode?, userId, userName, order, startedAt, title, count,
+  total, data }`. They belong to a person and a branch, sync like any record (so they follow the person to another
+  device; the web version keeps them in the cloud, nothing on the computer) and **never touch stock or the books**:
+  only completing one does, through the normal sale or delivery commit. Continuing a held sale removes the draft in
+  the same commit that puts any open sale on hold; receiving a delivery draft deletes it in the same commit as the
+  stock, so a delivery cannot be received twice from a draft. Supervisors (any role but cashier) can see everyone's
+  drafts at the branch and take them over or discard them; a discard asks first and is written to the audit log.
+  Sales held on a device before 1.7 move into drafts once. Scanned invoice photos stay on the device (not synced).
+  Receiving stock now waits for the device commit before saying it was received, like a sale.
+- **Reports → Sales lines** (`src/pages/SalesLines.jsx`): one row per sold line, amount after the line's share of the
+  sale discount, profit against the cost saved with the sale; filters by dispenser, sales type, payment, customer and
+  medicine; loss lines flagged.
+- **Lists**: Sales and Purchase History page through long lists (`usePages`/`Pager`, `useSort`/`SortTh` in
+  `src/ui.jsx`), print a receipt or an A4 invoice straight from a row, and show payment as a labelled chip.
+- **Colour level** (`src/vivid.js`): Calm (standard) or Vivid, chosen per device in the appearance menu; one meaning
+  per colour; tile colours are checked for white-text contrast in `tests/contrast-test.mjs`.
+- **Tests**: `tests/v41-reports-drafts.mjs` (38 checks).

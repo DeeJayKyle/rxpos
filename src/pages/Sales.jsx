@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Download, Printer, Undo2, Eye, Pencil, Trash2, Plus, History } from 'lucide-react';
+import { Download, Printer, Undo2, Eye, Pencil, Trash2, Plus, History, FileText } from 'lucide-react';
 import { useStore, dayOf, downloadFile, toCSV, put, move, now, audit, allocate, MAIN_BRANCH, DEFAULT_PAYMENT_METHODS } from '../store.jsx';
-import { Modal, SearchBox, Empty, PdfButton, ReceiptPdfButton } from '../ui.jsx';
+import { Modal, SearchBox, Empty, PdfButton, ReceiptPdfButton, Tabs, PayChip, usePages, Pager, useSort, SortTh } from '../ui.jsx';
 import { ask, toast } from '../feedback.jsx';
 import { Barcode } from '../barcode.jsx';
+import DraftsList, { useDraftCount } from './Drafts.jsx';
 
 /** Thermal-printer friendly receipt (58 mm or 80 mm, set in Settings). */
 export function Receipt({ sale }) {
@@ -54,6 +55,70 @@ export function Receipt({ sale }) {
   );
 }
 
+/** Full-page (A4) invoice for a sale: for insurers, companies and anyone who needs more than a till slip */
+export function SaleInvoice({ sale }) {
+  const { db, fmt } = useStore();
+  const s = db.settings;
+  const branch = db.branches.find((b) => b.id === (sale.branchId || MAIN_BRANCH));
+  const cust = db.customers.find((c) => c.id === sale.customerId);
+  const due = sale.total - (sale.paid ?? sale.total);
+  return (
+    <div className="invoice-doc print-area paper-210">
+      <div className="invoice-head">
+        <div>
+          {db.license?.[0]?.branding?.logo && <img className="receipt-logo" src={db.license[0].branding.logo} alt="" />}
+          <strong className="invoice-name">{s.name}</strong>
+          {db.branches.length > 1 && branch && <div>{branch.name}</div>}
+          {(branch?.address || s.address) && <div>{branch?.address || s.address}</div>}
+          {s.phone && <div>Tel: {s.phone}</div>}
+          {s.tin && <div>TIN: {s.tin}</div>}
+        </div>
+        <div className="invoice-meta">
+          <h2>INVOICE</h2>
+          <div>No. <b>{sale.number}</b></div>
+          <div>Date: {new Date(sale.date).toLocaleString([], { dateStyle: 'long', timeStyle: 'short' })}</div>
+          <div>Served by: {sale.cashier}</div>
+          {sale.status === 'refunded' && <div className="receipt-tag">REFUNDED</div>}
+        </div>
+      </div>
+      <div className="invoice-to"><small>Bill to</small><b>{sale.customerName || 'Walk-in customer'}</b>{cust?.phone && <span>Tel: {cust.phone}</span>}{cust?.address && <span>{cust.address}</span>}</div>
+      <table className="invoice-lines">
+        <thead><tr><th>#</th><th>Description</th><th>Batch / expiry</th><th className="num">Qty</th><th className="num">Unit price</th><th className="num">Amount</th></tr></thead>
+        <tbody>{sale.items.map((i, n) => (
+          <tr key={n}><td>{n + 1}</td><td>{i.name}</td><td>{(i.alloc || []).map((a) => [a.batch, a.expiry].filter(Boolean).join(' · ')).filter(Boolean).join(', ') || '—'}</td><td className="num">{i.qty}</td><td className="num">{fmt(i.price)}</td><td className="num">{fmt(i.qty * i.price)}</td></tr>
+        ))}</tbody>
+      </table>
+      <div className="invoice-totals">
+        <div><span>Subtotal</span><span>{fmt(sale.subtotal)}</span></div>
+        {sale.discount > 0 && <div><span>Discount</span><span>-{fmt(sale.discount)}</span></div>}
+        {sale.tax > 0 && <div><span>Tax</span><span>{fmt(sale.tax)}</span></div>}
+        <div className="grand"><span>Total</span><span>{fmt(sale.total)}</span></div>
+        <div><span>Paid ({sale.payment}{sale.momo?.txid ? ` · ref ${sale.momo.txid}` : ''})</span><span>{fmt(sale.paid ?? sale.total)}</span></div>
+        {due > 0 && <div className="grand"><span>Balance due</span><span>{fmt(due)}</span></div>}
+      </div>
+      {sale.momo && <p className="small">{sale.momo.confirmed ? 'Payment confirmed by the mobile network.' : 'Payment recorded by staff (not confirmed by the mobile network).'}</p>}
+      <div className="invoice-sign"><span>Received by ____________________</span><span>Signature &amp; stamp ____________________</span></div>
+      {s.receiptFooter && <p className="center small">{s.receiptFooter}</p>}
+    </div>
+  );
+}
+
+/** Print a receipt or an invoice straight from a list row: render it off screen, print, then remove it */
+export function usePrintSale() {
+  const [job, setJob] = useState(null);
+  useEffect(() => {
+    if (!job) return;
+    // only this document prints (not a receipt open in a dialog behind it)
+    document.body.classList.add('printing-job');
+    const t = setTimeout(() => { window.print(); setJob(null); }, 60);
+    return () => { clearTimeout(t); document.body.classList.remove('printing-job'); };
+  }, [job]);
+  const node = job ? <div className="print-stage">{job.kind === 'invoice' ? <SaleInvoice sale={job.sale} /> : <Receipt sale={job.sale} />}</div> : null;
+  return [node, (sale, kind) => setJob({ sale, kind })];
+}
+
+const STATUSES = [['', 'All statuses'], ['completed', 'Completed'], ['refunded', 'Refunded'], ['edited', 'Edited']];
+
 export default function Sales() {
   const { db, update, fmt, user, branchId, can } = useStore();
   const location = useLocation();
@@ -63,14 +128,24 @@ export default function Sales() {
   const [editing, setEditing] = useState(null);
   const [branch, setBranch] = useState(user.role === 'cashier' ? branchId : 'all');
   const [view, setView] = useState(null);
-  const [onlyEdited, setOnlyEdited] = useState(false);
+  const [tab, setTab] = useState(location.state?.tab || 'sales');
+  const draftCount = useDraftCount('sale');
+  const [f, setF] = useState({ cashier: '', payment: '', customer: '', status: '' });
+  const setFilter = (k) => (e) => setF({ ...f, [k]: e.target.value });
+  const onlyEdited = f.status === 'edited';
+  const [printNode, printSale] = usePrintSale();
+  const phoneOf = (s) => db.customers.find((c) => c.id === s.customerId)?.phone || '';
 
   const ql = q.toLowerCase();
-  const rows = db.sales.filter((s) =>
-    (branch === 'all' || (s.branchId || MAIN_BRANCH) === branch) &&
-    (!q || [s.number, s.customerName, s.cashier, s.payment, s.type, s.momo?.txid].join(' ').toLowerCase().includes(ql)) &&
-    (!from || dayOf(s.date) >= from) && (!to || dayOf(s.date) <= to) && (!onlyEdited || s.edits?.length > 0));
+  const inScope = db.sales.filter((s) => (branch === 'all' || (s.branchId || MAIN_BRANCH) === branch) && (!from || dayOf(s.date) >= from) && (!to || dayOf(s.date) <= to));
+  const opts = (k) => [...new Set(inScope.map((s) => s[k]).filter(Boolean))].sort();
+  const rows = inScope.filter((s) =>
+    (!q || [s.number, s.customerName, s.cashier, s.payment, s.type, s.momo?.txid, ...s.items.map((i) => i.name)].join(' ').toLowerCase().includes(ql)) &&
+    (!f.cashier || s.cashier === f.cashier) && (!f.payment || s.payment === f.payment) && (!f.customer || s.customerName === f.customer) &&
+    (!f.status || (f.status === 'edited' ? s.edits?.length > 0 : f.status === 'refunded' ? s.status === 'refunded' : s.status !== 'refunded')));
   const valid = rows.filter((s) => s.status !== 'refunded');
+  const sorted = useSort(rows, { number: (s) => s.number, date: (s) => s.date, customer: (s) => s.customerName || '', cashier: (s) => s.cashier || '', payment: (s) => s.payment || '', total: (s) => s.total }, 'date');
+  const page = usePages(sorted.rows, 25);
 
   const refund = async (sale) => {
     if (!(await ask({ title: `Refund ${sale.number}?`, message: `${fmt(sale.total)} will be refunded and the items returned to stock (same batches).`, confirmText: 'Refund', danger: true }))) return;
@@ -100,10 +175,9 @@ export default function Sales() {
               {db.branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
             </select>
           )}
-          <button type="button" className={"chip" + (onlyEdited ? " active" : "")} onClick={() => setOnlyEdited((v) => !v)} title="Show only sales that were changed after they were made"><History size={13} /> Edited only</button>
-          <SearchBox value={q} onChange={setQ} placeholder="Receipt, customer, cashier…" />
-          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} title="From" />
-          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} title="To" />
+          <SearchBox value={q} onChange={setQ} placeholder="Receipt, customer, medicine…" />
+          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} title="From" aria-label="From" />
+          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} title="To" aria-label="To" />
           <button className="btn ghost" onClick={() => downloadFile('sales.csv', toCSV(exportRows), 'text/csv')}><Download size={16} />CSV</button>
           <PdfButton title="Sales history" subtitle={[from || to ? `${from || 'start'} to ${to || 'today'}` : 'All dates', q && `search "${q}"`, onlyEdited && 'edited sales only', `${valid.length} sales · ${fmt(valid.reduce((a, s) => a + s.total, 0))}`].filter(Boolean).join(' · ')}
             data={() => [{ head: ['Receipt', 'Date', 'Customer', 'Cashier', 'Payment', 'Status', 'Total'], numeric: [6],
@@ -111,25 +185,46 @@ export default function Sales() {
               foot: ['', '', '', '', '', 'Total (excl. refunds)', fmt(valid.reduce((a, s) => a + s.total, 0))] }]} />
         </div>
       </div>
+      <Tabs tabs={[['sales', 'Sales'], ['drafts', <>Held sales{draftCount > 0 && <span className="badge-count">{draftCount}</span>}</>]]} value={tab} onChange={setTab} />
+      {tab === 'drafts' && <DraftsList kind="sale" />}
+      {tab === 'sales' && <>
+      <div className="report-filters">
+        <label>Cashier<select value={f.cashier} onChange={setFilter('cashier')}><option value="">All</option>{opts('cashier').map((x) => <option key={x}>{x}</option>)}</select></label>
+        <label>Payment<select value={f.payment} onChange={setFilter('payment')}><option value="">All</option>{opts('payment').map((x) => <option key={x}>{x}</option>)}</select></label>
+        <label>Customer<select value={f.customer} onChange={setFilter('customer')}><option value="">All</option>{opts('customerName').map((x) => <option key={x}>{x}</option>)}</select></label>
+        <label>Status<select value={f.status} onChange={setFilter('status')}>{STATUSES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></label>
+      </div>
       <div className="card table-wrap">
         <table>
-          <thead><tr><th>Receipt</th><th>Date</th>{db.branches.length > 1 && <th>Branch</th>}<th>Customer</th><th>Cashier</th><th>Payment</th><th>Status</th><th className="num">Total</th><th /></tr></thead>
+          <thead><tr><SortTh s={sorted} k="number">Receipt</SortTh><SortTh s={sorted} k="date">Date</SortTh><th>Time</th>{db.branches.length > 1 && <th>Branch</th>}<SortTh s={sorted} k="customer">Customer</SortTh><th>Phone</th><SortTh s={sorted} k="payment">Payment</SortTh><th>Status</th><SortTh s={sorted} k="total" className="num">Total</SortTh><SortTh s={sorted} k="cashier">Cashier</SortTh><th /></tr></thead>
           <tbody>
-            {rows.slice(0, 500).map((s) => (
+            {page.rows.map((s) => (
               <tr key={s.id} className={(s.status === 'refunded' ? 'dim' : '') + (s.edits?.length ? ' edited-row' : '')} title={s.edits?.length ? `Edited ${s.edits.length}× · last by ${s.editedBy || s.edits.at(-1).by}` : undefined}>
                 <td><strong>{s.number}</strong><br /><small className="muted cap">{s.type || 'retail'}</small></td>
-                <td>{new Date(s.date).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</td>
+                <td>{new Date(s.date).toLocaleDateString([], { dateStyle: 'medium' })}</td>
+                <td>{new Date(s.date).toLocaleTimeString([], { timeStyle: 'short' })}</td>
                 {db.branches.length > 1 && <td>{branchName(s.branchId)}</td>}
-                <td>{s.customerName}</td><td>{s.cashier}</td><td>{s.payment}{s.momo?.txid ? <><br /><small className="muted">{s.momo.txid}</small></> : null}</td>
+                <td>{s.customerName}</td><td className="muted">{phoneOf(s) || '—'}</td>
+                <td><PayChip name={s.payment} />{s.momo?.txid ? <><br /><small className="muted">{s.momo.txid}</small></> : null}</td>
                 <td><span className={'badge ' + (s.status === 'refunded' ? 'danger' : 'ok')}>{s.status}</span>{s.edits?.length > 0 && <><br /><button type="button" className="badge warn edited-badge" onClick={() => setView(s)} title="See what was changed and by whom"><History size={11} /> Edited{s.edits.length > 1 ? ` ×${s.edits.length}` : ''}</button></>}</td>
-                <td className="num">{fmt(s.total)}</td>
-                <td className="actions"><button className="btn sm ghost" onClick={() => setView(s)}><Eye size={14} />View</button>{s.status !== 'refunded' && can('sales.edit') && <button className="btn sm ghost" onClick={() => setEditing(s)}><Pencil size={14} />Edit</button>}</td>
+                <td className="num"><strong>{fmt(s.total)}</strong></td>
+                <td>{s.cashier}</td>
+                <td className="actions"><div className="row-acts">
+                  <button className="btn sm ghost" onClick={() => setView(s)}><Eye size={14} />View</button>
+                  <button className="btn sm ghost act-print" onClick={() => printSale(s, 'receipt')} title="Print the till receipt"><Printer size={14} />Receipt</button>
+                  <button className="btn sm ghost act-invoice" onClick={() => printSale(s, 'invoice')} title="Print a full-page invoice"><FileText size={14} />Invoice</button>
+                  {s.status !== 'refunded' && can('sales.edit') && <button className="btn sm ghost act-edit" onClick={() => setEditing(s)}><Pencil size={14} />Edit</button>}
+                </div></td>
               </tr>
             ))}
-            {!rows.length && (db.sales.length ? <Empty colSpan={9}>No sales match. Try another receipt number, customer or date.</Empty> : <Empty colSpan={9} action={{ label: 'Open the POS', to: '/pos' }}>No sales yet. Every sale rung up at the POS appears here with its receipt, to reprint, refund or correct.</Empty>)}
+            {!rows.length && (db.sales.length ? <Empty colSpan={11}>No sales match. Try another receipt number, customer, filter or date.</Empty> : <Empty colSpan={11} action={{ label: 'Open the POS', to: '/pos' }}>No sales yet. Every sale rung up at the POS appears here with its receipt, to reprint, refund or correct.</Empty>)}
+            {rows.length > 0 && <tr className="total-row"><td colSpan={db.branches.length > 1 ? 8 : 7}>Total (excl. refunds) · {valid.length.toLocaleString()} sales</td><td className="num">{fmt(valid.reduce((a, s) => a + s.total, 0))}</td><td colSpan={2} /></tr>}
           </tbody>
         </table>
+        <Pager p={page} />
       </div>
+      </>}
+      {printNode}
       {editing && <SaleEditor sale={editing} onClose={() => setEditing(null)} />}
       {view && (
         <Modal title={`Receipt ${view.number}`} onClose={() => setView(null)}>
@@ -140,6 +235,7 @@ export default function Sales() {
             {view.imported && <small className="muted">Copied from {view.imported}</small>}
             {view.status !== 'refunded' && !view.imported && user.role !== 'cashier' && <button className="btn danger" onClick={() => refund(view)}><Undo2 size={16} />Refund</button>}
             <ReceiptPdfButton sale={view} />
+            <button className="btn ghost act-invoice" onClick={() => { printSale(view, 'invoice'); }}><FileText size={16} />Invoice</button>
             <button className="btn primary" onClick={() => window.print()}><Printer size={16} />Print</button>
           </div>
         </Modal>
