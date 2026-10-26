@@ -13,6 +13,12 @@ const te = new TextEncoder();
 const PW_ITER = 100000; // same cost as the server's password hash
 const PIN_ITER = 310000; // a PIN is short, so hash it harder
 const PIN_MAX_TRIES = 5; // then the PIN is forgotten and the full password is required
+// 1.6 offline access window: a device signs someone in offline only within this many days of their last sign-in on it
+// with the internet (which renews it). After that they must connect once, so a removed or disabled account, a changed
+// password or a lost device stops working offline within a month at most.
+export const OFFLINE_DAYS = 30;
+export const OFFLINE_EXPIRED = `It has been more than ${OFFLINE_DAYS} days since you last signed in on this device with the internet. Connect once to sign in again.`;
+const within = (e) => !e?.at || Date.now() - e.at < OFFLINE_DAYS * 864e5;
 
 const hex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
 const b64 = (bytes) => btoa(String.fromCharCode(...bytes));
@@ -33,7 +39,7 @@ export async function rememberOffline(tenant, userId, password) {
   if (!userId || !password) return;
   const salt = newSalt();
   const all = read();
-  all[slot(tenant, userId)] = { ...(all[slot(tenant, userId)] || {}), pw: { salt, iter: PW_ITER, hash: await pbkdf2(password, salt, PW_ITER) } };
+  all[slot(tenant, userId)] = { ...(all[slot(tenant, userId)] || {}), pw: { salt, iter: PW_ITER, hash: await pbkdf2(password, salt, PW_ITER) }, at: Date.now() };
   write(all);
 }
 
@@ -55,6 +61,8 @@ export function hasOffline(tenant, userId) { const e = read()[slot(tenant, userI
 export async function verifyOffline(tenant, userId, password) {
   const e = read()[slot(tenant, userId)];
   if (!e) return false;
+  if (!within(e)) throw new Error(OFFLINE_EXPIRED);
+  if (!e.at) { const all = read(); all[slot(tenant, userId)] = { ...e, at: Date.now() }; write(all); } // stored before 1.6: the window starts now
   if (e.pw && (await pbkdf2(password, e.pw.salt, e.pw.iter)) === e.pw.hash) return true;
   if (e.legacy) {
     const ok = e.legacy.algo === 'pbkdf2'
@@ -91,6 +99,7 @@ export async function verifyPin(tenant, userId, pin) {
   const all = read();
   const e = all[slot(tenant, userId)];
   if (!e?.pin) return { ok: false, left: 0 };
+  if (!within(e)) throw new Error(OFFLINE_EXPIRED); // the same window as the password: a PIN can't outlive it
   const ok = (await pbkdf2(String(pin), e.pin.salt, e.pin.iter)) === e.pin.hash;
   if (ok) { e.pin.tries = 0; write(all); return { ok: true, left: PIN_MAX_TRIES }; }
   e.pin.tries = (e.pin.tries || 0) + 1;

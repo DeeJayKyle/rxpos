@@ -5,7 +5,8 @@
 // An update is only applied when nothing is in progress: no open sale or dialog, nobody typing, or the app is in the
 // background. The open sale, Add Stock delivery and held sales are kept on the device anyway (see POS / Add Stock).
 import { DEFAULT_CLOUD } from './cloud.js';
-import { isElectron, isAndroid } from './platform.js';
+import { isElectron, isAndroid, isWeb } from './platform.js';
+import { keepsData, trustedDevice } from './webpolicy.js';
 
 /* global __RXPOS_BUILD__, __RXPOS_LABEL__ */
 export const BUILD = typeof __RXPOS_BUILD__ !== 'undefined' ? __RXPOS_BUILD__ : 0;
@@ -46,9 +47,9 @@ export async function checkForUpdate() {
       const b = await u.download({ url: `${DEFAULT_CLOUD}/${latest.zip}`, version: String(latest.build), checksum: latest.zipSha256 });
       bundleId = b.id;
       await u.next({ id: b.id }); // used at the next start even if it is never idle before then
-    } else {
-      // the service worker picks up the new files on the reload; nudge it to check its own script too
-      navigator.serviceWorker?.getRegistration().then((r) => r?.update()).catch(() => {});
+    } else if (trustedDevice()) {
+      // trusted browser: install the new build's service worker (it caches the new files and waits until we switch)
+      await registerWorker(latest.build);
     }
     set({ status: 'ready', latest });
   } catch (e) {
@@ -63,7 +64,16 @@ export async function applyUpdate() {
   try { localStorage.setItem('rxpos-updated-from', String(BUILD)); } catch { /* ignore */ }
   if (isElectron) window.rxposShell?.apply();
   else if (isAndroid && bundleId) await (await plugin()).set({ id: bundleId });
-  else location.reload();
+  else {
+    // trusted browser: let the waiting service worker (the new build) take over, then reload into it
+    const r = await navigator.serviceWorker?.getRegistration().catch(() => null);
+    if (r?.waiting) {
+      const switched = new Promise((res) => { navigator.serviceWorker.addEventListener('controllerchange', res, { once: true }); setTimeout(res, 4000); });
+      r.waiting.postMessage('skip-waiting');
+      await switched;
+    }
+    location.reload();
+  }
 }
 
 /** The "Update now" button: get the newest build and switch to it straight away (the open sale and drafts are kept) */
@@ -74,9 +84,19 @@ export async function updateNow() {
   return state;
 }
 
+/** The service worker of a trusted browser, for this build (or a newer one): see public/sw.js */
+export async function registerWorker(build = BUILD) {
+  if (!isWeb || !trustedDevice() || !('serviceWorker' in navigator) || !build) return null;
+  return navigator.serviceWorker.register('/sw-offline.js?v=' + build).catch((e) => { console.error(e); return null; });
+}
+
 // ---- when is it safe to switch? ----
 let lastInput = Date.now();
+let unsent = 0;
+/** The store reports how many changes haven't reached the cloud (a session-only browser must not reload then) */
+export const setUnsent = (n) => { unsent = n; };
 const busy = () => {
+  if (unsent > 0 && !keepsData()) return true; // a reload would lose them: wait until they are sent
   if (document.querySelector('.modal, .cart-line, tr.new-line')) return true;
   const a = document.activeElement;
   return !!(a && /INPUT|TEXTAREA|SELECT/.test(a.tagName) && a.value);
@@ -96,7 +116,7 @@ export function startUpdates() {
   ['pointerdown', 'keydown'].forEach((e) => window.addEventListener(e, () => { lastInput = Date.now(); }, { passive: true, capture: true }));
   setTimeout(checkForUpdate, 20e3);
   setInterval(checkForUpdate, CHECK_EVERY);
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkForUpdate(); else if (state.status === 'ready') applyUpdate(); });
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkForUpdate(); else if (state.status === 'ready' && !(unsent > 0 && !keepsData())) applyUpdate(); });
   window.addEventListener('online', () => checkForUpdate());
   setInterval(() => { if (state.status === 'ready' && idle()) applyUpdate(); }, 15e3);
 }

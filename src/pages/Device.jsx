@@ -6,7 +6,14 @@ import { platformName, isElectron, isAndroid } from '../platform.js';
 import { deviceSettings, setDevice, onDevice, canSwitchView, canRotate, hasTray } from '../device.js';
 import { SOUND_KINDS, TONE_CHOICES, playSound, setCustomSound, soundsOn, setSounds } from '../notify.jsx';
 import { askNotifyPermission, notifyPermission } from '../badges.js';
-import { toast } from '../feedback.jsx';
+import { toast, ask } from '../feedback.jsx';
+import { useStore, restoreLegacyCopy } from '../store.jsx';
+import { storage } from '../storage.js';
+import { idbGet } from '../idb.js';
+import { isWeb } from '../platform.js';
+import { keepsData, trustedDevice, reloadForMode } from '../webpolicy.js';
+import { hasOffline, OFFLINE_DAYS } from '../offline.js';
+import { Database, WifiOff, ShieldCheck, Undo2 } from 'lucide-react';
 
 const Choice = ({ value, onChange, options, label }) => (
   <div className="seg" role="radiogroup" aria-label={label}>
@@ -24,6 +31,7 @@ export default function Device() {
       <div className="page-head"><div><h1>This device</h1><div className="sub">Only changes this {isAndroid ? 'phone or tablet' : isElectron ? 'computer' : 'browser'}. Everyone else keeps their own setup.</div></div></div>
       <div className="grid-2">
         <Updates />
+        <SyncStorage />
         <section className="card">
           <h3><MonitorSmartphone size={18} />Screen</h3>
           {canSwitchView && <>
@@ -132,6 +140,83 @@ function Notices({ d }) {
         : <button className="btn ghost" onClick={async () => setPerm(await askNotifyPermission())}><BellRing size={16} />{perm === 'denied' ? 'Notifications are blocked: allow them in the system settings' : 'Allow notifications'}</button>}
       <label className="field check" style={{ marginTop: 12 }}><input type="checkbox" checked={d.badges} onChange={(e) => setDevice({ badges: e.target.checked })} /><span>Show the unread count on the app icon</span></label>
       {hasTray && <label className="field check"><input type="checkbox" checked={d.tray} onChange={(e) => setDevice({ tray: e.target.checked })} /><span><PanelBottom size={14} /> Keep running in the system tray when the window is closed, so messages and calls still come through</span></label>}
+    </section>
+  );
+}
+
+/**
+ * Where this device's work stands, and whether it can work offline: what is waiting for the cloud, changes the cloud
+ * refused (kept here for review, never dropped), what is stored where, a readiness check that verifies the cached app
+ * and the downloaded data instead of assuming them, the trusted-device switch for a browser, and recovery after the
+ * 1.6 storage upgrade.
+ */
+function SyncStorage() {
+  const { pending, storageIssue, syncStatus, syncCfg, user, makeTrusted, leaveTrusted, db } = useStore();
+  const [rejected, setRejected] = useState([]);
+  const [est, setEst] = useState(null);
+  const [sw, setSw] = useState(null);
+  const [legacy, setLegacy] = useState(false);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { storage().rejected().then(setRejected).catch(() => {}); }, [syncStatus]);
+  useEffect(() => {
+    navigator.storage?.estimate?.().then(setEst).catch(() => {});
+    if (keepsData()) Promise.all([idbGet('t:sales'), idbGet('migrated-v1-removed')]).then(([old, removed]) => setLegacy(!!old && !removed)).catch(() => {});
+    if (!trustedDevice() || !navigator.serviceWorker) return;
+    const onMsg = (e) => e.data?.type === 'sw-status' && setSw(e.data);
+    navigator.serviceWorker.addEventListener('message', onMsg);
+    const ask = () => navigator.serviceWorker.controller?.postMessage('status');
+    ask(); const t = setInterval(ask, 3000);
+    return () => { clearInterval(t); navigator.serviceWorker.removeEventListener('message', onMsg); };
+  }, []);
+  const mode = !isWeb ? 'app' : trustedDevice() ? 'trusted' : 'session';
+  const data = !!syncCfg?.lastSync && db.products.length > 0;
+  const signIn = user && hasOffline(syncCfg?.tenant, user.id);
+  const appFiles = mode === 'app' || (sw && sw.total > 0 && sw.cached === sw.total);
+  const ready = mode !== 'session' && appFiles && data && signIn;
+  const run = async (fn) => { setBusy(true); try { await fn(); } catch (e) { toast(e.message, 'error'); } finally { setBusy(false); } };
+  const mb = (n) => (n / 1e6).toFixed(n < 1e7 ? 1 : 0) + ' MB';
+  const Row = ({ ok, children }) => <li className={'status ' + (ok ? 'ok' : 'warn')}><i aria-hidden="true" />{children}</li>;
+  return (
+    <section className="card sync-card">
+      <h3><Database size={18} />Sync &amp; storage</h3>
+      <p className="small">{mode === 'app' ? 'This app keeps the pharmacy on this device and works without internet; changes go to the cloud when it is reachable.'
+        : mode === 'trusted' ? 'Trusted device: this browser keeps the pharmacy and works without internet. Use this only on a computer the pharmacy controls; browser storage is not protected by the operating system.'
+          : 'Session-only: this browser keeps nothing on the computer. It needs the internet, and closing the tab or signing out forgets everything.'}</p>
+      <ul className="sync-facts">
+        <li><b>{pending}</b> change{pending === 1 ? '' : 's'} waiting for the cloud{syncStatus.lastSync ? ` · last synced ${new Date(syncStatus.lastSync).toLocaleString()}` : ''}</li>
+        {est?.usage != null && <li>Using {mb(est.usage)}{est.quota ? ` of ${mb(est.quota)} this browser allows` : ''}</li>}
+      </ul>
+      {storageIssue && <div className="error">{storageIssue}</div>}
+      {rejected.length > 0 && (
+        <div className="notice warn-notice">
+          <strong>{rejected.length} change{rejected.length === 1 ? ' was' : 's were'} refused by the cloud</strong>
+          <p className="small">They are kept here so nothing disappears silently. Usually the person who made them didn't have permission (ask an administrator to make the change), or the record was too large.</p>
+          <ul className="small">{rejected.slice(-8).map((r, i) => <li key={i}>{r.t} · {r.id} · {new Date(r.at || Date.now()).toLocaleString()} — {r.reason}</li>)}</ul>
+          <button className="btn sm ghost" onClick={() => run(async () => { if (await ask({ title: 'Clear the refused changes?', message: 'Only clear them once someone has made them again with the right permission. They are not sent anywhere.', confirmText: 'Clear' })) { await storage().clearRejected(); setRejected([]); } })}>Reviewed: clear the list</button>
+        </div>
+      )}
+      {mode !== 'session' && (
+        <>
+          <h4 className="small" style={{ margin: '12px 0 6px' }}>{ready ? <><CheckCircle2 size={14} className="text-ok" /> Ready to work offline</> : <><AlertTriangle size={14} className="text-warn" /> Not ready to work offline yet</>}</h4>
+          <ul className="sync-check">
+            {mode === 'trusted' && <Row ok={appFiles}>{sw ? `App saved in this browser: ${sw.cached} of ${sw.total} files` : 'Saving the app in this browser…'}</Row>}
+            <Row ok={data}>{data ? `Pharmacy downloaded (${db.products.length.toLocaleString()} medicines)` : 'Downloading the pharmacy… keep the internet on'}</Row>
+            <Row ok={signIn}>{signIn ? `You can sign in here offline for ${OFFLINE_DAYS} days after each online sign-in` : 'Sign out and sign in once with the internet so you can sign in here offline'}</Row>
+          </ul>
+        </>
+      )}
+      <p className="muted small"><WifiOff size={12} /> Without internet, sales, stock, prescriptions and reports keep working{mode === 'session' ? ' only in the apps or a trusted browser' : ''}. Mobile Money requests, SMS, AI prescription reading, drug information look-ups and Google sign-in need the internet; a Mobile Money payment can still be recorded with the customer&apos;s transaction ID.</p>
+      <div className="row gap">
+        {mode === 'session' && <button className="btn ghost" disabled={busy} onClick={() => run(async () => {
+          if (await ask({ title: 'Work offline in this browser?', message: 'Only on a computer the pharmacy owns and controls. This browser will keep a copy of the pharmacy (about 60 MB) and the app, so it opens and sells without internet. Anyone using this computer account could read it. Afterwards you sign in once more, so you can also sign in here without internet. You can switch it off later.', confirmText: 'Make this a trusted device' })) await makeTrusted();
+        })}><ShieldCheck size={16} />Work offline in this browser</button>}
+        {mode === 'trusted' && <button className="btn ghost" disabled={busy} onClick={() => run(async () => {
+          if (await ask({ title: 'Stop working offline in this browser?', message: 'Everything RxPOS keeps in this browser is removed (after any waiting changes have been sent). It then needs the internet again.', confirmText: 'Stop and remove', danger: true })) await leaveTrusted();
+        })}>Stop working offline in this browser</button>}
+        {legacy && <button className="btn ghost" disabled={busy} onClick={() => run(async () => {
+          if (await ask({ title: 'Restore the copy from before the 1.6 upgrade?', message: 'Use this only if something is missing after the upgrade. The device goes back to that copy and then downloads everything again from the cloud.', confirmText: 'Restore', danger: true })) { await restoreLegacyCopy(); reloadForMode(); }
+        })}><Undo2 size={16} />Restore the copy from before the upgrade</button>}
+      </div>
     </section>
   );
 }

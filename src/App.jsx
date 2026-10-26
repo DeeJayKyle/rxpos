@@ -449,7 +449,7 @@ function Shell() {
           <span className="avatar">{initials}</span>
           <div className="grow"><strong>{user.name}</strong><small>{user.role}</small></div>
           <button className="icon-btn" title="Change my password" onClick={() => changePassword(false)}><KeyRound size={17} /></button>
-          {isNative && <button className={'icon-btn' + (pinSet ? ' text-ok' : '')} title={pinSet ? 'Quick PIN is set for this device' : 'Set a quick PIN for this device'} onClick={manageDevicePin}><LockKeyhole size={17} /></button>}{/* web: nothing is kept on the computer, so no device PIN */}
+          {keepsData() && <button className={'icon-btn' + (pinSet ? ' text-ok' : '')} title={pinSet ? 'Quick PIN is set for this device' : 'Set a quick PIN for this device'} onClick={manageDevicePin}><LockKeyhole size={17} /></button>}{/* web: nothing is kept on the computer, so no device PIN */}
           {syncCfg?.key?.startsWith('u.') && <button className={'icon-btn' + (me?.twoFactor ? ' text-ok' : '')} title={me?.twoFactor ? 'Two-step sign-in is on' : 'Two-step sign-in'} onClick={() => setTwoStepOpen(true)}><ShieldCheck size={17} /></button>}
           <button className="icon-btn" title="Log out" onClick={signOut}><LogOut size={17} /></button>
         </div>
@@ -503,7 +503,7 @@ function Shell() {
  * connection. Changes already made go up as soon as it's back. The Windows and Android apps keep working offline. */
 function WebOffline() {
   const online = useOnline();
-  if (!isWeb || online) return null;
+  if (keepsData() || online) return null; // the apps and a trusted browser keep working offline
   return (
     <div className="modal-bg web-offline" role="alertdialog" aria-modal="true" aria-labelledby="web-offline-title">
       <div className="modal dialog">

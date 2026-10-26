@@ -6,9 +6,9 @@
 //     on-device database, and every saved item except appearance preferences); pharmacy data lives in memory and comes
 //     fresh from the cloud; anything the app saves in localStorage lives in this tab only (sessionStorage), so a reload
 //     stays signed in while closing the tab forgets it all; signing out clears this tab too.
-// Trusted device (opt-in, 1.6; Device page or the sign-in screen):
+// Trusted device (opt-in, 1.6; This device → Sync & storage):
 //   • for a pharmacy's own computer: RxPOS keeps the pharmacy in this browser (IndexedDB) and caches the app
-//     (public/sw.js), so it opens and sells without internet, like the apps. It must be switched on while online (the
+//     (public/sw-offline.js), so it opens and sells without internet, like the apps. It must be switched on while online (the
 //     first download needs the internet) and can be switched off only when nothing is waiting to be sent. Browser
 //     storage is not operating-system protected: use it only on a computer the pharmacy controls.
 // Only RxPOS's own resources are ever cleared: its IndexedDB database ("pharmapos"), caches whose names start with
@@ -35,7 +35,7 @@ const ownCaches = async () => (typeof caches === 'undefined' ? [] : (await cache
 
 /** Clear what RxPOS (an older version or an earlier session) left in this browser. Never throws. */
 export async function purgeWebData() {
-  try { for (const r of (await navigator.serviceWorker?.getRegistrations?.()) || []) if (/\/sw\.js/.test(r.active?.scriptURL || r.installing?.scriptURL || r.waiting?.scriptURL || '/sw.js')) await r.unregister(); } catch { /* not supported */ }
+  try { for (const r of (await navigator.serviceWorker?.getRegistrations?.()) || []) if (/\/sw(-offline)?\.js/.test(r.active?.scriptURL || r.installing?.scriptURL || r.waiting?.scriptURL || '/sw.js')) await r.unregister(); } catch { /* not supported */ }
   try { for (const k of await ownCaches()) await caches.delete(k); } catch { /* not supported */ }
   try { indexedDB.deleteDatabase('pharmapos'); } catch { /* not supported */ }
   try { clearLocal(); } catch { /* storage blocked */ }
@@ -85,3 +85,8 @@ export function setTrusted(on) {
   try { on ? realSet.call(window.localStorage, TRUSTED_KEY, '1') : realRemove.call(window.localStorage, TRUSTED_KEY); } catch { /* storage blocked */ }
 }
 export const reloadForMode = () => { leaving = true; location.reload(); };
+
+/** Becoming a trusted device: what this tab kept for itself (held sales, an unfinished delivery…) becomes the device's */
+export function promoteTabItems() {
+  try { for (const k of Object.keys(window.sessionStorage)) if (k !== 'pharmapos-session' && k !== 'rxpos-tab-sync') realSet.call(window.localStorage, k, window.sessionStorage.getItem(k)); } catch { /* storage blocked */ }
+}

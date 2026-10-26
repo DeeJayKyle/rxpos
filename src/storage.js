@@ -153,8 +153,8 @@ function memoryStorage() {
 let current;
 /** @returns {Storage} */
 export const storage = () => (current ??= memoryOnly() ? memoryStorage() : idbStorage());
-/** For tests and for switching a browser to trusted-device mode */
-export const resetStorageForTests = () => { current = undefined; };
+/** Decide again (a browser switching to or from trusted-device mode) */
+export const resetStorage = () => { current = undefined; };
 
 // ---------------------------------------------------------------------------------------------------------------
 // What changed between two states of the pharmacy. The store never mutates records in place (every edit makes a new

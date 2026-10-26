@@ -1949,3 +1949,13 @@ td.num, td .num, .price, .line-total { white-space: nowrap; }
   .chips-row { padding-top: 2px; padding-bottom: 4px; }
   .sale-tabs { gap: 6px; }
 }
+
+/* one tab at a time on a trusted browser (src/tabgate.jsx) */
+.tab-gate { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
+.tab-gate .auth-card h2 { margin: 0; font-size: 20px; }
+
+/* This device → Sync & storage */
+.sync-facts, .sync-check { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 6px; font-size: 13px; }
+.sync-check .status { width: fit-content; font-size: 12px; }
+.warn-notice { background: var(--warn-soft); color: var(--text); border-radius: var(--radius-sm); padding: 10px 12px; }
+.warn-notice ul { margin: 6px 0; padding-left: 18px; }
