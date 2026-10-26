@@ -6,7 +6,7 @@ import { StoreProvider } from './store.jsx';
 import { FeedbackHost } from './feedback.jsx';
 import { idbGet, idbKeys } from './idb.js';
 import './styles.css';
-import { applyTheme, startupTheme } from './themes.js';
+import { applyTheme, startupTheme, savedAccent } from './themes.js';
 import { applyStyle, savedStyle } from './surface.js';
 import { isAndroid } from './platform.js';
 import { startUpdates } from './update.js';
@@ -23,7 +23,7 @@ if (!isAndroid && typeof location !== 'undefined' && /^\/[a-z0-9-]+\/+$/.test(lo
 if (isAndroid) document.documentElement.classList.add('is-android');
 
 // Apply the saved theme and surface style before first paint (no flash)
-applyTheme(startupTheme());
+applyTheme(startupTheme(), savedAccent());
 applyStyle(savedStyle());
 
 class ErrorBoundary extends React.Component {

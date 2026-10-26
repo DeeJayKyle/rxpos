@@ -6,8 +6,8 @@ const T = (id, name, base, c, inspired = '') => ({ id, name, base, c, inspired }
 export const THEMES = [
   // light
   T('light', 'RxPOS Teal', 'light', { bg: '#f3f6f9', surface: '#ffffff', surface2: '#f7f9fb', border: '#e4e9ef', borderStrong: '#cfd8e3', text: '#0e1726', muted: '#64748b', primary: '#0d9488', primary2: '#0891b2', sidebar: '#0b1220', sidebar2: '#111a2e' }),
-  // Adaptive Hybrid: a calm medical light and a premium dark, flat (no page gradient, a solid accent)
-  T('hybrid-light', 'RxPOS Hybrid Light', 'light', { bg: '#f5f8fc', surface: '#ffffff', surface2: '#edf3f7', border: '#e1e8f0', borderStrong: '#cbd6e2', text: '#142638', muted: '#64748b', primary: '#008c58', primary2: '#008c58', sidebar: '#07131b', sidebar2: '#0d1c28', flat: true }, 'Adaptive Hybrid'),
+  // Adaptive Hybrid: a calm medical light and a premium dark, flat (no page gradient; emerald / turquoise action colour)
+  T('hybrid-light', 'RxPOS Hybrid Light', 'light', { bg: '#f5f8fc', surface: '#ffffff', surface2: '#edf3f7', border: '#e1e8f0', borderStrong: '#cbd6e2', text: '#142638', muted: '#64748b', primary: '#008c58', primary2: '#0e9f96', sidebar: '#07131b', sidebar2: '#0d1c28', flat: true }, 'Adaptive Hybrid'),
   T('clinic-blue', 'Clinic Blue', 'light', { bg: '#f2f6fc', surface: '#ffffff', surface2: '#f5f8fd', border: '#dfe7f3', borderStrong: '#c6d3e6', text: '#0c1a33', muted: '#5b6b86', primary: '#1d64d8', primary2: '#0ea5e9', sidebar: '#0b1a36', sidebar2: '#12264b' }),
   T('mint', 'Fresh Mint', 'light', { bg: '#f1f8f5', surface: '#ffffff', surface2: '#f4faf7', border: '#dcebe4', borderStrong: '#c2dbcf', text: '#0f231b', muted: '#5a7468', primary: '#059669', primary2: '#65a30d', sidebar: '#062419', sidebar2: '#0b3324' }),
   T('sunrise', 'Sunrise', 'light', { bg: '#fbf6f1', surface: '#ffffff', surface2: '#fdf9f5', border: '#efe3d6', borderStrong: '#e2cfbb', text: '#2a1a0e', muted: '#7c6553', primary: '#d97706', primary2: '#e11d48', sidebar: '#2a160a', sidebar2: '#3b2010' }),
@@ -21,7 +21,7 @@ export const THEMES = [
   T('paper', 'High Contrast Light', 'light', { bg: '#ffffff', surface: '#ffffff', surface2: '#f3f3f3', border: '#9a9a9a', borderStrong: '#555555', text: '#000000', muted: '#333333', primary: '#0050b3', primary2: '#003a80', sidebar: '#000000', sidebar2: '#1a1a1a' }, 'accessibility'),
   // dark
   T('dark', 'RxPOS Night', 'dark', { bg: '#070b14', surface: '#0f1624', surface2: '#131c2d', border: '#1e293b', borderStrong: '#2b3a52', text: '#e6edf7', muted: '#8b9ab3', primary: '#2dd4bf', primary2: '#22d3ee', sidebar: '#050912', sidebar2: '#0b1220' }),
-  T('hybrid-dark', 'RxPOS Hybrid Dark', 'dark', { bg: '#07131b', surface: '#101d2b', surface2: '#162635', border: '#2b3a49', borderStrong: '#3a4c5e', text: '#f3f7fb', muted: '#9bafc2', primary: '#20c9c3', primary2: '#20c9c3', sidebar: '#050e15', sidebar2: '#0a1721', flat: true }, 'Adaptive Hybrid'),
+  T('hybrid-dark', 'RxPOS Hybrid Dark', 'dark', { bg: '#07131b', surface: '#101d2b', surface2: '#162635', border: '#2b3a49', borderStrong: '#3a4c5e', text: '#f3f7fb', muted: '#9bafc2', primary: '#20c9c3', primary2: '#16a36a', sidebar: '#050e15', sidebar2: '#0a1721', flat: true }, 'Adaptive Hybrid'),
   T('tokyo-night', 'Tokyo Night', 'dark', { bg: '#16161e', surface: '#1a1b26', surface2: '#1f2335', border: '#292e42', borderStrong: '#3b4261', text: '#c0caf5', muted: '#7f88b8', primary: '#7aa2f7', primary2: '#bb9af7', sidebar: '#13131a', sidebar2: '#1a1b26' }, 'Tokyo Night'),
   T('nord', 'Nord Polar', 'dark', { bg: '#242933', surface: '#2e3440', surface2: '#343b49', border: '#3b4252', borderStrong: '#4c566a', text: '#eceff4', muted: '#a3adbf', primary: '#88c0d0', primary2: '#81a1c1', sidebar: '#1f232b', sidebar2: '#2a2f3a' }, 'Nord'),
   T('dracula', 'Dracula', 'dark', { bg: '#21222c', surface: '#282a36', surface2: '#2f3241', border: '#383a4a', borderStrong: '#44475a', text: '#f8f8f2', muted: '#a4a8c4', primary: '#bd93f9', primary2: '#ff79c6', sidebar: '#1b1c24', sidebar2: '#22232e' }, 'Dracula'),
@@ -84,13 +84,34 @@ export function themeVars(t) {
   };
 }
 
-/** Apply a theme to the page (CSS variables on <html>) */
-export function applyTheme(id) {
-  const t = themeById(id);
+// Accent presets: change only the brand / action colour of a palette (buttons, links, highlights). Status colours
+// (ok / warn / danger) are separate tokens and never follow the accent. Each pair is [primary, primary-2] per base;
+// themeVars() still makes the result readable (AA), as for any palette.
+export const ACCENTS = [
+  { id: 'emerald', name: 'Emerald', light: ['#008c58', '#0e9f96'], dark: ['#16a36a', '#20c9c3'] },
+  { id: 'ocean', name: 'Ocean Blue', light: ['#1d64d8', '#267bff'], dark: ['#267bff', '#20c9c3'] },
+  { id: 'violet', name: 'Violet', light: ['#6d43e0', '#8456f5'], dark: ['#8456f5', '#267bff'] },
+  { id: 'midnight', name: 'Midnight Turquoise', light: ['#0b7f86', '#13a3a0'], dark: ['#20c9c3', '#267bff'] },
+];
+/** A palette with an accent preset applied (or unchanged when there is none) */
+export function withAccent(t, accentId) {
+  const a = ACCENTS.find((x) => x.id === accentId);
+  if (!a) return t;
+  const [primary, primary2] = a[t.base];
+  return { ...t, c: { ...t.c, primary, primary2 } };
+}
+const ACCENT_KEY = 'rxpos-accent';
+export const savedAccent = () => { try { const v = localStorage.getItem(ACCENT_KEY) || ''; return ACCENTS.some((a) => a.id === v) ? v : ''; } catch { return ''; } };
+export const saveAccent = (id) => { try { id ? localStorage.setItem(ACCENT_KEY, id) : localStorage.removeItem(ACCENT_KEY); } catch {} };
+
+/** Apply a theme (and optional accent preset) to the page (CSS variables on <html>) */
+export function applyTheme(id, accentId = '') {
+  const t = withAccent(themeById(id), accentId);
   const c = t.c, dark = t.base === 'dark';
   const root = document.documentElement;
   root.dataset.theme = t.base;
   root.dataset.palette = t.id;
+  if (ACCENTS.some((a) => a.id === accentId)) root.dataset.accent = accentId; else delete root.dataset.accent;
   for (const [k, val] of Object.entries(themeVars(t))) root.style.setProperty(k, val);
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', dark ? c.sidebar : c.primary);
 }

@@ -157,19 +157,27 @@ export function CrudPage({ title, subtitle, singular, table, fields, columns, bl
   );
 }
 
-/** Numbers on the dashboard roll up to their value the first time they appear (text stays as given) */
+/** Numbers on the dashboard roll up to their value when they first appear, and glide to a new value when the data
+ * changes (text stays as given; the last frame is always the exact value; off with reduced motion) */
 export function CountUp({ value, ms = 700 }) {
   const str = String(value ?? '');
   const m = str.match(/-?[\d,]*\.?\d+/);
   const target = m ? Number(m[0].replace(/,/g, '')) : NaN;
-  const [shown, setShown] = useState(() => (isFinite(target) && !matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : target));
-  const first = useRef(true);
+  const still = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const [shown, setShown] = useState(() => (isFinite(target) && !still() ? 0 : target));
+  const from = useRef(isFinite(target) && !still() ? 0 : target);
   useEffect(() => {
     if (!isFinite(target)) return;
-    if (!first.current) { setShown(target); return; }
-    first.current = false;
+    const start = isFinite(from.current) ? from.current : target;
+    if (start === target || still()) { from.current = target; setShown(target); return; }
+    const dur = from.current === 0 ? ms : Math.min(ms, 450);
     let raf, t0;
-    const step = (t) => { t0 ??= t; const k = Math.min(1, (t - t0) / ms); setShown(target * (1 - (1 - k) ** 3)); if (k < 1) raf = requestAnimationFrame(step); };
+    const step = (t) => {
+      t0 ??= t; const k = Math.min(1, (t - t0) / dur);
+      const v = k < 1 ? start + (target - start) * (1 - (1 - k) ** 3) : target;
+      from.current = v; setShown(v);
+      if (k < 1) raf = requestAnimationFrame(step);
+    };
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
   }, [target]); // eslint-disable-line react-hooks/exhaustive-deps

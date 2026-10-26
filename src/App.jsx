@@ -20,7 +20,7 @@ import { AutoReorder } from './reorder.js';
 import { isWeb } from './platform.js';
 import RefreshHost from './refresh.jsx';
 import { startUpdates, onUpdate, applyUpdate, justUpdated, LABEL } from './update.js';
-import { applyTheme, saveTheme, allowedThemes, savedMode, saveMode, systemDark, paletteFor, startupTheme } from './themes.js';
+import { applyTheme, saveTheme, allowedThemes, savedMode, saveMode, systemDark, paletteFor, startupTheme, ACCENTS, savedAccent, saveAccent, withAccent } from './themes.js';
 import { STYLES, applyStyle, savedStyle, saveStyle } from './surface.js';
 import { TwoStepModal } from './twostep.jsx';
 import { setCrashCloud } from './crash.js';
@@ -136,9 +136,10 @@ const SHORTCUTS = { F2: '/pos', F3: '/pos/wholesale', F4: '/add-stock', F6: '/sa
 function useTheme() {
   const [theme, setTheme] = useState(startupTheme);
   const [mode, setMode] = useState(savedMode);
-  useEffect(() => { applyTheme(theme); saveTheme(theme); }, [theme]);
+  const [accent, setAccent] = useState(savedAccent);
+  useEffect(() => { applyTheme(theme, accent); saveTheme(theme); saveAccent(accent); }, [theme, accent]);
   useEffect(() => saveMode(mode), [mode]);
-  return [theme, setTheme, mode, setMode];
+  return [theme, setTheme, mode, setMode, accent, setAccent];
 }
 
 /** The device's surface style (glass, clay, skeuomorphism, neumorphism, or flat) */
@@ -148,7 +149,7 @@ function useSurface() {
   return [style, setStyle];
 }
 
-function ThemePicker({ theme, setTheme, mode, setMode, style, setStyle }) {
+function ThemePicker({ theme, setTheme, mode, setMode, accent, setAccent, style, setStyle }) {
   const { db } = useStore();
   const branding = db.license?.[0]?.branding;
   const list = allowedThemes(branding);
@@ -186,6 +187,17 @@ function ThemePicker({ theme, setTheme, mode, setMode, style, setStyle }) {
               <button key={id} role="radio" aria-checked={activeMode === id} className={'mode-opt' + (activeMode === id ? ' on' : '')}
                 onClick={() => (id === 'system' ? setMode('system') : pickBase(id))}><Icon size={14} />{label}</button>
             ))}
+          </div>
+          <div className="bell-head">Accent</div>
+          <div className="accent-row" role="radiogroup" aria-label="Accent colour">
+            {[{ id: '', name: 'Theme colour' }, ...ACCENTS].map((a) => {
+              const c = (current ? withAccent(current, a.id) : null)?.c;
+              return (
+                <button key={a.id || 'default'} role="radio" aria-checked={accent === a.id} title={a.name} aria-label={a.name}
+                  className={'accent-opt' + (accent === a.id ? ' on' : '')} style={c ? { background: `linear-gradient(135deg, ${c.primary}, ${c.primary2})` } : undefined}
+                  onClick={() => setAccent(a.id)} />
+              );
+            })}
           </div>
           <div className="bell-head">Theme</div>
           {list.map((t) => (
@@ -296,7 +308,7 @@ function Shell() {
   const { db, products, user, setUser, branchId, branch, update, syncNow, syncCfg } = useStore();
   const navigate = useNavigate();
   const location = useLocation();
-  const [theme, setTheme, themeMode, setThemeMode] = useTheme();
+  const [theme, setTheme, themeMode, setThemeMode, accent, setAccent] = useTheme();
   const [surface, setSurface] = useSurface();
   const [drawer, setDrawer] = useState(false);
   const [palette, setPalette] = useState(false);
@@ -421,7 +433,7 @@ function Shell() {
           {db.branches.length > 1 && <NavLink to="/branches" className="pill branch-pill" title="Branch this device works as"><Building2 size={14} />{branch?.name}</NavLink>}
           <ClockPill />
           <NotificationBell />
-          <ThemePicker theme={theme} setTheme={setTheme} mode={themeMode} setMode={setThemeMode} style={surface} setStyle={setSurface} />
+          <ThemePicker theme={theme} setTheme={setTheme} mode={themeMode} setMode={setThemeMode} accent={accent} setAccent={setAccent} style={surface} setStyle={setSurface} />
         </header>
         <main className="content">
           <Suspense fallback={<div className="page"><div className="skeleton" /><div className="skeleton" style={{ height: 280 }} /></div>}>
