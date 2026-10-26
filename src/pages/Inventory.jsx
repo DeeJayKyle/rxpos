@@ -135,7 +135,7 @@ export function StockLevels() {
                 <td><strong>{p.name}</strong><br /><small className="muted">{p.form}</small><StockStatus p={p} warn={warn} /></td><td>{p.batch || '—'}</td>
                 <td className={expiryClass(p.expiry, warn)}>{p.expiry || '—'}</td><td>{p.shelf}</td>
                 <td className="num">{p.reorder}</td>
-                <td className="num"><span className={p.stock <= 0 ? 'badge danger' : p.stock <= (p.reorder || 0) ? 'badge warn' : ''}>{p.stock}</span></td>
+                <td className="num"><span className={'stock-pill badge ' + (p.stock <= 0 ? 'danger' : p.stock <= (p.reorder || 0) ? 'warn' : 'ok')}>{p.stock}</span></td>
                 {multi && <td className="num muted">{p.totalStock}</td>}
                 <td className="num">{(() => { const v = batchValue(p, batchesOf); return <>{fmt(v.value)}{v.expired > 0 && <><br /><small className="text-danger">+ {fmt(v.expired)} expired</small></>}</>; })()}</td>
                 {can('inventory.edit') && <td className="actions"><button className="btn sm ghost" onClick={(e) => { e.stopPropagation(); setEditing(p); }}><Pencil size={14} />Edit</button></td>}

@@ -1,5 +1,5 @@
 import { useState, useRef, useMemo } from 'react';
-import { AlertTriangle, Boxes, Crown, TrendingDown, PackageX } from 'lucide-react';
+import { AlertTriangle, Boxes, Crown, TrendingDown, PackageX, Banknote, Receipt, Percent, Undo2 } from 'lucide-react';
 import { Empty, PageTip } from '../ui.jsx';
 import { useStore, today, dayOf, localDate, downloadFile, toCSV, daysUntil, MAIN_BRANCH } from '../store.jsx';
 import { Stat, Tabs, BarChart, PdfButton } from '../ui.jsx';
@@ -65,16 +65,20 @@ export default function Reports() {
 
       {tab === 'sales' && (
         <>
-          <div className="stats">
-            <Stat label="Sales" value={fmt(revenue + tax)} sub={`${sales.length} receipts`} />
-            <Stat label="Average sale" value={fmt(sales.length ? (revenue + tax) / sales.length : 0)} />
-            <Stat label="Discounts given" value={fmt(sales.reduce((a, s) => a + (s.discount || 0), 0))} />
-            <Stat label="Refunds" value={fmt(refunds.reduce((a, s) => a + s.total, 0))} sub={`${refunds.length} receipts`} />
+          <div className="stats kpis">
+            <Stat label="Sales" value={fmt(revenue + tax)} sub={`${sales.length} receipts`} tone="teal" icon={Banknote} />
+            <Stat label="Average sale" value={fmt(sales.length ? (revenue + tax) / sales.length : 0)} tone="blue" icon={Receipt} />
+            <Stat label="Discounts given" value={fmt(sales.reduce((a, s) => a + (s.discount || 0), 0))} tone="violet" icon={Percent} />
+            <Stat label="Refunds" value={fmt(refunds.reduce((a, s) => a + s.total, 0))} sub={`${refunds.length} receipts`} tone="red" icon={Undo2} />
           </div>
-          <div className="card"><h3>Daily sales</h3><BarChart fmt={fmt} data={days} series={[{ name: 'Sales' }]} /></div>
+          <div className="card"><h3>Daily sales</h3><BarChart key={from + to + branch} fmt={fmt} data={days} series={[{ name: 'Sales' }]} /></div>
           <div className="grid2">
-            <div className="card"><h3>By payment method</h3><table><tbody>
-              {sumBy(sales, (s) => s.payment, (s) => s.total).map(([k, v]) => <tr key={k}><td>{k}</td><td className="num">{fmt(v)}</td></tr>)}
+            <div className="card"><h3>By payment method</h3><table className="share-table"><tbody>
+              {(() => { const all = sales.reduce((a, s) => a + s.total, 0); return sumBy(sales, (s) => s.payment, (s) => s.total).map(([k, v], i) => (
+                <tr key={k}><td>{k}</td>
+                  <td className="share"><span className="share-bar" aria-hidden="true"><i className={'c' + (i % 5)} style={{ width: `${all ? (v / all) * 100 : 0}%` }} /></span><span className="share-pct">{all ? Math.round((v / all) * 100) : 0}%</span></td>
+                  <td className="num">{fmt(v)}</td></tr>
+              )); })()}
             </tbody></table></div>
             <div className="card"><h3>By cashier</h3><table><tbody>
               {sumBy(sales, (s) => s.cashier, (s) => s.total).map(([k, v]) => <tr key={k}><td>{k}</td><td className="num">{fmt(v)}</td></tr>)}

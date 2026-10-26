@@ -424,12 +424,12 @@ export default function POS({ mode = 'retail' }) {
         {narrow && (
           <div className="sheet-handle" role="button" tabIndex={0} aria-expanded={sheet} aria-label={sheet ? 'Hide the sale' : 'Show the sale'} onClick={() => setSheet((x) => !x)} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setSheet((x) => !x)}>
             <ShoppingCart size={18} />
-            <span className="grow"><strong>{items ? `${items} item${items === 1 ? '' : 's'}` : 'No items yet'}</strong>{held.length > 0 && <small className="muted"> · {held.length} on hold</small>}<br /><span className="sheet-total">{fmt(total)}</span></span>
+            <span className="grow"><strong>{items ? `${items} item${items === 1 ? '' : 's'}` : 'No items yet'}</strong>{held.length > 0 && <small className="muted"> · {held.length} on hold</small>}<br /><span className="sheet-total bump" key={total}>{fmt(total)}</span></span>
             <button className="btn primary" disabled={!cart.length} onClick={(e) => { e.stopPropagation(); if (!sheet) setSheet(true); checkout(); }}>Charge</button>
           </div>
         )}
         <div className="cart-head">
-          <h3>Current sale {items > 0 && <span className="badge">{items} item{items === 1 ? '' : 's'}</span>}</h3>
+          <h3>Current sale {items > 0 && <span className="badge bump" key={items}>{items} item{items === 1 ? '' : 's'}</span>}</h3>
           {cart.length > 0 && (
             <div className="row gap cart-tools">
               {cart.length > 1 && <label className="check small" title="Tick every line"><input type="checkbox" checked={picked.size === cart.length} onChange={(e) => setPicked(e.target.checked ? new Set(cart.map((l) => l.id)) : new Set())} /><span>All</span></label>}
@@ -501,7 +501,7 @@ export default function POS({ mode = 'retail' }) {
           <div className="row between gap"><span className="muted">Subtotal <b className="num">{fmt(subtotal)}</b></span>
             <span className="row gap"><span className="muted">Discount</span><input type="number" min="0" step="any" className="small-input" value={discount} onChange={(e) => setDiscount(e.target.value)} /></span></div>
           {tax > 0 && <div className="row between"><span className="muted">Tax ({db.settings.taxRate}%)</span><span className="num">{fmt(tax)}</span></div>}
-          <div className="row between grand"><span>Total</span><span className="num">{fmt(total)}</span></div>
+          <div className="row between grand"><span>Total</span><span className="num bump" key={total}>{fmt(total)}</span></div>
         </div>
         <div className="pay-methods">
           {methods.map((m, i) => <button key={m.id} className={'chip' + (payment === m.name ? ' active' : '')} onClick={() => setPayment(m.name)} title={i < 9 ? `Alt+${i + 1}` : undefined}>{m.name}{i < 9 && !touch && <kbd>{i + 1}</kbd>}</button>)}
@@ -679,6 +679,13 @@ export default function POS({ mode = 'retail' }) {
 
       {done && (
         <Modal title={done.proforma ? 'Proforma saved' : 'Sale complete ✓'} onClose={() => { setDone(null); focusSearch(); }}>
+          {/* shown only here, after finalize() has recorded the sale */}
+          {!done.proforma && (
+            <div className="sale-success" aria-hidden="true">
+              <svg viewBox="0 0 52 52"><circle cx="26" cy="26" r="23" /><path d="M15 27l7 7 15-16" /></svg>
+              <strong className="num">{fmt(done.total)}</strong>
+            </div>
+          )}
           <Receipt sale={done} />
           {!done.proforma && <SendReceipt sale={done} />}
           <div className="form-actions no-print">

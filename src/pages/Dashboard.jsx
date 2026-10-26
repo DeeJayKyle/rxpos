@@ -1,8 +1,9 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Banknote, Wallet, CalendarClock, PackageX, Pill, Coins, Users, ShoppingCart, ReceiptText, Share2, Megaphone, Store } from 'lucide-react';
+import { Banknote, Wallet, CalendarClock, PackageX, Pill, Coins, Users, ShoppingCart, ReceiptText, Share2, Megaphone, Store, TrendingUp, ShieldAlert } from 'lucide-react';
 import { useStore, today, localDate, dayOf, isLowStock, expiryCounts, stockValue, MAIN_BRANCH } from '../store.jsx';
 import { Stat, BarChart, AreaChart, Empty } from '../ui.jsx';
+import { ProductArt } from '../idleart.jsx';
 import { useInsights, shareText } from '../engage.jsx';
 import { whatsappLink } from '../cloud.js';
 import { WeatherCard } from './Storage.jsx';
@@ -11,7 +12,8 @@ const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 
 const dayKey = (offset) => { const d = new Date(); d.setDate(d.getDate() - offset); return localDate(d); };
 
 export default function Dashboard() {
-  const { db, products, fmt, user, branchId, features, batchesOf, day } = useStore();
+  const { db, products, fmt, user, branchId, features, batchesOf, day, can } = useStore();
+  const [range, setRange] = useState(30);
   const ins = useInsights();
   const promote = [ins.shortExpiry[0], ins.highMargin[0], ins.slow[0], ins.highMargin[1], ins.shortExpiry[1]].filter(Boolean).filter((x, i, a) => a.findIndex((y) => y.p.id === x.p.id) === i).slice(0, 4);
   const warn = db.settings.expiryWarnDays || 90;
@@ -23,21 +25,25 @@ export default function Dashboard() {
     const thisMonth = today().slice(0, 7);
     for (const s of valid) {
       const d = dayOf(s.date), mo = d.slice(0, 7);
-      (byDay[d] ??= { n: 0, total: 0, exp: 0 }); byDay[d].n++; byDay[d].total += s.total;
+      (byDay[d] ??= { n: 0, total: 0, exp: 0, gp: 0 }); byDay[d].n++; byDay[d].total += s.total;
+      // gross profit as in Reports → Profit: sales less tax, less each line's cost
+      byDay[d].gp += s.total - (s.tax || 0) - s.items.reduce((a, i) => a + (i.cost || 0) * i.qty, 0);
       (byMonth[mo] ??= { n: 0, total: 0, exp: 0 }); byMonth[mo].n++; byMonth[mo].total += s.total;
       if (mo === thisMonth) for (const i of s.items) { (top[i.name] ??= { name: i.name, qty: 0, amount: 0 }); top[i.name].qty += i.qty; top[i.name].amount += i.qty * i.price; }
     }
     for (const e of db.expenses) {
       const d = dayOf(e.date), mo = d.slice(0, 7);
-      (byDay[d] ??= { n: 0, total: 0, exp: 0 }); byDay[d].exp += e.amount;
+      (byDay[d] ??= { n: 0, total: 0, exp: 0, gp: 0 }); byDay[d].exp += e.amount;
       (byMonth[mo] ??= { n: 0, total: 0, exp: 0 }); byMonth[mo].exp += e.amount;
     }
     return { byDay, byMonth, top: Object.values(top).sort((a, b) => b.amount - a.amount).slice(0, 10) };
   }, [db.sales, db.expenses, branchId, day]);
 
-  const t = m.byDay[today()] || { n: 0, total: 0, exp: 0 };
-  const y = m.byDay[dayKey(1)] || { n: 0, total: 0, exp: 0 };
+  const t = m.byDay[today()] || { n: 0, total: 0, exp: 0, gp: 0 };
+  const y = m.byDay[dayKey(1)] || { n: 0, total: 0, exp: 0, gp: 0 };
   const delta = y.total ? ((t.total - y.total) / y.total) * 100 : null;
+  const nDelta = y.n ? ((t.n - y.n) / y.n) * 100 : null;
+  const gpDelta = y.gp > 0 ? ((t.gp - y.gp) / y.gp) * 100 : null;
   // only medicines in stock: every batch with stock left is checked, not just the next one to sell
   const exp = useMemo(() => expiryCounts(products, batchesOf, warn), [products, batchesOf, warn, day]); // eslint-disable-line react-hooks/exhaustive-deps
   const lowStock = products.filter(isLowStock);
@@ -46,7 +52,7 @@ export default function Dashboard() {
   const year = new Date().getFullYear();
   const monthRows = MONTHS.map((name, i) => ({ name, k: `${year}-${String(i + 1).padStart(2, '0')}` })).filter((r) => r.k <= today().slice(0, 7)).reverse();
   const last6 = Array.from({ length: 6 }, (_, i) => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 5 + i); return localDate(d).slice(0, 7); });
-  const trend = Array.from({ length: 30 }, (_, i) => { const k = dayKey(29 - i); return { label: new Date(k).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }), value: m.byDay[k]?.total || 0 }; });
+  const trend = Array.from({ length: range }, (_, i) => { const k = dayKey(range - 1 - i); return { label: new Date(k).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }), value: m.byDay[k]?.total || 0 }; });
   const hour = new Date().getHours();
   const greet = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
 
@@ -63,11 +69,17 @@ export default function Dashboard() {
         </div>
       </section>
 
-      <div className="stats">
+      <div className="stats kpis">
         <Stat to="/sales" state={{ from: today(), to: today() }} label="Today's sales" value={fmt(t.total)} sub={`${t.n} sale${t.n === 1 ? '' : 's'} · vs yesterday`} delta={delta} tone="teal" icon={Banknote} />
+        {can('reports') && <Stat to="/reports" label="Gross profit today" value={fmt(t.gp)} sub="sales less tax and cost · vs yesterday" delta={gpDelta} tone="blue" icon={TrendingUp} />}
         <Stat to="/expenses" label="Today's expenses" value={fmt(t.exp)} sub={`Net ${fmt(t.total - t.exp)}`} tone="red" icon={Wallet} />
-        <Stat to="/expiry" label="Soon expiring" value={exp.soon} sub={`${exp.expired} already expired`} tone="amber" icon={CalendarClock} />
-        <Stat to="/inventory" state={{ filter: 'low' }} label="Low stock" value={lowStock.length} sub="in stock, at or below reorder level" tone="violet" icon={PackageX} />
+        <Stat to="/sales" state={{ from: today(), to: today() }} label="Transactions" value={t.n.toLocaleString()} sub="receipts today · vs yesterday" delta={nDelta} tone="violet" icon={ReceiptText} />
+      </div>
+
+      <div className="stats alerts" aria-label="Stock alerts">
+        <Stat to="/inventory" state={{ filter: 'low' }} label="Low stock" value={lowStock.length} sub="in stock, at or below reorder level" tone="amber alert" icon={PackageX} />
+        <Stat to="/expiry" label="Soon expiring" value={exp.soon} sub={`within ${warn} days · ${exp.expired} already expired`} tone="amber alert" icon={CalendarClock} />
+        <Stat to="/expiry" label="Expired" value={exp.expired} sub={exp.expired ? 'in stock: return or write off' : 'nothing expired in stock'} tone={'alert ' + (exp.expired ? 'red' : 'ok')} icon={ShieldAlert} />
       </div>
 
       {(features.weather !== false || (features.promos !== false && promote.length > 0)) && (
@@ -78,6 +90,7 @@ export default function Dashboard() {
               <div className="promo-list">
                 {promote.map((x) => (
                   <div key={x.p.id} className={'promo-row promo-' + x.kind}>
+                    <span className="promo-art" aria-hidden="true"><ProductArt p={x.p} size={40} /></span>
                     <div className="grow promo-body">
                       <strong title={x.p.name}>{x.p.name}</strong>
                       <small className="muted"><span className="promo-tag">{x.staff}</span>{x.note}</small>
@@ -95,8 +108,13 @@ export default function Dashboard() {
 
       <div className="grid2">
         <div className="card">
-          <h3>Sales – last 30 days</h3>
-          <AreaChart data={trend} fmt={fmt} />
+          <div className="card-head">
+            <h3>Sales – last {range} days</h3>
+            <div className="seg" role="radiogroup" aria-label="Chart period">
+              {[7, 30].map((n) => <button key={n} role="radio" aria-checked={range === n} className={range === n ? 'on' : ''} onClick={() => setRange(n)}>{n} days</button>)}
+            </div>
+          </div>
+          <AreaChart key={range} data={trend} fmt={fmt} />
         </div>
         <div className="card">
           <h3>Sales vs expenses</h3>
