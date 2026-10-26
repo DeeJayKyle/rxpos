@@ -11,6 +11,15 @@ const expiryClass = (expiry, warn) => {
   const d = daysUntil(expiry);
   return d < 0 ? 'text-danger' : d <= warn ? 'text-warn' : '';
 };
+/** Stock and expiry status in words (not colour alone), from the same rules as the stock and expiry columns */
+const StockStatus = ({ p, warn }) => {
+  const d = p.expiry ? daysUntil(p.expiry) : null;
+  const tags = [
+    p.stock <= 0 ? ['danger', 'Out of stock'] : p.stock <= (p.reorder || 0) ? ['warn', 'Low stock'] : ['ok', 'In stock'],
+    d != null && p.stock > 0 && (d < 0 ? ['danger', 'Expired'] : d <= warn ? ['warn', 'Expiring soon'] : null),
+  ].filter(Boolean);
+  return <span className="status-tags">{tags.map(([tone, label]) => <span key={label} className={'status ' + tone}><i aria-hidden="true" />{label}</span>)}</span>;
+};
 const UNITS = ['Piece', 'Tablet', 'Strip', 'Pack', 'Box', 'Bottle', 'Tube', 'Vial', 'Ampoule', 'Sachet', 'Unit'];
 
 export function MedicineList() {
@@ -123,7 +132,7 @@ export function StockLevels() {
           <tbody>
             {rows.slice(0, 500).map((p) => (
               <tr key={p.id} onClick={() => setOpen(p)} style={{ cursor: 'pointer' }}>
-                <td><strong>{p.name}</strong><br /><small className="muted">{p.form}</small></td><td>{p.batch || '—'}</td>
+                <td><strong>{p.name}</strong><br /><small className="muted">{p.form}</small><StockStatus p={p} warn={warn} /></td><td>{p.batch || '—'}</td>
                 <td className={expiryClass(p.expiry, warn)}>{p.expiry || '—'}</td><td>{p.shelf}</td>
                 <td className="num">{p.reorder}</td>
                 <td className="num"><span className={p.stock <= 0 ? 'badge danger' : p.stock <= (p.reorder || 0) ? 'badge warn' : ''}>{p.stock}</span></td>

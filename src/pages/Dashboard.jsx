@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Banknote, Wallet, CalendarClock, PackageX, Pill, Coins, Users, ShoppingCart, ReceiptText, Share2, Megaphone } from 'lucide-react';
+import { Banknote, Wallet, CalendarClock, PackageX, Pill, Coins, Users, ShoppingCart, ReceiptText, Share2, Megaphone, Store } from 'lucide-react';
 import { useStore, today, localDate, dayOf, isLowStock, expiryCounts, stockValue, MAIN_BRANCH } from '../store.jsx';
 import { Stat, BarChart, AreaChart, Empty } from '../ui.jsx';
 import { useInsights, shareText } from '../engage.jsx';
@@ -52,15 +52,16 @@ export default function Dashboard() {
 
   return (
     <div className="page">
-      <div className="page-head">
-        <div>
+      <section className="page-head welcome" aria-label="Welcome">
+        <div className="welcome-text">
+          <span className="welcome-store"><Store size={14} />{db.settings.name}</span>
           <h1>{greet}, {user.name.split(' ')[0]} 👋</h1>
-          <div className="sub">{new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} · {db.settings.name}</div>
+          <div className="sub">{new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</div>
         </div>
         <div className="row gap">
-          <Link className="btn primary" to="/pos"><ShoppingCart size={16} />New sale</Link>
+          <Link className="btn primary big" to="/pos"><ShoppingCart size={18} />New sale</Link>
         </div>
-      </div>
+      </section>
 
       <div className="stats">
         <Stat to="/sales" state={{ from: today(), to: today() }} label="Today's sales" value={fmt(t.total)} sub={`${t.n} sale${t.n === 1 ? '' : 's'} · vs yesterday`} delta={delta} tone="teal" icon={Banknote} />
@@ -76,10 +77,13 @@ export default function Dashboard() {
               <h3><Megaphone size={17} />Promote today</h3>
               <div className="promo-list">
                 {promote.map((x) => (
-                  <div key={x.p.id} className="promo-row">
-                    <div className="grow"><strong>{x.p.name}</strong><small className="muted">{x.staff} · {x.note}</small></div>
-                    <span className="num">{fmt(x.p.price)}</span>
-                    <a className="icon-btn" title="Share on WhatsApp" target="_blank" rel="noreferrer" href={whatsappLink('', shareText(x.p, db.settings, fmt))}><Share2 size={16} /></a>
+                  <div key={x.p.id} className={'promo-row promo-' + x.kind}>
+                    <div className="grow promo-body">
+                      <strong title={x.p.name}>{x.p.name}</strong>
+                      <small className="muted"><span className="promo-tag">{x.staff}</span>{x.note}</small>
+                    </div>
+                    <span className="num promo-price">{fmt(x.p.price)}</span>
+                    <a className="icon-btn promo-share" title="Share on WhatsApp" aria-label={`Share ${x.p.name} on WhatsApp`} target="_blank" rel="noreferrer" href={whatsappLink('', shareText(x.p, db.settings, fmt))}><Share2 size={16} /></a>
                   </div>
                 ))}
               </div>
