@@ -1,0 +1,17 @@
+{
+  // TypeScript is introduced gradually (1.6): the storage contract, sync payloads and business operations first.
+  // `npm run typecheck` checks these modules (JSDoc types against src/contracts.d.ts); the rest of the app is plain JS.
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "strict": false,
+    "noImplicitAny": false,
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022", "DOM"],
+    "skipLibCheck": true
+  },
+  "files": ["src/contracts.d.ts", "src/storage.js"]
+}

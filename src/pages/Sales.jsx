@@ -46,6 +46,7 @@ export function Receipt({ sale }) {
       {!isProforma && sale.payment === 'Cash' && sale.tendered > sale.total && <div className="row between"><span>Change</span><span>{fmt(sale.tendered - sale.total)}</span></div>}
       {!isProforma && (sale.paid ?? sale.total) < sale.total && <div className="row between"><span>Balance on credit</span><span>{fmt(sale.total - sale.paid)}</span></div>}
       {sale.momo?.txid && <div className="row between"><span>{sale.momo.provider === 'airtel' ? 'Airtel' : 'MoMo'} Ref</span><span>{sale.momo.txid}</span></div>}
+      {sale.momo && <div className="small muted">{sale.momo.confirmed ? 'Payment confirmed by the mobile network' : sale.momo.manual ? 'Payment recorded by staff (transaction ID from the customer; not confirmed by the network)' : ''}</div>}
       {sale.status === 'refunded' && <div className="center receipt-tag">REFUNDED</div>}
       <div className="receipt-barcode"><Barcode value={sale.number} height={34} module={1.6} /></div>
       <p className="center">{isProforma ? 'Prices valid for 7 days.' : s.receiptFooter}</p>

@@ -1,9 +1,10 @@
 import { createContext, useContext, useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { idbGet, idbSet, idbDel, idbKeys } from './idb.js';
-import { createSync } from './sync.js';
+import { createSync, collectChanges } from './sync.js';
+import { storage, diff, storageError, STORAGE_VERSION } from './storage.js';
 import { featureSet, permissionsOf } from './access.js';
 import { platformName, isWeb } from './platform.js';
-import { endWebSession, isLeaving } from './webpolicy.js';
+import { endWebSession, isLeaving, keepsData } from './webpolicy.js';
 import { connectLive, disconnectLive, onLive } from './live.js';
 import { DEFAULT_CLOUD } from './cloud.js';
 import { formatMoney } from './money.js';
@@ -284,6 +285,66 @@ export function mergeRemote(db, changes) {
   return d;
 }
 
+// ---------- device storage helpers (src/storage.js holds the contract) ----------
+/** Built-in catalog medicines nobody changed are rebuilt from the app on every start: never stored */
+const skipRecord = (r) => isUntouchedBase(r);
+/** Built-in defaults nobody changed (walk-in customer, cash drawer…) are stored but every device already has them */
+const noSync = (r) => r.updatedAt === BASE_AT;
+const DATED = ['sales', 'purchases', 'expenses', 'payments', 'bankTx', 'proformas', 'prescriptions', 'transfers', 'audit', 'purchaseOrders', 'stockCounts', 'supplierReturns', 'movements', 'messages'];
+const byDate = (a, b) => String(b.date || '').localeCompare(String(a.date || ''));
+const byChange = (a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || ''));
+/** The pharmacy as the screens expect it (lists newest first) from one entry per record */
+function fromRecords({ tables, settings, tomb }) {
+  const out = { _tomb: tomb || [] };
+  if (settings) out.settings = settings;
+  for (const t of TABLES) out[t] = (tables[t] || []).sort(DATED.includes(t) ? byDate : byChange);
+  return out;
+}
+const countOf = (d) => Object.fromEntries(TABLES.map((t) => [t, d[t].filter((r) => !skipRecord(r)).length]));
+/**
+ * One-time move from the 1.5 storage (one IndexedDB value per table, rewritten whole on every change) to one entry
+ * per record. The 1.5 copy is left untouched (removeOldTableCopies deletes it 14 days later), the new copy is read
+ * back and compared before it is used, and the changes 1.5 had not sent to the cloud yet go into the outbox in the
+ * same transaction, so nothing waiting is lost.
+ */
+async function migrateLegacy(base, fill, cfg) {
+  let saved = null;
+  const parts = await Promise.all(PARTS.map((k) => idbGet('t:' + k)));
+  if (parts.some((p) => p !== undefined)) saved = Object.fromEntries(PARTS.map((k, i) => [k, parts[i]]).filter(([, v]) => v !== undefined));
+  else saved = (await idbGet('db')) || null; // data saved by version 1.0
+  const d = saved ? fill(saved) : base;
+  const want = countOf(d);
+  const unsent = saved && cfg?.key ? collectChanges(d, cfg.pushedAt).map((ch) => ({ op: uid(), txn: 'migration', t: ch.t, id: String(ch.id), deleted: !!ch.deleted, at: ch.at })) : [];
+  for (let attempt = 1; ; attempt++) {
+    await storage().commit({ ...diff(null, d, { tables: TABLES, local: false, skip: skipRecord }), settings: d.settings, tomb: d._tomb, ops: unsent, reset: true, clearOutbox: true, version: STORAGE_VERSION,
+      kv: saved ? { 'migrated-v1-at': now(), 'migrated-v1-counts': want } : {} });
+    const back = await storage().load();
+    const got = back && countOf(fromRecords(back));
+    const same = got && TABLES.every((t) => got[t] === want[t]) && (back.settings?.updatedAt || '') === (d.settings?.updatedAt || '') && back.tomb.length === d._tomb.length;
+    if (same) return d;
+    if (attempt >= 2) throw new Error('the storage upgrade could not be verified (the copy from before it is kept: This device → Restore the copy from before the upgrade)');
+  }
+}
+/** Restore the 1.5 copy kept by migrateLegacy (recovery, from This device). Reload afterwards. */
+export async function restoreLegacyCopy() {
+  if (!(await idbGet('t:sales')) && !(await idbGet('db'))) throw new Error('There is no copy from before the upgrade on this device.');
+  const left = await storage().count();
+  if (left) throw new Error(`${left} change(s) haven't reached the cloud yet. Let them send first, then restore.`);
+  // the copy is older than the cloud: pull everything again after restoring, so nothing made since is missing
+  const cfg = await idbGet('sync');
+  if (cfg) await idbSet('sync', { ...cfg, cursor: 0, lastSync: '' });
+  await storage().commit({ puts: [], dels: [], ops: [], kv: { 'storage-version': 1 } });
+}
+/** The 1.5 copy is removed 14 days after a verified upgrade (it is only kept for recovery) */
+async function removeOldTableCopies() {
+  if (!keepsData()) return;
+  const at = await idbGet('migrated-v1-at');
+  if (!at || Date.now() - Date.parse(at) < 14 * 864e5 || (await idbGet('migrated-v1-removed'))) return;
+  for (const k of PARTS) await idbDel('t:' + k);
+  await idbDel('db');
+  await idbSet('migrated-v1-removed', now());
+}
+
 const Ctx = createContext(null);
 
 export function StoreProvider({ children }) {
@@ -300,55 +361,59 @@ export function StoreProvider({ children }) {
     } catch { /* storage blocked */ }
     return null;
   });
+  // The latest state, always (updates read and write it synchronously, so two quick actions never lose each other)
   const dbRef = useRef(null);
-  dbRef.current = db;
+  const setState = useCallback((next) => { dbRef.current = next; setDb(next); }, []);
+  const [storageIssue, setStorageIssue] = useState(''); // a write to the device failed (shown as Needs attention)
 
-  // load: each table is stored under its own key so a sale only rewrites the tables it touched
-  const savedRefs = useRef({});
+  // ---------- load (with the one-time move to record-level storage, verified before it is used) ----------
   useEffect(() => {
     (async () => {
-      let saved = null, cfg = null;
+      let cfg = null, loaded = null;
+      const base = blankDb();
+      const fill = (saved) => {
+        const d = { ...base, ...saved, settings: { ...base.settings, ...(saved.settings || {}) }, _tomb: saved._tomb || [] };
+        TABLES.forEach((t) => { if (!Array.isArray(d[t])) d[t] = base[t]; });
+        if (!d.branches.length) d.branches = base.branches;
+        return d;
+      };
       try {
         cfg = await idbGet('sync');
-        const parts = await Promise.all(PARTS.map((k) => idbGet('t:' + k)));
-        if (parts.some((p) => p !== undefined)) saved = Object.fromEntries(PARTS.map((k, i) => [k, parts[i]]).filter(([, v]) => v !== undefined));
-        else saved = await idbGet('db'); // data saved by version 1.0
-      } catch (e) { console.error(e); }
-      const base = blankDb();
-      const loaded = saved ? { ...base, ...saved, settings: { ...base.settings, ...saved.settings } } : base;
-      if (!loaded.branches.length) loaded.branches = base.branches;
-      if (saved) PARTS.forEach((k) => { if (saved[k] !== undefined) savedRefs.current[k] = loaded[k]; });
-      setDb(loaded);
-      loadCatalog().then((cat) => setDb((prev) => withCatalog(prev, cat))).catch(console.error);
+        const rec = await storage().load();
+        if (rec) loaded = fill(fromRecords(rec));
+        else {
+          loaded = await migrateLegacy(base, fill, cfg);
+          // the changes it had not sent are in the outbox now: don't queue them a second time
+          if (cfg) { cfg = { ...cfg, outboxV2: true }; await idbSet('sync', cfg); }
+        }
+      } catch (e) {
+        console.error(e);
+        setStorageIssue('RxPOS could not read this device\'s storage: ' + (e.message || e) + '. Nothing was deleted; close other RxPOS windows and reopen.');
+      }
+      setState(loaded || base);
+      loadCatalog().then((cat) => { const prev = dbRef.current; const next = withCatalog(prev, cat); if (next !== prev) setState(next); }).catch(console.error);
       // devices set up on the old free addresses (rxpos.pages.dev, *.workers.dev) move to rxposug.com
       const moved = cfg?.url && /rxpos\.pages\.dev|pharmapos\.pharmapos\.workers\.dev/.test(cfg.url) ? { url: DEFAULT_CLOUD } : {};
-      // web (online only): nothing is kept between visits, so the pharmacy is downloaded from the start every time
+      // session-only browser: nothing is kept between visits, so the pharmacy is downloaded from the start every time
       // (with a new device id too: the cloud never sends a device its own changes back, and this page holds none of them)
-      const fresh = isWeb && cfg ? { deviceId: uid(), cursor: 0, pushedAt: '', lastSync: '', epoch: undefined } : {};
+      const fresh = !keepsData() && cfg ? { deviceId: uid(), cursor: 0, pushedAt: '', lastSync: '', epoch: undefined, outboxV2: true } : {};
       setSyncCfgState({ deviceId: uid(), url: '', key: '', pushedAt: '', cursor: 0, branchId: MAIN_BRANCH, ...(cfg || {}), ...moved, ...fresh });
+      removeOldTableCopies().catch(console.error);
     })();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // save changed tables (debounced), and flush immediately when the app is hidden or closed
-  useEffect(() => {
-    if (!db) return;
-    const save = () => {
-      for (const k of PARTS) {
-        if (savedRefs.current[k] === db[k]) continue;
-        savedRefs.current[k] = db[k];
-        idbSet('t:' + k, db[k]).catch((e) => { savedRefs.current[k] = null; console.error(e); });
-      }
-    };
-    const t = setTimeout(save, 250);
-    const flush = () => document.visibilityState === 'hidden' && save();
-    document.addEventListener('visibilitychange', flush);
-    window.addEventListener('pagehide', save);
-    return () => { clearTimeout(t); document.removeEventListener('visibilitychange', flush); window.removeEventListener('pagehide', save); };
-  }, [db]);
+  // ---------- save: every change goes to the device in one transaction, in order ----------
+  const chain = useRef(Promise.resolve());
+  const persist = useCallback((c) => {
+    if (!c.puts.length && !c.dels.length && !c.ops.length && !c.settings && !c.tomb && !c.reset) return Promise.resolve();
+    const p = chain.current.then(() => storage().commit(c));
+    chain.current = p.catch(() => {});
+    return p.then(() => setStorageIssue((x) => (x ? '' : x)), (e) => { setStorageIssue(e.message); throw e; });
+  }, []);
 
   // Daily on-device snapshot (last 7 kept) so a mistake can be undone even without a hub or manual backup
   useEffect(() => {
-    if (!db || !db.users.length || isWeb) return; // the web version keeps no copies on the computer
+    if (!db || !db.users.length || !keepsData()) return; // a session-only browser keeps no copies on the computer
     const key = 'snap:' + today();
     const t = setTimeout(async () => {
       try {
@@ -363,7 +428,8 @@ export function StoreProvider({ children }) {
 
   const saveSyncCfg = useCallback((cfg) => {
     setSyncCfgState(cfg);
-    idbSet('sync', cfg).catch(console.error);
+    cfgRef.current = cfg;
+    return idbSet('sync', cfg).catch((e) => { console.error(e); setStorageIssue(storageError(e).message); });
   }, []);
 
   // Every local change is pushed to the cloud almost at once (0.4 s, so a burst of edits goes up together; never
@@ -377,7 +443,28 @@ export function StoreProvider({ children }) {
     pushTimer.current = setTimeout(() => { pushFirst.current = 0; syncRef.current?.run(); }, wait);
   }, []);
   const changedAt = useRef(0); // last local change (web: warn before leaving while it isn't in the cloud yet)
-  const update = useCallback((fn) => { setDb((prev) => { const d = draft(prev); fn(d); return d; }); changedAt.current = Date.now(); queuePush(); }, [queuePush]);
+  const [pending, setPending] = useState(0); // changes on this device the cloud hasn't accepted yet
+  const countPending = useCallback(() => storage().count().then(setPending).catch(() => {}), []);
+  /**
+   * Change the pharmacy. The screen updates at once; the returned promise resolves when the change (and the note to
+   * send it to the cloud) is saved on the device, and rejects if it could not be saved. Anything that tells the user
+   * "saved" or "complete" (a sale, a delivery) waits for it. If the write fails and nothing changed since, the change
+   * is taken back so the screen never shows something the device doesn't hold.
+   */
+  const update = useCallback((fn) => {
+    const prev = dbRef.current;
+    const d = draft(prev);
+    fn(d);
+    setState(d);
+    changedAt.current = Date.now();
+    const c = diff(prev, d, { tables: TABLES, local: true, txn: uid(), skip: skipRecord, noOp: noSync });
+    const p = persist(c).then(() => { setPending((n) => n + c.ops.length); queuePush(); }, (e) => {
+      if (dbRef.current === d) setState(prev);
+      throw e;
+    });
+    p.catch(() => {}); // callers that don't wait still see the problem as "Needs attention"
+    return p;
+  }, [persist, queuePush, setState]);
   const upsert = useCallback((table, rec) => update((d) => { put(d, table, rec); }), [update]);
   const remove = useCallback((table, id) => update((d) => { del(d, table, id); }), [update]);
   const saveSettings = useCallback((s) => update((d) => { d.settings = { ...s, updatedAt: now() }; }), [update]);
@@ -385,7 +472,17 @@ export function StoreProvider({ children }) {
   const branchId = syncCfg?.branchId || MAIN_BRANCH;
   const setBranchId = useCallback((id) => saveSyncCfg({ ...cfgRef.current, branchId: id }), [saveSyncCfg]);
 
-  const setUser = useCallback((u, { remember } = {}) => {
+  /**
+   * Sign in / out. Signing out never deletes changes that haven't reached the cloud: the apps and a trusted browser
+   * keep them and send them later; a session-only browser (which keeps nothing) tries to send them first and, if it
+   * can't, asks before letting them go (resolves false when the person chose to stay signed in).
+   */
+  const setUser = useCallback(async (u, { remember, confirmLoss } = {}) => {
+    if (!u && !keepsData()) {
+      await Promise.race([syncRef.current?.run(), new Promise((r) => setTimeout(r, 4000))]);
+      const left = await storage().count().catch(() => 0);
+      if (left && !(await (confirmLoss || (() => Promise.resolve(window.confirm(`${left} change(s) have not reached the cloud yet. This browser keeps nothing, so signing out now loses them. Sign out anyway?`))))(left))) return false;
+    }
     try {
       if (u) {
         sessionStorage.setItem(SESSION_KEY, JSON.stringify(u));
@@ -393,13 +490,13 @@ export function StoreProvider({ children }) {
         else if (remember === false) localStorage.removeItem(REMEMBER_KEY);
       } else { sessionStorage.removeItem(SESSION_KEY); localStorage.removeItem(REMEMBER_KEY); } // signing out always forgets
     } catch { /* storage blocked */ }
-    // web: send anything still waiting, then clear this tab and start clean (nothing stays on the computer)
-    if (!u && isWeb) { Promise.race([syncRef.current?.run(), new Promise((r) => setTimeout(r, 4000))]).finally(endWebSession); }
+    if (!u && !keepsData()) { endWebSession(); return true; } // clear this tab and start clean (nothing stays on the computer)
     if (u && !user) update((d) => audit(d, u, 'Signed in', platformName, branchId));
     setUserState(u);
+    return true;
   }, [user, update, branchId]);
 
-  // background sync with the hub (when configured)
+  // background sync with the cloud (when configured)
   const syncRef = useRef(null);
   const cfgRef = useRef(null);
   cfgRef.current = syncCfg;
@@ -410,17 +507,29 @@ export function StoreProvider({ children }) {
       getDb: () => dbRef.current,
       getCfg: () => cfgRef.current,
       saveCfg: saveSyncCfg,
-      applyRemote: (changes) => setDb((prev) => withCatalog(mergeRemote(prev, changes))),
-      onStatus: (st) => { setSyncStatus(st); if (st.state === 'ok') sentAt.current = Date.now(); },
+      store: storage(),
+      // records from the cloud are saved on the device before the sync position moves past them
+      applyRemote: (changes) => {
+        const prev = dbRef.current;
+        const next = withCatalog(mergeRemote(prev, changes));
+        setState(next);
+        return persist(diff(prev, next, { tables: TABLES, local: false, skip: skipRecord }));
+      },
+      onStatus: (st) => {
+        setSyncStatus(st);
+        if (typeof st.pending === 'number') setPending(st.pending);
+        if (st.state === 'ok' && !st.pending) sentAt.current = Date.now();
+      },
     });
+    countPending();
     return syncRef.current.stop;
-  }, [hasCfg, syncCfg?.url, syncCfg?.key, saveSyncCfg]);
+  }, [hasCfg, syncCfg?.url, syncCfg?.key, saveSyncCfg]); // eslint-disable-line react-hooks/exhaustive-deps
   const syncNow = useCallback(() => syncRef.current?.run(), []);
-  // web (nothing is kept on the computer): leaving or reloading while a change hasn't reached the cloud would lose it,
+  // a session-only browser keeps nothing: leaving or reloading while a change hasn't reached the cloud would lose it,
   // so the browser asks first
   const sentAt = useRef(0);
   useEffect(() => {
-    if (!isWeb) return;
+    if (keepsData()) return;
     const guard = (e) => { if (!isLeaving() && changedAt.current > sentAt.current && cfgRef.current?.key) { e.preventDefault(); e.returnValue = ''; } };
     window.addEventListener('beforeunload', guard);
     return () => window.removeEventListener('beforeunload', guard);
@@ -436,20 +545,30 @@ export function StoreProvider({ children }) {
   /**
    * Link this device to a pharmacy after a cloud sign-in. If the device held another pharmacy's data (or old
    * device-only data), that is kept aside as a backup on the device and the store starts clean, then downloads.
+   * Changes another pharmacy's sign-in hasn't sent yet are never carried over to this one: they are sent first (with
+   * that pharmacy's own sign-in), and if they can't be, switching is refused with the reason.
    */
   const linkPharmacy = useCallback(async ({ url, token, account, tenant, slug, pharmacy }) => {
     const cur = cfgRef.current || {};
     const other = cur.tenant ? cur.tenant !== tenant : (dbRef.current?.users.length || 0) > 0;
+    if (other && cur.tenant) {
+      if (await storage().count()) await syncRef.current?.run();
+      const left = await storage().count();
+      if (left) throw new Error(`This device still has ${left} change(s) for ${cur.pharmacy || 'another pharmacy'} that haven't reached the cloud. Connect to the internet and let them send (or sign in to that pharmacy again) before signing in to a different pharmacy.`);
+    }
     if (other) {
       try { await idbSet('backup:' + (cur.tenant || 'device') + ':' + now().slice(0, 19), dbRef.current); } catch (e) { console.error(e); }
       for (const k of await idbKeys().catch(() => [])) if (String(k).startsWith('snap:')) await idbDel(k).catch(() => {});
-      setDb(withCatalog(blankDb()));
+      const blank = withCatalog(blankDb());
+      await persist({ ...diff(null, blank, { tables: TABLES, local: false, skip: skipRecord }), reset: true, clearOutbox: true, version: STORAGE_VERSION });
+      setState(blank);
+      setPending(0);
     }
-    const next = { ...cur, url, key: token, account, tenant, slug, pharmacy, ...(other || cur.url !== url ? { cursor: 0, pushedAt: '', lastSync: '' } : {}) };
-    saveSyncCfg(next);
-    cfgRef.current = next; // the sync engine restarts with the new sign-in and downloads straight away
+    // a new link (another pharmacy, another cloud, or device-only data joining one) sends everything it holds once
+    const next = { ...cur, url, key: token, account, tenant, slug, pharmacy, ...(other || cur.url !== url ? { cursor: 0, pushedAt: '', lastSync: '', outboxV2: false } : {}) };
+    await saveSyncCfg(next);
     return other || !cur.lastSync;
-  }, [saveSyncCfg]);
+  }, [saveSyncCfg, persist, setState]);
 
   // ---------- derived stock: per branch, per batch ----------
   const stockIndex = useMemo(() => {
@@ -517,7 +636,7 @@ export function StoreProvider({ children }) {
   if (!db || !syncCfg) return <div className="loading"><div className="spinner" />Loading RxPOS…</div>;
 
   return (
-    <Ctx.Provider value={{ db, setDb, update, upsert, remove, saveSettings, user, setUser, fmt, products, stockIndex, batchesOf,
+    <Ctx.Provider value={{ db, update, pending, storageIssue, upsert, remove, saveSettings, user, setUser, fmt, products, stockIndex, batchesOf,
       branchId, branch, setBranchId, syncCfg, saveSyncCfg, syncStatus, syncNow, linkPharmacy, features, can, day }}>
       {children}
     </Ctx.Provider>

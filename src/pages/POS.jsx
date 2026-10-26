@@ -275,7 +275,11 @@ export default function POS({ mode = 'retail' }) {
     finalize();
   };
 
-  const finalize = (extra = {}) => {
+  // 1.6 a sale is only "complete" once it is saved on the device (sale, stock movements, audit and the note to send it
+  // to the cloud, in one transaction); a second press while it is being saved is ignored
+  const saving = useRef(false);
+  const finalize = async (extra = {}) => {
+    if (saving.current) return;
     const credit = ptype === 'credit';
     const paid = credit ? Math.min(Number(tendered) || 0, total) : total;
     // Split each line across batches, earliest expiry first
@@ -292,7 +296,9 @@ export default function POS({ mode = 'retail' }) {
       customerId, customerName: customer?.name || 'Walk-in Customer', cashier: user.name, status: 'completed', ...(cart.some(isCd) && cdRef.current ? { controlled: cdRef.current } : {}), ...(cart.some((l) => l.allowExpired) ? { expiredOverride: true } : {}), ...extra,
     };
     const expiredLines = cart.filter((l) => l.allowExpired); // 1.6
-    update((d) => {
+    saving.current = true;
+    try {
+    await update((d) => {
       put(d, 'sales', sale);
       for (const i of items) for (const a of i.alloc) move(d, { productId: i.id, qty: -a.qty, type: 'Sale', ref: sale.number, user: user.name, batchId: a.batchId, branchId });
       const pf = location.state?.proforma;
@@ -301,6 +307,11 @@ export default function POS({ mode = 'retail' }) {
       // 1.6 an expired-stock sale is recorded in the audit log, with the pharmacist's reason per medicine
       if (expiredLines.length) audit(d, user, 'Expired stock sold', `${sale.number}: ${expiredLines.map((l) => `${l.name} (${l.expiredReason || 'no reason given'})`).join('; ')}`, branchId);
     });
+    } catch (e) {
+      // nothing was kept: the basket stays as it is so the sale can be charged again
+      toast(`The sale was NOT recorded. ${e.message}`, 'error');
+      return;
+    } finally { saving.current = false; }
     window.history.replaceState({}, '');
     setDone(sale);
     setMomo(null);
@@ -327,7 +338,7 @@ export default function POS({ mode = 'retail' }) {
         if (s.status === 'SUCCESSFUL') {
           setMomo((m) => ({ ...m, stage: 'paid' }));
           toast('Mobile Money payment received');
-          return finalize({ momo: { provider: momo.network, phone, ref, txid: s.txid || '' } });
+          return finalize({ momo: { provider: momo.network, phone, ref, txid: s.txid || '', confirmed: true } }); // confirmed by the network
         }
         if (s.status === 'FAILED') return setMomo((m) => ({ ...m, stage: 'enter', error: 'The customer declined or the payment failed' + (s.reason ? `: ${s.reason}` : '') }));
       }

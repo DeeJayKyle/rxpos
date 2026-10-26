@@ -13,7 +13,7 @@ export function toast(message, tone = 'success') {
   emit({ type: 'toast', item: { id: ++seq, message, tone } });
 }
 
-/** await ask({ title, message, confirmText, danger }) → true/false */
+/** await ask({ title, message, confirmText, cancelText, danger }) → true/false */
 export function ask(opts) {
   return new Promise((resolve) => emit({ type: 'dialog', item: { ...(typeof opts === 'string' ? { message: opts } : opts), resolve } }));
 }
@@ -89,7 +89,7 @@ export function FeedbackHost() {
               : <input ref={inputRef} type={dialog.type || 'text'} value={value} onChange={(e) => setValue(e.target.value)} placeholder={dialog.placeholder} />)}
             {dialog.input && dialog.minLength && <small className="muted">At least {dialog.minLength} characters</small>}
             <div className="form-actions">
-              <button type="button" className="btn ghost" autoFocus={dialog.danger && !dialog.input} onClick={() => close(dialog.input ? null : false)}>Cancel</button>
+              <button type="button" className="btn ghost" autoFocus={dialog.danger && !dialog.input} onClick={() => close(dialog.input ? null : false)}>{dialog.cancelText || 'Cancel'}</button>
               <button className={'btn ' + (dialog.danger ? 'danger-solid' : 'primary')} disabled={tooShort} autoFocus={!dialog.danger && !dialog.input}>{dialog.confirmText || 'Confirm'}</button>
             </div>
           </form>

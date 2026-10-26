@@ -30,6 +30,8 @@ jobs:
       - run: npm ci
       - name: Unit tests
         run: for f in tests/unit-*.mjs; do echo "== $f =="; node "$f" || exit 1; done
+      - name: Type check (storage and sync contracts)
+        run: npm run typecheck
       - name: App builds
         run: npm run build
 
