@@ -60,7 +60,7 @@ const sell = async (p, name) => {
   await p.keyboard.press('Escape'); await wait(300);
   return number;
 };
-const deviceHas = (p, number) => p.evaluate(async (n) => new Promise((res) => { const q = indexedDB.open('pharmapos'); q.onsuccess = () => { const g = q.result.transaction('records').objectStore('records').getAll(); g.onsuccess = () => { res(g.result.some((x) => x.t === 'sales' && x.r.number === n)); q.result.close(); }; }; q.onerror = () => res(false); }), number);
+const deviceHas = (p, number) => p.evaluate(async (n) => new Promise((res) => { const q = indexedDB.open('pharmapos'); q.onsuccess = () => { const g = q.result.transaction('records').objectStore('records').getAll(); g.onsuccess = () => { res(g.result.some((x) => x.t === 'sales' && x.rs.some((r) => r.number === n))); q.result.close(); }; }; q.onerror = () => res(false); }), number);
 const outboxSize = (p) => p.evaluate(async () => new Promise((res) => { const q = indexedDB.open('pharmapos'); q.onsuccess = () => { const g = q.result.transaction('outbox').objectStore('outbox').count(); g.onsuccess = () => { res(g.result); q.result.close(); }; }; }));
 
 // ---------- 1. offline sale, restart, reconnect: exactly once in the cloud ----------

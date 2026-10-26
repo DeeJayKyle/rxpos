@@ -35,7 +35,7 @@ const onDevice = (p) => p.evaluate(() => new Promise((res) => {
   const r = indexedDB.open('pharmapos');
   r.onsuccess = () => { const d = r.result; if (!d.objectStoreNames.contains('records')) { d.close(); return res({ sales: 0, outbox: 0 }); }
     const tx = d.transaction(['records', 'outbox']); let sales = 0, outbox = 0;
-    tx.objectStore('records').openCursor().onsuccess = (e) => { const c = e.target.result; if (c) { if (c.value.t === 'sales') sales++; c.continue(); } };
+    tx.objectStore('records').openCursor().onsuccess = (e) => { const c = e.target.result; if (c) { if (c.value.t === 'sales') sales += c.value.rs.length; c.continue(); } };
     tx.objectStore('outbox').count().onsuccess = (e) => { outbox = e.target.result; };
     tx.oncomplete = () => { d.close(); res({ sales, outbox }); }; };
   r.onerror = () => res(null);

@@ -292,8 +292,10 @@ const skipRecord = (r) => isUntouchedBase(r);
 /** Built-in defaults nobody changed (walk-in customer, cash drawer…) are stored but every device already has them */
 const noSync = (r) => r.updatedAt === BASE_AT;
 const DATED = ['sales', 'purchases', 'expenses', 'payments', 'bankTx', 'proformas', 'prescriptions', 'transfers', 'audit', 'purchaseOrders', 'stockCounts', 'supplierReturns', 'movements', 'messages'];
-const byDate = (a, b) => String(b.date || '').localeCompare(String(a.date || ''));
-const byChange = (a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || ''));
+// newest first. ISO times compare correctly as plain strings; localeCompare is far slower on 50,000 rows at start-up
+const desc = (x, y) => (x < y ? 1 : x > y ? -1 : 0);
+const byDate = (a, b) => desc(String(a.date || ''), String(b.date || ''));
+const byChange = (a, b) => desc(String(a.updatedAt || ''), String(b.updatedAt || ''));
 /** The pharmacy as the screens expect it (lists newest first) from one entry per record */
 function fromRecords({ tables, settings, tomb }) {
   const out = { _tomb: tomb || [] };

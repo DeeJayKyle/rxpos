@@ -2,7 +2,7 @@
 // RxPOS storage (1.6): the one place the app reads and writes the pharmacy on this device. Screens never touch
 // IndexedDB; they change the store (store.jsx), and the store hands each change to commit().
 //
-//   load()      the whole pharmacy, rebuilt from one entry per record
+//   load()      the whole pharmacy, rebuilt from its records (kept in small buckets on IndexedDB, see BUCKETS)
 //   commit(c)   one atomic write: changed records, deleted records, settings, tombstones AND the outbox entries that
 //               send the change to the cloud. Either all of it is on the device or none of it is, so a sale can never
 //               be saved without its stock movements, or without the note that it still has to be sent.
@@ -23,6 +23,18 @@ const KV_SETTINGS = 's2:settings';
 const KV_TOMB = 's2:_tomb';
 const KV_REJECTED = 'sync-rejected';
 const key = (/** @type {string} */ t, /** @type {string} */ id) => t + '|' + id;
+// On IndexedDB, records are kept in buckets: each record lives in bucket `<table>|#<hash of id mod 64>`, value
+// { t, rs: [record, …] }. Measured on 51,000 records (docs/ARCHITECTURE.md): one IndexedDB value per record took
+// 590 ms to read at start-up, buckets keyed by id 320 ms, array buckets 230 ms, whole-table arrays 140 ms; but a
+// whole-table value made every sale rewrite the table. A bucket holds ~230 records of a 15,000-sale table, so a sale
+// rewrites a few buckets, still in one transaction with its outbox entries.
+const BUCKETS = 64;
+const bucketOf = (/** @type {string} */ t, /** @type {any} */ id) => {
+  let h = 2166136261; // FNV-1a
+  const s = String(id);
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
+  return t + '|#' + ((h >>> 0) % BUCKETS).toString(16);
+};
 
 /** Promise for an IndexedDB transaction that settles when it is committed (or rejects when it fails / aborts) */
 const done = (/** @type {IDBTransaction} */ tx) => new Promise((resolve, reject) => {
@@ -53,19 +65,31 @@ function idbStorage() {
       if (version !== STORAGE_VERSION) return null;
       /** @type {Record<string, any[]>} */
       const tables = {};
-      for (const { t, r } of rows) (tables[t] ??= []).push(r);
+      for (const { t, rs } of rows) { const list = (tables[t] ??= []); for (const r of rs) list.push(r); }
       return { tables, settings, tomb: tomb || [] };
     },
     /** @param {Commit} c */
     async commit(c) {
+      /** @type {Map<string, {t:string, put:Map<string, any>, del:Set<string>}>} changes grouped by bucket */
+      const touched = new Map();
+      const at = (/** @type {string} */ t, /** @type {any} */ id) => { const k = bucketOf(t, id); let b = touched.get(k); if (!b) touched.set(k, (b = { t, put: new Map(), del: new Set() })); return b; };
+      for (const { t, rec } of c.puts || []) { const b = at(t, rec.id); b.put.set(String(rec.id), rec); b.del.delete(String(rec.id)); }
+      for (const { t, id } of c.dels || []) { const b = at(t, id); b.del.add(String(id)); b.put.delete(String(id)); }
       const db = await conn();
       const tx = db.transaction(['records', 'kv', 'outbox'], 'readwrite');
       const finished = done(tx);
       try {
         const rs = tx.objectStore('records'), kv = tx.objectStore('kv'), ob = tx.objectStore('outbox');
         if (c.reset) rs.clear();
-        for (const { t, rec } of c.puts || []) rs.put({ t, r: rec }, key(t, rec.id));
-        for (const { t, id } of c.dels || []) rs.delete(key(t, id));
+        // read-modify-write of each touched bucket inside this transaction (requests run in order, after the clear)
+        for (const [k, b] of touched) {
+          const g = rs.get(k);
+          g.onsuccess = () => {
+            const recs = (g.result?.rs || []).filter((/** @type {any} */ r) => !b.put.has(String(r.id)) && !b.del.has(String(r.id)));
+            for (const r of b.put.values()) recs.push(r);
+            if (recs.length) rs.put({ t: b.t, rs: recs }, k); else rs.delete(k);
+          };
+        }
         if (c.settings) kv.put(c.settings, KV_SETTINGS);
         if (c.tomb) kv.put(c.tomb, KV_TOMB);
         if (c.version) kv.put(c.version, 'storage-version');

@@ -56,7 +56,7 @@ await p.evaluate(async ({ legacy, cfg, user }) => {
 
 await p.goto(base + '/' + slug + '#/sales', { waitUntil: 'networkidle2' }); await wait(2500);
 const st = await p.evaluate(async () => new Promise((res) => { const q = indexedDB.open('pharmapos'); q.onsuccess = () => { const db = q.result; const tx = db.transaction(['records', 'kv', 'outbox'], 'readonly'); const out = {}; const g = (s, m, k, f) => { const r = tx.objectStore(s)[m](k); r.onsuccess = () => { out[f] = r.result; }; }; g('records', 'getAll', undefined, 'records'); g('kv', 'get', 'storage-version', 'version'); g('kv', 'get', 't:sales', 'legacySales'); g('kv', 'get', 'migrated-v1-counts', 'counts'); g('outbox', 'getAll', undefined, 'outbox'); tx.oncomplete = () => { db.close(); res(out); }; }; }));
-const recs = (st.records || []).map((x) => x.t + '|' + x.r.id);
+const recs = (st.records || []).flatMap((x) => x.rs.map((r) => x.t + '|' + r.id)); // buckets (src/storage.js)
 check('every 1.5 record is in the 1.6 record store', ['products|lg1', 'sales|sale-unsent', 'sales|sale-sent', 'movements|mv-unsent', 'users|' + login.user.id].every((k) => recs.includes(k)), recs.join(','));
 check('the storage version is 2', st.version === 2, st.version);
 check('the 1.5 copy is kept for recovery', Array.isArray(st.legacySales) && st.legacySales.length === 2);
