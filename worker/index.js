@@ -123,6 +123,8 @@ function ensureSchema(db) {
     if (!have.has('tenants_slug')) ddl.push('CREATE UNIQUE INDEX tenants_slug ON tenants(slug)');
     if (!have.has('client_errors')) ddl.push('CREATE TABLE client_errors (tenant TEXT NOT NULL, k TEXT NOT NULL, message TEXT, stack TEXT, page TEXT, build INTEGER, platform TEXT, kind TEXT, count INTEGER NOT NULL DEFAULT 1, devices INTEGER NOT NULL DEFAULT 1, first_at TEXT, last_at TEXT, PRIMARY KEY (tenant, k))'); // crash reports from devices (src/crash.js)
     if (!have.has('twofa')) ddl.push(twoStepDdl); // two-step sign-in secrets (worker/twostep.js), never synced
+    // 1.6 sync protocol 2: op ids already applied, so a request repeated after a lost reply is applied once
+    if (!have.has('sync_ops')) ddl.push('CREATE TABLE sync_ops (tenant TEXT NOT NULL, op TEXT NOT NULL, at TEXT NOT NULL, PRIMARY KEY (tenant, op))');
     if (!have.has('login_fail')) ddl.push('CREATE TABLE login_fail (email TEXT PRIMARY KEY, n INTEGER NOT NULL, until INTEGER NOT NULL DEFAULT 0)');
     if (!have.has('rtc')) ddl.push('CREATE TABLE rtc (id INTEGER PRIMARY KEY AUTOINCREMENT, tenant TEXT NOT NULL, to_uid TEXT NOT NULL, from_uid TEXT NOT NULL, from_name TEXT, type TEXT NOT NULL, call_id TEXT NOT NULL, data TEXT, at INTEGER NOT NULL)');
     if (!have.has('rtc_to')) ddl.push('CREATE INDEX rtc_to ON rtc(tenant, to_uid, id)'); // instant look-up of calls waiting for a person
@@ -495,6 +497,7 @@ async function sync(env, body, who) {
   const tenant = who.tenant;
   const { deviceId, since = 0, changes = [] } = body;
   if (!deviceId) return json({ error: 'Missing deviceId' }, 400);
+  if (!Array.isArray(changes)) return json({ error: 'changes must be a list' }, 400);
   if (changes.length > MAX_PUSH) return json({ error: `Send at most ${MAX_PUSH} changes per request` }, 413);
 
   // Last writer wins per record; every accepted write gets the next sequence number.
@@ -513,16 +516,30 @@ async function sync(env, body, who) {
   );
   const allowed = {};
   const stmts = [];
-  let refused = 0;
+  let refused = 0, dupes = 0;
+  const refusedKeys = [];
+  // protocol 2: changes carry op ids; ops this pharmacy already applied are skipped (a repeat after a lost reply).
+  // The ids are recorded in the same transaction as the records, so "applied" and "remembered" can't come apart.
+  const ops = changes.map((c) => (c && typeof c.op === 'string' && c.op.length <= 64 ? c.op : null)).filter(Boolean);
+  const seen = new Set();
+  if (ops.length) {
+    const { results } = await db.prepare('SELECT op FROM sync_ops WHERE tenant = ?1 AND op IN (SELECT value FROM json_each(?2))').bind(tenant, JSON.stringify(ops)).all();
+    for (const r of results || []) seen.add(r.op);
+  }
+  const remember = db.prepare('INSERT OR IGNORE INTO sync_ops (tenant, op, at) VALUES (?1, ?2, ?3)');
+  const nowIso = new Date().toISOString();
+  const refuse = (ch) => { refused++; refusedKeys.push(ch.t + '|' + ch.id); };
+  const ledger = new Set(); // positions of the op-ledger inserts in the batch (not counted as applied records)
   let tenantCount = null; // counted once, only if we actually insert new rows (quota guard)
   for (const ch of changes) {
     if (!ch || typeof ch.t !== 'string' || ch.id == null || typeof ch.at !== 'string') continue;
-    if (SERVER_ONLY.has(ch.t) && !who.viaKey) { refused++; continue; }
+    if (typeof ch.op === 'string' && seen.has(ch.op)) { dupes++; continue; } // already applied: a repeat
+    if (SERVER_ONLY.has(ch.t) && !who.viaKey) { refuse(ch); continue; }
     const perm = GUARDED[ch.t];
     if (perm && !who.viaKey) {
       allowed[perm] ??= await roleCan(env, tenant, who.role, perm);
-      if (!allowed[perm] && !(ch.t === 'users' && (await ownProfileEdit(db, tenant, who, ch)))) { refused++; continue; }
-      if (ch.t === 'users' && (await adminChangeRefused(db, tenant, ch, who))) { refused++; continue; }
+      if (!allowed[perm] && !(ch.t === 'users' && (await ownProfileEdit(db, tenant, who, ch)))) { refuse(ch); continue; }
+      if (ch.t === 'users' && (await adminChangeRefused(db, tenant, ch, who))) { refuse(ch); continue; }
     }
     const id = String(ch.id);
     let rec = ch.rec;
@@ -535,16 +552,16 @@ async function sync(env, body, who) {
     // 1.1 append-only tables: refuse any delete or overwrite, and stamp the actor + server time on audit rows so the
     // trail cannot be back-dated or attributed to someone else from a device.
     if (INSERT_ONLY.has(ch.t)) {
-      if (ch.deleted) { refused++; continue; }
+      if (ch.deleted) { refuse(ch); continue; }
       // stamp the real actor + server time on a staff device's audit row; the trusted pharmacy key (owner/enrolment)
       // keeps the record it sends
       if (ch.t === 'audit' && rec && !who.viaKey) rec = { ...rec, user: who.name || rec.user || '', date: new Date().toISOString() };
     }
     const body = ch.deleted ? null : JSON.stringify(rec ?? null);
-    if (body && body.length > MAX_REC_BYTES) { refused++; continue; } // 1.1 reject an oversized record
+    if (body && body.length > MAX_REC_BYTES) { refuse(ch); continue; } // 1.1 reject an oversized record
     if (!ch.deleted) { // 1.1 per-tenant record ceiling, counted at most once per request
       if (tenantCount === null) tenantCount = (await db.prepare('SELECT COUNT(*) n FROM records WHERE tenant = ?1').bind(tenant).first('n')) || 0;
-      if (tenantCount >= MAX_TENANT_RECORDS) { refused++; continue; }
+      if (tenantCount >= MAX_TENANT_RECORDS) { refuse(ch); continue; }
       tenantCount++;
     }
     const k = ch.t + '|' + id;
@@ -554,9 +571,16 @@ async function sync(env, body, who) {
     const at = atMs <= Date.now() + CLOCK_SKEW_MS ? ch.at : new Date(Date.now() + CLOCK_SKEW_MS).toISOString();
     if (INSERT_ONLY.has(ch.t)) stmts.push(insertOnly.bind(tenant, k, ch.t, id, body, at, deviceId));
     else stmts.push(upsert.bind(tenant, k, ch.t, id, body, ch.deleted ? 1 : 0, at, deviceId));
+    if (typeof ch.op === 'string' && ch.op.length <= 64) { stmts.push(remember.bind(tenant, ch.op, nowIso)); ledger.add(stmts.length - 1); seen.add(ch.op); }
   }
+  // the whole request in one transaction (D1 and libSQL batches are atomic): a sale and its stock movements land together
   let applied = 0;
-  if (stmts.length) for (const r of await db.batch(stmts)) applied += r.meta.changes || 0;
+  if (stmts.length) {
+    const res = await db.batch(stmts);
+    res.forEach((r, i) => { if (!ledger.has(i)) applied += r.meta?.changes || 0; });
+  }
+  // keep the op ledger small: ops older than 60 days can't be repeats any more (devices retry within minutes or days)
+  if (ops.length && Math.random() < 0.01) await db.prepare('DELETE FROM sync_ops WHERE tenant = ?1 AND at < ?2').bind(tenant, new Date(Date.now() - 60 * 864e5).toISOString()).run().catch(() => {});
   // Tell the pharmacy's other devices to pull, while this reply is being prepared (not one after the other)
   const notified = applied && env.HUB ? env.HUB.get(env.HUB.idFromName(tenant)).fetch('https://hub/notify', { method: 'POST', body: JSON.stringify({ from: deviceId }) }).catch(() => {}) : null;
 
@@ -577,7 +601,7 @@ async function sync(env, body, who) {
   await notified;
   // Build the response by hand so records stored as JSON text are not parsed and re-serialised (keeps CPU low)
   const items = page.map((r) => `{"t":${JSON.stringify(r.t)},"id":${JSON.stringify(r.id)},"at":${JSON.stringify(r.at)},"deleted":${r.deleted ? 'true' : 'false'},"rec":${stripUserSecrets(r.t, r.rec)}}`);
-  return json(`{"changes":[${items.join(',')}],"cursor":${cursor},"more":${more},"applied":${applied},"refused":${refused},"epoch":${JSON.stringify(epoch)},"tenant":${JSON.stringify(tenant)}}`);
+  return json(`{"changes":[${items.join(',')}],"cursor":${cursor},"more":${more},"applied":${applied},"refused":${refused},"refusedKeys":${JSON.stringify(refusedKeys)},"dupes":${dupes},"protocol":2,"epoch":${JSON.stringify(epoch)},"tenant":${JSON.stringify(tenant)}}`);
 }
 
 // ---------- Mobile Money (per pharmacy) ----------

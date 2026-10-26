@@ -18,6 +18,7 @@ import { CallManager } from './calls.jsx';
 import { WeeklyPopup } from './pages/Weekly.jsx';
 import { AutoReorder } from './reorder.js';
 import { isWeb, isNative } from './platform.js';
+import { keepsData } from './webpolicy.js';
 import RefreshHost from './refresh.jsx';
 import { startUpdates, onUpdate, applyUpdate, justUpdated, LABEL } from './update.js';
 import { applyTheme, saveTheme, allowedThemes, savedMode, saveMode, systemDark, paletteFor, startupTheme, ACCENTS, savedAccent, saveAccent, withAccent } from './themes.js';
@@ -231,20 +232,31 @@ function useOnline() {
 }
 
 /** Live clock (with seconds). The dot shows the connection: green = up to date, amber = offline, red = needs attention. */
+/**
+ * Live clock plus where this device's work stands (1.6): Offline (with how many changes are waiting), Syncing, a count
+ * of changes waiting, Synced, or Needs attention (a change the cloud refused, a failed save on the device, an expired
+ * sign-in). The tooltip says why; clicking tries again (or opens This device when something needs attention).
+ */
 function ClockPill() {
-  const { syncStatus, syncNow, setUser } = useStore();
+  const { syncStatus, syncNow, setUser, pending, storageIssue } = useStore();
+  const navigate = useNavigate();
   const online = useOnline();
   const [now, setNow] = useState(() => new Date());
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(t); }, []);
   const s = syncStatus.state;
-  const tone = syncStatus.expired || s === 'error' ? 'danger' : s === 'offline' || !online ? 'warn' : s === 'syncing' ? 'syncing' : 'ok';
-  const tip = syncStatus.expired ? 'Signed out of the cloud: click to sign in again' : s === 'error' ? syncStatus.error : !online || s === 'offline' ? 'Offline: your work is saved and goes up when the internet is back'
-    : syncStatus.lastSync ? 'Up to date ' + new Date(syncStatus.lastSync).toLocaleTimeString() : 'Connecting…';
-  // the state in words beside the clock (no "sync" jargon on the bar itself; the full detail is in the tooltip)
-  const label = s === 'off' ? 'On this device' : syncStatus.expired ? 'Sign in again' : s === 'error' ? 'Not sent · tap to retry'
-    : !online || s === 'offline' ? (isWeb ? 'Offline' : 'Saved on this device') : s === 'syncing' ? 'Sending…' : 'Up to date';
+  const waiting = pending > 0 ? `${pending} waiting` : '';
+  const attention = storageIssue || syncStatus.rejected > 0 || s === 'error' || syncStatus.expired;
+  const tone = attention ? 'danger' : s === 'offline' || !online ? 'warn' : s === 'syncing' || pending ? 'syncing' : 'ok';
+  const tip = storageIssue || (syncStatus.expired ? 'Signed out of the cloud: click to sign in again'
+    : syncStatus.rejected > 0 ? `${syncStatus.rejected} change(s) were refused by the cloud and kept on this device for review (This device → Sync & storage)`
+    : s === 'error' ? `${syncStatus.error}${pending ? ` · ${pending} change(s) waiting, kept on this device` : ''}${syncStatus.retryAt ? ` · trying again at ${new Date(syncStatus.retryAt).toLocaleTimeString()}` : ''}`
+    : !online || s === 'offline' ? (keepsData() ? `Offline: your work is saved on this device${pending ? ` (${pending} change(s) waiting)` : ''} and goes up when the internet is back` : 'Offline: the web version needs the internet')
+    : syncStatus.lastSync ? (pending ? `${pending} change(s) on their way · ` : '') + 'Up to date ' + new Date(syncStatus.lastSync).toLocaleTimeString() : 'Connecting…');
+  const label = s === 'off' && !pending ? 'On this device' : storageIssue ? 'Needs attention' : syncStatus.expired ? 'Sign in again' : attention ? 'Needs attention'
+    : !online || s === 'offline' ? ['Offline', waiting].filter(Boolean).join(' · ') : s === 'syncing' ? 'Syncing…' : waiting || 'Synced';
+  const click = () => (syncStatus.expired ? setUser(null) : storageIssue || syncStatus.rejected > 0 ? navigate('/device') : syncNow());
   return (
-    <button className={'pill clock ' + tone} title={tip} aria-label={`${now.toLocaleTimeString()}. ${label}. ${tip}`} onClick={() => (syncStatus.expired ? setUser(null) : syncNow())}>
+    <button className={'pill clock ' + tone} title={tip} aria-label={`${now.toLocaleTimeString()}. ${label}. ${tip}`} onClick={click}>
       <i /><span className="clock-state" aria-live="polite">{label}</span><span className="clock-time">{now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
       <span className="clock-date">{now.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })}</span>
     </button>
@@ -403,6 +415,13 @@ function Shell() {
   };
   const asked = useRef(false);
   useEffect(() => { if (me?.mustChangePassword && !asked.current) { asked.current = true; changePassword(true); } }, [me?.mustChangePassword]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Signing out never deletes unsent work: the apps and a trusted browser keep it and send it later; a session-only
+  // browser keeps nothing, so it asks before letting it go
+  const { pending: unsent } = useStore();
+  const signOut = async () => {
+    const out = await setUser(null, { confirmLoss: (n) => ask({ title: `${n} change(s) haven't reached the cloud`, message: 'This browser keeps nothing on the computer, so signing out now loses them. Stay signed in until the internet is back, or sign out anyway.', confirmText: 'Sign out anyway', cancelText: 'Stay signed in', danger: true }) });
+    if (out && keepsData() && unsent) toast(`${unsent} change(s) are kept on this device and will be sent when someone signs in again.`, 'info');
+  };
   const initials = user.name.split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
 
   return (
@@ -432,7 +451,7 @@ function Shell() {
           <button className="icon-btn" title="Change my password" onClick={() => changePassword(false)}><KeyRound size={17} /></button>
           {isNative && <button className={'icon-btn' + (pinSet ? ' text-ok' : '')} title={pinSet ? 'Quick PIN is set for this device' : 'Set a quick PIN for this device'} onClick={manageDevicePin}><LockKeyhole size={17} /></button>}{/* web: nothing is kept on the computer, so no device PIN */}
           {syncCfg?.key?.startsWith('u.') && <button className={'icon-btn' + (me?.twoFactor ? ' text-ok' : '')} title={me?.twoFactor ? 'Two-step sign-in is on' : 'Two-step sign-in'} onClick={() => setTwoStepOpen(true)}><ShieldCheck size={17} /></button>}
-          <button className="icon-btn" title="Log out" onClick={() => setUser(null)}><LogOut size={17} /></button>
+          <button className="icon-btn" title="Log out" onClick={signOut}><LogOut size={17} /></button>
         </div>
       </aside>
       <div className="main">

@@ -195,6 +195,10 @@ export function useAlerts() {
     const lastReading = [...db.tempLogs].filter((r) => r.place !== 'Outside').sort((a, b) => String(b.at).localeCompare(String(a.at)))[0];
     const badReading = lastReading && ((lastReading.place === 'Fridge' && (lastReading.temp < lim.fridgeMin || lastReading.temp > lim.fridgeMax)) || (lastReading.place !== 'Fridge' && lastReading.temp > lim.roomMax));
     const inv = can('inventory.view');
+    // 1.6 overselling: two devices selling the same last units while offline both keep their sale (stock is the sum of
+    // movements, so nothing is overwritten); the result shows here as stock below zero, to count and correct
+    const oversold = products.filter((p) => p.stock < 0).length;
+    if (oversold && inv) out.push({ key: 'oversold', tone: 'danger', Icon: PackageX, text: `${oversold} medicine${oversold > 1 ? 's show' : ' shows'} stock below zero`, why: 'More was sold than the system holds: usually two devices selling the last units while offline, or a delivery not yet entered. Count them and correct the stock.', to: '/stock-count', n: oversold });
     if (expired && inv) out.push({ key: 'expired', tone: 'danger', Icon: CalendarClock, text: `${expired} item${expired > 1 ? 's' : ''} expired but still in stock`, why: 'Expired batches can only be sold with a recorded reason. Return them to the supplier or write them off.', to: '/expiry', n: expired });
     if (expSoon && inv) out.push({ key: 'expiring', tone: 'warn', Icon: CalendarClock, text: `${expSoon} item${expSoon > 1 ? 's expire' : ' expires'} within 30 days: sell first`, why: 'Sales already use the earliest-expiring batch first. Promote these or return them before they expire.', to: '/expiry', n: expSoon });
     if (low && inv) out.push({ key: 'low', tone: 'warn', Icon: PackageX, text: `${low} item${low > 1 ? 's' : ''} at or below reorder level`, why: 'In stock, but at or below the fixed reorder level set on each medicine.', to: '/reorder', n: low });

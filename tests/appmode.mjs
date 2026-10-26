@@ -9,7 +9,12 @@ const CLOUD = /^https:\/\/(?:www\.|api\.)?rxposug\.com/; // the app's cloud addr
 // browser only. It only ever talks to the local test cloud.
 export const APP_ARGS = ['--disable-web-security', '--disable-features=IsolateOrigins,site-per-process,BlockInsecurePrivateNetworkRequests'];
 
+/**
+ * Returns a switch for the cloud as this page sees it: 'up' (normal), 'down' (unreachable: requests fail like no
+ * internet) or 'lose-reply' (the cloud receives and applies each sync request, then the reply is lost on the way back).
+ */
 export async function asDesktopApp(page, base) {
+  const cloud = { mode: 'up', syncCalls: 0, set(m) { this.mode = m; } };
   const ua = await page.browser().userAgent();
   await page.setUserAgent(ua.replace('HeadlessChrome', 'Chrome') + ' RxPOS Electron/43.0.0');
   await page.setBypassCSP(true); // the real app loads from disk with its own policy, not the web page's
@@ -21,6 +26,7 @@ export async function asDesktopApp(page, base) {
   page.on('request', async (req) => {
     const url = req.url();
     const m = url.match(CLOUD);
+    if (m && cloud.mode === 'down') return req.abort('internetdisconnected');
     if (process.env.APPMODE_DEBUG && /rxposug/.test(url)) console.log('appmode req:', req.method(), url, !!m);
     if (!m) return req.continue();
     const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type, Authorization', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS' };
@@ -31,10 +37,13 @@ export async function asDesktopApp(page, base) {
       for (const k of ['content-type', 'authorization', 'accept']) if (h[k]) headers[k] = h[k];
       const r = await fetch(base + url.slice(m[0].length), { method: req.method(), headers, body: ['GET', 'HEAD'].includes(req.method()) ? undefined : req.postData() });
       const body = Buffer.from(await r.arrayBuffer());
+      if (/\/api\/sync/.test(url)) cloud.syncCalls++;
+      if (cloud.mode === 'lose-reply' && /\/api\/sync/.test(url)) return req.abort('connectionreset'); // applied, but the reply never arrives
       req.respond({ status: r.status, headers: { ...cors, 'Content-Type': r.headers.get('content-type') || 'application/json' }, body });
     } catch (e) {
       if (process.env.APPMODE_DEBUG) console.log('appmode:', req.method(), url, e.message);
       req.abort('connectionrefused'); // like no internet (setOfflineMode also blocks it)
     }
   });
+  return cloud;
 }

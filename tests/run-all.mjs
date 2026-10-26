@@ -54,9 +54,14 @@ const SUITES = [
   ['pharmacy workspace', 'v34-workspace.mjs', ['.output/v34']],
   ['layout on every screen', 'v35-layout.mjs', ['.output/v35']],
   ['web is online only', 'v36-web-online.mjs', ['.output/v36']],
+  ['sales & sync reliability', 'v37-reliability.mjs', ['.output/v37']],
+  ['sync protocol 2', 'v38-sync-protocol.mjs', []],
+  ['storage upgrade 1.5 → 1.6', 'v39-migration.mjs', ['.output/v39']],
   ['append-only tables', 'v29-immutable.mjs', []],
   ['pay & sms gated', 'v30-paysms.mjs', []],
   ['restore epoch', 'v31-restore.mjs', []],
+  // performance timings: only on request (npm run bench), never part of npm test
+  ...(process.argv[2] === 'bench' ? [['benchmarks', 'bench.mjs', ['.output/bench']]] : []),
   // the Windows app's self-update needs a screen: Windows itself, or xvfb-run on Linux
   ...(process.platform === 'win32' || fs.existsSync('/usr/bin/xvfb-run') ? [['windows self-update', 'electron-update.mjs', []]] : []),
 ];

@@ -71,7 +71,7 @@ await A.type('input[autocomplete=username]', 'bea@test.rx'); await A.type('input
 await A.evaluate(() => [...document.querySelectorAll('button')].find((x) => x.textContent.includes('Sign in')).click());
 await wait(6000);
 const top = await A.evaluate(() => document.querySelector('.topbar')?.innerText || '');
-check('top bar shows a live clock with seconds, no "sync" wording', /\d{1,2}:\d{2}:\d{2}/.test(top) && !/sync/i.test(top), top.replace(/\n/g, ' | '));
+check('top bar shows a live clock with seconds and the sync state in one or two words (1.6)', /\d{1,2}:\d{2}:\d{2}/.test(top) && /Synced|Syncing|waiting|Offline|Needs attention/.test(top), top.replace(/\n/g, ' | '));
 check('sidebar shows the pharmacy logo', await A.evaluate(() => !!document.querySelector('.sidebar .logo-img')));
 check('dashboard has no Add stock button', !(await A.evaluate(() => [...document.querySelectorAll('.page-head a, .page-head button')].some((x) => /add stock/i.test(x.textContent)))));
 await A.evaluate(() => document.querySelector('button[title="Theme"]').click()); await wait(300);
