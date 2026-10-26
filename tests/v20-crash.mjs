@@ -4,6 +4,7 @@
 import puppeteer from 'puppeteer-core';
 import fs from 'node:fs';
 import { CHROME } from './chrome.mjs';
+import { asDesktopApp } from './appmode.mjs';
 const [base, ownerKey, out] = process.argv.slice(2);
 fs.mkdirSync(out, { recursive: true });
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -47,12 +48,12 @@ check('reports need a signed-in device', r.status === 401, r.status);
 await owner('/tenants/' + tid + '/errors', { clear: true, k: e.k });
 r = await owner('/tenants/' + tid + '/errors');
 check('"Fixed" removes it from the list', !(r.errors || []).some((x) => /Test crash/.test(x.message)));
-// ----- "Remember me" on the sign-in screen -----
+// ----- "Remember me" on the sign-in screen (Windows / Android app only; the web version keeps nothing) -----
 {
   const b2 = await puppeteer.launch({ executablePath: CHROME, headless: true });
   const ctx = await b2.createBrowserContext();
   const signIn = async (remember) => {
-    const p = await ctx.newPage();
+    const p = await ctx.newPage(); await asDesktopApp(p, base);
     await p.goto(base + '/' + slug, { waitUntil: 'networkidle2' }); await wait(800);
     await p.evaluate(() => { const i = document.querySelector('input[autocomplete=username]'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(i, ''); i.dispatchEvent(new Event('input', { bubbles: true })); });
     await p.type('input[autocomplete=username]', 'cleo@test.rx'); await p.type('input[type=password]', 'cleo-pass-123');
@@ -63,7 +64,7 @@ check('"Fixed" removes it from the list', !(r.errors || []).some((x) => /Test cr
     return p;
   };
   // "closing the app": a new tab has a fresh session, like reopening the browser or the Windows / Android app
-  const reopen = async () => { const p = await ctx.newPage(); await p.goto(base + '/' + slug, { waitUntil: 'networkidle2' }); await wait(1500); const inside = await p.evaluate(() => !!document.querySelector('.sidebar')); return { p, inside }; };
+  const reopen = async () => { const p = await ctx.newPage(); await asDesktopApp(p, base); await p.goto(base + '/' + slug, { waitUntil: 'networkidle2' }); await wait(1500); const inside = await p.evaluate(() => !!document.querySelector('.sidebar')); return { p, inside }; };
   let p1 = await signIn(false); await p1.close();
   let r1 = await reopen();
   check('without "Remember me", reopening the app asks to sign in again', !r1.inside);
@@ -76,6 +77,9 @@ check('"Fixed" removes it from the list', !(r.errors || []).some((x) => /Test cr
   const r2 = await reopen();
   check('signing out forgets the device', !r2.inside);
   check('…and the box is still ticked from last time', await r2.p.evaluate(() => document.querySelector('.remember-row input[type=checkbox]')?.checked === true));
+  // the web version offers no "Remember me": it keeps nothing on the computer
+  const w = await ctx.newPage(); await w.goto(base + '/' + slug, { waitUntil: 'networkidle2' }); await wait(800);
+  check('web: no "Remember me" box, and it says nothing is kept', await w.evaluate(() => !document.querySelector('.remember-row input[type=checkbox]') && /nothing is kept/i.test(document.querySelector('.remember-row')?.innerText || '')));
   await b2.close();
 }
 await owner('/tenants/' + tid + '/delete', { confirm: slug });

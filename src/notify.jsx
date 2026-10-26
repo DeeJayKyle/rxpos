@@ -1,7 +1,7 @@
 // Pop-up cards with a sound, used for stock/weather alerts, new messages, daily greetings, weekly reports and calls.
 // popup({ id, tone, title, body, icon, to, actions, sound, sticky, render })  — same id replaces an open pop-up.
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { X } from 'lucide-react';
 import { notifyOS } from './badges.js';
 
@@ -97,6 +97,7 @@ export const setSounds = (on) => { try { localStorage.setItem('rxpos-sound', on 
 /** Also show a system notification when RxPOS is in the background (if the user allowed it) */
 export function systemNotify(title, body, opts) { notifyOS(title, body, opts); }
 
+const ROUTINE = new Set(['weekly', 'hour', 'greet']);
 export function PopupHost() {
   const [items, setItems] = useState([]);
   const navigate = useNavigate();
@@ -109,10 +110,14 @@ export function PopupHost() {
     return () => timers.forEach(clearTimeout);
   }, [items]);
   const close = (p) => setItems((l) => l.filter((x) => x !== p));
-  if (!items.length) return null;
+  // at the till, routine notices (weekly summary, hourly reminder, greeting) wait until the POS is left; urgent alerts
+  // and messages from colleagues still show
+  const selling = useLocation().pathname.startsWith('/pos');
+  const shown = selling ? items.filter((p) => !ROUTINE.has(p.id) || p.tone === 'danger') : items;
+  if (!shown.length) return null;
   return (
     <div className="popups" role="status" aria-live="polite">
-      {items.map((p) => (
+      {shown.map((p) => (
         <div key={p.id + p.at} className={'popup ' + (p.tone || 'info') + (p.wide ? ' wide' : '')}>
           <div className="popup-head">
             {p.icon && <p.icon size={18} />}<strong>{p.title}</strong>

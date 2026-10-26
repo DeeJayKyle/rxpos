@@ -2,7 +2,8 @@ import { createContext, useContext, useEffect, useState, useCallback, useMemo, u
 import { idbGet, idbSet, idbDel, idbKeys } from './idb.js';
 import { createSync } from './sync.js';
 import { featureSet, permissionsOf } from './access.js';
-import { platformName } from './platform.js';
+import { platformName, isWeb } from './platform.js';
+import { endWebSession } from './webpolicy.js';
 import { connectLive, disconnectLive, onLive } from './live.js';
 import { DEFAULT_CLOUD } from './cloud.js';
 import { formatMoney } from './money.js';
@@ -321,7 +322,10 @@ export function StoreProvider({ children }) {
       loadCatalog().then((cat) => setDb((prev) => withCatalog(prev, cat))).catch(console.error);
       // devices set up on the old free addresses (rxpos.pages.dev, *.workers.dev) move to rxposug.com
       const moved = cfg?.url && /rxpos\.pages\.dev|pharmapos\.pharmapos\.workers\.dev/.test(cfg.url) ? { url: DEFAULT_CLOUD } : {};
-      setSyncCfgState({ deviceId: uid(), url: '', key: '', pushedAt: '', cursor: 0, branchId: MAIN_BRANCH, ...(cfg || {}), ...moved });
+      // web (online only): nothing is kept between visits, so the pharmacy is downloaded from the start every time
+      // (with a new device id too: the cloud never sends a device its own changes back, and this page holds none of them)
+      const fresh = isWeb && cfg ? { deviceId: uid(), cursor: 0, pushedAt: '', lastSync: '', epoch: undefined } : {};
+      setSyncCfgState({ deviceId: uid(), url: '', key: '', pushedAt: '', cursor: 0, branchId: MAIN_BRANCH, ...(cfg || {}), ...moved, ...fresh });
     })();
   }, []);
 
@@ -344,7 +348,7 @@ export function StoreProvider({ children }) {
 
   // Daily on-device snapshot (last 7 kept) so a mistake can be undone even without a hub or manual backup
   useEffect(() => {
-    if (!db || !db.users.length) return;
+    if (!db || !db.users.length || isWeb) return; // the web version keeps no copies on the computer
     const key = 'snap:' + today();
     const t = setTimeout(async () => {
       try {
@@ -372,7 +376,8 @@ export function StoreProvider({ children }) {
     const wait = Math.max(0, Math.min(400, 1500 - (Date.now() - pushFirst.current)));
     pushTimer.current = setTimeout(() => { pushFirst.current = 0; syncRef.current?.run(); }, wait);
   }, []);
-  const update = useCallback((fn) => { setDb((prev) => { const d = draft(prev); fn(d); return d; }); queuePush(); }, [queuePush]);
+  const changedAt = useRef(0); // last local change (web: warn before leaving while it isn't in the cloud yet)
+  const update = useCallback((fn) => { setDb((prev) => { const d = draft(prev); fn(d); return d; }); changedAt.current = Date.now(); queuePush(); }, [queuePush]);
   const upsert = useCallback((table, rec) => update((d) => { put(d, table, rec); }), [update]);
   const remove = useCallback((table, id) => update((d) => { del(d, table, id); }), [update]);
   const saveSettings = useCallback((s) => update((d) => { d.settings = { ...s, updatedAt: now() }; }), [update]);
@@ -388,6 +393,8 @@ export function StoreProvider({ children }) {
         else if (remember === false) localStorage.removeItem(REMEMBER_KEY);
       } else { sessionStorage.removeItem(SESSION_KEY); localStorage.removeItem(REMEMBER_KEY); } // signing out always forgets
     } catch { /* storage blocked */ }
+    // web: send anything still waiting, then clear this tab and start clean (nothing stays on the computer)
+    if (!u && isWeb) { Promise.race([syncRef.current?.run(), new Promise((r) => setTimeout(r, 4000))]).finally(endWebSession); }
     if (u && !user) update((d) => audit(d, u, 'Signed in', platformName, branchId));
     setUserState(u);
   }, [user, update, branchId]);
@@ -404,11 +411,20 @@ export function StoreProvider({ children }) {
       getCfg: () => cfgRef.current,
       saveCfg: saveSyncCfg,
       applyRemote: (changes) => setDb((prev) => withCatalog(mergeRemote(prev, changes))),
-      onStatus: setSyncStatus,
+      onStatus: (st) => { setSyncStatus(st); if (st.state === 'ok') sentAt.current = Date.now(); },
     });
     return syncRef.current.stop;
   }, [hasCfg, syncCfg?.url, syncCfg?.key, saveSyncCfg]);
   const syncNow = useCallback(() => syncRef.current?.run(), []);
+  // web (nothing is kept on the computer): leaving or reloading while a change hasn't reached the cloud would lose it,
+  // so the browser asks first
+  const sentAt = useRef(0);
+  useEffect(() => {
+    if (!isWeb) return;
+    const guard = (e) => { if (changedAt.current > sentAt.current && cfgRef.current?.key) { e.preventDefault(); e.returnValue = ''; } };
+    window.addEventListener('beforeunload', guard);
+    return () => window.removeEventListener('beforeunload', guard);
+  }, []);
   useEffect(() => {
     if (!syncCfg?.key?.startsWith('u.') || !user) { disconnectLive(); return; }
     connectLive(syncCfg);

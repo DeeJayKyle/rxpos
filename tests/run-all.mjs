@@ -52,6 +52,8 @@ const SUITES = [
   ['surface styles', 'v32-surface.mjs', ['.output/v32']],
   ['appearance & dashboard', 'v33-appearance.mjs', ['.output/v33']],
   ['pharmacy workspace', 'v34-workspace.mjs', ['.output/v34']],
+  ['layout on every screen', 'v35-layout.mjs', ['.output/v35']],
+  ['web is online only', 'v36-web-online.mjs', ['.output/v36']],
   ['append-only tables', 'v29-immutable.mjs', []],
   ['pay & sms gated', 'v30-paysms.mjs', []],
   ['restore epoch', 'v31-restore.mjs', []],

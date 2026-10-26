@@ -4,7 +4,7 @@ import {
   LayoutDashboard, ShoppingCart, PackageOpen, ReceiptText, FileText, ClipboardPlus, Users, Truck, Pill, FlaskConical,
   Boxes, PackagePlus, History, CalendarClock, PencilRuler, ScrollText, Wallet, Tags, Landmark, ArrowLeftRight, HandCoins,
   ArrowDownLeft, ArrowUpRight, ClipboardCheck, RefreshCw, Undo2, ShieldPlus, BookOpen, BarChart3, Settings as SettingsIcon, Search, Sun, Moon, Menu, LogOut, ChevronDown,
-  CornerDownLeft, User, Plus, BellRing, ShoppingBag, Tag, FileUp, Building2, Send, ShieldCheck, Clock, BookMarked, MessagesSquare, UserCog, KeyRound, CalendarDays, Thermometer, Palette, MonitorSmartphone, ScanText, GraduationCap, Megaphone, CalendarRange, LockKeyhole, PanelLeftClose, PanelLeftOpen,
+  CornerDownLeft, User, Plus, BellRing, ShoppingBag, Tag, FileUp, Building2, Send, ShieldCheck, Clock, BookMarked, MessagesSquare, UserCog, KeyRound, CalendarDays, Thermometer, Palette, MonitorSmartphone, ScanText, GraduationCap, Megaphone, CalendarRange, LockKeyhole, PanelLeftClose, PanelLeftOpen, WifiOff,
 } from 'lucide-react';
 import { useStore, makePassword, put, audit, isLowStock, expiryCounts } from './store.jsx';
 import { askText, ask, toast } from './feedback.jsx';
@@ -17,7 +17,7 @@ import { PopupHost } from './notify.jsx';
 import { CallManager } from './calls.jsx';
 import { WeeklyPopup } from './pages/Weekly.jsx';
 import { AutoReorder } from './reorder.js';
-import { isWeb } from './platform.js';
+import { isWeb, isNative } from './platform.js';
 import RefreshHost from './refresh.jsx';
 import { startUpdates, onUpdate, applyUpdate, justUpdated, LABEL } from './update.js';
 import { applyTheme, saveTheme, allowedThemes, savedMode, saveMode, systemDark, paletteFor, startupTheme, ACCENTS, savedAccent, saveAccent, withAccent } from './themes.js';
@@ -242,7 +242,7 @@ function ClockPill() {
     : syncStatus.lastSync ? 'Up to date ' + new Date(syncStatus.lastSync).toLocaleTimeString() : 'Connecting…';
   // the state in words beside the clock (no "sync" jargon on the bar itself; the full detail is in the tooltip)
   const label = s === 'off' ? 'On this device' : syncStatus.expired ? 'Sign in again' : s === 'error' ? 'Not sent · tap to retry'
-    : !online || s === 'offline' ? 'Saved on this device' : s === 'syncing' ? 'Sending…' : 'Up to date';
+    : !online || s === 'offline' ? (isWeb ? 'Offline' : 'Saved on this device') : s === 'syncing' ? 'Sending…' : 'Up to date';
   return (
     <button className={'pill clock ' + tone} title={tip} aria-label={`${now.toLocaleTimeString()}. ${label}. ${tip}`} onClick={() => (syncStatus.expired ? setUser(null) : syncNow())}>
       <i /><span className="clock-state" aria-live="polite">{label}</span><span className="clock-time">{now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
@@ -315,7 +315,10 @@ function Shell() {
   const [surface, setSurface] = useSurface();
   const [drawer, setDrawer] = useState(false);
   // compact navigation rail (icons only) for more working width, e.g. at the POS; remembered on this device
-  const [rail, setRail] = useState(() => { try { return localStorage.getItem('rxpos-rail') === '1'; } catch { return false; } });
+  const [rail, setRail] = useState(() => {
+    try { const v = localStorage.getItem('rxpos-rail'); if (v) return v === '1'; } catch { /* storage blocked */ }
+    return matchMedia('(pointer: coarse) and (max-height: 520px)').matches; // a phone on its side: give the work the width
+  });
   const toggleRail = () => setRail((r) => { try { localStorage.setItem('rxpos-rail', r ? '0' : '1'); } catch { /* storage blocked */ } return !r; });
   const [palette, setPalette] = useState(false);
   const [twoStepOpen, setTwoStepOpen] = useState(false);
@@ -427,7 +430,7 @@ function Shell() {
           <span className="avatar">{initials}</span>
           <div className="grow"><strong>{user.name}</strong><small>{user.role}</small></div>
           <button className="icon-btn" title="Change my password" onClick={() => changePassword(false)}><KeyRound size={17} /></button>
-          <button className={'icon-btn' + (pinSet ? ' text-ok' : '')} title={pinSet ? 'Quick PIN is set for this device' : 'Set a quick PIN for this device'} onClick={manageDevicePin}><LockKeyhole size={17} /></button>
+          {isNative && <button className={'icon-btn' + (pinSet ? ' text-ok' : '')} title={pinSet ? 'Quick PIN is set for this device' : 'Set a quick PIN for this device'} onClick={manageDevicePin}><LockKeyhole size={17} /></button>}{/* web: nothing is kept on the computer, so no device PIN */}
           {syncCfg?.key?.startsWith('u.') && <button className={'icon-btn' + (me?.twoFactor ? ' text-ok' : '')} title={me?.twoFactor ? 'Two-step sign-in is on' : 'Two-step sign-in'} onClick={() => setTwoStepOpen(true)}><ShieldCheck size={17} /></button>}
           <button className="icon-btn" title="Log out" onClick={() => setUser(null)}><LogOut size={17} /></button>
         </div>
@@ -471,7 +474,26 @@ function Shell() {
       <AutoReorder />
       <FirstDownload />
       <UpdateHost />
+      <WebOffline />
       {twoStepOpen && <TwoStepModal onClose={() => setTwoStepOpen(false)} />}
+    </div>
+  );
+}
+
+/** Web version (online only): without internet nothing can be saved, so the screen says so and waits for the
+ * connection. Changes already made go up as soon as it's back. The Windows and Android apps keep working offline. */
+function WebOffline() {
+  const online = useOnline();
+  if (!isWeb || online) return null;
+  return (
+    <div className="modal-bg web-offline" role="alertdialog" aria-modal="true" aria-labelledby="web-offline-title">
+      <div className="modal dialog">
+        <div className="dialog-icon danger"><WifiOff size={24} /></div>
+        <h3 id="web-offline-title">No internet connection</h3>
+        <p className="muted">The web version of RxPOS works online only and keeps nothing on this computer, so it waits here until the connection is back. Anything you already did goes up as soon as it reconnects.</p>
+        <p className="muted small">To keep selling without internet, use the RxPOS Windows or Android app.</p>
+        <div className="row gap" style={{ justifyContent: 'center' }}><span className="spinner" style={{ margin: 0, width: 22, height: 22 }} /><span className="small">Waiting for the connection…</span></div>
+      </div>
     </div>
   );
 }

@@ -1921,3 +1921,31 @@ td.num, td .num, .price, .line-total { white-space: nowrap; }
 .druginfo-skeleton { display: grid; gap: 10px; padding: 6px 0 12px; }
 .druginfo-skeleton i { display: block; height: 14px; border-radius: 7px; background: linear-gradient(90deg, var(--surface-2) 25%, var(--border) 50%, var(--surface-2) 75%); background-size: 200% 100%; animation: shimmer 1.2s infinite; }
 .druginfo-skeleton i:nth-child(1) { width: 45%; height: 18px; } .druginfo-skeleton i:nth-child(2) { width: 92%; } .druginfo-skeleton i:nth-child(3) { width: 76%; }
+
+/* ============================================================================
+   Every screen size (1.5.1): Android phones and tablets (touch), Windows PCs and
+   the browser. Found by tests/v35-layout.mjs; fixes are presentation only.
+   ============================================================================ */
+/* POS: the filter rows keep their height (they were squeezed on 768 px-tall laptops and phones on their side);
+   only the medicine grid scrolls. The camera button sits beside the search box instead of taking a row. */
+.pos-products > :not(.product-grid) { flex-shrink: 0; }
+.search-row { flex-wrap: nowrap; align-items: stretch; }
+.search-row .cam-btn { flex: none; width: 52px; padding: 0; }
+.product strong { overflow-wrap: break-word; word-break: normal; hyphens: auto; }
+/* the top-bar search keeps its icon when it shrinks to a button (phones) */
+.search-trigger svg { flex: none; }
+@media (max-width: 900px) { .search-trigger { flex: none; min-width: 44px; justify-content: center; padding: 8px; } }
+/* phones: tables keep readable columns and scroll sideways inside their card instead of squeezing */
+@media (max-width: 700px) { .card.table-wrap > table { min-width: 560px; } }
+
+/* touch screens (Android phones and tablets, touch PCs): every control at least 40 px to tap */
+@media (pointer: coarse) {
+  .btn, .btn.sm, .chip, .seg button, .mode-switch a, .tab, .sale-tab, .mode-opt, .link-btn { min-height: 40px; }
+  .btn.sm { padding-left: 14px; padding-right: 14px; }
+  .icon-btn { min-width: 40px; min-height: 40px; }
+  .small-input, .price-input { min-height: 40px; }
+  .mode-switch a { display: inline-flex; align-items: center; }
+  input[type='range'] { min-height: 32px; }
+  .chips-row { padding-top: 2px; padding-bottom: 4px; }
+  .sale-tabs { gap: 6px; }
+}

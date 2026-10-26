@@ -135,17 +135,19 @@ const bell = await p.evaluate(() => document.querySelector('.bell-menu')?.innerT
 check('notification bell lists expiring stock and today\'s event', /expires? within 30 days/.test(bell) && /Supplier delivery/.test(bell), bell.replace(/\n/g, ' | ').slice(0, 160));
 await p.screenshot({ path: out + '/09-bell.png' });
 
-// ---------- offline sign-in on a device that has signed in before ----------
-await p.evaluate(() => [...document.querySelectorAll('button[title="Log out"]')][0].click()); await wait(800);
+// ---------- web is online only: offline sign-in is refused with the reason (the apps keep offline sign-in: v28) ----------
+await p.evaluate(() => [...document.querySelectorAll('button[title="Log out"]')][0].click()); await wait(1000);
+await p.waitForSelector('input[type=password]', { timeout: 15000 }); await wait(500); // web sign-out clears the tab and reloads
 await p.setOfflineMode(true);
 await p.type('input[type=password]', 'grace-own-pass-1');
 const email = await p.$eval('input[autocomplete=username]', (e) => e.value);
 if (!email) await p.type('input[autocomplete=username]', 'grace@mukono.test');
 await clickText(p, 'Sign in');
-const offOk = await until(p, () => !!document.querySelector('.sidebar') && !!document.querySelector('.pill.clock.warn'), 10000);
-if (!offOk) { console.log('  auth text:', (await text(p)).replace(/\n/g, ' | ').slice(0, 400)); await p.screenshot({ path: out + '/xx-offline.png' }); }
-check('offline sign-in works after the first online sign-in', offOk);
+const offMsg = await until(p, () => /works online only/i.test(document.querySelector('.auth-card .error, [role=alert]')?.innerText || ''), 10000);
+check('web: offline sign-in is refused, explaining that the web version is online only', offMsg && !(await p.evaluate(() => !!document.querySelector('.sidebar'))));
 await p.setOfflineMode(false);
+await clickText(p, 'Sign in');
+check('…and works again once online', await until(p, () => !!document.querySelector('.sidebar'), 15000));
 
 // phone width: no sideways scrolling on new pages
 await p.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });

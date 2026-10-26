@@ -420,7 +420,7 @@ export default function POS({ mode = 'retail' }) {
               <div key={p.id} className="product-wrap">
               <button className={'product' + (p.stock <= 0 ? ' disabled' : '') + (i === active && !touch ? ' active' : '')} onClick={() => add(p)} onMouseEnter={() => setActive(i)}
                 aria-label={`${p.name}${p.generic ? ', ' + p.generic : ''}${p.form ? ', ' + p.form : ''}. ${fmt(priceOf(p))} per ${(p.unit || 'unit').toLowerCase()}. ${p.stock <= 0 ? 'Out of stock' : formatQty(p.stock, (p.unit || 'unit').toLowerCase() + 's') + ' in stock'}`}>
-                <strong>{p.name}</strong>
+                <strong>{p.name.replace(/\//g, '/\u200b')}</strong>
                 <small className="muted">{[p.generic, p.form].filter(Boolean).join(' · ')}</small>
                 <div className="row between">
                   <span className="price">{fmt(priceOf(p))}<small className="per-unit"> / {(p.unit || 'unit').toLowerCase()}</small></span>

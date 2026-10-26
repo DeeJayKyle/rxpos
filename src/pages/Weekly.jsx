@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Trophy, Star, BarChart3, Users, Receipt, Coins } from 'lucide-react';
 import { useStore, MAIN_BRANCH } from '../store.jsx';
 import { Stat, BarChart, Empty, PdfButton } from '../ui.jsx';
@@ -75,8 +75,9 @@ export function WeeklyMini({ w, fmt }) {
 /** At the start of each week (or the first time the app is opened that week): last week's summary pop-up */
 export function WeeklyPopup() {
   const { db, fmt, can, features } = useStore();
+  const selling = useLocation().pathname.startsWith('/pos'); // never during a sale: it shows once the POS is left
   useEffect(() => {
-    if (!can('reports') || features.reports === false) return;
+    if (!can('reports') || features.reports === false || selling) return;
     const start = weekStart(new Date(), -1);
     const key = 'rxpos-weekly-' + iso(start);
     try { if (localStorage.getItem(key)) return; } catch { return; }
@@ -88,7 +89,7 @@ export function WeeklyPopup() {
         render: () => <WeeklyMini w={w} fmt={fmt} />, actions: [{ label: 'Full weekly report', primary: true, to: '/weekly' }] });
     }, 9000);
     return () => clearTimeout(t);
-  }, [db.sales.length > 0]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [db.sales.length > 0, selling]); // eslint-disable-line react-hooks/exhaustive-deps
   return null;
 }
 

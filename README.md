@@ -1,7 +1,7 @@
 # RxPOS
 
-Pharmacy point of sale and management system that works **offline** and **online**: on Windows PCs, Android phones and in any browser,
-across all your branches.
+Pharmacy point of sale and management system for all your branches: the **Windows and Android apps** work **offline and online**;
+the **web version** (any browser) is **online only** and keeps nothing on the computer.
 
 **Live:** https://rxposug.com. Each pharmacy has its own address, e.g. https://rxposug.com/citycare-ntinda.
 The **owner** signs in on https://rxposug.com with the owner email and password (or the master key at https://rxposug.com/#/owner).
@@ -30,13 +30,13 @@ The **owner** signs in on https://rxposug.com with the owner email and password 
 | Engagement | **Idle-screen shop window**: medicines worth recommending (short expiry, slow movers, high value, best margin) and health tips, each with a picture; browse with arrows, swipes, thumbnails or the keyboard, pause, or close; one-tap **WhatsApp sharing**, "Promote today" on the dashboard, **hourly reminders** with a soft chime, notification bell |
 | Planner | **Calendar** with team events, refills due and expiring stock; subscribe in **Google Calendar / Outlook / phone** (private ICS link) |
 | Storage | **Weather** for the pharmacy's town (Open-Meteo), storage advice, **fridge / room temperature log** with safe ranges and trend |
-| Reliability | Works fully offline after the first sign-in, pushes changes within seconds and pulls every 10 s, 7 daily on-device snapshots, crash-recovery screen, dark mode, Ctrl+K search |
+| Reliability | Apps: work fully offline after the first sign-in, with 7 daily on-device snapshots. Web: online only, nothing stored on the computer. Everywhere: changes go up within seconds and come down every 10 s (instantly over the live connection), crash-recovery screen, dark mode, Ctrl+K search |
 
 ## Automatic updates
 
 Every device keeps itself on the newest version published at rxposug.com (deployed from `main`); nobody reinstalls anything.
 
-* **Browser / installed web app:** checks every 10 minutes and when it comes back to the screen; the new version is applied when nothing is in progress (no open sale, dialog or typing) or while the app is in the background.
+* **Browser:** pages are never cached (Cache-Control: no-store), so every visit loads the newest build; an open tab also checks every 10 minutes and switches when nothing is in progress (no open sale, dialog or typing) or while it is in the background.
 * **Windows app:** downloads only the files that changed (each checked by SHA-256), switches when idle or at the next start, and goes back to the previous version by itself if a new one fails to start (`electron/updater.cjs`).
 * **Android app:** downloads the new version in the background and switches at the next start or when idle, with the same automatic roll-back (Capgo updater, `src/update.js`).
 * The version stays **1.0**; each build is identified by its commit time (shown on **This device**, with **Update to the latest version**, which fetches and switches straight away).
@@ -44,10 +44,15 @@ Every device keeps itself on the newest version published at rxposug.com (deploy
 
 ## How offline + online works
 
-* Every device (desktop app or browser) keeps its **full database locally** (IndexedDB) and works with no network.
+* **The Windows and Android apps** keep the **full database on the device** (IndexedDB) and work with no network.
+* **The web version is online only** and keeps nothing on the computer (src/webpolicy.js): no offline service worker or caches,
+  no on-device database, no cookies. Pharmacy data is held in memory and downloaded fresh from the cloud at every visit; the
+  sign-in lasts for that browser tab only (a reload stays signed in, closing the tab or signing out forgets everything). Only
+  appearance preferences (theme, menu layout, text size and the like) are remembered. Without internet it shows a "No internet
+  connection" screen and waits; leaving the page while a change is still being sent asks first. "Remember me", the quick PIN and
+  offline sign-in exist in the apps only.
 * Stock is never stored as a single number: every sale, purchase, refund and adjustment is a **stock movement**, and stock is the sum of movements. That lets devices that sold offline merge without losing sales.
-* The first sign-in on a device (needs internet) downloads the pharmacy. After that it works offline, pushes its changes about 1.5 s after they are made, pulls everyone else's every 10 s (60 s in the background), and syncs immediately when the connection comes back. Conflicting edits to the same record: the latest edit wins.
-* The browser version installs a service worker, so it opens even without internet.
+* The first sign-in on an app (needs internet) downloads the pharmacy. After that the app works offline, pushes its changes about 1.5 s after they are made, pulls everyone else's every 10 s (60 s in the background), and syncs immediately when the connection comes back. Conflicting edits to the same record: the latest edit wins.
 
 ## Installing the desktop app (Windows)
 

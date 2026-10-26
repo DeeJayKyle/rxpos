@@ -1,3 +1,4 @@
+import { startWebPolicy } from './webpolicy.js';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import '@fontsource-variable/inter';
@@ -8,10 +9,13 @@ import { idbGet, idbKeys } from './idb.js';
 import './styles.css';
 import { applyTheme, startupTheme, savedAccent } from './themes.js';
 import { applyStyle, savedStyle } from './surface.js';
-import { isAndroid } from './platform.js';
+import { isAndroid, isNative } from './platform.js';
 import { startUpdates } from './update.js';
 import { startDevice } from './device.js';
 import { startCrashReports, reportError } from './crash.js';
+
+// The web version is online only and keeps nothing on the computer (src/webpolicy.js); runs before anything reads storage
+startWebPolicy();
 
 // Pharmacy web addresses are /<pharmacy> with no trailing slash; drop a stray one for a clean URL.
 // (Kept here rather than as an inline <script> in index.html so the web Content-Security-Policy can forbid inline scripts.)
@@ -72,10 +76,6 @@ startUpdates();
 startDevice(); // this device's layout, text size, rotation and tray (src/device.js)
 startCrashReports(); // private error reports to the pharmacy's own cloud (src/crash.js)
 
-// Ask the browser not to evict our offline database when the device is low on space
-navigator.storage?.persist?.().catch(() => {});
-
-// Offline support for the browser version (the desktop and Android apps load from disk and don't need it)
-if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol) && !import.meta.env.DEV && !window.Capacitor) {
-  window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
-}
+// The Windows and Android apps keep the pharmacy for offline work: ask the system not to evict it when space is low.
+// (The web version is online only: no offline service worker, nothing stored; see src/webpolicy.js.)
+if (isNative) navigator.storage?.persist?.().catch(() => {});

@@ -1,9 +1,11 @@
-// Device-bound offline sign-in and quick PIN (security review 0.2), driven through the real sign-in UI.
+// Device-bound offline sign-in and quick PIN (security review 0.2), driven through the real sign-in UI of the Windows
+// app (offline sign-in exists only in the apps; the web version is online only: tests/appmode.mjs).
 // Seeds the pharmacy through the owner API (fast and reliable), then uses only the login screen.
 //   node v28-pin.mjs <base> <ownerKey> <outDir>
 import puppeteer from 'puppeteer-core';
 import fs from 'node:fs';
 import { CHROME } from './chrome.mjs';
+import { asDesktopApp } from './appmode.mjs';
 const [base, ownerKey, out] = process.argv.slice(2);
 fs.mkdirSync(out, { recursive: true });
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -22,6 +24,7 @@ const slug = t.tenant.slug, tid = t.tenant.id;
 const b = await puppeteer.launch({ executablePath: CHROME, headless: true });
 const P = await (await b.createBrowserContext()).newPage();
 await P.setViewport({ width: 1280, height: 860 });
+await asDesktopApp(P, base);
 
 // ----- online password sign-in: the device remembers the password for offline use -----
 await P.goto(base + '/' + slug, { waitUntil: 'networkidle2' }); await wait(700);
