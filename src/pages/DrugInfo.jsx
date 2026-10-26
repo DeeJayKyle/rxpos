@@ -1,37 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
-import { BookMarked, ExternalLink, Printer, WifiOff, Search, AlertTriangle } from 'lucide-react';
+import { BookMarked, ExternalLink, Printer, WifiOff, Search, AlertTriangle, RefreshCw } from 'lucide-react';
 import { useStore } from '../store.jsx';
 import { idbGet, idbSet } from '../idb.js';
 import { Empty } from '../ui.jsx';
+import { createDrugLookup, genericKey, lookupKeys } from '../druglabel.js';
+import { searchProducts } from '../search.js';
 
-// Dispensing information: live from the U.S. FDA drug label database (openFDA, public domain), cached for offline use,
-// plus links to clinical references (Medscape, BNF, Drugs.com, …) that can't be copied into the app.
-const SECTIONS = [
-  ['indications_and_usage', 'Uses'],
-  ['dosage_and_administration', 'Dosage & administration'],
-  ['contraindications', 'Do not use when'],
-  ['warnings_and_cautions', 'Warnings & precautions'],
-  ['warnings', 'Warnings'],
-  ['boxed_warning', 'Boxed warning'],
-  ['adverse_reactions', 'Side effects'],
-  ['drug_interactions', 'Interactions'],
-  ['pregnancy', 'Pregnancy'],
-  ['pediatric_use', 'Children'],
-  ['geriatric_use', 'Elderly'],
-  ['overdosage', 'Overdose'],
-  ['storage_and_handling', 'Storage'],
-  ['how_supplied', 'How supplied'],
-];
-
-/** "Amoxicillin 500mg Capsules" → "amoxicillin" (first ingredient words, no strengths or forms) */
-export function genericKey(text) {
-  return String(text || '').toLowerCase()
-    .replace(/\(.*?\)/g, ' ')
-    .replace(/\d+(\.\d+)?\s*(mg|mcg|g|ml|iu|%|units?)\b/g, ' ')
-    .replace(/\b(tabs?|tablets?|caps?|capsules?|syrup|suspension|susp|inj|injection|cream|ointment|gel|drops?|eye|ear|sachet|vial|amp|ampoule|bottle|pack|strip|x\d+|forte|ds|plus)\b/g, ' ')
-    .split(/[\/+,&]| and /)[0]
-    .replace(/[^a-z\s-]/g, ' ').replace(/\s+/g, ' ').trim();
-}
+// Dispensing information: from the U.S. FDA drug label database (openFDA, public domain), kept on the device for
+// offline use (src/druglabel.js does the fast, cached, retried lookup), plus links to clinical references (Medscape,
+// BNF, Drugs.com, …) that can't be copied into the app.
+export { genericKey }; // used by the POS for substitutes
+const lookup = createDrugLookup({ get: idbGet, set: idbSet });
 
 const REFERENCES = (q) => [
   ['Medscape', `https://search.medscape.com/reference-search?queryText=${encodeURIComponent(q)}`],
@@ -43,63 +22,54 @@ const REFERENCES = (q) => [
   ['Uganda Clinical Guidelines', 'https://www.health.go.ug/cause/uganda-clinical-guidelines-2023/'],
 ];
 
-const clip = (s, n = 900) => { const t = String(s || '').replace(/\s+/g, ' ').trim(); return t.length > n ? t.slice(0, n).replace(/\s\S*$/, '') + ' …' : t; };
-
-async function fetchLabel(key) {
-  const fields = ['openfda.generic_name', 'openfda.substance_name', 'openfda.brand_name'];
-  for (const f of fields) {
-    const url = `https://api.fda.gov/drug/label.json?search=${f}:"${encodeURIComponent(key)}"&limit=1`;
-    const r = await fetch(url, { signal: AbortSignal.timeout(12000) });
-    if (r.status === 404) continue;
-    if (!r.ok) throw new Error('The drug database answered ' + r.status);
-    const j = await r.json();
-    const doc = j.results?.[0];
-    if (!doc) continue;
-    return {
-      key, fetchedAt: new Date().toISOString(),
-      title: [doc.openfda?.generic_name?.[0], doc.openfda?.brand_name?.[0] && `(${doc.openfda.brand_name[0]})`].filter(Boolean).join(' '),
-      route: doc.openfda?.route?.join(', ') || '', form: doc.openfda?.dosage_form?.[0] || '',
-      sections: SECTIONS.map(([k, label]) => [label, doc[k]?.[0] ? clip(doc[k][0]) : '']).filter(([, v]) => v),
-      source: `https://dailymed.nlm.nih.gov/dailymed/search.cfm?query=${encodeURIComponent(key)}`,
-    };
-  }
-  return null;
-}
-
 /** Reusable panel: dispensing information for one medicine (online → cached offline). */
 export function DrugInfoPanel({ name, generic, compact }) {
-  const key = genericKey(generic || name);
-  const [state, setState] = useState({ loading: true });
+  // names to try, best first (generic, then brand); a name RxPOS can't simplify is tried as typed
+  const keys = useMemo(() => { const k = lookupKeys(name, generic); const raw = String(generic || name || '').trim().toLowerCase(); return k.length ? k : raw.length >= 2 ? [raw] : []; }, [name, generic]);
+  const key = keys[0] || '';
+  const [state, setState] = useState(() => { const info = keys.map(lookup.peek).find(Boolean); return info ? { info } : { loading: true }; });
+  const [retry, setRetry] = useState(0);
   useEffect(() => {
     let live = true;
+    const show = (st) => live && setState(st);
     (async () => {
-      const cached = await idbGet('drug:' + key).catch(() => null);
-      if (cached && live) setState({ info: cached, cached: true, loading: navigator.onLine });
-      if (!navigator.onLine) { if (live && !cached) setState({ offline: true }); return; }
+      if (!keys.length) return show({ notFound: true });
+      // 1. what this device already knows: shown at once
+      let known = null;
+      for (const k of keys) { const s = await lookup.saved(k); if (s?.info) { known = s; break; } }
+      if (known) show({ info: known.info, cached: true, refreshing: !known.fresh && navigator.onLine });
+      if (known?.fresh && !retry) return; // recent enough: no network needed
+      if (!navigator.onLine) return show(known ? { info: known.info, cached: true } : { offline: true });
+      if (!known) show({ loading: true });
+      // 2. the network (a lookup already on its way is shared; names known to be missing are skipped unless retrying)
       try {
-        const info = await fetchLabel(key);
-        if (!live) return;
-        if (info) { idbSet('drug:' + key, info).catch(() => {}); setState({ info }); }
-        else setState(cached ? { info: cached, cached: true } : { notFound: true });
+        let info = null;
+        for (const k of keys) {
+          if (!retry && (await lookup.saved(k))?.miss) continue;
+          info = await lookup.refresh(k);
+          if (info) break;
+        }
+        show(info ? { info } : known ? { info: known.info, cached: true } : { notFound: true });
       } catch (e) {
-        if (live) setState(cached ? { info: cached, cached: true } : { error: e.message });
+        show(known ? { info: known.info, cached: true, warning: e.message } : { error: e.message });
       }
     })();
-    return () => { live = false; };
-  }, [key]);
+    return () => { live = false; }; // a late answer is ignored here but still saved for next time
+  }, [keys.join('|'), retry]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const { info } = state;
   return (
     <div className="druginfo">
-      {state.loading && !info && <div className="cart-empty"><div className="spinner" />Looking up {key}…</div>}
+      {state.loading && !info && <div className="druginfo-skeleton" role="status" aria-label={`Looking up ${key}`}><i /><i /><i /><span className="muted small">Looking up {key}…</span></div>}
       {state.offline && <div className="notice info-notice"><WifiOff size={16} /> Offline, and this medicine hasn't been looked up before. Connect to the internet once to save its information on this device.</div>}
-      {state.notFound && <div className="notice info-notice">No label found for “{key}” in the FDA database (common for local brands and sundries). Use the references below.</div>}
-      {state.error && <div className="error">{state.error}</div>}
+      {state.notFound && <div className="notice info-notice row gap"><span className="grow">No label found for “{key || name}” in the FDA database (common for local brands and sundries). Use the references below.</span>{key && <button className="btn sm ghost" onClick={() => setRetry((n) => n + 1)}><RefreshCw size={14} />Look again</button>}</div>}
+      {state.error && <div className="error row gap"><span className="grow">{state.error}</span><button className="btn sm ghost" onClick={() => setRetry((n) => n + 1)}><RefreshCw size={14} />Try again</button></div>}
+      {state.warning && <div className="notice info-notice row gap"><WifiOff size={16} /><span className="grow">Showing the copy saved on this device. {state.warning}</span><button className="btn sm ghost" onClick={() => setRetry((n) => n + 1)}><RefreshCw size={14} />Try again</button></div>}
       {info && (
         <>
           <div className="row between">
             <div><strong className="druginfo-title">{info.title || key}</strong><div className="muted small">{[info.form, info.route].filter(Boolean).join(' · ')}</div></div>
-            {state.cached && <span className="badge">saved {new Date(info.fetchedAt).toLocaleDateString()}</span>}
+            {state.cached && <span className="badge" title="Saved on this device, works offline">{state.refreshing ? 'updating…' : `saved ${new Date(info.fetchedAt).toLocaleDateString()}`}</span>}
           </div>
           <div className="druginfo-sections">
             {(compact ? info.sections.filter(([l]) => ['Uses', 'Dosage & administration', 'Do not use when', 'Warnings & precautions', 'Warnings', 'Side effects', 'Interactions'].includes(l)) : info.sections).map(([label, text]) => (
@@ -124,9 +94,8 @@ export default function DrugInfo() {
   const [q, setQ] = useState('');
   const [picked, setPicked] = useState(null);
   const matches = useMemo(() => {
-    const s = q.trim().toLowerCase();
-    if (s.length < 2) return [];
-    return products.filter((p) => `${p.name} ${p.generic}`.toLowerCase().includes(s)).slice(0, 12);
+    if (q.trim().length < 2) return [];
+    return searchProducts(products, q).slice(0, 12); // same spelling-tolerant matching as the POS
   }, [q, products]);
 
   return (

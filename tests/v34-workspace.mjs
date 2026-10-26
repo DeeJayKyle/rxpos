@@ -105,6 +105,15 @@ check('…the same totals Inventory shows', /8,700 at cost/.test(invSub) && /1,0
 await go('/reorder');
 check('Reorder explains fixed levels vs the sales forecast', await p.evaluate(() => /reorder level/.test(document.querySelector('.explain')?.textContent || '') && /sells per day/.test(document.querySelector('.explain')?.textContent || '')));
 
+// ---- drug information: spelling-tolerant search, never stuck loading ----
+await go('/drug-info');
+await setVal(p, '.page .search-wrap input', 'amoxycillin'); await wait(300);
+check('Drug info: a misspelt name still finds the medicine', await p.evaluate(() => [...document.querySelectorAll('.ref-links .chip')].some((x) => /Amoxyl/.test(x.textContent))));
+await p.evaluate(() => [...document.querySelectorAll('.ref-links .chip')].find((x) => /Amoxyl/.test(x.textContent))?.click());
+const settled = await (async () => { for (let i = 0; i < 50; i++) { const st = await p.evaluate(() => (document.querySelector('.druginfo-title') ? 'label' : document.querySelector('.druginfo .error button') ? 'error+retry' : /No label found/.test(document.querySelector('.druginfo')?.innerText || '') ? 'not found' : document.querySelector('.druginfo-skeleton') ? 'loading' : 'other')); if (st !== 'loading') return st; await wait(500); } return 'loading'; })();
+check('Drug info: the lookup ends in a clear state within 25 s (label, not found, or an error with Try again)', ['label', 'error+retry', 'not found'].includes(settled), settled);
+check('Drug info: reference links are always offered', (await p.evaluate(() => document.querySelectorAll('.druginfo .ref-links a').length)) >= 5);
+
 // ---- records to review ----
 await go('/medicines');
 await p.evaluate(() => [...document.querySelectorAll('.page-head button')].find((x) => /Needs review/.test(x.textContent))?.click()); await wait(400);

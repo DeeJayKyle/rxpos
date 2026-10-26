@@ -71,8 +71,8 @@ export default function Dashboard() {
 
       <div className="stats kpis">
         <Stat to="/sales" state={{ from: today(), to: today() }} label="Today's sales" value={fmt(t.total)} sub={`${t.n} sale${t.n === 1 ? '' : 's'} · vs yesterday`} delta={delta} tone="teal" icon={Banknote} />
-        {can('reports') && <Stat to="/reports" label="Gross profit today" value={fmt(t.gp)} sub="sales less tax and cost of goods, before expenses · vs yesterday" delta={gpDelta} tone="blue" icon={TrendingUp} />}
-        {(can('finance') || can('reports')) && <Stat to="/expenses" label="Today's expenses" value={fmt(t.exp)} sub={`Cash after expenses ${fmt(t.total - t.exp)} (sales − expenses, not profit)`} tone="red" icon={Wallet} />}
+        {can('reports') && <Stat to="/reports" label="Gross profit today" value={fmt(t.gp)} sub="after cost of goods, before expenses" delta={gpDelta} tone="blue" icon={TrendingUp} />}
+        {(can('finance') || can('reports')) && <Stat to="/expenses" label="Today's expenses" value={fmt(t.exp)} sub={`Sales − expenses: ${fmt(t.total - t.exp)}`} tone="red" icon={Wallet} />}
         <Stat to="/sales" state={{ from: today(), to: today() }} label="Transactions" value={t.n.toLocaleString()} sub="receipts today · vs yesterday" delta={nDelta} tone="violet" icon={ReceiptText} />
       </div>
 

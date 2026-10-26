@@ -1916,3 +1916,8 @@ td.num, td .num, .price, .line-total { white-space: nowrap; }
 .bell-head.sev-warn { color: var(--warn); }
 .bell-item .grow { display: flex; flex-direction: column; gap: 2px; text-align: left; }
 .bell-why { font-size: 11.5px; color: var(--muted); font-weight: 400; line-height: 1.35; }
+
+/* Drug information: a stable skeleton while the label loads (no layout jump when it arrives) */
+.druginfo-skeleton { display: grid; gap: 10px; padding: 6px 0 12px; }
+.druginfo-skeleton i { display: block; height: 14px; border-radius: 7px; background: linear-gradient(90deg, var(--surface-2) 25%, var(--border) 50%, var(--surface-2) 75%); background-size: 200% 100%; animation: shimmer 1.2s infinite; }
+.druginfo-skeleton i:nth-child(1) { width: 45%; height: 18px; } .druginfo-skeleton i:nth-child(2) { width: 92%; } .druginfo-skeleton i:nth-child(3) { width: 76%; }

@@ -20,6 +20,7 @@ const SUITES = [
   ['offline sign-in (unit)', 'unit-offline.mjs', []],
   ['money math (unit)', 'unit-money.mjs', []],
   ['medicine search (unit)', 'unit-search.mjs', []],
+  ['drug labels (unit)', 'unit-druglabel.mjs', []],
   ['fefo allocate (unit)', 'unit-fefo.mjs', []],
   ['date helpers (unit)', 'unit-dates.mjs', []],
   ['record ids (unit)', 'unit-ids.mjs', []],
