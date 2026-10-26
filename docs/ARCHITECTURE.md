@@ -184,4 +184,4 @@ before the upgrade" first.
   `src/ui.jsx`), print a receipt or an A4 invoice straight from a row, and show payment as a labelled chip.
 - **Colour level** (`src/vivid.js`): Calm (standard) or Vivid, chosen per device in the appearance menu; one meaning
   per colour; tile colours are checked for white-text contrast in `tests/contrast-test.mjs`.
-- **Tests**: `tests/v41-reports-drafts.mjs` (38 checks).
+- **Tests**: `tests/v41-reports-drafts.mjs` (38 checks) and `tests/unit-diff.mjs` (7). Full run for 1.7.0: **1,267 passed, 7 failed**, the same 7 environment failures as 1.6.0 (weather, AI ×2, GPS, outside temperature, idle-screen folder, Windows self-update without a display).
