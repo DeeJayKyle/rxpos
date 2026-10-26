@@ -136,7 +136,11 @@ Small: 300 products, 1,000 sales (3,900 records). Large: 2,000 products, 15,000 
 | v38 sync protocol 2 (13) | repeated op skipped, last writer wins for new ops, sale + movement applied together, append-only movements, a cashier's forbidden change refused by key while the rest applies, protocol-1 client, malformed request, expired/forged token → 401, server cursor |
 | v39 storage upgrade (12) | every 1.5 record moved, version 2, 1.5 copy kept, counts recorded, unsent 1.5 sale queued (sent one not re-queued), sent exactly once, restart opens from the new store |
 
-Full-suite results for this branch: see section 8a (filled in after the full run).
+Full run on this branch (2026-10-26, same machine as the benchmarks): **1,204 passed, 7 failed**. The 7 failures
+are the same as on 1.5.1 and come from this environment, not the code: weather (Open-Meteo unreachable), AI drug quiz
+and AI prescription reading (no Workers AI binding locally), weather from GPS, outside-temperature log, idle-screen fit
+(missing screenshot folder) and Windows self-update (no display). Everything else passed, including layout (253),
+web online-only (19), sales & sync reliability (27), sync protocol 2 (13) and the storage upgrade (12).
 
 ## 9. Known limitations
 
