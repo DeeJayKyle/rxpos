@@ -66,11 +66,31 @@ function attach(w) {
   setInterval(() => check().catch(() => {}), 30 * 60e3);
 }
 
+/**
+ * The newest build's manifest. The site answers an unknown address with the app's own page (single-page app), so a
+ * missing or half-deployed version.json arrives as HTML with status 200: read it as text, and fall back to the cloud's
+ * /api/version (the same file, the address the Android app uses) before giving up with a plain reason.
+ */
+async function manifest() {
+  let reason = '';
+  for (const u of ['/version.json', '/api/version']) {
+    try {
+      const res = await net.fetch(CLOUD + u + '?t=' + Date.now(), { cache: 'no-store' });
+      const text = await res.text();
+      if (!res.ok) { reason = `the update server answered ${res.status}`; continue; }
+      const m = JSON.parse(text);
+      if (m && m.build && Array.isArray(m.files)) return m;
+      reason = 'the update server sent no build information';
+    } catch (e) {
+      reason = e instanceof SyntaxError ? 'the update server sent a web page instead of update information' : (e.message || String(e));
+    }
+  }
+  throw new Error(`Couldn't check for updates: ${reason}. RxPOS keeps working; it will try again later.`);
+}
+
 function check() {
   return (inflight ??= (async () => {
-    const res = await net.fetch(CLOUD + '/version.json?t=' + Date.now(), { cache: 'no-store' });
-    if (!res.ok) throw new Error('Update check failed (' + res.status + ')');
-    const m = await res.json();
+    const m = await manifest();
     if (!m.build || m.build <= running() || state.bad.includes(m.build)) return { status: 'current', label: m.label, build: m.build };
     if ((m.shell || 1) > SHELL) return { status: 'shell', label: m.label, build: m.build };
     if (state.active?.build === m.build && usable(state.active)) return { status: 'ready', label: m.label, build: m.build };
