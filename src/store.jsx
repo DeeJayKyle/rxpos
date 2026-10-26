@@ -3,7 +3,7 @@ import { idbGet, idbSet, idbDel, idbKeys } from './idb.js';
 import { createSync } from './sync.js';
 import { featureSet, permissionsOf } from './access.js';
 import { platformName, isWeb } from './platform.js';
-import { endWebSession } from './webpolicy.js';
+import { endWebSession, isLeaving } from './webpolicy.js';
 import { connectLive, disconnectLive, onLive } from './live.js';
 import { DEFAULT_CLOUD } from './cloud.js';
 import { formatMoney } from './money.js';
@@ -421,7 +421,7 @@ export function StoreProvider({ children }) {
   const sentAt = useRef(0);
   useEffect(() => {
     if (!isWeb) return;
-    const guard = (e) => { if (changedAt.current > sentAt.current && cfgRef.current?.key) { e.preventDefault(); e.returnValue = ''; } };
+    const guard = (e) => { if (!isLeaving() && changedAt.current > sentAt.current && cfgRef.current?.key) { e.preventDefault(); e.returnValue = ''; } };
     window.addEventListener('beforeunload', guard);
     return () => window.removeEventListener('beforeunload', guard);
   }, []);

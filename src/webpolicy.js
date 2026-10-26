@@ -54,7 +54,11 @@ export function startWebPolicy() {
 }
 
 /** Sign-out on the web: forget this tab's session too and start clean. */
+let leaving = false;
+/** True while RxPOS itself is reloading the page (sign-out), so the "unsent changes" warning stays quiet */
+export const isLeaving = () => leaving;
 export async function endWebSession() {
+  leaving = true;
   await purgeWebData();
   try { window.sessionStorage.clear(); } catch { /* storage blocked */ }
   location.reload();
