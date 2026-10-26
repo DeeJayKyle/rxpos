@@ -190,10 +190,10 @@ await clickText(A, '.modal button', /^PDF$/); await wait(3000);
 got = fs.readdirSync(dl).find((f) => /^receipt-.*\.pdf$/.test(f) && fs.statSync(path.join(dl, f)).mtimeMs >= t2 - 500);
 check('#3 Sales History receipt downloads as PDF', !!got, got);
 await A.keyboard.press('Escape'); await wait(300);
-await clickText(A, '.chip', /Edited only/); await wait(400);
-const onlyEd = await A.evaluate(() => [...document.querySelectorAll('tbody tr')].length);
+await A.evaluate(() => { const l = [...document.querySelectorAll('.report-filters label')].find((x) => x.firstChild?.textContent.trim() === 'Status'); const s = l.querySelector('select'); Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(s, 'edited'); s.dispatchEvent(new Event('change', { bubbles: true })); }); await wait(400); // 1.7: the Status filter replaced the "Edited only" chip
+const onlyEd = await A.evaluate(() => [...document.querySelectorAll('tbody tr')].filter((r) => !r.classList.contains('total-row')).length);
 check('#6 "Edited only" shows just the edited sale', onlyEd === 1, onlyEd);
-await clickText(A, '.chip', /Edited only/); await wait(300);
+await A.evaluate(() => { const l = [...document.querySelectorAll('.report-filters label')].find((x) => x.firstChild?.textContent.trim() === 'Status'); const s = l.querySelector('select'); Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(s, ''); s.dispatchEvent(new Event('change', { bubbles: true })); }); await wait(300);
 // a sale copied from Rxtera can be corrected (record only, stock untouched)
 const panBefore = await A.evaluate(() => 0);
 await A.evaluate(() => { const row = [...document.querySelectorAll('tbody tr')].find((r) => r.innerText.includes('RX77')); [...row.querySelectorAll('button')].find((x) => /Edit/.test(x.innerText))?.click(); });

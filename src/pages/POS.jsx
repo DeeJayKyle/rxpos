@@ -4,6 +4,7 @@ import { ShoppingCart, Trash2, X, FileText, Printer, AlertTriangle, ScanBarcode,
 import { DrugInfoPanel, genericKey } from './DrugInfo.jsx';
 import { useStore, uid, now, daysUntil, put, del, move, allocate, audit, normalizePhone, DEFAULT_PAYMENT_METHODS } from '../store.jsx';
 import { draftsFor, saleDraft } from '../drafts.js';
+import { keepsData } from '../webpolicy.js';
 import { CASH } from '../finance.js';
 import { cartSubtotal, taxOf, round, formatQty } from '../money.js';
 import { searchProducts, searchKey } from '../search.js';
@@ -17,7 +18,7 @@ import { CameraButton, CameraScanner } from '../camscan.jsx';
 export const docNumber = (prefix) => prefix + Date.now().toString(36).toUpperCase().slice(-6) + Math.floor(Math.random() * 36).toString(36).toUpperCase();
 
 export default function POS({ mode = 'retail' }) {
-  const { db, products, update, user, fmt, batchesOf, branchId, syncCfg, features, can } = useStore();
+  const { db, products, update, user, fmt, batchesOf, branchId, syncCfg, features, can, pending } = useStore();
   const [momo, setMomo] = useState(null);
   const [newClient, setNewClient] = useState(null);   // quick 'add client' form
   const [labelFor, setLabelFor] = useState(null);     // cart line whose dispensing directions are being edited
@@ -99,7 +100,7 @@ export default function POS({ mode = 'retail' }) {
     if (location.state?.proforma) return;
     try {
       const saved = JSON.parse(localStorage.getItem(holdKey));
-      // sales held on this device before 1.7 become synced drafts once
+      // sales held on this device before 1.7 (or held in this tab and not yet sent when it reloaded) become drafts
       if (saved?.held?.length) changeHeld([], saved.held).then(() => localStorage.setItem(holdKey, JSON.stringify({ current: saved.current || null })), () => {});
       const resume = location.state?.resumeDraft && (db.drafts || []).find((x) => x.id === location.state.resumeDraft);
       if (resume) {
@@ -113,7 +114,10 @@ export default function POS({ mode = 'retail' }) {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const t = setTimeout(() => {
-      try { localStorage.setItem(holdKey, JSON.stringify({ current: cart.length ? snapshot() : null })); } catch { /* storage blocked */ }
+      // the web version keeps changes in memory until the cloud has them: until then the held sales are also kept in
+      // this tab, so a reload before they are sent loses none (they come back as drafts, same ids)
+      const backup = !keepsData() && pending > 0 && held.length ? { held } : {};
+      try { localStorage.setItem(holdKey, JSON.stringify({ current: cart.length ? snapshot() : null, ...backup })); } catch { /* storage blocked */ }
     }, 250);
     return () => clearTimeout(t);
   }); // after every change
