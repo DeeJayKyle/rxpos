@@ -4,7 +4,7 @@ import {
   LayoutDashboard, ShoppingCart, PackageOpen, ReceiptText, FileText, ClipboardPlus, Users, Truck, Pill, FlaskConical,
   Boxes, PackagePlus, History, CalendarClock, PencilRuler, ScrollText, Wallet, Tags, Landmark, ArrowLeftRight, HandCoins,
   ArrowDownLeft, ArrowUpRight, ClipboardCheck, RefreshCw, Undo2, ShieldPlus, BookOpen, BarChart3, Settings as SettingsIcon, Search, Sun, Moon, Menu, LogOut, ChevronDown,
-  CornerDownLeft, User, Plus, BellRing, ShoppingBag, Tag, FileUp, Building2, Send, ShieldCheck, Clock, BookMarked, MessagesSquare, UserCog, KeyRound, CalendarDays, Thermometer, Palette, MonitorSmartphone, ScanText, GraduationCap, Megaphone, CalendarRange, LockKeyhole,
+  CornerDownLeft, User, Plus, BellRing, ShoppingBag, Tag, FileUp, Building2, Send, ShieldCheck, Clock, BookMarked, MessagesSquare, UserCog, KeyRound, CalendarDays, Thermometer, Palette, MonitorSmartphone, ScanText, GraduationCap, Megaphone, CalendarRange, LockKeyhole, PanelLeftClose, PanelLeftOpen,
 } from 'lucide-react';
 import { useStore, makePassword, put, audit, isLowStock, expiryCounts } from './store.jsx';
 import { askText, ask, toast } from './feedback.jsx';
@@ -240,9 +240,12 @@ function ClockPill() {
   const tone = syncStatus.expired || s === 'error' ? 'danger' : s === 'offline' || !online ? 'warn' : s === 'syncing' ? 'syncing' : 'ok';
   const tip = syncStatus.expired ? 'Signed out of the cloud: click to sign in again' : s === 'error' ? syncStatus.error : !online || s === 'offline' ? 'Offline: your work is saved and goes up when the internet is back'
     : syncStatus.lastSync ? 'Up to date ' + new Date(syncStatus.lastSync).toLocaleTimeString() : 'Connecting…';
+  // the state in words beside the clock (no "sync" jargon on the bar itself; the full detail is in the tooltip)
+  const label = s === 'off' ? 'On this device' : syncStatus.expired ? 'Sign in again' : s === 'error' ? 'Not sent · tap to retry'
+    : !online || s === 'offline' ? 'Saved on this device' : s === 'syncing' ? 'Sending…' : 'Up to date';
   return (
-    <button className={'pill clock ' + tone} title={tip} onClick={() => (syncStatus.expired ? setUser(null) : syncNow())}>
-      <i /><span className="clock-time">{now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+    <button className={'pill clock ' + tone} title={tip} aria-label={`${now.toLocaleTimeString()}. ${label}. ${tip}`} onClick={() => (syncStatus.expired ? setUser(null) : syncNow())}>
+      <i /><span className="clock-state" aria-live="polite">{label}</span><span className="clock-time">{now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
       <span className="clock-date">{now.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })}</span>
     </button>
   );
@@ -311,6 +314,9 @@ function Shell() {
   const [theme, setTheme, themeMode, setThemeMode, accent, setAccent] = useTheme();
   const [surface, setSurface] = useSurface();
   const [drawer, setDrawer] = useState(false);
+  // compact navigation rail (icons only) for more working width, e.g. at the POS; remembered on this device
+  const [rail, setRail] = useState(() => { try { return localStorage.getItem('rxpos-rail') === '1'; } catch { return false; } });
+  const toggleRail = () => setRail((r) => { try { localStorage.setItem('rxpos-rail', r ? '0' : '1'); } catch { /* storage blocked */ } return !r; });
   const [palette, setPalette] = useState(false);
   const [twoStepOpen, setTwoStepOpen] = useState(false);
   useEffect(() => { setCrashCloud(syncCfg?.url && syncCfg?.key ? { url: syncCfg.url, key: syncCfg.key } : null); }, [syncCfg?.url, syncCfg?.key]);
@@ -397,17 +403,18 @@ function Shell() {
   const initials = user.name.split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
 
   return (
-    <div className={'shell' + (drawer ? ' drawer-open' : '')}>
+    <div className={'shell' + (drawer ? ' drawer-open' : '') + (rail ? ' rail' : '')}>
       <div className="drawer-bg" onClick={() => setDrawer(false)} />
       <aside className="sidebar">
-        <div className="brand"><BrandLogo src={db.license?.[0]?.branding?.logo} size={34} /> <span className="wordmark">Rx<span className="brand-accent">POS</span></span></div>
+        <div className="brand"><BrandLogo src={db.license?.[0]?.branding?.logo} size={34} /> <span className="wordmark">Rx<span className="brand-accent">POS</span></span>
+          <button className="icon-btn rail-btn" onClick={toggleRail} aria-pressed={rail} aria-label={rail ? 'Expand the menu' : 'Collapse the menu to icons'} title={rail ? 'Expand the menu' : 'Collapse the menu to icons'}>{rail ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}</button></div>
         <div className="store-name">{db.settings.name}</div>
         <nav>
           {groups.map((g, i) => (
             <div key={i} className="nav-group">
               {g.group && <button className="nav-title" aria-expanded={!collapsed[g.group]} onClick={() => toggleGroup(g.group)}>{g.group}<ChevronDown size={13} style={{ transform: collapsed[g.group] ? 'rotate(-90deg)' : '', transition: 'transform .15s' }} /></button>}
               {g.items.map(([to, label, Icon, key, badge]) => (
-                <NavLink key={to} to={to} end hidden={collapsed[g.group] && !g.items.some(([t]) => t === location.pathname) && !(badge && counts[badge] > 0)}>
+                <NavLink key={to} to={to} end title={rail ? label + (key ? ` (${key})` : '') : undefined} hidden={!rail && collapsed[g.group] && !g.items.some(([t]) => t === location.pathname) && !(badge && counts[badge] > 0)}>
                   <Icon size={17} /><span className="grow">{label}</span>
                   {badge && counts[badge] > 0 && <span className="count">{counts[badge]}</span>}
                   {key && <kbd>{key}</kbd>}

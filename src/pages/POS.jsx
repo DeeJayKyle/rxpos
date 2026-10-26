@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useLocation, Link } from 'react-router-dom';
-import { ShoppingCart, Trash2, X, FileText, Printer, AlertTriangle, ScanBarcode, Smartphone, Loader2, CheckCircle2, UserPlus, Tag, BookMarked, Repeat, PauseCircle, Keyboard, Plus, ClipboardList, MessageCircle, MessageSquareText } from 'lucide-react';
+import { ShoppingCart, Trash2, X, FileText, Printer, AlertTriangle, ScanBarcode, Smartphone, Loader2, CheckCircle2, UserPlus, Tag, BookMarked, Repeat, PauseCircle, Keyboard, Plus, ClipboardList, MessageCircle, MessageSquareText, Star } from 'lucide-react';
 import { DrugInfoPanel, genericKey } from './DrugInfo.jsx';
 import { useStore, uid, now, daysUntil, put, move, allocate, audit, normalizePhone, DEFAULT_PAYMENT_METHODS } from '../store.jsx';
 import { CASH } from '../finance.js';
-import { cartSubtotal, taxOf, round } from '../money.js';
+import { cartSubtotal, taxOf, round, formatQty } from '../money.js';
+import { searchProducts, searchKey } from '../search.js';
 import { Modal, SearchBox, ReceiptPdfButton, PageTip } from '../ui.jsx';
 import { toast, ask, askText } from '../feedback.jsx';
 import { payRequest, payStatus, guessNetwork, cloudConfig, whatsappLink, sendSms } from '../cloud.js';
@@ -28,6 +29,10 @@ export default function POS({ mode = 'retail' }) {
   const priceOf = (p) => (wholesale ? p.wholesale || p.price : p.price);
   const [q, setQ] = useState('');
   const [category, setCategory] = useState('');
+  const [view, setView] = useState(''); // '' | 'instock' | 'recent' | 'fav'
+  const favKey = `rxpos-pos-favs:${syncCfg.tenant || 'device'}`;
+  const [favs, setFavs] = useState(() => { try { return new Set(JSON.parse(localStorage.getItem(favKey)) || []); } catch { return new Set(); } });
+  const toggleFav = (id) => setFavs((f) => { const n = new Set(f); n.has(id) ? n.delete(id) : n.add(id); try { localStorage.setItem(favKey, JSON.stringify([...n])); } catch { /* storage blocked */ } return n; });
   const [cart, setCart] = useState([]);
   const [picked, setPicked] = useState(() => new Set()); // lines ticked on the current sale
   const togglePick = (id) => setPicked((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -91,6 +96,9 @@ export default function POS({ mode = 'retail' }) {
     return () => clearTimeout(t);
   }); // after every change
 
+  // Tell the idle shop window (engage.jsx) not to cover a sale that is being rung up
+  useEffect(() => { document.body.dataset.saleOpen = cart.length ? '1' : ''; return () => { document.body.dataset.saleOpen = ''; }; }, [cart.length]);
+
   // Load a proforma into the cart (from Proformas → "Sell")
   useEffect(() => {
     const pf = location.state?.proforma;
@@ -101,12 +109,27 @@ export default function POS({ mode = 'retail' }) {
   }, [location.state]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const categories = useMemo(() => [...new Set(products.map((p) => p.category).filter(Boolean))].sort().slice(0, 14), [products]);
-  const ql = q.toLowerCase();
-  const results = useMemo(() => products
-    .filter((p) => (!category || p.category === category) && (!q || `${p.name} ${p.generic} ${p.barcode} ${p.category}`.toLowerCase().includes(ql)))
-    .sort((a, b) => (b.stock > 0) - (a.stock > 0))
-    .slice(0, 80), [products, category, q, ql]);
-  useEffect(() => setActive(0), [q, category]);
+  // one folded search string per medicine, rebuilt only when the medicine list changes (src/search.js)
+  const keys = useMemo(() => new Map(products.map((p) => [p.id, searchKey(p)])), [products]);
+  // medicines sold most recently at this branch (newest first), for the "Recent" filter
+  const recent = useMemo(() => {
+    const seen = new Map();
+    for (let i = db.sales.length - 1; i >= 0 && seen.size < 40; i--) {
+      const s = db.sales[i];
+      if ((s.branchId || 'main') !== branchId) continue;
+      for (const it of s.items) if (!seen.has(it.id)) seen.set(it.id, seen.size);
+    }
+    return seen;
+  }, [db.sales, branchId]);
+  const results = useMemo(() => {
+    let list = products.filter((p) => (!category || p.category === category) && (view !== 'instock' || p.stock > 0)
+      && (view !== 'fav' || favs.has(p.id)) && (view !== 'recent' || recent.has(p.id)));
+    if (q) return searchProducts(list, q, (p) => keys.get(p.id) || searchKey(p)).slice(0, 80);
+    if (view === 'recent') list = [...list].sort((a, b) => recent.get(a.id) - recent.get(b.id));
+    else list = [...list].sort((a, b) => (b.stock > 0) - (a.stock > 0));
+    return list.slice(0, 80);
+  }, [products, category, q, keys, view, favs, recent]);
+  useEffect(() => setActive(0), [q, category, view]);
   // how many cards fit across the grid, so ↑/↓ move by a whole row
   const gridCols = () => { const el = gridRef.current; return el ? Math.max(1, getComputedStyle(el).gridTemplateColumns.split(' ').length) : 1; };
   const moveActive = (by) => setActive((a) => {
@@ -379,9 +402,14 @@ export default function POS({ mode = 'retail' }) {
           </div>
           <CameraButton className="btn ghost big cam-btn" onClick={() => setCam(true)} />
         </div>
+        <div className="chips-row" role="toolbar" aria-label="Filter medicines">
+          {[['', 'All'], ['instock', 'In stock'], ['recent', 'Recent'], ['fav', `Favourites${favs.size ? ` · ${favs.size}` : ''}`]].map(([k, label]) => (
+            <button key={k || 'all'} className={'chip view-chip' + (view === k ? ' active' : '')} aria-pressed={view === k} onClick={() => setView(k)}>{k === 'fav' && <Star size={12} />}{label}</button>
+          ))}
+        </div>
         {categories.length > 1 && (
           <div className="chips-row">
-            <button className={'chip' + (!category ? ' active' : '')} onClick={() => setCategory('')}>All</button>
+            <button className={'chip' + (!category ? ' active' : '')} onClick={() => setCategory('')}>All categories</button>
             {categories.map((c) => <button key={c} className={'chip' + (category === c ? ' active' : '')} onClick={() => setCategory(category === c ? '' : c)}>{c}</button>)}
           </div>
         )}
@@ -389,24 +417,29 @@ export default function POS({ mode = 'retail' }) {
           {results.map((p, i) => {
             const d = p.expiry ? daysUntil(p.expiry) : 999;
             return (
-              <button key={p.id} className={'product' + (p.stock <= 0 ? ' disabled' : '') + (i === active && !touch ? ' active' : '')} onClick={() => add(p)} onMouseEnter={() => setActive(i)}>
+              <div key={p.id} className="product-wrap">
+              <button className={'product' + (p.stock <= 0 ? ' disabled' : '') + (i === active && !touch ? ' active' : '')} onClick={() => add(p)} onMouseEnter={() => setActive(i)}
+                aria-label={`${p.name}${p.generic ? ', ' + p.generic : ''}${p.form ? ', ' + p.form : ''}. ${fmt(priceOf(p))} per ${(p.unit || 'unit').toLowerCase()}. ${p.stock <= 0 ? 'Out of stock' : formatQty(p.stock, (p.unit || 'unit').toLowerCase() + 's') + ' in stock'}`}>
                 <strong>{p.name}</strong>
                 <small className="muted">{[p.generic, p.form].filter(Boolean).join(' · ')}</small>
                 <div className="row between">
-                  <span className="price">{fmt(priceOf(p))}</span>
-                  <span className={'small ' + (p.stock <= 0 ? 'text-danger' : p.stock <= (p.reorder || 0) ? 'text-warn' : 'muted')}>{p.stock <= 0 ? 'Out of stock' : `${p.stock} left`}</span>
+                  <span className="price">{fmt(priceOf(p))}<small className="per-unit"> / {(p.unit || 'unit').toLowerCase()}</small></span>
+                  <span className={'small ' + (p.stock <= 0 ? 'text-danger' : p.stock <= (p.reorder || 0) ? 'text-warn' : 'muted')}>{p.stock <= 0 ? 'Out of stock' : `${formatQty(p.stock)} left`}</span>
                 </div>
                 <div className="tags">
                   {p.rx && <span className="badge">Rx</span>}
                   {p.controlled && <span className="badge danger">CD</span>}
                   {d < 0 && <span className="badge danger">Expired</span>}
                   {d >= 0 && d <= warn && <span className="badge warn">Exp {d}d</span>}
+                  {packsOf(p.id).length > 0 && <span className="badge pack-badge">{packsOf(p.id).map((k) => `1 ${k.name.toLowerCase()} = ${k.size} ${(p.unit || 'unit').toLowerCase()}s`).join(' · ')}</span>}
                 </div>
               </button>
+              <button type="button" className={'fav-btn' + (favs.has(p.id) ? ' on' : '')} aria-pressed={favs.has(p.id)} aria-label={(favs.has(p.id) ? 'Remove ' : 'Add ') + p.name + (favs.has(p.id) ? ' from favourites' : ' to favourites')} title={favs.has(p.id) ? 'Favourite' : 'Add to favourites'} onClick={() => toggleFav(p.id)}><Star size={14} /></button>
+              </div>
             );
           })}
           {!results.length && (
-            <div className="cart-empty" style={{ gridColumn: '1/-1' }}><ScanBarcode size={36} /><span>No medicines match “{q}”</span></div>
+            <div className="cart-empty" style={{ gridColumn: '1/-1' }}><ScanBarcode size={36} /><span>{q ? `No medicines match “${q}”` : view === 'fav' ? 'No favourites yet: tap the star on a medicine to keep it here' : view === 'recent' ? 'Nothing sold at this branch yet' : 'No medicines here'}</span></div>
           )}
         </div>
       </section>

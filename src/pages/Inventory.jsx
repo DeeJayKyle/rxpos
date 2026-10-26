@@ -4,6 +4,7 @@ import { Download, Barcode as BarcodeIcon, SlidersHorizontal, Save, Undo2, Penci
 import { CrudPage, Tabs, Modal, SearchBox, Empty, PdfButton } from '../ui.jsx';
 import { useStore, daysUntil, put, move, addBatch, audit, downloadFile, toCSV, batchValue, stockValue, markupPrice, MAIN_BRANCH } from '../store.jsx';
 import { ask, toast } from '../feedback.jsx';
+import { formatQty } from '../money.js';
 import { newInternalBarcode } from '../barcode.jsx';
 
 const expiryClass = (expiry, warn) => {
@@ -22,9 +23,23 @@ const StockStatus = ({ p, warn }) => {
 };
 const UNITS = ['Piece', 'Tablet', 'Strip', 'Pack', 'Box', 'Bottle', 'Tube', 'Vial', 'Ampoule', 'Sachet', 'Unit'];
 
+/** Things worth a look in a medicine record (imported or legacy data). Read-only: nothing is changed automatically. */
+const recordIssues = (p, dupBarcodes) => [
+  !(Number(p.price) > 0) && 'No retail price',
+  Number(p.price) > 0 && Number(p.cost) > Number(p.price) && 'Retail below cost',
+  !(Number(p.cost) > 0) && 'No cost price',
+  !p.form && 'No formulation',
+  !p.unit && 'No selling unit',
+  p.barcode && dupBarcodes.has(p.barcode) && 'Barcode used twice',
+  p.name && p.name !== p.name.trim() && 'Spaces around the name',
+].filter(Boolean);
+
 export function MedicineList() {
   const { db, products, update, fmt, user, branchId } = useStore();
   const [packsFor, setPacksFor] = useState(null);
+  const [review, setReview] = useState(false);
+  const dupBarcodes = useMemo(() => { const seen = new Set(), dup = new Set(); for (const p of products) if (p.barcode) (seen.has(p.barcode) ? dup : seen).add(p.barcode); return dup; }, [products]);
+  const issueCount = useMemo(() => products.filter((p) => recordIssues(p, dupBarcodes).length).length, [products, dupBarcodes]);
   const s = db.settings;
   const fields = [
     { key: 'name', label: 'Medicine name', required: true },
@@ -70,16 +85,22 @@ export function MedicineList() {
     {packsFor && <PacksEditor product={packsFor} onClose={() => setPacksFor(null)} />}
     <CrudPage
       title="Medicine List" singular="Medicine" table="products" rows={products} fields={fields} onSave={onSave}
-      subtitle={`${products.length.toLocaleString()} medicines and items`}
+      subtitle={review ? `${issueCount.toLocaleString()} records need a look. Open one to fix it; nothing is changed automatically.` : `${products.length.toLocaleString()} medicines and items`}
+      filter={review ? (p) => recordIssues(p, dupBarcodes).length > 0 : undefined}
+      headExtra={<button type="button" className={'btn ' + (review ? 'primary' : 'ghost')} aria-pressed={review} onClick={() => setReview((r) => !r)} title="Records with missing or inconsistent details">Needs review{issueCount ? ` (${issueCount})` : ''}</button>}
       blank={{ form: 'Tablets', unit: 'Piece', reorder: 10, rx: false }}
       extraActions={(p) => <button className="btn sm ghost" title="Sell or receive by strip, box…" onClick={() => setPacksFor(p)}>Packs{p.packs?.length ? ` (${p.packs.length})` : ''}</button>}
       columns={[
-        { label: 'Medicine', render: (p) => <><strong>{p.name}</strong> {p.rx && <span className="badge">Rx</span>}{p.chronic && <span className="badge ok">Chronic</span>}{p.controlled && <span className="badge danger">CD</span>}<br /><small className="muted">{[p.generic, p.strength, p.barcode].filter(Boolean).join(' · ')}</small></> },
+        { label: 'Medicine', render: (p) => <><strong>{p.name}</strong> {p.rx && <span className="badge">Rx</span>}{p.chronic && <span className="badge ok">Chronic</span>}{p.controlled && <span className="badge danger">CD</span>}<br /><small className="muted">{[p.generic, p.barcode].filter(Boolean).join(' · ')}</small>
+          {review && <span className="status-tags">{recordIssues(p, dupBarcodes).map((x) => <span key={x} className="status warn"><i aria-hidden="true" />{x}</span>)}</span>}</> },
+        { label: 'Strength', render: (p) => p.strength || <span className="muted">—</span> },
         { label: 'Formulation', key: 'form' },
+        { label: 'Category / class', render: (p) => p.category || <span className="muted">—</span> },
+        { label: 'Sold as', render: (p) => <>{p.unit || <span className="muted">—</span>}{p.packs?.filter((k) => k.name && Number(k.size) > 1).map((k) => <small key={k.name} className="muted nowrap"><br />1 {k.name.toLowerCase()} = {k.size}</small>)}</> },
         { label: 'Cost', num: true, render: (p) => fmt(p.cost) },
         { label: 'Wholesale', num: true, render: (p) => fmt(p.wholesale) },
         { label: 'Retail', num: true, render: (p) => fmt(p.price) },
-        { label: 'Stock', num: true, render: (p) => <span className={p.stock <= 0 ? 'badge danger' : p.stock <= (p.reorder || 0) ? 'badge warn' : ''}>{p.stock}</span> },
+        { label: 'Stock', num: true, render: (p) => <span className={p.stock <= 0 ? 'badge danger' : p.stock <= (p.reorder || 0) ? 'badge warn' : ''}>{formatQty(p.stock)}</span> },
       ]}
     />
     </>
@@ -133,9 +154,9 @@ export function StockLevels() {
             {rows.slice(0, 500).map((p) => (
               <tr key={p.id} onClick={() => setOpen(p)} style={{ cursor: 'pointer' }}>
                 <td><strong>{p.name}</strong><br /><small className="muted">{p.form}</small><StockStatus p={p} warn={warn} /></td><td>{p.batch || '—'}</td>
-                <td className={expiryClass(p.expiry, warn)}>{p.expiry || '—'}</td><td>{p.shelf}</td>
+                <td className={'nowrap ' + expiryClass(p.expiry, warn)}>{p.expiry || '—'}</td><td>{p.shelf}</td>
                 <td className="num">{p.reorder}</td>
-                <td className="num"><span className={'stock-pill badge ' + (p.stock <= 0 ? 'danger' : p.stock <= (p.reorder || 0) ? 'warn' : 'ok')}>{p.stock}</span></td>
+                <td className="num"><span className={'stock-pill badge ' + (p.stock <= 0 ? 'danger' : p.stock <= (p.reorder || 0) ? 'warn' : 'ok')}>{formatQty(p.stock)}</span></td>
                 {multi && <td className="num muted">{p.totalStock}</td>}
                 <td className="num">{(() => { const v = batchValue(p, batchesOf); return <>{fmt(v.value)}{v.expired > 0 && <><br /><small className="text-danger">+ {fmt(v.expired)} expired</small></>}</>; })()}</td>
                 {can('inventory.edit') && <td className="actions"><button className="btn sm ghost" onClick={(e) => { e.stopPropagation(); setEditing(p); }}><Pencil size={14} />Edit</button></td>}
@@ -152,7 +173,7 @@ export function StockLevels() {
             <thead><tr><th>Batch</th><th>Expiry</th><th>Received</th><th className="num">Cost</th><th className="num">Qty</th></tr></thead>
             <tbody>
               {batchesOf(open.id).filter((b) => b.qty !== 0).map((b, i) => (
-                <tr key={b.id}><td>{b.batch} {i === 0 && b.qty > 0 && <span className="badge ok">Sells next</span>}</td><td className={expiryClass(b.expiry, warn)}>{b.expiry || '—'}</td><td>{b.received || '—'}</td><td className="num">{fmt(b.cost || open.cost)}</td><td className="num">{b.qty}</td></tr>
+                <tr key={b.id}><td>{b.batch} {i === 0 && b.qty > 0 && <span className="badge ok">Sells next</span>}</td><td className={'nowrap ' + expiryClass(b.expiry, warn)}>{b.expiry || '—'}</td><td>{b.received || '—'}</td><td className="num">{fmt(b.cost || open.cost)}</td><td className="num">{formatQty(b.qty)}</td></tr>
               ))}
               {!batchesOf(open.id).some((b) => b.qty) && <Empty colSpan={5}>No stock at this branch</Empty>}
             </tbody>
@@ -192,9 +213,9 @@ export function Expiry() {
           <tbody>
             {rows.map((r) => (
               <tr key={r.p.id + r.id}>
-                <td><strong>{r.p.name}</strong></td><td>{r.batch}</td><td className={expiryClass(r.expiry, warn)}>{r.expiry}</td>
-                <td className={expiryClass(r.expiry, warn)}>{r.days < 0 ? `${-r.days} days ago` : r.days === 0 ? 'today' : `in ${r.days} days`}</td>
-                <td className="num">{r.qty}</td><td className="num">{fmt(r.qty * (r.cost || r.p.cost))}</td>
+                <td><strong>{r.p.name}</strong></td><td>{r.batch}</td><td className={'nowrap ' + expiryClass(r.expiry, warn)}>{r.expiry}</td>
+                <td className={'nowrap ' + expiryClass(r.expiry, warn)}>{r.days < 0 ? `${-r.days} days ago` : r.days === 0 ? 'today' : `in ${r.days} days`}</td>
+                <td className="num">{formatQty(r.qty)}</td><td className="num">{fmt(r.qty * (r.cost || r.p.cost))}</td>
                 <td className="actions">
                   {(can('stock.receive') || can('stock.adjust')) && <button className="btn sm ghost" title="Send it back to the supplier for a credit note or refund" onClick={() => navigate('/returns', { state: { returnBatch: { productId: r.p.id, batchId: r.id, reason: r.days < 0 ? 'Expired' : 'Short expiry' } } })}>Return</button>}
                   {tab === 'expired' && user.role !== 'cashier' && <button className="btn sm danger" onClick={() => writeOff(r)}>Write off</button>}
@@ -329,7 +350,7 @@ export function StockCard() {
         <div className="stats">
           <div className="card stat"><small>In stock here</small><strong>{p.stock}</strong><span className="muted small">{p.unit || 'units'}</span></div>
           {batches.filter((b) => b.qty).slice(0, 3).map((b) => (
-            <div key={b.id} className="card stat"><small>Batch {b.batch}</small><strong>{b.qty}</strong><span className={'small ' + expiryClass(b.expiry, db.settings.expiryWarnDays || 90)}>Expires {b.expiry || '—'}</span></div>
+            <div key={b.id} className="card stat"><small>Batch {b.batch}</small><strong>{formatQty(b.qty)}</strong><span className={'small ' + expiryClass(b.expiry, db.settings.expiryWarnDays || 90)}>Expires {b.expiry || '—'}</span></div>
           ))}
         </div>
       )}
@@ -341,7 +362,7 @@ export function StockCard() {
               <tr key={m.id}>
                 <td>{new Date(m.date).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</td><td>{m.type}</td><td>{m.batchId ? batchName[m.batchId] || '—' : p?.batch || '—'}</td>
                 <td>{m.ref}{m.note ? ` (${m.note})` : ''}</td><td>{m.user}</td>
-                <td className="num text-ok">{m.qty > 0 ? m.qty : ''}</td><td className="num text-danger">{m.qty < 0 ? -m.qty : ''}</td><td className="num"><strong>{m.bal}</strong></td>
+                <td className="num text-ok">{m.qty > 0 ? formatQty(m.qty) : ''}</td><td className="num text-danger">{m.qty < 0 ? formatQty(-m.qty) : ''}</td><td className="num"><strong>{formatQty(m.bal)}</strong></td>
               </tr>
             ))}
             {!lines.length && <Empty colSpan={8}>No stock movements at this branch</Empty>}

@@ -1,8 +1,15 @@
 // Money math (review Phase 1.5): integer-UGX rounding, per-line totals, tax, pack splitting, locale formatting.
 //   node unit-money.mjs
-import { round, lineTotal, cartSubtotal, taxOf, unitPrice, formatMoney } from '../src/money.js';
+import { round, lineTotal, cartSubtotal, taxOf, unitPrice, formatMoney, formatQty } from '../src/money.js';
 let pass = 0, fail = 0;
 const check = (n, ok, x = '') => { ok ? pass++ : fail++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${n}${x !== '' ? '  ' + String(x) : ''}`); };
+
+// formatQty (display only)
+check('a long fraction shows 2 decimals', formatQty(7.833333333333333) === '7.83', formatQty(7.833333333333333));
+check('whole quantities stay whole (no grouping, so a count still reads as a plain number)', formatQty(1200) === '1200' && formatQty(5.0000000001) === '5', formatQty(5.0000000001));
+check('trailing zeros are dropped', formatQty(2.5) === '2.5');
+check('a unit is appended, singular for 1', formatQty(1, 'tablets') === '1 tablet' && formatQty(3, 'tablets') === '3 tablets');
+check('junk shows a dash', formatQty('x') === '—');
 
 // round
 check('round to whole shillings', round(666.666 * 3) === 2000, round(666.666 * 3));

@@ -137,6 +137,14 @@ export default function Reorder() {
               <div className="form-actions"><button className="btn ghost" onClick={() => setLevels(null)}>Cancel</button>
                 <button className="btn primary" disabled={!levels.length} onClick={() => { applyReorderLevels(update, user, branchId, levels); toast(`${levels.length} reorder levels updated`); setLevels(null); }}>Apply {levels.length} change{levels.length === 1 ? '' : 's'}</button></div>
             </Modal>); })()}
+          <details className="explain">
+            <summary>How the order quantity is worked out</summary>
+            <p>Two different signals: the <b>reorder level</b> is a fixed number set on each medicine (Medicine list or "Set reorder levels from sales"); it drives the
+              "Low stock" alerts. The <b>suggestion</b> here is a forecast from real sales at this branch:</p>
+            <p><b>Order qty</b> = sells per day (last {window_} days) × (lead time {Number(lead) || 0} + cover {Number(cover) || 0} days) − in stock, rounded up.
+              A medicine with no sales in that window but at or below its reorder level is suggested at 2 × reorder level − in stock. Listed when the stock lasts
+              {' '}{Number(lead) + Number(cover)} days or less, or is at or below the reorder level.</p>
+          </details>
           <div className="row gap">
             <span className="muted small">Order each medicine from</span>
             <Tabs tabs={[['cheapest', 'Cheapest supplier'], ['last', 'Last supplier']]} value={from} onChange={(v) => { setFrom(v); setChosenSup({}); }} />

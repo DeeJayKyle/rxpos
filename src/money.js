@@ -37,6 +37,17 @@ export function unitPrice(packPrice, perPack, decimals = 0) {
   return round((Number(packPrice) || 0) / (n || 1), decimals);
 }
 
+/** A quantity for display: whole units as they are, part units (a split pack, a measured liquid) to at most 2
+ * decimals with trailing zeros dropped, so 7.833333333 shows as 7.83. Display only: stored quantities keep their
+ * full precision. With a unit, it is appended (singular for exactly 1). */
+export function formatQty(n, unit = '') {
+  const v = Number(n);
+  if (!isFinite(v)) return '—';
+  const txt = (Math.abs(v - Math.round(v)) < 1e-9 ? Math.round(v) : round(v, 2)).toLocaleString('en-US', { maximumFractionDigits: 2, useGrouping: false });
+  if (!unit) return txt;
+  return `${txt} ${Math.abs(v) === 1 ? unit.replace(/s$/i, '') : unit}`;
+}
+
 /** Format for display in the PHARMACY'S locale and currency, not the device's (review Phase 1.5). */
 export function formatMoney(n, { currency = '', decimals = 0, locale } = {}) {
   const grouped = (Number(n) || 0).toLocaleString(locale || 'en-UG', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });

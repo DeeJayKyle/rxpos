@@ -69,7 +69,7 @@ function useIdle(ms, enabled) {
     let t;
     const arm = () => {
       clearTimeout(t);
-      t = setTimeout(() => { if (document.visibilityState === 'visible') { idleRef.current = true; setIdle(true); } else arm(); }, ms);
+      t = setTimeout(() => { if (document.visibilityState === 'visible' && !document.body.dataset.saleOpen) { idleRef.current = true; setIdle(true); } else arm(); }, ms);
     };
     const onActivity = (e) => {
       if (!idleRef.current) return arm();
@@ -195,13 +195,13 @@ export function useAlerts() {
     const lastReading = [...db.tempLogs].filter((r) => r.place !== 'Outside').sort((a, b) => String(b.at).localeCompare(String(a.at)))[0];
     const badReading = lastReading && ((lastReading.place === 'Fridge' && (lastReading.temp < lim.fridgeMin || lastReading.temp > lim.fridgeMax)) || (lastReading.place !== 'Fridge' && lastReading.temp > lim.roomMax));
     const inv = can('inventory.view');
-    if (expired && inv) out.push({ key: 'expired', tone: 'danger', Icon: CalendarClock, text: `${expired} item${expired > 1 ? 's' : ''} expired but still in stock`, to: '/expiry', n: expired });
-    if (expSoon && inv) out.push({ key: 'expiring', tone: 'warn', Icon: CalendarClock, text: `${expSoon} item${expSoon > 1 ? 's expire' : ' expires'} within 30 days: sell first`, to: '/expiry', n: expSoon });
-    if (low && inv) out.push({ key: 'low', tone: 'warn', Icon: PackageX, text: `${low} item${low > 1 ? 's' : ''} at or below reorder level`, to: '/reorder', n: low });
-    if (ins.slow.length && inv) out.push({ key: 'slow', tone: 'info', Icon: Timer, text: `${ins.slow.length}${ins.slow.length >= 10 ? '+' : ''} slow-moving items: recommend or promote them`, to: '/reorder', n: ins.slow.length });
-    if (refills && can('prescriptions')) out.push({ key: 'refills', tone: 'info', Icon: Repeat, text: `${refills} refill${refills > 1 ? 's' : ''} due: remind the patients`, to: '/reminders', n: refills });
+    if (expired && inv) out.push({ key: 'expired', tone: 'danger', Icon: CalendarClock, text: `${expired} item${expired > 1 ? 's' : ''} expired but still in stock`, why: 'Expired batches can only be sold with a recorded reason. Return them to the supplier or write them off.', to: '/expiry', n: expired });
+    if (expSoon && inv) out.push({ key: 'expiring', tone: 'warn', Icon: CalendarClock, text: `${expSoon} item${expSoon > 1 ? 's expire' : ' expires'} within 30 days: sell first`, why: 'Sales already use the earliest-expiring batch first. Promote these or return them before they expire.', to: '/expiry', n: expSoon });
+    if (low && inv) out.push({ key: 'low', tone: 'warn', Icon: PackageX, text: `${low} item${low > 1 ? 's' : ''} at or below reorder level`, why: 'In stock, but at or below the fixed reorder level set on each medicine.', to: '/reorder', n: low });
+    if (ins.slow.length && inv) out.push({ key: 'slow', tone: 'info', Icon: Timer, text: `${ins.slow.length}${ins.slow.length >= 10 ? '+' : ''} slow-moving items: recommend or promote them`, why: 'In stock with no recent sales.', to: '/reorder', n: ins.slow.length });
+    if (refills && can('prescriptions')) out.push({ key: 'refills', tone: 'info', Icon: Repeat, text: `${refills} refill${refills > 1 ? 's' : ''} due: remind the patients`, why: 'Dispensed prescriptions whose refill interval has passed.', to: '/reminders', n: refills });
     for (const e of events) out.push({ key: 'ev-' + e.id, tone: 'info', Icon: CalendarDays, text: `${e.time ? e.time + ' · ' : ''}${e.title}`, to: '/calendar', n: 1 });
-    if (badReading) out.push({ key: 'reading-' + lastReading.id, tone: 'danger', Icon: Thermometer, text: `${lastReading.place} reading ${lastReading.temp}°C is out of range`, to: '/storage', n: 1 });
+    if (badReading) out.push({ key: 'reading-' + lastReading.id, tone: 'danger', Icon: Thermometer, text: `${lastReading.place} reading ${lastReading.temp}°C is out of range`, why: 'The last storage temperature reading is outside the safe range set in Settings.', to: '/storage', n: 1 });
     if (wx && features.weather !== false) {
       const now = wx.current?.temperature_2m, max = wx.daily?.temperature_2m_max?.[1];
       if (now >= lim.hotAlert || max >= lim.hotAlert) out.push({ key: 'hot', tone: 'danger', Icon: ThermometerSun, text: now >= lim.hotAlert ? `It's ${Math.round(now)}°C outside: keep medicines cool and check the room thermometer` : `Up to ${Math.round(max)}°C expected today: keep medicines cool`, to: '/storage', n: 1 });
@@ -227,15 +227,24 @@ export function NotificationBell() {
   const urgent = alerts.filter((a) => a.tone === 'danger').length;
   return (
     <div className="bell" ref={ref}>
-      <button className="icon-btn" title="Notifications" onClick={() => setOpen((o) => !o)}>
+      <button className="icon-btn" title="Notifications" aria-label={`Notifications${alerts.length ? `: ${alerts.length}${urgent ? `, ${urgent} urgent` : ''}` : ''}`} aria-expanded={open} onClick={() => setOpen((o) => !o)}>
         <Bell size={19} />{alerts.length > 0 && <span className={'bell-dot' + (urgent ? ' danger' : '')}>{alerts.length}</span>}
       </button>
       {open && (
         <div className="bell-menu">
-          <div className="bell-head">Today</div>
-          {alerts.map((a, i) => (
-            <button key={i} className={'bell-item ' + a.tone} onClick={() => { setOpen(false); navigate(a.to); }}><a.Icon size={16} /><span>{a.text}</span><ChevronRight size={14} /></button>
-          ))}
+          {[['danger', 'Urgent'], ['warn', 'Needs attention'], ['info', 'For information']].map(([tone, head]) => {
+            const list = alerts.filter((a) => a.tone === tone);
+            return list.length > 0 && (
+              <div key={tone} className="bell-group" role="group" aria-label={head}>
+                <div className={'bell-head sev-' + tone}>{head} · {list.length}</div>
+                {list.map((a) => (
+                  <button key={a.key} className={'bell-item ' + a.tone} onClick={() => { setOpen(false); navigate(a.to); }}>
+                    <a.Icon size={16} /><span className="grow">{a.text}{a.why && <small className="bell-why">{a.why}</small>}</span><ChevronRight size={14} />
+                  </button>
+                ))}
+              </div>
+            );
+          })}
           {!alerts.length && <div className="empty">All quiet. Nothing needs you right now.</div>}
           <label className="bell-sound"><input type="checkbox" defaultChecked={soundsOn()} onChange={(e) => setSounds(e.target.checked)} /> Sounds on this device</label>
         </div>
@@ -255,10 +264,12 @@ const announced = () => { try { const j = JSON.parse(localStorage.getItem(seenKe
 export function AlertWatcher() {
   const { db } = useStore();
   const alerts = useAlerts();
+  // at the till only urgent problems pop up; the rest wait (still unannounced) until the POS is left, and are always in the bell
+  const selling = useLocation().pathname.startsWith('/pos');
   useEffect(() => {
     if (quietNow(db.settings) || !alerts.length) return;
     const seen = announced();
-    const fresh = alerts.filter((a) => (seen.keys[a.key] ?? -1) < a.n);
+    const fresh = alerts.filter((a) => (seen.keys[a.key] ?? -1) < a.n && (!selling || a.tone === 'danger'));
     if (!fresh.length) return;
     const t = setTimeout(() => {
       for (const a of fresh) seen.keys[a.key] = a.n;
@@ -269,7 +280,7 @@ export function AlertWatcher() {
       systemNotify('RxPOS', top.map((a) => a.text).join('\n'));
     }, 4000); // let the first sync settle
     return () => clearTimeout(t);
-  }, [alerts, db.settings]);
+  }, [alerts, db.settings, selling]);
   return null;
 }
 

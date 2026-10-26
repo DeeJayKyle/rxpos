@@ -94,11 +94,11 @@ await p.goto(base + '/' + slug + '#/reports', { waitUntil: 'networkidle2' }); aw
 check('Reports: payment donut shows the period total with one segment per method', await p.evaluate(() => /3,000/.test(document.querySelector('.donut-total')?.textContent || '') && document.querySelectorAll('.donut-seg').length === 1));
 await p.screenshot({ path: `${out}/reports-light.png` });
 
-// ---- phone: two-up KPIs, three alert tiles in a row, Sell button in the bar ----
+// ---- phone: one KPI per row, three alert tiles in a row, Sell button in the bar ----
 await p.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
 await p.goto(base + '/' + slug + '#/', { waitUntil: 'networkidle2' }); await wait(1500);
 const cols = await p.evaluate(() => ['.kpis', '.alerts'].map((s) => getComputedStyle(document.querySelector(s)).gridTemplateColumns.split(' ').length));
-check('phone: KPI cards two per row, alerts three per row', cols[0] === 2 && cols[1] === 3, cols.join(','));
+check('phone: KPI cards one per row, alerts three per row', cols[0] === 1 && cols[1] === 3, cols.join(','));
 check('phone: no horizontal overflow', await p.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1));
 check('phone: bottom nav is Home · Stock · Sell · Sales · More', (await p.evaluate(() => [...document.querySelectorAll('.bottom-nav > *')].map((x) => x.textContent.trim()).join('·'))) === 'Home·Stock·Sell·Sales·More');
 await p.screenshot({ path: `${out}/phone-dashboard.png` });

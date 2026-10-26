@@ -1523,8 +1523,6 @@ th { font-size: 11px; letter-spacing: .06em; }
 /* ---- POS: search, product cards, cart, totals, payment ---- */
 .search.big { min-height: 48px; border-radius: 14px; }
 .product { border-radius: 14px; gap: 6px; }
-.product strong { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.product small.muted { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .product.active { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
 .pos-cart { border-radius: var(--radius-lg); }
 .cart-line { border-bottom-style: solid; }
@@ -1838,3 +1836,83 @@ th { font-size: 11px; letter-spacing: .06em; }
 .style-swatch.surface-clay { border: none; box-shadow: 2px 2px 4px rgba(0, 0, 0, .25), -2px -2px 4px rgba(255, 255, 255, .5), inset 1px 1px 2px rgba(255, 255, 255, .5); border-radius: 7px; }
 .style-swatch.surface-skeuomorphism { background: linear-gradient(to bottom, color-mix(in srgb, #fff 30%, var(--surface)), var(--surface)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .6), 0 1px 2px rgba(0, 0, 0, .3); }
 .style-swatch.surface-neumorphism { background: var(--bg); border: none; box-shadow: 2px 2px 4px rgba(163, 177, 198, .6), -2px -2px 4px #fff; }
+
+/* ============================================================================
+   Pharmacy workspace (v1.5): compact navigation rail, readable medicine cards,
+   favourites, stable tables, notification centre, plain save state.
+   ============================================================================ */
+.nowrap { white-space: nowrap; }
+td.num, td .num, .price, .line-total { white-space: nowrap; }
+
+/* compact rail: icons only, every label kept for screen readers and as a tooltip */
+.rail-btn { margin-left: auto; color: var(--sidebar-text); }
+.rail-btn:hover { background: rgba(255, 255, 255, .08); color: #fff; }
+@media (min-width: 901px) {
+  .shell.rail .sidebar { width: 72px; padding-left: 10px; padding-right: 10px; }
+  .shell.rail .brand { flex-direction: column; gap: 8px; padding: 0; }
+  .shell.rail .rail-btn { margin-left: 0; }
+  .shell.rail .wordmark, .shell.rail .store-name, .shell.rail .nav-title, .shell.rail .sidebar kbd, .shell.rail .user-box .grow { display: none; }
+  .shell.rail .sidebar nav a { justify-content: center; padding: 10px 0; }
+  .shell.rail .sidebar nav a:hover { padding-left: 0; }
+  .shell.rail .sidebar nav a .grow { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .shell.rail .sidebar nav a .count { position: absolute; top: 2px; right: 4px; padding: 0 5px; font-size: 9.5px; }
+  .shell.rail .nav-group { margin-bottom: 6px; padding-top: 6px; border-top: 1px solid rgba(255, 255, 255, .06); }
+  .shell.rail .user-box { flex-direction: column; gap: 4px; }
+  .shell.rail .pos { height: calc(100vh - 61px); }
+}
+@media (max-width: 900px) { .rail-btn { display: none; } }
+
+/* save state beside the clock */
+.pill.clock .clock-state { font-weight: 650; color: var(--text); }
+.pill.clock.warn .clock-state { color: var(--warn); }
+.pill.clock.danger .clock-state { color: var(--danger); }
+@media (max-width: 1250px) { .pill.clock .clock-date { display: none; } }
+@media (max-width: 700px) { .pill.clock .clock-state { display: none; } }
+
+/* POS medicine cards: full names, unit price, pack sizes, favourites */
+.product-wrap { position: relative; display: flex; min-width: 0; }
+.product-wrap > .product { flex: 1; min-width: 0; padding-right: 34px; }
+.product strong { display: block; -webkit-line-clamp: unset; overflow: visible; overflow-wrap: anywhere; }
+.product small.muted { display: block; -webkit-line-clamp: unset; white-space: normal; overflow: visible; }
+.product > .row.between { flex-wrap: wrap; align-items: baseline; gap: 2px 8px; }
+.product .price { display: inline-flex; align-items: baseline; gap: 3px; flex-wrap: wrap; }
+.product .row.between > .small { white-space: nowrap; margin-left: auto; }
+.product-grid .product { contain-intrinsic-size: auto 140px; }
+.per-unit { font-size: 11px; font-weight: 600; color: var(--muted); }
+.pack-badge { background: var(--surface-2); color: var(--muted); border: 1px solid var(--border); font-weight: 600; }
+.fav-btn { position: absolute; top: 8px; right: 8px; width: 28px; height: 28px; display: grid; place-items: center; border: 0; border-radius: 8px; background: none; color: var(--muted); cursor: pointer; opacity: .55; transition: opacity var(--dur-hover), color var(--dur-hover), transform var(--dur-press); }
+.fav-btn:hover, .fav-btn:focus-visible, .product-wrap:hover .fav-btn { opacity: 1; }
+.fav-btn.on { opacity: 1; color: #d69a2a; }
+.fav-btn.on svg { fill: currentColor; }
+.fav-btn:active { transform: scale(.88); }
+@media (pointer: coarse) { .fav-btn { opacity: 1; width: 36px; height: 36px; top: 4px; right: 4px; } }
+.view-chip { display: inline-flex; align-items: center; gap: 5px; }
+/* a line that has just entered the basket gets a short highlight */
+.cart-line { animation: line-in .6s var(--ease-out); }
+@keyframes line-in { 0% { background: var(--primary-soft); } 100% { background: transparent; } }
+
+/* dashboard KPI grid: 4 → 2 → 1 */
+.stats.kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 1199px) { .stats.kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 599px) { .stats.kpis { grid-template-columns: 1fr; } .kpis .stat { min-height: 0; } }
+
+/* large tables: header stays put while the rows scroll (desktop) */
+@media (min-width: 901px) {
+  .card.table-wrap { max-height: calc(100vh - 200px); overflow: auto; }
+  .card.table-wrap > table th { z-index: 2; box-shadow: inset 0 -1px 0 var(--border); }
+}
+.page .card.table-wrap > table td { overflow-wrap: anywhere; }
+.page .card.table-wrap > table td.num, .page .card.table-wrap > table td.nowrap { overflow-wrap: normal; }
+
+/* "how is this worked out" notes */
+.explain { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 14px; font-size: 13px; }
+.explain summary { cursor: pointer; font-weight: 650; color: var(--primary-text); }
+.explain p { margin: 8px 0 0; color: var(--muted); line-height: 1.5; }
+.explain b { color: var(--text); }
+
+/* notification centre: grouped by severity, with the reason under each item */
+.bell-group + .bell-group { border-top: 1px solid var(--border); margin-top: 4px; padding-top: 2px; }
+.bell-head.sev-danger { color: var(--danger); }
+.bell-head.sev-warn { color: var(--warn); }
+.bell-item .grow { display: flex; flex-direction: column; gap: 2px; text-align: left; }
+.bell-why { font-size: 11.5px; color: var(--muted); font-weight: 400; line-height: 1.35; }

@@ -1,7 +1,8 @@
 import { useState, useRef, useMemo } from 'react';
 import { AlertTriangle, Boxes, Crown, TrendingDown, PackageX, Banknote, Receipt, Percent, Undo2 } from 'lucide-react';
 import { Empty, PageTip } from '../ui.jsx';
-import { useStore, today, dayOf, localDate, downloadFile, toCSV, daysUntil, MAIN_BRANCH } from '../store.jsx';
+import { formatQty } from '../money.js';
+import { useStore, today, dayOf, localDate, downloadFile, toCSV, daysUntil, stockValue, batchValue, MAIN_BRANCH } from '../store.jsx';
 import { Stat, Tabs, BarChart, PdfButton } from '../ui.jsx';
 
 const sumBy = (arr, key, val) => {
@@ -31,7 +32,7 @@ function Donut({ parts, fmt }) {
 }
 
 export default function Reports() {
-  const { db, products, fmt } = useStore();
+  const { db, products, fmt, batchesOf } = useStore();
   const [tab, setTab] = useState('sales');
   const pageRef = useRef(null);
   const TAB_NAMES = { profit: 'Profit & Margins', sales: 'Sales Report', products: 'Sales by Product', consumption: 'Consumption (ABC)', purchases: 'Purchase Report', expenses: 'Expenses Report', stock: 'Stock Valuation', income: 'Income Statement' };
@@ -118,7 +119,7 @@ export default function Reports() {
           <table>
             <thead><tr><th>Product</th><th className="num">Qty</th><th className="num">Revenue</th><th className="num">Cost</th><th className="num">Profit</th></tr></thead>
             <tbody>
-              {productRows.map((r) => <tr key={r.product}><td>{r.product}</td><td className="num">{r.qty}</td><td className="num">{fmt(r.revenue)}</td><td className="num">{fmt(r.cost)}</td><td className="num">{fmt(r.profit)}</td></tr>)}
+              {productRows.map((r) => <tr key={r.product}><td>{r.product}</td><td className="num">{formatQty(r.qty)}</td><td className="num">{fmt(r.revenue)}</td><td className="num">{fmt(r.cost)}</td><td className="num">{fmt(r.profit)}</td></tr>)}
               {!productRows.length && <tr><td colSpan={5} className="empty">No sales in this period</td></tr>}
             </tbody>
           </table>
@@ -154,20 +155,23 @@ export default function Reports() {
       )}
 
       {tab === 'stock' && (() => {
+        // 1.5 the same rule as Inventory and the dashboard (store.jsx → batchValue): each batch at its own cost, and only
+        // the batches that have expired count as expired. (Before, every unit was valued at the medicine's latest cost and
+        // a medicine's whole stock counted as expired when its next batch had expired.)
         const inStock = products.filter((p) => p.stock > 0);
-        const cost = inStock.reduce((a, p) => a + p.stock * p.cost, 0);
-        const retail = inStock.reduce((a, p) => a + p.stock * p.price, 0);
-        const expired = inStock.filter((p) => p.expiry && daysUntil(p.expiry) < 0);
+        const sv = stockValue(inStock, batchesOf);
+        const sellable = (p) => batchesOf(p.id).reduce((a, b) => a + (b.qty > 0 && !(b.expiry && daysUntil(b.expiry) < 0) ? b.qty : 0), 0);
+        const retail = inStock.reduce((a, p) => a + sellable(p) * (p.price || 0), 0);
         return (
           <>
             <div className="stats">
-              <Stat label="Stock at cost" value={fmt(cost)} sub={`${inStock.length} items in stock`} />
-              <Stat label="Stock at retail" value={fmt(retail)} />
-              <Stat label="Potential profit" value={fmt(retail - cost)} />
-              <Stat label="Expired stock (cost)" value={fmt(expired.reduce((a, p) => a + p.stock * p.cost, 0))} tone="red" />
+              <Stat label="Stock at cost" value={fmt(sv.value)} sub={`${inStock.length} items · each batch at its cost · expired not included`} />
+              <Stat label="Stock at retail" value={fmt(retail)} sub="unexpired stock at today's prices" />
+              <Stat label="Potential profit" value={fmt(retail - sv.value)} sub="retail less cost, unexpired stock" />
+              <Stat label="Expired stock (cost)" value={fmt(sv.expired)} sub="expired batches still in stock" tone="red" />
             </div>
-            <div className="card"><h3>By formulation</h3><table><tbody>
-              {sumBy(inStock, (p) => p.form || '—', (p) => p.stock * p.cost).map(([k, v]) => <tr key={k}><td>{k}</td><td className="num">{fmt(v)}</td></tr>)}
+            <div className="card"><h3>By formulation <small className="muted">(at cost, expired not included)</small></h3><table><tbody>
+              {sumBy(inStock, (p) => p.form || '—', (p) => batchValue(p, batchesOf).value).map(([k, v]) => <tr key={k}><td>{k}</td><td className="num">{fmt(v)}</td></tr>)}
             </tbody></table></div>
           </>
         );
@@ -248,7 +252,7 @@ function ProfitReport({ sales }) {
         <table>
           <thead><tr><th>{by === 'product' ? 'Medicine' : 'Category'}</th><th className="num">Qty</th><th className="num">Sales</th><th className="num">Cost</th><th className="num">Profit</th><th className="num">Margin</th></tr></thead>
           <tbody>
-            {rows.slice(0, 300).map((r) => <tr key={r.key}><td>{r.name}</td><td className="num">{r.qty}</td><td className="num">{fmt(r.revenue)}</td><td className="num">{fmt(r.cost)}</td><td className={'num ' + (r.profit < 0 ? 'text-danger' : '')}>{fmt(r.profit)}</td><td className={'num ' + low(r.margin)}>{Math.round(r.margin)}%</td></tr>)}
+            {rows.slice(0, 300).map((r) => <tr key={r.key}><td>{r.name}</td><td className="num">{formatQty(r.qty)}</td><td className="num">{fmt(r.revenue)}</td><td className="num">{fmt(r.cost)}</td><td className={'num ' + (r.profit < 0 ? 'text-danger' : '')}>{fmt(r.profit)}</td><td className={'num ' + low(r.margin)}>{Math.round(r.margin)}%</td></tr>)}
             {!rows.length && <Empty colSpan={6}>No sales in this period</Empty>}
           </tbody>
         </table>
@@ -329,7 +333,7 @@ function ConsumptionReport({ sales, from, to }) {
               <tr key={r.id || r.name}>
                 <td><span className={'abc ' + r.cls.toLowerCase()}>{r.cls}</span></td>
                 <td><strong>{r.name}</strong>{r.form ? <><br /><small className="muted">{r.form}</small></> : null}</td>
-                <td className="num">{r.qty}</td><td className="num">{r.perDay.toFixed(1)}</td>
+                <td className="num">{formatQty(r.qty)}</td><td className="num">{r.perDay.toFixed(1)}</td>
                 <td className="num">{fmt(r.value)}</td><td className="num muted">{(r.value / (totalValue || 1) * 100).toFixed(1)}%</td>
                 <td className="num">{r.stock ?? '—'}</td>
                 <td className="num">{r.daysLeft == null ? '—' : <span className={r.daysLeft < 14 ? 'text-warn' : ''}>{Math.round(r.daysLeft)}</span>}</td>
