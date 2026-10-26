@@ -205,8 +205,9 @@ export function diff(prev, next, { tables, local, skip = () => false, noOp = () 
       c.puts.push({ t, rec: r });
       if (local && !noOp(r)) c.ops.push({ op: uuid(), txn, t, id: String(r.id), at: r.updatedAt || now() });
     }
-    // fewer of the old objects remain than there were: something was removed or replaced
-    if (kept + c.puts.filter((p) => p.t === t).length < a.length || b.length < a.length) {
+    // not every old object is still there unchanged: something was edited, removed, or removed and another added in
+    // the same change (counting puts here missed that last case, so the removal was lost)
+    if (kept < a.length) {
       const ids = new Set(b.map((/** @type {any} */ r) => r.id));
       for (const r of a) if (!ids.has(r.id)) {
         c.dels.push({ t, id: String(r.id) });

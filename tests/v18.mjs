@@ -57,7 +57,7 @@ await until(A, () => !!document.querySelector('.sidebar'), 20000); await wait(40
 // ---------- dashboard charts (screenshots for a visual check) ----------
 await go('/'); await wait(1500);
 const plot = await A.$('.trend-svg');
-if (plot) { const bx = await plot.boundingBox(); await A.mouse.move(bx.x + bx.width * 0.7, bx.y + bx.height / 2); await wait(300); }
+if (plot) { await plot.evaluate((el) => el.scrollIntoView({ block: 'center' })); await wait(200); const bx = await plot.boundingBox(); await A.mouse.move(bx.x + bx.width * 0.7, bx.y + bx.height / 2); await wait(300); }
 check('dashboard sales chart shows the day\'s sales on hover', await A.evaluate(() => !!document.querySelector('.trend-tip b') && /UGX|\d/.test(document.querySelector('.trend-tip')?.innerText || '')));
 await A.screenshot({ path: path.join(out, '0-dashboard-light.png') });
 await A.evaluate(() => localStorage.setItem('pharmapos-theme', 'dark')); await A.reload({ waitUntil: 'networkidle2' }); await wait(1500);
