@@ -1,21 +1,20 @@
-import { startWebPolicy, keepsData, trustedDevice } from './webpolicy.js';
+import { startWebPolicy } from './webpolicy.js';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import '@fontsource-variable/inter';
 import App from './App.jsx';
 import { StoreProvider } from './store.jsx';
-import { TabGate } from './tabgate.jsx';
 import { FeedbackHost } from './feedback.jsx';
 import { idbGet, idbKeys } from './idb.js';
 import './styles.css';
 import { applyTheme, startupTheme, savedAccent } from './themes.js';
 import { applyStyle, savedStyle } from './surface.js';
-import { isAndroid } from './platform.js';
-import { startUpdates, registerWorker } from './update.js';
+import { isAndroid, isNative } from './platform.js';
+import { startUpdates } from './update.js';
 import { startDevice } from './device.js';
 import { startCrashReports, reportError } from './crash.js';
 
-// What the browser keeps (session-only by default, or a trusted device): src/webpolicy.js. Runs before anything reads storage
+// The web version is online only and keeps nothing on the computer (src/webpolicy.js); runs before anything reads storage
 startWebPolicy();
 
 // Pharmacy web addresses are /<pharmacy> with no trailing slash; drop a stray one for a clean URL.
@@ -63,11 +62,9 @@ class ErrorBoundary extends React.Component {
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <ErrorBoundary>
-      <TabGate>
-        <StoreProvider>
-          <App />
-        </StoreProvider>
-      </TabGate>
+      <StoreProvider>
+        <App />
+      </StoreProvider>
       <FeedbackHost />
     </ErrorBoundary>
   </React.StrictMode>
@@ -79,7 +76,6 @@ startUpdates();
 startDevice(); // this device's layout, text size, rotation and tray (src/device.js)
 startCrashReports(); // private error reports to the pharmacy's own cloud (src/crash.js)
 
-// The apps and a trusted browser keep the pharmacy for offline work: ask the system not to evict it when space is low.
-// A trusted browser also caches the app itself (public/sw-offline.js); a session-only browser stores nothing (src/webpolicy.js).
-if (keepsData()) navigator.storage?.persist?.().catch(() => {});
-if (trustedDevice() && !import.meta.env.DEV) window.addEventListener('load', () => registerWorker());
+// The Windows and Android apps keep the pharmacy for offline work: ask the system not to evict it when space is low.
+// (The web version is online only: no offline service worker, nothing stored; see src/webpolicy.js.)
+if (isNative) navigator.storage?.persist?.().catch(() => {});

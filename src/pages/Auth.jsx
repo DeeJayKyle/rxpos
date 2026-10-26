@@ -6,12 +6,11 @@ import { Logo, BrandLogo } from '../logo.jsx';
 import { toast } from '../feedback.jsx';
 import { cloudLogin, cloudUrl, forgotPassword, resetPassword, whatsappLink, pharmacyInfo, googleClient, resetWithGoogle, DEFAULT_CLOUD } from '../cloud.js';
 import { isWeb, isNative, pharmacySlugFromUrl } from '../platform.js';
-import { keepsData } from '../webpolicy.js';
 import { PasswordInput } from '../password.jsx';
 
 const LAST_EMAIL = 'rxpos-last-email';
 const REMEMBER_CHOICE = 'rxpos-remember-choice';
-const WEB_OFFLINE = 'No internet connection. This browser keeps nothing on the computer, so it signs in online only. Reconnect, use the Windows or Android app, or make this browser a trusted device (This device → Work offline in this browser) while online.';
+const WEB_OFFLINE = 'No internet connection. The web version of RxPOS works online only and keeps nothing on this computer. Reconnect, or use the Windows or Android app to work offline.';
 // This device passed two-step sign-in for this person, so it may sign them in offline
 const trustKey = (tenant, uid) => `rxpos-2fa-ok:${tenant || 'device'}:${uid}`;
 const trusted = (tenant, uid) => { try { return localStorage.getItem(trustKey(tenant, uid)) === '1'; } catch { return false; } };
@@ -73,12 +72,12 @@ export default function Auth() {
         return;
       } catch (err) {
         if (/more than one pharmacy/i.test(err.message)) { setNeedCode(true); throw err; }
-        if (!keepsData() && networkFailure(err)) throw new Error(WEB_OFFLINE);
+        if (isWeb && networkFailure(err)) throw new Error(WEB_OFFLINE);
         if (!(networkFailure(err) && local && sameStore)) throw err;
         // the cloud can't be reached: fall back to this device's copy of the account
       }
     }
-    if (!keepsData()) throw new Error(WEB_OFFLINE); // a session-only browser keeps nothing, so it can't sign in offline
+    if (isWeb) throw new Error(WEB_OFFLINE); // the web version keeps nothing on the computer, so it can't sign in offline
     if (!local || !sameStore) throw new Error('No internet connection. The first sign-in on a device needs the internet to download your pharmacy.');
     // Offline: verify against this device's own verifier. A device synced before 0.2 may still carry the old synced
     // hash, so accept that too and let verifyOffline upgrade it to a device-salted verifier for next time.
@@ -106,7 +105,7 @@ export default function Auth() {
 
   const finish = async (r, email) => {
     await linkPharmacy({ url, token: r.token, account: email, tenant: r.tenant, slug: r.slug, pharmacy: r.pharmacy });
-    if (keepsData()) await rememberOffline(r.tenant, r.user.id, form.password); // the app (or a trusted browser) can now sign this person in offline for 30 days
+    if (isNative) await rememberOffline(r.tenant, r.user.id, form.password); // the Windows / Android app can now sign this person in offline
     if (twoStep) try { localStorage.setItem(trustKey(r.tenant, r.user.id), '1'); } catch { /* storage blocked */ }
     setTwoStep(null);
     if (isWeb && r.slug && slug !== r.slug) history.replaceState(null, '', '/' + r.slug + location.hash);
@@ -125,7 +124,7 @@ export default function Auth() {
     const e = form.email.trim().toLowerCase();
     if (!e) return null;
     const u = db.users.find((x) => !x.disabled && (x.email === e || (x.username || '').toLowerCase() === e));
-    return keepsData() && u && hasPin(syncCfg.tenant, u.id) ? u : null;
+    return isNative && u && hasPin(syncCfg.tenant, u.id) ? u : null;
   })();
   const signInPin = (e) => { e.preventDefault(); run(async () => {
     if (!pinUser) throw new Error('No PIN is set on this device for that account.');
@@ -230,12 +229,12 @@ export default function Auth() {
               <label className="field"><span>Password</span><PasswordInput autoComplete="current-password" value={form.password} onChange={set('password')} required autoFocus={!!form.email} /></label>
               {(needCode || (isUsername && !slug)) && codeField}
               <div className="row between remember-row">
-                {keepsData()
+                {isNative
                   ? <label className="check small"><input type="checkbox" checked={remember} onChange={(e) => keepChoice(e.target.checked)} /><span>Remember me for 30 days</span></label>
                   : <span className="muted small web-note">Online only · nothing is kept on this computer</span>}
                 <button type="button" className="link-btn small" onClick={() => { setForgot({ stage: 'ask' }); setError(''); }}>Forgot password?</button>
               </div>
-              {keepsData() && remember && <p className="muted small remember-note">Stays signed in on this device. Leave it off on a shared computer.</p>}
+              {isNative && remember && <p className="muted small remember-note">Stays signed in on this device. Leave it off on a shared computer.</p>}
               {error && <div className="error" role="alert">{error}</div>}
               <button className="btn primary block" disabled={busy}><LogIn size={16} />{busy ? 'Signing in…' : 'Sign in'}</button>
               {pinUser && <button type="button" className="btn ghost block" onClick={() => { setPinMode(true); setError(''); }}><ShieldCheck size={16} />Use the PIN for this device</button>}

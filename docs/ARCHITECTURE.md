@@ -13,13 +13,13 @@ how to recover, what was measured and tested, and what is still unverified.
 | State | `src/store.jsx` | Holds the pharmacy in memory; every change is diffed, committed to the device, then shown |
 | Sync client | `src/sync.js` | Sends the outbox, pulls by server cursor, reports a status |
 | Cloud | `worker/index.js` (Cloudflare Worker, D1 or Turso/libSQL) | Authorises and applies each change, keeps an op ledger, serves changes by sequence number |
-| Browser policy | `src/webpolicy.js`, `public/sw-offline.js`, `src/tabgate.jsx` | Session-only browser by default; optional trusted device |
+| Browser policy | `src/webpolicy.js` | The web version is online only and keeps nothing on the computer |
 
 No framework, database engine or state library was replaced. **SQLite was evaluated and not adopted**: the measured
 costs (section 6) are dominated by the first download and rendering, not by IndexedDB; a native SQLite plugin would
 need separate Electron and Capacitor code paths that cannot be exercised in this environment, and record-level
 IndexedDB fixed the actual risks (whole-table rewrites, sale shown before it was stored).
-A memory back end with the same contract serves the session-only browser.
+A memory back end with the same contract serves the web version, which keeps nothing.
 
 ## 2. Device storage contract (`src/contracts.d.ts`, `src/storage.js`)
 
@@ -77,24 +77,20 @@ tenant from the token. A device cannot write into another pharmacy (tested in v3
 - **Returns and reversals** are new movements/records, never edits of the original sale.
 - **Offline sign-in**: a salted PBKDF2 verifier per device and user (never the password), valid for **30 days** after
   the last online sign-in on that device (`src/offline.js`). After that the person must connect once.
-- **Signing out** with changes not yet in the cloud asks first and says how many; in a session-only browser it tries to
+- **Signing out** with changes not yet in the cloud asks first and says how many; in the web version it tries to
   send them, and nothing is deleted without that confirmation.
 - **Switching pharmacy** on a device with unsent changes is refused after trying to send them.
 
-## 5. Browser modes
+## 5. Web version: online only
 
-- **Session-only (default; every existing browser user stays here).** Nothing is kept: pharmacy data in memory, the
-  tab's session in `sessionStorage`, RxPOS's own leftovers cleared at start-up and sign-out. Updates never reload while
-  changes are unsent. Tested in v36.
-- **Trusted device (opt-in on This device → Sync & storage).** For a computer the pharmacy controls. Requires
-  internet, a completed sync and ~60 MB of quota. RxPOS copies the pharmacy onto the device and verifies the copy
-  before switching; the person signs in once more (this creates the offline sign-in verifier); `sw-offline.js` caches
-  the build listed in `version.json`. Readiness ("Ready to work offline") is shown only when the cached files match the
-  manifest, the pharmacy is downloaded and offline sign-in is available. One tab at a time (Web Locks), with a
-  hand-over. New builds install alongside and switch only when no basket or form is in progress. Switching off is
-  refused while changes are waiting, then removes only RxPOS's database, worker, `rxpos*` caches and keys. Tested in v40.
-- Not available offline in any mode: Mobile Money requests, SMS, AI prescription/invoice reading, drug-information
-  look-ups not already cached, Google sign-in. The Mobile Money dialog says so and offers recording the transaction ID.
+The web version stays entirely online, as in 1.5.1: nothing is kept on the computer (pharmacy data in memory, the
+tab's session in `sessionStorage`, RxPOS's own leftovers cleared at start-up and sign-out), it needs the internet,
+and offline work is for the Windows and Android apps. Updates never reload a tab while it holds changes not yet in
+the cloud. Tested in v36. (An opt-in offline mode for browsers was prototyped on this branch and removed on request.)
+
+Not available offline in the apps either: Mobile Money requests, SMS, AI prescription/invoice reading,
+drug-information look-ups not already cached, Google sign-in. The Mobile Money dialog says so and offers recording
+the transaction ID (shown on the receipt as recorded by staff, not confirmed by the network).
 
 ## 6. Migration and recovery
 
@@ -139,7 +135,6 @@ Small: 300 products, 1,000 sales (3,900 records). Large: 2,000 products, 15,000 
 | v37 sales & sync reliability (27) | sale stored before "Sale complete", offline sale survives a restart, reconnect sends it exactly once (with one movement), lost replies (applied but unacknowledged) retried without duplicates, two devices selling the last unit offline (both kept, stock −1, alert), clock 3 days behind still syncs, failed write not shown as complete and basket kept, tenant isolation when switching pharmacy |
 | v38 sync protocol 2 (13) | repeated op skipped, last writer wins for new ops, sale + movement applied together, append-only movements, a cashier's forbidden change refused by key while the rest applies, protocol-1 client, malformed request, expired/forged token → 401, server cursor |
 | v39 storage upgrade (12) | every 1.5 record moved, version 2, 1.5 copy kept, counts recorded, unsent 1.5 sale queued (sent one not re-queued), sent exactly once, restart opens from the new store |
-| v40 trusted browser (16) | refuses offline set-up, verified readiness, offline refresh + sale + refresh, one tab at a time, sent exactly once, switching off cleans up |
 
 Full-suite results for this branch: see section 8a (filled in after the full run).
 
@@ -149,13 +144,9 @@ Full-suite results for this branch: see section 8a (filled in after the full run
   added: they cannot be exercised here). Passwords are never stored; offline sign-in uses a salted PBKDF2 verifier.
 - Windows and Android builds, printers, barcode scanners and cash drawers were not run on real hardware in this
   work; the Electron and Android shells are unchanged.
-- Browser trusted-device storage is not OS-protected; the switch explains this and is meant for pharmacy-owned
-  computers only.
-- An update that arrives while a trusted browser is offline is applied only after it reconnects.
 - Not covered by automated tests: the "restore the copy from before the upgrade" button, a failed write *during* the
-  storage upgrade, returns/reversals syncing (unchanged code paths, exercised by the older v17/v18 suites), sign-out
-  and switching off a trusted browser while changes wait (refusal paths), and the build switch on a trusted browser
-  (checked by reading the code: it switches only when no basket, dialog or filled-in field is open).
+  storage upgrade, returns/reversals syncing (unchanged code paths, exercised by the older v17/v18 suites), and signing out of
+  the web version while changes wait (it asks first; checked by reading the code).
 - `v14-ui` fails when run on its own (it expects an earlier suite to have created the owner account); it passes in a
   full run. This predates 1.6.
 
@@ -164,7 +155,6 @@ Full-suite results for this branch: see section 8a (filled in after the full run
 1. Deploy the Worker first. It creates `sync_ops` on first use (`migrations/0003_sync_ops.sql`) and accepts protocol
    1 and 2, so existing 1.5 apps keep syncing.
 2. Release the apps/web build. Devices upgrade their storage on first start and keep the 1.5 copy for 14 days.
-3. The trusted-browser mode is opt-in per browser; nobody is moved into it.
 
 Rollback: the Worker can be rolled back to 1.5.1 (it ignores the `sync_ops` table; protocol-2 clients then get
 last-writer-wins without dedup). An app rolled back to 1.5.1 reads its kept 1.5 copy (still present for 14 days), so

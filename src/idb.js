@@ -1,10 +1,10 @@
-// IndexedDB on this device: the Windows and Android apps, and a browser the pharmacy has made a trusted device,
-// keep the pharmacy here for offline work. Version 2 (RxPOS 1.6) adds two stores next to the original key/value one:
+// IndexedDB on this device: the Windows and Android apps keep the pharmacy here for offline work (the web version
+// keeps nothing: it uses the memory back end in storage.js). Version 2 (RxPOS 1.6) adds two stores next to the original key/value one:
 //   kv       – settings and small values (sync sign-in, snapshots, drug labels; the 1.5 table copies stay here until
 //              the move to `records` has been verified, see storage.js)
 //   records  – one entry per record, key "<table>|<id>", value { t, r }
 //   outbox   – changes waiting for the cloud, in the order they were made (auto-increment key)
-// In a session-only browser (the web default) nothing is stored: everything lives in memory for this visit, except
+// In the web version nothing is stored: everything lives in memory for this visit, except
 // the cloud sign-in ("sync"), which lives in this tab only so a reload stays signed in (src/webpolicy.js).
 import { keepsData } from './webpolicy.js';
 

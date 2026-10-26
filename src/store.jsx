@@ -1,10 +1,10 @@
 import { createContext, useContext, useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { idbGet, idbSet, idbDel, idbKeys } from './idb.js';
 import { createSync, collectChanges } from './sync.js';
-import { storage, diff, storageError, STORAGE_VERSION, resetStorage } from './storage.js';
+import { storage, diff, storageError, STORAGE_VERSION } from './storage.js';
 import { featureSet, permissionsOf } from './access.js';
-import { platformName, isWeb } from './platform.js';
-import { endWebSession, isLeaving, keepsData, trustedDevice, setTrusted, reloadForMode, purgeWebData, promoteTabItems } from './webpolicy.js';
+import { platformName } from './platform.js';
+import { endWebSession, isLeaving, keepsData } from './webpolicy.js';
 import { connectLive, disconnectLive, onLive } from './live.js';
 import { DEFAULT_CLOUD } from './cloud.js';
 import { setUnsent } from './update.js';
@@ -397,7 +397,7 @@ export function StoreProvider({ children }) {
       loadCatalog().then((cat) => { const prev = dbRef.current; const next = withCatalog(prev, cat); if (next !== prev) setState(next); }).catch(console.error);
       // devices set up on the old free addresses (rxpos.pages.dev, *.workers.dev) move to rxposug.com
       const moved = cfg?.url && /rxpos\.pages\.dev|pharmapos\.pharmapos\.workers\.dev/.test(cfg.url) ? { url: DEFAULT_CLOUD } : {};
-      // session-only browser: nothing is kept between visits, so the pharmacy is downloaded from the start every time
+      // web version: nothing is kept between visits, so the pharmacy is downloaded from the start every time
       // (with a new device id too: the cloud never sends a device its own changes back, and this page holds none of them)
       const fresh = !keepsData() && cfg ? { deviceId: uid(), cursor: 0, pushedAt: '', lastSync: '', epoch: undefined, outboxV2: true } : {};
       setSyncCfgState({ deviceId: uid(), url: '', key: '', pushedAt: '', cursor: 0, branchId: MAIN_BRANCH, ...(cfg || {}), ...moved, ...fresh });
@@ -416,7 +416,7 @@ export function StoreProvider({ children }) {
 
   // Daily on-device snapshot (last 7 kept) so a mistake can be undone even without a hub or manual backup
   useEffect(() => {
-    if (!db || !db.users.length || !keepsData()) return; // a session-only browser keeps no copies on the computer
+    if (!db || !db.users.length || !keepsData()) return; // the web version keeps no copies on the computer
     const key = 'snap:' + today();
     const t = setTimeout(async () => {
       try {
@@ -448,7 +448,7 @@ export function StoreProvider({ children }) {
   const changedAt = useRef(0); // last local change (web: warn before leaving while it isn't in the cloud yet)
   const [pending, setPending] = useState(0); // changes on this device the cloud hasn't accepted yet
   const countPending = useCallback(() => storage().count().then(setPending).catch(() => {}), []);
-  useEffect(() => setUnsent(pending), [pending]); // updates wait while a session-only browser has unsent work
+  useEffect(() => setUnsent(pending), [pending]); // the web version keeps unsent work in memory: updates wait until it is sent
   /**
    * Change the pharmacy. The screen updates at once; the returned promise resolves when the change (and the note to
    * send it to the cloud) is saved on the device, and rejects if it could not be saved. Anything that tells the user
@@ -477,8 +477,8 @@ export function StoreProvider({ children }) {
   const setBranchId = useCallback((id) => saveSyncCfg({ ...cfgRef.current, branchId: id }), [saveSyncCfg]);
 
   /**
-   * Sign in / out. Signing out never deletes changes that haven't reached the cloud: the apps and a trusted browser
-   * keep them and send them later; a session-only browser (which keeps nothing) tries to send them first and, if it
+   * Sign in / out. Signing out never deletes changes that haven't reached the cloud: the Windows and Android apps
+   * keep them and send them later; the web version (which keeps nothing) tries to send them first and, if it
    * can't, asks before letting them go (resolves false when the person chose to stay signed in).
    */
   const setUser = useCallback(async (u, { remember, confirmLoss } = {}) => {
@@ -529,7 +529,7 @@ export function StoreProvider({ children }) {
     return syncRef.current.stop;
   }, [hasCfg, syncCfg?.url, syncCfg?.key, saveSyncCfg]); // eslint-disable-line react-hooks/exhaustive-deps
   const syncNow = useCallback(() => syncRef.current?.run(), []);
-  // a session-only browser keeps nothing: leaving or reloading while a change hasn't reached the cloud would lose it,
+  // the web version keeps nothing: leaving or reloading while a change hasn't reached the cloud would lose it,
   // so the browser asks first
   const sentAt = useRef(0);
   useEffect(() => {
@@ -573,48 +573,6 @@ export function StoreProvider({ children }) {
     await saveSyncCfg(next);
     return other || !cur.lastSync;
   }, [saveSyncCfg, persist, setState]);
-
-  /**
-   * Make this browser a trusted device (offline work). Needs the internet and an up-to-date copy; checks the space
-   * the browser allows; copies what this tab holds, including changes not sent yet, onto the device and reads it back
-   * before switching. Nothing is downloaded onto a computer unless someone chooses this.
-   */
-  const makeTrusted = useCallback(async () => {
-    if (!isWeb || trustedDevice()) return;
-    if (!navigator.onLine || !cfgRef.current?.key || !cfgRef.current?.lastSync) throw new Error('Connect to the internet and wait until RxPOS shows Synced, then try again. The first set-up needs the internet.');
-    const est = await navigator.storage?.estimate?.().catch(() => null);
-    if (est?.quota && est.quota - (est.usage || 0) < 60e6) throw new Error(`This browser lets RxPOS keep only ${Math.round((est.quota - (est.usage || 0)) / 1e6)} MB more, and it needs about 60 MB. Free some space (or use another browser) and try again.`);
-    const waiting = (await storage().outbox()).map(({ key, ...e }) => e); // eslint-disable-line no-unused-vars
-    const snap = dbRef.current, cfg = { ...cfgRef.current, outboxV2: true };
-    setTrusted(true); resetStorage();
-    try {
-      await storage().commit({ ...diff(null, snap, { tables: TABLES, local: false, skip: skipRecord }), settings: snap.settings, tomb: snap._tomb, ops: waiting, reset: true, clearOutbox: true, version: STORAGE_VERSION });
-      await idbSet('sync', cfg);
-      const back = await storage().load();
-      const want = countOf(snap), got = back && countOf(fromRecords(back));
-      if (!got || TABLES.some((t) => got[t] !== want[t]) || (await storage().count()) !== waiting.length) throw new Error('the copy on this device could not be verified');
-      await navigator.storage?.persist?.().catch(() => false);
-    } catch (e) {
-      setTrusted(false); resetStorage();
-      try { indexedDB.deleteDatabase('pharmapos'); } catch { /* not supported */ }
-      throw storageError(e);
-    }
-    promoteTabItems();
-    // sign in once more, online: that is what lets this person sign in here without internet later (offline.js)
-    try { sessionStorage.removeItem(SESSION_KEY); } catch { /* storage blocked */ }
-    reloadForMode();
-  }, []);
-  /** Stop working offline in this browser: only when nothing is waiting for the cloud; then it keeps nothing again. */
-  const leaveTrusted = useCallback(async () => {
-    if (!trustedDevice()) return;
-    await syncRef.current?.run();
-    const left = await storage().count();
-    if (left) throw new Error(`${left} change(s) haven't reached the cloud yet. Connect and let them send first, so nothing is lost.`);
-    try { sessionStorage.setItem('rxpos-tab-sync', JSON.stringify({ ...cfgRef.current, cursor: 0, lastSync: '' })); } catch { /* storage blocked */ } // stay signed in in this tab
-    setTrusted(false);
-    await purgeWebData();
-    reloadForMode();
-  }, []);
 
   // ---------- derived stock: per branch, per batch ----------
   const stockIndex = useMemo(() => {
@@ -682,7 +640,7 @@ export function StoreProvider({ children }) {
   if (!db || !syncCfg) return <div className="loading"><div className="spinner" />Loading RxPOS…</div>;
 
   return (
-    <Ctx.Provider value={{ db, update, pending, storageIssue, makeTrusted, leaveTrusted, upsert, remove, saveSettings, user, setUser, fmt, products, stockIndex, batchesOf,
+    <Ctx.Provider value={{ db, update, pending, storageIssue, upsert, remove, saveSettings, user, setUser, fmt, products, stockIndex, batchesOf,
       branchId, branch, setBranchId, syncCfg, saveSyncCfg, syncStatus, syncNow, linkPharmacy, features, can, day }}>
       {children}
     </Ctx.Provider>

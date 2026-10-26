@@ -9,7 +9,7 @@
 //   outbox      changes waiting for the cloud (see sync.js): list, count, ack (remove after the cloud accepted them),
 //               reject (keep refused ones aside for review: never silently dropped)
 //
-// Two back ends with the same contract: IndexedDB (apps, trusted browser) and memory (session-only browser).
+// Two back ends with the same contract: IndexedDB (Windows and Android apps) and memory (the web version, which keeps nothing).
 // Types: src/contracts.d.ts.
 import { conn, memoryOnly } from './idb.js';
 
@@ -173,12 +173,12 @@ function memoryStorage() {
 }
 
 /** @typedef {ReturnType<typeof idbStorage>} Storage */
-/** The storage for this device (decided once: apps and trusted browsers keep data; session-only browsers don't) */
+/** The storage for this device (decided once: the apps keep data; the web version doesn't) */
 let current;
 /** @returns {Storage} */
 export const storage = () => (current ??= memoryOnly() ? memoryStorage() : idbStorage());
-/** Decide again (a browser switching to or from trusted-device mode) */
-export const resetStorage = () => { current = undefined; };
+/** Decide again (tests) */
+export const resetStorageForTests = () => { current = undefined; };
 
 // ---------------------------------------------------------------------------------------------------------------
 // What changed between two states of the pharmacy. The store never mutates records in place (every edit makes a new
