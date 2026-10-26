@@ -95,7 +95,8 @@ await A.select('form.card select', 'sup-km');
 // the unfinished delivery survives a reload
 await wait(600);
 await A.reload({ waitUntil: 'networkidle2' }); await wait(1500);
-check('an unfinished delivery is kept on the device after a reload', (await A.evaluate(() => document.querySelectorAll('table.lines tbody tr').length)) === 2 && /unfinished delivery/i.test(await A.evaluate(() => document.querySelector('.info-notice')?.innerText || '')));
+// (the web version downloads the pharmacy afresh after a reload, so the delivery comes back once its medicines are in)
+check('an unfinished delivery is kept after a reload', await until(A, () => document.querySelectorAll('table.lines tbody tr').length === 2 && /unfinished delivery/i.test(document.querySelector('.info-notice')?.innerText || ''), 15000));
 // guard rails
 await setVal('table.lines tbody tr:nth-child(2) input[aria-label="Expiry date"]', '2020-01-31');
 await clickText('button', /Receive stock/); await wait(500);

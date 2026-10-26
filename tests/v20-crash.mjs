@@ -4,7 +4,7 @@
 import puppeteer from 'puppeteer-core';
 import fs from 'node:fs';
 import { CHROME } from './chrome.mjs';
-import { asDesktopApp } from './appmode.mjs';
+import { asDesktopApp, APP_ARGS } from './appmode.mjs';
 const [base, ownerKey, out] = process.argv.slice(2);
 fs.mkdirSync(out, { recursive: true });
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -50,7 +50,7 @@ r = await owner('/tenants/' + tid + '/errors');
 check('"Fixed" removes it from the list', !(r.errors || []).some((x) => /Test crash/.test(x.message)));
 // ----- "Remember me" on the sign-in screen (Windows / Android app only; the web version keeps nothing) -----
 {
-  const b2 = await puppeteer.launch({ executablePath: CHROME, headless: true });
+  const b2 = await puppeteer.launch({ executablePath: CHROME, headless: true, args: APP_ARGS });
   const ctx = await b2.createBrowserContext();
   const signIn = async (remember) => {
     const p = await ctx.newPage(); await asDesktopApp(p, base);

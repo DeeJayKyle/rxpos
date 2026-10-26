@@ -5,7 +5,7 @@
 import puppeteer from 'puppeteer-core';
 import fs from 'node:fs';
 import { CHROME } from './chrome.mjs';
-import { asDesktopApp } from './appmode.mjs';
+import { asDesktopApp, APP_ARGS } from './appmode.mjs';
 const [base, ownerKey, out] = process.argv.slice(2);
 fs.mkdirSync(out, { recursive: true });
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -21,7 +21,7 @@ const setVal = (p, sel, val) => p.evaluate((sel, val) => { const i = document.qu
 
 const t = await owner('/tenants', { name: 'Pin Pharmacy', admin: { name: 'Al Admin', email: 'al@test.rx', password: 'al-pass-1234' } });
 const slug = t.tenant.slug, tid = t.tenant.id;
-const b = await puppeteer.launch({ executablePath: CHROME, headless: true });
+const b = await puppeteer.launch({ executablePath: CHROME, headless: true, args: APP_ARGS });
 const P = await (await b.createBrowserContext()).newPage();
 await P.setViewport({ width: 1280, height: 860 });
 await asDesktopApp(P, base);

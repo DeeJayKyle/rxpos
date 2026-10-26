@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Pencil, Trash2, ScanText, Camera, FileUp, Loader2, AlertTriangle, CheckCircle2, X, Plus, RotateCcw, Sparkles } from 'lucide-react';
+import { isWeb } from '../platform.js';
 import { useStore, uid, today, now, put, move, addBatch, audit, downloadFile, toCSV, markupPrice, daysUntil, supplierPrices, MAIN_BRANCH } from '../store.jsx';
 import { CASH } from '../finance.js';
 import { Modal, PdfButton, Tabs, Empty, PageTip } from '../ui.jsx';
@@ -46,7 +47,7 @@ function editLine(l, patch, priceFor) {
 
 /** Receive stock from a supplier: every line becomes a batch (number + expiry) at this branch. */
 export function AddStock() {
-  const { db, products, update, fmt, user, branchId, syncCfg } = useStore();
+  const { db, products, update, fmt, user, branchId, syncCfg, syncStatus } = useStore();
   const location = useLocation();
   const s = db.settings;
   const draftKey = 'rxpos-addstock-draft:' + (syncCfg.tenant || 'device') + ':' + branchId;
@@ -90,18 +91,34 @@ export function AddStock() {
   };
   // Pre-filled from a purchase order (Reorder → Receive), else an unfinished delivery left on this device
   const restoredDraft = useRef(false);
+  const pendingDraft = useRef(null); // a draft whose medicines haven't arrived yet (the web version downloads afresh after a reload)
   const [form, setForm] = useState(() => {
     const po = location.state?.po;
     if (po) return { ...blank(), supplierId: po.supplierId || '', poId: po.id, lines: po.items.map((i) => { const p = products.find((x) => x.id === i.productId); return p ? lineFor(p, { qty: i.qty, ...(i.cost ? { cost: numOrBlank(i.cost), total: numOrBlank(i.cost * i.qty) } : {}) }) : null; }).filter(Boolean) };
     try {
       const d = JSON.parse(localStorage.getItem(draftKey));
-      const lines = (d?.lines || []).filter((l) => l.productId === NEW || products.some((p) => p.id === l.productId));
-      if (lines.length) { restoredDraft.current = true; return { ...blank(), ...d, lines }; }
+      const known = (l) => l.productId === NEW || products.some((p) => p.id === l.productId);
+      const lines = (d?.lines || []).filter(known);
+      // the web version starts empty and downloads the pharmacy: wait until the draft's medicines are there
+      const ready = !isWeb || (d?.lines || []).filter((l) => l.productId).every(known);
+      if (lines.length && ready) { restoredDraft.current = true; return { ...blank(), ...d, lines }; }
+      if (d?.lines?.some((l) => l.productId)) pendingDraft.current = d;
     } catch { /* no draft */ }
     return blank();
   });
+  // …restored as soon as its medicines are known
+  useEffect(() => {
+    const d = pendingDraft.current;
+    if (!d || form.lines.some((l) => l.productId)) return;
+    const known = (l) => l.productId === NEW || products.some((p) => p.id === l.productId);
+    // wait for every medicine on it, or for the download to finish (one that no longer exists is then left out)
+    if (!d.lines.filter((l) => l.productId).every(known) && (syncStatus.state === 'syncing' || !syncStatus.lastSync)) return;
+    const lines = d.lines.filter(known);
+    if (lines.some((l) => l.productId !== NEW)) { pendingDraft.current = null; restoredDraft.current = true; setForm({ ...blank(), ...d, lines }); setRestored(true); }
+  }, [products, syncStatus.state]); // eslint-disable-line react-hooks/exhaustive-deps
   // Keep the unfinished delivery on this device, so a reload, a power cut or a trip to another page loses nothing
   useEffect(() => {
+    if (pendingDraft.current && !form.lines.some((l) => l.productId)) return; // still waiting for the medicines: keep the draft
     const t = setTimeout(() => {
       try {
         if (form.lines.some((l) => l.productId)) localStorage.setItem(draftKey, JSON.stringify(form));
