@@ -16,8 +16,7 @@
 // (+ BREVO_SENDER_NAME) for password emails, and payment/SMS keys for the main pharmacy (MTN_*, AIRTEL_*, AT_*).
 // Other pharmacies' payment/SMS keys are stored per pharmacy (owner console → client → Payments & SMS).
 import CATALOG from '../src/data/catalog.json' with { type: 'json' };
-import { createClient } from '@libsql/client/web';
-import { d1FromLibsql } from './libsql-d1.js';
+import { withDatabase } from './database.js';
 import { isOwner, ownerAuthRoutes, ownerAccount, verifyGoogle, getConfig, ownerMainLogin, ownerMainFail } from './owner-auth.js';
 export { TenantHub } from './live.js';
 import { backup, restore } from './backup.js';
@@ -29,17 +28,6 @@ import { DEFAULT_ROLES } from '../src/access.js';
 // The built-in roles (cashier, dispenser, pharmacist, manager) live only in the app; they aren't stored as records.
 // The server needs their permissions too, so a permission check doesn't wrongly refuse a built-in role (1.1/1.9).
 const DEFAULT_ROLE_PERMS = Object.fromEntries(DEFAULT_ROLES.map((r) => [r.id, new Set(r.permissions)]));
-
-// Database: Cloudflare D1 (binding DB) by default, or libSQL / Turso when DB_BACKEND = "turso"
-// (secrets TURSO_URL + TURSO_AUTH_TOKEN). The rest of the code doesn't know the difference.
-let turso = null;
-function tursoDb(env) {
-  if (env.TURSO_TEST_DB) return env.TURSO_TEST_DB; // tests: a local libSQL file instead of Turso
-  if (!env.TURSO_URL) throw httpError(503, 'TURSO_URL is not set');
-  if (!turso || turso.url !== env.TURSO_URL) turso = { url: env.TURSO_URL, db: d1FromLibsql(createClient({ url: env.TURSO_URL, authToken: env.TURSO_AUTH_TOKEN })) };
-  return turso.db;
-}
-const withDatabase = (env) => ({ ...env, D1: env.DB, DB: env.DB_BACKEND === 'turso' ? tursoDb(env) : env.DB });
 
 const PAGE = 2500;
 const MAX_PUSH = 500;
@@ -492,7 +480,7 @@ async function resetWithGoogle(env, body) {
 }
 
 // ---------- sync ----------
-async function sync(env, body, who) {
+async function sync(env, body, who, ctx) {
   const db = env.DB;
   const tenant = who.tenant;
   const { deviceId, since = 0, changes = [] } = body;
@@ -582,7 +570,10 @@ async function sync(env, body, who) {
   // keep the op ledger small: ops older than 60 days can't be repeats any more (devices retry within minutes or days)
   if (ops.length && Math.random() < 0.01) await db.prepare('DELETE FROM sync_ops WHERE tenant = ?1 AND at < ?2').bind(tenant, new Date(Date.now() - 60 * 864e5).toISOString()).run().catch(() => {});
   // Tell the pharmacy's other devices to pull, while this reply is being prepared (not one after the other)
-  const notified = applied && env.HUB ? env.HUB.get(env.HUB.idFromName(tenant)).fetch('https://hub/notify', { method: 'POST', body: JSON.stringify({ from: deviceId }) }).catch(() => {}) : null;
+  if (applied && env.HUB) {
+    const notified = env.HUB.get(env.HUB.idFromName(tenant)).fetch('https://hub/notify', { method: 'POST', body: JSON.stringify({ from: deviceId }), signal: AbortSignal.timeout(5000) }).catch((e) => console.warn('sync notification failed', e.message));
+    ctx?.waitUntil(notified);
+  }
 
   // The page of changes and the latest sequence number are read in one transaction: one round trip to the database
   // instead of two, and both see the same moment (a record saved in between can't be skipped)
@@ -598,7 +589,6 @@ async function sync(env, body, who) {
   const more = results.length > PAGE;
   const page = more ? results.slice(0, PAGE) : results;
   const cursor = more ? page[page.length - 1].seq : Math.max(maxSeq || 0, Number(since) || 0);
-  await notified;
   // Build the response by hand so records stored as JSON text are not parsed and re-serialised (keeps CPU low)
   const items = page.map((r) => `{"t":${JSON.stringify(r.t)},"id":${JSON.stringify(r.id)},"at":${JSON.stringify(r.at)},"deleted":${r.deleted ? 'true' : 'false'},"rec":${stripUserSecrets(r.t, r.rec)}}`);
   return json(`{"changes":[${items.join(',')}],"cursor":${cursor},"more":${more},"applied":${applied},"refused":${refused},"refusedKeys":${JSON.stringify(refusedKeys)},"dupes":${dupes},"protocol":2,"epoch":${JSON.stringify(epoch)},"tenant":${JSON.stringify(tenant)}}`);
@@ -1255,7 +1245,7 @@ export default {
     if (event.cron !== '0 6 * * 1') { ctx.waitUntil(uptimeCheck(withDatabase(env)).then((r) => console.log('uptime', JSON.stringify(r))).catch((e) => console.log('uptime check failed', e.message))); return; }
     if (env.BREVO_API_KEY) ctx.waitUntil(fetch('https://api.brevo.com/v3/account', { headers: { 'api-key': env.BREVO_API_KEY, Accept: 'application/json' } }).then((r) => console.log('brevo keep-alive', r.status)).catch((e) => console.log('brevo keep-alive failed', e.message)));
   },
-  async fetch(req, rawEnv) {
+  async fetch(req, rawEnv, ctx) {
     const url = new URL(req.url);
     const path = url.pathname;
     if (!path.startsWith('/api/')) return rawEnv.ASSETS.fetch(req);
@@ -1321,7 +1311,7 @@ export default {
       if (!who) return json({ error: 'Not signed in (wrong sync key or expired sign-in)' }, 401);
       const penv = providerEnv(env, who.tenantRow);
 
-      if (path === '/api/sync' && req.method === 'POST') return await sync(env, body, who);
+      if (path === '/api/sync' && req.method === 'POST') return await sync(env, body, who, ctx);
       // A short-lived ticket to open the live WebSocket without putting the sign-in token in the URL (1.2)
       if (path === '/api/live-ticket' && req.method === 'POST') {
         if (!who.uid) return json({ error: 'Not available for this connection' }, 400);
