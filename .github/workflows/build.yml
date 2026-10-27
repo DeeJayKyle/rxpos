@@ -284,7 +284,11 @@ jobs:
             API=$(curl -fsS "https://api.rxposug.com/api/version?t=$(date +%s)" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{console.log(JSON.parse(s).build)}catch{console.log('not-json')}})" || echo none)
             echo "website: $GOT  cloud: $API  wanted: $WANT"
             if [ "$GOT" = "$WANT" ] && [ "$API" = "$WANT" ]; then
-              curl -fsS https://api.rxposug.com/api/health; echo; exit 0
+              HEALTH=$(curl -fsS https://api.rxposug.com/api/health || echo '{}'); echo "$HEALTH"
+              # sign-in must work too: the cloud reports whether it can sign passes (TOKEN_SECRET set and long enough)
+              if echo "$HEALTH" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const h=JSON.parse(s||'{}');process.exit(h.ok&&h.signing!==false?0:1)})"; then exit 0; fi
+              echo "::error::The cloud is live but cannot sign anyone in (Worker secret TOKEN_SECRET missing or under 32 characters). Add it in Cloudflare → pharmapos → Settings → Variables and Secrets, or roll back the Worker."
+              exit 1
             fi
             sleep 15
           done

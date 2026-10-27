@@ -1270,7 +1270,12 @@ export default {
       env = withDatabase(rawEnv);
       await ensureSchema(env.DB);
       await ensureMainTenant(env);
-      if (path === '/api/health') return json({ ok: true, app: 'rxpos-cloud', configured: (env.SYNC_KEY || '').length >= 12, multiPharmacy: true, version: 5, database: env.DB_BACKEND === 'turso' ? 'turso' : 'd1' });
+      if (path === '/api/health') {
+        // signing: whether sign-in passes can be issued (TOKEN_SECRET / SYNC_KEY long enough); the deploy check needs it
+        let signing = true;
+        try { tokenSecret(env); } catch { signing = false; }
+        return json({ ok: signing, app: 'rxpos-cloud', configured: (env.SYNC_KEY || '').length >= 12, signing, multiPharmacy: true, version: 5, database: env.DB_BACKEND === 'turso' ? 'turso' : 'd1' });
+      }
       // Public: latest WHO Disease Outbreak News (cached 3 h); outbreaks in or near Uganda are flagged
       if (path === '/api/health-alerts') return await healthAlerts();
       if (path === '/api/geo') {

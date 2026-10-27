@@ -22,6 +22,7 @@ Keep every login in a password manager (e.g. Bitwarden, free and open source): G
 |---|---|---|
 | Owner key | Owner console master key, backups, admin scripts | `Documents/RxPOS-Data/RxPOS-OWNER-KEY.txt`, Worker secret `OWNER_KEY`, GitHub secret `OWNER_KEY` |
 | Backup passphrase | Opening the nightly backups | `Documents/RxPOS-Data/RxPOS-BACKUP-PASSPHRASE.txt`, GitHub secret `BACKUP_PASSPHRASE` |
+| `TOKEN_SECRET` | Signing every sign-in pass (at least 32 random characters; required since 1.7). Changing it signs every device out once | Worker secret only (Cloudflare → pharmapos → Settings → Variables and Secrets). Check: `https://api.rxposug.com/api/health` shows `"signing": true` |
 | `TURSO_URL`, `TURSO_AUTH_TOKEN` | The Worker reaching the database | Worker secrets only (make a new token at app.turso.tech if needed) |
 | `SYNC_KEY` | Legacy key of the first pharmacy | Worker secret |
 | Android keystore (`ANDROID_KEYSTORE_B64`, password, alias) | Signing every Android build, **required for every Google Play update** | GitHub secrets. **Keep an offline copy**: losing it means the Play app can never be updated |
