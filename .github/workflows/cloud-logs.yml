@@ -48,6 +48,18 @@ jobs:
             if (crypto.createHash('sha256').update(b).digest('hex') !== f.sha256) bad.push({ path: f.path, status: r.status, redirected: r.redirected, url: r.url, listed: f.size, got: b.length, type: r.headers.get('content-type'), encoding: r.headers.get('content-encoding'), text: /html|css|javascript|json|svg/.test(r.headers.get('content-type') || '') ? b.toString('utf8') : '' });
           }
           console.log(v.files.length, 'files checked,', bad.length, 'differ from the list');
+          // the Windows app asks as a Chromium browser (Electron); Cloudflare can change pages for browsers only
+          const html = v.files.find((f) => f.path === 'index.html');
+          for (const [who, headers] of [
+            ['Windows app', { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) RxPOS/1.0.0 Chrome/124.0.6367.243 Electron/30.5.1 Safari/537.36', Accept: '*/*', 'Accept-Encoding': 'gzip, deflate, br', 'Accept-Language': 'en-US' }],
+            ['Chrome', { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36', Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8', 'Accept-Language': 'en-US' }],
+          ]) {
+            const r = await fetch('https://rxposug.com/index.html', { headers });
+            const b = Buffer.from(await r.arrayBuffer());
+            const ok = crypto.createHash('sha256').update(b).digest('hex') === html.sha256;
+            console.log(who, r.status, 'redirected', r.redirected, r.url, 'listed', html.size, 'got', b.length, ok ? 'MATCHES' : 'DIFFERS', 'cache-control', r.headers.get('cache-control'), 'cf-cache', r.headers.get('cf-cache-status'));
+            if (!ok) console.log('  got:', JSON.stringify(b.toString('utf8').slice(0, 3000)));
+          }
           for (const x of bad) {
             console.log(JSON.stringify({ ...x, text: undefined }));
             if (x.text) console.log('  starts:', JSON.stringify(x.text.slice(0, 300)), '\n  ends:', JSON.stringify(x.text.slice(-400)));
