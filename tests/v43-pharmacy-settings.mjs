@@ -1,0 +1,28 @@
+import assert from 'node:assert/strict';
+const [base,key]=process.argv.slice(2);
+let passed=0;
+const post=async(path,body,token=key)=>{const r=await fetch(base+path,{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify(body)});return {status:r.status,body:await r.json()};};
+const get=async(path)=>fetch(base+path,{headers:{Authorization:'Bearer '+key}}).then(r=>r.json());
+const created=(await post('/api/owner/tenants',{name:'Device Settings Test',slug:'device-settings-test',admin:{name:'Test',email:'device@test.invalid',password:'test-password-12345'}})).body;
+const id=created.tenant.id;
+const token=(await post('/api/login',{email:'device@test.invalid',password:'test-password-12345',tenant:id},'')).body.token;
+const sync=async(device,changes=[],since=0)=>post('/api/sync',{deviceId:device,since,changes},token);
+const first=(await sync('device-a')).body;
+const original=first.changes.find(c=>c.t==='settings').rec;
+let r=await post('/api/owner/tenants/'+id,{name:'Shared Owner Name',settings:{...original,name:'Shared Owner Name',phone:'0711111111',currency:'KES',decimals:2,taxRate:16,retailMarkup:40,nonCashBankId:'cash-drawer'}});
+assert.equal(r.status,200);passed++;
+const a=(await sync('device-a',[],first.cursor)).body;
+const b=(await sync('device-b')).body;
+for(const j of [a,b]){const s=j.changes.find(c=>c.t==='settings').rec;assert.equal(s.name,'Shared Owner Name');assert.equal(s.currency,'KES');assert.equal(s.taxRate,16);passed++;}
+const shared=b.changes.find(c=>c.t==='settings').rec;
+r=await sync('device-a',[{t:'settings',id:'settings',rec:{...shared,name:'Leaked device override'},at:new Date().toISOString(),op:'protected-write'}]);
+assert.equal(r.body.refused,1);passed++;
+r=await post('/api/sync',{deviceId:'legacy',changes:[{t:'settings',id:'settings',rec:{...shared,taxRate:0},at:new Date().toISOString()}]},created.syncKey);
+assert.equal(r.body.refused,1);passed++;
+assert.equal((await get('/api/owner/tenants/'+id)).settings.name,'Shared Owner Name');passed++;
+r=await sync('device-a',[{t:'settings',id:'settings',rec:{...shared,receiptFooter:'Allowed footer'},at:new Date(Date.now()+1000).toISOString(),op:'footer-write'}]);
+assert.equal(r.body.applied,1);passed++;
+assert.equal((await get('/api/owner/tenants/'+id)).settings.receiptFooter,'Allowed footer');passed++;
+r=await post('/api/owner/tenants/'+id,{settings:{taxRate:120}});assert.equal(r.status,400);passed++;
+await post('/api/owner/tenants/'+id+'/delete',{confirm:'device-settings-test'});
+console.log(`${passed} passed, 0 failed`);

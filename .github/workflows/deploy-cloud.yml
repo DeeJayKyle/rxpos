@@ -1,0 +1,59 @@
+name: Deploy RxPOS cloud
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Cloud and in-app JavaScript updates do not require rebuilding native installers.
+# Use the same production lock and credentials as the full release workflow.
+concurrency: production-deploy
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Unit tests
+        run: for f in tests/unit-*.mjs; do node "$f" || exit 1; done
+      - run: npm run typecheck
+      - run: npm run build
+      - name: Check deployment credentials
+        run: test -n "$CLOUDFLARE_API_TOKEN" && test -n "$CLOUDFLARE_ACCOUNT_ID"
+      - name: Deploy cloud Worker
+        run: npx wrangler deploy
+      - name: Deploy website and in-app updates
+        run: npx wrangler pages deploy dist --project-name rxpos --branch main --commit-dirty=true
+      - name: Verify production build and health
+        run: |
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          const wanted = JSON.parse(fs.readFileSync('dist/version.json', 'utf8')).build;
+          const get = async (url) => {
+            const r = await fetch(url, { signal: AbortSignal.timeout(10000), cache: 'no-store' });
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+          };
+          for (let i = 0; i < 20; i++) {
+            try {
+              const [web, cloud, health] = await Promise.all([
+                get('https://rxposug.com/version.json?t=' + Date.now()),
+                get('https://api.rxposug.com/api/version?t=' + Date.now()),
+                get('https://api.rxposug.com/api/health'),
+              ]);
+              console.log({ wanted, website: web.build, cloud: cloud.build, healthy: health.ok, signing: health.signing });
+              if (web.build === wanted && cloud.build === wanted && health.ok && health.signing !== false) process.exit(0);
+            } catch (e) { console.log('Waiting for deployment:', e.message); }
+            await new Promise((resolve) => setTimeout(resolve, 15000));
+          }
+          throw new Error('Production did not pass build and health verification');
+          JS

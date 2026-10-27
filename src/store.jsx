@@ -9,6 +9,7 @@ import { connectLive, disconnectLive, onLive } from './live.js';
 import { DEFAULT_CLOUD } from './cloud.js';
 import { setUnsent } from './update.js';
 import { formatMoney } from './money.js';
+import { pharmacyDefaults, overrideKey, readOverrides, writeOverrides, editOverrides, settingsEqual } from './pharmacy-settings.js';
 
 const SESSION_KEY = 'pharmapos-session';
 // "Remember me": the sign-in survives closing the app on this device for 30 days (otherwise it ends with the session)
@@ -353,6 +354,11 @@ const Ctx = createContext(null);
 export function StoreProvider({ children }) {
   const [db, setDb] = useState(null);
   const [syncCfg, setSyncCfgState] = useState(null);
+  const [overrideRevision, setOverrideRevision] = useState(0);
+  const localSettingsKey = overrideKey(syncCfg?.url, syncCfg?.tenant || syncCfg?.slug);
+  const pharmacyOverrides = useMemo(() => readOverrides(localSettingsKey), [localSettingsKey, overrideRevision]);
+  const effectiveSettings = useMemo(() => db ? { ...db.settings, ...pharmacyOverrides } : null, [db?.settings, pharmacyOverrides]);
+  const viewDb = useMemo(() => db ? { ...db, settings: effectiveSettings } : null, [db, effectiveSettings]);
   const [syncStatus, setSyncStatus] = useState({ state: 'off' });
   const [user, setUserState] = useState(() => {
     try {
@@ -471,7 +477,29 @@ export function StoreProvider({ children }) {
   }, [persist, queuePush, setState]);
   const upsert = useCallback((table, rec) => update((d) => { put(d, table, rec); }), [update]);
   const remove = useCallback((table, id) => update((d) => { del(d, table, id); }), [update]);
-  const saveSettings = useCallback((s) => update((d) => { d.settings = { ...s, updatedAt: now() }; }), [update]);
+  const saveSettings = useCallback(async (settings) => {
+    const shared = dbRef.current.settings;
+    const previous = readOverrides(localSettingsKey);
+    const next = editOverrides(shared, { ...shared, ...previous }, settings, previous);
+    try {
+      writeOverrides(localSettingsKey, next);
+      setOverrideRevision((n) => n + 1);
+      const canonical = { ...settings, ...pharmacyDefaults(shared) };
+      // A Pharmacy-tab edit changes no shared record and queues no sync operation.
+      if (!settingsEqual(canonical, { ...shared, ...pharmacyDefaults(shared) })) {
+        await update((d) => { d.settings = { ...canonical, updatedAt: now() }; });
+      }
+    } catch (e) {
+      try { writeOverrides(localSettingsKey, previous); } catch { /* retain the original error */ }
+      setOverrideRevision((n) => n + 1);
+      setStorageIssue(e.message || 'Device settings could not be saved');
+      throw e;
+    }
+  }, [update, localSettingsKey]);
+  const resetPharmacyOverrides = useCallback(() => {
+    try { writeOverrides(localSettingsKey, {}); setOverrideRevision((n) => n + 1); }
+    catch (e) { setStorageIssue(e.message); throw e; }
+  }, [localSettingsKey]);
 
   const branchId = syncCfg?.branchId || MAIN_BRANCH;
   const setBranchId = useCallback((id) => saveSyncCfg({ ...cfgRef.current, branchId: id }), [saveSyncCfg]);
@@ -619,10 +647,10 @@ export function StoreProvider({ children }) {
   }), [db?.products, stockIndex, batchMeta, branchId]);
 
   const fmt = useCallback((n) => {
-    const s = db?.settings || {};
+    const s = effectiveSettings || {};
     // The pharmacy's own locale (default en-UG), not the device's, so grouping/decimals are the same on every device (1.5)
     return formatMoney(n, { currency: s.currency || '', decimals: Number(s.decimals ?? 0), locale: s.locale || 'en-UG' });
-  }, [db?.settings]);
+  }, [effectiveSettings]);
 
   const branch = db?.branches.find((b) => b.id === branchId) || db?.branches[0];
   const features = useMemo(() => (db ? featureSet(db) : {}), [db?.license, db?.settings]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -640,7 +668,7 @@ export function StoreProvider({ children }) {
   if (!db || !syncCfg) return <div className="loading"><div className="spinner" />Loading RxPOS…</div>;
 
   return (
-    <Ctx.Provider value={{ db, update, pending, storageIssue, upsert, remove, saveSettings, user, setUser, fmt, products, stockIndex, batchesOf,
+    <Ctx.Provider value={{ db: viewDb, sharedSettings: db.settings, pharmacyOverrides, resetPharmacyOverrides, update, pending, storageIssue, upsert, remove, saveSettings, user, setUser, fmt, products, stockIndex, batchesOf,
       branchId, branch, setBranchId, syncCfg, saveSyncCfg, syncStatus, syncNow, linkPharmacy, features, can, day }}>
       {children}
     </Ctx.Provider>

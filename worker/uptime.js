@@ -4,7 +4,11 @@
 const SITES = ['https://rxposug.com/', 'https://www.rxposug.com/'];
 const REMIND_MIN = 60; // while still broken, remind once an hour
 
-const withTimeout = (p, ms, what) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(`${what}: no answer in ${ms / 1000} s`)), ms))]);
+async function withTimeout(p, ms, what) {
+  let timer;
+  try { return await Promise.race([p, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(`${what}: no answer in ${ms / 1000} s`)), ms); })]); }
+  finally { clearTimeout(timer); }
+}
 
 async function mail(env, to, subject, text) {
   if (!to || !env.BREVO_API_KEY || !env.BREVO_SENDER_EMAIL) return false;
@@ -16,11 +20,28 @@ async function mail(env, to, subject, text) {
 }
 
 /** Runs the checks; returns { problems, dbOk, mailed }. `test: true` always sends one email (owner console test). */
-export async function uptimeCheck(env, { now = new Date(), test = false } = {}) {
+export async function uptimeCheck(env, { now = new Date(), test = false, sync } = {}) {
   const problems = [];
   let dbOk = true;
   try { await withTimeout(env.DB.prepare('SELECT 1 AS ok').first(), 15000, 'Database (Turso)'); }
   catch (e) { dbOk = false; problems.push('Database (Turso): ' + e.message); }
+  // Exercise the real sync handler with an empty push. The old single-pharmacy
+  // SYNC_KEY may no longer belong to any tenant, so it is not a monitoring login.
+  // Use an active tenant internally; no credentials, records or device cursors
+  // are created, and no business data leaves this invocation.
+  if (dbOk && sync) {
+    try {
+      const tenant = await env.DB.prepare("SELECT id FROM tenants WHERE status = 'active' ORDER BY id LIMIT 1").first('id');
+      if (tenant) {
+        const r = await withTimeout(sync(env,
+          { deviceId: 'uptime-monitor', since: Number.MAX_SAFE_INTEGER, changes: [] },
+          { tenant, role: 'admin', viaKey: true }), 15000, 'Cloud sync');
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const result = await r.json();
+        if (result.protocol !== 2 || !Number.isFinite(result.cursor)) throw new Error('Invalid sync response');
+      }
+    } catch (e) { problems.push('Cloud sync: ' + e.message); }
+  }
   for (const u of SITES) {
     try { const r = await fetch(u, { signal: AbortSignal.timeout(15000), cf: { cacheTtl: 0 } }); if (!r.ok) problems.push(`Website ${u}: HTTP ${r.status}`); }
     catch (e) { problems.push(`Website ${u}: ${e.message}`); }
