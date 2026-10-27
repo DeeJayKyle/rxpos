@@ -20,25 +20,26 @@ async function mail(env, to, subject, text) {
 }
 
 /** Runs the checks; returns { problems, dbOk, mailed }. `test: true` always sends one email (owner console test). */
-export async function uptimeCheck(env, { now = new Date(), test = false } = {}) {
+export async function uptimeCheck(env, { now = new Date(), test = false, sync } = {}) {
   const problems = [];
   let dbOk = true;
   try { await withTimeout(env.DB.prepare('SELECT 1 AS ok').first(), 15000, 'Database (Turso)'); }
   catch (e) { dbOk = false; problems.push('Database (Turso): ' + e.message); }
-  // SELECT 1 can succeed while sync itself hangs. Probe the actual authenticated
-  // route with an empty push and a cursor beyond existing rows: no business data
-  // is written or downloaded, and no device cursor is changed.
-  if (env.SYNC_KEY) {
+  // Exercise the real sync handler with an empty push. The old single-pharmacy
+  // SYNC_KEY may no longer belong to any tenant, so it is not a monitoring login.
+  // Use an active tenant internally; no credentials, records or device cursors
+  // are created, and no business data leaves this invocation.
+  if (dbOk && sync) {
     try {
-      const r = await fetch('https://api.rxposug.com/api/sync', {
-        method: 'POST',
-        headers: { Authorization: 'Bearer ' + env.SYNC_KEY, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ deviceId: 'uptime-monitor', since: Number.MAX_SAFE_INTEGER, changes: [] }),
-        signal: AbortSignal.timeout(15000),
-      });
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      const result = await r.json();
-      if (result.protocol !== 2 || !Number.isFinite(result.cursor)) throw new Error('Invalid sync response');
+      const tenant = await env.DB.prepare("SELECT id FROM tenants WHERE status = 'active' ORDER BY id LIMIT 1").first('id');
+      if (tenant) {
+        const r = await withTimeout(sync(env,
+          { deviceId: 'uptime-monitor', since: Number.MAX_SAFE_INTEGER, changes: [] },
+          { tenant, role: 'admin', viaKey: true }), 15000, 'Cloud sync');
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const result = await r.json();
+        if (result.protocol !== 2 || !Number.isFinite(result.cursor)) throw new Error('Invalid sync response');
+      }
     } catch (e) { problems.push('Cloud sync: ' + e.message); }
   }
   for (const u of SITES) {
