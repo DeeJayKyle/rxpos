@@ -40,6 +40,18 @@ jobs:
           console.log('zip', r.status, r.headers.get('content-type'), 'length header', r.headers.get('content-length'), 'got', buf.length, 'bytes in', Date.now() - t0, 'ms', 'checksum', sha === v.zipSha256 ? 'matches' : 'DIFFERS ' + sha + ' vs ' + v.zipSha256, 'starts', buf.subarray(0, 2).toString());
           const part = await fetch(zipUrl, { headers: { Range: 'bytes=100-' } });
           console.log('resume request', part.status, 'content-range', part.headers.get('content-range'), 'content-length', part.headers.get('content-length'));
+          // every file the Windows app downloads one by one: does it arrive exactly as listed?
+          const bad = [];
+          for (const f of v.files) {
+            const r = await fetch('https://rxposug.com/' + f.path.split('/').map(encodeURIComponent).join('/'));
+            const b = Buffer.from(await r.arrayBuffer());
+            if (crypto.createHash('sha256').update(b).digest('hex') !== f.sha256) bad.push({ path: f.path, status: r.status, redirected: r.redirected, url: r.url, listed: f.size, got: b.length, type: r.headers.get('content-type'), encoding: r.headers.get('content-encoding'), text: /html|css|javascript|json|svg/.test(r.headers.get('content-type') || '') ? b.toString('utf8') : '' });
+          }
+          console.log(v.files.length, 'files checked,', bad.length, 'differ from the list');
+          for (const x of bad) {
+            console.log(JSON.stringify({ ...x, text: undefined }));
+            if (x.text) console.log('  starts:', JSON.stringify(x.text.slice(0, 300)), '\n  ends:', JSON.stringify(x.text.slice(-400)));
+          }
           JS
       - run: npm ci
       - name: Watch the cloud
