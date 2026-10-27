@@ -21,7 +21,10 @@ export const updateState = () => state;
 export function onUpdate(fn) { listeners.add(fn); fn(state); return () => listeners.delete(fn); }
 
 let capgo = null, bundleId = null;
-const plugin = async () => (capgo ??= (await import('@capgo/capacitor-updater')).CapacitorUpdater);
+// Run fn with the Capgo plugin. Never return the plugin itself from an async function or a .then(): Capacitor's plugin
+// proxy answers every property, `then` included, so awaiting it calls the native "then" and the await never finishes
+// (Android 1.0 hung on "Downloading…" and never told the updater it had started fine).
+const withPlugin = async (fn) => fn((capgo ??= await import('@capgo/capacitor-updater')).CapacitorUpdater);
 const versionUrl = () => (isAndroid ? DEFAULT_CLOUD + '/api/version' : './version.json');
 
 /** Ask for the newest build; download it when it is newer than this one */
@@ -43,19 +46,20 @@ export async function checkForUpdate() {
     if ((latest.shell || 1) > SHELL) return set({ status: 'shell', latest }), state;
     if (isAndroid) {
       set({ status: 'downloading', latest, percent: 0 });
-      const u = await plugin();
-      // Capgo waits for its download worker with no time limit, and the worker retries some failures for ever: give up
-      // after DOWNLOAD_LIMIT so the app shows why and tries again at the next check instead of "Downloading…" for ever
-      const progress = await u.addListener('download', (e) => { if (e?.percent > (state.percent || 0)) set({ percent: e.percent }); }).catch(() => null);
-      let timer;
-      try {
-        const b = await Promise.race([
-          u.download({ url: `${DEFAULT_CLOUD}/${latest.zip}`, version: String(latest.build), checksum: latest.zipSha256 }),
-          new Promise((_, no) => { timer = setTimeout(() => no(new Error(`The download stopped at ${state.percent || 0}%. It will try again by itself; check the internet if this repeats.`)), DOWNLOAD_LIMIT); }),
-        ]);
-        bundleId = b.id;
-        await u.next({ id: b.id }); // used at the next start even if it is never idle before then
-      } finally { clearTimeout(timer); progress?.remove(); }
+      await withPlugin(async (u) => {
+        // Capgo waits for its download worker with no time limit, and the worker retries some failures for ever: give up
+        // after DOWNLOAD_LIMIT so the app shows why and tries again at the next check instead of "Downloading…" for ever
+        const progress = await u.addListener('download', (e) => { if (e?.percent > (state.percent || 0)) set({ percent: e.percent }); }).catch(() => null);
+        let timer;
+        try {
+          const b = await Promise.race([
+            u.download({ url: `${DEFAULT_CLOUD}/${latest.zip}`, version: String(latest.build), checksum: latest.zipSha256 }),
+            new Promise((_, no) => { timer = setTimeout(() => no(new Error(`The download stopped at ${state.percent || 0}%. It will try again by itself; check the internet if this repeats.`)), DOWNLOAD_LIMIT); }),
+          ]);
+          bundleId = b.id;
+          await u.next({ id: b.id }); // used at the next start even if it is never idle before then
+        } finally { clearTimeout(timer); progress?.remove(); }
+      });
     }
     set({ status: 'ready', latest });
   } catch (e) {
@@ -69,7 +73,7 @@ export async function applyUpdate() {
   if (state.status !== 'ready') return;
   try { localStorage.setItem('rxpos-updated-from', String(BUILD)); } catch { /* ignore */ }
   if (isElectron) window.rxposShell?.apply();
-  else if (isAndroid && bundleId) await (await plugin()).set({ id: bundleId });
+  else if (isAndroid && bundleId) await withPlugin((u) => u.set({ id: bundleId }));
   else location.reload();
 }
 
@@ -99,7 +103,7 @@ let started = false;
 export function startUpdates() {
   if (started || !BUILD) return;
   started = true;
-  if (isAndroid) plugin().then((u) => u.notifyAppReady()).catch(() => {});
+  if (isAndroid) withPlugin((u) => u.notifyAppReady()).catch(() => {});
   if (isElectron) {
     window.rxposShell?.ready();
     window.rxposShell?.onUpdateReady((info) => set({ status: 'ready', latest: info }));

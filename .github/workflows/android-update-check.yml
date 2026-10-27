@@ -1,8 +1,8 @@
 name: Android update check
 
-# Diagnosis: does an installed Android app update itself from the live site? Builds the app as an older build, runs it
-# on an emulator, lets it find and download the live update (public files at rxposug.com, nothing is changed there)
-# and prints the updater's log. No sign-in, no pharmacy data.
+# Does an installed Android app update itself? Builds the app twice from this commit — an "installed" older build and a
+# "newer" build — serves the newer one from this runner (as rxposug.com would), runs the older APK on an emulator and
+# prints the updater's log: found, downloaded, switched, started fine (no rollback). Touches nothing live; no data.
 on:
   workflow_dispatch:
 
@@ -24,25 +24,49 @@ jobs:
           distribution: temurin
           java-version: 17
       - run: npm ci
-      - name: Build as an older build (the build number is the last commit's time; this commit stays on the runner)
+      - name: Point the app at this runner instead of rxposug.com
         run: |
-          git -c user.name=ci -c user.email=ci@example.invalid commit -q --allow-empty -m "older build" --date="2026-10-27T06:25:00Z"
-          GIT_COMMITTER_DATE="2026-10-27T06:25:00Z" git -c user.name=ci -c user.email=ci@example.invalid commit -q --amend --no-edit --allow-empty --date="2026-10-27T06:25:00Z"
+          sed -i "s#export const DEFAULT_CLOUD = 'https://rxposug.com';#export const DEFAULT_CLOUD = 'http://localhost:8080';#" src/cloud.js
+          grep -n "DEFAULT_CLOUD =" src/cloud.js
+      - name: Newer build (served by the runner)
+        run: |
           npm run build
-          node -p "require('./dist/version.json').label"
-      - name: Android project (as in build.yml)
+          mkdir -p served/api && cp -r dist/. served/ && cp dist/version.json served/api/version
+          node -p "'newer: ' + require('./dist/version.json').label"
+      - name: Older build (the installed app; the build number is the last commit's time, this commit stays on the runner)
+        run: |
+          GIT_COMMITTER_DATE="2026-10-27T06:25:00Z" git -c user.name=ci -c user.email=ci@example.invalid commit -q --allow-empty -m "older build" --date="2026-10-27T06:25:00Z"
+          npm run build
+          node -p "'installed: ' + require('./dist/version.json').label"
+      - name: Android project (as in build.yml, plus plain http to the runner)
         run: |
           rm -rf dist/updates
           npx cap add android
           npx cap sync android
           printf '\nallprojects { configurations.all { resolutionStrategy { force "androidx.work:work-runtime:2.9.1" } } }\n' >> android/build.gradle
           sed -i 's/minSdkVersion = 22/minSdkVersion = 23/' android/variables.gradle
+          sed -i 's#<application#<application android:usesCleartextTraffic="true"#' android/app/src/main/AndroidManifest.xml
           cd android && chmod +x gradlew && ./gradlew assembleDebug --no-daemon -q
+      - name: Serve the newer build on port 8080
+        run: |
+          cat > serve.mjs <<'JS'
+          import http from 'node:http'; import fs from 'node:fs'; import path from 'node:path';
+          const root = path.resolve('served');
+          http.createServer((req, res) => {
+            const p = path.join(root, decodeURIComponent(new URL(req.url, 'http://x').pathname));
+            console.log(new Date().toISOString(), req.method, req.url);
+            if (!p.startsWith(root) || !fs.existsSync(p) || fs.statSync(p).isDirectory()) { res.writeHead(404, { 'Access-Control-Allow-Origin': '*' }); return res.end(); }
+            res.writeHead(200, { 'Access-Control-Allow-Origin': '*', 'Content-Type': p.endsWith('.zip') ? 'application/zip' : p.endsWith('version') || p.endsWith('.json') ? 'application/json' : 'application/octet-stream', 'Content-Length': fs.statSync(p).size });
+            fs.createReadStream(p).pipe(res);
+          }).listen(8080);
+          JS
+          nohup node serve.mjs > served.log 2>&1 &
+          sleep 1 && curl -fs http://localhost:8080/api/version | head -c 200 && echo
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
-      - name: Run on an emulator and watch the update
+      - name: Run the installed app on an emulator and watch it update
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 34
@@ -50,12 +74,17 @@ jobs:
           target: google_apis
           disable-animations: true
           script: |
+            adb reverse tcp:8080 tcp:8080
             adb install -r android/app/build/outputs/apk/debug/app-debug.apk
             adb logcat -c
             adb shell monkey -p io.github.rxpos -c android.intent.category.LAUNCHER 1
-            sleep 330
+            sleep 300
             adb logcat -d > logcat.txt || true
-            echo "---- updater and WorkManager ----"
-            grep -iE "CapacitorUpdater|Capacitor-updater|capgo|WM-|DownloadService|Capacitor/Console" logcat.txt | grep -viE "chromium.*Uncaught \(in promise\) undefined" | tail -250 || true
-            echo "---- bundle folder ----"
-            adb shell run-as io.github.rxpos ls -laR files 2>/dev/null | head -40 || true
+            echo "---- requests the app made to the update server ----"
+            cat served.log
+            echo "---- updater ----"
+            grep -E "CapgoUpdater|Capacitor/Console" logcat.txt | grep -v "Capacitor/Console.*CapgoUpdater" | tail -150 || true
+            echo "---- verdict ----"
+            if grep -q 'then()" is not implemented' logcat.txt; then echo "FAIL: a plugin was awaited (then() not implemented)"; else echo "ok: no plugin awaited"; fi
+            grep -cE "download.*(succeeded|complete)|Download succeeded" logcat.txt || true
+            grep -iE "rollback|reset to builtin|Resetting|notifyAppReady" logcat.txt | grep CapgoUpdater | tail -20 || true

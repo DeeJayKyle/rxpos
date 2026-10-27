@@ -4,9 +4,10 @@ import { isAndroid, isElectron } from './platform.js';
 import { deviceSettings } from './device.js';
 
 let ln = null, androidPerm = 'default', nextId = 1;
-const plugin = async () => (ln ??= (await import('@capacitor/local-notifications')).LocalNotifications);
+// fn gets the plugin; never return the plugin itself from an async function (see withPlugin in update.js)
+const withPlugin = async (fn) => fn((ln ??= await import('@capacitor/local-notifications')).LocalNotifications);
 
-if (isAndroid) plugin().then((p) => p.checkPermissions()).then((r) => { androidPerm = r.display === 'granted' ? 'granted' : r.display === 'denied' ? 'denied' : 'default'; }).catch(() => {});
+if (isAndroid) withPlugin((p) => p.checkPermissions()).then((r) => { androidPerm = r.display === 'granted' ? 'granted' : r.display === 'denied' ? 'denied' : 'default'; }).catch(() => {});
 
 export function notifyPermission() {
   if (isAndroid) return androidPerm;
@@ -14,7 +15,7 @@ export function notifyPermission() {
 }
 export async function askNotifyPermission() {
   try {
-    if (isAndroid) { const r = await (await plugin()).requestPermissions(); androidPerm = r.display === 'granted' ? 'granted' : 'denied'; return androidPerm; }
+    if (isAndroid) { const r = await withPlugin((p) => p.requestPermissions()); androidPerm = r.display === 'granted' ? 'granted' : 'denied'; return androidPerm; }
     if ('Notification' in window) return await Notification.requestPermission();
   } catch { /* not supported here */ }
   return 'denied';
@@ -26,7 +27,7 @@ export async function notifyOS(title, body = '', { tag = title, always = false }
   try {
     if (isAndroid) {
       if (androidPerm !== 'granted') return;
-      await (await plugin()).schedule({ notifications: [{ id: nextId++ % 100000, title, body: String(body).slice(0, 240), group: 'rxpos', autoCancel: true }] });
+      await withPlugin((p) => p.schedule({ notifications: [{ id: nextId++ % 100000, title, body: String(body).slice(0, 240), group: 'rxpos', autoCancel: true }] }));
       return;
     }
     if (!('Notification' in window) || Notification.permission !== 'granted') return;
@@ -42,7 +43,7 @@ export function setBadge(n) {
   try {
     if (isElectron) window.rxposShell?.setBadge?.(count, count ? badgeImage(count) : '');
     else if ('setAppBadge' in navigator) (count ? navigator.setAppBadge(count) : navigator.clearAppBadge()).catch(() => {});
-    if (isAndroid && !count) plugin().then((p) => p.removeAllDeliveredNotifications()).catch(() => {});
+    if (isAndroid && !count) withPlugin((p) => p.removeAllDeliveredNotifications()).catch(() => {});
   } catch { /* not supported */ }
 }
 
