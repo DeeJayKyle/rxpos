@@ -60,7 +60,9 @@ const sha256 = (buf) => crypto.createHash('sha256').update(buf).digest('hex');
 /** Write version.json and the update archive into a finished dist folder */
 export function writeReleaseFiles(dist, info, version) {
   fs.rmSync(path.join(dist, 'updates'), { recursive: true, force: true });
-  const names = walk(dist).filter((f) => f !== 'version.json' && !f.startsWith('updates/')).sort();
+  // Cloudflare Pages settings files (_headers, _redirects, _routes.json …) are read by the host and never served as
+  // files: listing them made every Windows update fail ("_headers arrived damaged", the site's page came back instead)
+  const names = walk(dist).filter((f) => f !== 'version.json' && !f.startsWith('updates/') && !/^_[^/]*$/.test(f)).sort();
   const files = names.map((name) => { const data = fs.readFileSync(path.join(dist, name)); return { path: name, size: data.length, sha256: sha256(data), data }; });
   const archive = zip(files.map((f) => ({ name: f.path, data: f.data })));
   const zipName = `updates/web-${info.build}.zip`;

@@ -6,6 +6,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
+import http from 'node:http';
 import puppeteer from 'puppeteer-core';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const S = path.join(root, 'tests', '.state', 'electron-update'); // (arguments from run-all.mjs are not needed)
@@ -23,7 +24,16 @@ const sha = (s) => crypto.createHash('sha256').update(s).digest('hex');
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 let pass = 0, fail = 0;
 const check = (n, ok, x = '') => { ok ? pass++ : fail++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${n} ${x}`); };
-const srv = spawn('python3', ['-m', 'http.server', '8799', '-d', S + '/srv'], { stdio: 'ignore' });
+// Serves the newer build the way Cloudflare Pages serves rxposug.com: host settings files (_headers …) are never served
+// as files, and an unknown address gets the app's page (index.html, status 200). A plain file server hid that every
+// Windows update failed on _headers.
+const srvRoot = S + '/srv';
+const srv = http.createServer((req, res) => {
+  const p = decodeURIComponent(new URL(req.url, 'http://x').pathname).replace(/^\/+/, '');
+  let file = path.join(srvRoot, p || 'index.html');
+  if (/(^|\/)_[^/]*$/.test(p) || !file.startsWith(srvRoot) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) file = path.join(srvRoot, 'index.html');
+  res.writeHead(200); res.end(fs.readFileSync(file));
+}).listen(8799);
 const electron = path.join(root, 'node_modules', 'electron', 'dist', process.platform === 'win32' ? 'electron.exe' : 'electron');
 const cmd = process.platform === 'linux' ? ['xvfb-run', ['-a', electron]] : [electron, []];
 const start = () => spawn(cmd[0], [...cmd[1], ...(process.getuid?.() === 0 ? ['--no-sandbox'] : []), '--remote-debugging-port=9333', root],
@@ -67,5 +77,5 @@ try {
   check('the broken build is not downloaded again', again.status === 'current', JSON.stringify(again));
   b.disconnect();
 } catch (e) { console.log('ERROR', e.message); fail++; console.log(log.slice(-1500)); }
-stop(el); srv.kill();
+stop(el); srv.close();
 console.log(`\n${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0);
