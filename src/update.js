@@ -69,12 +69,16 @@ export async function checkForUpdate() {
 }
 
 /** Switch to the downloaded build now */
+let applying = false;
 export async function applyUpdate() {
-  if (state.status !== 'ready') return;
+  if (state.status !== 'ready' || applying) return; // the idle timer and leaving the app can fire together
+  applying = true;
   try { localStorage.setItem('rxpos-updated-from', String(BUILD)); } catch { /* ignore */ }
-  if (isElectron) window.rxposShell?.apply();
-  else if (isAndroid && bundleId) await withPlugin((u) => u.set({ id: bundleId }));
-  else location.reload();
+  try {
+    if (isElectron) window.rxposShell?.apply();
+    else if (isAndroid && bundleId) await withPlugin((u) => u.set({ id: bundleId }));
+    else location.reload();
+  } finally { applying = false; }
 }
 
 /** The "Update now" button: get the newest build and switch to it straight away (the open sale and drafts are kept) */
