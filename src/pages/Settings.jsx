@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Store, Printer, MessageSquareText, Cloud, DatabaseBackup, CheckCircle2, XCircle, Smartphone, CreditCard, Plus, Trash2, RotateCcw, ShieldAlert, BellRing, MapPin, Search, Thermometer, RefreshCw } from 'lucide-react';
 import { useStore, uid, audit, downloadFile, today, defaultSettings, DEFAULT_PAYMENT_METHODS } from '../store.jsx';
 import { Tabs } from '../ui.jsx';
@@ -6,26 +6,36 @@ import { ask, toast } from '../feedback.jsx';
 import { cloudConfig, daySummary } from '../cloud.js';
 import { searchPlaces, DEFAULT_PLACE, storageLimits } from '../weather.js';
 import { isWeb, platformName } from '../platform.js';
+import { pharmacyDefaults, validatePharmacyDefaults } from '../pharmacy-settings.js';
 import { Updates } from './Device.jsx';
 
 export default function Settings() {
-  const { db, update, saveSettings, user, syncCfg, syncStatus, syncNow, branchId, setBranchId, can, features } = useStore();
+  const { db, update, saveSettings, user, syncCfg, syncStatus, syncNow, branchId, setBranchId, can, features, sharedSettings, pharmacyOverrides, resetPharmacyOverrides } = useStore();
   const [tab, setTab] = useState('general');
   const [s, setS] = useState(db.settings);
+  const settingsBaseline = useRef(db.settings);
+  useEffect(() => {
+    const old = settingsBaseline.current;
+    setS((draft) => ({ ...db.settings, ...Object.fromEntries(Object.entries(draft).filter(([k, v]) => JSON.stringify(v) !== JSON.stringify(old[k]))) }));
+    settingsBaseline.current = db.settings;
+  }, [db.settings]);
   const [cfg, setCfg] = useState(null);
   const [placeQ, setPlaceQ] = useState('');
   const [places, setPlaces] = useState(null);
 
   useEffect(() => { if (syncCfg.url && syncCfg.key) cloudConfig(syncCfg).then(setCfg).catch((e) => setCfg({ error: e.message })); }, [syncCfg.url, syncCfg.key]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const submitSettings = (e) => {
+  const submitSettings = async (e) => {
     e?.preventDefault();
     const num = (k, d = 0) => (s[k] === '' || s[k] == null ? d : Number(s[k]) || 0);
-    saveSettings({ ...s, taxRate: num('taxRate'), decimals: num('decimals'), retailMarkup: num('retailMarkup', 50), wholesaleMarkup: num('wholesaleMarkup', 25), priceRound: num('priceRound'), minMargin: num('minMargin', 20),
+    const next = { ...s, taxRate: num('taxRate'), decimals: num('decimals'), retailMarkup: num('retailMarkup', 50), wholesaleMarkup: num('wholesaleMarkup', 25), priceRound: num('priceRound'), minMargin: num('minMargin', 20),
       expiryWarnDays: num('expiryWarnDays', 90), paperWidth: num('paperWidth', 80), leadDays: num('leadDays', 7), coverDays: num('coverDays', 30), deadDays: num('deadDays', 90),
-      idleMinutes: num('idleMinutes', 3), quietFrom: num('quietFrom', 21), quietTo: num('quietTo', 7) });
-    update((d) => audit(d, user, 'Settings changed', tab, branchId));
-    toast('Settings saved. Every device gets them at the next sync.');
+      idleMinutes: num('idleMinutes', 3), quietFrom: num('quietFrom', 21), quietTo: num('quietTo', 7) };
+    try {
+      await saveSettings(tab === 'general' ? { ...db.settings, ...validatePharmacyDefaults(next) } : next);
+      if (tab !== 'general') await update((d) => audit(d, user, 'Settings changed', tab, branchId));
+      toast(tab === 'general' ? 'Saved on this device only.' : 'Settings saved. Shared preferences sync to other devices.');
+    } catch (e) { toast(e.message, 'error'); }
   };
 
   const field = (k, label, type = 'text', extra = {}) => (
@@ -43,7 +53,9 @@ export default function Settings() {
 
       {tab === 'general' && (
         <form className="card" onSubmit={submitSettings}>
-          <h3><Store size={18} />Pharmacy details</h3>
+          <h3><Store size={18} />Pharmacy details · this device</h3>
+          <p className="muted small">Owner sets the shared defaults for every device. Edits here override them only on this device until you reset them. {isWeb && 'In the web version, overrides last for this browser tab’s session.'}</p>
+          <p className="muted small">{Object.keys(pharmacyOverrides).length} local override(s) · Owner pharmacy name: {sharedSettings.name}</p>
           <div className="form-grid">
             {field('name', 'Pharmacy name (shown on receipts)')}
             {field('phone', 'Phone')}
@@ -72,7 +84,7 @@ export default function Settings() {
             )}
           </div>
           <p className="muted small">Branches, features and administrator accounts are managed by your RxPOS provider.</p>
-          <div className="form-actions"><button className="btn primary">Save</button></div>
+          <div className="form-actions"><button type="button" className="btn ghost" onClick={() => { try { resetPharmacyOverrides(); setS({ ...db.settings, ...pharmacyDefaults(sharedSettings) }); toast('Owner defaults restored on this device.'); } catch (e) { toast(e.message, 'error'); } }} disabled={!Object.keys(pharmacyOverrides).length}><RotateCcw size={16} />Use Owner defaults</button><button className="btn primary">Save for this device</button></div>
         </form>
       )}
 
@@ -227,7 +239,7 @@ export default function Settings() {
           <h3><DatabaseBackup size={18} />Backup</h3>
           <p className="muted">All data is kept on this device and in the RxPOS cloud. You can also download a copy to keep on a USB stick or Google Drive.</p>
           <div className="row gap">
-            <button className="btn primary" onClick={() => downloadFile(`rxpos-backup-${today()}.json`, JSON.stringify(db), 'application/json')}>Download a backup</button>
+            <button className="btn primary" onClick={() => downloadFile(`rxpos-backup-${today()}.json`, JSON.stringify({ ...db, settings: sharedSettings }), 'application/json')}>Download a backup</button>
           </div>
           {can('data.reset') && (
             <div className="danger-zone">
@@ -236,7 +248,7 @@ export default function Settings() {
                 <p className="muted small">Receipt, stock, message, alert and payment-method settings go back to factory defaults. Pharmacy name, address, phone, TIN and licence are kept. To erase or restore a pharmacy's data, contact your RxPOS provider.</p>
                 <button type="button" className="btn ghost" onClick={async () => {
                   if (!(await ask({ title: 'Restore default settings?', message: 'All settings except your pharmacy details go back to factory defaults on every device.', confirmText: 'Restore defaults', danger: true }))) return;
-                  const keep = Object.fromEntries(['name', 'address', 'phone', 'tin', 'license', 'currency', 'adminWhatsApp', 'weatherPlace'].map((k) => [k, db.settings[k]]));
+                  const keep = Object.fromEntries([...Object.keys(pharmacyDefaults()), 'adminWhatsApp', 'weatherPlace'].map((k) => [k, db.settings[k]]));
                   const next = { ...defaultSettings(), ...keep };
                   saveSettings(next); setS(next);
                   update((d) => audit(d, user, 'Settings restored to defaults', '', branchId));
