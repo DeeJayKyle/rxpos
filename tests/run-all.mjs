@@ -56,6 +56,7 @@ const SUITES = [
   ['layout on every screen', 'v35-layout.mjs', ['.output/v35']],
   ['web is online only', 'v36-web-online.mjs', ['.output/v36']],
   ['sales & sync reliability', 'v37-reliability.mjs', ['.output/v37']],
+  ['device pharmacy settings', 'v43-pharmacy-settings.mjs', []],
   ['sync protocol 2', 'v38-sync-protocol.mjs', []],
   ['storage upgrade 1.5 → 1.6', 'v39-migration.mjs', ['.output/v39']],
   ['reports, colour & drafts', 'v41-reports-drafts.mjs', ['.output/v41']],
