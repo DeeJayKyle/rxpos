@@ -24,6 +24,10 @@ const LIVE_SAFETY = 30000; // live connection up: slow safety-net pull only
 const BACKGROUND = 60000;
 const PUSH_BATCH = 400;
 export const PROTOCOL = 2;
+// Bumped when every installed app must download the whole pharmacy again once and merge it (nothing is deleted, the
+// newer copy of each record wins, unsent changes are sent first). 1: Windows apps found missing deliveries, batches and
+// medicine updates made on other devices since 19 Oct 2026, while the cloud had them all.
+export const FULL_PULL = 1;
 const MAX_BACKOFF = 60000;
 /** Wait before retry n (1, 2, …): 2 s, 4 s, 8 s … up to a minute, ±50 % so many devices don't retry in step */
 export const backoff = (n, rand = Math.random) => Math.round(Math.min(MAX_BACKOFF, 1000 * 2 ** n) * (0.5 + rand()));
@@ -43,7 +47,7 @@ export function collectChanges(db, since) {
     out.push({ t, id: r.id, rec, at: r.updatedAt });
   }
   for (const x of db._tomb) if (!since || x.at > since) out.push({ t: x.t, id: x.id, deleted: true, at: x.at });
-  if (!since || db.settings.updatedAt > since) out.push({ t: 'settings', id: 'settings', rec: db.settings, at: db.settings.updatedAt });
+  if ((!since || db.settings.updatedAt > since) && db.settings.updatedAt !== BASE_AT) out.push({ t: 'settings', id: 'settings', rec: db.settings, at: db.settings.updatedAt }); // untouched defaults are never sent
   return out;
 }
 
@@ -133,10 +137,11 @@ export function createSync({ getDb, getCfg, saveCfg, applyRemote, onStatus, stor
       const c = getCfg();
       const batches = groupOutbox(await store.outbox());
       const total = batches.reduce((a, b) => a + b.length, 0);
-      let cursor = c.cursor || 0, epoch = c.epoch, i = 0, sent = 0, pulled = 0, refused = 0;
+      const full = (c.fullPull || 0) < FULL_PULL; // download everything from the start this time
+      let cursor = full ? 0 : c.cursor || 0, epoch = c.epoch, i = 0, sent = 0, pulled = 0, refused = 0;
       for (;;) {
         const batch = batches[i] || [];
-        const r = await post(c.url, c.key, { deviceId: c.deviceId, since: cursor, changes: toChanges(batch, getDb()), v: PROTOCOL });
+        const r = await post(c.url, c.key, { deviceId: c.deviceId, since: cursor, changes: toChanges(batch, getDb()), v: PROTOCOL, ...(full ? { all: true } : {}) });
         i++;
         // the request was applied as a whole: refused changes are kept for review, the rest leave the outbox
         if (batch.length) {
@@ -156,7 +161,7 @@ export function createSync({ getDb, getCfg, saveCfg, applyRemote, onStatus, stor
         if (i >= batches.length && !r.more) break;
         onStatus({ state: 'syncing', first: !c.lastSync, progress: i < batches.length ? `Sending ${sent.toLocaleString()} of ${total.toLocaleString()} changes` : `Downloading… ${pulled.toLocaleString()} records`, ...(await counts()) });
       }
-      const next = { ...getCfg(), lastSync: now(), lastError: '' };
+      const next = { ...getCfg(), lastSync: now(), lastError: '', ...(full ? { fullPull: FULL_PULL } : {}) };
       await saveCfg(next);
       failures = 0; retryAt = 0;
       result = { state: 'ok', lastSync: next.lastSync, pushed: sent, pulled, refused, ...(await counts()) };
@@ -200,6 +205,8 @@ export function createSync({ getDb, getCfg, saveCfg, applyRemote, onStatus, stor
 
   return {
     run,
+    /** "Download everything again" (This device): the next sync re-pulls the whole pharmacy and merges it */
+    async pullAll() { await saveCfg({ ...getCfg(), fullPull: 0 }); return run(); },
     stop() {
       stopped = true;
       clearTimeout(timer);

@@ -9,7 +9,7 @@ import { connectLive, disconnectLive, onLive } from './live.js';
 import { DEFAULT_CLOUD } from './cloud.js';
 import { setUnsent } from './update.js';
 import { formatMoney } from './money.js';
-import { pharmacyDefaults, overrideKey, readOverrides, writeOverrides, editOverrides, settingsEqual } from './pharmacy-settings.js';
+import { pharmacyDefaults, overrideKey, readOverrides, writeOverrides, editOverrides, settingsEqual, PHARMACY_FIELDS } from './pharmacy-settings.js';
 
 const SESSION_KEY = 'pharmapos-session';
 // "Remember me": the sign-in survives closing the app on this device for 30 days (otherwise it ends with the session)
@@ -263,9 +263,12 @@ function draft(db) {
 export function mergeRemote(db, changes) {
   const d = draft(db);
   const index = {};
+  let gone = null; // records deleted on this device, by `t|id` → when (a full download must not bring them back)
   for (const ch of changes) {
     if (ch.t === 'settings') {
       if (!d.settings.updatedAt || ch.at > d.settings.updatedAt) d.settings = { ...d.settings, ...ch.rec, updatedAt: ch.at };
+      // the pharmacy's details belong to the Owner console: the cloud's always win, even over newer local settings
+      else if (ch.rec) for (const [k] of PHARMACY_FIELDS) if (k in ch.rec && ch.rec[k] !== d.settings[k]) d.settings = { ...d.settings, [k]: ch.rec[k] };
       continue;
     }
     if (!d[ch.t]) continue;
@@ -273,6 +276,10 @@ export function mergeRemote(db, changes) {
     const i = index[ch.t].get(ch.id);
     const local = i !== undefined ? d[ch.t][i] : null;
     if (local && local.updatedAt >= ch.at) continue;
+    if (!local && !ch.deleted) {
+      gone ??= new Map(d._tomb.map((x) => [x.t + '|' + x.id, x.at]));
+      if (gone.get(ch.t + '|' + ch.id) >= ch.at) continue;
+    }
     if (ch.deleted) {
       if (local) { d[ch.t] = d[ch.t].filter((r) => r.id !== ch.id); delete index[ch.t]; }
     } else if (local) d[ch.t][i] = { ...ch.rec, updatedAt: ch.at };
@@ -557,6 +564,7 @@ export function StoreProvider({ children }) {
     return syncRef.current.stop;
   }, [hasCfg, syncCfg?.url, syncCfg?.key, saveSyncCfg]); // eslint-disable-line react-hooks/exhaustive-deps
   const syncNow = useCallback(() => syncRef.current?.run(), []);
+  const pullAll = useCallback(() => syncRef.current?.pullAll(), []);
   // the web version keeps nothing: leaving or reloading while a change hasn't reached the cloud would lose it,
   // so the browser asks first
   const sentAt = useRef(0);
@@ -669,7 +677,7 @@ export function StoreProvider({ children }) {
 
   return (
     <Ctx.Provider value={{ db: viewDb, sharedSettings: db.settings, pharmacyOverrides, resetPharmacyOverrides, update, pending, storageIssue, upsert, remove, saveSettings, user, setUser, fmt, products, stockIndex, batchesOf,
-      branchId, branch, setBranchId, syncCfg, saveSyncCfg, syncStatus, syncNow, linkPharmacy, features, can, day }}>
+      branchId, branch, setBranchId, syncCfg, saveSyncCfg, syncStatus, syncNow, pullAll, linkPharmacy, features, can, day }}>
       {children}
     </Ctx.Provider>
   );

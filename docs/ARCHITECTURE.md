@@ -56,6 +56,12 @@ Client → `POST /api/sync` `{ v: 2, since, changes: [{ op, t, id, rec | deleted
    device → Sync & storage until someone reviews and clears them.
 5. **Server cursors.** Pulls use the server's sequence number, not device time. A database restore changes the epoch;
    the client then re-downloads.
+   A device is normally not sent the records that carry its own device id. A **full download** (`all: true`) includes
+   them: every app does one after an update that raises `FULL_PULL` (src/sync.js), and This device → Sync & storage
+   has "Download everything again". It merges by last writer and never deletes; a record this device deleted (its
+   tombstone is at least as new) is not brought back. Added after a Windows app was found without 6 deliveries,
+   their batches and stock movements and one medicine that the cloud had, while it had every sale (27 Oct 2026;
+   tests/v44-full-pull.mjs).
 6. **Backoff.** Failures retry after `min(60 s, 1 s·2ⁿ) × (0.5–1.5)` jitter; an unreachable cloud is shown as Offline,
    a server error as Needs attention with the reason; an expired token as Sign in again.
 7. **Status** (top bar): On this device · Offline · N waiting · Syncing… · Synced · Needs attention · Sign in again.

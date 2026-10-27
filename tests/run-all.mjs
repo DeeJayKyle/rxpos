@@ -61,6 +61,8 @@ const SUITES = [
   ['storage upgrade 1.5 → 1.6', 'v39-migration.mjs', ['.output/v39']],
   ['reports, colour & drafts', 'v41-reports-drafts.mjs', ['.output/v41']],
   ['which pharmacy at sign-in', 'v42-which-pharmacy.mjs', ['.output/v42']],
+  ['full download repairs a device', 'v44-full-pull.mjs', []],
+  ['web shows the pharmacy\'s details', 'v45-web-settings.mjs', []],
   ['append-only tables', 'v29-immutable.mjs', []],
   ['pay & sms gated', 'v30-paysms.mjs', []],
   ['restore epoch', 'v31-restore.mjs', []],

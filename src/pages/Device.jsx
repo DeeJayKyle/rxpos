@@ -150,7 +150,7 @@ function Notices({ d }) {
  * storage upgrade. The web version is online only and keeps nothing on the computer (src/webpolicy.js).
  */
 function SyncStorage() {
-  const { pending, storageIssue, syncStatus, syncCfg, user, db } = useStore();
+  const { pending, storageIssue, syncStatus, syncCfg, user, db, pullAll } = useStore();
   const [rejected, setRejected] = useState([]);
   const [est, setEst] = useState(null);
   const [legacy, setLegacy] = useState(false);
@@ -195,6 +195,16 @@ function SyncStorage() {
           </ul>
           <p className="muted small"><WifiOff size={12} /> Without internet, sales, stock, prescriptions and reports keep working. Mobile Money requests, SMS, AI prescription reading, drug information look-ups and Google sign-in need the internet; a Mobile Money payment can still be recorded with the customer&apos;s transaction ID.</p>
         </>
+      )}
+      {app && syncCfg?.url && (
+        <div className="row gap" style={{ marginTop: 12 }}>
+          <button className="btn ghost" disabled={busy || syncStatus?.state === 'syncing'} onClick={() => run(async () => {
+            if (!(await ask({ title: 'Download everything again?', message: 'This device downloads the whole pharmacy from the cloud again and adds anything it is missing. Nothing is deleted and unsent sales are sent first. It can take a few minutes and uses about as much data as the first download, so use Wi-Fi on a phone.', confirmText: 'Download everything' }))) return;
+            const r = await pullAll();
+            if (r?.state === 'ok') toast(`Done: ${(r.pulled || 0).toLocaleString()} records checked against the cloud`, 'success');
+            else if (r?.error) toast(r.error, 'error');
+          })}><Download size={16} />Download everything again</button>
+        </div>
       )}
       {legacy && (
         <div className="row gap">

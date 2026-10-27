@@ -484,7 +484,7 @@ async function resetWithGoogle(env, body) {
 async function sync(env, body, who, ctx) {
   const db = env.DB;
   const tenant = who.tenant;
-  const { deviceId, since = 0, changes = [] } = body;
+  const { deviceId, since = 0, changes = [], all = false } = body;
   if (!deviceId) return json({ error: 'Missing deviceId' }, 400);
   if (!Array.isArray(changes)) return json({ error: 'changes must be a list' }, 400);
   if (changes.length > MAX_PUSH) return json({ error: `Send at most ${MAX_PUSH} changes per request` }, 413);
@@ -584,8 +584,10 @@ async function sync(env, body, who, ctx) {
   // The page of changes and the latest sequence number are read in one transaction: one round trip to the database
   // instead of two, and both see the same moment (a record saved in between can't be skipped)
   const [pageRes, maxRes, epochRes] = await db.batch([
-    db.prepare('SELECT t, id, rec, deleted, at, seq FROM records WHERE tenant = ?1 AND seq > ?2 AND origin IS NOT ?3 ORDER BY seq LIMIT ?4')
-      .bind(tenant, Number(since) || 0, deviceId, PAGE + 1),
+    // A device normally skips the records it sent itself. A full download (`all`, sync.js FULL_PULL) includes them: a
+    // device that lost its own copy, or shares its device id with another one, gets everything back.
+    db.prepare('SELECT t, id, rec, deleted, at, seq FROM records WHERE tenant = ?1 AND seq > ?2 AND (?5 = 1 OR origin IS NOT ?3) ORDER BY seq LIMIT ?4')
+      .bind(tenant, Number(since) || 0, deviceId, PAGE + 1, all === true ? 1 : 0),
     db.prepare('SELECT MAX(seq) m FROM records WHERE tenant = ?1').bind(tenant),
     db.prepare("SELECT v FROM owner_config WHERE k = 'epoch'"), // 1.4 database epoch (changes on a restore)
   ], 'read');

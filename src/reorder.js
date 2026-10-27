@@ -2,7 +2,7 @@
 //   reorder level = average daily sales over the period × (supplier lead time + safety days)
 // Only medicines that sold in the period are changed. Runs weekly (Settings → Receipts & stock) or on demand (Reorder page).
 import { useEffect } from 'react';
-import { useStore, put, audit, now, MAIN_BRANCH } from './store.jsx';
+import { useStore, put, audit, now, MAIN_BRANCH, BASE_AT } from './store.jsx';
 
 export const reorderSettings = (s = {}) => ({
   days: Number(s.autoReorderDays) || 30,
@@ -42,10 +42,14 @@ export function applyReorderLevels(update, user, branchId, changes, auto = false
 
 /** Once a week, on a device used by someone allowed to manage medicines */
 export function AutoReorder() {
-  const { db, products, update, user, branchId, can } = useStore();
+  const { db, products, update, user, branchId, can, syncCfg } = useStore();
   useEffect(() => {
     const cfg = reorderSettings(db.settings);
     if (!cfg.on || !can('medicines.manage')) return;
+    // Not before this device has the pharmacy: on the web (which downloads everything on every visit) it used to stamp
+    // the blank default settings as newer than the pharmacy's own, so the web showed "My Pharmacy" and the cloud refused
+    // the defaults it then sent ("Needs attention").
+    if (!syncCfg?.lastSync || !db.settings.updatedAt || db.settings.updatedAt === BASE_AT) return;
     const last = db.settings.autoReorderAt ? new Date(db.settings.autoReorderAt).getTime() : 0;
     if (Date.now() - last < 7 * 864e5) return;
     const t = setTimeout(() => {
@@ -54,6 +58,6 @@ export function AutoReorder() {
       else update((d) => { d.settings = { ...d.settings, autoReorderAt: now(), updatedAt: now() }; });
     }, 20000); // after the first sync has settled
     return () => clearTimeout(t);
-  }, [db.settings.autoReorderAt, db.settings.autoReorder]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [db.settings.autoReorderAt, db.settings.autoReorder, db.settings.updatedAt, !!syncCfg?.lastSync]); // eslint-disable-line react-hooks/exhaustive-deps
   return null;
 }
