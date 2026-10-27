@@ -760,7 +760,7 @@ async function owner(env, req, url, body) {
   if (parts[0] === 'backup' && req.method === 'GET') return backup(env, url, json);
   if (parts[0] === 'restore' && req.method === 'POST') return restore(env, body, json);
   if (parts[0] === 'account') return ownerAccount(env, req, url, body || {}, { json });
-  if (parts[0] === 'uptime-test' && req.method === 'POST') return json(await uptimeCheck(env, { test: true }));
+  if (parts[0] === 'uptime-test' && req.method === 'POST') return json(await uptimeCheck(env, { test: true, sync }));
   const view = async (t) => {
     const s = await db.prepare("SELECT COUNT(*) n, MAX(at) last, SUM(t = 'products' AND deleted = 0) products, SUM(t = 'users' AND deleted = 0) users, SUM(t = 'sales' AND deleted = 0) sales, SUM(t = 'branches' AND deleted = 0) branches FROM records WHERE tenant = ?1").bind(t.id).first();
     const secrets = JSON.parse(t.secrets || '{}');
@@ -967,7 +967,7 @@ async function owner(env, req, url, body) {
 // ---------- one-time copy of the whole cloud from D1 to Turso (owner only, in steps of 500 records) ----------
 async function moveToTurso(env, req, body) {
   if (!env.TURSO_URL || !env.TURSO_AUTH_TOKEN) return json({ error: 'Add the TURSO_URL and TURSO_AUTH_TOKEN secrets first.' }, 400);
-  const src = env.D1, dst = tursoDb(env);
+  const src = env.D1, dst = withDatabase({ ...env, DB_BACKEND: 'turso' }).DB;
   await ensureSchema(dst);
   const count = async (db) => ({
     tenants: await db.prepare('SELECT COUNT(*) n FROM tenants').first('n'),
@@ -1242,7 +1242,7 @@ export default {
   async scheduled(event, env, ctx) {
     // 18:00 UTC = 21:00 in Uganda: each pharmacy's daily summary email (worker/summary.js)
     if (event.cron === '0 18 * * *') { ctx.waitUntil(dailySummaries(withDatabase(env)).then((r) => console.log('daily summaries', r.map((x) => `${x.tenant}:${x.sent}${x.error ? ' ' + x.error : ''}`).join(', '))).catch((e) => console.log('daily summaries failed', e.message))); return; }
-    if (event.cron !== '0 6 * * 1') { ctx.waitUntil(uptimeCheck(withDatabase(env)).then((r) => console.log('uptime', JSON.stringify(r))).catch((e) => console.log('uptime check failed', e.message))); return; }
+    if (event.cron !== '0 6 * * 1') { ctx.waitUntil(uptimeCheck(withDatabase(env), { sync }).then((r) => console.log('uptime', JSON.stringify(r))).catch((e) => console.log('uptime check failed', e.message))); return; }
     if (env.BREVO_API_KEY) ctx.waitUntil(fetch('https://api.brevo.com/v3/account', { headers: { 'api-key': env.BREVO_API_KEY, Accept: 'application/json' } }).then((r) => console.log('brevo keep-alive', r.status)).catch((e) => console.log('brevo keep-alive failed', e.message)));
   },
   async fetch(req, rawEnv, ctx) {
