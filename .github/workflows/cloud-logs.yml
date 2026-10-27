@@ -1,0 +1,52 @@
+name: Cloud logs
+
+# Read-only diagnosis: watches the live cloud (Worker pharmapos → api.rxposug.com) for a while and prints the requests
+# that failed, with their error messages. Changes nothing. Request headers and bodies (sign-in passes, pharmacy data)
+# are never printed: only the method, the path, the outcome, exceptions and log lines.
+on:
+  workflow_dispatch:
+    inputs:
+      seconds:
+        description: 'How long to watch'
+        required: false
+        default: '120'
+
+permissions:
+  contents: read
+
+jobs:
+  tail:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Watch the cloud
+        run: timeout ${{ inputs.seconds }} npx wrangler tail pharmapos --format json > tail.jsonl || true
+      - name: Failed requests (no headers, no bodies)
+        run: |
+          node -e '
+            const lines = require("fs").readFileSync("tail.jsonl", "utf8").split("\n").filter(Boolean);
+            let all = 0, bad = 0; const seen = new Map();
+            for (const l of lines) {
+              let e; try { e = JSON.parse(l); } catch { continue; }
+              all++;
+              const req = e.event && e.event.request || {};
+              const path = (req.url || "").replace(/^https?:\/\/[^/]+/, "").replace(/\?.*$/, "");
+              const status = e.event && e.event.response && e.event.response.status;
+              const errs = (e.exceptions || []).map((x) => x.name + ": " + x.message);
+              const logs = (e.logs || []).filter((x) => x.level === "error" || x.level === "warn").map((x) => [].concat(x.message).join(" ").slice(0, 300));
+              if (e.outcome === "ok" && !(status >= 500) && !errs.length && !logs.length) continue;
+              bad++;
+              const key = [req.method, path, e.outcome, status, errs.join(" | "), logs.join(" | ")].join("  ");
+              seen.set(key, (seen.get(key) || 0) + 1);
+            }
+            console.log(`${all} requests seen, ${bad} failed`);
+            for (const [k, n] of [...seen].sort((a, b) => b[1] - a[1]).slice(0, 40)) console.log(n + "×  " + k);
+          '
