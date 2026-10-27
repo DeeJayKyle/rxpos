@@ -5,8 +5,17 @@
 import crypto from 'node:crypto';
 const site = process.argv[2] || 'https://rxposug.com';
 const sha = (b) => crypto.createHash('sha256').update(b).digest('hex');
-const get = async (p, headers = {}) => Buffer.from(await (await fetch(site + '/' + p.split('/').map(encodeURIComponent).join('/'), { headers })).arrayBuffer());
-const m = await (await fetch(site + '/version.json?t=' + Date.now(), { cache: 'no-store' })).json();
+// a network hiccup on the way (timeouts from the build machine) is not a changed file: retry, and say which it was
+const fetchRetry = async (url, opt = {}) => {
+  for (let i = 0; ; i++) {
+    try { return await fetch(url, { ...opt, signal: AbortSignal.timeout(20000) }); } catch (e) {
+      if (i >= 4) { console.log(`Could not reach ${url}: ${e.cause?.code || e.message}. The files were not checked.`); process.exit(2); }
+      await new Promise((r) => setTimeout(r, 3000 * (i + 1)));
+    }
+  }
+};
+const get = async (p, headers = {}) => Buffer.from(await (await fetchRetry(site + '/' + p.split('/').map(encodeURIComponent).join('/'), { headers })).arrayBuffer());
+const m = await (await fetchRetry(site + '/version.json?t=' + Date.now(), { cache: 'no-store' })).json();
 const bad = [];
 for (const f of m.files) if (sha(await get(f.path)) !== f.sha256) bad.push(f.path);
 const page = m.files.find((f) => f.path === 'index.html');
