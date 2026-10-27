@@ -9,6 +9,7 @@ import { Logo } from '../logo.jsx';
 import { downloadFile, today } from '../store.jsx';
 import { isWeb } from '../platform.js';
 import { THEMES } from '../themes.js';
+import { PHARMACY_FIELDS, pharmacyDefaults } from '../pharmacy-settings.js';
 import { PasswordInput } from '../password.jsx';
 
 const KEY = 'rxpos-owner-key';
@@ -194,7 +195,7 @@ function TenantAdmin({ id, api, url, onBack }) {
   const load = async () => {
     try {
       const j = await api('/tenants/' + id);
-      setD(j); setInfo({ name: j.tenant.name, slug: j.tenant.slug, notes: j.tenant.notes }); setFeatures(j.tenant.features);
+      setD(j); setInfo({ ...pharmacyDefaults(j.settings || {}), name: j.tenant.name, slug: j.tenant.slug, notes: j.tenant.notes }); setFeatures(j.tenant.features);
     } catch (e) { toast(e.message, 'error'); }
   };
   useEffect(() => { load(); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -242,10 +243,14 @@ function TenantAdmin({ id, api, url, onBack }) {
               <Stat label="Records" value={t.stats.records.toLocaleString()} />
               <Stat label="Last activity" value={t.stats.lastActivity ? new Date(t.stats.lastActivity).toLocaleDateString() : '—'} sub={t.stats.lastActivity ? new Date(t.stats.lastActivity).toLocaleTimeString() : ''} />
             </div>
-            <form className="card" onSubmit={(e) => { e.preventDefault(); doing(() => api('/tenants/' + t.id, info), 'Saved'); }}>
-              <h3><Pencil size={17} />Details</h3>
+            <form className="card" onSubmit={(e) => { e.preventDefault(); doing(() => api('/tenants/' + t.id, { ...info, settings: pharmacyDefaults(info) }), 'Owner defaults saved. Devices receive them at the next sync.'); }}>
+              <h3><Pencil size={17} />Shared pharmacy defaults</h3>
+              <p className="muted small">These defaults sync to every device and app version. A device may override individual values locally until it chooses Use Owner defaults.</p>
               <div className="form-grid">
                 <label className="field"><span>Pharmacy name</span><input required value={info.name} onChange={(e) => setInfo({ ...info, name: e.target.value })} /></label>
+                {PHARMACY_FIELDS.filter(([k]) => !['name', 'priceRound', 'nonCashBankId'].includes(k)).map(([k, label, type]) => <label className="field" key={k}><span>{label}</span><input type={type} min={type === 'number' ? 0 : undefined} max={k === 'decimals' ? 6 : ['taxRate', 'minMargin'].includes(k) ? 100 : undefined} step={k === 'decimals' ? 1 : 'any'} value={info[k]} onChange={(e) => setInfo({ ...info, [k]: type === 'number' ? e.target.value === '' ? '' : Number(e.target.value) : e.target.value })} /></label>)}
+                <label className="field"><span>Round worked-out prices</span><select value={info.priceRound} onChange={(e) => setInfo({ ...info, priceRound: Number(e.target.value) })}><option value={0}>To the nearest unit</option>{[10, 50, 100, 500].map((n) => <option key={n} value={n}>Up to the next {n}</option>)}</select></label>
+                <label className="field"><span>Non-cash sales go to</span><select value={info.nonCashBankId} onChange={(e) => setInfo({ ...info, nonCashBankId: e.target.value })}><option value="cash-drawer">Cash at hand</option>{(d.banks || []).filter((b) => b.id !== 'cash-drawer').map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select></label>
                 <label className="field"><span>Web address</span><div className="slug-input"><span>{url.replace(/^https?:\/\//, '')}/</span><input required value={info.slug} onChange={(e) => setInfo({ ...info, slug: slugify(e.target.value) })} /></div></label>
                 <label className="field full"><span>Notes</span><input value={info.notes} onChange={(e) => setInfo({ ...info, notes: e.target.value })} /></label>
               </div>
