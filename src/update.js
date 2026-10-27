@@ -12,8 +12,9 @@ export const BUILD = typeof __RXPOS_BUILD__ !== 'undefined' ? __RXPOS_BUILD__ : 
 export const LABEL = typeof __RXPOS_LABEL__ !== 'undefined' ? __RXPOS_LABEL__ : '1.0 (development)';
 const SHELL = 1; // must match the `shell` in version.json that this installer / APK can run (scripts/release-files.mjs)
 const CHECK_EVERY = 10 * 60e3;
+const DOWNLOAD_LIMIT = 4 * 60e3; // the archive is about 2 MB
 
-let state = { status: 'current', latest: null, error: '' }; // status: current | checking | downloading | ready | shell | error
+let state = { status: 'current', latest: null, error: '', percent: 0 }; // status: current | checking | downloading | ready | shell | error
 const listeners = new Set();
 const set = (patch) => { state = { ...state, ...patch }; listeners.forEach((f) => f(state)); };
 export const updateState = () => state;
@@ -41,11 +42,20 @@ export async function checkForUpdate() {
     if (!latest?.build || latest.build <= BUILD) return set({ status: 'current', latest }), state;
     if ((latest.shell || 1) > SHELL) return set({ status: 'shell', latest }), state;
     if (isAndroid) {
-      set({ status: 'downloading', latest });
+      set({ status: 'downloading', latest, percent: 0 });
       const u = await plugin();
-      const b = await u.download({ url: `${DEFAULT_CLOUD}/${latest.zip}`, version: String(latest.build), checksum: latest.zipSha256 });
-      bundleId = b.id;
-      await u.next({ id: b.id }); // used at the next start even if it is never idle before then
+      // Capgo waits for its download worker with no time limit, and the worker retries some failures for ever: give up
+      // after DOWNLOAD_LIMIT so the app shows why and tries again at the next check instead of "Downloading…" for ever
+      const progress = await u.addListener('download', (e) => { if (e?.percent > (state.percent || 0)) set({ percent: e.percent }); }).catch(() => null);
+      let timer;
+      try {
+        const b = await Promise.race([
+          u.download({ url: `${DEFAULT_CLOUD}/${latest.zip}`, version: String(latest.build), checksum: latest.zipSha256 }),
+          new Promise((_, no) => { timer = setTimeout(() => no(new Error(`The download stopped at ${state.percent || 0}%. It will try again by itself; check the internet if this repeats.`)), DOWNLOAD_LIMIT); }),
+        ]);
+        bundleId = b.id;
+        await u.next({ id: b.id }); // used at the next start even if it is never idle before then
+      } finally { clearTimeout(timer); progress?.remove(); }
     }
     set({ status: 'ready', latest });
   } catch (e) {

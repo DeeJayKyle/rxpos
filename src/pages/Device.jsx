@@ -67,7 +67,7 @@ export function Updates() {
     else if (r.status === 'error') toast(r.error || 'Could not reach the update server. Check the internet and try again.', 'error');
   };
   const working = busy || u.status === 'checking' || u.status === 'downloading';
-  const line = { checking: 'Looking for a newer version…', downloading: 'Downloading the new version…', ready: `Version ${u.latest?.label || ''} is downloaded and ready`, shell: 'The newest version needs a fresh installer', error: u.error, current: u.latest ? 'You have the latest version' : 'Updates install by themselves when the app is quiet' }[u.status];
+  const line = { checking: 'Looking for a newer version…', downloading: `Downloading the new version…${u.percent ? ` ${u.percent}%` : ''}`, ready: `Version ${u.latest?.label || ''} is downloaded and ready`, shell: 'The newest version needs a fresh installer', error: u.error, current: u.latest ? 'You have the latest version' : 'Updates install by themselves when the app is quiet' }[u.status];
   return (
     <section className="card update-card">
       <h3><RefreshCw size={18} />App version</h3>
