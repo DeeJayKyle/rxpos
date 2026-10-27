@@ -32,9 +32,17 @@ jobs:
       - name: Failed requests (no headers, no bodies)
         run: |
           node -e '
-            const lines = require("fs").readFileSync("tail.jsonl", "utf8").split("\n").filter(Boolean);
+            // wrangler prints each event as pretty-printed JSON over many lines: split on top-level objects
+            const text = require("fs").readFileSync("tail.jsonl", "utf8"); const events = [];
+            for (let i = 0, depth = 0, start = -1, str = false, esc = false; i < text.length; i++) {
+              const c = text[i];
+              if (str) { if (esc) esc = false; else if (c === "\\") esc = true; else if (c === "\"") str = false; continue; }
+              if (c === "\"") str = true;
+              else if (c === "{") { if (!depth++) start = i; }
+              else if (c === "}" && depth && !--depth) events.push(text.slice(start, i + 1));
+            }
             let all = 0, bad = 0; const seen = new Map();
-            for (const l of lines) {
+            for (const l of events) {
               let e; try { e = JSON.parse(l); } catch { continue; }
               all++;
               const req = e.event && e.event.request || {};
