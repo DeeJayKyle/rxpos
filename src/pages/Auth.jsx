@@ -3,7 +3,7 @@ import { Zap, WifiOff, MonitorSmartphone, ShieldCheck, Mail, MessageSquareText, 
 import { useStore, verifyPassword, normalizePhone } from '../store.jsx';
 import { rememberOffline, verifyOffline, hasPin, verifyPin } from '../offline.js';
 import { Logo, BrandLogo } from '../logo.jsx';
-import { toast } from '../feedback.jsx';
+import { toast, ask } from '../feedback.jsx';
 import { cloudLogin, cloudUrl, forgotPassword, resetPassword, whatsappLink, pharmacyInfo, googleClient, resetWithGoogle, DEFAULT_CLOUD } from '../cloud.js';
 import { isWeb, isNative, pharmacySlugFromUrl } from '../platform.js';
 import { PasswordInput } from '../password.jsx';
@@ -25,7 +25,7 @@ export default function Auth() {
   const url = cloudUrl();
   const slug = pharmacySlugFromUrl();
   const [pharmacy, setPharmacy] = useState(() => (syncCfg.tenant && (!slug || slug === syncCfg.slug) ? { name: syncCfg.pharmacy || db.settings.name, slug: syncCfg.slug, logo: db.license?.[0]?.branding?.logo } : null));
-  const [form, setForm] = useState(() => ({ email: (() => { try { return localStorage.getItem(LAST_EMAIL) || ''; } catch { return ''; } })(), password: '', code: slug || syncCfg.slug || '', otp: '', newPassword: '' }));
+  const [form, setForm] = useState(() => ({ email: (() => { try { return localStorage.getItem(LAST_EMAIL) || ''; } catch { return ''; } })(), password: '', code: slug || '', otp: '', newPassword: '' }));
   const [needCode, setNeedCode] = useState(false);
   const [remember, setRemember] = useState(() => { try { return localStorage.getItem(REMEMBER_CHOICE) === '1'; } catch { return false; } });
   const keepChoice = (v) => { setRemember(v); try { localStorage.setItem(REMEMBER_CHOICE, v ? '1' : '0'); } catch { /* ignore */ } };
@@ -56,7 +56,10 @@ export default function Auth() {
   const isUsername = form.email.trim().length > 0 && !form.email.includes('@');
   const signIn = (e) => { e.preventDefault(); run(async () => {
     const email = form.email.trim().toLowerCase();
-    const code = form.code.trim().toLowerCase();
+    // Which pharmacy: the one in the web address (rxposug.com/<pharmacy>) or a code typed in; otherwise the cloud decides
+    // from the email and password (one pharmacy: straight in; several: "Which pharmacy?"). Usernames are per pharmacy,
+    // so a username without a code means this device's pharmacy.
+    const code = (form.code.trim() || (!email.includes('@') ? syncCfg.slug || '' : '')).toLowerCase();
     const local = db.users.find((x) => !x.disabled && (x.email === email || (x.username || '').toLowerCase() === email));
     const sameStore = !code || [syncCfg.tenant, syncCfg.slug].includes(code);
     setChoices(null);
@@ -104,6 +107,12 @@ export default function Auth() {
   }); };
 
   const finish = async (r, email) => {
+    // a different pharmacy than the one this device holds: say what happens before switching
+    if (syncCfg.tenant && r.tenant !== syncCfg.tenant && !(await ask({
+      title: `Switch this device to ${r.pharmacy || r.slug}?`,
+      message: `This device holds ${syncCfg.pharmacy || syncCfg.slug || 'another pharmacy'}. Signing in to ${r.pharmacy || r.slug} downloads that pharmacy instead (it needs the internet). ${syncCfg.pharmacy || 'The other pharmacy'} stays safe in the cloud, a copy is kept on this device, and changes it has not sent yet are sent first. Its staff sign in again to switch back.`,
+      confirmText: `Switch to ${r.pharmacy || r.slug}`, cancelText: 'Cancel',
+    }))) return;
     await linkPharmacy({ url, token: r.token, account: email, tenant: r.tenant, slug: r.slug, pharmacy: r.pharmacy });
     if (isNative) await rememberOffline(r.tenant, r.user.id, form.password); // the Windows / Android app can now sign this person in offline
     if (twoStep) try { localStorage.setItem(trustKey(r.tenant, r.user.id), '1'); } catch { /* storage blocked */ }
@@ -170,7 +179,7 @@ export default function Auth() {
     </div>
   );
 
-  const title = pharmacy?.name ? `Sign in to ${pharmacy.name}` : 'Sign in to your pharmacy';
+  const title = pharmacy?.name ? (slug ? `Sign in to ${pharmacy.name}` : `Sign in · this device: ${pharmacy.name}`) : 'Sign in to your pharmacy';
   return (
     <div className="auth-bg">
       <section className="auth-hero">

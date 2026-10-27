@@ -59,6 +59,7 @@ const SUITES = [
   ['sync protocol 2', 'v38-sync-protocol.mjs', []],
   ['storage upgrade 1.5 → 1.6', 'v39-migration.mjs', ['.output/v39']],
   ['reports, colour & drafts', 'v41-reports-drafts.mjs', ['.output/v41']],
+  ['which pharmacy at sign-in', 'v42-which-pharmacy.mjs', ['.output/v42']],
   ['append-only tables', 'v29-immutable.mjs', []],
   ['pay & sms gated', 'v30-paysms.mjs', []],
   ['restore epoch', 'v31-restore.mjs', []],
