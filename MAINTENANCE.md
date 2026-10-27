@@ -64,9 +64,23 @@ as can open-source AI coding tools (Aider, Cline, OpenCode) or Claude.
 
 ## 5. Going live
 
+**From GitHub (1.7):** Actions → *Build RxPOS* → Run workflow on `main`. Fill in *release* (e.g. `v1.7.1`) and leave
+*deploy* on **with release**: after the apps are published, the same run deploys the cloud and then the website and
+checks that both answer with the new build. *deploy = now* puts `main` live without making a release.
+
+One-time setup (repository → Settings → Secrets and variables → Actions → New repository secret):
+
+| Secret | Where to get it |
+|---|---|
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare dashboard → Workers & Pages → the Account ID shown on the right |
+| `CLOUDFLARE_API_TOKEN` | Cloudflare → My Profile → API Tokens → Create Token → *Edit Cloudflare Workers* template, then add **Cloudflare Pages: Edit** and **D1: Edit** (account resources: your account only). Copy it once; it is not shown again |
+
+**From a PC** (the same thing by hand; build first, because the Worker serves the built files too):
+
 ```bash
-npx wrangler deploy                                              # the cloud (Worker)
-npm run build && npx wrangler pages deploy dist --project-name rxpos --branch main   # the website
+npm run build
+npx wrangler deploy                                              # the cloud (Worker), first
+npx wrangler pages deploy dist --project-name rxpos --branch main   # the website
 curl https://api.rxposug.com/api/health          # → "ok": true, "database": "turso"
 ```
 

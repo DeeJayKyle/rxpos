@@ -12,6 +12,11 @@ on:
         description: 'Publish a GitHub Release with this tag (e.g. v1.0.1); blank = just build'
         required: false
         default: ''
+      deploy:
+        description: 'Put the website (rxposug.com) and the cloud (api.rxposug.com) live: with the release, now (no release), or no'
+        type: choice
+        options: ['with release', 'now', 'no']
+        default: 'with release'
 
 permissions:
   contents: read
@@ -236,3 +241,52 @@ jobs:
             artifacts/RxPOS-Windows/*.exe
             artifacts/RxPOS-Hub/RxPOS-Hub.zip
             artifacts/RxPOS-Android/*
+
+  # Put this build live (1.7): the cloud Worker (api.rxposug.com) first, it accepts older apps, then the website
+  # (Cloudflare Pages project "rxpos", rxposug.com), then check both answer with this version. Runs after a successful
+  # release, or on its own with deploy = now. Needs the repository secrets CLOUDFLARE_API_TOKEN ("Edit Cloudflare
+  # Workers" template plus Pages Edit and D1 Edit) and CLOUDFLARE_ACCOUNT_ID: MAINTENANCE.md section 5. Rolling back:
+  # Cloudflare dashboard → Deployments.
+  deploy:
+    needs: [unit, release]
+    if: >-
+      always() && github.event_name == 'workflow_dispatch' && needs.unit.result == 'success' &&
+      ((inputs.deploy == 'with release' && inputs.release != '' && needs.release.result == 'success') || inputs.deploy == 'now')
+    runs-on: ubuntu-latest
+    concurrency: production-deploy
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Cloudflare secrets present
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::error::Add the repository secrets CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID (GitHub → Settings → Secrets and variables → Actions). Nothing was deployed."
+            exit 1
+          fi
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Build the app (the website and the Worker serve the same files)
+        run: npm run build
+      - name: Deploy the cloud (Worker pharmapos → api.rxposug.com)
+        run: npx wrangler deploy
+      - name: Deploy the website (Pages project rxpos → rxposug.com)
+        run: npx wrangler pages deploy dist --project-name rxpos --branch main --commit-dirty=true
+      - name: Check both are live with this version
+        run: |
+          WANT=$(node -p "require('./dist/version.json').build")
+          for i in $(seq 1 20); do
+            GOT=$(curl -fsS "https://rxposug.com/version.json?t=$(date +%s)" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{console.log(JSON.parse(s).build)}catch{console.log('not-json')}})" || echo none)
+            API=$(curl -fsS "https://api.rxposug.com/api/version?t=$(date +%s)" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{console.log(JSON.parse(s).build)}catch{console.log('not-json')}})" || echo none)
+            echo "website: $GOT  cloud: $API  wanted: $WANT"
+            if [ "$GOT" = "$WANT" ] && [ "$API" = "$WANT" ]; then
+              curl -fsS https://api.rxposug.com/api/health; echo; exit 0
+            fi
+            sleep 15
+          done
+          echo "::error::The website or the cloud does not answer with build $WANT yet. Check Cloudflare → Workers & Pages → Deployments."
+          exit 1
