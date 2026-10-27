@@ -4,7 +4,11 @@
 const SITES = ['https://rxposug.com/', 'https://www.rxposug.com/'];
 const REMIND_MIN = 60; // while still broken, remind once an hour
 
-const withTimeout = (p, ms, what) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(`${what}: no answer in ${ms / 1000} s`)), ms))]);
+async function withTimeout(p, ms, what) {
+  let timer;
+  try { return await Promise.race([p, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(`${what}: no answer in ${ms / 1000} s`)), ms); })]); }
+  finally { clearTimeout(timer); }
+}
 
 async function mail(env, to, subject, text) {
   if (!to || !env.BREVO_API_KEY || !env.BREVO_SENDER_EMAIL) return false;
@@ -21,6 +25,22 @@ export async function uptimeCheck(env, { now = new Date(), test = false } = {}) 
   let dbOk = true;
   try { await withTimeout(env.DB.prepare('SELECT 1 AS ok').first(), 15000, 'Database (Turso)'); }
   catch (e) { dbOk = false; problems.push('Database (Turso): ' + e.message); }
+  // SELECT 1 can succeed while sync itself hangs. Probe the actual authenticated
+  // route with an empty push and a cursor beyond existing rows: no business data
+  // is written or downloaded, and no device cursor is changed.
+  if (env.SYNC_KEY) {
+    try {
+      const r = await fetch('https://api.rxposug.com/api/sync', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + env.SYNC_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceId: 'uptime-monitor', since: Number.MAX_SAFE_INTEGER, changes: [] }),
+        signal: AbortSignal.timeout(15000),
+      });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const result = await r.json();
+      if (result.protocol !== 2 || !Number.isFinite(result.cursor)) throw new Error('Invalid sync response');
+    } catch (e) { problems.push('Cloud sync: ' + e.message); }
+  }
   for (const u of SITES) {
     try { const r = await fetch(u, { signal: AbortSignal.timeout(15000), cf: { cacheTtl: 0 } }); if (!r.ok) problems.push(`Website ${u}: HTTP ${r.status}`); }
     catch (e) { problems.push(`Website ${u}: ${e.message}`); }
