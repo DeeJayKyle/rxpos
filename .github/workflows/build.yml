@@ -237,6 +237,7 @@ jobs:
           name: RxPOS ${{ github.event_name == 'workflow_dispatch' && inputs.release || github.ref_name }}
           generate_release_notes: true
           make_latest: true
+          overwrite_files: true # re-publishing an existing tag (e.g. v1.0.0) replaces its downloads
           files: |
             artifacts/RxPOS-Windows/*.exe
             artifacts/RxPOS-Hub/RxPOS-Hub.zip
