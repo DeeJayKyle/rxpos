@@ -1,6 +1,8 @@
 # Security headers for every page. Cache-Control: the web app is online only (1.5.1), so the browser keeps none of
 # its pages, its update file or the retired service worker; every visit (including pharmacy addresses such as
 # /citycare-ntinda) loads the current build. Files under /assets/ carry a content hash, so they may be kept.
+# no-transform: Cloudflare must not add anything to the pages (it added a script to index.html for browser requests,
+# so the Windows app found index.html "damaged" against version.json and refused every update).
 /*
   X-Frame-Options: DENY
   X-Content-Type-Options: nosniff
@@ -9,7 +11,7 @@
   Cross-Origin-Opener-Policy: same-origin-allow-popups
   Permissions-Policy: camera=(self), microphone=(self), geolocation=(self), payment=(), usb=(), bluetooth=(), interest-cohort=()
   Content-Security-Policy: default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'wasm-unsafe-eval' https://accounts.google.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' blob: https:; font-src 'self' data:; worker-src 'self' blob:; manifest-src 'self'; frame-src 'self' https://accounts.google.com; connect-src 'self' https://rxposug.com https://www.rxposug.com https://api.rxposug.com wss://api.rxposug.com https://api.open-meteo.com https://geocoding-api.open-meteo.com https://accounts.google.com
-  Cache-Control: no-store
+  Cache-Control: no-store, no-transform
 
 /assets/*
   ! Cache-Control

@@ -58,7 +58,7 @@ jobs:
             const b = Buffer.from(await r.arrayBuffer());
             const ok = crypto.createHash('sha256').update(b).digest('hex') === html.sha256;
             console.log(who, r.status, 'redirected', r.redirected, r.url, 'listed', html.size, 'got', b.length, ok ? 'MATCHES' : 'DIFFERS', 'cache-control', r.headers.get('cache-control'), 'cf-cache', r.headers.get('cf-cache-status'));
-            if (!ok) console.log('  got:', JSON.stringify(b.toString('utf8').slice(0, 3000)));
+            if (!ok) console.log('  ends with:', JSON.stringify(b.toString('utf8').slice(-700)));
           }
           for (const x of bad) {
             console.log(JSON.stringify({ ...x, text: undefined }));

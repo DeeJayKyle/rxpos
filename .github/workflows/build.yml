@@ -295,3 +295,8 @@ jobs:
           done
           echo "::error::The website or the cloud does not answer with build $WANT yet. Check Cloudflare → Workers & Pages → Deployments."
           exit 1
+      - name: Every update file arrives exactly as listed (the Windows app refuses a changed file)
+        run: |
+          for i in 1 2 3; do node scripts/check-update-files.mjs && exit 0; sleep 20; done
+          echo "::error::Files on rxposug.com differ from version.json: installed apps cannot update. See the lines above."
+          exit 1
