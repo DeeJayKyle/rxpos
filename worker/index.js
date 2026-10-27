@@ -24,6 +24,7 @@ import { uptimeCheck } from './uptime.js';
 import { dailySummaries } from './summary.js';
 import { twoStepDdl, twoStepOf, totpCheck, markUsed, twoStepRoutes } from './twostep.js';
 import { tokenSecret, purposeLabel } from './secret.js';
+import { pharmacyChanged, validatePharmacyDefaults } from '../src/pharmacy-settings.js';
 import { DEFAULT_ROLES } from '../src/access.js';
 // The built-in roles (cashier, dispenser, pharmacist, manager) live only in the app; they aren't stored as records.
 // The server needs their permissions too, so a permission check doesn't wrongly refuse a built-in role (1.1/1.9).
@@ -530,6 +531,11 @@ async function sync(env, body, who, ctx) {
       if (ch.t === 'users' && (await adminChangeRefused(db, tenant, ch, who))) { refuse(ch); continue; }
     }
     const id = String(ch.id);
+    // Owner-only shared defaults, including protection against older installed clients.
+    if (ch.t === 'settings') {
+      const shared = (await existingRec(db, tenant, 'settings', 'settings')) || {};
+      if (ch.deleted || id !== 'settings' || pharmacyChanged(shared, ch.rec || {})) { refuse(ch); continue; }
+    }
     let rec = ch.rec;
     // Devices no longer hold password secrets, so a user edit (a rename, a role change) arrives without them: keep
     // whatever the server already stores. A real password set/change/reset still carries a fresh hash and wins. (0.2)
@@ -822,10 +828,17 @@ async function owner(env, req, url, body) {
     const { results: br } = await db.prepare("SELECT rec FROM records WHERE tenant = ?1 AND t = 'branches' AND deleted = 0").bind(t.id).all();
     const { results: tables } = await db.prepare('SELECT t, COUNT(*) n FROM records WHERE tenant = ?1 AND deleted = 0 GROUP BY t ORDER BY t').bind(t.id).all();
     const settings = await existingRec(db, t.id, 'settings', 'settings');
-    return json({ tenant: await view(t), users, branches: br.map((r) => JSON.parse(r.rec)), tables, settings });
+    const { results: bankRows } = await db.prepare("SELECT rec FROM records WHERE tenant = ?1 AND t = 'banks' AND deleted = 0").bind(t.id).all();
+    return json({ tenant: await view(t), users, branches: br.map((r) => JSON.parse(r.rec)), tables, settings, banks: bankRows.map((r) => JSON.parse(r.rec)) });
   }
   if (!sub && req.method === 'POST') {
-    const name = body.name != null ? String(body.name).trim().slice(0, 80) || t.name : t.name;
+    let pharmacySettings;
+    if (body.settings) {
+      try { pharmacySettings = validatePharmacyDefaults({ ...((await existingRec(db, t.id, 'settings', 'settings')) || {}), ...body.settings, name: body.name ?? body.settings.name ?? t.name }); }
+      catch (e) { return json({ error: e.message }, 400); }
+      if (pharmacySettings.nonCashBankId !== 'cash-drawer' && !(await existingRec(db, t.id, 'banks', pharmacySettings.nonCashBankId))) return json({ error: 'Choose an existing bank for non-cash sales.' }, 400);
+    }
+    const name = pharmacySettings?.name || (body.name != null ? String(body.name).trim().slice(0, 80) || t.name : t.name);
     const slug = body.slug != null && body.slug !== (t.slug || t.id) ? await checkSlug(env, String(body.slug).trim().toLowerCase(), t.id) : t.slug || t.id;
     const status = ['active', 'suspended'].includes(body.status) ? body.status : t.status;
     const features = body.features ? JSON.stringify({ ...JSON.parse(t.features || '{}'), ...body.features }) : t.features;
@@ -848,9 +861,9 @@ async function owner(env, req, url, body) {
     await db.prepare('UPDATE tenants SET name = ?2, status = ?3, features = ?4, notes = ?5, slug = ?6, branding = ?7 WHERE id = ?1').bind(t.id, name, status, features, notes, slug, JSON.stringify(branding)).run();
     const u = await tenantById(env, t.id);
     await writeLicense(env, u);
-    if (name !== t.name) {
+    if (pharmacySettings || name !== t.name) {
       const s = (await existingRec(db, t.id, 'settings', 'settings')) || {};
-      await serverWriteMany(env, t.id, [{ t: 'settings', id: 'settings', rec: { ...s, name } }]);
+      await serverWriteMany(env, t.id, [{ t: 'settings', id: 'settings', rec: { ...s, ...pharmacySettings, name } }]);
     }
     return json({ tenant: await view(u) });
   }
