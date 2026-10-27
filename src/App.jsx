@@ -151,16 +151,13 @@ function useSurface() {
   return [style, setStyle];
 }
 
-/** The device's colour level: Calm (standard) or Vivid (src/vivid.js) */
-function useLevel() {
-  const [level, setLevel] = useState(() => savedLevel());
-  useEffect(() => { applyLevel(level); saveLevel(level); }, [level]);
-  return [level, setLevel];
-}
+/** The device's colour level: Calm (standard) or Vivid (src/vivid.js). Applied and saved on the click itself: picking
+ *  closes the menu, which removes this list, so a later effect would never run. */
 function ColourLevel({ onPick }) {
-  const [level, setLevel] = useLevel();
+  const level = savedLevel();
+  const pick = (id) => { applyLevel(id); saveLevel(id); onPick(); };
   return LEVELS.map((l) => (
-    <button key={l.id} className={'style-item' + (l.id === level ? ' on' : '')} onClick={() => { setLevel(l.id); onPick(); }}>
+    <button key={l.id} className={'style-item' + (l.id === level ? ' on' : '')} onClick={() => pick(l.id)}>
       <span className={'swatch level-swatch level-' + l.id} />
       <span className="grow">{l.name}<small className="muted"> · {l.hint}</small></span>
     </button>

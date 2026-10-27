@@ -83,9 +83,15 @@ const A = await device('robin@test.rx', 'robin-pass-1234');
 // ---- Vivid ----
 await go(A, '#/');
 const calm = await A.evaluate(() => getComputedStyle(document.querySelector('.stat.teal')).backgroundImage);
-await A.evaluate(() => { localStorage.setItem('rxpos-colour', 'vivid'); }); await A.reload({ waitUntil: 'networkidle2' }); await A.waitForSelector('.sidebar', { timeout: 20000 }); await wait(1200);
+// switched on the way a person does it: appearance menu → Colour → Vivid
+await A.click('button[aria-label="Theme"]'); await wait(300);
+await clickText(A, '.style-item', /^Vivid/); await wait(500);
+const now = await A.evaluate(() => ({ attr: document.documentElement.dataset.colour, bg: getComputedStyle(document.querySelector('.stat.teal')).backgroundImage }));
+check('appearance menu → Colour → Vivid takes effect at once', now.attr === 'vivid' && /gradient/.test(now.bg), JSON.stringify(now));
+await A.reload({ waitUntil: 'networkidle2' }); await A.waitForSelector('.sidebar', { timeout: 20000 }); await wait(1200);
 await A.evaluate(() => { window.print = () => { window.__printed = (window.__printed || 0) + 1; }; });
 const vivid = await A.evaluate(() => ({ attr: document.documentElement.dataset.colour, bg: getComputedStyle(document.querySelector('.stat.teal')).backgroundImage, color: getComputedStyle(document.querySelector('.stat.teal strong')).color }));
+check('…and is kept after a restart', vivid.attr === 'vivid');
 check('Calm is the standard look (no solid tile)', !/gradient/.test(calm), calm);
 check('Vivid fills the toned tiles with their colour and white text', vivid.attr === 'vivid' && /gradient/.test(vivid.bg) && vivid.color === 'rgb(255, 255, 255)', JSON.stringify(vivid));
 check('tiles carry their meaning: expenses orange, profit violet', await A.evaluate(() => [...document.querySelectorAll('.stat')].some((s) => /expenses/i.test(s.innerText) && s.classList.contains('orange')) && [...document.querySelectorAll('.stat')].some((s) => /Gross profit/i.test(s.innerText) && s.classList.contains('violet'))));
