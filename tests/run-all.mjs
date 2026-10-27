@@ -13,6 +13,7 @@ const BASE = 'http://localhost:8790';
 const OWNER = 'local-owner-key-0123456789abcdef';
 const SUITES = [
   ['secret helper (unit)', 'unit-secret.mjs', []],
+  ['daily stock figures (unit)', 'unit-daily-stock.mjs', []],
   ['safe file urls (unit)', 'unit-safeurl.mjs', []],
   ['refill rules (unit)', 'unit-rxrules.mjs', []],
   ['crash scrub (unit)', 'unit-scrub.mjs', []],
@@ -63,6 +64,7 @@ const SUITES = [
   ['which pharmacy at sign-in', 'v42-which-pharmacy.mjs', ['.output/v42']],
   ['full download repairs a device', 'v44-full-pull.mjs', []],
   ['web shows the pharmacy\'s details', 'v45-web-settings.mjs', []],
+  ['daily stock sheet link', 'v46-daily-stock.mjs', []],
   ['append-only tables', 'v29-immutable.mjs', []],
   ['pay & sms gated', 'v30-paysms.mjs', []],
   ['restore epoch', 'v31-restore.mjs', []],

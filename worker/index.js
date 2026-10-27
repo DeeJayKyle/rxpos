@@ -22,6 +22,7 @@ export { TenantHub } from './live.js';
 import { backup, restore } from './backup.js';
 import { uptimeCheck } from './uptime.js';
 import { dailySummaries } from './summary.js';
+import { dailyStockFor, toCsv } from './dailystock.js';
 import { twoStepDdl, twoStepOf, totpCheck, markUsed, twoStepRoutes } from './twostep.js';
 import { tokenSecret, purposeLabel } from './secret.js';
 import { pharmacyChanged, validatePharmacyDefaults } from '../src/pharmacy-settings.js';
@@ -1295,6 +1296,17 @@ export default {
       }
       const fm = path.match(/^\/api\/files\/([a-z0-9-]{1,40})\/([A-Za-z0-9_-]{8,40})\/([A-Za-z0-9_-]{24})$/);
       if (fm && req.method === 'GET') return await downloadFile(env, fm[1], fm[2], fm[3]);
+      // Daily stock sheet for a Google Sheet (=IMPORTDATA): the link carries the pharmacy's own key (Settings → Data &
+      // backup → Daily stock sheet), which an administrator can replace at any time; daily totals only (worker/dailystock.js)
+      const dm = path.match(/^\/api\/daily-stock\/([a-z0-9-]{1,40})\/([A-Za-z0-9_-]{24,64})\.csv$/);
+      if (dm && req.method === 'GET') {
+        const t = await tenantById(env, dm[1]);
+        const key = t ? JSON.parse(t.secrets || '{}').dailyStockKey : '';
+        if (!key || !safeEqual(dm[2], key)) return json({ error: 'Not found' }, 404);
+        const days = Math.min(400, Math.max(7, Number(url.searchParams.get('days')) || 62));
+        const rows = await dailyStockFor(env.DB, t.id, { days });
+        return new Response(toCsv(rows), { headers: { 'Content-Type': 'text/csv; charset=utf-8', 'Cache-Control': 'max-age=300', 'X-Content-Type-Options': 'nosniff' } });
+      }
       const cm = path.match(/^\/api\/calendar\/([a-z0-9-]{1,40})\/([A-Za-z0-9_-]{24})\.ics$/);
       if (cm) {
         if (!safeEqual(cm[2], await calendarSig(env, cm[1]))) return json({ error: 'Not found' }, 404);
@@ -1356,6 +1368,16 @@ export default {
       if (path === '/api/rtc' || path === '/api/rtc/config') return await rtc(env, req, url, body, who);
       if (path === '/api/files' && req.method === 'POST') return await uploadChunk(env, body, who);
       if (path.startsWith('/api/ai/') && req.method === 'POST') return await ai(env, path, body, who);
+      if (path === '/api/daily-stock-link') {
+        if (!who.viaKey && !(await roleCan(env, who.tenant, who.role, 'settings.manage'))) return json({ error: 'Only an administrator can see or change this link.' }, 403);
+        const t = await tenantById(env, who.tenant);
+        const secrets = JSON.parse(t?.secrets || '{}');
+        if (req.method === 'POST') { // a new link: the old one stops working at once
+          secrets.dailyStockKey = b64url(crypto.getRandomValues(new Uint8Array(24)));
+          await env.DB.prepare('UPDATE tenants SET secrets = ?2 WHERE id = ?1').bind(who.tenant, JSON.stringify(secrets)).run();
+        }
+        return json({ url: secrets.dailyStockKey ? `https://api.rxposug.com/api/daily-stock/${who.tenant}/${secrets.dailyStockKey}.csv` : null });
+      }
       if (path === '/api/calendar-link') return json({ url: `${url.origin}/api/calendar/${who.tenant}/${await calendarSig(env, who.tenant)}.ics` });
       if (path === '/api/pay/request' && req.method === 'POST') {
         if (!who.viaKey && !(await roleCan(env, who.tenant, who.role, 'pos.sell'))) return json({ error: 'You are not allowed to take payments.' }, 403); // 1.9

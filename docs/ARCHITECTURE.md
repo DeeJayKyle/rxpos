@@ -191,3 +191,16 @@ before the upgrade" first.
 - **Colour level** (`src/vivid.js`): Calm (standard) or Vivid, chosen per device in the appearance menu; one meaning
   per colour; tile colours are checked for white-text contrast in `tests/contrast-test.mjs`.
 - **Tests**: `tests/v41-reports-drafts.mjs` (38 checks) and `tests/unit-diff.mjs` (7). Full run for 1.7.0: **1,267 passed, 7 failed**, the same 7 environment failures as 1.6.0 (weather, AI ×2, GPS, outside temperature, idle-screen folder, Windows self-update without a display).
+
+## Daily stock sheet (Google Sheets)
+
+`worker/dailystock.js` works out, per Uganda day, the figures a pharmacy keeps in its own daily sheet: Sales ·
+Opening stock value · Purchases (stock added at cost: Purchase, Purchase edit, Supplier return) · Closing stock value ·
+Cost of stock sold (Sale, Sale edit, Refund at batch cost) · Profit (sales − cost of stock sold) · Expenses · Other stock
+changes (write-offs, counts, adjustments, transfers, expiries, stock loaded at the start) · Number of sales. Stock value
+is the app's Inventory value (batch cost, expired not included), rebuilt from the stock movements, so each day
+reconciles (Opening + Purchases − Cost − Other = Closing) and a day corrects itself when a till sends its sales late.
+An administrator creates the private link in Settings → Data & backup (`/api/daily-stock-link`, key kept in the
+pharmacy's server-only secrets, "Make a new link" replaces it); a Google Sheet reads
+`/api/daily-stock/<pharmacy>/<key>.csv` with `=IMPORTDATA(...)` (last 62 days, `?days=` up to 400).
+Tests: tests/unit-daily-stock.mjs, tests/v46-daily-stock.mjs.

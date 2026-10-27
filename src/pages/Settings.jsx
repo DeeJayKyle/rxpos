@@ -1,9 +1,9 @@
 import { useEffect, useState, useRef } from 'react';
-import { Store, Printer, MessageSquareText, Cloud, DatabaseBackup, CheckCircle2, XCircle, Smartphone, CreditCard, Plus, Trash2, RotateCcw, ShieldAlert, BellRing, MapPin, Search, Thermometer, RefreshCw } from 'lucide-react';
+import { Store, Printer, MessageSquareText, Cloud, DatabaseBackup, Sheet, Copy, CheckCircle2, XCircle, Smartphone, CreditCard, Plus, Trash2, RotateCcw, ShieldAlert, BellRing, MapPin, Search, Thermometer, RefreshCw } from 'lucide-react';
 import { useStore, uid, audit, downloadFile, today, defaultSettings, DEFAULT_PAYMENT_METHODS } from '../store.jsx';
 import { Tabs } from '../ui.jsx';
 import { ask, toast } from '../feedback.jsx';
-import { cloudConfig, daySummary } from '../cloud.js';
+import { cloudConfig, daySummary, dailyStockLink } from '../cloud.js';
 import { searchPlaces, DEFAULT_PLACE, storageLimits } from '../weather.js';
 import { isWeb, platformName } from '../platform.js';
 import { pharmacyDefaults, validatePharmacyDefaults } from '../pharmacy-settings.js';
@@ -241,6 +241,7 @@ export default function Settings() {
           <div className="row gap">
             <button className="btn primary" onClick={() => downloadFile(`rxpos-backup-${today()}.json`, JSON.stringify({ ...db, settings: sharedSettings }), 'application/json')}>Download a backup</button>
           </div>
+          {can('settings.manage') && syncCfg?.url && <DailyStockSheet syncCfg={syncCfg} />}
           {can('data.reset') && (
             <div className="danger-zone">
               <h3><ShieldAlert size={18} />Restore default settings</h3>
@@ -294,5 +295,34 @@ function DailySummary({ s, setS, onSave }) {
       </div>
       {preview && <pre className="summary-preview">{preview}</pre>}
     </form>
+  );
+}
+
+/** Settings → Data & backup: the private link a Google Sheet reads every day's stock figures from (worker/dailystock.js) */
+function DailyStockSheet({ syncCfg }) {
+  const [link, setLink] = useState(undefined); // undefined: loading · null: none yet · string
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { dailyStockLink(syncCfg).then((r) => setLink(r.url || null)).catch(() => setLink(null)); }, [syncCfg?.tenant]); // eslint-disable-line react-hooks/exhaustive-deps
+  const formula = link ? `=IMPORTDATA("${link}")` : '';
+  const copy = async (text, what) => { try { await navigator.clipboard.writeText(text); toast(`${what} copied`, 'success'); } catch { toast('Select the text and copy it', 'warn'); } };
+  const renew = async () => {
+    if (link && !(await ask({ title: 'Make a new link?', message: 'The old link stops working at once: paste the new formula into your sheet.', confirmText: 'Make a new link' }))) return;
+    setBusy(true);
+    try { setLink((await dailyStockLink(syncCfg, true)).url); } catch (e) { toast(e.message, 'error'); } finally { setBusy(false); }
+  };
+  return (
+    <div className="card" style={{ marginTop: 16 }}>
+      <h3><Sheet size={18} />Daily stock sheet (Google Sheets)</h3>
+      <p className="muted small">Every day&apos;s sales, opening and closing stock value, purchases (stock added at cost), cost of stock sold, profit and expenses, worked out by the cloud from all your devices. Paste the formula into an empty tab of your Google Sheet: it refreshes by itself, and a day corrects itself if a till sends its sales late. Anyone who can open the sheet can read these daily totals (nothing else).</p>
+      {link === undefined ? <p className="muted small">Loading…</p> : link ? (
+        <>
+          <code className="small" style={{ display: 'block', wordBreak: 'break-all', margin: '8px 0' }}>{formula}</code>
+          <div className="row gap">
+            <button type="button" className="btn primary" onClick={() => copy(formula, 'Formula')}><Copy size={16} />Copy formula</button>
+            <button type="button" className="btn ghost" disabled={busy} onClick={renew}><RefreshCw size={16} />Make a new link</button>
+          </div>
+        </>
+      ) : <button type="button" className="btn primary" disabled={busy} onClick={renew}><Sheet size={16} />Create the link</button>}
+    </div>
   );
 }

@@ -51,6 +51,8 @@ export const ownerGoogleLogin = (url, credential) => call({ url: cleanUrl(url) }
 /** Public name of the pharmacy at a web address (for its sign-in page) */
 export const pharmacyInfo = (url, slug) => call({ url: cleanUrl(url) }, '/api/pharmacy/' + encodeURIComponent(slug), { timeout: 8000 });
 export const calendarLink = (cfg) => call(cfg, '/api/calendar-link', { timeout: 8000 });
+/** The pharmacy's daily stock sheet link for a Google Sheet (=IMPORTDATA); renew = a new link, the old one stops */
+export const dailyStockLink = (cfg, renew = false) => call(cfg, '/api/daily-stock-link', { method: renew ? 'POST' : 'GET', body: renew ? {} : undefined, timeout: 15000 });
 // AI (Cloudflare Workers AI): read a prescription photo; make a drug quiz
 export const aiPrescription = (cfg, image) => call(cfg, '/api/ai/prescription', { method: 'POST', body: { image }, timeout: 90000 });
 export const aiInvoice = (cfg, image) => call(cfg, '/api/ai/invoice', { method: 'POST', body: { image }, timeout: 120000 });
