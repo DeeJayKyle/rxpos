@@ -37,7 +37,7 @@ export async function receiptPdf(sale, { db, fmt }) {
   const logo = db.license?.[0]?.branding?.logo;
   const head = [
     ...(db.branches.length > 1 && branch ? [branch.name] : []),
-    ...(branch?.address || s.address ? [branch?.address || s.address] : []),
+    ...(((db.branches.length > 1 && branch?.address) ? branch.address : s.address) ? [(db.branches.length > 1 && branch?.address) ? branch.address : s.address] : []),
     ...(s.phone ? ['Tel: ' + s.phone] : []), ...(s.tin ? ['TIN: ' + s.tin] : []),
     ...(isProforma ? ['PROFORMA INVOICE'] : []),
     `${sale.number} · ${new Date(sale.date).toLocaleString()}`,

@@ -19,7 +19,7 @@ export function Receipt({ sale }) {
         {db.license?.[0]?.branding?.logo && <img className="receipt-logo" src={db.license[0].branding.logo} alt="" />}
         <strong className="receipt-title">{s.name}</strong>
         {db.branches.length > 1 && branch && <div>{branch.name}</div>}
-        {(branch?.address || s.address) && <div>{branch?.address || s.address}</div>}
+        {((db.branches.length > 1 && branch?.address) ? branch.address : s.address) && <div>{(db.branches.length > 1 && branch?.address) ? branch.address : s.address}</div>}
         {s.phone && <div>Tel: {s.phone}</div>}
         {s.tin && <div>TIN: {s.tin}</div>}
         {isProforma && <div className="receipt-tag">PROFORMA INVOICE</div>}
@@ -69,7 +69,7 @@ export function SaleInvoice({ sale }) {
           {db.license?.[0]?.branding?.logo && <img className="receipt-logo" src={db.license[0].branding.logo} alt="" />}
           <strong className="invoice-name">{s.name}</strong>
           {db.branches.length > 1 && branch && <div>{branch.name}</div>}
-          {(branch?.address || s.address) && <div>{branch?.address || s.address}</div>}
+          {((db.branches.length > 1 && branch?.address) ? branch.address : s.address) && <div>{(db.branches.length > 1 && branch?.address) ? branch.address : s.address}</div>}
           {s.phone && <div>Tel: {s.phone}</div>}
           {s.tin && <div>TIN: {s.tin}</div>}
         </div>

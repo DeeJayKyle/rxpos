@@ -70,6 +70,7 @@ const SUITES = [
   ['pay & sms gated', 'v30-paysms.mjs', []],
   ['restore epoch', 'v31-restore.mjs', []],
   ['restore drill', 'v33-restore-drill.mjs', []],
+  ['receipt from settings', 'v47-receipt.mjs', ['.output/v47']],
   // performance timings: only on request (npm run bench), never part of npm test
   ...(process.argv[2] === 'bench' ? [['benchmarks', 'bench.mjs', ['.output/bench']]] : []),
   // the Windows app's self-update needs a screen: Windows itself, or xvfb-run on Linux
