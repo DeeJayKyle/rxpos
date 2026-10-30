@@ -1,0 +1,30 @@
+name: Send a test alert email
+
+# Manually send ONE test email through the live uptime monitor (worker/uptime.js, uptimeCheck test mode) to confirm
+# owner alerts actually reach the inbox. It uses the existing OWNER_KEY secret and sends to ALERT_EMAIL (or the owner
+# console email) through the same Brevo sender used for every other alert. It changes no data — it only asks the
+# monitor to send its built-in test message. Run it from Actions → Send a test alert email → Run workflow.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ask the live monitor to send a test email
+        env:
+          OWNER_KEY: ${{ secrets.OWNER_KEY }}
+          API: https://api.rxposug.com
+        run: |
+          if [ -z "$OWNER_KEY" ]; then echo "::error::OWNER_KEY secret is not set."; exit 1; fi
+          resp=$(curl -sS -X POST "$API/api/owner/uptime-test" -H "Authorization: Bearer $OWNER_KEY" -H 'Content-Type: application/json')
+          echo "Monitor response: $resp"   # the recipient is masked (e.g. ma***@x) and no secret is printed
+          echo "$resp" | grep -q '"mailed":true' || {
+            echo "::error::The test email was NOT sent. Set ALERT_EMAIL (or the owner-console email), and make sure BREVO_API_KEY + BREVO_SENDER_EMAIL are configured.";
+            exit 1;
+          }
+          echo "Test alert email sent."
