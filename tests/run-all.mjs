@@ -26,6 +26,7 @@ const SUITES = [
   ['date helpers (unit)', 'unit-dates.mjs', []],
   ['record ids (unit)', 'unit-ids.mjs', []],
   ['watchdog alerts (unit)', 'unit-watchdog.mjs', []],
+  ['backup verify (unit)', 'unit-verify.mjs', []],
   ['storage change detection (unit)', 'unit-diff.mjs', []],
   ['theme choice (unit)', 'unit-theme.mjs', []],
   ['theme contrast', 'contrast-test.mjs', []],

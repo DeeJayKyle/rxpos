@@ -41,7 +41,7 @@ worker/         the cloud (Cloudflare Worker): index.js (API), live.js (live con
 functions/      Cloudflare Pages: /api on rxposug.com → the Worker; _middleware.js sends rxpos.pages.dev to rxposug.com
 electron/       the Windows app shell          server/  the self-hosted Hub
 tests/          automated tests (npm test)     tools/   backup.mjs, restore.mjs, rxtera/ (copying from Rxtera)
-.github/workflows/  build.yml (apps + releases), backup.yml (nightly backup)
+.github/workflows/  build.yml (apps + releases), backup.yml (nightly backup), restore-drill.yml (weekly restore check)
 ```
 
 Plain JavaScript: React + Vite for the app, Cloudflare Workers for the cloud. Any JavaScript developer can work on it,
@@ -125,6 +125,29 @@ OWNER_KEY=… BACKUP_PASSPHRASE=… npm run backup -- backups
 Restoring writes rows back exactly as they were; devices pick them up on their next sync.
 
 Each device also keeps its own full copy of its pharmacy, plus daily snapshots: Settings → Backup.
+
+**Off-site copy (recommended).** The 30-day Actions artifact is lost if the GitHub repo or account is lost, so the
+nightly job also copies each (already-encrypted) `.rxbak` to a Cloudflare R2 bucket when it is set up. To turn it on:
+
+1. Cloudflare dashboard → R2 → create a bucket (e.g. `rxpos-backups`); turn on **versioning**, and **Object Lock** if
+   you want backups that can't be deleted or overwritten for N days.
+2. R2 → Manage API tokens → create a token that can **read & write that one bucket**. Note the Access Key ID and Secret.
+3. GitHub → repo → Settings → Secrets → Actions, add four repository secrets:
+   `R2_ACCOUNT_ID` (your Cloudflare account id), `R2_BUCKET` (the bucket name), `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`.
+
+Until all four are set, the nightly job just keeps the 30-day artifact and prints a notice — nothing breaks. Once set,
+backups land at `s3://<bucket>/rxpos/`.
+
+**Weekly restore drill (`restore-drill.yml`, Mondays).** A backup you can't restore isn't a backup, so every Monday
+GitHub Actions proves it two ways: (a) it seeds a throwaway local cloud, backs it up, deletes the data and restores it,
+checking it comes back exactly — this always runs and never touches production; and (b) when R2 is configured, it
+downloads the **real latest** off-site backup, decrypts it with the passphrase and checks it isn't empty (it only reads
+it — it never restores into production). If either fails, the workflow goes red. Run it now from Actions → *Weekly
+restore drill* → **Run workflow**. You can also check any backup file by hand:
+
+```bash
+BACKUP_PASSPHRASE=… node tools/restore.mjs rxpos-backup-2026-10-15.rxbak --verify
+```
 
 ## 8. Keys: changing them
 

@@ -24,3 +24,44 @@ jobs:
       - run: npm ci
       - name: Backup -> restore round-trip
         run: node tests/run-all.mjs v33-restore-drill
+
+  # Prove the REAL off-site backup can be opened — not just that the restore mechanism works. Downloads the latest
+  # .rxbak from Cloudflare R2, decrypts it with the backup passphrase and checks it isn't empty. It only READS the
+  # backup; it never restores into production. Runs only when the R2 secrets are set (same ones backup.yml uses), so
+  # the round-trip drill above still runs on its own until R2 is configured.
+  offsite:
+    name: Verify the real off-site backup (when R2 is configured)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Download the latest R2 backup and verify it decrypts
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          if [ -z "$R2_ACCOUNT_ID" ] || [ -z "$R2_BUCKET" ] || [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
+            echo "::notice::R2 off-site backup not configured — skipping the off-site verify (the local round-trip drill still ran). Set R2_ACCOUNT_ID, R2_BUCKET, R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY to also check the real off-site backup each week."
+            exit 0
+          fi
+          if [ -z "$BACKUP_PASSPHRASE" ]; then
+            echo "::error::BACKUP_PASSPHRASE is not set, so the off-site backup cannot be opened. Add it as a repository secret."
+            exit 1
+          fi
+          endpoint="https://$R2_ACCOUNT_ID.r2.cloudflarestorage.com"
+          latest=$(aws s3 ls "s3://$R2_BUCKET/rxpos/" --endpoint-url "$endpoint" | grep '\.rxbak$' | sort | tail -1 | awk '{print $4}')
+          if [ -z "$latest" ]; then
+            echo "::error::No .rxbak backups found in s3://$R2_BUCKET/rxpos/ — the nightly off-site copy may not be running."
+            exit 1
+          fi
+          echo "Latest off-site backup: $latest"
+          mkdir -p offsite
+          aws s3 cp "s3://$R2_BUCKET/rxpos/$latest" "offsite/$latest" --endpoint-url "$endpoint" --only-show-errors
+          node tools/restore.mjs "offsite/$latest" --verify

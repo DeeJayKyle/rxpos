@@ -1,9 +1,12 @@
-// Open an RxPOS backup made by tools/backup.mjs: show what is in it, save it as plain JSON, or put it back into a cloud.
+// Open an RxPOS backup made by tools/backup.mjs: show what is in it, check it, save it as plain JSON, or put it back.
 //   BACKUP_PASSPHRASE=… node tools/restore.mjs <file.rxbak>                       → summary only
+//   BACKUP_PASSPHRASE=… node tools/restore.mjs <file.rxbak> --verify              → check it decrypts & isn't empty
 //   BACKUP_PASSPHRASE=… node tools/restore.mjs <file.rxbak> --json out.json       → decrypted copy (keep it safe!)
 //   BACKUP_PASSPHRASE=… RXPOS_API=… OWNER_KEY=… node tools/restore.mjs <file.rxbak> --restore [--tenant <id>]
-// --restore writes every row back exactly as it was (same ids, same sequence numbers). With --tenant only that
-// pharmacy is put back. Devices pull the restored data on their next sync.
+// --verify opens the file (so a wrong passphrase or a damaged/empty backup fails with a non-zero exit) without
+// touching any cloud — the weekly restore drill uses it on the real off-site backup. --restore writes every row
+// back exactly as it was (same ids, same sequence numbers). With --tenant only that pharmacy is put back. Devices
+// pull the restored data on their next sync.
 import fs from 'node:fs';
 import zlib from 'node:zlib';
 import crypto from 'node:crypto';
@@ -27,6 +30,16 @@ const only = val('--tenant');
 const pick = (rows) => (only ? rows.filter((r) => (r.tenant ?? r.id) === only) : rows);
 console.log(`Backup from ${data.at} (${data.database}): ${data.tenants.length} pharmacies, ${data.records.length} records, ${data.files.length} attachments`);
 for (const t of data.tenants) console.log(`  ${t.id}${t.slug && t.slug !== t.id ? ' /' + t.slug : ''}  ${t.name}  ·  ${data.records.filter((r) => r.tenant === t.id && !r.deleted).length} records`);
+
+if (flag('--verify')) {
+  // Getting here means the file decrypted and parsed (a wrong passphrase or a corrupt file already threw above).
+  // Also refuse an empty backup, so a nightly job that quietly started writing nothing is caught by the drill.
+  const problems = [];
+  if (!data.tenants?.length) problems.push('no pharmacies');
+  if (!data.records?.length) problems.push('no records');
+  if (problems.length) { console.error('Backup FAILED verification:', problems.join(', ')); process.exit(1); }
+  console.log(`Backup verified: it decrypts and holds ${data.tenants.length} pharmacies and ${data.records.length} records.`);
+}
 
 if (val('--json')) { fs.writeFileSync(val('--json'), JSON.stringify(data, null, 1)); console.log('Saved plain JSON to', val('--json'), '(it contains password hashes and keys: keep it private)'); }
 
