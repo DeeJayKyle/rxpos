@@ -2,38 +2,27 @@
 // covers the database, the websites and cloud sync). This adds the two other ways the whole system "goes wrong":
 //   1. Device crash reports arriving (src/crash.js → client_errors) — a short digest, at most once every 30 minutes.
 //   2. The nightly cloud backup stopping — if no success heartbeat for over 26 hours.
-// Runs on the same 5-minute cron as uptime (worker/index.js → scheduled). Recipient is ALERT_EMAIL, or the owner's
-// email in owner_config. State lives in owner_config so reminders don't repeat too often.
+// Runs on the same 5-minute cron as uptime (worker/index.js → scheduled). Emails go out through the shared Brevo
+// path (worker/email.js), to ALERT_EMAIL or the owner's email in owner_config. State lives in owner_config so
+// reminders don't repeat too often.
+import { sendAlert, alertRecipient } from './email.js';
 const BACKUP_STALE_H = 26;     // a backup is expected every night; warn past this age
 const BACKUP_REMIND_H = 12;    // while backups are stale, remind at most this often
 const ERROR_GAP_MIN = 30;      // at most one crash-digest email this often
 
-async function mail(env, to, subject, text) {
-  if (!to || !env.BREVO_API_KEY || !env.BREVO_SENDER_EMAIL) return false;
-  const r = await fetch('https://api.brevo.com/v3/smtp/email', {
-    method: 'POST', headers: { 'api-key': env.BREVO_API_KEY, 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify({ sender: { email: env.BREVO_SENDER_EMAIL, name: 'RxPOS monitor' }, to: [{ email: to }], subject, textContent: text }),
-  }).catch(() => ({ ok: false }));
-  return !!r.ok;
-}
 async function cfgGet(env, key, dflt) {
   const row = await env.DB.prepare('SELECT v FROM owner_config WHERE k = ?1').bind(key).first();
   if (!row?.v) return dflt;
   try { return JSON.parse(row.v); } catch { return dflt; }
 }
 const cfgSet = (env, key, obj) => env.DB.prepare("INSERT INTO owner_config (k, v) VALUES (?1, ?2) ON CONFLICT(k) DO UPDATE SET v = ?2").bind(key, JSON.stringify(obj)).run();
-async function recipient(env) {
-  if (env.ALERT_EMAIL) return env.ALERT_EMAIL;
-  const row = await env.DB.prepare("SELECT v FROM owner_config WHERE k = 'email'").first();
-  return row?.v || '';
-}
 
 /**
  * One watchdog pass. `mailer` and `now` are injectable for tests. Returns what it did.
  * Safe to call every 5 minutes: it only emails on genuinely new problems and rate-limits reminders.
  */
-export async function watchdog(env, { now = new Date(), mailer = mail } = {}) {
-  const to = await recipient(env);
+export async function watchdog(env, { now = new Date(), mailer = sendAlert } = {}) {
+  const to = await alertRecipient(env);
   if (!to) return { skipped: 'no alert email set' };
   const nowMs = now.getTime();
   const out = { to: to.replace(/^(.{2}).*(@.*)$/, '$1***$2') };

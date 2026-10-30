@@ -1,6 +1,8 @@
 // Uptime watch: every 5 minutes (cron in wrangler.jsonc) check the database and the website, and email the owner
-// when something breaks and again when it works again. State lives in owner_config key "uptime".
+// when something breaks and again when it works again. State lives in owner_config key "uptime". Emails go out
+// through the shared Brevo path (worker/email.js), the same one the system watchdog uses.
 // Limitation: it runs on Cloudflare, so a full Cloudflare outage can't be reported from here (an outside monitor covers that).
+import { sendAlert as mail } from './email.js';
 const SITES = ['https://rxposug.com/', 'https://www.rxposug.com/'];
 const REMIND_MIN = 60; // while still broken, remind once an hour
 
@@ -8,15 +10,6 @@ async function withTimeout(p, ms, what) {
   let timer;
   try { return await Promise.race([p, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(`${what}: no answer in ${ms / 1000} s`)), ms); })]); }
   finally { clearTimeout(timer); }
-}
-
-async function mail(env, to, subject, text) {
-  if (!to || !env.BREVO_API_KEY || !env.BREVO_SENDER_EMAIL) return false;
-  const r = await fetch('https://api.brevo.com/v3/smtp/email', {
-    method: 'POST', headers: { 'api-key': env.BREVO_API_KEY, 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify({ sender: { email: env.BREVO_SENDER_EMAIL, name: 'RxPOS monitor' }, to: [{ email: to }], subject, textContent: text }),
-  });
-  return r.ok;
 }
 
 /** Runs the checks; returns { problems, dbOk, mailed }. `test: true` always sends one email (owner console test). */
