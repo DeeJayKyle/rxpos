@@ -34,6 +34,10 @@ const info = JSON.parse(out.trim().split('\n').pop());
 check('the backup file was written and is non-empty', !!info.file && fs.existsSync(info.file) && info.bytes > 0, JSON.stringify({ bytes: info.bytes, records: info.records }));
 check('the backup captured this pharmacy', info.tenants >= 1 && info.records >= 3, JSON.stringify({ tenants: info.tenants, records: info.records }));
 
+// the backup recorded a success heartbeat (the cloud watchdog emails the owner if this ever goes stale)
+const beat = ((await owner('/backup?part=meta')).ownerConfig || []).find((r) => r.k === 'backup');
+check('the backup recorded a success heartbeat', !!beat && JSON.parse(beat.v).at, beat?.v);
+
 // simulate data loss
 await owner('/tenants/' + tid + '/delete', { confirm: slug });
 check('after deletion the pharmacy is gone', !(await owner('/tenants')).tenants?.some((x) => x.id === tid));

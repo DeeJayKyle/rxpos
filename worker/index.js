@@ -21,6 +21,7 @@ import { isOwner, ownerAuthRoutes, ownerAccount, verifyGoogle, getConfig, ownerM
 export { TenantHub } from './live.js';
 import { backup, restore } from './backup.js';
 import { uptimeCheck } from './uptime.js';
+import { watchdog } from './watchdog.js';
 import { dailySummaries } from './summary.js';
 import { dailyStockFor, toCsv } from './dailystock.js';
 import { twoStepDdl, twoStepOf, totpCheck, markUsed, twoStepRoutes } from './twostep.js';
@@ -768,6 +769,12 @@ async function owner(env, req, url, body) {
   if (parts[0] === 'move-to-turso') return moveToTurso(env, req, body);
   if (parts[0] === 'backup' && req.method === 'GET') return backup(env, url, json);
   if (parts[0] === 'restore' && req.method === 'POST') return restore(env, body, json);
+  // The nightly backup records a success heartbeat here; the watchdog emails the owner if it ever goes stale.
+  if (parts[0] === 'heartbeat' && req.method === 'POST') {
+    const beat = JSON.stringify({ at: new Date().toISOString(), bytes: Number(body?.bytes) || 0, records: Number(body?.records) || 0 });
+    await db.prepare("INSERT INTO owner_config (k, v) VALUES ('backup', ?1) ON CONFLICT(k) DO UPDATE SET v = ?1").bind(beat).run();
+    return json({ ok: true });
+  }
   if (parts[0] === 'account') return ownerAccount(env, req, url, body || {}, { json });
   if (parts[0] === 'uptime-test' && req.method === 'POST') return json(await uptimeCheck(env, { test: true, sync }));
   const view = async (t) => {
@@ -1258,7 +1265,11 @@ export default {
   async scheduled(event, env, ctx) {
     // 18:00 UTC = 21:00 in Uganda: each pharmacy's daily summary email (worker/summary.js)
     if (event.cron === '0 18 * * *') { ctx.waitUntil(dailySummaries(withDatabase(env)).then((r) => console.log('daily summaries', r.map((x) => `${x.tenant}:${x.sent}${x.error ? ' ' + x.error : ''}`).join(', '))).catch((e) => console.log('daily summaries failed', e.message))); return; }
-    if (event.cron !== '0 6 * * 1') { ctx.waitUntil(uptimeCheck(withDatabase(env), { sync }).then((r) => console.log('uptime', JSON.stringify(r))).catch((e) => console.log('uptime check failed', e.message))); return; }
+    if (event.cron !== '0 6 * * 1') {
+      ctx.waitUntil(uptimeCheck(withDatabase(env), { sync }).then((r) => console.log('uptime', JSON.stringify(r))).catch((e) => console.log('uptime check failed', e.message)));
+      ctx.waitUntil(watchdog(withDatabase(env)).then((r) => console.log('watchdog', JSON.stringify(r))).catch((e) => console.log('watchdog failed', e.message)));
+      return;
+    }
     if (env.BREVO_API_KEY) ctx.waitUntil(fetch('https://api.brevo.com/v3/account', { headers: { 'api-key': env.BREVO_API_KEY, Accept: 'application/json' } }).then((r) => console.log('brevo keep-alive', r.status)).catch((e) => console.log('brevo keep-alive failed', e.message)));
   },
   async fetch(req, rawEnv, ctx) {
