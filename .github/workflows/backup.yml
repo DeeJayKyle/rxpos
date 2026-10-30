@@ -32,3 +32,23 @@ jobs:
           path: backups/*.rxbak
           retention-days: 30
           if-no-files-found: error
+      # Also keep each backup off-site, so it outlives the 30-day Actions artifact and a lost repo/account.
+      # Optional: runs only when the R2 secrets are set, so the nightly backup keeps working without it. Create a
+      # Cloudflare R2 bucket with Object Lock + versioning, an API token scoped to write it, and add repo secrets
+      # R2_ACCOUNT_ID, R2_BUCKET, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY. The .rxbak is already encrypted, so R2 only
+      # ever holds ciphertext.
+      - name: Copy the backup off-site to Cloudflare R2 (when configured)
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+        run: |
+          if [ -z "$R2_ACCOUNT_ID" ] || [ -z "$R2_BUCKET" ] || [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
+            echo "::notice::R2 off-site backup not configured — keeping the 30-day Actions artifact only. Set R2_ACCOUNT_ID, R2_BUCKET, R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY to also keep backups off-site."
+            exit 0
+          fi
+          aws s3 cp backups/ "s3://$R2_BUCKET/rxpos/" --recursive --exclude '*' --include '*.rxbak' \
+            --endpoint-url "https://$R2_ACCOUNT_ID.r2.cloudflarestorage.com" --only-show-errors
+          echo "Backup copied off-site to R2 bucket $R2_BUCKET (prefix rxpos/)."

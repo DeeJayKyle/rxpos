@@ -1,0 +1,26 @@
+name: Weekly restore drill
+
+# Proves the backup can actually be RESTORED, not just written. Every Monday it seeds a throwaway local cloud, backs
+# it up with tools/backup.mjs, deletes the data, restores it from the encrypted file and checks it comes back exactly.
+# This never touches production — it runs against a local wrangler dev cloud — so it is always safe to run.
+on:
+  schedule:
+    - cron: '17 3 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  drill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Backup -> restore round-trip
+        run: node tests/run-all.mjs v33-restore-drill
