@@ -138,6 +138,19 @@ nightly job also copies each (already-encrypted) `.rxbak` to a Cloudflare R2 buc
 Until all four are set, the nightly job just keeps the 30-day artifact and prints a notice — nothing breaks. Once set,
 backups land at `s3://<bucket>/rxpos/`.
 
+_Setup checklist (tick as you go):_
+
+- [ ] Cloudflare → R2 → **Create bucket** `rxpos-backups`, versioning on (Object Lock optional).
+- [ ] Copy the **Account ID** from the R2 overview page → GitHub secret `R2_ACCOUNT_ID`.
+- [ ] R2 → **Manage R2 API Tokens → Create API token**, *Object Read & Write*, scoped to that one bucket.
+- [ ] Copy its **Access Key ID** → GitHub secret `R2_ACCESS_KEY_ID`, and **Secret Access Key** (shown once) → `R2_SECRET_ACCESS_KEY`.
+- [ ] GitHub secret `R2_BUCKET` = `rxpos-backups`.
+- [ ] GitHub secret `ALERT_EMAIL` = your email, so the monitor/watchdog alerts actually send (needs `BREVO_API_KEY` + `BREVO_SENDER_EMAIL` too).
+- [ ] Verify: Actions → *Nightly cloud backup* → **Run workflow**, then *Weekly restore drill* → **Run workflow**; the drill's **offsite** job should pass.
+
+(GitHub secrets live at repo → Settings → Secrets and variables → Actions → *New repository secret*. Never paste secret
+values into chat or commits — set them straight into GitHub.)
+
 **Weekly restore drill (`restore-drill.yml`, Mondays).** A backup you can't restore isn't a backup, so every Monday
 GitHub Actions proves it two ways: (a) it seeds a throwaway local cloud, backs it up, deletes the data and restores it,
 checking it comes back exactly — this always runs and never touches production; and (b) when R2 is configured, it
