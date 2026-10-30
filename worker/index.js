@@ -104,6 +104,10 @@ function ensureSchema(db) {
     if (!have.has('records_seq')) ddl.push('CREATE INDEX records_seq ON records(tenant, seq)');
     if (!have.has('records_t')) ddl.push('CREATE INDEX records_t ON records(tenant, t)');
     if (!have.has('records_gseq')) ddl.push('CREATE INDEX records_gseq ON records(seq)'); // fast MAX(seq) on every write
+    // Sign-in from the main page (no pharmacy chosen) looks up a user across every tenant, which records_t (led by
+    // tenant) can't serve — without this it full-scans the whole table and times out once the data grows. A PARTIAL
+    // index holds only the handful of user rows, so it stays tiny and only costs a write when a user row changes.
+    if (!have.has('records_users')) ddl.push("CREATE INDEX records_users ON records(tenant) WHERE t = 'users'");
     if (have.has('records_type')) ddl.push('DROP INDEX records_type'); // not worth its write cost
     if (!have.has('tenants')) ddl.push(`CREATE TABLE tenants (id TEXT PRIMARY KEY, name TEXT NOT NULL, key_hash TEXT UNIQUE, features TEXT NOT NULL DEFAULT '{}',
       status TEXT NOT NULL DEFAULT 'active', secrets TEXT NOT NULL DEFAULT '{}', notes TEXT, created_at TEXT NOT NULL, slug TEXT, branding TEXT)`);
