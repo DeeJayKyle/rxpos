@@ -21,7 +21,7 @@ jobs:
           API: https://api.rxposug.com
         run: |
           if [ -z "$OWNER_KEY" ]; then echo "::error::OWNER_KEY secret is not set."; exit 1; fi
-          resp=$(curl -sS -X POST "$API/api/owner/uptime-test" -H "Authorization: Bearer $OWNER_KEY" -H 'Content-Type: application/json')
+          resp=$(curl -sS -X POST "$API/api/owner/uptime-test" -H "Authorization: Bearer $OWNER_KEY" -H 'Content-Type: application/json' -d '{}')
           echo "Monitor response: $resp"   # the recipient is masked (e.g. ma***@x) and no secret is printed
           echo "$resp" | grep -q '"mailed":true' || {
             echo "::error::The test email was NOT sent. Set ALERT_EMAIL (or the owner-console email), and make sure BREVO_API_KEY + BREVO_SENDER_EMAIL are configured.";
