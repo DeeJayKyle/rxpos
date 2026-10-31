@@ -1,0 +1,36 @@
+name: Free artifact storage
+
+# Deletes old per-build installer artifacts (RxPOS-Windows, RxPOS-Hub, RxPOS-Android), keeping the newest of each.
+# They are only copies of installers: every shipped version is in GitHub Releases. When they fill the Actions storage
+# quota, new builds, releases and the 30-day backup copy can't upload. Backups (rxpos-backup-*) are NEVER touched.
+# Run it from Actions → Free artifact storage → Run workflow. GitHub recalculates the quota within 6–12 hours.
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  clean:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+    steps:
+      - name: Delete old build artifacts, keep the newest of each
+        run: |
+          gh api --paginate "repos/$REPO/actions/artifacts?per_page=100" \
+            --jq '.artifacts[] | select(.expired | not) | [.name, .created_at, .id, .size_in_bytes] | @tsv' > all.tsv
+          echo "Artifacts found: $(wc -l < all.tsv)"
+          # only the build installers; newest first per name; skip the first (newest) of each
+          grep -E '^RxPOS-(Windows|Hub|Android)\b' all.tsv | sort -t$'\t' -k1,1 -k2,2r \
+            | awk -F'\t' 'seen[$1]++' > delete.tsv || true
+          n=0; bytes=0
+          while IFS=$'\t' read -r name created id size; do
+            gh api -X DELETE "repos/$REPO/actions/artifacts/$id" && { n=$((n+1)); bytes=$((bytes+size)); }
+          done < delete.tsv
+          echo "Deleted $n old build artifacts, about $((bytes / 1048576)) MB."
+          echo "Kept (newest of each):"; grep -E '^RxPOS-(Windows|Hub|Android)\b' all.tsv | sort -t$'\t' -k1,1 -k2,2r | awk -F'\t' '!seen[$1]++ {print "  " $1 "  " $2}'
+          echo "Backups left untouched: $(grep -c '^rxpos-backup-' all.tsv || true)"
