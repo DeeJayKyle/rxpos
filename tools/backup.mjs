@@ -55,6 +55,7 @@ fs.writeFileSync(name, file);
 console.log(JSON.stringify({ file: name, bytes: file.length, tenants: meta.tenants.length, records: records.length, files: meta.files.length, chunks: chunks.length, database: meta.database }));
 
 // Record a success heartbeat so the cloud watchdog can email the owner if backups ever stop (worker/watchdog.js).
-try {
+// The nightly workflow sets BACKUP_HEARTBEAT=0 and records it itself, only after the file is stored somewhere.
+if (process.env.BACKUP_HEARTBEAT !== '0') try {
   await fetch(`${API}/api/owner/heartbeat`, { method: 'POST', headers: { Authorization: 'Bearer ' + KEY, 'Content-Type': 'application/json' }, body: JSON.stringify({ bytes: file.length, records: records.length }), signal: AbortSignal.timeout(30000) });
 } catch (e) { console.error('heartbeat failed (backup still saved):', e.message); }

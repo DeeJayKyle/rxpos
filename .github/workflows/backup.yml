@@ -1,7 +1,10 @@
 name: Nightly cloud backup
 
-# Every night at 02:00 Uganda time (23:00 UTC) the whole cloud is downloaded, encrypted with BACKUP_PASSPHRASE and kept
-# for 30 days as a download on this run (Actions → Nightly cloud backup → the run → Artifacts).
+# Every night at 02:00 Uganda time (23:00 UTC) the whole cloud is downloaded and encrypted with BACKUP_PASSPHRASE,
+# then stored in two places: off-site in Cloudflare R2 (when the R2 secrets are set) and as a 30-day download on this
+# run (Actions → Nightly cloud backup → the run → Artifacts). Either store is enough: a problem with one (e.g. the
+# GitHub artifact storage quota) never stops the other. The job fails only if the backup was saved NOWHERE, and the
+# success heartbeat the cloud watchdog checks is recorded only after the backup is actually saved.
 # Needs repository secrets OWNER_KEY and BACKUP_PASSPHRASE. Restore with tools/restore.mjs (see MAINTENANCE.md).
 on:
   schedule:
@@ -15,6 +18,8 @@ jobs:
   backup:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      RXPOS_API: https://api.rxposug.com
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -22,22 +27,16 @@ jobs:
           node-version: 22
       - name: Download and encrypt
         env:
-          RXPOS_API: https://api.rxposug.com
           OWNER_KEY: ${{ secrets.OWNER_KEY }}
           BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
-        run: node tools/backup.mjs backups
-      - uses: actions/upload-artifact@v4
-        with:
-          name: rxpos-backup-${{ github.run_id }}
-          path: backups/*.rxbak
-          retention-days: 30
-          if-no-files-found: error
-      # Also keep each backup off-site, so it outlives the 30-day Actions artifact and a lost repo/account.
-      # Optional: runs only when the R2 secrets are set, so the nightly backup keeps working without it. Create a
-      # Cloudflare R2 bucket with Object Lock + versioning, an API token scoped to write it, and add repo secrets
-      # R2_ACCOUNT_ID, R2_BUCKET, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY. The .rxbak is already encrypted, so R2 only
-      # ever holds ciphertext.
+          BACKUP_HEARTBEAT: '0' # recorded below, only once the backup is stored somewhere
+        run: node tools/backup.mjs backups | tee backup-info.json
+      # Off-site first, so it never depends on GitHub's artifact storage. Create a Cloudflare R2 bucket (versioning,
+      # Object Lock optional), an API token scoped to write it, and add repo secrets R2_ACCOUNT_ID, R2_BUCKET,
+      # R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY. The .rxbak is already encrypted, so R2 only ever holds ciphertext.
       - name: Copy the backup off-site to Cloudflare R2 (when configured)
+        id: r2
+        continue-on-error: true
         env:
           R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
           R2_BUCKET: ${{ secrets.R2_BUCKET }}
@@ -47,8 +46,34 @@ jobs:
         run: |
           if [ -z "$R2_ACCOUNT_ID" ] || [ -z "$R2_BUCKET" ] || [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
             echo "::notice::R2 off-site backup not configured — keeping the 30-day Actions artifact only. Set R2_ACCOUNT_ID, R2_BUCKET, R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY to also keep backups off-site."
-            exit 0
+            exit 1
           fi
           aws s3 cp backups/ "s3://$R2_BUCKET/rxpos/" --recursive --exclude '*' --include '*.rxbak' \
             --endpoint-url "https://$R2_ACCOUNT_ID.r2.cloudflarestorage.com" --only-show-errors
           echo "Backup copied off-site to R2 bucket $R2_BUCKET (prefix rxpos/)."
+      - name: Keep a 30-day copy on this run
+        id: artifact
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: rxpos-backup-${{ github.run_id }}
+          path: backups/*.rxbak
+          retention-days: 30
+          if-no-files-found: error
+      - name: Record success, or fail if the backup was saved nowhere
+        env:
+          OWNER_KEY: ${{ secrets.OWNER_KEY }}
+          R2: ${{ steps.r2.outcome }}
+          ARTIFACT: ${{ steps.artifact.outcome }}
+        run: |
+          echo "Off-site (R2): $R2 · Actions artifact: $ARTIFACT"
+          [ "$ARTIFACT" = success ] || echo "::warning::The 30-day Actions copy was not saved (often the GitHub artifact storage quota)."
+          if [ "$R2" != success ] && [ "$ARTIFACT" != success ]; then
+            echo "::error::The backup was made but could not be stored anywhere. Nothing from tonight is saved."
+            exit 1
+          fi
+          # the heartbeat the cloud watchdog checks: it emails the owner if this goes stale
+          body=$(node -e "const i=JSON.parse(require('fs').readFileSync('backup-info.json','utf8').trim().split('\n').pop()); console.log(JSON.stringify({bytes:i.bytes,records:i.records}))")
+          curl -fsS -X POST "$RXPOS_API/api/owner/heartbeat" -H "Authorization: Bearer $OWNER_KEY" -H 'Content-Type: application/json' -d "$body" > /dev/null \
+            || echo "::warning::Backup saved, but the success heartbeat could not be recorded."
+          echo "Backup saved."
