@@ -35,6 +35,7 @@ export const PERMISSIONS = [
   ['Management', [
     ['finance', 'Finance (expenses, banks, loans, cash book)'],
     ['reports', 'Reports & dashboard money figures'],
+    ['reports.lines', 'Sales lines report only (what was sold and by whom, no profit)'],
     ['branches.view', 'See all branches'],
     ['audit', 'Audit log'],
     ['users.manage', 'Manage users & roles'],
@@ -50,7 +51,7 @@ export const DEFAULT_ROLES = [
   { id: 'manager', name: 'Manager', builtIn: true, permissions: ALL_PERMISSIONS.filter((p) => !['settings.manage', 'data.reset'].includes(p)) },
   { id: 'pharmacist', name: 'Pharmacist', builtIn: true, permissions: ['pos.sell', 'pos.wholesale', 'pos.discount', 'sales.view', 'sales.refund', 'sales.edit', 'purchases.edit', 'proformas', 'shifts', 'prescriptions', 'customers', 'suppliers', 'reminders', 'chat', 'inventory.view', 'medicines.manage', 'stock.receive', 'stock.count', 'stock.adjust', 'transfers', 'reports'] },
   { id: 'dispenser', name: 'Dispenser', builtIn: true, permissions: ['pos.sell', 'sales.view', 'shifts', 'prescriptions', 'customers', 'chat', 'inventory.view', 'stock.count'] },
-  { id: 'cashier', name: 'Cashier', builtIn: true, permissions: ['pos.sell', 'sales.view', 'shifts', 'customers', 'chat'] },
+  { id: 'cashier', name: 'Cashier', builtIn: true, permissions: ['pos.sell', 'sales.view', 'shifts', 'customers', 'chat', 'reports.lines'] },
 ].map((r) => ({ ...r, updatedAt: t0 }));
 
 export const FEATURES = [

@@ -123,7 +123,7 @@ const NAV = [
     ['/creditors', 'Creditors', ArrowUpRight, null, null, <P.Creditors />, 'finance', 'finance'],
     ['/cash-book', 'Cash Book', BookOpen, null, null, <P.CashBook />, 'finance', 'finance'],
   ] },
-  { group: 'Insights', items: [['/weekly', 'Weekly Summary', CalendarRange, null, null, <P.Weekly />, 'reports', 'reports'], ['/reports', 'Reports', BarChart3, null, null, <P.Reports />, 'reports', 'reports']] },
+  { group: 'Insights', items: [['/weekly', 'Weekly Summary', CalendarRange, null, null, <P.Weekly />, 'reports', 'reports'], ['/reports', 'Reports', BarChart3, null, null, <P.Reports />, ['reports', 'reports.lines'], 'reports']] },
   { group: 'System', items: [
     ['/users', 'Users & Roles', UserCog, null, null, <P.Users />, 'users.manage'],
     ['/settings', 'Settings', SettingsIcon, null, null, <P.Settings />, 'settings.manage'],

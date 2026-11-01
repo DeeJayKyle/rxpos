@@ -34,9 +34,10 @@ function Donut({ parts, fmt }) {
 }
 
 export default function Reports() {
-  const { db, products, fmt, batchesOf } = useStore();
+  const { db, products, fmt, batchesOf, can } = useStore();
   const location = useLocation();
-  const [tab, setTab] = useState(location.state?.tab || 'sales');
+  const full = can('reports'); // otherwise 'reports.lines' only (e.g. cashiers): just the Sales lines tab, no profit
+  const [tab, setTab] = useState(full ? location.state?.tab || 'sales' : 'lines');
   const pageRef = useRef(null);
   const TAB_NAMES = { profit: 'Profit & Margins', sales: 'Sales Report', lines: 'Sales lines', products: 'Sales by Product', consumption: 'Consumption (ABC)', purchases: 'Purchase Report', expenses: 'Expenses Report', stock: 'Stock Valuation', income: 'Income Statement' };
   const [from, setFrom] = useState(location.state?.from || today().slice(0, 8) + '01');
@@ -84,8 +85,8 @@ export default function Reports() {
   return (
     <div className="page" ref={pageRef}>
       <div className="page-head"><h1>Reports</h1><div className="row gap wrap">{tab !== 'stock' && Range}{tab !== 'lines' && <PdfButton target={pageRef} title={TAB_NAMES[tab]} subtitle={tab === 'stock' ? `As at ${new Date().toLocaleDateString()}` : `${from} to ${to}`} />}</div></div>
-      <PageTip id="reports" title="Reading your figures">Pick the dates at the top right. Profit &amp; margins shows what each medicine earns and lists prices below your target margin; every table exports to PDF or CSV.</PageTip>
-      <Tabs value={tab} onChange={setTab} tabs={[['sales', 'Sales Report'], ['lines', 'Sales lines'], ['products', 'Sales by Product'], ['consumption', 'Consumption (ABC)'], ['purchases', 'Purchase Report'], ['expenses', 'Expenses Report'], ['profit', 'Profit & margins'], ['stock', 'Stock Valuation'], ['income', 'Income Statement']]} />
+      {full && <PageTip id="reports" title="Reading your figures">Pick the dates at the top right. Profit &amp; margins shows what each medicine earns and lists prices below your target margin; every table exports to PDF or CSV.</PageTip>}
+      <Tabs value={tab} onChange={setTab} tabs={!full ? [['lines', 'Sales lines']] : [['sales', 'Sales Report'], ['lines', 'Sales lines'], ['products', 'Sales by Product'], ['consumption', 'Consumption (ABC)'], ['purchases', 'Purchase Report'], ['expenses', 'Expenses Report'], ['profit', 'Profit & margins'], ['stock', 'Stock Valuation'], ['income', 'Income Statement']]} />
 
       {tab === 'sales' && (
         <>
@@ -129,7 +130,7 @@ export default function Reports() {
         </div>
       )}
 
-      {tab === 'lines' && <SalesLines from={from} to={to} branch={branch} initial={{ medicine: location.state?.medicine }} />}
+      {tab === 'lines' && <SalesLines from={from} to={to} branch={branch} money={full} initial={{ medicine: location.state?.medicine }} />}
 
       {tab === 'consumption' && <ConsumptionReport sales={sales} from={from} to={to} />}
 

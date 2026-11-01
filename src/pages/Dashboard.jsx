@@ -85,7 +85,8 @@ export default function Dashboard() {
       </section>
 
       <div className="stats kpis">
-        <Stat to="/sales" state={{ from: today(), to: today() }} label="Today's sales" value={fmt(t.total)} sub={`${t.n} sale${t.n === 1 ? '' : 's'} · vs yesterday`} delta={delta} tone="teal" icon={Banknote} />
+        {/* today's sales open Reports → Sales lines for today (every medicine sold); staff without it get the sales list */}
+        <Stat {...(can('reports') || can('reports.lines') ? { to: '/reports', state: { tab: 'lines', from: today(), to: today() } } : { to: '/sales', state: { from: today(), to: today() } })} label="Today's sales" value={fmt(t.total)} sub={`${t.n} sale${t.n === 1 ? '' : 's'} · vs yesterday`} delta={delta} tone="teal" icon={Banknote} />
         {can('reports') && <Stat to="/reports" label="Gross profit today" value={fmt(t.gp)} sub="after cost of goods, before expenses" delta={gpDelta} tone="violet" icon={TrendingUp} />}
         {(can('finance') || can('reports')) && <Stat to="/expenses" label="Today's expenses" value={fmt(t.exp)} sub={`Sales − expenses: ${fmt(t.total - t.exp)}`} tone="orange" icon={Wallet} />}
         <Stat to="/sales" state={{ from: today(), to: today() }} label="Transactions" value={t.n.toLocaleString()} sub="receipts today · vs yesterday" delta={nDelta} tone="blue" icon={ReceiptText} />
