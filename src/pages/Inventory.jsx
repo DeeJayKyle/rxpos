@@ -5,6 +5,7 @@ import { CrudPage, Tabs, Modal, SearchBox, Empty, PdfButton } from '../ui.jsx';
 import { useStore, daysUntil, put, move, addBatch, audit, downloadFile, toCSV, batchValue, stockValue, markupPrice, MAIN_BRANCH } from '../store.jsx';
 import { ask, toast } from '../feedback.jsx';
 import { formatQty } from '../money.js';
+import { removalSplit } from '../fefo.js';
 import { newInternalBarcode } from '../barcode.jsx';
 
 const expiryClass = (expiry, warn) => {
@@ -320,20 +321,33 @@ export function StockCard() {
   const options = stocked.filter((x) => !q || `${x.name} ${x.generic || ''} ${x.barcode || ''}`.toLowerCase().includes(ql)).slice(0, 300);
   if (p && !options.some((x) => x.id === p.id)) options.unshift(p);
 
+  const saving = useRef(false); // a second tap on Save while it is being saved must not record it twice
   const saveAdjust = (e) => {
     e.preventDefault();
+    if (saving.current) return;
     const b = batches.find((x) => x.id === adjust.batchId);
     let batchId = b && !b.legacy ? b.id : null;
     const counted = Number(adjust.counted);
-    let diff = adjust.mode === 'count' ? counted - (b?.qty || 0) : Number(adjust.qty) * (adjust.mode === 'remove' ? -1 : 1);
+    const diff = adjust.mode === 'count' ? counted - (b?.qty || 0) : Number(adjust.qty) * (adjust.mode === 'remove' ? -1 : 1);
     if (!diff) return setAdjust(null);
+    // Remove: never more than a batch holds (a batch going negative while others still have stock hides stock and value);
+    // what the chosen batch doesn't have comes from the medicine's other batches, earliest expiry first
+    let parts = null;
+    if (adjust.mode === 'remove') {
+      try { parts = removalSplit(batches, adjust.batchId, -diff); } catch (err) { toast(err.message, 'error'); return; }
+    }
+    saving.current = true;
     update((d) => {
       if (adjust.mode === 'add' && adjust.batchId === 'new') batchId = addBatch(d, { productId: p.id, batch: adjust.newBatch, expiry: adjust.newExpiry, cost: p.cost }).id;
-      move(d, { productId: p.id, qty: diff, type: adjust.mode === 'count' ? 'Stock count' : 'Adjustment', note: adjust.reason, user: user.name, batchId, branchId });
-      audit(d, user, adjust.mode === 'count' ? 'Stock count' : 'Stock adjusted', `${p.name} ${b?.batch || adjust.newBatch || ''}: ${diff > 0 ? '+' : ''}${diff} (${adjust.reason})`, branchId);
+      const type = adjust.mode === 'count' ? 'Stock count' : 'Adjustment';
+      if (parts) for (const x of parts) move(d, { productId: p.id, qty: -x.qty, type, note: adjust.reason, user: user.name, batchId: x.batchId, branchId });
+      else move(d, { productId: p.id, qty: diff, type, note: adjust.reason, user: user.name, batchId, branchId });
+      const where = parts ? parts.map((x) => `${x.batch || '—'} −${x.qty}`).join(', ') : b?.batch || adjust.newBatch || '';
+      audit(d, user, adjust.mode === 'count' ? 'Stock count' : 'Stock adjusted', `${p.name} ${where}: ${diff > 0 ? '+' : ''}${diff} (${adjust.reason})`, branchId);
     });
     toast('Stock updated');
     setAdjust(null);
+    setTimeout(() => { saving.current = false; }, 800);
   };
 
   return (
@@ -343,7 +357,7 @@ export function StockCard() {
         <div className="row gap">
           <SearchBox value={q} onChange={setQ} placeholder="Find medicine…" />
           <select value={id} onChange={(e) => setId(e.target.value)}>{options.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select>
-          {p && p.stock > 0 && can('stock.adjust') && <button className="btn primary" onClick={() => setAdjust({ mode: 'count', batchId: batches[0]?.id || 'new', counted: batches[0]?.qty || 0, qty: 1, reason: '', newBatch: '', newExpiry: '' })}><SlidersHorizontal size={16} />Count / adjust</button>}
+          {p && p.stock > 0 && can('stock.adjust') && <button className="btn primary" onClick={() => { const first = batches.find((x) => x.qty > 0) || batches[0]; setAdjust({ mode: 'count', batchId: first?.id || 'new', counted: first?.qty || 0, qty: 1, reason: '', newBatch: '', newExpiry: '' }); }}><SlidersHorizontal size={16} />Count / adjust</button>}
         </div>
       </div>
       {p && (

@@ -274,13 +274,13 @@ export function inputFor(rows, tenant) {
     let rec; try { rec = typeof r.rec === 'string' ? JSON.parse(r.rec) : r.rec; } catch { continue; }
     if (!rec) continue;
     rec.id ??= r.id;
-    if (r.t === 'movements') { rec.seq = r.seq; rec.origin = r.origin; }
+    if (r.t === 'movements' || r.t === 'sales') { rec.seq = r.seq; rec.origin = r.origin; }
     (live[r.t] ||= []).push(rec);
   }
   return { products: live.products || [], batches: live.batches || [], movements: live.movements || [], sales: live.sales || [], purchases: live.purchases || [], dead };
 }
 
-async function fetchAll() {
+export async function fetchAll() {
   const API = (process.env.RXPOS_API || 'https://api.rxposug.com').replace(/\/+$/, '');
   const KEY = process.env.OWNER_KEY;
   if (!KEY) throw new Error('Set OWNER_KEY (or use --file)');

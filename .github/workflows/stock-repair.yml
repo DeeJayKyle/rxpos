@@ -1,0 +1,34 @@
+name: Stock repair
+
+# Fixes stock problems the Stock audit finds that are safe to fix automatically, by ADDING correcting stock movements
+# (history is never edited): batches below zero while the same medicine holds stock in other batches. Each medicine's
+# total stock stays the same. Leave "apply" as "no" for a dry run that only prints the plan.
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: 'Write the corrections? (yes / no = dry run)'
+        default: 'no'
+      pharmacies:
+        description: 'Pharmacy web addresses, space-separated (empty = all)'
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Repair stock
+        env:
+          RXPOS_API: https://api.rxposug.com
+          OWNER_KEY: ${{ secrets.OWNER_KEY }}
+          APPLY: ${{ inputs.apply }}
+          ONLY: ${{ inputs.pharmacies }}
+        run: node tools/stock-repair.mjs $ONLY
