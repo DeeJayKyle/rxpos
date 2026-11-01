@@ -56,7 +56,7 @@ await A.evaluate(() => [...document.querySelectorAll('.stat.link')].find((s) => 
 check('dashboard "Low stock" tile opens Inventory on the Low stock tab', A.url().includes('#/inventory') && /low stock/i.test(await A.evaluate(() => document.querySelector('.tab.active')?.innerText || '')));
 await go(A, '/');
 await A.evaluate(() => [...document.querySelectorAll('.stat.link')].find((s) => /today's sales/i.test(s.innerText)).click()); await wait(1000);
-check('"Today\'s sales" tile opens Sales History filtered to today', A.url().includes('#/sales') && (await A.evaluate(() => [...document.querySelectorAll('input[type=date]')].map((i) => i.value).join(','))) === `${new Date().toISOString().slice(0, 10)},${new Date().toISOString().slice(0, 10)}`);
+check('"Today\'s sales" tile opens Reports → Sales lines for today', A.url().includes('#/reports') && /sales lines/i.test(await A.evaluate(() => document.querySelector('.tab.active')?.innerText || '')) && (await A.evaluate(() => [...document.querySelectorAll('input[type=date]')].map((i) => i.value).join(','))) === `${new Date().toISOString().slice(0, 10)},${new Date().toISOString().slice(0, 10)}`);
 check('all 8 dashboard tiles are links', (await (async () => { await go(A, '/'); return A.evaluate(() => document.querySelectorAll('.stat.link').length); })()) >= 8);
 
 // #8 quick edit & #9 stock card: stocked items only
