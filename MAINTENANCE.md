@@ -103,7 +103,7 @@ For a real new version instead, change `"version"` in `package.json` and tag `v1
 
 ## 7. Backups and restoring
 
-**Every night at 02:00 (Uganda)** GitHub Actions (`backup.yml`) downloads the whole cloud (every pharmacy, record, staff
+**Every night at about 01:40 (Uganda)** GitHub Actions (`backup.yml`) downloads the whole cloud (every pharmacy, record, staff
 account and chat attachment), encrypts it with the backup passphrase and keeps it for **30 days**:
 GitHub → Actions → *Nightly cloud backup* → a run → **Artifacts** → download the `.rxbak` file (inside a zip).
 Run one now: Actions → Nightly cloud backup → *Run workflow*. Keep a monthly copy somewhere else too (USB / Drive).

@@ -1,6 +1,6 @@
 name: Nightly cloud backup
 
-# Every night at 02:00 Uganda time (23:00 UTC) the whole cloud is downloaded and encrypted with BACKUP_PASSPHRASE,
+# Every night at about 01:41 Uganda time (22:41 UTC) the whole cloud is downloaded and encrypted with BACKUP_PASSPHRASE,
 # then stored in two places: off-site in Cloudflare R2 (when the R2 secrets are set) and as a 30-day download on this
 # run (Actions → Nightly cloud backup → the run → Artifacts). Either store is enough: a problem with one (e.g. the
 # GitHub artifact storage quota) never stops the other. The job fails only if the backup was saved NOWHERE, and the
@@ -8,7 +8,8 @@ name: Nightly cloud backup
 # Needs repository secrets OWNER_KEY and BACKUP_PASSPHRASE. Restore with tools/restore.mjs (see MAINTENANCE.md).
 on:
   schedule:
-    - cron: '0 23 * * *'
+    # not on the hour: GitHub queues top-of-the-hour schedules behind everyone else's (they ran ~3 hours late)
+    - cron: '41 22 * * *'
   workflow_dispatch:
 
 permissions:
