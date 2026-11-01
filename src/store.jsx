@@ -68,21 +68,7 @@ export function expiryBatches(products, batchesOf, warn) {
   const byExpiry = (a, b) => a.expiry.localeCompare(b.expiry);
   return { soon: soon.sort(byExpiry), expired: expired.sort(byExpiry) };
 }
-/** Stock value of one medicine at each batch's own cost (the medicine's cost if a batch has none); expired stock kept apart */
-export function batchValue(p, batchesOf, br) {
-  let value = 0, expired = 0;
-  for (const b of batchesOf(p.id, br)) {
-    if (!(b.qty > 0)) continue;
-    const v = b.qty * (b.cost || p.cost || 0);
-    if (b.expiry && daysUntil(b.expiry) < 0) expired += v; else value += v;
-  }
-  return { value, expired };
-}
-/** Inventory value of many medicines: { value (not expired), expired } */
-export const stockValue = (products, batchesOf, br) => products.reduce((a, p) => {
-  const v = batchValue(p, batchesOf, br);
-  return { value: a.value + v.value, expired: a.expired + v.expired };
-}, { value: 0, expired: 0 });
+export { batchValue, stockValue } from './stockvalue.js';
 /** Number of different medicines with stock expiring soon / already expired */
 export const expiryCounts = (products, batchesOf, warn) => {
   const { soon, expired } = expiryBatches(products, batchesOf, warn);

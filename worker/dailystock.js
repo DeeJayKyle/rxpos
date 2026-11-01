@@ -3,7 +3,8 @@
 //   Sales · Opening stock value · Purchases (stock added at cost) · Closing stock value · Cost of stock sold · Profit ·
 //   Expenses · Other stock changes
 // Stock value is what the app shows as Inventory value (store.jsx → batchValue): every batch's stock (the sum of its
-// stock movements) × the batch's cost (the medicine's cost if the batch has none), expired batches not included.
+// stock movements) × the medicine's current cost (the batch's own cost only if the medicine has none), expired batches
+// not included. Changing a medicine's cost therefore revalues all of its stock, on every day of the sheet.
 // Opening = the day before's closing; Closing = Opening + Purchases − Cost of stock sold − Other stock changes, where
 // Other is everything else that moved the value: write-offs, stock counts, adjustments, transfers, batches that
 // expired, stock loaded at the start. A Google Sheet reads it with =IMPORTDATA(<link>) (Settings → Data & backup).
@@ -50,7 +51,7 @@ export function dailyStock({ movements, batches, products, sales, expenses, from
     if (!l) {
       const b = m.batchId ? B.get(m.batchId) : null;
       const gone = m.batchId ? !b : false; // the app shows no batch for it, so it is in no total
-      l = { qty: 0, cost: (b && Number(b.cost)) || productCost(m.productId), expiry: (b ? b.expiry : P.get(m.productId)?.expiry) || '', gone };
+      l = { qty: 0, cost: productCost(m.productId) || (b && Number(b.cost)) || 0, expiry: (b ? b.expiry : P.get(m.productId)?.expiry) || '', gone };
       lots.set(k, l);
     }
     return l;

@@ -133,7 +133,7 @@ export function StockLevels() {
   const rows = products.filter((p) =>
     (!q || `${p.name} ${p.generic} ${p.barcode} ${p.category}`.toLowerCase().includes(ql)) &&
     (filter === 'all' || (filter === 'instock' && p.stock > 0) || (filter === 'low' && p.stock <= (p.reorder || 0) && p.stock > 0) || (filter === 'out' && p.stock <= 0)));
-  const sv = useMemo(() => stockValue(rows, batchesOf), [rows, batchesOf]); // at each batch's cost, expired apart
+  const sv = useMemo(() => stockValue(rows, batchesOf), [rows, batchesOf]); // physical stock × the medicine's current cost, expired apart
   const total = sv.value;
   const retail = rows.reduce((a, p) => a + Math.max(p.stock, 0) * (p.price || 0), 0);
   return (

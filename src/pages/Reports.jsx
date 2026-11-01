@@ -161,9 +161,8 @@ export default function Reports() {
       )}
 
       {tab === 'stock' && (() => {
-        // 1.5 the same rule as Inventory and the dashboard (store.jsx → batchValue): each batch at its own cost, and only
-        // the batches that have expired count as expired. (Before, every unit was valued at the medicine's latest cost and
-        // a medicine's whole stock counted as expired when its next batch had expired.)
+        // the same rule as Inventory and the dashboard (store.jsx → batchValue): physical stock × the medicine's current cost,
+        // and only the batches that have expired count as expired.
         const inStock = products.filter((p) => p.stock > 0);
         const sv = stockValue(inStock, batchesOf);
         const sellable = (p) => batchesOf(p.id).reduce((a, b) => a + (b.qty > 0 && !(b.expiry && daysUntil(b.expiry) < 0) ? b.qty : 0), 0);

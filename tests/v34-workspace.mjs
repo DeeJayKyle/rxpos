@@ -96,8 +96,8 @@ const invSub = await p.evaluate(() => document.querySelector('.page-head .sub')?
 await go('/reports');
 await p.evaluate(() => [...document.querySelectorAll('.tab')].find((x) => /Stock Valuation/.test(x.textContent))?.click()); await wait(400);
 const rep = await p.evaluate(() => Object.fromEntries([...document.querySelectorAll('.stat')].map((s) => [s.querySelector('small')?.textContent.trim(), s.querySelector('strong')?.textContent.trim()])));
-// at batch cost: Amoxyl good batch 10 × 600 + Zinc 30 × 90 = 8,700; expired: Amoxyl old batch 2 × 500 = 1,000
-check('Stock Valuation: stock at cost uses each batch\'s cost, expired excluded (8,700)', /8,700/.test(rep['Stock at cost'] || ''), JSON.stringify(rep));
+// at the medicine's cost: Amoxyl good batch 10 × 600 + Zinc 30 × 90 = 8,700; expired (Amoxyl old batch, 2 units) not included
+check('Stock Valuation: stock at cost, expired excluded (8,700)', /8,700/.test(rep['Stock at cost'] || ''), JSON.stringify(rep));
 check('Stock Valuation: only the expired batch counts as expired (1,000)', /1,000/.test(rep['Expired stock (cost)'] || ''), rep['Expired stock (cost)']);
 check('…the same totals Inventory shows', /8,700 at cost/.test(invSub) && /1,000 expired/.test(invSub), invSub);
 

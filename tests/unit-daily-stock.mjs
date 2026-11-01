@@ -55,4 +55,11 @@ ok('an untouched catalog medicine is valued like the app does it', () => {
   const r = dailyStock({ movements: [mv('2026-10-21T08:00:00Z', 'cat-1', null, 10, 'Opening stock')], batches: [], products: [], sales: [], expenses: [], from: '2026-10-22', to: '2026-10-22' });
   assert.ok(r[0].closing > 0);
 });
+ok('stock is valued at the medicine\'s current cost, like the app (not the batch\'s purchase cost)', () => {
+  const one = (cost) => dailyStock({ movements: [mv('2026-10-21T08:00:00Z', 'p9', 'b9', 10, 'Opening stock')], batches: [{ id: 'b9', productId: 'p9', cost: 80, expiry: '2099-01-01' }],
+    products: [{ id: 'p9', cost }], sales: [], expenses: [], from: '2026-10-22', to: '2026-10-22' })[0];
+  assert.equal(one(120).closing, 10 * 120);
+  assert.equal(one(150).closing, 10 * 150); // edit the cost → the sheet's stock value follows
+  assert.equal(one(0).closing, 10 * 80); // no cost on the medicine → the batch's own cost
+});
 console.log(`\n${passed} passed, 0 failed`);
