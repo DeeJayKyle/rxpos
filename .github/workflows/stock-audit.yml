@@ -1,0 +1,35 @@
+name: Stock audit
+
+# Read-only check of each pharmacy's stock records (tools/stock-audit.mjs): receipts vs stock taken out, purchases vs
+# stock added, duplicated changes, counts/edits made on a device missing earlier changes, negative / hidden stock, and a
+# day-by-day reconciliation of opening − closing stock value with the cost of sales. It changes nothing and prints stock
+# figures only (receipt numbers, medicines, quantities, values) — never customer details.
+on:
+  workflow_dispatch:
+    inputs:
+      days:
+        description: 'Days of daily reconciliation to show'
+        default: '30'
+      pharmacies:
+        description: 'Pharmacy web addresses to audit, space-separated (empty = all)'
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Audit stock
+        env:
+          RXPOS_API: https://api.rxposug.com
+          OWNER_KEY: ${{ secrets.OWNER_KEY }}
+          DAYS: ${{ inputs.days }}
+          ONLY: ${{ inputs.pharmacies }}
+        run: node tools/stock-audit.mjs $ONLY --days "${DAYS:-30}"

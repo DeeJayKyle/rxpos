@@ -27,6 +27,7 @@ const SUITES = [
   ['record ids (unit)', 'unit-ids.mjs', []],
   ['watchdog alerts (unit)', 'unit-watchdog.mjs', []],
   ['inventory value (unit)', 'unit-stockvalue.mjs', []],
+  ['stock audit (unit)', 'unit-stockaudit.mjs', []],
   ['backup verify (unit)', 'unit-verify.mjs', []],
   ['storage change detection (unit)', 'unit-diff.mjs', []],
   ['theme choice (unit)', 'unit-theme.mjs', []],

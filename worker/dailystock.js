@@ -27,7 +27,7 @@ export function dayLabel(day) {
 }
 
 /** Cost of a medicine the pharmacy never changed: the built-in catalog's, worked out as the app does (store.jsx baseProduct) */
-function catalogCost(id) {
+export function catalogCost(id) {
   const m = /^cat-(\d+)$/.exec(id || '');
   const row = m && catalog.rows[Number(m[1]) - 1];
   if (!row) return 0;
