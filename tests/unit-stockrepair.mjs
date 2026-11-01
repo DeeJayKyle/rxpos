@@ -17,4 +17,16 @@ ok("the medicine's total stock is unchanged", () => assert.equal(total('p1', pla
 ok('medicines without a negative batch are not touched', () => assert.ok(plan.moves.every((m) => m.productId === 'p1')));
 ok('corrections are adjustments with a clear note and fixed ids (re-running cannot double them)', () => { assert.ok(plan.moves.every((m) => m.type === 'Adjustment' && /Correction \(stock audit\)/.test(m.note) && m.id.startsWith('audit-20261101-'))); assert.equal(new Set(plan.moves.map((m) => m.id)).size, plan.moves.length); });
 ok('a second plan after applying has nothing to do', () => assert.equal(planRepairs({ products, batches, movements: [...movements, ...plan.moves] }).moves.length, 0));
+ok('a receipt that arrived with no stock movement gets its stock-out recorded from its own batches', () => {
+  const sales = [{ id: 's1', number: 'RHOO', date: '2026-11-01T09:00:00Z', status: 'completed', branchId: 'main', items: [{ id: 'p2', name: 'Zinc', qty: 2, alloc: [{ batchId: 'z', qty: 2 }] }] },
+    { id: 's2', number: 'ROK', date: '2026-11-01T09:00:00Z', status: 'completed', items: [{ id: 'p2', qty: 1, alloc: [{ batchId: 'z', qty: 1 }] }] },
+    { id: 'rx-s3', number: 'RX1', date: '2026-11-01T09:00:00Z', status: 'completed', items: [{ id: 'p2', qty: 1 }] }, // copied from Rxtera: never touched
+    { id: 's4', number: 'ROLD', date: '2026-10-01T09:00:00Z', status: 'completed', items: [{ id: 'p2', qty: 1 }] }]; // before stock tracking
+  const ms = [...movements, { batchId: 'z', productId: 'p2', qty: -1, type: 'Sale', ref: 'ROK', branchId: 'main', date: '2026-11-01T09:00:00Z' }];
+  const p = planRepairs({ products, batches, movements: ms, sales });
+  const fix = p.moves.filter((m) => m.ref === 'RHOO');
+  assert.equal(p.receipts.length, 1);
+  assert.deepEqual(fix.map((m) => [m.type, m.productId, m.batchId, m.qty]), [['Sale', 'p2', 'z', -2]]);
+  assert.equal(planRepairs({ products, batches, movements: [...ms, ...p.moves], sales }).receipts.length, 0);
+});
 console.log(`\n${passed} passed, 0 failed`);

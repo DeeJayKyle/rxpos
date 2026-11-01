@@ -4,6 +4,8 @@
 // Fixes:
 //   • batches below zero while the same medicine has stock in other batches (an adjustment "Remove" booked more than one
 //     batch held): the shortfall moves to those other batches, earliest expiry first. Each medicine's total is unchanged.
+//   • a receipt made in RxPOS (since stock tracking began) that reached the cloud with NO stock movement at all: the
+//     stock-out it should have made is recorded, from the batches the receipt itself chose (its "alloc").
 // Reports (no automatic fix, they need a decision): receipts made in RxPOS since stock tracking began whose stock was
 // not taken out, and duplicated stock changes. Prints stock figures only, never customer details.
 import { pathToFileURL } from 'node:url';
@@ -38,7 +40,21 @@ export function planRepairs({ products = [], batches = [], movements = [], sales
     lines.push({ medicine: P.get(neg.pid)?.name || neg.pid, batch: neg.batchId ? B.get(neg.batchId)?.batch : '(no batch)', was: neg.qty, movedFrom: takes.map(([d, t]) => `${d.batchId ? B.get(d.batchId)?.batch : '(no batch)'} −${t}`).join(', '),
       valueBackInTotal: Math.round(moved * cost(neg.pid)), leftNegative: need > 1e-9 ? -need : 0 });
   }
-  return { moves, lines, unfixable };
+  // receipts made in RxPOS since stock tracking began whose stock movements never arrived (none at all for the receipt)
+  const start = movements.filter((m) => /^Opening stock/.test(m.type)).map((m) => m.date).sort()[0];
+  const withMoves = new Set(movements.filter((m) => ['Sale', 'Sale edit', 'Refund'].includes(m.type)).map((m) => m.ref));
+  const receipts = [];
+  if (start) for (const s of sales) {
+    if (s.date < start || String(s.id).startsWith('rx-') || s.proforma || String(s.number).startsWith('PF') || withMoves.has(s.number)) continue;
+    const parts = (s.items || []).flatMap((i) => (i.alloc?.length ? i.alloc : [{ batchId: null, qty: i.qty }]).map((a) => ({ pid: i.id, name: i.name, batchId: a.batchId && B.has(a.batchId) ? a.batchId : null, qty: Number(a.qty) || 0 })));
+    if (!parts.length) continue;
+    parts.forEach((x, n) => {
+      moves.push({ id: `audit-sale-${s.number}-${n}`, productId: x.pid, qty: -x.qty, type: 'Sale', ref: s.number, note: 'Correction (stock audit): this receipt reached the cloud without its stock movements; recorded from the batches the receipt chose', user: 'Stock audit', batchId: x.batchId, branchId: s.branchId || 'main', date: s.date });
+      if (s.status === 'refunded') moves.push({ id: `audit-sale-${s.number}-${n}-r`, productId: x.pid, qty: x.qty, type: 'Refund', ref: s.number, note: 'Correction (stock audit): refund of the receipt above', user: 'Stock audit', batchId: x.batchId, branchId: s.branchId || 'main', date: s.refundedAt || s.date });
+    });
+    receipts.push({ receipt: s.number, day: ugDay(s.date), lines: parts.map((x) => `${x.name} −${x.qty}`).join(', '), value: Math.round(parts.reduce((a, x) => a + x.qty * cost(x.pid), 0)), refunded: s.status === 'refunded' });
+  }
+  return { moves, lines, unfixable, receipts };
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
@@ -54,6 +70,8 @@ if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
     console.log(`negative batches to correct: ${plan.lines.length}; correcting movements: ${plan.moves.length}`);
     for (const l of plan.lines) console.log(`  ${l.medicine} [${l.batch}] ${l.was} → 0, taken from ${l.movedFrom}${l.leftNegative ? ` (still ${l.leftNegative}: not enough stock elsewhere)` : ''}`);
     for (const u of plan.unfixable) console.log(`  CANNOT FIX (no other stock of it): ${u.medicine} ${u.qty}`);
+    console.log(`receipts whose stock-out never arrived, to record now: ${plan.receipts.length}`);
+    for (const r of plan.receipts) console.log(`  ${r.receipt} ${r.day}: ${r.lines} (${r.value.toLocaleString('en-US')})${r.refunded ? ' — refunded, so the stock goes back too' : ''}`);
     // receipts made in RxPOS since stock tracking began with stock not taken out: details to investigate
     const start = input.movements.filter((m) => /^Opening stock/.test(m.type)).map((m) => m.date).sort()[0] || '0000';
     const refs = new Map();
