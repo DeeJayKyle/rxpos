@@ -27,6 +27,12 @@ export function auditTenant({ products = [], batches = [], movements = [], sales
   const name = (pid) => P.get(pid)?.name || (/^cat-(\d+)$/.test(pid) ? catalog.rows[Number(pid.slice(4)) - 1]?.[0] : null) || pid;
   const known = (pid) => P.has(pid) || (/^cat-\d+$/.test(pid) && !deadP.has(pid));
   const out = { counts: {}, byType: {}, stock: {}, sales: {}, purchases: {}, duplicates: {}, stale: {}, daily: [], costs: {} };
+  // Stock is only tracked from the first opening stock: older receipts/purchases (e.g. history copied from Rxtera) never
+  // moved stock, so they are not checked. Records copied from Rxtera have ids starting "rx-".
+  const opens = movements.filter((m) => /^Opening stock/.test(m.type)).map((m) => m.date).sort();
+  const stockStart = opens[0] || '0000';
+  out.stockStart = stockStart === '0000' ? null : stockStart;
+  const copied = (r) => String(r.id || '').startsWith('rx-');
 
   // ---- movements by type ----
   for (const m of movements) {
@@ -40,13 +46,13 @@ export function auditTenant({ products = [], batches = [], movements = [], sales
   const lot = new Map(); // branch|batchId-or-lb → { pid, qty }
   for (const m of movements) {
     const k = (m.branchId || 'main') + '|' + (m.batchId || 'lb-' + m.productId);
-    const l = lot.get(k) || { pid: m.productId, batchId: m.batchId || null, qty: 0 };
-    l.qty += Number(m.qty) || 0; lot.set(k, l);
+    const l = lot.get(k) || { pid: m.productId, batchId: m.batchId || null, qty: 0, key: k, mix: {} };
+    l.qty += Number(m.qty) || 0; l.mix[m.type] = (l.mix[m.type] || 0) + (Number(m.qty) || 0); lot.set(k, l);
   }
   const hasBatches = new Set(batches.map((b) => b.productId));
   const st = { units: 0, value: 0, negative: { lots: 0, units: 0, value: 0, top: [] }, untracked: { lots: 0, units: 0, value: 0, top: [] },
     goneBatch: { lots: 0, units: 0, value: 0, top: [] }, goneProduct: { lots: 0, units: 0, value: 0, top: [] } };
-  const add = (g, l) => { g.lots++; g.units += l.qty; g.value += l.qty * cost(l.pid); g.top.push({ medicine: name(l.pid), qty: r0(l.qty * 100) / 100, value: r0(l.qty * cost(l.pid)) }); };
+  const add = (g, l) => { g.lots++; g.units += l.qty; g.value += l.qty * cost(l.pid); g.top.push({ medicine: name(l.pid), pid: l.pid, key: l.key, qty: r0(l.qty * 100) / 100, value: r0(l.qty * cost(l.pid)) }); };
   for (const l of lot.values()) {
     if (Math.abs(l.qty) < 1e-9) continue;
     if (!known(l.pid)) { add(st.goneProduct, l); continue; }
@@ -55,7 +61,13 @@ export function auditTenant({ products = [], batches = [], movements = [], sales
     if (!l.batchId && hasBatches.has(l.pid)) add(st.untracked, l);
     st.units += l.qty; st.value += l.qty * cost(l.pid);
   }
-  for (const g of [st.negative, st.untracked, st.goneBatch, st.goneProduct]) { g.value = r0(g.value); g.units = r0(g.units); g.top = g.top.sort((a, b) => Math.abs(b.value) - Math.abs(a.value)).slice(0, 12); }
+  for (const g of [st.negative, st.untracked, st.goneBatch, st.goneProduct]) { g.value = r0(g.value); g.units = r0(g.units); g.top = g.top.sort((a, b) => Math.abs(b.value) - Math.abs(a.value)).slice(0, 15); }
+  // for each negative lot: what drove it below zero, and how much stock the same medicine has in its other lots there
+  for (const t of st.negative.top) {
+    const l = lot.get(t.key); const br = t.key.split('|')[0];
+    t.mix = Object.fromEntries(Object.entries(l.mix).map(([k, v]) => [k, r0(v * 100) / 100]));
+    t.otherLots = r0([...lot.values()].filter((x) => x !== l && x.pid === l.pid && x.key.startsWith(br + '|') && x.qty > 0).reduce((a, x) => a + x.qty, 0) * 100) / 100;
+  }
   st.units = r0(st.units); st.value = r0(st.value);
   out.stock = st;
 
@@ -71,6 +83,8 @@ export function auditTenant({ products = [], batches = [], movements = [], sales
   const sx = { checked: 0, ok: 0, missing: { n: 0, units: 0, value: 0 }, extra: { n: 0, units: 0, value: 0 }, refundGap: { n: 0, units: 0, value: 0 }, top: [], orphan: { n: 0, units: 0, value: 0, top: [] }, noCost: 0, costVsNow: { lines: 0, recorded: 0, atNow: 0 } };
   for (const s of sales) {
     if (s.proforma || String(s.number).startsWith('PF')) continue;
+    if (s.date < stockStart) { sx.beforeStock = (sx.beforeStock || 0) + 1; continue; }
+    if (copied(s)) { sx.copiedAfter = (sx.copiedAfter || 0) + 1; }
     sx.checked++;
     const want = new Map();
     for (const i of s.items || []) { want.set(i.id, (want.get(i.id) || 0) + (Number(i.qty) || 0)); if (!(Number(i.cost) > 0)) sx.noCost++; sx.costVsNow.lines++; sx.costVsNow.recorded += (Number(i.cost) || 0) * (Number(i.qty) || 0); sx.costVsNow.atNow += cost(i.id) * (Number(i.qty) || 0); }
@@ -83,7 +97,8 @@ export function auditTenant({ products = [], batches = [], movements = [], sales
         fine = false;
         const bucket = diff < 0 ? sx.missing : sx.extra;
         bucket.n++; bucket.units += Math.abs(diff); bucket.value += Math.abs(diff) * cost(pid);
-        sx.top.push({ receipt: s.number, day: ugDay(s.date), medicine: name(pid), sold: w, stockOut: r0(g.out * 100) / 100, diff: r0(diff * 100) / 100, value: r0(diff * cost(pid)) });
+        if (copied(s)) sx.copiedMissing = (sx.copiedMissing || 0) + Math.abs(diff) * cost(pid);
+        sx.top.push({ receipt: s.number + (copied(s) ? ' (copied from Rxtera)' : ''), day: ugDay(s.date), medicine: name(pid), sold: w, stockOut: r0(g.out * 100) / 100, diff: r0(diff * 100) / 100, value: r0(diff * cost(pid)) });
       }
       if (s.status === 'refunded' && Math.abs(g.back - g.out) > 1e-6) { fine = false; sx.refundGap.n++; sx.refundGap.units += g.out - g.back; sx.refundGap.value += (g.out - g.back) * cost(pid); }
     }
@@ -108,13 +123,14 @@ export function auditTenant({ products = [], batches = [], movements = [], sales
   const px = { checked: 0, missing: { n: 0, units: 0, value: 0 }, top: [] };
   for (const p of purchases) {
     if (p.status === 'draft' || p.draft) continue;
+    if (String(p.date) < stockStart.slice(0, 10)) { px.beforeStock = (px.beforeStock || 0) + 1; continue; }
     px.checked++;
     const ref = p.invoice || p.number;
     const want = new Map();
     for (const i of p.items || []) { const pid = i.productId || i.id; if (pid) want.set(pid, (want.get(pid) || 0) + (Number(i.qty) || 0)); }
     for (const [pid, w] of want) {
       const g = (pin.get(ref + '|' + pid) || 0) + (pin.get(p.number + '|' + pid) || 0) * (ref !== p.number ? 1 : 0);
-      if (g + 1e-6 < w) { px.missing.n++; px.missing.units += w - g; px.missing.value += (w - g) * cost(pid); px.top.push({ purchase: ref, day: ugDay(p.date), medicine: name(pid), bought: w, stockIn: g, value: r0((w - g) * cost(pid)) }); }
+      if (g + 1e-6 < w) { px.missing.n++; px.missing.units += w - g; px.missing.value += (w - g) * cost(pid); px.top.push({ purchase: ref + (copied(p) ? ' (copied from Rxtera)' : ''), day: ugDay(p.date), medicine: name(pid), bought: w, stockIn: g, value: r0((w - g) * cost(pid)) }); }
     }
   }
   px.missing.units = r0(px.missing.units); px.missing.value = r0(px.missing.value);
@@ -162,12 +178,16 @@ export function auditTenant({ products = [], batches = [], movements = [], sales
   const lotKey = (m) => (m.branchId || 'main') + '|' + (m.batchId || 'lb-' + m.productId);
   const expiryOf = (m) => (m.batchId ? B.get(m.batchId)?.expiry : P.get(m.productId)?.expiry) || '';
   const valueAt = (day) => { let v = 0; for (const [k, l] of lotsD) if (l.qty > 0 && !l.gone && !(l.exp && l.exp < day)) v += l.qty * cost(l.pid); return v; };
+  const negValue = () => { let v = 0; for (const l of lotsD.values()) if (l.qty < 0 && !l.gone) v += l.qty * cost(l.pid); return v; }; // hidden from value
+  const expValue = (day) => { let v = 0; for (const l of lotsD.values()) if (l.qty > 0 && !l.gone && l.exp && l.exp < day) v += l.qty * cost(l.pid); return v; };
+  const noCostBy = new Map(); // day → value (at today's cost) of receipt lines saved with no cost
   const ms = movements.map((m) => ({ ...m, day: ugDay(m.date) })).sort((a, b) => (a.date < b.date ? -1 : 1));
   const from = new Date(Date.parse(today + 'T00:00:00Z') - (days - 1) * 864e5).toISOString().slice(0, 10);
   const saleCostBy = new Map(); // day → cost of goods sold as recorded on the receipts
   for (const s of sales) {
     if (s.status === 'refunded' || s.proforma) continue;
     const d = ugDay(s.date); saleCostBy.set(d, (saleCostBy.get(d) || 0) + (s.items || []).reduce((a, i) => a + (Number(i.cost) || 0) * (Number(i.qty) || 0), 0));
+    noCostBy.set(d, (noCostBy.get(d) || 0) + (s.items || []).filter((i) => !(Number(i.cost) > 0)).reduce((a, i) => a + cost(i.id) * (Number(i.qty) || 0), 0));
   }
   let i = 0;
   const apply = (until) => { while (i < ms.length && ms[i].day <= until) { const m = ms[i++]; const k = lotKey(m); const l = lotsD.get(k) || { pid: m.productId, qty: 0, exp: expiryOf(m), gone: !!(m.batchId && !B.has(m.batchId)) || !known(m.productId) }; l.qty += Number(m.qty) || 0; lotsD.set(k, l); } };
@@ -185,9 +205,11 @@ export function auditTenant({ products = [], batches = [], movements = [], sales
     const writeOff = t['Expired write-off'] || 0;
     const transfers = (t['Transfer in'] || 0) + (t['Transfer out'] || 0);
     const opening2 = (t['Opening stock'] || 0) + (t['Opening stock (import)'] || 0);
-    const explained = opening + purchasesV - saleMoves + countsV + writeOff + transfers + opening2;
+    const rxSync = t['Stock sync'] || 0;
+    const explained = opening + purchasesV - saleMoves + countsV + writeOff + transfers + opening2 + rxSync;
     out.daily.push({ day, opening: r0(opening), closing: r0(closing), drop: r0(opening - closing), receiptCost: r0(saleCostBy.get(day) || 0), saleMoves: r0(saleMoves), purchases: r0(purchasesV),
-      counts: r0(countsV), writeOff: r0(writeOff), transfers: r0(transfers), openingStock: r0(opening2), expiredOrHidden: r0(explained - closing) });
+      counts: r0(countsV), writeOff: r0(writeOff), transfers: r0(transfers), openingStock: r0(opening2), rxSync: r0(rxSync), expiredOrHidden: r0(explained - closing),
+      negativeNow: r0(negValue()), expiredNow: r0(expValue(day)), receiptNoCost: r0(noCostBy.get(day) || 0) });
     opening = closing;
   }
   return out;
@@ -200,6 +222,7 @@ export function formatReport(title, a) {
   const h = (s) => L.push('', '== ' + s + ' ==');
   L.push('', '#'.repeat(80), `# ${title}`, '#'.repeat(80));
   L.push(`records: ${Object.entries(a.counts).map(([k, v]) => `${v} ${k}`).join(', ')}`);
+  L.push(`stock tracked from: ${a.stockStart || 'never (no opening stock)'}`);
   h('Stock movements by type (value at each medicine\'s current cost)');
   for (const [t, x] of Object.entries(a.byType).sort((p, q) => q[1].n - p[1].n)) L.push(`  ${t.padEnd(24)} ${String(x.n).padStart(7)} moves  qty ${money(x.qty).padStart(10)}  value ${money(x.value).padStart(14)}`);
   const s = a.stock;
@@ -207,11 +230,12 @@ export function formatReport(title, a) {
   L.push(`  shown in the app: ${money(s.units)} units, value ${money(s.value)} (incl. expired)`);
   for (const [k, label] of [['negative', 'NEGATIVE batches (stock booked out that the system did not have — hidden from value)'], ['untracked', 'stock with no batch on medicines that have batches'], ['goneBatch', 'stock on DELETED batches (invisible in the app)'], ['goneProduct', 'stock on DELETED medicines (invisible in the app)']]) {
     const g = s[k]; L.push(`  ${label}: ${g.lots} lots, ${money(g.units)} units, ${money(g.value)}`);
-    for (const x of g.top.slice(0, 8)) L.push(`      ${x.medicine}: ${x.qty} (${money(x.value)})`);
+    for (const x of g.top.slice(0, k === 'negative' ? 15 : 8)) L.push(`      ${x.medicine}: ${x.qty} (${money(x.value)})${x.mix ? `  made of ${JSON.stringify(x.mix)}; other batches of it: ${x.otherLots}` : ''}`);
   }
   const x = a.sales;
   h('Sales vs stock taken out');
-  L.push(`  receipts checked: ${x.checked}; exactly right: ${x.ok}`);
+  L.push(`  receipts before stock tracking began (not checked): ${x.beforeStock || 0}`);
+  L.push(`  receipts checked: ${x.checked} (of which copied from Rxtera: ${x.copiedAfter || 0}); exactly right: ${x.ok}`);
   L.push(`  stock NOT taken out for sold items: ${x.missing.n} lines, ${money(x.missing.units)} units, ${money(x.missing.value)}`);
   L.push(`  MORE stock taken out than sold:       ${x.extra.n} lines, ${money(x.extra.units)} units, ${money(x.extra.value)}`);
   L.push(`  refunds not putting back what was taken: ${x.refundGap.n} lines, ${money(x.refundGap.units)} units, ${money(x.refundGap.value)}`);
@@ -222,6 +246,7 @@ export function formatReport(title, a) {
   L.push(`  cost of all sold items as recorded on receipts: ${money(x.costVsNow.recorded)}; at today's costs: ${money(x.costVsNow.atNow)}`);
   const p = a.purchases;
   h('Purchases vs stock added');
+  L.push(`  purchases before stock tracking began (not checked): ${p.beforeStock || 0}`);
   L.push(`  purchases checked: ${p.checked}; lines whose stock was not added: ${p.missing.n}, ${money(p.missing.units)} units, ${money(p.missing.value)}`);
   for (const t of p.top) L.push(`      ${t.purchase} ${t.day} ${t.medicine}: bought ${t.bought}, added ${t.stockIn} (${money(t.value)})`);
   const d = a.duplicates;
@@ -233,8 +258,10 @@ export function formatReport(title, a) {
   L.push(`  counts/adjustments/edits: ${z.counts}; affected: ${z.affected}; net effect ${money(z.units)} units, ${money(z.value)} (negative = stock lost)`);
   for (const t of z.top) L.push(`      ${t.day} ${t.type} ${t.medicine}: recorded ${t.countedDiff}, earlier change applied twice ${t.appliedTwice} (${money(t.value)})`);
   h(`Daily stock value (last ${a.daily.length} days, at today's costs)`);
-  L.push('  day         opening      closing   drop(o-c)  receipt-cost  sales-moves  purchases   counts  writeoff  transf  opening  expired/hidden');
-  for (const r of a.daily) L.push(`  ${r.day} ${money(r.opening).padStart(12)} ${money(r.closing).padStart(12)} ${money(r.drop).padStart(10)} ${money(r.receiptCost).padStart(12)} ${money(r.saleMoves).padStart(12)} ${money(r.purchases).padStart(10)} ${money(r.counts).padStart(8)} ${money(r.writeOff).padStart(9)} ${money(r.transfers).padStart(7)} ${money(r.openingStock).padStart(8)} ${money(r.expiredOrHidden).padStart(14)}`);
+  L.push('  drop = opening − closing; sales-moves = stock taken out by sales at today\'s cost; receipt-cost = cost saved on the receipts (no-cost = lines saved with none);');
+  L.push('  hidden = change explained by batches passing expiry or going negative (both left out of the value); negative/expired = what is left out at day end');
+  L.push('  day          opening     closing      drop  receipt-cost  no-cost  sales-moves  purchases   counts  writeoff  rx-sync  opening   hidden  negative   expired');
+  for (const r of a.daily.filter((d) => d.opening || d.closing)) L.push(`  ${r.day} ${money(r.opening).padStart(11)} ${money(r.closing).padStart(11)} ${money(r.drop).padStart(9)} ${money(r.receiptCost).padStart(13)} ${money(r.receiptNoCost).padStart(8)} ${money(r.saleMoves).padStart(12)} ${money(r.purchases).padStart(10)} ${money(r.counts).padStart(8)} ${money(r.writeOff).padStart(9)} ${money(r.rxSync).padStart(8)} ${money(r.openingStock).padStart(8)} ${money(r.expiredOrHidden).padStart(8)} ${money(r.negativeNow).padStart(9)} ${money(r.expiredNow).padStart(9)}`);
   return L;
 }
 
