@@ -5,6 +5,7 @@ import {
   Boxes, PackagePlus, History, CalendarClock, PencilRuler, ScrollText, Wallet, Tags, Landmark, ArrowLeftRight, HandCoins,
   ArrowDownLeft, ArrowUpRight, ClipboardCheck, RefreshCw, Undo2, ShieldPlus, BookOpen, BarChart3, Settings as SettingsIcon, Search, Sun, Moon, Menu, LogOut, ChevronDown,
   CornerDownLeft, User, Plus, BellRing, ShoppingBag, Tag, FileUp, Building2, Send, ShieldCheck, Clock, BookMarked, MessagesSquare, UserCog, KeyRound, CalendarDays, Thermometer, Palette, MonitorSmartphone, ScanText, GraduationCap, Megaphone, CalendarRange, LockKeyhole, PanelLeftClose, PanelLeftOpen, WifiOff,
+  Sparkles,
 } from 'lucide-react';
 import { useStore, makePassword, put, audit, isLowStock, expiryCounts } from './store.jsx';
 import { askText, ask, toast } from './feedback.jsx';
@@ -162,6 +163,33 @@ function ColourLevel({ onPick }) {
       <span className="grow">{l.name}<small className="muted"> · {l.hint}</small></span>
     </button>
   ));
+}
+
+/** One switch between this device's usual theme and the premium dark look (Midnight Pro). The setting is kept on the
+ *  device; switching only repaints, so the sale on the till, its client and totals stay exactly as they are. */
+const PREMIUM = 'midnight-pro', PREMIUM_PREV = 'rxpos-premium-prev', PREMIUM_KEY = 'rxpos-advanced-ui';
+function PremiumToggle({ theme, setTheme, setMode }) {
+  const { db } = useStore();
+  const list = allowedThemes(db.license?.[0]?.branding);
+  if (!list.some((t) => t.id === PREMIUM)) return null;
+  const useAdvancedUI = theme === PREMIUM;
+  const toggle = () => {
+    try {
+      if (useAdvancedUI) {
+        const prev = localStorage.getItem(PREMIUM_PREV);
+        setTheme(prev && prev !== PREMIUM && list.some((t) => t.id === prev) ? prev : paletteFor('light', list));
+        localStorage.setItem(PREMIUM_KEY, '0');
+      } else {
+        localStorage.setItem(PREMIUM_PREV, theme); localStorage.setItem(PREMIUM_KEY, '1');
+        setMode(''); setTheme(PREMIUM);
+      }
+    } catch { setTheme(useAdvancedUI ? paletteFor('light', list) : PREMIUM); }
+  };
+  return (
+    <button type="button" role="switch" aria-checked={useAdvancedUI} className={'premium-toggle' + (useAdvancedUI ? ' on' : '')} onClick={toggle} title={useAdvancedUI ? 'Premium UI is on: back to your usual theme' : 'Premium UI: the dark Midnight Pro look'}>
+      <Sparkles size={15} /><span>Premium UI</span><span className="premium-knob" aria-hidden="true" />
+    </button>
+  );
 }
 
 function ThemePicker({ theme, setTheme, mode, setMode, accent, setAccent, style, setStyle }) {
@@ -480,6 +508,7 @@ function Shell() {
           {db.branches.length > 1 && <NavLink to="/branches" className="pill branch-pill" title="Branch this device works as"><Building2 size={14} />{branch?.name}</NavLink>}
           <ClockPill />
           <NotificationBell />
+          <PremiumToggle theme={theme} setTheme={setTheme} setMode={setThemeMode} />
           <ThemePicker theme={theme} setTheme={setTheme} mode={themeMode} setMode={setThemeMode} accent={accent} setAccent={setAccent} style={surface} setStyle={setSurface} />
         </header>
         <main className="content">

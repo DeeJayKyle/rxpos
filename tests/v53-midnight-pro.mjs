@@ -65,11 +65,29 @@ check('a scanned line flashes green', /mpFlash/.test(await css('.cart-line', 'an
 await wait(800);
 check('the sale has the light beam while it has lines', (await css('.pos-cart', 'content', '::after')) === '""' && /mpBeam/.test(await css('.pos-cart', 'animationName', '::after')));
 check('totals: glass dock (blur 40px, 16px corners)', /blur\(40px\)/.test(await css('.pos-cart .totals', 'backdropFilter')) && (await css('.pos-cart .totals', 'borderRadius')) === '16px');
-check('Charge: emerald → teal gradient with its key tag', /linear-gradient\(90deg, rgb\(5, 150, 105\), rgb\(13, 148, 136\)\)/.test(await css('.pos-cart .pay-row .btn.primary', 'backgroundImage')) && /\[F9\]/.test(await p.evaluate(() => document.querySelector('.pos-cart .pay-row .btn.primary').innerText)));
+check('Charge: emerald → teal gradient with its key tag', /linear-gradient\(90deg, rgb\(5, 150, 105\), rgb\(13, 148, 136\)\)/.test(await css('.pos-cart .pay-row .btn.primary', 'backgroundImage')) && /\[F5\]/.test(await p.evaluate(() => document.querySelector('.pos-cart .pay-row .btn.primary').innerText)));
 await p.screenshot({ path: path.join(out, 'pos.png') });
 await p.select('select[aria-label="Till layout"]', 'advanced'); await wait(500);
 check('Advanced UI: the totals panel is the glass dock with the beam', /blur\(40px\)/.test(await css('.pos-pay', 'backdropFilter')) && /mpBeam/.test(await css('.pos-pay', 'animationName', '::after')));
 await p.screenshot({ path: path.join(out, 'pos-advanced.png') });
+
+// the Premium UI switch: back to the usual look and on again, the sale untouched; F5 charges in Premium UI
+await p.select('select[aria-label="Till layout"]', 'standard'); await wait(400);
+const saleNow = () => p.evaluate(() => [...document.querySelectorAll('.cart-line')].map((l) => l.innerText.replace(/\s+/g, ' ')).join(' | ') + ' || ' + document.querySelector('.totals .grand')?.innerText.replace(/\s+/g, ' '));
+const before = await saleNow();
+check('the top bar has a "Premium UI" switch, on', await p.evaluate(() => document.querySelector('.premium-toggle')?.getAttribute('aria-checked') === 'true'));
+await p.click('.premium-toggle'); await wait(500);
+check('switching it off goes back to a usual theme and keeps the sale exactly', (await p.evaluate(() => document.documentElement.dataset.palette)) !== 'midnight-pro' && (await saleNow()) === before, await saleNow());
+check('…with Charge as before ([F9])', /\[F9\]/.test(await p.evaluate(() => document.querySelector('.pos-cart .pay-row .btn.primary').innerText)));
+await p.click('.premium-toggle'); await wait(500);
+check('on again: Midnight Pro, same sale', (await p.evaluate(() => document.documentElement.dataset.palette)) === 'midnight-pro' && (await saleNow()) === before);
+await p.reload({ waitUntil: 'networkidle2' }); await wait(2500);
+check('the switch is remembered after a reload', (await p.evaluate(() => document.documentElement.dataset.palette)) === 'midnight-pro' && await p.evaluate(() => localStorage.getItem('rxpos-advanced-ui') === '1'));
+check('medicine tiles are see-through with stock as a pill', /rgba\(15, 23, 42, 0\.[48]\)/.test(await css('.product', 'backgroundColor')) && /rgba\(30, 41, 59, 0\.6\)/.test(await css('.product .stock-tag', 'backgroundColor')), [await css('.product', 'backgroundColor'), await css('.product .stock-tag', 'backgroundColor')].join(' / '));
+check('Charge shows [F5]', /\[F5\]/.test(await p.evaluate(() => document.querySelector('.pos-cart .pay-row .btn.primary').innerText)));
+await p.focus('.pos-products input.search'); await p.keyboard.press('F5'); await wait(1500);
+check('F5 charges the sale (no reload)', /Sale complete/.test(await p.evaluate(() => document.querySelector('.modal')?.innerText || '')));
+await p.screenshot({ path: path.join(out, 'pos-premium.png') });
 
 await b.close();
 await owner('/tenants/' + tid + '/delete', { confirm: T.tenant.slug });
