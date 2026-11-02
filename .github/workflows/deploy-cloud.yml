@@ -59,6 +59,6 @@ jobs:
           JS
       - name: Every update file arrives exactly as listed (the Windows app refuses a changed file)
         run: |
-          for i in 1 2 3; do node scripts/check-update-files.mjs; code=$?; [ $code = 0 ] && exit 0; sleep 20; done
+          for i in 1 2 3 4; do code=0; node scripts/check-update-files.mjs || code=$?; [ $code = 0 ] && exit 0; sleep 30; done # (|| keeps bash -e from stopping at the first try)
           if [ $code = 2 ]; then echo "::error::rxposug.com could not be reached from the build machine, so the update files were not checked (the deploy itself finished). Run the Cloud logs workflow to check them."; else echo "::error::Files on rxposug.com differ from version.json: installed apps cannot update. See the lines above."; fi
           exit 1
