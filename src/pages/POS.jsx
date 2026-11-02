@@ -1,7 +1,7 @@
 import { mainPack, packPrice, sellInPacks } from '../packs.js';
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useLocation, Link } from 'react-router-dom';
-import { ShoppingCart, Trash2, X, FileText, Printer, AlertTriangle, ScanBarcode, Smartphone, Loader2, CheckCircle2, UserPlus, Tag, BookMarked, Repeat, PauseCircle, Keyboard, Plus, ClipboardList, MessageCircle, MessageSquareText, Star, Search, Users } from 'lucide-react';
+import { ShoppingCart, Trash2, X, FileText, Printer, AlertTriangle, ScanBarcode, Smartphone, Loader2, CheckCircle2, UserPlus, Tag, BookMarked, Repeat, PauseCircle, Keyboard, Plus, ClipboardList, MessageCircle, MessageSquareText, Star, Search, Command, LayoutGrid, Users } from 'lucide-react';
 import { DrugInfoPanel, genericKey } from './DrugInfo.jsx';
 import { useStore, uid, now, daysUntil, put, del, move, allocate, audit, normalizePhone, customerBalance, DEFAULT_PAYMENT_METHODS } from '../store.jsx';
 import { draftsFor, saleDraft } from '../drafts.js';
@@ -14,12 +14,15 @@ import { toast, ask, askText } from '../feedback.jsx';
 import { payRequest, payStatus, guessNetwork, cloudConfig, whatsappLink, sendSms } from '../cloud.js';
 import { Receipt, receiptText } from './Sales.jsx';
 import { CameraButton, CameraScanner } from '../camscan.jsx';
+import { deviceSettings, setDevice, onDevice } from '../device.js';
 
 // Receipt numbers must be unique across synced devices, so they are time-based rather than sequential
 export const docNumber = (prefix) => prefix + Date.now().toString(36).toUpperCase().slice(-6) + Math.floor(Math.random() * 36).toString(36).toUpperCase();
 
 // A client with this many sales is shown as a loyalty member (repeat client) on the till
 const LOYAL_VISITS = 5;
+// the till's layouts (each device keeps its own choice)
+const POS_LAYOUTS = [['classic', 'Classic'], ['standard', 'Standard'], ['advanced', 'Advanced UI']];
 
 export default function POS({ mode = 'retail' }) {
   const { db, products, update, user, fmt, batchesOf, branchId, syncCfg, features, can, pending } = useStore();
@@ -312,6 +315,50 @@ export default function POS({ mode = 'retail' }) {
   const focusDiscount = () => { const i = discRef.current; if (i) { i.focus(); i.select(); } };
   const printLast = () => (lastSale ? setDone({ ...lastSale, reprint: true }) : toast('No sale at this branch yet', 'warn'));
   const pickCustomer = (id) => { setCustomerId(id); setCustQ(''); focusSearch(); };
+  // ---- the till's layout, chosen per device (This device / the till's Layout box): classic (as it always was),
+  // standard (client strip over the medicines on wide screens) or advanced (three columns, Ctrl+K commands) ----
+  const [layout, setLayoutState] = useState(() => (POS_LAYOUTS.some(([k]) => k === deviceSettings().posLayout) ? deviceSettings().posLayout : 'standard'));
+  useEffect(() => onDevice((d) => setLayoutState(POS_LAYOUTS.some(([k]) => k === d.posLayout) ? d.posLayout : 'standard')), []);
+  const useAdvancedLayout = layout === 'advanced';
+  const setLayout = (k) => { setDevice({ posLayout: k }); setLayoutState(k); };
+  const [omni, setOmni] = useState(false);
+  // a line that was just added or changed pulses briefly
+  const [pulse, setPulse] = useState({});
+  const lastCart = useRef(new Map());
+  useEffect(() => {
+    const before = lastCart.current, now2 = new Map(cart.map((l) => [l.id, `${l.qty}|${l.price}|${l.pack?.name || ''}`]));
+    const changed = [...now2].filter(([id, v]) => before.get(id) !== v).map(([id]) => id);
+    lastCart.current = now2;
+    if (!changed.length || !useAdvancedLayout) return undefined;
+    setPulse((p) => { const n = { ...p }; for (const id of changed) n[id] = (p[id] || 0) + 1; return n; });
+    const t = setTimeout(() => setPulse((p) => { const n = { ...p }; for (const id of changed) delete n[id]; return n; }), 700);
+    return () => clearTimeout(t);
+  }, [cart]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Command bar (Advanced, Ctrl+K): "+qty 2", "-qty 2", "qty 2 5", "void 2", "disc 2 10" (10% off line 2), "disc 10" (10% off the sale), "hold", "pay"; anything else finds a medicine
+  const runCommand = (text) => {
+    const t = text.trim().toLowerCase().replace(/\s+/g, ' ');
+    const rowOf = (n) => { const i = Number(n) - 1; return Number.isInteger(i) && i >= 0 && i < cart.length ? cart[i] : null; };
+    let m;
+    if ((m = t.match(/^([+-])\s?qty (\d+)(?: (\d+))?$/))) {
+      const l = rowOf(m[2]); if (!l) return `There is no line ${m[2]}`;
+      const by = Number(m[3] || 1) * (m[1] === '+' ? 1 : -1), now1 = l.qty / stepOf(l);
+      if (now1 + by <= 0) { removeLines([l.id]); return `Line ${m[2]} removed`; }
+      setCount(l, now1 + by); setCursor(cart.indexOf(l)); return null;
+    }
+    if ((m = t.match(/^qty (\d+) (\d+)$/))) { const l = rowOf(m[1]); if (!l) return `There is no line ${m[1]}`; setCount(l, Number(m[2])); setCursor(cart.indexOf(l)); return null; }
+    if ((m = t.match(/^void (\d+)$/))) { const l = rowOf(m[1]); if (!l) return `There is no line ${m[1]}`; removeLines([l.id]); setCursor(-1); return null; }
+    if ((m = t.match(/^disc (\d+) (\d+(?:\.\d+)?)%?$/))) {
+      const l = rowOf(m[1]), pct = Number(m[2]); if (!l) return `There is no line ${m[1]}`;
+      if (!can('pos.price_edit')) return 'You are not allowed to change prices';
+      if (!(pct > 0 && pct < 100)) return 'A discount is between 1 and 99%';
+      const f = 1 - pct / 100;
+      setLine(l.id, { price: round(l.price * f, 2), ...(l.pack ? { pack: { ...l.pack, price: round(l.pack.price * f, money) } } : {}) }); setCursor(cart.indexOf(l)); return null;
+    }
+    if ((m = t.match(/^disc (\d+(?:\.\d+)?)%?$/))) { const pct = Number(m[1]); if (!(pct > 0 && pct < 100)) return 'A discount is between 1 and 99%'; setDiscount(String(round(subtotal * pct / 100, money))); return null; }
+    if (t === 'hold') { holdSale(); return null; }
+    if (t === 'pay' || t === 'checkout' || t === 'charge') { setOmni(false); checkout(); return null; }
+    return 'Not a command. Try +qty 2, -qty 2, qty 2 5, void 2, disc 2 10, disc 10, hold or pay';
+  };
 
   const checkout = async () => {
     if (!cart.length) return;
@@ -422,7 +469,7 @@ export default function POS({ mode = 'retail' }) {
   // Alt+←/→ switch held sales, Alt+↑/↓ choose a cart line, +/− its quantity, Delete removes it, Alt+1…9 payment method
   useEffect(() => {
     const onKey = (e) => {
-      if (done || momo || newClient || labelFor || infoFor || subs || cdForm || cam || help) return;
+      if (done || momo || newClient || labelFor || infoFor || subs || cdForm || cam || help || omni) return;
       const inSearch = e.target.tagName === 'INPUT' && searchRef.current?.contains(e.target);
       const typing = /INPUT|TEXTAREA|SELECT/.test(e.target.tagName) && !inSearch;
       if (e.key === 'F8') { e.preventDefault(); focusSearch(); }
@@ -448,10 +495,21 @@ export default function POS({ mode = 'retail' }) {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   });
+  // Advanced: Ctrl+K / Cmd+K opens the till's command bar (instead of the app-wide search, which stays one click away)
+  useEffect(() => {
+    if (!useAdvancedLayout) return undefined;
+    const onK = (e) => {
+      if (!((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') || document.querySelector('.modal-bg')) return;
+      e.preventDefault(); e.stopImmediatePropagation(); setOmni(true);
+    };
+    window.addEventListener('keydown', onK, true);
+    return () => window.removeEventListener('keydown', onK, true);
+  }, [useAdvancedLayout]);
 
   return (
-    <div className="pos">
+    <div className={'pos lay-' + (layout === 'standard' ? 'std' : layout === 'advanced' ? 'adv' : 'classic')}>
       {/* wide screens only (CSS): client & loyalty */}
+      {layout !== 'classic' && (
       <aside className="pos-side" aria-label="Client">
         {capture !== 'off' && (
           <div className="card pos-client accent-teal">
@@ -477,6 +535,7 @@ export default function POS({ mode = 'retail' }) {
           </div>
         )}
       </aside>
+      )}
       <section className="pos-products">
         <div className="row between gap">
           <h2 className="pos-title"><ShoppingCart size={22} /> Point of sale</h2>
@@ -487,6 +546,13 @@ export default function POS({ mode = 'retail' }) {
                 <Link to="/pos/wholesale" className={wholesale ? 'on' : ''}>Wholesale <kbd>F3</kbd></Link>
               </div>
             )}
+            <label className="pos-layout" title="How the till is laid out on this device (wide screens)">
+              <LayoutGrid size={15} aria-hidden="true" />
+              <select value={layout} onChange={(e) => setLayout(e.target.value)} aria-label="Till layout">
+                {POS_LAYOUTS.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+              </select>
+            </label>
+            {useAdvancedLayout && <button className="icon-btn" title="Command bar (Ctrl+K)" aria-label="Command bar" onClick={() => setOmni(true)}><Command size={18} /></button>}
             <button className="icon-btn" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts" onClick={() => setHelp(true)}><Keyboard size={19} /></button>
           </div>
         </div>
@@ -559,6 +625,7 @@ export default function POS({ mode = 'retail' }) {
             <button className="btn primary" disabled={!cart.length} onClick={(e) => { e.stopPropagation(); if (!sheet) setSheet(true); checkout(); }}>Charge</button>
           </div>
         )}
+        <div className="pos-ledger">
         <div className="cart-head">
           <h3>Current sale {items > 0 && <span className="badge bump" key={items}>{items} item{items === 1 ? '' : 's'}</span>}</h3>
           {cart.length > 0 && (
@@ -597,7 +664,8 @@ export default function POS({ mode = 'retail' }) {
               onTouchStart={(e) => setSwipe({ id: l.id, x0: e.touches[0].clientX, y0: e.touches[0].clientY, dx: 0 })}
               onTouchMove={(e) => setSwipe((w) => { if (!w || w.id !== l.id) return w; const dx = e.touches[0].clientX - w.x0, dy = e.touches[0].clientY - w.y0; return Math.abs(dx) > Math.abs(dy) ? { ...w, dx: Math.min(0, dx) } : { ...w, dx: 0 }; })}
               onTouchEnd={() => { if (swipe?.id === l.id && swipe.dx < -90) removeLines([l.id]); setSwipe(null); }}
-              className={'cart-line' + (picked.has(l.id) ? ' picked' : '') + (cart.length > 1 && lineAt?.id === l.id && cursor >= 0 ? ' cursor' : '')} onClick={() => setCursor(cart.indexOf(l))}>
+              className={'cart-line' + (pulse[l.id] ? (pulse[l.id] % 2 ? ' pulse-a' : ' pulse-b') : '') + (picked.has(l.id) ? ' picked' : '') + (cart.length > 1 && lineAt?.id === l.id && cursor >= 0 ? ' cursor' : '')} onClick={() => setCursor(cart.indexOf(l))}>
+              {useAdvancedLayout && <span className="line-num" aria-label={`Line ${cart.indexOf(l) + 1}`}>{cart.indexOf(l) + 1}</span>}
               <input type="checkbox" className="line-check" checked={picked.has(l.id)} onChange={() => togglePick(l.id)} aria-label={`Select ${l.name}`} />
               <div className="grow"><strong>{l.name}</strong>{l.rx && <span className="badge">Rx</span>}
                 {Number(l.price) < (l.cost || 0) && <small className="text-danger below-cost"> below cost{can('reports') ? ` (${fmt(l.cost)})` : ''}</small>}
@@ -628,12 +696,14 @@ export default function POS({ mode = 'retail' }) {
           ))}
           {!cart.length && <div className="cart-empty"><ShoppingCart size={40} /><span>Tap a medicine or scan a barcode to start a sale</span></div>}
         </div>
+        </div>
+        <div className="pos-pay">
         <div className="totals">
           <div className="row between gap"><span className="muted">Subtotal <b className="num">{fmt(subtotal)}</b></span>
             <span className="row gap"><span className="muted">Discount</span><input ref={discRef} aria-label="Discount" type="number" min="0" step="any" className="small-input" value={discount} onChange={(e) => setDiscount(e.target.value)} /></span></div>
-          {disc > 0 && <div className="row between promo-row"><span className="muted">Promos / member discount</span><span className="num">− {fmt(disc)}</span></div>}
+          {layout !== 'classic' && disc > 0 && <div className="row between promo-row"><span className="muted">Promos / member discount</span><span className="num">− {fmt(disc)}</span></div>}
           {tax > 0 && <div className="row between"><span className="muted">Tax ({db.settings.taxRate}%)</span><span className="num">{fmt(tax)}</span></div>}
-          <div className="row between grand"><span>Total<small className="grand-sub">Net balance due</small></span><span className="num bump" key={total}>{fmt(total)}</span></div>
+          <div className="row between grand"><span>Total{layout !== 'classic' && <small className="grand-sub">Net balance due</small>}</span><span className="num bump" key={total}>{fmt(total)}</span></div>
         </div>
         <div className="pay-methods">
           {methods.map((m, i) => <button key={m.id} className={'chip pay-' + (m.type || 'other') + (payment === m.name ? ' active' : '')} onClick={() => setPayment(m.name)} title={i < 9 ? `Alt+${i + 1}` : undefined}>{m.name}{i < 9 && !touch && <kbd>{i + 1}</kbd>}</button>)}
@@ -650,7 +720,8 @@ export default function POS({ mode = 'retail' }) {
         <div className="row gap pay-row">
           <button className="btn ghost" onClick={saveProforma} disabled={!cart.length} title="F10"><FileText size={16} />Proforma</button>
           <button className="btn ghost" onClick={holdSale} disabled={!cart.length} title="Alt+H"><PauseCircle size={16} />Hold</button>
-          <button ref={chargeRef} className={'btn primary grow big' + (narrow ? ' charge-dup' : '')} onClick={checkout} disabled={!cart.length} title="F9"><span>Charge {fmt(total)}{!touch && <small className="kbd-sub">[F9]</small>}</span></button>
+          <button ref={chargeRef} className={'btn primary grow big' + (narrow ? ' charge-dup' : '')} onClick={checkout} disabled={!cart.length} title="F9"><span>{useAdvancedLayout ? 'Process checkout' : 'Charge'} {fmt(total)}{!touch && layout !== 'classic' && <small className="kbd-sub">[F9]</small>}</span></button>
+        </div>
         </div>
       </section>
 
@@ -804,12 +875,13 @@ export default function POS({ mode = 'retail' }) {
                 ['+ / −', 'More / fewer of the chosen cart line'], ['Alt+↑ / Alt+↓', 'Choose a cart line'], ['Delete', 'Remove the chosen cart line'],
                 ['Alt+1 … Alt+9', 'Payment method (number shown on each)'], ['F9 or Ctrl+Enter', 'Charge'], ['F10', 'Save as proforma'],
                 ['Alt+H', 'Put the sale on hold and serve the next customer'], ['Alt+← / Alt+→', 'Switch between held sales'],
-                ['F2 / F3', 'Retail / wholesale'], ['Alt+C', 'Find a client (wide screens)'], ['Alt+D', 'Discount'], ['Alt+R', 'Last receipt again'], ['F8', 'Back to the search box'], ['Ctrl+K', 'Search everything'], ['?', 'This list']].map(([k, v]) => <tr key={k}><td><kbd>{k}</kbd></td><td>{v}</td></tr>)}
+                ['F2 / F3', 'Retail / wholesale'], ['Alt+C', 'Find a client (wide screens)'], ['Alt+D', 'Discount'], ['Alt+R', 'Last receipt again'], ['Ctrl+K', 'Advanced UI: command bar (+qty 2, void 2, disc 2 10, hold, pay)'], ['F8', 'Back to the search box'], ['Ctrl+K', 'Search everything'], ['?', 'This list']].map(([k, v]) => <tr key={k}><td><kbd>{k}</kbd></td><td>{v}</td></tr>)}
             </tbody>
           </table>
         </Modal>
       )}
 
+      {omni && <Omnibar cart={cart} products={products} onAdd={(p) => add(p)} run={runCommand} onClose={() => { setOmni(false); focusSearch(); }} fmt={fmt} />}
       {done && (
         <Modal title={done.proforma ? 'Proforma saved' : done.reprint ? 'Last receipt' : 'Sale complete ✓'} onClose={() => { setDone(null); focusSearch(); }}>
           {/* shown only here, after finalize() has recorded the sale */}
@@ -832,6 +904,58 @@ export default function POS({ mode = 'retail' }) {
   );
 }
 
+
+/** Advanced UI command bar: type a command for a numbered line, or a medicine's name to add it. Keeps the keyboard inside. */
+function Omnibar({ cart, products, onAdd, run, onClose, fmt }) {
+  const [text, setText] = useState('');
+  const [msg, setMsg] = useState('');
+  const [hi, setHi] = useState(0);
+  const input = useRef(null), box = useRef(null);
+  useEffect(() => {
+    input.current?.focus();
+    // keep the keyboard inside the bar while it is open (adding a medicine elsewhere moves the cursor away)
+    const keep = (e) => { if (box.current && !box.current.contains(e.target)) setTimeout(() => input.current?.focus(), 0); };
+    document.addEventListener('focusin', keep);
+    return () => document.removeEventListener('focusin', keep);
+  }, []);
+  const isCmd = /^([+-]\s?qty|qty|void|disc|hold|pay|checkout|charge)\b/i.test(text.trim());
+  const found = useMemo(() => (!isCmd && text.trim().length >= 2 ? searchProducts(products, text).filter((p) => p.stock > 0).slice(0, 6) : []), [text, isCmd, products]);
+  useEffect(() => setHi(0), [text]);
+  const go = () => {
+    if (!isCmd && found[hi]) { onAdd(found[hi]); setText(''); setMsg(`Added ${found[hi].name}`); return; }
+    const err = run(text);
+    if (err) setMsg(err); else { setMsg('Done'); setText(''); }
+  };
+  const key = (e) => {
+    if (e.key === 'Escape') { e.preventDefault(); onClose(); }
+    else if (e.key === 'Enter') { e.preventDefault(); go(); }
+    else if (e.key === 'ArrowDown') { e.preventDefault(); setHi((h) => Math.min(found.length - 1, h + 1)); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setHi((h) => Math.max(0, h - 1)); }
+    else if (e.key === 'Tab') { // trap the keyboard inside the bar
+      const f = [...box.current.querySelectorAll('input, button')]; const i = f.indexOf(document.activeElement);
+      e.preventDefault(); f[(i + (e.shiftKey ? -1 : 1) + f.length) % f.length]?.focus();
+    }
+  };
+  return (
+    <div className="modal-bg omni-bg" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="omni" role="dialog" aria-modal="true" aria-label="Command bar" ref={box} onKeyDown={key}>
+        <div className="omni-input"><Command size={18} aria-hidden="true" />
+          <input ref={input} value={text} onChange={(e) => { setText(e.target.value); setMsg(''); }} placeholder="+qty 2 · void 2 · disc 2 10 · disc 10 · hold · pay · or a medicine" aria-label="Command" />
+          <kbd>Esc</kbd>
+        </div>
+        {found.length > 0 && (
+          <div className="omni-list" role="listbox" aria-label="Medicines">
+            {found.map((p, i) => <button key={p.id} type="button" role="option" aria-selected={i === hi} className={i === hi ? 'hi' : ''} onMouseDown={(e) => { e.preventDefault(); setHi(i); onAdd(p); setText(''); setMsg(`Added ${p.name}`); }}><span>{p.name}</span><small className="muted">{fmt(p.price)} · {p.stock} in stock</small></button>)}
+          </div>
+        )}
+        {msg && <div className={'omni-msg' + (/^(Done|Added)/.test(msg) ? ' ok' : ' warn')} role="status">{msg}</div>}
+        <div className="omni-lines">
+          {cart.length ? cart.map((l, i) => <span key={l.id}><b>{i + 1}</b> {l.name} × {l.pack ? `${l.qty / l.pack.size} ${l.pack.name.toLowerCase()}` : l.qty}</span>) : <span className="muted">No lines yet: type a medicine's name to add one.</span>}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /** After a sale: send the receipt to the customer by WhatsApp (free) or SMS (if set up). */
 function SendReceipt({ sale }) {
