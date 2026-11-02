@@ -2325,9 +2325,9 @@ tr.line-removed td { opacity: .55; }
 .line-num { display: inline-grid; place-items: center; min-width: 24px; height: 24px; border-radius: 6px; background: color-mix(in srgb, var(--pos-action-2) 14%, var(--surface)); color: var(--pos-action-2); font-size: 13px; font-weight: 800; }
 @keyframes linePulseA { 0% { background: color-mix(in srgb, #0D9488 26%, transparent); box-shadow: 0 0 0 3px color-mix(in srgb, #0D9488 35%, transparent); } 100% { box-shadow: 0 0 0 0 transparent; } }
 @keyframes linePulseB { 0% { background: color-mix(in srgb, #0D9488 26%, transparent); box-shadow: 0 0 0 3px color-mix(in srgb, #0D9488 35%, transparent); } 100% { box-shadow: 0 0 0 0 transparent; } }
-.cart-line.pulse-a { animation: linePulseA .6s ease-out; }
-.cart-line.pulse-b { animation: linePulseB .6s ease-out; }
-@media (prefers-reduced-motion: reduce) { .cart-line.pulse-a, .cart-line.pulse-b { animation-duration: .01s; } }
+.lay-adv .cart-line.pulse-a { animation: linePulseA .6s ease-out; }
+.lay-adv .cart-line.pulse-b { animation: linePulseB .6s ease-out; }
+@media (prefers-reduced-motion: reduce) { .cart-line.pulse-a, .cart-line.pulse-b { animation-duration: .01s !important; } }
 /* command bar */
 .omni-bg { align-items: flex-start; padding-top: 12vh; }
 .omni { width: min(640px, calc(100vw - 32px)); background: var(--surface); border: 1px solid var(--border); border-radius: 16px; box-shadow: 0 24px 60px -12px rgba(15, 23, 42, .45); overflow: hidden; }
@@ -2395,3 +2395,115 @@ tr.line-removed td { opacity: .55; }
   .lay-std .pos-cart .totals .small-input { padding-top: 2px; padding-bottom: 2px; }
   .lay-std .pos-cart .sale-tabs { margin: 0; }
 }
+
+/* =====================================================================================================================
+   Midnight Pro theme (Settings → theme picker): atmospheric slate-dark canvas, translucent sidebar, glass "bento"
+   cards, tight tracking, mono numbers, a light beam around the sale, a glass totals dock and an emerald checkout.
+   Everything here is scoped to [data-palette='midnight-pro']: every other theme looks exactly as before.
+   ===================================================================================================================== */
+@property --mp-beam { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+:root[data-palette='midnight-pro'] {
+  --mp-glass: rgba(15, 23, 42, .6); --mp-glass-line: rgba(30, 41, 59, .5); --mp-glass-line-hi: rgba(51, 65, 85, .8);
+  --mp-dock: rgba(2, 6, 23, .6); --mp-cyan: #22d3ee; --mp-emerald: #10b981;
+  --mp-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
+  --mp-shadow: 0 25px 50px -12px rgba(0, 0, 0, .55);
+  --pos-canvas: transparent;
+}
+:root[data-palette='midnight-pro'] body {
+  background: radial-gradient(900px 520px at 85% -8%, rgba(34, 211, 238, .07), transparent 60%), radial-gradient(800px 500px at -5% 105%, rgba(16, 185, 129, .07), transparent 55%), #0b0f19;
+  background-attachment: fixed; letter-spacing: -.006em;
+}
+:root[data-palette='midnight-pro'] h1, :root[data-palette='midnight-pro'] h2, :root[data-palette='midnight-pro'] h3 { letter-spacing: -.022em; }
+:root[data-palette='midnight-pro'] .muted { font-weight: 400; color: #94a3b8; }
+:root[data-palette='midnight-pro'] small, :root[data-palette='midnight-pro'] .field > span { letter-spacing: -.004em; }
+/* sidebar: translucent column, no block highlight; the icon turns cyan (and nudges) on the open page */
+:root[data-palette='midnight-pro'] .sidebar { background: rgba(2, 6, 23, .4); -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px); border-right: 1px solid rgba(30, 41, 59, .6); box-shadow: none; }
+:root[data-palette='midnight-pro'] .sidebar nav a { background: none; color: #94a3b8; transition: color .2s; }
+:root[data-palette='midnight-pro'] .sidebar nav a svg { transition: transform .25s cubic-bezier(.2, .8, .2, 1), color .25s; }
+:root[data-palette='midnight-pro'] .sidebar nav a:hover { background: none; color: #e2e8f0; }
+:root[data-palette='midnight-pro'] .sidebar nav a:hover svg { transform: translateX(2px); }
+:root[data-palette='midnight-pro'] .sidebar nav a.active { background: none; color: #f8fafc; font-weight: 600; }
+:root[data-palette='midnight-pro'] .sidebar nav a.active svg { color: var(--mp-cyan); transform: translateX(3px); filter: drop-shadow(0 0 6px rgba(34, 211, 238, .45)); }
+:root[data-palette='midnight-pro'] .sidebar nav a.active::before { width: 2px; background: var(--mp-cyan); box-shadow: 0 0 8px rgba(34, 211, 238, .7); }
+:root[data-palette='midnight-pro'] .topbar { background: rgba(11, 15, 25, .55); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); border-bottom: 1px solid rgba(30, 41, 59, .6); }
+/* glass cards */
+:root[data-palette='midnight-pro'] .card { background: var(--mp-glass); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); border: 1px solid var(--mp-glass-line); border-radius: 16px; box-shadow: var(--mp-shadow); transition: border-color .3s, box-shadow .3s, transform .3s; }
+:root[data-palette='midnight-pro'] .card:hover { border-color: var(--mp-glass-line-hi); }
+/* numbers: tight mono figures */
+:root[data-palette='midnight-pro'] .num, :root[data-palette='midnight-pro'] .stat strong, :root[data-palette='midnight-pro'] .line-total, :root[data-palette='midnight-pro'] .grand .num, :root[data-palette='midnight-pro'] .price {
+  font-family: var(--mp-mono); font-variant-numeric: tabular-nums; letter-spacing: -.03em; }
+/* dashboard: the day's figures as a bento grid (today's sales is the large tile) */
+@media (min-width: 900px) {
+  :root[data-palette='midnight-pro'] .stats.kpis { grid-template-columns: repeat(12, minmax(0, 1fr)); }
+  :root[data-palette='midnight-pro'] .stats.kpis > * { grid-column: span 3; }
+  :root[data-palette='midnight-pro'] .stats.kpis > :first-child:nth-last-child(4) { grid-column: span 6; }
+  :root[data-palette='midnight-pro'] .stats.kpis > :first-child:nth-last-child(4) ~ * { grid-column: span 2; }
+  :root[data-palette='midnight-pro'] .stats.kpis > :first-child:nth-last-child(3) { grid-column: span 6; }
+  :root[data-palette='midnight-pro'] .stats.kpis > :first-child:nth-last-child(3) ~ * { grid-column: span 3; }
+  :root[data-palette='midnight-pro'] .stats.kpis > :first-child:nth-last-child(2), :root[data-palette='midnight-pro'] .stats.kpis > :first-child:nth-last-child(2) ~ * { grid-column: span 6; }
+  :root[data-palette='midnight-pro'] .stats.kpis > :first-child:only-child { grid-column: span 12; }
+  :root[data-palette='midnight-pro'] .stats.kpis > :first-child strong { font-size: clamp(30px, 3vw, 40px); }
+  /* stock alerts: one strip of tabs */
+  :root[data-palette='midnight-pro'] .stats.alerts { display: flex; gap: 0; border: 1px solid var(--mp-glass-line); border-radius: 16px; overflow: hidden; background: var(--mp-glass); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); box-shadow: var(--mp-shadow); }
+  :root[data-palette='midnight-pro'] .stats.alerts > .card { flex: 1; border: 0; border-radius: 0; box-shadow: none; background: transparent; -webkit-backdrop-filter: none; backdrop-filter: none; }
+  :root[data-palette='midnight-pro'] .stats.alerts > .card + .card { border-left: 1px solid var(--mp-glass-line); }
+  :root[data-palette='midnight-pro'] .stats.alerts > .card:hover { background: rgba(30, 41, 59, .35); }
+}
+:root[data-palette='midnight-pro'] .stat small { text-transform: uppercase; letter-spacing: .06em; font-size: 11.5px; font-weight: 600; color: #94a3b8; }
+:root[data-palette='midnight-pro'] .stat strong { font-weight: 700; color: #f1f5f9; }
+/* the sale: clean rows on a flat surface, micro-pill tags */
+:root[data-palette='midnight-pro'] .cart-line, :root[data-palette='midnight-pro'] .pos-cart .cart-line:nth-child(even), :root[data-palette='midnight-pro'] .lay-adv .pos-ledger .cart-line:nth-child(even) { background: transparent; }
+:root[data-palette='midnight-pro'] .cart-line { border-bottom: 1px solid rgba(30, 41, 59, .7); border-radius: 0 !important; }
+:root[data-palette='midnight-pro'] .cart-line .badge, :root[data-palette='midnight-pro'] .product .badge, :root[data-palette='midnight-pro'] .cart-line .pack-select, :root[data-palette='midnight-pro'] .line-num {
+  background: rgba(30, 41, 59, .6); border: 1px solid rgba(51, 65, 85, .5); color: #cbd5e1; border-radius: 6px; font-weight: 500; }
+:root[data-palette='midnight-pro'] .product .badge.danger { color: #fca5a5; }
+:root[data-palette='midnight-pro'] .product .badge.warn { color: #fcd34d; }
+/* a line that was just added (scanner, keyboard or tap) or changed flashes green */
+@keyframes mpFlashA { 0% { background: rgba(16, 185, 129, .28); } 100% { background: transparent; } }
+@keyframes mpFlashB { 0% { background: rgba(16, 185, 129, .28); } 100% { background: transparent; } }
+:root[data-palette='midnight-pro'] .cart-line.pulse-a { animation: mpFlashA .7s ease-out; }
+:root[data-palette='midnight-pro'] .cart-line.pulse-b { animation: mpFlashB .7s ease-out; }
+/* the sale panel carries a slow light beam around its edge while it has lines */
+@keyframes mpBeam { to { --mp-beam: 360deg; } }
+:root[data-palette='midnight-pro'] .pos-cart:has(.cart-line), :root[data-palette='midnight-pro'] .lay-adv .pos-cart:has(.cart-line) .pos-pay { position: relative; }
+:root[data-palette='midnight-pro'] .pos-cart:not(.sheet):has(.cart-line)::after, :root[data-palette='midnight-pro'] .lay-adv .pos-cart:has(.cart-line) .pos-pay::after {
+  content: ''; position: absolute; inset: 0; border-radius: inherit; padding: 1px; pointer-events: none;
+  background: conic-gradient(from var(--mp-beam), transparent 0deg 250deg, rgba(34, 211, 238, .9) 300deg, rgba(16, 185, 129, .9) 330deg, transparent 360deg);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  animation: mpBeam 6s linear infinite; }
+:root[data-palette='midnight-pro'] .lay-adv .pos-cart:has(.cart-line)::after { content: none; }
+@media (prefers-reduced-motion: reduce) { :root[data-palette='midnight-pro'] .pos-cart::after, :root[data-palette='midnight-pro'] .pos-pay::after { animation: none !important; } }
+/* totals: a floating glass dock */
+:root[data-palette='midnight-pro'] .pos-cart .totals, :root[data-palette='midnight-pro'] .lay-adv .pos-pay {
+  background: var(--mp-dock); -webkit-backdrop-filter: blur(40px); backdrop-filter: blur(40px); border: 1px solid rgba(30, 41, 59, .8); box-shadow: var(--mp-shadow); border-radius: 16px; }
+:root[data-palette='midnight-pro'] .pos-cart .totals { padding: 16px 18px; }
+:root[data-palette='midnight-pro'] .lay-adv .pos-pay { padding: 24px; }
+:root[data-palette='midnight-pro'] .lay-adv .pos-pay .totals { background: transparent; border: 0; box-shadow: none; padding: 0; -webkit-backdrop-filter: none; backdrop-filter: none; }
+:root[data-palette='midnight-pro'] .totals .grand { font-weight: 800; color: #f8fafc; }
+:root[data-palette='midnight-pro'] .totals .grand .num { color: #34d399; }
+/* checkout: emerald → teal with a soft glow */
+:root[data-palette='midnight-pro'] .pos-cart .btn.primary.big, :root[data-palette='midnight-pro'] .lay-adv .pos-pay .pay-row .btn.primary, :root[data-palette='midnight-pro'] .pos-cart .pay-row .btn.primary {
+  background: linear-gradient(90deg, #059669, #0d9488); border-color: transparent; color: #fff; box-shadow: 0 10px 15px -3px rgba(6, 78, 59, .3), 0 4px 6px -4px rgba(6, 78, 59, .3); transition: filter .15s, transform .1s; }
+:root[data-palette='midnight-pro'] .pos-cart .btn.primary.big:hover:not(:disabled), :root[data-palette='midnight-pro'] .lay-adv .pos-pay .pay-row .btn.primary:hover:not(:disabled) { filter: brightness(1.1); }
+:root[data-palette='midnight-pro'] .pos-cart .btn.primary.big:active:not(:disabled), :root[data-palette='midnight-pro'] .lay-adv .pos-pay .pay-row .btn.primary:active:not(:disabled) { transform: scale(.99); }
+/* the client strip and badges in the dark */
+:root[data-palette='midnight-pro'] .cust-loyal { background: rgba(20, 184, 166, .12); color: #5eead4; border-color: rgba(45, 212, 191, .3); }
+:root[data-palette='midnight-pro'] .cust-credit { background: rgba(245, 158, 11, .12); color: #fcd34d; border-color: rgba(251, 191, 36, .3); }
+:root[data-palette='midnight-pro'] .cust-std { background: rgba(30, 41, 59, .6); color: #cbd5e1; border-color: rgba(51, 65, 85, .5); }
+/* Midnight Pro: precise 120 ms ease-out motion on hover and press */
+:root[data-palette='midnight-pro'] .btn, :root[data-palette='midnight-pro'] .chip, :root[data-palette='midnight-pro'] .icon-btn, :root[data-palette='midnight-pro'] .link-btn,
+:root[data-palette='midnight-pro'] .product, :root[data-palette='midnight-pro'] .sidebar nav a, :root[data-palette='midnight-pro'] .sidebar nav a svg { transition-duration: 120ms; transition-timing-function: ease-out; }
+:root[data-palette='midnight-pro'] .card:not(.stat):hover, :root[data-palette='midnight-pro'] .stat.link:hover { transform: none; }
+/* stock flags above zero (low stock, soon expiring, expired, old drafts) carry the light beam so they catch the eye */
+:root[data-palette='midnight-pro'] .stat.flagged { position: relative; overflow: hidden; }
+:root[data-palette='midnight-pro'] .stat.flagged::after {
+  content: ''; position: absolute; inset: 0; border-radius: inherit; padding: 1px; pointer-events: none;
+  background: conic-gradient(from var(--mp-beam), transparent 0deg 250deg, rgba(251, 191, 36, .95) 300deg, rgba(248, 113, 113, .85) 330deg, transparent 360deg);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  animation: mpBeam 4s linear infinite; }
+:root[data-palette='midnight-pro'] .stats.alerts > .card.flagged::after { border-radius: 0; }
+:root[data-palette='midnight-pro'] .stat.flagged strong { color: #fcd34d; }
+@media (prefers-reduced-motion: reduce) { :root[data-palette='midnight-pro'] .stat.flagged::after { animation: none !important; } }
+/* the key tag on checkout */
+:root[data-palette='midnight-pro'] .kbd-sub { font-family: var(--mp-mono); letter-spacing: 0; opacity: .9; }
+@media (min-width: 1100px) { .lay-adv .pos-pay .pay-methods .chip { padding: 6px 6px; font-size: 12.5px; min-width: 0; overflow: hidden; text-overflow: ellipsis; } .lay-adv .pos-pay .pay-methods .chip kbd { display: none; } }

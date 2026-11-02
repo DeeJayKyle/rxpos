@@ -33,6 +33,9 @@ export const THEMES = [
   T('rose-pine', 'Rosé Night', 'dark', { bg: '#191724', surface: '#1f1d2e', surface2: '#26233a', border: '#2a273f', borderStrong: '#403d52', text: '#e0def4', muted: '#908caa', primary: '#ebbcba', primary2: '#c4a7e7', sidebar: '#141220', sidebar2: '#191724' }, 'Rosé Pine'),
   T('forest', 'Forest Pharmacy', 'dark', { bg: '#07130e', surface: '#0d1f17', surface2: '#12281e', border: '#1b3a2c', borderStrong: '#285240', text: '#e3f5ec', muted: '#89b09d', primary: '#34d399', primary2: '#a3e635', sidebar: '#050e0a', sidebar2: '#0a1912' }),
   T('ocean', 'Deep Ocean', 'dark', { bg: '#04121f', surface: '#0a1d30', surface2: '#0f263d', border: '#163452', borderStrong: '#22486e', text: '#e2eefa', muted: '#86a3c0', primary: '#38bdf8', primary2: '#2dd4bf', sidebar: '#030d17', sidebar2: '#071827' }),
+  // Midnight Pro: an atmospheric slate-dark canvas with glass panels, a translucent sidebar and emerald / cyan actions
+  // (styles in styles.css under [data-palette='midnight-pro'])
+  T('midnight-pro', 'Midnight Pro', 'dark', { bg: '#0b0f19', surface: '#0f172a', surface2: '#131c31', border: '#1e293b', borderStrong: '#334155', text: '#e2e8f0', muted: '#94a3b8', primary: '#10b981', primary2: '#14b8a6', sidebar: '#020617', sidebar2: '#0b1220', flat: true }, 'Linear / Vercel'),
   T('contrast-dark', 'High Contrast Dark', 'dark', { bg: '#000000', surface: '#0a0a0a', surface2: '#141414', border: '#7a7a7a', borderStrong: '#bdbdbd', text: '#ffffff', muted: '#d6d6d6', primary: '#ffd60a', primary2: '#4cc9f0', sidebar: '#000000', sidebar2: '#0f0f0f' }, 'accessibility'),
 ];
 export const themeById = (id) => THEMES.find((t) => t.id === id) || THEMES[0];

@@ -78,6 +78,7 @@ const SUITES = [
   ['packs: receive boxes, sell tablets or boxes', 'v50-packs.mjs', ['.output/v50']],
   ['wide till: client panel, quick actions, ledger', 'v51-pos-wide.mjs', ['.output/v51']],
   ['till layouts: classic, standard, advanced + command bar', 'v52-pos-layouts.mjs', ['.output/v52']],
+  ['Midnight Pro theme', 'v53-midnight-pro.mjs', ['.output/v53']],
   ['append-only tables', 'v29-immutable.mjs', []],
   ['pay & sms gated', 'v30-paysms.mjs', []],
   ['restore epoch', 'v31-restore.mjs', []],

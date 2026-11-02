@@ -191,7 +191,7 @@ export function Stat({ label, value, sub, tone, icon: Icon, delta, to, state }) 
   const navigate = useNavigate();
   const go = to ? () => navigate(to, state ? { state } : undefined) : undefined;
   return (
-    <div className={'card stat ' + (tone || '') + (to ? ' link' : '')} onClick={go} role={to ? 'link' : undefined} tabIndex={to ? 0 : undefined} onKeyDown={to ? (e) => e.key === 'Enter' && go() : undefined}>
+    <div className={'card stat ' + (tone || '') + (to ? ' link' : '') + (/\balert\b/.test(tone || '') && Number(value) > 0 ? ' flagged' : '')} onClick={go} role={to ? 'link' : undefined} tabIndex={to ? 0 : undefined} onKeyDown={to ? (e) => e.key === 'Enter' && go() : undefined}>
       {Icon && <span className="stat-icon"><Icon size={20} /></span>}
       <small>{label}</small>
       <strong><CountUp value={value} /></strong>

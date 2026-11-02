@@ -329,7 +329,7 @@ export default function POS({ mode = 'retail' }) {
     const before = lastCart.current, now2 = new Map(cart.map((l) => [l.id, `${l.qty}|${l.price}|${l.pack?.name || ''}`]));
     const changed = [...now2].filter(([id, v]) => before.get(id) !== v).map(([id]) => id);
     lastCart.current = now2;
-    if (!changed.length || !useAdvancedLayout) return undefined;
+    if (!changed.length) return undefined; // (only Advanced UI and the Midnight Pro theme show the pulse)
     setPulse((p) => { const n = { ...p }; for (const id of changed) n[id] = (p[id] || 0) + 1; return n; });
     const t = setTimeout(() => setPulse((p) => { const n = { ...p }; for (const id of changed) delete n[id]; return n; }), 700);
     return () => clearTimeout(t);
@@ -720,7 +720,7 @@ export default function POS({ mode = 'retail' }) {
         <div className="row gap pay-row">
           <button className="btn ghost" onClick={saveProforma} disabled={!cart.length} title="F10"><FileText size={16} />Proforma</button>
           <button className="btn ghost" onClick={holdSale} disabled={!cart.length} title="Alt+H"><PauseCircle size={16} />Hold</button>
-          <button ref={chargeRef} className={'btn primary grow big' + (narrow ? ' charge-dup' : '')} onClick={checkout} disabled={!cart.length} title="F9"><span>{useAdvancedLayout ? 'Process checkout' : 'Charge'} {fmt(total)}{!touch && layout !== 'classic' && <small className="kbd-sub">[F9]</small>}</span></button>
+          <button ref={chargeRef} className={'btn primary grow big' + (narrow ? ' charge-dup' : '')} onClick={checkout} disabled={!cart.length} title="F9"><span>{useAdvancedLayout ? 'Process checkout' : 'Charge'} {fmt(total)}{!touch && (layout !== 'classic' || document.documentElement.dataset.palette === 'midnight-pro') && <small className="kbd-sub">[F9]</small>}</span></button>
         </div>
         </div>
       </section>
