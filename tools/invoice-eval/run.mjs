@@ -7,11 +7,16 @@ import { INVOICES, STYLES, html, total } from './invoices.mjs';
 import { CURRENT, CANDIDATE } from './prompts.mjs';
 
 const ACC = process.env.CLOUDFLARE_ACCOUNT_ID, TOKEN = process.env.CLOUDFLARE_API_TOKEN;
+// through the temporary eval worker (its AI binding) when given, else the Workers AI REST API
+const EVAL_URL = process.env.EVAL_URL, EVAL_KEY = process.env.EVAL_KEY;
+const runModel = (model, input) => (EVAL_URL
+  ? fetch(EVAL_URL, { method: 'POST', headers: { 'x-eval-key': EVAL_KEY, 'Content-Type': 'application/json' }, body: JSON.stringify({ model, input }), signal: AbortSignal.timeout(180000) }).then((r) => r.json())
+  : api('/run/' + model, input));
 const api = (p, body) => fetch(`https://api.cloudflare.com/client/v4/accounts/${ACC}/ai${p}`, { method: body ? 'POST' : 'GET', headers: { Authorization: 'Bearer ' + TOKEN, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(180000) }).then((r) => r.json());
 
 // 1. which vision models this account can run
 const found = [];
-for (let page = 1; page <= 5; page++) {
+for (let page = 1; page <= 5 && !EVAL_URL; page++) {
   const r = await api(`/models/search?per_page=100&page=${page}`);
   if (!r.success) { console.log('model list not available:', JSON.stringify(r.errors || r).slice(0, 300)); break; }
   for (const m of r.result) {
@@ -82,7 +87,7 @@ await Promise.all(MODELS.map(async (model) => {
       const t0 = Date.now();
       let out = null, err = '';
       try {
-        const r = await api('/run/' + model, { messages: [{ role: 'user', content: [{ type: 'text', text: prompt }, { type: 'image_url', image_url: { url: im.url } }] }], max_tokens: 2500, temperature: 0.1 });
+        const r = await runModel(model, { messages: [{ role: 'user', content: [{ type: 'text', text: prompt }, { type: 'image_url', image_url: { url: im.url } }] }], max_tokens: 2500, temperature: 0.1 });
         if (!r.success) throw new Error(JSON.stringify(r.errors || r).slice(0, 200));
         out = firstJson(r.result.response ?? r.result);
       } catch (e) { err = e.message; }

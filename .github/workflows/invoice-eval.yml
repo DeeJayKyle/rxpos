@@ -2,7 +2,8 @@ name: Invoice reading check
 
 # Measures how well "Scan invoice" reads supplier invoices: fictional invoices (tools/invoice-eval/invoices.mjs) in
 # typed, partly handwritten, fully handwritten and photo styles, read by Cloudflare Workers AI vision models, every
-# field scored against the known answer. Uses only fictional data; changes nothing live.
+# field scored against the known answer. Only fictional data. The models run in a temporary worker of its own
+# (tools/invoice-eval/worker), behind a one-time key, deleted at the end: the live cloud is not touched.
 on:
   workflow_dispatch:
     inputs:
@@ -21,13 +22,26 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      EVAL_NAME: rxpos-invoice-eval-${{ github.run_id }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm i --no-save playwright@1.49.1 && npx playwright install --with-deps chromium
+      - run: npm i --no-save playwright@1.49.1 wrangler@4 && npx playwright install --with-deps chromium
+      - name: Temporary worker with the AI binding
+        working-directory: tools/invoice-eval/worker
+        run: |
+          KEY=$(openssl rand -hex 24); echo "::add-mask::$KEY"; echo "EVAL_KEY=$KEY" >> $GITHUB_ENV
+          printf '{ "name": "%s", "main": "index.js", "compatibility_date": "2025-06-01", "workers_dev": true, "ai": { "binding": "AI" } }\n' "$EVAL_NAME" > wrangler.json
+          npx wrangler deploy --var "EVAL_KEY:$KEY" 2>&1 | tee deploy.log
+          URL=$(grep -oE 'https://[a-z0-9.-]+\.workers\.dev' deploy.log | head -1); echo "EVAL_URL=$URL" >> $GITHUB_ENV; echo "eval worker: $URL"
+          for i in $(seq 1 20); do [ "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$URL")" = 403 ] && break; sleep 3; done
       - run: node tools/invoice-eval/run.mjs ${{ inputs.models }}
+      - name: Delete the temporary worker
+        if: always()
+        working-directory: tools/invoice-eval/worker
+        run: npx wrangler delete --name "$EVAL_NAME" --force || true
       - uses: actions/upload-artifact@v4
         if: always()
         with:
