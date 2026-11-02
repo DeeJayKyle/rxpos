@@ -36,11 +36,25 @@ export function saleDraft(snap, { user, branchId, mode, customerName, order }) {
   };
 }
 
-/** An unfinished delivery (the Add Stock form) as a draft record. Scanned invoice pictures stay on the device. */
-export function deliveryDraft(form, { id, user, branchId, supplierName, total, startedAt }) {
-  const lines = form.lines.filter((l) => l.productId || l.newName);
+/**
+ * An unfinished delivery (the Add Stock form) as a draft record. A scanned invoice adds `scan`: what was read (supplier
+ * as written, invoice number, total, how many lines to check) and its pages, stored in the pharmacy's cloud
+ * (`pages`: file paths) so whoever reviews it, on any device, can compare every line with the invoice.
+ */
+export function deliveryDraft(form, { id, user, branchId, supplierName, total, startedAt, scan }) {
+  const lines = form.lines.filter((l) => l.productId || l.newName || l.read);
   return {
     id, kind: 'delivery', branchId, userId: user.id, userName: user.name, order: Date.now(), startedAt: startedAt || new Date().toISOString(),
-    title: supplierName || 'Delivery', invoice: form.invoice || '', count: lines.length, total, data: { ...form, lines },
+    title: scan ? `Scanned: ${supplierName || scan.supplier || 'invoice'}` : supplierName || 'Delivery', invoice: form.invoice || '', count: lines.length, total, data: { ...form, lines },
+    ...(scan ? { scan } : {}),
   };
+}
+
+/** How many lines of a scanned delivery still need a person's eye: not matched to a medicine, or flagged when read */
+export const toCheck = (lines) => lines.filter((l) => l.read && (!l.productId || l.read.check?.length || l.read.unclear)).length;
+/** "quantity (other reading 24), batch (MTZO931)": what to check on a scanned line, in plain words */
+const FIELD = { qty: 'quantity', unitCost: 'cost', batch: 'batch', expiry: 'expiry', name: 'medicine name' };
+export function checkText(read) {
+  if (!read?.check?.length) return read?.unclear ? 'hard to read' : '';
+  return read.check.map((f) => FIELD[f] + (read.alt && read.alt[f] != null && read.alt[f] !== '' ? ` (other reading: ${read.alt[f]})` : '')).join(', ');
 }

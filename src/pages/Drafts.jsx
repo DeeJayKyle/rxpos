@@ -3,11 +3,12 @@
 // ago, and take it over or discard it (a discard asks first and goes in the audit log).
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Play, Eye, Trash2, PauseCircle, PackageOpen } from 'lucide-react';
+import { Play, Eye, Trash2, PauseCircle, PackageOpen, ScanText, AlertTriangle } from 'lucide-react';
+import { safeFileUrl } from '../safeurl.js';
 import { useStore, del, audit } from '../store.jsx';
 import { Modal } from '../ui.jsx';
 import { ask, toast } from '../feedback.jsx';
-import { draftsFor, seesAllDrafts, ageText, isOld, isMine } from '../drafts.js';
+import { draftsFor, seesAllDrafts, ageText, isOld, isMine, toCheck, checkText } from '../drafts.js';
 
 export function useDraftCount(kind) {
   const { db, user, branchId } = useStore();
@@ -15,7 +16,7 @@ export function useDraftCount(kind) {
 }
 
 export default function DraftsList({ kind }) {
-  const { db, user, branchId, fmt, update } = useStore();
+  const { db, user, branchId, fmt, update, syncCfg } = useStore();
   const navigate = useNavigate();
   const [all, setAll] = useState(seesAllDrafts(user));
   const [view, setView] = useState(null);
@@ -47,6 +48,13 @@ export default function DraftsList({ kind }) {
           <div key={d.id} className={'draft-card' + (isOld(d) ? ' old' : '')}>
             <div className="row between"><strong><Icon size={15} /> {d.title}</strong><strong className="num">{fmt(d.total)}</strong></div>
             <div className="muted small">{d.count} item{d.count === 1 ? '' : 's'}{d.invoice ? ` · invoice ${d.invoice}` : ''} · {isMine(d, user) ? 'started by you' : `started by ${d.userName}`} · <span className={isOld(d) ? 'text-danger' : ''}>{ageText(d)}</span>{kind === 'sale' && d.mode === 'wholesale' ? ' · wholesale' : ''}</div>
+            {d.scan && (() => { const n = toCheck(d.data.lines || []), first = safeFileUrl(syncCfg?.url, d.scan.pages?.[0]); return (
+              <div className="draft-scan">
+                {first && <img src={first} alt="Invoice" loading="lazy" />}
+                <span className="small"><span className="badge info"><ScanText size={11} /> Scanned · needs review</span>{' '}
+                  {n > 0 ? <span className="text-warn"><AlertTriangle size={11} /> {n} line{n === 1 ? '' : 's'} to check</span> : <span className="muted">every line read clearly</span>}
+                  {d.scan.total > 0 && d.scan.totalMatches === false ? <span className="text-warn"> · lines don&apos;t add up to the invoice total</span> : null}</span>
+              </div>); })()}
             <div className="row-acts" style={{ justifyContent: 'flex-start', marginTop: 10 }}>
               <button className="btn sm primary act-edit" onClick={() => carryOn(d)}><Play size={14} />{isMine(d, user) ? 'Continue' : 'Take over'}</button>
               <button className="btn sm ghost" onClick={() => setView(d)}><Eye size={14} />View</button>
@@ -58,8 +66,8 @@ export default function DraftsList({ kind }) {
       {view && (
         <Modal title={view.title} onClose={() => setView(null)}>
           <p className="muted">{view.userName} · {ageText(view)} · {fmt(view.total)}</p>
-          <table><thead><tr><th>Medicine</th><th className="num">Qty</th></tr></thead>
-            <tbody>{lines(view).map((l, i) => <tr key={i}><td>{lineName(l)}</td><td className="num">{l.qty}</td></tr>)}</tbody></table>
+          <table><thead><tr><th>Medicine</th><th className="num">Qty</th>{view.scan && <th>To check</th>}</tr></thead>
+            <tbody>{lines(view).map((l, i) => <tr key={i}><td>{lineName(l) === '—' && l.read ? l.read.name : lineName(l)}</td><td className="num">{l.qty}</td>{view.scan && <td className="small text-warn">{!l.productId && l.read ? 'choose the medicine' : checkText(l.read)}</td>}</tr>)}</tbody></table>
           <div className="form-actions"><button className="btn primary" onClick={() => { carryOn(view); setView(null); }}><Play size={16} />{isMine(view, user) ? 'Continue' : 'Take over'}</button></div>
         </Modal>
       )}

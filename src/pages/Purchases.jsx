@@ -7,9 +7,11 @@ import { CASH } from '../finance.js';
 import { Modal, PdfButton, Tabs, Empty, PageTip, usePages, Pager, useSort, SortTh } from '../ui.jsx';
 import { ask, toast } from '../feedback.jsx';
 import { newInternalBarcode } from '../barcode.jsx';
-import { invoicePages, readInvoice, matchProduct, matchSupplier, normDate } from '../invoiceScan.js';
+import { invoicePages, readInvoice, matchProduct, matchSupplier, normDate, pageBlob } from '../invoiceScan.js';
+import { uploadAttachment } from '../attach.jsx';
+import { safeFileUrl } from '../safeurl.js';
 import { CameraButton, CameraScanner } from '../camscan.jsx';
-import { deliveryDraft, draftsFor, isOld } from '../drafts.js';
+import { deliveryDraft, draftsFor, isOld, toCheck, checkText } from '../drafts.js';
 import DraftsList, { useDraftCount } from './Drafts.jsx';
 import { Link, useNavigate } from 'react-router-dom';
 
@@ -56,7 +58,10 @@ export function AddStock() {
   const draftKey = 'rxpos-addstock-draft:' + (syncCfg.tenant || 'device') + ':' + branchId;
   const blankLine = () => ({ key: uid(), productId: '', name: '', form: 'Tablets', qty: 1, cost: '', total: '', price: '', auto: true, by: 'unit', batch: '', expiry: '' });
   const [scanOpen, setScanOpen] = useState(false);
-  const [scanned, setScanned] = useState(null); // { pages, supplier, invoiceNo, total } after an invoice was read
+  // a scanned delivery draft being reviewed brings its invoice pages (kept in the pharmacy's cloud) and what was read
+  const resumed = useRef(location.state?.draftId ? (db.drafts || []).find((x) => x.id === location.state.draftId) : null).current;
+  const pageUrls = (paths) => (paths || []).map((x) => safeFileUrl(syncCfg.url, x)).filter(Boolean);
+  const [scanned, setScanned] = useState(() => (resumed?.scan ? { ...resumed.scan, pagePaths: resumed.scan.pages || [], pages: pageUrls(resumed.scan.pages) } : null)); // { pages, pagePaths, supplier, invoiceNo, total, … } after an invoice was read
   const [checked, setChecked] = useState(false); // the person confirms they checked the scanned lines
   const blank = () => ({ supplierId: '', invoice: '', date: today(), paid: '', bankId: CASH, notes: '', markup: s.retailMarkup ?? 50, lines: [blankLine()] });
   const priceAt = (markup) => (cost) => markupPrice(cost, markup, s.priceRound);
@@ -66,24 +71,47 @@ export function AddStock() {
     if (!l.price && unitCost(l) > 0) { l.price = String(priceAt(markup)(unitCost(l))); l.derived = true; }
     return { ...l, total: l.cost !== '' ? numOrBlank(Number(l.cost) * Number(l.qty || 0)) : '' };
   };
-  // Put what was read off the invoice on the panel: nothing is saved until "Receive stock"
-  const applyScan = (r, pages) => {
+  // What was read off an invoice → Add Stock lines (medicines matched, costs and prices worked out) and a summary
+  const fromScan = (r, markup) => {
     const sup = matchSupplier(r.supplier, db.suppliers);
     const lines = r.items.map((it) => {
       const p = matchProduct(it.name, products);
       const qty = it.qty || 1;
-      const base = { qty, batch: it.batch || '', expiry: normDate(it.expiry), read: { name: it.name, unclear: it.unclear, matched: !!p } };
+      const read = { name: it.name, unclear: !!it.unclear, matched: !!p, ...(it.check?.length ? { check: it.check } : {}), ...(it.alt ? { alt: it.alt } : {}), ...(it.why ? { why: it.why } : {}), ...(it.note ? { note: it.note } : {}), ...(it.page ? { page: it.page } : {}) };
+      const base = { qty, batch: it.batch || '', expiry: normDate(it.expiry), read };
       const cost = it.unitCost || (it.lineTotal && qty ? it.lineTotal / qty : 0);
-      const l = p ? lineFor(p, base, form.markup) : { ...blankLine(), ...base, name: it.name || '' };
-      return it.lineTotal && !it.unitCost ? editLine(l, { total: String(it.lineTotal) }, priceAt(form.markup)) : editLine(l, { cost: numOrBlank(cost) }, priceAt(form.markup));
+      const l = p ? lineFor(p, base, markup) : { ...blankLine(), ...base, name: it.name || '' };
+      return it.lineTotal && !it.unitCost ? editLine(l, { total: String(it.lineTotal) }, priceAt(markup)) : editLine(l, { cost: numOrBlank(cost) }, priceAt(markup));
     });
+    const summary = { supplier: r.supplier, supplierMatched: !!sup, invoiceNo: r.invoiceNo, total: r.total, linesTotal: r.linesTotal || 0, totalMatches: r.totalMatches !== false,
+      readings: r.readings || 1, lines: lines.length, unmatched: lines.filter((l) => !l.productId).length, unclear: toCheck(lines), readAt: now(), readBy: user.name };
+    return { sup, lines, summary, invoice: r.invoiceNo || '', date: normDate(r.date, { endOfMonth: false }) || '' };
+  };
+  // Put what was read off the invoice on the panel: nothing is saved until "Receive stock"
+  const applyScan = (r, pages, pagePaths = []) => {
+    const { sup, lines, summary, invoice, date } = fromScan(r, form.markup);
     setForm((f) => {
       const keep = f.lines.filter((l) => l.productId);
-      return { ...f, supplierId: sup?.id || f.supplierId, invoice: r.invoiceNo || f.invoice, date: normDate(r.date, { endOfMonth: false }) || f.date, lines: keep.length || lines.length ? [...keep, ...lines] : [blankLine()] };
+      return { ...f, supplierId: sup?.id || f.supplierId, invoice: invoice || f.invoice, date: date || f.date, lines: keep.length || lines.length ? [...keep, ...lines] : [blankLine()] };
     });
-    setScanned({ pages, supplier: r.supplier, supplierMatched: !!sup, invoiceNo: r.invoiceNo, total: r.total, lines: lines.length, unmatched: lines.filter((l) => !l.productId).length, unclear: lines.filter((l) => l.read.unclear).length });
+    setScanned({ ...summary, pages, pagePaths });
     setChecked(false);
     setScanOpen(false);
+  };
+  // Several invoices read in one go: each becomes a delivery draft waiting for review (Purchase History → Drafts)
+  const saveScanDrafts = async (results) => {
+    const recs = results.map(({ r, pagePaths }) => {
+      const { sup, lines, summary, invoice, date } = fromScan(r, s.retailMarkup ?? 50);
+      const f = { ...blank(), supplierId: sup?.id || '', invoice, date: date || today(), lines };
+      const sum = lines.reduce((a, l) => a + (l.productId ? lineTotal(l) : Number(l.total) || 0), 0);
+      return deliveryDraft(f, { id: uid(), user, branchId, supplierName: sup?.name || r.supplier, total: sum, scan: { ...summary, pages: pagePaths } });
+    });
+    await update((d) => {
+      for (const rec of recs) put(d, 'drafts', rec);
+      audit(d, user, 'Invoices scanned', `${recs.length} invoice${recs.length > 1 ? 's' : ''} read into delivery drafts for review: ${recs.map((x) => `${x.title.replace(/^Scanned: /, '')}${x.invoice ? ' ' + x.invoice : ''} (${x.count} lines, ${x.scan.unclear} to check)`).join('; ')}`, branchId);
+    });
+    setScanOpen(false);
+    return recs;
   };
   const addScannedSupplier = () => {
     const id = uid();
@@ -188,9 +216,10 @@ export function AddStock() {
     if (!form.lines.some((l) => l.productId)) return toast('Add at least one medicine before saving a draft', 'warn');
     const supplier = db.suppliers.find((x) => x.id === form.supplierId);
     const { draftId, draftStartedAt, ...rest } = form;
-    const rec = deliveryDraft(rest, { id: draftId || uid(), user, branchId, supplierName: supplier?.name, total, startedAt: draftStartedAt });
+    const scan = scanned ? (({ pages: _shown, pagePaths, ...meta }) => ({ ...meta, pages: pagePaths || [], unclear: toCheck(rest.lines) }))(scanned) : undefined; // eslint-disable-line no-unused-vars
+    const rec = deliveryDraft(rest, { id: draftId || uid(), user, branchId, supplierName: supplier?.name, total, startedAt: draftStartedAt, scan });
     try { await update((d) => { put(d, 'drafts', rec); }); } catch (err) { return toast('The draft was NOT saved: ' + err.message, 'error'); }
-    toast(`Delivery saved as a draft${scanned ? ' (the invoice photos stay on this device only)' : ''}. Find it in Purchase History → Drafts.`);
+    toast(`Delivery saved as a draft${scanned && !scan.pages.length ? ' (the invoice photos stay on this device only)' : ''}. Find it in Purchase History → Drafts.`);
     discard();
   };
   const myDrafts = draftsFor(db, { user, branchId, kind: 'delivery' }).filter((x) => x.id !== form.draftId);
@@ -280,7 +309,7 @@ export function AddStock() {
       {form.draftId && <div className="notice info-notice">Continuing a saved draft. Receiving it removes it from Drafts; "Save as draft" keeps your changes in it.</div>}
       {myDrafts.length > 0 && <div className="notice info-notice row gap wrap">You have {myDrafts.length} saved deliver{myDrafts.length === 1 ? 'y' : 'ies'}{myDrafts.some((x) => isOld(x)) ? ', one waiting over a day' : ''}.<Link to="/purchases" state={{ tab: 'drafts' }}>Open drafts</Link></div>}
       <PageTip id="add-stock" title="Receiving a delivery">Search or scan each medicine (not in the list? type its name and choose “Add as a new medicine”). Type the line total from the invoice: the unit cost and the retail price work themselves out, and you can still change the price. Scan invoice reads a photo for you.</PageTip>
-      {scanOpen && <InvoiceScanner cfg={syncCfg} onClose={() => setScanOpen(false)} onRead={applyScan} />}
+      {scanOpen && <InvoiceScanner cfg={syncCfg} onClose={() => setScanOpen(false)} onRead={applyScan} onDrafts={saveScanDrafts} />}
       {restored && !scanned && (
         <div className="notice info-notice row between gap wrap">
           <span><RotateCcw size={15} /> Your unfinished delivery was kept on this device. Carry on, or start again.</span>
@@ -294,9 +323,10 @@ export function AddStock() {
             <button type="button" className="link-btn small" onClick={discard}>Discard</button>
           </div>
           <div className="small">
-            {scanned.lines} line{scanned.lines === 1 ? '' : 's'} read{scanned.total ? ` · invoice total ${fmt(scanned.total)} (here ${fmt(total)})` : ''}
+            {scanned.lines} line{scanned.lines === 1 ? '' : 's'} read{scanned.readings > 1 ? ' and cross-checked by two AI readings' : ''}{scanned.readBy ? ` · scanned by ${scanned.readBy}` : ''}{scanned.total ? ` · invoice total ${fmt(scanned.total)} (here ${fmt(total)})` : ''}
+            {scanned.total > 0 && scanned.totalMatches === false && <span className="text-warn"> · the lines read add up to {fmt(scanned.linesTotal)}, not the invoice total: a line may be missing or misread</span>}
             {scanned.unmatched > 0 && <span className="text-warn"> · {scanned.unmatched} not matched to a medicine: choose one or add it as new</span>}
-            {scanned.unclear > 0 && <span className="text-warn"> · {scanned.unclear} hard to read</span>}
+            {toCheck(form.lines) > 0 && <span className="text-warn"> · {toCheck(form.lines)} line{toCheck(form.lines) === 1 ? '' : 's'} to check (marked below)</span>}
           </div>
           {scanned.supplier && !scanned.supplierMatched && <div className="small">Supplier on the invoice: <strong>{scanned.supplier}</strong> (not in your list) <button type="button" className="btn sm ghost" onClick={addScannedSupplier}>Add this supplier</button></div>}
           <div className="scan-thumbs">{scanned.pages.map((src, n) => <a key={n} href={src} target="_blank" rel="noreferrer" title={`Page ${n + 1}: open to compare`}><img src={src} alt={`Invoice page ${n + 1}`} /></a>)}</div>
@@ -351,7 +381,7 @@ export function AddStock() {
                           {ownList.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
                         </select>
                       )}
-                      {l.read && <small className={'scan-read' + (!l.productId || l.read.unclear ? ' text-warn' : ' muted')}>{!l.productId || l.read.unclear ? <AlertTriangle size={11} /> : <CheckCircle2 size={11} />} Invoice: {l.read.name}{l.read.unclear ? ' (hard to read)' : ''}</small>}
+                      {l.read && <small className={'scan-read' + (!l.productId || l.read.unclear ? ' text-warn' : ' muted')}>{!l.productId || l.read.unclear ? <AlertTriangle size={11} /> : <CheckCircle2 size={11} />} Invoice{l.read.page > 1 ? ` p.${l.read.page}` : ''}: {l.read.name}{checkText(l.read) ? ` · check ${checkText(l.read)}` : ''}{l.read.note ? ` · ${l.read.note}` : ''}</small>}
                     </td>
                     <td data-label="Qty"><input type="number" min="1" step="any" inputMode="decimal" value={l.qty} onChange={(e) => setLine(l.key, { qty: e.target.value })} aria-label="Quantity" />
                       {packs.length > 0 && (
@@ -559,42 +589,97 @@ function PurchaseEditor({ purchase, onClose }) {
 }
 
 /** Photo or PDF of a supplier invoice → read by AI → handed back for the person to check on the Add Stock panel */
-function InvoiceScanner({ cfg, onClose, onRead }) {
-  const [pages, setPages] = useState([]);
-  const [note, setNote] = useState('');
+function InvoiceScanner({ cfg, onClose, onRead, onDrafts }) {
+  const navigate = useNavigate();
+  // one or more invoices, each with its pages (photos or a PDF): every invoice becomes one delivery draft
+  const [invoices, setInvoices] = useState([]); // [{ id, pages: [dataUrl], note, status, error }]
+  const [cur, setCur] = useState(0);
   const [busy, setBusy] = useState('');
-  const choose = async (file) => {
-    if (!file) return;
+  const addFiles = async (files, asNew = false) => {
+    files = [...(files || [])];
+    if (!files.length) return;
     setBusy('Opening…');
     try {
-      const r = await invoicePages(file);
-      setPages(r.pages);
-      setNote(r.total > r.pages.length ? `Only the first ${r.pages.length} of ${r.total} pages will be read.` : '');
+      const pdfs = files.filter((f) => f.type === 'application/pdf' || /\.pdf$/i.test(f.name)), photos = files.filter((f) => !pdfs.includes(f));
+      const next = [...invoices];
+      // a PDF is one invoice; photos chosen together are the pages of one invoice (added to the open one, if any)
+      for (const f of pdfs) { const r = await invoicePages(f); next.push({ id: uid(), pages: r.pages, note: r.total > r.pages.length ? `Only the first ${r.pages.length} of ${r.total} pages will be read.` : '' }); }
+      if (photos.length) {
+        const pages = []; for (const f of photos) pages.push(...(await invoicePages(f)).pages);
+        if (!asNew && next[cur] && !pdfs.length) next[cur] = { ...next[cur], pages: [...next[cur].pages, ...pages] };
+        else next.push({ id: uid(), pages, note: '' });
+      }
+      setInvoices(next);
+      setCur(pdfs.length || asNew || !next[cur] ? next.length - 1 : cur);
     } catch (e) { toast(e.message || 'That file could not be opened', 'error'); }
     finally { setBusy(''); }
   };
-  const read = async () => {
-    if (!navigator.onLine) return toast('Reading an invoice needs the internet.', 'warn');
+  const removeInvoice = (id) => { setInvoices((l) => l.filter((x) => x.id !== id)); setCur(0); };
+  const removePage = (inv, n) => setInvoices((l) => l.map((x) => (x.id === inv.id ? { ...x, pages: x.pages.filter((_, k) => k !== n) } : x)).filter((x) => x.pages.length));
+  const pageCount = invoices.reduce((a, x) => a + x.pages.length, 0);
+  const setStatus = (id, patch) => setInvoices((l) => l.map((x) => (x.id === id ? { ...x, ...patch } : x)));
+  // Keep the pages in the pharmacy's cloud (whoever reviews the draft compares with them), then read them
+  const readOne = async (inv, k) => {
+    const label = invoices.length > 1 ? `Invoice ${k + 1} of ${invoices.length}: ` : '';
+    setBusy(label + 'saving the pages…');
+    const pagePaths = [];
+    for (let n = 0; n < inv.pages.length; n++) pagePaths.push((await uploadAttachment(cfg, pageBlob(inv.pages[n]), `invoice-${today()}-${n + 1}.jpg`)).path);
+    const r = await readInvoice(cfg, inv.pages, (n, of) => setBusy(`${label}reading${of > 1 ? ` page ${n} of ${of}` : ''} with two AI readings…`));
+    if (!r.items.length) throw new Error('No medicine lines could be read. Try a sharper, straighter photo in good light.');
+    return { r, pagePaths, pages: inv.pages };
+  };
+  const toDrafts = async () => {
+    if (!navigator.onLine) return toast('Reading invoices needs the internet.', 'warn');
+    const done = [];
+    for (let k = 0; k < invoices.length; k++) {
+      const inv = invoices[k];
+      if (inv.status === 'saved') continue;
+      try { done.push(await readOne(inv, k)); setStatus(inv.id, { status: 'read', error: '' }); }
+      catch (e) { setStatus(inv.id, { status: 'failed', error: e.message || 'Could not be read' }); }
+    }
+    setBusy('');
+    if (!done.length) return toast('No invoice could be read. See the reason under each one.', 'error');
     try {
-      const r = await readInvoice(cfg, pages, (n, of) => setBusy(of > 1 ? `Reading page ${n} of ${of}…` : 'Reading the invoice…'));
-      if (!r.items.length) { toast('No medicine lines could be read. Try a sharper, straighter photo.', 'warn'); return; }
-      onRead(r, pages);
-    } catch (e) { toast(e.message || 'The invoice could not be read', 'error'); }
+      const recs = await onDrafts(done);
+      const lines = recs.reduce((a, x) => a + x.scan.unclear, 0);
+      toast(`${recs.length} invoice${recs.length > 1 ? 's' : ''} read and saved as draft${recs.length > 1 ? 's' : ''} for review${lines ? ` (${lines} line${lines > 1 ? 's' : ''} to check)` : ''}. Purchase History → Drafts.`, 'success');
+      if (invoices.length > done.length) toast(`${invoices.length - done.length} invoice(s) could not be read: scan them again.`, 'warn');
+      navigate('/purchases', { state: { tab: 'drafts' } });
+    } catch (e) { toast('The drafts were NOT saved: ' + e.message, 'error'); }
+  };
+  const fillNow = async () => {
+    if (!navigator.onLine) return toast('Reading an invoice needs the internet.', 'warn');
+    try { const { r, pagePaths, pages } = await readOne(invoices[0], 0); onRead(r, pages, pagePaths); }
+    catch (e) { toast(e.message || 'The invoice could not be read', 'error'); }
     finally { setBusy(''); }
   };
   return (
-    <Modal title="Scan a supplier invoice" onClose={busy ? () => {} : onClose} wide>
-      <p className="muted small">Take a photo of the invoice or delivery note, or choose an image or PDF. RxPOS reads the lines and fills in Add Stock for you to check. Nothing is saved until you press <strong>Receive stock</strong>.</p>
+    <Modal title="Scan supplier invoices" onClose={busy ? () => {} : onClose} wide>
+      <p className="muted small">Photograph each invoice or delivery note (typed or handwritten), or choose images or PDFs. Two AI models read every page and are cross-checked: each invoice is saved as a <strong>delivery draft waiting for review</strong>, with the lines to check marked. Nothing goes into stock until someone checks it and presses <strong>Receive stock</strong>.</p>
       <div className="row gap wrap">
-        <label className="btn ghost"><Camera size={16} />Take photo<input hidden type="file" accept="image/*" capture="environment" onChange={(e) => choose(e.target.files[0])} /></label>
-        <label className="btn ghost"><FileUp size={16} />Choose image or PDF<input hidden type="file" accept="image/*,application/pdf,.pdf" onChange={(e) => choose(e.target.files[0])} /></label>
-        {pages.length > 0 && <button type="button" className="btn sm ghost" onClick={() => setPages([])} disabled={!!busy}><X size={14} />Clear</button>}
+        <label className="btn ghost"><Camera size={16} />{invoices[cur] ? 'Add a page (photo)' : 'Take photo'}<input hidden type="file" accept="image/*" capture="environment" onChange={(e) => { addFiles(e.target.files); e.target.value = ''; }} /></label>
+        <label className="btn ghost"><FileUp size={16} />Choose images or PDFs<input hidden type="file" multiple accept="image/*,application/pdf,.pdf" onChange={(e) => { addFiles(e.target.files); e.target.value = ''; }} /></label>
+        {invoices.length > 0 && <label className="btn ghost"><Plus size={16} />Another invoice<input hidden type="file" multiple accept="image/*,application/pdf,.pdf" capture="environment" onChange={(e) => { addFiles(e.target.files, true); e.target.value = ''; }} /></label>}
       </div>
-      {note && <p className="small text-warn">{note}</p>}
-      {pages.length > 0 && <div className="scan-thumbs big">{pages.map((src, n) => <img key={n} src={src} alt={`Page ${n + 1}`} />)}</div>}
+      <p className="muted small">Photos taken one after another are pages of the same invoice; use <strong>Another invoice</strong> to start the next one. Flat, straight, in good light, the whole page in the picture.</p>
+      {invoices.map((inv, k) => (
+        <div key={inv.id} className={'scan-invoice' + (k === cur ? ' on' : '')} onClick={() => setCur(k)}>
+          <div className="row between gap">
+            <strong>Invoice {k + 1} · {inv.pages.length} page{inv.pages.length > 1 ? 's' : ''}</strong>
+            <span className="row gap">
+              {inv.status === 'failed' && <span className="badge danger"><AlertTriangle size={11} /> {inv.error}</span>}
+              {inv.status === 'read' && <span className="badge ok"><CheckCircle2 size={11} /> read</span>}
+              <button type="button" className="btn sm ghost" disabled={!!busy} onClick={(e) => { e.stopPropagation(); removeInvoice(inv.id); }}><X size={14} />Remove</button>
+            </span>
+          </div>
+          {inv.note && <p className="small text-warn">{inv.note}</p>}
+          <div className="scan-thumbs big">{inv.pages.map((src, n) => <span key={n} className="scan-page"><img src={src} alt={`Invoice ${k + 1} page ${n + 1}`} /><button type="button" className="icon-btn sm" title="Remove this page" disabled={!!busy} onClick={(e) => { e.stopPropagation(); removePage(inv, n); }}><X size={12} /></button></span>)}</div>
+        </div>
+      ))}
       <div className="form-actions">
         <button type="button" className="btn ghost" onClick={onClose} disabled={!!busy}>Cancel</button>
-        <button type="button" className="btn primary" disabled={!pages.length || !!busy} onClick={read}>{busy ? <><Loader2 size={16} className="spin" />{busy}</> : <><ScanText size={16} />Read invoice</>}</button>
+        {invoices.length === 1 && <button type="button" className="btn ghost" disabled={!pageCount || !!busy} onClick={fillNow}><ScanText size={16} />Read and fill in now</button>}
+        <button type="button" className="btn primary" disabled={!pageCount || !!busy} onClick={toDrafts}>{busy ? <><Loader2 size={16} className="spin" />{busy}</> : <><ScanText size={16} />Read {invoices.length > 1 ? `${invoices.length} invoices` : 'invoice'} into draft{invoices.length > 1 ? 's' : ''} for review</>}</button>
       </div>
     </Modal>
   );

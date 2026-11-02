@@ -899,6 +899,12 @@ tr.edited-row > td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
 .scan-thumbs { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
 .scan-thumbs img { height: 72px; border-radius: 6px; border: 1px solid var(--border, #e2e8f0); background: #fff; }
 .scan-thumbs.big img { height: 220px; max-width: 100%; object-fit: contain; }
+.scan-invoice { border: 1px solid var(--border, #e2e8f0); border-radius: 10px; padding: 10px 12px; margin-top: 10px; cursor: pointer; }
+.scan-invoice.on { border-color: var(--primary, #0f766e); box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary, #0f766e) 18%, transparent); }
+.scan-page { position: relative; display: inline-block; }
+.scan-page .icon-btn { position: absolute; top: 4px; right: 4px; background: var(--card, #fff); border-radius: 999px; }
+.draft-scan { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
+.draft-scan img { height: 44px; border-radius: 4px; border: 1px solid var(--border, #e2e8f0); background: #fff; }
 td.scan-check { background: var(--warn-soft); }
 .scan-read { display: flex; align-items: center; gap: 3px; margin-top: 3px; line-height: 1.25; }
 .text-warn { color: var(--warn); }

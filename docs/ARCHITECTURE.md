@@ -204,3 +204,26 @@ An administrator creates the private link in Settings → Data & backup (`/api/d
 pharmacy's server-only secrets, "Make a new link" replaces it); a Google Sheet reads
 `/api/daily-stock/<pharmacy>/<key>.csv` with `=IMPORTDATA(...)` (last 62 days, `?days=` up to 400).
 Tests: tests/unit-daily-stock.mjs, tests/v46-daily-stock.mjs.
+
+## Scan invoices → delivery drafts for review
+
+Add Stock → Scan invoice takes one or more invoices (photos taken one after another are pages of one invoice; a PDF
+is one invoice; "Another invoice" starts the next). For each invoice the app keeps the pages in the pharmacy's cloud
+(`/api/files`, so whoever reviews it on any device can compare), then sends every page to `/api/ai/invoice`:
+
+- Two different open vision models on Workers AI (`INVOICE_MODELS`) read the page independently with the same
+  instructions (`worker/invoiceprompt.js`): printed and handwritten text, crossed-out values replaced by handwriting,
+  batch characters that look alike, dates copied exactly as written.
+- `worker/invoiceread.js` cross-checks them: where the readings agree a line is confident; where they disagree (with
+  the other value kept in `alt`), where qty × unit cost ≠ line total, or where only one reading saw a line, the
+  fields to check are listed in `check`. Dates are turned into YYYY-MM-DD by RxPOS (`src/invoicedates.js`: an expiry
+  with only month and year is the last day of that month, leap years included), never by the model.
+- The lines are matched to the pharmacy's medicines and supplier on the device and saved as a delivery draft with
+  `scan` (what was read, lines to check, the page files). Purchase History → Drafts shows "Scanned · needs review".
+  Continuing it opens Add Stock with the invoice pages and each line's check; "Receive stock" stays disabled until
+  the reviewer ticks that they checked every line. Nothing reaches stock before that.
+
+How well it reads is measured, not guessed: `.github/workflows/invoice-eval.yml` renders fictional invoices (typed,
+handwritten corrections, fully handwritten, a skewed blurry photo), runs the models in a temporary worker that is
+deleted afterwards, and scores every field against the known answer, single models and the cross-checked result.
+Tests: tests/unit-invoice-read.mjs, tests/v47-scan-drafts.mjs, tests/v17.mjs (#4, fill in now).

@@ -14,6 +14,7 @@ const OWNER = 'local-owner-key-0123456789abcdef';
 const SUITES = [
   ['secret helper (unit)', 'unit-secret.mjs', []],
   ['daily stock figures (unit)', 'unit-daily-stock.mjs', []],
+  ['invoice reading cross-check (unit)', 'unit-invoice-read.mjs', []],
   ['safe file urls (unit)', 'unit-safeurl.mjs', []],
   ['refill rules (unit)', 'unit-rxrules.mjs', []],
   ['crash scrub (unit)', 'unit-scrub.mjs', []],
@@ -70,6 +71,7 @@ const SUITES = [
   ['full download repairs a device', 'v44-full-pull.mjs', []],
   ['web shows the pharmacy\'s details', 'v45-web-settings.mjs', []],
   ['daily stock sheet link', 'v46-daily-stock.mjs', []],
+  ['scan invoices into drafts', 'v47-scan-drafts.mjs', ['.output/v47']],
   ['append-only tables', 'v29-immutable.mjs', []],
   ['pay & sms gated', 'v30-paysms.mjs', []],
   ['restore epoch', 'v31-restore.mjs', []],

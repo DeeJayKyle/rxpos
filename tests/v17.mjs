@@ -251,7 +251,7 @@ const fileInput = await A.$('.modal input[type=file][accept*="pdf"]');
 await fileInput.uploadFile(invPath);
 const opened = await until(A, () => document.querySelectorAll('.modal .scan-thumbs img').length === 1, 20000);
 check('#4 a PDF invoice opens as a page image', opened);
-await clickText(A, '.modal button', /Read invoice/);
+await clickText(A, '.modal button', /Read and fill in now/); // (the other button reads it into a draft for review: tests/v47-scan-drafts.mjs)
 const filled = await until(A, () => !document.querySelector('.modal') && document.querySelectorAll('table.lines tbody tr').length >= 3, 20000);
 check('#4 the invoice page was sent to the reader as an image', aiCalls === 1 && /^data:image\/jpeg;base64,/.test(aiImage), aiCalls);
 const form = await A.evaluate(() => ({

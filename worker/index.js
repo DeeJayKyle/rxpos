@@ -24,6 +24,8 @@ import { uptimeCheck } from './uptime.js';
 import { watchdog } from './watchdog.js';
 import { dailySummaries } from './summary.js';
 import { dailyStockFor, toCsv } from './dailystock.js';
+import { clean as cleanInvoice, finish as finishInvoice } from './invoiceread.js';
+import { INVOICE_PROMPT } from './invoiceprompt.js';
 import { twoStepDdl, twoStepOf, totpCheck, markUsed, twoStepRoutes } from './twostep.js';
 import { tokenSecret, purposeLabel } from './secret.js';
 import { pharmacyChanged, validatePharmacyDefaults } from '../src/pharmacy-settings.js';
@@ -1124,6 +1126,8 @@ async function rtc(env, req, url, body, who) {
 // Mistral Small 3.1 (open source, Apache-2.0): reads images (typed & handwritten text) and writes well
 const VISION = '@cf/mistralai/mistral-small-3.1-24b-instruct';
 const TEXT = VISION;
+// invoices: two different open models read each page independently and are cross-checked (see /api/ai/invoice)
+const INVOICE_MODELS = [VISION, '@cf/meta/llama-4-scout-17b-16e-instruct'];
 const firstJson = (text, open = '{') => {
   // Some models already return parsed JSON instead of text
   if (text && typeof text === 'object') {
@@ -1160,20 +1164,21 @@ async function ai(env, path, body, who) {
     return json({ ...parsed, model: VISION });
   }
   if (path === '/api/ai/invoice') {
-    // one page of a supplier's invoice / delivery note (PDF pages are turned into images on the device)
+    // one page of a supplier's invoice / delivery note (PDF pages are turned into images on the device). Two models
+    // read it independently; the lines are cross-checked (worker/invoiceread.js): where the readings agree the line is
+    // confident, where they disagree, don't add up or only one saw a line, it is flagged for the person to check.
     const m = /^data:image\/(jpeg|png|webp);base64,(.+)$/.exec(String(body.image || ''));
-    if (!m || m[2].length > 2_000_000) return json({ error: 'Send a JPG or PNG image under 1.5 MB.' }, 400);
-    const prompt = 'You are helping a pharmacy in Uganda enter a supplier invoice (or delivery note) into stock. Read this page carefully, including every product line in the table. ' +
-      'Reply with ONLY this JSON, no other text: {"supplier":"","invoiceNo":"","date":"","items":[{"name":"","batch":"","expiry":"","qty":0,"unitCost":0,"lineTotal":0,"unclear":false}],"total":0}. ' +
-      'Rules: "supplier" is the company that issued the invoice (not the buyer). "date" and "expiry" as YYYY-MM-DD (an expiry like 06/2028 or Jun-28 means the last day of that month). ' +
-      '"name" is the product as written including strength and pack (e.g. "Amoxicillin 500mg caps 10x10"). "qty" is the quantity supplied, "unitCost" the price per unit/pack before the line total, "lineTotal" the amount for that line; plain numbers without commas or currency. ' +
-      'Include every product line once; skip subtotal, tax, discount and total rows. Set "unclear": true for any line you could not read with confidence. Leave unknown fields empty or 0.';
-    const out = await runAi(env, VISION, { messages: [{ role: 'user', content: [{ type: 'text', text: prompt }, { type: 'image_url', image_url: { url: body.image } }] }], max_tokens: 2500, temperature: 0.1 });
-    const parsed = firstJson(out.response);
-    const num = (v) => Number(String(v ?? '').replace(/[^0-9.-]/g, '')) || 0;
-    parsed.items = (Array.isArray(parsed.items) ? parsed.items : []).filter((x) => x && x.name).slice(0, 80)
-      .map((x) => ({ name: String(x.name).slice(0, 120), batch: String(x.batch || '').slice(0, 40), expiry: String(x.expiry || '').slice(0, 20), qty: num(x.qty), unitCost: num(x.unitCost), lineTotal: num(x.lineTotal), unclear: !!x.unclear }));
-    return json({ supplier: String(parsed.supplier || '').slice(0, 120), invoiceNo: String(parsed.invoiceNo || '').slice(0, 40), date: String(parsed.date || '').slice(0, 20), items: parsed.items, total: num(parsed.total), model: VISION });
+    if (!m || m[2].length > 2_800_000) return json({ error: 'Send a JPG or PNG image under 2 MB.' }, 400);
+    const readWith = async (model) => {
+      const out = await runAi(env, model, { messages: [{ role: 'user', content: [{ type: 'text', text: INVOICE_PROMPT }, { type: 'image_url', image_url: { url: body.image } }] }], max_tokens: 3000, temperature: 0.1 });
+      return cleanInvoice(firstJson(out.response ?? out));
+    };
+    const [a, b] = await Promise.allSettled([readWith(INVOICE_MODELS[0]), readWith(INVOICE_MODELS[1])]);
+    const first = a.status === 'fulfilled' ? a.value : b.status === 'fulfilled' ? b.value : null;
+    if (!first) throw new Error('The invoice could not be read. Try again in a moment.');
+    const second = a.status === 'fulfilled' && b.status === 'fulfilled' ? b.value : null;
+    const r = finishInvoice(first, second);
+    return json({ ...r, models: INVOICE_MODELS.filter((x, i) => [a, b][i].status === 'fulfilled') });
   }
   if (path === '/api/ai/quiz') {
     const drugs = (Array.isArray(body.drugs) ? body.drugs : []).map((d) => String(d).slice(0, 60)).filter(Boolean).slice(0, 10);
