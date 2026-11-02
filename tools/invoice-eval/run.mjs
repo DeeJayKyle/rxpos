@@ -122,7 +122,8 @@ if (MODELS.length >= 2) {
     const r = finish(clean(a.out), clean(b.out));
     let right = 0, silent = 0, flaggedOk = 0, flaggedBad = 0;
     for (const want of im.inv.items) {
-      const it = r.items.find((x) => words(x.name).filter((w) => new Set(words(want.name)).has(w)).length / Math.max(1, words(want.name).length) >= 0.5);
+      const overlap = (x) => words(want.name).filter((w) => new Set(words(x.name)).has(w)).length / Math.max(1, words(want.name).length);
+      const it = [...r.items].sort((x, y) => overlap(y) - overlap(x)).find((x) => overlap(x) >= 0.5); // the best match, not the first
       if (!it) { silent++; continue; }
       const ok = [num(it.qty) === want.qty, num(it.unitCost) === want.unitCost, norm(it.batch) === norm(want.batch), day(it.expiry) === want.expiry, true];
       right += ok.filter(Boolean).length;
