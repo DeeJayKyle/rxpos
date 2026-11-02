@@ -2186,3 +2186,88 @@ tr.line-removed td { opacity: .55; }
 @media (min-width: 761px) { .invoice-sheet { padding: 26px 24px 20px; } }
 .invoice-sheet table.stock-lines .date-input { min-width: 9.6em; }
 .invoice-sheet table.stock-lines td.line-med { min-width: 13em; }
+
+/* ---- POS on wide screens (1280px+): client & quick actions | medicines | the sale (ledger, totals, pay) ---- */
+:root { --pos-canvas: #F8FAFC; --pos-action: #0D9488; --pos-action-2: #2563EB; --pos-halt: #DC2626; }
+:root[data-theme='dark'] { --pos-canvas: var(--bg); }
+.pos-side { display: none; }
+.kbd-sub { display: block; font-size: 10.5px; font-weight: 600; letter-spacing: .02em; opacity: .85; line-height: 1.1; }
+.kbd-mini { font-size: 10.5px; padding: 1px 5px; }
+.grand-sub { display: none; }
+.cust-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.cust-badge { display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 999px; font-size: 14px; font-weight: 600; border: 1px solid transparent; }
+.cust-loyal { background: #F0FDFA; color: #115E59; border-color: #99F6E4; }   /* teal-50 / teal-800 */
+.cust-credit { background: #FFFBEB; color: #92400E; border-color: #FDE68A; }  /* amber-50 / amber-800 */
+.cust-std { background: #F1F5F9; color: #334155; border-color: #E2E8F0; }     /* neutral */
+@media (min-width: 1280px) {
+  .pos { grid-template-columns: minmax(0, 25fr) minmax(0, 50fr) minmax(0, 25fr); background: var(--pos-canvas); }
+  .pos-side { display: flex; flex-direction: column; gap: 14px; min-height: 0; overflow-y: auto; }
+  .pos-side .card { padding: 14px 16px; }
+  .pos-side h3 { margin: 0 0 10px; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+  .pos-client-find { display: flex; align-items: center; gap: 8px; border: 1px solid var(--border); border-radius: 10px; padding: 0 10px; background: var(--surface); }
+  .pos-client-find:focus-within { border-color: var(--pos-action); box-shadow: 0 0 0 3px color-mix(in srgb, var(--pos-action) 20%, transparent); }
+  .pos-client-find input { border: 0 !important; box-shadow: none !important; padding: 10px 0; flex: 1; min-width: 0; font-size: 15px; background: transparent; }
+  .pos-client-list { display: flex; flex-direction: column; margin-top: 6px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .pos-client-list button { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 9px 12px; border: 0; border-bottom: 1px solid var(--border); background: var(--surface); text-align: left; font-size: 15px; cursor: pointer; }
+  .pos-client-list button:last-child { border-bottom: 0; }
+  .pos-client-list button:hover, .pos-client-list button[aria-selected='true'] { background: color-mix(in srgb, var(--pos-action) 10%, var(--surface)); }
+  .pos-client-list > small { padding: 9px 12px; }
+  .pos-client-now { margin-top: 12px; display: flex; flex-direction: column; gap: 2px; font-size: 15px; }
+  .quick-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .quick-tile { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 84px; padding: 10px 6px; border-radius: 12px;
+    border: 1px solid color-mix(in srgb, var(--pos-action) 35%, var(--border)); background: var(--surface); color: var(--pos-action); font-size: 14px; font-weight: 700; cursor: pointer; text-align: center; }
+  .quick-tile:hover:not(:disabled) { background: color-mix(in srgb, var(--pos-action) 9%, var(--surface)); }
+  .quick-tile:disabled { opacity: .45; cursor: default; }
+  .quick-tile .kbd-sub { color: var(--text); }
+  /* the sale as a ledger: roomy rows, striped, the compact two-row line layout that fits the column */
+  .pos-cart { font-size: 14px; }
+  .pos-cart .cart-line { display: grid; grid-template-columns: auto 1fr auto auto; grid-template-areas: 'check name name x' 'check info qty total'; gap: 6px 10px; align-items: center; padding: 12px 10px; border-radius: 8px; }
+  .pos-cart .cart-line:nth-child(even) { background: color-mix(in srgb, var(--text) 4%, transparent); }
+  .pos-cart .cart-line > .line-check { grid-area: check; }
+  .pos-cart .cart-line > .grow { grid-area: name; min-width: 0; }
+  .pos-cart .cart-line > .qty { grid-area: qty; }
+  .pos-cart .cart-line > .line-total { grid-area: total; font-weight: 700; }
+  .pos-cart .cart-line > .line-remove { grid-area: x; }
+  .pos-cart .cart-line strong { font-size: 16px; font-weight: 700; color: var(--text); }
+  .pos-cart .qty button { min-width: 36px; min-height: 36px; font-size: 18px; }
+  .pos-cart .muted, .pos-cart .chip, .pos-cart .field > span { font-size: 14px; }
+  .pos-cart .totals .grand { font-size: 24px; font-weight: 800; }
+  .pos-cart .grand-sub { display: block; font-size: 12px; font-weight: 600; color: var(--muted); }
+  .pos-cart .pay-row { position: sticky; bottom: 0; z-index: 50; background: var(--surface); padding-top: 8px; box-shadow: 0 -8px 12px -10px rgba(15, 23, 42, .25); }
+  .pos-cart .pay-row .btn.primary { background: var(--pos-action); border-color: var(--pos-action); }
+  .pos-cart .pay-row .btn.primary > span { display: flex; flex-direction: column; align-items: center; }
+}
+@media (min-width: 1280px) {
+  /* the narrow sale column scrolls as one (lines keep their room); Charge stays pinned at its bottom */
+  .pos-cart { overflow-y: auto; overscroll-behavior: contain; }
+  .pos-cart > * { flex-shrink: 0; }
+  .pos-cart .cart-lines { flex: 0 0 auto; min-height: 140px; max-height: none; overflow: visible; }
+  .pos-cart .cart-head h3 { font-size: 17px; }
+  .pos-cart .pay-methods { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+  .pos-cart .pay-methods .chip { justify-content: center; padding: 7px 8px; }
+  .pos-cart .pay-row { margin-top: auto; flex-wrap: wrap; padding-bottom: 2px; }
+  .pos-cart .pay-row .btn.ghost { flex: 1; }
+  .pos-cart .pay-row .btn.primary { flex: 1 0 100%; }
+}
+@media (min-width: 1280px) {
+  /* same two-row line as the phone sheet: name and remove on top; price, quantity, line total underneath */
+  .pos-cart .cart-line > .grow { display: contents; }
+  .pos-cart .cart-line > .grow > strong { grid-area: name; }
+  .pos-cart .cart-line > .grow > .badge { grid-area: name; justify-self: end; }
+  .pos-cart .cart-line > .grow > small.muted { grid-area: info; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin: 0; }
+  .pos-cart .cart-line > .grow > .line-tools, .pos-cart .cart-line > .grow > .below-cost { grid-column: 2 / -1; margin: 0; }
+  .pos-cart .cart-line .line-check { align-self: start; margin-top: 3px; }
+  .pos-cart .cart-line .line-total { min-width: 70px; text-align: right; }
+  .pos-cart .price-input { width: 86px; }
+  .pos-cart .qty { flex-wrap: nowrap; }
+  .pos-cart .qty input { width: 42px; min-width: 42px; flex: none; font-size: 15px; font-weight: 700; }
+  /* the pinned Charge row covers the card's bottom padding so nothing shows beneath it */
+  .pos-cart .pay-row { bottom: -14px; padding-bottom: 14px; margin-bottom: -14px; }
+}
+@media (min-width: 1280px) {
+  /* three rows fit the narrow column: name + remove; price + line total; − qty + (then the line's tools) */
+  .pos-cart .cart-line { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: 'check name x' 'check info total' 'check qty qty'; }
+  .pos-cart .cart-line > .qty { justify-self: start; }
+  .pos-cart .cart-line > .grow > strong { overflow-wrap: anywhere; }
+  .pos-cart .pay-row .btn.ghost { min-width: 0; padding-left: 8px; padding-right: 8px; }
+}

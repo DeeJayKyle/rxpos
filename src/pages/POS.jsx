@@ -1,9 +1,9 @@
 import { mainPack, packPrice, sellInPacks } from '../packs.js';
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useLocation, Link } from 'react-router-dom';
-import { ShoppingCart, Trash2, X, FileText, Printer, AlertTriangle, ScanBarcode, Smartphone, Loader2, CheckCircle2, UserPlus, Tag, BookMarked, Repeat, PauseCircle, Keyboard, Plus, ClipboardList, MessageCircle, MessageSquareText, Star } from 'lucide-react';
+import { ShoppingCart, Trash2, X, FileText, Printer, AlertTriangle, ScanBarcode, Smartphone, Loader2, CheckCircle2, UserPlus, Tag, BookMarked, Repeat, PauseCircle, Keyboard, Plus, ClipboardList, MessageCircle, MessageSquareText, Star, Search, Ban, Percent, Users } from 'lucide-react';
 import { DrugInfoPanel, genericKey } from './DrugInfo.jsx';
-import { useStore, uid, now, daysUntil, put, del, move, allocate, audit, normalizePhone, DEFAULT_PAYMENT_METHODS } from '../store.jsx';
+import { useStore, uid, now, daysUntil, put, del, move, allocate, audit, normalizePhone, customerBalance, DEFAULT_PAYMENT_METHODS } from '../store.jsx';
 import { draftsFor, saleDraft } from '../drafts.js';
 import { keepsData } from '../webpolicy.js';
 import { CASH } from '../finance.js';
@@ -17,6 +17,9 @@ import { CameraButton, CameraScanner } from '../camscan.jsx';
 
 // Receipt numbers must be unique across synced devices, so they are time-based rather than sequential
 export const docNumber = (prefix) => prefix + Date.now().toString(36).toUpperCase().slice(-6) + Math.floor(Math.random() * 36).toString(36).toUpperCase();
+
+// A client with this many sales is shown as a loyalty member (repeat client) on the till
+const LOYAL_VISITS = 5;
 
 export default function POS({ mode = 'retail' }) {
   const { db, products, update, user, fmt, batchesOf, branchId, syncCfg, features, can, pending } = useStore();
@@ -283,6 +286,33 @@ export default function POS({ mode = 'retail' }) {
   const isRx = (l) => !!(products.find((p) => p.id === l.id)?.rx ?? l.rx);
   const isCd = (l) => !!(products.find((p) => p.id === l.id)?.controlled ?? l.controlled);
   const lineAt = cursor >= 0 && cursor < cart.length ? cart[cursor] : cart[cart.length - 1];
+  // ---- wide screens (1280px+): the client panel on the left, with the quick actions ----
+  const [custQ, setCustQ] = useState('');
+  const [custFind, setCustFind] = useState('');
+  useEffect(() => { const t = setTimeout(() => setCustFind(custQ.trim().toLowerCase()), 150); return () => clearTimeout(t); }, [custQ]); // 150 ms debounce
+  const custRef = useRef(null), discRef = useRef(null);
+  const custMatches = useMemo(() => {
+    if (!custFind) return [];
+    const digits = custFind.replace(/\D/g, '');
+    return db.customers.filter((c) => c.id !== 'walk-in' && (String(c.name || '').toLowerCase().includes(custFind) || (digits.length >= 3 && String(c.phone || '').replace(/\D/g, '').includes(digits)))).slice(0, 8);
+  }, [custFind, db.customers]);
+  // badges: a loyal (regular) client, what they owe or have in credit, else a standard account
+  const custBadges = useMemo(() => {
+    if (!customer || customer.id === 'walk-in') return [{ k: 'std', text: 'Walk-in · standard' }];
+    const visits = db.sales.filter((x) => x.customerId === customer.id && x.status !== 'refunded').length;
+    const owes = customerBalance(db, customer.id);
+    const out = [];
+    if (visits >= LOYAL_VISITS) out.push({ k: 'loyal', text: `Loyalty member · ${visits} visits` });
+    if (owes > 0.5) out.push({ k: 'credit', text: `Balance due ${fmt(owes)}` });
+    else if (owes < -0.5) out.push({ k: 'credit', text: `Store credit ${fmt(-owes)}` });
+    if (!out.length) out.push({ k: 'std', text: `Standard account${visits ? ` · ${visits} visit${visits === 1 ? '' : 's'}` : ''}` });
+    return out;
+  }, [customer, db]); // eslint-disable-line react-hooks/exhaustive-deps
+  const lastSale = useMemo(() => db.sales.filter((x) => (x.branchId || 'main') === (branchId || 'main')).reduce((b, x) => (!b || String(x.date) > String(b.date) ? x : b), null), [db.sales, branchId]);
+  const voidItem = () => { if (!lineAt) return toast('Nothing to void yet', 'warn'); removeLines([lineAt.id]); setCursor(-1); };
+  const focusDiscount = () => { const i = discRef.current; if (i) { i.focus(); i.select(); } };
+  const printLast = () => (lastSale ? setDone({ ...lastSale, reprint: true }) : toast('No sale at this branch yet', 'warn'));
+  const pickCustomer = (id) => { setCustomerId(id); setCustQ(''); focusSearch(); };
 
   const checkout = async () => {
     if (!cart.length) return;
@@ -397,6 +427,9 @@ export default function POS({ mode = 'retail' }) {
       const inSearch = e.target.tagName === 'INPUT' && searchRef.current?.contains(e.target);
       const typing = /INPUT|TEXTAREA|SELECT/.test(e.target.tagName) && !inSearch;
       if (e.key === 'F8') { e.preventDefault(); focusSearch(); }
+      else if (e.altKey && e.key.toLowerCase() === 'c') { e.preventDefault(); custRef.current?.focus(); }
+      else if (e.altKey && e.key.toLowerCase() === 'd') { e.preventDefault(); focusDiscount(); }
+      else if (e.altKey && e.key.toLowerCase() === 'r') { e.preventDefault(); printLast(); }
       else if (e.key === 'F9' || (e.ctrlKey && e.key === 'Enter')) { e.preventDefault(); checkout(); }
       else if (e.key === 'F10') { e.preventDefault(); saveProforma(); }
       else if (e.altKey && e.key.toLowerCase() === 'h') { e.preventDefault(); holdSale(); }
@@ -419,6 +452,43 @@ export default function POS({ mode = 'retail' }) {
 
   return (
     <div className="pos">
+      {/* wide screens only (CSS): client & loyalty, quick actions */}
+      <aside className="pos-side" aria-label="Client and quick actions">
+        {capture !== 'off' && (
+          <div className="card pos-client">
+            <h3><Users size={16} /> Client</h3>
+            <div className="pos-client-find">
+              <Search size={15} aria-hidden="true" />
+              <input ref={custRef} value={custQ} onChange={(e) => setCustQ(e.target.value)} placeholder="Find client: name or phone" aria-label="Find client"
+                onKeyDown={(e) => { if (e.key === 'Enter' && custMatches[0]) { e.preventDefault(); pickCustomer(custMatches[0].id); } else if (e.key === 'Escape') { setCustQ(''); focusSearch(); } }} />
+              <kbd className="kbd-mini">Alt+C</kbd>
+            </div>
+            {custFind && (
+              <div className="pos-client-list" role="listbox" aria-label="Clients found">
+                {custMatches.map((c) => <button key={c.id} type="button" role="option" aria-selected={c.id === customerId} onClick={() => pickCustomer(c.id)}><strong>{c.name}</strong>{c.phone && <small className="muted">{c.phone}</small>}</button>)}
+                {!custMatches.length && <small className="muted">No client matches “{custQ.trim()}”</small>}
+              </div>
+            )}
+            <div className="pos-client-now">
+              <strong>{customer && customer.id !== 'walk-in' ? customer.name : 'Walk-in customer'}</strong>
+              {customer?.phone && customer.id !== 'walk-in' && <small className="muted">{customer.phone}</small>}
+              <div className="cust-badges">{custBadges.map((b) => <span key={b.k + b.text} className={'cust-badge cust-' + b.k}>{b.text}</span>)}</div>
+              {customer && customer.id !== 'walk-in' && <button type="button" className="link-btn small" onClick={() => pickCustomer('walk-in')}>Back to walk-in</button>}
+            </div>
+          </div>
+        )}
+        <div className="card pos-quick">
+          <h3>Quick actions</h3>
+          <div className="quick-grid">
+            <button type="button" className="quick-tile" onClick={voidItem} disabled={!cart.length}><Ban size={20} /><span>Void item</span><small className="kbd-sub">[Del]</small></button>
+            <button type="button" className="quick-tile" onClick={holdSale} disabled={!cart.length}><PauseCircle size={20} /><span>Hold sale</span><small className="kbd-sub">[Alt+H]</small></button>
+            <button type="button" className="quick-tile" onClick={focusDiscount} disabled={!cart.length}><Percent size={20} /><span>Discount</span><small className="kbd-sub">[Alt+D]</small></button>
+            <button type="button" className="quick-tile" onClick={printLast} disabled={!lastSale}><Printer size={20} /><span>Last receipt</span><small className="kbd-sub">[Alt+R]</small></button>
+            <button type="button" className="quick-tile" onClick={saveProforma} disabled={!cart.length}><FileText size={20} /><span>Proforma</span><small className="kbd-sub">[F10]</small></button>
+            <button type="button" className="quick-tile" onClick={() => setHelp(true)}><Keyboard size={20} /><span>Shortcuts</span><small className="kbd-sub">[?]</small></button>
+          </div>
+        </div>
+      </aside>
       <section className="pos-products">
         <div className="row between gap">
           <h2 className="pos-title"><ShoppingCart size={22} /> Point of sale</h2>
@@ -572,9 +642,10 @@ export default function POS({ mode = 'retail' }) {
         </div>
         <div className="totals">
           <div className="row between gap"><span className="muted">Subtotal <b className="num">{fmt(subtotal)}</b></span>
-            <span className="row gap"><span className="muted">Discount</span><input type="number" min="0" step="any" className="small-input" value={discount} onChange={(e) => setDiscount(e.target.value)} /></span></div>
+            <span className="row gap"><span className="muted">Discount</span><input ref={discRef} aria-label="Discount" type="number" min="0" step="any" className="small-input" value={discount} onChange={(e) => setDiscount(e.target.value)} /></span></div>
+          {disc > 0 && <div className="row between promo-row"><span className="muted">Promos / member discount</span><span className="num">− {fmt(disc)}</span></div>}
           {tax > 0 && <div className="row between"><span className="muted">Tax ({db.settings.taxRate}%)</span><span className="num">{fmt(tax)}</span></div>}
-          <div className="row between grand"><span>Total</span><span className="num bump" key={total}>{fmt(total)}</span></div>
+          <div className="row between grand"><span>Total<small className="grand-sub">Net balance due</small></span><span className="num bump" key={total}>{fmt(total)}</span></div>
         </div>
         <div className="pay-methods">
           {methods.map((m, i) => <button key={m.id} className={'chip pay-' + (m.type || 'other') + (payment === m.name ? ' active' : '')} onClick={() => setPayment(m.name)} title={i < 9 ? `Alt+${i + 1}` : undefined}>{m.name}{i < 9 && !touch && <kbd>{i + 1}</kbd>}</button>)}
@@ -588,10 +659,10 @@ export default function POS({ mode = 'retail' }) {
               : <div className="change">On credit<br /><strong className="text-warn">{fmt(Math.max(total - (Number(tendered) || 0), 0))}</strong></div>}
           </div>
         )}
-        <div className="row gap">
+        <div className="row gap pay-row">
           <button className="btn ghost" onClick={saveProforma} disabled={!cart.length} title="F10"><FileText size={16} />Proforma</button>
           <button className="btn ghost" onClick={holdSale} disabled={!cart.length} title="Alt+H"><PauseCircle size={16} />Hold</button>
-          <button ref={chargeRef} className={'btn primary grow big' + (narrow ? ' charge-dup' : '')} onClick={checkout} disabled={!cart.length} title="F9">Charge {fmt(total)}</button>
+          <button ref={chargeRef} className={'btn primary grow big' + (narrow ? ' charge-dup' : '')} onClick={checkout} disabled={!cart.length} title="F9"><span>Charge {fmt(total)}{!touch && <small className="kbd-sub">[F9]</small>}</span></button>
         </div>
       </section>
 
@@ -745,14 +816,14 @@ export default function POS({ mode = 'retail' }) {
                 ['+ / −', 'More / fewer of the chosen cart line'], ['Alt+↑ / Alt+↓', 'Choose a cart line'], ['Delete', 'Remove the chosen cart line'],
                 ['Alt+1 … Alt+9', 'Payment method (number shown on each)'], ['F9 or Ctrl+Enter', 'Charge'], ['F10', 'Save as proforma'],
                 ['Alt+H', 'Put the sale on hold and serve the next customer'], ['Alt+← / Alt+→', 'Switch between held sales'],
-                ['F2 / F3', 'Retail / wholesale'], ['F8', 'Back to the search box'], ['Ctrl+K', 'Search everything'], ['?', 'This list']].map(([k, v]) => <tr key={k}><td><kbd>{k}</kbd></td><td>{v}</td></tr>)}
+                ['F2 / F3', 'Retail / wholesale'], ['Alt+C', 'Find a client (wide screens)'], ['Alt+D', 'Discount'], ['Alt+R', 'Last receipt again'], ['F8', 'Back to the search box'], ['Ctrl+K', 'Search everything'], ['?', 'This list']].map(([k, v]) => <tr key={k}><td><kbd>{k}</kbd></td><td>{v}</td></tr>)}
             </tbody>
           </table>
         </Modal>
       )}
 
       {done && (
-        <Modal title={done.proforma ? 'Proforma saved' : 'Sale complete ✓'} onClose={() => { setDone(null); focusSearch(); }}>
+        <Modal title={done.proforma ? 'Proforma saved' : done.reprint ? 'Last receipt' : 'Sale complete ✓'} onClose={() => { setDone(null); focusSearch(); }}>
           {/* shown only here, after finalize() has recorded the sale */}
           {!done.proforma && (
             <div className="sale-success" aria-hidden="true">

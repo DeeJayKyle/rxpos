@@ -76,6 +76,7 @@ const SUITES = [
   ['scan invoices into drafts', 'v47-scan-drafts.mjs', ['.output/v47']],
   ['add stock & edit purchase tools', 'v49-addstock-tools.mjs', ['.output/v49']],
   ['packs: receive boxes, sell tablets or boxes', 'v50-packs.mjs', ['.output/v50']],
+  ['wide till: client panel, quick actions, ledger', 'v51-pos-wide.mjs', ['.output/v51']],
   ['append-only tables', 'v29-immutable.mjs', []],
   ['pay & sms gated', 'v30-paysms.mjs', []],
   ['restore epoch', 'v31-restore.mjs', []],
