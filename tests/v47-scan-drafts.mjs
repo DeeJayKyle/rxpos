@@ -85,7 +85,7 @@ check('the supplier was matched', await p.evaluate(() => document.querySelector(
 await p.screenshot({ path: path.join(out, 'review.png'), fullPage: true });
 check('it cannot be received before someone confirms they checked', await p.evaluate(() => [...document.querySelectorAll('button')].find((x) => /^Receive stock/.test(x.textContent.trim()))?.disabled === true));
 // the reviewer removes the line the invoice didn't really have, ticks the box and receives
-await p.evaluate(() => { const row = [...document.querySelectorAll('tr')].find((r) => /Zinc Sulphate/.test(r.innerText)); row?.querySelector('button[aria-label^="Remove"], button[title^="Remove"], .act-danger, button.icon-btn')?.click(); });
+await p.evaluate(() => { const row = [...document.querySelectorAll('tr')].find((r) => /Zinc Sulphate/.test(r.innerText)); row?.querySelector('button[aria-label="Remove line"]')?.click(); });
 await wait(500);
 await p.evaluate(() => { const c = document.querySelector('.scan-confirm input'); c?.click(); });
 await wait(300);

@@ -1,3 +1,4 @@
+import { mainPack, packPrice, sellInPacks } from '../packs.js';
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import { ShoppingCart, Trash2, X, FileText, Printer, AlertTriangle, ScanBarcode, Smartphone, Loader2, CheckCircle2, UserPlus, Tag, BookMarked, Repeat, PauseCircle, Keyboard, Plus, ClipboardList, MessageCircle, MessageSquareText, Star } from 'lucide-react';
@@ -188,7 +189,11 @@ export default function POS({ mode = 'retail' }) {
     setCart((c) => {
       const line = c.find((l) => l.id === p.id);
       if (line) return c.map((l) => (l.id === p.id ? { ...l, allowExpired, expiredReason, qty: Math.min(l.qty + (l.pack?.size || 1), p.stock) } : l));
-      return [...c, { id: p.id, name: p.name, price: priceOf(p), cost: p.cost, qty: 1, max: p.stock, rx: p.rx, controlled: !!p.controlled, allowExpired, expiredReason }];
+      const first = { id: p.id, name: p.name, price: priceOf(p), cost: p.cost, qty: 1, max: p.stock, rx: p.rx, controlled: !!p.controlled, allowExpired, expiredReason };
+      // retail sells single units and wholesale whole packs by default (Settings → Receipts & stock); the line can be switched
+      const k = sellInPacks(db.settings, wholesale) ? mainPack(p) : null;
+      if (k && Number(k.size) <= p.stock) { const pp = packPrice(k, priceOf(p), wholesale), size = Number(k.size); return [...c, { ...first, pack: { name: k.name, size, price: pp }, price: pp / size, qty: size }]; }
+      return [...c, first];
     });
     setQ('');
     focusSearch();
@@ -225,8 +230,8 @@ export default function POS({ mode = 'retail' }) {
     if (!k) return setLine(l.id, { pack: null, price: priceOf(p), qty: Math.max(1, Math.min(l.qty, l.max)) });
     const size = Number(k.size);
     if (size > l.max) return toast(`Not a whole ${k.name.toLowerCase()} in stock (${l.max} left)`, 'warn');
-    const packPrice = Number(k.price) || priceOf(p) * size;
-    setLine(l.id, { pack: { name: k.name, size, price: packPrice }, price: packPrice / size, qty: size });
+    const pp = packPrice(k, priceOf(p), wholesale); // the pack's own retail or wholesale price, else unit price × size
+    setLine(l.id, { pack: { name: k.name, size, price: pp }, price: pp / size, qty: size });
   };
   // Integer-shilling money math (1.5): each line rounds, then they sum, so a pack-split price can't leave a floating
   // tail on the stored total, and tax rounds once.

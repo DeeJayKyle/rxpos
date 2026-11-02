@@ -1,6 +1,10 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo, Fragment } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Pencil, Trash2, ScanText, Camera, FileUp, Loader2, AlertTriangle, CheckCircle2, X, Plus, RotateCcw, Sparkles } from 'lucide-react';
+import { Pencil, Trash2, ScanText, Camera, FileUp, Loader2, AlertTriangle, CheckCircle2, X, Plus, RotateCcw, Sparkles, GripVertical, ChevronLeft, ChevronRight } from 'lucide-react';
+import { DateInput, MedicinePicker, useDateFormat } from '../fields.jsx';
+import { DATE_FORMATS } from '../dateformat.js';
+import { mainPack, packsOf, receiveInPacks } from '../packs.js';
+import { deviceSettings, setDevice } from '../device.js';
 import { isWeb } from '../platform.js';
 import { useStore, uid, today, now, put, del, move, addBatch, audit, downloadFile, toCSV, markupPrice, daysUntil, supplierPrices, MAIN_BRANCH } from '../store.jsx';
 import { CASH } from '../finance.js';
@@ -50,11 +54,31 @@ function editLine(l, patch, priceFor) {
   return n;
 }
 
+// Add Stock's columns: their order can be changed (drag a heading, or its arrows) and is kept on this device
+const COL_LABEL = { medicine: 'Medicine', qty: 'Qty', cost: 'Unit cost', total: 'Line total', price: 'New retail price', batch: 'Batch', expiry: 'Expiry' };
+const COLS = Object.keys(COL_LABEL);
+const colOrder = (saved) => { const ok = (saved || []).filter((c) => COLS.includes(c)); return [...ok, ...COLS.filter((c) => !ok.includes(c))]; };
+const NEW_SUPPLIER = '__new_supplier__';
+
+/** "DD/MM/YYYY ▾": how dates are typed on this device (This device → Dates) */
+function DateFormatChoice({ fmt }) {
+  return (
+    <select className="date-fmt" value={fmt} aria-label="Date format" title="How dates are typed on this device" onClick={(e) => e.stopPropagation()} onChange={(e) => setDevice({ dateFormat: e.target.value })}>
+      {DATE_FORMATS.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+    </select>
+  );
+}
+
 /** Receive stock from a supplier: every line becomes a batch (number + expiry) at this branch. */
 export function AddStock() {
-  const { db, products, update, fmt, user, branchId, syncCfg, syncStatus } = useStore();
+  const { db, products, update, fmt, user, branchId, syncCfg, syncStatus, can } = useStore();
   const location = useLocation();
   const s = db.settings;
+  const dateFmt = useDateFormat();
+  const [cols, setCols] = useState(() => colOrder(deviceSettings().stockCols));
+  const [dragCol, setDragCol] = useState(null);
+  const [newSupplier, setNewSupplier] = useState(null); // the "New supplier" form, when open
+  const [renaming, setRenaming] = useState(null); // { product, name } while renaming a medicine
   const draftKey = 'rxpos-addstock-draft:' + (syncCfg.tenant || 'device') + ':' + branchId;
   const blankLine = () => ({ key: uid(), productId: '', name: '', form: 'Tablets', qty: 1, cost: '', total: '', price: '', auto: true, by: 'unit', batch: '', expiry: '' });
   const [scanOpen, setScanOpen] = useState(false);
@@ -67,7 +91,10 @@ export function AddStock() {
   const priceAt = (markup) => (cost) => markupPrice(cost, markup, s.priceRound);
   // A line for a medicine already in the list: its current cost and price, with the totals worked out
   const lineFor = (p, extra = {}, markup = s.retailMarkup) => {
-    const l = { ...blankLine(), productId: p.id, cost: numOrBlank(p.cost || ''), price: p.price ? String(p.price) : '', basePrice: p.price || 0, derived: false, ...extra };
+    // received in the medicine's largest pack by default (Settings → Receipts & stock): the cost is then per pack
+    const k = receiveInPacks(s) && !('recvPack' in extra) ? mainPack(p) : null;
+    const l = { ...blankLine(), productId: p.id, cost: numOrBlank(p.cost ? p.cost * (k ? Number(k.size) : 1) : ''), price: p.price ? String(p.price) : '', basePrice: p.price || 0, derived: false,
+      ...(k ? { recvPack: k.name, recvSize: Number(k.size) } : {}), ...extra };
     if (!l.price && unitCost(l) > 0) { l.price = String(priceAt(markup)(unitCost(l))); l.derived = true; }
     return { ...l, total: l.cost !== '' ? numOrBlank(Number(l.cost) * Number(l.qty || 0)) : '' };
   };
@@ -80,7 +107,10 @@ export function AddStock() {
       const read = { name: it.name, unclear: !!it.unclear, matched: !!p, ...(it.check?.length ? { check: it.check } : {}), ...(it.alt ? { alt: it.alt } : {}), ...(it.why ? { why: it.why } : {}), ...(it.note ? { note: it.note } : {}), ...(it.page ? { page: it.page } : {}) };
       const base = { qty, batch: it.batch || '', expiry: normDate(it.expiry), read };
       const cost = it.unitCost || (it.lineTotal && qty ? it.lineTotal / qty : 0);
-      const l = p ? lineFor(p, base, markup) : { ...blankLine(), ...base, name: it.name || '' };
+      // packs or single units? whichever makes the invoice's price nearest the medicine's known cost per unit
+      const size = p && cost > 0 && p.cost > 0 ? [1, ...packsOf(p).map((k) => Number(k.size))].reduce((b, z) => (Math.abs(Math.log(cost / z / p.cost)) < Math.abs(Math.log(cost / b / p.cost)) ? z : b), 1) : 0;
+      const k = size > 1 ? packsOf(p).find((x) => Number(x.size) === size) : null;
+      const l = p ? lineFor(p, { ...base, ...(size ? (k ? { recvPack: k.name, recvSize: size } : { recvPack: '', recvSize: 1 }) : {}) }, markup) : { ...blankLine(), ...base, name: it.name || '' };
       return it.lineTotal && !it.unitCost ? editLine(l, { total: String(it.lineTotal) }, priceAt(markup)) : editLine(l, { cost: numOrBlank(cost) }, priceAt(markup));
     });
     const summary = { supplier: r.supplier, supplierMatched: !!sup, invoiceNo: r.invoiceNo, total: r.total, linesTotal: r.linesTotal || 0, totalMatches: r.totalMatches !== false,
@@ -128,7 +158,7 @@ export function AddStock() {
     const dr = location.state?.draftId && (db.drafts || []).find((x) => x.id === location.state.draftId);
     if (dr) return { ...blank(), ...dr.data, draftId: dr.id, draftStartedAt: dr.startedAt, lines: dr.data.lines?.length ? dr.data.lines.map((l) => ({ ...l, key: l.key || uid() })) : [blankLine()] };
     const po = location.state?.po;
-    if (po) return { ...blank(), supplierId: po.supplierId || '', poId: po.id, lines: po.items.map((i) => { const p = products.find((x) => x.id === i.productId); return p ? lineFor(p, { qty: i.qty, ...(i.cost ? { cost: numOrBlank(i.cost), total: numOrBlank(i.cost * i.qty) } : {}) }) : null; }).filter(Boolean) };
+    if (po) return { ...blank(), supplierId: po.supplierId || '', poId: po.id, lines: po.items.map((i) => { const p = products.find((x) => x.id === i.productId); return p ? lineFor(p, { qty: i.qty, recvPack: '', recvSize: 1, ...(i.cost ? { cost: numOrBlank(i.cost), total: numOrBlank(i.cost * i.qty) } : {}) }) : null; }).filter(Boolean) };
     try {
       const d = JSON.parse(localStorage.getItem(draftKey));
       const known = (l) => l.productId === NEW || products.some((p) => p.id === l.productId);
@@ -169,6 +199,56 @@ export function AddStock() {
   const nameRefs = useRef({});
 
   const priceFor = priceAt(form.markup);
+  const moveCol = (c, to) => setCols((list) => {
+    const next = list.filter((x) => x !== c); next.splice(Math.max(0, Math.min(next.length, to)), 0, c);
+    setDevice({ stockCols: next });
+    return next;
+  });
+  const resetCols = () => { setCols(COLS); setDevice({ stockCols: COLS }); };
+  // Enter in a line goes on to the next line, and on the last one adds a new line: it never receives the delivery
+  const tableRef = useRef(null);
+  const [focusLine, setFocusLine] = useState(null);
+  useEffect(() => {
+    if (!focusLine) return;
+    tableRef.current?.querySelector(`tr[data-line="${focusLine}"] .med-pick input, tr[data-line="${focusLine}"] .new-med input`)?.focus();
+    setFocusLine(null);
+  }, [focusLine, form.lines.length]);
+  const onLinesKey = (e) => {
+    if (e.key !== 'Enter' || e.defaultPrevented || e.target.tagName !== 'INPUT' && e.target.tagName !== 'SELECT') return;
+    e.preventDefault();
+    const key = e.target.closest('tr[data-line]')?.dataset.line;
+    const at = form.lines.findIndex((l) => l.key === key);
+    if (at >= 0 && at < form.lines.length - 1) return setFocusLine(form.lines[at + 1].key);
+    const line = blankLine();
+    setForm((f) => ({ ...f, lines: [...f.lines, line] }));
+    setFocusLine(line.key);
+  };
+  // a supplier added from here is chosen at once
+  const saveSupplier = async (e) => {
+    e.preventDefault();
+    const name = newSupplier.name.trim().replace(/\s+/g, ' ');
+    if (name.length < 2) return toast('Type the supplier\'s name', 'warn');
+    const dup = db.suppliers.find((x) => x.name.trim().toLowerCase() === name.toLowerCase());
+    if (dup) { setForm((f) => ({ ...f, supplierId: dup.id })); setNewSupplier(null); return toast(`${dup.name} is already in your suppliers: chosen`); }
+    const id = uid();
+    try { await update((d) => { put(d, 'suppliers', { id, name, contact: newSupplier.contact.trim(), phone: newSupplier.phone.trim(), email: newSupplier.email.trim(), address: '' }); audit(d, user, 'Supplier added', `${name} (from Add Stock)`, branchId); }); }
+    catch (err) { return toast('The supplier was NOT saved: ' + err.message, 'error'); }
+    setForm((f) => ({ ...f, supplierId: id })); setNewSupplier(null); toast(`Supplier ${name} added`);
+  };
+  // renaming a medicine changes it in the medicine list (every screen, every device), not only on this delivery
+  const saveRename = async (e) => {
+    e.preventDefault();
+    const { product, name: typed } = renaming, name = typed.trim().replace(/\s+/g, ' ');
+    if (name.length < 2) return toast('Type the medicine\'s name', 'warn');
+    if (name === product.name) return setRenaming(null);
+    const dup = products.find((x) => x.id !== product.id && x.name.trim().toLowerCase() === name.toLowerCase());
+    if (dup) return toast(`"${dup.name}" is already in your medicine list`, 'warn');
+    const base = db.products.find((x) => x.id === product.id) || product;
+    const { stock, totalStock, batch, expiry, ...rec } = { ...base, ...{ batch: base.batch, expiry: base.expiry } }; // eslint-disable-line no-unused-vars
+    try { await update((d) => { put(d, 'products', { ...rec, batch: base.batch, expiry: base.expiry, name }); audit(d, user, 'Medicine renamed', `${product.name} → ${name}`, branchId); }); }
+    catch (err) { return toast('The name was NOT changed: ' + err.message, 'error'); }
+    setRenaming(null); toast(`Renamed to ${name}`);
+  };
   const prices = useMemo(() => supplierPrices(db.purchases), [db.purchases]);
   // The line dropdowns list this pharmacy's own and stocked medicines only (the 9,710-item catalog in every dropdown
   // made typing slow on phones); anything in the catalog is still found with the search box above
@@ -226,6 +306,8 @@ export function AddStock() {
 
   const save = async (e) => {
     e.preventDefault();
+    const badDate = e.currentTarget.querySelector('.date-input.bad input[type=text]');
+    if (badDate) { badDate.focus(); return toast(`${badDate.getAttribute('aria-label') || 'A date'}: ${badDate.title.replace(/^This date is in the past$/, 'that date has already passed')}. Fix the box marked in red; nothing was received.`, 'error'); }
     const unpicked = form.lines.filter((l) => l.read && !l.productId && Number(l.qty) > 0);
     if (unpicked.length) return toast(`Choose the medicine for ${unpicked.length} line${unpicked.length > 1 ? 's' : ''} read from the invoice, add ${unpicked.length > 1 ? 'them' : 'it'} as new, or remove ${unpicked.length > 1 ? 'them' : 'it'}`, 'warn');
     if (scanned && !checked) return toast('Tick "I have checked every line against the invoice" before saving', 'warn');
@@ -309,6 +391,28 @@ export function AddStock() {
       {form.draftId && <div className="notice info-notice">Continuing a saved draft. Receiving it removes it from Drafts; "Save as draft" keeps your changes in it.</div>}
       {myDrafts.length > 0 && <div className="notice info-notice row gap wrap">You have {myDrafts.length} saved deliver{myDrafts.length === 1 ? 'y' : 'ies'}{myDrafts.some((x) => isOld(x)) ? ', one waiting over a day' : ''}.<Link to="/purchases" state={{ tab: 'drafts' }}>Open drafts</Link></div>}
       <PageTip id="add-stock" title="Receiving a delivery">Search or scan each medicine (not in the list? type its name and choose “Add as a new medicine”). Type the line total from the invoice: the unit cost and the retail price work themselves out, and you can still change the price. Scan invoice reads a photo for you.</PageTip>
+      {newSupplier && (
+        <Modal title="New supplier" onClose={() => setNewSupplier(null)}>
+          <form onSubmit={saveSupplier}>
+            <label className="field"><span>Supplier name</span><input autoFocus value={newSupplier.name} onChange={(e) => setNewSupplier({ ...newSupplier, name: e.target.value })} placeholder="e.g. Aim Pharmaceuticals Ltd" required /></label>
+            <div className="form-grid">
+              <label className="field"><span>Phone</span><input value={newSupplier.phone} inputMode="tel" onChange={(e) => setNewSupplier({ ...newSupplier, phone: e.target.value })} /></label>
+              <label className="field"><span>Contact person</span><input value={newSupplier.contact} onChange={(e) => setNewSupplier({ ...newSupplier, contact: e.target.value })} /></label>
+              <label className="field"><span>Email</span><input type="email" value={newSupplier.email} onChange={(e) => setNewSupplier({ ...newSupplier, email: e.target.value })} /></label>
+            </div>
+            <div className="form-actions"><button type="button" className="btn ghost" onClick={() => setNewSupplier(null)}>Cancel</button><button className="btn primary"><Plus size={16} />Add supplier</button></div>
+          </form>
+        </Modal>
+      )}
+      {renaming && (
+        <Modal title="Rename medicine" onClose={() => setRenaming(null)}>
+          <form onSubmit={saveRename}>
+            <p className="muted small">The new name is used everywhere: the medicine list, the till, reports and every device. Its stock, prices and history stay as they are.</p>
+            <label className="field"><span>Medicine name</span><input autoFocus value={renaming.name} onChange={(e) => setRenaming({ ...renaming, name: e.target.value })} required /></label>
+            <div className="form-actions"><button type="button" className="btn ghost" onClick={() => setRenaming(null)}>Cancel</button><button className="btn primary"><Pencil size={16} />Save name</button></div>
+          </form>
+        </Modal>
+      )}
       {scanOpen && <InvoiceScanner cfg={syncCfg} onClose={() => setScanOpen(false)} onRead={applyScan} onDrafts={saveScanDrafts} />}
       {restored && !scanned && (
         <div className="notice info-notice row between gap wrap">
@@ -333,17 +437,29 @@ export function AddStock() {
         </div>
       )}
       {saved && <div className="notice">Received {saved.items.length} item(s) worth {fmt(saved.total)} from {saved.supplierName}{saved.items.some((i) => i.added) ? ` (${saved.items.filter((i) => i.added).length} new medicine${saved.items.filter((i) => i.added).length > 1 ? 's' : ''} added to the list)` : ''}. {saved.paid < saved.total && `${fmt(saved.total - saved.paid)} added to creditors.`}</div>}
-      <form className="card" onSubmit={save}>
-        <div className="form-grid">
-          <label className="field"><span>Supplier</span>
-            <select value={form.supplierId} onChange={(e) => setForm({ ...form, supplierId: e.target.value })} required>
+      <form className="card invoice-sheet" onSubmit={save}>
+        <div className="invoice-head">
+          <div className="invoice-from">
+          <label className="field"><span className="invoice-caption">Supplier</span>
+            <select value={form.supplierId} onChange={(e) => (e.target.value === NEW_SUPPLIER ? setNewSupplier({ name: '', phone: '', contact: '', email: '' }) : setForm({ ...form, supplierId: e.target.value }))} required>
               <option value="">—</option>
-              {db.suppliers.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+              {[...db.suppliers].sort((a, b) => a.name.localeCompare(b.name)).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+              {(can('suppliers') || can('stock.receive')) && <option value={NEW_SUPPLIER}>➕ New supplier…</option>}
             </select>
           </label>
-          <label className="field"><span>Invoice no.</span><input value={form.invoice} onChange={(e) => setForm({ ...form, invoice: e.target.value })} /></label>
-          <label className="field"><span>Date</span><input type="date" value={form.date} max={today()} onChange={(e) => setForm({ ...form, date: e.target.value })} /></label>
-          <label className="field"><span>Retail markup for worked-out prices (%)</span><input type="number" min="0" step="any" value={form.markup} onChange={(e) => setMarkup(e.target.value)} /></label>
+          {(() => { const sup = db.suppliers.find((x) => x.id === form.supplierId); const bits = sup ? [sup.contact, sup.phone, sup.email, sup.address].filter(Boolean) : []; return bits.length ? <div className="invoice-party muted small">{bits.join(' · ')}</div> : null; })()}
+          <div className="invoice-to">
+            <span className="invoice-caption">Delivered to</span>
+            <strong>{s.name}</strong>
+            <span className="muted small">{[s.address, s.phone].filter(Boolean).join(' · ') || ' '}</span>
+          </div>
+          </div>
+          <div className="invoice-meta">
+            <div className="invoice-title">Purchase invoice<small>Goods received{branchId !== MAIN_BRANCH ? ` · ${db.branches.find((x) => x.id === branchId)?.name || ''}` : ''}</small></div>
+            <label className="invoice-meta-row"><span>Invoice no.</span><input value={form.invoice} placeholder="as on the invoice" onChange={(e) => setForm({ ...form, invoice: e.target.value })} aria-label="Invoice number" /></label>
+            <label className="invoice-meta-row"><span>Date <DateFormatChoice fmt={dateFmt} /></span><DateInput value={form.date} max={today()} onChange={(v) => setForm((f) => ({ ...f, date: v || today() }))} aria-label="Delivery date" /></label>
+            <label className="invoice-meta-row"><span>Retail markup %</span><input type="number" min="0" step="any" value={form.markup} onChange={(e) => setMarkup(e.target.value)} aria-label="Retail markup for worked-out prices (%)" title="Retail prices are worked out from the cost with this markup" /></label>
+          </div>
         </div>
         <div className="picker row gap search-row">
           <CameraButton className="btn ghost cam-btn" onClick={() => setCam(true)} />
@@ -356,17 +472,22 @@ export function AddStock() {
           )}
         </div>
         <div className="table-wrap">
-          <table className="lines stock-lines">
-            <thead><tr><th>Medicine</th><th>Qty</th><th>Unit cost</th><th>Line total</th><th>New retail price</th><th>Batch</th><th>Expiry</th><th /></tr></thead>
+          <table className="lines stock-lines" ref={tableRef} onKeyDown={onLinesKey}>
+            <thead><tr><th className="line-no">#</th>{cols.map((c, i) => (
+              <th key={c} className={'col-move' + (dragCol === c ? ' dragging' : '')} draggable onDragStart={(e) => { setDragCol(c); e.dataTransfer.effectAllowed = 'move'; }} onDragEnd={() => setDragCol(null)}
+                onDragOver={(e) => { if (dragCol && dragCol !== c) e.preventDefault(); }} onDrop={(e) => { e.preventDefault(); if (dragCol) moveCol(dragCol, i); setDragCol(null); }} title="Drag to move this column">
+                <span className="col-head"><GripVertical size={12} className="col-grip" aria-hidden="true" />{COL_LABEL[c]}
+                  <span className="col-arrows"><button type="button" className="icon-btn xs" disabled={i === 0} aria-label={`Move ${COL_LABEL[c]} left`} onClick={() => moveCol(c, i - 1)}><ChevronLeft size={12} /></button><button type="button" className="icon-btn xs" disabled={i === cols.length - 1} aria-label={`Move ${COL_LABEL[c]} right`} onClick={() => moveCol(c, i + 1)}><ChevronRight size={12} /></button></span></span>
+              </th>))}<th /></tr></thead>
             <tbody>
-              {form.lines.map((l) => {
+              {form.lines.map((l, lineIndex) => {
                 const p = l.productId && l.productId !== NEW ? products.find((x) => x.id === l.productId) : null;
                 const cost = baseCost(l), price = Number(l.price) || 0;
                 const packs = (p?.packs || []).filter((k) => k.name && Number(k.size) > 1);
                 const markup = cost > 0 && price > 0 ? Math.round(((price - cost) / cost) * 100) : null;
-                return (
-                  <tr key={l.key} className={l.productId === NEW ? 'new-line' : ''}>
-                    <td data-label="Medicine" className={'line-med' + (l.read && (!l.productId || l.read.unclear) ? ' scan-check' : '')}>
+                  const cells = {
+                    medicine: (
+                    <td key="medicine" data-label="Medicine" className={'line-med' + (l.read && (!l.productId || l.read.unclear) ? ' scan-check' : '')}>
                       {l.productId === NEW ? (
                         <div className="new-med">
                           <div className="row gap"><span className="badge ok"><Sparkles size={11} />New</span><button type="button" className="link-btn small" onClick={() => replaceLine(l.key, { ...l, productId: '' })}>choose existing</button></div>
@@ -374,29 +495,36 @@ export function AddStock() {
                           <select value={l.form} onChange={(e) => replaceLine(l.key, { ...l, form: e.target.value })} aria-label="Formulation">{FORMS.map((f) => <option key={f}>{f}</option>)}</select>
                         </div>
                       ) : (
-                        <select value={l.productId} onChange={(e) => chooseProduct(l, e.target.value)}>
-                          <option value="">Select medicine…</option>
-                          <option value={NEW}>➕ New medicine (not in the list){l.read?.name ? `: ${l.read.name}` : ''}</option>
-                          {p && !ownList.includes(p) && <option value={p.id}>{p.name}</option>}
-                          {ownList.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
-                        </select>
+                        <div className="row gap nowrap">
+                          <MedicinePicker products={products} value={l.productId} onPick={(id) => chooseProduct(l, id)} placeholder={l.read?.name ? `Search: ${l.read.name}` : 'Search medicine…'}
+                            onNew={(typed) => { chooseProduct({ ...l, name: typed || l.name || l.read?.name || '' }, NEW); }} newLabel={(typed) => `New medicine (not in the list)${typed || l.read?.name ? `: ${typed || l.read.name}` : ''}`} />
+                          {p && can('medicines.manage') && <button type="button" className="icon-btn" title="Edit this medicine's name in the medicine list" aria-label="Rename medicine" onClick={() => setRenaming({ product: p, name: p.name })}><Pencil size={14} /></button>}
+                        </div>
                       )}
                       {l.read && <small className={'scan-read' + (!l.productId || l.read.unclear ? ' text-warn' : ' muted')}>{!l.productId || l.read.unclear ? <AlertTriangle size={11} /> : <CheckCircle2 size={11} />} Invoice{l.read.page > 1 ? ` p.${l.read.page}` : ''}: {l.read.name}{checkText(l.read) ? ` · check ${checkText(l.read)}` : ''}{l.read.note ? ` · ${l.read.note}` : ''}</small>}
                     </td>
-                    <td data-label="Qty"><input type="number" min="1" step="any" inputMode="decimal" value={l.qty} onChange={(e) => setLine(l.key, { qty: e.target.value })} aria-label="Quantity" />
+                    ),
+                    qty: (
+                    <td key="qty" data-label="Qty"><input type="number" min="1" step="any" inputMode="decimal" value={l.qty} onChange={(e) => setLine(l.key, { qty: e.target.value })} aria-label="Quantity" />
                       {packs.length > 0 && (
-                        <select className="pack-select" value={l.recvPack || ''} aria-label="Received as" onChange={(e) => { const k = packs.find((x) => x.name === e.target.value); setLine(l.key, { recvPack: k?.name || '', recvSize: k ? Number(k.size) : 1 }); }}>
+                        <select className="pack-select" value={l.recvPack || ''} aria-label="Received as" onChange={(e) => { const k = packs.find((x) => x.name === e.target.value), size = k ? Number(k.size) : 1; setLine(l.key, { recvPack: k?.name || '', recvSize: size, ...(baseCost(l) > 0 ? { cost: numOrBlank(baseCost(l) * size) } : {}) }); }}>
                           <option value="">{p.unit || 'Unit'}s</option>
                           {packs.map((k) => <option key={k.name} value={k.name}>{k.name}s of {k.size}</option>)}
                         </select>
                       )}
                       {Number(l.recvSize) > 1 && <small className="price-hint muted">= {(Number(l.qty) || 0) * l.recvSize} {(p?.unit || 'unit').toLowerCase()}s</small>}
                     </td>
-                    <td data-label="Unit cost"><input type="number" min="0" step="any" inputMode="decimal" placeholder="0" value={l.cost} onChange={(e) => setLine(l.key, { cost: e.target.value })} aria-label="Unit cost" />
+                    ),
+                    cost: (
+                    <td key="cost" data-label="Unit cost"><input type="number" min="0" step="any" inputMode="decimal" placeholder="0" value={l.cost} onChange={(e) => setLine(l.key, { cost: e.target.value })} aria-label="Unit cost" />
                       {(() => { const best = (prices.get(l.productId) || []).find((o) => o.supplierId !== form.supplierId); return best && cost > 0 && best.cost < cost ? <small className="price-hint text-warn" title={`Last bought from ${best.supplierName} on ${best.date}`}>{best.supplierName}: {fmt(best.cost)}</small> : null; })()}
                     </td>
-                    <td data-label="Line total"><input type="number" min="0" step="any" inputMode="decimal" placeholder="Total amount" className={l.by === 'total' ? 'typed' : ''} value={l.total} onChange={(e) => setLine(l.key, { total: e.target.value })} aria-label="Line total" /></td>
-                    <td data-label="Retail price">
+                    ),
+                    total: (
+                    <td key="total" data-label="Line total"><input type="number" min="0" step="any" inputMode="decimal" placeholder="Total amount" className={l.by === 'total' ? 'typed' : ''} value={l.total} onChange={(e) => setLine(l.key, { total: e.target.value })} aria-label="Line total" /></td>
+                    ),
+                    price: (
+                    <td key="price" data-label="Retail price">
                       <input type="number" min="0" step="any" inputMode="decimal" placeholder={cost > 0 ? String(priceFor(cost)) : ''} value={l.price} onChange={(e) => setLine(l.key, { price: e.target.value })} aria-label="New retail price" />
                       <small className="price-hint">
                         {l.auto && l.derived ? <span className="muted">{l.kept ? 'kept (higher than +' + (form.markup || 0) + '%)' : `auto · +${form.markup || 0}%`}</span> : !l.auto ? <button type="button" className="link-btn small" title="Work the price out from the cost again" onClick={() => setLine(l.key, { price: '' })}><RotateCcw size={10} /> auto</button> : null}
@@ -404,9 +532,19 @@ export function AddStock() {
                         {p && price !== p.price && p.price > 0 && <span className="muted"> · was {fmt(p.price)}</span>}
                       </small>
                     </td>
-                    <td data-label="Batch"><input value={l.batch} placeholder="Batch no." onChange={(e) => replaceLine(l.key, { ...l, batch: e.target.value })} aria-label="Batch number" /></td>
-                    <td data-label="Expiry"><input type="date" value={l.expiry} min={today()} onChange={(e) => replaceLine(l.key, { ...l, expiry: e.target.value })} aria-label="Expiry date" /></td>
-                    <td className="line-x"><button type="button" className="icon-btn" title="Remove line" aria-label="Remove line" onClick={() => setForm((f) => ({ ...f, lines: f.lines.length > 1 ? f.lines.filter((x) => x.key !== l.key) : [blankLine()] }))}><X size={15} /></button></td>
+                    ),
+                    batch: (
+                    <td key="batch" data-label="Batch"><input value={l.batch} placeholder="Batch no." onChange={(e) => replaceLine(l.key, { ...l, batch: e.target.value })} aria-label="Batch number" /></td>
+                    ),
+                    expiry: (
+                    <td key="expiry" data-label="Expiry"><DateInput value={l.expiry} min={today()} monthYear onChange={(v) => replaceLine(l.key, { ...l, expiry: v })} aria-label="Expiry date" /></td>
+                    ),
+                  };
+                  return (
+                  <tr key={l.key} data-line={l.key} className={l.productId === NEW ? 'new-line' : ''}>
+                    <td className="line-no" aria-hidden="true">{lineIndex + 1}</td>
+                    {cols.map((c) => cells[c])}
+                    <td key="x" className="line-x"><button type="button" className="icon-btn" title="Remove line" aria-label="Remove line" onClick={() => setForm((f) => ({ ...f, lines: f.lines.length > 1 ? f.lines.filter((x) => x.key !== l.key) : [blankLine()] }))}><X size={15} /></button></td>
                   </tr>
                 );
               })}
@@ -416,18 +554,36 @@ export function AddStock() {
         <div className="row gap">
           <button type="button" className="btn sm ghost" onClick={() => setForm((f) => ({ ...f, lines: [...f.lines, blankLine()] }))}>+ Add line</button>
           <button type="button" className="btn sm ghost" onClick={() => addNew('')}><Sparkles size={14} />New medicine</button>
-          <small className="muted grow line-help">Type the unit cost or the line total from the invoice; the other is worked out. Retail prices follow the markup until you type your own.</small>
+          <small className="muted grow line-help">Type the unit cost or the line total from the invoice; the other is worked out. Retail prices follow the markup until you type your own. Enter goes to the next line (a new one on the last line). Drag a column heading (or use its arrows) to move it{cols.join() !== COLS.join() ? <> · <button type="button" className="link-btn small" onClick={resetCols}>reset column order</button></> : null}.</small>
         </div>
-        <div className="form-grid" style={{ marginTop: 16 }}>
-          <label className="field"><span>Amount paid now (blank = paid in full)</span><input type="number" min="0" step="any" value={form.paid} onChange={(e) => setForm({ ...form, paid: e.target.value })} /></label>
-          <label className="field"><span>Paid from</span>
-            <select value={form.bankId} onChange={(e) => setForm({ ...form, bankId: e.target.value })}>{db.banks.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select>
-          </label>
-          <label className="field full"><span>Notes (optional)</span><input value={form.notes || ''} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="e.g. 2 cartons short, supplier to deliver Friday" /></label>
+        <div className="invoice-foot">
+          <div className="invoice-notes">
+            <label className="field"><span className="invoice-caption">Remarks</span><textarea rows={3} value={form.notes || ''} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="e.g. 2 cartons short, supplier to deliver Friday" aria-label="Notes (optional)" /></label>
+            <div className="form-grid">
+              <label className="field"><span>Amount paid now (blank = paid in full)</span><input type="number" min="0" step="any" value={form.paid} onChange={(e) => setForm({ ...form, paid: e.target.value })} /></label>
+              <label className="field"><span>Paid from</span>
+                <select value={form.bankId} onChange={(e) => setForm({ ...form, bankId: e.target.value })}>{db.banks.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select>
+              </label>
+            </div>
+          </div>
+          {(() => {
+            const n = form.lines.filter((l) => l.productId).length, paidNow = form.paid === '' ? total : Math.max(0, Number(form.paid) || 0);
+            return (
+              <table className="invoice-totals">
+                <tbody>
+                  <tr><td>Lines</td><td className="num">{n}</td></tr>
+                  <tr><td>Sub-total</td><td className="num">{fmt(total)}</td></tr>
+                  <tr className="grand"><td>Total</td><td className="num">{fmt(total)}</td></tr>
+                  <tr><td>Amount paid</td><td className="num">{fmt(Math.min(paidNow, total))}</td></tr>
+                  <tr className={paidNow < total ? 'due' : ''}><td>Balance (on credit)</td><td className="num">{fmt(Math.max(0, total - paidNow))}</td></tr>
+                </tbody>
+              </table>
+            );
+          })()}
         </div>
         {scanned && <label className="field check scan-confirm"><input type="checkbox" checked={checked} onChange={(e) => setChecked(e.target.checked)} /><span>I have checked every line against the invoice (medicine, quantity, cost, batch and expiry)</span></label>}
         <div className="form-actions">
-          <div className="grow"><strong>Total: {fmt(total)}</strong>{form.paid !== '' && Number(form.paid) < total && <small className="text-warn"> · {fmt(total - Math.max(0, Number(form.paid) || 0))} on credit</small>}</div>
+          <div className="grow muted small">{form.lines.some((l) => l.productId) ? 'Check the lines against the supplier\'s invoice, then receive.' : 'Add the medicines on the invoice.'}</div>
           <button type="button" className="btn ghost" onClick={saveDraft} title="Keep this delivery to finish later (also from another device)">Save as draft</button>
           <button className="btn primary" disabled={!!scanned && !checked}>Receive stock</button>
         </div>
@@ -503,53 +659,86 @@ export default function Purchases() {
   );
 }
 
-/** Admin, manager or pharmacist: correct a past delivery. Quantity changes adjust that batch's stock; a corrected
- *  batch number or expiry moves the stock to the right batch. */
+/** Admin, manager or pharmacist: correct a past delivery: change any line (medicine, batch, expiry, quantity, cost),
+ *  remove lines and add lines that were missed. Every change moves stock with a "Purchase edit" movement on the right
+ *  batch, so stock and history stay true; stock that was already sold can't be taken back. */
 function PurchaseEditor({ purchase, onClose }) {
-  const { db, fmt, update, user, batchesOf } = useStore();
+  const { db, products, fmt, update, user, batchesOf } = useStore();
   const br = purchase.branchId || MAIN_BRANCH;
-  const [f, setF] = useState(() => ({ supplierId: purchase.supplierId || '', invoice: purchase.invoice || '', notes: purchase.notes || '', date: purchase.date, paid: purchase.paid ?? purchase.total, reason: '', items: purchase.items.map((i) => ({ ...i })) }));
-  const total = f.items.reduce((a, i) => a + Number(i.qty || 0) * Number(i.cost || 0), 0);
-  const setItem = (k, patch) => setF((x) => ({ ...x, items: x.items.map((i, n) => (n === k ? { ...i, ...patch } : i)) }));
+  const dateFmt = useDateFormat();
+  const [f, setF] = useState(() => ({ supplierId: purchase.supplierId || '', invoice: purchase.invoice || '', notes: purchase.notes || '', date: purchase.date, paid: purchase.paid ?? purchase.total, reason: '',
+    items: purchase.items.map((i, n) => ({ ...i, key: uid(), orig: n })) }));
+  const live = f.items.filter((i) => !i.removed);
+  const total = live.reduce((a, i) => a + Number(i.qty || 0) * Number(i.cost || 0), 0);
+  const setItem = (key, patch) => setF((x) => ({ ...x, items: x.items.map((i) => (i.key === key ? { ...i, ...patch } : i)) }));
+  const addItem = () => setF((x) => ({ ...x, items: [...x.items, { key: uid(), productId: '', name: '', batch: '', expiry: '', qty: 1, cost: '' }] }));
+  const pickMedicine = (i, id) => { const p = products.find((x) => x.id === id); if (p) setItem(i.key, { productId: p.id, name: p.name, ...(i.cost === '' || i.orig == null ? { cost: p.cost || '' } : {}) }); };
   const findBatch = (d, i) => (i.batchId && d.batches.find((b) => b.id === i.batchId)) || d.batches.find((b) => b.productId === i.productId && b.batch === String(i.batch || '').trim() && (b.expiry || '') === (i.expiry || ''));
+  // what happens to each original line: kept (maybe changed), or taken out (removed, quantity 0, or another medicine)
+  const plan = () => purchase.items.map((o, n) => {
+    const i = f.items.find((x) => x.orig === n);
+    const out = !i || i.removed || !(Number(i.qty) > 0) || i.productId !== o.productId;
+    return { o, i, out };
+  });
   const save = (e) => {
     e.preventDefault();
+    const badDate = e.currentTarget.querySelector('.date-input.bad input[type=text]');
+    if (badDate) { badDate.focus(); return toast(`${badDate.getAttribute('aria-label') || 'A date'}: ${badDate.title}. Fix the box marked in red.`, 'error'); }
     if (!f.reason.trim()) return toast('Say why the delivery is being changed', 'warn');
+    const added = f.items.filter((i) => !i.removed && (i.orig == null || i.productId !== purchase.items[i.orig].productId) && (i.productId || Number(i.qty) > 0));
+    for (const i of added) {
+      if (!i.productId) return toast('Choose the medicine for every added line (or remove the line)', 'warn');
+      if (!(Number(i.qty) > 0)) return toast(`${i.name}: type the quantity received`, 'warn');
+    }
+    if (!live.some((i) => i.productId && Number(i.qty) > 0)) return toast('A delivery needs at least one line. To cancel it completely, remove the lines one by one is not possible: return the stock to the supplier instead.', 'warn');
     // can't take back more than is still in that batch
-    for (const [n, o] of purchase.items.entries()) {
-      const i = f.items[n];
-      const less = o.qty - (i ? Number(i.qty) || 0 : 0);
-      const moved = i && (i.batch !== o.batch || i.expiry !== o.expiry);
+    for (const { o, i, out } of plan()) {
+      const moved = !out && (i.batch !== o.batch || i.expiry !== o.expiry);
+      const less = out ? o.qty : o.qty - (Number(i.qty) || 0);
       const b = findBatch(db, o);
       const have = b ? (batchesOf(o.productId, br).find((x) => x.id === b.id)?.qty || 0) : 0;
       const need = moved ? o.qty : less;
-      if (need > 0 && need > have) return toast(`${o.name}: only ${have} of batch ${o.batch} left (some was already sold). Reduce by at most ${have}.`, 'error');
+      if (need > 0 && need > have) return toast(`${o.name}: only ${have} of batch ${o.batch} left (some was already sold), so it can't be ${out ? 'removed' : 'reduced by more than ' + have}.`, 'error');
     }
     const supplier = db.suppliers.find((x) => x.id === f.supplierId);
     update((d) => {
       const items = [];
-      purchase.items.forEach((o, n) => {
-        const i = f.items[n];
+      const mv = (productId, qty, batchId, note) => move(d, { productId, qty, type: 'Purchase edit', ref: purchase.number, ...(note ? { note } : {}), user: user.name, batchId, branchId: br });
+      for (const { o, i, out } of plan()) {
         const old = findBatch(d, o);
-        if (!i) { if (old) move(d, { productId: o.productId, qty: -o.qty, type: 'Purchase edit', ref: purchase.number, user: user.name, batchId: old.id, branchId: br }); return; }
+        if (out) { if (old) mv(o.productId, -o.qty, old.id, i && !i.removed && Number(i.qty) > 0 ? 'medicine corrected' : 'line removed'); continue; }
         const qty = Math.max(0, Math.round(Number(i.qty) || 0)), cost = Number(i.cost) || 0;
         let batchId = old?.id;
         if ((i.batch !== o.batch || i.expiry !== o.expiry) && old) {
-          move(d, { productId: o.productId, qty: -o.qty, type: 'Purchase edit', ref: purchase.number, note: 'batch corrected', user: user.name, batchId: old.id, branchId: br });
+          mv(o.productId, -o.qty, old.id, 'batch corrected');
           batchId = addBatch(d, { productId: o.productId, batch: i.batch, expiry: i.expiry, cost }).id;
-          if (qty) move(d, { productId: o.productId, qty, type: 'Purchase edit', ref: purchase.number, note: 'batch corrected', user: user.name, batchId, branchId: br });
+          if (qty) mv(o.productId, qty, batchId, 'batch corrected');
         } else if (qty !== o.qty) {
           if (!old) batchId = addBatch(d, { productId: o.productId, batch: i.batch, expiry: i.expiry, cost }).id;
-          move(d, { productId: o.productId, qty: qty - o.qty, type: 'Purchase edit', ref: purchase.number, user: user.name, batchId, branchId: br });
+          mv(o.productId, qty - o.qty, batchId);
         }
         if (batchId && cost !== o.cost) { const b = d.batches.find((x) => x.id === batchId); if (b) put(d, 'batches', { ...b, cost }); }
-        if (qty > 0) items.push({ ...i, qty, cost, batchId });
-      });
+        const { key, orig, removed, ...rest } = i; // eslint-disable-line no-unused-vars
+        items.push({ ...rest, qty, cost, batchId });
+      }
+      // lines added on this edit (or a line whose medicine was corrected): new stock into their batch
+      for (const i of added) {
+        const qty = Math.max(0, Math.round(Number(i.qty) || 0)), cost = Number(i.cost) || 0;
+        const b = addBatch(d, { productId: i.productId, batch: i.batch, expiry: i.expiry, cost });
+        mv(i.productId, qty, b.id, i.orig == null ? 'line added' : 'medicine corrected');
+        const { key, orig, removed, ...rest } = i; // eslint-disable-line no-unused-vars
+        items.push({ ...rest, name: products.find((x) => x.id === i.productId)?.name || i.name, qty, cost, batchId: b.id });
+      }
       const newTotal = items.reduce((a, i) => a + i.qty * i.cost, 0);
       put(d, 'purchases', { ...purchase, supplierId: f.supplierId, supplierName: supplier?.name || purchase.supplierName, invoice: f.invoice, notes: f.notes.trim(), date: f.date, items, total: newTotal,
         paid: Math.min(Number(f.paid) || 0, newTotal), editedBy: user.name, editedAt: now(),
-        edits: [...(purchase.edits || []), { at: now(), by: user.name, reason: f.reason.trim(), before: { total: purchase.total } }] });
-      audit(d, user, 'Purchase edited', `${purchase.number}: ${fmt(purchase.total)} → ${fmt(newTotal)} (${f.reason.trim()})`, br);
+        edits: [...(purchase.edits || []), { at: now(), by: user.name, reason: f.reason.trim(), before: { total: purchase.total, lines: purchase.items.length } }] });
+      const changes = [];
+      const removedN = plan().filter((x) => x.out && !(x.i && !x.i.removed && Number(x.i.qty) > 0)).length, addedN = added.filter((i) => i.orig == null).length, swapped = added.length - addedN;
+      if (removedN) changes.push(`${removedN} line${removedN > 1 ? 's' : ''} removed`);
+      if (addedN) changes.push(`${addedN} added`);
+      if (swapped) changes.push(`${swapped} medicine${swapped > 1 ? 's' : ''} corrected`);
+      audit(d, user, 'Purchase edited', `${purchase.number}: ${fmt(purchase.total)} → ${fmt(newTotal)}${changes.length ? ', ' + changes.join(', ') : ''} (${f.reason.trim()})`, br);
     });
     toast(`${purchase.number} updated; stock adjusted`);
     onClose();
@@ -558,29 +747,36 @@ function PurchaseEditor({ purchase, onClose }) {
     <Modal title={`Edit purchase ${purchase.number}`} onClose={onClose} wide>
       <form onSubmit={save} className="stack">
         <div className="form-grid">
-          <label className="field"><span>Supplier</span><select value={f.supplierId} onChange={(e) => setF({ ...f, supplierId: e.target.value })}><option value="">—</option>{db.suppliers.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
+          <label className="field"><span>Supplier</span><select value={f.supplierId} onChange={(e) => setF({ ...f, supplierId: e.target.value })}><option value="">—</option>{[...db.suppliers].sort((a, b) => a.name.localeCompare(b.name)).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
           <label className="field"><span>Invoice no.</span><input value={f.invoice} onChange={(e) => setF({ ...f, invoice: e.target.value })} /></label>
           <label className="field"><span>Notes</span><input value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} /></label>
-          <label className="field"><span>Date</span><input type="date" value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })} /></label>
+          <label className="field"><span>Date <DateFormatChoice fmt={dateFmt} /></span><DateInput value={f.date} max={today()} onChange={(v) => setF((x) => ({ ...x, date: v || x.date }))} aria-label="Delivery date" /></label>
           <label className="field"><span>Amount paid</span><input type="number" min="0" step="any" value={f.paid} onChange={(e) => setF({ ...f, paid: e.target.value })} /></label>
         </div>
+        <div className="table-wrap invoice-sheet flat">
         <table className="lines">
           <thead><tr><th>Medicine</th><th>Batch</th><th>Expiry</th><th>Qty</th><th>Cost</th><th className="num">Total</th><th /></tr></thead>
           <tbody>
-            {f.items.map((i, k) => (
-              <tr key={k}>
-                <td>{i.name}</td>
-                <td><input value={i.batch || ''} onChange={(e) => setItem(k, { batch: e.target.value })} /></td>
-                <td><input type="date" value={i.expiry || ''} onChange={(e) => setItem(k, { expiry: e.target.value })} /></td>
-                <td><input type="number" min="0" value={i.qty} onChange={(e) => setItem(k, { qty: e.target.value })} /></td>
-                <td><input type="number" min="0" step="any" value={i.cost} onChange={(e) => setItem(k, { cost: e.target.value })} /></td>
-                <td className="num">{fmt(Number(i.qty || 0) * Number(i.cost || 0))}</td>
-                <td><button type="button" className="icon-btn" title="Remove line" onClick={() => setItem(k, { qty: 0 })}><Trash2 size={15} /></button></td>
+            {f.items.map((i) => (
+              <tr key={i.key} className={i.removed ? 'line-removed' : i.orig == null ? 'new-line' : ''}>
+                <td>{i.removed ? <s>{i.name}</s> : <MedicinePicker products={products} value={i.productId} onPick={(id) => pickMedicine(i, id)} placeholder="Search medicine…" />}
+                  {!i.removed && i.orig != null && i.productId !== purchase.items[i.orig].productId && <small className="text-warn">was {purchase.items[i.orig].name}: its stock is taken back, this one is added</small>}
+                  {!i.removed && i.orig == null && <small className="muted">added on this edit</small>}</td>
+                <td><input value={i.batch || ''} disabled={i.removed} onChange={(e) => setItem(i.key, { batch: e.target.value })} aria-label="Batch" /></td>
+                <td><DateInput value={i.expiry || ''} monthYear disabled={i.removed} onChange={(v) => setItem(i.key, { expiry: v })} aria-label="Expiry" /></td>
+                <td><input type="number" min="0" value={i.qty} disabled={i.removed} onChange={(e) => setItem(i.key, { qty: e.target.value })} aria-label="Quantity" /></td>
+                <td><input type="number" min="0" step="any" value={i.cost} disabled={i.removed} onChange={(e) => setItem(i.key, { cost: e.target.value })} aria-label="Cost" /></td>
+                <td className="num">{i.removed ? <span className="muted">removed</span> : fmt(Number(i.qty || 0) * Number(i.cost || 0))}</td>
+                <td>{i.removed
+                  ? <button type="button" className="btn sm ghost nowrap" style={{ whiteSpace: 'nowrap' }} onClick={() => setItem(i.key, { removed: false })}><RotateCcw size={13} />Undo</button>
+                  : <button type="button" className="icon-btn" title="Remove this line" aria-label="Remove line" onClick={() => (i.orig == null ? setF((x) => ({ ...x, items: x.items.filter((y) => y.key !== i.key) })) : setItem(i.key, { removed: true }))}><Trash2 size={15} /></button>}</td>
               </tr>
             ))}
           </tbody>
         </table>
-        <label className="field"><span>Reason for the change (kept in the audit log)</span><input required value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} placeholder="e.g. invoice quantity was 50 not 60" /></label>
+        </div>
+        <div><button type="button" className="btn sm ghost" onClick={addItem}><Plus size={14} />Add an item</button> <small className="muted">A removed line takes its stock back out; an added line puts stock in. Stock already sold can't be taken back.</small></div>
+        <label className="field"><span>Reason for the change (kept in the audit log)</span><input required value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} placeholder="e.g. invoice quantity was 50 not 60; 2 items were missed" /></label>
         <div className="totals"><div className="row between"><span className="muted">Was</span><span className="num">{fmt(purchase.total)}</span></div><div className="row between grand"><span>New total</span><span className="num">{fmt(total)}</span></div></div>
         <div className="form-actions"><button type="button" className="btn ghost" onClick={onClose}>Cancel</button><button className="btn primary">Save changes</button></div>
       </form>

@@ -256,19 +256,18 @@ const filled = await until(A, () => !document.querySelector('.modal') && documen
 check('#4 the invoice page was sent to the reader as an image', aiCalls === 1 && /^data:image\/jpeg;base64,/.test(aiImage), aiCalls);
 const form = await A.evaluate(() => ({
   supplier: document.querySelector('select')?.selectedOptions[0]?.text, invoice: [...document.querySelectorAll('input')].find((i) => i.value === 'KM-5521')?.value, date: document.querySelector('input[type=date]')?.value,
-  lines: [...document.querySelectorAll('table.lines tbody tr')].map((tr) => { const v = (l) => tr.querySelector(`input[aria-label="${l}"]`)?.value; return { med: tr.querySelector('select').selectedOptions[0]?.text, qty: v('Quantity'), cost: v('Unit cost'), total: v('Line total'), price: v('New retail price'), batch: v('Batch number'), exp: v('Expiry date'), read: tr.querySelector('.scan-read')?.innerText.trim() }; }),
+  lines: [...document.querySelectorAll('table.lines tbody tr')].map((tr) => { const v = (l) => tr.querySelector(`input[aria-label="${l}"]`)?.value; return { med: tr.querySelector('.med-pick input')?.value ?? tr.querySelector('select')?.selectedOptions[0]?.text, qty: v('Quantity'), cost: v('Unit cost'), total: v('Line total'), price: v('New retail price'), batch: v('Batch number'), exp: tr.querySelector('.date-input input[type=date]')?.value ?? v('Expiry date'), /* the stored date (the box shows the chosen format) */ read: tr.querySelector('.scan-read')?.innerText.trim() }; }),
   saveDisabled: [...document.querySelectorAll('button')].find((x) => /Receive stock/.test(x.innerText))?.disabled,
   notice: document.querySelector('.scan-notice')?.innerText.replace(/\s+/g, ' '),
 }));
 check('#4 supplier, invoice no. and date are filled from the invoice', filled && form.supplier === 'Kampala Medics' && form.invoice === 'KM-5521' && form.date === '2026-10-15', JSON.stringify({ s: form.supplier, i: form.invoice, d: form.date }));
 check('#4 lines matched to the pharmacy\'s medicines with qty, cost, batch and expiry', form.lines[0]?.med === 'Amoxyl 500mg caps' && form.lines[0].qty === '20' && form.lines[0].cost === '450' && form.lines[0].batch === 'AX77' && form.lines[0].exp === '2028-06-30' && form.lines[1]?.med === 'Panadol Extra tabs' && form.lines[1].exp === '2029-06-30', JSON.stringify(form.lines.slice(0, 2)));
-check('#4 an unknown medicine is flagged for the person to decide (cost worked out from the line total)', form.lines[2]?.med === 'Select medicine…' && form.lines[2].cost === '1200' && form.lines[2].exp === '2030-01-31' && /QWERTAZOL/.test(form.lines[2].read || ''), JSON.stringify(form.lines[2]));
+check('#4 an unknown medicine is flagged for the person to decide (cost worked out from the line total)', form.lines[2]?.med === '' /* no medicine chosen yet (the picker is empty) */ && form.lines[2].cost === '1200' && form.lines[2].exp === '2030-01-31' && /QWERTAZOL/.test(form.lines[2].read || ''), JSON.stringify(form.lines[2]));
 check('#4 nothing can be saved until the person ticks that they checked it', form.saveDisabled === true && /check every line/i.test(form.notice || ''), form.notice);
 await A.screenshot({ path: path.join(out, '4-scanned-invoice.png'), fullPage: true });
 // the person corrects the scan: unknown line becomes a new medicine, Panadol qty fixed to 12
-await A.evaluate(() => {
-  const sel = document.querySelectorAll('table.lines tbody tr')[2].querySelector('select'); sel.value = '__new__'; sel.dispatchEvent(new Event('change', { bubbles: true }));
-});
+await A.focus('table.lines tbody tr:nth-child(3) .med-pick input'); await wait(300); // the medicine picker: "New medicine" is its last row
+await A.evaluate(() => document.querySelector('.med-pick-row.add')?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })));
 await wait(300);
 const newLine = await A.evaluate(() => { const tr = document.querySelectorAll('table.lines tbody tr')[2]; return { name: tr.querySelector('input[aria-label="New medicine name"]')?.value, price: tr.querySelector('input[aria-label="New retail price"]')?.value }; });
 check('#4 "New medicine" keeps the name read off the invoice, and the retail price is worked out from the cost (1200 + 50% = 1800)', /QWERTAZOL/.test(newLine.name || '') && newLine.price === '1800', JSON.stringify(newLine));

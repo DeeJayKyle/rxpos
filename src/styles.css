@@ -2103,3 +2103,86 @@ tr.total-row td { font-weight: 750; background: var(--surface-2); border-top: 2p
 .draft-card strong svg { vertical-align: -2px; }
 .text-danger { color: var(--danger); font-weight: 650; }
 .tab .badge-count { margin-left: 6px; background: var(--warn); color: #fff; border-radius: 99px; font-size: 11px; padding: 0 7px; font-weight: 800; }
+
+/* date boxes in the chosen format, with a calendar button (src/fields.jsx) */
+.date-input { position: relative; display: flex; align-items: center; gap: 2px; min-width: 9.5em; }
+.date-input > input[type=text] { flex: 1; min-width: 0; }
+.date-input.bad > input[type=text] { border-color: var(--danger, #dc2626); }
+.date-input .date-native { position: absolute; left: 0; bottom: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.date-input .date-why { position: absolute; top: 100%; left: 0; white-space: nowrap; font-size: 11px; }
+.date-fmt { font-size: 11px; padding: 0 4px; height: auto; margin-left: 6px; width: auto; border-radius: 6px; }
+/* medicine picker you can type into */
+.med-pick { position: relative; flex: 1; min-width: 12em; }
+.med-pick input { width: 100%; padding-left: 28px; }
+.med-pick-icon { position: absolute; left: 9px; top: 50%; transform: translateY(-50%); opacity: .55; pointer-events: none; }
+.med-pick-list { z-index: 60; max-height: 320px; overflow: auto; background: var(--card, #fff); border: 1px solid var(--border, #e2e8f0); border-radius: 10px; box-shadow: 0 12px 32px rgba(0,0,0,.18); padding: 4px; }
+.med-pick-row { display: flex; width: 100%; justify-content: space-between; gap: 10px; align-items: baseline; text-align: left; padding: 7px 9px; border: 0; background: none; border-radius: 7px; cursor: pointer; color: inherit; font: inherit; }
+.med-pick-row.hi, .med-pick-row:hover { background: color-mix(in srgb, var(--primary, #0f766e) 12%, transparent); }
+.med-pick-row.on { font-weight: 600; }
+.med-pick-row.add { justify-content: flex-start; color: var(--primary, #0f766e); font-weight: 600; border-top: 1px solid var(--border, #e2e8f0); border-radius: 0 0 7px 7px; }
+.med-pick-row .stock-in { color: var(--ok, #15803d); white-space: nowrap; }
+.med-pick-empty { padding: 8px 10px; }
+/* Add Stock columns that can be moved */
+.col-move { cursor: grab; user-select: none; }
+.col-move.dragging { opacity: .45; }
+.col-head { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
+.col-grip { opacity: .4; }
+.col-arrows { display: inline-flex; opacity: 0; transition: opacity .15s; }
+.col-move:hover .col-arrows, .col-move:focus-within .col-arrows { opacity: 1; }
+@media (hover: none) { .col-arrows { opacity: .8; } }
+.icon-btn.xs { padding: 1px; min-width: 0; min-height: 0; }
+tr.line-removed td { opacity: .55; }
+.nowrap { flex-wrap: nowrap; }
+
+/* Add Stock (and Edit purchase) laid out like a printed supplier invoice */
+.invoice-sheet { --paper: var(--card, #fff); --ink: var(--text, #0f172a); --rule: color-mix(in srgb, var(--ink) 14%, transparent); background: var(--paper); border: 1px solid var(--rule); border-radius: 6px; box-shadow: 0 1px 0 var(--rule), 0 18px 40px -24px rgba(15, 23, 42, .35); padding: 28px 32px 22px; }
+.invoice-sheet.flat { box-shadow: none; padding: 0; border-radius: 6px; }
+.invoice-caption { display: block; font-size: 10.5px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--muted, #64748b); margin-bottom: 4px; }
+.invoice-head { display: grid; grid-template-columns: 1fr minmax(260px, 340px); gap: 28px; padding-bottom: 18px; margin-bottom: 14px; border-bottom: 3px double var(--rule); }
+.invoice-from > .field select { font-size: 1.15rem; font-weight: 700; }
+.invoice-party { margin: -4px 0 10px; }
+.invoice-to { display: flex; flex-direction: column; gap: 1px; margin-top: 10px; padding-left: 10px; border-left: 3px solid color-mix(in srgb, var(--primary, #0f766e) 55%, transparent); }
+.invoice-title { font-size: 1.55rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; text-align: right; line-height: 1.1; margin-bottom: 10px; }
+.invoice-title small { display: block; font-size: 11px; font-weight: 600; letter-spacing: .12em; color: var(--muted, #64748b); margin-top: 3px; }
+.invoice-meta-row { display: grid; grid-template-columns: 9.5em 1fr; align-items: center; gap: 8px; padding: 4px 0; border-bottom: 1px dotted var(--rule); }
+.invoice-meta-row > span { font-size: 12px; font-weight: 600; color: var(--muted, #64748b); white-space: nowrap; }
+.invoice-meta-row input { text-align: right; }
+.invoice-sheet table.lines { border-collapse: collapse; }
+.invoice-sheet table.lines thead th { background: color-mix(in srgb, var(--ink) 6%, transparent); border-top: 2px solid var(--ink); border-bottom: 1px solid var(--ink); font-size: 10.5px; letter-spacing: .1em; }
+.invoice-sheet table.lines tbody td { border-bottom: 1px solid var(--rule); vertical-align: top; padding-top: 6px; padding-bottom: 6px; }
+.invoice-sheet table.lines tbody tr:last-child td { border-bottom: 2px solid var(--ink); }
+.invoice-sheet table.lines .line-no { width: 2.2em; text-align: right; color: var(--muted, #64748b); font-variant-numeric: tabular-nums; padding-right: 6px; padding-top: 14px; }
+.invoice-sheet table.lines tbody input:not([type=checkbox]), .invoice-sheet table.lines tbody select, .invoice-meta-row input, .invoice-meta-row .date-input input[type=text] { border-color: transparent; background: transparent; box-shadow: none; }
+.invoice-sheet table.lines tbody tr:hover input:not([type=checkbox]), .invoice-sheet table.lines tbody tr:hover select, .invoice-sheet table.lines tbody input:focus, .invoice-sheet table.lines tbody select:focus,
+.invoice-meta-row:hover input, .invoice-meta-row input:focus { border-color: var(--border, #cbd5e1); background: var(--input-bg, var(--paper)); }
+.invoice-sheet table.lines tbody .date-input.bad input[type=text] { border-color: var(--danger, #dc2626); }
+.invoice-sheet table.lines input[type=number] { text-align: right; font-variant-numeric: tabular-nums; }
+.invoice-foot { display: grid; grid-template-columns: 1fr minmax(260px, 340px); gap: 28px; margin-top: 18px; align-items: start; }
+.invoice-notes textarea { width: 100%; resize: vertical; }
+.invoice-totals { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.invoice-totals td { padding: 6px 4px; border-bottom: 1px dotted var(--rule); }
+.invoice-totals td:first-child { color: var(--muted, #64748b); font-size: 13px; }
+.invoice-totals tr.grand td { font-size: 1.2rem; font-weight: 800; color: var(--ink); border-top: 2px solid var(--ink); border-bottom: 4px double var(--ink); }
+.invoice-totals tr.due td { color: var(--warn, #b45309); font-weight: 700; }
+@media (max-width: 760px) {
+  .invoice-sheet { padding: 18px 14px; }
+  .invoice-head, .invoice-foot { grid-template-columns: 1fr; gap: 14px; }
+  .invoice-title { text-align: left; }
+  .invoice-sheet table.lines .line-no { display: none; }
+}
+.invoice-sheet .med-pick input { padding-left: 28px !important; }
+.invoice-sheet table.stock-lines td.line-med { min-width: 15em; }
+.invoice-sheet table.stock-lines td.line-med .row.nowrap { align-items: center; }
+.invoice-sheet table.stock-lines input[aria-label="Quantity"] { width: 5em; }
+.invoice-sheet table.stock-lines input[aria-label="Unit cost"], .invoice-sheet table.stock-lines input[aria-label="Line total"], .invoice-sheet table.stock-lines input[aria-label="New retail price"] { width: 7.5em; }
+.invoice-sheet table.stock-lines input[aria-label="Batch number"] { width: 6.5em; }
+.invoice-sheet table.stock-lines .col-head { font-size: 10px; }
+.invoice-sheet table.stock-lines .col-arrows { opacity: 0; }
+.invoice-sheet table.stock-lines .col-move:hover .col-arrows, .invoice-sheet table.stock-lines .col-move:focus-within .col-arrows { opacity: 1; }
+.invoice-sheet table.stock-lines input[aria-label="Unit cost"], .invoice-sheet table.stock-lines input[aria-label="Line total"], .invoice-sheet table.stock-lines input[aria-label="New retail price"] { width: 6.6em; }
+.invoice-sheet table.stock-lines input[aria-label="Quantity"] { width: 4.2em; }
+.invoice-sheet table.stock-lines td, .invoice-sheet table.stock-lines th { padding-left: 5px; padding-right: 5px; }
+.invoice-sheet table.stock-lines .date-input { min-width: 8.6em; }
+@media (min-width: 761px) { .invoice-sheet { padding: 26px 24px 20px; } }
+.invoice-sheet table.stock-lines .date-input { min-width: 9.6em; }
+.invoice-sheet table.stock-lines td.line-med { min-width: 13em; }

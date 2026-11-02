@@ -82,7 +82,7 @@ check('a retail price typed by hand is kept when the cost changes', (await lineV
 await setVal('tr.new-line input[aria-label="Expiry date"]', future(400)); await setVal('tr.new-line input[aria-label="Batch number"]', 'ZY1');
 // an existing medicine by search + Enter
 await A.type('.picker input', 'Amoxyl'); await A.keyboard.press('Enter'); await wait(300);
-check('Enter in the search adds the first match', /Amoxyl/.test(await A.evaluate(() => document.querySelectorAll('table.lines tbody tr')[1]?.querySelector('select')?.selectedOptions[0]?.text || '')));
+check('Enter in the search adds the first match', /Amoxyl/.test(await A.evaluate(() => document.querySelectorAll('table.lines tbody tr')[1]?.querySelector('.med-pick input')?.value || '')));
 await setVal('table.lines tbody tr:nth-child(2) input[aria-label="Unit cost"]', 600); await wait(200);
 check('a worked-out price never lowers an existing price (600 + 50% = 900 < 1,000: keeps 1,000)', (await lineVal(1, 'New retail price')) === '1000', await lineVal(1, 'New retail price'));
 await setVal('table.lines tbody tr:nth-child(2) input[aria-label="Unit cost"]', 800); await wait(200);

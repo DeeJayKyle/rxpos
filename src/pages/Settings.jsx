@@ -97,6 +97,16 @@ export default function Settings() {
             </label>
             <label className="field check"><input type="checkbox" checked={!!s.autoPrint} onChange={(e) => setS({ ...s, autoPrint: e.target.checked })} /><span>Print the receipt automatically after each sale</span></label>
             {field('receiptFooter', 'Receipt footer message')}
+            <label className="field"><span>Add Stock receives medicines with packs in</span>
+              <select value={s.receiveUnit || 'pack'} onChange={(e) => setS({ ...s, receiveUnit: e.target.value })}><option value="pack">Packs (the largest pack, e.g. boxes)</option><option value="unit">Single units</option></select>
+            </label>
+            <label className="field"><span>Retail till sells in</span>
+              <select value={s.sellUnitRetail || 'unit'} onChange={(e) => setS({ ...s, sellUnitRetail: e.target.value })}><option value="unit">Single units (tablets, bottles…)</option><option value="pack">Packs</option></select>
+            </label>
+            <label className="field"><span>Wholesale till sells in</span>
+              <select value={s.sellUnitWholesale || 'pack'} onChange={(e) => setS({ ...s, sellUnitWholesale: e.target.value })}><option value="pack">Packs (the largest pack)</option><option value="unit">Single units</option></select>
+            </label>
+            <p className="muted small full">Stock is always counted in single units. A medicine's packs are set in Medicine List → Packs; each line in Add Stock or at the till can still be switched between packs and units.</p>
             {field('expiryWarnDays', 'Warn about expiry (days before)', 'number')}
             {field('leadDays', 'Supplier lead time (days)', 'number')}
             {field('coverDays', 'Reorder enough stock for (days)', 'number')}
