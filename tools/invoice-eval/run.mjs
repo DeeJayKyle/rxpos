@@ -5,6 +5,7 @@ import { chromium } from 'playwright';
 import fs from 'node:fs';
 import { INVOICES, STYLES, html, total } from './invoices.mjs';
 import { CURRENT, CANDIDATE } from './prompts.mjs';
+import { clean, finish } from '../../worker/invoiceread.js';
 
 const ACC = process.env.CLOUDFLARE_ACCOUNT_ID, TOKEN = process.env.CLOUDFLARE_API_TOKEN;
 // through the temporary eval worker (its AI binding) when given, else the Workers AI REST API
@@ -26,7 +27,7 @@ for (let page = 1; page <= 5 && !EVAL_URL; page++) {
   if (r.result.length < 100) break;
 }
 console.log('vision-capable models:', found.join(', ') || '(none found by search)');
-const MODELS = process.argv.slice(2).length ? process.argv.slice(2) : [...new Set(['@cf/mistralai/mistral-small-3.1-24b-instruct', '@cf/meta/llama-4-scout-17b-16e-instruct', '@cf/google/gemma-3-12b-it', ...found.filter((n) => /scout|gemma-3|qwen.*vl|mistral-small/.test(n))])];
+const MODELS = process.argv.slice(2).length ? process.argv.slice(2) : [...new Set(['@cf/mistralai/mistral-small-3.1-24b-instruct', '@cf/meta/llama-4-scout-17b-16e-instruct', ...found.filter((n) => /scout|gemma-3|qwen.*vl|mistral-small/.test(n))])];
 
 // 2. render every invoice in every style
 const browser = await chromium.launch();
@@ -109,4 +110,30 @@ for (const r of rows) {
   }
 }
 for (const [k, g] of Object.entries(groups).sort()) console.log(k.padEnd(70), `${Math.round((100 * g.right) / g.of)}%`.padStart(5), `silent errors ${g.silent}`, g.errors ? `failed calls ${g.errors}` : '');
+// 5. the two models cross-checked, as the cloud does it (worker/invoiceread.js): fields right, wrong lines that slipped
+// through without a flag (silent), and right lines flagged anyway (extra checking for the person)
+if (MODELS.length >= 2) {
+  console.log('\nCROSS-CHECKED (' + MODELS.slice(0, 2).map((m) => m.split('/').pop()).join(' + ') + ')');
+  const tally = {};
+  for (const [pname] of [['current'], ['candidate']]) for (const im of images) {
+    const a = rows.find((r) => r.model === MODELS[0] && r.prompt === pname && r.image === `${im.inv.id}-${im.style}`);
+    const b = rows.find((r) => r.model === MODELS[1] && r.prompt === pname && r.image === `${im.inv.id}-${im.style}`);
+    if (!a?.out || !b?.out) continue;
+    const r = finish(clean(a.out), clean(b.out));
+    let right = 0, silent = 0, flaggedOk = 0, flaggedBad = 0;
+    for (const want of im.inv.items) {
+      const it = r.items.find((x) => words(x.name).filter((w) => new Set(words(want.name)).has(w)).length / Math.max(1, words(want.name).length) >= 0.5);
+      if (!it) { silent++; continue; }
+      const ok = [num(it.qty) === want.qty, num(it.unitCost) === want.unitCost, norm(it.batch) === norm(want.batch), day(it.expiry) === want.expiry, true];
+      right += ok.filter(Boolean).length;
+      const allOk = ok.every(Boolean), flagged = (it.check || []).length > 0;
+      if (!allOk && !flagged) silent++; if (allOk && flagged) flaggedOk++; if (!allOk && flagged) flaggedBad++;
+    }
+    for (const key of [`${pname}|ALL`, `${pname}|${im.style}`]) {
+      const g = (tally[key] ||= { right: 0, of: 0, silent: 0, caught: 0, extra: 0, lines: 0 });
+      g.right += right; g.of += im.inv.items.length * 5; g.silent += silent; g.caught += flaggedBad; g.extra += flaggedOk; g.lines += im.inv.items.length;
+    }
+  }
+  for (const [k, g] of Object.entries(tally).sort()) console.log(k.padEnd(24), `${Math.round((100 * g.right) / g.of)}% fields right`.padEnd(18), `wrong lines caught ${g.caught}`, `· slipped through ${g.silent}`, `· right lines flagged ${g.extra} of ${g.lines}`);
+}
 fs.writeFileSync('invoice-eval-out/results.json', JSON.stringify(rows, null, 1));

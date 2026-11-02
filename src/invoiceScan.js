@@ -1,9 +1,11 @@
-// Scanning a supplier invoice into Add Stock: photo or PDF → pages as images → AI reads each page (Workers AI,
-// Mistral Small 3.1) → lines matched to this pharmacy's medicines. Nothing is saved until the person checks it.
+// Scanning a supplier invoice into Add Stock: photo or PDF → pages as images → two AI models read each page
+// independently in the cloud and are cross-checked (worker/invoiceread.js) → lines matched to this pharmacy's medicines
+// → a delivery draft that waits for a person to check it. Nothing reaches stock until "Receive stock".
 import { aiInvoice } from './cloud.js';
 import { shrinkPhoto } from './pages/Scan.jsx';
 
-const MAX_PAGES = 4;
+const MAX_PAGES = 6;
+const PAGE_PX = 2000; // small print and handwriting need the detail; the cloud takes pages up to 2 MB
 
 /** PDF → one JPEG per page (first few pages), using pdf.js (Apache-2.0), loaded only when needed */
 async function pdfPages(file) {
@@ -15,13 +17,13 @@ async function pdfPages(file) {
   for (let n = 1; n <= Math.min(pdf.numPages, MAX_PAGES); n++) {
     const page = await pdf.getPage(n);
     const base = page.getViewport({ scale: 1 });
-    const viewport = page.getViewport({ scale: Math.min(2.5, 1800 / Math.max(base.width, base.height)) });
+    const viewport = page.getViewport({ scale: Math.min(3, PAGE_PX / Math.max(base.width, base.height)) });
     const canvas = document.createElement('canvas');
     canvas.width = Math.round(viewport.width); canvas.height = Math.round(viewport.height);
     const ctx = canvas.getContext('2d');
     ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
     await page.render({ canvasContext: ctx, viewport, canvas }).promise;
-    out.push(await shrinkPhoto(canvas.toDataURL('image/jpeg', 0.92), 1600));
+    out.push(await shrinkPhoto(canvas.toDataURL('image/jpeg', 0.92), PAGE_PX));
   }
   return { pages: out, total: pdf.numPages };
 }
@@ -33,32 +35,18 @@ export async function invoicePages(file) {
   if (!file) return { pages: [], total: 0 };
   if (file.type === 'application/pdf' || /\.pdf$/i.test(file.name)) return pdfPages(file);
   if (!/^image\//.test(file.type)) throw new Error('Choose a photo (JPG / PNG) or a PDF of the invoice');
-  return { pages: [await shrinkPhoto(await readAsDataUrl(file), 1600)], total: 1 };
+  return { pages: [await shrinkPhoto(await readAsDataUrl(file), PAGE_PX)], total: 1 };
+}
+/** A page image (data URL) → a Blob, to keep in the pharmacy's cloud with the draft */
+export function pageBlob(dataUrl) { // decoded here: the app's security policy (rightly) doesn't let fetch() read data: URLs
+  const [head, data] = String(dataUrl).split(',');
+  const bin = atob(data), bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new Blob([bytes], { type: (/data:([^;]+)/.exec(head) || [])[1] || 'image/jpeg' });
 }
 
-const MONTHS = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, sept: 9, oct: 10, nov: 11, dec: 12 };
-const lastDay = (y, m) => new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
-const year4 = (y) => (String(y).length === 2 ? 2000 + Number(y) : Number(y));
-/** Expiry / invoice dates as written on invoices → YYYY-MM-DD ('' when it can't be read) */
-export function normDate(v, { endOfMonth = true } = {}) {
-  const s = String(v || '').trim().toLowerCase().replace(/\s+/g, ' ');
-  if (!s) return '';
-  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
-  if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
-  m = s.match(/^(\d{4})[/.-](\d{1,2})$/); // 2028-06
-  if (m) return endOfMonth ? lastDay(+m[1], +m[2]) : `${m[1]}-${m[2].padStart(2, '0')}-01`;
-  m = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})$/); // dd/mm/yyyy
-  if (m) return `${year4(m[3])}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
-  m = s.match(/^(\d{1,2})[/.-](\d{2,4})$/); // mm/yyyy or mm/yy
-  if (m && +m[1] >= 1 && +m[1] <= 12) return lastDay(year4(m[2]), +m[1]);
-  m = s.match(/^(?:(\d{1,2})[ /.-]?)?([a-z]{3,9})[ /.,-]*(\d{2,4})$/); // 30 Jun 2028, Jun-28, June 2028
-  if (m && (MONTHS[m[2].slice(0, 4)] || MONTHS[m[2].slice(0, 3)])) {
-    const mo = MONTHS[m[2].slice(0, 4)] || MONTHS[m[2].slice(0, 3)];
-    return m[1] ? `${year4(m[3])}-${String(mo).padStart(2, '0')}-${m[1].padStart(2, '0')}` : lastDay(year4(m[3]), mo);
-  }
-  const d = new Date(v);
-  return isNaN(d) ? '' : d.toISOString().slice(0, 10);
-}
+import { normDate } from './invoicedates.js';
+export { normDate };
 
 const STOP = new Set(['tablet', 'tablets', 'tabs', 'tab', 'capsule', 'capsules', 'caps', 'cap', 'syrup', 'suspension', 'susp', 'cream', 'injection', 'inj', 'drops', 'the', 'and', 'with', 'for', 'pack', 'pcs', 'box', 'bottle', 'btl']);
 const tokens = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9.]+/g, ' ').split(' ').filter((w) => w && !STOP.has(w));
@@ -99,12 +87,16 @@ export function matchSupplier(name, suppliers) {
 
 /** Read every page and merge them into one invoice */
 export async function readInvoice(cfg, pages, onPage) {
-  const merged = { supplier: '', invoiceNo: '', date: '', total: 0, items: [] };
+  const merged = { supplier: '', invoiceNo: '', date: '', total: 0, items: [], linesTotal: 0, readings: 0 };
   for (let i = 0; i < pages.length; i++) {
     onPage?.(i + 1, pages.length);
     const r = await aiInvoice(cfg, pages[i]);
     merged.supplier ||= r.supplier; merged.invoiceNo ||= r.invoiceNo; merged.date ||= r.date; merged.total ||= r.total;
-    merged.items.push(...(r.items || []));
+    merged.items.push(...(r.items || []).map((it) => ({ ...it, page: i + 1 })));
+    merged.linesTotal += Number(r.linesTotal) || 0;
+    merged.readings = Math.max(merged.readings, Number(r.readings) || 1);
   }
+  // the lines of all pages against the invoice total (printed once, usually on the last page)
+  merged.totalMatches = !merged.total || Math.abs(merged.linesTotal - merged.total) <= Math.max(1, merged.total * 0.01);
   return merged;
 }
