@@ -1,4 +1,4 @@
-// The till on a wide screen (fictional pharmacy): client panel on the left (debounced search, loyalty / balance
+// The till on a wide screen (fictional pharmacy), still two sides: client strip over the medicines (debounced search, loyalty / balance
 // badges), quick actions, the sale as a ledger with totals and Charge at the bottom right; everything already on the
 // till is still there. Below 1280px the till looks as before.
 //   node v51-pos-wide.mjs <base> <ownerKey> <outDir>
@@ -41,8 +41,8 @@ await p.evaluate(() => [...document.querySelectorAll('form button')].find((x) =>
 await p.waitForSelector('.sidebar', { timeout: 30000 }); await wait(2500);
 await p.evaluate(() => { location.hash = '#/pos'; }); await wait(1800);
 
-const cols = await p.evaluate(() => { const r = (s) => document.querySelector(s)?.getBoundingClientRect(); const a = r('.pos-side'), m = r('.pos-products'), c = r('.pos-cart'); return a && m && c ? { a: Math.round(a.width), m: Math.round(m.width), c: Math.round(c.width), order: a.left < m.left && m.left < c.left } : null; });
-check('three columns at 1440px: client | medicines | sale, about 25 / 50 / 25', cols && cols.order && Math.abs(cols.m / cols.a - 2) < 0.25 && Math.abs(cols.c - cols.a) < 12, JSON.stringify(cols));
+const cols = await p.evaluate(() => { const r = (s) => document.querySelector(s)?.getBoundingClientRect(); const a = r('.pos-side'), m = r('.pos-products'), c = r('.pos-cart'); return a && m && c ? { two: getComputedStyle(document.querySelector('.pos')).gridTemplateColumns.split(' ').length === 2, sideAbove: a.bottom <= m.top + 1 && Math.abs(a.left - m.left) < 2, cartRight: c.left > m.right } : null; });
+check('two sides at 1440px: client & quick actions over the medicines | the sale', cols && cols.two && cols.sideAbove && cols.cartRight, JSON.stringify(cols));
 check('nothing already on the till is gone: search, filters, medicines, client box, payment methods, Proforma, Hold, Charge', await p.evaluate(() => !!document.querySelector('.pos-products input') && !!document.querySelector('.chips-row') && document.querySelectorAll('.product').length === 2 && !!document.querySelector('.pos-cart select[aria-label="Client"]') && !!document.querySelector('.pay-methods') && [...document.querySelectorAll('.pos-cart button')].some((x) => /Proforma/.test(x.textContent)) && [...document.querySelectorAll('.pos-cart button')].some((x) => /^Hold/.test(x.textContent.trim())) && [...document.querySelectorAll('.pos-cart button')].some((x) => /^Charge/.test(x.textContent.trim()))));
 check('the medicine search still has the cursor (barcode scanners type there)', await p.evaluate(() => document.activeElement === document.querySelector('.pos-products input')));
 check('walk-in shows the neutral "standard" badge', await p.evaluate(() => document.querySelector('.cust-badge')?.className.includes('cust-std')));
@@ -85,9 +85,9 @@ await p.keyboard.press('Escape'); await wait(300);
 
 // narrower screens: as before
 await p.setViewport({ width: 1200, height: 900 }); await wait(500);
-check('below 1280px the client panel is hidden and the till is two columns as before', await p.evaluate(() => getComputedStyle(document.querySelector('.pos-side')).display === 'none' && getComputedStyle(document.querySelector('.pos')).gridTemplateColumns.split(' ').length === 2));
+check('below 1280px the client strip is hidden and the till is as before', await p.evaluate(() => getComputedStyle(document.querySelector('.pos-side')).display === 'none' && getComputedStyle(document.querySelector('.pos')).gridTemplateColumns.split(' ').length === 2));
 await p.setViewport({ width: 1280, height: 800 }); await wait(500);
-check('at exactly 1280px: three columns, nothing spills sideways', await p.evaluate(() => getComputedStyle(document.querySelector('.pos')).gridTemplateColumns.split(' ').length === 3 && document.documentElement.scrollWidth <= 1280));
+check('at exactly 1280px: two sides, nothing spills sideways', await p.evaluate(() => getComputedStyle(document.querySelector('.pos')).gridTemplateColumns.split(' ').length === 2 && document.documentElement.scrollWidth <= 1280));
 await p.screenshot({ path: path.join(out, 'pos-1280.png') });
 
 await b.close();

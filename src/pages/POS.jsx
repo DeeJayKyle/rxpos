@@ -455,7 +455,7 @@ export default function POS({ mode = 'retail' }) {
       {/* wide screens only (CSS): client & loyalty, quick actions */}
       <aside className="pos-side" aria-label="Client and quick actions">
         {capture !== 'off' && (
-          <div className="card pos-client">
+          <div className="card pos-client accent-teal">
             <h3><Users size={16} /> Client</h3>
             <div className="pos-client-find">
               <Search size={15} aria-hidden="true" />
@@ -477,15 +477,15 @@ export default function POS({ mode = 'retail' }) {
             </div>
           </div>
         )}
-        <div className="card pos-quick">
+        <div className="card pos-quick accent-blue">
           <h3>Quick actions</h3>
           <div className="quick-grid">
-            <button type="button" className="quick-tile" onClick={voidItem} disabled={!cart.length}><Ban size={20} /><span>Void item</span><small className="kbd-sub">[Del]</small></button>
-            <button type="button" className="quick-tile" onClick={holdSale} disabled={!cart.length}><PauseCircle size={20} /><span>Hold sale</span><small className="kbd-sub">[Alt+H]</small></button>
-            <button type="button" className="quick-tile" onClick={focusDiscount} disabled={!cart.length}><Percent size={20} /><span>Discount</span><small className="kbd-sub">[Alt+D]</small></button>
-            <button type="button" className="quick-tile" onClick={printLast} disabled={!lastSale}><Printer size={20} /><span>Last receipt</span><small className="kbd-sub">[Alt+R]</small></button>
-            <button type="button" className="quick-tile" onClick={saveProforma} disabled={!cart.length}><FileText size={20} /><span>Proforma</span><small className="kbd-sub">[F10]</small></button>
-            <button type="button" className="quick-tile" onClick={() => setHelp(true)}><Keyboard size={20} /><span>Shortcuts</span><small className="kbd-sub">[?]</small></button>
+            <button type="button" className="quick-tile q-void" onClick={voidItem} disabled={!cart.length}><Ban size={20} /><span>Void item</span><small className="kbd-sub">[Del]</small></button>
+            <button type="button" className="quick-tile q-hold" onClick={holdSale} disabled={!cart.length}><PauseCircle size={20} /><span>Hold sale</span><small className="kbd-sub">[Alt+H]</small></button>
+            <button type="button" className="quick-tile q-disc" onClick={focusDiscount} disabled={!cart.length}><Percent size={20} /><span>Discount</span><small className="kbd-sub">[Alt+D]</small></button>
+            <button type="button" className="quick-tile q-receipt" onClick={printLast} disabled={!lastSale}><Printer size={20} /><span>Last receipt</span><small className="kbd-sub">[Alt+R]</small></button>
+            <button type="button" className="quick-tile q-proforma" onClick={saveProforma} disabled={!cart.length}><FileText size={20} /><span>Proforma</span><small className="kbd-sub">[F10]</small></button>
+            <button type="button" className="quick-tile q-keys" onClick={() => setHelp(true)}><Keyboard size={20} /><span>Shortcuts</span><small className="kbd-sub">[?]</small></button>
           </div>
         </div>
       </aside>
