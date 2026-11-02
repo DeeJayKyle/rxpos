@@ -1,7 +1,7 @@
 import { mainPack, packPrice, sellInPacks } from '../packs.js';
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useLocation, Link } from 'react-router-dom';
-import { ShoppingCart, Trash2, X, FileText, Printer, AlertTriangle, ScanBarcode, Smartphone, Loader2, CheckCircle2, UserPlus, Tag, BookMarked, Repeat, PauseCircle, Keyboard, Plus, ClipboardList, MessageCircle, MessageSquareText, Star, Search, Ban, Percent, Users } from 'lucide-react';
+import { ShoppingCart, Trash2, X, FileText, Printer, AlertTriangle, ScanBarcode, Smartphone, Loader2, CheckCircle2, UserPlus, Tag, BookMarked, Repeat, PauseCircle, Keyboard, Plus, ClipboardList, MessageCircle, MessageSquareText, Star, Search, Users } from 'lucide-react';
 import { DrugInfoPanel, genericKey } from './DrugInfo.jsx';
 import { useStore, uid, now, daysUntil, put, del, move, allocate, audit, normalizePhone, customerBalance, DEFAULT_PAYMENT_METHODS } from '../store.jsx';
 import { draftsFor, saleDraft } from '../drafts.js';
@@ -309,7 +309,6 @@ export default function POS({ mode = 'retail' }) {
     return out;
   }, [customer, db]); // eslint-disable-line react-hooks/exhaustive-deps
   const lastSale = useMemo(() => db.sales.filter((x) => (x.branchId || 'main') === (branchId || 'main')).reduce((b, x) => (!b || String(x.date) > String(b.date) ? x : b), null), [db.sales, branchId]);
-  const voidItem = () => { if (!lineAt) return toast('Nothing to void yet', 'warn'); removeLines([lineAt.id]); setCursor(-1); };
   const focusDiscount = () => { const i = discRef.current; if (i) { i.focus(); i.select(); } };
   const printLast = () => (lastSale ? setDone({ ...lastSale, reprint: true }) : toast('No sale at this branch yet', 'warn'));
   const pickCustomer = (id) => { setCustomerId(id); setCustQ(''); focusSearch(); };
@@ -452,8 +451,8 @@ export default function POS({ mode = 'retail' }) {
 
   return (
     <div className="pos">
-      {/* wide screens only (CSS): client & loyalty, quick actions */}
-      <aside className="pos-side" aria-label="Client and quick actions">
+      {/* wide screens only (CSS): client & loyalty */}
+      <aside className="pos-side" aria-label="Client">
         {capture !== 'off' && (
           <div className="card pos-client accent-teal">
             <h3><Users size={16} /> Client</h3>
@@ -477,17 +476,6 @@ export default function POS({ mode = 'retail' }) {
             </div>
           </div>
         )}
-        <div className="card pos-quick accent-blue">
-          <h3>Quick actions</h3>
-          <div className="quick-grid">
-            <button type="button" className="quick-tile q-void" onClick={voidItem} disabled={!cart.length}><Ban size={20} /><span>Void item</span><small className="kbd-sub">[Del]</small></button>
-            <button type="button" className="quick-tile q-hold" onClick={holdSale} disabled={!cart.length}><PauseCircle size={20} /><span>Hold sale</span><small className="kbd-sub">[Alt+H]</small></button>
-            <button type="button" className="quick-tile q-disc" onClick={focusDiscount} disabled={!cart.length}><Percent size={20} /><span>Discount</span><small className="kbd-sub">[Alt+D]</small></button>
-            <button type="button" className="quick-tile q-receipt" onClick={printLast} disabled={!lastSale}><Printer size={20} /><span>Last receipt</span><small className="kbd-sub">[Alt+R]</small></button>
-            <button type="button" className="quick-tile q-proforma" onClick={saveProforma} disabled={!cart.length}><FileText size={20} /><span>Proforma</span><small className="kbd-sub">[F10]</small></button>
-            <button type="button" className="quick-tile q-keys" onClick={() => setHelp(true)}><Keyboard size={20} /><span>Shortcuts</span><small className="kbd-sub">[?]</small></button>
-          </div>
-        </div>
       </aside>
       <section className="pos-products">
         <div className="row between gap">
@@ -625,8 +613,8 @@ export default function POS({ mode = 'retail' }) {
                     : <input className="price-input" type="number" step="any" aria-label="Unit price" disabled={!can('pos.price_edit')} value={l.price} onChange={(e) => setLine(l.id, { price: e.target.value })} />}
                 </small>
                 <div className="line-tools">
-                  <button className={'link-btn small' + (l.directions ? ' text-ok' : '')} onClick={() => setLabelFor(l)}><Tag size={12} />{l.directions ? 'Directions ✓' : 'Directions / label'}</button>
-                  {features.drugInfo !== false && <button className="link-btn small" onClick={() => setInfoFor(products.find((p) => p.id === l.id) || l)}><BookMarked size={12} />Drug info</button>}
+                  <button className={'link-btn small' + (l.directions ? ' text-ok' : '')} title={l.directions ? 'Directions ✓' : 'Directions / label'} onClick={() => setLabelFor(l)}><Tag size={12} />{l.directions ? 'Directions ✓' : 'Directions / label'}</button>
+                  {features.drugInfo !== false && <button className="link-btn small" title="Drug info" onClick={() => setInfoFor(products.find((p) => p.id === l.id) || l)}><BookMarked size={12} />Drug info</button>}
                 </div>
               </div>
               <div className="qty">
@@ -651,7 +639,7 @@ export default function POS({ mode = 'retail' }) {
           {methods.map((m, i) => <button key={m.id} className={'chip pay-' + (m.type || 'other') + (payment === m.name ? ' active' : '')} onClick={() => setPayment(m.name)} title={i < 9 ? `Alt+${i + 1}` : undefined}>{m.name}{i < 9 && !touch && <kbd>{i + 1}</kbd>}</button>)}
         </div>
         {(ptype === 'cash' || ptype === 'credit') && (
-          <div className="row between">
+          <div className="row between tender-row">
             <label className="field grow"><span>{ptype === 'credit' ? 'Paid now (rest on credit)' : 'Amount tendered'}</span>
               <input type="number" step="any" value={tendered} onChange={(e) => setTendered(e.target.value)} /></label>
             {ptype === 'cash'

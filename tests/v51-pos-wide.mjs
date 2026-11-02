@@ -26,6 +26,10 @@ await owner('/tenants/' + tid + '/records', { records: [
   { t: 'batches', id: 'wt-bb', rec: { productId: 'wt-b', batch: 'Z1', expiry: '2029-01-31', cost: 4000, received: day.slice(0, 10) } },
   { t: 'movements', id: 'wt-ma', rec: { productId: 'wt-a', batchId: 'wt-ba', qty: 100, type: 'Opening stock', date: day, branchId: 'main', user: 'Wren Admin' } },
   { t: 'movements', id: 'wt-mb', rec: { productId: 'wt-b', batchId: 'wt-bb', qty: 20, type: 'Opening stock', date: day, branchId: 'main', user: 'Wren Admin' } },
+  ...['Amox', 'Brufen', 'Cetrix', 'Dexa', 'Eno', 'Flagyl', 'Gaviscon', 'Hydro'].flatMap((n, i) => [
+    { t: 'products', id: 'wt-x' + i, rec: { name: n + ' Sample ' + (i + 1), generic: n, form: 'Tablets', unit: 'Tablet', barcode: '70200' + (10 + i), price: 1000 + i * 100, cost: 500, reorder: 0 } },
+    { t: 'batches', id: 'wt-xb' + i, rec: { productId: 'wt-x' + i, batch: 'X' + i, expiry: '2029-01-31', cost: 500, received: day.slice(0, 10) } },
+    { t: 'movements', id: 'wt-xm' + i, rec: { productId: 'wt-x' + i, batchId: 'wt-xb' + i, qty: 50, type: 'Opening stock', date: day, branchId: 'main', user: 'Wren Admin' } }]),
   { t: 'customers', id: 'wt-c1', rec: { name: 'Grace Sample', phone: '0700111222', allergies: '' } },
   { t: 'customers', id: 'wt-c2', rec: { name: 'Henry Example', phone: '0700333444', allergies: '' } },
   ...[1, 2, 3, 4, 5].map((i) => sale('R-L' + i, 'wt-c1', 1000, 1000)),
@@ -43,7 +47,7 @@ await p.evaluate(() => { location.hash = '#/pos'; }); await wait(1800);
 
 const cols = await p.evaluate(() => { const r = (s) => document.querySelector(s)?.getBoundingClientRect(); const a = r('.pos-side'), m = r('.pos-products'), c = r('.pos-cart'); return a && m && c ? { two: getComputedStyle(document.querySelector('.pos')).gridTemplateColumns.split(' ').length === 2, sideAbove: a.bottom <= m.top + 1 && Math.abs(a.left - m.left) < 2, cartRight: c.left > m.right } : null; });
 check('two sides at 1440px: client & quick actions over the medicines | the sale', cols && cols.two && cols.sideAbove && cols.cartRight, JSON.stringify(cols));
-check('nothing already on the till is gone: search, filters, medicines, client box, payment methods, Proforma, Hold, Charge', await p.evaluate(() => !!document.querySelector('.pos-products input') && !!document.querySelector('.chips-row') && document.querySelectorAll('.product').length === 2 && !!document.querySelector('.pos-cart select[aria-label="Client"]') && !!document.querySelector('.pay-methods') && [...document.querySelectorAll('.pos-cart button')].some((x) => /Proforma/.test(x.textContent)) && [...document.querySelectorAll('.pos-cart button')].some((x) => /^Hold/.test(x.textContent.trim())) && [...document.querySelectorAll('.pos-cart button')].some((x) => /^Charge/.test(x.textContent.trim()))));
+check('nothing already on the till is gone: search, filters, medicines, client box, payment methods, Proforma, Hold, Charge', await p.evaluate(() => !!document.querySelector('.pos-products input') && !!document.querySelector('.chips-row') && document.querySelectorAll('.product').length === 10 && !!document.querySelector('.pos-cart select[aria-label="Client"]') && !!document.querySelector('.pay-methods') && [...document.querySelectorAll('.pos-cart button')].some((x) => /Proforma/.test(x.textContent)) && [...document.querySelectorAll('.pos-cart button')].some((x) => /^Hold/.test(x.textContent.trim())) && [...document.querySelectorAll('.pos-cart button')].some((x) => /^Charge/.test(x.textContent.trim()))));
 check('the medicine search still has the cursor (barcode scanners type there)', await p.evaluate(() => document.activeElement === document.querySelector('.pos-products input')));
 check('walk-in shows the neutral "standard" badge', await p.evaluate(() => document.querySelector('.cust-badge')?.className.includes('cust-std')));
 
@@ -75,10 +79,15 @@ check('Alt+D / Discount puts the cursor in the discount', await p.evaluate(() =>
 await p.keyboard.type('500'); await wait(200);
 check('a discount shows as "Promos / member discount" in the totals', await p.evaluate(() => /Promos \/ member discount\s*− UGX 500/.test(document.querySelector('.totals').innerText)));
 await p.screenshot({ path: path.join(out, 'pos-1440.png') });
-await p.evaluate(() => [...document.querySelectorAll('.quick-tile')].find((x) => /Void item/.test(x.textContent)).click()); await wait(300);
-check('Void item removes the line at the cursor (Calmex, last touched)', await p.evaluate(() => document.querySelectorAll('.cart-line').length === 1 && /Zinco/.test(document.querySelector('.cart-line').innerText)));
-await p.evaluate(() => [...document.querySelectorAll('.quick-tile')].find((x) => /Hold sale/.test(x.textContent)).click()); await wait(800);
-check('Hold sale parks it and starts a new one', await p.evaluate(() => !document.querySelector('.cart-line') && document.querySelectorAll('.sale-tab-wrap').length === 1));
+for (let i = 0; i < 8; i++) { await p.focus('.pos-products input.search'); await p.keyboard.type('70200' + (10 + i)); await p.keyboard.press('Enter'); await wait(250); }
+const seen = await p.evaluate(() => { const box = document.querySelector('.cart-lines').getBoundingClientRect(); return [...document.querySelectorAll('.cart-line')].filter((l) => { const r = l.getBoundingClientRect(); return r.top >= box.top - 1 && r.bottom <= box.bottom + 1; }).length; });
+check('at 1440 × 900 at least 7 sale lines are in view at once', seen >= 7, seen);
+await p.screenshot({ path: path.join(out, 'pos-many.png') });
+await p.evaluate(() => [...document.querySelectorAll('.pos-cart button')].find((x) => /Clear all/.test(x.textContent)).click()); await wait(300);
+for (const code of ['7010001', '7010002']) { await p.focus('.pos-products input.search'); await p.keyboard.type(code); await p.keyboard.press('Enter'); await wait(300); }
+check('no quick actions panel', await p.evaluate(() => !document.querySelector('.quick-tile')));
+await p.evaluate(() => [...document.querySelectorAll('.pos-cart button')].find((x) => /^Hold$/.test(x.textContent.trim())).click()); await wait(800);
+check('Hold parks the sale and starts a new one', await p.evaluate(() => !document.querySelector('.cart-line') && document.querySelectorAll('.sale-tab-wrap').length === 1));
 await p.keyboard.down('Alt'); await p.keyboard.press('r'); await p.keyboard.up('Alt'); await wait(500);
 check('Alt+R / Last receipt shows the last sale again', await p.evaluate(() => /Last receipt/.test(document.querySelector('.modal')?.innerText || '')));
 await p.keyboard.press('Escape'); await wait(300);

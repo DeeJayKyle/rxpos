@@ -2260,3 +2260,60 @@ tr.line-removed td { opacity: .55; }
   .pos-side .accent-blue { border-top: 3px solid #2563EB; }
   .pos-side .accent-teal h3 svg { color: #0D9488; }
 }
+
+/* more of the sale in view: compact rows, tighter totals and payment chips; the client strip is one card */
+@media (min-width: 1280px) {
+  .pos-side { grid-template-columns: minmax(0, 1fr); }
+  .pos-side .pos-client { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 6px 14px; align-items: center; }
+  .pos-side .pos-client h3 { grid-column: 1 / -1; margin: 0; }
+  .pos-side .pos-client-now { margin-top: 0; }
+  .pos-client-list { top: 78px; }
+  .pos-cart { gap: 8px; }
+  .pos-cart .cart-lines { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+  .pos-cart .cart-line { padding-top: 6px; padding-bottom: 6px; }
+  .pos-cart .cart-line .line-tools { margin-top: 0; }
+  .pos-cart .qty button { min-width: 32px; min-height: 32px; }
+  .pos-cart .totals { padding: 8px 12px; }
+  .pos-cart .totals .grand { font-size: 24px; }
+  .pos-cart .pay-methods { gap: 6px; }
+  .pos-cart .pay-methods .chip { padding: 4px 10px; }
+  .pos-cart .pay-row { padding-top: 6px; }
+}
+@media (min-width: 1280px) {
+  .pos { grid-template-columns: minmax(0, 1fr) minmax(520px, 50%); }
+  .pos-cart .cart-line > .grow > small.muted { display: inline-flex; align-items: center; gap: 4px; vertical-align: middle; }
+  .pos-cart .cart-line > .grow > .line-tools { display: inline-flex; margin: 0 0 0 10px; vertical-align: middle; }
+  .pos-cart .cart-line > .grow > strong { display: block; line-height: 1.25; }
+  .pos-cart .price-input { padding-top: 2px; padding-bottom: 2px; }
+  .pos-cart .totals { gap: 2px; }
+  .pos-cart .totals > div { margin: 0; padding-top: 2px; padding-bottom: 2px; }
+  .pos-cart .totals .grand { line-height: 1.15; padding-top: 4px; }
+  .pos-cart .totals .small-input { padding-top: 3px; padding-bottom: 3px; }
+  .pos-cart .field > input { padding-top: 6px; padding-bottom: 6px; }
+}
+@media (min-width: 1280px) {
+  /* one row under each name: price and the line's tools as icons (their names stay for hover and screen readers) */
+  .pos-cart .cart-line > .grow > .line-tools { gap: 2px; margin-left: 6px; }
+  .pos-cart .cart-line > .grow > .line-tools .link-btn { font-size: 0; padding: 4px; border-radius: 6px; line-height: 0; }
+  .pos-cart .cart-line > .grow > .line-tools .link-btn svg { width: 16px; height: 16px; }
+  .pos-cart .cart-line > .grow > .line-tools .link-btn:hover { background: var(--surface-2); }
+  .pos-cart .cart-line > .grow { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pos-cart .cart-line > .grow > strong { overflow: hidden; text-overflow: ellipsis; }
+  .pos-cart .grand-sub { display: inline; margin-left: 8px; }
+  .pos-cart .totals .grand { padding-top: 2px; }
+  .pos-cart .change { font-size: 12px; }
+  .pos-cart .change strong { font-size: 17px; }
+}
+@media (min-width: 1280px) {
+  .pos-cart .pay-methods { display: flex; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; padding-bottom: 2px; }
+  .pos-cart .pay-methods .chip { flex: none; }
+  .pos-cart .tender-row .field { flex-direction: row; align-items: center; gap: 10px; }
+  .pos-cart .tender-row .field > span { white-space: nowrap; }
+  .pos-cart .tender-row .change { display: flex; align-items: baseline; gap: 6px; }
+  .pos-cart .tender-row .change br { display: none; }
+  .pos-cart .cart-line { padding-top: 4px; padding-bottom: 4px; }
+  .pos-cart .qty button { min-width: 32px; min-height: 30px; }
+  .pos-cart .qty input { padding-top: 3px; padding-bottom: 3px; }
+  .pos-cart .totals > .row.between:first-child { min-height: 0; }
+}
+@media (min-width: 1280px) { .pos-cart .pay-methods { padding: 3px 2px 5px; flex: none; min-height: 44px; align-items: center; } }
