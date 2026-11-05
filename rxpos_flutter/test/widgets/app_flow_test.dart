@@ -52,6 +52,15 @@ void main() {
     await settle(tester, 20);
   }
 
+  /// Open a screen from the sidebar, scrolling it until the item is there (a long list builds items as they come into view).
+  Future<void> navTo(WidgetTester tester, String label) async {
+    final item = find.descendant(of: find.byKey(const Key('sidebar')), matching: find.text(label));
+    await tester.scrollUntilVisible(item, 120, scrollable: find.descendant(of: find.byKey(const Key('sidebar')), matching: find.byType(Scrollable)));
+    await settle(tester, 2);
+    await tester.tap(item);
+    await settle(tester);
+  }
+
   Future<void> toTill(WidgetTester tester) async {
     await tester.sendKeyEvent(LogicalKeyboardKey.f2);
     await settle(tester);
@@ -146,8 +155,7 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.f4);
     await settle(tester);
     expect(find.text('Add a medicine'), findsOneWidget);
-    await tester.tap(find.text('Sync & storage').last);
-    await settle(tester);
+    await navTo(tester, 'Sync & storage');
     expect(find.text('Download everything again'), findsOneWidget);
     expect(find.textContaining('Signed in as Tia Admin'), findsOneWidget);
     await done(tester);
@@ -213,8 +221,7 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Save'));
     await settle(tester);
     expect(find.text('97 tablets'), findsOneWidget);
-    await tester.tap(find.text('Customers'));
-    await settle(tester);
+    await navTo(tester, 'Customers');
     await tester.tap(find.text('Add client'));
     await settle(tester);
     await tester.enterText(find.widgetWithText(TextFormField, 'Name'), 'Grace Sample');
@@ -222,6 +229,50 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Save'));
     await settle(tester);
     expect(find.text('Grace Sample'), findsOneWidget);
+    await done(tester);
+  });
+
+  testWidgets('group 2: shift open and close; a stock take posted; purchase history, reorder and expiry open', (tester) async {
+    await tester.runAsync(signedIn);
+    await start(tester);
+    Future<void> go(String label) => navTo(tester, label);
+    await go('Shifts & Cash-up');
+    await tester.tap(find.text('Open shift'));
+    await settle(tester);
+    await tester.enterText(find.widgetWithText(TextFormField, 'Float in the drawer'), '20000');
+    await tester.tap(find.widgetWithText(FilledButton, 'Open shift').last);
+    await settle(tester);
+    expect(find.text('EXPECTED CASH'), findsOneWidget);
+    await tester.tap(find.text('Close shift'));
+    await settle(tester);
+    await tester.enterText(find.widgetWithText(TextFormField, 'Other coins (amount)'), '20000');
+    await tester.tap(find.widgetWithText(FilledButton, 'Close shift').last);
+    await settle(tester);
+    expect(find.textContaining('Counted UGX 20,000'), findsOneWidget);
+
+    await go('Stock take');
+    await tester.tap(find.text('Start a count'));
+    await settle(tester);
+    await tester.tap(find.widgetWithText(FilledButton, 'Start'));
+    await settle(tester);
+    await tester.tap(find.text('Calmex 500mg Tabs'));
+    await settle(tester);
+    await tester.enterText(find.widgetWithText(TextFormField, 'Batch C1 (exp 2029-01-31)'), '95');
+    await tester.tap(find.widgetWithText(FilledButton, 'Save count'));
+    await settle(tester);
+    await tester.tap(find.text('Review & post'));
+    await settle(tester);
+    await tester.tap(find.widgetWithText(FilledButton, 'Post'));
+    await settle(tester);
+    final moves = (await tester.runAsync(() => RecordStore(db).rows('movements')))!;
+    expect(moves.where((m) => m['type'] == 'Stock count').single['qty'], -5);
+
+    await go('Purchase history');
+    expect(find.text('No deliveries yet'), findsOneWidget);
+    await go('Reorder');
+    expect(find.text('Nothing to reorder'), findsOneWidget);
+    await go('Expiry');
+    expect(find.text('Nothing expired or expiring soon'), findsOneWidget);
     await done(tester);
   });
 }

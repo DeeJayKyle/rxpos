@@ -66,7 +66,7 @@ class _Sidebar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    return ListView(padding: const EdgeInsets.symmetric(vertical: 8), children: [
+    return ListView(key: const Key('sidebar'), padding: const EdgeInsets.symmetric(vertical: 8), children: [
       for (final g in navGroups)
         if (screens.any((s) => s.group == g)) ...[
           Padding(
