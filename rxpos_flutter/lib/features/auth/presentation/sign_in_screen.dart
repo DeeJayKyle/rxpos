@@ -57,7 +57,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                 child: AutofillGroup(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                     Row(children: [
-                      Icon(Icons.local_pharmacy, color: t.colorScheme.primary, size: 32),
+                      ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.asset('assets/icon.png', width: 36, height: 36)),
                       const SizedBox(width: 10),
                       Text('RxPOS', style: t.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
                     ]),
