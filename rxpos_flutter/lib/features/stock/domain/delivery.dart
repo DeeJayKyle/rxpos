@@ -16,11 +16,13 @@ import '../../../core/rules/stock.dart';
 /// [unitCost] is per received unit or pack; [price] is the new retail price per single unit (0: keep the current one).
 class DeliveryLine {
   const DeliveryLine({this.productId, this.newName = '', this.qty = 0, this.recvPack = '', this.recvSize = 1, this.unitCost = 0,
-      this.price = 0, this.batch = '', this.expiry = '', this.form = 'Others'});
+      this.price = 0, this.batch = '', this.expiry = '', this.form = 'Others', this.barcode = ''});
 
   /// null: a medicine not in the list yet, named [newName]
   final String? productId;
   final String newName, recvPack, batch, expiry, form;
+  /// a new medicine's barcode (scanned in Add Stock); one is generated when empty or already used
+  final String barcode;
   final double qty, recvSize, unitCost, price;
 
   bool get isNew => productId == null;
@@ -33,7 +35,7 @@ class DeliveryLine {
           double? price, String? batch, String? expiry}) =>
       DeliveryLine(productId: productId ?? this.productId, newName: newName ?? this.newName, qty: qty ?? this.qty,
           recvPack: recvPack ?? this.recvPack, recvSize: recvSize ?? this.recvSize, unitCost: unitCost ?? this.unitCost,
-          price: price ?? this.price, batch: batch ?? this.batch, expiry: expiry ?? this.expiry, form: form);
+          price: price ?? this.price, batch: batch ?? this.batch, expiry: expiry ?? this.expiry, form: form, barcode: barcode);
 }
 
 class DeliveryProblem implements Exception {
@@ -50,7 +52,8 @@ String _clean(String s) => s.trim().replaceAll(RegExp(r'\s+'), ' ');
 /// Receive the delivery. Returns the delivery record. Throws [DeliveryProblem] with what to fix (nothing is saved).
 Future<Map<String, Object?>> receiveDelivery(RecordStore store, {required List<DeliveryLine> lines, required Map<String, Product> products,
     required PharmacySettings settings, required String receivedBy, String supplierId = '', String supplierName = '',
-    String invoice = '', String notes = '', String? date, double? paid, String bankId = 'cash-drawer', String branchId = mainBranch, DateTime? now}) async {
+    String invoice = '', String notes = '', String? date, double? paid, String bankId = 'cash-drawer', String branchId = mainBranch, DateTime? now,
+    String? poId, String? draftId, bool scanned = false}) async {
   final use = lines.where((l) => (l.productId != null || l.newName.trim().isNotEmpty) && l.qty > 0).toList();
   if (use.isEmpty) throw DeliveryProblem('Add at least one medicine');
   if (lines.any((l) => (l.productId != null || l.newName.trim().isNotEmpty) && !(l.qty > 0))) {
@@ -87,17 +90,19 @@ Future<Map<String, Object?>> receiveDelivery(RecordStore store, {required List<D
             if (l.recvSize > 1) 'pack': {'name': l.recvPack, 'size': numOut(l.recvSize), 'count': numOut(l.qty), 'cost': numOut(l.unitCost)},
           },
       ],
+      if (scanned) 'scanned': true,
     };
+    if (draftId != null && await store.get('drafts', draftId) != null) d.del('drafts', draftId);
     final used = {for (final p in products.values) if (p.barcode.isNotEmpty) p.barcode};
     final created = <String>{};
     for (final l in use.where((x) => x.isNew)) {
       final id = idOf(l);
       if (!created.add(id)) continue;
       final rnd = Random.secure();
-      String code;
-      do {
-        code = '20${rnd.nextInt(1 << 30).toString().padLeft(10, '0').substring(0, 10)}';
-      } while (used.contains(code));
+      var code = l.barcode.trim();
+      while (code.isEmpty || used.contains(code)) {
+        code = '20${(rnd.nextInt(100000) * 100000 + rnd.nextInt(100000)).toString().padLeft(10, '0')}';
+      }
       used.add(code);
       d.put('products', {'id': id, 'name': nameOf(l), 'generic': '', 'form': l.form, 'unit': 'Unit', 'price': numOut(l.price),
         'wholesale': numOut(markupPrice(l.baseCost, settings.wholesaleMarkup, settings.priceRound) > 0 ? markupPrice(l.baseCost, settings.wholesaleMarkup, settings.priceRound) : l.price),
@@ -121,9 +126,13 @@ Future<Map<String, Object?>> receiveDelivery(RecordStore store, {required List<D
         }
       }
     }
+    if (poId != null) {
+      final po = await store.get('purchaseOrders', poId);
+      if (po != null) d.put('purchaseOrders', {...po, 'status': 'Received', 'receivedAt': today(now), 'purchaseId': purchase['id']});
+    }
     final rec = d.put('purchases', purchase);
     d.audit(receivedBy, 'Stock received',
-        '$number from ${purchase['supplierName']}: ${use.length} lines, ${formatMoney(total, currency: settings.currency, decimals: settings.decimalPlaces)}${created.isNotEmpty ? ', ${created.length} new medicine${created.length > 1 ? 's' : ''}' : ''}',
+        '$number from ${purchase['supplierName']}: ${use.length} lines, ${formatMoney(total, currency: settings.currency, decimals: settings.decimalPlaces)}${scanned ? ' (scanned invoice, checked by $receivedBy)' : ''}${created.isNotEmpty ? ', ${created.length} new medicine${created.length > 1 ? 's' : ''}' : ''}',
         branchId);
     return rec;
   });

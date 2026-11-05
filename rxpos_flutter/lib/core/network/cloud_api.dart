@@ -39,6 +39,19 @@ class CloudApi {
   Future<Map<String, Object?>> payStatus(String provider, String ref) => _call('/api/pay/status?provider=$provider&ref=${Uri.encodeComponent(ref)}');
 
   Future<void> sendSms(List<String> to, String message) => _call('/api/sms', body: {'to': to, 'message': message});
+
+  /// Any other call: POST [body] to [path].
+  Future<Map<String, Object?>> post(String path, Object body, {Duration timeout = const Duration(seconds: 60)}) => _call(path, body: body, timeout: timeout);
+  Future<Map<String, Object?>> get(String path) => _call(path);
+
+  /// An invoice page (JPEG data URL) read by two AI models in the cloud: supplier, invoiceNo, date, total, items, …
+  Future<Map<String, Object?>> aiInvoice(String image) => _call('/api/ai/invoice', body: {'image': image}, timeout: const Duration(seconds: 120));
+
+  /// A prescription photo read by AI.
+  Future<Map<String, Object?>> aiPrescription(String image) => _call('/api/ai/prescription', body: {'image': image}, timeout: const Duration(seconds: 90));
+
+  /// The address of a file kept in the pharmacy's cloud.
+  String fileUrl(String path) => path.startsWith('http') ? path : '$_base${path.startsWith('/') ? '' : '/'}$path';
 }
 
 final cloudApiProvider = Provider<CloudApi>((ref) => CloudApi(ref.watch(dioProvider), syncBase(ref.watch(appConfigProvider).cloudUrl)));
