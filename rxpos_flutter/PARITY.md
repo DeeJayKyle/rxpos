@@ -9,15 +9,17 @@ Every feature of the React app (`src/pages/*.jsx`, `src/*.jsx`), screen by scree
 - ✅ PIN for this device (quick sign-in, five tries), "Use password instead"; offline sign-in with this device's own verifier (30 days); remember me for 30 days
 - ✅ Change my password (asked at once after a temporary password), log out from the menu (unsent changes and held sales stay)
 - ✅ Two-step sign-in setup (QR code, switch on / off) for the signed-in person; asked before switching this device to another pharmacy
-- ✗ Notifications centre (urgent / needs attention / for information) and the badge
-- ✗ "No internet connection" banner; "Setting up" first-run screen
+- ✅ Notifications centre (urgent / needs attention / for information) and its count; counts beside the menu (low stock, expiry, transfers, unread chat)
+- ✗ The count on the Windows taskbar / Android app icon (see notifications in the background)
+- ✅ "No internet connection" banner; live clock with the sync state (offline, waiting, syncing, needs attention)
+- ✗ "Setting up" first-run screen
 - ✗ Error screen: "Something went wrong · Reload RxPOS · Download my data"; crash reports to the cloud
-- ✗ Global search (Ctrl+K): pages, medicines, customers, receipts
-- ✗ Branch switch from the top bar; switches by itself when nothing is in progress
-- ✗ Theme menu: light / dark / system, accent colours, 28 colour themes, colour level, surface style
+- ✅ Global search (Ctrl+K): pages, medicines, customers, receipts
+- ✅ Branch from the top bar (when there is more than one), opening Branches & Transfers
+- ✅ Theme menu: light / dark / system, accent colours, 28 colour themes (only those the owner allows), colour level, surface style; Premium UI switch back to the theme before
 - ✗ Idle-screen promotions and health tips; hourly time reminders
 - ✗ Live connection (instant sync and notifications); calls (voice / video between staff)
-- ✗ App updates (Windows installer, Android) and F5 refresh
+- ✗ App updates (Windows installer, Android; switches by itself when nothing is in progress) and F5 refresh
 
 ## POS (POS.jsx)
 - ✅ Search / scan, grid, in-stock filter, packs per line, price edit by permission, client, discount, tax, payment

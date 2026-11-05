@@ -14,14 +14,16 @@ import '../domain/balances.dart';
 
 /// Customers or Suppliers: the list with what each owes, add / edit, record a payment.
 class PeopleScreen extends ConsumerStatefulWidget {
-  const PeopleScreen({super.key, required this.suppliers});
+  const PeopleScreen({super.key, required this.suppliers, this.q = ''});
   final bool suppliers;
+  /// Opened from search (Ctrl+K) with a name already typed.
+  final String q;
   @override
   ConsumerState<PeopleScreen> createState() => _PeopleScreenState();
 }
 
 class _PeopleScreenState extends ConsumerState<PeopleScreen> {
-  String _q = '';
+  late String _q = widget.q;
   String get _t => widget.suppliers ? 'suppliers' : 'customers';
 
   List<FormFieldSpec> get _fields => widget.suppliers
@@ -51,7 +53,7 @@ class _PeopleScreenState extends ConsumerState<PeopleScreen> {
       title: widget.suppliers ? 'Suppliers' : 'Customers',
       subtitle: '${list.length} · ${widget.suppliers ? 'we owe' : 'they owe'} ${settings.money(total)}',
       actions: [
-        SearchField(onChanged: (v) => setState(() => _q = v), hint: 'Name or phone…'),
+        SearchField(initial: widget.q, onChanged: (v) => setState(() => _q = v), hint: 'Name or phone…'),
         FilledButton.icon(onPressed: () => _edit(null), icon: const Icon(Icons.add), label: Text(widget.suppliers ? 'Add supplier' : 'Add client')),
       ],
       child: list.isEmpty

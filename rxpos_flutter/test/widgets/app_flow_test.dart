@@ -13,6 +13,8 @@ import 'package:rxpos/core/database/app_database.dart';
 import 'package:rxpos/core/network/dio_client.dart';
 import 'package:rxpos/core/rules/passwords.dart';
 import 'package:rxpos/core/rules/dates.dart';
+import 'package:rxpos/core/presentation/widgets.dart';
+import 'package:rxpos/core/theme/themes.dart';
 import 'package:rxpos/features/auth/domain/offline_secrets.dart';
 import 'package:rxpos/features/calendar/domain/calendar.dart';
 import 'package:rxpos/features/calendar/presentation/calendar_screen.dart';
@@ -29,6 +31,7 @@ void main() {
   });
   late AppDatabase db;
   late FakeCloud cloud;
+  WidgetTester? tester0;
   final weatherCalls = <String>[];
   // fictional weather: hot and humid, so both storage warnings show
   final sampleWeather = <String, Object?>{
@@ -1539,6 +1542,174 @@ void main() {
     await tester.tap(find.byKey(const Key('account-menu')));
     await settle(tester, 4);
     expect(find.text('Log out'), findsOneWidget);
+    await done(tester);
+  });
+
+  testWidgets('the bell: urgent, needs attention, for information; menu counts; open an alert', (tester) async {
+    final day = today();
+    await tester.runAsync(signedIn);
+    await tester.runAsync(
+      () => RecordStore(db).update((d) {
+        d.put('batches', {'id': 'bx', 'productId': 'p1', 'batch': 'OLD', 'expiry': addDays(day, -3), 'cost': 300});
+        d.move(productId: 'p1', qty: 4, type: 'Opening stock', batchId: 'bx');
+        d.put('products', {'id': 'p5', 'name': 'Lowmex Syrup', 'unit': 'Bottle', 'price': 1000, 'cost': 500, 'reorder': 10});
+        d.put('batches', {'id': 'b5', 'productId': 'p5', 'batch': 'L1', 'expiry': '2030-01-31', 'cost': 500});
+        d.move(productId: 'p5', qty: 3, type: 'Opening stock', batchId: 'b5');
+        d.put('events', {'id': 'e1', 'title': 'Supplier visit', 'date': day, 'time': '10:00'});
+      }),
+    );
+    await start(tester);
+    expect(find.descendant(of: find.byKey(const Key('bell')), matching: find.text('4')), findsOneWidget, reason: 'expired, low, the event and the hot weather');
+    final side = find.descendant(of: find.byKey(const Key('sidebar')), matching: find.byType(Scrollable));
+    await tester.scrollUntilVisible(find.byKey(const ValueKey('count-/expiry')), 120, scrollable: side);
+    expect(find.descendant(of: find.byKey(const ValueKey('count-/inventory')), matching: find.text('1')), findsOneWidget, reason: 'one medicine at or below its reorder level');
+    expect(find.descendant(of: find.byKey(const ValueKey('count-/expiry')), matching: find.text('1')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('bell')));
+    await settle(tester, 4);
+    expect(find.text('Urgent · 2'), findsOneWidget);
+    expect(find.text("It's 31°C outside: keep medicines cool and check the room thermometer"), findsOneWidget);
+    expect(find.text('1 item expired but still in stock'), findsOneWidget);
+    expect(find.text('Needs attention · 1'), findsOneWidget);
+    expect(find.text('1 item at or below reorder level'), findsOneWidget);
+    expect(find.text('10:00 · Supplier visit'), findsOneWidget);
+    expect(find.text('Sounds on this device'), findsOneWidget);
+    await tester.tap(find.text('1 item expired but still in stock'));
+    await settle(tester);
+    expect(find.text('Expiring / Expired'), findsWidgets, reason: 'the alert opened its page');
+    await done(tester);
+  });
+
+  testWidgets('Ctrl+K search: a medicine opens its stock card; a customer opens Customers with the name typed', (tester) async {
+    await tester.runAsync(signedIn);
+    await tester.runAsync(() => RecordStore(db).update((d) => d.put('customers', {'id': 'c7', 'name': 'Okello Test', 'phone': '0772000111'})));
+    await start(tester);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyK);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await settle(tester, 4);
+    expect(find.byKey(const Key('palette-input')), findsOneWidget);
+    expect(find.text('Pages'), findsOneWidget);
+    await tester.enterText(find.byKey(const Key('palette-input')), 'calm');
+    await settle(tester, 3);
+    expect(find.text('Medicines'), findsOneWidget);
+    expect(find.text('100 in stock · UGX 500'), findsOneWidget);
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await settle(tester);
+    expect(find.text('Stock Card'), findsWidgets);
+    expect(find.textContaining('Calmex 500mg Tabs'), findsWidgets);
+
+    await tester.tap(find.byKey(const Key('search-trigger')));
+    await settle(tester, 4);
+    await tester.enterText(find.byKey(const Key('palette-input')), 'okello');
+    await settle(tester, 3);
+    await tester.tap(find.text('Okello Test'));
+    await settle(tester);
+    expect(find.text('0772000111'), findsWidgets, reason: 'Customers, filtered to the name');
+    await done(tester);
+  });
+
+  testWidgets('offline: the clock says so and the banner keeps the cashier working; the branch pill', (tester) async {
+    await tester.runAsync(signedIn);
+    await tester.runAsync(
+      () => RecordStore(db).update((d) {
+        d.put('branches', {'id': 'main', 'name': 'Kampala Road'});
+        d.put('branches', {'id': 'b2', 'name': 'Ntinda'});
+      }),
+    );
+    cloud.failOnRequest = 1;
+    await start(tester);
+    expect(find.byKey(const Key('branch-pill')), findsOneWidget);
+    expect(find.text('Kampala Road'), findsWidgets);
+    await tester.tap(find.byKey(const Key('clock-pill')));
+    await settle(tester);
+    expect(find.byKey(const Key('offline-banner')), findsOneWidget);
+    expect(find.textContaining('No internet connection. Keep working'), findsOneWidget);
+    expect(find.textContaining('Offline'), findsWidgets);
+    await tester.tap(find.text('Try again'));
+    await settle(tester);
+    expect(find.byKey(const Key('offline-banner')), findsNothing, reason: 'back online');
+    await tester.tap(find.byKey(const Key('branch-pill')));
+    await settle(tester);
+    expect(find.text('Branches & transfers'), findsOneWidget);
+    await done(tester);
+  });
+
+  Future<Map<String, Object?>> look() async {
+    final r = await tester0!.runAsync(() => (db.select(db.kv)..where((x) => x.k.equals('device:look'))).getSingleOrNull());
+    return r == null ? {} : (jsonDecode(r.v) as Map).cast<String, Object?>();
+  }
+
+  Brightness brightness(WidgetTester tester) => Theme.of(tester.element(find.byKey(const Key('theme-menu')))).brightness;
+
+  Future<void> openThemes(WidgetTester tester) async {
+    await tester.tap(find.byKey(const Key('theme-menu')));
+    await settle(tester, 4);
+  }
+
+  testWidgets('theme menu: dark, a theme from the list, accent, Vivid tiles, a style, the system; Premium UI and back', (tester) async {
+    tester0 = tester;
+    await tester.runAsync(signedIn);
+    await start(tester);
+    expect(brightness(tester), Brightness.light);
+    await openThemes(tester);
+    await tester.tap(find.text('Dark'));
+    await settle(tester, 4);
+    expect((await look())['theme'], 'hybrid-dark');
+    expect(brightness(tester), Brightness.dark);
+    final list = find.byKey(const Key('theme-list'));
+    await tester.scrollUntilVisible(find.byKey(const ValueKey('theme-dracula')), 120, scrollable: find.descendant(of: list, matching: find.byType(Scrollable)));
+    await tester.tap(find.byKey(const ValueKey('theme-dracula')));
+    await settle(tester, 4);
+    expect((await look())['theme'], 'dracula');
+    await openThemes(tester);
+    await tester.tap(find.byKey(const ValueKey('accent-ocean')));
+    await settle(tester, 3);
+    expect((await look())['accent'], 'ocean');
+    expect(Theme.of(tester.element(find.byKey(const Key('theme-menu')))).colorScheme.secondary, isNot(const Color(0xFFFF79C6)), reason: 'the ocean accent replaced Dracula\'s pink');
+    await tester.scrollUntilVisible(find.byKey(const ValueKey('level-vivid')), 120, scrollable: find.descendant(of: list, matching: find.byType(Scrollable)));
+    await tester.tap(find.byKey(const ValueKey('level-vivid')));
+    await settle(tester, 4);
+    expect((await look())['level'], 'vivid');
+    expect(Theme.of(tester.element(find.text("TODAY'S SALES"))).extension<LookLevel>()!.vivid, isTrue);
+    expect(find.descendant(of: find.byType(StatCard).first, matching: find.byWidgetPredicate((w) => w is Ink && w.decoration is BoxDecoration && (w.decoration! as BoxDecoration).gradient != null)), findsOneWidget,
+        reason: 'figure tiles are solid colour');
+    await openThemes(tester);
+    await tester.scrollUntilVisible(find.byKey(const ValueKey('style-glass')), 120, scrollable: find.descendant(of: list, matching: find.byType(Scrollable)));
+    await tester.tap(find.byKey(const ValueKey('style-glass')));
+    await settle(tester, 4);
+    expect((await look())['surface'], 'glass');
+    await openThemes(tester);
+    await tester.tap(find.text('System'));
+    await settle(tester, 4);
+    expect((await look())['mode'], 'system');
+    Navigator.of(tester.element(find.text('Appearance'))).pop();
+    await settle(tester, 3);
+
+    // Premium UI: Midnight Pro, then back to the theme from before
+    await tester.tap(find.byType(Switch).first);
+    await settle(tester, 4);
+    expect((await look())['theme'], 'midnight-pro');
+    expect(brightness(tester), Brightness.dark);
+    await tester.tap(find.byType(Switch).first);
+    await settle(tester, 4);
+    expect((await look())['theme'], 'dracula');
+    await done(tester);
+  });
+
+  testWidgets('the owner limits the themes: only those are offered, no Premium switch without Midnight Pro; on a phone', (tester) async {
+    tester0 = tester;
+    await tester.runAsync(signedIn);
+    await tester.runAsync(() => RecordStore(db).update((d) => d.put('license', {'id': 'lic', 'branding': {'themes': ['light', 'nord']}})));
+    await start(tester, size: const Size(400, 800));
+    await openThemes(tester);
+    expect(find.byKey(const ValueKey('theme-nord')), findsOneWidget);
+    expect(find.byKey(const ValueKey('theme-dracula')), findsNothing);
+    await tester.tap(find.text('Dark'));
+    await settle(tester, 4);
+    expect((await look())['theme'], 'nord', reason: 'the only dark theme allowed');
+    await done(tester);
+    await start(tester);
+    expect(find.byType(Switch), findsNothing, reason: 'Midnight Pro is not among the allowed themes');
     await done(tester);
   });
 }

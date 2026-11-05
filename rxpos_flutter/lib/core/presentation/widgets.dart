@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 
 import '../entities/settings.dart';
+import '../theme/themes.dart';
 import '../rules/money.dart';
 
 extension Money on PharmacySettings {
@@ -50,24 +51,32 @@ class StatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
+    // Vivid (This device → Theme → Colour): a solid tile of the figure's colour with white text
+    final vivid = t.extension<LookLevel>()?.vivid ?? false;
+    final (va, vb) = vividFor(color);
+    final ink = vivid ? Colors.white : null;
     return SizedBox(
       width: 250,
       child: Card(
         margin: EdgeInsets.zero,
-        child: InkWell(
+        clipBehavior: Clip.antiAlias,
+        child: Ink(
+          decoration: vivid ? BoxDecoration(gradient: LinearGradient(colors: [va, vb], begin: Alignment.topLeft, end: Alignment.bottomRight)) : null,
+          child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(12),
           child: Padding(
             padding: const EdgeInsets.all(14),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Row(children: [
-                Expanded(child: Text(label.toUpperCase(), style: t.textTheme.labelSmall?.copyWith(letterSpacing: .6, fontWeight: FontWeight.w700))),
-                if (icon != null) Icon(icon, size: 20, color: color ?? t.colorScheme.primary),
+                Expanded(child: Text(label.toUpperCase(), style: t.textTheme.labelSmall?.copyWith(letterSpacing: .6, fontWeight: FontWeight.w700, color: ink))),
+                if (icon != null) Icon(icon, size: 20, color: ink ?? color ?? t.colorScheme.primary),
               ]),
               const SizedBox(height: 6),
-              Text(value, style: t.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800, color: color)),
-              if (sub != null) Text(sub!, style: t.textTheme.bodySmall),
+              Text(value, style: t.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800, color: ink ?? color)),
+              if (sub != null) Text(sub!, style: t.textTheme.bodySmall?.copyWith(color: ink?.withValues(alpha: .9))),
             ]),
+          ),
           ),
         ),
       ),

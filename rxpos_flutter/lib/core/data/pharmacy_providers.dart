@@ -1,3 +1,4 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../entities/batch.dart';
@@ -80,3 +81,6 @@ Future<PharmacyData> pharmacy(Ref ref) async {
     features: features,
   );
 }
+
+/// The pharmacy's branding from its licence (logo, which colour themes it may use, the default theme).
+final brandingProvider = Provider.autoDispose<Map<String, Object?>?>((ref) => (ref.watch(tableProvider('license')).value?.firstOrNull?['branding'] as Map?)?.cast<String, Object?>());

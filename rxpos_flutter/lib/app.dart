@@ -7,7 +7,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/data/device_settings.dart';
 import 'core/router/app_router.dart';
-import 'core/theme/app_theme.dart';
+import 'core/data/pharmacy_providers.dart';
+import 'core/theme/themes.dart';
 import 'core/theme/theme_choice.dart';
 import 'features/sync_status/application/sync_controller.dart';
 
@@ -17,7 +18,9 @@ class RxposApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     ref.watch(syncControllerProvider); // sync runs while the app is open
-    final premium = ref.watch(premiumUiProvider).value ?? false;
+    final look = ref.watch(lookProvider).value ?? const Look();
+    final allowed = allowedPalettes(ref.watch(brandingProvider));
+    final chosen = allowed.any((p) => p.id == look.theme) ? look.theme : (allowed.firstOrNull ?? palettes.first).id;
     final zoom = double.tryParse(ref.watch(deviceValueProvider(zoomKey)).value ?? '') ?? 1;
     final rotation = ref.watch(deviceValueProvider(rotationKey)).value ?? 'auto';
     if (!kIsWeb && Platform.isAndroid) {
@@ -31,7 +34,10 @@ class RxposApp extends ConsumerWidget {
       builder: (context, child) => zoom == 1 ? child! : MediaQuery(data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(zoom)), child: child!),
       title: 'RxPOS',
       debugShowCheckedModeBanner: false,
-      theme: premium ? AppTheme.midnightPro() : AppTheme.light(),
+      // following the system: its light and dark themes, live when it changes
+      theme: buildTheme(paletteById(look.system ? paletteFor(false, allowed) : chosen), accent: look.accent, surface: look.surface, vivid: look.level == 'vivid'),
+      darkTheme: look.system ? buildTheme(paletteById(paletteFor(true, allowed)), accent: look.accent, surface: look.surface, vivid: look.level == 'vivid') : null,
+      themeMode: look.system ? ThemeMode.system : ThemeMode.light,
       routerConfig: ref.watch(appRouterProvider),
     );
   }
