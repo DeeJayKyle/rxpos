@@ -312,8 +312,8 @@ void main() {
     expect(find.text('No deliveries yet'), findsOneWidget);
     await go('Reorder');
     expect(find.text('Nothing to reorder'), findsOneWidget);
-    await go('Expiry');
-    expect(find.text('Nothing expired or expiring soon'), findsOneWidget);
+    await go('Expiring / Expired');
+    expect(find.text('Nothing expiring soon 🎉'), findsOneWidget);
     await done(tester);
   });
 
@@ -634,6 +634,88 @@ void main() {
     await settle(tester);
     expect(find.text('Calmex 500mg Tabs · Calmex'), findsOneWidget);
     expect(find.text('2 · UGX 1,000'), findsOneWidget);
+    await done(tester);
+  });
+
+  testWidgets('Inventory parity: Medicine List add with opening stock, packs, quick edit, stock card, expiry write-off', (tester) async {
+    await tester.runAsync(signedIn);
+    await tester.runAsync(() => RecordStore(db).update((d) {
+          d.put('batches', {'id': 'bx', 'productId': 'p2', 'batch': 'Z0', 'expiry': '2025-02-28', 'cost': 4000});
+          d.move(productId: 'p2', qty: 2, type: 'Opening stock', batchId: 'bx');
+        }));
+    await start(tester);
+    final store = RecordStore(db);
+
+    // Medicine List: add with opening stock; price from the markup, barcode generated
+    await navTo(tester, 'Medicine List');
+    await tester.tap(find.text('Add medicine'));
+    await settle(tester);
+    await tester.enterText(find.widgetWithText(TextFormField, 'Medicine name'), 'Ferrozin 200mg');
+    await tester.enterText(find.widgetWithText(TextFormField, 'Cost price'), '100');
+    await tester.enterText(find.widgetWithText(TextFormField, 'Opening stock (quantity)'), '30');
+    await tester.enterText(find.widgetWithText(TextFormField, 'Opening stock batch no.'), 'F1');
+    await tester.enterText(find.widgetWithText(TextFormField, 'Opening stock expiry'), '2030-01-31');
+    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await settle(tester);
+    final fer = (await tester.runAsync(() => store.rows('products')))!.firstWhere((p) => p['name'] == 'Ferrozin 200mg');
+    expect((fer['price'], '${fer['barcode']}'.startsWith('20'), '${fer['barcode']}'.length), (150, true, 12));
+    final opening = (await tester.runAsync(() => store.rows('movements')))!.where((m) => m['productId'] == fer['id']).single;
+    expect((opening['qty'], opening['type']), (30, 'Opening stock'));
+
+    // packs
+    await tester.tap(find.byKey(Key('packs-${fer['id']}')));
+    await settle(tester);
+    await tester.enterText(find.byKey(const Key('pack-size-0')), '10');
+    await tester.tap(find.text('Save packs'));
+    await settle(tester);
+    final withPacks = (await tester.runAsync(() => store.rows('products')))!.firstWhere((p) => p['id'] == fer['id']);
+    expect(withPacks['packs'], [{'name': 'Strip', 'size': 10, 'price': null}]);
+
+    // needs review lists records with missing details (Calmex has no formulation unit issues? Zinco has no formulation)
+    await tester.tap(find.textContaining('Needs review'));
+    await settle(tester);
+    expect(find.text('No formulation'), findsWidgets);
+
+    // Quick Edit: a new retail price, audited
+    await navTo(tester, 'Quick Edit');
+    await tester.enterText(find.byKey(Key('qe-price-${fer['id']}-0')), '180');
+    await settle(tester, 2);
+    await tester.tap(find.text('Save 1 change'));
+    await settle(tester);
+    expect((await tester.runAsync(() => store.rows('products')))!.firstWhere((p) => p['id'] == fer['id'])['price'], 180);
+    expect((await tester.runAsync(() => store.rows('audit')))!.map((a) => a['action']), contains('Price changed (quick edit)'));
+
+    // Stock card: the opening stock and its balance
+    await navTo(tester, 'Stock Card');
+    expect(find.text('Balance 100'), findsOneWidget, reason: 'Calmex, the first in stock');
+
+    // Expiring / Expired: write off Zinco's expired batch
+    await navTo(tester, 'Expiring / Expired');
+    await tester.tap(find.textContaining('Expired ('));
+    await settle(tester);
+    expect(find.text('Zinco Syrup 100ml'), findsOneWidget);
+    await tester.tap(find.text('Write off'));
+    await settle(tester);
+    await tester.tap(find.widgetWithText(FilledButton, 'Write off'));
+    await settle(tester);
+    final wo = (await tester.runAsync(() => store.rows('movements')))!.where((m) => m['type'] == 'Expired write-off').single;
+    expect((wo['qty'], wo['batchId']), (-2, 'bx'));
+    expect(find.text('No expired stock 🎉'), findsOneWidget);
+
+    // Inventory: edit stock (batch quantity with a reason)
+    await tester.sendKeyEvent(LogicalKeyboardKey.f7);
+    await settle(tester);
+    await tester.tap(find.text('Calmex 500mg Tabs'));
+    await settle(tester);
+    expect(find.text('Sells next'), findsOneWidget);
+    await tester.tap(find.text('Edit stock'));
+    await settle(tester);
+    await tester.enterText(find.byKey(const Key('inv-qty-b1')), '90');
+    await tester.enterText(find.byKey(const Key('inv-reason')), 'damaged');
+    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await settle(tester);
+    final ie = (await tester.runAsync(() => store.rows('movements')))!.where((m) => m['type'] == 'Inventory edit').single;
+    expect(ie['qty'], -10);
     await done(tester);
   });
 }

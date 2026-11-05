@@ -9,6 +9,7 @@ import '../../features/users/presentation/users_screen.dart';
 import '../../features/extras/presentation/extras_screens.dart';
 import '../../features/finance/presentation/finance_screen.dart';
 import '../../features/inventory/presentation/inventory_screen.dart';
+import '../../features/inventory/presentation/medicine_screens.dart';
 import '../../features/prescriptions/presentation/prescriptions_screen.dart';
 import '../../features/proformas/presentation/proformas_screen.dart';
 import '../../features/reports/presentation/reports_screen.dart';
@@ -37,13 +38,17 @@ final screens = <Screen>[
   Screen('/chat', 'Team chat', Icons.forum_outlined, 'People', (_) => const ChatScreen(), permission: 'chat', feature: 'chat'),
   Screen('/customers', 'Customers', Icons.people_outline, 'People', (_) => const PeopleScreen(suppliers: false), permission: 'customers'),
   Screen('/suppliers', 'Suppliers', Icons.factory_outlined, 'People', (_) => const PeopleScreen(suppliers: true), permission: 'suppliers'),
+  Screen('/medicines', 'Medicine List', Icons.medication_liquid_outlined, 'Medicine inventory', (_) => const MedicineListScreen(), permission: 'inventory.view'),
+  Screen('/formulations', 'Formulations', Icons.science_outlined, 'Medicine inventory', (_) => const FormulationsScreen(), permission: 'medicines.manage'),
   Screen('/inventory', 'Inventory', Icons.inventory_2_outlined, 'Medicine inventory', (q) => InventoryScreen(key: ValueKey(q['filter']), filter: q['filter'] ?? 'instock'),
       permission: 'inventory.view', key: LogicalKeyboardKey.f7),
   Screen('/add-stock', 'Add Stock', Icons.add_box_outlined, 'Medicine inventory', (_) => const AddStockScreen(), permission: 'stock.receive', key: LogicalKeyboardKey.f4),
   Screen('/purchases', 'Purchase history', Icons.local_shipping_outlined, 'Medicine inventory', (_) => const PurchasesScreen(), permission: 'stock.receive'),
   Screen('/stock-count', 'Stock take', Icons.fact_check_outlined, 'Medicine inventory', (_) => const StockCountScreen(), permission: 'stock.count'),
   Screen('/reorder', 'Reorder', Icons.shopping_cart_checkout, 'Medicine inventory', (_) => const ReorderScreen(), permission: 'inventory.view', feature: 'reorder'),
-  Screen('/expiry', 'Expiry', Icons.event_busy_outlined, 'Medicine inventory', (_) => const ExpiryScreen(), permission: 'inventory.view'),
+  Screen('/quick-edit', 'Quick Edit', Icons.edit_note, 'Medicine inventory', (_) => const QuickEditScreen(), permission: 'medicines.manage'),
+  Screen('/stock-card', 'Stock Card', Icons.receipt_outlined, 'Medicine inventory', (q) => StockCardScreen(key: ValueKey('card-${q['id']}'), productId: q['id'] ?? ''), permission: 'inventory.view'),
+  Screen('/expiry', 'Expiring / Expired', Icons.event_busy_outlined, 'Medicine inventory', (_) => const ExpiryScreen(), permission: 'inventory.view'),
   Screen('/returns', 'Returns to suppliers', Icons.assignment_return_outlined, 'Medicine inventory', (_) => const ReturnsScreen(), permission: 'stock.receive'),
   Screen('/labels', 'Barcode labels', Icons.qr_code_2, 'Medicine inventory', (_) => const LabelsScreen(), permission: 'medicines.manage', feature: 'labels'),
   Screen('/import', 'Import medicines', Icons.upload_file_outlined, 'Medicine inventory', (_) => const ImportScreen(), permission: 'medicines.manage', feature: 'import'),

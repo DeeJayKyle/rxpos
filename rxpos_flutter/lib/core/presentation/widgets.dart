@@ -248,3 +248,14 @@ Object _num(double v) => v == v.roundToDouble() ? v.toInt() : v;
 void say(BuildContext context, String message, {bool error = false}) => ScaffoldMessenger.of(context)
   ..hideCurrentSnackBar()
   ..showSnackBar(SnackBar(content: Text(message), backgroundColor: error ? Theme.of(context).colorScheme.error : null));
+
+/// Yes / no question; true when confirmed.
+Future<bool> confirmAction(BuildContext context, String title, String message, String yes) async =>
+    await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(title: Text(title), content: Text(message), actions: [
+        TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
+        FilledButton(onPressed: () => Navigator.pop(c, true), child: Text(yes)),
+      ]),
+    ) ??
+    false;

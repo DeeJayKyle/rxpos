@@ -1,18 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/data/pharmacy_providers.dart';
-import '../../../core/data/record_store.dart';
 import '../../../core/entities/product.dart';
 import '../../../core/presentation/widgets.dart';
 import '../../../core/rules/dates.dart';
-import '../../../core/rules/fefo.dart';
-import '../../../core/rules/ids.dart';
 import '../../../core/rules/money.dart';
 import '../../../core/rules/search.dart';
 import '../../../core/rules/stock.dart';
 import '../../auth/application/session_controller.dart';
-import '../domain/adjust.dart';
+import '../../../core/presentation/export.dart';
+import 'medicine_screens.dart';
 
 /// Inventory: every medicine with its stock here, filtered (in stock, low, out, expiring, expired); open one for its
 /// batches, to count or adjust stock, or to edit it. Add medicines.
@@ -60,12 +59,24 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
       };
     }).take(300).toList();
     final value = stockValue(d.products.where((p) => d.stockOf(p.id) > 0), d.stock.batchesOf);
+    final shownValue = stockValue(list, d.stock.batchesOf);
+    final retail = list.fold<double>(0, (a, p) => a + (d.stockOf(p.id) > 0 ? d.stockOf(p.id) : 0) * p.price);
     return PageFrame(
       title: 'Inventory',
-      subtitle: can.contains('reports') ? 'Stock value ${s.money(value.value)}${value.expired > 0 ? ' · expired ${s.money(value.expired)}' : ''}' : null,
+      subtitle: can.contains('reports')
+          ? '${list.length} items · ${s.money(shownValue.value)} at cost · ${s.money(retail)} at retail · all stock ${s.money(value.value)}${value.expired > 0 ? ' · ${s.money(value.expired)} expired (not included)' : ''}'
+          : '${list.length} items',
       actions: [
         SearchField(onChanged: (v) => setState(() => _q = v), hint: 'Medicine, generic, barcode…'),
-        if (can.contains('medicines.manage')) FilledButton.icon(onPressed: () => _edit(null), icon: const Icon(Icons.add), label: const Text('Add medicine')),
+        ExportButtons(
+          name: 'inventory',
+          settings: s,
+          title: const {'instock': 'Stock in hand', 'low': 'Low stock', 'out': 'Out of stock', 'all': 'All medicines', 'expiring': 'Expiring soon', 'expired': 'Expired'}[_filter] ?? 'Inventory',
+          subtitle: '${list.length} items · ${s.money(shownValue.value)} at cost · ${s.money(retail)} at retail${shownValue.expired > 0 ? ' · ${s.money(shownValue.expired)} expired (not included)' : ''}',
+          csv: () => inventoryCsv(list, d),
+          pdf: () => [inventoryTable(list, d, s)],
+        ),
+        if (can.contains('medicines.manage')) FilledButton.icon(onPressed: () => editMedicine(context, ref, null), icon: const Icon(Icons.add), label: const Text('Add medicine')),
       ],
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Wrap(spacing: 6, children: [for (final (k, l) in _filters) ChoiceChip(label: Text(l), selected: _filter == k, onSelected: (_) => setState(() => _filter = k))]),
@@ -101,97 +112,52 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
     final d = await ref.read(pharmacyProvider.future);
     final can = ref.read(permissionsProvider).value ?? const <String>{};
     if (!mounted) return;
-    final batches = d.stock.batchesOf(p.id);
+    final batches = d.stock.batchesOf(p.id).where((b) => b.qty != 0).toList();
+    final warn = d.settings.expiryWarnDays.round();
     await showDialog<void>(
       context: context,
       builder: (c) => AlertDialog(
-        title: Text(p.name),
+        title: Text('${p.name} – batches here'),
         content: SizedBox(
-          width: 460,
+          width: 500,
           child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text('${[p.generic, p.form, p.unit].where((x) => x.isNotEmpty).join(' · ')}\nBarcode ${p.barcode.isEmpty ? '—' : p.barcode}'),
             Text('Price ${d.settings.money(p.price)} · wholesale ${d.settings.money(p.wholesale)}${can.contains('reports') ? ' · cost ${d.settings.money(p.cost)}' : ''}'),
             const Divider(),
             Text('Stock here: ${formatQty(d.stockOf(p.id))}', style: const TextStyle(fontWeight: FontWeight.w700)),
-            for (final b in batches.where((b) => b.qty != 0))
-              Text('Batch ${b.batch}${b.expiry.isEmpty ? '' : ' · expires ${b.expiry}'} · ${formatQty(b.qty)}'),
-            if (batches.every((b) => b.qty == 0)) const Text('No stock recorded.'),
+            for (var i = 0; i < batches.length; i++)
+              Row(children: [
+                Expanded(child: Text('Batch ${batches[i].batch}${batches[i].expiry.isEmpty ? '' : ' · expires ${batches[i].expiry}'} · ${d.settings.money(batches[i].cost != 0 ? batches[i].cost : p.cost)}',
+                    style: TextStyle(color: batches[i].expiry.isEmpty ? null : daysUntil(batches[i].expiry) < 0 ? Theme.of(c).colorScheme.error : daysUntil(batches[i].expiry) <= warn ? Colors.orange.shade800 : null))),
+                if (i == 0 && batches[i].qty > 0) const Padding(padding: EdgeInsets.only(right: 8), child: Chip(label: Text('Sells next'), visualDensity: VisualDensity.compact)),
+                Text(formatQty(batches[i].qty), style: const TextStyle(fontWeight: FontWeight.w700)),
+              ]),
+            if (batches.isEmpty) const Text('No stock at this branch'),
           ]),
         ),
         actions: [
+          TextButton(onPressed: () {
+            Navigator.pop(c);
+            context.go('/stock-card?id=${p.id}');
+          }, child: const Text('Stock card')),
           if (can.contains('stock.adjust'))
             TextButton(onPressed: () async {
               Navigator.pop(c);
-              await _adjust(p, batches);
+              await adjustDialog(context, ref, p);
             }, child: const Text('Count / adjust')),
+          if (can.contains('inventory.edit'))
+            TextButton(onPressed: () async {
+              Navigator.pop(c);
+              await inventoryEditor(context, ref, p);
+            }, child: const Text('Edit stock')),
           if (can.contains('medicines.manage'))
             TextButton(onPressed: () async {
               Navigator.pop(c);
-              await _edit(p);
+              await editMedicine(context, ref, p);
             }, child: const Text('Edit')),
           FilledButton(onPressed: () => Navigator.pop(c), child: const Text('Close')),
         ],
       ),
     );
-  }
-
-  Future<void> _adjust(Product p, List<BatchStock> batches) async {
-    final opts = [for (final b in batches) (b.id, '${b.batch}${b.expiry.isEmpty ? '' : ' (exp ${b.expiry})'} · ${formatQty(b.qty)}'), ('new', 'A new batch')];
-    final v = await editRecord(context, title: 'Count / adjust ${p.name}', save: 'Save', initial: {
-      'mode': 'count', 'batchId': batches.where((b) => b.qty > 0).firstOrNull?.id ?? (batches.isEmpty ? 'new' : batches.first.id),
-    }, fields: [
-      const FormFieldSpec('mode', 'What to do', kind: FieldKind.choice, required: true, options: [('count', 'Count: set to what is on the shelf'), ('add', 'Add'), ('remove', 'Remove')]),
-      FormFieldSpec('batchId', 'Batch', kind: FieldKind.choice, required: true, options: opts),
-      const FormFieldSpec('qty', 'Quantity (counted, added or removed)', kind: FieldKind.number, required: true),
-      const FormFieldSpec('reason', 'Reason', required: true, hint: 'e.g. damaged, stock take, sample'),
-      const FormFieldSpec('newBatch', 'New batch number (only for a new batch)'),
-      const FormFieldSpec('newExpiry', 'New batch expiry (only for a new batch)', kind: FieldKind.date),
-    ]);
-    if (v == null || !mounted) return;
-    final mode = AdjustMode.values.byName(v['mode'] as String);
-    final qty = (v['qty'] as num).toDouble();
-    try {
-      final user = (await ref.read(sessionControllerProvider.future))?.userName ?? '';
-      final diff = await adjustStock(ref.read(recordStoreProvider), product: p, batches: batches, mode: mode, batchId: v['batchId'] as String,
-          counted: qty, qty: qty, reason: '${v['reason']}', user: user, branchId: (await ref.read(pharmacyProvider.future)).branch, newBatch: '${v['newBatch'] ?? ''}', newExpiry: '${v['newExpiry'] ?? ''}');
-      if (mounted) say(context, diff == 0 ? 'No change' : 'Stock updated (${diff > 0 ? '+' : ''}${formatQty(diff)})');
-    } on AdjustProblem catch (e) {
-      if (mounted) say(context, e.message, error: true);
-    }
-  }
-
-  Future<void> _edit(Product? p) async {
-    final v = await editRecord(context, title: p == null ? 'Add medicine' : 'Edit ${p.name}', initial: p?.toRecord() ?? {'unit': 'Unit', 'form': 'Tablets'}, fields: const [
-      FormFieldSpec('name', 'Name (brand)', required: true),
-      FormFieldSpec('generic', 'Generic name'),
-      FormFieldSpec('form', 'Form (Tablets, Syrups…)'),
-      FormFieldSpec('unit', 'Unit (Tablet, Bottle…)'),
-      FormFieldSpec('barcode', 'Barcode'),
-      FormFieldSpec('price', 'Retail price', kind: FieldKind.number, required: true),
-      FormFieldSpec('wholesale', 'Wholesale price', kind: FieldKind.number),
-      FormFieldSpec('cost', 'Cost', kind: FieldKind.number),
-      FormFieldSpec('reorder', 'Reorder level', kind: FieldKind.number),
-      FormFieldSpec('rx', 'Prescription only (Rx)', kind: FieldKind.flag),
-      FormFieldSpec('controlled', 'Controlled drug', kind: FieldKind.flag),
-    ]);
-    if (v == null || !mounted) return;
-    final d = await ref.read(pharmacyProvider.future);
-    final name = '${v['name']}'.trim();
-    if (d.products.any((x) => x.id != p?.id && x.name.trim().toLowerCase() == name.toLowerCase())) {
-      if (mounted) say(context, '"$name" is already in your medicine list', error: true);
-      return;
-    }
-    final code = '${v['barcode'] ?? ''}'.trim();
-    if (code.isNotEmpty && d.products.any((x) => x.id != p?.id && x.barcode == code)) {
-      if (mounted) say(context, 'Another medicine already has the barcode $code', error: true);
-      return;
-    }
-    final user = (await ref.read(sessionControllerProvider.future))?.userName ?? '';
-    await ref.read(recordStoreProvider).update((x) {
-      final rec = p == null ? {...v, 'id': uid(), 'name': name} : Product.fromRecord({...p.toRecord(), ...v, 'name': name}).copyWith(raw: {...p.raw, ...v}).toRecord();
-      x.put('products', rec);
-      x.audit(user, p == null ? 'Medicine added' : 'Medicine edited', name);
-    });
-    if (mounted) say(context, p == null ? '$name added' : '$name saved');
   }
 }

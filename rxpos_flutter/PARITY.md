@@ -69,15 +69,15 @@ Every feature of the React app (`src/pages/*.jsx`, `src/*.jsx`), screen by scree
   edit, delete, star, pin, search, message info, read marks, WhatsApp from chat
 
 ## Inventory (Inventory.jsx)
-- ✅ List with filters, batches, count / add / remove, add / edit medicine
-- ✗ Expiring / Expired tab with Return and Write off
-- ✗ Quick Edit (prices and stock in a grid)
-- ✗ Stock Card (every movement of a medicine)
-- ✗ Batches at this branch
-- ✗ Medicine List: records with missing or inconsistent details; generate missing barcodes
-- ✗ Packs editor ("Sell or receive by strip, box…")
-- ✗ Formulations list
-- ✗ Export CSV / PDF
+- ✅ List with filters (in stock / low / out / all, expiring, expired), value at cost and retail, batches ("Sells next"), count / add / remove, add / edit medicine
+- ✅ Expiring / Expired tabs with Return and Write off; PDF
+- ✅ Quick Edit (prices, reorder, shelf, barcode in a grid; margin; save many; generate missing barcodes)
+- ✅ Stock Card (every movement of a medicine with the running balance; count / adjust)
+- ✅ Inventory editor: a medicine's details and its batches here (number, expiry, actual quantity with a reason)
+- ✅ Medicine List: full form (markup prices, generated barcode, opening stock), "Needs review" (missing or inconsistent details)
+- ✅ Packs editor ("Sell or receive by strip, box…")
+- ✅ Formulations list (add / edit, medicines using each)
+- ✅ Export CSV / PDF
 
 ## Add Stock and Purchases (Purchases.jsx)
 - ✅ Receive a delivery (packs, batches, costs, prices, new medicines), purchase history
