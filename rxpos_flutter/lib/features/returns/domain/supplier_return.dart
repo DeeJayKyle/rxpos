@@ -1,6 +1,8 @@
 // Returning stock to a supplier (src/pages/Returns.jsx): each line leaves stock from its batch ("Supplier return"),
 // the return is settled as a credit note (less owed to the supplier) or a refund, with an audit line.
 import '../../../core/data/record_store.dart';
+import '../../../core/entities/settings.dart';
+import '../../../core/presentation/widgets.dart';
 import '../../../core/rules/fefo.dart';
 import '../../../core/rules/ids.dart';
 import '../../../core/rules/stock.dart';
@@ -21,8 +23,8 @@ class ReturnProblem implements Exception {
 }
 
 Future<Map<String, Object?>> returnToSupplier(RecordStore store, {required String supplierId, required String supplierName, required List<ReturnLine> lines,
-    required String settle, String creditNote = '', String note = '', String bankId = 'cash-drawer', required String by, required String date, String branchId = mainBranch}) {
-  if (lines.isEmpty) throw ReturnProblem('Add what is going back');
+    required String settle, String creditNote = '', String note = '', String bankId = 'cash-drawer', required String by, required String date, PharmacySettings settings = const PharmacySettings(), String branchId = mainBranch}) {
+  if (lines.isEmpty) throw ReturnProblem('Add the medicines being returned');
   for (final l in lines) {
     if (!(l.qty > 0) || l.qty > l.batch.qty) throw ReturnProblem('${l.name}: return between 1 and ${l.batch.qty.round()} (in stock in batch ${l.batch.batch})');
   }
@@ -40,7 +42,7 @@ Future<Map<String, Object?>> returnToSupplier(RecordStore store, {required Strin
       d.move(productId: i['productId'] as String, qty: -((i['qty'] as int).toDouble()), type: 'Supplier return', ref: rec['number'] as String,
           note: '${i['reason']}', user: by, batchId: i['batchId'] as String?, branchId: branchId);
     }
-    d.audit(by, 'Returned to supplier', '${rec['number']} to $supplierName: ${items.length} line${items.length > 1 ? 's' : ''}, $total (${settle == 'cash' ? 'refund' : 'credit note'})', branchId);
+    d.audit(by, 'Returned to supplier', '${rec['number']} to $supplierName: ${items.length} line${items.length > 1 ? 's' : ''}, ${settings.money(total)} (${settle == 'cash' ? 'refund' : 'credit note'})', branchId);
     return rec;
   });
 }

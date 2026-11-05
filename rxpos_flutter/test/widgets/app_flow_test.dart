@@ -313,7 +313,7 @@ void main() {
     await go('Purchase history');
     expect(find.text('No deliveries yet'), findsOneWidget);
     await go('Reorder');
-    expect(find.text('Nothing to reorder'), findsOneWidget);
+    expect(find.text('Stock levels look healthy. Nothing needs ordering.'), findsOneWidget);
     await go('Expiring / Expired');
     expect(find.text('Nothing expiring soon 🎉'), findsOneWidget);
     await done(tester);
@@ -372,14 +372,16 @@ void main() {
     final users = (await tester.runAsync(() => RecordStore(db).rows('users')))!;
     expect(verifyPassword(users.single, 'ben-pass-123'), isTrue);
 
+    await tester.runAsync(() => RecordStore(db).update((d) => d.put('branches', {'id': 'br-2', 'name': 'Kampala Road'})));
     await navTo(tester, 'Branches & Transfers');
-    await tester.tap(find.text('Add branch'));
-    await settle(tester);
-    await tester.enterText(find.widgetWithText(TextFormField, 'Name'), 'Kampala Road');
-    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
-    await settle(tester);
     expect(find.text('Kampala Road'), findsOneWidget);
     expect(find.text('Send stock'), findsOneWidget);
+    await tester.tap(find.text('Use on this device'));
+    await settle(tester);
+    await tester.tap(find.widgetWithText(FilledButton, 'Switch'));
+    await settle(tester);
+    expect(find.text('This device now works as Kampala Road'), findsOneWidget);
+    expect(await tester.runAsync(() => (db.select(db.kv)..where((x) => x.k.equals('branch'))).getSingle().then((r) => r.v)), 'br-2');
 
     await navTo(tester, 'Audit log');
     expect(find.textContaining('User added'), findsOneWidget);
@@ -718,6 +720,52 @@ void main() {
     await settle(tester);
     final ie = (await tester.runAsync(() => store.rows('movements')))!.where((m) => m['type'] == 'Inventory edit').single;
     expect(ie['qty'], -10);
+    await done(tester);
+  });
+
+  testWidgets('Returns with several lines and its note; Reorder purchase orders', (tester) async {
+    await tester.runAsync(signedIn);
+    await tester.runAsync(() => RecordStore(db).update((d) {
+          d.put('suppliers', {'id': 's1', 'name': 'Sample Wholesalers', 'phone': '0772000111'});
+          d.put('products', {'id': 'p2', 'name': 'Zinco Syrup 100ml', 'unit': 'Bottle', 'barcode': '7010002', 'price': 6000, 'cost': 4000, 'reorder': 5});
+          d.put('batches', {'id': 'b2', 'productId': 'p2', 'batch': 'Z1', 'expiry': '2029-01-31', 'cost': 4000});
+          d.move(productId: 'p2', qty: 3, type: 'Opening stock', batchId: 'b2');
+        }));
+    await start(tester);
+    final store = RecordStore(db);
+    await navTo(tester, 'Returns to suppliers');
+    await tester.tap(find.text('New return'));
+    await settle(tester);
+    await tester.tap(find.byKey(const Key('return-supplier')));
+    await settle(tester, 4);
+    await tester.tap(find.text('Sample Wholesalers').last);
+    await settle(tester, 4);
+    for (final name in ['Calmex', 'Zinco']) {
+      await tester.enterText(find.byKey(const Key('return-search')), name);
+      await settle(tester, 3);
+      await tester.tap(find.textContaining(name).last);
+      await settle(tester, 3);
+    }
+    await tester.tap(find.text('Save return'));
+    await settle(tester);
+    final ret = (await tester.runAsync(() => store.rows('supplierReturns')))!.single;
+    expect((ret['items'] as List).length, 2);
+    final out = (await tester.runAsync(() => store.rows('movements')))!.where((m) => m['type'] == 'Supplier return').map((m) => (m['productId'], m['qty'])).toSet();
+    expect(out, {('p1', -100), ('p2', -3)});
+    await tester.tap(find.text('View'));
+    await settle(tester);
+    expect(find.text('Return note (PDF)'), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, 'Close'));
+    await settle(tester);
+
+    // Reorder: Zinco is now out (0 ≤ 5) but never sold and out of stock, so nothing is suggested; dead stock and orders open
+    await navTo(tester, 'Reorder');
+    await tester.tap(find.text('Dead stock'));
+    await settle(tester);
+    expect(find.text('No dead stock. Everything is moving.'), findsOneWidget);
+    await tester.tap(find.text('Purchase orders'));
+    await settle(tester);
+    expect(find.text('No purchase orders yet. Create them from Reorder suggestions.'), findsOneWidget);
     await done(tester);
   });
 }

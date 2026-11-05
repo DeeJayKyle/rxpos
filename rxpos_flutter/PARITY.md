@@ -96,17 +96,17 @@ Every feature of the React app (`src/pages/*.jsx`, `src/*.jsx`), screen by scree
 - ✅ History with each count's figures; view a count; clear a count; keep counting; cancel; count sheet PDF; CSV
 
 ## Reorder (Reorder.jsx)
-- ✅ Reorder suggestions, levels from sales
-- ✗ Dead stock
-- ✗ Purchase orders (create, open, receive, delete, print); cheapest / last supplier
+- ✅ Reorder suggestions from sales velocity (window, lead time, cover), levels from sales (preview, apply), CSV
+- ✅ Dead stock (not sold for N days, value tied up)
+- ✅ Purchase orders (create per supplier, open, print, WhatsApp to the supplier, receive, delete); cheapest / last / chosen supplier
 
 ## Returns (Returns.jsx)
-- ✅ Return a batch, list
-- ✗ New return with several lines from any medicine; view a return
+- ✅ Return a batch, list, search, CSV
+- ✅ New return with several lines from any medicine (supplier from the batch's delivery, refund into a bank / credit note); view a return; return note PDF
 
 ## Branches (Branches.jsx)
-- ✅ Branches, send, receive
-- ✗ Cancel a transfer; "Use on this device" from the list
+- ✅ Branches at a glance (today, month, stock value, low / out), send, receive, transfers with status
+- ✅ "Use on this device" from the list (branches are added by the RxPOS owner, as in the React app; the React app has no transfer cancel)
 
 ## Finance (Finance.jsx)
 - ✅ Account balances and statements, expenses, deposits / withdrawals / transfers, loans and repayments
