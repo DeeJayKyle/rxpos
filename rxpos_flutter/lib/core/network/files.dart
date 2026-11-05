@@ -43,8 +43,13 @@ Future<({List<String> pages, int total})> filePages(String name, Uint8List bytes
 
 /// Let the person choose photos and / or PDFs.
 Future<List<({String name, Uint8List bytes})>> pickFiles({List<String> extensions = const ['jpg', 'jpeg', 'png', 'webp', 'pdf'], bool multiple = true}) async {
-  final files = await FilePicker.pickFiles(type: FileType.custom, allowedExtensions: extensions);
-  return [for (final f in (multiple ? files : files.take(1))) (name: f.name, bytes: await f.readAsBytes())];
+  // file_picker 13.3.2 separates the single-file picker from pickFiles().
+  // Using pickFile here prevents a single-file caller from selecting several
+  // files only for the extras to be silently discarded.
+  final files = multiple
+      ? await FilePicker.pickFiles(type: FileType.custom, allowedExtensions: extensions)
+      : [(await FilePicker.pickFile(type: FileType.custom, allowedExtensions: extensions))].whereType<PlatformFile>().toList();
+  return [for (final f in files) (name: f.name, bytes: await f.readAsBytes())];
 }
 
 String mimeOf(String name) {
