@@ -10,6 +10,11 @@ on:
       - '.github/workflows/flutter-apps.yml'
   workflow_dispatch:
 
+# the pilot builds are published to a pre-release (the account's artifact storage is full); the current apps update from
+# the website's version.json, never from GitHub releases, so this cannot reach them
+permissions:
+  contents: write
+
 concurrency:
   group: flutter-apps-${{ github.ref }}
   cancel-in-progress: true
@@ -101,16 +106,24 @@ jobs:
           flutter pub get
           flutter build apk --release --build-number=${{ github.run_number }}
           mkdir -p ../out
-          cp build/app/outputs/flutter-apk/app-release.apk "../out/RxPOS-New-${{ github.run_number }}-${SIGNED}.apk"
-      - uses: actions/upload-artifact@v4
+          cp build/app/outputs/flutter-apk/app-release.apk "../out/RxPOS-New-${SIGNED}.apk"
+      - name: Publish to the pilot pre-release
+        uses: softprops/action-gh-release@v2
         with:
-          name: rxpos-new-android
-          path: out/*.apk
-          if-no-files-found: error
+          tag_name: flutter-pilot
+          target_commitish: ${{ github.sha }}
+          name: RxPOS New (Flutter) – pilot build
+          prerelease: true
+          make_latest: false
+          body: |
+            Pilot builds of the new Flutter apps (Windows and Android). They install as "RxPOS New", next to the current
+            RxPOS apps, and use the same pharmacy account and cloud. Not for general use yet.
+          files: out/*.apk
+          fail_on_unmatched_files: true
 
   windows:
     name: Windows installer
-    needs: test
+    needs: [test, android] # after Android, so the two never create the pilot pre-release at the same moment
     runs-on: windows-latest
     timeout-minutes: 45
     steps:
@@ -130,13 +143,21 @@ jobs:
         run: |
           $release = "rxpos_flutter\build\windows\x64\runner\Release"
           New-Item -ItemType Directory -Force out | Out-Null
-          Compress-Archive -Path "$release\*" -DestinationPath "out\RxPOS-New-${{ github.run_number }}-windows-portable.zip"
+          Compress-Archive -Path "$release\*" -DestinationPath "out\RxPOS-New-windows-portable.zip"
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path $iscc)) { choco install innosetup --no-progress -y; }
           & $iscc /DAppVersion=1.0.${{ github.run_number }} "/DSourceDir=$((Resolve-Path $release).Path)" /Oout rxpos_flutter\windows\installer\rxpos.iss
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - uses: actions/upload-artifact@v4
+          Move-Item out\RxPOS-New-Setup-*.exe out\RxPOS-New-Setup.exe
+      - name: Publish to the pilot pre-release
+        uses: softprops/action-gh-release@v2
         with:
-          name: rxpos-new-windows
-          path: out/*
-          if-no-files-found: error
+          tag_name: flutter-pilot
+          target_commitish: ${{ github.sha }}
+          name: RxPOS New (Flutter) – pilot build
+          prerelease: true
+          make_latest: false
+          files: |
+            out/RxPOS-New-Setup.exe
+            out/RxPOS-New-windows-portable.zip
+          fail_on_unmatched_files: true
