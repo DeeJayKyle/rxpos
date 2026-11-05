@@ -12,8 +12,8 @@ Every feature of the React app (`src/pages/*.jsx`, `src/*.jsx`), screen by scree
 - ✅ Notifications centre (urgent / needs attention / for information) and its count; counts beside the menu (low stock, expiry, transfers, unread chat)
 - ✗ The count on the Windows taskbar / Android app icon (see notifications in the background)
 - ✅ "No internet connection" banner; live clock with the sync state (offline, waiting, syncing, needs attention)
-- ✗ "Setting up" first-run screen
-- ✗ Error screen: "Something went wrong · Reload RxPOS · Download my data"; crash reports to the cloud
+- ✅ "Setting up" first-run screen (while the first download runs)
+- ✅ Error screen: "Something went wrong · Reload RxPOS · Download my data"; crash reports to the cloud (no personal data, once a day, kept offline)
 - ✅ Global search (Ctrl+K): pages, medicines, customers, receipts
 - ✅ Branch from the top bar (when there is more than one), opening Branches & Transfers
 - ✅ Theme menu: light / dark / system, accent colours, 28 colour themes (only those the owner allows), colour level, surface style; Premium UI switch back to the theme before

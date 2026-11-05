@@ -5,6 +5,7 @@ import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rxpos/app.dart';
 import 'package:rxpos/core/data/pharmacy_providers.dart';
@@ -12,6 +13,7 @@ import 'package:rxpos/core/data/record_store.dart';
 import 'package:rxpos/core/database/app_database.dart';
 import 'package:rxpos/core/network/dio_client.dart';
 import 'package:rxpos/core/rules/passwords.dart';
+import 'package:rxpos/core/crash/crash_screen.dart';
 import 'package:rxpos/core/rules/dates.dart';
 import 'package:rxpos/core/presentation/widgets.dart';
 import 'package:rxpos/core/theme/themes.dart';
@@ -74,7 +76,7 @@ void main() {
     }
   }
 
-  Future<void> start(WidgetTester tester, {Size size = const Size(1440, 900)}) async {
+  Future<void> start(WidgetTester tester, {Size size = const Size(1440, 900), List<Override> extra = const []}) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -101,6 +103,7 @@ void main() {
             return (200, sampleWeather);
           }),
           connectionPlaceProvider.overrideWithValue(() async => {'lat': 0.31, 'lon': 32.58, 'city': 'Kampala', 'country': 'UG'}),
+          ...extra,
         ],
         child: const RxposApp(),
       ),
@@ -1712,4 +1715,37 @@ void main() {
     expect(find.byType(Switch), findsNothing, reason: 'Midnight Pro is not among the allowed themes');
     await done(tester);
   });
+
+  testWidgets('a broken screen: Something went wrong, then Reload RxPOS brings the app back', (tester) async {
+    await tester.runAsync(signedIn);
+    await start(tester);
+    final c = ProviderScope.containerOf(tester.element(find.byType(MaterialApp)));
+    c.read(appCrashProvider.notifier).crashed(StateError('A test break'));
+    await settle(tester, 3);
+    expect(find.text('Something went wrong'), findsOneWidget);
+    expect(find.text('Bad state: A test break'), findsOneWidget);
+    expect(find.text('Download my data'), findsOneWidget);
+    final rescue = jsonDecode((await tester.runAsync(() => rescueJson(RecordStore(db))))!) as Map;
+    expect(((rescue['products']! as List).first as Map)['name'], 'Calmex 500mg Tabs', reason: 'everything on this device');
+    await tester.tap(find.text('Reload RxPOS'));
+    await settle(tester);
+    expect(find.text('Something went wrong'), findsNothing);
+    expect(find.byKey(const Key('account-menu')), findsOneWidget);
+    await done(tester);
+  });
+
+  testWidgets('the first download: Setting up the pharmacy on this device', (tester) async {
+    await tester.runAsync(signedIn);
+    await tester.runAsync(() => RecordStore(db).update((d) => d.saveSettings({'name': 'Sample Pharmacy'})));
+    await start(tester, extra: [syncControllerProvider.overrideWith(_FirstSync.new)]);
+    expect(find.text('Setting up Sample Pharmacy on this device…'), findsOneWidget);
+    expect(find.descendant(of: find.byKey(const Key('first-download')), matching: find.text('Downloading products · 120 of 900')), findsOneWidget);
+    await done(tester);
+  });
+}
+
+/// A first download in progress (the sync screen's state, without a cloud).
+class _FirstSync extends SyncController {
+  @override
+  SyncStatus build() => const SyncStatus(state: SyncState.syncing, first: true, progress: 'Downloading products · 120 of 900');
 }

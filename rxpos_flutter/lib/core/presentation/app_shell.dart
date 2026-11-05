@@ -9,6 +9,7 @@ import '../../features/alerts/application/alerts_provider.dart';
 import '../../features/alerts/presentation/notification_bell.dart';
 import '../data/pharmacy_providers.dart';
 import '../theme/theme_choice.dart';
+import '../crash/crash_reports.dart';
 import 'nav.dart';
 import 'screens.dart';
 import 'theme_menu.dart';
@@ -26,6 +27,7 @@ class AppShell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    ref.read(crashReportsProvider).page = location;
     final session = ref.watch(sessionControllerProvider).value;
     final can = ref.watch(permissionsProvider).value ?? const <String>{};
     final features = ref.watch(pharmacyProvider).value?.features ?? const {};
@@ -69,7 +71,7 @@ class AppShell extends ConsumerWidget {
         if (session != null) AccountMenu(session: session, showName: wide),
       ],
     );
-    final body = Column(children: [const OfflineBanner(), Expanded(child: child)]);
+    final body = Stack(children: [Column(children: [const OfflineBanner(), Expanded(child: child)]), const FirstDownload()]);
     return CallbackShortcuts(
       bindings: {
         for (final s in visible) if (s.key != null) SingleActivator(s.key!): () => context.go(s.path),

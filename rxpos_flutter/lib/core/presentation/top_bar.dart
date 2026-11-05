@@ -259,3 +259,35 @@ class _CommandPaletteState extends ConsumerState<CommandPalette> {
     );
   }
 }
+
+/// The first sign-in on a device downloads the whole pharmacy: progress instead of empty screens (src/App.jsx
+/// FirstDownload). Shown while that first download runs and the medicine list is still small.
+class FirstDownload extends ConsumerWidget {
+  const FirstDownload({super.key});
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final s = ref.watch(syncControllerProvider);
+    final d = ref.watch(pharmacyProvider).value;
+    if (!(s.first && s.state == SyncState.syncing) || (d != null && d.products.length > 50)) return const SizedBox.shrink();
+    final name = d == null || d.settings.name == 'My Pharmacy' ? 'your pharmacy' : d.settings.name;
+    final t = Theme.of(context);
+    return Positioned.fill(
+      child: ColoredBox(
+        key: const Key('first-download'),
+        color: t.colorScheme.surface.withValues(alpha: .96),
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              const CircularProgressIndicator(),
+              const SizedBox(height: 16),
+              Text('Setting up $name on this device…', textAlign: TextAlign.center, style: t.textTheme.titleLarge),
+              const SizedBox(height: 8),
+              Text(s.progress ?? 'Downloading medicines, stock and staff. This happens only once.', textAlign: TextAlign.center, style: t.textTheme.bodyMedium),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+}

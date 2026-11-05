@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/data/device_settings.dart';
 import 'core/router/app_router.dart';
+import 'core/crash/crash_screen.dart';
 import 'core/data/pharmacy_providers.dart';
 import 'core/theme/themes.dart';
 import 'core/theme/theme_choice.dart';
@@ -30,12 +31,16 @@ class RxposApp extends ConsumerWidget {
         _ => const <DeviceOrientation>[],
       });
     }
+    final crash = ref.watch(appCrashProvider);
+    final theme = buildTheme(paletteById(look.system ? paletteFor(false, allowed) : chosen), accent: look.accent, surface: look.surface, vivid: look.level == 'vivid');
+    if (crash != null) return MaterialApp(debugShowCheckedModeBanner: false, title: 'RxPOS', theme: theme, home: CrashScreen(error: crash));
     return MaterialApp.router(
+      key: ValueKey('app-${ref.watch(appRestartProvider)}'),
       builder: (context, child) => zoom == 1 ? child! : MediaQuery(data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(zoom)), child: child!),
       title: 'RxPOS',
       debugShowCheckedModeBanner: false,
       // following the system: its light and dark themes, live when it changes
-      theme: buildTheme(paletteById(look.system ? paletteFor(false, allowed) : chosen), accent: look.accent, surface: look.surface, vivid: look.level == 'vivid'),
+      theme: theme,
       darkTheme: look.system ? buildTheme(paletteById(paletteFor(true, allowed)), accent: look.accent, surface: look.surface, vivid: look.level == 'vivid') : null,
       themeMode: look.system ? ThemeMode.system : ThemeMode.light,
       routerConfig: ref.watch(appRouterProvider),
