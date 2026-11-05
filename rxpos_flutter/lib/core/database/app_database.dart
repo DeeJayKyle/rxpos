@@ -2,6 +2,8 @@ import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import 'defaults.dart';
+
 part 'app_database.g.dart';
 
 // The device database mirrors the cloud's own shape (and the React app's IndexedDB "pharmapos" v2): every synced
@@ -89,7 +91,10 @@ class AppDatabase extends _$AppDatabase {
             await m.create(batchesByProduct);
           }
         },
-        beforeOpen: (details) async => customStatement('PRAGMA foreign_keys = ON'),
+        beforeOpen: (details) async {
+          await customStatement('PRAGMA foreign_keys = ON');
+          await ensureDefaults(this);
+        },
       );
 }
 

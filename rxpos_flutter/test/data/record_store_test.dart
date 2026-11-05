@@ -59,7 +59,7 @@ void main() {
   test('a deletion keeps a tombstone and sends a delete', () async {
     await store.update((d) => d.put('customers', {'id': 'c1', 'name': 'Grace'}));
     await store.update((d) => d.del('customers', 'c1'));
-    expect(await count('customers'), 0);
+    expect(await store.get('customers', 'c1'), isNull);
     expect((await db.select(db.tombstones).get()).single.id, 'c1');
     expect((await db.select(db.outbox).get()).last.deleted, isTrue);
   });

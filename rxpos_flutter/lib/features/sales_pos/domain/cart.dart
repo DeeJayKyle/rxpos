@@ -146,7 +146,7 @@ void checkCheckout(List<CartLine> cart, Checkout c, Totals t, {required Pharmacy
 /// discount, in ONE transaction (records written exactly as the React app writes them).
 Future<Map<String, Object?>> completeSale(RecordStore store, {required List<CartLine> cart, required Checkout c,
     required PharmacySettings settings, required StockView stock, required bool wholesale, required String cashier,
-    String branchId = mainBranch, DateTime? now}) async {
+    String branchId = mainBranch, DateTime? now, void Function(Edit d, Map<String, Object?> sale)? also}) async {
   final t = totalsOf(cart, discount: c.discount, settings: settings);
   checkCheckout(cart, c, t, settings: settings);
   final type = c.method.type;
@@ -182,6 +182,7 @@ Future<Map<String, Object?>> completeSale(RecordStore store, {required List<Cart
             batchId: a['batchId'] as String?, branchId: branchId);
       }
     }
+    also?.call(d, sale);
     if (t.discount > 0) d.audit(cashier, 'Discount given', '$number: ${formatMoney(t.discount, currency: settings.currency, decimals: settings.decimalPlaces)}', branchId);
     return sale;
   });

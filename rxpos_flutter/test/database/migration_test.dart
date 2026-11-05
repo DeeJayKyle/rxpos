@@ -29,7 +29,7 @@ void main() {
     await old.close();
 
     final db = AppDatabase(schema.newConnection());
-    expect((await db.select(db.records).get()).map((r) => r.id).toSet(), {'p1', 's1'});
+    expect((await db.select(db.records).get()).where((r) => r.t == 'products' || r.t == 'sales').map((r) => r.id).toSet(), {'p1', 's1'});
     expect((await db.select(db.outbox).get()).single.op, 'op-1', reason: 'unsent changes survive the update');
     expect((await db.select(db.kv).get()).single.v, contains('Sample Pharmacy'));
     await db.close();

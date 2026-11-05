@@ -7,6 +7,7 @@ import '../../../core/entities/product.dart';
 import '../../../core/entities/settings.dart';
 import '../../../core/rules/ids.dart';
 import '../../auth/application/session_controller.dart';
+import '../../proformas/domain/proformas.dart';
 import '../domain/cart.dart';
 
 part 'sale_controller.g.dart';
@@ -14,7 +15,7 @@ part 'sale_controller.g.dart';
 /// The sale being rung up on one till (retail or wholesale).
 class SaleState {
   const SaleState({this.lines = const [], this.customerId = walkIn, this.customerName = 'Walk-in Customer', this.discount = 0,
-      this.method, this.tendered, this.cursor = -1});
+      this.method, this.tendered, this.cursor = -1, this.proforma});
   final List<CartLine> lines;
   final String customerId, customerName;
   final double discount;
@@ -22,6 +23,8 @@ class SaleState {
   final double? tendered;
   /// the line the keyboard acts on (+ / − / Delete)
   final int cursor;
+  /// the proforma being sold (marked converted when the sale completes)
+  final Map<String, Object?>? proforma;
 
   SaleState copyWith({List<CartLine>? lines, String? customerId, String? customerName, double? discount, PaymentMethod? method,
           double? tendered, bool clearTendered = false, int? cursor}) =>
@@ -123,8 +126,33 @@ class SaleController extends _$SaleController {
         cart: state.lines,
         c: Checkout(method: method, tendered: state.tendered, customerId: state.customerId, customerName: state.customerName,
             discount: state.discount, controlled: controlled, momoRef: momoRef, rxChecked: rxChecked),
-        settings: d.settings, stock: d.stock, wholesale: wholesale, cashier: session?.userName ?? '');
+        settings: d.settings, stock: d.stock, wholesale: wholesale, cashier: session?.userName ?? '',
+        also: state.proforma == null ? null : (x, sale) => x.put('proformas', {...state.proforma!, 'status': 'Converted', 'saleNumber': sale['number']}));
     state = SaleState(method: state.method);
     return sale;
+  }
+
+  /// Save the sale as a proforma (quotation) and start a new one.
+  Future<Map<String, Object?>> proformaNow() async {
+    final d = await _data;
+    final session = await ref.read(sessionControllerProvider.future);
+    final pf = await saveProforma(ref.read(recordStoreProvider), cart: state.lines, discount: state.discount, settings: d.settings, wholesale: wholesale,
+        customerId: state.customerId, customerName: state.customerName, by: session?.userName ?? '');
+    clear();
+    return pf;
+  }
+
+  /// Load a proforma into this till to sell it (prices as quoted, quantities up to what is in stock).
+  Future<void> loadProforma(Map<String, Object?> pf) async {
+    final d = await _data;
+    final lines = <CartLine>[
+      for (final i in ((pf['items'] as List?) ?? const []).cast<Map>())
+        if (d.stockOf('${i['id']}') > 0)
+          CartLine(id: '${i['id']}', name: '${i['name']}', price: ((i['price'] as num?) ?? 0).toDouble(), cost: ((i['cost'] as num?) ?? 0).toDouble(),
+              qty: [((i['qty'] as num?) ?? 1).toDouble(), d.stockOf('${i['id']}')].reduce((a, b) => a < b ? a : b), max: d.stockOf('${i['id']}'),
+              rx: d.byId['${i['id']}']?.rx ?? false, controlled: d.byId['${i['id']}']?.controlled ?? false),
+    ];
+    state = SaleState(lines: lines, customerId: '${pf['customerId'] ?? walkIn}', customerName: '${pf['customerName'] ?? 'Walk-in Customer'}',
+        discount: ((pf['discount'] as num?) ?? 0).toDouble(), method: state.method, proforma: pf);
   }
 }

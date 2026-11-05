@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/data/pharmacy_providers.dart';
 import '../../../core/data/record_store.dart';
 import '../../../core/entities/product.dart';
+import '../../../core/presentation/widgets.dart';
 import '../../../core/rules/money.dart';
 import '../../../core/rules/packs.dart';
 import '../../../core/rules/search.dart';
@@ -309,6 +310,7 @@ class _SalePanel extends ConsumerWidget {
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          if (s.proforma != null) Text('Selling proforma ${s.proforma!['number']}', style: TextStyle(color: th.colorScheme.primary)),
           Row(children: [
             Text('Current sale', style: th.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
             const Spacer(),
@@ -440,6 +442,13 @@ class _SalePanel extends ConsumerWidget {
           const SizedBox(height: 10),
           Row(children: [
             OutlinedButton.icon(onPressed: s.lines.isEmpty ? null : () => c.hold(), icon: const Icon(Icons.pause_circle_outline), label: const Text('Hold')),
+            if (can.contains('proformas') && data.features['proformas'] != false) ...[
+              const SizedBox(width: 8),
+              OutlinedButton.icon(onPressed: s.lines.isEmpty ? null : () async {
+                final pf = await c.proformaNow();
+                if (context.mounted) say(context, 'Proforma ${pf['number']} saved (see Proformas)');
+              }, icon: const Icon(Icons.description_outlined), label: const Text('Proforma')),
+            ],
             const SizedBox(width: 8),
             Expanded(
               child: FilledButton(

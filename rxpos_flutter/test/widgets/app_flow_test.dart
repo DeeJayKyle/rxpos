@@ -275,4 +275,42 @@ void main() {
     expect(find.text('Nothing expired or expiring soon'), findsOneWidget);
     await done(tester);
   });
+
+  testWidgets('group 3: a proforma saved and sold; reports; an expense in finance', (tester) async {
+    await tester.runAsync(signedIn);
+    await start(tester);
+    await toTill(tester);
+    await tester.tap(find.text('Calmex 500mg Tabs'));
+    await settle(tester);
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Proforma'));
+    await settle(tester);
+    await navTo(tester, 'Proformas');
+    await tester.tap(find.text('Sell'));
+    await settle(tester);
+    expect(find.textContaining('Selling proforma PF'), findsOneWidget);
+    await tester.tap(find.text('Charge UGX 500   [F9]'));
+    await settle(tester);
+    await tester.tap(find.text('New sale'));
+    await settle(tester);
+    final pf = (await tester.runAsync(() => RecordStore(db).rows('proformas')))!.single;
+    expect((pf['status'], (pf['saleNumber'] as String).startsWith('R')), ('Converted', true));
+
+    await navTo(tester, 'Reports');
+    expect(find.text('UGX 500'), findsWidgets);
+    await navTo(tester, 'Finance');
+    expect(find.text('Cash at hand'), findsOneWidget);
+    await tester.tap(find.text('Expenses'));
+    await settle(tester);
+    await tester.tap(find.text('Add expense'));
+    await settle(tester);
+    await tester.enterText(find.widgetWithText(TextFormField, 'What for'), 'Airtime');
+    await tester.enterText(find.widgetWithText(TextFormField, 'Amount'), '200');
+    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await settle(tester);
+    expect(find.textContaining('Airtime'), findsOneWidget);
+    await tester.tap(find.text('Accounts'));
+    await settle(tester);
+    expect(find.text('UGX 300'), findsOneWidget, reason: 'cash at hand: 500 sale − 200 expense');
+    await done(tester);
+  });
 }
