@@ -7,7 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:rxpos/core/data/record_store.dart';
 import 'package:rxpos/core/database/app_database.dart';
 import 'package:rxpos/core/network/api_failure.dart';
-import 'package:rxpos/core/sync/downloader.dart';
+import 'package:rxpos/core/sync/sync_engine.dart';
 import 'package:rxpos/core/sync/sync_config.dart';
 
 import 'fake_cloud.dart';
@@ -16,12 +16,12 @@ void main() {
   late AppDatabase db;
   late RecordStore store;
   late FakeCloud cloud;
-  late Downloader down;
+  late SyncEngine down;
   setUp(() {
     db = AppDatabase(NativeDatabase.memory());
     store = RecordStore(db, clock: () => '2026-11-05T09:00:00.000Z');
     cloud = FakeCloud();
-    down = Downloader(dio: cloud.dio(), db: db, cloudUrl: 'https://rxposug.com');
+    down = SyncEngine(dio: cloud.dio(), db: db, cloudUrl: 'https://rxposug.com');
   });
   tearDown(() => db.close());
 
@@ -35,8 +35,8 @@ void main() {
     seed(1050);
     cloud.add('sales', 's1', {'number': 'R1', 'total': 500}, '2026-11-02T08:00:00.000Z');
     final seen = <int>[];
-    final r = await down.run(onProgress: (p) => seen.add(p.records));
-    expect(r.records, 1051);
+    final r = await down.run(onProgress: (p) => seen.add(p.received));
+    expect(r.received, 1051);
     expect(r.full, isTrue);
     expect(seen, [400, 800, 1051]);
     expect((await store.rows('products')).length, 1050);
@@ -52,7 +52,7 @@ void main() {
   test('it talks to the cloud server directly, not through the website', () async {
     String? url;
     final dio = cloud.dio()..interceptors.insert(0, InterceptorsWrapper(onRequest: (o, h) { url = o.uri.toString(); h.next(o); }));
-    await Downloader(dio: dio, db: db, cloudUrl: 'https://rxposug.com/').run();
+    await SyncEngine(dio: dio, db: db, cloudUrl: 'https://rxposug.com/').run();
     expect(url, 'https://api.rxposug.com/api/sync');
   });
 
@@ -64,7 +64,7 @@ void main() {
     expect((await SyncConfig.load(db)).cursor, 400);
     final r = await down.run();
     expect((await store.rows('products')).length, 1000);
-    expect(r.records, 600, reason: 'only what was missing');
+    expect(r.received, 600, reason: 'only what was missing');
     expect(cloud.requests.last['since'], 800);
     expect(cloud.requests.skip(2).every((q) => q['all'] == true), isTrue, reason: 'the resumed first download still asks for everything');
     expect((await SyncConfig.load(db)).needsFullPull, isFalse);
@@ -77,7 +77,7 @@ void main() {
     cloud.add('sales', 's-mine', {'total': 1}, '2026-11-05T08:00:00.000Z', origin: me);
     cloud.add('sales', 's-other', {'total': 2}, '2026-11-05T08:00:01.000Z');
     final r = await down.run();
-    expect(r.records, 1);
+    expect(r.received, 1);
     expect(r.full, isFalse);
     expect(cloud.requests.last.containsKey('all'), isFalse);
     expect(await store.get('sales', 's-other'), isNotNull);
@@ -116,6 +116,7 @@ void main() {
     test('settings: the newer copy wins, but the pharmacy\'s details always come from the cloud', () async {
       await store.update((d) => d.saveSettings({'name': 'Typed here', 'autoPrint': true, 'currency': 'KES'}));
       cloud.add('settings', 'settings', {'name': 'Sample Pharmacy', 'currency': 'UGX', 'autoPrint': false}, '2026-11-01T00:00:00.000Z');
+      cloud.refuse.add('settings|settings'); // the pharmacy's details are the Owner console's, not this device's
       await down.run();
       final s = await store.settings();
       expect(s.name, 'Sample Pharmacy', reason: 'pharmacy details belong to the Owner console');
@@ -138,7 +139,7 @@ void main() {
     cloud.epoch = 'epoch-2';
     final r = await down.run();
     expect(cloud.requests.last['since'], 0);
-    expect(r.records, 5);
+    expect(r.received, 5);
     expect((await store.rows('products')).length, 5, reason: 'merged, nothing doubled');
     expect((await SyncConfig.load(db)).epoch, 'epoch-2');
   });

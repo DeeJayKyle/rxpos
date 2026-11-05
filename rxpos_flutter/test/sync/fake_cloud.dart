@@ -25,6 +25,24 @@ class FakeCloud implements HttpClientAdapter {
   int? failOnRequest;
   /// answer this request number with something that is not a sync reply
   int? garbageOnRequest;
+  /// apply this request, then lose the reply (the device never hears back)
+  int? loseReplyOnRequest;
+  /// answer this request number with 401 (the sign-in expired)
+  int? expiredOnRequest;
+  /// changes the cloud refuses (no permission): "table|id"
+  final refuse = <String>{};
+  /// op ids already applied (the cloud's sync_ops ledger)
+  final applied = <String>{};
+  int dupes = 0;
+
+  /// The newest version of each record, as the cloud holds it.
+  Map<String, ServerRecord> get current {
+    final m = <String, ServerRecord>{};
+    for (final r in records) {
+      m['${r.t}|${r.id}'] = r;
+    }
+    return m;
+  }
 
   int get _seq => records.isEmpty ? 0 : records.last.seq;
 
@@ -38,14 +56,51 @@ class FakeCloud implements HttpClientAdapter {
     ..httpClientAdapter = this
     ..interceptors.add(FailureInterceptor());
 
+  /// Answers POST /api/login: (status, reply) for a request body.
+  (int, Map<String, Object?>) Function(Map<String, Object?> body)? login;
+  final logins = <Map<String, Object?>>[];
+
   @override
   Future<ResponseBody> fetch(RequestOptions options, Stream<Uint8List>? requestStream, Future<void>? cancelFuture) async {
     final body = (options.data as Map).cast<String, Object?>();
+    if (options.path.endsWith('/api/login')) {
+      logins.add(body);
+      final answer = login;
+      if (answer == null) throw DioException(requestOptions: options, type: DioExceptionType.connectionError, error: 'no route');
+      final (status, reply) = answer(body);
+      return ResponseBody.fromString(jsonEncode(reply), status, headers: _json);
+    }
     requests.add(body);
     if (failOnRequest == requests.length) {
       throw DioException(requestOptions: options, type: DioExceptionType.connectionError, error: 'connection reset');
     }
     if (garbageOnRequest == requests.length) return ResponseBody.fromString('{"hello":"world"}', 200, headers: _json);
+    if (expiredOnRequest == requests.length) return ResponseBody.fromString('{"error":"Not signed in"}', 401, headers: _json);
+    final refusedKeys = <String>[];
+    var appliedNow = 0;
+    for (final raw in (body['changes'] as List? ?? const [])) {
+      final ch = (raw as Map).cast<String, Object?>();
+      final t = ch['t'] as String, id = '${ch['id']}', at = ch['at'] as String, op = ch['op'] as String?;
+      if (op != null && applied.contains(op)) {
+        dupes++;
+        continue;
+      }
+      final key = '$t|$id';
+      final have = current[key];
+      final appendOnly = const {'movements', 'audit', 'controlled'}.contains(t);
+      if (refuse.contains(key) || (appendOnly && have != null && !have.deleted)) {
+        refusedKeys.add(key);
+        continue;
+      }
+      if (op != null) applied.add(op);
+      if (have != null && have.at.compareTo(at) >= 0) continue; // an older edit: the newer one stays
+      records.add(ServerRecord(_seq + 1, t, id, (ch['rec'] as Map?)?.cast<String, Object?>(), at,
+          origin: '${body['deviceId']}', deleted: ch['deleted'] == true));
+      appliedNow++;
+    }
+    if (loseReplyOnRequest == requests.length) {
+      throw DioException(requestOptions: options, type: DioExceptionType.receiveTimeout, error: 'reply lost');
+    }
     final since = (body['since'] as num).toInt();
     final all = body['all'] == true;
     final device = body['deviceId'];
@@ -56,7 +111,7 @@ class FakeCloud implements HttpClientAdapter {
       'changes': [for (final r in page) {'t': r.t, 'id': r.id, 'at': r.at, if (r.deleted) 'deleted': true else 'rec': r.rec}],
       'cursor': cursor,
       'more': next.length > page.length,
-      'applied': 0, 'refused': 0, 'epoch': epoch, 'tenant': 't-sample', 'protocol': 2,
+      'applied': appliedNow, 'refused': refusedKeys.length, 'refusedKeys': refusedKeys, 'dupes': dupes, 'epoch': epoch, 'tenant': 't-sample', 'protocol': 2,
     };
     return ResponseBody.fromString(jsonEncode(reply), 200, headers: _json);
   }

@@ -27,14 +27,18 @@ Milestone 1 is the till and sync on Windows and Android. Each step ends with tes
       (epoch) and "Download everything again". Tested against a fake cloud that behaves like worker/index.js.
 
 ## 3. Sync (protocol 2, same cloud)
-- [ ] Sign in (`/api/login`, two-step), session in `kv`, token in Dio; "Sign in again" when it expires.
-- [ ] Push: outbox in order, whole transactions together, ≤ 400 per request; remove only after a valid reply.
-- [ ] Pull: by server cursor; merge by last writer with the same clock clamp; tombstones respected; `epoch` change and
-      `FULL_PULL` trigger a full download.
-- [ ] Refused changes kept for review; status (On this device · Offline · N waiting · Syncing · Synced · Needs
-      attention · Sign in again); backoff; sync when the network returns.
-- [ ] Tests against a local cloud (the repo's wrangler test harness): two devices selling offline, lost replies,
-      refused changes, restore epoch, and the React app and this app on the same pharmacy.
+- [x] Sign in (`features/auth`): same accounts as the React app; choose a pharmacy; two-step code; owner accounts sent
+      to the owner console; session kept on the device (the till opens offline); switching pharmacy clears the old
+      one's data, never while changes are waiting.
+- [x] Sync engine (`core/sync/sync_engine.dart`): each request sends one group of outbox entries (whole actions,
+      ≤ 400) and pulls; refused changes kept for review; accepted ones, pulled records and the position saved in one
+      transaction; lost replies resent and deduplicated by op id; epoch restore; resumable full download.
+- [x] Sync controller (`features/sync_status`): status (On this device · Syncing · Synced · N waiting · Offline ·
+      Needs attention · Sign in again); every 5 s in use, 60 s in the background, straight after each change and on
+      returning to the app; backoff after failures; "Download everything again".
+- [x] Tests against a fake cloud that behaves like worker/index.js: two devices selling offline, lost replies,
+      refused changes, expired sign-in, deletes, grouping.
+- [ ] Against the real cloud: the React app and this app on the same pharmacy (with the repo's local cloud, step 5).
 
 ## 4. Feature UI: the till and stock
 - [ ] Shell: sidebar (Windows) / bottom bar (Android), sync status, branch, user; F2 / F3 / F8 / F9 keys on Windows.

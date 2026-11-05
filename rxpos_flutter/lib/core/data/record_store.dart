@@ -97,6 +97,10 @@ class RecordStore {
 
   final AppDatabase db;
   final String Function() _clock;
+  final _saved = StreamController<void>.broadcast();
+
+  /// Fires after every saved action (sync sends it straight away).
+  Stream<void> get saved => _saved.stream;
 
   static Map<String, Object?> _decode(String json) => (jsonDecode(json) as Map).cast<String, Object?>();
 
@@ -164,6 +168,9 @@ class RecordStore {
           await db.into(db.outbox).insert(OutboxCompanion.insert(op: uid(), txn: txn, t: 'settings', id: 'settings', at: d.now));
         }
         return result;
+      }).then((r) {
+        _saved.add(null);
+        return r;
       });
 }
 
