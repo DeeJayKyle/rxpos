@@ -5,10 +5,10 @@ Every feature of the React app (`src/pages/*.jsx`, `src/*.jsx`), screen by scree
 
 ## Sign-in and the app frame (Auth.jsx, App.jsx, main.jsx, engage.jsx, notify.jsx, refresh.jsx, twostep.jsx)
 - ✅ Sign in by email / username and password; choose a pharmacy; two-step code
-- ✗ Forgot password: email me a code, send a code by SMS, reset with Google
-- ✗ PIN for this device (quick sign-in), "Use password instead"
-- ✗ Change my password, log out from the menu
-- ✗ Two-step sign-in setup (switch on / off) for the signed-in person
+- ✅ Forgot password: email me a code, send a code by SMS, reset with Google (opens the web page, as the React apps do), ask the administrator on WhatsApp
+- ✅ PIN for this device (quick sign-in, five tries), "Use password instead"; offline sign-in with this device's own verifier (30 days); remember me for 30 days
+- ✅ Change my password (asked at once after a temporary password), log out from the menu (unsent changes and held sales stay)
+- ✅ Two-step sign-in setup (QR code, switch on / off) for the signed-in person; asked before switching this device to another pharmacy
 - ✗ Notifications centre (urgent / needs attention / for information) and the badge
 - ✗ "No internet connection" banner; "Setting up" first-run screen
 - ✗ Error screen: "Something went wrong · Reload RxPOS · Download my data"; crash reports to the cloud

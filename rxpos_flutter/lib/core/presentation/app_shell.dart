@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/auth/application/session_controller.dart';
+import '../../features/auth/presentation/account_menu.dart';
 import '../../features/sync_status/presentation/sync_chip.dart';
 import '../data/pharmacy_providers.dart';
 import '../theme/theme_choice.dart';
@@ -43,7 +44,7 @@ class AppShell extends ConsumerWidget {
             Switch(value: premium, onChanged: (v) => ref.read(premiumUiProvider.notifier).set(v)),
           ]),
         ),
-        if (wide && session != null) Padding(padding: const EdgeInsets.symmetric(horizontal: 12), child: Center(child: Text(session.userName))),
+        if (session != null) AccountMenu(session: session, showName: wide),
       ],
     );
     return CallbackShortcuts(

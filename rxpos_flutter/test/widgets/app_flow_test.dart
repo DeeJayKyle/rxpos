@@ -13,6 +13,7 @@ import 'package:rxpos/core/database/app_database.dart';
 import 'package:rxpos/core/network/dio_client.dart';
 import 'package:rxpos/core/rules/passwords.dart';
 import 'package:rxpos/core/rules/dates.dart';
+import 'package:rxpos/features/auth/domain/offline_secrets.dart';
 import 'package:rxpos/features/calendar/domain/calendar.dart';
 import 'package:rxpos/features/calendar/presentation/calendar_screen.dart';
 import 'package:rxpos/features/drug_info/presentation/drug_info_screen.dart';
@@ -22,6 +23,10 @@ import 'package:rxpos/features/sync_status/application/sync_controller.dart';
 import '../sync/fake_cloud.dart';
 
 void main() {
+  setUpAll(() {
+    passwordIterations = 50;
+    pinIterations = 50;
+  });
   late AppDatabase db;
   late FakeCloud cloud;
   final weatherCalls = <String>[];
@@ -39,7 +44,7 @@ void main() {
           ? (
               200,
               {
-                'token': 'tok',
+                'token': 'u.tok',
                 'tenant': 't1',
                 'slug': 't1',
                 'pharmacy': 'Sample Pharmacy',
@@ -131,7 +136,7 @@ void main() {
           KvCompanion.insert(
             k: 'session',
             v: jsonEncode({
-              'token': 'tok',
+              'token': 'u.tok',
               'tenant': 't1',
               'slug': 't1',
               'pharmacy': 'Sample Pharmacy',
@@ -1367,6 +1372,173 @@ void main() {
     await tester.tap(find.text('Add event'));
     await settle(tester);
     expect(find.byKey(const Key('event-title')), findsOneWidget);
+    await done(tester);
+  });
+
+  /// Wait (real time, up to 20 s) until [ready] holds: hashing a password on another thread takes a moment.
+  Future<void> until(WidgetTester tester, Future<bool> Function() ready) async {
+    for (var i = 0; i < 200; i++) {
+      if ((await tester.runAsync(ready)) == true) break;
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 100)));
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    await settle(tester, 4);
+  }
+
+  /// Pump (real time, up to 20 s) until [f] finds something.
+  Future<void> untilShown(WidgetTester tester, Finder f) async {
+    for (var i = 0; i < 200 && f.evaluate().isEmpty; i++) {
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 100)));
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    await settle(tester, 2);
+  }
+
+  Future<void> menu(WidgetTester tester, String item) async {
+    await tester.tap(find.byKey(const Key('account-menu')));
+    await settle(tester, 8); // the menu has opened
+    await tester.tap(find.text(item));
+    await settle(tester, 4);
+  }
+
+  Future<void> typeSecret(WidgetTester tester, String v, String button) async {
+    await tester.enterText(find.descendant(of: find.byKey(const Key('secret')), matching: find.byType(EditableText)), v);
+    await tester.tap(find.widgetWithText(FilledButton, button));
+    await settle(tester, 6);
+  }
+
+  testWidgets('account menu: change my password, a quick PIN, log out, then the PIN signs in offline', (tester) async {
+    await tester.runAsync(signedIn);
+    await tester.runAsync(() => RecordStore(db).update((d) => d.put('users', {'id': 'u1', 'name': 'Tia Admin', 'email': 'tia@test.rx', 'username': 'tia', 'role': 'admin'})));
+    await start(tester);
+    await menu(tester, 'Change my password');
+    await typeSecret(tester, 'short', 'Next');
+    expect(find.text('Use a password of at least 8 characters.'), findsOneWidget);
+    await typeSecret(tester, 'new-pass-9', 'Next');
+    await typeSecret(tester, 'new-pass-9', 'Save password');
+    await until(tester, () async => (await RecordStore(db).get('users', 'u1'))?['algo'] == 'pbkdf2');
+    final me = (await tester.runAsync(() => RecordStore(db).get('users', 'u1')))!;
+    expect((me['algo'], verifyPassword(me, 'new-pass-9')), ('pbkdf2', true));
+    noSnackBars(tester);
+
+    await menu(tester, 'Set a quick PIN for this device');
+    await typeSecret(tester, '2468', 'Next');
+    await typeSecret(tester, '2468', 'Save PIN');
+    await untilShown(tester, find.text('Quick PIN set for this device'));
+    expect(find.text('Quick PIN set for this device'), findsOneWidget);
+    noSnackBars(tester);
+
+    await menu(tester, 'Log out');
+    await settle(tester);
+    expect(find.text('Sign in · this device: Sample Pharmacy'), findsOneWidget);
+    cloud.login = null; // no internet
+    await tester.enterText(find.widgetWithText(TextField, 'Email or username'), 'tia');
+    await untilShown(tester, find.text('Use the PIN for this device'));
+    await tester.tap(find.text('Use the PIN for this device'));
+    await settle(tester, 3);
+    expect(find.text('Enter the PIN set on this device for Tia Admin'), findsOneWidget);
+    await tester.enterText(find.byKey(const Key('otp-pin')), '1357');
+    await tester.pump();
+    await tester.tap(find.widgetWithText(FilledButton, 'Sign in'));
+    await untilShown(tester, find.text('Wrong PIN. 4 tries left.'));
+    expect(find.text('Wrong PIN. 4 tries left.'), findsOneWidget);
+    await tester.enterText(find.byKey(const Key('otp-pin')), '2468');
+    await tester.pump();
+    await tester.tap(find.widgetWithText(FilledButton, 'Sign in'));
+    await untilShown(tester, find.byKey(const Key('account-menu')));
+    expect(find.byKey(const Key('account-menu')), findsOneWidget, reason: 'signed in offline with the PIN');
+
+    // and the new password works offline too
+    await menu(tester, 'Log out');
+    await tester.enterText(find.widgetWithText(TextField, 'Email or username'), 'tia@test.rx');
+    await tester.enterText(find.widgetWithText(TextField, 'Password'), 'new-pass-9');
+    await tester.tap(find.widgetWithText(FilledButton, 'Sign in'));
+    await untilShown(tester, find.byKey(const Key('account-menu')));
+    expect(find.byKey(const Key('account-menu')), findsOneWidget);
+    await done(tester);
+  });
+
+  testWidgets('a temporary password: asked for a new one at once', (tester) async {
+    await tester.runAsync(signedIn);
+    await tester.runAsync(() => RecordStore(db).update((d) => d.put('users', {'id': 'u1', 'name': 'Tia Admin', 'email': 'tia@test.rx', 'role': 'admin', 'mustChangePassword': true})));
+    await start(tester);
+    expect(find.text('Welcome, Tia. Set your own password'), findsOneWidget);
+    await typeSecret(tester, 'mine-only-1', 'Next');
+    await typeSecret(tester, 'mine-only-1', 'Save password');
+    await until(tester, () async => (await RecordStore(db).get('users', 'u1'))?['algo'] == 'pbkdf2');
+    final me = (await tester.runAsync(() => RecordStore(db).get('users', 'u1')))!;
+    expect(me.containsKey('mustChangePassword'), isFalse);
+    final audit = (await tester.runAsync(() => RecordStore(db).rows('audit')))!;
+    expect(audit.single['action'], 'Password changed');
+    await done(tester);
+  });
+
+  testWidgets('forgot password: a code by SMS, then the new password; remember me', (tester) async {
+    cloud.api['password/forgot'] = (b) => (200, {'message': 'We sent a code by SMS.', 'hint': '07•• ••• 123'});
+    cloud.api['password/reset'] = (b) => b['code'] == '654321' ? (200, {'ok': true}) : (400, {'error': 'That code is not right.'});
+    await start(tester);
+    await tester.tap(find.byKey(const Key('remember-me')));
+    await settle(tester, 3);
+    expect(find.text('Stays signed in on this device. Leave it off on a shared computer.'), findsOneWidget);
+    await tester.tap(find.text('Forgot password?'));
+    await settle(tester);
+    await tester.tap(find.text('Send a code by SMS'));
+    await settle(tester);
+    expect(find.text('Enter your email first.'), findsOneWidget);
+    await tester.enterText(find.widgetWithText(TextField, 'Your email'), 'tia@test.rx');
+    await tester.tap(find.text('Send a code by SMS'));
+    await settle(tester);
+    expect(find.text('We sent a code by SMS. (07•• ••• 123)'), findsOneWidget);
+    await tester.enterText(find.byKey(const Key('reset-code')), '111111');
+    await tester.enterText(find.widgetWithText(TextField, 'New password (8+ characters)'), 'brand-new-1');
+    await tester.tap(find.text('Set new password'));
+    await settle(tester);
+    expect(find.text('That code is not right.'), findsOneWidget);
+    await tester.enterText(find.byKey(const Key('reset-code')), '654321');
+    await tester.tap(find.text('Set new password'));
+    await settle(tester);
+    expect(find.text('Password changed. Sign in with it now.'), findsOneWidget);
+    expect(cloud.calls.where((c) => c.$1 == 'password/reset').last.$2['channel'], 'sms');
+    expect(find.text('Forgot password?'), findsOneWidget, reason: 'back to sign in');
+    final kept = await tester.runAsync(() => (db.select(db.kv)..where((x) => x.k.equals('device:remember-choice'))).getSingleOrNull());
+    expect(kept?.v, '1');
+    await done(tester);
+  });
+
+  testWidgets('two-step sign-in: set it up with the QR code, then it is on', (tester) async {
+    var enabled = false;
+    cloud.api['2fa'] = (_) => (200, {'enabled': enabled});
+    cloud.api['2fa/setup'] = (_) => (200, {'uri': 'otpauth://totp/RxPOS:tia?secret=JBSWY3DPEHPK3PXP', 'secret': 'JBSWY3DPEHPK3PXP'});
+    cloud.api['2fa/enable'] = (b) => b['code'] == '246810' ? (200, {'ok': (enabled = true)}) : (400, {'error': 'That code is not right.'});
+    await tester.runAsync(signedIn);
+    await start(tester);
+    await menu(tester, 'Two-step sign-in');
+    await tester.tap(find.text('Set it up'));
+    await settle(tester);
+    expect(find.byKey(const Key('twostep-qr')), findsOneWidget);
+    expect(find.text('Or type the key: JBSW Y3DP EHPK 3PXP'), findsOneWidget);
+    await tester.enterText(find.byKey(const Key('twostep-code')), '246810');
+    await tester.pump();
+    await tester.tap(find.text('Switch on'));
+    await settle(tester);
+    expect(find.text('Two-step sign-in is on for your account.'), findsOneWidget);
+    expect(enabled, isTrue);
+    final trusted = await tester.runAsync(() => (db.select(db.kv)..where((x) => x.k.equals('device:2fa-ok:t1:u1'))).getSingleOrNull());
+    expect(trusted?.v, '1', reason: 'this device may sign them in offline');
+    await done(tester);
+  });
+
+  testWidgets('sign-in and the account menu on a phone fit the screen', (tester) async {
+    await start(tester, size: const Size(400, 800));
+    await tester.tap(find.text('Forgot password?'));
+    await settle(tester);
+    expect(find.text('Email me a code'), findsOneWidget);
+    await done(tester);
+    await tester.runAsync(signedIn);
+    await start(tester, size: const Size(400, 800));
+    await tester.tap(find.byKey(const Key('account-menu')));
+    await settle(tester, 4);
+    expect(find.text('Log out'), findsOneWidget);
     await done(tester);
   });
 }

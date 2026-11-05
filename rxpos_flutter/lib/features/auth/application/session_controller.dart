@@ -19,13 +19,17 @@ AuthRepository authRepository(Ref ref) =>
 class SessionController extends _$SessionController {
   @override
   Future<Session?> build() async {
-    final s = await ref.read(authRepositoryProvider).restore();
+    final s = await ref.read(authRepositoryProvider).restore(appStart: true);
     ref.read(authTokenProvider.notifier).set(s?.token);
     return s;
   }
 
-  Future<SignInOutcome> signIn({required String email, required String password, String? pharmacy, String? code}) async {
-    final out = await ref.read(authRepositoryProvider).signIn(email: email, password: password, pharmacy: pharmacy, code: code);
+  Future<SignInOutcome> signIn({required String email, required String password, String? pharmacy, String? code, bool remember = true, bool allowSwitch = false}) async =>
+      _done(await ref.read(authRepositoryProvider).signIn(email: email, password: password, pharmacy: pharmacy, code: code, remember: remember, allowSwitch: allowSwitch));
+
+  Future<SignInOutcome> signInWithPin(String login, String pin, {bool remember = true}) async => _done(await ref.read(authRepositoryProvider).signInWithPin(login, pin, remember: remember));
+
+  SignInOutcome _done(SignInOutcome out) {
     if (out is SignedIn) {
       ref.read(authTokenProvider.notifier).set(out.session.token);
       state = AsyncData(out.session);
