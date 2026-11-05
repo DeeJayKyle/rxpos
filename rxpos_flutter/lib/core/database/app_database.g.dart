@@ -1546,6 +1546,22 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $OutboxTable outbox = $OutboxTable(this);
   late final $RejectedOpsTable rejectedOps = $RejectedOpsTable(this);
   late final $KvTable kv = $KvTable(this);
+  late final Index recordsByTable = Index(
+    'records_by_table',
+    'CREATE INDEX records_by_table ON records (t)',
+  );
+  late final Index productsByBarcode = Index(
+    'products_by_barcode',
+    'CREATE INDEX products_by_barcode ON records (json_extract(json, \'\$.barcode\')) WHERE t = \'products\'',
+  );
+  late final Index movementsByProduct = Index(
+    'movements_by_product',
+    'CREATE INDEX movements_by_product ON records (json_extract(json, \'\$.productId\')) WHERE t = \'movements\'',
+  );
+  late final Index batchesByProduct = Index(
+    'batches_by_product',
+    'CREATE INDEX batches_by_product ON records (json_extract(json, \'\$.productId\')) WHERE t = \'batches\'',
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -1556,6 +1572,10 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     outbox,
     rejectedOps,
     kv,
+    recordsByTable,
+    productsByBarcode,
+    movementsByProduct,
+    batchesByProduct,
   ];
   @override
   DriftDatabaseOptions get options =>

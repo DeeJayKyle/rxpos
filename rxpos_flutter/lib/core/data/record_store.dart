@@ -111,6 +111,23 @@ class RecordStore {
     return r == null ? null : _decode(r.json);
   }
 
+  // Lookups served by the schema-2 indexes (the expressions must match the index definitions exactly).
+  Future<List<Map<String, Object?>>> _byJsonKey(String t, String path, String value) async => [
+        for (final r in await db.customSelect(
+          "SELECT json FROM records WHERE t = ? AND json_extract(json, '\$.$path') = ?",
+          variables: [Variable.withString(t), Variable.withString(value)],
+          readsFrom: {db.records},
+        ).get())
+          _decode(r.read<String>('json')),
+      ];
+
+  /// The pharmacy's own medicine with this barcode (the built-in catalogue is searched in memory).
+  Future<Map<String, Object?>?> productByBarcode(String barcode) async => (await _byJsonKey('products', 'barcode', barcode)).firstOrNull;
+
+  Future<List<Map<String, Object?>>> movementsOf(String productId) => _byJsonKey('movements', 'productId', productId);
+
+  Future<List<Map<String, Object?>>> batchesOf(String productId) => _byJsonKey('batches', 'productId', productId);
+
   Future<Map<String, Object?>> settingsRecord() async {
     final r = await (db.select(db.kv)..where((x) => x.k.equals(settingsKey))).getSingleOrNull();
     return r == null ? <String, Object?>{} : _decode(r.v);

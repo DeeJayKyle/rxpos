@@ -16,10 +16,15 @@ Milestone 1 is the till and sync on Windows and Android. Each step ends with tes
 - [x] Built-in catalogue (`core/data/catalog.dart`, `assets/catalog.json`): same ids, barcodes and costs as the React app.
 
 ## 2. Local database and migrations
-- [ ] Schema v1 (done): `records`, `tombstones`, `outbox`, `rejected_ops`, `kv`.
-- [ ] Indexes the till needs: products by barcode and by name; movements and batches by product.
-- [ ] Migration tests: every later schema version upgrades a saved v1 database file in a test.
-- [ ] First start: download the pharmacy (full pull) with progress, then keep up by server cursor.
+- [x] Schema v1: `records`, `tombstones`, `outbox`, `rejected_ops`, `kv`.
+- [x] Schema v2: lookup indexes (records by table; partial expression indexes on the JSON for a medicine by barcode,
+      and a medicine's movements and batches). Name search stays in memory with the ported search rules, as in React.
+- [x] Migration tests with Drift's schema verifier (`drift_schemas/`, `test/database/`): v1 → v2 gives exactly the v2
+      schema, keeps records, unsent changes and settings; the lookups are checked to use the indexes.
+- [x] First download and keeping up (`core/sync/downloader.dart`): pages by server cursor with progress; each page and
+      its position saved in one transaction; an interrupted first download resumes instead of starting again; the
+      React merge rules (last writer wins, deleted here stays deleted, pharmacy details from the cloud); cloud restore
+      (epoch) and "Download everything again". Tested against a fake cloud that behaves like worker/index.js.
 
 ## 3. Sync (protocol 2, same cloud)
 - [ ] Sign in (`/api/login`, two-step), session in `kv`, token in Dio; "Sign in again" when it expires.

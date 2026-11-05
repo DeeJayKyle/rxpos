@@ -9,7 +9,13 @@ part 'app_database.g.dart';
 // (Freezed) are decoded from these rows for the screens.
 
 /// One synced record: table name, id, the record as JSON, and when it last changed.
+/// Indexes (schema 2): by table, and expression indexes on the JSON for what the till looks up by key: a medicine by
+/// barcode, and a medicine's stock movements and batches.
 @DataClassName('RecordRow')
+@TableIndex(name: 'records_by_table', columns: {#t})
+@TableIndex.sql("CREATE INDEX products_by_barcode ON records (json_extract(json, '\$.barcode')) WHERE t = 'products'")
+@TableIndex.sql("CREATE INDEX movements_by_product ON records (json_extract(json, '\$.productId')) WHERE t = 'movements'")
+@TableIndex.sql("CREATE INDEX batches_by_product ON records (json_extract(json, '\$.productId')) WHERE t = 'batches'")
 class Records extends Table {
   TextColumn get t => text()();
   TextColumn get id => text()();
@@ -65,17 +71,24 @@ class Kv extends Table {
 class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor]) : super(executor ?? driftDatabase(name: 'rxpos'));
 
+  /// 1: records, tombstones, outbox, rejected_ops, kv. 2: lookup indexes.
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
-        onCreate: (m) async {
-          await m.createAll();
-          await m.createIndex(Index('records_by_table', 'CREATE INDEX records_by_table ON records (t)'));
+        onCreate: (m) => m.createAll(),
+        // One step per version, each tested on a real database of the older version (test/database/migration_test.dart,
+        // schemas in drift_schemas/). Steps only add: a device's records are never rewritten by an upgrade.
+        onUpgrade: (m, from, to) async {
+          if (from < 2) {
+            // version 1 devices made this index at creation time, outside the schema
+            await customStatement('CREATE INDEX IF NOT EXISTS records_by_table ON records (t)');
+            await m.create(productsByBarcode);
+            await m.create(movementsByProduct);
+            await m.create(batchesByProduct);
+          }
         },
-        // Each schema change gets its own step (from 1 to 2, 2 to 3, …) and a test that upgrades a real old file.
-        onUpgrade: (m, from, to) async {},
         beforeOpen: (details) async => customStatement('PRAGMA foreign_keys = ON'),
       );
 }
