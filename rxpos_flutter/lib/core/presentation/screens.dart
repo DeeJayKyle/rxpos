@@ -9,6 +9,8 @@ import '../../features/settings/presentation/settings_screen.dart';
 import '../../features/settings/presentation/settings_screens.dart';
 import '../../features/users/presentation/users_screen.dart';
 import '../../features/extras/presentation/extras_screens.dart';
+import '../../features/drug_info/presentation/drug_info_screen.dart';
+import '../../features/extras/presentation/import_screen.dart';
 import '../../features/extras/presentation/labels_screen.dart';
 import '../../features/finance/presentation/finance_screen.dart';
 import '../../features/inventory/presentation/inventory_screen.dart';

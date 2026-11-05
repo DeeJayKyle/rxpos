@@ -8,6 +8,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
+import '../../drug_info/presentation/drug_info_screen.dart';
 import '../../../core/data/pharmacy_providers.dart';
 import '../../../core/entities/product.dart';
 import '../../../core/entities/settings.dart';
@@ -354,22 +355,26 @@ Future<void> showDrugInfo(BuildContext context, Product p, PharmacyData d) => sh
   builder: (c) => AlertDialog(
     title: Text(p.name),
     content: SizedBox(
-      width: 420,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text([p.generic, p.form, p.strength].where((x) => x.isNotEmpty).join(' · ')),
-          const SizedBox(height: 6),
-          Text('${p.rx ? 'Prescription only' : 'Over the counter'}${p.controlled ? ' · controlled drug' : ''}'),
-          Text('Price ${d.settings.money(p.price)} · in stock ${formatQty(d.stockOf(p.id))}'),
-          if (p.generic.isNotEmpty) ...[
+      width: 520,
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text([p.generic, p.form, p.strength].where((x) => x.isNotEmpty).join(' · ')),
             const SizedBox(height: 6),
-            Text(
-              'Same medicine, other brands: ${d.products.where((x) => x.id != p.id && x.generic.toLowerCase() == p.generic.toLowerCase()).map((x) => '${x.name} (${formatQty(d.stockOf(x.id))})').take(8).join(', ').ifEmpty('none')}',
-            ),
+            Text('${p.rx ? 'Prescription only' : 'Over the counter'}${p.controlled ? ' · controlled drug' : ''}'),
+            Text('Price ${d.settings.money(p.price)} · in stock ${formatQty(d.stockOf(p.id))}'),
+            if (p.generic.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text(
+                'Same medicine, other brands: ${d.products.where((x) => x.id != p.id && x.generic.toLowerCase() == p.generic.toLowerCase()).map((x) => '${x.name} (${formatQty(d.stockOf(x.id))})').take(8).join(', ').ifEmpty('none')}',
+              ),
+            ],
+            const Divider(height: 20),
+            DrugInfoPanel(name: p.name, generic: p.generic, compact: true),
           ],
-        ],
+        ),
       ),
     ),
     actions: [FilledButton(onPressed: () => Navigator.pop(c), child: const Text('Close'))],

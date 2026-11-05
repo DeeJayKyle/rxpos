@@ -12,6 +12,7 @@ import 'package:rxpos/core/data/record_store.dart';
 import 'package:rxpos/core/database/app_database.dart';
 import 'package:rxpos/core/network/dio_client.dart';
 import 'package:rxpos/core/rules/passwords.dart';
+import 'package:rxpos/features/drug_info/presentation/drug_info_screen.dart';
 import 'package:rxpos/features/sync_status/application/sync_controller.dart';
 
 import '../sync/fake_cloud.dart';
@@ -65,6 +66,17 @@ void main() {
           dioProvider.overrideWithValue(cloud.dio()),
           syncAutomaticallyProvider.overrideWithValue(false),
           catalogProvider.overrideWith((_) async => const []),
+          drugFetchProvider.overrideWithValue((url, _) async => url.contains('amoxicillin')
+              ? (200, {
+                  'results': [
+                    {
+                      'openfda': {'generic_name': ['AMOXICILLIN'], 'brand_name': ['AMOXIL']},
+                      'indications_and_usage': ['Bacterial infections.'],
+                      'dosage_and_administration': ['500 mg three times a day.'],
+                    },
+                  ],
+                })
+              : (404, null)),
         ],
         child: const RxposApp(),
       ),
@@ -461,9 +473,20 @@ void main() {
     expect(find.text('You deleted this message'), findsOneWidget);
 
     await navTo(tester, 'Import medicines');
-    await tester.enterText(find.byType(TextField).last, 'name,generic\nNew Syrup 100ml,Newgen,Syrups,4000,2500,,Bottle');
+    expect(find.text('Already included: built into RxPOS'), findsOneWidget);
+    await tester.tap(find.text('Excel / CSV file'));
+    await settle(tester);
+    await tester.enterText(find.byKey(const Key('import-paste')), 'Name,Generic,Formulation,Retail price,Cost,Barcode,Unit,Stock,Expiry\nNew Syrup 100ml,Newgen,Syrups,4000,2500,,Bottle,12,06/2028');
+    await tester.tap(find.text('Use the pasted rows'));
+    await settle(tester);
+    expect(find.text('Pasted rows · 1 rows'), findsOneWidget);
+    expect(find.text('2028-06-30'), findsOneWidget, reason: 'month/year expiry is the last day of the month');
+    await tester.ensureVisible(find.text('Import 1 rows'));
+    await tester.tap(find.text('Import 1 rows'));
+    await settle(tester);
     await tester.tap(find.widgetWithText(FilledButton, 'Import'));
     await settle(tester);
+    expect(find.text('1 added · 0 updated · 0 skipped · 1 with opening stock'), findsOneWidget);
     final products = (await tester.runAsync(() => RecordStore(db).rows('products')))!;
     expect(products.any((p) => p['name'] == 'New Syrup 100ml' && p['price'] == 4000), isTrue);
 

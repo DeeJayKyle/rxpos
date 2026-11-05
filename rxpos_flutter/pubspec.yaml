@@ -55,6 +55,8 @@ dependencies:
   record: ^7.1.2
   audioplayers: ^6.8.1
   barcode: ^2.2.9
+  archive: ^4.0.0
+  xml: ^7.0.1
 
 dev_dependencies:
   flutter_test:

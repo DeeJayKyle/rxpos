@@ -7,7 +7,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/data/pharmacy_providers.dart';
 import '../../../core/data/record_store.dart';
-import '../../../core/entities/product.dart';
 import '../../../core/presentation/export.dart';
 import '../../../core/entities/movement.dart';
 import '../../../core/entities/sale.dart';
@@ -17,7 +16,6 @@ import '../../../core/presentation/widgets.dart';
 import '../../../core/rules/dates.dart';
 import '../../../core/rules/ids.dart';
 import '../../../core/rules/money.dart';
-import '../../../core/rules/search.dart';
 import '../../../core/sync/sync_engine.dart';
 import '../../auth/application/session_controller.dart';
 import '../domain/extras.dart';
@@ -248,82 +246,6 @@ class _ControlledScreenState extends ConsumerState<ControlledScreen> {
               trailing: Text(st.money(r.qty * r.i.price))),
       ],
     ]);
-  }
-}
-
-/// Import medicines: paste rows from a spreadsheet (name, generic, form, price, cost, barcode, unit; tab or comma
-/// separated); medicines already in the list (same name) are skipped.
-class ImportScreen extends ConsumerStatefulWidget {
-  const ImportScreen({super.key});
-  @override
-  ConsumerState<ImportScreen> createState() => _ImportScreenState();
-}
-
-class _ImportScreenState extends ConsumerState<ImportScreen> {
-  final _text = TextEditingController();
-  @override
-  Widget build(BuildContext context) => PageFrame(
-        title: 'Import medicines',
-        subtitle: 'Columns: name, generic, form, price, cost, barcode, unit (copy them from Excel and paste below)',
-        actions: [FilledButton.icon(onPressed: _import, icon: const Icon(Icons.upload), label: const Text('Import'))],
-        child: TextField(controller: _text, maxLines: null, expands: true, decoration: const InputDecoration(border: OutlineInputBorder(), hintText: 'Amoxa 500mg Caps\tAmoxicillin\tCapsules\t500\t300\t6001001\tCapsule')),
-      );
-
-  Future<void> _import() async {
-    final d = await ref.read(pharmacyProvider.future);
-    final have = {for (final p in d.products) p.name.trim().toLowerCase()};
-    final rows = <Map<String, Object?>>[];
-    for (final line in _text.text.split('\n')) {
-      final c = line.contains('\t') ? line.split('\t') : line.split(',');
-      final name = c.isNotEmpty ? c[0].trim() : '';
-      if (name.length < 2 || name.toLowerCase() == 'name' || !have.add(name.toLowerCase())) continue;
-      String at(int i) => i < c.length ? c[i].trim() : '';
-      final price = double.tryParse(at(3).replaceAll(',', '')) ?? 0, cost = double.tryParse(at(4).replaceAll(',', '')) ?? 0;
-      rows.add({'id': uid(), 'name': name, 'generic': at(1), 'form': at(2).isEmpty ? 'Others' : at(2), 'price': price, 'wholesale': price, 'cost': cost,
-        'barcode': at(5), 'unit': at(6).isEmpty ? 'Unit' : at(6), 'reorder': 0});
-    }
-    if (rows.isEmpty) {
-      if (mounted) say(context, 'Nothing new to import', error: true);
-      return;
-    }
-    final by = await _me(ref);
-    await ref.read(recordStoreProvider).update((x) {
-      for (final r in rows) {
-        x.put('products', r);
-      }
-      x.audit(by, 'Medicines imported', '${rows.length} medicines');
-    });
-    _text.clear();
-    if (mounted) say(context, '${rows.length} medicines imported');
-  }
-}
-
-/// Drug information: find a medicine and see what the pharmacy knows about it (generic, form, prices, stock, batches).
-class DrugInfoScreen extends ConsumerStatefulWidget {
-  const DrugInfoScreen({super.key});
-  @override
-  ConsumerState<DrugInfoScreen> createState() => _DrugInfoScreenState();
-}
-
-class _DrugInfoScreenState extends ConsumerState<DrugInfoScreen> {
-  String _q = '';
-  @override
-  Widget build(BuildContext context) {
-    final d = ref.watch(pharmacyProvider).value;
-    if (d == null) return const Center(child: CircularProgressIndicator());
-    final found = _q.trim().length < 2 ? const <Product>[] : searchProducts(d.products, _q, stockOf: (p) => d.stockOf(p.id)).take(30).toList();
-    return PageFrame(
-      title: 'Drug information',
-      actions: [SearchField(onChanged: (v) => setState(() => _q = v), hint: 'Brand or generic name…')],
-      child: ListView(children: [
-        for (final p in found)
-          ExpansionTile(title: Text(p.name), subtitle: Text([p.generic, p.form, p.strength].where((x) => x.isNotEmpty).join(' · ')), children: [
-            ListTile(dense: true, title: Text('Price ${d.settings.money(p.price)} · wholesale ${d.settings.money(p.wholesale)} · ${p.rx ? 'prescription only' : 'over the counter'}${p.controlled ? ' · controlled' : ''}')),
-            ListTile(dense: true, title: Text('In stock ${formatQty(d.stockOf(p.id))}${p.barcode.isEmpty ? '' : ' · barcode ${p.barcode}'}')),
-            ListTile(dense: true, title: Text('Other medicines with ${p.generic.isEmpty ? 'this name' : p.generic}: ${d.products.where((x) => x.id != p.id && x.generic.isNotEmpty && x.generic.toLowerCase() == p.generic.toLowerCase()).map((x) => x.name).take(8).join(', ')}')),
-          ]),
-      ]),
-    );
   }
 }
 
