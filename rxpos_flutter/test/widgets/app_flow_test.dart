@@ -195,7 +195,7 @@ void main() {
     await start(tester);
     await tester.sendKeyEvent(LogicalKeyboardKey.f4);
     await settle(tester);
-    expect(find.text('Add a medicine'), findsOneWidget);
+    expect(find.text('Receive stock'), findsOneWidget);
     await navTo(tester, 'Sync & storage');
     expect(find.text('Download everything again'), findsOneWidget);
     expect(find.textContaining('Signed in as Tia Admin'), findsOneWidget);
@@ -311,7 +311,7 @@ void main() {
     expect(moves.where((m) => m['type'] == 'Stock count').single['qty'], -5);
 
     await go('Purchase history');
-    expect(find.text('No deliveries yet'), findsOneWidget);
+    expect(find.textContaining('No deliveries yet'), findsOneWidget);
     await go('Reorder');
     expect(find.text('Stock levels look healthy. Nothing needs ordering.'), findsOneWidget);
     await go('Expiring / Expired');
@@ -766,6 +766,68 @@ void main() {
     await tester.tap(find.text('Purchase orders'));
     await settle(tester);
     expect(find.text('No purchase orders yet. Create them from Reorder suggestions.'), findsOneWidget);
+    await done(tester);
+  });
+
+  testWidgets('Add Stock parity: search, line total, batch and expiry, receive; a draft continued from Purchase History; edit a delivery', (tester) async {
+    await tester.runAsync(signedIn);
+    await tester.runAsync(() => RecordStore(db).update((d) => d.put('suppliers', {'id': 's1', 'name': 'Sample Wholesalers'})));
+    await start(tester);
+    final store = RecordStore(db);
+    await tester.sendKeyEvent(LogicalKeyboardKey.f4);
+    await settle(tester);
+    Future<void> fillLine() async {
+      await tester.enterText(find.byKey(const Key('stock-search')), 'Calmex');
+      await settle(tester, 3);
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await settle(tester);
+      await tester.enterText(find.widgetWithText(TextFormField, 'Qty').first, '10');
+      await settle(tester, 2);
+      await tester.enterText(find.widgetWithText(TextFormField, 'Line total').first, '2800');
+      await settle(tester, 2);
+      await tester.enterText(find.widgetWithText(TextFormField, 'Batch').first, 'C9');
+      await tester.enterText(find.widgetWithText(TextField, 'Expiry').first, '12/2030');
+      await settle(tester, 2);
+    }
+
+    await fillLine();
+    expect(find.text('Calmex 500mg Tabs'), findsWidgets);
+    await tester.ensureVisible(find.text('Save as draft'));
+    await settle(tester, 2);
+    // save as draft, then carry it on from Purchase History → Drafts
+    await tester.tap(find.text('Save as draft'));
+    await settle(tester);
+    expect((await tester.runAsync(() => store.rows('drafts')))!.single['kind'], 'delivery');
+    await navTo(tester, 'Purchase history');
+    await tester.tap(find.text('Drafts (1)'));
+    await settle(tester);
+    await tester.tap(find.text('Continue'));
+    await settle(tester, 20);
+    expect(find.textContaining('Continuing a saved draft'), findsOneWidget);
+    await tester.ensureVisible(find.text('Receive stock'));
+    await settle(tester, 2);
+    await tester.tap(find.text('Receive stock'));
+    await settle(tester);
+    expect(find.textContaining('Received 1 item(s) worth UGX 2,800'), findsOneWidget);
+    final purchase = (await tester.runAsync(() => store.rows('purchases')))!.single;
+    final item = (purchase['items'] as List).single as Map;
+    expect((item['qty'], item['cost'], item['batch'], item['expiry']), (10, 280, 'C9', '2030-12-31'));
+    expect(await tester.runAsync(() => store.rows('drafts')), isEmpty, reason: 'the draft became the delivery');
+
+    // edit the delivery: 10 → 8, with a reason
+    await navTo(tester, 'Purchase history');
+    await tester.tap(find.byKey(Key('edit-${purchase['number']}')));
+    await settle(tester);
+    await tester.enterText(find.widgetWithText(TextFormField, 'Qty').first, '8');
+    await tester.enterText(find.byKey(const Key('purchase-reason')), 'invoice said 8');
+    await settle(tester, 2);
+    await tester.tap(find.text('Save changes'));
+    await settle(tester);
+    final edit = (await tester.runAsync(() => store.rows('movements')))!.where((m) => m['type'] == 'Purchase edit').single;
+    expect(edit['qty'], -2);
+    await tester.tap(find.text('Supplier prices'));
+    await settle(tester);
+    expect(find.text('Buy the same medicine from two suppliers and their prices are compared here.'), findsOneWidget);
     await done(tester);
   });
 }

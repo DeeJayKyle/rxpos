@@ -81,14 +81,15 @@ Every feature of the React app (`src/pages/*.jsx`, `src/*.jsx`), screen by scree
 
 ## Add Stock and Purchases (Purchases.jsx)
 - ✅ Receive a delivery (packs, batches, costs, prices, new medicines), purchase history
-- ✗ Delivery as an invoice layout: movable columns, date format choice, markup, recalculate price from cost
-- ✗ Save as draft / carry on / start again (also from another device)
-- ✗ New supplier and rename medicine from Add Stock
-- ✗ Scan medicines into the delivery (camera)
-- ✗ Scan supplier invoices (AI reading, pages, review before receiving)
-- ✗ Edit a past delivery (add, remove, change lines; stock adjusted; audit)
-- ✗ Supplier prices tab
-- ✗ Export CSV
+- ✅ Delivery as an invoice layout: movable columns (kept on the device), date format choice, markup, unit cost / line total in step, price from cost (never lower on its own), cheaper-supplier hint
+- ✅ Save as draft / carry on / start again (also from another device: same draft records as the React app); the unfinished delivery kept on the device
+- ✅ New supplier and rename medicine from Add Stock
+- ✅ Scan medicines into the delivery (Android camera, continuous)
+- ✅ Scan supplier invoices (photos / PDFs, pages kept in the pharmacy's cloud, two AI readings, fill in now or drafts for review, lines to check, "I have checked" before receiving)
+- ✅ Receive a purchase order (marked received)
+- ✅ Edit a past delivery (add, remove, change lines; stock adjusted; sold stock protected; audit)
+- ✅ Supplier prices tab; Drafts tab
+- ✅ Filters (dates, supplier), payment type, unpaid, Export CSV / PDF
 
 ## Stock take (StockCount.jsx)
 - ✅ Start, count per batch, found batch, review, post (same records as the React app: system quantity kept when counted)

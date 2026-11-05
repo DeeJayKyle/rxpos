@@ -20,49 +20,384 @@ import '../../extras/domain/extras.dart';
 import '../../../core/rules/stock.dart';
 import '../../auth/application/session_controller.dart';
 import '../../returns/presentation/returns_screen.dart';
+import '../../../core/entities/batch.dart';
+import '../../../core/entities/draft.dart';
+import '../../../core/rules/search.dart';
+import '../../sales_history/presentation/sales_screen.dart' show ageText, isOldDraft;
+import '../../stock/domain/delivery.dart';
+import '../../stock/domain/purchase_edit.dart';
 import '../domain/reorder.dart';
 
-/// Purchase history: every delivery received (newest first), what is still owed on each.
+/// Purchase History (src/pages/Purchases.jsx): deliveries with dates / supplier filters, payment type and what is
+/// unpaid, CSV and PDF, view, edit a delivery (purchases.edit); the Drafts tab (deliveries to finish, scanned invoices
+/// to review); Supplier prices (each medicine bought from more than one supplier, cheapest first).
 class PurchasesScreen extends ConsumerStatefulWidget {
-  const PurchasesScreen({super.key});
+  const PurchasesScreen({super.key, this.tab = 'history'});
+  final String tab;
   @override
   ConsumerState<PurchasesScreen> createState() => _PurchasesScreenState();
 }
 
 class _PurchasesScreenState extends ConsumerState<PurchasesScreen> {
-  String _q = '';
+  String _q = '', _from = '', _to = '', _supplier = '';
+  late String _tab = widget.tab;
+
   @override
   Widget build(BuildContext context) {
     final rows = ref.watch(tableProvider('purchases')).value;
+    final banks = ref.watch(tableProvider('banks')).value ?? const [];
     final st = ref.watch(settingsProvider).value ?? const PharmacySettings();
-    if (rows == null) return const Center(child: CircularProgressIndicator());
+    final can = ref.watch(permissionsProvider).value ?? const <String>{};
+    final d = ref.watch(pharmacyProvider).value;
+    final session = ref.watch(sessionControllerProvider).value;
+    if (rows == null || d == null) return const Center(child: CircularProgressIndicator());
+    String payType(Purchase p) {
+      if (p.paid <= 0) return 'Credit';
+      return '${banks.where((b) => b['id'] == p.bankId).firstOrNull?['name'] ?? 'Cash'}${p.paid < p.total ? ' + credit' : ''}';
+    }
+
     final q = _q.trim().toLowerCase();
-    final list = rows.map(Purchase.fromRecord).where((p) => q.isEmpty || [p.number, p.invoice, p.supplierName, ...p.items.map((i) => i.name)].any((x) => x.toLowerCase().contains(q))).toList()
-      ..sort((a, b) => b.date.compareTo(a.date));
-    final owed = list.fold(0.0, (a, p) => a + (p.total - p.paid));
+    final all = rows.map(Purchase.fromRecord).toList();
+    final suppliers = ({for (final p in all) p.supplierName}..remove('')).toList()..sort();
+    final list = all.where((p) => (q.isEmpty || [p.supplierName, p.invoice, p.number, p.notes, p.receivedBy, ...p.items.map((i) => i.name)].join(' ').toLowerCase().contains(q)) &&
+        (_from.isEmpty || p.date.compareTo(_from) >= 0) && (_to.isEmpty || p.date.compareTo(_to) <= 0) && (_supplier.isEmpty || p.supplierName == _supplier)).toList()
+      ..sort((a, b) => '${b.date}${b.number}'.compareTo('${a.date}${a.number}'));
+    final total = list.fold(0.0, (a, p) => a + p.total), owed = list.fold(0.0, (a, p) => a + (p.total - p.paid > 0 ? p.total - p.paid : 0));
+    final drafts = d.drafts.where((x) => x.kind == 'delivery' && (session?.role != 'cashier' || x.userId == session?.userId)).toList();
     return PageFrame(
-      title: 'Purchase history',
-      subtitle: '${list.length} deliveries · ${st.money(list.fold(0.0, (a, p) => a + p.total))}${owed > 0 ? ' · ${st.money(owed)} unpaid' : ''}',
-      actions: [SearchField(onChanged: (v) => setState(() => _q = v), hint: 'Supplier, invoice, medicine…')],
-      child: list.isEmpty
-          ? const EmptyState('No deliveries yet')
-          : ListView.separated(
-              itemCount: list.length,
-              separatorBuilder: (_, _) => const Divider(height: 1),
-              itemBuilder: (_, i) {
-                final p = list[i];
-                return ExpansionTile(
-                  title: Text('${p.number} · ${p.supplierName}'),
-                  subtitle: Text('${p.date} · invoice ${p.invoice.isEmpty ? '—' : p.invoice} · ${p.items.length} lines · by ${p.receivedBy}${p.paid < p.total ? ' · ${st.money(p.total - p.paid)} unpaid' : ''}'),
-                  trailing: Text(st.money(p.total), style: const TextStyle(fontWeight: FontWeight.w700)),
-                  children: [
-                    for (final it in p.items)
-                      ListTile(dense: true, title: Text(it.name), subtitle: Text('batch ${it.batch} · expires ${it.expiry}'),
-                          trailing: Text('${it.pack != null ? '${formatQty(it.pack!.count)} ${it.pack!.name} = ' : ''}${formatQty(it.qty)} @ ${st.money(it.cost)}')),
-                  ],
-                );
-              },
+      title: 'Purchase History',
+      subtitle: '${list.length} deliveries · ${st.money(total)}${owed > 0 ? ' · ${st.money(owed)} unpaid' : ''}',
+      actions: [
+        SearchField(onChanged: (v) => setState(() => _q = v), hint: 'Supplier, invoice, medicine…'),
+        ExportButtons(
+          name: 'purchases',
+          settings: st,
+          title: 'Purchase history',
+          subtitle: '${list.length} deliveries · ${st.money(total)}',
+          csv: () => [
+            for (final p in list)
+              {'date': p.date, 'number': p.number, 'supplier': p.supplierName, 'invoice': p.invoice, 'paymentType': payType(p), 'items': p.items.length, 'total': p.total, 'paid': p.paid,
+                'receivedBy': p.receivedBy, 'notes': p.notes},
+          ],
+          pdf: () => [
+            PdfTable(head: const ['Date', 'GRN', 'Supplier', 'Payment', 'Invoice', 'Items', 'Received by', 'Total', 'Unpaid'], numeric: const [5, 7, 8], body: [
+              for (final p in list) [p.date, p.number, p.supplierName, payType(p), p.invoice, '${p.items.length}', p.receivedBy, st.money(p.total), p.total > p.paid ? st.money(p.total - p.paid) : '—'],
+            ], foot: ['Total', '', '', '', '', '', '', st.money(total), st.money(owed)]),
+          ],
+        ),
+      ],
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Align(
+          alignment: Alignment.centerLeft,
+          child: SegmentedButton<String>(
+            segments: [
+              const ButtonSegment(value: 'history', label: Text('Deliveries')),
+              ButtonSegment(value: 'drafts', label: Text('Drafts${drafts.isEmpty ? '' : ' (${drafts.length})'}')),
+              const ButtonSegment(value: 'prices', label: Text('Supplier prices')),
+            ],
+            selected: {_tab},
+            onSelectionChanged: (v) => setState(() => _tab = v.first),
+          ),
+        ),
+        const SizedBox(height: 8),
+        if (_tab == 'drafts') Expanded(child: _DeliveryDrafts(drafts: drafts, settings: st)),
+        if (_tab == 'prices') Expanded(child: _SupplierPrices(rows: rows, q: _q, names: {for (final p in d.products) p.id: p.name}, settings: st)),
+        if (_tab == 'history') ...[
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            DateBox(label: 'From', value: _from, onChanged: (v) => setState(() => _from = v)),
+            DateBox(label: 'To', value: _to, onChanged: (v) => setState(() => _to = v)),
+            SizedBox(width: 220, child: DropdownButtonFormField<String>(
+              initialValue: _supplier,
+              isExpanded: true,
+              decoration: const InputDecoration(labelText: 'Supplier', isDense: true),
+              items: [const DropdownMenuItem(value: '', child: Text('All')), for (final x in suppliers) DropdownMenuItem(value: x, child: Text(x))],
+              onChanged: (v) => setState(() => _supplier = v ?? ''),
+            )),
+          ]),
+          const SizedBox(height: 8),
+          Expanded(
+            child: list.isEmpty
+                ? EmptyState(all.isEmpty ? 'No deliveries yet. Each delivery you receive in Add Stock is kept here with its invoice, to view or correct.' : 'No deliveries match')
+                : ListView.separated(
+                    itemCount: list.length + 1,
+                    separatorBuilder: (_, _) => const Divider(height: 1),
+                    itemBuilder: (_, i) {
+                      if (i == list.length) {
+                        return ListTile(title: Text('Total · ${list.length} deliveries', style: const TextStyle(fontWeight: FontWeight.w700)),
+                            trailing: Text('${st.money(total)}${owed > 0 ? ' · unpaid ${st.money(owed)}' : ''}', style: const TextStyle(fontWeight: FontWeight.w800)));
+                      }
+                      final p = list[i];
+                      return ListTile(
+                        title: Text('${p.number} · ${p.supplierName}${p.raw['editedAt'] != null ? ' · edited' : ''}'),
+                        subtitle: Text('${p.date} · ${payType(p)} · invoice ${p.invoice.isEmpty ? '—' : p.invoice} · ${p.items.length} lines · by ${p.receivedBy}${p.notes.isEmpty ? '' : ' · ${p.notes}'}'),
+                        trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                          Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.end, children: [
+                            Text(st.money(p.total), style: const TextStyle(fontWeight: FontWeight.w700)),
+                            if (p.total > p.paid) Text('${st.money(p.total - p.paid)} unpaid', style: TextStyle(color: Colors.orange.shade800, fontSize: 12)),
+                          ]),
+                          TextButton(onPressed: () => _view(p, st, payType(p)), child: const Text('View')),
+                          if (can.contains('purchases.edit') && p.raw['imported'] == null)
+                            TextButton(key: Key('edit-${p.number}'), onPressed: () => showDialog<void>(context: context, builder: (_) => PurchaseEditor(purchase: p.toRecord())), child: const Text('Edit')),
+                        ]),
+                        onTap: () => _view(p, st, payType(p)),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ]),
+    );
+  }
+
+  Future<void> _view(Purchase p, PharmacySettings st, String pay) => showDialog<void>(
+        context: context,
+        builder: (c) => AlertDialog(
+          title: Text('Purchase ${p.number}'),
+          content: SizedBox(
+            width: 600,
+            child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('${p.supplierName} · invoice ${p.invoice.isEmpty ? '—' : p.invoice} · ${p.date} · $pay'),
+              if (p.notes.isNotEmpty) Text('Notes: ${p.notes}'),
+              const Divider(),
+              for (final it in p.items)
+                ListTile(dense: true, title: Text(it.name), subtitle: Text('batch ${it.batch.isEmpty ? '—' : it.batch} · expires ${it.expiry.isEmpty ? '—' : it.expiry}'),
+                    trailing: Text('${it.pack != null ? '${formatQty(it.pack!.count)} ${it.pack!.name} = ' : ''}${formatQty(it.qty)} × ${st.money(it.cost)} = ${st.money(it.qty * it.cost)}')),
+              Text('Total ${st.money(p.total)} · paid ${st.money(p.paid)}', style: const TextStyle(fontWeight: FontWeight.w800)),
+            ])),
+          ),
+          actions: [FilledButton(onPressed: () => Navigator.pop(c), child: const Text('Close'))],
+        ),
+      );
+}
+
+class _DeliveryDrafts extends ConsumerWidget {
+  const _DeliveryDrafts({required this.drafts, required this.settings});
+  final List<Draft> drafts;
+  final PharmacySettings settings;
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final session = ref.watch(sessionControllerProvider).value;
+    if (drafts.isEmpty) return const EmptyState('No delivery drafts. In Add Stock, "Save as draft" keeps a delivery to finish later or on another device.');
+    final list = [...drafts]..sort((a, b) => a.order.compareTo(b.order));
+    return ListView(children: [
+      for (final x in list)
+        Card(
+          child: ListTile(
+            leading: Icon(x.raw['scan'] != null ? Icons.document_scanner_outlined : Icons.inventory_2_outlined),
+            title: Text(x.title),
+            subtitle: Text([
+              '${x.count.round()} item${x.count.round() == 1 ? '' : 's'}',
+              if ('${x.raw['invoice'] ?? ''}'.isNotEmpty) 'invoice ${x.raw['invoice']}',
+              x.userId == session?.userId ? 'started by you' : 'started by ${x.userName}',
+              ageText(x.startedAt),
+              if (x.raw['scan'] case final Map scan) 'scanned · ${(scan['unclear'] as num? ?? 0) > 0 ? '${scan['unclear']} line(s) to check' : 'every line read clearly'}${scan['totalMatches'] == false ? ' · lines don\'t add up to the invoice total' : ''}',
+            ].join(' · '), style: TextStyle(color: isOldDraft(x) ? Theme.of(context).colorScheme.error : null)),
+            trailing: Wrap(spacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
+              Text(settings.money(x.total)),
+              FilledButton.tonal(onPressed: () => context.go('/add-stock?draft=${x.id}'), child: Text(x.userId == session?.userId ? 'Continue' : 'Take over')),
+              IconButton(tooltip: 'Discard', icon: const Icon(Icons.delete_outline), onPressed: () async {
+                if (!await confirmAction(context, 'Discard this delivery draft?', '${x.title} · ${x.count.round()} item(s) · ${settings.money(x.total)}. Nothing in stock changes.', 'Discard')) return;
+                final branch = (await ref.read(pharmacyProvider.future)).branch;
+                await ref.read(recordStoreProvider).update((dd) {
+                  dd.del('drafts', x.id);
+                  dd.audit(session?.userName ?? '', 'Draft discarded', 'Delivery "${x.title}" (${x.count.round()} items, ${settings.money(x.total)}) started by ${x.userName} ${ageText(x.startedAt)}', branch);
+                });
+              }),
+            ]),
+          ),
+        ),
+    ]);
+  }
+}
+
+class _SupplierPrices extends StatelessWidget {
+  const _SupplierPrices({required this.rows, required this.q, required this.names, required this.settings});
+  final List<Map<String, Object?>> rows;
+  final String q;
+  final Map<String, String> names;
+  final PharmacySettings settings;
+  @override
+  Widget build(BuildContext context) {
+    final list = [
+      for (final e in supplierPrices(rows).entries)
+        if (e.value.length > 1)
+          (pid: e.key, name: names[e.key] ?? '—', list: e.value, gap: e.value.last.cost - e.value.first.cost, pct: ((e.value.last.cost - e.value.first.cost) / e.value.first.cost * 100).round()),
+    ].where((r) => q.trim().isEmpty || r.name.toLowerCase().contains(q.trim().toLowerCase())).toList()
+      ..sort((a, b) => b.pct.compareTo(a.pct));
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Row(children: [
+        const Expanded(child: Text('Medicines you have bought from more than one supplier, with the price each charged last time. Reorder buys from the cheapest by default.')),
+        ExportButtons(name: 'supplier-prices', settings: settings, title: 'Supplier prices', subtitle: '${list.length} medicines with more than one supplier', pdf: () => [
+          PdfTable(head: const ['Medicine', 'Cheapest', 'Others (last price)', 'Price gap'], body: [
+            for (final r in list)
+              [r.name, '${r.list.first.supplierName} ${settings.money(r.list.first.cost)}', r.list.skip(1).map((o) => '${o.supplierName}: ${settings.money(o.cost)}').join('; '), '${r.pct}%'],
+          ]),
+        ]),
+      ]),
+      Expanded(
+        child: list.isEmpty
+            ? const EmptyState('Buy the same medicine from two suppliers and their prices are compared here.')
+            : ListView(children: [
+                for (final r in list)
+                  ListTile(
+                    title: Text(r.name, style: const TextStyle(fontWeight: FontWeight.w700)),
+                    subtitle: Text('Cheapest: ${r.list.first.supplierName} ${settings.money(r.list.first.cost)} (${r.list.first.date})\n'
+                        '${r.list.skip(1).map((o) => '${o.supplierName}: ${settings.money(o.cost)} (${o.date})').join('\n')}'),
+                    isThreeLine: true,
+                    trailing: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.end, children: [
+                      Text('${r.pct}%', style: TextStyle(fontWeight: FontWeight.w800, color: r.pct >= 10 ? Colors.orange.shade800 : null)),
+                      Text('${settings.money(r.gap)} per unit', style: const TextStyle(fontSize: 12)),
+                    ]),
+                  ),
+              ]),
+      ),
+    ]);
+  }
+}
+
+/// Correct a past delivery (purchases.edit): change any line, remove lines, add lines that were missed; a reason.
+class PurchaseEditor extends ConsumerStatefulWidget {
+  const PurchaseEditor({super.key, required this.purchase});
+  final Map<String, Object?> purchase;
+  @override
+  ConsumerState<PurchaseEditor> createState() => _PurchaseEditorState();
+}
+
+class _PurchaseEditorState extends ConsumerState<PurchaseEditor> {
+  late var _lines = editLinesOf(widget.purchase);
+  late String _supplierId = '${widget.purchase['supplierId'] ?? ''}';
+  late final _invoice = TextEditingController(text: '${widget.purchase['invoice'] ?? ''}'), _notes = TextEditingController(text: '${widget.purchase['notes'] ?? ''}');
+  late final _paid = TextEditingController(text: formatQty((widget.purchase['paid'] ?? widget.purchase['total']) as num? ?? 0));
+  late String _date = '${widget.purchase['date'] ?? today()}';
+  final _reason = TextEditingController();
+  int _round = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final d = ref.watch(pharmacyProvider).value;
+    if (d == null) return const SizedBox();
+    final st = d.settings;
+    final pu = widget.purchase;
+    final orig = ((pu['items'] as List?) ?? const []).cast<Map>();
+    final total = _lines.where((l) => !l.removed).fold<double>(0, (a, l) => a + l.qty * l.cost);
+    Widget numBox(String key, double v, ValueChanged<double> on, {double w = 80, String label = ''}) => SizedBox(
+        width: w,
+        child: TextFormField(key: Key('$key-$_round'), initialValue: formatQty(v), keyboardType: TextInputType.number, decoration: InputDecoration(labelText: label, isDense: true),
+            onChanged: (x) => setState(() => on(double.tryParse(x) ?? 0))));
+    return AlertDialog(
+      title: Text('Edit purchase ${pu['number']}'),
+      content: SizedBox(
+        width: 820,
+        child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Wrap(spacing: 12, runSpacing: 8, children: [
+            SizedBox(width: 220, child: DropdownButtonFormField<String>(
+              initialValue: d.suppliers.any((x) => x.id == _supplierId) ? _supplierId : null,
+              isExpanded: true,
+              decoration: const InputDecoration(labelText: 'Supplier'),
+              items: [for (final x in [...d.suppliers]..sort((a, b) => a.name.compareTo(b.name))) DropdownMenuItem(value: x.id, child: Text(x.name))],
+              onChanged: (v) => setState(() => _supplierId = v ?? ''),
+            )),
+            SizedBox(width: 140, child: TextField(controller: _invoice, decoration: const InputDecoration(labelText: 'Invoice no.'))),
+            SizedBox(width: 200, child: TextField(controller: _notes, decoration: const InputDecoration(labelText: 'Notes'))),
+            DateBox(label: 'Date', value: _date, onChanged: (v) => setState(() => _date = v)),
+            SizedBox(width: 120, child: TextField(controller: _paid, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Amount paid'))),
+          ]),
+          const SizedBox(height: 8),
+          for (final (k, l) in _lines.indexed)
+            Opacity(
+              opacity: l.removed ? .5 : 1,
+              child: Row(children: [
+                SizedBox(
+                  width: 220,
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    OutlinedButton(
+                      onPressed: l.removed ? null : () async {
+                        final p = await showDialog<Product>(context: context, builder: (_) => _PickMedicine(data: d));
+                        if (p != null) setState(() => _lines[k] = _lines[k].copyWith(productId: p.id, name: p.name, cost: l.orig == null && l.cost == 0 ? p.cost : null));
+                      },
+                      child: Text(l.name.isEmpty ? 'Choose medicine…' : l.name, overflow: TextOverflow.ellipsis),
+                    ),
+                    if (!l.removed && l.orig != null && l.productId != '${orig[l.orig!]['productId']}')
+                      Text('was ${orig[l.orig!]['name']}: its stock is taken back, this one is added', style: TextStyle(fontSize: 11, color: Colors.orange.shade800)),
+                    if (!l.removed && l.orig == null) const Text('added on this edit', style: TextStyle(fontSize: 11)),
+                  ]),
+                ),
+                const SizedBox(width: 6),
+                SizedBox(width: 100, child: TextFormField(key: Key('b-$k-$_round'), initialValue: l.batch, enabled: !l.removed, decoration: const InputDecoration(labelText: 'Batch', isDense: true),
+                    onChanged: (v) => _lines[k] = _lines[k].copyWith(batch: v))),
+                const SizedBox(width: 6),
+                SizedBox(width: 120, child: TextFormField(key: Key('e-$k-$_round'), initialValue: l.expiry, enabled: !l.removed, decoration: const InputDecoration(labelText: 'Expiry', hintText: 'YYYY-MM-DD', isDense: true),
+                    onChanged: (v) => _lines[k] = _lines[k].copyWith(expiry: v.trim()))),
+                const SizedBox(width: 6),
+                numBox('q-$k', l.qty, (v) => _lines[k] = _lines[k].copyWith(qty: v), label: 'Qty'),
+                const SizedBox(width: 6),
+                numBox('c-$k', l.cost, (v) => _lines[k] = _lines[k].copyWith(cost: v), label: 'Cost', w: 100),
+                SizedBox(width: 110, child: Text(l.removed ? 'removed' : st.money(l.qty * l.cost), textAlign: TextAlign.right)),
+                l.removed
+                    ? TextButton(onPressed: () => setState(() => _lines[k] = l.copyWith(removed: false)), child: const Text('Undo'))
+                    : IconButton(tooltip: 'Remove this line', icon: const Icon(Icons.delete_outline), onPressed: () => setState(() {
+                        if (l.orig == null) {
+                          _lines = [..._lines]..removeAt(k);
+                          _round++;
+                        } else {
+                          _lines[k] = l.copyWith(removed: true);
+                        }
+                      })),
+              ]),
             ),
+          Row(children: [
+            TextButton.icon(onPressed: () => setState(() => _lines = [..._lines, const PurchaseEditLine(productId: '', name: '', qty: 1, cost: 0)]), icon: const Icon(Icons.add), label: const Text('Add an item')),
+            const Expanded(child: Text("A removed line takes its stock back out; an added line puts stock in. Stock already sold can't be taken back.", style: TextStyle(fontSize: 12))),
+          ]),
+          TextField(key: const Key('purchase-reason'), controller: _reason, decoration: const InputDecoration(labelText: 'Reason for the change (kept in the audit log)', hintText: 'e.g. invoice quantity was 50 not 60; 2 items were missed')),
+          const SizedBox(height: 8),
+          Row(children: [const Expanded(child: Text('Was')), Text(st.money((pu['total'] as num?) ?? 0))]),
+          Row(children: [const Expanded(child: Text('New total', style: TextStyle(fontWeight: FontWeight.w800))), Text(st.money(total), style: const TextStyle(fontWeight: FontWeight.w800))]),
+        ])),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+        FilledButton(
+          onPressed: () async {
+            final user = (await ref.read(sessionControllerProvider.future))?.userName ?? '';
+            final sup = d.suppliers.where((x) => x.id == _supplierId).firstOrNull;
+            final batches = (await ref.read(recordStoreProvider).rows('batches')).map(Batch.fromRecord).toList();
+            try {
+              await editPurchase(ref.read(recordStoreProvider), pu, _lines, supplierId: _supplierId, supplierName: sup?.name ?? '', invoice: _invoice.text.trim(), notes: _notes.text,
+                  date: _date, paid: double.tryParse(_paid.text) ?? 0, reason: _reason.text, user: user, settings: st,
+                  batchesOf: (id, br) => StockView(products: d.products, batches: batches, index: d.stock.index, branch: br).batchesOf(id));
+              if (!context.mounted) return;
+              Navigator.pop(context);
+              say(context, '${pu['number']} updated; stock adjusted');
+            } on DeliveryProblem catch (e) {
+              if (context.mounted) say(context, e.message, error: true);
+            }
+          },
+          child: const Text('Save changes'),
+        ),
+      ],
+    );
+  }
+}
+
+class _PickMedicine extends StatefulWidget {
+  const _PickMedicine({required this.data});
+  final PharmacyData data;
+  @override
+  State<_PickMedicine> createState() => _PickMedicineState();
+}
+
+class _PickMedicineState extends State<_PickMedicine> {
+  String _q = '';
+  @override
+  Widget build(BuildContext context) {
+    final d = widget.data;
+    final found = searchProducts(d.products, _q, stockOf: (p) => d.stockOf(p.id)).take(40).toList();
+    return AlertDialog(
+      title: TextField(autofocus: true, decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Search medicine…'), onChanged: (v) => setState(() => _q = v)),
+      content: SizedBox(width: 440, height: 380, child: ListView(children: [
+        for (final p in found) ListTile(title: Text(p.name), trailing: Text('${formatQty(d.stockOf(p.id))} in stock'), onTap: () => Navigator.pop(context, p)),
+      ])),
     );
   }
 }

@@ -490,9 +490,9 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
                     SizedBox(
                       width: switch (c) { 'medicine' => 260, 'qty' => 120, 'cost' => 140, 'total' => 130, 'price' => 170, 'batch' => 120, _ => 170 } + 8,
                       child: Row(children: [
-                        Text(stockColumns[c]!, style: const TextStyle(fontWeight: FontWeight.w700)),
-                        IconButton(visualDensity: VisualDensity.compact, tooltip: 'Move ${stockColumns[c]} left', icon: const Icon(Icons.chevron_left, size: 16), onPressed: i == 0 ? null : () => moveCol(c, i - 1)),
-                        IconButton(visualDensity: VisualDensity.compact, tooltip: 'Move ${stockColumns[c]} right', icon: const Icon(Icons.chevron_right, size: 16), onPressed: i == cols.length - 1 ? null : () => moveCol(c, i + 1)),
+                        Flexible(child: Text(stockColumns[c]!, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700))),
+                        InkWell(onTap: i == 0 ? null : () => moveCol(c, i - 1), child: Tooltip(message: 'Move ${stockColumns[c]} left', child: Icon(Icons.chevron_left, size: 18, color: i == 0 ? Theme.of(context).disabledColor : null))),
+                        InkWell(onTap: i == cols.length - 1 ? null : () => moveCol(c, i + 1), child: Tooltip(message: 'Move ${stockColumns[c]} right', child: Icon(Icons.chevron_right, size: 18, color: i == cols.length - 1 ? Theme.of(context).disabledColor : null))),
                       ]),
                     ),
                 ]),
