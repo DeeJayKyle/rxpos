@@ -50,3 +50,27 @@ const features = [
 /// Features the RxPOS owner switched on for this pharmacy (anything not switched off is on).
 Map<String, bool> featureSet(Map<String, Object?>? licenseFeatures) =>
     {for (final f in features) f: licenseFeatures?[f] != false};
+
+/// The permissions in groups with their labels, as the role editor shows them (src/access.js PERMISSIONS).
+const permissionGroups = [
+  ('Selling', [
+    ('pos.sell', 'Sell at the POS (retail)'), ('pos.wholesale', 'Sell wholesale'), ('pos.discount', 'Give discounts'), ('pos.price_edit', 'Change prices at the POS'),
+    ('sales.view', 'See sales history'), ('sales.refund', 'Refund sales'), ('sales.edit', 'Edit past sales (items, quantities, prices, payment)'), ('proformas', 'Proformas'),
+    ('shifts', 'Open/close own shift (cash-up)'), ('shifts.all', "See and close everyone's shifts"),
+  ]),
+  ('Patients & people', [
+    ('prescriptions', 'Record & dispense prescriptions'), ('customers', 'Customers (view & add)'), ('suppliers', 'Suppliers'),
+    ('reminders', 'Send reminders (WhatsApp / SMS)'), ('chat', 'Team chat & client messages'),
+  ]),
+  ('Medicines & stock', [
+    ('inventory.view', 'See stock, expiry and stock cards'), ('medicines.manage', 'Add/edit medicines, prices, import, labels'),
+    ('stock.receive', 'Receive stock, purchase orders, reorder'), ('purchases.edit', 'Edit past purchases (quantities, costs, batches)'),
+    ('inventory.edit', 'Edit inventory (batches, expiry, quantities, prices)'), ('stock.count', 'Count stock (stock take); posting needs the next permission'),
+    ('stock.adjust', 'Stock counts, adjustments, write-offs'), ('transfers', 'Stock transfers between branches'),
+  ]),
+  ('Management', [
+    ('finance', 'Finance (expenses, banks, loans, cash book)'), ('reports', 'Reports & dashboard money figures'),
+    ('reports.lines', 'Sales lines report only (what was sold and by whom, no profit)'), ('branches.view', 'See all branches'), ('audit', 'Audit log'),
+    ('users.manage', 'Manage users & roles'), ('settings.manage', 'Settings & payment methods'), ('data.reset', 'Restore default settings'),
+  ]),
+];

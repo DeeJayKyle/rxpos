@@ -62,9 +62,9 @@ Every feature of the React app (`src/pages/*.jsx`, `src/*.jsx`), screen by scree
 
 ## People (People.jsx, Users.jsx, Messages.jsx, Reminders.jsx, Chat.jsx)
 - ✅ Customers, suppliers, balances, payments; users, roles, reset password; reminders by WhatsApp; team chat (text)
-- ✗ Users: delete, reset two-step, copy a role, edit permissions by group, reset a role to default
-- ✗ Messages & SMS: templates (new / edit), send by WhatsApp or SMS, today's health tip
-- ✗ Reminders by SMS
+- ✅ Users: add / edit (WhatsApp, home branch), password, disable (the React app's flag), delete, reset two-step; roles: permissions by group (All / None), copy, delete a custom role, reset a built-in one
+- ✅ Messages & SMS: templates (new / edit / delete), audiences (all / chronic / debtors / chosen), WhatsApp one by one or SMS, today's health tip (the same tip as the React app), messages logged
+- ✅ Reminders: refills from prescriptions and chronic medicines, debtors, WhatsApp or SMS (one or selected), last reminded
 - ✗ Chat: client conversations, attachments (photo, PDF, video, audio, spreadsheet), voice notes, reply, forward,
   edit, delete, star, pin, search, message info, read marks, WhatsApp from chat
 

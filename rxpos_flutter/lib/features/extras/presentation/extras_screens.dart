@@ -8,7 +8,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/data/pharmacy_providers.dart';
 import '../../../core/data/record_store.dart';
@@ -25,9 +24,6 @@ import '../../../core/rules/money.dart';
 import '../../../core/rules/search.dart';
 import '../../../core/sync/sync_engine.dart';
 import '../../auth/application/session_controller.dart';
-import '../../prescriptions/presentation/prescriptions_screen.dart' show medicationsText;
-import '../../people/domain/balances.dart';
-import '../../prescriptions/domain/prescriptions.dart';
 import '../domain/extras.dart';
 
 Future<String> _me(WidgetRef ref) async => (await ref.read(sessionControllerProvider.future))?.userName ?? '';
@@ -75,50 +71,6 @@ class StorageScreen extends ConsumerWidget {
                   subtitle: Text('${'${r['at']}'.replaceFirst('T', ' ').split('.').first} · ${r['by'] ?? ''} ${r['note'] ?? ''}'),
                 ),
             ]),
-    );
-  }
-}
-
-/// Reminders: refills coming due and clients who owe, with a WhatsApp message ready to send.
-class RemindersScreen extends ConsumerWidget {
-  const RemindersScreen({super.key});
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final rx = ref.watch(tableProvider('prescriptions')).value;
-    final customers = ref.watch(tableProvider('customers')).value ?? const [];
-    final sales = (ref.watch(tableProvider('sales')).value ?? const []).map(Sale.fromRecord).toList();
-    final payments = ref.watch(tableProvider('payments')).value ?? const [];
-    final st = ref.watch(settingsProvider).value ?? const PharmacySettings();
-    if (rx == null) return const Center(child: CircularProgressIndicator());
-    Map<String, Object?>? client(Object? id) => customers.where((c) => c['id'] == id).firstOrNull;
-    final soon = localDate(DateTime.now().add(const Duration(days: 7)));
-    final refills = [for (final r in rx) if (nextRefillDue(r) case final due? when due.compareTo(soon) <= 0) (r, due)]..sort((a, b) => a.$2.compareTo(b.$2));
-    final debts = [for (final c in customers) if (c['id'] != 'walk-in') (c, customerBalance('${c['id']}', sales, payments))].where((x) => x.$2 > 0.5).toList()
-      ..sort((a, b) => b.$2.compareTo(a.$2));
-    Widget send(Map<String, Object?>? c, String text) {
-      final phone = normalizePhone('${c?['phone'] ?? ''}');
-      return IconButton(tooltip: 'WhatsApp', icon: const Icon(Icons.chat_outlined),
-          onPressed: phone.length < 12 ? null : () => launchUrl(Uri.parse(whatsappLink(phone, text)), mode: LaunchMode.externalApplication));
-    }
-
-    return PageFrame(
-      title: 'Reminders',
-      scroll: true,
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('Refills due within a week (${refills.length})', style: Theme.of(context).textTheme.titleMedium),
-        for (final (r, due) in refills)
-          ListTile(dense: true, title: Text('${client(r['customerId'])?['name'] ?? '—'} · due $due'),
-              subtitle: Text(medicationsText(r['medications']).replaceAll('\n', ', ')),
-              trailing: send(client(r['customerId']), fillTemplate('${st.raw['smsRefill'] ?? defaultRefillMessage}', {
-                'name': '${client(r['customerId'])?['name'] ?? ''}', 'pharmacy': st.name, 'medicine': medicationsText(r['medications']).replaceAll('\n', ', '), 'date': due}))),
-        const Divider(),
-        Text('Clients who owe (${debts.length})', style: Theme.of(context).textTheme.titleMedium),
-        for (final (c, owed) in debts)
-          ListTile(dense: true, title: Text('${c['name']}'), subtitle: Text('${c['phone'] ?? ''}'), trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-            Text(st.money(owed)),
-            send(c, fillTemplate('${st.raw['smsDebt'] ?? defaultDebtMessage}', {'name': '${c['name']}', 'pharmacy': st.name, 'amount': st.money(owed)})),
-          ])),
-      ]),
     );
   }
 }

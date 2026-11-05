@@ -15,6 +15,7 @@ import '../../features/prescriptions/presentation/scan_screen.dart';
 import '../../features/proformas/presentation/proformas_screen.dart';
 import '../../features/reports/presentation/reports_screen.dart';
 import '../../features/reports/presentation/weekly_screen.dart';
+import '../../features/people/presentation/messages_screens.dart';
 import '../../features/people/presentation/people_screens.dart';
 import '../../features/purchases/presentation/purchases_screens.dart';
 import '../../features/returns/presentation/returns_screen.dart';
@@ -38,6 +39,7 @@ final screens = <Screen>[
   Screen('/scan', 'Scan Prescription', Icons.document_scanner_outlined, 'Sales', (_) => const ScanPrescriptionScreen(), permission: 'prescriptions', feature: 'ai'),
   Screen('/controlled', 'Controlled drugs', Icons.gpp_good_outlined, 'Sales', (_) => const ControlledScreen(), permission: 'sales.view'),
   Screen('/reminders', 'Reminders', Icons.notifications_active_outlined, 'People', (_) => const RemindersScreen(), permission: 'reminders', feature: 'reminders'),
+  Screen('/messages', 'Messages & SMS', Icons.campaign_outlined, 'People', (_) => const MessagesScreen(), permission: 'reminders', feature: 'reminders'),
   Screen('/chat', 'Team chat', Icons.forum_outlined, 'People', (_) => const ChatScreen(), permission: 'chat', feature: 'chat'),
   Screen('/customers', 'Customers', Icons.people_outline, 'People', (_) => const PeopleScreen(suppliers: false), permission: 'customers'),
   Screen('/suppliers', 'Suppliers', Icons.factory_outlined, 'People', (_) => const PeopleScreen(suppliers: true), permission: 'suppliers'),

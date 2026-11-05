@@ -367,14 +367,24 @@ void main() {
     await navTo(tester, 'Users & Roles');
     await tester.tap(find.text('Add user'));
     await settle(tester);
-    await tester.enterText(find.widgetWithText(TextFormField, 'Name'), 'Ben Cashier');
-    await tester.enterText(find.widgetWithText(TextFormField, 'Email'), 'ben@test.rx');
+    await tester.enterText(find.widgetWithText(TextFormField, 'Full name'), 'Ben Cashier');
+    await tester.enterText(find.widgetWithText(TextFormField, 'Email – signs in and recovers the password'), 'ben@test.rx');
     await tester.enterText(find.widgetWithText(TextFormField, 'Password (8+ characters)'), 'ben-pass-123');
-    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Add user').last);
     await settle(tester, 30);
     expect(find.text('Ben Cashier'), findsOneWidget);
     final users = (await tester.runAsync(() => RecordStore(db).rows('users')))!;
     expect(verifyPassword(users.single, 'ben-pass-123'), isTrue);
+    await tester.tap(find.text('Disable'));
+    await settle(tester);
+    expect((await tester.runAsync(() => RecordStore(db).rows('users')))!.single['disabled'], true);
+    await tester.tap(find.textContaining('Roles & permissions'));
+    await settle(tester);
+    await tester.tap(find.byTooltip('Copy as a new role').at(4));
+    await settle(tester);
+    await tester.tap(find.text('Save role'));
+    await settle(tester);
+    expect((await tester.runAsync(() => RecordStore(db).rows('roles')))!.any((r) => r['name'] == 'Cashier (copy)'), isTrue);
 
     await tester.runAsync(() => RecordStore(db).update((d) => d.put('branches', {'id': 'br-2', 'name': 'Kampala Road'})));
     await navTo(tester, 'Branches & Transfers');

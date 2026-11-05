@@ -30,7 +30,7 @@ Future<Map<String, Object?>> saveUser(RecordStore store, Map<String, Object?> us
   final pw = isNew || (password ?? '').isNotEmpty ? makePassword(password!) : const <String, Object?>{};
   return store.update((d) {
     final rec = d.put('users', {...user, 'id': user['id'] ?? uid(), 'email': email, 'username': username,
-      'phone': '${user['phone'] ?? ''}'.trim(), ...pw});
+      'phone': '${user['phone'] ?? ''}'.trim(), 'whatsapp': '${user['whatsapp'] ?? ''}'.trim(), ...pw}..remove('active'));
     d.audit(by, isNew ? 'User added' : (pw.isEmpty ? 'User updated' : 'Password reset'), '${rec['name']} ($roleName)');
     return rec;
   });
@@ -42,7 +42,36 @@ Future<Map<String, Object?>> saveRole(RecordStore store, {String? id, required S
   if (id == null && existingIds.contains(rid)) throw UserProblem('A role with that name exists');
   return store.update((d) {
     final r = d.put('roles', {'id': rid, 'name': name.trim(), 'permissions': permissions});
-    d.audit(by, 'Role saved', '${r['name']}: ${permissions.length} permissions');
+    d.audit(by, id == null ? 'Role created' : 'Role permissions changed', '${r['name']}: ${permissions.length} permissions');
     return r;
+  });
+}
+
+/// Set a new password for someone (audited).
+Future<void> resetPassword(RecordStore store, Map<String, Object?> user, String password, {required String by}) {
+  if (password.length < 8) throw UserProblem('Use a password of at least 8 characters');
+  return store.update((d) {
+    d.put('users', {...user, ...makePassword(password)});
+    d.audit(by, 'Password reset', '${user['name']}');
+  });
+}
+
+/// Disable / enable signing in (the React app's "disabled" flag).
+Future<void> setDisabled(RecordStore store, Map<String, Object?> user, bool disabled, {required String by}) => store.update((d) {
+      d.put('users', {...user, 'disabled': disabled}..remove('active'));
+      d.audit(by, disabled ? 'User disabled' : 'User enabled', '${user['name']}');
+    });
+
+Future<void> deleteUser(RecordStore store, Map<String, Object?> user, {required String by}) => store.update((d) {
+      d.del('users', '${user['id']}');
+      d.audit(by, 'User deleted', '${user['name']}');
+    });
+
+/// A custom role can be deleted only when nobody has it.
+Future<void> deleteRole(RecordStore store, String id, String name, {required List<Map<String, Object?>> users, required String by}) {
+  if (users.any((u) => u['role'] == id)) throw UserProblem('Some users still have the $name role');
+  return store.update((d) {
+    d.del('roles', id);
+    d.audit(by, 'Role deleted', name);
   });
 }
