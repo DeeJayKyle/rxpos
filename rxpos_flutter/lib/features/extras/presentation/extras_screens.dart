@@ -1,7 +1,6 @@
 // The remaining screens: storage temperature, reminders, calendar, team chat, the controlled-drugs register,
-// barcode labels, importing medicines, drug information and the AI drug quiz.
+// barcode labels, importing medicines and drug information.
 
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -11,12 +10,10 @@ import '../../../core/presentation/export.dart';
 import '../../../core/entities/movement.dart';
 import '../../../core/entities/sale.dart';
 import '../../../core/entities/settings.dart';
-import '../../../core/network/dio_client.dart';
 import '../../../core/presentation/widgets.dart';
 import '../../../core/rules/dates.dart';
 import '../../../core/rules/ids.dart';
 import '../../../core/rules/money.dart';
-import '../../../core/sync/sync_engine.dart';
 import '../../auth/application/session_controller.dart';
 import '../domain/extras.dart';
 
@@ -247,54 +244,4 @@ class _ControlledScreenState extends ConsumerState<ControlledScreen> {
       ],
     ]);
   }
-}
-
-/// Drug quiz: questions about the pharmacy's best-selling medicines, made by the cloud's AI (needs internet).
-class QuizScreen extends ConsumerStatefulWidget {
-  const QuizScreen({super.key});
-  @override
-  ConsumerState<QuizScreen> createState() => _QuizScreenState();
-}
-
-class _QuizScreenState extends ConsumerState<QuizScreen> {
-  List<Map<String, Object?>> _qs = const [];
-  final _answers = <int, int>{};
-  bool _busy = false;
-
-  Future<void> _make() async {
-    setState(() => _busy = true);
-    try {
-      final d = await ref.read(pharmacyProvider.future);
-      final drugs = d.products.where((p) => d.stockOf(p.id) > 0).map((p) => p.generic.isEmpty ? p.name : p.generic).toSet().take(12).toList();
-      final res = await ref.read(dioProvider).post<Object?>('${syncBase(ref.read(appConfigProvider).cloudUrl)}/api/ai/quiz', data: {'drugs': drugs, 'count': 8},
-          options: Options(receiveTimeout: const Duration(seconds: 90)));
-      final list = ((res.data as Map?)?['questions'] as List?) ?? const [];
-      setState(() {
-        _qs = [for (final q in list) if (q is Map) q.cast<String, Object?>()];
-        _answers.clear();
-      });
-    } catch (e) {
-      if (mounted) say(context, 'The quiz could not be made: $e', error: true);
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) => PageFrame(
-        title: 'Drug quiz',
-        subtitle: _qs.isEmpty ? 'Questions about medicines you stock' : '${_answers.entries.where((e) => e.value == ((_qs[e.key]['answer'] as num?) ?? -1)).length} of ${_qs.length} right',
-        actions: [FilledButton.icon(onPressed: _busy ? null : _make, icon: const Icon(Icons.quiz_outlined), label: Text(_busy ? 'Making questions…' : 'New quiz'))],
-        child: ListView(children: [
-          for (var i = 0; i < _qs.length; i++)
-            Card(child: Padding(padding: const EdgeInsets.all(12), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('${i + 1}. ${_qs[i]['question']}', style: const TextStyle(fontWeight: FontWeight.w700)),
-              for (final (j, o) in ((_qs[i]['options'] as List?) ?? const []).indexed)
-                ListTile(dense: true, title: Text('$o'), onTap: _answers.containsKey(i) ? null : () => setState(() => _answers[i] = j),
-                    leading: Icon(!_answers.containsKey(i) ? Icons.radio_button_unchecked : j == _qs[i]['answer'] ? Icons.check_circle : _answers[i] == j ? Icons.cancel : Icons.radio_button_unchecked,
-                        color: !_answers.containsKey(i) ? null : j == _qs[i]['answer'] ? Colors.green : _answers[i] == j ? Colors.red : null)),
-              if (_answers.containsKey(i) && _qs[i]['explain'] != null) Text('${_qs[i]['explain']}', style: Theme.of(context).textTheme.bodySmall),
-            ]))),
-        ]),
-      );
 }

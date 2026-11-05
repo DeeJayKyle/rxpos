@@ -10,6 +10,7 @@ import '../../features/settings/presentation/settings_screens.dart';
 import '../../features/users/presentation/users_screen.dart';
 import '../../features/extras/presentation/extras_screens.dart';
 import '../../features/drug_info/presentation/drug_info_screen.dart';
+import '../../features/quiz/presentation/quiz_screen.dart';
 import '../../features/extras/presentation/import_screen.dart';
 import '../../features/extras/presentation/labels_screen.dart';
 import '../../features/finance/presentation/finance_screen.dart';
@@ -64,7 +65,7 @@ final screens = <Screen>[
   Screen('/import', 'Import medicines', Icons.upload_file_outlined, 'Medicine inventory', (_) => const ImportScreen(), permission: 'medicines.manage', feature: 'import'),
   Screen('/storage', 'Storage temperature', Icons.thermostat_outlined, 'Medicine inventory', (_) => const StorageScreen(), permission: 'inventory.view', feature: 'weather'),
   Screen('/drug-info', 'Drug information', Icons.menu_book_outlined, 'Insights', (_) => const DrugInfoScreen(), feature: 'drugInfo'),
-  Screen('/quiz', 'Drug quiz', Icons.quiz_outlined, 'Insights', (_) => const QuizScreen(), feature: 'ai'),
+  Screen('/quiz', 'Drug quiz', Icons.quiz_outlined, 'Insights', (_) => const QuizScreen(), feature: 'drugInfo'),
   Screen('/calendar', 'Calendar', Icons.calendar_month_outlined, 'Insights', (_) => const CalendarScreen(), feature: 'calendar'),
   Screen('/finance', 'Finance', Icons.account_balance_outlined, 'Finance', (q) => FinanceScreen(key: ValueKey('finance-${q['tab']}'), tab: q['tab'] ?? 'accounts'), permission: 'finance', feature: 'finance'),
   Screen('/weekly', 'Weekly Summary', Icons.date_range_outlined, 'Insights', (_) => const WeeklyScreen(), permission: 'reports', feature: 'reports'),

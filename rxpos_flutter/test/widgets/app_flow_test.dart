@@ -1101,4 +1101,70 @@ void main() {
     expect(find.textContaining('No label found for “calmex”'), findsOneWidget);
     await done(tester);
   });
+
+  Future<void> quizMedicines() => RecordStore(db).update((d) {
+        for (final (i, (name, generic, form)) in const [
+          ('Amoxil 500mg Caps', 'Amoxicillin', 'Capsules'),
+          ('Brufen 400mg Tabs', 'Ibuprofen', 'Tablets'),
+          ('Flagyl Suspension', 'Metronidazole', 'Suspension'),
+          ('Zyrtec Syrup', 'Cetirizine', 'Syrup'),
+          ('Ventolin Inhaler', 'Salbutamol', 'Inhaler'),
+        ].indexed) {
+          d.put('products', {'id': 'q$i', 'name': name, 'generic': generic, 'form': form, 'unit': 'Pack', 'price': 1000, 'cost': 500});
+        }
+      });
+
+  testWidgets('Drug quiz: a quick quiz offline, one question at a time, the score saved and on the team board', (tester) async {
+    await tester.runAsync(signedIn);
+    await tester.runAsync(quizMedicines);
+    await start(tester);
+    await navTo(tester, 'Drug quiz');
+    expect(find.text('No quizzes yet this month'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('quiz-offline')));
+    await settle(tester);
+    expect(find.text('Question 1 of 6'), findsOneWidget, reason: 'six medicines have a generic name that differs from their name');
+    for (var i = 0; i < 6; i++) {
+      expect(find.byKey(const Key('quiz-opt-3')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('quiz-opt-0')));
+      await settle(tester, 2);
+      expect(find.textContaining(RegExp(r'^(Correct! |The right answer is )')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('quiz-opt-1')));
+      await settle(tester, 2);
+      expect(find.textContaining(RegExp(r'^(Correct! |The right answer is )')), findsOneWidget, reason: 'the first answer stands');
+      await tester.ensureVisible(find.byKey(const Key('quiz-next')));
+      await tester.tap(find.byKey(const Key('quiz-next')));
+      await settle(tester, 4);
+    }
+    expect(find.textContaining(' / 6'), findsOneWidget);
+    expect(find.text('Answers'), findsOneWidget);
+    final saved = (await tester.runAsync(() => RecordStore(db).rows('quizResults')))!.single;
+    expect((saved['userId'], saved['userName'], saved['total'], saved['source']), ('u1', 'Tia Admin', 6, 'Your medicine list'));
+    expect(saved['score'], isA<int>());
+    expect(find.text('Tia Admin'), findsWidgets, reason: 'on the team board');
+    await tester.ensureVisible(find.text('Another quiz'));
+    await tester.tap(find.text('Another quiz'));
+    await settle(tester);
+    expect(find.byKey(const Key('quiz-offline')), findsOneWidget);
+    await done(tester);
+  });
+
+  testWidgets('Drug quiz on a phone: the start, a question and the board fit the screen', (tester) async {
+    await tester.runAsync(signedIn);
+    await tester.runAsync(quizMedicines);
+    await start(tester, size: const Size(400, 800));
+    await tester.tap(find.byTooltip('Open navigation menu'));
+    await settle(tester);
+    final list = find.descendant(of: find.byType(Drawer), matching: find.byType(Scrollable)).first;
+    await tester.scrollUntilVisible(find.descendant(of: find.byType(Drawer), matching: find.text('Drug quiz')), 150, scrollable: list);
+    await settle(tester, 2);
+    await tester.tap(find.descendant(of: find.byType(Drawer), matching: find.text('Drug quiz')));
+    await settle(tester);
+    expect(find.text('Team board · this month'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('quiz-offline')));
+    await settle(tester);
+    await tester.tap(find.byKey(const Key('quiz-opt-0')));
+    await settle(tester, 2);
+    expect(find.text('Question 1 of 6'), findsOneWidget);
+    await done(tester);
+  });
 }
