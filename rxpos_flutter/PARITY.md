@@ -91,9 +91,9 @@ Every feature of the React app (`src/pages/*.jsx`, `src/*.jsx`), screen by scree
 - ✗ Export CSV
 
 ## Stock take (StockCount.jsx)
-- ✅ Start, count per batch, found batch, review, post
-- ✗ Scan & count (each scan counts one pack), blind count options, by shelf / category / random scopes
-- ✗ History with each count's report; clear a count; keep counting
+- ✅ Start, count per batch, found batch, review, post (same records as the React app: system quantity kept when counted)
+- ✅ Scan & count (each scan counts one pack), blind count with show / hide, scopes: all, shelf, formulation, expiring, top by value, random, scan as you go
+- ✅ History with each count's figures; view a count; clear a count; keep counting; cancel; count sheet PDF; CSV
 
 ## Reorder (Reorder.jsx)
 - ✅ Reorder suggestions, levels from sales

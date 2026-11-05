@@ -292,19 +292,21 @@ void main() {
     expect(find.textContaining('Counted UGX 20,000'), findsOneWidget);
 
     await go('Stock take');
-    await tester.tap(find.text('Start a count'));
+    await tester.tap(find.text('New stock count'));
     await settle(tester);
-    await tester.tap(find.widgetWithText(FilledButton, 'Start'));
+    await tester.tap(find.text('Start counting'));
     await settle(tester);
-    await tester.tap(find.text('Calmex 500mg Tabs'));
+    await tester.enterText(find.byKey(const Key('count-p1-b1')), '95');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
     await settle(tester);
-    await tester.enterText(find.widgetWithText(TextFormField, 'Batch C1 (exp 2029-01-31)'), '95');
-    await tester.tap(find.widgetWithText(FilledButton, 'Save count'));
-    await settle(tester);
+    expect(find.text('1 of 1 counted (100%)'), findsOneWidget);
     await tester.tap(find.text('Review & post'));
     await settle(tester);
-    await tester.tap(find.widgetWithText(FilledButton, 'Post'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Post count'));
     await settle(tester);
+    await tester.tap(find.widgetWithText(FilledButton, 'Post count'));
+    await settle(tester);
+    expect(find.text('History'), findsOneWidget);
     final moves = (await tester.runAsync(() => RecordStore(db).rows('movements')))!;
     expect(moves.where((m) => m['type'] == 'Stock count').single['qty'], -5);
 

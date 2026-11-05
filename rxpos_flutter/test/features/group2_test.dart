@@ -6,6 +6,7 @@ import 'package:rxpos/core/database/app_database.dart';
 import 'package:rxpos/core/entities/movement.dart';
 import 'package:rxpos/core/entities/product.dart';
 import 'package:rxpos/core/entities/sale.dart';
+import 'package:rxpos/core/entities/settings.dart';
 import 'package:rxpos/core/entities/shift.dart';
 import 'package:rxpos/core/rules/fefo.dart';
 import 'package:rxpos/core/rules/stock.dart';
@@ -50,19 +51,60 @@ void main() {
     });
   });
 
-  test('stock take: differences per batch, a batch found on the shelf, an uncounted medicine set to 0', () async {
-    const a = Product(id: 'a', name: 'Amoxa', cost: 100), b = Product(id: 'b', name: 'Brufa', cost: 50);
+  test('stock take: system quantity kept when counted, a batch found on the shelf, an uncounted medicine set to 0, summary', () async {
+    final a = Product.fromRecord({'id': 'a', 'name': 'Amoxa', 'cost': 100}), b = Product.fromRecord({'id': 'b', 'name': 'Brufa', 'cost': 50});
     final batches = {'a': [const BatchStock(id: 'a1', batch: 'A1', qty: 10), const BatchStock(id: 'a2', batch: 'A2', qty: 5)], 'b': [const BatchStock(id: 'b1', batch: 'B1', qty: 7)]};
-    final count = await startCount(store, name: 'Shelf 1', productIds: ['a', 'b'], user: 'Tia');
-    final r = countDifferences({'a': a, 'b': b}, {'a': [const CountLine(batchId: 'a1', batch: 'A1', qty: 8), const CountLine(batchId: 'a2', batch: 'A2', qty: 5), const CountLine(batch: 'NEW', expiry: '2030-01-01', qty: 3)]},
-        ['a', 'b'], (id) => batches[id]!);
-    expect(r.diffs.map((x) => (x.batch, x.diff)), [('A1', -2.0), ('NEW', 3.0)]);
-    expect(r.uncounted.single.batch, 'B1');
-    await postCount(store, count: count, diffs: r.diffs, zero: r.uncounted, user: 'Tia');
+    expect(() => startCount(store, name: 'x', scope: CountScope.shelf, label: 'Shelf Z', productIds: const [], user: 'Tia'), throwsA(isA<CountProblem>()));
+    final count = await startCount(store, name: 'Shelf 1', scope: CountScope.all, label: 'All medicines in stock', productIds: ['a', 'b'], user: 'Tia');
+    // A1 counted 8 (system 10 then); A2 left blank (not counted: keeps its 5); a batch found on the shelf
+    await saveCount(store, count: count, product: a, batches: batches['a']!, item: null, typed: {'a1': '8'},
+        extra: [foundBatch(batch: 'NEW', expiry: '2030-01-01', qty: 3, cost: 100)], by: 'Tia');
+    // a sale of 2 from A1 while counting: the system quantity stays what it was when counted
+    var item = CountItem.fromRecord((await store.get('countItems', countItemId(count['id'] as String, 'a')))!);
+    await saveCount(store, count: count, product: a, batches: [const BatchStock(id: 'a1', batch: 'A1', qty: 8), batches['a']![1]], item: item, typed: {'a1': '8'}, by: 'Tia');
+    item = CountItem.fromRecord((await store.get('countItems', countItemId(count['id'] as String, 'a')))!);
+    expect(item.lines.map((l) => (l.batch, l.sys, l.qty, l.skipped, l.found)), [('A1', 10.0, 8.0, false, false), ('A2', 5.0, 5.0, true, false), ('NEW', 0.0, 3.0, false, true)]);
+    final byId = {'a': a, 'b': b};
+    final sum = summarise(2, [item], byId);
+    expect((sum.counted, sum.short, sum.over, sum.shortValue, sum.overValue), (1, 0, 1, 200.0, 300.0), reason: 'net +1 unit, +100: extra overall');
+    final diffs = differences([item], byId);
+    expect(diffs.map((r) => (r.l.batch, r.l.diff)), [('A1', -2.0), ('NEW', 3.0)]);
+    final zero = zeroable([a, b], [item], (id) => batches[id]!);
+    expect(zero.single.b.batch, 'B1');
+    final posted = await postCount(store, count: count, diffs: diffs, sum: sum, zero: zero, settings: const PharmacySettings(), user: 'Tia');
+    expect((posted.zeroed, posted.net), (1, 100.0 - 350.0));
     expect(await stock('a'), 1, reason: '−2 and +3 new batch');
     expect(await stock('b'), -7, reason: 'set to 0 from 7');
-    expect((await store.get('stockCounts', count['id'] as String))!['status'], 'posted');
+    final saved = (await store.get('stockCounts', count['id'] as String))!;
+    expect((saved['status'], (saved['summary'] as Map)['zeroed']), ('posted', 1));
     expect((await store.rows('batches')).single['batch'], 'NEW');
+    expect((await store.rows('audit')).map((x) => x['action']), ['Stock count started', 'Stock count posted']);
+  });
+
+  test('stock take scopes and scan & count', () async {
+    final ps = [
+      Product.fromRecord({'id': 'a', 'name': 'Amoxa', 'form': 'Capsules', 'cost': 100, 'shelf': 'B'}),
+      Product.fromRecord({'id': 'b', 'name': 'Brufa', 'form': 'Tablets', 'cost': 50, 'shelf': 'A'}),
+      Product.fromRecord({'id': 'c', 'name': 'Cefo', 'form': 'Tablets', 'cost': 900}),
+    ];
+    final bs = {'a': [const BatchStock(id: 'a1', batch: 'A1', expiry: '2026-12-01', qty: 4)], 'b': [const BatchStock(id: 'b1', batch: 'B1', qty: 2)], 'c': [const BatchStock(id: 'c1', batch: 'C1', qty: 1)]};
+    List<BatchStock> of(String id) => bs[id]!;
+    final now = DateTime(2026, 11, 5);
+    expect(countScope(CountScope.all, ps, of).list.map((p) => p.id), ['b', 'a', 'c'], reason: 'shelf order, no shelf last');
+    expect(countScope(CountScope.shelf, ps, of, shelf: 'B').list.single.id, 'a');
+    expect(countScope(CountScope.form, ps, of, form: 'Tablets').list.map((p) => p.id), ['b', 'c']);
+    expect(countScope(CountScope.expiring, ps, of, now: now).list.single.id, 'a');
+    final top = countScope(CountScope.value, ps, of, size: 1);
+    expect((top.list.single.id, top.label), ('c', 'Top 1 by value'));
+    expect(countScope(CountScope.empty, ps, of).list, isEmpty);
+    final count = await startCount(store, name: 'Spot', scope: CountScope.empty, label: 'Scan as you go', productIds: const [], user: 'Tia');
+    await addToCount(store, count, 'a');
+    expect(((await store.get('stockCounts', count['id'] as String))!['productIds'] as List), ['a']);
+    expect(await tallyOne(store, count: count, p: ps[0], batches: of('a'), item: null, by: 'Tia'), 'Amoxa: 1 counted (batch A1)');
+    final it = CountItem.fromRecord((await store.get('countItems', countItemId(count['id'] as String, 'a')))!);
+    expect(await tallyOne(store, count: count, p: ps[0], batches: of('a'), item: it, by: 'Tia'), 'Amoxa: 2 counted (batch A1)');
+    await clearCount(store, count, 'a');
+    expect(await store.rows('countItems'), isEmpty);
   });
 
   test('reorder levels follow what sold: average a day × (lead + safety days)', () {
