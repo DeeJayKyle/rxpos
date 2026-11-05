@@ -44,3 +44,6 @@ class DeviceValue extends _$DeviceValue {
     state = AsyncData(v);
   }
 }
+
+/// Device keys for the screen (Settings → This device).
+const zoomKey = 'zoom', rotationKey = 'rotation';

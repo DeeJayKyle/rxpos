@@ -93,8 +93,14 @@ final class TableFamily extends $Family
   String toString() => r'tableProvider';
 }
 
+/// The pharmacy's settings with this device's own overrides of the pharmacy's details (Settings → Pharmacy). [raw]
+/// stays the shared record; save settings from [RecordStore.settingsRecord] so overrides never reach other devices.
+
 @ProviderFor(settings)
 final settingsProvider = SettingsProvider._();
+
+/// The pharmacy's settings with this device's own overrides of the pharmacy's details (Settings → Pharmacy). [raw]
+/// stays the shared record; save settings from [RecordStore.settingsRecord] so overrides never reach other devices.
 
 final class SettingsProvider
     extends
@@ -104,6 +110,8 @@ final class SettingsProvider
           Stream<PharmacySettings>
         >
     with $FutureModifier<PharmacySettings>, $StreamProvider<PharmacySettings> {
+  /// The pharmacy's settings with this device's own overrides of the pharmacy's details (Settings → Pharmacy). [raw]
+  /// stays the shared record; save settings from [RecordStore.settingsRecord] so overrides never reach other devices.
   SettingsProvider._()
     : super(
         from: null,
@@ -130,7 +138,7 @@ final class SettingsProvider
   }
 }
 
-String _$settingsHash() => r'cda4193393e08b7f668bb30b1a3cc5ed8e50b62e';
+String _$settingsHash() => r'c263487333333458b7bfc137380d068a8ec560bd';
 
 /// The built-in catalogue (9,710 medicines), loaded once.
 

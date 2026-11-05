@@ -1,13 +1,9 @@
 // The remaining screens: storage temperature, reminders, calendar, team chat, the controlled-drugs register,
 // barcode labels, importing medicines, drug information and the AI drug quiz.
-import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:pdf/pdf.dart';
-import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
 
 import '../../../core/data/pharmacy_providers.dart';
 import '../../../core/data/record_store.dart';
@@ -252,57 +248,6 @@ class _ControlledScreenState extends ConsumerState<ControlledScreen> {
               trailing: Text(st.money(r.qty * r.i.price))),
       ],
     ]);
-  }
-}
-
-/// Barcode labels: choose medicines and how many labels; print them (Code 128) as a PDF.
-class LabelsScreen extends ConsumerStatefulWidget {
-  const LabelsScreen({super.key});
-  @override
-  ConsumerState<LabelsScreen> createState() => _LabelsScreenState();
-}
-
-class _LabelsScreenState extends ConsumerState<LabelsScreen> {
-  final _count = <String, int>{};
-  String _q = '';
-  @override
-  Widget build(BuildContext context) {
-    final d = ref.watch(pharmacyProvider).value;
-    if (d == null) return const Center(child: CircularProgressIndicator());
-    final found = searchProducts(d.products.where((p) => p.barcode.isNotEmpty).toList(), _q, stockOf: (p) => d.stockOf(p.id)).take(60).toList();
-    final total = _count.values.fold(0, (a, b) => a + b);
-    return PageFrame(
-      title: 'Barcode labels',
-      subtitle: '$total labels chosen',
-      actions: [
-        SearchField(onChanged: (v) => setState(() => _q = v), hint: 'Medicine…'),
-        FilledButton.icon(onPressed: total == 0 ? null : () => Printing.layoutPdf(onLayout: (_) => _pdf(d)), icon: const Icon(Icons.print), label: const Text('Print labels')),
-      ],
-      child: ListView(children: [
-        for (final p in found)
-          ListTile(dense: true, title: Text(p.name), subtitle: Text('${p.barcode} · ${d.settings.money(p.price)}'), trailing: SizedBox(width: 120, child: Row(children: [
-            IconButton(onPressed: () => setState(() => _count[p.id] = ((_count[p.id] ?? 0) - 1).clamp(0, 999)), icon: const Icon(Icons.remove)),
-            Text('${_count[p.id] ?? 0}'),
-            IconButton(onPressed: () => setState(() => _count[p.id] = (_count[p.id] ?? 0) + 1), icon: const Icon(Icons.add)),
-          ]))),
-      ]),
-    );
-  }
-
-  Future<Uint8List> _pdf(PharmacyData d) {
-    final doc = pw.Document();
-    final labels = [for (final e in _count.entries) for (var i = 0; i < e.value; i++) d.byId[e.key]!];
-    doc.addPage(pw.MultiPage(pageFormat: PdfPageFormat.a4, build: (_) => [
-      pw.Wrap(spacing: 8, runSpacing: 8, children: [
-        for (final p in labels)
-          pw.Container(width: 160, padding: const pw.EdgeInsets.all(4), decoration: pw.BoxDecoration(border: pw.Border.all(width: .5)), child: pw.Column(children: [
-            pw.Text(p.name, maxLines: 1, style: const pw.TextStyle(fontSize: 8)),
-            pw.BarcodeWidget(barcode: pw.Barcode.code128(), data: p.barcode, height: 32, textStyle: const pw.TextStyle(fontSize: 7)),
-            pw.Text(d.settings.money(p.price), style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
-          ])),
-      ]),
-    ]));
-    return doc.save();
   }
 }
 

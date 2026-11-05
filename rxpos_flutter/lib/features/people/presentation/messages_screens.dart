@@ -171,8 +171,9 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
       ((s.raw['messageTemplates'] as List?) ?? const []).isNotEmpty ? [for (final t in (s.raw['messageTemplates'] as List).cast<Map>()) t.cast<String, Object?>()] : starterTemplates;
 
   Future<void> _saveTemplates(List<Map<String, Object?>> next) async {
-    final st = await ref.read(settingsProvider.future);
-    await ref.read(recordStoreProvider).update((d) => d.saveSettings({...st.toRecord(), 'messageTemplates': next}));
+    final store = ref.read(recordStoreProvider);
+    final shared = await store.settingsRecord();
+    await store.update((d) => d.saveSettings({...shared, 'messageTemplates': next}));
   }
 
   @override

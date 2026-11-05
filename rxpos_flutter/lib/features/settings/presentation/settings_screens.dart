@@ -1,100 +1,67 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/data/device_settings.dart';
 import '../../../core/data/pharmacy_providers.dart';
-import '../../../core/data/record_store.dart';
 import '../../../core/database/app_database.dart';
+import '../../../core/network/files.dart';
+import '../../../core/presentation/export.dart';
 import '../../../core/presentation/widgets.dart';
-import '../../../core/sync/merge.dart';
+import '../../../core/rules/dates.dart';
+import '../../../core/sound/sounds.dart';
+import '../../stock/domain/stock_form.dart' show dateFormats;
 import '../../../core/sync/sync_config.dart';
 import '../../../core/theme/theme_choice.dart';
-import '../../auth/application/session_controller.dart';
 import '../../sync_status/application/sync_controller.dart';
 
-/// Settings: receipts and stock rules, payment methods. The pharmacy's details (name, currency, tax, markups) come from
-/// the RxPOS owner console and are shown here read-only (the cloud refuses changes to them from devices).
-class SettingsScreen extends ConsumerWidget {
-  const SettingsScreen({super.key});
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final st = ref.watch(settingsProvider).value;
-    if (st == null) return const Center(child: CircularProgressIndicator());
-    final rec = st.raw;
-    Future<void> save(Map<String, Object?> patch) async {
-      final by = (await ref.read(sessionControllerProvider.future))?.userName ?? '';
-      await ref.read(recordStoreProvider).update((d) {
-        d.saveSettings({...rec, ...patch});
-        d.audit(by, 'Settings changed', patch.keys.join(', '));
-      });
-      if (context.mounted) say(context, 'Settings saved');
-    }
-
-    return PageFrame(
-      title: 'Settings',
-      scroll: true,
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Pharmacy (from the RxPOS owner console)', style: Theme.of(context).textTheme.titleMedium),
-          for (final k in pharmacyFields) if (rec[k] != null && '${rec[k]}'.isNotEmpty) Text('$k: ${rec[k]}'),
-          if (pharmacyFields.every((k) => rec[k] == null)) Text('${st.name} · ${st.currency}'),
-        ]))),
-        const SizedBox(height: 12),
-        Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            Expanded(child: Text('Receipts & stock', style: Theme.of(context).textTheme.titleMedium)),
-            FilledButton(onPressed: () async {
-              final v = await editRecord(context, title: 'Receipts & stock', initial: {
-                'expiryWarnDays': st.expiryWarnDays, 'clientCapture': st.clientCapture, 'receiveUnit': st.receiveUnit, 'sellUnitRetail': st.sellUnitRetail,
-                'sellUnitWholesale': st.sellUnitWholesale, 'autoPrint': st.autoPrint, 'receiptFooter': rec['receiptFooter'] ?? '',
-              }, fields: const [
-                FormFieldSpec('expiryWarnDays', 'Warn about expiry (days before)', kind: FieldKind.number),
-                FormFieldSpec('clientCapture', 'Client at the till', kind: FieldKind.choice, options: [('off', 'Not asked'), ('optional', 'Optional'), ('required', 'Required')]),
-                FormFieldSpec('receiveUnit', 'Add Stock receives medicines with packs in', kind: FieldKind.choice, options: [('pack', 'Packs (the largest pack)'), ('unit', 'Single units')]),
-                FormFieldSpec('sellUnitRetail', 'Retail till sells in', kind: FieldKind.choice, options: [('unit', 'Single units'), ('pack', 'Packs')]),
-                FormFieldSpec('sellUnitWholesale', 'Wholesale till sells in', kind: FieldKind.choice, options: [('pack', 'Packs'), ('unit', 'Single units')]),
-                FormFieldSpec('autoPrint', 'Print the receipt after every sale', kind: FieldKind.flag),
-                FormFieldSpec('receiptFooter', 'Receipt footer'),
-              ]);
-              if (v != null) await save(v);
-            }, child: const Text('Change')),
-          ]),
-          Text('Expiry warning ${st.expiryWarnDays.round()} days · client ${st.clientCapture} · receive in ${st.receiveUnit}s · retail sells ${st.sellUnitRetail}s · wholesale sells ${st.sellUnitWholesale}s'),
-        ]))),
-        const SizedBox(height: 12),
-        Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            Expanded(child: Text('Payment methods', style: Theme.of(context).textTheme.titleMedium)),
-            OutlinedButton(onPressed: () async {
-              final v = await editRecord(context, title: 'Add a payment method', fields: const [
-                FormFieldSpec('name', 'Name', required: true),
-                FormFieldSpec('type', 'Kind', kind: FieldKind.choice, required: true, options: [('cash', 'Cash (with change)'), ('momo', 'Mobile Money'), ('credit', 'Credit'), ('other', 'Other')]),
-              ]);
-              if (v == null) return;
-              final id = '${v['name']}'.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-');
-              await save({'paymentMethods': [for (final m in st.methods) m.toJson(), {'id': id, 'name': v['name'], 'type': v['type']}]});
-            }, child: const Text('Add')),
-          ]),
-          for (final m in st.methods) ListTile(dense: true, title: Text(m.name), subtitle: Text(m.type)),
-        ]))),
-      ]),
-    );
-  }
-}
-
-/// This device: which branch it works as, its look, sync and storage.
-class DeviceScreen extends ConsumerWidget {
+/// This device (src/pages/Device.jsx): its branch and look, sync & storage (waiting changes, refused changes, ready to
+/// work offline, download everything again), text size and rotation, the date format, and notification sounds.
+class DeviceScreen extends ConsumerStatefulWidget {
   const DeviceScreen({super.key});
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<DeviceScreen> createState() => _DeviceScreenState();
+}
+
+class _DeviceScreenState extends ConsumerState<DeviceScreen> {
+  int _tick = 0;
+  bool _busy = false;
+
+  Widget _section(String title, IconData icon, List<Widget> children) => Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [Icon(icon, size: 18), const SizedBox(width: 8), Expanded(child: Text(title, style: Theme.of(context).textTheme.titleMedium))]),
+            const SizedBox(height: 8),
+            ...children,
+          ]),
+        ),
+      );
+
+  Widget _choice(String value, List<(String, String)> options, ValueChanged<String> onChanged) => SegmentedButton<String>(
+        showSelectedIcon: false,
+        segments: [for (final (v, l) in options) ButtonSegment(value: v, label: Text(l))],
+        selected: {options.any((o) => o.$1 == value) ? value : options.first.$1},
+        onSelectionChanged: (v) => onChanged(v.first),
+      );
+
+  @override
+  Widget build(BuildContext context) {
     final branches = ref.watch(tableProvider('branches')).value ?? const [];
     final branch = ref.watch(deviceBranchProvider).value;
     final premium = ref.watch(premiumUiProvider).value ?? false;
+    final zoom = double.tryParse(ref.watch(deviceValueProvider(zoomKey)).value ?? '') ?? 1;
+    final rotation = ref.watch(deviceValueProvider(rotationKey)).value ?? 'auto';
+    final dateFormat = ref.watch(deviceValueProvider('dateFormat')).value ?? 'dmy';
+    final sounds = SoundPrefs.parse(ref.watch(deviceValueProvider(soundPrefsKey)).value);
+    final sync = ref.watch(syncControllerProvider);
     final db = ref.watch(appDatabaseProvider);
-    return PageFrame(
-      title: 'This device',
-      scroll: true,
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+    final products = ref.watch(tableProvider('products')).value?.length ?? 0;
+    Future<void> setSounds(SoundPrefs p) => ref.read(deviceValueProvider(soundPrefsKey).notifier).set(p.encode());
+    final wide = MediaQuery.sizeOf(context).width >= 900;
+    final cards = <Widget>[
+      _section('This device', Icons.devices_outlined, [
         DropdownButtonFormField<String>(
           initialValue: branches.any((b) => b['id'] == branch) ? branch : null,
           decoration: const InputDecoration(labelText: 'Branch this device works as'),
@@ -102,30 +69,175 @@ class DeviceScreen extends ConsumerWidget {
           onChanged: (v) => ref.read(deviceBranchProvider.notifier).set(v!),
         ),
         SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('Premium UI (Midnight Pro)'), value: premium, onChanged: (v) => ref.read(premiumUiProvider.notifier).set(v)),
-        const Divider(),
+      ]),
+      _section('Sync & storage', Icons.storage_outlined, [
+        const Text('This app keeps the pharmacy on this device and works without internet; changes go to the cloud when it is reachable.'),
+        const SizedBox(height: 8),
         FutureBuilder(
-          future: Future.wait([db.select(db.records).get(), db.select(db.outbox).get(), SyncConfig.load(db)]),
+          key: ValueKey('facts-$_tick-${sync.pending}-${sync.lastSync}'),
+          future: Future.wait([db.select(db.outbox).get(), db.select(db.rejectedOps).get(), SyncConfig.load(db)]),
           builder: (_, snap) {
             final d = snap.data;
             if (d == null) return const SizedBox.shrink();
-            final records = (d[0] as List<RecordRow>);
+            final pending = (d[0] as List).length;
+            final rejected = (d[1] as List<RejectedRow>);
             final cfg = d[2] as SyncConfig;
+            final data = cfg.lastSync != null && products > 0;
             return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Records on this device: ${records.length}'),
-              Text('Changes waiting to be sent: ${(d[1] as List).length}'),
-              Text('Device id: ${cfg.deviceId}'),
-              Text('Last synced: ${cfg.lastSync ?? 'not yet'}'),
+              Text('$pending change${pending == 1 ? '' : 's'} waiting for the cloud${cfg.lastSync == null ? '' : ' · last synced ${cfg.lastSync!.replaceFirst('T', ' ').split('.').first}'}'),
+              Text('Device id: ${cfg.deviceId}', style: Theme.of(context).textTheme.bodySmall),
+              if (rejected.isNotEmpty)
+                Card(
+                  color: Theme.of(context).colorScheme.errorContainer,
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text('${rejected.length} change${rejected.length == 1 ? ' was' : 's were'} refused by the cloud', style: const TextStyle(fontWeight: FontWeight.w700)),
+                      const Text("They are kept here so nothing disappears silently. Usually the person who made them didn't have permission (ask an administrator to make the change), or the record was too large."),
+                      for (final r in rejected.reversed.take(8)) Text('${r.t} · ${r.id} · ${r.at.replaceFirst('T', ' ').split('.').first} — ${r.reason ?? ''}', style: Theme.of(context).textTheme.bodySmall),
+                      TextButton(
+                        onPressed: () async {
+                          if (!await confirmAction(context, 'Clear the refused changes?', 'Only clear them once someone has made them again with the right permission. They are not sent anywhere.', 'Clear')) return;
+                          await db.delete(db.rejectedOps).go();
+                          setState(() => _tick++);
+                        },
+                        child: const Text('Reviewed: clear the list'),
+                      ),
+                    ]),
+                  ),
+                ),
+              const SizedBox(height: 8),
+              Row(children: [
+                Icon(data ? Icons.check_circle : Icons.warning_amber, size: 16, color: data ? Colors.green : Colors.orange),
+                const SizedBox(width: 6),
+                Expanded(child: Text(data ? 'Ready to work offline' : 'Not ready to work offline yet', style: const TextStyle(fontWeight: FontWeight.w700))),
+              ]),
+              Text(data ? 'Pharmacy downloaded ($products medicines)' : 'Downloading the pharmacy… keep the internet on'),
+              const Text('You stay signed in on this device, so it opens without the internet.'),
+              const SizedBox(height: 4),
+              Text("Without internet, sales, stock, prescriptions and reports keep working. Mobile Money requests, SMS, AI prescription reading, drug information look-ups and Google sign-in need the internet; a Mobile Money payment can still be recorded with the customer's transaction ID.",
+                  style: Theme.of(context).textTheme.bodySmall),
             ]);
           },
         ),
-        const SizedBox(height: 12),
-        OutlinedButton.icon(onPressed: () => ref.read(syncControllerProvider.notifier).downloadEverything(), icon: const Icon(Icons.cloud_download_outlined), label: const Text('Download everything again')),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          onPressed: _busy
+              ? null
+              : () async {
+                  if (!await confirmAction(context, 'Download everything again?',
+                      'This device downloads the whole pharmacy from the cloud again and adds anything it is missing. Nothing is deleted and unsent sales are sent first. It can take a few minutes and uses about as much data as the first download, so use Wi-Fi on a phone.',
+                      'Download everything')) {
+                    return;
+                  }
+                  setState(() => _busy = true);
+                  final r = await ref.read(syncControllerProvider.notifier).downloadEverything();
+                  if (!mounted) return;
+                  setState(() => _busy = false);
+                  say(this.context, r.error ?? 'Done: everything checked against the cloud');
+                },
+          icon: const Icon(Icons.cloud_download_outlined),
+          label: const Text('Download everything again'),
+        ),
       ]),
+      _section('Screen', Icons.screenshot_monitor, [
+        Text('Text and button size · ${(zoom * 100).round()}%'),
+        Slider(
+          key: const Key('zoom'),
+          min: 0.8,
+          max: 1.6,
+          divisions: 16,
+          value: zoom.clamp(0.8, 1.6),
+          onChanged: (v) => ref.read(deviceValueProvider(zoomKey).notifier).set(v.toStringAsFixed(2)),
+        ),
+        if (zoom != 1) TextButton(onPressed: () => ref.read(deviceValueProvider(zoomKey).notifier).set(null), child: const Text('Back to 100%')),
+        if (Platform.isAndroid) ...[
+          const SizedBox(height: 8),
+          const Text('Rotation'),
+          const SizedBox(height: 4),
+          _choice(rotation, const [('auto', 'Turns with the phone'), ('portrait', 'Stay upright'), ('landscape', 'Stay sideways')], (v) => ref.read(deviceValueProvider(rotationKey).notifier).set(v)),
+        ],
+      ]),
+      _section('Dates', Icons.calendar_month_outlined, [
+        Text('How dates are typed and shown in Add Stock and when correcting deliveries on this device. An expiry can also be typed as month and year (06/2028 = 30 June 2028).',
+            style: Theme.of(context).textTheme.bodySmall),
+        const SizedBox(height: 8),
+        _choice(dateFormat, dateFormats, (v) => ref.read(deviceValueProvider('dateFormat').notifier).set(v)),
+      ]),
+      _section('Notification sounds', Icons.volume_up_outlined, [
+        CheckboxListTile(
+          contentPadding: EdgeInsets.zero,
+          controlAffinity: ListTileControlAffinity.leading,
+          title: const Text('Play sounds on this device'),
+          value: sounds.on,
+          onChanged: (v) => setSounds(sounds.copyWith(on: v)),
+        ),
+        Text('Volume · ${(sounds.volume * 100).round()}%'),
+        Slider(
+          min: 0,
+          max: 1,
+          divisions: 20,
+          value: sounds.volume,
+          onChanged: sounds.on ? (v) => setSounds(sounds.copyWith(volume: v)) : null,
+          onChangeEnd: (_) => ref.read(soundsProvider).play('message'),
+        ),
+        for (final (kind, label, _) in soundKinds)
+          Row(children: [
+            Expanded(child: Text('$label${sounds.toneFor(kind) == 'custom' ? ' · ${sounds.names[kind] ?? 'your file'}' : ''}')),
+            DropdownButton<String>(
+              key: Key('sound-$kind'),
+              value: sounds.toneFor(kind),
+              onChanged: !sounds.on
+                  ? null
+                  : (tone) async {
+                      if (tone == null) return;
+                      if (tone == 'custom') {
+                        final fs = await pickFiles(extensions: const ['mp3', 'wav', 'ogg', 'm4a'], multiple: false);
+                        if (fs.isEmpty) return;
+                        if (fs.first.bytes.length > 1500000) {
+                          if (context.mounted) say(context, 'Choose a sound under 1.5 MB (a short clip works best)');
+                          return;
+                        }
+                        await (await Sounds.customFile(kind)).writeAsBytes(fs.first.bytes, flush: true);
+                        await setSounds(sounds.copyWith(tones: {...sounds.tones, kind: 'custom'}, names: {...sounds.names, kind: fs.first.name}));
+                        await ref.read(soundsProvider).play(kind, tone: 'custom');
+                        if (context.mounted) say(context, '"${fs.first.name}" will play for ${label.toLowerCase()}');
+                        return;
+                      }
+                      await setSounds(sounds.copyWith(tones: {...sounds.tones, kind: tone}));
+                      if (tone != 'off') await ref.read(soundsProvider).play(kind, tone: tone);
+                    },
+              items: [
+                for (final e in tones.entries.where((e) => e.key != 'ringback')) DropdownMenuItem(value: e.key, child: Text(e.value.$1)),
+                DropdownMenuItem(value: 'custom', child: Text(sounds.toneFor(kind) == 'custom' ? 'My file (change…)' : 'My own file…')),
+                const DropdownMenuItem(value: 'off', child: Text('Silent')),
+              ],
+            ),
+            IconButton(
+              tooltip: 'Play it',
+              onPressed: !sounds.on || sounds.toneFor(kind) == 'off' ? null : () => ref.read(soundsProvider).play(kind, tone: sounds.toneFor(kind)),
+              icon: const Icon(Icons.play_arrow),
+            ),
+          ]),
+        Text('Your own sound can be any short MP3, WAV, OGG or M4A file under 1.5 MB.', style: Theme.of(context).textTheme.bodySmall),
+      ]),
+    ];
+    return PageFrame(
+      title: 'This device',
+      subtitle: 'Only changes this ${Platform.isAndroid ? 'phone or tablet' : 'computer'}. Everyone else keeps their own setup.',
+      scroll: true,
+      child: wide
+          ? Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Expanded(child: Column(children: [for (var i = 0; i < cards.length; i += 2) cards[i]])),
+              const SizedBox(width: 12),
+              Expanded(child: Column(children: [for (var i = 1; i < cards.length; i += 2) cards[i]])),
+            ])
+          : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: cards),
     );
   }
 }
 
-/// Audit log: who did what and when (newest first), searchable.
+/// Audit log (src/pages/Audit.jsx): who did what, when and where; by person, action, from a date and search; CSV.
 class AuditScreen extends ConsumerStatefulWidget {
   const AuditScreen({super.key});
   @override
@@ -133,27 +245,58 @@ class AuditScreen extends ConsumerStatefulWidget {
 }
 
 class _AuditScreenState extends ConsumerState<AuditScreen> {
-  String _q = '';
+  String _q = '', _who = '', _action = '', _from = '';
   @override
   Widget build(BuildContext context) {
     final rows = ref.watch(tableProvider('audit')).value;
-    if (rows == null) return const Center(child: CircularProgressIndicator());
+    final branches = ref.watch(tableProvider('branches')).value ?? const [];
+    final st = ref.watch(settingsProvider).value;
+    if (rows == null || st == null) return const Center(child: CircularProgressIndicator());
+    final users = {for (final a in rows) if ('${a['user'] ?? ''}'.isNotEmpty) '${a['user']}'}.toList()..sort();
+    final actions = {for (final a in rows) '${a['action'] ?? ''}'}.toList()..sort();
+    String branch(Object? id) => '${branches.where((b) => b['id'] == ('${id ?? ''}'.isEmpty ? 'main' : id)).firstOrNull?['name'] ?? ''}';
     final q = _q.trim().toLowerCase();
-    final list = rows.where((a) => q.isEmpty || '${a['user']} ${a['action']} ${a['details']}'.toLowerCase().contains(q)).toList()
+    final list = rows
+        .where((a) => (_who.isEmpty || a['user'] == _who) && (_action.isEmpty || a['action'] == _action) && (_from.isEmpty || dayOf('${a['date']}').compareTo(_from) >= 0) &&
+            (q.isEmpty || '${a['user']} ${a['action']} ${a['details']}'.toLowerCase().contains(q)))
+        .toList()
       ..sort((a, b) => '${b['date']}'.compareTo('${a['date']}'));
     return PageFrame(
-      title: 'Audit log',
-      subtitle: '${list.length} entries',
-      actions: [SearchField(onChanged: (v) => setState(() => _q = v), hint: 'Person, action, details…')],
-      child: ListView.separated(
-        itemCount: list.length > 500 ? 500 : list.length,
-        separatorBuilder: (_, _) => const Divider(height: 1),
-        itemBuilder: (_, i) {
-          final a = list[i];
-          return ListTile(dense: true, title: Text('${a['action']} · ${a['user']}'), subtitle: Text('${'${a['date']}'.replaceFirst('T', ' ').split('.').first} · ${a['details'] ?? ''}'));
-        },
-      ),
+      title: 'Audit Log',
+      subtitle: 'Sign-ins, refunds, discounts, price changes, stock adjustments, write-offs, transfers and user changes',
+      actions: [
+        DropdownButton<String>(
+          value: _who,
+          items: [const DropdownMenuItem(value: '', child: Text('Everyone')), for (final u in users) DropdownMenuItem(value: u, child: Text(u))],
+          onChanged: (v) => setState(() => _who = v ?? ''),
+        ),
+        DropdownButton<String>(
+          value: _action,
+          items: [const DropdownMenuItem(value: '', child: Text('All actions')), for (final a in actions) DropdownMenuItem(value: a, child: Text(a))],
+          onChanged: (v) => setState(() => _action = v ?? ''),
+        ),
+        DateBox(label: 'From date', value: _from, onChanged: (v) => setState(() => _from = v)),
+        SearchField(onChanged: (v) => setState(() => _q = v), hint: 'Person, action, details…', width: 220),
+        ExportButtons(
+          name: 'audit-log',
+          settings: st,
+          csv: () => [for (final a in list) {'date': a['date'], 'user': a['user'], 'action': a['action'], 'details': a['details'], 'branch': branch(a['branchId'])}],
+        ),
+      ],
+      child: list.isEmpty
+          ? const EmptyState('No activity recorded yet')
+          : ListView.separated(
+              itemCount: list.length > 1000 ? 1000 : list.length,
+              separatorBuilder: (_, _) => const Divider(height: 1),
+              itemBuilder: (_, i) {
+                final a = list[i];
+                return ListTile(
+                  dense: true,
+                  title: Text('${a['action']} · ${a['user']}'),
+                  subtitle: Text('${'${a['date']}'.replaceFirst('T', ' ').split('.').first} · ${a['details'] ?? ''}${branches.length > 1 ? ' · ${branch(a['branchId'])}' : ''}'),
+                );
+              },
+            ),
     );
   }
 }
-

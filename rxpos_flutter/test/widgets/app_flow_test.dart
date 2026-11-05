@@ -925,4 +925,136 @@ void main() {
     expect(await tester.runAsync(() => RecordStore(db).rows('proformas')), isEmpty);
     await done(tester);
   });
+  testWidgets('Settings: pharmacy details overridden on this device only, payment methods, messages, restore defaults', (tester) async {
+    await tester.runAsync(signedIn);
+    await tester.runAsync(() => RecordStore(db).update((d) => d.saveSettings({'name': 'Sample Pharmacy', 'currency': 'UGX', 'smsRefill': 'Old text'})));
+    await tester.runAsync(() => db.delete(db.outbox).go());
+    await start(tester);
+    await navTo(tester, 'Settings');
+    expect(find.text('0 local override(s) · Owner pharmacy name: Sample Pharmacy'), findsOneWidget);
+    await tester.enterText(find.byKey(const ValueKey('set-name-0-general')), 'Sample Pharmacy Kireka');
+    await tester.tap(find.text('Save for this device'));
+    await settle(tester);
+    expect(find.text('1 local override(s) · Owner pharmacy name: Sample Pharmacy'), findsOneWidget);
+    var shared = (await tester.runAsync(() => RecordStore(db).settingsRecord()))!;
+    expect(shared['name'], 'Sample Pharmacy', reason: 'an override never changes the shared record');
+    expect(await tester.runAsync(() => db.select(db.outbox).get()), isEmpty, reason: 'nor is it sent to the cloud');
+    expect(find.text('Sample Pharmacy Kireka'), findsWidgets, reason: 'this device shows its own name');
+    await tester.tap(find.text('Use Owner defaults'));
+    await settle(tester);
+    expect(find.text('0 local override(s) · Owner pharmacy name: Sample Pharmacy'), findsOneWidget);
+
+    await tester.ensureVisible(find.text('Payment methods'));
+    await tester.tap(find.text('Payment methods'));
+    await settle(tester);
+    await tester.tap(find.text('Add payment method'));
+    await settle(tester);
+    await tester.enterText(find.widgetWithText(TextFormField, 'Name shown on the POS & receipt').last, 'Jubilee Insurance');
+    await tester.pump();
+    await tester.ensureVisible(find.widgetWithText(FilledButton, 'Save'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await settle(tester);
+    shared = (await tester.runAsync(() => RecordStore(db).settingsRecord()))!;
+    expect((shared['paymentMethods'] as List).length, 7);
+    expect(((shared['paymentMethods'] as List).last as Map)['name'], 'Jubilee Insurance');
+
+    await tester.ensureVisible(find.text('Messages & recovery'));
+    await tester.tap(find.text('Messages & recovery'));
+    await settle(tester);
+    await tester.enterText(find.widgetWithText(TextFormField, 'Refill reminder'), 'Hello {name}, your {medicine} is due');
+    await tester.pump();
+    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await settle(tester);
+    shared = (await tester.runAsync(() => RecordStore(db).settingsRecord()))!;
+    expect(shared['smsRefill'], 'Hello {name}, your {medicine} is due');
+    expect(shared['name'], 'Sample Pharmacy');
+    final audit = (await tester.runAsync(() => RecordStore(db).rows('audit')))!;
+    expect(audit.where((a) => a['action'] == 'Settings changed').length, 2);
+
+    await tester.ensureVisible(find.text('Data & backup'));
+    await tester.tap(find.text('Data & backup'));
+    await settle(tester);
+    await tester.ensureVisible(find.text('Restore defaults'));
+    await tester.tap(find.text('Restore defaults'));
+    await settle(tester);
+    await tester.tap(find.widgetWithText(FilledButton, 'Restore defaults'));
+    await settle(tester);
+    shared = (await tester.runAsync(() => RecordStore(db).settingsRecord()))!;
+    expect(shared['smsRefill'], startsWith('Hello {name}, this is {pharmacy}.'));
+    expect((shared['paymentMethods'] as List).length, 6);
+    expect(shared['name'], 'Sample Pharmacy', reason: 'pharmacy details are kept');
+    await done(tester);
+  });
+  testWidgets('This device: date format, sounds, text size; phone layout fits', (tester) async {
+    await tester.runAsync(signedIn);
+    await start(tester);
+    await navTo(tester, 'This device');
+    expect(find.text('Ready to work offline'), findsNothing, reason: 'never synced yet');
+    await tester.ensureVisible(find.text('YYYY-MM-DD'));
+    await tester.tap(find.text('YYYY-MM-DD'));
+    await settle(tester);
+    Future<String?> kv(String k) async => (await tester.runAsync(() => (db.select(db.kv)..where((x) => x.k.equals('device:$k'))).getSingleOrNull()))?.v;
+    expect(await kv('dateFormat'), 'ymd');
+    await tester.ensureVisible(find.byKey(const Key('sound-message')));
+    await tester.tap(find.byKey(const Key('sound-message')));
+    await settle(tester);
+    await tester.tap(find.text('Silent').last);
+    await settle(tester);
+    expect(await kv('sounds'), contains('"message":"off"'));
+    await tester.ensureVisible(find.byKey(const Key('zoom')));
+    await tester.tap(find.byKey(const Key('zoom')));
+    await settle(tester);
+    expect(await kv('zoom'), isNotNull, reason: 'text size is kept on this device');
+    await done(tester);
+  });
+
+  testWidgets('on a phone: chat, every settings tab and this device fit the screen', (tester) async {
+    await tester.runAsync(signedIn);
+    await start(tester, size: const Size(400, 800));
+    Future<void> open(String label) async {
+      await tester.tap(find.byTooltip('Open navigation menu'));
+      await settle(tester);
+      final list = find.descendant(of: find.byType(Drawer), matching: find.byType(Scrollable)).first;
+      await tester.scrollUntilVisible(find.descendant(of: find.byType(Drawer), matching: find.text(label)), 150, scrollable: list);
+      await settle(tester, 2);
+      await tester.tap(find.descendant(of: find.byType(Drawer), matching: find.text(label)));
+      await settle(tester);
+    }
+
+    await open('Chat & Messages');
+    await tester.tap(find.text('General'));
+    await settle(tester);
+    expect(find.text('Message the team'), findsOneWidget);
+    await tester.tap(find.byTooltip('Back to chats'));
+    await settle(tester);
+    await open('Settings');
+    for (final t in ['Payment methods', 'Receipts & stock', 'Messages & recovery', 'Alerts & storage', 'Online & Mobile Money', 'Data & backup']) {
+      await tester.ensureVisible(find.text(t));
+      await tester.tap(find.text(t));
+      await settle(tester);
+    }
+    await open('This device');
+    expect(find.text('Notification sounds'), findsOneWidget);
+    await done(tester);
+  });
+
+  testWidgets('Barcode labels: a medicine without a barcode gets one; all in stock; quantities', (tester) async {
+    await tester.runAsync(signedIn);
+    await start(tester);
+    await navTo(tester, 'Barcode labels');
+    await tester.enterText(find.byKey(const Key('labels-search')), 'Zinco');
+    await settle(tester, 4);
+    await tester.tap(find.text('Zinco Syrup 100ml').last);
+    await settle(tester);
+    expect(find.text('Print 1 label'), findsOneWidget);
+    await tester.tap(find.byTooltip('More'));
+    await settle(tester, 4);
+    expect(find.text('Print 2 labels'), findsOneWidget);
+    await tester.tap(find.text('Add all in-stock items'));
+    await settle(tester);
+    expect(find.text('Print 3 labels'), findsOneWidget, reason: 'Calmex is the only one in stock');
+    expect(find.text('Exp 2029-01-31'), findsOneWidget, reason: "Calmex's batch expiry");
+    await done(tester);
+  });
+
 }

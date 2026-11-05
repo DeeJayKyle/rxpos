@@ -127,20 +127,28 @@ Every feature of the React app (`src/pages/*.jsx`, `src/*.jsx`), screen by scree
   top 10 by amount / qty / profit; open drafts; promote today with share on WhatsApp; products and customers
 
 ## Settings (Settings.jsx, Device.jsx)
-- ✅ Receipts & stock, payment methods (add), this device (branch, theme, storage)
-- ✗ Pharmacy tab (owner defaults), Messages & recovery, Alerts & storage, Online & Mobile Money, Data & backup
-  (download a backup, restore defaults), daily stock sheet link, calendar link
-- ✗ Payment methods: edit, delete, reorder
-- ✗ This device: screen orientation, alarm sound test, restore the copy from before the upgrade
+- ✅ Pharmacy: this device's own pharmacy details over the Owner's (kept on the device, never synced), Use Owner
+  defaults, non-cash sales account, this device's branch
+- ✅ Payment methods: rename, type, reorder, delete, add, defaults
+- ✅ Receipts & stock (paper, footer, packs, expiry, lead time, cover, dead stock, automatic reorder levels)
+- ✅ Messages & recovery (refill / payment reminder texts, administrator's WhatsApp, client details at the POS)
+- ✅ Alerts & storage (owner's daily summary: emails, preview, email now, WhatsApp; idle promotions, hourly reminder,
+  greetings, quiet hours; weather location with town search; storage limits)
+- ✅ Online & Mobile Money (sync status, sync now; MTN / Airtel / SMS set-up status)
+- ✅ Data & backup (download a backup, daily stock sheet link for Google Sheets, restore default settings)
+- ✅ This device: branch, theme, sync & storage (waiting / refused changes, ready to work offline, download everything
+  again), text size, rotation (Android), date format, notification sounds (the same tones, volume, own file, test)
+- n/a Restore the copy from before the 1.6 upgrade (a browser storage upgrade the Flutter app never had)
+- ✗ App version and updates (see App frame), notifications in the background (see App frame)
 
 ## Other screens
-- ✗ Labels: show price / expiry / pharmacy name, add all in-stock, preview (✅ print)
+- ✅ Labels: four sizes (thermal 38×25 / 50×30 / 60×40, A4 sheet of 21), show price / expiry / pharmacy name, add all in-stock, a barcode made for a medicine without one, preview, print
 - ✗ Import: standard catalogue tab, Excel / CSV file, preview, template download (✅ paste)
 - ✗ Drug information: online lookup saved for offline, counselling sheet (✅ local)
 - ✗ Quiz: quick quiz offline (✅ AI quiz)
 - ✗ Storage: weather, trend chart, delete a reading (✅ log)
 - ✗ Calendar: copy, delete, add to Google Calendar, today view (✅ add / edit)
-- ✗ Audit log: date filter (✅ search)
+- ✅ Audit log: person, action, from date, search, branch, CSV
 
 ## Owner console (OwnerConsole.jsx)
 - Stays on the website (rxposug.com): it manages every pharmacy, not one.

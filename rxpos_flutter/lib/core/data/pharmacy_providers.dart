@@ -10,6 +10,7 @@ import '../rules/permissions.dart';
 import '../rules/stock.dart';
 import 'catalog.dart';
 import 'device_settings.dart';
+import '../rules/pharmacy_settings.dart';
 import 'record_store.dart';
 
 part 'pharmacy_providers.g.dart';
@@ -18,8 +19,13 @@ part 'pharmacy_providers.g.dart';
 @riverpod
 Stream<List<Map<String, Object?>>> table(Ref ref, String t) => ref.watch(recordStoreProvider).watch(t);
 
+/// The pharmacy's settings with this device's own overrides of the pharmacy's details (Settings → Pharmacy). [raw]
+/// stays the shared record; save settings from [RecordStore.settingsRecord] so overrides never reach other devices.
 @Riverpod(keepAlive: true)
-Stream<PharmacySettings> settings(Ref ref) => ref.watch(recordStoreProvider).watchSettings();
+Stream<PharmacySettings> settings(Ref ref) async* {
+  final over = readOverrides(await ref.watch(deviceValueProvider(overridesKey).future));
+  yield* ref.watch(recordStoreProvider).watchSettings().map((s) => over.isEmpty ? s : PharmacySettings.fromRecord({...s.raw, ...over}).copyWith(raw: s.raw));
+}
 
 /// The built-in catalogue (9,710 medicines), loaded once.
 @Riverpod(keepAlive: true)
