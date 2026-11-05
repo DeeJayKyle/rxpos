@@ -7,15 +7,16 @@ import 'package:rxpos/core/database/app_database.dart';
 import 'package:rxpos/core/entities/movement.dart';
 import 'package:rxpos/core/network/api_failure.dart';
 import 'package:rxpos/core/rules/stock.dart';
+import 'package:rxpos/core/sync/sync_config.dart';
 import 'package:rxpos/core/sync/sync_engine.dart';
 
 import 'fake_cloud.dart';
 
 class Device {
-  Device(FakeCloud cloud, String name) : db = AppDatabase(NativeDatabase.memory()) {
+  Device(FakeCloud cloud, String name, {int maxRequests = 100000}) : db = AppDatabase(NativeDatabase.memory()) {
     var n = 0;
     store = RecordStore(db, clock: () => '2026-11-05T10:${(n++).toString().padLeft(2, '0')}:00.000Z-$name'.substring(0, 24));
-    sync = SyncEngine(dio: cloud.dio(), db: db, cloudUrl: 'https://rxposug.com');
+    sync = SyncEngine(dio: cloud.dio(), db: db, cloudUrl: 'https://rxposug.com', maxRequests: maxRequests);
   }
   final AppDatabase db;
   late final RecordStore store;
@@ -79,6 +80,25 @@ void main() {
     await a.db.close();
   });
 
+  test('a cloud backup restore keeps local changes until they are safely resent', () async {
+    final a = Device(cloud, 'A');
+    await a.sync.run(); // remember epoch-1 before the local work
+    await a.sell('p1', 2, 'b1');
+    expect(await a.waiting(), 2);
+
+    cloud.epoch = 'epoch-2'; // the next reply says the cloud was restored
+    await a.sync.run();
+
+    // The restore run must not discard operations based on the stale-epoch reply. The next sync resends
+    // them; op ids make that safe if the cloud applied the first request before reporting the restore.
+    expect(await a.waiting(), 2);
+    await a.sync.run();
+    expect(await a.waiting(), 0);
+    expect(cloud.current.keys.where((k) => k.startsWith('movements|')), hasLength(1));
+    expect(cloud.dupes, greaterThanOrEqualTo(2));
+    await a.db.close();
+  });
+
   test('refused changes are kept for review, never dropped; the rest go through', () async {
     final a = Device(cloud, 'A');
     await a.store.update((d) => d.put('products', {'id': 'p-secret', 'name': 'Price change', 'price': 1}));
@@ -133,6 +153,26 @@ void main() {
     await a.store.update((d) => d.del('customers', 'c9'));
     await a.sync.run();
     expect(cloud.current['customers|c9']!.deleted, isTrue);
+    await a.db.close();
+  });
+
+  test('a request limit preserves an incomplete full download for a later resume', () async {
+    cloud = FakeCloud(pageSize: 1);
+    cloud.add('products', 'p1', {'name': 'First'}, '2026-11-01T00:00:00.000Z');
+    cloud.add('products', 'p2', {'name': 'Second'}, '2026-11-01T00:01:00.000Z');
+    final a = Device(cloud, 'A', maxRequests: 1);
+
+    await expectLater(a.sync.run(), throwsA(isA<ApiFailure>().having((f) => f.kind, 'kind', ApiFailureKind.server)));
+    final partial = await SyncConfig.load(a.db);
+    expect(partial.cursor, 1);
+    expect(partial.fullInProgress, isTrue);
+    expect(partial.needsFullPull, isTrue, reason: 'a capped download must not be marked complete');
+
+    await a.sync.run();
+    final completed = await SyncConfig.load(a.db);
+    expect(completed.fullInProgress, isFalse);
+    expect(completed.needsFullPull, isFalse);
+    expect((await a.store.rows('products')).map((r) => r['id']).toSet(), {'p1', 'p2'});
     await a.db.close();
   });
 
