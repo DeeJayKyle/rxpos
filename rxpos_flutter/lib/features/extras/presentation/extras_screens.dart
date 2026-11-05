@@ -1,59 +1,17 @@
-// The remaining screens: reminders, calendar, team chat, the controlled-drugs register,
+// The remaining screens: reminders, team chat, the controlled-drugs register,
 // barcode labels, importing medicines and drug information.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/data/pharmacy_providers.dart';
-import '../../../core/data/record_store.dart';
 import '../../../core/presentation/export.dart';
 import '../../../core/entities/movement.dart';
 import '../../../core/entities/sale.dart';
 import '../../../core/entities/settings.dart';
 import '../../../core/presentation/widgets.dart';
 import '../../../core/rules/dates.dart';
-import '../../../core/rules/ids.dart';
 import '../../../core/rules/money.dart';
-import '../../auth/application/session_controller.dart';
-
-Future<String> _me(WidgetRef ref) async => (await ref.read(sessionControllerProvider.future))?.userName ?? '';
-
-/// Calendar: the pharmacy's events (deliveries, inspections, meetings…), upcoming first.
-class CalendarScreen extends ConsumerWidget {
-  const CalendarScreen({super.key});
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final rows = ref.watch(tableProvider('events')).value;
-    if (rows == null) return const Center(child: CircularProgressIndicator());
-    final t = today();
-    final upcoming = rows.where((e) => '${e['date']}'.compareTo(t) >= 0).toList()..sort((a, b) => '${a['date']} ${a['time'] ?? ''}'.compareTo('${b['date']} ${b['time'] ?? ''}'));
-    Future<void> edit(Map<String, Object?>? e) async {
-      final v = await editRecord(context, title: e == null ? 'New event' : 'Edit event', initial: e ?? {'date': t}, fields: const [
-        FormFieldSpec('title', 'What', required: true),
-        FormFieldSpec('date', 'Date', kind: FieldKind.date, required: true),
-        FormFieldSpec('time', 'Time (e.g. 14:30)'),
-        FormFieldSpec('note', 'Note', kind: FieldKind.multiline),
-      ]);
-      if (v == null) return;
-      final by = await _me(ref);
-      await ref.read(recordStoreProvider).update((x) {
-        x.put('events', {...?e, ...v, 'id': e?['id'] ?? uid(), 'title': '${v['title']}'.trim(), 'createdBy': e?['createdBy'] ?? by});
-        x.audit(by, e == null ? 'Calendar event added' : 'Calendar event changed', '${v['title']} ${v['date']}');
-      });
-    }
-
-    return PageFrame(
-      title: 'Calendar',
-      actions: [FilledButton.icon(onPressed: () => edit(null), icon: const Icon(Icons.event), label: const Text('Add event'))],
-      child: upcoming.isEmpty
-          ? const EmptyState('Nothing coming up')
-          : ListView(children: [
-              for (final e in upcoming)
-                ListTile(title: Text('${e['title']}'), subtitle: Text('${e['date']} ${e['time'] ?? ''} · ${e['note'] ?? ''}'), onTap: () => edit(e)),
-            ]),
-    );
-  }
-}
 
 /// Controlled Drugs & Recalls (src/pages/Controlled.jsx): every dose of a controlled medicine in and out at this branch
 /// with the running balance and, for each sale, the patient, prescriber and prescription; and a batch recall lookup:

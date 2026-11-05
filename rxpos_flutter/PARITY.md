@@ -148,7 +148,7 @@ Every feature of the React app (`src/pages/*.jsx`, `src/*.jsx`), screen by scree
 - ✅ Quiz: quick quiz offline, AI quiz (falls back to offline), one question at a time, score saved, team board
 - ✅ Storage: weather (Open-Meteo, kept on the device for offline, advice for storage; also on the dashboard), last reading per place, trend chart with the safe range, readings with humidity, delete a reading
 - ✗ Weather location from the device's GPS (now: the connection's location from the cloud, else the town in Settings)
-- ✗ Calendar: copy, delete, add to Google Calendar, today view (✅ add / edit)
+- ✅ Calendar: month grid, repeating events, refills due and expiring stock, the day's agenda and Today, add / edit / delete, add to Google Calendar, subscription link (copy, Google, Apple / Outlook), .ics file
 - ✅ Audit log: person, action, from date, search, branch, CSV
 
 ## Owner console (OwnerConsole.jsx)

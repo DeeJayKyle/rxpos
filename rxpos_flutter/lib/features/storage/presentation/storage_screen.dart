@@ -327,6 +327,7 @@ class _ReadingDialogState extends State<_ReadingDialog> {
               child: Column(mainAxisSize: MainAxisSize.min, children: [
                 DropdownButtonFormField<String>(
                   key: const Key('reading-place'),
+                  isExpanded: true,
                   initialValue: _place,
                   decoration: const InputDecoration(labelText: 'Where'),
                   items: [for (final (p, _) in places) DropdownMenuItem(value: p, child: Text(p))],

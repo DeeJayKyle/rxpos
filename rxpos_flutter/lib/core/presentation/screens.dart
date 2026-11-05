@@ -10,6 +10,7 @@ import '../../features/settings/presentation/settings_screens.dart';
 import '../../features/users/presentation/users_screen.dart';
 import '../../features/extras/presentation/extras_screens.dart';
 import '../../features/drug_info/presentation/drug_info_screen.dart';
+import '../../features/calendar/presentation/calendar_screen.dart';
 import '../../features/quiz/presentation/quiz_screen.dart';
 import '../../features/storage/presentation/storage_screen.dart';
 import '../../features/extras/presentation/import_screen.dart';

@@ -12,6 +12,9 @@ import 'package:rxpos/core/data/record_store.dart';
 import 'package:rxpos/core/database/app_database.dart';
 import 'package:rxpos/core/network/dio_client.dart';
 import 'package:rxpos/core/rules/passwords.dart';
+import 'package:rxpos/core/rules/dates.dart';
+import 'package:rxpos/features/calendar/domain/calendar.dart';
+import 'package:rxpos/features/calendar/presentation/calendar_screen.dart';
 import 'package:rxpos/features/drug_info/presentation/drug_info_screen.dart';
 import 'package:rxpos/features/storage/application/weather_controller.dart';
 import 'package:rxpos/features/sync_status/application/sync_controller.dart';
@@ -509,7 +512,7 @@ void main() {
     await tester.enterText(find.widgetWithText(TextFormField, 'What'), 'NDA inspection');
     await tester.tap(find.widgetWithText(FilledButton, 'Save'));
     await settle(tester);
-    expect(find.text('NDA inspection'), findsOneWidget);
+    expect(find.text('NDA inspection'), findsWidgets, reason: 'in the month and on the day');
 
     for (final screen in ['Reminders', 'Controlled drugs', 'Barcode labels', 'Drug information', 'Drug quiz']) {
       await navTo(tester, screen);
@@ -1267,6 +1270,103 @@ void main() {
     await tester.tap(find.text('Record reading'));
     await settle(tester);
     expect(find.text('Record a temperature reading'), findsOneWidget);
+    await done(tester);
+  });
+
+  testWidgets('Calendar: repeating event with notes, refills and expiries, Today, copy the link, edit and delete', (tester) async {
+    final day = today();
+    await tester.runAsync(signedIn);
+    await tester.runAsync(
+      () => RecordStore(db).update((d) {
+        d.put('customers', {'id': 'c9', 'name': 'Amina Test'});
+        d.put('prescriptions', {'id': 'rx9', 'customerId': 'c9', 'status': 'Dispensed', 'dispensedOn': day, 'refillDays': 0, 'medications': 'Calmex 1x3'});
+        d.put('prescriptions', {'id': 'rx8', 'customerId': 'c9', 'status': 'Dispensed', 'dispensedOn': addDays(day, -30), 'refillDays': 30, 'medications': 'Calmex 1x3'});
+        d.put('batches', {'id': 'b9', 'productId': 'p1', 'batch': 'SOON', 'expiry': day, 'cost': 300});
+        d.move(productId: 'p1', qty: 5, type: 'Opening stock', batchId: 'b9');
+      }),
+    );
+    cloud.api['calendar-link'] = (_) => (200, {'url': 'https://cloud.test/api/calendar/t1/sig.ics'});
+    String? copied;
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'Clipboard.setData') copied = (call.arguments as Map)['text'] as String?;
+      return null;
+    });
+    addTearDown(() => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, null));
+    await start(tester);
+    await navTo(tester, 'Calendar');
+    expect(find.text('Refill due: Amina Test'), findsWidgets, reason: 'the 30-day refill falls today; the one without refill days is left out');
+    expect(find.text('Expires: Calmex 500mg Tabs (5 left, batch SOON)'), findsWidgets);
+    expect(find.text('https://cloud.test/api/calendar/t1/sig.ics'), findsOneWidget);
+    await tester.tap(find.text('Copy'));
+    await settle(tester, 3);
+    expect(copied, 'https://cloud.test/api/calendar/t1/sig.ics');
+    noSnackBars(tester);
+
+    await tester.tap(find.text('Add event'));
+    await settle(tester);
+    await tester.enterText(find.byKey(const Key('event-title')), 'Staff meeting');
+    await tester.enterText(find.byKey(const Key('event-time')), '9:30');
+    await tester.enterText(find.byKey(const Key('event-end')), '1030');
+    await tester.enterText(find.byKey(const Key('event-notes')), 'Stock count plan');
+    await tester.tap(find.byKey(const Key('event-repeat')));
+    await settle(tester, 3);
+    await tester.tap(find.text('Every week').last);
+    await settle(tester, 3);
+    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await settle(tester);
+    final ev = (await tester.runAsync(() => RecordStore(db).rows('events')))!.single;
+    expect((ev['title'], ev['date'], ev['time'], ev['endTime'], ev['repeat'], ev['notes'], ev['createdBy']), ('Staff meeting', day, '09:30', '10:30', 'weekly', 'Stock count plan', 'Tia Admin'));
+    expect(ev.containsKey('note'), isFalse, reason: 'the React app reads notes');
+    expect(find.text('09:30–10:30 · Staff meeting'), findsOneWidget);
+    noSnackBars(tester);
+
+    // a week on: the repeating event is there too
+    final next = addDays(day, 7);
+    if (!next.startsWith(day.substring(0, 7))) {
+      await tester.tap(find.byTooltip('Next month'));
+      await settle(tester, 3);
+    }
+    await tester.ensureVisible(find.byKey(ValueKey('cal-$next')));
+    await tester.tap(find.byKey(ValueKey('cal-$next')));
+    await settle(tester, 3);
+    expect(find.text('09:30–10:30 · Staff meeting'), findsOneWidget);
+    await tester.ensureVisible(find.text('Today'));
+    await tester.tap(find.text('Today'));
+    await settle(tester, 3);
+    expect(find.text(longDay(day)), findsOneWidget);
+
+    await tester.ensureVisible(find.text('Edit'));
+    await tester.tap(find.text('Edit'));
+    await settle(tester);
+    await tester.tap(find.text('Delete'));
+    await settle(tester);
+    expect(find.text('Delete "Staff meeting"?'), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
+    await settle(tester);
+    expect((await tester.runAsync(() => RecordStore(db).rows('events')))!, isEmpty);
+    final audit = (await tester.runAsync(() => RecordStore(db).rows('audit')))!;
+    expect(audit.map((a) => a['action']), containsAll(['Calendar event added', 'Calendar event deleted']));
+    await done(tester);
+  });
+
+  testWidgets('Calendar on a phone fits the screen', (tester) async {
+    await tester.runAsync(signedIn);
+    await start(tester, size: const Size(400, 800));
+    await tester.tap(find.byTooltip('Open navigation menu'));
+    await settle(tester);
+    final list = find.descendant(of: find.byType(Drawer), matching: find.byType(Scrollable)).first;
+    await tester.scrollUntilVisible(find.descendant(of: find.byType(Drawer), matching: find.text('Calendar')), 150, scrollable: list);
+    await settle(tester, 2);
+    await tester.tap(find.descendant(of: find.byType(Drawer), matching: find.text('Calendar')));
+    await settle(tester);
+    expect(find.byKey(const Key('cal-month')), findsOneWidget);
+    final page = find.descendant(of: find.byKey(const Key('calendar-page')), matching: find.byType(Scrollable)).first;
+    await tester.drag(page, const Offset(0, -3000));
+    await settle(tester, 2);
+    expect(find.text('Download .ics file'), findsOneWidget);
+    await tester.tap(find.text('Add event'));
+    await settle(tester);
+    expect(find.byKey(const Key('event-title')), findsOneWidget);
     await done(tester);
   });
 }
