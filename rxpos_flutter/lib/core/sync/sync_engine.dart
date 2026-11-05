@@ -105,7 +105,7 @@ class SyncEngine {
       final restored = reply.epoch != null && epoch != null && reply.epoch != epoch;
       final refusedKeys = reply.refusedKeys.toSet();
       await db.transaction(() async {
-        if (batch.isNotEmpty) {
+        if (batch.isNotEmpty && !restored) {
           for (final e in batch) {
             if (refusedKeys.contains('${e.t}|${e.id}')) {
               await db.into(db.rejectedOps).insert(RejectedOpsCompanion.insert(op: e.op, t: e.t, id: e.id, at: e.at,
@@ -117,7 +117,9 @@ class SyncEngine {
           sent += batch.length;
         }
         if (restored) {
-          // the cloud was restored from a backup: download everything again from the start and merge
+          // A restored cloud may have replied before it durably applied this request. Keep every local operation,
+          // including a refusal reported by that stale reply, until it is resent against the new epoch. Op ids make
+          // that resend safe when the cloud did apply it. This preserves unsynced records through a cloud restore.
           epoch = reply.epoch;
           cursor = 0;
         } else {
@@ -132,6 +134,12 @@ class SyncEngine {
       onProgress?.call(SyncProgress(sent: sent, toSend: toSend, received: received, first: first));
       if (restored) continue;
       if (i >= batches.length && !reply.more) break;
+    }
+    // Do not mark a partial full download complete when the caller-imposed safety
+    // limit stops paging. The saved cursor/fullInProgress state lets the next run
+    // resume without losing the remaining download.
+    if (requests > maxRequests) {
+      throw const ApiFailure(ApiFailureKind.server, 'Sync paused before all changes were downloaded; please run sync again.');
     }
     cfg = cfg.copyWith(lastSync: DateTime.now().toUtc().toIso8601String(), lastError: '', fullPull: full ? fullPullVersion : null, fullInProgress: false);
     await cfg.save(db);
