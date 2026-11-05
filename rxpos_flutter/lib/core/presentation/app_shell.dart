@@ -10,6 +10,8 @@ import '../../features/alerts/presentation/notification_bell.dart';
 import '../data/pharmacy_providers.dart';
 import '../theme/theme_choice.dart';
 import '../crash/crash_reports.dart';
+import '../crash/crash_screen.dart';
+import '../../features/sync_status/application/sync_controller.dart';
 import '../../features/engage/application/popups.dart';
 import '../../features/engage/presentation/spotlight.dart';
 import '../../features/engage/presentation/watchers.dart';
@@ -85,6 +87,10 @@ class AppShell extends ConsumerWidget {
         for (final s in visible) if (s.key != null) SingleActivator(s.key!): () => context.go(s.path),
         const SingleActivator(LogicalKeyboardKey.keyK, control: true): () => openSearch(context, visible),
         const SingleActivator(LogicalKeyboardKey.keyK, meta: true): () => openSearch(context, visible),
+        // F5 / Ctrl+R: send and fetch now (the page updates in place); Ctrl+Shift+R reloads the whole app
+        const SingleActivator(LogicalKeyboardKey.f5): () => refreshNow(context, ref),
+        const SingleActivator(LogicalKeyboardKey.keyR, control: true): () => refreshNow(context, ref),
+        const SingleActivator(LogicalKeyboardKey.keyR, control: true, shift: true): () => ref.read(appCrashProvider.notifier).reload(),
       },
       // the idle screen covers the whole window
       child: Spotlight(
@@ -136,4 +142,17 @@ class _Sidebar extends StatelessWidget {
         ],
     ]);
   }
+}
+
+/// F5: sync now and say how it went (src/refresh.jsx).
+Future<void> refreshNow(BuildContext context, WidgetRef ref) async {
+  final messenger = ScaffoldMessenger.of(context);
+  final r = await ref.read(syncControllerProvider.notifier).runNow();
+  final text = switch (r.state) {
+    SyncState.signedOut => 'This device is not linked to the cloud',
+    SyncState.offline => 'Offline: your work is saved and goes up when the internet is back',
+    SyncState.needsAttention || SyncState.signInAgain => r.error ?? 'Could not reach the cloud',
+    _ => r.pending > 0 ? 'Up to date · ${r.pending} still waiting' : 'Up to date',
+  };
+  messenger.showSnackBar(SnackBar(content: Text(text)));
 }

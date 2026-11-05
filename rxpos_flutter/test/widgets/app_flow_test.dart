@@ -1,4 +1,5 @@
 // The real screens, driven like a cashier would: sign in, scan, charge, receipt; Add Stock; the sync screen.
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:drift/native.dart';
@@ -7,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:rxpos/app.dart';
 import 'package:rxpos/core/data/pharmacy_providers.dart';
 import 'package:rxpos/core/data/record_store.dart';
@@ -14,6 +16,7 @@ import 'package:rxpos/core/database/app_database.dart';
 import 'package:rxpos/core/network/dio_client.dart';
 import 'package:rxpos/core/rules/passwords.dart';
 import 'package:rxpos/core/crash/crash_screen.dart';
+import 'package:rxpos/core/live/live_connection.dart';
 import 'package:rxpos/core/rules/dates.dart';
 import 'package:rxpos/core/sound/sounds.dart';
 import 'package:rxpos/core/sync/sync_config.dart';
@@ -34,6 +37,7 @@ void main() {
   setUpAll(() {
     passwordIterations = 50;
     pinIterations = 50;
+    PackageInfo.setMockInitialValues(appName: 'RxPOS', packageName: 'io.github.rxpos', version: '1.0.0', buildNumber: '42', buildSignature: '');
   });
   late AppDatabase db;
   late FakeCloud cloud;
@@ -82,7 +86,7 @@ void main() {
     }
   }
 
-  Future<void> start(WidgetTester tester, {Size size = const Size(1440, 900), List<Override> extra = const [], bool engage = false}) async {
+  Future<void> start(WidgetTester tester, {Size size = const Size(1440, 900), List<Override> extra = const [], bool engage = false, bool live = false}) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -111,6 +115,7 @@ void main() {
           connectionPlaceProvider.overrideWithValue(() async => {'lat': 0.31, 'lon': 32.58, 'city': 'Kampala', 'country': 'UG'}),
           engageOnProvider.overrideWithValue(engage), // pop-ups and the idle screen: only in the tests about them
           soundsProvider.overrideWith((ref) => _QuietSounds(ref, played)),
+          liveOnProvider.overrideWithValue(live), // no real connection to the cloud in tests
           ...extra,
         ],
         child: const RxposApp(),
@@ -1905,6 +1910,36 @@ void main() {
     await tester.pump(const Duration(seconds: 31));
     await settle(tester);
     expect(find.byKey(const Key('spotlight')), findsOneWidget);
+    await done(tester);
+  });
+
+  testWidgets('the live line: opened with a ticket; "changed" from another device syncs at once; F5 syncs and says so', (tester) async {
+    await tester.runAsync(signedIn);
+    cloud.api['live-ticket'] = (_) => (200, {'ticket': 't-123'});
+    final line = StreamController<Object?>();
+    Uri? opened;
+    final sent = <String>[];
+    await start(tester, live: true, extra: [
+      liveConnectProvider.overrideWithValue((url, onSend) async {
+        opened = url;
+        onSend(sent.add);
+        return line.stream;
+      }),
+    ]);
+    await settle(tester);
+    expect(opened.toString(), startsWith('wss://api.rxposug.com/api/live?ticket=t-123&device=dev-'), reason: 'the token never goes in the address');
+    final before = cloud.requests.length;
+    line.add('{"type":"changed"}');
+    await settle(tester);
+    expect(cloud.requests.length, greaterThan(before), reason: 'pulled at once');
+    await tester.sendKeyEvent(LogicalKeyboardKey.f5);
+    await settle(tester);
+    expect(find.text('Up to date'), findsOneWidget);
+    await navTo(tester, 'This device');
+    await tester.scrollUntilVisible(find.byKey(const Key('live-state')), 200, scrollable: find.descendant(of: find.byType(PageFrame), matching: find.byType(Scrollable)).first);
+    expect(find.textContaining('Live connection: on'), findsOneWidget);
+    expect(find.text('RxPOS 1.0.0 (build 42)'), findsOneWidget);
+    await line.close();
     await done(tester);
   });
 }

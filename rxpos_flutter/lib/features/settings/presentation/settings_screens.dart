@@ -1,8 +1,10 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/live/live_connection.dart';
 import '../../../core/data/device_settings.dart';
 import '../../../core/data/pharmacy_providers.dart';
 import '../../../core/database/app_database.dart';
@@ -220,6 +222,14 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
             ),
           ]),
         Text('Your own sound can be any short MP3, WAV, OGG or M4A file under 1.5 MB.', style: Theme.of(context).textTheme.bodySmall),
+      ]),
+      _section('App version', Icons.info_outline, [
+        FutureBuilder<PackageInfo>(
+          future: PackageInfo.fromPlatform(),
+          builder: (_, v) => Text(v.data == null ? 'RxPOS' : 'RxPOS ${v.data!.version} (build ${v.data!.buildNumber})', key: const Key('app-version')),
+        ),
+        const SizedBox(height: 4),
+        Text('Live connection: ${ref.watch(liveProvider).up ? 'on (changes from other devices arrive at once)' : 'off (syncing every few seconds instead)'}', key: const Key('live-state')),
       ]),
     ];
     return PageFrame(

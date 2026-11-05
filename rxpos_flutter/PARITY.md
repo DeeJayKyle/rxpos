@@ -22,8 +22,12 @@ Every feature of the React app (`src/pages/*.jsx`, `src/*.jsx`), screen by scree
   with the day's health tip and nearby WHO alerts at 08 / 14 / 16 (posted to the team chat); quiet hours
 - ✅ Pop-ups with a sound: new alerts (once a day per kind, urgent only at the till), new messages, last week at a
   glance on Monday; outside temperature logged every 6 hours; reorder levels updated automatically once a week
-- ✗ Live connection (instant sync and notifications); calls (voice / video between staff)
-- ✗ App updates (Windows installer, Android; switches by itself when nothing is in progress) and F5 refresh
+- ✅ Live connection (a ticket, ping every 20 s, reconnects; another device's change syncs at once)
+- ✗ Calls (voice between staff over the live connection, also from Chat): needs a WebRTC plugin in the Windows and Android builds
+- ✅ F5 / Ctrl+R refresh (sync now and say how it went), Ctrl+Shift+R reloads the app; the app version in This device
+- ✗ App updates (Windows installer, Android; switches by itself when nothing is in progress): the Flutter builds are
+  published only to the private repository's pilot release, so the apps have nowhere public to check; needs a version
+  file and the installers served by the cloud
 
 ## POS (POS.jsx)
 - ✅ Search / scan, grid, in-stock filter, packs per line, price edit by permission, client, discount, tax, payment

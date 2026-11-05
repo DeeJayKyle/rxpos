@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/data/device_settings.dart';
 import 'core/router/app_router.dart';
 import 'core/crash/crash_screen.dart';
+import 'core/live/live_connection.dart';
 import 'core/data/pharmacy_providers.dart';
 import 'core/theme/themes.dart';
 import 'core/theme/theme_choice.dart';
@@ -19,6 +20,7 @@ class RxposApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     ref.watch(syncControllerProvider); // sync runs while the app is open
+    ref.watch(liveProvider); // and the live line brings other devices' changes at once
     final look = ref.watch(lookProvider).value ?? const Look();
     final allowed = allowedPalettes(ref.watch(brandingProvider));
     final chosen = allowed.any((p) => p.id == look.theme) ? look.theme : (allowed.firstOrNull ?? palettes.first).id;
