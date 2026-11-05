@@ -11,6 +11,7 @@ import '../../features/finance/presentation/finance_screen.dart';
 import '../../features/inventory/presentation/inventory_screen.dart';
 import '../../features/inventory/presentation/medicine_screens.dart';
 import '../../features/prescriptions/presentation/prescriptions_screen.dart';
+import '../../features/prescriptions/presentation/scan_screen.dart';
 import '../../features/proformas/presentation/proformas_screen.dart';
 import '../../features/reports/presentation/reports_screen.dart';
 import '../../features/reports/presentation/weekly_screen.dart';
@@ -34,6 +35,7 @@ final screens = <Screen>[
   Screen('/shifts', 'Shifts & Cash-up', Icons.schedule_outlined, 'Sales', (_) => const ShiftsScreen(), permission: 'shifts', feature: 'shifts'),
   Screen('/proformas', 'Proformas', Icons.description_outlined, 'Sales', (_) => const ProformasScreen(), permission: 'proformas', feature: 'proformas'),
   Screen('/prescriptions', 'Prescriptions & Refills', Icons.medication_outlined, 'Sales', (_) => const PrescriptionsScreen(), permission: 'prescriptions', feature: 'prescriptions'),
+  Screen('/scan', 'Scan Prescription', Icons.document_scanner_outlined, 'Sales', (_) => const ScanPrescriptionScreen(), permission: 'prescriptions', feature: 'ai'),
   Screen('/controlled', 'Controlled drugs', Icons.gpp_good_outlined, 'Sales', (_) => const ControlledScreen(), permission: 'sales.view'),
   Screen('/reminders', 'Reminders', Icons.notifications_active_outlined, 'People', (_) => const RemindersScreen(), permission: 'reminders', feature: 'reminders'),
   Screen('/chat', 'Team chat', Icons.forum_outlined, 'People', (_) => const ChatScreen(), permission: 'chat', feature: 'chat'),

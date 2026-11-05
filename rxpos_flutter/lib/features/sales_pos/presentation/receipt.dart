@@ -41,6 +41,8 @@ String receiptText(Sale s, PharmacySettings st) {
 /// An 80 mm roll receipt as a PDF (printed on any Windows printer or Android print service, or shared).
 Future<Uint8List> receiptPdf(Sale s, PharmacySettings st) async {
   String fmt(num n) => formatMoney(n, currency: st.currency, decimals: st.decimalPlaces);
+  final proforma = s.raw['proforma'] == true || s.number.startsWith('PF');
+  final tin = '${st.raw['tin'] ?? ''}';
   final doc = pw.Document();
   pw.Widget row(String a, String b, {bool bold = false}) => pw.Row(
     children: [
@@ -62,11 +64,14 @@ Future<Uint8List> receiptPdf(Sale s, PharmacySettings st) async {
             style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
           ),
           if (st.address.isNotEmpty) pw.Text(st.address, textAlign: pw.TextAlign.center),
-          if (st.phone.isNotEmpty) pw.Text(st.phone, textAlign: pw.TextAlign.center),
+          if (st.phone.isNotEmpty) pw.Text('Tel: ${st.phone}', textAlign: pw.TextAlign.center),
+          if (tin.isNotEmpty) pw.Text('TIN: $tin', textAlign: pw.TextAlign.center),
+          if (proforma) pw.Text('PROFORMA INVOICE', textAlign: pw.TextAlign.center, style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
           pw.SizedBox(height: 6),
-          pw.Text('Receipt ${s.number}'),
+          pw.Text('${proforma ? 'Proforma' : 'Receipt'} ${s.number}'),
           pw.Text(s.date.replaceFirst('T', ' ').split('.').first),
-          pw.Text('Served by ${s.cashier} · ${s.customerName}'),
+          pw.Text('${proforma ? 'Prepared by' : 'Served by'} ${s.cashier.isEmpty ? '${s.raw['createdBy'] ?? ''}' : s.cashier}'),
+          if (s.customerName.isNotEmpty && s.customerName != 'Walk-in Customer') pw.Text('Customer: ${s.customerName}'),
           pw.Divider(),
           for (final i in s.items) ...[
             pw.Text(i.name),
@@ -86,9 +91,9 @@ Future<Uint8List> receiptPdf(Sale s, PharmacySettings st) async {
           if (s.discount > 0) row('Discount', '−${fmt(s.discount)}'),
           if (s.tax > 0) row('Tax', fmt(s.tax)),
           row('Total', fmt(s.total), bold: true),
-          row('Paid (${s.payment})', fmt(s.paid)),
-          if (s.tendered > s.total) row('Change', fmt(s.tendered - s.total)),
-          if (s.paid < s.total) row('Balance on credit', fmt(s.total - s.paid), bold: true),
+          if (!proforma) row('Paid (${s.payment})', fmt(s.paid)),
+          if (!proforma && s.tendered > s.total) row('Change', fmt(s.tendered - s.total)),
+          if (!proforma && s.paid < s.total) row('Balance on credit', fmt(s.total - s.paid), bold: true),
           if (s.raw['momo'] case final Map m)
             pw.Text(
               'Mobile Money ${m['txid'] ?? m['ref'] ?? ''} (${m['confirmed'] == true ? 'confirmed by ${m['provider'] == 'airtel' ? 'Airtel' : 'MTN'}' : 'recorded by staff'})',
@@ -97,7 +102,7 @@ Future<Uint8List> receiptPdf(Sale s, PharmacySettings st) async {
           if (s.status == 'refunded') pw.Text('REFUNDED', textAlign: pw.TextAlign.center, style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
           pw.BarcodeWidget(barcode: pw.Barcode.code128(), data: s.number, height: 34, drawText: false),
           pw.SizedBox(height: 4),
-          pw.Text('${st.raw['receiptFooter'] ?? ''}'.isEmpty ? 'Thank you' : '${st.raw['receiptFooter']}', textAlign: pw.TextAlign.center),
+          pw.Text(proforma ? 'Prices valid for 7 days.' : '${st.raw['receiptFooter'] ?? ''}'.isEmpty ? 'Thank you' : '${st.raw['receiptFooter']}', textAlign: pw.TextAlign.center),
         ],
       ),
     ),

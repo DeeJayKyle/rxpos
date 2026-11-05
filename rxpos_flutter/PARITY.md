@@ -45,20 +45,20 @@ Every feature of the React app (`src/pages/*.jsx`, `src/*.jsx`), screen by scree
 
 ## Shifts (Shifts.jsx)
 - ✅ Start, live figures, close with note count, history (mine / all)
-- ✗ Close-of-day report (print), by payment method table
+- ✅ Close-of-day (Z) report (print, 80 mm), by payment method
 
 ## Proformas (Proformas.jsx)
 - ✅ List, sell, cancel
-- ✗ View, print, delete
+- ✅ Search, view, print / PDF as a proforma invoice, delete
 
 ## Prescriptions (Prescriptions.jsx, Scan.jsx)
 - ✅ Add / edit, refill, next due
-- ✗ Dispense (to the till)
-- ✗ Scan a prescription (photo → AI reading → add to a sale / save as prescription)
+- ✅ Dispense (Pending → Dispensed, as in the React app); medications kept as text like the React app
+- ✅ Scan a prescription (photo → AI reading → matched to stock / alternatives → add to a sale / save as prescription)
 
 ## Controlled drugs (Controlled.jsx)
 - ✅ Register
-- ✗ Batch recall lookup
+- ✅ Register per medicine with the running balance, patient and prescriber (CSV / PDF); batch recall lookup (where it is, every sale from it)
 
 ## People (People.jsx, Users.jsx, Messages.jsx, Reminders.jsx, Chat.jsx)
 - ✅ Customers, suppliers, balances, payments; users, roles, reset password; reminders by WhatsApp; team chat (text)

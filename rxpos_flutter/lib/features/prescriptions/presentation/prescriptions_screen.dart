@@ -14,15 +14,15 @@ class PrescriptionsScreen extends ConsumerWidget {
   const PrescriptionsScreen({super.key});
 
   static const _fields = [
-    FormFieldSpec('date', 'Date', kind: FieldKind.date, required: true),
-    FormFieldSpec('doctor', 'Prescriber'),
-    FormFieldSpec('facility', 'Facility'),
+    FormFieldSpec('date', 'Date issued', kind: FieldKind.date),
+    FormFieldSpec('doctor', 'Prescriber', required: true),
+    FormFieldSpec('facility', 'Hospital / clinic'),
     FormFieldSpec('diagnosis', 'Diagnosis'),
-    FormFieldSpec('medicationsText', 'Medicines and directions (one per line)', kind: FieldKind.multiline),
-    FormFieldSpec('refillsAllowed', 'Refills allowed', kind: FieldKind.number),
-    FormFieldSpec('refillDays', 'Days between refills', kind: FieldKind.number),
     FormFieldSpec('status', 'Status', kind: FieldKind.choice, options: [('Pending', 'Pending'), ('Dispensed', 'Dispensed'), ('Completed', 'Completed'), ('Cancelled', 'Cancelled')]),
-    FormFieldSpec('notes', 'Notes', kind: FieldKind.multiline),
+    FormFieldSpec('refillsAllowed', 'Refills allowed (0 = none)', kind: FieldKind.number),
+    FormFieldSpec('refillDays', 'Refill every (days)', kind: FieldKind.number, hint: 'e.g. 30'),
+    FormFieldSpec('medications', 'Medications, dose & directions', kind: FieldKind.multiline, required: true),
+    FormFieldSpec('notes', 'Pharmacist notes / counselling', kind: FieldKind.multiline),
   ];
 
   @override
@@ -34,21 +34,22 @@ class PrescriptionsScreen extends ConsumerWidget {
     final list = [...rows]..sort((a, b) => '${b['date']}'.compareTo('${a['date']}'));
 
     Future<void> edit(Map<String, Object?>? r) async {
-      final meds = ((r?['medications'] as List?) ?? const []).map((m) => m is Map ? [m['name'], m['dose'], m['freq'], m['days']].where((x) => x != null && '$x'.isNotEmpty).join(' ') : '$m').join('\n');
       final v = await editRecord(context, title: r == null ? 'New prescription' : 'Edit prescription', initial: {
-        ...?r, 'medicationsText': meds, 'date': r?['date'] ?? today(), 'status': r?['status'] ?? 'Pending', 'customerId': r?['customerId'],
+        ...?r, 'medications': medicationsText(r?['medications']), 'date': r?['date'] ?? today(), 'status': r?['status'] ?? 'Pending', 'customerId': r?['customerId'],
+        'refillsAllowed': r?['refillsAllowed'] ?? 0,
       }, fields: [
-        FormFieldSpec('customerId', 'Client', kind: FieldKind.choice, required: true, options: [for (final c in customers.where((c) => c['id'] != 'walk-in')) ('${c['id']}', '${c['name']}')]),
+        FormFieldSpec('customerId', 'Patient', kind: FieldKind.choice, required: true,
+            options: [for (final c in customers.where((c) => c['id'] != 'walk-in')) ('${c['id']}', '${c['name']}${'${c['phone'] ?? ''}'.isEmpty ? '' : ' · ${c['phone']}'}')]),
         ..._fields,
       ]);
       if (v == null) return;
-      final medications = [for (final l in '${v.remove('medicationsText') ?? ''}'.split('\n').map((x) => x.trim()).where((x) => x.isNotEmpty)) {'name': l}];
-      await ref.read(recordStoreProvider).update((d) => d.put('prescriptions', {...?r, ...v, 'medications': medications, 'id': r?['id'] ?? uid(),
-        'refillsUsed': r?['refillsUsed'] ?? 0}));
+      // as the React app keeps them: medications as one text
+      await ref.read(recordStoreProvider).update((d) => d.put('prescriptions', {...?r, ...v, 'id': r?['id'] ?? uid(), 'refillsUsed': r?['refillsUsed'] ?? 0}));
     }
 
     return PageFrame(
-      title: 'Prescriptions & refills',
+      title: 'Prescriptions & Refills',
+      subtitle: 'Record prescriptions, dispense them and track refills. Due refills appear in Reminders.',
       actions: [FilledButton.icon(onPressed: () => edit(null), icon: const Icon(Icons.add), label: const Text('Add prescription'))],
       child: list.isEmpty
           ? const EmptyState('No prescriptions yet')
@@ -61,9 +62,12 @@ class PrescriptionsScreen extends ConsumerWidget {
                 return ListTile(
                   title: Text('${nameOf(r['customerId'])} · ${r['status']}'),
                   subtitle: Text('${r['date']} · ${r['doctor'] ?? ''}${r['diagnosis'] == null || '${r['diagnosis']}'.isEmpty ? '' : ' · ${r['diagnosis']}'}'
-                      ' · refills ${r['refillsUsed'] ?? 0}/${r['refillsAllowed'] ?? 0}${due == null ? '' : ' · next due $due'}'),
+                      ' · refills ${r['refillsUsed'] ?? 0}/${r['refillsAllowed'] ?? 0}${due == null ? '' : ' · next due $due'}\n${medicationsText(r['medications'])}', maxLines: 3, overflow: TextOverflow.ellipsis),
                   onTap: () => edit(r),
-                  trailing: canRecordRefill(r)
+                  trailing: r['status'] == 'Pending'
+                      ? FilledButton.tonal(onPressed: () => ref.read(recordStoreProvider).update((d) => d.put('prescriptions', {...r, 'status': 'Dispensed', 'dispensedOn': today()})),
+                          child: const Text('Dispense'))
+                      : r['status'] == 'Dispensed' && canRecordRefill(r)
                       ? TextButton(onPressed: () async {
                           final user = (await ref.read(sessionControllerProvider.future))?.userName ?? '';
                           try {
@@ -80,3 +84,8 @@ class PrescriptionsScreen extends ConsumerWidget {
     );
   }
 }
+
+/// The medications as text (the React app's field); older Flutter records kept a list.
+String medicationsText(Object? m) => m is List
+    ? m.map((x) => x is Map ? [x['name'], x['dose'], x['freq'], x['days']].where((y) => y != null && '$y'.isNotEmpty).join(' ') : '$x').join('\n')
+    : '${m ?? ''}';

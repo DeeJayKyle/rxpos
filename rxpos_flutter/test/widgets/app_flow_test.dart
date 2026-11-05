@@ -834,4 +834,48 @@ void main() {
     expect(find.text('Buy the same medicine from two suppliers and their prices are compared here.'), findsOneWidget);
     await done(tester);
   });
+
+  testWidgets('Prescriptions in the React shape, dispense; controlled register and batch recall; proforma view and delete', (tester) async {
+    await tester.runAsync(signedIn);
+    await tester.runAsync(() => RecordStore(db).update((d) {
+          d.put('customers', {'id': 'c1', 'name': 'Grace Achieng', 'phone': '0772555111'});
+          d.put('prescriptions', {'id': 'rx1', 'customerId': 'c1', 'date': '2026-11-01', 'doctor': 'Dr Okello', 'status': 'Pending', 'medications': 'Amoxil 250mg 1 cap tds 5 days', 'refillsAllowed': 0});
+          d.put('products', {'id': 'p1', 'name': 'Calmex 500mg Tabs', 'generic': 'Calmex', 'unit': 'Tablet', 'barcode': '7010001', 'price': 500, 'cost': 300, 'controlled': true});
+          d.put('sales', {'id': 's1', 'number': 'RX9', 'date': '2026-11-02T09:00:00.000Z', 'branchId': 'main', 'customerId': 'c1', 'customerName': 'Grace Achieng', 'total': 500, 'paid': 500,
+            'status': 'completed', 'controlled': {'patient': 'Grace Achieng', 'idNo': 'CM123', 'prescriber': 'Dr Okello', 'rxNo': 'R-1'},
+            'items': [{'id': 'p1', 'name': 'Calmex 500mg Tabs', 'qty': 1, 'price': 500, 'cost': 300, 'alloc': [{'batchId': 'b1', 'qty': 1, 'batch': 'C1'}]}]});
+          d.move(productId: 'p1', qty: -1, type: 'Sale', ref: 'RX9', batchId: 'b1');
+          d.put('proformas', {'id': 'pf1', 'number': 'PF1', 'date': '2026-11-03T10:00:00Z', 'status': 'Open', 'customerName': 'Walk-in Customer', 'total': 1000, 'createdBy': 'Tia',
+            'items': [{'id': 'p1', 'name': 'Calmex 500mg Tabs', 'qty': 2, 'price': 500}]});
+        }));
+    await start(tester);
+    await navTo(tester, 'Prescriptions & Refills');
+    expect(find.textContaining('Amoxil 250mg'), findsOneWidget);
+    await tester.tap(find.text('Dispense'));
+    await settle(tester);
+    expect((await tester.runAsync(() => RecordStore(db).get('prescriptions', 'rx1')))!['status'], 'Dispensed');
+
+    await navTo(tester, 'Controlled drugs');
+    expect(find.text('Balance 99'), findsOneWidget);
+    expect(find.textContaining('Patient Grace Achieng CM123'), findsOneWidget);
+    await tester.tap(find.text('Batch recall lookup'));
+    await settle(tester);
+    await tester.enterText(find.byKey(const Key('recall-batch')), 'c1');
+    await settle(tester, 4);
+    expect(find.text('Sold from this batch: 1 sale'), findsOneWidget);
+    expect(find.text('Grace Achieng · 0772555111'), findsOneWidget);
+
+    await navTo(tester, 'Proformas');
+    await tester.tap(find.text('View'));
+    await settle(tester);
+    expect(find.text('PROFORMA INVOICE'), findsOneWidget);
+    Navigator.of(tester.element(find.text('PROFORMA INVOICE'))).pop();
+    await settle(tester);
+    await tester.tap(find.byTooltip('Delete'));
+    await settle(tester);
+    await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
+    await settle(tester);
+    expect(await tester.runAsync(() => RecordStore(db).rows('proformas')), isEmpty);
+    await done(tester);
+  });
 }

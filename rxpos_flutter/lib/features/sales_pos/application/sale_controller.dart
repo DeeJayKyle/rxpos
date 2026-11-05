@@ -421,7 +421,7 @@ class SaleController extends _$SaleController {
       customerName: '${pf['customerName'] ?? 'Walk-in Customer'}',
       discount: ((pf['discount'] as num?) ?? 0).toDouble(),
       method: state.method,
-      proforma: pf,
+      proforma: pf['id'] == null ? null : pf, // medicines from a scanned prescription are not a proforma
     );
   }
 }
