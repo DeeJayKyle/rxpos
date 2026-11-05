@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -7,9 +6,12 @@ import '../../features/auth/application/session_controller.dart';
 import '../../features/sync_status/presentation/sync_chip.dart';
 import '../data/pharmacy_providers.dart';
 import '../theme/theme_choice.dart';
+import 'nav.dart';
+import 'screens.dart';
 
-/// The frame around every screen: a side rail on Windows and tablets, a bottom bar on phones; the pharmacy, who is
-/// signed in, the sync status and the Premium UI switch. F2 retail, F3 wholesale, F4 Add Stock (as in the React app).
+/// The frame around every screen: the sidebar with its groups (Sales, People, Medicine inventory, Finance, Insights,
+/// System) on Windows and tablets, a drawer on phones; the pharmacy, who is signed in, the sync status, the Premium UI
+/// switch; the shortcut keys (F2 retail, F3 wholesale, F4 Add Stock, F6 Sales History, F7 Inventory).
 class AppShell extends ConsumerWidget {
   const AppShell({super.key, required this.location, required this.child});
 
@@ -22,17 +24,15 @@ class AppShell extends ConsumerWidget {
     final can = ref.watch(permissionsProvider).value ?? const <String>{};
     final features = ref.watch(pharmacyProvider).value?.features ?? const {};
     final premium = ref.watch(premiumUiProvider).value ?? false;
-    final dests = <(String, String, IconData, String?)>[
-      if (can.contains('pos.sell')) ('/pos', 'Retail', Icons.point_of_sale, 'F2'),
-      if (can.contains('pos.wholesale') && features['wholesale'] != false) ('/pos/wholesale', 'Wholesale', Icons.local_shipping_outlined, 'F3'),
-      if (can.contains('stock.receive')) ('/add-stock', 'Add Stock', Icons.add_box_outlined, 'F4'),
-      ('/sync', 'Sync & storage', Icons.cloud_sync_outlined, null),
-    ];
-    var index = dests.indexWhere((d) => d.$1 == location);
-    if (index < 0) index = dests.length - 1;
-    final wide = MediaQuery.sizeOf(context).width >= 760;
+    final visible = screens.where((s) => s.allowed(can, features)).toList();
+    final wide = MediaQuery.sizeOf(context).width >= 900;
+    final nav = _Sidebar(screens: visible, location: location, onGo: (p) {
+      if (!wide) Navigator.of(context).maybePop();
+      context.go(p);
+    });
     final bar = AppBar(
       title: Text(session?.pharmacy.isNotEmpty == true ? session!.pharmacy : 'RxPOS', overflow: TextOverflow.ellipsis),
+      automaticallyImplyLeading: !wide,
       actions: [
         const SyncChip(),
         const SizedBox(width: 8),
@@ -46,44 +46,43 @@ class AppShell extends ConsumerWidget {
         if (wide && session != null) Padding(padding: const EdgeInsets.symmetric(horizontal: 12), child: Center(child: Text(session.userName))),
       ],
     );
-    final body = wide
-        ? Row(children: [
-            NavigationRail(
-              selectedIndex: index,
-              labelType: NavigationRailLabelType.all,
-              onDestinationSelected: (i) => context.go(dests[i].$1),
-              destinations: [
-                for (final d in dests)
-                  NavigationRailDestination(icon: Icon(d.$3), label: Text(d.$4 == null ? d.$2 : '${d.$2}  ${d.$4}')),
-              ],
-            ),
-            const VerticalDivider(width: 1),
-            Expanded(child: child),
-          ])
-        : child;
     return CallbackShortcuts(
-      bindings: {
-        for (final d in dests)
-          if (d.$4 != null) SingleActivator(LogicalKeyboardKey.findKeyByKeyId(_fKey(d.$4!))!): () => context.go(d.$1),
-      },
+      bindings: {for (final s in visible) if (s.key != null) SingleActivator(s.key!): () => context.go(s.path)},
       child: Scaffold(
         appBar: bar,
-        body: body,
-        // a bottom bar needs at least two places to go (someone allowed only one screen gets none)
-        bottomNavigationBar: wide || dests.length < 2
-            ? null
-            : NavigationBar(
-                selectedIndex: index,
-                onDestinationSelected: (i) => context.go(dests[i].$1),
-                destinations: [for (final d in dests) NavigationDestination(icon: Icon(d.$3), label: d.$2)],
-              ),
+        drawer: wide ? null : Drawer(child: SafeArea(child: nav)),
+        body: wide ? Row(children: [SizedBox(width: 240, child: Material(color: Theme.of(context).colorScheme.surfaceContainerLow, child: nav)), const VerticalDivider(width: 1), Expanded(child: child)]) : child,
       ),
     );
   }
+}
 
-  static int _fKey(String f) => switch (f) {
-        'F2' => LogicalKeyboardKey.f2.keyId,
-        'F3' => LogicalKeyboardKey.f3.keyId,
-        _ => LogicalKeyboardKey.f4.keyId,
-      };
+class _Sidebar extends StatelessWidget {
+  const _Sidebar({required this.screens, required this.location, required this.onGo});
+  final List<Screen> screens;
+  final String location;
+  final ValueChanged<String> onGo;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    return ListView(padding: const EdgeInsets.symmetric(vertical: 8), children: [
+      for (final g in navGroups)
+        if (screens.any((s) => s.group == g)) ...[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 12, 4),
+            child: Text(g.toUpperCase(), style: t.textTheme.labelSmall?.copyWith(letterSpacing: .8, fontWeight: FontWeight.w700)),
+          ),
+          for (final s in screens.where((s) => s.group == g))
+            ListTile(
+              dense: true,
+              selected: s.path == location,
+              leading: Icon(s.icon, size: 20),
+              title: Text(s.label),
+              trailing: s.key == null ? null : Text(s.keyLabel, style: t.textTheme.labelSmall),
+              onTap: () => onGo(s.path),
+            ),
+        ],
+    ]);
+  }
 }

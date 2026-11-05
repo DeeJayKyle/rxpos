@@ -1,0 +1,191 @@
+// Pieces every screen uses: a page with a title and actions, figure cards, a search box, an empty state, a record form,
+// money formatted in the pharmacy's currency.
+import 'package:flutter/material.dart';
+
+import '../entities/settings.dart';
+import '../rules/money.dart';
+
+extension Money on PharmacySettings {
+  String money(num n) => formatMoney(n, currency: currency, decimals: decimalPlaces, locale: locale);
+}
+
+/// A screen's frame: title (and a line under it), actions on the right, then the content.
+class PageFrame extends StatelessWidget {
+  const PageFrame({super.key, required this.title, this.subtitle, this.actions = const [], required this.child, this.scroll = false});
+  final String title;
+  final String? subtitle;
+  final List<Widget> actions;
+  final Widget child;
+  final bool scroll;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    final head = Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      child: Wrap(spacing: 12, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, alignment: WrapAlignment.spaceBetween, children: [
+        Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+          Text(title, style: t.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
+          if (subtitle != null) Text(subtitle!, style: t.textTheme.bodySmall),
+        ]),
+        if (actions.isNotEmpty) Wrap(spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: actions),
+      ]),
+    );
+    if (scroll) {
+      return ListView(padding: const EdgeInsets.only(bottom: 24), children: [head, Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: child)]);
+    }
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [head, Expanded(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: child))]);
+  }
+}
+
+/// A figure with its label (and a line under it); tappable when [onTap] is set.
+class StatCard extends StatelessWidget {
+  const StatCard({super.key, required this.label, required this.value, this.sub, this.icon, this.color, this.onTap});
+  final String label, value;
+  final String? sub;
+  final IconData? icon;
+  final Color? color;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    return SizedBox(
+      width: 250,
+      child: Card(
+        margin: EdgeInsets.zero,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Expanded(child: Text(label.toUpperCase(), style: t.textTheme.labelSmall?.copyWith(letterSpacing: .6, fontWeight: FontWeight.w700))),
+                if (icon != null) Icon(icon, size: 20, color: color ?? t.colorScheme.primary),
+              ]),
+              const SizedBox(height: 6),
+              Text(value, style: t.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800, color: color)),
+              if (sub != null) Text(sub!, style: t.textTheme.bodySmall),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class SearchField extends StatelessWidget {
+  const SearchField({super.key, required this.onChanged, this.hint = 'Search…', this.width = 280});
+  final ValueChanged<String> onChanged;
+  final String hint;
+  final double width;
+  @override
+  Widget build(BuildContext context) => SizedBox(
+        width: width,
+        child: TextField(onChanged: onChanged, decoration: InputDecoration(prefixIcon: const Icon(Icons.search), hintText: hint, isDense: true, border: const OutlineInputBorder())),
+      );
+}
+
+class EmptyState extends StatelessWidget {
+  const EmptyState(this.text, {super.key, this.icon = Icons.inbox_outlined});
+  final String text;
+  final IconData icon;
+  @override
+  Widget build(BuildContext context) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [Icon(icon, size: 40, color: Theme.of(context).disabledColor), const SizedBox(height: 8), Text(text, textAlign: TextAlign.center)]),
+        ),
+      );
+}
+
+/// One field of a [RecordForm].
+class FormFieldSpec {
+  const FormFieldSpec(this.key, this.label, {this.kind = FieldKind.text, this.required = false, this.options = const [], this.hint});
+  final String key, label;
+  final FieldKind kind;
+  final bool required;
+  /// for [FieldKind.choice]: (value, label)
+  final List<(String, String)> options;
+  final String? hint;
+}
+
+enum FieldKind { text, number, multiline, choice, flag, date }
+
+/// A dialog that edits a record's fields and returns the edited values (null when cancelled).
+Future<Map<String, Object?>?> editRecord(BuildContext context, {required String title, required List<FormFieldSpec> fields,
+    Map<String, Object?> initial = const {}, String save = 'Save'}) {
+  final values = Map<String, Object?>.of(initial);
+  final ctl = {for (final f in fields) if (f.kind != FieldKind.choice && f.kind != FieldKind.flag) f.key: TextEditingController(text: _show(initial[f.key]))};
+  final formKey = GlobalKey<FormState>();
+  return showDialog<Map<String, Object?>>(
+    context: context,
+    builder: (c) => StatefulBuilder(
+      builder: (c, set) => AlertDialog(
+        title: Text(title),
+        content: SizedBox(
+          width: 460,
+          child: Form(
+            key: formKey,
+            child: SingleChildScrollView(
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                for (final f in fields)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: switch (f.kind) {
+                      FieldKind.flag => SwitchListTile(contentPadding: EdgeInsets.zero, title: Text(f.label), value: values[f.key] == true, onChanged: (v) => set(() => values[f.key] = v)),
+                      FieldKind.choice => DropdownButtonFormField<String>(
+                          initialValue: f.options.any((o) => o.$1 == values[f.key]) ? values[f.key] as String : null,
+                          decoration: InputDecoration(labelText: f.label),
+                          items: [for (final o in f.options) DropdownMenuItem(value: o.$1, child: Text(o.$2))],
+                          validator: (v) => f.required && v == null ? 'Choose ${f.label.toLowerCase()}' : null,
+                          onChanged: (v) => values[f.key] = v,
+                        ),
+                      _ => TextFormField(
+                          controller: ctl[f.key],
+                          decoration: InputDecoration(labelText: f.label, hintText: f.hint ?? (f.kind == FieldKind.date ? 'YYYY-MM-DD' : null)),
+                          maxLines: f.kind == FieldKind.multiline ? 3 : 1,
+                          keyboardType: f.kind == FieldKind.number ? const TextInputType.numberWithOptions(decimal: true) : null,
+                          validator: (v) {
+                            final s = (v ?? '').trim();
+                            if (f.required && s.isEmpty) return 'Required';
+                            if (f.kind == FieldKind.number && s.isNotEmpty && double.tryParse(s.replaceAll(',', '')) == null) return 'A number';
+                            if (f.kind == FieldKind.date && s.isNotEmpty && !RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(s)) return 'YYYY-MM-DD';
+                            return null;
+                          },
+                        ),
+                    },
+                  ),
+              ]),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () {
+              if (!(formKey.currentState?.validate() ?? false)) return;
+              for (final f in fields) {
+                final x = ctl[f.key];
+                if (x == null) continue;
+                final s = x.text.trim();
+                values[f.key] = f.kind == FieldKind.number ? (s.isEmpty ? 0 : _num(double.parse(s.replaceAll(',', '')))) : s;
+              }
+              Navigator.pop(c, values);
+            },
+            child: Text(save),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+String _show(Object? v) => v == null ? '' : v is double && v == v.roundToDouble() ? '${v.toInt()}' : '$v';
+Object _num(double v) => v == v.roundToDouble() ? v.toInt() : v;
+
+/// A short message at the bottom of the screen.
+void say(BuildContext context, String message, {bool error = false}) => ScaffoldMessenger.of(context)
+  ..hideCurrentSnackBar()
+  ..showSnackBar(SnackBar(content: Text(message), backgroundColor: error ? Theme.of(context).colorScheme.error : null));

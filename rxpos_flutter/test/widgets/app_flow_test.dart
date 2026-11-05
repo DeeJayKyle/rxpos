@@ -52,6 +52,11 @@ void main() {
     await settle(tester, 20);
   }
 
+  Future<void> toTill(WidgetTester tester) async {
+    await tester.sendKeyEvent(LogicalKeyboardKey.f2);
+    await settle(tester);
+  }
+
   /// Unmount the app and let the database's live queries close (their close timers run on the next tick).
   Future<void> done(WidgetTester tester) async {
     await tester.pumpWidget(const SizedBox());
@@ -83,14 +88,15 @@ void main() {
     await tester.enterText(find.widgetWithText(TextField, 'Password'), 'tia-pass');
     await tester.tap(find.widgetWithText(FilledButton, 'Sign in'));
     await settle(tester);
-    expect(find.text('Point of sale'), findsOneWidget);
-    expect(find.text('Sample Pharmacy'), findsOneWidget);
+    expect(find.textContaining('Tia'), findsWidgets, reason: 'the dashboard greets the cashier');
+    expect(find.text('Sample Pharmacy'), findsWidgets);
     await done(tester);
   });
 
   testWidgets('scan, add one more, charge: the receipt shows and the sale and stock are saved', (tester) async {
     await tester.runAsync(signedIn);
     await start(tester);
+    await toTill(tester);
     expect(find.text('Point of sale'), findsOneWidget);
     expect(find.text('100 left'), findsOneWidget);
     expect(find.text('Out of stock'), findsOneWidget, reason: 'Zinco has no stock');
@@ -120,6 +126,7 @@ void main() {
   testWidgets('a sale can be held and resumed', (tester) async {
     await tester.runAsync(signedIn);
     await start(tester);
+    await toTill(tester);
     await tester.tap(find.text('Calmex 500mg Tabs'));
     await settle(tester);
     await tester.tap(find.text('Hold'));
@@ -146,10 +153,13 @@ void main() {
     await done(tester);
   });
 
-  testWidgets('on a phone: bottom navigation, the sale opens from the bar and is charged', (tester) async {
+  testWidgets('on a phone: the menu, the sale opens from the bar and is charged', (tester) async {
     await tester.runAsync(signedIn);
     await start(tester, size: const Size(400, 800));
-    expect(find.byType(NavigationBar), findsOneWidget);
+    await tester.tap(find.byTooltip('Open navigation menu'));
+    await settle(tester);
+    await tester.tap(find.text('POS – Retail'));
+    await settle(tester);
     expect(find.text('No items yet'), findsOneWidget);
     await tester.tap(find.text('Calmex 500mg Tabs'));
     await settle(tester);
@@ -159,6 +169,59 @@ void main() {
     await tester.tap(find.text('Charge UGX 500   [F9]'));
     await settle(tester);
     expect(find.text('Sale complete ✓'), findsOneWidget);
+    await done(tester);
+  });
+
+  testWidgets('dashboard figures; sales history refund puts stock back', (tester) async {
+    await tester.runAsync(signedIn);
+    await start(tester);
+    expect(find.text('TODAY\'S SALES'), findsOneWidget);
+    await toTill(tester);
+    await tester.tap(find.text('Calmex 500mg Tabs'));
+    await settle(tester);
+    await tester.tap(find.text('Charge UGX 500   [F9]'));
+    await settle(tester);
+    await tester.tap(find.text('New sale'));
+    await settle(tester);
+    await tester.sendKeyEvent(LogicalKeyboardKey.f6);
+    await settle(tester);
+    expect(find.text('Sales History'), findsWidgets);
+    await tester.tap(find.textContaining('Walk-in Customer').first);
+    await settle(tester);
+    await tester.tap(find.text('Refund'));
+    await settle(tester);
+    await tester.tap(find.widgetWithText(FilledButton, 'Refund'));
+    await settle(tester);
+    expect(find.textContaining('REFUNDED'), findsOneWidget);
+    final moves = (await tester.runAsync(() => RecordStore(db).rows('movements')))!;
+    expect(moves.where((m) => m['type'] == 'Refund').single['qty'], 1);
+    await done(tester);
+  });
+
+  testWidgets('inventory: count a batch; customers: add a client', (tester) async {
+    await tester.runAsync(signedIn);
+    await start(tester);
+    await tester.sendKeyEvent(LogicalKeyboardKey.f7);
+    await settle(tester);
+    expect(find.text('100 tablets'), findsOneWidget);
+    await tester.tap(find.text('Calmex 500mg Tabs'));
+    await settle(tester);
+    await tester.tap(find.text('Count / adjust'));
+    await settle(tester);
+    await tester.enterText(find.widgetWithText(TextFormField, 'Quantity (counted, added or removed)'), '97');
+    await tester.enterText(find.widgetWithText(TextFormField, 'Reason'), 'stock take');
+    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await settle(tester);
+    expect(find.text('97 tablets'), findsOneWidget);
+    await tester.tap(find.text('Customers'));
+    await settle(tester);
+    await tester.tap(find.text('Add client'));
+    await settle(tester);
+    await tester.enterText(find.widgetWithText(TextFormField, 'Name'), 'Grace Sample');
+    await tester.enterText(find.widgetWithText(TextFormField, 'Phone'), '0700111222');
+    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await settle(tester);
+    expect(find.text('Grace Sample'), findsOneWidget);
     await done(tester);
   });
 }
