@@ -146,7 +146,8 @@ Every feature of the React app (`src/pages/*.jsx`, `src/*.jsx`), screen by scree
 - ✅ Import: standard catalogue tab, Excel (.xlsx) / CSV file or pasted rows, column matching, preview, update or skip existing, opening stock, template
 - ✅ Drug information: online lookup saved for offline, counselling sheet, the till's drug info
 - ✅ Quiz: quick quiz offline, AI quiz (falls back to offline), one question at a time, score saved, team board
-- ✗ Storage: weather, trend chart, delete a reading (✅ log)
+- ✅ Storage: weather (Open-Meteo, kept on the device for offline, advice for storage; also on the dashboard), last reading per place, trend chart with the safe range, readings with humidity, delete a reading
+- ✗ Weather location from the device's GPS (now: the connection's location from the cloud, else the town in Settings)
 - ✗ Calendar: copy, delete, add to Google Calendar, today view (✅ add / edit)
 - ✅ Audit log: person, action, from date, search, branch, CSV
 

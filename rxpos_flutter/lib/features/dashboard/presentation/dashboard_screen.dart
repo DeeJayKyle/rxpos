@@ -14,6 +14,7 @@ import '../../sales_history/presentation/sales_screen.dart' show ageText, isOldD
 import '../../../core/presentation/charts.dart';
 import '../domain/figures.dart';
 import '../domain/insights.dart';
+import '../../storage/presentation/storage_screen.dart';
 
 /// Home: today's figures against yesterday, stock alerts, this month's best sellers.
 class DashboardScreen extends ConsumerStatefulWidget {
@@ -112,6 +113,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             ),
           ),
         ],
+        if (data.features['weather'] != false) ...[const SizedBox(height: 16), const WeatherCard(compact: true)],
         const SizedBox(height: 16),
         Wrap(spacing: 12, runSpacing: 12, children: [
           SizedBox(

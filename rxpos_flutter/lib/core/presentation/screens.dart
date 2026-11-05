@@ -11,6 +11,7 @@ import '../../features/users/presentation/users_screen.dart';
 import '../../features/extras/presentation/extras_screens.dart';
 import '../../features/drug_info/presentation/drug_info_screen.dart';
 import '../../features/quiz/presentation/quiz_screen.dart';
+import '../../features/storage/presentation/storage_screen.dart';
 import '../../features/extras/presentation/import_screen.dart';
 import '../../features/extras/presentation/labels_screen.dart';
 import '../../features/finance/presentation/finance_screen.dart';
@@ -63,7 +64,7 @@ final screens = <Screen>[
   Screen('/returns', 'Returns to suppliers', Icons.assignment_return_outlined, 'Medicine inventory', (_) => const ReturnsScreen(), permission: 'stock.receive'),
   Screen('/labels', 'Barcode labels', Icons.qr_code_2, 'Medicine inventory', (_) => const LabelsScreen(), permission: 'medicines.manage', feature: 'labels'),
   Screen('/import', 'Import medicines', Icons.upload_file_outlined, 'Medicine inventory', (_) => const ImportScreen(), permission: 'medicines.manage', feature: 'import'),
-  Screen('/storage', 'Storage temperature', Icons.thermostat_outlined, 'Medicine inventory', (_) => const StorageScreen(), permission: 'inventory.view', feature: 'weather'),
+  Screen('/storage', 'Weather & Storage', Icons.thermostat_outlined, 'Medicine inventory', (_) => const StorageScreen(), permission: 'inventory.view', feature: 'weather'),
   Screen('/drug-info', 'Drug information', Icons.menu_book_outlined, 'Insights', (_) => const DrugInfoScreen(), feature: 'drugInfo'),
   Screen('/quiz', 'Drug quiz', Icons.quiz_outlined, 'Insights', (_) => const QuizScreen(), feature: 'drugInfo'),
   Screen('/calendar', 'Calendar', Icons.calendar_month_outlined, 'Insights', (_) => const CalendarScreen(), feature: 'calendar'),

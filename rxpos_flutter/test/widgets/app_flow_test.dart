@@ -13,6 +13,7 @@ import 'package:rxpos/core/database/app_database.dart';
 import 'package:rxpos/core/network/dio_client.dart';
 import 'package:rxpos/core/rules/passwords.dart';
 import 'package:rxpos/features/drug_info/presentation/drug_info_screen.dart';
+import 'package:rxpos/features/storage/application/weather_controller.dart';
 import 'package:rxpos/features/sync_status/application/sync_controller.dart';
 
 import '../sync/fake_cloud.dart';
@@ -20,8 +21,15 @@ import '../sync/fake_cloud.dart';
 void main() {
   late AppDatabase db;
   late FakeCloud cloud;
+  final weatherCalls = <String>[];
+  // fictional weather: hot and humid, so both storage warnings show
+  final sampleWeather = <String, Object?>{
+    'current': {'time': '2026-11-05T12:15', 'temperature_2m': 31.4, 'relative_humidity_2m': 70, 'apparent_temperature': 34, 'weather_code': 2, 'wind_speed_10m': 9.6},
+    'daily': {'temperature_2m_min': [18.2], 'temperature_2m_max': [31.9], 'precipitation_probability_max': [40]},
+  };
 
   setUp(() {
+    weatherCalls.clear();
     db = AppDatabase(NativeDatabase.memory());
     cloud = FakeCloud()
       ..login = (b) => b['password'] == 'tia-pass'
@@ -77,6 +85,11 @@ void main() {
                   ],
                 })
               : (404, null)),
+          weatherFetchProvider.overrideWithValue((url) async {
+            weatherCalls.add(url);
+            return (200, sampleWeather);
+          }),
+          connectionPlaceProvider.overrideWithValue(() async => {'lat': 0.31, 'lon': 32.58, 'city': 'Kampala', 'country': 'UG'}),
         ],
         child: const RxposApp(),
       ),
@@ -427,11 +440,11 @@ void main() {
   testWidgets('group 5: storage reading, team chat, import, calendar and the other extras', (tester) async {
     await tester.runAsync(signedIn);
     await start(tester);
-    await navTo(tester, 'Storage temperature');
-    await tester.tap(find.text('Log a reading'));
+    await navTo(tester, 'Weather & Storage');
+    await tester.tap(find.text('Record reading'));
     await settle(tester);
-    await tester.enterText(find.widgetWithText(TextFormField, 'Temperature (°C)'), '11');
-    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await tester.enterText(find.byKey(const Key('reading-temp')), '11');
+    await tester.tap(find.widgetWithText(FilledButton, 'Save reading'));
     await settle(tester);
     expect(find.text('Fridge · 11°C'), findsOneWidget);
     final audit = (await tester.runAsync(() => RecordStore(db).rows('audit')))!;
@@ -1165,6 +1178,95 @@ void main() {
     await tester.tap(find.byKey(const Key('quiz-opt-0')));
     await settle(tester, 2);
     expect(find.text('Question 1 of 6'), findsOneWidget);
+    await done(tester);
+  });
+
+  testWidgets('Weather & Storage: the weather and its advice, readings with humidity, the trend, delete a reading', (tester) async {
+    await tester.runAsync(signedIn);
+    await tester.runAsync(
+      () => RecordStore(db).update((d) {
+        d.put('tempLogs', {'id': 't1', 'at': '2026-11-04T06:00:00.000Z', 'place': 'Fridge', 'temp': 5, 'humidity': null, 'note': '', 'by': 'Tia Admin', 'branchId': 'main'});
+        d.put('tempLogs', {'id': 't2', 'at': '2026-11-04T12:00:00.000Z', 'place': 'Fridge', 'temp': 6.5, 'humidity': null, 'note': '', 'by': 'Tia Admin', 'branchId': 'main'});
+        d.put('tempLogs', {'id': 't3', 'at': '2026-11-04T12:00:00.000Z', 'place': 'Fridge', 'temp': 4, 'humidity': null, 'note': 'other branch', 'by': 'Ben', 'branchId': 'b2'});
+      }),
+    );
+    await start(tester);
+    expect(find.byKey(const Key('weather-card')), findsOneWidget, reason: 'the dashboard shows the weather');
+    await navTo(tester, 'Weather & Storage');
+    expect(find.text('Kampala, UG'), findsOneWidget, reason: "the connection's location");
+    expect(find.text('31°C'), findsOneWidget);
+    expect(find.text('Partly cloudy · feels 34°C'), findsOneWidget);
+    expect(find.textContaining('Hot (31°C)'), findsOneWidget);
+    expect(find.textContaining('Humid (70%)'), findsOneWidget);
+    expect(find.text('18° / 32°'), findsOneWidget);
+    expect(weatherCalls.single, contains('latitude=0.31'));
+    final kept = await tester.runAsync(() => (db.select(db.kv)..where((x) => x.k.equals('device:weather'))).getSingleOrNull());
+    expect(kept, isNotNull, reason: 'kept on this device to show offline');
+    expect(find.byKey(const Key('temp-trend')), findsOneWidget, reason: "two fridge readings at this branch draw the trend; the other branch's isn't counted");
+    expect(find.text('Fridge · 4°C'), findsNothing);
+
+    // room 24°C but 80% humidity: out of range
+    await tester.tap(find.text('Record reading'));
+    await settle(tester);
+    await tester.tap(find.byKey(const Key('reading-place')));
+    await settle(tester, 3);
+    await tester.tap(find.text('Room').last);
+    await settle(tester, 3);
+    await tester.enterText(find.byKey(const Key('reading-temp')), '24');
+    await tester.enterText(find.byKey(const Key('reading-humidity')), '80');
+    await tester.enterText(find.byKey(const Key('reading-note')), 'rain all day');
+    await tester.tap(find.widgetWithText(FilledButton, 'Save reading'));
+    await settle(tester);
+    expect(find.text('Out of range! Room should be below 25°C'), findsOneWidget);
+    noSnackBars(tester);
+    final room = (await tester.runAsync(() => RecordStore(db).rows('tempLogs')))!.firstWhere((r) => r['place'] == 'Room');
+    expect((room['temp'], room['humidity'], room['note'], room['by'], room['branchId']), (24, 80, 'rain all day', 'Tia Admin', 'main'));
+    expect(find.text('Room · 24°C · 80%'), findsOneWidget);
+
+    // a fridge reading without humidity keeps it empty
+    await tester.tap(find.text('Record reading'));
+    await settle(tester);
+    await tester.enterText(find.byKey(const Key('reading-temp')), '5');
+    await tester.tap(find.widgetWithText(FilledButton, 'Save reading'));
+    await settle(tester);
+    expect(find.text('Reading saved'), findsOneWidget);
+    noSnackBars(tester);
+    final fridge = (await tester.runAsync(() => RecordStore(db).rows('tempLogs')))!.where((r) => r['place'] == 'Fridge' && r['branchId'] == 'main' && r['id'] != 't1' && r['id'] != 't2');
+    expect(fridge.single['humidity'], isNull);
+
+    final page = find.descendant(of: find.byKey(const Key('storage-page')), matching: find.byType(Scrollable)).first;
+    await tester.scrollUntilVisible(find.byKey(const ValueKey('reading-t1')), 200, scrollable: page);
+    await settle(tester, 2);
+    await tester.tap(find.descendant(of: find.byKey(const ValueKey('reading-t1')), matching: find.byTooltip('Delete')));
+    await settle(tester);
+    expect(find.text('Delete this reading?'), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
+    await settle(tester);
+    expect(find.byKey(const ValueKey('reading-t1')), findsNothing);
+    expect((await tester.runAsync(() => RecordStore(db).get('tempLogs', 't1'))), isNull);
+    await done(tester);
+  });
+
+  testWidgets('Weather & Storage on a phone fits the screen', (tester) async {
+    await tester.runAsync(signedIn);
+    await start(tester, size: const Size(400, 800));
+    await tester.tap(find.byTooltip('Open navigation menu'));
+    await settle(tester);
+    final list = find.descendant(of: find.byType(Drawer), matching: find.byType(Scrollable)).first;
+    await tester.scrollUntilVisible(find.descendant(of: find.byType(Drawer), matching: find.text('Weather & Storage')), 150, scrollable: list);
+    await settle(tester, 2);
+    await tester.tap(find.descendant(of: find.byType(Drawer), matching: find.text('Weather & Storage')));
+    await settle(tester);
+    expect(find.byKey(const Key('weather-card')), findsOneWidget);
+    final page = find.descendant(of: find.byKey(const Key('storage-page')), matching: find.byType(Scrollable)).first;
+    await tester.scrollUntilVisible(find.text('Trend'), 200, scrollable: page);
+    await settle(tester, 2);
+    expect(find.text('Trend'), findsOneWidget);
+    await tester.drag(page, const Offset(0, 3000));
+    await settle(tester, 2);
+    await tester.tap(find.text('Record reading'));
+    await settle(tester);
+    expect(find.text('Record a temperature reading'), findsOneWidget);
     await done(tester);
   });
 }

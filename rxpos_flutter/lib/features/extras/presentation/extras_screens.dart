@@ -1,4 +1,4 @@
-// The remaining screens: storage temperature, reminders, calendar, team chat, the controlled-drugs register,
+// The remaining screens: reminders, calendar, team chat, the controlled-drugs register,
 // barcode labels, importing medicines and drug information.
 
 import 'package:flutter/material.dart';
@@ -15,56 +15,8 @@ import '../../../core/rules/dates.dart';
 import '../../../core/rules/ids.dart';
 import '../../../core/rules/money.dart';
 import '../../auth/application/session_controller.dart';
-import '../domain/extras.dart';
 
 Future<String> _me(WidgetRef ref) async => (await ref.read(sessionControllerProvider.future))?.userName ?? '';
-
-/// Storage temperature: log fridge and room readings; out-of-range readings stand out and go in the audit log.
-class StorageScreen extends ConsumerWidget {
-  const StorageScreen({super.key});
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final rows = ref.watch(tableProvider('tempLogs')).value;
-    final d = ref.watch(pharmacyProvider).value;
-    if (rows == null || d == null) return const Center(child: CircularProgressIndicator());
-    final st = d.settings;
-    final list = rows.where((r) => (r['branchId'] ?? 'main') == d.branch).toList()..sort((a, b) => '${b['at']}'.compareTo('${a['at']}'));
-    final l = storageLimits(st);
-    return PageFrame(
-      title: 'Storage temperature',
-      subtitle: 'Fridge ${l.fridgeMin.round()}–${l.fridgeMax.round()}°C · room below ${l.roomMax.round()}°C',
-      actions: [FilledButton.icon(onPressed: () async {
-        final v = await editRecord(context, title: 'Log a reading', initial: {'place': 'Fridge'}, fields: const [
-          FormFieldSpec('place', 'Where', kind: FieldKind.choice, required: true, options: [('Fridge', 'Fridge'), ('Room', 'Room / shelves')]),
-          FormFieldSpec('temp', 'Temperature (°C)', kind: FieldKind.number, required: true),
-          FormFieldSpec('humidity', 'Humidity (%)', kind: FieldKind.number),
-          FormFieldSpec('note', 'Note'),
-        ]);
-        if (v == null) return;
-        final by = await _me(ref);
-        final temp = (v['temp'] as num).toDouble();
-        final ok = tempInRange('${v['place']}', temp, st);
-        await ref.read(recordStoreProvider).update((x) {
-          x.put('tempLogs', {'id': uid(), 'at': x.now, 'place': v['place'], 'temp': v['temp'], 'humidity': v['humidity'] == 0 ? null : v['humidity'], 'note': v['note'] ?? '', 'by': by, 'branchId': d.branch});
-          if (!ok) x.audit(by, 'Storage temperature out of range', '${v['place']} $temp°C', d.branch);
-        });
-        if (context.mounted) say(context, ok ? 'Reading saved' : 'Out of range! Check the ${'${v['place']}'.toLowerCase()} now', error: !ok);
-      }, icon: const Icon(Icons.thermostat), label: const Text('Log a reading'))],
-      child: list.isEmpty
-          ? const EmptyState('No readings yet')
-          : ListView(children: [
-              for (final r in list.take(200))
-                ListTile(
-                  dense: true,
-                  leading: Icon(tempInRange('${r['place']}', ((r['temp'] as num?) ?? 0).toDouble(), st) ? Icons.check_circle_outline : Icons.warning_amber, color:
-                      tempInRange('${r['place']}', ((r['temp'] as num?) ?? 0).toDouble(), st) ? Colors.green : Theme.of(context).colorScheme.error),
-                  title: Text('${r['place']} · ${r['temp']}°C${r['humidity'] == null ? '' : ' · ${r['humidity']}%'}'),
-                  subtitle: Text('${'${r['at']}'.replaceFirst('T', ' ').split('.').first} · ${r['by'] ?? ''} ${r['note'] ?? ''}'),
-                ),
-            ]),
-    );
-  }
-}
 
 /// Calendar: the pharmacy's events (deliveries, inspections, meetings…), upcoming first.
 class CalendarScreen extends ConsumerWidget {

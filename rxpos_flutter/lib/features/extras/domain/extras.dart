@@ -2,17 +2,23 @@
 // WhatsApp links (src/store.jsx normalizePhone, src/cloud.js whatsappLink), message templates (fillTemplate).
 import '../../../core/entities/settings.dart';
 
-({double roomMax, double roomMin, double fridgeMin, double fridgeMax}) storageLimits(PharmacySettings s) {
-  double v(String k, double d) => ((s.raw[k] as num?)?.toDouble() ?? 0) == 0 ? d : (s.raw[k] as num).toDouble();
-  return (roomMax: v('roomMax', 25), roomMin: v('roomMin', 15), fridgeMin: v('fridgeMin', 2), fridgeMax: v('fridgeMax', 8));
+({double roomMax, double roomMin, double fridgeMin, double fridgeMax, double humidityMax, double hotAlert}) storageLimits(PharmacySettings s) {
+  // like Number(x) || default: empty, zero or not a number takes the default
+  double v(String k, double d) {
+    final n = num.tryParse('${s.raw[k] ?? ''}'.trim());
+    return n == null || n == 0 ? d : n.toDouble();
+  }
+
+  return (roomMax: v('roomMax', 25), roomMin: v('roomMin', 15), fridgeMin: v('fridgeMin', 2), fridgeMax: v('fridgeMax', 8), humidityMax: v('humidityMax', 65), hotAlert: v('hotAlert', 30));
 }
 
-/// Is a reading within the limits for where it was taken (outside readings are never out of range)?
-bool tempInRange(String place, double temp, PharmacySettings s) {
+/// Is a reading within the limits for where it was taken (outside readings are never out of range)? A humidity above
+/// the limit is out of range too (src/pages/Storage.jsx inRange).
+bool tempInRange(String place, double temp, PharmacySettings s, [num? humidity]) {
   final l = storageLimits(s);
   if (place == 'Outside') return true;
-  if (place == 'Fridge') return temp >= l.fridgeMin && temp <= l.fridgeMax;
-  return temp <= l.roomMax && temp >= l.roomMin - 5;
+  final t = place == 'Fridge' ? temp >= l.fridgeMin && temp <= l.fridgeMax : temp <= l.roomMax && temp >= l.roomMin - 5;
+  return t && (humidity == null || humidity <= l.humidityMax);
 }
 
 /// A phone number in international form without + (Uganda by default): 0772 123456 → 256772123456.
