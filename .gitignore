@@ -7,7 +7,7 @@ hub-data/
 
 .dev.vars
 .wrangler/
-android/
+/android/
 .harness*
 tests/.state/
 tests/.output/
