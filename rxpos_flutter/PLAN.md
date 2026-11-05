@@ -3,16 +3,17 @@
 Milestone 1 is the till and sync on Windows and Android. Each step ends with tests and is reviewed before the next.
 
 ## 1. Core data layer and entities (Freezed + json_serializable)
-- [ ] `Rec` decoding helpers: unknown fields are kept untouched, so a record edited here and synced back loses nothing
-      the React app or a newer version added.
-- [ ] Entities for milestone 1: `Product` (+ `Pack`), `Batch`, `Movement`, `Sale` (+ `SaleItem`, batch allocations,
-      pack, payment), `Customer`, `Supplier`, `Purchase` (+ lines), `User`, `Role`, `Branch`, `Shift`, `Draft`,
-      `PaymentMethod`, pharmacy `Settings`.
-- [ ] Pure business rules, ported with unit tests copied from the React tests: money rounding and tax (`money.js`),
-      first-expiry-first-out allocation (`fefo.js`), packs (`packs.js`), stock and stock value from movements
-      (`stockvalue.js`), markup prices, permissions (`access.js`), dates.
-- [ ] Repositories: read typed entities from `records`; `commit()` writes records, tombstones and outbox entries in one
-      transaction (the React `store.update()` contract).
+- [x] Record helpers (`core/data/json_fields.dart`, `record_merge.dart`): loose values read as the React app reads
+      them; unknown fields, including inside sale lines, are kept, so a record edited here loses nothing.
+- [x] Entities (`core/entities/`): `Product` (+ `Pack`), `Batch`, `Movement`, `Sale` (+ `SaleItem`, `Allocation`,
+      `SalePack`), `Customer`, `Supplier`, `Purchase` (+ lines, packs), `AppUser`, `Role`, `Branch`, `Shift`, `Draft`,
+      `PaymentMethod`, `PharmacySettings`.
+- [x] Business rules (`core/rules/`), with the React unit tests ported case for case: money and tax, dates,
+      first-expiry-first-out and removal, stock from movements per branch and batch, stock value, expiry, low stock,
+      packs, markup prices, search, permissions and features, ids and document numbers.
+- [x] `RecordStore.update()` (`core/data/record_store.dart`): one action = one transaction of records, tombstones,
+      settings and outbox entries sharing a txn; movements and audit append-only; nothing saved on failure.
+- [x] Built-in catalogue (`core/data/catalog.dart`, `assets/catalog.json`): same ids, barcodes and costs as the React app.
 
 ## 2. Local database and migrations
 - [ ] Schema v1 (done): `records`, `tombstones`, `outbox`, `rejected_ops`, `kv`.
