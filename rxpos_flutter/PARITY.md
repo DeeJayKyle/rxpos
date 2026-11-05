@@ -23,16 +23,16 @@ Every feature of the React app (`src/pages/*.jsx`, `src/*.jsx`), screen by scree
 - ✅ Search / scan, grid, in-stock filter, packs per line, price edit by permission, client, discount, tax, payment
   methods, cash tendered and change, credit, prescription check, controlled register, Mobile Money by transaction ID,
   hold and resume, proforma, F2 / F3 / F8 / F9 / Alt+H
-- ✗ Filters: Recent, Favourites (star a medicine), categories
-- ✗ Held sales as tabs above the sale; discard a held sale; Alt+← / Alt+→ to switch
-- ✗ Tick lines ("Tick every line", remove ticked); swipe to remove on a phone
-- ✗ Mobile Money request to the customer's phone (MTN / Airtel) and waiting for approval
-- ✗ Directions / drug label for a line (print label); drug info from the line
+- ✅ Filters: Recent, Favourites (star a medicine), categories
+- ✅ Held sales as tabs above the sale; discard a held sale; Alt+← / Alt+→ to switch
+- ✅ Tick lines ("Tick every line", remove ticked); swipe to remove on a phone
+- ✅ Mobile Money request to the customer's phone (MTN / Airtel) and waiting for approval
+- ✅ Directions / drug label for a line (print label); drug info from the line
 - ✗ Camera "Scan items into the sale" continuous; Windows camera
-- ✗ Layouts: Classic / Standard / Advanced UI; command bar (Ctrl+K); keyboard shortcuts help (?)
-- ✗ Selling expired stock with a recorded reason
-- ✗ Receipt: WhatsApp / SMS to the client from the receipt; auto print; receipt PDF button
-- ✗ Sale kept on the device across a restart
+- ◐ Keyboard shortcuts help (? / F1) ✅; layouts Classic / Standard / Advanced UI and command bar (Ctrl+K) ✗
+- ✅ Selling expired stock with a recorded reason
+- ✅ Receipt: WhatsApp / SMS to the client from the receipt; auto print; receipt PDF button
+- ✅ Sale kept on the device across a restart
 
 ## Sales History (Sales.jsx, SalesLines.jsx, Drafts.jsx)
 - ✅ List, search, receipt, print / PDF / WhatsApp, refund

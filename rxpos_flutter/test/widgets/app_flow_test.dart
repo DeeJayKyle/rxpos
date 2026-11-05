@@ -24,7 +24,16 @@ void main() {
     db = AppDatabase(NativeDatabase.memory());
     cloud = FakeCloud()
       ..login = (b) => b['password'] == 'tia-pass'
-          ? (200, {'token': 'tok', 'tenant': 't1', 'slug': 't1', 'pharmacy': 'Sample Pharmacy', 'user': {'id': 'u1', 'name': 'Tia Admin', 'email': 'tia@test.rx', 'role': 'admin'}})
+          ? (
+              200,
+              {
+                'token': 'tok',
+                'tenant': 't1',
+                'slug': 't1',
+                'pharmacy': 'Sample Pharmacy',
+                'user': {'id': 'u1', 'name': 'Tia Admin', 'email': 'tia@test.rx', 'role': 'admin'},
+              },
+            )
           : (401, {'error': 'Wrong email or password'});
   });
   tearDown(() => db.close());
@@ -41,15 +50,17 @@ void main() {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
-    await tester.pumpWidget(ProviderScope(
-      overrides: [
-        appDatabaseProvider.overrideWithValue(db),
-        dioProvider.overrideWithValue(cloud.dio()),
-        syncAutomaticallyProvider.overrideWithValue(false),
-        catalogProvider.overrideWith((_) async => const []),
-      ],
-      child: const RxposApp(),
-    ));
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appDatabaseProvider.overrideWithValue(db),
+          dioProvider.overrideWithValue(cloud.dio()),
+          syncAutomaticallyProvider.overrideWithValue(false),
+          catalogProvider.overrideWith((_) async => const []),
+        ],
+        child: const RxposApp(),
+      ),
+    );
     await settle(tester, 20);
   }
 
@@ -78,11 +89,36 @@ void main() {
   }
 
   Future<void> signedIn() async {
-    await db.into(db.kv).insert(KvCompanion.insert(k: 'session', v: jsonEncode({'token': 'tok', 'tenant': 't1', 'slug': 't1',
-      'pharmacy': 'Sample Pharmacy', 'userId': 'u1', 'userName': 'Tia Admin', 'email': 'tia@test.rx', 'role': 'admin', 'signedInAt': 'x'})));
+    await db
+        .into(db.kv)
+        .insert(
+          KvCompanion.insert(
+            k: 'session',
+            v: jsonEncode({
+              'token': 'tok',
+              'tenant': 't1',
+              'slug': 't1',
+              'pharmacy': 'Sample Pharmacy',
+              'userId': 'u1',
+              'userName': 'Tia Admin',
+              'email': 'tia@test.rx',
+              'role': 'admin',
+              'signedInAt': 'x',
+            }),
+          ),
+        );
     final store = RecordStore(db);
     await store.update((d) {
-      d.put('products', {'id': 'p1', 'name': 'Calmex 500mg Tabs', 'generic': 'Calmex', 'form': 'Tablets', 'unit': 'Tablet', 'barcode': '7010001', 'price': 500, 'cost': 300});
+      d.put('products', {
+        'id': 'p1',
+        'name': 'Calmex 500mg Tabs',
+        'generic': 'Calmex',
+        'form': 'Tablets',
+        'unit': 'Tablet',
+        'barcode': '7010001',
+        'price': 500,
+        'cost': 300,
+      });
       d.put('products', {'id': 'p2', 'name': 'Zinco Syrup 100ml', 'unit': 'Bottle', 'barcode': '7010002', 'price': 6000, 'cost': 4000});
       d.put('batches', {'id': 'b1', 'productId': 'p1', 'batch': 'C1', 'expiry': '2029-01-31', 'cost': 300});
       d.move(productId: 'p1', qty: 100, type: 'Opening stock', batchId: 'b1');
@@ -388,6 +424,102 @@ void main() {
       await navTo(tester, screen);
       expect(find.text(screen == 'Controlled drugs' ? 'Controlled drugs register' : screen), findsWidgets);
     }
+    await done(tester);
+  });
+
+  testWidgets('POS parity: favourites, ticks, directions label, discard a held sale, expired stock, the sale kept across a restart', (tester) async {
+    await tester.runAsync(signedIn);
+    await tester.runAsync(
+      () => RecordStore(db).update((d) {
+        d.put('products', {'id': 'p3', 'name': 'Oldex Drops 10ml', 'unit': 'Bottle', 'price': 2000, 'cost': 1000, 'category': 'Eye care'});
+        d.put('batches', {'id': 'b3', 'productId': 'p3', 'batch': 'OLD', 'expiry': '2025-01-31', 'cost': 1000});
+        d.move(productId: 'p3', qty: 3, type: 'Opening stock', batchId: 'b3');
+      }),
+    );
+    await start(tester);
+    await toTill(tester);
+
+    // favourites
+    await tester.tap(find.byKey(const Key('star-p1')));
+    await settle(tester);
+    await tester.tap(find.widgetWithText(ChoiceChip, '★ Favourites'));
+    await settle(tester);
+    expect(find.text('Calmex 500mg Tabs'), findsOneWidget);
+    expect(find.text('Oldex Drops 10ml'), findsNothing);
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Eye care'));
+    await settle(tester);
+    expect(find.text('Oldex Drops 10ml'), findsOneWidget);
+    expect(find.text('Calmex 500mg Tabs'), findsNothing);
+
+    // expired stock needs a reason
+    await tester.tap(find.text('Oldex Drops 10ml'));
+    await settle(tester);
+    expect(find.text('Only expired stock left'), findsOneWidget);
+    await tester.enterText(find.byKey(const Key('expired-reason')), 'No alternative in town');
+    await settle(tester, 2);
+    await tester.tap(find.text('Sell expired'));
+    await settle(tester);
+    expect(find.text('Expired stock · No alternative in town'), findsOneWidget);
+
+    // directions label
+    await tester.tap(find.byKey(const Key('directions-p3')));
+    await settle(tester);
+    await tester.enterText(find.byKey(const Key('dir-dose')), '2 drops');
+    await tester.enterText(find.byKey(const Key('dir-freq')), 'twice a day');
+    await tester.tap(find.text('Done'));
+    await settle(tester);
+    expect(find.text('Label ✓'), findsOneWidget);
+
+    // the sale survives a restart of the app
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 400)));
+    await settle(tester);
+    expect(await tester.runAsync(() => (db.select(db.kv)..where((x) => x.k.equals('device:pos-sale-retail'))).getSingleOrNull()), isNotNull);
+    await done(tester);
+    await start(tester);
+    await toTill(tester);
+    await settle(tester);
+    expect(find.text('Expired stock · No alternative in town'), findsOneWidget, reason: 'the sale came back after the restart');
+    expect(find.text('Label ✓'), findsOneWidget);
+
+    // charge it: the expired override is on the sale and in the audit log
+    await tester.tap(find.textContaining('Charge UGX 2,000'));
+    await settle(tester);
+    expect(find.text('Sale complete ✓'), findsOneWidget);
+    await tester.tap(find.text('New sale'));
+    await settle(tester);
+    final sale = (await tester.runAsync(() => RecordStore(db).rows('sales')))!.single;
+    expect(sale['expiredOverride'], true);
+    expect(((sale['items'] as List).single as Map)['directions'], containsPair('dose', '2 drops'));
+
+    // ticks: tick every line, remove the ticked ones
+    await tester.tap(find.widgetWithText(ChoiceChip, 'All'));
+    await settle(tester);
+    await tester.tap(find.text('Calmex 500mg Tabs'));
+    await settle(tester);
+    await tester.tap(find.byKey(const Key('tick-p1')));
+    await settle(tester);
+    await tester.tap(find.text('Remove ticked (1)'));
+    await settle(tester);
+    expect(find.text('Tap a medicine or scan a barcode to start a sale'), findsOneWidget);
+
+    // a held sale can be discarded (audit)
+    await tester.tap(find.text('Calmex 500mg Tabs'));
+    await settle(tester);
+    await tester.tap(find.text('Hold'));
+    await settle(tester);
+    await tester.tap(find.byTooltip('Discard this held sale'));
+    await settle(tester);
+    await tester.tap(find.widgetWithText(FilledButton, 'Discard'));
+    await settle(tester);
+    final store = RecordStore(db);
+    expect(await tester.runAsync(() => store.rows('drafts')), isEmpty);
+    final audit = (await tester.runAsync(() => store.rows('audit')))!;
+    expect(audit.map((a) => a['action']), containsAll(['Expired stock sold', 'Draft discarded']));
+
+    // keyboard shortcuts help
+    await tester.sendKeyEvent(LogicalKeyboardKey.f1);
+    await settle(tester);
+    expect(find.text('Keyboard shortcuts'), findsOneWidget);
     await done(tester);
   });
 }

@@ -1,10 +1,16 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+
+import '../../../core/data/device_settings.dart';
 
 import '../../../core/data/pharmacy_providers.dart';
 import '../../../core/data/record_store.dart';
 import '../../../core/entities/draft.dart';
 import '../../../core/entities/product.dart';
 import '../../../core/entities/settings.dart';
+import '../../../core/rules/dates.dart';
 import '../../../core/rules/ids.dart';
 import '../../auth/application/session_controller.dart';
 import '../../proformas/domain/proformas.dart';
@@ -14,39 +20,177 @@ part 'sale_controller.g.dart';
 
 /// The sale being rung up on one till (retail or wholesale).
 class SaleState {
-  const SaleState({this.lines = const [], this.customerId = walkIn, this.customerName = 'Walk-in Customer', this.discount = 0,
-      this.method, this.tendered, this.cursor = -1, this.proforma});
+  const SaleState({
+    this.lines = const [],
+    this.customerId = walkIn,
+    this.customerName = 'Walk-in Customer',
+    this.discount = 0,
+    this.method,
+    this.tendered,
+    this.cursor = -1,
+    this.proforma,
+    this.ticked = const {},
+  });
   final List<CartLine> lines;
   final String customerId, customerName;
   final double discount;
   final PaymentMethod? method;
   final double? tendered;
+
   /// the line the keyboard acts on (+ / − / Delete)
   final int cursor;
+
   /// the proforma being sold (marked converted when the sale completes)
   final Map<String, Object?>? proforma;
 
-  SaleState copyWith({List<CartLine>? lines, String? customerId, String? customerName, double? discount, PaymentMethod? method,
-          double? tendered, bool clearTendered = false, int? cursor}) =>
-      SaleState(lines: lines ?? this.lines, customerId: customerId ?? this.customerId, customerName: customerName ?? this.customerName,
-          discount: discount ?? this.discount, method: method ?? this.method, tendered: clearTendered ? null : (tendered ?? this.tendered),
-          cursor: cursor ?? this.cursor);
+  /// lines ticked for "Remove ticked"
+  final Set<String> ticked;
 
-  Map<String, Object?> toSnapshot() => {'id': uid(), 'at': DateTime.now().toUtc().toIso8601String(),
-    'cart': [for (final l in lines) l.toJson()], 'customerId': customerId, 'discount': discount, 'payment': method?.name ?? ''};
+  SaleState copyWith({
+    List<CartLine>? lines,
+    String? customerId,
+    String? customerName,
+    double? discount,
+    PaymentMethod? method,
+    double? tendered,
+    bool clearTendered = false,
+    int? cursor,
+    Set<String>? ticked,
+  }) {
+    final l = lines ?? this.lines;
+    return SaleState(
+      lines: l,
+      customerId: customerId ?? this.customerId,
+      customerName: customerName ?? this.customerName,
+      discount: discount ?? this.discount,
+      method: method ?? this.method,
+      tendered: clearTendered ? null : (tendered ?? this.tendered),
+      cursor: cursor ?? this.cursor,
+      proforma: proforma,
+      ticked: {
+        for (final id in ticked ?? this.ticked)
+          if (l.any((x) => x.id == id)) id,
+      },
+    );
+  }
+
+  Map<String, Object?> toSnapshot() => {
+    'id': uid(),
+    'at': DateTime.now().toUtc().toIso8601String(),
+    'cart': [for (final l in lines) l.toJson()],
+    'customerId': customerId,
+    'customerName': customerName,
+    'discount': discount,
+    'payment': method?.name ?? '',
+    'methodId': method?.id ?? '',
+    'tendered': tendered,
+  };
+}
+
+/// Units of a medicine that may still be sold without the expired-stock override (stock less expired batches).
+double sellableOf(PharmacyData d, String id, {DateTime? now}) {
+  final expired = d.stock
+      .batchesOf(id)
+      .where((b) => b.qty > 0 && b.expiry.isNotEmpty && daysUntil(b.expiry, now: now) < 0)
+      .fold<double>(0, (a, b) => a + b.qty);
+  final left = d.stockOf(id) - expired;
+  return left < 0 ? 0 : left;
 }
 
 @Riverpod(keepAlive: true)
 class SaleController extends _$SaleController {
   @override
-  SaleState build(bool wholesale) => const SaleState();
+  SaleState build(bool wholesale) {
+    // the sale in progress is kept on the device, so a restart or a crash loses nothing (like the React till)
+    Timer? t;
+    listenSelf((_, next) {
+      if (!_restored) return;
+      t?.cancel();
+      t = Timer(const Duration(milliseconds: 250), () => _keep(next));
+    });
+    ref.onDispose(() => t?.cancel());
+    Future.microtask(_restore);
+    return const SaleState();
+  }
+
+  bool _restored = false;
+  String get _key => 'pos-sale-${wholesale ? 'wholesale' : 'retail'}';
+
+  Future<void> _keep(SaleState s) async {
+    try {
+      await ref.read(deviceValueProvider(_key).notifier).set(s.lines.isEmpty ? null : jsonEncode(s.toSnapshot()));
+    } catch (_) {
+      /* the provider was disposed (tests) */
+    }
+  }
+
+  Future<void> _restore() async {
+    try {
+      final raw = await ref.read(deviceValueProvider(_key).future);
+      if (raw != null && state.lines.isEmpty) {
+        final snap = (jsonDecode(raw) as Map).cast<String, Object?>();
+        final d = await _data;
+        final lines = _linesOf(snap, d);
+        if (lines.isNotEmpty) {
+          final m = d.methods.where((x) => x.id == snap['methodId']).firstOrNull;
+          state = SaleState(
+            lines: lines,
+            customerId: '${snap['customerId'] ?? walkIn}',
+            customerName: '${snap['customerName'] ?? 'Walk-in Customer'}',
+            discount: ((snap['discount'] as num?) ?? 0).toDouble(),
+            method: m,
+            tendered: (snap['tendered'] as num?)?.toDouble(),
+          );
+        }
+      }
+    } catch (_) {
+      /* nothing kept, or it could not be read: start with an empty sale */
+    }
+    _restored = true;
+  }
+
+  static List<CartLine> _linesOf(Map<String, Object?> snap, PharmacyData d) => [
+    for (final j in ((snap['cart'] as List?) ?? const []).cast<Map>())
+      () {
+        final l = CartLine.fromJson(j.cast<String, Object?>());
+        return l.copyWith(max: d.stockOf(l.id));
+      }(),
+  ];
 
   Future<PharmacyData> get _data => ref.read(pharmacyProvider.future);
 
-  Future<void> add(Product p) async {
+  /// Add a medicine. Throws [OnlyExpiredLeft] when only expired stock is left; call again with the pharmacist's
+  /// [expiredReason] to sell it anyway (recorded in the audit log).
+  Future<void> add(Product p, {String? expiredReason}) async {
     final d = await _data;
-    final lines = addToCart(state.lines, p, stock: d.stockOf(p.id), wholesale: wholesale, settings: d.settings);
+    final lines = addToCart(
+      state.lines,
+      p,
+      stock: d.stockOf(p.id),
+      wholesale: wholesale,
+      settings: d.settings,
+      sellable: sellableOf(d, p.id),
+      expiredReason: expiredReason,
+    );
     state = state.copyWith(lines: lines, cursor: lines.indexWhere((l) => l.id == p.id));
+  }
+
+  /// Tick or untick a line; tick every line; remove the ticked ones.
+  void tick(String id) => state = state.copyWith(ticked: state.ticked.contains(id) ? ({...state.ticked}..remove(id)) : {...state.ticked, id});
+  void tickAll(bool on) => state = state.copyWith(ticked: on ? {for (final l in state.lines) l.id} : {});
+  void removeTicked() => state = state.copyWith(lines: state.lines.where((l) => !state.ticked.contains(l.id)).toList(), ticked: {}, cursor: -1);
+
+  /// Dosage directions for a line's label (empty clears them).
+  void directions(String id, Map<String, Object?>? dir) => _replace(id, (x) => dir == null ? x.copyWith(clearDirections: true) : x.copyWith(directions: dir));
+
+  /// Throw a held sale away (recorded in the audit log).
+  Future<void> discard(Draft h) async {
+    final session = await ref.read(sessionControllerProvider.future);
+    final d = await _data;
+    await ref.read(recordStoreProvider).update((x) {
+      x.del('drafts', h.id);
+      x.audit(session?.userName ?? '', 'Draft discarded', '${h.title} · ${h.count.round()} item${h.count.round() == 1 ? '' : 's'}', d.branch);
+    });
   }
 
   /// A scanned or typed barcode: true when it matched a medicine.
@@ -57,8 +201,7 @@ class SaleController extends _$SaleController {
     return true;
   }
 
-  void _replace(String id, CartLine Function(CartLine) f) =>
-      state = state.copyWith(lines: [for (final l in state.lines) l.id == id ? f(l) : l]);
+  void _replace(String id, CartLine Function(CartLine) f) => state = state.copyWith(lines: [for (final l in state.lines) l.id == id ? f(l) : l]);
 
   void step(String id, int by) {
     final l = state.lines.firstWhere((x) => x.id == id);
@@ -74,8 +217,15 @@ class SaleController extends _$SaleController {
   }
 
   /// A new price for a line (only staff who may change prices: pos.price_edit).
-  void price(String id, double perUnitOrPack) =>
-      _replace(id, (x) => x.pack == null ? x.copyWith(price: perUnitOrPack) : x.copyWith(price: perUnitOrPack / x.pack!.size, pack: LinePack(name: x.pack!.name, size: x.pack!.size, price: perUnitOrPack)));
+  void price(String id, double perUnitOrPack) => _replace(
+    id,
+    (x) => x.pack == null
+        ? x.copyWith(price: perUnitOrPack)
+        : x.copyWith(
+            price: perUnitOrPack / x.pack!.size,
+            pack: LinePack(name: x.pack!.name, size: x.pack!.size, price: perUnitOrPack),
+          ),
+  );
 
   void remove(String id) => state = state.copyWith(lines: state.lines.where((l) => l.id != id).toList(), cursor: -1);
   void clear() => state = SaleState(method: state.method);
@@ -91,12 +241,24 @@ class SaleController extends _$SaleController {
     final session = await ref.read(sessionControllerProvider.future);
     final data = await _data;
     final t = totalsOf(state.lines, discount: state.discount, settings: data.settings);
-    await ref.read(recordStoreProvider).update((d) => d.put('drafts', {
-          'id': uid(), 'kind': 'sale', 'branchId': data.branch, 'mode': wholesale ? 'wholesale' : 'retail', 'userId': session?.userId ?? '',
-          'userName': session?.userName ?? '', 'order': DateTime.now().millisecondsSinceEpoch, 'startedAt': d.now,
-          'title': state.customerId == walkIn ? 'Walk-in · ${state.lines.length} item${state.lines.length == 1 ? '' : 's'}' : state.customerName,
-          'count': state.lines.length, 'total': t.total, 'data': state.toSnapshot(),
-        }));
+    await ref
+        .read(recordStoreProvider)
+        .update(
+          (d) => d.put('drafts', {
+            'id': uid(),
+            'kind': 'sale',
+            'branchId': data.branch,
+            'mode': wholesale ? 'wholesale' : 'retail',
+            'userId': session?.userId ?? '',
+            'userName': session?.userName ?? '',
+            'order': DateTime.now().millisecondsSinceEpoch,
+            'startedAt': d.now,
+            'title': state.customerId == walkIn ? 'Walk-in · ${state.lines.length} item${state.lines.length == 1 ? '' : 's'}' : state.customerName,
+            'count': state.lines.length,
+            'total': t.total,
+            'data': state.toSnapshot(),
+          }),
+        );
     clear();
   }
 
@@ -105,30 +267,44 @@ class SaleController extends _$SaleController {
     if (state.lines.isNotEmpty) await hold();
     final data = h.data ?? const {};
     final d = await _data;
-    final lines = [
-      for (final j in ((data['cart'] as List?) ?? const []).cast<Map>())
-        () {
-          final l = CartLine.fromJson(j.cast<String, Object?>());
-          return CartLine(id: l.id, name: l.name, price: l.price, cost: l.cost, qty: l.qty, max: d.stockOf(l.id), pack: l.pack, rx: l.rx, controlled: l.controlled);
-        }(),
-    ];
+    final lines = _linesOf(data, d);
     await ref.read(recordStoreProvider).update((x) => x.del('drafts', h.id));
     final c = d.customers.where((x) => x.id == data['customerId']).firstOrNull;
-    state = SaleState(lines: lines, customerId: c?.id ?? walkIn, customerName: c?.name ?? 'Walk-in Customer',
-        discount: ((data['discount'] as num?) ?? 0).toDouble(), method: state.method);
+    state = SaleState(
+      lines: lines,
+      customerId: c?.id ?? walkIn,
+      customerName: c?.name ?? 'Walk-in Customer',
+      discount: ((data['discount'] as num?) ?? 0).toDouble(),
+      method: state.method,
+    );
   }
 
   /// Complete the sale. Returns the saved sale; on any problem nothing is saved and the sale stays as it is.
-  Future<Map<String, Object?>> complete({ControlledEntry? controlled, String? momoRef, bool rxChecked = false}) async {
+  Future<Map<String, Object?>> complete({ControlledEntry? controlled, String? momoRef, Map<String, Object?>? momo, bool rxChecked = false}) async {
     final d = await _data;
     final session = await ref.read(sessionControllerProvider.future);
     final method = state.method ?? d.methods.first;
-    final sale = await completeSale(ref.read(recordStoreProvider),
-        cart: state.lines,
-        c: Checkout(method: method, tendered: state.tendered, customerId: state.customerId, customerName: state.customerName,
-            discount: state.discount, controlled: controlled, momoRef: momoRef, rxChecked: rxChecked),
-        settings: d.settings, stock: d.stock, wholesale: wholesale, cashier: session?.userName ?? '', branchId: d.branch,
-        also: state.proforma == null ? null : (x, sale) => x.put('proformas', {...state.proforma!, 'status': 'Converted', 'saleNumber': sale['number']}));
+    final sale = await completeSale(
+      ref.read(recordStoreProvider),
+      cart: state.lines,
+      c: Checkout(
+        method: method,
+        tendered: state.tendered,
+        customerId: state.customerId,
+        customerName: state.customerName,
+        discount: state.discount,
+        controlled: controlled,
+        momoRef: momoRef,
+        momo: momo,
+        rxChecked: rxChecked,
+      ),
+      settings: d.settings,
+      stock: d.stock,
+      wholesale: wholesale,
+      cashier: session?.userName ?? '',
+      branchId: d.branch,
+      also: state.proforma == null ? null : (x, sale) => x.put('proformas', {...state.proforma!, 'status': 'Converted', 'saleNumber': sale['number']}),
+    );
     state = SaleState(method: state.method);
     return sale;
   }
@@ -137,8 +313,16 @@ class SaleController extends _$SaleController {
   Future<Map<String, Object?>> proformaNow() async {
     final d = await _data;
     final session = await ref.read(sessionControllerProvider.future);
-    final pf = await saveProforma(ref.read(recordStoreProvider), cart: state.lines, discount: state.discount, settings: d.settings, wholesale: wholesale,
-        customerId: state.customerId, customerName: state.customerName, by: session?.userName ?? '');
+    final pf = await saveProforma(
+      ref.read(recordStoreProvider),
+      cart: state.lines,
+      discount: state.discount,
+      settings: d.settings,
+      wholesale: wholesale,
+      customerId: state.customerId,
+      customerName: state.customerName,
+      by: session?.userName ?? '',
+    );
     clear();
     return pf;
   }
@@ -149,11 +333,24 @@ class SaleController extends _$SaleController {
     final lines = <CartLine>[
       for (final i in ((pf['items'] as List?) ?? const []).cast<Map>())
         if (d.stockOf('${i['id']}') > 0)
-          CartLine(id: '${i['id']}', name: '${i['name']}', price: ((i['price'] as num?) ?? 0).toDouble(), cost: ((i['cost'] as num?) ?? 0).toDouble(),
-              qty: [((i['qty'] as num?) ?? 1).toDouble(), d.stockOf('${i['id']}')].reduce((a, b) => a < b ? a : b), max: d.stockOf('${i['id']}'),
-              rx: d.byId['${i['id']}']?.rx ?? false, controlled: d.byId['${i['id']}']?.controlled ?? false),
+          CartLine(
+            id: '${i['id']}',
+            name: '${i['name']}',
+            price: ((i['price'] as num?) ?? 0).toDouble(),
+            cost: ((i['cost'] as num?) ?? 0).toDouble(),
+            qty: [((i['qty'] as num?) ?? 1).toDouble(), d.stockOf('${i['id']}')].reduce((a, b) => a < b ? a : b),
+            max: d.stockOf('${i['id']}'),
+            rx: d.byId['${i['id']}']?.rx ?? false,
+            controlled: d.byId['${i['id']}']?.controlled ?? false,
+          ),
     ];
-    state = SaleState(lines: lines, customerId: '${pf['customerId'] ?? walkIn}', customerName: '${pf['customerName'] ?? 'Walk-in Customer'}',
-        discount: ((pf['discount'] as num?) ?? 0).toDouble(), method: state.method, proforma: pf);
+    state = SaleState(
+      lines: lines,
+      customerId: '${pf['customerId'] ?? walkIn}',
+      customerName: '${pf['customerName'] ?? 'Walk-in Customer'}',
+      discount: ((pf['discount'] as num?) ?? 0).toDouble(),
+      method: state.method,
+      proforma: pf,
+    );
   }
 }

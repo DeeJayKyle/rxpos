@@ -24,3 +24,23 @@ class DeviceBranch extends _$DeviceBranch {
     state = AsyncData(branchId);
   }
 }
+
+/// A value kept on this device only (never synced): POS favourites, the sale in progress, and the like.
+@Riverpod(keepAlive: true)
+class DeviceValue extends _$DeviceValue {
+  @override
+  Future<String?> build(String key) async {
+    final db = ref.watch(appDatabaseProvider);
+    return (await (db.select(db.kv)..where((x) => x.k.equals('device:$key'))).getSingleOrNull())?.v;
+  }
+
+  Future<void> set(String? v) async {
+    final db = ref.read(appDatabaseProvider);
+    if (v == null) {
+      await (db.delete(db.kv)..where((x) => x.k.equals('device:$key'))).go();
+    } else {
+      await db.into(db.kv).insertOnConflictUpdate(KvCompanion.insert(k: 'device:$key', v: v));
+    }
+    state = AsyncData(v);
+  }
+}

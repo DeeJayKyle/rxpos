@@ -21,16 +21,22 @@ class FakeCloud implements HttpClientAdapter {
   final records = <ServerRecord>[];
   String epoch = 'epoch-1';
   final requests = <Map<String, Object?>>[];
+
   /// drop the connection on this request number (1-based)
   int? failOnRequest;
+
   /// answer this request number with something that is not a sync reply
   int? garbageOnRequest;
+
   /// apply this request, then lose the reply (the device never hears back)
   int? loseReplyOnRequest;
+
   /// answer this request number with 401 (the sign-in expired)
   int? expiredOnRequest;
+
   /// changes the cloud refuses (no permission): "table|id"
   final refuse = <String>{};
+
   /// op ids already applied (the cloud's sync_ops ledger)
   final applied = <String>{};
   int dupes = 0;
@@ -60,8 +66,22 @@ class FakeCloud implements HttpClientAdapter {
   (int, Map<String, Object?>) Function(Map<String, Object?> body)? login;
   final logins = <Map<String, Object?>>[];
 
+  /// Answers for other endpoints, e.g. 'config', 'pay/request', 'pay/status', 'sms'.
+  final api = <String, (int, Map<String, Object?>) Function(Map<String, Object?> body)>{};
+  final calls = <(String, Map<String, Object?>)>[];
+
   @override
   Future<ResponseBody> fetch(RequestOptions options, Stream<Uint8List>? requestStream, Future<void>? cancelFuture) async {
+    final path = Uri.parse(options.path).path;
+    if (!path.endsWith('/api/sync') && !path.endsWith('/api/login')) {
+      // other cloud calls (config, Mobile Money, SMS): answered by [api], keyed by the path after /api/
+      final name = path.substring(path.indexOf('/api/') + 5);
+      calls.add((name, options.data is Map ? (options.data as Map).cast<String, Object?>() : Uri.parse(options.path).queryParameters));
+      final answer = api[name];
+      if (answer == null) return ResponseBody.fromString('{"error":"Not found"}', 404, headers: _json);
+      final (status, reply) = answer(calls.last.$2);
+      return ResponseBody.fromString(jsonEncode(reply), status, headers: _json);
+    }
     final body = (options.data as Map).cast<String, Object?>();
     if (options.path.endsWith('/api/login')) {
       logins.add(body);
@@ -99,8 +119,9 @@ class FakeCloud implements HttpClientAdapter {
       }
       if (op != null) applied.add(op);
       if (have != null && have.at.compareTo(at) >= 0) continue; // an older edit: the newer one stays
-      records.add(ServerRecord(_seq + 1, t, id, (ch['rec'] as Map?)?.cast<String, Object?>(), at,
-          origin: '${body['deviceId']}', deleted: ch['deleted'] == true));
+      records.add(
+        ServerRecord(_seq + 1, t, id, (ch['rec'] as Map?)?.cast<String, Object?>(), at, origin: '${body['deviceId']}', deleted: ch['deleted'] == true),
+      );
       appliedNow++;
     }
     if (loseReplyOnRequest == requests.length) {
@@ -113,17 +134,26 @@ class FakeCloud implements HttpClientAdapter {
     final page = next.take(pageSize).toList();
     final cursor = page.isEmpty ? _seq : page.last.seq;
     final reply = {
-      'changes': [for (final r in page) {'t': r.t, 'id': r.id, 'at': r.at, if (r.deleted) 'deleted': true else 'rec': r.rec}],
+      'changes': [
+        for (final r in page) {'t': r.t, 'id': r.id, 'at': r.at, if (r.deleted) 'deleted': true else 'rec': r.rec},
+      ],
       'cursor': cursor,
       'more': next.length > page.length,
-      'applied': appliedNow, 'refused': refusedKeys.length, 'refusedKeys': refusedKeys, 'dupes': dupes, 'epoch': epoch, 'tenant': 't-sample', 'protocol': 2,
+      'applied': appliedNow,
+      'refused': refusedKeys.length,
+      'refusedKeys': refusedKeys,
+      'dupes': dupes,
+      'epoch': epoch,
+      'tenant': 't-sample',
+      'protocol': 2,
     };
     return ResponseBody.fromString(jsonEncode(reply), 200, headers: _json);
   }
 
-  static const _json = {Headers.contentTypeHeader: [Headers.jsonContentType]};
+  static const _json = {
+    Headers.contentTypeHeader: [Headers.jsonContentType],
+  };
 
   @override
   void close({bool force = false}) {}
 }
-
