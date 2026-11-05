@@ -7,6 +7,7 @@ class Screen {
   const Screen(this.path, this.label, this.icon, this.group, this.builder, {this.permission, this.feature, this.key});
   final String path, label, group;
   final IconData icon;
+  /// one permission, or several any of which is enough ("a|b")
   final String? permission, feature;
   final LogicalKeyboardKey? key;
   /// builds the screen; [q] are the link's query values (e.g. /inventory?filter=low)
@@ -14,7 +15,7 @@ class Screen {
 
   String get keyLabel => key == null ? '' : key!.keyLabel;
   bool allowed(Set<String> can, Map<String, bool> features) =>
-      (permission == null || can.contains(permission)) && (feature == null || features[feature] != false);
+      (permission == null || permission!.split('|').any(can.contains)) && (feature == null || features[feature] != false);
 }
 
 const navGroups = ['Sales', 'People', 'Medicine inventory', 'Finance', 'Insights', 'System'];

@@ -75,3 +75,19 @@ Map<String, double> accountBalances(Map<String, List<Map<String, Object?>>> t) {
   final total = round(_n(loan['amount']) * (1 + _n(loan['interestRate']) / 100), 2);
   return (total: total, repaid: repaid, balance: total - repaid);
 }
+
+/// The cash book of one account between two days: the balance before [from], each entry with the balance after it,
+/// totals in and out, and the closing balance.
+({double opening, List<(LedgerEntry, double)> rows, double totalIn, double totalOut, double closing}) cashBook(Map<String, List<Map<String, Object?>>> t, String account,
+    {required String from, required String to, double opening = 0}) {
+  var bal = opening;
+  final all = [for (final e in ledger(t).where((e) => e.account == account)) (e, bal += e.inAmount - e.outAmount)];
+  String day(String d) => d.length >= 10 ? d.substring(0, 10) : d;
+  final rows = all.where((x) => day(x.$1.date).compareTo(from) >= 0 && day(x.$1.date).compareTo(to) <= 0).toList();
+  final before = all.where((x) => day(x.$1.date).compareTo(from) < 0).lastOrNull?.$2 ?? opening;
+  final open = rows.isEmpty ? before : rows.first.$2 - rows.first.$1.inAmount + rows.first.$1.outAmount;
+  return (
+    opening: open, rows: rows, totalIn: rows.fold(0.0, (a, x) => a + x.$1.inAmount), totalOut: rows.fold(0.0, (a, x) => a + x.$1.outAmount),
+    closing: rows.isEmpty ? open : rows.last.$2,
+  );
+}

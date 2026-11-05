@@ -348,10 +348,14 @@ void main() {
     await settle(tester);
     await tester.enterText(find.widgetWithText(TextFormField, 'What for'), 'Airtime');
     await tester.enterText(find.widgetWithText(TextFormField, 'Amount'), '200');
+    await tester.tap(find.widgetWithText(DropdownButtonFormField<String>, 'Category'));
+    await settle(tester, 4);
+    await tester.tap(find.text('Other').last);
+    await settle(tester, 4);
     await tester.tap(find.widgetWithText(FilledButton, 'Save'));
     await settle(tester);
-    expect(find.textContaining('Airtime'), findsOneWidget);
-    await tester.tap(find.text('Accounts'));
+    expect(find.text('Other: Airtime'), findsOneWidget);
+    await tester.tap(find.text('Banks'));
     await settle(tester);
     expect(find.text('UGX 300'), findsOneWidget, reason: 'cash at hand: 500 sale − 200 expense');
     await done(tester);
@@ -632,7 +636,7 @@ void main() {
 
     // Reports → Sales lines
     await navTo(tester, 'Reports');
-    await tester.enterText(find.widgetWithText(TextFormField, 'From'), '2026-11-01');
+    await tester.enterText(find.byKey(const Key('date-From')), '2026-11-01');
     await settle(tester, 2);
     await tester.tap(find.text('Sales lines'));
     await settle(tester);

@@ -28,9 +28,9 @@ import '../domain/sale_edit.dart';
 /// status (completed / refunded / edited); CSV and PDF; open a sale to see its receipt and change history, print the
 /// receipt or a full-page invoice, edit it (with a reason) or refund it. The Held sales tab lists drafts.
 class SalesScreen extends ConsumerStatefulWidget {
-  const SalesScreen({super.key, this.q = ''});
-  /// a receipt number to look for (from Sales lines)
-  final String q;
+  const SalesScreen({super.key, this.q = '', this.from = '', this.to = ''});
+  /// a receipt number to look for (from Sales lines); a day from the dashboard's chart
+  final String q, from, to;
   @override
   ConsumerState<SalesScreen> createState() => _SalesScreenState();
 }
@@ -39,7 +39,8 @@ const _statuses = [('', 'All statuses'), ('completed', 'Completed'), ('refunded'
 
 class _SalesScreenState extends ConsumerState<SalesScreen> {
   late String _q = widget.q;
-  String _from = '', _to = '', _cashier = '', _payment = '', _customer = '', _status = '', _tab = 'sales';
+  late String _from = widget.from, _to = widget.to;
+  String _cashier = '', _payment = '', _customer = '', _status = '', _tab = 'sales';
   String? _branch;
 
   @override

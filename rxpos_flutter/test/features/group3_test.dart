@@ -66,4 +66,17 @@ void main() {
       expect((pf['status'], pf['total'], (pf['number'] as String).startsWith('PF')), ('Open', 1400.0, true));
     });
   });
+
+  test('the cash book: the balance before the period, each entry with the balance after it, totals', () {
+    final t = {
+      'banks': [{'id': 'cash-drawer', 'name': 'Cash at hand', 'opening': 1000}],
+      'sales': [{'id': 's1', 'number': 'R1', 'date': '2026-10-30T10:00:00Z', 'total': 500, 'paid': 500}, {'id': 's2', 'number': 'R2', 'date': '2026-11-02T10:00:00Z', 'total': 300, 'paid': 300}],
+      'expenses': [{'id': 'e', 'date': '2026-11-03', 'amount': 200, 'description': 'Airtime'}],
+    };
+    final b = cashBook(t, 'cash-drawer', from: '2026-11-01', to: '2026-11-30', opening: 1000);
+    expect((b.opening, b.totalIn, b.totalOut, b.closing), (1500.0, 300.0, 200.0, 1600.0));
+    expect(b.rows.map((x) => x.$2), [1800.0, 1600.0]);
+    final none = cashBook(t, 'cash-drawer', from: '2026-12-01', to: '2026-12-31', opening: 1000);
+    expect((none.opening, none.closing, none.rows.length), (1600.0, 1600.0, 0));
+  });
 }

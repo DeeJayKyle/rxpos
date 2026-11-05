@@ -23,15 +23,18 @@ class TopSeller {
 }
 
 class Figures {
-  Figures({required this.byDay, required this.byMonth, required this.top});
+  Figures({required this.byDay, required this.byMonth, required this.top, this.purchasesByMonth = const {}});
   final Map<String, DayFigures> byDay, byMonth;
+  /// deliveries received per month (YYYY-MM)
+  final Map<String, double> purchasesByMonth;
   final List<TopSeller> top;
 
   DayFigures day(String d) => byDay[d] ?? const DayFigures();
   DayFigures month(String m) => byMonth[m] ?? const DayFigures();
 
   /// [sales] and [expenses] as records; [now] fixes "today" in tests.
-  factory Figures.of(Iterable<Sale> sales, Iterable<Map<String, Object?>> expenses, {String branch = mainBranch, DateTime? now}) {
+  factory Figures.of(Iterable<Sale> sales, Iterable<Map<String, Object?>> expenses, {String branch = mainBranch, DateTime? now,
+      Iterable<Map<String, Object?>> purchases = const []}) {
     final byDay = <String, DayFigures>{}, byMonth = <String, DayFigures>{}, top = <String, TopSeller>{};
     final thisMonth = today(now).substring(0, 7);
     for (final s in sales) {
@@ -54,9 +57,27 @@ class Figures {
       byDay[d] = (byDay[d] ?? const DayFigures()).add(exp: amount);
       byMonth[m] = (byMonth[m] ?? const DayFigures()).add(exp: amount);
     }
-    return Figures(byDay: byDay, byMonth: byMonth, top: top.values.toList()..sort((a, b) => b.amount.compareTo(a.amount)));
+    final purch = <String, double>{};
+    for (final p in purchases) {
+      if ('${p['branchId'] ?? mainBranch}' != branch) continue;
+      final m = monthOf('${p['date'] ?? ''}');
+      purch[m] = (purch[m] ?? 0) + ((p['total'] as num?)?.toDouble() ?? 0);
+    }
+    return Figures(byDay: byDay, byMonth: byMonth, top: top.values.toList()..sort((a, b) => b.amount.compareTo(a.amount)), purchasesByMonth: purch);
   }
 }
 
 /// Change against yesterday in %, or null when yesterday had nothing.
 double? deltaPercent(double now, double before) => before > 0 ? (now - before) / before * 100 : null;
+
+/// The day keys for the last [days] days, oldest first, today last.
+List<String> lastDays(int days, {DateTime? now}) {
+  final n = now ?? DateTime.now();
+  return [for (var i = days - 1; i >= 0; i--) localDate(DateTime(n.year, n.month, n.day - i))];
+}
+
+/// The month keys for the last [months] months, oldest first, this month last.
+List<String> lastMonths(int months, {DateTime? now}) {
+  final n = now ?? DateTime.now();
+  return [for (var i = months - 1; i >= 0; i--) localDate(DateTime(n.year, n.month - i, 1)).substring(0, 7)];
+}

@@ -110,18 +110,19 @@ Every feature of the React app (`src/pages/*.jsx`, `src/*.jsx`), screen by scree
 - ✅ "Use on this device" from the list (branches are added by the RxPOS owner, as in the React app; the React app has no transfer cancel)
 
 ## Finance (Finance.jsx)
-- ✅ Account balances and statements, expenses, deposits / withdrawals / transfers, loans and repayments
-- ✗ Payment history; Cash Book; Expense categories (add / edit); Banks (add / edit / delete)
-- ✗ Debtors and Creditors pages; Export CSV
+- ✅ Banks (add / edit; balances; no delete, as in the React app), Cash Book (account, dates, opening, running balance, totals, CSV / PDF)
+- ✅ Expenses (by month, add / edit / delete, method, payee, CSV); Expense categories (add / edit, total spent)
+- ✅ Deposits / withdrawals / transfers (add / edit / delete, reference); loans and repayments
+- ✅ Debtors and Creditors (balances, receive / pay, payment history, CSV); Payment history
 
 ## Reports (Reports.jsx, Weekly.jsx, charts.jsx)
-- ✅ Summary, by medicine / day / payment / cashier, print
-- ✗ Sales lines; Sales report; Sales by product; Consumption (ABC); Purchase report; Expenses report; Profit &
-  margins; Stock valuation; Income statement; by supplier, by formulation, retail vs wholesale; "Reading your figures"
-- ✗ Weekly summary
-- ✗ Dashboard charts (daily sales 7 / 30 / 90 days; money in & out month by month); top 10 by amount / qty / profit;
-  share on WhatsApp
-- ✗ Export CSV everywhere
+- ✅ Sales Report (daily bars, payment donut and shares, by cashier, retail vs wholesale), Sales lines, Sales by Product,
+  Consumption (ABC, running out, not sold), Purchase Report (by supplier), Expenses Report, Profit & margins (price check
+  against the target margin, by medicine / category), Stock Valuation (by formulation), Income Statement; branch; print
+  / PDF every tab; CSV; "Reading your figures"
+- ✅ Weekly summary (earlier / later weeks, against the week before, top sellers, stood out / slowed down, team, payments, PDF)
+- ✅ Dashboard charts (daily sales 7 / 30 / 90 days, tap a day for its sales; money in & out month by month, 6 / 12);
+  top 10 by amount / qty / profit; open drafts; promote today with share on WhatsApp; products and customers
 
 ## Settings (Settings.jsx, Device.jsx)
 - ✅ Receipts & stock, payment methods (add), this device (branch, theme, storage)

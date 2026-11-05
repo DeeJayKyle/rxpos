@@ -13,6 +13,7 @@ import '../../features/inventory/presentation/medicine_screens.dart';
 import '../../features/prescriptions/presentation/prescriptions_screen.dart';
 import '../../features/proformas/presentation/proformas_screen.dart';
 import '../../features/reports/presentation/reports_screen.dart';
+import '../../features/reports/presentation/weekly_screen.dart';
 import '../../features/people/presentation/people_screens.dart';
 import '../../features/purchases/presentation/purchases_screens.dart';
 import '../../features/returns/presentation/returns_screen.dart';
@@ -29,7 +30,7 @@ final screens = <Screen>[
   Screen('/pos', 'POS – Retail', Icons.point_of_sale, 'Sales', (_) => const PosScreen(key: ValueKey('retail')), permission: 'pos.sell', key: LogicalKeyboardKey.f2),
   Screen('/pos/wholesale', 'POS – Wholesale', Icons.local_shipping_outlined, 'Sales', (_) => const PosScreen(key: ValueKey('wholesale'), wholesale: true),
       permission: 'pos.wholesale', feature: 'wholesale', key: LogicalKeyboardKey.f3),
-  Screen('/sales', 'Sales History', Icons.receipt_long_outlined, 'Sales', (q) => SalesScreen(key: ValueKey('sales-${q['q']}'), q: q['q'] ?? ''), permission: 'sales.view', key: LogicalKeyboardKey.f6),
+  Screen('/sales', 'Sales History', Icons.receipt_long_outlined, 'Sales', (q) => SalesScreen(key: ValueKey('sales-${q['q']}-${q['from']}-${q['to']}'), q: q['q'] ?? '', from: q['from'] ?? '', to: q['to'] ?? ''), permission: 'sales.view', key: LogicalKeyboardKey.f6),
   Screen('/shifts', 'Shifts & Cash-up', Icons.schedule_outlined, 'Sales', (_) => const ShiftsScreen(), permission: 'shifts', feature: 'shifts'),
   Screen('/proformas', 'Proformas', Icons.description_outlined, 'Sales', (_) => const ProformasScreen(), permission: 'proformas', feature: 'proformas'),
   Screen('/prescriptions', 'Prescriptions & Refills', Icons.medication_outlined, 'Sales', (_) => const PrescriptionsScreen(), permission: 'prescriptions', feature: 'prescriptions'),
@@ -56,8 +57,9 @@ final screens = <Screen>[
   Screen('/drug-info', 'Drug information', Icons.menu_book_outlined, 'Insights', (_) => const DrugInfoScreen(), feature: 'drugInfo'),
   Screen('/quiz', 'Drug quiz', Icons.quiz_outlined, 'Insights', (_) => const QuizScreen(), feature: 'ai'),
   Screen('/calendar', 'Calendar', Icons.calendar_month_outlined, 'Insights', (_) => const CalendarScreen(), feature: 'calendar'),
-  Screen('/finance', 'Finance', Icons.account_balance_outlined, 'Finance', (_) => const FinanceScreen(), permission: 'finance', feature: 'finance'),
-  Screen('/reports', 'Reports', Icons.insights_outlined, 'Insights', (_) => const ReportsScreen(), permission: 'reports', feature: 'reports'),
+  Screen('/finance', 'Finance', Icons.account_balance_outlined, 'Finance', (q) => FinanceScreen(key: ValueKey('finance-${q['tab']}'), tab: q['tab'] ?? 'accounts'), permission: 'finance', feature: 'finance'),
+  Screen('/weekly', 'Weekly Summary', Icons.date_range_outlined, 'Insights', (_) => const WeeklyScreen(), permission: 'reports', feature: 'reports'),
+  Screen('/reports', 'Reports', Icons.insights_outlined, 'Insights', (q) => ReportsScreen(key: ValueKey('reports-${q['tab']}-${q['from']}-${q['to']}'), tab: q['tab'] ?? '', from: q['from'] ?? '', to: q['to'] ?? ''), permission: 'reports|reports.lines', feature: 'reports'),
   Screen('/users', 'Users & Roles', Icons.manage_accounts_outlined, 'People', (_) => const UsersScreen(), permission: 'users.manage'),
   Screen('/branches', 'Branches & Transfers', Icons.store_mall_directory_outlined, 'Medicine inventory', (_) => const BranchesScreen(), permission: 'transfers', feature: 'branches'),
   Screen('/settings', 'Settings', Icons.settings_outlined, 'System', (_) => const SettingsScreen(), permission: 'settings.manage'),
