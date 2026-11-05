@@ -133,6 +133,12 @@ class SyncEngine {
       if (restored) continue;
       if (i >= batches.length && !reply.more) break;
     }
+    // Do not mark a partial full download complete when the caller-imposed safety
+    // limit stops paging. The saved cursor/fullInProgress state lets the next run
+    // resume without losing the remaining download.
+    if (requests > maxRequests) {
+      throw const ApiFailure(ApiFailureKind.server, 'Sync paused before all changes were downloaded; please run sync again.');
+    }
     cfg = cfg.copyWith(lastSync: DateTime.now().toUtc().toIso8601String(), lastError: '', fullPull: full ? fullPullVersion : null, fullInProgress: false);
     await cfg.save(db);
     return SyncResult(sent: sent, refused: refused, received: received, applied: applied, full: full);
