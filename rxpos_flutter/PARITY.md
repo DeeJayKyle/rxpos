@@ -144,7 +144,7 @@ Every feature of the React app (`src/pages/*.jsx`, `src/*.jsx`), screen by scree
 ## Other screens
 - ✅ Labels: four sizes (thermal 38×25 / 50×30 / 60×40, A4 sheet of 21), show price / expiry / pharmacy name, add all in-stock, a barcode made for a medicine without one, preview, print
 - ✅ Import: standard catalogue tab, Excel (.xlsx) / CSV file or pasted rows, column matching, preview, update or skip existing, opening stock, template
-- ✗ Drug information: online lookup saved for offline, counselling sheet (✅ local)
+- ✅ Drug information: online lookup saved for offline, counselling sheet, the till's drug info
 - ✗ Quiz: quick quiz offline (✅ AI quiz)
 - ✗ Storage: weather, trend chart, delete a reading (✅ log)
 - ✗ Calendar: copy, delete, add to Google Calendar, today view (✅ add / edit)

@@ -154,17 +154,33 @@ class DrugLookup {
   }
 
   /// Ask the network (sharing a request already on its way) and remember the answer.
-  Future<Map<String, Object?>?> refresh(String key) => _inflight[key] ??= _fromNetwork(key).then((info) async {
-        if (info != null) {
-          _mem[key] = {'info': info};
-          await set('drug:$key', info).catchError((Object _) {});
-        } else {
-          final at = _now();
-          _mem[key] = {'miss': true, 'at': at};
-          await set('drug-miss:$key', at.toUtc().toIso8601String()).catchError((Object _) {});
-        }
-        return info;
-      }).whenComplete(() => _inflight.remove(key));
+  Future<Map<String, Object?>?> refresh(String key) => _inflight[key] ??= _refresh(key);
+
+  Future<Map<String, Object?>?> _refresh(String key) async {
+    try {
+      final info = await _fromNetwork(key);
+      if (info != null) {
+        _mem[key] = {'info': info};
+        await _keep('drug:$key', info);
+      } else {
+        final at = _now();
+        _mem[key] = {'miss': true, 'at': at};
+        await _keep('drug-miss:$key', at.toUtc().toIso8601String());
+      }
+      return info;
+    } finally {
+      // never return the removed Future from here: awaiting itself would never complete
+      _inflight.remove(key);
+    }
+  }
+
+  Future<void> _keep(String key, Object? value) async {
+    try {
+      await set(key, value);
+    } catch (_) {
+      // the device copy is a convenience; the answer still stands
+    }
+  }
 
   Map<String, Object?>? peek(String key) => _mem[key]?['info'] as Map<String, Object?>?;
 }
