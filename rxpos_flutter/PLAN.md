@@ -38,7 +38,9 @@ Milestone 1 is the till and sync on Windows and Android. Each step ends with tes
       returning to the app; backoff after failures; "Download everything again".
 - [x] Tests against a fake cloud that behaves like worker/index.js: two devices selling offline, lost replies,
       refused changes, expired sign-in, deletes, grouping.
-- [ ] Against the real cloud: the React app and this app on the same pharmacy (with the repo's local cloud, step 5).
+- [x] Against the real cloud code (`test/cloud`, worker/index.js run locally with wrangler, fictional data): sign-in,
+      first download, a sale here reaching the cloud as the React app writes it, a React-style device's sale arriving
+      here (both count), resends applied once, deleting a stock movement refused and kept for review.
 
 ## 4. Feature UI: the till and stock
 - [x] Shell: side rail (Windows, tablets) / bottom bar (phones), sync status chip, user, Premium UI switch; F2 retail,
@@ -64,5 +66,9 @@ Milestone 1 is the till and sync on Windows and Android. Each step ends with tes
       5 s instead), Mobile Money requests to the customer's phone, Bluetooth receipt printers.
 
 ## 5. Packaging
-- [ ] Windows installer (MSIX or Inno Setup) and Android APK / app bundle, built by GitHub Actions; app updates.
-- [ ] Pilot on one device per platform next to the React app before replacing it.
+- [x] GitHub Actions (`.github/workflows/flutter-apps.yml`): analyze, all tests, the real-cloud tests, then the Android
+      APK (signed with the current app's key when the secrets are set) and the Windows installer (Inno Setup, per user,
+      no administrator) plus a portable zip, as downloadable artifacts.
+- [x] Installs next to the current apps ("RxPOS New", Android id io.github.rxpos.rxpos), not replacing them.
+- [ ] App updates for the new apps (store / installer channel to decide before replacing the current apps).
+- [ ] Pilot on one device per platform next to the React app (needs a pharmacy device: not possible from here).

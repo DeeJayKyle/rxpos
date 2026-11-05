@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "io.github.rxpos" "\0"
-            VALUE "FileDescription", "rxpos" "\0"
+            VALUE "CompanyName", "RxPOS" "\0"
+            VALUE "FileDescription", "RxPOS" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "rxpos" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 io.github.rxpos. All rights reserved." "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 RxPOS. All rights reserved." "\0"
             VALUE "OriginalFilename", "rxpos.exe" "\0"
-            VALUE "ProductName", "rxpos" "\0"
+            VALUE "ProductName", "RxPOS New" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

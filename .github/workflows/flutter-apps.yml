@@ -1,0 +1,142 @@
+# The Flutter RxPOS apps (rxpos_flutter/): tests, then the Windows installer and the Android APK.
+# Runs on every push that changes rxpos_flutter/ (any branch) and by hand. The live website, cloud and current
+# Electron / Capacitor apps are not touched: this only produces build artifacts to download and pilot.
+name: Flutter apps
+
+on:
+  push:
+    paths:
+      - 'rxpos_flutter/**'
+      - '.github/workflows/flutter-apps.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: flutter-apps-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FLUTTER_VERSION: '3.47.9'
+
+jobs:
+  test:
+    name: Analyze and test (with the real cloud code run locally)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Flutter packages
+        working-directory: rxpos_flutter
+        run: flutter pub get
+      - name: Generated code is up to date
+        working-directory: rxpos_flutter
+        run: |
+          dart run build_runner build
+          git diff --exit-code -- lib || (echo "::error::Run 'dart run build_runner build' and commit the generated files." && exit 1)
+      - name: Analyze
+        working-directory: rxpos_flutter
+        run: flutter analyze
+      - name: Tests
+        working-directory: rxpos_flutter
+        run: flutter test
+      - name: Start the cloud code locally (fictional data only)
+        run: |
+          npm ci
+          npm run build
+          sed 's/^\s*"ai":.*$//' wrangler.jsonc > wrangler.test.jsonc
+          node node_modules/wrangler/bin/wrangler.js dev -c wrangler.test.jsonc --port 8791 --persist-to "$RUNNER_TEMP/cloud" \
+            --var DB_BACKEND: --var SYNC_KEY:ci-sync-key-0123456789abcdef0123 --var OWNER_KEY:ci-owner-key-0123456789abcdef0123 \
+            --var PUBLIC_URL:http://127.0.0.1:8791 > "$RUNNER_TEMP/wrangler.log" 2>&1 &
+          for i in $(seq 1 60); do curl -sf http://127.0.0.1:8791/api/health && exit 0; sleep 2; done
+          cat "$RUNNER_TEMP/wrangler.log"; exit 1
+      - name: Tests against the real cloud code
+        working-directory: rxpos_flutter
+        env:
+          RXPOS_CLOUD: http://127.0.0.1:8791
+          RXPOS_OWNER_KEY: ci-owner-key-0123456789abcdef0123
+        run: flutter test test/cloud
+
+  android:
+    name: Android APK
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: Release signing (the same key as the current RxPOS Android app, when the secrets are set)
+        working-directory: rxpos_flutter/android
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KS_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          if [ -n "$KS_B64" ] && [ -n "$KS_PASS" ] && [ -n "$KS_ALIAS" ]; then
+            echo "$KS_B64" | base64 -d > app/release.jks
+            printf 'storeFile=release.jks\nstorePassword=%s\nkeyPassword=%s\nkeyAlias=%s\n' "$KS_PASS" "$KS_PASS" "$KS_ALIAS" > key.properties
+            echo "SIGNED=release" >> "$GITHUB_ENV"
+          else
+            echo "::warning::Android signing secrets are not set: this APK is signed with a debug key (pilot only)."
+            echo "SIGNED=debug" >> "$GITHUB_ENV"
+          fi
+      - name: Build
+        working-directory: rxpos_flutter
+        run: |
+          flutter pub get
+          flutter build apk --release --build-number=${{ github.run_number }}
+          mkdir -p ../out
+          cp build/app/outputs/flutter-apk/app-release.apk "../out/RxPOS-New-${{ github.run_number }}-${SIGNED}.apk"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rxpos-new-android
+          path: out/*.apk
+          if-no-files-found: error
+
+  windows:
+    name: Windows installer
+    needs: test
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: Build
+        working-directory: rxpos_flutter
+        run: |
+          flutter pub get
+          flutter build windows --release --build-number=${{ github.run_number }}
+      - name: Installer and portable zip
+        shell: pwsh
+        run: |
+          $release = "rxpos_flutter\build\windows\x64\runner\Release"
+          New-Item -ItemType Directory -Force out | Out-Null
+          Compress-Archive -Path "$release\*" -DestinationPath "out\RxPOS-New-${{ github.run_number }}-windows-portable.zip"
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup --no-progress -y; }
+          & $iscc /DAppVersion=1.0.${{ github.run_number }} "/DSourceDir=$((Resolve-Path $release).Path)" /Oout rxpos_flutter\windows\installer\rxpos.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rxpos-new-windows
+          path: out/*
+          if-no-files-found: error

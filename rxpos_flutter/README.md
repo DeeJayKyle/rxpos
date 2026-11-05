@@ -33,4 +33,15 @@ flutter run -d windows        # on a Windows PC
 flutter run -d <android-id>   # on an Android phone or tablet
 ```
 
+Tests against the real cloud code (run `worker/index.js` locally with wrangler, as `.github/workflows/flutter-apps.yml`
+does):
+
+```
+RXPOS_CLOUD=http://127.0.0.1:8791 RXPOS_OWNER_KEY=<the local owner key> flutter test test/cloud
+```
+
+Builds: every push that changes `rxpos_flutter/` runs `.github/workflows/flutter-apps.yml`, which tests and then builds
+the Windows installer and the Android APK as downloadable artifacts. They install as "RxPOS New", next to the current
+apps.
+
 The implementation plan, step by step, is in `PLAN.md`.

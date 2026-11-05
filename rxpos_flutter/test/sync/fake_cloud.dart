@@ -88,8 +88,13 @@ class FakeCloud implements HttpClientAdapter {
       final key = '$t|$id';
       final have = current[key];
       final appendOnly = const {'movements', 'audit', 'controlled'}.contains(t);
-      if (refuse.contains(key) || (appendOnly && have != null && !have.deleted)) {
+      // as worker/index.js: deleting an append-only row is refused; overwriting one is ignored (insert only)
+      if (refuse.contains(key) || (appendOnly && ch['deleted'] == true)) {
         refusedKeys.add(key);
+        continue;
+      }
+      if (appendOnly && have != null) {
+        if (op != null) applied.add(op);
         continue;
       }
       if (op != null) applied.add(op);
