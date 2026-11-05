@@ -16,11 +16,18 @@ class BatchStock {
   final bool legacy;
 }
 
-/// Split [qty] across [batches] (already in expiry order). Expired batches are skipped unless [allowExpired]. Stock
-/// not yet recorded is booked against the next sellable batch, never an expired or arbitrary one; with none it is
-/// booked without a batch (batchId null).
+/// Split [qty] across [batches] (already in expiry order). Expired batches are skipped unless [allowExpired].
+/// Refuse an allocation that exceeds the sellable stock, rather than assigning an unfilled remainder to a batch.
 List<Allocation> allocate(List<BatchStock> batches, double qty, {bool allowExpired = false, DateTime? now}) {
+  if (qty <= 0) return const [];
   bool ok(BatchStock b) => allowExpired || b.expiry.isEmpty || daysUntil(b.expiry, now: now) >= 0;
+  final available = batches.where((b) => b.qty > 0 && ok(b)).fold(0.0, (sum, b) => sum + b.qty);
+  NotEnoughStock notEnough() {
+    final shown = (available * 100).round() / 100;
+    return NotEnoughStock("Only ${shown == shown.roundToDouble() ? shown.toInt() : shown} sellable in stock: you can't allocate ${qty == qty.roundToDouble() ? qty.toInt() : qty}.");
+  }
+  // Do not allow a sub-nanounit excess through: it would otherwise return a partial allocation.
+  if (qty > available) throw notEnough();
   final out = <Allocation>[];
   var left = qty;
   for (final b in batches) {
@@ -30,10 +37,8 @@ List<Allocation> allocate(List<BatchStock> batches, double qty, {bool allowExpir
     out.add(Allocation(batchId: b.id, qty: take, batch: b.batch, expiry: b.expiry));
     left -= take;
   }
-  if (left > 0) {
-    final b = batches.where(ok).firstOrNull;
-    out.add(Allocation(batchId: b?.id, qty: left, batch: b?.batch ?? '', expiry: b?.expiry ?? ''));
-  }
+  // Keep this guard even though the pre-check should make it unreachable: never return a partial allocation.
+  if (left > 0) throw notEnough();
   return out;
 }
 
