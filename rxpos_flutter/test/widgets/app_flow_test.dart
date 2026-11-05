@@ -56,7 +56,11 @@ void main() {
   /// Open a screen from the sidebar, scrolling it until the item is there (a long list builds items as they come into view).
   Future<void> navTo(WidgetTester tester, String label) async {
     final item = find.descendant(of: find.byKey(const Key('sidebar')), matching: find.text(label));
-    await tester.scrollUntilVisible(item, 120, scrollable: find.descendant(of: find.byKey(const Key('sidebar')), matching: find.byType(Scrollable)));
+    final list = find.descendant(of: find.byKey(const Key('sidebar')), matching: find.byType(Scrollable));
+    // the sidebar keeps its scroll position between screens: start from the top, then scroll down to the item
+    await tester.drag(list, const Offset(0, 4000));
+    await settle(tester, 2);
+    await tester.scrollUntilVisible(item, 120, scrollable: list);
     await settle(tester, 2);
     await tester.tap(item);
     await settle(tester);
@@ -343,6 +347,47 @@ void main() {
     expect(find.textContaining('User added'), findsOneWidget);
     await navTo(tester, 'This device');
     expect(find.text('Branch this device works as'), findsOneWidget);
+    await done(tester);
+  });
+
+  testWidgets('group 5: storage reading, team chat, import, calendar and the other extras', (tester) async {
+    await tester.runAsync(signedIn);
+    await start(tester);
+    await navTo(tester, 'Storage temperature');
+    await tester.tap(find.text('Log a reading'));
+    await settle(tester);
+    await tester.enterText(find.widgetWithText(TextFormField, 'Temperature (°C)'), '11');
+    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await settle(tester);
+    expect(find.text('Fridge · 11°C'), findsOneWidget);
+    final audit = (await tester.runAsync(() => RecordStore(db).rows('audit')))!;
+    expect(audit.any((a) => a['action'] == 'Storage temperature out of range'), isTrue);
+
+    await navTo(tester, 'Team chat');
+    await tester.enterText(find.byType(TextField).last, 'Delivery at 3pm');
+    await tester.tap(find.byIcon(Icons.send));
+    await settle(tester);
+    expect(find.text('Delivery at 3pm'), findsOneWidget);
+
+    await navTo(tester, 'Import medicines');
+    await tester.enterText(find.byType(TextField).last, 'name,generic\nNew Syrup 100ml,Newgen,Syrups,4000,2500,,Bottle');
+    await tester.tap(find.widgetWithText(FilledButton, 'Import'));
+    await settle(tester);
+    final products = (await tester.runAsync(() => RecordStore(db).rows('products')))!;
+    expect(products.any((p) => p['name'] == 'New Syrup 100ml' && p['price'] == 4000), isTrue);
+
+    await navTo(tester, 'Calendar');
+    await tester.tap(find.text('Add event'));
+    await settle(tester);
+    await tester.enterText(find.widgetWithText(TextFormField, 'What'), 'NDA inspection');
+    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await settle(tester);
+    expect(find.text('NDA inspection'), findsOneWidget);
+
+    for (final screen in ['Reminders', 'Controlled drugs', 'Barcode labels', 'Drug information', 'Drug quiz']) {
+      await navTo(tester, screen);
+      expect(find.text(screen == 'Controlled drugs' ? 'Controlled drugs register' : screen), findsWidgets);
+    }
     await done(tester);
   });
 }

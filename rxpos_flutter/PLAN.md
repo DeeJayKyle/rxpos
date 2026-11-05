@@ -72,3 +72,17 @@ Milestone 1 is the till and sync on Windows and Android. Each step ends with tes
 - [x] Installs next to the current apps ("RxPOS New", Android id io.github.rxpos.rxpos), not replacing them.
 - [ ] App updates for the new apps (store / installer channel to decide before replacing the current apps).
 - [ ] Pilot on one device per platform next to the React app (needs a pharmacy device: not possible from here).
+
+## 6. The whole app (after milestone 1)
+- [x] Group 1: Dashboard, Sales History (refunds, receipts), Inventory (count / adjust, add and edit medicines),
+      Customers, Suppliers (balances, payments); grouped sidebar like the React app, a drawer on phones.
+- [x] Group 2: Shifts & cash-up, Stock take, Purchase history, Reorder (levels from sales), Expiry, Returns to suppliers.
+- [x] Group 3: Finance (ledger and balances, expenses, banking, loans), Reports (profit, by medicine / day / payment /
+      cashier, PDF), Prescriptions & refills, Proformas (sold from the till); built-in defaults with the React ids.
+- [x] Group 4: Users & roles (passwords as the cloud expects), Branches & transfers, Settings, This device (branch),
+      Audit log.
+- [x] Group 5: Storage temperature, Reminders (WhatsApp), Calendar, Team chat, Controlled drugs register, Barcode labels,
+      Import medicines, Drug information, Drug quiz (cloud AI).
+- [ ] Not yet: voice and video calls, invoice scanning (AI), delivery drafts, the owner console (stays on the web),
+      Mobile Money requests to the customer's phone, the live connection (sync runs every 5 s instead), Classic /
+      Advanced till layouts and the command bar.

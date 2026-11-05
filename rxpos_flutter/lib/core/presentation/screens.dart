@@ -6,6 +6,7 @@ import '../../features/branches/presentation/branches_screen.dart';
 import '../../features/dashboard/presentation/dashboard_screen.dart';
 import '../../features/settings/presentation/settings_screens.dart';
 import '../../features/users/presentation/users_screen.dart';
+import '../../features/extras/presentation/extras_screens.dart';
 import '../../features/finance/presentation/finance_screen.dart';
 import '../../features/inventory/presentation/inventory_screen.dart';
 import '../../features/prescriptions/presentation/prescriptions_screen.dart';
@@ -31,6 +32,9 @@ final screens = <Screen>[
   Screen('/shifts', 'Shifts & Cash-up', Icons.schedule_outlined, 'Sales', (_) => const ShiftsScreen(), permission: 'shifts', feature: 'shifts'),
   Screen('/proformas', 'Proformas', Icons.description_outlined, 'Sales', (_) => const ProformasScreen(), permission: 'proformas', feature: 'proformas'),
   Screen('/prescriptions', 'Prescriptions & Refills', Icons.medication_outlined, 'Sales', (_) => const PrescriptionsScreen(), permission: 'prescriptions', feature: 'prescriptions'),
+  Screen('/controlled', 'Controlled drugs', Icons.gpp_good_outlined, 'Sales', (_) => const ControlledScreen(), permission: 'sales.view'),
+  Screen('/reminders', 'Reminders', Icons.notifications_active_outlined, 'People', (_) => const RemindersScreen(), permission: 'reminders', feature: 'reminders'),
+  Screen('/chat', 'Team chat', Icons.forum_outlined, 'People', (_) => const ChatScreen(), permission: 'chat', feature: 'chat'),
   Screen('/customers', 'Customers', Icons.people_outline, 'People', (_) => const PeopleScreen(suppliers: false), permission: 'customers'),
   Screen('/suppliers', 'Suppliers', Icons.factory_outlined, 'People', (_) => const PeopleScreen(suppliers: true), permission: 'suppliers'),
   Screen('/inventory', 'Inventory', Icons.inventory_2_outlined, 'Medicine inventory', (q) => InventoryScreen(key: ValueKey(q['filter']), filter: q['filter'] ?? 'instock'),
@@ -41,6 +45,12 @@ final screens = <Screen>[
   Screen('/reorder', 'Reorder', Icons.shopping_cart_checkout, 'Medicine inventory', (_) => const ReorderScreen(), permission: 'inventory.view', feature: 'reorder'),
   Screen('/expiry', 'Expiry', Icons.event_busy_outlined, 'Medicine inventory', (_) => const ExpiryScreen(), permission: 'inventory.view'),
   Screen('/returns', 'Returns to suppliers', Icons.assignment_return_outlined, 'Medicine inventory', (_) => const ReturnsScreen(), permission: 'stock.receive'),
+  Screen('/labels', 'Barcode labels', Icons.qr_code_2, 'Medicine inventory', (_) => const LabelsScreen(), permission: 'medicines.manage', feature: 'labels'),
+  Screen('/import', 'Import medicines', Icons.upload_file_outlined, 'Medicine inventory', (_) => const ImportScreen(), permission: 'medicines.manage', feature: 'import'),
+  Screen('/storage', 'Storage temperature', Icons.thermostat_outlined, 'Medicine inventory', (_) => const StorageScreen(), permission: 'inventory.view', feature: 'weather'),
+  Screen('/drug-info', 'Drug information', Icons.menu_book_outlined, 'Insights', (_) => const DrugInfoScreen(), feature: 'drugInfo'),
+  Screen('/quiz', 'Drug quiz', Icons.quiz_outlined, 'Insights', (_) => const QuizScreen(), feature: 'ai'),
+  Screen('/calendar', 'Calendar', Icons.calendar_month_outlined, 'Insights', (_) => const CalendarScreen(), feature: 'calendar'),
   Screen('/finance', 'Finance', Icons.account_balance_outlined, 'Finance', (_) => const FinanceScreen(), permission: 'finance', feature: 'finance'),
   Screen('/reports', 'Reports', Icons.insights_outlined, 'Insights', (_) => const ReportsScreen(), permission: 'reports', feature: 'reports'),
   Screen('/users', 'Users & Roles', Icons.manage_accounts_outlined, 'People', (_) => const UsersScreen(), permission: 'users.manage'),
