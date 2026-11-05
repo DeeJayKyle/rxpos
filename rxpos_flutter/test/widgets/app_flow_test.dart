@@ -38,6 +38,14 @@ void main() {
   });
   tearDown(() => db.close());
 
+  /// Close any snack bar (they cover the bottom of the screen).
+  void noSnackBars(WidgetTester tester) {
+    for (final s in tester.stateList<ScaffoldMessengerState>(find.byType(ScaffoldMessenger))) {
+      s.removeCurrentSnackBar();
+      s.clearSnackBars();
+    }
+  }
+
   /// Let the database (real time) and the screen (test time) both move on.
   Future<void> settle(WidgetTester tester, [int rounds = 12]) async {
     for (var i = 0; i < rounds; i++) {
@@ -417,11 +425,40 @@ void main() {
     final audit = (await tester.runAsync(() => RecordStore(db).rows('audit')))!;
     expect(audit.any((a) => a['action'] == 'Storage temperature out of range'), isTrue);
 
-    await navTo(tester, 'Team chat');
-    await tester.enterText(find.byType(TextField).last, 'Delivery at 3pm');
+    await navTo(tester, 'Chat & Messages');
+    noSnackBars(tester);
+    await tester.enterText(find.byKey(const ValueKey('chat-input')), 'Delivery at 3pm');
+    await tester.pump();
     await tester.tap(find.byIcon(Icons.send));
     await settle(tester);
     expect(find.text('Delivery at 3pm'), findsOneWidget);
+    expect(find.byTooltip('Message options'), findsOneWidget);
+    // the message menu: pin, react, edit, delete for everyone (src/pages/Chat.jsx)
+    Future<void> menu(String item) async {
+      await tester.tap(find.byTooltip('Message options').last);
+      await settle(tester);
+      await tester.tap(find.text(item).last);
+      await settle(tester);
+      noSnackBars(tester);
+      await settle(tester, 4);
+    }
+
+    await menu('Pin');
+    expect(find.textContaining('Pinned ·'), findsOneWidget);
+    await menu('👍');
+    final chatMarks = (await tester.runAsync(() => RecordStore(db).rows('chatMarks')))!;
+    expect(chatMarks.single['emoji'], '👍');
+    await menu('Edit');
+    await tester.enterText(find.byKey(const ValueKey('chat-input')), 'Delivery at 4pm');
+    await tester.pump();
+    await tester.tap(find.byTooltip('Save'));
+    await settle(tester);
+    expect(find.text('Delivery at 4pm'), findsOneWidget);
+    expect(find.textContaining('edited ·'), findsOneWidget);
+    await menu('Delete');
+    await tester.tap(find.text('Delete for everyone'));
+    await settle(tester);
+    expect(find.text('You deleted this message'), findsOneWidget);
 
     await navTo(tester, 'Import medicines');
     await tester.enterText(find.byType(TextField).last, 'name,generic\nNew Syrup 100ml,Newgen,Syrups,4000,2500,,Bottle');

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../features/branches/presentation/branches_screen.dart';
+import '../../features/chat/presentation/chat_screen.dart';
 import '../../features/dashboard/presentation/dashboard_screen.dart';
 import '../../features/settings/presentation/settings_screens.dart';
 import '../../features/users/presentation/users_screen.dart';
@@ -40,7 +41,7 @@ final screens = <Screen>[
   Screen('/controlled', 'Controlled drugs', Icons.gpp_good_outlined, 'Sales', (_) => const ControlledScreen(), permission: 'sales.view'),
   Screen('/reminders', 'Reminders', Icons.notifications_active_outlined, 'People', (_) => const RemindersScreen(), permission: 'reminders', feature: 'reminders'),
   Screen('/messages', 'Messages & SMS', Icons.campaign_outlined, 'People', (_) => const MessagesScreen(), permission: 'reminders', feature: 'reminders'),
-  Screen('/chat', 'Team chat', Icons.forum_outlined, 'People', (_) => const ChatScreen(), permission: 'chat', feature: 'chat'),
+  Screen('/chat', 'Chat & Messages', Icons.forum_outlined, 'People', (_) => const ChatScreen(), permission: 'chat', feature: 'chat'),
   Screen('/customers', 'Customers', Icons.people_outline, 'People', (_) => const PeopleScreen(suppliers: false), permission: 'customers'),
   Screen('/suppliers', 'Suppliers', Icons.factory_outlined, 'People', (_) => const PeopleScreen(suppliers: true), permission: 'suppliers'),
   Screen('/medicines', 'Medicine List', Icons.medication_liquid_outlined, 'Medicine inventory', (_) => const MedicineListScreen(), permission: 'inventory.view'),

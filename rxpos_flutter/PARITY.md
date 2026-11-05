@@ -65,8 +65,10 @@ Every feature of the React app (`src/pages/*.jsx`, `src/*.jsx`), screen by scree
 - ✅ Users: add / edit (WhatsApp, home branch), password, disable (the React app's flag), delete, reset two-step; roles: permissions by group (All / None), copy, delete a custom role, reset a built-in one
 - ✅ Messages & SMS: templates (new / edit / delete), audiences (all / chronic / debtors / chosen), WhatsApp one by one or SMS, today's health tip (the same tip as the React app), messages logged
 - ✅ Reminders: refills from prescriptions and chronic medicines, debtors, WhatsApp or SMS (one or selected), last reminded
-- ✗ Chat: client conversations, attachments (photo, PDF, video, audio, spreadsheet), voice notes, reply, forward,
-  edit, delete, star, pin, search, message info, read marks, WhatsApp from chat
+- ✅ Chat & Messages: General, private chats and client conversations (WhatsApp, SMS, record their reply); attachments
+  (photo, PDF, video, audio, spreadsheet, up to 15 MB) and voice notes (up to 3 min); reply, forward, edit (24 h), delete for
+  everyone (48 h) or for me, react, star, pin, search, message info, read ticks, unread counts, new messages every 8 s
+- ✗ Voice calls from chat (part of the live connection, see App frame)
 
 ## Inventory (Inventory.jsx)
 - ✅ List with filters (in stock / low / out / all, expiring, expired), value at cost and retail, batches ("Sells next"), count / add / remove, add / edit medicine

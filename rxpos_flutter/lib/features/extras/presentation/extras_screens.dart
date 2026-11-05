@@ -112,57 +112,6 @@ class CalendarScreen extends ConsumerWidget {
   }
 }
 
-/// Team chat: the pharmacy's team conversation (it travels with sync).
-class ChatScreen extends ConsumerStatefulWidget {
-  const ChatScreen({super.key});
-  @override
-  ConsumerState<ChatScreen> createState() => _ChatScreenState();
-}
-
-class _ChatScreenState extends ConsumerState<ChatScreen> {
-  final _text = TextEditingController();
-  @override
-  Widget build(BuildContext context) {
-    final rows = ref.watch(tableProvider('messages')).value;
-    final me = ref.watch(sessionControllerProvider).value;
-    if (rows == null || me == null) return const Center(child: CircularProgressIndicator());
-    final list = rows.where((m) => m['conv'] == 'team' && m['deleted'] != true).toList()..sort((a, b) => '${a['date']}'.compareTo('${b['date']}'));
-    Future<void> send() async {
-      final t = _text.text.trim();
-      if (t.isEmpty) return;
-      _text.clear();
-      final branch = (await ref.read(pharmacyProvider.future)).branch;
-      await ref.read(recordStoreProvider).update((x) => x.put('messages', {'id': uid(), 'date': x.now, 'fromId': me.userId, 'fromName': me.userName, 'conv': 'team',
-        'branchId': branch, 'channel': 'team', 'text': t}));
-    }
-
-    return PageFrame(
-      title: 'Team chat',
-      child: Column(children: [
-        Expanded(
-          child: ListView(reverse: true, children: [
-            for (final m in list.reversed.take(300))
-              Align(
-                alignment: m['fromId'] == me.userId ? Alignment.centerRight : Alignment.centerLeft,
-                child: Card(
-                  color: m['fromId'] == me.userId ? Theme.of(context).colorScheme.primaryContainer : null,
-                  child: Padding(padding: const EdgeInsets.all(10), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text('${m['fromName']} · ${'${m['date']}'.replaceFirst('T', ' ').substring(0, 16)}', style: Theme.of(context).textTheme.labelSmall),
-                    Text('${m['text'] ?? (m['call'] != null ? 'Call' : '')}'),
-                  ])),
-                ),
-              ),
-          ]),
-        ),
-        Row(children: [
-          Expanded(child: TextField(controller: _text, decoration: const InputDecoration(hintText: 'Message the team…'), onSubmitted: (_) => send())),
-          IconButton(onPressed: send, icon: const Icon(Icons.send)),
-        ]),
-      ]),
-    );
-  }
-}
-
 /// Controlled Drugs & Recalls (src/pages/Controlled.jsx): every dose of a controlled medicine in and out at this branch
 /// with the running balance and, for each sale, the patient, prescriber and prescription; and a batch recall lookup:
 /// where a batch is, and every sale from it (to call the patients back).
