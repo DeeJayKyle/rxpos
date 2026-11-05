@@ -11,6 +11,7 @@ import 'package:rxpos/core/data/pharmacy_providers.dart';
 import 'package:rxpos/core/data/record_store.dart';
 import 'package:rxpos/core/database/app_database.dart';
 import 'package:rxpos/core/network/dio_client.dart';
+import 'package:rxpos/core/rules/passwords.dart';
 import 'package:rxpos/features/sync_status/application/sync_controller.dart';
 
 import '../sync/fake_cloud.dart';
@@ -311,6 +312,37 @@ void main() {
     await tester.tap(find.text('Accounts'));
     await settle(tester);
     expect(find.text('UGX 300'), findsOneWidget, reason: 'cash at hand: 500 sale − 200 expense');
+    await done(tester);
+  });
+
+  testWidgets('group 4: add a user, add a branch, the audit log, this device', (tester) async {
+    await tester.runAsync(signedIn);
+    await start(tester);
+    await navTo(tester, 'Users & Roles');
+    await tester.tap(find.text('Add user'));
+    await settle(tester);
+    await tester.enterText(find.widgetWithText(TextFormField, 'Name'), 'Ben Cashier');
+    await tester.enterText(find.widgetWithText(TextFormField, 'Email'), 'ben@test.rx');
+    await tester.enterText(find.widgetWithText(TextFormField, 'Password (8+ characters)'), 'ben-pass-123');
+    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await settle(tester, 30);
+    expect(find.text('Ben Cashier'), findsOneWidget);
+    final users = (await tester.runAsync(() => RecordStore(db).rows('users')))!;
+    expect(verifyPassword(users.single, 'ben-pass-123'), isTrue);
+
+    await navTo(tester, 'Branches & Transfers');
+    await tester.tap(find.text('Add branch'));
+    await settle(tester);
+    await tester.enterText(find.widgetWithText(TextFormField, 'Name'), 'Kampala Road');
+    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await settle(tester);
+    expect(find.text('Kampala Road'), findsOneWidget);
+    expect(find.text('Send stock'), findsOneWidget);
+
+    await navTo(tester, 'Audit log');
+    expect(find.textContaining('User added'), findsOneWidget);
+    await navTo(tester, 'This device');
+    expect(find.text('Branch this device works as'), findsOneWidget);
     await done(tester);
   });
 }

@@ -2,7 +2,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../features/branches/presentation/branches_screen.dart';
 import '../../features/dashboard/presentation/dashboard_screen.dart';
+import '../../features/settings/presentation/settings_screens.dart';
+import '../../features/users/presentation/users_screen.dart';
 import '../../features/finance/presentation/finance_screen.dart';
 import '../../features/inventory/presentation/inventory_screen.dart';
 import '../../features/prescriptions/presentation/prescriptions_screen.dart';
@@ -40,5 +43,10 @@ final screens = <Screen>[
   Screen('/returns', 'Returns to suppliers', Icons.assignment_return_outlined, 'Medicine inventory', (_) => const ReturnsScreen(), permission: 'stock.receive'),
   Screen('/finance', 'Finance', Icons.account_balance_outlined, 'Finance', (_) => const FinanceScreen(), permission: 'finance', feature: 'finance'),
   Screen('/reports', 'Reports', Icons.insights_outlined, 'Insights', (_) => const ReportsScreen(), permission: 'reports', feature: 'reports'),
+  Screen('/users', 'Users & Roles', Icons.manage_accounts_outlined, 'People', (_) => const UsersScreen(), permission: 'users.manage'),
+  Screen('/branches', 'Branches & Transfers', Icons.store_mall_directory_outlined, 'Medicine inventory', (_) => const BranchesScreen(), permission: 'transfers', feature: 'branches'),
+  Screen('/settings', 'Settings', Icons.settings_outlined, 'System', (_) => const SettingsScreen(), permission: 'settings.manage'),
+  Screen('/device', 'This device', Icons.devices_outlined, 'System', (_) => const DeviceScreen()),
+  Screen('/audit', 'Audit log', Icons.policy_outlined, 'System', (_) => const AuditScreen(), permission: 'audit'),
   Screen('/sync', 'Sync & storage', Icons.cloud_sync_outlined, 'System', (_) => const SyncScreen()),
 ];

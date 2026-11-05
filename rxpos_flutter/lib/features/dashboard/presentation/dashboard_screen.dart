@@ -24,7 +24,7 @@ class DashboardScreen extends ConsumerWidget {
     final can = ref.watch(permissionsProvider).value ?? const <String>{};
     if (data == null || sales == null || expenses == null) return const Center(child: CircularProgressIndicator());
     final s = data.settings;
-    final f = Figures.of(sales.map(Sale.fromRecord), expenses);
+    final f = Figures.of(sales.map(Sale.fromRecord), expenses, branch: data.branch);
     final now = DateTime.now();
     final t = f.day(today()), y = f.day(localDate(now.subtract(const Duration(days: 1)))), m = f.month(monthOf(today()));
     String delta(double a, double b) {

@@ -9,6 +9,7 @@ import '../entities/settings.dart';
 import '../rules/permissions.dart';
 import '../rules/stock.dart';
 import 'catalog.dart';
+import 'device_settings.dart';
 import 'record_store.dart';
 
 part 'pharmacy_providers.g.dart';
@@ -27,7 +28,7 @@ Future<List<Product>> catalog(Ref ref) => loadCatalog();
 /// The pharmacy as the till and Add Stock see it.
 class PharmacyData {
   PharmacyData({required this.settings, required this.products, required this.stock, required this.customers,
-      required this.suppliers, required this.drafts, required this.features});
+      required this.suppliers, required this.drafts, required this.features, this.branch = mainBranch});
 
   final PharmacySettings settings;
   final List<Product> products;
@@ -36,6 +37,8 @@ class PharmacyData {
   final List<Supplier> suppliers;
   final List<Draft> drafts;
   final Map<String, bool> features;
+  /// the branch this device works as
+  final String branch;
 
   late final Map<String, Product> byId = {for (final p in products) p.id: p};
   late final Map<String, Product> byBarcode = {for (final p in products) if (p.barcode.isNotEmpty) p.barcode: p};
@@ -49,6 +52,7 @@ class PharmacyData {
 @riverpod
 Future<PharmacyData> pharmacy(Ref ref) async {
   final settings = await ref.watch(settingsProvider.future);
+  final branch = await ref.watch(deviceBranchProvider.future);
   final own = (await ref.watch(tableProvider('products').future)).map(Product.fromRecord).toList();
   final license = await ref.watch(tableProvider('license').future);
   final features = featureSet((license.firstOrNull?['features'] as Map?)?.cast<String, Object?>());
@@ -62,10 +66,11 @@ Future<PharmacyData> pharmacy(Ref ref) async {
   return PharmacyData(
     settings: settings,
     products: products,
-    stock: StockView(products: products, batches: batches, index: StockIndex.of(movements)),
+    stock: StockView(products: products, batches: batches, index: StockIndex.of(movements), branch: branch),
+    branch: branch,
     customers: customers,
     suppliers: (await ref.watch(tableProvider('suppliers').future)).map(Supplier.fromRecord).toList()..sort((a, b) => a.name.compareTo(b.name)),
-    drafts: (await ref.watch(tableProvider('drafts').future)).map(Draft.fromRecord).toList()..sort((a, b) => b.order.compareTo(a.order)),
+    drafts: (await ref.watch(tableProvider('drafts').future)).map(Draft.fromRecord).where((x) => (x.branchId.isEmpty ? mainBranch : x.branchId) == branch).toList()..sort((a, b) => b.order.compareTo(a.order)),
     features: features,
   );
 }

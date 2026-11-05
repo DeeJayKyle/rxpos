@@ -153,7 +153,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
     try {
       final user = (await ref.read(sessionControllerProvider.future))?.userName ?? '';
       final diff = await adjustStock(ref.read(recordStoreProvider), product: p, batches: batches, mode: mode, batchId: v['batchId'] as String,
-          counted: qty, qty: qty, reason: '${v['reason']}', user: user, newBatch: '${v['newBatch'] ?? ''}', newExpiry: '${v['newExpiry'] ?? ''}');
+          counted: qty, qty: qty, reason: '${v['reason']}', user: user, branchId: (await ref.read(pharmacyProvider.future)).branch, newBatch: '${v['newBatch'] ?? ''}', newExpiry: '${v['newExpiry'] ?? ''}');
       if (mounted) say(context, diff == 0 ? 'No change' : 'Stock updated (${diff > 0 ? '+' : ''}${formatQty(diff)})');
     } on AdjustProblem catch (e) {
       if (mounted) say(context, e.message, error: true);

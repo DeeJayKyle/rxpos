@@ -33,7 +33,8 @@ class ShiftsScreen extends ConsumerWidget {
           FilledButton.icon(onPressed: () async {
             final v = await editRecord(context, title: 'Open a shift', save: 'Open shift', fields: const [FormFieldSpec('float', 'Float in the drawer', kind: FieldKind.number, required: true)]);
             if (v == null) return;
-            await openShift(ref.read(recordStoreProvider), userId: session.userId, user: session.userName, float: (v['float'] as num).toDouble());
+            await openShift(ref.read(recordStoreProvider), userId: session.userId, user: session.userName, float: (v['float'] as num).toDouble(),
+                branchId: (await ref.read(pharmacyProvider.future)).branch);
           }, icon: const Icon(Icons.play_arrow), label: const Text('Open shift'))
         else
           FilledButton.icon(onPressed: () => _close(context, ref, open, sales, st), icon: const Icon(Icons.lock_outline), label: const Text('Close shift')),

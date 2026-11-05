@@ -50,7 +50,7 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
     try {
       final rec = await receiveDelivery(ref.read(recordStoreProvider), lines: _lines, products: d.byId, settings: d.settings,
           receivedBy: session?.userName ?? '', supplierId: supplier?.id ?? '', supplierName: supplier?.name ?? '',
-          invoice: _invoice.text, notes: _notes.text, date: _date, paid: _paid.text.trim().isEmpty ? null : double.tryParse(_paid.text.replaceAll(',', '')));
+          invoice: _invoice.text, notes: _notes.text, date: _date, branchId: d.branch, paid: _paid.text.trim().isEmpty ? null : double.tryParse(_paid.text.replaceAll(',', '')));
       if (!mounted) return;
       _say('Received ${_lines.length} item${_lines.length == 1 ? '' : 's'} (${rec['number']})');
       setState(() {

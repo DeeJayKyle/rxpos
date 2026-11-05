@@ -89,9 +89,10 @@ class SaleController extends _$SaleController {
   Future<void> hold() async {
     if (state.lines.isEmpty) return;
     final session = await ref.read(sessionControllerProvider.future);
-    final t = totalsOf(state.lines, discount: state.discount, settings: (await _data).settings);
+    final data = await _data;
+    final t = totalsOf(state.lines, discount: state.discount, settings: data.settings);
     await ref.read(recordStoreProvider).update((d) => d.put('drafts', {
-          'id': uid(), 'kind': 'sale', 'branchId': 'main', 'mode': wholesale ? 'wholesale' : 'retail', 'userId': session?.userId ?? '',
+          'id': uid(), 'kind': 'sale', 'branchId': data.branch, 'mode': wholesale ? 'wholesale' : 'retail', 'userId': session?.userId ?? '',
           'userName': session?.userName ?? '', 'order': DateTime.now().millisecondsSinceEpoch, 'startedAt': d.now,
           'title': state.customerId == walkIn ? 'Walk-in · ${state.lines.length} item${state.lines.length == 1 ? '' : 's'}' : state.customerName,
           'count': state.lines.length, 'total': t.total, 'data': state.toSnapshot(),
@@ -126,7 +127,7 @@ class SaleController extends _$SaleController {
         cart: state.lines,
         c: Checkout(method: method, tendered: state.tendered, customerId: state.customerId, customerName: state.customerName,
             discount: state.discount, controlled: controlled, momoRef: momoRef, rxChecked: rxChecked),
-        settings: d.settings, stock: d.stock, wholesale: wholesale, cashier: session?.userName ?? '',
+        settings: d.settings, stock: d.stock, wholesale: wholesale, cashier: session?.userName ?? '', branchId: d.branch,
         also: state.proforma == null ? null : (x, sale) => x.put('proformas', {...state.proforma!, 'status': 'Converted', 'saleNumber': sale['number']}));
     state = SaleState(method: state.method);
     return sale;
