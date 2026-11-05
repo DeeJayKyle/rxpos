@@ -10,6 +10,9 @@ import '../../features/alerts/presentation/notification_bell.dart';
 import '../data/pharmacy_providers.dart';
 import '../theme/theme_choice.dart';
 import '../crash/crash_reports.dart';
+import '../../features/engage/application/popups.dart';
+import '../../features/engage/presentation/spotlight.dart';
+import '../../features/engage/presentation/watchers.dart';
 import 'nav.dart';
 import 'screens.dart';
 import 'theme_menu.dart';
@@ -71,17 +74,25 @@ class AppShell extends ConsumerWidget {
         if (session != null) AccountMenu(session: session, showName: wide),
       ],
     );
-    final body = Stack(children: [Column(children: [const OfflineBanner(), Expanded(child: child)]), const FirstDownload()]);
+    final body = Stack(children: [
+      Column(children: [const OfflineBanner(), Expanded(child: child)]),
+      const FirstDownload(),
+      PopupHost(location: location),
+      EngageWatchers(location: location),
+    ]);
     return CallbackShortcuts(
       bindings: {
         for (final s in visible) if (s.key != null) SingleActivator(s.key!): () => context.go(s.path),
         const SingleActivator(LogicalKeyboardKey.keyK, control: true): () => openSearch(context, visible),
         const SingleActivator(LogicalKeyboardKey.keyK, meta: true): () => openSearch(context, visible),
       },
-      child: Scaffold(
-        appBar: bar,
-        drawer: wide ? null : Drawer(child: SafeArea(child: nav)),
-        body: wide ? Row(children: [SizedBox(width: 240, child: Material(color: Theme.of(context).colorScheme.surfaceContainerLow, child: nav)), const VerticalDivider(width: 1), Expanded(child: body)]) : body,
+      // the idle screen covers the whole window
+      child: Spotlight(
+        child: Scaffold(
+          appBar: bar,
+          drawer: wide ? null : Drawer(child: SafeArea(child: nav)),
+          body: wide ? Row(children: [SizedBox(width: 240, child: Material(color: Theme.of(context).colorScheme.surfaceContainerLow, child: nav)), const VerticalDivider(width: 1), Expanded(child: body)]) : body,
+        ),
       ),
     );
   }

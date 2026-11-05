@@ -15,6 +15,10 @@ import 'package:rxpos/core/network/dio_client.dart';
 import 'package:rxpos/core/rules/passwords.dart';
 import 'package:rxpos/core/crash/crash_screen.dart';
 import 'package:rxpos/core/rules/dates.dart';
+import 'package:rxpos/core/sound/sounds.dart';
+import 'package:rxpos/core/sync/sync_config.dart';
+import 'package:rxpos/features/engage/presentation/watchers.dart';
+import 'package:rxpos/features/reports/domain/weekly.dart';
 import 'package:rxpos/core/presentation/widgets.dart';
 import 'package:rxpos/core/theme/themes.dart';
 import 'package:rxpos/features/auth/domain/offline_secrets.dart';
@@ -35,6 +39,7 @@ void main() {
   late FakeCloud cloud;
   WidgetTester? tester0;
   final weatherCalls = <String>[];
+  final played = <String>[]; // the sounds the app asked for (none really play in tests)
   // fictional weather: hot and humid, so both storage warnings show
   final sampleWeather = <String, Object?>{
     'current': {'time': '2026-11-05T12:15', 'temperature_2m': 31.4, 'relative_humidity_2m': 70, 'apparent_temperature': 34, 'weather_code': 2, 'wind_speed_10m': 9.6},
@@ -43,6 +48,7 @@ void main() {
 
   setUp(() {
     weatherCalls.clear();
+    played.clear();
     db = AppDatabase(NativeDatabase.memory());
     cloud = FakeCloud()
       ..login = (b) => b['password'] == 'tia-pass'
@@ -76,7 +82,7 @@ void main() {
     }
   }
 
-  Future<void> start(WidgetTester tester, {Size size = const Size(1440, 900), List<Override> extra = const []}) async {
+  Future<void> start(WidgetTester tester, {Size size = const Size(1440, 900), List<Override> extra = const [], bool engage = false}) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -103,6 +109,8 @@ void main() {
             return (200, sampleWeather);
           }),
           connectionPlaceProvider.overrideWithValue(() async => {'lat': 0.31, 'lon': 32.58, 'city': 'Kampala', 'country': 'UG'}),
+          engageOnProvider.overrideWithValue(engage), // pop-ups and the idle screen: only in the tests about them
+          soundsProvider.overrideWith((ref) => _QuietSounds(ref, played)),
           ...extra,
         ],
         child: const RxposApp(),
@@ -1742,10 +1750,174 @@ void main() {
     expect(find.descendant(of: find.byKey(const Key('first-download')), matching: find.text('Downloading products · 120 of 900')), findsOneWidget);
     await done(tester);
   });
+
+  Future<void> engageStart(WidgetTester tester, {DateTime? at}) => start(tester, engage: true, extra: [
+        if (at != null) engageClockProvider.overrideWithValue(() => at),
+      ]);
+
+  testWidgets('alerts pop up with a sound once a day; new messages pop up; the outside weather is logged every 6 hours', (tester) async {
+    final day = today();
+    sampleWeather['hourly'] = {
+      'time': ['${day}T00:00', '${day}T06:00', '${day}T09:00'],
+      'temperature_2m': [17.24, 19.96, 24],
+      'relative_humidity_2m': [88.4, 80, 60],
+    };
+    (sampleWeather['current']! as Map)['time'] = '${day}T09:30';
+    addTearDown(() => sampleWeather.remove('hourly'));
+    await tester.runAsync(signedIn);
+    await tester.runAsync(
+      () => RecordStore(db).update((d) {
+        d.put('batches', {'id': 'bx', 'productId': 'p1', 'batch': 'OLD', 'expiry': addDays(day, -3), 'cost': 300});
+        d.move(productId: 'p1', qty: 4, type: 'Opening stock', batchId: 'bx');
+      }),
+    );
+    await engageStart(tester, at: DateTime.parse('${day}T10:15:00'));
+    await tester.pump(const Duration(seconds: 5));
+    await settle(tester);
+    expect(find.byKey(const ValueKey('popup-alerts')), findsOneWidget);
+    expect(find.descendant(of: find.byKey(const ValueKey('popup-alerts')), matching: find.text('1 item expired but still in stock')), findsOneWidget);
+    expect(played, contains('alert'));
+    final logged = (await tester.runAsync(() => RecordStore(db).rows('tempLogs')))!.where((r) => r['auto'] == true).toList()..sort((a, b) => '${a['at']}'.compareTo('${b['at']}'));
+    expect([for (final r in logged) (r['id'], r['temp'], r['humidity'], r['place'], r['by'])], [
+      ('wx-main-${day}T00', 17.2, 88, 'Outside', 'Automatic (weather)'),
+      ('wx-main-${day}T06', 20.0, 80, 'Outside', 'Automatic (weather)'),
+    ]);
+    await tester.tap(find.descendant(of: find.byKey(const ValueKey('popup-alerts')), matching: find.byTooltip('Close')));
+    await settle(tester, 3);
+
+    // a colleague writes
+    await tester.runAsync(() => RecordStore(db).update((d) => d.put('messages', {'id': 'm9', 'date': DateTime.now().toUtc().toIso8601String(), 'fromId': 'u2', 'fromName': 'Ben', 'conv': 'team', 'text': 'Delivery is here'})));
+    await settle(tester);
+    expect(find.text('Ben · General'), findsOneWidget);
+    expect(find.text('Delivery is here'), findsOneWidget);
+    await done(tester);
+
+    // the same alert is not announced again today
+    await engageStart(tester, at: DateTime.parse('${day}T10:20:00'));
+    await tester.pump(const Duration(seconds: 5));
+    await settle(tester);
+    expect(find.byKey(const ValueKey('popup-alerts')), findsNothing);
+    await done(tester);
+  });
+
+  testWidgets('the top of the hour: a chime with what needs doing, readings at 06/12/18, a greeting with the tip at 08, quiet at night', (tester) async {
+    final day = today();
+    await tester.runAsync(signedIn);
+    await tester.runAsync(() => RecordStore(db).update((d) => d.saveSettings({'name': 'Sample Pharmacy', 'phone': '0700 000000'})));
+    await engageStart(tester, at: DateTime.parse('${day}T12:00:01'));
+    EngageWatchersState w() => tester.state<EngageWatchersState>(find.byType(EngageWatchers));
+    await tester.runAsync(() => w().fireHour());
+    await settle(tester);
+    expect(find.text("It's 12:00"), findsOneWidget);
+    expect(find.text('Time to record the room and fridge temperature & humidity'), findsOneWidget);
+    await done(tester);
+
+    await engageStart(tester, at: DateTime.parse('${day}T08:00:01'));
+    await tester.runAsync(() => w().fireHour());
+    await settle(tester);
+    expect(find.text('Good morning, Tia · 08:00'), findsOneWidget);
+    expect(find.text('Share on WhatsApp'), findsOneWidget);
+    final post = (await tester.runAsync(() => RecordStore(db).get('messages', 'auto-$day-8')))!;
+    expect((post['fromName'], post['conv'], post['auto']), ('RxPOS', 'team', true));
+    expect('${post['text']}', startsWith('Good morning from Sample Pharmacy!'));
+    expect('${post['text']}', isNot(contains('Questions?')), reason: 'the team post leaves out the line for clients');
+    await done(tester);
+
+    await engageStart(tester, at: DateTime.parse('${day}T22:00:01'));
+    await tester.runAsync(() => w().fireHour());
+    await settle(tester);
+    expect(find.text("It's 22:00"), findsNothing, reason: 'quiet hours');
+    await done(tester);
+  });
+
+  testWidgets('Monday: last week at a glance, once; reorder levels updated automatically once a week', (tester) async {
+    final lastWeek = weekStart(DateTime.now(), -1);
+    final saleDay = DateTime(lastWeek.year, lastWeek.month, lastWeek.day + 2, 10);
+    await tester.runAsync(signedIn);
+    await tester.runAsync(() async {
+      final store = RecordStore(db);
+      await store.update((d) {
+        for (var i = 0; i < 6; i++) {
+          d.put('sales', {
+            'id': 'sw$i', 'number': 'R-W$i', 'date': saleDay.subtract(Duration(days: i * 4)).toUtc().toIso8601String(), 'total': 5000, 'subtotal': 5000, 'cashier': 'Tia Admin', 'payment': 'Cash',
+            'status': 'paid', 'items': [{'id': 'p1', 'name': 'Calmex 500mg Tabs', 'qty': 10, 'price': 500, 'cost': 300}],
+          });
+        }
+        d.saveSettings({'name': 'Sample Pharmacy', 'updatedAt': '2026-10-01T00:00:00.000Z'});
+      });
+      final cfg = await SyncConfig.load(db);
+      await cfg.copyWith(lastSync: DateTime.now().toUtc().toIso8601String()).save(db);
+    });
+    await engageStart(tester);
+    await tester.pump(const Duration(seconds: 10));
+    await settle(tester);
+    expect(find.text('Last week at a glance'), findsOneWidget);
+    expect(find.text('Full weekly report'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 11));
+    await settle(tester, 20);
+    final p1 = (await tester.runAsync(() => RecordStore(db).get('products', 'p1')))!;
+    expect((p1['reorder'] as num) > 0, isTrue, reason: 'set from sales');
+    final audit = (await tester.runAsync(() => RecordStore(db).rows('audit')))!;
+    expect(audit.map((a) => a['action']), contains('Reorder levels updated automatically'));
+    expect((await tester.runAsync(() => RecordStore(db).settingsRecord()))!['autoReorderAt'], isNotNull);
+    await done(tester);
+    await engageStart(tester);
+    await tester.pump(const Duration(seconds: 10));
+    await settle(tester);
+    expect(find.text('Last week at a glance'), findsNothing, reason: 'once a week');
+    await done(tester);
+  });
+
+  testWidgets('the idle screen: medicines worth recommending and health tips; never during a sale; a tap outside closes it', (tester) async {
+    await tester.runAsync(signedIn);
+    await tester.runAsync(() => RecordStore(db).update((d) => d.saveSettings({'name': 'Sample Pharmacy', 'idleMinutes': 0.5})));
+    await engageStart(tester);
+    await tester.pump(const Duration(seconds: 31));
+    await settle(tester);
+    expect(find.byKey(const Key('spotlight')), findsOneWidget);
+    expect(find.text('Calmex 500mg Tabs'), findsWidgets);
+    expect(find.text('Share on WhatsApp'), findsOneWidget);
+    await tester.tap(find.byTooltip('Next'));
+    await settle(tester, 3);
+    expect(find.textContaining('health tip'), findsWidgets, reason: 'tips are mixed in');
+    await tester.tapAt(const Offset(200, 450)); // beside the card
+    await settle(tester, 3);
+    expect(find.byKey(const Key('spotlight')), findsNothing);
+
+    // a sale on the till: no shop window
+    await toTill(tester);
+    await tester.tap(find.text('Calmex 500mg Tabs'));
+    await settle(tester);
+    await tester.pump(const Duration(seconds: 31));
+    await settle(tester);
+    expect(find.byKey(const Key('spotlight')), findsNothing);
+    await done(tester);
+  });
+
+  testWidgets('the idle screen and the pop-ups on a phone fit the screen', (tester) async {
+    final day = today();
+    await tester.runAsync(signedIn);
+    await tester.runAsync(() => RecordStore(db).update((d) => d.saveSettings({'name': 'Sample Pharmacy', 'idleMinutes': 0.5})));
+    await start(tester, size: const Size(400, 800), engage: true, extra: [engageClockProvider.overrideWithValue(() => DateTime.parse('${day}T08:00:01'))]);
+    await tester.runAsync(() => tester.state<EngageWatchersState>(find.byType(EngageWatchers)).fireHour());
+    await settle(tester);
+    expect(find.text('Share on WhatsApp'), findsOneWidget, reason: 'the greeting card');
+    await tester.pump(const Duration(seconds: 31));
+    await settle(tester);
+    expect(find.byKey(const Key('spotlight')), findsOneWidget);
+    await done(tester);
+  });
 }
 
 /// A first download in progress (the sync screen's state, without a cloud).
 class _FirstSync extends SyncController {
   @override
   SyncStatus build() => const SyncStatus(state: SyncState.syncing, first: true, progress: 'Downloading products · 120 of 900');
+}
+/// Sounds that are only written down (there is no audio device in tests).
+class _QuietSounds extends Sounds {
+  _QuietSounds(super.ref, this.played);
+  final List<String> played;
+  @override
+  Future<void> play(String kind, {String? tone, double? volume}) async => played.add(tone ?? kind);
 }

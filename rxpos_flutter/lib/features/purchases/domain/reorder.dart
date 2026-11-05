@@ -37,13 +37,19 @@ List<ReorderChange> computeReorderLevels(Iterable<Sale> sales, Iterable<Product>
   return out..sort((a, b) => b.perDay.compareTo(a.perDay));
 }
 
-Future<void> applyReorderLevels(RecordStore store, List<ReorderChange> changes, {required String user, String branchId = mainBranch}) =>
-    store.update((d) {
-      for (final c in changes) {
-        d.put('products', c.product.copyWith(reorder: c.level.toDouble()).toRecord());
-      }
-      d.audit(user, 'Reorder levels updated', '${changes.length} medicines', branchId);
-    });
+/// Save the new levels (src/reorder.js applyReorderLevels): the products, when it was done (settings.autoReorderAt, so the
+/// weekly automatic update waits a week) and the audit log.
+Future<void> applyReorderLevels(RecordStore store, List<ReorderChange> changes, {required String user, String branchId = mainBranch, bool auto = false}) async {
+  if (changes.isEmpty) return;
+  final settings = await store.settingsRecord();
+  await store.update((d) {
+    for (final c in changes) {
+      d.put('products', c.product.copyWith(reorder: c.level.toDouble()).toRecord());
+    }
+    d.saveSettings({...settings, 'autoReorderAt': d.now});
+    d.audit(user, auto ? 'Reorder levels updated automatically' : 'Reorder levels updated from sales', '${changes.length} medicines', branchId);
+  });
+}
 
 /// How many to order for a low medicine: up to twice its reorder level.
 double suggestedOrder(Product p, double stock) => (p.reorder * 2 - stock).clamp(0, double.infinity).ceilToDouble();

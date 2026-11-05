@@ -17,7 +17,11 @@ Every feature of the React app (`src/pages/*.jsx`, `src/*.jsx`), screen by scree
 - ✅ Global search (Ctrl+K): pages, medicines, customers, receipts
 - ✅ Branch from the top bar (when there is more than one), opening Branches & Transfers
 - ✅ Theme menu: light / dark / system, accent colours, 28 colour themes (only those the owner allows), colour level, surface style; Premium UI switch back to the theme before
-- ✗ Idle-screen promotions and health tips; hourly time reminders
+- ✅ Idle-screen promotions and health tips (the shop window: arrows, swipe, thumbnails, keys, pause, share; never
+  during a sale); hourly time reminders with what needs doing, room and fridge readings at 06 / 12 / 18, greetings
+  with the day's health tip and nearby WHO alerts at 08 / 14 / 16 (posted to the team chat); quiet hours
+- ✅ Pop-ups with a sound: new alerts (once a day per kind, urgent only at the till), new messages, last week at a
+  glance on Monday; outside temperature logged every 6 hours; reorder levels updated automatically once a week
 - ✗ Live connection (instant sync and notifications); calls (voice / video between staff)
 - ✗ App updates (Windows installer, Android; switches by itself when nothing is in progress) and F5 refresh
 
