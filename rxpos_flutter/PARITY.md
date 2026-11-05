@@ -35,13 +35,13 @@ Every feature of the React app (`src/pages/*.jsx`, `src/*.jsx`), screen by scree
 - ✅ Sale kept on the device across a restart
 
 ## Sales History (Sales.jsx, SalesLines.jsx, Drafts.jsx)
-- ✅ List, search, receipt, print / PDF / WhatsApp, refund
-- ✗ Date range from / to, branch filter, status filter (completed / refunded / edited)
-- ✗ Edit a past sale (items, quantities, prices, payment) with the change history ("See what was changed and by whom")
-- ✗ Full-page invoice print
-- ✗ Export CSV and PDF
-- ✗ Held sales tab (drafts: mine / everyone at this branch, view, discard)
-- ✗ Sales lines report (every medicine sold) opening each sale
+- ✅ List, search, receipt, print / PDF / WhatsApp / SMS, refund
+- ✅ Date range from / to (calendar), branch filter, cashier / payment / customer / status filter (completed / refunded / edited)
+- ✅ Edit a past sale (items, quantities, prices, client, payment, discount, reason) with the change history ("Edited" badge)
+- ✅ Full-page (A4) invoice print
+- ✅ Export CSV and PDF
+- ✅ Held sales tab (mine / everyone at this branch, view, continue or take over, discard)
+- ✅ Sales lines report (every medicine sold, filters, profit, CSV / PDF) opening each sale
 
 ## Shifts (Shifts.jsx)
 - ✅ Start, live figures, close with note count, history (mine / all)

@@ -16,21 +16,26 @@ import '../../extras/domain/extras.dart';
 /// The receipt as plain text (WhatsApp, SMS), like src/pages/Sales.jsx receiptText.
 String receiptText(Sale s, PharmacySettings st) {
   String fmt(num n) => formatMoney(n, currency: st.currency, decimals: st.decimalPlaces);
-  final b = StringBuffer()
-    ..writeln(st.name)
-    ..writeln('Receipt ${s.number} · ${s.date.length >= 16 ? s.date.substring(0, 16).replaceFirst('T', ' ') : s.date}');
-  for (final i in s.items) {
-    final qty = i.pack != null ? '${formatQty(i.pack!.count)} × ${i.pack!.name} (${formatQty(i.pack!.size)})' : formatQty(i.qty);
-    b.writeln('${i.name}  $qty  ${fmt(i.price * i.qty)}');
-  }
-  if (s.discount > 0) b.writeln('Discount −${fmt(s.discount)}');
-  if (s.tax > 0) b.writeln('Tax ${fmt(s.tax)}');
-  b
-    ..writeln('Total ${fmt(s.total)}')
-    ..writeln('Paid by ${s.payment}');
-  if (s.paid < s.total) b.writeln('Balance on credit ${fmt(s.total - s.paid)}');
-  b.writeln('Thank you · ${st.phone}');
-  return b.toString().trim();
+  final when = s.date.replaceFirst('T', ' ').split('.').first;
+  final paid = s.paid;
+  return [
+    '*${st.name.isEmpty ? 'Pharmacy' : st.name}*',
+    if (st.address.isNotEmpty) st.address,
+    if (st.phone.isNotEmpty) 'Tel: ${st.phone}',
+    'Receipt ${s.number} · ${when.length > 16 ? when.substring(0, 16) : when}',
+    if (s.customerName.isNotEmpty && s.customerName != 'Walk-in Customer') 'Customer: ${s.customerName}',
+    '--------------------------------',
+    for (final i in s.items) '${formatQty(i.qty)} × ${i.name} — ${fmt(i.qty * i.price)}',
+    '--------------------------------',
+    if (s.discount > 0) 'Subtotal: ${fmt(s.subtotal)}',
+    if (s.discount > 0) 'Discount: -${fmt(s.discount)}',
+    if (s.tax > 0) 'Tax: ${fmt(s.tax)}',
+    '*TOTAL: ${fmt(s.total)}*',
+    'Paid (${s.payment}): ${fmt(paid)}',
+    if (paid < s.total) 'Balance: ${fmt(s.total - paid)}',
+    '',
+    '${st.raw['receiptFooter'] ?? ''}'.isEmpty ? 'Thank you. Get well soon!' : '${st.raw['receiptFooter']}',
+  ].join('\n');
 }
 
 /// An 80 mm roll receipt as a PDF (printed on any Windows printer or Android print service, or shared).
@@ -71,6 +76,10 @@ Future<Uint8List> receiptPdf(Sale s, PharmacySettings st) async {
                   : '  ${formatQty(i.qty)} @ ${fmt(i.price)}',
               fmt(i.price * i.qty),
             ),
+            if (i.alloc.length == 1 && i.alloc.first.batch.isNotEmpty || i.alloc.isNotEmpty && i.alloc.first.expiry.isNotEmpty)
+              pw.Text('  ${[if (i.alloc.length == 1 && i.alloc.first.batch.isNotEmpty) 'B/N ${i.alloc.first.batch}', if (i.alloc.first.expiry.isNotEmpty) 'Exp ${i.alloc.first.expiry}'].join(' · ')}', style: const pw.TextStyle(fontSize: 8)),
+            if (i.directions != null)
+              pw.Text('  ${[i.directions!['dose'], i.directions!['freq'], if ('${i.directions!['days'] ?? ''}'.isNotEmpty) 'for ${i.directions!['days']} days'].where((x) => x != null && '$x'.isNotEmpty).join(' ')}${(i.directions!['notes'] as List?)?.isNotEmpty == true ? ' · ${(i.directions!['notes'] as List).join(', ')}' : ''}', style: const pw.TextStyle(fontSize: 8)),
           ],
           pw.Divider(),
           row('Subtotal', fmt(s.subtotal)),
@@ -85,7 +94,10 @@ Future<Uint8List> receiptPdf(Sale s, PharmacySettings st) async {
               'Mobile Money ${m['txid'] ?? m['ref'] ?? ''} (${m['confirmed'] == true ? 'confirmed by ${m['provider'] == 'airtel' ? 'Airtel' : 'MTN'}' : 'recorded by staff'})',
             ),
           pw.SizedBox(height: 8),
-          pw.Text('Thank you', textAlign: pw.TextAlign.center),
+          if (s.status == 'refunded') pw.Text('REFUNDED', textAlign: pw.TextAlign.center, style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+          pw.BarcodeWidget(barcode: pw.Barcode.code128(), data: s.number, height: 34, drawText: false),
+          pw.SizedBox(height: 4),
+          pw.Text('${st.raw['receiptFooter'] ?? ''}'.isEmpty ? 'Thank you' : '${st.raw['receiptFooter']}', textAlign: pw.TextAlign.center),
         ],
       ),
     ),
@@ -219,4 +231,80 @@ class _ReceiptDialogState extends ConsumerState<_ReceiptDialog> {
       ],
     );
   }
+}
+
+/// A full-page (A4) invoice for a sale: for insurers, companies and anyone who needs more than a till slip
+/// (src/pages/Sales.jsx SaleInvoice).
+Future<Uint8List> invoicePdf(Sale s, PharmacySettings st, {String customerPhone = '', String customerAddress = ''}) async {
+  String fmt(num n) => formatMoney(n, currency: st.currency, decimals: st.decimalPlaces);
+  final due = s.total - s.paid;
+  final momo = s.raw['momo'] is Map ? (s.raw['momo'] as Map) : null;
+  final tin = '${st.raw['tin'] ?? ''}', footer = '${st.raw['receiptFooter'] ?? ''}';
+  pw.Widget row(String a, String b, {bool bold = false}) => pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
+        pw.Text(a, style: pw.TextStyle(fontWeight: bold ? pw.FontWeight.bold : null)),
+        pw.Text(b, style: pw.TextStyle(fontWeight: bold ? pw.FontWeight.bold : null)),
+      ]);
+  final doc = pw.Document()
+    ..addPage(pw.MultiPage(
+      pageFormat: PdfPageFormat.a4,
+      margin: const pw.EdgeInsets.all(16 * PdfPageFormat.mm),
+      build: (_) => [
+        pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+          pw.Expanded(child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+            pw.Text(st.name, style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
+            if (st.address.isNotEmpty) pw.Text(st.address),
+            if (st.phone.isNotEmpty) pw.Text('Tel: ${st.phone}'),
+            if (tin.isNotEmpty) pw.Text('TIN: $tin'),
+          ])),
+          pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.end, children: [
+            pw.Text('INVOICE', style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
+            pw.Text('No. ${s.number}'),
+            pw.Text('Date: ${s.date.replaceFirst('T', ' ').split('.').first}'),
+            pw.Text('Served by: ${s.cashier}'),
+            if (s.status == 'refunded') pw.Text('REFUNDED', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.red)),
+          ]),
+        ]),
+        pw.SizedBox(height: 14),
+        pw.Text('Bill to', style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
+        pw.Text(s.customerName.isEmpty ? 'Walk-in customer' : s.customerName, style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+        if (customerPhone.isNotEmpty) pw.Text('Tel: $customerPhone'),
+        if (customerAddress.isNotEmpty) pw.Text(customerAddress),
+        pw.SizedBox(height: 10),
+        pw.TableHelper.fromTextArray(
+          headers: ['#', 'Description', 'Batch / expiry', 'Qty', 'Unit price', 'Amount'],
+          data: [
+            for (var n = 0; n < s.items.length; n++)
+              [
+                '${n + 1}', s.items[n].name,
+                s.items[n].alloc.map((a) => [a.batch, a.expiry].where((x) => x.isNotEmpty).join(' · ')).where((x) => x.isNotEmpty).join(', ').ifBlankDash,
+                formatQty(s.items[n].qty), fmt(s.items[n].price), fmt(s.items[n].qty * s.items[n].price),
+              ],
+          ],
+          headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9),
+          cellStyle: const pw.TextStyle(fontSize: 9),
+          cellAlignments: {3: pw.Alignment.centerRight, 4: pw.Alignment.centerRight, 5: pw.Alignment.centerRight},
+        ),
+        pw.SizedBox(height: 10),
+        pw.Align(
+          alignment: pw.Alignment.centerRight,
+          child: pw.SizedBox(width: 240, child: pw.Column(children: [
+            row('Subtotal', fmt(s.subtotal)),
+            if (s.discount > 0) row('Discount', '-${fmt(s.discount)}'),
+            if (s.tax > 0) row('Tax', fmt(s.tax)),
+            row('Total', fmt(s.total), bold: true),
+            row('Paid (${s.payment}${momo?['txid'] != null && '${momo!['txid']}'.isNotEmpty ? ' · ref ${momo['txid']}' : ''})', fmt(s.paid)),
+            if (due > 0) row('Balance due', fmt(due), bold: true),
+          ])),
+        ),
+        if (momo != null) pw.Text(momo['confirmed'] == true ? 'Payment confirmed by the mobile network.' : 'Payment recorded by staff (not confirmed by the mobile network).', style: const pw.TextStyle(fontSize: 9)),
+        pw.SizedBox(height: 40),
+        pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [pw.Text('Received by ____________________'), pw.Text('Signature & stamp ____________________')]),
+        if (footer.isNotEmpty) pw.Padding(padding: const pw.EdgeInsets.only(top: 16), child: pw.Center(child: pw.Text(footer, style: const pw.TextStyle(fontSize: 9)))),
+      ],
+    ));
+  return doc.save();
+}
+
+extension on String {
+  String get ifBlankDash => trim().isEmpty ? '—' : this;
 }

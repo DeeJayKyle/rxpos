@@ -12,6 +12,7 @@ import '../../../core/entities/settings.dart';
 import '../../../core/presentation/widgets.dart';
 import '../../../core/rules/dates.dart';
 import '../../../core/rules/money.dart';
+import '../../sales_history/presentation/sales_lines.dart';
 import '../domain/reports.dart';
 
 /// Reports: for a date range, the profit summary and sales by day, payment method, medicine and cashier; print as PDF.
@@ -58,11 +59,13 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         ]),
         const SizedBox(height: 16),
         Wrap(spacing: 6, children: [
-          for (final (k, l) in const [('medicine', 'By medicine'), ('day', 'By day'), ('method', 'By payment'), ('cashier', 'By cashier')])
+          for (final (k, l) in const [('medicine', 'By medicine'), ('day', 'By day'), ('method', 'By payment'), ('cashier', 'By cashier'), ('lines', 'Sales lines')])
             ChoiceChip(label: Text(l), selected: _by == k, onSelected: (_) => setState(() => _by = k)),
         ]),
         const SizedBox(height: 8),
-        if (lines.isEmpty) const Text('No sales in this period.'),
+        if (_by == 'lines') SalesLinesView(key: ValueKey('$_from|$_to'), from: _from, to: _to)
+        else if (lines.isEmpty) const Text('No sales in this period.'),
+        if (_by != 'lines')
         for (final l in lines)
           ListTile(dense: true, title: Text(l.key.isEmpty ? '—' : l.key),
               subtitle: Text(_by == 'medicine' ? '${formatQty(l.qty)} sold · profit ${st.money(l.profit)}' : '${l.sales} sales${_by == 'method' ? '' : ' · profit ${st.money(l.profit)}'}'),

@@ -76,14 +76,73 @@ class StatCard extends StatelessWidget {
 }
 
 class SearchField extends StatelessWidget {
-  const SearchField({super.key, required this.onChanged, this.hint = 'Search…', this.width = 280});
+  const SearchField({super.key, required this.onChanged, this.hint = 'Search…', this.width = 280, this.initial = ''});
   final ValueChanged<String> onChanged;
   final String hint;
   final double width;
+  final String initial;
   @override
   Widget build(BuildContext context) => SizedBox(
         width: width,
-        child: TextField(onChanged: onChanged, decoration: InputDecoration(prefixIcon: const Icon(Icons.search), hintText: hint, isDense: true, border: const OutlineInputBorder())),
+        child: TextFormField(initialValue: initial, onChanged: onChanged,
+            decoration: InputDecoration(prefixIcon: const Icon(Icons.search), hintText: hint, isDense: true, border: const OutlineInputBorder())),
+      );
+}
+
+/// A date (YYYY-MM-DD, or empty for none), typed or picked from a calendar.
+class DateBox extends StatefulWidget {
+  const DateBox({super.key, required this.label, required this.value, required this.onChanged, this.width = 160});
+  final String label, value;
+  final ValueChanged<String> onChanged;
+  final double width;
+  @override
+  State<DateBox> createState() => _DateBoxState();
+}
+
+class _DateBoxState extends State<DateBox> {
+  late final _c = TextEditingController(text: widget.value);
+
+  @override
+  void didUpdateWidget(DateBox old) {
+    super.didUpdateWidget(old);
+    if (widget.value != old.value && widget.value != _c.text) _c.text = widget.value;
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+        width: widget.width,
+        child: TextField(
+          key: Key('date-${widget.label}'),
+          controller: _c,
+          decoration: InputDecoration(
+            labelText: widget.label,
+            hintText: 'YYYY-MM-DD',
+            isDense: true,
+            suffixIcon: IconButton(
+              tooltip: 'Pick a date',
+              icon: const Icon(Icons.calendar_today, size: 18),
+              onPressed: () async {
+                final now = DateTime.now();
+                final d = await showDatePicker(context: context, firstDate: DateTime(2015), lastDate: DateTime(now.year + 5),
+                    initialDate: DateTime.tryParse(_c.text) ?? now);
+                if (d == null) return;
+                final v = '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+                _c.text = v;
+                widget.onChanged(v);
+              },
+            ),
+          ),
+          onChanged: (v) {
+            final t = v.trim();
+            if (t.isEmpty || RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(t)) widget.onChanged(t);
+          },
+        ),
       );
 }
 

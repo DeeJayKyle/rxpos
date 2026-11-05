@@ -28,7 +28,7 @@ final screens = <Screen>[
   Screen('/pos', 'POS – Retail', Icons.point_of_sale, 'Sales', (_) => const PosScreen(key: ValueKey('retail')), permission: 'pos.sell', key: LogicalKeyboardKey.f2),
   Screen('/pos/wholesale', 'POS – Wholesale', Icons.local_shipping_outlined, 'Sales', (_) => const PosScreen(key: ValueKey('wholesale'), wholesale: true),
       permission: 'pos.wholesale', feature: 'wholesale', key: LogicalKeyboardKey.f3),
-  Screen('/sales', 'Sales History', Icons.receipt_long_outlined, 'Sales', (_) => const SalesScreen(), permission: 'sales.view', key: LogicalKeyboardKey.f6),
+  Screen('/sales', 'Sales History', Icons.receipt_long_outlined, 'Sales', (q) => SalesScreen(key: ValueKey('sales-${q['q']}'), q: q['q'] ?? ''), permission: 'sales.view', key: LogicalKeyboardKey.f6),
   Screen('/shifts', 'Shifts & Cash-up', Icons.schedule_outlined, 'Sales', (_) => const ShiftsScreen(), permission: 'shifts', feature: 'shifts'),
   Screen('/proformas', 'Proformas', Icons.description_outlined, 'Sales', (_) => const ProformasScreen(), permission: 'proformas', feature: 'proformas'),
   Screen('/prescriptions', 'Prescriptions & Refills', Icons.medication_outlined, 'Sales', (_) => const PrescriptionsScreen(), permission: 'prescriptions', feature: 'prescriptions'),

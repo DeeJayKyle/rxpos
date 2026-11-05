@@ -241,7 +241,7 @@ void main() {
     await settle(tester);
     await tester.tap(find.widgetWithText(FilledButton, 'Refund'));
     await settle(tester);
-    expect(find.textContaining('REFUNDED'), findsOneWidget);
+    expect(find.text('refunded'), findsOneWidget);
     final moves = (await tester.runAsync(() => RecordStore(db).rows('movements')))!;
     expect(moves.where((m) => m['type'] == 'Refund').single['qty'], 1);
     await done(tester);
@@ -566,6 +566,74 @@ void main() {
     expect((sale['total'], sale['discount'], sale['customerName']), (1800, 200, 'Grace Achieng'));
     await tester.tap(find.text('New sale'));
     await settle(tester);
+    await done(tester);
+  });
+
+  testWidgets('Sales History parity: edit a past sale with a reason, its history, the Edited filter, held sales, Sales lines', (tester) async {
+    await tester.runAsync(signedIn);
+    await tester.runAsync(() => RecordStore(db).update((d) {
+          d.put('sales', {'id': 's1', 'number': 'RXA1', 'date': '2026-11-01T09:00:00.000Z', 'branchId': 'main', 'payment': 'Cash', 'cashier': 'Tia Admin',
+            'customerId': 'walk-in', 'customerName': 'Walk-in Customer', 'subtotal': 1500, 'discount': 0, 'tax': 0, 'total': 1500, 'paid': 1500, 'tendered': 1500,
+            'status': 'completed', 'type': 'retail', 'items': [{'id': 'p1', 'name': 'Calmex 500mg Tabs', 'price': 500, 'cost': 300, 'qty': 3, 'alloc': [{'batchId': 'b1', 'qty': 3, 'batch': 'C1', 'expiry': '2029-01-31'}]}]});
+          d.put('drafts', {'id': 'h1', 'kind': 'sale', 'branchId': 'main', 'mode': 'retail', 'userId': 'u1', 'userName': 'Tia Admin', 'order': 1,
+            'startedAt': '2026-11-05T08:00:00.000Z', 'title': 'Grace', 'count': 1, 'total': 500, 'data': {'cart': [{'id': 'p1', 'name': 'Calmex 500mg Tabs', 'qty': 1, 'price': 500}]}});
+        }));
+    await start(tester);
+    await tester.sendKeyEvent(LogicalKeyboardKey.f6);
+    await settle(tester);
+    expect(find.text('RXA1 · Walk-in Customer'), findsOneWidget);
+
+    // edit: 3 → 2, with a reason
+    await tester.tap(find.byTooltip('Actions for RXA1'));
+    await settle(tester);
+    await tester.tap(find.text('Edit').last);
+    await settle(tester);
+    await tester.enterText(find.byKey(const Key('edit-qty-p1')), '2');
+    await tester.tap(find.text('Save changes'));
+    await settle(tester);
+    expect(find.text('Say why the sale is being changed'), findsOneWidget);
+    await tester.enterText(find.byKey(const Key('edit-reason')), 'wrong quantity entered');
+    await settle(tester, 2);
+    await tester.tap(find.text('Save changes'));
+    await settle(tester);
+    expect(find.text('RXA1 updated; stock adjusted'), findsOneWidget);
+    final sale = (await tester.runAsync(() => RecordStore(db).rows('sales')))!.single;
+    expect((sale['total'], sale['editedBy']), (1000.0, 'Tia Admin'));
+    final back = (await tester.runAsync(() => RecordStore(db).rows('movements')))!.where((m) => m['type'] == 'Sale edit').single;
+    expect((back['qty'], back['batchId']), (1, 'b1'));
+
+    // the Edited badge and filter; the history in the receipt
+    await tester.tap(find.byKey(const Key('filter-Status')));
+    await settle(tester, 4);
+    await tester.tap(find.text('Edited').last);
+    await settle(tester);
+    expect(find.text('RXA1 · Walk-in Customer'), findsOneWidget);
+    await tester.tap(find.text('RXA1 · Walk-in Customer'));
+    await settle(tester);
+    expect(find.text('Edit history (1)'), findsOneWidget);
+    expect(find.text('Reason: wrong quantity entered'), findsOneWidget);
+    Navigator.of(tester.element(find.text('Edit history (1)'))).pop();
+    await settle(tester);
+
+    // held sales: discard (audit)
+    await tester.tap(find.textContaining('Held sales'));
+    await settle(tester);
+    expect(find.text('Grace'), findsOneWidget);
+    await tester.tap(find.byTooltip('Discard'));
+    await settle(tester);
+    await tester.tap(find.widgetWithText(FilledButton, 'Discard'));
+    await settle(tester);
+    expect(await tester.runAsync(() => RecordStore(db).rows('drafts')), isEmpty);
+    expect((await tester.runAsync(() => RecordStore(db).rows('audit')))!.map((a) => a['action']), containsAll(['Sale edited', 'Draft discarded']));
+
+    // Reports → Sales lines
+    await navTo(tester, 'Reports');
+    await tester.enterText(find.widgetWithText(TextFormField, 'From'), '2026-11-01');
+    await settle(tester, 2);
+    await tester.tap(find.text('Sales lines'));
+    await settle(tester);
+    expect(find.text('Calmex 500mg Tabs · Calmex'), findsOneWidget);
+    expect(find.text('2 · UGX 1,000'), findsOneWidget);
     await done(tester);
   });
 }
