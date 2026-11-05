@@ -28,8 +28,8 @@ Every feature of the React app (`src/pages/*.jsx`, `src/*.jsx`), screen by scree
 - ✅ Tick lines ("Tick every line", remove ticked); swipe to remove on a phone
 - ✅ Mobile Money request to the customer's phone (MTN / Airtel) and waiting for approval
 - ✅ Directions / drug label for a line (print label); drug info from the line
-- ✗ Camera "Scan items into the sale" continuous; Windows camera
-- ◐ Keyboard shortcuts help (? / F1) ✅; layouts Classic / Standard / Advanced UI and command bar (Ctrl+K) ✗
+- ✅ Camera "Scan items into the sale", continuous (Android); on Windows a USB / Bluetooth barcode scanner types into the search box
+- ✅ Layouts: Classic / Standard (client strip, Alt+C) / Advanced UI (three columns, numbered lines, command bar Ctrl+K); keyboard shortcuts help (? / F1)
 - ✅ Selling expired stock with a recorded reason
 - ✅ Receipt: WhatsApp / SMS to the client from the receipt; auto print; receipt PDF button
 - ✅ Sale kept on the device across a restart

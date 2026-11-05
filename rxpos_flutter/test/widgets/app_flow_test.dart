@@ -151,7 +151,7 @@ void main() {
     expect(find.text('100 left'), findsOneWidget);
     expect(find.text('Out of stock'), findsOneWidget, reason: 'Zinco has no stock');
     // the scanner types the barcode and Enter
-    await tester.enterText(find.byType(TextField).first, '7010001');
+    await tester.enterText(find.widgetWithText(TextField, 'Search medicine or scan barcode…  (F8)'), '7010001');
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await settle(tester);
     expect(find.text('Calmex 500mg Tabs'), findsNWidgets(2), reason: 'in the grid and in the sale');
@@ -520,6 +520,52 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.f1);
     await settle(tester);
     expect(find.text('Keyboard shortcuts'), findsOneWidget);
+    await done(tester);
+  });
+
+  testWidgets('POS layouts: the client strip finds a client; Advanced UI command bar (Ctrl+K) adds, changes and charges', (tester) async {
+    await tester.runAsync(signedIn);
+    await tester.runAsync(() => RecordStore(db).update((d) => d.put('customers', {'id': 'c1', 'name': 'Grace Achieng', 'phone': '0772 555 111'})));
+    await start(tester);
+    await toTill(tester);
+    // Standard (the default): the client strip over the medicines
+    await tester.enterText(find.byKey(const Key('find-client')), '555');
+    await settle(tester, 4);
+    await tester.tap(find.text('Grace Achieng').last);
+    await settle(tester, 4);
+    expect(find.text('Back to walk-in'), findsOneWidget);
+
+    // Advanced UI, kept on this device
+    await tester.tap(find.byKey(const Key('pos-layout')));
+    await settle(tester, 4);
+    await tester.tap(find.text('Advanced UI').last);
+    await settle(tester);
+    expect(await tester.runAsync(() => (db.select(db.kv)..where((x) => x.k.equals('device:pos-layout'))).getSingleOrNull()), isNotNull);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyK);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await settle(tester, 4);
+    Future<void> cmd(String text) async {
+      await tester.enterText(find.byKey(const Key('command-bar')), text);
+      await settle(tester, 3);
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await settle(tester, 4);
+    }
+
+    await cmd('Calmex');
+    expect(find.text('Added Calmex 500mg Tabs'), findsOneWidget);
+    await cmd('qty 1 4');
+    expect(find.text('1  Calmex 500mg Tabs × 4'), findsOneWidget);
+    await cmd('void 3');
+    expect(find.text('There is no line 3'), findsOneWidget);
+    await cmd('disc 10');
+    expect(find.text('Done'), findsOneWidget);
+    await cmd('pay');
+    expect(find.text('Sale complete ✓'), findsOneWidget);
+    final sale = (await tester.runAsync(() => RecordStore(db).rows('sales')))!.single;
+    expect((sale['total'], sale['discount'], sale['customerName']), (1800, 200, 'Grace Achieng'));
+    await tester.tap(find.text('New sale'));
+    await settle(tester);
     await done(tester);
   });
 }

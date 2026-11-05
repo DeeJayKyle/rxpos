@@ -175,6 +175,77 @@ class SaleController extends _$SaleController {
     state = state.copyWith(lines: lines, cursor: lines.indexWhere((l) => l.id == p.id));
   }
 
+  /// The Advanced UI command bar (Ctrl+K), like the React till: "+qty 2", "-qty 2 3", "qty 2 5", "void 2",
+  /// "disc 2 10" (10% off line 2), "disc 10" (10% off the sale), "hold", "pay". Lines are numbered from 1.
+  /// Returns what went wrong (null when done) and whether to charge now.
+  Future<({String? error, bool pay})> command(String text, {required bool canEditPrice}) async {
+    final t = text.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+    final lines = state.lines;
+    CartLine? rowOf(String n) {
+      final i = int.parse(n) - 1;
+      return i >= 0 && i < lines.length ? lines[i] : null;
+    }
+
+    ({String? error, bool pay}) err(String e) => (error: e, pay: false);
+    const ok = (error: null, pay: false);
+    try {
+      RegExpMatch? m;
+      if ((m = RegExp(r'^([+-])\s?qty (\d+)(?: (\d+))?$').firstMatch(t)) != null) {
+        final l = rowOf(m![2]!);
+        if (l == null) return err('There is no line ${m[2]}');
+        final by = int.parse(m[3] ?? '1') * (m[1] == '+' ? 1 : -1);
+        if (l.count + by <= 0) {
+          remove(l.id);
+          return err('Line ${m[2]} removed');
+        }
+        count(l.id, l.count + by);
+        cursor(lines.indexOf(l));
+        return ok;
+      }
+      if ((m = RegExp(r'^qty (\d+) (\d+)$').firstMatch(t)) != null) {
+        final l = rowOf(m![1]!);
+        if (l == null) return err('There is no line ${m[1]}');
+        count(l.id, double.parse(m[2]!));
+        cursor(lines.indexOf(l));
+        return ok;
+      }
+      if ((m = RegExp(r'^void (\d+)$').firstMatch(t)) != null) {
+        final l = rowOf(m![1]!);
+        if (l == null) return err('There is no line ${m[1]}');
+        remove(l.id);
+        return ok;
+      }
+      final st = (await _data).settings;
+      double round(double v, int dp) => double.parse(v.toStringAsFixed(dp));
+      if ((m = RegExp(r'^disc (\d+) (\d+(?:\.\d+)?)%?$').firstMatch(t)) != null) {
+        final l = rowOf(m![1]!);
+        final pct = double.parse(m[2]!);
+        if (l == null) return err('There is no line ${m[1]}');
+        if (!canEditPrice) return err('You are not allowed to change prices');
+        if (!(pct > 0 && pct < 100)) return err('A discount is between 1 and 99%');
+        final f = 1 - pct / 100;
+        _replace(l.id, (x) => x.copyWith(price: round(x.price * f, 2),
+            pack: x.pack == null ? null : LinePack(name: x.pack!.name, size: x.pack!.size, price: round(x.pack!.price * f, st.decimalPlaces))));
+        cursor(lines.indexOf(l));
+        return ok;
+      }
+      if ((m = RegExp(r'^disc (\d+(?:\.\d+)?)%?$').firstMatch(t)) != null) {
+        final pct = double.parse(m![1]!);
+        if (!(pct > 0 && pct < 100)) return err('A discount is between 1 and 99%');
+        discount(round(totalsOf(lines, discount: 0, settings: st).subtotal * pct / 100, st.decimalPlaces));
+        return ok;
+      }
+      if (t == 'hold') {
+        await hold();
+        return ok;
+      }
+      if (t == 'pay' || t == 'checkout' || t == 'charge') return (error: null, pay: true);
+    } on CartProblem catch (e) {
+      return err(e.message);
+    }
+    return err('Not a command. Try +qty 2, -qty 2, qty 2 5, void 2, disc 2 10, disc 10, hold or pay');
+  }
+
   /// Tick or untick a line; tick every line; remove the ticked ones.
   void tick(String id) => state = state.copyWith(ticked: state.ticked.contains(id) ? ({...state.ticked}..remove(id)) : {...state.ticked, id});
   void tickAll(bool on) => state = state.copyWith(ticked: on ? {for (final l in state.lines) l.id} : {});

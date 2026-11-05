@@ -171,6 +171,9 @@ class _PosScreenState extends ConsumerState<PosScreen> {
             ? (_view == 'recent' ? pool : ([...pool]..sort((a, b) => (d.stockOf(b.id) > 0 ? 1 : 0) - (d.stockOf(a.id) > 0 ? 1 : 0)))).take(120).toList()
             : searchProducts(pool, _q, stockOf: (p) => d.stockOf(p.id)).take(120).toList();
         final wide = MediaQuery.sizeOf(context).width >= 900;
+        final stored = ref.watch(deviceValueProvider('pos-layout')).value;
+        final layout = posLayouts.any((x) => x.$1 == stored) ? stored! : 'standard';
+        final advanced = wide && layout == 'advanced';
         final products = _ProductPanel(
           wholesale: widget.wholesale,
           data: d,
@@ -185,16 +188,25 @@ class _PosScreenState extends ConsumerState<PosScreen> {
           categories: categoriesOf(d.products),
           onView: (v) => setState(() => _view = v),
           onStar: (p) => _toggleFav(favs, p.id),
+          layout: wide ? layout : null,
+          onLayout: (v) => ref.read(deviceValueProvider('pos-layout').notifier).set(v),
+          onCommand: advanced ? () => _openCommandBar(d) : null,
           onCamera: Platform.isAndroid
               ? () async {
-                  final code = await scanBarcode(context);
-                  if (code == null) return;
-                  final p = d.byBarcode[code.trim()];
-                  p == null ? _say('No medicine has the barcode $code') : await _add(p);
+                  await scanContinuous(context, title: 'Scan items into the sale', onCode: (code) async {
+                    final p = d.byBarcode[code.trim()];
+                    if (p == null) return null;
+                    await _add(p);
+                    return '${p.name} added';
+                  });
+                  _searchFocus.requestFocus();
                 }
               : null,
         );
-        final sale = _SalePanel(wholesale: widget.wholesale, data: d, onCharge: _charge, onError: (m) => _say(m, error: true));
+        final sale = _SalePanel(wholesale: widget.wholesale, data: d, onCharge: _charge, onError: (m) => _say(m, error: true), advanced: advanced);
+        final client = wide && layout != 'classic' && d.settings.clientCapture != 'off'
+            ? _ClientStrip(wholesale: widget.wholesale, data: d, focus: _clientFocus, onDone: _searchFocus.requestFocus)
+            : null;
         return Focus(
           // "?" opens the shortcuts, except while typing
           onKeyEvent: (_, e) {
@@ -214,11 +226,16 @@ class _PosScreenState extends ConsumerState<PosScreen> {
               const SingleActivator(LogicalKeyboardKey.f9): _charge,
               const SingleActivator(LogicalKeyboardKey.enter, control: true): _charge,
               const SingleActivator(LogicalKeyboardKey.keyH, alt: true): () => _sale.hold(),
+              const SingleActivator(LogicalKeyboardKey.keyC, alt: true): _clientFocus.requestFocus,
+              if (advanced) const SingleActivator(LogicalKeyboardKey.keyK, control: true): () => _openCommandBar(d),
             },
             child: wide
                 ? Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Expanded(child: products),
+                      // Advanced UI: three columns (client · medicines · sale); Standard: the client strip over the medicines
+                      if (client != null && advanced) SizedBox(width: 270, child: client),
+                      Expanded(child: client != null && !advanced ? Column(children: [client, Expanded(child: products)]) : products),
                       SizedBox(width: 460, child: sale),
                     ],
                   )
@@ -232,6 +249,17 @@ class _PosScreenState extends ConsumerState<PosScreen> {
         );
       },
     );
+  }
+
+  final _clientFocus = FocusNode();
+
+  Future<void> _openCommandBar(PharmacyData d) async {
+    final pay = await showDialog<bool>(
+      context: context,
+      builder: (_) => _CommandBar(wholesale: widget.wholesale, data: d, onAdd: _add),
+    );
+    if (pay == true) await _charge();
+    if (mounted) _searchFocus.requestFocus();
   }
 
   static Set<String> _favs(String? raw) {
@@ -253,6 +281,198 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     useSafeArea: true,
     builder: (_) => SizedBox(height: MediaQuery.sizeOf(context).height * 0.9, child: sale),
   );
+}
+
+/// The till's layouts, chosen per device (like the React till).
+const posLayouts = [('classic', 'Classic'), ('standard', 'Standard'), ('advanced', 'Advanced UI')];
+
+/// Standard and Advanced layouts: find the client by name or phone (Alt+C), with their loyalty and balance.
+class _ClientStrip extends ConsumerStatefulWidget {
+  const _ClientStrip({required this.wholesale, required this.data, required this.focus, required this.onDone});
+  final bool wholesale;
+  final PharmacyData data;
+  final FocusNode focus;
+  final VoidCallback onDone;
+  @override
+  ConsumerState<_ClientStrip> createState() => _ClientStripState();
+}
+
+class _ClientStripState extends ConsumerState<_ClientStrip> {
+  final _q = TextEditingController();
+
+  @override
+  void dispose() {
+    _q.dispose();
+    super.dispose();
+  }
+
+  void _pick(String id, String name) {
+    ref.read(saleControllerProvider(widget.wholesale).notifier).customer(id, name);
+    _q.clear();
+    setState(() {});
+    widget.onDone();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final th = Theme.of(context);
+    final s = ref.watch(saleControllerProvider(widget.wholesale));
+    final d = widget.data;
+    final q = _q.text.trim().toLowerCase();
+    final digits = q.replaceAll(RegExp(r'\D'), '');
+    final found = q.isEmpty
+        ? d.customers.take(0).toList()
+        : d.customers
+            .where((c) => c.id != walkIn && (c.name.toLowerCase().contains(q) || (digits.length >= 3 && c.phone.replaceAll(RegExp(r'\D'), '').contains(digits))))
+            .take(6)
+            .toList();
+    final c = d.customers.where((x) => x.id == s.customerId && x.id != walkIn).firstOrNull;
+    final sales = (ref.watch(tableProvider('sales')).value ?? const []).where((x) => c != null && x['customerId'] == c.id).length;
+    return Card(
+      margin: const EdgeInsets.fromLTRB(12, 12, 0, 0),
+      child: Padding(
+        padding: const EdgeInsets.all(10),
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Row(children: [
+            const Icon(Icons.people_outline, size: 18),
+            const SizedBox(width: 6),
+            Text('Client', style: th.textTheme.titleSmall),
+            const SizedBox(width: 12),
+            Expanded(
+              child: TextField(
+                key: const Key('find-client'),
+                controller: _q,
+                focusNode: widget.focus,
+                onChanged: (_) => setState(() {}),
+                onSubmitted: (_) => found.isEmpty ? null : _pick(found.first.id, found.first.name),
+                decoration: const InputDecoration(isDense: true, prefixIcon: Icon(Icons.search, size: 18), hintText: 'Find client: name or phone  (Alt+C)'),
+              ),
+            ),
+          ]),
+          for (final x in found)
+            ListTile(dense: true, title: Text(x.name), subtitle: x.phone.isEmpty ? null : Text(x.phone), onTap: () => _pick(x.id, x.name)),
+          if (q.isNotEmpty && found.isEmpty) Text('No client matches “${_q.text.trim()}”', style: th.textTheme.bodySmall),
+          const SizedBox(height: 6),
+          Wrap(crossAxisAlignment: WrapCrossAlignment.center, spacing: 8, runSpacing: 4, children: [
+            Text(c?.name ?? 'Walk-in customer', style: const TextStyle(fontWeight: FontWeight.w700)),
+            if (c != null && c.phone.isNotEmpty) Text(c.phone, style: th.textTheme.bodySmall),
+            if (c != null && sales >= 3) const Chip(label: Text('Loyal client'), visualDensity: VisualDensity.compact),
+            if (c != null && c.allergies.isNotEmpty) Chip(label: Text('Allergies: ${c.allergies}'), backgroundColor: th.colorScheme.errorContainer, visualDensity: VisualDensity.compact),
+            if (c != null) TextButton(onPressed: () => _pick(walkIn, 'Walk-in Customer'), child: const Text('Back to walk-in')),
+          ]),
+        ]),
+      ),
+    );
+  }
+}
+
+/// Advanced UI command bar (Ctrl+K): a command for a numbered line, or a medicine's name to add it. Pops true to charge.
+class _CommandBar extends ConsumerStatefulWidget {
+  const _CommandBar({required this.wholesale, required this.data, required this.onAdd});
+  final bool wholesale;
+  final PharmacyData data;
+  final Future<void> Function(Product) onAdd;
+  @override
+  ConsumerState<_CommandBar> createState() => _CommandBarState();
+}
+
+class _CommandBarState extends ConsumerState<_CommandBar> {
+  final _text = TextEditingController();
+  final _focus = FocusNode();
+  String _msg = '';
+  int _hi = 0;
+
+  bool get _isCmd => RegExp(r'^([+-]\s?qty|qty|void|disc|hold|pay|checkout|charge)\b', caseSensitive: false).hasMatch(_text.text.trim());
+
+  List<Product> get _found => !_isCmd && _text.text.trim().length >= 2
+      ? searchProducts(widget.data.products, _text.text, stockOf: (p) => widget.data.stockOf(p.id)).where((p) => widget.data.stockOf(p.id) > 0).take(6).toList()
+      : const [];
+
+  Future<void> _go() async {
+    final found = _found;
+    if (!_isCmd && found.isNotEmpty) {
+      final p = found[_hi.clamp(0, found.length - 1)];
+      await widget.onAdd(p);
+      setState(() {
+        _text.clear();
+        _msg = 'Added ${p.name}';
+      });
+    } else {
+      final can = ref.read(permissionsProvider).value ?? const <String>{};
+      final r = await ref.read(saleControllerProvider(widget.wholesale).notifier).command(_text.text, canEditPrice: can.contains('pos.price_edit'));
+      if (!mounted) return;
+      if (r.pay) return Navigator.pop(context, true);
+      setState(() {
+        _msg = r.error ?? 'Done';
+        if (r.error == null) _text.clear();
+      });
+    }
+    _focus.requestFocus();
+  }
+
+  @override
+  void dispose() {
+    _text.dispose();
+    _focus.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final th = Theme.of(context);
+    final s = ref.watch(saleControllerProvider(widget.wholesale));
+    final found = _found;
+    final good = _msg.startsWith('Done') || _msg.startsWith('Added');
+    return Dialog(
+      alignment: Alignment.topCenter,
+      insetPadding: const EdgeInsets.only(top: 80, left: 24, right: 24),
+      child: SizedBox(
+        width: 600,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: CallbackShortcuts(
+            bindings: {
+              const SingleActivator(LogicalKeyboardKey.arrowDown): () => setState(() => _hi = (_hi + 1).clamp(0, found.isEmpty ? 0 : found.length - 1)),
+              const SingleActivator(LogicalKeyboardKey.arrowUp): () => setState(() => _hi = (_hi - 1).clamp(0, found.isEmpty ? 0 : found.length - 1)),
+            },
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              TextField(
+                key: const Key('command-bar'),
+                controller: _text,
+                focusNode: _focus,
+                autofocus: true,
+                onChanged: (_) => setState(() {
+                  _msg = '';
+                  _hi = 0;
+                }),
+                onSubmitted: (_) => _go(),
+                decoration: const InputDecoration(prefixIcon: Icon(Icons.keyboard_command_key), hintText: '+qty 2 · void 2 · disc 2 10 · disc 10 · hold · pay · or a medicine', suffixText: 'Esc'),
+              ),
+              for (var i = 0; i < found.length; i++)
+                ListTile(
+                  dense: true,
+                  selected: i == _hi,
+                  title: Text(found[i].name),
+                  trailing: Text('${widget.data.settings.money(priceOf(found[i], wholesale: widget.wholesale))} · ${formatQty(widget.data.stockOf(found[i].id))} in stock'),
+                  onTap: () {
+                    _hi = i;
+                    _go();
+                  },
+                ),
+              if (_msg.isNotEmpty)
+                Padding(padding: const EdgeInsets.only(top: 8), child: Text(_msg, style: TextStyle(color: good ? Colors.green.shade700 : th.colorScheme.error))),
+              const SizedBox(height: 8),
+              Wrap(spacing: 12, runSpacing: 4, children: [
+                if (s.lines.isEmpty) Text("No lines yet: type a medicine's name to add one.", style: th.textTheme.bodySmall),
+                for (var i = 0; i < s.lines.length; i++)
+                  Text('${i + 1}  ${s.lines[i].name} × ${s.lines[i].pack != null ? '${formatQty(s.lines[i].count)} ${s.lines[i].pack!.name.toLowerCase()}' : formatQty(s.lines[i].qty)}'),
+              ]),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// Held sales at this branch for this till, oldest first.
@@ -308,7 +528,14 @@ class _ProductPanel extends StatelessWidget {
     this.categories = const [],
     this.onView,
     this.onStar,
+    this.layout,
+    this.onLayout,
+    this.onCommand,
   });
+  /// the till's layout on wide screens (null on a phone: no choice)
+  final String? layout;
+  final ValueChanged<String>? onLayout;
+  final VoidCallback? onCommand;
   final String view;
   final Set<String> favs;
   final List<String> categories;
@@ -344,6 +571,18 @@ class _ProductPanel extends StatelessWidget {
                 ),
               ),
               Text('${data.products.length} medicines', style: t.textTheme.bodySmall),
+              if (onCommand != null) IconButton(tooltip: 'Command bar (Ctrl+K)', icon: const Icon(Icons.keyboard_command_key), onPressed: onCommand),
+              if (layout != null) ...[
+                const SizedBox(width: 8),
+                DropdownButton<String>(
+                  key: const Key('pos-layout'),
+                  value: layout,
+                  isDense: true,
+                  underline: const SizedBox(),
+                  items: [for (final (k, label) in posLayouts) DropdownMenuItem(value: k, child: Text(label))],
+                  onChanged: (v) => onLayout?.call(v!),
+                ),
+              ],
             ],
           ),
           const SizedBox(height: 10),
@@ -546,7 +785,9 @@ class _SaleBar extends ConsumerWidget {
 }
 
 class _SalePanel extends ConsumerWidget {
-  const _SalePanel({required this.wholesale, required this.data, required this.onCharge, required this.onError});
+  const _SalePanel({required this.wholesale, required this.data, required this.onCharge, required this.onError, this.advanced = false});
+  /// Advanced UI: numbered lines (for the command bar) and "Process checkout"
+  final bool advanced;
   final bool wholesale;
   final PharmacyData data;
   final VoidCallback onCharge;
@@ -706,7 +947,7 @@ class _SalePanel extends ConsumerWidget {
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Text(l.name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                                      Text(advanced ? '${i + 1}  ${l.name}' : l.name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
                                       if (l.allowExpired)
                                         Text('Expired stock · ${l.expiredReason}', style: TextStyle(color: th.colorScheme.error, fontSize: 12)),
                                       if (l.directions != null)
@@ -872,7 +1113,7 @@ class _SalePanel extends ConsumerWidget {
                   child: FilledButton(
                     onPressed: s.lines.isEmpty ? null : onCharge,
                     style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 18)),
-                    child: Text('Charge ${fmt(t.total)}   [F9]', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                    child: Text('${advanced ? 'Process checkout' : 'Charge'} ${fmt(t.total)}   [F9]', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
                   ),
                 ),
               ],
