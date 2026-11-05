@@ -35,8 +35,8 @@ class StoreRefused implements Exception {
 }
 
 /// Everything one action changes (a sale, a delivery…), collected and then saved in one transaction.
-class Draft {
-  Draft(this._store, this.now);
+class Edit {
+  Edit(this._store, this.now);
 
   final RecordStore _store;
   /// The time every record in this action is stamped with.
@@ -139,11 +139,14 @@ class RecordStore {
 
   Future<PharmacySettings> settings() async => PharmacySettings.fromRecord(await settingsRecord());
 
+  Stream<PharmacySettings> watchSettings() => (db.select(db.kv)..where((x) => x.k.equals(settingsKey))).watch().map(
+      (rs) => PharmacySettings.fromRecord(rs.isEmpty ? const {} : _decode(rs.single.v)));
+
   /// Run [change] and save everything it did in ONE transaction: records, deletions (with tombstones), settings and
   /// the outbox entries (all sharing one txn id, so they reach the cloud together). If anything fails, nothing is
   /// saved and the error is passed on: the caller (e.g. the till) keeps the sale and says it was NOT recorded.
-  Future<T> update<T>(FutureOr<T> Function(Draft d) change) => db.transaction(() async {
-        final d = Draft(this, _clock());
+  Future<T> update<T>(FutureOr<T> Function(Edit d) change) => db.transaction(() async {
+        final d = Edit(this, _clock());
         final result = await change(d);
         if (d.isEmpty) return result;
         final txn = uid();
