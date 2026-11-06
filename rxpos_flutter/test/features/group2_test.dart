@@ -79,6 +79,26 @@ void main() {
     expect((saved['status'], (saved['summary'] as Map)['zeroed']), ('posted', 1));
     expect((await store.rows('batches')).single['batch'], 'NEW');
     expect((await store.rows('audit')).map((x) => x['action']), ['Stock count started', 'Stock count posted']);
+
+    // corrected afterwards: A1 was really 10, not 8; the found batch can't go below what is left of it now
+    final postedCount = (await store.get('stockCounts', count['id'] as String))!;
+    item = CountItem.fromRecord((await store.get('countItems', countItemId(count['id'] as String, 'a')))!);
+    final newId = (await store.rows('batches')).single['id'] as String;
+    final now = [const BatchStock(id: 'a1', batch: 'A1', qty: 8), BatchStock(id: newId, batch: 'NEW', expiry: '2030-01-01', qty: 1)];
+    final keyNew = item.lines.last.key;
+    await expectLater(correctPostedCount(store, count: postedCount, item: item, counted: {'a1': 10}, reason: '', byId: byId, batchesNow: now,
+        settings: const PharmacySettings(), user: 'Ben'), throwsA(isA<CountProblem>()));
+    await expectLater(correctPostedCount(store, count: postedCount, item: item, counted: {keyNew: 0}, reason: 'miscounted', byId: byId, batchesNow: now,
+        settings: const PharmacySettings(), user: 'Ben'), throwsA(predicate((e) => '$e'.contains('only 1 left now'))));
+    final fixed = await correctPostedCount(store, count: postedCount, item: item, counted: {'a1': 10, keyNew: 3}, reason: 'second carton missed', byId: byId,
+        batchesNow: now, settings: const PharmacySettings(), user: 'Ben');
+    expect(await stock('a'), 3, reason: '+2 on A1');
+    final mv = (await store.rows('movements')).last;
+    expect((mv['batchId'], mv['qty'], mv['type'], mv['note']), ('a1', 2, 'Stock count', 'Shelf 1 (corrected: second carton missed)'));
+    expect((fixed.short, fixed.over, fixed.zeroed, fixed.net), (0, 1, 1, 300.0 - 350.0), reason: 'A1 now matches; B1 set to 0 stays');
+    expect((await store.get('countItems', countItemId(count['id'] as String, 'a')))!['total'], 18);
+    expect(((await store.get('stockCounts', count['id'] as String))!['summary'] as Map)['net'], -50.0);
+    expect((await store.rows('audit')).last['details'], 'Shelf 1: Amoxa batch A1 8 → 10 (second carton missed)');
   });
 
   test('stock take scopes and scan & count', () async {

@@ -4,7 +4,9 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/data/pharmacy_providers.dart';
 import '../../../core/entities/product.dart';
+import '../../../core/presentation/medicine_groups.dart';
 import '../../../core/presentation/widgets.dart';
+import '../../../core/rules/drug_class.dart';
 import '../../../core/rules/dates.dart';
 import '../../../core/rules/money.dart';
 import '../../../core/rules/search.dart';
@@ -25,6 +27,7 @@ class InventoryScreen extends ConsumerStatefulWidget {
 class _InventoryScreenState extends ConsumerState<InventoryScreen> {
   late String _filter = widget.filter;
   String _q = '';
+  final _folded = <String>{};
 
   static const _filters = [('all', 'All'), ('instock', 'In stock'), ('low', 'Low'), ('out', 'Out of stock'), ('expiring', 'Expiring'), ('expired', 'Expired')];
 
@@ -61,6 +64,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
     final value = stockValue(d.products.where((p) => d.stockOf(p.id) > 0), d.stock.batchesOf);
     final shownValue = stockValue(list, d.stock.batchesOf);
     final retail = list.fold<double>(0, (a, p) => a + (d.stockOf(p.id) > 0 ? d.stockOf(p.id) : 0) * p.price);
+    final order = medicineOrderOf(ref);
+    final rows = groupedRows(list, order, _folded);
     return PageFrame(
       title: 'Inventory',
       subtitle: can.contains('reports')
@@ -79,21 +84,30 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
         if (can.contains('medicines.manage')) FilledButton.icon(onPressed: () => editMedicine(context, ref, null), icon: const Icon(Icons.add), label: const Text('Add medicine')),
       ],
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Wrap(spacing: 6, children: [for (final (k, l) in _filters) ChoiceChip(label: Text(l), selected: _filter == k, onSelected: (_) => setState(() => _filter = k))]),
+        Wrap(spacing: 6, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
+          for (final (k, l) in _filters) ChoiceChip(label: Text(l), selected: _filter == k, onSelected: (_) => setState(() => _filter = k)),
+          const MedicineOrderMenu(),
+        ]),
         const SizedBox(height: 8),
         Expanded(
           child: list.isEmpty
               ? const EmptyState('No medicines here')
               : ListView.separated(
-                  itemCount: list.length,
+                  itemCount: rows.length,
                   separatorBuilder: (_, _) => const Divider(height: 1),
                   itemBuilder: (_, i) {
-                    final p = list[i];
+                    final row = rows[i];
+                    if (row is GroupHeading) {
+                      return GroupHeadingTile(heading: row, onToggle: () => setState(() => _folded.contains(row.name) ? _folded.remove(row.name) : _folded.add(row.name)));
+                    }
+                    final p = (row as GroupedMedicine).p;
                     final st = d.stockOf(p.id);
                     final days = soonest(p);
+                    final cls = drugClassOf(p).cls;
                     return ListTile(
                       title: Text(p.name),
-                      subtitle: Text([p.generic, p.form, if (days != null) days < 0 ? 'EXPIRED' : 'expires in $days days'].where((x) => x.isNotEmpty).join(' · ')),
+                      subtitle: Text([p.generic, p.form, if (order != MedicineOrder.drugClass && cls != unclassified) cls, if (order != MedicineOrder.shelf && shelfLabel(p).isNotEmpty) 'shelf ${shelfLabel(p)}',
+                        if (days != null) days < 0 ? 'EXPIRED' : 'expires in $days days'].where((x) => x.isNotEmpty).join(' · ')),
                       trailing: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.end, children: [
                         Text(formatQty(st, '${p.unit.isEmpty ? 'unit' : p.unit.toLowerCase()}s'),
                             style: TextStyle(fontWeight: FontWeight.w700, color: st <= 0 ? Theme.of(context).colorScheme.error : isLowStock(p, st) ? Colors.orange.shade800 : null)),

@@ -256,6 +256,7 @@ class _SupplierPrices extends StatelessWidget {
 }
 
 /// Correct a past delivery (purchases.edit): change any line, remove lines, add lines that were missed; a reason.
+/// Or delete it entirely (its stock goes back out).
 class PurchaseEditor extends ConsumerStatefulWidget {
   const PurchaseEditor({super.key, required this.purchase});
   final Map<String, Object?> purchase;
@@ -356,6 +357,31 @@ class _PurchaseEditorState extends ConsumerState<PurchaseEditor> {
         ])),
       ),
       actions: [
+        TextButton.icon(
+          key: const Key('purchase-delete'),
+          style: TextButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.error),
+          icon: const Icon(Icons.delete_outline),
+          label: const Text('Delete delivery'),
+          onPressed: () async {
+            if (_reason.text.trim().isEmpty) return say(context, 'Say why the delivery is being deleted (in the reason box)', error: true);
+            final ok = await confirmAction(context, 'Delete ${pu['number']}?',
+                'Its stock (${orig.length} line${orig.length == 1 ? '' : 's'}) goes back out of the batches it came in, and the delivery is removed on every device. '
+                    'Payments already made to the supplier stay as they are. The audit log keeps what it was.',
+                'Delete');
+            if (!ok || !context.mounted) return;
+            final user = (await ref.read(sessionControllerProvider.future))?.userName ?? '';
+            final batches = (await ref.read(recordStoreProvider).rows('batches')).map(Batch.fromRecord).toList();
+            try {
+              await deletePurchase(ref.read(recordStoreProvider), pu, reason: _reason.text, user: user, settings: st,
+                  batchesOf: (id, br) => StockView(products: d.products, batches: batches, index: d.stock.index, branch: br).batchesOf(id));
+              if (!context.mounted) return;
+              Navigator.pop(context);
+              say(context, '${pu['number']} deleted; its stock was taken back out');
+            } on DeliveryProblem catch (e) {
+              if (context.mounted) say(context, e.message, error: true);
+            }
+          },
+        ),
         TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
         FilledButton(
           onPressed: () async {

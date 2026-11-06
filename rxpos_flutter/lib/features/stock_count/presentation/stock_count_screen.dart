@@ -7,6 +7,7 @@ import '../../../core/data/pharmacy_providers.dart';
 import '../../../core/data/record_store.dart';
 import '../../../core/entities/product.dart';
 import '../../../core/presentation/export.dart';
+import '../../../core/presentation/medicine_groups.dart';
 import '../../../core/presentation/widgets.dart';
 import '../../../core/rules/dates.dart';
 import '../../../core/rules/fefo.dart';
@@ -201,6 +202,7 @@ class _CountSheetState extends ConsumerState<_CountSheet> {
   final _search = TextEditingController();
   final _searchFocus = FocusNode();
   String _q = '', _shelf = '';
+  final _folded = <String>{};
   late String _tab = widget.count['status'] == 'open' ? 'todo' : 'diff';
   bool _reveal = false;
   int _limit = 150;
@@ -230,6 +232,7 @@ class _CountSheetState extends ConsumerState<_CountSheet> {
         (_tab == 'all' || (_tab == 'todo' ? !itemBy.containsKey(p.id) : _tab == 'done' ? itemBy.containsKey(p.id) : itemBy.containsKey(p.id) && hasDiff(p)))).toList();
     final outside = !readOnly && ql.length > 1 ? searchProducts(d.products, _q, stockOf: (p) => d.stockOf(p.id)).where((p) => !ids.contains(p.id)).take(6).toList() : const <Product>[];
     final pct = all.isEmpty ? 0 : (items.length / all.length * 100).round();
+    final order = medicineOrderOf(ref);
 
     Future<void> openOn(Product p) async {
       if (!ids.contains(p.id)) await addToCount(ref.read(recordStoreProvider), count, p.id);
@@ -348,6 +351,8 @@ class _CountSheetState extends ConsumerState<_CountSheet> {
               ),
             ),
           ),
+          const SizedBox(width: 8),
+          const MedicineOrderMenu(),
           if (shelves.length > 1)
             DropdownButton<String>(value: _shelf, items: [const DropdownMenuItem(value: '', child: Text('All shelves')), for (final x in shelves) DropdownMenuItem(value: x, child: Text(x))],
                 onChanged: (v) => setState(() => _shelf = v ?? '')),
@@ -356,12 +361,21 @@ class _CountSheetState extends ConsumerState<_CountSheet> {
         Expanded(
           child: shown.isEmpty
               ? EmptyState(_tab == 'todo' && all.isNotEmpty ? 'Everything here is counted 🎉 Review & post when ready.' : ql.isNotEmpty ? 'Nothing matches. Scan or type another name.' : 'Nothing here')
-              : ListView.builder(
-                  itemCount: (shown.length > _limit ? _limit : shown.length) + (shown.length > _limit ? 1 : 0),
-                  itemBuilder: (_, i) => i == _limit
-                      ? TextButton(onPressed: () => setState(() => _limit += 150), child: Text('Show more (${shown.length - _limit} left)'))
-                      : _CountRow(key: ValueKey('row-${shown[i].id}-${itemBy[shown[i].id]?.at}'), count: count, p: shown[i], item: itemBy[shown[i].id], blind: blind, readOnly: readOnly, warn: st.expiryWarnDays.round()),
-                ),
+              : Builder(builder: (_) {
+                  final rows = groupedRows(shown.take(_limit), order, _folded);
+                  return ListView.builder(
+                    itemCount: rows.length + (shown.length > _limit ? 1 : 0),
+                    itemBuilder: (_, i) {
+                      if (i == rows.length) return TextButton(onPressed: () => setState(() => _limit += 150), child: Text('Show more (${shown.length - _limit} left)'));
+                      final row = rows[i];
+                      if (row is GroupHeading) {
+                        return GroupHeadingTile(heading: row, onToggle: () => setState(() => _folded.contains(row.name) ? _folded.remove(row.name) : _folded.add(row.name)));
+                      }
+                      final p = (row as GroupedMedicine).p;
+                      return _CountRow(key: ValueKey('row-${p.id}-${itemBy[p.id]?.at}'), count: count, p: p, item: itemBy[p.id], blind: blind, readOnly: readOnly, warn: st.expiryWarnDays.round());
+                    },
+                  );
+                }),
         ),
       ]),
     );
@@ -459,6 +473,51 @@ class _CountRowState extends ConsumerState<_CountRow> {
         typed: {for (final e in _ctl.entries) e.key: e.value.text, ...patch}, extra: extra, by: user, branchId: d.branch);
   }
 
+  /// A posted count corrected: the right quantity per batch and why; the difference is booked on the batch.
+  Future<void> _correct(BuildContext context) async {
+    final item = widget.item!;
+    final ctl = {for (final l in item.lines) l.key: TextEditingController(text: formatQty(l.qty))};
+    final reason = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: Text('Correct the count of ${widget.p.name}'),
+        content: SizedBox(
+          width: 460,
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            for (final l in item.lines)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(children: [
+                  Expanded(child: Text('Batch ${l.batch.isEmpty ? '—' : l.batch}${l.expiry.isEmpty ? '' : ' · exp ${l.expiry}'}\nsystem then ${formatQty(l.sys)}, counted ${formatQty(l.qty)}')),
+                  SizedBox(width: 100, child: TextField(key: Key('correct-${l.key}'), controller: ctl[l.key], keyboardType: TextInputType.number, textAlign: TextAlign.center,
+                      decoration: const InputDecoration(labelText: 'Should be', isDense: true))),
+                ]),
+              ),
+            TextField(key: const Key('correct-reason'), controller: reason, decoration: const InputDecoration(labelText: 'Reason (kept in the audit log)', hintText: 'e.g. a second carton was missed')),
+            const SizedBox(height: 6),
+            Text('The difference is added to or taken from that batch now. Sales made since the count stay as they are.', style: Theme.of(c).textTheme.bodySmall),
+          ]),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Save correction')),
+        ],
+      ),
+    );
+    if (ok != true || !context.mounted) return;
+    final d = await ref.read(pharmacyProvider.future);
+    final user = (await ref.read(sessionControllerProvider.future))?.userName ?? '';
+    try {
+      await correctPostedCount(ref.read(recordStoreProvider), count: widget.count, item: item,
+          counted: {for (final e in ctl.entries) e.key: ?double.tryParse(e.value.text.trim())},
+          reason: reason.text, byId: d.byId, batchesNow: d.stock.batchesOf(widget.p.id), settings: d.settings, user: user, branchId: d.branch);
+      if (context.mounted) say(context, '${widget.p.name}: count corrected and stock adjusted');
+    } on CountProblem catch (e) {
+      if (context.mounted) say(context, e.message, error: true);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final d = ref.watch(pharmacyProvider).value;
@@ -533,6 +592,11 @@ class _CountRowState extends ConsumerState<_CountRow> {
               ],
             ]),
           if (rows.isEmpty && !_adding) Text('No batch recorded here. If it is on the shelf, add the batch you find.', style: th.textTheme.bodySmall),
+          if (widget.readOnly && counted && widget.count['status'] == 'posted' && (ref.watch(permissionsProvider).value ?? const <String>{}).contains('stock.adjust'))
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(key: Key('count-correct-${p.id}'), onPressed: () => _correct(context), icon: const Icon(Icons.edit_outlined, size: 16), label: const Text('Correct this count')),
+            ),
           if (!widget.readOnly)
             Wrap(spacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
               if (!widget.blind && rows.isNotEmpty)
