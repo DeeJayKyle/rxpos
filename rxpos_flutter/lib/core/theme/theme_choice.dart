@@ -11,7 +11,7 @@ part 'theme_choice.g.dart';
 /// This device's look (src/App.jsx useTheme / useSurface, src/vivid.js): the colour theme, following the system's light
 /// or dark, the accent, the surface style and the colour level. Kept on this device only.
 class Look {
-  const Look({this.theme = 'light', this.system = false, this.accent = '', this.surface = 'flat', this.level = 'calm', this.beforePremium = ''});
+  const Look({this.theme = 'light', this.system = false, this.accent = '', this.surface = 'aurora', this.level = 'calm', this.beforePremium = ''});
   final String theme, accent, surface, level, beforePremium;
   final bool system;
 
@@ -20,7 +20,7 @@ class Look {
         level: level ?? this.level, beforePremium: beforePremium ?? this.beforePremium,
       );
 
-  Map<String, Object?> toJson() => {'theme': theme, 'mode': system ? 'system' : '', 'accent': accent, 'surface': surface, 'level': level, 'beforePremium': beforePremium};
+  Map<String, Object?> toJson() => {'v': 2, 'theme': theme, 'mode': system ? 'system' : '', 'accent': accent, 'surface': surface, 'level': level, 'beforePremium': beforePremium};
 
   static Look parse(String? v) {
     try {
@@ -30,7 +30,8 @@ class Look {
         theme: palettes.any((p) => p.id == theme) ? theme : 'light',
         system: j['mode'] == 'system',
         accent: accents.any((a) => a.$1 == j['accent']) ? '${j['accent']}' : '',
-        surface: surfaceStyles.any((s) => s.$1 == j['surface']) ? '${j['surface']}' : 'flat',
+        // Aurora is the standard look from version 2 of the saved look; a device still on the old standard (Flat) moves to it once
+        surface: !surfaceStyles.any((s) => s.$1 == j['surface']) || (j['v'] != 2 && j['surface'] == 'flat') ? 'aurora' : '${j['surface']}',
         level: j['level'] == 'vivid' ? 'vivid' : 'calm',
         beforePremium: '${j['beforePremium'] ?? ''}',
       );

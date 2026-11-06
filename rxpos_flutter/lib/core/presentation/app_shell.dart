@@ -18,6 +18,7 @@ import '../../features/sync_status/application/sync_controller.dart';
 import '../../features/engage/application/popups.dart';
 import '../../features/engage/presentation/spotlight.dart';
 import '../../features/engage/presentation/watchers.dart';
+import 'backdrop.dart';
 import 'nav.dart';
 import 'screens.dart';
 import 'theme_menu.dart';
@@ -44,6 +45,7 @@ class AppShell extends ConsumerWidget {
     final premium = ref.watch(premiumUiProvider).value ?? false;
     final visible = screens.where((s) => s.allowed(can, features)).toList();
     final wide = MediaQuery.sizeOf(context).width >= 900;
+    final aurora = auroraOn(context);
     final counts = ref.watch(navCountsProvider);
     // the sidebar folds down to a rail of icons (kept on this device)
     final rail = wide && ref.watch(deviceValueProvider(navRailKey)).value == '1';
@@ -109,7 +111,9 @@ class AppShell extends ConsumerWidget {
       },
       // the idle screen covers the whole window
       child: Spotlight(
-        child: Scaffold(
+        child: AuroraBackground(
+          child: Scaffold(
+          backgroundColor: aurora ? Colors.transparent : null,
           appBar: bar,
           drawer: wide ? null : Drawer(child: SafeArea(child: nav)),
           body: wide
@@ -118,12 +122,13 @@ class AppShell extends ConsumerWidget {
                     duration: const Duration(milliseconds: 200),
                     curve: Curves.easeOutCubic,
                     width: rail ? 72 : 240,
-                    child: Material(color: Theme.of(context).colorScheme.surfaceContainerLow, child: nav),
+                    child: Material(color: Theme.of(context).colorScheme.surfaceContainerLow.withValues(alpha: aurora ? .55 : 1), child: nav),
                   ),
-                  const VerticalDivider(width: 1),
+                  VerticalDivider(width: 1, color: aurora ? Theme.of(context).dividerColor.withValues(alpha: .4) : null),
                   Expanded(child: body),
                 ])
               : body,
+          ),
         ),
       ),
     );

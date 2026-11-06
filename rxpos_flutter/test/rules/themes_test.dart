@@ -1,4 +1,6 @@
 // Colour themes (src/themes.js): 28 palettes, readable everywhere (WCAG AA), accents, the owner's choice, light / dark.
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rxpos/core/theme/theme_choice.dart';
@@ -36,7 +38,17 @@ void main() {
     final l = Look.parse('{"theme":"nord","mode":"system","accent":"violet","surface":"glass","level":"vivid"}');
     expect((l.theme, l.system, l.accent, l.surface, l.level), ('nord', true, 'violet', 'glass', 'vivid'));
     expect(Look.parse('{"theme":"nope","surface":"x"}').theme, 'light');
-    expect(Look.parse('garbage').surface, 'flat');
+    expect(Look.parse('garbage').surface, 'aurora');
     expect(buildTheme(p, vivid: true).extension<LookLevel>()!.vivid, isTrue);
+  });
+
+  test('Aurora is the standard look: a device on the old standard moves to it once; Flat chosen since stays', () {
+    expect(Look.parse('{"theme":"nord","surface":"flat"}').surface, 'aurora');
+    expect(Look.parse('{"v":2,"theme":"nord","surface":"flat"}').surface, 'flat');
+    expect(Look.parse(jsonEncode(Look.parse('{"surface":"flat"}').copyWith(surface: 'flat').toJson())).surface, 'flat');
+    final t = buildTheme(paletteById('light'), surface: 'aurora');
+    expect(t.extension<Backdrop>()!.on, isTrue);
+    expect(t.cardTheme.color!.a, lessThan(1), reason: 'translucent panels over the backdrop');
+    expect(buildTheme(paletteById('light')).extension<Backdrop>()!.on, isFalse);
   });
 }

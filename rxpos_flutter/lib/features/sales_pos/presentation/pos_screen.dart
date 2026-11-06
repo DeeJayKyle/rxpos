@@ -11,6 +11,7 @@ import '../../../core/data/record_store.dart';
 import '../../../core/entities/draft.dart';
 import '../../../core/entities/product.dart';
 import '../../../core/entities/sale.dart';
+import '../../../core/presentation/backdrop.dart';
 import '../../../core/presentation/resizable.dart';
 import '../../../core/presentation/widgets.dart';
 import '../../../core/rules/drug_class.dart';
@@ -938,7 +939,7 @@ class _SalePanel extends ConsumerWidget {
     }
 
     return Material(
-      color: th.colorScheme.surfaceContainerLow,
+      color: th.colorScheme.surfaceContainerLow.withValues(alpha: auroraOn(context) ? .6 : 1),
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
