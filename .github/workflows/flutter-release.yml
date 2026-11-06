@@ -23,7 +23,7 @@ concurrency:
 env:
   RELEASE_TAG: flutter-v1.1
   RELEASE_NAME: RxPos Ug v1.1
-  BUILD: '61' # the "Flutter apps" run number whose files are released (app version 1.0.BUILD)
+  BUILD: '62' # the "Flutter apps" run number whose files are released (app version 1.0.BUILD)
   LATEST: 'true' # the owner made the new apps the repository's latest release
 
 jobs:
