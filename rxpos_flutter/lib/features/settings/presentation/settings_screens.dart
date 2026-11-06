@@ -18,6 +18,7 @@ import '../../stock/domain/stock_form.dart' show dateFormats;
 import '../../../core/sync/sync_config.dart';
 import '../../../core/theme/theme_choice.dart';
 import '../../sync_status/application/sync_controller.dart';
+import '../../../core/update/app_updates.dart';
 
 /// This device (src/pages/Device.jsx): its branch and look, sync & storage (waiting changes, refused changes, ready to
 /// work offline, download everything again), text size and rotation, the date format, and notification sounds.
@@ -246,6 +247,18 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
         ),
         const SizedBox(height: 4),
         Text('Live connection: ${ref.watch(liveProvider).up ? 'on (changes from other devices arrive at once)' : 'off (syncing every few seconds instead)'}', key: const Key('live-state')),
+        const SizedBox(height: 4),
+        Text(updateText(ref.watch(appUpdaterProvider), ref.watch(updatePlatformProvider)), key: const Key('update-state')),
+        if (ref.watch(updatePlatformProvider) != null)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              key: const Key('update-now'),
+              onPressed: const {'checking', 'downloading'}.contains(ref.watch(appUpdaterProvider).status) ? null : () => ref.read(appUpdaterProvider.notifier).updateNow(),
+              icon: const Icon(Icons.system_update_alt),
+              label: Text(ref.watch(appUpdaterProvider).status == 'ready' ? 'Update now' : 'Check for updates'),
+            ),
+          ),
       ]),
     ];
     return PageFrame(

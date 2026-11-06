@@ -21,6 +21,7 @@ import 'theme_menu.dart';
 import '../theme/themes.dart';
 import 'top_bar.dart';
 import '../../features/calls/presentation/call_overlay.dart';
+import '../update/update_pill.dart';
 
 /// The frame around every screen: the sidebar with its groups (Sales, People, Medicine inventory, Finance, Insights,
 /// System) on Windows and tablets, a drawer on phones; the pharmacy, who is signed in, the sync status, the Premium UI
@@ -64,6 +65,7 @@ class AppShell extends ConsumerWidget {
         if (wide) const BranchPill(),
         const SizedBox(width: 6),
         ClockPill(compact: !wide, date: MediaQuery.sizeOf(context).width >= 1280),
+        const UpdatePill(),
         const NotificationBell(),
         if (wide && allowedPalettes(ref.watch(brandingProvider)).any((p) => p.id == premiumTheme))
           Tooltip(

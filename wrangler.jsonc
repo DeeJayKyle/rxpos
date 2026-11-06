@@ -31,5 +31,7 @@
   // Live connection per pharmacy: instant sync notifications and call set-up (worker/live.js)
   "durable_objects": { "bindings": [{ "name": "HUB", "class_name": "TenantHub" }] },
   "migrations": [{ "tag": "v1-live", "new_sqlite_classes": ["TenantHub"] }],
+  // Update files of the new (Flutter) apps, served read-only at /api/app/<file> (too big for the website's 25 MB limit)
+  "r2_buckets": [{ "binding": "APPS", "bucket_name": "rxpos-apps" }],
   "observability": { "enabled": true }
 }

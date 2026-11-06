@@ -26,9 +26,10 @@ Every feature of the React app (`src/pages/*.jsx`, `src/*.jsx`), screen by scree
 - ✅ Live connection (a ticket, ping every 20 s, reconnects; another device's change syncs at once)
 - ✅ Calls (voice between staff over the live connection, HTTP when a colleague isn't on it): ring and ringback, answer / decline, mute, hang up, "busy", 45 s no answer, missed after 46 s, a fresh route after a network change; the call noted in the private chat; WebRTC in the Windows and Android builds, so a Flutter device and a React device can call each other
 - ✅ F5 / Ctrl+R refresh (sync now and say how it went), Ctrl+Shift+R reloads the app; the app version in This device
-- ✗ App updates (Windows installer, Android; switches by itself when nothing is in progress): the Flutter builds are
-  published only to the private repository's pilot release, so the apps have nowhere public to check; needs a version
-  file and the installers served by the cloud
+- ✅ App updates from the cloud (a version file and the installer per platform at /api/app/, from the R2 bucket
+  rxpos-apps): checked 20 s after start and every 10 minutes, downloaded and checksum-checked; Windows installs silently
+  when nothing is in progress (or with Update) and opens again; Android opens the system installer on Update (Android
+  always asks; the React app's in-place web updates have no Flutter equivalent); "RxPOS updated" once after
 
 ## POS (POS.jsx)
 - ✅ Search / scan, grid, in-stock filter, packs per line, price edit by permission, client, discount, tax, payment
@@ -151,7 +152,7 @@ Every feature of the React app (`src/pages/*.jsx`, `src/*.jsx`), screen by scree
   again), text size, rotation (Android), date format, notification sounds (the same tones, volume, own file, test)
 - n/a Restore the copy from before the 1.6 upgrade (a browser storage upgrade the Flutter app never had)
 - ✅ App version, notifications in the background
-- ✗ App updates (see App frame)
+- ✅ App updates: the state and Check for updates / Update now in This device (see App frame)
 
 ## Other screens
 - ✅ Labels: four sizes (thermal 38×25 / 50×30 / 60×40, A4 sheet of 21), show price / expiry / pharmacy name, add all in-stock, a barcode made for a medicine without one, preview, print

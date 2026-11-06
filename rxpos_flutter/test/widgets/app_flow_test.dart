@@ -1,6 +1,9 @@
 // The real screens, driven like a cashier would: sign in, scan, charge, receipt; Add Stock; the sync screen.
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+
+import 'package:crypto/crypto.dart';
 
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
@@ -21,6 +24,7 @@ import 'package:rxpos/core/notify/os_notifications.dart';
 import 'package:rxpos/core/rules/dates.dart';
 import 'package:rxpos/core/sound/sounds.dart';
 import 'package:rxpos/core/sync/sync_config.dart';
+import 'package:rxpos/core/update/app_updates.dart';
 import 'package:rxpos/features/calls/application/call_controller.dart';
 import 'package:rxpos/features/calls/domain/rtc_peer.dart';
 import 'package:rxpos/features/engage/presentation/watchers.dart';
@@ -123,6 +127,7 @@ void main() {
           soundsProvider.overrideWith((ref) => _QuietSounds(ref, played)),
           liveOnProvider.overrideWithValue(live), // no real connection to the cloud in tests
           callsOnProvider.overrideWithValue(calls), // voice calls: only in the tests about them
+          if (!extra.any((o) => o.origin == updatePlatformProvider)) updatePlatformProvider.overrideWithValue(null), // no self-updates unless a test asks
           osNotifyProvider.overrideWithValue(osNotify),
           appInForegroundProvider.overrideWithValue(() => foreground),
           ...extra,
@@ -2135,6 +2140,98 @@ void main() {
       await settle(tester);
       expect(find.byKey(const Key('call-screen')), findsNothing);
       await line.close();
+      await done(tester);
+    });
+  });
+
+  group('app updates from the cloud', () {
+    late Directory folder;
+    late List<(String, String)> installs;
+    late DateTime now;
+    late List<int> served;
+    late Map<String, Object?> manifest;
+
+    Future<void> updStart(WidgetTester tester, String platform, {int build = 50, bool damaged = false}) async {
+      await tester.runAsync(signedIn);
+      folder = (await tester.runAsync(() => Directory.systemTemp.createTemp('rxpos-upd')))!;
+      addTearDown(() => folder.delete(recursive: true));
+      installs = [];
+      now = DateTime(2026, 11, 6, 10);
+      served = List.generate(5000, (i) => i % 251);
+      final ext = platform == 'windows' ? 'exe' : 'apk';
+      manifest = {'build': 51, 'label': '1.0.51', 'file': 'RxPOS-New-51.$ext', 'size': served.length, 'sha256': '${sha256.convert(served)}'};
+      cloud.api['app/flutter-$platform.json'] = (_) => (200, manifest);
+      await start(tester, extra: [
+        updatePlatformProvider.overrideWithValue(platform),
+        currentBuildProvider.overrideWith((_) async => build),
+        updateFolderProvider.overrideWithValue(() async => folder.path),
+        updateClockProvider.overrideWithValue(() => now),
+        updateDownloadProvider.overrideWithValue((url, path, progress) async {
+          expect(url, 'https://api.rxposug.com/api/app/RxPOS-New-51.$ext');
+          await File(path).writeAsBytes(damaged ? served.reversed.toList() : served);
+          progress(1);
+        }),
+        updateInstallProvider.overrideWithValue((platform, path) async => installs.add((platform, path))),
+      ]);
+    }
+
+    Future<void> firstCheck(WidgetTester tester) async {
+      await tester.pump(const Duration(seconds: 21));
+      await settle(tester);
+      await settle(tester);
+    }
+
+    testWidgets('Windows: a newer build is downloaded, checked, and installed by itself once nothing is in progress', (tester) async {
+      await updStart(tester, 'windows');
+      expect(find.byKey(const Key('update-pill')), findsNothing);
+      await firstCheck(tester);
+      expect(cloud.calls.map((c) => c.$1), contains('app/flutter-windows.json'));
+      expect(find.byKey(const Key('update-pill')), findsOneWidget);
+      expect(find.text('New version · Update'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 16));
+      expect(installs, isEmpty, reason: 'someone was using it a moment ago');
+      now = now.add(const Duration(seconds: 91));
+      await tester.pump(const Duration(seconds: 16));
+      await settle(tester);
+      expect(installs, [('windows', '${folder.path}${Platform.pathSeparator}RxPOS-New-51.exe')]);
+      expect(await tester.runAsync(() => db.select(db.kv).get().then((r) => r.firstWhere((k) => k.k == 'device:updatedFrom').v)), '50');
+      await done(tester);
+    });
+
+    testWidgets('Android: ready to install; the system installer opens only when Update is tapped', (tester) async {
+      await updStart(tester, 'android');
+      await firstCheck(tester);
+      now = now.add(const Duration(minutes: 5));
+      await tester.pump(const Duration(seconds: 30));
+      expect(installs, isEmpty);
+      await tester.tap(find.byKey(const Key('update-pill')));
+      await settle(tester);
+      expect(installs.single.$1, 'android');
+      expect(installs.single.$2, endsWith('RxPOS-New-51.apk'));
+      await done(tester);
+    });
+
+    testWidgets('a damaged download is thrown away and never installed; This device says so and checks again', (tester) async {
+      await updStart(tester, 'windows', damaged: true);
+      await firstCheck(tester);
+      expect(find.byKey(const Key('update-pill')), findsNothing);
+      expect(await tester.runAsync(() => File('${folder.path}${Platform.pathSeparator}RxPOS-New-51.exe').exists()), isFalse);
+      await navTo(tester, 'This device');
+      await tester.scrollUntilVisible(find.byKey(const Key('update-state')), 200, scrollable: find.descendant(of: find.byType(PageFrame), matching: find.byType(Scrollable)).first);
+      expect(find.text('The download was damaged. It will try again by itself.'), findsOneWidget);
+      expect(installs, isEmpty);
+      await done(tester);
+    });
+
+    testWidgets('already the newest build: "Up to date"; after an update, "RxPOS updated" once', (tester) async {
+      await tester.runAsync(() => db.into(db.kv).insert(KvCompanion.insert(k: 'device:updatedFrom', v: '50')));
+      await updStart(tester, 'windows', build: 51);
+      expect(find.text('RxPOS updated (1.0.51)'), findsOneWidget);
+      await firstCheck(tester);
+      await navTo(tester, 'This device');
+      await tester.scrollUntilVisible(find.byKey(const Key('update-state')), 200, scrollable: find.descendant(of: find.byType(PageFrame), matching: find.byType(Scrollable)).first);
+      expect(find.text('Up to date. New versions are fetched by themselves.'), findsOneWidget);
+      expect(find.byKey(const Key('update-pill')), findsNothing);
       await done(tester);
     });
   });

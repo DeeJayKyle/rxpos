@@ -145,6 +145,23 @@ const json = (body, status = 200) =>
   new Response(typeof body === 'string' ? body : JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...cors } });
 const httpError = (status, message) => Object.assign(new Error(message), { status });
 
+/** One file of the new apps' updates from the APPS bucket; names are plain file names, nothing else is reachable */
+async function appFile(env, name, method) {
+  if (!env.APPS || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,120}$/.test(name)) return json({ error: 'Not found' }, 404);
+  const obj = method === 'HEAD' ? await env.APPS.head(name) : await env.APPS.get(name);
+  if (!obj) return json({ error: 'Not found' }, 404);
+  const manifest = name.endsWith('.json');
+  const headers = {
+    ...cors,
+    'Content-Type': manifest ? 'application/json' : name.endsWith('.apk') ? 'application/vnd.android.package-archive' : 'application/octet-stream',
+    'Content-Length': String(obj.size),
+    ETag: obj.httpEtag,
+    // the version files change with every build; an installer's name carries its build, so it never changes
+    'Cache-Control': manifest ? 'no-store' : 'public, max-age=86400',
+  };
+  return new Response(method === 'HEAD' ? null : obj.body, { status: 200, headers });
+}
+
 // ---------- crypto helpers ----------
 const te = new TextEncoder();
 const b64url = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -1292,6 +1309,9 @@ export default {
       const r = await rawEnv.ASSETS.fetch(new URL('/version.json', url));
       return r.ok ? json(await r.text()) : json({ error: 'No version information' }, 404);
     }
+    // Public: the new (Flutter) apps' update files in the APPS bucket (R2): flutter-windows.json / flutter-android.json
+    // ({ build, label, file, size, sha256 }) and the installers they name. Read only; uploaded by flutter-apps.yml.
+    if (path.startsWith('/api/app/') && (req.method === 'GET' || req.method === 'HEAD')) return await appFile(rawEnv, path.slice(9), req.method);
     try {
       env = withDatabase(rawEnv);
       await ensureSchema(env.DB);

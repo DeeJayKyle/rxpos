@@ -23,6 +23,8 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 UninstallDisplayIcon={app}\rxpos.exe
 WizardStyle=modern
+; an update closes the running app first (the app also quits as it starts the update)
+CloseApplications=force
 
 [Files]
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
@@ -36,3 +38,5 @@ Name: "desktopicon"; Description: "Create a desktop shortcut"
 
 [Run]
 Filename: "{app}\rxpos.exe"; Description: "Open RxPOS New"; Flags: nowait postinstall skipifsilent
+; an update the app installed by itself (/VERYSILENT): open it again
+Filename: "{app}\rxpos.exe"; Flags: nowait; Check: WizardSilent

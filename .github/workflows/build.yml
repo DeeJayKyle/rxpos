@@ -276,6 +276,8 @@ jobs:
       - run: npm ci
       - name: Build the app (the website and the Worker serve the same files)
         run: npm run build
+      - name: The new apps' update bucket exists (the Worker's APPS binding needs it)
+        run: npx wrangler r2 bucket info rxpos-apps > /dev/null 2>&1 || npx wrangler r2 bucket create rxpos-apps
       - name: Deploy the cloud (Worker pharmapos → api.rxposug.com)
         run: npx wrangler deploy
       - name: Deploy the website (Pages project rxpos → rxposug.com)

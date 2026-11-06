@@ -29,6 +29,8 @@ jobs:
       - run: npm run build
       - name: Check deployment credentials
         run: test -n "$CLOUDFLARE_API_TOKEN" && test -n "$CLOUDFLARE_ACCOUNT_ID"
+      - name: The new apps' update bucket exists (the Worker's APPS binding needs it)
+        run: npx wrangler r2 bucket info rxpos-apps > /dev/null 2>&1 || npx wrangler r2 bucket create rxpos-apps
       - name: Deploy cloud Worker
         run: npx wrangler deploy
       - name: Deploy website and in-app updates
