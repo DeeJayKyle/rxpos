@@ -144,6 +144,22 @@ void main() {
     expect((await SyncConfig.load(db)).epoch, 'epoch-2');
   });
 
+  test('a restore resends local changes that the backup discarded', () async {
+    seed(1);
+    await down.run();
+    await store.update((d) => d.put('sales', {'id': 'after-backup', 'number': 'R-AFTER', 'total': 500}));
+    cloud.epoch = 'epoch-2';
+    cloud.discardChangesOnRequest = cloud.requests.length + 1;
+
+    final r = await down.run();
+
+    expect(r.sent, 1, reason: 'the preserved change is counted only when its resend is confirmed');
+    expect(cloud.current['sales|after-backup'], isNotNull);
+    expect((await db.select(db.outbox).get()), isEmpty);
+    expect(cloud.requests[cloud.requests.length - 2]['changes'], isNotEmpty, reason: 'the restore reply saw the original batch');
+    expect(cloud.requests.last['changes'], isNotEmpty, reason: 'the next request resent the preserved batch');
+  });
+
   test('"Download everything again" asks for everything once', () async {
     seed(2);
     await down.run();
