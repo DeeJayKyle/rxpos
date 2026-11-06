@@ -7,6 +7,7 @@ import 'package:rxpos/core/database/app_database.dart';
 import 'package:rxpos/core/entities/movement.dart';
 import 'package:rxpos/core/network/api_failure.dart';
 import 'package:rxpos/core/rules/stock.dart';
+import 'package:rxpos/core/sync/sync_config.dart';
 import 'package:rxpos/core/sync/sync_engine.dart';
 
 import 'fake_cloud.dart';
@@ -141,5 +142,81 @@ void main() {
     final entries = [for (var i = 0; i < 3; i++) e(i, 'a'), for (var i = 3; i < 8; i++) e(i, 'b'), for (var i = 8; i < 10; i++) e(i, 'c')];
     expect(groupOutbox(entries, 5).map((g) => g.length), [3, 5, 2]);
     expect(groupOutbox([for (var i = 0; i < 12; i++) e(i, 'big')], 5).map((g) => g.length), [5, 5, 2]);
+  });
+
+  group('a cloud restored from an older backup', () {
+    late FakeCloud cloud;
+    late Device a;
+    late List<ServerRecord> backup;
+    setUp(() async {
+      cloud = FakeCloud();
+      a = Device(cloud, 'A');
+      await a.store.update((d) {
+        d.put('products', {'id': 'p1', 'name': 'Calmex', 'price': 500});
+        d.put('customers', {'id': 'c1', 'name': 'Amina Test'});
+      });
+      await a.sync.run();
+      backup = [...cloud.records]; // the nightly backup
+      // after the backup: a sale, a deleted customer
+      await a.store.update((d) => d.put('sales', {'id': 's1', 'number': 'R-1', 'total': 500}));
+      await a.store.update((d) => d.del('customers', 'c1'));
+      await a.sync.run();
+      expect(await a.waiting(), 0, reason: 'sent and acknowledged before the restore');
+    });
+    tearDown(() => a.db.close());
+
+    void restore() {
+      cloud.records
+        ..clear()
+        ..addAll(backup);
+      cloud.epoch = 'epoch-2';
+    }
+
+    test('changes made after the backup go up again; deletions too', () async {
+      restore();
+      expect(cloud.current.containsKey('sales|s1'), isFalse, reason: 'lost by the restore');
+      final first = await a.sync.run();
+      expect(first.complete, isFalse, reason: 'everything this device holds is queued to go up again');
+      expect(await a.waiting(), greaterThan(0));
+      final second = await a.sync.run();
+      expect(second.complete, isTrue);
+      expect(await a.waiting(), 0);
+      expect(cloud.current['sales|s1']?.rec?['total'], 500, reason: 'the sale is back in the cloud');
+      expect(cloud.current['customers|c1']?.deleted, isTrue, reason: 'the deletion is back too');
+      expect((await SyncConfig.load(a.db)).resendAfterRestore, isFalse);
+      final third = await a.sync.run();
+      expect((third.complete, third.sent), (true, 0), reason: 'only once');
+    });
+
+    test('a newer copy in the restored cloud is never overwritten by the resend', () async {
+      restore();
+      cloud.add('products', 'p1', {'name': 'Calmex', 'price': 650, 'updatedAt': '2026-11-06T08:00:00.000Z'}, '2026-11-06T08:00:00.000Z');
+      await a.sync.run();
+      await a.sync.run();
+      expect(cloud.current['products|p1']!.rec!['price'], 650);
+      expect((await a.store.get('products', 'p1'))!['price'], 650, reason: 'and this device took the newer one');
+    });
+
+    test('a record deleted and made again goes up alive, not deleted', () async {
+      await a.store.update((d) => d.put('customers', {'id': 'c1', 'name': 'Amina Test (again)'}));
+      await a.sync.run();
+      restore();
+      await a.sync.run();
+      await a.sync.run();
+      expect(cloud.current['customers|c1']?.deleted, isFalse);
+      expect(cloud.current['customers|c1']?.rec?['name'], 'Amina Test (again)');
+    });
+
+    test('a run cut off after the restore still sends everything on the next run', () async {
+      restore();
+      final capped = SyncEngine(dio: cloud.dio(), db: a.db, cloudUrl: 'https://rxposug.com', maxRequests: 1);
+      final cut = await capped.run();
+      expect(cut.complete, isFalse);
+      expect((await SyncConfig.load(a.db)).resendAfterRestore, isTrue, reason: 'remembered on the device');
+      await a.sync.run();
+      await a.sync.run();
+      expect(cloud.current['sales|s1'], isNotNull);
+      expect((await SyncConfig.load(a.db)).resendAfterRestore, isFalse);
+    });
   });
 }

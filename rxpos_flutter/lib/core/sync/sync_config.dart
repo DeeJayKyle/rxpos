@@ -12,7 +12,7 @@ const _key = 'sync';
 
 /// Where this device is in the conversation with the cloud, kept in the device database (kv "sync").
 class SyncConfig {
-  const SyncConfig({required this.deviceId, this.cursor = 0, this.epoch, this.fullPull = 0, this.fullInProgress = false, this.lastSync, this.lastError = ''});
+  const SyncConfig({required this.deviceId, this.cursor = 0, this.epoch, this.fullPull = 0, this.fullInProgress = false, this.lastSync, this.lastError = '', this.resendAfterRestore = false});
 
   /// This device's id: the cloud does not send a device the records it wrote itself (unless a full download).
   final String deviceId;
@@ -26,19 +26,24 @@ class SyncConfig {
   final bool fullInProgress;
   final String? lastSync;
   final String lastError;
+  /// The cloud was restored from an older backup: once everything is downloaded again, this device sends everything
+  /// it holds once more, so changes made after that backup (by any device that reached this one) are not lost.
+  final bool resendAfterRestore;
 
   bool get needsFullPull => fullPull < fullPullVersion;
 
-  SyncConfig copyWith({int? cursor, String? epoch, int? fullPull, bool? fullInProgress, String? lastSync, String? lastError}) => SyncConfig(
+  SyncConfig copyWith({int? cursor, String? epoch, int? fullPull, bool? fullInProgress, String? lastSync, String? lastError, bool? resendAfterRestore}) => SyncConfig(
       deviceId: deviceId, cursor: cursor ?? this.cursor, epoch: epoch ?? this.epoch, fullPull: fullPull ?? this.fullPull,
-      fullInProgress: fullInProgress ?? this.fullInProgress, lastSync: lastSync ?? this.lastSync, lastError: lastError ?? this.lastError);
+      fullInProgress: fullInProgress ?? this.fullInProgress, lastSync: lastSync ?? this.lastSync, lastError: lastError ?? this.lastError,
+      resendAfterRestore: resendAfterRestore ?? this.resendAfterRestore);
 
   Map<String, Object?> toJson() => {'deviceId': deviceId, 'cursor': cursor, 'epoch': epoch, 'fullPull': fullPull,
-    'fullInProgress': fullInProgress, 'lastSync': lastSync, 'lastError': lastError};
+    'fullInProgress': fullInProgress, 'lastSync': lastSync, 'lastError': lastError, 'resendAfterRestore': resendAfterRestore};
 
   factory SyncConfig.fromJson(Map<String, Object?> j) => SyncConfig(
       deviceId: j['deviceId'] as String, cursor: (j['cursor'] as num?)?.toInt() ?? 0, epoch: j['epoch'] as String?,
-      fullPull: (j['fullPull'] as num?)?.toInt() ?? 0, fullInProgress: j['fullInProgress'] == true, lastSync: j['lastSync'] as String?, lastError: (j['lastError'] as String?) ?? '');
+      fullPull: (j['fullPull'] as num?)?.toInt() ?? 0, fullInProgress: j['fullInProgress'] == true, lastSync: j['lastSync'] as String?, lastError: (j['lastError'] as String?) ?? '',
+      resendAfterRestore: j['resendAfterRestore'] == true);
 
   /// This device's sync state (made, with a new device id, the first time).
   static Future<SyncConfig> load(AppDatabase db) async {
