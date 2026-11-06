@@ -151,13 +151,18 @@ void main() {
     cloud.epoch = 'epoch-2';
     cloud.discardChangesOnRequest = cloud.requests.length + 1;
 
-    final r = await down.run();
+    final restored = await down.run();
 
-    expect(r.sent, 1, reason: 'the preserved change is counted only when its resend is confirmed');
+    expect(restored.requeued, greaterThanOrEqualTo(1));
+    expect(restored.complete, isFalse, reason: 'the queued restore resend still needs a sync');
+    expect((await db.select(db.outbox).get()), isNotEmpty);
+    expect(cloud.current['sales|after-backup'], isNull, reason: 'the restore discarded the first send');
+
+    final resent = await down.run();
+    expect(resent.sent, greaterThanOrEqualTo(1));
     expect(cloud.current['sales|after-backup'], isNotNull);
     expect((await db.select(db.outbox).get()), isEmpty);
-    expect(cloud.requests[cloud.requests.length - 2]['changes'], isNotEmpty, reason: 'the restore reply saw the original batch');
-    expect(cloud.requests.last['changes'], isNotEmpty, reason: 'the next request resent the preserved batch');
+    expect(cloud.requests.last['changes'], isNotEmpty, reason: 'the next sync resends the queued records');
   });
 
   test('"Download everything again" asks for everything once', () async {
