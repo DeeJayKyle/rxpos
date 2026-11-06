@@ -2,6 +2,7 @@ import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import '../data/app_dirs.dart';
 import 'defaults.dart';
 
 part 'app_database.g.dart';
@@ -71,7 +72,7 @@ class Kv extends Table {
 
 @DriftDatabase(tables: [Records, Tombstones, Outbox, RejectedOps, Kv])
 class AppDatabase extends _$AppDatabase {
-  AppDatabase([QueryExecutor? executor]) : super(executor ?? driftDatabase(name: 'rxpos'));
+  AppDatabase([QueryExecutor? executor]) : super(executor ?? driftDatabase(name: 'rxpos', native: const DriftNativeOptions(databaseDirectory: databaseDir)));
 
   /// 1: records, tombstones, outbox, rejected_ops, kv. 2: lookup indexes.
   @override

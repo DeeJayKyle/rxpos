@@ -10,6 +10,7 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../data/app_dirs.dart';
 import '../data/device_settings.dart';
 
 typedef Note = (double freq, double at, double len, String wave);
@@ -149,11 +150,3 @@ class Sounds {
 }
 
 final soundsProvider = Provider<Sounds>((ref) => Sounds(ref));
-
-/// This app's own files folder. On Windows it is pinned to where it has always been (%APPDATA%\RxPOS\RxPOS New):
-/// the folder Windows would pick follows the product name, and the app was renamed from "RxPOS New" to "RxPOS".
-Future<Directory> appSupportDir() async {
-  final appData = Platform.isWindows ? Platform.environment['APPDATA'] : null;
-  if (appData != null && appData.isNotEmpty) return Directory('$appData\\RxPOS\\RxPOS New').create(recursive: true);
-  return getApplicationSupportDirectory();
-}

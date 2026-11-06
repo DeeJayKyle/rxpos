@@ -1,12 +1,13 @@
 // Keeps the installed apps on the newest pilot build (src/update.js for the new apps). The cloud serves a version file
 // per platform at /api/app/flutter-<windows|android>.json ({ build, label, file, size, sha256 }) and the installer it
-// names (worker/index.js appFile; uploaded by .github/workflows/flutter-apps.yml). Checked 20 s after start and every
+// names; an Android phone first asks for the smaller APK made for its processor (flutter-android-<arm64|armv7|x64>.json) (worker/index.js appFile; uploaded by .github/workflows/flutter-apps.yml). Checked 20 s after start and every
 // 10 minutes; a newer build is downloaded and its checksum checked, then:
 //   Windows  installed silently when nothing is in progress (no input for 90 s and nothing being typed, or the
 //            window in the background), or straight away with "Update"; the installer opens the app again
 //   Android  the system installer opens when the person taps "Update" (Android always asks to confirm)
 // The open sale, held sales and drafts are kept on the device, so nothing is lost by the switch.
 import 'dart:async';
+import 'dart:ffi' show Abi;
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
@@ -26,6 +27,15 @@ import '../sync/sync_engine.dart';
 /// Which installer this device takes ('windows' / 'android'); null where the app doesn't update itself (tests, other
 /// systems).
 final updatePlatformProvider = Provider<String?>((_) => Platform.isWindows ? 'windows' : Platform.isAndroid ? 'android' : null);
+
+/// The processor this Android phone has, as the per-processor APKs are named (arm64 / armv7 / x64); null elsewhere,
+/// and on processors without their own APK, which take the APK for all of them.
+final androidAbiProvider = Provider<String?>((_) => !Platform.isAndroid
+    ? null
+    : switch (Abi.current()) { Abi.androidArm64 => 'arm64', Abi.androidArm => 'armv7', Abi.androidX64 => 'x64', _ => null });
+
+/// The installer names the apps accept (the build number, and the processor for a per-processor APK).
+final installerName = RegExp(r'^RxPOS-New-\d+(-(arm64|armv7|x64))?\.(exe|apk)$');
 
 /// This app's build number (0 in a development copy, which never updates itself).
 final currentBuildProvider = FutureProvider<int>((_) async => int.tryParse((await PackageInfo.fromPlatform()).buildNumber) ?? 0);
@@ -129,12 +139,11 @@ class AppUpdater extends Notifier<UpdateState> {
     if (mine <= 0) return state;
     state = UpdateState(status: 'checking', latest: state.latest);
     try {
-      final r = await ref.read(dioProvider).get<Object?>('${_url('flutter-$platform.json')}?t=${DateTime.now().millisecondsSinceEpoch}',
-          options: Options(validateStatus: (_) => true, receiveTimeout: const Duration(seconds: 15)));
-      final latest = r.statusCode == 200 && r.data is Map ? (r.data as Map).cast<String, Object?>() : null;
+      final abi = platform == 'android' ? ref.read(androidAbiProvider) : null;
+      final latest = (abi != null ? await _manifest('flutter-android-$abi.json') : null) ?? await _manifest('flutter-$platform.json');
       final build = (latest?['build'] as num?)?.toInt() ?? 0;
       final file = '${latest?['file'] ?? ''}';
-      if (latest == null || build <= mine || !RegExp(r'^RxPOS-New-\d+\.(exe|apk)$').hasMatch(file)) {
+      if (latest == null || build <= mine || !installerName.hasMatch(file)) {
         return state = UpdateState(latest: latest);
       }
       state = UpdateState(status: 'downloading', latest: latest);
@@ -155,6 +164,13 @@ class AppUpdater extends Notifier<UpdateState> {
     } catch (e) {
       return state = UpdateState(status: 'error', latest: state.latest, error: _why(e));
     }
+  }
+
+  /// A version file from the cloud; null when there is none.
+  Future<Map<String, Object?>?> _manifest(String name) async {
+    final r = await ref.read(dioProvider).get<Object?>('${_url(name)}?t=${DateTime.now().millisecondsSinceEpoch}',
+        options: Options(validateStatus: (_) => true, receiveTimeout: const Duration(seconds: 15)));
+    return r.statusCode == 200 && r.data is Map ? (r.data as Map).cast<String, Object?>() : null;
   }
 
   static String _why(Object e) {

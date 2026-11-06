@@ -1,4 +1,4 @@
-// "New version ready · Update" in the top bar (src/App.jsx update-pill), and "RxPOS updated (1.0.N)" once after an
+// "New version ready · Update" in the top bar (src/App.jsx update-pill), and "RxPOS updated (2.0.N)" once after an
 // update. Watching it starts the update checks.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -26,7 +26,7 @@ class _UpdatePillState extends ConsumerState<UpdatePill> {
       if (from == null) return;
       final now = await ref.read(currentBuildProvider.future);
       await ref.read(deviceValueProvider(updatedFromKey).notifier).set(null);
-      if (now != from && mounted) ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(content: Text('RxPOS updated (1.0.$now)')));
+      if (now != from && mounted) ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(content: Text('RxPOS updated (2.0.$now)')));
     } catch (_) {}
   }
 

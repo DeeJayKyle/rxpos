@@ -1,10 +1,10 @@
 ; Windows installer for the Flutter RxPOS (Inno Setup 6). Built by .github/workflows/flutter-apps.yml:
-;   iscc /DAppVersion=1.0.0 /DSourceDir=<Release folder> rxpos.iss
+;   iscc /DAppVersion=2.0.0 /DSourceDir=<Release folder> rxpos.iss
 ; Installs for the current user (no administrator needed) as "RxPOS". It sits next to the current (Electron) RxPOS app
 ; without replacing it: its own AppId and its own folder (the Electron app uses Programs\RxPOS), and the desktop shortcut
 ; is only made when there isn't an RxPOS one already. Copies installed as "RxPOS New" keep their folder when updated.
 #ifndef AppVersion
-  #define AppVersion "1.0.0"
+  #define AppVersion "2.0.0"
 #endif
 #ifndef SourceDir
   #define SourceDir "..\..\build\windows\x64\runner\Release"

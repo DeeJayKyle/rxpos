@@ -2158,7 +2158,7 @@ void main() {
     late List<int> served;
     late Map<String, Object?> manifest;
 
-    Future<void> updStart(WidgetTester tester, String platform, {int build = 50, bool damaged = false}) async {
+    Future<void> updStart(WidgetTester tester, String platform, {int build = 50, bool damaged = false, String? abi, bool abiApk = false}) async {
       await tester.runAsync(signedIn);
       folder = (await tester.runAsync(() => Directory.systemTemp.createTemp('rxpos-upd')))!;
       addTearDown(() => folder.delete(recursive: true));
@@ -2166,15 +2166,20 @@ void main() {
       now = DateTime(2026, 11, 6, 10);
       served = List.generate(5000, (i) => i % 251);
       final ext = platform == 'windows' ? 'exe' : 'apk';
-      manifest = {'build': 51, 'label': '1.0.51', 'file': 'RxPOS-New-51.$ext', 'size': served.length, 'sha256': '${sha256.convert(served)}'};
+      manifest = {'build': 51, 'label': '2.0.51', 'file': 'RxPOS-New-51.$ext', 'size': served.length, 'sha256': '${sha256.convert(served)}'};
       cloud.api['app/flutter-$platform.json'] = (_) => (200, manifest);
+      if (abiApk) {
+        manifest = {...manifest, 'file': 'RxPOS-New-51-$abi.apk'};
+        cloud.api['app/flutter-android-$abi.json'] = (_) => (200, manifest);
+      }
       await start(tester, extra: [
         updatePlatformProvider.overrideWithValue(platform),
+        androidAbiProvider.overrideWithValue(abi),
         currentBuildProvider.overrideWith((_) async => build),
         updateFolderProvider.overrideWithValue(() async => folder.path),
         updateClockProvider.overrideWithValue(() => now),
         updateDownloadProvider.overrideWithValue((url, path, progress) async {
-          expect(url, 'https://api.rxposug.com/api/app/RxPOS-New-51.$ext');
+          expect(url, 'https://api.rxposug.com/api/app/${manifest['file']}');
           await File(path).writeAsBytes(damaged ? served.reversed.toList() : served);
           progress(1);
         }),
@@ -2218,6 +2223,26 @@ void main() {
       await done(tester);
     });
 
+    testWidgets('Android: a phone takes the smaller APK made for its processor, or the one for all when there is none', (tester) async {
+      await updStart(tester, 'android', abi: 'arm64', abiApk: true);
+      await firstCheck(tester);
+      expect(cloud.calls.map((c) => c.$1), contains('app/flutter-android-arm64.json'));
+      await tester.tap(find.byKey(const Key('update-pill')));
+      await settle(tester);
+      expect(installs.single.$2, endsWith('RxPOS-New-51-arm64.apk'));
+      await done(tester);
+    });
+
+    testWidgets('Android: without a version file for its processor, the APK for all processors is taken', (tester) async {
+      await updStart(tester, 'android', abi: 'armv7');
+      await firstCheck(tester);
+      expect(cloud.calls.map((c) => c.$1), containsAll(['app/flutter-android-armv7.json', 'app/flutter-android.json']));
+      await tester.tap(find.byKey(const Key('update-pill')));
+      await settle(tester);
+      expect(installs.single.$2, endsWith('RxPOS-New-51.apk'));
+      await done(tester);
+    });
+
     testWidgets('a damaged download is thrown away and never installed; This device says so and checks again', (tester) async {
       await updStart(tester, 'windows', damaged: true);
       await firstCheck(tester);
@@ -2233,7 +2258,7 @@ void main() {
     testWidgets('already the newest build: "Up to date"; after an update, "RxPOS updated" once', (tester) async {
       await tester.runAsync(() => db.into(db.kv).insert(KvCompanion.insert(k: 'device:updatedFrom', v: '50')));
       await updStart(tester, 'windows', build: 51);
-      expect(find.text('RxPOS updated (1.0.51)'), findsOneWidget);
+      expect(find.text('RxPOS updated (2.0.51)'), findsOneWidget);
       await firstCheck(tester);
       await navTo(tester, 'This device');
       await tester.scrollUntilVisible(find.byKey(const Key('update-state')), 200, scrollable: find.descendant(of: find.byType(PageFrame), matching: find.byType(Scrollable)).first);

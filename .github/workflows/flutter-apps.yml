@@ -1,4 +1,5 @@
-# The Flutter RxPOS apps (rxpos_flutter/): tests, then the Windows installer and the Android APK.
+# The Flutter RxPOS apps (rxpos_flutter/), version 2.0.<run number>: tests, then the Windows installer and the Android
+# apps (one APK for all phones, smaller APKs per processor, and an app bundle for app stores).
 # Runs on every push that changes rxpos_flutter/ (any branch) and by hand. The live website, cloud and current
 # Electron / Capacitor apps are not touched. Builds of the pilot branch are also offered to the installed new RxPOS
 # apps (the R2 bucket rxpos-apps, read through the cloud at /api/app/; scripts/publish-flutter-update.sh).
@@ -22,6 +23,7 @@ concurrency:
 
 env:
   FLUTTER_VERSION: '3.47.9'
+  VERSION: 2.0.${{ github.run_number }} # 2.0.x, so the new apps never look older than the React app's 1.7.x
 
 jobs:
   test:
@@ -71,7 +73,7 @@ jobs:
         run: flutter test test/cloud
 
   android:
-    name: Android APK
+    name: Android apps
     needs: test
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -105,10 +107,19 @@ jobs:
         working-directory: rxpos_flutter
         run: |
           flutter pub get
-          flutter build apk --release --build-number=${{ github.run_number }}
+          v="--build-name=$VERSION --build-number=${{ github.run_number }}"
           mkdir -p ../out
-          if [ "$SIGNED" = release ]; then apk=RxPOS.apk; else apk=RxPOS-debug.apk; fi # a debug-signed APK is named so
-          cp build/app/outputs/flutter-apk/app-release.apk "../out/$apk"
+          if [ "$SIGNED" = release ]; then s=""; else s="-debug"; fi # debug-signed files are named so
+          flutter build apk --release $v # one APK for every phone (and for copies that update from it)
+          cp build/app/outputs/flutter-apk/app-release.apk "../out/RxPOS$s.apk"
+          # a smaller APK per processor, numbered like the one for all (so either can update the other)
+          flutter build apk --release --split-per-abi -P force-version-code-ignoring-abi=true $v
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk "../out/RxPOS-arm64$s.apk"
+          cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk "../out/RxPOS-armv7$s.apk"
+          cp build/app/outputs/flutter-apk/app-x86_64-release.apk "../out/RxPOS-x64$s.apk"
+          flutter build appbundle --release $v # for app stores (Google Play)
+          cp build/app/outputs/bundle/release/app-release.aab "../out/RxPOS$s.aab"
+          ls -l ../out
       - name: Remove the files with the old name (RxPOS New) from the pilot release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -126,14 +137,20 @@ jobs:
           body: |
             Pilot builds of the new Flutter apps (Windows and Android). They install as "RxPOS", next to the current
             RxPOS apps, and use the same pharmacy account and cloud. Not for general use yet.
-          files: out/*.apk
+          files: |
+            out/*.apk
+            out/*.aab
           fail_on_unmatched_files: true
       - name: Offer it to the installed apps (pilot branch, release-signed only, as a debug key can't update an install)
         if: github.ref == 'refs/heads/ccr-54387795-ifu3p1' && env.SIGNED == 'release'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: scripts/publish-flutter-update.sh android out/RxPOS.apk ${{ github.run_number }} "1.0.${{ github.run_number }}"
+        run: |
+          scripts/publish-flutter-update.sh android out/RxPOS.apk ${{ github.run_number }} "$VERSION"
+          for abi in arm64 armv7 x64; do
+            scripts/publish-flutter-update.sh "android-$abi" "out/RxPOS-$abi.apk" ${{ github.run_number }} "$VERSION"
+          done
 
   windows:
     name: Windows installer
@@ -151,7 +168,7 @@ jobs:
         working-directory: rxpos_flutter
         run: |
           flutter pub get
-          flutter build windows --release --build-number=${{ github.run_number }}
+          flutter build windows --release --build-name=${{ env.VERSION }} --build-number=${{ github.run_number }}
       - name: Installer and portable zip
         shell: pwsh
         run: |
@@ -160,7 +177,7 @@ jobs:
           Compress-Archive -Path "$release\*" -DestinationPath "out\RxPOS-windows-portable.zip"
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path $iscc)) { choco install innosetup --no-progress -y; }
-          & $iscc /DAppVersion=1.0.${{ github.run_number }} "/DSourceDir=$((Resolve-Path $release).Path)" /Oout rxpos_flutter\windows\installer\rxpos.iss
+          & $iscc /DAppVersion=${{ env.VERSION }} "/DSourceDir=$((Resolve-Path $release).Path)" /Oout rxpos_flutter\windows\installer\rxpos.iss
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Move-Item out\RxPOS-Setup-*.exe out\RxPOS-Setup.exe
       - name: Publish to the pilot pre-release
@@ -180,4 +197,4 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: scripts/publish-flutter-update.sh windows out/RxPOS-Setup.exe ${{ github.run_number }} "1.0.${{ github.run_number }}"
+        run: scripts/publish-flutter-update.sh windows out/RxPOS-Setup.exe ${{ github.run_number }} "$VERSION"
