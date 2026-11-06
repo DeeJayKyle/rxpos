@@ -19,6 +19,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/data/device_settings.dart';
 import '../../../core/data/pharmacy_providers.dart';
 import '../../../core/data/record_store.dart';
+import '../../../core/notify/os_notifications.dart';
 import '../../../core/database/app_database.dart';
 import '../../../core/entities/sale.dart';
 import '../../../core/network/cloud_api.dart';
@@ -75,6 +76,15 @@ class EngageWatchersState extends ConsumerState<EngageWatchers> {
   final _subs = <ProviderSubscription<Object?>>[];
 
   bool get _selling => widget.location.startsWith('/pos');
+
+  /// The number on the app icon: unread chat and transfers on their way here (src/App.jsx setBadge).
+  int get _unread {
+    final c = ref.read(navCountsProvider);
+    return (c['chat'] ?? 0) + (c['transfers'] ?? 0);
+  }
+
+  /// Also as a system notification while RxPOS is in the background.
+  void _system(String title, String body) => ref.read(systemNoticesProvider).notify(title, body, count: _unread);
   DateTime _now() => ref.read(engageClockProvider)();
 
   @override
@@ -87,6 +97,7 @@ class EngageWatchersState extends ConsumerState<EngageWatchers> {
       if (rows != null) _messages(rows);
     }, fireImmediately: true));
     _subs.add(ref.listenManual<WeatherState>(weatherProvider, (_, next) => _logWeather(next), fireImmediately: true));
+    _subs.add(ref.listenManual<Map<String, int>>(navCountsProvider, (_, next) => ref.read(systemNoticesProvider).countIs((next['chat'] ?? 0) + (next['transfers'] ?? 0))));
     _armHour();
     _weeklyTimer = Timer(const Duration(seconds: 9), _weekly);
     _reorderTimer = Timer(const Duration(seconds: 20), _autoReorder);
@@ -145,6 +156,7 @@ class EngageWatchersState extends ConsumerState<EngageWatchers> {
             sound: 'alert',
             content: (c, close) => alertList(c, top, close),
           ));
+      _system('RxPOS', top.map((a) => a.text).join('\n'));
     });
   }
 
@@ -180,6 +192,7 @@ class EngageWatchersState extends ConsumerState<EngageWatchers> {
           to: '/chat',
           sound: 'message',
         ));
+    _system(call ? 'Missed call from ${m['fromName']}' : '${m['fromName']} · $where', call ? 'Open RxPOS to call back' : (preview.length > 120 ? preview.substring(0, 120) : preview));
   }
 
   // ---- outside readings every 6 hours ----
@@ -231,6 +244,7 @@ class EngageWatchersState extends ConsumerState<EngageWatchers> {
           ttl: const Duration(seconds: 20),
           content: (c, close) => items.isEmpty ? const Text('Nothing waiting on you. Enjoy the next hour.') : alertList(c, items, close),
         ));
+    _system('RxPOS · ${_hm(now)}', items.isEmpty ? 'All clear.' : items.map((x) => x.text).join('\n'));
   }
 
   Future<List<({String title, String url, String date})>> _whoNear() async {

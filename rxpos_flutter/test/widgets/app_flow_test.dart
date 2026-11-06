@@ -17,6 +17,7 @@ import 'package:rxpos/core/network/dio_client.dart';
 import 'package:rxpos/core/rules/passwords.dart';
 import 'package:rxpos/core/crash/crash_screen.dart';
 import 'package:rxpos/core/live/live_connection.dart';
+import 'package:rxpos/core/notify/os_notifications.dart';
 import 'package:rxpos/core/rules/dates.dart';
 import 'package:rxpos/core/sound/sounds.dart';
 import 'package:rxpos/core/sync/sync_config.dart';
@@ -44,6 +45,7 @@ void main() {
   WidgetTester? tester0;
   final weatherCalls = <String>[];
   final played = <String>[]; // the sounds the app asked for (none really play in tests)
+  final osNotify = _FakeNotify(); // system notifications the app asked for
   // fictional weather: hot and humid, so both storage warnings show
   final sampleWeather = <String, Object?>{
     'current': {'time': '2026-11-05T12:15', 'temperature_2m': 31.4, 'relative_humidity_2m': 70, 'apparent_temperature': 34, 'weather_code': 2, 'wind_speed_10m': 9.6},
@@ -53,6 +55,7 @@ void main() {
   setUp(() {
     weatherCalls.clear();
     played.clear();
+    osNotify.reset();
     db = AppDatabase(NativeDatabase.memory());
     cloud = FakeCloud()
       ..login = (b) => b['password'] == 'tia-pass'
@@ -86,7 +89,7 @@ void main() {
     }
   }
 
-  Future<void> start(WidgetTester tester, {Size size = const Size(1440, 900), List<Override> extra = const [], bool engage = false, bool live = false}) async {
+  Future<void> start(WidgetTester tester, {Size size = const Size(1440, 900), List<Override> extra = const [], bool engage = false, bool live = false, bool foreground = true}) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -117,6 +120,8 @@ void main() {
           engageOnProvider.overrideWithValue(engage), // pop-ups and the idle screen: only in the tests about them
           soundsProvider.overrideWith((ref) => _QuietSounds(ref, played)),
           liveOnProvider.overrideWithValue(live), // no real connection to the cloud in tests
+          osNotifyProvider.overrideWithValue(osNotify),
+          appInForegroundProvider.overrideWithValue(() => foreground),
           ...extra,
         ],
         child: const RxposApp(),
@@ -1952,6 +1957,35 @@ void main() {
     expect(weatherCalls.last, contains('latitude=0.3367&longitude=32.5719'));
     await done(tester);
   });
+
+  testWidgets('in the background: a new message is also a system notification with the unread count; on screen it is not', (tester) async {
+    await tester.runAsync(signedIn);
+    await start(tester, engage: true, foreground: false);
+    await tester.runAsync(() => RecordStore(db).update((d) => d.put('messages', {'id': 'm7', 'date': DateTime.now().toUtc().toIso8601String(), 'fromId': 'u2', 'fromName': 'Ben', 'conv': 'team', 'text': 'Delivery is here'})));
+    await settle(tester);
+    expect(osNotify.shown.map((n) => (n.title, n.body, n.count)), [('Ben · General', 'Delivery is here', 1)]);
+    await done(tester);
+    osNotify.reset();
+    await start(tester, engage: true);
+    await tester.runAsync(() => RecordStore(db).update((d) => d.put('messages', {'id': 'm8', 'date': DateTime.now().toUtc().toIso8601String(), 'fromId': 'u2', 'fromName': 'Ben', 'conv': 'team', 'text': 'And the invoice'})));
+    await settle(tester);
+    expect(osNotify.shown, isEmpty, reason: 'RxPOS is on screen: the pop-up is enough');
+    await done(tester);
+  });
+
+  testWidgets('This device: allow notifications; the unread count on the icon can be switched off', (tester) async {
+    osNotify.perm = 'default';
+    await tester.runAsync(signedIn);
+    await start(tester);
+    await navTo(tester, 'This device');
+    await tester.ensureVisible(find.byKey(const Key('notify-allow')));
+    await settle(tester, 2);
+    await tester.tap(find.byKey(const Key('notify-allow')));
+    await settle(tester);
+    expect(find.text('Notifications are allowed'), findsOneWidget);
+    expect(osNotify.asked, 1);
+    await done(tester);
+  });
 }
 
 /// A first download in progress (the sync screen's state, without a cloud).
@@ -1965,4 +1999,30 @@ class _QuietSounds extends Sounds {
   final List<String> played;
   @override
   Future<void> play(String kind, {String? tone, double? volume}) async => played.add(tone ?? kind);
+}
+
+/// System notifications, written down instead of shown.
+class _FakeNotify implements OsNotify {
+  var shown = <({String title, String body, int? count})>[];
+  var perm = 'granted';
+  var asked = 0, cleared = 0;
+  void reset() {
+    shown = [];
+    perm = 'granted';
+    asked = 0;
+    cleared = 0;
+  }
+
+  @override
+  Future<String> permission() async => perm;
+  @override
+  Future<String> ask() async {
+    asked++;
+    return perm = 'granted';
+  }
+
+  @override
+  Future<void> show(int id, String title, String body, {int? count}) async => shown.add((title: title, body: body, count: count));
+  @override
+  Future<void> clear() async => cleared++;
 }

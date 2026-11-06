@@ -10,7 +10,8 @@ Every feature of the React app (`src/pages/*.jsx`, `src/*.jsx`), screen by scree
 - ✅ Change my password (asked at once after a temporary password), log out from the menu (unsent changes and held sales stay)
 - ✅ Two-step sign-in setup (QR code, switch on / off) for the signed-in person; asked before switching this device to another pharmacy
 - ✅ Notifications centre (urgent / needs attention / for information) and its count; counts beside the menu (low stock, expiry, transfers, unread chat)
-- ✗ The count on the Windows taskbar / Android app icon (see notifications in the background)
+- ✅ System notifications while RxPOS is in the background (messages, missed calls, urgent alerts, the hourly reminder), the unread count on the Android app icon, allow / switch off in This device
+- n/a The number on the Windows taskbar icon (the Windows notification shows instead)
 - ✅ "No internet connection" banner; live clock with the sync state (offline, waiting, syncing, needs attention)
 - ✅ "Setting up" first-run screen (while the first download runs)
 - ✅ Error screen: "Something went wrong · Reload RxPOS · Download my data"; crash reports to the cloud (no personal data, once a day, kept offline)
@@ -149,7 +150,8 @@ Every feature of the React app (`src/pages/*.jsx`, `src/*.jsx`), screen by scree
 - ✅ This device: branch, theme, sync & storage (waiting / refused changes, ready to work offline, download everything
   again), text size, rotation (Android), date format, notification sounds (the same tones, volume, own file, test)
 - n/a Restore the copy from before the 1.6 upgrade (a browser storage upgrade the Flutter app never had)
-- ✗ App version and updates (see App frame), notifications in the background (see App frame)
+- ✅ App version, notifications in the background
+- ✗ App updates (see App frame)
 
 ## Other screens
 - ✅ Labels: four sizes (thermal 38×25 / 50×30 / 60×40, A4 sheet of 21), show price / expiry / pharmacy name, add all in-stock, a barcode made for a medicine without one, preview, print

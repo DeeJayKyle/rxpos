@@ -5,6 +5,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/live/live_connection.dart';
+import '../../../core/notify/os_notifications.dart';
 import '../../../core/data/device_settings.dart';
 import '../../../core/data/pharmacy_providers.dart';
 import '../../../core/database/app_database.dart';
@@ -223,6 +224,21 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
           ]),
         Text('Your own sound can be any short MP3, WAV, OGG or M4A file under 1.5 MB.', style: Theme.of(context).textTheme.bodySmall),
       ]),
+      _section('When RxPOS is in the background', Icons.notifications_active_outlined, [
+        Text(Platform.isAndroid
+            ? 'New messages, calls and stock alerts pop up in the phone’s notification shade, with the unread count on the app icon.'
+            : 'New messages, calls and stock alerts pop up in the corner of the screen.'),
+        const SizedBox(height: 8),
+        const _NotifyPermission(),
+        if (Platform.isAndroid)
+          SwitchListTile(
+            key: const Key('badges'),
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Show the unread count on the app icon'),
+            value: ref.watch(deviceValueProvider(badgesKey)).value != '0',
+            onChanged: (v) => ref.read(deviceValueProvider(badgesKey).notifier).set(v ? '1' : '0'),
+          ),
+      ]),
       _section('App version', Icons.info_outline, [
         FutureBuilder<PackageInfo>(
           future: PackageInfo.fromPlatform(),
@@ -307,6 +323,40 @@ class _AuditScreenState extends ConsumerState<AuditScreen> {
                 );
               },
             ),
+    );
+  }
+}
+
+class _NotifyPermission extends ConsumerStatefulWidget {
+  const _NotifyPermission();
+  @override
+  ConsumerState<_NotifyPermission> createState() => _NotifyPermissionState();
+}
+
+class _NotifyPermissionState extends ConsumerState<_NotifyPermission> {
+  String? _perm;
+
+  @override
+  void initState() {
+    super.initState();
+    ref.read(osNotifyProvider).permission().then((p) {
+      if (mounted) setState(() => _perm = p);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_perm == 'granted') {
+      return const Row(key: Key('notify-allowed'), children: [Icon(Icons.check_circle, color: Colors.green, size: 18), SizedBox(width: 6), Flexible(child: Text('Notifications are allowed'))]);
+    }
+    return OutlinedButton.icon(
+      key: const Key('notify-allow'),
+      onPressed: _perm == null ? null : () async {
+        final p = await ref.read(osNotifyProvider).ask();
+        if (mounted) setState(() => _perm = p);
+      },
+      icon: const Icon(Icons.notifications_active_outlined),
+      label: Text(_perm == 'denied' ? 'Notifications are blocked: allow them in the system settings' : 'Allow notifications'),
     );
   }
 }
