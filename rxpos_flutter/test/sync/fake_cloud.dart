@@ -31,6 +31,9 @@ class FakeCloud implements HttpClientAdapter {
   /// apply this request, then lose the reply (the device never hears back)
   int? loseReplyOnRequest;
 
+  /// discard incoming changes on this request, as if a backup restore won the race.
+  int? discardChangesOnRequest;
+
   /// answer this request number with 401 (the sign-in expired)
   int? expiredOnRequest;
 
@@ -98,7 +101,7 @@ class FakeCloud implements HttpClientAdapter {
     if (expiredOnRequest == requests.length) return ResponseBody.fromString('{"error":"Not signed in"}', 401, headers: _json);
     final refusedKeys = <String>[];
     var appliedNow = 0;
-    for (final raw in (body['changes'] as List? ?? const [])) {
+    if (discardChangesOnRequest != requests.length) for (final raw in (body['changes'] as List? ?? const [])) {
       final ch = (raw as Map).cast<String, Object?>();
       final t = ch['t'] as String, id = '${ch['id']}', at = ch['at'] as String, op = ch['op'] as String?;
       if (op != null && applied.contains(op)) {

@@ -144,6 +144,27 @@ void main() {
     expect((await SyncConfig.load(db)).epoch, 'epoch-2');
   });
 
+  test('a restore resends local changes that the backup discarded', () async {
+    seed(1);
+    await down.run();
+    await store.update((d) => d.put('sales', {'id': 'after-backup', 'number': 'R-AFTER', 'total': 500}));
+    cloud.epoch = 'epoch-2';
+    cloud.discardChangesOnRequest = cloud.requests.length + 1;
+
+    final restored = await down.run();
+
+    expect(restored.requeued, greaterThanOrEqualTo(1));
+    expect(restored.complete, isFalse, reason: 'the queued restore resend still needs a sync');
+    expect((await db.select(db.outbox).get()), isNotEmpty);
+    expect(cloud.current['sales|after-backup'], isNull, reason: 'the restore discarded the first send');
+
+    final resent = await down.run();
+    expect(resent.sent, greaterThanOrEqualTo(1));
+    expect(cloud.current['sales|after-backup'], isNotNull);
+    expect((await db.select(db.outbox).get()), isEmpty);
+    expect(cloud.requests.last['changes'], isNotEmpty, reason: 'the next sync resends the queued records');
+  });
+
   test('"Download everything again" asks for everything once', () async {
     seed(2);
     await down.run();
