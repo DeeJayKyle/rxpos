@@ -121,7 +121,7 @@ jobs:
             RxPOS apps, and use the same pharmacy account and cloud. Not for general use yet.
           files: out/*.apk
           fail_on_unmatched_files: true
-      - name: Offer it to the installed apps (pilot branch, release-signed only: a debug key can't update an install)
+      - name: Offer it to the installed apps (pilot branch, release-signed only, as a debug key can't update an install)
         if: github.ref == 'refs/heads/ccr-54387795-ifu3p1' && env.SIGNED == 'release'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
