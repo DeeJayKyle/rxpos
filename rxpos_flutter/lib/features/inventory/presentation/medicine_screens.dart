@@ -111,7 +111,7 @@ Future<void> editMedicine(BuildContext context, WidgetRef ref, Product? p) async
   final forms = (await ref.read(recordStoreProvider).rows('formulations')).map((f) => '${f['name']}').toList()..sort();
   final s = d.settings;
   if (!context.mounted) return;
-  final v = await editRecord(context, title: p == null ? 'Add medicine' : 'Edit ${p.name}', initial: p?.toRecord() ?? {'form': 'Tablets', 'unit': 'Piece', 'reorder': 10}, fields: [
+  final v = await editRecord(context, title: p == null ? 'Add medicine' : 'Edit ${p.name}', delete: p == null ? null : 'medicine', initial: p?.toRecord() ?? {'form': 'Tablets', 'unit': 'Piece', 'reorder': 10}, fields: [
     const FormFieldSpec('name', 'Medicine name', required: true),
     const FormFieldSpec('generic', 'Generic name'),
     const FormFieldSpec('category', 'Category / class'),
@@ -134,6 +134,15 @@ Future<void> editMedicine(BuildContext context, WidgetRef ref, Product? p) async
     const FormFieldSpec('controlled', 'Controlled drug (register: patient & prescriber recorded at sale)', kind: FieldKind.flag),
   ]);
   if (v == null) return;
+  if (identical(v, deleteRecord) && p != null) {
+    final by = await _user(ref);
+    await ref.read(recordStoreProvider).update((x) {
+      x.del('products', p.id);
+      x.audit(by, 'Medicine deleted', p.name, d.branch);
+    });
+    if (context.mounted) say(context, 'Medicine deleted');
+    return;
+  }
   try {
     final saved = await saveMedicine(ref.read(recordStoreProvider), v, before: p, all: d.products, settings: s, user: await _user(ref), branchId: d.branch);
     if (context.mounted) say(context, p == null ? '${saved['name']} added' : '${saved['name']} saved');
@@ -203,11 +212,16 @@ class FormulationsScreen extends ConsumerWidget {
     }
     final list = [...rows]..sort((a, b) => '${a['name']}'.compareTo('${b['name']}'));
     Future<void> edit(Map<String, Object?>? f) async {
-      final v = await editRecord(context, title: f == null ? 'Add formulation' : 'Edit ${f['name']}', initial: f ?? const {}, fields: const [
+      final v = await editRecord(context, title: f == null ? 'Add formulation' : 'Edit ${f['name']}', initial: f ?? const {}, delete: f == null ? null : 'formulation', fields: const [
         FormFieldSpec('name', 'Name', required: true),
         FormFieldSpec('description', 'Description', kind: FieldKind.multiline),
       ]);
       if (v == null) return;
+      if (identical(v, deleteRecord) && f != null) {
+        await ref.read(recordStoreProvider).update((x) => x.del('formulations', '${f['id']}'));
+        if (context.mounted) say(context, 'Formulation deleted');
+        return;
+      }
       await ref.read(recordStoreProvider).update((x) => x.put('formulations', {...?f, ...v, 'id': f?['id'] ?? uid()}));
     }
 

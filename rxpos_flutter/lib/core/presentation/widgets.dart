@@ -181,9 +181,13 @@ class FormFieldSpec {
 
 enum FieldKind { text, number, multiline, choice, flag, date }
 
-/// A dialog that edits a record's fields and returns the edited values (null when cancelled).
+/// What [editRecord] returns when its Delete button is pressed (and the deletion confirmed).
+const deleteRecord = {'_delete': true};
+
+/// A dialog that edits a record's fields and returns the edited values (null when cancelled). With [delete] (the
+/// record's name, e.g. 'medicine'), a Delete button asks "Delete this medicine?" and then returns [deleteRecord].
 Future<Map<String, Object?>?> editRecord(BuildContext context, {required String title, required List<FormFieldSpec> fields,
-    Map<String, Object?> initial = const {}, String save = 'Save'}) {
+    Map<String, Object?> initial = const {}, String save = 'Save', String? delete}) {
   final values = Map<String, Object?>.of(initial);
   final ctl = {for (final f in fields) if (f.kind != FieldKind.choice && f.kind != FieldKind.flag) f.key: TextEditingController(text: _show(initial[f.key]))};
   final formKey = GlobalKey<FormState>();
@@ -230,6 +234,16 @@ Future<Map<String, Object?>?> editRecord(BuildContext context, {required String 
           ),
         ),
         actions: [
+          if (delete != null)
+            TextButton(
+              key: const Key('record-delete'),
+              style: TextButton.styleFrom(foregroundColor: Theme.of(c).colorScheme.error),
+              onPressed: () async {
+                if (!await confirmAction(c, 'Delete this $delete?', 'This cannot be undone.', 'Delete')) return;
+                if (c.mounted) Navigator.pop(c, deleteRecord);
+              },
+              child: const Text('Delete'),
+            ),
           TextButton(onPressed: () => Navigator.pop(c), child: const Text('Cancel')),
           FilledButton(
             onPressed: () {

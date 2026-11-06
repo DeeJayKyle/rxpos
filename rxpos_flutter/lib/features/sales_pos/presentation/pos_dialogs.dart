@@ -392,8 +392,14 @@ const posShortcuts = [
   ('F9 / Ctrl+Enter', 'Charge'),
   ('Alt+H', 'Hold the sale'),
   ('Alt+← / Alt+→', 'Switch between held sales'),
-  ('+ / −', 'More / less of the selected line'),
-  ('Delete', 'Remove the selected line'),
+  ('Alt+↑ / Alt+↓', 'Choose a line of the sale'),
+  ('+ / −', 'More / less of the chosen line (from the empty search box)'),
+  ('Delete', 'Remove the chosen line'),
+  ('Alt+1 … Alt+9', 'Payment method'),
+  ('Alt+C', 'Find a client'),
+  ('Alt+D', 'Discount'),
+  ('Alt+R', 'The last receipt again'),
+  ('F10', 'Save as a proforma'),
   ('?', 'These shortcuts'),
 ];
 

@@ -22,6 +22,8 @@ import 'camera_scan.dart';
 import 'checkout_dialogs.dart';
 import 'pos_dialogs.dart';
 import 'receipt.dart';
+import '../../../core/presentation/page_tip.dart';
+import '../../../core/rules/stock.dart' show mainBranch;
 
 /// The till. Type or scan to add (Enter adds the exact barcode, or the first match); F8 back to the search, F9
 /// charge, Alt+H hold the sale. On a phone the sale opens from the bar at the bottom.
@@ -100,6 +102,81 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     _searchFocus.requestFocus();
   }
 
+  /// The sale line the keyboard works on: the chosen one (Alt+↑/↓), else the last (src/pages/POS.jsx lineAt).
+  CartLine? _lineAt() {
+    final s = ref.read(saleControllerProvider(widget.wholesale));
+    if (s.lines.isEmpty) return null;
+    return s.cursor >= 0 && s.cursor < s.lines.length ? s.lines[s.cursor] : s.lines.last;
+  }
+
+  bool get _typingElsewhere {
+    final f = FocusManager.instance.primaryFocus;
+    return f != null && f != _searchFocus && f.context?.widget is EditableText;
+  }
+
+  bool get _searchEmpty => _search.text.trim().isEmpty;
+
+  /// Alt+↑ / Alt+↓: choose a line of the sale.
+  void _moveCursor(int by) {
+    final s = ref.read(saleControllerProvider(widget.wholesale));
+    if (s.lines.isEmpty) return;
+    final cur = s.cursor >= 0 && s.cursor < s.lines.length ? s.cursor : s.lines.length - 1;
+    _sale.cursor((cur + by).clamp(0, s.lines.length - 1));
+  }
+
+  /// + / −: one more or one less of the chosen line (from the empty search box); Delete removes it.
+  KeyEventResult _lineKey(KeyEvent e) {
+    if (e is! KeyDownEvent || _typingElsewhere) return KeyEventResult.ignored;
+    final l = _lineAt();
+    if (l == null) return KeyEventResult.ignored;
+    final k = e.logicalKey, ch = e.character;
+    final plus = ch == '+' || k == LogicalKeyboardKey.numpadAdd || k == LogicalKeyboardKey.add;
+    final minus = ch == '-' || k == LogicalKeyboardKey.numpadSubtract || k == LogicalKeyboardKey.minus;
+    if ((plus || minus) && _searchEmpty) {
+      _sale.step(l.id, plus ? 1 : -1);
+      return KeyEventResult.handled;
+    }
+    if (e.logicalKey == LogicalKeyboardKey.delete && _searchEmpty) {
+      _sale.remove(l.id);
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  /// Alt+1…9: the payment method in that place.
+  Future<void> _methodKey(int n) async {
+    final d = await ref.read(pharmacyProvider.future);
+    if (n <= d.methods.length) _sale.method(d.methods[n - 1]);
+  }
+
+  /// F10: save the sale as a proforma (staff who may).
+  Future<void> _proformaKey() async {
+    final d = await ref.read(pharmacyProvider.future);
+    final can = ref.read(permissionsProvider).value ?? const <String>{};
+    if (!can.contains('proformas') || d.features['proformas'] == false || ref.read(saleControllerProvider(widget.wholesale)).lines.isEmpty) return;
+    final pf = await _sale.proformaNow();
+    if (mounted) _say('Proforma ${pf['number']} saved (see Proformas)');
+  }
+
+  /// Alt+D: the discount (staff who may).
+  Future<void> _discountKey() async {
+    final can = ref.read(permissionsProvider).value ?? const <String>{};
+    if (!can.contains('pos.discount')) return;
+    final v = await askNumber(context, 'Discount (amount)', ref.read(saleControllerProvider(widget.wholesale)).discount);
+    if (v != null) _sale.discount(v);
+  }
+
+  /// Alt+R: the last receipt at this branch again.
+  Future<void> _lastReceipt() async {
+    final d = await ref.read(pharmacyProvider.future);
+    final sales = (await ref.read(recordStoreProvider).rows('sales')).where((x) => '${x['branchId'] ?? mainBranch}' == d.branch).toList()
+      ..sort((a, b) => '${b['date']}'.compareTo('${a['date']}'));
+    if (!mounted) return;
+    if (sales.isEmpty) return _say('No sale at this branch yet', error: true);
+    final phone = d.customers.where((x) => x.id == sales.first['customerId'] && x.id != walkIn).firstOrNull?.phone ?? '';
+    await showReceipt(context, sales.first, d.settings, phone: phone);
+  }
+
   Future<void> _charge() async {
     final d = await ref.read(pharmacyProvider.future);
     final s = ref.read(saleControllerProvider(widget.wholesale));
@@ -174,7 +251,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
         final stored = ref.watch(deviceValueProvider('pos-layout')).value;
         final layout = posLayouts.any((x) => x.$1 == stored) ? stored! : 'standard';
         final advanced = wide && layout == 'advanced';
-        final products = _ProductPanel(
+        final productPanel = _ProductPanel(
           wholesale: widget.wholesale,
           data: d,
           results: results,
@@ -203,6 +280,20 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                 }
               : null,
         );
+        final touch = Theme.of(context).platform == TargetPlatform.android;
+        final products = Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+            child: PageTip(
+              id: 'pos',
+              title: 'Selling quickly',
+              text: touch
+                  ? 'Tap a medicine to add it. The sale waits at the bottom with the total and Charge; tap it to see the lines. The camera button scans barcodes.'
+                  : 'Type or scan to add, ↑↓ and Enter to pick. Alt+H holds a sale while you serve the next customer, F9 charges. Press ? for every shortcut.',
+            ),
+          ),
+          Expanded(child: productPanel),
+        ]);
         final sale = _SalePanel(wholesale: widget.wholesale, data: d, onCharge: _charge, onError: (m) => _say(m, error: true), advanced: advanced);
         final client = wide && layout != 'classic' && d.settings.clientCapture != 'off'
             ? _ClientStrip(wholesale: widget.wholesale, data: d, focus: _clientFocus, onDone: _searchFocus.requestFocus)
@@ -214,7 +305,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
               showKeyboardHelp(context);
               return KeyEventResult.handled;
             }
-            return KeyEventResult.ignored;
+            return _lineKey(e);
           },
           child: CallbackShortcuts(
             bindings: {
@@ -227,6 +318,16 @@ class _PosScreenState extends ConsumerState<PosScreen> {
               const SingleActivator(LogicalKeyboardKey.enter, control: true): _charge,
               const SingleActivator(LogicalKeyboardKey.keyH, alt: true): () => _sale.hold(),
               const SingleActivator(LogicalKeyboardKey.keyC, alt: true): _clientFocus.requestFocus,
+              const SingleActivator(LogicalKeyboardKey.keyD, alt: true): _discountKey,
+              const SingleActivator(LogicalKeyboardKey.keyR, alt: true): _lastReceipt,
+              const SingleActivator(LogicalKeyboardKey.f10): _proformaKey,
+              const SingleActivator(LogicalKeyboardKey.arrowUp, alt: true): () => _moveCursor(-1),
+              const SingleActivator(LogicalKeyboardKey.arrowDown, alt: true): () => _moveCursor(1),
+              for (final (i, k) in const [
+                LogicalKeyboardKey.digit1, LogicalKeyboardKey.digit2, LogicalKeyboardKey.digit3, LogicalKeyboardKey.digit4, LogicalKeyboardKey.digit5,
+                LogicalKeyboardKey.digit6, LogicalKeyboardKey.digit7, LogicalKeyboardKey.digit8, LogicalKeyboardKey.digit9,
+              ].indexed)
+                SingleActivator(k, alt: true): () => _methodKey(i + 1),
               if (advanced) const SingleActivator(LogicalKeyboardKey.keyK, control: true): () => _openCommandBar(d),
             },
             child: wide
@@ -923,6 +1024,7 @@ class _SalePanel extends ConsumerWidget {
                         final l = s.lines[i];
                         final p = data.byId[l.id];
                         final packs = p == null ? const <Pack>[] : packsOf(p);
+                        final chosen = s.cursor == i;
                         return Dismissible(
                           key: ValueKey('line-${l.id}'),
                           direction: DismissDirection.endToStart,
@@ -933,7 +1035,9 @@ class _SalePanel extends ConsumerWidget {
                             child: const Icon(Icons.delete_outline),
                           ),
                           onDismissed: (_) => c.remove(l.id),
-                          child: Padding(
+                          child: Container(
+                            key: chosen ? const Key('line-chosen') : null,
+                            color: chosen ? th.colorScheme.primaryContainer.withValues(alpha: 0.5) : null,
                             padding: const EdgeInsets.symmetric(vertical: 6),
                             child: Row(
                               children: [

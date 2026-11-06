@@ -21,6 +21,7 @@ import '../../sales_pos/presentation/camera_scan.dart';
 import '../domain/delivery.dart';
 import '../domain/stock_form.dart';
 import 'invoice_scan.dart';
+import '../../../core/presentation/page_tip.dart';
 
 /// Add Stock (src/pages/Purchases.jsx AddStock): a delivery laid out like the supplier's invoice. Search or scan each
 /// medicine (not in the list? add it as new); type the unit cost or the line total (the other is worked out) and the
@@ -366,6 +367,11 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
           });
         }, icon: const Icon(Icons.document_scanner_outlined), label: const Text('Scan invoice')),
       ]),
+      const PageTip(
+        id: 'add-stock',
+        title: 'Receiving a delivery',
+        text: 'Search or scan each medicine (not in the list? type its name and add it as a new medicine). Type the line total from the invoice: the unit cost and the retail price work themselves out, and you can still change the price. Scan invoice reads a photo for you.',
+      ),
       if (f['draftId'] != null && '${f['draftId']}'.isNotEmpty)
         const _Notice('Continuing a saved draft. Receiving it removes it from Drafts; "Save as draft" keeps your changes in it.'),
       if (myDrafts.isNotEmpty)

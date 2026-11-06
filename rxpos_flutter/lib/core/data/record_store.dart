@@ -54,10 +54,12 @@ class Edit {
     return r;
   }
 
-  /// Delete a record (a tombstone is kept so a later download does not bring it back).
+  /// Delete a record (a tombstone is kept so a later download does not bring it back). A standard-catalogue medicine
+  /// is built into the app, so this pharmacy also remembers it removed it (catalogHidden, as src/store.jsx del).
   void del(String t, String id) {
     _puts.remove('$t|$id');
     _dels['$t|$id'] = (t: t, id: id);
+    if (t == 'products' && RegExp(r'^cat-\d+$').hasMatch(id)) put('catalogHidden', {'id': id});
   }
 
   /// Record a stock movement (+ in, − out). Stock is always the sum of movements.

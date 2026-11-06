@@ -24,6 +24,9 @@ import 'package:rxpos/core/notify/os_notifications.dart';
 import 'package:rxpos/core/rules/dates.dart';
 import 'package:rxpos/core/sound/sounds.dart';
 import 'package:rxpos/core/sync/sync_config.dart';
+import 'package:rxpos/core/presentation/page_tip.dart';
+import 'package:rxpos/features/sales_pos/application/sale_controller.dart';
+import 'package:rxpos/features/sales_pos/presentation/pos_screen.dart';
 import 'package:rxpos/core/update/app_updates.dart';
 import 'package:rxpos/features/calls/application/call_controller.dart';
 import 'package:rxpos/features/calls/domain/rtc_peer.dart';
@@ -95,7 +98,7 @@ void main() {
     }
   }
 
-  Future<void> start(WidgetTester tester, {Size size = const Size(1440, 900), List<Override> extra = const [], bool engage = false, bool live = false, bool foreground = true, bool calls = false}) async {
+  Future<void> start(WidgetTester tester, {Size size = const Size(1440, 900), List<Override> extra = const [], bool engage = false, bool live = false, bool foreground = true, bool calls = false, bool tips = false}) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -127,6 +130,7 @@ void main() {
           soundsProvider.overrideWith((ref) => _QuietSounds(ref, played)),
           liveOnProvider.overrideWithValue(live), // no real connection to the cloud in tests
           callsOnProvider.overrideWithValue(calls), // voice calls: only in the tests about them
+          pageTipsOnProvider.overrideWithValue(tips), // first-visit tips: only in the test about them
           if (!extra.any((o) => o.origin == updatePlatformProvider)) updatePlatformProvider.overrideWithValue(null), // no self-updates unless a test asks
           osNotifyProvider.overrideWithValue(osNotify),
           appInForegroundProvider.overrideWithValue(() => foreground),
@@ -339,7 +343,7 @@ void main() {
     await navTo(tester, 'Customers');
     await tester.tap(find.text('Add client'));
     await settle(tester);
-    await tester.enterText(find.widgetWithText(TextFormField, 'Name'), 'Grace Sample');
+    await tester.enterText(find.widgetWithText(TextFormField, 'Full name / company'), 'Grace Sample');
     await tester.enterText(find.widgetWithText(TextFormField, 'Phone'), '0700111222');
     await tester.tap(find.widgetWithText(FilledButton, 'Save'));
     await settle(tester);
@@ -2232,6 +2236,166 @@ void main() {
       await tester.scrollUntilVisible(find.byKey(const Key('update-state')), 200, scrollable: find.descendant(of: find.byType(PageFrame), matching: find.byType(Scrollable)).first);
       expect(find.text('Up to date. New versions are fetched by themselves.'), findsOneWidget);
       expect(find.byKey(const Key('update-pill')), findsNothing);
+      await done(tester);
+    });
+  });
+
+  group('parity with the React app (from the similarity index)', () {
+    Future<void> confirmDelete(WidgetTester tester) async {
+      await tester.tap(find.byKey(const Key('record-delete')));
+      await settle(tester, 8);
+      await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
+      await settle(tester);
+    }
+
+    testWidgets('medicines, formulations, prescriptions, expense categories and loans can be deleted', (tester) async {
+      await tester.runAsync(signedIn);
+      await tester.runAsync(() => RecordStore(db).update((d) {
+            d.put('formulations', {'id': 'f-gel', 'name': 'Gel'});
+            d.put('prescriptions', {'id': 'rx1', 'customerId': 'walk-in', 'date': '2026-11-01', 'medications': 'Calmex 1x3', 'status': 'Pending', 'refillsAllowed': 0});
+            d.put('expenseCategories', {'id': 'ec1', 'name': 'Fuel'});
+            d.put('loans', {'id': 'l1', 'lender': 'Sample Bank', 'date': '2026-10-01', 'amount': 100000, 'interestRate': 0});
+          }));
+      await start(tester);
+      final store = RecordStore(db);
+      Future<bool> gone(String t, String id) async => (await tester.runAsync(() => store.get(t, id))) == null;
+
+      await navTo(tester, 'Medicine List');
+      await tester.tap(find.text('Zinco Syrup 100ml'));
+      await settle(tester);
+      await confirmDelete(tester);
+      expect(await gone('products', 'p2'), isTrue);
+      expect(find.text('Medicine deleted'), findsOneWidget);
+      final audit = (await tester.runAsync(() => store.rows('audit')))!;
+      expect(audit.any((a) => a['action'] == 'Medicine deleted' && a['details'] == 'Zinco Syrup 100ml'), isTrue);
+
+      await navTo(tester, 'Formulations');
+      await tester.tap(find.text('Gel'));
+      await settle(tester);
+      await confirmDelete(tester);
+      expect(await gone('formulations', 'f-gel'), isTrue);
+
+      await navTo(tester, 'Prescriptions & Refills');
+      await tester.tap(find.textContaining('Calmex 1x3').first);
+      await settle(tester);
+      await confirmDelete(tester);
+      expect(await gone('prescriptions', 'rx1'), isTrue);
+
+      await navTo(tester, 'Finance');
+      await tester.tap(find.text('Expense Categories'));
+      await settle(tester);
+      await tester.tap(find.text('Fuel'));
+      await settle(tester);
+      await confirmDelete(tester);
+      expect(await gone('expenseCategories', 'ec1'), isTrue);
+      await tester.tap(find.text('Loans'));
+      await settle(tester);
+      await tester.tap(find.textContaining('Sample Bank'));
+      await settle(tester);
+      await confirmDelete(tester);
+      expect(await gone('loans', 'l1'), isTrue);
+      await done(tester);
+    });
+
+    testWidgets('a client has the React app\'s fields (email, address, birth date, type, insurance, credit limit); a supplier its TIN', (tester) async {
+      await tester.runAsync(signedIn);
+      await start(tester);
+      await navTo(tester, 'Customers');
+      await tester.tap(find.text('Add client'));
+      await settle(tester);
+      await tester.enterText(find.widgetWithText(TextFormField, 'Full name / company'), 'Amina Test');
+      await tester.enterText(find.widgetWithText(TextFormField, 'Email'), 'amina@test.rx');
+      await tester.enterText(find.widgetWithText(TextFormField, 'Address'), 'Plot 1, Sample Road');
+      await tester.enterText(find.widgetWithText(TextFormField, 'Date of birth'), '1990-04-02');
+      await tester.enterText(find.widgetWithText(TextFormField, 'Insurance / HMO'), 'Sample Health');
+      await tester.enterText(find.widgetWithText(TextFormField, 'Policy number'), 'SH-001');
+      await tester.enterText(find.widgetWithText(TextFormField, 'Credit limit'), '50000');
+      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+      await settle(tester);
+      final c = (await tester.runAsync(() => RecordStore(db).rows('customers')))!.firstWhere((x) => x['name'] == 'Amina Test');
+      expect((c['email'], c['address'], c['dob'], c['insurance'], c['insuranceNo'], c['creditLimit']), ('amina@test.rx', 'Plot 1, Sample Road', '1990-04-02', 'Sample Health', 'SH-001', 50000));
+      await navTo(tester, 'Suppliers');
+      await tester.tap(find.text('Add supplier'));
+      await settle(tester);
+      await tester.enterText(find.widgetWithText(TextFormField, 'Company name'), 'Sample Pharma Ltd');
+      await tester.enterText(find.widgetWithText(TextFormField, 'TIN / tax number'), '1000123456');
+      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+      await settle(tester);
+      final sup = (await tester.runAsync(() => RecordStore(db).rows('suppliers')))!.firstWhere((x) => x['name'] == 'Sample Pharma Ltd');
+      expect(sup['tin'], '1000123456');
+      await done(tester);
+    });
+
+    testWidgets('the till keyboard: Alt+↑/↓ chooses a line, + / − / Delete change it, Alt+2 the method, F10 a proforma, Alt+R the last receipt', (tester) async {
+      await tester.runAsync(signedIn);
+      await tester.runAsync(() => RecordStore(db).update((d) {
+            d.put('batches', {'id': 'b2', 'productId': 'p2', 'batch': 'Z1', 'expiry': '2029-01-31', 'cost': 4000});
+            d.move(productId: 'p2', qty: 10, type: 'Opening stock', batchId: 'b2');
+          }));
+      await start(tester);
+      await toTill(tester);
+      final container = ProviderScope.containerOf(tester.element(find.byType(PosScreen)));
+      SaleState sale() => container.read(saleControllerProvider(false));
+      Future<void> alt(LogicalKeyboardKey k) async {
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.altLeft);
+        await tester.sendKeyEvent(k);
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.altLeft);
+        await settle(tester, 2);
+      }
+
+      await alt(LogicalKeyboardKey.keyR);
+      expect(find.text('No sale at this branch yet'), findsOneWidget);
+      await tester.tap(find.text('Calmex 500mg Tabs'));
+      await settle(tester, 4);
+      await tester.tap(find.text('Zinco Syrup 100ml'));
+      await settle(tester, 4);
+      await alt(LogicalKeyboardKey.arrowUp);
+      expect(sale().cursor, 0, reason: 'from the last line up to Calmex');
+      expect(find.byKey(const Key('line-chosen')), findsOneWidget);
+      await tester.sendKeyEvent(LogicalKeyboardKey.numpadAdd);
+      await tester.sendKeyEvent(LogicalKeyboardKey.numpadAdd);
+      await settle(tester, 2);
+      expect(sale().lines.first.count, 3);
+      await tester.sendKeyEvent(LogicalKeyboardKey.numpadSubtract);
+      await settle(tester, 2);
+      expect(sale().lines.first.count, 2);
+      await alt(LogicalKeyboardKey.digit2);
+      expect(sale().method?.name, 'Mobile Money');
+      await tester.sendKeyEvent(LogicalKeyboardKey.delete);
+      await settle(tester, 2);
+      expect(sale().lines.map((l) => l.name), ['Zinco Syrup 100ml']);
+      await tester.sendKeyEvent(LogicalKeyboardKey.f10);
+      await settle(tester);
+      expect(find.textContaining('saved (see Proformas)'), findsOneWidget);
+      expect((await tester.runAsync(() => RecordStore(db).rows('proformas')))!, hasLength(1));
+      await alt(LogicalKeyboardKey.digit1);
+      expect(sale().method?.name, 'Cash');
+      if (sale().lines.isEmpty) {
+        await tester.tap(find.text('Calmex 500mg Tabs'));
+        await settle(tester, 4);
+      }
+      await tester.sendKeyEvent(LogicalKeyboardKey.f9);
+      await settle(tester);
+      await tester.tap(find.text('New sale'));
+      await settle(tester);
+      await alt(LogicalKeyboardKey.keyR);
+      await settle(tester);
+      expect(find.text('New sale'), findsOneWidget, reason: 'the receipt again');
+      await done(tester);
+    });
+
+    testWidgets('a first-visit tip on the till, gone for good after "Got it"', (tester) async {
+      await tester.runAsync(signedIn);
+      await start(tester, tips: true);
+      await toTill(tester);
+      expect(find.text('Selling quickly'), findsOneWidget);
+      await tester.tap(find.text('Got it'));
+      await settle(tester);
+      expect(find.text('Selling quickly'), findsNothing);
+      await done(tester);
+      await start(tester, tips: true);
+      await toTill(tester);
+      expect(find.text('Selling quickly'), findsNothing, reason: 'remembered on this device');
       await done(tester);
     });
   });

@@ -86,6 +86,11 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
 
   Future<void> _delete(String table, Map<String, Object?> r, String what) async {
     if (!await confirmAction(context, 'Delete this $what?', 'It is removed on every device.', 'Delete')) return;
+    await _deleted(table, r, what);
+  }
+
+  /// Delete a record (already confirmed), noted in the audit log.
+  Future<void> _deleted(String table, Map<String, Object?> r, String what) async {
     final by = await _who();
     await _store.update((d) {
       d.del(table, '${r['id']}');
@@ -205,8 +210,11 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
 
   Widget _categories(Map<String, List<Map<String, Object?>>> data, PharmacySettings st) {
     Future<void> edit(Map<String, Object?>? c) async {
-      final v = await editRecord(context, title: c == null ? 'New category' : 'Edit ${c['name']}', initial: c ?? const {}, fields: const [FormFieldSpec('name', 'Name', required: true)]);
-      if (v != null) await _store.update((d) => d.put('expenseCategories', {...?c, ...v, 'id': c?['id'] ?? uid()}));
+      final v = await editRecord(context, title: c == null ? 'New category' : 'Edit ${c['name']}', initial: c ?? const {}, delete: c == null ? null : 'category',
+          fields: const [FormFieldSpec('name', 'Name', required: true)]);
+      if (v == null) return;
+      if (identical(v, deleteRecord) && c != null) return _deleted('expenseCategories', c, 'Expense category');
+      await _store.update((d) => d.put('expenseCategories', {...?c, ...v, 'id': c?['id'] ?? uid()}));
     }
 
     double spent(Object? id) => data['expenses']!.where((e) => e['categoryId'] == id).fold(0.0, (a, e) => a + ((e['amount'] as num?)?.toDouble() ?? 0));
@@ -271,7 +279,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
 
   Widget _loans(Map<String, List<Map<String, Object?>>> data, List<(String, String)> bankOpts, PharmacySettings st) {
     Future<void> edit(Map<String, Object?>? l) async {
-      final v = await editRecord(context, title: l == null ? 'New loan' : 'Edit loan', initial: l ?? {'date': today(), 'bankId': cashDrawer, 'interestRate': 0}, fields: [
+      final v = await editRecord(context, title: l == null ? 'New loan' : 'Edit loan', delete: l == null ? null : 'loan', initial: l ?? {'date': today(), 'bankId': cashDrawer, 'interestRate': 0}, fields: [
         const FormFieldSpec('lender', 'Lender', required: true),
         const FormFieldSpec('date', 'Date received', kind: FieldKind.date, required: true),
         const FormFieldSpec('amount', 'Amount', kind: FieldKind.number, required: true),
@@ -280,7 +288,9 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
         FormFieldSpec('bankId', 'Received into', kind: FieldKind.choice, options: bankOpts),
         const FormFieldSpec('purpose', 'Purpose'),
       ]);
-      if (v != null) await _store.update((d) => d.put('loans', {...?l, ...v, 'id': l?['id'] ?? uid()}));
+      if (v == null) return;
+      if (identical(v, deleteRecord) && l != null) return _deleted('loans', l, 'Loan');
+      await _store.update((d) => d.put('loans', {...?l, ...v, 'id': l?['id'] ?? uid()}));
     }
 
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [

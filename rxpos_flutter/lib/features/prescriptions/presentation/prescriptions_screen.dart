@@ -34,7 +34,7 @@ class PrescriptionsScreen extends ConsumerWidget {
     final list = [...rows]..sort((a, b) => '${b['date']}'.compareTo('${a['date']}'));
 
     Future<void> edit(Map<String, Object?>? r) async {
-      final v = await editRecord(context, title: r == null ? 'New prescription' : 'Edit prescription', initial: {
+      final v = await editRecord(context, title: r == null ? 'New prescription' : 'Edit prescription', delete: r == null ? null : 'prescription', initial: {
         ...?r, 'medications': medicationsText(r?['medications']), 'date': r?['date'] ?? today(), 'status': r?['status'] ?? 'Pending', 'customerId': r?['customerId'],
         'refillsAllowed': r?['refillsAllowed'] ?? 0,
       }, fields: [
@@ -43,6 +43,11 @@ class PrescriptionsScreen extends ConsumerWidget {
         ..._fields,
       ]);
       if (v == null) return;
+      if (identical(v, deleteRecord) && r != null) {
+        await ref.read(recordStoreProvider).update((d) => d.del('prescriptions', '${r['id']}'));
+        if (context.mounted) say(context, 'Prescription deleted');
+        return;
+      }
       // as the React app keeps them: medications as one text
       await ref.read(recordStoreProvider).update((d) => d.put('prescriptions', {...?r, ...v, 'id': r?['id'] ?? uid(), 'refillsUsed': r?['refillsUsed'] ?? 0}));
     }

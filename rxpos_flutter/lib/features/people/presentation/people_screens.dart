@@ -27,10 +27,16 @@ class _PeopleScreenState extends ConsumerState<PeopleScreen> {
   String get _t => widget.suppliers ? 'suppliers' : 'customers';
 
   List<FormFieldSpec> get _fields => widget.suppliers
-      ? const [FormFieldSpec('name', 'Name', required: true), FormFieldSpec('contact', 'Contact person'), FormFieldSpec('phone', 'Phone'),
-          FormFieldSpec('email', 'Email'), FormFieldSpec('address', 'Address')]
-      : const [FormFieldSpec('name', 'Name', required: true), FormFieldSpec('phone', 'Phone'), FormFieldSpec('allergies', 'Allergies'),
-          FormFieldSpec('notes', 'Notes', kind: FieldKind.multiline)];
+      // the same fields as the React app (src/pages/People.jsx)
+      ? const [FormFieldSpec('name', 'Company name', required: true), FormFieldSpec('contact', 'Contact person'), FormFieldSpec('phone', 'Phone'),
+          FormFieldSpec('email', 'Email'), FormFieldSpec('tin', 'TIN / tax number'), FormFieldSpec('address', 'Address', kind: FieldKind.multiline)]
+      : const [
+          FormFieldSpec('name', 'Full name / company', required: true), FormFieldSpec('phone', 'Phone'), FormFieldSpec('email', 'Email'),
+          FormFieldSpec('address', 'Address'), FormFieldSpec('dob', 'Date of birth', kind: FieldKind.date),
+          FormFieldSpec('type', 'Type', kind: FieldKind.choice, options: [('Retail', 'Retail'), ('Wholesale', 'Wholesale'), ('Clinic / Hospital', 'Clinic / Hospital'), ('Insurance', 'Insurance')]),
+          FormFieldSpec('insurance', 'Insurance / HMO'), FormFieldSpec('insuranceNo', 'Policy number'), FormFieldSpec('creditLimit', 'Credit limit', kind: FieldKind.number),
+          FormFieldSpec('allergies', 'Allergies', kind: FieldKind.multiline), FormFieldSpec('notes', 'Notes', kind: FieldKind.multiline),
+        ];
 
   @override
   Widget build(BuildContext context) {

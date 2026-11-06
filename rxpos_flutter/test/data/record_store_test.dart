@@ -90,4 +90,19 @@ void main() {
     await store.update((d) {});
     expect(await db.select(db.outbox).get(), isEmpty);
   });
+
+  test('deleting a standard-catalogue medicine also remembers it was removed (catalogHidden), as src/store.jsx del', () async {
+    await store.update((d) {
+      d.put('products', {'id': 'cat-12', 'name': 'Calmex 500mg Tabs', 'price': 500});
+      d.put('products', {'id': 'p-own', 'name': 'House syrup'});
+    });
+    await store.update((d) {
+      d.del('products', 'cat-12');
+      d.del('products', 'p-own');
+    });
+    expect((await store.rows('catalogHidden')).map((r) => r['id']), ['cat-12'], reason: 'only the catalogue one: an own medicine just goes');
+    expect(await count('products'), 0);
+    final out = await db.select(db.outbox).get();
+    expect(out.where((o) => o.t == 'catalogHidden').single.deleted, isFalse, reason: 'it syncs, so every device hides it');
+  });
 }
