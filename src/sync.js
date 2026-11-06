@@ -137,8 +137,11 @@ export function createSync({ getDb, getCfg, saveCfg, applyRemote, onStatus, stor
       const c = getCfg();
       const batches = groupOutbox(await store.outbox());
       const total = batches.reduce((a, b) => a + b.length, 0);
-      const full = (c.fullPull || 0) < FULL_PULL; // download everything from the start this time
-      let cursor = full ? 0 : c.cursor || 0, epoch = c.epoch, i = 0, sent = 0, pulled = 0, refused = 0;
+      // download everything this time. It starts from 0 once (fullInProgress); a run cut off part-way leaves the pages
+      // that arrived on the device, and the next run carries on from the last one instead of starting again.
+      const full = (c.fullPull || 0) < FULL_PULL;
+      if (full && !c.fullInProgress) await saveCfg({ ...getCfg(), cursor: 0, fullInProgress: true });
+      let cursor = full ? getCfg().cursor || 0 : c.cursor || 0, epoch = c.epoch, i = 0, sent = 0, pulled = 0, refused = 0;
       for (;;) {
         const batch = batches[i] || [];
         const r = await post(c.url, c.key, { deviceId: c.deviceId, since: cursor, changes: toChanges(batch, getDb()), v: PROTOCOL, ...(full ? { all: true } : {}) });
@@ -175,7 +178,7 @@ export function createSync({ getDb, getCfg, saveCfg, applyRemote, onStatus, stor
         await saveCfg({ ...getCfg(), resendAfterRestore: false }); // after the commit: a crash in between only queues it twice
         if (all.length) again = true; // send them straight away
       }
-      const next = { ...getCfg(), lastSync: now(), lastError: '', ...(full ? { fullPull: FULL_PULL } : {}) };
+      const next = { ...getCfg(), lastSync: now(), lastError: '', ...(full ? { fullPull: FULL_PULL, fullInProgress: false } : {}) };
       await saveCfg(next);
       failures = 0; retryAt = 0;
       result = { state: 'ok', lastSync: next.lastSync, pushed: sent, pulled, refused, ...(await counts()) };
@@ -220,7 +223,7 @@ export function createSync({ getDb, getCfg, saveCfg, applyRemote, onStatus, stor
   return {
     run,
     /** "Download everything again" (This device): the next sync re-pulls the whole pharmacy and merges it */
-    async pullAll() { await saveCfg({ ...getCfg(), fullPull: 0 }); return run(); },
+    async pullAll() { await saveCfg({ ...getCfg(), fullPull: 0, fullInProgress: false }); return run(); }, // from the start again
     stop() {
       stopped = true;
       clearTimeout(timer);
