@@ -91,7 +91,7 @@ class _SalesLinesViewState extends ConsumerState<SalesLinesView> {
         ),
       ]),
       const SizedBox(height: 12),
-      Wrap(spacing: 12, runSpacing: 12, children: [
+      StatGrid(children: [
         StatCard(label: 'Amount', value: st.money(amount), sub: '${shown.length} lines · ${{for (final l in shown) l.saleId}.length} receipts'),
         if (widget.money) StatCard(label: 'Profit', value: st.money(profit), sub: '${pct(profit, amount)} margin', color: Colors.deepPurple),
         StatCard(label: 'Quantity sold', value: formatQty(qty), sub: '${{for (final l in shown) l.name}.length} medicines'),

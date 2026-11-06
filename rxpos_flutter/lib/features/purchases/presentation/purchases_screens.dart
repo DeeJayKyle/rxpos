@@ -446,7 +446,7 @@ class _ReorderScreenState extends ConsumerState<ReorderScreen> {
       subtitle: 'Based on how fast each item really sells',
       scroll: true,
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Wrap(spacing: 12, runSpacing: 12, children: [
+        StatGrid(children: [
           StatCard(label: 'Need reordering', value: '${suggestions.length}', sub: 'cover ${lead + cover} days', color: Colors.orange.shade800),
           StatCard(label: 'Est. order value', value: st.money(suggestions.fold<double>(0, (a, r) => a + r.cost))),
           StatCard(label: 'Dead stock', value: '${dead.length}', sub: '${st.money(deadValue)} tied up', color: Theme.of(context).colorScheme.error),

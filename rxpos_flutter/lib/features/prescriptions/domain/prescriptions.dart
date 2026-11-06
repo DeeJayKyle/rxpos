@@ -3,7 +3,10 @@
 import '../../../core/data/record_store.dart';
 import '../../../core/rules/dates.dart';
 
-int _i(Object? v) => (v as num?)?.toInt() ?? 0;
+int _i(Object? v) => v is num ? v.toInt() : int.tryParse('${v ?? ''}') ?? 0;
+
+/// How many refills remain; never negative (src/rxrules.js refillsLeft). Unset or 0 allowed means none.
+int refillsLeft(Map<String, Object?> r) => (_i(r['refillsAllowed']) - _i(r['refillsUsed'])).clamp(0, 1 << 30);
 
 bool canRecordRefill(Map<String, Object?> r) => r['status'] != 'Cancelled' && r['status'] != 'Completed' && _i(r['refillsUsed']) < _i(r['refillsAllowed']);
 

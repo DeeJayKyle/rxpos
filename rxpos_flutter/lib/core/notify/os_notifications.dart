@@ -31,7 +31,7 @@ class PluginNotify implements OsNotify {
           return await _p.initialize(
                 settings: const InitializationSettings(
                   android: AndroidInitializationSettings('@mipmap/ic_launcher'),
-                  windows: WindowsInitializationSettings(appName: 'RxPOS New', appUserModelId: 'RxPOS.New', guid: 'd174d7c2-f9be-466f-bec5-6be0dada8654'),
+                  windows: WindowsInitializationSettings(appName: 'RxPOS', appUserModelId: 'RxPOS.New', guid: 'd174d7c2-f9be-466f-bec5-6be0dada8654'),
                   linux: LinuxInitializationSettings(defaultActionName: 'Open RxPOS'),
                 ),
               ) ??

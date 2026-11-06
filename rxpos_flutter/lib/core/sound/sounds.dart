@@ -10,6 +10,7 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../data/app_dirs.dart';
 import '../data/device_settings.dart';
 
 typedef Note = (double freq, double at, double len, String wave);
@@ -116,7 +117,7 @@ class Sounds {
 
   Future<SoundPrefs> prefs() async => SoundPrefs.parse(await _ref.read(deviceValueProvider(soundPrefsKey).future));
 
-  static Future<File> customFile(String kind) async => File('${(await getApplicationSupportDirectory()).path}${Platform.pathSeparator}sound-$kind');
+  static Future<File> customFile(String kind) async => File('${(await appSupportDir()).path}${Platform.pathSeparator}sound-$kind');
 
   /// Play the sound for [kind] (or try [tone]); silent when sounds are off on this device (a [tone] test always plays).
   Future<void> play(String kind, {String? tone, double? volume}) async {

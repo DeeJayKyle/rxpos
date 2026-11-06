@@ -2,6 +2,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui' show Tristate;
 
 import 'package:crypto/crypto.dart';
 
@@ -24,6 +25,7 @@ import 'package:rxpos/core/notify/os_notifications.dart';
 import 'package:rxpos/core/rules/dates.dart';
 import 'package:rxpos/core/sound/sounds.dart';
 import 'package:rxpos/core/sync/sync_config.dart';
+import 'package:rxpos/core/presentation/app_shell.dart' show sidebarStartsCollapsedProvider;
 import 'package:rxpos/core/presentation/page_tip.dart';
 import 'package:rxpos/features/sales_pos/application/sale_controller.dart';
 import 'package:rxpos/features/sales_pos/presentation/pos_screen.dart';
@@ -98,7 +100,7 @@ void main() {
     }
   }
 
-  Future<void> start(WidgetTester tester, {Size size = const Size(1440, 900), List<Override> extra = const [], bool engage = false, bool live = false, bool foreground = true, bool calls = false, bool tips = false}) async {
+  Future<void> start(WidgetTester tester, {Size size = const Size(1440, 900), List<Override> extra = const [], bool engage = false, bool live = false, bool foreground = true, bool calls = false, bool tips = false, bool foldedNav = false}) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -131,6 +133,7 @@ void main() {
           liveOnProvider.overrideWithValue(live), // no real connection to the cloud in tests
           callsOnProvider.overrideWithValue(calls), // voice calls: only in the tests about them
           pageTipsOnProvider.overrideWithValue(tips), // first-visit tips: only in the test about them
+          sidebarStartsCollapsedProvider.overrideWithValue(foldedNav), // sidebar groups open, so pages are found by name
           if (!extra.any((o) => o.origin == updatePlatformProvider)) updatePlatformProvider.overrideWithValue(null), // no self-updates unless a test asks
           osNotifyProvider.overrideWithValue(osNotify),
           appInForegroundProvider.overrideWithValue(() => foreground),
@@ -238,7 +241,7 @@ void main() {
     expect(find.text('Charge UGX 1,000   [F9]'), findsOneWidget);
     await tester.tap(find.text('Charge UGX 1,000   [F9]'));
     await settle(tester);
-    expect(find.text('Sale complete ✓'), findsOneWidget);
+    expect(find.text('Sale complete'), findsOneWidget);
     final store = RecordStore(db);
     final sale = (await tester.runAsync(() => store.rows('sales')))!.single;
     expect((sale['total'], sale['cashier'], sale['payment']), (1000, 'Tia Admin', 'Cash'));
@@ -295,7 +298,7 @@ void main() {
     await settle(tester);
     await tester.tap(find.text('Charge UGX 500   [F9]'));
     await settle(tester);
-    expect(find.text('Sale complete ✓'), findsOneWidget);
+    expect(find.text('Sale complete'), findsOneWidget);
     await done(tester);
   });
 
@@ -578,7 +581,7 @@ void main() {
     // favourites
     await tester.tap(find.byKey(const Key('star-p1')));
     await settle(tester);
-    await tester.tap(find.widgetWithText(ChoiceChip, '★ Favourites'));
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Favourites'));
     await settle(tester);
     expect(find.text('Calmex 500mg Tabs'), findsOneWidget);
     expect(find.text('Oldex Drops 10ml'), findsNothing);
@@ -604,7 +607,7 @@ void main() {
     await tester.enterText(find.byKey(const Key('dir-freq')), 'twice a day');
     await tester.tap(find.text('Done'));
     await settle(tester);
-    expect(find.text('Label ✓'), findsOneWidget);
+    expect(find.text('Edit label'), findsOneWidget);
 
     // the sale survives a restart of the app
     await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 400)));
@@ -615,12 +618,12 @@ void main() {
     await toTill(tester);
     await settle(tester);
     expect(find.text('Expired stock · No alternative in town'), findsOneWidget, reason: 'the sale came back after the restart');
-    expect(find.text('Label ✓'), findsOneWidget);
+    expect(find.text('Edit label'), findsOneWidget);
 
     // charge it: the expired override is on the sale and in the audit log
     await tester.tap(find.textContaining('Charge UGX 2,000'));
     await settle(tester);
-    expect(find.text('Sale complete ✓'), findsOneWidget);
+    expect(find.text('Sale complete'), findsOneWidget);
     await tester.tap(find.text('New sale'));
     await settle(tester);
     final sale = (await tester.runAsync(() => RecordStore(db).rows('sales')))!.single;
@@ -697,7 +700,7 @@ void main() {
     await cmd('disc 10');
     expect(find.text('Done'), findsOneWidget);
     await cmd('pay');
-    expect(find.text('Sale complete ✓'), findsOneWidget);
+    expect(find.text('Sale complete'), findsOneWidget);
     final sale = (await tester.runAsync(() => RecordStore(db).rows('sales')))!.single;
     expect((sale['total'], sale['discount'], sale['customerName']), (1800, 200, 'Grace Achieng'));
     await tester.tap(find.text('New sale'));
@@ -2155,7 +2158,7 @@ void main() {
     late List<int> served;
     late Map<String, Object?> manifest;
 
-    Future<void> updStart(WidgetTester tester, String platform, {int build = 50, bool damaged = false}) async {
+    Future<void> updStart(WidgetTester tester, String platform, {int build = 50, bool damaged = false, String? abi, bool abiApk = false}) async {
       await tester.runAsync(signedIn);
       folder = (await tester.runAsync(() => Directory.systemTemp.createTemp('rxpos-upd')))!;
       addTearDown(() => folder.delete(recursive: true));
@@ -2163,15 +2166,20 @@ void main() {
       now = DateTime(2026, 11, 6, 10);
       served = List.generate(5000, (i) => i % 251);
       final ext = platform == 'windows' ? 'exe' : 'apk';
-      manifest = {'build': 51, 'label': '1.0.51', 'file': 'RxPOS-New-51.$ext', 'size': served.length, 'sha256': '${sha256.convert(served)}'};
+      manifest = {'build': 51, 'label': '2.0.51', 'file': 'RxPOS-New-51.$ext', 'size': served.length, 'sha256': '${sha256.convert(served)}'};
       cloud.api['app/flutter-$platform.json'] = (_) => (200, manifest);
+      if (abiApk) {
+        manifest = {...manifest, 'file': 'RxPOS-New-51-$abi.apk'};
+        cloud.api['app/flutter-android-$abi.json'] = (_) => (200, manifest);
+      }
       await start(tester, extra: [
         updatePlatformProvider.overrideWithValue(platform),
+        androidAbiProvider.overrideWithValue(abi),
         currentBuildProvider.overrideWith((_) async => build),
         updateFolderProvider.overrideWithValue(() async => folder.path),
         updateClockProvider.overrideWithValue(() => now),
         updateDownloadProvider.overrideWithValue((url, path, progress) async {
-          expect(url, 'https://api.rxposug.com/api/app/RxPOS-New-51.$ext');
+          expect(url, 'https://api.rxposug.com/api/app/${manifest['file']}');
           await File(path).writeAsBytes(damaged ? served.reversed.toList() : served);
           progress(1);
         }),
@@ -2215,6 +2223,26 @@ void main() {
       await done(tester);
     });
 
+    testWidgets('Android: a phone takes the smaller APK made for its processor, or the one for all when there is none', (tester) async {
+      await updStart(tester, 'android', abi: 'arm64', abiApk: true);
+      await firstCheck(tester);
+      expect(cloud.calls.map((c) => c.$1), contains('app/flutter-android-arm64.json'));
+      await tester.tap(find.byKey(const Key('update-pill')));
+      await settle(tester);
+      expect(installs.single.$2, endsWith('RxPOS-New-51-arm64.apk'));
+      await done(tester);
+    });
+
+    testWidgets('Android: without a version file for its processor, the APK for all processors is taken', (tester) async {
+      await updStart(tester, 'android', abi: 'armv7');
+      await firstCheck(tester);
+      expect(cloud.calls.map((c) => c.$1), containsAll(['app/flutter-android-armv7.json', 'app/flutter-android.json']));
+      await tester.tap(find.byKey(const Key('update-pill')));
+      await settle(tester);
+      expect(installs.single.$2, endsWith('RxPOS-New-51.apk'));
+      await done(tester);
+    });
+
     testWidgets('a damaged download is thrown away and never installed; This device says so and checks again', (tester) async {
       await updStart(tester, 'windows', damaged: true);
       await firstCheck(tester);
@@ -2230,7 +2258,7 @@ void main() {
     testWidgets('already the newest build: "Up to date"; after an update, "RxPOS updated" once', (tester) async {
       await tester.runAsync(() => db.into(db.kv).insert(KvCompanion.insert(k: 'device:updatedFrom', v: '50')));
       await updStart(tester, 'windows', build: 51);
-      expect(find.text('RxPOS updated (1.0.51)'), findsOneWidget);
+      expect(find.text('RxPOS updated (2.0.51)'), findsOneWidget);
       await firstCheck(tester);
       await navTo(tester, 'This device');
       await tester.scrollUntilVisible(find.byKey(const Key('update-state')), 200, scrollable: find.descendant(of: find.byType(PageFrame), matching: find.byType(Scrollable)).first);
@@ -2398,6 +2426,134 @@ void main() {
       expect(find.text('Selling quickly'), findsNothing, reason: 'remembered on this device');
       await done(tester);
     });
+  });
+
+  // Screenshots of the real screens with real fonts, for reviewing the look (not part of the normal run):
+  //   flutter test test/widgets/app_flow_test.dart --plain-name screenshots --dart-define=SCREENS=true --update-goldens
+  // The images land in test/widgets/screens/ (ignored by git).
+  group('screenshots', () {
+    const on = bool.fromEnvironment('SCREENS');
+    setUpAll(() async {
+      if (!on) return;
+      final fonts = '${Platform.environment['FLUTTER_ROOT'] ?? '/root/flutter'}/bin/cache/artifacts/material_fonts';
+      final roboto = FontLoader('Roboto');
+      for (final w in ['Regular', 'Medium', 'Bold', 'Black', 'Light']) {
+        roboto.addFont(File('$fonts/Roboto-$w.ttf').readAsBytes().then(ByteData.sublistView));
+      }
+      await roboto.load();
+      await (FontLoader('MaterialIcons')..addFont(File('$fonts/MaterialIcons-Regular.otf').readAsBytes().then(ByteData.sublistView))).load();
+    });
+
+    Future<void> look(String theme) => db.into(db.kv).insertOnConflictUpdate(KvCompanion.insert(k: 'device:look', v: '{"theme":"$theme"}'));
+
+    Future<void> shot(WidgetTester tester, String name) async {
+      noSnackBars(tester);
+      await settle(tester, 6);
+      await expectLater(find.byType(MaterialApp).first, matchesGoldenFile('screens/$name.png'));
+    }
+
+    for (final (theme, tag) in [('hybrid-light', 'light'), ('hybrid-dark', 'dark')]) {
+      testWidgets('screens on a computer, $tag', (tester) async {
+        await tester.runAsync(signedIn);
+        await tester.runAsync(() => look(theme));
+        await start(tester, foldedNav: tag == 'light'); // light: the sidebar as it first opens (groups folded)
+        await shot(tester, '$tag-01-dashboard');
+        if (tag == 'light') {
+          // open the folded groups again, so the pages below can be found by name
+          await tester.runAsync(() => db.into(db.kv).insertOnConflictUpdate(KvCompanion.insert(k: 'device:navCollapsed', v: '{}')));
+          await done(tester);
+          await start(tester);
+        }
+        await toTill(tester);
+        await tester.tap(find.text('Calmex 500mg Tabs'));
+        await settle(tester, 4);
+        await shot(tester, '$tag-02-pos');
+        for (final (i, screen) in ['Medicine List', 'Add Stock', 'Sales History', 'Reports', 'Customers', 'Finance', 'Settings', 'This device', 'Chat & Messages'].indexed) {
+          await navTo(tester, screen);
+          await shot(tester, '$tag-${(i + 3).toString().padLeft(2, '0')}-${screen.toLowerCase().replaceAll(RegExp(r'[^a-z]+'), '-')}');
+        }
+        await navTo(tester, 'Medicine List');
+        await tester.tap(find.text('Add medicine'));
+        await settle(tester);
+        await shot(tester, '$tag-20-dialog');
+        await done(tester);
+      }, skip: !on);
+    }
+
+    testWidgets('screens on a phone', (tester) async {
+      await tester.runAsync(signedIn);
+      await tester.runAsync(() => look('hybrid-light'));
+      await start(tester, size: const Size(400, 860));
+      await shot(tester, 'phone-01-dashboard');
+      await tester.tap(find.byTooltip('Open navigation menu'));
+      await settle(tester);
+      await shot(tester, 'phone-02-menu');
+      await tester.tap(find.text('POS – Retail'));
+      await settle(tester);
+      await tester.tap(find.text('Calmex 500mg Tabs'));
+      await settle(tester, 4);
+      await shot(tester, 'phone-03-pos');
+      await done(tester);
+      // a small phone with the largest common system text size: nothing cut off or overflowing
+      tester.platformDispatcher.textScaleFactorTestValue = 1.5;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      await start(tester, size: const Size(375, 812));
+      await shot(tester, 'phone-04-large-text-dashboard');
+      await tester.tap(find.byTooltip('Open navigation menu'));
+      await settle(tester);
+      await tester.tap(find.text('POS – Retail'));
+      await settle(tester);
+      await tester.tap(find.text('Calmex 500mg Tabs'));
+      await settle(tester, 4);
+      await shot(tester, 'phone-05-large-text-pos');
+      await tester.tap(find.text('1 item'));
+      await settle(tester);
+      await shot(tester, 'phone-06-large-text-sale');
+      await done(tester);
+    }, skip: !on);
+
+    testWidgets('sign-in screen', (tester) async {
+      await tester.runAsync(() => look('hybrid-light'));
+      await start(tester);
+      await shot(tester, 'signin-desktop');
+      await done(tester);
+      await start(tester, size: const Size(400, 860));
+      await shot(tester, 'signin-phone');
+      await done(tester);
+    }, skip: !on);
+  });
+
+  testWidgets('sidebar groups fold away and stay so on this device; the page you are on and pages with a count still show', (tester) async {
+    await tester.runAsync(signedIn);
+    await start(tester, foldedNav: true);
+    final sidebar = find.byKey(const Key('sidebar'));
+    Finder item(String label) => find.descendant(of: sidebar, matching: find.text(label));
+    // as the React app: at first only Sales is open
+    expect(item('POS – Retail'), findsOneWidget);
+    expect(item('Customers'), findsNothing);
+    expect(item('Settings'), findsNothing);
+    final people = find.byKey(const ValueKey('nav-group-People'));
+    expect(tester.getSemantics(people).flagsCollection.isExpanded, Tristate.isFalse);
+    await tester.tap(people);
+    await settle(tester);
+    expect(item('Customers'), findsOneWidget);
+    expect(tester.getSemantics(people).flagsCollection.isExpanded, Tristate.isTrue);
+    await tester.tap(item('Customers'));
+    await settle(tester);
+    await tester.tap(people);
+    await settle(tester);
+    expect(item('Customers'), findsOneWidget, reason: 'the page you are on stays in a folded group');
+    expect(item('Suppliers'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('nav-group-Sales')));
+    await settle(tester);
+    expect(item('POS – Retail'), findsNothing);
+    final saved = (await tester.runAsync(() => db.select(db.kv).get()))!.firstWhere((k) => k.k == 'device:navCollapsed').v;
+    expect(jsonDecode(saved), containsPair('Sales', true));
+    await done(tester);
+    await start(tester, foldedNav: true);
+    expect(item('POS – Retail'), findsNothing, reason: 'remembered on this device');
+    expect(item('Dashboard'), findsOneWidget, reason: 'the page you are on');
+    await done(tester);
   });
 
   testWidgets('weather from the device GPS when allowed: named from the connection\'s city', (tester) async {

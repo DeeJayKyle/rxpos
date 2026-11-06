@@ -95,7 +95,7 @@ BEGIN
             VALUE "InternalName", "rxpos" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 RxPOS. All rights reserved." "\0"
             VALUE "OriginalFilename", "rxpos.exe" "\0"
-            VALUE "ProductName", "RxPOS New" "\0"
+            VALUE "ProductName", "RxPOS" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

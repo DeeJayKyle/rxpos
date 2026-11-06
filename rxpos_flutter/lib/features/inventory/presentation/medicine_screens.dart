@@ -377,7 +377,7 @@ class _StockCardScreenState extends ConsumerState<StockCardScreen> {
       ],
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         if (p != null)
-          Wrap(spacing: 12, runSpacing: 12, children: [
+          StatGrid(children: [
             StatCard(label: 'In stock here', value: formatQty(d.stockOf(p.id)), sub: p.unit.isEmpty ? 'units' : p.unit),
             for (final b in d.stock.batchesOf(p.id).where((b) => b.qty != 0).take(3))
               StatCard(label: 'Batch ${b.batch}', value: formatQty(b.qty), sub: 'Expires ${b.expiry.isEmpty ? '—' : b.expiry}',

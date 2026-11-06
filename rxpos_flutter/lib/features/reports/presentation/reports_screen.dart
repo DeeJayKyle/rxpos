@@ -128,7 +128,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     final all = p.revenue + p.tax;
     final byPay = sumBy(p.sales, (s) => s.payment, (s) => s.total);
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Wrap(spacing: 12, runSpacing: 12, children: [
+      StatGrid(children: [
         StatCard(label: 'Sales', value: st.money(all), sub: '${p.sales.length} receipts', icon: Icons.payments_outlined),
         StatCard(label: 'Average sale', value: st.money(p.sales.isEmpty ? 0 : all / p.sales.length), icon: Icons.receipt_outlined, color: Colors.blue),
         StatCard(label: 'Discounts given', value: st.money(p.discounts), icon: Icons.percent, color: Colors.deepPurple),
@@ -164,7 +164,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     double value(String k) => c.rows.where((r) => r.cls == k).fold(0.0, (a, r) => a + r.value);
     final soon = c.rows.where((r) => r.daysLeft != null && r.daysLeft! < 14).toList()..sort((a, b) => a.daysLeft!.compareTo(b.daysLeft!));
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Wrap(spacing: 12, runSpacing: 12, children: [
+      StatGrid(children: [
         StatCard(label: 'Consumption (at cost)', value: st.money(c.total), sub: '${formatQty(c.rows.fold<double>(0, (a, r) => a + r.qty))} units · $days days'),
         StatCard(label: 'Class A', value: '${count('A')}', sub: '${st.money(value('A'))} · the vital few', color: Colors.deepPurple),
         StatCard(label: 'Running out (<14 days)', value: '${soon.length}', sub: 'at this rate', color: soon.isNotEmpty ? Colors.orange.shade800 : null),
@@ -205,7 +205,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     double n(Object? v) => (v as num?)?.toDouble() ?? 0;
     final total = p.purchases.fold<double>(0, (a, x) => a + n(x['total'])), paid = p.purchases.fold<double>(0, (a, x) => a + n(x['paid'] ?? x['total']));
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Wrap(spacing: 12, runSpacing: 12, children: [
+      StatGrid(children: [
         StatCard(label: 'Purchases', value: st.money(total), sub: '${p.purchases.length} deliveries'),
         StatCard(label: 'Paid', value: st.money(paid)),
         StatCard(label: 'On credit', value: st.money(total - paid)),
@@ -234,7 +234,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     final err = Theme.of(context).colorScheme.error;
     Color? low(double m) => m < 0 ? err : m < target ? Colors.orange.shade800 : null;
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Wrap(spacing: 12, runSpacing: 12, children: [
+      StatGrid(children: [
         StatCard(label: 'Gross profit', value: st.money(revenue - cost), sub: 'on ${st.money(revenue)} sales'),
         StatCard(label: 'Gross margin', value: '${revenue == 0 ? 0 : ((revenue - cost) / revenue * 100).round()}%', sub: 'target ${formatQty(target)}% (Settings)'),
         StatCard(label: 'Priced below cost', value: '${check.where((r) => r.margin < 0).length}', sub: 'in stock now', color: check.any((r) => r.margin < 0) ? err : null),
@@ -269,7 +269,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   Widget _stock(PharmacyData d, PharmacySettings st) {
     final v = stockValuation(d.products, d.stock);
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Wrap(spacing: 12, runSpacing: 12, children: [
+      StatGrid(children: [
         StatCard(label: 'Stock at cost', value: st.money(v.cost), sub: '${v.items} items · each batch at its cost · expired not included'),
         StatCard(label: 'Stock at retail', value: st.money(v.retail), sub: "unexpired stock at today's prices"),
         StatCard(label: 'Potential profit', value: st.money(v.retail - v.cost), sub: 'retail less cost, unexpired stock'),

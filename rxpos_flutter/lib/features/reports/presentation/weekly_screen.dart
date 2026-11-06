@@ -85,7 +85,7 @@ class _WeeklyScreenState extends ConsumerState<WeeklyScreen> {
       ],
       scroll: true,
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Wrap(spacing: 12, runSpacing: 12, children: [
+        StatGrid(children: [
           StatCard(label: 'Sales', value: st.money(w.total), sub: delta(w.total, w.prevTotal), icon: Icons.payments_outlined),
           StatCard(label: 'Transactions', value: '${w.count}', sub: delta(w.count.toDouble(), w.prevCount.toDouble()), icon: Icons.receipt_long_outlined, color: Colors.deepPurple),
           StatCard(label: 'Average basket', value: st.money(w.basket), sub: 'per sale', icon: Icons.shopping_basket_outlined),

@@ -69,8 +69,12 @@ class _ClockPillState extends ConsumerState<ClockPill> {
                         ? '${s.pending > 0 ? '${s.pending} change(s) on their way · ' : ''}Up to date ${time(s.lastSync)}'
                         : 'Connecting…';
     final label = s.rejected > 0 ? 'Needs attention' : s.label;
-    return Tooltip(
-      message: tip,
+    // on a phone the dot alone (its colour says it; the words are in the tooltip and read out), so the pharmacy name fits
+    final dotOnly = widget.compact && MediaQuery.sizeOf(context).width < 480;
+    return Semantics(
+      label: 'Sync: $label',
+      child: Tooltip(
+      message: dotOnly ? '$label · $tip' : tip,
       child: InkWell(
         key: const Key('clock-pill'),
         borderRadius: BorderRadius.circular(20),
@@ -79,9 +83,11 @@ class _ClockPillState extends ConsumerState<ClockPill> {
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           decoration: BoxDecoration(borderRadius: BorderRadius.circular(20), border: Border.all(color: color.withValues(alpha: .5))),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
-            Container(width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
-            const SizedBox(width: 6),
-            Text(label, style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 12)),
+            Container(width: dotOnly ? 10 : 8, height: dotOnly ? 10 : 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+            if (!dotOnly) ...[
+              const SizedBox(width: 6),
+              Text(label, style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 12)),
+            ],
             if (!widget.compact) ...[
               const SizedBox(width: 8),
               Text(_hms(_now), style: const TextStyle(fontFeatures: [FontFeature.tabularFigures()], fontSize: 12)),
@@ -92,6 +98,7 @@ class _ClockPillState extends ConsumerState<ClockPill> {
             ],
           ]),
         ),
+      ),
       ),
     );
   }
