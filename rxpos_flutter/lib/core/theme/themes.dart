@@ -68,6 +68,10 @@ const designPalettes = [
   Palette('retrowave', 'Retrowave Cyber-Tech', true, bg: 0xFF140B2E, surface: 0xFF1E1340, surface2: 0xFF26194F, border: 0xFF3A2A6E, borderStrong: 0xFF5B3FA0, text: 0xFFF5F0FF, muted: 0xFFB9AEDC, primary: 0xFFFF2E97, primary2: 0xFF00E5FF, sidebar: 0xFF0E0722, sidebar2: 0xFF160D34, inspired: 'Retrowave Cyber-Tech'),
   Palette('bauhaus', 'Editorial Bauhaus', false, bg: 0xFFF4EFE6, surface: 0xFFFFFFFF, surface2: 0xFFFAF6EE, border: 0xFF111111, borderStrong: 0xFF111111, text: 0xFF111111, muted: 0xFF3A3A3A, primary: 0xFF1F4FD8, primary2: 0xFFD7263D, sidebar: 0xFF111111, sidebar2: 0xFF1F1F1F, inspired: 'Editorial Bauhaus'),
   Palette('sunset', 'Sunset Glass', true, bg: 0xFF4A0E3F, surface: 0xFF2A0B3D, surface2: 0xFF3A1050, border: 0xFF7A3B7A, borderStrong: 0xFFA05A9A, text: 0xFFFFFFFF, muted: 0xFFF3DDEB, primary: 0xFFFFB86B, primary2: 0xFFFF7AA8, sidebar: 0xFF1F0830, sidebar2: 0xFF2A0B3D, inspired: 'Sunset Glassmorphic'),
+  Palette('rxpos-green', 'RxPOS Green', false, bg: 0xFFF7F6F0, surface: 0xFFFFFFFF, surface2: 0xFFF2F5EF, border: 0xFFE3E7DF, borderStrong: 0xFFC8D1C3, text: 0xFF13241A, muted: 0xFF56665B, primary: 0xFF1B7A45, primary2: 0xFF2E9E5B, sidebar: 0xFF0E4D2C, sidebar2: 0xFF11603A, inspired: 'RxPOS Green'),
+  Palette('studio', 'Studio Grid', false, bg: 0xFFFFFFFF, surface: 0xFFFFFFFF, surface2: 0xFFF7F7F8, border: 0xFFE6E6EA, borderStrong: 0xFFCFCFD6, text: 0xFF0A0A0B, muted: 0xFF5C5C66, primary: 0xFF5B4FF0, primary2: 0xFF7C6CF7, sidebar: 0xFF111113, sidebar2: 0xFF1B1B1F, inspired: 'Studio Grid'),
+  Palette('lavender', 'Lavender Dream', false, bg: 0xFFEDE7FF, surface: 0xFFFFFFFF, surface2: 0xFFF6F2FF, border: 0xFFE3DAFB, borderStrong: 0xFFC9BCF2, text: 0xFF241B45, muted: 0xFF5E5580, primary: 0xFF7B5CF5, primary2: 0xFFE76BB8, sidebar: 0xFF241B45, sidebar2: 0xFF30255A, inspired: 'Lavender Dream'),
+  Palette('travel', 'Travel Orange', false, bg: 0xFFF3F1F8, surface: 0xFFFFFFFF, surface2: 0xFFF8F6FB, border: 0xFFE4DEEC, borderStrong: 0xFFC9BED8, text: 0xFF2B1C38, muted: 0xFF6A5C78, primary: 0xFFE8650A, primary2: 0xFF4A2B5E, sidebar: 0xFF2B1C38, sidebar2: 0xFF3A2650, inspired: 'Travel Orange'),
 ];
 
 const premiumTheme = 'midnight-pro';
@@ -314,8 +318,8 @@ ThemeData buildTheme(Palette base, {String accent = '', String surface = 'flat',
     cardTheme: CardThemeData(
       color: cardColor,
       surfaceTintColor: Colors.transparent,
-      elevation: tk.glow != null && !hard ? 2 : switch (surface) { 'clay' => 6, 'skeuomorphism' => 3, 'neumorphism' => 4, _ => 0 },
-      shadowColor: tk.glow ?? (surface == 'neumorphism' ? Color(p.dark ? 0xFF000000 : 0xFFA3B1C6) : null),
+      elevation: tk.softShadow != null ? 8 : tk.glow != null && !hard ? 2 : switch (surface) { 'clay' => 6, 'skeuomorphism' => 3, 'neumorphism' => 4, _ => 0 },
+      shadowColor: tk.softShadow ?? tk.glow ?? (surface == 'neumorphism' ? Color(p.dark ? 0xFF000000 : 0xFFA3B1C6) : null),
       // a hard shadow needs room beside the card
       margin: hard ? EdgeInsets.fromLTRB(4, 4, 4 + tk.hardShadow, 4 + tk.hardShadow) : null,
       shape: shapeOf(radius, side),

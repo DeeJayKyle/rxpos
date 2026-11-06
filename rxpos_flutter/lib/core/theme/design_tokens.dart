@@ -34,6 +34,13 @@ class DesignTokens extends ThemeExtension<DesignTokens> {
     this.splitPane = false,
     this.touch = false,
     this.motionMs = 180,
+    this.heroBand = const [],
+    this.heroCurve = 0,
+    this.rails = false,
+    this.softShadow,
+    this.bottomNav = false,
+    this.sidebarFill = const [],
+    this.tintedStats = false,
   });
 
   /// corner radius of cards and panels; of buttons and fields; of chips
@@ -74,6 +81,20 @@ class DesignTokens extends ThemeExtension<DesignTokens> {
   final bool touch;
   /// how long page and panel changes take (0 when the device asks for less motion)
   final int motionMs;
+  /// a coloured band behind each page's title (one colour, or a gradient), white title on it; empty: none
+  final List<Color> heroBand;
+  /// how round the band's lower corners are (Travel Orange's curved header)
+  final double heroCurve;
+  /// fine rule lines and hatched rails framing the page on wide screens (Studio Grid)
+  final bool rails;
+  /// a soft, coloured shadow under cards (Lavender Dream); null: none
+  final Color? softShadow;
+  /// on a phone, the main pages in an icon bar at the bottom (the menu stays one tap away)
+  final bool bottomNav;
+  /// the sidebar in a deep colour (a gradient, top to bottom) with white text; empty: the panel colour
+  final List<Color> sidebarFill;
+  /// figure cards washed in their own colour (green sales, amber low stock, red expiring) with the icon in a tile
+  final bool tintedStats;
 
   /// The device's own defaults: a finger needs 48 dp targets (Android), a mouse 44 px (Windows).
   static DesignTokens forDevice({required bool touch}) => DesignTokens(touch: touch, tapTarget: touch ? 48 : 44, gap: touch ? 10 : 8);
@@ -88,7 +109,8 @@ class DesignTokens extends ThemeExtension<DesignTokens> {
     double? radius, double? controlRadius, double? chipRadius, double? borderWidth, Color? ink, double? hardShadow, Color? glow, double? tapTarget,
     double? gap, double? cardPadding, double? tileWidth, double? tileHeight, FontWeight? headingWeight, String? headingFamily, double? headingSpacing,
     double? textScale, double? glassAlpha, List<Color>? backdrop, List<Color>? glows, Color? grid, bool? hud, bool? colorCoded, bool? splitPane,
-    bool? touch, int? motionMs,
+    bool? touch, int? motionMs, List<Color>? heroBand, double? heroCurve, bool? rails, Color? softShadow, bool? bottomNav,
+    List<Color>? sidebarFill, bool? tintedStats,
   }) =>
       DesignTokens(
         radius: radius ?? this.radius, controlRadius: controlRadius ?? this.controlRadius, chipRadius: chipRadius ?? this.chipRadius,
@@ -98,6 +120,8 @@ class DesignTokens extends ThemeExtension<DesignTokens> {
         headingSpacing: headingSpacing ?? this.headingSpacing, textScale: textScale ?? this.textScale, glassAlpha: glassAlpha ?? this.glassAlpha,
         backdrop: backdrop ?? this.backdrop, glows: glows ?? this.glows, grid: grid ?? this.grid, hud: hud ?? this.hud, colorCoded: colorCoded ?? this.colorCoded,
         splitPane: splitPane ?? this.splitPane, touch: touch ?? this.touch, motionMs: motionMs ?? this.motionMs,
+        heroBand: heroBand ?? this.heroBand, heroCurve: heroCurve ?? this.heroCurve, rails: rails ?? this.rails, softShadow: softShadow ?? this.softShadow,
+        bottomNav: bottomNav ?? this.bottomNav, sidebarFill: sidebarFill ?? this.sidebarFill, tintedStats: tintedStats ?? this.tintedStats,
       );
 
   @override

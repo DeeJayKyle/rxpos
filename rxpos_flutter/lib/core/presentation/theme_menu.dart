@@ -54,7 +54,7 @@ class ThemeMenu extends ConsumerWidget {
               // the ten design systems, folded into one row (the current one named) so the menu stays short
               ExpansionTile(
                 key: const Key('design-systems'),
-                initiallyExpanded: look.design.isNotEmpty,
+                initiallyExpanded: false,
                 leading: const Icon(Icons.dashboard_customize_outlined),
                 title: Text('Design system', style: t.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800)),
                 subtitle: Text(look.designSystem?.name ?? 'None: the theme and style below'),

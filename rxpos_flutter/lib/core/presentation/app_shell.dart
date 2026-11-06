@@ -118,13 +118,15 @@ class AppShell extends ConsumerWidget {
           backgroundColor: aurora ? Colors.transparent : null,
           appBar: bar,
           drawer: wide ? null : Drawer(child: SafeArea(child: nav)),
+          // a design with a bottom bar (Travel Orange): on a phone the main pages are one tap away at the thumb
+          bottomNavigationBar: !wide && tokensOf(context).bottomNav ? _BottomBar(screens: visible, location: location) : null,
           body: wide
               ? Row(children: [
                   AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
                     curve: Curves.easeOutCubic,
                     width: rail ? 72 : 240,
-                    child: Material(color: Theme.of(context).colorScheme.surfaceContainerLow.withValues(alpha: aurora ? .55 : 1), child: nav),
+                    child: _SidebarSurface(aurora: aurora, child: nav),
                   ),
                   VerticalDivider(width: 1, color: aurora ? Theme.of(context).dividerColor.withValues(alpha: .4) : null),
                   Expanded(child: body),
@@ -284,4 +286,56 @@ Future<void> refreshNow(BuildContext context, WidgetRef ref) async {
     _ => r.pending > 0 ? 'Up to date · ${r.pending} still waiting' : 'Up to date',
   };
   messenger.showSnackBar(SnackBar(content: Text(text)));
+}
+
+/// The phone's icon bar: Dashboard, the till, Inventory and Sales History (those this person may open), and the menu.
+class _BottomBar extends StatelessWidget {
+  const _BottomBar({required this.screens, required this.location});
+  final List<Screen> screens;
+  final String location;
+  @override
+  Widget build(BuildContext context) {
+    final main = [for (final path in const ['/', '/pos', '/inventory', '/sales']) ?screens.where((s) => s.path == path).firstOrNull];
+    final at = main.indexWhere((s) => s.path == location);
+    return NavigationBar(
+      key: const Key('bottom-nav'),
+      selectedIndex: at < 0 ? main.length : at,
+      labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
+      onDestinationSelected: (i) => i == main.length ? Scaffold.of(context).openDrawer() : context.go(main[i].path),
+      destinations: [
+        for (final s in main) NavigationDestination(icon: Icon(s.icon), label: s.label.split(' – ').first),
+        const NavigationDestination(icon: Icon(Icons.menu), label: 'Menu'),
+      ],
+    );
+  }
+}
+
+/// The sidebar's panel: the theme's panel colour, or a design's deep colour (RxPOS Green) with white text on it.
+class _SidebarSurface extends StatelessWidget {
+  const _SidebarSurface({required this.child, required this.aurora});
+  final Widget child;
+  final bool aurora;
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    final fill = tokensOf(context).sidebarFill;
+    if (fill.isEmpty) return Material(color: t.colorScheme.surfaceContainerLow.withValues(alpha: aurora ? .55 : 1), child: child);
+    const white = Colors.white;
+    final cs = t.colorScheme.copyWith(
+      onSurface: white, onSurfaceVariant: white.withValues(alpha: .78), primary: white,
+      primaryContainer: white.withValues(alpha: .16), onPrimaryContainer: white,
+    );
+    return DecoratedBox(
+      decoration: BoxDecoration(gradient: LinearGradient(colors: fill.length > 1 ? fill : [fill.first, fill.first], begin: Alignment.topCenter, end: Alignment.bottomCenter)),
+      child: Theme(
+        data: t.copyWith(
+          colorScheme: cs,
+          textTheme: t.textTheme.apply(bodyColor: white, displayColor: white),
+          listTileTheme: t.listTileTheme.copyWith(iconColor: white.withValues(alpha: .82), textColor: white, selectedColor: white, selectedTileColor: white.withValues(alpha: .16)),
+          iconTheme: const IconThemeData(color: white),
+        ),
+        child: Material(type: MaterialType.transparency, child: child),
+      ),
+    );
+  }
 }

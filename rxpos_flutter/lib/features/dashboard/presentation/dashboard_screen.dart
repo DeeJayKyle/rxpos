@@ -14,6 +14,7 @@ import '../../sales_history/presentation/sales_screen.dart' show ageText, isOldD
 import '../../../core/presentation/charts.dart';
 import '../domain/figures.dart';
 import '../domain/insights.dart';
+import 'dashboard_panels.dart';
 import '../../storage/presentation/storage_screen.dart';
 
 /// Home: today's figures against yesterday, stock alerts, this month's best sellers.
@@ -58,13 +59,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final warn = s.expiryWarnDays.round();
     final exp = expiryBatches(stocked, data.stock.batchesOf, data.stockOf, warn);
     final value = stockValue(stocked, data.stock.batchesOf);
-    final hour = now.hour;
     return PageFrame(
-      title: '${hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'}${session == null ? '' : ', ${session.userName.split(' ').first}'}',
-      subtitle: s.name,
-      actions: [if (can.contains('pos.sell')) FilledButton.icon(onPressed: () => context.go('/pos'), icon: const Icon(Icons.point_of_sale), label: const Text('New sale'))],
+      title: '',
       scroll: true,
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        SizedBox(width: double.infinity, child: GreetingCard(pharmacy: s.name, name: session?.userName ?? '', canSell: can.contains('pos.sell'))),
+        const SizedBox(height: 16),
         StatGrid(children: [
           StatCard(label: 'Today\'s sales', value: s.money(t.total), sub: '${t.count} sale${t.count == 1 ? '' : 's'}${delta(t.total, y.total)}', icon: Icons.payments_outlined,
               onTap: can.contains('sales.view') ? () => context.go('/sales?from=$day&to=$day') : null),
@@ -133,6 +133,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             ))),
           ),
           SizedBox(
+            width: MediaQuery.sizeOf(context).width < 700 ? MediaQuery.sizeOf(context).width - 32 : 520,
+            child: StockAlertsCard(low: stocked.where((p) => isLowStock(p, data.stockOf(p.id))).toList()..sort((a, b) => data.stockOf(a.id).compareTo(data.stockOf(b.id))),
+                soon: exp.soon, stockOf: data.stockOf),
+          ),
+          SizedBox(
             width: MediaQuery.sizeOf(context).width < 700 ? MediaQuery.sizeOf(context).width - 32 : 640,
             child: Card(child: Padding(padding: const EdgeInsets.all(12), child: MonthLines(
               money: s.money,
@@ -146,6 +151,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             ))),
           ),
         ]),
+        if (can.contains('sales.view')) ...[
+          const SizedBox(height: 16),
+          RecentSalesCard(
+            sales: (saleList.where((x) => x.branchId == data.branch && x.status != 'refunded').toList()..sort((a, b) => b.date.compareTo(a.date))).take(6).toList(),
+            settings: s,
+          ),
+        ],
         const SizedBox(height: 16),
         StatGrid(children: [
           StatCard(label: 'Products', value: '${data.products.length}', icon: Icons.medication_outlined, onTap: () => context.go('/medicines')),

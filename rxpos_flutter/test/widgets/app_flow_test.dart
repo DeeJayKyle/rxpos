@@ -2462,7 +2462,7 @@ void main() {
     testWidgets('screens of the ten design systems', (tester) async {
       await tester.runAsync(signedIn);
       for (final d in designSystems) {
-        await tester.runAsync(() => db.into(db.kv).insertOnConflictUpdate(KvCompanion.insert(k: 'device:look', v: '{"v":2,"design":"${d.id}","theme":"${d.palette}","surface":"${d.surface}"}')));
+        await tester.runAsync(() => db.into(db.kv).insertOnConflictUpdate(KvCompanion.insert(k: 'device:look', v: '{"v":2,"design":"${d.id}","theme":"${d.palette}","surface":"${d.surface}","level":"${d.vivid ? 'vivid' : 'calm'}"}')));
         await start(tester);
         await shot(tester, 'design-${d.id}-dashboard');
         await toTill(tester);
@@ -2477,6 +2477,14 @@ void main() {
         await start(tester, size: size);
         await toTill(tester);
         await shot(tester, 'design-target-tap-$tag-pos');
+        await done(tester);
+      }
+      // the showcase designs on a phone: Travel Orange with its bottom bar, Lavender Dream
+      for (final d in ['travel', 'lavender', 'studio']) {
+        final ds = designSystems.firstWhere((x) => x.id == d);
+        await tester.runAsync(() => db.into(db.kv).insertOnConflictUpdate(KvCompanion.insert(k: 'device:look', v: '{"v":2,"design":"$d","theme":"${ds.palette}","surface":"${ds.surface}","level":"${ds.vivid ? 'vivid' : 'calm'}"}')));
+        await start(tester, size: const Size(412, 900));
+        await shot(tester, 'design-$d-phone-dashboard');
         await done(tester);
       }
     }, skip: !on);
@@ -2720,6 +2728,8 @@ void main() {
       expect(find.textContaining('last scan just now'), findsOneWidget);
       // picking a theme leaves the design system
       await tester.tap(find.byKey(const Key('theme-menu')));
+      await settle(tester);
+      await tester.tap(find.byKey(const Key('design-systems')));
       await settle(tester);
       await tester.ensureVisible(find.byKey(const ValueKey('design-off')));
       await settle(tester);
