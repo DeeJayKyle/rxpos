@@ -4,23 +4,33 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../database/app_database.dart';
+import 'design_systems.dart';
 import 'themes.dart';
+
+export 'design_systems.dart';
 
 part 'theme_choice.g.dart';
 
 /// This device's look (src/App.jsx useTheme / useSurface, src/vivid.js): the colour theme, following the system's light
-/// or dark, the accent, the surface style and the colour level. Kept on this device only.
+/// or dark, the accent, the surface style and the colour level, or one of the design systems (design_systems.dart),
+/// which sets the palette, the style and the design tokens together. Kept on this device only.
 class Look {
-  const Look({this.theme = 'light', this.system = false, this.accent = '', this.surface = 'aurora', this.level = 'calm', this.beforePremium = ''});
+  const Look({this.theme = 'light', this.system = false, this.accent = '', this.surface = 'aurora', this.level = 'calm', this.beforePremium = '', this.design = ''});
   final String theme, accent, surface, level, beforePremium;
+  /// the design system in use ('' for none)
+  final String design;
   final bool system;
 
-  Look copyWith({String? theme, bool? system, String? accent, String? surface, String? level, String? beforePremium}) => Look(
+  /// The design system in use, or null.
+  DesignSystem? get designSystem => design.isEmpty ? null : designById(design);
+
+  Look copyWith({String? theme, bool? system, String? accent, String? surface, String? level, String? beforePremium, String? design}) => Look(
         theme: theme ?? this.theme, system: system ?? this.system, accent: accent ?? this.accent, surface: surface ?? this.surface,
-        level: level ?? this.level, beforePremium: beforePremium ?? this.beforePremium,
+        level: level ?? this.level, beforePremium: beforePremium ?? this.beforePremium, design: design ?? this.design,
       );
 
-  Map<String, Object?> toJson() => {'v': 2, 'theme': theme, 'mode': system ? 'system' : '', 'accent': accent, 'surface': surface, 'level': level, 'beforePremium': beforePremium};
+  Map<String, Object?> toJson() => {'v': 2, 'theme': theme, 'mode': system ? 'system' : '', 'accent': accent, 'surface': surface, 'level': level,
+    'beforePremium': beforePremium, if (design.isNotEmpty) 'design': design};
 
   static Look parse(String? v) {
     try {
@@ -34,6 +44,7 @@ class Look {
         surface: !surfaceStyles.any((s) => s.$1 == j['surface']) || (j['v'] != 2 && j['surface'] == 'flat') ? 'aurora' : '${j['surface']}',
         level: j['level'] == 'vivid' ? 'vivid' : 'calm',
         beforePremium: '${j['beforePremium'] ?? ''}',
+        design: designById('${j['design'] ?? ''}') == null ? '' : '${j['design']}',
       );
     } catch (_) {
       return const Look();
@@ -64,18 +75,25 @@ class LookController extends AsyncNotifier<Look> {
   Future<Look> _now() async => state.value ?? await future;
 
   /// A theme picked from the list (no longer following the system).
-  Future<void> pick(String theme) async => save((await _now()).copyWith(theme: theme, system: false));
+  Future<void> pick(String theme) async => save((await _now()).copyWith(theme: theme, system: false, design: ''));
+
+  /// A design system: its palette, style and tokens together ('' leaves it, keeping its colours).
+  Future<void> designSystem(String id) async {
+    final l = await _now();
+    final d = designById(id);
+    await save(d == null ? l.copyWith(design: '') : l.copyWith(design: d.id, theme: d.palette, surface: d.surface, system: false, accent: ''));
+  }
 
   /// Light or Dark: the theme of that base (the current one when it is already that base).
   Future<void> base(bool dark, List<Palette> allowed, {String? preferred}) async {
     final l = await _now();
     final cur = paletteById(l.theme);
-    await save(l.copyWith(system: false, theme: cur.dark == dark && allowed.any((p) => p.id == cur.id) ? cur.id : paletteFor(dark, allowed, preferred)));
+    await save(l.copyWith(design: '', system: false, theme: cur.dark == dark && allowed.any((p) => p.id == cur.id) ? cur.id : paletteFor(dark, allowed, preferred)));
   }
 
-  Future<void> followSystem() async => save((await _now()).copyWith(system: true));
+  Future<void> followSystem() async => save((await _now()).copyWith(system: true, design: ''));
   Future<void> accent(String id) async => save((await _now()).copyWith(accent: id));
-  Future<void> surface(String id) async => save((await _now()).copyWith(surface: id));
+  Future<void> surface(String id) async => save((await _now()).copyWith(surface: id, design: ''));
   Future<void> level(String id) async => save((await _now()).copyWith(level: id));
 
   /// Premium UI on: Midnight Pro (remembering the theme before); off: back to that theme.

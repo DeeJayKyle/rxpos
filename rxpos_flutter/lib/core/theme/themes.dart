@@ -7,6 +7,10 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import 'design_tokens.dart';
+
+export 'design_tokens.dart';
+
 class Palette {
   const Palette(this.id, this.name, this.dark,
       {required this.bg, required this.surface, required this.surface2, required this.border, required this.borderStrong, required this.text,
@@ -51,9 +55,24 @@ const palettes = [
   Palette('contrast-dark', 'High Contrast Dark', true, bg: 0xFF000000, surface: 0xFF0A0A0A, surface2: 0xFF141414, border: 0xFF7A7A7A, borderStrong: 0xFFBDBDBD, text: 0xFFFFFFFF, muted: 0xFFD6D6D6, primary: 0xFFFFD60A, primary2: 0xFF4CC9F0, sidebar: 0xFF000000, sidebar2: 0xFF0F0F0F, inspired: 'accessibility'),
 ];
 
+/// The design systems' own palettes (design_systems.dart): used only through a design system, so the owner's choice
+/// of themes and the theme list stay those of the React app.
+const designPalettes = [
+  Palette('split-pane', 'Split-Pane Slate', false, bg: 0xFFF4F6F8, surface: 0xFFFFFFFF, surface2: 0xFFF7F9FB, border: 0xFFDCE2E8, borderStrong: 0xFFC3CCD6, text: 0xFF0F172A, muted: 0xFF5B6573, primary: 0xFF0F766E, primary2: 0xFF1D4ED8, sidebar: 0xFF0F172A, sidebar2: 0xFF1E293B, inspired: 'Split-Pane Hybrid Grid'),
+  Palette('target-tap', 'Target Tap', false, bg: 0xFFF1F6F5, surface: 0xFFFFFFFF, surface2: 0xFFF5FAF9, border: 0xFFD3E2DF, borderStrong: 0xFFA9C2BD, text: 0xFF0B1F1C, muted: 0xFF4A615C, primary: 0xFF0B7A75, primary2: 0xFF2563EB, sidebar: 0xFF0B1F1C, sidebar2: 0xFF12302B, inspired: 'Target Tap Ergonomic'),
+  Palette('nightlife', 'Nightlife Contrast', true, bg: 0xFF121212, surface: 0xFF1E1E1E, surface2: 0xFF242424, border: 0xFF333333, borderStrong: 0xFF4A4A4A, text: 0xFFEDEDED, muted: 0xFFA8A8A8, primary: 0xFF22D3EE, primary2: 0xFFA3E635, sidebar: 0xFF0D0D0D, sidebar2: 0xFF161616, inspired: 'Nightlife Contrast'),
+  Palette('daylight', 'Daylight Retail', false, bg: 0xFFFFFFFF, surface: 0xFFFFFFFF, surface2: 0xFFF3F4F6, border: 0xFFD1D5DB, borderStrong: 0xFF9CA3AF, text: 0xFF030712, muted: 0xFF374151, primary: 0xFF0B5FD7, primary2: 0xFF0E7490, sidebar: 0xFF111827, sidebar2: 0xFF1F2937, inspired: 'Daylight Retail'),
+  Palette('hud', 'Diagnostic HUD', true, bg: 0xFF0B1117, surface: 0xFF111A22, surface2: 0xFF16212B, border: 0xFF22313D, borderStrong: 0xFF34495A, text: 0xFFE6EDF3, muted: 0xFF9FB0C0, primary: 0xFF22C55E, primary2: 0xFF38BDF8, sidebar: 0xFF070C11, sidebar2: 0xFF0D151C, inspired: 'Hardware Diagnostic HUD'),
+  Palette('brutalist', 'Neo-Brutalist Pop', false, bg: 0xFFFFF1C1, surface: 0xFFFFFFFF, surface2: 0xFFFFF8E1, border: 0xFF000000, borderStrong: 0xFF000000, text: 0xFF000000, muted: 0xFF2B2B2B, primary: 0xFF2563EB, primary2: 0xFFFF4D6D, sidebar: 0xFF000000, sidebar2: 0xFF1A1A1A, inspired: 'Neo-Brutalist Pop'),
+  Palette('holo', 'Aurora Holographic', false, bg: 0xFFF3F0FF, surface: 0xFFFFFFFF, surface2: 0xFFF7F5FF, border: 0xFFE4DDF7, borderStrong: 0xFFCFC4EE, text: 0xFF1E1B2E, muted: 0xFF5B5675, primary: 0xFF7C3AED, primary2: 0xFF0EA5A4, sidebar: 0xFF1E1B2E, sidebar2: 0xFF2A2540, inspired: 'Aurora Glow / Holographic'),
+  Palette('retrowave', 'Retrowave Cyber-Tech', true, bg: 0xFF140B2E, surface: 0xFF1E1340, surface2: 0xFF26194F, border: 0xFF3A2A6E, borderStrong: 0xFF5B3FA0, text: 0xFFF5F0FF, muted: 0xFFB9AEDC, primary: 0xFFFF2E97, primary2: 0xFF00E5FF, sidebar: 0xFF0E0722, sidebar2: 0xFF160D34, inspired: 'Retrowave Cyber-Tech'),
+  Palette('bauhaus', 'Editorial Bauhaus', false, bg: 0xFFF4EFE6, surface: 0xFFFFFFFF, surface2: 0xFFFAF6EE, border: 0xFF111111, borderStrong: 0xFF111111, text: 0xFF111111, muted: 0xFF3A3A3A, primary: 0xFF1F4FD8, primary2: 0xFFD7263D, sidebar: 0xFF111111, sidebar2: 0xFF1F1F1F, inspired: 'Editorial Bauhaus'),
+  Palette('sunset', 'Sunset Glass', true, bg: 0xFF4A0E3F, surface: 0xFF2A0B3D, surface2: 0xFF3A1050, border: 0xFF7A3B7A, borderStrong: 0xFFA05A9A, text: 0xFFFFFFFF, muted: 0xFFF3DDEB, primary: 0xFFFFB86B, primary2: 0xFFFF7AA8, sidebar: 0xFF1F0830, sidebar2: 0xFF2A0B3D, inspired: 'Sunset Glassmorphic'),
+];
+
 const premiumTheme = 'midnight-pro';
 
-Palette paletteById(String id) => palettes.firstWhere((p) => p.id == id, orElse: () => palettes.first);
+Palette paletteById(String id) => palettes.where((p) => p.id == id).firstOrNull ?? designPalettes.where((p) => p.id == id).firstOrNull ?? palettes.first;
 
 /// Themes a pharmacy may use (set by the owner); all of them when the owner hasn't restricted it.
 List<Palette> allowedPalettes(Map? branding) {
@@ -152,17 +171,6 @@ int readable(int fg, List<int> bgs, int toward, [double min = 4.5]) {
   return (a: a, b: b, on: on);
 }
 
-/// The Aurora backdrop behind the app: the page colour with soft glows of the theme's colours ([on] false: plain).
-class Backdrop extends ThemeExtension<Backdrop> {
-  const Backdrop({this.on = false, this.base = Colors.white, this.glowA = Colors.transparent, this.glowB = Colors.transparent, this.glowC = Colors.transparent});
-  final bool on;
-  final Color base, glowA, glowB, glowC;
-  @override
-  Backdrop copyWith({bool? on}) => Backdrop(on: on ?? this.on, base: base, glowA: glowA, glowB: glowB, glowC: glowC);
-  @override
-  Backdrop lerp(Backdrop? other, double t) => t < .5 ? this : (other ?? this);
-}
-
 /// The colour level as screens read it, from the theme's extensions.
 class LookLevel extends ThemeExtension<LookLevel> {
   const LookLevel({this.vivid = false});
@@ -190,12 +198,29 @@ class LookLevel extends ThemeExtension<LookLevel> {
   return (Color(vivid[best]!.$1), Color(vivid[best]!.$2));
 }
 
-/// The Flutter theme for a palette, an accent, a surface style and the colour level.
-ThemeData buildTheme(Palette base, {String accent = '', String surface = 'flat', bool vivid = false}) {
+/// The tokens of a surface style (when no design system sets them).
+DesignTokens surfaceTokens(String surface, Palette p) => switch (surface) {
+      'aurora' => DesignTokens(radius: 16, controlRadius: 12, chipRadius: 20, glassAlpha: p.dark ? .66 : .78, glows: [
+          Color(p.primary).withValues(alpha: p.dark ? .20 : .16),
+          Color(p.primary2).withValues(alpha: p.dark ? .16 : .13),
+          Color(p.dark ? 0xFF8B5CF6 : 0xFFA78BFA).withValues(alpha: p.dark ? .12 : .10),
+        ]),
+      'glass' => DesignTokens(radius: 16, glassAlpha: p.dark ? .62 : .72),
+      'clay' => const DesignTokens(radius: 22, controlRadius: 14, chipRadius: 14),
+      'neumorphism' => const DesignTokens(radius: 18, controlRadius: 12, chipRadius: 12),
+      _ => const DesignTokens(),
+    };
+
+/// The Flutter theme for a palette, an accent, a surface style, the colour level and the design tokens ([tokens]: a
+/// design system's; otherwise the surface style's), laid out for a finger ([touch], Android) or a mouse (Windows).
+ThemeData buildTheme(Palette base, {String accent = '', String surface = 'flat', bool vivid = false, DesignTokens? tokens, bool touch = false}) {
   final p = withAccent(base, accent);
+  final tk = (tokens ?? surfaceTokens(surface, p)).onDevice(touch: touch);
   final btn = buttonColours(p.primary, p.primary2, p.dark);
   final muted = readable(p.muted, [p.bg, p.surface, p.surface2], p.dark ? 0xFFFFFFFF : 0xFF000000);
-  final primaryText = readable(p.primary, [p.surface, p.surface2], p.dark ? 0xFFFFFFFF : 0xFF000000);
+  // brand-coloured text must also read on the backdrop the translucent panels let through
+  final behind = [p.surface, p.surface2, if (tk.glassAlpha != null) ...tk.backdrop.map((c) => c.toARGB32())];
+  final primaryText = readable(p.primary, behind, p.dark ? 0xFFFFFFFF : 0xFF000000);
   final scheme = ColorScheme(
     brightness: p.dark ? Brightness.dark : Brightness.light,
     primary: Color(btn.a),
@@ -219,43 +244,53 @@ ThemeData buildTheme(Palette base, {String accent = '', String surface = 'flat',
     outline: Color(p.borderStrong),
     outlineVariant: Color(p.border),
   );
-  final aurora = surface == 'aurora';
-  final radius = switch (surface) { 'clay' => 22.0, 'neumorphism' => 18.0, 'glass' || 'aurora' => 16.0, _ => 12.0 };
-  final cardColor = switch (surface) {
-    'glass' => Color(p.surface).withValues(alpha: p.dark ? .62 : .72),
-    'aurora' => Color(p.surface).withValues(alpha: p.dark ? .66 : .78),
-    'neumorphism' => Color(p.bg),
-    _ => Color(p.surface),
-  };
-  final side = switch (surface) {
-    'flat' => BorderSide(color: Color(p.border)),
-    'glass' => BorderSide(color: Color(p.dark ? 0x33FFFFFF : 0x99FFFFFF)),
-    'aurora' => BorderSide(color: Color(p.dark ? 0x1FFFFFFF : 0xCCFFFFFF)),
-    'skeuomorphism' => BorderSide(color: Color(p.borderStrong), width: 1.2),
-    _ => BorderSide.none,
-  };
-  // figures of equal width everywhere, so amounts line up in lists and totals; headings a little heavier
+  final glass = tk.glassAlpha != null && tk.hasBackdrop;
+  final radius = tk.radius;
+  // see-through panels over the backdrop: a light veil on deep colours (Sunset), the panel colour elsewhere
+  final cardColor = tk.glassAlpha != null
+      ? (p.dark && tk.glassAlpha! < .3 ? Colors.white.withValues(alpha: tk.glassAlpha!) : Color(p.surface).withValues(alpha: tk.glassAlpha!))
+      : surface == 'neumorphism'
+          ? Color(p.bg)
+          : Color(p.surface);
+  final edge = tk.ink ?? tk.glow?.withValues(alpha: .55);
+  final side = edge != null
+      ? BorderSide(color: edge, width: tk.borderWidth)
+      : switch (surface) {
+          'flat' => BorderSide(color: Color(p.border), width: tk.borderWidth),
+          'glass' || 'aurora' => BorderSide(color: Color(p.dark ? 0x1FFFFFFF : 0xCCFFFFFF)),
+          'skeuomorphism' => BorderSide(color: Color(p.borderStrong), width: 1.2),
+          _ => BorderSide.none,
+        };
+  // figures of equal width everywhere, so amounts line up in lists and totals; headings in the design's weight and font
   const tabular = [FontFeature.tabularFigures()];
   final m3 = ThemeData(useMaterial3: true, brightness: p.dark ? Brightness.dark : Brightness.light).textTheme; // sizes are added by Theme.of
   TextStyle? tab(TextStyle? x, [FontWeight? w]) => x?.copyWith(fontFeatures: tabular, fontWeight: w ?? x.fontWeight);
+  TextStyle? head(TextStyle? x, [FontWeight? w]) => tab(x, w ?? tk.headingWeight)
+      ?.copyWith(fontFamily: tk.headingFamily, fontFamilyFallback: tk.headingFamily == null ? null : const ['Georgia', 'Noto Serif', 'serif'], letterSpacing: tk.headingSpacing);
+  TextStyle? body(TextStyle? x) => tk.textScale == 1 || x?.fontSize == null ? tab(x) : tab(x)?.copyWith(fontSize: x!.fontSize! * tk.textScale);
   final text = m3.copyWith(
-    displaySmall: tab(m3.displaySmall, FontWeight.w700),
-    headlineLarge: tab(m3.headlineLarge, FontWeight.w800),
-    headlineMedium: tab(m3.headlineMedium, FontWeight.w800),
-    headlineSmall: tab(m3.headlineSmall, FontWeight.w800),
-    titleLarge: tab(m3.titleLarge, FontWeight.w700),
+    displaySmall: head(m3.displaySmall, FontWeight.w700),
+    headlineLarge: head(m3.headlineLarge),
+    headlineMedium: head(m3.headlineMedium),
+    headlineSmall: head(m3.headlineSmall),
+    titleLarge: head(m3.titleLarge, tk.headingWeight == FontWeight.w800 ? FontWeight.w700 : tk.headingWeight),
     titleMedium: tab(m3.titleMedium, FontWeight.w600),
     titleSmall: tab(m3.titleSmall, FontWeight.w600),
-    bodyLarge: tab(m3.bodyLarge),
-    bodyMedium: tab(m3.bodyMedium),
-    bodySmall: tab(m3.bodySmall)?.copyWith(color: Color(muted)),
+    bodyLarge: body(m3.bodyLarge),
+    bodyMedium: body(m3.bodyMedium),
+    bodySmall: body(m3.bodySmall)?.copyWith(color: Color(muted)),
     labelLarge: tab(m3.labelLarge, FontWeight.w600),
     labelMedium: tab(m3.labelMedium, FontWeight.w600),
     labelSmall: tab(m3.labelSmall),
   );
-  final control = RoundedRectangleBorder(borderRadius: BorderRadius.circular(aurora ? 12 : 10));
-  // Aurora: the main buttons are a gradient of the two brand colours (iOS / GNOME style), flat when disabled
-  final gradientFill = !aurora
+  final hard = tk.hardShadow > 0;
+  OutlinedBorder shapeOf(double r, [BorderSide s = BorderSide.none]) =>
+      hard ? HardShadowBorder(borderRadius: BorderRadius.circular(r), side: s, offset: tk.hardShadow / 2, color: tk.ink ?? Colors.black) : RoundedRectangleBorder(borderRadius: BorderRadius.circular(r), side: s);
+  final control = shapeOf(tk.controlRadius, tk.ink == null ? BorderSide.none : BorderSide(color: tk.ink!, width: tk.borderWidth));
+  final label = text.labelLarge;
+  final aurora = surface == 'aurora' && tokens == null;
+  // the main buttons are a gradient of the two brand colours on the gradient looks (iOS / GNOME style), flat when disabled
+  final gradientFill = !(glass || aurora)
       ? null
       : (BuildContext _, Set<WidgetState> st, Widget? child) => st.contains(WidgetState.disabled)
           ? child!
@@ -263,47 +298,45 @@ ThemeData buildTheme(Palette base, {String accent = '', String surface = 'flat',
               decoration: BoxDecoration(gradient: LinearGradient(colors: [Color(btn.a), Color(btn.b)], begin: Alignment.topLeft, end: Alignment.bottomRight)),
               child: child,
             );
-  final label = text.labelLarge;
-  OutlineInputBorder field(Color c, [double w = 1]) => OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: c, width: w));
+  final tap = tk.tapTarget;
+  final focusRing = tk.glow ?? scheme.primary;
+  OutlineInputBorder field(Color c, [double w = 1]) => OutlineInputBorder(borderRadius: BorderRadius.circular(tk.controlRadius), borderSide: BorderSide(color: c, width: w));
+  final fieldEdge = tk.ink ?? Color(p.borderStrong);
   return ThemeData(
     useMaterial3: true,
     colorScheme: scheme,
-    extensions: [
-      LookLevel(vivid: vivid),
-      Backdrop(
-        on: aurora,
-        base: Color(p.bg),
-        glowA: Color(p.primary).withValues(alpha: p.dark ? .20 : .16),
-        glowB: Color(p.primary2).withValues(alpha: p.dark ? .16 : .13),
-        glowC: Color(p.dark ? 0xFF8B5CF6 : 0xFFA78BFA).withValues(alpha: p.dark ? .12 : .10),
-      ),
-    ],
+    // a finger needs room (Android); a mouse is precise (Windows)
+    visualDensity: tk.touch ? VisualDensity.standard : const VisualDensity(horizontal: 0, vertical: -.5),
+    materialTapTargetSize: tk.touch ? MaterialTapTargetSize.padded : MaterialTapTargetSize.shrinkWrap,
+    extensions: [LookLevel(vivid: vivid), tk.copyWith(backdrop: tk.backdrop, glows: tk.glows)],
     scaffoldBackgroundColor: Color(p.bg),
     dividerColor: Color(p.border),
     cardTheme: CardThemeData(
       color: cardColor,
       surfaceTintColor: Colors.transparent,
-      elevation: switch (surface) { 'clay' => 6, 'skeuomorphism' => 3, 'neumorphism' => 4, _ => 0 },
-      shadowColor: surface == 'neumorphism' ? Color(p.dark ? 0xFF000000 : 0xFFA3B1C6) : null,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(radius), side: side),
+      elevation: tk.glow != null && !hard ? 2 : switch (surface) { 'clay' => 6, 'skeuomorphism' => 3, 'neumorphism' => 4, _ => 0 },
+      shadowColor: tk.glow ?? (surface == 'neumorphism' ? Color(p.dark ? 0xFF000000 : 0xFFA3B1C6) : null),
+      // a hard shadow needs room beside the card
+      margin: hard ? EdgeInsets.fromLTRB(4, 4, 4 + tk.hardShadow, 4 + tk.hardShadow) : null,
+      shape: shapeOf(radius, side),
     ),
     appBarTheme: AppBarTheme(
-      backgroundColor: aurora ? Color(p.surface).withValues(alpha: p.dark ? .55 : .62) : Color(p.surface),
+      backgroundColor: glass || aurora ? Color(p.surface).withValues(alpha: p.dark ? .55 : .62) : Color(p.surface),
       foregroundColor: Color(p.text),
       surfaceTintColor: Colors.transparent,
       scrolledUnderElevation: 0,
-      shape: Border(bottom: BorderSide(color: aurora ? Color(p.border).withValues(alpha: .5) : Color(p.border))),
-      titleTextStyle: text.titleLarge?.copyWith(fontSize: 20, fontWeight: FontWeight.w700, color: Color(p.text)),
+      shape: Border(bottom: BorderSide(color: tk.ink ?? (glass || aurora ? Color(p.border).withValues(alpha: .5) : Color(p.border)), width: tk.ink != null ? tk.borderWidth : 1)),
+      titleTextStyle: text.titleLarge?.copyWith(fontSize: 20, color: Color(p.text)),
     ),
     textTheme: text,
     // one look for every text field: outlined, lightly filled, the label always readable, errors in the error colour
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: Color(p.dark ? p.surface2 : p.surface),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-      border: field(Color(p.borderStrong)),
-      enabledBorder: field(Color(p.borderStrong)),
-      focusedBorder: field(scheme.primary, 2),
+      fillColor: glass ? cardColor : Color(p.dark ? p.surface2 : p.surface),
+      contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: ((tap - 20) / 2).clamp(12, 22)),
+      border: field(fieldEdge, tk.borderWidth),
+      enabledBorder: field(fieldEdge, tk.borderWidth),
+      focusedBorder: field(focusRing, tk.borderWidth + 1),
       errorBorder: field(scheme.error),
       focusedErrorBorder: field(scheme.error, 2),
       disabledBorder: field(Color(p.border)),
@@ -313,50 +346,57 @@ ThemeData buildTheme(Palette base, {String accent = '', String surface = 'flat',
       prefixIconColor: Color(muted),
       suffixIconColor: Color(muted),
     ),
-    // buttons: at least 44 px high (easy to hit on a phone and with a mouse), one corner radius for all of them
-    filledButtonTheme: FilledButtonThemeData(style: FilledButton.styleFrom(minimumSize: const Size(64, 44), shape: control, textStyle: label, backgroundBuilder: gradientFill)),
-    elevatedButtonTheme: ElevatedButtonThemeData(style: ElevatedButton.styleFrom(minimumSize: const Size(64, 44), shape: control, textStyle: label)),
+    // every button at least the device's tap target (44 px with a mouse, 48 dp with a finger, 64 for Target Tap)
+    filledButtonTheme: FilledButtonThemeData(style: FilledButton.styleFrom(minimumSize: Size(64, tap), shape: control, textStyle: label, backgroundBuilder: gradientFill,
+        elevation: tk.glow != null ? 3 : null, shadowColor: tk.glow)),
+    elevatedButtonTheme: ElevatedButtonThemeData(style: ElevatedButton.styleFrom(minimumSize: Size(64, tap), shape: control, textStyle: label)),
     outlinedButtonTheme: OutlinedButtonThemeData(
-      style: OutlinedButton.styleFrom(minimumSize: const Size(64, 44), shape: control, textStyle: label, side: BorderSide(color: Color(p.borderStrong))),
+      style: OutlinedButton.styleFrom(minimumSize: Size(64, tap), shape: control, textStyle: label, side: BorderSide(color: tk.ink ?? tk.glow?.withValues(alpha: .6) ?? Color(p.borderStrong), width: tk.borderWidth)),
     ),
-    textButtonTheme: TextButtonThemeData(style: TextButton.styleFrom(minimumSize: const Size(48, 40), shape: control, textStyle: label, foregroundColor: Color(primaryText))),
-    iconButtonTheme: IconButtonThemeData(style: IconButton.styleFrom(minimumSize: const Size(40, 40))),
-    segmentedButtonTheme: SegmentedButtonThemeData(style: SegmentedButton.styleFrom(minimumSize: const Size(48, 40), shape: control, side: BorderSide(color: Color(p.borderStrong)))),
+    textButtonTheme: TextButtonThemeData(style: TextButton.styleFrom(minimumSize: Size(48, tap - 4), shape: shapeOf(tk.controlRadius), textStyle: label, foregroundColor: Color(primaryText))),
+    iconButtonTheme: IconButtonThemeData(style: IconButton.styleFrom(minimumSize: Size(tap - 4, tap - 4))),
+    segmentedButtonTheme: SegmentedButtonThemeData(style: SegmentedButton.styleFrom(minimumSize: Size(48, tap - 4), shape: control, side: BorderSide(color: fieldEdge, width: tk.borderWidth))),
     chipTheme: ChipThemeData(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(aurora ? 20 : 8)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(tk.chipRadius)),
+      padding: EdgeInsets.symmetric(horizontal: 8, vertical: ((tap - 36) / 2).clamp(4, 14)),
       // the chosen chip (payment method, filter) stands out by its border as well as its fill
-      side: WidgetStateBorderSide.resolveWith((st) => BorderSide(color: st.contains(WidgetState.selected) ? scheme.primary : Color(p.borderStrong), width: st.contains(WidgetState.selected) ? 1.5 : 1)),
+      side: WidgetStateBorderSide.resolveWith((st) => BorderSide(
+          color: st.contains(WidgetState.selected) ? focusRing : (tk.ink ?? Color(p.borderStrong)),
+          width: st.contains(WidgetState.selected) ? tk.borderWidth + .5 : tk.borderWidth)),
       labelStyle: text.labelLarge?.copyWith(color: Color(p.text)),
       selectedColor: scheme.primaryContainer,
       checkmarkColor: scheme.onPrimaryContainer,
+      elevation: 0,
+      selectedShadowColor: tk.glow,
+      pressElevation: tk.glow != null ? 4 : null,
     ),
     dialogTheme: DialogThemeData(
       backgroundColor: Color(p.surface),
       surfaceTintColor: Colors.transparent,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(radius + 4)),
-      titleTextStyle: text.titleLarge?.copyWith(fontSize: 20, fontWeight: FontWeight.w700, color: Color(p.text)),
+      shape: shapeOf(radius + (radius == 0 ? 0 : 4), tk.ink == null ? BorderSide.none : BorderSide(color: tk.ink!, width: tk.borderWidth)),
+      titleTextStyle: text.titleLarge?.copyWith(fontSize: 20, color: Color(p.text)),
     ),
     bottomSheetTheme: BottomSheetThemeData(backgroundColor: Color(p.surface), surfaceTintColor: Colors.transparent, showDragHandle: true),
-    popupMenuTheme: PopupMenuThemeData(color: Color(p.surface), surfaceTintColor: Colors.transparent, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10), side: BorderSide(color: Color(p.border)))),
+    popupMenuTheme: PopupMenuThemeData(color: Color(p.surface), surfaceTintColor: Colors.transparent, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(tk.controlRadius), side: BorderSide(color: tk.ink ?? Color(p.border), width: tk.borderWidth))),
     menuTheme: MenuThemeData(style: MenuStyle(backgroundColor: WidgetStatePropertyAll(Color(p.surface)), surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent))),
     snackBarTheme: SnackBarThemeData(
       behavior: SnackBarBehavior.floating,
-      width: 520,
+      width: tk.touch ? null : 520,
       backgroundColor: Color(p.dark ? mix(p.surface2, 0xFFFFFFFF, .12) : p.sidebar),
       contentTextStyle: text.bodyMedium?.copyWith(color: Colors.white),
       actionTextColor: Color(p.dark ? p.primary : mix(p.primary, 0xFFFFFFFF, .45)),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(tk.controlRadius)),
     ),
     tooltipTheme: TooltipThemeData(
       decoration: BoxDecoration(color: Color(p.dark ? mix(p.surface2, 0xFFFFFFFF, .15) : p.sidebar), borderRadius: BorderRadius.circular(6)),
       textStyle: text.bodySmall?.copyWith(color: Colors.white),
       waitDuration: const Duration(milliseconds: 400),
     ),
-    listTileTheme: ListTileThemeData(iconColor: Color(muted), selectedColor: scheme.onPrimaryContainer, selectedTileColor: scheme.primaryContainer),
-    dividerTheme: DividerThemeData(color: Color(p.border), space: 1, thickness: 1),
-    checkboxTheme: CheckboxThemeData(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4))),
+    listTileTheme: ListTileThemeData(iconColor: Color(muted), selectedColor: scheme.onPrimaryContainer, selectedTileColor: scheme.primaryContainer, minTileHeight: tk.touch || tap > 48 ? tap + 4 : null),
+    dividerTheme: DividerThemeData(color: tk.ink ?? Color(p.border), space: 1, thickness: tk.ink != null ? tk.borderWidth / 2 : 1),
+    checkboxTheme: CheckboxThemeData(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(tk.radius == 0 ? 0 : 4))),
     // a clear ring around whatever the keyboard is on (Tab / arrow keys at the till)
-    focusColor: scheme.primary.withValues(alpha: p.dark ? .22 : .14),
-    scrollbarTheme: ScrollbarThemeData(radius: const Radius.circular(8), thickness: const WidgetStatePropertyAll(8), thumbColor: WidgetStatePropertyAll(Color(p.borderStrong))),
+    focusColor: focusRing.withValues(alpha: p.dark ? .22 : .14),
+    scrollbarTheme: ScrollbarThemeData(radius: const Radius.circular(8), thickness: WidgetStatePropertyAll(tk.touch ? 4 : 8), thumbColor: WidgetStatePropertyAll(Color(p.borderStrong))),
   );
 }

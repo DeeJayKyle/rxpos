@@ -19,6 +19,7 @@ import '../../features/engage/application/popups.dart';
 import '../../features/engage/presentation/spotlight.dart';
 import '../../features/engage/presentation/watchers.dart';
 import 'backdrop.dart';
+import 'hardware_hud.dart';
 import 'nav.dart';
 import 'screens.dart';
 import 'theme_menu.dart';
@@ -92,7 +93,8 @@ class AppShell extends ConsumerWidget {
       ],
     );
     final body = Stack(children: [
-      Column(children: [const OfflineBanner(), Expanded(child: child)]),
+      // the Hardware Diagnostic HUD design: a status bar (printer, scanner, connection, alerts) over every page
+      Column(children: [if (tokensOf(context).hud) const HardwareHud(), const OfflineBanner(), Expanded(child: child)]),
       const FirstDownload(),
       PopupHost(location: location),
       EngageWatchers(location: location),
@@ -244,7 +246,7 @@ class _Sidebar extends ConsumerWidget {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
               child: ListTile(
-              dense: true,
+              dense: !tokensOf(context).touch, // full-size rows under a finger
               selected: s.path == location,
               // the page you are on: a filled pill, not only a colour change
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
