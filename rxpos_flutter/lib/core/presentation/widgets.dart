@@ -77,7 +77,12 @@ class StatCard extends StatelessWidget {
               ]),
               const SizedBox(height: 6),
               Text(value, style: t.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800, color: ink ?? shown)),
-              if (sub != null) Text(sub!, style: t.textTheme.bodySmall?.copyWith(color: ink?.withValues(alpha: .9))),
+              if (sub != null || onTap != null)
+                Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                  Expanded(child: Text(sub ?? '', style: t.textTheme.bodySmall?.copyWith(color: ink?.withValues(alpha: .9)))),
+                  // a card that opens a page says so
+                  if (onTap != null) Icon(Icons.arrow_outward, size: 16, color: (ink ?? shown ?? t.colorScheme.primary).withValues(alpha: .8)),
+                ]),
             ]),
           ),
           ),

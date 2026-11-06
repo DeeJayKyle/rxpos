@@ -2593,6 +2593,80 @@ void main() {
     expect(osNotify.asked, 1);
     await done(tester);
   });
+  group('shelves, drug classes and stock corrections', () {
+    testWidgets('a whole therapeutic area goes on a shelf; the shelf shows on the till', (tester) async {
+      await tester.runAsync(signedIn);
+      await start(tester);
+      await navTo(tester, 'Shelves');
+      await tester.tap(find.byKey(const Key('medicine-order')));
+      await settle(tester);
+      await tester.tap(find.text('Therapeutic area').last);
+      await settle(tester);
+      // Zinco (zinc) is under vitamins and minerals; Calmex is not a known generic: Other
+      expect(find.byKey(const Key('group-Vitamins, minerals & nutrition')), findsOneWidget);
+      expect(find.byKey(const Key('group-Other')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('shelf-group-Vitamins, minerals & nutrition')));
+      await settle(tester);
+      await tester.enterText(find.byKey(const Key('shelf-name')), 'B2');
+      await tester.tap(find.text('Put on shelf'));
+      await settle(tester);
+      expect(find.text('1 put on shelf B2'), findsOneWidget);
+      final store = RecordStore(db);
+      expect((await tester.runAsync(() => store.get('products', 'p2')))!['shelf'], 'B2');
+      final audit = (await tester.runAsync(() => store.rows('audit')))!;
+      expect(audit.last['details'], 'Vitamins, minerals & nutrition → shelf B2');
+      // tick Calmex and put it on the shelf already in use
+      await tester.tap(find.byKey(const Key('shelf-med-p1')));
+      await settle(tester);
+      await tester.tap(find.byKey(const Key('shelf-put')));
+      await settle(tester);
+      await tester.tap(find.widgetWithText(ActionChip, 'B2'));
+      await settle(tester);
+      expect((await tester.runAsync(() => store.get('products', 'p1')))!['shelf'], 'B2');
+      expect(find.byKey(const Key('shelf-B2')), findsOneWidget);
+      await toTill(tester);
+      expect(find.textContaining('B2', findRichText: true), findsWidgets);
+      await done(tester);
+    });
+
+    testWidgets('the till: the sale panel is widened by dragging, the payment area folds away; the menu folds to icons', (tester) async {
+      await tester.runAsync(signedIn);
+      await start(tester);
+      await toTill(tester);
+      Future<String?> kv(String k) async => (await tester.runAsync(() => db.select(db.kv).get()))!.where((r) => r.k == 'device:$k').firstOrNull?.v;
+      final handle = find.byKey(const Key('split-pos-sale-w'));
+      final x0 = tester.getCenter(handle).dx;
+      await tester.drag(handle, const Offset(-120, 0));
+      await settle(tester);
+      final moved = x0 - tester.getCenter(handle).dx;
+      expect(moved, greaterThan(80), reason: 'dragged left (less the touch slop)');
+      expect(await kv('pos-sale-w'), '${(460 + moved).round()}');
+      // double-click: the standard width again
+      await tester.tap(handle);
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.tap(handle);
+      await settle(tester);
+      expect(await kv('pos-sale-w'), isNull);
+      // the payment area folds to the total and Charge
+      await tester.tap(find.text('Calmex 500mg Tabs'));
+      await settle(tester);
+      expect(find.text('Amount tendered'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('fold-pos-pay-h')));
+      await settle(tester);
+      expect(find.text('Amount tendered'), findsNothing);
+      expect(find.textContaining('Charge'), findsOneWidget);
+      expect(await kv('pos-pay-h-fold'), '1');
+      // the menu folds to a rail of icons
+      await tester.tap(find.byKey(const Key('sidebar-toggle')));
+      await settle(tester);
+      expect(find.byKey(const ValueKey('rail-/sales')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('rail-/sales')));
+      await settle(tester);
+      expect(find.text('Sales History'), findsWidgets);
+      expect(await kv('navRail'), '1');
+      await done(tester);
+    });
+  });
 }
 
 /// A first download in progress (the sync screen's state, without a cloud).

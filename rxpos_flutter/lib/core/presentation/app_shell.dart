@@ -18,6 +18,7 @@ import '../../features/sync_status/application/sync_controller.dart';
 import '../../features/engage/application/popups.dart';
 import '../../features/engage/presentation/spotlight.dart';
 import '../../features/engage/presentation/watchers.dart';
+import 'backdrop.dart';
 import 'nav.dart';
 import 'screens.dart';
 import 'theme_menu.dart';
@@ -44,14 +45,22 @@ class AppShell extends ConsumerWidget {
     final premium = ref.watch(premiumUiProvider).value ?? false;
     final visible = screens.where((s) => s.allowed(can, features)).toList();
     final wide = MediaQuery.sizeOf(context).width >= 900;
+    final aurora = auroraOn(context);
     final counts = ref.watch(navCountsProvider);
-    final nav = _Sidebar(screens: visible, location: location, counts: counts, onGo: (p) {
+    // the sidebar folds down to a rail of icons (kept on this device)
+    final rail = wide && ref.watch(deviceValueProvider(navRailKey)).value == '1';
+    void toggleRail() => ref.read(deviceValueProvider(navRailKey).notifier).set(rail ? null : '1');
+    final nav = _Sidebar(screens: visible, location: location, counts: counts, rail: rail, onGo: (p) {
       if (!wide) Navigator.of(context).maybePop();
       context.go(p);
     });
     final bar = AppBar(
       title: Text(session?.pharmacy.isNotEmpty == true ? session!.pharmacy : 'RxPOS', overflow: TextOverflow.ellipsis),
       automaticallyImplyLeading: !wide,
+      leading: wide
+          ? IconButton(key: const Key('sidebar-toggle'), tooltip: rail ? 'Show the menu (Ctrl+B)' : 'Fold the menu to icons (Ctrl+B)', onPressed: toggleRail,
+              icon: Icon(rail ? Icons.menu : Icons.menu_open))
+          : null,
       actions: [
         if (wide)
           Padding(
@@ -93,6 +102,7 @@ class AppShell extends ConsumerWidget {
       bindings: {
         for (final s in visible) if (s.key != null) SingleActivator(s.key!): () => context.go(s.path),
         const SingleActivator(LogicalKeyboardKey.keyK, control: true): () => openSearch(context, visible),
+        if (wide) const SingleActivator(LogicalKeyboardKey.keyB, control: true): toggleRail,
         const SingleActivator(LogicalKeyboardKey.keyK, meta: true): () => openSearch(context, visible),
         // F5 / Ctrl+R: send and fetch now (the page updates in place); Ctrl+Shift+R reloads the whole app
         const SingleActivator(LogicalKeyboardKey.f5): () => refreshNow(context, ref),
@@ -101,10 +111,24 @@ class AppShell extends ConsumerWidget {
       },
       // the idle screen covers the whole window
       child: Spotlight(
-        child: Scaffold(
+        child: AuroraBackground(
+          child: Scaffold(
+          backgroundColor: aurora ? Colors.transparent : null,
           appBar: bar,
           drawer: wide ? null : Drawer(child: SafeArea(child: nav)),
-          body: wide ? Row(children: [SizedBox(width: 240, child: Material(color: Theme.of(context).colorScheme.surfaceContainerLow, child: nav)), const VerticalDivider(width: 1), Expanded(child: body)]) : body,
+          body: wide
+              ? Row(children: [
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeOutCubic,
+                    width: rail ? 72 : 240,
+                    child: Material(color: Theme.of(context).colorScheme.surfaceContainerLow.withValues(alpha: aurora ? .55 : 1), child: nav),
+                  ),
+                  VerticalDivider(width: 1, color: aurora ? Theme.of(context).dividerColor.withValues(alpha: .4) : null),
+                  Expanded(child: body),
+                ])
+              : body,
+          ),
         ),
       ),
     );
@@ -118,9 +142,14 @@ final sidebarStartsCollapsedProvider = Provider<bool>((_) => true);
 /// The device key holding which sidebar groups are collapsed ({"People": true, ...}).
 const navCollapsedKey = 'navCollapsed';
 
+/// The device key that folds the sidebar to a rail of icons ('1').
+const navRailKey = 'navRail';
+
 class _Sidebar extends ConsumerWidget {
-  const _Sidebar({required this.screens, required this.location, required this.onGo, this.counts = const {}});
+  const _Sidebar({required this.screens, required this.location, required this.onGo, this.counts = const {}, this.rail = false});
   final List<Screen> screens;
+  /// only the icons (the name on hover)
+  final bool rail;
   final Map<String, int> counts;
   static const _badges = {'/chat': 'chat', '/inventory': 'low', '/expiry': 'expiry', '/branches': 'transfers'};
   final String location;
@@ -141,6 +170,44 @@ class _Sidebar extends ConsumerWidget {
     }
     void toggle(String g) => ref.read(deviceValueProvider(navCollapsedKey).notifier).set(jsonEncode({...collapsed, g: !(collapsed[g] ?? false)}));
     int badge(Screen s) => counts[_badges[s.path]] ?? 0;
+
+    if (rail) {
+      return ListView(key: const Key('sidebar'), padding: const EdgeInsets.symmetric(vertical: 8), children: [
+        for (final g in navGroups)
+          if (screens.any((s) => s.group == g)) ...[
+            if (g != navGroups.first) const Divider(indent: 16, endIndent: 16, height: 12),
+            for (final s in screens.where((s) => s.group == g))
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                child: Tooltip(
+                  message: '${s.label}${s.key == null ? '' : '  ${s.keyLabel}'}',
+                  preferBelow: false,
+                  waitDuration: const Duration(milliseconds: 300),
+                  child: Material(
+                    color: s.path == location ? t.colorScheme.primaryContainer : Colors.transparent,
+                    borderRadius: BorderRadius.circular(12),
+                    child: InkWell(
+                      key: ValueKey('rail-${s.path}'),
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: () => onGo(s.path),
+                      child: SizedBox(
+                        height: 44,
+                        child: Center(
+                          child: Badge(
+                            isLabelVisible: badge(s) > 0,
+                            label: Text('${badge(s)}'),
+                            backgroundColor: t.colorScheme.primary,
+                            child: Icon(s.icon, size: 22, color: s.path == location ? t.colorScheme.onPrimaryContainer : t.colorScheme.onSurfaceVariant, semanticLabel: s.label),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+      ]);
+    }
 
     return ListView(key: const Key('sidebar'), padding: const EdgeInsets.symmetric(vertical: 8), children: [
       for (final g in navGroups)

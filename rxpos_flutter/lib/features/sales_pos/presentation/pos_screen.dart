@@ -11,7 +11,10 @@ import '../../../core/data/record_store.dart';
 import '../../../core/entities/draft.dart';
 import '../../../core/entities/product.dart';
 import '../../../core/entities/sale.dart';
+import '../../../core/presentation/backdrop.dart';
+import '../../../core/presentation/resizable.dart';
 import '../../../core/presentation/widgets.dart';
+import '../../../core/rules/drug_class.dart';
 import '../../../core/rules/money.dart';
 import '../../../core/rules/packs.dart';
 import '../../../core/rules/search.dart';
@@ -331,14 +334,19 @@ class _PosScreenState extends ConsumerState<PosScreen> {
               if (advanced) const SingleActivator(LogicalKeyboardKey.keyK, control: true): () => _openCommandBar(d),
             },
             child: wide
-                ? Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // Advanced UI: three columns (client · medicines · sale); Standard: the client strip over the medicines
-                      if (client != null && advanced) SizedBox(width: 270, child: client),
-                      Expanded(child: client != null && !advanced ? Column(children: [client, Expanded(child: products)]) : products),
-                      SizedBox(width: 460, child: sale),
-                    ],
+                // the sale panel's width is dragged on the handle beside it (kept on this device)
+                ? ResizableSplit(
+                    storeKey: 'pos-sale-w',
+                    leftMin: client != null && advanced ? 630 : 360,
+                    left: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // Advanced UI: three columns (client · medicines · sale); Standard: the client strip over the medicines
+                        if (client != null && advanced) SizedBox(width: 270, child: client),
+                        Expanded(child: client != null && !advanced ? Column(children: [client, Expanded(child: products)]) : products),
+                      ],
+                    ),
+                    right: sale,
                   )
                 : Column(
                     children: [
@@ -792,8 +800,14 @@ class _ProductPanel extends StatelessWidget {
                                     ),
                                   ],
                                 ),
-                                Text(
-                                  [p.generic, p.form].where((x) => x.isNotEmpty).join(' · '),
+                                Text.rich(
+                                  TextSpan(children: [
+                                    if (shelfLabel(p).isNotEmpty) ...[
+                                      WidgetSpan(alignment: PlaceholderAlignment.middle, child: Icon(Icons.shelves, size: 12, color: t.colorScheme.tertiary)),
+                                      TextSpan(text: ' ${shelfLabel(p)}  ', style: TextStyle(color: t.colorScheme.tertiary, fontWeight: FontWeight.w700)),
+                                    ],
+                                    TextSpan(text: [p.generic, p.form].where((x) => x.isNotEmpty).join(' · ')),
+                                  ]),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: t.textTheme.bodySmall,
@@ -925,7 +939,7 @@ class _SalePanel extends ConsumerWidget {
     }
 
     return Material(
-      color: th.colorScheme.surfaceContainerLow,
+      color: th.colorScheme.surfaceContainerLow.withValues(alpha: auroraOn(context) ? .6 : 1),
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
@@ -1119,6 +1133,7 @@ class _SalePanel extends ConsumerWidget {
                                             child: Text('@ ${fmt(l.pack?.price ?? l.price)}', style: th.textTheme.bodySmall),
                                           ),
                                           if (l.price < l.cost) Text('  below cost', style: TextStyle(color: th.colorScheme.error, fontSize: 12)),
+                                          if (p != null && shelfLabel(p).isNotEmpty) Padding(padding: const EdgeInsets.only(left: 6), child: _ShelfTag(shelfLabel(p))),
                                           TextButton.icon(
                                             key: Key('directions-${l.id}'),
                                             style: _lineAction,
@@ -1152,76 +1167,8 @@ class _SalePanel extends ConsumerWidget {
                       },
                     ),
             ),
-            const Divider(),
-            Row(
-              children: [
-                Expanded(child: Text('Subtotal ${fmt(t.subtotal)}')),
-                if (can.contains('pos.discount'))
-                  TextButton(
-                    onPressed: () async {
-                      final v = await askNumber(context, 'Discount (amount)', s.discount);
-                      if (v != null) c.discount(v);
-                    },
-                    child: Text(t.discount > 0 ? 'Discount − ${fmt(t.discount)}' : 'Discount'),
-                  ),
-              ],
-            ),
-            if (t.tax > 0) Text('Tax (${formatQty(st.taxRate)}%) ${fmt(t.tax)}'),
-            Row(
-              children: [
-                Text('Total', style: th.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
-                const Spacer(),
-                Text(
-                  fmt(t.total),
-                  style: th.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900, color: th.colorScheme.primary),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            // on a phone the payment methods scroll sideways in one row, so the sale lines keep their room
-            if (narrow)
-              SingleChildScrollView(
-                key: const Key('pay-methods'),
-                scrollDirection: Axis.horizontal,
-                child: Row(children: [
-                  for (final m in data.methods)
-                    Padding(padding: const EdgeInsets.only(right: 6), child: ChoiceChip(label: Text(m.name), selected: m.id == method.id, onSelected: (_) => c.method(m))),
-                ]),
-              )
-            else
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: [for (final m in data.methods) ChoiceChip(label: Text(m.name), selected: m.id == method.id, onSelected: (_) => c.method(m))],
-              ),
-            if (method.type == 'cash' || method.type == 'credit') ...[
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      key: ValueKey('tendered-${method.id}-${s.lines.isEmpty}'),
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: InputDecoration(labelText: method.type == 'credit' ? 'Paid now (rest on credit)' : 'Amount tendered', isDense: true),
-                      onChanged: (v) => c.tendered(double.tryParse(v.replaceAll(',', ''))),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  if (method.type == 'cash')
-                    Text(
-                      'Change ${fmt((s.tendered ?? t.total) - t.total < 0 ? 0 : (s.tendered ?? t.total) - t.total)}',
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    )
-                  else
-                    Text(
-                      'On credit ${fmt((t.total - (s.tendered ?? 0)).clamp(0, double.infinity))}',
-                      style: TextStyle(color: Colors.orange.shade800, fontWeight: FontWeight.w700),
-                    ),
-                ],
-              ),
-            ],
-            const SizedBox(height: 10),
             () {
+              final buttons = () {
               final hold = OutlinedButton.icon(
                 onPressed: s.lines.isEmpty ? null : () => c.hold(),
                 icon: const Icon(Icons.pause_circle_outline),
@@ -1258,6 +1205,96 @@ class _SalePanel extends ConsumerWidget {
                 const SizedBox(width: 8),
                 Expanded(child: charge),
               ]);
+            }();
+              final pay = <Widget>[
+              const Divider(),
+              Row(
+                children: [
+                  Expanded(child: Text('Subtotal ${fmt(t.subtotal)}')),
+                  if (can.contains('pos.discount'))
+                    TextButton(
+                      onPressed: () async {
+                        final v = await askNumber(context, 'Discount (amount)', s.discount);
+                        if (v != null) c.discount(v);
+                      },
+                      child: Text(t.discount > 0 ? 'Discount − ${fmt(t.discount)}' : 'Discount'),
+                    ),
+                ],
+              ),
+              if (t.tax > 0) Text('Tax (${formatQty(st.taxRate)}%) ${fmt(t.tax)}'),
+              Row(
+                children: [
+                  Text('Total', style: th.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
+                  const Spacer(),
+                  Text(
+                    fmt(t.total),
+                    style: th.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900, color: th.colorScheme.primary),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              // on a phone the payment methods scroll sideways in one row, so the sale lines keep their room
+              if (narrow)
+                SingleChildScrollView(
+                  key: const Key('pay-methods'),
+                  scrollDirection: Axis.horizontal,
+                  child: Row(children: [
+                    for (final m in data.methods)
+                      Padding(padding: const EdgeInsets.only(right: 6), child: ChoiceChip(label: Text(m.name), selected: m.id == method.id, onSelected: (_) => c.method(m))),
+                  ]),
+                )
+              else
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [for (final m in data.methods) ChoiceChip(label: Text(m.name), selected: m.id == method.id, onSelected: (_) => c.method(m))],
+                ),
+              if (method.type == 'cash' || method.type == 'credit') ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        key: ValueKey('tendered-${method.id}-${s.lines.isEmpty}'),
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        decoration: InputDecoration(labelText: method.type == 'credit' ? 'Paid now (rest on credit)' : 'Amount tendered', isDense: true),
+                        onChanged: (v) => c.tendered(double.tryParse(v.replaceAll(',', ''))),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    if (method.type == 'cash')
+                      Text(
+                        'Change ${fmt((s.tendered ?? t.total) - t.total < 0 ? 0 : (s.tendered ?? t.total) - t.total)}',
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      )
+                    else
+                      Text(
+                        'On credit ${fmt((t.total - (s.tendered ?? 0)).clamp(0, double.infinity))}',
+                        style: TextStyle(color: Colors.orange.shade800, fontWeight: FontWeight.w700),
+                      ),
+                  ],
+                ),
+              ],
+              const SizedBox(height: 10),
+                buttons,
+              ];
+              if (narrow) return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: pay);
+              // the payment area's height is dragged on its handle, or it folds down to the total and Charge
+              return ResizableSection(
+                storeKey: 'pos-pay-h',
+                label: 'payment area',
+                compact: Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
+                  Row(children: [
+                    Text('Total', style: th.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+                    const Spacer(),
+                    Text('${method.name} · ', style: th.textTheme.bodySmall),
+                    Text(fmt(t.total), style: th.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900, color: th.colorScheme.primary)),
+                  ]),
+                  const SizedBox(height: 6),
+                  buttons,
+                ]),
+                children: pay,
+              );
             }(),
           ],
         ),
@@ -1275,3 +1312,18 @@ final _lineAction = TextButton.styleFrom(minimumSize: const Size(0, 36), padding
 
 /// The − / + of a sale line's quantity.
 final _stepper = IconButton.styleFrom(minimumSize: const Size(36, 36), padding: EdgeInsets.zero, visualDensity: VisualDensity.compact);
+
+/// Where a medicine is kept (its shelf), on the till's cards and sale lines, to find it fast when dispensing.
+class _ShelfTag extends StatelessWidget {
+  const _ShelfTag(this.shelf);
+  final String shelf;
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    return Row(mainAxisSize: MainAxisSize.min, children: [
+      Icon(Icons.shelves, size: 13, color: t.colorScheme.tertiary),
+      const SizedBox(width: 3),
+      Flexible(child: Text(shelf, maxLines: 1, overflow: TextOverflow.ellipsis, style: t.textTheme.labelSmall?.copyWith(color: t.colorScheme.tertiary, fontWeight: FontWeight.w700))),
+    ]);
+  }
+}

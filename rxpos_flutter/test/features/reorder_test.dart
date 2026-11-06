@@ -67,4 +67,52 @@ void main() {
     expect(poText(first, 'Sample Pharmacy'), 'Purchase order ${first['number']} from Sample Pharmacy\n• Amoxa × 10\nPlease confirm availability and prices. Thank you.');
     expect((await store.rows('audit')).single['details'], '2 order(s), 2 lines');
   });
+
+  group('order quantity methods', () {
+    final f = Product.fromRecord({'id': 'f', 'name': 'Fastol', 'cost': 100});
+    final v = Product.fromRecord({'id': 'v', 'name': 'Varix', 'cost': 100});
+    final sl = Product.fromRecord({'id': 's', 'name': 'Slowa', 'cost': 100, 'reorder': 5});
+    final stock = {'f': 20.0, 'v': 50.0, 's': 4.0};
+    // the last 30 days: Fastol 4 every day; Varix 10 every other day; Slowa 3 on three days
+    final sales = [
+      for (var i = 0; i < 30; i++) ...[
+        Sale.fromRecord({'id': 'f$i', 'date': now.subtract(Duration(days: i)).toIso8601String(), 'branchId': 'main', 'items': [{'id': 'f', 'qty': 4}]}),
+        if (i.isEven) Sale.fromRecord({'id': 'v$i', 'date': now.subtract(Duration(days: i)).toIso8601String(), 'branchId': 'main', 'items': [{'id': 'v', 'qty': 10}]}),
+        if (i % 10 == 0) Sale.fromRecord({'id': 's$i', 'date': now.subtract(Duration(days: i)).toIso8601String(), 'branchId': 'main', 'items': [{'id': 's', 'qty': 3}]}),
+      ],
+    ];
+    final demand = dailyDemand(sales, days: 30, now: now);
+    Map<String, double> run(OrderMethod m) => {
+          for (final r in orderSuggestions([f, v, sl], (id) => stock[id]!, demand, method: m, window: 30, lead: 7, cover: 14, prices: const {}, last: const {}))
+            r.p.id: r.qty,
+        };
+
+    test('daily sales per medicine, oldest first', () {
+      expect((demand['f']!.length, demand['f']!.every((x) => x == 4), demand['v']!.where((x) => x == 10).length, demand['s']!.where((x) => x > 0).length), (30, true, 15, 3));
+    });
+
+    test('reorder point + safety stock: the steady seller needs no safety stock, the irregular one does', () {
+      // Fastol: point 4×7 = 28 ≥ 20, up to 4×21 = 84 → 64. Varix: mean 5, sd 5.09, safety ⌈1.65×5.09×√7⌉ = 23, point 58 ≥ 50, up to 128 → 78.
+      // Slowa: mean 0.3, safety 4, point ⌈2.1 + 4⌉ = 7 ≥ 4, up to 11 → 7
+      expect(run(OrderMethod.safety), {'f': 64.0, 'v': 78.0, 's': 7.0});
+    });
+
+    test('smart mix: safety stock for the daily sellers, Min / Max for the occasional one', () {
+      // Slowa sold on 3 of 30 days: min 5 (its reorder level), max 10 → 6
+      expect(run(OrderMethod.smart), {'f': 64.0, 'v': 78.0, 's': 6.0});
+    });
+
+    test('Min / Max, EOQ and order-up-to', () {
+      expect(run(OrderMethod.minMax)['s'], 6);
+      // EOQ for Fastol: √(2 × 1460 × 20000 ÷ 25) = 1528.4 → 1529
+      expect(run(OrderMethod.eoq)['f'], 1529);
+      // order-up-to tops up every seller, even Slowa: ⌈0.3 × 21 + 4⌉ = 11 − 4 = 7
+      expect(run(OrderMethod.upTo), {'f': 64.0, 'v': 78.0, 's': 7.0});
+    });
+
+    test('days of cover gives the same answers as the current app\'s rule', () {
+      final old = reorderSuggestions([f, v, sl], (id) => stock[id]!, salesVelocity(sales, days: 30, now: now).sold, window: 30, lead: 7, cover: 14, prices: const {}, last: const {});
+      expect(run(OrderMethod.cover), {for (final r in old) r.p.id: r.qty});
+    });
+  });
 }

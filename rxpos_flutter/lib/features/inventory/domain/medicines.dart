@@ -204,3 +204,20 @@ List<(Movement, double)> stockCard(Iterable<Movement> moves, String productId, S
   var bal = 0.0;
   return [for (final m in list) (m, bal += m.qty)];
 }
+
+/// Put medicines on a shelf (or take them off one with ''): writes each medicine's "Shelf / location" (the React
+/// app's `shelf` field) and notes it in the audit log. [what] says what was moved (e.g. "Antimalarials"). Returns how
+/// many changed.
+Future<int> assignShelf(RecordStore store, Iterable<Product> products, String shelf, {String what = '', required String user, String branchId = mainBranch}) async {
+  final to = shelf.trim();
+  final change = [for (final p in products) if ('${p.raw['shelf'] ?? ''}'.trim() != to) p];
+  if (change.isEmpty) return 0;
+  await store.update((d) {
+    for (final p in change) {
+      d.put('products', {...p.toRecord(), 'shelf': to});
+    }
+    final names = what.isNotEmpty ? what : change.length <= 5 ? change.map((p) => p.name).join(', ') : '${change.length} medicines';
+    d.audit(user, 'Shelf assigned', to.isEmpty ? '$names: taken off their shelf' : '$names → shelf $to', branchId);
+  });
+  return change.length;
+}

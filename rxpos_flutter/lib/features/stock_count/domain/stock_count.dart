@@ -285,3 +285,63 @@ Future<CountSummary> postCount(RecordStore store, {required Map<String, Object?>
     return summary;
   });
 }
+
+/// Correct a posted count (stock.adjust): [counted] is line key → the quantity that should have been counted. Each
+/// change books the difference as a "Stock count" movement on that batch (note "… corrected: reason"), the medicine's
+/// count and the count's totals are updated, and the audit log keeps what changed and why. Stock sold since can't be
+/// taken back: a correction never takes a batch below 0.
+Future<CountSummary> correctPostedCount(RecordStore store, {required Map<String, Object?> count, required CountItem item, required Map<String, double> counted,
+    required String reason, required Map<String, Product> byId, required List<BatchStock> batchesNow, required PharmacySettings settings, required String user,
+    String branchId = mainBranch}) async {
+  if (count['status'] != 'posted') throw CountProblem('Only a posted count can be corrected');
+  if (reason.trim().isEmpty) throw CountProblem('Say why the count is being corrected');
+  final p = byId[item.productId];
+  if (p == null) throw CountProblem('That medicine is no longer in the list');
+  final allBatches = await store.rows('batches');
+  String? batchOf(CountLine l) => l.batchId != null && !l.batchId!.startsWith('lb-')
+      ? l.batchId
+      : allBatches.where((b) => b['productId'] == p.id && b['batch'] == l.batch && (b['expiry'] ?? '') == l.expiry).firstOrNull?['id'] as String?;
+  final changes = <({CountLine l, double qty, String? batchId})>[];
+  for (final l in item.lines) {
+    final want = counted[l.key];
+    if (want == null) continue;
+    final qty = max(0, want.round()).toDouble();
+    if (qty == l.qty) continue;
+    final batchId = batchOf(l);
+    final have = batchesNow.where((b) => b.id == batchId).firstOrNull?.qty ?? 0;
+    if (have + qty - l.qty < 0) {
+      throw CountProblem('${p.name}, batch ${l.batch.isEmpty ? '—' : l.batch}: only ${_fmt(have)} left now, so the count can\'t go down by ${_fmt(l.qty - qty)}');
+    }
+    changes.add((l: l, qty: qty, batchId: batchId));
+  }
+  final old = count['summary'] is Map ? CountSummary.fromJson((count['summary'] as Map).cast<String, Object?>()) : null;
+  if (changes.isEmpty) return old ?? const CountSummary();
+  final rows = await store.rows('countItems');
+  final items = [for (final r in rows.where((r) => r['countId'] == count['id'])) CountItem.fromRecord(r)];
+  final scope = ((count['productIds'] as List?) ?? const []).length;
+  final before = summarise(scope, items, byId);
+  final lines = [for (final l in item.lines) () {
+    final c = changes.where((x) => x.l.key == l.key).firstOrNull;
+    return c == null ? l : CountLine(key: l.key, batchId: l.batchId, batch: l.batch, expiry: l.expiry, cost: l.cost, sys: l.sys, qty: c.qty, skipped: false, found: l.found);
+  }()];
+  final fixed = CountItem(productId: item.productId, lines: lines, by: item.by, at: item.at);
+  final after = summarise(scope, [for (final i in items) i.productId == item.productId ? fixed : i], byId);
+  // what posting set to 0 (uncounted batches) stays as it was
+  final zeroValue = old == null ? 0.0 : old.net - before.net, zeroShort = old == null ? 0.0 : old.shortValue - before.shortValue;
+  final summary = CountSummary(counted: after.counted, matched: after.matched, short: after.short, over: after.over, shortValue: after.shortValue + zeroShort,
+      overValue: after.overValue, scope: old?.scope ?? scope, zeroed: old?.zeroed ?? 0, netValue: after.net + zeroValue);
+  final ref = '${count['number'] ?? count['name']}';
+  return store.update((d) async {
+    for (final c in changes) {
+      d.move(productId: p.id, qty: c.qty - c.l.qty, type: 'Stock count', ref: ref, note: '${count['name']} (corrected: ${reason.trim()})', user: user, batchId: c.batchId, branchId: branchId);
+    }
+    final rec = await store.get('countItems', countItemId(count['id'] as String, p.id)) ?? const <String, Object?>{};
+    d.put('countItems', {...rec, 'lines': [for (final l in lines) l.toJson()], 'total': lines.fold<double>(0, (a, l) => a + l.qty)});
+    final cur = await store.get('stockCounts', count['id'] as String) ?? count;
+    d.put('stockCounts', {...cur, 'summary': summary.toJson()});
+    d.audit(user, 'Stock count corrected',
+        '${count['name']}: ${p.name} ${[for (final c in changes) 'batch ${c.l.batch.isEmpty ? '—' : c.l.batch} ${_fmt(c.l.qty)} → ${_fmt(c.qty)}'].join(', ')} (${reason.trim()})',
+        branchId);
+    return summary;
+  });
+}

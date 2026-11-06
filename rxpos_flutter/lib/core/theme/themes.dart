@@ -87,7 +87,8 @@ Palette withAccent(Palette p, String accent) {
 
 /// Surface styles: how panels are drawn, independent of the colours.
 const surfaceStyles = [
-  ('flat', 'Flat', 'The standard clean look'),
+  ('aurora', 'Aurora', 'Soft gradients and frosted panels, in the style of iOS and Linux desktops (standard)'),
+  ('flat', 'Flat', 'The plain clean look'),
   ('glass', 'Glassmorphism', 'Frosted, translucent panels'),
   ('clay', 'Claymorphism', 'Soft, puffy, rounded'),
   ('skeuomorphism', 'Skeuomorphism', 'Tactile, with depth and bevels'),
@@ -151,6 +152,17 @@ int readable(int fg, List<int> bgs, int toward, [double min = 4.5]) {
   return (a: a, b: b, on: on);
 }
 
+/// The Aurora backdrop behind the app: the page colour with soft glows of the theme's colours ([on] false: plain).
+class Backdrop extends ThemeExtension<Backdrop> {
+  const Backdrop({this.on = false, this.base = Colors.white, this.glowA = Colors.transparent, this.glowB = Colors.transparent, this.glowC = Colors.transparent});
+  final bool on;
+  final Color base, glowA, glowB, glowC;
+  @override
+  Backdrop copyWith({bool? on}) => Backdrop(on: on ?? this.on, base: base, glowA: glowA, glowB: glowB, glowC: glowC);
+  @override
+  Backdrop lerp(Backdrop? other, double t) => t < .5 ? this : (other ?? this);
+}
+
 /// The colour level as screens read it, from the theme's extensions.
 class LookLevel extends ThemeExtension<LookLevel> {
   const LookLevel({this.vivid = false});
@@ -207,15 +219,18 @@ ThemeData buildTheme(Palette base, {String accent = '', String surface = 'flat',
     outline: Color(p.borderStrong),
     outlineVariant: Color(p.border),
   );
-  final radius = switch (surface) { 'clay' => 22.0, 'neumorphism' => 18.0, 'glass' => 16.0, _ => 12.0 };
+  final aurora = surface == 'aurora';
+  final radius = switch (surface) { 'clay' => 22.0, 'neumorphism' => 18.0, 'glass' || 'aurora' => 16.0, _ => 12.0 };
   final cardColor = switch (surface) {
     'glass' => Color(p.surface).withValues(alpha: p.dark ? .62 : .72),
+    'aurora' => Color(p.surface).withValues(alpha: p.dark ? .66 : .78),
     'neumorphism' => Color(p.bg),
     _ => Color(p.surface),
   };
   final side = switch (surface) {
     'flat' => BorderSide(color: Color(p.border)),
     'glass' => BorderSide(color: Color(p.dark ? 0x33FFFFFF : 0x99FFFFFF)),
+    'aurora' => BorderSide(color: Color(p.dark ? 0x1FFFFFFF : 0xCCFFFFFF)),
     'skeuomorphism' => BorderSide(color: Color(p.borderStrong), width: 1.2),
     _ => BorderSide.none,
   };
@@ -238,13 +253,31 @@ ThemeData buildTheme(Palette base, {String accent = '', String surface = 'flat',
     labelMedium: tab(m3.labelMedium, FontWeight.w600),
     labelSmall: tab(m3.labelSmall),
   );
-  final control = RoundedRectangleBorder(borderRadius: BorderRadius.circular(10));
+  final control = RoundedRectangleBorder(borderRadius: BorderRadius.circular(aurora ? 12 : 10));
+  // Aurora: the main buttons are a gradient of the two brand colours (iOS / GNOME style), flat when disabled
+  final gradientFill = !aurora
+      ? null
+      : (BuildContext _, Set<WidgetState> st, Widget? child) => st.contains(WidgetState.disabled)
+          ? child!
+          : DecoratedBox(
+              decoration: BoxDecoration(gradient: LinearGradient(colors: [Color(btn.a), Color(btn.b)], begin: Alignment.topLeft, end: Alignment.bottomRight)),
+              child: child,
+            );
   final label = text.labelLarge;
   OutlineInputBorder field(Color c, [double w = 1]) => OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: c, width: w));
   return ThemeData(
     useMaterial3: true,
     colorScheme: scheme,
-    extensions: [LookLevel(vivid: vivid)],
+    extensions: [
+      LookLevel(vivid: vivid),
+      Backdrop(
+        on: aurora,
+        base: Color(p.bg),
+        glowA: Color(p.primary).withValues(alpha: p.dark ? .20 : .16),
+        glowB: Color(p.primary2).withValues(alpha: p.dark ? .16 : .13),
+        glowC: Color(p.dark ? 0xFF8B5CF6 : 0xFFA78BFA).withValues(alpha: p.dark ? .12 : .10),
+      ),
+    ],
     scaffoldBackgroundColor: Color(p.bg),
     dividerColor: Color(p.border),
     cardTheme: CardThemeData(
@@ -255,11 +288,11 @@ ThemeData buildTheme(Palette base, {String accent = '', String surface = 'flat',
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(radius), side: side),
     ),
     appBarTheme: AppBarTheme(
-      backgroundColor: Color(p.surface),
+      backgroundColor: aurora ? Color(p.surface).withValues(alpha: p.dark ? .55 : .62) : Color(p.surface),
       foregroundColor: Color(p.text),
       surfaceTintColor: Colors.transparent,
       scrolledUnderElevation: 0,
-      shape: Border(bottom: BorderSide(color: Color(p.border))),
+      shape: Border(bottom: BorderSide(color: aurora ? Color(p.border).withValues(alpha: .5) : Color(p.border))),
       titleTextStyle: text.titleLarge?.copyWith(fontSize: 20, fontWeight: FontWeight.w700, color: Color(p.text)),
     ),
     textTheme: text,
@@ -281,7 +314,7 @@ ThemeData buildTheme(Palette base, {String accent = '', String surface = 'flat',
       suffixIconColor: Color(muted),
     ),
     // buttons: at least 44 px high (easy to hit on a phone and with a mouse), one corner radius for all of them
-    filledButtonTheme: FilledButtonThemeData(style: FilledButton.styleFrom(minimumSize: const Size(64, 44), shape: control, textStyle: label)),
+    filledButtonTheme: FilledButtonThemeData(style: FilledButton.styleFrom(minimumSize: const Size(64, 44), shape: control, textStyle: label, backgroundBuilder: gradientFill)),
     elevatedButtonTheme: ElevatedButtonThemeData(style: ElevatedButton.styleFrom(minimumSize: const Size(64, 44), shape: control, textStyle: label)),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(minimumSize: const Size(64, 44), shape: control, textStyle: label, side: BorderSide(color: Color(p.borderStrong))),
@@ -290,7 +323,7 @@ ThemeData buildTheme(Palette base, {String accent = '', String surface = 'flat',
     iconButtonTheme: IconButtonThemeData(style: IconButton.styleFrom(minimumSize: const Size(40, 40))),
     segmentedButtonTheme: SegmentedButtonThemeData(style: SegmentedButton.styleFrom(minimumSize: const Size(48, 40), shape: control, side: BorderSide(color: Color(p.borderStrong)))),
     chipTheme: ChipThemeData(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(aurora ? 20 : 8)),
       // the chosen chip (payment method, filter) stands out by its border as well as its fill
       side: WidgetStateBorderSide.resolveWith((st) => BorderSide(color: st.contains(WidgetState.selected) ? scheme.primary : Color(p.borderStrong), width: st.contains(WidgetState.selected) ? 1.5 : 1)),
       labelStyle: text.labelLarge?.copyWith(color: Color(p.text)),

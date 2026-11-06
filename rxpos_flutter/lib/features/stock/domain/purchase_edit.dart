@@ -112,3 +112,47 @@ Future<Map<String, Object?>> editPurchase(RecordStore store, Map<String, Object?
     return rec;
   });
 }
+
+/// Delete a whole delivery (purchases.edit): every line's stock goes back out of its batch with a "Purchase deleted"
+/// movement, the record is removed (on every device) and the audit log keeps what it was and why. Refused when stock
+/// from it was already sold, used or moved: then only the rest can be corrected with [editPurchase].
+Future<void> deletePurchase(RecordStore store, Map<String, Object?> purchase,
+    {required String reason, required String user, required List<BatchStock> Function(String productId, String branch) batchesOf, required PharmacySettings settings}) async {
+  if (reason.trim().isEmpty) throw DeliveryProblem('Say why the delivery is being deleted');
+  final items = ((purchase['items'] as List?) ?? const []).cast<Map>();
+  final br = '${purchase['branchId'] ?? mainBranch}';
+  final batches = await store.rows('batches');
+  Map<String, Object?>? findBatch(Map o) =>
+      batches.where((b) => b['id'] == o['batchId']).firstOrNull ??
+      batches.where((b) => b['productId'] == o['productId'] && b['batch'] == '${o['batch'] ?? ''}'.trim() && (b['expiry'] ?? '') == (o['expiry'] ?? '')).firstOrNull;
+  // what each batch must give back (two lines can share a batch)
+  final need = <String, double>{};
+  for (final o in items) {
+    final b = findBatch(o);
+    if (b != null) need[b['id'] as String] = (need[b['id']] ?? 0) + ((o['qty'] as num?) ?? 0).toDouble();
+  }
+  for (final o in items) {
+    final b = findBatch(o);
+    if (b == null) continue;
+    final have = batchesOf('${o['productId']}', br).where((s) => s.id == b['id']).firstOrNull?.qty ?? 0;
+    if (need[b['id']]! > have) {
+      throw DeliveryProblem('${o['name']}: only ${formatQty(have)} of batch ${o['batch']} left (some was already sold or moved), so this delivery '
+          'can\'t be deleted. Correct it with Edit instead.');
+    }
+  }
+  final ref = '${purchase['number']}';
+  await store.update((d) {
+    for (final o in items) {
+      final b = findBatch(o);
+      final qty = ((o['qty'] as num?) ?? 0).toDouble();
+      if (b != null && qty != 0) {
+        d.move(productId: '${o['productId']}', qty: -qty, type: 'Purchase edit', ref: ref, note: 'delivery deleted', user: user, batchId: b['id'] as String, branchId: br);
+      }
+    }
+    d.del('purchases', purchase['id'] as String);
+    d.audit(user, 'Purchase deleted',
+        '$ref from ${purchase['supplierName'] ?? ''} (invoice ${'${purchase['invoice'] ?? ''}'.isEmpty ? '—' : purchase['invoice']}, ${items.length} lines, '
+        '${settings.money((purchase['total'] as num?) ?? 0)}): ${reason.trim()}',
+        br);
+  });
+}

@@ -1,4 +1,4 @@
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
@@ -43,7 +43,26 @@ GoRouter appRouter(Ref ref) {
       GoRoute(path: Routes.signIn, builder: (_, _) => const SignInScreen()),
       ShellRoute(
         builder: (_, state, child) => AppShell(location: state.matchedLocation, child: child),
-        routes: [for (final s in screens) GoRoute(path: s.path, builder: (_, st) => s.builder(st.uri.queryParameters))],
+        // pages change with a quick fade and a slight rise (180 ms): smooth, never in the way
+        routes: [
+          for (final s in screens)
+            GoRoute(
+              path: s.path,
+              pageBuilder: (_, st) => CustomTransitionPage<void>(
+                key: st.pageKey,
+                child: s.builder(st.uri.queryParameters),
+                transitionDuration: const Duration(milliseconds: 180),
+                reverseTransitionDuration: const Duration(milliseconds: 120),
+                transitionsBuilder: (_, a, b, child) => FadeTransition(
+                  opacity: CurvedAnimation(parent: a, curve: Curves.easeOut),
+                  child: FadeTransition(
+                    opacity: Tween<double>(begin: 1, end: 0).animate(CurvedAnimation(parent: b, curve: Curves.easeIn)),
+                    child: SlideTransition(position: Tween(begin: const Offset(0, .015), end: Offset.zero).animate(CurvedAnimation(parent: a, curve: Curves.easeOutCubic)), child: child),
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     ],
   );

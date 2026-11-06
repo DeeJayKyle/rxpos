@@ -106,6 +106,10 @@ jobs:
       - name: Build
         working-directory: rxpos_flutter
         run: |
+          # GitHub's runner was shut down for want of memory: Gradle and the Kotlin compiler are kept smaller here
+          # (the user-level file overrides android/gradle.properties)
+          mkdir -p ~/.gradle
+          printf 'org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g -XX:+HeapDumpOnOutOfMemoryError\nkotlin.daemon.jvmargs=-Xmx1g\norg.gradle.workers.max=2\n' > ~/.gradle/gradle.properties
           flutter pub get
           v="--build-name=$VERSION --build-number=${{ github.run_number }}"
           mkdir -p ../out

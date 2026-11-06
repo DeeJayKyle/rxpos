@@ -158,5 +158,41 @@ void main() {
       await expectLater(editPurchase(store, rec, [editLinesOf(rec)[0].copyWith(removed: true), editLinesOf(rec)[1]], supplierId: '', supplierName: '', invoice: '', notes: '',
           date: '2026-11-01', paid: 0, reason: 'x', user: 'T', batchesOf: await view(), settings: s), throwsA(predicate((e) => '$e'.contains('only 1 of batch Z1 left'))));
     });
+
+    test('deleting a delivery takes its stock back out and removes it; refused once some of it was sold', () async {
+      await store.update((d) {
+        d.put('batches', {'id': 'b1', 'productId': 'p2', 'batch': 'Z1', 'expiry': '2030-01-31'});
+        d.put('batches', {'id': 'b2', 'productId': 'p1', 'batch': 'P1', 'expiry': '2030-01-31'});
+        d.move(productId: 'p2', qty: 10, type: 'Purchase', batchId: 'b1');
+        d.move(productId: 'p1', qty: 5, type: 'Purchase', batchId: 'b2');
+      });
+      Map<String, Object?> grn(String id) => {'id': id, 'number': 'GRN-$id', 'branchId': 'main', 'supplierName': 'Alpha', 'invoice': 'I-9', 'total': 41500, 'paid': 41500,
+        'date': '2026-11-01', 'items': [
+          {'productId': 'p2', 'name': 'Zinco', 'qty': 10, 'cost': 4000, 'batch': 'Z1', 'expiry': '2030-01-31', 'batchId': 'b1'},
+          {'productId': 'p1', 'name': 'Paramol', 'qty': 5, 'cost': 300, 'batch': 'P1', 'expiry': '2030-01-31', 'batchId': 'b2'},
+        ]};
+      await store.update((d) => d.put('purchases', grn('g2')));
+      Future<List<BatchStock> Function(String, String)> view() async {
+        final idx = StockIndex.of((await store.rows('movements')).map(Movement.fromRecord));
+        final bs = (await store.rows('batches')).map(Batch.fromRecord).toList();
+        return (id, br) => StockView(products: [para, zinc], batches: bs, index: idx, branch: br).batchesOf(id);
+      }
+
+      await expectLater(deletePurchase(store, grn('g2'), reason: ' ', user: 'T', batchesOf: await view(), settings: s), throwsA(isA<DeliveryProblem>()));
+      // one sold: it can't be deleted, and nothing changed
+      await store.update((d) => d.move(productId: 'p2', qty: -1, type: 'Sale', batchId: 'b1'));
+      await expectLater(deletePurchase(store, grn('g2'), reason: 'wrong supplier', user: 'T', batchesOf: await view(), settings: s),
+          throwsA(predicate((e) => '$e'.contains('only 9 of batch Z1 left'))));
+      expect(await store.get('purchases', 'g2'), isNotNull);
+      // the sale returned: now it can
+      await store.update((d) => d.move(productId: 'p2', qty: 1, type: 'Return', batchId: 'b1'));
+      await deletePurchase(store, grn('g2'), reason: 'entered twice', user: 'T', batchesOf: await view(), settings: s);
+      expect(await store.get('purchases', 'g2'), isNull);
+      final moves = (await store.rows('movements')).where((m) => m['note'] == 'delivery deleted').map((m) => (m['productId'], m['qty'], m['type'], m['batchId'])).toList();
+      expect(moves, [('p2', -10, 'Purchase edit', 'b1'), ('p1', -5, 'Purchase edit', 'b2')]);
+      final v = await view();
+      expect((v('p2', 'main').single.qty, v('p1', 'main').single.qty), (0, 0));
+      expect((await store.rows('audit')).last['details'], allOf(contains('GRN-g2 from Alpha'), contains('entered twice')));
+    });
   });
 }
