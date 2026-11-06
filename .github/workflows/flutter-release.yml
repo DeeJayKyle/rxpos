@@ -63,7 +63,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.RELEASE_TAG }}
-          target_commitish: ${{ env.SHA }}
+          # the tag goes on main: GitHub refuses this token a tag on a pilot commit whose workflow files differ from
+          # main's. The files are exactly the build named below (its commit is in the notes).
+          target_commitish: main
           name: ${{ env.RELEASE_NAME }}
           prerelease: false
           make_latest: ${{ env.LATEST }}
@@ -85,7 +87,7 @@ jobs:
             - **Android:** `RxPOS-1.0.${{ env.BUILD }}.apk`, signed with the same key as the current RxPOS Android app.
             - Once installed, the apps update themselves from the cloud. On Windows this happens when nothing is in
               progress; on Android, tap Update and confirm.
-            - Checksums are in `SHA256SUMS.txt`.
+            - Checksums are in `SHA256SUMS.txt`. Built from commit ${{ env.SHA }} (pilot branch, "Flutter apps" run ${{ env.BUILD }}).
 
             Everything the React app does is included (rxpos_flutter/PARITY.md, rxpos_flutter/SIMILARITY.md). Different
             by design: a sale beyond the stock this device knows is refused, and the owner console stays on the website.
