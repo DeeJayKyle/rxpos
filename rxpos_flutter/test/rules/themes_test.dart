@@ -47,8 +47,54 @@ void main() {
     expect(Look.parse('{"v":2,"theme":"nord","surface":"flat"}').surface, 'flat');
     expect(Look.parse(jsonEncode(Look.parse('{"surface":"flat"}').copyWith(surface: 'flat').toJson())).surface, 'flat');
     final t = buildTheme(paletteById('light'), surface: 'aurora');
-    expect(t.extension<Backdrop>()!.on, isTrue);
+    expect(t.extension<DesignTokens>()!.hasBackdrop, isTrue);
     expect(t.cardTheme.color!.a, lessThan(1), reason: 'translucent panels over the backdrop');
-    expect(buildTheme(paletteById('light')).extension<Backdrop>()!.on, isFalse);
+    expect(buildTheme(paletteById('light')).extension<DesignTokens>()!.hasBackdrop, isFalse);
+  });
+
+  group('design systems', () {
+    test('ten of them, each with its own palette; picked by id, unknown ids ignored', () {
+      expect(designSystems.length, 10);
+      expect(designSystems.where((d) => d.group == 'pos').length, 5);
+      for (final d in designSystems) {
+        expect(paletteById(d.palette).id, d.palette, reason: d.id);
+      }
+      expect(Look.parse('{"design":"brutalist"}').designSystem?.name, 'Neo-Brutalist Pop');
+      expect(Look.parse('{"design":"nope"}').design, '');
+    });
+
+    test('every design is readable: text on its page and panels at least 4.5:1, white or dark text on its buttons', () {
+      for (final d in designSystems) {
+        final t = buildTheme(paletteById(d.palette), surface: d.surface, tokens: d.tokens);
+        final cs = t.colorScheme;
+        final bg = d.tokens.backdrop.isNotEmpty ? d.tokens.backdrop : [t.scaffoldBackgroundColor];
+        for (final b in [...bg, cs.surface]) {
+          expect(contrast(cs.onSurface.toARGB32(), b.toARGB32()), greaterThanOrEqualTo(4.5), reason: '${d.id}: text on ${b.toARGB32().toRadixString(16)}');
+        }
+        expect(contrast(cs.onPrimary.toARGB32(), cs.primary.toARGB32()), greaterThanOrEqualTo(4.5), reason: '${d.id}: button text');
+        for (final b in [if (d.tokens.glassAlpha != null) ...d.tokens.backdrop, cs.surface]) {
+          expect(contrast(cs.tertiary.toARGB32(), b.toARGB32()), greaterThanOrEqualTo(4.5), reason: '${d.id}: prices and links');
+        }
+      }
+    });
+
+    test('tap targets: 44 px with a mouse, 48 dp with a finger, 64 for Target Tap whatever the device', () {
+      Size? filled(ThemeData t) => t.filledButtonTheme.style!.minimumSize!.resolve({});
+      final split = designById('split-pane')!, tap = designById('target-tap')!;
+      expect(filled(buildTheme(paletteById(split.palette), tokens: split.tokens))!.height, 44);
+      expect(filled(buildTheme(paletteById(split.palette), tokens: split.tokens, touch: true))!.height, 48);
+      expect(filled(buildTheme(paletteById(tap.palette), tokens: tap.tokens))!.height, 64);
+      expect(buildTheme(paletteById('light'), touch: true).materialTapTargetSize, MaterialTapTargetSize.padded);
+    });
+
+    test('Neo-Brutalist: thick black borders and a hard shadow drawn only outside the card; Bauhaus: square corners', () {
+      final b = designById('brutalist')!;
+      final shape = buildTheme(paletteById(b.palette), tokens: b.tokens).cardTheme.shape! as HardShadowBorder;
+      expect((shape.side.width, shape.side.color, shape.offset), (2.5, Colors.black, 2.0));
+      final bau = designById('bauhaus')!;
+      final r = buildTheme(paletteById(bau.palette), tokens: bau.tokens).cardTheme.shape! as RoundedRectangleBorder;
+      expect(r.borderRadius, BorderRadius.circular(0));
+      expect(buildTheme(paletteById(bau.palette), tokens: bau.tokens).textTheme.headlineSmall!.fontFamily, 'Georgia');
+    });
   });
 }

@@ -53,7 +53,8 @@ GoRouter appRouter(Ref ref) {
                 child: s.builder(st.uri.queryParameters),
                 transitionDuration: const Duration(milliseconds: 180),
                 reverseTransitionDuration: const Duration(milliseconds: 120),
-                transitionsBuilder: (_, a, b, child) => FadeTransition(
+                // none when the device asks for less motion (Settings → Accessibility → Remove animations)
+                transitionsBuilder: (ctx, a, b, child) => MediaQuery.disableAnimationsOf(ctx) ? child : FadeTransition(
                   opacity: CurvedAnimation(parent: a, curve: Curves.easeOut),
                   child: FadeTransition(
                     opacity: Tween<double>(begin: 1, end: 0).animate(CurvedAnimation(parent: b, curve: Curves.easeIn)),

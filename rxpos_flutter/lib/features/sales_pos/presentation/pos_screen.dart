@@ -12,9 +12,11 @@ import '../../../core/entities/draft.dart';
 import '../../../core/entities/product.dart';
 import '../../../core/entities/sale.dart';
 import '../../../core/presentation/backdrop.dart';
+import '../../../core/presentation/hardware_hud.dart';
 import '../../../core/presentation/resizable.dart';
 import '../../../core/presentation/widgets.dart';
 import '../../../core/rules/drug_class.dart';
+import '../../../core/theme/design_tokens.dart';
 import '../../../core/rules/money.dart';
 import '../../../core/rules/packs.dart';
 import '../../../core/rules/search.dart';
@@ -87,6 +89,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     if (code.isEmpty) return;
     final byCode = d.byBarcode[code];
     if (byCode != null) {
+      ref.read(lastScanProvider.notifier).now(); // for the hardware status bar
       await _add(byCode);
       _clearSearch();
       return;
@@ -276,6 +279,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                   await scanContinuous(context, title: 'Scan items into the sale', onCode: (code) async {
                     final p = d.byBarcode[code.trim()];
                     if (p == null) return null;
+                    ref.read(lastScanProvider.notifier).now();
                     await _add(p);
                     return '${p.name} added';
                   });
@@ -337,6 +341,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                 // the sale panel's width is dragged on the handle beside it (kept on this device)
                 ? ResizableSplit(
                     storeKey: 'pos-sale-w',
+                    initial: tokensOf(context).splitPane ? 520 : 460,
                     leftMin: client != null && advanced ? 630 : 360,
                     left: Row(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -756,11 +761,12 @@ class _ProductPanel extends StatelessWidget {
                   )
                 : GridView.builder(
                     // taller cards when the phone's text size is larger (accessibility), so nothing is cut off
+                    // card size and spacing come from the design tokens (Target Tap: big cards, Split-Pane: dense)
                     gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-                      maxCrossAxisExtent: 230,
-                      mainAxisExtent: MediaQuery.textScalerOf(context).scale(122),
-                      crossAxisSpacing: 8,
-                      mainAxisSpacing: 8,
+                      maxCrossAxisExtent: tokensOf(context).tileWidth,
+                      mainAxisExtent: MediaQuery.textScalerOf(context).scale(tokensOf(context).tileHeight),
+                      crossAxisSpacing: tokensOf(context).gap,
+                      mainAxisSpacing: tokensOf(context).gap,
                     ),
                     itemCount: results.length,
                     itemBuilder: (_, i) {
@@ -768,13 +774,18 @@ class _ProductPanel extends StatelessWidget {
                       final stock = data.stockOf(p.id);
                       final out = stock <= 0;
                       final low = !out && p.reorder > 0 && stock <= p.reorder;
+                      final tk = tokensOf(context);
+                      // Target Tap: a stripe in the colour of the medicine's therapeutic area (the name keeps full contrast)
+                      final area = tk.colorCoded ? areaColors[drugClassOf(p).area] : null;
                       return Card(
-                        margin: EdgeInsets.zero,
+                        margin: tk.hardShadow > 0 ? EdgeInsets.only(right: tk.hardShadow, bottom: tk.hardShadow) : EdgeInsets.zero,
+                        clipBehavior: area != null ? Clip.antiAlias : Clip.none,
                         child: InkWell(
                           onTap: out ? null : () => onPick(p),
-                          borderRadius: BorderRadius.circular(12),
-                          child: Padding(
-                            padding: const EdgeInsets.all(10),
+                          borderRadius: BorderRadius.circular(tk.radius),
+                          child: Container(
+                            decoration: area == null ? null : BoxDecoration(border: Border(left: BorderSide(color: area, width: 8))),
+                            padding: EdgeInsets.all(tk.cardPadding),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
@@ -828,7 +839,8 @@ class _ProductPanel extends StatelessWidget {
                                           decimals: s.decimalPlaces,
                                         ),
                                         maxLines: 1,
-                                        style: TextStyle(color: t.colorScheme.primary, fontWeight: FontWeight.w800),
+                                        // the brand colour made readable on this card (tertiary), on every look
+                                        style: TextStyle(color: t.colorScheme.tertiary, fontWeight: FontWeight.w800),
                                       ),
                                     if (p.rx) const _Tag('Rx'),
                                     if (p.controlled) const _Tag('CD'),
@@ -890,7 +902,7 @@ class _SaleBar extends ConsumerWidget {
       child: InkWell(
         onTap: open,
         child: Padding(
-          padding: const EdgeInsets.all(14),
+          padding: EdgeInsets.symmetric(horizontal: 14, vertical: ((tokensOf(context).tapTarget - 26) / 2).clamp(14, 24)), // at least the tap target high
           child: Row(
             children: [
               const Icon(Icons.shopping_cart_outlined),
@@ -1053,12 +1065,12 @@ class _SalePanel extends ConsumerWidget {
                                 Container(
                                   decoration: BoxDecoration(border: Border.all(color: th.colorScheme.outline), borderRadius: BorderRadius.circular(10)),
                                   child: Row(mainAxisSize: MainAxisSize.min, children: [
-                                    IconButton(onPressed: () => guard(() => c.step(l.id, -1)), icon: const Icon(Icons.remove, size: 18), tooltip: 'Less', style: _stepper),
+                                    IconButton(onPressed: () => guard(() => c.step(l.id, -1)), icon: const Icon(Icons.remove, size: 18), tooltip: 'Less', style: _stepperFor(context)),
                                     SizedBox(
                                       width: 30,
                                       child: Text(formatQty(l.count), textAlign: TextAlign.center, style: th.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
                                     ),
-                                    IconButton(onPressed: () => guard(() => c.step(l.id, 1)), icon: const Icon(Icons.add, size: 18), tooltip: 'More', style: _stepper),
+                                    IconButton(onPressed: () => guard(() => c.step(l.id, 1)), icon: const Icon(Icons.add, size: 18), tooltip: 'More', style: _stepperFor(context)),
                                   ]),
                                 ),
                                 SizedBox(
@@ -1136,7 +1148,7 @@ class _SalePanel extends ConsumerWidget {
                                           if (p != null && shelfLabel(p).isNotEmpty) Padding(padding: const EdgeInsets.only(left: 6), child: _ShelfTag(shelfLabel(p))),
                                           TextButton.icon(
                                             key: Key('directions-${l.id}'),
-                                            style: _lineAction,
+                                            style: _lineActionFor(context),
                                             onPressed: () async {
                                               final dir = await askDirections(context, l, st, patient: s.customerId == walkIn ? '' : s.customerName);
                                               if (dir != null) c.directions(l.id, dir.isEmpty ? null : dir);
@@ -1146,7 +1158,7 @@ class _SalePanel extends ConsumerWidget {
                                           ),
                                           if (p != null && data.features['drugInfo'] != false)
                                             TextButton.icon(
-                                              style: _lineAction,
+                                              style: _lineActionFor(context),
                                               onPressed: () => showDrugInfo(context, p, data),
                                               icon: const Icon(Icons.info_outline, size: 16),
                                               label: const Text('Drug info'),
@@ -1278,7 +1290,8 @@ class _SalePanel extends ConsumerWidget {
               const SizedBox(height: 10),
                 buttons,
               ];
-              if (narrow) return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: pay);
+              // on a phone, and with Split-Pane (the sale and payment always in full view), the payment area is not resized
+              if (narrow || tokensOf(context).splitPane) return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: pay);
               // the payment area's height is dragged on its handle, or it folds down to the total and Charge
               return ResizableSection(
                 storeKey: 'pos-pay-h',
@@ -1308,10 +1321,18 @@ extension on String {
 }
 
 /// The small actions under a sale line (Directions, Drug info): compact, still easy to hit.
-final _lineAction = TextButton.styleFrom(minimumSize: const Size(0, 36), padding: const EdgeInsets.symmetric(horizontal: 8), visualDensity: VisualDensity.compact);
+ButtonStyle _lineActionFor(BuildContext context) {
+  final h = tokensOf(context).tapTarget > 48 ? tokensOf(context).tapTarget - 8 : 36.0;
+  return TextButton.styleFrom(minimumSize: Size(0, h), padding: const EdgeInsets.symmetric(horizontal: 8), visualDensity: VisualDensity.compact);
+}
 
 /// The − / + of a sale line's quantity.
-final _stepper = IconButton.styleFrom(minimumSize: const Size(36, 36), padding: EdgeInsets.zero, visualDensity: VisualDensity.compact);
+/// (compact at a desk; as big as the tap target on Target Tap)
+ButtonStyle _stepperFor(BuildContext context) {
+  final t = tokensOf(context);
+  final size = t.tapTarget > 48 ? t.tapTarget : t.touch ? 40.0 : 36.0;
+  return IconButton.styleFrom(minimumSize: Size(size, size), padding: EdgeInsets.zero, visualDensity: VisualDensity.compact);
+}
 
 /// Where a medicine is kept (its shelf), on the till's cards and sale lines, to find it fast when dispensing.
 class _ShelfTag extends StatelessWidget {

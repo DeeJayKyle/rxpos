@@ -35,6 +35,7 @@ import 'package:rxpos/features/calls/domain/rtc_peer.dart';
 import 'package:rxpos/features/engage/presentation/watchers.dart';
 import 'package:rxpos/features/reports/domain/weekly.dart';
 import 'package:rxpos/core/presentation/widgets.dart';
+import 'package:rxpos/core/theme/design_systems.dart';
 import 'package:rxpos/core/theme/themes.dart';
 import 'package:rxpos/features/auth/domain/offline_secrets.dart';
 import 'package:rxpos/features/calendar/domain/calendar.dart';
@@ -1695,6 +1696,8 @@ void main() {
     expect(brightness(tester), Brightness.dark);
     final list = find.byKey(const Key('theme-list'));
     await tester.scrollUntilVisible(find.byKey(const ValueKey('theme-dracula')), 120, scrollable: find.descendant(of: list, matching: find.byType(Scrollable)));
+    await tester.ensureVisible(find.byKey(const ValueKey('theme-dracula')));
+    await settle(tester);
     await tester.tap(find.byKey(const ValueKey('theme-dracula')));
     await settle(tester, 4);
     expect((await look())['theme'], 'dracula');
@@ -1704,6 +1707,8 @@ void main() {
     expect((await look())['accent'], 'ocean');
     expect(Theme.of(tester.element(find.byKey(const Key('theme-menu')))).colorScheme.secondary, isNot(const Color(0xFFFF79C6)), reason: 'the ocean accent replaced Dracula\'s pink');
     await tester.scrollUntilVisible(find.byKey(const ValueKey('level-vivid')), 120, scrollable: find.descendant(of: list, matching: find.byType(Scrollable)));
+    await tester.ensureVisible(find.byKey(const ValueKey('level-vivid')));
+    await settle(tester);
     await tester.tap(find.byKey(const ValueKey('level-vivid')));
     await settle(tester, 4);
     expect((await look())['level'], 'vivid');
@@ -1712,6 +1717,8 @@ void main() {
         reason: 'figure tiles are solid colour');
     await openThemes(tester);
     await tester.scrollUntilVisible(find.byKey(const ValueKey('style-glass')), 120, scrollable: find.descendant(of: list, matching: find.byType(Scrollable)));
+    await tester.ensureVisible(find.byKey(const ValueKey('style-glass')));
+    await settle(tester);
     await tester.tap(find.byKey(const ValueKey('style-glass')));
     await settle(tester, 4);
     expect((await look())['surface'], 'glass');
@@ -2452,6 +2459,28 @@ void main() {
       await expectLater(find.byType(MaterialApp).first, matchesGoldenFile('screens/$name.png'));
     }
 
+    testWidgets('screens of the ten design systems', (tester) async {
+      await tester.runAsync(signedIn);
+      for (final d in designSystems) {
+        await tester.runAsync(() => db.into(db.kv).insertOnConflictUpdate(KvCompanion.insert(k: 'device:look', v: '{"v":2,"design":"${d.id}","theme":"${d.palette}","surface":"${d.surface}"}')));
+        await start(tester);
+        await shot(tester, 'design-${d.id}-dashboard');
+        await toTill(tester);
+        await tester.tap(find.text('Calmex 500mg Tabs').first);
+        await settle(tester, 4);
+        await shot(tester, 'design-${d.id}-pos');
+        await done(tester);
+      }
+      // a phone and a 10" tablet in portrait with Target Tap
+      for (final (size, tag) in [(const Size(412, 900), 'phone'), (const Size(800, 1280), 'tablet')]) {
+        await tester.runAsync(() => db.into(db.kv).insertOnConflictUpdate(KvCompanion.insert(k: 'device:look', v: '{"v":2,"design":"target-tap","theme":"target-tap","surface":"flat"}')));
+        await start(tester, size: size);
+        await toTill(tester);
+        await shot(tester, 'design-target-tap-$tag-pos');
+        await done(tester);
+      }
+    }, skip: !on);
+
     for (final (theme, tag) in [('hybrid-light', 'light'), ('hybrid-dark', 'dark')]) {
       testWidgets('screens on a computer, $tag', (tester) async {
         await tester.runAsync(signedIn);
@@ -2664,6 +2693,39 @@ void main() {
       await settle(tester);
       expect(find.text('Sales History'), findsWidgets);
       expect(await kv('navRail'), '1');
+      await done(tester);
+    });
+
+    testWidgets('a design system is picked in the theme menu; the HUD design shows the hardware status bar and its alerts', (tester) async {
+      await tester.runAsync(signedIn);
+      await start(tester);
+      expect(find.byKey(const Key('hardware-hud')), findsNothing);
+      await tester.tap(find.byKey(const Key('theme-menu')));
+      await settle(tester);
+      await tester.tap(find.byKey(const Key('design-systems')));
+      await settle(tester);
+      await tester.tap(find.byKey(const ValueKey('design-hud')));
+      await settle(tester);
+      final look = (await tester.runAsync(() => db.select(db.kv).get()))!.firstWhere((r) => r.k == 'device:look').v;
+      expect(look, contains('"design":"hud"'));
+      expect(find.byKey(const Key('hardware-hud')), findsOneWidget);
+      expect(find.byKey(const Key('hud-printer')), findsOneWidget);
+      expect(find.byKey(const Key('hud-scanner')), findsOneWidget);
+      expect(find.textContaining('nothing scanned yet'), findsOneWidget);
+      // a barcode at the till shows as the scanner's last scan
+      await toTill(tester);
+      await tester.enterText(find.byType(TextField).at(1), '7010001');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await settle(tester);
+      expect(find.textContaining('last scan just now'), findsOneWidget);
+      // picking a theme leaves the design system
+      await tester.tap(find.byKey(const Key('theme-menu')));
+      await settle(tester);
+      await tester.ensureVisible(find.byKey(const ValueKey('design-off')));
+      await settle(tester);
+      await tester.tap(find.byKey(const ValueKey('design-off')));
+      await settle(tester);
+      expect(find.byKey(const Key('hardware-hud')), findsNothing);
       await done(tester);
     });
   });

@@ -34,7 +34,12 @@ class RxposApp extends ConsumerWidget {
       });
     }
     final crash = ref.watch(appCrashProvider);
-    final theme = buildTheme(paletteById(look.system ? paletteFor(false, allowed) : chosen), accent: look.accent, surface: look.surface, vivid: look.level == 'vivid');
+    // a design system's palette is always allowed with it; the layout fits the device: a finger on Android, a mouse on Windows
+    final design = look.designSystem;
+    final touch = !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+    final theme = design != null
+        ? buildTheme(paletteById(design.palette), surface: design.surface, vivid: look.level == 'vivid', tokens: design.tokens, touch: touch)
+        : buildTheme(paletteById(look.system ? paletteFor(false, allowed) : chosen), accent: look.accent, surface: look.surface, vivid: look.level == 'vivid', touch: touch);
     if (crash != null) return MaterialApp(debugShowCheckedModeBanner: false, title: 'RxPOS', theme: theme, home: CrashScreen(error: crash));
     return MaterialApp.router(
       key: ValueKey('app-${ref.watch(appRestartProvider)}'),
@@ -43,8 +48,8 @@ class RxposApp extends ConsumerWidget {
       debugShowCheckedModeBanner: false,
       // following the system: its light and dark themes, live when it changes
       theme: theme,
-      darkTheme: look.system ? buildTheme(paletteById(paletteFor(true, allowed)), accent: look.accent, surface: look.surface, vivid: look.level == 'vivid') : null,
-      themeMode: look.system ? ThemeMode.system : ThemeMode.light,
+      darkTheme: look.system && design == null ? buildTheme(paletteById(paletteFor(true, allowed)), accent: look.accent, surface: look.surface, vivid: look.level == 'vivid', touch: touch) : null,
+      themeMode: look.system && design == null ? ThemeMode.system : ThemeMode.light,
       routerConfig: ref.watch(appRouterProvider),
     );
   }
