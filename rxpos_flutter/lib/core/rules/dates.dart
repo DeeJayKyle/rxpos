@@ -17,6 +17,7 @@ String dayOf(String? v) {
   final s = v ?? '';
   if (_plainDate.hasMatch(s)) return s;
   if (s.isEmpty) return '';
+  if (RegExp(r'^\d{4}-\d{2}$').hasMatch(s)) return '$s-01'; // a month alone means its first day, as in React
   final d = DateTime.tryParse(s);
   return d == null ? '' : localDate(d);
 }

@@ -54,3 +54,16 @@ python3 rxpos_flutter/tool/similarity/actions.py .
 ```
 
 Run them from the repository root. Each prints JSON: what React has, and what wasn't found in Flutter.
+
+## Behaviour check: same inputs, same answers
+
+`tool/parity/react_cases.mjs` runs the React rules (money, first-expiry-first-out, packs, search, dates, typed dates, invoice dates, prescriptions, drug labels, storage advice, permissions) on 183 fixed, fictional cases, and `test/parity/react_parity_test.dart` asks the Flutter rules the same questions. It is run against two versions of React:
+
+- **React now (after the migration):** every answer must match; the test fails otherwise. The first run found 13 differences; 10 were fixed in Flutter (a month alone such as `2026-02` as a day, a non-date shown empty, dates typed without separators such as `06112026`, year-first month/year expiries such as `2028/06`). Three are kept on purpose: React's `NaN-NaN-NaN` for a non-date, React reading a bare number as 1 January 1970, and Flutter refusing a refill on a cancelled or completed prescription. Selling beyond the stock is refused (the owner's choice).
+- **React v1.7.0 (before the migration):** for the report only. The one remaining difference is the "Sales lines report only" permission, added to React after v1.7.0; 77 answers come from rules v1.7.0 did not have yet (packs, typed dates, invoice dates, stock removal).
+
+```bash
+node rxpos_flutter/tool/parity/react_cases.mjs . rxpos_flutter/test/parity/react_expected.json
+```
+
+The report is written to `rxpos_flutter/build/parity_report.txt` by `flutter test test/parity`.

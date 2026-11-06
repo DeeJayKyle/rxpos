@@ -1,0 +1,2817 @@
+[
+ {
+  "fn": "round",
+  "args": [
+   1.005,
+   2
+  ],
+  "out": 1.01
+ },
+ {
+  "fn": "round",
+  "args": [
+   2.5,
+   0
+  ],
+  "out": 3
+ },
+ {
+  "fn": "round",
+  "args": [
+   -2.5,
+   0
+  ],
+  "out": -2
+ },
+ {
+  "fn": "round",
+  "args": [
+   1234.5678,
+   2
+  ],
+  "out": 1234.57
+ },
+ {
+  "fn": "round",
+  "args": [
+   0.30000000000000004,
+   2
+  ],
+  "out": 0.3
+ },
+ {
+  "fn": "round",
+  "args": [
+   999.995,
+   2
+  ],
+  "out": 1000
+ },
+ {
+  "fn": "round",
+  "args": [
+   3333333.3333333335,
+   0
+  ],
+  "out": 3333333
+ },
+ {
+  "fn": "lineTotal",
+  "args": [
+   {
+    "price": 500,
+    "qty": 3
+   },
+   0
+  ],
+  "out": 1500
+ },
+ {
+  "fn": "lineTotal",
+  "args": [
+   {
+    "price": 500,
+    "qty": 3
+   },
+   2
+  ],
+  "out": 1500
+ },
+ {
+  "fn": "lineTotal",
+  "args": [
+   {
+    "price": 1250.5,
+    "qty": 2,
+    "discount": 100
+   },
+   0
+  ],
+  "out": 2401
+ },
+ {
+  "fn": "lineTotal",
+  "args": [
+   {
+    "price": 1250.5,
+    "qty": 2,
+    "discount": 100
+   },
+   2
+  ],
+  "out": 2401
+ },
+ {
+  "fn": "lineTotal",
+  "args": [
+   {
+    "price": 100,
+    "qty": 1,
+    "discount": 250
+   },
+   0
+  ],
+  "out": 0
+ },
+ {
+  "fn": "lineTotal",
+  "args": [
+   {
+    "price": 100,
+    "qty": 1,
+    "discount": 250
+   },
+   2
+  ],
+  "out": 0
+ },
+ {
+  "fn": "lineTotal",
+  "args": [
+   {
+    "price": 33.333,
+    "qty": 3
+   },
+   0
+  ],
+  "out": 100
+ },
+ {
+  "fn": "lineTotal",
+  "args": [
+   {
+    "price": 33.333,
+    "qty": 3
+   },
+   2
+  ],
+  "out": 100
+ },
+ {
+  "fn": "lineTotal",
+  "args": [
+   {
+    "price": 0.5,
+    "qty": 7
+   },
+   0
+  ],
+  "out": 4
+ },
+ {
+  "fn": "lineTotal",
+  "args": [
+   {
+    "price": 0.5,
+    "qty": 7
+   },
+   2
+  ],
+  "out": 3.5
+ },
+ {
+  "fn": "cartSubtotal",
+  "args": [
+   [
+    {
+     "price": 500,
+     "qty": 2
+    },
+    {
+     "price": 1250.5,
+     "qty": 1,
+     "discount": 50
+    }
+   ],
+   0
+  ],
+  "out": 2201
+ },
+ {
+  "fn": "taxOf",
+  "args": [
+   10000,
+   18,
+   false,
+   0
+  ],
+  "out": 1800
+ },
+ {
+  "fn": "taxOf",
+  "args": [
+   11800,
+   18,
+   true,
+   0
+  ],
+  "out": 1800
+ },
+ {
+  "fn": "taxOf",
+  "args": [
+   999,
+   16,
+   false,
+   2
+  ],
+  "out": 159.84
+ },
+ {
+  "fn": "taxOf",
+  "args": [
+   999,
+   16,
+   true,
+   2
+  ],
+  "out": 137.79
+ },
+ {
+  "fn": "taxOf",
+  "args": [
+   5000,
+   0,
+   false,
+   0
+  ],
+  "out": 0
+ },
+ {
+  "fn": "unitPrice",
+  "args": [
+   6000,
+   12,
+   0
+  ],
+  "out": 500
+ },
+ {
+  "fn": "unitPrice",
+  "args": [
+   1000,
+   3,
+   2
+  ],
+  "out": 333.33
+ },
+ {
+  "fn": "unitPrice",
+  "args": [
+   500,
+   0,
+   0
+  ],
+  "out": 500
+ },
+ {
+  "fn": "formatQty",
+  "args": [
+   5,
+   ""
+  ],
+  "out": "5"
+ },
+ {
+  "fn": "formatQty",
+  "args": [
+   1,
+   "tablet"
+  ],
+  "out": "1 tablet"
+ },
+ {
+  "fn": "formatQty",
+  "args": [
+   2,
+   "tablet"
+  ],
+  "out": "2 tablet"
+ },
+ {
+  "fn": "formatQty",
+  "args": [
+   1.333333,
+   ""
+  ],
+  "out": "1.33"
+ },
+ {
+  "fn": "formatQty",
+  "args": [
+   0.5,
+   "bottle"
+  ],
+  "out": "0.5 bottle"
+ },
+ {
+  "fn": "formatQty",
+  "args": [
+   12.5,
+   "ml"
+  ],
+  "out": "12.5 ml"
+ },
+ {
+  "fn": "formatQty",
+  "args": [
+   100,
+   "Strip"
+  ],
+  "out": "100 Strip"
+ },
+ {
+  "fn": "formatMoney",
+  "args": [
+   1234567,
+   "UGX",
+   0
+  ],
+  "out": "UGX 1,234,567"
+ },
+ {
+  "fn": "formatMoney",
+  "args": [
+   1234.5,
+   "KES",
+   2
+  ],
+  "out": "KES 1,234.50"
+ },
+ {
+  "fn": "formatMoney",
+  "args": [
+   -500,
+   "UGX",
+   0
+  ],
+  "out": "UGX -500"
+ },
+ {
+  "fn": "formatMoney",
+  "args": [
+   0,
+   "",
+   0
+  ],
+  "out": "0"
+ },
+ {
+  "fn": "formatMoney",
+  "args": [
+   999999.999,
+   "UGX",
+   2
+  ],
+  "out": "UGX 1,000,000.00"
+ },
+ {
+  "fn": "allocate",
+  "args": [
+   [
+    {
+     "id": "b-old",
+     "qty": 5,
+     "batch": "X0",
+     "expiry": "2001-01-31"
+    },
+    {
+     "id": "b1",
+     "qty": 10,
+     "batch": "A1",
+     "expiry": "2091-03-31"
+    },
+    {
+     "id": "b2",
+     "qty": 0,
+     "batch": "A2",
+     "expiry": "2092-03-31"
+    },
+    {
+     "id": "b3",
+     "qty": 25,
+     "batch": "A3",
+     "expiry": "2093-03-31"
+    },
+    {
+     "id": "b4",
+     "qty": 4.5,
+     "batch": "A4",
+     "expiry": ""
+    }
+   ],
+   1,
+   false
+  ],
+  "out": [
+   {
+    "batchId": "b1",
+    "qty": 1,
+    "batch": "A1",
+    "expiry": "2091-03-31"
+   }
+  ]
+ },
+ {
+  "fn": "allocate",
+  "args": [
+   [
+    {
+     "id": "b-old",
+     "qty": 5,
+     "batch": "X0",
+     "expiry": "2001-01-31"
+    },
+    {
+     "id": "b1",
+     "qty": 10,
+     "batch": "A1",
+     "expiry": "2091-03-31"
+    },
+    {
+     "id": "b2",
+     "qty": 0,
+     "batch": "A2",
+     "expiry": "2092-03-31"
+    },
+    {
+     "id": "b3",
+     "qty": 25,
+     "batch": "A3",
+     "expiry": "2093-03-31"
+    },
+    {
+     "id": "b4",
+     "qty": 4.5,
+     "batch": "A4",
+     "expiry": ""
+    }
+   ],
+   10,
+   false
+  ],
+  "out": [
+   {
+    "batchId": "b1",
+    "qty": 10,
+    "batch": "A1",
+    "expiry": "2091-03-31"
+   }
+  ]
+ },
+ {
+  "fn": "allocate",
+  "args": [
+   [
+    {
+     "id": "b-old",
+     "qty": 5,
+     "batch": "X0",
+     "expiry": "2001-01-31"
+    },
+    {
+     "id": "b1",
+     "qty": 10,
+     "batch": "A1",
+     "expiry": "2091-03-31"
+    },
+    {
+     "id": "b2",
+     "qty": 0,
+     "batch": "A2",
+     "expiry": "2092-03-31"
+    },
+    {
+     "id": "b3",
+     "qty": 25,
+     "batch": "A3",
+     "expiry": "2093-03-31"
+    },
+    {
+     "id": "b4",
+     "qty": 4.5,
+     "batch": "A4",
+     "expiry": ""
+    }
+   ],
+   11,
+   false
+  ],
+  "out": [
+   {
+    "batchId": "b1",
+    "qty": 10,
+    "batch": "A1",
+    "expiry": "2091-03-31"
+   },
+   {
+    "batchId": "b3",
+    "qty": 1,
+    "batch": "A3",
+    "expiry": "2093-03-31"
+   }
+  ]
+ },
+ {
+  "fn": "allocate",
+  "args": [
+   [
+    {
+     "id": "b-old",
+     "qty": 5,
+     "batch": "X0",
+     "expiry": "2001-01-31"
+    },
+    {
+     "id": "b1",
+     "qty": 10,
+     "batch": "A1",
+     "expiry": "2091-03-31"
+    },
+    {
+     "id": "b2",
+     "qty": 0,
+     "batch": "A2",
+     "expiry": "2092-03-31"
+    },
+    {
+     "id": "b3",
+     "qty": 25,
+     "batch": "A3",
+     "expiry": "2093-03-31"
+    },
+    {
+     "id": "b4",
+     "qty": 4.5,
+     "batch": "A4",
+     "expiry": ""
+    }
+   ],
+   35,
+   false
+  ],
+  "out": [
+   {
+    "batchId": "b1",
+    "qty": 10,
+    "batch": "A1",
+    "expiry": "2091-03-31"
+   },
+   {
+    "batchId": "b3",
+    "qty": 25,
+    "batch": "A3",
+    "expiry": "2093-03-31"
+   }
+  ]
+ },
+ {
+  "fn": "allocate",
+  "args": [
+   [
+    {
+     "id": "b-old",
+     "qty": 5,
+     "batch": "X0",
+     "expiry": "2001-01-31"
+    },
+    {
+     "id": "b1",
+     "qty": 10,
+     "batch": "A1",
+     "expiry": "2091-03-31"
+    },
+    {
+     "id": "b2",
+     "qty": 0,
+     "batch": "A2",
+     "expiry": "2092-03-31"
+    },
+    {
+     "id": "b3",
+     "qty": 25,
+     "batch": "A3",
+     "expiry": "2093-03-31"
+    },
+    {
+     "id": "b4",
+     "qty": 4.5,
+     "batch": "A4",
+     "expiry": ""
+    }
+   ],
+   39.5,
+   false
+  ],
+  "out": [
+   {
+    "batchId": "b1",
+    "qty": 10,
+    "batch": "A1",
+    "expiry": "2091-03-31"
+   },
+   {
+    "batchId": "b3",
+    "qty": 25,
+    "batch": "A3",
+    "expiry": "2093-03-31"
+   },
+   {
+    "batchId": "b4",
+    "qty": 4.5,
+    "batch": "A4",
+    "expiry": ""
+   }
+  ]
+ },
+ {
+  "fn": "allocate",
+  "args": [
+   [
+    {
+     "id": "b-old",
+     "qty": 5,
+     "batch": "X0",
+     "expiry": "2001-01-31"
+    },
+    {
+     "id": "b1",
+     "qty": 10,
+     "batch": "A1",
+     "expiry": "2091-03-31"
+    },
+    {
+     "id": "b2",
+     "qty": 0,
+     "batch": "A2",
+     "expiry": "2092-03-31"
+    },
+    {
+     "id": "b3",
+     "qty": 25,
+     "batch": "A3",
+     "expiry": "2093-03-31"
+    },
+    {
+     "id": "b4",
+     "qty": 4.5,
+     "batch": "A4",
+     "expiry": ""
+    }
+   ],
+   3,
+   true
+  ],
+  "out": [
+   {
+    "batchId": "b-old",
+    "qty": 3,
+    "batch": "X0",
+    "expiry": "2001-01-31"
+   }
+  ]
+ },
+ {
+  "fn": "allocate",
+  "args": [
+   [
+    {
+     "id": "b-old",
+     "qty": 5,
+     "batch": "X0",
+     "expiry": "2001-01-31"
+    },
+    {
+     "id": "b1",
+     "qty": 10,
+     "batch": "A1",
+     "expiry": "2091-03-31"
+    },
+    {
+     "id": "b2",
+     "qty": 0,
+     "batch": "A2",
+     "expiry": "2092-03-31"
+    },
+    {
+     "id": "b3",
+     "qty": 25,
+     "batch": "A3",
+     "expiry": "2093-03-31"
+    },
+    {
+     "id": "b4",
+     "qty": 4.5,
+     "batch": "A4",
+     "expiry": ""
+    }
+   ],
+   44.5,
+   true
+  ],
+  "out": [
+   {
+    "batchId": "b-old",
+    "qty": 5,
+    "batch": "X0",
+    "expiry": "2001-01-31"
+   },
+   {
+    "batchId": "b1",
+    "qty": 10,
+    "batch": "A1",
+    "expiry": "2091-03-31"
+   },
+   {
+    "batchId": "b3",
+    "qty": 25,
+    "batch": "A3",
+    "expiry": "2093-03-31"
+   },
+   {
+    "batchId": "b4",
+    "qty": 4.5,
+    "batch": "A4",
+    "expiry": ""
+   }
+  ]
+ },
+ {
+  "fn": "removalSplit",
+  "args": [
+   [
+    {
+     "id": "b-old",
+     "qty": 5,
+     "batch": "X0",
+     "expiry": "2001-01-31"
+    },
+    {
+     "id": "b1",
+     "qty": 10,
+     "batch": "A1",
+     "expiry": "2091-03-31"
+    },
+    {
+     "id": "b2",
+     "qty": 0,
+     "batch": "A2",
+     "expiry": "2092-03-31"
+    },
+    {
+     "id": "b3",
+     "qty": 25,
+     "batch": "A3",
+     "expiry": "2093-03-31"
+    },
+    {
+     "id": "b4",
+     "qty": 4.5,
+     "batch": "A4",
+     "expiry": ""
+    }
+   ],
+   "b3",
+   5
+  ],
+  "absent": true
+ },
+ {
+  "fn": "removalSplit",
+  "args": [
+   [
+    {
+     "id": "b-old",
+     "qty": 5,
+     "batch": "X0",
+     "expiry": "2001-01-31"
+    },
+    {
+     "id": "b1",
+     "qty": 10,
+     "batch": "A1",
+     "expiry": "2091-03-31"
+    },
+    {
+     "id": "b2",
+     "qty": 0,
+     "batch": "A2",
+     "expiry": "2092-03-31"
+    },
+    {
+     "id": "b3",
+     "qty": 25,
+     "batch": "A3",
+     "expiry": "2093-03-31"
+    },
+    {
+     "id": "b4",
+     "qty": 4.5,
+     "batch": "A4",
+     "expiry": ""
+    }
+   ],
+   "b3",
+   30
+  ],
+  "absent": true
+ },
+ {
+  "fn": "removalSplit",
+  "args": [
+   [
+    {
+     "id": "b-old",
+     "qty": 5,
+     "batch": "X0",
+     "expiry": "2001-01-31"
+    },
+    {
+     "id": "b1",
+     "qty": 10,
+     "batch": "A1",
+     "expiry": "2091-03-31"
+    },
+    {
+     "id": "b2",
+     "qty": 0,
+     "batch": "A2",
+     "expiry": "2092-03-31"
+    },
+    {
+     "id": "b3",
+     "qty": 25,
+     "batch": "A3",
+     "expiry": "2093-03-31"
+    },
+    {
+     "id": "b4",
+     "qty": 4.5,
+     "batch": "A4",
+     "expiry": ""
+    }
+   ],
+   "b1",
+   44.5
+  ],
+  "absent": true
+ },
+ {
+  "fn": "removalSplit",
+  "args": [
+   [
+    {
+     "id": "b-old",
+     "qty": 5,
+     "batch": "X0",
+     "expiry": "2001-01-31"
+    },
+    {
+     "id": "b1",
+     "qty": 10,
+     "batch": "A1",
+     "expiry": "2091-03-31"
+    },
+    {
+     "id": "b2",
+     "qty": 0,
+     "batch": "A2",
+     "expiry": "2092-03-31"
+    },
+    {
+     "id": "b3",
+     "qty": 25,
+     "batch": "A3",
+     "expiry": "2093-03-31"
+    },
+    {
+     "id": "b4",
+     "qty": 4.5,
+     "batch": "A4",
+     "expiry": ""
+    }
+   ],
+   "b2",
+   3
+  ],
+  "absent": true
+ },
+ {
+  "fn": "removalSplit",
+  "args": [
+   [
+    {
+     "id": "b-old",
+     "qty": 5,
+     "batch": "X0",
+     "expiry": "2001-01-31"
+    },
+    {
+     "id": "b1",
+     "qty": 10,
+     "batch": "A1",
+     "expiry": "2091-03-31"
+    },
+    {
+     "id": "b2",
+     "qty": 0,
+     "batch": "A2",
+     "expiry": "2092-03-31"
+    },
+    {
+     "id": "b3",
+     "qty": 25,
+     "batch": "A3",
+     "expiry": "2093-03-31"
+    },
+    {
+     "id": "b4",
+     "qty": 4.5,
+     "batch": "A4",
+     "expiry": ""
+    }
+   ],
+   "b1",
+   100
+  ],
+  "absent": true
+ },
+ {
+  "fn": "packsOf",
+  "args": [
+   {
+    "id": "p1",
+    "name": "Calmex 500mg Tabs",
+    "price": 500,
+    "wholesale": 400,
+    "packs": [
+     {
+      "name": "Strip",
+      "size": 10
+     },
+     {
+      "name": "Box",
+      "size": 100,
+      "price": 45000
+     },
+     {
+      "name": "",
+      "size": 5
+     },
+     {
+      "name": "Single",
+      "size": 1
+     }
+    ]
+   }
+  ],
+  "absent": true
+ },
+ {
+  "fn": "mainPack",
+  "args": [
+   {
+    "id": "p1",
+    "name": "Calmex 500mg Tabs",
+    "price": 500,
+    "wholesale": 400,
+    "packs": [
+     {
+      "name": "Strip",
+      "size": 10
+     },
+     {
+      "name": "Box",
+      "size": 100,
+      "price": 45000
+     },
+     {
+      "name": "",
+      "size": 5
+     },
+     {
+      "name": "Single",
+      "size": 1
+     }
+    ]
+   }
+  ],
+  "absent": true
+ },
+ {
+  "fn": "mainPack",
+  "args": [
+   {
+    "id": "p2",
+    "name": "No packs"
+   }
+  ],
+  "absent": true
+ },
+ {
+  "fn": "packPrice",
+  "args": [
+   {
+    "name": "Strip",
+    "size": 10
+   },
+   500,
+   false
+  ],
+  "absent": true
+ },
+ {
+  "fn": "packPrice",
+  "args": [
+   {
+    "name": "Box",
+    "size": 100,
+    "price": 45000
+   },
+   500,
+   false
+  ],
+  "absent": true
+ },
+ {
+  "fn": "packPrice",
+  "args": [
+   {
+    "name": "Box",
+    "size": 100,
+    "price": 45000,
+    "wholesale": 38000
+   },
+   400,
+   true
+  ],
+  "absent": true
+ },
+ {
+  "fn": "packPrice",
+  "args": [
+   {
+    "name": "Strip",
+    "size": 10,
+    "price": 4500
+   },
+   400,
+   true
+  ],
+  "absent": true
+ },
+ {
+  "fn": "receiveInPacks",
+  "args": [
+   {}
+  ],
+  "absent": true
+ },
+ {
+  "fn": "receiveInPacks",
+  "args": [
+   {
+    "receiveUnit": "unit"
+   }
+  ],
+  "absent": true
+ },
+ {
+  "fn": "sellInPacks",
+  "args": [
+   {},
+   false
+  ],
+  "absent": true
+ },
+ {
+  "fn": "sellInPacks",
+  "args": [
+   {},
+   true
+  ],
+  "absent": true
+ },
+ {
+  "fn": "sellInPacks",
+  "args": [
+   {
+    "sellUnitRetail": "pack"
+   },
+   false
+  ],
+  "absent": true
+ },
+ {
+  "fn": "sellInPacks",
+  "args": [
+   {
+    "sellUnitWholesale": "unit"
+   },
+   true
+  ],
+  "absent": true
+ },
+ {
+  "fn": "fold",
+  "args": [
+   "Amoxycillin 500 mg Caps"
+  ],
+  "out": "amoxicilin 500mg caps"
+ },
+ {
+  "fn": "fold",
+  "args": [
+   "PAEDIATRIC Syrup"
+  ],
+  "out": "pediatric sirup"
+ },
+ {
+  "fn": "fold",
+  "args": [
+   "Ferrous Sulphate"
+  ],
+  "out": "ferous sulfate"
+ },
+ {
+  "fn": "fold",
+  "args": [
+   "Café-Crème"
+  ],
+  "out": "cafe creme"
+ },
+ {
+  "fn": "fold",
+  "args": [
+   "Vit. C 1000MG"
+  ],
+  "out": "vit. c 1000mg"
+ },
+ {
+  "fn": "fold",
+  "args": [
+   "Paracetamol  250mg/5ml"
+  ],
+  "out": "paracetamol 250mg 5ml"
+ },
+ {
+  "fn": "fold",
+  "args": [
+   ""
+  ],
+  "out": ""
+ },
+ {
+  "fn": "fold",
+  "args": [
+   "Ibuprofen 2%"
+  ],
+  "out": "ibuprofen 2%"
+ },
+ {
+  "fn": "searchProducts",
+  "args": [
+   [
+    {
+     "id": "a",
+     "name": "Amoxil 500mg Capsules",
+     "generic": "Amoxicillin",
+     "form": "Capsules",
+     "stock": 0
+    },
+    {
+     "id": "b",
+     "name": "Calmex 500mg Tabs",
+     "generic": "Paracetamol",
+     "form": "Tablets",
+     "stock": 40
+    },
+    {
+     "id": "c",
+     "name": "Panadol Extra",
+     "generic": "Paracetamol Caffeine",
+     "form": "Tablets",
+     "barcode": "6001234",
+     "stock": 12
+    },
+    {
+     "id": "d",
+     "name": "Zinco Syrup 100ml",
+     "generic": "Zinc sulphate",
+     "form": "Syrup",
+     "category": "Paediatric",
+     "stock": 3
+    },
+    {
+     "id": "e",
+     "name": "Para Junior Syrup",
+     "generic": "Paracetamol 120mg/5ml",
+     "form": "Syrup",
+     "stock": 0
+    },
+    {
+     "id": "f",
+     "name": "Ferrous Tabs",
+     "generic": "Ferrous sulfate",
+     "strength": "200 mg",
+     "stock": 9
+    }
+   ],
+   "para"
+  ],
+  "out": [
+   "e",
+   "b",
+   "c"
+  ]
+ },
+ {
+  "fn": "searchProducts",
+  "args": [
+   [
+    {
+     "id": "a",
+     "name": "Amoxil 500mg Capsules",
+     "generic": "Amoxicillin",
+     "form": "Capsules",
+     "stock": 0
+    },
+    {
+     "id": "b",
+     "name": "Calmex 500mg Tabs",
+     "generic": "Paracetamol",
+     "form": "Tablets",
+     "stock": 40
+    },
+    {
+     "id": "c",
+     "name": "Panadol Extra",
+     "generic": "Paracetamol Caffeine",
+     "form": "Tablets",
+     "barcode": "6001234",
+     "stock": 12
+    },
+    {
+     "id": "d",
+     "name": "Zinco Syrup 100ml",
+     "generic": "Zinc sulphate",
+     "form": "Syrup",
+     "category": "Paediatric",
+     "stock": 3
+    },
+    {
+     "id": "e",
+     "name": "Para Junior Syrup",
+     "generic": "Paracetamol 120mg/5ml",
+     "form": "Syrup",
+     "stock": 0
+    },
+    {
+     "id": "f",
+     "name": "Ferrous Tabs",
+     "generic": "Ferrous sulfate",
+     "strength": "200 mg",
+     "stock": 9
+    }
+   ],
+   "paracetamol tab"
+  ],
+  "out": [
+   "b",
+   "c"
+  ]
+ },
+ {
+  "fn": "searchProducts",
+  "args": [
+   [
+    {
+     "id": "a",
+     "name": "Amoxil 500mg Capsules",
+     "generic": "Amoxicillin",
+     "form": "Capsules",
+     "stock": 0
+    },
+    {
+     "id": "b",
+     "name": "Calmex 500mg Tabs",
+     "generic": "Paracetamol",
+     "form": "Tablets",
+     "stock": 40
+    },
+    {
+     "id": "c",
+     "name": "Panadol Extra",
+     "generic": "Paracetamol Caffeine",
+     "form": "Tablets",
+     "barcode": "6001234",
+     "stock": 12
+    },
+    {
+     "id": "d",
+     "name": "Zinco Syrup 100ml",
+     "generic": "Zinc sulphate",
+     "form": "Syrup",
+     "category": "Paediatric",
+     "stock": 3
+    },
+    {
+     "id": "e",
+     "name": "Para Junior Syrup",
+     "generic": "Paracetamol 120mg/5ml",
+     "form": "Syrup",
+     "stock": 0
+    },
+    {
+     "id": "f",
+     "name": "Ferrous Tabs",
+     "generic": "Ferrous sulfate",
+     "strength": "200 mg",
+     "stock": 9
+    }
+   ],
+   "amoxycillin"
+  ],
+  "out": [
+   "a"
+  ]
+ },
+ {
+  "fn": "searchProducts",
+  "args": [
+   [
+    {
+     "id": "a",
+     "name": "Amoxil 500mg Capsules",
+     "generic": "Amoxicillin",
+     "form": "Capsules",
+     "stock": 0
+    },
+    {
+     "id": "b",
+     "name": "Calmex 500mg Tabs",
+     "generic": "Paracetamol",
+     "form": "Tablets",
+     "stock": 40
+    },
+    {
+     "id": "c",
+     "name": "Panadol Extra",
+     "generic": "Paracetamol Caffeine",
+     "form": "Tablets",
+     "barcode": "6001234",
+     "stock": 12
+    },
+    {
+     "id": "d",
+     "name": "Zinco Syrup 100ml",
+     "generic": "Zinc sulphate",
+     "form": "Syrup",
+     "category": "Paediatric",
+     "stock": 3
+    },
+    {
+     "id": "e",
+     "name": "Para Junior Syrup",
+     "generic": "Paracetamol 120mg/5ml",
+     "form": "Syrup",
+     "stock": 0
+    },
+    {
+     "id": "f",
+     "name": "Ferrous Tabs",
+     "generic": "Ferrous sulfate",
+     "strength": "200 mg",
+     "stock": 9
+    }
+   ],
+   "sulfate"
+  ],
+  "out": [
+   "d",
+   "f"
+  ]
+ },
+ {
+  "fn": "searchProducts",
+  "args": [
+   [
+    {
+     "id": "a",
+     "name": "Amoxil 500mg Capsules",
+     "generic": "Amoxicillin",
+     "form": "Capsules",
+     "stock": 0
+    },
+    {
+     "id": "b",
+     "name": "Calmex 500mg Tabs",
+     "generic": "Paracetamol",
+     "form": "Tablets",
+     "stock": 40
+    },
+    {
+     "id": "c",
+     "name": "Panadol Extra",
+     "generic": "Paracetamol Caffeine",
+     "form": "Tablets",
+     "barcode": "6001234",
+     "stock": 12
+    },
+    {
+     "id": "d",
+     "name": "Zinco Syrup 100ml",
+     "generic": "Zinc sulphate",
+     "form": "Syrup",
+     "category": "Paediatric",
+     "stock": 3
+    },
+    {
+     "id": "e",
+     "name": "Para Junior Syrup",
+     "generic": "Paracetamol 120mg/5ml",
+     "form": "Syrup",
+     "stock": 0
+    },
+    {
+     "id": "f",
+     "name": "Ferrous Tabs",
+     "generic": "Ferrous sulfate",
+     "strength": "200 mg",
+     "stock": 9
+    }
+   ],
+   "syrup"
+  ],
+  "out": [
+   "d",
+   "e"
+  ]
+ },
+ {
+  "fn": "searchProducts",
+  "args": [
+   [
+    {
+     "id": "a",
+     "name": "Amoxil 500mg Capsules",
+     "generic": "Amoxicillin",
+     "form": "Capsules",
+     "stock": 0
+    },
+    {
+     "id": "b",
+     "name": "Calmex 500mg Tabs",
+     "generic": "Paracetamol",
+     "form": "Tablets",
+     "stock": 40
+    },
+    {
+     "id": "c",
+     "name": "Panadol Extra",
+     "generic": "Paracetamol Caffeine",
+     "form": "Tablets",
+     "barcode": "6001234",
+     "stock": 12
+    },
+    {
+     "id": "d",
+     "name": "Zinco Syrup 100ml",
+     "generic": "Zinc sulphate",
+     "form": "Syrup",
+     "category": "Paediatric",
+     "stock": 3
+    },
+    {
+     "id": "e",
+     "name": "Para Junior Syrup",
+     "generic": "Paracetamol 120mg/5ml",
+     "form": "Syrup",
+     "stock": 0
+    },
+    {
+     "id": "f",
+     "name": "Ferrous Tabs",
+     "generic": "Ferrous sulfate",
+     "strength": "200 mg",
+     "stock": 9
+    }
+   ],
+   "pediatric"
+  ],
+  "out": [
+   "d"
+  ]
+ },
+ {
+  "fn": "searchProducts",
+  "args": [
+   [
+    {
+     "id": "a",
+     "name": "Amoxil 500mg Capsules",
+     "generic": "Amoxicillin",
+     "form": "Capsules",
+     "stock": 0
+    },
+    {
+     "id": "b",
+     "name": "Calmex 500mg Tabs",
+     "generic": "Paracetamol",
+     "form": "Tablets",
+     "stock": 40
+    },
+    {
+     "id": "c",
+     "name": "Panadol Extra",
+     "generic": "Paracetamol Caffeine",
+     "form": "Tablets",
+     "barcode": "6001234",
+     "stock": 12
+    },
+    {
+     "id": "d",
+     "name": "Zinco Syrup 100ml",
+     "generic": "Zinc sulphate",
+     "form": "Syrup",
+     "category": "Paediatric",
+     "stock": 3
+    },
+    {
+     "id": "e",
+     "name": "Para Junior Syrup",
+     "generic": "Paracetamol 120mg/5ml",
+     "form": "Syrup",
+     "stock": 0
+    },
+    {
+     "id": "f",
+     "name": "Ferrous Tabs",
+     "generic": "Ferrous sulfate",
+     "strength": "200 mg",
+     "stock": 9
+    }
+   ],
+   "6001"
+  ],
+  "out": [
+   "c"
+  ]
+ },
+ {
+  "fn": "searchProducts",
+  "args": [
+   [
+    {
+     "id": "a",
+     "name": "Amoxil 500mg Capsules",
+     "generic": "Amoxicillin",
+     "form": "Capsules",
+     "stock": 0
+    },
+    {
+     "id": "b",
+     "name": "Calmex 500mg Tabs",
+     "generic": "Paracetamol",
+     "form": "Tablets",
+     "stock": 40
+    },
+    {
+     "id": "c",
+     "name": "Panadol Extra",
+     "generic": "Paracetamol Caffeine",
+     "form": "Tablets",
+     "barcode": "6001234",
+     "stock": 12
+    },
+    {
+     "id": "d",
+     "name": "Zinco Syrup 100ml",
+     "generic": "Zinc sulphate",
+     "form": "Syrup",
+     "category": "Paediatric",
+     "stock": 3
+    },
+    {
+     "id": "e",
+     "name": "Para Junior Syrup",
+     "generic": "Paracetamol 120mg/5ml",
+     "form": "Syrup",
+     "stock": 0
+    },
+    {
+     "id": "f",
+     "name": "Ferrous Tabs",
+     "generic": "Ferrous sulfate",
+     "strength": "200 mg",
+     "stock": 9
+    }
+   ],
+   "200mg"
+  ],
+  "out": [
+   "f"
+  ]
+ },
+ {
+  "fn": "searchProducts",
+  "args": [
+   [
+    {
+     "id": "a",
+     "name": "Amoxil 500mg Capsules",
+     "generic": "Amoxicillin",
+     "form": "Capsules",
+     "stock": 0
+    },
+    {
+     "id": "b",
+     "name": "Calmex 500mg Tabs",
+     "generic": "Paracetamol",
+     "form": "Tablets",
+     "stock": 40
+    },
+    {
+     "id": "c",
+     "name": "Panadol Extra",
+     "generic": "Paracetamol Caffeine",
+     "form": "Tablets",
+     "barcode": "6001234",
+     "stock": 12
+    },
+    {
+     "id": "d",
+     "name": "Zinco Syrup 100ml",
+     "generic": "Zinc sulphate",
+     "form": "Syrup",
+     "category": "Paediatric",
+     "stock": 3
+    },
+    {
+     "id": "e",
+     "name": "Para Junior Syrup",
+     "generic": "Paracetamol 120mg/5ml",
+     "form": "Syrup",
+     "stock": 0
+    },
+    {
+     "id": "f",
+     "name": "Ferrous Tabs",
+     "generic": "Ferrous sulfate",
+     "strength": "200 mg",
+     "stock": 9
+    }
+   ],
+   "xyz"
+  ],
+  "out": []
+ },
+ {
+  "fn": "searchProducts",
+  "args": [
+   [
+    {
+     "id": "a",
+     "name": "Amoxil 500mg Capsules",
+     "generic": "Amoxicillin",
+     "form": "Capsules",
+     "stock": 0
+    },
+    {
+     "id": "b",
+     "name": "Calmex 500mg Tabs",
+     "generic": "Paracetamol",
+     "form": "Tablets",
+     "stock": 40
+    },
+    {
+     "id": "c",
+     "name": "Panadol Extra",
+     "generic": "Paracetamol Caffeine",
+     "form": "Tablets",
+     "barcode": "6001234",
+     "stock": 12
+    },
+    {
+     "id": "d",
+     "name": "Zinco Syrup 100ml",
+     "generic": "Zinc sulphate",
+     "form": "Syrup",
+     "category": "Paediatric",
+     "stock": 3
+    },
+    {
+     "id": "e",
+     "name": "Para Junior Syrup",
+     "generic": "Paracetamol 120mg/5ml",
+     "form": "Syrup",
+     "stock": 0
+    },
+    {
+     "id": "f",
+     "name": "Ferrous Tabs",
+     "generic": "Ferrous sulfate",
+     "strength": "200 mg",
+     "stock": 9
+    }
+   ],
+   ""
+  ],
+  "out": [
+   "a",
+   "b",
+   "c",
+   "d",
+   "e",
+   "f"
+  ]
+ },
+ {
+  "fn": "dayOf",
+  "args": [
+   "2026-11-06T09:15:00.000Z"
+  ],
+  "out": "2026-11-06"
+ },
+ {
+  "fn": "dayOf",
+  "args": [
+   "2026-11-06"
+  ],
+  "out": "2026-11-06"
+ },
+ {
+  "fn": "dayOf",
+  "args": [
+   "2026-02"
+  ],
+  "out": "2026-02-01"
+ },
+ {
+  "fn": "dayOf",
+  "args": [
+   ""
+  ],
+  "out": ""
+ },
+ {
+  "fn": "dayOf",
+  "args": [
+   null
+  ],
+  "out": ""
+ },
+ {
+  "fn": "dayOf",
+  "args": [
+   "garbage"
+  ],
+  "out": "NaN-NaN-NaN"
+ },
+ {
+  "fn": "monthOf",
+  "args": [
+   "2026-11-06T09:15:00.000Z"
+  ],
+  "out": "2026-11"
+ },
+ {
+  "fn": "monthOf",
+  "args": [
+   "2026-11"
+  ],
+  "out": "2026-11"
+ },
+ {
+  "fn": "monthOf",
+  "args": [
+   ""
+  ],
+  "out": ""
+ },
+ {
+  "fn": "formatDate",
+  "args": [
+   "2026-11-06",
+   "dmy"
+  ],
+  "absent": true
+ },
+ {
+  "fn": "formatDate",
+  "args": [
+   "2028-06-30T00:00:00Z",
+   "dmy"
+  ],
+  "absent": true
+ },
+ {
+  "fn": "formatDate",
+  "args": [
+   "",
+   "dmy"
+  ],
+  "absent": true
+ },
+ {
+  "fn": "formatDate",
+  "args": [
+   "nope",
+   "dmy"
+  ],
+  "absent": true
+ },
+ {
+  "fn": "formatDate",
+  "args": [
+   "2026-11-06",
+   "mdy"
+  ],
+  "absent": true
+ },
+ {
+  "fn": "formatDate",
+  "args": [
+   "2028-06-30T00:00:00Z",
+   "mdy"
+  ],
+  "absent": true
+ },
+ {
+  "fn": "formatDate",
+  "args": [
+   "",
+   "mdy"
+  ],
+  "absent": true
+ },
+ {
+  "fn": "formatDate",
+  "args": [
+   "nope",
+   "mdy"
+  ],
+  "absent": true
+ },
+ {
+  "fn": "formatDate",
+  "args": [
+   "2026-11-06",
+   "ymd"
+  ],
+  "absent": true
+ },
+ {
+  "fn": "formatDate",
+  "args": [
+   "2028-06-30T00:00:00Z",
+   "ymd"
+  ],
+  "absent": true
+ },
+ {
+  "fn": "formatDate",
+  "args": [
+   "",
+   "ymd"
+  ],
+  "absent": true
+ },
+ {
+  "fn": "formatDate",
+  "args": [
+   "nope",
+   "ymd"
+  ],
+  "absent": true
+ },
+ {
+  "fn": "parseDate",
+  "args": [
+   "06/11/2026",
+   "dmy",
+   false
+  ],
+  "absent": true
+ },
+ {
+  "fn": "parseDate",
+  "args": [
+   "6/11/26",
+   "dmy",
+   false
+  ],
+  "absent": true
+ },
+ {
+  "fn": "parseDate",
+  "args": [
+   "2026-11-06",
+   "dmy",
+   false
+  ],
+  "absent": true
+ },
+ {
+  "fn": "parseDate",
+  "args": [
+   "31/02/2026",
+   "dmy",
+   false
+  ],
+  "absent": true
+ },
+ {
+  "fn": "parseDate",
+  "args": [
+   "06/2028",
+   "dmy",
+   true
+  ],
+  "absent": true
+ },
+ {
+  "fn": "parseDate",
+  "args": [
+   "6-28",
+   "dmy",
+   true
+  ],
+  "absent": true
+ },
+ {
+  "fn": "parseDate",
+  "args": [
+   "2028/06",
+   "dmy",
+   true
+  ],
+  "absent": true
+ },
+ {
+  "fn": "parseDate",
+  "args": [
+   "06112026",
+   "dmy",
+   false
+  ],
+  "absent": true
+ },
+ {
+  "fn": "parseDate",
+  "args": [
+   "061126",
+   "dmy",
+   false
+  ],
+  "absent": true
+ },
+ {
+  "fn": "parseDate",
+  "args": [
+   "",
+   "dmy",
+   false
+  ],
+  "absent": true
+ },
+ {
+  "fn": "parseDate",
+  "args": [
+   "hello",
+   "dmy",
+   false
+  ],
+  "absent": true
+ },
+ {
+  "fn": "parseDate",
+  "args": [
+   "13/13/2026",
+   "dmy",
+   false
+  ],
+  "absent": true
+ },
+ {
+  "fn": "parseDate",
+  "args": [
+   "06/11/2026",
+   "mdy",
+   false
+  ],
+  "absent": true
+ },
+ {
+  "fn": "parseDate",
+  "args": [
+   "6/11/26",
+   "mdy",
+   false
+  ],
+  "absent": true
+ },
+ {
+  "fn": "parseDate",
+  "args": [
+   "2026-11-06",
+   "mdy",
+   false
+  ],
+  "absent": true
+ },
+ {
+  "fn": "parseDate",
+  "args": [
+   "31/02/2026",
+   "mdy",
+   false
+  ],
+  "absent": true
+ },
+ {
+  "fn": "parseDate",
+  "args": [
+   "06/2028",
+   "mdy",
+   true
+  ],
+  "absent": true
+ },
+ {
+  "fn": "parseDate",
+  "args": [
+   "6-28",
+   "mdy",
+   true
+  ],
+  "absent": true
+ },
+ {
+  "fn": "parseDate",
+  "args": [
+   "2028/06",
+   "mdy",
+   true
+  ],
+  "absent": true
+ },
+ {
+  "fn": "parseDate",
+  "args": [
+   "06112026",
+   "mdy",
+   false
+  ],
+  "absent": true
+ },
+ {
+  "fn": "parseDate",
+  "args": [
+   "061126",
+   "mdy",
+   false
+  ],
+  "absent": true
+ },
+ {
+  "fn": "parseDate",
+  "args": [
+   "",
+   "mdy",
+   false
+  ],
+  "absent": true
+ },
+ {
+  "fn": "parseDate",
+  "args": [
+   "hello",
+   "mdy",
+   false
+  ],
+  "absent": true
+ },
+ {
+  "fn": "parseDate",
+  "args": [
+   "13/13/2026",
+   "mdy",
+   false
+  ],
+  "absent": true
+ },
+ {
+  "fn": "parseDate",
+  "args": [
+   "06/11/2026",
+   "ymd",
+   false
+  ],
+  "absent": true
+ },
+ {
+  "fn": "parseDate",
+  "args": [
+   "6/11/26",
+   "ymd",
+   false
+  ],
+  "absent": true
+ },
+ {
+  "fn": "parseDate",
+  "args": [
+   "2026-11-06",
+   "ymd",
+   false
+  ],
+  "absent": true
+ },
+ {
+  "fn": "parseDate",
+  "args": [
+   "31/02/2026",
+   "ymd",
+   false
+  ],
+  "absent": true
+ },
+ {
+  "fn": "parseDate",
+  "args": [
+   "06/2028",
+   "ymd",
+   true
+  ],
+  "absent": true
+ },
+ {
+  "fn": "parseDate",
+  "args": [
+   "6-28",
+   "ymd",
+   true
+  ],
+  "absent": true
+ },
+ {
+  "fn": "parseDate",
+  "args": [
+   "2028/06",
+   "ymd",
+   true
+  ],
+  "absent": true
+ },
+ {
+  "fn": "parseDate",
+  "args": [
+   "06112026",
+   "ymd",
+   false
+  ],
+  "absent": true
+ },
+ {
+  "fn": "parseDate",
+  "args": [
+   "061126",
+   "ymd",
+   false
+  ],
+  "absent": true
+ },
+ {
+  "fn": "parseDate",
+  "args": [
+   "",
+   "ymd",
+   false
+  ],
+  "absent": true
+ },
+ {
+  "fn": "parseDate",
+  "args": [
+   "hello",
+   "ymd",
+   false
+  ],
+  "absent": true
+ },
+ {
+  "fn": "parseDate",
+  "args": [
+   "13/13/2026",
+   "ymd",
+   false
+  ],
+  "absent": true
+ },
+ {
+  "fn": "refillsLeft",
+  "args": [
+   {
+    "status": "Active",
+    "refillsAllowed": 3,
+    "refillsUsed": 1,
+    "refillDays": 30
+   }
+  ],
+  "out": 2
+ },
+ {
+  "fn": "canRecordRefill",
+  "args": [
+   {
+    "status": "Active",
+    "refillsAllowed": 3,
+    "refillsUsed": 1,
+    "refillDays": 30
+   }
+  ],
+  "out": true
+ },
+ {
+  "fn": "reminderActive",
+  "args": [
+   {
+    "status": "Active",
+    "refillsAllowed": 3,
+    "refillsUsed": 1,
+    "refillDays": 30
+   }
+  ],
+  "out": true
+ },
+ {
+  "fn": "refillsLeft",
+  "args": [
+   {
+    "status": "Completed",
+    "refillsAllowed": 3,
+    "refillsUsed": 3,
+    "refillDays": 30
+   }
+  ],
+  "out": 0
+ },
+ {
+  "fn": "canRecordRefill",
+  "args": [
+   {
+    "status": "Completed",
+    "refillsAllowed": 3,
+    "refillsUsed": 3,
+    "refillDays": 30
+   }
+  ],
+  "out": false
+ },
+ {
+  "fn": "reminderActive",
+  "args": [
+   {
+    "status": "Completed",
+    "refillsAllowed": 3,
+    "refillsUsed": 3,
+    "refillDays": 30
+   }
+  ],
+  "out": false
+ },
+ {
+  "fn": "refillsLeft",
+  "args": [
+   {
+    "status": "Pending",
+    "refillsAllowed": 2,
+    "refillsUsed": 0,
+    "refillDays": 0
+   }
+  ],
+  "out": 2
+ },
+ {
+  "fn": "canRecordRefill",
+  "args": [
+   {
+    "status": "Pending",
+    "refillsAllowed": 2,
+    "refillsUsed": 0,
+    "refillDays": 0
+   }
+  ],
+  "out": true
+ },
+ {
+  "fn": "reminderActive",
+  "args": [
+   {
+    "status": "Pending",
+    "refillsAllowed": 2,
+    "refillsUsed": 0,
+    "refillDays": 0
+   }
+  ],
+  "out": false
+ },
+ {
+  "fn": "refillsLeft",
+  "args": [
+   {
+    "status": "Cancelled",
+    "refillsAllowed": 5,
+    "refillsUsed": 1,
+    "refillDays": 14
+   }
+  ],
+  "out": 4
+ },
+ {
+  "fn": "canRecordRefill",
+  "args": [
+   {
+    "status": "Cancelled",
+    "refillsAllowed": 5,
+    "refillsUsed": 1,
+    "refillDays": 14
+   }
+  ],
+  "out": true
+ },
+ {
+  "fn": "reminderActive",
+  "args": [
+   {
+    "status": "Cancelled",
+    "refillsAllowed": 5,
+    "refillsUsed": 1,
+    "refillDays": 14
+   }
+  ],
+  "out": false
+ },
+ {
+  "fn": "refillsLeft",
+  "args": [
+   {
+    "status": "Active",
+    "refillsAllowed": "2",
+    "refillsUsed": "2",
+    "refillDays": "28"
+   }
+  ],
+  "out": 0
+ },
+ {
+  "fn": "canRecordRefill",
+  "args": [
+   {
+    "status": "Active",
+    "refillsAllowed": "2",
+    "refillsUsed": "2",
+    "refillDays": "28"
+   }
+  ],
+  "out": false
+ },
+ {
+  "fn": "reminderActive",
+  "args": [
+   {
+    "status": "Active",
+    "refillsAllowed": "2",
+    "refillsUsed": "2",
+    "refillDays": "28"
+   }
+  ],
+  "out": true
+ },
+ {
+  "fn": "normDate",
+  "args": [
+   "06/2028"
+  ],
+  "absent": true
+ },
+ {
+  "fn": "normDate",
+  "args": [
+   "2028-06"
+  ],
+  "absent": true
+ },
+ {
+  "fn": "normDate",
+  "args": [
+   "30.06.2028"
+  ],
+  "absent": true
+ },
+ {
+  "fn": "normDate",
+  "args": [
+   "Jun 2028"
+  ],
+  "absent": true
+ },
+ {
+  "fn": "normDate",
+  "args": [
+   "JUN-28"
+  ],
+  "absent": true
+ },
+ {
+  "fn": "normDate",
+  "args": [
+   "2028-06-15"
+  ],
+  "absent": true
+ },
+ {
+  "fn": "normDate",
+  "args": [
+   "15/06/2028"
+  ],
+  "absent": true
+ },
+ {
+  "fn": "normDate",
+  "args": [
+   ""
+  ],
+  "absent": true
+ },
+ {
+  "fn": "normDate",
+  "args": [
+   null
+  ],
+  "absent": true
+ },
+ {
+  "fn": "normDate",
+  "args": [
+   "n/a"
+  ],
+  "absent": true
+ },
+ {
+  "fn": "normDate",
+  "args": [
+   46000
+  ],
+  "absent": true
+ },
+ {
+  "fn": "genericKey",
+  "args": [
+   "Amoxicillin 500mg Capsules"
+  ],
+  "out": "amoxicillin"
+ },
+ {
+  "fn": "genericKey",
+  "args": [
+   "PARACETAMOL (as hydrochloride) 1g"
+  ],
+  "out": "paracetamol"
+ },
+ {
+  "fn": "genericKey",
+  "args": [
+   "Zinc sulphate 20mg/5ml syrup"
+  ],
+  "out": "zinc sulphate"
+ },
+ {
+  "fn": "genericKey",
+  "args": [
+   ""
+  ],
+  "out": ""
+ },
+ {
+  "fn": "genericKey",
+  "args": [
+   null
+  ],
+  "out": ""
+ },
+ {
+  "fn": "genericKey",
+  "args": [
+   "Co-trimoxazole"
+  ],
+  "out": "co-trimoxazole"
+ },
+ {
+  "fn": "lookupKeys",
+  "args": [
+   "Amoxil 500mg",
+   "Amoxicillin"
+  ],
+  "out": [
+   "amoxicillin",
+   "amoxil"
+  ]
+ },
+ {
+  "fn": "lookupKeys",
+  "args": [
+   "Calmex",
+   ""
+  ],
+  "out": [
+   "calmex"
+  ]
+ },
+ {
+  "fn": "storageAdvice",
+  "args": [
+   {
+    "temperature_2m": 31.4,
+    "relative_humidity_2m": 70
+   },
+   {}
+  ],
+  "out": [
+   [
+    "danger",
+    "Hot (31°C): keep the shop cool, close blinds, check the room thermometer."
+   ],
+   [
+    "warn",
+    "Humid (70%): keep containers closed; protect tablets, powders and test strips from moisture."
+   ]
+  ]
+ },
+ {
+  "fn": "storageAdvice",
+  "args": [
+   {
+    "temperature_2m": 31.4,
+    "relative_humidity_2m": 70
+   },
+   {
+    "roomMax": 28,
+    "hotAlert": 33,
+    "humidityMax": 80
+   }
+  ],
+  "out": [
+   [
+    "warn",
+    "Warm outside (31°C): keep heat-sensitive medicines below 28°C."
+   ]
+  ]
+ },
+ {
+  "fn": "storageAdvice",
+  "args": [
+   {
+    "temperature_2m": 27,
+    "relative_humidity_2m": 40
+   },
+   {}
+  ],
+  "out": [
+   [
+    "warn",
+    "Warm outside (27°C): keep heat-sensitive medicines below 25°C."
+   ]
+  ]
+ },
+ {
+  "fn": "storageAdvice",
+  "args": [
+   {
+    "temperature_2m": 27,
+    "relative_humidity_2m": 40
+   },
+   {
+    "roomMax": 28,
+    "hotAlert": 33,
+    "humidityMax": 80
+   }
+  ],
+  "out": []
+ },
+ {
+  "fn": "storageAdvice",
+  "args": [
+   {
+    "temperature_2m": 20,
+    "relative_humidity_2m": 90
+   },
+   {}
+  ],
+  "out": [
+   [
+    "warn",
+    "Humid (90%): keep containers closed; protect tablets, powders and test strips from moisture."
+   ]
+  ]
+ },
+ {
+  "fn": "storageAdvice",
+  "args": [
+   {
+    "temperature_2m": 20,
+    "relative_humidity_2m": 90
+   },
+   {
+    "roomMax": 28,
+    "hotAlert": 33,
+    "humidityMax": 80
+   }
+  ],
+  "out": [
+   [
+    "warn",
+    "Humid (90%): keep containers closed; protect tablets, powders and test strips from moisture."
+   ]
+  ]
+ },
+ {
+  "fn": "permissionsOf",
+  "args": [
+   [
+    {
+     "id": "cashier",
+     "name": "Cashier (edited)",
+     "permissions": [
+      "pos.sell"
+     ]
+    },
+    {
+     "id": "counter",
+     "name": "Counter",
+     "permissions": [
+      "pos.sell",
+      "sales.view"
+     ]
+    }
+   ],
+   "admin"
+  ],
+  "out": [
+   "audit",
+   "branches.view",
+   "chat",
+   "customers",
+   "data.reset",
+   "finance",
+   "inventory.edit",
+   "inventory.view",
+   "medicines.manage",
+   "pos.discount",
+   "pos.price_edit",
+   "pos.sell",
+   "pos.wholesale",
+   "prescriptions",
+   "proformas",
+   "purchases.edit",
+   "reminders",
+   "reports",
+   "sales.edit",
+   "sales.refund",
+   "sales.view",
+   "settings.manage",
+   "shifts",
+   "shifts.all",
+   "stock.adjust",
+   "stock.count",
+   "stock.receive",
+   "suppliers",
+   "transfers",
+   "users.manage"
+  ]
+ },
+ {
+  "fn": "permissionsOf",
+  "args": [
+   [
+    {
+     "id": "cashier",
+     "name": "Cashier (edited)",
+     "permissions": [
+      "pos.sell"
+     ]
+    },
+    {
+     "id": "counter",
+     "name": "Counter",
+     "permissions": [
+      "pos.sell",
+      "sales.view"
+     ]
+    }
+   ],
+   "cashier"
+  ],
+  "out": [
+   "pos.sell"
+  ]
+ },
+ {
+  "fn": "permissionsOf",
+  "args": [
+   [
+    {
+     "id": "cashier",
+     "name": "Cashier (edited)",
+     "permissions": [
+      "pos.sell"
+     ]
+    },
+    {
+     "id": "counter",
+     "name": "Counter",
+     "permissions": [
+      "pos.sell",
+      "sales.view"
+     ]
+    }
+   ],
+   "pharmacist"
+  ],
+  "out": [
+   "chat",
+   "customers",
+   "inventory.view",
+   "medicines.manage",
+   "pos.discount",
+   "pos.sell",
+   "pos.wholesale",
+   "prescriptions",
+   "proformas",
+   "purchases.edit",
+   "reminders",
+   "reports",
+   "sales.edit",
+   "sales.refund",
+   "sales.view",
+   "shifts",
+   "stock.adjust",
+   "stock.count",
+   "stock.receive",
+   "suppliers",
+   "transfers"
+  ]
+ },
+ {
+  "fn": "permissionsOf",
+  "args": [
+   [
+    {
+     "id": "cashier",
+     "name": "Cashier (edited)",
+     "permissions": [
+      "pos.sell"
+     ]
+    },
+    {
+     "id": "counter",
+     "name": "Counter",
+     "permissions": [
+      "pos.sell",
+      "sales.view"
+     ]
+    }
+   ],
+   "counter"
+  ],
+  "out": [
+   "pos.sell",
+   "sales.view"
+  ]
+ },
+ {
+  "fn": "permissionsOf",
+  "args": [
+   [
+    {
+     "id": "cashier",
+     "name": "Cashier (edited)",
+     "permissions": [
+      "pos.sell"
+     ]
+    },
+    {
+     "id": "counter",
+     "name": "Counter",
+     "permissions": [
+      "pos.sell",
+      "sales.view"
+     ]
+    }
+   ],
+   "nobody"
+  ],
+  "out": []
+ }
+]

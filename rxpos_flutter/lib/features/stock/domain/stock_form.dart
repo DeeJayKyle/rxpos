@@ -230,10 +230,12 @@ String parseTypedDate(String text, String format, {bool monthYear = false}) {
     m = int.parse(iso[2]!);
     d = int.parse(iso[3]!);
   } else {
-    final parts = t.split(RegExp(r'[/.\-\s]+')).where((x) => x.isNotEmpty).toList();
+    final parts = t.split(RegExp(r'[^0-9]+')).where((x) => x.isNotEmpty).toList();
     if (monthYear && parts.length == 2) {
-      m = int.tryParse(parts[0]);
-      y = int.tryParse(parts[1]);
+      // year first (2028/06) in the YYYY-MM-DD format, otherwise month first (06/2028, 6/28)
+      final yearFirst = format == 'ymd' && parts[0].length == 4;
+      m = int.tryParse(yearFirst ? parts[1] : parts[0]);
+      y = int.tryParse(yearFirst ? parts[0] : parts[1]);
       if (y != null && y < 100) y += 2000;
       if (m == null || y == null || m < 1 || m > 12) return '';
       d = DateTime(y, m + 1, 0).day;
@@ -242,17 +244,24 @@ String parseTypedDate(String text, String format, {bool monthYear = false}) {
       if (a == null || b == null || c == null) return '';
       (y, m, d) = switch (format) { 'mdy' => (c, a, b), 'ymd' => (a, b, c), _ => (c, b, a) };
       if (y < 100) y += 2000;
+    } else if (RegExp(r'^\d{6}$|^\d{8}$').hasMatch(t)) {
+      // typed without separators: 06112026 / 061126 (YYYYMMDD in the YYYY-MM-DD format), as in React
+      if (format == 'ymd') return t.length == 8 ? parseTypedDate('${t.substring(0, 4)}-${t.substring(4, 6)}-${t.substring(6)}', format) : '';
+      final a = int.parse(t.substring(0, 2)), b = int.parse(t.substring(2, 4));
+      y = int.parse(t.substring(4));
+      (m, d) = format == 'mdy' ? (a, b) : (b, a);
+      if (y < 100) y += 2000;
     } else {
       return '';
     }
   }
-  if (m < 1 || m > 12 || d < 1 || d > DateTime(y, m + 1, 0).day) return '';
+  if (y < 1900 || y > 2200 || m < 1 || m > 12 || d < 1 || d > DateTime(y, m + 1, 0).day) return '';
   return '$y-${m.toString().padLeft(2, '0')}-${d.toString().padLeft(2, '0')}';
 }
 
 /// YYYY-MM-DD shown in the device's format.
 String showDate(String iso, String format) {
   final m = RegExp(r'^(\d{4})-(\d{2})-(\d{2})').firstMatch(iso);
-  if (m == null) return iso;
+  if (m == null) return ''; // not a date: shown empty, as in React (src/dateformat.js formatDate)
   return switch (format) { 'mdy' => '${m[2]}/${m[3]}/${m[1]}', 'ymd' => '${m[1]}-${m[2]}-${m[3]}', _ => '${m[3]}/${m[2]}/${m[1]}' };
 }
