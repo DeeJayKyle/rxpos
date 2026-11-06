@@ -23,7 +23,7 @@ concurrency:
 env:
   RELEASE_TAG: flutter-v1.1
   RELEASE_NAME: RxPos Ug v1.1
-  BUILD: '60' # the "Flutter apps" run number whose files are released (app version 1.0.BUILD)
+  BUILD: '61' # the "Flutter apps" run number whose files are released (app version 1.0.BUILD)
   LATEST: 'true' # the owner made the new apps the repository's latest release
 
 jobs:
@@ -41,7 +41,7 @@ jobs:
         run: |
           mkdir -p out
           gh release download flutter-pilot --repo "$GITHUB_REPOSITORY" --dir out \
-            --pattern 'RxPOS-New-release.apk' --pattern 'RxPOS-New-Setup.exe' --pattern 'RxPOS-New-windows-portable.zip'
+            --pattern 'RxPOS.apk' --pattern 'RxPOS-Setup.exe' --pattern 'RxPOS-windows-portable.zip'
           ls -l out
           # the pilot release must hold that build: its run finished successfully after these files were uploaded
           run=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/flutter-apps.yml/runs?per_page=50" \
@@ -49,16 +49,16 @@ jobs:
           echo "Flutter apps run $BUILD: $run"
           [ "$(cut -f1 <<<"$run")" = success ] || { echo "::error::Flutter apps run $BUILD has not finished successfully: nothing was released."; exit 1; }
           echo "SHA=$(cut -f4 <<<"$run")" >> "$GITHUB_ENV" # the release points at the commit that was built
-          for a in RxPOS-New-release.apk RxPOS-New-Setup.exe; do
+          for a in RxPOS.apk RxPOS-Setup.exe; do
             up=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/flutter-pilot" --jq ".assets[] | select(.name == \"$a\") | .updated_at")
             echo "$a uploaded $up"
             [[ "$up" < "$(cut -f2 <<<"$run")" ]] || { echo "::error::$a on flutter-pilot is newer than run $BUILD: a later build replaced it."; exit 1; }
             [[ "$up" > "$(cut -f3 <<<"$run")" ]] || { echo "::error::$a on flutter-pilot is older than run $BUILD: that run did not upload it."; exit 1; }
           done
-          cp out/RxPOS-New-release.apk "out/RxPOS-Ug-1.0.$BUILD.apk"
-          cp out/RxPOS-New-Setup.exe "out/RxPOS-Ug-1.0.$BUILD-Setup.exe"
-          cp out/RxPOS-New-windows-portable.zip "out/RxPOS-Ug-1.0.$BUILD-windows-portable.zip"
-          (cd out && sha256sum RxPOS-Ug-* > SHA256SUMS.txt && cat SHA256SUMS.txt)
+          cp out/RxPOS.apk "out/RxPOS-1.0.$BUILD.apk"
+          cp out/RxPOS-Setup.exe "out/RxPOS-1.0.$BUILD-Setup.exe"
+          cp out/RxPOS-windows-portable.zip "out/RxPOS-1.0.$BUILD-windows-portable.zip"
+          (cd out && sha256sum RxPOS-1.0.* > SHA256SUMS.txt && cat SHA256SUMS.txt)
       - name: Publish the release
         uses: softprops/action-gh-release@v2
         with:
@@ -69,7 +69,7 @@ jobs:
           make_latest: ${{ env.LATEST }}
           body: |
             The new RxPOS apps for Windows and Android (version 1.0.${{ env.BUILD }}), built with Flutter. They install
-            as "RxPOS New", next to the current RxPOS apps, and use the same pharmacy account and cloud, so both apps
+            as "RxPOS", next to the current RxPOS apps, and use the same pharmacy account and cloud, so both apps
             can be used side by side.
 
             **New in v1.1, a cleaner, more consistent interface:** one style for every text field; buttons at least
@@ -77,10 +77,12 @@ jobs:
             figures that fill the row and line up; colours readable on the dark themes too; real icons. At the till,
             a compact quantity stepper, and on phones the medicine name keeps its width, payment methods scroll in
             one row and Charge is full width. Prices on the medicine cards are never cut, even with large text.
+            The sidebar's groups fold away (remembered on the device), and the apps are now called RxPOS everywhere:
+            the window, the Android app, the Start menu and the download files.
 
-            - **Windows:** `RxPOS-Ug-1.0.${{ env.BUILD }}-Setup.exe` (installs for the current user, no administrator
+            - **Windows:** `RxPOS-1.0.${{ env.BUILD }}-Setup.exe` (installs for the current user, no administrator
               needed), or the portable zip.
-            - **Android:** `RxPOS-Ug-1.0.${{ env.BUILD }}.apk`, signed with the same key as the current RxPOS Android app.
+            - **Android:** `RxPOS-1.0.${{ env.BUILD }}.apk`, signed with the same key as the current RxPOS Android app.
             - Once installed, the apps update themselves from the cloud. On Windows this happens when nothing is in
               progress; on Android, tap Update and confirm.
             - Checksums are in `SHA256SUMS.txt`.
@@ -88,9 +90,9 @@ jobs:
             Everything the React app does is included (rxpos_flutter/PARITY.md, rxpos_flutter/SIMILARITY.md). Different
             by design: a sale beyond the stock this device knows is refused, and the owner console stays on the website.
           files: |
-            out/RxPOS-Ug-1.0.${{ env.BUILD }}.apk
-            out/RxPOS-Ug-1.0.${{ env.BUILD }}-Setup.exe
-            out/RxPOS-Ug-1.0.${{ env.BUILD }}-windows-portable.zip
+            out/RxPOS-1.0.${{ env.BUILD }}.apk
+            out/RxPOS-1.0.${{ env.BUILD }}-Setup.exe
+            out/RxPOS-1.0.${{ env.BUILD }}-windows-portable.zip
             out/SHA256SUMS.txt
           fail_on_unmatched_files: true
       - name: Offer it to the installed apps
@@ -98,5 +100,5 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          scripts/publish-flutter-update.sh android out/RxPOS-New-release.apk "$BUILD" "1.0.$BUILD"
-          scripts/publish-flutter-update.sh windows out/RxPOS-New-Setup.exe "$BUILD" "1.0.$BUILD"
+          scripts/publish-flutter-update.sh android out/RxPOS.apk "$BUILD" "1.0.$BUILD"
+          scripts/publish-flutter-update.sh windows out/RxPOS-Setup.exe "$BUILD" "1.0.$BUILD"
