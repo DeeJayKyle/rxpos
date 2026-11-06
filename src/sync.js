@@ -153,13 +153,27 @@ export function createSync({ getDb, getCfg, saveCfg, applyRemote, onStatus, stor
         }
         // 1.4 the cloud was restored from a backup: its database epoch changed, so re-pull everything from the start
         // and merge (last-writer-wins). Restored rows keep their old sequence numbers, below this device's cursor.
-        if (r.epoch !== undefined && epoch !== undefined && r.epoch !== epoch) { epoch = r.epoch; cursor = 0; await saveCfg({ ...getCfg(), cursor, epoch }); continue; }
+        // It also lost what this device sent after that backup (already acknowledged, so no longer in the outbox): once
+        // the download is done, everything this device holds goes up once more (resendAfterRestore, kept with the sync
+        // settings so an interrupted run still does it).
+        if (r.epoch !== undefined && epoch !== undefined && r.epoch !== epoch) { epoch = r.epoch; cursor = 0; await saveCfg({ ...getCfg(), cursor, epoch, resendAfterRestore: true }); continue; }
         epoch = r.epoch ?? epoch;
         if (r.changes.length) { await applyRemote(r.changes); pulled += r.changes.length; }
         cursor = Number(r.cursor);
         await saveCfg({ ...getCfg(), cursor, epoch }); // after the records are on the device: an interrupted download resumes here
         if (i >= batches.length && !r.more) break;
         onStatus({ state: 'syncing', first: !c.lastSync, progress: i < batches.length ? `Sending ${sent.toLocaleString()} of ${total.toLocaleString()} changes` : `Downloading… ${pulled.toLocaleString()} records`, ...(await counts()) });
+      }
+      if (getCfg().resendAfterRestore) {
+        // Each change goes with its own updatedAt, so the cloud keeps whichever copy is newer (last writer wins) and
+        // never changes add-only rows: resending what it already has does nothing. A record deleted and later made
+        // again still has its old tombstone; the record is what this device has now, so that delete is not sent.
+        const db = getDb();
+        const live = new Set(TABLES.flatMap((t) => (db[t] || []).map((x) => t + '|' + x.id)));
+        const all = collectChanges(db, null).filter((ch) => !(ch.deleted && live.has(ch.t + '|' + ch.id)));
+        await store.commit({ puts: [], dels: [], ops: all.map((ch) => ({ op: crypto.randomUUID(), txn: crypto.randomUUID(), t: ch.t, id: String(ch.id), deleted: !!ch.deleted, at: ch.at })) });
+        await saveCfg({ ...getCfg(), resendAfterRestore: false }); // after the commit: a crash in between only queues it twice
+        if (all.length) again = true; // send them straight away
       }
       const next = { ...getCfg(), lastSync: now(), lastError: '', ...(full ? { fullPull: FULL_PULL } : {}) };
       await saveCfg(next);

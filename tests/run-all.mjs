@@ -34,6 +34,7 @@ const SUITES = [
   ['stock repair (unit)', 'unit-stockrepair.mjs', []],
   ['backup verify (unit)', 'unit-verify.mjs', []],
   ['storage change detection (unit)', 'unit-diff.mjs', []],
+  ['cloud restore resend (unit)', 'unit-sync-restore.mjs', []],
   ['theme choice (unit)', 'unit-theme.mjs', []],
   ['theme contrast', 'contrast-test.mjs', []],
   ['owner sign-in', 'owner-auth-test.mjs', []],
