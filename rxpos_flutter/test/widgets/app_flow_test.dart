@@ -2628,6 +2628,44 @@ void main() {
       expect(find.textContaining('B2', findRichText: true), findsWidgets);
       await done(tester);
     });
+
+    testWidgets('the till: the sale panel is widened by dragging, the payment area folds away; the menu folds to icons', (tester) async {
+      await tester.runAsync(signedIn);
+      await start(tester);
+      await toTill(tester);
+      Future<String?> kv(String k) async => (await tester.runAsync(() => db.select(db.kv).get()))!.where((r) => r.k == 'device:$k').firstOrNull?.v;
+      final handle = find.byKey(const Key('split-pos-sale-w'));
+      final x0 = tester.getCenter(handle).dx;
+      await tester.drag(handle, const Offset(-120, 0));
+      await settle(tester);
+      final moved = x0 - tester.getCenter(handle).dx;
+      expect(moved, greaterThan(80), reason: 'dragged left (less the touch slop)');
+      expect(await kv('pos-sale-w'), '${(460 + moved).round()}');
+      // double-click: the standard width again
+      await tester.tap(handle);
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.tap(handle);
+      await settle(tester);
+      expect(await kv('pos-sale-w'), isNull);
+      // the payment area folds to the total and Charge
+      await tester.tap(find.text('Calmex 500mg Tabs'));
+      await settle(tester);
+      expect(find.text('Amount tendered'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('fold-pos-pay-h')));
+      await settle(tester);
+      expect(find.text('Amount tendered'), findsNothing);
+      expect(find.textContaining('Charge'), findsOneWidget);
+      expect(await kv('pos-pay-h-fold'), '1');
+      // the menu folds to a rail of icons
+      await tester.tap(find.byKey(const Key('sidebar-toggle')));
+      await settle(tester);
+      expect(find.byKey(const ValueKey('rail-/sales')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('rail-/sales')));
+      await settle(tester);
+      expect(find.text('Sales History'), findsWidgets);
+      expect(await kv('navRail'), '1');
+      await done(tester);
+    });
   });
 }
 

@@ -47,6 +47,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final topMax = top.isEmpty ? 1.0 : top.take(10).map(topVal).fold<double>(1, (a, b) => b > a ? b : a);
     final now = DateTime.now();
     final t = f.day(today()), y = f.day(localDate(now.subtract(const Duration(days: 1)))), m = f.month(monthOf(today()));
+    final day = today();
     String delta(double a, double b) {
       final d = deltaPercent(a, b);
       return d == null ? '' : ' · ${d >= 0 ? '▲' : '▼'} ${d.abs().toStringAsFixed(0)}% vs yesterday';
@@ -66,12 +67,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         StatGrid(children: [
           StatCard(label: 'Today\'s sales', value: s.money(t.total), sub: '${t.count} sale${t.count == 1 ? '' : 's'}${delta(t.total, y.total)}', icon: Icons.payments_outlined,
-              onTap: can.contains('sales.view') ? () => context.go('/sales') : null),
+              onTap: can.contains('sales.view') ? () => context.go('/sales?from=$day&to=$day') : null),
           if (can.contains('reports'))
-            StatCard(label: 'Gross profit today', value: s.money(t.grossProfit), sub: 'after cost of goods, before expenses', icon: Icons.trending_up, color: Colors.deepPurple),
+            StatCard(label: 'Gross profit today', value: s.money(t.grossProfit), sub: 'after cost of goods, before expenses', icon: Icons.trending_up, color: Colors.deepPurple,
+                onTap: () => context.go('/reports?tab=profit&from=$day&to=$day')),
           if (can.contains('finance') || can.contains('reports'))
-            StatCard(label: 'Today\'s expenses', value: s.money(t.expenses), sub: 'Sales − expenses: ${s.money(t.total - t.expenses)}', icon: Icons.account_balance_wallet_outlined, color: Colors.orange.shade800),
-          StatCard(label: 'Transactions', value: '${t.count}', sub: 'receipts today${delta(t.count.toDouble(), y.count.toDouble())}', icon: Icons.receipt_long_outlined, color: Colors.blue),
+            StatCard(label: 'Today\'s expenses', value: s.money(t.expenses), sub: 'Sales − expenses: ${s.money(t.total - t.expenses)}', icon: Icons.account_balance_wallet_outlined, color: Colors.orange.shade800,
+                onTap: () => context.go(can.contains('finance') ? '/finance?tab=expenses' : '/reports?tab=expenses&from=$day&to=$day')),
+          StatCard(label: 'Transactions', value: '${t.count}', sub: 'receipts today${delta(t.count.toDouble(), y.count.toDouble())}', icon: Icons.receipt_long_outlined, color: Colors.blue,
+              onTap: can.contains('sales.view') ? () => context.go('/sales?from=$day&to=$day') : null),
         ]),
         const SizedBox(height: 16),
         StatGrid(children: [
@@ -81,8 +85,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               color: exp.soon.isNotEmpty ? Colors.orange.shade800 : null, onTap: () => context.go('/inventory?filter=expiring')),
           StatCard(label: 'Expired', value: '${exp.expired.map((x) => x.$1.id).toSet().length}', sub: exp.expired.isEmpty ? 'nothing expired in stock' : 'in stock: return or write off',
               icon: Icons.gpp_maybe_outlined, color: exp.expired.isNotEmpty ? Theme.of(context).colorScheme.error : Colors.green, onTap: () => context.go('/inventory?filter=expired')),
-          if (can.contains('reports')) StatCard(label: 'Inventory value', value: s.money(value.value), sub: value.expired > 0 ? '+ ${s.money(value.expired)} expired' : 'at current cost', icon: Icons.warehouse_outlined),
-          StatCard(label: 'This month', value: s.money(m.total), sub: '${m.count} sales', icon: Icons.calendar_month_outlined),
+          if (can.contains('reports'))
+            StatCard(label: 'Inventory value', value: s.money(value.value), sub: value.expired > 0 ? '+ ${s.money(value.expired)} expired' : 'at current cost', icon: Icons.warehouse_outlined,
+                onTap: () => context.go('/reports?tab=stock')),
+          StatCard(label: 'This month', value: s.money(m.total), sub: '${m.count} sales', icon: Icons.calendar_month_outlined,
+              onTap: can.contains('reports') ? () => context.go('/reports?tab=sales&from=${day.substring(0, 8)}01&to=$day') : can.contains('sales.view') ? () => context.go('/sales?from=${day.substring(0, 8)}01&to=$day') : null),
         ]),
         if (drafts.isNotEmpty) ...[
           const SizedBox(height: 12),

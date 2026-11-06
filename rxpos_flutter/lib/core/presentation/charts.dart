@@ -93,13 +93,22 @@ class _DailyTrendState extends State<DailyTrend> {
       LayoutBuilder(builder: (_, box) {
         const h = 200.0;
         final w = box.maxWidth;
-        int indexAt(double dx) => ((dx - 46) / (w - 60) * (keys.length - 1)).round().clamp(0, keys.length - 1);
+        int indexAt(double dx) => ((dx - 46) / ((w - 60) / keys.length)).floor().clamp(0, keys.length - 1);
         return MouseRegion(
           onExit: (_) => setState(() => _hover = null),
           onHover: (e) => setState(() => _hover = indexAt(e.localPosition.dx)),
           child: GestureDetector(
             onTapUp: (e) => widget.onDay?.call(keys[indexAt(e.localPosition.dx)]),
-            child: CustomPaint(size: Size(w, h), painter: _TrendPainter(keys, vals, avg, done.isNotEmpty && done[best] > 0 ? best : null, _hover, th.dividerColor)),
+            // the bars grow in when the range changes
+            child: TweenAnimationBuilder<double>(
+              key: ValueKey(_range),
+              tween: Tween(begin: 0, end: 1),
+              duration: const Duration(milliseconds: 420),
+              curve: Curves.easeOutCubic,
+              builder: (_, grow, _) => CustomPaint(
+                  size: Size(w, h),
+                  painter: _DailyBarsPainter(keys, vals, avg, done.isNotEmpty && done[best] > 0 ? best : null, _hover, th.dividerColor, grow, th.colorScheme.onSurface)),
+            ),
           ),
         );
       }),
@@ -111,45 +120,51 @@ class _DailyTrendState extends State<DailyTrend> {
   }
 }
 
-class _TrendPainter extends CustomPainter {
-  _TrendPainter(this.keys, this.vals, this.avg, this.best, this.hover, this.grid);
+/// Daily sales as bars: a gradient bar a day, today's lighter (so far), the best day in the profit colour, the one
+/// pointed at outlined, and the daily average as a dashed line. [grow] (0 → 1) animates the bars in.
+class _DailyBarsPainter extends CustomPainter {
+  _DailyBarsPainter(this.keys, this.vals, this.avg, this.best, this.hover, this.grid, this.grow, this.ink);
   final List<String> keys;
   final List<double> vals;
-  final double avg;
+  final double avg, grow;
   final int? best, hover;
-  final Color grid;
+  final Color grid, ink;
 
   @override
   void paint(Canvas c, Size s) {
     const l = 46.0, r = 14.0, t = 10.0, b = 24.0;
-    final n = max(1, keys.length - 1);
+    final n = keys.length;
     final top = niceMax(vals.fold<double>(0, max));
-    double x(int i) => l + i * (s.width - l - r) / n;
+    final slot = (s.width - l - r) / n;
+    final bar = max(2.0, min(slot * .72, 28.0));
+    double cx(int i) => l + slot * (i + .5);
     double y(double v) => s.height - b - v / top * (s.height - t - b);
     final gp = Paint()..color = grid..strokeWidth = 1;
     for (final f in [0, .25, .5, .75, 1.0]) {
       c.drawLine(Offset(l, y(top * f)), Offset(s.width - r, y(top * f)), gp);
       _text(c, compact(top * f), Offset(l - 6, y(top * f)), align: TextAlign.right);
     }
-    final every = keys.length <= 7 ? 1 : keys.length <= 30 ? 5 : 15;
-    for (var i = 0; i < keys.length; i++) {
-      if (i % every == 0 || i == n) _text(c, i == n ? 'Today' : _day(keys[i]), Offset(x(i), s.height - 8), align: i == n ? TextAlign.right : i == 0 ? TextAlign.left : TextAlign.center);
-    }
-    final line = Path();
+    final every = n <= 7 ? 1 : n <= 30 ? 5 : 15;
     for (var i = 0; i < n; i++) {
-      i == 0 ? line.moveTo(x(i), y(vals[i])) : line.lineTo(x(i), y(vals[i]));
+      if (i % every == 0 || i == n - 1) {
+        _text(c, i == n - 1 ? 'Today' : _day(keys[i]), Offset(cx(i), s.height - 8), align: i == n - 1 ? TextAlign.right : i == 0 ? TextAlign.left : TextAlign.center);
+      }
     }
-    if (n > 1) {
-      final fill = Path.from(line)..lineTo(x(n - 1), y(0))..lineTo(x(0), y(0))..close();
-      c.drawPath(fill, Paint()..shader = LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [moneyIn.withValues(alpha: .28), moneyIn.withValues(alpha: 0)]).createShader(Offset.zero & s));
-      c.drawPath(line, Paint()..color = moneyIn..strokeWidth = 2..style = PaintingStyle.stroke);
+    final base = y(0);
+    for (var i = 0; i < n; i++) {
+      final v = vals[i] * grow;
+      if (v <= 0) continue;
+      final rect = Rect.fromLTRB(cx(i) - bar / 2, y(v), cx(i) + bar / 2, base);
+      final color = i == best ? profitColor : moneyIn;
+      final today = i == n - 1;
+      final paint = Paint()
+        ..shader = LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter,
+            colors: [color.withValues(alpha: today ? .55 : 1), color.withValues(alpha: today ? .2 : .45)]).createShader(rect);
+      final rr = RRect.fromRectAndCorners(rect, topLeft: Radius.circular(min(6, bar / 2)), topRight: Radius.circular(min(6, bar / 2)));
+      c.drawRRect(rr, paint);
+      if (i == hover) c.drawRRect(rr, Paint()..color = ink.withValues(alpha: .7)..style = PaintingStyle.stroke..strokeWidth = 1.5);
     }
-    // today: a dashed end ("so far")
-    final from = Offset(x(n - 1), y(vals[n - 1])), to = Offset(x(n), y(vals[n]));
-    for (var k = 0.0; k < 1; k += .2) {
-      c.drawLine(Offset.lerp(from, to, k)!, Offset.lerp(from, to, min(1, k + .1))!, Paint()..color = moneyIn..strokeWidth = 2);
-    }
-    c.drawCircle(to, 4, Paint()..color = moneyIn);
+    if (hover != null && vals[hover!] <= 0) c.drawLine(Offset(cx(hover!), t), Offset(cx(hover!), base), gp);
     if (avg > 0) {
       final ap = Paint()..color = Colors.grey..strokeWidth = 1;
       for (var xx = l; xx < s.width - r; xx += 8) {
@@ -157,15 +172,10 @@ class _TrendPainter extends CustomPainter {
       }
       _text(c, 'average', Offset(s.width - r, y(avg) - 8), align: TextAlign.right);
     }
-    if (best != null) c.drawCircle(Offset(x(best!), y(vals[best!])), 4.5, Paint()..color = profitColor);
-    if (hover != null) {
-      c.drawLine(Offset(x(hover!), t), Offset(x(hover!), s.height - b), gp);
-      c.drawCircle(Offset(x(hover!), y(vals[hover!])), 4.5, Paint()..color = Colors.black54);
-    }
   }
 
   @override
-  bool shouldRepaint(_TrendPainter o) => o.vals != vals || o.hover != hover;
+  bool shouldRepaint(_DailyBarsPainter o) => o.vals != vals || o.hover != hover || o.grow != grow || o.best != best;
 }
 
 /// One line per series over the last 6 or 12 months. [series]: (name, colour, month key → value).
