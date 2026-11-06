@@ -119,8 +119,7 @@ jobs:
       - name: Publish to the pilot pre-release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: flutter-pilot
-          target_commitish: ${{ github.sha }}
+          tag_name: flutter-pilot # (the tag exists: moving it to each build's commit was refused by GitHub)
           name: RxPOS (Flutter) – pilot build
           prerelease: true
           make_latest: false
@@ -167,8 +166,7 @@ jobs:
       - name: Publish to the pilot pre-release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: flutter-pilot
-          target_commitish: ${{ github.sha }}
+          tag_name: flutter-pilot # (the tag exists: moving it to each build's commit was refused by GitHub)
           name: RxPOS (Flutter) – pilot build
           prerelease: true
           make_latest: false
