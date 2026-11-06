@@ -95,7 +95,8 @@ class SyncController extends _$SyncController {
       final cfg = await SyncConfig.load(ref.read(appDatabaseProvider));
       final first = cfg.lastSync == null || cfg.fullInProgress;
       state = SyncStatus(state: SyncState.syncing, lastSync: cfg.lastSync, pending: state.pending, rejected: state.rejected, first: first);
-      await ref.read(syncEngineProvider).run(onProgress: (p) => state = SyncStatus(state: SyncState.syncing, progress: p.label, lastSync: cfg.lastSync, first: first));
+      final result = await ref.read(syncEngineProvider).run(onProgress: (p) => state = SyncStatus(state: SyncState.syncing, progress: p.label, lastSync: cfg.lastSync, first: first));
+      if (!result.complete) _again = true; // stopped at its request limit: carry on straight away
       _failures = 0;
       final c = await _counts();
       final done = await SyncConfig.load(ref.read(appDatabaseProvider));

@@ -134,7 +134,7 @@ final class SyncControllerProvider
   }
 }
 
-String _$syncControllerHash() => r'854d71d5df5e05533e48a14b0ca90804d443baeb';
+String _$syncControllerHash() => r'1f20e7bd8ada9bee180a2682b7ee4b5977575bea';
 
 /// Runs sync: about every 5 s while the app is in use (60 s in the background), straight after every change, at once
 /// when the app comes back to the front, and after a failure with growing pauses (1 s doubling to 60 s, ± half).

@@ -68,9 +68,11 @@ class SyncProgress {
 }
 
 class SyncResult {
-  const SyncResult({required this.sent, required this.refused, required this.received, required this.applied, required this.full});
+  const SyncResult({required this.sent, required this.refused, required this.received, required this.applied, required this.full, this.complete = true});
   final int sent, refused, received, applied;
   final bool full;
+  /// false when the run stopped at its request limit with more to send or to fetch: the next run carries on.
+  final bool complete;
 }
 
 class SyncEngine {
@@ -96,6 +98,7 @@ class SyncEngine {
     var cursor = cfg.cursor;
     var epoch = cfg.epoch;
     var i = 0, sent = 0, refused = 0, received = 0, applied = 0, requests = 0;
+    var complete = false;
     while (requests++ < maxRequests) {
       final batch = i < batches.length ? batches[i] : const <OutboxRow>[];
       final reply = await _post({
@@ -131,8 +134,15 @@ class SyncEngine {
       });
       onProgress?.call(SyncProgress(sent: sent, toSend: toSend, received: received, first: first));
       if (restored) continue;
-      if (i >= batches.length && !reply.more) break;
+      if (i >= batches.length && !reply.more) {
+        complete = true;
+        break;
+      }
     }
+    // Stopped at the request limit with more to send or fetch: what arrived and the cursor are saved (after every
+    // batch above), but the run is not finished, so it must not be recorded as done: no lastSync, and a full download
+    // stays in progress so the next run resumes it instead of starting a normal sync from a half-downloaded pharmacy.
+    if (!complete) return SyncResult(sent: sent, refused: refused, received: received, applied: applied, full: full, complete: false);
     cfg = cfg.copyWith(lastSync: DateTime.now().toUtc().toIso8601String(), lastError: '', fullPull: full ? fullPullVersion : null, fullInProgress: false);
     await cfg.save(db);
     return SyncResult(sent: sent, refused: refused, received: received, applied: applied, full: full);

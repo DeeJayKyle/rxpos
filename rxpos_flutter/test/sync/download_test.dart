@@ -180,4 +180,38 @@ void main() {
     expect((await store.batchesOf('p7')).single['batch'], 'Z1');
     expect(await store.productByBarcode('nope'), isNull);
   });
+
+  test('stopped at the request limit: not recorded as done; the next run finishes the download', () async {
+    seed(1050);
+    final capped = SyncEngine(dio: cloud.dio(), db: db, cloudUrl: 'https://rxposug.com', maxRequests: 2);
+    final r = await capped.run();
+    expect(r.complete, isFalse, reason: 'two pages of three');
+    expect(r.received, 800);
+    var cfg = await SyncConfig.load(db);
+    expect(cfg.lastSync, isNull, reason: 'a cut-off sync must not look finished');
+    expect(cfg.fullInProgress, isTrue, reason: 'the first download is still under way');
+    expect(cfg.needsFullPull, isTrue);
+    expect(cfg.cursor, 800, reason: 'what arrived is kept');
+
+    final rest = await down.run();
+    expect(rest.complete, isTrue);
+    expect((await store.rows('products')).length, 1050, reason: 'no gaps');
+    cfg = await SyncConfig.load(db);
+    expect((cfg.lastSync != null, cfg.fullInProgress, cfg.needsFullPull, cfg.cursor), (true, false, false, 1050));
+  });
+
+  test('stopped at the request limit while sending: what is left waits in the outbox, nothing is lost', () async {
+    for (var i = 0; i < 900; i++) {
+      await store.update((d) => d.put('sales', {'id': 'sx$i', 'number': 'R-X$i', 'total': 100}));
+    }
+    final capped = SyncEngine(dio: cloud.dio(), db: db, cloudUrl: 'https://rxposug.com', maxRequests: 1);
+    final r = await capped.run();
+    expect((r.complete, r.sent), (false, 400));
+    expect((await db.select(db.outbox).get()).length, 500);
+    expect((await SyncConfig.load(db)).lastSync, isNull);
+    final rest = await down.run();
+    expect((rest.complete, rest.sent), (true, 500));
+    expect(await db.select(db.outbox).get(), isEmpty);
+    expect(cloud.current.keys.where((k) => k.startsWith('sales|')).length, 900);
+  });
 }
