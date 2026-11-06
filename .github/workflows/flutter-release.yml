@@ -21,9 +21,10 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  RELEASE_TAG: flutter-v1.0
-  RELEASE_NAME: RxPos Ug v1.0
-  BUILD: '59' # the "Flutter apps" run number whose files are released (app version 1.0.BUILD)
+  RELEASE_TAG: flutter-v1.1
+  RELEASE_NAME: RxPos Ug v1.1
+  BUILD: '60' # the "Flutter apps" run number whose files are released (app version 1.0.BUILD)
+  LATEST: 'true' # the owner made the new apps the repository's latest release
 
 jobs:
   release:
@@ -44,9 +45,10 @@ jobs:
           ls -l out
           # the pilot release must hold that build: its run finished successfully after these files were uploaded
           run=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/flutter-apps.yml/runs?per_page=50" \
-            --jq ".workflow_runs[] | select(.run_number == $BUILD) | [.conclusion, .updated_at, .run_started_at] | @tsv")
+            --jq ".workflow_runs[] | select(.run_number == $BUILD) | [.conclusion, .updated_at, .run_started_at, .head_sha] | @tsv")
           echo "Flutter apps run $BUILD: $run"
           [ "$(cut -f1 <<<"$run")" = success ] || { echo "::error::Flutter apps run $BUILD has not finished successfully: nothing was released."; exit 1; }
+          echo "SHA=$(cut -f4 <<<"$run")" >> "$GITHUB_ENV" # the release points at the commit that was built
           for a in RxPOS-New-release.apk RxPOS-New-Setup.exe; do
             up=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/flutter-pilot" --jq ".assets[] | select(.name == \"$a\") | .updated_at")
             echo "$a uploaded $up"
@@ -61,14 +63,20 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.RELEASE_TAG }}
-          target_commitish: main
+          target_commitish: ${{ env.SHA }}
           name: ${{ env.RELEASE_NAME }}
           prerelease: false
-          make_latest: false # "latest" stays the current React apps' download until the switch-over
+          make_latest: ${{ env.LATEST }}
           body: |
-            The first release of the new RxPOS apps for Windows and Android (version 1.0.${{ env.BUILD }}), built with
-            Flutter. They install as "RxPOS New", next to the current RxPOS apps, and use the same pharmacy account and
-            cloud, so both apps can be used side by side during the pilot.
+            The new RxPOS apps for Windows and Android (version 1.0.${{ env.BUILD }}), built with Flutter. They install
+            as "RxPOS New", next to the current RxPOS apps, and use the same pharmacy account and cloud, so both apps
+            can be used side by side.
+
+            **New in v1.1, a cleaner, more consistent interface:** one style for every text field; buttons at least
+            44 px high; dialogs, menus, chips and notices that match; the page you are on marked in the sidebar;
+            figures that fill the row and line up; colours readable on the dark themes too; real icons. At the till,
+            a compact quantity stepper, and on phones the medicine name keeps its width, payment methods scroll in
+            one row and Charge is full width. Prices on the medicine cards are never cut, even with large text.
 
             - **Windows:** `RxPOS-Ug-1.0.${{ env.BUILD }}-Setup.exe` (installs for the current user, no administrator
               needed), or the portable zip.
