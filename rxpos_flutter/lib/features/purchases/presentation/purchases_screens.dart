@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:printing/printing.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/data/device_settings.dart';
 import '../../../core/data/pharmacy_providers.dart';
 import '../../../core/data/record_store.dart';
 import '../../../core/entities/purchase.dart';
@@ -442,6 +443,7 @@ class _ReorderScreenState extends ConsumerState<ReorderScreen> {
   int _window = 30;
   int? _lead, _cover, _dead;
   bool _cheapest = true;
+  double _z = 1.65, _orderCost = 20000, _holding = 25;
   final _picked = <String, bool>{};
   final _chosen = <String, String>{};
 
@@ -459,8 +461,9 @@ class _ReorderScreenState extends ConsumerState<ReorderScreen> {
     final saleList = sales.map(Sale.fromRecord).toList();
     final v = salesVelocity(saleList, days: _window, branch: d.branch);
     final prices = supplierPrices(purchases);
-    final suggestions = reorderSuggestions(d.products, d.stockOf, v.sold, window: _window, lead: lead, cover: cover, prices: prices, last: lastBuys(purchases),
-        fromCheapest: _cheapest, chosen: _chosen);
+    final method = OrderMethod.values.where((m) => m.name == ref.watch(deviceValueProvider('orderMethod')).value).firstOrNull ?? OrderMethod.cover;
+    final suggestions = orderSuggestions(d.products, d.stockOf, dailyDemand(saleList, days: _window, branch: d.branch), method: method, window: _window, lead: lead,
+        cover: cover, z: _z, orderCost: _orderCost, holdingRate: _holding / 100, prices: prices, last: lastBuys(purchases), fromCheapest: _cheapest, chosen: _chosen);
     final dead = deadStock(d.products, d.stockOf, v.lastSale, deadDays: deadDays);
     final chosen = suggestions.where((r) => _picked[r.p.id] ?? true).toList();
     final orders = pos.where((o) => (o['branchId'] ?? 'main') == d.branch).toList()..sort((a, b) => '${b['date']}'.compareTo('${a['date']}'));
@@ -515,11 +518,50 @@ class _ReorderScreenState extends ConsumerState<ReorderScreen> {
               label: Text('Create purchase orders (${chosen.length})'),
             ),
           ]),
-          ExpansionTile(title: const Text('How the order quantity is worked out'), children: [
-            Padding(padding: const EdgeInsets.all(8), child: Text('Order qty = sells per day (last $_window days) × (lead time $lead + cover $cover days) − in stock, rounded up. '
-                'A medicine with no sales in that window but at or below its reorder level is suggested at 2 × reorder level − in stock. Listed when the stock lasts '
-                '${lead + cover} days or less, or is at or below the reorder level. The reorder level itself (set on each medicine) drives the Low stock alerts.')),
-          ]),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                Wrap(spacing: 12, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
+                  const Text('Order quantity method', style: TextStyle(fontWeight: FontWeight.w700)),
+                  DropdownButton<OrderMethod>(
+                    key: const Key('order-method'),
+                    value: method,
+                    items: [for (final m in OrderMethod.values) DropdownMenuItem(value: m, child: Text(orderMethodInfo[m]!.$1))],
+                    onChanged: (m) => ref.read(deviceValueProvider('orderMethod').notifier).set(m?.name),
+                  ),
+                  if (method != OrderMethod.cover && method != OrderMethod.minMax)
+                    DropdownButton<double>(
+                      value: _z,
+                      items: [for (final (l, z) in serviceLevels) DropdownMenuItem(value: z, child: Text('Service level $l'))],
+                      onChanged: (z) => setState(() => _z = z ?? 1.65),
+                    ),
+                  if (method == OrderMethod.eoq) ...[
+                    SizedBox(width: 170, child: TextFormField(initialValue: formatQty(_orderCost), keyboardType: TextInputType.number,
+                        decoration: InputDecoration(labelText: 'Cost of one order (${st.currency})', isDense: true), onChanged: (x) => setState(() => _orderCost = double.tryParse(x) ?? _orderCost))),
+                    SizedBox(width: 170, child: TextFormField(initialValue: formatQty(_holding), keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(labelText: 'Holding cost a year (%)', isDense: true), onChanged: (x) => setState(() => _holding = double.tryParse(x) ?? _holding))),
+                  ],
+                ]),
+                const SizedBox(height: 4),
+                Text(orderMethodInfo[method]!.$2, style: Theme.of(context).textTheme.bodySmall),
+                ExpansionTile(
+                  tilePadding: EdgeInsets.zero,
+                  title: const Text('Which method to use?'),
+                  children: [
+                    Text('Recommended: Smart mix. Most medicines in a busy pharmacy sell every day, and a safety stock sized to how much their sales vary '
+                        'protects against stock-outs; slow movers are better kept with a simple Min / Max so money and shelf life are not tied up. '
+                        'Use EOQ when each order is expensive to place (transport from Kampala, a minimum order value); use Order-up-to when you order on '
+                        'fixed days. A higher service level means fewer stock-outs but more stock on the shelf. Whatever the method, the reorder level on '
+                        'each medicine still drives the Low stock alerts.\n', style: Theme.of(context).textTheme.bodySmall),
+                    for (final m in OrderMethod.values)
+                      ListTile(dense: true, contentPadding: EdgeInsets.zero, selected: m == method, title: Text(orderMethodInfo[m]!.$1), subtitle: Text(orderMethodInfo[m]!.$2),
+                          onTap: () => ref.read(deviceValueProvider('orderMethod').notifier).set(m.name)),
+                  ],
+                ),
+              ]),
+            ),
+          ),
           Row(children: [
             const Text('Order each medicine from  '),
             SegmentedButton<bool>(segments: const [ButtonSegment(value: true, label: Text('Cheapest supplier')), ButtonSegment(value: false, label: Text('Last supplier'))],
@@ -534,6 +576,7 @@ class _ReorderScreenState extends ConsumerState<ReorderScreen> {
               leading: Checkbox(value: _picked[r.p.id] ?? true, onChanged: (x) => setState(() => _picked[r.p.id] = x ?? false)),
               title: Text(r.p.name, style: const TextStyle(fontWeight: FontWeight.w700)),
               subtitle: Wrap(crossAxisAlignment: WrapCrossAlignment.center, spacing: 8, children: [
+                if (r.why.isNotEmpty) SizedBox(width: double.infinity, child: Text(r.why, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.tertiary))),
                 Text('in stock ${formatQty(r.stock)} · sells ${r.perDay.toStringAsFixed(1)}/day · days left ${r.daysLeft.isFinite ? r.daysLeft.floor() : '—'} · buy from'),
                 if (r.options.length > 1)
                   DropdownButton<String>(

@@ -18,6 +18,7 @@ import '../../features/extras/presentation/labels_screen.dart';
 import '../../features/finance/presentation/finance_screen.dart';
 import '../../features/inventory/presentation/inventory_screen.dart';
 import '../../features/inventory/presentation/medicine_screens.dart';
+import '../../features/inventory/presentation/shelves_screen.dart';
 import '../../features/prescriptions/presentation/prescriptions_screen.dart';
 import '../../features/prescriptions/presentation/scan_screen.dart';
 import '../../features/proformas/presentation/proformas_screen.dart';
@@ -57,6 +58,7 @@ final screens = <Screen>[
       permission: 'inventory.view', key: LogicalKeyboardKey.f7),
   Screen('/add-stock', 'Add Stock', Icons.add_box_outlined, 'Medicine inventory', (q) => AddStockScreen(key: ValueKey('stock-${q['po']}-${q['draft']}'), po: q['po'] ?? '', draft: q['draft'] ?? ''), permission: 'stock.receive', key: LogicalKeyboardKey.f4),
   Screen('/purchases', 'Purchase history', Icons.local_shipping_outlined, 'Medicine inventory', (q) => PurchasesScreen(key: ValueKey('purchases-${q['tab']}'), tab: q['tab'] ?? 'history'), permission: 'stock.receive'),
+  Screen('/shelves', 'Shelves', Icons.shelves, 'Medicine inventory', (_) => const ShelvesScreen(), permission: 'inventory.view'),
   Screen('/stock-count', 'Stock take', Icons.fact_check_outlined, 'Medicine inventory', (_) => const StockCountScreen(), permission: 'stock.count'),
   Screen('/reorder', 'Reorder', Icons.shopping_cart_checkout, 'Medicine inventory', (_) => const ReorderScreen(), permission: 'inventory.view', feature: 'reorder'),
   Screen('/quick-edit', 'Quick Edit', Icons.edit_note, 'Medicine inventory', (_) => const QuickEditScreen(), permission: 'medicines.manage'),
