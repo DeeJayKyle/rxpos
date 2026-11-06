@@ -137,8 +137,11 @@ export function createSync({ getDb, getCfg, saveCfg, applyRemote, onStatus, stor
       const c = getCfg();
       const batches = groupOutbox(await store.outbox());
       const total = batches.reduce((a, b) => a + b.length, 0);
-      const full = (c.fullPull || 0) < FULL_PULL; // download everything from the start this time
-      let cursor = full ? 0 : c.cursor || 0, epoch = c.epoch, i = 0, sent = 0, pulled = 0, refused = 0;
+      // download everything this time. It starts from 0 once (fullInProgress); a run cut off part-way leaves the pages
+      // that arrived on the device, and the next run carries on from the last one instead of starting again.
+      const full = (c.fullPull || 0) < FULL_PULL;
+      if (full && !c.fullInProgress) await saveCfg({ ...getCfg(), cursor: 0, fullInProgress: true });
+      let cursor = full ? getCfg().cursor || 0 : c.cursor || 0, epoch = c.epoch, i = 0, sent = 0, pulled = 0, refused = 0;
       for (;;) {
         const batch = batches[i] || [];
         const r = await post(c.url, c.key, { deviceId: c.deviceId, since: cursor, changes: toChanges(batch, getDb()), v: PROTOCOL, ...(full ? { all: true } : {}) });
@@ -153,7 +156,10 @@ export function createSync({ getDb, getCfg, saveCfg, applyRemote, onStatus, stor
         }
         // 1.4 the cloud was restored from a backup: its database epoch changed, so re-pull everything from the start
         // and merge (last-writer-wins). Restored rows keep their old sequence numbers, below this device's cursor.
-        if (r.epoch !== undefined && epoch !== undefined && r.epoch !== epoch) { epoch = r.epoch; cursor = 0; await saveCfg({ ...getCfg(), cursor, epoch }); continue; }
+        // It also lost what this device sent after that backup (already acknowledged, so no longer in the outbox): once
+        // the download is done, everything this device holds goes up once more (resendAfterRestore, kept with the sync
+        // settings so an interrupted run still does it).
+        if (r.epoch !== undefined && epoch !== undefined && r.epoch !== epoch) { epoch = r.epoch; cursor = 0; await saveCfg({ ...getCfg(), cursor, epoch, resendAfterRestore: true }); continue; }
         epoch = r.epoch ?? epoch;
         if (r.changes.length) { await applyRemote(r.changes); pulled += r.changes.length; }
         cursor = Number(r.cursor);
@@ -161,7 +167,18 @@ export function createSync({ getDb, getCfg, saveCfg, applyRemote, onStatus, stor
         if (i >= batches.length && !r.more) break;
         onStatus({ state: 'syncing', first: !c.lastSync, progress: i < batches.length ? `Sending ${sent.toLocaleString()} of ${total.toLocaleString()} changes` : `Downloading… ${pulled.toLocaleString()} records`, ...(await counts()) });
       }
-      const next = { ...getCfg(), lastSync: now(), lastError: '', ...(full ? { fullPull: FULL_PULL } : {}) };
+      if (getCfg().resendAfterRestore) {
+        // Each change goes with its own updatedAt, so the cloud keeps whichever copy is newer (last writer wins) and
+        // never changes add-only rows: resending what it already has does nothing. A record deleted and later made
+        // again still has its old tombstone; the record is what this device has now, so that delete is not sent.
+        const db = getDb();
+        const live = new Set(TABLES.flatMap((t) => (db[t] || []).map((x) => t + '|' + x.id)));
+        const all = collectChanges(db, null).filter((ch) => !(ch.deleted && live.has(ch.t + '|' + ch.id)));
+        await store.commit({ puts: [], dels: [], ops: all.map((ch) => ({ op: crypto.randomUUID(), txn: crypto.randomUUID(), t: ch.t, id: String(ch.id), deleted: !!ch.deleted, at: ch.at })) });
+        await saveCfg({ ...getCfg(), resendAfterRestore: false }); // after the commit: a crash in between only queues it twice
+        if (all.length) again = true; // send them straight away
+      }
+      const next = { ...getCfg(), lastSync: now(), lastError: '', ...(full ? { fullPull: FULL_PULL, fullInProgress: false } : {}) };
       await saveCfg(next);
       failures = 0; retryAt = 0;
       result = { state: 'ok', lastSync: next.lastSync, pushed: sent, pulled, refused, ...(await counts()) };
@@ -206,7 +223,7 @@ export function createSync({ getDb, getCfg, saveCfg, applyRemote, onStatus, stor
   return {
     run,
     /** "Download everything again" (This device): the next sync re-pulls the whole pharmacy and merges it */
-    async pullAll() { await saveCfg({ ...getCfg(), fullPull: 0 }); return run(); },
+    async pullAll() { await saveCfg({ ...getCfg(), fullPull: 0, fullInProgress: false }); return run(); }, // from the start again
     stop() {
       stopped = true;
       clearTimeout(timer);

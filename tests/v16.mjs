@@ -106,7 +106,7 @@ check('edited sale is marked "edited"', /edited/i.test(await A.evaluate(() => do
 const p0 = await stockOf('Item three') ?? await stockOf(await A.evaluate(() => ''));
 await go(A, '/purchases');
 await A.evaluate(() => [...document.querySelectorAll('tbody tr button')].find((x) => x.textContent.includes('Edit')).click()); await wait(600);
-await A.evaluate(() => { const qty = document.querySelectorAll('.modal tbody tr td input')[2]; const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; set.call(qty, '15'); qty.dispatchEvent(new Event('input', { bubbles: true })); });
+await A.evaluate(() => { const qty = [...document.querySelectorAll('.modal tbody tr')][0].querySelector('input[aria-label="Quantity"]'); const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; set.call(qty, '15'); qty.dispatchEvent(new Event('input', { bubbles: true })); });
 await A.type('.modal input[placeholder^="e.g. invoice"]', 'Invoice said 15');
 await A.evaluate(() => [...document.querySelectorAll('.modal button')].find((x) => x.textContent.includes('Save changes')).click()); await wait(1000);
 await go(A, '/purchases');
