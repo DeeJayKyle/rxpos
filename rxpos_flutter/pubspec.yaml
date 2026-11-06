@@ -58,6 +58,7 @@ dependencies:
   archive: ^4.0.0
   xml: ^7.0.1
   package_info_plus: ^10.2.2
+  geolocator: ^14.0.1
 
 dev_dependencies:
   flutter_test:

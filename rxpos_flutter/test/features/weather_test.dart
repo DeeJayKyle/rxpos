@@ -60,4 +60,10 @@ void main() {
     }, 'Mbarara');
     expect((found.single.name, found.single.lat), ('Mbarara, Western Region, Uganda', -0.6));
   });
+
+  test('the place from GPS: rounded to 4 places, named from the connection\'s city', () {
+    final p = gpsPlace(0.336712, 32.571903, {'city': 'Kampala'});
+    expect((p.name, p.lat, p.lon, p.source), ('Near Kampala', 0.3367, 32.5719, 'gps'));
+    expect(gpsPlace(1, 2, null).name, 'Your location');
+  });
 }

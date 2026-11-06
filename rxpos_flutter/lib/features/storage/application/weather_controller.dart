@@ -6,6 +6,7 @@ import 'dart:convert';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
 
 import '../../../core/data/device_settings.dart';
 import '../../../core/data/pharmacy_providers.dart';
@@ -28,6 +29,21 @@ final weatherFetchProvider = Provider<WeatherFetch>((ref) {
 final connectionPlaceProvider = Provider<Future<Map<String, Object?>?> Function()>((ref) => () async {
       try {
         return await ref.read(cloudApiProvider).get('/api/geo');
+      } catch (_) {
+        return null;
+      }
+    });
+
+/// This device's position from its GPS (lat, lon), or null when there is none, the person said no, or it takes too
+/// long (8 s). Asked once; refused means the connection's location is used (src/weather.js devicePlace).
+final gpsPositionProvider = Provider<Future<({double lat, double lon})?> Function()>((ref) => () async {
+      try {
+        if (!await Geolocator.isLocationServiceEnabled()) return null;
+        var p = await Geolocator.checkPermission();
+        if (p == LocationPermission.denied) p = await Geolocator.requestPermission();
+        if (p == LocationPermission.denied || p == LocationPermission.deniedForever) return null;
+        final pos = await Geolocator.getCurrentPosition(locationSettings: const LocationSettings(accuracy: LocationAccuracy.low, timeLimit: Duration(seconds: 8)));
+        return (lat: pos.latitude, lon: pos.longitude);
       } catch (_) {
         return null;
       }
@@ -80,7 +96,9 @@ class WeatherController extends Notifier<WeatherState> {
     final at = DateTime.tryParse('${c?['at'] ?? ''}');
     final kept = placeFrom(c?['place']);
     if (kept != null && at != null && DateTime.now().difference(at) < const Duration(minutes: 30)) return kept;
-    final place = networkPlace(await ref.read(connectionPlaceProvider)()) ?? fixed ?? kampala;
+    final gps = await ref.read(gpsPositionProvider)();
+    final net = await ref.read(connectionPlaceProvider)();
+    final place = gps != null ? gpsPlace(gps.lat, gps.lon, net) : networkPlace(net) ?? fixed ?? kampala;
     await _write(placeKey, {'at': DateTime.now().toUtc().toIso8601String(), 'place': placeJson(place)});
     return place;
   }

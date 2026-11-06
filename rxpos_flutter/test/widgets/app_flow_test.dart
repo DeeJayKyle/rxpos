@@ -113,6 +113,7 @@ void main() {
             return (200, sampleWeather);
           }),
           connectionPlaceProvider.overrideWithValue(() async => {'lat': 0.31, 'lon': 32.58, 'city': 'Kampala', 'country': 'UG'}),
+          if (!extra.any((o) => o.origin == gpsPositionProvider)) gpsPositionProvider.overrideWithValue(() async => null), // no GPS unless a test gives one
           engageOnProvider.overrideWithValue(engage), // pop-ups and the idle screen: only in the tests about them
           soundsProvider.overrideWith((ref) => _QuietSounds(ref, played)),
           liveOnProvider.overrideWithValue(live), // no real connection to the cloud in tests
@@ -1940,6 +1941,15 @@ void main() {
     expect(find.textContaining('Live connection: on'), findsOneWidget);
     expect(find.text('RxPOS 1.0.0 (build 42)'), findsOneWidget);
     await line.close();
+    await done(tester);
+  });
+
+  testWidgets('weather from the device GPS when allowed: named from the connection\'s city', (tester) async {
+    await tester.runAsync(signedIn);
+    await start(tester, extra: [gpsPositionProvider.overrideWithValue(() async => (lat: 0.336712, lon: 32.571903))]);
+    await navTo(tester, 'Weather & Storage');
+    expect(find.text('Near Kampala · GPS'), findsOneWidget);
+    expect(weatherCalls.last, contains('latitude=0.3367&longitude=32.5719'));
     await done(tester);
   });
 }

@@ -58,7 +58,7 @@ class WeatherCard extends ConsumerWidget {
           Row(children: [
             const Icon(Icons.place_outlined, size: 16),
             const SizedBox(width: 4),
-            Expanded(child: Text(w.place?.name.isNotEmpty == true ? w.place!.name : 'Finding your location…', style: t.textTheme.titleSmall, overflow: TextOverflow.ellipsis)),
+            Expanded(child: Text(w.place?.name.isNotEmpty == true ? '${w.place!.name}${w.place!.source == 'gps' ? ' · GPS' : ''}' : 'Finding your location…', style: t.textTheme.titleSmall, overflow: TextOverflow.ellipsis)),
             if (!compact) IconButton(tooltip: 'Refresh', onPressed: refresh, icon: const Icon(Icons.refresh, size: 18)),
           ]),
           if (cur != null) ...[

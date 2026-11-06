@@ -4,6 +4,8 @@
     <!-- barcode scanning with the camera -->
     <uses-permission android:name="android.permission.CAMERA"/>
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <!-- weather for where the device is (approximate is enough; asked once, the connection's location otherwise) -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     <application
         android:label="RxPOS New"
         android:name="${applicationName}"

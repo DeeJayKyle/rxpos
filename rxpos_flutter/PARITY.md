@@ -157,7 +157,7 @@ Every feature of the React app (`src/pages/*.jsx`, `src/*.jsx`), screen by scree
 - ✅ Drug information: online lookup saved for offline, counselling sheet, the till's drug info
 - ✅ Quiz: quick quiz offline, AI quiz (falls back to offline), one question at a time, score saved, team board
 - ✅ Storage: weather (Open-Meteo, kept on the device for offline, advice for storage; also on the dashboard), last reading per place, trend chart with the safe range, readings with humidity, delete a reading
-- ✗ Weather location from the device's GPS (now: the connection's location from the cloud, else the town in Settings)
+- ✅ Weather location from the device's GPS (asked once; refused or none: the connection's location, else the town in Settings)
 - ✅ Calendar: month grid, repeating events, refills due and expiring stock, the day's agenda and Today, add / edit / delete, add to Google Calendar, subscription link (copy, Google, Apple / Outlook), .ics file
 - ✅ Audit log: person, action, from date, search, branch, CSV
 

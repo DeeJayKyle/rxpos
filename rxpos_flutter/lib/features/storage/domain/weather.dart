@@ -29,6 +29,13 @@ Place? networkPlace(Map<String, Object?>? net) {
   return (name: name.isEmpty ? 'Your area' : name, lat: r3(lat), lon: r3(lon), source: 'network');
 }
 
+/// The place from the device's GPS, named from the connection's city when the cloud knows it (src/weather.js).
+Place gpsPlace(double lat, double lon, Map<String, Object?>? net) {
+  double r4(double v) => (v * 10000).round() / 10000;
+  final city = '${net?['city'] ?? ''}';
+  return (name: city.isEmpty ? 'Your location' : 'Near $city', lat: r4(lat), lon: r4(lon), source: 'gps');
+}
+
 /// WMO weather code → label and icon.
 (String, IconData) describeWeather(num? code) {
   final c = code ?? 0;
