@@ -2,11 +2,12 @@
 import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
+import 'package:rxpos/core/platform.dart';
 
 /// This app's own files folder. On Windows it is pinned to where it has always been (%APPDATA%\RxPOS\RxPOS New):
 /// the folder Windows would pick follows the product name, and the app was renamed from "RxPOS New" to "RxPOS".
 Future<Directory> appSupportDir() async {
-  final appData = Platform.isWindows ? Platform.environment['APPDATA'] : null;
+  final appData = onWindows ? Platform.environment['APPDATA'] : null;
   if (appData != null && appData.isNotEmpty) return Directory('$appData\\RxPOS\\RxPOS New').create(recursive: true);
   return getApplicationSupportDirectory();
 }
@@ -15,7 +16,7 @@ Future<Directory> appSupportDir() async {
 /// 1.0 kept it: visible to everyone, and often copied by OneDrive while open). Elsewhere it stays where it was.
 Future<Directory> databaseDir() async {
   final docs = await getApplicationDocumentsDirectory();
-  if (!Platform.isWindows) return docs;
+  if (!onWindows) return docs;
   return settleDatabase(from: docs, to: await appSupportDir());
 }
 

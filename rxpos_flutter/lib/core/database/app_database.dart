@@ -2,7 +2,11 @@ import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:rxpos/core/web/web_keep_stub.dart' if (dart.library.js_interop) 'package:rxpos/core/web/web_keep_web.dart';
+
 import '../data/app_dirs.dart';
+import 'connect_stub.dart' if (dart.library.js_interop) 'connect_web.dart';
 import 'defaults.dart';
 
 part 'app_database.g.dart';
@@ -70,9 +74,17 @@ class Kv extends Table {
   Set<Column> get primaryKey => {k};
 }
 
+/// Where the web app's files are served from (/app/ on the site; set when it is built), '' while developing.
+const webBase = String.fromEnvironment('RXPOS_WEB_BASE');
+
 @DriftDatabase(tables: [Records, Tombstones, Outbox, RejectedOps, Kv])
 class AppDatabase extends _$AppDatabase {
-  AppDatabase([QueryExecutor? executor]) : super(executor ?? driftDatabase(name: 'rxpos', native: const DriftNativeOptions(databaseDirectory: databaseDir)));
+  AppDatabase([QueryExecutor? executor])
+      : super(executor ??
+            (kIsWeb
+                // in a browser: in memory only (nothing of the pharmacy is kept on the computer)
+                ? openWebMemory(webBase)
+                : driftDatabase(name: 'rxpos', native: const DriftNativeOptions(databaseDirectory: databaseDir))));
 
   /// 1: records, tombstones, outbox, rejected_ops, kv. 2: lookup indexes.
   @override
@@ -95,6 +107,10 @@ class AppDatabase extends _$AppDatabase {
         beforeOpen: (details) async {
           await customStatement('PRAGMA foreign_keys = ON');
           await ensureDefaults(this);
+          // a browser: put back this tab's sign-in and the appearance preferences it kept
+          for (final e in webKept().entries) {
+            await into(kv).insertOnConflictUpdate(KvCompanion.insert(k: e.key, v: e.value));
+          }
         },
       );
 }

@@ -1,9 +1,9 @@
 // The signed-in person's menu in the top bar (src/App.jsx): change my password (asked at once after signing in with
 // a temporary password), the quick PIN for this device, two-step sign-in (src/twostep.jsx) and log out. Signing out
 // never deletes unsent work: it stays on this device and is sent when someone signs in again.
-import 'dart:isolate';
 
 import 'package:barcode/barcode.dart';
+import 'package:flutter/foundation.dart' show compute;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -21,7 +21,8 @@ import '../domain/session.dart';
 import 'sign_in_screen.dart';
 
 /// [makePassword] off the screen's thread (100,000 rounds take a moment on a phone).
-Future<Map<String, Object?>> makePasswordAsync(String pw) => Isolate.run(() => makePassword(pw));
+/// (in the background on Windows and Android; in the page on the web, where there are no isolates)
+Future<Map<String, Object?>> makePasswordAsync(String pw) => compute(makePassword, pw);
 
 /// Ask for a secret twice (a password or a PIN); null when cancelled. [check] says what is wrong with the first one.
 Future<String?> askTwice(BuildContext context, {required String title, required String message, required String again, required String save, String? Function(String)? check, bool digits = false}) async {

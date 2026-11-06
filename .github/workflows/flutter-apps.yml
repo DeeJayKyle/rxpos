@@ -1,5 +1,6 @@
-# The Flutter RxPOS apps (rxpos_flutter/), version 2.0.<run number>: tests, then the Windows installer and the Android
-# apps (one APK for all phones, smaller APKs per processor, and an app bundle for app stores).
+# The Flutter RxPOS apps (rxpos_flutter/), version 2.0.<run number>: tests, then the Windows installer, the Android
+# apps (one APK for all phones, smaller APKs per processor, and an app bundle for app stores) and the website
+# (rxposug.com: the app for the browser, with the classic app kept at /classic/). One commit, one version, all three.
 # Runs on every push that changes rxpos_flutter/ (any branch) and by hand. The live website, cloud and current
 # Electron / Capacitor apps are not touched. Builds of the pilot branch are also offered to the installed new RxPOS
 # apps (the R2 bucket rxpos-apps, read through the cloud at /api/app/; scripts/publish-flutter-update.sh).
@@ -207,3 +208,72 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: scripts/publish-flutter-update.sh windows out/RxPOS-Setup.exe ${{ github.run_number }} "$VERSION"
+
+  web:
+    name: Website (the app in the browser)
+    needs: [test, android] # after Android, as the Windows job: never two jobs updating the pilot release at once
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    concurrency: production-deploy # the same lock as the other website deploys (build.yml, deploy-cloud.yml)
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: The classic app (kept at /classic/, and at the root for the installed classic apps' updates)
+        run: npm ci && npm run build
+      - name: The app for the browser
+        working-directory: rxpos_flutter
+        run: |
+          flutter pub get
+          # its files from /app/, no outside servers (the site's security policy), this build's number for updates
+          flutter build web --release --no-web-resources-cdn --dart-define=RXPOS_WEB_BASE=/app/ --dart-define=RXPOS_BUILD=${{ github.run_number }}
+      - name: Put the website together
+        run: |
+          scripts/build-web-site.sh dist rxpos_flutter/build/web site ${{ github.run_number }} "$VERSION"
+          mkdir -p out
+          printf '{"build":%s,"label":"%s"}\n' "${{ github.run_number }}" "$VERSION" > rxpos_flutter/build/web/rxpos-web.json
+          (cd rxpos_flutter/build/web && zip -qr ../../../out/RxPOS-web.zip .)
+      - name: Publish to the pilot pre-release (the classic deploys put the website together with it)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: flutter-pilot
+          prerelease: true
+          make_latest: false
+          files: out/RxPOS-web.zip
+          fail_on_unmatched_files: true
+      - name: Browser for the checks
+        if: github.ref == 'refs/heads/ccr-54387795-ifu3p1'
+        run: npm i --no-save playwright@1.49.1 && npx playwright install --with-deps chromium
+      - name: Preview, check, go live (and back to the previous site by itself if the live check fails)
+        if: github.ref == 'refs/heads/ccr-54387795-ifu3p1'
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then echo "::warning::Cloudflare credentials are not set: the website was not deployed."; exit 0; fi
+          API="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/rxpos"
+          prev=$(curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$API/deployments?env=production&per_page=1" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{console.log(JSON.parse(s).result[0]?.id||'')}catch{console.log('')}})")
+          echo "Live website before this deploy: ${prev:-unknown}"
+          npx wrangler pages deploy site --project-name rxpos --branch web-preview --commit-dirty=true
+          ok=0; for i in 1 2 3 4 5 6; do node tests/web-site-check.mjs https://web-preview.rxpos.pages.dev ${{ github.run_number }} && { ok=1; break; }; sleep 20; done
+          [ $ok = 1 ] || { echo "::error::The preview did not pass its check: the live website was not changed."; exit 1; }
+          npx wrangler pages deploy site --project-name rxpos --branch main --commit-dirty=true
+          ok=0; for i in 1 2 3 4 5 6; do node tests/web-site-check.mjs https://rxposug.com ${{ github.run_number }} --live && { ok=1; break; }; sleep 20; done
+          if [ $ok != 1 ]; then
+            if [ -n "$prev" ]; then
+              curl -fsS -X POST -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$API/deployments/$prev/rollback" > /dev/null && echo "::error::The live website failed its check, so the previous website ($prev) was put back."
+            else
+              echo "::error::The live website failed its check and the previous one could not be found to put back."
+            fi
+            exit 1
+          fi
+          echo "rxposug.com is the RxPOS app build ${{ github.run_number }} ($VERSION); the classic app is at /classic/"
+

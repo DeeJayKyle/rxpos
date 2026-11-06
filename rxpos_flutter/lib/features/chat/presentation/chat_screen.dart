@@ -9,6 +9,7 @@ import 'dart:io';
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
+import 'package:rxpos/core/platform.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
@@ -612,7 +613,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             if (_text.text.trim().isNotEmpty || _editing != null)
               IconButton.filled(tooltip: _editing != null ? 'Save' : 'Send', onPressed: () => _sendTeam(me), icon: Icon(_editing != null ? Icons.check : Icons.send))
             else
-              IconButton.filled(tooltip: 'Record a voice note', onPressed: _uploading != null ? null : () => setState(() => _recording = true), icon: const Icon(Icons.mic)),
+              // voice notes need the installed app (a browser has no file to record into)
+              if (!onWeb) IconButton.filled(tooltip: 'Record a voice note', onPressed: _uploading != null ? null : () => setState(() => _recording = true), icon: const Icon(Icons.mic)),
           ]),
         ),
     ]);

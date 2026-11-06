@@ -3,11 +3,12 @@
 // device; reports wait on the device while offline. No sales or patient data: only the error message, where it
 // happened in code, the screen, the app build and the device type; emails and long numbers are blanked out.
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:rxpos/core/platform.dart';
+import 'package:rxpos/core/update/app_updates.dart' show webBuild;
 
 import '../data/device_settings.dart';
 import '../network/dio_client.dart';
@@ -70,11 +71,11 @@ class CrashReports {
       final keep = q.length > 19 ? q.sublist(q.length - 19) : q;
       int build = 0;
       try {
-        build = int.tryParse((await PackageInfo.fromPlatform()).buildNumber) ?? 0;
+        build = onWeb ? webBuild : int.tryParse((await PackageInfo.fromPlatform()).buildNumber) ?? 0;
       } catch (_) {}
       keep.add({
         'key': key, 'message': message, 'stack': st, 'page': page.length > 80 ? page.substring(0, 80) : page, 'build': build,
-        'platform': 'flutter-${Platform.operatingSystem}', 'kind': kind, 'at': DateTime.now().toUtc().toIso8601String(),
+        'platform': 'flutter-$osName', 'kind': kind, 'at': DateTime.now().toUtc().toIso8601String(),
       });
       await _ref.read(deviceValueProvider(_queueKey).notifier).set(jsonEncode(keep));
       await flush();

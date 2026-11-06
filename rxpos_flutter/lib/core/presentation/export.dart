@@ -1,11 +1,11 @@
 // Exporting what a screen shows, like the React app's CSV and PDF buttons (src/store.jsx toCSV, src/pdf.js pagePdf):
 // a CSV file, or an A4 PDF with the pharmacy's name, the title, a subtitle and the table (landscape when wide).
 import 'dart:convert';
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:path_provider/path_provider.dart';
+
+import 'download_io.dart' if (dart.library.js_interop) 'download_web.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -71,12 +71,14 @@ Future<Uint8List> tablesPdf(PharmacySettings s, {required String title, String s
   return doc.save();
 }
 
-/// Save a file in this device's Downloads folder (Windows) or the app's downloads folder (Android) and say where.
-Future<File> saveDownload(String filename, List<int> bytes) async {
-  final dir = await getDownloadsDirectory() ?? await getApplicationDocumentsDirectory();
-  final f = File('${dir.path}${Platform.pathSeparator}$filename');
-  await f.writeAsBytes(bytes, flush: true);
-  return f;
+/// Save a file in this device's Downloads folder (Windows), the app's downloads folder (Android) or the browser's
+/// downloads (web), and say where.
+Future<SavedFile> saveDownload(String filename, List<int> bytes) async => SavedFile(await saveBytes(filename, bytes));
+
+/// Where a file was saved.
+class SavedFile {
+  const SavedFile(this.path);
+  final String path;
 }
 
 /// "CSV" and "PDF" buttons for a screen's table.

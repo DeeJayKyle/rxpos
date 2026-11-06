@@ -1,3 +1,4 @@
+import 'package:rxpos/core/web/web_keep_stub.dart' if (dart.library.js_interop) 'package:rxpos/core/web/web_keep_web.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../database/app_database.dart';
@@ -41,6 +42,7 @@ class DeviceValue extends _$DeviceValue {
     } else {
       await db.into(db.kv).insertOnConflictUpdate(KvCompanion.insert(k: 'device:$key', v: v));
     }
+    webKeep('device:$key', v); // a browser keeps appearance preferences only
     state = AsyncData(v);
   }
 }

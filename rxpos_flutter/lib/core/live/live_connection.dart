@@ -7,7 +7,9 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../../features/auth/application/session_controller.dart';
 import '../../features/sync_status/application/sync_controller.dart';
@@ -20,6 +22,13 @@ import '../database/app_database.dart';
 typedef LiveConnect = Future<Stream<Object?>> Function(Uri url, void Function(void Function(String) send) onSend);
 
 final liveConnectProvider = Provider<LiveConnect>((ref) => (url, onSend) async {
+      if (kIsWeb) {
+        // a browser: its own WebSocket
+        final ch = WebSocketChannel.connect(url);
+        await ch.ready.timeout(const Duration(seconds: 15));
+        onSend(ch.sink.add);
+        return ch.stream.map<Object?>((x) => x);
+      }
       final ws = await WebSocket.connect(url.toString()).timeout(const Duration(seconds: 15));
       onSend(ws.add);
       return ws.map<Object?>((x) => x);

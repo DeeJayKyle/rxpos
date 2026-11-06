@@ -1,5 +1,8 @@
 import 'dart:convert';
 
+import 'package:rxpos/core/web/tab_session_stub.dart' if (dart.library.js_interop) 'package:rxpos/core/web/tab_session_web.dart';
+import 'package:rxpos/core/web/web_keep_stub.dart' if (dart.library.js_interop) 'package:rxpos/core/web/web_keep_web.dart';
+
 import 'package:dio/dio.dart';
 
 import '../../../core/data/record_store.dart';
@@ -40,7 +43,10 @@ class AuthRepository {
   final DateTime Function() _now;
 
   Future<String?> _kv(String k) async => (await (db.select(db.kv)..where((x) => x.k.equals(k))).getSingleOrNull())?.v;
-  Future<void> _put(String k, String v) => db.into(db.kv).insertOnConflictUpdate(KvCompanion.insert(k: k, v: v));
+  Future<void> _put(String k, String v) async {
+    await db.into(db.kv).insertOnConflictUpdate(KvCompanion.insert(k: k, v: v));
+    webKeep(k, v); // a browser keeps the sign-in for this tab only
+  }
 
   /// The session kept on the device; one that wasn't "remembered", or is more than 30 days old, asks to sign in again.
   Future<Session?> restore({bool appStart = false}) async {
@@ -48,7 +54,7 @@ class AuthRepository {
     if (v == null) return null;
     final s = Session.fromJson((jsonDecode(v) as Map).cast<String, Object?>());
     final at = DateTime.tryParse(s.signedInAt);
-    if (appStart && (!s.remember || (at != null && _now().difference(at) > rememberFor))) {
+    if (appStart && ((!s.remember && !tabSignedIn()) || (at != null && _now().difference(at) > rememberFor))) {
       await signOut();
       return null;
     }
@@ -216,6 +222,8 @@ class AuthRepository {
       await db.delete(db.tombstones).go();
       await db.delete(db.rejectedOps).go();
       await (db.delete(db.kv)..where((x) => x.k.isIn(['settings', _sessionKey, _linkKey]))).go();
+      webKeep(_sessionKey, null);
+      webKeep(_linkKey, null);
       await SyncConfig(deviceId: cfg.deviceId).save(db);
       await _put(_tenantKey, s.tenant);
     });
@@ -231,6 +239,7 @@ class AuthRepository {
       await _put(_linkKey, jsonEncode({'token': s['token'], 'tenant': s['tenant'], 'slug': s['slug'], 'pharmacy': s['pharmacy']}));
     }
     await (db.delete(db.kv)..where((x) => x.k.equals(_sessionKey))).go();
+    webKeep(_sessionKey, null);
   }
 
   /// Changes waiting to reach the cloud (told when signing out).

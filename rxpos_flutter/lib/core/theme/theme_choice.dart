@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:rxpos/core/web/web_keep_stub.dart' if (dart.library.js_interop) 'package:rxpos/core/web/web_keep_web.dart';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
@@ -72,6 +74,7 @@ class LookController extends AsyncNotifier<Look> {
   Future<void> save(Look l) async {
     final db = ref.read(appDatabaseProvider);
     await db.into(db.kv).insertOnConflictUpdate(KvCompanion.insert(k: lookKey, v: jsonEncode(l.toJson())));
+    webKeep(lookKey, jsonEncode(l.toJson()));
     state = AsyncData(l);
   }
 

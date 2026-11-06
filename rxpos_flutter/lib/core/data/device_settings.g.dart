@@ -107,7 +107,7 @@ final class DeviceValueProvider
   }
 }
 
-String _$deviceValueHash() => r'beece2eeba71b2984ac6011aff83cc6ae3f03546';
+String _$deviceValueHash() => r'ded7073625a3761ef3b33f05f726e9161b67a49a';
 
 /// A value kept on this device only (never synced): POS favourites, the sale in progress, and the like.
 

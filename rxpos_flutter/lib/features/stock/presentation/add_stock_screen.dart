@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:rxpos/core/platform.dart';
 
 import '../../../core/data/device_settings.dart';
 import '../../../core/data/pharmacy_providers.dart';
@@ -441,7 +441,7 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
             ]),
             const SizedBox(height: 12),
             Row(children: [
-              if (Platform.isAndroid)
+              if (onAndroid)
                 IconButton.filledTonal(tooltip: 'Scan medicines into the delivery', icon: const Icon(Icons.qr_code_scanner), onPressed: () => scanContinuous(context, title: 'Scan medicines into the delivery', onCode: (code) async {
                   final p = d.byBarcode[code];
                   if (p != null) {

@@ -1,13 +1,13 @@
 // The Hardware Diagnostic HUD (design system "Hardware Diagnostic HUD"): a slim status bar over every page with the
 // cloud connection, the receipt printer, the barcode scanner and the camera, and short alert banners (unsent work,
 // low stock, expiring stock) that open the page that deals with them. It only reads what the app already knows.
-import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:printing/printing.dart';
+import 'package:rxpos/core/platform.dart';
 
 import '../../features/alerts/application/alerts_provider.dart';
 import '../../features/sync_status/application/sync_controller.dart';
@@ -23,7 +23,7 @@ final lastScanProvider = NotifierProvider<LastScan, DateTime?>(LastScan.new);
 
 /// The printers this computer knows (the default first); empty where the system's print dialog is used instead.
 final hudPrintersProvider = FutureProvider.autoDispose<List<Printer>>((_) async {
-  if (kIsWeb || !Platform.isWindows) return const [];
+  if (kIsWeb || !onWindows) return const [];
   try {
     final list = await Printing.listPrinters();
     return [...list.where((p) => p.isDefault), ...list.where((p) => !p.isDefault)];
@@ -49,7 +49,7 @@ class HardwareHud extends ConsumerWidget {
       return m < 1 ? 'just now' : m < 60 ? '$m min ago' : '${m ~/ 60} h ago';
     }
 
-    final android = !kIsWeb && Platform.isAndroid;
+    final android = !kIsWeb && onAndroid;
     final items = <Widget>[
       _Status(Icons.cloud_done_outlined, 'Cloud', sync.label, online ? ok : sync.state == SyncState.offline ? warn : bad, key: const Key('hud-cloud')),
       _Status(Icons.print_outlined, 'Printer', printers.isEmpty ? (android ? 'Android print service' : 'print dialog') : printers.first.name,
