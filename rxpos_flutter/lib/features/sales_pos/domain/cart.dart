@@ -272,6 +272,17 @@ Future<Map<String, Object?>> completeSale(
 }) async {
   final t = totalsOf(cart, discount: c.discount, settings: settings);
   checkCheckout(cart, c, t, settings: settings);
+  // The stock may have changed since a line was added (another device's sale arrived by sync, a held sale resumed
+  // later): a sale can't go beyond the stock this device knows of. Checked per medicine, before anything is saved.
+  final want = <String, double>{};
+  for (final l in cart) {
+    want[l.id] = (want[l.id] ?? 0) + l.qty;
+  }
+  for (final e in want.entries) {
+    final l = cart.firstWhere((x) => x.id == e.key);
+    final have = sellable(stock.batchesOf(e.key, atBranch: branchId), allowExpired: cart.any((x) => x.id == e.key && x.allowExpired), now: now);
+    if (e.value > have + stockTolerance) throw CartProblem('Only ${formatQty(have)} ${l.name} in stock here: lower the quantity or remove it.');
+  }
   final type = c.method.type;
   final credit = type == 'credit';
   final paid = credit ? [c.tendered ?? 0, t.total].reduce((a, b) => a < b ? a : b) : t.total;

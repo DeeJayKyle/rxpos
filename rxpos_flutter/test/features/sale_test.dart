@@ -119,6 +119,18 @@ void main() {
       expect((sale['total'], sale['paid'], sale['customerName']), (600, 200, 'Grace'));
     });
 
+    test('stock sold elsewhere since the line was added: the sale is refused with the medicine, nothing is saved', () async {
+      final cart = [setCount(addToCart([], para, stock: 10, wholesale: false, settings: s).single, 8)];
+      // another device's sale arrived by sync: only 5 left here now
+      final now = view(const [Movement(id: 'm', productId: 'p1', qty: 10, batchId: 'b-late'), Movement(id: 'm2', productId: 'p1', qty: -5, batchId: 'b-late')]);
+      await expectLater(
+        completeSale(store, cart: cart, c: const Checkout(method: cash), settings: s, stock: now, wholesale: false, cashier: 'Tia'),
+        throwsA(isA<CartProblem>().having((e) => e.message, 'message', 'Only 5 Paramol 500mg in stock here: lower the quantity or remove it.')),
+      );
+      expect(await store.rows('sales'), isEmpty);
+      expect((await store.rows('movements')).where((m) => m['type'] == 'Sale'), isEmpty);
+    });
+
     test('a refused sale saves nothing', () async {
       await expectLater(completeSale(store, cart: const [], c: const Checkout(method: cash), settings: s, stock: view(const []), wholesale: false, cashier: 'Tia'), throwsA(isA<CartProblem>()));
       expect(await store.rows('sales'), isEmpty);

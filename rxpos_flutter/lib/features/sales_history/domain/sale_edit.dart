@@ -67,7 +67,13 @@ Future<Map<String, Object?>> editSale(RecordStore store, Sale sale, {required Li
       if (recordOnly) {
         // history only
       } else if (q1 > q0) {
-        for (final a in allocate(stock.batchesOf(l.id, atBranch: br), q1 - q0, now: now)) {
+        final List<Allocation> taken;
+        try {
+          taken = allocate(stock.batchesOf(l.id, atBranch: br), q1 - q0, now: now);
+        } on NotEnoughStock catch (e) {
+          throw SaleEditProblem('${l.name}: $e'); // e.g. the only stock left has expired
+        }
+        for (final a in taken) {
           d.move(productId: l.id, qty: -a.qty, type: 'Sale edit', ref: sale.number, user: user, batchId: a.batchId, branchId: br);
           final same = alloc.indexWhere((x) => x.batchId == a.batchId);
           if (same >= 0) {
