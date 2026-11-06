@@ -24,7 +24,7 @@ Every feature of the React app (`src/pages/*.jsx`, `src/*.jsx`), screen by scree
 - ✅ Pop-ups with a sound: new alerts (once a day per kind, urgent only at the till), new messages, last week at a
   glance on Monday; outside temperature logged every 6 hours; reorder levels updated automatically once a week
 - ✅ Live connection (a ticket, ping every 20 s, reconnects; another device's change syncs at once)
-- ✗ Calls (voice between staff over the live connection, also from Chat): needs a WebRTC plugin in the Windows and Android builds
+- ✅ Calls (voice between staff over the live connection, HTTP when a colleague isn't on it): ring and ringback, answer / decline, mute, hang up, "busy", 45 s no answer, missed after 46 s, a fresh route after a network change; the call noted in the private chat; WebRTC in the Windows and Android builds, so a Flutter device and a React device can call each other
 - ✅ F5 / Ctrl+R refresh (sync now and say how it went), Ctrl+Shift+R reloads the app; the app version in This device
 - ✗ App updates (Windows installer, Android; switches by itself when nothing is in progress): the Flutter builds are
   published only to the private repository's pilot release, so the apps have nowhere public to check; needs a version
@@ -79,7 +79,7 @@ Every feature of the React app (`src/pages/*.jsx`, `src/*.jsx`), screen by scree
 - ✅ Chat & Messages: General, private chats and client conversations (WhatsApp, SMS, record their reply); attachments
   (photo, PDF, video, audio, spreadsheet, up to 15 MB) and voice notes (up to 3 min); reply, forward, edit (24 h), delete for
   everyone (48 h) or for me, react, star, pin, search, message info, read ticks, unread counts, new messages every 8 s
-- ✗ Voice calls from chat (part of the live connection, see App frame)
+- ✅ Voice calls from chat: the call button (in-app call, WhatsApp, phone) on each colleague and in the private chat's header, "Call back" on the call note
 
 ## Inventory (Inventory.jsx)
 - ✅ List with filters (in stock / low / out / all, expiring, expired), value at cost and retail, batches ("Sells next"), count / add / remove, add / edit medicine

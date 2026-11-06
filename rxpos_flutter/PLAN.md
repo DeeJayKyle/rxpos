@@ -83,6 +83,6 @@ Milestone 1 is the till and sync on Windows and Android. Each step ends with tes
       Audit log.
 - [x] Group 5: Storage temperature, Reminders (WhatsApp), Calendar, Team chat, Controlled drugs register, Barcode labels,
       Import medicines, Drug information, Drug quiz (cloud AI).
-- [ ] Not yet: voice and video calls, invoice scanning (AI), delivery drafts, the owner console (stays on the web),
+- [ ] Not yet: video calls, invoice scanning (AI), delivery drafts, the owner console (stays on the web),
       Mobile Money requests to the customer's phone, the live connection (sync runs every 5 s instead), Classic /
       Advanced till layouts and the command bar.

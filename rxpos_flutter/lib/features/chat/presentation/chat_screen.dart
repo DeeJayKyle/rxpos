@@ -27,6 +27,8 @@ import '../../extras/domain/extras.dart';
 import '../../people/presentation/messages_screens.dart' show smsReadyProvider;
 import '../../sync_status/application/sync_controller.dart';
 import '../domain/chat.dart' as chat;
+import '../../calls/application/call_controller.dart';
+import '../../calls/presentation/call_menu.dart';
 
 const _attachTypes = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'pdf', 'mp4', 'mov', 'webm', 'mp3', 'm4a', 'ogg', 'wav', 'csv', 'xls', 'xlsx', 'ods', 'doc', 'docx', 'ppt', 'pptx'];
 
@@ -185,7 +187,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 ? ['${client['phone'] ?? ''}', '${client['whatsapp'] ?? ''}'].firstWhere((x) => x.isNotEmpty && x != 'null', orElse: () => 'No phone number saved')
                 : '';
 
-    Widget convRow(String id, String name, {Widget? icon}) {
+    Widget convRow(String id, String name, {Widget? icon, Widget? trailing}) {
       final l = lastOf(id), n = unread(id);
       return ListTile(
         key: ValueKey('conv-$id'),
@@ -197,9 +199,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
-        trailing: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.end, children: [
-          if (l != null) Text(_time('${l['date']}'), style: Theme.of(context).textTheme.labelSmall),
-          if (n > 0) Badge(label: Text('$n')),
+        trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+          Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.end, children: [
+            if (l != null) Text(_time('${l['date']}'), style: Theme.of(context).textTheme.labelSmall),
+            if (n > 0) Badge(label: Text('$n')),
+          ]),
+          ?trailing,
         ]),
         onTap: () => _openConv(id),
       );
@@ -224,7 +229,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               ? ListView(children: [
                   convRow('team', 'General', icon: const CircleAvatar(child: Icon(Icons.tag))),
                   if (staff.isNotEmpty) Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 4), child: Text('Private chats', style: Theme.of(context).textTheme.labelMedium)),
-                  for (final u in staff) convRow(chat.dmId(me.userId, '${u['id']}'), '${u['name']}'),
+                  for (final u in staff) convRow(chat.dmId(me.userId, '${u['id']}'), '${u['name']}', trailing: CallMenu(person: u, staff: true, compact: true)),
                   if (staff.isEmpty) const Padding(padding: EdgeInsets.all(16), child: Text('Add your colleagues under Users & Roles and you can message them here.')),
                 ])
               : Column(children: [
@@ -271,6 +276,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               Text(mine ? (missed ? 'You called · no answer' : chat.callText(m['call'] as Map)) : chat.callText(m['call'] as Map)),
               const SizedBox(width: 6),
               Text(_time('${m['date']}'), style: Theme.of(context).textTheme.labelSmall),
+              if (peer != null)
+                TextButton(onPressed: () => ref.read(callProvider.notifier).start('${peer['id']}', '${peer['name']}'), child: const Text('Call back')),
             ]),
           ),
         ));
@@ -410,7 +417,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             if (client == null)
               IconButton(tooltip: 'Search this chat', isSelected: _find != null, onPressed: () => setState(() => _find = _find == null ? '' : null), icon: const Icon(Icons.search)),
             IconButton(tooltip: 'Starred messages', isSelected: _starredOnly, onPressed: () => setState(() => _starredOnly = !_starredOnly), icon: const Icon(Icons.star_border), selectedIcon: const Icon(Icons.star)),
-            if (client != null && phone.length >= 12) IconButton(tooltip: 'Phone ${client['name']}', onPressed: () => launchUrl(Uri.parse('tel:+$phone')), icon: const Icon(Icons.phone)),
+            if (client != null) CallMenu(person: client),
+            if (peer != null) CallMenu(person: peer, staff: true),
           ]),
         ),
         if (_find != null)

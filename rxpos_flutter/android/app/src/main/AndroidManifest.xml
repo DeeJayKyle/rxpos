@@ -4,6 +4,9 @@
     <!-- barcode scanning with the camera -->
     <uses-permission android:name="android.permission.CAMERA"/>
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <!-- in-app voice calls between staff: speaker / earpiece and Bluetooth headsets -->
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
     <!-- weather for where the device is (approximate is enough; asked once, the connection's location otherwise) -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     <!-- new messages, calls and stock alerts while RxPOS is in the background (Android 13+ asks first) -->

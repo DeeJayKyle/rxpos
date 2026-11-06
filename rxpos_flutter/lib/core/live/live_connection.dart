@@ -38,6 +38,22 @@ class LiveState {
 
 class LiveConnection extends Notifier<LiveState> {
   StreamSubscription<Object?>? _sub;
+  final _rtc = StreamController<Map<String, Object?>>.broadcast();
+
+  /// Call set-up messages from colleagues ({type: 'rtc', kind, call_id, from_uid, from_name, data, at}) and
+  /// "that colleague isn't on the live line" ({type: 'rtc-offline', to, call_id}).
+  Stream<Map<String, Object?>> get rtcMessages => _rtc.stream;
+
+  /// Send a message over the live line; false when it is down (the caller then sends it by HTTP).
+  bool send(Map<String, Object?> m) {
+    if (!state.up || _send == null) return false;
+    try {
+      _send!(jsonEncode(m));
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
   Timer? _retry, _ping;
   int _attempt = 0;
   DateTime _heard = DateTime.fromMillisecondsSinceEpoch(0);
@@ -107,6 +123,10 @@ class LiveConnection extends Notifier<LiveState> {
     try {
       m = jsonDecode(data);
     } catch (_) {
+      return;
+    }
+    if (m is Map && (m['type'] == 'rtc' || m['type'] == 'rtc-offline')) {
+      _rtc.add(m.cast<String, Object?>());
       return;
     }
     if (m is Map && m['type'] == 'changed') {

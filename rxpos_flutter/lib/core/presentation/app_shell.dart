@@ -20,6 +20,7 @@ import 'screens.dart';
 import 'theme_menu.dart';
 import '../theme/themes.dart';
 import 'top_bar.dart';
+import '../../features/calls/presentation/call_overlay.dart';
 
 /// The frame around every screen: the sidebar with its groups (Sales, People, Medicine inventory, Finance, Insights,
 /// System) on Windows and tablets, a drawer on phones; the pharmacy, who is signed in, the sync status, the Premium UI
@@ -81,6 +82,7 @@ class AppShell extends ConsumerWidget {
       const FirstDownload(),
       PopupHost(location: location),
       EngageWatchers(location: location),
+      const CallOverlay(),
     ]);
     return CallbackShortcuts(
       bindings: {

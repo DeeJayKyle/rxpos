@@ -21,6 +21,8 @@ import 'package:rxpos/core/notify/os_notifications.dart';
 import 'package:rxpos/core/rules/dates.dart';
 import 'package:rxpos/core/sound/sounds.dart';
 import 'package:rxpos/core/sync/sync_config.dart';
+import 'package:rxpos/features/calls/application/call_controller.dart';
+import 'package:rxpos/features/calls/domain/rtc_peer.dart';
 import 'package:rxpos/features/engage/presentation/watchers.dart';
 import 'package:rxpos/features/reports/domain/weekly.dart';
 import 'package:rxpos/core/presentation/widgets.dart';
@@ -89,7 +91,7 @@ void main() {
     }
   }
 
-  Future<void> start(WidgetTester tester, {Size size = const Size(1440, 900), List<Override> extra = const [], bool engage = false, bool live = false, bool foreground = true}) async {
+  Future<void> start(WidgetTester tester, {Size size = const Size(1440, 900), List<Override> extra = const [], bool engage = false, bool live = false, bool foreground = true, bool calls = false}) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -120,6 +122,7 @@ void main() {
           engageOnProvider.overrideWithValue(engage), // pop-ups and the idle screen: only in the tests about them
           soundsProvider.overrideWith((ref) => _QuietSounds(ref, played)),
           liveOnProvider.overrideWithValue(live), // no real connection to the cloud in tests
+          callsOnProvider.overrideWithValue(calls), // voice calls: only in the tests about them
           osNotifyProvider.overrideWithValue(osNotify),
           appInForegroundProvider.overrideWithValue(() => foreground),
           ...extra,
@@ -1949,6 +1952,193 @@ void main() {
     await done(tester);
   });
 
+  group('voice calls between staff', () {
+    late StreamController<Object?> line;
+    late List<Map<String, Object?>> sent;
+    late List<_FakePeer> peers;
+    var micRefused = false;
+
+    Future<void> callStart(WidgetTester tester, {Size size = const Size(1440, 900)}) async {
+      await tester.runAsync(signedIn);
+      await tester.runAsync(() => RecordStore(db).update((d) => d.put('users', {'id': 'u2', 'name': 'Ben Okello', 'role': 'pharmacist', 'phone': '0772 123456'})));
+      line = StreamController<Object?>();
+      sent = [];
+      peers = [];
+      micRefused = false;
+      await start(tester, size: size, live: true, calls: true, extra: [
+        liveConnectProvider.overrideWithValue((url, onSend) async {
+          onSend((m) {
+            if (m != 'ping') sent.add((jsonDecode(m) as Map).cast<String, Object?>());
+          });
+          return line.stream;
+        }),
+        rtcPeerFactoryProvider.overrideWithValue((ice) async {
+          if (micRefused) throw const MicrophoneRefused();
+          return peers.addAndReturn(_FakePeer());
+        }),
+      ]);
+    }
+
+    List<String> kinds() => [for (final m in sent) '${m['kind']}'];
+    void hear(String kind, String callId, [Map<String, Object?>? data]) => line.add(jsonEncode({
+          'type': 'rtc', 'kind': kind, 'call_id': callId, 'from_uid': 'u2', 'from_name': 'Ben Okello', 'data': data, 'at': DateTime.now().millisecondsSinceEpoch,
+        }));
+
+    Future<void> openBen(WidgetTester tester) async {
+      await navTo(tester, 'Chat & Messages');
+      await tester.tap(find.byKey(const ValueKey('conv-dm:u1:u2')));
+      await settle(tester);
+    }
+
+    Future<void> callBen(WidgetTester tester) async {
+      await tester.tap(find.byKey(const Key('call-u2')).last);
+      await settle(tester, 8);
+      await tester.tap(find.text('In-app call'));
+      await settle(tester);
+    }
+
+    testWidgets('calling a colleague from Chat: ring, answer, talk, hang up; the call is noted in the private chat', (tester) async {
+      await callStart(tester);
+      await openBen(tester);
+      await tester.tap(find.byKey(const Key('call-u2')).last);
+      await settle(tester, 8);
+      expect(find.text('WhatsApp'), findsOneWidget);
+      expect(find.text('Phone call'), findsOneWidget);
+      await tester.tap(find.text('In-app call'));
+      await settle(tester);
+      expect(kinds(), ['ring', 'offer']);
+      expect(sent.first['to'], 'u2');
+      expect(sent[1]['data'], {'type': 'offer', 'sdp': 'fake-offer'});
+      final id = '${sent.first['callId']}';
+      expect(find.byKey(const Key('call-screen')), findsOneWidget);
+      expect(find.text('Ben Okello'), findsWidgets);
+      expect(find.text('Ringing…'), findsOneWidget);
+      expect(played, contains('ringback'));
+      hear('answer', id, {'type': 'answer', 'sdp': 'their-answer'});
+      await settle(tester);
+      expect(peers.single.remote, {'type': 'answer', 'sdp': 'their-answer'});
+      expect(find.text('Connecting…'), findsOneWidget);
+      peers.single.state.add('connected');
+      await settle(tester);
+      expect(find.text('0:00'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('call-Mute')));
+      await settle(tester, 2);
+      expect(peers.single.muted, isTrue);
+      expect(find.byKey(const Key('call-Unmute')), findsOneWidget);
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 1100)));
+      await tester.tap(find.byKey(const Key('call-Hang up')));
+      await settle(tester);
+      expect(kinds().last, 'hangup');
+      expect(peers.single.closed, isTrue);
+      expect(find.textContaining('Call ended · 0:0'), findsOneWidget);
+      await until(tester, () async => (await RecordStore(db).get('messages', 'call-$id')) != null);
+      final log = (await tester.runAsync(() => RecordStore(db).get('messages', 'call-$id')))!;
+      expect(log['conv'], 'dm:u1:u2');
+      expect(log['fromId'], 'u1');
+      expect(log['channel'], 'team');
+      expect((log['call'] as Map)['status'], 'done');
+      expect((log['call'] as Map)['secs'], greaterThanOrEqualTo(1));
+      await tester.pump(const Duration(seconds: 2));
+      await settle(tester);
+      expect(find.byKey(const Key('call-screen')), findsNothing);
+      expect(find.textContaining('Voice call · 0:0'), findsWidgets); // the note, and the chat list's preview
+      expect(find.text('Call back'), findsOneWidget);
+      await line.close();
+      await done(tester);
+    });
+
+    testWidgets('a colleague who doesn\'t pick up: "No answer" after 45 s, noted as a missed call', (tester) async {
+      await callStart(tester);
+      await openBen(tester);
+      await callBen(tester);
+      final id = '${sent.first['callId']}';
+      await tester.pump(const Duration(seconds: 46));
+      await settle(tester, 4);
+      expect(kinds().last, 'hangup');
+      expect(find.text("Ben Okello didn't pick up"), findsOneWidget);
+      await until(tester, () async => (await RecordStore(db).get('messages', 'call-$id')) != null);
+      final log = (await tester.runAsync(() => RecordStore(db).get('messages', 'call-$id')))!;
+      expect(log['call'], {'status': 'no answer', 'secs': 0});
+      await tester.pump(const Duration(seconds: 2));
+      await settle(tester);
+      expect(find.text('You called · no answer'), findsOneWidget);
+      await line.close();
+      await done(tester);
+    });
+
+    testWidgets('an incoming call: rings, answered, a second caller hears "busy", hung up by the colleague', (tester) async {
+      await callStart(tester);
+      hear('ring', 'c1');
+      await settle(tester);
+      expect(find.text('Incoming call'), findsOneWidget);
+      expect(played, contains('ring'));
+      expect(osNotify.shown, isEmpty, reason: 'RxPOS is on screen');
+      await tester.tap(find.byKey(const Key('call-Answer')));
+      await settle(tester);
+      expect(find.text('Connecting…'), findsOneWidget);
+      expect(peers, isEmpty, reason: 'answered before the details arrived: waits for them');
+      hear('offer', 'c1', {'type': 'offer', 'sdp': 'their-offer'});
+      await settle(tester);
+      expect(peers.single.remote, {'type': 'offer', 'sdp': 'their-offer'});
+      expect(kinds(), ['answer']);
+      expect(sent.single['data'], {'type': 'answer', 'sdp': 'fake-answer'});
+      hear('ice', 'c1', {'candidate': 'candidate:1', 'sdpMid': '0', 'sdpMLineIndex': 0});
+      peers.single.state.add('connected');
+      await settle(tester);
+      expect(peers.single.ice, hasLength(1));
+      expect(find.text('0:00'), findsOneWidget);
+      line.add(jsonEncode({'type': 'rtc', 'kind': 'ring', 'call_id': 'c2', 'from_uid': 'u3', 'from_name': 'Joy', 'at': DateTime.now().millisecondsSinceEpoch}));
+      await settle(tester);
+      expect(sent.last['kind'], 'busy');
+      expect(sent.last['to'], 'u3');
+      hear('hangup', 'c1');
+      await settle(tester);
+      expect(find.text('Call ended'), findsOneWidget);
+      expect(await tester.runAsync(() => RecordStore(db).get('messages', 'call-c1')), isNull, reason: 'the caller writes the note, not this device');
+      await tester.pump(const Duration(seconds: 2));
+      await settle(tester, 4);
+      expect(find.byKey(const Key('call-screen')), findsNothing);
+      await line.close();
+      await done(tester);
+    });
+
+    testWidgets('declining an incoming call; a call nobody answers here is "Missed call" after 46 s', (tester) async {
+      await callStart(tester, size: const Size(400, 800));
+      hear('ring', 'c1');
+      await settle(tester);
+      expect(tester.takeException(), isNull);
+      await tester.tap(find.byKey(const Key('call-Decline')));
+      await settle(tester);
+      expect(kinds(), ['decline']);
+      expect(find.text('Busy right now'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 2));
+      hear('ring', 'c3');
+      await settle(tester);
+      expect(find.text('Incoming call'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 45));
+      expect(find.text('Incoming call'), findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 1500));
+      expect(find.text('Missed call'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 2));
+      await line.close();
+      await done(tester);
+    });
+
+    testWidgets('the microphone not allowed: says so, no call', (tester) async {
+      await callStart(tester);
+      await openBen(tester);
+      micRefused = true;
+      await callBen(tester);
+      expect(find.text('Allow the microphone to make calls'), findsOneWidget);
+      expect(find.text('Call failed'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 2));
+      await settle(tester);
+      expect(find.byKey(const Key('call-screen')), findsNothing);
+      await line.close();
+      await done(tester);
+    });
+  });
+
   testWidgets('weather from the device GPS when allowed: named from the connection\'s city', (tester) async {
     await tester.runAsync(signedIn);
     await start(tester, extra: [gpsPositionProvider.overrideWithValue(() async => (lat: 0.336712, lon: 32.571903))]);
@@ -1994,6 +2184,42 @@ class _FirstSync extends SyncController {
   SyncStatus build() => const SyncStatus(state: SyncState.syncing, first: true, progress: 'Downloading products · 120 of 900');
 }
 /// Sounds that are only written down (there is no audio device in tests).
+extension<T> on List<T> {
+  T addAndReturn(T v) {
+    add(v);
+    return v;
+  }
+}
+
+/// One side of a call, without audio: remembers what it was given.
+class _FakePeer implements RtcPeer {
+  final state = StreamController<String>.broadcast();
+  final candidates = StreamController<Map<String, Object?>>.broadcast();
+  Map<String, Object?>? remote, local;
+  final ice = <Map<String, Object?>>[];
+  bool muted = false, closed = false;
+  @override
+  Future<Map<String, Object?>> createOffer({bool iceRestart = false}) async => local = {'type': 'offer', 'sdp': iceRestart ? 'fake-reoffer' : 'fake-offer'};
+  @override
+  Future<Map<String, Object?>> createAnswer() async => local = {'type': 'answer', 'sdp': 'fake-answer'};
+  @override
+  Future<void> setRemote(Map<String, Object?> d) async => remote = d;
+  @override
+  Future<void> addIce(Map<String, Object?> c) async => ice.add(c);
+  @override
+  bool get hasRemote => remote != null;
+  @override
+  Future<Map<String, Object?>> gathered({Duration wait = const Duration(milliseconds: 700)}) async => local!;
+  @override
+  Stream<String> get connectionState => state.stream;
+  @override
+  Stream<Map<String, Object?>> get iceCandidates => candidates.stream;
+  @override
+  void mute(bool on) => muted = on;
+  @override
+  Future<void> close() async => closed = true;
+}
+
 class _QuietSounds extends Sounds {
   _QuietSounds(super.ref, this.played);
   final List<String> played;
