@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Publishes one Flutter app build as the update the installed "RxPOS New" apps take (rxpos_flutter/lib/core/update):
+# Publishes one Flutter app build as the update the installed new RxPOS apps take (rxpos_flutter/lib/core/update):
 #   scripts/publish-flutter-update.sh <windows|android> <installer file> <build number> <label>
-# Uploads the installer to the R2 bucket rxpos-apps as RxPOS-New-<build>.<ext>, then flutter-<platform>.json
+# Uploads the installer to the R2 bucket rxpos-apps as RxPOS-New-<build>.<ext> (an internal name the apps check, kept
+# so copies installed before the rename to "RxPOS" still update), then flutter-<platform>.json
 # ({ build, label, file, size, sha256 }), then removes the installer the previous version file named. The apps read
 # both through the cloud at https://api.rxposug.com/api/app/<file> (worker/index.js appFile).
 # Needs CLOUDFLARE_API_TOKEN (with R2 edit) and CLOUDFLARE_ACCOUNT_ID; without them it says so and does nothing.

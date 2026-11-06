@@ -41,7 +41,7 @@ RXPOS_CLOUD=http://127.0.0.1:8791 RXPOS_OWNER_KEY=<the local owner key> flutter 
 ```
 
 Builds: every push that changes `rxpos_flutter/` runs `.github/workflows/flutter-apps.yml`, which tests and then builds
-the Windows installer and the Android APK as downloadable artifacts. They install as "RxPOS New", next to the current
+the Windows installer and the Android APK as downloadable artifacts. They install as "RxPOS" (their own folder, Android id io.github.rxpos.rxpos), next to the current
 apps.
 
 The implementation plan, step by step, is in `PLAN.md`.

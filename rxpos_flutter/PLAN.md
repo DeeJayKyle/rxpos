@@ -69,7 +69,7 @@ Milestone 1 is the till and sync on Windows and Android. Each step ends with tes
 - [x] GitHub Actions (`.github/workflows/flutter-apps.yml`): analyze, all tests, the real-cloud tests, then the Android
       APK (signed with the current app's key when the secrets are set) and the Windows installer (Inno Setup, per user,
       no administrator) plus a portable zip, as downloadable artifacts.
-- [x] Installs next to the current apps ("RxPOS New", Android id io.github.rxpos.rxpos), not replacing them.
+- [x] Installs next to the current apps as "RxPOS" (named "RxPOS New" until v1.1; its own Windows folder and Android id io.github.rxpos.rxpos), not replacing them.
 - [ ] App updates for the new apps (store / installer channel to decide before replacing the current apps).
 - [ ] Pilot on one device per platform next to the React app (needs a pharmacy device: not possible from here).
 

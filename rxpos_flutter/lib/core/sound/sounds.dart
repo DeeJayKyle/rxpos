@@ -116,7 +116,7 @@ class Sounds {
 
   Future<SoundPrefs> prefs() async => SoundPrefs.parse(await _ref.read(deviceValueProvider(soundPrefsKey).future));
 
-  static Future<File> customFile(String kind) async => File('${(await getApplicationSupportDirectory()).path}${Platform.pathSeparator}sound-$kind');
+  static Future<File> customFile(String kind) async => File('${(await appSupportDir()).path}${Platform.pathSeparator}sound-$kind');
 
   /// Play the sound for [kind] (or try [tone]); silent when sounds are off on this device (a [tone] test always plays).
   Future<void> play(String kind, {String? tone, double? volume}) async {
@@ -149,3 +149,11 @@ class Sounds {
 }
 
 final soundsProvider = Provider<Sounds>((ref) => Sounds(ref));
+
+/// This app's own files folder. On Windows it is pinned to where it has always been (%APPDATA%\RxPOS\RxPOS New):
+/// the folder Windows would pick follows the product name, and the app was renamed from "RxPOS New" to "RxPOS".
+Future<Directory> appSupportDir() async {
+  final appData = Platform.isWindows ? Platform.environment['APPDATA'] : null;
+  if (appData != null && appData.isNotEmpty) return Directory('$appData\\RxPOS\\RxPOS New').create(recursive: true);
+  return getApplicationSupportDirectory();
+}

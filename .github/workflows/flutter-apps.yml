@@ -1,6 +1,6 @@
 # The Flutter RxPOS apps (rxpos_flutter/): tests, then the Windows installer and the Android APK.
 # Runs on every push that changes rxpos_flutter/ (any branch) and by hand. The live website, cloud and current
-# Electron / Capacitor apps are not touched. Builds of the pilot branch are also offered to the installed "RxPOS New"
+# Electron / Capacitor apps are not touched. Builds of the pilot branch are also offered to the installed new RxPOS
 # apps (the R2 bucket rxpos-apps, read through the cloud at /api/app/; scripts/publish-flutter-update.sh).
 name: Flutter apps
 
@@ -107,17 +107,25 @@ jobs:
           flutter pub get
           flutter build apk --release --build-number=${{ github.run_number }}
           mkdir -p ../out
-          cp build/app/outputs/flutter-apk/app-release.apk "../out/RxPOS-New-${SIGNED}.apk"
+          if [ "$SIGNED" = release ]; then apk=RxPOS.apk; else apk=RxPOS-debug.apk; fi # a debug-signed APK is named so
+          cp build/app/outputs/flutter-apk/app-release.apk "../out/$apk"
+      - name: Remove the files with the old name (RxPOS New) from the pilot release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for id in $(gh api "repos/$GITHUB_REPOSITORY/releases/tags/flutter-pilot" --jq '.assets[] | select(.name | startswith("RxPOS-New-")) | .id' 2>/dev/null); do
+            gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/assets/$id" && echo "removed asset $id"
+          done
       - name: Publish to the pilot pre-release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: flutter-pilot
           target_commitish: ${{ github.sha }}
-          name: RxPOS New (Flutter) – pilot build
+          name: RxPOS (Flutter) – pilot build
           prerelease: true
           make_latest: false
           body: |
-            Pilot builds of the new Flutter apps (Windows and Android). They install as "RxPOS New", next to the current
+            Pilot builds of the new Flutter apps (Windows and Android). They install as "RxPOS", next to the current
             RxPOS apps, and use the same pharmacy account and cloud. Not for general use yet.
           files: out/*.apk
           fail_on_unmatched_files: true
@@ -126,7 +134,7 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: scripts/publish-flutter-update.sh android out/RxPOS-New-release.apk ${{ github.run_number }} "1.0.${{ github.run_number }}"
+        run: scripts/publish-flutter-update.sh android out/RxPOS.apk ${{ github.run_number }} "1.0.${{ github.run_number }}"
 
   windows:
     name: Windows installer
@@ -150,23 +158,23 @@ jobs:
         run: |
           $release = "rxpos_flutter\build\windows\x64\runner\Release"
           New-Item -ItemType Directory -Force out | Out-Null
-          Compress-Archive -Path "$release\*" -DestinationPath "out\RxPOS-New-windows-portable.zip"
+          Compress-Archive -Path "$release\*" -DestinationPath "out\RxPOS-windows-portable.zip"
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path $iscc)) { choco install innosetup --no-progress -y; }
           & $iscc /DAppVersion=1.0.${{ github.run_number }} "/DSourceDir=$((Resolve-Path $release).Path)" /Oout rxpos_flutter\windows\installer\rxpos.iss
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          Move-Item out\RxPOS-New-Setup-*.exe out\RxPOS-New-Setup.exe
+          Move-Item out\RxPOS-Setup-*.exe out\RxPOS-Setup.exe
       - name: Publish to the pilot pre-release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: flutter-pilot
           target_commitish: ${{ github.sha }}
-          name: RxPOS New (Flutter) – pilot build
+          name: RxPOS (Flutter) – pilot build
           prerelease: true
           make_latest: false
           files: |
-            out/RxPOS-New-Setup.exe
-            out/RxPOS-New-windows-portable.zip
+            out/RxPOS-Setup.exe
+            out/RxPOS-windows-portable.zip
           fail_on_unmatched_files: true
       - name: Offer it to the installed apps (pilot branch)
         if: github.ref == 'refs/heads/ccr-54387795-ifu3p1'
@@ -174,4 +182,4 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: scripts/publish-flutter-update.sh windows out/RxPOS-New-Setup.exe ${{ github.run_number }} "1.0.${{ github.run_number }}"
+        run: scripts/publish-flutter-update.sh windows out/RxPOS-Setup.exe ${{ github.run_number }} "1.0.${{ github.run_number }}"

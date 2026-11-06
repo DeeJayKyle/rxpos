@@ -2,6 +2,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui' show Tristate;
 
 import 'package:crypto/crypto.dart';
 
@@ -24,6 +25,7 @@ import 'package:rxpos/core/notify/os_notifications.dart';
 import 'package:rxpos/core/rules/dates.dart';
 import 'package:rxpos/core/sound/sounds.dart';
 import 'package:rxpos/core/sync/sync_config.dart';
+import 'package:rxpos/core/presentation/app_shell.dart' show sidebarStartsCollapsedProvider;
 import 'package:rxpos/core/presentation/page_tip.dart';
 import 'package:rxpos/features/sales_pos/application/sale_controller.dart';
 import 'package:rxpos/features/sales_pos/presentation/pos_screen.dart';
@@ -98,7 +100,7 @@ void main() {
     }
   }
 
-  Future<void> start(WidgetTester tester, {Size size = const Size(1440, 900), List<Override> extra = const [], bool engage = false, bool live = false, bool foreground = true, bool calls = false, bool tips = false}) async {
+  Future<void> start(WidgetTester tester, {Size size = const Size(1440, 900), List<Override> extra = const [], bool engage = false, bool live = false, bool foreground = true, bool calls = false, bool tips = false, bool foldedNav = false}) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -131,6 +133,7 @@ void main() {
           liveOnProvider.overrideWithValue(live), // no real connection to the cloud in tests
           callsOnProvider.overrideWithValue(calls), // voice calls: only in the tests about them
           pageTipsOnProvider.overrideWithValue(tips), // first-visit tips: only in the test about them
+          sidebarStartsCollapsedProvider.overrideWithValue(foldedNav), // sidebar groups open, so pages are found by name
           if (!extra.any((o) => o.origin == updatePlatformProvider)) updatePlatformProvider.overrideWithValue(null), // no self-updates unless a test asks
           osNotifyProvider.overrideWithValue(osNotify),
           appInForegroundProvider.overrideWithValue(() => foreground),
@@ -2428,8 +2431,14 @@ void main() {
       testWidgets('screens on a computer, $tag', (tester) async {
         await tester.runAsync(signedIn);
         await tester.runAsync(() => look(theme));
-        await start(tester);
+        await start(tester, foldedNav: tag == 'light'); // light: the sidebar as it first opens (groups folded)
         await shot(tester, '$tag-01-dashboard');
+        if (tag == 'light') {
+          // open the folded groups again, so the pages below can be found by name
+          await tester.runAsync(() => db.into(db.kv).insertOnConflictUpdate(KvCompanion.insert(k: 'device:navCollapsed', v: '{}')));
+          await done(tester);
+          await start(tester);
+        }
         await toTill(tester);
         await tester.tap(find.text('Calmex 500mg Tabs'));
         await settle(tester, 4);
@@ -2487,6 +2496,39 @@ void main() {
       await shot(tester, 'signin-phone');
       await done(tester);
     }, skip: !on);
+  });
+
+  testWidgets('sidebar groups fold away and stay so on this device; the page you are on and pages with a count still show', (tester) async {
+    await tester.runAsync(signedIn);
+    await start(tester, foldedNav: true);
+    final sidebar = find.byKey(const Key('sidebar'));
+    Finder item(String label) => find.descendant(of: sidebar, matching: find.text(label));
+    // as the React app: at first only Sales is open
+    expect(item('POS – Retail'), findsOneWidget);
+    expect(item('Customers'), findsNothing);
+    expect(item('Settings'), findsNothing);
+    final people = find.byKey(const ValueKey('nav-group-People'));
+    expect(tester.getSemantics(people).flagsCollection.isExpanded, Tristate.isFalse);
+    await tester.tap(people);
+    await settle(tester);
+    expect(item('Customers'), findsOneWidget);
+    expect(tester.getSemantics(people).flagsCollection.isExpanded, Tristate.isTrue);
+    await tester.tap(item('Customers'));
+    await settle(tester);
+    await tester.tap(people);
+    await settle(tester);
+    expect(item('Customers'), findsOneWidget, reason: 'the page you are on stays in a folded group');
+    expect(item('Suppliers'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('nav-group-Sales')));
+    await settle(tester);
+    expect(item('POS – Retail'), findsNothing);
+    final saved = (await tester.runAsync(() => db.select(db.kv).get()))!.firstWhere((k) => k.k == 'device:navCollapsed').v;
+    expect(jsonDecode(saved), containsPair('Sales', true));
+    await done(tester);
+    await start(tester, foldedNav: true);
+    expect(item('POS – Retail'), findsNothing, reason: 'remembered on this device');
+    expect(item('Dashboard'), findsOneWidget, reason: 'the page you are on');
+    await done(tester);
   });
 
   testWidgets('weather from the device GPS when allowed: named from the connection\'s city', (tester) async {

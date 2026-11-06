@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,6 +9,7 @@ import '../../features/auth/application/session_controller.dart';
 import '../../features/auth/presentation/account_menu.dart';
 import '../../features/alerts/application/alerts_provider.dart';
 import '../../features/alerts/presentation/notification_bell.dart';
+import '../data/device_settings.dart';
 import '../data/pharmacy_providers.dart';
 import '../theme/theme_choice.dart';
 import '../crash/crash_reports.dart';
@@ -108,7 +111,14 @@ class AppShell extends ConsumerWidget {
   }
 }
 
-class _Sidebar extends StatelessWidget {
+/// Whether the sidebar's groups start collapsed (all but Sales, as the React app) until someone opens or closes one;
+/// the tests that find pages by name start with them open.
+final sidebarStartsCollapsedProvider = Provider<bool>((_) => true);
+
+/// The device key holding which sidebar groups are collapsed ({"People": true, ...}).
+const navCollapsedKey = 'navCollapsed';
+
+class _Sidebar extends ConsumerWidget {
   const _Sidebar({required this.screens, required this.location, required this.onGo, this.counts = const {}});
   final List<Screen> screens;
   final Map<String, int> counts;
@@ -117,16 +127,53 @@ class _Sidebar extends StatelessWidget {
   final ValueChanged<String> onGo;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final t = Theme.of(context);
+    // which groups are folded away: saved on this device; at first every group but Sales (src/App.jsx collapsed)
+    final saved = ref.watch(deviceValueProvider(navCollapsedKey)).value;
+    Map<String, bool> collapsed;
+    try {
+      collapsed = saved == null
+          ? {for (final g in navGroups) if (g != 'Sales') g: ref.watch(sidebarStartsCollapsedProvider)}
+          : (jsonDecode(saved) as Map).map((k, v) => MapEntry('$k', v == true));
+    } catch (_) {
+      collapsed = const {};
+    }
+    void toggle(String g) => ref.read(deviceValueProvider(navCollapsedKey).notifier).set(jsonEncode({...collapsed, g: !(collapsed[g] ?? false)}));
+    int badge(Screen s) => counts[_badges[s.path]] ?? 0;
+
     return ListView(key: const Key('sidebar'), padding: const EdgeInsets.symmetric(vertical: 8), children: [
       for (final g in navGroups)
         if (screens.any((s) => s.group == g)) ...[
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 12, 12, 4),
-            child: Text(g.toUpperCase(), style: t.textTheme.labelSmall?.copyWith(letterSpacing: .8, fontWeight: FontWeight.w700)),
-          ),
+          () {
+            final shut = collapsed[g] ?? false;
+            // a folded group still shows the page you are on and any page with a count (as the React app)
+            final hidden = shut ? screens.where((s) => s.group == g && s.path != location && badge(s) == 0).length : 0;
+            return Semantics(
+              button: true,
+              expanded: !shut,
+              child: InkWell(
+                key: ValueKey('nav-group-$g'),
+                borderRadius: BorderRadius.circular(8),
+                onTap: () => toggle(g),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 12, 6),
+                  child: Row(children: [
+                    Expanded(child: Text(g.toUpperCase(), style: t.textTheme.labelSmall?.copyWith(letterSpacing: .8, fontWeight: FontWeight.w700))),
+                    if (shut && hidden > 0) Text('$hidden', style: t.textTheme.labelSmall?.copyWith(color: t.colorScheme.onSurfaceVariant)),
+                    const SizedBox(width: 4),
+                    AnimatedRotation(
+                      turns: shut ? -0.25 : 0,
+                      duration: const Duration(milliseconds: 150),
+                      child: Icon(Icons.expand_more, size: 18, color: t.colorScheme.onSurfaceVariant, semanticLabel: shut ? 'Show $g' : 'Hide $g'),
+                    ),
+                  ]),
+                ),
+              ),
+            );
+          }(),
           for (final s in screens.where((s) => s.group == g))
+            if (!(collapsed[g] ?? false) || s.path == location || badge(s) > 0)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
               child: ListTile(
@@ -141,7 +188,7 @@ class _Sidebar extends StatelessWidget {
               leading: Icon(s.icon, size: 20),
               title: Text(s.label),
               trailing: () {
-                final n = counts[_badges[s.path]] ?? 0;
+                final n = badge(s);
                 final key = s.key == null ? null : Text(s.keyLabel, style: t.textTheme.labelSmall);
                 if (n == 0) return key;
                 return Row(mainAxisSize: MainAxisSize.min, children: [
