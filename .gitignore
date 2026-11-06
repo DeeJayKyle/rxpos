@@ -15,3 +15,5 @@ backups/
 *.rxbak
 tests/*.png
 wrangler.test.jsonc
+# test screenshots
+.output/
