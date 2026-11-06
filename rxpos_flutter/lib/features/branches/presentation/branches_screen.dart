@@ -53,7 +53,7 @@ class BranchesScreen extends ConsumerWidget {
       ],
       scroll: true,
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Wrap(spacing: 12, runSpacing: 12, children: [
+        StatGrid(children: [
           StatCard(label: 'Sales today – all branches', value: st.money(stats.fold<double>(0, (a, x) => a + x.today))),
           StatCard(label: 'Sales this month', value: st.money(stats.fold<double>(0, (a, x) => a + x.month)), color: Colors.deepPurple),
           StatCard(label: 'Stock value – all branches', value: st.money(stats.fold<double>(0, (a, x) => a + x.value)),

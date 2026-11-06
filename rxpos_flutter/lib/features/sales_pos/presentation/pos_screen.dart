@@ -719,12 +719,17 @@ class _ProductPanel extends StatelessWidget {
                   ('', 'All'),
                   ('instock', 'In stock'),
                   ('recent', 'Recent'),
-                  ('fav', '★ Favourites'),
+                  ('fav', 'Favourites'),
                   for (final c in categories) ('cat:$c', c),
                 ])
                   Padding(
                     padding: const EdgeInsets.only(right: 6),
-                    child: ChoiceChip(label: Text(label), selected: view == v, onSelected: (_) => onView?.call(v)),
+                    child: ChoiceChip(
+                      avatar: v == 'fav' && view != v ? const Icon(Icons.star_rounded, size: 18, color: Colors.amber) : null,
+                      label: Text(label),
+                      selected: view == v,
+                      onSelected: (_) => onView?.call(v),
+                    ),
                   ),
               ],
             ),
@@ -735,7 +740,7 @@ class _ProductPanel extends StatelessWidget {
                 ? Center(
                     child: Text(
                       view == 'fav'
-                          ? 'No favourites yet — tap ☆ on a medicine to keep it here'
+                          ? 'No favourites yet. Tap the star on a medicine to keep it here.'
                           : view == 'recent'
                           ? 'Nothing sold here yet'
                           : 'No medicines here',
@@ -794,20 +799,23 @@ class _ProductPanel extends StatelessWidget {
                                   style: t.textTheme.bodySmall,
                                 ),
                                 const Spacer(),
-                                Row(
+                                // the price is never cut: when the stock note doesn't fit beside it, it goes under it
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: Wrap(
+                                  alignment: WrapAlignment.spaceBetween,
+                                  crossAxisAlignment: WrapCrossAlignment.center,
+                                  spacing: 4,
                                   children: [
-                                    Expanded(
-                                      child: Text(
+                                    Text(
                                         formatMoney(
                                           priceOf(p, wholesale: wholesale),
                                           currency: s.currency,
                                           decimals: s.decimalPlaces,
                                         ),
                                         maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
                                         style: TextStyle(color: t.colorScheme.primary, fontWeight: FontWeight.w800),
                                       ),
-                                    ),
                                     if (p.rx) const _Tag('Rx'),
                                     if (p.controlled) const _Tag('CD'),
                                     Text(
@@ -822,6 +830,7 @@ class _ProductPanel extends StatelessWidget {
                                       ),
                                     ),
                                   ],
+                                ),
                                 ),
                               ],
                             ),
@@ -897,6 +906,7 @@ class _SalePanel extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final th = Theme.of(context);
+    final narrow = MediaQuery.sizeOf(context).width < 600; // the sale opens as a sheet on a phone
     final s = ref.watch(saleControllerProvider(wholesale));
     final c = ref.read(saleControllerProvider(wholesale).notifier);
     final can = ref.watch(permissionsProvider).value ?? const <String>{};
@@ -983,12 +993,12 @@ class _SalePanel extends ConsumerWidget {
                     child: DropdownButton<String>(
                       isExpanded: true,
                       value: data.customers.any((x) => x.id == s.customerId) ? s.customerId : null,
-                      hint: Text(st.clientCapture == 'required' ? '— choose a client —' : 'Walk-in (no client details)'),
+                      hint: Text(st.clientCapture == 'required' ? '— choose a client —' : 'Walk-in (no client details)', maxLines: 1, overflow: TextOverflow.ellipsis),
                       items: [
                         for (final x in data.customers)
                           DropdownMenuItem(
                             value: x.id,
-                            child: Text(x.id == walkIn ? 'Walk-in (no client details)' : '${x.name}${x.phone.isEmpty ? '' : ' · ${x.phone}'}'),
+                            child: Text(x.id == walkIn ? 'Walk-in (no client details)' : '${x.name}${x.phone.isEmpty ? '' : ' · ${x.phone}'}', maxLines: 1, overflow: TextOverflow.ellipsis),
                           ),
                       ],
                       onChanged: (id) => c.customer(id!, data.customers.firstWhere((x) => x.id == id).name),
@@ -1025,6 +1035,27 @@ class _SalePanel extends ConsumerWidget {
                         final p = data.byId[l.id];
                         final packs = p == null ? const <Pack>[] : packsOf(p);
                         final chosen = s.cursor == i;
+                        List<Widget> qtyAndTotal() => [
+                                Container(
+                                  decoration: BoxDecoration(border: Border.all(color: th.colorScheme.outline), borderRadius: BorderRadius.circular(10)),
+                                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                                    IconButton(onPressed: () => guard(() => c.step(l.id, -1)), icon: const Icon(Icons.remove, size: 18), tooltip: 'Less', style: _stepper),
+                                    SizedBox(
+                                      width: 30,
+                                      child: Text(formatQty(l.count), textAlign: TextAlign.center, style: th.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
+                                    ),
+                                    IconButton(onPressed: () => guard(() => c.step(l.id, 1)), icon: const Icon(Icons.add, size: 18), tooltip: 'More', style: _stepper),
+                                  ]),
+                                ),
+                                SizedBox(
+                                  width: 88,
+                                  child: Text(
+                                    fmt(l.total),
+                                    textAlign: TextAlign.right,
+                                    style: const TextStyle(fontWeight: FontWeight.w700),
+                                  ),
+                                ),
+                        ];
                         return Dismissible(
                           key: ValueKey('line-${l.id}'),
                           direction: DismissDirection.endToStart,
@@ -1088,45 +1119,32 @@ class _SalePanel extends ConsumerWidget {
                                             child: Text('@ ${fmt(l.pack?.price ?? l.price)}', style: th.textTheme.bodySmall),
                                           ),
                                           if (l.price < l.cost) Text('  below cost', style: TextStyle(color: th.colorScheme.error, fontSize: 12)),
-                                          TextButton(
+                                          TextButton.icon(
                                             key: Key('directions-${l.id}'),
-                                            style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+                                            style: _lineAction,
                                             onPressed: () async {
                                               final dir = await askDirections(context, l, st, patient: s.customerId == walkIn ? '' : s.customerName);
                                               if (dir != null) c.directions(l.id, dir.isEmpty ? null : dir);
                                             },
-                                            child: Text(l.directions == null ? 'Directions' : 'Label ✓'),
+                                            icon: Icon(l.directions == null ? Icons.edit_note : Icons.check_circle, size: 16),
+                                            label: Text(l.directions == null ? 'Directions' : 'Edit label'),
                                           ),
                                           if (p != null && data.features['drugInfo'] != false)
-                                            TextButton(
-                                              style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+                                            TextButton.icon(
+                                              style: _lineAction,
                                               onPressed: () => showDrugInfo(context, p, data),
-                                              child: const Text('Drug info'),
+                                              icon: const Icon(Icons.info_outline, size: 16),
+                                              label: const Text('Drug info'),
                                             ),
                                         ],
                                       ),
+                                      // on a phone the quantity and the line total go under the name, so the name keeps the width
+                                      if (narrow) Row(children: [qtyAndTotal().first, const Spacer(), Text(fmt(l.total), style: const TextStyle(fontWeight: FontWeight.w700))]),
                                     ],
                                   ),
                                 ),
-                                IconButton(onPressed: () => guard(() => c.step(l.id, -1)), icon: const Icon(Icons.remove), tooltip: 'Less'),
-                                SizedBox(
-                                  width: 34,
-                                  child: Text(
-                                    formatQty(l.count),
-                                    textAlign: TextAlign.center,
-                                    style: const TextStyle(fontWeight: FontWeight.w700),
-                                  ),
-                                ),
-                                IconButton(onPressed: () => guard(() => c.step(l.id, 1)), icon: const Icon(Icons.add), tooltip: 'More'),
-                                SizedBox(
-                                  width: 92,
-                                  child: Text(
-                                    fmt(l.total),
-                                    textAlign: TextAlign.right,
-                                    style: const TextStyle(fontWeight: FontWeight.w700),
-                                  ),
-                                ),
-                                IconButton(onPressed: () => c.remove(l.id), icon: const Icon(Icons.close, size: 18), tooltip: 'Remove ${l.name}'),
+                                if (!narrow) ...qtyAndTotal(),
+                                IconButton(onPressed: () => c.remove(l.id), icon: const Icon(Icons.close, size: 18), tooltip: 'Remove ${l.name}', color: th.colorScheme.onSurfaceVariant),
                               ],
                             ),
                           ),
@@ -1160,11 +1178,22 @@ class _SalePanel extends ConsumerWidget {
               ],
             ),
             const SizedBox(height: 8),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: [for (final m in data.methods) ChoiceChip(label: Text(m.name), selected: m.id == method.id, onSelected: (_) => c.method(m))],
-            ),
+            // on a phone the payment methods scroll sideways in one row, so the sale lines keep their room
+            if (narrow)
+              SingleChildScrollView(
+                key: const Key('pay-methods'),
+                scrollDirection: Axis.horizontal,
+                child: Row(children: [
+                  for (final m in data.methods)
+                    Padding(padding: const EdgeInsets.only(right: 6), child: ChoiceChip(label: Text(m.name), selected: m.id == method.id, onSelected: (_) => c.method(m))),
+                ]),
+              )
+            else
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [for (final m in data.methods) ChoiceChip(label: Text(m.name), selected: m.id == method.id, onSelected: (_) => c.method(m))],
+              ),
             if (method.type == 'cash' || method.type == 'credit') ...[
               const SizedBox(height: 8),
               Row(
@@ -1192,36 +1221,44 @@ class _SalePanel extends ConsumerWidget {
               ),
             ],
             const SizedBox(height: 10),
-            Row(
-              children: [
-                OutlinedButton.icon(
-                  onPressed: s.lines.isEmpty ? null : () => c.hold(),
-                  icon: const Icon(Icons.pause_circle_outline),
-                  label: const Text('Hold'),
-                ),
-                if (can.contains('proformas') && data.features['proformas'] != false) ...[
-                  const SizedBox(width: 8),
-                  OutlinedButton.icon(
-                    onPressed: s.lines.isEmpty
-                        ? null
-                        : () async {
-                            final pf = await c.proformaNow();
-                            if (context.mounted) say(context, 'Proforma ${pf['number']} saved (see Proformas)');
-                          },
-                    icon: const Icon(Icons.description_outlined),
-                    label: const Text('Proforma'),
-                  ),
-                ],
+            () {
+              final hold = OutlinedButton.icon(
+                onPressed: s.lines.isEmpty ? null : () => c.hold(),
+                icon: const Icon(Icons.pause_circle_outline),
+                label: const Text('Hold'),
+              );
+              final proforma = can.contains('proformas') && data.features['proformas'] != false
+                  ? OutlinedButton.icon(
+                      onPressed: s.lines.isEmpty
+                          ? null
+                          : () async {
+                              final pf = await c.proformaNow();
+                              if (context.mounted) say(context, 'Proforma ${pf['number']} saved (see Proformas)');
+                            },
+                      icon: const Icon(Icons.description_outlined),
+                      label: const Text('Proforma'),
+                    )
+                  : null;
+              final charge = FilledButton(
+                onPressed: s.lines.isEmpty ? null : onCharge,
+                style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16)),
+                child: Text('${advanced ? 'Process checkout' : 'Charge'} ${fmt(t.total)}   [F9]', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+              );
+              // on a phone: Hold and Proforma side by side, then Charge across the whole width
+              if (narrow) {
+                return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  Row(children: [Expanded(child: hold), if (proforma != null) ...[const SizedBox(width: 8), Expanded(child: proforma)]]),
+                  const SizedBox(height: 8),
+                  charge,
+                ]);
+              }
+              return Row(children: [
+                hold,
+                if (proforma != null) ...[const SizedBox(width: 8), proforma],
                 const SizedBox(width: 8),
-                Expanded(
-                  child: FilledButton(
-                    onPressed: s.lines.isEmpty ? null : onCharge,
-                    style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 18)),
-                    child: Text('${advanced ? 'Process checkout' : 'Charge'} ${fmt(t.total)}   [F9]', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-                  ),
-                ),
-              ],
-            ),
+                Expanded(child: charge),
+              ]);
+            }(),
           ],
         ),
       ),
@@ -1232,3 +1269,9 @@ class _SalePanel extends ConsumerWidget {
 extension on String {
   String ifBlank(String other) => trim().isEmpty ? other : this;
 }
+
+/// The small actions under a sale line (Directions, Drug info): compact, still easy to hit.
+final _lineAction = TextButton.styleFrom(minimumSize: const Size(0, 36), padding: const EdgeInsets.symmetric(horizontal: 8), visualDensity: VisualDensity.compact);
+
+/// The − / + of a sale line's quantity.
+final _stepper = IconButton.styleFrom(minimumSize: const Size(36, 36), padding: EdgeInsets.zero, visualDensity: VisualDensity.compact);

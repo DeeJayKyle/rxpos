@@ -127,9 +127,17 @@ class _Sidebar extends StatelessWidget {
             child: Text(g.toUpperCase(), style: t.textTheme.labelSmall?.copyWith(letterSpacing: .8, fontWeight: FontWeight.w700)),
           ),
           for (final s in screens.where((s) => s.group == g))
-            ListTile(
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
+              child: ListTile(
               dense: true,
               selected: s.path == location,
+              // the page you are on: a filled pill, not only a colour change
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+              selectedTileColor: t.colorScheme.primaryContainer,
+              selectedColor: t.colorScheme.onPrimaryContainer,
+              titleTextStyle: t.textTheme.bodyMedium?.copyWith(fontWeight: s.path == location ? FontWeight.w700 : FontWeight.w500),
               leading: Icon(s.icon, size: 20),
               title: Text(s.label),
               trailing: () {
@@ -142,6 +150,7 @@ class _Sidebar extends StatelessWidget {
                 ]);
               }(),
               onTap: () => onGo(s.path),
+            ),
             ),
         ],
     ]);

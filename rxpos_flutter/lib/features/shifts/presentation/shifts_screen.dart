@@ -47,7 +47,7 @@ class ShiftsScreen extends ConsumerWidget {
       scroll: true,
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         if (live != null) ...[
-          Wrap(spacing: 12, runSpacing: 12, children: [
+          StatGrid(children: [
             StatCard(label: 'Sales this shift', value: st.money(live.total), sub: '${live.count} sales'),
             StatCard(label: 'Expected cash', value: st.money(live.expectedCash), sub: 'float ${st.money(open!.float)} + cash − refunds'),
             StatCard(label: 'On credit', value: st.money(live.credit)),

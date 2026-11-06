@@ -55,8 +55,11 @@ class StatCard extends StatelessWidget {
     final vivid = t.extension<LookLevel>()?.vivid ?? false;
     final (va, vb) = vividFor(color);
     final ink = vivid ? Colors.white : null;
-    return SizedBox(
-      width: 250,
+    // a figure's colour (purple, orange, blue…) is lifted until it reads on this card: AA on light and dark themes
+    final dark = t.brightness == Brightness.dark;
+    final shown = color == null ? null : Color(readable(color!.toARGB32(), [t.cardTheme.color?.toARGB32() ?? t.colorScheme.surface.toARGB32()], dark ? 0xFFFFFFFF : 0xFF000000));
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minWidth: 200, maxWidth: 250),
       child: Card(
         margin: EdgeInsets.zero,
         clipBehavior: Clip.antiAlias,
@@ -70,10 +73,10 @@ class StatCard extends StatelessWidget {
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Row(children: [
                 Expanded(child: Text(label.toUpperCase(), style: t.textTheme.labelSmall?.copyWith(letterSpacing: .6, fontWeight: FontWeight.w700, color: ink))),
-                if (icon != null) Icon(icon, size: 20, color: ink ?? color ?? t.colorScheme.primary),
+                if (icon != null) Icon(icon, size: 20, color: ink ?? shown ?? t.colorScheme.primary),
               ]),
               const SizedBox(height: 6),
-              Text(value, style: t.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800, color: ink ?? color)),
+              Text(value, style: t.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800, color: ink ?? shown)),
               if (sub != null) Text(sub!, style: t.textTheme.bodySmall?.copyWith(color: ink?.withValues(alpha: .9))),
             ]),
           ),
@@ -82,6 +85,25 @@ class StatCard extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Figures side by side that fill the row: each [StatCard] gets an equal share of the width (at least [minWidth]),
+/// so a row never ends in a gap; anything else in the grid keeps its own size.
+class StatGrid extends StatelessWidget {
+  const StatGrid({super.key, required this.children, this.minWidth = 230, this.spacing = 12});
+  final List<Widget> children;
+  final double minWidth, spacing;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(builder: (context, c) {
+        final cards = children.whereType<StatCard>().length;
+        final w = c.maxWidth.isFinite ? c.maxWidth : minWidth * 4;
+        final cols = ((w + spacing) / (minWidth + spacing)).floor().clamp(1, cards == 0 ? 1 : cards);
+        final cw = ((w - spacing * (cols - 1)) / cols).floorToDouble();
+        return Wrap(spacing: spacing, runSpacing: spacing, children: [
+          for (final x in children) x is StatCard ? SizedBox(width: cw, child: x) : x,
+        ]);
+      });
 }
 
 class SearchField extends StatelessWidget {
@@ -210,7 +232,9 @@ Future<Map<String, Object?>?> editRecord(BuildContext context, {required String 
                       FieldKind.choice => DropdownButtonFormField<String>(
                           initialValue: f.options.any((o) => o.$1 == values[f.key]) ? values[f.key] as String : null,
                           decoration: InputDecoration(labelText: f.label),
-                          items: [for (final o in f.options) DropdownMenuItem(value: o.$1, child: Text(o.$2))],
+                          // the field's full width; a long choice ends in "…" instead of running off the edge
+                          isExpanded: true,
+                          items: [for (final o in f.options) DropdownMenuItem(value: o.$1, child: Text(o.$2, maxLines: 1, overflow: TextOverflow.ellipsis))],
                           validator: (v) => f.required && v == null ? 'Choose ${f.label.toLowerCase()}' : null,
                           onChanged: (v) => values[f.key] = v,
                         ),

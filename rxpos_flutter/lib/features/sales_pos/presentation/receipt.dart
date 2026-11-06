@@ -150,7 +150,11 @@ class _ReceiptDialogState extends ConsumerState<_ReceiptDialog> {
     final wa = normalizePhone(_phone.text);
     final text = receiptText(s, st);
     return AlertDialog(
-      title: const Text('Sale complete ✓'),
+      title: Row(children: [
+        Icon(Icons.check_circle, color: Colors.green.shade600),
+        const SizedBox(width: 10),
+        const Flexible(child: Text('Sale complete')),
+      ]),
       content: SizedBox(
         width: 380,
         child: SingleChildScrollView(
@@ -216,7 +220,12 @@ class _ReceiptDialogState extends ConsumerState<_ReceiptDialog> {
                   ),
                 ],
               ),
-              if (_sent.isNotEmpty) Text(_sent == 'sms' ? '✓ Sent by SMS' : '✓ Opened WhatsApp with the receipt', style: const TextStyle(color: Colors.green)),
+              if (_sent.isNotEmpty)
+                Row(children: [
+                  Icon(Icons.check_circle, size: 18, color: Colors.green.shade700),
+                  const SizedBox(width: 6),
+                  Flexible(child: Text(_sent == 'sms' ? 'Sent by SMS' : 'Opened WhatsApp with the receipt', style: TextStyle(color: Colors.green.shade700))),
+                ]),
             ],
           ),
         ),

@@ -64,7 +64,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       actions: [if (can.contains('pos.sell')) FilledButton.icon(onPressed: () => context.go('/pos'), icon: const Icon(Icons.point_of_sale), label: const Text('New sale'))],
       scroll: true,
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Wrap(spacing: 12, runSpacing: 12, children: [
+        StatGrid(children: [
           StatCard(label: 'Today\'s sales', value: s.money(t.total), sub: '${t.count} sale${t.count == 1 ? '' : 's'}${delta(t.total, y.total)}', icon: Icons.payments_outlined,
               onTap: can.contains('sales.view') ? () => context.go('/sales') : null),
           if (can.contains('reports'))
@@ -74,7 +74,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           StatCard(label: 'Transactions', value: '${t.count}', sub: 'receipts today${delta(t.count.toDouble(), y.count.toDouble())}', icon: Icons.receipt_long_outlined, color: Colors.blue),
         ]),
         const SizedBox(height: 16),
-        Wrap(spacing: 12, runSpacing: 12, children: [
+        StatGrid(children: [
           StatCard(label: 'Low stock', value: '$low', sub: 'in stock, at or below reorder level', icon: Icons.inventory_2_outlined, color: low > 0 ? Colors.orange.shade800 : null,
               onTap: () => context.go('/inventory?filter=low')),
           StatCard(label: 'Soon expiring', value: '${exp.soon.map((x) => x.$1.id).toSet().length}', sub: 'within $warn days', icon: Icons.event_outlined,
@@ -140,7 +140,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           ),
         ]),
         const SizedBox(height: 16),
-        Wrap(spacing: 12, runSpacing: 12, children: [
+        StatGrid(children: [
           StatCard(label: 'Products', value: '${data.products.length}', icon: Icons.medication_outlined, onTap: () => context.go('/medicines')),
           StatCard(label: 'Customers', value: '${data.customers.where((c) => c.id != 'walk-in').length}', icon: Icons.people_outline, onTap: () => context.go('/customers')),
         ]),

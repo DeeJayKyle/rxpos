@@ -28,8 +28,17 @@ String compact(double v) {
 const _monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 String _day(String k) => '${int.parse(k.substring(8, 10))} ${_monthNames[int.parse(k.substring(5, 7)) - 1]}';
 
-void _text(Canvas c, String s, Offset at, {Color color = const Color(0xFF6B7280), double size = 10, TextAlign align = TextAlign.left}) {
-  final tp = TextPainter(text: TextSpan(text: s, style: TextStyle(color: color, fontSize: size)), textDirection: TextDirection.ltr)..layout();
+/// The axis text of the chart being painted: the app's font and its readable muted colour (AA on light and dark
+/// themes), set by each chart as it builds.
+TextStyle _axis = const TextStyle(color: Color(0xFF6B7280));
+
+void _axisFrom(BuildContext context) {
+  final t = Theme.of(context);
+  _axis = (t.textTheme.labelSmall ?? const TextStyle()).copyWith(color: t.colorScheme.onSurfaceVariant, fontFeatures: const [FontFeature.tabularFigures()]);
+}
+
+void _text(Canvas c, String s, Offset at, {Color? color, double size = 10, TextAlign align = TextAlign.left}) {
+  final tp = TextPainter(text: TextSpan(text: s, style: _axis.copyWith(color: color, fontSize: size)), textDirection: TextDirection.ltr)..layout();
   final dx = switch (align) { TextAlign.right || TextAlign.end => -tp.width, TextAlign.center => -tp.width / 2, _ => 0.0 };
   tp.paint(c, at + Offset(dx, -tp.height / 2));
 }
@@ -52,6 +61,7 @@ class _DailyTrendState extends State<DailyTrend> {
 
   @override
   Widget build(BuildContext context) {
+    _axisFrom(context);
     final keys = widget.keysFor(_range);
     final vals = [for (final k in keys) widget.byDay[k] ?? 0.0];
     final done = vals.sublist(0, vals.length - 1);
@@ -173,6 +183,7 @@ class _MonthLinesState extends State<MonthLines> {
   int _months = 6;
   @override
   Widget build(BuildContext context) {
+    _axisFrom(context);
     final keys = widget.monthKeys(_months);
     final th = Theme.of(context);
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -243,9 +254,13 @@ class BarChart extends StatelessWidget {
   final double height;
   @override
   Widget build(BuildContext context) => LayoutBuilder(
+        // (the axis text style is taken in the builder below)
         builder: (_, box) => Tooltip(
           message: data.isEmpty ? '' : 'Highest ${money(data.map((x) => x.$2).reduce(max))}',
-          child: CustomPaint(size: Size(box.maxWidth, height), painter: _BarsPainter(data, Theme.of(context).dividerColor)),
+          child: CustomPaint(size: Size(box.maxWidth, height), painter: (() {
+            _axisFrom(context);
+            return _BarsPainter(data, Theme.of(context).dividerColor);
+          })()),
         ),
       );
 }
@@ -316,6 +331,7 @@ class ShareTable extends StatelessWidget {
   final String Function(num) money;
   @override
   Widget build(BuildContext context) {
+    _axisFrom(context);
     final all = parts.fold<double>(0, (a, p) => a + p.$2);
     return Column(children: [
       for (final (i, (k, v)) in parts.indexed)

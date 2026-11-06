@@ -127,7 +127,11 @@ class _ScanPrescriptionScreenState extends ConsumerState<ScanPrescriptionScreen>
                   ]),
                 ],
                 const SizedBox(height: 8),
-                Text('⚠ AI can misread handwriting. A pharmacist must always check the prescription before dispensing.', style: th.textTheme.bodySmall),
+                Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Icon(Icons.warning_amber_rounded, size: 18, color: Colors.orange.shade800),
+                  const SizedBox(width: 6),
+                  Expanded(child: Text('AI can misread handwriting. A pharmacist must always check the prescription before dispensing.', style: th.textTheme.bodySmall)),
+                ]),
               ]),
             ),
           ),

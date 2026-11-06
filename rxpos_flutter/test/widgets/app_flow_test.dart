@@ -238,7 +238,7 @@ void main() {
     expect(find.text('Charge UGX 1,000   [F9]'), findsOneWidget);
     await tester.tap(find.text('Charge UGX 1,000   [F9]'));
     await settle(tester);
-    expect(find.text('Sale complete ✓'), findsOneWidget);
+    expect(find.text('Sale complete'), findsOneWidget);
     final store = RecordStore(db);
     final sale = (await tester.runAsync(() => store.rows('sales')))!.single;
     expect((sale['total'], sale['cashier'], sale['payment']), (1000, 'Tia Admin', 'Cash'));
@@ -295,7 +295,7 @@ void main() {
     await settle(tester);
     await tester.tap(find.text('Charge UGX 500   [F9]'));
     await settle(tester);
-    expect(find.text('Sale complete ✓'), findsOneWidget);
+    expect(find.text('Sale complete'), findsOneWidget);
     await done(tester);
   });
 
@@ -578,7 +578,7 @@ void main() {
     // favourites
     await tester.tap(find.byKey(const Key('star-p1')));
     await settle(tester);
-    await tester.tap(find.widgetWithText(ChoiceChip, '★ Favourites'));
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Favourites'));
     await settle(tester);
     expect(find.text('Calmex 500mg Tabs'), findsOneWidget);
     expect(find.text('Oldex Drops 10ml'), findsNothing);
@@ -604,7 +604,7 @@ void main() {
     await tester.enterText(find.byKey(const Key('dir-freq')), 'twice a day');
     await tester.tap(find.text('Done'));
     await settle(tester);
-    expect(find.text('Label ✓'), findsOneWidget);
+    expect(find.text('Edit label'), findsOneWidget);
 
     // the sale survives a restart of the app
     await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 400)));
@@ -615,12 +615,12 @@ void main() {
     await toTill(tester);
     await settle(tester);
     expect(find.text('Expired stock · No alternative in town'), findsOneWidget, reason: 'the sale came back after the restart');
-    expect(find.text('Label ✓'), findsOneWidget);
+    expect(find.text('Edit label'), findsOneWidget);
 
     // charge it: the expired override is on the sale and in the audit log
     await tester.tap(find.textContaining('Charge UGX 2,000'));
     await settle(tester);
-    expect(find.text('Sale complete ✓'), findsOneWidget);
+    expect(find.text('Sale complete'), findsOneWidget);
     await tester.tap(find.text('New sale'));
     await settle(tester);
     final sale = (await tester.runAsync(() => RecordStore(db).rows('sales')))!.single;
@@ -697,7 +697,7 @@ void main() {
     await cmd('disc 10');
     expect(find.text('Done'), findsOneWidget);
     await cmd('pay');
-    expect(find.text('Sale complete ✓'), findsOneWidget);
+    expect(find.text('Sale complete'), findsOneWidget);
     final sale = (await tester.runAsync(() => RecordStore(db).rows('sales')))!.single;
     expect((sale['total'], sale['discount'], sale['customerName']), (1800, 200, 'Grace Achieng'));
     await tester.tap(find.text('New sale'));
@@ -2398,6 +2398,95 @@ void main() {
       expect(find.text('Selling quickly'), findsNothing, reason: 'remembered on this device');
       await done(tester);
     });
+  });
+
+  // Screenshots of the real screens with real fonts, for reviewing the look (not part of the normal run):
+  //   flutter test test/widgets/app_flow_test.dart --plain-name screenshots --dart-define=SCREENS=true --update-goldens
+  // The images land in test/widgets/screens/ (ignored by git).
+  group('screenshots', () {
+    const on = bool.fromEnvironment('SCREENS');
+    setUpAll(() async {
+      if (!on) return;
+      final fonts = '${Platform.environment['FLUTTER_ROOT'] ?? '/root/flutter'}/bin/cache/artifacts/material_fonts';
+      final roboto = FontLoader('Roboto');
+      for (final w in ['Regular', 'Medium', 'Bold', 'Black', 'Light']) {
+        roboto.addFont(File('$fonts/Roboto-$w.ttf').readAsBytes().then(ByteData.sublistView));
+      }
+      await roboto.load();
+      await (FontLoader('MaterialIcons')..addFont(File('$fonts/MaterialIcons-Regular.otf').readAsBytes().then(ByteData.sublistView))).load();
+    });
+
+    Future<void> look(String theme) => db.into(db.kv).insertOnConflictUpdate(KvCompanion.insert(k: 'device:look', v: '{"theme":"$theme"}'));
+
+    Future<void> shot(WidgetTester tester, String name) async {
+      noSnackBars(tester);
+      await settle(tester, 6);
+      await expectLater(find.byType(MaterialApp).first, matchesGoldenFile('screens/$name.png'));
+    }
+
+    for (final (theme, tag) in [('hybrid-light', 'light'), ('hybrid-dark', 'dark')]) {
+      testWidgets('screens on a computer, $tag', (tester) async {
+        await tester.runAsync(signedIn);
+        await tester.runAsync(() => look(theme));
+        await start(tester);
+        await shot(tester, '$tag-01-dashboard');
+        await toTill(tester);
+        await tester.tap(find.text('Calmex 500mg Tabs'));
+        await settle(tester, 4);
+        await shot(tester, '$tag-02-pos');
+        for (final (i, screen) in ['Medicine List', 'Add Stock', 'Sales History', 'Reports', 'Customers', 'Finance', 'Settings', 'This device', 'Chat & Messages'].indexed) {
+          await navTo(tester, screen);
+          await shot(tester, '$tag-${(i + 3).toString().padLeft(2, '0')}-${screen.toLowerCase().replaceAll(RegExp(r'[^a-z]+'), '-')}');
+        }
+        await navTo(tester, 'Medicine List');
+        await tester.tap(find.text('Add medicine'));
+        await settle(tester);
+        await shot(tester, '$tag-20-dialog');
+        await done(tester);
+      }, skip: !on);
+    }
+
+    testWidgets('screens on a phone', (tester) async {
+      await tester.runAsync(signedIn);
+      await tester.runAsync(() => look('hybrid-light'));
+      await start(tester, size: const Size(400, 860));
+      await shot(tester, 'phone-01-dashboard');
+      await tester.tap(find.byTooltip('Open navigation menu'));
+      await settle(tester);
+      await shot(tester, 'phone-02-menu');
+      await tester.tap(find.text('POS – Retail'));
+      await settle(tester);
+      await tester.tap(find.text('Calmex 500mg Tabs'));
+      await settle(tester, 4);
+      await shot(tester, 'phone-03-pos');
+      await done(tester);
+      // a small phone with the largest common system text size: nothing cut off or overflowing
+      tester.platformDispatcher.textScaleFactorTestValue = 1.5;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      await start(tester, size: const Size(375, 812));
+      await shot(tester, 'phone-04-large-text-dashboard');
+      await tester.tap(find.byTooltip('Open navigation menu'));
+      await settle(tester);
+      await tester.tap(find.text('POS – Retail'));
+      await settle(tester);
+      await tester.tap(find.text('Calmex 500mg Tabs'));
+      await settle(tester, 4);
+      await shot(tester, 'phone-05-large-text-pos');
+      await tester.tap(find.text('1 item'));
+      await settle(tester);
+      await shot(tester, 'phone-06-large-text-sale');
+      await done(tester);
+    }, skip: !on);
+
+    testWidgets('sign-in screen', (tester) async {
+      await tester.runAsync(() => look('hybrid-light'));
+      await start(tester);
+      await shot(tester, 'signin-desktop');
+      await done(tester);
+      await start(tester, size: const Size(400, 860));
+      await shot(tester, 'signin-phone');
+      await done(tester);
+    }, skip: !on);
   });
 
   testWidgets('weather from the device GPS when allowed: named from the connection\'s city', (tester) async {

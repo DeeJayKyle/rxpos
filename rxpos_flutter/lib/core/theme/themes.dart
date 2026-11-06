@@ -219,6 +219,28 @@ ThemeData buildTheme(Palette base, {String accent = '', String surface = 'flat',
     'skeuomorphism' => BorderSide(color: Color(p.borderStrong), width: 1.2),
     _ => BorderSide.none,
   };
+  // figures of equal width everywhere, so amounts line up in lists and totals; headings a little heavier
+  const tabular = [FontFeature.tabularFigures()];
+  final m3 = ThemeData(useMaterial3: true, brightness: p.dark ? Brightness.dark : Brightness.light).textTheme; // sizes are added by Theme.of
+  TextStyle? tab(TextStyle? x, [FontWeight? w]) => x?.copyWith(fontFeatures: tabular, fontWeight: w ?? x.fontWeight);
+  final text = m3.copyWith(
+    displaySmall: tab(m3.displaySmall, FontWeight.w700),
+    headlineLarge: tab(m3.headlineLarge, FontWeight.w800),
+    headlineMedium: tab(m3.headlineMedium, FontWeight.w800),
+    headlineSmall: tab(m3.headlineSmall, FontWeight.w800),
+    titleLarge: tab(m3.titleLarge, FontWeight.w700),
+    titleMedium: tab(m3.titleMedium, FontWeight.w600),
+    titleSmall: tab(m3.titleSmall, FontWeight.w600),
+    bodyLarge: tab(m3.bodyLarge),
+    bodyMedium: tab(m3.bodyMedium),
+    bodySmall: tab(m3.bodySmall)?.copyWith(color: Color(muted)),
+    labelLarge: tab(m3.labelLarge, FontWeight.w600),
+    labelMedium: tab(m3.labelMedium, FontWeight.w600),
+    labelSmall: tab(m3.labelSmall),
+  );
+  final control = RoundedRectangleBorder(borderRadius: BorderRadius.circular(10));
+  final label = text.labelLarge;
+  OutlineInputBorder field(Color c, [double w = 1]) => OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: c, width: w));
   return ThemeData(
     useMaterial3: true,
     colorScheme: scheme,
@@ -232,6 +254,76 @@ ThemeData buildTheme(Palette base, {String accent = '', String surface = 'flat',
       shadowColor: surface == 'neumorphism' ? Color(p.dark ? 0xFF000000 : 0xFFA3B1C6) : null,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(radius), side: side),
     ),
-    appBarTheme: AppBarTheme(backgroundColor: Color(p.surface), foregroundColor: Color(p.text), surfaceTintColor: Colors.transparent),
+    appBarTheme: AppBarTheme(
+      backgroundColor: Color(p.surface),
+      foregroundColor: Color(p.text),
+      surfaceTintColor: Colors.transparent,
+      scrolledUnderElevation: 0,
+      shape: Border(bottom: BorderSide(color: Color(p.border))),
+      titleTextStyle: text.titleLarge?.copyWith(fontSize: 20, fontWeight: FontWeight.w700, color: Color(p.text)),
+    ),
+    textTheme: text,
+    // one look for every text field: outlined, lightly filled, the label always readable, errors in the error colour
+    inputDecorationTheme: InputDecorationTheme(
+      filled: true,
+      fillColor: Color(p.dark ? p.surface2 : p.surface),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      border: field(Color(p.borderStrong)),
+      enabledBorder: field(Color(p.borderStrong)),
+      focusedBorder: field(scheme.primary, 2),
+      errorBorder: field(scheme.error),
+      focusedErrorBorder: field(scheme.error, 2),
+      disabledBorder: field(Color(p.border)),
+      labelStyle: TextStyle(color: Color(muted)),
+      floatingLabelStyle: TextStyle(color: Color(primaryText), fontWeight: FontWeight.w600),
+      hintStyle: TextStyle(color: Color(muted)),
+      prefixIconColor: Color(muted),
+      suffixIconColor: Color(muted),
+    ),
+    // buttons: at least 44 px high (easy to hit on a phone and with a mouse), one corner radius for all of them
+    filledButtonTheme: FilledButtonThemeData(style: FilledButton.styleFrom(minimumSize: const Size(64, 44), shape: control, textStyle: label)),
+    elevatedButtonTheme: ElevatedButtonThemeData(style: ElevatedButton.styleFrom(minimumSize: const Size(64, 44), shape: control, textStyle: label)),
+    outlinedButtonTheme: OutlinedButtonThemeData(
+      style: OutlinedButton.styleFrom(minimumSize: const Size(64, 44), shape: control, textStyle: label, side: BorderSide(color: Color(p.borderStrong))),
+    ),
+    textButtonTheme: TextButtonThemeData(style: TextButton.styleFrom(minimumSize: const Size(48, 40), shape: control, textStyle: label, foregroundColor: Color(primaryText))),
+    iconButtonTheme: IconButtonThemeData(style: IconButton.styleFrom(minimumSize: const Size(40, 40))),
+    segmentedButtonTheme: SegmentedButtonThemeData(style: SegmentedButton.styleFrom(minimumSize: const Size(48, 40), shape: control, side: BorderSide(color: Color(p.borderStrong)))),
+    chipTheme: ChipThemeData(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      // the chosen chip (payment method, filter) stands out by its border as well as its fill
+      side: WidgetStateBorderSide.resolveWith((st) => BorderSide(color: st.contains(WidgetState.selected) ? scheme.primary : Color(p.borderStrong), width: st.contains(WidgetState.selected) ? 1.5 : 1)),
+      labelStyle: text.labelLarge?.copyWith(color: Color(p.text)),
+      selectedColor: scheme.primaryContainer,
+      checkmarkColor: scheme.onPrimaryContainer,
+    ),
+    dialogTheme: DialogThemeData(
+      backgroundColor: Color(p.surface),
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(radius + 4)),
+      titleTextStyle: text.titleLarge?.copyWith(fontSize: 20, fontWeight: FontWeight.w700, color: Color(p.text)),
+    ),
+    bottomSheetTheme: BottomSheetThemeData(backgroundColor: Color(p.surface), surfaceTintColor: Colors.transparent, showDragHandle: true),
+    popupMenuTheme: PopupMenuThemeData(color: Color(p.surface), surfaceTintColor: Colors.transparent, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10), side: BorderSide(color: Color(p.border)))),
+    menuTheme: MenuThemeData(style: MenuStyle(backgroundColor: WidgetStatePropertyAll(Color(p.surface)), surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent))),
+    snackBarTheme: SnackBarThemeData(
+      behavior: SnackBarBehavior.floating,
+      width: 520,
+      backgroundColor: Color(p.dark ? mix(p.surface2, 0xFFFFFFFF, .12) : p.sidebar),
+      contentTextStyle: text.bodyMedium?.copyWith(color: Colors.white),
+      actionTextColor: Color(p.dark ? p.primary : mix(p.primary, 0xFFFFFFFF, .45)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+    ),
+    tooltipTheme: TooltipThemeData(
+      decoration: BoxDecoration(color: Color(p.dark ? mix(p.surface2, 0xFFFFFFFF, .15) : p.sidebar), borderRadius: BorderRadius.circular(6)),
+      textStyle: text.bodySmall?.copyWith(color: Colors.white),
+      waitDuration: const Duration(milliseconds: 400),
+    ),
+    listTileTheme: ListTileThemeData(iconColor: Color(muted), selectedColor: scheme.onPrimaryContainer, selectedTileColor: scheme.primaryContainer),
+    dividerTheme: DividerThemeData(color: Color(p.border), space: 1, thickness: 1),
+    checkboxTheme: CheckboxThemeData(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4))),
+    // a clear ring around whatever the keyboard is on (Tab / arrow keys at the till)
+    focusColor: scheme.primary.withValues(alpha: p.dark ? .22 : .14),
+    scrollbarTheme: ScrollbarThemeData(radius: const Radius.circular(8), thickness: const WidgetStatePropertyAll(8), thumbColor: WidgetStatePropertyAll(Color(p.borderStrong))),
   );
 }
