@@ -42,14 +42,25 @@ if (live) {
 // the app starts in a real browser
 try {
   const { chromium } = await import('playwright');
-  const browser = await chromium.launch();
+  // software graphics: CI machines have no GPU, and the app draws with WebGL
+  const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e)));
-  page.on('console', (m) => m.type() === 'error' && /Content Security Policy|Uncaught|TypeError/.test(m.text()) && errors.push(m.text()));
+  const log = [];
+  page.on('console', (m) => { log.push(`${m.type()}: ${m.text().slice(0, 200)}`); if (m.type() === 'error' && /Content Security Policy|Uncaught|TypeError/.test(m.text())) errors.push(m.text()); });
+  page.on('requestfailed', (r) => log.push(`request failed: ${r.url().slice(0, 140)} ${r.failure()?.errorText}`));
+  page.on('response', (r) => r.status() >= 400 && log.push(`HTTP ${r.status()}: ${r.url().slice(0, 140)}`));
+  const explain = () => console.log('  what the browser said:\n    ' + (log.slice(-25).join('\n    ') || '(nothing)'));
   await page.goto(site + '/', { waitUntil: 'domcontentloaded', timeout: 60000 });
-  await page.waitForSelector('flutter-view, flt-glass-pane', { timeout: 60000 });
-  await page.waitForFunction(() => !document.getElementById('rx-loading'), null, { timeout: 60000 });
+  try {
+    await page.waitForSelector('flutter-view, flt-glass-pane', { timeout: 60000 });
+    await page.waitForFunction(() => !document.getElementById('rx-loading'), null, { timeout: 60000 });
+  } catch (e) {
+    explain();
+    throw e;
+  }
+  if (errors.length) explain();
   check(errors.length === 0, 'the app starts in a browser without errors' + (errors.length ? ': ' + errors.slice(0, 3).join(' | ') : ''));
   await browser.close();
 } catch (e) {
