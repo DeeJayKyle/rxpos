@@ -5,8 +5,8 @@
 //   exception, so it can be checked before it goes live.
 // - The site is the RxPOS app (Flutter, its files under /app/): the home page and the app's own pages
 //   (/pos, /inventory, …) open it. Everything else is served as before: the classic app's files at the root (the
-//   installed classic apps update from them), the classic app itself at /classic/, and a pharmacy's own address
-//   (rxposug.com/<pharmacy>) still opens the classic app.
+//   installed classic apps update from them), the classic app itself at /classic/ and the owner console (/owner). A
+//   pharmacy's own address (rxposug.com/<pharmacy>, as bookmarked from the classic app) opens the new app too.
 import { FLUTTER_ROUTES } from './flutter-routes.js';
 
 const HOME = 'https://rxposug.com';
@@ -31,9 +31,17 @@ export async function onRequest({ request, next, env }) {
   return next();
 }
 
-/** The home page, or an address starting with one of the app's pages (not a file: no extension). */
+// Not pharmacy addresses: the site's own folders and names the cloud never gives a pharmacy (worker RESERVED)
+const NOT_PHARMACY = new Set(['api', 'owner', 'assets', 'app', 'classic', 'updates', 'functions', 'index', 'sw', 'manifest', 'favicon', 'admin', 'login', 'www']);
+const SLUG = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/;
+
+/** The home page, an address starting with one of the app's pages, or a pharmacy's own address (/<pharmacy>, with or
+ * without a trailing slash); never a file (no extension). */
 export function isAppPage(path) {
   if (path === '/') return true;
-  const first = path.split('/')[1] || '';
-  return APP.has(first) && !/\.[a-z0-9]+$/i.test(path);
+  if (/\.[a-z0-9]+$/i.test(path)) return false;
+  const parts = path.split('/').filter(Boolean);
+  const first = parts[0] || '';
+  if (APP.has(first)) return true;
+  return parts.length === 1 && SLUG.test(first) && !NOT_PHARMACY.has(first);
 }

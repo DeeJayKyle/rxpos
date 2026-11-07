@@ -12,6 +12,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:rxpos/core/router/app_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:rxpos/app.dart';
 import 'package:rxpos/core/data/pharmacy_providers.dart';
@@ -440,6 +441,17 @@ void main() {
     await tester.tap(find.text('Banks'));
     await settle(tester);
     expect(find.text('UGX 300'), findsOneWidget, reason: 'cash at hand: 500 sale − 200 expense');
+    await done(tester);
+  });
+
+  testWidgets("a pharmacy's own address (/pharmcare, bookmarked from the classic app) opens the dashboard", (tester) async {
+    await tester.runAsync(signedIn);
+    await start(tester);
+    final router = ProviderScope.containerOf(tester.element(find.byType(MaterialApp).first)).read(appRouterProvider);
+    router.go('/pharmcare');
+    await settle(tester);
+    expect(router.routerDelegate.currentConfiguration.uri.path, '/');
+    expect(find.byKey(const Key('sidebar')), findsOneWidget);
     await done(tester);
   });
 
