@@ -18,6 +18,8 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the classic app's build number is its last change (scripts/release-files.mjs)
       - uses: actions/setup-node@v4
         with:
           node-version: 22

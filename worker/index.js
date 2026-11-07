@@ -221,7 +221,9 @@ async function verifyPassword(u, pw) {
 // ---------- tenants ----------
 const DEFAULT_FEATURES = { catalog: true, branches: true, wholesale: true, proformas: true, prescriptions: true, finance: true, reports: true, reminders: true,
   chat: true, labels: true, import: true, reorder: true, transfers: true, momo: true, drugInfo: true, shifts: true,
-  promos: true, hourly: true, calendar: true, weather: true, ai: true };
+  promos: true, hourly: true, calendar: true, weather: true, ai: true, newApp: true };
+/** Which web app a pharmacy uses (owner console → features → "New RxPOS app on the web"): 'new' or 'classic' */
+const webAppOf = (t) => (JSON.parse(t?.features || '{}').newApp === false ? 'classic' : 'new');
 
 /** The original single-pharmacy deployment becomes tenant "main", keyed by the SYNC_KEY secret. */
 let mainChecked = false; // once per Worker instance; writes only if the main pharmacy's sync key changed
@@ -401,7 +403,7 @@ async function pharmacyLogin(env, body, ownerToken, ip = 'noip') {
   }
   if (fail) await env.DB.prepare('DELETE FROM login_fail WHERE email = ?1').bind(lockKey).run(); // only once the code is right too
   const token = await signToken(env, { sub: u.id, tn: match.tenant, name: u.name, role: u.role, exp: Date.now() + TOKEN_DAYS * 864e5 });
-  return json({ token, tenant: match.tenant, slug: t.slug || match.tenant, pharmacy: t.name, user: { id: u.id, name: u.name, email: u.email, role: u.role } });
+  return json({ token, tenant: match.tenant, slug: t.slug || match.tenant, pharmacy: t.name, app: webAppOf(t), user: { id: u.id, name: u.name, email: u.email, role: u.role } });
 }
 
 /** The caller's IP (Cloudflare sets CF-Connecting-IP); a fixed fallback keeps local/dev working. */
@@ -1343,7 +1345,7 @@ export default {
       const pm = path.match(/^\/api\/pharmacy\/([a-z0-9-]{1,40})$/);
       if (pm) {
         const t = await tenantByCode(env, pm[1]);
-        return t ? json({ id: t.id, slug: t.slug || t.id, name: t.name, status: t.status, logo: brandingOf(t).logo || null }) : json({ error: 'No pharmacy at this address. Check the link with your RxPOS provider.' }, 404);
+        return t ? json({ id: t.id, slug: t.slug || t.id, name: t.name, status: t.status, logo: brandingOf(t).logo || null, app: webAppOf(t) }) : json({ error: 'No pharmacy at this address. Check the link with your RxPOS provider.' }, 404);
       }
       const fm = path.match(/^\/api\/files\/([a-z0-9-]{1,40})\/([A-Za-z0-9_-]{8,40})\/([A-Za-z0-9_-]{24})$/);
       if (fm && req.method === 'GET') return await downloadFile(env, fm[1], fm[2], fm[3]);

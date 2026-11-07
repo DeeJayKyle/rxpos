@@ -76,6 +76,7 @@ export const FEATURES = [
   ['calendar', 'Calendar & calendar sync', 'Google / Outlook / phone'],
   ['weather', 'Weather & storage temperature log'],
   ['ai', 'AI prescription reading & drug quizzes', 'Cloudflare Workers AI'],
+  ['newApp', 'New RxPOS app on the web', 'Off = rxposug.com/<pharmacy> and signing in on the website open the classic app'],
 ];
 export const DEFAULT_FEATURES = Object.fromEntries(FEATURES.map(([k]) => [k, true]));
 

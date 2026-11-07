@@ -39,6 +39,17 @@ class _KvSecrets implements SecretsStore {
 /// The cloud's code for "RxPOS owner" in the list of places an account can sign in to.
 const ownerChoice = '__owner__';
 
+/// Offered to the owner on the website next to the owner console: the classic RxPOS app (rxposug.com/classic/).
+const classicChoice = '__classic__';
+
+/// Where the owner can go after signing in on the website: the owner console, any pharmacy the same email works at
+/// (in this app), or the classic app.
+List<PharmacyChoice> ownerPlaces(List<PharmacyChoice> pharmacies) => [
+      const PharmacyChoice(code: ownerChoice, name: 'RxPOS owner console', role: 'Manage all pharmacies'),
+      ...pharmacies,
+      const PharmacyChoice(code: classicChoice, name: 'Classic RxPOS app', role: 'The previous app, at rxposug.com/classic/'),
+    ];
+
 class AuthRepository {
   AuthRepository({required this.dio, required this.db, required this.cloudUrl, DateTime Function()? now}) : _now = now ?? DateTime.now, secrets = OfflineSecrets(_KvSecrets(db), now: now);
 
@@ -92,8 +103,9 @@ class AuthRepository {
 
   Future<SignInOutcome> signIn({required String email, required String password, String? pharmacy, String? code, bool remember = true, bool allowSwitch = false}) async {
     final login = email.trim().toLowerCase();
-    // "RxPOS owner" picked from the list (the same email and password are also the owner's): the owner console
+    // the owner's choice of where to go (website only): the owner console, or the classic app
     if (pharmacy == ownerChoice && _ownerToken != null && openOwnerConsole(_ownerToken!)) return const SignInFailed('Opening the owner console…');
+    if (pharmacy == classicChoice && openClassicApp()) return const SignInFailed('Opening the classic RxPOS app…');
     final Response<Object?> res;
     try {
       res = await dio.post<Object?>('${syncBase(cloudUrl)}/api/login',
@@ -107,16 +119,26 @@ class AuthRepository {
     if (j['choose'] is List) {
       // the owner console is offered on the website only (it is a page of rxposug.com)
       _ownerToken = kIsWeb && j['ownerToken'] is String ? j['ownerToken'] as String : null;
-      return ChoosePharmacy([
+      final pharmacies = [
         for (final c in (j['choose'] as List).cast<Map>())
-          if (c['code'] != ownerChoice || _ownerToken != null) PharmacyChoice(code: '${c['code']}', name: '${c['name']}', role: '${c['role'] ?? ''}'),
-      ]);
+          if (c['code'] != ownerChoice) PharmacyChoice(code: '${c['code']}', name: '${c['name']}', role: '${c['role'] ?? ''}'),
+      ];
+      return ChoosePharmacy(_ownerToken != null ? ownerPlaces(pharmacies) : pharmacies);
     }
     if (j['owner'] is Map && j['token'] == null) {
       // on the website: straight to the owner console (rxposug.com/owner); the apps send the owner there
+      // on the website the owner chooses where to go (the owner console or the classic app); the apps send them there
       final token = '${(j['owner'] as Map)['token'] ?? ''}';
-      if (token.isNotEmpty && openOwnerConsole(token)) return const SignInFailed('Opening the owner console…');
+      if (kIsWeb && token.isNotEmpty) {
+        _ownerToken = token;
+        return ChoosePharmacy(ownerPlaces(const []));
+      }
       return const SignInFailed('That is the RxPOS owner account. Open rxposug.com/owner in a web browser to manage pharmacies.');
+    }
+    // a pharmacy the owner keeps on the classic app (owner console → "New RxPOS app on the web" off): on the website its
+    // staff go to the classic app, at the pharmacy's address (they sign in there)
+    if (kIsWeb && res.statusCode == 200 && j['token'] is String && j['app'] == 'classic' && openClassicApp('${j['slug'] ?? ''}')) {
+      return SignInFailed('${j['pharmacy'] ?? 'This pharmacy'} uses the classic RxPOS app: opening it…');
     }
     if (res.statusCode == 200 && j['token'] is String) {
       final session = Session.fromLogin(j).copyWith(remember: remember);

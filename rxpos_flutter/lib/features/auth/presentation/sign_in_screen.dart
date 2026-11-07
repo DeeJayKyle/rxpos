@@ -13,6 +13,7 @@ import '../../../core/presentation/widgets.dart';
 import '../../../core/sync/sync_engine.dart';
 import '../../extras/domain/extras.dart';
 import '../application/session_controller.dart';
+import '../data/auth_repository.dart' show classicChoice, ownerChoice;
 import '../domain/session.dart';
 
 const lastEmailKey = 'last-email', rememberChoiceKey = 'remember-choice';
@@ -275,17 +276,24 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     ];
   }
 
+  /// The owner's places (the owner console, pharmacies, the classic app), not just pharmacies.
+  bool get _ownerPlaces => _choices.any((c) => c.code == ownerChoice);
+
   List<Widget> _choose(ThemeData t) => [
         _back('Back', () => setState(() => _stage = _Stage.main)),
-        Text('Which pharmacy?', textAlign: TextAlign.center, style: t.textTheme.titleMedium),
-        Text('${_email.text} works at ${_choices.length} pharmacies', textAlign: TextAlign.center, style: t.textTheme.bodySmall),
+        Text(_ownerPlaces ? 'Where to?' : 'Which pharmacy?', textAlign: TextAlign.center, style: t.textTheme.titleMedium),
+        Text(_ownerPlaces ? 'Signed in as the RxPOS owner (${_email.text})' : '${_email.text} works at ${_choices.length} pharmacies',
+            textAlign: TextAlign.center, style: t.textTheme.bodySmall),
         const SizedBox(height: 12),
         for (final c in _choices)
           Card(
             child: ListTile(
-              leading: const Icon(Icons.business_outlined),
+              key: Key('choose-${c.code}'),
+              leading: Icon(c.code == ownerChoice ? Icons.admin_panel_settings_outlined : c.code == classicChoice ? Icons.history : Icons.business_outlined),
               title: Text(c.name, style: const TextStyle(fontWeight: FontWeight.w700)),
-              subtitle: Text([c.code, if (c.role.isNotEmpty) c.role, if (c.code == _held) 'this device'].join(' · ')),
+              subtitle: Text(c.code == ownerChoice || c.code == classicChoice
+                  ? c.role
+                  : [c.code, if (c.role.isNotEmpty) c.role, if (c.code == _held) 'this device', if (_ownerPlaces) 'the new app'].join(' · ')),
               trailing: const Icon(Icons.login),
               onTap: _busy
                   ? null

@@ -28,6 +28,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the classic app's build number is its last change (scripts/release-files.mjs)
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -44,6 +46,8 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the classic app's build number is its last change (scripts/release-files.mjs)
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -74,6 +78,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the classic app's build number is its last change (scripts/release-files.mjs)
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -95,6 +101,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the classic app's build number is its last change (scripts/release-files.mjs)
       - name: Build hub image
         run: docker build -t rxpos-hub .
       - name: Smoke test
@@ -110,6 +118,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the classic app's build number is its last change (scripts/release-files.mjs)
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -269,6 +279,8 @@ jobs:
             exit 1
           fi
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the classic app's build number is its last change (scripts/release-files.mjs)
       - uses: actions/setup-node@v4
         with:
           node-version: 22 # wrangler needs Node 22+
