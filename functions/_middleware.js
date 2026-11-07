@@ -5,11 +5,12 @@
 //   exception, so it can be checked before it goes live.
 // - The site is the RxPOS app (Flutter, its files under /app/): the home page and the app's own pages
 //   (/pos, /inventory, …) open it. Everything else is served as before: the classic app's files at the root (the
-//   installed classic apps update from them), the classic app itself at /classic/ and the owner console (/owner). A
+//   installed classic apps update from them), the classic app itself at /classic/ and its owner console (/owner sends you to /classic/#/owner). A
 //   pharmacy's own address (rxposug.com/<pharmacy>, as bookmarked from the classic app) opens the new app too.
 import { FLUTTER_ROUTES } from './flutter-routes.js';
 
 const HOME = 'https://rxposug.com';
+export const OWNER_CONSOLE = '/classic/#/owner';
 const APP = new Set(FLUTTER_ROUTES);
 
 export async function onRequest({ request, next, env }) {
@@ -24,7 +25,16 @@ export async function onRequest({ request, next, env }) {
     const page = await env.ASSETS.fetch(new URL('/', url));
     return new Response(request.method === 'HEAD' ? null : page.body, { status: page.status, headers: page.headers });
   }
+  // the owner console is a page of the classic app: rxposug.com/owner is the easy address to remember
+  if (url.pathname === '/owner' || url.pathname === '/owner/') return Response.redirect(url.origin + OWNER_CONSOLE, 302);
   if (request.method === 'GET' && isAppPage(url.pathname)) {
+    // a pharmacy the owner keeps on the classic app (owner console → "New RxPOS app on the web" off): its address opens
+    // the classic app, which reads the pharmacy from the address
+    const slug = pharmacyAddress(url.pathname);
+    if (slug && (await webAppFor(slug)) === 'classic') {
+      const page = await env.ASSETS.fetch(new URL('/', url));
+      return new Response(page.body, { status: 200, headers: page.headers });
+    }
     const page = await env.ASSETS.fetch(new URL('/app/index.html', url));
     return new Response(page.body, { status: 200, headers: page.headers });
   }
@@ -40,8 +50,31 @@ const SLUG = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/;
 export function isAppPage(path) {
   if (path === '/') return true;
   if (/\.[a-z0-9]+$/i.test(path)) return false;
+  return APP.has(path.split('/')[1] || '') || pharmacyAddress(path) !== '';
+}
+
+/** The pharmacy in a pharmacy's own address (/<pharmacy> or /<pharmacy>/), else '' */
+export function pharmacyAddress(path) {
+  if (/\.[a-z0-9]+$/i.test(path)) return '';
   const parts = path.split('/').filter(Boolean);
   const first = parts[0] || '';
-  if (APP.has(first)) return true;
-  return parts.length === 1 && SLUG.test(first) && !NOT_PHARMACY.has(first);
+  return parts.length === 1 && SLUG.test(first) && !NOT_PHARMACY.has(first) && !APP.has(first) ? first : '';
+}
+
+const API = 'https://api.rxposug.com';
+/** Which web app a pharmacy uses ('new' or 'classic'), from the cloud's public lookup, kept for a minute. Anything
+ * unexpected (no such pharmacy, the cloud out of reach) opens the new app, whose sign-in says what is wrong. */
+export async function webAppFor(slug, fetcher = fetch) {
+  const cache = globalThis.caches?.default;
+  const key = `${API}/api/pharmacy/${slug}`;
+  try {
+    let r = cache ? await cache.match(key) : undefined;
+    if (!r) {
+      r = await fetcher(key, { signal: AbortSignal.timeout(4000) });
+      if (cache && r.ok) await cache.put(key, new Response(await r.clone().text(), { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'max-age=60' } }));
+    }
+    return r.ok && (await r.json()).app === 'classic' ? 'classic' : 'new';
+  } catch {
+    return 'new';
+  }
 }

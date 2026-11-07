@@ -75,6 +75,8 @@ void main() {
     // the same email at pharmacies too: the apps list only the pharmacies
     cloud.login = (_) => (200, {'choose': [{'code': '__owner__', 'name': 'RxPOS owner', 'role': 'owner'}, {'code': 'pharmcare', 'name': 'Pharmcare', 'role': 'admin'}], 'ownerToken': 'own'});
     expect((await auth.signIn(email: 'owner@rx', password: 'p') as ChoosePharmacy).choices.map((c) => c.code), ['pharmcare']);
+    // on the website the owner picks where to go: the owner console, a pharmacy in this app, or the classic app
+    expect(ownerPlaces(const [PharmacyChoice(code: 'pharmcare', name: 'Pharmcare', role: 'admin')]).map((c) => c.code), [ownerChoice, 'pharmcare', classicChoice]);
   });
 
   test('switching pharmacy clears the old one\'s data, but never while changes are waiting', () async {

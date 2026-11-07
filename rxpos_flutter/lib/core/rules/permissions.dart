@@ -44,7 +44,7 @@ Set<String> permissionsOf(Iterable<Role> custom, String role) {
 
 const features = [
   'catalog', 'branches', 'wholesale', 'proformas', 'prescriptions', 'finance', 'reports', 'reminders', 'chat',
-  'labels', 'import', 'reorder', 'momo', 'drugInfo', 'shifts', 'promos', 'hourly', 'calendar', 'weather', 'ai',
+  'labels', 'import', 'reorder', 'momo', 'drugInfo', 'shifts', 'promos', 'hourly', 'calendar', 'weather', 'ai', 'newApp',
 ];
 
 /// Features the RxPOS owner switched on for this pharmacy (anything not switched off is on).

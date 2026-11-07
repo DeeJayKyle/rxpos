@@ -80,7 +80,7 @@ export default function OwnerConsole() {
   const active = tenants?.filter((t) => t.status === 'active').length || 0;
   return (
     <div className="owner">
-      <OwnerBar busy={busy} onRefresh={() => load()} onLock={signOut}><button className="btn ghost" onClick={() => setAccount(true)}><UserCog size={16} />Owner account</button></OwnerBar>
+      <OwnerBar busy={busy} onRefresh={() => load()} onLock={signOut}><button className="btn ghost" onClick={() => setAccount(true)}><UserCog size={16} />Owner account</button><a className="btn ghost" href="/sign-in" title="The new RxPOS app (rxposug.com)"><ExternalLink size={16} />New RxPOS app</a></OwnerBar>
       {account && <OwnerAccount api={api} onClose={() => setAccount(false)} />}
       <div className="page">
         <div className="page-head">

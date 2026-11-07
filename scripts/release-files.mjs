@@ -10,10 +10,18 @@ import crypto from 'node:crypto';
 import zlib from 'node:zlib';
 import { execSync } from 'node:child_process';
 
-/** Build number and commit: the commit time (seconds) when git is there, else now */
+// What makes up the classic app (and so its update): a commit that changes none of these (e.g. only the new app in
+// rxpos_flutter/, the cloud or the CI) must not make a new classic version, or every installed classic app is
+// offered an update for nothing and the previous update file disappears from the site while devices still ask for it.
+export const CLASSIC_SOURCES = ['src', 'public', 'index.html', 'package.json', 'package-lock.json', 'vite.config.js', 'scripts/release-files.mjs'];
+
+/** Build number and commit: the time (seconds) of the last commit that changed the classic app (needs the git history:
+ * CI checks out with fetch-depth 0), else of the last commit, else now */
 export function buildInfo(root = process.cwd()) {
   let build = 0, commit = '';
-  try { build = Number(execSync('git log -1 --format=%ct', { cwd: root, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim()) || 0; } catch { /* no git */ }
+  const git = (args) => execSync(`git ${args}`, { cwd: root, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
+  try { build = Number(git(`log -1 --format=%ct -- ${CLASSIC_SOURCES.join(' ')}`)) || 0; } catch { /* no git */ }
+  try { if (!build || git('rev-parse --is-shallow-repository') === 'true') build = Number(git('log -1 --format=%ct')) || 0; } catch { /* no git */ }
   try { commit = execSync('git rev-parse --short HEAD', { cwd: root, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch { /* no git */ }
   if (!build) build = Math.floor(Date.now() / 1000);
   const d = new Date(build * 1000);
