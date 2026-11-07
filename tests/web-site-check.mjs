@@ -31,7 +31,9 @@ check(index.status === 200 && crypto.createHash('sha256').update(index.text).dig
 const old = await get('/classic/');
 check(old.status === 200 && !old.text.toString().includes('flutter_bootstrap') && old.text.toString().includes('assets/'), '/classic/ is the classic app');
 const slug = await get('/sample-pharmacy-address');
-check(slug.status === 200 && !slug.text.toString().includes('/app/flutter_bootstrap.js'), "a pharmacy's own address still opens the classic app");
+check(slug.status === 200 && slug.text.toString().includes('/app/flutter_bootstrap.js'), "a pharmacy's own address opens the RxPOS app");
+const owner = await get('/owner');
+check(owner.status === 200 && !owner.text.toString().includes('flutter_bootstrap') && owner.text.toString().includes('assets/'), 'the owner console is still the classic page');
 if (live) {
   const h = await get('/api/health');
   let ok = false;

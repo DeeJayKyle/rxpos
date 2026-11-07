@@ -19,6 +19,9 @@ abstract final class Routes {
   static const sync = '/sync';
 }
 
+/// Is [path] one of the app's pages (or sign-in)?
+bool knownPage(String path) => path == Routes.signIn || screens.any((s) => s.path == path);
+
 /// Notifies the router when the session changes (sign in / sign out).
 class _SessionListenable extends ChangeNotifier {
   void ping() => notifyListeners();
@@ -37,6 +40,9 @@ GoRouter appRouter(Ref ref) {
       final signedIn = s.value != null;
       if (!signedIn) return state.matchedLocation == Routes.signIn ? null : Routes.signIn;
       if (state.matchedLocation == Routes.signIn) return Routes.home;
+      // an address the app has no page for (a pharmacy's own address bookmarked from the classic app, /pharmcare):
+      // the dashboard
+      if (!knownPage(state.uri.path)) return Routes.home;
       return null;
     },
     routes: [

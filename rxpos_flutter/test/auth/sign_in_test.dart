@@ -70,7 +70,11 @@ void main() {
 
   test('the RxPOS owner\'s account is sent to the owner console', () async {
     cloud.login = (_) => (200, {'owner': {'token': 'own'}});
-    expect((await auth.signIn(email: 'owner@rx', password: 'p') as SignInFailed).message, contains('RxPOS owner account'));
+    // the apps point to the console's address (on the website the sign-in opens it: owner_console_web.dart)
+    expect((await auth.signIn(email: 'owner@rx', password: 'p') as SignInFailed).message, allOf(contains('RxPOS owner account'), contains('rxposug.com/owner')));
+    // the same email at pharmacies too: the apps list only the pharmacies
+    cloud.login = (_) => (200, {'choose': [{'code': '__owner__', 'name': 'RxPOS owner', 'role': 'owner'}, {'code': 'pharmcare', 'name': 'Pharmcare', 'role': 'admin'}], 'ownerToken': 'own'});
+    expect((await auth.signIn(email: 'owner@rx', password: 'p') as ChoosePharmacy).choices.map((c) => c.code), ['pharmcare']);
   });
 
   test('switching pharmacy clears the old one\'s data, but never while changes are waiting', () async {

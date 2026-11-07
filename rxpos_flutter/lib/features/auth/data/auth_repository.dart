@@ -1,5 +1,8 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
+
+import 'package:rxpos/core/web/owner_console_stub.dart' if (dart.library.js_interop) 'package:rxpos/core/web/owner_console_web.dart';
 import 'package:rxpos/core/web/tab_session_stub.dart' if (dart.library.js_interop) 'package:rxpos/core/web/tab_session_web.dart';
 import 'package:rxpos/core/web/web_keep_stub.dart' if (dart.library.js_interop) 'package:rxpos/core/web/web_keep_web.dart';
 
@@ -33,6 +36,9 @@ class _KvSecrets implements SecretsStore {
 
 /// Signing in to the pharmacy (POST /api/login, same accounts as the React app), offline with this device's own
 /// verifier or quick PIN (src/pages/Auth.jsx, src/offline.js), forgotten passwords, and the session kept on the device.
+/// The cloud's code for "RxPOS owner" in the list of places an account can sign in to.
+const ownerChoice = '__owner__';
+
 class AuthRepository {
   AuthRepository({required this.dio, required this.db, required this.cloudUrl, DateTime Function()? now}) : _now = now ?? DateTime.now, secrets = OfflineSecrets(_KvSecrets(db), now: now);
 
@@ -81,8 +87,13 @@ class AuthRepository {
 
   Future<bool> trusted(String tenant, String userId) async => await _kv(trustKey(tenant, userId)) == '1';
 
+  /// The owner's key from a sign-in that offered the owner console among the pharmacies (website only).
+  String? _ownerToken;
+
   Future<SignInOutcome> signIn({required String email, required String password, String? pharmacy, String? code, bool remember = true, bool allowSwitch = false}) async {
     final login = email.trim().toLowerCase();
+    // "RxPOS owner" picked from the list (the same email and password are also the owner's): the owner console
+    if (pharmacy == ownerChoice && _ownerToken != null && openOwnerConsole(_ownerToken!)) return const SignInFailed('Opening the owner console…');
     final Response<Object?> res;
     try {
       res = await dio.post<Object?>('${syncBase(cloudUrl)}/api/login',
@@ -94,13 +105,18 @@ class AuthRepository {
     final j = res.data is Map ? (res.data as Map).cast<String, Object?>() : const <String, Object?>{};
     if (j['twoFactor'] == true) return NeedsCode(code == null || code.isEmpty ? null : j['error'] as String?);
     if (j['choose'] is List) {
+      // the owner console is offered on the website only (it is a page of rxposug.com)
+      _ownerToken = kIsWeb && j['ownerToken'] is String ? j['ownerToken'] as String : null;
       return ChoosePharmacy([
         for (final c in (j['choose'] as List).cast<Map>())
-          if (c['code'] != '__owner__') PharmacyChoice(code: '${c['code']}', name: '${c['name']}', role: '${c['role'] ?? ''}'),
+          if (c['code'] != ownerChoice || _ownerToken != null) PharmacyChoice(code: '${c['code']}', name: '${c['name']}', role: '${c['role'] ?? ''}'),
       ]);
     }
     if (j['owner'] is Map && j['token'] == null) {
-      return const SignInFailed('That is the RxPOS owner account. Open rxposug.com in a web browser to manage pharmacies.');
+      // on the website: straight to the owner console (rxposug.com/owner); the apps send the owner there
+      final token = '${(j['owner'] as Map)['token'] ?? ''}';
+      if (token.isNotEmpty && openOwnerConsole(token)) return const SignInFailed('Opening the owner console…');
+      return const SignInFailed('That is the RxPOS owner account. Open rxposug.com/owner in a web browser to manage pharmacies.');
     }
     if (res.statusCode == 200 && j['token'] is String) {
       final session = Session.fromLogin(j).copyWith(remember: remember);
