@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import 'download_io.dart' if (dart.library.js_interop) 'download_web.dart';
+import 'xlsx.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -106,6 +107,23 @@ class ExportButtons extends StatelessWidget {
             icon: const Icon(Icons.download, size: 18),
             label: const Text('CSV'),
           ),
+        if (csv != null) ...[
+          const SizedBox(width: 8),
+          // the same rows as an Excel workbook (numbers stay numbers, the header stays in view, filters on)
+          OutlinedButton.icon(
+            key: Key('excel-$name'),
+            onPressed: () async {
+              try {
+                final f = await saveDownload('$name.xlsx', toXlsx(csv!(), sheet: title.isEmpty ? name : title));
+                if (context.mounted) say(context, 'Saved ${f.path}');
+              } catch (e) {
+                if (context.mounted) say(context, 'Could not save the file: $e', error: true);
+              }
+            },
+            icon: const Icon(Icons.grid_on_outlined, size: 18),
+            label: const Text('Excel'),
+          ),
+        ],
         if (pdf != null) ...[
           const SizedBox(width: 8),
           OutlinedButton.icon(
