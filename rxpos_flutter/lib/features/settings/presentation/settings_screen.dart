@@ -19,6 +19,7 @@ import '../../../core/sync/merge.dart' show pharmacyFields;
 import '../../../core/presentation/widgets.dart';
 import '../../auth/application/session_controller.dart';
 import '../../sync_status/application/sync_controller.dart';
+import 'report_schedules.dart';
 
 const defaultPlace = {'name': 'Kampala, Uganda', 'lat': 0.3476, 'lon': 32.5825};
 
@@ -413,6 +414,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ]),
         const SizedBox(height: 12),
       ],
+      const ReportSchedulesCard(),
+      const SizedBox(height: 12),
       _card('Idle promotions & reminders', Icons.notifications_active_outlined, [
         if (features['promos'] != false) _field('idleMinutes', 'Show product promotions after the app is idle for (minutes, 0 = never)', number: true),
         if (features['hourly'] != false) ...[

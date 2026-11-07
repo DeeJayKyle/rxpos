@@ -4,7 +4,7 @@
 // synced or sent to the cloud. A device signs someone in offline only within 30 days of their last sign-in on it
 // with the internet.
 import 'dart:convert';
-import 'dart:isolate';
+import 'package:flutter/foundation.dart' show compute;
 import 'dart:math';
 
 import '../../../core/rules/passwords.dart';
@@ -50,7 +50,7 @@ class OfflineSecrets {
 
   String _salt() => base64.encode(List<int>.generate(16, (_) => _random.nextInt(256)));
 
-  static Future<String> _hash(String secret, String salt, int iter) => Isolate.run(() => pbkdf2Hex(secret, salt, iterations: iter));
+  static Future<String> _hash(String secret, String salt, int iter) => compute(_pbkdf2, (secret, salt, iter));
 
   bool _within(Map e) {
     final at = e['at'];
@@ -144,3 +144,6 @@ class OfflineSecrets {
     return (ok: true, left: pinMaxTries);
   }
 }
+
+/// (top level, for compute: in the background on Windows and Android, in the page on the web)
+String _pbkdf2((String, String, int) a) => pbkdf2Hex(a.$1, a.$2, iterations: a.$3);

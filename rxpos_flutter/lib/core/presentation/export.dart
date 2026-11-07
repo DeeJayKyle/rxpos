@@ -1,11 +1,12 @@
 // Exporting what a screen shows, like the React app's CSV and PDF buttons (src/store.jsx toCSV, src/pdf.js pagePdf):
 // a CSV file, or an A4 PDF with the pharmacy's name, the title, a subtitle and the table (landscape when wide).
 import 'dart:convert';
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:path_provider/path_provider.dart';
+
+import 'download_io.dart' if (dart.library.js_interop) 'download_web.dart';
+import 'xlsx.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -71,12 +72,14 @@ Future<Uint8List> tablesPdf(PharmacySettings s, {required String title, String s
   return doc.save();
 }
 
-/// Save a file in this device's Downloads folder (Windows) or the app's downloads folder (Android) and say where.
-Future<File> saveDownload(String filename, List<int> bytes) async {
-  final dir = await getDownloadsDirectory() ?? await getApplicationDocumentsDirectory();
-  final f = File('${dir.path}${Platform.pathSeparator}$filename');
-  await f.writeAsBytes(bytes, flush: true);
-  return f;
+/// Save a file in this device's Downloads folder (Windows), the app's downloads folder (Android) or the browser's
+/// downloads (web), and say where.
+Future<SavedFile> saveDownload(String filename, List<int> bytes) async => SavedFile(await saveBytes(filename, bytes));
+
+/// Where a file was saved.
+class SavedFile {
+  const SavedFile(this.path);
+  final String path;
 }
 
 /// "CSV" and "PDF" buttons for a screen's table.
@@ -104,6 +107,23 @@ class ExportButtons extends StatelessWidget {
             icon: const Icon(Icons.download, size: 18),
             label: const Text('CSV'),
           ),
+        if (csv != null) ...[
+          const SizedBox(width: 8),
+          // the same rows as an Excel workbook (numbers stay numbers, the header stays in view, filters on)
+          OutlinedButton.icon(
+            key: Key('excel-$name'),
+            onPressed: () async {
+              try {
+                final f = await saveDownload('$name.xlsx', toXlsx(csv!(), sheet: title.isEmpty ? name : title));
+                if (context.mounted) say(context, 'Saved ${f.path}');
+              } catch (e) {
+                if (context.mounted) say(context, 'Could not save the file: $e', error: true);
+              }
+            },
+            icon: const Icon(Icons.grid_on_outlined, size: 18),
+            label: const Text('Excel'),
+          ),
+        ],
         if (pdf != null) ...[
           const SizedBox(width: 8),
           OutlinedButton.icon(

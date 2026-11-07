@@ -1,3 +1,4 @@
+import 'package:rxpos/core/web/tab_session_stub.dart' if (dart.library.js_interop) 'package:rxpos/core/web/tab_session_web.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../core/data/record_store.dart';
@@ -31,6 +32,7 @@ class SessionController extends _$SessionController {
 
   SignInOutcome _done(SignInOutcome out) {
     if (out is SignedIn) {
+      markTabSignedIn(); // a browser keeps this sign-in for the tab
       ref.read(authTokenProvider.notifier).set(out.session.token);
       state = AsyncData(out.session);
     }

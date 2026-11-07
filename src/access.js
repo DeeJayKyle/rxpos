@@ -34,6 +34,7 @@ export const PERMISSIONS = [
   ]],
   ['Management', [
     ['finance', 'Finance (expenses, banks, loans, cash book)'],
+    ['payroll', 'Payroll & staff (salaries, attendance, advances)'],
     ['reports', 'Reports & dashboard money figures'],
     ['reports.lines', 'Sales lines report only (what was sold and by whom, no profit)'],
     ['branches.view', 'See all branches'],

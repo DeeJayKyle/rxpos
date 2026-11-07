@@ -1,11 +1,13 @@
 // Notices outside the app window (src/badges.js): a system notification when RxPOS is in the background (new
 // messages, calls, urgent alerts, the hourly reminder), and the unread count on the Android app icon, which comes with
 // the notification. Only while RxPOS is not on screen, unless `always`. The person allows it once (Android 13+).
-import 'dart:io';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:rxpos/core/platform.dart';
+
+import 'web_notify_stub.dart' if (dart.library.js_interop) 'web_notify_web.dart';
 
 import '../data/device_settings.dart';
 
@@ -46,7 +48,7 @@ class PluginNotify implements OsNotify {
   @override
   Future<String> permission() async {
     if (!await _init()) return 'denied';
-    if (!Platform.isAndroid) return 'granted';
+    if (!onAndroid) return 'granted';
     final on = await _android?.areNotificationsEnabled();
     return on == true ? 'granted' : 'default';
   }
@@ -54,7 +56,7 @@ class PluginNotify implements OsNotify {
   @override
   Future<String> ask() async {
     if (!await _init()) return 'denied';
-    if (!Platform.isAndroid) return 'granted';
+    if (!onAndroid) return 'granted';
     final ok = await _android?.requestNotificationsPermission();
     return ok == true ? 'granted' : 'denied';
   }
@@ -80,7 +82,19 @@ class PluginNotify implements OsNotify {
   }
 }
 
-final osNotifyProvider = Provider<OsNotify>((_) => PluginNotify());
+final osNotifyProvider = Provider<OsNotify>((_) => onWeb ? WebNotify() : PluginNotify());
+
+/// In a browser: the browser's own notifications (it asks once for this site).
+class WebNotify implements OsNotify {
+  @override
+  Future<String> permission() async => webPermission();
+  @override
+  Future<String> ask() => webAsk();
+  @override
+  Future<void> show(int id, String title, String body, {int? count}) async => webShow(title, body.length > 240 ? body.substring(0, 240) : body);
+  @override
+  Future<void> clear() async {}
+}
 
 /// Is RxPOS on screen? (Replaced in tests.)
 final appInForegroundProvider = Provider<bool Function()>((_) => () {

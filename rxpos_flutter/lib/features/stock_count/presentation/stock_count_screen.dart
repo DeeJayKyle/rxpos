@@ -1,7 +1,7 @@
-import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:rxpos/core/platform.dart';
 
 import '../../../core/data/pharmacy_providers.dart';
 import '../../../core/data/record_store.dart';
@@ -311,7 +311,7 @@ class _CountSheetState extends ConsumerState<_CountSheet> {
                 },
               ),
             ),
-            if (Platform.isAndroid) ...[
+            if (onAndroid) ...[
               IconButton(tooltip: 'Scan to find an item', icon: const Icon(Icons.photo_camera_outlined), onPressed: () async {
                 final code = await scanBarcode(context);
                 final p = code == null ? null : d.byBarcode[code];

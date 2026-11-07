@@ -16,6 +16,7 @@ import '../../features/storage/presentation/storage_screen.dart';
 import '../../features/extras/presentation/import_screen.dart';
 import '../../features/extras/presentation/labels_screen.dart';
 import '../../features/finance/presentation/finance_screen.dart';
+import '../../features/payroll/presentation/payroll_screen.dart';
 import '../../features/inventory/presentation/inventory_screen.dart';
 import '../../features/inventory/presentation/medicine_screens.dart';
 import '../../features/inventory/presentation/shelves_screen.dart';
@@ -72,6 +73,7 @@ final screens = <Screen>[
   Screen('/quiz', 'Drug quiz', Icons.quiz_outlined, 'Insights', (_) => const QuizScreen(), feature: 'drugInfo'),
   Screen('/calendar', 'Calendar', Icons.calendar_month_outlined, 'Insights', (_) => const CalendarScreen(), feature: 'calendar'),
   Screen('/finance', 'Finance', Icons.account_balance_outlined, 'Finance', (q) => FinanceScreen(key: ValueKey('finance-${q['tab']}'), tab: q['tab'] ?? 'accounts'), permission: 'finance', feature: 'finance'),
+  Screen('/payroll', 'Payroll & HR', Icons.badge_outlined, 'Finance', (q) => PayrollScreen(key: ValueKey('payroll-${q['tab']}'), tab: q['tab'] ?? 'staff'), permission: 'payroll', feature: 'finance'),
   Screen('/weekly', 'Weekly Summary', Icons.date_range_outlined, 'Insights', (_) => const WeeklyScreen(), permission: 'reports', feature: 'reports'),
   Screen('/reports', 'Reports', Icons.insights_outlined, 'Insights', (q) => ReportsScreen(key: ValueKey('reports-${q['tab']}-${q['from']}-${q['to']}'), tab: q['tab'] ?? '', from: q['from'] ?? '', to: q['to'] ?? ''), permission: 'reports|reports.lines', feature: 'reports'),
   Screen('/users', 'Users & Roles', Icons.manage_accounts_outlined, 'People', (_) => const UsersScreen(), permission: 'users.manage'),

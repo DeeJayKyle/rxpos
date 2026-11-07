@@ -51,6 +51,21 @@ check('owner creates a second admin', s === 200 && j.user.role === 'admin' && !j
 check('owner edits web address and features', s === 200 && j.tenant.slug === 'testrx' && j.tenant.features.promos === false);
 [s, j] = await call('/api/login', { body: { email: 'two@test.rx', password: 'second-pass-1', tenant: 'testrx' } });
 check('sign-in works at the new address', s === 200, j.error);
+// payroll: only people with the Payroll permission may change staff pay records or download them
+const hrTok = j.token;
+[s, j] = await call(`/api/owner/tenants/${tid}/users`, { auth: ownerKey, body: { user: { name: 'Cal Cashier', email: 'cal@test.rx', role: 'cashier', password: 'cal-pass-1234' } } });
+[s, j] = await call('/api/login', { body: { email: 'cal@test.rx', password: 'cal-pass-1234', tenant: 'testrx' } });
+const calTok = j.token;
+check('a cashier signs in', s === 200 && !!calTok, j.error);
+[s, j] = await sync(calTok, [{ t: 'employees', id: 'emp-cal', rec: { id: 'emp-cal', name: 'Cal Cashier', basicSalary: 9000000 }, at: at() }]);
+check('a cashier cannot change pay records', j.refused === 1 && j.applied === 0, JSON.stringify({ a: j.applied, r: j.refused }));
+[s, j] = await sync(hrTok, [{ t: 'employees', id: 'emp-ann', rec: { id: 'emp-ann', name: 'Ann Sample', basicSalary: 800000 }, at: at() },
+  { t: 'customers', id: 'c-hr', rec: { id: 'c-hr', name: 'Sample Client' }, at: at() }]);
+check('an administrator records staff pay', j.applied === 2 && j.refused === 0, JSON.stringify({ a: j.applied, r: j.refused }));
+[s, j] = await sync(calTok);
+check('a cashier downloads everything but the pay records', j.changes?.some((c) => c.id === 'c-hr') && !j.changes.some((c) => c.t === 'employees'));
+[s, j] = await sync(hrTok, [], 0);
+check('…which a payroll user gets', j.changes?.some((c) => c.t === 'employees' && c.id === 'emp-ann'));
 [s, j] = await call(`/api/owner/tenants/${tid}/records`, { auth: ownerKey, body: { records: [{ t: 'products', id: 'p1', rec: { name: 'Paracetamol 500mg', price: 100 } }, { t: 'customers', id: 'c1', rec: { name: 'Jane' } }] } });
 check('owner writes records', s === 200 && j.written === 2);
 [s, j] = await call(`/api/owner/tenants/${tid}/records?t=products&q=Paracet`, { auth: ownerKey });

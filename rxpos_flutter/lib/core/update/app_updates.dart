@@ -7,11 +7,11 @@
 //   Android  the system installer opens when the person taps "Update" (Android always asks to confirm)
 // The open sale, held sales and drafts are kept on the device, so nothing is lost by the switch.
 import 'dart:async';
-import 'dart:ffi' show Abi;
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
@@ -19,26 +19,30 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:rxpos/core/platform.dart';
 
 import '../data/device_settings.dart';
+import 'abi_stub.dart' if (dart.library.ffi) 'abi_ffi.dart';
+import 'web_reload_stub.dart' if (dart.library.js_interop) 'web_reload_web.dart';
 import '../network/dio_client.dart';
 import '../sync/sync_engine.dart';
 
 /// Which installer this device takes ('windows' / 'android'); null where the app doesn't update itself (tests, other
 /// systems).
-final updatePlatformProvider = Provider<String?>((_) => Platform.isWindows ? 'windows' : Platform.isAndroid ? 'android' : null);
+final updatePlatformProvider = Provider<String?>((_) => kIsWeb ? 'web' : onWindows ? 'windows' : onAndroid ? 'android' : null);
 
 /// The processor this Android phone has, as the per-processor APKs are named (arm64 / armv7 / x64); null elsewhere,
 /// and on processors without their own APK, which take the APK for all of them.
-final androidAbiProvider = Provider<String?>((_) => !Platform.isAndroid
-    ? null
-    : switch (Abi.current()) { Abi.androidArm64 => 'arm64', Abi.androidArm => 'armv7', Abi.androidX64 => 'x64', _ => null });
+final androidAbiProvider = Provider<String?>((_) => !kIsWeb && onAndroid ? androidAbi() : null);
 
 /// The installer names the apps accept (the build number, and the processor for a per-processor APK).
 final installerName = RegExp(r'^RxPOS-New-\d+(-(arm64|armv7|x64))?\.(exe|apk)$');
 
 /// This app's build number (0 in a development copy, which never updates itself).
-final currentBuildProvider = FutureProvider<int>((_) async => int.tryParse((await PackageInfo.fromPlatform()).buildNumber) ?? 0);
+final currentBuildProvider = FutureProvider<int>((_) async => kIsWeb ? webBuild : int.tryParse((await PackageInfo.fromPlatform()).buildNumber) ?? 0);
+
+/// The web app's build number, set when it is built (--dart-define=RXPOS_BUILD=…); 0 in a development copy.
+const webBuild = int.fromEnvironment('RXPOS_BUILD');
 
 /// Where downloaded installers are kept until they are used.
 final updateFolderProvider = Provider<Future<String> Function()>((_) => () async => (await getTemporaryDirectory()).path);
@@ -138,6 +142,7 @@ class AppUpdater extends Notifier<UpdateState> {
     final mine = await ref.read(currentBuildProvider.future);
     if (mine <= 0) return state;
     state = UpdateState(status: 'checking', latest: state.latest);
+    if (platform == 'web') return state = await _checkWeb(mine);
     try {
       final abi = platform == 'android' ? ref.read(androidAbiProvider) : null;
       final latest = (abi != null ? await _manifest('flutter-android-$abi.json') : null) ?? await _manifest('flutter-$platform.json');
@@ -163,6 +168,22 @@ class AppUpdater extends Notifier<UpdateState> {
       return state = UpdateState(status: 'ready', latest: latest);
     } catch (e) {
       return state = UpdateState(status: 'error', latest: state.latest, error: _why(e));
+    }
+  }
+
+  /// The web app: the site's app/version.json ({build, label}, written when the site is deployed) names the newest
+  /// build; a newer one is taken by loading the page again.
+  Future<UpdateState> _checkWeb(int mine) async {
+    try {
+      final r = await ref.read(dioProvider).get<Object?>(Uri.base.resolve('/app/version.json?t=${DateTime.now().millisecondsSinceEpoch}').toString(),
+          options: Options(validateStatus: (_) => true, receiveTimeout: const Duration(seconds: 15)));
+      final latest = r.statusCode == 200 && r.data is Map ? (r.data as Map).cast<String, Object?>() : null;
+      final build = (latest?['build'] as num?)?.toInt() ?? 0;
+      if (latest == null || build <= mine) return UpdateState(latest: latest);
+      _file = 'web';
+      return UpdateState(status: 'ready', latest: latest);
+    } catch (e) {
+      return UpdateState(latest: state.latest);
     }
   }
 
@@ -201,6 +222,7 @@ class AppUpdater extends Notifier<UpdateState> {
     _applying = true;
     try {
       await ref.read(deviceValueProvider(updatedFromKey).notifier).set('${await ref.read(currentBuildProvider.future)}');
+      if (platform == 'web') return reloadPage();
       await ref.read(updateInstallProvider)(platform, file);
     } catch (e) {
       state = UpdateState(status: 'error', latest: state.latest, error: _why(e));
@@ -226,7 +248,7 @@ String updateText(UpdateState u, String? platform) => switch (u.status) {
       _ when platform == null => 'This copy is updated by installing a new build.',
       'checking' => 'Looking for a new version…',
       'downloading' => 'Downloading version ${u.label}… ${(u.percent * 100).round()}%',
-      'ready' => platform == 'android' ? 'Version ${u.label} is ready: tap Update to install it.' : 'Version ${u.label} is ready. It installs by itself when nothing is in progress, or now with Update.',
+      'ready' => platform == 'web' ? 'Version ${u.label} is ready: tap Update to load it.' : platform == 'android' ? 'Version ${u.label} is ready: tap Update to install it.' : 'Version ${u.label} is ready. It installs by itself when nothing is in progress, or now with Update.',
       'error' => u.error,
       _ => 'Up to date. New versions are fetched by themselves.',
     };

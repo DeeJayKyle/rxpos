@@ -34,7 +34,12 @@ jobs:
       - name: Deploy cloud Worker
         run: npx wrangler deploy
       - name: Deploy website and in-app updates
-        run: npx wrangler pages deploy dist --project-name rxpos --branch main --commit-dirty=true
+        # with the newest tested RxPOS app for the browser (the site's home page), so this deploy never takes it away
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          scripts/site-with-app.sh dist site
+          npx wrangler pages deploy site --project-name rxpos --branch main --commit-dirty=true
       - name: Verify production build and health
         run: |
           node --input-type=module <<'JS'

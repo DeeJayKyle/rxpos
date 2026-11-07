@@ -1,8 +1,8 @@
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:rxpos/core/platform.dart';
 
 import '../../../core/live/live_connection.dart';
 import '../../../core/notify/os_notifications.dart';
@@ -155,7 +155,7 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
           onChanged: (v) => ref.read(deviceValueProvider(zoomKey).notifier).set(v.toStringAsFixed(2)),
         ),
         if (zoom != 1) TextButton(onPressed: () => ref.read(deviceValueProvider(zoomKey).notifier).set(null), child: const Text('Back to 100%')),
-        if (Platform.isAndroid) ...[
+        if (onAndroid) ...[
           const SizedBox(height: 8),
           const Text('Rotation'),
           const SizedBox(height: 4),
@@ -195,6 +195,10 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
                   ? null
                   : (tone) async {
                       if (tone == null) return;
+                      if (tone == 'custom' && onWeb) {
+                        if (context.mounted) say(context, 'Your own sound files work in the installed app; in the browser, choose one of the tones');
+                        return;
+                      }
                       if (tone == 'custom') {
                         final fs = await pickFiles(extensions: const ['mp3', 'wav', 'ogg', 'm4a'], multiple: false);
                         if (fs.isEmpty) return;
@@ -226,12 +230,12 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
         Text('Your own sound can be any short MP3, WAV, OGG or M4A file under 1.5 MB.', style: Theme.of(context).textTheme.bodySmall),
       ]),
       _section('When RxPOS is in the background', Icons.notifications_active_outlined, [
-        Text(Platform.isAndroid
+        Text(onAndroid
             ? 'New messages, calls and stock alerts pop up in the phone’s notification shade, with the unread count on the app icon.'
             : 'New messages, calls and stock alerts pop up in the corner of the screen.'),
         const SizedBox(height: 8),
         const _NotifyPermission(),
-        if (Platform.isAndroid)
+        if (onAndroid)
           SwitchListTile(
             key: const Key('badges'),
             contentPadding: EdgeInsets.zero,
@@ -243,7 +247,7 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
       _section('App version', Icons.info_outline, [
         FutureBuilder<PackageInfo>(
           future: PackageInfo.fromPlatform(),
-          builder: (_, v) => Text(v.data == null ? 'RxPOS' : 'RxPOS ${v.data!.version} (build ${v.data!.buildNumber})', key: const Key('app-version')),
+          builder: (_, v) => Text(onWeb ? 'RxPOS 2.0.$webBuild (web, build $webBuild)' : v.data == null ? 'RxPOS' : 'RxPOS ${v.data!.version} (build ${v.data!.buildNumber})', key: const Key('app-version')),
         ),
         const SizedBox(height: 4),
         Text('Live connection: ${ref.watch(liveProvider).up ? 'on (changes from other devices arrive at once)' : 'off (syncing every few seconds instead)'}', key: const Key('live-state')),
@@ -263,7 +267,7 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
     ];
     return PageFrame(
       title: 'This device',
-      subtitle: 'Only changes this ${Platform.isAndroid ? 'phone or tablet' : 'computer'}. Everyone else keeps their own setup.',
+      subtitle: 'Only changes this ${onAndroid ? 'phone or tablet' : 'computer'}. Everyone else keeps their own setup.',
       scroll: true,
       child: wide
           ? Row(crossAxisAlignment: CrossAxisAlignment.start, children: [

@@ -7,7 +7,9 @@ import 'package:flutter/material.dart';
 import 'design_tokens.dart';
 
 class DesignSystem {
-  const DesignSystem(this.id, this.name, this.group, this.description, {required this.palette, required this.surface, required this.tokens, this.forTouch = false});
+  const DesignSystem(this.id, this.name, this.group, this.description, {required this.palette, required this.surface, required this.tokens, this.forTouch = false, this.vivid = false});
+  /// figures as solid colour tiles (the Vivid colour level)
+  final bool vivid;
   final String id, name, description;
   /// 'pos' (efficiency and tap targets) or 'colourful' (looks)
   final String group;
@@ -17,9 +19,14 @@ class DesignSystem {
   final bool forTouch;
 }
 
-const designGroups = [('pos', 'Point of sale & efficiency'), ('colourful', 'Modern & colourful')];
+const designGroups = [('pos', 'Point of sale & efficiency'), ('colourful', 'Modern & colourful'), ('showcase', 'Showcase')];
 
 const designSystems = <DesignSystem>[
+  // the standard RxPOS look
+  DesignSystem('rxpos-green', 'RxPOS Green (standard)', 'pos',
+      'The RxPOS look: a calm cream page, a deep green menu, green actions, figure cards washed in their own colour, and clear tables.',
+      palette: 'rxpos-green', surface: 'flat',
+      tokens: DesignTokens(radius: 14, controlRadius: 10, chipRadius: 999, tintedStats: true, sidebarFill: [Color(0xFF0F5A33), Color(0xFF0A4326)])),
   // ---- point of sale & transactional ----
   DesignSystem('split-pane', 'Split-Pane Hybrid Grid', 'pos',
       'Medicines and the sale side by side, the sale and payment always in full view: nothing to scroll or unfold to finish a sale.',
@@ -69,6 +76,22 @@ const designSystems = <DesignSystem>[
       palette: 'sunset', surface: 'aurora',
       tokens: DesignTokens(radius: 18, controlRadius: 14, chipRadius: 18, glassAlpha: .16,
           backdrop: [Color(0xFFB4410E), Color(0xFF9D174D), Color(0xFF4C1D95)], glows: [Color(0x40FFB86B), Color(0x30F472B6)])),
+  // ---- showcase: in the styles of modern product sites and app mock-ups ----
+  DesignSystem('studio', 'Studio Grid', 'showcase',
+      'A crisp white page framed by fine rule lines and hatched rails, a dark band behind each title in large type, pill tags and indigo buttons.',
+      palette: 'studio', surface: 'flat',
+      tokens: DesignTokens(radius: 14, controlRadius: 10, chipRadius: 999, rails: true, heroBand: [Color(0xFF141416), Color(0xFF1E1E22)], headingWeight: FontWeight.w700,
+          headingSpacing: -.6)),
+  DesignSystem('lavender', 'Lavender Dream', 'showcase',
+      'A soft violet-to-pink gradient, white frosted cards floating on coloured shadows, pastel tiles and gradient pill buttons.',
+      palette: 'lavender', surface: 'aurora', vivid: true,
+      tokens: DesignTokens(radius: 24, controlRadius: 999, chipRadius: 999, glassAlpha: .82, softShadow: Color(0x557B5CF5),
+          backdrop: [Color(0xFFD6C9FF), Color(0xFFEAD8FF), Color(0xFFFFD6EB)], glows: [Color(0x66FFFFFF), Color(0x40A78BFA)])),
+  DesignSystem('travel', 'Travel Orange', 'showcase',
+      'Bold orange header blocks with curved bottoms, pill-shaped fields, deep purple figure cards and, on a phone, an icon bar at the bottom.',
+      palette: 'travel', surface: 'flat', vivid: true, forTouch: true,
+      tokens: DesignTokens(radius: 22, controlRadius: 999, chipRadius: 999, borderWidth: 1.5, heroBand: [Color(0xFFF07A1A), Color(0xFFE25D0B)], heroCurve: 28,
+          softShadow: Color(0x22000000), bottomNav: true)),
 ];
 
 DesignSystem? designById(String id) => designSystems.where((d) => d.id == id).firstOrNull;

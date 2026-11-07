@@ -443,6 +443,64 @@ void main() {
     await done(tester);
   });
 
+  testWidgets('Payroll & HR: add staff, mark a day, prepare and pay the month; Settings: a report email sent now', (tester) async {
+    await tester.runAsync(signedIn);
+    await start(tester);
+    await navTo(tester, 'Payroll & HR');
+    await tester.tap(find.byKey(const Key('add-employee')));
+    await settle(tester);
+    await tester.enterText(find.widgetWithText(TextFormField, 'Full name'), 'Ann Sample');
+    await tester.enterText(find.widgetWithText(TextFormField, 'Basic salary a month'), '600000');
+    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await settle(tester);
+    expect(find.text('Ann Sample'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('payroll-tab-attendance')));
+    await settle(tester);
+    await tester.tap(find.text('Sick'));
+    await settle(tester);
+    final att = (await tester.runAsync(() => RecordStore(db).rows('attendance')))!.single;
+    expect(att['status'], 'sick');
+
+    await tester.tap(find.byKey(const Key('payroll-tab-runs')));
+    await settle(tester);
+    await tester.tap(find.byKey(const Key('prepare-payroll')));
+    await settle(tester);
+    await tester.tap(find.widgetWithText(FilledButton, 'Prepare'));
+    await settle(tester);
+    // 600,000 gross: PAYE 25,000 + 30% of 190,000 = 82,000; NSSF 30,000; net 488,000
+    expect(find.text('UGX 488,000'), findsWidgets);
+    await tester.tap(find.byKey(const Key('pay-payroll')));
+    await settle(tester);
+    await tester.tap(find.widgetWithText(FilledButton, 'Mark as paid').last);
+    await settle(tester);
+    final exp = (await tester.runAsync(() => RecordStore(db).rows('expenses')))!.map((e) => e['amount']).toSet();
+    expect(exp, {488000, 82000 + 30000 + 60000});
+    noSnackBars(tester);
+
+    cloud.api['reports/send'] = (b) => (200, {'period': '2026-11-07', 'to': ['owner@example.com'], 'sent': 1, 'error': '', 'file': 'Weekly.xlsx', 'sheets': const []});
+    await navTo(tester, 'Settings');
+    await tester.ensureVisible(find.text('Alerts & storage'));
+    await settle(tester, 2);
+    await tester.tap(find.text('Alerts & storage'));
+    await settle(tester);
+    await tester.ensureVisible(find.byKey(const Key('add-report-schedule')));
+    await tester.tap(find.byKey(const Key('add-report-schedule')));
+    await settle(tester);
+    await tester.enterText(find.widgetWithText(TextFormField, 'Name'), 'Weekly report');
+    await tester.enterText(find.widgetWithText(TextFormField, 'Email it to (separated by commas)'), 'owner@example.com');
+    await tester.tap(find.descendant(of: find.byType(Dialog), matching: find.widgetWithText(FilledButton, 'Save')));
+    await settle(tester);
+    final sched = (await tester.runAsync(() => RecordStore(db).rows('reportSchedules')))!.single;
+    expect((sched['frequency'], (sched['reports'] as List).length, sched['active']), ('weekly', 5, true));
+    await tester.ensureVisible(find.text('Send now'));
+    await tester.tap(find.text('Send now'));
+    await settle(tester);
+    expect((cloud.calls.last.$1, cloud.calls.last.$2['id']), ('reports/send', sched['id']));
+    expect(find.text('Weekly.xlsx emailed to 1 address'), findsOneWidget);
+    await done(tester);
+  });
+
   testWidgets('group 4: add a user, add a branch, the audit log, this device', (tester) async {
     await tester.runAsync(signedIn);
     await start(tester);
@@ -2462,7 +2520,7 @@ void main() {
     testWidgets('screens of the ten design systems', (tester) async {
       await tester.runAsync(signedIn);
       for (final d in designSystems) {
-        await tester.runAsync(() => db.into(db.kv).insertOnConflictUpdate(KvCompanion.insert(k: 'device:look', v: '{"v":2,"design":"${d.id}","theme":"${d.palette}","surface":"${d.surface}"}')));
+        await tester.runAsync(() => db.into(db.kv).insertOnConflictUpdate(KvCompanion.insert(k: 'device:look', v: '{"v":2,"design":"${d.id}","theme":"${d.palette}","surface":"${d.surface}","level":"${d.vivid ? 'vivid' : 'calm'}"}')));
         await start(tester);
         await shot(tester, 'design-${d.id}-dashboard');
         await toTill(tester);
@@ -2477,6 +2535,14 @@ void main() {
         await start(tester, size: size);
         await toTill(tester);
         await shot(tester, 'design-target-tap-$tag-pos');
+        await done(tester);
+      }
+      // the showcase designs on a phone: Travel Orange with its bottom bar, Lavender Dream
+      for (final d in ['travel', 'lavender', 'studio']) {
+        final ds = designSystems.firstWhere((x) => x.id == d);
+        await tester.runAsync(() => db.into(db.kv).insertOnConflictUpdate(KvCompanion.insert(k: 'device:look', v: '{"v":2,"design":"$d","theme":"${ds.palette}","surface":"${ds.surface}","level":"${ds.vivid ? 'vivid' : 'calm'}"}')));
+        await start(tester, size: const Size(412, 900));
+        await shot(tester, 'design-$d-phone-dashboard');
         await done(tester);
       }
     }, skip: !on);
@@ -2720,6 +2786,8 @@ void main() {
       expect(find.textContaining('last scan just now'), findsOneWidget);
       // picking a theme leaves the design system
       await tester.tap(find.byKey(const Key('theme-menu')));
+      await settle(tester);
+      await tester.tap(find.byKey(const Key('design-systems')));
       await settle(tester);
       await tester.ensureVisible(find.byKey(const ValueKey('design-off')));
       await settle(tester);

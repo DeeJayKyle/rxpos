@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <base href="$FLUTTER_BASE_HREF">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="RxPOS: pharmacy point of sale for Uganda. Sales, stock, prescriptions and reports, online or offline.">
+  <meta name="theme-color" content="#0F5A33">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="RxPOS">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+  <link rel="icon" type="image/png" href="favicon.png">
+  <link rel="manifest" href="manifest.json">
+  <title>RxPOS</title>
+  <style>
+    /* shown until the app's first frame: the RxPOS mark on the page colour, no layout jump */
+    html, body { margin: 0; height: 100%; background: #F7F6F0; }
+    #rx-loading { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+      font: 600 15px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #13241A; transition: opacity .25s ease; }
+    #rx-loading img { width: 72px; height: 72px; border-radius: 18px; }
+    #rx-loading .bar { width: 160px; height: 4px; border-radius: 4px; background: #E3E7DF; overflow: hidden; }
+    #rx-loading .bar i { display: block; width: 40%; height: 100%; background: #1B7A45; animation: rx 1.1s ease-in-out infinite; }
+    @keyframes rx { 0% { transform: translateX(-100%); } 100% { transform: translateX(260%); } }
+    @media (prefers-reduced-motion: reduce) { #rx-loading .bar i { animation: none; width: 100%; } }
+  </style>
+</head>
+<body>
+  <div id="rx-loading" role="status" aria-live="polite">
+    <img src="icons/Icon-192.png" alt="">
+    <div>Opening RxPOS…</div>
+    <div class="bar"><i></i></div>
+  </div>
+  <script src="rx_boot.js"></script>
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>

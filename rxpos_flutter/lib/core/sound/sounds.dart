@@ -11,6 +11,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../data/app_dirs.dart';
+import '../platform.dart';
 import '../data/device_settings.dart';
 
 typedef Note = (double freq, double at, double len, String wave);
@@ -129,7 +130,7 @@ class Sounds {
       if (choice == 'off' || vol == 0) return;
       final player = _player ??= AudioPlayer();
       await player.stop();
-      if (choice == 'custom') {
+      if (choice == 'custom' && !onWeb) {
         final f = await customFile(kind);
         if (await f.exists()) {
           await player.setVolume(vol);
@@ -139,6 +140,12 @@ class Sounds {
         }
       }
       final t = tones.containsKey(choice) ? choice : soundKinds.firstWhere((k) => k.$1 == kind, orElse: () => ('', '', 'alert')).$3;
+      if (onWeb) {
+        // a browser: the tone straight from memory (no files)
+        await player.setVolume(1);
+        await player.play(BytesSource(toneWav(t, volume: vol), mimeType: 'audio/wav'));
+        return;
+      }
       final f = File('${(await getTemporaryDirectory()).path}${Platform.pathSeparator}rxpos-tone-$t-${(vol * 100).round()}.wav');
       if (!await f.exists()) await f.writeAsBytes(toneWav(t, volume: vol));
       await player.setVolume(1);

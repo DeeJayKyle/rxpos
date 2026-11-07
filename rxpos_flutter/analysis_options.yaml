@@ -11,6 +11,7 @@ analyzer:
     - build/**
     - android/**
     - windows/**
+    - web/**
   errors:
     # Freezed's documented way to configure json_serializable is an annotation on the factory constructor
     invalid_annotation_target: ignore

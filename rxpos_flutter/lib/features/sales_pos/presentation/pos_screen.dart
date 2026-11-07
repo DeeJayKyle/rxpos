@@ -1,9 +1,9 @@
 import 'dart:convert';
-import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:rxpos/core/platform.dart';
 
 import '../../../core/data/device_settings.dart';
 import '../../../core/data/pharmacy_providers.dart';
@@ -274,7 +274,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
           layout: wide ? layout : null,
           onLayout: (v) => ref.read(deviceValueProvider('pos-layout').notifier).set(v),
           onCommand: advanced ? () => _openCommandBar(d) : null,
-          onCamera: Platform.isAndroid
+          onCamera: onAndroid
               ? () async {
                   await scanContinuous(context, title: 'Scan items into the sale', onCode: (code) async {
                     final p = d.byBarcode[code.trim()];

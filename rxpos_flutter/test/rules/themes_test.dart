@@ -38,13 +38,17 @@ void main() {
     final l = Look.parse('{"theme":"nord","mode":"system","accent":"violet","surface":"glass","level":"vivid"}');
     expect((l.theme, l.system, l.accent, l.surface, l.level), ('nord', true, 'violet', 'glass', 'vivid'));
     expect(Look.parse('{"theme":"nope","surface":"x"}').theme, 'light');
-    expect(Look.parse('garbage').surface, 'aurora');
+    expect((Look.parse('garbage').design, Look.parse('garbage').surface), ('rxpos-green', 'flat'));
     expect(buildTheme(p, vivid: true).extension<LookLevel>()!.vivid, isTrue);
   });
 
   test('Aurora is the standard look: a device on the old standard moves to it once; Flat chosen since stays', () {
     expect(Look.parse('{"theme":"nord","surface":"flat"}').surface, 'aurora');
     expect(Look.parse('{"v":2,"theme":"nord","surface":"flat"}').surface, 'flat');
+    // RxPOS Green is the standard from version 3: light looks move to it once; dark ones and the system's stay
+    expect(Look.parse('{"v":2,"theme":"light","surface":"aurora"}').design, 'rxpos-green');
+    expect(Look.parse('{"v":2,"theme":"dracula","surface":"aurora"}').design, '');
+    expect(Look.parse('{"v":3,"theme":"light","surface":"aurora"}').design, '');
     expect(Look.parse(jsonEncode(Look.parse('{"surface":"flat"}').copyWith(surface: 'flat').toJson())).surface, 'flat');
     final t = buildTheme(paletteById('light'), surface: 'aurora');
     expect(t.extension<DesignTokens>()!.hasBackdrop, isTrue);
@@ -53,14 +57,14 @@ void main() {
   });
 
   group('design systems', () {
-    test('ten of them, each with its own palette; picked by id, unknown ids ignored', () {
-      expect(designSystems.length, 10);
-      expect(designSystems.where((d) => d.group == 'pos').length, 5);
+    test('fourteen of them, each with its own palette; picked by id, unknown ids ignored', () {
+      expect(designSystems.length, 14);
+      expect(designSystems.where((d) => d.group == 'pos').length, 6);
       for (final d in designSystems) {
         expect(paletteById(d.palette).id, d.palette, reason: d.id);
       }
       expect(Look.parse('{"design":"brutalist"}').designSystem?.name, 'Neo-Brutalist Pop');
-      expect(Look.parse('{"design":"nope"}').design, '');
+      expect(Look.parse('{"v":3,"design":"nope"}').design, '');
     });
 
     test('every design is readable: text on its page and panels at least 4.5:1, white or dark text on its buttons', () {

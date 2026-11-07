@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:rxpos/core/web/web_keep_stub.dart' if (dart.library.js_interop) 'package:rxpos/core/web/web_keep_web.dart';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
@@ -15,7 +17,7 @@ part 'theme_choice.g.dart';
 /// or dark, the accent, the surface style and the colour level, or one of the design systems (design_systems.dart),
 /// which sets the palette, the style and the design tokens together. Kept on this device only.
 class Look {
-  const Look({this.theme = 'light', this.system = false, this.accent = '', this.surface = 'aurora', this.level = 'calm', this.beforePremium = '', this.design = ''});
+  const Look({this.theme = 'rxpos-green', this.system = false, this.accent = '', this.surface = 'flat', this.level = 'calm', this.beforePremium = '', this.design = 'rxpos-green'});
   final String theme, accent, surface, level, beforePremium;
   /// the design system in use ('' for none)
   final String design;
@@ -29,7 +31,7 @@ class Look {
         level: level ?? this.level, beforePremium: beforePremium ?? this.beforePremium, design: design ?? this.design,
       );
 
-  Map<String, Object?> toJson() => {'v': 2, 'theme': theme, 'mode': system ? 'system' : '', 'accent': accent, 'surface': surface, 'level': level,
+  Map<String, Object?> toJson() => {'v': 3, 'theme': theme, 'mode': system ? 'system' : '', 'accent': accent, 'surface': surface, 'level': level,
     'beforePremium': beforePremium, if (design.isNotEmpty) 'design': design};
 
   static Look parse(String? v) {
@@ -41,10 +43,13 @@ class Look {
         system: j['mode'] == 'system',
         accent: accents.any((a) => a.$1 == j['accent']) ? '${j['accent']}' : '',
         // Aurora is the standard look from version 2 of the saved look; a device still on the old standard (Flat) moves to it once
-        surface: !surfaceStyles.any((s) => s.$1 == j['surface']) || (j['v'] != 2 && j['surface'] == 'flat') ? 'aurora' : '${j['surface']}',
+        surface: !surfaceStyles.any((s) => s.$1 == j['surface']) || ((j['v'] as num? ?? 0) < 2 && j['surface'] == 'flat') ? 'aurora' : '${j['surface']}',
         level: j['level'] == 'vivid' ? 'vivid' : 'calm',
         beforePremium: '${j['beforePremium'] ?? ''}',
-        design: designById('${j['design'] ?? ''}') == null ? '' : '${j['design']}',
+        design: designById('${j['design'] ?? ''}') != null
+            ? '${j['design']}'
+            // RxPOS Green is the standard look from version 3: a device still on a light standard look moves to it once
+            : (j['v'] as num? ?? 0) < 3 && !palettes.any((p) => p.id == '${j['theme']}' && p.dark) && j['mode'] != 'system' ? 'rxpos-green' : '',
       );
     } catch (_) {
       return const Look();
@@ -69,6 +74,7 @@ class LookController extends AsyncNotifier<Look> {
   Future<void> save(Look l) async {
     final db = ref.read(appDatabaseProvider);
     await db.into(db.kv).insertOnConflictUpdate(KvCompanion.insert(k: lookKey, v: jsonEncode(l.toJson())));
+    webKeep(lookKey, jsonEncode(l.toJson()));
     state = AsyncData(l);
   }
 
@@ -81,7 +87,7 @@ class LookController extends AsyncNotifier<Look> {
   Future<void> designSystem(String id) async {
     final l = await _now();
     final d = designById(id);
-    await save(d == null ? l.copyWith(design: '') : l.copyWith(design: d.id, theme: d.palette, surface: d.surface, system: false, accent: ''));
+    await save(d == null ? l.copyWith(design: '') : l.copyWith(design: d.id, theme: d.palette, surface: d.surface, system: false, accent: '', level: d.vivid ? 'vivid' : 'calm'));
   }
 
   /// Light or Dark: the theme of that base (the current one when it is already that base).

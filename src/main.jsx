@@ -20,7 +20,8 @@ startWebPolicy();
 
 // Pharmacy web addresses are /<pharmacy> with no trailing slash; drop a stray one for a clean URL.
 // (Kept here rather than as an inline <script> in index.html so the web Content-Security-Policy can forbid inline scripts.)
-if (!isAndroid && typeof location !== 'undefined' && /^\/[a-z0-9-]+\/+$/.test(location.pathname)) {
+// (not /classic/: the classic app's own folder on rxposug.com, where the slash belongs)
+if (!isAndroid && typeof location !== 'undefined' && /^\/[a-z0-9-]+\/+$/.test(location.pathname) && location.pathname !== '/classic/') {
   location.replace(location.pathname.replace(/\/+$/, '') + location.search + location.hash);
 }
 

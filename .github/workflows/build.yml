@@ -281,7 +281,12 @@ jobs:
       - name: Deploy the cloud (Worker pharmapos → api.rxposug.com)
         run: npx wrangler deploy
       - name: Deploy the website (Pages project rxpos → rxposug.com)
-        run: npx wrangler pages deploy dist --project-name rxpos --branch main --commit-dirty=true
+        # with the newest tested RxPOS app for the browser (the site's home page), so this deploy never takes it away
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          scripts/site-with-app.sh dist site
+          npx wrangler pages deploy site --project-name rxpos --branch main --commit-dirty=true
       - name: Check both are live with this version
         run: |
           WANT=$(node -p "require('./dist/version.json').build")

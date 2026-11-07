@@ -23,6 +23,7 @@ import { backup, restore } from './backup.js';
 import { uptimeCheck } from './uptime.js';
 import { watchdog } from './watchdog.js';
 import { dailySummaries } from './summary.js';
+import { scheduledReports } from './reports.js';
 import { dailyStockFor, toCsv } from './dailystock.js';
 import { clean as cleanInvoice, finish as finishInvoice } from './invoiceread.js';
 import { INVOICE_PROMPT } from './invoiceprompt.js';
@@ -39,7 +40,10 @@ const MAX_PUSH = 500;
 const TOKEN_DAYS = 30;
 const MAIN = 'main';
 // Tables only some roles may change; the server enforces it whatever a device sends
-const GUARDED = { users: 'users.manage', roles: 'users.manage', settings: 'settings.manage' };
+const GUARDED = { users: 'users.manage', roles: 'users.manage', settings: 'settings.manage',
+  employees: 'payroll', attendance: 'payroll', salaryAdvances: 'payroll', payrolls: 'payroll', reportSchedules: 'settings.manage' };
+// Salaries and staff records: only people who may run the payroll download them (others never get the rows)
+const PAYROLL_TABLES = new Set(['employees', 'attendance', 'salaryAdvances', 'payrolls']);
 // Only the RxPOS owner (owner console) may change these: the licence/features and the pharmacy's branches
 const SERVER_ONLY = new Set(['license', 'branches']);
 // Append-only tables (1.1): the server accepts new rows but never an update or a delete, so an audit trail, a stock
@@ -622,8 +626,10 @@ async function sync(env, body, who, ctx) {
   const more = results.length > PAGE;
   const page = more ? results.slice(0, PAGE) : results;
   const cursor = more ? page[page.length - 1].seq : Math.max(maxSeq || 0, Number(since) || 0);
+  const hideHr = !who.viaKey && page.some((r) => PAYROLL_TABLES.has(r.t)) && !(await roleCan(env, tenant, who.role, 'payroll'));
+  const shown = hideHr ? page.filter((r) => !PAYROLL_TABLES.has(r.t)) : page;
   // Build the response by hand so records stored as JSON text are not parsed and re-serialised (keeps CPU low)
-  const items = page.map((r) => `{"t":${JSON.stringify(r.t)},"id":${JSON.stringify(r.id)},"at":${JSON.stringify(r.at)},"deleted":${r.deleted ? 'true' : 'false'},"rec":${stripUserSecrets(r.t, r.rec)}}`);
+  const items = shown.map((r) => `{"t":${JSON.stringify(r.t)},"id":${JSON.stringify(r.id)},"at":${JSON.stringify(r.at)},"deleted":${r.deleted ? 'true' : 'false'},"rec":${stripUserSecrets(r.t, r.rec)}}`);
   return json(`{"changes":[${items.join(',')}],"cursor":${cursor},"more":${more},"applied":${applied},"refused":${refused},"refusedKeys":${JSON.stringify(refusedKeys)},"dupes":${dupes},"protocol":2,"epoch":${JSON.stringify(epoch)},"tenant":${JSON.stringify(tenant)}}`);
 }
 
@@ -1290,7 +1296,12 @@ export default {
   // disables it for 90 days of inactivity (password emails are rare).
   async scheduled(event, env, ctx) {
     // 18:00 UTC = 21:00 in Uganda: each pharmacy's daily summary email (worker/summary.js)
-    if (event.cron === '0 18 * * *') { ctx.waitUntil(dailySummaries(withDatabase(env)).then((r) => console.log('daily summaries', r.map((x) => `${x.tenant}:${x.sent}${x.error ? ' ' + x.error : ''}`).join(', '))).catch((e) => console.log('daily summaries failed', e.message))); return; }
+    if (event.cron === '0 18 * * *') {
+      ctx.waitUntil(dailySummaries(withDatabase(env)).then((r) => console.log('daily summaries', r.map((x) => `${x.tenant}:${x.sent}${x.error ? ' ' + x.error : ''}`).join(', '))).catch((e) => console.log('daily summaries failed', e.message)));
+      // and the scheduled Excel reports that are due today (worker/reports.js)
+      ctx.waitUntil(scheduledReports(withDatabase(env)).then((r) => console.log('scheduled reports', r.map((x) => `${x.tenant}/${x.schedule}:${x.sent}${x.error ? ' ' + x.error : ''}`).join(', '))).catch((e) => console.log('scheduled reports failed', e.message)));
+      return;
+    }
     if (event.cron !== '0 6 * * 1') {
       ctx.waitUntil(uptimeCheck(withDatabase(env), { sync }).then((r) => console.log('uptime', JSON.stringify(r))).catch((e) => console.log('uptime check failed', e.message)));
       ctx.waitUntil(watchdog(withDatabase(env)).then((r) => console.log('watchdog', JSON.stringify(r))).catch((e) => console.log('watchdog failed', e.message)));
@@ -1404,6 +1415,13 @@ export default {
         if (!who.viaKey && !(await roleCan(env, who.tenant, who.role, 'reports'))) return json({ error: 'Only staff who can see reports' }, 403);
         const [r] = await dailySummaries(env, { tenantId: who.tenant, dry: req.method !== 'POST' });
         return json(r ? { day: r.day, text: r.text, to: r.to, sent: r.sent, error: r.error } : { error: 'No pharmacy' }, r ? 200 : 404);
+      }
+      // A report schedule: preview what it would send (GET ?id=) or email it now (POST {id}), for its period up to today
+      if (path === '/api/reports/send') {
+        if (!who.viaKey && !(await roleCan(env, who.tenant, who.role, 'settings.manage'))) return json({ error: 'Only staff who manage settings' }, 403);
+        const id = String(req.method === 'POST' ? body?.id || '' : url.searchParams.get('id') || '');
+        const [r] = await scheduledReports(env, { tenantId: who.tenant, scheduleId: id, dry: req.method !== 'POST' });
+        return r ? json({ period: r.period, to: r.to, sent: r.sent, error: r.error, file: r.file, sheets: r.sheets }) : json({ error: 'No such report schedule' }, 404);
       }
       if (path === '/api/rtc' || path === '/api/rtc/config') return await rtc(env, req, url, body, who);
       if (path === '/api/files' && req.method === 'POST') return await uploadChunk(env, body, who);
