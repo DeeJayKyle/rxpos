@@ -19,6 +19,8 @@ const syncedTables = [
   'batches', 'branches', 'transfers', 'audit', 'purchaseOrders', 'roles', 'messages', 'shifts', 'license', 'events',
   'tempLogs', 'catalogHidden', 'quizResults', 'stockCounts', 'countItems', 'supplierReturns', 'chatMarks', 'chatPins',
   'chatReads', 'drafts',
+  // only this app (Payroll & HR); the React app skips tables it does not know
+  'employees', 'attendance', 'salaryAdvances', 'payrolls',
 ];
 
 /// Tables that only ever grow: a row is never changed or deleted (the cloud refuses it too).

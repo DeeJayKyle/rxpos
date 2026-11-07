@@ -39,7 +39,10 @@ const MAX_PUSH = 500;
 const TOKEN_DAYS = 30;
 const MAIN = 'main';
 // Tables only some roles may change; the server enforces it whatever a device sends
-const GUARDED = { users: 'users.manage', roles: 'users.manage', settings: 'settings.manage' };
+const GUARDED = { users: 'users.manage', roles: 'users.manage', settings: 'settings.manage',
+  employees: 'payroll', attendance: 'payroll', salaryAdvances: 'payroll', payrolls: 'payroll' };
+// Salaries and staff records: only people who may run the payroll download them (others never get the rows)
+const PAYROLL_TABLES = new Set(['employees', 'attendance', 'salaryAdvances', 'payrolls']);
 // Only the RxPOS owner (owner console) may change these: the licence/features and the pharmacy's branches
 const SERVER_ONLY = new Set(['license', 'branches']);
 // Append-only tables (1.1): the server accepts new rows but never an update or a delete, so an audit trail, a stock
@@ -622,8 +625,10 @@ async function sync(env, body, who, ctx) {
   const more = results.length > PAGE;
   const page = more ? results.slice(0, PAGE) : results;
   const cursor = more ? page[page.length - 1].seq : Math.max(maxSeq || 0, Number(since) || 0);
+  const hideHr = !who.viaKey && page.some((r) => PAYROLL_TABLES.has(r.t)) && !(await roleCan(env, tenant, who.role, 'payroll'));
+  const shown = hideHr ? page.filter((r) => !PAYROLL_TABLES.has(r.t)) : page;
   // Build the response by hand so records stored as JSON text are not parsed and re-serialised (keeps CPU low)
-  const items = page.map((r) => `{"t":${JSON.stringify(r.t)},"id":${JSON.stringify(r.id)},"at":${JSON.stringify(r.at)},"deleted":${r.deleted ? 'true' : 'false'},"rec":${stripUserSecrets(r.t, r.rec)}}`);
+  const items = shown.map((r) => `{"t":${JSON.stringify(r.t)},"id":${JSON.stringify(r.id)},"at":${JSON.stringify(r.at)},"deleted":${r.deleted ? 'true' : 'false'},"rec":${stripUserSecrets(r.t, r.rec)}}`);
   return json(`{"changes":[${items.join(',')}],"cursor":${cursor},"more":${more},"applied":${applied},"refused":${refused},"refusedKeys":${JSON.stringify(refusedKeys)},"dupes":${dupes},"protocol":2,"epoch":${JSON.stringify(epoch)},"tenant":${JSON.stringify(tenant)}}`);
 }
 

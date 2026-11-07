@@ -5,7 +5,7 @@ const allPermissions = [
   'pos.sell', 'pos.wholesale', 'pos.discount', 'pos.price_edit', 'sales.view', 'sales.refund', 'sales.edit', 'proformas',
   'shifts', 'shifts.all', 'prescriptions', 'customers', 'suppliers', 'reminders', 'chat', 'inventory.view',
   'medicines.manage', 'stock.receive', 'purchases.edit', 'inventory.edit', 'stock.count', 'stock.adjust', 'transfers',
-  'finance', 'reports', 'reports.lines', 'branches.view', 'audit', 'users.manage', 'settings.manage', 'data.reset',
+  'finance', 'payroll', 'reports', 'reports.lines', 'branches.view', 'audit', 'users.manage', 'settings.manage', 'data.reset',
 ];
 
 const _t0 = '2000-01-01T00:00:00.000Z';
@@ -69,7 +69,7 @@ const permissionGroups = [
     ('stock.adjust', 'Stock counts, adjustments, write-offs'), ('transfers', 'Stock transfers between branches'),
   ]),
   ('Management', [
-    ('finance', 'Finance (expenses, banks, loans, cash book)'), ('reports', 'Reports & dashboard money figures'),
+    ('finance', 'Finance (expenses, banks, loans, cash book)'), ('payroll', 'Payroll & staff (salaries, attendance, advances)'), ('reports', 'Reports & dashboard money figures'),
     ('reports.lines', 'Sales lines report only (what was sold and by whom, no profit)'), ('branches.view', 'See all branches'), ('audit', 'Audit log'),
     ('users.manage', 'Manage users & roles'), ('settings.manage', 'Settings & payment methods'), ('data.reset', 'Restore default settings'),
   ]),
