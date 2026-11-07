@@ -43,7 +43,8 @@ if (live) {
 try {
   const { chromium } = await import('playwright');
   // software graphics: CI machines have no GPU, and the app draws with WebGL
-  const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+  // the full Chromium (channel 'chromium'), not Playwright's headless shell, which cannot draw the app
+  const browser = await chromium.launch({ channel: 'chromium', args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e)));
@@ -54,8 +55,8 @@ try {
   const explain = () => console.log('  what the browser said:\n    ' + (log.slice(-25).join('\n    ') || '(nothing)'));
   await page.goto(site + '/', { waitUntil: 'domcontentloaded', timeout: 60000 });
   try {
-    await page.waitForSelector('flutter-view, flt-glass-pane', { timeout: 60000 });
-    await page.waitForFunction(() => !document.getElementById('rx-loading'), null, { timeout: 60000 });
+    await page.waitForSelector('flutter-view, flt-glass-pane', { timeout: 120000 });
+    await page.waitForFunction(() => !document.getElementById('rx-loading'), null, { timeout: 120000 });
   } catch (e) {
     explain();
     throw e;
