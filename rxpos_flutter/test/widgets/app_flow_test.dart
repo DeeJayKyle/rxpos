@@ -443,6 +443,64 @@ void main() {
     await done(tester);
   });
 
+  testWidgets('Payroll & HR: add staff, mark a day, prepare and pay the month; Settings: a report email sent now', (tester) async {
+    await tester.runAsync(signedIn);
+    await start(tester);
+    await navTo(tester, 'Payroll & HR');
+    await tester.tap(find.byKey(const Key('add-employee')));
+    await settle(tester);
+    await tester.enterText(find.widgetWithText(TextFormField, 'Full name'), 'Ann Sample');
+    await tester.enterText(find.widgetWithText(TextFormField, 'Basic salary a month'), '600000');
+    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await settle(tester);
+    expect(find.text('Ann Sample'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('payroll-tab-attendance')));
+    await settle(tester);
+    await tester.tap(find.text('Sick'));
+    await settle(tester);
+    final att = (await tester.runAsync(() => RecordStore(db).rows('attendance')))!.single;
+    expect(att['status'], 'sick');
+
+    await tester.tap(find.byKey(const Key('payroll-tab-runs')));
+    await settle(tester);
+    await tester.tap(find.byKey(const Key('prepare-payroll')));
+    await settle(tester);
+    await tester.tap(find.widgetWithText(FilledButton, 'Prepare'));
+    await settle(tester);
+    // 600,000 gross: PAYE 25,000 + 30% of 190,000 = 82,000; NSSF 30,000; net 488,000
+    expect(find.text('UGX 488,000'), findsWidgets);
+    await tester.tap(find.byKey(const Key('pay-payroll')));
+    await settle(tester);
+    await tester.tap(find.widgetWithText(FilledButton, 'Mark as paid').last);
+    await settle(tester);
+    final exp = (await tester.runAsync(() => RecordStore(db).rows('expenses')))!.map((e) => e['amount']).toSet();
+    expect(exp, {488000, 82000 + 30000 + 60000});
+    noSnackBars(tester);
+
+    cloud.api['reports/send'] = (b) => (200, {'period': '2026-11-07', 'to': ['owner@example.com'], 'sent': 1, 'error': '', 'file': 'Weekly.xlsx', 'sheets': const []});
+    await navTo(tester, 'Settings');
+    await tester.ensureVisible(find.text('Alerts & storage'));
+    await settle(tester, 2);
+    await tester.tap(find.text('Alerts & storage'));
+    await settle(tester);
+    await tester.ensureVisible(find.byKey(const Key('add-report-schedule')));
+    await tester.tap(find.byKey(const Key('add-report-schedule')));
+    await settle(tester);
+    await tester.enterText(find.widgetWithText(TextFormField, 'Name'), 'Weekly report');
+    await tester.enterText(find.widgetWithText(TextFormField, 'Email it to (separated by commas)'), 'owner@example.com');
+    await tester.tap(find.descendant(of: find.byType(Dialog), matching: find.widgetWithText(FilledButton, 'Save')));
+    await settle(tester);
+    final sched = (await tester.runAsync(() => RecordStore(db).rows('reportSchedules')))!.single;
+    expect((sched['frequency'], (sched['reports'] as List).length, sched['active']), ('weekly', 5, true));
+    await tester.ensureVisible(find.text('Send now'));
+    await tester.tap(find.text('Send now'));
+    await settle(tester);
+    expect((cloud.calls.last.$1, cloud.calls.last.$2['id']), ('reports/send', sched['id']));
+    expect(find.text('Weekly.xlsx emailed to 1 address'), findsOneWidget);
+    await done(tester);
+  });
+
   testWidgets('group 4: add a user, add a branch, the audit log, this device', (tester) async {
     await tester.runAsync(signedIn);
     await start(tester);

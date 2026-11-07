@@ -55,6 +55,22 @@ export function summaryText(name, day, f, money) {
   return L.join('\n');
 }
 
+/** Stock that needs attention on [day]: batches with stock expiring within 30 days, medicines at or below their reorder level */
+export async function attention(db, tenant, day) {
+  const rows = async (sql, ...args) => (await db.prepare(sql).bind(tenant, ...args).all()).results.map((r) => JSON.parse(r.rec || 'null')).filter(Boolean);
+  const stock = (await db.prepare("SELECT json_extract(rec, '$.batchId') b, json_extract(rec, '$.productId') p, SUM(json_extract(rec, '$.qty')) q FROM records WHERE tenant = ?1 AND t = 'movements' AND deleted = 0 GROUP BY b, p").bind(tenant).all()).results;
+  const byBatch = new Map(stock.filter((s) => s.q > 0 && s.b).map((s) => [s.b, s.q]));
+  const byProduct = new Map(); for (const s of stock) byProduct.set(s.p, (byProduct.get(s.p) || 0) + s.q);
+  const soon = new Date(Date.parse(day) + 30 * 864e5).toISOString().slice(0, 10);
+  const batches = (await rows("SELECT rec FROM records WHERE tenant = ?1 AND t = 'batches' AND deleted = 0 AND json_extract(rec, '$.expiry') != '' AND json_extract(rec, '$.expiry') <= ?2", soon)).filter((b) => byBatch.get(b.id) > 0);
+  const products = await rows("SELECT rec FROM records WHERE tenant = ?1 AND t = 'products' AND deleted = 0 AND json_extract(rec, '$.reorder') > 0");
+  const name = new Map((await rows("SELECT rec FROM records WHERE tenant = ?1 AND t = 'products' AND deleted = 0")).map((p) => [p.id, p.name]));
+  return {
+    expiring: batches.sort((a, b) => a.expiry.localeCompare(b.expiry)).map((b) => ({ medicine: name.get(b.productId) || 'Medicine', batch: b.batch, left: byBatch.get(b.id), expiry: b.expiry })),
+    low: products.filter((p) => { const q = byProduct.get(p.id) || 0; return q > 0 && q <= p.reorder; }).map((p) => ({ medicine: p.name, left: byProduct.get(p.id), reorder: p.reorder })),
+  };
+}
+
 const fmtMoney = (settings) => (n) => `${settings.currency || 'UGX'} ${Math.round(Number(n) || 0).toLocaleString('en-US')}`;
 
 /** Build (and unless dry, email) today's summary for every pharmacy that asked for it */
@@ -72,16 +88,9 @@ export async function dailySummaries(env, { now = new Date(), dry = false, tenan
     const sales = await rows("SELECT rec FROM records WHERE tenant = ?1 AND t = 'sales' AND deleted = 0 AND json_extract(rec, '$.date') >= ?2 AND json_extract(rec, '$.date') < ?3", startIso, endIso);
     const expenses = await rows("SELECT rec FROM records WHERE tenant = ?1 AND t = 'expenses' AND deleted = 0 AND substr(json_extract(rec, '$.date'), 1, 10) = ?2", day);
     const branches = await rows("SELECT rec FROM records WHERE tenant = ?1 AND t = 'branches' AND deleted = 0");
-    // stock needing attention: batches with stock expiring within 30 days, products at or below their reorder level
-    const stock = (await db.prepare("SELECT json_extract(rec, '$.batchId') b, json_extract(rec, '$.productId') p, SUM(json_extract(rec, '$.qty')) q FROM records WHERE tenant = ?1 AND t = 'movements' AND deleted = 0 GROUP BY b, p").bind(t.id).all()).results;
-    const byBatch = new Map(stock.filter((s) => s.q > 0 && s.b).map((s) => [s.b, s.q]));
-    const byProduct = new Map(); for (const s of stock) byProduct.set(s.p, (byProduct.get(s.p) || 0) + s.q);
-    const soon = new Date(Date.parse(day) + 30 * 864e5).toISOString().slice(0, 10);
-    const batches = (await rows("SELECT rec FROM records WHERE tenant = ?1 AND t = 'batches' AND deleted = 0 AND json_extract(rec, '$.expiry') != '' AND json_extract(rec, '$.expiry') <= ?2", soon)).filter((b) => byBatch.get(b.id) > 0);
-    const products = await rows("SELECT rec FROM records WHERE tenant = ?1 AND t = 'products' AND deleted = 0 AND json_extract(rec, '$.reorder') > 0");
-    const name = new Map((await rows("SELECT rec FROM records WHERE tenant = ?1 AND t = 'products' AND deleted = 0")).map((p) => [p.id, p.name]));
-    const expiring = batches.sort((a, b) => a.expiry.localeCompare(b.expiry)).map((b) => `${name.get(b.productId) || 'Medicine'} batch ${b.batch}: ${byBatch.get(b.id)} left, expires ${b.expiry}`);
-    const lowStock = products.filter((p) => { const q = byProduct.get(p.id) || 0; return q > 0 && q <= p.reorder; }).map((p) => `${p.name}: ${byProduct.get(p.id)} left (reorder at ${p.reorder})`);
+    const att = await attention(db, t.id, day);
+    const expiring = att.expiring.map((b) => `${b.medicine} batch ${b.batch}: ${b.left} left, expires ${b.expiry}`);
+    const lowStock = att.low.map((p) => `${p.medicine}: ${p.left} left (reorder at ${p.reorder})`);
     const f = summarise({ sales, expenses, branches, lowStock, expiring });
     const text = summaryText(settings.name || t.name, day, f, fmtMoney(settings));
     let sent = 0, error = '';

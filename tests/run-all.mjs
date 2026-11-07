@@ -88,6 +88,7 @@ const SUITES = [
   ['receipt from settings', 'v47-receipt.mjs', ['.output/v47']],
   ['sign-in finds the pharmacy at scale', 'v48-login-scale.mjs', []],
   ['dashboard sales card opens sales lines', 'v49-dashboard-sales-link.mjs', ['.output/v49']],
+  ['scheduled email reports', 'v54-scheduled-reports.mjs', []],
   // performance timings: only on request (npm run bench), never part of npm test
   ...(process.argv[2] === 'bench' ? [['benchmarks', 'bench.mjs', ['.output/bench']]] : []),
   // the Windows app's self-update needs a screen: Windows itself, or xvfb-run on Linux
