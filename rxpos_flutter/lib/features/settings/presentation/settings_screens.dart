@@ -19,6 +19,7 @@ import '../../../core/sync/sync_config.dart';
 import '../../../core/theme/theme_choice.dart';
 import '../../sync_status/application/sync_controller.dart';
 import '../../../core/update/app_updates.dart';
+import 'font_picker.dart';
 
 /// This device (src/pages/Device.jsx): its branch and look, sync & storage (waiting changes, refused changes, ready to
 /// work offline, download everything again), text size and rotation, the date format, and notification sounds.
@@ -162,6 +163,7 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
           _choice(rotation, const [('auto', 'Turns with the phone'), ('portrait', 'Stay upright'), ('landscape', 'Stay sideways')], (v) => ref.read(deviceValueProvider(rotationKey).notifier).set(v)),
         ],
       ]),
+      const FontsCard(),
       _section('Dates', Icons.calendar_month_outlined, [
         Text('How dates are typed and shown in Add Stock and when correcting deliveries on this device. An expiry can also be typed as month and year (06/2028 = 30 June 2028).',
             style: Theme.of(context).textTheme.bodySmall),

@@ -13,6 +13,7 @@ import 'core/crash/crash_screen.dart';
 import 'core/live/live_connection.dart';
 import 'core/data/pharmacy_providers.dart';
 import 'core/theme/themes.dart';
+import 'core/theme/fonts.dart';
 import 'core/theme/theme_choice.dart';
 import 'features/sync_status/application/sync_controller.dart';
 
@@ -38,10 +39,13 @@ class RxposApp extends ConsumerWidget {
     final crash = ref.watch(appCrashProvider);
     // a design system's palette is always allowed with it; the layout fits the device: a finger on Android, a mouse on Windows
     final design = look.designSystem;
+    // this device's fonts (This device → Fonts), used once they are ready
+    final (headingFont, bodyFont) = fontsInUse(ref.watch(fontsProvider).value ?? const FontChoice(), ref.watch(loadedFontsProvider));
     final touch = !kIsWeb && (onAndroid || Platform.isIOS);
     final theme = design != null
-        ? buildTheme(paletteById(design.palette), surface: design.surface, vivid: look.level == 'vivid', tokens: design.tokens, touch: touch)
-        : buildTheme(paletteById(look.system ? paletteFor(false, allowed) : chosen), accent: look.accent, surface: look.surface, vivid: look.level == 'vivid', touch: touch);
+        ? buildTheme(paletteById(design.palette), surface: design.surface, vivid: look.level == 'vivid', tokens: design.tokens, touch: touch, headingFont: headingFont, bodyFont: bodyFont)
+        : buildTheme(paletteById(look.system ? paletteFor(false, allowed) : chosen), accent: look.accent, surface: look.surface, vivid: look.level == 'vivid', touch: touch,
+            headingFont: headingFont, bodyFont: bodyFont);
     if (crash != null) return MaterialApp(debugShowCheckedModeBanner: false, title: 'RxPOS', theme: theme, home: CrashScreen(error: crash));
     return MaterialApp.router(
       key: ValueKey('app-${ref.watch(appRestartProvider)}'),
@@ -51,7 +55,8 @@ class RxposApp extends ConsumerWidget {
       debugShowCheckedModeBanner: false,
       // following the system: its light and dark themes, live when it changes
       theme: theme,
-      darkTheme: look.system && design == null ? buildTheme(paletteById(paletteFor(true, allowed)), accent: look.accent, surface: look.surface, vivid: look.level == 'vivid', touch: touch) : null,
+      darkTheme: look.system && design == null ? buildTheme(paletteById(paletteFor(true, allowed)), accent: look.accent, surface: look.surface, vivid: look.level == 'vivid', touch: touch,
+          headingFont: headingFont, bodyFont: bodyFont) : null,
       themeMode: look.system && design == null ? ThemeMode.system : ThemeMode.light,
       routerConfig: ref.watch(appRouterProvider),
     );
