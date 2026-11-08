@@ -217,7 +217,9 @@ DesignTokens surfaceTokens(String surface, Palette p) => switch (surface) {
 
 /// The Flutter theme for a palette, an accent, a surface style, the colour level and the design tokens ([tokens]: a
 /// design system's; otherwise the surface style's), laid out for a finger ([touch], Android) or a mouse (Windows).
-ThemeData buildTheme(Palette base, {String accent = '', String surface = 'flat', bool vivid = false, DesignTokens? tokens, bool touch = false}) {
+/// [headingFont] and [bodyFont]: this device's chosen fonts (fonts.dart), once they are ready; null keeps the look's own.
+ThemeData buildTheme(Palette base, {String accent = '', String surface = 'flat', bool vivid = false, DesignTokens? tokens, bool touch = false,
+    String? headingFont, String? bodyFont}) {
   final p = withAccent(base, accent);
   final tk = (tokens ?? surfaceTokens(surface, p)).onDevice(touch: touch);
   final btn = buttonColours(p.primary, p.primary2, p.dark);
@@ -266,11 +268,12 @@ ThemeData buildTheme(Palette base, {String accent = '', String surface = 'flat',
           _ => BorderSide.none,
         };
   // figures of equal width everywhere, so amounts line up in lists and totals; headings in the design's weight and font
-  const tabular = [FontFeature.tabularFigures()];
+  const tabular = [FontFeature.tabularFigures(), FontFeature.liningFigures()]; // lining: 0 never looks like o (old-style fonts such as Playfair)
   final m3 = ThemeData(useMaterial3: true, brightness: p.dark ? Brightness.dark : Brightness.light).textTheme; // sizes are added by Theme.of
-  TextStyle? tab(TextStyle? x, [FontWeight? w]) => x?.copyWith(fontFeatures: tabular, fontWeight: w ?? x.fontWeight);
+  TextStyle? tab(TextStyle? x, [FontWeight? w]) => x?.copyWith(fontFeatures: tabular, fontWeight: w ?? x.fontWeight, fontFamily: bodyFont);
+  final headFamily = headingFont ?? tk.headingFamily;
   TextStyle? head(TextStyle? x, [FontWeight? w]) => tab(x, w ?? tk.headingWeight)
-      ?.copyWith(fontFamily: tk.headingFamily, fontFamilyFallback: tk.headingFamily == null ? null : const ['Georgia', 'Noto Serif', 'serif'], letterSpacing: tk.headingSpacing);
+      ?.copyWith(fontFamily: headFamily, fontFamilyFallback: headFamily == null || headingFont != null ? null : const ['Georgia', 'Noto Serif', 'serif'], letterSpacing: tk.headingSpacing);
   TextStyle? body(TextStyle? x) => tk.textScale == 1 || x?.fontSize == null ? tab(x) : tab(x)?.copyWith(fontSize: x!.fontSize! * tk.textScale);
   final text = m3.copyWith(
     displaySmall: head(m3.displaySmall, FontWeight.w700),
@@ -308,6 +311,7 @@ ThemeData buildTheme(Palette base, {String accent = '', String surface = 'flat',
   final fieldEdge = tk.ink ?? Color(p.borderStrong);
   return ThemeData(
     useMaterial3: true,
+    fontFamily: bodyFont,
     colorScheme: scheme,
     // a finger needs room (Android); a mouse is precise (Windows)
     visualDensity: tk.touch ? VisualDensity.standard : const VisualDensity(horizontal: 0, vertical: -.5),

@@ -12,6 +12,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:rxpos/core/theme/fonts.dart';
 import 'package:rxpos/core/router/app_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:rxpos/app.dart';
@@ -441,6 +442,39 @@ void main() {
     await tester.tap(find.text('Banks'));
     await settle(tester);
     expect(find.text('UGX 300'), findsOneWidget, reason: 'cash at hand: 500 sale − 200 expense');
+    await done(tester);
+  });
+
+  testWidgets('This device → Fonts: a pack is downloaded, kept and used; any two fonts can be picked', (tester) async {
+    await tester.runAsync(signedIn);
+    final fetched = <String>[];
+    final registered = <String>[];
+    await start(tester, extra: [
+      fontDownloadProvider.overrideWithValue((url) async {
+        fetched.add(url);
+        return Uint8List(4);
+      }),
+      fontRegisterProvider.overrideWithValue((family, _) async => registered.add(family)),
+    ]);
+    await navTo(tester, 'This device');
+    await settle(tester, 4);
+    await tester.ensureVisible(find.byKey(const Key('font-pack-editorial')));
+    await settle(tester, 2);
+    await tester.tap(find.byKey(const Key('font-pack-editorial')));
+    await settle(tester);
+    expect(registered.toSet(), {'Playfair Display', 'Inter'});
+    expect(fetched.length, fontFiles['Playfair Display']!.length + fontFiles['Inter']!.length);
+    final th = Theme.of(tester.element(find.byKey(const Key('fonts-card'))));
+    expect((th.textTheme.headlineSmall?.fontFamily, th.textTheme.bodyMedium?.fontFamily), ('Playfair Display', 'Inter'));
+    final kept = (await tester.runAsync(() => (db.select(db.kv)..where((x) => x.k.equals(fontsKey))).getSingle()))!;
+    expect(kept.v, contains('editorial'));
+    // back to the system font: nothing more downloaded
+    await tester.ensureVisible(find.byKey(const Key('font-pack-system')));
+    await settle(tester, 2);
+    await tester.tap(find.byKey(const Key('font-pack-system')));
+    await settle(tester);
+    expect(Theme.of(tester.element(find.byKey(const Key('fonts-card')))).textTheme.bodyMedium?.fontFamily, isNot('Inter'));
+    expect(fetched.length, fontFiles['Playfair Display']!.length + fontFiles['Inter']!.length);
     await done(tester);
   });
 
@@ -1146,17 +1180,20 @@ void main() {
     await navTo(tester, 'This device');
     expect(find.text('Ready to work offline'), findsNothing, reason: 'never synced yet');
     await tester.ensureVisible(find.text('YYYY-MM-DD'));
+    await settle(tester, 2);
     await tester.tap(find.text('YYYY-MM-DD'));
     await settle(tester);
     Future<String?> kv(String k) async => (await tester.runAsync(() => (db.select(db.kv)..where((x) => x.k.equals('device:$k'))).getSingleOrNull()))?.v;
     expect(await kv('dateFormat'), 'ymd');
     await tester.ensureVisible(find.byKey(const Key('sound-message')));
+    await settle(tester, 2);
     await tester.tap(find.byKey(const Key('sound-message')));
     await settle(tester);
     await tester.tap(find.text('Silent').last);
     await settle(tester);
     expect(await kv('sounds'), contains('"message":"off"'));
     await tester.ensureVisible(find.byKey(const Key('zoom')));
+    await settle(tester, 2);
     await tester.tap(find.byKey(const Key('zoom')));
     await settle(tester);
     expect(await kv('zoom'), isNotNull, reason: 'text size is kept on this device');
@@ -2528,6 +2565,36 @@ void main() {
       await settle(tester, 6);
       await expectLater(find.byType(MaterialApp).first, matchesGoldenFile('screens/$name.png'));
     }
+
+    // font packs drawn with the real fonts: FONT_FILES names a folder holding the packs' files (named as in font_files.dart)
+    testWidgets('screens of font packs', (tester) async {
+      final dir = Platform.environment['FONT_FILES'] ?? '';
+      await tester.runAsync(signedIn);
+      for (final id in ['editorial', 'startup', 'legible', 'tech']) {
+        final p = packById(id)!;
+        await tester.runAsync(() async {
+          for (final fam in {p.heading, p.body}) {
+            final l = FontLoader(fam);
+            for (final u in fontFiles[fam]!.values) {
+              l.addFont(Future.value(ByteData.sublistView(await File('$dir/${u.split('/').last}').readAsBytes())));
+            }
+            await l.load();
+          }
+        });
+        await tester.runAsync(() => db.into(db.kv).insertOnConflictUpdate(KvCompanion.insert(k: fontsKey, v: '{"pack":"$id"}')));
+        await start(tester, extra: [
+          fontDownloadProvider.overrideWithValue((_) async => Uint8List(0)),
+          fontRegisterProvider.overrideWithValue((_, _) async {}), // registered above
+        ]);
+        await shot(tester, 'fonts-$id-dashboard');
+        await done(tester);
+      }
+      await start(tester, extra: [fontDownloadProvider.overrideWithValue((_) async => Uint8List(0)), fontRegisterProvider.overrideWithValue((_, _) async {})]);
+      await navTo(tester, 'This device');
+      await tester.ensureVisible(find.byKey(const Key('fonts-card')));
+      await shot(tester, 'fonts-picker');
+      await done(tester);
+    }, skip: !on);
 
     testWidgets('screens of the ten design systems', (tester) async {
       await tester.runAsync(signedIn);
