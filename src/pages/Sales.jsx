@@ -233,7 +233,7 @@ export default function Sales() {
           <div className="form-actions no-print">
             {view.status !== 'refunded' && can('sales.edit') && <button className="btn ghost" onClick={() => { setEditing(view); setView(null); }}><Pencil size={16} />Edit sale</button>}
             {view.imported && <small className="muted">Copied from {view.imported}</small>}
-            {view.status !== 'refunded' && !view.imported && user.role !== 'cashier' && <button className="btn danger" onClick={() => refund(view)}><Undo2 size={16} />Refund</button>}
+            {view.status !== 'refunded' && !view.imported && user.role !== 'cashier' && can('sales.refund') && <button className="btn danger" onClick={() => refund(view)}><Undo2 size={16} />Refund</button>}
             <ReceiptPdfButton sale={view} />
             <button className="btn ghost act-invoice" onClick={() => { printSale(view, 'invoice'); }}><FileText size={16} />Invoice</button>
             <button className="btn primary" onClick={() => window.print()}><Printer size={16} />Print</button>

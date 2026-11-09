@@ -95,7 +95,7 @@ export function Empty({ children = 'Nothing here yet', colSpan, action, icon: Ic
 }
 
 /** Generic searchable list + add/edit/delete for a db table. */
-export function CrudPage({ title, subtitle, singular, table, fields, columns, blank = {}, extraActions, rowClass, rows: rowsProp, onSave, headExtra, canDelete = true, filter }) {
+export function CrudPage({ title, subtitle, singular, table, fields, columns, blank = {}, extraActions, rowClass, rows: rowsProp, onSave, headExtra, canDelete = true, filter, readOnly = false }) {
   const { db, upsert, remove } = useStore();
   const location = useLocation();
   const [q, setQ] = useState(location.state?.q || '');
@@ -119,7 +119,7 @@ export function CrudPage({ title, subtitle, singular, table, fields, columns, bl
           {headExtra}
           <SearchBox value={q} onChange={setQ} />
           <button className="btn ghost" title="Export CSV" onClick={() => downloadFile(`${table}.csv`, toCSV(rows.map(({ updatedAt, ...r }) => r)), 'text/csv')}><Download size={16} />CSV</button>
-          <button className="btn primary" onClick={() => setEditing({ ...blank, id: uid(), _new: true })}><Plus size={16} />Add {name.toLowerCase()}</button>
+          {!readOnly && <button className="btn primary" onClick={() => setEditing({ ...blank, id: uid(), _new: true })}><Plus size={16} />Add {name.toLowerCase()}</button>}
         </div>
       </div>
       <div className="card table-wrap">
@@ -133,12 +133,12 @@ export function CrudPage({ title, subtitle, singular, table, fields, columns, bl
                 {columns.map((c) => <td key={c.label} className={c.num ? 'num' : ''}>{c.render ? c.render(r) : r[c.key]}</td>)}
                 <td className="actions">
                   {extraActions?.(r)}
-                  <button className="btn sm ghost" onClick={() => setEditing(r)}><Pencil size={14} />Edit</button>
-                  {canDelete && <button className="btn sm danger" title="Delete" onClick={() => del(r)}><Trash2 size={14} /></button>}
+                  {!readOnly && <button className="btn sm ghost" onClick={() => setEditing(r)}><Pencil size={14} />Edit</button>}
+                  {canDelete && !readOnly && <button className="btn sm danger" title="Delete" onClick={() => del(r)}><Trash2 size={14} /></button>}
                 </td>
               </tr>
             ))}
-            {!rows.length && <Empty colSpan={columns.length + 1}>{q ? `No ${title.toLowerCase()} match “${q}”` : `No ${title.toLowerCase()} yet. Click “Add ${name.toLowerCase()}” to create one.`}</Empty>}
+            {!rows.length && <Empty colSpan={columns.length + 1}>{q ? `No ${title.toLowerCase()} match “${q}”` : `No ${title.toLowerCase()} yet.${readOnly ? '' : ` Click “Add ${name.toLowerCase()}” to create one.`}`}</Empty>}
             {rows.length > 500 && <tr><td colSpan={columns.length + 1} className="empty">Showing 500 of {rows.length}. Use search to narrow down.</td></tr>}
           </tbody>
         </table>

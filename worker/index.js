@@ -31,6 +31,7 @@ import { twoStepDdl, twoStepOf, totpCheck, markUsed, twoStepRoutes } from './two
 import { tokenSecret, purposeLabel } from './secret.js';
 import { pharmacyChanged, validatePharmacyDefaults } from '../src/pharmacy-settings.js';
 import { DEFAULT_ROLES } from '../src/access.js';
+import { decide, NEEDS_OLD } from './policy.js';
 // The built-in roles (cashier, dispenser, pharmacist, manager) live only in the app; they aren't stored as records.
 // The server needs their permissions too, so a permission check doesn't wrongly refuse a built-in role (1.1/1.9).
 const DEFAULT_ROLE_PERMS = Object.fromEntries(DEFAULT_ROLES.map((r) => [r.id, new Set(r.permissions)]));
@@ -551,10 +552,27 @@ async function sync(env, body, who, ctx) {
   const refuse = (ch) => { refused++; refusedKeys.push(ch.t + '|' + ch.id); };
   const ledger = new Set(); // positions of the op-ledger inserts in the batch (not counted as applied records)
   let tenantCount = null; // counted once, only if we actually insert new rows (quota guard)
+  // step 2 write policy (worker/policy.js): the stored sales, purchases and payments this push touches, read in one
+  // query; `current` then follows this request's own accepted changes, so a create and a refund of the same sale in
+  // one push are judged in order
+  const can = async (perm) => (allowed[perm] ??= await roleCan(env, tenant, who.role, perm));
+  const current = new Map();
+  if (!who.viaKey) {
+    const keys = [...new Set(changes.filter((c) => c && NEEDS_OLD.has(c.t) && c.id != null).map((c) => c.t + '|' + c.id))];
+    if (keys.length) {
+      const { results } = await db.prepare('SELECT k, rec FROM records WHERE tenant = ?1 AND deleted = 0 AND k IN (SELECT value FROM json_each(?2))').bind(tenant, JSON.stringify(keys)).all();
+      for (const r of results || []) { try { current.set(r.k, JSON.parse(r.rec)); } catch { /* unreadable: treated as new */ } }
+    }
+  }
   for (const ch of changes) {
     if (!ch || typeof ch.t !== 'string' || ch.id == null || typeof ch.at !== 'string') continue;
     if (typeof ch.op === 'string' && seen.has(ch.op)) { dupes++; continue; } // already applied: a repeat
     if (SERVER_ONLY.has(ch.t) && !who.viaKey) { refuse(ch); continue; }
+    if (!who.viaKey) {
+      const key = ch.t + '|' + ch.id;
+      const verdict = await decide(ch, current.get(key) || null, who.role, can);
+      if (!verdict.ok) { refuse(ch); continue; }
+    }
     const perm = GUARDED[ch.t];
     if (perm && !who.viaKey) {
       allowed[perm] ??= await roleCan(env, tenant, who.role, perm);
@@ -596,6 +614,7 @@ async function sync(env, body, who, ctx) {
     const at = atMs <= Date.now() + CLOCK_SKEW_MS ? ch.at : new Date(Date.now() + CLOCK_SKEW_MS).toISOString();
     if (INSERT_ONLY.has(ch.t)) stmts.push(insertOnly.bind(tenant, k, ch.t, id, body, at, deviceId));
     else stmts.push(upsert.bind(tenant, k, ch.t, id, body, ch.deleted ? 1 : 0, at, deviceId));
+    if (NEEDS_OLD.has(ch.t)) { if (ch.deleted) current.delete(k); else current.set(k, rec); } // accepted: later changes see it
     if (typeof ch.op === 'string' && ch.op.length <= 64) { stmts.push(remember.bind(tenant, ch.op, nowIso)); ledger.add(stmts.length - 1); seen.add(ch.op); }
   }
   // the whole request in one transaction (D1 and libSQL batches are atomic): a sale and its stock movements land together

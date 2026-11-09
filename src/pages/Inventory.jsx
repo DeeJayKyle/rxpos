@@ -36,7 +36,9 @@ const recordIssues = (p, dupBarcodes) => [
 ].filter(Boolean);
 
 export function MedicineList() {
-  const { db, products, update, fmt, user, branchId } = useStore();
+  const { db, products, update, fmt, user, branchId, can } = useStore();
+  // the list is open to anyone who may see stock; changing it needs medicines.manage (the cloud enforces the same)
+  const manage = can('medicines.manage');
   const [packsFor, setPacksFor] = useState(null);
   const [review, setReview] = useState(false);
   const dupBarcodes = useMemo(() => { const seen = new Set(), dup = new Set(); for (const p of products) if (p.barcode) (seen.has(p.barcode) ? dup : seen).add(p.barcode); return dup; }, [products]);
@@ -85,12 +87,12 @@ export function MedicineList() {
     <>
     {packsFor && <PacksEditor product={packsFor} onClose={() => setPacksFor(null)} />}
     <CrudPage
-      title="Medicine List" singular="Medicine" table="products" rows={products} fields={fields} onSave={onSave}
+      title="Medicine List" singular="Medicine" table="products" rows={products} fields={fields} onSave={onSave} readOnly={!manage}
       subtitle={review ? `${issueCount.toLocaleString()} records need a look. Open one to fix it; nothing is changed automatically.` : `${products.length.toLocaleString()} medicines and items`}
       filter={review ? (p) => recordIssues(p, dupBarcodes).length > 0 : undefined}
       headExtra={<button type="button" className={'btn ' + (review ? 'primary' : 'ghost')} aria-pressed={review} onClick={() => setReview((r) => !r)} title="Records with missing or inconsistent details">Needs review{issueCount ? ` (${issueCount})` : ''}</button>}
       blank={{ form: 'Tablets', unit: 'Piece', reorder: 10, rx: false }}
-      extraActions={(p) => <button className="btn sm ghost" title="Sell or receive by strip, box…" onClick={() => setPacksFor(p)}>Packs{p.packs?.length ? ` (${p.packs.length})` : ''}</button>}
+      extraActions={(p) => manage && <button className="btn sm ghost" title="Sell or receive by strip, box…" onClick={() => setPacksFor(p)}>Packs{p.packs?.length ? ` (${p.packs.length})` : ''}</button>}
       columns={[
         { label: 'Medicine', render: (p) => <><strong>{p.name}</strong> {p.rx && <span className="badge">Rx</span>}{p.chronic && <span className="badge ok">Chronic</span>}{p.controlled && <span className="badge danger">CD</span>}<br /><small className="muted">{[p.generic, p.barcode].filter(Boolean).join(' · ')}</small>
           {review && <span className="status-tags">{recordIssues(p, dupBarcodes).map((x) => <span key={x} className="status warn"><i aria-hidden="true" />{x}</span>)}</span>}</> },
@@ -219,7 +221,7 @@ export function Expiry() {
                 <td className="num">{formatQty(r.qty)}</td><td className="num">{fmt(r.qty * (r.cost || r.p.cost))}</td>
                 <td className="actions">
                   {(can('stock.receive') || can('stock.adjust')) && <button className="btn sm ghost" title="Send it back to the supplier for a credit note or refund" onClick={() => navigate('/returns', { state: { returnBatch: { productId: r.p.id, batchId: r.id, reason: r.days < 0 ? 'Expired' : 'Short expiry' } } })}>Return</button>}
-                  {tab === 'expired' && user.role !== 'cashier' && <button className="btn sm danger" onClick={() => writeOff(r)}>Write off</button>}
+                  {tab === 'expired' && can('stock.adjust') && <button className="btn sm danger" onClick={() => writeOff(r)}>Write off</button>}
                 </td>
               </tr>
             ))}
