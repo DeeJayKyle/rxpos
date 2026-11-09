@@ -17,7 +17,7 @@ Server-side steps (Worker, `worker/`) protect **both** apps at once. Client-side
 |---|---|---|---|---|
 | 1 | CI runs the full suite on every PR/push to main and before any release or deploy | 3 | `.github/workflows` | ✅ |
 | 2 | Server write policy per table and operation (cashiers can't change prices, delete sales, …) | 1.1 | Worker + tests | ✅ |
-| 3 | Server checks sale totals/discounts; mismatches recorded as anomalies for the owner | 1.2 | Worker + tests | ⏳ |
+| 3 | Server checks sale totals/discounts; mismatches recorded as anomalies for the owner | 1.2 | Worker + tests | ✅ |
 | 4 | F9 is the only charge key on every theme (F5 never charges) | 4.6 | client | ⏳ |
 | 5 | Passwords: 600k rounds, rehash on sign-in (including legacy SHA-256), constant-time compare | 1.5 | Worker + tests | ⏳ |
 | 6 | Sign-in throttling per account (not only per IP), Turnstile after repeated failures, prune `login_fail` | 1.5 | Worker + tests | ⏳ |
@@ -53,6 +53,12 @@ Server-side steps (Worker, `worker/`) protect **both** apps at once. Client-side
 | 24 | Interface: one till layout with density setting, 4 themes, single payment panel, accessibility audit (axe), translations | 4.6 | ⏳ |
 | 25 | React → Flutter cut-over plan and retirement of the React client (if chosen in step 0) | 3 | ⏳ |
 
+## Phase 5 — Release (requested by the owner, 2026-11-09)
+| # | Step | Status |
+|---|---|---|
+| 26 | Copy the features that exist only in the Flutter app into the React classic app (list them first, owner picks) | ⏳ |
+| 27 | Publish both apps: release build (Windows, Android, Hub) and deploy cloud + website, after the full suite passes in CI | ⏳ (confirm version and timing with the owner first) |
+
 ## Log
 (Each finished step adds a line here: date, step, commit, tests run, anything left open.)
 
@@ -73,3 +79,13 @@ Server-side steps (Worker, `worker/`) protect **both** apps at once. Client-side
   v35-layout 253, v41 40, v17 40 re-run after the screen fixes. Open: the one-line Flutter change (write-off gate)
   was not compiled here (no Flutter SDK); the flutter-apps workflow will analyse and test it. Records a device already
   holds that the cloud now refuses stay on that device and are listed under This device → Sync & storage.
+- 2026-11-09 · Step 3 · `73b57ea` + this commit · `worker/anomalies.js` re-checks every staff sale (totals, paid >
+  total, negative amounts, discount without "Give discounts", price below the medicine's without "Change prices";
+  proforma sales exempt). Sales are never refused; findings are `anomalies` records in the same transaction, sent only
+  to roles with the audit log. "Sales to check" card with Checked (audited) on both dashboards; owner console count.
+  React till discount now needs "Give discounts" like Flutter (owner's choice). Flutter SDK 3.47.9 installed in this
+  session: analyze clean, 368 tests passed (366 before + 2 new). JS: unit-anomalies 20, v56 19; full suite 1,716
+  passed, 7 failed = the 6 known + one intermittent v37 check (passed 3/3 re-runs). Hardened its likely cause, which
+  predates this work: switching pharmacy now makes one fresh send attempt if the first `run()` was the tail of an
+  already-failing sync; v37 then passed 2/2. Known limit: findings use the role of whoever is signed in when the sale
+  reaches the cloud.

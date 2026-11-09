@@ -579,7 +579,9 @@ export function StoreProvider({ children }) {
     const cur = cfgRef.current || {};
     const other = cur.tenant ? cur.tenant !== tenant : (dbRef.current?.users.length || 0) > 0;
     if (other && cur.tenant) {
-      if (await storage().count()) await syncRef.current?.run();
+      // twice at most: a first run() may just be the end of a sync that was already running (and failed, e.g. it
+      // started while the connection was down); the second is a fresh attempt now that the person is signing in
+      for (let i = 0; i < 2 && (await storage().count()); i++) await syncRef.current?.run();
       const left = await storage().count();
       if (left) throw new Error(`This device still has ${left} change(s) for ${cur.pharmacy || 'another pharmacy'} that haven't reached the cloud. Connect to the internet and let them send (or sign in to that pharmacy again) before signing in to a different pharmacy.`);
     }
