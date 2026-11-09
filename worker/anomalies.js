@@ -8,6 +8,7 @@
 // Pure: the caller passes the stored products the sale refers to and `can(perm)` for the person who pushed it.
 import { lineTotal } from '../src/money.js';
 import { packPrice } from '../src/packs.js';
+import { overLimit } from '../src/credit.js';
 
 const num = (v) => Number(v) || 0;
 const money = (n) => Math.round(num(n)).toLocaleString('en-US');
@@ -23,9 +24,10 @@ function expectedUnitPrice(p, item, wholesale) {
 
 /**
  * sale: the record pushed · products: Map(id → stored product, including built-in catalog entries) ·
- * can(perm) → boolean | Promise<boolean>.  Returns [{ kind, detail, amount }] (amount: the money at stake, ≥ 0).
+ * can(perm) → boolean | Promise<boolean> · ctx.credit: { limit, owed } for a client with a credit limit (step 8; owed is
+ * what they owed before this sale, as on the Debtors page).  Returns [{ kind, detail, amount }] (amount ≥ 0).
  */
-export async function saleFindings(sale, products, can) {
+export async function saleFindings(sale, products, can, ctx = {}) {
   const out = [];
   if (!sale || sale.status === 'refunded') return out; // a refund changes no money (step 2 makes sure of that)
   const items = Array.isArray(sale.items) ? sale.items : [];
@@ -45,6 +47,14 @@ export async function saleFindings(sale, products, can) {
   if (paid > total + 1)
     out.push({ kind: 'paid', detail: `Paid ${money(paid)} is more than the total ${money(total)}`, amount: paid - total });
 
+  // step 8: over the client's credit limit, by a role without Finance (the apps ask for a reason; an older app does not)
+  if (ctx.credit) {
+    const over = overLimit({ limit: ctx.credit.limit, owed: ctx.credit.owed, total, tendered: paid });
+    if (over && !(await can('finance'))) {
+      const why = sale.creditOver?.reason ? `Reason given: ${String(sale.creditOver.reason).slice(0, 200)}` : 'No reason given';
+      out.push({ kind: 'credit', detail: `${sale.customerName || 'The client'} owed ${money(over.owed)}; this sale put ${money(over.adds)} on credit, over the limit of ${money(over.limit)}. ${why}`, amount: Math.round(over.owed + over.adds - over.limit) });
+    }
+  }
   // a proforma's discount and prices were set by whoever made the quotation (proformas permission)
   if (!sale.proformaId) {
     if (discount > 0 && !(await can('pos.discount')))

@@ -215,6 +215,16 @@ class ControlledEntry {
   Map<String, Object?> toJson() => {'patient': patient, 'idNo': idNo, 'prescriber': prescriber, 'prescriberReg': prescriberReg, 'rxNo': rxNo};
 }
 
+/// Step 8: a credit sale that takes a client over their credit limit (src/credit.js overLimit). Null when it does not,
+/// or when the client has no limit. [owed]: what they owe before this sale; [adds]: what this sale puts on credit.
+({double limit, double owed, double adds})? overLimit({required double limit, required double owed, required double total, double? tendered}) {
+  if (!(limit > 0)) return null;
+  final paidNow = (tendered ?? 0) < total ? (tendered ?? 0) : total;
+  final adds = total - (paidNow > 0 ? paidNow : 0);
+  if (!(adds > 0.5)) return null; // paid in full now: this sale adds nothing to what they owe
+  return owed + adds > limit + 0.5 ? (limit: limit, owed: owed, adds: adds) : null;
+}
+
 /// Everything about how the sale is paid and who it is for.
 class Checkout {
   const Checkout({
@@ -227,7 +237,10 @@ class Checkout {
     this.momoRef,
     this.momo,
     this.rxChecked = false,
+    this.creditOver,
   });
+  /// Step 8: over the client's credit limit: {limit, owed, adds, reason?, finance?} (saved on the sale, audited).
+  final Map<String, Object?>? creditOver;
   final PaymentMethod method;
   final double? tendered;
   final String customerId, customerName;
@@ -337,6 +350,7 @@ Future<Map<String, Object?>> completeSale(
       if (cart.any((l) => l.allowExpired)) 'expiredOverride': true,
       // the cloud does not flag a proforma's discount and prices: they were set by whoever made the quotation
       'proformaId': ?proformaId,
+      'creditOver': ?c.creditOver,
     });
     for (final i in items) {
       for (final a in (i['alloc'] as List).cast<Map<String, Object?>>()) {
@@ -363,6 +377,11 @@ Future<Map<String, Object?>> completeSale(
     }
     if (t.discount > 0) {
       d.audit(cashier, 'Discount given', '$number: ${formatMoney(t.discount, currency: settings.currency, decimals: settings.decimalPlaces)}', branchId);
+    }
+    final over = c.creditOver;
+    if (over != null) {
+      String m(Object? v) => formatMoney((v as num?) ?? 0, currency: settings.currency, decimals: settings.decimalPlaces);
+      d.audit(cashier, 'Credit limit exceeded', '$number: ${c.customerName} owed ${m(over['owed'])}, + ${m(over['adds'])} on credit, limit ${m(over['limit'])}${over['reason'] != null ? ' · ${over['reason']}' : ''}', branchId);
     }
     return sale;
   });

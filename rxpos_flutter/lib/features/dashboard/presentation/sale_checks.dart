@@ -15,6 +15,7 @@ const saleCheckKinds = {
   'price': 'Sold below price',
   'paid': 'Paid more than the total',
   'invalid': 'Invalid amounts',
+  'credit': 'Over credit limit',
 };
 
 class SaleChecksCard extends ConsumerWidget {

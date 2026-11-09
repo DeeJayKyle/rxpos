@@ -38,5 +38,19 @@ check('a refunded sale is not re-checked', (await kinds(sale({ status: 'refunded
 check('the same money gives the same fingerprint (a re-send keeps "checked")', fingerprint(moneyView(sale())) === fingerprint(moneyView({ ...sale(), receiptSent: true })));
 check('different money gives a new fingerprint', fingerprint(moneyView(sale())) !== fingerprint(moneyView(sale({ total: 1 }))));
 
+// step 8: credit limits (src/credit.js, and the cloud's finding)
+const { overLimit } = await import('../src/credit.js');
+check('within the limit: nothing', overLimit({ limit: 1000, owed: 500, total: 400, tendered: 0 }) === null);
+check('over it: limit, owed and what this sale adds', JSON.stringify(overLimit({ limit: 1000, owed: 800, total: 500, tendered: 100 })) === JSON.stringify({ limit: 1000, owed: 800, adds: 400 }));
+check('paid in full now: nothing goes on credit', overLimit({ limit: 1000, owed: 5000, total: 500, tendered: 500 }) === null);
+check('no limit: never over', overLimit({ limit: 0, owed: 1e9, total: 1, tendered: 0 }) === null && overLimit({ owed: 1, total: 1 }) === null);
+const onCredit = sale({ customerId: 'c1', customerName: 'Grace', paid: 0 });
+const cr = await saleFindings(onCredit, products, cashier, { credit: { limit: 1000, owed: 800 } });
+check('a cashier\'s credit sale over the limit is flagged, saying no reason was given', cr.length === 1 && cr[0].kind === 'credit' && /No reason given/.test(cr[0].detail) && cr[0].amount === 1800, JSON.stringify(cr));
+const cr2 = await saleFindings({ ...onCredit, creditOver: { reason: 'regular client, pays Friday' } }, products, cashier, { credit: { limit: 1000, owed: 800 } });
+check('…quoting the reason when one was given', /pays Friday/.test(cr2[0]?.detail || ''));
+check('a Finance role is not flagged', (await saleFindings(onCredit, products, (p) => p === 'finance', { credit: { limit: 1000, owed: 800 } })).length === 0);
+check('within the limit is not flagged', (await saleFindings(onCredit, products, cashier, { credit: { limit: 5000, owed: 800 } })).length === 0);
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

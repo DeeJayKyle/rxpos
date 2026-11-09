@@ -67,6 +67,7 @@ const SUITES = [
   ['passwords: rounds, upgrade on sign-in', 'v57-passwords.mjs', []],
   ['sign-in slowdown per account', 'v58-throttle.mjs', []],
   ['document numbers: tills, receipts, branch code', 'v59-doc-numbers.mjs', []],
+  ['credit limits: reason at the till, flagged for the owner', 'v60-credit-limit.mjs', []],
   ['file uploads', 'v24-files.mjs', []],
   ['security headers', 'v25-headers.mjs', []],
   ['rate limits', 'v26-ratelimit.mjs', []],

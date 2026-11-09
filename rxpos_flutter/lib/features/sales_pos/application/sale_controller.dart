@@ -9,10 +9,12 @@ import '../../../core/data/pharmacy_providers.dart';
 import '../../../core/data/record_store.dart';
 import '../../../core/entities/draft.dart';
 import '../../../core/entities/product.dart';
+import '../../../core/entities/sale.dart';
 import '../../../core/entities/settings.dart';
 import '../../../core/rules/dates.dart';
 import '../../../core/rules/ids.dart';
 import '../../auth/application/session_controller.dart';
+import '../../people/domain/balances.dart';
 import '../../proformas/domain/proformas.dart';
 import '../domain/cart.dart';
 
@@ -351,7 +353,20 @@ class SaleController extends _$SaleController {
   }
 
   /// Complete the sale. Returns the saved sale; on any problem nothing is saved and the sale stays as it is.
-  Future<Map<String, Object?>> complete({ControlledEntry? controlled, String? momoRef, Map<String, Object?>? momo, bool rxChecked = false}) async {
+  /// Step 8: would this credit sale take the client over their credit limit? (what they owe as on the Debtors page)
+  Future<({double limit, double owed, double adds})?> creditCheck() async {
+    final d = await _data;
+    final method = state.method ?? d.methods.first;
+    if (method.type != 'credit' || state.customerId == walkIn) return null;
+    final c = d.customers.where((x) => x.id == state.customerId).firstOrNull;
+    final limit = (c?.raw['creditLimit'] as num?)?.toDouble() ?? 0;
+    if (!(limit > 0)) return null;
+    final store = ref.read(recordStoreProvider);
+    final owed = customerBalance(state.customerId, (await store.rows('sales')).map(Sale.fromRecord), await store.rows('payments'));
+    return overLimit(limit: limit, owed: owed, total: totalsOf(state.lines, discount: state.discount, settings: d.settings).total, tendered: state.tendered);
+  }
+
+  Future<Map<String, Object?>> complete({ControlledEntry? controlled, String? momoRef, Map<String, Object?>? momo, bool rxChecked = false, Map<String, Object?>? creditOver}) async {
     final d = await _data;
     final session = await ref.read(sessionControllerProvider.future);
     final method = state.method ?? d.methods.first;
@@ -368,6 +383,7 @@ class SaleController extends _$SaleController {
         momoRef: momoRef,
         momo: momo,
         rxChecked: rxChecked,
+        creditOver: creditOver,
       ),
       settings: d.settings,
       stock: d.stock,

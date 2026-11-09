@@ -4,6 +4,7 @@ import { useLocation, Link } from 'react-router-dom';
 import { ShoppingCart, Trash2, X, FileText, Printer, AlertTriangle, ScanBarcode, Smartphone, Loader2, CheckCircle2, UserPlus, Tag, BookMarked, Repeat, PauseCircle, Keyboard, Plus, ClipboardList, MessageCircle, MessageSquareText, Star, Search, Command, LayoutGrid, Users } from 'lucide-react';
 import { DrugInfoPanel, genericKey } from './DrugInfo.jsx';
 import { useStore, uid, now, daysUntil, put, del, move, allocate, audit, normalizePhone, customerBalance, DEFAULT_PAYMENT_METHODS } from '../store.jsx';
+import { overLimit } from '../credit.js';
 import { draftsFor, saleDraft } from '../drafts.js';
 import { keepsData } from '../webpolicy.js';
 import { CASH } from '../finance.js';
@@ -375,12 +376,23 @@ export default function POS({ mode = 'retail' }) {
       return setCdForm({ patient: c?.name || '', idNo: c?.phone || '', prescriber: '', prescriberReg: '', rxNo: '' });
     }
     if (cart.some(isRx) && !cart.some(isCd) && !(await ask({ title: 'Prescription-only medicine', message: 'Confirm that a valid prescription has been checked for the Rx items in this sale.', confirmText: 'Prescription verified' }))) return;
+    // step 8: a credit sale over the client's limit: Finance roles go on; others give a reason (audited, flagged)
+    let creditOver = null;
+    if (credit) {
+      const over = overLimit({ limit: customer?.creditLimit, owed: customerBalance(db, customerId), total, tendered });
+      if (over && can('finance')) creditOver = { ...over, finance: true };
+      else if (over) {
+        const reason = await askText({ title: 'Over the credit limit', message: `${customer.name} owes ${fmt(over.owed)}. This sale adds ${fmt(over.adds)} on credit, over the limit of ${fmt(over.limit)}. Why sell on credit anyway? The reason is recorded in the audit log and the owner is told.`, confirmText: 'Sell on credit', minLength: 3 });
+        if (!reason) return;
+        creditOver = { ...over, reason };
+      }
+    }
     if (ptype === 'momo') {
       const phone = normalizePhone(customer?.phone || '');
       if (syncCfg.url && navigator.onLine) cloudConfig(syncCfg).then(setPayCfg).catch(() => setPayCfg({}));
       return setMomo({ phone: customer?.phone || '', network: phone ? guessNetwork(phone) : 'mtn', stage: 'enter', ref: '', manualRef: '' });
     }
-    finalize();
+    finalize(creditOver ? { creditOver } : {});
   };
 
   // 1.6 a sale is only "complete" once it is saved on the device (sale, stock movements, audit and the note to send it
@@ -413,6 +425,7 @@ export default function POS({ mode = 'retail' }) {
       const pf = location.state?.proforma;
       if (pf) put(d, 'proformas', { ...d.proformas.find((x) => x.id === pf.id), status: 'Converted', saleNumber: sale.number });
       if (disc > 0) audit(d, user, 'Discount given', `${sale.number}: ${fmt(disc)}`, branchId);
+      if (sale.creditOver) audit(d, user, 'Credit limit exceeded', `${sale.number}: ${sale.customerName} owed ${fmt(sale.creditOver.owed)}, + ${fmt(sale.creditOver.adds)} on credit, limit ${fmt(sale.creditOver.limit)}${sale.creditOver.reason ? ' · ' + sale.creditOver.reason : ''}`, branchId);
       // 1.6 an expired-stock sale is recorded in the audit log, with the pharmacist's reason per medicine
       if (expiredLines.length) audit(d, user, 'Expired stock sold', `${sale.number}: ${expiredLines.map((l) => `${l.name} (${l.expiredReason || 'no reason given'})`).join('; ')}`, branchId);
     });

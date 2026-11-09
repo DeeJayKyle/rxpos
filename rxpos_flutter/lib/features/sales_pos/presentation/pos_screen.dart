@@ -215,8 +215,26 @@ class _PosScreenState extends ConsumerState<PosScreen> {
       if (momo == null) return;
     }
     final client = d.customers.where((x) => x.id == s.customerId && x.id != walkIn).firstOrNull;
+    // step 8: a credit sale over the client's limit: Finance roles go on; others give a reason (audited, flagged)
+    Map<String, Object?>? creditOver;
+    if (method.type == 'credit') {
+      final over = await _sale.creditCheck();
+      if (over != null) {
+        final can = ref.read(permissionsProvider).value ?? const <String>{};
+        final base = <String, Object?>{'limit': over.limit, 'owed': over.owed, 'adds': over.adds};
+        if (can.contains('finance')) {
+          creditOver = {...base, 'finance': true};
+        } else {
+          if (!mounted) return;
+          String m(double v) => formatMoney(v, currency: d.settings.currency, decimals: d.settings.decimalPlaces);
+          final why = await askCreditReason(context, client: s.customerName, owed: m(over.owed), adds: m(over.adds), limit: m(over.limit));
+          if (why == null) return;
+          creditOver = {...base, 'reason': why};
+        }
+      }
+    }
     try {
-      final sale = await _sale.complete(controlled: cd, momo: momo?.momo, rxChecked: rx);
+      final sale = await _sale.complete(controlled: cd, momo: momo?.momo, rxChecked: rx, creditOver: creditOver);
       if (!mounted) return;
       await showReceipt(context, sale, d.settings, phone: client?.phone ?? '', autoPrint: d.settings.autoPrint);
       _searchFocus.requestFocus();

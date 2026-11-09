@@ -349,6 +349,39 @@ Future<String?> askExpiredReason(BuildContext context, String name) {
   );
 }
 
+/// Step 8: this credit sale takes the client over their credit limit. Returns the reason (audit log; the owner is
+/// told in "Sales to check"), null to go back.
+Future<String?> askCreditReason(BuildContext context, {required String client, required String owed, required String adds, required String limit}) {
+  final why = TextEditingController();
+  return showDialog<String>(
+    context: context,
+    builder: (c) => StatefulBuilder(
+      builder: (c, set) => AlertDialog(
+        title: const Text('Over the credit limit'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('$client owes $owed. This sale adds $adds on credit, over the limit of $limit. '
+                'Why sell on credit anyway? The reason is recorded in the audit log and the owner is told.'),
+            TextField(
+              key: const Key('credit-reason'),
+              controller: why,
+              autofocus: true,
+              decoration: const InputDecoration(labelText: 'Reason'),
+              onChanged: (_) => set(() {}),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c), child: const Text('Cancel')),
+          FilledButton(onPressed: why.text.trim().length < 3 ? null : () => Navigator.pop(c, why.text.trim()), child: const Text('Sell on credit')),
+        ],
+      ),
+    ),
+  );
+}
+
 /// Drug information for a medicine on the sale (what the pharmacy has on it, and alternatives with the same generic).
 Future<void> showDrugInfo(BuildContext context, Product p, PharmacyData d) => showDialog<void>(
   context: context,

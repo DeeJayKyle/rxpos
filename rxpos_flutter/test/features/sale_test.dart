@@ -112,6 +112,24 @@ void main() {
       expect((await db.select(db.outbox).get()).map((o) => o.txn).toSet(), hasLength(1));
     });
 
+    test('step 8: credit limits: over only when this sale adds to what is owed beyond the limit', () {
+      expect(overLimit(limit: 1000, owed: 500, total: 400, tendered: 0), isNull);
+      expect(overLimit(limit: 1000, owed: 800, total: 500, tendered: 100), (limit: 1000.0, owed: 800.0, adds: 400.0));
+      expect(overLimit(limit: 1000, owed: 5000, total: 500, tendered: 500), isNull, reason: 'paid in full now');
+      expect(overLimit(limit: 0, owed: 1e9, total: 1), isNull, reason: 'no limit');
+    });
+
+    test('step 8: a sale over the limit keeps the reason and is in the audit log', () async {
+      final stock = view(const [Movement(id: 'm', productId: 'p1', qty: 100, batchId: 'b-late')]);
+      final sale = await completeSale(store, cart: addToCart([], para, stock: 100, wholesale: false, settings: s),
+          c: const Checkout(method: PaymentMethod(id: 'credit', name: 'Credit', type: 'credit'), tendered: 0, customerId: 'c1', customerName: 'Grace',
+              creditOver: {'limit': 1000, 'owed': 800, 'adds': 60, 'reason': 'pays on Friday'}),
+          settings: s, stock: stock, wholesale: false, cashier: 'Tia');
+      expect((sale['creditOver'] as Map)['reason'], 'pays on Friday');
+      final line = (await store.rows('audit')).singleWhere((a) => a['action'] == 'Credit limit exceeded');
+      expect('${line['details']}', allOf(contains('Grace owed'), contains('limit'), contains('pays on Friday')));
+    });
+
     test('step 7: receipts are numbered per till, counted with the sale; the old style until there is a till', () async {
       final stock = view(const [Movement(id: 'm', productId: 'p1', qty: 100, batchId: 'b-late')]);
       Future<String> sell() async => (await completeSale(store, cart: addToCart([], para, stock: 100, wholesale: false, settings: s), c: const Checkout(method: cash),
