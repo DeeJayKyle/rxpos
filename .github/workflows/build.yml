@@ -22,8 +22,7 @@ permissions:
   contents: read
 
 jobs:
-  # Fast, browser-free checks on every push and pull request (review Phase 1.8). The full browser/cloud suite
-  # (puppeteer + wrangler + xvfb Electron) is heavier to wire into CI and is tracked as a follow-up.
+  # Fast, browser-free checks on every push and pull request (review Phase 1.8).
   unit:
     runs-on: ubuntu-latest
     steps:
@@ -41,6 +40,10 @@ jobs:
         run: npm run typecheck
       - name: App builds
         run: npm run build
+
+  # Every suite against a local cloud in headless Chrome (full-tests.yml). Releases and deploys wait for it.
+  full:
+    uses: ./.github/workflows/full-tests.yml
 
   windows:
     runs-on: windows-latest
@@ -233,7 +236,7 @@ jobs:
   # One release with everything, after all builds: on a version tag push, or a manual run with "release" filled in
   # (the workflow then creates the tag itself at this commit)
   release:
-    needs: [unit, windows, web, android]
+    needs: [unit, full, windows, web, android]
     permissions:
       contents: write
     if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.release != '')
@@ -262,9 +265,9 @@ jobs:
   # Workers" template plus Pages Edit and D1 Edit) and CLOUDFLARE_ACCOUNT_ID: MAINTENANCE.md section 5. Rolling back:
   # Cloudflare dashboard → Deployments.
   deploy:
-    needs: [unit, release]
+    needs: [unit, full, release]
     if: >-
-      always() && github.event_name == 'workflow_dispatch' && needs.unit.result == 'success' &&
+      always() && github.event_name == 'workflow_dispatch' && needs.unit.result == 'success' && needs.full.result == 'success' &&
       ((inputs.deploy == 'with release' && inputs.release != '' && needs.release.result == 'success') || inputs.deploy == 'now')
     runs-on: ubuntu-latest
     concurrency: production-deploy
