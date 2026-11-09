@@ -131,6 +131,24 @@ class RecordStore {
   Stream<List<Map<String, Object?>>> watch(String t) =>
       (db.select(db.records)..where((x) => x.t.equals(t))).watch().map((rs) => [for (final r in rs) _decode(r.json)]);
 
+  /// Step 13: stock per branch, batch and medicine, added up by SQLite (the same keys as StockIndex.of: an empty
+  /// branch is the main branch, a movement without a batch counts under `lb-<medicine>`, quantities read as numbers
+  /// like toNum). Re-runs when records change; returns a few thousand totals, not every movement.
+  static const _stockSql = '''
+SELECT CASE WHEN COALESCE(CAST(json_extract(json, '\$.branchId') AS TEXT), '') = '' THEN 'main' ELSE CAST(json_extract(json, '\$.branchId') AS TEXT) END AS br,
+  COALESCE(CAST(json_extract(json, '\$.batchId') AS TEXT), 'lb-' || COALESCE(CAST(json_extract(json, '\$.productId') AS TEXT), '')) AS bk,
+  COALESCE(CAST(json_extract(json, '\$.productId') AS TEXT), '') AS pid,
+  TOTAL(CAST(json_extract(json, '\$.qty') AS REAL)) AS q
+FROM records WHERE t = 'movements' GROUP BY br, bk, pid''';
+
+  ({String branch, String batchKey, String productId, double qty}) _total(QueryRow r) =>
+      (branch: r.read<String>('br'), batchKey: r.read<String>('bk'), productId: r.read<String>('pid'), qty: r.read<double>('q'));
+
+  Stream<StockIndex> watchStock() =>
+      db.customSelect(_stockSql, readsFrom: {db.records}).watch().map((rows) => StockIndex.fromTotals(rows.map(_total)));
+
+  Future<StockIndex> stock() async => StockIndex.fromTotals((await db.customSelect(_stockSql, readsFrom: {db.records}).get()).map(_total));
+
   Future<Map<String, Object?>?> get(String t, String id) async {
     final r = await (db.select(db.records)..where((x) => x.t.equals(t) & x.id.equals(id))).getSingleOrNull();
     return r == null ? null : _decode(r.json);

@@ -28,6 +28,7 @@ const SUITES = [
   ['password hashing (unit)', 'unit-passwords.mjs', []],
   ['sign-in slowdown (unit)', 'unit-throttle.mjs', []],
   ['document numbers (unit)', 'unit-docnumbers.mjs', []],
+  ['stock balances (unit)', 'unit-stockindex.mjs', []],
   ['medicine search (unit)', 'unit-search.mjs', []],
   ['drug labels (unit)', 'unit-druglabel.mjs', []],
   ['fefo allocate (unit)', 'unit-fefo.mjs', []],
@@ -167,6 +168,7 @@ for (const [label, file, extra] of SUITES) {
     p.stderr.on('data', (d) => { buf += d; });
     p.on('exit', (code) => resolve({ code, buf }));
   });
+  if (process.env.RXPOS_VERBOSE === '1') console.log(out.buf); // RXPOS_VERBOSE=1: every suite's own output
   const m = out.buf.match(/(\d+) passed, (\d+) failed/);
   const passed = m ? +m[1] : 0;
   let failed = m ? +m[2] : 1;

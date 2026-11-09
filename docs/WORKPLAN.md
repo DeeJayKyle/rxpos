@@ -33,8 +33,8 @@ Server-side steps (Worker, `worker/`) protect **both** apps at once. Client-side
 ## Phase 3 — Scale and structure (month 2)
 | # | Step | Review ref | Status |
 |---|---|---|---|
-| 11 | Split payments on one sale (`payments[]`) | 2.3 | ⏳ |
-| 12 | Tax per product (exempt / zero / standard), inclusive or exclusive pricing, tax per line | 2.3 | ⏳ |
+| 11 | Split payments on one sale (`payments[]`) | 2.3 | ⏸ skipped by the owner for now |
+| 12 | Tax per product (exempt / zero / standard), inclusive or exclusive pricing, tax per line | 2.3 | ⏸ skipped by the owner for now |
 | 13 | Incremental stock balances (no full rescan of movements per change) | 2.4 | ⏳ |
 | 14 | Per-field merge for master data (products, customers, suppliers) | 2.5 | ⏳ |
 | 15 | Per-tenant sequence and record counters on the server | 2.6 | ⏳ |

@@ -25,6 +25,20 @@ class StockIndex {
     return StockIndex._(batch, product, total);
   }
 
+  /// Step 13: the same index from totals SQLite added up per branch, batch key and medicine
+  /// (RecordStore.watchStock), so the app does not read and decode every movement after each change.
+  factory StockIndex.fromTotals(Iterable<({String branch, String batchKey, String productId, double qty})> totals) {
+    final batch = <String, double>{}, product = <String, double>{}, total = <String, double>{};
+    for (final t in totals) {
+      final bk = '${t.branch}|${t.batchKey}';
+      batch[bk] = (batch[bk] ?? 0) + t.qty;
+      final pk = '${t.branch}|${t.productId}';
+      product[pk] = (product[pk] ?? 0) + t.qty;
+      total[t.productId] = (total[t.productId] ?? 0) + t.qty;
+    }
+    return StockIndex._(batch, product, total);
+  }
+
   final Map<String, double> _batch, _product, _total;
 
   double ofBatch(String branch, String batchId) => _batch['$branch|$batchId'] ?? 0;

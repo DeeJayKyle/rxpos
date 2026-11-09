@@ -128,11 +128,11 @@ for (const size of only) {
 
   log(size, 'sold', JSON.stringify(r));
   // 6. inventory, 7. reports
-  const screen = async (hash, ready) => { await go(hash === '#/' ? '#/sales' : '#/'); await wait(800); const t = Date.now(); await go(hash); await p.waitForFunction(ready, { timeout: 60000, polling: 20 }); return Date.now() - t; };
+  const screen = async (hash, ready) => { await go(hash === '#/' ? '#/sales' : '#/'); await wait(800); const t = Date.now(); await go(hash); await p.waitForFunction(ready, { timeout: 60000, polling: 20 }).catch(async (e) => { throw new Error(`${hash} did not appear: ${(await p.evaluate(() => document.querySelector('.page')?.innerText.slice(0, 300) || location.hash).catch(() => '?')).replace(/\s+/g, ' ')}`); }); return Date.now() - t; };
   const thrice = async (hash, ready) => { const a = []; for (let i = 0; i < 3; i++) a.push(await screen(hash, ready)); return median(a); };
   r.inventoryMs = await thrice('#/inventory', () => document.querySelectorAll('.page tbody tr').length > 10);
   r.reportsMs = await thrice('#/reports', () => document.querySelectorAll('.page .stat').length >= 4);
-  r.dashboardMs = await thrice('#/', () => document.querySelectorAll('.page .stat').length >= 4 && !!document.querySelector('.chart-plot'));
+  r.dashboardMs = await thrice('#/', () => document.querySelectorAll('.page .stat').length >= 4 && !!document.querySelector('.trend-svg')); // the dashboard charts (src/charts.jsx)
 
   log(size, 'screens', JSON.stringify(r));
   // 8. 20 sales offline, then reconnect: time until everything is in the cloud

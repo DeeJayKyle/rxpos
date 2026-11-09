@@ -8,6 +8,7 @@ import { endWebSession, isLeaving, keepsData } from './webpolicy.js';
 import { connectLive, disconnectLive, onLive } from './live.js';
 import { DEFAULT_CLOUD, tillNumber } from './cloud.js';
 import { nextNumber } from './docnumbers.js';
+import { createStockIndexer } from './stockindex.js';
 import { setUnsent } from './update.js';
 import { formatMoney } from './money.js';
 import { pharmacyDefaults, overrideKey, readOverrides, writeOverrides, editOverrides, settingsEqual, PHARMACY_FIELDS } from './pharmacy-settings.js';
@@ -602,20 +603,10 @@ export function StoreProvider({ children }) {
   }, [saveSyncCfg, persist, setState]);
 
   // ---------- derived stock: per branch, per batch ----------
-  const stockIndex = useMemo(() => {
-    const batch = new Map(); // `${branch}|${batchId}` → qty
-    const product = new Map(); // `${branch}|${productId}` → qty
-    const total = new Map(); // productId → qty across all branches
-    for (const mv of db?.movements || []) {
-      const br = mv.branchId || MAIN_BRANCH;
-      const bk = br + '|' + (mv.batchId || 'lb-' + mv.productId);
-      const pk = br + '|' + mv.productId;
-      batch.set(bk, (batch.get(bk) || 0) + mv.qty);
-      product.set(pk, (product.get(pk) || 0) + mv.qty);
-      total.set(mv.productId, (total.get(mv.productId) || 0) + mv.qty);
-    }
-    return { batch, product, total };
-  }, [db?.movements]);
+  // step 13 (src/stockindex.js): running balances; after a change only the new movements are added
+  const stockIndexer = useRef(null);
+  stockIndexer.current ??= createStockIndexer({ onMismatch: () => console.warn('Stock balances re-counted: the running totals differed from the full count') });
+  const stockIndex = useMemo(() => stockIndexer.current(db?.movements), [db?.movements]);
 
   const batchMeta = useMemo(() => {
     const m = new Map();
