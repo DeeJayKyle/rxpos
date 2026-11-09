@@ -80,9 +80,11 @@ async function login({ email, password }) {
   const e = String(email || '').trim().toLowerCase();
   const u = Object.values(state.rows).filter((r) => r.t === 'users' && !r.deleted).map((r) => r.rec).find((x) => x && x.email === e && !x.disabled);
   const pw = String(password || '');
+  // step 5: compared in constant time (the full hub rebuild on the cloud's code is workplan step 16)
+  const same = (a, b) => { const x = Buffer.from(String(a)), y = Buffer.from(String(b ?? '')); return x.length === y.length && crypto.timingSafeEqual(x, y); };
   const ok = u && (u.algo === 'pbkdf2'
-    ? (await pbkdf2(pw, Buffer.from(u.salt, 'base64'), u.iter || 100000)).toString('hex') === u.hash
-    : crypto.createHash('sha256').update('pharmapos:' + pw).digest('hex') === u.hash);
+    ? same((await pbkdf2(pw, Buffer.from(u.salt, 'base64'), u.iter || 100000)).toString('hex'), u.hash)
+    : same(crypto.createHash('sha256').update('pharmapos:' + pw).digest('hex'), u.hash));
   if (!ok) return [401, { error: 'Wrong email or password, or this account has not been synced to the hub yet.' }];
   const body = b64url(JSON.stringify({ sub: u.id, name: u.name, role: u.role, exp: Date.now() + 30 * 864e5 }));
   return [200, { token: 'u.' + body + '.' + sign(body), user: { id: u.id, name: u.name, email: u.email, role: u.role } }];

@@ -6,10 +6,11 @@
 // Settings live in the owner_config table: pw, email, google_email, google_client_id, github_login, github_client_id, github_client_secret.
 // "email" lets the owner sign in on the main page (rxposug.com) with that email + the owner password.
 
+import { verify, hashNew, upgrade, FLOOR } from './passwords.js';
+
 const te = new TextEncoder();
 const b64url = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 const fromB64url = (s) => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((s.length + 3) % 4)), (c) => c.charCodeAt(0));
-const hex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
 const SESSION_HOURS = 12;
 const MAX_FAILS = 5, LOCK_MINUTES = 15;
 
@@ -45,14 +46,17 @@ const setConfig = (db, entries) => db.batch(Object.entries(entries).map(([k, v])
   ? db.prepare('DELETE FROM owner_config WHERE k = ?1').bind(k)
   : db.prepare('INSERT INTO owner_config (k, v) VALUES (?1, ?2) ON CONFLICT(k) DO UPDATE SET v = ?2').bind(k, String(v)))));
 
-async function pbkdf2(pw, salt) {
-  const k = await crypto.subtle.importKey('raw', te.encode(pw), 'PBKDF2', false, ['deriveBits']);
-  return hex(await crypto.subtle.deriveBits({ name: 'PBKDF2', salt: Uint8Array.from(atob(salt), (c) => c.charCodeAt(0)), iterations: 100000, hash: 'SHA-256' }, k, 256));
-}
-async function checkPassword(cfg, pw) {
+/** The owner password (worker/passwords.js, step 5): constant-time check, and a right password re-hashed to PBKDF2_ITER.
+ *  Stored before step 5 as { salt, hash } only: that is PBKDF2 at 100,000 rounds. */
+async function checkPassword(env, cfg, pw) {
   if (!cfg.pw) return false;
-  const { salt, hash } = JSON.parse(cfg.pw);
-  return (await pbkdf2(pw, salt)) === hash;
+  const rec = { algo: 'pbkdf2', iter: FLOOR, ...JSON.parse(cfg.pw) };
+  if (!(await verify(rec, pw))) return false;
+  try {
+    const next = await upgrade(rec, pw, env);
+    if (next) await setConfig(env.DB, { pw: JSON.stringify(next) });
+  } catch (e) { console.warn('owner password re-hash skipped:', e.message); }
+  return true;
 }
 
 /**
@@ -66,7 +70,7 @@ export async function ownerMainLogin(env, email, password) {
   if (!cfg.email || !cfg.pw || String(email || '').trim().toLowerCase() !== cfg.email.toLowerCase()) return null;
   const fail = await env.DB.prepare('SELECT n, until FROM login_fail WHERE email = ?1').bind('owner:').first();
   if (fail && fail.until > Date.now()) return { locked: true };
-  if (!(await checkPassword(cfg, String(password || '')))) return { owner: true };
+  if (!(await checkPassword(env, cfg, String(password || '')))) return { owner: true };
   if (fail) await env.DB.prepare('DELETE FROM login_fail WHERE email = ?1').bind('owner:').run();
   return { match: true, token: await ownerSession(env, 'password') };
 }
@@ -120,7 +124,7 @@ export async function ownerAuthRoutes(env, req, url, body, { json, safeEqual }) 
     if (!master && fail && fail.until > Date.now()) return json({ error: `Too many wrong tries. Try again in ${Math.ceil((fail.until - Date.now()) / 60000)} minutes, sign in with Google / GitHub, or use the master key.` }, 429);
     let via = null;
     if (master) via = 'master key';
-    else if (await checkPassword(cfg, secret)) via = 'password';
+    else if (await checkPassword(env, cfg, secret)) via = 'password';
     if (!via) {
       const n = (fail && fail.until <= Date.now() && fail.until > 0 ? 0 : fail?.n || 0) + 1;
       const until = n >= MAX_FAILS ? Date.now() + LOCK_MINUTES * 60000 : 0;
@@ -179,9 +183,8 @@ export async function ownerAccount(env, req, url, body, { json }) {
   if (body.password != null) {
     const pw = String(body.password);
     if (pw.length < 10) return json({ error: 'Use at least 10 characters for the owner password.' }, 400);
-    if (cfg.pw && !(await checkPassword(cfg, String(body.current || ''))) && String(body.current || '') !== env.OWNER_KEY) return json({ error: 'Your current password is wrong.' }, 400);
-    const salt = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(16))));
-    await setConfig(db, { pw: JSON.stringify({ salt, hash: await pbkdf2(pw, salt) }) });
+    if (cfg.pw && !(await checkPassword(env, cfg, String(body.current || ''))) && String(body.current || '') !== env.OWNER_KEY) return json({ error: 'Your current password is wrong.' }, 400);
+    await setConfig(db, { pw: JSON.stringify(await hashNew(env, pw)) });
   }
   const allowed = { email: 'email', googleEmail: 'google_email', googleClientId: 'google_client_id', githubLogin: 'github_login', githubClientId: 'github_client_id', githubClientSecret: 'github_client_secret' };
   const updates = {};

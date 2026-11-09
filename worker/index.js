@@ -33,6 +33,7 @@ import { pharmacyChanged, validatePharmacyDefaults } from '../src/pharmacy-setti
 import { DEFAULT_ROLES } from '../src/access.js';
 import { decide, NEEDS_OLD, moneyView } from './policy.js';
 import { saleFindings, fingerprint } from './anomalies.js';
+import { verify as verifyPassword, hashNew, upgrade as upgradeHash } from './passwords.js';
 // The built-in roles (cashier, dispenser, pharmacist, manager) live only in the app; they aren't stored as records.
 // The server needs their permissions too, so a permission check doesn't wrongly refuse a built-in role (1.1/1.9).
 const DEFAULT_ROLE_PERMS = Object.fromEntries(DEFAULT_ROLES.map((r) => [r.id, new Set(r.permissions)]));
@@ -210,15 +211,7 @@ async function readTicket(env, ticket) {
   return p.exp > Date.now() ? p : null;
 }
 
-async function pbkdf2(pw, saltB64, iter = 100000) {
-  const key = await crypto.subtle.importKey('raw', te.encode(pw), 'PBKDF2', false, ['deriveBits']);
-  const salt = Uint8Array.from(atob(saltB64), (c) => c.charCodeAt(0));
-  return hex(await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: iter, hash: 'SHA-256' }, key, 256));
-}
-async function verifyPassword(u, pw) {
-  if (u.algo === 'pbkdf2') return (await pbkdf2(pw, u.salt, u.iter || 100000)) === u.hash;
-  return (await sha256('pharmapos:' + pw)) === u.hash;
-}
+// Password hashing and checks: worker/passwords.js (step 5: constant-time, rounds from PBKDF2_ITER, re-hash on sign-in)
 
 // ---------- tenants ----------
 const DEFAULT_FEATURES = { catalog: true, branches: true, wholesale: true, proformas: true, prescriptions: true, finance: true, reports: true, reminders: true,
@@ -404,6 +397,12 @@ async function pharmacyLogin(env, body, ownerToken, ip = 'noip') {
     await markUsed(env, match.tenant, u.id, step);
   }
   if (fail) await env.DB.prepare('DELETE FROM login_fail WHERE email = ?1').bind(lockKey).run(); // only once the code is right too
+  // step 5: the password was right, so a weaker hash (fewer rounds than PBKDF2_ITER, or the old unsalted one) is
+  // replaced now. Never at the cost of the sign-in: a failure here is logged and the person is signed in as usual.
+  try {
+    const next = await upgradeHash(u, String(body.password || ''), env);
+    if (next) await serverWrite(env, match.tenant, 'users', u.id, { ...u, ...next });
+  } catch (e) { console.warn('password re-hash skipped:', e.message); }
   const token = await signToken(env, { sub: u.id, tn: match.tenant, name: u.name, role: u.role, exp: Date.now() + TOKEN_DAYS * 864e5 });
   return json({ token, tenant: match.tenant, slug: t.slug || match.tenant, pharmacy: t.name, app: webAppOf(t), user: { id: u.id, name: u.name, email: u.email, role: u.role } });
 }
@@ -486,8 +485,7 @@ async function resetPassword(env, body) {
     await env.DB.prepare('UPDATE reset_codes SET tries = tries + 1 WHERE k = ?1').bind(k).run();
     return json({ error: 'Wrong code.' }, 400);
   }
-  const salt = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(16))));
-  const u = { ...match.u, algo: 'pbkdf2', salt, iter: 100000, hash: await pbkdf2(pw, salt) };
+  const u = { ...match.u, ...(await hashNew(env, pw)) };
   await serverWrite(env, match.tenant, 'users', u.id, u);
   await serverWrite(env, match.tenant, 'audit', crypto.randomUUID(), { date: new Date().toISOString(), user: u.name, action: 'Password reset (forgot password)', details: 'via ' + (body.channel || 'email') + ' code', branchId: 'main' });
   await env.DB.batch([env.DB.prepare('DELETE FROM reset_codes WHERE k = ?1').bind(k), env.DB.prepare("DELETE FROM login_fail WHERE email LIKE '%|' || ?1").bind(k)]);
@@ -504,8 +502,7 @@ async function resetWithGoogle(env, body) {
   try { email = await verifyGoogle(body.credential, cfg.google_client_id); } catch (e) { return json({ error: e.message }, 401); }
   const { tenant, match } = await pickUser(env, { email, tenant: body.tenant });
   if (!match) return json({ error: `No RxPOS account uses ${email}. Use the Google account whose Gmail is on your RxPOS account.` }, 404);
-  const salt = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(16))));
-  const u = { ...match.u, algo: 'pbkdf2', salt, iter: 100000, hash: await pbkdf2(pw, salt) };
+  const u = { ...match.u, ...(await hashNew(env, pw)) };
   delete u.mustChangePassword;
   await serverWrite(env, match.tenant, 'users', u.id, u);
   await serverWrite(env, match.tenant, 'audit', crypto.randomUUID(), { date: new Date().toISOString(), user: u.name, action: 'Password reset (Google)', details: email, branchId: 'main' });
@@ -811,10 +808,9 @@ const KEEP_ON_RESET = "('products','formulations','expenseCategories','license',
 const TABLE_RE = /^[A-Za-z]{2,30}$/;
 const publicUser = ({ hash, salt, algo, iter, ...u }) => u; // eslint-disable-line no-unused-vars
 
-async function passwordFields(pw) {
+async function passwordFields(env, pw) {
   if (String(pw).length < 8) throw httpError(400, 'Use a password of at least 8 characters.');
-  const salt = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(16))));
-  return { algo: 'pbkdf2', salt, iter: 100000, hash: await pbkdf2(String(pw), salt) };
+  return hashNew(env, String(pw));
 }
 
 async function checkSlug(env, slug, exceptId = '') {
@@ -880,7 +876,7 @@ async function owner(env, req, url, body) {
     const admin = body.admin || {};
     const email = String(admin.email || '').trim().toLowerCase();
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return json({ error: "Enter the administrator's email." }, 400);
-    const pw = await passwordFields(admin.password || '');
+    const pw = await passwordFields(env, admin.password || '');
     const key = randomKey();
     // The standard catalog is built into the apps (feature "catalog"), so nothing is copied: creating a pharmacy costs a few writes
     const features = JSON.stringify({ ...DEFAULT_FEATURES, ...(body.features || {}), ...(body.catalog === false ? { catalog: false } : {}) });
@@ -1011,7 +1007,7 @@ async function owner(env, req, url, body) {
     const old = users.find((x) => x.id === id) || {};
     if (!old.id && !u.password) return json({ error: 'Set a password for the new user.' }, 400);
     const rec = { ...old, name: String(u.name || old.name || '').slice(0, 80), email, phone: String(u.phone ?? old.phone ?? ''), role: String(u.role || old.role || 'cashier'),
-      branchId: u.branchId ?? old.branchId ?? '', disabled: !!u.disabled, ...(u.password ? { ...(await passwordFields(u.password)), mustChangePassword: !!u.mustChange } : {}) };
+      branchId: u.branchId ?? old.branchId ?? '', disabled: !!u.disabled, ...(u.password ? { ...(await passwordFields(env, u.password)), mustChangePassword: !!u.mustChange } : {}) };
     await serverWriteMany(env, t.id, [{ t: 'users', id, rec }, { t: 'audit', id: crypto.randomUUID(), rec: { date: new Date().toISOString(), user: 'RxPOS owner', action: old.id ? 'User updated by owner' : 'User created by owner', details: `${rec.name} (${rec.role})`, branchId: 'main' } }]);
     return json({ user: publicUser({ ...rec, id }) });
   }
@@ -1053,7 +1049,7 @@ async function owner(env, req, url, body) {
     const items = (Array.isArray(body.records) ? body.records : [body]).filter((x) => x && TABLE_RE.test(x.t || '') && x.id != null && x.t !== 'license');
     if (!items.length) return json({ error: 'Nothing to save.' }, 400);
     if (items.length > 500) return json({ error: 'Send at most 500 records at a time.' }, 413);
-    for (const x of items) if (x.t === 'users' && x.rec?.password) { Object.assign(x.rec, await passwordFields(x.rec.password)); delete x.rec.password; }
+    for (const x of items) if (x.t === 'users' && x.rec?.password) { Object.assign(x.rec, await passwordFields(env, x.rec.password)); delete x.rec.password; }
     const n = await serverWriteMany(env, t.id, items.map((x) => ({ t: x.t, id: x.id, rec: x.rec || {}, deleted: !!x.deleted })));
     return json({ ok: true, written: n });
   }

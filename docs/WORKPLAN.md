@@ -19,7 +19,7 @@ Server-side steps (Worker, `worker/`) protect **both** apps at once. Client-side
 | 2 | Server write policy per table and operation (cashiers can't change prices, delete sales, …) | 1.1 | Worker + tests | ✅ |
 | 3 | Server checks sale totals/discounts; mismatches recorded as anomalies for the owner | 1.2 | Worker + tests | ✅ |
 | 4 | F9 is the only charge key on every theme (F5 never charges) | 4.6 | client | ✅ |
-| 5 | Passwords: 600k rounds, rehash on sign-in (including legacy SHA-256), constant-time compare | 1.5 | Worker + tests | ⏳ |
+| 5 | Passwords: rounds as a setting (PBKDF2_ITER), rehash on sign-in (including legacy SHA-256), constant-time compare | 1.5 | Worker + tests | ✅ (raising rounds in production is the owner's call) |
 | 6 | Sign-in throttling per account (not only per IP), Turnstile after repeated failures, prune `login_fail` | 1.5 | Worker + tests | ⏳ |
 
 ## Phase 2 — Money correctness (weeks 3–4)
@@ -93,3 +93,10 @@ Server-side steps (Worker, `worker/`) protect **both** apps at once. Client-side
   [F9], shortcut help updated. Flutter already behaved this way (F5 = sync, [F9]), so no Flutter change. v53 now checks
   that F5 leaves the sale open and F9 charges it: 22/22, and 3 failures against the old code, as expected.
   v52 19, v51 21, v37 27, v56 19.
+- 2026-11-09 · Step 5 · this commit · Owner's choice: "safe now, rounds as a setting" (600,000 could break every
+  sign-in if Cloudflare refuses >100,000 rounds or the free plan's CPU limit cuts the request; not testable from here;
+  local workerd accepted 600,000 at ~90 ms vs ~15 ms for 100,000). `worker/passwords.js`: constant-time checks; new
+  hashes at PBKDF2_ITER (default/min 100,000), falling back to 100,000 if refused; a right sign-in upgrades weaker
+  hashes, legacy unsalted SHA-256 included, never failing the sign-in. Staff and owner passwords both use it; Hub got
+  the constant-time compare (rebuild is step 16). Documented in MAINTENANCE.md. Test cloud runs with 150,000.
+  unit-passwords 18 (incl. a simulated refusal), v57 9; full suite 1,745 passed, 6 failed (the known 6).

@@ -25,6 +25,7 @@ const SUITES = [
   ['money math (unit)', 'unit-money.mjs', []],
   ['server write policy (unit)', 'unit-policy.mjs', []],
   ['sale checks (unit)', 'unit-anomalies.mjs', []],
+  ['password hashing (unit)', 'unit-passwords.mjs', []],
   ['medicine search (unit)', 'unit-search.mjs', []],
   ['drug labels (unit)', 'unit-druglabel.mjs', []],
   ['fefo allocate (unit)', 'unit-fefo.mjs', []],
@@ -61,6 +62,7 @@ const SUITES = [
   ['server write policy', 'v55-write-policy.mjs', []],
   ['staff screens match the policy', 'v55-staff-ui.mjs', []],
   ['sale checks for the owner', 'v56-sale-checks.mjs', []],
+  ['passwords: rounds, upgrade on sign-in', 'v57-passwords.mjs', []],
   ['file uploads', 'v24-files.mjs', []],
   ['security headers', 'v25-headers.mjs', []],
   ['rate limits', 'v26-ratelimit.mjs', []],
@@ -133,7 +135,9 @@ if (!process.env.CLOUDFLARE_API_TOKEN) {
   cfgArgs.push('-c', 'wrangler.test.jsonc');
 }
 const cloud = spawn(process.execPath, [bin('wrangler/bin/wrangler.js'), 'dev', ...cfgArgs, '--port', '8790', '--persist-to', state, '--var', 'DB_BACKEND:', '--var', 'SYNC_KEY:local-test-sync-key-0123456789abcdef',
-  '--var', `OWNER_KEY:${OWNER}`, '--var', `PUBLIC_URL:${BASE}`], { cwd: root, stdio: 'ignore' });
+  '--var', `OWNER_KEY:${OWNER}`, '--var', `PUBLIC_URL:${BASE}`,
+  // step 5: a raised password-rounds setting, so every suite signs in through the re-hash path
+  '--var', 'PBKDF2_ITER:150000'], { cwd: root, stdio: 'ignore' });
 const stop = () => { try { process.platform === 'win32' ? spawn('taskkill', ['/pid', String(cloud.pid), '/T', '/F'], { stdio: 'ignore' }) : cloud.kill('SIGTERM'); } catch { /* already gone */ } };
 process.on('exit', stop);
 let up = false;
