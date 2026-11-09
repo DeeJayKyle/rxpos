@@ -10,12 +10,12 @@ Server-side steps (Worker, `worker/`) protect **both** apps at once. Client-side
 ## Phase 0 — Decisions
 | # | Step | Status |
 |---|---|---|
-| 0 | Choose which client(s) get client-side changes (React, Flutter, or both) and how the Hub is handled | ⏳ |
+| 0 | Choose which client(s) get client-side changes (React, Flutter, or both) and how the Hub is handled | ✅ both apps; Hub rebuilt on the shared core |
 
 ## Phase 1 — Safety net and critical security (weeks 1–2)
 | # | Step | Review ref | Touches | Status |
 |---|---|---|---|---|
-| 1 | CI runs the unit suites on every PR and the full suite before any deploy | 3 | `.github/workflows` | ⏳ |
+| 1 | CI runs the full suite on every PR/push to main and before any release or deploy | 3 | `.github/workflows` | ✅ |
 | 2 | Server write policy per table and operation (cashiers can't change prices, delete sales, …) | 1.1 | Worker + tests | ⏳ |
 | 3 | Server checks sale totals/discounts; mismatches recorded as anomalies for the owner | 1.2 | Worker + tests | ⏳ |
 | 4 | F9 is the only charge key on every theme (F5 never charges) | 4.6 | client | ⏳ |
@@ -55,3 +55,11 @@ Server-side steps (Worker, `worker/`) protect **both** apps at once. Client-side
 
 ## Log
 (Each finished step adds a line here: date, step, commit, tests run, anything left open.)
+
+- 2026-11-09 · Step 1 · `5cec6ab`, `feb1f20`, `b4c6838` · New `full-tests.yml` (reusable). `build.yml` runs it on
+  push/PR and `release` + `deploy` need it; `deploy-cloud.yml` needs it. With `RXPOS_CI=1`, `run-all.mjs` reports 5 named
+  checks that need Workers AI or Open-Meteo as skipped (any other failure still fails). Fixed `idle-fit.mjs` (never
+  created its screenshot folder). Baseline here: 1,596 passed, 7 failed (the 7 documented environment failures).
+  Verified: v15 → 26 passed, 4 skipped; idle-fit → 9 passed. Open: the Windows self-update suite could not run here (no
+  Electron binary in this container); it runs on GitHub (xvfb present). If it fails there it will block deploys, and
+  the cause should be looked at, not skipped. The first real proof is the first CI run on GitHub.

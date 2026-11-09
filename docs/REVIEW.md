@@ -120,10 +120,11 @@ Every write computes `(SELECT COALESCE(MAX(seq),0)+1 FROM records)` over **all p
 
 ## 3. Engineering process
 
-- **CI does not run the tests.** `build.yml` and `deploy-cloud.yml` run only `npm run typecheck`, and `tsconfig.json` checks only two
-  files (`contracts.d.ts`, `storage.js`). The 1,200+ check suite (`tests/run-all.mjs`) never gates a deploy to production.
-  **Fix:** run the unit suites on every PR (seconds), and run the full suite (local Wrangler plus headless Chromium, already in
-  the harness) before the deploy job.
+- **CI does not run the full suite.** `build.yml` and `deploy-cloud.yml` run the unit suites and `npm run typecheck` (which
+  checks only `contracts.d.ts` and `storage.js`), but the full browser + local cloud suite (`tests/run-all.mjs`, 1,600 checks)
+  never gates a deploy to production. *(Corrected: an earlier version of this review said CI ran only the typecheck.)*
+  **Fix:** run the full suite (local Wrangler plus headless Chromium, already in the harness) on PRs and before releases
+  and deploys. *Done in workplan step 1.*
 - **No linter or formatter.** Several `eslint-disable` comments exist with no ESLint config. Add ESLint
   (`react-hooks/exhaustive-deps` especially) and Prettier.
 - **Very large files.** `worker/index.js` (1,474 lines, every route in one `if` chain), `POS.jsx` (999), `Purchases.jsx` (913),
