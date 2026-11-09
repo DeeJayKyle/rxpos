@@ -35,7 +35,7 @@ Server-side steps (Worker, `worker/`) protect **both** apps at once. Client-side
 |---|---|---|---|
 | 11 | Split payments on one sale (`payments[]`) | 2.3 | ⏸ skipped by the owner for now |
 | 12 | Tax per product (exempt / zero / standard), inclusive or exclusive pricing, tax per line | 2.3 | ⏸ skipped by the owner for now |
-| 13 | Incremental stock balances (no full rescan of movements per change) | 2.4 | ⏳ |
+| 13 | Incremental stock balances (no full rescan of movements per change) | 2.4 | ✅ |
 | 14 | Per-field merge for master data (products, customers, suppliers) | 2.5 | ⏳ |
 | 15 | Per-tenant sequence and record counters on the server | 2.6 | ⏳ |
 | 16 | Hub: shared sync/permission core over SQLite, or retire (per step 0) | 1.4 | ⏳ |
@@ -121,3 +121,10 @@ Server-side steps (Worker, `worker/`) protect **both** apps at once. Client-side
   or "No reason given" from an older app). Found while testing: a sale paid in full is never questioned. Tests:
   unit-anomalies +8, v60 10, Flutter +2 (373 passed, analyze clean); full JS suite 1,802 passed, 6 failed (the
   known 6). Not covered by a test: Flutter's reason dialog on screen (rule and saving are tested).
+- 2026-11-09 · Step 13 · `7221fb5` + this commit · React: running balances (`src/stockindex.js`), only new movements
+  added when the previous list is intact at both ends, full re-count otherwise, self-check every 300 steps. Flutter:
+  SQLite adds movements up (`RecordStore.watchStock`) instead of decoding all of them. Measured (single machine,
+  two runs each): React large pharmacy F9 → "Sale complete" 247/262 → 179/173 ms, the rest within noise; Flutter
+  100k movements ~700 → ~180–270 ms per re-count. Benchmark repaired (it waited for a chart class removed earlier).
+  unit-stockindex 11, Flutter stock_totals 2; Flutter 375 passed, analyze clean; full JS suite 1,813 passed,
+  6 failed (the known 6).
