@@ -27,8 +27,8 @@ Server-side steps (Worker, `worker/`) protect **both** apps at once. Client-side
 |---|---|---|---|---|
 | 7 | Receipt numbers: branch–device–counter, unique offline, sequential | 2.1 | client + tests | ✅ |
 | 8 | Credit limit checked at the till (reason required) and in the cloud (flagged) | 2.2 | client + Worker check | ✅ |
-| 9 | Mobile Money: server-side pending payments, provider callbacks, "payments without a sale" screen | 1.3 | Worker + client | ⏳ (sandbox keys needed to test live) |
-| 10 | Tokens: short access + rotating refresh token, device list with "sign out this device", secure storage | 1.5 | Worker + client | ⏳ |
+| 9 | Mobile Money: server-side pending payments, provider callbacks, "payments without a sale" screen | 1.3 | Worker + client | ⏸ skipped by the owner for now (sandbox keys needed to test live) |
+| 10 | Tokens: short access + rotating refresh token, device list with "sign out this device", secure storage | 1.5 | Worker + client | ⏸ skipped by the owner for now |
 
 ## Phase 3 — Scale and structure (month 2)
 | # | Step | Review ref | Status |
