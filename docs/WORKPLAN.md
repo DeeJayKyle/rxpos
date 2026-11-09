@@ -36,7 +36,7 @@ Server-side steps (Worker, `worker/`) protect **both** apps at once. Client-side
 | 11 | Split payments on one sale (`payments[]`) | 2.3 | ⏸ skipped by the owner for now |
 | 12 | Tax per product (exempt / zero / standard), inclusive or exclusive pricing, tax per line | 2.3 | ⏸ skipped by the owner for now |
 | 13 | Incremental stock balances (no full rescan of movements per change) | 2.4 | ✅ |
-| 14 | Per-field merge for master data (products, customers, suppliers) | 2.5 | ⏳ |
+| 14 | Per-field merge for master data (products, customers, suppliers) | 2.5 | ✅ (batches too) |
 | 15 | Per-tenant sequence and record counters on the server | 2.6 | ⏳ |
 | 16 | Hub: shared sync/permission core over SQLite, or retire (per step 0) | 1.4 | ⏳ |
 | 17 | ESLint + Prettier; split `worker/index.js` into route modules; split `POS.jsx`; widen typecheck | 3 | ⏳ |
@@ -128,3 +128,9 @@ Server-side steps (Worker, `worker/`) protect **both** apps at once. Client-side
   100k movements ~700 → ~180–270 ms per re-count. Benchmark repaired (it waited for a chart class removed earlier).
   unit-stockindex 11, Flutter stock_totals 2; Flutter 375 passed, analyze clean; full JS suite 1,813 passed,
   6 failed (the known 6).
+- 2026-11-10 · Step 14 · `868a734` + this commit · Medicines, clients, suppliers and batches carry `_f` (field change
+  times, compact) and merge field by field in the cloud's sync, React (put / mergeRemote) and Flutter (update /
+  applyRemote); the cloud marks a merged result as its own so the sender downloads it; field times capped; unknown
+  fields never erased; deletes stay record-level; other tables unchanged. Shared cases tests/field-merge-cases.json
+  run by JS (14) and Dart (13); v61 8, v61-field-merge-app 5 (React offline edit vs another device). Flutter 388
+  passed, analyze clean; full JS suite 1,840 passed, 6 failed (the known 6). Hub still whole-record (step 16).
