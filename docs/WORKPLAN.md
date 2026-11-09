@@ -18,7 +18,7 @@ Server-side steps (Worker, `worker/`) protect **both** apps at once. Client-side
 | 1 | CI runs the full suite on every PR/push to main and before any release or deploy | 3 | `.github/workflows` | ✅ |
 | 2 | Server write policy per table and operation (cashiers can't change prices, delete sales, …) | 1.1 | Worker + tests | ✅ |
 | 3 | Server checks sale totals/discounts; mismatches recorded as anomalies for the owner | 1.2 | Worker + tests | ✅ |
-| 4 | F9 is the only charge key on every theme (F5 never charges) | 4.6 | client | ⏳ |
+| 4 | F9 is the only charge key on every theme (F5 never charges) | 4.6 | client | ✅ |
 | 5 | Passwords: 600k rounds, rehash on sign-in (including legacy SHA-256), constant-time compare | 1.5 | Worker + tests | ⏳ |
 | 6 | Sign-in throttling per account (not only per IP), Turnstile after repeated failures, prune `login_fail` | 1.5 | Worker + tests | ⏳ |
 
@@ -89,3 +89,7 @@ Server-side steps (Worker, `worker/`) protect **both** apps at once. Client-side
   predates this work: switching pharmacy now makes one fresh send attempt if the first `run()` was the tail of an
   already-failing sync; v37 then passed 2/2. Known limit: findings use the role of whoever is signed in when the sale
   reaches the cloud.
+- 2026-11-09 · Step 4 · this commit · React till: the Midnight Pro F5-charges handler is gone, Charge always shows
+  [F9], shortcut help updated. Flutter already behaved this way (F5 = sync, [F9]), so no Flutter change. v53 now checks
+  that F5 leaves the sale open and F9 charges it: 22/22, and 3 failures against the old code, as expected.
+  v52 19, v51 21, v37 27, v56 19.

@@ -320,7 +320,7 @@ export default function POS({ mode = 'retail' }) {
   const [layout, setLayoutState] = useState(() => (POS_LAYOUTS.some(([k]) => k === deviceSettings().posLayout) ? deviceSettings().posLayout : 'standard'));
   useEffect(() => onDevice((d) => setLayoutState(POS_LAYOUTS.some(([k]) => k === d.posLayout) ? d.posLayout : 'standard')), []);
   const useAdvancedLayout = layout === 'advanced';
-  // the theme (Premium UI changes it without reloading): watched so the key tag and F5 follow it at once
+  // the theme (Premium UI changes it without reloading): watched so the key tag follows it at once
   const [palette, setPalette] = useState(() => document.documentElement.dataset.palette || '');
   useEffect(() => { const o = new MutationObserver(() => setPalette(document.documentElement.dataset.palette || '')); o.observe(document.documentElement, { attributes: true, attributeFilter: ['data-palette'] }); return () => o.disconnect(); }, []);
   const premium = palette === 'midnight-pro';
@@ -499,16 +499,8 @@ export default function POS({ mode = 'retail' }) {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   });
-  // Premium UI (Midnight Pro): F5 charges the sale while it has lines (F9 too). With an empty sale F5 refreshes as usual;
-  // Shift+F5 always reloads.
-  useEffect(() => {
-    const onF5 = (e) => {
-      if (e.key !== 'F5' || e.shiftKey || e.ctrlKey || document.documentElement.dataset.palette !== 'midnight-pro' || !cart.length || document.querySelector('.modal-bg')) return;
-      e.preventDefault(); e.stopImmediatePropagation(); checkout();
-    };
-    window.addEventListener('keydown', onF5, true);
-    return () => window.removeEventListener('keydown', onF5, true);
-  });
+  // F9 (or Ctrl+Enter) is the only charge key, on every theme: F5 always means "sync now" (src/refresh.jsx), as in
+  // the Flutter app. Midnight Pro used to charge with F5, so a cashier moving between devices could charge by accident.
   // Advanced: Ctrl+K / Cmd+K opens the till's command bar (instead of the app-wide search, which stays one click away)
   useEffect(() => {
     if (!useAdvancedLayout) return undefined;
@@ -734,7 +726,7 @@ export default function POS({ mode = 'retail' }) {
         <div className="row gap pay-row">
           <button className="btn ghost" onClick={saveProforma} disabled={!cart.length} title="F10"><FileText size={16} />Proforma</button>
           <button className="btn ghost" onClick={holdSale} disabled={!cart.length} title="Alt+H"><PauseCircle size={16} />Hold</button>
-          <button ref={chargeRef} className={'btn primary grow big' + (narrow ? ' charge-dup' : '')} onClick={checkout} disabled={!cart.length} title="F9"><span>{useAdvancedLayout ? 'Process checkout' : 'Charge'} {fmt(total)}{!touch && (layout !== 'classic' || premium) && <small className="kbd-sub">{premium ? '[F5]' : '[F9]'}</small>}</span></button>
+          <button ref={chargeRef} className={'btn primary grow big' + (narrow ? ' charge-dup' : '')} onClick={checkout} disabled={!cart.length} title="F9"><span>{useAdvancedLayout ? 'Process checkout' : 'Charge'} {fmt(total)}{!touch && (layout !== 'classic' || premium) && <small className="kbd-sub">[F9]</small>}</span></button>
         </div>
         </div>
       </section>
@@ -887,7 +879,7 @@ export default function POS({ mode = 'retail' }) {
             <tbody>
               {[['Type or scan', 'Find a medicine (barcode adds it straight away)'], ['↑ ↓ ← →', 'Move through the medicines'], ['Enter', 'Add the highlighted medicine'], ['Esc', 'Clear the search'],
                 ['+ / −', 'More / fewer of the chosen cart line'], ['Alt+↑ / Alt+↓', 'Choose a cart line'], ['Delete', 'Remove the chosen cart line'],
-                ['Alt+1 … Alt+9', 'Payment method (number shown on each)'], ['F9 or Ctrl+Enter', 'Charge (F5 too with Premium UI)'], ['F10', 'Save as proforma'],
+                ['Alt+1 … Alt+9', 'Payment method (number shown on each)'], ['F9 or Ctrl+Enter', 'Charge'], ['F10', 'Save as proforma'],
                 ['Alt+H', 'Put the sale on hold and serve the next customer'], ['Alt+← / Alt+→', 'Switch between held sales'],
                 ['F2 / F3', 'Retail / wholesale'], ['Alt+C', 'Find a client (wide screens)'], ['Alt+D', 'Discount'], ['Alt+R', 'Last receipt again'], ['Ctrl+K', 'Advanced UI: command bar (+qty 2, void 2, disc 2 10, hold, pay)'], ['F8', 'Back to the search box'], ['Ctrl+K', 'Search everything'], ['?', 'This list']].map(([k, v]) => <tr key={k}><td><kbd>{k}</kbd></td><td>{v}</td></tr>)}
             </tbody>
