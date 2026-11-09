@@ -34,6 +34,7 @@ import { DEFAULT_ROLES } from '../src/access.js';
 import { decide, NEEDS_OLD, moneyView } from './policy.js';
 import { saleFindings, fingerprint } from './anomalies.js';
 import { verify as verifyPassword, hashNew, upgrade as upgradeHash } from './passwords.js';
+import { waitFor, afterFail, waitText } from './throttle.js';
 // The built-in roles (cashier, dispenser, pharmacist, manager) live only in the app; they aren't stored as records.
 // The server needs their permissions too, so a permission check doesn't wrongly refuse a built-in role (1.1/1.9).
 const DEFAULT_ROLE_PERMS = Object.fromEntries(DEFAULT_ROLES.map((r) => [r.id, new Set(r.permissions)]));
@@ -130,6 +131,8 @@ function ensureSchema(db) {
     // 1.6 sync protocol 2: op ids already applied, so a request repeated after a lost reply is applied once
     if (!have.has('sync_ops')) ddl.push('CREATE TABLE sync_ops (tenant TEXT NOT NULL, op TEXT NOT NULL, at TEXT NOT NULL, PRIMARY KEY (tenant, op))');
     if (!have.has('login_fail')) ddl.push('CREATE TABLE login_fail (email TEXT PRIMARY KEY, n INTEGER NOT NULL, until INTEGER NOT NULL DEFAULT 0)');
+    // step 6: wrong passwords per account across every address (worker/throttle.js), a slowdown rather than a lock
+    if (!have.has('login_throttle')) ddl.push('CREATE TABLE login_throttle (k TEXT PRIMARY KEY, n INTEGER NOT NULL, last_at INTEGER NOT NULL)');
     if (!have.has('rtc')) ddl.push('CREATE TABLE rtc (id INTEGER PRIMARY KEY AUTOINCREMENT, tenant TEXT NOT NULL, to_uid TEXT NOT NULL, from_uid TEXT NOT NULL, from_name TEXT, type TEXT NOT NULL, call_id TEXT NOT NULL, data TEXT, at INTEGER NOT NULL)');
     if (!have.has('rtc_to')) ddl.push('CREATE INDEX rtc_to ON rtc(tenant, to_uid, id)'); // instant look-up of calls waiting for a person
     if (!have.has('file_chunks')) ddl.push('CREATE TABLE file_chunks (tenant TEXT NOT NULL, id TEXT NOT NULL, n INTEGER NOT NULL, data BLOB NOT NULL, PRIMARY KEY (tenant, id, n))');
@@ -289,6 +292,20 @@ const writeLicense = (env, t) => serverWrite(env, t.id, 'license', 'license', { 
 // ---------- login & password recovery ----------
 const MAX_FAILS = 5;
 const LOCK_MINUTES = 15;
+// step 6 (worker/throttle.js): the per-account slowdown. Keyed by pharmacy and email/username whether or not such an
+// account exists, so the answer never tells anyone which accounts are real.
+const throttleRow = (env, k) => env.DB.prepare('SELECT n, last_at FROM login_throttle WHERE k = ?1').bind(k).first();
+const throttleFail = (env, k, row) => { const r = afterFail(row); return env.DB.prepare('INSERT INTO login_throttle (k, n, last_at) VALUES (?1, ?2, ?3) ON CONFLICT(k) DO UPDATE SET n = ?2, last_at = ?3').bind(k, r.n, r.last_at).run(); };
+const throttleClear = (env, ...keys) => env.DB.batch(keys.map((k) => env.DB.prepare('DELETE FROM login_throttle WHERE k = ?1').bind(k)));
+const slowedDown = (ms) => json({ error: `Too many wrong passwords for this account. Try again in ${waitText(ms)}, or use "Forgot password".`, retryAfter: Math.ceil(ms / 1000) }, 429);
+/** Daily: forget finished locks, part-counts of wrong tries and old slowdowns (both tables grew forever before) */
+export async function pruneSignInTables(db) {
+  const now = Date.now();
+  await db.batch([
+    db.prepare('DELETE FROM login_fail WHERE until = 0 OR until < ?1').bind(now),
+    db.prepare('DELETE FROM login_throttle WHERE last_at < ?1').bind(now - 24 * 3600e3),
+  ]);
+}
 
 // A person signs in with their email, or with a username their pharmacy gave them. A username is matched only inside
 // its own pharmacy (two shops may each have a "mary"), so it always comes with a pharmacy code.
@@ -342,16 +359,20 @@ async function pharmacyLogin(env, body, ownerToken, ip = 'noip') {
         const mins = Math.ceil((fail.until - Date.now()) / 60000);
         return json({ error: `Too many wrong passwords. Try again in ${mins} minute${mins === 1 ? '' : 's'}, or use "Forgot password".` }, 429);
       }
+      const slowKey = '*:' + email0, slow = await throttleRow(env, slowKey);
+      if (waitFor(slow) && !ownerToken) return slowedDown(waitFor(slow));
       const ok = [];
       for (const f of found.slice(0, 10)) if (await verifyPassword(f.u, String(body.password || ''))) ok.push(f);
       if (!ok.length && ownerToken) return json({ owner: { token: ownerToken } });
       if (!ok.length) {
+        await throttleFail(env, slowKey, slow);
         const n = (fail && fail.until <= Date.now() && fail.until > 0 ? 0 : fail?.n || 0) + 1;
         const until = n >= MAX_FAILS ? Date.now() + LOCK_MINUTES * 60000 : 0;
         await env.DB.prepare('INSERT INTO login_fail (email, n, until) VALUES (?1, ?2, ?3) ON CONFLICT(email) DO UPDATE SET n = ?2, until = ?3').bind(key, until ? 0 : n, until).run();
         return json({ error: until ? `Too many wrong passwords. Sign-in is locked for ${LOCK_MINUTES} minutes.` : `Wrong email or password (${MAX_FAILS - n} attempt${MAX_FAILS - n === 1 ? '' : 's'} left before a ${LOCK_MINUTES}-minute lock).` }, until ? 429 : 401);
       }
       if (fail) await env.DB.prepare('DELETE FROM login_fail WHERE email = ?1').bind(key).run();
+      if (slow) await throttleClear(env, slowKey);
       const choices = [];
       for (const f of ok) {
         const t = await tenantById(env, f.tenant);
@@ -371,8 +392,11 @@ async function pharmacyLogin(env, body, ownerToken, ip = 'noip') {
     const mins = Math.ceil((fail.until - Date.now()) / 60000);
     return json({ error: `Too many wrong passwords. Try again in ${mins} minute${mins === 1 ? '' : 's'}, or use "Forgot password".` }, 429);
   }
+  const slowKey = tenant + ':' + email, slow = await throttleRow(env, slowKey);
+  if (waitFor(slow) && !ownerToken) return slowedDown(waitFor(slow));
   if (!match || !(await verifyPassword(match.u, String(body.password || '')))) {
     if (ownerToken) return json({ owner: { token: ownerToken } }); // it is the owner's password: straight to the owner console
+    await throttleFail(env, slowKey, slow);
     const n = (fail && fail.until <= Date.now() && fail.until > 0 ? 0 : fail?.n || 0) + 1;
     const until = n >= MAX_FAILS ? Date.now() + LOCK_MINUTES * 60000 : 0;
     await env.DB.prepare('INSERT INTO login_fail (email, n, until) VALUES (?1, ?2, ?3) ON CONFLICT(email) DO UPDATE SET n = ?2, until = ?3').bind(lockKey, until ? 0 : n, until).run();
@@ -389,6 +413,7 @@ async function pharmacyLogin(env, body, ownerToken, ip = 'noip') {
     if (!body.otp) return json({ twoFactor: true });
     const step = await totpCheck(tf.secret, body.otp, tf.last_step);
     if (step < 0) {
+      await throttleFail(env, slowKey, slow); // a wrong two-step code counts like a wrong password
       const n = (fail && fail.until <= Date.now() && fail.until > 0 ? 0 : fail?.n || 0) + 1;
       const until = n >= MAX_FAILS ? Date.now() + LOCK_MINUTES * 60000 : 0;
       await env.DB.prepare('INSERT INTO login_fail (email, n, until) VALUES (?1, ?2, ?3) ON CONFLICT(email) DO UPDATE SET n = ?2, until = ?3').bind(lockKey, until ? 0 : n, until).run();
@@ -397,6 +422,7 @@ async function pharmacyLogin(env, body, ownerToken, ip = 'noip') {
     await markUsed(env, match.tenant, u.id, step);
   }
   if (fail) await env.DB.prepare('DELETE FROM login_fail WHERE email = ?1').bind(lockKey).run(); // only once the code is right too
+  if (slow) await throttleClear(env, slowKey);
   // step 5: the password was right, so a weaker hash (fewer rounds than PBKDF2_ITER, or the old unsalted one) is
   // replaced now. Never at the cost of the sign-in: a failure here is logged and the person is signed in as usual.
   try {
@@ -489,6 +515,7 @@ async function resetPassword(env, body) {
   await serverWrite(env, match.tenant, 'users', u.id, u);
   await serverWrite(env, match.tenant, 'audit', crypto.randomUUID(), { date: new Date().toISOString(), user: u.name, action: 'Password reset (forgot password)', details: 'via ' + (body.channel || 'email') + ' code', branchId: 'main' });
   await env.DB.batch([env.DB.prepare('DELETE FROM reset_codes WHERE k = ?1').bind(k), env.DB.prepare("DELETE FROM login_fail WHERE email LIKE '%|' || ?1").bind(k)]);
+  await throttleClear(env, k, '*:' + email); // a reset password starts with no slowdown
   return json({ ok: true });
 }
 
@@ -507,6 +534,7 @@ async function resetWithGoogle(env, body) {
   await serverWrite(env, match.tenant, 'users', u.id, u);
   await serverWrite(env, match.tenant, 'audit', crypto.randomUUID(), { date: new Date().toISOString(), user: u.name, action: 'Password reset (Google)', details: email, branchId: 'main' });
   await env.DB.prepare("DELETE FROM login_fail WHERE email LIKE '%|' || ?1").bind(tenant + ':' + email).run();
+  await throttleClear(env, match.tenant + ':' + email, tenant + ':' + email, '*:' + email);
   return json({ ok: true, email });
 }
 
@@ -1346,6 +1374,7 @@ export default {
   async scheduled(event, env, ctx) {
     // 18:00 UTC = 21:00 in Uganda: each pharmacy's daily summary email (worker/summary.js)
     if (event.cron === '0 18 * * *') {
+      ctx.waitUntil((async () => { const e = withDatabase(env); await ensureSchema(e.DB); await pruneSignInTables(e.DB); })().then(() => console.log('sign-in tables pruned')).catch((e) => console.log('prune failed', e.message)));
       ctx.waitUntil(dailySummaries(withDatabase(env)).then((r) => console.log('daily summaries', r.map((x) => `${x.tenant}:${x.sent}${x.error ? ' ' + x.error : ''}`).join(', '))).catch((e) => console.log('daily summaries failed', e.message)));
       // and the scheduled Excel reports that are due today (worker/reports.js)
       ctx.waitUntil(scheduledReports(withDatabase(env)).then((r) => console.log('scheduled reports', r.map((x) => `${x.tenant}/${x.schedule}:${x.sent}${x.error ? ' ' + x.error : ''}`).join(', '))).catch((e) => console.log('scheduled reports failed', e.message)));

@@ -20,7 +20,7 @@ Server-side steps (Worker, `worker/`) protect **both** apps at once. Client-side
 | 3 | Server checks sale totals/discounts; mismatches recorded as anomalies for the owner | 1.2 | Worker + tests | ✅ |
 | 4 | F9 is the only charge key on every theme (F5 never charges) | 4.6 | client | ✅ |
 | 5 | Passwords: rounds as a setting (PBKDF2_ITER), rehash on sign-in (including legacy SHA-256), constant-time compare | 1.5 | Worker + tests | ✅ (raising rounds in production is the owner's call) |
-| 6 | Sign-in throttling per account (not only per IP), Turnstile after repeated failures, prune `login_fail` | 1.5 | Worker + tests | ⏳ |
+| 6 | Sign-in slowdown per account (not only per IP), prune `login_fail` (Turnstile not chosen) | 1.5 | Worker + tests | ✅ |
 
 ## Phase 2 — Money correctness (weeks 3–4)
 | # | Step | Review ref | Touches | Status |
@@ -100,3 +100,10 @@ Server-side steps (Worker, `worker/`) protect **both** apps at once. Client-side
   hashes, legacy unsalted SHA-256 included, never failing the sign-in. Staff and owner passwords both use it; Hub got
   the constant-time compare (rebuild is step 16). Documented in MAINTENANCE.md. Test cloud runs with 150,000.
   unit-passwords 18 (incl. a simulated refusal), v57 9; full suite 1,745 passed, 6 failed (the known 6).
+- 2026-11-09 · Step 6 · this commit · Owner's choice: slow down, don't lock. `worker/throttle.js` + `login_throttle`
+  table: per account across all addresses, 10 wrong passwords (or two-step codes) within an hour → one try a minute,
+  20 → one every 5 minutes; checked before hashing; same answer whether the account exists; cleared by a right
+  sign-in, a password reset or an hour's quiet. The per-address lock stays. Daily cron prunes `login_fail` (finished
+  locks and part-counts) and old slowdowns. unit-throttle 8; v58 10 (guesses from 10 addresses, a real minute's wait);
+  v26 3, v42 12, v48 6; full suite 1,763 passed, 6 failed (the known 6). Not covered by a test: the slowdown on the
+  "same email at several pharmacies" sign-in path (same helpers, key `*:<email>`).
