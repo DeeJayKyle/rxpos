@@ -16,7 +16,7 @@ Server-side steps (Worker, `worker/`) protect **both** apps at once. Client-side
 | # | Step | Review ref | Touches | Status |
 |---|---|---|---|---|
 | 1 | CI runs the full suite on every PR/push to main and before any release or deploy | 3 | `.github/workflows` | ✅ |
-| 2 | Server write policy per table and operation (cashiers can't change prices, delete sales, …) | 1.1 | Worker + tests | ⏳ |
+| 2 | Server write policy per table and operation (cashiers can't change prices, delete sales, …) | 1.1 | Worker + tests | ✅ |
 | 3 | Server checks sale totals/discounts; mismatches recorded as anomalies for the owner | 1.2 | Worker + tests | ⏳ |
 | 4 | F9 is the only charge key on every theme (F5 never charges) | 4.6 | client | ⏳ |
 | 5 | Passwords: 600k rounds, rehash on sign-in (including legacy SHA-256), constant-time compare | 1.5 | Worker + tests | ⏳ |
@@ -63,3 +63,13 @@ Server-side steps (Worker, `worker/`) protect **both** apps at once. Client-side
   Verified: v15 → 26 passed, 4 skipped; idle-fit → 9 passed. Open: the Windows self-update suite could not run here (no
   Electron binary in this container); it runs on GitHub (xvfb present). If it fails there it will block deploys, and
   the cause should be looked at, not skipped. The first real proof is the first CI run on GitHub.
+- 2026-11-09 · Step 2 · `ca7e03a` · `worker/policy.js` decides every staff change by table, operation and movement
+  type (rules in the file; sales: create = sell, edit = sales.edit, refund-only = sales.refund, delete = admins only,
+  per the owner). Stored sales/purchases/payments are read in one query per push. Screens that offered actions the
+  role lacks were fixed: React Refund now needs sales.refund (a dispenser could refund); React and Flutter Write off
+  now need stock.adjust (a dispenser could write off); React Medicine List is read-only without medicines.manage.
+  Tests: unit-policy 46/46, v55-write-policy 17/17, v55-staff-ui 10/10 (shown to fail when the Refund fix is undone).
+  Full suite: 1,668 passed, 6 failed (5 outside-service checks + Windows self-update, no Electron binary here);
+  v35-layout 253, v41 40, v17 40 re-run after the screen fixes. Open: the one-line Flutter change (write-off gate)
+  was not compiled here (no Flutter SDK); the flutter-apps workflow will analyse and test it. Records a device already
+  holds that the cloud now refuses stay on that device and are listed under This device → Sync & storage.
