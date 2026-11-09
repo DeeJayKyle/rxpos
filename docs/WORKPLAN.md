@@ -25,7 +25,7 @@ Server-side steps (Worker, `worker/`) protect **both** apps at once. Client-side
 ## Phase 2 — Money correctness (weeks 3–4)
 | # | Step | Review ref | Touches | Status |
 |---|---|---|---|---|
-| 7 | Receipt numbers: branch–device–counter, unique offline, sequential | 2.1 | client + tests | ⏳ |
+| 7 | Receipt numbers: branch–device–counter, unique offline, sequential | 2.1 | client + tests | ✅ |
 | 8 | Credit limit enforced at the till with an audited supervisor override | 2.2 | client + Worker check | ⏳ |
 | 9 | Mobile Money: server-side pending payments, provider callbacks, "payments without a sale" screen | 1.3 | Worker + client | ⏳ (sandbox keys needed to test live) |
 | 10 | Tokens: short access + rotating refresh token, device list with "sign out this device", secure storage | 1.5 | Worker + client | ⏳ |
@@ -107,3 +107,10 @@ Server-side steps (Worker, `worker/`) protect **both** apps at once. Client-side
   locks and part-counts) and old slowdowns. unit-throttle 8; v58 10 (guesses from 10 addresses, a real minute's wait);
   v26 3, v42 12, v48 6; full suite 1,763 passed, 6 failed (the known 6). Not covered by a test: the slowdown on the
   "same email at several pharmacies" sign-in path (same helpers, key `*:<email>`).
+- 2026-11-09 · Step 7 · `ebd624a` + this commit · Owner's choice: all documents. `<kind>-<branch code>-<till>-<count>`
+  (R, PF, GRN, PO, TR, SC, RT) in both apps: `/api/till` gives each device a stable till number per pharmacy; each kind
+  is counted in a per-till `counters` record saved in the same commit/transaction as the document and synced; branch
+  code from the owner console (default: first three letters of the name); old style until a device has a till
+  (older install, hub). Web tabs get a new till at each fresh start (the web keeps nothing). Old documents keep their
+  numbers. unit-docnumbers 12, v59 9; Flutter analyze clean, 371 tests passed (+3); full JS suite 1,784 passed,
+  6 failed (the known 6).
