@@ -26,7 +26,7 @@ Server-side steps (Worker, `worker/`) protect **both** apps at once. Client-side
 | # | Step | Review ref | Touches | Status |
 |---|---|---|---|---|
 | 7 | Receipt numbers: branch–device–counter, unique offline, sequential | 2.1 | client + tests | ✅ |
-| 8 | Credit limit enforced at the till with an audited supervisor override | 2.2 | client + Worker check | ⏳ |
+| 8 | Credit limit checked at the till (reason required) and in the cloud (flagged) | 2.2 | client + Worker check | ✅ |
 | 9 | Mobile Money: server-side pending payments, provider callbacks, "payments without a sale" screen | 1.3 | Worker + client | ⏳ (sandbox keys needed to test live) |
 | 10 | Tokens: short access + rotating refresh token, device list with "sign out this device", secure storage | 1.5 | Worker + client | ⏳ |
 
@@ -114,3 +114,10 @@ Server-side steps (Worker, `worker/`) protect **both** apps at once. Client-side
   (older install, hub). Web tabs get a new till at each fresh start (the web keeps nothing). Old documents keep their
   numbers. unit-docnumbers 12, v59 9; Flutter analyze clean, 371 tests passed (+3); full JS suite 1,784 passed,
   6 failed (the known 6).
+- 2026-11-09 · Step 8 · `60e4e0f` + this commit · Owner's choice: allow with a reason, flag it. Both apps: a credit
+  sale taking a client over their limit (owed as on the Debtors page + what this sale puts on credit) asks a role
+  without Finance for a reason; the sale keeps `creditOver`, the audit log records it; Finance roles go on freely.
+  The cloud re-computes what is owed from its own records and adds an "Over credit limit" finding (reason quoted,
+  or "No reason given" from an older app). Found while testing: a sale paid in full is never questioned. Tests:
+  unit-anomalies +8, v60 10, Flutter +2 (373 passed, analyze clean); full JS suite 1,802 passed, 6 failed (the
+  known 6). Not covered by a test: Flutter's reason dialog on screen (rule and saving are tested).
