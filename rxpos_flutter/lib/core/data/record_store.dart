@@ -19,6 +19,7 @@ const syncedTables = [
   'batches', 'branches', 'transfers', 'audit', 'purchaseOrders', 'roles', 'messages', 'shifts', 'license', 'events',
   'tempLogs', 'catalogHidden', 'quizResults', 'stockCounts', 'countItems', 'supplierReturns', 'chatMarks', 'chatPins',
   'chatReads', 'drafts',
+  'anomalies', // sale checks written by the cloud (worker/anomalies.js); only roles with the audit log receive them
   // only this app (Payroll & HR, scheduled report emails); the React app skips tables it does not know
   'employees', 'attendance', 'salaryAdvances', 'payrolls', 'reportSchedules',
 ];

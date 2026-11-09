@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Banknote, Wallet, CalendarClock, PackageX, Pill, Coins, Users, ShoppingCart, ReceiptText, Share2, Megaphone, Store, TrendingUp, ShieldAlert, PauseCircle } from 'lucide-react';
+import { Banknote, Wallet, CalendarClock, PackageX, Pill, Coins, Users, ShoppingCart, ReceiptText, Share2, Megaphone, Store, TrendingUp, ShieldAlert, PauseCircle, SearchCheck } from 'lucide-react';
 import { draftsFor, seesAllDrafts, isOld, ageText } from '../drafts.js';
-import { useStore, today, localDate, dayOf, isLowStock, expiryCounts, stockValue, MAIN_BRANCH } from '../store.jsx';
+import { useStore, today, localDate, dayOf, isLowStock, expiryCounts, stockValue, MAIN_BRANCH, put, audit, now } from '../store.jsx';
 import { Stat, Empty } from '../ui.jsx';
 import { DailyTrend, MonthLines } from '../charts.jsx';
 import { ProductArt } from '../idleart.jsx';
@@ -100,6 +100,8 @@ export default function Dashboard() {
         <Stat to="/expiry" label="Expired" value={exp.expired} sub={exp.expired ? 'in stock: return or write off' : 'nothing expired in stock'} tone={'alert ' + (exp.expired ? 'red' : 'ok')} icon={ShieldAlert} />
       </div>
 
+      {can('audit') && <SaleChecks />}
+
       {(features.weather !== false || (features.promos !== false && promote.length > 0)) && (
         <div className="grid2">
           {features.promos !== false && promote.length > 0 && (
@@ -178,6 +180,38 @@ export default function Dashboard() {
           </table>
         </div>
       </div>
+    </div>
+  );
+}
+
+// Step 3: what the cloud found when it re-checked a sale (worker/anomalies.js). Only roles with the audit log receive
+// these records; the sale itself was kept as it was sold. "Checked" keeps the finding, marked, in the audit trail.
+const CHECK_KINDS = { totals: 'Totals don’t add up', discount: 'Discount without permission', price: 'Sold below price', paid: 'Paid more than the total', invalid: 'Invalid amounts' };
+function SaleChecks() {
+  const { db, fmt, user, update, branchId } = useStore();
+  const open = (db.anomalies || []).filter((a) => !a.reviewed).sort((a, b) => String(b.saleDate).localeCompare(String(a.saleDate)));
+  if (!open.length) return null;
+  const here = open.filter((a) => (a.branchId || MAIN_BRANCH) === branchId);
+  const list = (here.length ? here : open).slice(0, 8);
+  const checked = (a) => update((d) => {
+    put(d, 'anomalies', { ...a, reviewed: true, reviewedBy: user.name, reviewedAt: now() });
+    audit(d, user, 'Sale check reviewed', `${a.saleNumber}: ${CHECK_KINDS[a.kind] || a.kind}`, a.branchId || branchId);
+  });
+  return (
+    <div className="card sale-checks" aria-label="Sales to check">
+      <h3><SearchCheck size={17} />Sales to check <span className="badge warn">{open.length}</span></h3>
+      <small className="muted">The cloud re-checks every sale. These were kept as sold; look at each one and mark it checked.</small>
+      <table className="compact"><tbody>
+        {list.map((a) => (
+          <tr key={a.id}>
+            <td><strong>{a.saleNumber || '—'}</strong><br /><small className="muted">{String(a.saleDate).slice(0, 16).replace('T', ' ')} · {a.cashier || a.pushedBy}</small></td>
+            <td><span className="badge warn">{CHECK_KINDS[a.kind] || a.kind}</span><br /><small>{a.detail}</small></td>
+            <td className="num">{a.amount ? fmt(a.amount) : ''}</td>
+            <td className="actions"><button className="btn sm ghost" onClick={() => checked(a)}>Checked</button></td>
+          </tr>
+        ))}
+      </tbody></table>
+      {open.length > list.length && <small className="muted">{open.length - list.length} more after these.</small>}
     </div>
   );
 }

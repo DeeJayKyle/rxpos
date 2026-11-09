@@ -111,6 +111,16 @@ void main() {
       expect((await db.select(db.outbox).get()).map((o) => o.txn).toSet(), hasLength(1));
     });
 
+    test('a sale from a proforma names it, so the cloud does not flag its quoted discount (workplan step 3)', () async {
+      final stock = view(const [Movement(id: 'm', productId: 'p1', qty: 100, batchId: 'b-late')]);
+      final quoted = await completeSale(store, cart: addToCart([], para, stock: 100, wholesale: false, settings: s), c: const Checkout(method: cash),
+          settings: s, stock: stock, wholesale: false, cashier: 'Tia', proformaId: 'pf-7');
+      expect(quoted['proformaId'], 'pf-7');
+      final plain = await completeSale(store, cart: addToCart([], para, stock: 100, wholesale: false, settings: s), c: const Checkout(method: cash),
+          settings: s, stock: stock, wholesale: false, cashier: 'Tia');
+      expect(plain.containsKey('proformaId'), isFalse);
+    });
+
     test('a credit sale records what was paid now', () async {
       final cart = addToCart([], para, stock: 100, wholesale: false, settings: s);
       final sale = await completeSale(store, cart: [setCount(cart.single, 10)],

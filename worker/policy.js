@@ -34,6 +34,7 @@ export const TABLE_RULES = {
   banks: { write: ['finance'], delete: ['finance'] },
   bankTx: { write: ['finance'], delete: ['finance'] },
   loans: { write: ['finance'], delete: ['finance'] },
+  anomalies: { write: ['audit'], delete: ['audit'] }, // step 3 sale findings: marking one checked
 };
 
 /** Stock movement type → who may record it. Any other type needs stock.adjust. */

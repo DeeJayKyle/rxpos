@@ -31,7 +31,8 @@ import { twoStepDdl, twoStepOf, totpCheck, markUsed, twoStepRoutes } from './two
 import { tokenSecret, purposeLabel } from './secret.js';
 import { pharmacyChanged, validatePharmacyDefaults } from '../src/pharmacy-settings.js';
 import { DEFAULT_ROLES } from '../src/access.js';
-import { decide, NEEDS_OLD } from './policy.js';
+import { decide, NEEDS_OLD, moneyView } from './policy.js';
+import { saleFindings, fingerprint } from './anomalies.js';
 // The built-in roles (cashier, dispenser, pharmacist, manager) live only in the app; they aren't stored as records.
 // The server needs their permissions too, so a permission check doesn't wrongly refuse a built-in role (1.1/1.9).
 const DEFAULT_ROLE_PERMS = Object.fromEntries(DEFAULT_ROLES.map((r) => [r.id, new Set(r.permissions)]));
@@ -557,6 +558,7 @@ async function sync(env, body, who, ctx) {
   // one push are judged in order
   const can = async (perm) => (allowed[perm] ??= await roleCan(env, tenant, who.role, perm));
   const current = new Map();
+  const toCheck = new Map(); // sale key → the accepted record, for the step 3 checks
   if (!who.viaKey) {
     const keys = [...new Set(changes.filter((c) => c && NEEDS_OLD.has(c.t) && c.id != null).map((c) => c.t + '|' + c.id))];
     if (keys.length) {
@@ -615,7 +617,35 @@ async function sync(env, body, who, ctx) {
     if (INSERT_ONLY.has(ch.t)) stmts.push(insertOnly.bind(tenant, k, ch.t, id, body, at, deviceId));
     else stmts.push(upsert.bind(tenant, k, ch.t, id, body, ch.deleted ? 1 : 0, at, deviceId));
     if (NEEDS_OLD.has(ch.t)) { if (ch.deleted) current.delete(k); else current.set(k, rec); } // accepted: later changes see it
+    if (ch.t === 'sales' && !ch.deleted && rec && !who.viaKey) toCheck.set(k, rec); // step 3: re-checked below
     if (typeof ch.op === 'string' && ch.op.length <= 64) { stmts.push(remember.bind(tenant, ch.op, nowIso)); ledger.add(stmts.length - 1); seen.add(ch.op); }
+  }
+  // step 3 (worker/anomalies.js): re-check each accepted sale's money. Findings are stored next to the sale, in the
+  // same transaction, for whoever may read the audit log; the sale itself is never refused for them.
+  if (toCheck.size) {
+    const ids = [...new Set([...toCheck.values()].flatMap((r) => (Array.isArray(r.items) ? r.items : []).map((i) => String(i?.id ?? ''))))].filter(Boolean);
+    const products = new Map();
+    if (ids.length) {
+      const { results } = await db.prepare("SELECT id, rec FROM records WHERE tenant = ?1 AND t = 'products' AND deleted = 0 AND id IN (SELECT value FROM json_each(?2))").bind(tenant, JSON.stringify(ids)).all();
+      for (const r of results || []) { try { products.set(r.id, JSON.parse(r.rec)); } catch { /* skip */ } }
+    }
+    // a built-in catalog medicine this pharmacy never edited is not stored: its price is the catalog's
+    const col = Object.fromEntries(CATALOG.columns.map((c, i) => [c, i]));
+    for (const id of ids) if (!products.has(id) && /^cat-\d+$/.test(id)) {
+      const row = CATALOG.rows[Number(id.slice(4)) - 1];
+      if (row) products.set(id, { price: row[col.price], wholesale: row[col.wholesale] });
+    }
+    for (const sale of toCheck.values()) {
+      const found = await saleFindings(sale, products, can);
+      const fp = fingerprint(moneyView(sale));
+      found.forEach((f, n) => {
+        const id = `${sale.id}~${f.kind}${n}~${fp}`;
+        const rec = { id, saleId: sale.id, saleNumber: sale.number || '', saleDate: sale.date || '', branchId: sale.branchId || '', cashier: sale.cashier || '',
+          pushedBy: who.name || '', kind: f.kind, detail: f.detail, amount: f.amount, reviewed: false, createdAt: nowIso, updatedAt: nowIso };
+        stmts.push(insertOnly.bind(tenant, 'anomalies|' + id, 'anomalies', id, JSON.stringify(rec), nowIso, 'server'));
+        ledger.add(stmts.length - 1); // not one of the device's own changes
+      });
+    }
   }
   // the whole request in one transaction (D1 and libSQL batches are atomic): a sale and its stock movements land together
   let applied = 0;
@@ -648,7 +678,9 @@ async function sync(env, body, who, ctx) {
   const page = more ? results.slice(0, PAGE) : results;
   const cursor = more ? page[page.length - 1].seq : Math.max(maxSeq || 0, Number(since) || 0);
   const hideHr = !who.viaKey && page.some((r) => PAYROLL_TABLES.has(r.t)) && !(await roleCan(env, tenant, who.role, 'payroll'));
-  const shown = hideHr ? page.filter((r) => !PAYROLL_TABLES.has(r.t)) : page;
+  // step 3: sale findings are for whoever may read the audit log (admins always), not for the staff they are about
+  const hideChecks = !who.viaKey && page.some((r) => r.t === 'anomalies') && !(await roleCan(env, tenant, who.role, 'audit'));
+  const shown = hideHr || hideChecks ? page.filter((r) => !(hideHr && PAYROLL_TABLES.has(r.t)) && !(hideChecks && r.t === 'anomalies')) : page;
   // Build the response by hand so records stored as JSON text are not parsed and re-serialised (keeps CPU low)
   const items = shown.map((r) => `{"t":${JSON.stringify(r.t)},"id":${JSON.stringify(r.id)},"at":${JSON.stringify(r.at)},"deleted":${r.deleted ? 'true' : 'false'},"rec":${stripUserSecrets(r.t, r.rec)}}`);
   return json(`{"changes":[${items.join(',')}],"cursor":${cursor},"more":${more},"applied":${applied},"refused":${refused},"refusedKeys":${JSON.stringify(refusedKeys)},"dupes":${dupes},"protocol":2,"epoch":${JSON.stringify(epoch)},"tenant":${JSON.stringify(tenant)}}`);
@@ -828,10 +860,10 @@ async function owner(env, req, url, body) {
   if (parts[0] === 'account') return ownerAccount(env, req, url, body || {}, { json });
   if (parts[0] === 'uptime-test' && req.method === 'POST') return json(await uptimeCheck(env, { test: true, sync }));
   const view = async (t) => {
-    const s = await db.prepare("SELECT COUNT(*) n, MAX(at) last, SUM(t = 'products' AND deleted = 0) products, SUM(t = 'users' AND deleted = 0) users, SUM(t = 'sales' AND deleted = 0) sales, SUM(t = 'branches' AND deleted = 0) branches FROM records WHERE tenant = ?1").bind(t.id).first();
+    const s = await db.prepare("SELECT COUNT(*) n, MAX(at) last, SUM(t = 'products' AND deleted = 0) products, SUM(t = 'users' AND deleted = 0) users, SUM(t = 'sales' AND deleted = 0) sales, SUM(t = 'branches' AND deleted = 0) branches, SUM(t = 'anomalies' AND deleted = 0 AND COALESCE(json_extract(rec, '$.reviewed'), 0) = 0) anomalies FROM records WHERE tenant = ?1").bind(t.id).first();
     const secrets = JSON.parse(t.secrets || '{}');
     return { id: t.id, slug: t.slug || t.id, name: t.name, status: t.status, notes: t.notes || '', created: t.created_at, features: { ...DEFAULT_FEATURES, ...JSON.parse(t.features || '{}') }, branding: brandingOf(t),
-      stats: { records: s.n || 0, products: s.products || 0, users: s.users || 0, sales: s.sales || 0, branches: s.branches || 0, lastActivity: s.last || null },
+      stats: { records: s.n || 0, products: s.products || 0, users: s.users || 0, sales: s.sales || 0, branches: s.branches || 0, anomalies: s.anomalies || 0, lastActivity: s.last || null },
       payments: { mtn: t.id === MAIN ? mtn.enabled(env) : mtn.enabled(secrets), airtel: t.id === MAIN ? airtel.enabled(env) : airtel.enabled(secrets), sms: t.id === MAIN ? !!env.AT_API_KEY : !!secrets.AT_API_KEY } };
   };
 

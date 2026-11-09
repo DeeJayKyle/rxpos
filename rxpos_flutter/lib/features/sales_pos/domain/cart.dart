@@ -269,6 +269,7 @@ Future<Map<String, Object?>> completeSale(
   String branchId = mainBranch,
   DateTime? now,
   void Function(Edit d, Map<String, Object?> sale)? also,
+  String? proformaId,
 }) async {
   final t = totalsOf(cart, discount: c.discount, settings: settings);
   checkCheckout(cart, c, t, settings: settings);
@@ -334,6 +335,8 @@ Future<Map<String, Object?>> completeSale(
       if (type == 'momo')
         'momo': c.momo != null ? (c.momo!['manual'] == true ? c.momo! : {...c.momo!, 'confirmed': true}) : {'txid': c.momoRef!.trim(), 'manual': true},
       if (cart.any((l) => l.allowExpired)) 'expiredOverride': true,
+      // the cloud does not flag a proforma's discount and prices: they were set by whoever made the quotation
+      'proformaId': ?proformaId,
     });
     for (final i in items) {
       for (final a in (i['alloc'] as List).cast<Map<String, Object?>>()) {

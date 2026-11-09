@@ -358,7 +358,7 @@ export default function POS({ mode = 'retail' }) {
       const f = 1 - pct / 100;
       setLine(l.id, { price: round(l.price * f, 2), ...(l.pack ? { pack: { ...l.pack, price: round(l.pack.price * f, money) } } : {}) }); setCursor(cart.indexOf(l)); return null;
     }
-    if ((m = t.match(/^disc (\d+(?:\.\d+)?)%?$/))) { const pct = Number(m[1]); if (!(pct > 0 && pct < 100)) return 'A discount is between 1 and 99%'; setDiscount(String(round(subtotal * pct / 100, money))); return null; }
+    if ((m = t.match(/^disc (\d+(?:\.\d+)?)%?$/))) { if (!can('pos.discount')) return 'You are not allowed to give discounts'; const pct = Number(m[1]); if (!(pct > 0 && pct < 100)) return 'A discount is between 1 and 99%'; setDiscount(String(round(subtotal * pct / 100, money))); return null; }
     if (t === 'hold') { holdSale(); return null; }
     if (t === 'pay' || t === 'checkout' || t === 'charge') { setOmni(false); checkout(); return null; }
     return 'Not a command. Try +qty 2, -qty 2, qty 2 5, void 2, disc 2 10, disc 10, hold or pay';
@@ -402,7 +402,7 @@ export default function POS({ mode = 'retail' }) {
       items, subtotal, discount: disc, tax, total, payment, paid,
       tendered: ptype === 'cash' ? Number(tendered) || total : paid,
       bankId: ptype === 'cash' || credit ? CASH : db.settings.nonCashBankId || CASH,
-      customerId, customerName: customer?.name || 'Walk-in Customer', cashier: user.name, status: 'completed', ...(cart.some(isCd) && cdRef.current ? { controlled: cdRef.current } : {}), ...(cart.some((l) => l.allowExpired) ? { expiredOverride: true } : {}), ...extra,
+      customerId, customerName: customer?.name || 'Walk-in Customer', cashier: user.name, status: 'completed', ...(location.state?.proforma?.id ? { proformaId: location.state.proforma.id } : {}), ...(cart.some(isCd) && cdRef.current ? { controlled: cdRef.current } : {}), ...(cart.some((l) => l.allowExpired) ? { expiredOverride: true } : {}), ...extra,
     };
     const expiredLines = cart.filter((l) => l.allowExpired); // 1.6
     saving.current = true;
@@ -714,7 +714,7 @@ export default function POS({ mode = 'retail' }) {
         <div className="pos-pay">
         <div className="totals">
           <div className="row between gap"><span className="muted">Subtotal <b className="num">{fmt(subtotal)}</b></span>
-            <span className="row gap"><span className="muted">Discount</span><input ref={discRef} aria-label="Discount" type="number" min="0" step="any" className="small-input" value={discount} onChange={(e) => setDiscount(e.target.value)} /></span></div>
+            <span className="row gap"><span className="muted">Discount</span><input ref={discRef} aria-label="Discount" type="number" min="0" step="any" className="small-input" value={discount} onChange={(e) => setDiscount(e.target.value)} disabled={!can('pos.discount')} title={can('pos.discount') ? undefined : 'Giving discounts needs the "Give discounts" permission'} /></span></div>
           {layout !== 'classic' && disc > 0 && <div className="row between promo-row"><span className="muted">Promos / member discount</span><span className="num">− {fmt(disc)}</span></div>}
           {tax > 0 && <div className="row between"><span className="muted">Tax ({db.settings.taxRate}%)</span><span className="num">{fmt(tax)}</span></div>}
           <div className="row between grand"><span>Total{layout !== 'classic' && <small className="grand-sub">Net balance due</small>}</span><span className="num bump" key={total}>{fmt(total)}</span></div>

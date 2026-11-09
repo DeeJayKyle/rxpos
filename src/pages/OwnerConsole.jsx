@@ -101,6 +101,7 @@ export default function OwnerConsole() {
               <div className="kv"><span>Medicines</span><strong>{t.stats.products.toLocaleString()}</strong></div>
               <div className="kv"><span>Staff · branches</span><strong>{t.stats.users} · {t.stats.branches || 1}</strong></div>
               <div className="kv"><span>Sales recorded</span><strong>{t.stats.sales.toLocaleString()}</strong></div>
+              {t.stats.anomalies > 0 && <div className="kv" title="Sales the cloud found something wrong with (not yet marked checked in the pharmacy)"><span>Sales to check</span><strong className="warn-text"><b>{t.stats.anomalies.toLocaleString()}</b></strong></div>}
               <div className="kv"><span>Last activity</span><strong>{t.stats.lastActivity ? new Date(t.stats.lastActivity).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : '—'}</strong></div>
               {t.notes && <p className="muted small">{t.notes}</p>}
               <button className="btn sm primary">Manage <ArrowLeft size={14} style={{ transform: 'rotate(180deg)' }} /></button>
@@ -240,6 +241,7 @@ function TenantAdmin({ id, api, url, onBack }) {
             <div className="stats">
               <Stat label="Medicines" value={t.stats.products.toLocaleString()} tone="teal" />
               <Stat label="Sales" value={t.stats.sales.toLocaleString()} tone="violet" />
+              {t.stats.anomalies > 0 && <Stat label="Sales to check" value={t.stats.anomalies.toLocaleString()} sub="marked checked in the pharmacy's dashboard" tone="amber" />}
               <Stat label="Records" value={t.stats.records.toLocaleString()} />
               <Stat label="Last activity" value={t.stats.lastActivity ? new Date(t.stats.lastActivity).toLocaleDateString() : '—'} sub={t.stats.lastActivity ? new Date(t.stats.lastActivity).toLocaleTimeString() : ''} />
             </div>

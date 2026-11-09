@@ -331,6 +331,28 @@ void main() {
     await done(tester);
   });
 
+  testWidgets('sales to check (workplan step 3): the cloud\'s findings on the dashboard, "Checked" marks one and logs it', (tester) async {
+    await tester.runAsync(signedIn);
+    await tester.runAsync(() => RecordStore(db).update((d) {
+          d.put('anomalies', {'id': 'a1', 'saleId': 's1', 'saleNumber': 'R-DISC', 'saleDate': '2026-11-09T10:00:00Z', 'branchId': 'main', 'cashier': 'Cid Cashier',
+            'kind': 'discount', 'detail': 'Discount of 300 given by a role without "Give discounts"', 'amount': 300, 'reviewed': false});
+          d.put('anomalies', {'id': 'a2', 'saleId': 's2', 'saleNumber': 'R-OLD', 'saleDate': '2026-11-08T10:00:00Z', 'kind': 'totals', 'detail': 'x', 'amount': 5, 'reviewed': true});
+        }));
+    await start(tester);
+    expect(find.text('Sales to check'), findsOneWidget);
+    expect(find.text('R-DISC · Discount without permission'), findsOneWidget);
+    expect(find.textContaining('R-OLD'), findsNothing); // already checked
+    await tester.ensureVisible(find.widgetWithText(OutlinedButton, 'Checked'));
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Checked'));
+    await settle(tester);
+    expect(find.text('Sales to check'), findsNothing);
+    final a1 = (await tester.runAsync(() => RecordStore(db).rows('anomalies')))!.firstWhere((a) => a['id'] == 'a1');
+    expect((a1['reviewed'], a1['reviewedBy']), (true, 'Tia Admin'));
+    final audit = (await tester.runAsync(() => RecordStore(db).rows('audit')))!;
+    expect(audit.any((x) => x['action'] == 'Sale check reviewed' && '${x['details']}'.startsWith('R-DISC')), isTrue);
+    await done(tester);
+  });
+
   testWidgets('inventory: count a batch; customers: add a client', (tester) async {
     await tester.runAsync(signedIn);
     await start(tester);

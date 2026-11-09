@@ -15,6 +15,7 @@ import '../../../core/presentation/charts.dart';
 import '../domain/figures.dart';
 import '../domain/insights.dart';
 import 'dashboard_panels.dart';
+import 'sale_checks.dart';
 import '../../storage/presentation/storage_screen.dart';
 
 /// Home: today's figures against yesterday, stock alerts, this month's best sellers.
@@ -98,6 +99,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               icon: Icons.pause_circle_outline, color: oldDrafts.isNotEmpty ? Theme.of(context).colorScheme.error : Colors.orange.shade800,
               onTap: () => context.go(drafts.any((x) => x.kind == 'delivery') && (oldDrafts.any((x) => x.kind == 'delivery') || !drafts.any((x) => x.kind == 'sale')) ? '/purchases?tab=drafts' : '/sales')),
         ],
+        if (can.contains('audit')) ...[const SizedBox(height: 16), SaleChecksCard(branch: data.branch, money: s.money)],
         if (promote.isNotEmpty) ...[
           const SizedBox(height: 16),
           Card(

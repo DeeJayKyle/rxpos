@@ -22,6 +22,7 @@ export const TABLES = [
   'prescriptions', 'expenses', 'expenseCategories', 'banks', 'bankTx', 'loans', 'payments', 'users',
   'batches', 'branches', 'transfers', 'audit', 'purchaseOrders', 'roles', 'messages', 'shifts', 'license', 'events', 'tempLogs', 'catalogHidden', 'quizResults',
   'stockCounts', 'countItems', 'supplierReturns', 'chatMarks', 'chatPins', 'chatReads', 'drafts',
+  'anomalies', // sale checks written by the cloud (worker/anomalies.js); only roles with the audit log receive them
 ];
 // What is persisted on the device, one IndexedDB key per part
 const PARTS = [...TABLES, 'settings', '_tomb'];

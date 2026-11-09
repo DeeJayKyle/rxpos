@@ -374,6 +374,7 @@ class SaleController extends _$SaleController {
       wholesale: wholesale,
       cashier: session?.userName ?? '',
       branchId: d.branch,
+      proformaId: state.proforma?['id']?.toString(),
       also: state.proforma == null ? null : (x, sale) => x.put('proformas', {...state.proforma!, 'status': 'Converted', 'saleNumber': sale['number']}),
     );
     state = SaleState(method: state.method);
