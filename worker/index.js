@@ -35,6 +35,7 @@ import { decide, NEEDS_OLD, moneyView } from './policy.js';
 import { saleFindings, fingerprint } from './anomalies.js';
 import { verify as verifyPassword, hashNew, upgrade as upgradeHash } from './passwords.js';
 import { waitFor, afterFail, waitText } from './throttle.js';
+import { FIELD_TABLES, mergeFields, clampFields, sameRecord } from '../src/fieldmerge.js';
 // The built-in roles (cashier, dispenser, pharmacist, manager) live only in the app; they aren't stored as records.
 // The server needs their permissions too, so a permission check doesn't wrongly refuse a built-in role (1.1/1.9).
 const DEFAULT_ROLE_PERMS = Object.fromEntries(DEFAULT_ROLES.map((r) => [r.id, new Set(r.permissions)]));
@@ -593,6 +594,18 @@ async function sync(env, body, who, ctx) {
       for (const r of results || []) { try { current.set(r.k, JSON.parse(r.rec)); } catch { /* unreadable: treated as new */ } }
     }
   }
+  // step 14 (src/fieldmerge.js): medicines, clients, suppliers and batches merge field by field with what is stored
+  const stored = new Map();
+  {
+    const keys = [...new Set(changes.filter((c) => c && FIELD_TABLES.has(c.t) && c.id != null && !c.deleted).map((c) => c.t + '|' + c.id))];
+    if (keys.length) {
+      const { results } = await db.prepare('SELECT k, rec, at FROM records WHERE tenant = ?1 AND deleted = 0 AND k IN (SELECT value FROM json_each(?2))').bind(tenant, JSON.stringify(keys)).all();
+      for (const r of results || []) { try { stored.set(r.k, { rec: JSON.parse(r.rec), at: r.at }); } catch { /* unreadable: replaced */ } }
+    }
+  }
+  const upsertMerged = db.prepare(
+    `INSERT INTO records (tenant, k, t, id, rec, deleted, at, origin, seq) VALUES (?1, ?2, ?3, ?4, ?5, 0, ?6, ?7, (SELECT COALESCE(MAX(seq), 0) + 1 FROM records))
+     ON CONFLICT(tenant, k) DO UPDATE SET rec = excluded.rec, deleted = 0, at = excluded.at, origin = excluded.origin, seq = excluded.seq`);
   for (const ch of changes) {
     if (!ch || typeof ch.t !== 'string' || ch.id == null || typeof ch.at !== 'string') continue;
     if (typeof ch.op === 'string' && seen.has(ch.op)) { dupes++; continue; } // already applied: a repeat
@@ -641,8 +654,20 @@ async function sync(env, body, who, ctx) {
     // otherwise win last-writer-wins forever and leave a record that no normal edit can ever overwrite.
     const atMs = Date.parse(ch.at);
     const at = atMs <= Date.now() + CLOCK_SKEW_MS ? ch.at : new Date(Date.now() + CLOCK_SKEW_MS).toISOString();
-    if (INSERT_ONLY.has(ch.t)) stmts.push(insertOnly.bind(tenant, k, ch.t, id, body, at, deviceId));
-    else stmts.push(upsert.bind(tenant, k, ch.t, id, body, ch.deleted ? 1 : 0, at, deviceId));
+    const old = FIELD_TABLES.has(ch.t) && !ch.deleted && rec ? stored.get(k) : null;
+    if (old) {
+      // step 14: newer value of each field wins; the record's time becomes the newest field time. If the result is not
+      // what the device sent, it is marked as the cloud's, so that device downloads the merged copy too.
+      const incoming = clampFields({ ...rec, id }, at);
+      const merged = mergeFields(old.rec, old.at, incoming, at);
+      const unchanged = sameRecord(merged, old.rec);
+      if (!unchanged) stmts.push(upsertMerged.bind(tenant, k, ch.t, id, JSON.stringify(merged), merged.updatedAt, sameRecord(merged, { ...incoming, updatedAt: merged.updatedAt }) ? deviceId : 'server'));
+      stored.set(k, { rec: merged, at: merged.updatedAt });
+    } else if (INSERT_ONLY.has(ch.t)) stmts.push(insertOnly.bind(tenant, k, ch.t, id, body, at, deviceId));
+    else {
+      stmts.push(upsert.bind(tenant, k, ch.t, id, body, ch.deleted ? 1 : 0, at, deviceId));
+      if (FIELD_TABLES.has(ch.t) && !ch.deleted && rec) stored.set(k, { rec: { ...rec, id }, at });
+    }
     if (NEEDS_OLD.has(ch.t)) { if (ch.deleted) current.delete(k); else current.set(k, rec); } // accepted: later changes see it
     if (ch.t === 'sales' && !ch.deleted && rec && !who.viaKey) toCheck.set(k, rec); // step 3: re-checked below
     if (typeof ch.op === 'string' && ch.op.length <= 64) { stmts.push(remember.bind(tenant, ch.op, nowIso)); ledger.add(stmts.length - 1); seen.add(ch.op); }

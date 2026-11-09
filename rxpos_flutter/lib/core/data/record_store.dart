@@ -9,6 +9,7 @@ import '../entities/settings.dart';
 import '../rules/dates.dart';
 import '../rules/doc_numbers.dart';
 import '../rules/ids.dart';
+import '../sync/field_merge.dart';
 import '../sync/sync_config.dart';
 import '../rules/stock.dart';
 
@@ -194,8 +195,10 @@ FROM records WHERE t = 'movements' GROUP BY br, bk, pid''';
           if (appendOnlyTables.contains(p.t) && await get(p.t, id) != null) {
             throw StoreRefused('${p.t} can only be added to, never changed ($id).');
           }
+          // step 14: a medicine, client, supplier or batch remembers when each field changed (core/sync/field_merge.dart)
+          final rec = fieldTables.contains(p.t) ? stampFields(await get(p.t, id), p.rec, d.now) : p.rec;
           await db.into(db.records).insertOnConflictUpdate(
-              RecordsCompanion.insert(t: p.t, id: id, json: jsonEncode(p.rec), updatedAt: Value(d.now)));
+              RecordsCompanion.insert(t: p.t, id: id, json: jsonEncode(rec), updatedAt: Value(d.now)));
           await db.into(db.outbox).insert(OutboxCompanion.insert(op: uid(), txn: txn, t: p.t, id: id, at: d.now));
         }
         for (final x in d._dels.values) {

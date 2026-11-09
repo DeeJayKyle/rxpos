@@ -9,6 +9,7 @@ import { connectLive, disconnectLive, onLive } from './live.js';
 import { DEFAULT_CLOUD, tillNumber } from './cloud.js';
 import { nextNumber } from './docnumbers.js';
 import { createStockIndexer } from './stockindex.js';
+import { FIELD_TABLES, stampFields, mergeFields, sameRecord } from './fieldmerge.js';
 import { setUnsent } from './update.js';
 import { formatMoney } from './money.js';
 import { pharmacyDefaults, overrideKey, readOverrides, writeOverrides, editOverrides, settingsEqual, PHARMACY_FIELDS } from './pharmacy-settings.js';
@@ -102,8 +103,10 @@ export async function verifyPassword(u, pw) {
 
 // ---------- draft helpers (used inside update(d => …)) ----------
 export function put(d, table, rec) {
-  const r = { ...rec, id: rec.id || uid(), updatedAt: now() };
+  let r = { ...rec, id: rec.id || uid(), updatedAt: now() };
   const i = d[table].findIndex((x) => x.id === r.id);
+  // step 14: medicines, clients, suppliers and batches remember when each field changed, so edits from two devices merge
+  if (i >= 0 && FIELD_TABLES.has(table)) r = stampFields(d[table][i], r, r.updatedAt);
   if (i >= 0) d[table][i] = r;
   else d[table].unshift(r);
   return r;
@@ -265,6 +268,12 @@ export function mergeRemote(db, changes) {
     index[ch.t] ??= new Map(d[ch.t].map((r, i) => [r.id, i]));
     const i = index[ch.t].get(ch.id);
     const local = i !== undefined ? d[ch.t][i] : null;
+    // step 14: a medicine, client, supplier or batch held here merges field by field (the newer value of each wins)
+    if (local && !ch.deleted && ch.rec && FIELD_TABLES.has(ch.t)) {
+      const merged = mergeFields(local, local.updatedAt, { ...ch.rec, id: ch.id }, ch.at);
+      if (!sameRecord(merged, local)) d[ch.t][i] = merged;
+      continue;
+    }
     if (local && local.updatedAt >= ch.at) continue;
     if (!local && !ch.deleted) {
       gone ??= new Map(d._tomb.map((x) => [x.t + '|' + x.id, x.at]));

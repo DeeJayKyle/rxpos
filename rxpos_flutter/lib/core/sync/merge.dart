@@ -10,6 +10,7 @@ import 'package:drift/drift.dart';
 
 import '../data/record_store.dart';
 import '../database/app_database.dart';
+import 'field_merge.dart';
 import 'remote_change.dart';
 
 /// Pharmacy fields the cloud always decides (src/pharmacy-settings.js PHARMACY_FIELDS).
@@ -28,6 +29,17 @@ Future<int> applyRemote(AppDatabase db, List<RemoteChange> changes) async {
     }
     if (!syncedTables.contains(ch.t)) continue; // a table this app version does not know yet
     final local = await (db.select(db.records)..where((r) => r.t.equals(ch.t) & r.id.equals(ch.id))).getSingleOrNull();
+    // step 14: a medicine, client, supplier or batch held here merges field by field (the newer value of each wins)
+    if (local != null && !ch.deleted && ch.rec != null && fieldTables.contains(ch.t)) {
+      final mine = (jsonDecode(local.json) as Map).cast<String, Object?>();
+      final merged = mergeFields(mine, local.updatedAt ?? (mine['updatedAt'] as String?), {...ch.rec!, 'id': ch.id}, ch.at);
+      if (!sameRecord(merged, mine)) {
+        await db.into(db.records).insertOnConflictUpdate(
+            RecordsCompanion.insert(t: ch.t, id: ch.id, json: jsonEncode(merged), updatedAt: Value(merged['updatedAt'] as String?)));
+        applied++;
+      }
+      continue;
+    }
     if (local != null && (local.updatedAt ?? '').compareTo(ch.at) >= 0) continue;
     if (local == null && !ch.deleted) {
       final tomb = await (db.select(db.tombstones)..where((x) => x.t.equals(ch.t) & x.id.equals(ch.id))).getSingleOrNull();
