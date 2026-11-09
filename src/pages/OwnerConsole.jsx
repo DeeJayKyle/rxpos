@@ -388,7 +388,7 @@ function TenantAdmin({ id, api, url, onBack }) {
         <Modal title={branchEdit.id ? `Edit ${branchEdit.name}` : 'Add branch'} onClose={() => setBranchEdit(null)}>
           <form onSubmit={saveBranch}>
             <div className="form-grid">
-              {[['name', 'Branch name', true], ['address', 'Address / town'], ['phone', 'Phone'], ['manager', 'Manager']].map(([k, l, req]) => (
+              {[['name', 'Branch name', true], ['code', 'Code on receipts (e.g. NTD; empty = from the name)'], ['address', 'Address / town'], ['phone', 'Phone'], ['manager', 'Manager']].map(([k, l, req]) => (
                 <label key={k} className="field"><span>{l}</span><input required={!!req} value={branchEdit[k] || ''} onChange={(e) => setBranchEdit({ ...branchEdit, [k]: e.target.value })} /></label>))}
             </div>
             <div className="form-actions"><button type="button" className="btn ghost" onClick={() => setBranchEdit(null)}>Cancel</button><button className="btn primary" disabled={busy}>Save</button></div>

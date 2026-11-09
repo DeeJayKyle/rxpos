@@ -114,7 +114,7 @@ for (const size of only) {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'F9', bubbles: true }));
       for (;;) { await new Promise((r) => setTimeout(r, 5)); if (/Sale complete/.test(document.querySelector('.modal')?.innerText || '') || performance.now() - t > 10000) break; }
       const shown = performance.now() - t;
-      const number = document.querySelector('.modal .receipt')?.innerText.match(/\bR[A-Z0-9]{6,}\b/)?.[0];
+      const number = document.querySelector('.modal .receipt')?.innerText.match(/\bR-[A-Z0-9]+-\d{2,}-\d{6,}\b|\bR[A-Z0-9]{6,}\b/)?.[0];
       // until the sale is on the device (both the 1.5 table blobs and the 1.6 record store are checked)
       const onDevice = async () => new Promise((res) => { const q = indexedDB.open('pharmapos'); q.onsuccess = () => { const db = q.result; const names = [...db.objectStoreNames]; const tx = db.transaction(names, 'readonly'); const hits = []; if (names.includes('records')) { const g = tx.objectStore('records').getAll(); g.onsuccess = () => hits.push(g.result.some((x) => x?.r?.number === number || (x?.t === 'sales' && (x.rs || []).some((r) => r.number === number)))); } const g2 = tx.objectStore('kv').get('t:sales'); g2.onsuccess = () => hits.push((g2.result || []).some((s) => s.number === number)); tx.oncomplete = () => { db.close(); res(hits.some(Boolean)); }; }; q.onerror = () => res(false); });
       while (!(await onDevice()) && performance.now() - t < 10000) await new Promise((r) => setTimeout(r, 20));

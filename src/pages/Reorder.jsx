@@ -9,7 +9,7 @@ import { computeReorderLevels, applyReorderLevels, reorderSettings } from '../re
 
 /** Smart reorder suggestions, dead stock and purchase orders. */
 export default function Reorder() {
-  const { db, products, fmt, update, user, branchId, branch, can } = useStore();
+  const { db, products, fmt, update, user, branchId, branch, can, numberFor } = useStore();
   const navigate = useNavigate();
   const s = db.settings;
   const [tab, setTab] = useState('reorder');
@@ -84,7 +84,7 @@ export default function Reorder() {
     update((d) => {
       for (const [supplierId, list] of bySupplier) {
         put(d, 'purchaseOrders', {
-          id: uid(), number: 'PO' + Date.now().toString(36).toUpperCase().slice(-6) + Math.floor(Math.random() * 9), date: now(), status: 'Draft', branchId,
+          id: uid(), number: numberFor(d, 'PO'), date: now(), status: 'Draft', branchId,
           supplierId, supplierName: db.suppliers.find((x) => x.id === supplierId)?.name || 'Any supplier', createdBy: user.name,
           items: list.map((r) => ({ productId: r.p.id, name: r.p.name, qty: r.qty, cost: r.buy?.cost || r.p.cost })),
         });

@@ -132,6 +132,8 @@ function ensureSchema(db) {
     if (!have.has('sync_ops')) ddl.push('CREATE TABLE sync_ops (tenant TEXT NOT NULL, op TEXT NOT NULL, at TEXT NOT NULL, PRIMARY KEY (tenant, op))');
     if (!have.has('login_fail')) ddl.push('CREATE TABLE login_fail (email TEXT PRIMARY KEY, n INTEGER NOT NULL, until INTEGER NOT NULL DEFAULT 0)');
     // step 6: wrong passwords per account across every address (worker/throttle.js), a slowdown rather than a lock
+    // step 7: each device's till number in its pharmacy, for document numbers like R-NTD-03-000412 (src/docnumbers.js)
+    if (!have.has('tills')) ddl.push('CREATE TABLE tills (tenant TEXT NOT NULL, device TEXT NOT NULL, n INTEGER NOT NULL, at TEXT NOT NULL, PRIMARY KEY (tenant, device))');
     if (!have.has('login_throttle')) ddl.push('CREATE TABLE login_throttle (k TEXT PRIMARY KEY, n INTEGER NOT NULL, last_at INTEGER NOT NULL)');
     if (!have.has('rtc')) ddl.push('CREATE TABLE rtc (id INTEGER PRIMARY KEY AUTOINCREMENT, tenant TEXT NOT NULL, to_uid TEXT NOT NULL, from_uid TEXT NOT NULL, from_name TEXT, type TEXT NOT NULL, call_id TEXT NOT NULL, data TEXT, at INTEGER NOT NULL)');
     if (!have.has('rtc_to')) ddl.push('CREATE INDEX rtc_to ON rtc(tenant, to_uid, id)'); // instant look-up of calls waiting for a person
@@ -1050,7 +1052,9 @@ async function owner(env, req, url, body) {
     if (!String(b.name || '').trim()) return json({ error: 'Enter the branch name.' }, 400);
     const id = String(b.id || 'br-' + slugify(b.name).slice(0, 20) + '-' + randomKey(4).toLowerCase());
     const old = (await existingRec(db, t.id, 'branches', id)) || {};
-    const rec = { ...old, name: String(b.name).trim().slice(0, 60), address: String(b.address ?? old.address ?? '').slice(0, 120), phone: String(b.phone ?? old.phone ?? ''), manager: String(b.manager ?? old.manager ?? '') };
+    const rec = { ...old, name: String(b.name).trim().slice(0, 60), address: String(b.address ?? old.address ?? '').slice(0, 120), phone: String(b.phone ?? old.phone ?? ''), manager: String(b.manager ?? old.manager ?? ''),
+      // step 7: the branch's code in document numbers (R-NTD-03-000412); empty = the first letters of its name
+      code: String(b.code ?? old.code ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5) };
     await serverWriteMany(env, t.id, [{ t: 'branches', id, rec }]);
     return json({ branch: { ...rec, id } });
   }
@@ -1472,6 +1476,14 @@ export default {
       if (path === '/api/live-ticket' && req.method === 'POST') {
         if (!who.uid) return json({ error: 'Not available for this connection' }, 400);
         return json({ ticket: await signTicket(env, { sub: who.uid, tn: who.tenant, name: who.name || '', exp: Date.now() + LIVE_TICKET_MS }) });
+      }
+      // step 7: this device's till number in this pharmacy (the same device always gets the same one)
+      if (path === '/api/till' && req.method === 'POST') {
+        const device = String(body.deviceId || '').slice(0, 80);
+        if (!device) return json({ error: 'Missing deviceId' }, 400);
+        await env.DB.prepare('INSERT INTO tills (tenant, device, n, at) SELECT ?1, ?2, COALESCE(MAX(n), 0) + 1, ?3 FROM tills WHERE tenant = ?1 ON CONFLICT(tenant, device) DO NOTHING')
+          .bind(who.tenant, device, new Date().toISOString()).run();
+        return json({ till: await env.DB.prepare('SELECT n FROM tills WHERE tenant = ?1 AND device = ?2').bind(who.tenant, device).first('n') });
       }
       if (path === '/api/config') return json({ tenant: who.tenant, slug: who.tenantRow.slug || who.tenant, pharmacy: who.tenantRow.name, mtn: mtn.enabled(penv), airtel: airtel.enabled(penv), sms: !!(penv.AT_USERNAME && penv.AT_API_KEY), email: !!(env.BREVO_API_KEY && env.BREVO_SENDER_EMAIL), mtnEnv: penv.MTN_ENV || 'sandbox', airtelEnv: penv.AIRTEL_ENV || 'uat', role: who.role });
       // Crash reports from this pharmacy's devices (src/crash.js): the same error is one row with a count

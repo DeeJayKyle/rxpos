@@ -71,7 +71,7 @@ function DateFormatChoice({ fmt }) {
 
 /** Receive stock from a supplier: every line becomes a batch (number + expiry) at this branch. */
 export function AddStock() {
-  const { db, products, update, fmt, user, branchId, syncCfg, syncStatus, can } = useStore();
+  const { db, products, update, fmt, user, branchId, syncCfg, syncStatus, can, numberFor } = useStore();
   const location = useLocation();
   const s = db.settings;
   const dateFmt = useDateFormat();
@@ -336,13 +336,14 @@ export function AddStock() {
     const paid = form.paid === '' ? total : Math.max(0, Math.min(Number(form.paid) || 0, total));
     const idOf = (l) => (l.productId === NEW ? freshIds.get(nameOf(l).toLowerCase()) : l.productId);
     const purchase = {
-      id: uid(), number: 'GRN' + Date.now().toString(36).toUpperCase().slice(-6), supplierId: form.supplierId, supplierName: supplier?.name || '—',
+      id: uid(), number: '', supplierId: form.supplierId, supplierName: supplier?.name || '—',
       invoice: form.invoice.trim(), notes: (form.notes || '').trim(), date: form.date || today(), receivedBy: user.name, total, paid, bankId: form.bankId, branchId,
       items: lines.map((l) => ({ productId: idOf(l), name: nameOf(l), qty: Number(l.qty) * (Number(l.recvSize) || 1), cost: baseCost(l), batch: l.batch.trim(), expiry: l.expiry, ...(l.productId === NEW ? { added: true } : {}),
         ...(Number(l.recvSize) > 1 ? { pack: { name: l.recvPack, size: Number(l.recvSize), count: Number(l.qty), cost: unitCost(l) } } : {}) })),
       ...(scanned ? { scanned: true } : {}),
     };
     try { await update((d) => {
+      purchase.number = numberFor(d, 'GRN'); // step 7: counted with the delivery
       if (form.draftId && d.drafts.some((x) => x.id === form.draftId)) del(d, 'drafts', form.draftId); // the draft is done: it became this delivery
       const used = new Set(d.products.map((x) => x.barcode).filter(Boolean));
       for (const l of lines) {

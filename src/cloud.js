@@ -51,6 +51,8 @@ export const ownerGoogleLogin = (url, credential) => call({ url: cleanUrl(url) }
 /** Public name of the pharmacy at a web address (for its sign-in page) */
 export const pharmacyInfo = (url, slug) => call({ url: cleanUrl(url) }, '/api/pharmacy/' + encodeURIComponent(slug), { timeout: 8000 });
 export const calendarLink = (cfg) => call(cfg, '/api/calendar-link', { timeout: 8000 });
+/** step 7: this device's till number in its pharmacy (src/docnumbers.js) */
+export const tillNumber = (cfg) => call(cfg, '/api/till', { method: 'POST', body: { deviceId: cfg.deviceId }, timeout: 15000 });
 /** The pharmacy's daily stock sheet link for a Google Sheet (=IMPORTDATA); renew = a new link, the old one stops */
 export const dailyStockLink = (cfg, renew = false) => call(cfg, '/api/daily-stock-link', { method: renew ? 'POST' : 'GET', body: renew ? {} : undefined, timeout: 15000 });
 // AI (Cloudflare Workers AI): read a prescription photo; make a drug quiz

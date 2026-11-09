@@ -287,8 +287,8 @@ Future<Map<String, Object?>> completeSale(
   final type = c.method.type;
   final credit = type == 'credit';
   final paid = credit ? [c.tendered ?? 0, t.total].reduce((a, b) => a < b ? a : b) : t.total;
-  return store.update((d) {
-    final number = docNumber('R', now: now);
+  return store.update((d) async {
+    final number = await d.number('R', branchId: branchId);
     final items = [
       for (final l in cart)
         {

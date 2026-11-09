@@ -113,7 +113,7 @@ function CountList({ onOpen }) {
 }
 
 function NewCount({ onClose, onStarted }) {
-  const { db, products, batchesOf, update, user, branchId, fmt } = useStore();
+  const { db, products, batchesOf, update, user, branchId, fmt, numberFor } = useStore();
   const stocked = useMemo(() => products.filter((p) => p.stock !== 0), [products]);
   const shelves = useMemo(() => [...new Set(stocked.map((p) => (p.shelf || '').trim()).filter(Boolean))].sort(), [stocked]);
   const forms = useMemo(() => [...new Set(stocked.map((p) => p.form).filter(Boolean))].sort(), [stocked]);
@@ -137,9 +137,9 @@ function NewCount({ onClose, onStarted }) {
     e.preventDefault();
     if (f.scope !== 'empty' && !list.length) return toast('Nothing to count in that choice', 'warn');
     const byShelf = (a, b) => (a.shelf || '~').localeCompare(b.shelf || '~') || a.name.localeCompare(b.name);
-    const rec = { id: uid(), number: 'SC' + Date.now().toString(36).toUpperCase().slice(-6), name: f.name.trim() || 'Stock count', date: now(), branchId, scope: f.scope, scopeLabel: label,
+    const rec = { id: uid(), number: '', name: f.name.trim() || 'Stock count', date: now(), branchId, scope: f.scope, scopeLabel: label,
       productIds: (f.scope === 'random' ? list : list.slice().sort(byShelf)).map((p) => p.id), blind: !!f.blind, status: 'open', startedBy: user.name, startedAt: now() };
-    update((d) => { put(d, 'stockCounts', rec); audit(d, user, 'Stock count started', `${rec.name} (${label}, ${rec.productIds.length} items)`, branchId); });
+    update((d) => { rec.number = numberFor(d, 'SC'); put(d, 'stockCounts', rec); audit(d, user, 'Stock count started', `${rec.name} (${label}, ${rec.productIds.length} items)`, branchId); });
     onStarted(rec.id);
   };
   const opt = (k, title, sub, extra) => (

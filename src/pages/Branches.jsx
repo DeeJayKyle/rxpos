@@ -58,7 +58,7 @@ export default function Branches() {
 
 /** Send stock to another branch (leaves now, "in transit"), and receive incoming transfers. */
 export function Transfers() {
-  const { db, products, update, user, branchId, batchesOf, stockIndex } = useStore();
+  const { db, products, update, user, branchId, batchesOf, stockIndex, numberFor } = useStore();
   const [tab, setTab] = useState('incoming');
   const [creating, setCreating] = useState(null);
   const [q, setQ] = useState('');
@@ -76,8 +76,9 @@ export function Transfers() {
       const have = products.find((p) => p.id === l.productId)?.stock || 0;
       if (Number(l.qty) > have) return toast(`Only ${have} ${l.name} in stock`, 'error');
     }
-    const t = { id: uid(), number: 'TR' + Date.now().toString(36).toUpperCase().slice(-6), date: now(), fromId: branchId, toId: creating.toId, status: 'In transit', sentBy: user.name, note: creating.note, items: [] };
+    const t = { id: uid(), number: '', date: now(), fromId: branchId, toId: creating.toId, status: 'In transit', sentBy: user.name, note: creating.note, items: [] };
     update((d) => {
+      t.number = numberFor(d, 'TR'); // step 7: counted with the transfer
       for (const l of lines) {
         const alloc = allocate(batchesOf(l.productId), Number(l.qty), { allowExpired: false });
         t.items.push({ productId: l.productId, name: l.name, qty: Number(l.qty), alloc });

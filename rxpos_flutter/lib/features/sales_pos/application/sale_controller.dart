@@ -394,6 +394,7 @@ class SaleController extends _$SaleController {
       customerId: state.customerId,
       customerName: state.customerName,
       by: session?.userName ?? '',
+      branchId: d.branch,
     );
     clear();
     return pf;

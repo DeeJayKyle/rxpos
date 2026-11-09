@@ -19,8 +19,8 @@ Future<Map<String, Object?>> sendTransfer(RecordStore store, {required String fr
   for (final l in use) {
     if (l.qty > l.stock) throw TransferProblem('Only ${l.stock.round()} ${l.name} in stock');
   }
-  return store.update((d) {
-    final number = 'TR${DateTime.now().millisecondsSinceEpoch.toRadixString(36).toUpperCase().substring(2)}';
+  return store.update((d) async {
+    final number = await d.number('TR', branchId: fromId);
     final items = <Map<String, Object?>>[];
     for (final l in use) {
       final alloc = allocate(l.batches, l.qty);

@@ -76,8 +76,8 @@ Future<Map<String, Object?>> receiveDelivery(RecordStore store, {required List<D
   }
   final total = round(deliveryTotal(use), settings.decimalPlaces);
   final paidNow = paid == null ? total : max(0.0, min(paid, total));
-  final number = 'GRN${(now ?? DateTime.now()).millisecondsSinceEpoch.toRadixString(36).toUpperCase().substring(2)}';
   return store.update((d) async {
+    final number = await d.number('GRN', branchId: branchId);
     final purchase = <String, Object?>{
       'id': uid(), 'number': number, 'supplierId': supplierId, 'supplierName': supplierName.isEmpty ? '—' : supplierName,
       'invoice': invoice.trim(), 'notes': notes.trim(), 'date': date ?? today(now), 'receivedBy': receivedBy,

@@ -1,6 +1,7 @@
 // Ringing up and completing a sale: the till's rules (src/pages/POS.jsx) and the records it writes.
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:rxpos/core/sync/sync_config.dart';
 import 'package:rxpos/core/data/record_store.dart';
 import 'package:rxpos/core/database/app_database.dart';
 import 'package:rxpos/core/entities/batch.dart';
@@ -109,6 +110,23 @@ void main() {
       expect(moves.every((m) => m.ref == sale['number'] && m.type == 'Sale'), isTrue);
       expect((await store.rows('audit')).single['action'], 'Discount given');
       expect((await db.select(db.outbox).get()).map((o) => o.txn).toSet(), hasLength(1));
+    });
+
+    test('step 7: receipts are numbered per till, counted with the sale; the old style until there is a till', () async {
+      final stock = view(const [Movement(id: 'm', productId: 'p1', qty: 100, batchId: 'b-late')]);
+      Future<String> sell() async => (await completeSale(store, cart: addToCart([], para, stock: 100, wholesale: false, settings: s), c: const Checkout(method: cash),
+          settings: s, stock: stock, wholesale: false, cashier: 'Tia'))['number'] as String;
+      expect(await sell(), matches(RegExp(r'^R[0-9A-Z]{7}$')), reason: 'no till number yet');
+      expect(await store.rows('counters'), isEmpty);
+      await (await SyncConfig.load(db)).copyWith(till: 3).save(db);
+      await store.update((d) => d.put('branches', {'id': 'main', 'name': 'Main branch'}));
+      expect(await sell(), 'R-MAI-03-000001');
+      expect(await sell(), 'R-MAI-03-000002');
+      expect((await store.rows('counters')).single, containsPair('R', 2));
+      await store.update((d) => d.put('branches', {'id': 'main', 'name': 'Main branch', 'code': 'KLA'}));
+      expect(await sell(), 'R-KLA-03-000003');
+      final pf = await store.update((d) => d.number('PF'));
+      expect(pf, 'PF-KLA-03-000001', reason: 'each kind counts on its own');
     });
 
     test('a sale from a proforma names it, so the cloud does not flag its quoted discount (workplan step 3)', () async {

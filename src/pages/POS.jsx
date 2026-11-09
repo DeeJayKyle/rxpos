@@ -17,7 +17,6 @@ import { CameraButton, CameraScanner } from '../camscan.jsx';
 import { deviceSettings, setDevice, onDevice } from '../device.js';
 
 // Receipt numbers must be unique across synced devices, so they are time-based rather than sequential
-export const docNumber = (prefix) => prefix + Date.now().toString(36).toUpperCase().slice(-6) + Math.floor(Math.random() * 36).toString(36).toUpperCase();
 
 // A client with this many sales is shown as a loyalty member (repeat client) on the till
 const LOYAL_VISITS = 5;
@@ -25,7 +24,7 @@ const LOYAL_VISITS = 5;
 const POS_LAYOUTS = [['classic', 'Classic'], ['standard', 'Standard'], ['advanced', 'Advanced UI']];
 
 export default function POS({ mode = 'retail' }) {
-  const { db, products, update, user, fmt, batchesOf, branchId, syncCfg, features, can, pending } = useStore();
+  const { db, products, update, user, fmt, batchesOf, branchId, syncCfg, features, can, pending, numberFor } = useStore();
   const [momo, setMomo] = useState(null);
   const [newClient, setNewClient] = useState(null);   // quick 'add client' form
   const [labelFor, setLabelFor] = useState(null);     // cart line whose dispensing directions are being edited
@@ -398,7 +397,7 @@ export default function POS({ mode = 'retail' }) {
       alloc: allocate(batchesOf(id), qty, { allowExpired }).map(({ batchId, qty: q, batch, expiry }) => ({ batchId, qty: q, batch, expiry })),
     }));
     const sale = {
-      id: uid(), number: docNumber('R'), date: now(), type: mode, branchId,
+      id: uid(), number: '', date: now(), type: mode, branchId, // numbered in the commit below (step 7)
       items, subtotal, discount: disc, tax, total, payment, paid,
       tendered: ptype === 'cash' ? Number(tendered) || total : paid,
       bankId: ptype === 'cash' || credit ? CASH : db.settings.nonCashBankId || CASH,
@@ -408,6 +407,7 @@ export default function POS({ mode = 'retail' }) {
     saving.current = true;
     try {
     await update((d) => {
+      sale.number = numberFor(d, 'R'); // saved with the sale: never repeats, even offline
       put(d, 'sales', sale);
       for (const i of items) for (const a of i.alloc) move(d, { productId: i.id, qty: -a.qty, type: 'Sale', ref: sale.number, user: user.name, batchId: a.batchId, branchId });
       const pf = location.state?.proforma;
@@ -460,11 +460,11 @@ export default function POS({ mode = 'retail' }) {
   const saveProforma = () => {
     if (!cart.length) return;
     const pf = {
-      id: uid(), number: docNumber('PF'), date: now(), type: mode, status: 'Open',
+      id: uid(), number: '', date: now(), type: mode, status: 'Open',
       items: cart.map(({ id, name, price, cost, qty }) => ({ id, name, price: Number(price), cost, qty })),
       subtotal, discount: disc, tax, total, customerId, customerName: customer?.name || 'Walk-in Customer', createdBy: user.name,
     };
-    update((d) => { put(d, 'proformas', pf); });
+    update((d) => { pf.number = numberFor(d, 'PF'); put(d, 'proformas', pf); });
     setDone({ ...pf, proforma: true });
     clearSale();
   };

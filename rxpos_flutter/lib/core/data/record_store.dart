@@ -7,7 +7,9 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../database/app_database.dart';
 import '../entities/settings.dart';
 import '../rules/dates.dart';
+import '../rules/doc_numbers.dart';
 import '../rules/ids.dart';
+import '../sync/sync_config.dart';
 import '../rules/stock.dart';
 
 part 'record_store.g.dart';
@@ -19,6 +21,7 @@ const syncedTables = [
   'batches', 'branches', 'transfers', 'audit', 'purchaseOrders', 'roles', 'messages', 'shifts', 'license', 'events',
   'tempLogs', 'catalogHidden', 'quizResults', 'stockCounts', 'countItems', 'supplierReturns', 'chatMarks', 'chatPins',
   'chatReads', 'drafts',
+  'counters', // step 7: each till's document counts (core/rules/doc_numbers.dart), saved with the documents
   'anomalies', // sale checks written by the cloud (worker/anomalies.js); only roles with the audit log receive them
   // only this app (Payroll & HR, scheduled report emails); the React app skips tables it does not know
   'employees', 'attendance', 'salaryAdvances', 'payrolls', 'reportSchedules',
@@ -87,6 +90,19 @@ class Edit {
     return put('batches', {'id': uid(), 'productId': productId,
       'batch': code.isEmpty ? 'B${today().replaceAll('-', '').substring(2)}' : code, 'expiry': expiry,
       'cost': cost == cost.roundToDouble() ? cost.toInt() : cost, 'received': today()});
+  }
+
+  /// Step 7: the next number for a document of this [kind] (R, PF, GRN, PO, TR, SC, RT) at [branchId], counted in
+  /// this same transaction, so the count is saved with the document (core/rules/doc_numbers.dart).
+  Future<String> number(String kind, {String branchId = mainBranch}) async {
+    final till = (await SyncConfig.load(_store.db)).till;
+    if (till == null || till <= 0) return legacyNumber(kind);
+    final id = counterId(till);
+    final cur = _puts['counters|$id']?.rec ?? (await _store.rows('counters')).where((c) => c['id'] == id).firstOrNull ?? {'id': id, 'till': till};
+    final n = ((cur[kind] as num?) ?? 0).toInt() + 1;
+    put('counters', {...cur, kind: n});
+    final branch = _puts['branches|$branchId']?.rec ?? (await _store.rows('branches')).where((b) => b['id'] == branchId).firstOrNull;
+    return formatNumber(kind, branchCode(branch), till, n);
   }
 
   /// Change the pharmacy's shared settings.

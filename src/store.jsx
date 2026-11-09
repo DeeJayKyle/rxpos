@@ -6,7 +6,8 @@ import { featureSet, permissionsOf } from './access.js';
 import { platformName } from './platform.js';
 import { endWebSession, isLeaving, keepsData } from './webpolicy.js';
 import { connectLive, disconnectLive, onLive } from './live.js';
-import { DEFAULT_CLOUD } from './cloud.js';
+import { DEFAULT_CLOUD, tillNumber } from './cloud.js';
+import { nextNumber } from './docnumbers.js';
 import { setUnsent } from './update.js';
 import { formatMoney } from './money.js';
 import { pharmacyDefaults, overrideKey, readOverrides, writeOverrides, editOverrides, settingsEqual, PHARMACY_FIELDS } from './pharmacy-settings.js';
@@ -23,6 +24,7 @@ export const TABLES = [
   'batches', 'branches', 'transfers', 'audit', 'purchaseOrders', 'roles', 'messages', 'shifts', 'license', 'events', 'tempLogs', 'catalogHidden', 'quizResults',
   'stockCounts', 'countItems', 'supplierReturns', 'chatMarks', 'chatPins', 'chatReads', 'drafts',
   'anomalies', // sale checks written by the cloud (worker/anomalies.js); only roles with the audit log receive them
+  'counters', // step 7: each till's document counts (src/docnumbers.js), saved with the documents they number
 ];
 // What is persisted on the device, one IndexedDB key per part
 const PARTS = [...TABLES, 'settings', '_tomb'];
@@ -594,7 +596,7 @@ export function StoreProvider({ children }) {
       setPending(0);
     }
     // a new link (another pharmacy, another cloud, or device-only data joining one) sends everything it holds once
-    const next = { ...cur, url, key: token, account, tenant, slug, pharmacy, ...(other || cur.url !== url ? { cursor: 0, pushedAt: '', lastSync: '', outboxV2: false } : {}) };
+    const next = { ...cur, url, key: token, account, tenant, slug, pharmacy, ...(other || cur.url !== url ? { cursor: 0, pushedAt: '', lastSync: '', outboxV2: false, till: undefined } : {}) };
     await saveSyncCfg(next);
     return other || !cur.lastSync;
   }, [saveSyncCfg, persist, setState]);
@@ -650,6 +652,17 @@ export function StoreProvider({ children }) {
   }, [effectiveSettings]);
 
   const branch = db?.branches.find((b) => b.id === branchId) || db?.branches[0];
+  // step 7: document numbers (src/docnumbers.js). Called inside update(): the count is saved with the document.
+  const numberFor = useCallback((d, kind) => nextNumber(d, put, kind, { till: cfgRef.current?.till, branch: d.branches?.find((b) => b.id === branchId) || branch }), [branchId, branch]);
+  // a till number from the cloud once this device is signed in to one (the same device always gets the same number)
+  useEffect(() => {
+    if (!user || !syncCfg?.url || !syncCfg?.key || syncCfg?.till) return;
+    let gone = false;
+    const ask = () => tillNumber(syncCfg).then((r) => { if (!gone && r?.till > 0 && cfgRef.current?.key === syncCfg.key) saveSyncCfg({ ...cfgRef.current, till: r.till }); }).catch(() => {});
+    ask();
+    const again = setInterval(ask, 60000); // offline or an older cloud: keep the old-style numbers and ask again later
+    return () => { gone = true; clearInterval(again); };
+  }, [user, syncCfg?.url, syncCfg?.key, syncCfg?.till, syncCfg?.deviceId]); // eslint-disable-line react-hooks/exhaustive-deps
   const features = useMemo(() => (db ? featureSet(db) : {}), [db?.license, db?.settings]); // eslint-disable-line react-hooks/exhaustive-deps
   const perms = useMemo(() => (db && user ? permissionsOf(db, user.role) : new Set()), [db?.roles, user]); // eslint-disable-line react-hooks/exhaustive-deps
   const can = useCallback((p) => perms.has(p), [perms]);
@@ -666,7 +679,7 @@ export function StoreProvider({ children }) {
 
   return (
     <Ctx.Provider value={{ db: viewDb, sharedSettings: db.settings, pharmacyOverrides, resetPharmacyOverrides, update, pending, storageIssue, upsert, remove, saveSettings, user, setUser, fmt, products, stockIndex, batchesOf,
-      branchId, branch, setBranchId, syncCfg, saveSyncCfg, syncStatus, syncNow, pullAll, linkPharmacy, features, can, day }}>
+      branchId, branch, setBranchId, numberFor, syncCfg, saveSyncCfg, syncStatus, syncNow, pullAll, linkPharmacy, features, can, day }}>
       {children}
     </Ctx.Provider>
   );

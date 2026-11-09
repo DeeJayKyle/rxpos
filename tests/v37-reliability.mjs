@@ -56,7 +56,7 @@ const sell = async (p, name) => {
   await p.evaluate(() => document.querySelector('.product')?.click()); await wait(300);
   await p.evaluate(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'F9', bubbles: true })));
   const ok = await until(p, () => /Sale complete/.test(document.querySelector('.modal')?.innerText || ''), 8000);
-  const number = ok ? await p.evaluate(() => document.querySelector('.modal .receipt')?.innerText.match(/\bR[A-Z0-9]{6,}\b/)?.[0] || null) : null;
+  const number = ok ? await p.evaluate(() => document.querySelector('.modal .receipt')?.innerText.match(/\bR-[A-Z0-9]+-\d{2,}-\d{6,}\b|\bR[A-Z0-9]{6,}\b/)?.[0] || null) : null;
   await p.keyboard.press('Escape'); await wait(300);
   return number;
 };
