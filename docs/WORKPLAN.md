@@ -194,4 +194,4 @@ Server-side steps (Worker, `worker/`) protect **both** apps at once. Client-side
   leave out the share. The website's list of app pages gains /insurers. Not done, waiting for the owner:
   pre-authorisation numbers, monthly claim batches with rejections, member card checks. unit-insurance 18, v66 15,
   unit-anomalies +5, unit-policy +1; Flutter insurance 18 + 2 new tests, 429 passed, analyze clean, parity snapshot
-  unchanged; lint 0; full JS suite and hub suites: RESULTS.
+  unchanged; lint 0; full JS suite 1,959 passed, 6 failed (the known 6); hub suites 330/330.
