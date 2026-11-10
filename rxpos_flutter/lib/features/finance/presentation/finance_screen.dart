@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/rules/day_close.dart';
 import '../../../core/data/pharmacy_providers.dart';
 import '../../../core/data/record_store.dart';
 import '../../../core/entities/purchase.dart';
@@ -14,7 +15,7 @@ import '../../auth/application/session_controller.dart';
 import '../../people/domain/balances.dart';
 import '../domain/ledger.dart';
 
-const _tables = ['sales', 'purchases', 'supplierReturns', 'expenses', 'expenseCategories', 'payments', 'loans', 'bankTx', 'banks', 'customers', 'suppliers'];
+const _tables = ['sales', 'purchases', 'supplierReturns', 'expenses', 'expenseCategories', 'payments', 'loans', 'bankTx', 'banks', 'customers', 'suppliers', 'dayCloses'];
 const payMethods = ['Cash', 'Mobile Money', 'Bank Transfer', 'Cheque', 'Card'];
 const financeTabs = [
   ('accounts', 'Banks'), ('cashbook', 'Cash Book'), ('expenses', 'Expenses'), ('categories', 'Expense Categories'), ('banking', 'Deposits & Withdrawals'), ('loans', 'Loans'),
@@ -200,9 +201,11 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
             subtitle: Text('${e['date']}${'${e['payee'] ?? ''}'.isEmpty ? '' : ' · to ${e['payee']}'} · from ${bankName(e['bankId'])}${e['method'] == null ? '' : ' · ${e['method']}'}'),
             trailing: Row(mainAxisSize: MainAxisSize.min, children: [
               Text(st.money((e['amount'] as num?) ?? 0)),
-              IconButton(tooltip: 'Delete', icon: const Icon(Icons.delete_outline), onPressed: () => _delete('expenses', e, 'expense')),
+              // step 18: a closed day's expense can't be changed or deleted (the cloud refuses it too)
+              if (inClosedDay(e, closedSet(data['dayCloses']!))) const Padding(padding: EdgeInsets.only(left: 8), child: Text('Day closed'))
+              else IconButton(tooltip: 'Delete', icon: const Icon(Icons.delete_outline), onPressed: () => _delete('expenses', e, 'expense')),
             ]),
-            onTap: () => edit(e),
+            onTap: inClosedDay(e, closedSet(data['dayCloses']!)) ? null : () => edit(e),
           ),
       ], 'No expenses this month')),
     ]);
@@ -255,9 +258,10 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
             subtitle: Text('${x['date']}${'${x['ref'] ?? ''}'.isEmpty ? '' : ' · ref ${x['ref']}'}${'${x['note'] ?? ''}'.isEmpty ? '' : ' · ${x['note']}'}'),
             trailing: Row(mainAxisSize: MainAxisSize.min, children: [
               Text(st.money((x['amount'] as num?) ?? 0)),
-              IconButton(tooltip: 'Delete', icon: const Icon(Icons.delete_outline), onPressed: () => _delete('bankTx', x, 'transaction')),
+              if (inClosedDay(x, closedSet(data['dayCloses']!))) const Padding(padding: EdgeInsets.only(left: 8), child: Text('Day closed'))
+              else IconButton(tooltip: 'Delete', icon: const Icon(Icons.delete_outline), onPressed: () => _delete('bankTx', x, 'transaction')),
             ]),
-            onTap: () => edit(x),
+            onTap: inClosedDay(x, closedSet(data['dayCloses']!)) ? null : () => edit(x),
           ),
       ], 'Nothing here yet')),
     ]);

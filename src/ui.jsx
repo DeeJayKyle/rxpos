@@ -95,7 +95,7 @@ export function Empty({ children = 'Nothing here yet', colSpan, action, icon: Ic
 }
 
 /** Generic searchable list + add/edit/delete for a db table. */
-export function CrudPage({ title, subtitle, singular, table, fields, columns, blank = {}, extraActions, rowClass, rows: rowsProp, onSave, headExtra, canDelete = true, filter, readOnly = false }) {
+export function CrudPage({ title, subtitle, singular, table, fields, columns, blank = {}, extraActions, rowClass, rows: rowsProp, onSave, headExtra, canDelete = true, filter, readOnly = false, rowLocked }) {
   const { db, upsert, remove } = useStore();
   const location = useLocation();
   const [q, setQ] = useState(location.state?.q || '');
@@ -133,8 +133,9 @@ export function CrudPage({ title, subtitle, singular, table, fields, columns, bl
                 {columns.map((c) => <td key={c.label} className={c.num ? 'num' : ''}>{c.render ? c.render(r) : r[c.key]}</td>)}
                 <td className="actions">
                   {extraActions?.(r)}
-                  {!readOnly && <button className="btn sm ghost" onClick={() => setEditing(r)}><Pencil size={14} />Edit</button>}
-                  {canDelete && !readOnly && <button className="btn sm danger" title="Delete" onClick={() => del(r)}><Trash2 size={14} /></button>}
+                  {!readOnly && rowLocked?.(r) && <span className="muted" title="This day is closed: it can't be changed">Day closed</span>}
+                  {!readOnly && !rowLocked?.(r) && <button className="btn sm ghost" onClick={() => setEditing(r)}><Pencil size={14} />Edit</button>}
+                  {canDelete && !readOnly && !rowLocked?.(r) && <button className="btn sm danger" title="Delete" onClick={() => del(r)}><Trash2 size={14} /></button>}
                 </td>
               </tr>
             ))}

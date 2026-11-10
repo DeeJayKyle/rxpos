@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { closedSet, inClosedDay } from '../dayclose.js';
 import { useLocation } from 'react-router-dom';
 import { Download, Printer, Undo2, Eye, Pencil, Trash2, Plus, History, FileText } from 'lucide-react';
 import { useStore, dayOf, downloadFile, toCSV, put, move, now, audit, allocate, MAIN_BRANCH, DEFAULT_PAYMENT_METHODS } from '../store.jsx';
@@ -121,6 +122,9 @@ const STATUSES = [['', 'All statuses'], ['completed', 'Completed'], ['refunded',
 
 export default function Sales() {
   const { db, update, fmt, user, branchId, can } = useStore();
+  // step 18: a closed day's sales can't be edited (a refund still can, and the owner is told)
+  const closed = useMemo(() => closedSet(db.dayCloses), [db.dayCloses]);
+  const locked = (s) => inClosedDay(s, closed, dayOf);
   const location = useLocation();
   const [q, setQ] = useState(location.state?.q || '');
   const [from, setFrom] = useState(location.state?.from || '');
@@ -213,7 +217,7 @@ export default function Sales() {
                   <button className="btn sm ghost" onClick={() => setView(s)}><Eye size={14} />View</button>
                   <button className="btn sm ghost act-print" onClick={() => printSale(s, 'receipt')} title="Print the till receipt"><Printer size={14} />Receipt</button>
                   <button className="btn sm ghost act-invoice" onClick={() => printSale(s, 'invoice')} title="Print a full-page invoice"><FileText size={14} />Invoice</button>
-                  {s.status !== 'refunded' && can('sales.edit') && <button className="btn sm ghost act-edit" onClick={() => setEditing(s)}><Pencil size={14} />Edit</button>}
+                  {s.status !== 'refunded' && can('sales.edit') && !locked(s) && <button className="btn sm ghost act-edit" onClick={() => setEditing(s)}><Pencil size={14} />Edit</button>}
                 </div></td>
               </tr>
             ))}
@@ -231,7 +235,7 @@ export default function Sales() {
           <Receipt sale={view} />
           <EditHistory sale={view} />
           <div className="form-actions no-print">
-            {view.status !== 'refunded' && can('sales.edit') && <button className="btn ghost" onClick={() => { setEditing(view); setView(null); }}><Pencil size={16} />Edit sale</button>}
+            {view.status !== 'refunded' && can('sales.edit') && !locked(view) && <button className="btn ghost" onClick={() => { setEditing(view); setView(null); }}><Pencil size={16} />Edit sale</button>}
             {view.imported && <small className="muted">Copied from {view.imported}</small>}
             {view.status !== 'refunded' && !view.imported && user.role !== 'cashier' && can('sales.refund') && <button className="btn danger" onClick={() => refund(view)}><Undo2 size={16} />Refund</button>}
             <ReceiptPdfButton sale={view} />

@@ -353,6 +353,28 @@ void main() {
     await done(tester);
   });
 
+  testWidgets('close the day (step 18): an admin closes today on Shifts; the close is saved with its totals and audited; Reopen is offered', (tester) async {
+    await tester.runAsync(signedIn);
+    final day = today();
+    await tester.runAsync(() => RecordStore(db).update((d) => d.put('sales', {'id': 's-today', 'number': 'R-T1', 'date': day, 'branchId': 'main', 'type': 'retail',
+          'items': [{'id': 'p1', 'name': 'Calmex 500mg Tabs', 'qty': 1, 'price': 500}], 'subtotal': 500, 'discount': 0, 'tax': 0, 'total': 500, 'paid': 500,
+          'payment': 'Cash', 'customerId': 'walk-in', 'customerName': 'Walk-in Customer', 'status': 'completed'})));
+    await start(tester);
+    await navTo(tester, 'Shifts & Cash-up');
+    expect(find.byKey(const Key('day-close')), findsOneWidget);
+    final row = find.ancestor(of: find.text('$day · today'), matching: find.byType(ListTile));
+    await tester.tap(find.descendant(of: row, matching: find.text('Close')));
+    await settle(tester);
+    await tester.tap(find.widgetWithText(FilledButton, 'Close the day'));
+    await settle(tester);
+    expect(find.descendant(of: find.ancestor(of: find.text('$day · today'), matching: find.byType(ListTile)), matching: find.textContaining('Closed by Tia Admin')), findsOneWidget);
+    final c = (await tester.runAsync(() => RecordStore(db).get('dayCloses', 'main:$day')))!;
+    expect((c['closedBy'], (c['snapshot'] as Map)['sales'], (c['snapshot'] as Map)['total']), ('Tia Admin', 1, 500));
+    expect((await tester.runAsync(() => RecordStore(db).rows('audit')))!.any((a) => a['action'] == 'Day closed'), isTrue);
+    expect(find.text('Reopen'), findsWidgets, reason: 'an admin can reopen');
+    await done(tester);
+  });
+
   testWidgets('inventory: count a batch; customers: add a client', (tester) async {
     await tester.runAsync(signedIn);
     await start(tester);

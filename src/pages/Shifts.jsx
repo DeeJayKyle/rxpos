@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
-import { Clock, PlayCircle, StopCircle, Printer, Coins } from 'lucide-react';
-import { useStore, uid, now, put, audit, MAIN_BRANCH } from '../store.jsx';
+import { Clock, PlayCircle, StopCircle, Printer, Coins, Lock, LockOpen } from 'lucide-react';
+import { useStore, uid, now, put, audit, MAIN_BRANCH, today, dayOf } from '../store.jsx';
+import { closeId, daySnapshot } from '../dayclose.js';
 import { Modal, Stat, Empty, Tabs } from '../ui.jsx';
-import { toast, ask } from '../feedback.jsx';
+import { toast, ask, askText } from '../feedback.jsx';
 
 const NOTES = [50000, 20000, 10000, 5000, 2000, 1000, 500, 200, 100, 50];
 
@@ -78,6 +79,7 @@ export default function Shifts() {
           </tbody></table></div>
         </>
       )}
+      {(can('day.close') || user.role === 'admin') && <DayClose />}
       {can('shifts.all') && <Tabs tabs={[['mine', 'My shifts'], ['all', 'All staff']]} value={tab} onChange={setTab} />}
       <div className="card table-wrap">
         <table>
@@ -154,6 +156,55 @@ export default function Shifts() {
           <div className="form-actions no-print"><button className="btn primary" onClick={() => window.print()}><Printer size={16} />Print</button></div>
         </Modal>
       )}
+    </div>
+  );
+}
+
+// Step 18 (src/dayclose.js): close a day for this branch. After that its sales, expenses, payments and stock can't be
+// changed or deleted from any device (the cloud refuses it); a refund, or something recorded late, is flagged in
+// "Sales to check". The close keeps the day's totals as they were. Reopening needs an administrator and a reason.
+function DayClose() {
+  const { db, update, user, fmt, branchId } = useStore();
+  const days = Array.from({ length: 7 }, (_, i) => { const d = new Date(); d.setDate(d.getDate() - i); return dayOf(d.toISOString()); });
+  const closes = new Map((db.dayCloses || []).filter((c) => (c.branchId || MAIN_BRANCH) === branchId).map((c) => [c.day, c]));
+  const close = async (day) => {
+    const snap = daySnapshot(db, branchId, day, dayOf);
+    if (!(await ask({ title: `Close ${day}?`, message: `${snap.sales} sale${snap.sales === 1 ? '' : 's'}, ${fmt(snap.total)}${snap.expenses ? `, expenses ${fmt(snap.expenses)}` : ''}. After closing, this day's sales, expenses, payments and stock can't be changed on any device. Anything recorded for it later is shown to the owner.`, confirmText: 'Close the day' }))) return;
+    await update((d) => {
+      put(d, 'dayCloses', { id: closeId(branchId, day), branchId, day, open: false, closedBy: user.name, closedAt: now(), snapshot: snap });
+      audit(d, user, 'Day closed', `${day}: ${snap.sales} sales, ${fmt(snap.total)}`, branchId);
+    });
+    toast(`${day} is closed`);
+  };
+  const reopen = async (c) => {
+    const reason = await askText({ title: `Reopen ${c.day}?`, message: 'Its records can be changed again until it is closed once more. Why reopen it? This is written to the audit log.', confirmText: 'Reopen', minLength: 3 });
+    if (!reason) return;
+    await update((d) => {
+      put(d, 'dayCloses', { ...c, open: true, reopenedBy: user.name, reopenedAt: now(), reason });
+      audit(d, user, 'Day reopened', `${c.day}: ${reason}`, branchId);
+    });
+    toast(`${c.day} is open again`);
+  };
+  return (
+    <div className="card day-close" aria-label="Close the day">
+      <h3><Lock size={17} />Close the day</h3>
+      <small className="muted">A closed day's sales, expenses, payments and stock can't be changed any more. Refunds and anything recorded late are shown in "Sales to check".</small>
+      <table className="compact"><tbody>
+        {days.map((day) => {
+          const c = closes.get(day), shut = c && !c.open;
+          return (
+            <tr key={day} className={shut ? 'closed-day' : ''}>
+              <td><strong>{day}</strong>{day === today() && <small className="muted"> · today</small>}</td>
+              <td>{shut ? <><span className="badge ok"><Lock size={12} /> Closed</span> <small className="muted">by {c.closedBy} · {String(c.closedAt).slice(11, 16)}</small></> : c?.open ? <small className="muted">Reopened by {c.reopenedBy}: {c.reason}</small> : <small className="muted">Open</small>}</td>
+              <td className="num">{shut && c.snapshot ? <small>{c.snapshot.sales} sales · {fmt(c.snapshot.total)}</small> : ''}</td>
+              <td className="actions">
+                {!shut && <button className="btn sm" onClick={() => close(day)}><Lock size={14} />Close</button>}
+                {shut && user.role === 'admin' && <button className="btn sm ghost" onClick={() => reopen(c)}><LockOpen size={14} />Reopen</button>}
+              </td>
+            </tr>
+          );
+        })}
+      </tbody></table>
     </div>
   );
 }

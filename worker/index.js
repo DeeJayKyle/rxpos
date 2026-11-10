@@ -35,6 +35,9 @@ import { saleFindings, fingerprint } from './anomalies.js';
 import { verify as verifyPassword, hashNew, upgrade as upgradeHash } from './passwords.js';
 import { waitFor, afterFail, waitText } from './throttle.js';
 import { FIELD_TABLES, mergeFields, clampFields, sameRecord } from '../src/fieldmerge.js';
+import { LOCKED_TABLES, DOCUMENT_MOVES, closedSet, inClosedDay, recordDay } from '../src/dayclose.js';
+import { isRefundOnly } from './policy.js';
+import { localDay } from './dailystock.js';
 // The built-in roles (cashier, dispenser, pharmacist, manager) live only in the app; they aren't stored as records.
 // The server needs their permissions too, so a permission check doesn't wrongly refuse a built-in role (1.1/1.9).
 const DEFAULT_ROLE_PERMS = Object.fromEntries(DEFAULT_ROLES.map((r) => [r.id, new Set(r.permissions)]));
@@ -617,6 +620,22 @@ async function sync(env, body, who, ctx) {
       for (const r of results || []) { try { stored.set(r.k, { rec: JSON.parse(r.rec), at: r.at }); } catch { /* unreadable: replaced */ } }
     }
   }
+  // step 18 (src/dayclose.js): this pharmacy's closed days, and the stored copies of the records a push changes in them
+  let closed = null;
+  const lockedOld = new Map();
+  const dayFlags = []; // records kept but flagged: new in a closed day, or a refund of a closed day's sale
+  if (!who.viaKey && changes.some((c) => c && LOCKED_TABLES.has(c.t))) {
+    const { results } = await db.prepare("SELECT rec FROM records WHERE tenant = ?1 AND t = 'dayCloses' AND deleted = 0").bind(tenant).all();
+    const set = closedSet((results || []).map((r) => { try { return JSON.parse(r.rec); } catch { return null; } }));
+    if (set.size) {
+      closed = set;
+      const keys = [...new Set(changes.filter((c) => c && LOCKED_TABLES.has(c.t) && c.t !== 'movements' && c.id != null).map((c) => c.t + '|' + c.id))];
+      if (keys.length) {
+        const { results: olds } = await db.prepare('SELECT k, rec FROM records WHERE tenant = ?1 AND deleted = 0 AND k IN (SELECT value FROM json_each(?2))').bind(tenant, JSON.stringify(keys)).all();
+        for (const r of olds || []) { try { lockedOld.set(r.k, JSON.parse(r.rec)); } catch { /* unreadable */ } }
+      }
+    }
+  }
   const upsertMerged = db.prepare(
     `INSERT INTO records (tenant, k, t, id, rec, deleted, at, origin, seq) VALUES (?1, ?2, ?3, ?4, ?5, 0, ?6, ?7, (SELECT COALESCE(MAX(seq), 0) + 1 FROM records))
      ON CONFLICT(tenant, k) DO UPDATE SET rec = excluded.rec, deleted = 0, at = excluded.at, origin = excluded.origin, seq = excluded.seq`);
@@ -663,6 +682,21 @@ async function sync(env, body, who, ctx) {
       if (tenantCount >= MAX_TENANT_RECORDS && !countExact) { tenantCount = await recordCount(db, tenant, { exact: true }) + tenantAdded; countExact = true; }
       if (tenantCount >= MAX_TENANT_RECORDS) { refuse(ch); continue; }
       tenantCount++; tenantAdded++;
+    }
+    // step 18: a closed day's records can't be changed or deleted; a refund of its sale, or something new dated in it
+    // (a till that sold offline and reconnects later), is kept and flagged for the owner
+    if (closed && LOCKED_TABLES.has(ch.t)) {
+      const old = lockedOld.get(ch.t + '|' + id);
+      const bare = (r) => { const { updatedAt: _u, _f, ...x } = r || {}; return x; };
+      if (old && inClosedDay(old, closed, localDay)) {
+        const same = !ch.deleted && rec && sameRecord(bare(old), bare({ ...rec, id: old.id ?? rec.id }));
+        const refund = ch.t === 'sales' && !ch.deleted && rec && isRefundOnly(old, rec);
+        if (!same && !refund) { refuse(ch); continue; }
+        if (refund) dayFlags.push({ t: ch.t, id, rec, kind: 'closed-refund' });
+      } else if (!ch.deleted && rec && inClosedDay(rec, closed, localDay)) {
+        if (old) { refuse(ch); continue; } // an open day's record moved back into a closed day
+        if (!(ch.t === 'movements' && DOCUMENT_MOVES.has(rec.type))) dayFlags.push({ t: ch.t, id, rec, kind: 'late' });
+      }
     }
     const k = ch.t + '|' + id;
     // 1.3 clamp a device's clock to server time plus a little skew. A wrong or deliberately future-dated clock can
@@ -727,6 +761,19 @@ async function sync(env, body, who, ctx) {
         ledger.add(stmts.length - 1); // not one of the device's own changes
       });
     }
+  }
+  // step 18: the closed-day findings, next to the records, for whoever may read the audit log (as the sale checks)
+  const LABEL = { sales: 'Sale', expenses: 'Expense', payments: 'Payment', bankTx: 'Bank transaction', purchases: 'Delivery', supplierReturns: 'Return to supplier', movements: 'Stock change' };
+  for (const f of dayFlags) {
+    const r = f.rec, day = recordDay(r, localDay);
+    const what = `${LABEL[f.t] || f.t}${r.number ? ' ' + r.number : ''}${f.t === 'movements' && r.type ? ` (${r.type})` : ''}`;
+    const detail = f.kind === 'late' ? `${what} dated ${day} was recorded after that day was closed` : `${what} from ${day}, a closed day, was refunded`;
+    const aid = `${f.t}:${f.id}~${f.kind}`;
+    const rec = { id: aid, saleId: f.id, saleNumber: r.number || LABEL[f.t] || f.t, saleDate: r.date || '', branchId: r.branchId || '', table: f.t,
+      cashier: r.cashier || r.by || r.user || r.receivedBy || r.createdBy || '', pushedBy: who.name || '', kind: f.kind, detail,
+      amount: Math.abs(Number(r.total ?? r.amount ?? 0)) || 0, reviewed: false, createdAt: nowIso, updatedAt: nowIso };
+    stmts.push(insertOnly.bind(tenant, 'anomalies|' + aid, 'anomalies', aid, JSON.stringify(rec), nowIso, 'server'));
+    ledger.add(stmts.length - 1);
   }
   // step 15: this push's new rows go into the cached count with the records (an update counted as new is corrected at
   // the next hourly count; it can only make the count high, and a high count is re-counted before refusing)

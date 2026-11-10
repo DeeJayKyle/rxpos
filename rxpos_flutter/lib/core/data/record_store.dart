@@ -22,6 +22,7 @@ const syncedTables = [
   'batches', 'branches', 'transfers', 'audit', 'purchaseOrders', 'roles', 'messages', 'shifts', 'license', 'events',
   'tempLogs', 'catalogHidden', 'quizResults', 'stockCounts', 'countItems', 'supplierReturns', 'chatMarks', 'chatPins',
   'chatReads', 'drafts',
+  'dayCloses', // step 18: closed days per branch (core/rules/day_close.dart)
   'counters', // step 7: each till's document counts (core/rules/doc_numbers.dart), saved with the documents
   'anomalies', // sale checks written by the cloud (worker/anomalies.js); only roles with the audit log receive them
   // only this app (Payroll & HR, scheduled report emails); the React app skips tables it does not know

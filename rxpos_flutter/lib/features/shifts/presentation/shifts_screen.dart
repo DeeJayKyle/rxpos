@@ -14,6 +14,7 @@ import '../../../core/entities/shift.dart';
 import '../../../core/presentation/widgets.dart';
 import '../../auth/application/session_controller.dart';
 import '../domain/shifts.dart';
+import 'day_close_card.dart';
 
 /// Shifts & cash-up: open a shift with a float, see it live, close it by counting the drawer; past shifts.
 class ShiftsScreen extends ConsumerWidget {
@@ -55,6 +56,7 @@ class ShiftsScreen extends ConsumerWidget {
           ]),
           const SizedBox(height: 16),
         ],
+        if (can.contains('day.close') || session.role == 'admin') ...[const DayCloseCard(), const SizedBox(height: 16)],
         Text('Shifts', style: Theme.of(context).textTheme.titleMedium),
         if (shifts.isEmpty) const Text('No shifts yet.'),
         for (final x in shifts)

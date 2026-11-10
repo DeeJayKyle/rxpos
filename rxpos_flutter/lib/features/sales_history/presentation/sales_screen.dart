@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:printing/printing.dart';
 
+import '../../../core/rules/day_close.dart';
 import '../../../core/data/device_settings.dart';
 import '../../../core/data/pharmacy_providers.dart';
 import '../../../core/data/record_store.dart';
@@ -46,6 +47,7 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
   @override
   Widget build(BuildContext context) {
     final rows = ref.watch(tableProvider('sales')).value;
+    ref.watch(tableProvider('dayCloses')); // step 18: Edit goes away when the day is closed
     final st = ref.watch(settingsProvider).value ?? const PharmacySettings();
     final branches = ref.watch(tableProvider('branches')).value ?? const [];
     final session = ref.watch(sessionControllerProvider).value;
@@ -198,7 +200,7 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
                               const PopupMenuItem(value: 'view', child: Text('View')),
                               const PopupMenuItem(value: 'receipt', child: Text('Print receipt')),
                               const PopupMenuItem(value: 'invoice', child: Text('Invoice (A4)')),
-                              if (!refunded && _can('sales.edit')) const PopupMenuItem(value: 'edit', child: Text('Edit')),
+                              if (!refunded && _can('sales.edit') && !_locked(s)) const PopupMenuItem(value: 'edit', child: Text('Edit')),
                             ],
                           ),
                         ]),
@@ -213,6 +215,8 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
   }
 
   bool _can(String p) => (ref.read(permissionsProvider).value ?? const <String>{}).contains(p);
+  /// step 18: a closed day's sale can't be edited (a refund still can, and the owner is told)
+  bool _locked(Sale s) => inClosedDay(s.raw, closedSet(ref.read(tableProvider('dayCloses')).value ?? const []));
 
   Future<void> _invoice(Sale s, PharmacySettings st) async {
     final c = (await ref.read(pharmacyProvider.future)).customers.where((x) => x.id == s.customerId).firstOrNull;
@@ -251,7 +255,7 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
           ])),
         ),
         actions: [
-          if (s.status != 'refunded' && _can('sales.edit'))
+          if (s.status != 'refunded' && _can('sales.edit') && !_locked(s))
             TextButton.icon(onPressed: () {
               Navigator.pop(c);
               _edit(s, st);

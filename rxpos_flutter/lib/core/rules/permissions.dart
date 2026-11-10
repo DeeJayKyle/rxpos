@@ -5,7 +5,7 @@ const allPermissions = [
   'pos.sell', 'pos.wholesale', 'pos.discount', 'pos.price_edit', 'sales.view', 'sales.refund', 'sales.edit', 'proformas',
   'shifts', 'shifts.all', 'prescriptions', 'customers', 'suppliers', 'reminders', 'chat', 'inventory.view',
   'medicines.manage', 'stock.receive', 'purchases.edit', 'inventory.edit', 'stock.count', 'stock.adjust', 'transfers',
-  'finance', 'payroll', 'reports', 'reports.lines', 'branches.view', 'audit', 'users.manage', 'settings.manage', 'data.reset',
+  'finance', 'payroll', 'reports', 'reports.lines', 'branches.view', 'audit', 'day.close', 'users.manage', 'settings.manage', 'data.reset',
 ];
 
 const _t0 = '2000-01-01T00:00:00.000Z';

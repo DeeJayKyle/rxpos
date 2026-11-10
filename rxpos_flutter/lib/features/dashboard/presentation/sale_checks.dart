@@ -16,6 +16,8 @@ const saleCheckKinds = {
   'paid': 'Paid more than the total',
   'invalid': 'Invalid amounts',
   'credit': 'Over credit limit',
+  'late': 'Recorded after the day was closed',
+  'closed-refund': 'Refund from a closed day',
 };
 
 class SaleChecksCard extends ConsumerWidget {

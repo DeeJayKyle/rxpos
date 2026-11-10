@@ -187,7 +187,7 @@ export default function Dashboard() {
 
 // Step 3: what the cloud found when it re-checked a sale (worker/anomalies.js). Only roles with the audit log receive
 // these records; the sale itself was kept as it was sold. "Checked" keeps the finding, marked, in the audit trail.
-const CHECK_KINDS = { totals: 'Totals don’t add up', discount: 'Discount without permission', price: 'Sold below price', paid: 'Paid more than the total', invalid: 'Invalid amounts', credit: 'Over credit limit' };
+const CHECK_KINDS = { totals: 'Totals don’t add up', discount: 'Discount without permission', price: 'Sold below price', paid: 'Paid more than the total', invalid: 'Invalid amounts', credit: 'Over credit limit', late: 'Recorded after the day was closed', 'closed-refund': 'Refund from a closed day' };
 function SaleChecks() {
   const { db, fmt, user, update, branchId } = useStore();
   const open = (db.anomalies || []).filter((a) => !a.reviewed).sort((a, b) => String(b.saleDate).localeCompare(String(a.saleDate)));

@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
+import { closedSet, inClosedDay } from '../dayclose.js';
 import { CrudPage, Modal, RecordForm } from '../ui.jsx';
 import { useStore, today, dayOf, uid, put, customerBalance, supplierBalance, downloadFile, toCSV } from '../store.jsx';
 import { CASH, ledger, accountBalances, loanBalance } from '../finance.js';
@@ -6,14 +7,18 @@ import { CASH, ledger, accountBalances, loanBalance } from '../finance.js';
 const METHODS = ['Cash', 'Mobile Money', 'Bank Transfer', 'Cheque', 'Card'];
 const bankOptions = (db) => db.banks.map((b) => ({ value: b.id, label: b.name }));
 
+/** step 18: rows of a closed day can't be changed or deleted (the cloud refuses it too) */
+const useDayLock = (db) => { const closed = useMemo(() => closedSet(db.dayCloses), [db.dayCloses]); return (r) => inClosedDay(r, closed, dayOf); };
+
 export function Expenses() {
   const { db, fmt, user } = useStore();
+  const rowLocked = useDayLock(db);
   const [month, setMonth] = useState(today().slice(0, 7));
   const inMonth = (e) => !month || String(e.date).startsWith(month);
   const total = db.expenses.filter(inMonth).reduce((a, e) => a + e.amount, 0);
   return (
     <CrudPage
-      title="Expenses" table="expenses" filter={inMonth}
+      title="Expenses" table="expenses" filter={inMonth} rowLocked={rowLocked}
       headExtra={<><input type="month" value={month} onChange={(e) => setMonth(e.target.value)} /><span className="muted">Total {fmt(total)}</span></>}
       blank={{ date: today(), bankId: CASH, method: 'Cash', recordedBy: user.name }}
       fields={[
@@ -71,10 +76,11 @@ export function Banks() {
 
 export function BankTx() {
   const { db, fmt, user } = useStore();
+  const rowLocked = useDayLock(db);
   const name = (id) => db.banks.find((b) => b.id === id)?.name || '—';
   return (
     <CrudPage
-      title="Deposits & Withdrawals" singular="Transaction" table="bankTx"
+      title="Deposits & Withdrawals" singular="Transaction" table="bankTx" rowLocked={rowLocked}
       blank={{ date: today(), type: 'Deposit', by: user.name }}
       fields={[
         { key: 'date', label: 'Date', type: 'date', required: true },

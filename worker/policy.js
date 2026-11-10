@@ -87,6 +87,11 @@ export async function decide(ch, old, role, can) {
     if (unchanged(old, rec) && (await anyOf(can, SELL))) return { ok: true };
     return { ok: false, need: isRefundOnly(old, rec) ? 'sales.refund' : 'sales.edit' };
   }
+  if (t === 'dayCloses') {
+    // step 18: closing a day needs "Close the day"; reopening one (or removing a close) needs an administrator
+    if (deleted || rec?.open === true) return role === 'admin' ? { ok: true } : { ok: false, need: 'admin' };
+    return (await can('day.close')) ? { ok: true } : { ok: false, need: 'day.close' };
+  }
   if (t === 'purchases') {
     const perms = deleted || old ? ['purchases.edit'] : ['stock.receive'];
     return (await anyOf(can, perms)) ? { ok: true } : { ok: false, need: perms.join('|') };

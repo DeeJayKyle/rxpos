@@ -26,6 +26,7 @@ export const TABLES = [
   'batches', 'branches', 'transfers', 'audit', 'purchaseOrders', 'roles', 'messages', 'shifts', 'license', 'events', 'tempLogs', 'catalogHidden', 'quizResults',
   'stockCounts', 'countItems', 'supplierReturns', 'chatMarks', 'chatPins', 'chatReads', 'drafts',
   'anomalies', // sale checks written by the cloud (worker/anomalies.js); only roles with the audit log receive them
+  'dayCloses', // step 18: closed days per branch (src/dayclose.js)
   'counters', // step 7: each till's document counts (src/docnumbers.js), saved with the documents they number
 ];
 // What is persisted on the device, one IndexedDB key per part
