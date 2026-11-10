@@ -38,7 +38,7 @@ Server-side steps (Worker, `worker/`) protect **both** apps at once. Client-side
 | 13 | Incremental stock balances (no full rescan of movements per change) | 2.4 | ✅ |
 | 14 | Per-field merge for master data (products, customers, suppliers) | 2.5 | ✅ (batches too) |
 | 15 | Per-tenant sequence and record counters on the server | 2.6 | ✅ (record count only; sequence was already indexed) |
-| 16 | Hub: shared sync/permission core over SQLite, or retire (per step 0) | 1.4 | ⏳ |
+| 16 | Hub: shared sync/permission core over SQLite, or retire (per step 0) | 1.4 | ✅ (runs the cloud's own code) |
 | 17 | ESLint + Prettier; split `worker/index.js` into route modules; split `POS.jsx`; widen typecheck | 3 | ⏳ |
 
 ## Phase 4 — Product upgrades (month 3+)
@@ -57,7 +57,7 @@ Server-side steps (Worker, `worker/`) protect **both** apps at once. Client-side
 | # | Step | Status |
 |---|---|---|
 | 26 | Copy the features that exist only in the Flutter app into the React classic app (list them first, owner picks) | ⏳ |
-| 27 | Publish both apps: release build (Windows, Android, Hub) and deploy cloud + website, after the full suite passes in CI | ⏳ (confirm version and timing with the owner first) |
+| 27 | Publish both apps: release build (Windows, Android, Hub) and deploy cloud + website, after the full suite passes in CI | ⏳ (confirm version and timing with the owner first; a new Windows installer is needed for the hub from step 16) |
 
 ## Log
 (Each finished step adds a line here: date, step, commit, tests run, anything left open.)
@@ -140,3 +140,10 @@ Server-side steps (Worker, `worker/`) protect **both** apps at once. Client-side
   row, updated in the push's transaction, recounted hourly and always exactly before refusing. Deleting a pharmacy
   also removes its count and tills. v62 6 (concurrent pushes + a downloader: 1,000 records, none lost or doubled;
   cached count checked in the local DB); full JS suite 1,846 passed, 6 failed (the known 6).
+- 2026-11-10 · Step 16 · `b7652aa` + this commit · The hub runs worker/index.js itself on Node's SQLite
+  (server/d1-sqlite.js as D1); worker/main.js is the Cloudflare-only entry. hub.json moved once into hub.db (kept as a
+  backup); daily DB copies; RXPOS_OWNER_KEY / RXPOS_TRUST_PROXY; bundled into server/hub-core.mjs by npm run build;
+  Dockerfile on Node 22 shipping the bundle. Needs Node 22.13+; devices sign in to a hub again once; Windows
+  `--hub` PCs need the new installer (noted for step 27). RXPOS_TEST_HUB=1: 18 suites / 274 checks pass on the hub (in
+  CI too); hub-move 12; full JS suite on the Cloudflare cloud 1,858 passed, 6 failed (the known 6). Not checked here:
+  the Docker image build (no Docker in this environment).
