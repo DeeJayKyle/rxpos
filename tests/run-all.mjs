@@ -85,6 +85,7 @@ const SUITES = [
   ['accessibility (axe): sign-in and main pages, light and dark', 'v67-a11y.mjs', []],
   ['received by the box, sold by the unit', 'v68-packs.mjs', []],
   ['keyboard, mouse, selection and navigation', 'v69-controls.mjs', []],
+  ['from the Flutter app: report emails, shelves, payroll, till panels', 'v70-from-flutter.mjs', []],
   ['file uploads', 'v24-files.mjs', []],
   ['security headers', 'v25-headers.mjs', []],
   ['rate limits', 'v26-ratelimit.mjs', []],
