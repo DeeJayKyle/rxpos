@@ -332,6 +332,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             _field('safetyDays', 'Safety stock (extra days of sales)', number: true, hint: '7'),
           ]),
           _check('autoPrint', 'Print the receipt automatically after each sale', onByDefault: false),
+          _check('blindCashUp', 'Blind cash-up: staff count the cash before they see what the drawer should hold', onByDefault: false),
           _check('autoReorder', 'Set reorder levels automatically every week from sales'),
           _muted("Stock is always counted in single units. A medicine's packs are set in Medicine List → Packs; each line in Add Stock or at the till can still be switched between packs and units."),
           const SizedBox(height: 6),

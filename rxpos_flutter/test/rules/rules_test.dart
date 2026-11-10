@@ -63,6 +63,13 @@ void main() {
     expect(docNumber('R', now: DateTime.utc(2026, 11, 5)), matches(RegExp(r'^R[0-9A-Z]{7}$')));
   });
   group('permissions', () {
+    test('step 20: a role\'s discount limit; none set = no limit; admins never limited', () {
+      final roles = [Role.fromRecord({'id': 'cashier', 'permissions': ['pos.sell'], 'maxDiscount': 10}), Role.fromRecord({'id': 'stock', 'permissions': <String>[], 'maxDiscount': ''})];
+      expect(maxDiscountOf(roles, 'cashier'), 10);
+      expect(maxDiscountOf(roles, 'stock'), isNull);
+      expect(maxDiscountOf(roles, 'pharmacist'), isNull);
+      expect(maxDiscountOf([Role.fromRecord({'id': 'admin', 'maxDiscount': 1})], 'admin'), isNull);
+    });
     test('the administrator can do everything', () => expect(permissionsOf(const [], 'admin'), allPermissions.toSet()));
     test('the manager everything but settings and reset', () {
       final m = permissionsOf(const [], 'manager');

@@ -61,7 +61,8 @@ export default function Users() {
     if (!id) return toast('Give the role a name', 'warn');
     if (roleEdit._new && allRoles.some((r) => r.id === id)) return toast('A role with that name exists', 'error');
     update((d) => {
-      put(d, 'roles', { id, name: roleEdit.name.trim(), permissions: [...roleEdit.permissions] });
+      const max = roleEdit.maxDiscount === '' || roleEdit.maxDiscount == null ? null : Math.min(100, Math.max(0, Number(roleEdit.maxDiscount) || 0));
+      put(d, 'roles', { id, name: roleEdit.name.trim(), permissions: [...roleEdit.permissions], maxDiscount: max }); // step 20: discount ceiling
       audit(d, user, roleEdit._new ? 'Role created' : 'Role permissions changed', `${roleEdit.name}: ${roleEdit.permissions.length} permissions`, branchId);
     });
     toast('Role saved. It applies on every device after the next sync.');
@@ -118,7 +119,7 @@ export default function Users() {
           {allRoles.map((r) => (
             <div key={r.id} className="card branch-card">
               <div className="row between"><h3><ShieldCheck size={18} />{r.name}</h3>{r.builtIn && <span className="badge">built-in</span>}</div>
-              <p className="muted small">{r.id === 'admin' ? 'Everything, always.' : `${r.permissions.length} permissions`} · {db.users.filter((u) => u.role === r.id).length} user(s)</p>
+              <p className="muted small">{r.id === 'admin' ? 'Everything, always.' : `${r.permissions.length} permissions${r.maxDiscount != null && r.maxDiscount !== '' ? ` · discounts up to ${r.maxDiscount}%` : ''}`} · {db.users.filter((u) => u.role === r.id).length} user(s)</p>
               <div className="row gap">
                 {r.id !== 'admin' && <button className="btn sm ghost" onClick={() => setRoleEdit({ ...r, permissions: new Set(r.permissions) })}>Edit permissions</button>}
                 <button className="btn sm ghost" title="Copy as a new role" onClick={() => setRoleEdit({ _new: true, name: r.name + ' (copy)', permissions: new Set(r.permissions) })}><Copy size={14} /></button>
@@ -159,6 +160,7 @@ export default function Users() {
         <Modal title={roleEdit._new ? 'New role' : `Permissions – ${roleEdit.name}`} onClose={() => setRoleEdit(null)} wide>
           <form onSubmit={saveRole}>
             <label className="field"><span>Role name</span><input required value={roleEdit.name} disabled={!roleEdit._new && roleEdit.builtIn} onChange={(e) => setRoleEdit({ ...roleEdit, name: e.target.value })} placeholder="e.g. Store keeper" /></label>
+            <label className="field"><span>Largest discount this role may give (% of the sale; empty = no limit)</span><input type="number" min="0" max="100" step="any" value={roleEdit.maxDiscount ?? ''} onChange={(e) => setRoleEdit({ ...roleEdit, maxDiscount: e.target.value })} placeholder="no limit" /></label>
             <div className="perm-grid">
               {PERMISSIONS.map(([group, list]) => (
                 <div key={group} className="perm-group">

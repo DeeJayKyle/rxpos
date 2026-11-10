@@ -75,6 +75,7 @@ const SUITES = [
   ['cloud counters: concurrent pushes, cached record count', 'v62-counters.mjs', []],
   ['hub: moved from hub.json onto the cloud\'s code', 'hub-move.mjs', []],
   ['close the day', 'v63-day-close.mjs', []],
+  ['discount limit per role, blind cash-up', 'v64-discount-blind.mjs', []],
   ['file uploads', 'v24-files.mjs', []],
   ['security headers', 'v25-headers.mjs', []],
   ['rate limits', 'v26-ratelimit.mjs', []],
@@ -120,7 +121,7 @@ const only = process.argv[2];
 const HUB = process.env.RXPOS_TEST_HUB === '1';
 const HUB_SUITES = new Set(['unit-policy.mjs', 'v14-api.mjs', 'v23-perms.mjs', 'v26-ratelimit.mjs', 'v27-secrets.mjs', 'v29-immutable.mjs', 'v38-sync-protocol.mjs',
   'v55-write-policy.mjs', 'v55-staff-ui.mjs', 'v56-sale-checks.mjs', 'v57-passwords.mjs', 'v58-throttle.mjs', 'v59-doc-numbers.mjs', 'v60-credit-limit.mjs',
-  'v61-field-merge.mjs', 'v61-field-merge-app.mjs', 'v37-reliability.mjs', 'hub-move.mjs', 'v63-day-close.mjs']);
+  'v61-field-merge.mjs', 'v61-field-merge-app.mjs', 'v37-reliability.mjs', 'hub-move.mjs', 'v63-day-close.mjs', 'v64-discount-blind.mjs']);
 // RXPOS_CI=1 (full-tests.yml): checks that need a service a CI machine can't reach are reported as skipped, not
 // failed, so the deploy gate isn't blocked by the outside world. Listed by exact check name: anything else that fails
 // still fails. Local runs (no RXPOS_CI) count them as failures as before.

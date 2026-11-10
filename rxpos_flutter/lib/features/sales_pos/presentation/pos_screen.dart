@@ -7,6 +7,8 @@ import 'package:rxpos/core/platform.dart';
 
 import '../../../core/data/device_settings.dart';
 import '../../../core/data/pharmacy_providers.dart';
+import '../../../core/entities/people.dart';
+import '../../../core/rules/permissions.dart';
 import '../../../core/data/record_store.dart';
 import '../../../core/entities/draft.dart';
 import '../../../core/entities/product.dart';
@@ -188,6 +190,16 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     final s = ref.read(saleControllerProvider(widget.wholesale));
     if (s.lines.isEmpty || !mounted) return;
     final method = s.method ?? d.methods.first;
+    // step 20: the role's discount ceiling (a proforma's discount was set by whoever made the quotation)
+    final session0 = ref.read(sessionControllerProvider).value;
+    final roles = (await ref.read(tableProvider('roles').future)).map(Role.fromRecord);
+    if (!mounted) return;
+    final maxDisc = maxDiscountOf(roles, session0?.role ?? '');
+    final sub = totalsOf(s.lines, discount: s.discount, settings: d.settings).subtotal;
+    if (maxDisc != null && s.discount > 0 && sub > 0 && s.proforma == null && s.discount / sub * 100 > maxDisc + 1e-9) {
+      _say('Your role may give at most ${maxDisc % 1 == 0 ? maxDisc.toInt() : maxDisc}% discount (${d.settings.money((sub * maxDisc / 100).floorToDouble())} on this sale)', error: true);
+      return;
+    }
     ControlledEntry? cd;
     MomoPaid? momo;
     var rx = false;

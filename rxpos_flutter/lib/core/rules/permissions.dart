@@ -42,6 +42,15 @@ Set<String> permissionsOf(Iterable<Role> custom, String role) {
   return (rolesOf(custom).where((r) => r.id == role).firstOrNull?.permissions ?? const <String>[]).toSet();
 }
 
+/// Step 20: the largest sale discount (% of the sale) this role may give, or null for no limit (src/access.js
+/// maxDiscountOf). Set per role in Users & roles; administrators are never limited.
+double? maxDiscountOf(Iterable<Role> custom, String role) {
+  if (role == 'admin') return null;
+  final v = rolesOf(custom).where((r) => r.id == role).firstOrNull?.raw['maxDiscount'];
+  final n = v is num ? v.toDouble() : double.tryParse('${v ?? ''}');
+  return n == null || n < 0 ? null : n;
+}
+
 const features = [
   'catalog', 'branches', 'wholesale', 'proformas', 'prescriptions', 'finance', 'reports', 'reminders', 'chat',
   'labels', 'import', 'reorder', 'momo', 'drugInfo', 'shifts', 'promos', 'hourly', 'calendar', 'weather', 'ai', 'newApp',

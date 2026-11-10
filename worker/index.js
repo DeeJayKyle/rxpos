@@ -736,6 +736,13 @@ async function sync(env, body, who, ctx) {
       const row = CATALOG.rows[Number(id.slice(4)) - 1];
       if (row) products.set(id, { price: row[col.price], wholesale: row[col.wholesale] });
     }
+    // step 20: the pushing role's discount ceiling (null = no limit; administrators never have one)
+    let maxDiscount = null;
+    if (who.role !== 'admin') {
+      const r = await db.prepare("SELECT rec FROM records WHERE tenant = ?1 AND t = 'roles' AND id = ?2 AND deleted = 0").bind(tenant, who.role).first('rec');
+      const v = r ? JSON.parse(r).maxDiscount : null;
+      maxDiscount = v === '' || v == null || !(Number(v) >= 0) ? null : Number(v);
+    }
     for (const sale of toCheck.values()) {
       // step 8: a sale left partly unpaid, to a client with a credit limit: what they owed before it, from the cloud's
       // own records (the Debtors figure: unpaid credit sales not refunded, less their payments)
@@ -751,7 +758,7 @@ async function sync(env, body, who, ctx) {
           credit = { limit, owed: Number(unpaid.results?.[0]?.v || 0) - Number(paidIn.results?.[0]?.v || 0) };
         }
       }
-      const found = await saleFindings(sale, products, can, { credit });
+      const found = await saleFindings(sale, products, can, { credit, maxDiscount });
       const fp = fingerprint(moneyView(sale));
       found.forEach((f, n) => {
         const id = `${sale.id}~${f.kind}${n}~${fp}`;

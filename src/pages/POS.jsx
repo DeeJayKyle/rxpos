@@ -5,6 +5,7 @@ import { ShoppingCart, Trash2, X, FileText, Printer, AlertTriangle, ScanBarcode,
 import { DrugInfoPanel, genericKey } from './DrugInfo.jsx';
 import { useStore, uid, now, daysUntil, put, del, move, allocate, audit, normalizePhone, customerBalance, DEFAULT_PAYMENT_METHODS } from '../store.jsx';
 import { overLimit } from '../credit.js';
+import { maxDiscountOf } from '../access.js';
 import { draftsFor, saleDraft } from '../drafts.js';
 import { keepsData } from '../webpolicy.js';
 import { CASH } from '../finance.js';
@@ -370,6 +371,10 @@ export default function POS({ mode = 'retail' }) {
     if (credit && customerId === 'walk-in') return toast('Select a registered customer for a credit sale', 'warn');
     if (capture === 'required' && customerId === 'walk-in') return toast('Choose or add the client for this sale', 'warn');
     if (ptype === 'cash' && tendered !== '' && change < 0) return toast('Amount tendered is less than the total', 'error');
+    // step 20: the role's discount ceiling (a proforma's discount was set by whoever made the quotation)
+    const maxDisc = maxDiscountOf(db, user.role);
+    if (maxDisc != null && disc > 0 && subtotal > 0 && !location.state?.proforma && (disc / subtotal) * 100 > maxDisc + 1e-9)
+      return toast(`Your role may give at most ${maxDisc}% discount (${fmt(Math.floor((subtotal * maxDisc) / 100))} on this sale)`, 'error');
     // controlled drugs: patient, prescriber and prescription go in the register (asked once per sale)
     if (cart.some(isCd) && !cdRef.current) {
       const c = customer && customer.id !== 'walk-in' ? customer : null;

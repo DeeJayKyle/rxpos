@@ -25,7 +25,8 @@ function expectedUnitPrice(p, item, wholesale) {
 /**
  * sale: the record pushed · products: Map(id → stored product, including built-in catalog entries) ·
  * can(perm) → boolean | Promise<boolean> · ctx.credit: { limit, owed } for a client with a credit limit (step 8; owed is
- * what they owed before this sale, as on the Debtors page).  Returns [{ kind, detail, amount }] (amount ≥ 0).
+ * what they owed before this sale, as on the Debtors page) · ctx.maxDiscount: the pushing role's discount ceiling in %
+ * (step 20; null = no limit).  Returns [{ kind, detail, amount }] (amount ≥ 0).
  */
 export async function saleFindings(sale, products, can, ctx = {}) {
   const out = [];
@@ -57,6 +58,10 @@ export async function saleFindings(sale, products, can, ctx = {}) {
   }
   // a proforma's discount and prices were set by whoever made the quotation (proformas permission)
   if (!sale.proformaId) {
+    // step 20: above the role's discount ceiling (Users & roles); the till refuses it, an older app may not
+    const max = ctx.maxDiscount;
+    if (max != null && discount > 0 && subtotal > 0 && (discount / subtotal) * 100 > max + 1e-9)
+      out.push({ kind: 'discount-limit', detail: `Discount of ${money(discount)} (${Math.round((discount / subtotal) * 1000) / 10}% of the sale) is above this role's limit of ${max}%`, amount: Math.round(discount - (subtotal * max) / 100) });
     if (discount > 0 && !(await can('pos.discount')))
       out.push({ kind: 'discount', detail: `Discount of ${money(discount)} given by a role without "Give discounts"`, amount: discount });
     if (!(await can('pos.price_edit'))) {

@@ -32,6 +32,10 @@ export default function Shifts() {
   const [report, setReport] = useState(null);
   const open = db.shifts.find((s) => s.userId === user.id && !s.closedAt && (s.branchId || MAIN_BRANCH) === branchId);
   const live = useMemo(() => (open ? shiftSummary(db, open) : null), [db, open]);
+  // step 20: blind cash-up (Settings): staff count the cash before they see what the drawer should hold, so while a
+  // shift is open its money figures are hidden from whoever may not see everyone's shifts
+  const blind = !!db.settings.blindCashUp;
+  const hideMoney = blind && !can('shifts.all');
   const list = db.shifts.filter((s) => (tab === 'all' ? true : s.userId === user.id)).sort((a, b) => b.openedAt.localeCompare(a.openedAt));
 
   const openShift = async () => {
@@ -47,10 +51,11 @@ export default function Shifts() {
   const closeShift = (counts, note) => {
     const counted = NOTES.reduce((a, n) => a + n * (Number(counts[n]) || 0), 0) + (Number(counts.coins) || 0);
     const summary = shiftSummary(db, open);
-    const closed = { ...open, closedAt: now(), counts, counted, expected: summary.expectedCash, variance: counted - summary.expectedCash, note, summary };
+    const blindCount = !!db.settings.blindCashUp; // step 20: counted before the expected cash was shown
+    const closed = { ...open, closedAt: now(), counts, counted, expected: summary.expectedCash, variance: counted - summary.expectedCash, note, summary, ...(blindCount ? { blind: true } : {}) };
     update((d) => {
       put(d, 'shifts', closed);
-      audit(d, user, 'Shift closed', `Expected ${fmt(summary.expectedCash)}, counted ${fmt(counted)}, ${counted - summary.expectedCash >= 0 ? 'over' : 'short'} ${fmt(Math.abs(counted - summary.expectedCash))}`, branchId);
+      audit(d, user, blindCount ? 'Shift closed (blind count)' : 'Shift closed', `Expected ${fmt(summary.expectedCash)}, counted ${fmt(counted)}, ${counted - summary.expectedCash >= 0 ? 'over' : 'short'} ${fmt(Math.abs(counted - summary.expectedCash))}`, branchId);
     });
     setClosing(null);
     setReport(closed);
@@ -67,6 +72,7 @@ export default function Shifts() {
       {open && live && (
         <>
           <div className="notice info-notice">Shift open since {new Date(open.openedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · float {fmt(open.float)}</div>
+          {hideMoney ? <div className="notice">Blind cash-up: count the cash when you close the shift; what the drawer should hold is shown after you count. {live.count} sale{live.count === 1 ? '' : 's'} so far.</div> : <>
           <div className="stats">
             <Stat label="Sales this shift" value={fmt(live.total)} sub={`${live.count} sales`} tone="teal" icon={Coins} />
             <Stat label="Cash expected in drawer" value={fmt(live.expectedCash)} sub="float + cash sales − cash refunds" />
@@ -77,6 +83,7 @@ export default function Shifts() {
             {Object.entries(live.byMethod).map(([k, v]) => <tr key={k}><td>{k}</td><td className="num">{fmt(v)}</td></tr>)}
             {!Object.keys(live.byMethod).length && <Empty colSpan={2}>No sales yet this shift</Empty>}
           </tbody></table></div>
+          </>}
         </>
       )}
       {(can('day.close') || user.role === 'admin') && <DayClose />}
@@ -112,24 +119,28 @@ export default function Shifts() {
       {closing?.mode === 'close' && (() => {
         const counted = NOTES.reduce((a, n) => a + n * (Number(closing.counts[n]) || 0), 0) + (Number(closing.counts.coins) || 0);
         const diff = counted - live.expectedCash;
+        const shown = !blind || closing.revealed; // blind: the expected cash appears only once the count is in
         return (
           <Modal title="Close shift – count the cash" onClose={() => setClosing(null)} wide>
             <div className="cash-count">
               {NOTES.map((n) => (
                 <label key={n} className="field"><span>{fmt(n)} ×</span>
-                  <input type="number" min="0" inputMode="numeric" value={closing.counts[n] || ''} onChange={(e) => setClosing({ ...closing, counts: { ...closing.counts, [n]: e.target.value } })} /></label>
+                  <input type="number" min="0" inputMode="numeric" disabled={blind && closing.revealed} value={closing.counts[n] || ''} onChange={(e) => setClosing({ ...closing, counts: { ...closing.counts, [n]: e.target.value } })} /></label>
               ))}
-              <label className="field"><span>Other coins (total)</span><input type="number" min="0" value={closing.counts.coins || ''} onChange={(e) => setClosing({ ...closing, counts: { ...closing.counts, coins: e.target.value } })} /></label>
+              <label className="field"><span>Other coins (total)</span><input type="number" min="0" disabled={blind && closing.revealed} value={closing.counts.coins || ''} onChange={(e) => setClosing({ ...closing, counts: { ...closing.counts, coins: e.target.value } })} /></label>
             </div>
             <div className="totals" style={{ marginTop: 12 }}>
-              <div className="row between"><span className="muted">Expected cash</span><span className="num">{fmt(live.expectedCash)}</span></div>
+              {shown && <div className="row between"><span className="muted">Expected cash</span><span className="num">{fmt(live.expectedCash)}</span></div>}
               <div className="row between"><span className="muted">Counted</span><span className="num">{fmt(counted)}</span></div>
-              <div className={'row between grand ' + (diff < 0 ? 'text-danger' : diff > 0 ? 'text-warn' : 'text-ok')}><span>{diff === 0 ? 'Balanced' : diff > 0 ? 'Over' : 'Short'}</span><span className="num">{fmt(Math.abs(diff))}</span></div>
+              {shown && <div className={'row between grand ' + (diff < 0 ? 'text-danger' : diff > 0 ? 'text-warn' : 'text-ok')}><span>{diff === 0 ? 'Balanced' : diff > 0 ? 'Over' : 'Short'}</span><span className="num">{fmt(Math.abs(diff))}</span></div>}
+              {!shown && <small className="muted">Blind cash-up: enter what you counted, then see what the drawer should hold. The count can't be changed after that.</small>}
             </div>
             <label className="field" style={{ marginTop: 12 }}><span>Note (explain any difference)</span><input value={closing.note} onChange={(e) => setClosing({ ...closing, note: e.target.value })} /></label>
             <div className="form-actions">
               <button className="btn ghost" onClick={() => setClosing(null)}>Cancel</button>
+              {!shown ? <button className="btn primary" onClick={() => setClosing({ ...closing, revealed: true })}>Show the difference</button> : <>
               <button className="btn primary" onClick={async () => { if (diff !== 0 && !closing.note.trim() && !(await ask({ title: `Cash is ${diff > 0 ? 'over' : 'short'} by ${fmt(Math.abs(diff))}`, message: 'Close the shift without a note?', confirmText: 'Close anyway' }))) return; closeShift(closing.counts, closing.note); }}>Close shift</button>
+              </>}
             </div>
           </Modal>
         );

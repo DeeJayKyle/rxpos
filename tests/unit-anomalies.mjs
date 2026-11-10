@@ -52,5 +52,18 @@ check('…quoting the reason when one was given', /pays Friday/.test(cr2[0]?.det
 check('a Finance role is not flagged', (await saleFindings(onCredit, products, (p) => p === 'finance', { credit: { limit: 1000, owed: 800 } })).length === 0);
 check('within the limit is not flagged', (await saleFindings(onCredit, products, cashier, { credit: { limit: 5000, owed: 800 } })).length === 0);
 
+// step 20: the role's discount ceiling
+const disc15 = sale({ discount: 300, total: 1700, paid: 1700 });
+const lim = async (s, max, can = (p) => p === 'pos.discount') => (await saleFindings(s, products, can, { maxDiscount: max })).map((f) => f.kind).join(',');
+check('a discount above the role\'s limit is flagged', (await lim(disc15, 10)) === 'discount-limit');
+const dl = (await saleFindings(disc15, products, (p) => p === 'pos.discount', { maxDiscount: 10 }))[0];
+check('…saying by how much (15% against 10%, 100 too much)', /15% of the sale\) is above this role's limit of 10%/.test(dl?.detail) && dl?.amount === 100, dl?.detail);
+check('at or under the limit is fine', (await lim(disc15, 15)) === '' && (await lim(sale({ discount: 100, total: 1900, paid: 1900 }), 10)) === '');
+check('no limit set: never flagged', (await lim(disc15, null)) === '');
+check('a proforma\'s discount is not the cashier\'s', (await lim({ ...disc15, proformaId: 'pf1' }, 10)) === '');
+const { maxDiscountOf } = await import('../src/access.js');
+const roleDb = { roles: [{ id: 'cashier', permissions: ['pos.sell'], maxDiscount: 10 }, { id: 'stock', permissions: [], maxDiscount: '' }] };
+check('a role\'s limit from Users & roles; none set = no limit; admins never limited', maxDiscountOf(roleDb, 'cashier') === 10 && maxDiscountOf(roleDb, 'stock') === null && maxDiscountOf(roleDb, 'pharmacist') === null && maxDiscountOf({ roles: [{ id: 'admin', maxDiscount: 1 }] }, 'admin') === null);
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -17,6 +17,7 @@ const saleCheckKinds = {
   'invalid': 'Invalid amounts',
   'credit': 'Over credit limit',
   'late': 'Recorded after the day was closed',
+  'discount-limit': 'Discount above the role\'s limit',
   'closed-refund': 'Refund from a closed day',
 };
 

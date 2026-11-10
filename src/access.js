@@ -95,6 +95,16 @@ export function rolesOf(db) {
   return base;
 }
 
+/**
+ * Step 20: the largest sale discount (in % of the sale) this role may give, or null for no limit. Set per role in
+ * Users & roles; administrators are never limited. The till refuses more and the cloud flags it (worker/anomalies.js).
+ */
+export function maxDiscountOf(db, role) {
+  if (role === 'admin') return null;
+  const v = rolesOf(db).find((r) => r.id === role)?.maxDiscount;
+  return v === '' || v == null || !(Number(v) >= 0) ? null : Number(v);
+}
+
 export function permissionsOf(db, role) {
   if (role === 'admin') return new Set(ALL_PERMISSIONS);
   return new Set(rolesOf(db).find((r) => r.id === role)?.permissions || []);

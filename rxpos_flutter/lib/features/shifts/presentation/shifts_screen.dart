@@ -32,6 +32,9 @@ class ShiftsScreen extends ConsumerWidget {
       ..sort((a, b) => b.openedAt.compareTo(a.openedAt));
     final open = shifts.where((s) => s.userId == session.userId && s.isOpen).firstOrNull;
     final live = open == null ? null : shiftSummary(open, sales);
+    // step 20: blind cash-up (Settings): while a shift is open its money figures are hidden from whoever may not see
+    // everyone's shifts, so the cash is counted before anyone sees what the drawer should hold
+    final hideMoney = st.raw['blindCashUp'] == true && !can.contains('shifts.all');
     return PageFrame(
       title: 'Shifts & cash-up',
       actions: [
@@ -47,7 +50,11 @@ class ShiftsScreen extends ConsumerWidget {
       ],
       scroll: true,
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        if (live != null) ...[
+        if (live != null && hideMoney) ...[
+          Text('Blind cash-up: count the cash when you close the shift; what the drawer should hold is shown after you count. ${live.count} sale${live.count == 1 ? '' : 's'} so far.'),
+          const SizedBox(height: 16),
+        ],
+        if (live != null && !hideMoney) ...[
           StatGrid(children: [
             StatCard(label: 'Sales this shift', value: st.money(live.total), sub: '${live.count} sales'),
             StatCard(label: 'Expected cash', value: st.money(live.expectedCash), sub: 'float ${st.money(open!.float)} + cash − refunds'),
@@ -83,7 +90,7 @@ class ShiftsScreen extends ConsumerWidget {
     ]);
     if (v == null) return;
     final rec = await closeShift(ref.read(recordStoreProvider), open, sales,
-        counts: {for (final e in v.entries) if (e.value is num) e.key: e.value as num}, note: '${v['note'] ?? ''}');
+        counts: {for (final e in v.entries) if (e.value is num) e.key: e.value as num}, note: '${v['note'] ?? ''}', blind: st.raw['blindCashUp'] == true);
     if (context.mounted) say(context, 'Shift closed: counted ${st.money(rec['counted'] as num)}, ${((rec['variance'] as num) >= 0) ? 'over' : 'short'} ${st.money((rec['variance'] as num).abs())}');
   }
 }

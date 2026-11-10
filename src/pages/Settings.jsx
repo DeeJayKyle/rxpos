@@ -96,6 +96,7 @@ export default function Settings() {
               <select value={s.paperWidth || 80} onChange={(e) => setS({ ...s, paperWidth: Number(e.target.value) })}><option value={80}>80 mm thermal</option><option value={58}>58 mm thermal</option><option value={210}>A4 / normal printer</option></select>
             </label>
             <label className="field check"><input type="checkbox" checked={!!s.autoPrint} onChange={(e) => setS({ ...s, autoPrint: e.target.checked })} /><span>Print the receipt automatically after each sale</span></label>
+            <label className="field check"><input type="checkbox" checked={!!s.blindCashUp} onChange={(e) => setS({ ...s, blindCashUp: e.target.checked })} /><span>Blind cash-up: staff count the cash before they see what the drawer should hold</span></label>
             {field('receiptFooter', 'Receipt footer message')}
             <label className="field"><span>Add Stock receives medicines with packs in</span>
               <select value={s.receiveUnit || 'pack'} onChange={(e) => setS({ ...s, receiveUnit: e.target.value })}><option value="pack">Packs (the largest pack, e.g. boxes)</option><option value="unit">Single units</option></select>
