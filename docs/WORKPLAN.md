@@ -48,7 +48,7 @@ Server-side steps (Worker, `worker/`) protect **both** apps at once. Client-side
 | 19 | Clinical: structured allergies that block, interaction and duplicate-therapy checks | 4.2 | ⏸ skipped by the owner until a licensed interaction database is chosen |
 | 20 | Selling: loyalty points, promotions engine, customer display, cash-up with blind counts, per-role discount ceiling | 4.3 | ✅ discount ceiling + blind cash-up (owner's choice); the rest not done |
 | 21 | Stock: GS1 DataMatrix scan, scheduled draft POs, expiry markdowns, branch rebalancing | 4.4 | ✅ GS1 pack scanning (the recommended part; the owner said continue without picking); the rest not done |
-| 22 | Insurance: insurers/schemes, member check, co-pay at the till, monthly claim batches | 4.1 | ⏳ |
+| 22 | Insurance: insurers/schemes, member check, co-pay at the till, monthly claim batches | 4.1 | ✅ insurers, schemes and the co-pay at the till (the recommended part; the owner had no preference); pre-authorisation, claim batches and member checks not done |
 | 23 | URA EFRIS e-invoicing (fiscal number + QR on receipts, offline queue) | 4.1 | ⏳ (needs URA EFRIS credentials / sandbox) |
 | 24 | Interface: one till layout with density setting, 4 themes, single payment panel, accessibility audit (axe), translations | 4.6 | ⏳ |
 | 25 | React → Flutter cut-over plan and retirement of the React client (if chosen in step 0) | 3 | ⏳ |
@@ -180,3 +180,18 @@ Server-side steps (Worker, `worker/`) protect **both** apps at once. Client-side
   in the test font). Scheduled draft POs, expiry markdowns and branch rebalancing wait for the owner. unit-gs1 15
   (now in run-all), v65 6; Flutter gs1 13 + 2 new tests, 409 passed, analyze clean; lint 0; full JS suite 1,920 passed, 6 failed (the known 6);
   hub suites 314/314.
+- 2026-11-10 · Step 22 · `c28ae27` · The owner had no preference, so the recommended part only: insurers and their
+  schemes, and the co-pay split at the till, the insurer's share counted as owed like credit. Shared rules
+  src/insurance.js / rxpos_flutter/lib/core/rules/insurance.dart, both checked against tests/insurance-cases.json: the
+  client pays the co-pay (a percentage or a fixed amount, whichever is more), the insurer the rest up to the scheme's
+  cover limit per sale. The sale keeps `insurance` {insurer, scheme, memberNo, share}; `paid` is the client's part only,
+  so cash-up and the cash book are right as they were. Both apps: an Insurers page (insurers, schemes, what each owes,
+  its sales, "Receive payment" as a payment of kind insurer: money in), the till's Insurance choice (registered client
+  and member number needed; the member number comes from the client's record), receipts and A4 invoices name the
+  insurer and member, Debtors and credit limits leave out the insurer's share, shift reports show "Billed to
+  insurers". Cloud: insurers need Customers or Finance to change (Finance to delete); the insurer's share is part of a
+  sale's money view (changing it is a sale edit); a new finding "Insurance split doesn't add up"; credit-limit checks
+  leave out the share. The website's list of app pages gains /insurers. Not done, waiting for the owner:
+  pre-authorisation numbers, monthly claim batches with rejections, member card checks. unit-insurance 18, v66 15,
+  unit-anomalies +5, unit-policy +1; Flutter insurance 18 + 2 new tests, 429 passed, analyze clean, parity snapshot
+  unchanged; lint 0; full JS suite and hub suites: RESULTS.
