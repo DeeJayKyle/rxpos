@@ -192,7 +192,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     final method = s.method ?? d.methods.first;
     // step 20: the role's discount ceiling (a proforma's discount was set by whoever made the quotation)
     final session0 = ref.read(sessionControllerProvider).value;
-    final roles = (await ref.read(tableProvider('roles').future)).map(Role.fromRecord);
+    final roles = (await ref.read(recordStoreProvider).rows('roles')).map(Role.fromRecord); // straight from the device (nothing on the till watches roles)
     if (!mounted) return;
     final maxDisc = maxDiscountOf(roles, session0?.role ?? '');
     final sub = totalsOf(s.lines, discount: s.discount, settings: d.settings).subtotal;

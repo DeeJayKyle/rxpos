@@ -46,7 +46,7 @@ Server-side steps (Worker, `worker/`) protect **both** apps at once. Client-side
 |---|---|---|---|
 | 18 | Owner: anomaly dashboard, day close / lock, accounting export | 4.5 | ✅ Close the day (owner's choice); export and overview not done |
 | 19 | Clinical: structured allergies that block, interaction and duplicate-therapy checks | 4.2 | ⏸ skipped by the owner until a licensed interaction database is chosen |
-| 20 | Selling: loyalty points, promotions engine, customer display, cash-up with blind counts, per-role discount ceiling | 4.3 | ⏳ |
+| 20 | Selling: loyalty points, promotions engine, customer display, cash-up with blind counts, per-role discount ceiling | 4.3 | ✅ discount ceiling + blind cash-up (owner's choice); the rest not done |
 | 21 | Stock: GS1 DataMatrix scan, scheduled draft POs, expiry markdowns, branch rebalancing | 4.4 | ⏳ |
 | 22 | Insurance: insurers/schemes, member check, co-pay at the till, monthly claim batches | 4.1 | ⏳ |
 | 23 | URA EFRIS e-invoicing (fiscal number + QR on receipts, offline queue) | 4.1 | ⏳ (needs URA EFRIS credentials / sandbox) |
@@ -162,3 +162,11 @@ Server-side steps (Worker, `worker/`) protect **both** apps at once. Client-side
   in the cloud and the device's own local day in the apps. v63 22; Flutter 392 passed (+4; the React parity snapshot
   regenerated with tool/parity/react_cases.mjs: only the new permission changed); lint 0; full JS suite 1,881 passed,
   6 failed (the known 6); hub suites 296/296.
+- 2026-11-10 · Step 20 · `2ea42c5` + this commit · Owner's choice: 1 and 2. Discount limit per role (Users & roles;
+  empty = no limit; admins never limited): the till refuses more before any prompt (proforma discounts exempt), the
+  cloud flags "Discount above the role's limit". Blind cash-up (Settings switch): open-shift money figures hidden from
+  staff without shifts.all; React's close shows the expected cash only after the count is locked; the shift is saved
+  as blind and audited. The full Flutter run caught a bug in the first version: the till read the roles through a
+  provider nothing watched, which was disposed before it loaded, so charging stopped (7 till tests failed); fixed by
+  reading roles from the device store. v64 12; unit-anomalies +6; Flutter 394 passed, analyze clean; lint 0; full JS
+  suite 1,899 passed, 6 failed (the known 6); hub suites 308/308.
