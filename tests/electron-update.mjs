@@ -1,7 +1,7 @@
 // Windows app self-update (electron/updater.cjs): start the app, find a newer build, switch to it, keep the
 // device's data, survive a restart, and roll back a broken build. Serves a copy of dist/ as the "newer build".
 //   npm run build && node tests/electron-update.mjs      (Linux needs xvfb-run; Windows runs as is)
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
@@ -35,6 +35,11 @@ const srv = http.createServer((req, res) => {
   res.writeHead(200); res.end(fs.readFileSync(file));
 }).listen(8799);
 const electron = path.join(root, 'node_modules', 'electron', 'dist', process.platform === 'win32' ? 'electron.exe' : 'electron');
+// Electron 43 no longer downloads its binary on npm install (its install-electron step does): fetch it when missing
+if (!fs.existsSync(electron)) {
+  const r = spawnSync(process.execPath, [path.join(root, 'node_modules', 'electron', 'install.js')], { cwd: root, stdio: 'inherit', timeout: 240000 });
+  if (r.status !== 0 || !fs.existsSync(electron)) { console.log('Error: could not download the Electron binary'); console.log('\n0 passed, 1 failed'); process.exit(1); }
+}
 const cmd = process.platform === 'linux' ? ['xvfb-run', ['-a', electron]] : [electron, []];
 // Linux: no Chromium sandbox for this headless test run (root can't use it, and Ubuntu 24.04's runners block the
 // unprivileged namespaces it needs for everyone else, so Electron would not start on GitHub); the app itself is unchanged
