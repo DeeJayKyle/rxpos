@@ -45,7 +45,7 @@ Server-side steps (Worker, `worker/`) protect **both** apps at once. Client-side
 | # | Step | Review ref | Status |
 |---|---|---|---|
 | 18 | Owner: anomaly dashboard, day close / lock, accounting export | 4.5 | ✅ Close the day (owner's choice); export and overview not done |
-| 19 | Clinical: structured allergies that block, interaction and duplicate-therapy checks | 4.2 | ⏳ (needs an interaction data source you are licensed to use) |
+| 19 | Clinical: structured allergies that block, interaction and duplicate-therapy checks | 4.2 | ⏸ skipped by the owner until a licensed interaction database is chosen |
 | 20 | Selling: loyalty points, promotions engine, customer display, cash-up with blind counts, per-role discount ceiling | 4.3 | ⏳ |
 | 21 | Stock: GS1 DataMatrix scan, scheduled draft POs, expiry markdowns, branch rebalancing | 4.4 | ⏳ |
 | 22 | Insurance: insurers/schemes, member check, co-pay at the till, monthly claim batches | 4.1 | ⏳ |
