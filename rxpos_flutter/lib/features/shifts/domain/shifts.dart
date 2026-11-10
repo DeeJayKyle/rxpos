@@ -11,12 +11,13 @@ const notes = [50000, 20000, 10000, 5000, 2000, 1000, 500, 200, 100, 50];
 
 class ShiftSummary {
   const ShiftSummary({required this.count, required this.total, required this.byMethod, required this.discounts, required this.refunds,
-      required this.refundTotal, required this.expectedCash, required this.credit});
+      required this.refundTotal, required this.expectedCash, required this.credit, this.insured = 0});
   final int count, refunds;
-  final double total, discounts, refundTotal, expectedCash, credit;
+  /// step 22: billed to insurers (owed by them, not the clients)
+  final double total, discounts, refundTotal, expectedCash, credit, insured;
   final Map<String, double> byMethod;
   Map<String, Object?> toJson() => {'count': count, 'total': total, 'byMethod': byMethod, 'discounts': discounts, 'refunds': refunds,
-    'refundTotal': refundTotal, 'expectedCash': expectedCash, 'credit': credit};
+    'refundTotal': refundTotal, 'expectedCash': expectedCash, 'credit': credit, if (insured > 0) 'insured': insured};
 }
 
 ShiftSummary shiftSummary(Shift shift, Iterable<Sale> sales, {String? now}) {
@@ -35,7 +36,8 @@ ShiftSummary shiftSummary(Shift shift, Iterable<Sale> sales, {String? now}) {
   return ShiftSummary(
     count: valid.length, total: valid.fold(0.0, (a, s) => a + s.total), byMethod: byMethod, discounts: valid.fold(0.0, (a, s) => a + s.discount),
     refunds: refunds.length, refundTotal: refunds.fold(0.0, (a, s) => a + s.total),
-    expectedCash: shift.float + cash(valid) - cash(refunds), credit: valid.fold(0.0, (a, s) => a + (s.total - s.paid)),
+    expectedCash: shift.float + cash(valid) - cash(refunds), credit: valid.fold(0.0, (a, s) => a + s.balance),
+    insured: valid.fold(0.0, (a, s) => a + s.insuredShare),
   );
 }
 

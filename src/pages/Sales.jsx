@@ -6,6 +6,10 @@ import { useStore, dayOf, downloadFile, toCSV, put, move, now, audit, allocate, 
 import { Modal, SearchBox, Empty, PdfButton, ReceiptPdfButton, Tabs, PayChip, usePages, Pager, useSort, SortTh } from '../ui.jsx';
 import { ask, toast } from '../feedback.jsx';
 import { Barcode } from '../barcode.jsx';
+// step 22: what the client still owes on a sale (an insurer's share is billed to the insurer); shown on the receipt
+// even after a refund, as before
+const billed = (s) => (s.insurance ? Math.max(0, Number(s.insurance.share) || 0) : 0);
+const unpaid = (s) => s.total - (s.paid ?? s.total) - billed(s);
 import DraftsList, { useDraftCount } from './Drafts.jsx';
 
 /** Thermal-printer friendly receipt (58 mm or 80 mm, set in Settings). */
@@ -45,8 +49,10 @@ export function Receipt({ sale }) {
       {sale.tax > 0 && <div className="row between"><span>Tax</span><span>{fmt(sale.tax)}</span></div>}
       <div className="row between grand"><span>TOTAL</span><span>{fmt(sale.total)}</span></div>
       {!isProforma && <div className="row between"><span>Paid ({sale.payment})</span><span>{fmt(sale.payment === 'Cash' ? sale.tendered : sale.paid ?? sale.total)}</span></div>}
-      {!isProforma && sale.payment === 'Cash' && sale.tendered > sale.total && <div className="row between"><span>Change</span><span>{fmt(sale.tendered - sale.total)}</span></div>}
-      {!isProforma && (sale.paid ?? sale.total) < sale.total && <div className="row between"><span>Balance on credit</span><span>{fmt(sale.total - sale.paid)}</span></div>}
+      {!isProforma && sale.payment === 'Cash' && sale.tendered > (sale.paid ?? sale.total) && <div className="row between"><span>Change</span><span>{fmt(sale.tendered - (sale.paid ?? sale.total))}</span></div>}
+      {!isProforma && sale.insurance && <div className="row between"><span>{sale.insurance.insurer} ({sale.insurance.scheme})</span><span>{fmt(billed(sale))}</span></div>}
+      {!isProforma && sale.insurance && <div className="small">Member no. {sale.insurance.memberNo}</div>}
+      {!isProforma && unpaid(sale) > 0.005 && <div className="row between"><span>Balance on credit</span><span>{fmt(unpaid(sale))}</span></div>}
       {sale.momo?.txid && <div className="row between"><span>{sale.momo.provider === 'airtel' ? 'Airtel' : 'MoMo'} Ref</span><span>{sale.momo.txid}</span></div>}
       {sale.momo && <div className="small muted">{sale.momo.confirmed ? 'Payment confirmed by the mobile network' : sale.momo.manual ? 'Payment recorded by staff (transaction ID from the customer; not confirmed by the network)' : ''}</div>}
       {sale.status === 'refunded' && <div className="center receipt-tag">REFUNDED</div>}
@@ -62,7 +68,7 @@ export function SaleInvoice({ sale }) {
   const s = db.settings;
   const branch = db.branches.find((b) => b.id === (sale.branchId || MAIN_BRANCH));
   const cust = db.customers.find((c) => c.id === sale.customerId);
-  const due = sale.total - (sale.paid ?? sale.total);
+  const due = unpaid(sale); // step 22: an insurer's share is billed to the insurer, not due from the client
   return (
     <div className="invoice-doc print-area paper-210">
       <div className="invoice-head">
@@ -95,6 +101,7 @@ export function SaleInvoice({ sale }) {
         {sale.tax > 0 && <div><span>Tax</span><span>{fmt(sale.tax)}</span></div>}
         <div className="grand"><span>Total</span><span>{fmt(sale.total)}</span></div>
         <div><span>Paid ({sale.payment}{sale.momo?.txid ? ` · ref ${sale.momo.txid}` : ''})</span><span>{fmt(sale.paid ?? sale.total)}</span></div>
+        {sale.insurance && <div><span>Billed to {sale.insurance.insurer} ({sale.insurance.scheme} · member {sale.insurance.memberNo})</span><span>{fmt(billed(sale))}</span></div>}
         {due > 0 && <div className="grand"><span>Balance due</span><span>{fmt(due)}</span></div>}
       </div>
       {sale.momo && <p className="small">{sale.momo.confirmed ? 'Payment confirmed by the mobile network.' : 'Payment recorded by staff (not confirmed by the mobile network).'}</p>}
@@ -408,7 +415,8 @@ export function receiptText(sale, s, fmt) {
   if (sale.tax > 0) L.push(`Tax: ${fmt(sale.tax)}`);
   L.push(`*TOTAL: ${fmt(sale.total)}*`);
   L.push(`Paid (${sale.payment}): ${fmt(sale.paid ?? sale.total)}`);
-  if ((sale.paid ?? sale.total) < sale.total) L.push(`Balance: ${fmt(sale.total - (sale.paid ?? sale.total))}`);
+  if (sale.insurance) L.push(`${sale.insurance.insurer} (${sale.insurance.scheme}, member ${sale.insurance.memberNo}): ${fmt(billed(sale))}`);
+  if (unpaid(sale) > 0.005) L.push(`Balance: ${fmt(unpaid(sale))}`);
   L.push('');
   L.push(s.receiptFooter || 'Thank you. Get well soon!');
   return L.join('\n');

@@ -25,6 +25,7 @@ export const TABLE_RULES = {
   countItems: { write: ['stock.count', 'stock.adjust'], delete: ['stock.count', 'stock.adjust'] },
   transfers: { write: ['transfers'], delete: ['transfers'] },
   customers: { write: ['customers', 'reminders'], delete: ['customers'] },
+  insurers: { write: ['customers', 'finance'], delete: ['finance'] }, // step 22: insurers and their schemes
   suppliers: { write: ['suppliers', 'stock.receive'], delete: ['suppliers'] },
   prescriptions: { write: ['prescriptions'], delete: ['prescriptions'] },
   proformas: { write: ['proformas', ...SELL], delete: ['proformas'] }, // the till marks a proforma "Converted"
@@ -64,6 +65,8 @@ export function moneyView(s) {
     num(s?.subtotal), num(s?.discount), num(s?.tax), num(s?.total), num(s?.paid), String(s?.payment ?? ''),
     String(s?.customerId ?? ''), String(s?.type ?? ''), String(s?.branchId ?? ''),
     (Array.isArray(s?.items) ? s.items : []).map((i) => [String(i?.id ?? ''), num(i?.qty), num(i?.price)]),
+    // step 22: who is billed what (only on insured sales, so the view of every other sale is as it was)
+    ...(s?.insurance ? [[String(s.insurance.insurerId ?? ''), num(s.insurance.share)]] : []),
   ]);
 }
 /** A refund changes only the status (to refunded) and who/when; the money stays exactly as it was */

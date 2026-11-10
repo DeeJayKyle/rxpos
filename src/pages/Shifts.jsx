@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { clientOwes, insurerShare } from '../insurance.js';
 import { Clock, PlayCircle, StopCircle, Printer, Coins, Lock, LockOpen } from 'lucide-react';
 import { useStore, uid, now, put, audit, MAIN_BRANCH, today, dayOf } from '../store.jsx';
 import { closeId, daySnapshot } from '../dayclose.js';
@@ -18,10 +19,12 @@ export function shiftSummary(db, shift) {
   const refunds = db.sales.filter((s) => s.status === 'refunded' && s.refundedBy === shift.user && s.refundedAt >= shift.openedAt && s.refundedAt <= end);
   const cashRefunds = refunds.filter((s) => s.payment === 'Cash').reduce((a, s) => a + (s.paid ?? s.total), 0);
   const cashSales = valid.filter((s) => s.payment === 'Cash').reduce((a, s) => a + (s.paid ?? s.total), 0);
+  const insured = valid.reduce((a, s) => a + insurerShare(s), 0);
   return {
     count: valid.length, total: valid.reduce((a, s) => a + s.total, 0), byMethod,
     discounts: valid.reduce((a, s) => a + (s.discount || 0), 0), refunds: refunds.length, refundTotal: refunds.reduce((a, s) => a + s.total, 0),
-    expectedCash: Number(shift.float || 0) + cashSales - cashRefunds, credit: valid.reduce((a, s) => a + (s.total - (s.paid ?? s.total)), 0),
+    expectedCash: Number(shift.float || 0) + cashSales - cashRefunds, credit: valid.reduce((a, s) => a + clientOwes(s), 0),
+    ...(insured > 0 ? { insured } : {}), // step 22: billed to insurers (owed by them, not the clients)
   };
 }
 
@@ -154,6 +157,7 @@ export default function Shifts() {
             <div className="row between"><span>Sales ({report.summary.count})</span><span>{fmt(report.summary.total)}</span></div>
             {Object.entries(report.summary.byMethod).map(([k, v]) => <div key={k} className="row between"><span>  {k}</span><span>{fmt(v)}</span></div>)}
             <div className="row between"><span>On credit</span><span>{fmt(report.summary.credit)}</span></div>
+            {report.summary.insured > 0 && <div className="row between"><span>Billed to insurers</span><span>{fmt(report.summary.insured)}</span></div>}
             <div className="row between"><span>Discounts</span><span>{fmt(report.summary.discounts)}</span></div>
             <div className="row between"><span>Refunds ({report.summary.refunds})</span><span>{fmt(report.summary.refundTotal)}</span></div>
             <div className="receipt-rule" />

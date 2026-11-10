@@ -103,7 +103,7 @@ export function BankTx() {
   );
 }
 
-function PaymentModal({ title, kind, partyId, max, onClose }) {
+export function PaymentModal({ title, kind, partyId, max, onClose }) {
   const { db, update, user, fmt } = useStore();
   return (
     <Modal title={title} onClose={onClose}>
@@ -115,7 +115,7 @@ function PaymentModal({ title, kind, partyId, max, onClose }) {
           { key: 'date', label: 'Date', type: 'date', required: true },
           { key: 'amount', label: 'Amount', type: 'number', required: true },
           { key: 'method', label: 'Method', type: 'select', options: METHODS },
-          { key: 'bankId', label: kind === 'customer' ? 'Received into' : 'Paid from', type: 'select', options: bankOptions(db) },
+          { key: 'bankId', label: kind === 'customer' || kind === 'insurer' ? 'Received into' : 'Paid from', type: 'select', options: bankOptions(db) },
           { key: 'note', label: 'Note', full: true },
         ]}
         onCancel={onClose}

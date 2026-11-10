@@ -8,6 +8,7 @@ import { endWebSession, isLeaving, keepsData } from './webpolicy.js';
 import { connectLive, disconnectLive, onLive } from './live.js';
 import { DEFAULT_CLOUD, tillNumber } from './cloud.js';
 import { nextNumber } from './docnumbers.js';
+import { clientOwes } from './insurance.js';
 import { createStockIndexer } from './stockindex.js';
 import { FIELD_TABLES, stampFields, mergeFields, sameRecord } from './fieldmerge.js';
 import { setUnsent } from './update.js';
@@ -28,6 +29,7 @@ export const TABLES = [
   'anomalies', // sale checks written by the cloud (worker/anomalies.js); only roles with the audit log receive them
   'dayCloses', // step 18: closed days per branch (src/dayclose.js)
   'counters', // step 7: each till's document counts (src/docnumbers.js), saved with the documents they number
+  'insurers', // step 22: insurers and their schemes (src/insurance.js)
 ];
 // What is persisted on the device, one IndexedDB key per part
 const PARTS = [...TABLES, 'settings', '_tomb'];
@@ -725,7 +727,7 @@ export function supplierPrices(purchases) {
 
 /** Amount a customer owes: credit sales minus payments received. */
 export function customerBalance(db, id) {
-  const credit = db.sales.filter((s) => s.customerId === id && s.status !== 'refunded').reduce((a, s) => a + (s.total - (s.paid ?? s.total)), 0);
+  const credit = db.sales.filter((s) => s.customerId === id).reduce((a, s) => a + clientOwes(s), 0); // an insurer's share is not the client's debt (step 22)
   const paid = db.payments.filter((p) => p.kind === 'customer' && p.partyId === id).reduce((a, p) => a + p.amount, 0);
   return credit - paid;
 }

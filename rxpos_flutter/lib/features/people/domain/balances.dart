@@ -9,7 +9,7 @@ double _num(Object? v) => (v as num?)?.toDouble() ?? 0;
 
 /// Credit sales not yet paid, less payments received.
 double customerBalance(String id, Iterable<Sale> sales, Iterable<Map<String, Object?>> payments) {
-  final credit = sales.where((s) => s.customerId == id && s.status != 'refunded').fold(0.0, (a, s) => a + (s.total - s.paid));
+  final credit = sales.where((s) => s.customerId == id && s.status != 'refunded').fold(0.0, (a, s) => a + s.balance); // an insurer's share is not the client's debt (step 22)
   final paid = payments.where((p) => p['kind'] == 'customer' && p['partyId'] == id).fold(0.0, (a, p) => a + _num(p['amount']));
   return credit - paid;
 }

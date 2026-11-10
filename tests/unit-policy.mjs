@@ -66,5 +66,9 @@ check('every movement type the apps use has a rule', ['Adjustment', 'Sale', 'Sal
 check('chat, drafts and the calendar stay open to everyone', (await ok(cashier({ t: 'messages', id: 'x', rec: {} }))) && (await ok(cashier({ t: 'drafts', id: 'x', rec: {} }))) && (await ok(cashier({ t: 'events', id: 'x', rec: {} }))));
 check('an admin can do everything', (await ok(admin(P(null, true)))) && (await ok(admin({ t: 'bankTx', id: 'b', deleted: true }))));
 
+// step 22: insurers and their schemes
+const I = (deleted) => ({ t: 'insurers', id: 'i1', rec: deleted ? undefined : { name: 'Jubilee', schemes: [] }, deleted });
+check('insurers: staff who manage clients (or Finance) may add one; deleting needs Finance', (await ok(manager(I()))) && !(await ok(dispenser(I()))) === !permsOf('dispenser').has('customers') && (await ok(admin(I(true)))) && !(await ok(cashier(I(true)))));
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

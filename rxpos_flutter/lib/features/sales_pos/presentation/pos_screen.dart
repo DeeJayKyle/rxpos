@@ -8,6 +8,7 @@ import 'package:rxpos/core/platform.dart';
 import '../../../core/data/device_settings.dart';
 import '../../../core/data/pharmacy_providers.dart';
 import '../../../core/rules/gs1.dart';
+import '../../../core/rules/insurance.dart';
 import '../../../core/rules/dates.dart';
 import '../../../core/entities/people.dart';
 import '../../../core/rules/permissions.dart';
@@ -227,6 +228,10 @@ class _PosScreenState extends ConsumerState<PosScreen> {
       _say('Your role may give at most ${maxDisc % 1 == 0 ? maxDisc.toInt() : maxDisc}% discount (${d.settings.money((sub * maxDisc / 100).floorToDouble())} on this sale)', error: true);
       return;
     }
+    // step 22: an insured sale needs the client and their member number before anything is asked
+    final ins = s.insured;
+    if (ins != null && s.customerId == walkIn) return _say('Choose the insured client for this sale', error: true);
+    if (ins != null && ins.memberNo.trim().isEmpty) return _say('Enter the client\'s ${ins.insurerName} member number', error: true);
     ControlledEntry? cd;
     MomoPaid? momo;
     var rx = false;
@@ -242,8 +247,9 @@ class _PosScreenState extends ConsumerState<PosScreen> {
       );
       if (!rx) return;
     }
-    if (method.type == 'momo' && mounted) {
-      final total = totalsOf(s.lines, discount: s.discount, settings: d.settings).total;
+    final due = dueOf(ins, totalsOf(s.lines, discount: s.discount, settings: d.settings).total, d.settings);
+    if (method.type == 'momo' && due > 0 && mounted) {
+      final total = due; // the client's part of an insured sale
       final phone = d.customers.where((x) => x.id == s.customerId && x.id != walkIn).firstOrNull?.phone ?? '';
       momo = await askMomo(
         context,
@@ -1002,6 +1008,10 @@ class _SalePanel extends ConsumerWidget {
     String fmt(num n) => formatMoney(n, currency: st.currency, decimals: st.decimalPlaces);
     final t = totalsOf(s.lines, discount: s.discount, settings: st);
     final method = s.method ?? data.methods.first;
+    // step 22: insurers' schemes; an insured sale's client pays the co-pay (due), the insurer the rest
+    final schemes = schemeChoices(ref.watch(tableProvider('insurers')).value ?? const []);
+    final ins = s.insured == null ? null : schemes.where((x) => x.key == s.insured!.key).firstOrNull;
+    final due = dueOf(ins == null ? null : s.insured, t.total, st);
     final held = heldSales(data, wholesale);
     final customer = data.customers.where((x) => x.id == s.customerId).firstOrNull;
     void guard(void Function() f) {
@@ -1263,7 +1273,7 @@ class _SalePanel extends ConsumerWidget {
               final charge = FilledButton(
                 onPressed: s.lines.isEmpty ? null : onCharge,
                 style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16)),
-                child: Text('${advanced ? 'Process checkout' : 'Charge'} ${fmt(t.total)}   [F9]', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                child: Text('${advanced ? 'Process checkout' : 'Charge'} ${fmt(due)}   [F9]', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
               );
               // on a phone: Hold and Proforma side by side, then Charge across the whole width
               if (narrow) {
@@ -1306,6 +1316,44 @@ class _SalePanel extends ConsumerWidget {
                   ),
                 ],
               ),
+              if (schemes.isNotEmpty)
+                Row(children: [
+                  Expanded(
+                    child: DropdownButton<String>(
+                      key: const Key('insurance-scheme'),
+                      isExpanded: true,
+                      value: ins?.key ?? '',
+                      items: [
+                        const DropdownMenuItem(value: '', child: Text('Not insured')),
+                        for (final x in schemes) DropdownMenuItem(value: x.key, child: Text('${x.insurer['name']} · ${x.scheme['name']}', overflow: TextOverflow.ellipsis)),
+                      ],
+                      onChanged: (k) {
+                        final x = schemes.where((y) => y.key == k).firstOrNull;
+                        final member = s.insured?.memberNo.isNotEmpty == true ? s.insured!.memberNo : '${customer?.raw['insuranceNo'] ?? ''}';
+                        c.insure(x == null ? null : Insured(insurer: x.insurer, scheme: x.scheme, memberNo: member));
+                      },
+                    ),
+                  ),
+                  if (ins != null) ...[
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextFormField(
+                        key: ValueKey('member-${ins.key}-${s.lines.isEmpty}'),
+                        initialValue: s.insured?.memberNo ?? '',
+                        decoration: const InputDecoration(labelText: 'Member no.', isDense: true),
+                        onChanged: c.memberNo,
+                      ),
+                    ),
+                  ],
+                ]),
+              if (ins != null) ...[
+                Row(children: [Expanded(child: Text('${ins.insurer['name']} pays')), Text('− ${fmt(t.total - due)}')]),
+                Row(children: [
+                  Text('Client pays', style: th.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+                  const Spacer(),
+                  Text(fmt(due), style: th.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
+                ]),
+              ],
               const SizedBox(height: 8),
               // on a phone the payment methods scroll sideways in one row, so the sale lines keep their room
               if (narrow)
@@ -1338,12 +1386,12 @@ class _SalePanel extends ConsumerWidget {
                     const SizedBox(width: 12),
                     if (method.type == 'cash')
                       Text(
-                        'Change ${fmt((s.tendered ?? t.total) - t.total < 0 ? 0 : (s.tendered ?? t.total) - t.total)}',
+                        'Change ${fmt((s.tendered ?? due) - due < 0 ? 0 : (s.tendered ?? due) - due)}',
                         style: const TextStyle(fontWeight: FontWeight.w700),
                       )
                     else
                       Text(
-                        'On credit ${fmt((t.total - (s.tendered ?? 0)).clamp(0, double.infinity))}',
+                        'On credit ${fmt((due - (s.tendered ?? 0)).clamp(0, double.infinity))}',
                         style: TextStyle(color: Colors.orange.shade800, fontWeight: FontWeight.w700),
                       ),
                   ],

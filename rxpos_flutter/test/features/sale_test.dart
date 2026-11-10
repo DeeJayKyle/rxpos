@@ -7,6 +7,7 @@ import 'package:rxpos/core/database/app_database.dart';
 import 'package:rxpos/core/entities/batch.dart';
 import 'package:rxpos/core/entities/movement.dart';
 import 'package:rxpos/core/entities/product.dart';
+import 'package:rxpos/core/entities/sale.dart';
 import 'package:rxpos/core/entities/settings.dart';
 import 'package:rxpos/core/rules/stock.dart';
 import 'package:rxpos/features/sales_pos/domain/cart.dart';
@@ -122,6 +123,26 @@ void main() {
           stock: stock, wholesale: false, cashier: 'Tia', now: DateTime(2026, 11, 5));
       final item = (sale['items'] as List).single as Map;
       expect((item['alloc'] as List).map((a) => (a as Map)['batchId']), ['b-late']);
+    });
+
+    test('step 22: an insured sale: the client pays the co-pay, the insurer is billed the rest; not the client\'s debt', () async {
+      final stock = view(const [Movement(id: 'm', productId: 'p1', qty: 100, batchId: 'b-late')]);
+      const ins = Insured(insurer: {'id': 'i1', 'name': 'Jubilee'}, scheme: {'id': 'gold', 'name': 'Gold', 'copayPct': 10}, memberNo: ' JB-77 ');
+      final cart = [setCount(addToCart([], para, stock: 100, wholesale: false, settings: s).single, 50)]; // 50 × 60 = 3,000
+      // the client and the member number are needed
+      expect(() => checkCheckout(cart, const Checkout(method: cash, insured: ins), totalsOf(cart, discount: 0, settings: s), settings: s), throwsA(isA<CartProblem>()));
+      expect(() => checkCheckout(cart, Checkout(method: cash, customerId: 'c1', insured: ins.withMember(' ')), totalsOf(cart, discount: 0, settings: s), settings: s), throwsA(isA<CartProblem>()));
+      // 300 tendered is enough for the co-pay
+      final sale = await completeSale(store, cart: cart, c: const Checkout(method: cash, tendered: 500, customerId: 'c1', customerName: 'Grace', insured: ins),
+          settings: s, stock: stock, wholesale: false, cashier: 'Tia');
+      expect((sale['total'], sale['paid'], sale['tendered']), (3000, 300, 500));
+      expect(sale['insurance'], {'insurerId': 'i1', 'insurer': 'Jubilee', 'schemeId': 'gold', 'scheme': 'Gold', 'memberNo': 'JB-77', 'share': 2700});
+      final sales = (await store.rows('sales')).map(Sale.fromRecord).toList();
+      expect((sales.single.balance, sales.single.insuredShare), (0.0, 2700.0));
+      // on credit: the client's part only
+      final credit = await completeSale(store, cart: cart, c: const Checkout(method: PaymentMethod(id: 'credit', name: 'Credit', type: 'credit'), tendered: 100, customerId: 'c1', insured: ins),
+          settings: s, stock: view(const [Movement(id: 'm', productId: 'p1', qty: 100, batchId: 'b-late')]), wholesale: false, cashier: 'Tia');
+      expect((credit['paid'], Sale.fromRecord(credit).balance), (100, 200.0));
     });
 
     test('step 8: credit limits: over only when this sale adds to what is owed beyond the limit', () {

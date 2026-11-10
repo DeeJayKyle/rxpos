@@ -306,6 +306,52 @@ void main() {
     await done(tester);
   });
 
+  testWidgets('step 22: an insured sale: the client pays the co-pay, the insurer owes the rest until it pays', (tester) async {
+    await tester.runAsync(signedIn);
+    final store = RecordStore(db);
+    await tester.runAsync(() => store.update((d) {
+          d.put('insurers', {'id': 'i1', 'name': 'Jubilee Health', 'schemes': [{'id': 'gold', 'name': 'Gold', 'copayPct': 10, 'copayFixed': 0, 'limit': 0}]});
+          d.put('customers', {'id': 'c1', 'name': 'Grace Achieng', 'phone': '0772 555 111', 'insuranceNo': 'JB-77'});
+        }));
+    await start(tester);
+    await toTill(tester);
+    await tester.enterText(find.byKey(const Key('find-client')), '555');
+    await settle(tester, 4);
+    await tester.tap(find.text('Grace Achieng').last);
+    await settle(tester, 4);
+    await tester.enterText(find.widgetWithText(TextField, 'Search medicine or scan barcode…  (F8)'), '7010001');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await settle(tester);
+    await tester.tap(find.byTooltip('More'));
+    await settle(tester);
+    await tester.tap(find.byKey(const Key('insurance-scheme')));
+    await settle(tester, 3);
+    await tester.tap(find.text('Jubilee Health · Gold').last);
+    await settle(tester, 3);
+    expect(find.text('Jubilee Health pays'), findsOneWidget);
+    expect(find.widgetWithText(TextFormField, 'JB-77'), findsOneWidget, reason: 'the member number comes from the client');
+    await tester.tap(find.textContaining('Charge UGX 100 '));
+    await settle(tester);
+    expect(find.text('Sale complete'), findsOneWidget);
+    final sale = (await tester.runAsync(() => store.rows('sales')))!.single;
+    expect((sale['total'], sale['paid'], sale['customerId']), (1000, 100, 'c1'));
+    expect(sale['insurance'], {'insurerId': 'i1', 'insurer': 'Jubilee Health', 'schemeId': 'gold', 'scheme': 'Gold', 'memberNo': 'JB-77', 'share': 900});
+    expect(find.textContaining('Jubilee Health (Gold, member JB-77)'), findsWidgets, reason: 'on the receipt');
+    await tester.tap(find.text('New sale'));
+    await settle(tester);
+    // Insurers: Jubilee owes 900 until it pays
+    await navTo(tester, 'Insurers');
+    expect(find.text('Owes UGX 900'), findsOneWidget);
+    await tester.tap(find.text('Receive payment'));
+    await settle(tester);
+    await tester.tap(find.text('Record payment'));
+    await settle(tester);
+    expect(find.text('Owes UGX 0'), findsOneWidget);
+    final pay = (await tester.runAsync(() => store.rows('payments')))!.single;
+    expect((pay['kind'], pay['partyId'], pay['amount']), ('insurer', 'i1', 900));
+    await done(tester);
+  });
+
   testWidgets('a sale can be held and resumed', (tester) async {
     await tester.runAsync(signedIn);
     await start(tester);

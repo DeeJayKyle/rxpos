@@ -7,6 +7,7 @@ import { useStore, uid, now, daysUntil, put, del, move, allocate, audit, normali
 import { overLimit } from '../credit.js';
 import { parseGs1, findByGtin } from '../gs1.js';
 import { preferFirst } from '../fefo.js';
+import { copayOf, schemeChoices } from '../insurance.js';
 import { maxDiscountOf } from '../access.js';
 import { draftsFor, saleDraft } from '../drafts.js';
 import { keepsData } from '../webpolicy.js';
@@ -83,6 +84,9 @@ export default function POS({ mode = 'retail' }) {
   const [payment, setPayment] = useState(methods[0]?.name || 'Cash');
   const ptype = methods.find((m) => m.name === payment)?.type || 'other';
   const [tendered, setTendered] = useState('');
+  // step 22: the insurer and scheme billed for this sale ('' = not insured) and the patient's member number
+  const [insKey, setInsKey] = useState('');
+  const [memberNo, setMemberNo] = useState('');
   const [done, setDone] = useState(null);
   const searchRef = useRef();
   const gridRef = useRef();
@@ -261,19 +265,25 @@ export default function POS({ mode = 'retail' }) {
   const disc = Math.min(round(Number(discount) || 0, money), subtotal);
   const tax = taxOf(subtotal - disc, db.settings.taxRate, { decimals: money });
   const total = round(subtotal - disc + tax, money);
-  const change = (Number(tendered) || 0) - total;
+  // step 22 (src/insurance.js): an insured sale is split; the patient pays the co-pay now, the insurer owes the rest
+  const schemes = useMemo(() => schemeChoices(db.insurers), [db.insurers]);
+  const insured = schemes.find((x) => x.key === insKey) || null;
+  const split = insured ? copayOf(insured.scheme, total, money) : null;
+  const due = split ? split.copay : total; // what is paid at the till
+  const change = (Number(tendered) || 0) - due;
   const customer = db.customers.find((c) => c.id === customerId);
   const items = cart.reduce((a, l) => a + l.qty, 0);
 
   const branchName = db.branches.find((b) => b.id === branchId)?.name || 'this branch';
 
   // ---- sales on hold: serve the next customer while one is still deciding, then switch back ----
-  const snapshot = () => ({ id: uid(), at: now(), cart, customerId, discount, payment, tendered });
+  const snapshot = () => ({ id: uid(), at: now(), cart, customerId, discount, payment, tendered, insKey, memberNo });
   function loadSale(x) {
     cdRef.current = null;
     // stock may have moved while the sale was on hold: each line's limit is today's stock
     setCart((x.cart || []).map((l) => { const p = products.find((y) => y.id === l.id); return p ? { ...l, max: p.stock, qty: Math.min(l.qty, Math.max(1, p.stock)) } : l; })); setCustomerId(x.customerId || 'walk-in'); setDiscount(x.discount || 0);
     setPayment(methods.some((m) => m.name === x.payment) ? x.payment : methods[0]?.name || 'Cash'); setTendered(x.tendered || ''); setPicked(new Set()); setCursor(-1);
+    setInsKey(x.insKey || ''); setMemberNo(x.memberNo || '');
   }
   const clearSale = () => loadSale({});
   const holdSale = async () => {
@@ -384,7 +394,9 @@ export default function POS({ mode = 'retail' }) {
     const credit = ptype === 'credit';
     if (credit && customerId === 'walk-in') return toast('Select a registered customer for a credit sale', 'warn');
     if (capture === 'required' && customerId === 'walk-in') return toast('Choose or add the client for this sale', 'warn');
-    if (ptype === 'cash' && tendered !== '' && change < 0) return toast('Amount tendered is less than the total', 'error');
+    if (insured && customerId === 'walk-in') return toast('Choose the insured client for this sale', 'warn');
+    if (insured && !memberNo.trim()) return toast(`Enter the client's ${insured.insurer.name} member number`, 'warn');
+    if (ptype === 'cash' && tendered !== '' && change < 0) return toast(`Amount tendered is less than ${split ? 'the client pays' : 'the total'}`, 'error');
     // step 20: the role's discount ceiling (a proforma's discount was set by whoever made the quotation)
     const maxDisc = maxDiscountOf(db, user.role);
     if (maxDisc != null && disc > 0 && subtotal > 0 && !location.state?.proforma && (disc / subtotal) * 100 > maxDisc + 1e-9)
@@ -398,7 +410,7 @@ export default function POS({ mode = 'retail' }) {
     // step 8: a credit sale over the client's limit: Finance roles go on; others give a reason (audited, flagged)
     let creditOver = null;
     if (credit) {
-      const over = overLimit({ limit: customer?.creditLimit, owed: customerBalance(db, customerId), total, tendered });
+      const over = overLimit({ limit: customer?.creditLimit, owed: customerBalance(db, customerId), total: due, tendered });
       if (over && can('finance')) creditOver = { ...over, finance: true };
       else if (over) {
         const reason = await askText({ title: 'Over the credit limit', message: `${customer.name} owes ${fmt(over.owed)}. This sale adds ${fmt(over.adds)} on credit, over the limit of ${fmt(over.limit)}. Why sell on credit anyway? The reason is recorded in the audit log and the owner is told.`, confirmText: 'Sell on credit', minLength: 3 });
@@ -406,7 +418,7 @@ export default function POS({ mode = 'retail' }) {
         creditOver = { ...over, reason };
       }
     }
-    if (ptype === 'momo') {
+    if (ptype === 'momo' && due > 0) {
       const phone = normalizePhone(customer?.phone || '');
       if (syncCfg.url && navigator.onLine) cloudConfig(syncCfg).then(setPayCfg).catch(() => setPayCfg({}));
       return setMomo({ phone: customer?.phone || '', network: phone ? guessNetwork(phone) : 'mtn', stage: 'enter', ref: '', manualRef: '' });
@@ -420,7 +432,7 @@ export default function POS({ mode = 'retail' }) {
   const finalize = async (extra = {}) => {
     if (saving.current) return;
     const credit = ptype === 'credit';
-    const paid = credit ? Math.min(Number(tendered) || 0, total) : total;
+    const paid = credit ? Math.min(Number(tendered) || 0, due) : due;
     // Split each line across batches, earliest expiry first
     const items = cart.map((l) => ({ ...l, controlled: isCd(l) })).map(({ id, name, price, cost, qty, allowExpired, directions, controlled, pack, preferBatch }) => ({
       id, name, price: Number(price), cost, qty, ...(directions ? { directions } : {}), ...(controlled ? { controlled: true } : {}),
@@ -430,9 +442,10 @@ export default function POS({ mode = 'retail' }) {
     const sale = {
       id: uid(), number: '', date: now(), type: mode, branchId, // numbered in the commit below (step 7)
       items, subtotal, discount: disc, tax, total, payment, paid,
-      tendered: ptype === 'cash' ? Number(tendered) || total : paid,
+      tendered: ptype === 'cash' ? Number(tendered) || due : paid,
       bankId: ptype === 'cash' || credit ? CASH : db.settings.nonCashBankId || CASH,
-      customerId, customerName: customer?.name || 'Walk-in Customer', cashier: user.name, status: 'completed', ...(location.state?.proforma?.id ? { proformaId: location.state.proforma.id } : {}), ...(cart.some(isCd) && cdRef.current ? { controlled: cdRef.current } : {}), ...(cart.some((l) => l.allowExpired) ? { expiredOverride: true } : {}), ...extra,
+      customerId, customerName: customer?.name || 'Walk-in Customer', cashier: user.name, status: 'completed', ...(location.state?.proforma?.id ? { proformaId: location.state.proforma.id } : {}), ...(cart.some(isCd) && cdRef.current ? { controlled: cdRef.current } : {}), ...(cart.some((l) => l.allowExpired) ? { expiredOverride: true } : {}),
+      ...(split ? { insurance: { insurerId: insured.insurer.id, insurer: insured.insurer.name, schemeId: insured.scheme.id, scheme: insured.scheme.name, memberNo: memberNo.trim(), share: split.insurer } } : {}), ...extra,
     };
     const expiredLines = cart.filter((l) => l.allowExpired); // 1.6
     saving.current = true;
@@ -470,7 +483,7 @@ export default function POS({ mode = 'retail' }) {
     const run = ++pollRef.current;
     try {
       const reference = 'PP' + Date.now().toString(36).toUpperCase();
-      const { ref } = await payRequest(syncCfg, { provider: momo.network, phone, amount: total, reference, note: `${db.settings.name} payment` });
+      const { ref } = await payRequest(syncCfg, { provider: momo.network, phone, amount: due, reference, note: `${db.settings.name} payment` });
       setMomo((m) => ({ ...m, ref }));
       for (let i = 0; i < 45 && run === pollRef.current; i++) {
         await new Promise((r) => setTimeout(r, 4000));
@@ -742,6 +755,18 @@ export default function POS({ mode = 'retail' }) {
           {layout !== 'classic' && disc > 0 && <div className="row between promo-row"><span className="muted">Promos / member discount</span><span className="num">− {fmt(disc)}</span></div>}
           {tax > 0 && <div className="row between"><span className="muted">Tax ({db.settings.taxRate}%)</span><span className="num">{fmt(tax)}</span></div>}
           <div className="row between grand"><span>Total{layout !== 'classic' && <small className="grand-sub">Net balance due</small>}</span><span className="num bump" key={total}>{fmt(total)}</span></div>
+          {schemes.length > 0 && (
+            <div className="row gap insure-row">
+              <label className="field grow"><span>Insurance</span>
+                <select aria-label="Insurance scheme" value={insKey} onChange={(e) => { setInsKey(e.target.value); if (e.target.value && !memberNo) setMemberNo(customer?.insuranceNo || ''); }}>
+                  <option value="">Not insured</option>
+                  {schemes.map((x) => <option key={x.key} value={x.key}>{x.insurer.name} · {x.scheme.name}</option>)}
+                </select></label>
+              {insured && <label className="field grow"><span>Member no.</span><input aria-label="Member number" value={memberNo} onChange={(e) => setMemberNo(e.target.value)} /></label>}
+            </div>
+          )}
+          {split && <div className="row between"><span className="muted">{insured.insurer.name} pays</span><span className="num">− {fmt(split.insurer)}</span></div>}
+          {split && <div className="row between grand"><span>Client pays</span><span className="num">{fmt(due)}</span></div>}
         </div>
         <div className="pay-methods">
           {methods.map((m, i) => <button key={m.id} className={'chip pay-' + (m.type || 'other') + (payment === m.name ? ' active' : '')} onClick={() => setPayment(m.name)} title={i < 9 ? `Alt+${i + 1}` : undefined}>{m.name}{i < 9 && !touch && <kbd>{i + 1}</kbd>}</button>)}
@@ -752,19 +777,19 @@ export default function POS({ mode = 'retail' }) {
               <input type="number" step="any" value={tendered} onChange={(e) => setTendered(e.target.value)} /></label>
             {ptype === 'cash'
               ? <div className="change">Change<br /><strong>{fmt(Math.max(change, 0))}</strong></div>
-              : <div className="change">On credit<br /><strong className="text-warn">{fmt(Math.max(total - (Number(tendered) || 0), 0))}</strong></div>}
+              : <div className="change">On credit<br /><strong className="text-warn">{fmt(Math.max(due - (Number(tendered) || 0), 0))}</strong></div>}
           </div>
         )}
         <div className="row gap pay-row">
           <button className="btn ghost" onClick={saveProforma} disabled={!cart.length} title="F10"><FileText size={16} />Proforma</button>
           <button className="btn ghost" onClick={holdSale} disabled={!cart.length} title="Alt+H"><PauseCircle size={16} />Hold</button>
-          <button ref={chargeRef} className={'btn primary grow big' + (narrow ? ' charge-dup' : '')} onClick={checkout} disabled={!cart.length} title="F9"><span>{useAdvancedLayout ? 'Process checkout' : 'Charge'} {fmt(total)}{!touch && (layout !== 'classic' || premium) && <small className="kbd-sub">[F9]</small>}</span></button>
+          <button ref={chargeRef} className={'btn primary grow big' + (narrow ? ' charge-dup' : '')} onClick={checkout} disabled={!cart.length} title="F9"><span>{useAdvancedLayout ? 'Process checkout' : 'Charge'} {fmt(due)}{!touch && (layout !== 'classic' || premium) && <small className="kbd-sub">[F9]</small>}</span></button>
         </div>
         </div>
       </section>
 
       {momo && (
-        <Modal title={<><Smartphone size={18} /> Mobile Money – {fmt(total)}</>} onClose={() => { pollRef.current++; setMomo(null); }}>
+        <Modal title={<><Smartphone size={18} /> Mobile Money – {fmt(due)}</>} onClose={() => { pollRef.current++; setMomo(null); }}>
           {momo.stage === 'waiting' ? (
             <div className="cart-empty">
               <Loader2 size={40} className="spin" />

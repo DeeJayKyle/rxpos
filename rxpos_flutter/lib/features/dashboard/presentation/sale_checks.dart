@@ -19,6 +19,7 @@ const saleCheckKinds = {
   'late': 'Recorded after the day was closed',
   'discount-limit': 'Discount above the role\'s limit',
   'closed-refund': 'Refund from a closed day',
+  'insurance': 'Insurance split doesn’t add up',
 };
 
 class SaleChecksCard extends ConsumerWidget {

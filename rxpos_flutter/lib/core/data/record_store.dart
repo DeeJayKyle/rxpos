@@ -25,6 +25,7 @@ const syncedTables = [
   'dayCloses', // step 18: closed days per branch (core/rules/day_close.dart)
   'counters', // step 7: each till's document counts (core/rules/doc_numbers.dart), saved with the documents
   'anomalies', // sale checks written by the cloud (worker/anomalies.js); only roles with the audit log receive them
+  'insurers', // step 22: insurers and their schemes (core/rules/insurance.dart)
   // only this app (Payroll & HR, scheduled report emails); the React app skips tables it does not know
   'employees', 'attendance', 'salaryAdvances', 'payrolls', 'reportSchedules',
 ];

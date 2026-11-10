@@ -13,6 +13,20 @@ import '../../../core/network/cloud_api.dart';
 import '../../../core/rules/money.dart';
 import '../../extras/domain/extras.dart';
 
+// step 22: what an insurer is billed on a sale, and what the client still owes (shown on the receipt even after a
+// refund, as before; src/pages/Sales.jsx billed / unpaid)
+double _billed(Sale s) {
+  final v = ((s.raw['insurance'] as Map?)?['share'] as num?)?.toDouble() ?? 0;
+  return v > 0 ? v : 0;
+}
+
+double _unpaid(Sale s) => s.total - s.paid - _billed(s);
+
+String _insuredLine(Sale s) {
+  final i = s.raw['insurance'] as Map;
+  return '${i['insurer']} (${i['scheme']}, member ${i['memberNo']})';
+}
+
 /// The receipt as plain text (WhatsApp, SMS), like src/pages/Sales.jsx receiptText.
 String receiptText(Sale s, PharmacySettings st) {
   String fmt(num n) => formatMoney(n, currency: st.currency, decimals: st.decimalPlaces);
@@ -32,7 +46,8 @@ String receiptText(Sale s, PharmacySettings st) {
     if (s.tax > 0) 'Tax: ${fmt(s.tax)}',
     '*TOTAL: ${fmt(s.total)}*',
     'Paid (${s.payment}): ${fmt(paid)}',
-    if (paid < s.total) 'Balance: ${fmt(s.total - paid)}',
+    if (s.raw['insurance'] is Map) '${_insuredLine(s)}: ${fmt(_billed(s))}',
+    if (_unpaid(s) > 0.005) 'Balance: ${fmt(_unpaid(s))}',
     '',
     '${st.raw['receiptFooter'] ?? ''}'.isEmpty ? 'Thank you. Get well soon!' : '${st.raw['receiptFooter']}',
   ].join('\n');
@@ -92,8 +107,9 @@ Future<Uint8List> receiptPdf(Sale s, PharmacySettings st) async {
           if (s.tax > 0) row('Tax', fmt(s.tax)),
           row('Total', fmt(s.total), bold: true),
           if (!proforma) row('Paid (${s.payment})', fmt(s.paid)),
-          if (!proforma && s.tendered > s.total) row('Change', fmt(s.tendered - s.total)),
-          if (!proforma && s.paid < s.total) row('Balance on credit', fmt(s.total - s.paid), bold: true),
+          if (!proforma && s.tendered > s.paid) row('Change', fmt(s.tendered - s.paid)),
+          if (!proforma && s.raw['insurance'] is Map) row(_insuredLine(s), fmt(_billed(s))),
+          if (!proforma && _unpaid(s) > 0.005) row('Balance on credit', fmt(_unpaid(s)), bold: true),
           if (s.raw['momo'] case final Map m)
             pw.Text(
               'Mobile Money ${m['txid'] ?? m['ref'] ?? ''} (${m['confirmed'] == true ? 'confirmed by ${m['provider'] == 'airtel' ? 'Airtel' : 'MTN'}' : 'recorded by staff'})',
@@ -179,8 +195,9 @@ class _ReceiptDialogState extends ConsumerState<_ReceiptDialog> {
                   Text(fmt(s.total), style: const TextStyle(fontWeight: FontWeight.w800)),
                 ],
               ),
-              if (s.tendered > s.total) Text('Change ${fmt(s.tendered - s.total)}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-              if (s.paid < s.total) Text('Balance on credit ${fmt(s.total - s.paid)}'),
+              if (s.tendered > s.paid) Text('Change ${fmt(s.tendered - s.paid)}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+              if (s.raw['insurance'] is Map) Text('Billed to ${_insuredLine(s)}: ${fmt(_billed(s))}'),
+              if (_unpaid(s) > 0.005) Text('Balance on credit ${fmt(_unpaid(s))}'),
               const SizedBox(height: 12),
               const Text('Send the receipt to the customer', style: TextStyle(fontSize: 12)),
               Row(
@@ -251,7 +268,7 @@ class _ReceiptDialogState extends ConsumerState<_ReceiptDialog> {
 /// (src/pages/Sales.jsx SaleInvoice).
 Future<Uint8List> invoicePdf(Sale s, PharmacySettings st, {String customerPhone = '', String customerAddress = ''}) async {
   String fmt(num n) => formatMoney(n, currency: st.currency, decimals: st.decimalPlaces);
-  final due = s.total - s.paid;
+  final due = _unpaid(s);
   final momo = s.raw['momo'] is Map ? (s.raw['momo'] as Map) : null;
   final tin = '${st.raw['tin'] ?? ''}', footer = '${st.raw['receiptFooter'] ?? ''}';
   pw.Widget row(String a, String b, {bool bold = false}) => pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
@@ -307,6 +324,7 @@ Future<Uint8List> invoicePdf(Sale s, PharmacySettings st, {String customerPhone 
             if (s.tax > 0) row('Tax', fmt(s.tax)),
             row('Total', fmt(s.total), bold: true),
             row('Paid (${s.payment}${momo?['txid'] != null && '${momo!['txid']}'.isNotEmpty ? ' · ref ${momo['txid']}' : ''})', fmt(s.paid)),
+            if (s.raw['insurance'] is Map) row('Billed to ${_insuredLine(s)}', fmt(_billed(s))),
             if (due > 0) row('Balance due', fmt(due), bold: true),
           ])),
         ),

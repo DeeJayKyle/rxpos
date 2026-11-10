@@ -65,5 +65,14 @@ const { maxDiscountOf } = await import('../src/access.js');
 const roleDb = { roles: [{ id: 'cashier', permissions: ['pos.sell'], maxDiscount: 10 }, { id: 'stock', permissions: [], maxDiscount: '' }] };
 check('a role\'s limit from Users & roles; none set = no limit; admins never limited', maxDiscountOf(roleDb, 'cashier') === 10 && maxDiscountOf(roleDb, 'stock') === null && maxDiscountOf(roleDb, 'pharmacist') === null && maxDiscountOf({ roles: [{ id: 'admin', maxDiscount: 1 }] }, 'admin') === null);
 
+// step 22: insurance
+const ins = (share, paid) => sale({ customerId: 'c1', paid, insurance: { insurerId: 'i1', insurer: 'Jubilee', share } });
+check('an insured sale that adds up is not flagged', (await kinds(ins(1800, 200))) === '');
+const bi = await saleFindings(ins(1900, 200), products, cashier);
+check('an insurer share and co-pay above the total is flagged', bi.map((f) => f.kind).join() === 'insurance' && bi[0].amount === 100 && /Jubilee is billed 1,900/.test(bi[0].detail), bi[0]?.detail);
+check('a negative insurer share is flagged', (await kinds(ins(-5, 2000))) === 'insurance');
+check('the insurer\'s share is not credit: a client with a credit limit is not flagged for it', (await saleFindings(ins(1800, 200), products, cashier, { credit: { limit: 100, owed: 0 } })).length === 0);
+check('the insurer share is part of the money view (changing it is a sale edit); an uninsured sale\'s view is unchanged', moneyView(ins(1800, 200)) !== moneyView(ins(1700, 200)) && moneyView(sale()) === moneyView({ ...sale(), insurance: undefined }) && !moneyView(sale()).includes('i1'));
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

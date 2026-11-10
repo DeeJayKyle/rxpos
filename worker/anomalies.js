@@ -47,10 +47,16 @@ export async function saleFindings(sale, products, can, ctx = {}) {
     out.push({ kind: 'totals', detail: `${money(subtotal)} − discount ${money(discount)} + tax ${money(tax)} is ${money(subtotal - discount + tax)}, but the total says ${money(total)}`, amount: Math.abs(subtotal - discount + tax - total) });
   if (paid > total + 1)
     out.push({ kind: 'paid', detail: `Paid ${money(paid)} is more than the total ${money(total)}`, amount: paid - total });
+  // step 22: an insured sale: the insurer's share and what the patient paid can't come to more than the sale
+  if (sale.insurance) {
+    const share = num(sale.insurance.share);
+    if (share < 0 || paid + share > total + 1)
+      out.push({ kind: 'insurance', detail: `${sale.insurance.insurer || 'The insurer'} is billed ${money(share)} and the patient paid ${money(paid)}: more than the total ${money(total)}`, amount: Math.abs(paid + share - total) });
+  }
 
   // step 8: over the client's credit limit, by a role without Finance (the apps ask for a reason; an older app does not)
   if (ctx.credit) {
-    const over = overLimit({ limit: ctx.credit.limit, owed: ctx.credit.owed, total, tendered: paid });
+    const over = overLimit({ limit: ctx.credit.limit, owed: ctx.credit.owed, total: total - Math.max(0, num(sale.insurance?.share)), tendered: paid });
     if (over && !(await can('finance'))) {
       const why = sale.creditOver?.reason ? `Reason given: ${String(sale.creditOver.reason).slice(0, 200)}` : 'No reason given';
       out.push({ kind: 'credit', detail: `${sale.customerName || 'The client'} owed ${money(over.owed)}; this sale put ${money(over.adds)} on credit, over the limit of ${money(over.limit)}. ${why}`, amount: Math.round(over.owed + over.adds - over.limit) });

@@ -15,7 +15,7 @@ import '../../auth/application/session_controller.dart';
 import '../../people/domain/balances.dart';
 import '../domain/ledger.dart';
 
-const _tables = ['sales', 'purchases', 'supplierReturns', 'expenses', 'expenseCategories', 'payments', 'loans', 'bankTx', 'banks', 'customers', 'suppliers', 'dayCloses'];
+const _tables = ['sales', 'purchases', 'supplierReturns', 'expenses', 'expenseCategories', 'payments', 'loans', 'bankTx', 'banks', 'customers', 'suppliers', 'dayCloses', 'insurers'];
 const payMethods = ['Cash', 'Mobile Money', 'Bank Transfer', 'Cheque', 'Card'];
 const financeTabs = [
   ('accounts', 'Banks'), ('cashbook', 'Cash Book'), ('expenses', 'Expenses'), ('categories', 'Expense Categories'), ('banking', 'Deposits & Withdrawals'), ('loans', 'Loans'),
@@ -274,7 +274,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
       const FormFieldSpec('date', 'Date', kind: FieldKind.date, required: true),
       const FormFieldSpec('amount', 'Amount', kind: FieldKind.number, required: true),
       FormFieldSpec('method', 'Method', kind: FieldKind.choice, options: [for (final m in payMethods) (m, m)]),
-      FormFieldSpec('bankId', kind == 'customer' ? 'Received into' : 'Paid from', kind: FieldKind.choice, options: bankOpts),
+      FormFieldSpec('bankId', kind == 'customer' || kind == 'insurer' ? 'Received into' : 'Paid from', kind: FieldKind.choice, options: bankOpts),
       const FormFieldSpec('note', 'Note'),
     ]);
     if (v == null) return;
@@ -362,12 +362,12 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
 
   Widget _payments(Map<String, List<Map<String, Object?>>> data, String Function(Object?) bankName, PharmacySettings st) {
     String who(Map<String, Object?> p) {
-      final table = switch (p['kind']) { 'customer' => 'customers', 'supplier' => 'suppliers', _ => 'loans' };
-      final r = data[table]!.where((x) => x['id'] == p['partyId']).firstOrNull;
+      final table = switch (p['kind']) { 'customer' => 'customers', 'supplier' => 'suppliers', 'insurer' => 'insurers', _ => 'loans' };
+      final r = data[table]?.where((x) => x['id'] == p['partyId']).firstOrNull;
       return '${r?['name'] ?? r?['lender'] ?? '—'}';
     }
 
-    const label = {'customer': 'From customer', 'supplier': 'To supplier', 'loan': 'Loan repayment'};
+    const label = {'customer': 'From customer', 'insurer': 'From insurer', 'supplier': 'To supplier', 'loan': 'Loan repayment'};
     final rows = [...data['payments']!]..sort((a, b) => '${b['date']}'.compareTo('${a['date']}'));
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       _head([
@@ -382,8 +382,8 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
             dense: true,
             title: Text('${label[p['kind']] ?? p['kind']} · ${who(p)}'),
             subtitle: Text('${p['date']} · ${p['method'] ?? ''} · ${bankName(p['bankId'])}${'${p['note'] ?? ''}'.isEmpty ? '' : ' · ${p['note']}'}${p['by'] == null ? '' : ' · by ${p['by']}'}'),
-            trailing: Text('${p['kind'] == 'customer' ? '+' : '−'}${st.money((p['amount'] as num?) ?? 0)}',
-                style: TextStyle(color: p['kind'] == 'customer' ? Colors.green.shade700 : Theme.of(context).colorScheme.error)),
+            trailing: Text('${p['kind'] == 'customer' || p['kind'] == 'insurer' ? '+' : '−'}${st.money((p['amount'] as num?) ?? 0)}',
+                style: TextStyle(color: p['kind'] == 'customer' || p['kind'] == 'insurer' ? Colors.green.shade700 : Theme.of(context).colorScheme.error)),
           ),
       ], 'No payments yet')),
     ]);

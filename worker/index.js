@@ -745,14 +745,15 @@ async function sync(env, body, who, ctx) {
     }
     for (const sale of toCheck.values()) {
       // step 8: a sale left partly unpaid, to a client with a credit limit: what they owed before it, from the cloud's
-      // own records (the Debtors figure: unpaid credit sales not refunded, less their payments)
+      // own records (the Debtors figure: unpaid credit sales not refunded, less their payments; an insurer's share is
+      // the insurer's debt, not the client's, step 22)
       let credit = null;
       const cid = String(sale.customerId || '');
-      if (cid && cid !== 'walk-in' && Number(sale.total) - Number(sale.paid ?? sale.total) > 0.5) {
+      if (cid && cid !== 'walk-in' && Number(sale.total) - Number(sale.paid ?? sale.total) - (Number(sale.insurance?.share) || 0) > 0.5) {
         const limit = Number((await existingRec(db, tenant, 'customers', cid))?.creditLimit) || 0;
         if (limit > 0) {
           const [unpaid, paidIn] = await db.batch([
-            db.prepare("SELECT COALESCE(SUM(json_extract(rec, '$.total') - COALESCE(json_extract(rec, '$.paid'), json_extract(rec, '$.total'))), 0) v FROM records WHERE tenant = ?1 AND t = 'sales' AND deleted = 0 AND id != ?3 AND json_extract(rec, '$.customerId') = ?2 AND COALESCE(json_extract(rec, '$.status'), '') != 'refunded'").bind(tenant, cid, String(sale.id)),
+            db.prepare("SELECT COALESCE(SUM(json_extract(rec, '$.total') - COALESCE(json_extract(rec, '$.paid'), json_extract(rec, '$.total')) - COALESCE(json_extract(rec, '$.insurance.share'), 0)), 0) v FROM records WHERE tenant = ?1 AND t = 'sales' AND deleted = 0 AND id != ?3 AND json_extract(rec, '$.customerId') = ?2 AND COALESCE(json_extract(rec, '$.status'), '') != 'refunded'").bind(tenant, cid, String(sale.id)),
             db.prepare("SELECT COALESCE(SUM(json_extract(rec, '$.amount')), 0) v FROM records WHERE tenant = ?1 AND t = 'payments' AND deleted = 0 AND json_extract(rec, '$.kind') = 'customer' AND json_extract(rec, '$.partyId') = ?2").bind(tenant, cid),
           ], 'read');
           credit = { limit, owed: Number(unpaid.results?.[0]?.v || 0) - Number(paidIn.results?.[0]?.v || 0) };

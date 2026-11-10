@@ -42,6 +42,7 @@ const P = {
   Proformas: page(() => import('./pages/Proformas.jsx')),
   Prescriptions: page(() => import('./pages/Prescriptions.jsx')),
   Customers: page(ppl, 'Customers'), Suppliers: page(ppl, 'Suppliers'),
+  Insurers: page(() => import('./pages/Insurers.jsx')),
   MedicineList: page(inv, 'MedicineList'), Formulations: page(inv, 'Formulations'), StockLevels: page(inv, 'StockLevels'),
   QuickEdit: page(inv, 'QuickEdit'), StockCard: page(inv, 'StockCard'), Expiry: page(inv, 'Expiry'),
   AddStock: page(() => import('./pages/Purchases.jsx'), 'AddStock'), Purchases: page(() => import('./pages/Purchases.jsx')),
@@ -88,6 +89,7 @@ const NAV = [
   { group: 'People', items: [
     ['/customers', 'Customers', Users, null, null, <P.Customers />, 'customers'],
     ['/suppliers', 'Suppliers', Truck, null, null, <P.Suppliers />, 'suppliers'],
+    ['/insurers', 'Insurers', ShieldCheck, null, null, <P.Insurers />, ['customers', 'finance']],
     ['/chat', 'Chat & Messages', MessagesSquare, null, 'chat', <P.Chat />, 'chat', 'chat'],
     ['/reminders', 'Reminders', BellRing, null, null, <P.Reminders />, 'reminders', 'reminders'],
     ['/messages', 'Messages & SMS', Megaphone, null, null, <P.Messages />, 'reminders', 'reminders'],
