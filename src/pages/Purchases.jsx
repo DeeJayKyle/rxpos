@@ -23,6 +23,9 @@ import { Link, useNavigate } from 'react-router-dom';
 const NEW = '__new__'; // a line for a medicine that is not in the list yet
 const FORMS = ['Tablets', 'Capsules', 'Syrups', 'Suspensions', 'Injectables', 'Creams', 'Ointments', 'Drops', 'Sachets', 'Devices', 'Surgicals', 'Others'];
 const round2 = (n) => Math.round(n * 100) / 100;
+/** What a new medicine is sold by, from its formulation (it is received by the box and sold by these) */
+const unitForForm = (form) => ({ Tablets: 'Tablet', Capsules: 'Capsule', Sachets: 'Sachet', Syrups: 'Bottle', Suspensions: 'Bottle', Injectables: 'Vial', Drops: 'Bottle', Creams: 'Tube', Ointments: 'Tube' })[form] || 'Unit';
+const NEW_PACK = '__pack__'; // "New pack size…" in Received as
 const numOrBlank = (n) => (n === '' || n == null || !Number.isFinite(Number(n)) ? '' : String(round2(Number(n))));
 /** Unit cost exactly as entered: a line typed as a total keeps total ÷ qty unrounded, so qty × cost = the invoice total */
 const unitCost = (l) => (l.by === 'total' && l.total !== '' && Number(l.qty) > 0 ? Number(l.total) / Number(l.qty) : Number(l.cost) || 0);
@@ -337,6 +340,14 @@ export function AddStock() {
       if (!freshIds.has(name.toLowerCase())) freshIds.set(name.toLowerCase(), uid());
     }
     const nameOf = (l) => (l.productId === NEW ? l.name.trim().replace(/\s+/g, ' ') : products.find((p) => p.id === l.productId)?.name);
+    // received by a pack: its size is whole units (2 or more); a new size is added to the medicine, under a name it doesn't use yet
+    for (const l of lines.filter((x) => x.newPack || Number(x.recvSize) > 1)) {
+      const size = Number(l.recvSize), name = String(l.recvPack || '').trim();
+      if (!(Number.isInteger(size) && size >= 2)) return toast(`${nameOf(l)}: how many ${(products.find((x) => x.id === l.productId)?.unit || unitForForm(l.form)).toLowerCase()}s are in one ${name.toLowerCase() || 'pack'}? (2 or more)`, 'warn');
+      if (!name) return toast(`${nameOf(l)}: give the pack a name (e.g. Box)`, 'warn');
+      const same = packsOf(products.find((x) => x.id === l.productId)).find((k) => k.name.toLowerCase() === name.toLowerCase());
+      if (same && Number(same.size) !== size) return toast(`${nameOf(l)} already has a ${same.name} of ${same.size}. Choose it, or call the new pack something else (e.g. "${same.name} of ${size}")`, 'warn');
+    }
     const noExpiry = lines.find((l) => !l.expiry);
     if (noExpiry) return toast(`Enter the expiry date for ${nameOf(noExpiry)} (needed for first-expiry-first-out)`, 'warn');
     const expired = lines.find((l) => daysUntil(l.expiry) < 0);
@@ -362,9 +373,11 @@ export function AddStock() {
         if (l.productId !== NEW) continue;
         const id = idOf(l);
         if (d.products.some((x) => x.id === id)) continue;
-        const cost = unitCost(l), barcode = l.barcode && !used.has(l.barcode) ? l.barcode : newInternalBarcode(used);
+        const cost = baseCost(l), barcode = l.barcode && !used.has(l.barcode) ? l.barcode : newInternalBarcode(used);
         used.add(barcode);
-        put(d, 'products', { id, name: nameOf(l), generic: '', form: l.form || 'Others', unit: 'Unit', price: Number(l.price), wholesale: markupPrice(cost, s.wholesaleMarkup, s.priceRound) || Number(l.price), cost, reorder: 0, barcode });
+        // received by the box: the medicine is sold by the unit (tablets, capsules…) and keeps the box as its pack
+        const pack = Number(l.recvSize) > 1 ? [{ name: String(l.recvPack || 'Box').trim(), size: Number(l.recvSize) }] : [];
+        put(d, 'products', { id, name: nameOf(l), generic: '', form: l.form || 'Others', unit: unitForForm(l.form), price: Number(l.price), wholesale: markupPrice(cost, s.wholesaleMarkup, s.priceRound) || Number(l.price), cost, reorder: 0, barcode, ...(pack.length ? { packs: pack } : {}) });
         audit(d, user, 'Medicine added', `${nameOf(l)} (on receiving ${purchase.number})`, branchId);
       }
       lines.forEach((l, n) => {
@@ -375,8 +388,12 @@ export function AddStock() {
         purchase.items[n].batchId = b.id;
         move(d, { productId: p.id, qty: purchase.items[n].qty, type: 'Purchase', ref: purchase.invoice || purchase.number, user: user.name, batchId: b.id, branchId });
         const price = Number(l.price) || p.price;
-        if (cost !== p.cost || price !== p.price) {
-          put(d, 'products', { ...p, cost: cost || p.cost, price });
+        // a pack size the medicine didn't have: it is added, so it can be received (and sold) by it again
+        const packName = String(l.recvPack || '').trim(), size = Number(l.recvSize);
+        const newPack = l.productId !== NEW && size > 1 && packName && !packsOf(p).some((k) => k.name.toLowerCase() === packName.toLowerCase());
+        if (cost !== p.cost || price !== p.price || newPack) {
+          put(d, 'products', { ...p, cost: cost || p.cost, price, ...(newPack ? { packs: [...(p.packs || []), { name: packName, size }] } : {}) });
+          if (newPack) audit(d, user, 'Pack added', `${p.name}: ${packName} of ${size} (on receiving)`, branchId);
           if (price !== p.price && l.productId !== NEW) audit(d, user, 'Price changed', `${p.name}: ${fmt(p.price)} → ${fmt(price)} (on receiving)`, branchId);
         }
       });
@@ -521,17 +538,37 @@ export function AddStock() {
                     ),
                     qty: (
                     <td key="qty" data-label="Qty"><input type="number" min="1" step="any" inputMode="decimal" value={l.qty} onChange={(e) => setLine(l.key, { qty: e.target.value })} aria-label="Quantity" />
-                      {packs.length > 0 && (
-                        <select className="pack-select" value={l.recvPack || ''} aria-label="Received as" onChange={(e) => { const k = packs.find((x) => x.name === e.target.value), size = k ? Number(k.size) : 1; setLine(l.key, { recvPack: k?.name || '', recvSize: size, ...(baseCost(l) > 0 ? { cost: numOrBlank(baseCost(l) * size) } : {}) }); }}>
-                          <option value="">{p.unit || 'Unit'}s</option>
-                          {packs.map((k) => <option key={k.name} value={k.name}>{k.name}s of {k.size}</option>)}
-                        </select>
-                      )}
-                      {Number(l.recvSize) > 1 && <small className="price-hint muted">= {(Number(l.qty) || 0) * l.recvSize} {(p?.unit || 'unit').toLowerCase()}s</small>}
+                      {l.productId && (() => {
+                        // step: received by the box (or any pack), sold by the unit; a pack size the medicine doesn't have yet is added to it
+                        const unit = p?.unit || unitForForm(l.form);
+                        const known = packs.some((k) => k.name === l.recvPack && Number(k.size) === Number(l.recvSize));
+                        const choice = l.newPack ? NEW_PACK : Number(l.recvSize) > 1 && known ? l.recvPack : Number(l.recvSize) > 1 ? NEW_PACK : '';
+                        return (<>
+                          <select className="pack-select" value={choice} aria-label="Received as" onChange={(e) => {
+                            if (e.target.value === NEW_PACK) return replaceLine(l.key, { ...l, newPack: true, recvPack: l.recvPack || 'Box', recvSize: Number(l.recvSize) > 1 ? l.recvSize : '' });
+                            const k = packs.find((x) => x.name === e.target.value), size = k ? Number(k.size) : 1;
+                            setLine(l.key, { newPack: false, recvPack: k?.name || '', recvSize: size, ...(baseCost(l) > 0 ? { cost: numOrBlank(baseCost(l) * size) } : {}) });
+                          }}>
+                            <option value="">{unit}s</option>
+                            {packs.map((k) => <option key={k.name} value={k.name}>{k.name}s of {k.size}</option>)}
+                            <option value={NEW_PACK}>{packs.length ? 'Other pack size…' : 'Boxes / packs of…'}</option>
+                          </select>
+                          {choice === NEW_PACK && (
+                            <span className="row gap new-pack">
+                              <input className="small-input" aria-label="Pack name" placeholder="Box" value={l.recvPack || ''} onChange={(e) => replaceLine(l.key, { ...l, recvPack: e.target.value })} />
+                              <span className="muted small">of</span>
+                              <input className="small-input" type="number" min="2" step="1" inputMode="numeric" aria-label="Units per pack" placeholder="100" value={l.recvSize || ''} onChange={(e) => setLine(l.key, { recvSize: e.target.value })} />
+                              <span className="muted small">{unit.toLowerCase()}s</span>
+                            </span>
+                          )}
+                        </>);
+                      })()}
+                      {Number(l.recvSize) > 1 && <small className="price-hint muted">= {(Number(l.qty) || 0) * l.recvSize} {(p?.unit || unitForForm(l.form)).toLowerCase()}s</small>}
                     </td>
                     ),
                     cost: (
                     <td key="cost" data-label="Unit cost"><input type="number" min="0" step="any" inputMode="decimal" placeholder="0" value={l.cost} onChange={(e) => setLine(l.key, { cost: e.target.value })} aria-label="Unit cost" />
+                      {Number(l.recvSize) > 1 && <small className="price-hint muted">per {String(l.recvPack || 'pack').toLowerCase()}</small>}
                       {(() => { const best = (prices.get(l.productId) || []).find((o) => o.supplierId !== form.supplierId); return best && cost > 0 && best.cost < cost ? <small className="price-hint text-warn" title={`Last bought from ${best.supplierName} on ${best.date}`}>{best.supplierName}: {fmt(best.cost)}</small> : null; })()}
                     </td>
                     ),

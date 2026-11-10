@@ -52,6 +52,9 @@ Map<String, Object?> blankForm(PharmacySettings s) => {
       'supplierId': '', 'invoice': '', 'date': today(), 'paid': '', 'bankId': 'cash-drawer', 'notes': '', 'markup': _txt(s.retailMarkup), 'lines': [blankLine()],
     };
 
+/// "New pack size…" in Received as.
+const newPackChoice = '__pack__';
+
 /// The price worked out from a cost at a markup (rounded to the pharmacy's price step).
 double Function(double) priceAt(Object? markup, PharmacySettings s) => (cost) => markupPrice(cost, _n(markup), s.priceRound);
 
@@ -145,7 +148,7 @@ List<DeliveryLine> deliveryLines(Map<String, Object?> form) => [
           DeliveryLine(
             productId: l['productId'] == newMedicine ? null : '${l['productId']}',
             newName: l['productId'] == newMedicine ? '${l['name'] ?? ''}' : '',
-            qty: _n(l['qty']), recvPack: '${l['recvPack'] ?? ''}', recvSize: _n(l['recvSize']) > 0 ? _n(l['recvSize']) : 1, unitCost: unitCost(l),
+            qty: _n(l['qty']), recvPack: '${l['recvPack'] ?? ''}', recvSize: _n(l['recvSize']) > 0 ? _n(l['recvSize']) : 1, unitCost: unitCost(l), newPack: l['newPack'] == true,
             price: _n(l['price']), batch: '${l['batch'] ?? ''}', expiry: '${l['expiry'] ?? ''}', form: '${l['form'] ?? 'Others'}', barcode: '${l['barcode'] ?? ''}',
           ),
     ];

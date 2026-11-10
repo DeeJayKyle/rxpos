@@ -12,11 +12,20 @@ import '../../../core/rules/money.dart';
 import '../../../core/rules/pricing.dart';
 import '../../../core/rules/stock.dart';
 
+/// What a new medicine is sold by, from its formulation (src/pages/Purchases.jsx unitForForm): received by the box,
+/// sold by these.
+String unitForForm(String form) =>
+    const {'Tablets': 'Tablet', 'Capsules': 'Capsule', 'Sachets': 'Sachet', 'Syrups': 'Bottle', 'Suspensions': 'Bottle', 'Injectables': 'Vial', 'Drops': 'Bottle', 'Creams': 'Tube', 'Ointments': 'Tube'}[form] ??
+    'Unit';
+
 /// One line of a delivery as typed. [qty] is in what was received ([recvSize] units each: a box of 100, or 1);
 /// [unitCost] is per received unit or pack; [price] is the new retail price per single unit (0: keep the current one).
 class DeliveryLine {
   const DeliveryLine({this.productId, this.newName = '', this.qty = 0, this.recvPack = '', this.recvSize = 1, this.unitCost = 0,
-      this.price = 0, this.batch = '', this.expiry = '', this.form = 'Others', this.barcode = ''});
+      this.price = 0, this.batch = '', this.expiry = '', this.form = 'Others', this.barcode = '', this.newPack = false});
+
+  /// received by a pack size typed on the line ("Boxes / packs of…"): its size must be given
+  final bool newPack;
 
   /// null: a medicine not in the list yet, named [newName]
   final String? productId;
@@ -35,7 +44,7 @@ class DeliveryLine {
           double? price, String? batch, String? expiry}) =>
       DeliveryLine(productId: productId ?? this.productId, newName: newName ?? this.newName, qty: qty ?? this.qty,
           recvPack: recvPack ?? this.recvPack, recvSize: recvSize ?? this.recvSize, unitCost: unitCost ?? this.unitCost,
-          price: price ?? this.price, batch: batch ?? this.batch, expiry: expiry ?? this.expiry, form: form, barcode: barcode);
+          price: price ?? this.price, batch: batch ?? this.batch, expiry: expiry ?? this.expiry, form: form, barcode: barcode, newPack: newPack);
 }
 
 class DeliveryProblem implements Exception {
@@ -70,6 +79,19 @@ Future<Map<String, Object?>> receiveDelivery(RecordStore store, {required List<D
   }
   String nameOf(DeliveryLine l) => l.isNew ? _clean(l.newName) : (products[l.productId]?.name ?? '');
   String idOf(DeliveryLine l) => l.isNew ? freshIds[_clean(l.newName).toLowerCase()]! : l.productId!;
+  // received by a pack: its size is whole units (2 or more); a new size is added to the medicine, under a name it doesn't use yet
+  for (final l in use.where((x) => x.newPack || x.recvSize > 1)) {
+    final unit = (l.isNew ? unitForForm(l.form) : (products[l.productId]?.unit ?? '')).toLowerCase();
+    final name = l.recvPack.trim();
+    if (!(l.recvSize >= 2 && l.recvSize == l.recvSize.roundToDouble())) {
+      throw DeliveryProblem('${nameOf(l)}: how many ${unit.isEmpty ? 'unit' : unit}s are in one ${name.isEmpty ? 'pack' : name.toLowerCase()}? (2 or more)');
+    }
+    if (name.isEmpty) throw DeliveryProblem('${nameOf(l)}: give the pack a name (e.g. Box)');
+    final same = l.isNew ? null : products[l.productId]?.packs.where((k) => k.name.toLowerCase() == name.toLowerCase()).firstOrNull;
+    if (same != null && same.size != l.recvSize) {
+      throw DeliveryProblem('${nameOf(l)} already has a ${same.name} of ${formatQty(same.size)}. Choose it, or call the new pack something else (e.g. "${same.name} of ${formatQty(l.recvSize)}")');
+    }
+  }
   for (final l in use) {
     if (l.expiry.isEmpty) throw DeliveryProblem('Enter the expiry date for ${nameOf(l)} (needed for first-expiry-first-out)');
     if (daysUntil(l.expiry, now: now) < 0) throw DeliveryProblem('${nameOf(l)}: the expiry date ${l.expiry} has already passed. Check the date on the pack.');
@@ -104,7 +126,9 @@ Future<Map<String, Object?>> receiveDelivery(RecordStore store, {required List<D
         code = '20${(rnd.nextInt(100000) * 100000 + rnd.nextInt(100000)).toString().padLeft(10, '0')}';
       }
       used.add(code);
-      d.put('products', {'id': id, 'name': nameOf(l), 'generic': '', 'form': l.form, 'unit': 'Unit', 'price': numOut(l.price),
+      // received by the box: the medicine is sold by the unit (tablets, capsules…) and keeps the box as its pack
+      d.put('products', {'id': id, 'name': nameOf(l), 'generic': '', 'form': l.form, 'unit': unitForForm(l.form), 'price': numOut(l.price),
+        if (l.recvSize > 1) 'packs': [{'name': l.recvPack.trim().isEmpty ? 'Box' : l.recvPack.trim(), 'size': numOut(l.recvSize)}],
         'wholesale': numOut(markupPrice(l.baseCost, settings.wholesaleMarkup, settings.priceRound) > 0 ? markupPrice(l.baseCost, settings.wholesaleMarkup, settings.priceRound) : l.price),
         'cost': numOut(l.baseCost), 'reorder': 0, 'barcode': code});
       d.audit(receivedBy, 'Medicine added', '${nameOf(l)} (on receiving $number)', branchId);
@@ -119,8 +143,16 @@ Future<Map<String, Object?>> receiveDelivery(RecordStore store, {required List<D
       final p = products[id];
       if (p == null) continue; // a new medicine: created above with this cost and price
       final price = l.price > 0 ? l.price : p.price;
-      if (l.baseCost != p.cost || price != p.price) {
-        d.put('products', p.copyWith(cost: l.baseCost != 0 ? l.baseCost : p.cost, price: price).toRecord());
+      // a pack size the medicine didn't have: it is added, so it can be received (and sold) by it again
+      final packName = l.recvPack.trim();
+      final newPack = l.recvSize > 1 && packName.isNotEmpty && !p.packs.any((k) => k.name.toLowerCase() == packName.toLowerCase());
+      if (l.baseCost != p.cost || price != p.price || newPack) {
+        final rec = p.copyWith(cost: l.baseCost != 0 ? l.baseCost : p.cost, price: price).toRecord();
+        d.put('products', {
+          ...rec,
+          if (newPack) 'packs': [...((rec['packs'] as List?) ?? const []), {'name': packName, 'size': numOut(l.recvSize)}],
+        });
+        if (newPack) d.audit(receivedBy, 'Pack added', '${p.name}: $packName of ${formatQty(l.recvSize)} (on receiving)', branchId);
         if (price != p.price) {
           d.audit(receivedBy, 'Price changed', '${p.name}: ${formatMoney(p.price, currency: settings.currency)} → ${formatMoney(price, currency: settings.currency)} (on receiving)', branchId);
         }

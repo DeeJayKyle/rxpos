@@ -309,23 +309,50 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
           ),
         'qty' => Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
             box('qty-$key', 'Qty', l['qty'], (v) => _setLine(key, {'qty': v}), w: 80),
-            if (packs.isNotEmpty)
-              DropdownButton<String>(
-                value: (double.tryParse('${l['recvSize'] ?? 1}') ?? 1) > 1 ? '${l['recvPack']}' : '',
-                isDense: true,
-                items: [DropdownMenuItem(value: '', child: Text('${p!.unit.isEmpty ? 'Unit' : p.unit}s')), for (final k in packs) DropdownMenuItem(value: k.name, child: Text('${k.name}s of ${formatQty(k.size)}'))],
-                onChanged: (v) {
-                  final k = packs.where((x) => x.name == v).firstOrNull;
-                  final size = k?.size ?? 1;
-                  _setLine(key, {'recvPack': k?.name ?? '', 'recvSize': size, if (baseCost(l) > 0) 'cost': numOrBlank(baseCost(l) * size)});
-                  setState(() => _round++);
-                },
-              ),
+            // received by the box (or any pack), sold by the unit; a pack size the medicine doesn't have is added to it
+            if ('${l['productId'] ?? ''}'.isNotEmpty) ...() {
+              final unit = p != null && p.unit.isNotEmpty ? p.unit : unitForForm('${l['form'] ?? ''}');
+              final size = double.tryParse('${l['recvSize'] ?? 1}') ?? 1;
+              final known = packs.any((k) => k.name == l['recvPack'] && k.size == size);
+              final choice = l['newPack'] == true || (size > 1 && !known) ? newPackChoice : size > 1 ? '${l['recvPack']}' : '';
+              return [
+                SizedBox(
+                  width: 120,
+                  child: DropdownButton<String>(
+                    key: Key('received-as-$key'),
+                    value: choice,
+                    isDense: true,
+                    isExpanded: true,
+                    items: [
+                      DropdownMenuItem(value: '', child: Text('${unit}s', overflow: TextOverflow.ellipsis)),
+                      for (final k in packs) DropdownMenuItem(value: k.name, child: Text('${k.name}s of ${formatQty(k.size)}', overflow: TextOverflow.ellipsis)),
+                      DropdownMenuItem(value: newPackChoice, child: Text(packs.isEmpty ? 'Boxes / packs of…' : 'Other pack size…', overflow: TextOverflow.ellipsis)),
+                    ],
+                    onChanged: (v) {
+                      if (v == newPackChoice) {
+                        _replaceLine(key, {...l, 'newPack': true, 'recvPack': '${l['recvPack'] ?? ''}'.isEmpty ? 'Box' : l['recvPack'], 'recvSize': size > 1 ? l['recvSize'] : ''});
+                      } else {
+                        final k = packs.where((x) => x.name == v).firstOrNull;
+                        final sz = k?.size ?? 1;
+                        _setLine(key, {'newPack': false, 'recvPack': k?.name ?? '', 'recvSize': sz, if (baseCost(l) > 0) 'cost': numOrBlank(baseCost(l) * sz)});
+                      }
+                      setState(() => _round++);
+                    },
+                  ),
+                ),
+                if (choice == newPackChoice)
+                  Wrap(spacing: 4, runSpacing: 4, children: [
+                    box('pack-name-$key', 'Pack', l['recvPack'], (v) => _replaceLine(key, {...l, 'recvPack': v}), w: 58, number: false, hint: 'Box'),
+                    box('pack-size-$key', '${unit}s', l['recvSize'] == '' ? '' : l['recvSize'], (v) => _setLine(key, {'recvSize': v}), w: 58, hint: '100'),
+                  ]),
+              ];
+            }(),
             if ((double.tryParse('${l['recvSize'] ?? 1}') ?? 1) > 1)
-              Text('= ${formatQty((double.tryParse('${l['qty']}') ?? 0) * (double.tryParse('${l['recvSize']}') ?? 1))} ${(p?.unit.isEmpty ?? true ? 'unit' : p!.unit).toLowerCase()}s', style: th.textTheme.bodySmall),
+              Text('= ${formatQty((double.tryParse('${l['qty']}') ?? 0) * (double.tryParse('${l['recvSize']}') ?? 1))} ${(p?.unit.isEmpty ?? true ? unitForForm('${l['form'] ?? ''}') : p!.unit).toLowerCase()}s', style: th.textTheme.bodySmall),
           ]),
         'cost' => Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
             box('cost-$key-${l['by'] == 'total' ? l['total'] : ''}', 'Unit cost', l['cost'], (v) => _setLine(key, {'cost': v}), w: 110),
+            if ((double.tryParse('${l['recvSize'] ?? 1}') ?? 1) > 1) Text('per ${'${l['recvPack'] ?? 'pack'}'.toLowerCase()}', style: th.textTheme.bodySmall),
             if (() {
               final best = (prices['${l['productId']}'] ?? const <SupplierPrice>[]).where((o) => o.supplierId != f['supplierId']).firstOrNull;
               return best != null && cost > 0 && best.cost < cost ? best : null;
