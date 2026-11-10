@@ -134,7 +134,10 @@ await B.evaluate(() => [...document.querySelectorAll('.chat-conv')].find((x) => 
 check('…and the other person sees "This message was deleted"', await until(B, () => /This message was deleted/.test(document.querySelector('.chat-messages')?.innerText || ''), 25000));
 await A.screenshot({ path: out + '/chat.png' });
 // phones: the list, then one chat full screen with a back button
-await B.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true, deviceScaleFactor: 2 }); await B.reload({ waitUntil: 'networkidle2' }); await wait(1200);
+// (switching to a phone reloads the page; an outside service the page uses, e.g. the weather, can keep the network busy
+// past 30 s on a CI machine, so wait for the page itself rather than for the network to go quiet)
+await B.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true, deviceScaleFactor: 2 }).catch((e) => { if (!/Navigation timeout/.test(e.message)) throw e; });
+await B.reload({ waitUntil: 'load' }); await B.waitForSelector('.chat-conv', { timeout: 30000 }); await wait(1200);
 check('phone: the chat list fills the screen', await B.evaluate(() => getComputedStyle(document.querySelector('.chat-main')).display === 'none' && getComputedStyle(document.querySelector('.chat-list')).display !== 'none'));
 await B.evaluate(() => [...document.querySelectorAll('.chat-conv')].find((x) => /General/.test(x.innerText)).click()); await wait(500);
 check('…tapping a chat opens it full screen with a back button', await B.evaluate(() => getComputedStyle(document.querySelector('.chat-list')).display === 'none' && getComputedStyle(document.querySelector('.chat-back')).display !== 'none'));
