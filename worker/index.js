@@ -58,6 +58,18 @@ const SERVER_ONLY = new Set(['license', 'branches']);
 const INSERT_ONLY = new Set(['audit', 'movements', 'controlled']);
 const MAX_REC_BYTES = 256 * 1024; // one record's JSON (file chunks are stored elsewhere); rejects absurd payloads
 const MAX_TENANT_RECORDS = 2_000_000; // a safety ceiling per pharmacy so one device can't fill the database
+// step 15: the ceiling is checked against a cached count: a push adds its new records to it, a real COUNT(*) runs at
+// most once an hour, and always before anything is refused (so a stale or high count can never refuse wrongly).
+const COUNT_TTL_MS = 3600e3;
+async function recordCount(db, tenant, { exact = false } = {}) {
+  if (!exact) {
+    const row = await db.prepare('SELECT n, at FROM tenant_counts WHERE tenant = ?1').bind(tenant).first();
+    if (row && Date.now() - row.at < COUNT_TTL_MS) return row.n;
+  }
+  const n = (await db.prepare('SELECT COUNT(*) n FROM records WHERE tenant = ?1').bind(tenant).first('n')) || 0;
+  await db.prepare('INSERT INTO tenant_counts (tenant, n, at) VALUES (?1, ?2, ?3) ON CONFLICT(tenant) DO UPDATE SET n = ?2, at = ?3').bind(tenant, n, Date.now()).run();
+  return n;
+}
 const CLOCK_SKEW_MS = 5 * 60000; // 1.3 how far ahead of server time a device's clock may be before it is clamped
 
 const existingRec = async (db, tenant, t, id) => {
@@ -135,6 +147,8 @@ function ensureSchema(db) {
     // step 6: wrong passwords per account across every address (worker/throttle.js), a slowdown rather than a lock
     // step 7: each device's till number in its pharmacy, for document numbers like R-NTD-03-000412 (src/docnumbers.js)
     if (!have.has('tills')) ddl.push('CREATE TABLE tills (tenant TEXT NOT NULL, device TEXT NOT NULL, n INTEGER NOT NULL, at TEXT NOT NULL, PRIMARY KEY (tenant, device))');
+    // step 15: each pharmacy's record count, cached (a COUNT(*) read every one of its rows on every push)
+    if (!have.has('tenant_counts')) ddl.push('CREATE TABLE tenant_counts (tenant TEXT PRIMARY KEY, n INTEGER NOT NULL, at INTEGER NOT NULL)');
     if (!have.has('login_throttle')) ddl.push('CREATE TABLE login_throttle (k TEXT PRIMARY KEY, n INTEGER NOT NULL, last_at INTEGER NOT NULL)');
     if (!have.has('rtc')) ddl.push('CREATE TABLE rtc (id INTEGER PRIMARY KEY AUTOINCREMENT, tenant TEXT NOT NULL, to_uid TEXT NOT NULL, from_uid TEXT NOT NULL, from_name TEXT, type TEXT NOT NULL, call_id TEXT NOT NULL, data TEXT, at INTEGER NOT NULL)');
     if (!have.has('rtc_to')) ddl.push('CREATE INDEX rtc_to ON rtc(tenant, to_uid, id)'); // instant look-up of calls waiting for a person
@@ -581,6 +595,7 @@ async function sync(env, body, who, ctx) {
   const refuse = (ch) => { refused++; refusedKeys.push(ch.t + '|' + ch.id); };
   const ledger = new Set(); // positions of the op-ledger inserts in the batch (not counted as applied records)
   let tenantCount = null; // counted once, only if we actually insert new rows (quota guard)
+  let tenantAdded = 0, countExact = false; // step 15: rows this push may add, and whether the count was taken exactly
   // step 2 write policy (worker/policy.js): the stored sales, purchases and payments this push touches, read in one
   // query; `current` then follows this request's own accepted changes, so a create and a refund of the same sale in
   // one push are judged in order
@@ -645,9 +660,10 @@ async function sync(env, body, who, ctx) {
     const body = ch.deleted ? null : JSON.stringify(rec ?? null);
     if (body && body.length > MAX_REC_BYTES) { refuse(ch); continue; } // 1.1 reject an oversized record
     if (!ch.deleted) { // 1.1 per-tenant record ceiling, counted at most once per request
-      if (tenantCount === null) tenantCount = (await db.prepare('SELECT COUNT(*) n FROM records WHERE tenant = ?1').bind(tenant).first('n')) || 0;
+      if (tenantCount === null) tenantCount = await recordCount(db, tenant);
+      if (tenantCount >= MAX_TENANT_RECORDS && !countExact) { tenantCount = await recordCount(db, tenant, { exact: true }) + tenantAdded; countExact = true; }
       if (tenantCount >= MAX_TENANT_RECORDS) { refuse(ch); continue; }
-      tenantCount++;
+      tenantCount++; tenantAdded++;
     }
     const k = ch.t + '|' + id;
     // 1.3 clamp a device's clock to server time plus a little skew. A wrong or deliberately future-dated clock can
@@ -713,6 +729,9 @@ async function sync(env, body, who, ctx) {
       });
     }
   }
+  // step 15: this push's new rows go into the cached count with the records (an update counted as new is corrected at
+  // the next hourly count; it can only make the count high, and a high count is re-counted before refusing)
+  if (tenantAdded) { stmts.push(db.prepare('UPDATE tenant_counts SET n = n + ?2 WHERE tenant = ?1').bind(tenant, tenantAdded)); ledger.add(stmts.length - 1); }
   // the whole request in one transaction (D1 and libSQL batches are atomic): a sale and its stock movements land together
   let applied = 0;
   if (stmts.length) {
@@ -1031,6 +1050,8 @@ async function owner(env, req, url, body) {
       db.prepare('DELETE FROM tenants WHERE id = ?1').bind(t.id),
       db.prepare("DELETE FROM login_fail WHERE email LIKE '%|' || ?1 || ':%'").bind(t.id),
       db.prepare("DELETE FROM reset_codes WHERE k LIKE ?1 || ':%'").bind(t.id),
+      db.prepare('DELETE FROM tenant_counts WHERE tenant = ?1').bind(t.id),
+      db.prepare('DELETE FROM tills WHERE tenant = ?1').bind(t.id),
     ]);
     // its chat attachments go too (personal data must not outlive the pharmacy)
     await db.batch([db.prepare('DELETE FROM file_chunks WHERE tenant = ?1').bind(t.id), db.prepare('DELETE FROM files WHERE tenant = ?1').bind(t.id)]).catch(() => {});

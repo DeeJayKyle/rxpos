@@ -72,6 +72,7 @@ const SUITES = [
   ['credit limits: reason at the till, flagged for the owner', 'v60-credit-limit.mjs', []],
   ['field-by-field merge in the cloud', 'v61-field-merge.mjs', []],
   ['field-by-field merge in the app (offline edit)', 'v61-field-merge-app.mjs', []],
+  ['cloud counters: concurrent pushes, cached record count', 'v62-counters.mjs', []],
   ['file uploads', 'v24-files.mjs', []],
   ['security headers', 'v25-headers.mjs', []],
   ['rate limits', 'v26-ratelimit.mjs', []],
