@@ -49,8 +49,8 @@ Server-side steps (Worker, `worker/`) protect **both** apps at once. Client-side
 | 20 | Selling: loyalty points, promotions engine, customer display, cash-up with blind counts, per-role discount ceiling | 4.3 | ✅ discount ceiling + blind cash-up (owner's choice); the rest not done |
 | 21 | Stock: GS1 DataMatrix scan, scheduled draft POs, expiry markdowns, branch rebalancing | 4.4 | ✅ GS1 pack scanning (the recommended part; the owner said continue without picking); the rest not done |
 | 22 | Insurance: insurers/schemes, member check, co-pay at the till, monthly claim batches | 4.1 | ✅ insurers, schemes and the co-pay at the till (the recommended part; the owner had no preference); pre-authorisation, claim batches and member checks not done |
-| 23 | URA EFRIS e-invoicing (fiscal number + QR on receipts, offline queue) | 4.1 | ⏳ (needs URA EFRIS credentials / sandbox) |
-| 24 | Interface: one till layout with density setting, 4 themes, single payment panel, accessibility audit (axe), translations | 4.6 | ⏳ |
+| 23 | URA EFRIS e-invoicing (fiscal number + QR on receipts, offline queue) | 4.1 | ⏸ skipped until URA EFRIS sandbox credentials are available |
+| 24 | Interface: one till layout with density setting, 4 themes, single payment panel, accessibility audit (axe), translations | 4.6 | ✅ accessibility audit (the recommended part); then the owner's controls request (keyboard map, mouse, selection, navigation) |
 | 25 | React → Flutter cut-over plan and retirement of the React client (if chosen in step 0) | 3 | ⏳ |
 
 ## Phase 5 — Release (requested by the owner, 2026-11-09)
@@ -195,3 +195,28 @@ Server-side steps (Worker, `worker/`) protect **both** apps at once. Client-side
   pre-authorisation numbers, monthly claim batches with rejections, member card checks. unit-insurance 18, v66 15,
   unit-anomalies +5, unit-policy +1; Flutter insurance 18 + 2 new tests, 429 passed, analyze clean, parity snapshot
   unchanged; lint 0; full JS suite 1,959 passed, 6 failed (the known 6); hub suites 330/330.
+- 2026-11-10 · Step 23 · skipped: it needs URA EFRIS sandbox credentials, which we don't have (the owner had no
+  preference between skipping and building the groundwork against a stand-in).
+- 2026-11-10 · Step 24 · `84161f0` · The owner had no preference: the recommended part, an accessibility audit.
+  React: axe-core 4.14.0 (pinned) checks sign-in and 18 main pages in light and dark (v67). Flutter: its own
+  guidelines (labelled tap targets, text contrast) on 11 screens in the standard and dark look. Found and fixed: Add
+  Stock's invoice paper was white behind light text in the dark theme (unreadable: the CSS used a variable that
+  doesn't exist); the status pill's spoken name; medicine tiles named by their text; held-sale tabs; unnamed date,
+  month and account boxes; chart bars; faded rows and shortcut keys below AA contrast; Flutter's unnamed favourite
+  star. v67 38/38.
+- 2026-11-10 · Owner's requests (Add Stock) · `c0b6734`, `a8f7ae1` · Receiving an invoice no longer changes a
+  medicine's retail price (cost + markup is offered with "Use"; a new medicine still gets it, per unit). The expiry is
+  read whatever its format (06/2028, JUN 2028, 30/06/2028 or 06/30/2028, 062028, 20280630, "EXP: 06/28"; shared
+  rules, tests/expiry-cases.json, 33 cases). Any line, a new medicine too, can be received by a pack size typed on
+  the line (Box of 100) and is sold by the unit; a new pack size is added to the medicine (audited); a new
+  medicine is sold by the unit of its formulation. Fixed on the way: a medicine with no price received by the box
+  was priced from the box cost; a new medicine received by the box took the box cost as its unit cost. v68 12, v18
+  70, Flutter delivery and add-stock tests.
+- 2026-11-10 · Owner's request (controls, all four parts chosen) · `d12714c` (React), `b6db3d6` (Flutter) · A
+  keyboard map for the whole app, the same in both apps (src/keymap.js, keymap.dart, checked against each other):
+  F2–F7 and two-key page shortcuts (G then C…), Ctrl+K, ?, Alt+←/→, G then G to pin; every key changeable per
+  device (This device → Keyboard). Every list: arrow keys, Enter, E, N, /, Space, Ctrl+A, Esc, double-click,
+  right-click menu, Shift+click ranges, bulk export/delete, and on the Medicine List bulk price / category /
+  reorder level; columns per device and the search kept (React). Pinned and recent pages, breadcrumbs, Ctrl+K
+  commands, scroll kept per page (React), a stock-and-batches hover (React). v69 35/35; Flutter keymap 3 + 1 widget
+  test; Flutter 471 passed, analyze clean; lint 0; full JS suite RESULTS.
