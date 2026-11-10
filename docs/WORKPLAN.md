@@ -44,7 +44,7 @@ Server-side steps (Worker, `worker/`) protect **both** apps at once. Client-side
 ## Phase 4 — Product upgrades (month 3+)
 | # | Step | Review ref | Status |
 |---|---|---|---|
-| 18 | Owner: anomaly dashboard, day close / lock, accounting export | 4.5 | ⏳ |
+| 18 | Owner: anomaly dashboard, day close / lock, accounting export | 4.5 | ✅ Close the day (owner's choice); export and overview not done |
 | 19 | Clinical: structured allergies that block, interaction and duplicate-therapy checks | 4.2 | ⏳ (needs an interaction data source you are licensed to use) |
 | 20 | Selling: loyalty points, promotions engine, customer display, cash-up with blind counts, per-role discount ceiling | 4.3 | ⏳ |
 | 21 | Stock: GS1 DataMatrix scan, scheduled draft POs, expiry markdowns, branch rebalancing | 4.4 | ⏳ |
@@ -154,3 +154,11 @@ Server-side steps (Worker, `worker/`) protect **both** apps at once. Client-side
   tools/rxtera snippet, a hook false alarm (Scan.jsx), an error without its cause; four intentional hook dependencies
   marked with reasons. Lint 0 problems; unit tests pass; full JS suite 1,859 passed, 6 failed (the known 6); hub suites
   274/274.
+- 2026-11-10 · Step 18 · `3d6925e` + this commit · Close the day per branch (new permission `day.close`; managers have
+  it). The cloud refuses edits/deletes of a closed day's sales, expenses, payments, bank transactions, deliveries and
+  supplier returns, and moving records into it; refunds of its sales and anything new dated in it are kept and flagged
+  (owner's choice: no lost offline sales); reopening needs an admin and a reason; the close keeps frozen totals. Both
+  apps: panel on Shifts & Cash-up, Edit hidden for closed-day sales, expense / bank rows locked. Days are Uganda days
+  in the cloud and the device's own local day in the apps. v63 22; Flutter 392 passed (+4; the React parity snapshot
+  regenerated with tool/parity/react_cases.mjs: only the new permission changed); lint 0; full JS suite 1,881 passed,
+  6 failed (the known 6); hub suites 296/296.

@@ -2711,6 +2711,7 @@
    "chat",
    "customers",
    "data.reset",
+   "day.close",
    "finance",
    "inventory.edit",
    "inventory.view",

@@ -71,6 +71,7 @@ const permissionGroups = [
   ('Management', [
     ('finance', 'Finance (expenses, banks, loans, cash book)'), ('payroll', 'Payroll & staff (salaries, attendance, advances)'), ('reports', 'Reports & dashboard money figures'),
     ('reports.lines', 'Sales lines report only (what was sold and by whom, no profit)'), ('branches.view', 'See all branches'), ('audit', 'Audit log'),
+    ('day.close', 'Close the day (no more changes to its sales, expenses and stock)'),
     ('users.manage', 'Manage users & roles'), ('settings.manage', 'Settings & payment methods'), ('data.reset', 'Restore default settings'),
   ]),
 ];
