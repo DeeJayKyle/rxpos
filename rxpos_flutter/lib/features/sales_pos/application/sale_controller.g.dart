@@ -58,7 +58,7 @@ final class SaleControllerProvider
   }
 }
 
-String _$saleControllerHash() => r'0067455060362a8853d7fea196a1e8e45eb28012';
+String _$saleControllerHash() => r'a03a58212bb7d1c2365f975bae4c4d312058464f';
 
 final class SaleControllerFamily extends $Family
     with
