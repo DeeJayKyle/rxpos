@@ -30,6 +30,13 @@ jobs:
           # suites that need services this machine can't reach (Workers AI, Open-Meteo, a screen) are skipped, not failed
           RXPOS_CI: '1'
         run: node tests/run-all.mjs 2>&1 | tee full-tests.log
+      - name: The same rules on the self-hosted hub (server/hub.mjs on Node's SQLite)
+        shell: bash
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+          RXPOS_CI: '1'
+          RXPOS_TEST_HUB: '1'
+        run: node tests/run-all.mjs 2>&1 | tee hub-tests.log
       - name: Keep the log and screenshots
         if: always()
         uses: actions/upload-artifact@v4
@@ -38,5 +45,6 @@ jobs:
           retention-days: 7
           path: |
             full-tests.log
+            hub-tests.log
             tests/.output/
           if-no-files-found: ignore

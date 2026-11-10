@@ -1,15 +1,24 @@
 #!/usr/bin/env node
-// RxPOS Hub: keeps every RxPOS device (desktop apps and browsers) in sync, and serves the web app.
-// No dependencies; needs Node.js 18+.
+// RxPOS Hub: keeps every RxPOS device (desktop apps and browsers) in sync on a pharmacy's own PC or server, and serves
+// the web app. Since 1.x (workplan step 16) it runs the SAME code as the RxPOS cloud (worker/index.js) over SQLite
+// built into Node, so a hub applies every rule the cloud does: permissions per table, append-only stock movements,
+// field-by-field merge, sale checks, the sign-in slowdown, document numbers… Before, it was a separate, simpler copy.
 //
-//   RXPOS_SYNC_KEY=choose-a-long-secret node server/hub.mjs [--port 8686] [--data ./hub-data]
+//   RXPOS_SYNC_KEY=choose-a-long-secret node server/hub.mjs [--port 8686] [--data ./hub-data] [--web ./dist]
+//   (needs Node.js 22.13+; the Windows app's built-in hub, `RxPOS.exe --hub --key=…`, already has it)
 //
-// Run it on the main PC (LAN) or on any server/VPS (online). Devices link to it in Settings → Sync.
+// Optional: RXPOS_OWNER_KEY (20+ characters) opens the owner console on the hub (add pharmacies, staff, branches);
+// RXPOS_TRUST_PROXY=1 behind an HTTPS proxy (Caddy, nginx), so each device's own address counts for sign-in limits.
+// Not on a hub (they need Cloudflare or outside services): the live connection (devices check every 10 s instead),
+// Mobile Money, SMS, AI reading, emails. Data: <data>/hub.db, a copy every day in <data>/backups (last 30 kept).
+// A hub from before (hub.json) is moved into hub.db once, on first start; hub.json is kept, renamed, as a backup.
+// Devices signed in to an older hub sign in again once (the sign-in passes are made differently now).
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
-import crypto from 'node:crypto';
-import { fileURLToPath } from 'node:url';
+import nodeCrypto from 'node:crypto';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { d1FromSqlite } from './d1-sqlite.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i > 0 ? process.argv[i + 1] : d; };
@@ -17,157 +26,109 @@ const PORT = Number(arg('port', process.env.PORT || 8686));
 const DATA_DIR = path.resolve(arg('data', process.env.RXPOS_DATA || process.env.PHARMAPOS_DATA || path.join(here, '..', 'hub-data')));
 const WEB_DIR = path.resolve(arg('web', path.join(here, '..', 'dist')));
 const KEY = process.env.RXPOS_SYNC_KEY || process.env.PHARMAPOS_SYNC_KEY || '';
-const PAGE = 2000;
+const MAIN = 'main';
 
 if (KEY.length < 12) {
   console.error('Set RXPOS_SYNC_KEY to a secret of at least 12 characters, e.g.\n  RXPOS_SYNC_KEY=my-long-secret-key node server/hub.mjs');
   process.exit(1);
 }
 
-fs.mkdirSync(DATA_DIR, { recursive: true });
-const FILE = path.join(DATA_DIR, 'hub.json');
-// state.rows: { "table|id": { t, id, rec?, deleted?, at, seq, origin } }
-let state = { seq: 0, rows: {} };
-if (fs.existsSync(FILE)) state = JSON.parse(fs.readFileSync(FILE, 'utf8'));
+// Cloudflare-only API the cloud code uses (constant-time comparison)
+crypto.subtle.timingSafeEqual ??= (a, b) => nodeCrypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
+// The cloud code, bundled into one file for the Windows app and the hub download (scripts/build-hub.mjs), or straight
+// from worker/ in a source checkout
+const corePath = fs.existsSync(path.join(here, 'hub-core.mjs')) ? path.join(here, 'hub-core.mjs') : path.join(here, '..', 'worker', 'index.js');
+const { default: cloud, pruneSignInTables } = await import(pathToFileURL(corePath).href);
 
-let saveTimer = null;
-function save() {
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    const tmp = FILE + '.tmp';
-    fs.writeFileSync(tmp, JSON.stringify(state));
-    fs.renameSync(tmp, FILE);
-  }, 500);
+fs.mkdirSync(DATA_DIR, { recursive: true });
+const db = d1FromSqlite(path.join(DATA_DIR, 'hub.db'));
+const sha256 = (s) => nodeCrypto.createHash('sha256').update(s).digest('hex');
+
+// ---------- the web app (everything that isn't /api) ----------
+const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png',
+  '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.ico': 'image/x-icon', '.woff2': 'font/woff2', '.wasm': 'application/wasm', '.zip': 'application/zip' };
+const ASSETS = {
+  async fetch(input) {
+    let decoded;
+    try { decoded = decodeURIComponent(new URL(typeof input === 'string' || input instanceof URL ? input : input.url).pathname); } catch { return new Response('Bad path', { status: 400 }); }
+    let file = path.normalize(path.join(WEB_DIR, decoded));
+    const rel = path.relative(WEB_DIR, file);
+    if (rel.startsWith('..') || path.isAbsolute(rel)) return new Response('Forbidden', { status: 403 });
+    if (!fs.existsSync(file) || fs.statSync(file).isDirectory()) {
+      if (path.extname(decoded)) return new Response('Not found', { status: 404 }); // a missing file, not an app address
+      file = path.join(WEB_DIR, 'index.html');
+    }
+    if (!fs.existsSync(file)) return new Response('Web app not built. Run "npm run build" first.', { status: 404, headers: { 'Content-Type': 'text/plain' } });
+    return new Response(fs.readFileSync(file), { headers: { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-store' } });
+  },
+};
+
+const env = {
+  DB: db,
+  SYNC_KEY: KEY,
+  // sign-in passes are signed with a key made from the sync key (the cloud wants 32+ characters)
+  TOKEN_SECRET: sha256('rxpos-hub-token:' + KEY),
+  ...(process.env.RXPOS_OWNER_KEY ? { OWNER_KEY: process.env.RXPOS_OWNER_KEY } : {}),
+  ...(process.env.PBKDF2_ITER ? { PBKDF2_ITER: process.env.PBKDF2_ITER } : {}),
+  ...(process.env.PUBLIC_URL ? { PUBLIC_URL: process.env.PUBLIC_URL } : {}),
+  ASSETS,
+};
+const ctx = { waitUntil: (p) => Promise.resolve(p).catch((e) => console.warn('background task:', e?.message || e)), passThroughOnException() {} };
+
+// ---------- first start: the database, the hub's own pharmacy, and the move from hub.json ----------
+await cloud.fetch(new Request('http://hub/api/health'), env, ctx); // creates the tables (the cloud's ensureSchema)
+await db.prepare(`INSERT INTO tenants (id, name, key_hash, features, status, secrets, created_at, slug) VALUES (?1, ?2, ?3, '{}', 'active', '{}', ?4, ?1)
+  ON CONFLICT(id) DO UPDATE SET key_hash = ?3`).bind(MAIN, 'Pharmacy on this hub', sha256(KEY), new Date().toISOString()).run();
+
+const OLD = path.join(DATA_DIR, 'hub.json');
+if (fs.existsSync(OLD) && !(await db.prepare('SELECT 1 x FROM records WHERE tenant = ?1 LIMIT 1').bind(MAIN).first('x'))) {
+  const state = JSON.parse(fs.readFileSync(OLD, 'utf8'));
+  const rows = Object.values(state.rows || {}).filter((r) => r && typeof r.t === 'string' && r.id != null);
+  const insert = `INSERT OR REPLACE INTO records (tenant, k, t, id, rec, deleted, at, seq, origin) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)`;
+  await db.batch(rows.map((r) => db.prepare(insert).bind(MAIN, r.t + '|' + r.id, r.t, String(r.id), r.deleted ? null : JSON.stringify(r.rec ?? null),
+    r.deleted ? 1 : 0, r.at || new Date(0).toISOString(), Number(r.seq) || 0, r.origin || 'hub-1')));
+  const kept = OLD.replace(/\.json$/, `.before-move-${new Date().toISOString().slice(0, 10)}.json`);
+  fs.renameSync(OLD, kept);
+  console.log(`Moved ${rows.length} records from hub.json into hub.db (hub.json kept as ${path.basename(kept)}).`);
 }
 
-// Daily backup, keep 30
-function backup() {
-  if (!fs.existsSync(FILE)) return;
+// ---------- daily: a copy of the database (last 30 kept), and the sign-in tables tidied ----------
+async function daily() {
   const dir = path.join(DATA_DIR, 'backups');
   fs.mkdirSync(dir, { recursive: true });
-  const f = path.join(dir, `hub-${new Date().toISOString().slice(0, 10)}.json`);
-  if (!fs.existsSync(f)) fs.copyFileSync(FILE, f);
-  for (const x of fs.readdirSync(dir).sort().reverse().slice(30)) fs.unlinkSync(path.join(dir, x));
-}
-backup();
-setInterval(backup, 6 * 3600e3);
-
-// ---- auth: the sync key (full access) or a staff sign-in token (same scheme as the cloud worker) ----
-const ADMIN_ONLY = new Set(['users', 'settings', 'branches']);
-// Password secrets stay on the hub and are never sent to a device (0.2); a device verifies its own users offline
-// with a local device-bound verifier (src/offline.js), not with these fields.
-const USER_SECRETS = ['hash', 'salt', 'algo', 'iter'];
-const CLOCK_SKEW_MS = 5 * 60000; // 1.3 clamp a device clock this far ahead of server time at most
-const stripUserSecrets = (t, rec) => { if (t !== 'users' || !rec) return rec; const o = { ...rec }; for (const f of USER_SECRETS) delete o[f]; return o; };
-const b64url = (buf) => Buffer.from(buf).toString('base64url');
-const sign = (body) => crypto.createHmac('sha256', 'token:' + KEY).update(body).digest('base64url');
-
-function authenticate(req) {
-  const got = (req.headers.authorization || '').replace(/^Bearer /, '');
-  if (got.startsWith('u.')) {
-    const [, body, sig] = got.split('.');
-    if (!body || !sig || sig.length !== sign(body).length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(sign(body)))) return null;
-    const p = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
-    return p.exp > Date.now() ? { role: p.role, name: p.name } : null;
+  const f = path.join(dir, `hub-${new Date().toISOString().slice(0, 10)}.db`);
+  if (!fs.existsSync(f)) {
+    try { db.raw.exec(`VACUUM INTO '${f.replace(/'/g, "''")}'`); } catch (e) { console.warn('backup failed:', e.message); }
   }
-  const a = Buffer.from(got), b = Buffer.from(KEY);
-  return a.length === b.length && crypto.timingSafeEqual(a, b) ? { role: 'admin', name: 'sync key' } : null;
+  for (const x of fs.readdirSync(dir).filter((n) => /^hub-.*\.db$/.test(n)).sort().reverse().slice(30)) fs.unlinkSync(path.join(dir, x));
+  await pruneSignInTables(db).catch(() => {});
 }
+await daily();
+setInterval(() => daily().catch(() => {}), 6 * 3600e3).unref?.();
 
-// 2.8 async PBKDF2 so a sign-in doesn't block the single-threaded hub while hashing
-const pbkdf2 = (pw, salt, iter) => new Promise((resolve, reject) => crypto.pbkdf2(pw, salt, iter, 32, 'sha256', (err, dk) => (err ? reject(err) : resolve(dk))));
-async function login({ email, password }) {
-  const e = String(email || '').trim().toLowerCase();
-  const u = Object.values(state.rows).filter((r) => r.t === 'users' && !r.deleted).map((r) => r.rec).find((x) => x && x.email === e && !x.disabled);
-  const pw = String(password || '');
-  // step 5: compared in constant time (the full hub rebuild on the cloud's code is workplan step 16)
-  const same = (a, b) => { const x = Buffer.from(String(a)), y = Buffer.from(String(b ?? '')); return x.length === y.length && crypto.timingSafeEqual(x, y); };
-  const ok = u && (u.algo === 'pbkdf2'
-    ? same((await pbkdf2(pw, Buffer.from(u.salt, 'base64'), u.iter || 100000)).toString('hex'), u.hash)
-    : same(crypto.createHash('sha256').update('pharmapos:' + pw).digest('hex'), u.hash));
-  if (!ok) return [401, { error: 'Wrong email or password, or this account has not been synced to the hub yet.' }];
-  const body = b64url(JSON.stringify({ sub: u.id, name: u.name, role: u.role, exp: Date.now() + 30 * 864e5 }));
-  return [200, { token: 'u.' + body + '.' + sign(body), user: { id: u.id, name: u.name, email: u.email, role: u.role } }];
-}
-
-function sync({ deviceId, since = 0, changes = [] }, who) {
-  let applied = 0;
-  for (const ch of changes) {
-    if (!ch || typeof ch.t !== 'string' || ch.id == null || typeof ch.at !== 'string') continue;
-    if (who.role !== 'admin' && ADMIN_ONLY.has(ch.t)) continue; // only admins change users, settings, branches
-    const k = ch.t + '|' + ch.id;
-    // 1.3 clamp a device's clock to server time (+ a little skew), so a wrong/future clock can't win forever
-    const atMs = Date.parse(ch.at);
-    const at = atMs <= Date.now() + CLOCK_SKEW_MS ? ch.at : new Date(Date.now() + CLOCK_SKEW_MS).toISOString();
-    const cur = state.rows[k];
-    if (cur && cur.at >= at) continue; // last writer wins
-    let rec = ch.deleted ? undefined : ch.rec;
-    // a device no longer holds password secrets, so a user edit arrives without them: keep what the hub stores (0.2)
-    if (ch.t === 'users' && rec && !rec.hash && cur?.rec) { rec = { ...rec }; for (const f of USER_SECRETS) if (cur.rec[f] !== undefined) rec[f] = cur.rec[f]; }
-    state.rows[k] = { t: ch.t, id: ch.id, rec, deleted: !!ch.deleted, at, seq: ++state.seq, origin: deviceId };
-    applied++;
-  }
-  if (applied) save();
-  const out = Object.values(state.rows)
-    .filter((r) => r.seq > since && r.origin !== deviceId)
-    .sort((a, b) => a.seq - b.seq);
-  const page = out.slice(0, PAGE);
-  // Cursor: everything up to here has been delivered (rows from this device are skipped, not missed)
-  const cursor = out.length > PAGE ? page[page.length - 1].seq : state.seq;
-  return { changes: page.map(({ t, id, rec, deleted, at }) => ({ t, id, rec: stripUserSecrets(t, rec), deleted, at })), cursor, more: out.length > PAGE, applied };
-}
-
-const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.ico': 'image/x-icon' };
-
-function send(res, code, body, type = 'application/json') {
-  res.writeHead(code, {
-    'Content-Type': type,
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Authorization, Content-Type',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Cache-Control': 'no-store',
-  });
-  res.end(typeof body === 'string' || Buffer.isBuffer(body) ? body : JSON.stringify(body));
-}
-
-const server = http.createServer((req, res) => {
- try { // 2.8 never let a malformed request (e.g. a bad %-escape in the path) crash the single-process hub
-  const url = new URL(req.url, 'http://x');
-  if (req.method === 'OPTIONS') return send(res, 204, '');
-  if (url.pathname === '/api/health') return send(res, 200, { ok: true, app: 'rxpos-hub', rows: Object.keys(state.rows).length });
-  if ((url.pathname === '/api/sync' || url.pathname === '/api/login') && req.method === 'POST') {
-    const who = url.pathname === '/api/sync' ? authenticate(req) : null;
-    if (url.pathname === '/api/sync' && !who) return send(res, 401, { error: 'Not signed in (wrong sync key or expired sign-in)' });
+// ---------- the server ----------
+const MAX_BODY = 50e6;
+const server = http.createServer(async (req, res) => {
+  try {
     const chunks = [];
     let size = 0;
-    req.on('data', (c) => { size += c.length; if (size > 50e6) req.destroy(); else chunks.push(c); });
-    req.on('end', () => {
-      try {
-        const body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
-        if (url.pathname === '/api/login') { login(body).then(([code, out]) => send(res, code, out)).catch((e) => send(res, 400, { error: 'Bad request: ' + e.message })); return; }
-        if (!body.deviceId) return send(res, 400, { error: 'Missing deviceId' });
-        send(res, 200, sync(body, who));
-      } catch (e) {
-        send(res, 400, { error: 'Bad request: ' + e.message });
-      }
-    });
-    return;
+    for await (const c of req) { size += c.length; if (size > MAX_BODY) { res.writeHead(413).end('Too large'); return; } chunks.push(c); }
+    const headers = new Headers();
+    for (const [k, v] of Object.entries(req.headers)) if (v != null && !k.startsWith(':')) headers.set(k, Array.isArray(v) ? v.join(', ') : v);
+    // the device's address, for the sign-in limits: the connection's own, or behind an HTTPS proxy (Caddy, nginx) with
+    // RXPOS_TRUST_PROXY=1, the first X-Forwarded-For entry (only then: a device could otherwise pretend to be anyone)
+    const fwd = process.env.RXPOS_TRUST_PROXY === '1' ? String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() : '';
+    headers.set('CF-Connecting-IP', fwd || req.socket.remoteAddress || 'noip');
+    const url = `http://${req.headers.host || 'localhost:' + PORT}${req.url}`;
+    const r = await cloud.fetch(new Request(url, { method: req.method, headers, body: ['GET', 'HEAD'].includes(req.method) ? undefined : Buffer.concat(chunks) }), env, ctx);
+    const out = {};
+    r.headers.forEach((v, k) => { out[k] = v; });
+    res.writeHead(r.status, out);
+    res.end(req.method === 'HEAD' ? undefined : Buffer.from(await r.arrayBuffer()));
+  } catch (e) {
+    console.error(e);
+    try { res.writeHead(500, { 'Content-Type': 'application/json' }).end(JSON.stringify({ error: 'Server error' })); } catch { /* reply already started */ }
   }
-  if (url.pathname === '/api/config') {
-    if (!authenticate(req)) return send(res, 401, { error: 'Not signed in' });
-    return send(res, 200, { mtn: false, airtel: false, sms: false, hub: 'local' });
-  }
-  // Static web app
-  if (req.method !== 'GET') return send(res, 405, { error: 'Method not allowed' });
-  let decoded; try { decoded = decodeURIComponent(url.pathname); } catch { return send(res, 400, { error: 'Bad path' }); }
-  let file = path.normalize(path.join(WEB_DIR, decoded));
-  // 2.8 robust traversal check: path.relative, not startsWith (which a sibling dir sharing the prefix could slip past)
-  const rel = path.relative(WEB_DIR, file);
-  if (rel.startsWith('..') || path.isAbsolute(rel)) return send(res, 403, { error: 'Forbidden' });
-  if (!fs.existsSync(file) || fs.statSync(file).isDirectory()) file = path.join(WEB_DIR, 'index.html');
-  if (!fs.existsSync(file)) return send(res, 404, 'Web app not built. Run "npm run build" first.', 'text/plain');
-  send(res, 200, fs.readFileSync(file), MIME[path.extname(file)] || 'application/octet-stream');
- } catch (e) { try { send(res, 500, { error: 'Server error' }); } catch { /* response already sent */ } }
 });
 
 server.listen(PORT, () => {

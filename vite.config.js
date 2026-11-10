@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 import fs from 'node:fs';
 import path from 'node:path';
 import { buildInfo, writeReleaseFiles } from './scripts/release-files.mjs';
+import { buildHub } from './scripts/build-hub.mjs';
 
 const info = buildInfo();
 const { version } = JSON.parse(fs.readFileSync('./package.json', 'utf8'));
@@ -11,7 +12,10 @@ const { version } = JSON.parse(fs.readFileSync('./package.json', 'utf8'));
 const releaseFiles = () => ({
   name: 'rxpos-release-files',
   apply: 'build',
-  closeBundle() { const m = writeReleaseFiles(path.resolve('dist'), info, version); console.log(`RxPOS ${m.label} · build ${m.build} · ${m.files.length} files`); },
+  async closeBundle() {
+    const m = writeReleaseFiles(path.resolve('dist'), info, version); console.log(`RxPOS ${m.label} · build ${m.build} · ${m.files.length} files`);
+    await buildHub(); // the self-hosted hub's copy of the cloud code (server/hub-core.mjs), shipped in the Windows app and RxPOS-Hub.zip
+  },
 });
 
 // Relative base so the same build works on the web (rxposug.com/<pharmacy>) and inside Electron (file://)

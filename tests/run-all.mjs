@@ -73,6 +73,7 @@ const SUITES = [
   ['field-by-field merge in the cloud', 'v61-field-merge.mjs', []],
   ['field-by-field merge in the app (offline edit)', 'v61-field-merge-app.mjs', []],
   ['cloud counters: concurrent pushes, cached record count', 'v62-counters.mjs', []],
+  ['hub: moved from hub.json onto the cloud\'s code', 'hub-move.mjs', []],
   ['file uploads', 'v24-files.mjs', []],
   ['security headers', 'v25-headers.mjs', []],
   ['rate limits', 'v26-ratelimit.mjs', []],
@@ -112,6 +113,13 @@ const SUITES = [
   ...(process.platform === 'win32' || fs.existsSync('/usr/bin/xvfb-run') ? [['windows self-update', 'electron-update.mjs', []]] : []),
 ];
 const only = process.argv[2];
+// RXPOS_TEST_HUB=1: the same suites against the self-hosted hub (server/hub.mjs, the cloud's code on Node's SQLite)
+// instead of the local Cloudflare cloud. Only suites that don't need Cloudflare itself (the live connection, R2,
+// the cloud's own database file) run there.
+const HUB = process.env.RXPOS_TEST_HUB === '1';
+const HUB_SUITES = new Set(['unit-policy.mjs', 'v14-api.mjs', 'v23-perms.mjs', 'v26-ratelimit.mjs', 'v27-secrets.mjs', 'v29-immutable.mjs', 'v38-sync-protocol.mjs',
+  'v55-write-policy.mjs', 'v55-staff-ui.mjs', 'v56-sale-checks.mjs', 'v57-passwords.mjs', 'v58-throttle.mjs', 'v59-doc-numbers.mjs', 'v60-credit-limit.mjs',
+  'v61-field-merge.mjs', 'v61-field-merge-app.mjs', 'v37-reliability.mjs', 'hub-move.mjs']);
 // RXPOS_CI=1 (full-tests.yml): checks that need a service a CI machine can't reach are reported as skipped, not
 // failed, so the deploy gate isn't blocked by the outside world. Listed by exact check name: anything else that fails
 // still fails. Local runs (no RXPOS_CI) count them as failures as before.
@@ -129,7 +137,7 @@ const state = path.join(here, '.state');
 fs.rmSync(state, { recursive: true, force: true });
 // run the tools with node directly: no shell, so folders with spaces in their names work
 const bin = (p) => path.join(root, 'node_modules', p);
-console.log('Building the app and starting a local cloud…');
+console.log(HUB ? 'Building the app and starting a local hub (server/hub.mjs)…' : 'Building the app and starting a local cloud…');
 const build = spawn(process.execPath, [bin('vite/bin/vite.js'), 'build'], { cwd: root });
 let buildOut = '';
 build.stdout.on('data', (d) => { buildOut += d; });
@@ -144,7 +152,10 @@ if (!process.env.CLOUDFLARE_API_TOKEN) {
   fs.writeFileSync(path.join(root, 'wrangler.test.jsonc'), cfg);
   cfgArgs.push('-c', 'wrangler.test.jsonc');
 }
-const cloud = spawn(process.execPath, [bin('wrangler/bin/wrangler.js'), 'dev', ...cfgArgs, '--port', '8790', '--persist-to', state, '--var', 'DB_BACKEND:', '--var', 'SYNC_KEY:local-test-sync-key-0123456789abcdef',
+const cloud = HUB
+  ? spawn(process.execPath, ['--no-warnings', path.join(root, 'server', 'hub.mjs'), '--port', '8790', '--data', state, '--web', path.join(root, 'dist')], { cwd: root, stdio: 'ignore',
+    env: { ...process.env, RXPOS_SYNC_KEY: 'local-test-sync-key-0123456789abcdef', RXPOS_OWNER_KEY: OWNER, PUBLIC_URL: BASE, PBKDF2_ITER: '150000', RXPOS_TRUST_PROXY: '1' } })
+  : spawn(process.execPath, [bin('wrangler/bin/wrangler.js'), 'dev', ...cfgArgs, '--port', '8790', '--persist-to', state, '--var', 'DB_BACKEND:', '--var', 'SYNC_KEY:local-test-sync-key-0123456789abcdef',
   '--var', `OWNER_KEY:${OWNER}`, '--var', `PUBLIC_URL:${BASE}`,
   // step 5: a raised password-rounds setting, so every suite signs in through the re-hash path
   '--var', 'PBKDF2_ITER:150000'], { cwd: root, stdio: 'ignore' });
@@ -161,6 +172,7 @@ const results = [];
 let totalSkipped = 0;
 for (const [label, file, extra] of SUITES) {
   if (only && !file.includes(only)) continue;
+  if (HUB && !HUB_SUITES.has(file)) continue;
   await clearAll();
   const outDir = extra[0] ? path.join(here, extra[0]) : null;
   const args = [path.join(here, file), BASE, OWNER, ...(outDir ? [outDir] : [])];

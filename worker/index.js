@@ -18,7 +18,6 @@
 import CATALOG from '../src/data/catalog.json' with { type: 'json' };
 import { withDatabase } from './database.js';
 import { isOwner, ownerAuthRoutes, ownerAccount, verifyGoogle, getConfig, ownerMainLogin, ownerMainFail } from './owner-auth.js';
-export { TenantHub } from './live.js';
 import { backup, restore } from './backup.js';
 import { uptimeCheck } from './uptime.js';
 import { watchdog } from './watchdog.js';
@@ -1362,16 +1361,16 @@ async function ai(env, path, body, who) {
 // ---------- health alerts (WHO Disease Outbreak News) ----------
 const NEAR = /uganda|kenya|tanzania|rwanda|burundi|south sudan|congo|ethiopia|somalia|africa/i;
 async function healthAlerts() {
-  const cache = caches.default;
+  const cache = typeof caches !== 'undefined' ? caches.default : null; // Cloudflare's cache (absent on a hub)
   const key = new Request('https://rxpos.cache/health-alerts-v1');
-  const hit = await cache.match(key).catch(() => null);
+  const hit = cache && (await cache.match(key).catch(() => null));
   if (hit) return hit;
   let r;
   try { r = await fetch('https://www.who.int/api/news/diseaseoutbreaknews?sf_culture=en&$orderby=PublicationDateAndTime%20desc&$top=12&$select=Title,PublicationDateAndTime,UrlName', { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(8000) }); } catch { r = null; }
   if (!r?.ok) return json({ error: 'WHO alerts are unavailable right now', items: [] }, 502);
   const items = ((await r.json()).value || []).map((x) => ({ title: x.Title, date: String(x.PublicationDateAndTime).slice(0, 10), url: 'https://www.who.int/emergencies/disease-outbreak-news/item/' + x.UrlName, near: NEAR.test(x.Title) }));
   const res = new Response(JSON.stringify({ source: 'World Health Organization – Disease Outbreak News', items }), { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=10800', ...cors } });
-  await cache.put(key, res.clone()).catch(() => {});
+  if (cache) await cache.put(key, res.clone()).catch(() => {});
   return res;
 }
 
