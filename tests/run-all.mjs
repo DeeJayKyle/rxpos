@@ -209,7 +209,9 @@ for (const [label, file, extra] of SUITES) {
   totalSkipped += skipped.length;
   results.push({ label, passed, failed: out.code && !failed ? 1 : failed });
   console.log(`${failed || out.code ? '✗' : '✓'} ${label.padEnd(20)} ${passed} passed, ${failed} failed  (${Math.round((Date.now() - t0) / 1000)} s)`);
-  for (const line of out.buf.split('\n').filter((l) => /^(FAIL|Error|\s+at |[A-Za-z]*Error:)/.test(l) && !skipped.some((x) => l.slice(6).startsWith(x.replace(/ \(needs .*\)$/, '')))).slice(0, 8)) console.log('    ' + line.slice(0, 220));
+  // a suite that stopped before its own summary: the end of what it printed, so the reason is in the CI log
+  if (!m) console.log(out.buf.trim().split('\n').slice(-15).map((l) => '    | ' + l.slice(0, 220)).join('\n'));
+  for (const line of out.buf.split('\n').filter((l) => /^(FAIL|Error|\s+at |[A-Za-z]*Error:)/.test(l) && !skipped.some((x) => l.slice(6).startsWith(x.replace(/ \(needs .*\)$/, '')))).slice(0, 12)) console.log('    ' + line.slice(0, 220));
   for (const x of skipped) console.log('    SKIP  ' + x);
 }
 const total = results.reduce((a, r) => ({ p: a.p + r.passed, f: a.f + r.failed }), { p: 0, f: 0 });

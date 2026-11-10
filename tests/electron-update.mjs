@@ -36,7 +36,9 @@ const srv = http.createServer((req, res) => {
 }).listen(8799);
 const electron = path.join(root, 'node_modules', 'electron', 'dist', process.platform === 'win32' ? 'electron.exe' : 'electron');
 const cmd = process.platform === 'linux' ? ['xvfb-run', ['-a', electron]] : [electron, []];
-const start = () => spawn(cmd[0], [...cmd[1], ...(process.getuid?.() === 0 ? ['--no-sandbox'] : []), '--remote-debugging-port=9333', root],
+// Linux: no Chromium sandbox for this headless test run (root can't use it, and Ubuntu 24.04's runners block the
+// unprivileged namespaces it needs for everyone else, so Electron would not start on GitHub); the app itself is unchanged
+const start = () => spawn(cmd[0], [...cmd[1], ...(process.platform === 'linux' ? ['--no-sandbox'] : []), '--remote-debugging-port=9333', root],
   { env: { ...process.env, HOME: S + '/home', XDG_CONFIG_HOME: S + '/home/.config', APPDATA: S + '/home/.config', RXPOS_UPDATE_URL: 'http://localhost:8799', RXPOS_READY_TIMEOUT: '8000' }, stdio: ['ignore', 'pipe', 'pipe'], detached: process.platform !== 'win32' });
 // stop the app and everything it started (xvfb-run leaves Electron running otherwise)
 const stop = (c) => { try { process.platform === 'win32' ? spawn('taskkill', ['/pid', String(c.pid), '/T', '/F']) : process.kill(-c.pid, 'SIGTERM'); } catch { /* gone */ } setTimeout(() => { try { process.kill(-c.pid, 'SIGKILL'); } catch { /* gone */ } }, 1500); };
@@ -76,6 +78,6 @@ try {
   const again = await p.evaluate(() => window.rxposShell.check());
   check('the broken build is not downloaded again', again.status === 'current', JSON.stringify(again));
   b.disconnect();
-} catch (e) { console.log('ERROR', e.message); fail++; console.log(log.slice(-1500)); }
+} catch (e) { console.log('Error:', e.message); fail++; console.log(log.slice(-1500).split('\n').map((l) => 'Error:   ' + l).join('\n')); } // shown by run-all
 stop(el); srv.close();
 console.log(`\n${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0);
