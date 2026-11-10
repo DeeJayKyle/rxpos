@@ -47,7 +47,7 @@ Server-side steps (Worker, `worker/`) protect **both** apps at once. Client-side
 | 18 | Owner: anomaly dashboard, day close / lock, accounting export | 4.5 | ✅ Close the day (owner's choice); export and overview not done |
 | 19 | Clinical: structured allergies that block, interaction and duplicate-therapy checks | 4.2 | ⏸ skipped by the owner until a licensed interaction database is chosen |
 | 20 | Selling: loyalty points, promotions engine, customer display, cash-up with blind counts, per-role discount ceiling | 4.3 | ✅ discount ceiling + blind cash-up (owner's choice); the rest not done |
-| 21 | Stock: GS1 DataMatrix scan, scheduled draft POs, expiry markdowns, branch rebalancing | 4.4 | ⏳ |
+| 21 | Stock: GS1 DataMatrix scan, scheduled draft POs, expiry markdowns, branch rebalancing | 4.4 | ✅ GS1 pack scanning (the recommended part; the owner said continue without picking); the rest not done |
 | 22 | Insurance: insurers/schemes, member check, co-pay at the till, monthly claim batches | 4.1 | ⏳ |
 | 23 | URA EFRIS e-invoicing (fiscal number + QR on receipts, offline queue) | 4.1 | ⏳ (needs URA EFRIS credentials / sandbox) |
 | 24 | Interface: one till layout with density setting, 4 themes, single payment panel, accessibility audit (axe), translations | 4.6 | ⏳ |
@@ -170,3 +170,13 @@ Server-side steps (Worker, `worker/`) protect **both** apps at once. Client-side
   provider nothing watched, which was disposed before it loaded, so charging stopped (7 till tests failed); fixed by
   reading roles from the device store. v64 12; unit-anomalies +6; Flutter 394 passed, analyze clean; lint 0; full JS
   suite 1,899 passed, 6 failed (the known 6); hub suites 308/308.
+- 2026-11-10 · Step 21 · `32fd351` · The owner said "Continue" without picking parts, so only the recommended one:
+  GS1 pack codes (src/gs1.js, rxpos_flutter/lib/core/rules/gs1.dart, both checked against tests/gs1-cases.json):
+  product number (AI 01), expiry (17), batch (10), serial (21); with or without the GS separator, a scanner prefix
+  such as ]d2, or the printed "(01)…(17)…(10)…" text. Till (both apps, search box and camera): the medicine is found
+  by its product number (an EAN-13 barcode matches the GTIN-14), that pack's batch is sold from first, an expired pack
+  is refused. Add Stock (both apps): the line gets the batch and expiry; an unknown product number starts a new
+  medicine with them filled. Flutter's "New / choose existing" row on a new-medicine line now wraps (it overflowed
+  in the test font). Scheduled draft POs, expiry markdowns and branch rebalancing wait for the owner. unit-gs1 15
+  (now in run-all), v65 6; Flutter gs1 13 + 2 new tests, 409 passed, analyze clean; lint 0; full JS suite 1,920 passed, 6 failed (the known 6);
+  hub suites 314/314.
