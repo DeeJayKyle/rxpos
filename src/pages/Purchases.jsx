@@ -31,8 +31,10 @@ const baseCost = (l) => unitCost(l) / (Number(l.recvSize) || 1);
 const lineTotal = (l) => (l.by === 'total' && l.total !== '' ? Number(l.total) || 0 : (Number(l.qty) || 0) * (Number(l.cost) || 0));
 
 /**
- * Apply an edit to a line. Quantity, unit cost and line total stay in step (type whichever the invoice shows), and the
- * retail price follows the cost at the chosen markup until the person types a price of their own.
+ * Apply an edit to a line. Quantity, unit cost and line total stay in step (type whichever the invoice shows).
+ * The retail price of a medicine already in the list is never changed by the invoice: it stays as it is until the
+ * person types a new one (the owner's choice, 2026-11-10; "Use" applies the cost + markup price). A medicine with no
+ * price yet (a new one) gets cost + markup until a price is typed.
  */
 function editLine(l, patch, priceFor) {
   const n = { ...l, ...patch };
@@ -43,13 +45,14 @@ function editLine(l, patch, priceFor) {
     if (n.by === 'total' && n.total !== '') n.cost = qty > 0 ? numOrBlank(Number(n.total) / qty) : '';
     else if (n.cost !== '') n.total = numOrBlank(Number(n.cost) * qty);
   }
-  if ('price' in patch) n.auto = patch.price === ''; // clearing the price hands it back to the markup
+  const priced = Number(n.basePrice) > 0; // a medicine already in the list, with its price
+  if ('price' in patch) {
+    n.auto = patch.price === ''; // clearing the price: back to today's price (or, for a new medicine, cost + markup)
+    if (patch.price === '' && priced) { n.price = String(Number(n.basePrice)); n.derived = false; }
+  }
   const costChanged = 'cost' in patch || 'total' in patch || ('qty' in patch && n.by === 'total');
-  // a medicine already in the list never gets a lower price on its own: the higher of today's price and cost + markup
-  if (n.auto && (costChanged || patch.price === '' || patch.reprice || 'recvSize' in patch) && baseCost(n) > 0) {
-    const worked = priceFor(baseCost(n));
-    n.kept = Number(n.basePrice) > worked;
-    n.price = String(n.kept ? Number(n.basePrice) : worked); n.derived = true;
+  if (n.auto && !priced && (costChanged || patch.price === '' || patch.reprice || 'recvSize' in patch) && baseCost(n) > 0) {
+    n.price = String(priceFor(baseCost(n))); n.derived = true;
   }
   delete n.reprice;
   return n;
@@ -96,7 +99,7 @@ export function AddStock() {
     const k = receiveInPacks(s) && !('recvPack' in extra) ? mainPack(p) : null;
     const l = { ...blankLine(), productId: p.id, cost: numOrBlank(p.cost ? p.cost * (k ? Number(k.size) : 1) : ''), price: p.price ? String(p.price) : '', basePrice: p.price || 0, derived: false,
       ...(k ? { recvPack: k.name, recvSize: Number(k.size) } : {}), ...extra };
-    if (!l.price && unitCost(l) > 0) { l.price = String(priceAt(markup)(unitCost(l))); l.derived = true; }
+    if (!l.price && baseCost(l) > 0) { l.price = String(priceAt(markup)(baseCost(l))); l.derived = true; } // per unit, also when received by the box
     return { ...l, total: l.cost !== '' ? numOrBlank(Number(l.cost) * Number(l.qty || 0)) : '' };
   };
   // What was read off an invoice → Add Stock lines (medicines matched, costs and prices worked out) and a summary
@@ -539,7 +542,9 @@ export function AddStock() {
                     <td key="price" data-label="Retail price">
                       <input type="number" min="0" step="any" inputMode="decimal" placeholder={cost > 0 ? String(priceFor(cost)) : ''} value={l.price} onChange={(e) => setLine(l.key, { price: e.target.value })} aria-label="New retail price" />
                       <small className="price-hint">
-                        {l.auto && l.derived ? <span className="muted">{l.kept ? 'kept (higher than +' + (form.markup || 0) + '%)' : `auto · +${form.markup || 0}%`}</span> : !l.auto ? <button type="button" className="link-btn small" title="Work the price out from the cost again" onClick={() => setLine(l.key, { price: '' })}><RotateCcw size={10} /> auto</button> : null}
+                        {l.auto && l.derived ? <span className="muted">{`auto · +${form.markup || 0}%`}</span> : !l.auto ? <button type="button" className="link-btn small" title={p?.price > 0 ? 'Back to today\'s price' : 'Work the price out from the cost again'} onClick={() => setLine(l.key, { price: '' })}><RotateCcw size={10} /> {p?.price > 0 ? 'undo' : 'auto'}</button> : null}
+                        {/* the owner's choice: the price is kept; cost + markup is offered, not applied */}
+                        {p?.price > 0 && cost > 0 && priceFor(cost) !== price && <button type="button" className="link-btn small" title={`Cost + ${form.markup || 0}% markup`} onClick={() => setLine(l.key, { price: String(priceFor(cost)) })}>Use {fmt(priceFor(cost))}</button>}
                         {markup !== null && <span className={markup < 0 ? 'text-danger' : 'muted'}> {markup < 0 ? 'below cost' : `margin ${markup}%`}</span>}
                         {p && price !== p.price && p.price > 0 && <span className="muted"> · was {fmt(p.price)}</span>}
                       </small>

@@ -338,12 +338,22 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
                 hint: cost > 0 ? formatQty(priceAt(f['markup'], s)(cost)) : null),
             Wrap(spacing: 4, children: [
               if (l['auto'] == true && l['derived'] == true)
-                Text(l['kept'] == true ? 'kept (higher than +${f['markup']}%)' : 'auto · +${f['markup']}%', style: th.textTheme.bodySmall)
+                Text('auto · +${f['markup']}%', style: th.textTheme.bodySmall)
               else if (l['auto'] != true)
                 InkWell(onTap: () {
                   _setLine(key, {'price': ''});
                   setState(() => _round++);
-                }, child: Text('↺ auto', style: TextStyle(color: th.colorScheme.primary, fontSize: 12))),
+                }, child: Text(p != null && p.price > 0 ? '↺ undo' : '↺ auto', style: TextStyle(color: th.colorScheme.primary, fontSize: 12))),
+              // the owner's choice: the price is kept; cost + markup is offered, not applied
+              if (p != null && p.price > 0 && cost > 0 && priceAt(f['markup'], s)(cost) != price)
+                InkWell(
+                  key: Key('use-price-$key'),
+                  onTap: () {
+                    _setLine(key, {'price': formatQty(priceAt(f['markup'], s)(cost))});
+                    setState(() => _round++);
+                  },
+                  child: Text('Use ${s.money(priceAt(f['markup'], s)(cost))}', style: TextStyle(color: th.colorScheme.primary, fontSize: 12)),
+                ),
               if (cost > 0 && price > 0)
                 Text(price < cost ? 'below cost' : 'margin ${((price - cost) / cost * 100).round()}%', style: TextStyle(fontSize: 12, color: price < cost ? th.colorScheme.error : null)),
               if (p != null && price != p.price && p.price > 0) Text('was ${s.money(p.price)}', style: th.textTheme.bodySmall),
@@ -656,10 +666,15 @@ class _DateCellState extends State<_DateCell> {
     super.dispose();
   }
 
+  /// An expiry (monthYear) is read whatever its format: 06/2028, JUN 2028, 30/06/2028, 062028… (parseExpiry)
+  String _read(String t) => widget.monthYear ? (parseExpiry(t, widget.format) ?? '') : parseTypedDate(t, widget.format);
+
   @override
   Widget build(BuildContext context) {
-    final iso = parseTypedDate(_c.text, widget.format, monthYear: widget.monthYear);
+    final iso = _read(_c.text);
     final past = widget.monthYear && iso.isNotEmpty && daysUntil(iso) < 0;
+    // how a typed expiry was read, when it was typed another way (JUN 2028 → 30/06/2028)
+    final readAs = widget.monthYear && iso.isNotEmpty && _c.text.trim() != showDate(iso, widget.format) ? 'Read as ${showDate(iso, widget.format)}' : null;
     return SizedBox(
       width: 170,
       child: TextField(
@@ -668,7 +683,8 @@ class _DateCellState extends State<_DateCell> {
           labelText: widget.label,
           isDense: true,
           hintText: dateFormats.firstWhere((x) => x.$1 == widget.format).$2,
-          errorText: _bad ? 'Not a date' : past ? 'Already passed' : null,
+          errorText: _bad ? (widget.monthYear ? 'Try 06/2028 or JUN 2028' : 'Not a date') : past ? 'Already passed' : null,
+          helperText: readAs,
           suffixIcon: IconButton(
             tooltip: 'Pick a date',
             icon: const Icon(Icons.calendar_today, size: 16),
@@ -684,7 +700,7 @@ class _DateCellState extends State<_DateCell> {
           ),
         ),
         onChanged: (v) {
-          final p = parseTypedDate(v, widget.format, monthYear: widget.monthYear);
+          final p = _read(v);
           setState(() => _bad = v.trim().isNotEmpty && p.isEmpty);
           if (p.isNotEmpty || v.trim().isEmpty) widget.onChanged(p);
         },

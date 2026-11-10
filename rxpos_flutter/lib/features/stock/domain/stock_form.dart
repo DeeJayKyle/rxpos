@@ -55,9 +55,10 @@ Map<String, Object?> blankForm(PharmacySettings s) => {
 /// The price worked out from a cost at a markup (rounded to the pharmacy's price step).
 double Function(double) priceAt(Object? markup, PharmacySettings s) => (cost) => markupPrice(cost, _n(markup), s.priceRound);
 
-/// Apply an edit to a line. Quantity, unit cost and line total stay in step (type whichever the invoice shows), and the
-/// retail price follows the cost at the markup until the person types a price of their own; a medicine already in
-/// the list never gets a lower price on its own (the higher of today's price and cost + markup).
+/// Apply an edit to a line. Quantity, unit cost and line total stay in step (type whichever the invoice shows).
+/// The retail price of a medicine already in the list is never changed by the invoice: it stays until the person types
+/// a new one (the owner's choice, 2026-11-10; "Use" applies the cost + markup price). A medicine with no price yet (a
+/// new one) gets cost + markup until a price is typed. As src/pages/Purchases.jsx editLine.
 Line editLine(Line l, Map<String, Object?> patch, double Function(double) priceFor) {
   final n = {...l, ...patch};
   final qty = _n(n['qty']);
@@ -74,13 +75,17 @@ Line editLine(Line l, Map<String, Object?> patch, double Function(double) priceF
       n['total'] = numOrBlank(_n(n['cost']) * qty);
     }
   }
-  if (patch.containsKey('price')) n['auto'] = _blank(patch['price']);
+  final priced = _n(n['basePrice']) > 0; // a medicine already in the list, with its price
+  if (patch.containsKey('price')) {
+    n['auto'] = _blank(patch['price']); // clearing the price: back to today's price (or, for a new medicine, cost + markup)
+    if (_blank(patch['price']) && priced) {
+      n['price'] = _txt(_n(n['basePrice']));
+      n['derived'] = false;
+    }
+  }
   final costChanged = patch.containsKey('cost') || patch.containsKey('total') || (patch.containsKey('qty') && n['by'] == 'total');
-  if (n['auto'] == true && (costChanged || (patch.containsKey('price') && _blank(patch['price'])) || patch['reprice'] == true || patch.containsKey('recvSize')) && baseCost(n) > 0) {
-    final worked = priceFor(baseCost(n));
-    final kept = _n(n['basePrice']) > worked;
-    n['kept'] = kept;
-    n['price'] = _txt(kept ? _n(n['basePrice']) : worked);
+  if (n['auto'] == true && !priced && (costChanged || (patch.containsKey('price') && _blank(patch['price'])) || patch['reprice'] == true || patch.containsKey('recvSize')) && baseCost(n) > 0) {
+    n['price'] = _txt(priceFor(baseCost(n)));
     n['derived'] = true;
   }
   n.remove('reprice');
@@ -96,8 +101,9 @@ Line lineFor(Product p, PharmacySettings s, {Map<String, Object?> extra = const 
     if (k != null) 'recvPack': k.name, if (k != null) 'recvSize': k.size,
     ...extra,
   };
-  if (_blank(l['price']) && unitCost(l) > 0) {
-    l['price'] = _txt(priceAt(markup ?? s.retailMarkup, s)(unitCost(l)));
+  if (_blank(l['price']) && baseCost(l) > 0) {
+    // per unit, also when received by the box
+    l['price'] = _txt(priceAt(markup ?? s.retailMarkup, s)(baseCost(l)));
     l['derived'] = true;
   }
   return {...l, 'total': !_blank(l['cost']) ? numOrBlank(_n(l['cost']) * _n(l['qty'])) : ''};
@@ -264,4 +270,55 @@ String showDate(String iso, String format) {
   final m = RegExp(r'^(\d{4})-(\d{2})-(\d{2})').firstMatch(iso);
   if (m == null) return ''; // not a date: shown empty, as in React (src/dateformat.js formatDate)
   return switch (format) { 'mdy' => '${m[2]}/${m[3]}/${m[1]}', 'ymd' => '${m[1]}-${m[2]}-${m[3]}', _ => '${m[3]}/${m[2]}/${m[1]}' };
+}
+
+// An expiry as printed on packs and invoices, whatever its format (the owner's request, 2026-11-10), as src/dateformat.js
+// parseExpiry; both are checked against tests/expiry-cases.json. 06/2028, 6/28, 2028-06, JUN 2028, 30-JUN-2028,
+// 30/06/2028 or 06/30/2028, 062028, 300628, 20280630, "EXP: 06/28". Day and month are told apart when one is above 12;
+// when both could be either, the device's date format decides. Month and year only: the last day of that month.
+const _months = {'JAN': 1, 'FEB': 2, 'MAR': 3, 'APR': 4, 'MAY': 5, 'JUN': 6, 'JUL': 7, 'AUG': 8, 'SEP': 9, 'SEPT': 9, 'OCT': 10, 'NOV': 11, 'DEC': 12};
+int? _monthOf(String w) => _months[w] ?? (w.length >= 3 ? _months[w.substring(0, 3)] : null);
+int _lastDay(int y, int m) => DateTime(y, m + 1, 0).day;
+String? _iso(int y, int m, int d) =>
+    y >= 2000 && y <= 2100 && m >= 1 && m <= 12 && d >= 1 && d <= _lastDay(y, m) ? '$y-${m.toString().padLeft(2, '0')}-${d.toString().padLeft(2, '0')}' : null;
+String? _endOf(int y, int m) => y >= 2000 && y <= 2100 && m >= 1 && m <= 12 ? _iso(y, m, _lastDay(y, m)) : null;
+int _year4(String y) => y.length <= 2 ? 2000 + int.parse(y) : int.parse(y);
+String? _dmyOrMdy(int a, int b, int y, String fmt) =>
+    a > 12 && b <= 12 ? _iso(y, b, a) : b > 12 && a <= 12 ? _iso(y, a, b) : fmt == 'mdy' ? _iso(y, a, b) : _iso(y, b, a);
+
+/// An expiry as typed or printed → YYYY-MM-DD; '' for an empty box, null when it can't be read.
+String? parseExpiry(String text, String fmt) {
+  final s = text.trim().toUpperCase().replaceFirst(RegExp(r'^(EXP(IRY)?(\s*DATE)?|USE\s*BY|BEST\s*BEFORE|BB)\s*[.:-]?\s*'), '').trim();
+  if (s.isEmpty) return '';
+  final words = s.split(RegExp(r'[^A-Z0-9]+')).where((w) => w.isNotEmpty).toList();
+  if (RegExp('[A-Z]').hasMatch(s)) {
+    final at = words.indexWhere((w) => RegExp(r'^[A-Z]+$').hasMatch(w) && _monthOf(w) != null);
+    if (at < 0) return null;
+    final m = _monthOf(words[at])!;
+    final nums = [for (var i = 0; i < words.length; i++) if (i != at) words[i]];
+    if (nums.isEmpty || nums.length > 2 || nums.any((w) => !RegExp(r'^\d+$').hasMatch(w))) return null;
+    if (nums.length == 1) return _endOf(_year4(nums[0]), m);
+    final four = nums.indexWhere((w) => w.length == 4);
+    final (d, y) = four == 0 ? (nums[1], nums[0]) : (nums[0], nums[1]);
+    return _iso(_year4(y), m, int.parse(d));
+  }
+  final n = words.map(int.parse).toList();
+  if (words.length == 3) return words[0].length == 4 ? _iso(n[0], n[1], n[2]) : _dmyOrMdy(n[0], n[1], _year4(words[2]), fmt);
+  if (words.length == 2) {
+    if (words[0].length == 4) return _endOf(n[0], n[1]);
+    if (words[1].length == 4) return _endOf(n[1], n[0]);
+    return n[0] <= 12 ? _endOf(_year4(words[1]), n[0]) : n[1] <= 12 ? _endOf(_year4(words[0]), n[1]) : null;
+  }
+  if (words.length != 1) return null;
+  final t = words[0];
+  int two(int i) => int.parse(t.substring(i, i + 2));
+  int four(int i) => int.parse(t.substring(i, i + 4));
+  if (t.length == 8) return (t.startsWith('20') ? _iso(four(0), two(4), two(6)) : null) ?? _dmyOrMdy(two(0), two(2), four(4), fmt);
+  if (t.length == 6) {
+    return (two(0) >= 1 && two(0) <= 12 && four(2) >= 2000 ? _endOf(four(2), two(0)) : null) ??
+        (four(0) >= 2000 && two(4) >= 1 && two(4) <= 12 ? _endOf(four(0), two(4)) : null) ??
+        _dmyOrMdy(two(0), two(2), 2000 + two(4), fmt);
+  }
+  if (t.length == 4) return two(0) >= 1 && two(0) <= 12 ? _endOf(2000 + two(2), two(0)) : null;
+  return null;
 }
