@@ -37,7 +37,7 @@ Server-side steps (Worker, `worker/`) protect **both** apps at once. Client-side
 | 12 | Tax per product (exempt / zero / standard), inclusive or exclusive pricing, tax per line | 2.3 | ⏸ skipped by the owner for now |
 | 13 | Incremental stock balances (no full rescan of movements per change) | 2.4 | ✅ |
 | 14 | Per-field merge for master data (products, customers, suppliers) | 2.5 | ✅ (batches too) |
-| 15 | Per-tenant sequence and record counters on the server | 2.6 | ⏳ |
+| 15 | Per-tenant sequence and record counters on the server | 2.6 | ✅ (record count only; sequence was already indexed) |
 | 16 | Hub: shared sync/permission core over SQLite, or retire (per step 0) | 1.4 | ⏳ |
 | 17 | ESLint + Prettier; split `worker/index.js` into route modules; split `POS.jsx`; widen typecheck | 3 | ⏳ |
 
@@ -134,3 +134,9 @@ Server-side steps (Worker, `worker/`) protect **both** apps at once. Client-side
   fields never erased; deletes stay record-level; other tables unchanged. Shared cases tests/field-merge-cases.json
   run by JS (14) and Dart (13); v61 8, v61-field-merge-app 5 (React offline edit vs another device). Flutter 388
   passed, analyze clean; full JS suite 1,840 passed, 6 failed (the known 6). Hub still whole-record (step 16).
+- 2026-11-10 · Step 15 · `33a8680` + this commit · Measured first: MAX(seq) is an index lookup (records_gseq, ~0.007 ms
+  at 300k rows), so the review's sequence concern was wrong and sequences are unchanged. The real cost was COUNT(*)
+  over the pharmacy's rows on every push (~1.7 ms per 100k rows, and billed rows read): now a cached `tenant_counts`
+  row, updated in the push's transaction, recounted hourly and always exactly before refusing. Deleting a pharmacy
+  also removes its count and tills. v62 6 (concurrent pushes + a downloader: 1,000 records, none lost or doubled;
+  cached count checked in the local DB); full JS suite 1,846 passed, 6 failed (the known 6).

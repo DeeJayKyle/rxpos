@@ -114,6 +114,7 @@ Two devices editing different fields of the same product (one the price, one the
 timestamps for master data (products, customers, suppliers, settings), merged field by field. Ledgers stay append-only.
 
 ### 2.6 Server hot spots
+*(Corrected in step 15: `MAX(seq)` is served by the `records_gseq` index and is not a hot spot; the per-push `COUNT(*)` was, and is now cached.)*
 Every write computes `(SELECT COALESCE(MAX(seq),0)+1 FROM records)` over **all pharmacies**, and every push runs
 `COUNT(*)` over the tenant's records for the quota check. That is fine today but will serialise all tenants as you grow.
 **Fix:** a per-tenant `counters` row (`seq`, `record_count`), updated in the same batch.
