@@ -183,7 +183,7 @@ const clearAll = async () => { for (const t of (await owner('/tenants')).tenants
 const results = [];
 let totalSkipped = 0;
 for (const [label, file, extra] of SUITES) {
-  if (only && !file.includes(only)) continue;
+  if (only && !only.split(',').some((o) => file.includes(o))) continue; // several, comma-separated: npm test -- owner-auth,v14-ui
   if (HUB && !HUB_SUITES.has(file)) continue;
   await clearAll();
   const outDir = extra[0] ? path.join(here, extra[0]) : null;
