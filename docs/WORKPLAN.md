@@ -219,4 +219,5 @@ Server-side steps (Worker, `worker/`) protect **both** apps at once. Client-side
   right-click menu, Shift+click ranges, bulk export/delete, and on the Medicine List bulk price / category /
   reorder level; columns per device and the search kept (React). Pinned and recent pages, breadcrumbs, Ctrl+K
   commands, scroll kept per page (React), a stock-and-batches hover (React). v69 35/35; Flutter keymap 3 + 1 widget
-  test; Flutter 471 passed, analyze clean; lint 0; full JS suite RESULTS.
+  test; Flutter 471 passed, analyze clean; lint 0; full JS suite 2,060 passed, 7 failed: the known 6, and the Advanced
+  till's Ctrl+K (the app's map took it first), fixed in `062e2b5` (v52 19/19 again); hub suites 330/330.
