@@ -51,7 +51,7 @@ Server-side steps (Worker, `worker/`) protect **both** apps at once. Client-side
 | 22 | Insurance: insurers/schemes, member check, co-pay at the till, monthly claim batches | 4.1 | ✅ insurers, schemes and the co-pay at the till (the recommended part; the owner had no preference); pre-authorisation, claim batches and member checks not done |
 | 23 | URA EFRIS e-invoicing (fiscal number + QR on receipts, offline queue) | 4.1 | ⏸ skipped until URA EFRIS sandbox credentials are available |
 | 24 | Interface: one till layout with density setting, 4 themes, single payment panel, accessibility audit (axe), translations | 4.6 | ✅ accessibility audit (the recommended part); then the owner's controls request (keyboard map, mouse, selection, navigation) |
-| 25 | React → Flutter cut-over plan and retirement of the React client (if chosen in step 0) | 3 | ⏳ |
+| 25 | React → Flutter cut-over plan and retirement of the React client (if chosen in step 0) | 3 | ⏳ (not chosen yet: both apps are kept) |
 
 ## Phase 5 — Release (requested by the owner, 2026-11-09)
 | # | Step | Status |
@@ -221,3 +221,14 @@ Server-side steps (Worker, `worker/`) protect **both** apps at once. Client-side
   commands, scroll kept per page (React), a stock-and-batches hover (React). v69 35/35; Flutter keymap 3 + 1 widget
   test; Flutter 471 passed, analyze clean; lint 0; full JS suite 2,060 passed, 7 failed: the known 6, and the Advanced
   till's Ctrl+K (the app's map took it first), fixed in `062e2b5` (v52 19/19 again); hub suites 330/330.
+- 2026-11-10 · Step 26 · `12d258b`, `c6fc407`, `27f5647` · The owner chose all four Flutter-only features for the
+  React app: scheduled report emails (Settings → Alerts); a Shelves page and Inventory / Stock Count grouped by class,
+  therapeutic area, form or shelf (src/drugclass.js, generated from the Dart rules and checked by tool/parity);
+  Payroll & HR (src/payroll.js; both apps run tests/payroll-cases.json: PAYE bands, NSSF, absence, overtime,
+  advances); the till's sale width and payment height dragged per device (Classic and Standard). The full suite
+  caught two regressions from the handles (a sale line lost at 1440 × 900; the width saved one move behind), both
+  fixed. v70 14, unit-payroll 12, parity 580 cases; Flutter 482 passed, analyze clean; lint 0; full JS suite 2,103
+  passed, 8 failed (the known 6 + the two fixed since: v51 21/21, v70 14/14 again); hub suites 330/330.
+- 2026-11-10 · Step 27 · `5c38a71` · Owner's choices: React 1.1.0, Flutter 2.1.0+2; a pull request the owner merges;
+  then the version tags, the app builds and the cloud deploy. Release notes: docs/RELEASE-NOTES.md (deploy the cloud
+  first; Hub PCs need the new Windows installer).
