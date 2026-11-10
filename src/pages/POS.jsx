@@ -83,9 +83,14 @@ export default function POS({ mode = 'retail' }) {
     e.preventDefault();
     const box = posRef.current?.getBoundingClientRect(), pay = payRef.current?.getBoundingClientRect();
     if (!box) return;
-    const move = (ev) => setSized((z) => kind === 'w'
-      ? { ...z, w: Math.round(Math.max(320, Math.min(box.width - 360, box.right - ev.clientX - 18))) }
-      : { ...z, h: Math.round(Math.max(140, Math.min(window.innerHeight * 0.7, (pay?.bottom || window.innerHeight) - ev.clientY))) });
+    const move = (ev) => {
+      const z = sizedRef.current;
+      const next = kind === 'w'
+        ? { ...z, w: Math.round(Math.max(320, Math.min(box.width - 360, box.right - ev.clientX - 18))) }
+        : { ...z, h: Math.round(Math.max(140, Math.min(window.innerHeight * 0.7, (pay?.bottom || window.innerHeight) - ev.clientY))) };
+      sizedRef.current = next; // what is saved when the button comes up, even before it is drawn
+      setSized(next);
+    };
     const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); setDevice({ posSaleW: sizedRef.current.w, posPayH: sizedRef.current.h }); };
     window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
   };
@@ -765,9 +770,9 @@ export default function POS({ mode = 'retail' }) {
           {!cart.length && <div className="cart-empty"><ShoppingCart size={40} /><span>Tap a medicine or scan a barcode to start a sale</span></div>}
         </div>
         </div>
-        {resizable && <div className="pay-handle" role="separator" aria-orientation="horizontal" aria-label="Drag to make the payment area taller or shorter (double-click: standard size)" title="Drag to size the payment area · double-click: standard size" onPointerDown={dragTo('h')} onDoubleClick={() => resetSize('h')} />}
         <div ref={payRef} className={'pos-pay' + (resizable && sized.h ? ' sized' : '')} style={resizable && sized.h ? { height: sized.h } : undefined}>
         <div className="totals">
+          {resizable && <div className="pay-handle" role="separator" aria-orientation="horizontal" aria-label="Drag to make the payment area taller or shorter (double-click: standard size)" title="Drag to size the payment area · double-click: standard size" onPointerDown={dragTo('h')} onDoubleClick={() => resetSize('h')} />}
           <div className="row between gap"><span className="muted">Subtotal <b className="num">{fmt(subtotal)}</b></span>
             <span className="row gap"><span className="muted">Discount</span><input ref={discRef} aria-label="Discount" type="number" min="0" step="any" className="small-input" value={discount} onChange={(e) => setDiscount(e.target.value)} disabled={!can('pos.discount')} title={can('pos.discount') ? undefined : 'Giving discounts needs the "Give discounts" permission'} /></span></div>
           {layout !== 'classic' && disc > 0 && <div className="row between promo-row"><span className="muted">Promos / member discount</span><span className="num">− {fmt(disc)}</span></div>}

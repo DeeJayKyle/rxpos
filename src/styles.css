@@ -2584,6 +2584,7 @@ tr.group-head > td { background: var(--surface-2); padding: 6px 10px; }
 .split-handle::after, .pay-handle::after { content: ''; position: absolute; border-radius: 3px; background: var(--border-strong); opacity: 0; transition: opacity .15s; }
 .split-handle::after { left: 4px; top: 45%; height: 48px; width: 3px; }
 .split-handle:hover::after, .pay-handle:hover::after { opacity: 1; }
-.pay-handle { position: relative; flex: none; height: 8px; margin: -4px 0; cursor: row-resize; touch-action: none; }
+.totals { position: relative; }
+.pay-handle { position: absolute; left: 0; right: 0; top: -10px; height: 10px; cursor: row-resize; touch-action: none; } /* takes no room from the sale lines */
 .pay-handle::after { left: 45%; top: 3px; width: 48px; height: 3px; }
 .pos-pay.sized { display: flex; flex-direction: column; gap: 8px; flex: none; overflow-y: auto; }
