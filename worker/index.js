@@ -18,7 +18,6 @@
 import CATALOG from '../src/data/catalog.json' with { type: 'json' };
 import { withDatabase } from './database.js';
 import { isOwner, ownerAuthRoutes, ownerAccount, verifyGoogle, getConfig, ownerMainLogin, ownerMainFail } from './owner-auth.js';
-export { TenantHub } from './live.js';
 import { backup, restore } from './backup.js';
 import { uptimeCheck } from './uptime.js';
 import { watchdog } from './watchdog.js';
@@ -31,6 +30,14 @@ import { twoStepDdl, twoStepOf, totpCheck, markUsed, twoStepRoutes } from './two
 import { tokenSecret, purposeLabel } from './secret.js';
 import { pharmacyChanged, validatePharmacyDefaults } from '../src/pharmacy-settings.js';
 import { DEFAULT_ROLES } from '../src/access.js';
+import { decide, NEEDS_OLD, moneyView } from './policy.js';
+import { saleFindings, fingerprint } from './anomalies.js';
+import { verify as verifyPassword, hashNew, upgrade as upgradeHash } from './passwords.js';
+import { waitFor, afterFail, waitText } from './throttle.js';
+import { FIELD_TABLES, mergeFields, clampFields, sameRecord } from '../src/fieldmerge.js';
+import { LOCKED_TABLES, DOCUMENT_MOVES, closedSet, inClosedDay, recordDay } from '../src/dayclose.js';
+import { isRefundOnly } from './policy.js';
+import { localDay } from './dailystock.js';
 // The built-in roles (cashier, dispenser, pharmacist, manager) live only in the app; they aren't stored as records.
 // The server needs their permissions too, so a permission check doesn't wrongly refuse a built-in role (1.1/1.9).
 const DEFAULT_ROLE_PERMS = Object.fromEntries(DEFAULT_ROLES.map((r) => [r.id, new Set(r.permissions)]));
@@ -53,6 +60,18 @@ const SERVER_ONLY = new Set(['license', 'branches']);
 const INSERT_ONLY = new Set(['audit', 'movements', 'controlled']);
 const MAX_REC_BYTES = 256 * 1024; // one record's JSON (file chunks are stored elsewhere); rejects absurd payloads
 const MAX_TENANT_RECORDS = 2_000_000; // a safety ceiling per pharmacy so one device can't fill the database
+// step 15: the ceiling is checked against a cached count: a push adds its new records to it, a real COUNT(*) runs at
+// most once an hour, and always before anything is refused (so a stale or high count can never refuse wrongly).
+const COUNT_TTL_MS = 3600e3;
+async function recordCount(db, tenant, { exact = false } = {}) {
+  if (!exact) {
+    const row = await db.prepare('SELECT n, at FROM tenant_counts WHERE tenant = ?1').bind(tenant).first();
+    if (row && Date.now() - row.at < COUNT_TTL_MS) return row.n;
+  }
+  const n = (await db.prepare('SELECT COUNT(*) n FROM records WHERE tenant = ?1').bind(tenant).first('n')) || 0;
+  await db.prepare('INSERT INTO tenant_counts (tenant, n, at) VALUES (?1, ?2, ?3) ON CONFLICT(tenant) DO UPDATE SET n = ?2, at = ?3').bind(tenant, n, Date.now()).run();
+  return n;
+}
 const CLOCK_SKEW_MS = 5 * 60000; // 1.3 how far ahead of server time a device's clock may be before it is clamped
 
 const existingRec = async (db, tenant, t, id) => {
@@ -127,6 +146,12 @@ function ensureSchema(db) {
     // 1.6 sync protocol 2: op ids already applied, so a request repeated after a lost reply is applied once
     if (!have.has('sync_ops')) ddl.push('CREATE TABLE sync_ops (tenant TEXT NOT NULL, op TEXT NOT NULL, at TEXT NOT NULL, PRIMARY KEY (tenant, op))');
     if (!have.has('login_fail')) ddl.push('CREATE TABLE login_fail (email TEXT PRIMARY KEY, n INTEGER NOT NULL, until INTEGER NOT NULL DEFAULT 0)');
+    // step 6: wrong passwords per account across every address (worker/throttle.js), a slowdown rather than a lock
+    // step 7: each device's till number in its pharmacy, for document numbers like R-NTD-03-000412 (src/docnumbers.js)
+    if (!have.has('tills')) ddl.push('CREATE TABLE tills (tenant TEXT NOT NULL, device TEXT NOT NULL, n INTEGER NOT NULL, at TEXT NOT NULL, PRIMARY KEY (tenant, device))');
+    // step 15: each pharmacy's record count, cached (a COUNT(*) read every one of its rows on every push)
+    if (!have.has('tenant_counts')) ddl.push('CREATE TABLE tenant_counts (tenant TEXT PRIMARY KEY, n INTEGER NOT NULL, at INTEGER NOT NULL)');
+    if (!have.has('login_throttle')) ddl.push('CREATE TABLE login_throttle (k TEXT PRIMARY KEY, n INTEGER NOT NULL, last_at INTEGER NOT NULL)');
     if (!have.has('rtc')) ddl.push('CREATE TABLE rtc (id INTEGER PRIMARY KEY AUTOINCREMENT, tenant TEXT NOT NULL, to_uid TEXT NOT NULL, from_uid TEXT NOT NULL, from_name TEXT, type TEXT NOT NULL, call_id TEXT NOT NULL, data TEXT, at INTEGER NOT NULL)');
     if (!have.has('rtc_to')) ddl.push('CREATE INDEX rtc_to ON rtc(tenant, to_uid, id)'); // instant look-up of calls waiting for a person
     if (!have.has('file_chunks')) ddl.push('CREATE TABLE file_chunks (tenant TEXT NOT NULL, id TEXT NOT NULL, n INTEGER NOT NULL, data BLOB NOT NULL, PRIMARY KEY (tenant, id, n))');
@@ -208,15 +233,7 @@ async function readTicket(env, ticket) {
   return p.exp > Date.now() ? p : null;
 }
 
-async function pbkdf2(pw, saltB64, iter = 100000) {
-  const key = await crypto.subtle.importKey('raw', te.encode(pw), 'PBKDF2', false, ['deriveBits']);
-  const salt = Uint8Array.from(atob(saltB64), (c) => c.charCodeAt(0));
-  return hex(await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: iter, hash: 'SHA-256' }, key, 256));
-}
-async function verifyPassword(u, pw) {
-  if (u.algo === 'pbkdf2') return (await pbkdf2(pw, u.salt, u.iter || 100000)) === u.hash;
-  return (await sha256('pharmapos:' + pw)) === u.hash;
-}
+// Password hashing and checks: worker/passwords.js (step 5: constant-time, rounds from PBKDF2_ITER, re-hash on sign-in)
 
 // ---------- tenants ----------
 const DEFAULT_FEATURES = { catalog: true, branches: true, wholesale: true, proformas: true, prescriptions: true, finance: true, reports: true, reminders: true,
@@ -294,6 +311,20 @@ const writeLicense = (env, t) => serverWrite(env, t.id, 'license', 'license', { 
 // ---------- login & password recovery ----------
 const MAX_FAILS = 5;
 const LOCK_MINUTES = 15;
+// step 6 (worker/throttle.js): the per-account slowdown. Keyed by pharmacy and email/username whether or not such an
+// account exists, so the answer never tells anyone which accounts are real.
+const throttleRow = (env, k) => env.DB.prepare('SELECT n, last_at FROM login_throttle WHERE k = ?1').bind(k).first();
+const throttleFail = (env, k, row) => { const r = afterFail(row); return env.DB.prepare('INSERT INTO login_throttle (k, n, last_at) VALUES (?1, ?2, ?3) ON CONFLICT(k) DO UPDATE SET n = ?2, last_at = ?3').bind(k, r.n, r.last_at).run(); };
+const throttleClear = (env, ...keys) => env.DB.batch(keys.map((k) => env.DB.prepare('DELETE FROM login_throttle WHERE k = ?1').bind(k)));
+const slowedDown = (ms) => json({ error: `Too many wrong passwords for this account. Try again in ${waitText(ms)}, or use "Forgot password".`, retryAfter: Math.ceil(ms / 1000) }, 429);
+/** Daily: forget finished locks, part-counts of wrong tries and old slowdowns (both tables grew forever before) */
+export async function pruneSignInTables(db) {
+  const now = Date.now();
+  await db.batch([
+    db.prepare('DELETE FROM login_fail WHERE until = 0 OR until < ?1').bind(now),
+    db.prepare('DELETE FROM login_throttle WHERE last_at < ?1').bind(now - 24 * 3600e3),
+  ]);
+}
 
 // A person signs in with their email, or with a username their pharmacy gave them. A username is matched only inside
 // its own pharmacy (two shops may each have a "mary"), so it always comes with a pharmacy code.
@@ -347,16 +378,20 @@ async function pharmacyLogin(env, body, ownerToken, ip = 'noip') {
         const mins = Math.ceil((fail.until - Date.now()) / 60000);
         return json({ error: `Too many wrong passwords. Try again in ${mins} minute${mins === 1 ? '' : 's'}, or use "Forgot password".` }, 429);
       }
+      const slowKey = '*:' + email0, slow = await throttleRow(env, slowKey);
+      if (waitFor(slow) && !ownerToken) return slowedDown(waitFor(slow));
       const ok = [];
       for (const f of found.slice(0, 10)) if (await verifyPassword(f.u, String(body.password || ''))) ok.push(f);
       if (!ok.length && ownerToken) return json({ owner: { token: ownerToken } });
       if (!ok.length) {
+        await throttleFail(env, slowKey, slow);
         const n = (fail && fail.until <= Date.now() && fail.until > 0 ? 0 : fail?.n || 0) + 1;
         const until = n >= MAX_FAILS ? Date.now() + LOCK_MINUTES * 60000 : 0;
         await env.DB.prepare('INSERT INTO login_fail (email, n, until) VALUES (?1, ?2, ?3) ON CONFLICT(email) DO UPDATE SET n = ?2, until = ?3').bind(key, until ? 0 : n, until).run();
         return json({ error: until ? `Too many wrong passwords. Sign-in is locked for ${LOCK_MINUTES} minutes.` : `Wrong email or password (${MAX_FAILS - n} attempt${MAX_FAILS - n === 1 ? '' : 's'} left before a ${LOCK_MINUTES}-minute lock).` }, until ? 429 : 401);
       }
       if (fail) await env.DB.prepare('DELETE FROM login_fail WHERE email = ?1').bind(key).run();
+      if (slow) await throttleClear(env, slowKey);
       const choices = [];
       for (const f of ok) {
         const t = await tenantById(env, f.tenant);
@@ -376,8 +411,11 @@ async function pharmacyLogin(env, body, ownerToken, ip = 'noip') {
     const mins = Math.ceil((fail.until - Date.now()) / 60000);
     return json({ error: `Too many wrong passwords. Try again in ${mins} minute${mins === 1 ? '' : 's'}, or use "Forgot password".` }, 429);
   }
+  const slowKey = tenant + ':' + email, slow = await throttleRow(env, slowKey);
+  if (waitFor(slow) && !ownerToken) return slowedDown(waitFor(slow));
   if (!match || !(await verifyPassword(match.u, String(body.password || '')))) {
     if (ownerToken) return json({ owner: { token: ownerToken } }); // it is the owner's password: straight to the owner console
+    await throttleFail(env, slowKey, slow);
     const n = (fail && fail.until <= Date.now() && fail.until > 0 ? 0 : fail?.n || 0) + 1;
     const until = n >= MAX_FAILS ? Date.now() + LOCK_MINUTES * 60000 : 0;
     await env.DB.prepare('INSERT INTO login_fail (email, n, until) VALUES (?1, ?2, ?3) ON CONFLICT(email) DO UPDATE SET n = ?2, until = ?3').bind(lockKey, until ? 0 : n, until).run();
@@ -394,6 +432,7 @@ async function pharmacyLogin(env, body, ownerToken, ip = 'noip') {
     if (!body.otp) return json({ twoFactor: true });
     const step = await totpCheck(tf.secret, body.otp, tf.last_step);
     if (step < 0) {
+      await throttleFail(env, slowKey, slow); // a wrong two-step code counts like a wrong password
       const n = (fail && fail.until <= Date.now() && fail.until > 0 ? 0 : fail?.n || 0) + 1;
       const until = n >= MAX_FAILS ? Date.now() + LOCK_MINUTES * 60000 : 0;
       await env.DB.prepare('INSERT INTO login_fail (email, n, until) VALUES (?1, ?2, ?3) ON CONFLICT(email) DO UPDATE SET n = ?2, until = ?3').bind(lockKey, until ? 0 : n, until).run();
@@ -402,6 +441,13 @@ async function pharmacyLogin(env, body, ownerToken, ip = 'noip') {
     await markUsed(env, match.tenant, u.id, step);
   }
   if (fail) await env.DB.prepare('DELETE FROM login_fail WHERE email = ?1').bind(lockKey).run(); // only once the code is right too
+  if (slow) await throttleClear(env, slowKey);
+  // step 5: the password was right, so a weaker hash (fewer rounds than PBKDF2_ITER, or the old unsalted one) is
+  // replaced now. Never at the cost of the sign-in: a failure here is logged and the person is signed in as usual.
+  try {
+    const next = await upgradeHash(u, String(body.password || ''), env);
+    if (next) await serverWrite(env, match.tenant, 'users', u.id, { ...u, ...next });
+  } catch (e) { console.warn('password re-hash skipped:', e.message); }
   const token = await signToken(env, { sub: u.id, tn: match.tenant, name: u.name, role: u.role, exp: Date.now() + TOKEN_DAYS * 864e5 });
   return json({ token, tenant: match.tenant, slug: t.slug || match.tenant, pharmacy: t.name, app: webAppOf(t), user: { id: u.id, name: u.name, email: u.email, role: u.role } });
 }
@@ -484,11 +530,11 @@ async function resetPassword(env, body) {
     await env.DB.prepare('UPDATE reset_codes SET tries = tries + 1 WHERE k = ?1').bind(k).run();
     return json({ error: 'Wrong code.' }, 400);
   }
-  const salt = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(16))));
-  const u = { ...match.u, algo: 'pbkdf2', salt, iter: 100000, hash: await pbkdf2(pw, salt) };
+  const u = { ...match.u, ...(await hashNew(env, pw)) };
   await serverWrite(env, match.tenant, 'users', u.id, u);
   await serverWrite(env, match.tenant, 'audit', crypto.randomUUID(), { date: new Date().toISOString(), user: u.name, action: 'Password reset (forgot password)', details: 'via ' + (body.channel || 'email') + ' code', branchId: 'main' });
   await env.DB.batch([env.DB.prepare('DELETE FROM reset_codes WHERE k = ?1').bind(k), env.DB.prepare("DELETE FROM login_fail WHERE email LIKE '%|' || ?1").bind(k)]);
+  await throttleClear(env, k, '*:' + email); // a reset password starts with no slowdown
   return json({ ok: true });
 }
 
@@ -502,12 +548,12 @@ async function resetWithGoogle(env, body) {
   try { email = await verifyGoogle(body.credential, cfg.google_client_id); } catch (e) { return json({ error: e.message }, 401); }
   const { tenant, match } = await pickUser(env, { email, tenant: body.tenant });
   if (!match) return json({ error: `No RxPOS account uses ${email}. Use the Google account whose Gmail is on your RxPOS account.` }, 404);
-  const salt = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(16))));
-  const u = { ...match.u, algo: 'pbkdf2', salt, iter: 100000, hash: await pbkdf2(pw, salt) };
+  const u = { ...match.u, ...(await hashNew(env, pw)) };
   delete u.mustChangePassword;
   await serverWrite(env, match.tenant, 'users', u.id, u);
   await serverWrite(env, match.tenant, 'audit', crypto.randomUUID(), { date: new Date().toISOString(), user: u.name, action: 'Password reset (Google)', details: email, branchId: 'main' });
   await env.DB.prepare("DELETE FROM login_fail WHERE email LIKE '%|' || ?1").bind(tenant + ':' + email).run();
+  await throttleClear(env, match.tenant + ':' + email, tenant + ':' + email, '*:' + email);
   return json({ ok: true, email });
 }
 
@@ -551,10 +597,57 @@ async function sync(env, body, who, ctx) {
   const refuse = (ch) => { refused++; refusedKeys.push(ch.t + '|' + ch.id); };
   const ledger = new Set(); // positions of the op-ledger inserts in the batch (not counted as applied records)
   let tenantCount = null; // counted once, only if we actually insert new rows (quota guard)
+  let tenantAdded = 0, countExact = false; // step 15: rows this push may add, and whether the count was taken exactly
+  // step 2 write policy (worker/policy.js): the stored sales, purchases and payments this push touches, read in one
+  // query; `current` then follows this request's own accepted changes, so a create and a refund of the same sale in
+  // one push are judged in order
+  const can = async (perm) => (allowed[perm] ??= await roleCan(env, tenant, who.role, perm));
+  const current = new Map();
+  const toCheck = new Map(); // sale key → the accepted record, for the step 3 checks
+  if (!who.viaKey) {
+    const keys = [...new Set(changes.filter((c) => c && NEEDS_OLD.has(c.t) && c.id != null).map((c) => c.t + '|' + c.id))];
+    if (keys.length) {
+      const { results } = await db.prepare('SELECT k, rec FROM records WHERE tenant = ?1 AND deleted = 0 AND k IN (SELECT value FROM json_each(?2))').bind(tenant, JSON.stringify(keys)).all();
+      for (const r of results || []) { try { current.set(r.k, JSON.parse(r.rec)); } catch { /* unreadable: treated as new */ } }
+    }
+  }
+  // step 14 (src/fieldmerge.js): medicines, clients, suppliers and batches merge field by field with what is stored
+  const stored = new Map();
+  {
+    const keys = [...new Set(changes.filter((c) => c && FIELD_TABLES.has(c.t) && c.id != null && !c.deleted).map((c) => c.t + '|' + c.id))];
+    if (keys.length) {
+      const { results } = await db.prepare('SELECT k, rec, at FROM records WHERE tenant = ?1 AND deleted = 0 AND k IN (SELECT value FROM json_each(?2))').bind(tenant, JSON.stringify(keys)).all();
+      for (const r of results || []) { try { stored.set(r.k, { rec: JSON.parse(r.rec), at: r.at }); } catch { /* unreadable: replaced */ } }
+    }
+  }
+  // step 18 (src/dayclose.js): this pharmacy's closed days, and the stored copies of the records a push changes in them
+  let closed = null;
+  const lockedOld = new Map();
+  const dayFlags = []; // records kept but flagged: new in a closed day, or a refund of a closed day's sale
+  if (!who.viaKey && changes.some((c) => c && LOCKED_TABLES.has(c.t))) {
+    const { results } = await db.prepare("SELECT rec FROM records WHERE tenant = ?1 AND t = 'dayCloses' AND deleted = 0").bind(tenant).all();
+    const set = closedSet((results || []).map((r) => { try { return JSON.parse(r.rec); } catch { return null; } }));
+    if (set.size) {
+      closed = set;
+      const keys = [...new Set(changes.filter((c) => c && LOCKED_TABLES.has(c.t) && c.t !== 'movements' && c.id != null).map((c) => c.t + '|' + c.id))];
+      if (keys.length) {
+        const { results: olds } = await db.prepare('SELECT k, rec FROM records WHERE tenant = ?1 AND deleted = 0 AND k IN (SELECT value FROM json_each(?2))').bind(tenant, JSON.stringify(keys)).all();
+        for (const r of olds || []) { try { lockedOld.set(r.k, JSON.parse(r.rec)); } catch { /* unreadable */ } }
+      }
+    }
+  }
+  const upsertMerged = db.prepare(
+    `INSERT INTO records (tenant, k, t, id, rec, deleted, at, origin, seq) VALUES (?1, ?2, ?3, ?4, ?5, 0, ?6, ?7, (SELECT COALESCE(MAX(seq), 0) + 1 FROM records))
+     ON CONFLICT(tenant, k) DO UPDATE SET rec = excluded.rec, deleted = 0, at = excluded.at, origin = excluded.origin, seq = excluded.seq`);
   for (const ch of changes) {
     if (!ch || typeof ch.t !== 'string' || ch.id == null || typeof ch.at !== 'string') continue;
     if (typeof ch.op === 'string' && seen.has(ch.op)) { dupes++; continue; } // already applied: a repeat
     if (SERVER_ONLY.has(ch.t) && !who.viaKey) { refuse(ch); continue; }
+    if (!who.viaKey) {
+      const key = ch.t + '|' + ch.id;
+      const verdict = await decide(ch, current.get(key) || null, who.role, can);
+      if (!verdict.ok) { refuse(ch); continue; }
+    }
     const perm = GUARDED[ch.t];
     if (perm && !who.viaKey) {
       allowed[perm] ??= await roleCan(env, tenant, who.role, perm);
@@ -585,19 +678,114 @@ async function sync(env, body, who, ctx) {
     const body = ch.deleted ? null : JSON.stringify(rec ?? null);
     if (body && body.length > MAX_REC_BYTES) { refuse(ch); continue; } // 1.1 reject an oversized record
     if (!ch.deleted) { // 1.1 per-tenant record ceiling, counted at most once per request
-      if (tenantCount === null) tenantCount = (await db.prepare('SELECT COUNT(*) n FROM records WHERE tenant = ?1').bind(tenant).first('n')) || 0;
+      if (tenantCount === null) tenantCount = await recordCount(db, tenant);
+      if (tenantCount >= MAX_TENANT_RECORDS && !countExact) { tenantCount = await recordCount(db, tenant, { exact: true }) + tenantAdded; countExact = true; }
       if (tenantCount >= MAX_TENANT_RECORDS) { refuse(ch); continue; }
-      tenantCount++;
+      tenantCount++; tenantAdded++;
+    }
+    // step 18: a closed day's records can't be changed or deleted; a refund of its sale, or something new dated in it
+    // (a till that sold offline and reconnects later), is kept and flagged for the owner
+    if (closed && LOCKED_TABLES.has(ch.t)) {
+      const old = lockedOld.get(ch.t + '|' + id);
+      const bare = (r) => { const { updatedAt: _u, _f, ...x } = r || {}; return x; };
+      if (old && inClosedDay(old, closed, localDay)) {
+        const same = !ch.deleted && rec && sameRecord(bare(old), bare({ ...rec, id: old.id ?? rec.id }));
+        const refund = ch.t === 'sales' && !ch.deleted && rec && isRefundOnly(old, rec);
+        if (!same && !refund) { refuse(ch); continue; }
+        if (refund) dayFlags.push({ t: ch.t, id, rec, kind: 'closed-refund' });
+      } else if (!ch.deleted && rec && inClosedDay(rec, closed, localDay)) {
+        if (old) { refuse(ch); continue; } // an open day's record moved back into a closed day
+        if (!(ch.t === 'movements' && DOCUMENT_MOVES.has(rec.type))) dayFlags.push({ t: ch.t, id, rec, kind: 'late' });
+      }
     }
     const k = ch.t + '|' + id;
     // 1.3 clamp a device's clock to server time plus a little skew. A wrong or deliberately future-dated clock can
     // otherwise win last-writer-wins forever and leave a record that no normal edit can ever overwrite.
     const atMs = Date.parse(ch.at);
     const at = atMs <= Date.now() + CLOCK_SKEW_MS ? ch.at : new Date(Date.now() + CLOCK_SKEW_MS).toISOString();
-    if (INSERT_ONLY.has(ch.t)) stmts.push(insertOnly.bind(tenant, k, ch.t, id, body, at, deviceId));
-    else stmts.push(upsert.bind(tenant, k, ch.t, id, body, ch.deleted ? 1 : 0, at, deviceId));
+    const old = FIELD_TABLES.has(ch.t) && !ch.deleted && rec ? stored.get(k) : null;
+    if (old) {
+      // step 14: newer value of each field wins; the record's time becomes the newest field time. If the result is not
+      // what the device sent, it is marked as the cloud's, so that device downloads the merged copy too.
+      const incoming = clampFields({ ...rec, id }, at);
+      const merged = mergeFields(old.rec, old.at, incoming, at);
+      const unchanged = sameRecord(merged, old.rec);
+      if (!unchanged) stmts.push(upsertMerged.bind(tenant, k, ch.t, id, JSON.stringify(merged), merged.updatedAt, sameRecord(merged, { ...incoming, updatedAt: merged.updatedAt }) ? deviceId : 'server'));
+      stored.set(k, { rec: merged, at: merged.updatedAt });
+    } else if (INSERT_ONLY.has(ch.t)) stmts.push(insertOnly.bind(tenant, k, ch.t, id, body, at, deviceId));
+    else {
+      stmts.push(upsert.bind(tenant, k, ch.t, id, body, ch.deleted ? 1 : 0, at, deviceId));
+      if (FIELD_TABLES.has(ch.t) && !ch.deleted && rec) stored.set(k, { rec: { ...rec, id }, at });
+    }
+    if (NEEDS_OLD.has(ch.t)) { if (ch.deleted) current.delete(k); else current.set(k, rec); } // accepted: later changes see it
+    if (ch.t === 'sales' && !ch.deleted && rec && !who.viaKey) toCheck.set(k, rec); // step 3: re-checked below
     if (typeof ch.op === 'string' && ch.op.length <= 64) { stmts.push(remember.bind(tenant, ch.op, nowIso)); ledger.add(stmts.length - 1); seen.add(ch.op); }
   }
+  // step 3 (worker/anomalies.js): re-check each accepted sale's money. Findings are stored next to the sale, in the
+  // same transaction, for whoever may read the audit log; the sale itself is never refused for them.
+  if (toCheck.size) {
+    const ids = [...new Set([...toCheck.values()].flatMap((r) => (Array.isArray(r.items) ? r.items : []).map((i) => String(i?.id ?? ''))))].filter(Boolean);
+    const products = new Map();
+    if (ids.length) {
+      const { results } = await db.prepare("SELECT id, rec FROM records WHERE tenant = ?1 AND t = 'products' AND deleted = 0 AND id IN (SELECT value FROM json_each(?2))").bind(tenant, JSON.stringify(ids)).all();
+      for (const r of results || []) { try { products.set(r.id, JSON.parse(r.rec)); } catch { /* skip */ } }
+    }
+    // a built-in catalog medicine this pharmacy never edited is not stored: its price is the catalog's
+    const col = Object.fromEntries(CATALOG.columns.map((c, i) => [c, i]));
+    for (const id of ids) if (!products.has(id) && /^cat-\d+$/.test(id)) {
+      const row = CATALOG.rows[Number(id.slice(4)) - 1];
+      if (row) products.set(id, { price: row[col.price], wholesale: row[col.wholesale] });
+    }
+    // step 20: the pushing role's discount ceiling (null = no limit; administrators never have one)
+    let maxDiscount = null;
+    if (who.role !== 'admin') {
+      const r = await db.prepare("SELECT rec FROM records WHERE tenant = ?1 AND t = 'roles' AND id = ?2 AND deleted = 0").bind(tenant, who.role).first('rec');
+      const v = r ? JSON.parse(r).maxDiscount : null;
+      maxDiscount = v === '' || v == null || !(Number(v) >= 0) ? null : Number(v);
+    }
+    for (const sale of toCheck.values()) {
+      // step 8: a sale left partly unpaid, to a client with a credit limit: what they owed before it, from the cloud's
+      // own records (the Debtors figure: unpaid credit sales not refunded, less their payments; an insurer's share is
+      // the insurer's debt, not the client's, step 22)
+      let credit = null;
+      const cid = String(sale.customerId || '');
+      if (cid && cid !== 'walk-in' && Number(sale.total) - Number(sale.paid ?? sale.total) - (Number(sale.insurance?.share) || 0) > 0.5) {
+        const limit = Number((await existingRec(db, tenant, 'customers', cid))?.creditLimit) || 0;
+        if (limit > 0) {
+          const [unpaid, paidIn] = await db.batch([
+            db.prepare("SELECT COALESCE(SUM(json_extract(rec, '$.total') - COALESCE(json_extract(rec, '$.paid'), json_extract(rec, '$.total')) - COALESCE(json_extract(rec, '$.insurance.share'), 0)), 0) v FROM records WHERE tenant = ?1 AND t = 'sales' AND deleted = 0 AND id != ?3 AND json_extract(rec, '$.customerId') = ?2 AND COALESCE(json_extract(rec, '$.status'), '') != 'refunded'").bind(tenant, cid, String(sale.id)),
+            db.prepare("SELECT COALESCE(SUM(json_extract(rec, '$.amount')), 0) v FROM records WHERE tenant = ?1 AND t = 'payments' AND deleted = 0 AND json_extract(rec, '$.kind') = 'customer' AND json_extract(rec, '$.partyId') = ?2").bind(tenant, cid),
+          ], 'read');
+          credit = { limit, owed: Number(unpaid.results?.[0]?.v || 0) - Number(paidIn.results?.[0]?.v || 0) };
+        }
+      }
+      const found = await saleFindings(sale, products, can, { credit, maxDiscount });
+      const fp = fingerprint(moneyView(sale));
+      found.forEach((f, n) => {
+        const id = `${sale.id}~${f.kind}${n}~${fp}`;
+        const rec = { id, saleId: sale.id, saleNumber: sale.number || '', saleDate: sale.date || '', branchId: sale.branchId || '', cashier: sale.cashier || '',
+          pushedBy: who.name || '', kind: f.kind, detail: f.detail, amount: f.amount, reviewed: false, createdAt: nowIso, updatedAt: nowIso };
+        stmts.push(insertOnly.bind(tenant, 'anomalies|' + id, 'anomalies', id, JSON.stringify(rec), nowIso, 'server'));
+        ledger.add(stmts.length - 1); // not one of the device's own changes
+      });
+    }
+  }
+  // step 18: the closed-day findings, next to the records, for whoever may read the audit log (as the sale checks)
+  const LABEL = { sales: 'Sale', expenses: 'Expense', payments: 'Payment', bankTx: 'Bank transaction', purchases: 'Delivery', supplierReturns: 'Return to supplier', movements: 'Stock change' };
+  for (const f of dayFlags) {
+    const r = f.rec, day = recordDay(r, localDay);
+    const what = `${LABEL[f.t] || f.t}${r.number ? ' ' + r.number : ''}${f.t === 'movements' && r.type ? ` (${r.type})` : ''}`;
+    const detail = f.kind === 'late' ? `${what} dated ${day} was recorded after that day was closed` : `${what} from ${day}, a closed day, was refunded`;
+    const aid = `${f.t}:${f.id}~${f.kind}`;
+    const rec = { id: aid, saleId: f.id, saleNumber: r.number || LABEL[f.t] || f.t, saleDate: r.date || '', branchId: r.branchId || '', table: f.t,
+      cashier: r.cashier || r.by || r.user || r.receivedBy || r.createdBy || '', pushedBy: who.name || '', kind: f.kind, detail,
+      amount: Math.abs(Number(r.total ?? r.amount ?? 0)) || 0, reviewed: false, createdAt: nowIso, updatedAt: nowIso };
+    stmts.push(insertOnly.bind(tenant, 'anomalies|' + aid, 'anomalies', aid, JSON.stringify(rec), nowIso, 'server'));
+    ledger.add(stmts.length - 1);
+  }
+  // step 15: this push's new rows go into the cached count with the records (an update counted as new is corrected at
+  // the next hourly count; it can only make the count high, and a high count is re-counted before refusing)
+  if (tenantAdded) { stmts.push(db.prepare('UPDATE tenant_counts SET n = n + ?2 WHERE tenant = ?1').bind(tenant, tenantAdded)); ledger.add(stmts.length - 1); }
   // the whole request in one transaction (D1 and libSQL batches are atomic): a sale and its stock movements land together
   let applied = 0;
   if (stmts.length) {
@@ -629,7 +817,9 @@ async function sync(env, body, who, ctx) {
   const page = more ? results.slice(0, PAGE) : results;
   const cursor = more ? page[page.length - 1].seq : Math.max(maxSeq || 0, Number(since) || 0);
   const hideHr = !who.viaKey && page.some((r) => PAYROLL_TABLES.has(r.t)) && !(await roleCan(env, tenant, who.role, 'payroll'));
-  const shown = hideHr ? page.filter((r) => !PAYROLL_TABLES.has(r.t)) : page;
+  // step 3: sale findings are for whoever may read the audit log (admins always), not for the staff they are about
+  const hideChecks = !who.viaKey && page.some((r) => r.t === 'anomalies') && !(await roleCan(env, tenant, who.role, 'audit'));
+  const shown = hideHr || hideChecks ? page.filter((r) => !(hideHr && PAYROLL_TABLES.has(r.t)) && !(hideChecks && r.t === 'anomalies')) : page;
   // Build the response by hand so records stored as JSON text are not parsed and re-serialised (keeps CPU low)
   const items = shown.map((r) => `{"t":${JSON.stringify(r.t)},"id":${JSON.stringify(r.id)},"at":${JSON.stringify(r.at)},"deleted":${r.deleted ? 'true' : 'false'},"rec":${stripUserSecrets(r.t, r.rec)}}`);
   return json(`{"changes":[${items.join(',')}],"cursor":${cursor},"more":${more},"applied":${applied},"refused":${refused},"refusedKeys":${JSON.stringify(refusedKeys)},"dupes":${dupes},"protocol":2,"epoch":${JSON.stringify(epoch)},"tenant":${JSON.stringify(tenant)}}`);
@@ -758,12 +948,11 @@ async function sendSms(env, { to, message }) {
 const SECRET_FIELDS = ['MTN_SUBSCRIPTION_KEY', 'MTN_API_USER', 'MTN_API_KEY', 'MTN_ENV', 'MTN_TARGET', 'AIRTEL_CLIENT_ID', 'AIRTEL_CLIENT_SECRET', 'AIRTEL_ENV', 'AT_USERNAME', 'AT_API_KEY', 'AT_SENDER_ID'];
 const KEEP_ON_RESET = "('products','formulations','expenseCategories','license','roles','branches','users','settings')";
 const TABLE_RE = /^[A-Za-z]{2,30}$/;
-const publicUser = ({ hash, salt, algo, iter, ...u }) => u; // eslint-disable-line no-unused-vars
+const publicUser = ({ hash, salt, algo, iter, ...u }) => u;
 
-async function passwordFields(pw) {
+async function passwordFields(env, pw) {
   if (String(pw).length < 8) throw httpError(400, 'Use a password of at least 8 characters.');
-  const salt = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(16))));
-  return { algo: 'pbkdf2', salt, iter: 100000, hash: await pbkdf2(String(pw), salt) };
+  return hashNew(env, String(pw));
 }
 
 async function checkSlug(env, slug, exceptId = '') {
@@ -809,10 +998,10 @@ async function owner(env, req, url, body) {
   if (parts[0] === 'account') return ownerAccount(env, req, url, body || {}, { json });
   if (parts[0] === 'uptime-test' && req.method === 'POST') return json(await uptimeCheck(env, { test: true, sync }));
   const view = async (t) => {
-    const s = await db.prepare("SELECT COUNT(*) n, MAX(at) last, SUM(t = 'products' AND deleted = 0) products, SUM(t = 'users' AND deleted = 0) users, SUM(t = 'sales' AND deleted = 0) sales, SUM(t = 'branches' AND deleted = 0) branches FROM records WHERE tenant = ?1").bind(t.id).first();
+    const s = await db.prepare("SELECT COUNT(*) n, MAX(at) last, SUM(t = 'products' AND deleted = 0) products, SUM(t = 'users' AND deleted = 0) users, SUM(t = 'sales' AND deleted = 0) sales, SUM(t = 'branches' AND deleted = 0) branches, SUM(t = 'anomalies' AND deleted = 0 AND COALESCE(json_extract(rec, '$.reviewed'), 0) = 0) anomalies FROM records WHERE tenant = ?1").bind(t.id).first();
     const secrets = JSON.parse(t.secrets || '{}');
     return { id: t.id, slug: t.slug || t.id, name: t.name, status: t.status, notes: t.notes || '', created: t.created_at, features: { ...DEFAULT_FEATURES, ...JSON.parse(t.features || '{}') }, branding: brandingOf(t),
-      stats: { records: s.n || 0, products: s.products || 0, users: s.users || 0, sales: s.sales || 0, branches: s.branches || 0, lastActivity: s.last || null },
+      stats: { records: s.n || 0, products: s.products || 0, users: s.users || 0, sales: s.sales || 0, branches: s.branches || 0, anomalies: s.anomalies || 0, lastActivity: s.last || null },
       payments: { mtn: t.id === MAIN ? mtn.enabled(env) : mtn.enabled(secrets), airtel: t.id === MAIN ? airtel.enabled(env) : airtel.enabled(secrets), sms: t.id === MAIN ? !!env.AT_API_KEY : !!secrets.AT_API_KEY } };
   };
 
@@ -829,7 +1018,7 @@ async function owner(env, req, url, body) {
     const admin = body.admin || {};
     const email = String(admin.email || '').trim().toLowerCase();
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return json({ error: "Enter the administrator's email." }, 400);
-    const pw = await passwordFields(admin.password || '');
+    const pw = await passwordFields(env, admin.password || '');
     const key = randomKey();
     // The standard catalog is built into the apps (feature "catalog"), so nothing is copied: creating a pharmacy costs a few writes
     const features = JSON.stringify({ ...DEFAULT_FEATURES, ...(body.features || {}), ...(body.catalog === false ? { catalog: false } : {}) });
@@ -915,6 +1104,8 @@ async function owner(env, req, url, body) {
       db.prepare('DELETE FROM tenants WHERE id = ?1').bind(t.id),
       db.prepare("DELETE FROM login_fail WHERE email LIKE '%|' || ?1 || ':%'").bind(t.id),
       db.prepare("DELETE FROM reset_codes WHERE k LIKE ?1 || ':%'").bind(t.id),
+      db.prepare('DELETE FROM tenant_counts WHERE tenant = ?1').bind(t.id),
+      db.prepare('DELETE FROM tills WHERE tenant = ?1').bind(t.id),
     ]);
     // its chat attachments go too (personal data must not outlive the pharmacy)
     await db.batch([db.prepare('DELETE FROM file_chunks WHERE tenant = ?1').bind(t.id), db.prepare('DELETE FROM files WHERE tenant = ?1').bind(t.id)]).catch(() => {});
@@ -960,7 +1151,7 @@ async function owner(env, req, url, body) {
     const old = users.find((x) => x.id === id) || {};
     if (!old.id && !u.password) return json({ error: 'Set a password for the new user.' }, 400);
     const rec = { ...old, name: String(u.name || old.name || '').slice(0, 80), email, phone: String(u.phone ?? old.phone ?? ''), role: String(u.role || old.role || 'cashier'),
-      branchId: u.branchId ?? old.branchId ?? '', disabled: !!u.disabled, ...(u.password ? { ...(await passwordFields(u.password)), mustChangePassword: !!u.mustChange } : {}) };
+      branchId: u.branchId ?? old.branchId ?? '', disabled: !!u.disabled, ...(u.password ? { ...(await passwordFields(env, u.password)), mustChangePassword: !!u.mustChange } : {}) };
     await serverWriteMany(env, t.id, [{ t: 'users', id, rec }, { t: 'audit', id: crypto.randomUUID(), rec: { date: new Date().toISOString(), user: 'RxPOS owner', action: old.id ? 'User updated by owner' : 'User created by owner', details: `${rec.name} (${rec.role})`, branchId: 'main' } }]);
     return json({ user: publicUser({ ...rec, id }) });
   }
@@ -975,7 +1166,9 @@ async function owner(env, req, url, body) {
     if (!String(b.name || '').trim()) return json({ error: 'Enter the branch name.' }, 400);
     const id = String(b.id || 'br-' + slugify(b.name).slice(0, 20) + '-' + randomKey(4).toLowerCase());
     const old = (await existingRec(db, t.id, 'branches', id)) || {};
-    const rec = { ...old, name: String(b.name).trim().slice(0, 60), address: String(b.address ?? old.address ?? '').slice(0, 120), phone: String(b.phone ?? old.phone ?? ''), manager: String(b.manager ?? old.manager ?? '') };
+    const rec = { ...old, name: String(b.name).trim().slice(0, 60), address: String(b.address ?? old.address ?? '').slice(0, 120), phone: String(b.phone ?? old.phone ?? ''), manager: String(b.manager ?? old.manager ?? ''),
+      // step 7: the branch's code in document numbers (R-NTD-03-000412); empty = the first letters of its name
+      code: String(b.code ?? old.code ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5) };
     await serverWriteMany(env, t.id, [{ t: 'branches', id, rec }]);
     return json({ branch: { ...rec, id } });
   }
@@ -1002,7 +1195,7 @@ async function owner(env, req, url, body) {
     const items = (Array.isArray(body.records) ? body.records : [body]).filter((x) => x && TABLE_RE.test(x.t || '') && x.id != null && x.t !== 'license');
     if (!items.length) return json({ error: 'Nothing to save.' }, 400);
     if (items.length > 500) return json({ error: 'Send at most 500 records at a time.' }, 413);
-    for (const x of items) if (x.t === 'users' && x.rec?.password) { Object.assign(x.rec, await passwordFields(x.rec.password)); delete x.rec.password; }
+    for (const x of items) if (x.t === 'users' && x.rec?.password) { Object.assign(x.rec, await passwordFields(env, x.rec.password)); delete x.rec.password; }
     const n = await serverWriteMany(env, t.id, items.map((x) => ({ t: x.t, id: x.id, rec: x.rec || {}, deleted: !!x.deleted })));
     return json({ ok: true, written: n });
   }
@@ -1223,16 +1416,16 @@ async function ai(env, path, body, who) {
 // ---------- health alerts (WHO Disease Outbreak News) ----------
 const NEAR = /uganda|kenya|tanzania|rwanda|burundi|south sudan|congo|ethiopia|somalia|africa/i;
 async function healthAlerts() {
-  const cache = caches.default;
+  const cache = typeof caches !== 'undefined' ? caches.default : null; // Cloudflare's cache (absent on a hub)
   const key = new Request('https://rxpos.cache/health-alerts-v1');
-  const hit = await cache.match(key).catch(() => null);
+  const hit = cache && (await cache.match(key).catch(() => null));
   if (hit) return hit;
   let r;
   try { r = await fetch('https://www.who.int/api/news/diseaseoutbreaknews?sf_culture=en&$orderby=PublicationDateAndTime%20desc&$top=12&$select=Title,PublicationDateAndTime,UrlName', { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(8000) }); } catch { r = null; }
   if (!r?.ok) return json({ error: 'WHO alerts are unavailable right now', items: [] }, 502);
   const items = ((await r.json()).value || []).map((x) => ({ title: x.Title, date: String(x.PublicationDateAndTime).slice(0, 10), url: 'https://www.who.int/emergencies/disease-outbreak-news/item/' + x.UrlName, near: NEAR.test(x.Title) }));
   const res = new Response(JSON.stringify({ source: 'World Health Organization – Disease Outbreak News', items }), { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=10800', ...cors } });
-  await cache.put(key, res.clone()).catch(() => {});
+  if (cache) await cache.put(key, res.clone()).catch(() => {});
   return res;
 }
 
@@ -1299,6 +1492,7 @@ export default {
   async scheduled(event, env, ctx) {
     // 18:00 UTC = 21:00 in Uganda: each pharmacy's daily summary email (worker/summary.js)
     if (event.cron === '0 18 * * *') {
+      ctx.waitUntil((async () => { const e = withDatabase(env); await ensureSchema(e.DB); await pruneSignInTables(e.DB); })().then(() => console.log('sign-in tables pruned')).catch((e) => console.log('prune failed', e.message)));
       ctx.waitUntil(dailySummaries(withDatabase(env)).then((r) => console.log('daily summaries', r.map((x) => `${x.tenant}:${x.sent}${x.error ? ' ' + x.error : ''}`).join(', '))).catch((e) => console.log('daily summaries failed', e.message)));
       // and the scheduled Excel reports that are due today (worker/reports.js)
       ctx.waitUntil(scheduledReports(withDatabase(env)).then((r) => console.log('scheduled reports', r.map((x) => `${x.tenant}/${x.schedule}:${x.sent}${x.error ? ' ' + x.error : ''}`).join(', '))).catch((e) => console.log('scheduled reports failed', e.message)));
@@ -1396,6 +1590,14 @@ export default {
       if (path === '/api/live-ticket' && req.method === 'POST') {
         if (!who.uid) return json({ error: 'Not available for this connection' }, 400);
         return json({ ticket: await signTicket(env, { sub: who.uid, tn: who.tenant, name: who.name || '', exp: Date.now() + LIVE_TICKET_MS }) });
+      }
+      // step 7: this device's till number in this pharmacy (the same device always gets the same one)
+      if (path === '/api/till' && req.method === 'POST') {
+        const device = String(body.deviceId || '').slice(0, 80);
+        if (!device) return json({ error: 'Missing deviceId' }, 400);
+        await env.DB.prepare('INSERT INTO tills (tenant, device, n, at) SELECT ?1, ?2, COALESCE(MAX(n), 0) + 1, ?3 FROM tills WHERE tenant = ?1 ON CONFLICT(tenant, device) DO NOTHING')
+          .bind(who.tenant, device, new Date().toISOString()).run();
+        return json({ till: await env.DB.prepare('SELECT n FROM tills WHERE tenant = ?1 AND device = ?2').bind(who.tenant, device).first('n') });
       }
       if (path === '/api/config') return json({ tenant: who.tenant, slug: who.tenantRow.slug || who.tenant, pharmacy: who.tenantRow.name, mtn: mtn.enabled(penv), airtel: airtel.enabled(penv), sms: !!(penv.AT_USERNAME && penv.AT_API_KEY), email: !!(env.BREVO_API_KEY && env.BREVO_SENDER_EMAIL), mtnEnv: penv.MTN_ENV || 'sandbox', airtelEnv: penv.AIRTEL_ENV || 'uat', role: who.role });
       // Crash reports from this pharmacy's devices (src/crash.js): the same error is one row with a count

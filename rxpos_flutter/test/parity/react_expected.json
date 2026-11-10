@@ -2711,6 +2711,7 @@
    "chat",
    "customers",
    "data.reset",
+   "day.close",
    "finance",
    "inventory.edit",
    "inventory.view",
@@ -2862,5 +2863,8445 @@
    "nobody"
   ],
   "out": []
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k0",
+    "name": "02-LON",
+    "generic": "ORNIDAZOLE",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Nitroimidazoles",
+   "area": "Anti-infectives"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k1",
+    "name": "Accord (8002576)",
+    "generic": "OLANZEPINE 10MG TABLETS",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k2",
+    "name": "Acetaminophen Rapid Release Sleep Aid PM 500MG",
+    "generic": "Acetaminophen Rapid Release Sleep Aid PM 500MG",
+    "form": "Capsules"
+   }
+  ],
+  "out": {
+   "cls": "Analgesics & antipyretics",
+   "area": "Pain, fever & inflammation"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k3",
+    "name": "Acinet dry syp 228/5ml",
+    "generic": "amoxicillin/clavulanIC ACID",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Penicillins",
+   "area": "Anti-infectives"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k4",
+    "name": "Actifizz Vitamin C and Zinc",
+    "generic": "Actifizz",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Vitamins & minerals",
+   "area": "Vitamins, minerals & nutrition"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k5",
+    "name": "Actrapid Insulin Inj 100IU 10ML",
+    "generic": "AGO-CPM",
+    "form": "Injectables"
+   }
+  ],
+  "out": {
+   "cls": "Insulins",
+   "area": "Diabetes & hormones"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k6",
+    "name": "Adidas Spray",
+    "generic": "Adidas Deo Spray",
+    "form": "Cosmetics"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k7",
+    "name": "AFLODOR SR",
+    "generic": "Aceclofenac/Thiocolchicoside caps 16mg (AFLODOR) SR",
+    "form": "Capsules"
+   }
+  ],
+  "out": {
+   "cls": "NSAIDs",
+   "area": "Pain, fever & inflammation"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k8",
+    "name": "Agodryl cough syp 100ml",
+    "generic": "Agodry cough syp 100ml",
+    "form": "Syrups"
+   }
+  ],
+  "out": {
+   "cls": "Cough preparations",
+   "area": "Respiratory & allergy"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k9",
+    "name": "Agozole Susp",
+    "generic": "Albendazole Suspension",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Anthelmintics",
+   "area": "Antiparasitics & deworming"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k10",
+    "name": "Albendazole (ANTHEL)",
+    "generic": "Albendazole",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Anthelmintics",
+   "area": "Antiparasitics & deworming"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k11",
+    "name": "Alexanda (Aspire)Body Splash",
+    "generic": "Alexanda Body Splash",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k12",
+    "name": "ALMUS (8000414)",
+    "generic": "Furosemide tabs 40mg UK",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Diuretics",
+   "area": "Cardiovascular"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k13",
+    "name": "Always blue and blue pink",
+    "generic": "Sanitary pads",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k14",
+    "name": "Amaryl 3mgs tabs",
+    "generic": "glimepride",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k15",
+    "name": "Aminophyline injection",
+    "generic": "Aminophyline BP 250mg",
+    "form": "Injectables"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k16",
+    "name": "AmloDenk 5mg Tab",
+    "generic": "Amlodipine tabs 5mg",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Calcium channel blockers",
+   "area": "Cardiovascular"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k17",
+    "name": "AMLOPRESS-5",
+    "generic": "Amlodipine 5mg",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Calcium channel blockers",
+   "area": "Cardiovascular"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k18",
+    "name": "Amoxicillin & Clavulanic acid 375mg tabs (SPOTCLAV 375)",
+    "generic": "Amoxicillin & Clavulanic acid 375mg tabs (SPOTCLAV 375)",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Penicillins",
+   "area": "Anti-infectives"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k19",
+    "name": "Amoxicillin/Clavulanate 375mg tabs (Augmentin 375)",
+    "generic": "Amoxicillin/Clavulanate 375mg tabs (Augmentin 375)",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Penicillins",
+   "area": "Anti-infectives"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k20",
+    "name": "Amoxikid 125mg tab",
+    "generic": "Amoxicillin tabs 125mg",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Penicillins",
+   "area": "Anti-infectives"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k21",
+    "name": "Ampiclo-Dawa syrup 100ml",
+    "generic": "Ampiclox syrup 250mg/ml syrup",
+    "form": "Syrups"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k22",
+    "name": "Anginovag m/spray 10ml",
+    "generic": "Anginovag m/spray 10ml",
+    "form": "Syrups"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k23",
+    "name": "Antifungal soap 75g",
+    "generic": "Antifungal soap 75g",
+    "form": "Capsules"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k24",
+    "name": "APDYL-H Syrup 100ml",
+    "generic": "APDYL-H Syrup 100ml",
+    "form": "Syrups"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k25",
+    "name": "Apitropin EYE DROPS",
+    "generic": "Apitropin EYE DROPS",
+    "form": "Drops"
+   }
+  ],
+  "out": {
+   "cls": "Eye preparations",
+   "area": "Eye, ear & nose"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k26",
+    "name": "Aptizooom Syrup 200ml",
+    "generic": "Aptizooom Syrup 200ml",
+    "form": "Syrups"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k27",
+    "name": "Aristozyme Gold tabs 30s",
+    "generic": "multi-enzyme tabs 30s",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k28",
+    "name": "Artemether/ lumefantrine 20/120mg 24's (LONART)",
+    "generic": "Artemether/ lumefantrine 20/120mg 24's (LONART)",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Antimalarials",
+   "area": "Antimalarials"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k29",
+    "name": "ASA 75 BRISTOL",
+    "generic": "Aspirin Dispersible tablets 75mg (ASA 75 BRISTOL)",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Salicylates",
+   "area": "Pain, fever & inflammation"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k30",
+    "name": "ASPEC Tabs 10x10",
+    "generic": "ASPEC Tabs 10x10",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k31",
+    "name": "Asvir",
+    "generic": "Aciclovir tabs BP 200mg",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Antivirals",
+   "area": "Antivirals & HIV"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k32",
+    "name": "Atorva 20",
+    "generic": "Atorvastatin tabs 20mg (Atorva 20)",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Statins",
+   "area": "Cardiovascular"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k33",
+    "name": "Atoxia 60mg tabs 10s",
+    "generic": "Etoricixib 60mg",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k34",
+    "name": "Auroxetil 500mg tablet",
+    "generic": "Cefuroxime 500mg tablet",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Cephalosporins",
+   "area": "Anti-infectives"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k35",
+    "name": "Axcel Betamethaxone cream 15g",
+    "generic": "Axcel Betamethaxone cream 15g",
+    "form": "Creams"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k36",
+    "name": "Axe Shower Gel",
+    "generic": "Axe Shower Gel 400ml",
+    "form": "Cosmetics"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k37",
+    "name": "Azigen",
+    "generic": "Azithromycin syr 15ml",
+    "form": "Syrups"
+   }
+  ],
+  "out": {
+   "cls": "Macrolides",
+   "area": "Anti-infectives"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k38",
+    "name": "Azithromycin 500mg tabs (ZAHA 500)",
+    "generic": "Azithromycin 500mg tabs (ZAHA 500)",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Macrolides",
+   "area": "Anti-infectives"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k39",
+    "name": "Azito suspension 30ml",
+    "generic": "Azithromycin suspension 200mg/5ml",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Macrolides",
+   "area": "Anti-infectives"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k40",
+    "name": "Baby Cream 30g",
+    "generic": "Zinc oxide/Olive oil 20mg/5mg",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Skin preparations",
+   "area": "Skin"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k41",
+    "name": "Bactafuz-B Cream 15g",
+    "generic": "Fusidic Acid and Betamethasone cream",
+    "form": "Creams"
+   }
+  ],
+  "out": {
+   "cls": "Corticosteroids",
+   "area": "Diabetes & hormones"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k42",
+    "name": "Ballet mosquito repellent jelly 100gs",
+    "generic": "mosquito repellent",
+    "form": "Specials"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k43",
+    "name": "Beauty Care Face Out Soap.",
+    "generic": "SOAP",
+    "form": "Cosmetics"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k44",
+    "name": "Bendex syps 10mls",
+    "generic": "albendazole suspension",
+    "form": "Syrups"
+   }
+  ],
+  "out": {
+   "cls": "Anthelmintics",
+   "area": "Antiparasitics & deworming"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k45",
+    "name": "Benzoyl Peroxide Cleansing Bar 5% w/w (Perobar 5%)",
+    "generic": "Benzoyl Peroxide Cleansing Bar 5% w/w",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Skin preparations",
+   "area": "Skin"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k46",
+    "name": "Betadrop Eye drop",
+    "generic": "Betamethasone",
+    "form": "Drops"
+   }
+  ],
+  "out": {
+   "cls": "Corticosteroids",
+   "area": "Diabetes & hormones"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k47",
+    "name": "Betasol cream",
+    "generic": "betamethasone",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Corticosteroids",
+   "area": "Diabetes & hormones"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k48",
+    "name": "BIN LINERS",
+    "generic": "LINERS",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k49",
+    "name": "BIOFERON 200ml",
+    "generic": "Bioferon syrups 200mls:IronVit B12 and Folic Acid",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Iron & folic acid",
+   "area": "Vitamins, minerals & nutrition"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k50",
+    "name": "Bisoprolol 2.5mg Tabs (Hillcross)",
+    "generic": "Bisoprolol 2.5mg Tabs (Hillcross)",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Beta blockers",
+   "area": "Cardiovascular"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k51",
+    "name": "Blood giving set",
+    "generic": "Blood giving set",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Medical supplies",
+   "area": "Medical supplies"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k52",
+    "name": "Bone-Aid tab 1X30 PKT",
+    "generic": "Boneaid",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k53",
+    "name": "Brain Active Denk",
+    "generic": "ginger extractcaffeine vitamin b5Omega-3-fatt",
+    "form": "Capsules"
+   }
+  ],
+  "out": {
+   "cls": "Vitamins & minerals",
+   "area": "Vitamins, minerals & nutrition"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k54",
+    "name": "Bronchopro liquid",
+    "generic": "Ambroxol syrup (Bronchopro) liquid",
+    "form": "Syrups"
+   }
+  ],
+  "out": {
+   "cls": "Cough preparations",
+   "area": "Respiratory & allergy"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k55",
+    "name": "Brutaflam 120mg Tabs",
+    "generic": "Etoricoxib Tabs",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "NSAIDs",
+   "area": "Pain, fever & inflammation"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k56",
+    "name": "BURNEM Cream",
+    "generic": "For BurnsWoundsPus Formation Bruised Skin and cu",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k57",
+    "name": "Cadiphen Syrup 60ml",
+    "generic": "Piriton/guaif/NH4/Na+ citrate 2/80/100/44mg",
+    "form": "Syrups"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k58",
+    "name": "CALCIGARD RETARD",
+    "generic": "NIFEDIPINE 20 MG",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Calcium channel blockers",
+   "area": "Cardiovascular"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k59",
+    "name": "Calpol 60ml",
+    "generic": "Paracetamol syr 60ml",
+    "form": "Syrups"
+   }
+  ],
+  "out": {
+   "cls": "Analgesics & antipyretics",
+   "area": "Pain, fever & inflammation"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k60",
+    "name": "Candiderm Cream 15mg",
+    "generic": "Clotrimazole/beclometasone/gentamycin 1/0.025/0.1%",
+    "form": "Creams"
+   }
+  ],
+  "out": {
+   "cls": "Antifungals",
+   "area": "Antifungals"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k61",
+    "name": "Captopril 25mg Uk",
+    "generic": "Captopril 25mg Uk",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "ACE inhibitors",
+   "area": "Cardiovascular"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k62",
+    "name": "Carbimazole 5mg (Man UK)",
+    "generic": "Carbimazole 5mg",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Thyroid medicines",
+   "area": "Diabetes & hormones"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k63",
+    "name": "CAROFIT Tablets",
+    "generic": "CAROFIT Tablets",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k64",
+    "name": "Castor Oil 100ml Faholo",
+    "generic": "Castor Oil 100ml Faholo",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k65",
+    "name": "Cebay syp 60ml",
+    "generic": "Cefixime",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Cephalosporins",
+   "area": "Anti-infectives"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k66",
+    "name": "Cefazolin injection 1gm (SEFOZOL)",
+    "generic": "Cefazolin injection 1gm",
+    "form": "Injectables"
+   }
+  ],
+  "out": {
+   "cls": "Cephalosporins",
+   "area": "Anti-infectives"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k67",
+    "name": "Cefixime 400mg (CEFDIA)",
+    "generic": "Cefixime 400mg (CEFDIA)",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Cephalosporins",
+   "area": "Anti-infectives"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k68",
+    "name": "Cefotaxime 1g injection (VALORAN 1g)",
+    "generic": "Cefotaxime 1g injection",
+    "form": "Injectables"
+   }
+  ],
+  "out": {
+   "cls": "Cephalosporins",
+   "area": "Anti-infectives"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k69",
+    "name": "Ceftriaxone for inj 1g (THEOXONE)",
+    "generic": "Ceftriaxone for inj 1g",
+    "form": "Injectables"
+   }
+  ],
+  "out": {
+   "cls": "Cephalosporins",
+   "area": "Anti-infectives"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k70",
+    "name": "Celestamine tabs",
+    "generic": "Betamethasone/dexchlorpheniramine 0.25/2mg",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Corticosteroids",
+   "area": "Diabetes & hormones"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k71",
+    "name": "Cephalexin syp 125/5ML india",
+    "generic": "Cephalexin",
+    "form": "Capsules"
+   }
+  ],
+  "out": {
+   "cls": "Cephalosporins",
+   "area": "Anti-infectives"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k72",
+    "name": "Cetariv",
+    "generic": "Cetirizine syrup (Cetariv) 60ml",
+    "form": "Syrups"
+   }
+  ],
+  "out": {
+   "cls": "Antihistamines",
+   "area": "Respiratory & allergy"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k73",
+    "name": "Charcoplus",
+    "generic": "charcoplus",
+    "form": "Capsules"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k74",
+    "name": "Chlordiapoxide 5mg/Clidinium bromide 2.5mg) (Epirax)",
+    "generic": "Chlordiapoxide 5mg/Clidinium bromide 2.5mg)",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k75",
+    "name": "Chromic Catgut 1/0",
+    "generic": "Chromic Catgut 1/0",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k76",
+    "name": "Cinod 5mg",
+    "generic": "Clinidipine tabs",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k77",
+    "name": "Ciprofena",
+    "generic": "Ciprofloxacin 0.3% Ophthalmic solution 0.3%",
+    "form": "Drops"
+   }
+  ],
+  "out": {
+   "cls": "Fluoroquinolones",
+   "area": "Anti-infectives"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k78",
+    "name": "Cirab",
+    "generic": "Rabeprazole 20mg inj",
+    "form": "Injectables"
+   }
+  ],
+  "out": {
+   "cls": "Proton pump inhibitors",
+   "area": "Gastrointestinal"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k79",
+    "name": "Clarie OD",
+    "generic": "Clarithromycin 500mg",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Macrolides",
+   "area": "Anti-infectives"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k80",
+    "name": "Clavodar 1g Tabs",
+    "generic": "Amoxicillin/Clavulanic Acid",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Penicillins",
+   "area": "Anti-infectives"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k81",
+    "name": "Clear and simple 3s hcg strips",
+    "generic": "Clear and simple 3s hcg test",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Medical supplies",
+   "area": "Medical supplies"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k82",
+    "name": "Clindamycin 150mg",
+    "generic": "Cindamycin 150mg",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Lincosamides",
+   "area": "Anti-infectives"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k83",
+    "name": "Clofains tab",
+    "generic": "paracentamol 500mg/ diclofenac 50mg",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "NSAIDs",
+   "area": "Pain, fever & inflammation"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k84",
+    "name": "Clopidogrel 75",
+    "generic": "Clopidodrel 75mg",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Anticoagulants & antiplatelets",
+   "area": "Cardiovascular"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k85",
+    "name": "Clotrimazole Cream 15g (CLOTRILIN)",
+    "generic": "Clotrimazole Cream 15g",
+    "form": "Creams"
+   }
+  ],
+  "out": {
+   "cls": "Antifungals",
+   "area": "Antifungals"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k86",
+    "name": "Cloxacillin 250mg Caps India 10x10s",
+    "generic": "Cloxacillin caps USP 250mg",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Penicillins",
+   "area": "Anti-infectives"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k87",
+    "name": "Co-pack Oralyte 60ml",
+    "generic": "oralyte co-pack 60l",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k88",
+    "name": "Codeine Phosphate UK 60mg",
+    "generic": "Codein Phosphate",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Opioid analgesics",
+   "area": "Pain, fever & inflammation"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k89",
+    "name": "COLD-A-GO",
+    "generic": "Flu Capsules",
+    "form": "Capsules"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k90",
+    "name": "Coldrub Inhaler",
+    "generic": "Inhaler",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k91",
+    "name": "Collagen lifting and nourising oil 118mls",
+    "generic": "pure collagen",
+    "form": "Cosmetics"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k92",
+    "name": "Concealer",
+    "generic": "Concealer",
+    "form": "Cosmetics"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k93",
+    "name": "Contus Peadiatric Drops 15mls",
+    "generic": "chlorophenamine and phenylephrine",
+    "form": "Syrups"
+   }
+  ],
+  "out": {
+   "cls": "Decongestants",
+   "area": "Respiratory & allergy"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k94",
+    "name": "Cortitab (hydrocortisone ) 10mg tabs 30s",
+    "generic": "Hydrocortisone 10mg tablet",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Corticosteroids",
+   "area": "Diabetes & hormones"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k95",
+    "name": "Cotton 50g Small (I-Care)",
+    "generic": "Cotton 50g Small",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k96",
+    "name": "Covonia Sorethroat spray",
+    "generic": "Covonia Sorethroat spray",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k97",
+    "name": "CRESCENT (8002579)",
+    "generic": "FOLIC ACID TABLETS",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Iron & folic acid",
+   "area": "Vitamins, minerals & nutrition"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k98",
+    "name": "Curam 625mg",
+    "generic": "Amoxycillin 500mg + Potassium Clavulanate 125mg",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k99",
+    "name": "Cussons Baby Soap 100g",
+    "generic": "baby soap",
+    "form": "Cosmetics"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k100",
+    "name": "CZ Fort [VIT C ZINCVIT D]",
+    "generic": "VIT C ZINC VIT D",
+    "form": "Supplements"
+   }
+  ],
+  "out": {
+   "cls": "Vitamins & minerals",
+   "area": "Vitamins, minerals & nutrition"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k101",
+    "name": "Dacof Paediatric 100ml",
+    "generic": "Dacof Paediatric 100ml",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k102",
+    "name": "Dalman AQ Nasal Spray",
+    "generic": "Fluticasone Propionate 50 mcg",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Inhaled corticosteroids",
+   "area": "Respiratory & allergy"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k103",
+    "name": "Dapzin 5mg tabs 30s",
+    "generic": "Dapzin 5mg tabs 30s",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k104",
+    "name": "Dear Heart 200ml",
+    "generic": "Dear Heart 200ml",
+    "form": "Cosmetics"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k105",
+    "name": "Deep Heat single patch odourless",
+    "generic": "deep heat odourless",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k106",
+    "name": "Delight Baby Pampers",
+    "generic": "baby diapers",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k107",
+    "name": "Dental Mate Floss",
+    "generic": "Dental Mate Floss",
+    "form": "Capsules"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k108",
+    "name": "DERMOCIN",
+    "generic": "MUPIROCIN OINTMENT",
+    "form": "Creams"
+   }
+  ],
+  "out": {
+   "cls": "Antiseptics & topical antibiotics",
+   "area": "Skin"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k109",
+    "name": "Deslozed tab",
+    "generic": "Desloratadine 5mg tab",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Antihistamines",
+   "area": "Respiratory & allergy"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k110",
+    "name": "DETTOL SOAP JUNIOR100mg",
+    "generic": "dettol 100mgGlycerine soap",
+    "form": "Cosmetics"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k111",
+    "name": "Dexorange 60ml",
+    "generic": "Dexorange 60ml",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k112",
+    "name": "Diacol Plus 12.5/1000",
+    "generic": "Empagliflozin/Metformin 12.5/1000mg tabs",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Oral antidiabetics",
+   "area": "Diabetes & hormones"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k113",
+    "name": "Diazepam 5mg tabs",
+    "generic": "Diazepam tablet BP 5mg",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Benzodiazepines",
+   "area": "Nervous system & mental health"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k114",
+    "name": "Diclofen",
+    "generic": "Diclofenac 25mg suppostories",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "NSAIDs",
+   "area": "Pain, fever & inflammation"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k115",
+    "name": "Diclofenac&Serratiopeptidase tabs (SERAFEN)",
+    "generic": "Diclofenac&Serratiopeptidase tabs (SERAFEN)",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "NSAIDs",
+   "area": "Pain, fever & inflammation"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k116",
+    "name": "Digital thermometer",
+    "generic": "Digital thermometer PT-PO1A",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Medical supplies",
+   "area": "Medical supplies"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k117",
+    "name": "Diltizem 90mg tabs",
+    "generic": "Diltizem 90mg tabs",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k118",
+    "name": "Disposable razor (shavers)",
+    "generic": "shavers",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k119",
+    "name": "Dolowin tabs 100mg 30s",
+    "generic": "Dolowin tabs 100mg 30s",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k120",
+    "name": "Dorco Tinkle Eyebrow Razor",
+    "generic": "Dorco Tinkle eyebrow razors",
+    "form": "Capsules"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k121",
+    "name": "Dove stick",
+    "generic": "Dove stick",
+    "form": "Cosmetics"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k122",
+    "name": "Dr rashel black-peel offmask 120g",
+    "generic": "collagen with charcoaltiighten pores deep cleanig",
+    "form": "Cosmetics"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k123",
+    "name": "Dr. Rashel Sunscreen",
+    "generic": "DR Rashel Sunscreen",
+    "form": "Cosmetics"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k124",
+    "name": "Drez gargle",
+    "generic": "Iodinate-Povidone Gargle (Drez gargle)",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Antiseptics & topical antibiotics",
+   "area": "Skin"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k125",
+    "name": "Dufenac 75mg",
+    "generic": "diclofenac",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "NSAIDs",
+   "area": "Pain, fever & inflammation"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k126",
+    "name": "Duphalac syrup 150ml",
+    "generic": "Lactulose 3.3g/5ml",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Laxatives",
+   "area": "Gastrointestinal"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k127",
+    "name": "Dutasteride 0.5mg caps 30s",
+    "generic": "Dutasteride 0.5mg caps 30s",
+    "form": "Capsules"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k128",
+    "name": "Ear Buds - big",
+    "generic": "Ear buds - big",
+    "form": "Cosmetics"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k129",
+    "name": "ECO Styling Lotion",
+    "generic": "ECO Styling Cream",
+    "form": "Cosmetics"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k130",
+    "name": "ELICA-M Cream 30g",
+    "generic": "ELICA",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k131",
+    "name": "Emitino 4mg Tablet",
+    "generic": "Ondansetron 4mg",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Antiemetics",
+   "area": "Gastrointestinal"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k132",
+    "name": "Enat Caps 400mg 30s",
+    "generic": "Natural vitamin E 400 i.u",
+    "form": "Capsules"
+   }
+  ],
+  "out": {
+   "cls": "Vitamins & minerals",
+   "area": "Vitamins, minerals & nutrition"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k133",
+    "name": "Enrich Oral drops",
+    "generic": "Enrich Oral drops",
+    "form": "Drops"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k134",
+    "name": "Epigab caps 75mg 14s",
+    "generic": "Epigab caps 75mg 14s",
+    "form": "Capsules"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k135",
+    "name": "Epron",
+    "generic": "Epron",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k136",
+    "name": "Erotica Condom",
+    "generic": "Condom",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Medical supplies",
+   "area": "Medical supplies"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k137",
+    "name": "Escitalopram 10mg",
+    "generic": "Escitalopram 10mg",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Antidepressants",
+   "area": "Nervous system & mental health"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k138",
+    "name": "ESOMEPRAZOLE 10MG",
+    "generic": "ESOMEPRAZOLE 10MG",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Proton pump inhibitors",
+   "area": "Gastrointestinal"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k139",
+    "name": "Esomeprazole inj 40mg",
+    "generic": "Esomeprazole inj 40mg",
+    "form": "Injectables"
+   }
+  ],
+  "out": {
+   "cls": "Proton pump inhibitors",
+   "area": "Gastrointestinal"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k140",
+    "name": "Etoricoxib 90mg tabs ( ATOXIA-90)0)",
+    "generic": "Etoricoxib 90mg tabs ( ATOXIA-90)0)",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "NSAIDs",
+   "area": "Pain, fever & inflammation"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k141",
+    "name": "Ever Cef 400",
+    "generic": "Cefixime 400mg Caps",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Cephalosporins",
+   "area": "Anti-infectives"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k142",
+    "name": "EXYT-200",
+    "generic": "Albendazole Syrup (EXYT-200)",
+    "form": "Syrups"
+   }
+  ],
+  "out": {
+   "cls": "Anthelmintics",
+   "area": "Antiparasitics & deworming"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k143",
+    "name": "Face Mask (Black)",
+    "generic": "Black Face Mask",
+    "form": "Sundries"
+   }
+  ],
+  "out": {
+   "cls": "Medical supplies",
+   "area": "Medical supplies"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k144",
+    "name": "Farcocil susp",
+    "generic": "Amoxicillin 125mg/5ml Pharco",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Penicillins",
+   "area": "Anti-infectives"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k145",
+    "name": "Febuxostat 40mg (FEBUDAY 40)",
+    "generic": "Febuxostat 40mg (FEBUDAY 40)",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Gout medicines",
+   "area": "Muscle & joint"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k146",
+    "name": "Femiwash 100ml",
+    "generic": "Femiwash 100ml",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k147",
+    "name": "Ferrobin caps",
+    "generic": "Ferrobin caps",
+    "form": "Capsules"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k148",
+    "name": "Feveral1g Injection",
+    "generic": "Paracetamol inj 100ml",
+    "form": "Injectables"
+   }
+  ],
+  "out": {
+   "cls": "Analgesics & antipyretics",
+   "area": "Pain, fever & inflammation"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k149",
+    "name": "Fiesta BigBlack",
+    "generic": "Fiesta BigBlack",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k150",
+    "name": "Fintop Cream 15",
+    "generic": "Butenafine HCL 1% W/W",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k151",
+    "name": "FLAREX EYE DROP",
+    "generic": "Fluorometholone acetate 0.1%",
+    "form": "Drops"
+   }
+  ],
+  "out": {
+   "cls": "Eye preparations",
+   "area": "Eye, ear & nose"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k152",
+    "name": "Flucamox caps 500",
+    "generic": "Amoxicillin 250mg/Flucloxacillin 250mg",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Penicillins",
+   "area": "Anti-infectives"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k153",
+    "name": "Fluconazole 200mg Caps (Fasicon-200) 20s",
+    "generic": "FLUCONAZOLE CAPS 200mg",
+    "form": "Capsules"
+   }
+  ],
+  "out": {
+   "cls": "Antifungals",
+   "area": "Antifungals"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k154",
+    "name": "Flugone plus 60MLS",
+    "generic": "paracetamol/pseudoephedrine/piriton",
+    "form": "Syrups"
+   }
+  ],
+  "out": {
+   "cls": "Analgesics & antipyretics",
+   "area": "Pain, fever & inflammation"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k155",
+    "name": "Fluticasone Nasal spray",
+    "generic": "Fluticasone Nasal spray",
+    "form": "Drops"
+   }
+  ],
+  "out": {
+   "cls": "Inhaled corticosteroids",
+   "area": "Respiratory & allergy"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k156",
+    "name": "Folon",
+    "generic": "Folic Acid 5mg tabs",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Iron & folic acid",
+   "area": "Vitamins, minerals & nutrition"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k157",
+    "name": "Formalin 1Litre",
+    "generic": "DeadPool",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k158",
+    "name": "Fremol",
+    "generic": "Paracetamol 500mg tab pair",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Analgesics & antipyretics",
+   "area": "Pain, fever & inflammation"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k159",
+    "name": "Frusemide 20MG UK",
+    "generic": "Frusemide 20MG UK",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Diuretics",
+   "area": "Cardiovascular"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k160",
+    "name": "Furosemide 20mg (Cescent UK)",
+    "generic": "Furosemide 20mg",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Diuretics",
+   "area": "Cardiovascular"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k161",
+    "name": "G-Glutamin tabs",
+    "generic": "G-Glutamin tabs",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k162",
+    "name": "Galvus Met 50/1000",
+    "generic": "Vildagliptin/Metformin (Galvus Met 50/1000)",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Oral antidiabetics",
+   "area": "Diabetes & hormones"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k163",
+    "name": "Gauze Stick Small",
+    "generic": "Gauze Stick Small",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Medical supplies",
+   "area": "Medical supplies"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k164",
+    "name": "Geisha rose and honey (big)",
+    "generic": "geisha soap",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k165",
+    "name": "Genuphil tabs",
+    "generic": "Genuphil tabs",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k166",
+    "name": "Giggles XL",
+    "generic": "Giggles XL",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k167",
+    "name": "GIVING SET",
+    "generic": "IV INFUSION SET",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Medical supplies",
+   "area": "Medical supplies"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k168",
+    "name": "Gliclazide 80mg tabs UK 28s",
+    "generic": "Gliclazide 80mg",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Oral antidiabetics",
+   "area": "Diabetes & hormones"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k169",
+    "name": "Glucart Tabs 10s",
+    "generic": "Glucart Tabs",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k170",
+    "name": "Glycerol suppositories 4g",
+    "generic": "Glycerol suppositories 4g",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k171",
+    "name": "Golden Time",
+    "generic": "Malaria strip",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Medical supplies",
+   "area": "Medical supplies"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k172",
+    "name": "Gramocef-O syp 50mg/5m 100ml",
+    "generic": "Cefixime(3H2O) 50mg/5ml susp",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Cephalosporins",
+   "area": "Anti-infectives"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k173",
+    "name": "Grovit syrup 100ml",
+    "generic": "Multivitamin Syrup",
+    "form": "Syrups"
+   }
+  ],
+  "out": {
+   "cls": "Vitamins & minerals",
+   "area": "Vitamins, minerals & nutrition"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k174",
+    "name": "H Pylori Test Kit",
+    "generic": "Diagnostic Kit",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Medical supplies",
+   "area": "Medical supplies"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k175",
+    "name": "Haloperidol 50mg/1ml injection",
+    "generic": "Haloperidol inj",
+    "form": "Injectables"
+   }
+  ],
+  "out": {
+   "cls": "Antipsychotics",
+   "area": "Nervous system & mental health"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k176",
+    "name": "hasha 100ml",
+    "generic": "hasha 100ml",
+    "form": "Syrups"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k177",
+    "name": "Hedon tabs",
+    "generic": "Hedon tabs",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k178",
+    "name": "Hi Dee (8001953)",
+    "generic": "Vitamin D3 (cholecalciferol) 10,000 IU",
+    "form": "Capsules"
+   }
+  ],
+  "out": {
+   "cls": "Vitamins & minerals",
+   "area": "Vitamins, minerals & nutrition"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k179",
+    "name": "HIV STAT-PAK",
+    "generic": "HIV STAT-PAK",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k180",
+    "name": "Honey moisturising toner 300mls",
+    "generic": "moisturising toner",
+    "form": "Cosmetics"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k181",
+    "name": "Hydrea 500mg capsules 10x10",
+    "generic": "Hydroxyurea 500mg",
+    "form": "Capsules"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k182",
+    "name": "Hydrokant 15g",
+    "generic": "Hydrocortisone Acetate cream",
+    "form": "Creams"
+   }
+  ],
+  "out": {
+   "cls": "Corticosteroids",
+   "area": "Diabetes & hormones"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k183",
+    "name": "Hyzaar Fort 100mg/25mg",
+    "generic": "Losartan Potasyum",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Angiotensin receptor blockers",
+   "area": "Cardiovascular"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k184",
+    "name": "Ibuplus 150s",
+    "generic": "ibuprofen + paracetamol",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "NSAIDs",
+   "area": "Pain, fever & inflammation"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k185",
+    "name": "iburenjur 60ml",
+    "generic": "iburenjur 60ml",
+    "form": "Syrups"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k186",
+    "name": "INDACLAV SYRUP 228",
+    "generic": "AMOXICILLIN PLUS CLAVULANIC ACID",
+    "form": "Syrups"
+   }
+  ],
+  "out": {
+   "cls": "Penicillins",
+   "area": "Anti-infectives"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k187",
+    "name": "infra red temperature gun",
+    "generic": "temperature gun",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k188",
+    "name": "Intense Peach 80ml Perfume",
+    "generic": "Intense Peach 80ml Perfume",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k189",
+    "name": "Irbesartan/Hydrochlorothiazide 300mg/12.5mg tabs (MACLEODS)",
+    "generic": "Irbesartan/Hydrochlorothiazide 300mg/12.5mg tabs (MACLEODS)",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Angiotensin receptor blockers",
+   "area": "Cardiovascular"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k190",
+    "name": "Isotretinoin 20mg",
+    "generic": "isotretinoin",
+    "form": "Capsules"
+   }
+  ],
+  "out": {
+   "cls": "Skin preparations",
+   "area": "Skin"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k191",
+    "name": "Janumet 50/1000mg 56s",
+    "generic": "Janumet 50/1000mg 56s",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k192",
+    "name": "JENA POWER 100G",
+    "generic": "JENA POWER 100G",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k193",
+    "name": "Jenaflu syrup 100ml",
+    "generic": "Jenaflu syrup",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k194",
+    "name": "Johnson Baby Oil Regular 300ml",
+    "generic": "Baby Oil",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k195",
+    "name": "Jointace",
+    "generic": "Multivitamins for Joints",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Vitamins & minerals",
+   "area": "Vitamins, minerals & nutrition"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k196",
+    "name": "K-Cid syrup 100ml",
+    "generic": "K-Cid syrup 100ml",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k197",
+    "name": "Kamagra 50mg",
+    "generic": "Sildinafil citrate tabs 50mg",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k198",
+    "name": "Kelvin syp 60ml",
+    "generic": "Paracetamol",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Analgesics & antipyretics",
+   "area": "Pain, fever & inflammation"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k199",
+    "name": "Keppra 250mg",
+    "generic": "Levetirasetam 250mg",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k200",
+    "name": "Ketoconazole Shampoo kenaozle",
+    "generic": "Ketoconazole 2%",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Antifungals",
+   "area": "Antifungals"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k201",
+    "name": "Kids disposable face masks",
+    "generic": "Kids disposable face masks",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Medical supplies",
+   "area": "Medical supplies"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k202",
+    "name": "Kiss Passion Fruit",
+    "generic": "KISS",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k203",
+    "name": "Koact 625",
+    "generic": "Co-amoxiclav tabs BP 500-125mg",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k204",
+    "name": "Kombiglyze tabs 5mg/1000mg 30s",
+    "generic": "Kombiglyze tabs 5mg/1000mg 30s",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k205",
+    "name": "Kyogero Herbal Soap",
+    "generic": "Kyogero Herbal Soap",
+    "form": "Cosmetics"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k206",
+    "name": "Labetalol inj 5mg/ml",
+    "generic": "Labetalol",
+    "form": "Injectables"
+   }
+  ],
+  "out": {
+   "cls": "Beta blockers",
+   "area": "Cardiovascular"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k207",
+    "name": "Lamotrigine Accord 25mg UK",
+    "generic": "Lamotrigine 25gm UK",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Antiepileptics",
+   "area": "Nervous system & mental health"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k208",
+    "name": "Larinex 5mg",
+    "generic": "Desloratidine 5mg",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k209",
+    "name": "Lebasma-4",
+    "generic": "Salbutamol Tablets 4mg",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Bronchodilators",
+   "area": "Respiratory & allergy"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k210",
+    "name": "Levetiracetam 250mg UK",
+    "generic": "Levetiracetam",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Antiepileptics",
+   "area": "Nervous system & mental health"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k211",
+    "name": "Levodopa/Carbidopa 250/25mg (SYNDOPA 275)",
+    "generic": "Levodopa/Carbidopa 250/25mg (SYNDOPA 275)",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Antiparkinson medicines",
+   "area": "Nervous system & mental health"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k212",
+    "name": "LEVOPLANT (DKT)",
+    "generic": "LEVOPLANT (DKT)",
+    "form": "Injectables"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k213",
+    "name": "Lexar 100ml",
+    "generic": "Lexar 100ml",
+    "form": "Capsules"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k214",
+    "name": "Lignocaine Hydrochloride Gel",
+    "generic": "Lignocaine Hydrochloride Gel",
+    "form": "Capsules"
+   }
+  ],
+  "out": {
+   "cls": "Local anaesthetics",
+   "area": "Medical supplies"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k215",
+    "name": "Liquid soap 5 lts",
+    "generic": "liquid soap",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k216",
+    "name": "Little Angels Kids Detangler",
+    "generic": "Little Angels Kids Detangler",
+    "form": "Cosmetics"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k217",
+    "name": "LOFNAC Gel 30g",
+    "generic": "LOFNAC Gel 30g",
+    "form": "Creams"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k218",
+    "name": "Loperamide Caps 2mg UK",
+    "generic": "Loperamide Hydrochloride 2mg Caps",
+    "form": "Capsules"
+   }
+  ],
+  "out": {
+   "cls": "Antidiarrhoeals",
+   "area": "Gastrointestinal"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k219",
+    "name": "Loreal Men Expert Spray",
+    "generic": "Loreal Men Expert Spray",
+    "form": "Cosmetics"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k220",
+    "name": "Losartan 100/25mg UK",
+    "generic": "Losartan K+/Hydrochlorothiazide BP 100/25mg",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Angiotensin receptor blockers",
+   "area": "Cardiovascular"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k221",
+    "name": "Lubricting jelly cheap",
+    "generic": "lubricating jelly",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k222",
+    "name": "LUMERAX",
+    "generic": "A/L",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k223",
+    "name": "Lynx body spray",
+    "generic": "Lynx body spray",
+    "form": "Cosmetics"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k224",
+    "name": "Maama Kit 400g",
+    "generic": "Maama Kit",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k225",
+    "name": "Magnesium Glycine Complex & Vitamin D3 tabs (BIOMAG)",
+    "generic": "Magnesium Glycine Complex & Vitamin D3 tabs",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Vitamins & minerals",
+   "area": "Vitamins, minerals & nutrition"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k226",
+    "name": "Malanil 12s",
+    "generic": "Malanil 250 + 100mg",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k227",
+    "name": "Mara Moja",
+    "generic": "Paracetamol Cafeine and Asprin",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Analgesics & antipyretics",
+   "area": "Pain, fever & inflammation"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k228",
+    "name": "Maxmoist Eye Drops",
+    "generic": "Maxmoist Eye Drops",
+    "form": "Drops"
+   }
+  ],
+  "out": {
+   "cls": "Eye preparations",
+   "area": "Eye, ear & nose"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k229",
+    "name": "Mecobalamin",
+    "generic": "Mecobalamin",
+    "form": "Injectables"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k230",
+    "name": "MEDISAFE FABRIC PLASTERS",
+    "generic": "PLASTERS 25x76 mm",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Medical supplies",
+   "area": "Medical supplies"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k231",
+    "name": "MEDREICH (8002572)",
+    "generic": "TERBINAFINE 250MG",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Antifungals",
+   "area": "Antifungals"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k232",
+    "name": "Megafer Injection100mg/5ml",
+    "generic": "Iron Sucrose Injection 100mg/5ml (Megafer)",
+    "form": "Injectables"
+   }
+  ],
+  "out": {
+   "cls": "Iron & folic acid",
+   "area": "Vitamins, minerals & nutrition"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k233",
+    "name": "Memantin 10mg",
+    "generic": "Memantin 10mg",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k234",
+    "name": "Meropenem Inj 1G",
+    "generic": "Meropenem Inj 1G",
+    "form": "Injectables"
+   }
+  ],
+  "out": {
+   "cls": "Reserve antibiotics",
+   "area": "Anti-infectives"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k235",
+    "name": "Metformin Denk 500mg tab",
+    "generic": "Metfromin Hcl 500mg tabs",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Oral antidiabetics",
+   "area": "Diabetes & hormones"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k236",
+    "name": "Metoprolol 50mg",
+    "generic": "Metoprolol 50mg",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Beta blockers",
+   "area": "Cardiovascular"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k237",
+    "name": "Metronidazole 400mg tabs (Axcel 400)",
+    "generic": "Metronidazole 400mg tabs (Axcel 400)",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Nitroimidazoles",
+   "area": "Anti-infectives"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k238",
+    "name": "Mflox E/D",
+    "generic": "Moxifloxacin Opth. Sol",
+    "form": "Drops"
+   }
+  ],
+  "out": {
+   "cls": "Fluoroquinolones",
+   "area": "Anti-infectives"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k239",
+    "name": "Microgynon Pills",
+    "generic": "Microgynon",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Hormonal contraceptives",
+   "area": "Women's health & family planning"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k240",
+    "name": "Minipress 1mg",
+    "generic": "Prazosin 1mg",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k241",
+    "name": "Misoprostol/Mifeperistone 200mcg/200mg tabs (Ma-kare) pack of 5",
+    "generic": "Misoprostol/Mifeperistone 200mcg/200mg tabs (Ma-kare) pack of 5",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Uterotonics",
+   "area": "Women's health & family planning"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k242",
+    "name": "Mometasone Cream 15g (MOMADERM)",
+    "generic": "Mometasone Cream 15g (MOMADERM)",
+    "form": "Creams"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k243",
+    "name": "Montelukast Denk 4Mg",
+    "generic": "Montelukast Denk 4Mg",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Other asthma medicines",
+   "area": "Respiratory & allergy"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k244",
+    "name": "Mosedin Syrup",
+    "generic": "Loratadine5mg//5ml",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Antihistamines",
+   "area": "Respiratory & allergy"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k245",
+    "name": "MOVIT BODY MILK LOTION",
+    "generic": "MOVIT BODY MILK",
+    "form": "Cosmetics"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k246",
+    "name": "Moxiflox 400mg caps 5s",
+    "generic": "Moxifloxacin 400mg",
+    "form": "Capsules"
+   }
+  ],
+  "out": {
+   "cls": "Fluoroquinolones",
+   "area": "Anti-infectives"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k247",
+    "name": "Mucosil AM Syp 100ml",
+    "generic": "Mucosil AM Syp 100ml",
+    "form": "Syrups"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k248",
+    "name": "Mupirocin Ointment 2.0%",
+    "generic": "Mupirocin",
+    "form": "Creams"
+   }
+  ],
+  "out": {
+   "cls": "Antiseptics & topical antibiotics",
+   "area": "Skin"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k249",
+    "name": "N G Tube",
+    "generic": "Feeding tube fg 8",
+    "form": "Creams"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k250",
+    "name": "Nasal inhaler",
+    "generic": "Nasal inhaler",
+    "form": "Drops"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k251",
+    "name": "Natural Fish Oil 1g (MEGA 3) 1'S",
+    "generic": "Natural Fish Oil 1g (MEGA 3) 1'S",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k252",
+    "name": "Nebivolol 2.5mg tabs (Nebilong-2.5)",
+    "generic": "Nebivolol 2.5mg tabs (Nebilong-2.5)",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k253",
+    "name": "Neoloridin tabs 30s",
+    "generic": "Neo Loridin",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k254",
+    "name": "Nervex Caps 10's",
+    "generic": "Nervex Caps 10's",
+    "form": "Capsules"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k255",
+    "name": "Neurogen - Plus Caps 30s",
+    "generic": "Pregabaline 75mg+ Mecobalamin 750mg",
+    "form": "Capsules"
+   }
+  ],
+  "out": {
+   "cls": "Other nervous system medicines",
+   "area": "Nervous system & mental health"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k256",
+    "name": "Neutragena clear and defend scrub",
+    "generic": "Neutragena clear and defend scrub",
+    "form": "Cosmetics"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k257",
+    "name": "Nice and lovely lotion 400ml",
+    "generic": "Nice and lovely lotion 400ml",
+    "form": "Cosmetics"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k258",
+    "name": "Nifuroxazide 200mg caps (Antinal)",
+    "generic": "Nifuroxazide 200mg caps (Antinal)",
+    "form": "Capsules"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k259",
+    "name": "Nitazoxanide tab",
+    "generic": "Nitazoxanide tab",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k260",
+    "name": "Nivea lotion express hydration 48hr 400ml",
+    "generic": "Nivea lotion express hydration 48hr 400ml",
+    "form": "Cosmetics"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k261",
+    "name": "Nivea sun screen",
+    "generic": "Nivea sun screen",
+    "form": "Cosmetics"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k262",
+    "name": "Norfloxacin 400mg tabs",
+    "generic": "Norfloxacin tabs 400mg",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Fluoroquinolones",
+   "area": "Anti-infectives"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k263",
+    "name": "Novomin (Dimentydinate) 60mg",
+    "generic": "Novomin (Dimentydinate) 60mg",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k264",
+    "name": "NUROKIND INJ",
+    "generic": "Mecobalamin inj",
+    "form": "Injectables"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k265",
+    "name": "NYLON 2 RC 12s",
+    "generic": "NYLON 2 RC 12s",
+    "form": "Surgicals"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k266",
+    "name": "Nystatin/Neomycin/ Triamcinolone cream 15g (Amocomb)",
+    "generic": "Nystatin/Neomycin/ Triamcinolone cream 15g (Amocomb)",
+    "form": "Creams"
+   }
+  ],
+  "out": {
+   "cls": "Aminoglycosides",
+   "area": "Anti-infectives"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k267",
+    "name": "ODIMONT 10",
+    "generic": "Montelukast 10mg (Odimont)",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Other asthma medicines",
+   "area": "Respiratory & allergy"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k268",
+    "name": "OLANDUS 10",
+    "generic": "Olanzapine 10mg",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Antipsychotics",
+   "area": "Nervous system & mental health"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k269",
+    "name": "OLEVO-500",
+    "generic": "Levofloxacin tabs",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Fluoroquinolones",
+   "area": "Anti-infectives"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k270",
+    "name": "OLIYE FOOT and HEAL",
+    "generic": "OLIYE FOOT and HEAL",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k271",
+    "name": "Omega-3 CLO syrup 100ml",
+    "generic": "Vita Health",
+    "form": "Syrups"
+   }
+  ],
+  "out": {
+   "cls": "Vitamins & minerals",
+   "area": "Vitamins, minerals & nutrition"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k272",
+    "name": "OMEPRAZOLE UK 40MG",
+    "generic": "OMEPRAZOLE",
+    "form": "Capsules"
+   }
+  ],
+  "out": {
+   "cls": "Proton pump inhibitors",
+   "area": "Gastrointestinal"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k273",
+    "name": "Ondansetron Oral drops",
+    "generic": "Ondansetron Oral Susp",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Antiemetics",
+   "area": "Gastrointestinal"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k274",
+    "name": "OPHTHALMOSCOPE",
+    "generic": "OPHTHALMOSCOPE",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k275",
+    "name": "Oral B Dental Floss",
+    "generic": "Oral B Dental Floss",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k276",
+    "name": "Originals olive oil body lotion (body lotion)",
+    "generic": "body lotion",
+    "form": "Cosmetics"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k277",
+    "name": "Orthojoint tabs 10s",
+    "generic": "Orthojoint tabs 10s",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k278",
+    "name": "Osteoflex plus tabs",
+    "generic": "Osteoflex plus tabs",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k279",
+    "name": "Oxybutynin HCL 5mg UK 84S",
+    "generic": "Oxybutynin HCL 5mg",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Urological medicines",
+   "area": "Urology & men's health"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k280",
+    "name": "P.O.P 20cm",
+    "generic": "Bandage",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Medical supplies",
+   "area": "Medical supplies"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k281",
+    "name": "Paludrine",
+    "generic": "Paludrine",
+    "form": "Capsules"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k282",
+    "name": "pampers min",
+    "generic": "pampers min",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k283",
+    "name": "Panfor SR 1000mg",
+    "generic": "Metformin 1000mg",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Oral antidiabetics",
+   "area": "Diabetes & hormones"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k284",
+    "name": "papaya whitening extract hand and body cream vit E",
+    "generic": "papaya Etract cream",
+    "form": "Cosmetics"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k285",
+    "name": "PARACETAMOL SYP 250MG AXCEL",
+    "generic": "PARACETAMOL SYP 250MG AXCEL",
+    "form": "Syrups"
+   }
+  ],
+  "out": {
+   "cls": "Analgesics & antipyretics",
+   "area": "Pain, fever & inflammation"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k286",
+    "name": "Parasyp 100ml",
+    "generic": "paracetamol syrup",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Analgesics & antipyretics",
+   "area": "Pain, fever & inflammation"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k287",
+    "name": "pefloxacin tab agog",
+    "generic": "pefloxacin 400mgs",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k288",
+    "name": "pepto bismol susp 240ml",
+    "generic": "amaranthbismuth subsalicylatealuminium",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k289",
+    "name": "Phenobarb COSMOS",
+    "generic": "Phenobarbital 30mg (Phenobarbital COSMOS)",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Antiepileptics",
+   "area": "Nervous system & mental health"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k290",
+    "name": "Pilex Tablets",
+    "generic": "pilex tabs",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k291",
+    "name": "PIRAV-75",
+    "generic": "Pregabalin 75mg tabs",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Other nervous system medicines",
+   "area": "Nervous system & mental health"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k292",
+    "name": "Plasil tabs 10mg",
+    "generic": "Metoclopromide tabs 10mg",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k293",
+    "name": "Potential cough mixture",
+    "generic": "herbal cough mixtures",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Cough preparations",
+   "area": "Respiratory & allergy"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k294",
+    "name": "Predinisole tabs",
+    "generic": "KAM PREDSOL",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k295",
+    "name": "Pregabalin 75mg (Lyrica)",
+    "generic": "Pregabalin 75mg (Lyrica)",
+    "form": "Capsules"
+   }
+  ],
+  "out": {
+   "cls": "Other nervous system medicines",
+   "area": "Nervous system & mental health"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k296",
+    "name": "Pregnacare Prenatal Formula (Original)",
+    "generic": "Pregnacare Prenatal Formula",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k297",
+    "name": "Primapore 15cm x 8cm",
+    "generic": "Primapore 15cmx8cm",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k298",
+    "name": "Prodart Caps 0.4/0.05 mg (Tamsulocin and Dutaster",
+    "generic": "Prodart Caps 0.4/0.05mg (Tamsulocin and Dutasteri",
+    "form": "Capsules"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k299",
+    "name": "Propranolol 40mg Tabs - COSMOS",
+    "generic": "Propranolol 40mg",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Beta blockers",
+   "area": "Cardiovascular"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k300",
+    "name": "PSA STRIPS",
+    "generic": "PSA STRIPS",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Medical supplies",
+   "area": "Medical supplies"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k301",
+    "name": "Pyramax Tabs 180mg/60mg 9s-Dz",
+    "generic": "Pyronaridine/Artesunate",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Antimalarials",
+   "area": "Antimalarials"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k302",
+    "name": "Quinine syrup100ml (QUINIMIX)",
+    "generic": "Quinine syrup100ml (QUINIMIX)",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Antimalarials",
+   "area": "Antimalarials"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k303",
+    "name": "Rabeprazole 20mg rapped tabs",
+    "generic": "Rabeprazole tabs 20mg",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Proton pump inhibitors",
+   "area": "Gastrointestinal"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k304",
+    "name": "Ramipril 5mg caps 28",
+    "generic": "ramipril 5mg caps",
+    "form": "Capsules"
+   }
+  ],
+  "out": {
+   "cls": "ACE inhibitors",
+   "area": "Cardiovascular"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k305",
+    "name": "RE-CART Caps",
+    "generic": "collagen peptideGlucosamineChondroitinNatural e",
+    "form": "Capsules"
+   }
+  ],
+  "out": {
+   "cls": "Joint supplements",
+   "area": "Muscle & joint"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k306",
+    "name": "RelonChem (8001396)",
+    "generic": "Tamoxifen 20mg",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k307",
+    "name": "Renochlor",
+    "generic": "Renochlor syrup",
+    "form": "Syrups"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k308",
+    "name": "Rexona quantum 25ml",
+    "generic": "Rexona Collection Roll-on",
+    "form": "Cosmetics"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k309",
+    "name": "Ridmal 6s",
+    "generic": "Dihydroartemisinin + Piperaquine 40/320mg",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Antimalarials",
+   "area": "Antimalarials"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k310",
+    "name": "Risperidone 1mg",
+    "generic": "Lactose Monohydrate 1mg",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Antipsychotics",
+   "area": "Nervous system & mental health"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k311",
+    "name": "Robitussin Dry Cough",
+    "generic": "Robitussin Dry Cough",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Cough preparations",
+   "area": "Respiratory & allergy"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k312",
+    "name": "Rosuvastatin 10mg UK",
+    "generic": "Rosuvastatin 10mg",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Statins",
+   "area": "Cardiovascular"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k313",
+    "name": "ROXATAT Tabs 50mg 3s(pkt)",
+    "generic": "ROXATAT Tabs 50mg 3s",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k314",
+    "name": "Sacoplus 49/51",
+    "generic": "sacubitril/valsartan",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Angiotensin receptor blockers",
+   "area": "Cardiovascular"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k315",
+    "name": "Salbutamol Inhaler 100mcg(DERIHALER)",
+    "generic": "Salbutamol Inhaler 100mcg(DERIHALER)",
+    "form": "Inhaler"
+   }
+  ],
+  "out": {
+   "cls": "Bronchodilators",
+   "area": "Respiratory & allergy"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k316",
+    "name": "Sanex spray 150ml",
+    "generic": "sanex spray 150ml",
+    "form": "Cosmetics"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k317",
+    "name": "SCABION CREAM",
+    "generic": "Crotamiton bp.+sulphur",
+    "form": "Creams"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k318",
+    "name": "Secnindazole 1gm Tabs 2s",
+    "generic": "Secnidazole 1000mg",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Nitroimidazoles",
+   "area": "Anti-infectives"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k319",
+    "name": "Senela tangerine lip balm",
+    "generic": "senela tangerine lip balm",
+    "form": "Cosmetics"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k320",
+    "name": "Sensodyne Mouth Wash",
+    "generic": "Sensodyne Mouth Wash",
+    "form": "Cosmetics"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k321",
+    "name": "Serafen tabs 20s",
+    "generic": "Serafen tabs 20s",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k322",
+    "name": "Seven Seas CLO 30s",
+    "generic": "Seven Seas CLO 30s",
+    "form": "Capsules"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k323",
+    "name": "Shower to Shower happy days",
+    "generic": "Shower to Shower happy days",
+    "form": "Capsules"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k324",
+    "name": "SILICON GEL CREAM 50g (SCARO cream)",
+    "generic": "SILICON GEL CREAM 50g",
+    "form": "Creams"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k325",
+    "name": "Simvastatin 20MG UK",
+    "generic": "Simvastatin 20MG",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Statins",
+   "area": "Cardiovascular"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k326",
+    "name": "Sinurhon tabs",
+    "generic": "phenylephrine/chlorpheniramine/paracetamol/caffeine pack of 6 (SINURHON tabs)",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Analgesics & antipyretics",
+   "area": "Pain, fever & inflammation"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k327",
+    "name": "Skin Balance gel.",
+    "generic": "Wrinkle remover",
+    "form": "Cosmetics"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k328",
+    "name": "Slow Sodium Chloride Tabs 600mg",
+    "generic": "Slow sodium chloride tabs 600mg",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Intravenous fluids",
+   "area": "Fluids & electrolytes"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k329",
+    "name": "Sodium Valproate 500mg (VALATE 500)",
+    "generic": "Sodium Valproate 500mg (VALATE 500)",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Antiepileptics",
+   "area": "Nervous system & mental health"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k330",
+    "name": "Softcare pants 24pcs",
+    "generic": "Diapers",
+    "form": "Sundries"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k331",
+    "name": "Sonatec mouth wash (PINK) 250ml",
+    "generic": "cetylpyridinium cl BP 0.05%",
+    "form": "Generals"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k332",
+    "name": "Special black toothpaste",
+    "generic": "toothpaste",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k333",
+    "name": "Spotclav 375",
+    "generic": "amoxicillin and clavulanate",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Penicillins",
+   "area": "Anti-infectives"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k334",
+    "name": "Stelazine 5mg uk",
+    "generic": "Trifluoperazine",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Antipsychotics",
+   "area": "Nervous system & mental health"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k335",
+    "name": "Strepsils Original 24s tabs",
+    "generic": "Strepsil Lozenges - Original",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k336",
+    "name": "Sudif Cream 10g",
+    "generic": "Sudif Cream 10g",
+    "form": "Creams"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k337",
+    "name": "sulfasalazin (salazopyrin)",
+    "generic": "salfasalazin 500mg",
+    "form": "Capsules"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k338",
+    "name": "Super eyes dry eyes eye drop",
+    "generic": "super eyes dry eyes eye drop",
+    "form": "Sundries"
+   }
+  ],
+  "out": {
+   "cls": "Eye preparations",
+   "area": "Eye, ear & nose"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k339",
+    "name": "Surgical gloves Size 7",
+    "generic": "Surgical gloves",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Medical supplies",
+   "area": "Medical supplies"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k340",
+    "name": "Synergex tabs 625mg 30s",
+    "generic": "Synergex tabs 625mg 30s",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k341",
+    "name": "Tadacip-20",
+    "generic": "Tadalafil 20mg",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Urological medicines",
+   "area": "Urology & men's health"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k342",
+    "name": "Tamsulosin 0.4mg (Tamsumac 0.4mg)",
+    "generic": "Tamsulosin Hydrochloride 0.4mg",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Urological medicines",
+   "area": "Urology & men's health"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k343",
+    "name": "TCB hair food 100mls",
+    "generic": "natural hair foods",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k344",
+    "name": "Telmisartan and Hydrochlorothiazide 40mg/12.5 UK",
+    "generic": "Telmisartan and Hydrochlorothiazide 40mg/12.5mg UK",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Angiotensin receptor blockers",
+   "area": "Cardiovascular"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k345",
+    "name": "Terazosin 2mg",
+    "generic": "Terazosin 2mg",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k346",
+    "name": "Terbinafine HCL Tabs 250mg (FUNGISAFE)",
+    "generic": "Terbinafine HCL Tabs 250mg",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Antifungals",
+   "area": "Antifungals"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k347",
+    "name": "THANOS",
+    "generic": "THIAMINE TABS 100MG",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Vitamins & minerals",
+   "area": "Vitamins, minerals & nutrition"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k348",
+    "name": "Thromban 2.5",
+    "generic": "Apixaban tabs 2.5mg (Thromban 2.5)",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Anticoagulants & antiplatelets",
+   "area": "Cardiovascular"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k349",
+    "name": "TINODERM Ointment 18g",
+    "generic": "TINODERM Ointment 18g",
+    "form": "Creams"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k350",
+    "name": "Toffplus capsules 20s",
+    "generic": "Panadol/dextrom/piriton/phenyieph500/15/2/10mg",
+    "form": "Capsules"
+   }
+  ],
+  "out": {
+   "cls": "Analgesics & antipyretics",
+   "area": "Pain, fever & inflammation"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k351",
+    "name": "Topizone cream",
+    "generic": "Fusidic acid/Betamethas/1/1mg",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Antiseptics & topical antibiotics",
+   "area": "Skin"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k352",
+    "name": "TOZOA",
+    "generic": "INVERMECTIN 12MG",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k353",
+    "name": "Tranexamic acid 500mg (SAVIBLEED)",
+    "generic": "Tranexamic acid 500mg",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k354",
+    "name": "Trevox Tabs 500mg 20s",
+    "generic": "Trevox Tabs 500mg 20s",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k355",
+    "name": "TRINERVE Caps",
+    "generic": "TRINERVE Caps",
+    "form": "Capsules"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k356",
+    "name": "TURBOVAS CP tabs 30s",
+    "generic": "TURBOVAS CP tabs 30s",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k357",
+    "name": "Uganda Bentoite (Small)",
+    "generic": "Food Grade",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k358",
+    "name": "UNIFED",
+    "generic": "Triprolidine 2.5mg (UNIFED)",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k359",
+    "name": "Uractonum 25mg",
+    "generic": "Uractonum 25mg",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k360",
+    "name": "Urysoren",
+    "generic": "Solifenacin 5mg tabs",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k361",
+    "name": "Valparin Chrono 300mg.",
+    "generic": "Titanium Dioxide.",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k362",
+    "name": "Vaselin cocoa butter 240ml",
+    "generic": "vaselin",
+    "form": "Cosmetics"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k363",
+    "name": "Vaseline Jelly Baby (big)",
+    "generic": "petroleum jelly",
+    "form": "Cosmetics"
+   }
+  ],
+  "out": {
+   "cls": "Skin preparations",
+   "area": "Skin"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k364",
+    "name": "Vaseline Lotion men cooling (big)",
+    "generic": "Vaseline lotion",
+    "form": "Cosmetics"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k365",
+    "name": "Vental inhaler",
+    "generic": "Salbutamol 0.1mg/dose",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Bronchodilators",
+   "area": "Respiratory & allergy"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k366",
+    "name": "Vestline body lotion",
+    "generic": "Vestline body lotion",
+    "form": "Cosmetics"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k367",
+    "name": "VICRYL 4/0",
+    "generic": "VICRYL 4/0",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k368",
+    "name": "Vildaril-M 50/500mg",
+    "generic": "Vildagliptin and Metformin Hydrochloride tabs",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Oral antidiabetics",
+   "area": "Diabetes & hormones"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k369",
+    "name": "Visionace caps",
+    "generic": "VISIONACE",
+    "form": "Capsules"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k370",
+    "name": "VITACOD",
+    "generic": "VITACOD",
+    "form": "Capsules"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k371",
+    "name": "Vitamin B Complex Tablets",
+    "generic": "Vitamin B",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Vitamins & minerals",
+   "area": "Vitamins, minerals & nutrition"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k372",
+    "name": "VITAMIN D CAPS 60,000 IU (VITOC-D)",
+    "generic": "VITAMIN D CAPS 60,000 IU",
+    "form": "Capsules"
+   }
+  ],
+  "out": {
+   "cls": "Vitamins & minerals",
+   "area": "Vitamins, minerals & nutrition"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k373",
+    "name": "Vitrum Tabs",
+    "generic": "Multivitamin",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Vitamins & minerals",
+   "area": "Vitamins, minerals & nutrition"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k374",
+    "name": "Vomistat tabs 8mg",
+    "generic": "Vomistat tabs 8mg",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k375",
+    "name": "Watoto Vaseline 500g",
+    "generic": "petrolleum jelly",
+    "form": "Cosmetics"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k376",
+    "name": "Wellkid chewable tabs",
+    "generic": "Wellkid multivits",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Vitamins & minerals",
+   "area": "Vitamins, minerals & nutrition"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k377",
+    "name": "WELLWOMAN MAX",
+    "generic": "NUTRITINAL SUPPLEMENTS",
+    "form": "Capsules"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k378",
+    "name": "Wipes",
+    "generic": "wipes",
+    "form": "Cosmetics"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k379",
+    "name": "X-Power Coffee",
+    "generic": "X-Power Coffee",
+    "form": "Others"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k380",
+    "name": "XSONE eye drops",
+    "generic": "Dexamethasone/Benzalkonium eye drops",
+    "form": "Eye Drops"
+   }
+  ],
+  "out": {
+   "cls": "Corticosteroids",
+   "area": "Diabetes & hormones"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k381",
+    "name": "Yolk skin care serum",
+    "generic": "natural vitamin E and collagen",
+    "form": "Cosmetics"
+   }
+  ],
+  "out": {
+   "cls": "Vitamins & minerals",
+   "area": "Vitamins, minerals & nutrition"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k382",
+    "name": "Zecuf Sugar free syp 100ml",
+    "generic": "Zecuf Sugar free syp 100ml",
+    "form": "Syrups"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k383",
+    "name": "Zepar Suspension",
+    "generic": "Zepar",
+    "form": "Syrups"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k384",
+    "name": "Zimax 200mg/5ml Susp 30ml",
+    "generic": "Azithromycin Oral Susp 200mg/5ml 30ml",
+    "form": "Syrups"
+   }
+  ],
+  "out": {
+   "cls": "Macrolides",
+   "area": "Anti-infectives"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k385",
+    "name": "Zinc Sulphate 20mg",
+    "generic": "zinc sulphate 20mg",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Oral rehydration & zinc",
+   "area": "Fluids & electrolytes"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k386",
+    "name": "Zithromax 250mg",
+    "generic": "Azithromycin 250mg",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Macrolides",
+   "area": "Anti-infectives"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k387",
+    "name": "Zolanas-30mgs caps",
+    "generic": "lansoprazole caps 30mgs",
+    "form": "Capsules"
+   }
+  ],
+  "out": {
+   "cls": "Proton pump inhibitors",
+   "area": "Gastrointestinal"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "k388",
+    "name": "Zynol 300mg",
+    "generic": "ALLOPURINOL 300MG",
+    "form": "Tablets"
+   }
+  ],
+  "out": {
+   "cls": "Gout medicines",
+   "area": "Muscle & joint"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "t1",
+    "name": "House blend",
+    "category": "Antimalarial"
+   }
+  ],
+  "out": {
+   "cls": "Antimalarial",
+   "area": "Antimalarials"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "t2",
+    "name": "Mystery Tabs",
+    "category": "Supplements"
+   }
+  ],
+  "out": {
+   "cls": "Supplements",
+   "area": "Vitamins, minerals & nutrition"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "t3",
+    "name": "Plain thing"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "drugClassOf",
+  "args": [
+   {
+    "id": "t4",
+    "name": "Shelved",
+    "shelf": "A3"
+   }
+  ],
+  "out": {
+   "cls": "Unclassified",
+   "area": "Other"
+  }
+ },
+ {
+  "fn": "groupMedicines",
+  "args": [
+   [
+    {
+     "id": "k0",
+     "name": "02-LON",
+     "generic": "ORNIDAZOLE",
+     "form": "Tablets"
+    },
+    {
+     "id": "k1",
+     "name": "Accord (8002576)",
+     "generic": "OLANZEPINE 10MG TABLETS",
+     "form": "Tablets"
+    },
+    {
+     "id": "k2",
+     "name": "Acetaminophen Rapid Release Sleep Aid PM 500MG",
+     "generic": "Acetaminophen Rapid Release Sleep Aid PM 500MG",
+     "form": "Capsules"
+    },
+    {
+     "id": "k3",
+     "name": "Acinet dry syp 228/5ml",
+     "generic": "amoxicillin/clavulanIC ACID",
+     "form": "Others"
+    },
+    {
+     "id": "k4",
+     "name": "Actifizz Vitamin C and Zinc",
+     "generic": "Actifizz",
+     "form": "Others"
+    },
+    {
+     "id": "k5",
+     "name": "Actrapid Insulin Inj 100IU 10ML",
+     "generic": "AGO-CPM",
+     "form": "Injectables"
+    },
+    {
+     "id": "k6",
+     "name": "Adidas Spray",
+     "generic": "Adidas Deo Spray",
+     "form": "Cosmetics"
+    },
+    {
+     "id": "k7",
+     "name": "AFLODOR SR",
+     "generic": "Aceclofenac/Thiocolchicoside caps 16mg (AFLODOR) SR",
+     "form": "Capsules"
+    },
+    {
+     "id": "k8",
+     "name": "Agodryl cough syp 100ml",
+     "generic": "Agodry cough syp 100ml",
+     "form": "Syrups"
+    },
+    {
+     "id": "k9",
+     "name": "Agozole Susp",
+     "generic": "Albendazole Suspension",
+     "form": "Others"
+    },
+    {
+     "id": "k10",
+     "name": "Albendazole (ANTHEL)",
+     "generic": "Albendazole",
+     "form": "Tablets"
+    },
+    {
+     "id": "k11",
+     "name": "Alexanda (Aspire)Body Splash",
+     "generic": "Alexanda Body Splash",
+     "form": "Tablets"
+    },
+    {
+     "id": "k12",
+     "name": "ALMUS (8000414)",
+     "generic": "Furosemide tabs 40mg UK",
+     "form": "Tablets"
+    },
+    {
+     "id": "k13",
+     "name": "Always blue and blue pink",
+     "generic": "Sanitary pads",
+     "form": "Others"
+    },
+    {
+     "id": "k14",
+     "name": "Amaryl 3mgs tabs",
+     "generic": "glimepride",
+     "form": "Tablets"
+    },
+    {
+     "id": "k15",
+     "name": "Aminophyline injection",
+     "generic": "Aminophyline BP 250mg",
+     "form": "Injectables"
+    },
+    {
+     "id": "k16",
+     "name": "AmloDenk 5mg Tab",
+     "generic": "Amlodipine tabs 5mg",
+     "form": "Tablets"
+    },
+    {
+     "id": "k17",
+     "name": "AMLOPRESS-5",
+     "generic": "Amlodipine 5mg",
+     "form": "Tablets"
+    },
+    {
+     "id": "k18",
+     "name": "Amoxicillin & Clavulanic acid 375mg tabs (SPOTCLAV 375)",
+     "generic": "Amoxicillin & Clavulanic acid 375mg tabs (SPOTCLAV 375)",
+     "form": "Tablets"
+    },
+    {
+     "id": "k19",
+     "name": "Amoxicillin/Clavulanate 375mg tabs (Augmentin 375)",
+     "generic": "Amoxicillin/Clavulanate 375mg tabs (Augmentin 375)",
+     "form": "Tablets"
+    },
+    {
+     "id": "k20",
+     "name": "Amoxikid 125mg tab",
+     "generic": "Amoxicillin tabs 125mg",
+     "form": "Tablets"
+    },
+    {
+     "id": "k21",
+     "name": "Ampiclo-Dawa syrup 100ml",
+     "generic": "Ampiclox syrup 250mg/ml syrup",
+     "form": "Syrups"
+    },
+    {
+     "id": "k22",
+     "name": "Anginovag m/spray 10ml",
+     "generic": "Anginovag m/spray 10ml",
+     "form": "Syrups"
+    },
+    {
+     "id": "k23",
+     "name": "Antifungal soap 75g",
+     "generic": "Antifungal soap 75g",
+     "form": "Capsules"
+    },
+    {
+     "id": "k24",
+     "name": "APDYL-H Syrup 100ml",
+     "generic": "APDYL-H Syrup 100ml",
+     "form": "Syrups"
+    },
+    {
+     "id": "k25",
+     "name": "Apitropin EYE DROPS",
+     "generic": "Apitropin EYE DROPS",
+     "form": "Drops"
+    },
+    {
+     "id": "k26",
+     "name": "Aptizooom Syrup 200ml",
+     "generic": "Aptizooom Syrup 200ml",
+     "form": "Syrups"
+    },
+    {
+     "id": "k27",
+     "name": "Aristozyme Gold tabs 30s",
+     "generic": "multi-enzyme tabs 30s",
+     "form": "Tablets"
+    },
+    {
+     "id": "k28",
+     "name": "Artemether/ lumefantrine 20/120mg 24's (LONART)",
+     "generic": "Artemether/ lumefantrine 20/120mg 24's (LONART)",
+     "form": "Others"
+    },
+    {
+     "id": "k29",
+     "name": "ASA 75 BRISTOL",
+     "generic": "Aspirin Dispersible tablets 75mg (ASA 75 BRISTOL)",
+     "form": "Tablets"
+    },
+    {
+     "id": "k30",
+     "name": "ASPEC Tabs 10x10",
+     "generic": "ASPEC Tabs 10x10",
+     "form": "Tablets"
+    },
+    {
+     "id": "k31",
+     "name": "Asvir",
+     "generic": "Aciclovir tabs BP 200mg",
+     "form": "Tablets"
+    },
+    {
+     "id": "k32",
+     "name": "Atorva 20",
+     "generic": "Atorvastatin tabs 20mg (Atorva 20)",
+     "form": "Tablets"
+    },
+    {
+     "id": "k33",
+     "name": "Atoxia 60mg tabs 10s",
+     "generic": "Etoricixib 60mg",
+     "form": "Tablets"
+    },
+    {
+     "id": "k34",
+     "name": "Auroxetil 500mg tablet",
+     "generic": "Cefuroxime 500mg tablet",
+     "form": "Tablets"
+    },
+    {
+     "id": "k35",
+     "name": "Axcel Betamethaxone cream 15g",
+     "generic": "Axcel Betamethaxone cream 15g",
+     "form": "Creams"
+    },
+    {
+     "id": "k36",
+     "name": "Axe Shower Gel",
+     "generic": "Axe Shower Gel 400ml",
+     "form": "Cosmetics"
+    },
+    {
+     "id": "k37",
+     "name": "Azigen",
+     "generic": "Azithromycin syr 15ml",
+     "form": "Syrups"
+    },
+    {
+     "id": "k38",
+     "name": "Azithromycin 500mg tabs (ZAHA 500)",
+     "generic": "Azithromycin 500mg tabs (ZAHA 500)",
+     "form": "Tablets"
+    },
+    {
+     "id": "k39",
+     "name": "Azito suspension 30ml",
+     "generic": "Azithromycin suspension 200mg/5ml",
+     "form": "Others"
+    },
+    {
+     "id": "k40",
+     "name": "Baby Cream 30g",
+     "generic": "Zinc oxide/Olive oil 20mg/5mg",
+     "form": "Others"
+    },
+    {
+     "id": "k41",
+     "name": "Bactafuz-B Cream 15g",
+     "generic": "Fusidic Acid and Betamethasone cream",
+     "form": "Creams"
+    },
+    {
+     "id": "k42",
+     "name": "Ballet mosquito repellent jelly 100gs",
+     "generic": "mosquito repellent",
+     "form": "Specials"
+    },
+    {
+     "id": "k43",
+     "name": "Beauty Care Face Out Soap.",
+     "generic": "SOAP",
+     "form": "Cosmetics"
+    },
+    {
+     "id": "k44",
+     "name": "Bendex syps 10mls",
+     "generic": "albendazole suspension",
+     "form": "Syrups"
+    },
+    {
+     "id": "k45",
+     "name": "Benzoyl Peroxide Cleansing Bar 5% w/w (Perobar 5%)",
+     "generic": "Benzoyl Peroxide Cleansing Bar 5% w/w",
+     "form": "Others"
+    },
+    {
+     "id": "k46",
+     "name": "Betadrop Eye drop",
+     "generic": "Betamethasone",
+     "form": "Drops"
+    },
+    {
+     "id": "k47",
+     "name": "Betasol cream",
+     "generic": "betamethasone",
+     "form": "Others"
+    },
+    {
+     "id": "k48",
+     "name": "BIN LINERS",
+     "generic": "LINERS",
+     "form": "Others"
+    },
+    {
+     "id": "k49",
+     "name": "BIOFERON 200ml",
+     "generic": "Bioferon syrups 200mls:IronVit B12 and Folic Acid",
+     "form": "Others"
+    },
+    {
+     "id": "k50",
+     "name": "Bisoprolol 2.5mg Tabs (Hillcross)",
+     "generic": "Bisoprolol 2.5mg Tabs (Hillcross)",
+     "form": "Tablets"
+    },
+    {
+     "id": "k51",
+     "name": "Blood giving set",
+     "generic": "Blood giving set",
+     "form": "Others"
+    },
+    {
+     "id": "k52",
+     "name": "Bone-Aid tab 1X30 PKT",
+     "generic": "Boneaid",
+     "form": "Tablets"
+    },
+    {
+     "id": "k53",
+     "name": "Brain Active Denk",
+     "generic": "ginger extractcaffeine vitamin b5Omega-3-fatt",
+     "form": "Capsules"
+    },
+    {
+     "id": "k54",
+     "name": "Bronchopro liquid",
+     "generic": "Ambroxol syrup (Bronchopro) liquid",
+     "form": "Syrups"
+    },
+    {
+     "id": "k55",
+     "name": "Brutaflam 120mg Tabs",
+     "generic": "Etoricoxib Tabs",
+     "form": "Tablets"
+    },
+    {
+     "id": "k56",
+     "name": "BURNEM Cream",
+     "generic": "For BurnsWoundsPus Formation Bruised Skin and cu",
+     "form": "Others"
+    },
+    {
+     "id": "k57",
+     "name": "Cadiphen Syrup 60ml",
+     "generic": "Piriton/guaif/NH4/Na+ citrate 2/80/100/44mg",
+     "form": "Syrups"
+    },
+    {
+     "id": "k58",
+     "name": "CALCIGARD RETARD",
+     "generic": "NIFEDIPINE 20 MG",
+     "form": "Tablets"
+    },
+    {
+     "id": "k59",
+     "name": "Calpol 60ml",
+     "generic": "Paracetamol syr 60ml",
+     "form": "Syrups"
+    },
+    {
+     "id": "k60",
+     "name": "Candiderm Cream 15mg",
+     "generic": "Clotrimazole/beclometasone/gentamycin 1/0.025/0.1%",
+     "form": "Creams"
+    },
+    {
+     "id": "k61",
+     "name": "Captopril 25mg Uk",
+     "generic": "Captopril 25mg Uk",
+     "form": "Tablets"
+    },
+    {
+     "id": "k62",
+     "name": "Carbimazole 5mg (Man UK)",
+     "generic": "Carbimazole 5mg",
+     "form": "Tablets"
+    },
+    {
+     "id": "k63",
+     "name": "CAROFIT Tablets",
+     "generic": "CAROFIT Tablets",
+     "form": "Tablets"
+    },
+    {
+     "id": "k64",
+     "name": "Castor Oil 100ml Faholo",
+     "generic": "Castor Oil 100ml Faholo",
+     "form": "Others"
+    },
+    {
+     "id": "k65",
+     "name": "Cebay syp 60ml",
+     "generic": "Cefixime",
+     "form": "Others"
+    },
+    {
+     "id": "k66",
+     "name": "Cefazolin injection 1gm (SEFOZOL)",
+     "generic": "Cefazolin injection 1gm",
+     "form": "Injectables"
+    },
+    {
+     "id": "k67",
+     "name": "Cefixime 400mg (CEFDIA)",
+     "generic": "Cefixime 400mg (CEFDIA)",
+     "form": "Others"
+    },
+    {
+     "id": "k68",
+     "name": "Cefotaxime 1g injection (VALORAN 1g)",
+     "generic": "Cefotaxime 1g injection",
+     "form": "Injectables"
+    },
+    {
+     "id": "k69",
+     "name": "Ceftriaxone for inj 1g (THEOXONE)",
+     "generic": "Ceftriaxone for inj 1g",
+     "form": "Injectables"
+    },
+    {
+     "id": "k70",
+     "name": "Celestamine tabs",
+     "generic": "Betamethasone/dexchlorpheniramine 0.25/2mg",
+     "form": "Tablets"
+    },
+    {
+     "id": "k71",
+     "name": "Cephalexin syp 125/5ML india",
+     "generic": "Cephalexin",
+     "form": "Capsules"
+    },
+    {
+     "id": "k72",
+     "name": "Cetariv",
+     "generic": "Cetirizine syrup (Cetariv) 60ml",
+     "form": "Syrups"
+    },
+    {
+     "id": "k73",
+     "name": "Charcoplus",
+     "generic": "charcoplus",
+     "form": "Capsules"
+    },
+    {
+     "id": "k74",
+     "name": "Chlordiapoxide 5mg/Clidinium bromide 2.5mg) (Epirax)",
+     "generic": "Chlordiapoxide 5mg/Clidinium bromide 2.5mg)",
+     "form": "Tablets"
+    },
+    {
+     "id": "k75",
+     "name": "Chromic Catgut 1/0",
+     "generic": "Chromic Catgut 1/0",
+     "form": "Others"
+    },
+    {
+     "id": "k76",
+     "name": "Cinod 5mg",
+     "generic": "Clinidipine tabs",
+     "form": "Tablets"
+    },
+    {
+     "id": "k77",
+     "name": "Ciprofena",
+     "generic": "Ciprofloxacin 0.3% Ophthalmic solution 0.3%",
+     "form": "Drops"
+    },
+    {
+     "id": "k78",
+     "name": "Cirab",
+     "generic": "Rabeprazole 20mg inj",
+     "form": "Injectables"
+    },
+    {
+     "id": "k79",
+     "name": "Clarie OD",
+     "generic": "Clarithromycin 500mg",
+     "form": "Tablets"
+    }
+   ],
+   "drugClass"
+  ],
+  "out": [
+   [
+    "ACE inhibitors",
+    [
+     "k61"
+    ]
+   ],
+   [
+    "Analgesics & antipyretics",
+    [
+     "k2",
+     "k59"
+    ]
+   ],
+   [
+    "Anthelmintics",
+    [
+     "k9",
+     "k10",
+     "k44"
+    ]
+   ],
+   [
+    "Antifungals",
+    [
+     "k60"
+    ]
+   ],
+   [
+    "Antihistamines",
+    [
+     "k72"
+    ]
+   ],
+   [
+    "Antimalarials",
+    [
+     "k28"
+    ]
+   ],
+   [
+    "Antivirals",
+    [
+     "k31"
+    ]
+   ],
+   [
+    "Beta blockers",
+    [
+     "k50"
+    ]
+   ],
+   [
+    "Calcium channel blockers",
+    [
+     "k16",
+     "k17",
+     "k58"
+    ]
+   ],
+   [
+    "Cephalosporins",
+    [
+     "k34",
+     "k65",
+     "k66",
+     "k67",
+     "k68",
+     "k69",
+     "k71"
+    ]
+   ],
+   [
+    "Corticosteroids",
+    [
+     "k41",
+     "k46",
+     "k47",
+     "k70"
+    ]
+   ],
+   [
+    "Cough preparations",
+    [
+     "k8",
+     "k54"
+    ]
+   ],
+   [
+    "Diuretics",
+    [
+     "k12"
+    ]
+   ],
+   [
+    "Eye preparations",
+    [
+     "k25"
+    ]
+   ],
+   [
+    "Fluoroquinolones",
+    [
+     "k77"
+    ]
+   ],
+   [
+    "Insulins",
+    [
+     "k5"
+    ]
+   ],
+   [
+    "Iron & folic acid",
+    [
+     "k49"
+    ]
+   ],
+   [
+    "Macrolides",
+    [
+     "k37",
+     "k38",
+     "k39",
+     "k79"
+    ]
+   ],
+   [
+    "Medical supplies",
+    [
+     "k51"
+    ]
+   ],
+   [
+    "Nitroimidazoles",
+    [
+     "k0"
+    ]
+   ],
+   [
+    "NSAIDs",
+    [
+     "k7",
+     "k55"
+    ]
+   ],
+   [
+    "Penicillins",
+    [
+     "k3",
+     "k18",
+     "k19",
+     "k20"
+    ]
+   ],
+   [
+    "Proton pump inhibitors",
+    [
+     "k78"
+    ]
+   ],
+   [
+    "Salicylates",
+    [
+     "k29"
+    ]
+   ],
+   [
+    "Skin preparations",
+    [
+     "k40",
+     "k45"
+    ]
+   ],
+   [
+    "Statins",
+    [
+     "k32"
+    ]
+   ],
+   [
+    "Thyroid medicines",
+    [
+     "k62"
+    ]
+   ],
+   [
+    "Vitamins & minerals",
+    [
+     "k4",
+     "k53"
+    ]
+   ],
+   [
+    "Unclassified",
+    [
+     "k1",
+     "k6",
+     "k11",
+     "k13",
+     "k14",
+     "k15",
+     "k21",
+     "k22",
+     "k23",
+     "k24",
+     "k26",
+     "k27",
+     "k30",
+     "k33",
+     "k35",
+     "k36",
+     "k42",
+     "k43",
+     "k48",
+     "k52",
+     "k56",
+     "k57",
+     "k63",
+     "k64",
+     "k73",
+     "k74",
+     "k75",
+     "k76"
+    ]
+   ]
+  ]
+ },
+ {
+  "fn": "groupMedicines",
+  "args": [
+   [
+    {
+     "id": "k0",
+     "name": "02-LON",
+     "generic": "ORNIDAZOLE",
+     "form": "Tablets"
+    },
+    {
+     "id": "k1",
+     "name": "Accord (8002576)",
+     "generic": "OLANZEPINE 10MG TABLETS",
+     "form": "Tablets"
+    },
+    {
+     "id": "k2",
+     "name": "Acetaminophen Rapid Release Sleep Aid PM 500MG",
+     "generic": "Acetaminophen Rapid Release Sleep Aid PM 500MG",
+     "form": "Capsules"
+    },
+    {
+     "id": "k3",
+     "name": "Acinet dry syp 228/5ml",
+     "generic": "amoxicillin/clavulanIC ACID",
+     "form": "Others"
+    },
+    {
+     "id": "k4",
+     "name": "Actifizz Vitamin C and Zinc",
+     "generic": "Actifizz",
+     "form": "Others"
+    },
+    {
+     "id": "k5",
+     "name": "Actrapid Insulin Inj 100IU 10ML",
+     "generic": "AGO-CPM",
+     "form": "Injectables"
+    },
+    {
+     "id": "k6",
+     "name": "Adidas Spray",
+     "generic": "Adidas Deo Spray",
+     "form": "Cosmetics"
+    },
+    {
+     "id": "k7",
+     "name": "AFLODOR SR",
+     "generic": "Aceclofenac/Thiocolchicoside caps 16mg (AFLODOR) SR",
+     "form": "Capsules"
+    },
+    {
+     "id": "k8",
+     "name": "Agodryl cough syp 100ml",
+     "generic": "Agodry cough syp 100ml",
+     "form": "Syrups"
+    },
+    {
+     "id": "k9",
+     "name": "Agozole Susp",
+     "generic": "Albendazole Suspension",
+     "form": "Others"
+    },
+    {
+     "id": "k10",
+     "name": "Albendazole (ANTHEL)",
+     "generic": "Albendazole",
+     "form": "Tablets"
+    },
+    {
+     "id": "k11",
+     "name": "Alexanda (Aspire)Body Splash",
+     "generic": "Alexanda Body Splash",
+     "form": "Tablets"
+    },
+    {
+     "id": "k12",
+     "name": "ALMUS (8000414)",
+     "generic": "Furosemide tabs 40mg UK",
+     "form": "Tablets"
+    },
+    {
+     "id": "k13",
+     "name": "Always blue and blue pink",
+     "generic": "Sanitary pads",
+     "form": "Others"
+    },
+    {
+     "id": "k14",
+     "name": "Amaryl 3mgs tabs",
+     "generic": "glimepride",
+     "form": "Tablets"
+    },
+    {
+     "id": "k15",
+     "name": "Aminophyline injection",
+     "generic": "Aminophyline BP 250mg",
+     "form": "Injectables"
+    },
+    {
+     "id": "k16",
+     "name": "AmloDenk 5mg Tab",
+     "generic": "Amlodipine tabs 5mg",
+     "form": "Tablets"
+    },
+    {
+     "id": "k17",
+     "name": "AMLOPRESS-5",
+     "generic": "Amlodipine 5mg",
+     "form": "Tablets"
+    },
+    {
+     "id": "k18",
+     "name": "Amoxicillin & Clavulanic acid 375mg tabs (SPOTCLAV 375)",
+     "generic": "Amoxicillin & Clavulanic acid 375mg tabs (SPOTCLAV 375)",
+     "form": "Tablets"
+    },
+    {
+     "id": "k19",
+     "name": "Amoxicillin/Clavulanate 375mg tabs (Augmentin 375)",
+     "generic": "Amoxicillin/Clavulanate 375mg tabs (Augmentin 375)",
+     "form": "Tablets"
+    },
+    {
+     "id": "k20",
+     "name": "Amoxikid 125mg tab",
+     "generic": "Amoxicillin tabs 125mg",
+     "form": "Tablets"
+    },
+    {
+     "id": "k21",
+     "name": "Ampiclo-Dawa syrup 100ml",
+     "generic": "Ampiclox syrup 250mg/ml syrup",
+     "form": "Syrups"
+    },
+    {
+     "id": "k22",
+     "name": "Anginovag m/spray 10ml",
+     "generic": "Anginovag m/spray 10ml",
+     "form": "Syrups"
+    },
+    {
+     "id": "k23",
+     "name": "Antifungal soap 75g",
+     "generic": "Antifungal soap 75g",
+     "form": "Capsules"
+    },
+    {
+     "id": "k24",
+     "name": "APDYL-H Syrup 100ml",
+     "generic": "APDYL-H Syrup 100ml",
+     "form": "Syrups"
+    },
+    {
+     "id": "k25",
+     "name": "Apitropin EYE DROPS",
+     "generic": "Apitropin EYE DROPS",
+     "form": "Drops"
+    },
+    {
+     "id": "k26",
+     "name": "Aptizooom Syrup 200ml",
+     "generic": "Aptizooom Syrup 200ml",
+     "form": "Syrups"
+    },
+    {
+     "id": "k27",
+     "name": "Aristozyme Gold tabs 30s",
+     "generic": "multi-enzyme tabs 30s",
+     "form": "Tablets"
+    },
+    {
+     "id": "k28",
+     "name": "Artemether/ lumefantrine 20/120mg 24's (LONART)",
+     "generic": "Artemether/ lumefantrine 20/120mg 24's (LONART)",
+     "form": "Others"
+    },
+    {
+     "id": "k29",
+     "name": "ASA 75 BRISTOL",
+     "generic": "Aspirin Dispersible tablets 75mg (ASA 75 BRISTOL)",
+     "form": "Tablets"
+    },
+    {
+     "id": "k30",
+     "name": "ASPEC Tabs 10x10",
+     "generic": "ASPEC Tabs 10x10",
+     "form": "Tablets"
+    },
+    {
+     "id": "k31",
+     "name": "Asvir",
+     "generic": "Aciclovir tabs BP 200mg",
+     "form": "Tablets"
+    },
+    {
+     "id": "k32",
+     "name": "Atorva 20",
+     "generic": "Atorvastatin tabs 20mg (Atorva 20)",
+     "form": "Tablets"
+    },
+    {
+     "id": "k33",
+     "name": "Atoxia 60mg tabs 10s",
+     "generic": "Etoricixib 60mg",
+     "form": "Tablets"
+    },
+    {
+     "id": "k34",
+     "name": "Auroxetil 500mg tablet",
+     "generic": "Cefuroxime 500mg tablet",
+     "form": "Tablets"
+    },
+    {
+     "id": "k35",
+     "name": "Axcel Betamethaxone cream 15g",
+     "generic": "Axcel Betamethaxone cream 15g",
+     "form": "Creams"
+    },
+    {
+     "id": "k36",
+     "name": "Axe Shower Gel",
+     "generic": "Axe Shower Gel 400ml",
+     "form": "Cosmetics"
+    },
+    {
+     "id": "k37",
+     "name": "Azigen",
+     "generic": "Azithromycin syr 15ml",
+     "form": "Syrups"
+    },
+    {
+     "id": "k38",
+     "name": "Azithromycin 500mg tabs (ZAHA 500)",
+     "generic": "Azithromycin 500mg tabs (ZAHA 500)",
+     "form": "Tablets"
+    },
+    {
+     "id": "k39",
+     "name": "Azito suspension 30ml",
+     "generic": "Azithromycin suspension 200mg/5ml",
+     "form": "Others"
+    },
+    {
+     "id": "k40",
+     "name": "Baby Cream 30g",
+     "generic": "Zinc oxide/Olive oil 20mg/5mg",
+     "form": "Others"
+    },
+    {
+     "id": "k41",
+     "name": "Bactafuz-B Cream 15g",
+     "generic": "Fusidic Acid and Betamethasone cream",
+     "form": "Creams"
+    },
+    {
+     "id": "k42",
+     "name": "Ballet mosquito repellent jelly 100gs",
+     "generic": "mosquito repellent",
+     "form": "Specials"
+    },
+    {
+     "id": "k43",
+     "name": "Beauty Care Face Out Soap.",
+     "generic": "SOAP",
+     "form": "Cosmetics"
+    },
+    {
+     "id": "k44",
+     "name": "Bendex syps 10mls",
+     "generic": "albendazole suspension",
+     "form": "Syrups"
+    },
+    {
+     "id": "k45",
+     "name": "Benzoyl Peroxide Cleansing Bar 5% w/w (Perobar 5%)",
+     "generic": "Benzoyl Peroxide Cleansing Bar 5% w/w",
+     "form": "Others"
+    },
+    {
+     "id": "k46",
+     "name": "Betadrop Eye drop",
+     "generic": "Betamethasone",
+     "form": "Drops"
+    },
+    {
+     "id": "k47",
+     "name": "Betasol cream",
+     "generic": "betamethasone",
+     "form": "Others"
+    },
+    {
+     "id": "k48",
+     "name": "BIN LINERS",
+     "generic": "LINERS",
+     "form": "Others"
+    },
+    {
+     "id": "k49",
+     "name": "BIOFERON 200ml",
+     "generic": "Bioferon syrups 200mls:IronVit B12 and Folic Acid",
+     "form": "Others"
+    },
+    {
+     "id": "k50",
+     "name": "Bisoprolol 2.5mg Tabs (Hillcross)",
+     "generic": "Bisoprolol 2.5mg Tabs (Hillcross)",
+     "form": "Tablets"
+    },
+    {
+     "id": "k51",
+     "name": "Blood giving set",
+     "generic": "Blood giving set",
+     "form": "Others"
+    },
+    {
+     "id": "k52",
+     "name": "Bone-Aid tab 1X30 PKT",
+     "generic": "Boneaid",
+     "form": "Tablets"
+    },
+    {
+     "id": "k53",
+     "name": "Brain Active Denk",
+     "generic": "ginger extractcaffeine vitamin b5Omega-3-fatt",
+     "form": "Capsules"
+    },
+    {
+     "id": "k54",
+     "name": "Bronchopro liquid",
+     "generic": "Ambroxol syrup (Bronchopro) liquid",
+     "form": "Syrups"
+    },
+    {
+     "id": "k55",
+     "name": "Brutaflam 120mg Tabs",
+     "generic": "Etoricoxib Tabs",
+     "form": "Tablets"
+    },
+    {
+     "id": "k56",
+     "name": "BURNEM Cream",
+     "generic": "For BurnsWoundsPus Formation Bruised Skin and cu",
+     "form": "Others"
+    },
+    {
+     "id": "k57",
+     "name": "Cadiphen Syrup 60ml",
+     "generic": "Piriton/guaif/NH4/Na+ citrate 2/80/100/44mg",
+     "form": "Syrups"
+    },
+    {
+     "id": "k58",
+     "name": "CALCIGARD RETARD",
+     "generic": "NIFEDIPINE 20 MG",
+     "form": "Tablets"
+    },
+    {
+     "id": "k59",
+     "name": "Calpol 60ml",
+     "generic": "Paracetamol syr 60ml",
+     "form": "Syrups"
+    },
+    {
+     "id": "k60",
+     "name": "Candiderm Cream 15mg",
+     "generic": "Clotrimazole/beclometasone/gentamycin 1/0.025/0.1%",
+     "form": "Creams"
+    },
+    {
+     "id": "k61",
+     "name": "Captopril 25mg Uk",
+     "generic": "Captopril 25mg Uk",
+     "form": "Tablets"
+    },
+    {
+     "id": "k62",
+     "name": "Carbimazole 5mg (Man UK)",
+     "generic": "Carbimazole 5mg",
+     "form": "Tablets"
+    },
+    {
+     "id": "k63",
+     "name": "CAROFIT Tablets",
+     "generic": "CAROFIT Tablets",
+     "form": "Tablets"
+    },
+    {
+     "id": "k64",
+     "name": "Castor Oil 100ml Faholo",
+     "generic": "Castor Oil 100ml Faholo",
+     "form": "Others"
+    },
+    {
+     "id": "k65",
+     "name": "Cebay syp 60ml",
+     "generic": "Cefixime",
+     "form": "Others"
+    },
+    {
+     "id": "k66",
+     "name": "Cefazolin injection 1gm (SEFOZOL)",
+     "generic": "Cefazolin injection 1gm",
+     "form": "Injectables"
+    },
+    {
+     "id": "k67",
+     "name": "Cefixime 400mg (CEFDIA)",
+     "generic": "Cefixime 400mg (CEFDIA)",
+     "form": "Others"
+    },
+    {
+     "id": "k68",
+     "name": "Cefotaxime 1g injection (VALORAN 1g)",
+     "generic": "Cefotaxime 1g injection",
+     "form": "Injectables"
+    },
+    {
+     "id": "k69",
+     "name": "Ceftriaxone for inj 1g (THEOXONE)",
+     "generic": "Ceftriaxone for inj 1g",
+     "form": "Injectables"
+    },
+    {
+     "id": "k70",
+     "name": "Celestamine tabs",
+     "generic": "Betamethasone/dexchlorpheniramine 0.25/2mg",
+     "form": "Tablets"
+    },
+    {
+     "id": "k71",
+     "name": "Cephalexin syp 125/5ML india",
+     "generic": "Cephalexin",
+     "form": "Capsules"
+    },
+    {
+     "id": "k72",
+     "name": "Cetariv",
+     "generic": "Cetirizine syrup (Cetariv) 60ml",
+     "form": "Syrups"
+    },
+    {
+     "id": "k73",
+     "name": "Charcoplus",
+     "generic": "charcoplus",
+     "form": "Capsules"
+    },
+    {
+     "id": "k74",
+     "name": "Chlordiapoxide 5mg/Clidinium bromide 2.5mg) (Epirax)",
+     "generic": "Chlordiapoxide 5mg/Clidinium bromide 2.5mg)",
+     "form": "Tablets"
+    },
+    {
+     "id": "k75",
+     "name": "Chromic Catgut 1/0",
+     "generic": "Chromic Catgut 1/0",
+     "form": "Others"
+    },
+    {
+     "id": "k76",
+     "name": "Cinod 5mg",
+     "generic": "Clinidipine tabs",
+     "form": "Tablets"
+    },
+    {
+     "id": "k77",
+     "name": "Ciprofena",
+     "generic": "Ciprofloxacin 0.3% Ophthalmic solution 0.3%",
+     "form": "Drops"
+    },
+    {
+     "id": "k78",
+     "name": "Cirab",
+     "generic": "Rabeprazole 20mg inj",
+     "form": "Injectables"
+    },
+    {
+     "id": "k79",
+     "name": "Clarie OD",
+     "generic": "Clarithromycin 500mg",
+     "form": "Tablets"
+    }
+   ],
+   "area"
+  ],
+  "out": [
+   [
+    "Anti-infectives",
+    [
+     "k0",
+     "k3",
+     "k18",
+     "k19",
+     "k20",
+     "k34",
+     "k37",
+     "k38",
+     "k39",
+     "k65",
+     "k66",
+     "k67",
+     "k68",
+     "k69",
+     "k71",
+     "k77",
+     "k79"
+    ]
+   ],
+   [
+    "Antimalarials",
+    [
+     "k28"
+    ]
+   ],
+   [
+    "Antivirals & HIV",
+    [
+     "k31"
+    ]
+   ],
+   [
+    "Antifungals",
+    [
+     "k60"
+    ]
+   ],
+   [
+    "Antiparasitics & deworming",
+    [
+     "k9",
+     "k10",
+     "k44"
+    ]
+   ],
+   [
+    "Pain, fever & inflammation",
+    [
+     "k2",
+     "k7",
+     "k29",
+     "k55",
+     "k59"
+    ]
+   ],
+   [
+    "Cardiovascular",
+    [
+     "k12",
+     "k16",
+     "k17",
+     "k32",
+     "k50",
+     "k58",
+     "k61"
+    ]
+   ],
+   [
+    "Diabetes & hormones",
+    [
+     "k5",
+     "k41",
+     "k46",
+     "k47",
+     "k62",
+     "k70"
+    ]
+   ],
+   [
+    "Respiratory & allergy",
+    [
+     "k8",
+     "k54",
+     "k72"
+    ]
+   ],
+   [
+    "Gastrointestinal",
+    [
+     "k78"
+    ]
+   ],
+   [
+    "Vitamins, minerals & nutrition",
+    [
+     "k4",
+     "k49",
+     "k53"
+    ]
+   ],
+   [
+    "Skin",
+    [
+     "k40",
+     "k45"
+    ]
+   ],
+   [
+    "Eye, ear & nose",
+    [
+     "k25"
+    ]
+   ],
+   [
+    "Medical supplies",
+    [
+     "k51"
+    ]
+   ],
+   [
+    "Other",
+    [
+     "k1",
+     "k6",
+     "k11",
+     "k13",
+     "k14",
+     "k15",
+     "k21",
+     "k22",
+     "k23",
+     "k24",
+     "k26",
+     "k27",
+     "k30",
+     "k33",
+     "k35",
+     "k36",
+     "k42",
+     "k43",
+     "k48",
+     "k52",
+     "k56",
+     "k57",
+     "k63",
+     "k64",
+     "k73",
+     "k74",
+     "k75",
+     "k76"
+    ]
+   ]
+  ]
+ },
+ {
+  "fn": "groupMedicines",
+  "args": [
+   [
+    {
+     "id": "k0",
+     "name": "02-LON",
+     "generic": "ORNIDAZOLE",
+     "form": "Tablets"
+    },
+    {
+     "id": "k1",
+     "name": "Accord (8002576)",
+     "generic": "OLANZEPINE 10MG TABLETS",
+     "form": "Tablets"
+    },
+    {
+     "id": "k2",
+     "name": "Acetaminophen Rapid Release Sleep Aid PM 500MG",
+     "generic": "Acetaminophen Rapid Release Sleep Aid PM 500MG",
+     "form": "Capsules"
+    },
+    {
+     "id": "k3",
+     "name": "Acinet dry syp 228/5ml",
+     "generic": "amoxicillin/clavulanIC ACID",
+     "form": "Others"
+    },
+    {
+     "id": "k4",
+     "name": "Actifizz Vitamin C and Zinc",
+     "generic": "Actifizz",
+     "form": "Others"
+    },
+    {
+     "id": "k5",
+     "name": "Actrapid Insulin Inj 100IU 10ML",
+     "generic": "AGO-CPM",
+     "form": "Injectables"
+    },
+    {
+     "id": "k6",
+     "name": "Adidas Spray",
+     "generic": "Adidas Deo Spray",
+     "form": "Cosmetics"
+    },
+    {
+     "id": "k7",
+     "name": "AFLODOR SR",
+     "generic": "Aceclofenac/Thiocolchicoside caps 16mg (AFLODOR) SR",
+     "form": "Capsules"
+    },
+    {
+     "id": "k8",
+     "name": "Agodryl cough syp 100ml",
+     "generic": "Agodry cough syp 100ml",
+     "form": "Syrups"
+    },
+    {
+     "id": "k9",
+     "name": "Agozole Susp",
+     "generic": "Albendazole Suspension",
+     "form": "Others"
+    },
+    {
+     "id": "k10",
+     "name": "Albendazole (ANTHEL)",
+     "generic": "Albendazole",
+     "form": "Tablets"
+    },
+    {
+     "id": "k11",
+     "name": "Alexanda (Aspire)Body Splash",
+     "generic": "Alexanda Body Splash",
+     "form": "Tablets"
+    },
+    {
+     "id": "k12",
+     "name": "ALMUS (8000414)",
+     "generic": "Furosemide tabs 40mg UK",
+     "form": "Tablets"
+    },
+    {
+     "id": "k13",
+     "name": "Always blue and blue pink",
+     "generic": "Sanitary pads",
+     "form": "Others"
+    },
+    {
+     "id": "k14",
+     "name": "Amaryl 3mgs tabs",
+     "generic": "glimepride",
+     "form": "Tablets"
+    },
+    {
+     "id": "k15",
+     "name": "Aminophyline injection",
+     "generic": "Aminophyline BP 250mg",
+     "form": "Injectables"
+    },
+    {
+     "id": "k16",
+     "name": "AmloDenk 5mg Tab",
+     "generic": "Amlodipine tabs 5mg",
+     "form": "Tablets"
+    },
+    {
+     "id": "k17",
+     "name": "AMLOPRESS-5",
+     "generic": "Amlodipine 5mg",
+     "form": "Tablets"
+    },
+    {
+     "id": "k18",
+     "name": "Amoxicillin & Clavulanic acid 375mg tabs (SPOTCLAV 375)",
+     "generic": "Amoxicillin & Clavulanic acid 375mg tabs (SPOTCLAV 375)",
+     "form": "Tablets"
+    },
+    {
+     "id": "k19",
+     "name": "Amoxicillin/Clavulanate 375mg tabs (Augmentin 375)",
+     "generic": "Amoxicillin/Clavulanate 375mg tabs (Augmentin 375)",
+     "form": "Tablets"
+    },
+    {
+     "id": "k20",
+     "name": "Amoxikid 125mg tab",
+     "generic": "Amoxicillin tabs 125mg",
+     "form": "Tablets"
+    },
+    {
+     "id": "k21",
+     "name": "Ampiclo-Dawa syrup 100ml",
+     "generic": "Ampiclox syrup 250mg/ml syrup",
+     "form": "Syrups"
+    },
+    {
+     "id": "k22",
+     "name": "Anginovag m/spray 10ml",
+     "generic": "Anginovag m/spray 10ml",
+     "form": "Syrups"
+    },
+    {
+     "id": "k23",
+     "name": "Antifungal soap 75g",
+     "generic": "Antifungal soap 75g",
+     "form": "Capsules"
+    },
+    {
+     "id": "k24",
+     "name": "APDYL-H Syrup 100ml",
+     "generic": "APDYL-H Syrup 100ml",
+     "form": "Syrups"
+    },
+    {
+     "id": "k25",
+     "name": "Apitropin EYE DROPS",
+     "generic": "Apitropin EYE DROPS",
+     "form": "Drops"
+    },
+    {
+     "id": "k26",
+     "name": "Aptizooom Syrup 200ml",
+     "generic": "Aptizooom Syrup 200ml",
+     "form": "Syrups"
+    },
+    {
+     "id": "k27",
+     "name": "Aristozyme Gold tabs 30s",
+     "generic": "multi-enzyme tabs 30s",
+     "form": "Tablets"
+    },
+    {
+     "id": "k28",
+     "name": "Artemether/ lumefantrine 20/120mg 24's (LONART)",
+     "generic": "Artemether/ lumefantrine 20/120mg 24's (LONART)",
+     "form": "Others"
+    },
+    {
+     "id": "k29",
+     "name": "ASA 75 BRISTOL",
+     "generic": "Aspirin Dispersible tablets 75mg (ASA 75 BRISTOL)",
+     "form": "Tablets"
+    },
+    {
+     "id": "k30",
+     "name": "ASPEC Tabs 10x10",
+     "generic": "ASPEC Tabs 10x10",
+     "form": "Tablets"
+    },
+    {
+     "id": "k31",
+     "name": "Asvir",
+     "generic": "Aciclovir tabs BP 200mg",
+     "form": "Tablets"
+    },
+    {
+     "id": "k32",
+     "name": "Atorva 20",
+     "generic": "Atorvastatin tabs 20mg (Atorva 20)",
+     "form": "Tablets"
+    },
+    {
+     "id": "k33",
+     "name": "Atoxia 60mg tabs 10s",
+     "generic": "Etoricixib 60mg",
+     "form": "Tablets"
+    },
+    {
+     "id": "k34",
+     "name": "Auroxetil 500mg tablet",
+     "generic": "Cefuroxime 500mg tablet",
+     "form": "Tablets"
+    },
+    {
+     "id": "k35",
+     "name": "Axcel Betamethaxone cream 15g",
+     "generic": "Axcel Betamethaxone cream 15g",
+     "form": "Creams"
+    },
+    {
+     "id": "k36",
+     "name": "Axe Shower Gel",
+     "generic": "Axe Shower Gel 400ml",
+     "form": "Cosmetics"
+    },
+    {
+     "id": "k37",
+     "name": "Azigen",
+     "generic": "Azithromycin syr 15ml",
+     "form": "Syrups"
+    },
+    {
+     "id": "k38",
+     "name": "Azithromycin 500mg tabs (ZAHA 500)",
+     "generic": "Azithromycin 500mg tabs (ZAHA 500)",
+     "form": "Tablets"
+    },
+    {
+     "id": "k39",
+     "name": "Azito suspension 30ml",
+     "generic": "Azithromycin suspension 200mg/5ml",
+     "form": "Others"
+    },
+    {
+     "id": "k40",
+     "name": "Baby Cream 30g",
+     "generic": "Zinc oxide/Olive oil 20mg/5mg",
+     "form": "Others"
+    },
+    {
+     "id": "k41",
+     "name": "Bactafuz-B Cream 15g",
+     "generic": "Fusidic Acid and Betamethasone cream",
+     "form": "Creams"
+    },
+    {
+     "id": "k42",
+     "name": "Ballet mosquito repellent jelly 100gs",
+     "generic": "mosquito repellent",
+     "form": "Specials"
+    },
+    {
+     "id": "k43",
+     "name": "Beauty Care Face Out Soap.",
+     "generic": "SOAP",
+     "form": "Cosmetics"
+    },
+    {
+     "id": "k44",
+     "name": "Bendex syps 10mls",
+     "generic": "albendazole suspension",
+     "form": "Syrups"
+    },
+    {
+     "id": "k45",
+     "name": "Benzoyl Peroxide Cleansing Bar 5% w/w (Perobar 5%)",
+     "generic": "Benzoyl Peroxide Cleansing Bar 5% w/w",
+     "form": "Others"
+    },
+    {
+     "id": "k46",
+     "name": "Betadrop Eye drop",
+     "generic": "Betamethasone",
+     "form": "Drops"
+    },
+    {
+     "id": "k47",
+     "name": "Betasol cream",
+     "generic": "betamethasone",
+     "form": "Others"
+    },
+    {
+     "id": "k48",
+     "name": "BIN LINERS",
+     "generic": "LINERS",
+     "form": "Others"
+    },
+    {
+     "id": "k49",
+     "name": "BIOFERON 200ml",
+     "generic": "Bioferon syrups 200mls:IronVit B12 and Folic Acid",
+     "form": "Others"
+    },
+    {
+     "id": "k50",
+     "name": "Bisoprolol 2.5mg Tabs (Hillcross)",
+     "generic": "Bisoprolol 2.5mg Tabs (Hillcross)",
+     "form": "Tablets"
+    },
+    {
+     "id": "k51",
+     "name": "Blood giving set",
+     "generic": "Blood giving set",
+     "form": "Others"
+    },
+    {
+     "id": "k52",
+     "name": "Bone-Aid tab 1X30 PKT",
+     "generic": "Boneaid",
+     "form": "Tablets"
+    },
+    {
+     "id": "k53",
+     "name": "Brain Active Denk",
+     "generic": "ginger extractcaffeine vitamin b5Omega-3-fatt",
+     "form": "Capsules"
+    },
+    {
+     "id": "k54",
+     "name": "Bronchopro liquid",
+     "generic": "Ambroxol syrup (Bronchopro) liquid",
+     "form": "Syrups"
+    },
+    {
+     "id": "k55",
+     "name": "Brutaflam 120mg Tabs",
+     "generic": "Etoricoxib Tabs",
+     "form": "Tablets"
+    },
+    {
+     "id": "k56",
+     "name": "BURNEM Cream",
+     "generic": "For BurnsWoundsPus Formation Bruised Skin and cu",
+     "form": "Others"
+    },
+    {
+     "id": "k57",
+     "name": "Cadiphen Syrup 60ml",
+     "generic": "Piriton/guaif/NH4/Na+ citrate 2/80/100/44mg",
+     "form": "Syrups"
+    },
+    {
+     "id": "k58",
+     "name": "CALCIGARD RETARD",
+     "generic": "NIFEDIPINE 20 MG",
+     "form": "Tablets"
+    },
+    {
+     "id": "k59",
+     "name": "Calpol 60ml",
+     "generic": "Paracetamol syr 60ml",
+     "form": "Syrups"
+    },
+    {
+     "id": "k60",
+     "name": "Candiderm Cream 15mg",
+     "generic": "Clotrimazole/beclometasone/gentamycin 1/0.025/0.1%",
+     "form": "Creams"
+    },
+    {
+     "id": "k61",
+     "name": "Captopril 25mg Uk",
+     "generic": "Captopril 25mg Uk",
+     "form": "Tablets"
+    },
+    {
+     "id": "k62",
+     "name": "Carbimazole 5mg (Man UK)",
+     "generic": "Carbimazole 5mg",
+     "form": "Tablets"
+    },
+    {
+     "id": "k63",
+     "name": "CAROFIT Tablets",
+     "generic": "CAROFIT Tablets",
+     "form": "Tablets"
+    },
+    {
+     "id": "k64",
+     "name": "Castor Oil 100ml Faholo",
+     "generic": "Castor Oil 100ml Faholo",
+     "form": "Others"
+    },
+    {
+     "id": "k65",
+     "name": "Cebay syp 60ml",
+     "generic": "Cefixime",
+     "form": "Others"
+    },
+    {
+     "id": "k66",
+     "name": "Cefazolin injection 1gm (SEFOZOL)",
+     "generic": "Cefazolin injection 1gm",
+     "form": "Injectables"
+    },
+    {
+     "id": "k67",
+     "name": "Cefixime 400mg (CEFDIA)",
+     "generic": "Cefixime 400mg (CEFDIA)",
+     "form": "Others"
+    },
+    {
+     "id": "k68",
+     "name": "Cefotaxime 1g injection (VALORAN 1g)",
+     "generic": "Cefotaxime 1g injection",
+     "form": "Injectables"
+    },
+    {
+     "id": "k69",
+     "name": "Ceftriaxone for inj 1g (THEOXONE)",
+     "generic": "Ceftriaxone for inj 1g",
+     "form": "Injectables"
+    },
+    {
+     "id": "k70",
+     "name": "Celestamine tabs",
+     "generic": "Betamethasone/dexchlorpheniramine 0.25/2mg",
+     "form": "Tablets"
+    },
+    {
+     "id": "k71",
+     "name": "Cephalexin syp 125/5ML india",
+     "generic": "Cephalexin",
+     "form": "Capsules"
+    },
+    {
+     "id": "k72",
+     "name": "Cetariv",
+     "generic": "Cetirizine syrup (Cetariv) 60ml",
+     "form": "Syrups"
+    },
+    {
+     "id": "k73",
+     "name": "Charcoplus",
+     "generic": "charcoplus",
+     "form": "Capsules"
+    },
+    {
+     "id": "k74",
+     "name": "Chlordiapoxide 5mg/Clidinium bromide 2.5mg) (Epirax)",
+     "generic": "Chlordiapoxide 5mg/Clidinium bromide 2.5mg)",
+     "form": "Tablets"
+    },
+    {
+     "id": "k75",
+     "name": "Chromic Catgut 1/0",
+     "generic": "Chromic Catgut 1/0",
+     "form": "Others"
+    },
+    {
+     "id": "k76",
+     "name": "Cinod 5mg",
+     "generic": "Clinidipine tabs",
+     "form": "Tablets"
+    },
+    {
+     "id": "k77",
+     "name": "Ciprofena",
+     "generic": "Ciprofloxacin 0.3% Ophthalmic solution 0.3%",
+     "form": "Drops"
+    },
+    {
+     "id": "k78",
+     "name": "Cirab",
+     "generic": "Rabeprazole 20mg inj",
+     "form": "Injectables"
+    },
+    {
+     "id": "k79",
+     "name": "Clarie OD",
+     "generic": "Clarithromycin 500mg",
+     "form": "Tablets"
+    }
+   ],
+   "form"
+  ],
+  "out": [
+   [
+    "Capsules",
+    [
+     "k2",
+     "k7",
+     "k23",
+     "k53",
+     "k71",
+     "k73"
+    ]
+   ],
+   [
+    "Cosmetics",
+    [
+     "k6",
+     "k36",
+     "k43"
+    ]
+   ],
+   [
+    "Creams",
+    [
+     "k35",
+     "k41",
+     "k60"
+    ]
+   ],
+   [
+    "Drops",
+    [
+     "k25",
+     "k46",
+     "k77"
+    ]
+   ],
+   [
+    "Injectables",
+    [
+     "k5",
+     "k15",
+     "k66",
+     "k68",
+     "k69",
+     "k78"
+    ]
+   ],
+   [
+    "Others",
+    [
+     "k3",
+     "k4",
+     "k9",
+     "k13",
+     "k28",
+     "k39",
+     "k40",
+     "k45",
+     "k47",
+     "k48",
+     "k49",
+     "k51",
+     "k56",
+     "k64",
+     "k65",
+     "k67",
+     "k75"
+    ]
+   ],
+   [
+    "Specials",
+    [
+     "k42"
+    ]
+   ],
+   [
+    "Syrups",
+    [
+     "k8",
+     "k21",
+     "k22",
+     "k24",
+     "k26",
+     "k37",
+     "k44",
+     "k54",
+     "k57",
+     "k59",
+     "k72"
+    ]
+   ],
+   [
+    "Tablets",
+    [
+     "k0",
+     "k1",
+     "k10",
+     "k11",
+     "k12",
+     "k14",
+     "k16",
+     "k17",
+     "k18",
+     "k19",
+     "k20",
+     "k27",
+     "k29",
+     "k30",
+     "k31",
+     "k32",
+     "k33",
+     "k34",
+     "k38",
+     "k50",
+     "k52",
+     "k55",
+     "k58",
+     "k61",
+     "k62",
+     "k63",
+     "k70",
+     "k74",
+     "k76",
+     "k79"
+    ]
+   ]
+  ]
+ },
+ {
+  "fn": "groupMedicines",
+  "args": [
+   [
+    {
+     "id": "k0",
+     "name": "02-LON",
+     "generic": "ORNIDAZOLE",
+     "form": "Tablets"
+    },
+    {
+     "id": "k1",
+     "name": "Accord (8002576)",
+     "generic": "OLANZEPINE 10MG TABLETS",
+     "form": "Tablets"
+    },
+    {
+     "id": "k2",
+     "name": "Acetaminophen Rapid Release Sleep Aid PM 500MG",
+     "generic": "Acetaminophen Rapid Release Sleep Aid PM 500MG",
+     "form": "Capsules"
+    },
+    {
+     "id": "k3",
+     "name": "Acinet dry syp 228/5ml",
+     "generic": "amoxicillin/clavulanIC ACID",
+     "form": "Others"
+    },
+    {
+     "id": "k4",
+     "name": "Actifizz Vitamin C and Zinc",
+     "generic": "Actifizz",
+     "form": "Others"
+    },
+    {
+     "id": "k5",
+     "name": "Actrapid Insulin Inj 100IU 10ML",
+     "generic": "AGO-CPM",
+     "form": "Injectables"
+    },
+    {
+     "id": "k6",
+     "name": "Adidas Spray",
+     "generic": "Adidas Deo Spray",
+     "form": "Cosmetics"
+    },
+    {
+     "id": "k7",
+     "name": "AFLODOR SR",
+     "generic": "Aceclofenac/Thiocolchicoside caps 16mg (AFLODOR) SR",
+     "form": "Capsules"
+    },
+    {
+     "id": "k8",
+     "name": "Agodryl cough syp 100ml",
+     "generic": "Agodry cough syp 100ml",
+     "form": "Syrups"
+    },
+    {
+     "id": "k9",
+     "name": "Agozole Susp",
+     "generic": "Albendazole Suspension",
+     "form": "Others"
+    },
+    {
+     "id": "k10",
+     "name": "Albendazole (ANTHEL)",
+     "generic": "Albendazole",
+     "form": "Tablets"
+    },
+    {
+     "id": "k11",
+     "name": "Alexanda (Aspire)Body Splash",
+     "generic": "Alexanda Body Splash",
+     "form": "Tablets"
+    },
+    {
+     "id": "k12",
+     "name": "ALMUS (8000414)",
+     "generic": "Furosemide tabs 40mg UK",
+     "form": "Tablets"
+    },
+    {
+     "id": "k13",
+     "name": "Always blue and blue pink",
+     "generic": "Sanitary pads",
+     "form": "Others"
+    },
+    {
+     "id": "k14",
+     "name": "Amaryl 3mgs tabs",
+     "generic": "glimepride",
+     "form": "Tablets"
+    },
+    {
+     "id": "k15",
+     "name": "Aminophyline injection",
+     "generic": "Aminophyline BP 250mg",
+     "form": "Injectables"
+    },
+    {
+     "id": "k16",
+     "name": "AmloDenk 5mg Tab",
+     "generic": "Amlodipine tabs 5mg",
+     "form": "Tablets"
+    },
+    {
+     "id": "k17",
+     "name": "AMLOPRESS-5",
+     "generic": "Amlodipine 5mg",
+     "form": "Tablets"
+    },
+    {
+     "id": "k18",
+     "name": "Amoxicillin & Clavulanic acid 375mg tabs (SPOTCLAV 375)",
+     "generic": "Amoxicillin & Clavulanic acid 375mg tabs (SPOTCLAV 375)",
+     "form": "Tablets"
+    },
+    {
+     "id": "k19",
+     "name": "Amoxicillin/Clavulanate 375mg tabs (Augmentin 375)",
+     "generic": "Amoxicillin/Clavulanate 375mg tabs (Augmentin 375)",
+     "form": "Tablets"
+    },
+    {
+     "id": "k20",
+     "name": "Amoxikid 125mg tab",
+     "generic": "Amoxicillin tabs 125mg",
+     "form": "Tablets"
+    },
+    {
+     "id": "k21",
+     "name": "Ampiclo-Dawa syrup 100ml",
+     "generic": "Ampiclox syrup 250mg/ml syrup",
+     "form": "Syrups"
+    },
+    {
+     "id": "k22",
+     "name": "Anginovag m/spray 10ml",
+     "generic": "Anginovag m/spray 10ml",
+     "form": "Syrups"
+    },
+    {
+     "id": "k23",
+     "name": "Antifungal soap 75g",
+     "generic": "Antifungal soap 75g",
+     "form": "Capsules"
+    },
+    {
+     "id": "k24",
+     "name": "APDYL-H Syrup 100ml",
+     "generic": "APDYL-H Syrup 100ml",
+     "form": "Syrups"
+    },
+    {
+     "id": "k25",
+     "name": "Apitropin EYE DROPS",
+     "generic": "Apitropin EYE DROPS",
+     "form": "Drops"
+    },
+    {
+     "id": "k26",
+     "name": "Aptizooom Syrup 200ml",
+     "generic": "Aptizooom Syrup 200ml",
+     "form": "Syrups"
+    },
+    {
+     "id": "k27",
+     "name": "Aristozyme Gold tabs 30s",
+     "generic": "multi-enzyme tabs 30s",
+     "form": "Tablets"
+    },
+    {
+     "id": "k28",
+     "name": "Artemether/ lumefantrine 20/120mg 24's (LONART)",
+     "generic": "Artemether/ lumefantrine 20/120mg 24's (LONART)",
+     "form": "Others"
+    },
+    {
+     "id": "k29",
+     "name": "ASA 75 BRISTOL",
+     "generic": "Aspirin Dispersible tablets 75mg (ASA 75 BRISTOL)",
+     "form": "Tablets"
+    },
+    {
+     "id": "k30",
+     "name": "ASPEC Tabs 10x10",
+     "generic": "ASPEC Tabs 10x10",
+     "form": "Tablets"
+    },
+    {
+     "id": "k31",
+     "name": "Asvir",
+     "generic": "Aciclovir tabs BP 200mg",
+     "form": "Tablets"
+    },
+    {
+     "id": "k32",
+     "name": "Atorva 20",
+     "generic": "Atorvastatin tabs 20mg (Atorva 20)",
+     "form": "Tablets"
+    },
+    {
+     "id": "k33",
+     "name": "Atoxia 60mg tabs 10s",
+     "generic": "Etoricixib 60mg",
+     "form": "Tablets"
+    },
+    {
+     "id": "k34",
+     "name": "Auroxetil 500mg tablet",
+     "generic": "Cefuroxime 500mg tablet",
+     "form": "Tablets"
+    },
+    {
+     "id": "k35",
+     "name": "Axcel Betamethaxone cream 15g",
+     "generic": "Axcel Betamethaxone cream 15g",
+     "form": "Creams"
+    },
+    {
+     "id": "k36",
+     "name": "Axe Shower Gel",
+     "generic": "Axe Shower Gel 400ml",
+     "form": "Cosmetics"
+    },
+    {
+     "id": "k37",
+     "name": "Azigen",
+     "generic": "Azithromycin syr 15ml",
+     "form": "Syrups"
+    },
+    {
+     "id": "k38",
+     "name": "Azithromycin 500mg tabs (ZAHA 500)",
+     "generic": "Azithromycin 500mg tabs (ZAHA 500)",
+     "form": "Tablets"
+    },
+    {
+     "id": "k39",
+     "name": "Azito suspension 30ml",
+     "generic": "Azithromycin suspension 200mg/5ml",
+     "form": "Others"
+    },
+    {
+     "id": "k40",
+     "name": "Baby Cream 30g",
+     "generic": "Zinc oxide/Olive oil 20mg/5mg",
+     "form": "Others"
+    },
+    {
+     "id": "k41",
+     "name": "Bactafuz-B Cream 15g",
+     "generic": "Fusidic Acid and Betamethasone cream",
+     "form": "Creams"
+    },
+    {
+     "id": "k42",
+     "name": "Ballet mosquito repellent jelly 100gs",
+     "generic": "mosquito repellent",
+     "form": "Specials"
+    },
+    {
+     "id": "k43",
+     "name": "Beauty Care Face Out Soap.",
+     "generic": "SOAP",
+     "form": "Cosmetics"
+    },
+    {
+     "id": "k44",
+     "name": "Bendex syps 10mls",
+     "generic": "albendazole suspension",
+     "form": "Syrups"
+    },
+    {
+     "id": "k45",
+     "name": "Benzoyl Peroxide Cleansing Bar 5% w/w (Perobar 5%)",
+     "generic": "Benzoyl Peroxide Cleansing Bar 5% w/w",
+     "form": "Others"
+    },
+    {
+     "id": "k46",
+     "name": "Betadrop Eye drop",
+     "generic": "Betamethasone",
+     "form": "Drops"
+    },
+    {
+     "id": "k47",
+     "name": "Betasol cream",
+     "generic": "betamethasone",
+     "form": "Others"
+    },
+    {
+     "id": "k48",
+     "name": "BIN LINERS",
+     "generic": "LINERS",
+     "form": "Others"
+    },
+    {
+     "id": "k49",
+     "name": "BIOFERON 200ml",
+     "generic": "Bioferon syrups 200mls:IronVit B12 and Folic Acid",
+     "form": "Others"
+    },
+    {
+     "id": "k50",
+     "name": "Bisoprolol 2.5mg Tabs (Hillcross)",
+     "generic": "Bisoprolol 2.5mg Tabs (Hillcross)",
+     "form": "Tablets"
+    },
+    {
+     "id": "k51",
+     "name": "Blood giving set",
+     "generic": "Blood giving set",
+     "form": "Others"
+    },
+    {
+     "id": "k52",
+     "name": "Bone-Aid tab 1X30 PKT",
+     "generic": "Boneaid",
+     "form": "Tablets"
+    },
+    {
+     "id": "k53",
+     "name": "Brain Active Denk",
+     "generic": "ginger extractcaffeine vitamin b5Omega-3-fatt",
+     "form": "Capsules"
+    },
+    {
+     "id": "k54",
+     "name": "Bronchopro liquid",
+     "generic": "Ambroxol syrup (Bronchopro) liquid",
+     "form": "Syrups"
+    },
+    {
+     "id": "k55",
+     "name": "Brutaflam 120mg Tabs",
+     "generic": "Etoricoxib Tabs",
+     "form": "Tablets"
+    },
+    {
+     "id": "k56",
+     "name": "BURNEM Cream",
+     "generic": "For BurnsWoundsPus Formation Bruised Skin and cu",
+     "form": "Others"
+    },
+    {
+     "id": "k57",
+     "name": "Cadiphen Syrup 60ml",
+     "generic": "Piriton/guaif/NH4/Na+ citrate 2/80/100/44mg",
+     "form": "Syrups"
+    },
+    {
+     "id": "k58",
+     "name": "CALCIGARD RETARD",
+     "generic": "NIFEDIPINE 20 MG",
+     "form": "Tablets"
+    },
+    {
+     "id": "k59",
+     "name": "Calpol 60ml",
+     "generic": "Paracetamol syr 60ml",
+     "form": "Syrups"
+    },
+    {
+     "id": "k60",
+     "name": "Candiderm Cream 15mg",
+     "generic": "Clotrimazole/beclometasone/gentamycin 1/0.025/0.1%",
+     "form": "Creams"
+    },
+    {
+     "id": "k61",
+     "name": "Captopril 25mg Uk",
+     "generic": "Captopril 25mg Uk",
+     "form": "Tablets"
+    },
+    {
+     "id": "k62",
+     "name": "Carbimazole 5mg (Man UK)",
+     "generic": "Carbimazole 5mg",
+     "form": "Tablets"
+    },
+    {
+     "id": "k63",
+     "name": "CAROFIT Tablets",
+     "generic": "CAROFIT Tablets",
+     "form": "Tablets"
+    },
+    {
+     "id": "k64",
+     "name": "Castor Oil 100ml Faholo",
+     "generic": "Castor Oil 100ml Faholo",
+     "form": "Others"
+    },
+    {
+     "id": "k65",
+     "name": "Cebay syp 60ml",
+     "generic": "Cefixime",
+     "form": "Others"
+    },
+    {
+     "id": "k66",
+     "name": "Cefazolin injection 1gm (SEFOZOL)",
+     "generic": "Cefazolin injection 1gm",
+     "form": "Injectables"
+    },
+    {
+     "id": "k67",
+     "name": "Cefixime 400mg (CEFDIA)",
+     "generic": "Cefixime 400mg (CEFDIA)",
+     "form": "Others"
+    },
+    {
+     "id": "k68",
+     "name": "Cefotaxime 1g injection (VALORAN 1g)",
+     "generic": "Cefotaxime 1g injection",
+     "form": "Injectables"
+    },
+    {
+     "id": "k69",
+     "name": "Ceftriaxone for inj 1g (THEOXONE)",
+     "generic": "Ceftriaxone for inj 1g",
+     "form": "Injectables"
+    },
+    {
+     "id": "k70",
+     "name": "Celestamine tabs",
+     "generic": "Betamethasone/dexchlorpheniramine 0.25/2mg",
+     "form": "Tablets"
+    },
+    {
+     "id": "k71",
+     "name": "Cephalexin syp 125/5ML india",
+     "generic": "Cephalexin",
+     "form": "Capsules"
+    },
+    {
+     "id": "k72",
+     "name": "Cetariv",
+     "generic": "Cetirizine syrup (Cetariv) 60ml",
+     "form": "Syrups"
+    },
+    {
+     "id": "k73",
+     "name": "Charcoplus",
+     "generic": "charcoplus",
+     "form": "Capsules"
+    },
+    {
+     "id": "k74",
+     "name": "Chlordiapoxide 5mg/Clidinium bromide 2.5mg) (Epirax)",
+     "generic": "Chlordiapoxide 5mg/Clidinium bromide 2.5mg)",
+     "form": "Tablets"
+    },
+    {
+     "id": "k75",
+     "name": "Chromic Catgut 1/0",
+     "generic": "Chromic Catgut 1/0",
+     "form": "Others"
+    },
+    {
+     "id": "k76",
+     "name": "Cinod 5mg",
+     "generic": "Clinidipine tabs",
+     "form": "Tablets"
+    },
+    {
+     "id": "k77",
+     "name": "Ciprofena",
+     "generic": "Ciprofloxacin 0.3% Ophthalmic solution 0.3%",
+     "form": "Drops"
+    },
+    {
+     "id": "k78",
+     "name": "Cirab",
+     "generic": "Rabeprazole 20mg inj",
+     "form": "Injectables"
+    },
+    {
+     "id": "k79",
+     "name": "Clarie OD",
+     "generic": "Clarithromycin 500mg",
+     "form": "Tablets"
+    }
+   ],
+   "shelf"
+  ],
+  "out": [
+   [
+    "No shelf",
+    [
+     "k0",
+     "k1",
+     "k2",
+     "k3",
+     "k4",
+     "k5",
+     "k6",
+     "k7",
+     "k8",
+     "k9",
+     "k10",
+     "k11",
+     "k12",
+     "k13",
+     "k14",
+     "k15",
+     "k16",
+     "k17",
+     "k18",
+     "k19",
+     "k20",
+     "k21",
+     "k22",
+     "k23",
+     "k24",
+     "k25",
+     "k26",
+     "k27",
+     "k28",
+     "k29",
+     "k30",
+     "k31",
+     "k32",
+     "k33",
+     "k34",
+     "k35",
+     "k36",
+     "k37",
+     "k38",
+     "k39",
+     "k40",
+     "k41",
+     "k42",
+     "k43",
+     "k44",
+     "k45",
+     "k46",
+     "k47",
+     "k48",
+     "k49",
+     "k50",
+     "k51",
+     "k52",
+     "k53",
+     "k54",
+     "k55",
+     "k56",
+     "k57",
+     "k58",
+     "k59",
+     "k60",
+     "k61",
+     "k62",
+     "k63",
+     "k64",
+     "k65",
+     "k66",
+     "k67",
+     "k68",
+     "k69",
+     "k70",
+     "k71",
+     "k72",
+     "k73",
+     "k74",
+     "k75",
+     "k76",
+     "k77",
+     "k78",
+     "k79"
+    ]
+   ]
+  ]
  }
 ]

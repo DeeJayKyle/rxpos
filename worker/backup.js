@@ -48,7 +48,7 @@ export async function restore(env, body, json) {
   const db = env.DB;
   const rows = Array.isArray(body.rows) ? body.rows : [];
   if (rows.length > 1000) return json({ error: 'Send at most 1000 rows at a time.' }, 413);
-  let stmts = [];
+  let stmts;
   if (body.part === 'tenants') {
     stmts = rows.map((t) => db.prepare('INSERT OR REPLACE INTO tenants (id, name, key_hash, features, status, secrets, notes, created_at, slug, branding) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)')
       .bind(t.id, t.name, t.key_hash ?? null, t.features ?? '{}', t.status ?? 'active', t.secrets ?? '{}', t.notes ?? null, t.created_at ?? new Date().toISOString(), t.slug ?? null, t.branding ?? null));

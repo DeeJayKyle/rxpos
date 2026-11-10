@@ -89,6 +89,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
       final isNew = r == null || copy;
       final chosen = {...?r?.permissions};
       final name = TextEditingController(text: copy ? '${r!.name} (copy)' : r?.name ?? '');
+      final maxDisc = TextEditingController(text: r?.raw['maxDiscount'] == null ? '' : '${r!.raw['maxDiscount']}');
       final ok = await showDialog<bool>(
         context: context,
         builder: (c) => StatefulBuilder(
@@ -98,6 +99,8 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
               width: 720,
               child: ListView(shrinkWrap: true, children: [
                 TextField(key: const Key('role-name'), controller: name, enabled: isNew || !r.builtIn, decoration: const InputDecoration(labelText: 'Role name', hintText: 'e.g. Store keeper')),
+                TextField(key: const Key('role-max-discount'), controller: maxDisc, keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(labelText: 'Largest discount this role may give (% of the sale)', hintText: 'empty = no limit')),
                 const SizedBox(height: 8),
                 Wrap(spacing: 16, runSpacing: 8, children: [
                   for (final (group, list) in permissionGroups)
@@ -136,7 +139,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
       if (ok != true) return;
       try {
         await saveRole(ref.read(recordStoreProvider), id: isNew ? null : r.id, name: name.text, permissions: [for (final (_, list) in permissionGroups) for (final (k, _) in list) if (chosen.contains(k)) k],
-            by: await _by(), existingIds: {for (final x in roles) x.id});
+            by: await _by(), existingIds: {for (final x in roles) x.id}, maxDiscount: double.tryParse(maxDisc.text.trim()));
         if (context.mounted) say(context, 'Role saved. It applies on every device after the next sync.');
       } on UserProblem catch (e) {
         if (context.mounted) say(context, e.message, error: true);
@@ -213,7 +216,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
                                 Expanded(child: Text(r.name, style: th.textTheme.titleMedium)),
                                 if (r.builtIn) const Chip(label: Text('built-in'), visualDensity: VisualDensity.compact),
                               ]),
-                              Text('${r.id == 'admin' ? 'Everything, always.' : '${r.permissions.length} permissions'} · ${users.where((u) => u['role'] == r.id).length} user(s)', style: th.textTheme.bodySmall),
+                              Text('${r.id == 'admin' ? 'Everything, always.' : '${r.permissions.length} permissions${r.raw['maxDiscount'] == null ? '' : ' · discounts up to ${r.raw['maxDiscount']}%'}'} · ${users.where((u) => u['role'] == r.id).length} user(s)', style: th.textTheme.bodySmall),
                               Wrap(spacing: 4, children: [
                                 if (r.id != 'admin') TextButton(onPressed: () => editRole(r), child: const Text('Edit permissions')),
                                 IconButton(tooltip: 'Copy as a new role', icon: const Icon(Icons.copy, size: 18), onPressed: () => editRole(r, copy: true)),

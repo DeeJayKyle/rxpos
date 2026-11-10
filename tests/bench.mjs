@@ -114,7 +114,7 @@ for (const size of only) {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'F9', bubbles: true }));
       for (;;) { await new Promise((r) => setTimeout(r, 5)); if (/Sale complete/.test(document.querySelector('.modal')?.innerText || '') || performance.now() - t > 10000) break; }
       const shown = performance.now() - t;
-      const number = document.querySelector('.modal .receipt')?.innerText.match(/\bR[A-Z0-9]{6,}\b/)?.[0];
+      const number = document.querySelector('.modal .receipt')?.innerText.match(/\bR-[A-Z0-9]+-\d{2,}-\d{6,}\b|\bR[A-Z0-9]{6,}\b/)?.[0];
       // until the sale is on the device (both the 1.5 table blobs and the 1.6 record store are checked)
       const onDevice = async () => new Promise((res) => { const q = indexedDB.open('pharmapos'); q.onsuccess = () => { const db = q.result; const names = [...db.objectStoreNames]; const tx = db.transaction(names, 'readonly'); const hits = []; if (names.includes('records')) { const g = tx.objectStore('records').getAll(); g.onsuccess = () => hits.push(g.result.some((x) => x?.r?.number === number || (x?.t === 'sales' && (x.rs || []).some((r) => r.number === number)))); } const g2 = tx.objectStore('kv').get('t:sales'); g2.onsuccess = () => hits.push((g2.result || []).some((s) => s.number === number)); tx.oncomplete = () => { db.close(); res(hits.some(Boolean)); }; }; q.onerror = () => res(false); });
       while (!(await onDevice()) && performance.now() - t < 10000) await new Promise((r) => setTimeout(r, 20));
@@ -128,11 +128,11 @@ for (const size of only) {
 
   log(size, 'sold', JSON.stringify(r));
   // 6. inventory, 7. reports
-  const screen = async (hash, ready) => { await go(hash === '#/' ? '#/sales' : '#/'); await wait(800); const t = Date.now(); await go(hash); await p.waitForFunction(ready, { timeout: 60000, polling: 20 }); return Date.now() - t; };
+  const screen = async (hash, ready) => { await go(hash === '#/' ? '#/sales' : '#/'); await wait(800); const t = Date.now(); await go(hash); await p.waitForFunction(ready, { timeout: 60000, polling: 20 }).catch(async () => { throw new Error(`${hash} did not appear: ${(await p.evaluate(() => document.querySelector('.page')?.innerText.slice(0, 300) || location.hash).catch(() => '?')).replace(/\s+/g, ' ')}`); }); return Date.now() - t; };
   const thrice = async (hash, ready) => { const a = []; for (let i = 0; i < 3; i++) a.push(await screen(hash, ready)); return median(a); };
   r.inventoryMs = await thrice('#/inventory', () => document.querySelectorAll('.page tbody tr').length > 10);
   r.reportsMs = await thrice('#/reports', () => document.querySelectorAll('.page .stat').length >= 4);
-  r.dashboardMs = await thrice('#/', () => document.querySelectorAll('.page .stat').length >= 4 && !!document.querySelector('.chart-plot'));
+  r.dashboardMs = await thrice('#/', () => document.querySelectorAll('.page .stat').length >= 4 && !!document.querySelector('.trend-svg')); // the dashboard charts (src/charts.jsx)
 
   log(size, 'screens', JSON.stringify(r));
   // 8. 20 sales offline, then reconnect: time until everything is in the cloud

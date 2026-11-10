@@ -28,21 +28,29 @@ void main() {
       final l = lineFor(para, s);
       expect((l['recvPack'], l['recvSize'], l['cost'], l['total'], l['price']), ('Box', 100.0, '3000', '3000', '60'));
     });
-    test('the line total works out the unit cost (unrounded) and the price follows the markup; never lower than today\'s', () {
+    test('the line total works out the unit cost (unrounded); an existing medicine keeps its retail price (the owner\'s choice)', () {
       var l = lineFor(zinc, s);
       l = editLine(l, {'qty': '3'}, pf);
       expect(l['total'], '12000');
       l = editLine(l, {'total': '13000'}, pf);
       expect((l['by'], l['cost'], unitCost(l)), ('total', '4333.33', 13000 / 3));
-      expect((l['price'], l['kept']), ('6500', false), reason: '4333.33 × 1.5 = 6500 rounded up to 50');
-      l = editLine(l, {'cost': '3000'}, pf);
-      expect((l['total'], l['price'], l['kept']), ('9000', '6000', true), reason: '4500 < 6000 today: kept');
+      expect(l['price'], '6000', reason: 'the invoice does not change the price (cost + markup would be 6,500: offered, not applied)');
+      l = editLine(l, {'cost': '5000'}, pf);
+      expect(l['price'], '6000');
       l = editLine(l, {'price': '7000'}, pf);
       expect(l['auto'], false);
-      l = editLine(l, {'cost': '5000'}, pf);
+      l = editLine(l, {'cost': '6000'}, pf);
       expect(l['price'], '7000', reason: 'a typed price stays');
       l = editLine(l, {'price': ''}, pf);
-      expect(l['price'], '7500', reason: 'cleared: back to the markup');
+      expect(l['price'], '6000', reason: 'cleared: back to today\'s price');
+    });
+    test('a new medicine (no price yet) gets cost + markup until a price is typed, per unit when received by the box', () {
+      var l = editLine({...blankLine(), 'productId': newMedicine, 'name': 'New Drops'}, {'cost': '4000'}, pf);
+      expect(l['price'], '6000', reason: '4000 × 1.5');
+      l = editLine(l, {'recvPack': 'Box', 'recvSize': 10}, pf);
+      expect(l['price'], '600', reason: 'a box of 10 at 4,000: 400 a unit × 1.5');
+      final noPrice = Product.fromRecord({'id': 'p9', 'name': 'Unpriced', 'cost': 200, 'packs': [{'name': 'Box', 'size': 10}]});
+      expect(lineFor(noPrice, s)['price'], '300', reason: 'received by the box of 10 (2,000), priced per unit: 200 × 1.5');
     });
     test('a purchase order\'s lines; new medicine lines become delivery lines', () {
       final ls = linesFromPo({'items': [{'productId': 'p2', 'qty': 4, 'cost': 3800}, {'productId': 'gone', 'qty': 1}]}, {'p2': zinc}, s);

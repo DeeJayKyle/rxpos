@@ -5,7 +5,7 @@ const allPermissions = [
   'pos.sell', 'pos.wholesale', 'pos.discount', 'pos.price_edit', 'sales.view', 'sales.refund', 'sales.edit', 'proformas',
   'shifts', 'shifts.all', 'prescriptions', 'customers', 'suppliers', 'reminders', 'chat', 'inventory.view',
   'medicines.manage', 'stock.receive', 'purchases.edit', 'inventory.edit', 'stock.count', 'stock.adjust', 'transfers',
-  'finance', 'payroll', 'reports', 'reports.lines', 'branches.view', 'audit', 'users.manage', 'settings.manage', 'data.reset',
+  'finance', 'payroll', 'reports', 'reports.lines', 'branches.view', 'audit', 'day.close', 'users.manage', 'settings.manage', 'data.reset',
 ];
 
 const _t0 = '2000-01-01T00:00:00.000Z';
@@ -42,6 +42,15 @@ Set<String> permissionsOf(Iterable<Role> custom, String role) {
   return (rolesOf(custom).where((r) => r.id == role).firstOrNull?.permissions ?? const <String>[]).toSet();
 }
 
+/// Step 20: the largest sale discount (% of the sale) this role may give, or null for no limit (src/access.js
+/// maxDiscountOf). Set per role in Users & roles; administrators are never limited.
+double? maxDiscountOf(Iterable<Role> custom, String role) {
+  if (role == 'admin') return null;
+  final v = rolesOf(custom).where((r) => r.id == role).firstOrNull?.raw['maxDiscount'];
+  final n = v is num ? v.toDouble() : double.tryParse('${v ?? ''}');
+  return n == null || n < 0 ? null : n;
+}
+
 const features = [
   'catalog', 'branches', 'wholesale', 'proformas', 'prescriptions', 'finance', 'reports', 'reminders', 'chat',
   'labels', 'import', 'reorder', 'momo', 'drugInfo', 'shifts', 'promos', 'hourly', 'calendar', 'weather', 'ai', 'newApp',
@@ -71,6 +80,7 @@ const permissionGroups = [
   ('Management', [
     ('finance', 'Finance (expenses, banks, loans, cash book)'), ('payroll', 'Payroll & staff (salaries, attendance, advances)'), ('reports', 'Reports & dashboard money figures'),
     ('reports.lines', 'Sales lines report only (what was sold and by whom, no profit)'), ('branches.view', 'See all branches'), ('audit', 'Audit log'),
+    ('day.close', 'Close the day (no more changes to its sales, expenses and stock)'),
     ('users.manage', 'Manage users & roles'), ('settings.manage', 'Settings & payment methods'), ('data.reset', 'Restore default settings'),
   ]),
 ];

@@ -31,6 +31,10 @@ double sellable(List<BatchStock> batches, {bool allowExpired = false, DateTime? 
 /// Split [qty] across [batches] (already in expiry order). Expired batches are skipped unless [allowExpired].
 /// More than the sellable stock this device knows of is refused with [NotEnoughStock]: an oversale is never booked
 /// against a batch it isn't in (the pharmacy's policy: a sale can't go beyond the stock, even offline).
+/// Step 21: a scanned pack's batch first (when it is there), the others after in their order (src/fefo.js preferFirst).
+List<BatchStock> preferFirst(List<BatchStock> batches, String? batchId) =>
+    batchId == null ? batches : [...batches.where((b) => b.id == batchId), ...batches.where((b) => b.id != batchId)];
+
 List<Allocation> allocate(List<BatchStock> batches, double qty, {bool allowExpired = false, DateTime? now}) {
   if (qty <= 0) return const [];
   bool ok(BatchStock b) => allowExpired || b.expiry.isEmpty || daysUntil(b.expiry, now: now) >= 0;

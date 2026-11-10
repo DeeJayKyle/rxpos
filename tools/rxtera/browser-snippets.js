@@ -41,7 +41,7 @@ window.rxPaged = async (name) => {
   const head = [...document.querySelectorAll('table thead th')].map((h) => h.textContent.trim().replace(/\s+/g, ' '));
   const all = [];
   for (let guard = 0; guard < 2000; guard++) {
-    for (const tr of document.querySelectorAll('table tbody tr')) all.push([...tr.cells].map((c) => { const i = c.querySelector('input,select'); return (i ? (i.tagName === 'SELECT' ? i.selectedOptions[0]?.text : i.value) : c.textContent).trim().replace(/\s+/g, ' '); }));
+    for (const tr of document.querySelectorAll('table tbody tr')) all.push([...tr.cells].map((c) => { const i = c.querySelector('input,select'); return (i ? (i.tagName === 'SELECT' ? i.selectedOptions[0]?.text ?? '' : i.value) : c.textContent).trim().replace(/\s+/g, ' '); }));
     const next = [...document.querySelectorAll('button[wire\\:click]')].find((b) => /nextPage/.test(b.getAttribute('wire:click')) && !b.disabled);
     if (!next) break;
     const first = document.querySelector('table tbody tr')?.textContent;

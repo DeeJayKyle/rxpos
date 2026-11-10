@@ -51,6 +51,8 @@ export const ownerGoogleLogin = (url, credential) => call({ url: cleanUrl(url) }
 /** Public name of the pharmacy at a web address (for its sign-in page) */
 export const pharmacyInfo = (url, slug) => call({ url: cleanUrl(url) }, '/api/pharmacy/' + encodeURIComponent(slug), { timeout: 8000 });
 export const calendarLink = (cfg) => call(cfg, '/api/calendar-link', { timeout: 8000 });
+/** step 7: this device's till number in its pharmacy (src/docnumbers.js) */
+export const tillNumber = (cfg) => call(cfg, '/api/till', { method: 'POST', body: { deviceId: cfg.deviceId }, timeout: 15000 });
 /** The pharmacy's daily stock sheet link for a Google Sheet (=IMPORTDATA); renew = a new link, the old one stops */
 export const dailyStockLink = (cfg, renew = false) => call(cfg, '/api/daily-stock-link', { method: renew ? 'POST' : 'GET', body: renew ? {} : undefined, timeout: 15000 });
 // AI (Cloudflare Workers AI): read a prescription photo; make a drug quiz
@@ -73,6 +75,8 @@ export function guessNetwork(msisdn) {
 export const whatsappLink = (phone, text) => `https://wa.me/${String(phone).replace(/\D/g, '')}?text=${encodeURIComponent(text)}`;
 
 /** Today's owner summary (worker/summary.js): preview, or email it now to the addresses in Settings */
+// step 26: a scheduled report email, previewed (what would be sent) or sent now (worker/reports.js)
+export const reportSend = (cfg, id, send = false) => call(cfg, '/api/reports/send' + (send ? '' : '?id=' + encodeURIComponent(id)), { method: send ? 'POST' : 'GET', body: send ? { id } : undefined, timeout: 60000 });
 export const daySummary = (cfg, send = false) => call(cfg, '/api/summary', { method: send ? 'POST' : 'GET', body: send ? {} : undefined });
 
 /** Two-step sign-in for the signed-in person (worker/twostep.js) */

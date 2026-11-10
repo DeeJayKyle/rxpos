@@ -1,11 +1,18 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { closedSet, inClosedDay } from '../dayclose.js';
 import { useLocation } from 'react-router-dom';
 import { Download, Printer, Undo2, Eye, Pencil, Trash2, Plus, History, FileText } from 'lucide-react';
 import { useStore, dayOf, downloadFile, toCSV, put, move, now, audit, allocate, MAIN_BRANCH, DEFAULT_PAYMENT_METHODS } from '../store.jsx';
 import { Modal, SearchBox, Empty, PdfButton, ReceiptPdfButton, Tabs, PayChip, usePages, Pager, useSort, SortTh } from '../ui.jsx';
 import { ask, toast } from '../feedback.jsx';
 import { Barcode } from '../barcode.jsx';
+// step 22: what the client still owes on a sale (an insurer's share is billed to the insurer); shown on the receipt
+// even after a refund, as before
+const billed = (s) => (s.insurance ? Math.max(0, Number(s.insurance.share) || 0) : 0);
+const unpaid = (s) => s.total - (s.paid ?? s.total) - billed(s);
 import DraftsList, { useDraftCount } from './Drafts.jsx';
+import { useListControls, useContextMenu } from '../listcontrols.jsx';
+import { Copy } from 'lucide-react';
 
 /** Thermal-printer friendly receipt (58 mm or 80 mm, set in Settings). */
 export function Receipt({ sale }) {
@@ -44,8 +51,10 @@ export function Receipt({ sale }) {
       {sale.tax > 0 && <div className="row between"><span>Tax</span><span>{fmt(sale.tax)}</span></div>}
       <div className="row between grand"><span>TOTAL</span><span>{fmt(sale.total)}</span></div>
       {!isProforma && <div className="row between"><span>Paid ({sale.payment})</span><span>{fmt(sale.payment === 'Cash' ? sale.tendered : sale.paid ?? sale.total)}</span></div>}
-      {!isProforma && sale.payment === 'Cash' && sale.tendered > sale.total && <div className="row between"><span>Change</span><span>{fmt(sale.tendered - sale.total)}</span></div>}
-      {!isProforma && (sale.paid ?? sale.total) < sale.total && <div className="row between"><span>Balance on credit</span><span>{fmt(sale.total - sale.paid)}</span></div>}
+      {!isProforma && sale.payment === 'Cash' && sale.tendered > (sale.paid ?? sale.total) && <div className="row between"><span>Change</span><span>{fmt(sale.tendered - (sale.paid ?? sale.total))}</span></div>}
+      {!isProforma && sale.insurance && <div className="row between"><span>{sale.insurance.insurer} ({sale.insurance.scheme})</span><span>{fmt(billed(sale))}</span></div>}
+      {!isProforma && sale.insurance && <div className="small">Member no. {sale.insurance.memberNo}</div>}
+      {!isProforma && unpaid(sale) > 0.005 && <div className="row between"><span>Balance on credit</span><span>{fmt(unpaid(sale))}</span></div>}
       {sale.momo?.txid && <div className="row between"><span>{sale.momo.provider === 'airtel' ? 'Airtel' : 'MoMo'} Ref</span><span>{sale.momo.txid}</span></div>}
       {sale.momo && <div className="small muted">{sale.momo.confirmed ? 'Payment confirmed by the mobile network' : sale.momo.manual ? 'Payment recorded by staff (transaction ID from the customer; not confirmed by the network)' : ''}</div>}
       {sale.status === 'refunded' && <div className="center receipt-tag">REFUNDED</div>}
@@ -61,7 +70,7 @@ export function SaleInvoice({ sale }) {
   const s = db.settings;
   const branch = db.branches.find((b) => b.id === (sale.branchId || MAIN_BRANCH));
   const cust = db.customers.find((c) => c.id === sale.customerId);
-  const due = sale.total - (sale.paid ?? sale.total);
+  const due = unpaid(sale); // step 22: an insurer's share is billed to the insurer, not due from the client
   return (
     <div className="invoice-doc print-area paper-210">
       <div className="invoice-head">
@@ -94,6 +103,7 @@ export function SaleInvoice({ sale }) {
         {sale.tax > 0 && <div><span>Tax</span><span>{fmt(sale.tax)}</span></div>}
         <div className="grand"><span>Total</span><span>{fmt(sale.total)}</span></div>
         <div><span>Paid ({sale.payment}{sale.momo?.txid ? ` · ref ${sale.momo.txid}` : ''})</span><span>{fmt(sale.paid ?? sale.total)}</span></div>
+        {sale.insurance && <div><span>Billed to {sale.insurance.insurer} ({sale.insurance.scheme} · member {sale.insurance.memberNo})</span><span>{fmt(billed(sale))}</span></div>}
         {due > 0 && <div className="grand"><span>Balance due</span><span>{fmt(due)}</span></div>}
       </div>
       {sale.momo && <p className="small">{sale.momo.confirmed ? 'Payment confirmed by the mobile network.' : 'Payment recorded by staff (not confirmed by the mobile network).'}</p>}
@@ -121,6 +131,9 @@ const STATUSES = [['', 'All statuses'], ['completed', 'Completed'], ['refunded',
 
 export default function Sales() {
   const { db, update, fmt, user, branchId, can } = useStore();
+  // step 18: a closed day's sales can't be edited (a refund still can, and the owner is told)
+  const closed = useMemo(() => closedSet(db.dayCloses), [db.dayCloses]);
+  const locked = (s) => inClosedDay(s, closed, dayOf);
   const location = useLocation();
   const [q, setQ] = useState(location.state?.q || '');
   const [from, setFrom] = useState(location.state?.from || '');
@@ -146,6 +159,21 @@ export default function Sales() {
   const valid = rows.filter((s) => s.status !== 'refunded');
   const sorted = useSort(rows, { number: (s) => s.number, date: (s) => s.date, customer: (s) => s.customerName || '', cashier: (s) => s.cashier || '', payment: (s) => s.payment || '', total: (s) => s.total }, 'date');
   const page = usePages(sorted.rows, 25);
+  // the owner's request: keys, double-click and right-click on the sales too (src/listcontrols.jsx)
+  const searchRef = useRef(null);
+  const canEditSale = (x) => x.status !== 'refunded' && can('sales.edit') && !locked(x);
+  const canRefund = (x) => x.status !== 'refunded' && !x.imported && user.role !== 'cashier' && can('sales.refund');
+  const lc = useListControls({ rows: page.rows, onOpen: (x) => setView(x), onEdit: (x) => canEditSale(x) && setEditing(x), searchRef, onClearSearch: () => setQ(''), enabled: tab === 'sales' });
+  const menu = useContextMenu();
+  const saleMenu = (e, x) => menu.open(e, [
+    { label: 'View', Icon: Eye, keyId: 'list:open', run: () => setView(x) },
+    { label: 'Print the receipt', Icon: Printer, run: () => printSale(x, 'receipt') },
+    { label: 'Print an invoice (A4)', Icon: FileText, run: () => printSale(x, 'invoice') },
+    canEditSale(x) && { label: 'Edit', Icon: Pencil, keyId: 'list:edit', run: () => setEditing(x) },
+    { label: 'Copy the receipt number', Icon: Copy, run: () => navigator.clipboard?.writeText(x.number).then(() => toast('Copied'), () => toast('Could not copy', 'warn')) },
+    canRefund(x) && '-',
+    canRefund(x) && { label: 'Refund…', Icon: Undo2, danger: true, run: () => refund(x) },
+  ]);
 
   const refund = async (sale) => {
     if (!(await ask({ title: `Refund ${sale.number}?`, message: `${fmt(sale.total)} will be refunded and the items returned to stock (same batches).`, confirmText: 'Refund', danger: true }))) return;
@@ -175,7 +203,7 @@ export default function Sales() {
               {db.branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
             </select>
           )}
-          <SearchBox value={q} onChange={setQ} placeholder="Receipt, customer, medicine…" />
+          <SearchBox value={q} onChange={setQ} placeholder="Receipt, customer, medicine…" inputRef={searchRef} />
           <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} title="From" aria-label="From" />
           <input type="date" value={to} onChange={(e) => setTo(e.target.value)} title="To" aria-label="To" />
           <button className="btn ghost" onClick={() => downloadFile('sales.csv', toCSV(exportRows), 'text/csv')}><Download size={16} />CSV</button>
@@ -198,8 +226,8 @@ export default function Sales() {
         <table>
           <thead><tr><SortTh s={sorted} k="number">Receipt</SortTh><SortTh s={sorted} k="date">Date</SortTh><th>Time</th>{db.branches.length > 1 && <th>Branch</th>}<SortTh s={sorted} k="customer">Customer</SortTh><th>Phone</th><SortTh s={sorted} k="payment">Payment</SortTh><th>Status</th><SortTh s={sorted} k="total" className="num">Total</SortTh><SortTh s={sorted} k="cashier">Cashier</SortTh><th /></tr></thead>
           <tbody>
-            {page.rows.map((s) => (
-              <tr key={s.id} className={(s.status === 'refunded' ? 'dim' : '') + (s.edits?.length ? ' edited-row' : '')} title={s.edits?.length ? `Edited ${s.edits.length}× · last by ${s.editedBy || s.edits.at(-1).by}` : undefined}>
+            {page.rows.map((s, i) => { const rp = lc.rowProps(s, i, saleMenu); return (
+              <tr key={s.id} {...rp} className={[(s.status === 'refunded' ? 'dim' : ''), (s.edits?.length ? 'edited-row' : ''), rp.className].filter(Boolean).join(' ')} title={s.edits?.length ? `Edited ${s.edits.length}× · last by ${s.editedBy || s.edits.at(-1).by}` : undefined}>
                 <td><strong>{s.number}</strong><br /><small className="muted cap">{s.type || 'retail'}</small></td>
                 <td>{new Date(s.date).toLocaleDateString([], { dateStyle: 'medium' })}</td>
                 <td>{new Date(s.date).toLocaleTimeString([], { timeStyle: 'short' })}</td>
@@ -213,14 +241,15 @@ export default function Sales() {
                   <button className="btn sm ghost" onClick={() => setView(s)}><Eye size={14} />View</button>
                   <button className="btn sm ghost act-print" onClick={() => printSale(s, 'receipt')} title="Print the till receipt"><Printer size={14} />Receipt</button>
                   <button className="btn sm ghost act-invoice" onClick={() => printSale(s, 'invoice')} title="Print a full-page invoice"><FileText size={14} />Invoice</button>
-                  {s.status !== 'refunded' && can('sales.edit') && <button className="btn sm ghost act-edit" onClick={() => setEditing(s)}><Pencil size={14} />Edit</button>}
+                  {s.status !== 'refunded' && can('sales.edit') && !locked(s) && <button className="btn sm ghost act-edit" onClick={() => setEditing(s)}><Pencil size={14} />Edit</button>}
                 </div></td>
               </tr>
-            ))}
+            ); })}
             {!rows.length && (db.sales.length ? <Empty colSpan={11}>No sales match. Try another receipt number, customer, filter or date.</Empty> : <Empty colSpan={11} action={{ label: 'Open the POS', to: '/pos' }}>No sales yet. Every sale rung up at the POS appears here with its receipt, to reprint, refund or correct.</Empty>)}
             {rows.length > 0 && <tr className="total-row"><td colSpan={db.branches.length > 1 ? 8 : 7}>Total (excl. refunds) · {valid.length.toLocaleString()} sales</td><td className="num">{fmt(valid.reduce((a, s) => a + s.total, 0))}</td><td colSpan={2} /></tr>}
           </tbody>
         </table>
+        {menu.node}
         <Pager p={page} />
       </div>
       </>}
@@ -231,9 +260,9 @@ export default function Sales() {
           <Receipt sale={view} />
           <EditHistory sale={view} />
           <div className="form-actions no-print">
-            {view.status !== 'refunded' && can('sales.edit') && <button className="btn ghost" onClick={() => { setEditing(view); setView(null); }}><Pencil size={16} />Edit sale</button>}
+            {view.status !== 'refunded' && can('sales.edit') && !locked(view) && <button className="btn ghost" onClick={() => { setEditing(view); setView(null); }}><Pencil size={16} />Edit sale</button>}
             {view.imported && <small className="muted">Copied from {view.imported}</small>}
-            {view.status !== 'refunded' && !view.imported && user.role !== 'cashier' && <button className="btn danger" onClick={() => refund(view)}><Undo2 size={16} />Refund</button>}
+            {view.status !== 'refunded' && !view.imported && user.role !== 'cashier' && can('sales.refund') && <button className="btn danger" onClick={() => refund(view)}><Undo2 size={16} />Refund</button>}
             <ReceiptPdfButton sale={view} />
             <button className="btn ghost act-invoice" onClick={() => { printSale(view, 'invoice'); }}><FileText size={16} />Invoice</button>
             <button className="btn primary" onClick={() => window.print()}><Printer size={16} />Print</button>
@@ -404,7 +433,8 @@ export function receiptText(sale, s, fmt) {
   if (sale.tax > 0) L.push(`Tax: ${fmt(sale.tax)}`);
   L.push(`*TOTAL: ${fmt(sale.total)}*`);
   L.push(`Paid (${sale.payment}): ${fmt(sale.paid ?? sale.total)}`);
-  if ((sale.paid ?? sale.total) < sale.total) L.push(`Balance: ${fmt(sale.total - (sale.paid ?? sale.total))}`);
+  if (sale.insurance) L.push(`${sale.insurance.insurer} (${sale.insurance.scheme}, member ${sale.insurance.memberNo}): ${fmt(billed(sale))}`);
+  if (unpaid(sale) > 0.005) L.push(`Balance: ${fmt(unpaid(sale))}`);
   L.push('');
   L.push(s.receiptFooter || 'Thank you. Get well soon!');
   return L.join('\n');

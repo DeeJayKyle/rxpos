@@ -11,12 +11,13 @@ const notes = [50000, 20000, 10000, 5000, 2000, 1000, 500, 200, 100, 50];
 
 class ShiftSummary {
   const ShiftSummary({required this.count, required this.total, required this.byMethod, required this.discounts, required this.refunds,
-      required this.refundTotal, required this.expectedCash, required this.credit});
+      required this.refundTotal, required this.expectedCash, required this.credit, this.insured = 0});
   final int count, refunds;
-  final double total, discounts, refundTotal, expectedCash, credit;
+  /// step 22: billed to insurers (owed by them, not the clients)
+  final double total, discounts, refundTotal, expectedCash, credit, insured;
   final Map<String, double> byMethod;
   Map<String, Object?> toJson() => {'count': count, 'total': total, 'byMethod': byMethod, 'discounts': discounts, 'refunds': refunds,
-    'refundTotal': refundTotal, 'expectedCash': expectedCash, 'credit': credit};
+    'refundTotal': refundTotal, 'expectedCash': expectedCash, 'credit': credit, if (insured > 0) 'insured': insured};
 }
 
 ShiftSummary shiftSummary(Shift shift, Iterable<Sale> sales, {String? now}) {
@@ -35,7 +36,8 @@ ShiftSummary shiftSummary(Shift shift, Iterable<Sale> sales, {String? now}) {
   return ShiftSummary(
     count: valid.length, total: valid.fold(0.0, (a, s) => a + s.total), byMethod: byMethod, discounts: valid.fold(0.0, (a, s) => a + s.discount),
     refunds: refunds.length, refundTotal: refunds.fold(0.0, (a, s) => a + s.total),
-    expectedCash: shift.float + cash(valid) - cash(refunds), credit: valid.fold(0.0, (a, s) => a + (s.total - s.paid)),
+    expectedCash: shift.float + cash(valid) - cash(refunds), credit: valid.fold(0.0, (a, s) => a + s.balance),
+    insured: valid.fold(0.0, (a, s) => a + s.insuredShare),
   );
 }
 
@@ -47,13 +49,13 @@ Future<Map<String, Object?>> openShift(RecordStore store, {required String userI
     });
 
 /// Close a shift with the cash counted ([counts]: note value → how many, plus 'coins' as an amount).
-Future<Map<String, Object?>> closeShift(RecordStore store, Shift open, Iterable<Sale> sales, {required Map<String, num> counts, String note = ''}) {
+Future<Map<String, Object?>> closeShift(RecordStore store, Shift open, Iterable<Sale> sales, {required Map<String, num> counts, String note = '', bool blind = false}) {
   final counted = notes.fold<double>(0, (a, n) => a + n * (counts['$n'] ?? 0)) + (counts['coins'] ?? 0);
   final sum = shiftSummary(open, sales);
   return store.update((d) {
     final rec = d.put('shifts', {...open.toRecord(), 'closedAt': d.now, 'counts': counts, 'counted': counted, 'expected': sum.expectedCash,
-      'variance': counted - sum.expectedCash, 'note': note, 'summary': sum.toJson()});
-    d.audit(open.user, 'Shift closed', 'Counted $counted, expected ${sum.expectedCash} (${counted - sum.expectedCash >= 0 ? '+' : ''}${counted - sum.expectedCash})', open.branchId);
+      'variance': counted - sum.expectedCash, 'note': note, 'summary': sum.toJson(), if (blind) 'blind': true}); // step 20: counted before the expected cash was shown
+    d.audit(open.user, blind ? 'Shift closed (blind count)' : 'Shift closed', 'Counted $counted, expected ${sum.expectedCash} (${counted - sum.expectedCash >= 0 ? '+' : ''}${counted - sum.expectedCash})', open.branchId);
     return rec;
   });
 }

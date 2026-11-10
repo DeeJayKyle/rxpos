@@ -790,7 +790,7 @@ class _ExpiryScreenState extends ConsumerState<ExpiryScreen> {
                       trailing: Wrap(spacing: 4, children: [
                         if (can.contains('stock.receive') || can.contains('stock.adjust'))
                           TextButton(onPressed: () => returnDialog(context, ref, p, b, days < 0 ? 'Expired' : 'Short expiry'), child: const Text('Return')),
-                        if (_tab == 'expired' && session?.role != 'cashier')
+                        if (_tab == 'expired' && can.contains('stock.adjust'))
                           TextButton(
                             style: TextButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.error),
                             onPressed: () async {

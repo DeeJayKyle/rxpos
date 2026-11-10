@@ -155,11 +155,10 @@ Future<int> createPurchaseOrders(RecordStore store, List<Suggestion> chosen, {re
   for (final r in chosen) {
     (by[r.buy?.supplierId ?? ''] ??= []).add(r);
   }
-  return store.update((d) {
-    var n = 0;
+  return store.update((d) async {
     for (final e in by.entries) {
       d.put('purchaseOrders', {
-        'id': uid(), 'number': 'PO${DateTime.now().millisecondsSinceEpoch.toRadixString(36).toUpperCase().substring(2)}${n++}', 'date': d.now, 'status': 'Draft',
+        'id': uid(), 'number': await d.number('PO', branchId: branchId), 'date': d.now, 'status': 'Draft',
         'branchId': branchId, 'supplierId': e.key, 'supplierName': supplierNames[e.key] ?? 'Any supplier', 'createdBy': user,
         'items': [for (final r in e.value) {'productId': r.p.id, 'name': r.p.name, 'qty': r.qty, 'cost': (r.buy?.cost ?? 0) > 0 ? r.buy!.cost : r.p.cost}],
       });

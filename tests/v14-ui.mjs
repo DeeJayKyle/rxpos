@@ -150,7 +150,9 @@ await clickText(p, 'Sign in');
 check('…and works again once online', await until(p, () => !!document.querySelector('.sidebar'), 15000));
 
 // phone width: no sideways scrolling on new pages
-await p.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
+// (switching to a phone reloads the page; an outside service the page uses, e.g. the weather, can keep that reload from
+// finishing within 30 s on a CI machine; each page below is loaded again anyway)
+await p.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true }).catch((e) => { if (!/Navigation timeout/.test(e.message)) throw e; });
 const wide = [];
 for (const h of ['/', '/calendar', '/storage', '/settings']) {
   await p.goto(base + '/mukono-health-pharmacy#' + h, { waitUntil: 'networkidle2' }); await wait(700);

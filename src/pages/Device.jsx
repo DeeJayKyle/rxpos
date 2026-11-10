@@ -15,7 +15,9 @@ import { idbGet } from '../idb.js';
 import { isWeb } from '../platform.js';
 import { keepsData, reloadForMode } from '../webpolicy.js';
 import { hasOffline, OFFLINE_DAYS } from '../offline.js';
-import { Database, WifiOff, Undo2 } from 'lucide-react';
+import { Database, WifiOff, Undo2, Keyboard } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
+import { ACTIONS, keyOf, isDefault, setKey, resetKeys, showKey, comboOf } from '../keymap.js';
 
 const Choice = ({ value, onChange, options, label }) => (
   <div className="seg" role="radiogroup" aria-label={label}>
@@ -56,6 +58,7 @@ export default function Device() {
         </section>
         <Sounds d={d} />
         <Notices d={d} />
+        <KeyboardCard d={d} />
       </div>
     </div>
   );
@@ -223,3 +226,58 @@ function SyncStorage() {
     </section>
   );
 }
+
+/**
+ * The keyboard map for this device (src/keymap.js): every shortcut, the key it has now, and Change / Default. A key
+ * another action uses moves to the new one. A letter pressed and then another within a moment is a two-key sequence.
+ */
+function KeyboardCard({ d }) {
+  const location = useLocation();
+  const ref = useRef(null);
+  const [rec, setRec] = useState(null); // the action whose key is being recorded
+  useEffect(() => { if (location.state?.tab === 'keyboard') setTimeout(() => ref.current?.scrollIntoView({ block: 'start' }), 100); }, [location.state]);
+  useEffect(() => {
+    if (!rec) return undefined;
+    let first = '', timer;
+    const done = (k) => { clearTimeout(timer); setKey(rec, k); setRec(null); toast(`${ACTIONS.find(([id]) => id === rec)[1]}: ${showKey(k)}`); };
+    const onKey = (e) => {
+      const c = comboOf(e);
+      if (!c) return;
+      e.preventDefault(); e.stopImmediatePropagation(); // the key being set must not also do what it does now
+      if (c === 'Escape' && !first) { setRec(null); return; }
+      const plain = c.length === 1 && c !== ' ' && c !== '?';
+      if (first) { done(plain ? `${first} ${c}` : first); return; }
+      if (plain && !rec.startsWith('list:')) { first = c; timer = setTimeout(() => done(first), 1200); return; } // maybe the first of two keys
+      done(c);
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => { clearTimeout(timer); window.removeEventListener('keydown', onKey, true); };
+  }, [rec]);
+  const groups = [...new Set(ACTIONS.map(([, , g]) => g))];
+  return (
+    <section className="card keyboard-card" ref={ref} id="keyboard">
+      <h3><Keyboard size={18} />Keyboard</h3>
+      <p className="muted small">The shortcuts on this device. Press ? on any page to see them. To change one, press Change and then the new key: a letter and then another (G then S) makes a two-key shortcut.</p>
+      {groups.map((g) => (
+        <div key={g}>
+          <h4 className="keys-group">{g}</h4>
+          <table className="keys-table"><tbody>
+            {ACTIONS.filter(([, , grp]) => grp === g).map(([id, label]) => (
+              <tr key={id} className={rec === id ? 'recording' : ''}>
+                <td>{label}</td>
+                <td><kbd>{rec === id ? 'Press a key…' : showKey(keyOf(id))}</kbd>{!isDefault(id) && <small className="muted"> changed</small>}</td>
+                <td className="actions">
+                  <button className="btn sm" aria-label={`Change the key for ${label}`} onClick={() => setRec(rec === id ? null : id)}>{rec === id ? 'Cancel' : 'Change'}</button>
+                  {!isDefault(id) && <button className="btn sm ghost" onClick={() => { setKey(id, ACTIONS.find(([x]) => x === id)[3]); }}>Default</button>}
+                  {keyOf(id) && <button className="btn sm ghost" title="No key for this" onClick={() => setKey(id, '')}>Off</button>}
+                </td>
+              </tr>
+            ))}
+          </tbody></table>
+        </div>
+      ))}
+      {Object.keys(d.keymap || {}).length > 0 && <button className="btn" onClick={async () => { if (await ask({ title: 'Put every key back as it was?', message: 'All the shortcuts on this device go back to the standard keys.', confirmText: 'Reset' })) resetKeys(); }}>Reset all keys</button>}
+    </section>
+  );
+}
+

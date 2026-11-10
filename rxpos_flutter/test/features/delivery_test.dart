@@ -34,8 +34,33 @@ void main() {
     expect((batch['batch'], batch['expiry'], batch['cost'], item['batchId']), ('PM2', '2030-12-31', 32, batch['id']));
     final p = (await store.get('products', 'p1'))!;
     expect((p['cost'], p['price']), (32, 70));
-    expect((await store.rows('audit')).map((a) => a['action']).toSet(), {'Price changed', 'Stock received'});
+    expect((await store.rows('audit')).map((a) => a['action']).toSet(), {'Price changed', 'Pack added', 'Stock received'}, reason: 'Paramol had no Box: it gains one');
     expect((await db.select(db.outbox).get()).map((o) => o.txn).toSet(), hasLength(1));
+  });
+
+  test('received by the box, sold by the tablet: a new medicine keeps the box as its pack; an existing one gains a new pack size', () async {
+    await receiveDelivery(store, lines: const [
+      DeliveryLine(newName: 'Amoxil 500mg', form: 'Capsules', qty: 3, recvPack: 'Box', recvSize: 100, newPack: true, unitCost: 5000, price: 100, batch: 'A1', expiry: '2029-01-31'),
+      DeliveryLine(productId: 'p1', qty: 2, recvPack: 'Carton', recvSize: 500, newPack: true, unitCost: 15000, batch: 'C1', expiry: '2030-01-31'),
+    ], products: products, settings: s, receivedBy: 'Tia', now: now);
+    final rows = {for (final r in await store.rows('products')) r['id']: r};
+    final amox = rows.values.firstWhere((r) => r['name'] == 'Amoxil 500mg');
+    expect((amox['unit'], amox['cost']), ('Capsule', 50), reason: 'sold by the capsule at 5,000 ÷ 100');
+    expect(amox['packs'], [{'name': 'Box', 'size': 100}]);
+    expect((rows['p1']!['packs'] as List).map((k) => ((k as Map)['name'], k['size'])), [('Carton', 500)]);
+    expect(rows['p1']!['price'], 60, reason: 'the price is kept');
+    final moves = (await store.rows('movements')).map(Movement.fromRecord).toList();
+    expect((StockIndex.of(moves).ofProduct(mainBranch, '${amox['id']}'), StockIndex.of(moves).ofProduct(mainBranch, 'p1')), (300, 1000));
+    expect((await store.rows('audit')).any((a) => a['action'] == 'Pack added' && '${a['details']}'.contains('Carton of 500')), isTrue);
+  });
+
+  test('a pack needs its size; a name the medicine already uses for another size is refused', () async {
+    final withBox = {'p1': Product.fromRecord({'id': 'p1', 'name': 'Paramol', 'price': 60, 'cost': 30, 'packs': [{'name': 'Box', 'size': 100}]})};
+    Future<void> receive(DeliveryLine l) => receiveDelivery(store, lines: [l], products: withBox, settings: s, receivedBy: 'Tia', now: now);
+    expect(() => receive(const DeliveryLine(productId: 'p1', qty: 1, recvPack: 'Box', newPack: true, unitCost: 100, expiry: '2030-01-31')), throwsA(isA<DeliveryProblem>()));
+    expect(() => receive(const DeliveryLine(productId: 'p1', qty: 1, recvPack: 'Box', recvSize: 50, newPack: true, unitCost: 100, expiry: '2030-01-31')),
+        throwsA(predicate((e) => '$e'.contains('already has a Box of 100'))));
+    expect(await store.rows('purchases'), isEmpty);
   });
 
   test('a new medicine is added to the list with its price, a barcode and the delivery', () async {

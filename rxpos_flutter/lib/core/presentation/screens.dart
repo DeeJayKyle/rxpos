@@ -36,6 +36,7 @@ import '../../features/sales_pos/presentation/pos_screen.dart';
 import '../../features/stock/presentation/add_stock_screen.dart';
 import '../../features/sync_status/presentation/sync_screen.dart';
 import 'nav.dart';
+import '../../features/insurance/presentation/insurers_screen.dart';
 
 final screens = <Screen>[
   Screen('/', 'Dashboard', Icons.space_dashboard_outlined, 'Sales', (_) => const DashboardScreen()),
@@ -51,8 +52,9 @@ final screens = <Screen>[
   Screen('/reminders', 'Reminders', Icons.notifications_active_outlined, 'People', (_) => const RemindersScreen(), permission: 'reminders', feature: 'reminders'),
   Screen('/messages', 'Messages & SMS', Icons.campaign_outlined, 'People', (_) => const MessagesScreen(), permission: 'reminders', feature: 'reminders'),
   Screen('/chat', 'Chat & Messages', Icons.forum_outlined, 'People', (_) => const ChatScreen(), permission: 'chat', feature: 'chat'),
-  Screen('/customers', 'Customers', Icons.people_outline, 'People', (q) => PeopleScreen(key: ValueKey('customers-${q['q']}'), suppliers: false, q: q['q'] ?? ''), permission: 'customers'),
-  Screen('/suppliers', 'Suppliers', Icons.factory_outlined, 'People', (_) => const PeopleScreen(suppliers: true), permission: 'suppliers'),
+  Screen('/customers', 'Customers', Icons.people_outline, 'People', (q) => PeopleScreen(key: ValueKey('customers-${q['q']}-${q['new']}'), suppliers: false, q: q['q'] ?? '', create: q['new'] == '1'), permission: 'customers'),
+  Screen('/suppliers', 'Suppliers', Icons.factory_outlined, 'People', (q) => PeopleScreen(key: ValueKey('suppliers-${q['new']}'), suppliers: true, create: q['new'] == '1'), permission: 'suppliers'),
+  Screen('/insurers', 'Insurers', Icons.health_and_safety_outlined, 'People', (_) => const InsurersScreen(), permission: 'customers|finance'),
   Screen('/medicines', 'Medicine List', Icons.medication_liquid_outlined, 'Medicine inventory', (_) => const MedicineListScreen(), permission: 'inventory.view'),
   Screen('/formulations', 'Formulations', Icons.science_outlined, 'Medicine inventory', (_) => const FormulationsScreen(), permission: 'medicines.manage'),
   Screen('/inventory', 'Inventory', Icons.inventory_2_outlined, 'Medicine inventory', (q) => InventoryScreen(key: ValueKey(q['filter']), filter: q['filter'] ?? 'instock'),

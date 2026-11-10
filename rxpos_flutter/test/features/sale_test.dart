@@ -1,11 +1,13 @@
 // Ringing up and completing a sale: the till's rules (src/pages/POS.jsx) and the records it writes.
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:rxpos/core/sync/sync_config.dart';
 import 'package:rxpos/core/data/record_store.dart';
 import 'package:rxpos/core/database/app_database.dart';
 import 'package:rxpos/core/entities/batch.dart';
 import 'package:rxpos/core/entities/movement.dart';
 import 'package:rxpos/core/entities/product.dart';
+import 'package:rxpos/core/entities/sale.dart';
 import 'package:rxpos/core/entities/settings.dart';
 import 'package:rxpos/core/rules/stock.dart';
 import 'package:rxpos/features/sales_pos/domain/cart.dart';
@@ -109,6 +111,83 @@ void main() {
       expect(moves.every((m) => m.ref == sale['number'] && m.type == 'Sale'), isTrue);
       expect((await store.rows('audit')).single['action'], 'Discount given');
       expect((await db.select(db.outbox).get()).map((o) => o.txn).toSet(), hasLength(1));
+    });
+
+    test('step 21: a scanned pack sells from its own batch first, then first-expiry-first-out', () async {
+      final stock = view(const [
+        Movement(id: 'm1', productId: 'p1', qty: 8, batchId: 'b-early'),
+        Movement(id: 'm2', productId: 'p1', qty: 100, batchId: 'b-late'),
+      ]);
+      final cart = [addToCart([], para, stock: 108, wholesale: false, settings: s).single.copyWith(preferBatch: 'b-late')];
+      final sale = await completeSale(store, cart: cart, c: const Checkout(method: cash, tendered: 1000), settings: s,
+          stock: stock, wholesale: false, cashier: 'Tia', now: DateTime(2026, 11, 5));
+      final item = (sale['items'] as List).single as Map;
+      expect((item['alloc'] as List).map((a) => (a as Map)['batchId']), ['b-late']);
+    });
+
+    test('step 22: an insured sale: the client pays the co-pay, the insurer is billed the rest; not the client\'s debt', () async {
+      final stock = view(const [Movement(id: 'm', productId: 'p1', qty: 100, batchId: 'b-late')]);
+      const ins = Insured(insurer: {'id': 'i1', 'name': 'Jubilee'}, scheme: {'id': 'gold', 'name': 'Gold', 'copayPct': 10}, memberNo: ' JB-77 ');
+      final cart = [setCount(addToCart([], para, stock: 100, wholesale: false, settings: s).single, 50)]; // 50 × 60 = 3,000
+      // the client and the member number are needed
+      expect(() => checkCheckout(cart, const Checkout(method: cash, insured: ins), totalsOf(cart, discount: 0, settings: s), settings: s), throwsA(isA<CartProblem>()));
+      expect(() => checkCheckout(cart, Checkout(method: cash, customerId: 'c1', insured: ins.withMember(' ')), totalsOf(cart, discount: 0, settings: s), settings: s), throwsA(isA<CartProblem>()));
+      // 300 tendered is enough for the co-pay
+      final sale = await completeSale(store, cart: cart, c: const Checkout(method: cash, tendered: 500, customerId: 'c1', customerName: 'Grace', insured: ins),
+          settings: s, stock: stock, wholesale: false, cashier: 'Tia');
+      expect((sale['total'], sale['paid'], sale['tendered']), (3000, 300, 500));
+      expect(sale['insurance'], {'insurerId': 'i1', 'insurer': 'Jubilee', 'schemeId': 'gold', 'scheme': 'Gold', 'memberNo': 'JB-77', 'share': 2700});
+      final sales = (await store.rows('sales')).map(Sale.fromRecord).toList();
+      expect((sales.single.balance, sales.single.insuredShare), (0.0, 2700.0));
+      // on credit: the client's part only
+      final credit = await completeSale(store, cart: cart, c: const Checkout(method: PaymentMethod(id: 'credit', name: 'Credit', type: 'credit'), tendered: 100, customerId: 'c1', insured: ins),
+          settings: s, stock: view(const [Movement(id: 'm', productId: 'p1', qty: 100, batchId: 'b-late')]), wholesale: false, cashier: 'Tia');
+      expect((credit['paid'], Sale.fromRecord(credit).balance), (100, 200.0));
+    });
+
+    test('step 8: credit limits: over only when this sale adds to what is owed beyond the limit', () {
+      expect(overLimit(limit: 1000, owed: 500, total: 400, tendered: 0), isNull);
+      expect(overLimit(limit: 1000, owed: 800, total: 500, tendered: 100), (limit: 1000.0, owed: 800.0, adds: 400.0));
+      expect(overLimit(limit: 1000, owed: 5000, total: 500, tendered: 500), isNull, reason: 'paid in full now');
+      expect(overLimit(limit: 0, owed: 1e9, total: 1), isNull, reason: 'no limit');
+    });
+
+    test('step 8: a sale over the limit keeps the reason and is in the audit log', () async {
+      final stock = view(const [Movement(id: 'm', productId: 'p1', qty: 100, batchId: 'b-late')]);
+      final sale = await completeSale(store, cart: addToCart([], para, stock: 100, wholesale: false, settings: s),
+          c: const Checkout(method: PaymentMethod(id: 'credit', name: 'Credit', type: 'credit'), tendered: 0, customerId: 'c1', customerName: 'Grace',
+              creditOver: {'limit': 1000, 'owed': 800, 'adds': 60, 'reason': 'pays on Friday'}),
+          settings: s, stock: stock, wholesale: false, cashier: 'Tia');
+      expect((sale['creditOver'] as Map)['reason'], 'pays on Friday');
+      final line = (await store.rows('audit')).singleWhere((a) => a['action'] == 'Credit limit exceeded');
+      expect('${line['details']}', allOf(contains('Grace owed'), contains('limit'), contains('pays on Friday')));
+    });
+
+    test('step 7: receipts are numbered per till, counted with the sale; the old style until there is a till', () async {
+      final stock = view(const [Movement(id: 'm', productId: 'p1', qty: 100, batchId: 'b-late')]);
+      Future<String> sell() async => (await completeSale(store, cart: addToCart([], para, stock: 100, wholesale: false, settings: s), c: const Checkout(method: cash),
+          settings: s, stock: stock, wholesale: false, cashier: 'Tia'))['number'] as String;
+      expect(await sell(), matches(RegExp(r'^R[0-9A-Z]{7}$')), reason: 'no till number yet');
+      expect(await store.rows('counters'), isEmpty);
+      await (await SyncConfig.load(db)).copyWith(till: 3).save(db);
+      await store.update((d) => d.put('branches', {'id': 'main', 'name': 'Main branch'}));
+      expect(await sell(), 'R-MAI-03-000001');
+      expect(await sell(), 'R-MAI-03-000002');
+      expect((await store.rows('counters')).single, containsPair('R', 2));
+      await store.update((d) => d.put('branches', {'id': 'main', 'name': 'Main branch', 'code': 'KLA'}));
+      expect(await sell(), 'R-KLA-03-000003');
+      final pf = await store.update((d) => d.number('PF'));
+      expect(pf, 'PF-KLA-03-000001', reason: 'each kind counts on its own');
+    });
+
+    test('a sale from a proforma names it, so the cloud does not flag its quoted discount (workplan step 3)', () async {
+      final stock = view(const [Movement(id: 'm', productId: 'p1', qty: 100, batchId: 'b-late')]);
+      final quoted = await completeSale(store, cart: addToCart([], para, stock: 100, wholesale: false, settings: s), c: const Checkout(method: cash),
+          settings: s, stock: stock, wholesale: false, cashier: 'Tia', proformaId: 'pf-7');
+      expect(quoted['proformaId'], 'pf-7');
+      final plain = await completeSale(store, cart: addToCart([], para, stock: 100, wholesale: false, settings: s), c: const Checkout(method: cash),
+          settings: s, stock: stock, wholesale: false, cashier: 'Tia');
+      expect(plain.containsKey('proformaId'), isFalse);
     });
 
     test('a credit sale records what was paid now', () async {

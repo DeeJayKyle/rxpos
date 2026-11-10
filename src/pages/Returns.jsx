@@ -5,7 +5,6 @@ import { useStore, uid, now, today, put, move, audit, downloadFile, toCSV, daysU
 import { CASH } from '../finance.js';
 import { Modal, Empty, PdfButton, SearchBox } from '../ui.jsx';
 import { toast } from '../feedback.jsx';
-import { docNumber } from './POS.jsx';
 
 const REASONS = ['Expired', 'Short expiry', 'Damaged', 'Wrong item delivered', 'Recall', 'Other'];
 
@@ -80,7 +79,7 @@ function ReturnNote({ r }) {
 }
 
 function ReturnForm({ pre, onClose }) {
-  const { db, products, batchesOf, update, user, branchId, fmt } = useStore();
+  const { db, products, batchesOf, update, user, branchId, fmt, numberFor } = useStore();
   const lineFor = (p, b, extra = {}) => ({ key: uid(), productId: p.id, name: p.name, batchId: b?.id || '', qty: b ? Math.max(1, b.qty) : 1, credit: b?.cost || p.cost || 0, reason: b?.expiry && daysUntil(b.expiry) < 0 ? 'Expired' : 'Damaged', ...extra });
   const [f, setF] = useState(() => {
     const base = { supplierId: '', date: today(), creditNote: '', settle: 'credit', bankId: CASH, note: '', lines: [] };
@@ -110,9 +109,10 @@ function ReturnForm({ pre, onClose }) {
       if (!(Number(l.qty) > 0) || Number(l.qty) > b.qty) return toast(`${l.name}: return between 1 and ${b.qty} (in stock in batch ${b.batch})`, 'warn');
     }
     const items = f.lines.map((l) => { const b = batchesOf(l.productId).find((x) => x.id === l.batchId); return { productId: l.productId, name: l.name, batchId: b.legacy ? null : b.id, batch: b.batch, expiry: b.expiry || '', qty: Math.round(Number(l.qty)), credit: Number(l.credit) || 0, reason: l.reason }; });
-    const rec = { id: uid(), number: docNumber('RT'), date: f.date || today(), supplierId: supplier.id, supplierName: supplier.name, creditNote: f.creditNote.trim(), settle: f.settle,
+    const rec = { id: uid(), number: '', date: f.date || today(), supplierId: supplier.id, supplierName: supplier.name, creditNote: f.creditNote.trim(), settle: f.settle,
       ...(f.settle === 'cash' ? { bankId: f.bankId } : {}), note: f.note.trim(), items, total: items.reduce((a, i) => a + i.qty * i.credit, 0), branchId, by: user.name, at: now() };
     update((d) => {
+      rec.number = numberFor(d, 'RT'); // step 7: counted with the return
       for (const i of items) move(d, { productId: i.productId, qty: -i.qty, type: 'Supplier return', ref: rec.number, note: i.reason, user: user.name, batchId: i.batchId, branchId });
       put(d, 'supplierReturns', rec);
       audit(d, user, 'Returned to supplier', `${rec.number} to ${supplier.name}: ${items.length} line${items.length > 1 ? 's' : ''}, ${fmt(rec.total)} (${f.settle === 'cash' ? 'refund' : 'credit note'})`, branchId);

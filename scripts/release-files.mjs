@@ -77,7 +77,7 @@ export function writeReleaseFiles(dist, info, version) {
   fs.mkdirSync(path.join(dist, 'updates'), { recursive: true });
   fs.writeFileSync(path.join(dist, zipName), archive);
   // shell: bump when a change needs a new installer / APK (new native permission or plugin); older shells are told so
-  const manifest = { version, build: info.build, label: info.label, commit: info.commit, shell: 1, zip: zipName, zipSha256: sha256(archive), files: files.map(({ data, ...f }) => f) }; // eslint-disable-line no-unused-vars
+  const manifest = { version, build: info.build, label: info.label, commit: info.commit, shell: 1, zip: zipName, zipSha256: sha256(archive), files: files.map(({ data, ...f }) => f) };
   fs.writeFileSync(path.join(dist, 'version.json'), JSON.stringify(manifest));
   return manifest;
 }

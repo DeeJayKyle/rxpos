@@ -1,0 +1,91 @@
+{
+  "_about": "Field-by-field merge (workplan step 14). Run by tests/unit-fieldmerge.mjs (src/fieldmerge.js) and rxpos_flutter/test/sync/field_merge_test.dart (lib/core/sync/field_merge.dart), so both apps merge the same way.",
+  "merge": [
+    {
+      "name": "two devices edit different fields: both survive",
+      "a": { "id": "p1", "name": "Amox", "price": 1200, "reorder": 10, "updatedAt": "2026-11-09T10:00:00Z", "_f": { "name": "2026-11-01T00:00:00Z", "reorder": "2026-11-01T00:00:00Z" } },
+      "aAt": "2026-11-09T10:00:00Z",
+      "b": { "id": "p1", "name": "Amox", "price": 1000, "reorder": 25, "updatedAt": "2026-11-09T11:00:00Z", "_f": { "name": "2026-11-01T00:00:00Z", "price": "2026-11-01T00:00:00Z" } },
+      "bAt": "2026-11-09T11:00:00Z",
+      "expect": { "id": "p1", "name": "Amox", "price": 1200, "reorder": 25, "updatedAt": "2026-11-09T11:00:00Z", "_f": { "name": "2026-11-01T00:00:00Z", "price": "2026-11-09T10:00:00Z" } }
+    },
+    {
+      "name": "the same field edited on both: the newer wins",
+      "a": { "id": "p1", "price": 1200, "updatedAt": "2026-11-09T10:00:00Z" },
+      "aAt": "2026-11-09T10:00:00Z",
+      "b": { "id": "p1", "price": 1300, "updatedAt": "2026-11-09T11:00:00Z" },
+      "bAt": "2026-11-09T11:00:00Z",
+      "expect": { "id": "p1", "price": 1300, "updatedAt": "2026-11-09T11:00:00Z" }
+    },
+    {
+      "name": "an older copy changes nothing",
+      "a": { "id": "p1", "price": 1300, "updatedAt": "2026-11-09T11:00:00Z" },
+      "aAt": "2026-11-09T11:00:00Z",
+      "b": { "id": "p1", "price": 900, "updatedAt": "2026-11-09T09:00:00Z" },
+      "bAt": "2026-11-09T09:00:00Z",
+      "expect": { "id": "p1", "price": 1300, "updatedAt": "2026-11-09T11:00:00Z" }
+    },
+    {
+      "name": "a tie keeps the existing copy",
+      "a": { "id": "p1", "price": 1300, "updatedAt": "2026-11-09T11:00:00Z" },
+      "aAt": "2026-11-09T11:00:00Z",
+      "b": { "id": "p1", "price": 1, "updatedAt": "2026-11-09T11:00:00Z" },
+      "bAt": "2026-11-09T11:00:00Z",
+      "expect": { "id": "p1", "price": 1300, "updatedAt": "2026-11-09T11:00:00Z" }
+    },
+    {
+      "name": "an older app (no _f) that does not know a field never erases it",
+      "a": { "id": "p1", "name": "Amox", "price": 1200, "shelf": "A3", "updatedAt": "2026-11-09T10:00:00Z" },
+      "aAt": "2026-11-09T10:00:00Z",
+      "b": { "id": "p1", "name": "Amoxicillin", "price": 1200, "updatedAt": "2026-11-09T11:00:00Z" },
+      "bAt": "2026-11-09T11:00:00Z",
+      "expect": { "id": "p1", "name": "Amoxicillin", "price": 1200, "shelf": "A3", "updatedAt": "2026-11-09T11:00:00Z", "_f": { "shelf": "2026-11-09T10:00:00Z" } }
+    },
+    {
+      "name": "a field removed on purpose stays removed when that is newer",
+      "a": { "id": "c1", "name": "Ann", "allergies": "penicillin", "updatedAt": "2026-11-09T10:00:00Z" },
+      "aAt": "2026-11-09T10:00:00Z",
+      "b": { "id": "c1", "name": "Ann", "updatedAt": "2026-11-09T11:00:00Z", "_f": { "name": "2026-11-09T10:00:00Z", "allergies": "2026-11-09T11:00:00Z" } },
+      "bAt": "2026-11-09T11:00:00Z",
+      "expect": { "id": "c1", "name": "Ann", "updatedAt": "2026-11-09T11:00:00Z", "_f": { "name": "2026-11-09T10:00:00Z", "allergies": "2026-11-09T11:00:00Z" } }
+    },
+    {
+      "name": "objects (packs) are compared and taken whole",
+      "a": { "id": "p2", "packs": [{ "name": "Box", "size": 10 }], "price": 500, "updatedAt": "2026-11-09T10:00:00Z", "_f": { "price": "2026-11-01T00:00:00Z" } },
+      "aAt": "2026-11-09T10:00:00Z",
+      "b": { "id": "p2", "packs": [{ "name": "Strip", "size": 10 }], "price": 550, "updatedAt": "2026-11-09T09:30:00Z", "_f": { "packs": "2026-11-01T00:00:00Z" } },
+      "bAt": "2026-11-09T09:30:00Z",
+      "expect": { "id": "p2", "packs": [{ "name": "Box", "size": 10 }], "price": 550, "updatedAt": "2026-11-09T10:00:00Z", "_f": { "price": "2026-11-09T09:30:00Z" } }
+    }
+  ],
+  "stamp": [
+    {
+      "name": "a new record has no field times",
+      "prev": null,
+      "next": { "id": "p1", "name": "Amox", "price": 1000 },
+      "now": "2026-11-09T12:00:00Z",
+      "expect": { "id": "p1", "name": "Amox", "price": 1000, "updatedAt": "2026-11-09T12:00:00Z" }
+    },
+    {
+      "name": "only the changed field gets the new time",
+      "prev": { "id": "p1", "name": "Amox", "price": 1000, "reorder": 10, "updatedAt": "2026-11-09T10:00:00Z" },
+      "next": { "id": "p1", "name": "Amox", "price": 1100, "reorder": 10, "updatedAt": "2026-11-09T10:00:00Z" },
+      "now": "2026-11-09T12:00:00Z",
+      "expect": { "id": "p1", "name": "Amox", "price": 1100, "reorder": 10, "updatedAt": "2026-11-09T12:00:00Z", "_f": { "name": "2026-11-09T10:00:00Z", "reorder": "2026-11-09T10:00:00Z" } }
+    },
+    {
+      "name": "older field times are kept, a removed field is marked",
+      "prev": { "id": "c1", "name": "Ann", "allergies": "penicillin", "phone": "0700", "updatedAt": "2026-11-09T10:00:00Z", "_f": { "name": "2026-11-01T00:00:00Z" } },
+      "next": { "id": "c1", "name": "Ann", "phone": "0701" },
+      "now": "2026-11-09T12:00:00Z",
+      "expect": { "id": "c1", "name": "Ann", "phone": "0701", "updatedAt": "2026-11-09T12:00:00Z", "_f": { "name": "2026-11-01T00:00:00Z", "allergies": "2026-11-09T12:00:00Z" } }
+    },
+    {
+      "name": "saving with nothing changed keeps every field's time",
+      "prev": { "id": "p1", "price": 1000, "updatedAt": "2026-11-09T10:00:00Z" },
+      "next": { "id": "p1", "price": 1000 },
+      "now": "2026-11-09T12:00:00Z",
+      "expect": { "id": "p1", "price": 1000, "updatedAt": "2026-11-09T12:00:00Z", "_f": { "price": "2026-11-09T10:00:00Z" } }
+    }
+  ]
+}

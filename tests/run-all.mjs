@@ -17,12 +17,23 @@ const SUITES = [
   ['invoice reading cross-check (unit)', 'unit-invoice-read.mjs', []],
   ['date formats (unit)', 'unit-dateformat.mjs', []],
   ['packs (unit)', 'unit-packs.mjs', []],
+  ['GS1 pack codes (unit)', 'unit-gs1.mjs', []],
+  ['insurance co-pay and balances (unit)', 'unit-insurance.mjs', []],
+  ['expiry dates in any format (unit)', 'unit-expiry.mjs', []],
+  ['payroll: PAYE, NSSF, a month\'s pay (unit)', 'unit-payroll.mjs', []],
   ['safe file urls (unit)', 'unit-safeurl.mjs', []],
   ['refill rules (unit)', 'unit-rxrules.mjs', []],
   ['crash scrub (unit)', 'unit-scrub.mjs', []],
   ['idle promote (unit)', 'unit-promote.mjs', []],
   ['offline sign-in (unit)', 'unit-offline.mjs', []],
   ['money math (unit)', 'unit-money.mjs', []],
+  ['server write policy (unit)', 'unit-policy.mjs', []],
+  ['sale checks (unit)', 'unit-anomalies.mjs', []],
+  ['password hashing (unit)', 'unit-passwords.mjs', []],
+  ['sign-in slowdown (unit)', 'unit-throttle.mjs', []],
+  ['document numbers (unit)', 'unit-docnumbers.mjs', []],
+  ['stock balances (unit)', 'unit-stockindex.mjs', []],
+  ['field-by-field merge (unit)', 'unit-fieldmerge.mjs', []],
   ['medicine search (unit)', 'unit-search.mjs', []],
   ['drug labels (unit)', 'unit-druglabel.mjs', []],
   ['fefo allocate (unit)', 'unit-fefo.mjs', []],
@@ -56,6 +67,25 @@ const SUITES = [
   ['idle screen fit', 'idle-fit.mjs', ['.output/fit']],
   ['username & ABC report', 'v22-username-abc.mjs', ['.output/v22']],
   ['server permissions', 'v23-perms.mjs', []],
+  ['server write policy', 'v55-write-policy.mjs', []],
+  ['staff screens match the policy', 'v55-staff-ui.mjs', []],
+  ['sale checks for the owner', 'v56-sale-checks.mjs', []],
+  ['passwords: rounds, upgrade on sign-in', 'v57-passwords.mjs', []],
+  ['sign-in slowdown per account', 'v58-throttle.mjs', []],
+  ['document numbers: tills, receipts, branch code', 'v59-doc-numbers.mjs', []],
+  ['credit limits: reason at the till, flagged for the owner', 'v60-credit-limit.mjs', []],
+  ['field-by-field merge in the cloud', 'v61-field-merge.mjs', []],
+  ['field-by-field merge in the app (offline edit)', 'v61-field-merge-app.mjs', []],
+  ['cloud counters: concurrent pushes, cached record count', 'v62-counters.mjs', []],
+  ['hub: moved from hub.json onto the cloud\'s code', 'hub-move.mjs', []],
+  ['close the day', 'v63-day-close.mjs', []],
+  ['discount limit per role, blind cash-up', 'v64-discount-blind.mjs', []],
+  ['GS1 pack codes: till batch, expired pack, Add Stock', 'v65-gs1.mjs', []],
+  ['insurance: co-pay at the till, insurer owes, payment', 'v66-insurance.mjs', []],
+  ['accessibility (axe): sign-in and main pages, light and dark', 'v67-a11y.mjs', []],
+  ['received by the box, sold by the unit', 'v68-packs.mjs', []],
+  ['keyboard, mouse, selection and navigation', 'v69-controls.mjs', []],
+  ['from the Flutter app: report emails, shelves, payroll, till panels', 'v70-from-flutter.mjs', []],
   ['file uploads', 'v24-files.mjs', []],
   ['security headers', 'v25-headers.mjs', []],
   ['rate limits', 'v26-ratelimit.mjs', []],
@@ -95,13 +125,31 @@ const SUITES = [
   ...(process.platform === 'win32' || fs.existsSync('/usr/bin/xvfb-run') ? [['windows self-update', 'electron-update.mjs', []]] : []),
 ];
 const only = process.argv[2];
+// RXPOS_TEST_HUB=1: the same suites against the self-hosted hub (server/hub.mjs, the cloud's code on Node's SQLite)
+// instead of the local Cloudflare cloud. Only suites that don't need Cloudflare itself (the live connection, R2,
+// the cloud's own database file) run there.
+const HUB = process.env.RXPOS_TEST_HUB === '1';
+const HUB_SUITES = new Set(['unit-policy.mjs', 'v14-api.mjs', 'v23-perms.mjs', 'v26-ratelimit.mjs', 'v27-secrets.mjs', 'v29-immutable.mjs', 'v38-sync-protocol.mjs',
+  'v55-write-policy.mjs', 'v55-staff-ui.mjs', 'v56-sale-checks.mjs', 'v57-passwords.mjs', 'v58-throttle.mjs', 'v59-doc-numbers.mjs', 'v60-credit-limit.mjs',
+  'v61-field-merge.mjs', 'v61-field-merge-app.mjs', 'v37-reliability.mjs', 'hub-move.mjs', 'v63-day-close.mjs', 'v64-discount-blind.mjs', 'v65-gs1.mjs', 'v66-insurance.mjs']);
+// RXPOS_CI=1 (full-tests.yml): checks that need a service a CI machine can't reach are reported as skipped, not
+// failed, so the deploy gate isn't blocked by the outside world. Listed by exact check name: anything else that fails
+// still fails. Local runs (no RXPOS_CI) count them as failures as before.
+const CI = process.env.RXPOS_CI === '1';
+const NEEDS_OUTSIDE = new Map([
+  ['weather loads (Open-Meteo)', 'Open-Meteo'],
+  ['AI drug quiz (Workers AI)', 'Workers AI'],
+  ['AI reads a prescription photo (Workers AI vision)', 'Workers AI'],
+  ['weather uses the device location (GPS)', 'Open-Meteo'],
+  ['outside temperature & humidity logged every 6 hours', 'Open-Meteo'],
+]);
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const state = path.join(here, '.state');
 fs.rmSync(state, { recursive: true, force: true });
 // run the tools with node directly: no shell, so folders with spaces in their names work
 const bin = (p) => path.join(root, 'node_modules', p);
-console.log('Building the app and starting a local cloud…');
+console.log(HUB ? 'Building the app and starting a local hub (server/hub.mjs)…' : 'Building the app and starting a local cloud…');
 const build = spawn(process.execPath, [bin('vite/bin/vite.js'), 'build'], { cwd: root });
 let buildOut = '';
 build.stdout.on('data', (d) => { buildOut += d; });
@@ -116,8 +164,13 @@ if (!process.env.CLOUDFLARE_API_TOKEN) {
   fs.writeFileSync(path.join(root, 'wrangler.test.jsonc'), cfg);
   cfgArgs.push('-c', 'wrangler.test.jsonc');
 }
-const cloud = spawn(process.execPath, [bin('wrangler/bin/wrangler.js'), 'dev', ...cfgArgs, '--port', '8790', '--persist-to', state, '--var', 'DB_BACKEND:', '--var', 'SYNC_KEY:local-test-sync-key-0123456789abcdef',
-  '--var', `OWNER_KEY:${OWNER}`, '--var', `PUBLIC_URL:${BASE}`], { cwd: root, stdio: 'ignore' });
+const cloud = HUB
+  ? spawn(process.execPath, ['--no-warnings', path.join(root, 'server', 'hub.mjs'), '--port', '8790', '--data', state, '--web', path.join(root, 'dist')], { cwd: root, stdio: 'ignore',
+    env: { ...process.env, RXPOS_SYNC_KEY: 'local-test-sync-key-0123456789abcdef', RXPOS_OWNER_KEY: OWNER, PUBLIC_URL: BASE, PBKDF2_ITER: '150000', RXPOS_TRUST_PROXY: '1' } })
+  : spawn(process.execPath, [bin('wrangler/bin/wrangler.js'), 'dev', ...cfgArgs, '--port', '8790', '--persist-to', state, '--var', 'DB_BACKEND:', '--var', 'SYNC_KEY:local-test-sync-key-0123456789abcdef',
+  '--var', `OWNER_KEY:${OWNER}`, '--var', `PUBLIC_URL:${BASE}`,
+  // step 5: a raised password-rounds setting, so every suite signs in through the re-hash path
+  '--var', 'PBKDF2_ITER:150000'], { cwd: root, stdio: 'ignore' });
 const stop = () => { try { process.platform === 'win32' ? spawn('taskkill', ['/pid', String(cloud.pid), '/T', '/F'], { stdio: 'ignore' }) : cloud.kill('SIGTERM'); } catch { /* already gone */ } };
 process.on('exit', stop);
 let up = false;
@@ -128,8 +181,10 @@ const owner = (p, body) => fetch(BASE + '/api/owner' + p, { method: body ? 'POST
 const clearAll = async () => { for (const t of (await owner('/tenants')).tenants || []) await owner('/tenants/' + t.id + '/delete', { confirm: t.slug }); };
 
 const results = [];
+let totalSkipped = 0;
 for (const [label, file, extra] of SUITES) {
-  if (only && !file.includes(only)) continue;
+  if (only && !only.split(',').some((o) => file.includes(o))) continue; // several, comma-separated: npm test -- owner-auth,v14-ui
+  if (HUB && !HUB_SUITES.has(file)) continue;
   await clearAll();
   const outDir = extra[0] ? path.join(here, extra[0]) : null;
   const args = [path.join(here, file), BASE, OWNER, ...(outDir ? [outDir] : [])];
@@ -141,13 +196,25 @@ for (const [label, file, extra] of SUITES) {
     p.stderr.on('data', (d) => { buf += d; });
     p.on('exit', (code) => resolve({ code, buf }));
   });
+  if (process.env.RXPOS_VERBOSE === '1') console.log(out.buf); // RXPOS_VERBOSE=1: every suite's own output
   const m = out.buf.match(/(\d+) passed, (\d+) failed/);
-  const passed = m ? +m[1] : 0, failed = m ? +m[2] : 1;
+  const passed = m ? +m[1] : 0;
+  let failed = m ? +m[2] : 1;
+  const skipped = [];
+  if (CI && m) for (const line of out.buf.split('\n')) {
+    const name = line.startsWith('FAIL  ') && [...NEEDS_OUTSIDE.keys()].find((k) => line.slice(6).startsWith(k));
+    if (name) { skipped.push(`${name} (needs ${NEEDS_OUTSIDE.get(name)})`); failed--; }
+  }
+  if (skipped.length && !failed) out.code = 0; // the only failures were the listed outside-service checks
+  totalSkipped += skipped.length;
   results.push({ label, passed, failed: out.code && !failed ? 1 : failed });
   console.log(`${failed || out.code ? '✗' : '✓'} ${label.padEnd(20)} ${passed} passed, ${failed} failed  (${Math.round((Date.now() - t0) / 1000)} s)`);
-  for (const line of out.buf.split('\n').filter((l) => /^(FAIL|Error|\s+at |[A-Za-z]*Error:)/.test(l)).slice(0, 8)) console.log('    ' + line.slice(0, 220));
+  // a suite that stopped before its own summary: the end of what it printed, so the reason is in the CI log
+  if (!m) console.log(out.buf.trim().split('\n').slice(-15).map((l) => '    | ' + l.slice(0, 220)).join('\n'));
+  for (const line of out.buf.split('\n').filter((l) => /^(FAIL|Error|\s+at |[A-Za-z]*Error:)/.test(l) && !skipped.some((x) => l.slice(6).startsWith(x.replace(/ \(needs .*\)$/, '')))).slice(0, 12)) console.log('    ' + line.slice(0, 220));
+  for (const x of skipped) console.log('    SKIP  ' + x);
 }
 const total = results.reduce((a, r) => ({ p: a.p + r.passed, f: a.f + r.failed }), { p: 0, f: 0 });
-console.log(`\n${total.p} passed, ${total.f} failed`);
+console.log(`\n${total.p} passed, ${total.f} failed${totalSkipped ? `, ${totalSkipped} skipped (need outside services)` : ''}`);
 stop();
 process.exit(total.f ? 1 : 0);

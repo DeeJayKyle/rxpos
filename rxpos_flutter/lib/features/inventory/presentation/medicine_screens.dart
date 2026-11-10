@@ -2,6 +2,7 @@
 // editors used from the lists.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/data/pharmacy_providers.dart';
 import '../../../core/data/record_store.dart';
@@ -9,10 +10,12 @@ import '../../../core/entities/movement.dart';
 import '../../../core/entities/product.dart';
 import '../../../core/entities/settings.dart';
 import '../../../core/presentation/export.dart';
+import '../../../core/presentation/list_controls.dart';
 import '../../../core/presentation/widgets.dart';
 import '../../../core/rules/dates.dart';
 import '../../../core/rules/ids.dart';
 import '../../../core/rules/money.dart';
+import '../../../core/rules/pricing.dart';
 import '../../../core/rules/search.dart';
 import '../../../core/rules/stock.dart';
 import '../../auth/application/session_controller.dart';
@@ -32,6 +35,52 @@ class MedicineListScreen extends ConsumerStatefulWidget {
 class _MedicineListScreenState extends ConsumerState<MedicineListScreen> {
   String _q = '';
   bool _review = false;
+  final _search = TextEditingController();
+  final _searchFocus = FocusNode();
+
+  @override
+  void dispose() {
+    _search.dispose();
+    _searchFocus.dispose();
+    super.dispose();
+  }
+
+  /// The ticked medicines together (the owner's request: selection and bulk actions); every change is audited.
+  Future<void> _bulkPrice(List<Product> ps, PharmacySettings s, VoidCallback done) async {
+    final v = await editRecord(context, title: 'Change the retail price of ${ps.length} medicine${ps.length > 1 ? 's' : ''}', save: 'Change prices',
+        fields: const [FormFieldSpec('how', 'Type +10% or -5% to raise or lower each price, or an amount (1500) for all', required: true, hint: '+10%')]);
+    if (v == null || !mounted) return;
+    final m = RegExp(r'^\s*([+-]?\d+(?:\.\d+)?)\s*(%?)\s*$').firstMatch('${v['how']}');
+    if (m == null) return say(context, 'Type +10%, -5% or an amount', error: true);
+    final n = double.parse(m[1]!), pct = m[2] == '%';
+    if (!pct && !(n > 0)) return say(context, 'A price is above 0', error: true);
+    final who = (await ref.read(sessionControllerProvider.future))?.userName ?? '';
+    await ref.read(recordStoreProvider).update((d) {
+      for (final p in ps) {
+        final price = pct ? markupPrice(p.price, n, s.priceRound) : n;
+        if (!(price > 0) || price == p.price) continue;
+        d.put('products', p.copyWith(price: price).toRecord());
+        d.audit(who, 'Price changed', '${p.name}: retail ${s.money(p.price)} → ${s.money(price)} (${ps.length} changed together)');
+      }
+    });
+    if (mounted) say(context, 'Prices changed for ${ps.length} medicine${ps.length > 1 ? 's' : ''}');
+    done();
+  }
+
+  Future<void> _bulkField(List<Product> ps, String key, String label, VoidCallback done) async {
+    final v = await editRecord(context, title: '$label for ${ps.length} medicine${ps.length > 1 ? 's' : ''}', fields: [FormFieldSpec(key, label, kind: key == 'reorder' ? FieldKind.number : FieldKind.text)]);
+    if (v == null || !mounted) return;
+    final who = (await ref.read(sessionControllerProvider.future))?.userName ?? '';
+    final val = key == 'reorder' ? ((v[key] as num?) ?? 0) : '${v[key] ?? ''}'.trim();
+    await ref.read(recordStoreProvider).update((d) {
+      for (final p in ps) {
+        d.put('products', {...p.toRecord(), key: val});
+      }
+      d.audit(who, 'Medicines changed', '$label set to "$val" for ${ps.length}: ${ps.take(5).map((p) => p.name).join(', ')}${ps.length > 5 ? '…' : ''}');
+    });
+    if (mounted) say(context, '$label saved for ${ps.length}');
+    done();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -48,20 +97,46 @@ class _MedicineListScreenState extends ConsumerState<MedicineListScreen> {
       title: 'Medicine List',
       subtitle: _review ? '$issues records need a look. Open one to fix it; nothing is changed automatically.' : '${d.products.length} medicines and items',
       actions: [
-        SearchField(onChanged: (v) => setState(() => _q = v), hint: 'Medicine, generic, barcode…'),
+        SearchField(controller: _search, focusNode: _searchFocus, onChanged: (v) => setState(() => _q = v), hint: 'Medicine, generic, barcode…'),
         FilterChip(label: Text('Needs review${issues > 0 ? ' ($issues)' : ''}'), selected: _review, onSelected: (v) => setState(() => _review = v)),
         if (manage) FilledButton.icon(onPressed: () => editMedicine(context, ref, null), icon: const Icon(Icons.add), label: const Text('Add medicine')),
       ],
       child: list.isEmpty
           ? EmptyState(_review ? 'Every record looks complete' : 'No medicines match')
-          : ListView.separated(
-              itemCount: list.length > 400 ? 400 : list.length,
+          : () {
+              final shown = list.take(400).toList();
+              // the owner's request: keys, double-click, right-click and ticks, as every list (list_controls.dart)
+              return ListControls(
+              ids: [for (final p in shown) p.id],
+              search: _searchFocus,
+              onClearSearch: () => setState(() {
+                _search.clear();
+                _q = '';
+              }),
+              onEdit: manage ? (i) => editMedicine(context, ref, shown[i]) : null,
+              onNew: manage ? () => editMedicine(context, ref, null) : null,
+              menu: (i) => [
+                if (manage) RowAction('Edit', Icons.edit_outlined, () => editMedicine(context, ref, shown[i]), keyId: 'list:edit'),
+                RowAction('Stock card', Icons.receipt_long_outlined, () => context.go('/stock-card?id=${Uri.encodeComponent(shown[i].id)}')),
+                if (manage) RowAction('Packs (strip, box…)', Icons.inventory_2_outlined, () => editPacks(context, ref, shown[i])),
+              ],
+              bulk: manage
+                  ? (rows) => [
+                        ('Change price…', Icons.sell_outlined, (rows, done) => _bulkPrice([for (final i in rows) shown[i]], s, done)),
+                        ('Set category…', Icons.category_outlined, (rows, done) => _bulkField([for (final i in rows) shown[i]], 'category', 'Category', done)),
+                        ('Set reorder level…', Icons.low_priority, (rows, done) => _bulkField([for (final i in rows) shown[i]], 'reorder', 'Reorder level', done)),
+                      ]
+                  : null,
+              builder: (context, row) => ListView.separated(
+              itemCount: shown.length,
               separatorBuilder: (_, _) => const Divider(height: 1),
               itemBuilder: (_, i) {
-                final p = list[i];
+                final p = shown[i];
                 final st = d.stockOf(p.id);
                 final packs = p.packs.where((k) => k.name.isNotEmpty && k.size > 1);
-                return ListTile(
+                final rs = row(i);
+                return rs.wrap(ListTile(
+                  leading: manage ? rs.tickBox : null,
                   title: Wrap(spacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
                     Text(p.name, style: const TextStyle(fontWeight: FontWeight.w700)),
                     if (p.rx) const _Tag('Rx'),
@@ -86,9 +161,11 @@ class _MedicineListScreenState extends ConsumerState<MedicineListScreen> {
                       ),
                   ]),
                   onTap: manage ? () => editMedicine(context, ref, p) : null,
-                );
+                ));
               },
             ),
+            );
+            }(),
     );
   }
 }

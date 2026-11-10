@@ -1,7 +1,7 @@
 // Windows app self-update (electron/updater.cjs): start the app, find a newer build, switch to it, keep the
 // device's data, survive a restart, and roll back a broken build. Serves a copy of dist/ as the "newer build".
 //   npm run build && node tests/electron-update.mjs      (Linux needs xvfb-run; Windows runs as is)
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
@@ -35,8 +35,15 @@ const srv = http.createServer((req, res) => {
   res.writeHead(200); res.end(fs.readFileSync(file));
 }).listen(8799);
 const electron = path.join(root, 'node_modules', 'electron', 'dist', process.platform === 'win32' ? 'electron.exe' : 'electron');
+// Electron 43 no longer downloads its binary on npm install (its install-electron step does): fetch it when missing
+if (!fs.existsSync(electron)) {
+  const r = spawnSync(process.execPath, [path.join(root, 'node_modules', 'electron', 'install.js')], { cwd: root, stdio: 'inherit', timeout: 240000 });
+  if (r.status !== 0 || !fs.existsSync(electron)) { console.log('Error: could not download the Electron binary'); console.log('\n0 passed, 1 failed'); process.exit(1); }
+}
 const cmd = process.platform === 'linux' ? ['xvfb-run', ['-a', electron]] : [electron, []];
-const start = () => spawn(cmd[0], [...cmd[1], ...(process.getuid?.() === 0 ? ['--no-sandbox'] : []), '--remote-debugging-port=9333', root],
+// Linux: no Chromium sandbox for this headless test run (root can't use it, and Ubuntu 24.04's runners block the
+// unprivileged namespaces it needs for everyone else, so Electron would not start on GitHub); the app itself is unchanged
+const start = () => spawn(cmd[0], [...cmd[1], ...(process.platform === 'linux' ? ['--no-sandbox'] : []), '--remote-debugging-port=9333', root],
   { env: { ...process.env, HOME: S + '/home', XDG_CONFIG_HOME: S + '/home/.config', APPDATA: S + '/home/.config', RXPOS_UPDATE_URL: 'http://localhost:8799', RXPOS_READY_TIMEOUT: '8000' }, stdio: ['ignore', 'pipe', 'pipe'], detached: process.platform !== 'win32' });
 // stop the app and everything it started (xvfb-run leaves Electron running otherwise)
 const stop = (c) => { try { process.platform === 'win32' ? spawn('taskkill', ['/pid', String(c.pid), '/T', '/F']) : process.kill(-c.pid, 'SIGTERM'); } catch { /* gone */ } setTimeout(() => { try { process.kill(-c.pid, 'SIGKILL'); } catch { /* gone */ } }, 1500); };
@@ -76,6 +83,6 @@ try {
   const again = await p.evaluate(() => window.rxposShell.check());
   check('the broken build is not downloaded again', again.status === 'current', JSON.stringify(again));
   b.disconnect();
-} catch (e) { console.log('ERROR', e.message); fail++; console.log(log.slice(-1500)); }
+} catch (e) { console.log('Error:', e.message); fail++; console.log(log.slice(-1500).split('\n').map((l) => 'Error:   ' + l).join('\n')); } // shown by run-all
 stop(el); srv.close();
 console.log(`\n${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0);

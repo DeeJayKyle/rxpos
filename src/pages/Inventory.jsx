@@ -1,12 +1,14 @@
 import { useState, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Download, Barcode as BarcodeIcon, SlidersHorizontal, Save, Undo2, Pencil } from 'lucide-react';
+import { Download, Barcode as BarcodeIcon, SlidersHorizontal, Save, Undo2, Pencil, ScrollText, Boxes } from 'lucide-react';
 import { CrudPage, Tabs, Modal, SearchBox, Empty, PdfButton } from '../ui.jsx';
 import { useStore, daysUntil, put, move, addBatch, audit, downloadFile, toCSV, batchValue, stockValue, markupPrice, MAIN_BRANCH } from '../store.jsx';
-import { ask, toast } from '../feedback.jsx';
+import { ask, askText, toast } from '../feedback.jsx';
 import { formatQty } from '../money.js';
 import { removalSplit } from '../fefo.js';
 import { newInternalBarcode } from '../barcode.jsx';
+import { useHoverCard } from '../listcontrols.jsx';
+import { useMedicineOrder, MedicineOrderPicker, groupedRows, useFolded, GroupHeadingRow } from '../medgroups.jsx';
 
 const expiryClass = (expiry, warn) => {
   if (!expiry) return '';
@@ -35,8 +37,44 @@ const recordIssues = (p, dupBarcodes) => [
   p.name && p.name !== p.name.trim() && 'Spaces around the name',
 ].filter(Boolean);
 
+/** A medicine's stock and batches, shown while the pointer rests on its name (the owner's request: mouse functions) */
+function StockPeek({ p }) {
+  const { fmt, batchesOf } = useStore();
+  const bs = (batchesOf(p.id) || []).filter((b) => b.qty > 0).sort((a, b) => String(a.expiry).localeCompare(String(b.expiry)));
+  return (<>
+    <strong>{p.name}</strong><br />
+    <span className="muted">{formatQty(p.stock)} {(p.unit || 'unit').toLowerCase()}s in stock · {fmt(p.price)} each</span>
+    {bs.length ? <table><tbody>{bs.slice(0, 6).map((b) => <tr key={b.id}><td>{b.batch || '—'}</td><td>{b.expiry || '—'}{b.expiry && daysUntil(b.expiry) < 0 ? ' (expired)' : ''}</td><td className="num">{formatQty(b.qty)}</td></tr>)}</tbody></table> : <div className="muted small">No batches in stock</div>}
+    {bs.length > 6 && <div className="muted small">+{bs.length - 6} more batches</div>}
+  </>);
+}
+
 export function MedicineList() {
-  const { db, products, update, fmt, user, branchId } = useStore();
+  const { db, products, update, fmt, user, branchId, can } = useStore();
+  const navigate = useNavigate();
+  const peek = useHoverCard((p) => <StockPeek p={p} />);
+  // the ticked medicines together (the owner's request: selection and bulk actions); every change is audited
+  const bulkPrice = async (rows, done) => {
+    const how = await askText({ title: `Change the retail price of ${rows.length} medicine${rows.length > 1 ? 's' : ''}`, message: 'Type +10% or -5% to raise or lower each price, or an amount (1500) for the same price on all.', placeholder: '+10%', confirmText: 'Change prices' });
+    if (!how) return;
+    const m = /^\s*([+-]?\d+(?:\.\d+)?)\s*(%?)\s*$/.exec(how);
+    if (!m) return toast('Type +10%, -5% or an amount', 'warn');
+    const n = Number(m[1]), pct = m[2] === '%';
+    if (!pct && !(n > 0)) return toast('A price is above 0', 'warn');
+    const priceOf = (p) => (pct ? markupPrice(p.price || 0, n, s.priceRound) : n);
+    await update((d) => { for (const p of rows) { const price = priceOf(p); if (!(price > 0) || price === p.price) continue; put(d, 'products', { ...d.products.find((x) => x.id === p.id) || p, price }); audit(d, user, 'Price changed', `${p.name}: retail ${fmt(p.price)} → ${fmt(price)} (${rows.length} changed together)`, branchId); } });
+    toast(`Prices changed for ${rows.length} medicine${rows.length > 1 ? 's' : ''}`); done();
+  };
+  const bulkField = (key, label) => async (rows, done) => {
+    const v = await askText({ title: `${label} for ${rows.length} medicine${rows.length > 1 ? 's' : ''}`, message: `The same ${label.toLowerCase()} for all the ticked medicines.`, confirmText: 'Save' });
+    if (v === null || v === undefined) return;
+    const val = key === 'reorder' ? Number(v) : String(v).trim();
+    if (key === 'reorder' && !(val >= 0)) return toast('A reorder level is 0 or more', 'warn');
+    await update((d) => { for (const p of rows) put(d, 'products', { ...d.products.find((x) => x.id === p.id) || p, [key]: val }); audit(d, user, 'Medicines changed', `${label} set to "${val}" for ${rows.length}: ${rows.slice(0, 5).map((p) => p.name).join(', ')}${rows.length > 5 ? '…' : ''}`, branchId); });
+    toast(`${label} saved for ${rows.length}`); done();
+  };
+  // the list is open to anyone who may see stock; changing it needs medicines.manage (the cloud enforces the same)
+  const manage = can('medicines.manage');
   const [packsFor, setPacksFor] = useState(null);
   const [review, setReview] = useState(false);
   const dupBarcodes = useMemo(() => { const seen = new Set(), dup = new Set(); for (const p of products) if (p.barcode) (seen.has(p.barcode) ? dup : seen).add(p.barcode); return dup; }, [products]);
@@ -85,14 +123,19 @@ export function MedicineList() {
     <>
     {packsFor && <PacksEditor product={packsFor} onClose={() => setPacksFor(null)} />}
     <CrudPage
-      title="Medicine List" singular="Medicine" table="products" rows={products} fields={fields} onSave={onSave}
+      title="Medicine List" singular="Medicine" table="products" rows={products} fields={fields} onSave={onSave} readOnly={!manage}
       subtitle={review ? `${issueCount.toLocaleString()} records need a look. Open one to fix it; nothing is changed automatically.` : `${products.length.toLocaleString()} medicines and items`}
       filter={review ? (p) => recordIssues(p, dupBarcodes).length > 0 : undefined}
       headExtra={<button type="button" className={'btn ' + (review ? 'primary' : 'ghost')} aria-pressed={review} onClick={() => setReview((r) => !r)} title="Records with missing or inconsistent details">Needs review{issueCount ? ` (${issueCount})` : ''}</button>}
       blank={{ form: 'Tablets', unit: 'Piece', reorder: 10, rx: false }}
-      extraActions={(p) => <button className="btn sm ghost" title="Sell or receive by strip, box…" onClick={() => setPacksFor(p)}>Packs{p.packs?.length ? ` (${p.packs.length})` : ''}</button>}
+      extraActions={(p) => manage && <button className="btn sm ghost" title="Sell or receive by strip, box…" onClick={() => setPacksFor(p)}>Packs{p.packs?.length ? ` (${p.packs.length})` : ''}</button>}
+      bulk={manage ? () => [{ label: 'Change price…', run: bulkPrice }, { label: 'Set category…', run: bulkField('category', 'Category') }, { label: 'Set reorder level…', run: bulkField('reorder', 'Reorder level') }] : undefined}
+      rowMenu={(p) => [
+        { label: 'Stock card', Icon: ScrollText, run: () => navigate('/stock-card', { state: { productId: p.id } }) },
+        manage && { label: 'Packs (strip, box…)', Icon: Boxes, run: () => setPacksFor(p) },
+      ].filter(Boolean)}
       columns={[
-        { label: 'Medicine', render: (p) => <><strong>{p.name}</strong> {p.rx && <span className="badge">Rx</span>}{p.chronic && <span className="badge ok">Chronic</span>}{p.controlled && <span className="badge danger">CD</span>}<br /><small className="muted">{[p.generic, p.barcode].filter(Boolean).join(' · ')}</small>
+        { label: 'Medicine', render: (p) => <><strong {...peek.bind(p)}>{p.name}</strong> {p.rx && <span className="badge">Rx</span>}{p.chronic && <span className="badge ok">Chronic</span>}{p.controlled && <span className="badge danger">CD</span>}<br /><small className="muted">{[p.generic, p.barcode].filter(Boolean).join(' · ')}</small>
           {review && <span className="status-tags">{recordIssues(p, dupBarcodes).map((x) => <span key={x} className="status warn"><i aria-hidden="true" />{x}</span>)}</span>}</> },
         { label: 'Strength', render: (p) => p.strength || <span className="muted">—</span> },
         { label: 'Formulation', key: 'form' },
@@ -104,6 +147,7 @@ export function MedicineList() {
         { label: 'Stock', num: true, render: (p) => <span className={p.stock <= 0 ? 'badge danger' : p.stock <= (p.reorder || 0) ? 'badge warn' : ''}>{formatQty(p.stock)}</span> },
       ]}
     />
+    {peek.node}
     </>
   );
 }
@@ -137,11 +181,17 @@ export function StockLevels() {
   const sv = useMemo(() => stockValue(rows, batchesOf), [rows, batchesOf]); // physical stock × the medicine's current cost, expired apart
   const total = sv.value;
   const retail = rows.reduce((a, p) => a + Math.max(p.stock, 0) * (p.price || 0), 0);
+  // step 26 (from the Flutter app): sorted and grouped by class, therapeutic area, form or shelf, per device
+  const [order, setOrder] = useMedicineOrder();
+  const [folded, toggleFold] = useFolded();
+  const shownRows = groupedRows(rows.slice(0, 500), order, folded);
+  const cols = 8 + (multi ? 1 : 0) + (can('inventory.edit') ? 1 : 0);
   return (
     <div className="page">
       <div className="page-head">
         <div><h1>Inventory</h1><div className="sub">{branch?.name} · {rows.length.toLocaleString()} items · {fmt(total)} at cost · {fmt(retail)} at retail{sv.expired > 0 && <> · <span className="text-danger">{fmt(sv.expired)} expired (not included)</span></>}</div></div>
         <div className="row gap">
+          <MedicineOrderPicker value={order} onChange={setOrder} />
           <SearchBox value={q} onChange={setQ} />
           <button className="btn ghost" onClick={() => downloadFile('inventory.csv', toCSV(rows.flatMap((p) => batchesOf(p.id).filter((b) => b.qty).map((b) => ({ name: p.name, generic: p.generic, form: p.form, batch: b.batch, expiry: b.expiry, qty: b.qty, cost: b.cost || p.cost, price: p.price, value: b.qty * (b.cost || p.cost) })))), 'text/csv')}><Download size={16} />CSV</button>
           <PdfButton target={listRef} title={{ instock: 'Stock in hand', low: 'Low stock', out: 'Out of stock', all: 'All medicines' }[filter]} subtitle={`${branch?.name || ''} · ${rows.length} items · ${fmt(total)} at cost · ${fmt(retail)} at retail${sv.expired > 0 ? ` · ${fmt(sv.expired)} expired (not included)` : ''}`} />
@@ -152,7 +202,7 @@ export function StockLevels() {
         <table>
           <thead><tr><th>Medicine</th><th>Next batch</th><th>Expiry</th><th>Shelf</th><th className="num">Reorder at</th><th className="num">In stock</th>{multi && <th className="num">All branches</th>}<th className="num">Value (cost)</th>{can('inventory.edit') && <th />}</tr></thead>
           <tbody>
-            {rows.slice(0, 500).map((p) => (
+            {shownRows.map((r) => r.heading !== undefined ? <GroupHeadingRow key={'g:' + r.heading} row={r} colSpan={cols} onToggle={() => toggleFold(r.heading)} /> : (({ p }) => (
               <tr key={p.id} onClick={() => setOpen(p)} style={{ cursor: 'pointer' }}>
                 <td><strong>{p.name}</strong><br /><small className="muted">{p.form}</small><StockStatus p={p} warn={warn} /></td><td>{p.batch || '—'}</td>
                 <td className={'nowrap ' + expiryClass(p.expiry, warn)}>{p.expiry || '—'}</td><td>{p.shelf}</td>
@@ -162,7 +212,7 @@ export function StockLevels() {
                 <td className="num">{(() => { const v = batchValue(p, batchesOf); return <>{fmt(v.value)}{v.expired > 0 && <><br /><small className="text-danger">+ {fmt(v.expired)} expired</small></>}</>; })()}</td>
                 {can('inventory.edit') && <td className="actions"><button className="btn sm ghost" onClick={(e) => { e.stopPropagation(); setEditing(p); }}><Pencil size={14} />Edit</button></td>}
               </tr>
-            ))}
+            ))(r))}
             {!rows.length && <Empty colSpan={8}>Nothing here</Empty>}
           </tbody>
         </table>
@@ -219,7 +269,7 @@ export function Expiry() {
                 <td className="num">{formatQty(r.qty)}</td><td className="num">{fmt(r.qty * (r.cost || r.p.cost))}</td>
                 <td className="actions">
                   {(can('stock.receive') || can('stock.adjust')) && <button className="btn sm ghost" title="Send it back to the supplier for a credit note or refund" onClick={() => navigate('/returns', { state: { returnBatch: { productId: r.p.id, batchId: r.id, reason: r.days < 0 ? 'Expired' : 'Short expiry' } } })}>Return</button>}
-                  {tab === 'expired' && user.role !== 'cashier' && <button className="btn sm danger" onClick={() => writeOff(r)}>Write off</button>}
+                  {tab === 'expired' && can('stock.adjust') && <button className="btn sm danger" onClick={() => writeOff(r)}>Write off</button>}
                 </td>
               </tr>
             ))}
@@ -413,7 +463,7 @@ export function StockCard() {
 
 /** Admin & manager: edit an item's details and its batches (number, expiry, quantity) in one place */
 function InventoryEditor({ product, onClose }) {
-  const { db, fmt, update, user, batchesOf, branchId } = useStore();
+  const { fmt, update, user, batchesOf, branchId } = useStore();
   const [p, setP] = useState(() => ({ name: product.name, generic: product.generic || '', form: product.form || '', cost: product.cost || 0, wholesale: product.wholesale || 0, price: product.price || 0, reorder: product.reorder || 0, shelf: product.shelf || '' }));
   const [rows, setRows] = useState(() => batchesOf(product.id).filter((b) => b.qty !== 0).map((b) => ({ ...b, newQty: b.qty, newBatch: b.batch, newExpiry: b.expiry || '' })));
   const [reason, setReason] = useState('');
@@ -476,7 +526,7 @@ function InventoryEditor({ product, onClose }) {
  * units with its own price (blank = unit price × size). The POS can sell, and Add Stock receive, by pack.
  */
 export function PacksEditor({ product, onClose }) {
-  const { db, update, user, branchId, fmt } = useStore();
+  const { update, user, branchId, fmt } = useStore();
   const [rows, setRows] = useState(() => (product.packs?.length ? product.packs : [{ name: 'Strip', size: 10, price: '' }]).map((k) => ({ ...k, price: k.price ?? '' })));
   const unit = product.unit || 'Unit';
   const set = (n, patch) => setRows((r) => r.map((x, i) => (i === n ? { ...x, ...patch } : x)));
@@ -486,7 +536,7 @@ export function PacksEditor({ product, onClose }) {
     if (new Set(packs.map((k) => k.name.toLowerCase())).size !== packs.length) return toast('Each pack needs its own name', 'warn');
     update((d) => {
       const cur = d.products.find((x) => x.id === product.id) || product;
-      const { stock, totalStock, ...rest } = cur; // eslint-disable-line no-unused-vars
+      const { stock, totalStock, ...rest } = cur;
       put(d, 'products', { ...rest, packs });
       audit(d, user, 'Pack sizes changed', `${product.name}: ${packs.map((k) => `${k.name} = ${k.size} ${unit}`).join(', ') || 'none'}`, branchId);
     });

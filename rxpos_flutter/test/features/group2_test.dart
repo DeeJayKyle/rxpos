@@ -49,6 +49,11 @@ void main() {
       expect((rec['counted'], rec['variance']), (24500.0, -500.0));
       expect((await store.rows('audit')).single['action'], 'Shift closed');
     });
+    test('step 20: a blind count is marked on the shift and in the audit log', () async {
+      final rec = await closeShift(store, open, sales.where((x) => x.id != 'd'), counts: {'20000': 1}, blind: true);
+      expect((rec['blind'], rec['counted']), (true, 20000.0));
+      expect((await store.rows('audit')).single['action'], 'Shift closed (blind count)');
+    });
   });
 
   test('stock take: system quantity kept when counted, a batch found on the shelf, an uncounted medicine set to 0, summary', () async {

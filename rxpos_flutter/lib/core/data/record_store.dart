@@ -7,7 +7,10 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../database/app_database.dart';
 import '../entities/settings.dart';
 import '../rules/dates.dart';
+import '../rules/doc_numbers.dart';
 import '../rules/ids.dart';
+import '../sync/field_merge.dart';
+import '../sync/sync_config.dart';
 import '../rules/stock.dart';
 
 part 'record_store.g.dart';
@@ -19,6 +22,10 @@ const syncedTables = [
   'batches', 'branches', 'transfers', 'audit', 'purchaseOrders', 'roles', 'messages', 'shifts', 'license', 'events',
   'tempLogs', 'catalogHidden', 'quizResults', 'stockCounts', 'countItems', 'supplierReturns', 'chatMarks', 'chatPins',
   'chatReads', 'drafts',
+  'dayCloses', // step 18: closed days per branch (core/rules/day_close.dart)
+  'counters', // step 7: each till's document counts (core/rules/doc_numbers.dart), saved with the documents
+  'anomalies', // sale checks written by the cloud (worker/anomalies.js); only roles with the audit log receive them
+  'insurers', // step 22: insurers and their schemes (core/rules/insurance.dart)
   // only this app (Payroll & HR, scheduled report emails); the React app skips tables it does not know
   'employees', 'attendance', 'salaryAdvances', 'payrolls', 'reportSchedules',
 ];
@@ -88,6 +95,19 @@ class Edit {
       'cost': cost == cost.roundToDouble() ? cost.toInt() : cost, 'received': today()});
   }
 
+  /// Step 7: the next number for a document of this [kind] (R, PF, GRN, PO, TR, SC, RT) at [branchId], counted in
+  /// this same transaction, so the count is saved with the document (core/rules/doc_numbers.dart).
+  Future<String> number(String kind, {String branchId = mainBranch}) async {
+    final till = (await SyncConfig.load(_store.db)).till;
+    if (till == null || till <= 0) return legacyNumber(kind);
+    final id = counterId(till);
+    final cur = _puts['counters|$id']?.rec ?? (await _store.rows('counters')).where((c) => c['id'] == id).firstOrNull ?? {'id': id, 'till': till};
+    final n = ((cur[kind] as num?) ?? 0).toInt() + 1;
+    put('counters', {...cur, kind: n});
+    final branch = _puts['branches|$branchId']?.rec ?? (await _store.rows('branches')).where((b) => b['id'] == branchId).firstOrNull;
+    return formatNumber(kind, branchCode(branch), till, n);
+  }
+
   /// Change the pharmacy's shared settings.
   void saveSettings(Map<String, Object?> settings) => _settings = {...settings, 'updatedAt': now};
 
@@ -113,6 +133,24 @@ class RecordStore {
 
   Stream<List<Map<String, Object?>>> watch(String t) =>
       (db.select(db.records)..where((x) => x.t.equals(t))).watch().map((rs) => [for (final r in rs) _decode(r.json)]);
+
+  /// Step 13: stock per branch, batch and medicine, added up by SQLite (the same keys as StockIndex.of: an empty
+  /// branch is the main branch, a movement without a batch counts under `lb-<medicine>`, quantities read as numbers
+  /// like toNum). Re-runs when records change; returns a few thousand totals, not every movement.
+  static const _stockSql = '''
+SELECT CASE WHEN COALESCE(CAST(json_extract(json, '\$.branchId') AS TEXT), '') = '' THEN 'main' ELSE CAST(json_extract(json, '\$.branchId') AS TEXT) END AS br,
+  COALESCE(CAST(json_extract(json, '\$.batchId') AS TEXT), 'lb-' || COALESCE(CAST(json_extract(json, '\$.productId') AS TEXT), '')) AS bk,
+  COALESCE(CAST(json_extract(json, '\$.productId') AS TEXT), '') AS pid,
+  TOTAL(CAST(json_extract(json, '\$.qty') AS REAL)) AS q
+FROM records WHERE t = 'movements' GROUP BY br, bk, pid''';
+
+  ({String branch, String batchKey, String productId, double qty}) _total(QueryRow r) =>
+      (branch: r.read<String>('br'), batchKey: r.read<String>('bk'), productId: r.read<String>('pid'), qty: r.read<double>('q'));
+
+  Stream<StockIndex> watchStock() =>
+      db.customSelect(_stockSql, readsFrom: {db.records}).watch().map((rows) => StockIndex.fromTotals(rows.map(_total)));
+
+  Future<StockIndex> stock() async => StockIndex.fromTotals((await db.customSelect(_stockSql, readsFrom: {db.records}).get()).map(_total));
 
   Future<Map<String, Object?>?> get(String t, String id) async {
     final r = await (db.select(db.records)..where((x) => x.t.equals(t) & x.id.equals(id))).getSingleOrNull();
@@ -159,8 +197,10 @@ class RecordStore {
           if (appendOnlyTables.contains(p.t) && await get(p.t, id) != null) {
             throw StoreRefused('${p.t} can only be added to, never changed ($id).');
           }
+          // step 14: a medicine, client, supplier or batch remembers when each field changed (core/sync/field_merge.dart)
+          final rec = fieldTables.contains(p.t) ? stampFields(await get(p.t, id), p.rec, d.now) : p.rec;
           await db.into(db.records).insertOnConflictUpdate(
-              RecordsCompanion.insert(t: p.t, id: id, json: jsonEncode(p.rec), updatedAt: Value(d.now)));
+              RecordsCompanion.insert(t: p.t, id: id, json: jsonEncode(rec), updatedAt: Value(d.now)));
           await db.into(db.outbox).insert(OutboxCompanion.insert(op: uid(), txn: txn, t: p.t, id: id, at: d.now));
         }
         for (final x in d._dels.values) {

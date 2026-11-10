@@ -84,13 +84,17 @@ await setVal('tr.new-line input[aria-label="Expiry date"]', future(400)); await 
 await A.type('.picker input', 'Amoxyl'); await A.keyboard.press('Enter'); await wait(300);
 check('Enter in the search adds the first match', /Amoxyl/.test(await A.evaluate(() => document.querySelectorAll('table.lines tbody tr')[1]?.querySelector('.med-pick input')?.value || '')));
 await setVal('table.lines tbody tr:nth-child(2) input[aria-label="Unit cost"]', 600); await wait(200);
-check('a worked-out price never lowers an existing price (600 + 50% = 900 < 1,000: keeps 1,000)', (await lineVal(1, 'New retail price')) === '1000', await lineVal(1, 'New retail price'));
+check('an existing medicine keeps its price when the cost is lower (600 + 50% = 900: stays 1,000)', (await lineVal(1, 'New retail price')) === '1000', await lineVal(1, 'New retail price'));
 await setVal('table.lines tbody tr:nth-child(2) input[aria-label="Unit cost"]', 800); await wait(200);
 const hint = await A.evaluate(() => document.querySelectorAll('table.lines tbody tr')[1].querySelector('.price-hint')?.innerText || '');
-check('a higher cost raises the price (800 + 50% = 1,200) and shows the old one', (await lineVal(1, 'New retail price')) === '1200' && /was UGX 1,000/.test(hint), (await lineVal(1, 'New retail price')) + ' · ' + hint);
+check('a higher cost does not change the price (the owner\'s choice): 800 + 50% = 1,200 is offered', (await lineVal(1, 'New retail price')) === '1000' && /Use UGX 1,200/.test(hint), (await lineVal(1, 'New retail price')) + ' · ' + hint);
+await A.evaluate(() => [...document.querySelectorAll('table.lines tbody tr')[1].querySelectorAll('.price-hint button')].find((b) => /^Use/.test(b.textContent))?.click()); await wait(200);
+check('…"Use" applies it, and the old price is shown', (await lineVal(1, 'New retail price')) === '1200' && /was UGX 1,000/.test(await A.evaluate(() => document.querySelectorAll('table.lines tbody tr')[1].querySelector('.price-hint')?.innerText || '')));
 await setVal('table.lines tbody tr:nth-child(2) input[aria-label="Quantity"]', 20);
 await setVal('table.lines tbody tr:nth-child(2) input[aria-label="Batch number"]', 'B-AMOX'); // same batch: goes into it
-await setVal('table.lines tbody tr:nth-child(2) input[aria-label="Expiry date"]', '2028-06-30');
+await setVal('table.lines tbody tr:nth-child(2) input[aria-label="Expiry date"]', 'JUN 2028'); // as printed on the pack
+await A.evaluate(() => document.querySelector('table.lines tbody tr:nth-child(2) input[aria-label="Expiry date"]')?.blur()); await wait(200);
+check('an expiry typed as on the pack (JUN 2028) is read as the end of that month', (await A.evaluate(() => document.querySelector('table.lines tbody tr:nth-child(2) input[aria-label="Expiry date"]')?.value)) === '30/06/2028', await A.evaluate(() => document.querySelector('table.lines tbody tr:nth-child(2) input[aria-label="Expiry date"]')?.value));
 await A.select('form.card select', 'sup-km');
 // the unfinished delivery survives a reload
 await wait(600);

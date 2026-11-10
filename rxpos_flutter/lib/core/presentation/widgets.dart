@@ -143,15 +143,18 @@ class StatGrid extends StatelessWidget {
 }
 
 class SearchField extends StatelessWidget {
-  const SearchField({super.key, required this.onChanged, this.hint = 'Search…', this.width = 280, this.initial = ''});
+  const SearchField({super.key, required this.onChanged, this.hint = 'Search…', this.width = 280, this.initial = '', this.focusNode, this.controller});
   final ValueChanged<String> onChanged;
   final String hint;
   final double width;
   final String initial;
+  /// for a list's keys (list_controls.dart): / goes to the search, Esc clears it
+  final FocusNode? focusNode;
+  final TextEditingController? controller;
   @override
   Widget build(BuildContext context) => SizedBox(
         width: width,
-        child: TextFormField(initialValue: initial, onChanged: onChanged,
+        child: TextFormField(initialValue: controller == null ? initial : null, controller: controller, focusNode: focusNode, onChanged: onChanged,
             decoration: InputDecoration(prefixIcon: const Icon(Icons.search), hintText: hint, isDense: true, border: const OutlineInputBorder())),
       );
 }

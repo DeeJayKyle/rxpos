@@ -1,8 +1,10 @@
 // The idle-screen shop window fits inside the screen at PC, laptop, tablet and phone sizes, with 40 medicines.
 //   node idle-fit.mjs <base> <ownerKey> <outDir>
+import fs from 'node:fs';
 import puppeteer from 'puppeteer-core';
 import { CHROME } from './chrome.mjs';
 const [base, key, out] = process.argv.slice(2);
+fs.mkdirSync(out, { recursive: true }); // screenshots go here; a fresh checkout has no tests/.output
 const owner = (p, b) => fetch(base + '/api/owner' + p, { method: b ? 'POST' : 'GET', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key }, body: b ? JSON.stringify(b) : undefined }).then((r) => r.json());
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const t = await owner('/tenants', { name: 'Fit Pharmacy', admin: { name: 'Fay Fit', email: 'fay@test.rx', password: 'fay-pass-123' } });

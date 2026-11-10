@@ -132,9 +132,9 @@ class CountProblem implements Exception {
 Future<Map<String, Object?>> startCount(RecordStore store, {required String name, required CountScope scope, required String label,
     required List<String> productIds, required String user, bool blind = true, String branchId = mainBranch}) {
   if (scope != CountScope.empty && productIds.isEmpty) throw CountProblem('Nothing to count in that choice');
-  return store.update((d) {
+  return store.update((d) async {
     final rec = d.put('stockCounts', {
-      'id': uid(), 'number': 'SC${DateTime.now().millisecondsSinceEpoch.toRadixString(36).toUpperCase().substring(2)}',
+      'id': uid(), 'number': await d.number('SC', branchId: branchId),
       'name': name.trim().isEmpty ? 'Stock count' : name.trim(), 'date': d.now, 'branchId': branchId, 'scope': scope.name, 'scopeLabel': label,
       'productIds': productIds, 'blind': blind, 'status': 'open', 'startedBy': user, 'startedAt': d.now,
     });

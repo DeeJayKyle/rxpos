@@ -22,7 +22,7 @@ const r0 = (x) => Math.round(x);
 export function auditTenant({ products = [], batches = [], movements = [], sales = [], purchases = [], dead = {}, today, days = 30 }) {
   const P = new Map(products.map((p) => [p.id, p]));
   const B = new Map(batches.map((b) => [b.id, b]));
-  const deadB = new Set(dead.batches || []), deadP = new Set(dead.products || []);
+  const deadP = new Set(dead.products || []);
   const cost = (pid) => (P.has(pid) ? Number(P.get(pid).cost) || 0 : catalogCost(pid));
   const name = (pid) => P.get(pid)?.name || (/^cat-(\d+)$/.test(pid) ? catalog.rows[Number(pid.slice(4)) - 1]?.[0] : null) || pid;
   const known = (pid) => P.has(pid) || (/^cat-\d+$/.test(pid) && !deadP.has(pid));
@@ -177,7 +177,7 @@ export function auditTenant({ products = [], batches = [], movements = [], sales
   const lotsD = new Map();
   const lotKey = (m) => (m.branchId || 'main') + '|' + (m.batchId || 'lb-' + m.productId);
   const expiryOf = (m) => (m.batchId ? B.get(m.batchId)?.expiry : P.get(m.productId)?.expiry) || '';
-  const valueAt = (day) => { let v = 0; for (const [k, l] of lotsD) if (l.qty > 0 && !l.gone && !(l.exp && l.exp < day)) v += l.qty * cost(l.pid); return v; };
+  const valueAt = (day) => { let v = 0; for (const [, l] of lotsD) if (l.qty > 0 && !l.gone && !(l.exp && l.exp < day)) v += l.qty * cost(l.pid); return v; };
   const negValue = () => { let v = 0; for (const l of lotsD.values()) if (l.qty < 0 && !l.gone) v += l.qty * cost(l.pid); return v; }; // hidden from value
   const expValue = (day) => { let v = 0; for (const l of lotsD.values()) if (l.qty > 0 && !l.gone && l.exp && l.exp < day) v += l.qty * cost(l.pid); return v; };
   const noCostBy = new Map(); // day → value (at today's cost) of receipt lines saved with no cost

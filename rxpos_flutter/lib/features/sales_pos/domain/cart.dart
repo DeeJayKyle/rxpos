@@ -5,6 +5,7 @@ import '../../../core/data/record_store.dart';
 import '../../../core/entities/product.dart';
 import '../../../core/entities/settings.dart';
 import '../../../core/rules/fefo.dart';
+import '../../../core/rules/insurance.dart';
 import '../../../core/rules/ids.dart';
 import '../../../core/rules/money.dart';
 import '../../../core/rules/packs.dart';
@@ -38,9 +39,12 @@ class CartLine {
     this.directions,
     this.allowExpired = false,
     this.expiredReason = '',
+    this.preferBatch,
   });
 
   final String id, name;
+  /// step 21: the batch of a scanned pack, sold from first (core/rules/gs1.dart)
+  final String? preferBatch;
   final double price, cost, qty, max;
   final LinePack? pack;
   final bool rx, controlled;
@@ -67,6 +71,7 @@ class CartLine {
     bool? allowExpired,
     String? expiredReason,
     double? max,
+    String? preferBatch,
   }) => CartLine(
     id: id,
     name: name,
@@ -80,6 +85,7 @@ class CartLine {
     directions: clearDirections ? null : (directions ?? this.directions),
     allowExpired: allowExpired ?? this.allowExpired,
     expiredReason: expiredReason ?? this.expiredReason,
+    preferBatch: preferBatch ?? this.preferBatch,
   );
 
   Map<String, Object?> toJson() => {
@@ -215,7 +221,31 @@ class ControlledEntry {
   Map<String, Object?> toJson() => {'patient': patient, 'idNo': idNo, 'prescriber': prescriber, 'prescriberReg': prescriberReg, 'rxNo': rxNo};
 }
 
+/// Step 8: a credit sale that takes a client over their credit limit (src/credit.js overLimit). Null when it does not,
+/// or when the client has no limit. [owed]: what they owe before this sale; [adds]: what this sale puts on credit.
+({double limit, double owed, double adds})? overLimit({required double limit, required double owed, required double total, double? tendered}) {
+  if (!(limit > 0)) return null;
+  final paidNow = (tendered ?? 0) < total ? (tendered ?? 0) : total;
+  final adds = total - (paidNow > 0 ? paidNow : 0);
+  if (!(adds > 0.5)) return null; // paid in full now: this sale adds nothing to what they owe
+  return owed + adds > limit + 0.5 ? (limit: limit, owed: owed, adds: adds) : null;
+}
+
 /// Everything about how the sale is paid and who it is for.
+/// Step 22: the insurer and scheme billed for a sale, and the patient's member number (core/rules/insurance.dart).
+class Insured {
+  const Insured({required this.insurer, required this.scheme, this.memberNo = ''});
+  final Map<String, Object?> insurer, scheme;
+  final String memberNo;
+  String get key => '${insurer['id']}|${scheme['id']}';
+  String get insurerName => '${insurer['name'] ?? ''}';
+  String get schemeName => '${scheme['name'] ?? ''}';
+  Insured withMember(String m) => Insured(insurer: insurer, scheme: scheme, memberNo: m);
+}
+
+/// What the patient pays at the till: the co-pay on an insured sale, else the total.
+double dueOf(Insured? ins, double total, PharmacySettings s) => ins == null ? total : copayOf(ins.scheme, total, decimals: s.decimalPlaces).copay;
+
 class Checkout {
   const Checkout({
     required this.method,
@@ -227,7 +257,13 @@ class Checkout {
     this.momoRef,
     this.momo,
     this.rxChecked = false,
+    this.creditOver,
+    this.insured,
   });
+  /// Step 22: billed to an insurer (the patient pays the co-pay).
+  final Insured? insured;
+  /// Step 8: over the client's credit limit: {limit, owed, adds, reason?, finance?} (saved on the sale, audited).
+  final Map<String, Object?>? creditOver;
   final PaymentMethod method;
   final double? tendered;
   final String customerId, customerName;
@@ -248,7 +284,11 @@ void checkCheckout(List<CartLine> cart, Checkout c, Totals t, {required Pharmacy
   final type = c.method.type;
   if (type == 'credit' && c.customerId == walkIn) throw CartProblem('Select a registered customer for a credit sale');
   if (settings.clientCapture == 'required' && c.customerId == walkIn) throw CartProblem('Choose or add the client for this sale');
-  if (type == 'cash' && c.tendered != null && c.tendered! < t.total) throw CartProblem('Amount tendered is less than the total');
+  final ins = c.insured;
+  if (ins != null && c.customerId == walkIn) throw CartProblem('Choose the insured client for this sale');
+  if (ins != null && ins.memberNo.trim().isEmpty) throw CartProblem('Enter the client\'s ${ins.insurerName} member number');
+  final due = dueOf(ins, t.total, settings);
+  if (type == 'cash' && c.tendered != null && c.tendered! < due - 1e-9) throw CartProblem('Amount tendered is less than ${ins != null ? 'the client pays' : 'the total'}');
   if (cart.any((l) => l.controlled) && c.controlled == null) throw CartProblem('Fill in the controlled-drugs register for this sale');
   if (cart.any((l) => l.rx) && !cart.any((l) => l.controlled) && !c.rxChecked) throw CartProblem('Confirm that a valid prescription was checked');
   if (type == 'momo' && c.momo == null && (c.momoRef ?? '').trim().isEmpty) {
@@ -269,6 +309,7 @@ Future<Map<String, Object?>> completeSale(
   String branchId = mainBranch,
   DateTime? now,
   void Function(Edit d, Map<String, Object?> sale)? also,
+  String? proformaId,
 }) async {
   final t = totalsOf(cart, discount: c.discount, settings: settings);
   checkCheckout(cart, c, t, settings: settings);
@@ -285,9 +326,11 @@ Future<Map<String, Object?>> completeSale(
   }
   final type = c.method.type;
   final credit = type == 'credit';
-  final paid = credit ? [c.tendered ?? 0, t.total].reduce((a, b) => a < b ? a : b) : t.total;
-  return store.update((d) {
-    final number = docNumber('R', now: now);
+  final ins = c.insured;
+  final due = dueOf(ins, t.total, settings);
+  final paid = credit ? [c.tendered ?? 0, due].reduce((a, b) => a < b ? a : b) : due;
+  return store.update((d) async {
+    final number = await d.number('R', branchId: branchId);
     final items = [
       for (final l in cart)
         {
@@ -302,7 +345,7 @@ Future<Map<String, Object?>> completeSale(
             'pack': {'name': l.pack!.name, 'size': numOut(l.pack!.size), 'count': numOut(l.qty / l.pack!.size), 'price': numOut(l.price * l.pack!.size)},
           'alloc': [
             for (final a in allocate(
-              stock.batchesOf(l.id, atBranch: branchId),
+              preferFirst(stock.batchesOf(l.id, atBranch: branchId), l.preferBatch),
               l.qty,
               allowExpired: l.allowExpired,
               now: now,
@@ -324,7 +367,7 @@ Future<Map<String, Object?>> completeSale(
       'total': numOut(t.total),
       'payment': c.method.name,
       'paid': numOut(paid),
-      'tendered': numOut(type == 'cash' ? (c.tendered ?? t.total) : paid),
+      'tendered': numOut(type == 'cash' ? (c.tendered ?? due) : paid),
       'bankId': type == 'cash' || credit ? cashDrawer : ((settings.raw['nonCashBankId'] as String?) ?? cashDrawer),
       'customerId': c.customerId,
       'customerName': c.customerName,
@@ -334,6 +377,18 @@ Future<Map<String, Object?>> completeSale(
       if (type == 'momo')
         'momo': c.momo != null ? (c.momo!['manual'] == true ? c.momo! : {...c.momo!, 'confirmed': true}) : {'txid': c.momoRef!.trim(), 'manual': true},
       if (cart.any((l) => l.allowExpired)) 'expiredOverride': true,
+      // the cloud does not flag a proforma's discount and prices: they were set by whoever made the quotation
+      'proformaId': ?proformaId,
+      'creditOver': ?c.creditOver,
+      if (ins != null)
+        'insurance': {
+          'insurerId': ins.insurer['id'],
+          'insurer': ins.insurerName,
+          'schemeId': ins.scheme['id'],
+          'scheme': ins.schemeName,
+          'memberNo': ins.memberNo.trim(),
+          'share': numOut(copayOf(ins.scheme, t.total, decimals: settings.decimalPlaces).insurer),
+        },
     });
     for (final i in items) {
       for (final a in (i['alloc'] as List).cast<Map<String, Object?>>()) {
@@ -360,6 +415,11 @@ Future<Map<String, Object?>> completeSale(
     }
     if (t.discount > 0) {
       d.audit(cashier, 'Discount given', '$number: ${formatMoney(t.discount, currency: settings.currency, decimals: settings.decimalPlaces)}', branchId);
+    }
+    final over = c.creditOver;
+    if (over != null) {
+      String m(Object? v) => formatMoney((v as num?) ?? 0, currency: settings.currency, decimals: settings.decimalPlaces);
+      d.audit(cashier, 'Credit limit exceeded', '$number: ${c.customerName} owed ${m(over['owed'])}, + ${m(over['adds'])} on credit, limit ${m(over['limit'])}${over['reason'] != null ? ' · ${over['reason']}' : ''}', branchId);
     }
     return sale;
   });

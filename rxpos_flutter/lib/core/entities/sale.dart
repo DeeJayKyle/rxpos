@@ -2,6 +2,7 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 
 import '../data/json_fields.dart';
 import '../data/record_merge.dart';
+import '../rules/insurance.dart';
 
 part 'sale.freezed.dart';
 part 'sale.g.dart';
@@ -91,6 +92,9 @@ abstract class Sale with _$Sale {
 
   Map<String, Object?> toRecord() => mergeRecord(raw, toJson());
 
-  /// What is still owed on a credit sale.
-  double get balance => total - paid;
+  /// What the insurer owes on this sale (step 22: the record's insurance.share; 0 when uninsured or refunded).
+  double get insuredShare => status == 'refunded' ? 0 : insurerShare(raw);
+
+  /// What the client still owes on a credit sale (an insurer's share is the insurer's debt, not the client's).
+  double get balance => total - paid - insuredShare;
 }

@@ -11,7 +11,12 @@ permissions:
 concurrency: production-deploy
 
 jobs:
+  # every suite must pass first (full-tests.yml)
+  full:
+    uses: ./.github/workflows/full-tests.yml
+
   deploy:
+    needs: full
     runs-on: ubuntu-latest
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

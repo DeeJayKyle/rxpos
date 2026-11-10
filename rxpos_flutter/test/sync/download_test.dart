@@ -50,10 +50,26 @@ void main() {
   });
 
   test('it talks to the cloud server directly, not through the website', () async {
-    String? url;
-    final dio = cloud.dio()..interceptors.insert(0, InterceptorsWrapper(onRequest: (o, h) { url = o.uri.toString(); h.next(o); }));
+    final urls = <String>[];
+    final dio = cloud.dio()..interceptors.insert(0, InterceptorsWrapper(onRequest: (o, h) { urls.add(o.uri.toString()); h.next(o); }));
     await SyncEngine(dio: dio, db: db, cloudUrl: 'https://rxposug.com/').run();
-    expect(url, 'https://api.rxposug.com/api/sync');
+    expect(urls.first, 'https://api.rxposug.com/api/sync');
+    expect(urls.every((u) => u.startsWith('https://api.rxposug.com/api/')), isTrue);
+  });
+
+  test('step 7: once in sync, the device asks for its till number once and keeps it', () async {
+    cloud.api['till'] = (b) => (200, {'till': 7});
+    await down.run();
+    expect((await SyncConfig.load(db)).till, 7);
+    expect(cloud.calls.where((c) => c.$1 == 'till').single.$2['deviceId'], (await SyncConfig.load(db)).deviceId);
+    await down.run();
+    expect(cloud.calls.where((c) => c.$1 == 'till'), hasLength(1), reason: 'not asked again');
+  });
+
+  test('step 7: a cloud without till numbers changes nothing (old-style numbers, asked again next time)', () async {
+    final r = await down.run(); // the fake cloud answers 404 for /api/till
+    expect(r.complete, isTrue);
+    expect((await SyncConfig.load(db)).till, isNull);
   });
 
   test('a dropped connection keeps what arrived; the next run resumes without gaps or doubles', () async {

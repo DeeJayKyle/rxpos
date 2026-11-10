@@ -71,14 +71,25 @@ Pick a strong secret (12+ characters) as the **sync key**. Everyone who has it c
 
 Other devices then link to `http://<main-PC-IP>:8686`. Allow port 8686 through Windows Firewall.
 
-**On a server (online access from anywhere), needs Node.js 18+:**
+**On a server (online access from anywhere), needs Node.js 22.13+:**
 
 ```bash
 RXPOS_SYNC_KEY=YOUR-SECRET-KEY node server/hub.mjs --port 8686 --data ./hub-data
 ```
 
-Put it behind HTTPS (e.g. Caddy, nginx, or a host such as Render/Railway/Fly.io). Open `https://your-hub-address` in any browser to use RxPOS online. The hub serves the web app too.
-The `RxPOS-Hub.zip` artifact from GitHub Actions contains everything needed. The hub keeps daily backups in `hub-data/backups`.
+Put it behind HTTPS (e.g. Caddy, nginx, or a host such as Render/Railway/Fly.io), and then add `RXPOS_TRUST_PROXY=1`
+so each device's own address counts for the sign-in limits. Open `https://your-hub-address` in any browser to use RxPOS
+online. The hub serves the web app too. The `RxPOS-Hub.zip` artifact from GitHub Actions contains everything needed.
+
+The hub runs the **same code as the RxPOS cloud** (since 1.x), so it applies the same rules: permissions per table,
+stock movements that can't be changed or deleted, field-by-field merge, sale checks, the sign-in slowdown, document
+numbers. Its data is in `hub-data/hub.db` (SQLite), with a copy every day in `hub-data/backups` (last 30 kept).
+Optional: `RXPOS_OWNER_KEY` (20+ characters) opens the owner console on the hub. Not on a hub: the live connection
+(devices check every 10 s instead), Mobile Money, SMS, AI reading and emails.
+
+**Upgrading a hub from before:** on its first start the new hub moves `hub.json` into `hub.db` once and keeps the old
+file as `hub.before-move-<date>.json`. Devices sign in again once (sign-in passes are made differently now). On a
+Windows PC running `RxPOS.exe --hub`, the new hub comes with the new installer.
 
 ## Putting RxPOS online (recommended: Cloudflare, free, no card, no server)
 

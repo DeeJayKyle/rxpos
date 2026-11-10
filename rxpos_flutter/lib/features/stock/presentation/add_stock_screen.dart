@@ -12,6 +12,7 @@ import '../../../core/data/record_store.dart';
 import '../../../core/entities/product.dart';
 import '../../../core/presentation/widgets.dart';
 import '../../../core/rules/dates.dart';
+import '../../../core/rules/gs1.dart';
 import '../../../core/rules/money.dart';
 import '../../../core/rules/packs.dart';
 import '../../../core/rules/search.dart';
@@ -115,6 +116,19 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
 
   void _pick(Product p, PharmacyData d) => _placeLine(lineFor(p, d.settings, markup: _form!['markup']));
   void _addNew(String name, {String barcode = ''}) => _placeLine({...blankLine(), 'productId': newMedicine, 'name': name.trim(), if (barcode.isNotEmpty) 'barcode': barcode});
+
+  /// A GS1 pack code (workplan step 21): the medicine with that product number gets a line with the batch and expiry
+  /// filled; an unknown product number starts a new medicine with them filled. Returns what to tell the user.
+  String _receivePack(Gs1 g, PharmacyData d) {
+    final p = d.byGtin(g.gtin);
+    final extra = {if (g.batch.isNotEmpty) 'batch': g.batch, if (g.expiry.isNotEmpty) 'expiry': g.expiry};
+    if (p != null) {
+      _placeLine(lineFor(p, d.settings, extra: extra, markup: _form!['markup']));
+      return '${p.name} added${g.batch.isNotEmpty ? ' · batch ${g.batch}' : ''}';
+    }
+    _placeLine({...blankLine(), 'productId': newMedicine, 'name': '', 'barcode': g.gtin, ...extra});
+    return 'New product number: type the medicine name';
+  }
 
   void _discard(PharmacyData d) {
     setState(() {
@@ -269,7 +283,7 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
             width: 260,
             child: l['productId'] == newMedicine
                 ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Row(children: [
+                    Wrap(crossAxisAlignment: WrapCrossAlignment.center, children: [
                       const Chip(label: Text('New'), visualDensity: VisualDensity.compact),
                       TextButton(onPressed: () => _replaceLine(key, {...l, 'productId': ''}), child: const Text('choose existing')),
                     ]),
@@ -295,23 +309,50 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
           ),
         'qty' => Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
             box('qty-$key', 'Qty', l['qty'], (v) => _setLine(key, {'qty': v}), w: 80),
-            if (packs.isNotEmpty)
-              DropdownButton<String>(
-                value: (double.tryParse('${l['recvSize'] ?? 1}') ?? 1) > 1 ? '${l['recvPack']}' : '',
-                isDense: true,
-                items: [DropdownMenuItem(value: '', child: Text('${p!.unit.isEmpty ? 'Unit' : p.unit}s')), for (final k in packs) DropdownMenuItem(value: k.name, child: Text('${k.name}s of ${formatQty(k.size)}'))],
-                onChanged: (v) {
-                  final k = packs.where((x) => x.name == v).firstOrNull;
-                  final size = k?.size ?? 1;
-                  _setLine(key, {'recvPack': k?.name ?? '', 'recvSize': size, if (baseCost(l) > 0) 'cost': numOrBlank(baseCost(l) * size)});
-                  setState(() => _round++);
-                },
-              ),
+            // received by the box (or any pack), sold by the unit; a pack size the medicine doesn't have is added to it
+            if ('${l['productId'] ?? ''}'.isNotEmpty) ...() {
+              final unit = p != null && p.unit.isNotEmpty ? p.unit : unitForForm('${l['form'] ?? ''}');
+              final size = double.tryParse('${l['recvSize'] ?? 1}') ?? 1;
+              final known = packs.any((k) => k.name == l['recvPack'] && k.size == size);
+              final choice = l['newPack'] == true || (size > 1 && !known) ? newPackChoice : size > 1 ? '${l['recvPack']}' : '';
+              return [
+                SizedBox(
+                  width: 120,
+                  child: DropdownButton<String>(
+                    key: Key('received-as-$key'),
+                    value: choice,
+                    isDense: true,
+                    isExpanded: true,
+                    items: [
+                      DropdownMenuItem(value: '', child: Text('${unit}s', overflow: TextOverflow.ellipsis)),
+                      for (final k in packs) DropdownMenuItem(value: k.name, child: Text('${k.name}s of ${formatQty(k.size)}', overflow: TextOverflow.ellipsis)),
+                      DropdownMenuItem(value: newPackChoice, child: Text(packs.isEmpty ? 'Boxes / packs of…' : 'Other pack size…', overflow: TextOverflow.ellipsis)),
+                    ],
+                    onChanged: (v) {
+                      if (v == newPackChoice) {
+                        _replaceLine(key, {...l, 'newPack': true, 'recvPack': '${l['recvPack'] ?? ''}'.isEmpty ? 'Box' : l['recvPack'], 'recvSize': size > 1 ? l['recvSize'] : ''});
+                      } else {
+                        final k = packs.where((x) => x.name == v).firstOrNull;
+                        final sz = k?.size ?? 1;
+                        _setLine(key, {'newPack': false, 'recvPack': k?.name ?? '', 'recvSize': sz, if (baseCost(l) > 0) 'cost': numOrBlank(baseCost(l) * sz)});
+                      }
+                      setState(() => _round++);
+                    },
+                  ),
+                ),
+                if (choice == newPackChoice)
+                  Wrap(spacing: 4, runSpacing: 4, children: [
+                    box('pack-name-$key', 'Pack', l['recvPack'], (v) => _replaceLine(key, {...l, 'recvPack': v}), w: 58, number: false, hint: 'Box'),
+                    box('pack-size-$key', '${unit}s', l['recvSize'] == '' ? '' : l['recvSize'], (v) => _setLine(key, {'recvSize': v}), w: 58, hint: '100'),
+                  ]),
+              ];
+            }(),
             if ((double.tryParse('${l['recvSize'] ?? 1}') ?? 1) > 1)
-              Text('= ${formatQty((double.tryParse('${l['qty']}') ?? 0) * (double.tryParse('${l['recvSize']}') ?? 1))} ${(p?.unit.isEmpty ?? true ? 'unit' : p!.unit).toLowerCase()}s', style: th.textTheme.bodySmall),
+              Text('= ${formatQty((double.tryParse('${l['qty']}') ?? 0) * (double.tryParse('${l['recvSize']}') ?? 1))} ${(p?.unit.isEmpty ?? true ? unitForForm('${l['form'] ?? ''}') : p!.unit).toLowerCase()}s', style: th.textTheme.bodySmall),
           ]),
         'cost' => Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
             box('cost-$key-${l['by'] == 'total' ? l['total'] : ''}', 'Unit cost', l['cost'], (v) => _setLine(key, {'cost': v}), w: 110),
+            if ((double.tryParse('${l['recvSize'] ?? 1}') ?? 1) > 1) Text('per ${'${l['recvPack'] ?? 'pack'}'.toLowerCase()}', style: th.textTheme.bodySmall),
             if (() {
               final best = (prices['${l['productId']}'] ?? const <SupplierPrice>[]).where((o) => o.supplierId != f['supplierId']).firstOrNull;
               return best != null && cost > 0 && best.cost < cost ? best : null;
@@ -324,12 +365,22 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
                 hint: cost > 0 ? formatQty(priceAt(f['markup'], s)(cost)) : null),
             Wrap(spacing: 4, children: [
               if (l['auto'] == true && l['derived'] == true)
-                Text(l['kept'] == true ? 'kept (higher than +${f['markup']}%)' : 'auto · +${f['markup']}%', style: th.textTheme.bodySmall)
+                Text('auto · +${f['markup']}%', style: th.textTheme.bodySmall)
               else if (l['auto'] != true)
                 InkWell(onTap: () {
                   _setLine(key, {'price': ''});
                   setState(() => _round++);
-                }, child: Text('↺ auto', style: TextStyle(color: th.colorScheme.primary, fontSize: 12))),
+                }, child: Text(p != null && p.price > 0 ? '↺ undo' : '↺ auto', style: TextStyle(color: th.colorScheme.primary, fontSize: 12))),
+              // the owner's choice: the price is kept; cost + markup is offered, not applied
+              if (p != null && p.price > 0 && cost > 0 && priceAt(f['markup'], s)(cost) != price)
+                InkWell(
+                  key: Key('use-price-$key'),
+                  onTap: () {
+                    _setLine(key, {'price': formatQty(priceAt(f['markup'], s)(cost))});
+                    setState(() => _round++);
+                  },
+                  child: Text('Use ${s.money(priceAt(f['markup'], s)(cost))}', style: TextStyle(color: th.colorScheme.primary, fontSize: 12)),
+                ),
               if (cost > 0 && price > 0)
                 Text(price < cost ? 'below cost' : 'margin ${((price - cost) / cost * 100).round()}%', style: TextStyle(fontSize: 12, color: price < cost ? th.colorScheme.error : null)),
               if (p != null && price != p.price && p.price > 0) Text('was ${s.money(p.price)}', style: th.textTheme.bodySmall),
@@ -443,6 +494,8 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
             Row(children: [
               if (onAndroid)
                 IconButton.filledTonal(tooltip: 'Scan medicines into the delivery', icon: const Icon(Icons.qr_code_scanner), onPressed: () => scanContinuous(context, title: 'Scan medicines into the delivery', onCode: (code) async {
+                  final g = parseGs1(code);
+                  if (g != null) return _receivePack(g, d);
                   final p = d.byBarcode[code];
                   if (p != null) {
                     _pick(p, d);
@@ -460,6 +513,12 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
                   onChanged: (v) => setState(() => _q = v),
                   onSubmitted: (_) {
                     if (ql.isEmpty) return;
+                    final g = parseGs1(_q);
+                    if (g != null) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_receivePack(g, d))));
+                      setState(() => _round++);
+                      return;
+                    }
                     final code = d.byBarcode.entries.where((e) => e.key.toLowerCase() == ql).firstOrNull?.value;
                     if (code != null || matches.isNotEmpty) {
                       _pick(code ?? matches.first, d);
@@ -634,10 +693,15 @@ class _DateCellState extends State<_DateCell> {
     super.dispose();
   }
 
+  /// An expiry (monthYear) is read whatever its format: 06/2028, JUN 2028, 30/06/2028, 062028… (parseExpiry)
+  String _read(String t) => widget.monthYear ? (parseExpiry(t, widget.format) ?? '') : parseTypedDate(t, widget.format);
+
   @override
   Widget build(BuildContext context) {
-    final iso = parseTypedDate(_c.text, widget.format, monthYear: widget.monthYear);
+    final iso = _read(_c.text);
     final past = widget.monthYear && iso.isNotEmpty && daysUntil(iso) < 0;
+    // how a typed expiry was read, when it was typed another way (JUN 2028 → 30/06/2028)
+    final readAs = widget.monthYear && iso.isNotEmpty && _c.text.trim() != showDate(iso, widget.format) ? 'Read as ${showDate(iso, widget.format)}' : null;
     return SizedBox(
       width: 170,
       child: TextField(
@@ -646,7 +710,8 @@ class _DateCellState extends State<_DateCell> {
           labelText: widget.label,
           isDense: true,
           hintText: dateFormats.firstWhere((x) => x.$1 == widget.format).$2,
-          errorText: _bad ? 'Not a date' : past ? 'Already passed' : null,
+          errorText: _bad ? (widget.monthYear ? 'Try 06/2028 or JUN 2028' : 'Not a date') : past ? 'Already passed' : null,
+          helperText: readAs,
           suffixIcon: IconButton(
             tooltip: 'Pick a date',
             icon: const Icon(Icons.calendar_today, size: 16),
@@ -662,7 +727,7 @@ class _DateCellState extends State<_DateCell> {
           ),
         ),
         onChanged: (v) {
-          final p = parseTypedDate(v, widget.format, monthYear: widget.monthYear);
+          final p = _read(v);
           setState(() => _bad = v.trim().isNotEmpty && p.isEmpty);
           if (p.isNotEmpty || v.trim().isEmpty) widget.onChanged(p);
         },

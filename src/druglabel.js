@@ -33,7 +33,7 @@ export function genericKey(text) {
     .replace(/\(.*?\)/g, ' ')
     .replace(/\d+(\.\d+)?\s*(mg|mcg|g|ml|iu|%|units?)\b/g, ' ')
     .replace(/\b(tabs?|tablets?|caps?|capsules?|syrup|suspension|susp|inj|injection|cream|ointment|gel|drops?|eye|ear|sachet|vial|amp|ampoule|bottle|pack|strip|x\d+|forte|ds|plus)\b/g, ' ')
-    .split(/[\/+,&]| and /)[0]
+    .split(/[/+,&]| and /)[0]
     .replace(/[^a-z\s-]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 

@@ -12,7 +12,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 // v1.7.0 code, from before the migration); the answers go to the file named second
 const root = path.resolve(process.argv[2] || path.join(here, '..', '..', '..'));
 const target = process.argv[3] || path.join(here, '..', '..', 'test', 'parity', 'react_expected.json');
-const mods = ['money', 'fefo', 'packs', 'search', 'dates', 'dateformat', 'rxrules', 'invoicedates', 'druglabel', 'weather', 'access']
+const mods = ['money', 'fefo', 'packs', 'search', 'dates', 'dateformat', 'rxrules', 'invoicedates', 'druglabel', 'weather', 'access', 'drugclass']
   .filter((m) => fs.existsSync(path.join(root, 'src', m + '.js')));
 const entry = mods.map((m) => `export * as ${m} from ${JSON.stringify(path.join(root, 'src', m + '.js'))};`).join('\n');
 const out = await build({ stdin: { contents: entry, resolveDir: root, loader: 'js' }, bundle: true, format: 'esm', platform: 'node', write: false,
@@ -107,6 +107,15 @@ for (const cur of [{ temperature_2m: 31.4, relative_humidity_2m: 70 }, { tempera
 // roles and permissions
 const roles = [{ id: 'cashier', name: 'Cashier (edited)', permissions: ['pos.sell'] }, { id: 'counter', name: 'Counter', permissions: ['pos.sell', 'sales.view'] }];
 for (const role of ['admin', 'cashier', 'pharmacist', 'counter', 'nobody']) run('permissionsOf', [roles, role], () => [...R.permissionsOf({ roles, settings: {} }, role)].sort());
+
+// drug classes and grouping (step 26: copied from the Flutter app): every 25th medicine of the standard catalogue, and
+// some typed categories
+const cat = JSON.parse(fs.readFileSync(path.join(here, '..', '..', 'assets', 'catalog.json'), 'utf8'));
+const col = (r, k) => r[cat.columns.indexOf(k)];
+const meds = cat.rows.filter((_, i) => i % 25 === 0).map((r, i) => ({ id: 'k' + i, name: String(col(r, 'name') ?? ''), generic: String(col(r, 'generic') ?? ''), form: String(col(r, 'form') ?? '') }));
+meds.push({ id: 't1', name: 'House blend', category: 'Antimalarial' }, { id: 't2', name: 'Mystery Tabs', category: 'Supplements' }, { id: 't3', name: 'Plain thing' }, { id: 't4', name: 'Shelved', shelf: 'A3' });
+for (const m of meds) run('drugClassOf', [m], () => R.drugClassOf(m));
+for (const o of ['drugClass', 'area', 'form', 'shelf']) run('groupMedicines', [meds.slice(0, 80), o], () => R.groupMedicines(meds.slice(0, 80), o).map(([g, ps]) => [g, ps.map((x) => x.id)]));
 
 fs.writeFileSync(target, JSON.stringify(cases, null, 1) + '\n');
 console.log(`${cases.length} cases from the React rules in ${root} (${cases.filter((c) => c.absent).length} rules not there)`);

@@ -36,12 +36,13 @@ Future<Map<String, Object?>> saveUser(RecordStore store, Map<String, Object?> us
   });
 }
 
-Future<Map<String, Object?>> saveRole(RecordStore store, {String? id, required String name, required List<String> permissions, required String by, required Set<String> existingIds}) {
+Future<Map<String, Object?>> saveRole(RecordStore store, {String? id, required String name, required List<String> permissions, required String by, required Set<String> existingIds, double? maxDiscount}) {
   final rid = id ?? name.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-');
   if (name.trim().isEmpty) throw UserProblem('Name the role');
   if (id == null && existingIds.contains(rid)) throw UserProblem('A role with that name exists');
   return store.update((d) {
-    final r = d.put('roles', {'id': rid, 'name': name.trim(), 'permissions': permissions});
+    // step 20: the role's discount ceiling (% of the sale; null = no limit)
+    final r = d.put('roles', {'id': rid, 'name': name.trim(), 'permissions': permissions, 'maxDiscount': maxDiscount?.clamp(0, 100)});
     d.audit(by, id == null ? 'Role created' : 'Role permissions changed', '${r['name']}: ${permissions.length} permissions');
     return r;
   });

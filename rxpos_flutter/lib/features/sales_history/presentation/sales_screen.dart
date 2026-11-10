@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:printing/printing.dart';
 
+import '../../../core/rules/day_close.dart';
 import '../../../core/data/device_settings.dart';
 import '../../../core/data/pharmacy_providers.dart';
 import '../../../core/data/record_store.dart';
@@ -15,6 +17,7 @@ import '../../../core/rules/dates.dart';
 import '../../../core/rules/money.dart';
 import '../../../core/rules/search.dart';
 import '../../../core/rules/stock.dart';
+import '../../../core/presentation/list_controls.dart';
 import '../../auth/application/session_controller.dart';
 import '../../auth/domain/session.dart';
 import '../../sales_pos/domain/cart.dart' show walkIn;
@@ -46,6 +49,7 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
   @override
   Widget build(BuildContext context) {
     final rows = ref.watch(tableProvider('sales')).value;
+    ref.watch(tableProvider('dayCloses')); // step 18: Edit goes away when the day is closed
     final st = ref.watch(settingsProvider).value ?? const PharmacySettings();
     final branches = ref.watch(tableProvider('branches')).value ?? const [];
     final session = ref.watch(sessionControllerProvider).value;
@@ -157,7 +161,26 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
                 ? EmptyState(rows.isEmpty
                     ? 'No sales yet. Every sale rung up at the POS appears here with its receipt, to reprint, refund or correct.'
                     : 'No sales match. Try another receipt number, customer, filter or date.')
-                : ListView.separated(
+                // the owner's request: keys, double-click and right-click on the sales too (list_controls.dart)
+                : ListControls(
+                    ids: [for (final s in sales) s.id],
+                    selectable: false,
+                    onOpen: (i) => _open(sales[i], st),
+                    onEdit: (i) {
+                      final s = sales[i];
+                      if (s.status != 'refunded' && _can('sales.edit') && !_locked(s)) _edit(s, st);
+                    },
+                    menu: (i) {
+                      final s = sales[i];
+                      return [
+                        RowAction('View', Icons.visibility_outlined, () => _open(s, st), keyId: 'list:open'),
+                        RowAction('Print the receipt', Icons.print_outlined, () => Printing.layoutPdf(onLayout: (_) => receiptPdf(s, st), name: s.number)),
+                        RowAction('Invoice (A4)', Icons.description_outlined, () => _invoice(s, st)),
+                        if (s.status != 'refunded' && _can('sales.edit') && !_locked(s)) RowAction('Edit', Icons.edit_outlined, () => _edit(s, st), keyId: 'list:edit'),
+                        RowAction('Copy the receipt number', Icons.copy, () => Clipboard.setData(ClipboardData(text: s.number))),
+                      ];
+                    },
+                    builder: (context, row) => ListView.separated(
                     itemCount: sales.length + 1,
                     separatorBuilder: (_, _) => const Divider(height: 1),
                     itemBuilder: (_, i) {
@@ -171,7 +194,7 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
                       final refunded = s.status == 'refunded';
                       final n = ((s.raw['edits'] as List?) ?? const []).length;
                       final momo = '${(s.raw['momo'] as Map?)?['txid'] ?? ''}';
-                      return ListTile(
+                      return row(i).wrap(ListTile(
                         title: Wrap(spacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
                           Text('${s.number} · ${s.customerName}', style: TextStyle(fontWeight: FontWeight.w700, decoration: refunded ? TextDecoration.lineThrough : null)),
                           _Badge(refunded ? 'refunded' : s.status, error: refunded),
@@ -198,13 +221,14 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
                               const PopupMenuItem(value: 'view', child: Text('View')),
                               const PopupMenuItem(value: 'receipt', child: Text('Print receipt')),
                               const PopupMenuItem(value: 'invoice', child: Text('Invoice (A4)')),
-                              if (!refunded && _can('sales.edit')) const PopupMenuItem(value: 'edit', child: Text('Edit')),
+                              if (!refunded && _can('sales.edit') && !_locked(s)) const PopupMenuItem(value: 'edit', child: Text('Edit')),
                             ],
                           ),
                         ]),
                         onTap: () => _open(s, st),
-                      );
+                      ));
                     },
+                  ),
                   ),
           ),
         ],
@@ -213,6 +237,8 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
   }
 
   bool _can(String p) => (ref.read(permissionsProvider).value ?? const <String>{}).contains(p);
+  /// step 18: a closed day's sale can't be edited (a refund still can, and the owner is told)
+  bool _locked(Sale s) => inClosedDay(s.raw, closedSet(ref.read(tableProvider('dayCloses')).value ?? const []));
 
   Future<void> _invoice(Sale s, PharmacySettings st) async {
     final c = (await ref.read(pharmacyProvider.future)).customers.where((x) => x.id == s.customerId).firstOrNull;
@@ -251,7 +277,7 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
           ])),
         ),
         actions: [
-          if (s.status != 'refunded' && _can('sales.edit'))
+          if (s.status != 'refunded' && _can('sales.edit') && !_locked(s))
             TextButton.icon(onPressed: () {
               Navigator.pop(c);
               _edit(s, st);

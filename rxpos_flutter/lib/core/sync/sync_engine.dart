@@ -148,6 +148,15 @@ class SyncEngine {
     // stays in progress so the next run resumes it instead of starting a normal sync from a half-downloaded pharmacy.
     if (!complete) return SyncResult(sent: sent, refused: refused, received: received, applied: applied, full: full, complete: false);
     cfg = cfg.copyWith(lastSync: DateTime.now().toUtc().toIso8601String(), lastError: '', fullPull: full ? fullPullVersion : null, fullInProgress: false);
+    // step 7: once in sync, a device without a till number asks for one (document numbers, core/rules/doc_numbers.dart).
+    // A cloud or hub without /api/till, or no answer: old-style numbers for now, asked again after the next sync.
+    if (cfg.till == null) {
+      try {
+        final r = await dio.post<Object?>('${syncBase(cloudUrl)}/api/till', data: {'deviceId': cfg.deviceId});
+        final n = r.data is Map ? (r.data as Map)['till'] : null;
+        if (n is num && n > 0) cfg = cfg.copyWith(till: n.toInt());
+      } catch (_) {/* not this time */}
+    }
     if (cfg.resendAfterRestore) {
       // The cloud was restored from an older backup. Changes saved after that backup were acknowledged and left the
       // outbox, so the restored cloud lost them and nothing would send them again. Now that this device has merged

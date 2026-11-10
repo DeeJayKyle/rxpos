@@ -45,7 +45,7 @@ export function matchMedicine(rx, products) {
 }
 
 export default function Scan() {
-  const { db, products, fmt, update, user, branchId, syncCfg } = useStore();
+  const { products, fmt, update, user, branchId, syncCfg } = useStore();
   const navigate = useNavigate();
   const [photo, setPhoto] = useState('');
   const [busy, setBusy] = useState(false);
@@ -67,10 +67,10 @@ export default function Scan() {
     const v = videoRef.current, c = document.createElement('canvas');
     c.width = v.videoWidth; c.height = v.videoHeight; c.getContext('2d').drawImage(v, 0, 0);
     stopCamera();
-    use(c.toDataURL('image/jpeg', 0.92));
+    showPhoto(c.toDataURL('image/jpeg', 0.92));
   };
-  const use = async (src) => { setResult(null); setPick({}); setPhoto(await shrinkPhoto(src)); };
-  const fromFile = (f) => { const r = new FileReader(); r.onload = () => use(r.result).catch((e) => toast(e.message, 'error')); r.readAsDataURL(f); };
+  const showPhoto = async (src) => { setResult(null); setPick({}); setPhoto(await shrinkPhoto(src)); };
+  const fromFile = (f) => { const r = new FileReader(); r.onload = () => showPhoto(r.result).catch((e) => toast(e.message, 'error')); r.readAsDataURL(f); };
 
   const read = async () => {
     if (!navigator.onLine) return toast('Reading a prescription needs the internet.', 'warn');

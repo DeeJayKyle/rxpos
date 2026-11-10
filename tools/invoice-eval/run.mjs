@@ -3,7 +3,7 @@
 //   CLOUDFLARE_ACCOUNT_ID=… CLOUDFLARE_API_TOKEN=… node tools/invoice-eval/run.mjs [models…]
 import { chromium } from 'playwright';
 import fs from 'node:fs';
-import { INVOICES, STYLES, html, total } from './invoices.mjs';
+import { INVOICES, STYLES, html } from './invoices.mjs';
 import { CURRENT, CANDIDATE } from './prompts.mjs';
 import { clean, finish } from '../../worker/invoiceread.js';
 

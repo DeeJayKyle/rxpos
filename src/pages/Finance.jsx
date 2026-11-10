@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
+import { closedSet, inClosedDay } from '../dayclose.js';
 import { CrudPage, Modal, RecordForm } from '../ui.jsx';
 import { useStore, today, dayOf, uid, put, customerBalance, supplierBalance, downloadFile, toCSV } from '../store.jsx';
 import { CASH, ledger, accountBalances, loanBalance } from '../finance.js';
@@ -6,15 +7,19 @@ import { CASH, ledger, accountBalances, loanBalance } from '../finance.js';
 const METHODS = ['Cash', 'Mobile Money', 'Bank Transfer', 'Cheque', 'Card'];
 const bankOptions = (db) => db.banks.map((b) => ({ value: b.id, label: b.name }));
 
+/** step 18: rows of a closed day can't be changed or deleted (the cloud refuses it too) */
+const useDayLock = (db) => { const closed = useMemo(() => closedSet(db.dayCloses), [db.dayCloses]); return (r) => inClosedDay(r, closed, dayOf); };
+
 export function Expenses() {
   const { db, fmt, user } = useStore();
+  const rowLocked = useDayLock(db);
   const [month, setMonth] = useState(today().slice(0, 7));
   const inMonth = (e) => !month || String(e.date).startsWith(month);
   const total = db.expenses.filter(inMonth).reduce((a, e) => a + e.amount, 0);
   return (
     <CrudPage
-      title="Expenses" table="expenses" filter={inMonth}
-      headExtra={<><input type="month" value={month} onChange={(e) => setMonth(e.target.value)} /><span className="muted">Total {fmt(total)}</span></>}
+      title="Expenses" table="expenses" filter={inMonth} rowLocked={rowLocked}
+      headExtra={<><input type="month" aria-label="Month" value={month} onChange={(e) => setMonth(e.target.value)} /><span className="muted">Total {fmt(total)}</span></>}
       blank={{ date: today(), bankId: CASH, method: 'Cash', recordedBy: user.name }}
       fields={[
         { key: 'date', label: 'Date', type: 'date', required: true },
@@ -71,10 +76,11 @@ export function Banks() {
 
 export function BankTx() {
   const { db, fmt, user } = useStore();
+  const rowLocked = useDayLock(db);
   const name = (id) => db.banks.find((b) => b.id === id)?.name || '—';
   return (
     <CrudPage
-      title="Deposits & Withdrawals" singular="Transaction" table="bankTx"
+      title="Deposits & Withdrawals" singular="Transaction" table="bankTx" rowLocked={rowLocked}
       blank={{ date: today(), type: 'Deposit', by: user.name }}
       fields={[
         { key: 'date', label: 'Date', type: 'date', required: true },
@@ -97,7 +103,7 @@ export function BankTx() {
   );
 }
 
-function PaymentModal({ title, kind, partyId, max, onClose }) {
+export function PaymentModal({ title, kind, partyId, max, onClose }) {
   const { db, update, user, fmt } = useStore();
   return (
     <Modal title={title} onClose={onClose}>
@@ -109,7 +115,7 @@ function PaymentModal({ title, kind, partyId, max, onClose }) {
           { key: 'date', label: 'Date', type: 'date', required: true },
           { key: 'amount', label: 'Amount', type: 'number', required: true },
           { key: 'method', label: 'Method', type: 'select', options: METHODS },
-          { key: 'bankId', label: kind === 'customer' ? 'Received into' : 'Paid from', type: 'select', options: bankOptions(db) },
+          { key: 'bankId', label: kind === 'customer' || kind === 'insurer' ? 'Received into' : 'Paid from', type: 'select', options: bankOptions(db) },
           { key: 'note', label: 'Note', full: true },
         ]}
         onCancel={onClose}
@@ -211,8 +217,8 @@ export function CashBook() {
       <div className="page-head">
         <h1>Cash Book</h1>
         <div className="row gap">
-          <select value={account} onChange={(e) => setAccount(e.target.value)}>{db.banks.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select>
-          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /><input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+          <select aria-label="Account" value={account} onChange={(e) => setAccount(e.target.value)}>{db.banks.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select>
+          <input type="date" aria-label="From" value={from} onChange={(e) => setFrom(e.target.value)} /><input type="date" aria-label="To" value={to} onChange={(e) => setTo(e.target.value)} />
           <button className="btn ghost" onClick={() => downloadFile('cash-book.csv', toCSV(rows.map(({ date, desc, kind, in: i, out, bal: b }) => ({ date, description: desc, type: kind, in: i, out, balance: b }))), 'text/csv')}>Export CSV</button>
         </div>
       </div>

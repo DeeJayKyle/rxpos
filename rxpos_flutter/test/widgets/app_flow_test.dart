@@ -8,10 +8,12 @@ import 'package:crypto/crypto.dart';
 
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:rxpos/core/theme/fonts.dart';
 import 'package:rxpos/core/router/app_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -257,6 +259,209 @@ void main() {
     await done(tester);
   });
 
+  testWidgets('step 21: a GS1 pack code sells that batch, an expired pack is refused, Add Stock fills batch and expiry', (tester) async {
+    await tester.runAsync(signedIn);
+    final store = RecordStore(db);
+    await tester.runAsync(() => store.update((d) {
+          d.put('products', {'id': 'p1', 'name': 'Calmex 500mg Tabs', 'generic': 'Calmex', 'form': 'Tablets', 'unit': 'Tablet', 'barcode': '4006381333931', 'price': 500, 'cost': 300});
+          d.put('batches', {'id': 'b2', 'productId': 'p1', 'batch': 'C2', 'expiry': '2030-06-30', 'cost': 300});
+          d.move(productId: 'p1', qty: 10, type: 'Opening stock', batchId: 'b2');
+        }));
+    await start(tester);
+    await toTill(tester);
+    final search = find.widgetWithText(TextField, 'Search medicine or scan barcode…  (F8)');
+    // an expired pack: refused, nothing added
+    await tester.enterText(search, '0104006381333931172001311OLD1');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await settle(tester);
+    expect(find.textContaining('expired on 2020-01-31'), findsOneWidget);
+    expect(find.text('Calmex 500mg Tabs'), findsOneWidget, reason: 'only in the grid');
+    // the pack of batch C2 (not the first to expire): that batch is sold
+    await tester.enterText(search, '010400638133393117300630' '10C2');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await settle(tester);
+    expect(find.text('Calmex 500mg Tabs'), findsNWidgets(2));
+    await tester.tap(find.byTooltip('More'));
+    await settle(tester);
+    await tester.tap(find.textContaining('Charge UGX'));
+    await settle(tester);
+    expect(find.text('Sale complete'), findsOneWidget);
+    final moves = (await tester.runAsync(() => store.rows('movements')))!.where((m) => m['type'] == 'Sale').toList();
+    expect(moves.map((m) => m['batchId']).toSet(), {'b2'});
+    await tester.tap(find.text('New sale'));
+    await settle(tester);
+    // Add Stock: the pack fills the medicine, batch and expiry; an unknown product number starts a new medicine
+    await tester.sendKeyEvent(LogicalKeyboardKey.f4);
+    await settle(tester);
+    await tester.enterText(find.byKey(const Key('stock-search')), '(01)04006381333931(17)310200(10)NEW9');
+    await settle(tester, 3);
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await settle(tester);
+    expect(find.text('Calmex 500mg Tabs'), findsWidgets);
+    expect(find.widgetWithText(TextFormField, 'NEW9'), findsOneWidget);
+    expect(find.textContaining('Calmex 500mg Tabs added · batch NEW9'), findsOneWidget);
+    await tester.enterText(find.byKey(const Key('stock-search')), '0109506000134352' '10Z5');
+    await settle(tester, 3);
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await settle(tester);
+    expect(find.widgetWithText(TextFormField, 'Z5'), findsOneWidget);
+    await done(tester);
+  });
+
+  testWidgets('step 22: an insured sale: the client pays the co-pay, the insurer owes the rest until it pays', (tester) async {
+    await tester.runAsync(signedIn);
+    final store = RecordStore(db);
+    await tester.runAsync(() => store.update((d) {
+          d.put('insurers', {'id': 'i1', 'name': 'Jubilee Health', 'schemes': [{'id': 'gold', 'name': 'Gold', 'copayPct': 10, 'copayFixed': 0, 'limit': 0}]});
+          d.put('customers', {'id': 'c1', 'name': 'Grace Achieng', 'phone': '0772 555 111', 'insuranceNo': 'JB-77'});
+        }));
+    await start(tester);
+    await toTill(tester);
+    await tester.enterText(find.byKey(const Key('find-client')), '555');
+    await settle(tester, 4);
+    await tester.tap(find.text('Grace Achieng').last);
+    await settle(tester, 4);
+    await tester.enterText(find.widgetWithText(TextField, 'Search medicine or scan barcode…  (F8)'), '7010001');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await settle(tester);
+    await tester.tap(find.byTooltip('More'));
+    await settle(tester);
+    await tester.tap(find.byKey(const Key('insurance-scheme')));
+    await settle(tester, 3);
+    await tester.tap(find.text('Jubilee Health · Gold').last);
+    await settle(tester, 3);
+    expect(find.text('Jubilee Health pays'), findsOneWidget);
+    expect(find.widgetWithText(TextFormField, 'JB-77'), findsOneWidget, reason: 'the member number comes from the client');
+    await tester.tap(find.textContaining('Charge UGX 100 '));
+    await settle(tester);
+    expect(find.text('Sale complete'), findsOneWidget);
+    final sale = (await tester.runAsync(() => store.rows('sales')))!.single;
+    expect((sale['total'], sale['paid'], sale['customerId']), (1000, 100, 'c1'));
+    expect(sale['insurance'], {'insurerId': 'i1', 'insurer': 'Jubilee Health', 'schemeId': 'gold', 'scheme': 'Gold', 'memberNo': 'JB-77', 'share': 900});
+    expect(find.textContaining('Jubilee Health (Gold, member JB-77)'), findsWidgets, reason: 'on the receipt');
+    await tester.tap(find.text('New sale'));
+    await settle(tester);
+    // Insurers: Jubilee owes 900 until it pays
+    await navTo(tester, 'Insurers');
+    expect(find.text('Owes UGX 900'), findsOneWidget);
+    await tester.tap(find.text('Receive payment'));
+    await settle(tester);
+    await tester.tap(find.text('Record payment'));
+    await settle(tester);
+    expect(find.text('Owes UGX 0'), findsOneWidget);
+    final pay = (await tester.runAsync(() => store.rows('payments')))!.single;
+    expect((pay['kind'], pay['partyId'], pay['amount']), ('insurer', 'i1', 900));
+    await done(tester);
+  });
+
+  for (final (look, saved) in [('the standard look', ''), ('the dark theme (RxPOS Night)', '{"theme":"dark","design":"","surface":"flat","v":2}')]) {
+    testWidgets('step 24: accessibility in $look: every tap target on the main screens has a label and text has enough contrast', (tester) async {
+      await tester.runAsync(signedIn);
+      await tester.runAsync(() => RecordStore(db).update((d) => d.put('insurers', {'id': 'i1', 'name': 'Jubilee Health', 'schemes': [{'id': 'gold', 'name': 'Gold', 'copayPct': 10}]})));
+      if (saved.isNotEmpty) await tester.runAsync(() => db.into(db.kv).insertOnConflictUpdate(KvCompanion.insert(k: 'device:look', v: saved)));
+      final semantics = tester.ensureSemantics();
+      await start(tester);
+      final problems = <String>[];
+      Future<void> audit(String screen) async {
+        for (final (name, g) in [('labels', labeledTapTargetGuideline), ('contrast', textContrastGuideline)]) {
+          final r = await g.evaluate(tester);
+          if (!r.passed) problems.add('$screen · $name: ${r.reason}');
+        }
+      }
+
+      await audit('Dashboard');
+      for (final screen in ['POS – Retail', 'Sales History', 'Customers', 'Insurers', 'Medicine List', 'Inventory', 'Add Stock', 'Finance', 'Reports', 'Settings']) {
+        await navTo(tester, screen);
+        await audit(screen);
+      }
+      semantics.dispose();
+      expect(problems, isEmpty, reason: problems.join('\n\n'));
+      await done(tester);
+    });
+  }
+
+  testWidgets('keyboard, mouse and navigation: page keys, back, ?, pin, list keys, right-click, ticks, a key changed', (tester) async {
+    await tester.runAsync(signedIn);
+    await tester.runAsync(() => RecordStore(db).update((d) {
+          for (final (i, n) in ['Achieng Grace', 'Bwire Paul', 'Kato Sam', 'Nabirye Ruth'].indexed) {
+            d.put('customers', {'id': 'c$i', 'name': n, 'phone': '07725550$i'});
+          }
+        }));
+    await start(tester);
+    Future<void> keys(List<LogicalKeyboardKey> ks) async {
+      for (final k in ks) {
+        await tester.sendKeyEvent(k);
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      await settle(tester);
+    }
+
+    String at() => GoRouter.of(tester.element(find.byKey(const Key('sidebar')))).routerDelegate.currentConfiguration.uri.path;
+    await keys([LogicalKeyboardKey.keyG, LogicalKeyboardKey.keyC]);
+    expect(at(), '/customers', reason: 'G then C opens Customers');
+    await keys([LogicalKeyboardKey.f6]);
+    expect(at(), '/sales');
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.altLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.altLeft);
+    await settle(tester);
+    expect(at(), '/customers', reason: 'Alt+← goes back');
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.altLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.altLeft);
+    await settle(tester);
+    expect(at(), '/sales', reason: 'Alt+→ goes forward');
+    await keys([LogicalKeyboardKey.keyG, LogicalKeyboardKey.keyC]);
+    expect(find.byKey(const Key('pin-page')), findsOneWidget);
+    // ? shows the keys
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.slash);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+    await settle(tester);
+    expect(find.text('Keyboard and mouse'), findsOneWidget);
+    expect(find.text('G then C'), findsOneWidget);
+    expect(find.text('Right-click'), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, 'Close'));
+    await settle(tester);
+    // G then G pins the page
+    await keys([LogicalKeyboardKey.keyG, LogicalKeyboardKey.keyG]);
+    expect(find.byKey(const ValueKey('nav-pin-/customers')), findsOneWidget);
+    // list keys: ↓ ↓ highlights the second, Enter opens it
+    await keys([LogicalKeyboardKey.arrowDown, LogicalKeyboardKey.arrowDown, LogicalKeyboardKey.enter]);
+    expect(find.text('Edit Bwire Paul'), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await settle(tester);
+    // right-click: the row's menu
+    await tester.tap(find.text('Kato Sam'), buttons: kSecondaryMouseButton);
+    await settle(tester);
+    expect(find.text('Copy name and phone'), findsOneWidget);
+    expect(find.text('Tick'), findsOneWidget);
+    await tester.tap(find.text('Tick'));
+    await settle(tester);
+    // Shift+click ticks the rows in between
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.tap(find.byKey(const ValueKey('tick-c0')));
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+    await settle(tester);
+    expect(find.text('3 ticked'), findsOneWidget);
+    await keys([LogicalKeyboardKey.escape]);
+    expect(find.byKey(const Key('bulk-bar')), findsNothing);
+    // a key changed on this device
+    await navTo(tester, 'This device');
+    ScaffoldMessenger.of(tester.element(find.byKey(const Key('sidebar')))).clearSnackBars(); // the "Pinned" note sits over the page's foot
+    await settle(tester);
+    await tester.ensureVisible(find.byKey(const ValueKey('change-go:/customers')));
+    await settle(tester);
+    await tester.tap(find.byKey(const ValueKey('change-go:/customers')));
+    await settle(tester);
+    expect(find.text('New key for Customers'), findsOneWidget);
+    await keys([LogicalKeyboardKey.keyG, LogicalKeyboardKey.keyK]);
+    expect(tester.widget<Text>(find.byKey(const ValueKey('key-go:/customers'))).data, 'G then K ·');
+    await keys([LogicalKeyboardKey.keyG, LogicalKeyboardKey.keyK]);
+    expect(at(), '/customers', reason: 'the new key works at once');
+    await done(tester);
+  });
+
   testWidgets('a sale can be held and resumed', (tester) async {
     await tester.runAsync(signedIn);
     await start(tester);
@@ -328,6 +533,50 @@ void main() {
     expect(find.text('refunded'), findsOneWidget);
     final moves = (await tester.runAsync(() => RecordStore(db).rows('movements')))!;
     expect(moves.where((m) => m['type'] == 'Refund').single['qty'], 1);
+    await done(tester);
+  });
+
+  testWidgets('sales to check (workplan step 3): the cloud\'s findings on the dashboard, "Checked" marks one and logs it', (tester) async {
+    await tester.runAsync(signedIn);
+    await tester.runAsync(() => RecordStore(db).update((d) {
+          d.put('anomalies', {'id': 'a1', 'saleId': 's1', 'saleNumber': 'R-DISC', 'saleDate': '2026-11-09T10:00:00Z', 'branchId': 'main', 'cashier': 'Cid Cashier',
+            'kind': 'discount', 'detail': 'Discount of 300 given by a role without "Give discounts"', 'amount': 300, 'reviewed': false});
+          d.put('anomalies', {'id': 'a2', 'saleId': 's2', 'saleNumber': 'R-OLD', 'saleDate': '2026-11-08T10:00:00Z', 'kind': 'totals', 'detail': 'x', 'amount': 5, 'reviewed': true});
+        }));
+    await start(tester);
+    expect(find.text('Sales to check'), findsOneWidget);
+    expect(find.text('R-DISC · Discount without permission'), findsOneWidget);
+    expect(find.textContaining('R-OLD'), findsNothing); // already checked
+    await tester.ensureVisible(find.widgetWithText(OutlinedButton, 'Checked'));
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Checked'));
+    await settle(tester);
+    expect(find.text('Sales to check'), findsNothing);
+    final a1 = (await tester.runAsync(() => RecordStore(db).rows('anomalies')))!.firstWhere((a) => a['id'] == 'a1');
+    expect((a1['reviewed'], a1['reviewedBy']), (true, 'Tia Admin'));
+    final audit = (await tester.runAsync(() => RecordStore(db).rows('audit')))!;
+    expect(audit.any((x) => x['action'] == 'Sale check reviewed' && '${x['details']}'.startsWith('R-DISC')), isTrue);
+    await done(tester);
+  });
+
+  testWidgets('close the day (step 18): an admin closes today on Shifts; the close is saved with its totals and audited; Reopen is offered', (tester) async {
+    await tester.runAsync(signedIn);
+    final day = today();
+    await tester.runAsync(() => RecordStore(db).update((d) => d.put('sales', {'id': 's-today', 'number': 'R-T1', 'date': day, 'branchId': 'main', 'type': 'retail',
+          'items': [{'id': 'p1', 'name': 'Calmex 500mg Tabs', 'qty': 1, 'price': 500}], 'subtotal': 500, 'discount': 0, 'tax': 0, 'total': 500, 'paid': 500,
+          'payment': 'Cash', 'customerId': 'walk-in', 'customerName': 'Walk-in Customer', 'status': 'completed'})));
+    await start(tester);
+    await navTo(tester, 'Shifts & Cash-up');
+    expect(find.byKey(const Key('day-close')), findsOneWidget);
+    final row = find.ancestor(of: find.text('$day · today'), matching: find.byType(ListTile));
+    await tester.tap(find.descendant(of: row, matching: find.text('Close')));
+    await settle(tester);
+    await tester.tap(find.widgetWithText(FilledButton, 'Close the day'));
+    await settle(tester);
+    expect(find.descendant(of: find.ancestor(of: find.text('$day · today'), matching: find.byType(ListTile)), matching: find.textContaining('Closed by Tia Admin')), findsOneWidget);
+    final c = (await tester.runAsync(() => RecordStore(db).get('dayCloses', 'main:$day')))!;
+    expect((c['closedBy'], (c['snapshot'] as Map)['sales'], (c['snapshot'] as Map)['total']), ('Tia Admin', 1, 500));
+    expect((await tester.runAsync(() => RecordStore(db).rows('audit')))!.any((a) => a['action'] == 'Day closed'), isTrue);
+    expect(find.text('Reopen'), findsWidgets, reason: 'an admin can reopen');
     await done(tester);
   });
 
@@ -2699,7 +2948,7 @@ void main() {
 
   testWidgets('sidebar groups fold away and stay so on this device; the page you are on and pages with a count still show', (tester) async {
     await tester.runAsync(signedIn);
-    await start(tester, foldedNav: true);
+    await start(tester, foldedNav: true, size: const Size(1440, 1600)); // tall: the recent pages sit above the groups
     final sidebar = find.byKey(const Key('sidebar'));
     Finder item(String label) => find.descendant(of: sidebar, matching: find.text(label));
     // as the React app: at first only Sales is open

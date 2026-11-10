@@ -42,9 +42,15 @@ List<LedgerEntry> ledger(Map<String, List<Map<String, Object?>>> t) {
   }
   for (final p in t['payments'] ?? const <Map<String, Object?>>[]) {
     final kind = '${p['kind']}';
-    final who = kind == 'customer' ? nameOf('customers', p['partyId']) : kind == 'supplier' ? nameOf('suppliers', p['partyId']) : nameOf('loans', p['partyId'], 'lender');
-    final incoming = kind == 'customer';
-    final label = {'customer': 'Payment from', 'supplier': 'Payment to', 'loan': 'Loan repayment to'}[kind] ?? 'Payment';
+    final who = kind == 'customer'
+        ? nameOf('customers', p['partyId'])
+        : kind == 'supplier'
+            ? nameOf('suppliers', p['partyId'])
+            : kind == 'insurer'
+                ? nameOf('insurers', p['partyId'])
+                : nameOf('loans', p['partyId'], 'lender');
+    final incoming = kind == 'customer' || kind == 'insurer'; // step 22: an insurer paying its claims
+    final label = {'customer': 'Payment from', 'insurer': 'Payment from', 'supplier': 'Payment to', 'loan': 'Loan repayment to'}[kind] ?? 'Payment';
     e.add(LedgerEntry(date: '${p['date']}', desc: '$label $who', inAmount: incoming ? _n(p['amount']) : 0, outAmount: incoming ? 0 : _n(p['amount']), account: _acct(p['bankId']), kind: 'Payments'));
   }
   for (final l in t['loans'] ?? const <Map<String, Object?>>[]) {

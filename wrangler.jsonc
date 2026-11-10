@@ -7,7 +7,7 @@
   // Internal Cloudflare names kept from before the rename (never shown; renaming would need every secret re-entered).
   // Everyone reaches it as api.rxposug.com / rxposug.com.
   "name": "pharmapos",
-  "main": "worker/index.js",
+  "main": "worker/main.js",
   "compatibility_date": "2026-09-01",
   "assets": {
     "directory": "./dist",

@@ -26,9 +26,10 @@ export function ledger(db) {
   for (const p of db.payments) {
     const who = p.kind === 'customer' ? db.customers.find((c) => c.id === p.partyId)?.name
       : p.kind === 'supplier' ? db.suppliers.find((c) => c.id === p.partyId)?.name
+      : p.kind === 'insurer' ? (db.insurers || []).find((c) => c.id === p.partyId)?.name
       : db.loans.find((l) => l.id === p.partyId)?.lender;
-    const incoming = p.kind === 'customer';
-    const label = { customer: 'Payment from', supplier: 'Payment to', loan: 'Loan repayment to' }[p.kind];
+    const incoming = p.kind === 'customer' || p.kind === 'insurer'; // step 22: an insurer paying its claims
+    const label = { customer: 'Payment from', insurer: 'Payment from', supplier: 'Payment to', loan: 'Loan repayment to' }[p.kind];
     e.push({ date: p.date, desc: `${label} ${who || ''}`, in: incoming ? p.amount : 0, out: incoming ? 0 : p.amount, account: acct(p.bankId), kind: 'Payments' });
   }
   for (const l of db.loans) e.push({ date: l.date, desc: `Loan received from ${l.lender}`, in: l.amount, out: 0, account: acct(l.bankId), kind: 'Loans' });

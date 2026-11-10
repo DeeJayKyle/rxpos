@@ -7,12 +7,18 @@ import 'package:rxpos/core/platform.dart';
 
 import '../../../core/data/device_settings.dart';
 import '../../../core/data/pharmacy_providers.dart';
+import '../../../core/rules/gs1.dart';
+import '../../../core/rules/insurance.dart';
+import '../../../core/rules/dates.dart';
+import '../../../core/entities/people.dart';
+import '../../../core/rules/permissions.dart';
 import '../../../core/data/record_store.dart';
 import '../../../core/entities/draft.dart';
 import '../../../core/entities/product.dart';
 import '../../../core/entities/sale.dart';
 import '../../../core/presentation/backdrop.dart';
 import '../../../core/presentation/hardware_hud.dart';
+import '../../../core/presentation/keys_host.dart' show tillOwnsCtrlK;
 import '../../../core/presentation/resizable.dart';
 import '../../../core/presentation/widgets.dart';
 import '../../../core/rules/drug_class.dart';
@@ -84,9 +90,34 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     await _sale.resume(by > 0 ? held.first : held.last);
   }
 
+  /// Step 21 (core/rules/gs1.dart): a scanned pack's 2D code names the medicine and its batch, which is sold from
+  /// first; an expired pack is refused at once.
+  Future<Product?> _scanPack(PharmacyData d, Gs1 g) async {
+    final p = d.byGtin(g.gtin);
+    if (p == null) {
+      _say('No medicine has the product number ${g.gtin}', error: true);
+      return null;
+    }
+    if (g.expiry.isNotEmpty && daysUntil(g.expiry) < 0) {
+      _say('This ${p.name} pack expired on ${g.expiry}: take it off the shelf, don\'t sell it', error: true);
+      return null;
+    }
+    ref.read(lastScanProvider.notifier).now();
+    await _add(p);
+    final b = g.batch.isEmpty ? null : d.stock.batchesOf(p.id).where((x) => x.batch == g.batch && x.qty > 0).firstOrNull;
+    if (b != null) _sale.preferBatch(p.id, b.id);
+    return p;
+  }
+
   Future<void> _submitSearch(PharmacyData d, List<Product> results) async {
     final code = _search.text.trim();
     if (code.isEmpty) return;
+    final g = parseGs1(code);
+    if (g != null) {
+      await _scanPack(d, g);
+      _clearSearch();
+      return;
+    }
     final byCode = d.byBarcode[code];
     if (byCode != null) {
       ref.read(lastScanProvider.notifier).now(); // for the hardware status bar
@@ -188,6 +219,20 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     final s = ref.read(saleControllerProvider(widget.wholesale));
     if (s.lines.isEmpty || !mounted) return;
     final method = s.method ?? d.methods.first;
+    // step 20: the role's discount ceiling (a proforma's discount was set by whoever made the quotation)
+    final session0 = ref.read(sessionControllerProvider).value;
+    final roles = (await ref.read(recordStoreProvider).rows('roles')).map(Role.fromRecord); // straight from the device (nothing on the till watches roles)
+    if (!mounted) return;
+    final maxDisc = maxDiscountOf(roles, session0?.role ?? '');
+    final sub = totalsOf(s.lines, discount: s.discount, settings: d.settings).subtotal;
+    if (maxDisc != null && s.discount > 0 && sub > 0 && s.proforma == null && s.discount / sub * 100 > maxDisc + 1e-9) {
+      _say('Your role may give at most ${maxDisc % 1 == 0 ? maxDisc.toInt() : maxDisc}% discount (${d.settings.money((sub * maxDisc / 100).floorToDouble())} on this sale)', error: true);
+      return;
+    }
+    // step 22: an insured sale needs the client and their member number before anything is asked
+    final ins = s.insured;
+    if (ins != null && s.customerId == walkIn) return _say('Choose the insured client for this sale', error: true);
+    if (ins != null && ins.memberNo.trim().isEmpty) return _say('Enter the client\'s ${ins.insurerName} member number', error: true);
     ControlledEntry? cd;
     MomoPaid? momo;
     var rx = false;
@@ -203,8 +248,9 @@ class _PosScreenState extends ConsumerState<PosScreen> {
       );
       if (!rx) return;
     }
-    if (method.type == 'momo' && mounted) {
-      final total = totalsOf(s.lines, discount: s.discount, settings: d.settings).total;
+    final due = dueOf(ins, totalsOf(s.lines, discount: s.discount, settings: d.settings).total, d.settings);
+    if (method.type == 'momo' && due > 0 && mounted) {
+      final total = due; // the client's part of an insured sale
       final phone = d.customers.where((x) => x.id == s.customerId && x.id != walkIn).firstOrNull?.phone ?? '';
       momo = await askMomo(
         context,
@@ -215,8 +261,26 @@ class _PosScreenState extends ConsumerState<PosScreen> {
       if (momo == null) return;
     }
     final client = d.customers.where((x) => x.id == s.customerId && x.id != walkIn).firstOrNull;
+    // step 8: a credit sale over the client's limit: Finance roles go on; others give a reason (audited, flagged)
+    Map<String, Object?>? creditOver;
+    if (method.type == 'credit') {
+      final over = await _sale.creditCheck();
+      if (over != null) {
+        final can = ref.read(permissionsProvider).value ?? const <String>{};
+        final base = <String, Object?>{'limit': over.limit, 'owed': over.owed, 'adds': over.adds};
+        if (can.contains('finance')) {
+          creditOver = {...base, 'finance': true};
+        } else {
+          if (!mounted) return;
+          String m(double v) => formatMoney(v, currency: d.settings.currency, decimals: d.settings.decimalPlaces);
+          final why = await askCreditReason(context, client: s.customerName, owed: m(over.owed), adds: m(over.adds), limit: m(over.limit));
+          if (why == null) return;
+          creditOver = {...base, 'reason': why};
+        }
+      }
+    }
     try {
-      final sale = await _sale.complete(controlled: cd, momo: momo?.momo, rxChecked: rx);
+      final sale = await _sale.complete(controlled: cd, momo: momo?.momo, rxChecked: rx, creditOver: creditOver);
       if (!mounted) return;
       await showReceipt(context, sale, d.settings, phone: client?.phone ?? '', autoPrint: d.settings.autoPrint);
       _searchFocus.requestFocus();
@@ -235,6 +299,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
 
   @override
   void dispose() {
+    tillOwnsCtrlK.value = false;
     _search.dispose();
     _searchFocus.dispose();
     super.dispose();
@@ -257,6 +322,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
         final stored = ref.watch(deviceValueProvider('pos-layout')).value;
         final layout = posLayouts.any((x) => x.$1 == stored) ? stored! : 'standard';
         final advanced = wide && layout == 'advanced';
+        tillOwnsCtrlK.value = advanced; // Ctrl+K opens the till's command bar, not the app's search
         final productPanel = _ProductPanel(
           wholesale: widget.wholesale,
           data: d,
@@ -277,6 +343,11 @@ class _PosScreenState extends ConsumerState<PosScreen> {
           onCamera: onAndroid
               ? () async {
                   await scanContinuous(context, title: 'Scan items into the sale', onCode: (code) async {
+                    final g = parseGs1(code);
+                    if (g != null) {
+                      final sp = await _scanPack(d, g);
+                      return sp == null ? null : '${sp.name} added${g.batch.isEmpty ? '' : ' (batch ${g.batch})'}';
+                    }
                     final p = d.byBarcode[code.trim()];
                     if (p == null) return null;
                     ref.read(lastScanProvider.notifier).now();
@@ -800,13 +871,18 @@ class _ProductPanel extends StatelessWidget {
                                         style: const TextStyle(fontWeight: FontWeight.w700),
                                       ),
                                     ),
-                                    InkWell(
-                                      key: Key('star-${p.id}'),
-                                      onTap: onStar == null ? null : () => onStar!(p),
-                                      child: Icon(
-                                        favs.contains(p.id) ? Icons.star : Icons.star_border,
-                                        size: 18,
-                                        color: favs.contains(p.id) ? Colors.amber.shade700 : t.hintColor,
+                                    // step 24: a screen reader says what the star does (it was an unnamed button)
+                                    Semantics(
+                                      button: true,
+                                      label: favs.contains(p.id) ? 'Remove ${p.name} from favourites' : 'Add ${p.name} to favourites',
+                                      child: InkWell(
+                                        key: Key('star-${p.id}'),
+                                        onTap: onStar == null ? null : () => onStar!(p),
+                                        child: Icon(
+                                          favs.contains(p.id) ? Icons.star : Icons.star_border,
+                                          size: 18,
+                                          color: favs.contains(p.id) ? Colors.amber.shade700 : t.hintColor,
+                                        ),
                                       ),
                                     ),
                                   ],
@@ -940,6 +1016,10 @@ class _SalePanel extends ConsumerWidget {
     String fmt(num n) => formatMoney(n, currency: st.currency, decimals: st.decimalPlaces);
     final t = totalsOf(s.lines, discount: s.discount, settings: st);
     final method = s.method ?? data.methods.first;
+    // step 22: insurers' schemes; an insured sale's client pays the co-pay (due), the insurer the rest
+    final schemes = schemeChoices(ref.watch(tableProvider('insurers')).value ?? const []);
+    final ins = s.insured == null ? null : schemes.where((x) => x.key == s.insured!.key).firstOrNull;
+    final due = dueOf(ins == null ? null : s.insured, t.total, st);
     final held = heldSales(data, wholesale);
     final customer = data.customers.where((x) => x.id == s.customerId).firstOrNull;
     void guard(void Function() f) {
@@ -1201,7 +1281,7 @@ class _SalePanel extends ConsumerWidget {
               final charge = FilledButton(
                 onPressed: s.lines.isEmpty ? null : onCharge,
                 style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16)),
-                child: Text('${advanced ? 'Process checkout' : 'Charge'} ${fmt(t.total)}   [F9]', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                child: Text('${advanced ? 'Process checkout' : 'Charge'} ${fmt(due)}   [F9]', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
               );
               // on a phone: Hold and Proforma side by side, then Charge across the whole width
               if (narrow) {
@@ -1244,6 +1324,44 @@ class _SalePanel extends ConsumerWidget {
                   ),
                 ],
               ),
+              if (schemes.isNotEmpty)
+                Row(children: [
+                  Expanded(
+                    child: DropdownButton<String>(
+                      key: const Key('insurance-scheme'),
+                      isExpanded: true,
+                      value: ins?.key ?? '',
+                      items: [
+                        const DropdownMenuItem(value: '', child: Text('Not insured')),
+                        for (final x in schemes) DropdownMenuItem(value: x.key, child: Text('${x.insurer['name']} · ${x.scheme['name']}', overflow: TextOverflow.ellipsis)),
+                      ],
+                      onChanged: (k) {
+                        final x = schemes.where((y) => y.key == k).firstOrNull;
+                        final member = s.insured?.memberNo.isNotEmpty == true ? s.insured!.memberNo : '${customer?.raw['insuranceNo'] ?? ''}';
+                        c.insure(x == null ? null : Insured(insurer: x.insurer, scheme: x.scheme, memberNo: member));
+                      },
+                    ),
+                  ),
+                  if (ins != null) ...[
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextFormField(
+                        key: ValueKey('member-${ins.key}-${s.lines.isEmpty}'),
+                        initialValue: s.insured?.memberNo ?? '',
+                        decoration: const InputDecoration(labelText: 'Member no.', isDense: true),
+                        onChanged: c.memberNo,
+                      ),
+                    ),
+                  ],
+                ]),
+              if (ins != null) ...[
+                Row(children: [Expanded(child: Text('${ins.insurer['name']} pays')), Text('− ${fmt(t.total - due)}')]),
+                Row(children: [
+                  Text('Client pays', style: th.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+                  const Spacer(),
+                  Text(fmt(due), style: th.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
+                ]),
+              ],
               const SizedBox(height: 8),
               // on a phone the payment methods scroll sideways in one row, so the sale lines keep their room
               if (narrow)
@@ -1276,12 +1394,12 @@ class _SalePanel extends ConsumerWidget {
                     const SizedBox(width: 12),
                     if (method.type == 'cash')
                       Text(
-                        'Change ${fmt((s.tendered ?? t.total) - t.total < 0 ? 0 : (s.tendered ?? t.total) - t.total)}',
+                        'Change ${fmt((s.tendered ?? due) - due < 0 ? 0 : (s.tendered ?? due) - due)}',
                         style: const TextStyle(fontWeight: FontWeight.w700),
                       )
                     else
                       Text(
-                        'On credit ${fmt((t.total - (s.tendered ?? 0)).clamp(0, double.infinity))}',
+                        'On credit ${fmt((due - (s.tendered ?? 0)).clamp(0, double.infinity))}',
                         style: TextStyle(color: Colors.orange.shade800, fontWeight: FontWeight.w700),
                       ),
                   ],

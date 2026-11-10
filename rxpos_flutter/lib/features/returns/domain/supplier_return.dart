@@ -28,14 +28,14 @@ Future<Map<String, Object?>> returnToSupplier(RecordStore store, {required Strin
   for (final l in lines) {
     if (!(l.qty > 0) || l.qty > l.batch.qty) throw ReturnProblem('${l.name}: return between 1 and ${l.batch.qty.round()} (in stock in batch ${l.batch.batch})');
   }
-  return store.update((d) {
+  return store.update((d) async {
     final items = [
       for (final l in lines)
         {'productId': l.productId, 'name': l.name, 'batchId': l.batch.legacy ? null : l.batch.id, 'batch': l.batch.batch, 'expiry': l.batch.expiry,
           'qty': l.qty.round(), 'credit': l.credit, 'reason': l.reason},
     ];
     final total = lines.fold(0.0, (a, l) => a + l.qty.roundToDouble() * l.credit);
-    final rec = d.put('supplierReturns', {'id': uid(), 'number': docNumber('RT'), 'date': date, 'supplierId': supplierId, 'supplierName': supplierName,
+    final rec = d.put('supplierReturns', {'id': uid(), 'number': await d.number('RT', branchId: branchId), 'date': date, 'supplierId': supplierId, 'supplierName': supplierName,
       'creditNote': creditNote.trim(), 'settle': settle, if (settle == 'cash') 'bankId': bankId, 'note': note.trim(), 'items': items, 'total': total,
       'branchId': branchId, 'by': by, 'at': d.now});
     for (final i in items) {

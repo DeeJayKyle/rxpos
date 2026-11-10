@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Crown, Plus, RefreshCw, KeyRound, PauseCircle, PlayCircle, Eraser, Copy, Smartphone, LogOut, Building2, ArrowLeft, Users, Database, SlidersHorizontal,
+import { Crown, Plus, RefreshCw, KeyRound, PauseCircle, PlayCircle, Eraser, Copy, Smartphone, LogOut, Building2, ArrowLeft, Users,
   Trash2, Download, Upload, Globe, Pencil, Search, ShieldAlert, MessageCircle, ExternalLink, Wand2, Eye, UserCog, Mail, LockKeyhole } from 'lucide-react';
 import { FEATURES, DEFAULT_FEATURES, DEFAULT_ROLES } from '../access.js';
 import { ownerApi, cleanUrl, cloudUrl, whatsappLink, ownerAuthConfig, ownerLogin, ownerGoogleLogin } from '../cloud.js';
@@ -101,6 +101,7 @@ export default function OwnerConsole() {
               <div className="kv"><span>Medicines</span><strong>{t.stats.products.toLocaleString()}</strong></div>
               <div className="kv"><span>Staff · branches</span><strong>{t.stats.users} · {t.stats.branches || 1}</strong></div>
               <div className="kv"><span>Sales recorded</span><strong>{t.stats.sales.toLocaleString()}</strong></div>
+              {t.stats.anomalies > 0 && <div className="kv" title="Sales the cloud found something wrong with (not yet marked checked in the pharmacy)"><span>Sales to check</span><strong className="warn-text"><b>{t.stats.anomalies.toLocaleString()}</b></strong></div>}
               <div className="kv"><span>Last activity</span><strong>{t.stats.lastActivity ? new Date(t.stats.lastActivity).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : '—'}</strong></div>
               {t.notes && <p className="muted small">{t.notes}</p>}
               <button className="btn sm primary">Manage <ArrowLeft size={14} style={{ transform: 'rotate(180deg)' }} /></button>
@@ -240,6 +241,7 @@ function TenantAdmin({ id, api, url, onBack }) {
             <div className="stats">
               <Stat label="Medicines" value={t.stats.products.toLocaleString()} tone="teal" />
               <Stat label="Sales" value={t.stats.sales.toLocaleString()} tone="violet" />
+              {t.stats.anomalies > 0 && <Stat label="Sales to check" value={t.stats.anomalies.toLocaleString()} sub="marked checked in the pharmacy's dashboard" tone="amber" />}
               <Stat label="Records" value={t.stats.records.toLocaleString()} />
               <Stat label="Last activity" value={t.stats.lastActivity ? new Date(t.stats.lastActivity).toLocaleDateString() : '—'} sub={t.stats.lastActivity ? new Date(t.stats.lastActivity).toLocaleTimeString() : ''} />
             </div>
@@ -386,7 +388,7 @@ function TenantAdmin({ id, api, url, onBack }) {
         <Modal title={branchEdit.id ? `Edit ${branchEdit.name}` : 'Add branch'} onClose={() => setBranchEdit(null)}>
           <form onSubmit={saveBranch}>
             <div className="form-grid">
-              {[['name', 'Branch name', true], ['address', 'Address / town'], ['phone', 'Phone'], ['manager', 'Manager']].map(([k, l, req]) => (
+              {[['name', 'Branch name', true], ['code', 'Code on receipts (e.g. NTD; empty = from the name)'], ['address', 'Address / town'], ['phone', 'Phone'], ['manager', 'Manager']].map(([k, l, req]) => (
                 <label key={k} className="field"><span>{l}</span><input required={!!req} value={branchEdit[k] || ''} onChange={(e) => setBranchEdit({ ...branchEdit, [k]: e.target.value })} /></label>))}
             </div>
             <div className="form-actions"><button type="button" className="btn ghost" onClick={() => setBranchEdit(null)}>Cancel</button><button className="btn primary" disabled={busy}>Save</button></div>

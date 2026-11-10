@@ -6,7 +6,11 @@ import { featureSet, permissionsOf } from './access.js';
 import { platformName } from './platform.js';
 import { endWebSession, isLeaving, keepsData } from './webpolicy.js';
 import { connectLive, disconnectLive, onLive } from './live.js';
-import { DEFAULT_CLOUD } from './cloud.js';
+import { DEFAULT_CLOUD, tillNumber } from './cloud.js';
+import { nextNumber } from './docnumbers.js';
+import { clientOwes } from './insurance.js';
+import { createStockIndexer } from './stockindex.js';
+import { FIELD_TABLES, stampFields, mergeFields, sameRecord } from './fieldmerge.js';
 import { setUnsent } from './update.js';
 import { formatMoney } from './money.js';
 import { pharmacyDefaults, overrideKey, readOverrides, writeOverrides, editOverrides, settingsEqual, PHARMACY_FIELDS } from './pharmacy-settings.js';
@@ -22,6 +26,12 @@ export const TABLES = [
   'prescriptions', 'expenses', 'expenseCategories', 'banks', 'bankTx', 'loans', 'payments', 'users',
   'batches', 'branches', 'transfers', 'audit', 'purchaseOrders', 'roles', 'messages', 'shifts', 'license', 'events', 'tempLogs', 'catalogHidden', 'quizResults',
   'stockCounts', 'countItems', 'supplierReturns', 'chatMarks', 'chatPins', 'chatReads', 'drafts',
+  'anomalies', // sale checks written by the cloud (worker/anomalies.js); only roles with the audit log receive them
+  'dayCloses', // step 18: closed days per branch (src/dayclose.js)
+  'counters', // step 7: each till's document counts (src/docnumbers.js), saved with the documents they number
+  'insurers', // step 22: insurers and their schemes (src/insurance.js)
+  // step 26 (from the Flutter app): Payroll & HR (the cloud sends them only to roles with Payroll) and report emails
+  'employees', 'attendance', 'salaryAdvances', 'payrolls', 'reportSchedules',
 ];
 // What is persisted on the device, one IndexedDB key per part
 const PARTS = [...TABLES, 'settings', '_tomb'];
@@ -98,8 +108,10 @@ export async function verifyPassword(u, pw) {
 
 // ---------- draft helpers (used inside update(d => …)) ----------
 export function put(d, table, rec) {
-  const r = { ...rec, id: rec.id || uid(), updatedAt: now() };
+  let r = { ...rec, id: rec.id || uid(), updatedAt: now() };
   const i = d[table].findIndex((x) => x.id === r.id);
+  // step 14: medicines, clients, suppliers and batches remember when each field changed, so edits from two devices merge
+  if (i >= 0 && FIELD_TABLES.has(table)) r = stampFields(d[table][i], r, r.updatedAt);
   if (i >= 0) d[table][i] = r;
   else d[table].unshift(r);
   return r;
@@ -261,6 +273,12 @@ export function mergeRemote(db, changes) {
     index[ch.t] ??= new Map(d[ch.t].map((r, i) => [r.id, i]));
     const i = index[ch.t].get(ch.id);
     const local = i !== undefined ? d[ch.t][i] : null;
+    // step 14: a medicine, client, supplier or batch held here merges field by field (the newer value of each wins)
+    if (local && !ch.deleted && ch.rec && FIELD_TABLES.has(ch.t)) {
+      const merged = mergeFields(local, local.updatedAt, { ...ch.rec, id: ch.id }, ch.at);
+      if (!sameRecord(merged, local)) d[ch.t][i] = merged;
+      continue;
+    }
     if (local && local.updatedAt >= ch.at) continue;
     if (!local && !ch.deleted) {
       gone ??= new Map(d._tomb.map((x) => [x.t + '|' + x.id, x.at]));
@@ -305,7 +323,7 @@ const countOf = (d) => Object.fromEntries(TABLES.map((t) => [t, d[t].filter((r) 
  * same transaction, so nothing waiting is lost.
  */
 async function migrateLegacy(base, fill, cfg) {
-  let saved = null;
+  let saved;
   const parts = await Promise.all(PARTS.map((k) => idbGet('t:' + k)));
   if (parts.some((p) => p !== undefined)) saved = Object.fromEntries(PARTS.map((k, i) => [k, parts[i]]).filter(([, v]) => v !== undefined));
   else saved = (await idbGet('db')) || null; // data saved by version 1.0
@@ -349,7 +367,9 @@ export function StoreProvider({ children }) {
   const [syncCfg, setSyncCfgState] = useState(null);
   const [overrideRevision, setOverrideRevision] = useState(0);
   const localSettingsKey = overrideKey(syncCfg?.url, syncCfg?.tenant || syncCfg?.slug);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- overrideRevision: re-read this device's overrides after an edit
   const pharmacyOverrides = useMemo(() => readOverrides(localSettingsKey), [localSettingsKey, overrideRevision]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- only the shared settings matter here, not every record change
   const effectiveSettings = useMemo(() => db ? { ...db.settings, ...pharmacyOverrides } : null, [db?.settings, pharmacyOverrides]);
   const viewDb = useMemo(() => db ? { ...db, settings: effectiveSettings } : null, [db, effectiveSettings]);
   const [syncStatus, setSyncStatus] = useState({ state: 'off' });
@@ -578,7 +598,9 @@ export function StoreProvider({ children }) {
     const cur = cfgRef.current || {};
     const other = cur.tenant ? cur.tenant !== tenant : (dbRef.current?.users.length || 0) > 0;
     if (other && cur.tenant) {
-      if (await storage().count()) await syncRef.current?.run();
+      // twice at most: a first run() may just be the end of a sync that was already running (and failed, e.g. it
+      // started while the connection was down); the second is a fresh attempt now that the person is signing in
+      for (let i = 0; i < 2 && (await storage().count()); i++) await syncRef.current?.run();
       const left = await storage().count();
       if (left) throw new Error(`This device still has ${left} change(s) for ${cur.pharmacy || 'another pharmacy'} that haven't reached the cloud. Connect to the internet and let them send (or sign in to that pharmacy again) before signing in to a different pharmacy.`);
     }
@@ -591,26 +613,16 @@ export function StoreProvider({ children }) {
       setPending(0);
     }
     // a new link (another pharmacy, another cloud, or device-only data joining one) sends everything it holds once
-    const next = { ...cur, url, key: token, account, tenant, slug, pharmacy, ...(other || cur.url !== url ? { cursor: 0, pushedAt: '', lastSync: '', outboxV2: false } : {}) };
+    const next = { ...cur, url, key: token, account, tenant, slug, pharmacy, ...(other || cur.url !== url ? { cursor: 0, pushedAt: '', lastSync: '', outboxV2: false, till: undefined } : {}) };
     await saveSyncCfg(next);
     return other || !cur.lastSync;
   }, [saveSyncCfg, persist, setState]);
 
   // ---------- derived stock: per branch, per batch ----------
-  const stockIndex = useMemo(() => {
-    const batch = new Map(); // `${branch}|${batchId}` → qty
-    const product = new Map(); // `${branch}|${productId}` → qty
-    const total = new Map(); // productId → qty across all branches
-    for (const mv of db?.movements || []) {
-      const br = mv.branchId || MAIN_BRANCH;
-      const bk = br + '|' + (mv.batchId || 'lb-' + mv.productId);
-      const pk = br + '|' + mv.productId;
-      batch.set(bk, (batch.get(bk) || 0) + mv.qty);
-      product.set(pk, (product.get(pk) || 0) + mv.qty);
-      total.set(mv.productId, (total.get(mv.productId) || 0) + mv.qty);
-    }
-    return { batch, product, total };
-  }, [db?.movements]);
+  // step 13 (src/stockindex.js): running balances; after a change only the new movements are added
+  const stockIndexer = useRef(null);
+  stockIndexer.current ??= createStockIndexer({ onMismatch: () => console.warn('Stock balances re-counted: the running totals differed from the full count') });
+  const stockIndex = useMemo(() => stockIndexer.current(db?.movements), [db?.movements]);
 
   const batchMeta = useMemo(() => {
     const m = new Map();
@@ -647,6 +659,17 @@ export function StoreProvider({ children }) {
   }, [effectiveSettings]);
 
   const branch = db?.branches.find((b) => b.id === branchId) || db?.branches[0];
+  // step 7: document numbers (src/docnumbers.js). Called inside update(): the count is saved with the document.
+  const numberFor = useCallback((d, kind) => nextNumber(d, put, kind, { till: cfgRef.current?.till, branch: d.branches?.find((b) => b.id === branchId) || branch }), [branchId, branch]);
+  // a till number from the cloud once this device is signed in to one (the same device always gets the same number)
+  useEffect(() => {
+    if (!user || !syncCfg?.url || !syncCfg?.key || syncCfg?.till) return;
+    let gone = false;
+    const ask = () => tillNumber(syncCfg).then((r) => { if (!gone && r?.till > 0 && cfgRef.current?.key === syncCfg.key) saveSyncCfg({ ...cfgRef.current, till: r.till }); }).catch(() => {});
+    ask();
+    const again = setInterval(ask, 60000); // offline or an older cloud: keep the old-style numbers and ask again later
+    return () => { gone = true; clearInterval(again); };
+  }, [user, syncCfg?.url, syncCfg?.key, syncCfg?.till, syncCfg?.deviceId]); // eslint-disable-line react-hooks/exhaustive-deps
   const features = useMemo(() => (db ? featureSet(db) : {}), [db?.license, db?.settings]); // eslint-disable-line react-hooks/exhaustive-deps
   const perms = useMemo(() => (db && user ? permissionsOf(db, user.role) : new Set()), [db?.roles, user]); // eslint-disable-line react-hooks/exhaustive-deps
   const can = useCallback((p) => perms.has(p), [perms]);
@@ -663,7 +686,7 @@ export function StoreProvider({ children }) {
 
   return (
     <Ctx.Provider value={{ db: viewDb, sharedSettings: db.settings, pharmacyOverrides, resetPharmacyOverrides, update, pending, storageIssue, upsert, remove, saveSettings, user, setUser, fmt, products, stockIndex, batchesOf,
-      branchId, branch, setBranchId, syncCfg, saveSyncCfg, syncStatus, syncNow, pullAll, linkPharmacy, features, can, day }}>
+      branchId, branch, setBranchId, numberFor, syncCfg, saveSyncCfg, syncStatus, syncNow, pullAll, linkPharmacy, features, can, day }}>
       {children}
     </Ctx.Provider>
   );
@@ -706,7 +729,7 @@ export function supplierPrices(purchases) {
 
 /** Amount a customer owes: credit sales minus payments received. */
 export function customerBalance(db, id) {
-  const credit = db.sales.filter((s) => s.customerId === id && s.status !== 'refunded').reduce((a, s) => a + (s.total - (s.paid ?? s.total)), 0);
+  const credit = db.sales.filter((s) => s.customerId === id).reduce((a, s) => a + clientOwes(s), 0); // an insurer's share is not the client's debt (step 22)
   const paid = db.payments.filter((p) => p.kind === 'customer' && p.partyId === id).reduce((a, p) => a + p.amount, 0);
   return credit - paid;
 }

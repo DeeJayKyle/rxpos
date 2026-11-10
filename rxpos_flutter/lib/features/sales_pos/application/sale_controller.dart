@@ -9,10 +9,13 @@ import '../../../core/data/pharmacy_providers.dart';
 import '../../../core/data/record_store.dart';
 import '../../../core/entities/draft.dart';
 import '../../../core/entities/product.dart';
+import '../../../core/entities/sale.dart';
 import '../../../core/entities/settings.dart';
 import '../../../core/rules/dates.dart';
 import '../../../core/rules/ids.dart';
+import '../../../core/rules/insurance.dart';
 import '../../auth/application/session_controller.dart';
+import '../../people/domain/balances.dart';
 import '../../proformas/domain/proformas.dart';
 import '../domain/cart.dart';
 
@@ -30,7 +33,10 @@ class SaleState {
     this.cursor = -1,
     this.proforma,
     this.ticked = const {},
+    this.insured,
   });
+  /// step 22: billed to an insurer (null = not insured)
+  final Insured? insured;
   final List<CartLine> lines;
   final String customerId, customerName;
   final double discount;
@@ -56,6 +62,8 @@ class SaleState {
     bool clearTendered = false,
     int? cursor,
     Set<String>? ticked,
+    Insured? insured,
+    bool clearInsured = false,
   }) {
     final l = lines ?? this.lines;
     return SaleState(
@@ -67,6 +75,7 @@ class SaleState {
       tendered: clearTendered ? null : (tendered ?? this.tendered),
       cursor: cursor ?? this.cursor,
       proforma: proforma,
+      insured: clearInsured ? null : (insured ?? this.insured),
       ticked: {
         for (final id in ticked ?? this.ticked)
           if (l.any((x) => x.id == id)) id,
@@ -84,6 +93,8 @@ class SaleState {
     'payment': method?.name ?? '',
     'methodId': method?.id ?? '',
     'tendered': tendered,
+    if (insured != null) 'insKey': insured!.key,
+    if (insured != null) 'memberNo': insured!.memberNo,
   };
 }
 
@@ -140,6 +151,7 @@ class SaleController extends _$SaleController {
             discount: ((snap['discount'] as num?) ?? 0).toDouble(),
             method: m,
             tendered: (snap['tendered'] as num?)?.toDouble(),
+            insured: await _insuredOf(snap),
           );
         }
       }
@@ -272,6 +284,9 @@ class SaleController extends _$SaleController {
     return true;
   }
 
+  /// Step 21: sell this line from the scanned pack's batch first.
+  void preferBatch(String id, String batchId) => _replace(id, (l) => l.copyWith(preferBatch: batchId));
+
   void _replace(String id, CartLine Function(CartLine) f) => state = state.copyWith(lines: [for (final l in state.lines) l.id == id ? f(l) : l]);
 
   void step(String id, int by) {
@@ -305,6 +320,10 @@ class SaleController extends _$SaleController {
   void method(PaymentMethod m) => state = state.copyWith(method: m, clearTendered: true);
   void tendered(double? v) => state = v == null ? state.copyWith(clearTendered: true) : state.copyWith(tendered: v);
   void cursor(int i) => state = state.copyWith(cursor: i);
+
+  /// step 22: bill an insurer's scheme for this sale (null = not insured); the member number defaults to the client's
+  void insure(Insured? x) => state = x == null ? state.copyWith(clearInsured: true) : state.copyWith(insured: x);
+  void memberNo(String v) => state.insured == null ? null : state = state.copyWith(insured: state.insured!.withMember(v));
 
   /// Put the sale on hold (a draft, on every device) and start a new one.
   Future<void> hold() async {
@@ -347,11 +366,34 @@ class SaleController extends _$SaleController {
       customerName: c?.name ?? 'Walk-in Customer',
       discount: ((data['discount'] as num?) ?? 0).toDouble(),
       method: state.method,
+      insured: await _insuredOf(data),
     );
   }
 
+  /// step 22: the insurer and scheme a kept or held sale was billed to (insKey "insurer|scheme", as the React till keeps it)
+  Future<Insured?> _insuredOf(Map<String, Object?> snap) async {
+    final key = '${snap['insKey'] ?? ''}';
+    if (key.isEmpty) return null;
+    final c = schemeChoices(await ref.read(recordStoreProvider).rows('insurers')).where((x) => x.key == key).firstOrNull;
+    return c == null ? null : Insured(insurer: c.insurer, scheme: c.scheme, memberNo: '${snap['memberNo'] ?? ''}');
+  }
+
   /// Complete the sale. Returns the saved sale; on any problem nothing is saved and the sale stays as it is.
-  Future<Map<String, Object?>> complete({ControlledEntry? controlled, String? momoRef, Map<String, Object?>? momo, bool rxChecked = false}) async {
+  /// Step 8: would this credit sale take the client over their credit limit? (what they owe as on the Debtors page)
+  Future<({double limit, double owed, double adds})?> creditCheck() async {
+    final d = await _data;
+    final method = state.method ?? d.methods.first;
+    if (method.type != 'credit' || state.customerId == walkIn) return null;
+    final c = d.customers.where((x) => x.id == state.customerId).firstOrNull;
+    final limit = (c?.raw['creditLimit'] as num?)?.toDouble() ?? 0;
+    if (!(limit > 0)) return null;
+    final store = ref.read(recordStoreProvider);
+    final owed = customerBalance(state.customerId, (await store.rows('sales')).map(Sale.fromRecord), await store.rows('payments'));
+    final total = totalsOf(state.lines, discount: state.discount, settings: d.settings).total;
+    return overLimit(limit: limit, owed: owed, total: dueOf(state.insured, total, d.settings), tendered: state.tendered);
+  }
+
+  Future<Map<String, Object?>> complete({ControlledEntry? controlled, String? momoRef, Map<String, Object?>? momo, bool rxChecked = false, Map<String, Object?>? creditOver}) async {
     final d = await _data;
     final session = await ref.read(sessionControllerProvider.future);
     final method = state.method ?? d.methods.first;
@@ -368,12 +410,15 @@ class SaleController extends _$SaleController {
         momoRef: momoRef,
         momo: momo,
         rxChecked: rxChecked,
+        creditOver: creditOver,
+        insured: state.insured,
       ),
       settings: d.settings,
       stock: d.stock,
       wholesale: wholesale,
       cashier: session?.userName ?? '',
       branchId: d.branch,
+      proformaId: state.proforma?['id']?.toString(),
       also: state.proforma == null ? null : (x, sale) => x.put('proformas', {...state.proforma!, 'status': 'Converted', 'saleNumber': sale['number']}),
     );
     state = SaleState(method: state.method);
@@ -393,6 +438,7 @@ class SaleController extends _$SaleController {
       customerId: state.customerId,
       customerName: state.customerName,
       by: session?.userName ?? '',
+      branchId: d.branch,
     );
     clear();
     return pf;

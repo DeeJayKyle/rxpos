@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CalendarDays, Plus, Search } from 'lucide-react';
 import { deviceSettings, onDevice } from './device.js';
-import { formatDate, parseDate, datePlaceholder } from './dateformat.js';
+import { formatDate, parseDate, parseExpiry, datePlaceholder } from './dateformat.js';
 import { searchProducts } from './search.js';
 
 /** The date format this device uses (re-renders when it changes) */
@@ -23,20 +23,24 @@ export function DateInput({ value, onChange, min, max, monthYear = false, ...res
   const [bad, setBad] = useState(false);
   const pickerRef = useRef(null);
   useEffect(() => { setText(formatDate(value, fmt)); setBad(false); }, [value, fmt]);
+  // an expiry (monthYear) is read whatever its format: 06/2028, JUN 2028, 30/06/2028, 062028… (dateformat.js parseExpiry)
+  const read = (t) => (monthYear ? parseExpiry(t, fmt) : parseDate(t, fmt));
   const commit = () => {
-    const iso = parseDate(text, fmt, { monthYear });
+    const iso = read(text);
     if (iso === null || (iso && ((min && iso < min) || (max && iso > max)))) { setBad(true); return; }
     setBad(false);
     if (iso !== (value || '')) onChange(iso); else setText(formatDate(value, fmt));
   };
-  const why = bad ? (parseDate(text, fmt, { monthYear }) === null ? `Type the date as ${datePlaceholder(fmt, monthYear)}` : min && parseDate(text, fmt, { monthYear }) < min ? 'This date is in the past' : 'This date is in the future') : '';
+  const why = bad ? (read(text) === null ? (monthYear ? 'Could not read this expiry: try 06/2028, JUN 2028 or 30/06/2028' : `Type the date as ${datePlaceholder(fmt, monthYear)}`) : min && read(text) < min ? 'This date is in the past' : 'This date is in the future') : '';
   return (
     <span className={'date-input' + (bad ? ' bad' : '')}>
       <input {...rest} type="text" inputMode="numeric" value={text} placeholder={datePlaceholder(fmt, monthYear)} title={why || datePlaceholder(fmt, monthYear)}
         onChange={(e) => {
           const t = e.target.value; setText(t); setBad(false);
           // a complete date (4-digit year, or YYYY-MM-DD) is kept at once; anything shorter waits for Enter or leaving the box
-          const iso = /\d{4}\s*$|^\d{4}-\d{1,2}-\d{1,2}$/.test(t.trim()) ? parseDate(t, fmt, { monthYear }) : null;
+          // (an expiry typed as digits only, 30062028, waits too: 300620 could already be read as a date)
+          const done = monthYear ? /[^0-9]\d{4}\s*$|^\d{4}-\d{1,2}(-\d{1,2})?$/.test(t.trim()) : /\d{4}\s*$|^\d{4}-\d{1,2}-\d{1,2}$/.test(t.trim());
+          const iso = done ? read(t) : null;
           if (iso && ((min && iso < min) || (max && iso > max))) setBad(true); // complete but outside the allowed dates: red at once
           else if (iso && iso !== (value || '')) onChange(iso);
         }} onBlur={commit} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(); } }} aria-invalid={bad || undefined} />

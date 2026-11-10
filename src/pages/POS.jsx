@@ -4,6 +4,11 @@ import { useLocation, Link } from 'react-router-dom';
 import { ShoppingCart, Trash2, X, FileText, Printer, AlertTriangle, ScanBarcode, Smartphone, Loader2, CheckCircle2, UserPlus, Tag, BookMarked, Repeat, PauseCircle, Keyboard, Plus, ClipboardList, MessageCircle, MessageSquareText, Star, Search, Command, LayoutGrid, Users } from 'lucide-react';
 import { DrugInfoPanel, genericKey } from './DrugInfo.jsx';
 import { useStore, uid, now, daysUntil, put, del, move, allocate, audit, normalizePhone, customerBalance, DEFAULT_PAYMENT_METHODS } from '../store.jsx';
+import { overLimit } from '../credit.js';
+import { parseGs1, findByGtin } from '../gs1.js';
+import { preferFirst } from '../fefo.js';
+import { copayOf, schemeChoices } from '../insurance.js';
+import { maxDiscountOf } from '../access.js';
 import { draftsFor, saleDraft } from '../drafts.js';
 import { keepsData } from '../webpolicy.js';
 import { CASH } from '../finance.js';
@@ -17,7 +22,6 @@ import { CameraButton, CameraScanner } from '../camscan.jsx';
 import { deviceSettings, setDevice, onDevice } from '../device.js';
 
 // Receipt numbers must be unique across synced devices, so they are time-based rather than sequential
-export const docNumber = (prefix) => prefix + Date.now().toString(36).toUpperCase().slice(-6) + Math.floor(Math.random() * 36).toString(36).toUpperCase();
 
 // A client with this many sales is shown as a loyalty member (repeat client) on the till
 const LOYAL_VISITS = 5;
@@ -25,7 +29,7 @@ const LOYAL_VISITS = 5;
 const POS_LAYOUTS = [['classic', 'Classic'], ['standard', 'Standard'], ['advanced', 'Advanced UI']];
 
 export default function POS({ mode = 'retail' }) {
-  const { db, products, update, user, fmt, batchesOf, branchId, syncCfg, features, can, pending } = useStore();
+  const { db, products, update, user, fmt, batchesOf, branchId, syncCfg, features, can, pending, numberFor } = useStore();
   const [momo, setMomo] = useState(null);
   const [newClient, setNewClient] = useState(null);   // quick 'add client' form
   const [labelFor, setLabelFor] = useState(null);     // cart line whose dispensing directions are being edited
@@ -70,6 +74,27 @@ export default function POS({ mode = 'retail' }) {
   const [cam, setCam] = useState(false); // camera barcode scanner
   // Phones and tablets: the sale is a sheet docked at the bottom (total and Charge always in reach), slid up to edit it
   const [narrow, setNarrow] = useState(() => typeof matchMedia === 'function' && matchMedia('(max-width: 900px)').matches);
+  // step 26 (from the Flutter app): the sale panel's width and the payment area's height are dragged on their handles,
+  // remembered on this device; a double-click on a handle goes back to the standard size (Classic and Standard)
+  const [sized, setSized] = useState(() => ({ w: deviceSettings().posSaleW || 0, h: deviceSettings().posPayH || 0 }));
+  const posRef = useRef(null), payRef = useRef(null), sizedRef = useRef(sized);
+  sizedRef.current = sized;
+  const dragTo = (kind) => (e) => {
+    e.preventDefault();
+    const box = posRef.current?.getBoundingClientRect(), pay = payRef.current?.getBoundingClientRect();
+    if (!box) return;
+    const move = (ev) => {
+      const z = sizedRef.current;
+      const next = kind === 'w'
+        ? { ...z, w: Math.round(Math.max(320, Math.min(box.width - 360, box.right - ev.clientX - 18))) }
+        : { ...z, h: Math.round(Math.max(140, Math.min(window.innerHeight * 0.7, (pay?.bottom || window.innerHeight) - ev.clientY))) };
+      sizedRef.current = next; // what is saved when the button comes up, even before it is drawn
+      setSized(next);
+    };
+    const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); setDevice({ posSaleW: sizedRef.current.w, posPayH: sizedRef.current.h }); };
+    window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
+  };
+  const resetSize = (kind) => { const n = { ...sizedRef.current, [kind]: 0 }; setSized(n); setDevice({ posSaleW: n.w, posPayH: n.h }); };
   useEffect(() => { const m = matchMedia('(max-width: 900px)'); const f = () => setNarrow(m.matches); m.addEventListener?.('change', f); return () => m.removeEventListener?.('change', f); }, []);
   const [sheet, setSheet] = useState(false);
   const [swipe, setSwipe] = useState(null); // { id, x0, y0, dx } while a cart line is being swiped
@@ -80,6 +105,9 @@ export default function POS({ mode = 'retail' }) {
   const [payment, setPayment] = useState(methods[0]?.name || 'Cash');
   const ptype = methods.find((m) => m.name === payment)?.type || 'other';
   const [tendered, setTendered] = useState('');
+  // step 22: the insurer and scheme billed for this sale ('' = not insured) and the patient's member number
+  const [insKey, setInsKey] = useState('');
+  const [memberNo, setMemberNo] = useState('');
   const [done, setDone] = useState(null);
   const searchRef = useRef();
   const gridRef = useRef();
@@ -213,6 +241,8 @@ export default function POS({ mode = 'retail' }) {
     else if (e.key === 'ArrowRight' && (q === '' || e.target.selectionStart === q.length)) { e.preventDefault(); moveActive(1); }
     else if (e.key === 'ArrowLeft' && q === '') { e.preventDefault(); moveActive(-1); }
     if (e.key !== 'Enter') return;
+    const g = parseGs1(q);
+    if (g) { scanPack(g); setQ(''); return; }
     const exact = products.find((p) => p.barcode && p.barcode === q.trim());
     if (exact) add(exact);
     else if (/^\d{6,}$/.test(q.trim())) toast(`No medicine has the barcode ${q.trim()}`, 'warn'); // a scan that matched nothing: never guess
@@ -221,6 +251,16 @@ export default function POS({ mode = 'retail' }) {
   };
 
   const setLine = (id, patch) => setCart((c) => c.map((l) => (l.id === id ? { ...l, ...patch } : l)));
+  // step 21 (src/gs1.js): a scanned pack's 2D code names the medicine and its batch; that batch is sold from first.
+  // An expired pack is refused at once. Returns the medicine, or null when the scan names none of this pharmacy's.
+  const scanPack = (g) => {
+    const p = findByGtin(products, g.gtin);
+    if (!p) { toast(`No medicine has the product number ${g.gtin}`, 'warn'); return null; }
+    if (g.expiry && daysUntil(g.expiry) < 0) { toast(`This ${p.name} pack expired on ${g.expiry}: take it off the shelf, don't sell it`, 'error'); return null; }
+    const b = g.batch ? batchesOf(p.id).find((x) => x.batch === g.batch && x.qty > 0) : null;
+    Promise.resolve(add(p)).then(() => { if (b) setLine(p.id, { preferBatch: b.id }); });
+    return p;
+  };
   const setQty = (id, qty) => setCart((c) => c.map((l) => (l.id === id ? { ...l, qty: Math.max(1, Math.min(Number(qty) || 1, l.max)) } : l)));
   // Packs (strip, box…): stock and line.qty stay in the medicine's smallest unit; a pack line counts whole packs
   const packsOf = (id) => products.find((p) => p.id === id)?.packs?.filter((k) => k.name && Number(k.size) > 1) || [];
@@ -246,19 +286,25 @@ export default function POS({ mode = 'retail' }) {
   const disc = Math.min(round(Number(discount) || 0, money), subtotal);
   const tax = taxOf(subtotal - disc, db.settings.taxRate, { decimals: money });
   const total = round(subtotal - disc + tax, money);
-  const change = (Number(tendered) || 0) - total;
+  // step 22 (src/insurance.js): an insured sale is split; the patient pays the co-pay now, the insurer owes the rest
+  const schemes = useMemo(() => schemeChoices(db.insurers), [db.insurers]);
+  const insured = schemes.find((x) => x.key === insKey) || null;
+  const split = insured ? copayOf(insured.scheme, total, money) : null;
+  const due = split ? split.copay : total; // what is paid at the till
+  const change = (Number(tendered) || 0) - due;
   const customer = db.customers.find((c) => c.id === customerId);
   const items = cart.reduce((a, l) => a + l.qty, 0);
 
   const branchName = db.branches.find((b) => b.id === branchId)?.name || 'this branch';
 
   // ---- sales on hold: serve the next customer while one is still deciding, then switch back ----
-  const snapshot = () => ({ id: uid(), at: now(), cart, customerId, discount, payment, tendered });
+  const snapshot = () => ({ id: uid(), at: now(), cart, customerId, discount, payment, tendered, insKey, memberNo });
   function loadSale(x) {
     cdRef.current = null;
     // stock may have moved while the sale was on hold: each line's limit is today's stock
     setCart((x.cart || []).map((l) => { const p = products.find((y) => y.id === l.id); return p ? { ...l, max: p.stock, qty: Math.min(l.qty, Math.max(1, p.stock)) } : l; })); setCustomerId(x.customerId || 'walk-in'); setDiscount(x.discount || 0);
     setPayment(methods.some((m) => m.name === x.payment) ? x.payment : methods[0]?.name || 'Cash'); setTendered(x.tendered || ''); setPicked(new Set()); setCursor(-1);
+    setInsKey(x.insKey || ''); setMemberNo(x.memberNo || '');
   }
   const clearSale = () => loadSale({});
   const holdSale = async () => {
@@ -320,7 +366,8 @@ export default function POS({ mode = 'retail' }) {
   const [layout, setLayoutState] = useState(() => (POS_LAYOUTS.some(([k]) => k === deviceSettings().posLayout) ? deviceSettings().posLayout : 'standard'));
   useEffect(() => onDevice((d) => setLayoutState(POS_LAYOUTS.some(([k]) => k === d.posLayout) ? d.posLayout : 'standard')), []);
   const useAdvancedLayout = layout === 'advanced';
-  // the theme (Premium UI changes it without reloading): watched so the key tag and F5 follow it at once
+  const resizable = !narrow && !useAdvancedLayout; // the panels are sized by dragging in Classic and Standard
+  // the theme (Premium UI changes it without reloading): watched so the key tag follows it at once
   const [palette, setPalette] = useState(() => document.documentElement.dataset.palette || '');
   useEffect(() => { const o = new MutationObserver(() => setPalette(document.documentElement.dataset.palette || '')); o.observe(document.documentElement, { attributes: true, attributeFilter: ['data-palette'] }); return () => o.disconnect(); }, []);
   const premium = palette === 'midnight-pro';
@@ -337,7 +384,7 @@ export default function POS({ mode = 'retail' }) {
     setPulse((p) => { const n = { ...p }; for (const id of changed) n[id] = (p[id] || 0) + 1; return n; });
     const t = setTimeout(() => setPulse((p) => { const n = { ...p }; for (const id of changed) delete n[id]; return n; }), 700);
     return () => clearTimeout(t);
-  }, [cart]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [cart]);
   // Command bar (Advanced, Ctrl+K): "+qty 2", "-qty 2", "qty 2 5", "void 2", "disc 2 10" (10% off line 2), "disc 10" (10% off the sale), "hold", "pay"; anything else finds a medicine
   const runCommand = (text) => {
     const t = text.trim().toLowerCase().replace(/\s+/g, ' ');
@@ -358,7 +405,7 @@ export default function POS({ mode = 'retail' }) {
       const f = 1 - pct / 100;
       setLine(l.id, { price: round(l.price * f, 2), ...(l.pack ? { pack: { ...l.pack, price: round(l.pack.price * f, money) } } : {}) }); setCursor(cart.indexOf(l)); return null;
     }
-    if ((m = t.match(/^disc (\d+(?:\.\d+)?)%?$/))) { const pct = Number(m[1]); if (!(pct > 0 && pct < 100)) return 'A discount is between 1 and 99%'; setDiscount(String(round(subtotal * pct / 100, money))); return null; }
+    if ((m = t.match(/^disc (\d+(?:\.\d+)?)%?$/))) { if (!can('pos.discount')) return 'You are not allowed to give discounts'; const pct = Number(m[1]); if (!(pct > 0 && pct < 100)) return 'A discount is between 1 and 99%'; setDiscount(String(round(subtotal * pct / 100, money))); return null; }
     if (t === 'hold') { holdSale(); return null; }
     if (t === 'pay' || t === 'checkout' || t === 'charge') { setOmni(false); checkout(); return null; }
     return 'Not a command. Try +qty 2, -qty 2, qty 2 5, void 2, disc 2 10, disc 10, hold or pay';
@@ -369,19 +416,36 @@ export default function POS({ mode = 'retail' }) {
     const credit = ptype === 'credit';
     if (credit && customerId === 'walk-in') return toast('Select a registered customer for a credit sale', 'warn');
     if (capture === 'required' && customerId === 'walk-in') return toast('Choose or add the client for this sale', 'warn');
-    if (ptype === 'cash' && tendered !== '' && change < 0) return toast('Amount tendered is less than the total', 'error');
+    if (insured && customerId === 'walk-in') return toast('Choose the insured client for this sale', 'warn');
+    if (insured && !memberNo.trim()) return toast(`Enter the client's ${insured.insurer.name} member number`, 'warn');
+    if (ptype === 'cash' && tendered !== '' && change < 0) return toast(`Amount tendered is less than ${split ? 'the client pays' : 'the total'}`, 'error');
+    // step 20: the role's discount ceiling (a proforma's discount was set by whoever made the quotation)
+    const maxDisc = maxDiscountOf(db, user.role);
+    if (maxDisc != null && disc > 0 && subtotal > 0 && !location.state?.proforma && (disc / subtotal) * 100 > maxDisc + 1e-9)
+      return toast(`Your role may give at most ${maxDisc}% discount (${fmt(Math.floor((subtotal * maxDisc) / 100))} on this sale)`, 'error');
     // controlled drugs: patient, prescriber and prescription go in the register (asked once per sale)
     if (cart.some(isCd) && !cdRef.current) {
       const c = customer && customer.id !== 'walk-in' ? customer : null;
       return setCdForm({ patient: c?.name || '', idNo: c?.phone || '', prescriber: '', prescriberReg: '', rxNo: '' });
     }
     if (cart.some(isRx) && !cart.some(isCd) && !(await ask({ title: 'Prescription-only medicine', message: 'Confirm that a valid prescription has been checked for the Rx items in this sale.', confirmText: 'Prescription verified' }))) return;
-    if (ptype === 'momo') {
+    // step 8: a credit sale over the client's limit: Finance roles go on; others give a reason (audited, flagged)
+    let creditOver = null;
+    if (credit) {
+      const over = overLimit({ limit: customer?.creditLimit, owed: customerBalance(db, customerId), total: due, tendered });
+      if (over && can('finance')) creditOver = { ...over, finance: true };
+      else if (over) {
+        const reason = await askText({ title: 'Over the credit limit', message: `${customer.name} owes ${fmt(over.owed)}. This sale adds ${fmt(over.adds)} on credit, over the limit of ${fmt(over.limit)}. Why sell on credit anyway? The reason is recorded in the audit log and the owner is told.`, confirmText: 'Sell on credit', minLength: 3 });
+        if (!reason) return;
+        creditOver = { ...over, reason };
+      }
+    }
+    if (ptype === 'momo' && due > 0) {
       const phone = normalizePhone(customer?.phone || '');
       if (syncCfg.url && navigator.onLine) cloudConfig(syncCfg).then(setPayCfg).catch(() => setPayCfg({}));
       return setMomo({ phone: customer?.phone || '', network: phone ? guessNetwork(phone) : 'mtn', stage: 'enter', ref: '', manualRef: '' });
     }
-    finalize();
+    finalize(creditOver ? { creditOver } : {});
   };
 
   // 1.6 a sale is only "complete" once it is saved on the device (sale, stock movements, audit and the note to send it
@@ -390,29 +454,32 @@ export default function POS({ mode = 'retail' }) {
   const finalize = async (extra = {}) => {
     if (saving.current) return;
     const credit = ptype === 'credit';
-    const paid = credit ? Math.min(Number(tendered) || 0, total) : total;
+    const paid = credit ? Math.min(Number(tendered) || 0, due) : due;
     // Split each line across batches, earliest expiry first
-    const items = cart.map((l) => ({ ...l, controlled: isCd(l) })).map(({ id, name, price, cost, qty, allowExpired, directions, controlled, pack }) => ({
+    const items = cart.map((l) => ({ ...l, controlled: isCd(l) })).map(({ id, name, price, cost, qty, allowExpired, directions, controlled, pack, preferBatch }) => ({
       id, name, price: Number(price), cost, qty, ...(directions ? { directions } : {}), ...(controlled ? { controlled: true } : {}),
       ...(pack ? { pack: { name: pack.name, size: pack.size, count: qty / pack.size, price: Number(price) * pack.size } } : {}),
-      alloc: allocate(batchesOf(id), qty, { allowExpired }).map(({ batchId, qty: q, batch, expiry }) => ({ batchId, qty: q, batch, expiry })),
+      alloc: allocate(preferFirst(batchesOf(id), preferBatch), qty, { allowExpired }).map(({ batchId, qty: q, batch, expiry }) => ({ batchId, qty: q, batch, expiry })),
     }));
     const sale = {
-      id: uid(), number: docNumber('R'), date: now(), type: mode, branchId,
+      id: uid(), number: '', date: now(), type: mode, branchId, // numbered in the commit below (step 7)
       items, subtotal, discount: disc, tax, total, payment, paid,
-      tendered: ptype === 'cash' ? Number(tendered) || total : paid,
+      tendered: ptype === 'cash' ? Number(tendered) || due : paid,
       bankId: ptype === 'cash' || credit ? CASH : db.settings.nonCashBankId || CASH,
-      customerId, customerName: customer?.name || 'Walk-in Customer', cashier: user.name, status: 'completed', ...(cart.some(isCd) && cdRef.current ? { controlled: cdRef.current } : {}), ...(cart.some((l) => l.allowExpired) ? { expiredOverride: true } : {}), ...extra,
+      customerId, customerName: customer?.name || 'Walk-in Customer', cashier: user.name, status: 'completed', ...(location.state?.proforma?.id ? { proformaId: location.state.proforma.id } : {}), ...(cart.some(isCd) && cdRef.current ? { controlled: cdRef.current } : {}), ...(cart.some((l) => l.allowExpired) ? { expiredOverride: true } : {}),
+      ...(split ? { insurance: { insurerId: insured.insurer.id, insurer: insured.insurer.name, schemeId: insured.scheme.id, scheme: insured.scheme.name, memberNo: memberNo.trim(), share: split.insurer } } : {}), ...extra,
     };
     const expiredLines = cart.filter((l) => l.allowExpired); // 1.6
     saving.current = true;
     try {
     await update((d) => {
+      sale.number = numberFor(d, 'R'); // saved with the sale: never repeats, even offline
       put(d, 'sales', sale);
       for (const i of items) for (const a of i.alloc) move(d, { productId: i.id, qty: -a.qty, type: 'Sale', ref: sale.number, user: user.name, batchId: a.batchId, branchId });
       const pf = location.state?.proforma;
       if (pf) put(d, 'proformas', { ...d.proformas.find((x) => x.id === pf.id), status: 'Converted', saleNumber: sale.number });
       if (disc > 0) audit(d, user, 'Discount given', `${sale.number}: ${fmt(disc)}`, branchId);
+      if (sale.creditOver) audit(d, user, 'Credit limit exceeded', `${sale.number}: ${sale.customerName} owed ${fmt(sale.creditOver.owed)}, + ${fmt(sale.creditOver.adds)} on credit, limit ${fmt(sale.creditOver.limit)}${sale.creditOver.reason ? ' · ' + sale.creditOver.reason : ''}`, branchId);
       // 1.6 an expired-stock sale is recorded in the audit log, with the pharmacist's reason per medicine
       if (expiredLines.length) audit(d, user, 'Expired stock sold', `${sale.number}: ${expiredLines.map((l) => `${l.name} (${l.expiredReason || 'no reason given'})`).join('; ')}`, branchId);
     });
@@ -438,7 +505,7 @@ export default function POS({ mode = 'retail' }) {
     const run = ++pollRef.current;
     try {
       const reference = 'PP' + Date.now().toString(36).toUpperCase();
-      const { ref } = await payRequest(syncCfg, { provider: momo.network, phone, amount: total, reference, note: `${db.settings.name} payment` });
+      const { ref } = await payRequest(syncCfg, { provider: momo.network, phone, amount: due, reference, note: `${db.settings.name} payment` });
       setMomo((m) => ({ ...m, ref }));
       for (let i = 0; i < 45 && run === pollRef.current; i++) {
         await new Promise((r) => setTimeout(r, 4000));
@@ -460,11 +527,11 @@ export default function POS({ mode = 'retail' }) {
   const saveProforma = () => {
     if (!cart.length) return;
     const pf = {
-      id: uid(), number: docNumber('PF'), date: now(), type: mode, status: 'Open',
+      id: uid(), number: '', date: now(), type: mode, status: 'Open',
       items: cart.map(({ id, name, price, cost, qty }) => ({ id, name, price: Number(price), cost, qty })),
       subtotal, discount: disc, tax, total, customerId, customerName: customer?.name || 'Walk-in Customer', createdBy: user.name,
     };
-    update((d) => { put(d, 'proformas', pf); });
+    update((d) => { pf.number = numberFor(d, 'PF'); put(d, 'proformas', pf); });
     setDone({ ...pf, proforma: true });
     clearSale();
   };
@@ -499,16 +566,8 @@ export default function POS({ mode = 'retail' }) {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   });
-  // Premium UI (Midnight Pro): F5 charges the sale while it has lines (F9 too). With an empty sale F5 refreshes as usual;
-  // Shift+F5 always reloads.
-  useEffect(() => {
-    const onF5 = (e) => {
-      if (e.key !== 'F5' || e.shiftKey || e.ctrlKey || document.documentElement.dataset.palette !== 'midnight-pro' || !cart.length || document.querySelector('.modal-bg')) return;
-      e.preventDefault(); e.stopImmediatePropagation(); checkout();
-    };
-    window.addEventListener('keydown', onF5, true);
-    return () => window.removeEventListener('keydown', onF5, true);
-  });
+  // F9 (or Ctrl+Enter) is the only charge key, on every theme: F5 always means "sync now" (src/refresh.jsx), as in
+  // the Flutter app. Midnight Pro used to charge with F5, so a cashier moving between devices could charge by accident.
   // Advanced: Ctrl+K / Cmd+K opens the till's command bar (instead of the app-wide search, which stays one click away)
   useEffect(() => {
     if (!useAdvancedLayout) return undefined;
@@ -521,7 +580,7 @@ export default function POS({ mode = 'retail' }) {
   }, [useAdvancedLayout]);
 
   return (
-    <div className={'pos lay-' + (layout === 'standard' ? 'std' : layout === 'advanced' ? 'adv' : 'classic')}>
+    <div ref={posRef} className={'pos lay-' + (layout === 'standard' ? 'std' : layout === 'advanced' ? 'adv' : 'classic') + (resizable && sized.w ? ' sized' : '')} style={resizable && sized.w ? { '--pos-sale-w': sized.w + 'px' } : undefined}>
       {/* wide screens only (CSS): client & loyalty */}
       {layout !== 'classic' && (
       <aside className="pos-side" aria-label="Client">
@@ -596,8 +655,7 @@ export default function POS({ mode = 'retail' }) {
             const d = p.expiry ? daysUntil(p.expiry) : 999;
             return (
               <div key={p.id} className="product-wrap">
-              <button className={'product' + (p.stock <= 0 ? ' disabled' : '') + (i === active && !touch ? ' active' : '')} onClick={() => add(p)} onMouseEnter={() => setActive(i)}
-                aria-label={`${p.name}${p.generic ? ', ' + p.generic : ''}${p.form ? ', ' + p.form : ''}. ${fmt(priceOf(p))} per ${(p.unit || 'unit').toLowerCase()}. ${p.stock <= 0 ? 'Out of stock' : formatQty(p.stock, (p.unit || 'unit').toLowerCase() + 's') + ' in stock'}`}>
+              <button className={'product' + (p.stock <= 0 ? ' disabled' : '') + (i === active && !touch ? ' active' : '')} onClick={() => add(p)} onMouseEnter={() => setActive(i)}>
                 <strong>{p.name.replace(/\//g, '/\u200b')}</strong>
                 <small className="muted">{[p.generic, p.form].filter(Boolean).join(' · ')}</small>
                 <div className="row between">
@@ -632,6 +690,7 @@ export default function POS({ mode = 'retail' }) {
 
       {narrow && sheet && <div className="sheet-bg" onClick={() => setSheet(false)} aria-hidden="true" />}
       <section className={'pos-cart card' + (narrow ? ' sheet' + (sheet ? ' open' : '') : '')} ref={cartRef}>
+        {resizable && <div className="split-handle" role="separator" aria-orientation="vertical" aria-label="Drag to widen or narrow the sale (double-click: standard size)" title="Drag to widen or narrow the sale · double-click: standard size" onPointerDown={dragTo('w')} onDoubleClick={() => resetSize('w')} />}
         {narrow && (
           <div className="sheet-handle" role="button" tabIndex={0} aria-expanded={sheet} aria-label={sheet ? 'Hide the sale' : 'Show the sale'} onClick={() => setSheet((x) => !x)} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setSheet((x) => !x)}>
             <ShoppingCart size={18} />
@@ -651,11 +710,11 @@ export default function POS({ mode = 'retail' }) {
             </div>
           )}
         </div>
-        <div className="sale-tabs" role="tablist" aria-label="Sales">
-          <button role="tab" aria-selected="true" className="sale-tab on"><ShoppingCart size={13} />{cart.length ? `Now · ${fmt(total)}` : 'New sale'}</button>
+        <div className="sale-tabs" role="group" aria-label="Sales">
+          <button aria-current="true" className="sale-tab on"><ShoppingCart size={13} />{cart.length ? `Now · ${fmt(total)}` : 'New sale'}</button>
           {held.map((h, i) => (
             <span key={h.id} className="sale-tab-wrap">
-              <button role="tab" aria-selected="false" className="sale-tab" title={`Carry on with this sale${i === 0 ? ' (Alt+→)' : i === held.length - 1 ? ' (Alt+←)' : ''}`} onClick={() => resumeSale(h.id)}>
+              <button className="sale-tab" title={`Carry on with this sale${i === 0 ? ' (Alt+→)' : i === held.length - 1 ? ' (Alt+←)' : ''}`} onClick={() => resumeSale(h.id)}>
                 <PauseCircle size={13} />{heldLabel(h)} · {fmt(heldTotal(h))}
               </button>
               <button className="sale-tab-x" aria-label={`Discard held sale ${heldLabel(h)}`} title="Discard this held sale" onClick={async () => { if (await ask({ title: 'Discard this held sale?', message: `${h.cart.length} item(s) · ${fmt(heldTotal(h))}`, confirmText: 'Discard', danger: true })) update((d) => { del(d, 'drafts', h.id); audit(d, user, 'Draft discarded', `Held sale "${heldLabel(h)}" (${h.cart.length} items, ${fmt(heldTotal(h))})`, branchId); }).catch((e) => toast(e.message, 'error')); }}><X size={11} /></button>
@@ -711,13 +770,26 @@ export default function POS({ mode = 'retail' }) {
           {!cart.length && <div className="cart-empty"><ShoppingCart size={40} /><span>Tap a medicine or scan a barcode to start a sale</span></div>}
         </div>
         </div>
-        <div className="pos-pay">
+        <div ref={payRef} className={'pos-pay' + (resizable && sized.h ? ' sized' : '')} style={resizable && sized.h ? { height: sized.h } : undefined}>
         <div className="totals">
+          {resizable && <div className="pay-handle" role="separator" aria-orientation="horizontal" aria-label="Drag to make the payment area taller or shorter (double-click: standard size)" title="Drag to size the payment area · double-click: standard size" onPointerDown={dragTo('h')} onDoubleClick={() => resetSize('h')} />}
           <div className="row between gap"><span className="muted">Subtotal <b className="num">{fmt(subtotal)}</b></span>
-            <span className="row gap"><span className="muted">Discount</span><input ref={discRef} aria-label="Discount" type="number" min="0" step="any" className="small-input" value={discount} onChange={(e) => setDiscount(e.target.value)} /></span></div>
+            <span className="row gap"><span className="muted">Discount</span><input ref={discRef} aria-label="Discount" type="number" min="0" step="any" className="small-input" value={discount} onChange={(e) => setDiscount(e.target.value)} disabled={!can('pos.discount')} title={can('pos.discount') ? undefined : 'Giving discounts needs the "Give discounts" permission'} /></span></div>
           {layout !== 'classic' && disc > 0 && <div className="row between promo-row"><span className="muted">Promos / member discount</span><span className="num">− {fmt(disc)}</span></div>}
           {tax > 0 && <div className="row between"><span className="muted">Tax ({db.settings.taxRate}%)</span><span className="num">{fmt(tax)}</span></div>}
           <div className="row between grand"><span>Total{layout !== 'classic' && <small className="grand-sub">Net balance due</small>}</span><span className="num bump" key={total}>{fmt(total)}</span></div>
+          {schemes.length > 0 && (
+            <div className="row gap insure-row">
+              <label className="field grow"><span>Insurance</span>
+                <select aria-label="Insurance scheme" value={insKey} onChange={(e) => { setInsKey(e.target.value); if (e.target.value && !memberNo) setMemberNo(customer?.insuranceNo || ''); }}>
+                  <option value="">Not insured</option>
+                  {schemes.map((x) => <option key={x.key} value={x.key}>{x.insurer.name} · {x.scheme.name}</option>)}
+                </select></label>
+              {insured && <label className="field grow"><span>Member no.</span><input aria-label="Member number" value={memberNo} onChange={(e) => setMemberNo(e.target.value)} /></label>}
+            </div>
+          )}
+          {split && <div className="row between"><span className="muted">{insured.insurer.name} pays</span><span className="num">− {fmt(split.insurer)}</span></div>}
+          {split && <div className="row between grand"><span>Client pays</span><span className="num">{fmt(due)}</span></div>}
         </div>
         <div className="pay-methods">
           {methods.map((m, i) => <button key={m.id} className={'chip pay-' + (m.type || 'other') + (payment === m.name ? ' active' : '')} onClick={() => setPayment(m.name)} title={i < 9 ? `Alt+${i + 1}` : undefined}>{m.name}{i < 9 && !touch && <kbd>{i + 1}</kbd>}</button>)}
@@ -728,19 +800,19 @@ export default function POS({ mode = 'retail' }) {
               <input type="number" step="any" value={tendered} onChange={(e) => setTendered(e.target.value)} /></label>
             {ptype === 'cash'
               ? <div className="change">Change<br /><strong>{fmt(Math.max(change, 0))}</strong></div>
-              : <div className="change">On credit<br /><strong className="text-warn">{fmt(Math.max(total - (Number(tendered) || 0), 0))}</strong></div>}
+              : <div className="change">On credit<br /><strong className="text-warn">{fmt(Math.max(due - (Number(tendered) || 0), 0))}</strong></div>}
           </div>
         )}
         <div className="row gap pay-row">
           <button className="btn ghost" onClick={saveProforma} disabled={!cart.length} title="F10"><FileText size={16} />Proforma</button>
           <button className="btn ghost" onClick={holdSale} disabled={!cart.length} title="Alt+H"><PauseCircle size={16} />Hold</button>
-          <button ref={chargeRef} className={'btn primary grow big' + (narrow ? ' charge-dup' : '')} onClick={checkout} disabled={!cart.length} title="F9"><span>{useAdvancedLayout ? 'Process checkout' : 'Charge'} {fmt(total)}{!touch && (layout !== 'classic' || premium) && <small className="kbd-sub">{premium ? '[F5]' : '[F9]'}</small>}</span></button>
+          <button ref={chargeRef} className={'btn primary grow big' + (narrow ? ' charge-dup' : '')} onClick={checkout} disabled={!cart.length} title="F9"><span>{useAdvancedLayout ? 'Process checkout' : 'Charge'} {fmt(due)}{!touch && (layout !== 'classic' || premium) && <small className="kbd-sub">[F9]</small>}</span></button>
         </div>
         </div>
       </section>
 
       {momo && (
-        <Modal title={<><Smartphone size={18} /> Mobile Money – {fmt(total)}</>} onClose={() => { pollRef.current++; setMomo(null); }}>
+        <Modal title={<><Smartphone size={18} /> Mobile Money – {fmt(due)}</>} onClose={() => { pollRef.current++; setMomo(null); }}>
           {momo.stage === 'waiting' ? (
             <div className="cart-empty">
               <Loader2 size={40} className="spin" />
@@ -854,6 +926,8 @@ export default function POS({ mode = 'retail' }) {
 
       {cam && (
         <CameraScanner title="Scan items into the sale" onClose={() => { setCam(false); focusSearch(); }} onCode={(code) => {
+          const g = parseGs1(code);
+          if (g) { const sp = scanPack(g); return sp ? `${sp.name} added${g.batch ? ` (batch ${g.batch})` : ''}` : false; }
           const p = products.find((x) => x.barcode && x.barcode === code);
           if (!p) return false;
           add(p);
@@ -887,7 +961,7 @@ export default function POS({ mode = 'retail' }) {
             <tbody>
               {[['Type or scan', 'Find a medicine (barcode adds it straight away)'], ['↑ ↓ ← →', 'Move through the medicines'], ['Enter', 'Add the highlighted medicine'], ['Esc', 'Clear the search'],
                 ['+ / −', 'More / fewer of the chosen cart line'], ['Alt+↑ / Alt+↓', 'Choose a cart line'], ['Delete', 'Remove the chosen cart line'],
-                ['Alt+1 … Alt+9', 'Payment method (number shown on each)'], ['F9 or Ctrl+Enter', 'Charge (F5 too with Premium UI)'], ['F10', 'Save as proforma'],
+                ['Alt+1 … Alt+9', 'Payment method (number shown on each)'], ['F9 or Ctrl+Enter', 'Charge'], ['F10', 'Save as proforma'],
                 ['Alt+H', 'Put the sale on hold and serve the next customer'], ['Alt+← / Alt+→', 'Switch between held sales'],
                 ['F2 / F3', 'Retail / wholesale'], ['Alt+C', 'Find a client (wide screens)'], ['Alt+D', 'Discount'], ['Alt+R', 'Last receipt again'], ['Ctrl+K', 'Advanced UI: command bar (+qty 2, void 2, disc 2 10, hold, pay)'], ['F8', 'Back to the search box'], ['Ctrl+K', 'Search everything'], ['?', 'This list']].map(([k, v]) => <tr key={k}><td><kbd>{k}</kbd></td><td>{v}</td></tr>)}
             </tbody>

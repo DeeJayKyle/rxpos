@@ -3,10 +3,10 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../entities/batch.dart';
 import '../entities/draft.dart';
-import '../entities/movement.dart';
 import '../entities/party.dart';
 import '../entities/product.dart';
 import '../entities/settings.dart';
+import '../rules/gs1.dart';
 import '../rules/permissions.dart';
 import '../rules/stock.dart';
 import 'catalog.dart';
@@ -19,6 +19,9 @@ part 'pharmacy_providers.g.dart';
 /// A table's records, live (every saved action and every sync updates it).
 @riverpod
 Stream<List<Map<String, Object?>>> table(Ref ref, String t) => ref.watch(recordStoreProvider).watch(t);
+
+/// Step 13: stock per branch and batch, added up by SQLite (RecordStore.watchStock) instead of decoding every movement.
+final stockIndexProvider = StreamProvider<StockIndex>((ref) => ref.watch(recordStoreProvider).watchStock());
 
 /// The pharmacy's settings with this device's own overrides of the pharmacy's details (Settings → Pharmacy). [raw]
 /// stays the shared record; save settings from [RecordStore.settingsRecord] so overrides never reach other devices.
@@ -49,6 +52,8 @@ class PharmacyData {
 
   late final Map<String, Product> byId = {for (final p in products) p.id: p};
   late final Map<String, Product> byBarcode = {for (final p in products) if (p.barcode.isNotEmpty) p.barcode: p};
+  /// step 21: the medicine whose barcode is this product number (a GTIN-14 from a pack's 2D code, or its EAN-13)
+  Product? byGtin(String gtin) => products.where((p) => sameGtin(p.barcode, gtin)).firstOrNull;
 
   double stockOf(String id) => stock.stockOf(id);
 
@@ -66,14 +71,14 @@ Future<PharmacyData> pharmacy(Ref ref) async {
   final hidden = {for (final h in await ref.watch(tableProvider('catalogHidden').future)) '${h['id']}'};
   final cat = features['catalog'] == false ? const <Product>[] : await ref.watch(catalogProvider.future);
   final products = withCatalog(own, cat, hidden: hidden, on: features['catalog'] != false)..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-  final movements = (await ref.watch(tableProvider('movements').future)).map(Movement.fromRecord);
+  final stockIndex = await ref.watch(stockIndexProvider.future);
   final batches = (await ref.watch(tableProvider('batches').future)).map(Batch.fromRecord);
   final customers = (await ref.watch(tableProvider('customers').future)).map(Customer.fromRecord).toList()
     ..sort((a, b) => a.id == 'walk-in' ? -1 : b.id == 'walk-in' ? 1 : a.name.compareTo(b.name));
   return PharmacyData(
     settings: settings,
     products: products,
-    stock: StockView(products: products, batches: batches, index: StockIndex.of(movements), branch: branch),
+    stock: StockView(products: products, batches: batches, index: stockIndex, branch: branch),
     branch: branch,
     customers: customers,
     suppliers: (await ref.watch(tableProvider('suppliers').future)).map(Supplier.fromRecord).toList()..sort((a, b) => a.name.compareTo(b.name)),

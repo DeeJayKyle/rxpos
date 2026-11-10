@@ -24,6 +24,9 @@ export function allocate(batches, qty, { allowExpired = false } = {}) {
   return out;
 }
 
+/** step 21: a scanned pack's batch first (when it is there), the others after in their order */
+export const preferFirst = (batches, batchId) => (batchId ? [...batches.filter((b) => b.id === batchId), ...batches.filter((b) => b.id !== batchId)] : batches);
+
 /**
  * Stock to REMOVE from a medicine (adjustment "Remove"), starting with the chosen batch: never more than a batch holds, so
  * no batch goes negative while others still hold stock. What the chosen batch doesn't have comes from the medicine's

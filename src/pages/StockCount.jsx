@@ -1,9 +1,11 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
-import { ClipboardCheck, Plus, Minus, ArrowLeft, Check, EyeOff, Eye, Search, ScanLine, Trash2, PackagePlus, Download, CheckCircle2, AlertTriangle, Play, Ban } from 'lucide-react';
+import { ClipboardCheck, Plus, Minus, ArrowLeft, Check, EyeOff, Eye, ScanLine, Trash2, PackagePlus, Download, CheckCircle2, AlertTriangle, Play, Ban } from 'lucide-react';
 import { useStore, uid, now, today, put, del, move, addBatch, audit, downloadFile, toCSV, daysUntil } from '../store.jsx';
 import { Modal, Tabs, Empty, PdfButton } from '../ui.jsx';
 import { ask, toast } from '../feedback.jsx';
 import { CameraButton, CameraScanner } from '../camscan.jsx';
+import { useMedicineOrder, MedicineOrderPicker, groupedRows, useFolded } from '../medgroups.jsx';
+import { ChevronDown } from 'lucide-react';
 
 /*
  * Stock take: count what is physically on the shelves and make RxPOS match it.
@@ -113,7 +115,7 @@ function CountList({ onOpen }) {
 }
 
 function NewCount({ onClose, onStarted }) {
-  const { db, products, batchesOf, update, user, branchId, fmt } = useStore();
+  const { db, products, batchesOf, update, user, branchId, fmt, numberFor } = useStore();
   const stocked = useMemo(() => products.filter((p) => p.stock !== 0), [products]);
   const shelves = useMemo(() => [...new Set(stocked.map((p) => (p.shelf || '').trim()).filter(Boolean))].sort(), [stocked]);
   const forms = useMemo(() => [...new Set(stocked.map((p) => p.form).filter(Boolean))].sort(), [stocked]);
@@ -137,9 +139,9 @@ function NewCount({ onClose, onStarted }) {
     e.preventDefault();
     if (f.scope !== 'empty' && !list.length) return toast('Nothing to count in that choice', 'warn');
     const byShelf = (a, b) => (a.shelf || '~').localeCompare(b.shelf || '~') || a.name.localeCompare(b.name);
-    const rec = { id: uid(), number: 'SC' + Date.now().toString(36).toUpperCase().slice(-6), name: f.name.trim() || 'Stock count', date: now(), branchId, scope: f.scope, scopeLabel: label,
+    const rec = { id: uid(), number: '', name: f.name.trim() || 'Stock count', date: now(), branchId, scope: f.scope, scopeLabel: label,
       productIds: (f.scope === 'random' ? list : list.slice().sort(byShelf)).map((p) => p.id), blind: !!f.blind, status: 'open', startedBy: user.name, startedAt: now() };
-    update((d) => { put(d, 'stockCounts', rec); audit(d, user, 'Stock count started', `${rec.name} (${label}, ${rec.productIds.length} items)`, branchId); });
+    update((d) => { rec.number = numberFor(d, 'SC'); put(d, 'stockCounts', rec); audit(d, user, 'Stock count started', `${rec.name} (${label}, ${rec.productIds.length} items)`, branchId); });
     onStarted(rec.id);
   };
   const opt = (k, title, sub, extra) => (
@@ -202,6 +204,9 @@ function CountSheet({ count, onBack }) {
   const rows = all.filter((p) => (!shelf || (p.shelf || '').trim() === shelf) && (!ql || `${p.name} ${p.generic || ''} ${p.barcode || ''}`.toLowerCase().includes(ql)) &&
     (tab === 'all' || (tab === 'todo' ? !itemBy.has(p.id) : tab === 'done' ? itemBy.has(p.id) : itemBy.has(p.id) && hasDiff(p))));
   const sum = useMemo(() => summarise(count, items, productById), [count, items, productById]);
+  // step 26 (from the Flutter app): the sheet sorted and grouped by class, therapeutic area, form or shelf, per device
+  const [order, setOrder] = useMedicineOrder();
+  const [folded, toggleFold] = useFolded();
   const pct = all.length ? Math.round((items.length / all.length) * 100) : 0;
   // medicines not on this count's list yet that match the search: add them by tapping (or scanning their barcode)
   const outside = !readOnly && ql.length > 1 ? products.filter((p) => !ids.includes(p.id) && `${p.name} ${p.barcode || ''}`.toLowerCase().includes(ql)).slice(0, 6) : [];
@@ -312,11 +317,14 @@ function CountSheet({ count, onBack }) {
 
       <div className="row between gap wrap">
         <Tabs value={tab} onChange={(t) => { setTab(t); setLimit(150); }} tabs={[['todo', `To count (${all.length - items.length})`], ['done', `Counted (${items.length})`], ...(blind ? [] : [['diff', `Differences (${sum.short + sum.over})`]]), ['all', 'All']]} />
+        <MedicineOrderPicker value={order} onChange={setOrder} />
         {shelves.length > 1 && <select value={shelf} onChange={(e) => setShelf(e.target.value)} aria-label="Shelf"><option value="">All shelves</option>{shelves.map((x) => <option key={x}>{x}</option>)}</select>}
       </div>
 
       <div className="count-list" ref={sheetRef}>
-        {rows.slice(0, limit).map((p) => <CountRow key={p.id} p={p} item={itemBy.get(p.id)} blind={blind} readOnly={readOnly} onSave={saveItem} focusNext={focusNext} />)}
+        {groupedRows(rows.slice(0, limit), order, folded).map((r) => (r.heading !== undefined
+          ? <button key={'g:' + r.heading} type="button" className="count-group link-btn" aria-expanded={!r.folded} onClick={() => toggleFold(r.heading)}><ChevronDown size={14} style={{ transform: r.folded ? 'rotate(-90deg)' : '' }} /><strong>{r.heading}</strong> <span className="muted">({r.count})</span></button>
+          : <CountRow key={r.p.id} p={r.p} item={itemBy.get(r.p.id)} blind={blind} readOnly={readOnly} onSave={saveItem} focusNext={focusNext} />))}
         {rows.length > limit && <button className="btn ghost block" onClick={() => setLimit((l) => l + 150)}>Show more ({rows.length - limit} left)</button>}
         {!rows.length && <div className="card"><Empty>{tab === 'todo' && all.length ? 'Everything here is counted 🎉 Review & post when ready.' : ql ? 'Nothing matches. Scan or type another name.' : 'Nothing here'}</Empty></div>}
       </div>
@@ -339,7 +347,7 @@ function CountRow({ p, item, blind, readOnly, onSave, focusNext }) {
     });
     for (const l of item?.lines || []) if (!out.some((o) => o.batchId === l.batchId && l.batchId)) out.push({ ...l, key: l.key || l.batchId || l.batch, sysNow: 0 });
     return out;
-  }, [sys, item, p.cost]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [sys, item, p.cost]);
   const [draft, setDraft] = useState({});
   const [adding, setAdding] = useState(null);
   useEffect(() => setDraft({}), [item?.at]);

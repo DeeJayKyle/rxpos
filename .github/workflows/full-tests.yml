@@ -1,0 +1,50 @@
+name: Full test suite
+
+# Every RxPOS suite (tests/run-all.mjs): builds the app, starts a throw-away local cloud (wrangler dev) and drives the
+# app in headless Chrome. build.yml calls it on every push and pull request to main and gates releases and deploys on
+# it; deploy-cloud.yml gates on it too, so nothing reaches rxposug.com without passing it. Can also be run on demand.
+on:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  full:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the classic app's build number is its last change (scripts/release-files.mjs)
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22 # wrangler needs Node 22+
+          cache: npm
+      - run: npm ci
+      - name: Run every suite against a local cloud
+        shell: bash # explicit bash runs with -o pipefail, so a failing suite isn't hidden by tee
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+          # suites that need services this machine can't reach (Workers AI, Open-Meteo, a screen) are skipped, not failed
+          RXPOS_CI: '1'
+        run: node tests/run-all.mjs 2>&1 | tee full-tests.log
+      - name: The same rules on the self-hosted hub (server/hub.mjs on Node's SQLite)
+        shell: bash
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+          RXPOS_CI: '1'
+          RXPOS_TEST_HUB: '1'
+        run: node tests/run-all.mjs 2>&1 | tee hub-tests.log
+      - name: Keep the log and screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: full-tests
+          retention-days: 7
+          path: |
+            full-tests.log
+            hub-tests.log
+            tests/.output/
+          if-no-files-found: ignore

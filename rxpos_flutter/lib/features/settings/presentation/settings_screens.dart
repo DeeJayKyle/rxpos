@@ -20,6 +20,7 @@ import '../../../core/theme/theme_choice.dart';
 import '../../sync_status/application/sync_controller.dart';
 import '../../../core/update/app_updates.dart';
 import 'font_picker.dart';
+import 'keyboard_settings.dart';
 
 /// This device (src/pages/Device.jsx): its branch and look, sync & storage (waiting changes, refused changes, ready to
 /// work offline, download everything again), text size and rotation, the date format, and notification sounds.
@@ -266,6 +267,7 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
             ),
           ),
       ]),
+      _section('Keyboard', Icons.keyboard_outlined, const [KeyboardSettings()]),
     ];
     return PageFrame(
       title: 'This device',
