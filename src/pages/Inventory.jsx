@@ -1,12 +1,13 @@
 import { useState, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Download, Barcode as BarcodeIcon, SlidersHorizontal, Save, Undo2, Pencil } from 'lucide-react';
+import { Download, Barcode as BarcodeIcon, SlidersHorizontal, Save, Undo2, Pencil, ScrollText, Boxes } from 'lucide-react';
 import { CrudPage, Tabs, Modal, SearchBox, Empty, PdfButton } from '../ui.jsx';
 import { useStore, daysUntil, put, move, addBatch, audit, downloadFile, toCSV, batchValue, stockValue, markupPrice, MAIN_BRANCH } from '../store.jsx';
-import { ask, toast } from '../feedback.jsx';
+import { ask, askText, toast } from '../feedback.jsx';
 import { formatQty } from '../money.js';
 import { removalSplit } from '../fefo.js';
 import { newInternalBarcode } from '../barcode.jsx';
+import { useHoverCard } from '../listcontrols.jsx';
 
 const expiryClass = (expiry, warn) => {
   if (!expiry) return '';
@@ -35,8 +36,42 @@ const recordIssues = (p, dupBarcodes) => [
   p.name && p.name !== p.name.trim() && 'Spaces around the name',
 ].filter(Boolean);
 
+/** A medicine's stock and batches, shown while the pointer rests on its name (the owner's request: mouse functions) */
+function StockPeek({ p }) {
+  const { fmt, batchesOf } = useStore();
+  const bs = (batchesOf(p.id) || []).filter((b) => b.qty > 0).sort((a, b) => String(a.expiry).localeCompare(String(b.expiry)));
+  return (<>
+    <strong>{p.name}</strong><br />
+    <span className="muted">{formatQty(p.stock)} {(p.unit || 'unit').toLowerCase()}s in stock · {fmt(p.price)} each</span>
+    {bs.length ? <table><tbody>{bs.slice(0, 6).map((b) => <tr key={b.id}><td>{b.batch || '—'}</td><td>{b.expiry || '—'}{b.expiry && daysUntil(b.expiry) < 0 ? ' (expired)' : ''}</td><td className="num">{formatQty(b.qty)}</td></tr>)}</tbody></table> : <div className="muted small">No batches in stock</div>}
+    {bs.length > 6 && <div className="muted small">+{bs.length - 6} more batches</div>}
+  </>);
+}
+
 export function MedicineList() {
   const { db, products, update, fmt, user, branchId, can } = useStore();
+  const navigate = useNavigate();
+  const peek = useHoverCard((p) => <StockPeek p={p} />);
+  // the ticked medicines together (the owner's request: selection and bulk actions); every change is audited
+  const bulkPrice = async (rows, done) => {
+    const how = await askText({ title: `Change the retail price of ${rows.length} medicine${rows.length > 1 ? 's' : ''}`, message: 'Type +10% or -5% to raise or lower each price, or an amount (1500) for the same price on all.', placeholder: '+10%', confirmText: 'Change prices' });
+    if (!how) return;
+    const m = /^\s*([+-]?\d+(?:\.\d+)?)\s*(%?)\s*$/.exec(how);
+    if (!m) return toast('Type +10%, -5% or an amount', 'warn');
+    const n = Number(m[1]), pct = m[2] === '%';
+    if (!pct && !(n > 0)) return toast('A price is above 0', 'warn');
+    const priceOf = (p) => (pct ? markupPrice(p.price || 0, n, s.priceRound) : n);
+    await update((d) => { for (const p of rows) { const price = priceOf(p); if (!(price > 0) || price === p.price) continue; put(d, 'products', { ...d.products.find((x) => x.id === p.id) || p, price }); audit(d, user, 'Price changed', `${p.name}: retail ${fmt(p.price)} → ${fmt(price)} (${rows.length} changed together)`, branchId); } });
+    toast(`Prices changed for ${rows.length} medicine${rows.length > 1 ? 's' : ''}`); done();
+  };
+  const bulkField = (key, label) => async (rows, done) => {
+    const v = await askText({ title: `${label} for ${rows.length} medicine${rows.length > 1 ? 's' : ''}`, message: `The same ${label.toLowerCase()} for all the ticked medicines.`, confirmText: 'Save' });
+    if (v === null || v === undefined) return;
+    const val = key === 'reorder' ? Number(v) : String(v).trim();
+    if (key === 'reorder' && !(val >= 0)) return toast('A reorder level is 0 or more', 'warn');
+    await update((d) => { for (const p of rows) put(d, 'products', { ...d.products.find((x) => x.id === p.id) || p, [key]: val }); audit(d, user, 'Medicines changed', `${label} set to "${val}" for ${rows.length}: ${rows.slice(0, 5).map((p) => p.name).join(', ')}${rows.length > 5 ? '…' : ''}`, branchId); });
+    toast(`${label} saved for ${rows.length}`); done();
+  };
   // the list is open to anyone who may see stock; changing it needs medicines.manage (the cloud enforces the same)
   const manage = can('medicines.manage');
   const [packsFor, setPacksFor] = useState(null);
@@ -93,8 +128,13 @@ export function MedicineList() {
       headExtra={<button type="button" className={'btn ' + (review ? 'primary' : 'ghost')} aria-pressed={review} onClick={() => setReview((r) => !r)} title="Records with missing or inconsistent details">Needs review{issueCount ? ` (${issueCount})` : ''}</button>}
       blank={{ form: 'Tablets', unit: 'Piece', reorder: 10, rx: false }}
       extraActions={(p) => manage && <button className="btn sm ghost" title="Sell or receive by strip, box…" onClick={() => setPacksFor(p)}>Packs{p.packs?.length ? ` (${p.packs.length})` : ''}</button>}
+      bulk={manage ? () => [{ label: 'Change price…', run: bulkPrice }, { label: 'Set category…', run: bulkField('category', 'Category') }, { label: 'Set reorder level…', run: bulkField('reorder', 'Reorder level') }] : undefined}
+      rowMenu={(p) => [
+        { label: 'Stock card', Icon: ScrollText, run: () => navigate('/stock-card', { state: { productId: p.id } }) },
+        manage && { label: 'Packs (strip, box…)', Icon: Boxes, run: () => setPacksFor(p) },
+      ].filter(Boolean)}
       columns={[
-        { label: 'Medicine', render: (p) => <><strong>{p.name}</strong> {p.rx && <span className="badge">Rx</span>}{p.chronic && <span className="badge ok">Chronic</span>}{p.controlled && <span className="badge danger">CD</span>}<br /><small className="muted">{[p.generic, p.barcode].filter(Boolean).join(' · ')}</small>
+        { label: 'Medicine', render: (p) => <><strong {...peek.bind(p)}>{p.name}</strong> {p.rx && <span className="badge">Rx</span>}{p.chronic && <span className="badge ok">Chronic</span>}{p.controlled && <span className="badge danger">CD</span>}<br /><small className="muted">{[p.generic, p.barcode].filter(Boolean).join(' · ')}</small>
           {review && <span className="status-tags">{recordIssues(p, dupBarcodes).map((x) => <span key={x} className="status warn"><i aria-hidden="true" />{x}</span>)}</span>}</> },
         { label: 'Strength', render: (p) => p.strength || <span className="muted">—</span> },
         { label: 'Formulation', key: 'form' },
@@ -106,6 +146,7 @@ export function MedicineList() {
         { label: 'Stock', num: true, render: (p) => <span className={p.stock <= 0 ? 'badge danger' : p.stock <= (p.reorder || 0) ? 'badge warn' : ''}>{formatQty(p.stock)}</span> },
       ]}
     />
+    {peek.node}
     </>
   );
 }

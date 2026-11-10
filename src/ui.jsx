@@ -1,9 +1,12 @@
 import { useNavigate } from 'react-router-dom';
-import { useEffect, useRef, useState, useId } from 'react';
+import { useEffect, useMemo, useRef, useState, useId } from 'react';
 import { useLocation } from 'react-router-dom';
-import { X, Search, Download, Plus, Pencil, Trash2, Inbox, Lightbulb, TrendingUp, TrendingDown, FileDown, Loader2 } from 'lucide-react';
+import { X, Search, Download, Plus, Pencil, Trash2, Inbox, Lightbulb, TrendingUp, TrendingDown, FileDown, Loader2, Copy, CheckSquare, Columns3 } from 'lucide-react';
 import { pagePdf, receiptPdf } from './pdf.js';
-import { useStore, uid, downloadFile, toCSV } from './store.jsx';
+import { useStore, uid, downloadFile, toCSV, del as del1 } from './store.jsx';
+import { useListControls, useContextMenu } from './listcontrols.jsx';
+import { keyOf, showKey } from './keymap.js';
+import { deviceSettings, setDevice } from './device.js';
 import { ask, toast } from './feedback.jsx';
 
 export function Modal({ title, onClose, children, wide }) {
@@ -73,11 +76,11 @@ export function RecordForm({ fields, initial, onSave, onCancel, saveLabel = 'Sav
   );
 }
 
-export function SearchBox({ value, onChange, placeholder = 'Search…', big }) {
+export function SearchBox({ value, onChange, placeholder = 'Search…', big, inputRef, hint }) {
   return (
     <div className="search-wrap">
       <Search size={16} />
-      <input className={'search' + (big ? ' big' : '')} placeholder={placeholder} value={value} onChange={(e) => onChange(e.target.value)} />
+      <input ref={inputRef} className={'search' + (big ? ' big' : '')} placeholder={placeholder} value={value} onChange={(e) => onChange(e.target.value)} aria-label={placeholder.replace(/…$/, '')} title={hint} />
     </div>
   );
 }
@@ -95,21 +98,58 @@ export function Empty({ children = 'Nothing here yet', colSpan, action, icon: Ic
 }
 
 /** Generic searchable list + add/edit/delete for a db table. */
-export function CrudPage({ title, subtitle, singular, table, fields, columns, blank = {}, extraActions, rowClass, rows: rowsProp, onSave, headExtra, canDelete = true, filter, readOnly = false, rowLocked }) {
-  const { db, upsert, remove } = useStore();
+/**
+ * A list of records with add / edit / delete, search and CSV export. The owner's request (2026-11-10): the same
+ * keyboard, mouse and selection everywhere (src/listcontrols.jsx): arrow keys, Enter, E, Delete, N, /, Space; double-
+ * click to edit; right-click for a menu; tick boxes with Shift+click ranges, and the ticked rows exported or deleted
+ * together; the columns shown chosen per device; the search kept while the app is open. `bulk(rows)` adds page actions
+ * for the ticked rows ([{ label, run }]); `rowMenu(r)` adds items to a row's menu.
+ */
+export function CrudPage({ title, subtitle, singular, table, fields, columns, blank = {}, extraActions, rowClass, rows: rowsProp, onSave, headExtra, canDelete = true, filter, readOnly = false, rowLocked, bulk, rowMenu }) {
+  const { db, upsert, remove, update } = useStore();
   const location = useLocation();
-  const [q, setQ] = useState(location.state?.q || '');
+  const qKey = 'rxpos-q:' + table + ':' + location.pathname;
+  const [q, setQState] = useState(() => { if (location.state?.q) return location.state.q; try { return sessionStorage.getItem(qKey) || ''; } catch { return ''; } });
+  const setQ = (v) => { setQState(v); try { v ? sessionStorage.setItem(qKey, v) : sessionStorage.removeItem(qKey); } catch { /* storage blocked */ } };
   const [editing, setEditing] = useState(null);
+  const searchRef = useRef(null);
   const all = rowsProp || db[table];
   const ql = q.toLowerCase();
-  const rows = all.filter((r) => (!filter || filter(r)) && (!q || JSON.stringify(r).toLowerCase().includes(ql)));
+  const rows = useMemo(() => all.filter((r) => (!filter || filter(r)) && (!q || JSON.stringify(r).toLowerCase().includes(ql))), [all, filter, q, ql]);
+  const shown = rows.slice(0, 500);
   const name = singular || title.replace(/s$/, '');
+  const startNew = () => !readOnly && setEditing({ ...blank, id: uid(), _new: true });
+  const editRow = (r) => !readOnly && !rowLocked?.(r) && setEditing(r);
+  // a command from Ctrl+K ("Add a customer") opens the form at once
+  useEffect(() => { if (location.state?.create) startNew(); }, [location.state]); // eslint-disable-line react-hooks/exhaustive-deps
+  // the columns shown, per device (the first is always shown)
+  const [hidden, setHidden] = useState(() => new Set(deviceSettings().hiddenCols?.[table] || []));
+  const [chooser, setChooser] = useState(false);
+  const setColumn = (label, on) => { const h = new Set(hidden); on ? h.delete(label) : h.add(label); setHidden(h); setDevice({ hiddenCols: { ...(deviceSettings().hiddenCols || {}), [table]: [...h] } }); };
+  const cols = columns.filter((c, i) => i === 0 || !hidden.has(c.label));
 
-  const del = async (r) => {
-    if (!(await ask({ title: `Delete this ${name.toLowerCase()}?`, message: 'This cannot be undone.', confirmText: 'Delete', danger: true }))) return;
-    remove(table, r.id);
-    toast(`${name} deleted`);
+  const deletable = (r) => canDelete && !readOnly && !rowLocked?.(r);
+  const del = async (list) => {
+    const rs = list.filter(deletable);
+    if (!rs.length) return toast(list.length ? 'These rows can\'t be deleted (a closed day, or not allowed)' : 'Nothing to delete', 'warn');
+    const one = rs.length === 1;
+    if (!(await ask({ title: one ? `Delete this ${name.toLowerCase()}?` : `Delete ${rs.length} ${title.toLowerCase()}?`, message: `${one ? '' : rs.slice(0, 5).map((r) => r.name || r.description || r.number || r.id).join(', ') + (rs.length > 5 ? '…' : '') + '. '}This cannot be undone.`, confirmText: 'Delete', danger: true }))) return;
+    if (one) remove(table, rs[0].id); else update((d) => { for (const r of rs) del1(d, table, r.id); });
+    lc.clear();
+    toast(one ? `${name} deleted` : `${rs.length} ${title.toLowerCase()} deleted`);
   };
+  const exportRows = (list, file = table) => downloadFile(`${file}.csv`, toCSV(list.map(({ updatedAt, ...r }) => r)), 'text/csv');
+  const lc = useListControls({ rows: shown, onEdit: readOnly ? null : editRow, onDelete: canDelete && !readOnly ? del : null, onNew: readOnly ? null : startNew, searchRef, onClearSearch: () => setQ('') });
+  const menu = useContextMenu();
+  const rowMenuFor = (e, r, i) => menu.open(e, [
+    !readOnly && !rowLocked?.(r) && { label: 'Edit', Icon: Pencil, keyId: 'list:edit', run: () => editRow(r) },
+    ...(rowMenu?.(r) || []),
+    { label: lc.ticked.has(r.id) ? 'Untick' : 'Tick', Icon: CheckSquare, keyId: 'list:tick', run: () => lc.toggle(i) },
+    { label: 'Copy', Icon: Copy, run: () => { const t = cols.map((c) => (c.render ? '' : r[c.key] ?? '')).filter((x) => x !== '').join('\t') || String(r.name || ''); navigator.clipboard?.writeText(t).then(() => toast('Copied'), () => toast('Could not copy', 'warn')); } },
+    { label: lc.ticked.size > 1 && lc.ticked.has(r.id) ? `Export ${lc.ticked.size} ticked (CSV)` : 'Export this row (CSV)', Icon: Download, run: () => exportRows(lc.ticked.size > 1 && lc.ticked.has(r.id) ? lc.tickedRows : [r]) },
+    deletable(r) && '-',
+    deletable(r) && { label: lc.ticked.size > 1 && lc.ticked.has(r.id) ? `Delete ${lc.ticked.size} ticked` : 'Delete', Icon: Trash2, danger: true, keyId: 'list:delete', run: () => del(lc.ticked.size > 1 && lc.ticked.has(r.id) ? lc.tickedRows : [r]) },
+  ]);
 
   return (
     <div className="page">
@@ -117,33 +157,55 @@ export function CrudPage({ title, subtitle, singular, table, fields, columns, bl
         <div><h1>{title}</h1>{subtitle && <div className="sub">{subtitle}</div>}</div>
         <div className="row gap">
           {headExtra}
-          <SearchBox value={q} onChange={setQ} />
-          <button className="btn ghost" title="Export CSV" onClick={() => downloadFile(`${table}.csv`, toCSV(rows.map(({ updatedAt, ...r }) => r)), 'text/csv')}><Download size={16} />CSV</button>
-          {!readOnly && <button className="btn primary" onClick={() => setEditing({ ...blank, id: uid(), _new: true })}><Plus size={16} />Add {name.toLowerCase()}</button>}
+          <SearchBox value={q} onChange={setQ} inputRef={searchRef} hint={`Search (${showKey(keyOf('list:search'))})`} />
+          <span className="col-chooser-wrap" style={{ position: 'relative' }}>
+            <button className="btn ghost" aria-expanded={chooser} onClick={() => setChooser((c) => !c)} title="Choose the columns shown on this device"><Columns3 size={16} />Columns</button>
+            {chooser && (
+              <div className="col-chooser" role="group" aria-label="Columns shown" onMouseLeave={() => setChooser(false)}>
+                {columns.map((c, i) => <label key={c.label} className="field check"><input type="checkbox" disabled={i === 0} checked={i === 0 || !hidden.has(c.label)} onChange={(e) => setColumn(c.label, e.target.checked)} /><span>{c.label}</span></label>)}
+              </div>
+            )}
+          </span>
+          <button className="btn ghost" title="Export CSV (the ticked rows, or all shown)" onClick={() => exportRows(lc.tickedRows.length ? lc.tickedRows : rows)}><Download size={16} />CSV</button>
+          {!readOnly && <button className="btn primary" onClick={startNew} title={`Add ${name.toLowerCase()} (${showKey(keyOf('list:new'))})`}><Plus size={16} />Add {name.toLowerCase()}</button>}
         </div>
       </div>
+      {lc.ticked.size > 0 && (
+        <div className="bulk-bar" role="region" aria-label="Ticked rows">
+          <strong>{lc.ticked.size} ticked</strong>
+          <button className="btn sm" onClick={() => exportRows(lc.tickedRows)}><Download size={14} />Export</button>
+          {(bulk?.(lc.tickedRows) || []).map((b) => <button key={b.label} className="btn sm" onClick={() => b.run(lc.tickedRows, lc.clear)}>{b.label}</button>)}
+          {canDelete && !readOnly && <button className="btn sm danger" onClick={() => del(lc.tickedRows)}><Trash2 size={14} />Delete</button>}
+          <button className="btn sm ghost" onClick={lc.clear}>Untick all <kbd>Esc</kbd></button>
+        </div>
+      )}
       <div className="card table-wrap">
         <table>
           <thead>
-            <tr>{columns.map((c) => <th key={c.label} className={c.num ? 'num' : ''}>{c.label}</th>)}<th /></tr>
+            <tr><th className="tick"><input {...lc.allProps} /></th>{cols.map((c) => <th key={c.label} className={c.num ? 'num' : ''}>{c.label}</th>)}<th /></tr>
           </thead>
           <tbody>
-            {rows.slice(0, 500).map((r) => (
-              <tr key={r.id} className={rowClass?.(r)}>
-                {columns.map((c) => <td key={c.label} className={c.num ? 'num' : ''}>{c.render ? c.render(r) : r[c.key]}</td>)}
+            {shown.map((r, i) => {
+              const rp = lc.rowProps(r, i, rowMenuFor);
+              return (
+              <tr key={r.id} {...rp} className={[rowClass?.(r), rp.className].filter(Boolean).join(' ')}>
+                <td className="tick"><input {...lc.tickProps(r, i)} /></td>
+                {cols.map((c) => <td key={c.label} className={c.num ? 'num' : ''}>{c.render ? c.render(r) : r[c.key]}</td>)}
                 <td className="actions">
                   {extraActions?.(r)}
                   {!readOnly && rowLocked?.(r) && <span className="muted" title="This day is closed: it can't be changed">Day closed</span>}
                   {!readOnly && !rowLocked?.(r) && <button className="btn sm ghost" onClick={() => setEditing(r)}><Pencil size={14} />Edit</button>}
-                  {canDelete && !readOnly && !rowLocked?.(r) && <button className="btn sm danger" title="Delete" onClick={() => del(r)}><Trash2 size={14} /></button>}
+                  {deletable(r) && <button className="btn sm danger" title="Delete" aria-label="Delete" onClick={() => del([r])}><Trash2 size={14} /></button>}
                 </td>
               </tr>
-            ))}
-            {!rows.length && <Empty colSpan={columns.length + 1}>{q ? `No ${title.toLowerCase()} match “${q}”` : `No ${title.toLowerCase()} yet.${readOnly ? '' : ` Click “Add ${name.toLowerCase()}” to create one.`}`}</Empty>}
-            {rows.length > 500 && <tr><td colSpan={columns.length + 1} className="empty">Showing 500 of {rows.length}. Use search to narrow down.</td></tr>}
+              );
+            })}
+            {!rows.length && <Empty colSpan={cols.length + 2}>{q ? `No ${title.toLowerCase()} match “${q}”` : `No ${title.toLowerCase()} yet.${readOnly ? '' : ` Click “Add ${name.toLowerCase()}” to create one.`}`}</Empty>}
+            {rows.length > 500 && <tr><td colSpan={cols.length + 2} className="empty">Showing 500 of {rows.length}. Use search to narrow down.</td></tr>}
           </tbody>
         </table>
       </div>
+      {menu.node}
       {editing && (
         <Modal title={(editing._new ? 'Add ' : 'Edit ') + name.toLowerCase()} onClose={() => setEditing(null)} wide>
           <RecordForm fields={fields} initial={editing} onCancel={() => setEditing(null)}

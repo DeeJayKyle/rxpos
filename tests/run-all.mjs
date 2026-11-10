@@ -83,6 +83,7 @@ const SUITES = [
   ['insurance: co-pay at the till, insurer owes, payment', 'v66-insurance.mjs', []],
   ['accessibility (axe): sign-in and main pages, light and dark', 'v67-a11y.mjs', []],
   ['received by the box, sold by the unit', 'v68-packs.mjs', []],
+  ['keyboard, mouse, selection and navigation', 'v69-controls.mjs', []],
   ['file uploads', 'v24-files.mjs', []],
   ['security headers', 'v25-headers.mjs', []],
   ['rate limits', 'v26-ratelimit.mjs', []],

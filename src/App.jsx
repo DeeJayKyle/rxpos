@@ -5,7 +5,7 @@ import {
   Boxes, PackagePlus, History, CalendarClock, PencilRuler, ScrollText, Wallet, Tags, Landmark, ArrowLeftRight, HandCoins,
   ArrowDownLeft, ArrowUpRight, ClipboardCheck, RefreshCw, Undo2, ShieldPlus, BookOpen, BarChart3, Settings as SettingsIcon, Search, Sun, Moon, Menu, LogOut, ChevronDown,
   CornerDownLeft, User, BellRing, ShoppingBag, Tag, FileUp, Building2, Send, ShieldCheck, Clock, BookMarked, MessagesSquare, UserCog, KeyRound, CalendarDays, Thermometer, Palette, MonitorSmartphone, ScanText, GraduationCap, Megaphone, CalendarRange, LockKeyhole, PanelLeftClose, PanelLeftOpen, WifiOff,
-  Sparkles,
+  Sparkles, Pin, Keyboard, UserPlus,
 } from 'lucide-react';
 import { useStore, makePassword, put, audit, isLowStock, expiryCounts } from './store.jsx';
 import { askText, ask, toast } from './feedback.jsx';
@@ -28,6 +28,9 @@ import { LEVELS, applyLevel, savedLevel, saveLevel } from './vivid.js';
 import { TwoStepModal } from './twostep.jsx';
 import { setCrashCloud } from './crash.js';
 import { setBadge } from './badges.js';
+import { ACTIONS, keyOf, keyMatcher, showKey, typing } from './keymap.js';
+import { deviceSettings, setDevice, onDevice } from './device.js';
+import { Modal } from './ui.jsx';
 const OwnerConsole = lazy(() => import('./pages/OwnerConsole.jsx'));
 
 // Pages load on demand so the app opens fast, even on low-end PCs and phones
@@ -135,7 +138,6 @@ const NAV = [
   ] },
 ];
 
-const SHORTCUTS = { F2: '/pos', F3: '/pos/wholesale', F4: '/add-stock', F6: '/sales', F7: '/inventory' };
 
 /** The device's colour theme (any theme the owner allows for this pharmacy) and whether it follows the system */
 function useTheme() {
@@ -312,7 +314,7 @@ function ClockPill() {
 }
 
 /** Ctrl+K: jump to any page, medicine, customer or receipt */
-function CommandPalette({ open, onClose, pages }) {
+function CommandPalette({ open, onClose, pages, commands = [] }) {
   const { db, products, fmt } = useStore();
   const navigate = useNavigate();
   const [q, setQ] = useState('');
@@ -323,7 +325,9 @@ function CommandPalette({ open, onClose, pages }) {
   const results = useMemo(() => {
     const s = q.trim().toLowerCase();
     const has = (...v) => v.join(' ').toLowerCase().includes(s);
-    const out = pages.filter((p) => !s || has(p.label)).slice(0, s ? 6 : 8).map((p) => ({ section: 'Pages', label: p.label, Icon: p.Icon, hint: p.key, go: () => navigate(p.to) }));
+    // the owner's request: Ctrl+K also runs commands ("new sale", "receive stock", "add customer"…)
+    const out = commands.filter((c) => (s ? has(c.label, c.words || '') : true)).slice(0, s ? 5 : 4).map((c) => ({ section: 'Commands', ...c }));
+    out.push(...pages.filter((p) => !s || has(p.label)).slice(0, s ? 6 : 8).map((p) => ({ section: 'Pages', label: p.label, Icon: p.Icon, hint: p.key, go: () => navigate(p.to) })));
     if (s) {
       products.filter((p) => has(p.name, p.generic, p.barcode)).slice(0, 6).forEach((p) =>
         out.push({ section: 'Medicines', label: p.name, Icon: Pill, hint: `${p.stock} in stock · ${fmt(p.price)}`, go: () => navigate('/stock-card', { state: { productId: p.id } }) }));
@@ -333,7 +337,7 @@ function CommandPalette({ open, onClose, pages }) {
         out.push({ section: 'Receipts', label: x.number, Icon: ReceiptText, hint: fmt(x.total), go: () => navigate('/sales', { state: { q: x.number } }) }));
     }
     return out;
-  }, [q, pages, products, db.customers, db.sales, fmt, navigate]);
+  }, [q, pages, commands, products, db.customers, db.sales, fmt, navigate]);
 
   if (!open) return null;
   const pick = (r) => { r.go(); onClose(); };
@@ -347,7 +351,7 @@ function CommandPalette({ open, onClose, pages }) {
   return (
     <div className="modal-bg palette-bg" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="palette" onKeyDown={onKey}>
-        <div className="palette-input"><Search size={18} /><input ref={inputRef} autoFocus value={q} onChange={(e) => { setQ(e.target.value); setActive(0); }} placeholder="Search pages, medicines, customers, receipts…" /><kbd>Esc</kbd></div>
+        <div className="palette-input"><Search size={18} /><input ref={inputRef} autoFocus value={q} onChange={(e) => { setQ(e.target.value); setActive(0); }} placeholder="Search pages, medicines, customers, receipts, or type a command…" /><kbd>Esc</kbd></div>
         <div className="palette-list">
           {results.map((r, i) => {
             const head = r.section !== lastSection ? <div className="palette-section">{(lastSection = r.section)}</div> : null;
@@ -364,6 +368,39 @@ function CommandPalette({ open, onClose, pages }) {
         </div>
       </div>
     </div>
+  );
+}
+
+/** ? on any page: the keys as they are on this device, and what the mouse does */
+function KeysHelp({ onClose, pages }) {
+  const navigate = useNavigate();
+  const allowed = new Set(pages.map((p) => 'go:' + p.to));
+  const groups = ['Pages', 'Anywhere', 'Lists'];
+  return (
+    <Modal title="Keyboard and mouse" onClose={onClose} wide>
+      <div className="keys-help">
+        {groups.map((g) => (
+          <section key={g}>
+            <h4>{g === 'Lists' ? 'In lists (customers, medicines, sales…)' : g}</h4>
+            <table className="keys-table"><tbody>
+              {ACTIONS.filter(([id, , grp]) => grp === g && (!id.startsWith('go:') || allowed.has(id)) && keyOf(id)).map(([id, label]) => <tr key={id}><td><kbd>{showKey(keyOf(id))}</kbd></td><td>{label}</td></tr>)}
+            </tbody></table>
+          </section>
+        ))}
+        <section>
+          <h4>Mouse</h4>
+          <table className="keys-table"><tbody>
+            <tr><td><kbd>Double-click</kbd></td><td>Open or edit a row</td></tr>
+            <tr><td><kbd>Right-click</kbd></td><td>What you can do with a row</td></tr>
+            <tr><td><kbd>Shift+click</kbd></td><td>Tick every row between two ticks</td></tr>
+            <tr><td><kbd>Ctrl+click</kbd></td><td>Open a menu page in a new tab or window</td></tr>
+            <tr><td><kbd>Hover</kbd></td><td>A medicine's stock and batches (Medicine List, Inventory)</td></tr>
+          </tbody></table>
+          <p className="muted small">The till has its own keys: press ? there.</p>
+        </section>
+      </div>
+      <div className="form-actions"><button className="btn" onClick={() => { onClose(); navigate('/device', { state: { tab: 'keyboard' } }); }}>Change the keys</button><button className="btn primary" onClick={onClose}>Close</button></div>
+    </Modal>
   );
 }
 
@@ -406,16 +443,51 @@ function Shell() {
   useEffect(() => setBadge(counts.chat + counts.transfers), [counts.chat, counts.transfers]); // the number on the app / taskbar icon
 
   useEffect(() => setDrawer(false), [location.pathname]);
+  // the keyboard map (src/keymap.js): pages, Ctrl+K, ?, back / forward, pin; the keys can be changed per device
+  const [help, setHelp] = useState(false);
+  const [nav, setNav] = useState(() => ({ pins: deviceSettings().navPins || [], recent: deviceSettings().navRecent || [] }));
+  useEffect(() => onDevice((d) => setNav({ pins: d.navPins || [], recent: d.navRecent || [] })), []);
+  const togglePin = (to) => { const pins = nav.pins.includes(to) ? nav.pins.filter((x) => x !== to) : [...nav.pins, to].slice(-8); setDevice({ navPins: pins }); toast(nav.pins.includes(to) ? 'Unpinned from the menu' : 'Pinned to the top of the menu'); };
+  const here = location.pathname;
+  const pinRef = useRef(); pinRef.current = () => togglePin(here);
   useEffect(() => {
+    const ids = ACTIONS.map(([id]) => id).filter((id) => !id.startsWith('list:'));
+    const match = keyMatcher(ids);
     const onKey = (e) => {
       // 1.10 don't fire global navigation/command shortcuts while a dialog or modal is open
       if (document.querySelector('.modal-bg')) return;
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); setPalette(true); }
-      else if (SHORTCUTS[e.key]) { e.preventDefault(); navigate(SHORTCUTS[e.key]); }
+      const c = e.key;
+      // a plain letter, digit or ? while typing in a box is the box's (F-keys and Ctrl/Alt combinations still work)
+      if (typing(e) && !e.ctrlKey && !e.metaKey && !e.altKey && c.length === 1) return;
+      const id = match(e);
+      if (!id) return;
+      const onTill = window.location.hash.startsWith('#/pos');
+      if (onTill && (id === 'help' || id === 'back' || id === 'forward')) return; // the till has its own ? sheet, and Alt+←/→ switch held sales
+      e.preventDefault();
+      e.stopImmediatePropagation(); // G then E is Expenses, not also "edit the row" in a list
+      if (id.startsWith('go:')) navigate(id.slice(3));
+      else if (id === 'palette') setPalette(true);
+      else if (id === 'help') setHelp(true);
+      else if (id === 'back') navigate(-1);
+      else if (id === 'forward') navigate(1);
+      else if (id === 'pin') pinRef.current();
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    // capture: before the lists' keys (src/listcontrols.jsx), so G then E is Expenses and not also "edit the row"
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
   }, [navigate]);
+  // recent pages (this device), and each page's scroll position, kept while the app is open
+  const scrolls = useRef({});
+  useEffect(() => {
+    const recent = [here, ...(deviceSettings().navRecent || []).filter((x) => x !== here)].slice(0, 6);
+    setDevice({ navRecent: recent });
+    const box = document.querySelector('main.content');
+    const y = scrolls.current[here] || 0;
+    const t = setTimeout(() => { if (box) box.scrollTop = y; }, 60);
+    const save = () => { if (box) scrolls.current[here] = box.scrollTop; };
+    box?.addEventListener('scroll', save, { passive: true });
+    return () => { clearTimeout(t); box?.removeEventListener('scroll', save); };
+  }, [here]);
 
   const toggleGroup = (g) => setCollapsed((c) => {
     const next = { ...c, [g]: !c[g] };
@@ -482,16 +554,27 @@ function Shell() {
           <button className="icon-btn rail-btn" onClick={toggleRail} aria-pressed={rail} aria-label={rail ? 'Expand the menu' : 'Collapse the menu to icons'} title={rail ? 'Expand the menu' : 'Collapse the menu to icons'}>{rail ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}</button></div>
         <div className="store-name">{db.settings.name}</div>
         <nav>
+          {/* pinned pages (G G, or the pin in the top bar) and the last pages used, on this device */}
+          {(() => {
+            const byTo = Object.fromEntries(pages.map((pg) => [pg.to, pg]));
+            const pinned = nav.pins.map((t) => byTo[t]).filter(Boolean);
+            const recent = nav.recent.filter((t) => t !== here && !nav.pins.includes(t)).map((t) => byTo[t]).filter(Boolean).slice(0, 4);
+            const item = (pg, kind) => <NavLink key={kind + pg.to} to={pg.to} end title={rail ? pg.label : undefined} className={'nav-' + kind}><pg.Icon size={17} /><span className="grow">{pg.label}</span></NavLink>;
+            return (<>
+              {pinned.length > 0 && <div className="nav-group nav-quick"><div className="nav-title static">Pinned</div>{pinned.map((pg) => item(pg, 'pin'))}</div>}
+              {recent.length > 0 && !rail && <div className="nav-group nav-quick"><div className="nav-title static">Recent</div>{recent.map((pg) => item(pg, 'recent'))}</div>}
+            </>);
+          })()}
           {groups.map((g, i) => (
             <div key={i} className="nav-group">
               {g.group && <button className="nav-title" aria-expanded={!collapsed[g.group]} onClick={() => toggleGroup(g.group)}>{g.group}<ChevronDown size={13} style={{ transform: collapsed[g.group] ? 'rotate(-90deg)' : '', transition: 'transform .15s' }} /></button>}
-              {g.items.map(([to, label, Icon, key, badge]) => (
+              {g.items.map(([to, label, Icon, , badge]) => { const key = keyOf('go:' + to) && showKey(keyOf('go:' + to)); return (
                 <NavLink key={to} to={to} end title={rail ? label + (key ? ` (${key})` : '') : undefined} hidden={!rail && collapsed[g.group] && !g.items.some(([t]) => t === location.pathname) && !(badge && counts[badge] > 0)}>
                   <Icon size={17} /><span className="grow">{label}</span>
                   {badge && counts[badge] > 0 && <span className="count">{counts[badge]}</span>}
                   {key && <kbd>{key}</kbd>}
                 </NavLink>
-              ))}
+              ); })}
             </div>
           ))}
         </nav>
@@ -508,6 +591,18 @@ function Shell() {
         <header className="topbar">
           <button className="icon-btn menu-btn" aria-label="Menu" onClick={() => setDrawer(true)}><Menu size={20} /></button>
           <button className="search-trigger" onClick={() => setPalette(true)}><Search size={16} /><span>Search medicines, customers, receipts…</span><kbd>Ctrl K</kbd></button>
+          {(() => {
+            const g = groups.find((x) => x.items.some(([t]) => t === here));
+            const pg = pages.find((x) => x.to === here);
+            return pg ? (
+              <nav className="crumbs" aria-label="You are here">
+                {g?.group && <span className="muted">{g.group}</span>}{g?.group && <span className="muted" aria-hidden="true">›</span>}<strong>{pg.label}</strong>
+                <button className={'icon-btn sm' + (nav.pins.includes(here) ? ' on' : '')} aria-pressed={nav.pins.includes(here)} onClick={() => togglePin(here)}
+                  title={`${nav.pins.includes(here) ? 'Unpin this page from' : 'Pin this page to'} the top of the menu (${showKey(keyOf('pin'))})`} aria-label={nav.pins.includes(here) ? 'Unpin this page' : 'Pin this page'}><Pin size={14} /></button>
+                <button className="icon-btn sm" onClick={() => setHelp(true)} title={`Keyboard and mouse (${showKey(keyOf('help'))})`} aria-label="Keyboard and mouse help"><Keyboard size={14} /></button>
+              </nav>
+            ) : null;
+          })()}
           <div className="spacer grow" />
           {db.branches.length > 1 && <NavLink to="/branches" className="pill branch-pill" title="Branch this device works as"><Building2 size={14} />{branch?.name}</NavLink>}
           <ClockPill />
@@ -531,7 +626,18 @@ function Shell() {
         <NavLink to="/sales"><ReceiptText size={20} /><span>Sales</span></NavLink>
         <button onClick={() => setDrawer(true)} aria-expanded={drawer}><Menu size={20} /><span>More</span></button>
       </nav>
-      <CommandPalette open={palette} onClose={() => setPalette(false)} pages={pages} />
+      <CommandPalette open={palette} onClose={() => setPalette(false)} pages={pages} commands={[
+        ...(can('pos.sell') ? [{ label: 'New sale', words: 'sell till pos', Icon: ShoppingCart, hint: showKey(keyOf('go:/pos')), go: () => navigate('/pos') }] : []),
+        ...(can('stock.receive') ? [{ label: 'Receive stock', words: 'add stock delivery invoice purchase', Icon: PackagePlus, hint: showKey(keyOf('go:/add-stock')), go: () => navigate('/add-stock') }] : []),
+        ...(can('customers') ? [{ label: 'Add a customer', words: 'new client patient', Icon: UserPlus, go: () => navigate('/customers', { state: { create: true } }) }] : []),
+        ...(can('suppliers') ? [{ label: 'Add a supplier', words: 'new supplier', Icon: Truck, go: () => navigate('/suppliers', { state: { create: true } }) }] : []),
+        ...(can('medicines.manage') ? [{ label: 'Add a medicine', words: 'new product drug', Icon: Pill, go: () => navigate('/medicines', { state: { create: true } }) }] : []),
+        ...(can('finance') ? [{ label: 'Add an expense', words: 'new expense spend', Icon: Wallet, go: () => navigate('/expenses', { state: { create: true } }) }] : []),
+        { label: nav.pins.includes(here) ? 'Unpin this page' : 'Pin this page', words: 'pin favourite menu', Icon: Pin, hint: showKey(keyOf('pin')), go: () => togglePin(here) },
+        { label: 'Keyboard and mouse help', words: 'shortcuts keys help', Icon: Keyboard, hint: showKey(keyOf('help')), go: () => setHelp(true) },
+        { label: 'Change keyboard shortcuts', words: 'keys remap keyboard settings', Icon: Keyboard, go: () => navigate('/device', { state: { tab: 'keyboard' } }) },
+      ]} />
+      {help && <KeysHelp onClose={() => setHelp(false)} pages={pages} />}
       <Spotlight />
       <RefreshHost refresh={syncNow} />
       <HourlyReminder />
