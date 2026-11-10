@@ -20,6 +20,8 @@ import '../../features/engage/presentation/spotlight.dart';
 import '../../features/engage/presentation/watchers.dart';
 import 'backdrop.dart';
 import 'hardware_hud.dart';
+import 'keymap.dart';
+import 'keys_host.dart';
 import 'nav.dart';
 import 'screens.dart';
 import 'theme_menu.dart';
@@ -56,7 +58,11 @@ class AppShell extends ConsumerWidget {
       context.go(p);
     });
     final bar = AppBar(
-      title: Text(session?.pharmacy.isNotEmpty == true ? session!.pharmacy : 'RxPOS', overflow: TextOverflow.ellipsis),
+      // the pharmacy, then where you are (group › page) with the page's pin and the ? sheet; the title area shrinks first
+      title: Row(children: [
+        Flexible(child: Text(session?.pharmacy.isNotEmpty == true ? session!.pharmacy : 'RxPOS', overflow: TextOverflow.ellipsis)),
+        if (wide) ...[const SizedBox(width: 16), Flexible(child: _Crumbs(screens: visible, location: location))],
+      ]),
       automaticallyImplyLeading: !wide,
       leading: wide
           ? IconButton(key: const Key('sidebar-toggle'), tooltip: rail ? 'Show the menu (Ctrl+B)' : 'Fold the menu to icons (Ctrl+B)', onPressed: toggleRail,
@@ -102,17 +108,19 @@ class AppShell extends ConsumerWidget {
     ]);
     return CallbackShortcuts(
       bindings: {
-        for (final s in visible) if (s.key != null) SingleActivator(s.key!): () => context.go(s.path),
-        const SingleActivator(LogicalKeyboardKey.keyK, control: true): () => openSearch(context, visible),
+        // the page keys, Ctrl+K, ?, back / forward and pin are the keyboard map's (keys_host.dart), changeable per device
         if (wide) const SingleActivator(LogicalKeyboardKey.keyB, control: true): toggleRail,
-        const SingleActivator(LogicalKeyboardKey.keyK, meta: true): () => openSearch(context, visible),
         // F5 / Ctrl+R: send and fetch now (the page updates in place); Ctrl+Shift+R reloads the whole app
         const SingleActivator(LogicalKeyboardKey.f5): () => refreshNow(context, ref),
         const SingleActivator(LogicalKeyboardKey.keyR, control: true): () => refreshNow(context, ref),
         const SingleActivator(LogicalKeyboardKey.keyR, control: true, shift: true): () => ref.read(appCrashProvider.notifier).reload(),
       },
       // the idle screen covers the whole window
-      child: Spotlight(
+      child: KeysHost(
+        location: location,
+        screens: visible,
+        onPalette: () => openSearch(context, visible),
+        child: Spotlight(
         child: AuroraBackground(
           child: Scaffold(
           backgroundColor: aurora ? Colors.transparent : null,
@@ -134,6 +142,7 @@ class AppShell extends ConsumerWidget {
               : body,
           ),
         ),
+      ),
       ),
     );
   }
@@ -184,7 +193,7 @@ class _Sidebar extends ConsumerWidget {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
                 child: Tooltip(
-                  message: '${s.label}${s.key == null ? '' : '  ${s.keyLabel}'}',
+                  message: '${s.label}${ref.watch(keyMapProvider).keyOf('go:${s.path}').isEmpty ? '' : '  ${showKey(ref.watch(keyMapProvider).keyOf('go:${s.path}'))}'}',
                   preferBelow: false,
                   waitDuration: const Duration(milliseconds: 300),
                   child: Material(
@@ -213,7 +222,29 @@ class _Sidebar extends ConsumerWidget {
       ]);
     }
 
+    // pinned pages (G then G, or the pin in the top bar) and the last pages used, on this device
+    final byPath = {for (final s in screens) s.path: s};
+    final pinned = [for (final p in ref.watch(navPinsProvider)) ?byPath[p]];
+    final recent = [for (final p in ref.watch(navRecentProvider)) if (p != location && !pinned.any((x) => x.path == p)) ?byPath[p]].take(4).toList();
+    Widget quick(String title, List<Screen> list, String kind) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Padding(padding: const EdgeInsets.fromLTRB(20, 12, 12, 6), child: Text(title.toUpperCase(), style: t.textTheme.labelSmall?.copyWith(letterSpacing: .8, fontWeight: FontWeight.w700))),
+          for (final s in list)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
+              child: ListTile(
+                key: ValueKey('nav-$kind-${s.path}'),
+                dense: !tokensOf(context).touch,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                leading: Icon(s.icon, size: 20),
+                title: Text(s.label),
+                onTap: () => onGo(s.path),
+              ),
+            ),
+        ]);
     return ListView(key: const Key('sidebar'), padding: const EdgeInsets.symmetric(vertical: 8), children: [
+      if (pinned.isNotEmpty) quick('Pinned', pinned, 'pin'),
+      if (recent.isNotEmpty) quick('Recent', recent, 'recent'),
       for (final g in navGroups)
         if (screens.any((s) => s.group == g)) ...[
           () {
@@ -260,7 +291,8 @@ class _Sidebar extends ConsumerWidget {
               title: Text(s.label),
               trailing: () {
                 final n = badge(s);
-                final key = s.key == null ? null : Text(s.keyLabel, style: t.textTheme.labelSmall);
+                final k = ref.watch(keyMapProvider).keyOf('go:${s.path}');
+                final key = k.isEmpty ? null : Text(showKey(k), style: t.textTheme.labelSmall);
                 if (n == 0) return key;
                 return Row(mainAxisSize: MainAxisSize.min, children: [
                   Badge(key: ValueKey('count-${s.path}'), label: Text('$n'), backgroundColor: t.colorScheme.primary),
@@ -337,5 +369,42 @@ class _SidebarSurface extends StatelessWidget {
         child: Material(type: MaterialType.transparency, child: child),
       ),
     );
+  }
+}
+
+
+/// Where you are (group › page), with the page's pin and the ? sheet, in the top bar.
+class _Crumbs extends ConsumerWidget {
+  const _Crumbs({required this.screens, required this.location});
+  final List<Screen> screens;
+  final String location;
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final s = screens.where((x) => x.path == location).firstOrNull;
+    if (s == null) return const SizedBox();
+    final pinned = ref.watch(navPinsProvider).contains(location);
+    final map = ref.watch(keyMapProvider);
+    final t = Theme.of(context);
+    // shown only when there is room for it (the pharmacy's name, the clock and the menus come first)
+    return LayoutBuilder(builder: (context, c) => c.maxWidth < 84 ? const SizedBox() : Row(mainAxisSize: MainAxisSize.min, children: [
+      if (c.maxWidth >= 190) ...[
+        Flexible(child: Text('${s.group} › ', style: t.textTheme.bodySmall, overflow: TextOverflow.ellipsis, maxLines: 1)),
+        Flexible(child: Text(s.label, key: const Key('crumb-page'), style: t.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w700), overflow: TextOverflow.ellipsis, maxLines: 1)),
+      ],
+      IconButton(
+        key: const Key('pin-page'),
+        visualDensity: VisualDensity.compact,
+        tooltip: '${pinned ? 'Unpin this page from' : 'Pin this page to'} the top of the menu (${showKey(map.keyOf('pin'))})',
+        icon: Icon(pinned ? Icons.push_pin : Icons.push_pin_outlined, size: 18),
+        onPressed: () => togglePin(ref, context, location),
+      ),
+      IconButton(
+        key: const Key('keys-help'),
+        visualDensity: VisualDensity.compact,
+        tooltip: 'Keyboard and mouse (${showKey(map.keyOf('help'))})',
+        icon: const Icon(Icons.keyboard_outlined, size: 18),
+        onPressed: () => showKeysHelp(context, map, screens),
+      ),
+    ]));
   }
 }

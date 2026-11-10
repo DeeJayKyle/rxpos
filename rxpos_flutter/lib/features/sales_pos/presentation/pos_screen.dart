@@ -18,6 +18,7 @@ import '../../../core/entities/product.dart';
 import '../../../core/entities/sale.dart';
 import '../../../core/presentation/backdrop.dart';
 import '../../../core/presentation/hardware_hud.dart';
+import '../../../core/presentation/keys_host.dart' show tillOwnsCtrlK;
 import '../../../core/presentation/resizable.dart';
 import '../../../core/presentation/widgets.dart';
 import '../../../core/rules/drug_class.dart';
@@ -298,6 +299,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
 
   @override
   void dispose() {
+    tillOwnsCtrlK.value = false;
     _search.dispose();
     _searchFocus.dispose();
     super.dispose();
@@ -320,6 +322,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
         final stored = ref.watch(deviceValueProvider('pos-layout')).value;
         final layout = posLayouts.any((x) => x.$1 == stored) ? stored! : 'standard';
         final advanced = wide && layout == 'advanced';
+        tillOwnsCtrlK.value = advanced; // Ctrl+K opens the till's command bar, not the app's search
         final productPanel = _ProductPanel(
           wholesale: widget.wholesale,
           data: d,

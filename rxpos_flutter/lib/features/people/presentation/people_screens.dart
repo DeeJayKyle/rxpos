@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/data/pharmacy_providers.dart';
@@ -11,11 +12,14 @@ import '../../../core/rules/dates.dart';
 import '../../../core/rules/ids.dart';
 import '../../auth/application/session_controller.dart';
 import '../domain/balances.dart';
+import '../../../core/presentation/list_controls.dart';
 
 /// Customers or Suppliers: the list with what each owes, add / edit, record a payment.
 class PeopleScreen extends ConsumerStatefulWidget {
-  const PeopleScreen({super.key, required this.suppliers, this.q = ''});
+  const PeopleScreen({super.key, required this.suppliers, this.q = '', this.create = false});
   final bool suppliers;
+  /// Opened from a Ctrl+K command ("Add a customer"): the form opens at once.
+  final bool create;
   /// Opened from search (Ctrl+K) with a name already typed.
   final String q;
   @override
@@ -24,6 +28,21 @@ class PeopleScreen extends ConsumerStatefulWidget {
 
 class _PeopleScreenState extends ConsumerState<PeopleScreen> {
   late String _q = widget.q;
+  late final _search = TextEditingController(text: widget.q);
+  final _searchFocus = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.create) WidgetsBinding.instance.addPostFrameCallback((_) => _edit(null));
+  }
+
+  @override
+  void dispose() {
+    _search.dispose();
+    _searchFocus.dispose();
+    super.dispose();
+  }
   String get _t => widget.suppliers ? 'suppliers' : 'customers';
 
   List<FormFieldSpec> get _fields => widget.suppliers
@@ -59,18 +78,43 @@ class _PeopleScreenState extends ConsumerState<PeopleScreen> {
       title: widget.suppliers ? 'Suppliers' : 'Customers',
       subtitle: '${list.length} · ${widget.suppliers ? 'we owe' : 'they owe'} ${settings.money(total)}',
       actions: [
-        SearchField(initial: widget.q, onChanged: (v) => setState(() => _q = v), hint: 'Name or phone…'),
+        SearchField(controller: _search, focusNode: _searchFocus, onChanged: (v) => setState(() => _q = v), hint: 'Name or phone…'),
         FilledButton.icon(onPressed: () => _edit(null), icon: const Icon(Icons.add), label: Text(widget.suppliers ? 'Add supplier' : 'Add client')),
       ],
+      // the owner's request: keys, double-click, right-click and ticks, as every list (list_controls.dart)
       child: list.isEmpty
           ? EmptyState(widget.suppliers ? 'No suppliers yet' : 'No clients yet')
-          : ListView.separated(
+          : ListControls(
+              ids: [for (final r in list) '${r['id']}'],
+              search: _searchFocus,
+              onClearSearch: () => setState(() {
+                _search.clear();
+                _q = '';
+              }),
+              onEdit: (i) => _edit(list[i]),
+              onNew: () => _edit(null),
+              menu: (i) => [
+                RowAction('Edit', Icons.edit_outlined, () => _edit(list[i]), keyId: 'list:edit'),
+                if (owes('${list[i]['id']}') > 0.5 && (can.contains('finance') || can.contains('customers')))
+                  RowAction(widget.suppliers ? 'Pay supplier' : 'Record payment', Icons.payments_outlined, () => _pay(list[i], owes('${list[i]['id']}'), settings)),
+                RowAction('Copy name and phone', Icons.copy, () => Clipboard.setData(ClipboardData(text: [list[i]['name'], list[i]['phone']].where((x) => '${x ?? ''}'.isNotEmpty).join(' · ')))),
+              ],
+              bulk: (rows) => [
+                ('Copy', Icons.copy, (rows, done) {
+                  Clipboard.setData(ClipboardData(text: [for (final i in rows) '${list[i]['name']}\t${list[i]['phone'] ?? ''}'].join('\n')));
+                  say(context, '${rows.length} copied');
+                  done();
+                }),
+              ],
+              builder: (context, row) => ListView.separated(
               itemCount: list.length,
               separatorBuilder: (_, _) => const Divider(height: 1),
               itemBuilder: (_, i) {
                 final r = list[i];
                 final bal = owes('${r['id']}');
-                return ListTile(
+                final st = row(i);
+                return st.wrap(ListTile(
+                  leading: st.tickBox,
                   title: Text('${r['name']}'),
                   subtitle: Text([r['phone'], widget.suppliers ? r['contact'] : r['allergies'] == null || '${r['allergies']}'.isEmpty ? null : 'Allergies: ${r['allergies']}']
                       .where((x) => x != null && '$x'.isNotEmpty).join(' · ')),
@@ -80,8 +124,9 @@ class _PeopleScreenState extends ConsumerState<PeopleScreen> {
                       IconButton(tooltip: widget.suppliers ? 'Pay supplier' : 'Record payment', icon: const Icon(Icons.payments_outlined), onPressed: () => _pay(r, bal, settings)),
                     IconButton(tooltip: 'Edit', icon: const Icon(Icons.edit_outlined), onPressed: () => _edit(r)),
                   ]),
-                );
+                ));
               },
+            ),
             ),
     );
   }

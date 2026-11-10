@@ -8,10 +8,12 @@ import 'package:crypto/crypto.dart';
 
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:rxpos/core/theme/fonts.dart';
 import 'package:rxpos/core/router/app_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -377,6 +379,88 @@ void main() {
       await done(tester);
     });
   }
+
+  testWidgets('keyboard, mouse and navigation: page keys, back, ?, pin, list keys, right-click, ticks, a key changed', (tester) async {
+    await tester.runAsync(signedIn);
+    await tester.runAsync(() => RecordStore(db).update((d) {
+          for (final (i, n) in ['Achieng Grace', 'Bwire Paul', 'Kato Sam', 'Nabirye Ruth'].indexed) {
+            d.put('customers', {'id': 'c$i', 'name': n, 'phone': '07725550$i'});
+          }
+        }));
+    await start(tester);
+    Future<void> keys(List<LogicalKeyboardKey> ks) async {
+      for (final k in ks) {
+        await tester.sendKeyEvent(k);
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      await settle(tester);
+    }
+
+    String at() => GoRouter.of(tester.element(find.byKey(const Key('sidebar')))).routerDelegate.currentConfiguration.uri.path;
+    await keys([LogicalKeyboardKey.keyG, LogicalKeyboardKey.keyC]);
+    expect(at(), '/customers', reason: 'G then C opens Customers');
+    await keys([LogicalKeyboardKey.f6]);
+    expect(at(), '/sales');
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.altLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.altLeft);
+    await settle(tester);
+    expect(at(), '/customers', reason: 'Alt+← goes back');
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.altLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.altLeft);
+    await settle(tester);
+    expect(at(), '/sales', reason: 'Alt+→ goes forward');
+    await keys([LogicalKeyboardKey.keyG, LogicalKeyboardKey.keyC]);
+    expect(find.byKey(const Key('pin-page')), findsOneWidget);
+    // ? shows the keys
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.slash);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+    await settle(tester);
+    expect(find.text('Keyboard and mouse'), findsOneWidget);
+    expect(find.text('G then C'), findsOneWidget);
+    expect(find.text('Right-click'), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, 'Close'));
+    await settle(tester);
+    // G then G pins the page
+    await keys([LogicalKeyboardKey.keyG, LogicalKeyboardKey.keyG]);
+    expect(find.byKey(const ValueKey('nav-pin-/customers')), findsOneWidget);
+    // list keys: ↓ ↓ highlights the second, Enter opens it
+    await keys([LogicalKeyboardKey.arrowDown, LogicalKeyboardKey.arrowDown, LogicalKeyboardKey.enter]);
+    expect(find.text('Edit Bwire Paul'), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await settle(tester);
+    // right-click: the row's menu
+    await tester.tap(find.text('Kato Sam'), buttons: kSecondaryMouseButton);
+    await settle(tester);
+    expect(find.text('Copy name and phone'), findsOneWidget);
+    expect(find.text('Tick'), findsOneWidget);
+    await tester.tap(find.text('Tick'));
+    await settle(tester);
+    // Shift+click ticks the rows in between
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.tap(find.byKey(const ValueKey('tick-c0')));
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+    await settle(tester);
+    expect(find.text('3 ticked'), findsOneWidget);
+    await keys([LogicalKeyboardKey.escape]);
+    expect(find.byKey(const Key('bulk-bar')), findsNothing);
+    // a key changed on this device
+    await navTo(tester, 'This device');
+    ScaffoldMessenger.of(tester.element(find.byKey(const Key('sidebar')))).clearSnackBars(); // the "Pinned" note sits over the page's foot
+    await settle(tester);
+    await tester.ensureVisible(find.byKey(const ValueKey('change-go:/customers')));
+    await settle(tester);
+    await tester.tap(find.byKey(const ValueKey('change-go:/customers')));
+    await settle(tester);
+    expect(find.text('New key for Customers'), findsOneWidget);
+    await keys([LogicalKeyboardKey.keyG, LogicalKeyboardKey.keyK]);
+    expect(tester.widget<Text>(find.byKey(const ValueKey('key-go:/customers'))).data, 'G then K ·');
+    await keys([LogicalKeyboardKey.keyG, LogicalKeyboardKey.keyK]);
+    expect(at(), '/customers', reason: 'the new key works at once');
+    await done(tester);
+  });
 
   testWidgets('a sale can be held and resumed', (tester) async {
     await tester.runAsync(signedIn);
@@ -2864,7 +2948,7 @@ void main() {
 
   testWidgets('sidebar groups fold away and stay so on this device; the page you are on and pages with a count still show', (tester) async {
     await tester.runAsync(signedIn);
-    await start(tester, foldedNav: true);
+    await start(tester, foldedNav: true, size: const Size(1440, 1600)); // tall: the recent pages sit above the groups
     final sidebar = find.byKey(const Key('sidebar'));
     Finder item(String label) => find.descendant(of: sidebar, matching: find.text(label));
     // as the React app: at first only Sales is open

@@ -172,7 +172,17 @@ class _CommandPaletteState extends ConsumerState<CommandPalette> {
   List<_Hit> _results() {
     final s = _q.trim().toLowerCase();
     bool has(List<Object?> v) => v.join(' ').toLowerCase().contains(s);
+    // the owner's request: Ctrl+K also runs commands ("new sale", "receive stock", "add a customer"…), as the React app
+    final can = {for (final p in widget.pages) p.path};
+    final commands = [
+      if (can.contains('/pos')) ('New sale', 'sell till pos', Icons.point_of_sale, '/pos'),
+      if (can.contains('/add-stock')) ('Receive stock', 'add stock delivery invoice purchase', Icons.add_box_outlined, '/add-stock'),
+      if (can.contains('/customers')) ('Add a customer', 'new client patient', Icons.person_add_alt, '/customers?new=1'),
+      if (can.contains('/suppliers')) ('Add a supplier', 'new supplier', Icons.local_shipping_outlined, '/suppliers?new=1'),
+      if (can.contains('/device')) ('Change keyboard shortcuts', 'keys remap keyboard settings', Icons.keyboard_outlined, '/device'),
+    ];
     final out = <_Hit>[
+      for (final c in commands.where((c) => s.isNotEmpty ? has([c.$1, c.$2]) : true).take(s.isEmpty ? 3 : 5)) _Hit('Commands', c.$1, c.$3, c.$4),
       for (final p in widget.pages.where((p) => s.isEmpty || has([p.label])).take(s.isEmpty ? 8 : 6)) _Hit('Pages', p.label, p.icon, p.path, hint: p.keyLabel),
     ];
     if (s.isEmpty) return out;

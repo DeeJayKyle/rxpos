@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:printing/printing.dart';
@@ -16,6 +17,7 @@ import '../../../core/rules/dates.dart';
 import '../../../core/rules/money.dart';
 import '../../../core/rules/search.dart';
 import '../../../core/rules/stock.dart';
+import '../../../core/presentation/list_controls.dart';
 import '../../auth/application/session_controller.dart';
 import '../../auth/domain/session.dart';
 import '../../sales_pos/domain/cart.dart' show walkIn;
@@ -159,7 +161,26 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
                 ? EmptyState(rows.isEmpty
                     ? 'No sales yet. Every sale rung up at the POS appears here with its receipt, to reprint, refund or correct.'
                     : 'No sales match. Try another receipt number, customer, filter or date.')
-                : ListView.separated(
+                // the owner's request: keys, double-click and right-click on the sales too (list_controls.dart)
+                : ListControls(
+                    ids: [for (final s in sales) s.id],
+                    selectable: false,
+                    onOpen: (i) => _open(sales[i], st),
+                    onEdit: (i) {
+                      final s = sales[i];
+                      if (s.status != 'refunded' && _can('sales.edit') && !_locked(s)) _edit(s, st);
+                    },
+                    menu: (i) {
+                      final s = sales[i];
+                      return [
+                        RowAction('View', Icons.visibility_outlined, () => _open(s, st), keyId: 'list:open'),
+                        RowAction('Print the receipt', Icons.print_outlined, () => Printing.layoutPdf(onLayout: (_) => receiptPdf(s, st), name: s.number)),
+                        RowAction('Invoice (A4)', Icons.description_outlined, () => _invoice(s, st)),
+                        if (s.status != 'refunded' && _can('sales.edit') && !_locked(s)) RowAction('Edit', Icons.edit_outlined, () => _edit(s, st), keyId: 'list:edit'),
+                        RowAction('Copy the receipt number', Icons.copy, () => Clipboard.setData(ClipboardData(text: s.number))),
+                      ];
+                    },
+                    builder: (context, row) => ListView.separated(
                     itemCount: sales.length + 1,
                     separatorBuilder: (_, _) => const Divider(height: 1),
                     itemBuilder: (_, i) {
@@ -173,7 +194,7 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
                       final refunded = s.status == 'refunded';
                       final n = ((s.raw['edits'] as List?) ?? const []).length;
                       final momo = '${(s.raw['momo'] as Map?)?['txid'] ?? ''}';
-                      return ListTile(
+                      return row(i).wrap(ListTile(
                         title: Wrap(spacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
                           Text('${s.number} · ${s.customerName}', style: TextStyle(fontWeight: FontWeight.w700, decoration: refunded ? TextDecoration.lineThrough : null)),
                           _Badge(refunded ? 'refunded' : s.status, error: refunded),
@@ -205,8 +226,9 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
                           ),
                         ]),
                         onTap: () => _open(s, st),
-                      );
+                      ));
                     },
+                  ),
                   ),
           ),
         ],
