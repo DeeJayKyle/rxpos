@@ -112,6 +112,18 @@ void main() {
       expect((await db.select(db.outbox).get()).map((o) => o.txn).toSet(), hasLength(1));
     });
 
+    test('step 21: a scanned pack sells from its own batch first, then first-expiry-first-out', () async {
+      final stock = view(const [
+        Movement(id: 'm1', productId: 'p1', qty: 8, batchId: 'b-early'),
+        Movement(id: 'm2', productId: 'p1', qty: 100, batchId: 'b-late'),
+      ]);
+      final cart = [addToCart([], para, stock: 108, wholesale: false, settings: s).single.copyWith(preferBatch: 'b-late')];
+      final sale = await completeSale(store, cart: cart, c: const Checkout(method: cash, tendered: 1000), settings: s,
+          stock: stock, wholesale: false, cashier: 'Tia', now: DateTime(2026, 11, 5));
+      final item = (sale['items'] as List).single as Map;
+      expect((item['alloc'] as List).map((a) => (a as Map)['batchId']), ['b-late']);
+    });
+
     test('step 8: credit limits: over only when this sale adds to what is owed beyond the limit', () {
       expect(overLimit(limit: 1000, owed: 500, total: 400, tendered: 0), isNull);
       expect(overLimit(limit: 1000, owed: 800, total: 500, tendered: 100), (limit: 1000.0, owed: 800.0, adds: 400.0));

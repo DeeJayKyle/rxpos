@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
+import { parseGs1, findByGtin } from '../gs1.js';
 import { useLocation } from 'react-router-dom';
 import { Pencil, Trash2, ScanText, Camera, FileUp, Loader2, AlertTriangle, CheckCircle2, X, Plus, RotateCcw, Sparkles, GripVertical, ChevronLeft, ChevronRight } from 'lucide-react';
 import { DateInput, MedicinePicker, useDateFormat } from '../fields.jsx';
@@ -270,10 +271,21 @@ export function AddStock() {
     const key = placeLine({ ...blankLine(), productId: NEW, name: name.trim(), ...(barcode ? { barcode } : {}) });
     setTimeout(() => nameRefs.current[key]?.focus(), 30);
   };
+  // step 21 (src/gs1.js): a pack's 2D code gives the medicine, its batch and expiry at once; an unknown product number
+  // starts a new medicine with them filled in
+  const receivePack = (g) => {
+    const p = findByGtin(products, g.gtin);
+    if (p) { placeLine(lineFor(p, { batch: g.batch, expiry: g.expiry }, form.markup)); return p; }
+    const key = placeLine({ ...blankLine(), productId: NEW, name: '', barcode: g.gtin, batch: g.batch, expiry: g.expiry });
+    setTimeout(() => nameRefs.current[key]?.focus(), 30);
+    return null;
+  };
   const onSearchKey = (e) => {
     if (e.key !== 'Enter') return;
     e.preventDefault();
     if (!ql) return;
+    const g = parseGs1(q);
+    if (g) { receivePack(g); return; }
     const code = products.find((p) => p.barcode && p.barcode.toLowerCase() === ql);
     if (code || matches[0]) pick(code || matches[0]);
     else if (ql.length > 1) addNew(q);
@@ -381,6 +393,8 @@ export function AddStock() {
     <div className="page">
       <div className="page-head"><h1>Add Stock</h1><button type="button" className="btn ghost" onClick={() => setScanOpen(true)}><ScanText size={16} />Scan invoice</button></div>
       {cam && <CameraScanner title="Scan medicines into the delivery" onClose={() => setCam(false)} onCode={(code) => {
+        const g = parseGs1(code);
+        if (g) { const gp = receivePack(g); if (!gp) setCam(false); return gp ? `${gp.name} added (batch ${g.batch || '—'}, expiry ${g.expiry || '—'})` : 'New product number: type the medicine name'; }
         const p = products.find((x) => x.barcode && x.barcode === code);
         if (p) { pick(p); return `${p.name} added`; }
         addNew('', code); setCam(false);

@@ -257,6 +257,55 @@ void main() {
     await done(tester);
   });
 
+  testWidgets('step 21: a GS1 pack code sells that batch, an expired pack is refused, Add Stock fills batch and expiry', (tester) async {
+    await tester.runAsync(signedIn);
+    final store = RecordStore(db);
+    await tester.runAsync(() => store.update((d) {
+          d.put('products', {'id': 'p1', 'name': 'Calmex 500mg Tabs', 'generic': 'Calmex', 'form': 'Tablets', 'unit': 'Tablet', 'barcode': '4006381333931', 'price': 500, 'cost': 300});
+          d.put('batches', {'id': 'b2', 'productId': 'p1', 'batch': 'C2', 'expiry': '2030-06-30', 'cost': 300});
+          d.move(productId: 'p1', qty: 10, type: 'Opening stock', batchId: 'b2');
+        }));
+    await start(tester);
+    await toTill(tester);
+    final search = find.widgetWithText(TextField, 'Search medicine or scan barcode…  (F8)');
+    // an expired pack: refused, nothing added
+    await tester.enterText(search, '0104006381333931172001311OLD1');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await settle(tester);
+    expect(find.textContaining('expired on 2020-01-31'), findsOneWidget);
+    expect(find.text('Calmex 500mg Tabs'), findsOneWidget, reason: 'only in the grid');
+    // the pack of batch C2 (not the first to expire): that batch is sold
+    await tester.enterText(search, '010400638133393117300630' '10C2');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await settle(tester);
+    expect(find.text('Calmex 500mg Tabs'), findsNWidgets(2));
+    await tester.tap(find.byTooltip('More'));
+    await settle(tester);
+    await tester.tap(find.textContaining('Charge UGX'));
+    await settle(tester);
+    expect(find.text('Sale complete'), findsOneWidget);
+    final moves = (await tester.runAsync(() => store.rows('movements')))!.where((m) => m['type'] == 'Sale').toList();
+    expect(moves.map((m) => m['batchId']).toSet(), {'b2'});
+    await tester.tap(find.text('New sale'));
+    await settle(tester);
+    // Add Stock: the pack fills the medicine, batch and expiry; an unknown product number starts a new medicine
+    await tester.sendKeyEvent(LogicalKeyboardKey.f4);
+    await settle(tester);
+    await tester.enterText(find.byKey(const Key('stock-search')), '(01)04006381333931(17)310200(10)NEW9');
+    await settle(tester, 3);
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await settle(tester);
+    expect(find.text('Calmex 500mg Tabs'), findsWidgets);
+    expect(find.widgetWithText(TextFormField, 'NEW9'), findsOneWidget);
+    expect(find.textContaining('Calmex 500mg Tabs added · batch NEW9'), findsOneWidget);
+    await tester.enterText(find.byKey(const Key('stock-search')), '0109506000134352' '10Z5');
+    await settle(tester, 3);
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await settle(tester);
+    expect(find.widgetWithText(TextFormField, 'Z5'), findsOneWidget);
+    await done(tester);
+  });
+
   testWidgets('a sale can be held and resumed', (tester) async {
     await tester.runAsync(signedIn);
     await start(tester);

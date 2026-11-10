@@ -7,6 +7,8 @@ import 'package:rxpos/core/platform.dart';
 
 import '../../../core/data/device_settings.dart';
 import '../../../core/data/pharmacy_providers.dart';
+import '../../../core/rules/gs1.dart';
+import '../../../core/rules/dates.dart';
 import '../../../core/entities/people.dart';
 import '../../../core/rules/permissions.dart';
 import '../../../core/data/record_store.dart';
@@ -86,9 +88,34 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     await _sale.resume(by > 0 ? held.first : held.last);
   }
 
+  /// Step 21 (core/rules/gs1.dart): a scanned pack's 2D code names the medicine and its batch, which is sold from
+  /// first; an expired pack is refused at once.
+  Future<Product?> _scanPack(PharmacyData d, Gs1 g) async {
+    final p = d.byGtin(g.gtin);
+    if (p == null) {
+      _say('No medicine has the product number ${g.gtin}', error: true);
+      return null;
+    }
+    if (g.expiry.isNotEmpty && daysUntil(g.expiry) < 0) {
+      _say('This ${p.name} pack expired on ${g.expiry}: take it off the shelf, don\'t sell it', error: true);
+      return null;
+    }
+    ref.read(lastScanProvider.notifier).now();
+    await _add(p);
+    final b = g.batch.isEmpty ? null : d.stock.batchesOf(p.id).where((x) => x.batch == g.batch && x.qty > 0).firstOrNull;
+    if (b != null) _sale.preferBatch(p.id, b.id);
+    return p;
+  }
+
   Future<void> _submitSearch(PharmacyData d, List<Product> results) async {
     final code = _search.text.trim();
     if (code.isEmpty) return;
+    final g = parseGs1(code);
+    if (g != null) {
+      await _scanPack(d, g);
+      _clearSearch();
+      return;
+    }
     final byCode = d.byBarcode[code];
     if (byCode != null) {
       ref.read(lastScanProvider.notifier).now(); // for the hardware status bar
@@ -307,6 +334,11 @@ class _PosScreenState extends ConsumerState<PosScreen> {
           onCamera: onAndroid
               ? () async {
                   await scanContinuous(context, title: 'Scan items into the sale', onCode: (code) async {
+                    final g = parseGs1(code);
+                    if (g != null) {
+                      final sp = await _scanPack(d, g);
+                      return sp == null ? null : '${sp.name} added${g.batch.isEmpty ? '' : ' (batch ${g.batch})'}';
+                    }
                     final p = d.byBarcode[code.trim()];
                     if (p == null) return null;
                     ref.read(lastScanProvider.notifier).now();

@@ -6,6 +6,7 @@ import '../entities/draft.dart';
 import '../entities/party.dart';
 import '../entities/product.dart';
 import '../entities/settings.dart';
+import '../rules/gs1.dart';
 import '../rules/permissions.dart';
 import '../rules/stock.dart';
 import 'catalog.dart';
@@ -51,6 +52,8 @@ class PharmacyData {
 
   late final Map<String, Product> byId = {for (final p in products) p.id: p};
   late final Map<String, Product> byBarcode = {for (final p in products) if (p.barcode.isNotEmpty) p.barcode: p};
+  /// step 21: the medicine whose barcode is this product number (a GTIN-14 from a pack's 2D code, or its EAN-13)
+  Product? byGtin(String gtin) => products.where((p) => sameGtin(p.barcode, gtin)).firstOrNull;
 
   double stockOf(String id) => stock.stockOf(id);
 

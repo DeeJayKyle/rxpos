@@ -274,6 +274,9 @@ class SaleController extends _$SaleController {
     return true;
   }
 
+  /// Step 21: sell this line from the scanned pack's batch first.
+  void preferBatch(String id, String batchId) => _replace(id, (l) => l.copyWith(preferBatch: batchId));
+
   void _replace(String id, CartLine Function(CartLine) f) => state = state.copyWith(lines: [for (final l in state.lines) l.id == id ? f(l) : l]);
 
   void step(String id, int by) {

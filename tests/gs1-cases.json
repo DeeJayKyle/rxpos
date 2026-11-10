@@ -1,0 +1,19 @@
+{
+  "_about": "GS1 pack codes (workplan step 21). Run by tests/unit-gs1.mjs (src/gs1.js) and rxpos_flutter/test/rules/gs1_test.dart (lib/core/rules/gs1.dart). \\u001d is GS, the separator a scanner sends after a variable-length field. GTINs used: 4006381333931 (a published EAN-13 example) and 09506000134352 (GS1's own documentation example).",
+  "parse": [
+    { "name": "a scanner with GS: product, expiry, batch, then serial", "in": "010400638133393117271231" , "append": "10ABC123\u001d21SN1", "expect": { "gtin": "04006381333931", "expiry": "2027-12-31", "batch": "ABC123", "serial": "SN1" } },
+    { "name": "with the scanner's symbology prefix ]d2", "in": "]d2010400638133393117271231", "append": "10ABC123", "expect": { "gtin": "04006381333931", "expiry": "2027-12-31", "batch": "ABC123", "serial": "" } },
+    { "name": "no GS sent, the usual order (batch last): still read", "in": "010400638133393117271231", "append": "10LOT-9", "expect": { "gtin": "04006381333931", "expiry": "2027-12-31", "batch": "LOT-9", "serial": "" } },
+    { "name": "serial first, then expiry and batch", "in": "010400638133393121SN77", "append": "\u001d1726063010B42", "expect": { "gtin": "04006381333931", "expiry": "2026-06-30", "batch": "B42", "serial": "SN77" } },
+    { "name": "the printed text, a day of 00 = the month's last day", "in": "(01)09506000134352(17)270200(10)LOT7", "append": "", "expect": { "gtin": "09506000134352", "expiry": "2027-02-28", "batch": "LOT7", "serial": "" } },
+    { "name": "a scanner that types <GS> as text", "in": "0109506000134352", "append": "10X1<GS>17280115", "expect": { "gtin": "09506000134352", "expiry": "2028-01-15", "batch": "X1", "serial": "" } },
+    { "name": "a wrong check digit is not a GS1 code", "in": "0104006381333932", "append": "17271231", "expect": null },
+    { "name": "an ordinary barcode is not a GS1 code", "in": "4006381333931", "append": "", "expect": null },
+    { "name": "a name being typed is not a GS1 code", "in": "Amoxicillin", "append": "", "expect": null }
+  ],
+  "sameGtin": [
+    { "a": "4006381333931", "b": "04006381333931", "expect": true },
+    { "a": "4006381333931", "b": "4006381333932", "expect": false },
+    { "a": "INTERNAL-7", "b": "INTERNAL-7", "expect": false }
+  ]
+}

@@ -12,6 +12,7 @@ import '../../../core/data/record_store.dart';
 import '../../../core/entities/product.dart';
 import '../../../core/presentation/widgets.dart';
 import '../../../core/rules/dates.dart';
+import '../../../core/rules/gs1.dart';
 import '../../../core/rules/money.dart';
 import '../../../core/rules/packs.dart';
 import '../../../core/rules/search.dart';
@@ -115,6 +116,19 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
 
   void _pick(Product p, PharmacyData d) => _placeLine(lineFor(p, d.settings, markup: _form!['markup']));
   void _addNew(String name, {String barcode = ''}) => _placeLine({...blankLine(), 'productId': newMedicine, 'name': name.trim(), if (barcode.isNotEmpty) 'barcode': barcode});
+
+  /// A GS1 pack code (workplan step 21): the medicine with that product number gets a line with the batch and expiry
+  /// filled; an unknown product number starts a new medicine with them filled. Returns what to tell the user.
+  String _receivePack(Gs1 g, PharmacyData d) {
+    final p = d.byGtin(g.gtin);
+    final extra = {if (g.batch.isNotEmpty) 'batch': g.batch, if (g.expiry.isNotEmpty) 'expiry': g.expiry};
+    if (p != null) {
+      _placeLine(lineFor(p, d.settings, extra: extra, markup: _form!['markup']));
+      return '${p.name} added${g.batch.isNotEmpty ? ' · batch ${g.batch}' : ''}';
+    }
+    _placeLine({...blankLine(), 'productId': newMedicine, 'name': '', 'barcode': g.gtin, ...extra});
+    return 'New product number: type the medicine name';
+  }
 
   void _discard(PharmacyData d) {
     setState(() {
@@ -269,7 +283,7 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
             width: 260,
             child: l['productId'] == newMedicine
                 ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Row(children: [
+                    Wrap(crossAxisAlignment: WrapCrossAlignment.center, children: [
                       const Chip(label: Text('New'), visualDensity: VisualDensity.compact),
                       TextButton(onPressed: () => _replaceLine(key, {...l, 'productId': ''}), child: const Text('choose existing')),
                     ]),
@@ -443,6 +457,8 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
             Row(children: [
               if (onAndroid)
                 IconButton.filledTonal(tooltip: 'Scan medicines into the delivery', icon: const Icon(Icons.qr_code_scanner), onPressed: () => scanContinuous(context, title: 'Scan medicines into the delivery', onCode: (code) async {
+                  final g = parseGs1(code);
+                  if (g != null) return _receivePack(g, d);
                   final p = d.byBarcode[code];
                   if (p != null) {
                     _pick(p, d);
@@ -460,6 +476,12 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
                   onChanged: (v) => setState(() => _q = v),
                   onSubmitted: (_) {
                     if (ql.isEmpty) return;
+                    final g = parseGs1(_q);
+                    if (g != null) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_receivePack(g, d))));
+                      setState(() => _round++);
+                      return;
+                    }
                     final code = d.byBarcode.entries.where((e) => e.key.toLowerCase() == ql).firstOrNull?.value;
                     if (code != null || matches.isNotEmpty) {
                       _pick(code ?? matches.first, d);

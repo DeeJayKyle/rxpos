@@ -38,9 +38,12 @@ class CartLine {
     this.directions,
     this.allowExpired = false,
     this.expiredReason = '',
+    this.preferBatch,
   });
 
   final String id, name;
+  /// step 21: the batch of a scanned pack, sold from first (core/rules/gs1.dart)
+  final String? preferBatch;
   final double price, cost, qty, max;
   final LinePack? pack;
   final bool rx, controlled;
@@ -67,6 +70,7 @@ class CartLine {
     bool? allowExpired,
     String? expiredReason,
     double? max,
+    String? preferBatch,
   }) => CartLine(
     id: id,
     name: name,
@@ -80,6 +84,7 @@ class CartLine {
     directions: clearDirections ? null : (directions ?? this.directions),
     allowExpired: allowExpired ?? this.allowExpired,
     expiredReason: expiredReason ?? this.expiredReason,
+    preferBatch: preferBatch ?? this.preferBatch,
   );
 
   Map<String, Object?> toJson() => {
@@ -316,7 +321,7 @@ Future<Map<String, Object?>> completeSale(
             'pack': {'name': l.pack!.name, 'size': numOut(l.pack!.size), 'count': numOut(l.qty / l.pack!.size), 'price': numOut(l.price * l.pack!.size)},
           'alloc': [
             for (final a in allocate(
-              stock.batchesOf(l.id, atBranch: branchId),
+              preferFirst(stock.batchesOf(l.id, atBranch: branchId), l.preferBatch),
               l.qty,
               allowExpired: l.allowExpired,
               now: now,

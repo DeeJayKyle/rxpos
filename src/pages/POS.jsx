@@ -5,6 +5,8 @@ import { ShoppingCart, Trash2, X, FileText, Printer, AlertTriangle, ScanBarcode,
 import { DrugInfoPanel, genericKey } from './DrugInfo.jsx';
 import { useStore, uid, now, daysUntil, put, del, move, allocate, audit, normalizePhone, customerBalance, DEFAULT_PAYMENT_METHODS } from '../store.jsx';
 import { overLimit } from '../credit.js';
+import { parseGs1, findByGtin } from '../gs1.js';
+import { preferFirst } from '../fefo.js';
 import { maxDiscountOf } from '../access.js';
 import { draftsFor, saleDraft } from '../drafts.js';
 import { keepsData } from '../webpolicy.js';
@@ -214,6 +216,8 @@ export default function POS({ mode = 'retail' }) {
     else if (e.key === 'ArrowRight' && (q === '' || e.target.selectionStart === q.length)) { e.preventDefault(); moveActive(1); }
     else if (e.key === 'ArrowLeft' && q === '') { e.preventDefault(); moveActive(-1); }
     if (e.key !== 'Enter') return;
+    const g = parseGs1(q);
+    if (g) { scanPack(g); setQ(''); return; }
     const exact = products.find((p) => p.barcode && p.barcode === q.trim());
     if (exact) add(exact);
     else if (/^\d{6,}$/.test(q.trim())) toast(`No medicine has the barcode ${q.trim()}`, 'warn'); // a scan that matched nothing: never guess
@@ -222,6 +226,16 @@ export default function POS({ mode = 'retail' }) {
   };
 
   const setLine = (id, patch) => setCart((c) => c.map((l) => (l.id === id ? { ...l, ...patch } : l)));
+  // step 21 (src/gs1.js): a scanned pack's 2D code names the medicine and its batch; that batch is sold from first.
+  // An expired pack is refused at once. Returns the medicine, or null when the scan names none of this pharmacy's.
+  const scanPack = (g) => {
+    const p = findByGtin(products, g.gtin);
+    if (!p) { toast(`No medicine has the product number ${g.gtin}`, 'warn'); return null; }
+    if (g.expiry && daysUntil(g.expiry) < 0) { toast(`This ${p.name} pack expired on ${g.expiry}: take it off the shelf, don't sell it`, 'error'); return null; }
+    const b = g.batch ? batchesOf(p.id).find((x) => x.batch === g.batch && x.qty > 0) : null;
+    Promise.resolve(add(p)).then(() => { if (b) setLine(p.id, { preferBatch: b.id }); });
+    return p;
+  };
   const setQty = (id, qty) => setCart((c) => c.map((l) => (l.id === id ? { ...l, qty: Math.max(1, Math.min(Number(qty) || 1, l.max)) } : l)));
   // Packs (strip, box…): stock and line.qty stay in the medicine's smallest unit; a pack line counts whole packs
   const packsOf = (id) => products.find((p) => p.id === id)?.packs?.filter((k) => k.name && Number(k.size) > 1) || [];
@@ -408,10 +422,10 @@ export default function POS({ mode = 'retail' }) {
     const credit = ptype === 'credit';
     const paid = credit ? Math.min(Number(tendered) || 0, total) : total;
     // Split each line across batches, earliest expiry first
-    const items = cart.map((l) => ({ ...l, controlled: isCd(l) })).map(({ id, name, price, cost, qty, allowExpired, directions, controlled, pack }) => ({
+    const items = cart.map((l) => ({ ...l, controlled: isCd(l) })).map(({ id, name, price, cost, qty, allowExpired, directions, controlled, pack, preferBatch }) => ({
       id, name, price: Number(price), cost, qty, ...(directions ? { directions } : {}), ...(controlled ? { controlled: true } : {}),
       ...(pack ? { pack: { name: pack.name, size: pack.size, count: qty / pack.size, price: Number(price) * pack.size } } : {}),
-      alloc: allocate(batchesOf(id), qty, { allowExpired }).map(({ batchId, qty: q, batch, expiry }) => ({ batchId, qty: q, batch, expiry })),
+      alloc: allocate(preferFirst(batchesOf(id), preferBatch), qty, { allowExpired }).map(({ batchId, qty: q, batch, expiry }) => ({ batchId, qty: q, batch, expiry })),
     }));
     const sale = {
       id: uid(), number: '', date: now(), type: mode, branchId, // numbered in the commit below (step 7)
@@ -864,6 +878,8 @@ export default function POS({ mode = 'retail' }) {
 
       {cam && (
         <CameraScanner title="Scan items into the sale" onClose={() => { setCam(false); focusSearch(); }} onCode={(code) => {
+          const g = parseGs1(code);
+          if (g) { const sp = scanPack(g); return sp ? `${sp.name} added${g.batch ? ` (batch ${g.batch})` : ''}` : false; }
           const p = products.find((x) => x.barcode && x.barcode === code);
           if (!p) return false;
           add(p);
