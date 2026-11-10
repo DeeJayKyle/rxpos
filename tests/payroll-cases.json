@@ -1,0 +1,24 @@
+{
+  "_about": "Payroll & HR (step 26). Run by tests/unit-payroll.mjs (src/payroll.js) and rxpos_flutter/test/features/payroll_cases_test.dart (features/payroll/domain/payroll.dart). Uganda PAYE bands as of 2026; NSSF 5% / 10%.",
+  "paye": [[200000, 0], [235000, 0], [300000, 6500], [335000, 10000], [400000, 23000], [410000, 25000], [800000, 142000], [12000000, 3702000]],
+  "lines": [
+    { "name": "basic only, PAYE and NSSF",
+      "employee": { "id": "e1", "name": "Amina", "jobTitle": "Pharmacist", "basicSalary": 800000 },
+      "month": "2026-11", "workingDays": 26, "deductAbsence": false, "attendance": [], "advances": [],
+      "expect": { "gross": 800000, "paye": 142000, "nssfEmployee": 40000, "nssfEmployer": 80000, "advances": 0, "net": 618000, "overtime": 0, "absence": 0 } },
+    { "name": "allowances, overtime, two unpaid days, an open advance; another month's day and a taken-back advance are left out",
+      "employee": { "id": "e2", "name": "Brian", "basicSalary": 520000, "allowances": 60000, "overtimeRate": 3000 },
+      "month": "2026-11", "workingDays": 26, "deductAbsence": true,
+      "attendance": [
+        { "employeeId": "e2", "date": "2026-11-02", "status": "absent" }, { "employeeId": "e2", "date": "2026-11-03", "status": "absent" },
+        { "employeeId": "e2", "date": "2026-11-04", "status": "present", "overtimeHours": 4 }, { "employeeId": "e2", "date": "2026-11-05", "status": "sick" },
+        { "employeeId": "e2", "date": "2026-10-30", "status": "absent" }, { "employeeId": "e1", "date": "2026-11-02", "status": "absent" }
+      ],
+      "advances": [{ "id": "a1", "employeeId": "e2", "amount": 50000 }, { "id": "a2", "employeeId": "e2", "amount": 20000, "payrollId": "old" }],
+      "expect": { "gross": 552000, "paye": 67600, "nssfEmployee": 27600, "nssfEmployer": 55200, "advances": 50000, "net": 406800, "overtime": 12000, "absence": 40000, "unpaidDays": 2, "present": 1, "leave": 1, "advanceIds": ["a1"] } },
+    { "name": "no PAYE, no NSSF",
+      "employee": { "id": "e3", "name": "Cleo", "basicSalary": 300000, "paye": false, "nssf": false },
+      "month": "2026-11", "workingDays": 26, "deductAbsence": false, "attendance": [], "advances": [],
+      "expect": { "gross": 300000, "paye": 0, "nssfEmployee": 0, "nssfEmployer": 0, "net": 300000 } }
+  ]
+}

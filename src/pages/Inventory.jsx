@@ -8,6 +8,7 @@ import { formatQty } from '../money.js';
 import { removalSplit } from '../fefo.js';
 import { newInternalBarcode } from '../barcode.jsx';
 import { useHoverCard } from '../listcontrols.jsx';
+import { useMedicineOrder, MedicineOrderPicker, groupedRows, useFolded, GroupHeadingRow } from '../medgroups.jsx';
 
 const expiryClass = (expiry, warn) => {
   if (!expiry) return '';
@@ -180,11 +181,17 @@ export function StockLevels() {
   const sv = useMemo(() => stockValue(rows, batchesOf), [rows, batchesOf]); // physical stock × the medicine's current cost, expired apart
   const total = sv.value;
   const retail = rows.reduce((a, p) => a + Math.max(p.stock, 0) * (p.price || 0), 0);
+  // step 26 (from the Flutter app): sorted and grouped by class, therapeutic area, form or shelf, per device
+  const [order, setOrder] = useMedicineOrder();
+  const [folded, toggleFold] = useFolded();
+  const shownRows = groupedRows(rows.slice(0, 500), order, folded);
+  const cols = 8 + (multi ? 1 : 0) + (can('inventory.edit') ? 1 : 0);
   return (
     <div className="page">
       <div className="page-head">
         <div><h1>Inventory</h1><div className="sub">{branch?.name} · {rows.length.toLocaleString()} items · {fmt(total)} at cost · {fmt(retail)} at retail{sv.expired > 0 && <> · <span className="text-danger">{fmt(sv.expired)} expired (not included)</span></>}</div></div>
         <div className="row gap">
+          <MedicineOrderPicker value={order} onChange={setOrder} />
           <SearchBox value={q} onChange={setQ} />
           <button className="btn ghost" onClick={() => downloadFile('inventory.csv', toCSV(rows.flatMap((p) => batchesOf(p.id).filter((b) => b.qty).map((b) => ({ name: p.name, generic: p.generic, form: p.form, batch: b.batch, expiry: b.expiry, qty: b.qty, cost: b.cost || p.cost, price: p.price, value: b.qty * (b.cost || p.cost) })))), 'text/csv')}><Download size={16} />CSV</button>
           <PdfButton target={listRef} title={{ instock: 'Stock in hand', low: 'Low stock', out: 'Out of stock', all: 'All medicines' }[filter]} subtitle={`${branch?.name || ''} · ${rows.length} items · ${fmt(total)} at cost · ${fmt(retail)} at retail${sv.expired > 0 ? ` · ${fmt(sv.expired)} expired (not included)` : ''}`} />
@@ -195,7 +202,7 @@ export function StockLevels() {
         <table>
           <thead><tr><th>Medicine</th><th>Next batch</th><th>Expiry</th><th>Shelf</th><th className="num">Reorder at</th><th className="num">In stock</th>{multi && <th className="num">All branches</th>}<th className="num">Value (cost)</th>{can('inventory.edit') && <th />}</tr></thead>
           <tbody>
-            {rows.slice(0, 500).map((p) => (
+            {shownRows.map((r) => r.heading !== undefined ? <GroupHeadingRow key={'g:' + r.heading} row={r} colSpan={cols} onToggle={() => toggleFold(r.heading)} /> : (({ p }) => (
               <tr key={p.id} onClick={() => setOpen(p)} style={{ cursor: 'pointer' }}>
                 <td><strong>{p.name}</strong><br /><small className="muted">{p.form}</small><StockStatus p={p} warn={warn} /></td><td>{p.batch || '—'}</td>
                 <td className={'nowrap ' + expiryClass(p.expiry, warn)}>{p.expiry || '—'}</td><td>{p.shelf}</td>
@@ -205,7 +212,7 @@ export function StockLevels() {
                 <td className="num">{(() => { const v = batchValue(p, batchesOf); return <>{fmt(v.value)}{v.expired > 0 && <><br /><small className="text-danger">+ {fmt(v.expired)} expired</small></>}</>; })()}</td>
                 {can('inventory.edit') && <td className="actions"><button className="btn sm ghost" onClick={(e) => { e.stopPropagation(); setEditing(p); }}><Pencil size={14} />Edit</button></td>}
               </tr>
-            ))}
+            ))(r))}
             {!rows.length && <Empty colSpan={8}>Nothing here</Empty>}
           </tbody>
         </table>

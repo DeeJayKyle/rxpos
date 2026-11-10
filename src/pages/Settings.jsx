@@ -8,6 +8,7 @@ import { searchPlaces, DEFAULT_PLACE, storageLimits } from '../weather.js';
 import { isWeb, platformName } from '../platform.js';
 import { pharmacyDefaults, validatePharmacyDefaults } from '../pharmacy-settings.js';
 import { Updates } from './Device.jsx';
+import ReportEmails from './ReportEmails.jsx';
 
 export default function Settings() {
   const { db, update, saveSettings, user, syncCfg, syncStatus, syncNow, branchId, setBranchId, can, features, sharedSettings, pharmacyOverrides, resetPharmacyOverrides } = useStore();
@@ -142,6 +143,7 @@ export default function Settings() {
       )}
 
       {tab === 'alerts' && <DailySummary s={s} setS={setS} onSave={submitSettings} />}
+      {tab === 'alerts' && <ReportEmails />}
       {tab === 'alerts' && (
         <form className="card" onSubmit={submitSettings}>
           <h3><BellRing size={18} />Idle promotions & reminders</h3>

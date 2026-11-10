@@ -75,6 +75,8 @@ export function guessNetwork(msisdn) {
 export const whatsappLink = (phone, text) => `https://wa.me/${String(phone).replace(/\D/g, '')}?text=${encodeURIComponent(text)}`;
 
 /** Today's owner summary (worker/summary.js): preview, or email it now to the addresses in Settings */
+// step 26: a scheduled report email, previewed (what would be sent) or sent now (worker/reports.js)
+export const reportSend = (cfg, id, send = false) => call(cfg, '/api/reports/send' + (send ? '' : '?id=' + encodeURIComponent(id)), { method: send ? 'POST' : 'GET', body: send ? { id } : undefined, timeout: 60000 });
 export const daySummary = (cfg, send = false) => call(cfg, '/api/summary', { method: send ? 'POST' : 'GET', body: send ? {} : undefined });
 
 /** Two-step sign-in for the signed-in person (worker/twostep.js) */

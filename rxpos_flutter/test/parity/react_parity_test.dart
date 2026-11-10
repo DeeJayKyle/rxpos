@@ -9,6 +9,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:rxpos/core/rules/drug_class.dart';
 import 'package:rxpos/core/entities/people.dart';
 import 'package:rxpos/core/entities/product.dart';
 import 'package:rxpos/core/entities/settings.dart';
@@ -83,6 +84,13 @@ Object? flutter(String fn, List args) => switch (fn) {
           for (final (tone, text) in storageAdvice(_m(args[0]), storageLimits(PharmacySettings.fromRecord(_m(args[1]))))) [tone, text],
         ],
       'permissionsOf' => (permissionsOf([for (final r in args[0] as List) Role.fromRecord(_m(r))], '${args[1]}').toList()..sort()),
+      'drugClassOf' => () {
+          final r = drugClassOf(Product.fromRecord(_m(args[0])));
+          return {'cls': r.cls, 'area': r.area};
+        }(),
+      'groupMedicines' => [
+          for (final (g, ps) in groupMedicines([for (final p in args[0] as List) Product.fromRecord(_m(p))], MedicineOrder.values.byName('${args[1]}'))) [g, [for (final p in ps) p.id]],
+        ],
       _ => throw UnsupportedError('no Flutter rule mapped for $fn'),
     };
 

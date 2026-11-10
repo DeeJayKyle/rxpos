@@ -30,6 +30,8 @@ export const TABLES = [
   'dayCloses', // step 18: closed days per branch (src/dayclose.js)
   'counters', // step 7: each till's document counts (src/docnumbers.js), saved with the documents they number
   'insurers', // step 22: insurers and their schemes (src/insurance.js)
+  // step 26 (from the Flutter app): Payroll & HR (the cloud sends them only to roles with Payroll) and report emails
+  'employees', 'attendance', 'salaryAdvances', 'payrolls', 'reportSchedules',
 ];
 // What is persisted on the device, one IndexedDB key per part
 const PARTS = [...TABLES, 'settings', '_tomb'];

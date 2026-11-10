@@ -38,7 +38,6 @@ await p.evaluate(() => [...document.querySelectorAll('form button')].find((x) =>
 await p.waitForSelector('.sidebar', { timeout: 20000 });
 await until(p, () => /Synced/.test(document.querySelector('.pill.clock .clock-state')?.innerText || ''), 30000);
 const hash = () => p.evaluate(() => location.hash);
-const body = () => p.evaluate(() => document.body.innerText);
 const focusBody = () => p.evaluate(() => document.activeElement?.blur());
 const key = async (...ks) => { for (const k of ks) { await p.keyboard.press(k); await wait(120); } await wait(500); };
 const rows = () => p.evaluate(() => [...document.querySelectorAll('.page table tbody tr')].map((r) => r.innerText.split('\t').filter(Boolean)[0]?.trim() || r.innerText.trim().split('\n')[0]));

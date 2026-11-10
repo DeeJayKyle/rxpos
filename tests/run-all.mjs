@@ -20,6 +20,7 @@ const SUITES = [
   ['GS1 pack codes (unit)', 'unit-gs1.mjs', []],
   ['insurance co-pay and balances (unit)', 'unit-insurance.mjs', []],
   ['expiry dates in any format (unit)', 'unit-expiry.mjs', []],
+  ['payroll: PAYE, NSSF, a month\'s pay (unit)', 'unit-payroll.mjs', []],
   ['safe file urls (unit)', 'unit-safeurl.mjs', []],
   ['refill rules (unit)', 'unit-rxrules.mjs', []],
   ['crash scrub (unit)', 'unit-scrub.mjs', []],
