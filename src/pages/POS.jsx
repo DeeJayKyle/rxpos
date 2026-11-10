@@ -337,7 +337,7 @@ export default function POS({ mode = 'retail' }) {
     setPulse((p) => { const n = { ...p }; for (const id of changed) n[id] = (p[id] || 0) + 1; return n; });
     const t = setTimeout(() => setPulse((p) => { const n = { ...p }; for (const id of changed) delete n[id]; return n; }), 700);
     return () => clearTimeout(t);
-  }, [cart]);  
+  }, [cart]);
   // Command bar (Advanced, Ctrl+K): "+qty 2", "-qty 2", "qty 2 5", "void 2", "disc 2 10" (10% off line 2), "disc 10" (10% off the sale), "hold", "pay"; anything else finds a medicine
   const runCommand = (text) => {
     const t = text.trim().toLowerCase().replace(/\s+/g, ' ');

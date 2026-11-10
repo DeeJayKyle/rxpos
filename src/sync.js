@@ -43,7 +43,7 @@ export function collectChanges(db, since) {
   for (const t of TABLES) for (const r of db[t]) {
     if (since && r.updatedAt <= since) continue;
     if (isUntouchedBase(r) || r.updatedAt === BASE_AT) continue; // built-in catalog medicines and untouched defaults: every device already has them
-    const { _base, ...rec } = r;  
+    const { _base, ...rec } = r;
     out.push({ t, id: r.id, rec, at: r.updatedAt });
   }
   for (const x of db._tomb) if (!since || x.at > since) out.push({ t: x.t, id: x.id, deleted: true, at: x.at });
@@ -102,7 +102,7 @@ export function toChanges(entries, db) {
     index[e.t] ??= new Map(db[e.t].map((r) => [String(r.id), r]));
     const r = index[e.t].get(String(e.id));
     if (!r) continue; // removed since: its delete is a later entry
-    const { _base, ...rec } = r;  
+    const { _base, ...rec } = r;
     out.push({ t: e.t, id: String(e.id), rec, at: r.updatedAt || e.at, op: e.op });
   }
   return out;

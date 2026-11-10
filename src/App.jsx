@@ -433,7 +433,7 @@ function Shell() {
       update((d) => {
         const u = d.users.find((x) => x.id === user.id);
         if (!u) return;
-        const { mustChangePassword, ...rest } = u;  
+        const { mustChangePassword, ...rest } = u;
         put(d, 'users', { ...rest, ...fields });
         audit(d, user, 'Password changed', user.name, branchId);
       });

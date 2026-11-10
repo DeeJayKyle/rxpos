@@ -114,7 +114,7 @@ export function Spotlight() {
   const go = (n, d = n > i ? 1 : -1) => { setDir(d); setI((n + slides.length) % slides.length); };
   const next = () => go(i + 1, 1), prev = () => go(i - 1, -1);
   useEffect(() => { if (idle) { setI(0); setPaused(false); } }, [idle]);
-  useEffect(() => { if (!idle || paused || slides.length < 2) return; const t = setTimeout(next, 8000); return () => clearTimeout(t); });  
+  useEffect(() => { if (!idle || paused || slides.length < 2) return; const t = setTimeout(next, 8000); return () => clearTimeout(t); });
   useEffect(() => {
     if (!idle) return;
     const onKey = (e) => { if (e.key === 'ArrowRight') next(); else if (e.key === 'ArrowLeft') prev(); else if (e.key === ' ') { e.preventDefault(); setPaused((v) => !v); } };

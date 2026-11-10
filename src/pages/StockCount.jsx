@@ -339,7 +339,7 @@ function CountRow({ p, item, blind, readOnly, onSave, focusNext }) {
     });
     for (const l of item?.lines || []) if (!out.some((o) => o.batchId === l.batchId && l.batchId)) out.push({ ...l, key: l.key || l.batchId || l.batch, sysNow: 0 });
     return out;
-  }, [sys, item, p.cost]);  
+  }, [sys, item, p.cost]);
   const [draft, setDraft] = useState({});
   const [adding, setAdding] = useState(null);
   useEffect(() => setDraft({}), [item?.at]);

@@ -163,7 +163,7 @@ export default function Chat() {
     const mine = m.fromId === user.id && !m.call;
     if (mine && age(m) < UNSEND_HOURS && !m.deleted) {
       const forAll = await ask({ title: 'Delete message?', message: 'Delete it for everyone, or only hide it on this device?', confirmText: 'Delete for everyone', danger: true });
-      if (forAll) { update((d) => { const x = d.messages.find((y) => y.id === m.id); if (x) { const { attachment, replyTo: _r, ...rest } = x; put(d, 'messages', { ...rest, text: '', deleted: true, deletedAt: now() }); } }); setTimeout(syncNow, 300); return; }  
+      if (forAll) { update((d) => { const x = d.messages.find((y) => y.id === m.id); if (x) { const { attachment, replyTo: _r, ...rest } = x; put(d, 'messages', { ...rest, text: '', deleted: true, deletedAt: now() }); } }); setTimeout(syncNow, 300); return; }
       if (forAll === false && await ask({ title: 'Delete just for you?', message: 'Others will still see it.', confirmText: 'Delete for me' })) removeForMe(m);
       return;
     }

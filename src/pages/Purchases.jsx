@@ -244,7 +244,7 @@ export function AddStock() {
     const dup = products.find((x) => x.id !== product.id && x.name.trim().toLowerCase() === name.toLowerCase());
     if (dup) return toast(`"${dup.name}" is already in your medicine list`, 'warn');
     const base = db.products.find((x) => x.id === product.id) || product;
-    const { stock, totalStock, batch, expiry, ...rec } = { ...base, ...{ batch: base.batch, expiry: base.expiry } };  
+    const { stock, totalStock, batch, expiry, ...rec } = { ...base, ...{ batch: base.batch, expiry: base.expiry } };
     try { await update((d) => { put(d, 'products', { ...rec, batch: base.batch, expiry: base.expiry, name }); audit(d, user, 'Medicine renamed', `${product.name} → ${name}`, branchId); }); }
     catch (err) { return toast('The name was NOT changed: ' + err.message, 'error'); }
     setRenaming(null); toast(`Renamed to ${name}`);
@@ -293,7 +293,7 @@ export function AddStock() {
     if (!form.lines.some((l) => l.productId)) return toast('Add at least one medicine before saving a draft', 'warn');
     const supplier = db.suppliers.find((x) => x.id === form.supplierId);
     const { draftId, draftStartedAt, ...rest } = form;
-    const scan = scanned ? (({ pages: _shown, pagePaths, ...meta }) => ({ ...meta, pages: pagePaths || [], unclear: toCheck(rest.lines) }))(scanned) : undefined;  
+    const scan = scanned ? (({ pages: _shown, pagePaths, ...meta }) => ({ ...meta, pages: pagePaths || [], unclear: toCheck(rest.lines) }))(scanned) : undefined;
     const rec = deliveryDraft(rest, { id: draftId || uid(), user, branchId, supplierName: supplier?.name, total, startedAt: draftStartedAt, scan });
     try { await update((d) => { put(d, 'drafts', rec); }); } catch (err) { return toast('The draft was NOT saved: ' + err.message, 'error'); }
     toast(`Delivery saved as a draft${scanned && !scan.pages.length ? ' (the invoice photos stay on this device only)' : ''}. Find it in Purchase History → Drafts.`);
@@ -716,7 +716,7 @@ function PurchaseEditor({ purchase, onClose }) {
           mv(o.productId, qty - o.qty, batchId);
         }
         if (batchId && cost !== o.cost) { const b = d.batches.find((x) => x.id === batchId); if (b) put(d, 'batches', { ...b, cost }); }
-        const { key, orig, removed, ...rest } = i;  
+        const { key, orig, removed, ...rest } = i;
         items.push({ ...rest, qty, cost, batchId });
       }
       // lines added on this edit (or a line whose medicine was corrected): new stock into their batch
@@ -724,7 +724,7 @@ function PurchaseEditor({ purchase, onClose }) {
         const qty = Math.max(0, Math.round(Number(i.qty) || 0)), cost = Number(i.cost) || 0;
         const b = addBatch(d, { productId: i.productId, batch: i.batch, expiry: i.expiry, cost });
         mv(i.productId, qty, b.id, i.orig == null ? 'line added' : 'medicine corrected');
-        const { key, orig, removed, ...rest } = i;  
+        const { key, orig, removed, ...rest } = i;
         items.push({ ...rest, name: products.find((x) => x.id === i.productId)?.name || i.name, qty, cost, batchId: b.id });
       }
       const newTotal = items.reduce((a, i) => a + i.qty * i.cost, 0);

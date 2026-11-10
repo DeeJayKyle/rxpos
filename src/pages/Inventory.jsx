@@ -488,7 +488,7 @@ export function PacksEditor({ product, onClose }) {
     if (new Set(packs.map((k) => k.name.toLowerCase())).size !== packs.length) return toast('Each pack needs its own name', 'warn');
     update((d) => {
       const cur = d.products.find((x) => x.id === product.id) || product;
-      const { stock, totalStock, ...rest } = cur;  
+      const { stock, totalStock, ...rest } = cur;
       put(d, 'products', { ...rest, packs });
       audit(d, user, 'Pack sizes changed', `${product.name}: ${packs.map((k) => `${k.name} = ${k.size} ${unit}`).join(', ') || 'none'}`, branchId);
     });
