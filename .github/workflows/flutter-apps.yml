@@ -24,7 +24,7 @@ concurrency:
 
 env:
   FLUTTER_VERSION: '3.47.9'
-  VERSION: 2.0.${{ github.run_number }} # 2.0.x, so the new apps never look older than the React app's 1.7.x
+  VERSION: 2.1.${{ github.run_number }} # 2.1.x (2.0.x before November 2026), so the new apps never look older than the React app
 
 jobs:
   test:

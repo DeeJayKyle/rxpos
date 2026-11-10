@@ -100,7 +100,7 @@ git tag -f v1.0.0 && git push origin v1.0.0
 
 GitHub Actions then builds and attaches `RxPOS.Setup.1.0.0.exe`, `RxPOS-Portable-1.0.0.exe`, `RxPOS-Android.apk`,
 `RxPOS-GooglePlay.aab` and `RxPOS-Hub.zip` (about 10 minutes: GitHub → Actions). Install them on the pharmacy devices.
-For a real new version instead, change `"version"` in `package.json` and tag `v1.1.0`.
+For a real new version instead, change `"version"` in `package.json` and tag `v1.8.0` (the next number after the last release).
 
 ## 7. Backups and restoring
 
