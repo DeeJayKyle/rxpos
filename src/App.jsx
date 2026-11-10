@@ -300,11 +300,13 @@ function ClockPill() {
     : syncStatus.lastSync ? (pending ? `${pending} change(s) on their way · ` : '') + 'Up to date ' + new Date(syncStatus.lastSync).toLocaleTimeString() : 'Connecting…');
   const label = s === 'off' && !pending ? 'On this device' : storageIssue ? 'Needs attention' : syncStatus.expired ? 'Sign in again' : attention ? 'Needs attention'
     : !online || s === 'offline' ? ['Offline', waiting].filter(Boolean).join(' · ') : s === 'syncing' ? 'Syncing…' : waiting || 'Synced';
+  const clockTime = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }), clockDate = now.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' });
   const click = () => (syncStatus.expired ? setUser(null) : storageIssue || syncStatus.rejected > 0 ? navigate('/device') : syncNow());
   return (
-    <button className={'pill clock ' + tone} title={tip} aria-label={`${now.toLocaleTimeString()}. ${label}. ${tip}`} onClick={click}>
-      <i /><span className="clock-state" aria-live="polite">{label}</span><span className="clock-time">{now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
-      <span className="clock-date">{now.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })}</span>
+    // step 24: the spoken name starts with the words on the pill (axe label-content-name-mismatch), then the detail
+    <button className={'pill clock ' + tone} title={tip} aria-label={`${label} ${clockTime} ${clockDate}. ${tip}`} onClick={click}>
+      <i /><span className="clock-state" aria-live="polite">{label}</span>{' '}<span className="clock-time">{clockTime}</span>{' '}
+      <span className="clock-date">{clockDate}</span>
     </button>
   );
 }

@@ -78,7 +78,7 @@ export default function Reports() {
           {db.branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
         </select>
       )}
-      <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /><span>to</span><input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+      <input type="date" aria-label="From" value={from} onChange={(e) => setFrom(e.target.value)} /><span>to</span><input type="date" aria-label="To" value={to} onChange={(e) => setTo(e.target.value)} />
     </div>
   );
 

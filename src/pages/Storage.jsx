@@ -38,7 +38,7 @@ export function WeatherCard({ compact }) {
           </div>
           {advice.map(([tone, text], i) => <div key={i} className={'advice ' + tone}><AlertTriangle size={14} />{text}</div>)}
         </>
-      ) : err ? <div className="row gap"><p className="muted small grow">{err}</p><button className="btn sm ghost" onClick={load}><RefreshCw size={14} />Try again</button></div> : <div className="skeleton" style={{ height: 64 }} aria-label="Loading weather" />}
+      ) : err ? <div className="row gap"><p className="muted small grow">{err}</p><button className="btn sm ghost" onClick={load}><RefreshCw size={14} />Try again</button></div> : <div className="skeleton" style={{ height: 64 }} role="status" aria-label="Loading weather" />}
       {err && cur && <p className="muted small">{err}</p>}
     </div>
   );

@@ -868,13 +868,18 @@ class _ProductPanel extends StatelessWidget {
                                         style: const TextStyle(fontWeight: FontWeight.w700),
                                       ),
                                     ),
-                                    InkWell(
-                                      key: Key('star-${p.id}'),
-                                      onTap: onStar == null ? null : () => onStar!(p),
-                                      child: Icon(
-                                        favs.contains(p.id) ? Icons.star : Icons.star_border,
-                                        size: 18,
-                                        color: favs.contains(p.id) ? Colors.amber.shade700 : t.hintColor,
+                                    // step 24: a screen reader says what the star does (it was an unnamed button)
+                                    Semantics(
+                                      button: true,
+                                      label: favs.contains(p.id) ? 'Remove ${p.name} from favourites' : 'Add ${p.name} to favourites',
+                                      child: InkWell(
+                                        key: Key('star-${p.id}'),
+                                        onTap: onStar == null ? null : () => onStar!(p),
+                                        child: Icon(
+                                          favs.contains(p.id) ? Icons.star : Icons.star_border,
+                                          size: 18,
+                                          color: favs.contains(p.id) ? Colors.amber.shade700 : t.hintColor,
+                                        ),
                                       ),
                                     ),
                                   ],

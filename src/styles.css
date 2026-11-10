@@ -224,7 +224,7 @@ th, td { padding: 11px 14px; border-bottom: 1px solid var(--border); vertical-al
 tbody tr:last-child td { border-bottom: 0; }
 tbody tr { transition: background .1s; }
 tbody tr:hover { background: color-mix(in srgb, var(--primary-soft) 35%, transparent); }
-tr.dim td { opacity: .5; }
+tr.dim { opacity: 1; } tr.dim td { color: var(--muted); font-style: italic; } /* step 24: dimmed rows stay readable (WCAG AA contrast) */
 tr.edited td { background: var(--warn-soft); }
 td.actions { text-align: right; white-space: nowrap; }
 td.actions .btn { margin-left: 4px; }
@@ -996,7 +996,7 @@ html.is-android, html.is-android body { overscroll-behavior-y: contain; }
 .sale-tab-x { border-radius: 0 99px 99px 0; padding: 6px 8px; color: var(--muted); background: var(--warn-soft); }
 .sale-tab-x:hover { color: var(--danger); }
 .cart-line.cursor { outline: 2px solid var(--primary); outline-offset: -2px; border-radius: 10px; }
-.chip kbd, .mode-switch kbd { margin-left: 6px; font-size: 10px; opacity: .6; }
+.chip kbd, .mode-switch kbd { margin-left: 6px; font-size: 10px; opacity: 1; color: var(--muted); } /* step 24: readable (WCAG AA contrast) */
 table.keys td { padding: 7px 6px; } table.keys td:first-child { white-space: nowrap; width: 1%; }
 .count-stats { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
 
@@ -2135,7 +2135,7 @@ tr.line-removed td { opacity: .55; }
 .nowrap { flex-wrap: nowrap; }
 
 /* Add Stock (and Edit purchase) laid out like a printed supplier invoice */
-.invoice-sheet { --paper: var(--card, #fff); --ink: var(--text, #0f172a); --rule: color-mix(in srgb, var(--ink) 14%, transparent); background: var(--paper); border: 1px solid var(--rule); border-radius: 6px; box-shadow: 0 1px 0 var(--rule), 0 18px 40px -24px rgba(15, 23, 42, .35); padding: 28px 32px 22px; }
+.invoice-sheet { --paper: var(--surface, #fff); --ink: var(--text, #0f172a); --rule: color-mix(in srgb, var(--ink) 14%, transparent); background: var(--paper); border: 1px solid var(--rule); border-radius: 6px; box-shadow: 0 1px 0 var(--rule), 0 18px 40px -24px rgba(15, 23, 42, .35); padding: 28px 32px 22px; }
 .invoice-sheet.flat { box-shadow: none; padding: 0; border-radius: 6px; }
 .invoice-caption { display: block; font-size: 10.5px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--muted, #64748b); margin-bottom: 4px; }
 .invoice-head { display: grid; grid-template-columns: 1fr minmax(260px, 340px); gap: 28px; padding-bottom: 18px; margin-bottom: 14px; border-bottom: 3px double var(--rule); }

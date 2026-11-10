@@ -352,6 +352,32 @@ void main() {
     await done(tester);
   });
 
+  for (final (look, saved) in [('the standard look', ''), ('the dark theme (RxPOS Night)', '{"theme":"dark","design":"","surface":"flat","v":2}')]) {
+    testWidgets('step 24: accessibility in $look: every tap target on the main screens has a label and text has enough contrast', (tester) async {
+      await tester.runAsync(signedIn);
+      await tester.runAsync(() => RecordStore(db).update((d) => d.put('insurers', {'id': 'i1', 'name': 'Jubilee Health', 'schemes': [{'id': 'gold', 'name': 'Gold', 'copayPct': 10}]})));
+      if (saved.isNotEmpty) await tester.runAsync(() => db.into(db.kv).insertOnConflictUpdate(KvCompanion.insert(k: 'device:look', v: saved)));
+      final semantics = tester.ensureSemantics();
+      await start(tester);
+      final problems = <String>[];
+      Future<void> audit(String screen) async {
+        for (final (name, g) in [('labels', labeledTapTargetGuideline), ('contrast', textContrastGuideline)]) {
+          final r = await g.evaluate(tester);
+          if (!r.passed) problems.add('$screen · $name: ${r.reason}');
+        }
+      }
+
+      await audit('Dashboard');
+      for (final screen in ['POS – Retail', 'Sales History', 'Customers', 'Insurers', 'Medicine List', 'Inventory', 'Add Stock', 'Finance', 'Reports', 'Settings']) {
+        await navTo(tester, screen);
+        await audit(screen);
+      }
+      semantics.dispose();
+      expect(problems, isEmpty, reason: problems.join('\n\n'));
+      await done(tester);
+    });
+  }
+
   testWidgets('a sale can be held and resumed', (tester) async {
     await tester.runAsync(signedIn);
     await start(tester);

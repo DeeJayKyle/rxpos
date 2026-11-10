@@ -633,8 +633,7 @@ export default function POS({ mode = 'retail' }) {
             const d = p.expiry ? daysUntil(p.expiry) : 999;
             return (
               <div key={p.id} className="product-wrap">
-              <button className={'product' + (p.stock <= 0 ? ' disabled' : '') + (i === active && !touch ? ' active' : '')} onClick={() => add(p)} onMouseEnter={() => setActive(i)}
-                aria-label={`${p.name}${p.generic ? ', ' + p.generic : ''}${p.form ? ', ' + p.form : ''}. ${fmt(priceOf(p))} per ${(p.unit || 'unit').toLowerCase()}. ${p.stock <= 0 ? 'Out of stock' : formatQty(p.stock, (p.unit || 'unit').toLowerCase() + 's') + ' in stock'}`}>
+              <button className={'product' + (p.stock <= 0 ? ' disabled' : '') + (i === active && !touch ? ' active' : '')} onClick={() => add(p)} onMouseEnter={() => setActive(i)}>
                 <strong>{p.name.replace(/\//g, '/\u200b')}</strong>
                 <small className="muted">{[p.generic, p.form].filter(Boolean).join(' · ')}</small>
                 <div className="row between">
@@ -688,11 +687,11 @@ export default function POS({ mode = 'retail' }) {
             </div>
           )}
         </div>
-        <div className="sale-tabs" role="tablist" aria-label="Sales">
-          <button role="tab" aria-selected="true" className="sale-tab on"><ShoppingCart size={13} />{cart.length ? `Now · ${fmt(total)}` : 'New sale'}</button>
+        <div className="sale-tabs" role="group" aria-label="Sales">
+          <button aria-current="true" className="sale-tab on"><ShoppingCart size={13} />{cart.length ? `Now · ${fmt(total)}` : 'New sale'}</button>
           {held.map((h, i) => (
             <span key={h.id} className="sale-tab-wrap">
-              <button role="tab" aria-selected="false" className="sale-tab" title={`Carry on with this sale${i === 0 ? ' (Alt+→)' : i === held.length - 1 ? ' (Alt+←)' : ''}`} onClick={() => resumeSale(h.id)}>
+              <button className="sale-tab" title={`Carry on with this sale${i === 0 ? ' (Alt+→)' : i === held.length - 1 ? ' (Alt+←)' : ''}`} onClick={() => resumeSale(h.id)}>
                 <PauseCircle size={13} />{heldLabel(h)} · {fmt(heldTotal(h))}
               </button>
               <button className="sale-tab-x" aria-label={`Discard held sale ${heldLabel(h)}`} title="Discard this held sale" onClick={async () => { if (await ask({ title: 'Discard this held sale?', message: `${h.cart.length} item(s) · ${fmt(heldTotal(h))}`, confirmText: 'Discard', danger: true })) update((d) => { del(d, 'drafts', h.id); audit(d, user, 'Draft discarded', `Held sale "${heldLabel(h)}" (${h.cart.length} items, ${fmt(heldTotal(h))})`, branchId); }).catch((e) => toast(e.message, 'error')); }}><X size={11} /></button>

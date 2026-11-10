@@ -246,7 +246,7 @@ export function BarChart({ data, series, fmt, height = 180, empty = 'Nothing rec
       <ChartFrame max={max} height={height} empty={none && empty} first={data[0]?.label} last={data[data.length - 1]?.label}>
         <div className="bars">
           {data.map((d, n) => (
-            <div key={d.label} className={'bar-group' + (hover === n ? ' on' : '')} onMouseEnter={() => setHover(n)} onFocus={() => setHover(n)} tabIndex={0}
+            <div key={d.label} className={'bar-group' + (hover === n ? ' on' : '')} onMouseEnter={() => setHover(n)} onFocus={() => setHover(n)} tabIndex={0} role="img"
               aria-label={`${d.label}: ${d.values.map((v, i) => `${series[i].name} ${fmt(v)}`).join(', ')}`}>
               {d.values.map((v, i) => <div key={i} className={'bar-fill s' + (i + 1)} style={{ height: v > 0 ? `max(2px, ${(v / max) * 100}%)` : 0 }} />)}
               {hover === n && (

@@ -19,7 +19,7 @@ export function Expenses() {
   return (
     <CrudPage
       title="Expenses" table="expenses" filter={inMonth} rowLocked={rowLocked}
-      headExtra={<><input type="month" value={month} onChange={(e) => setMonth(e.target.value)} /><span className="muted">Total {fmt(total)}</span></>}
+      headExtra={<><input type="month" aria-label="Month" value={month} onChange={(e) => setMonth(e.target.value)} /><span className="muted">Total {fmt(total)}</span></>}
       blank={{ date: today(), bankId: CASH, method: 'Cash', recordedBy: user.name }}
       fields={[
         { key: 'date', label: 'Date', type: 'date', required: true },
@@ -217,8 +217,8 @@ export function CashBook() {
       <div className="page-head">
         <h1>Cash Book</h1>
         <div className="row gap">
-          <select value={account} onChange={(e) => setAccount(e.target.value)}>{db.banks.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select>
-          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /><input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+          <select aria-label="Account" value={account} onChange={(e) => setAccount(e.target.value)}>{db.banks.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select>
+          <input type="date" aria-label="From" value={from} onChange={(e) => setFrom(e.target.value)} /><input type="date" aria-label="To" value={to} onChange={(e) => setTo(e.target.value)} />
           <button className="btn ghost" onClick={() => downloadFile('cash-book.csv', toCSV(rows.map(({ date, desc, kind, in: i, out, bal: b }) => ({ date, description: desc, type: kind, in: i, out, balance: b }))), 'text/csv')}>Export CSV</button>
         </div>
       </div>
