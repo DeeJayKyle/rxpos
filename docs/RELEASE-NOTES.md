@@ -1,6 +1,6 @@
 # RxPOS release notes
 
-## React (classic) app 1.1.0 · Flutter app 2.1.0 · cloud and Hub · November 2026
+## React (classic) app 1.8.0 · Flutter app 2.1.0 · cloud and Hub · November 2026
 
 Everything in this release came from the review (`docs/REVIEW.md`) and the step-by-step plan (`docs/WORKPLAN.md`),
 each step approved by the owner. The log in the workplan lists every commit and the tests run for it.

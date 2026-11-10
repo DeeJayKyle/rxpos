@@ -232,3 +232,7 @@ Server-side steps (Worker, `worker/`) protect **both** apps at once. Client-side
 - 2026-11-10 · Step 27 · `5c38a71` · Owner's choices: React 1.1.0, Flutter 2.1.0+2; a pull request the owner merges;
   then the version tags, the app builds and the cloud deploy. Release notes: docs/RELEASE-NOTES.md (deploy the cloud
   first; Hub PCs need the new Windows installer).
+- 2026-11-10 · Release numbers · Found before tagging: the classic app's last release is v1.7.0 (main's package.json
+  still said 1.0.0), so 1.1.0 would have looked older than what pharmacies run. The classic app is 1.8.0 instead. The
+  Flutter apps take their version from the build workflow (2.0.<run>), now 2.1.<run>; the Flutter release workflow
+  publishes flutter-v2.1 from a "Flutter apps" run number given when it is started.
