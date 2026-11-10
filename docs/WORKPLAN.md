@@ -39,7 +39,7 @@ Server-side steps (Worker, `worker/`) protect **both** apps at once. Client-side
 | 14 | Per-field merge for master data (products, customers, suppliers) | 2.5 | ✅ (batches too) |
 | 15 | Per-tenant sequence and record counters on the server | 2.6 | ✅ (record count only; sequence was already indexed) |
 | 16 | Hub: shared sync/permission core over SQLite, or retire (per step 0) | 1.4 | ✅ (runs the cloud's own code) |
-| 17 | ESLint + Prettier; split `worker/index.js` into route modules; split `POS.jsx`; widen typecheck | 3 | ⏳ |
+| 17 | ESLint + Prettier; split `worker/index.js` into route modules; split `POS.jsx`; widen typecheck | 3 | ✅ ESLint only (owner's choice); the rest not done |
 
 ## Phase 4 — Product upgrades (month 3+)
 | # | Step | Review ref | Status |
@@ -147,3 +147,10 @@ Server-side steps (Worker, `worker/`) protect **both** apps at once. Client-side
   `--hub` PCs need the new installer (noted for step 27). RXPOS_TEST_HUB=1: 18 suites / 274 checks pass on the hub (in
   CI too); hub-move 12; full JS suite on the Cloudflare cloud 1,858 passed, 6 failed (the known 6). Not checked here:
   the Docker image build (no Docker in this environment).
+- 2026-11-10 · Step 17 · `e352df0`, `77beb90`, `bd26a07` · Owner's choice: ESLint only (no Prettier reformat, no
+  file splits, typecheck unchanged). ESLint 10 flat config over app, cloud, hub, Windows shell, tests, tools; `npm run
+  lint` (--max-warnings 0) in the build workflow's quick job. Fixed what it found: unused code (incl. a never-used
+  useMemo over every product in Purchases), a test (v36) that fetched but never checked the cloud's sales, a crash in a
+  tools/rxtera snippet, a hook false alarm (Scan.jsx), an error without its cause; four intentional hook dependencies
+  marked with reasons. Lint 0 problems; unit tests pass; full JS suite 1,859 passed, 6 failed (the known 6); hub suites
+  274/274.
