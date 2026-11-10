@@ -1,7 +1,6 @@
 // Server-side permission enforcement (security review Phase 0/1).
 //   0.5 only an admin may create, edit, disable, delete or promote-to an administrator account.
 //   node v23-perms.mjs <base> <ownerKey> <outDir>
-import { CHROME } from './chrome.mjs';
 const [base, ownerKey] = process.argv.slice(2);
 let pass = 0, fail = 0;
 const check = (n, ok, x = '') => { ok ? pass++ : fail++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${n}${x !== '' ? '  ' + String(x).slice(0, 180) : ''}`); };

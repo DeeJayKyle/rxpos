@@ -75,7 +75,7 @@ export default function Auth() {
         return;
       } catch (err) {
         if (/more than one pharmacy/i.test(err.message)) { setNeedCode(true); throw err; }
-        if (isWeb && networkFailure(err)) throw new Error(WEB_OFFLINE);
+        if (isWeb && networkFailure(err)) throw new Error(WEB_OFFLINE, { cause: err });
         if (!(networkFailure(err) && local && sameStore)) throw err;
         // the cloud can't be reached: fall back to this device's copy of the account
       }

@@ -71,7 +71,7 @@ check('Stock Card choices are only medicines in stock', sopts === 3, sopts);
 await go(A, '/pos');
 const widths = await A.evaluate(() => ({ cart: document.querySelector('.pos-cart').getBoundingClientRect().width, prods: document.querySelector('.pos-products').getBoundingClientRect().width }));
 check('POS "Current sale" panel is wider (≥ 470 px at 1366 px)', widths.cart >= 470, JSON.stringify(widths));
-for (const id of ['cat-1', 'cat-2', 'cat-3']) {
+for (let i = 0; i < 3; i++) {
   await A.evaluate(() => { const i = document.querySelector('.pos-search input, input.search'); i.value = ''; });
 }
 await A.evaluate(() => { const ps = [...document.querySelectorAll('.product:not(.disabled)')].slice(0, 3); ps.forEach((p) => p.click()); });
@@ -103,7 +103,6 @@ await go(A, '/sales');
 check('edited sale is marked "edited"', /edited/i.test(await A.evaluate(() => document.querySelector('tbody tr')?.innerText || '')));
 
 // #2 edit a purchase: 20 → 15
-const p0 = await stockOf('Item three') ?? await stockOf(await A.evaluate(() => ''));
 await go(A, '/purchases');
 await A.evaluate(() => [...document.querySelectorAll('tbody tr button')].find((x) => x.textContent.includes('Edit')).click()); await wait(600);
 await A.evaluate(() => { const qty = [...document.querySelectorAll('.modal tbody tr')][0].querySelector('input[aria-label="Quantity"]'); const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; set.call(qty, '15'); qty.dispatchEvent(new Event('input', { bubbles: true })); });
@@ -112,7 +111,7 @@ await A.evaluate(() => [...document.querySelectorAll('.modal button')].find((x) 
 await go(A, '/purchases');
 check('edited purchase total updated (15 × 300 = 4,500)', /4,500/.test(await A.evaluate(() => document.querySelector('tbody tr')?.innerText || '')));
 await go(A, '/stock-card');
-const third = await A.evaluate(() => { const s = document.querySelector('.page-head select'); const o = [...s.options].find((x) => /three|cat/i.test(x.text)) || s.options[2]; return o?.text; });
+await A.evaluate(() => { const s = document.querySelector('.page-head select'); const o = [...s.options].find((x) => /three|cat/i.test(x.text)) || s.options[2]; return o?.text; });
 
 // #7 inventory edit: change the first item's quantity by +5
 await go(A, '/inventory');

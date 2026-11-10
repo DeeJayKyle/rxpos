@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Thermometer, Droplets, Wind, RefreshCw, Plus, MapPin, Snowflake, Warehouse, Sun as SunIcon, AlertTriangle, Trash2 } from 'lucide-react';
 import { useStore, uid, put, del, audit, now, today, dayOf } from '../store.jsx';
 import { Modal, Empty, Stat } from '../ui.jsx';

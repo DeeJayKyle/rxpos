@@ -34,6 +34,8 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - name: Lint (ESLint, eslint.config.js)
+        run: npm run lint
       - name: Unit tests
         run: for f in tests/unit-*.mjs; do echo "== $f =="; node "$f" || exit 1; done
       - name: Type check (storage and sync contracts)

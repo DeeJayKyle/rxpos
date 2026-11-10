@@ -60,7 +60,8 @@ await p.evaluate(() => document.querySelector('.product')?.click()); await wait(
 await p.keyboard.press('F9'); await wait(1500);
 check('a sale can be made', await until(p, () => /Sale complete/.test(document.body.innerText), 8000));
 await p.keyboard.press('Escape'); await wait(2500); // let it reach the cloud
-const sales = (await owner('/tenants/' + tid + '/records?table=sales').catch(() => null));
+const sales = (await owner('/tenants/' + tid + '/records?t=sales').catch(() => null));
+check('…and it reached the cloud', sales?.total >= 1, JSON.stringify(sales)?.slice(0, 80));
 const stored = await p.evaluate(async () => ({ db: (await indexedDB.databases?.() || []).map((d) => d.name), keys: Object.keys(window.localStorage), caches: (await caches.keys()).length }));
 check('after working: no on-device database and no caches', !stored.db.includes('pharmapos') && stored.caches === 0, JSON.stringify(stored));
 check('after working: localStorage holds appearance preferences only', stored.keys.every((k) => /^(pharmapos-theme|rxpos-theme-mode|rxpos-accent|rxpos-surface-style|rxpos-rail|pharmapos-nav|rxpos-tip:|rxpos-device|rxpos-sound|rxpos-pos-favs:|rxpos-weekly-|rxpos-announced)/.test(k)), stored.keys.join(','));

@@ -47,6 +47,7 @@ export default function Dashboard() {
       (byMonth[mo] ??= { n: 0, total: 0, exp: 0, gp: 0, purch: 0 }); byMonth[mo].purch += p.total || 0;
     }
     return { byDay, byMonth, top: Object.values(top).map((x) => ({ ...x, profit: x.amount - x.cost })) };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- day: today's figures start again at midnight
   }, [db.sales, db.expenses, db.purchases, branchId, day]);
   const top = [...m.top].sort((a, b) => b[topBy] - a[topBy]).slice(0, 10);
   const topMax = Math.max(1, ...top.map((x) => x[topBy]));

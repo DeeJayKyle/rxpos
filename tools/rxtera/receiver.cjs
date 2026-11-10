@@ -1,4 +1,4 @@
-const http = require('http'), fs = require('fs'), path = require('path'), crypto = require('crypto');
+const http = require('http'), fs = require('fs'), path = require('path');
 const dir = process.argv[4]; fs.mkdirSync(dir, { recursive: true });
 const token = process.argv[2];
 http.createServer((req, res) => {

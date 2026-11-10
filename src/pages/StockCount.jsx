@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
-import { ClipboardCheck, Plus, Minus, ArrowLeft, Check, EyeOff, Eye, Search, ScanLine, Trash2, PackagePlus, Download, CheckCircle2, AlertTriangle, Play, Ban } from 'lucide-react';
+import { ClipboardCheck, Plus, Minus, ArrowLeft, Check, EyeOff, Eye, ScanLine, Trash2, PackagePlus, Download, CheckCircle2, AlertTriangle, Play, Ban } from 'lucide-react';
 import { useStore, uid, now, today, put, del, move, addBatch, audit, downloadFile, toCSV, daysUntil } from '../store.jsx';
 import { Modal, Tabs, Empty, PdfButton } from '../ui.jsx';
 import { ask, toast } from '../feedback.jsx';
@@ -339,7 +339,7 @@ function CountRow({ p, item, blind, readOnly, onSave, focusNext }) {
     });
     for (const l of item?.lines || []) if (!out.some((o) => o.batchId === l.batchId && l.batchId)) out.push({ ...l, key: l.key || l.batchId || l.batch, sysNow: 0 });
     return out;
-  }, [sys, item, p.cost]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [sys, item, p.cost]);  
   const [draft, setDraft] = useState({});
   const [adding, setAdding] = useState(null);
   useEffect(() => setDraft({}), [item?.at]);

@@ -318,7 +318,7 @@ const countOf = (d) => Object.fromEntries(TABLES.map((t) => [t, d[t].filter((r) 
  * same transaction, so nothing waiting is lost.
  */
 async function migrateLegacy(base, fill, cfg) {
-  let saved = null;
+  let saved;
   const parts = await Promise.all(PARTS.map((k) => idbGet('t:' + k)));
   if (parts.some((p) => p !== undefined)) saved = Object.fromEntries(PARTS.map((k, i) => [k, parts[i]]).filter(([, v]) => v !== undefined));
   else saved = (await idbGet('db')) || null; // data saved by version 1.0
@@ -362,7 +362,9 @@ export function StoreProvider({ children }) {
   const [syncCfg, setSyncCfgState] = useState(null);
   const [overrideRevision, setOverrideRevision] = useState(0);
   const localSettingsKey = overrideKey(syncCfg?.url, syncCfg?.tenant || syncCfg?.slug);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- overrideRevision: re-read this device's overrides after an edit
   const pharmacyOverrides = useMemo(() => readOverrides(localSettingsKey), [localSettingsKey, overrideRevision]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- only the shared settings matter here, not every record change
   const effectiveSettings = useMemo(() => db ? { ...db.settings, ...pharmacyOverrides } : null, [db?.settings, pharmacyOverrides]);
   const viewDb = useMemo(() => db ? { ...db, settings: effectiveSettings } : null, [db, effectiveSettings]);
   const [syncStatus, setSyncStatus] = useState({ state: 'off' });

@@ -88,7 +88,7 @@ export default function Calendar() {
 
   const save = (e) => {
     e.preventDefault();
-    const { _new, kind, ...rec } = edit; // eslint-disable-line no-unused-vars
+    const { _new, kind, ...rec } = edit;  
     update((d) => { put(d, 'events', { ...rec, title: rec.title.trim(), createdBy: rec.createdBy || user.name }); audit(d, user, _new ? 'Calendar event added' : 'Calendar event changed', `${rec.title} · ${rec.date}`, branchId); });
     toast(_new ? 'Event added. It syncs to every device and subscribed calendars.' : 'Event saved');
     setDay(rec.date); setEdit(null);

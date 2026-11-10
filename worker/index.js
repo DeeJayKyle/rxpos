@@ -893,7 +893,7 @@ async function sendSms(env, { to, message }) {
 const SECRET_FIELDS = ['MTN_SUBSCRIPTION_KEY', 'MTN_API_USER', 'MTN_API_KEY', 'MTN_ENV', 'MTN_TARGET', 'AIRTEL_CLIENT_ID', 'AIRTEL_CLIENT_SECRET', 'AIRTEL_ENV', 'AT_USERNAME', 'AT_API_KEY', 'AT_SENDER_ID'];
 const KEEP_ON_RESET = "('products','formulations','expenseCategories','license','roles','branches','users','settings')";
 const TABLE_RE = /^[A-Za-z]{2,30}$/;
-const publicUser = ({ hash, salt, algo, iter, ...u }) => u; // eslint-disable-line no-unused-vars
+const publicUser = ({ hash, salt, algo, iter, ...u }) => u;  
 
 async function passwordFields(env, pw) {
   if (String(pw).length < 8) throw httpError(400, 'Use a password of at least 8 characters.');

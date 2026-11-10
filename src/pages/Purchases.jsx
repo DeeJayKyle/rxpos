@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo, Fragment } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Pencil, Trash2, ScanText, Camera, FileUp, Loader2, AlertTriangle, CheckCircle2, X, Plus, RotateCcw, Sparkles, GripVertical, ChevronLeft, ChevronRight } from 'lucide-react';
 import { DateInput, MedicinePicker, useDateFormat } from '../fields.jsx';
@@ -244,15 +244,12 @@ export function AddStock() {
     const dup = products.find((x) => x.id !== product.id && x.name.trim().toLowerCase() === name.toLowerCase());
     if (dup) return toast(`"${dup.name}" is already in your medicine list`, 'warn');
     const base = db.products.find((x) => x.id === product.id) || product;
-    const { stock, totalStock, batch, expiry, ...rec } = { ...base, ...{ batch: base.batch, expiry: base.expiry } }; // eslint-disable-line no-unused-vars
+    const { stock, totalStock, batch, expiry, ...rec } = { ...base, ...{ batch: base.batch, expiry: base.expiry } };  
     try { await update((d) => { put(d, 'products', { ...rec, batch: base.batch, expiry: base.expiry, name }); audit(d, user, 'Medicine renamed', `${product.name} → ${name}`, branchId); }); }
     catch (err) { return toast('The name was NOT changed: ' + err.message, 'error'); }
     setRenaming(null); toast(`Renamed to ${name}`);
   };
   const prices = useMemo(() => supplierPrices(db.purchases), [db.purchases]);
-  // The line dropdowns list this pharmacy's own and stocked medicines only (the 9,710-item catalog in every dropdown
-  // made typing slow on phones); anything in the catalog is still found with the search box above
-  const ownList = useMemo(() => products.filter((p) => !p.fromCatalog || p.stock > 0 || p.totalStock > 0 || !p._base).sort((a, b) => a.name.localeCompare(b.name)), [products]);
   const setLine = (key, patch) => setForm((f) => ({ ...f, lines: f.lines.map((l) => (l.key === key ? editLine(l, patch, priceAt(f.markup)) : l)) }));
   const replaceLine = (key, line) => setForm((f) => ({ ...f, lines: f.lines.map((l) => (l.key === key ? { ...line, key } : l)) }));
   const setMarkup = (markup) => setForm((f) => ({ ...f, markup, lines: f.lines.map((l) => (l.auto && l.derived ? editLine(l, { reprice: true }, priceAt(markup)) : l)) }));
@@ -296,7 +293,7 @@ export function AddStock() {
     if (!form.lines.some((l) => l.productId)) return toast('Add at least one medicine before saving a draft', 'warn');
     const supplier = db.suppliers.find((x) => x.id === form.supplierId);
     const { draftId, draftStartedAt, ...rest } = form;
-    const scan = scanned ? (({ pages: _shown, pagePaths, ...meta }) => ({ ...meta, pages: pagePaths || [], unclear: toCheck(rest.lines) }))(scanned) : undefined; // eslint-disable-line no-unused-vars
+    const scan = scanned ? (({ pages: _shown, pagePaths, ...meta }) => ({ ...meta, pages: pagePaths || [], unclear: toCheck(rest.lines) }))(scanned) : undefined;  
     const rec = deliveryDraft(rest, { id: draftId || uid(), user, branchId, supplierName: supplier?.name, total, startedAt: draftStartedAt, scan });
     try { await update((d) => { put(d, 'drafts', rec); }); } catch (err) { return toast('The draft was NOT saved: ' + err.message, 'error'); }
     toast(`Delivery saved as a draft${scanned && !scan.pages.length ? ' (the invoice photos stay on this device only)' : ''}. Find it in Purchase History → Drafts.`);
@@ -719,7 +716,7 @@ function PurchaseEditor({ purchase, onClose }) {
           mv(o.productId, qty - o.qty, batchId);
         }
         if (batchId && cost !== o.cost) { const b = d.batches.find((x) => x.id === batchId); if (b) put(d, 'batches', { ...b, cost }); }
-        const { key, orig, removed, ...rest } = i; // eslint-disable-line no-unused-vars
+        const { key, orig, removed, ...rest } = i;  
         items.push({ ...rest, qty, cost, batchId });
       }
       // lines added on this edit (or a line whose medicine was corrected): new stock into their batch
@@ -727,7 +724,7 @@ function PurchaseEditor({ purchase, onClose }) {
         const qty = Math.max(0, Math.round(Number(i.qty) || 0)), cost = Number(i.cost) || 0;
         const b = addBatch(d, { productId: i.productId, batch: i.batch, expiry: i.expiry, cost });
         mv(i.productId, qty, b.id, i.orig == null ? 'line added' : 'medicine corrected');
-        const { key, orig, removed, ...rest } = i; // eslint-disable-line no-unused-vars
+        const { key, orig, removed, ...rest } = i;  
         items.push({ ...rest, name: products.find((x) => x.id === i.productId)?.name || i.name, qty, cost, batchId: b.id });
       }
       const newTotal = items.reduce((a, i) => a + i.qty * i.cost, 0);

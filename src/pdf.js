@@ -23,7 +23,7 @@ export async function savePdf(name, doc) {
   return file;
 }
 
-const money = (fmt, n) => fmt(n).replace(/ /g, ' ');
+const money = (fmt, n) => fmt(n).replace(/\u00a0/g, ' '); // non-breaking spaces from number formatting: the PDF font has none
 
 /** A receipt (or proforma) as a PDF the width of the receipt paper (58 / 80 mm), or A4 */
 export async function receiptPdf(sale, { db, fmt }) {

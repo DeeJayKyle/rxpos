@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Crown, Plus, RefreshCw, KeyRound, PauseCircle, PlayCircle, Eraser, Copy, Smartphone, LogOut, Building2, ArrowLeft, Users, Database, SlidersHorizontal,
+import { Crown, Plus, RefreshCw, KeyRound, PauseCircle, PlayCircle, Eraser, Copy, Smartphone, LogOut, Building2, ArrowLeft, Users,
   Trash2, Download, Upload, Globe, Pencil, Search, ShieldAlert, MessageCircle, ExternalLink, Wand2, Eye, UserCog, Mail, LockKeyhole } from 'lucide-react';
 import { FEATURES, DEFAULT_FEATURES, DEFAULT_ROLES } from '../access.js';
 import { ownerApi, cleanUrl, cloudUrl, whatsappLink, ownerAuthConfig, ownerLogin, ownerGoogleLogin } from '../cloud.js';

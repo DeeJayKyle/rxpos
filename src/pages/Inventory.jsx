@@ -415,7 +415,7 @@ export function StockCard() {
 
 /** Admin & manager: edit an item's details and its batches (number, expiry, quantity) in one place */
 function InventoryEditor({ product, onClose }) {
-  const { db, fmt, update, user, batchesOf, branchId } = useStore();
+  const { fmt, update, user, batchesOf, branchId } = useStore();
   const [p, setP] = useState(() => ({ name: product.name, generic: product.generic || '', form: product.form || '', cost: product.cost || 0, wholesale: product.wholesale || 0, price: product.price || 0, reorder: product.reorder || 0, shelf: product.shelf || '' }));
   const [rows, setRows] = useState(() => batchesOf(product.id).filter((b) => b.qty !== 0).map((b) => ({ ...b, newQty: b.qty, newBatch: b.batch, newExpiry: b.expiry || '' })));
   const [reason, setReason] = useState('');
@@ -478,7 +478,7 @@ function InventoryEditor({ product, onClose }) {
  * units with its own price (blank = unit price × size). The POS can sell, and Add Stock receive, by pack.
  */
 export function PacksEditor({ product, onClose }) {
-  const { db, update, user, branchId, fmt } = useStore();
+  const { update, user, branchId, fmt } = useStore();
   const [rows, setRows] = useState(() => (product.packs?.length ? product.packs : [{ name: 'Strip', size: 10, price: '' }]).map((k) => ({ ...k, price: k.price ?? '' })));
   const unit = product.unit || 'Unit';
   const set = (n, patch) => setRows((r) => r.map((x, i) => (i === n ? { ...x, ...patch } : x)));
@@ -488,7 +488,7 @@ export function PacksEditor({ product, onClose }) {
     if (new Set(packs.map((k) => k.name.toLowerCase())).size !== packs.length) return toast('Each pack needs its own name', 'warn');
     update((d) => {
       const cur = d.products.find((x) => x.id === product.id) || product;
-      const { stock, totalStock, ...rest } = cur; // eslint-disable-line no-unused-vars
+      const { stock, totalStock, ...rest } = cur;  
       put(d, 'products', { ...rest, packs });
       audit(d, user, 'Pack sizes changed', `${product.name}: ${packs.map((k) => `${k.name} = ${k.size} ${unit}`).join(', ') || 'none'}`, branchId);
     });

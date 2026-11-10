@@ -12,7 +12,7 @@ const products = new Map([
 ]);
 const base = { id: 's1', number: 'R1', date: '2026-11-09T10:00:00Z', type: 'retail', status: 'completed', items: [{ id: 'p1', name: 'Amox', qty: 2, price: 1000 }], subtotal: 2000, discount: 0, tax: 0, total: 2000, paid: 2000 };
 const sale = (x = {}) => ({ ...base, ...x });
-const cashier = (p) => false && p; // no discount, no price edit
+const cashier = () => false; // no discount, no price edit
 const boss = () => true;
 const kinds = async (s, can = cashier) => (await saleFindings(s, products, can)).map((f) => f.kind).sort().join(',');
 

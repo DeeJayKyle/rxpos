@@ -4,7 +4,7 @@ import {
   LayoutDashboard, ShoppingCart, PackageOpen, ReceiptText, FileText, ClipboardPlus, Users, Truck, Pill, FlaskConical,
   Boxes, PackagePlus, History, CalendarClock, PencilRuler, ScrollText, Wallet, Tags, Landmark, ArrowLeftRight, HandCoins,
   ArrowDownLeft, ArrowUpRight, ClipboardCheck, RefreshCw, Undo2, ShieldPlus, BookOpen, BarChart3, Settings as SettingsIcon, Search, Sun, Moon, Menu, LogOut, ChevronDown,
-  CornerDownLeft, User, Plus, BellRing, ShoppingBag, Tag, FileUp, Building2, Send, ShieldCheck, Clock, BookMarked, MessagesSquare, UserCog, KeyRound, CalendarDays, Thermometer, Palette, MonitorSmartphone, ScanText, GraduationCap, Megaphone, CalendarRange, LockKeyhole, PanelLeftClose, PanelLeftOpen, WifiOff,
+  CornerDownLeft, User, BellRing, ShoppingBag, Tag, FileUp, Building2, Send, ShieldCheck, Clock, BookMarked, MessagesSquare, UserCog, KeyRound, CalendarDays, Thermometer, Palette, MonitorSmartphone, ScanText, GraduationCap, Megaphone, CalendarRange, LockKeyhole, PanelLeftClose, PanelLeftOpen, WifiOff,
   Sparkles,
 } from 'lucide-react';
 import { useStore, makePassword, put, audit, isLowStock, expiryCounts } from './store.jsx';
@@ -433,7 +433,7 @@ function Shell() {
       update((d) => {
         const u = d.users.find((x) => x.id === user.id);
         if (!u) return;
-        const { mustChangePassword, ...rest } = u; // eslint-disable-line no-unused-vars
+        const { mustChangePassword, ...rest } = u;  
         put(d, 'users', { ...rest, ...fields });
         audit(d, user, 'Password changed', user.name, branchId);
       });

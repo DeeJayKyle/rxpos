@@ -5,7 +5,6 @@ import puppeteer from 'puppeteer-core';
 import { CHROME } from './chrome.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
 const [base, ownerKey, out] = process.argv.slice(2);
 fs.mkdirSync(out, { recursive: true });
 const dl = path.resolve(out, 'downloads'); fs.rmSync(dl, { recursive: true, force: true }); fs.mkdirSync(dl, { recursive: true });
@@ -195,7 +194,6 @@ const onlyEd = await A.evaluate(() => [...document.querySelectorAll('tbody tr')]
 check('#6 "Edited only" shows just the edited sale', onlyEd === 1, onlyEd);
 await A.evaluate(() => { const l = [...document.querySelectorAll('.report-filters label')].find((x) => x.firstChild?.textContent.trim() === 'Status'); const s = l.querySelector('select'); Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(s, ''); s.dispatchEvent(new Event('change', { bubbles: true })); }); await wait(300);
 // a sale copied from Rxtera can be corrected (record only, stock untouched)
-const panBefore = await A.evaluate(() => 0);
 await A.evaluate(() => { const row = [...document.querySelectorAll('tbody tr')].find((r) => r.innerText.includes('RX77')); [...row.querySelectorAll('button')].find((x) => /Edit/.test(x.innerText))?.click(); });
 await wait(600);
 const ro = await A.evaluate(() => document.querySelector('.modal')?.innerText || '');

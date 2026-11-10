@@ -270,7 +270,7 @@ function ProfitReport({ sales }) {
  *  items that tie up most of the money (class A) get the closest watch. Also flags fast movers about to run out and
  *  stock that didn't move at all. */
 function ConsumptionReport({ sales, from, to }) {
-  const { db, products, fmt } = useStore();
+  const { products, fmt } = useStore();
   const [showIdle, setShowIdle] = useState(false);
   const byId = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
   const periodDays = Math.max(1, Math.round((new Date(to) - new Date(from)) / 864e5) + 1);
