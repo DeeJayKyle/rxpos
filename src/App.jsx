@@ -463,6 +463,7 @@ function Shell() {
       if (!id) return;
       const onTill = window.location.hash.startsWith('#/pos');
       if (onTill && (id === 'help' || id === 'back' || id === 'forward')) return; // the till has its own ? sheet, and Alt+←/→ switch held sales
+      if (id === 'palette' && document.querySelector('.pos.lay-adv')) return; // the Advanced till keeps Ctrl+K for its command bar
       e.preventDefault();
       e.stopImmediatePropagation(); // G then E is Expenses, not also "edit the row" in a list
       if (id.startsWith('go:')) navigate(id.slice(3));
