@@ -248,3 +248,23 @@ keeps:
 
 Run it again before changing the balance rules or the window defaults.
 
+**Stage 4 on: measured** (this machine, local cloud, no network delay, *large* bench pharmacy: 51,000 records, sales
+spread over one year; two runs each, window off → on):
+
+| | Off | On |
+|---|---|---|
+| Web: till ready | 0.72 / 0.75 s | 0.57 / 0.65 s |
+| Web: everything downloaded | 1.32 / 1.35 s | 1.39 / 1.46 s |
+| Classic app: first download | 2.73 / 2.72 s | 3.22 / 3.12 s |
+| Start-up, search, sale, reports | unchanged | unchanged |
+
+- With no network delay the smaller download barely shows, and asking for brought-forward figures adds a cloud pass
+  over the pharmacy's money and stock records. The bench pharmacy is one year old, so the apps' 12-month window keeps
+  everything there and only pays that pass. The gains are in bytes over real connections (JBM's website downloads
+  18% of its history with 1 month) and in devices no longer holding all history as it grows.
+- The brought-forward pass on JBM's real records takes 0.45–0.88 s (Node, CI runner); it reads 5,000 records at a time
+  and keeps only totals, so it stays far inside the Worker's per-request CPU limit. Kept in R2 per pharmacy, epoch, W
+  and sequence number.
+- Next, if wanted: keep the brought-forward figures per W and add only records newer than the kept sequence number,
+  so a busy pharmacy's devices don't repeat the whole pass.
+

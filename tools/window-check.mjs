@@ -105,10 +105,12 @@ if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
     console.log(`\n### ${t.name} (/${t.slug || t.id})`);
     for (const m of months) {
       const W = windowStart(m);
+      const t0 = performance.now();
       const cloud = await cloudBroughtForward(data.rows, t.id, W);
+      const ms = Math.round(performance.now() - t0);
       const res = checkWindow(full, W, cloud);
       const ok = !res.mismatches.length && !res.cloudVsLocal.length; allOk &&= ok;
-      console.log(`  ${String(m).padStart(2)} months (from ${W.slice(0, 10)}): ${ok ? 'EQUAL' : 'DIFFERENT'} — ${res.checked} balances checked with the cloud's own brought-forward figures, ${res.mismatches.length} differ; cloud vs shared rules: ${res.cloudVsLocal.length} differ; device keeps ${res.kept} of ${res.total} history records (${res.total ? Math.round(100 * res.kept / res.total) : 100}%)`);
+      console.log(`  ${String(m).padStart(2)} months (from ${W.slice(0, 10)}): ${ok ? 'EQUAL' : 'DIFFERENT'} — ${res.checked} balances checked with the cloud's own brought-forward figures, ${res.mismatches.length} differ; cloud vs shared rules: ${res.cloudVsLocal.length} differ; device keeps ${res.kept} of ${res.total} history records (${res.total ? Math.round(100 * res.kept / res.total) : 100}%); the cloud's brought-forward figures took ${ms} ms here`);
       for (const x of [...res.mismatches, ...res.cloudVsLocal].slice(0, 12)) console.log('      ' + x);
     }
   }
