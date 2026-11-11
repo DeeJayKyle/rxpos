@@ -1,0 +1,36 @@
+name: History window check
+
+# Before the history window is turned on (docs/SYNC-HISTORY-WINDOW.md: "once the equality checks on real pharmacies
+# pass"), compare every balance a windowed device would show with the whole-history figure, on each real pharmacy:
+# stock, client / supplier / insurer debts, cash and bank accounts, loans. Read-only; prints ids and figures only.
+on:
+  workflow_dispatch:
+    inputs:
+      months:
+        description: 'Windows to check, in months (comma-separated)'
+        default: '1,6,12,24'
+      pharmacies:
+        description: 'Pharmacy web addresses, space-separated (empty = all)'
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Check every balance with a window against the whole history
+        env:
+          RXPOS_API: https://api.rxposug.com
+          OWNER_KEY: ${{ secrets.OWNER_KEY }}
+          MONTHS: ${{ inputs.months }}
+          ONLY: ${{ inputs.pharmacies }}
+        run: node tools/window-check.mjs $ONLY --months "${MONTHS:-1,6,12,24}"
