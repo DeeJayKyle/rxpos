@@ -35,3 +35,21 @@ export function keeps(t, r, W) {
   const d = recordDate(r);
   return !d || d >= W || hasEntryFrom(t, r, W) || isOpenItem(t, r);
 }
+
+/**
+ * What a device drops when its window moves forward to W: { tables: { t: kept list } (only the tables that change),
+ * dels: [{ t, id }] }. A record with a change still waiting to be sent (`waiting`: Set of 't|id') stays until it has
+ * gone, or the change would be lost. Only on this device: the cloud keeps everything.
+ */
+export function pruneOf(db, W, waiting = new Set()) {
+  const stays = (t, r) => keeps(t, r, W) || waiting.has(t + '|' + String(r.id));
+  const tables = {}, dels = [];
+  for (const t of WINDOWED) {
+    const list = db?.[t] || [];
+    const kept = list.filter((r) => stays(t, r));
+    if (kept.length === list.length) continue;
+    tables[t] = kept;
+    for (const r of list) if (!stays(t, r)) dels.push({ t, id: String(r.id) });
+  }
+  return { tables, dels };
+}

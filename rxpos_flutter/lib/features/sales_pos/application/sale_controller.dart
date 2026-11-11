@@ -388,7 +388,7 @@ class SaleController extends _$SaleController {
     final limit = (c?.raw['creditLimit'] as num?)?.toDouble() ?? 0;
     if (!(limit > 0)) return null;
     final store = ref.read(recordStoreProvider);
-    final owed = customerBalance(state.customerId, (await store.rows('sales')).map(Sale.fromRecord), await store.rows('payments'));
+    final owed = customerBalance(state.customerId, (await store.rows('sales')).map(Sale.fromRecord), await store.rows('payments'), win: await store.balanceWindow());
     final total = totalsOf(state.lines, discount: state.discount, settings: d.settings).total;
     return overLimit(limit: limit, owed: owed, total: dueOf(state.insured, total, d.settings), tendered: state.tendered);
   }

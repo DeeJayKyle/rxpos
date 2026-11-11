@@ -6,6 +6,7 @@ import '../entities/draft.dart';
 import '../entities/party.dart';
 import '../entities/product.dart';
 import '../entities/settings.dart';
+import '../rules/balances.dart';
 import '../rules/gs1.dart';
 import '../rules/permissions.dart';
 import '../rules/stock.dart';
@@ -22,6 +23,10 @@ Stream<List<Map<String, Object?>>> table(Ref ref, String t) => ref.watch(recordS
 
 /// Step 13: stock per branch and batch, added up by SQLite (RecordStore.watchStock) instead of decoding every movement.
 final stockIndexProvider = StreamProvider<StockIndex>((ref) => ref.watch(recordStoreProvider).watchStock());
+
+/// Faster sync, stage 4: the cloud's brought-forward figures on a device keeping recent history (null: no window, the
+/// balances are the plain sums). Pass it to customerBalance, supplierBalance, insurerBalance, accountBalances, loanBalance.
+final balanceWindowProvider = StreamProvider<BalanceWindow?>((ref) => ref.watch(recordStoreProvider).watchBalanceWindow());
 
 /// The pharmacy's settings with this device's own overrides of the pharmacy's details (Settings → Pharmacy). [raw]
 /// stays the shared record; save settings from [RecordStore.settingsRecord] so overrides never reach other devices.

@@ -3,6 +3,7 @@
 // percentage of the sale or a fixed amount, whichever is more) and may cap what the insurer covers per sale. The sale
 // keeps the split in insurance.share (what the insurer owes) and paid (what the patient paid now). The insurer's share
 // is owed like credit: not the client's debt, and not money in the drawer until the insurer pays.
+import 'balances.dart' show BalanceWindow;
 
 double _n(Object? v) => v is num ? v.toDouble() : double.tryParse('${v ?? ''}') ?? 0;
 
@@ -44,8 +45,10 @@ double insurerShare(Map<String, Object?> s) {
 /// What the client still owes on this sale: the total less what they paid and less the insurer's share.
 double clientOwes(Map<String, Object?> s) => s['status'] == 'refunded' ? 0 : _n(s['total']) - _n(s['paid'] ?? s['total']) - insurerShare(s);
 
-/// What an insurer owes: its share of the sales not refunded, less its payments (kind 'insurer').
-double insurerBalance(Iterable<Map<String, Object?>> sales, Iterable<Map<String, Object?>> payments, String insurerId) {
+/// What an insurer owes: its share of the sales not refunded, less its payments (kind 'insurer'). [win]: a device
+/// keeping recent history (stage 4): the cloud's brought-forward figure + the entries from the window start.
+double insurerBalance(Iterable<Map<String, Object?>> sales, Iterable<Map<String, Object?>> payments, String insurerId, {BalanceWindow? win}) {
+  if (win != null) return win.one('insurer', insurerId, {'sales': sales, 'payments': payments}, sources: [sales, payments]);
   final owed = sales.where((s) => (s['insurance'] as Map?)?['insurerId'] == insurerId).fold(0.0, (a, s) => a + insurerShare(s));
   final paid = payments.where((p) => p['kind'] == 'insurer' && p['partyId'] == insurerId).fold(0.0, (a, p) => a + _n(p['amount']));
   return owed - paid;

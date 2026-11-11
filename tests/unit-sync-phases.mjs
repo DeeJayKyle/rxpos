@@ -149,6 +149,24 @@ try {
     await a.sync.run();
     check('a cloud without brought-forward figures: the device goes back to keeping everything', !a.cfg.window && !a.cfg.historyMonths && a.cfg.fullPull === 0, JSON.stringify({ w: a.cfg.window, m: a.cfg.historyMonths }));
   }
+  {
+    // stage 4 with stage 3: a device keeping recent history asks for the ready-made chunks WITH its window, so the cloud
+    // leaves out the older history (else a new device or the website downloads everything through the chunks)
+    const cl = cloud(), a = device(cl);
+    const seen = [];
+    const f = cl.fetch;
+    cl.fetch = async (u, init) => {
+      const url = String(u), b = init?.body ? JSON.parse(init.body) : {};
+      if (url.endsWith('/api/snapshot')) { seen.push(['list', b.window || null]); return { ok: true, status: 200, json: async () => ({ epoch: cl.epoch, chunks: [{ from: 0, to: cl.seq }] }) }; }
+      if (url.endsWith('/api/snapshot/chunk')) { seen.push(['chunk', b.window || null]); return { ok: true, status: 200, json: async () => ({ changes: cl.rows.filter((r) => r.seq > b.from && r.seq <= b.to).map((r) => ({ t: r.t, id: r.id, rec: r.rec, at: r.at })) }) }; }
+      if (url.endsWith('/api/balances')) { const x = JSON.parse(init.body); return { ok: true, status: 200, json: async () => ({ W: x.window, asOf: cl.seq, stock: [] }) }; }
+      return f(u, init);
+    };
+    a.setCfg({ ...a.cfg, historyMonths: 12 });
+    const r = await a.sync.run();
+    const W = windowStart(12);
+    check('a windowed first download asks for the ready-made chunks with its window', r.state === 'ok' && seen.length >= 2 && seen.every(([, w]) => w === W), JSON.stringify(seen));
+  }
 } catch (e) { fail++; console.log('FAIL  threw', e.stack); }
 
 // The owner's decisions G and H: a device that never chose keeps 12 months in the Windows / Android apps and 1 month on

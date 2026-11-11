@@ -243,11 +243,13 @@ export function createSync({ getDb, getCfg, saveCfg, applyRemote, onStatus, stor
           // then page from the last one as before. Each chunk is saved with its position, so a cut-off run resumes.
           if (full && !ahead && i >= batches.length && (phase === 'core' || phase === 'history') && !chunked.has(phase)) {
             chunked.add(phase);
-            const list = await snapshotList(c.url, c.key, { deviceId: c.deviceId, phase, cutoff: getCfg().cutoff });
+            // stage 4: with the window, so the chunks leave out the older history this device doesn't keep (the cloud filters them)
+            const win = getCfg().window ? { window: getCfg().window } : {};
+            const list = await snapshotList(c.url, c.key, { deviceId: c.deviceId, phase, cutoff: getCfg().cutoff, ...win });
             if (list && (epoch === undefined || list.epoch === epoch)) {
               epoch = list.epoch ?? epoch;
               const todo = list.chunks.filter((ch) => ch.to > cursor);
-              const get = (ch) => { const pr = snapshotChunk(c.url, c.key, { deviceId: c.deviceId, phase, cutoff: getCfg().cutoff, from: ch.from, to: ch.to }); pr.catch(() => {}); return pr; };
+              const get = (ch) => { const pr = snapshotChunk(c.url, c.key, { deviceId: c.deviceId, phase, cutoff: getCfg().cutoff, from: ch.from, to: ch.to, ...win }); pr.catch(() => {}); return pr; };
               const inFlight = todo.slice(0, CHUNKS_AT_ONCE).map(get);
               for (let k = 0; k < todo.length; k++) {
                 const r = await inFlight[k];

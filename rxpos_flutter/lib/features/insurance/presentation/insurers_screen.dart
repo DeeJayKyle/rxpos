@@ -108,12 +108,13 @@ class _InsurersScreenState extends ConsumerState<InsurersScreen> {
     final payments = ref.watch(tableProvider('payments')).value ?? const [];
     final banks = ref.watch(tableProvider('banks')).value ?? const [];
     final st = ref.watch(settingsProvider).value ?? const PharmacySettings();
+    final win = ref.watch(balanceWindowProvider).value; // stage 4: a device keeping recent history
     final can = ref.watch(permissionsProvider).value ?? const <String>{};
     final editable = can.contains('customers') || can.contains('finance');
     if (insurers == null) return const Center(child: CircularProgressIndicator());
     String fmt(num v) => st.money(v);
     final rows = [
-      for (final i in insurers) (i: i, owed: insurerBalance(sales, payments, '${i['id']}')),
+      for (final i in insurers) (i: i, owed: insurerBalance(sales, payments, '${i['id']}', win: win)),
     ]..sort((a, b) => (a.i['archived'] == true ? 1 : 0) - (b.i['archived'] == true ? 1 : 0) != 0
         ? (a.i['archived'] == true ? 1 : 0) - (b.i['archived'] == true ? 1 : 0)
         : b.owed.compareTo(a.owed));
