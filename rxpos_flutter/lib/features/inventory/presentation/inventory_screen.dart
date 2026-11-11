@@ -66,7 +66,10 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
     final retail = list.fold<double>(0, (a, p) => a + (d.stockOf(p.id) > 0 ? d.stockOf(p.id) : 0) * p.price);
     final order = medicineOrderOf(ref);
     final rows = groupedRows(list, order, _folded);
+    // phones: the heading, search and filters scroll away with the list, so the medicines always get the screen
+    final phone = MediaQuery.sizeOf(context).width < 600;
     return PageFrame(
+      scroll: phone,
       title: 'Inventory',
       subtitle: can.contains('reports')
           ? '${list.length} items · ${s.money(shownValue.value)} at cost · ${s.money(retail)} at retail · all stock ${s.money(value.value)}${value.expired > 0 ? ' · ${s.money(value.expired)} expired (not included)' : ''}'
@@ -89,10 +92,13 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
           const MedicineOrderMenu(),
         ]),
         const SizedBox(height: 8),
-        Expanded(
-          child: list.isEmpty
+        _fill(
+          phone,
+          list.isEmpty
               ? const EmptyState('No medicines here')
               : ListView.separated(
+                  shrinkWrap: phone,
+                  physics: phone ? const NeverScrollableScrollPhysics() : null,
                   itemCount: rows.length,
                   separatorBuilder: (_, _) => const Divider(height: 1),
                   itemBuilder: (_, i) {
@@ -121,6 +127,9 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
       ]),
     );
   }
+
+  /// the list fills the rest of the page on a desktop; on a phone it is part of the page's own scroll
+  Widget _fill(bool phone, Widget child) => phone ? child : Expanded(child: child);
 
   Future<void> _open(Product p) async {
     final d = await ref.read(pharmacyProvider.future);

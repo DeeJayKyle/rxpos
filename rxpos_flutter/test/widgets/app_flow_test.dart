@@ -1449,6 +1449,41 @@ void main() {
     await done(tester);
   });
 
+  testWidgets('UI fit: phones, a narrow screen with large text, a laptop; long names; nothing overflows, the pharmacy in full, New sale in reach', (tester) async {
+    await tester.runAsync(signedIn);
+    const pharmacy = 'St. Bernadette Community Pharmacy & Wellness Centre Nakawa';
+    const medicine = 'Amoxicillin + Clavulanic Acid 625mg Film-Coated Tablets (Augmentin Duo)';
+    await tester.runAsync(() => RecordStore(db).update((d) async {
+          d.saveSettings({'name': pharmacy, 'currency': 'UGX'});
+          d.put('products', {'id': 'p9', 'name': medicine, 'generic': 'Amoxicillin', 'form': 'Tablets', 'unit': 'Tablet', 'price': 2500, 'cost': 1700, 'reorder': 20});
+          final b = await d.addBatch(productId: 'p9', batch: 'LONGBATCH-2026-1000', expiry: DateTime.now().add(const Duration(days: 30)).toIso8601String().substring(0, 10), cost: 1700);
+          d.move(productId: 'p9', qty: 5, type: 'Opening stock', batchId: '${b['id']}');
+        }));
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    for (final (size, scale) in [(const Size(400, 800), 1.0), (const Size(360, 740), 1.6), (const Size(1100, 800), 1.3)]) {
+      tester.platformDispatcher.textScaleFactorTestValue = scale;
+      await start(tester, size: size);
+      expect(find.text(pharmacy), findsWidgets, reason: 'the pharmacy\'s name in full at $size × $scale');
+      final sale = find.byKey(const Key('greeting-new-sale'));
+      expect(sale, findsOneWidget);
+      expect(tester.getRect(sale).bottom, lessThanOrEqualTo(size.height), reason: 'New sale on the first screen, no scrolling, at $size × $scale');
+      if (scale == 1) expect(tester.getRect(find.byKey(const Key('greeting'))).height, lessThan(220), reason: 'a slim greeting at $size');
+      if (size.width < 600) {
+        expect(find.byKey(const Key('alert-Low stock')), findsOneWidget, reason: 'phones: stock alerts as one list');
+        expect(find.byKey(const Key('alert-Soon expiring')), findsOneWidget);
+      }
+      await tester.tap(sale);
+      await settle(tester);
+      expect(find.text(medicine), findsWidgets, reason: 'the till lists the long name at $size × $scale');
+      for (final page in ['/inventory', '/expiry', '/sales']) {
+        GoRouter.of(tester.element(find.byType(Scaffold).first)).go(page);
+        await settle(tester);
+        expect(find.textContaining('Amoxicillin'), page == '/sales' ? anything : findsWidgets, reason: '$page at $size × $scale');
+      }
+      await done(tester);
+    }
+  });
+
   testWidgets('on a phone: chat, every settings tab and this device fit the screen', (tester) async {
     await tester.runAsync(signedIn);
     await start(tester, size: const Size(400, 800));

@@ -60,6 +60,17 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final warn = s.expiryWarnDays.round();
     final exp = expiryBatches(stocked, data.stock.batchesOf, data.stockOf, warn);
     final value = stockValue(stocked, data.stock.batchesOf);
+    final soonN = exp.soon.map((x) => x.$1.id).toSet().length, expiredN = exp.expired.map((x) => x.$1.id).toSet().length;
+    final width = MediaQuery.sizeOf(context).width;
+    final phone = width < 600;
+    final draftAlert = (
+      label: 'Open drafts',
+      count: '${drafts.length}',
+      why: drafts.isEmpty ? '' : oldDrafts.isNotEmpty ? '${oldDrafts.length} waiting too long · oldest ${ageText(oldest!.startedAt)}' : 'held sales and unfinished deliveries · oldest ${ageText(oldest!.startedAt)}',
+      icon: Icons.pause_circle_outline,
+      color: oldDrafts.isNotEmpty ? Theme.of(context).colorScheme.error : Colors.orange.shade800,
+      onTap: () => context.go(drafts.any((x) => x.kind == 'delivery') && (oldDrafts.any((x) => x.kind == 'delivery') || !drafts.any((x) => x.kind == 'sale')) ? '/purchases?tab=drafts' : '/sales'),
+    );
     return PageFrame(
       title: '',
       scroll: true,
@@ -79,26 +90,35 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               onTap: can.contains('sales.view') ? () => context.go('/sales?from=$day&to=$day') : null),
         ]),
         const SizedBox(height: 16),
+        if (phone)
+          AlertList(items: [
+            (label: 'Low stock', count: '$low', why: 'in stock, at or below reorder level', icon: Icons.inventory_2_outlined, color: low > 0 ? Colors.orange.shade800 : null,
+                onTap: () => context.go('/inventory?filter=low')),
+            (label: 'Soon expiring', count: '$soonN', why: 'within $warn days', icon: Icons.event_outlined, color: soonN > 0 ? Colors.orange.shade800 : null,
+                onTap: () => context.go('/inventory?filter=expiring')),
+            (label: 'Expired', count: '$expiredN', why: expiredN == 0 ? 'nothing expired in stock' : 'in stock: return or write off', icon: Icons.gpp_maybe_outlined,
+                color: expiredN > 0 ? Theme.of(context).colorScheme.error : null, onTap: () => context.go('/inventory?filter=expired')),
+            if (drafts.isNotEmpty) draftAlert,
+          ])
+        else ...[
+          StatGrid(children: [
+            StatCard(label: 'Low stock', value: '$low', sub: 'in stock, at or below reorder level', icon: Icons.inventory_2_outlined, color: low > 0 ? Colors.orange.shade800 : null,
+                onTap: () => context.go('/inventory?filter=low')),
+            StatCard(label: 'Soon expiring', value: '$soonN', sub: 'within $warn days', icon: Icons.event_outlined,
+                color: soonN > 0 ? Colors.orange.shade800 : null, onTap: () => context.go('/inventory?filter=expiring')),
+            StatCard(label: 'Expired', value: '$expiredN', sub: expiredN == 0 ? 'nothing expired in stock' : 'in stock: return or write off',
+                icon: Icons.gpp_maybe_outlined, color: expiredN > 0 ? Theme.of(context).colorScheme.error : Colors.green, onTap: () => context.go('/inventory?filter=expired')),
+            if (drafts.isNotEmpty) StatCard(label: draftAlert.label, value: draftAlert.count, sub: draftAlert.why, icon: draftAlert.icon, color: draftAlert.color, onTap: draftAlert.onTap),
+          ]),
+        ],
+        const SizedBox(height: 16),
         StatGrid(children: [
-          StatCard(label: 'Low stock', value: '$low', sub: 'in stock, at or below reorder level', icon: Icons.inventory_2_outlined, color: low > 0 ? Colors.orange.shade800 : null,
-              onTap: () => context.go('/inventory?filter=low')),
-          StatCard(label: 'Soon expiring', value: '${exp.soon.map((x) => x.$1.id).toSet().length}', sub: 'within $warn days', icon: Icons.event_outlined,
-              color: exp.soon.isNotEmpty ? Colors.orange.shade800 : null, onTap: () => context.go('/inventory?filter=expiring')),
-          StatCard(label: 'Expired', value: '${exp.expired.map((x) => x.$1.id).toSet().length}', sub: exp.expired.isEmpty ? 'nothing expired in stock' : 'in stock: return or write off',
-              icon: Icons.gpp_maybe_outlined, color: exp.expired.isNotEmpty ? Theme.of(context).colorScheme.error : Colors.green, onTap: () => context.go('/inventory?filter=expired')),
           if (can.contains('reports'))
             StatCard(label: 'Inventory value', value: s.money(value.value), sub: value.expired > 0 ? '+ ${s.money(value.expired)} expired' : 'at current cost', icon: Icons.warehouse_outlined,
                 onTap: () => context.go('/reports?tab=stock')),
           StatCard(label: 'This month', value: s.money(m.total), sub: '${m.count} sales', icon: Icons.calendar_month_outlined,
               onTap: can.contains('reports') ? () => context.go('/reports?tab=sales&from=${day.substring(0, 8)}01&to=$day') : can.contains('sales.view') ? () => context.go('/sales?from=${day.substring(0, 8)}01&to=$day') : null),
         ]),
-        if (drafts.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          StatCard(label: 'Open drafts', value: '${drafts.length}',
-              sub: oldDrafts.isNotEmpty ? '${oldDrafts.length} waiting too long · oldest ${ageText(oldest!.startedAt)}' : 'held sales and unfinished deliveries · oldest ${ageText(oldest!.startedAt)}',
-              icon: Icons.pause_circle_outline, color: oldDrafts.isNotEmpty ? Theme.of(context).colorScheme.error : Colors.orange.shade800,
-              onTap: () => context.go(drafts.any((x) => x.kind == 'delivery') && (oldDrafts.any((x) => x.kind == 'delivery') || !drafts.any((x) => x.kind == 'sale')) ? '/purchases?tab=drafts' : '/sales')),
-        ],
         if (can.contains('audit')) ...[const SizedBox(height: 16), SaleChecksCard(branch: data.branch, money: s.money)],
         if (promote.isNotEmpty) ...[
           const SizedBox(height: 16),
@@ -124,9 +144,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         ],
         if (data.features['weather'] != false) ...[const SizedBox(height: 16), const WeatherCard(compact: true)],
         const SizedBox(height: 16),
-        Wrap(spacing: 12, runSpacing: 12, children: [
+        LayoutBuilder(builder: (context, box) {
+          // two charts side by side only when each keeps 460 px; else one per row, full width
+          final half = box.maxWidth >= 932 ? ((box.maxWidth - 12) / 2).floorToDouble() : box.maxWidth;
+          return Wrap(spacing: 12, runSpacing: 12, children: [
           SizedBox(
-            width: MediaQuery.sizeOf(context).width < 700 ? MediaQuery.sizeOf(context).width - 32 : 640,
+            width: half,
             child: Card(child: Padding(padding: const EdgeInsets.all(12), child: DailyTrend(
               byDay: {for (final e in f.byDay.entries) e.key: e.value.total},
               keysFor: (n) => lastDays(n),
@@ -135,12 +158,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             ))),
           ),
           SizedBox(
-            width: MediaQuery.sizeOf(context).width < 700 ? MediaQuery.sizeOf(context).width - 32 : 520,
+            width: half,
             child: StockAlertsCard(low: stocked.where((p) => isLowStock(p, data.stockOf(p.id))).toList()..sort((a, b) => data.stockOf(a.id).compareTo(data.stockOf(b.id))),
                 soon: exp.soon, stockOf: data.stockOf),
           ),
           SizedBox(
-            width: MediaQuery.sizeOf(context).width < 700 ? MediaQuery.sizeOf(context).width - 32 : 640,
+            width: half,
             child: Card(child: Padding(padding: const EdgeInsets.all(12), child: MonthLines(
               money: s.money,
               monthKeys: (n) => lastMonths(n),
@@ -152,7 +175,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               ],
             ))),
           ),
-        ]),
+        ]);
+        }),
         if (can.contains('sales.view')) ...[
           const SizedBox(height: 16),
           RecentSalesCard(

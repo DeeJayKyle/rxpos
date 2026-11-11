@@ -1,5 +1,23 @@
 # RxPOS release notes
 
+## React (classic) app 1.8.1 · Flutter app 2.1 (next build) · November 2026
+
+A screen-layout update for both apps: compact, readable and responsive on phones and desktops. Data, figures,
+permissions, settings, actions, offline work, sync and backups are unchanged. No cloud deploy is needed for it.
+
+- **Dashboard:** a slim greeting with **New sale** beside it (on phones too); the pharmacy's full name instead of
+  being cut off; today's figures two to a row on phones while the amounts still fit; stock alerts (low stock, soon
+  expiring, expired, open drafts) as one easy-to-scan list on phones, the urgent ones first.
+- **Phones:** the classic app's top bar no longer runs off the screen; on the till, *Charge* is always fully visible
+  and the Sell button no longer covers the docked sale; inventory and expiry tables become one labelled card per
+  medicine; long medicine names wrap instead of being cut.
+- **Large text and narrow screens:** pages fit at 150 % zoom on a phone (classic) and with large system text
+  (Flutter); headings with their search and buttons scroll away so lists keep the screen; export buttons wrap.
+- **Desktop:** the same efficient layout; charts share the width evenly; tables keep figures on one line.
+- **Accessibility:** a visible focus ring for keyboard users, larger touch targets, named switches.
+- New checks: `tests/ui-fit.mjs` (phones, tablet, laptop, desktop, 150 % zoom, long names) and a Flutter widget
+  test at phone size with 1.6× text.
+
 ## React (classic) app 1.8.0 · Flutter app 2.1.0 · cloud and Hub · November 2026
 
 Everything in this release came from the review (`docs/REVIEW.md`) and the step-by-step plan (`docs/WORKPLAN.md`),

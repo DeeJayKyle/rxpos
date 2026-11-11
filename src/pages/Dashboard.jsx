@@ -173,7 +173,7 @@ export default function Dashboard() {
         </div>
         <div className="card">
           <h3>Monthly sales – {year}</h3>
-          <table>
+          <table className="month-table">
             <thead><tr><th>Month</th><th className="num">Sales</th><th className="num">Total</th><th /></tr></thead>
             <tbody>
               {monthRows.map(({ name, k }) => <tr key={k}><td>{name}</td><td className="num">{(m.byMonth[k]?.n || 0).toLocaleString()}</td><td className="num">{fmt(m.byMonth[k]?.total)}</td><td style={{ width: '28%' }}><div className="meter"><i style={{ width: `${((m.byMonth[k]?.total || 0) / monthMax) * 100}%` }} /></div></td></tr>)}

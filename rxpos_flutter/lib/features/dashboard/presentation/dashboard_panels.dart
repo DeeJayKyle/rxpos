@@ -31,43 +31,100 @@ class GreetingCard extends StatelessWidget {
     final greet = t.hour < 12 ? 'Good morning' : t.hour < 17 ? 'Good afternoon' : 'Good evening';
     final first = name.trim().split(' ').first;
     final r = tokensOf(context).radius + 4;
+    final phone = MediaQuery.sizeOf(context).width < 600;
+    final chip = pharmacy.isEmpty
+        ? null
+        : Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+            decoration: BoxDecoration(color: cs.primary.withValues(alpha: .14), borderRadius: BorderRadius.circular(10)),
+            // the pharmacy's name in full: it wraps rather than being cut off
+            child: Row(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Padding(padding: const EdgeInsets.only(top: 1), child: Icon(Icons.storefront_outlined, size: 14, color: cs.tertiary)),
+              const SizedBox(width: 6),
+              Flexible(child: Text(pharmacy, key: const Key('greeting-pharmacy'), style: th.textTheme.labelMedium?.copyWith(color: cs.tertiary, fontWeight: FontWeight.w800))),
+            ]),
+          );
+    final text = Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+      Text('$greet${first.isEmpty ? '' : ', $first'} 👋', style: (phone ? th.textTheme.titleMedium : th.textTheme.titleLarge)?.copyWith(fontWeight: FontWeight.w800)),
+      Text('${_days[t.weekday - 1]}, ${_months[t.month - 1]} ${t.day}, ${t.year}', style: th.textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+    ]);
+    final sale = canSell
+        ? FilledButton.icon(
+            key: const Key('greeting-new-sale'),
+            style: FilledButton.styleFrom(minimumSize: const Size(0, 46), padding: EdgeInsets.symmetric(horizontal: phone ? 14 : 20)),
+            onPressed: () => context.go('/pos'),
+            icon: const Icon(Icons.shopping_cart_outlined),
+            label: const Text('New sale'),
+          )
+        : null;
     return Card(
       key: const Key('greeting'),
       margin: EdgeInsets.zero,
       clipBehavior: Clip.antiAlias,
       child: Container(
         decoration: BoxDecoration(
-          gradient: LinearGradient(colors: [cs.primary.withValues(alpha: .14), cs.secondary.withValues(alpha: .05)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+          gradient: LinearGradient(colors: [cs.primary.withValues(alpha: .12), cs.secondary.withValues(alpha: .04)], begin: Alignment.topLeft, end: Alignment.bottomRight),
           borderRadius: BorderRadius.circular(r),
         ),
-        child: Stack(children: [
-          // a soft circle in the corner, as on the figure tiles
-          Positioned(right: -40, top: -60, child: Container(width: 220, height: 220, decoration: BoxDecoration(shape: BoxShape.circle, color: cs.primary.withValues(alpha: .07)))),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(22, 18, 22, 18),
-            child: Wrap(spacing: 16, runSpacing: 12, alignment: WrapAlignment.spaceBetween, runAlignment: WrapAlignment.center, crossAxisAlignment: WrapCrossAlignment.center, children: [
-              Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-                if (pharmacy.isNotEmpty)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(color: cs.primary.withValues(alpha: .14), borderRadius: BorderRadius.circular(999)),
-                    child: Row(mainAxisSize: MainAxisSize.min, children: [
-                      Icon(Icons.storefront_outlined, size: 14, color: cs.tertiary),
-                      const SizedBox(width: 6),
-                      Text(pharmacy.toUpperCase(), style: th.textTheme.labelSmall?.copyWith(color: cs.tertiary, fontWeight: FontWeight.w800, letterSpacing: .6)),
-                    ]),
-                  ),
-                const SizedBox(height: 8),
-                Text('$greet${first.isEmpty ? '' : ', $first'} 👋', style: th.textTheme.headlineSmall),
-                Text('${_days[t.weekday - 1]}, ${_months[t.month - 1]} ${t.day}, ${t.year}', style: th.textTheme.bodyMedium?.copyWith(color: cs.onSurfaceVariant)),
-              ]),
-              if (canSell)
-                FilledButton.icon(key: const Key('greeting-new-sale'), onPressed: () => context.go('/pos'), icon: const Icon(Icons.shopping_cart_outlined), label: const Text('New sale')),
-            ]),
-          ),
-        ]),
+        padding: EdgeInsets.symmetric(horizontal: phone ? 14 : 20, vertical: phone ? 12 : 14),
+        // a slim header: the greeting with New sale beside it; on a very narrow screen New sale goes under it, full width
+        // the pharmacy's name on its own line, then the greeting with New sale beside it; when large text leaves the
+        // greeting too little room, New sale goes under it, full width
+        child: LayoutBuilder(builder: (context, c) {
+          final scale = MediaQuery.textScalerOf(context).scale(1);
+          return Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
+            if (chip != null) ...[Align(alignment: Alignment.centerLeft, child: chip), const SizedBox(height: 6)],
+            if (sale != null && c.maxWidth < 330 * scale)
+              ...[text, const SizedBox(height: 10), sale]
+            else
+              Row(children: [Expanded(child: text), if (sale != null) ...[const SizedBox(width: 12), sale]]),
+          ]);
+        }),
       ),
     );
+  }
+}
+
+/// Stock alerts on a phone: one list to scan (a coloured edge, what, why and how many), the most urgent first.
+class AlertList extends StatelessWidget {
+  const AlertList({super.key, required this.items});
+  /// label, count, why, icon, colour (null: nothing to act on), open
+  final List<({String label, String count, String why, IconData icon, Color? color, VoidCallback onTap})> items;
+
+  @override
+  Widget build(BuildContext context) {
+    final th = Theme.of(context);
+    final sorted = [...items]..sort((a, b) => (a.color == null ? 1 : 0).compareTo(b.color == null ? 1 : 0));
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      for (final x in sorted)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Card(
+            key: Key('alert-${x.label}'),
+            margin: EdgeInsets.zero,
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: x.onTap,
+              child: Container(
+                decoration: BoxDecoration(border: Border(left: BorderSide(color: x.color ?? Colors.green.shade600, width: 4))),
+                padding: const EdgeInsets.fromLTRB(12, 10, 14, 10),
+                child: Row(children: [
+                  Icon(x.icon, size: 22, color: x.color ?? Colors.green.shade700),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(x.label, style: th.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800)),
+                      Text(x.why, style: th.textTheme.bodySmall),
+                    ]),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(x.count, style: th.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
+                ]),
+              ),
+            ),
+          ),
+        ),
+    ]);
   }
 }
 
@@ -124,8 +181,9 @@ class _StockAlertsCardState extends State<StockAlertsCard> {
       child: Padding(
         padding: const EdgeInsets.all(14),
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          Row(children: [
-            Expanded(child: Text('Stock alerts', style: th.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800))),
+          // the link goes under the heading when both don't fit (large text, narrow screens)
+          Wrap(alignment: WrapAlignment.spaceBetween, crossAxisAlignment: WrapCrossAlignment.center, children: [
+            Text('Stock alerts', style: th.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
             TextButton(onPressed: () => context.go(_expiring ? '/expiry' : '/inventory?filter=low'), child: const Text('View inventory →')),
           ]),
           const SizedBox(height: 6),
@@ -208,8 +266,9 @@ class RecentSalesCard extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(14),
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          Row(children: [
-            Expanded(child: Text('Recent transactions', style: th.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800))),
+          // the link goes under the heading when both don't fit (large text, narrow screens)
+          Wrap(alignment: WrapAlignment.spaceBetween, crossAxisAlignment: WrapCrossAlignment.center, children: [
+            Text('Recent transactions', style: th.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
             TextButton(onPressed: () => context.go('/sales'), child: const Text('View all sales →')),
           ]),
           if (sales.isEmpty)

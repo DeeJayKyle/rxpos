@@ -121,10 +121,10 @@ const rows = await p.evaluate(() => [...document.querySelectorAll('tbody tr')].m
 check('Needs review lists the record with problems, and why', rows.length === 1 && /Ferrous/.test(rows[0]) && /No retail price/.test(rows[0]) && /No formulation/.test(rows[0]), JSON.stringify(rows));
 check('…and leaves the record as it is (still no retail price)', /UGX 0\b/.test(rows[0] || ''), rows[0]);
 
-// ---- dashboard on a phone: one KPI per row ----
+// ---- dashboard on a phone: two KPIs per row while the amounts fit ----
 await p.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
 await go('/');
-check('phone: one KPI card per row', (await p.evaluate(() => getComputedStyle(document.querySelector('.kpis')).gridTemplateColumns.split(' ').length)) === 1);
+check('phone: two KPI cards per row', (await p.evaluate(() => getComputedStyle(document.querySelector('.kpis')).gridTemplateColumns.split(' ').length)) === 2);
 check('phone: no horizontal overflow', await p.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1));
 
 await b.close();

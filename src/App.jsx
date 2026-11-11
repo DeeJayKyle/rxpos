@@ -194,7 +194,7 @@ function PremiumToggle({ theme, setTheme, setMode }) {
     } catch { setTheme(useAdvancedUI ? paletteFor('light', list) : PREMIUM); }
   };
   return (
-    <button type="button" role="switch" aria-checked={useAdvancedUI} className={'premium-toggle' + (useAdvancedUI ? ' on' : '')} onClick={toggle} title={useAdvancedUI ? 'Premium UI is on: back to your usual theme' : 'Premium UI: the dark Midnight Pro look'}>
+    <button type="button" role="switch" aria-checked={useAdvancedUI} className={'premium-toggle' + (useAdvancedUI ? ' on' : '')} aria-label="Premium UI" onClick={toggle} title={useAdvancedUI ? 'Premium UI is on: back to your usual theme' : 'Premium UI: the dark Midnight Pro look'}>
       <Sparkles size={15} /><span>Premium UI</span><span className="premium-knob" aria-hidden="true" />
     </button>
   );
