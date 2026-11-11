@@ -60,7 +60,16 @@ class AppShell extends ConsumerWidget {
     final bar = AppBar(
       // the pharmacy, then where you are (group › page) with the page's pin and the ? sheet; the title area shrinks first
       title: Row(children: [
-        Flexible(child: Text(session?.pharmacy.isNotEmpty == true ? session!.pharmacy : 'RxPOS', overflow: TextOverflow.ellipsis)),
+        // the pharmacy's name: on a narrow screen up to two smaller lines, so a long name is read in full
+        Flexible(
+          child: Text(
+            session?.pharmacy.isNotEmpty == true ? session!.pharmacy : 'RxPOS',
+            key: const Key('appbar-pharmacy'),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: wide ? null : Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700, height: 1.15),
+          ),
+        ),
         if (wide) ...[const SizedBox(width: 16), Flexible(child: _Crumbs(screens: visible, location: location))],
       ]),
       automaticallyImplyLeading: !wide,

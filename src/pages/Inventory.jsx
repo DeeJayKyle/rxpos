@@ -199,17 +199,17 @@ export function StockLevels() {
       </div>
       <Tabs tabs={[['instock', 'In stock'], ['low', 'Low stock'], ['out', 'Out of stock'], ['all', 'All']]} value={filter} onChange={setFilter} />
       <div className="card table-wrap" ref={listRef}>
-        <table>
+        <table className="phone-rows">
           <thead><tr><th>Medicine</th><th>Next batch</th><th>Expiry</th><th>Shelf</th><th className="num">Reorder at</th><th className="num">In stock</th>{multi && <th className="num">All branches</th>}<th className="num">Value (cost)</th>{can('inventory.edit') && <th />}</tr></thead>
           <tbody>
             {shownRows.map((r) => r.heading !== undefined ? <GroupHeadingRow key={'g:' + r.heading} row={r} colSpan={cols} onToggle={() => toggleFold(r.heading)} /> : (({ p }) => (
               <tr key={p.id} onClick={() => setOpen(p)} style={{ cursor: 'pointer' }}>
-                <td><strong>{p.name}</strong><br /><small className="muted">{p.form}</small><StockStatus p={p} warn={warn} /></td><td>{p.batch || '—'}</td>
-                <td className={'nowrap ' + expiryClass(p.expiry, warn)}>{p.expiry || '—'}</td><td>{p.shelf}</td>
-                <td className="num">{p.reorder}</td>
-                <td className="num"><span className={'stock-pill badge ' + (p.stock <= 0 ? 'danger' : p.stock <= (p.reorder || 0) ? 'warn' : 'ok')}>{formatQty(p.stock)}</span></td>
-                {multi && <td className="num muted">{p.totalStock}</td>}
-                <td className="num">{(() => { const v = batchValue(p, batchesOf); return <>{fmt(v.value)}{v.expired > 0 && <><br /><small className="text-danger">+ {fmt(v.expired)} expired</small></>}</>; })()}</td>
+                <td className="row-title"><strong>{p.name}</strong><br /><small className="muted">{p.form}</small><StockStatus p={p} warn={warn} /></td><td data-label="Next batch" className="batch-cell">{p.batch || '—'}</td>
+                <td data-label="Expiry" className={'nowrap ' + expiryClass(p.expiry, warn)}>{p.expiry || '—'}</td><td data-label="Shelf">{p.shelf}</td>
+                <td data-label="Reorder at" className="num">{p.reorder}</td>
+                <td data-label="In stock" className="num"><span className={'stock-pill badge ' + (p.stock <= 0 ? 'danger' : p.stock <= (p.reorder || 0) ? 'warn' : 'ok')}>{formatQty(p.stock)}</span></td>
+                {multi && <td data-label="All branches" className="num muted">{p.totalStock}</td>}
+                <td data-label="Value (cost)" className="num">{(() => { const v = batchValue(p, batchesOf); return <>{fmt(v.value)}{v.expired > 0 && <><br /><small className="text-danger">+ {fmt(v.expired)} expired</small></>}</>; })()}</td>
                 {can('inventory.edit') && <td className="actions"><button className="btn sm ghost" onClick={(e) => { e.stopPropagation(); setEditing(p); }}><Pencil size={14} />Edit</button></td>}
               </tr>
             ))(r))}
@@ -259,14 +259,14 @@ export function Expiry() {
         <PdfButton target={expRef} title={tab === 'expired' ? 'Expired stock' : `Expiring within ${warn} days`} subtitle={`${rows.length} batches in stock · ${fmt(rows.reduce((a, r) => a + r.qty * (r.cost || r.p.cost), 0))} at cost`} /></div>
       <Tabs tabs={[['soon', `Expiring within ${warn} days`], ['expired', 'Expired']]} value={tab} onChange={setTab} />
       <div className="card table-wrap" ref={expRef}>
-        <table>
+        <table className="phone-rows">
           <thead><tr><th>Medicine</th><th>Batch</th><th>Expiry</th><th>When</th><th className="num">Qty</th><th className="num">Value</th><th /></tr></thead>
           <tbody>
             {rows.map((r) => (
               <tr key={r.p.id + r.id}>
-                <td><strong>{r.p.name}</strong></td><td>{r.batch}</td><td className={'nowrap ' + expiryClass(r.expiry, warn)}>{r.expiry}</td>
-                <td className={'nowrap ' + expiryClass(r.expiry, warn)}>{r.days < 0 ? `${-r.days} days ago` : r.days === 0 ? 'today' : `in ${r.days} days`}</td>
-                <td className="num">{formatQty(r.qty)}</td><td className="num">{fmt(r.qty * (r.cost || r.p.cost))}</td>
+                <td className="row-title"><strong>{r.p.name}</strong></td><td data-label="Batch" className="batch-cell">{r.batch}</td><td data-label="Expiry" className={'nowrap ' + expiryClass(r.expiry, warn)}>{r.expiry}</td>
+                <td data-label="When" className={'nowrap ' + expiryClass(r.expiry, warn)}>{r.days < 0 ? `${-r.days} days ago` : r.days === 0 ? 'today' : `in ${r.days} days`}</td>
+                <td data-label="Qty" className="num">{formatQty(r.qty)}</td><td data-label="Value" className="num">{fmt(r.qty * (r.cost || r.p.cost))}</td>
                 <td className="actions">
                   {(can('stock.receive') || can('stock.adjust')) && <button className="btn sm ghost" title="Send it back to the supplier for a credit note or refund" onClick={() => navigate('/returns', { state: { returnBatch: { productId: r.p.id, batchId: r.id, reason: r.days < 0 ? 'Expired' : 'Short expiry' } } })}>Return</button>}
                   {tab === 'expired' && can('stock.adjust') && <button className="btn sm danger" onClick={() => writeOff(r)}>Write off</button>}

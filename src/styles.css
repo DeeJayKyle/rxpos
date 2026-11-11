@@ -2589,3 +2589,135 @@ tr.group-head > td { background: var(--surface-2); padding: 6px 10px; }
 .pay-handle { position: absolute; left: 0; right: 0; top: -10px; height: 10px; cursor: row-resize; touch-action: none; } /* takes no room from the sale lines */
 .pay-handle::after { left: 45%; top: 3px; width: 48px; height: 3px; }
 .pos-pay.sized { display: flex; flex-direction: column; gap: 8px; flex: none; overflow-y: auto; }
+
+/* ============================================================================
+   UI refresh 2026-11: compact, readable and responsive on phones and desktops.
+   Layout only (no colours): every theme, surface style and Midnight Pro keep their own look.
+   ============================================================================ */
+
+/* the pharmacy's name: shown in full, wrapping instead of being cut off */
+.sidebar .store-name { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; line-height: 1.3; }
+.welcome-store { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; line-height: 1.35; align-items: flex-start; border-radius: 12px; }
+.welcome-store > svg { flex: none; margin-top: 1px; }
+
+/* dashboard welcome: a slim header, New sale kept prominent */
+.welcome { padding: var(--space-4) var(--space-5); }
+.welcome h1 { font-size: 22px; line-height: 1.2; }
+.welcome .sub { font-size: 13px; }
+.welcome .btn.big { min-height: 46px; }
+.welcome::before { width: 160px; height: 160px; bottom: -80px; right: -30px; }
+
+/* figures: long amounts keep to their card */
+.stat strong { overflow-wrap: anywhere; line-height: 1.15; }
+.stat > .muted.small { line-height: 1.35; }
+
+/* stock alerts: one scannable list on phones (colour edge, what, why, how many) */
+@media (max-width: 599px) {
+  .stats.alerts { grid-template-columns: 1fr !important; gap: 8px; }
+  .stats.alerts .stat {
+    display: grid; grid-template-columns: auto 1fr auto; grid-template-areas: 'icon label value' 'icon why value';
+    align-items: center; column-gap: 12px; row-gap: 1px; padding: 10px 14px; min-height: 0; border-left-width: 4px;
+  }
+  .stats.alerts .stat .stat-icon { display: grid !important; position: static; grid-area: icon; width: 34px; height: 34px; border-radius: 10px; }
+  .stats.alerts .stat small { grid-area: label; font-size: 12px; letter-spacing: .03em; }
+  .stats.alerts .stat strong { grid-area: value; font-size: 22px; text-align: right; }
+  .stats.alerts .stat > .muted.small { display: block !important; grid-area: why; font-size: 12.5px; }
+  .stats.alerts .stat.flagged { order: -1; }
+}
+
+/* today's figures: two to a row on phones while the amounts still fit, else one */
+@media (max-width: 599px) {
+  .stats.kpis { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)) !important; gap: 10px; }
+  .kpis .stat { padding: 12px; min-height: 0; border-top-width: 2px !important; }
+  .kpis .stat .stat-icon { display: none; }
+  .kpis .stat strong { font-size: clamp(17px, 5vw, 21px); }
+  .kpis .stat > .muted.small { font-size: 12px; }
+  .stats:not(.kpis):not(.alerts) .stat strong { font-size: clamp(16px, 4.8vw, 19px); }
+}
+
+/* phones: greeting and New sale on one line, no oversized banner */
+@media (max-width: 600px) {
+  .welcome { flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 12px; padding: 12px 14px; }
+  .welcome::before, .welcome::after { display: none; }
+  .welcome-text { flex: 1; gap: 2px; }
+  .welcome h1 { font-size: 18px; }
+  .welcome .sub { font-size: 12px; }
+  .welcome-store { font-size: 11.5px; padding: 2px 8px; }
+  .welcome > .row { width: auto !important; flex: none; }
+  .welcome .btn.big { width: auto !important; padding: 10px 14px; font-size: 15px; min-height: 44px; }
+  .page { gap: 14px; }
+}
+
+/* top bar on phones: everything fits; the clock shows its sync dot (time and state stay in its label) */
+@media (max-width: 560px) {
+  .topbar { gap: 6px; padding-left: 10px; padding-right: 10px; }
+  .topbar .pill.clock { padding: 7px 10px; gap: 0; }
+  .topbar .pill.clock .clock-time, .topbar .pill.clock .clock-date, .topbar .pill.clock .clock-state { display: none; }
+  .topbar .premium-toggle { padding: 0 6px; }
+  .topbar .premium-toggle > span:not(.premium-knob) { display: none; }
+}
+@media (max-width: 380px) {
+  .topbar .icon-btn, .topbar .search-trigger { padding: 7px; }
+}
+
+/* the till on a phone: Sell in the bottom bar doesn't cover the docked sale */
+@media (max-width: 900px) {
+  .bottom-nav .fab.active .fab-icon { margin-top: 0; width: 40px; height: 30px; border-radius: 10px; box-shadow: none; }
+  .sheet-handle .btn { flex: none; }
+  .sheet-handle .grow { min-width: 0; }
+}
+
+/* long medicine names wrap instead of widening cards and tables */
+.product-grid .product strong, .cart-line strong, .promo-body strong, td.row-title strong, .top-list td.name strong { overflow-wrap: anywhere; }
+.page .card.table-wrap > table td.batch-cell { overflow-wrap: normal; word-break: keep-all; }
+
+/* inventory and expiry tables on phones: one compact card per medicine, each figure labelled */
+@media (max-width: 700px) {
+  .card.table-wrap > table.phone-rows { min-width: 0 !important; }
+  table.phone-rows thead { display: none; }
+  table.phone-rows, table.phone-rows tbody { display: block; width: 100%; }
+  table.phone-rows tr:not(.group-head) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 14px; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+  table.phone-rows tr.group-head { display: block; }
+  table.phone-rows tr.group-head > td { display: block; }
+  table.phone-rows tr:not(.group-head) > td { display: block; padding: 0 !important; border: 0 !important; text-align: left; min-width: 0; }
+  table.phone-rows td.row-title, table.phone-rows td.actions { grid-column: 1 / -1; }
+  table.phone-rows td.row-title strong { font-size: 15px; }
+  table.phone-rows td.actions { display: flex !important; gap: 8px; justify-content: flex-end; }
+  table.phone-rows td.actions:empty { display: none !important; }
+  table.phone-rows td[data-label]::before { content: attr(data-label); display: block; font-size: 11px; font-weight: 650; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); margin-bottom: 2px; }
+  table.phone-rows td.num { text-align: left; }
+  table.phone-rows tr > td[colspan] { grid-column: 1 / -1; }
+}
+
+/* touch: comfortable targets; keyboard: a visible focus ring everywhere */
+@media (pointer: coarse) {
+  .btn, .icon-btn, .seg button, .tabs button { min-height: 40px; }
+  .btn.sm { min-height: 36px; }
+}
+:where(a, button, input, select, textarea, [tabindex]):focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+/* very narrow (a phone with large text): the top bar wraps rather than running off the side */
+@media (max-width: 340px) {
+  .topbar { flex-wrap: wrap; row-gap: 6px; }
+  .topbar .spacer { flex-basis: 0; }
+  .welcome { flex-wrap: wrap; }
+  .welcome > .row, .welcome .btn.big { width: 100% !important; }
+  .stats.kpis { grid-template-columns: 1fr !important; }
+  .top-list td:nth-child(3), .month-table th:nth-child(4), .month-table td:nth-child(4) { display: none; }
+  .month-table { width: 100%; table-layout: fixed; font-size: 13px; }
+  .month-table th, .month-table td { padding-left: 4px; padding-right: 4px; overflow-wrap: anywhere; }
+  .month-table th:first-child { width: 34%; }
+}
+
+/* long medicine names: Promote today and the top 10 wrap the name instead of cutting it */
+.promo-row .grow strong { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.3; }
+@media (max-width: 600px) {
+  .promo-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: 'art body share' 'art price share'; column-gap: 12px; row-gap: 2px; }
+  .promo-row .promo-art { grid-area: art; align-self: start; }
+  .promo-row .promo-body { grid-area: body; }
+  .promo-row .promo-price { grid-area: price; min-width: 0; text-align: left; }
+  .promo-row .promo-share { grid-area: share; }
+  .promo-row .grow small { white-space: normal; }
+  .top-list td:nth-child(3) { width: 16% !important; }
+  .top-list td.name small { display: block; }
+}

@@ -755,17 +755,24 @@ class _ProductPanel extends StatelessWidget {
                   style: t.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
                 ),
               ),
-              Text('${data.products.length} medicines', style: t.textTheme.bodySmall),
+              // with large text in a narrow panel the count and the layout menu shrink instead of running off the side
+              Flexible(child: Text('${data.products.length} medicines', maxLines: 1, overflow: TextOverflow.ellipsis, style: t.textTheme.bodySmall)),
               if (onCommand != null) IconButton(tooltip: 'Command bar (Ctrl+K)', icon: const Icon(Icons.keyboard_command_key), onPressed: onCommand),
               if (layout != null) ...[
                 const SizedBox(width: 8),
-                DropdownButton<String>(
-                  key: const Key('pos-layout'),
-                  value: layout,
-                  isDense: true,
-                  underline: const SizedBox(),
-                  items: [for (final (k, label) in posLayouts) DropdownMenuItem(value: k, child: Text(label))],
-                  onChanged: (v) => onLayout?.call(v!),
+                Flexible(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 170),
+                    child: DropdownButton<String>(
+                      key: const Key('pos-layout'),
+                      value: layout,
+                      isDense: true,
+                      isExpanded: true,
+                      underline: const SizedBox(),
+                      items: [for (final (k, label) in posLayouts) DropdownMenuItem(value: k, child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis))],
+                      onChanged: (v) => onLayout?.call(v!),
+                    ),
+                  ),
                 ),
               ],
             ],

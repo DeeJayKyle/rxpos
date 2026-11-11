@@ -56,7 +56,16 @@ class PageFrame extends StatelessWidget {
     if (scroll) {
       return body(ListView(padding: const EdgeInsets.only(bottom: 24), children: [head, Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: child)]));
     }
-    return body(Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [head, Expanded(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: child))]));
+    // phones: the heading (title, search, filters, buttons) keeps at most 45 % of the height and scrolls by itself
+    // when taller (large text), so the page's list always has room; both stay reachable
+    final pad = Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: child);
+    return body(LayoutBuilder(builder: (context, c) {
+      final phone = MediaQuery.sizeOf(context).width < 600 && c.maxHeight.isFinite;
+      return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        phone ? ConstrainedBox(constraints: BoxConstraints(maxHeight: c.maxHeight * .45), child: SingleChildScrollView(child: head)) : head,
+        Expanded(child: pad),
+      ]);
+    }));
   }
 }
 
@@ -83,8 +92,9 @@ class StatCard extends StatelessWidget {
     final tone = color ?? t.colorScheme.primary;
     final wash = Color.alphaBlend(tone.withValues(alpha: dark ? .16 : .08), t.cardTheme.color ?? t.colorScheme.surface);
     final shown = color == null ? null : Color(readable(color!.toARGB32(), [(tinted ? wash : t.cardTheme.color ?? t.colorScheme.surface).toARGB32()], dark ? 0xFFFFFFFF : 0xFF000000));
+    // the grid (or the parent) decides the width; the figure shrinks to fit rather than being cut or wrapped
     return ConstrainedBox(
-      constraints: const BoxConstraints(minWidth: 200, maxWidth: 250),
+      constraints: const BoxConstraints(minWidth: 140),
       child: Card(
         margin: EdgeInsets.zero,
         clipBehavior: Clip.antiAlias,
@@ -96,7 +106,7 @@ class StatCard extends StatelessWidget {
           onTap: onTap,
           borderRadius: BorderRadius.circular(12),
           child: Padding(
-            padding: const EdgeInsets.all(14),
+            padding: EdgeInsets.all(MediaQuery.sizeOf(context).width < 600 ? 12 : 14),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Row(children: [
                 Expanded(child: Text(label.toUpperCase(), style: t.textTheme.labelSmall?.copyWith(letterSpacing: .6, fontWeight: FontWeight.w700, color: ink))),
@@ -107,7 +117,11 @@ class StatCard extends StatelessWidget {
                       : Icon(icon, size: 20, color: ink ?? shown ?? t.colorScheme.primary),
               ]),
               const SizedBox(height: 6),
-              Text(value, style: t.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800, color: ink ?? shown)),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(value, maxLines: 1, style: t.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800, color: ink ?? shown)),
+              ),
               if (sub != null || onTap != null)
                 Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
                   Expanded(child: Text(sub ?? '', style: t.textTheme.bodySmall?.copyWith(color: ink?.withValues(alpha: .9)))),
@@ -134,7 +148,9 @@ class StatGrid extends StatelessWidget {
   Widget build(BuildContext context) => LayoutBuilder(builder: (context, c) {
         final cards = children.whereType<StatCard>().length;
         final w = c.maxWidth.isFinite ? c.maxWidth : minWidth * 4;
-        final cols = ((w + spacing) / (minWidth + spacing)).floor().clamp(1, cards == 0 ? 1 : cards);
+        // phones: two figures to a row while each still gets 150 px (amounts stay readable), else one
+        final min = w < 600 ? 150.0 : minWidth;
+        final cols = ((w + spacing) / (min + spacing)).floor().clamp(1, cards == 0 ? 1 : cards);
         final cw = ((w - spacing * (cols - 1)) / cols).floorToDouble();
         return Wrap(spacing: spacing, runSpacing: spacing, children: [
           for (final x in children) x is StatCard ? SizedBox(width: cw, child: x) : x,
@@ -221,8 +237,9 @@ class EmptyState extends StatelessWidget {
   final String text;
   final IconData icon;
   @override
+  // scrolls when there is little room (a phone with large text) rather than running off the bottom
   Widget build(BuildContext context) => Center(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(32),
           child: Column(mainAxisSize: MainAxisSize.min, children: [Icon(icon, size: 40, color: Theme.of(context).disabledColor), const SizedBox(height: 8), Text(text, textAlign: TextAlign.center)]),
         ),

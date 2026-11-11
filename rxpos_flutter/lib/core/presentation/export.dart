@@ -93,7 +93,8 @@ class ExportButtons extends StatelessWidget {
   final String title, subtitle;
 
   @override
-  Widget build(BuildContext context) => Row(mainAxisSize: MainAxisSize.min, children: [
+  // a Wrap: on a phone (or with large text) the buttons go under each other instead of running off the side
+  Widget build(BuildContext context) => Wrap(spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
         if (csv != null)
           OutlinedButton.icon(
             onPressed: () async {
