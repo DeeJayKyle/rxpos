@@ -38,6 +38,9 @@ import { FIELD_TABLES, mergeFields, clampFields, sameRecord } from '../src/field
 import { LOCKED_TABLES, DOCUMENT_MOVES, closedSet, inClosedDay, recordDay } from '../src/dayclose.js';
 import { isRefundOnly } from './policy.js';
 import { localDay } from './dailystock.js';
+import { snapshotList, snapshotChunk, pruneSnapshots } from './snapshot.js';
+import { balancesAt, validWindow } from './window.js';
+import { keeps as keepsInWindow, WINDOWED } from '../src/historywindow.js';
 // The built-in roles (cashier, dispenser, pharmacist, manager) live only in the app; they aren't stored as records.
 // The server needs their permissions too, so a permission check doesn't wrongly refuse a built-in role (1.1/1.9).
 const DEFAULT_ROLE_PERMS = Object.fromEntries(DEFAULT_ROLES.map((r) => [r.id, new Set(r.permissions)]));
@@ -157,6 +160,7 @@ function ensureSchema(db) {
     if (!have.has('twofa')) ddl.push(twoStepDdl); // two-step sign-in secrets (worker/twostep.js), never synced
     // 1.6 sync protocol 2: op ids already applied, so a request repeated after a lost reply is applied once
     if (!have.has('sync_ops')) ddl.push('CREATE TABLE sync_ops (tenant TEXT NOT NULL, op TEXT NOT NULL, at TEXT NOT NULL, PRIMARY KEY (tenant, op))');
+    if (!have.has('snapshot_bounds')) ddl.push('CREATE TABLE snapshot_bounds (tenant TEXT PRIMARY KEY, v TEXT NOT NULL)'); // faster sync stage 3 (worker/snapshot.js)
     if (!have.has('login_fail')) ddl.push('CREATE TABLE login_fail (email TEXT PRIMARY KEY, n INTEGER NOT NULL, until INTEGER NOT NULL DEFAULT 0)');
     // step 6: wrong passwords per account across every address (worker/throttle.js), a slowdown rather than a lock
     // step 7: each device's till number in its pharmacy, for document numbers like R-NTD-03-000412 (src/docnumbers.js)
@@ -570,6 +574,23 @@ async function resetWithGoogle(env, body) {
 }
 
 // ---------- sync ----------
+/** One record as a sync change, built by hand so stored JSON is not parsed and re-serialised (keeps CPU low) */
+const itemJson = (r) => `{"t":${JSON.stringify(r.t)},"id":${JSON.stringify(r.id)},"at":${JSON.stringify(r.at)},"deleted":${r.deleted ? 'true' : 'false'},"rec":${stripUserSecrets(r.t, r.rec)}}`;
+/** The pharmacy database's epoch (changes on a restore) */
+const epochOf = async (db) => (await db.prepare("SELECT v FROM owner_config WHERE k = 'epoch'").first())?.v || '0';
+/** What a person's role may see in a full download: payroll, sale checks (as in sync) */
+const viewOf = (env) => async (who) => {
+  const hideHr = !who.viaKey && !(await roleCan(env, who.tenant, who.role, 'payroll'));
+  const hideChecks = !who.viaKey && !(await roleCan(env, who.tenant, who.role, 'audit'));
+  return { key: (hideHr ? 'h' : '') + (hideChecks ? 'c' : '') || 'all', hideHr, hideChecks, payroll: PAYROLL_TABLES };
+};
+/** Stage 4: does a device with window start W keep this stored row? (src/historywindow.js; a deleted record: yes) */
+const keepsRow = (r, W) => {
+  if (r.deleted || !WINDOWED.has(r.t)) return true;
+  try { return keepsInWindow(r.t, JSON.parse(r.rec), W); } catch { return true; }
+};
+const windowOf = (body) => validWindow(body?.window);
+
 async function sync(env, body, who, ctx) {
   const db = env.DB;
   const tenant = who.tenant;
@@ -837,10 +858,31 @@ async function sync(env, body, who, ctx) {
   const hideHr = !who.viaKey && page.some((r) => PAYROLL_TABLES.has(r.t)) && !(await roleCan(env, tenant, who.role, 'payroll'));
   // step 3: sale findings are for whoever may read the audit log (admins always), not for the staff they are about
   const hideChecks = !who.viaKey && page.some((r) => r.t === 'anomalies') && !(await roleCan(env, tenant, who.role, 'audit'));
-  const shown = hideHr || hideChecks ? page.filter((r) => !(hideHr && PAYROLL_TABLES.has(r.t)) && !(hideChecks && r.t === 'anomalies')) : page;
+  const W = all === true ? windowOf(body) : null; // stage 4: a full download for a device keeping recent history
+  const shown = hideHr || hideChecks || W ? page.filter((r) => !(hideHr && PAYROLL_TABLES.has(r.t)) && !(hideChecks && r.t === 'anomalies') && !(W && !keepsRow(r, W))) : page;
   // Build the response by hand so records stored as JSON text are not parsed and re-serialised (keeps CPU low)
-  const items = shown.map((r) => `{"t":${JSON.stringify(r.t)},"id":${JSON.stringify(r.id)},"at":${JSON.stringify(r.at)},"deleted":${r.deleted ? 'true' : 'false'},"rec":${stripUserSecrets(r.t, r.rec)}}`);
-  return json(`{"changes":[${items.join(',')}],"cursor":${cursor},"more":${more},"applied":${applied},"refused":${refused},"refusedKeys":${JSON.stringify(refusedKeys)},"dupes":${dupes},"protocol":2,"limit":${limit},"phase":${JSON.stringify(phase)},"epoch":${JSON.stringify(epoch)},"tenant":${JSON.stringify(tenant)}}`);
+  const items = shown.map(itemJson);
+  return json(`{"changes":[${items.join(',')}],"cursor":${cursor},"more":${more},"applied":${applied},"refused":${refused},"refusedKeys":${JSON.stringify(refusedKeys)},"dupes":${dupes},"protocol":2,"limit":${limit},"phase":${JSON.stringify(phase)},"window":${JSON.stringify(W)},"epoch":${JSON.stringify(epoch)},"tenant":${JSON.stringify(tenant)}}`);
+}
+
+/**
+ * POST /api/history { t, from, to, after }: the records of one table dated in [from, to), paged, for a page on a device
+ * keeping recent history (stage 4, src/history.js). Same role rules as sync: payroll and sale checks stay hidden.
+ */
+async function olderHistory(env, body, who) {
+  const t = String(body?.t || '');
+  if (!WINDOWED.has(t)) return json({ error: 'Not a table with older history' }, 400);
+  const from = validWindow(body?.from) || '0000-00-00', to = validWindow(body?.to);
+  if (!to) return json({ error: 'to must be a date' }, 400);
+  const v = await viewOf(env)(who);
+  if ((v.hideHr && PAYROLL_TABLES.has(t)) || (v.hideChecks && t === 'anomalies')) return json({ records: [], more: false, after: 0 });
+  const after = Number(body?.after) || 0, PAGE_H = 5000;
+  const { results } = await env.DB.prepare(`SELECT rec, seq FROM records WHERE tenant = ?1 AND t = ?2 AND deleted = 0 AND seq > ?3
+    AND COALESCE(json_extract(rec, '$.date'), json_extract(rec, '$.at'), '') >= ?4 AND COALESCE(json_extract(rec, '$.date'), json_extract(rec, '$.at'), '') < ?5 ORDER BY seq LIMIT ${PAGE_H + 1}`)
+    .bind(who.tenant, t, after, from, to).all();
+  const more = (results || []).length > PAGE_H;
+  const rows = more ? results.slice(0, PAGE_H) : results || [];
+  return json(`{"records":[${rows.map((r) => stripUserSecrets(t, r.rec)).join(',')}],"more":${more},"after":${rows.length ? rows[rows.length - 1].seq : after}}`);
 }
 
 // ---------- Mobile Money (per pharmacy) ----------
@@ -1511,6 +1553,7 @@ export default {
     // 18:00 UTC = 21:00 in Uganda: each pharmacy's daily summary email (worker/summary.js)
     if (event.cron === '0 18 * * *') {
       ctx.waitUntil((async () => { const e = withDatabase(env); await ensureSchema(e.DB); await pruneSignInTables(e.DB); })().then(() => console.log('sign-in tables pruned')).catch((e) => console.log('prune failed', e.message)));
+      ctx.waitUntil(pruneSnapshots(withDatabase(env), epochOf).then((n) => console.log('ready-made downloads pruned', n)).catch((e) => console.log('snapshot prune failed', e.message)));
       ctx.waitUntil(dailySummaries(withDatabase(env)).then((r) => console.log('daily summaries', r.map((x) => `${x.tenant}:${x.sent}${x.error ? ' ' + x.error : ''}`).join(', '))).catch((e) => console.log('daily summaries failed', e.message)));
       // and the scheduled Excel reports that are due today (worker/reports.js)
       ctx.waitUntil(scheduledReports(withDatabase(env)).then((r) => console.log('scheduled reports', r.map((x) => `${x.tenant}/${x.schedule}:${x.sent}${x.error ? ' ' + x.error : ''}`).join(', '))).catch((e) => console.log('scheduled reports failed', e.message)));
@@ -1604,6 +1647,16 @@ export default {
       const penv = providerEnv(env, who.tenantRow);
 
       if (path === '/api/sync' && req.method === 'POST') return await sync(env, body, who, ctx);
+      // faster sync, stage 3: ready-made compressed chunks of a full download (worker/snapshot.js)
+      if (path === '/api/snapshot' && req.method === 'POST') return await snapshotList(env, body, who, { json, epochOf });
+      if (path === '/api/snapshot/chunk' && req.method === 'POST') return await snapshotChunk(env, body, who, { json, epochOf, historySql: HISTORY_SQL, viewOf: viewOf(env), itemJson, windowOf, keepsRow });
+      // stage 4: brought-forward figures for a device keeping recent history, and older history for a page (worker/window.js)
+      if (path === '/api/balances' && req.method === 'POST') {
+        const W = windowOf(body);
+        if (!W) return json({ error: 'window must be a date' }, 400);
+        return json(await balancesAt(env, who.tenant, W, { epochOf }));
+      }
+      if (path === '/api/history' && req.method === 'POST') return await olderHistory(env, body, who);
       // A short-lived ticket to open the live WebSocket without putting the sign-in token in the URL (1.2)
       if (path === '/api/live-ticket' && req.method === 'POST') {
         if (!who.uid) return json({ error: 'Not available for this connection' }, 400);
