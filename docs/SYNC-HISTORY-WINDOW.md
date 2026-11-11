@@ -1,6 +1,6 @@
 # Recent history on devices (stage 4, recommendation G): design for the owner's approval
 
-Part of `docs/SYNC-SPEED-PLAN.md`. Nothing here is built until the owner approves it.
+Part of `docs/SYNC-SPEED-PLAN.md`. **Approved by the owner on 11 Nov 2026: the full design, first shipped with the window off by default ("everything"), then turned on.**
 
 ## What changes for the pharmacy
 

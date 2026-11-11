@@ -117,7 +117,7 @@ Ship stage 1 (build update), measure on the live cloud with a test pharmacy, the
 ## Stage 4: recent history on devices (G)
 
 This is the most delicate stage. It starts with a written design (S4.1), shown to the owner before any code:
-**`docs/SYNC-HISTORY-WINDOW.md`** (written 11 Nov 2026, waiting for the owner's OK).
+**`docs/SYNC-HISTORY-WINDOW.md`** (written 11 Nov 2026; **approved 11 Nov 2026: the full design, shipped first with the window off by default, then turned on to 12 months / 1 month once the equality checks on real pharmacies pass**).
 
 **S4.1 Design: everything that adds up history.** List every place in both apps that totals old records, and decide
 how each stays exact with only recent history on the device:
