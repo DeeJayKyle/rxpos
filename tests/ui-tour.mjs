@@ -63,8 +63,9 @@ await P.tap('.product-grid .product');
 await wait(400);
 check('phone POS: the docked sale shows the item count and total', /1 item/.test(await P.evaluate(() => document.querySelector('.sheet-handle')?.innerText || '')) && /UGX 1,200/.test(await P.evaluate(() => document.querySelector('.sheet-handle')?.innerText || '')));
 await P.screenshot({ path: path.join(out, 'phone-pos-docked.png') });
-await P.tap('.sheet-handle .grow'); await wait(500);
-check('tapping it slides the full sale up', await P.evaluate(() => document.querySelector('.pos-cart.sheet.open') !== null));
+await P.tap('.sheet-handle .grow');
+// wait for the sheet to open rather than a fixed pause: on a busy CI runner the tap and animation can take over 500 ms
+check('tapping it slides the full sale up', await P.waitForSelector('.pos-cart.sheet.open', { timeout: 5000 }).then(() => true, () => false));
 await P.screenshot({ path: path.join(out, 'phone-pos-sheet.png') });
 check('no page errors', errors.length === 0, errors.slice(0, 3).join(' | '));
 await b.close();
