@@ -654,6 +654,7 @@ function Shell() {
       <WeeklyPopup />
       <AutoReorder />
       <FirstDownload />
+      <HistoryLoading />
       <UpdateHost />
       <WebOffline />
       {twoStepOpen && <TwoStepModal onClose={() => setTwoStepOpen(false)} />}
@@ -690,7 +691,8 @@ function UpdateHost() {
 /** The first sign-in on a device downloads the whole pharmacy: show progress instead of empty pages */
 function FirstDownload() {
   const { syncStatus, db } = useStore();
-  if (!(syncStatus.first && syncStatus.state === 'syncing') || db.products.length > 50) return null;
+  // stage 2 of the faster sync: once the core (medicines, stock, clients, staff) is in, the app is ready to use
+  if (!(syncStatus.first && syncStatus.state === 'syncing') || syncStatus.history || db.products.length > 50) return null;
   return (
     <div className="first-sync">
       <div className="spinner" />
@@ -698,6 +700,13 @@ function FirstDownload() {
       <p className="muted">{syncStatus.progress || 'Downloading medicines, stock and staff. This happens only once.'}</p>
     </div>
   );
+}
+
+/** While a full download brings the older records (stage 2 of the faster sync): say that reports may still grow */
+function HistoryLoading() {
+  const { syncStatus } = useStore();
+  if (!(syncStatus.history && syncStatus.state === 'syncing')) return null;
+  return <div className="history-loading" role="status">{syncStatus.progress || 'Downloading older records…'} · sales history and reports fill in as they arrive; selling and stock are ready</div>;
 }
 
 /** Fade out the splash screen (index.html) once RxPOS is ready, after its short intro animation. */

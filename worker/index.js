@@ -43,6 +43,17 @@ import { localDay } from './dailystock.js';
 const DEFAULT_ROLE_PERMS = Object.fromEntries(DEFAULT_ROLES.map((r) => [r.id, new Set(r.permissions)]));
 
 const PAGE = 2500; // records per sync reply for apps that don't ask (before the faster sync, SYNC-SPEED-PLAN.md)
+// Faster sync, stage 2 (docs/SYNC-SPEED-PLAN.md): what a full download may leave for after the core. The core is
+// everything else: medicines, batches, every stock movement (stock is their sum), clients, suppliers, staff, money
+// records, and every sale a client's debt, an insurer's share or today's cash-up needs: sales to a named client,
+// unpaid or insured sales, and sales from the last days (?6, the cutoff the app sends). A deleted record is core.
+// Same rule in rxpos_flutter (it only sends the phase; the cloud decides).
+const HISTORY_TABLES = ['audit', 'messages', 'events', 'chatReads', 'chatMarks', 'chatPins', 'quizResults', 'tempLogs', 'anomalies'];
+const HISTORY_SQL = `t IN (${HISTORY_TABLES.map((x) => `'${x}'`).join(', ')}) OR (t = 'sales' AND deleted = 0
+  AND COALESCE(NULLIF(json_extract(rec, '$.customerId'), ''), 'walk-in') = 'walk-in'
+  AND json_extract(rec, '$.insurance') IS NULL
+  AND COALESCE(json_extract(rec, '$.paid'), json_extract(rec, '$.total'), 0) >= COALESCE(json_extract(rec, '$.total'), 0)
+  AND COALESCE(json_extract(rec, '$.date'), '') < ?6)`;
 const MAX_PAGE = 10000; // what an app may ask for with `limit` (stage 1: fewer round trips; about 250 KB compressed)
 const MAX_PUSH = 500;
 const TOKEN_DAYS = 30;
@@ -564,6 +575,8 @@ async function sync(env, body, who, ctx) {
   const tenant = who.tenant;
   const { deviceId, since = 0, changes = [], all = false } = body;
   const limit = Math.min(MAX_PAGE, Math.max(1, Math.floor(Number(body.limit)) || PAGE)); // stage 1: an app may ask for bigger pages
+  const phase = all === true && (body.phase === 'core' || body.phase === 'history') ? body.phase : null; // stage 2 (full downloads only)
+  const cutoff = typeof body.cutoff === 'string' && /^\d{4}-\d{2}-\d{2}/.test(body.cutoff) ? body.cutoff : new Date(Date.now() - 3 * 864e5).toISOString();
   if (!deviceId) return json({ error: 'Missing deviceId' }, 400);
   if (!Array.isArray(changes)) return json({ error: 'changes must be a list' }, 400);
   if (changes.length > MAX_PUSH) return json({ error: `Send at most ${MAX_PUSH} changes per request` }, 413);
@@ -807,8 +820,11 @@ async function sync(env, body, who, ctx) {
   const [pageRes, maxRes, epochRes] = await db.batch([
     // A device normally skips the records it sent itself. A full download (`all`, sync.js FULL_PULL) includes them: a
     // device that lost its own copy, or shares its device id with another one, gets everything back.
-    db.prepare('SELECT t, id, rec, deleted, at, seq FROM records WHERE tenant = ?1 AND seq > ?2 AND (?5 = 1 OR origin IS NOT ?3) ORDER BY seq LIMIT ?4')
-      .bind(tenant, Number(since) || 0, deviceId, limit + 1, all === true ? 1 : 0),
+    // Faster sync, stage 2: a full download may ask for the core first (`phase: 'core'`: what selling, stock and debts
+    // need) and the history after (`phase: 'history'`), both split by the same rule (HISTORY_SQL) at a cutoff date the
+    // app chose when the download began, so every record is in exactly one of them.
+    db.prepare(`SELECT t, id, rec, deleted, at, seq FROM records WHERE tenant = ?1 AND seq > ?2 AND (?5 = 1 OR origin IS NOT ?3)${phase === 'core' ? ` AND NOT (${HISTORY_SQL})` : phase === 'history' ? ` AND (${HISTORY_SQL})` : ''} ORDER BY seq LIMIT ?4`)
+      .bind(tenant, Number(since) || 0, deviceId, limit + 1, all === true ? 1 : 0, ...(phase ? [cutoff] : [])),
     db.prepare('SELECT MAX(seq) m FROM records WHERE tenant = ?1').bind(tenant),
     db.prepare("SELECT v FROM owner_config WHERE k = 'epoch'"), // 1.4 database epoch (changes on a restore)
   ], 'read');
@@ -824,7 +840,7 @@ async function sync(env, body, who, ctx) {
   const shown = hideHr || hideChecks ? page.filter((r) => !(hideHr && PAYROLL_TABLES.has(r.t)) && !(hideChecks && r.t === 'anomalies')) : page;
   // Build the response by hand so records stored as JSON text are not parsed and re-serialised (keeps CPU low)
   const items = shown.map((r) => `{"t":${JSON.stringify(r.t)},"id":${JSON.stringify(r.id)},"at":${JSON.stringify(r.at)},"deleted":${r.deleted ? 'true' : 'false'},"rec":${stripUserSecrets(r.t, r.rec)}}`);
-  return json(`{"changes":[${items.join(',')}],"cursor":${cursor},"more":${more},"applied":${applied},"refused":${refused},"refusedKeys":${JSON.stringify(refusedKeys)},"dupes":${dupes},"protocol":2,"limit":${limit},"epoch":${JSON.stringify(epoch)},"tenant":${JSON.stringify(tenant)}}`);
+  return json(`{"changes":[${items.join(',')}],"cursor":${cursor},"more":${more},"applied":${applied},"refused":${refused},"refusedKeys":${JSON.stringify(refusedKeys)},"dupes":${dupes},"protocol":2,"limit":${limit},"phase":${JSON.stringify(phase)},"epoch":${JSON.stringify(epoch)},"tenant":${JSON.stringify(tenant)}}`);
 }
 
 // ---------- Mobile Money (per pharmacy) ----------

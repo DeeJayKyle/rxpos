@@ -58,14 +58,16 @@ List<List<OutboxRow>> groupOutbox(List<OutboxRow> entries, [int max = pushBatch]
 }
 
 class SyncProgress {
-  const SyncProgress({required this.sent, required this.toSend, required this.received, required this.first});
+  const SyncProgress({required this.sent, required this.toSend, required this.received, required this.first, this.history = false});
   final int sent, toSend, received;
   /// the very first download on this device
   final bool first;
+  /// Faster sync, stage 2: the core is in (the app can be used); older records are still coming.
+  final bool history;
 
   String get label => sent < toSend
       ? 'Sending $sent of $toSend changes'
-      : '${first ? 'Downloading the pharmacy' : 'Downloading'}… $received records';
+      : '${history ? 'Downloading older records' : first ? 'Downloading the pharmacy' : 'Downloading'}… $received records';
 }
 
 class SyncResult {
@@ -81,6 +83,9 @@ class SyncResult {
 /// Records per page asked for (stage 1 of the faster sync; worker/index.js MAX_PAGE).
 const pullLimit = 10000;
 
+/// Stage 2: a full download's core has every sale from the last days (today's cash-up, returns); src/sync.js CORE_DAYS.
+const coreDays = 3;
+
 class SyncEngine {
   SyncEngine({required this.dio, required this.db, required this.cloudUrl, this.maxRequests = 100000});
 
@@ -95,10 +100,15 @@ class SyncEngine {
     var cfg = await SyncConfig.load(db);
     final full = cfg.needsFullPull;
     final first = cfg.lastSync == null;
+    // Faster sync, stage 2: a full download comes in phases: the core (medicines, stock, clients, staff, debts; the app
+    // can be used once it is in), then the history (older cash sales, audit log, messages…), then what changed since
+    // the core ended. A cloud without phases sends everything at once (src/sync.js, the same steps).
     if (full && !cfg.fullInProgress) {
-      cfg = cfg.copyWith(cursor: 0, fullInProgress: true);
+      cfg = cfg.copyWith(cursor: 0, fullInProgress: true, phase: 'core', coreCursor: 0,
+          cutoff: DateTime.now().toUtc().subtract(const Duration(days: coreDays)).toIso8601String());
       await cfg.save(db);
     }
+    var phase = full ? cfg.phase : null; // a download begun by an older version carries on without phases
     final batches = groupOutbox(await (db.select(db.outbox)..orderBy([(o) => OrderingTerm(expression: o.seq)])).get());
     final toSend = batches.fold(0, (a, b) => a + b.length);
     var cursor = cfg.cursor;
@@ -109,6 +119,7 @@ class SyncEngine {
     // is being saved the next one is already on its way. The cursor is still saved with each page's records.
     Future<SyncReply> ask(int since, List<OutboxRow> batch) async => _post({
           'deviceId': cfg.deviceId, 'since': since, 'changes': await _toChanges(batch), 'v': 2, 'limit': pullLimit, if (full) 'all': true,
+          if (phase == 'core' || phase == 'history') ...{'phase': phase, 'cutoff': cfg.cutoff},
         });
     Future<SyncReply>? ahead;
     try {
@@ -122,7 +133,11 @@ class SyncEngine {
           ahead = ask(reply.cursor, const []);
         }
         final restored = reply.epoch != null && epoch != null && reply.epoch != epoch;
+        // a cloud without phases ignored the phase and sent everything in order: carry on as one plain download
+        final plain = !restored && (phase == 'core' || phase == 'history') && reply.phase != phase;
+        if (plain) phase = null;
         final refusedKeys = reply.refusedKeys.toSet();
+        var moved = false;
         await db.transaction(() async {
           if (batch.isNotEmpty) {
             for (final e in batch) {
@@ -139,6 +154,7 @@ class SyncEngine {
             // the cloud was restored from a backup: download everything again from the start and merge
             epoch = reply.epoch;
             cursor = 0;
+            if (phase != null) phase = 'core';
           } else {
             epoch = reply.epoch ?? epoch;
             applied += await applyRemote(db, reply.changes);
@@ -146,12 +162,27 @@ class SyncEngine {
             cursor = reply.cursor;
           }
           // a restore also means: once the download is done, send everything this device holds again (see below)
-          cfg = cfg.copyWith(cursor: cursor, epoch: epoch, resendAfterRestore: restored ? true : null);
+          cfg = cfg.copyWith(cursor: cursor, epoch: epoch, resendAfterRestore: restored ? true : null,
+              phase: phase, clearPhase: phase == null, coreCursor: restored ? 0 : null);
+          // the core is in: the history next, from the start; then what changed since the core ended
+          if (!restored && i >= batches.length && !reply.more && (phase == 'core' || phase == 'history')) {
+            moved = true;
+            if (phase == 'core') {
+              phase = 'history';
+              cfg = cfg.copyWith(phase: phase, coreCursor: cursor, cursor: 0);
+              cursor = 0;
+            } else {
+              phase = 'tail';
+              cursor = cfg.coreCursor;
+              cfg = cfg.copyWith(phase: phase, cursor: cursor);
+            }
+          }
           await cfg.save(db);
         });
-        onProgress?.call(SyncProgress(sent: sent, toSend: toSend, received: received, first: first));
+        onProgress?.call(SyncProgress(sent: sent, toSend: toSend, received: received, first: first, history: phase == 'history' || phase == 'tail'));
         if (restored) continue;
         if (i >= batches.length && !reply.more) {
+          if (moved) continue; // on to the next phase
           complete = true;
           break;
         }
@@ -163,7 +194,7 @@ class SyncEngine {
     // batch above), but the run is not finished, so it must not be recorded as done: no lastSync, and a full download
     // stays in progress so the next run resumes it instead of starting a normal sync from a half-downloaded pharmacy.
     if (!complete) return SyncResult(sent: sent, refused: refused, received: received, applied: applied, full: full, complete: false);
-    cfg = cfg.copyWith(lastSync: DateTime.now().toUtc().toIso8601String(), lastError: '', fullPull: full ? fullPullVersion : null, fullInProgress: false);
+    cfg = cfg.copyWith(lastSync: DateTime.now().toUtc().toIso8601String(), lastError: '', fullPull: full ? fullPullVersion : null, fullInProgress: false, clearPhase: true);
     // step 7: once in sync, a device without a till number asks for one (document numbers, core/rules/doc_numbers.dart).
     // A cloud or hub without /api/till, or no answer: old-style numbers for now, asked again after the next sync.
     if (cfg.till == null) {

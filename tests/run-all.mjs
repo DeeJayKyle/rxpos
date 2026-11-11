@@ -47,6 +47,7 @@ const SUITES = [
   ['storage change detection (unit)', 'unit-diff.mjs', []],
   ['cloud restore resend (unit)', 'unit-sync-restore.mjs', []],
   ['first download resume (unit)', 'unit-sync-resume.mjs', []],
+  ['full download in phases (unit)', 'unit-sync-phases.mjs', []],
   ['theme choice (unit)', 'unit-theme.mjs', []],
   ['theme contrast', 'contrast-test.mjs', []],
   ['owner sign-in', 'owner-auth-test.mjs', []],
@@ -119,6 +120,7 @@ const SUITES = [
   ['sign-in finds the pharmacy at scale', 'v48-login-scale.mjs', []],
   ['dashboard sales card opens sales lines', 'v49-dashboard-sales-link.mjs', ['.output/v49']],
   ['scheduled email reports', 'v54-scheduled-reports.mjs', []],
+  ['faster sync: core first, history after', 'v71-sync-phases.mjs', []],
   // performance timings: only on request (npm run bench), never part of npm test
   ...(process.argv[2] === 'bench' ? [['benchmarks', 'bench.mjs', ['.output/bench']]] : []),
   // the Windows app's self-update needs a screen: Windows itself, or xvfb-run on Linux
@@ -131,7 +133,7 @@ const only = process.argv[2];
 const HUB = process.env.RXPOS_TEST_HUB === '1';
 const HUB_SUITES = new Set(['unit-policy.mjs', 'v14-api.mjs', 'v23-perms.mjs', 'v26-ratelimit.mjs', 'v27-secrets.mjs', 'v29-immutable.mjs', 'v38-sync-protocol.mjs',
   'v55-write-policy.mjs', 'v55-staff-ui.mjs', 'v56-sale-checks.mjs', 'v57-passwords.mjs', 'v58-throttle.mjs', 'v59-doc-numbers.mjs', 'v60-credit-limit.mjs',
-  'v61-field-merge.mjs', 'v61-field-merge-app.mjs', 'v37-reliability.mjs', 'hub-move.mjs', 'v63-day-close.mjs', 'v64-discount-blind.mjs', 'v65-gs1.mjs', 'v66-insurance.mjs']);
+  'v61-field-merge.mjs', 'v61-field-merge-app.mjs', 'v37-reliability.mjs', 'hub-move.mjs', 'v63-day-close.mjs', 'v64-discount-blind.mjs', 'v65-gs1.mjs', 'v66-insurance.mjs', 'v71-sync-phases.mjs']);
 // RXPOS_CI=1 (full-tests.yml): checks that need a service a CI machine can't reach are reported as skipped, not
 // failed, so the deploy gate isn't blocked by the outside world. Listed by exact check name: anything else that fails
 // still fails. Local runs (no RXPOS_CI) count them as failures as before.

@@ -25,6 +25,7 @@ const BACKGROUND = 60000;
 const PUSH_BATCH = 400;
 export const PULL_LIMIT = 10000; // records per page asked for (a cloud before the faster sync sends 2,500)
 export const FLUSH = 10000, FLUSH_MS = 3000; // downloaded records applied and saved together
+export const CORE_DAYS = 3; // stage 2: a full download's core has every sale from the last days (today's cash-up, returns)
 export const PROTOCOL = 2;
 // Bumped when every installed app must download the whole pharmacy again once and merge it (nothing is deleted, the
 // newer copy of each record wins, unsent changes are sent first). 1: Windows apps found missing deliveries, batches and
@@ -142,7 +143,11 @@ export function createSync({ getDb, getCfg, saveCfg, applyRemote, onStatus, stor
       // download everything this time. It starts from 0 once (fullInProgress); a run cut off part-way leaves the pages
       // that arrived on the device, and the next run carries on from the last one instead of starting again.
       const full = (c.fullPull || 0) < FULL_PULL;
-      if (full && !c.fullInProgress) await saveCfg({ ...getCfg(), cursor: 0, fullInProgress: true });
+      // Faster sync, stage 2: a full download comes in phases. First the core (medicines, stock, clients, staff, open
+      // debts: the app is usable once it is in), then the history (older cash sales, audit log, messages…), then
+      // whatever changed meanwhile, from where the core ended. A cloud without phases sends everything at once.
+      if (full && !c.fullInProgress) await saveCfg({ ...getCfg(), cursor: 0, fullInProgress: true, phase: 'core', coreCursor: 0, cutoff: new Date(Date.now() - CORE_DAYS * 864e5).toISOString() });
+      let phase = full ? getCfg().phase || null : null; // a download begun by an older version carries on without phases
       let cursor = full ? getCfg().cursor || 0 : c.cursor || 0, epoch = c.epoch, i = 0, sent = 0, pulled = 0, refused = 0;
       // Faster sync, stage 1 (docs/SYNC-SPEED-PLAN.md): downloaded pages are applied and saved in batches (FLUSH records
       // or every FLUSH_MS) instead of one by one, since each save rewrites the storage buckets it touches and redraws
@@ -154,7 +159,9 @@ export function createSync({ getDb, getCfg, saveCfg, applyRemote, onStatus, stor
         await saveCfg({ ...getCfg(), cursor: heldCursor, epoch });
         heldAt = Date.now();
       };
-      const ask = (since, batch) => post(c.url, c.key, { deviceId: c.deviceId, since, changes: toChanges(batch, getDb()), v: PROTOCOL, limit: PULL_LIMIT, ...(full ? { all: true } : {}) });
+      const ask = (since, batch) => post(c.url, c.key, { deviceId: c.deviceId, since, changes: toChanges(batch, getDb()), v: PROTOCOL, limit: PULL_LIMIT, ...(full ? { all: true } : {}),
+        ...(phase === 'core' || phase === 'history' ? { phase, cutoff: getCfg().cutoff } : {}) });
+      const later = () => phase === 'history' || phase === 'tail'; // the core is in: the app can be used
       let ahead = null; // the next page, asked for while this one is saved
       try {
         for (;;) {
@@ -178,8 +185,11 @@ export function createSync({ getDb, getCfg, saveCfg, applyRemote, onStatus, stor
           if (r.epoch !== undefined && epoch !== undefined && r.epoch !== epoch) {
             if (held.length) await flush(); // what arrived before the restore is still merged (newest copy wins)
             epoch = r.epoch; cursor = 0; heldCursor = 0;
-            await saveCfg({ ...getCfg(), cursor, epoch, resendAfterRestore: true }); continue;
+            if (phase) phase = 'core';
+            await saveCfg({ ...getCfg(), cursor, epoch, resendAfterRestore: true, ...(phase ? { phase, coreCursor: 0 } : {}) }); continue;
           }
+          // a cloud without phases ignored the phase and sent everything in order: carry on as one plain download
+          if ((phase === 'core' || phase === 'history') && r.phase !== phase) { phase = null; await saveCfg({ ...getCfg(), phase: null }); }
           epoch = r.epoch ?? epoch;
           cursor = Number(r.cursor);
           const sending = i < batches.length;
@@ -188,8 +198,14 @@ export function createSync({ getDb, getCfg, saveCfg, applyRemote, onStatus, stor
           if (r.changes.length) held.push(...r.changes);
           heldCursor = cursor;
           if (sending || !r.more || held.length >= FLUSH || Date.now() - heldAt >= FLUSH_MS) await flush();
-          if (!sending && !r.more) break;
-          onStatus({ state: 'syncing', first: !c.lastSync, progress: sending ? `Sending ${sent.toLocaleString()} of ${total.toLocaleString()} changes` : `Downloading… ${(pulled + held.length).toLocaleString()} records`, ...(await counts()) });
+          if (!sending && !r.more) {
+            // the core is in: the history next, from the start; then what changed since the core ended
+            if (phase === 'core') { phase = 'history'; await saveCfg({ ...getCfg(), phase, coreCursor: cursor, cursor: 0 }); cursor = 0; heldCursor = 0; }
+            else if (phase === 'history') { phase = 'tail'; cursor = getCfg().coreCursor || 0; heldCursor = cursor; await saveCfg({ ...getCfg(), phase, cursor }); }
+            else break;
+          }
+          const what = later() ? 'Downloading older records' : 'Downloading';
+          onStatus({ state: 'syncing', first: !c.lastSync, history: later(), progress: sending ? `Sending ${sent.toLocaleString()} of ${total.toLocaleString()} changes` : `${what}… ${(pulled + held.length).toLocaleString()} records`, ...(await counts()) });
         }
       } catch (e) {
         // cut off part-way (the connection dropped): what already arrived is saved, so the next run carries on after it
@@ -207,7 +223,7 @@ export function createSync({ getDb, getCfg, saveCfg, applyRemote, onStatus, stor
         await saveCfg({ ...getCfg(), resendAfterRestore: false }); // after the commit: a crash in between only queues it twice
         if (all.length) again = true; // send them straight away
       }
-      const next = { ...getCfg(), lastSync: now(), lastError: '', ...(full ? { fullPull: FULL_PULL, fullInProgress: false } : {}) };
+      const next = { ...getCfg(), lastSync: now(), lastError: '', ...(full ? { fullPull: FULL_PULL, fullInProgress: false, phase: null } : {}) };
       await saveCfg(next);
       failures = 0; retryAt = 0;
       result = { state: 'ok', lastSync: next.lastSync, pushed: sent, pulled, refused, ...(await counts()) };

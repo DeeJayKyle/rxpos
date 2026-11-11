@@ -652,6 +652,7 @@ details input { width: 100%; }
 
 .first-sync { position: fixed; inset: 0; z-index: 110; display: grid; place-items: center; align-content: center; gap: 10px; text-align: center; padding: 24px; background: color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: blur(4px); }
 .first-sync h3 { margin: 8px 0 0; }
+.history-loading { position: fixed; left: 50%; bottom: 12px; transform: translateX(-50%); z-index: 105; max-width: min(640px, calc(100vw - 32px)); padding: 8px 14px; border-radius: 999px; font-size: 13px; background: var(--surface); color: var(--text); border: 1px solid var(--border); box-shadow: 0 4px 16px rgb(0 0 0 / .12); pointer-events: none; }
 
 /* dashboard: promotions & weather */
 .promo-list { display: flex; flex-direction: column; }
