@@ -12,8 +12,12 @@ const MAIN_BRANCH_ID = 'main'; // store.jsx MAIN_BRANCH (kept here so this modul
 
 export const SELF_CHECK = 300;
 
-function add(idx, list) {
+// Faster sync, stage 4 (docs/SYNC-HISTORY-WINDOW.md): a device keeping recent history only starts from the cloud's
+// brought-forward balances at its window start W (win = { W, stock: [{ branch, batch, product, qty }] }) and adds the
+// movements dated from W. Without a window, everything is as before.
+function add(idx, list, W) {
   for (const mv of list) {
+    if (W && String(mv.date || '') < W) continue; // already in the brought-forward balance
     const br = mv.branchId || MAIN_BRANCH_ID;
     const bk = br + '|' + (mv.batchId || 'lb-' + mv.productId);
     const pk = br + '|' + mv.productId;
@@ -24,9 +28,15 @@ function add(idx, list) {
 }
 
 /** The balances from scratch: { batch: `${branch}|${batchId}` → qty, product: `${branch}|${productId}` → qty, total } */
-export function countAll(movements) {
+export function countAll(movements, win) {
   const idx = { batch: new Map(), product: new Map(), total: new Map() };
-  add(idx, movements || []);
+  for (const b of win?.stock || []) {
+    const bk = b.branch + '|' + b.batch, pk = b.branch + '|' + b.product;
+    idx.batch.set(bk, (idx.batch.get(bk) || 0) + b.qty);
+    idx.product.set(pk, (idx.product.get(pk) || 0) + b.qty);
+    idx.total.set(b.product, (idx.total.get(b.product) || 0) + b.qty);
+  }
+  add(idx, movements || [], win?.W);
   return idx;
 }
 
@@ -48,26 +58,26 @@ const same = (a, b) => {
  * { batch, product, total, how } — how: 'same' | 'front' | 'back' | 'full' | 'checked' (for tests and the benchmark).
  */
 export function createStockIndexer({ selfCheck = SELF_CHECK, onMismatch = () => {} } = {}) {
-  let prev = null, idx = null, steps = 0;
-  return function index(movements) {
+  let prev = null, idx = null, steps = 0, prevWin = null;
+  return function index(movements, win = null) {
     const m = movements || [];
-    if (m === prev && idx) return { ...idx, how: 'same' }; // asked twice for the same list (React may do that)
+    if (m === prev && win === prevWin && idx) return { ...idx, how: 'same' }; // asked twice for the same list (React may do that)
     let how = 'full', added = null;
-    if (prev && idx && m.length >= prev.length && prev.length > 0) {
+    if (prev && idx && win === prevWin && m.length >= prev.length && prev.length > 0) {
       const k = m.length - prev.length;
       if (m[k] === prev[0] && m[m.length - 1] === prev[prev.length - 1]) { how = 'front'; added = m.slice(0, k); }
       else if (m[0] === prev[0] && m[prev.length - 1] === prev[prev.length - 1]) { how = 'back'; added = m.slice(prev.length); }
     }
     if (added) {
-      add(idx, added);
+      add(idx, added, win?.W);
       if (++steps >= selfCheck) {
         steps = 0;
-        const full = countAll(m);
+        const full = countAll(m, win);
         if (!same(full, idx)) { onMismatch(); idx = full; }
         how = 'checked';
       }
-    } else { idx = countAll(m); steps = 0; }
-    prev = m;
+    } else { idx = countAll(m, win); steps = 0; }
+    prev = m; prevWin = win;
     return { batch: idx.batch, product: idx.product, total: idx.total, how };
   };
 }

@@ -102,6 +102,7 @@ class AppShell extends ConsumerWidget {
       // the Hardware Diagnostic HUD design: a status bar (printer, scanner, connection, alerts) over every page
       Column(children: [if (tokensOf(context).hud) const HardwareHud(), const OfflineBanner(), Expanded(child: child)]),
       const FirstDownload(),
+      const HistoryLoading(),
       PopupHost(location: location),
       EngageWatchers(location: location),
       const CallOverlay(),

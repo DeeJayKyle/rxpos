@@ -60,10 +60,12 @@ void main() {
     final out = await AuthRepository(dio: app, db: db, cloudUrl: base).signIn(email: email, password: password);
     token = (out as SignedIn).session.token;
     final watch = Stopwatch()..start();
-    final r = await SyncEngine(dio: app, db: db, cloudUrl: base).run();
+    int? readyMs; // stage 2: the core is in (the app can be used)
+    final r = await SyncEngine(dio: app, db: db, cloudUrl: base).run(onProgress: (p) => readyMs ??= p.history ? watch.elapsedMilliseconds : null);
     watch.stop();
     // ignore: avoid_print
-    print('first download: ${recs.length} records in ${watch.elapsedMilliseconds} ms');
+    print('first download: ${recs.length} records in ${watch.elapsedMilliseconds} ms; ready to use after ${readyMs ?? '-'} ms');
+    expect(readyMs, isNotNull, reason: 'the cloud sends the core first, then the history');
 
     final store = RecordStore(db);
     expect(r.complete, isTrue);

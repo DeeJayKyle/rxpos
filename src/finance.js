@@ -1,5 +1,7 @@
 // Money ledger derived from the records: every inflow/outflow with the account it hit.
 // Accounts are the `banks` table; "cash-drawer" (Cash at hand) is the default.
+import { windowSums } from './balances.js';
+
 export const CASH = 'cash-drawer';
 
 export function ledger(db) {
@@ -45,12 +47,15 @@ export function ledger(db) {
 
 export function accountBalances(db) {
   const bal = Object.fromEntries(db.banks.map((b) => [b.id, Number(b.opening) || 0]));
+  const w = windowSums(db); // stage 4: brought forward + the entries from the window start (src/balances.js)
+  if (w) { for (const [k, v] of w.account) bal[k] = (bal[k] || 0) + v; return bal; }
   for (const x of ledger(db)) bal[x.account] = (bal[x.account] || 0) + x.in - x.out;
   return bal;
 }
 
 export function loanBalance(db, loan) {
-  const repaid = db.payments.filter((p) => p.kind === 'loan' && p.partyId === loan.id).reduce((a, p) => a + p.amount, 0);
+  const w = windowSums(db);
+  const repaid = w ? w.loan.get(loan.id) || 0 : db.payments.filter((p) => p.kind === 'loan' && p.partyId === loan.id).reduce((a, p) => a + p.amount, 0);
   const total = loan.amount * (1 + (Number(loan.interestRate) || 0) / 100);
   return { total, repaid, balance: total - repaid };
 }

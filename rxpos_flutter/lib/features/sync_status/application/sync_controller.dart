@@ -19,10 +19,12 @@ part 'sync_controller.g.dart';
 enum SyncState { signedOut, syncing, synced, offline, needsAttention, signInAgain }
 
 class SyncStatus {
-  const SyncStatus({required this.state, this.pending = 0, this.rejected = 0, this.lastSync, this.error, this.progress, this.first = false});
+  const SyncStatus({required this.state, this.pending = 0, this.rejected = 0, this.lastSync, this.error, this.progress, this.first = false, this.history = false});
   final SyncState state;
   /// The first download of the pharmacy on this device (it has never synced, or that download was interrupted).
   final bool first;
+  /// Faster sync, stage 2: the core is in and the app can be used; older records are still downloading.
+  final bool history;
   final int pending, rejected;
   final String? lastSync, error, progress;
 
@@ -94,8 +96,10 @@ class SyncController extends _$SyncController {
     try {
       final cfg = await SyncConfig.load(ref.read(appDatabaseProvider));
       final first = cfg.lastSync == null || cfg.fullInProgress;
-      state = SyncStatus(state: SyncState.syncing, lastSync: cfg.lastSync, pending: state.pending, rejected: state.rejected, first: first);
-      final result = await ref.read(syncEngineProvider).run(onProgress: (p) => state = SyncStatus(state: SyncState.syncing, progress: p.label, lastSync: cfg.lastSync, first: first));
+      final later = cfg.fullInProgress && (cfg.phase == 'history' || cfg.phase == 'tail'); // resumed after the core
+      state = SyncStatus(state: SyncState.syncing, lastSync: cfg.lastSync, pending: state.pending, rejected: state.rejected, first: first, history: later);
+      final result = await ref.read(syncEngineProvider).run(
+          onProgress: (p) => state = SyncStatus(state: SyncState.syncing, progress: p.label, lastSync: cfg.lastSync, first: first, history: p.history));
       if (!result.complete) _again = true; // stopped at its request limit: carry on straight away
       _failures = 0;
       final c = await _counts();

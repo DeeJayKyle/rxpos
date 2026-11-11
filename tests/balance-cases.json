@@ -1,0 +1,3060 @@
+{
+ "about": "src/balances.js entriesOf: the entries each record makes (faster sync, stage 4). Made by tests/unit-balances.mjs --write.",
+ "cases": [
+  {
+   "t": "movements",
+   "rec": {
+    "id": "m0",
+    "productId": "p0",
+    "batchId": "b0",
+    "qty": 12,
+    "date": "2026-04-14T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "stock",
+     "key": "main|b0",
+     "product": "p0",
+     "branch": "main",
+     "date": "2026-04-14T00:00:00.000Z",
+     "amount": 12
+    }
+   ]
+  },
+  {
+   "t": "movements",
+   "rec": {
+    "id": "m1",
+    "productId": "p1",
+    "qty": 2,
+    "date": "2024-02-17T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "stock",
+     "key": "main|lb-p1",
+     "product": "p1",
+     "branch": "main",
+     "date": "2024-02-17T00:00:00.000Z",
+     "amount": 2
+    }
+   ]
+  },
+  {
+   "t": "movements",
+   "rec": {
+    "id": "m2",
+    "productId": "p2",
+    "qty": 27,
+    "date": "2025-04-23T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "stock",
+     "key": "main|lb-p2",
+     "product": "p2",
+     "branch": "main",
+     "date": "2025-04-23T00:00:00.000Z",
+     "amount": 27
+    }
+   ]
+  },
+  {
+   "t": "movements",
+   "rec": {
+    "id": "m3",
+    "productId": "p3",
+    "batchId": "b3",
+    "branchId": "b2",
+    "qty": 12,
+    "date": "2025-11-30T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "stock",
+     "key": "b2|b3",
+     "product": "p3",
+     "branch": "b2",
+     "date": "2025-11-30T00:00:00.000Z",
+     "amount": 12
+    }
+   ]
+  },
+  {
+   "t": "movements",
+   "rec": {
+    "id": "m4",
+    "productId": "p4",
+    "batchId": "b4",
+    "branchId": "b2",
+    "qty": 7,
+    "date": "2026-02-05T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "stock",
+     "key": "b2|b4",
+     "product": "p4",
+     "branch": "b2",
+     "date": "2026-02-05T00:00:00.000Z",
+     "amount": 7
+    }
+   ]
+  },
+  {
+   "t": "movements",
+   "rec": {
+    "id": "m5",
+    "productId": "p5",
+    "batchId": "b5",
+    "branchId": "b2",
+    "qty": -8,
+    "date": "2025-11-05T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "stock",
+     "key": "b2|b5",
+     "product": "p5",
+     "branch": "b2",
+     "date": "2025-11-05T00:00:00.000Z",
+     "amount": -8
+    }
+   ]
+  },
+  {
+   "t": "movements",
+   "rec": {
+    "id": "m6",
+    "productId": "p6",
+    "batchId": "b6",
+    "branchId": "b2",
+    "qty": -5,
+    "date": "2026-06-02T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "stock",
+     "key": "b2|b6",
+     "product": "p6",
+     "branch": "b2",
+     "date": "2026-06-02T00:00:00.000Z",
+     "amount": -5
+    }
+   ]
+  },
+  {
+   "t": "movements",
+   "rec": {
+    "id": "m7",
+    "productId": "p0",
+    "branchId": "b2",
+    "qty": 6,
+    "date": "2024-04-07T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "stock",
+     "key": "b2|lb-p0",
+     "product": "p0",
+     "branch": "b2",
+     "date": "2024-04-07T00:00:00.000Z",
+     "amount": 6
+    }
+   ]
+  },
+  {
+   "t": "movements",
+   "rec": {
+    "id": "m8",
+    "productId": "p1",
+    "branchId": "b2",
+    "qty": 19,
+    "date": "2024-03-17T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "stock",
+     "key": "b2|lb-p1",
+     "product": "p1",
+     "branch": "b2",
+     "date": "2024-03-17T00:00:00.000Z",
+     "amount": 19
+    }
+   ]
+  },
+  {
+   "t": "movements",
+   "rec": {
+    "id": "m9",
+    "productId": "p2",
+    "batchId": "b9",
+    "qty": -1,
+    "date": "2025-06-15T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "stock",
+     "key": "main|b9",
+     "product": "p2",
+     "branch": "main",
+     "date": "2025-06-15T00:00:00.000Z",
+     "amount": -1
+    }
+   ]
+  },
+  {
+   "t": "movements",
+   "rec": {
+    "id": "m10",
+    "productId": "p3",
+    "batchId": "b10",
+    "branchId": "main",
+    "qty": 8,
+    "date": "2025-10-02T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "stock",
+     "key": "main|b10",
+     "product": "p3",
+     "branch": "main",
+     "date": "2025-10-02T00:00:00.000Z",
+     "amount": 8
+    }
+   ]
+  },
+  {
+   "t": "movements",
+   "rec": {
+    "id": "m11",
+    "productId": "p4",
+    "batchId": "b0",
+    "branchId": "main",
+    "qty": 23,
+    "date": "2025-07-17T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "stock",
+     "key": "main|b0",
+     "product": "p4",
+     "branch": "main",
+     "date": "2025-07-17T00:00:00.000Z",
+     "amount": 23
+    }
+   ]
+  },
+  {
+   "t": "movements",
+   "rec": {
+    "id": "m12",
+    "productId": "p5",
+    "batchId": "b1",
+    "qty": 7,
+    "date": "2024-06-09T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "stock",
+     "key": "main|b1",
+     "product": "p5",
+     "branch": "main",
+     "date": "2024-06-09T00:00:00.000Z",
+     "amount": 7
+    }
+   ]
+  },
+  {
+   "t": "movements",
+   "rec": {
+    "id": "m13",
+    "productId": "p6",
+    "batchId": "b2",
+    "qty": 12,
+    "date": "2025-03-19T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "stock",
+     "key": "main|b2",
+     "product": "p6",
+     "branch": "main",
+     "date": "2025-03-19T00:00:00.000Z",
+     "amount": 12
+    }
+   ]
+  },
+  {
+   "t": "movements",
+   "rec": {
+    "id": "m14",
+    "productId": "p0",
+    "branchId": "b2",
+    "qty": -5,
+    "date": "2024-01-02T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "stock",
+     "key": "b2|lb-p0",
+     "product": "p0",
+     "branch": "b2",
+     "date": "2024-01-02T00:00:00.000Z",
+     "amount": -5
+    }
+   ]
+  },
+  {
+   "t": "movements",
+   "rec": {
+    "id": "m15",
+    "productId": "p1",
+    "batchId": "b4",
+    "qty": -6,
+    "date": "2025-05-03T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "stock",
+     "key": "main|b4",
+     "product": "p1",
+     "branch": "main",
+     "date": "2025-05-03T00:00:00.000Z",
+     "amount": -6
+    }
+   ]
+  },
+  {
+   "t": "movements",
+   "rec": {
+    "id": "m16",
+    "productId": "p2",
+    "batchId": "b5",
+    "qty": 3,
+    "date": "2024-12-31T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "stock",
+     "key": "main|b5",
+     "product": "p2",
+     "branch": "main",
+     "date": "2024-12-31T00:00:00.000Z",
+     "amount": 3
+    }
+   ]
+  },
+  {
+   "t": "movements",
+   "rec": {
+    "id": "m17",
+    "productId": "p3",
+    "batchId": "b6",
+    "qty": 8,
+    "date": "2025-03-09T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "stock",
+     "key": "main|b6",
+     "product": "p3",
+     "branch": "main",
+     "date": "2025-03-09T00:00:00.000Z",
+     "amount": 8
+    }
+   ]
+  },
+  {
+   "t": "movements",
+   "rec": {
+    "id": "m18",
+    "productId": "p4",
+    "batchId": "b7",
+    "qty": 1,
+    "date": "2026-03-07T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "stock",
+     "key": "main|b7",
+     "product": "p4",
+     "branch": "main",
+     "date": "2026-03-07T00:00:00.000Z",
+     "amount": 1
+    }
+   ]
+  },
+  {
+   "t": "movements",
+   "rec": {
+    "id": "m19",
+    "productId": "p5",
+    "batchId": "b8",
+    "branchId": "main",
+    "qty": 26,
+    "date": "2025-10-05T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "stock",
+     "key": "main|b8",
+     "product": "p5",
+     "branch": "main",
+     "date": "2025-10-05T00:00:00.000Z",
+     "amount": 26
+    }
+   ]
+  },
+  {
+   "t": "movements",
+   "rec": {
+    "id": "m20",
+    "productId": "p6",
+    "batchId": "b9",
+    "branchId": "main",
+    "qty": 0,
+    "date": "2026-01-13T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "stock",
+     "key": "main|b9",
+     "product": "p6",
+     "branch": "main",
+     "date": "2026-01-13T00:00:00.000Z",
+     "amount": 0
+    }
+   ]
+  },
+  {
+   "t": "movements",
+   "rec": {
+    "id": "m21",
+    "productId": "p0",
+    "batchId": "b10",
+    "branchId": "main",
+    "qty": 8,
+    "date": "2025-11-11T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "stock",
+     "key": "main|b10",
+     "product": "p0",
+     "branch": "main",
+     "date": "2025-11-11T00:00:00.000Z",
+     "amount": 8
+    }
+   ]
+  },
+  {
+   "t": "movements",
+   "rec": {
+    "id": "m22",
+    "productId": "p1",
+    "batchId": "b0",
+    "branchId": "main",
+    "qty": 2,
+    "date": "2024-07-03T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "stock",
+     "key": "main|b0",
+     "product": "p1",
+     "branch": "main",
+     "date": "2024-07-03T00:00:00.000Z",
+     "amount": 2
+    }
+   ]
+  },
+  {
+   "t": "movements",
+   "rec": {
+    "id": "m23",
+    "productId": "p2",
+    "batchId": "b1",
+    "branchId": "main",
+    "qty": 15,
+    "date": "2025-09-21T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "stock",
+     "key": "main|b1",
+     "product": "p2",
+     "branch": "main",
+     "date": "2025-09-21T00:00:00.000Z",
+     "amount": 15
+    }
+   ]
+  },
+  {
+   "t": "movements",
+   "rec": {
+    "id": "m24",
+    "productId": "p3",
+    "batchId": "b2",
+    "branchId": "main",
+    "qty": 9,
+    "date": "2024-10-30T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "stock",
+     "key": "main|b2",
+     "product": "p3",
+     "branch": "main",
+     "date": "2024-10-30T00:00:00.000Z",
+     "amount": 9
+    }
+   ]
+  },
+  {
+   "t": "movements",
+   "rec": {
+    "id": "m25",
+    "productId": "p4",
+    "branchId": "b2",
+    "qty": 7,
+    "date": "2025-11-06T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "stock",
+     "key": "b2|lb-p4",
+     "product": "p4",
+     "branch": "b2",
+     "date": "2025-11-06T00:00:00.000Z",
+     "amount": 7
+    }
+   ]
+  },
+  {
+   "t": "movements",
+   "rec": {
+    "id": "m26",
+    "productId": "p5",
+    "batchId": "b4",
+    "qty": -3,
+    "date": "2025-09-09T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "stock",
+     "key": "main|b4",
+     "product": "p5",
+     "branch": "main",
+     "date": "2025-09-09T00:00:00.000Z",
+     "amount": -3
+    }
+   ]
+  },
+  {
+   "t": "movements",
+   "rec": {
+    "id": "m27",
+    "productId": "p6",
+    "batchId": "b5",
+    "branchId": "main",
+    "qty": 18,
+    "date": "2026-01-10T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "stock",
+     "key": "main|b5",
+     "product": "p6",
+     "branch": "main",
+     "date": "2026-01-10T00:00:00.000Z",
+     "amount": 18
+    }
+   ]
+  },
+  {
+   "t": "movements",
+   "rec": {
+    "id": "m28",
+    "productId": "p0",
+    "batchId": "b6",
+    "qty": -10,
+    "date": "2025-11-03T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "stock",
+     "key": "main|b6",
+     "product": "p0",
+     "branch": "main",
+     "date": "2025-11-03T00:00:00.000Z",
+     "amount": -10
+    }
+   ]
+  },
+  {
+   "t": "movements",
+   "rec": {
+    "id": "m29",
+    "productId": "p1",
+    "batchId": "b7",
+    "qty": 24,
+    "date": "2024-06-25T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "stock",
+     "key": "main|b7",
+     "product": "p1",
+     "branch": "main",
+     "date": "2024-06-25T00:00:00.000Z",
+     "amount": 24
+    }
+   ]
+  },
+  {
+   "t": "movements",
+   "rec": {
+    "id": "m30",
+    "productId": "p2",
+    "batchId": "b8",
+    "qty": 20,
+    "date": "2026-06-05T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "stock",
+     "key": "main|b8",
+     "product": "p2",
+     "branch": "main",
+     "date": "2026-06-05T00:00:00.000Z",
+     "amount": 20
+    }
+   ]
+  },
+  {
+   "t": "movements",
+   "rec": {
+    "id": "m31",
+    "productId": "p3",
+    "batchId": "b9",
+    "branchId": "main",
+    "qty": 23,
+    "date": "2024-08-02T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "stock",
+     "key": "main|b9",
+     "product": "p3",
+     "branch": "main",
+     "date": "2024-08-02T00:00:00.000Z",
+     "amount": 23
+    }
+   ]
+  },
+  {
+   "t": "movements",
+   "rec": {
+    "id": "m32",
+    "productId": "p4",
+    "batchId": "b10",
+    "branchId": "main",
+    "qty": 25,
+    "date": "2026-01-20T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "stock",
+     "key": "main|b10",
+     "product": "p4",
+     "branch": "main",
+     "date": "2026-01-20T00:00:00.000Z",
+     "amount": 25
+    }
+   ]
+  },
+  {
+   "t": "movements",
+   "rec": {
+    "id": "m33",
+    "productId": "p5",
+    "batchId": "b0",
+    "branchId": "b2",
+    "qty": 3,
+    "date": "2024-06-16T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "stock",
+     "key": "b2|b0",
+     "product": "p5",
+     "branch": "b2",
+     "date": "2024-06-16T00:00:00.000Z",
+     "amount": 3
+    }
+   ]
+  },
+  {
+   "t": "movements",
+   "rec": {
+    "id": "m34",
+    "productId": "p6",
+    "branchId": "main",
+    "qty": -7,
+    "date": "2025-11-18T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "stock",
+     "key": "main|lb-p6",
+     "product": "p6",
+     "branch": "main",
+     "date": "2025-11-18T00:00:00.000Z",
+     "amount": -7
+    }
+   ]
+  },
+  {
+   "t": "movements",
+   "rec": {
+    "id": "m35",
+    "productId": "p0",
+    "branchId": "b2",
+    "qty": 8,
+    "date": "2026-06-12T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "stock",
+     "key": "b2|lb-p0",
+     "product": "p0",
+     "branch": "b2",
+     "date": "2026-06-12T00:00:00.000Z",
+     "amount": 8
+    }
+   ]
+  },
+  {
+   "t": "movements",
+   "rec": {
+    "id": "m36",
+    "productId": "p1",
+    "branchId": "b2",
+    "qty": 8,
+    "date": "2025-01-02T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "stock",
+     "key": "b2|lb-p1",
+     "product": "p1",
+     "branch": "b2",
+     "date": "2025-01-02T00:00:00.000Z",
+     "amount": 8
+    }
+   ]
+  },
+  {
+   "t": "movements",
+   "rec": {
+    "id": "m37",
+    "productId": "p2",
+    "batchId": "b4",
+    "branchId": "main",
+    "qty": 15,
+    "date": "2024-07-30T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "stock",
+     "key": "main|b4",
+     "product": "p2",
+     "branch": "main",
+     "date": "2024-07-30T00:00:00.000Z",
+     "amount": 15
+    }
+   ]
+  },
+  {
+   "t": "movements",
+   "rec": {
+    "id": "m38",
+    "productId": "p3",
+    "batchId": "b5",
+    "branchId": "main",
+    "qty": 18,
+    "date": "2025-11-04T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "stock",
+     "key": "main|b5",
+     "product": "p3",
+     "branch": "main",
+     "date": "2025-11-04T00:00:00.000Z",
+     "amount": 18
+    }
+   ]
+  },
+  {
+   "t": "movements",
+   "rec": {
+    "id": "m39",
+    "productId": "p4",
+    "batchId": "b6",
+    "branchId": "main",
+    "qty": 24,
+    "date": "2024-03-17T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "stock",
+     "key": "main|b6",
+     "product": "p4",
+     "branch": "main",
+     "date": "2024-03-17T00:00:00.000Z",
+     "amount": 24
+    }
+   ]
+  },
+  {
+   "t": "sales",
+   "rec": {
+    "id": "s0",
+    "total": 12000,
+    "paid": 12000,
+    "date": "2024-08-27T00:00:00.000Z",
+    "bankId": "bank-1",
+    "status": "completed"
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "bank-1",
+     "date": "2024-08-27T00:00:00.000Z",
+     "amount": 12000
+    }
+   ]
+  },
+  {
+   "t": "sales",
+   "rec": {
+    "id": "s1",
+    "total": 19500,
+    "paid": 19500,
+    "date": "2024-04-02T00:00:00.000Z",
+    "customerId": "walk-in",
+    "bankId": "cash-drawer",
+    "status": "completed"
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "cash-drawer",
+     "date": "2024-04-02T00:00:00.000Z",
+     "amount": 19500
+    }
+   ]
+  },
+  {
+   "t": "sales",
+   "rec": {
+    "id": "s2",
+    "total": 8000,
+    "paid": 8000,
+    "date": "2024-11-20T00:00:00.000Z",
+    "customerId": "c3",
+    "bankId": "momo",
+    "status": "refunded",
+    "refundedAt": "2024-10-30T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "momo",
+     "date": "2024-11-20T00:00:00.000Z",
+     "amount": 8000
+    },
+    {
+     "kind": "account",
+     "key": "momo",
+     "date": "2024-10-30T00:00:00.000Z",
+     "amount": -8000
+    }
+   ]
+  },
+  {
+   "t": "sales",
+   "rec": {
+    "id": "s3",
+    "total": 2500,
+    "date": "2024-10-30T00:00:00.000Z",
+    "customerId": "c3",
+    "bankId": "momo",
+    "status": "completed"
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "momo",
+     "date": "2024-10-30T00:00:00.000Z",
+     "amount": 2500
+    }
+   ]
+  },
+  {
+   "t": "sales",
+   "rec": {
+    "id": "s4",
+    "total": 15000,
+    "paid": 15000,
+    "date": "2024-12-28T00:00:00.000Z",
+    "customerId": "c2",
+    "bankId": "momo",
+    "status": "completed"
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "momo",
+     "date": "2024-12-28T00:00:00.000Z",
+     "amount": 15000
+    }
+   ]
+  },
+  {
+   "t": "sales",
+   "rec": {
+    "id": "s5",
+    "total": 1000,
+    "paid": 400,
+    "date": "2025-07-10T00:00:00.000Z",
+    "customerId": "walk-in",
+    "status": "completed",
+    "insurance": {
+     "insurerId": "i1",
+     "share": 600
+    }
+   },
+   "entries": [
+    {
+     "kind": "insurer",
+     "key": "i1",
+     "date": "2025-07-10T00:00:00.000Z",
+     "amount": 600
+    },
+    {
+     "kind": "account",
+     "key": "cash-drawer",
+     "date": "2025-07-10T00:00:00.000Z",
+     "amount": 400
+    }
+   ]
+  },
+  {
+   "t": "sales",
+   "rec": {
+    "id": "s6",
+    "total": 4000,
+    "paid": 4000,
+    "date": "2024-02-21T00:00:00.000Z",
+    "customerId": "c2",
+    "status": "completed"
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "cash-drawer",
+     "date": "2024-02-21T00:00:00.000Z",
+     "amount": 4000
+    }
+   ]
+  },
+  {
+   "t": "sales",
+   "rec": {
+    "id": "s7",
+    "total": 22500,
+    "paid": 22500,
+    "date": "2024-05-29T00:00:00.000Z",
+    "customerId": "c1",
+    "bankId": "cash-drawer",
+    "status": "completed"
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "cash-drawer",
+     "date": "2024-05-29T00:00:00.000Z",
+     "amount": 22500
+    }
+   ]
+  },
+  {
+   "t": "sales",
+   "rec": {
+    "id": "s8",
+    "total": 15000,
+    "paid": 11605,
+    "date": "2024-01-30T00:00:00.000Z",
+    "customerId": "c1",
+    "bankId": "bank-1",
+    "status": "completed"
+   },
+   "entries": [
+    {
+     "kind": "customer",
+     "key": "c1",
+     "date": "2024-01-30T00:00:00.000Z",
+     "amount": 3395
+    },
+    {
+     "kind": "account",
+     "key": "bank-1",
+     "date": "2024-01-30T00:00:00.000Z",
+     "amount": 11605
+    }
+   ]
+  },
+  {
+   "t": "sales",
+   "rec": {
+    "id": "s9",
+    "total": 24500,
+    "paid": 9800,
+    "date": "2024-08-06T00:00:00.000Z",
+    "customerId": "c3",
+    "status": "completed",
+    "insurance": {
+     "insurerId": "i2",
+     "share": 14700
+    }
+   },
+   "entries": [
+    {
+     "kind": "insurer",
+     "key": "i2",
+     "date": "2024-08-06T00:00:00.000Z",
+     "amount": 14700
+    },
+    {
+     "kind": "account",
+     "key": "cash-drawer",
+     "date": "2024-08-06T00:00:00.000Z",
+     "amount": 9800
+    }
+   ]
+  },
+  {
+   "t": "sales",
+   "rec": {
+    "id": "s10",
+    "total": 16000,
+    "paid": 16000,
+    "date": "2024-10-05T00:00:00.000Z",
+    "customerId": "walk-in",
+    "bankId": "cash-drawer",
+    "status": "completed"
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "cash-drawer",
+     "date": "2024-10-05T00:00:00.000Z",
+     "amount": 16000
+    }
+   ]
+  },
+  {
+   "t": "sales",
+   "rec": {
+    "id": "s11",
+    "total": 22000,
+    "date": "2025-04-25T00:00:00.000Z",
+    "bankId": "bank-1",
+    "status": "completed"
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "bank-1",
+     "date": "2025-04-25T00:00:00.000Z",
+     "amount": 22000
+    }
+   ]
+  },
+  {
+   "t": "sales",
+   "rec": {
+    "id": "s12",
+    "total": 9000,
+    "paid": 3600,
+    "date": "2026-03-23T00:00:00.000Z",
+    "customerId": "c3",
+    "bankId": "bank-1",
+    "status": "completed",
+    "insurance": {
+     "insurerId": "i2",
+     "share": 5400
+    }
+   },
+   "entries": [
+    {
+     "kind": "insurer",
+     "key": "i2",
+     "date": "2026-03-23T00:00:00.000Z",
+     "amount": 5400
+    },
+    {
+     "kind": "account",
+     "key": "bank-1",
+     "date": "2026-03-23T00:00:00.000Z",
+     "amount": 3600
+    }
+   ]
+  },
+  {
+   "t": "sales",
+   "rec": {
+    "id": "s13",
+    "total": 24000,
+    "paid": 24000,
+    "date": "2026-04-01T00:00:00.000Z",
+    "bankId": "momo",
+    "status": "completed"
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "momo",
+     "date": "2026-04-01T00:00:00.000Z",
+     "amount": 24000
+    }
+   ]
+  },
+  {
+   "t": "sales",
+   "rec": {
+    "id": "s14",
+    "total": 21500,
+    "paid": 21500,
+    "date": "2024-01-06T00:00:00.000Z",
+    "customerId": "c3",
+    "status": "completed"
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "cash-drawer",
+     "date": "2024-01-06T00:00:00.000Z",
+     "amount": 21500
+    }
+   ]
+  },
+  {
+   "t": "sales",
+   "rec": {
+    "id": "s15",
+    "total": 4000,
+    "paid": 1600,
+    "date": "2024-11-11T00:00:00.000Z",
+    "customerId": "c1",
+    "bankId": "bank-1",
+    "status": "completed",
+    "insurance": {
+     "insurerId": "i1",
+     "share": 2400
+    }
+   },
+   "entries": [
+    {
+     "kind": "insurer",
+     "key": "i1",
+     "date": "2024-11-11T00:00:00.000Z",
+     "amount": 2400
+    },
+    {
+     "kind": "account",
+     "key": "bank-1",
+     "date": "2024-11-11T00:00:00.000Z",
+     "amount": 1600
+    }
+   ]
+  },
+  {
+   "t": "sales",
+   "rec": {
+    "id": "s16",
+    "total": 3000,
+    "paid": 743,
+    "date": "2024-12-16T00:00:00.000Z",
+    "customerId": "walk-in",
+    "status": "completed"
+   },
+   "entries": [
+    {
+     "kind": "customer",
+     "key": "walk-in",
+     "date": "2024-12-16T00:00:00.000Z",
+     "amount": 2257
+    },
+    {
+     "kind": "account",
+     "key": "cash-drawer",
+     "date": "2024-12-16T00:00:00.000Z",
+     "amount": 743
+    }
+   ]
+  },
+  {
+   "t": "sales",
+   "rec": {
+    "id": "s17",
+    "total": 15000,
+    "paid": 15000,
+    "date": "2024-02-03T00:00:00.000Z",
+    "bankId": "cash-drawer",
+    "status": "completed"
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "cash-drawer",
+     "date": "2024-02-03T00:00:00.000Z",
+     "amount": 15000
+    }
+   ]
+  },
+  {
+   "t": "sales",
+   "rec": {
+    "id": "s18",
+    "total": 17500,
+    "paid": 17500,
+    "date": "2025-09-06T00:00:00.000Z",
+    "customerId": "c1",
+    "bankId": "cash-drawer",
+    "status": "completed"
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "cash-drawer",
+     "date": "2025-09-06T00:00:00.000Z",
+     "amount": 17500
+    }
+   ]
+  },
+  {
+   "t": "sales",
+   "rec": {
+    "id": "s19",
+    "total": 24500,
+    "paid": 6404,
+    "date": "2025-08-21T00:00:00.000Z",
+    "customerId": "c1",
+    "bankId": "momo",
+    "status": "completed"
+   },
+   "entries": [
+    {
+     "kind": "customer",
+     "key": "c1",
+     "date": "2025-08-21T00:00:00.000Z",
+     "amount": 18096
+    },
+    {
+     "kind": "account",
+     "key": "momo",
+     "date": "2025-08-21T00:00:00.000Z",
+     "amount": 6404
+    }
+   ]
+  },
+  {
+   "t": "sales",
+   "rec": {
+    "id": "s20",
+    "total": 2500,
+    "paid": 2500,
+    "date": "2024-05-02T00:00:00.000Z",
+    "customerId": "c2",
+    "bankId": "momo",
+    "status": "completed"
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "momo",
+     "date": "2024-05-02T00:00:00.000Z",
+     "amount": 2500
+    }
+   ]
+  },
+  {
+   "t": "sales",
+   "rec": {
+    "id": "s21",
+    "total": 9000,
+    "paid": 1030,
+    "date": "2026-02-27T00:00:00.000Z",
+    "customerId": "walk-in",
+    "bankId": "cash-drawer",
+    "status": "completed"
+   },
+   "entries": [
+    {
+     "kind": "customer",
+     "key": "walk-in",
+     "date": "2026-02-27T00:00:00.000Z",
+     "amount": 7970
+    },
+    {
+     "kind": "account",
+     "key": "cash-drawer",
+     "date": "2026-02-27T00:00:00.000Z",
+     "amount": 1030
+    }
+   ]
+  },
+  {
+   "t": "sales",
+   "rec": {
+    "id": "s22",
+    "total": 8500,
+    "paid": 8500,
+    "date": "2025-07-14T00:00:00.000Z",
+    "customerId": "c2",
+    "bankId": "momo",
+    "status": "completed"
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "momo",
+     "date": "2025-07-14T00:00:00.000Z",
+     "amount": 8500
+    }
+   ]
+  },
+  {
+   "t": "sales",
+   "rec": {
+    "id": "s23",
+    "total": 1500,
+    "paid": 600,
+    "date": "2026-01-20T00:00:00.000Z",
+    "status": "completed",
+    "insurance": {
+     "insurerId": "i1",
+     "share": 900
+    }
+   },
+   "entries": [
+    {
+     "kind": "insurer",
+     "key": "i1",
+     "date": "2026-01-20T00:00:00.000Z",
+     "amount": 900
+    },
+    {
+     "kind": "account",
+     "key": "cash-drawer",
+     "date": "2026-01-20T00:00:00.000Z",
+     "amount": 600
+    }
+   ]
+  },
+  {
+   "t": "sales",
+   "rec": {
+    "id": "s24",
+    "total": 13000,
+    "paid": 13000,
+    "date": "2025-09-25T00:00:00.000Z",
+    "customerId": "c2",
+    "status": "completed"
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "cash-drawer",
+     "date": "2025-09-25T00:00:00.000Z",
+     "amount": 13000
+    }
+   ]
+  },
+  {
+   "t": "sales",
+   "rec": {
+    "id": "s25",
+    "total": 6000,
+    "date": "2024-11-26T00:00:00.000Z",
+    "customerId": "c1",
+    "bankId": "bank-1",
+    "status": "completed"
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "bank-1",
+     "date": "2024-11-26T00:00:00.000Z",
+     "amount": 6000
+    }
+   ]
+  },
+  {
+   "t": "sales",
+   "rec": {
+    "id": "s26",
+    "total": 5500,
+    "paid": 3806,
+    "date": "2025-04-25T00:00:00.000Z",
+    "customerId": "c1",
+    "bankId": "bank-1",
+    "status": "completed"
+   },
+   "entries": [
+    {
+     "kind": "customer",
+     "key": "c1",
+     "date": "2025-04-25T00:00:00.000Z",
+     "amount": 1694
+    },
+    {
+     "kind": "account",
+     "key": "bank-1",
+     "date": "2025-04-25T00:00:00.000Z",
+     "amount": 3806
+    }
+   ]
+  },
+  {
+   "t": "sales",
+   "rec": {
+    "id": "s27",
+    "total": 16500,
+    "paid": 16500,
+    "date": "2024-10-05T00:00:00.000Z",
+    "customerId": "walk-in",
+    "bankId": "momo",
+    "status": "completed"
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "momo",
+     "date": "2024-10-05T00:00:00.000Z",
+     "amount": 16500
+    }
+   ]
+  },
+  {
+   "t": "sales",
+   "rec": {
+    "id": "s28",
+    "total": 2000,
+    "paid": 2000,
+    "date": "2024-12-31T00:00:00.000Z",
+    "customerId": "c1",
+    "bankId": "bank-1",
+    "status": "completed"
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "bank-1",
+     "date": "2024-12-31T00:00:00.000Z",
+     "amount": 2000
+    }
+   ]
+  },
+  {
+   "t": "sales",
+   "rec": {
+    "id": "s29",
+    "total": 20500,
+    "paid": 20500,
+    "date": "2024-10-15T00:00:00.000Z",
+    "customerId": "c2",
+    "bankId": "momo",
+    "status": "completed"
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "momo",
+     "date": "2024-10-15T00:00:00.000Z",
+     "amount": 20500
+    }
+   ]
+  },
+  {
+   "t": "sales",
+   "rec": {
+    "id": "s30",
+    "total": 18000,
+    "paid": 5667,
+    "date": "2026-04-27T00:00:00.000Z",
+    "customerId": "walk-in",
+    "bankId": "momo",
+    "status": "completed",
+    "imported": true
+   },
+   "entries": [
+    {
+     "kind": "customer",
+     "key": "walk-in",
+     "date": "2026-04-27T00:00:00.000Z",
+     "amount": 12333
+    }
+   ]
+  },
+  {
+   "t": "sales",
+   "rec": {
+    "id": "s31",
+    "total": 1500,
+    "date": "2024-09-22T00:00:00.000Z",
+    "customerId": "c3",
+    "status": "completed"
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "cash-drawer",
+     "date": "2024-09-22T00:00:00.000Z",
+     "amount": 1500
+    }
+   ]
+  },
+  {
+   "t": "sales",
+   "rec": {
+    "id": "s32",
+    "total": 22000,
+    "paid": 22000,
+    "date": "2025-10-07T00:00:00.000Z",
+    "customerId": "c2",
+    "bankId": "momo",
+    "status": "completed"
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "momo",
+     "date": "2025-10-07T00:00:00.000Z",
+     "amount": 22000
+    }
+   ]
+  },
+  {
+   "t": "sales",
+   "rec": {
+    "id": "s33",
+    "total": 17500,
+    "date": "2024-09-24T00:00:00.000Z",
+    "customerId": "c2",
+    "bankId": "cash-drawer",
+    "status": "completed"
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "cash-drawer",
+     "date": "2024-09-24T00:00:00.000Z",
+     "amount": 17500
+    }
+   ]
+  },
+  {
+   "t": "sales",
+   "rec": {
+    "id": "s34",
+    "total": 15500,
+    "paid": 15500,
+    "date": "2025-08-01T00:00:00.000Z",
+    "customerId": "c2",
+    "bankId": "momo",
+    "status": "refunded",
+    "refundedAt": "2025-10-09T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "momo",
+     "date": "2025-08-01T00:00:00.000Z",
+     "amount": 15500
+    },
+    {
+     "kind": "account",
+     "key": "momo",
+     "date": "2025-10-09T00:00:00.000Z",
+     "amount": -15500
+    }
+   ]
+  },
+  {
+   "t": "sales",
+   "rec": {
+    "id": "s35",
+    "total": 21000,
+    "paid": 21000,
+    "date": "2024-09-18T00:00:00.000Z",
+    "customerId": "c2",
+    "status": "completed"
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "cash-drawer",
+     "date": "2024-09-18T00:00:00.000Z",
+     "amount": 21000
+    }
+   ]
+  },
+  {
+   "t": "sales",
+   "rec": {
+    "id": "s36",
+    "total": 3500,
+    "paid": 3500,
+    "date": "2024-06-03T00:00:00.000Z",
+    "customerId": "walk-in",
+    "bankId": "cash-drawer",
+    "status": "completed"
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "cash-drawer",
+     "date": "2024-06-03T00:00:00.000Z",
+     "amount": 3500
+    }
+   ]
+  },
+  {
+   "t": "sales",
+   "rec": {
+    "id": "s37",
+    "total": 10000,
+    "paid": 10000,
+    "date": "2026-02-14T00:00:00.000Z",
+    "bankId": "bank-1",
+    "status": "completed"
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "bank-1",
+     "date": "2026-02-14T00:00:00.000Z",
+     "amount": 10000
+    }
+   ]
+  },
+  {
+   "t": "sales",
+   "rec": {
+    "id": "s38",
+    "total": 23000,
+    "paid": 1637,
+    "date": "2024-02-21T00:00:00.000Z",
+    "customerId": "c1",
+    "status": "completed"
+   },
+   "entries": [
+    {
+     "kind": "customer",
+     "key": "c1",
+     "date": "2024-02-21T00:00:00.000Z",
+     "amount": 21363
+    },
+    {
+     "kind": "account",
+     "key": "cash-drawer",
+     "date": "2024-02-21T00:00:00.000Z",
+     "amount": 1637
+    }
+   ]
+  },
+  {
+   "t": "sales",
+   "rec": {
+    "id": "s39",
+    "total": 21000,
+    "paid": 21000,
+    "date": "2025-09-19T00:00:00.000Z",
+    "customerId": "c1",
+    "bankId": "bank-1",
+    "status": "completed"
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "bank-1",
+     "date": "2025-09-19T00:00:00.000Z",
+     "amount": 21000
+    }
+   ]
+  },
+  {
+   "t": "purchases",
+   "rec": {
+    "id": "pu0",
+    "supplierId": "s1",
+    "total": 17500,
+    "date": "2026-03-03T00:00:00.000Z",
+    "imported": false
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "cash-drawer",
+     "date": "2026-03-03T00:00:00.000Z",
+     "amount": -17500
+    }
+   ]
+  },
+  {
+   "t": "purchases",
+   "rec": {
+    "id": "pu1",
+    "supplierId": "s1",
+    "total": 11000,
+    "paid": 6954,
+    "date": "2025-09-02T00:00:00.000Z",
+    "bankId": "cash-drawer",
+    "imported": false
+   },
+   "entries": [
+    {
+     "kind": "supplier",
+     "key": "s1",
+     "date": "2025-09-02T00:00:00.000Z",
+     "amount": 4046
+    },
+    {
+     "kind": "account",
+     "key": "cash-drawer",
+     "date": "2025-09-02T00:00:00.000Z",
+     "amount": -6954
+    }
+   ]
+  },
+  {
+   "t": "purchases",
+   "rec": {
+    "id": "pu2",
+    "supplierId": "s1",
+    "total": 17500,
+    "paid": 14330,
+    "date": "2025-06-04T00:00:00.000Z",
+    "bankId": "bank-1",
+    "imported": false
+   },
+   "entries": [
+    {
+     "kind": "supplier",
+     "key": "s1",
+     "date": "2025-06-04T00:00:00.000Z",
+     "amount": 3170
+    },
+    {
+     "kind": "account",
+     "key": "bank-1",
+     "date": "2025-06-04T00:00:00.000Z",
+     "amount": -14330
+    }
+   ]
+  },
+  {
+   "t": "purchases",
+   "rec": {
+    "id": "pu3",
+    "supplierId": "s1",
+    "total": 16500,
+    "date": "2024-10-01T00:00:00.000Z",
+    "bankId": "cash-drawer",
+    "imported": false
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "cash-drawer",
+     "date": "2024-10-01T00:00:00.000Z",
+     "amount": -16500
+    }
+   ]
+  },
+  {
+   "t": "purchases",
+   "rec": {
+    "id": "pu4",
+    "supplierId": "s2",
+    "total": 13500,
+    "paid": 832,
+    "date": "2025-11-15T00:00:00.000Z",
+    "bankId": "bank-1",
+    "imported": false
+   },
+   "entries": [
+    {
+     "kind": "supplier",
+     "key": "s2",
+     "date": "2025-11-15T00:00:00.000Z",
+     "amount": 12668
+    },
+    {
+     "kind": "account",
+     "key": "bank-1",
+     "date": "2025-11-15T00:00:00.000Z",
+     "amount": -832
+    }
+   ]
+  },
+  {
+   "t": "purchases",
+   "rec": {
+    "id": "pu5",
+    "supplierId": "s2",
+    "total": 20000,
+    "paid": 10613,
+    "date": "2026-02-23T00:00:00.000Z",
+    "bankId": "cash-drawer",
+    "imported": false
+   },
+   "entries": [
+    {
+     "kind": "supplier",
+     "key": "s2",
+     "date": "2026-02-23T00:00:00.000Z",
+     "amount": 9387
+    },
+    {
+     "kind": "account",
+     "key": "cash-drawer",
+     "date": "2026-02-23T00:00:00.000Z",
+     "amount": -10613
+    }
+   ]
+  },
+  {
+   "t": "purchases",
+   "rec": {
+    "id": "pu6",
+    "supplierId": "s1",
+    "total": 4500,
+    "date": "2025-08-08T00:00:00.000Z",
+    "bankId": "bank-1",
+    "imported": false
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "bank-1",
+     "date": "2025-08-08T00:00:00.000Z",
+     "amount": -4500
+    }
+   ]
+  },
+  {
+   "t": "purchases",
+   "rec": {
+    "id": "pu7",
+    "supplierId": "s2",
+    "total": 8500,
+    "date": "2024-11-12T00:00:00.000Z",
+    "bankId": "cash-drawer",
+    "imported": false
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "cash-drawer",
+     "date": "2024-11-12T00:00:00.000Z",
+     "amount": -8500
+    }
+   ]
+  },
+  {
+   "t": "purchases",
+   "rec": {
+    "id": "pu8",
+    "supplierId": "s1",
+    "total": 4000,
+    "paid": 2109,
+    "date": "2026-04-30T00:00:00.000Z",
+    "imported": false
+   },
+   "entries": [
+    {
+     "kind": "supplier",
+     "key": "s1",
+     "date": "2026-04-30T00:00:00.000Z",
+     "amount": 1891
+    },
+    {
+     "kind": "account",
+     "key": "cash-drawer",
+     "date": "2026-04-30T00:00:00.000Z",
+     "amount": -2109
+    }
+   ]
+  },
+  {
+   "t": "purchases",
+   "rec": {
+    "id": "pu9",
+    "supplierId": "s1",
+    "total": 1500,
+    "date": "2025-10-03T00:00:00.000Z",
+    "bankId": "bank-1",
+    "imported": false
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "bank-1",
+     "date": "2025-10-03T00:00:00.000Z",
+     "amount": -1500
+    }
+   ]
+  },
+  {
+   "t": "purchases",
+   "rec": {
+    "id": "pu10",
+    "supplierId": "s1",
+    "total": 17500,
+    "date": "2026-02-14T00:00:00.000Z",
+    "bankId": "cash-drawer",
+    "imported": false
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "cash-drawer",
+     "date": "2026-02-14T00:00:00.000Z",
+     "amount": -17500
+    }
+   ]
+  },
+  {
+   "t": "purchases",
+   "rec": {
+    "id": "pu11",
+    "supplierId": "s2",
+    "total": 4000,
+    "date": "2025-09-09T00:00:00.000Z",
+    "imported": false
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "cash-drawer",
+     "date": "2025-09-09T00:00:00.000Z",
+     "amount": -4000
+    }
+   ]
+  },
+  {
+   "t": "supplierReturns",
+   "rec": {
+    "id": "sr0",
+    "supplierId": "s1",
+    "total": 18500,
+    "settle": "replace",
+    "date": "2025-11-20T00:00:00.000Z",
+    "bankId": "cash-drawer"
+   },
+   "entries": []
+  },
+  {
+   "t": "supplierReturns",
+   "rec": {
+    "id": "sr1",
+    "supplierId": "s1",
+    "total": 14500,
+    "settle": "replace",
+    "date": "2024-06-21T00:00:00.000Z",
+    "bankId": "cash-drawer"
+   },
+   "entries": []
+  },
+  {
+   "t": "supplierReturns",
+   "rec": {
+    "id": "sr2",
+    "supplierId": "s2",
+    "total": 3500,
+    "settle": "replace",
+    "date": "2024-10-16T00:00:00.000Z",
+    "bankId": "bank-1"
+   },
+   "entries": []
+  },
+  {
+   "t": "supplierReturns",
+   "rec": {
+    "id": "sr3",
+    "supplierId": "s2",
+    "total": 500,
+    "settle": "credit",
+    "date": "2024-08-01T00:00:00.000Z",
+    "bankId": "bank-1"
+   },
+   "entries": [
+    {
+     "kind": "supplier",
+     "key": "s2",
+     "date": "2024-08-01T00:00:00.000Z",
+     "amount": -500
+    }
+   ]
+  },
+  {
+   "t": "supplierReturns",
+   "rec": {
+    "id": "sr4",
+    "supplierId": "s1",
+    "total": 22500,
+    "settle": "cash",
+    "date": "2026-03-19T00:00:00.000Z",
+    "bankId": "bank-1"
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "bank-1",
+     "date": "2026-03-19T00:00:00.000Z",
+     "amount": 22500
+    }
+   ]
+  },
+  {
+   "t": "supplierReturns",
+   "rec": {
+    "id": "sr5",
+    "supplierId": "s1",
+    "total": 16500,
+    "settle": "credit",
+    "date": "2025-07-18T00:00:00.000Z",
+    "bankId": "cash-drawer"
+   },
+   "entries": [
+    {
+     "kind": "supplier",
+     "key": "s1",
+     "date": "2025-07-18T00:00:00.000Z",
+     "amount": -16500
+    }
+   ]
+  },
+  {
+   "t": "supplierReturns",
+   "rec": {
+    "id": "sr6",
+    "supplierId": "s1",
+    "total": 10000,
+    "settle": "credit",
+    "date": "2024-11-18T00:00:00.000Z",
+    "bankId": "cash-drawer"
+   },
+   "entries": [
+    {
+     "kind": "supplier",
+     "key": "s1",
+     "date": "2024-11-18T00:00:00.000Z",
+     "amount": -10000
+    }
+   ]
+  },
+  {
+   "t": "supplierReturns",
+   "rec": {
+    "id": "sr7",
+    "supplierId": "s2",
+    "total": 24500,
+    "settle": "credit",
+    "date": "2024-05-03T00:00:00.000Z",
+    "bankId": "bank-1"
+   },
+   "entries": [
+    {
+     "kind": "supplier",
+     "key": "s2",
+     "date": "2024-05-03T00:00:00.000Z",
+     "amount": -24500
+    }
+   ]
+  },
+  {
+   "t": "supplierReturns",
+   "rec": {
+    "id": "sr8",
+    "supplierId": "s2",
+    "total": 21000,
+    "settle": "cash",
+    "date": "2026-03-18T00:00:00.000Z",
+    "bankId": "bank-1"
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "bank-1",
+     "date": "2026-03-18T00:00:00.000Z",
+     "amount": 21000
+    }
+   ]
+  },
+  {
+   "t": "supplierReturns",
+   "rec": {
+    "id": "sr9",
+    "supplierId": "s1",
+    "total": 23000,
+    "settle": "credit",
+    "date": "2026-01-28T00:00:00.000Z",
+    "bankId": "cash-drawer"
+   },
+   "entries": [
+    {
+     "kind": "supplier",
+     "key": "s1",
+     "date": "2026-01-28T00:00:00.000Z",
+     "amount": -23000
+    }
+   ]
+  },
+  {
+   "t": "supplierReturns",
+   "rec": {
+    "id": "sr10",
+    "supplierId": "s2",
+    "total": 11000,
+    "settle": "credit",
+    "date": "2026-01-17T00:00:00.000Z",
+    "bankId": "cash-drawer"
+   },
+   "entries": [
+    {
+     "kind": "supplier",
+     "key": "s2",
+     "date": "2026-01-17T00:00:00.000Z",
+     "amount": -11000
+    }
+   ]
+  },
+  {
+   "t": "supplierReturns",
+   "rec": {
+    "id": "sr11",
+    "supplierId": "s1",
+    "total": 12000,
+    "settle": "replace",
+    "date": "2026-02-28T00:00:00.000Z",
+    "bankId": "bank-1"
+   },
+   "entries": []
+  },
+  {
+   "t": "expenses",
+   "rec": {
+    "id": "e0",
+    "amount": 2500,
+    "date": "2025-07-26T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "cash-drawer",
+     "date": "2025-07-26T00:00:00.000Z",
+     "amount": -2500
+    }
+   ]
+  },
+  {
+   "t": "expenses",
+   "rec": {
+    "id": "e1",
+    "amount": 21000,
+    "date": "2024-06-02T00:00:00.000Z",
+    "bankId": "bank-1"
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "bank-1",
+     "date": "2024-06-02T00:00:00.000Z",
+     "amount": -21000
+    }
+   ]
+  },
+  {
+   "t": "expenses",
+   "rec": {
+    "id": "e2",
+    "amount": 24500,
+    "date": "2026-02-15T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "cash-drawer",
+     "date": "2026-02-15T00:00:00.000Z",
+     "amount": -24500
+    }
+   ]
+  },
+  {
+   "t": "expenses",
+   "rec": {
+    "id": "e3",
+    "amount": 8000,
+    "date": "2026-05-29T00:00:00.000Z",
+    "bankId": "bank-1"
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "bank-1",
+     "date": "2026-05-29T00:00:00.000Z",
+     "amount": -8000
+    }
+   ]
+  },
+  {
+   "t": "expenses",
+   "rec": {
+    "id": "e4",
+    "amount": 6000,
+    "date": "2025-05-30T00:00:00.000Z",
+    "bankId": "cash-drawer"
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "cash-drawer",
+     "date": "2025-05-30T00:00:00.000Z",
+     "amount": -6000
+    }
+   ]
+  },
+  {
+   "t": "expenses",
+   "rec": {
+    "id": "e5",
+    "amount": 6500,
+    "date": "2024-12-05T00:00:00.000Z",
+    "bankId": "cash-drawer"
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "cash-drawer",
+     "date": "2024-12-05T00:00:00.000Z",
+     "amount": -6500
+    }
+   ]
+  },
+  {
+   "t": "expenses",
+   "rec": {
+    "id": "e6",
+    "amount": 23000,
+    "date": "2025-12-03T00:00:00.000Z",
+    "bankId": "cash-drawer"
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "cash-drawer",
+     "date": "2025-12-03T00:00:00.000Z",
+     "amount": -23000
+    }
+   ]
+  },
+  {
+   "t": "expenses",
+   "rec": {
+    "id": "e7",
+    "amount": 9500,
+    "date": "2024-07-22T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "cash-drawer",
+     "date": "2024-07-22T00:00:00.000Z",
+     "amount": -9500
+    }
+   ]
+  },
+  {
+   "t": "expenses",
+   "rec": {
+    "id": "e8",
+    "amount": 500,
+    "date": "2024-01-19T00:00:00.000Z",
+    "bankId": "cash-drawer"
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "cash-drawer",
+     "date": "2024-01-19T00:00:00.000Z",
+     "amount": -500
+    }
+   ]
+  },
+  {
+   "t": "expenses",
+   "rec": {
+    "id": "e9",
+    "amount": 2000,
+    "date": "2025-05-10T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "cash-drawer",
+     "date": "2025-05-10T00:00:00.000Z",
+     "amount": -2000
+    }
+   ]
+  },
+  {
+   "t": "expenses",
+   "rec": {
+    "id": "e10",
+    "amount": 21500,
+    "date": "2025-10-30T00:00:00.000Z",
+    "bankId": "bank-1"
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "bank-1",
+     "date": "2025-10-30T00:00:00.000Z",
+     "amount": -21500
+    }
+   ]
+  },
+  {
+   "t": "expenses",
+   "rec": {
+    "id": "e11",
+    "amount": 13500,
+    "date": "2026-05-11T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "cash-drawer",
+     "date": "2026-05-11T00:00:00.000Z",
+     "amount": -13500
+    }
+   ]
+  },
+  {
+   "t": "payments",
+   "rec": {
+    "id": "pay0",
+    "kind": "loan",
+    "partyId": "l1",
+    "amount": 13000,
+    "date": "2025-03-19T00:00:00.000Z",
+    "bankId": "cash-drawer"
+   },
+   "entries": [
+    {
+     "kind": "loan",
+     "key": "l1",
+     "date": "2025-03-19T00:00:00.000Z",
+     "amount": 13000
+    },
+    {
+     "kind": "account",
+     "key": "cash-drawer",
+     "date": "2025-03-19T00:00:00.000Z",
+     "amount": -13000
+    }
+   ]
+  },
+  {
+   "t": "payments",
+   "rec": {
+    "id": "pay1",
+    "kind": "supplier",
+    "partyId": "s1",
+    "amount": 11000,
+    "date": "2024-04-14T00:00:00.000Z",
+    "bankId": "cash-drawer"
+   },
+   "entries": [
+    {
+     "kind": "supplier",
+     "key": "s1",
+     "date": "2024-04-14T00:00:00.000Z",
+     "amount": -11000
+    },
+    {
+     "kind": "account",
+     "key": "cash-drawer",
+     "date": "2024-04-14T00:00:00.000Z",
+     "amount": -11000
+    }
+   ]
+  },
+  {
+   "t": "payments",
+   "rec": {
+    "id": "pay2",
+    "kind": "supplier",
+    "partyId": "s1",
+    "amount": 8000,
+    "date": "2025-07-19T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "supplier",
+     "key": "s1",
+     "date": "2025-07-19T00:00:00.000Z",
+     "amount": -8000
+    },
+    {
+     "kind": "account",
+     "key": "cash-drawer",
+     "date": "2025-07-19T00:00:00.000Z",
+     "amount": -8000
+    }
+   ]
+  },
+  {
+   "t": "payments",
+   "rec": {
+    "id": "pay3",
+    "kind": "customer",
+    "partyId": "c3",
+    "amount": 22000,
+    "date": "2024-07-07T00:00:00.000Z",
+    "bankId": "cash-drawer"
+   },
+   "entries": [
+    {
+     "kind": "customer",
+     "key": "c3",
+     "date": "2024-07-07T00:00:00.000Z",
+     "amount": -22000
+    },
+    {
+     "kind": "account",
+     "key": "cash-drawer",
+     "date": "2024-07-07T00:00:00.000Z",
+     "amount": 22000
+    }
+   ]
+  },
+  {
+   "t": "payments",
+   "rec": {
+    "id": "pay4",
+    "kind": "insurer",
+    "partyId": "i2",
+    "amount": 1000,
+    "date": "2024-10-31T00:00:00.000Z",
+    "bankId": "bank-1"
+   },
+   "entries": [
+    {
+     "kind": "insurer",
+     "key": "i2",
+     "date": "2024-10-31T00:00:00.000Z",
+     "amount": -1000
+    },
+    {
+     "kind": "account",
+     "key": "bank-1",
+     "date": "2024-10-31T00:00:00.000Z",
+     "amount": 1000
+    }
+   ]
+  },
+  {
+   "t": "payments",
+   "rec": {
+    "id": "pay5",
+    "kind": "supplier",
+    "partyId": "s2",
+    "amount": 11500,
+    "date": "2025-10-16T00:00:00.000Z",
+    "bankId": "bank-1"
+   },
+   "entries": [
+    {
+     "kind": "supplier",
+     "key": "s2",
+     "date": "2025-10-16T00:00:00.000Z",
+     "amount": -11500
+    },
+    {
+     "kind": "account",
+     "key": "bank-1",
+     "date": "2025-10-16T00:00:00.000Z",
+     "amount": -11500
+    }
+   ]
+  },
+  {
+   "t": "payments",
+   "rec": {
+    "id": "pay6",
+    "kind": "insurer",
+    "partyId": "i1",
+    "amount": 12000,
+    "date": "2026-04-11T00:00:00.000Z",
+    "bankId": "momo"
+   },
+   "entries": [
+    {
+     "kind": "insurer",
+     "key": "i1",
+     "date": "2026-04-11T00:00:00.000Z",
+     "amount": -12000
+    },
+    {
+     "kind": "account",
+     "key": "momo",
+     "date": "2026-04-11T00:00:00.000Z",
+     "amount": 12000
+    }
+   ]
+  },
+  {
+   "t": "payments",
+   "rec": {
+    "id": "pay7",
+    "kind": "insurer",
+    "partyId": "i1",
+    "amount": 16000,
+    "date": "2024-08-16T00:00:00.000Z",
+    "bankId": "momo"
+   },
+   "entries": [
+    {
+     "kind": "insurer",
+     "key": "i1",
+     "date": "2024-08-16T00:00:00.000Z",
+     "amount": -16000
+    },
+    {
+     "kind": "account",
+     "key": "momo",
+     "date": "2024-08-16T00:00:00.000Z",
+     "amount": 16000
+    }
+   ]
+  },
+  {
+   "t": "payments",
+   "rec": {
+    "id": "pay8",
+    "kind": "supplier",
+    "partyId": "s2",
+    "amount": 10000,
+    "date": "2024-08-02T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "supplier",
+     "key": "s2",
+     "date": "2024-08-02T00:00:00.000Z",
+     "amount": -10000
+    },
+    {
+     "kind": "account",
+     "key": "cash-drawer",
+     "date": "2024-08-02T00:00:00.000Z",
+     "amount": -10000
+    }
+   ]
+  },
+  {
+   "t": "payments",
+   "rec": {
+    "id": "pay9",
+    "kind": "insurer",
+    "partyId": "i1",
+    "amount": 8500,
+    "date": "2026-05-25T00:00:00.000Z",
+    "bankId": "bank-1"
+   },
+   "entries": [
+    {
+     "kind": "insurer",
+     "key": "i1",
+     "date": "2026-05-25T00:00:00.000Z",
+     "amount": -8500
+    },
+    {
+     "kind": "account",
+     "key": "bank-1",
+     "date": "2026-05-25T00:00:00.000Z",
+     "amount": 8500
+    }
+   ]
+  },
+  {
+   "t": "payments",
+   "rec": {
+    "id": "pay10",
+    "kind": "loan",
+    "partyId": "l1",
+    "amount": 17500,
+    "date": "2024-03-04T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "loan",
+     "key": "l1",
+     "date": "2024-03-04T00:00:00.000Z",
+     "amount": 17500
+    },
+    {
+     "kind": "account",
+     "key": "cash-drawer",
+     "date": "2024-03-04T00:00:00.000Z",
+     "amount": -17500
+    }
+   ]
+  },
+  {
+   "t": "payments",
+   "rec": {
+    "id": "pay11",
+    "kind": "customer",
+    "partyId": "c2",
+    "amount": 11000,
+    "date": "2026-01-05T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "customer",
+     "key": "c2",
+     "date": "2026-01-05T00:00:00.000Z",
+     "amount": -11000
+    },
+    {
+     "kind": "account",
+     "key": "cash-drawer",
+     "date": "2026-01-05T00:00:00.000Z",
+     "amount": 11000
+    }
+   ]
+  },
+  {
+   "t": "loans",
+   "rec": {
+    "id": "l1",
+    "lender": "Sample Bank",
+    "amount": 1000000,
+    "interestRate": 10,
+    "date": "2026-01-11T00:00:00.000Z",
+    "bankId": "bank-1"
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "bank-1",
+     "date": "2026-01-11T00:00:00.000Z",
+     "amount": 1000000
+    }
+   ]
+  },
+  {
+   "t": "bankTx",
+   "rec": {
+    "id": "bt0",
+    "type": "Withdrawal",
+    "bankId": "bank-1",
+    "fromId": "momo",
+    "toId": "bank-1",
+    "amount": 22500,
+    "date": "2025-10-28T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "momo",
+     "date": "2025-10-28T00:00:00.000Z",
+     "amount": -22500
+    },
+    {
+     "kind": "account",
+     "key": "cash-drawer",
+     "date": "2025-10-28T00:00:00.000Z",
+     "amount": 22500
+    }
+   ]
+  },
+  {
+   "t": "bankTx",
+   "rec": {
+    "id": "bt1",
+    "type": "Transfer",
+    "bankId": "bank-1",
+    "fromId": "momo",
+    "toId": "bank-1",
+    "amount": 7000,
+    "date": "2026-02-21T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "momo",
+     "date": "2026-02-21T00:00:00.000Z",
+     "amount": -7000
+    },
+    {
+     "kind": "account",
+     "key": "bank-1",
+     "date": "2026-02-21T00:00:00.000Z",
+     "amount": 7000
+    }
+   ]
+  },
+  {
+   "t": "bankTx",
+   "rec": {
+    "id": "bt2",
+    "type": "Withdrawal",
+    "bankId": "momo",
+    "fromId": "momo",
+    "toId": "bank-1",
+    "amount": 9000,
+    "date": "2024-01-18T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "momo",
+     "date": "2024-01-18T00:00:00.000Z",
+     "amount": -9000
+    },
+    {
+     "kind": "account",
+     "key": "cash-drawer",
+     "date": "2024-01-18T00:00:00.000Z",
+     "amount": 9000
+    }
+   ]
+  },
+  {
+   "t": "bankTx",
+   "rec": {
+    "id": "bt3",
+    "type": "Deposit",
+    "bankId": "bank-1",
+    "fromId": "momo",
+    "toId": "bank-1",
+    "amount": 12000,
+    "date": "2024-07-08T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "cash-drawer",
+     "date": "2024-07-08T00:00:00.000Z",
+     "amount": -12000
+    },
+    {
+     "kind": "account",
+     "key": "bank-1",
+     "date": "2024-07-08T00:00:00.000Z",
+     "amount": 12000
+    }
+   ]
+  },
+  {
+   "t": "bankTx",
+   "rec": {
+    "id": "bt4",
+    "type": "Transfer",
+    "bankId": "momo",
+    "fromId": "momo",
+    "toId": "bank-1",
+    "amount": 3000,
+    "date": "2026-01-21T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "momo",
+     "date": "2026-01-21T00:00:00.000Z",
+     "amount": -3000
+    },
+    {
+     "kind": "account",
+     "key": "bank-1",
+     "date": "2026-01-21T00:00:00.000Z",
+     "amount": 3000
+    }
+   ]
+  },
+  {
+   "t": "bankTx",
+   "rec": {
+    "id": "bt5",
+    "type": "Transfer",
+    "bankId": "bank-1",
+    "fromId": "momo",
+    "toId": "bank-1",
+    "amount": 9000,
+    "date": "2026-03-14T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "momo",
+     "date": "2026-03-14T00:00:00.000Z",
+     "amount": -9000
+    },
+    {
+     "kind": "account",
+     "key": "bank-1",
+     "date": "2026-03-14T00:00:00.000Z",
+     "amount": 9000
+    }
+   ]
+  },
+  {
+   "t": "bankTx",
+   "rec": {
+    "id": "bt6",
+    "type": "Withdrawal",
+    "bankId": "bank-1",
+    "fromId": "momo",
+    "toId": "bank-1",
+    "amount": 14500,
+    "date": "2026-03-26T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "momo",
+     "date": "2026-03-26T00:00:00.000Z",
+     "amount": -14500
+    },
+    {
+     "kind": "account",
+     "key": "cash-drawer",
+     "date": "2026-03-26T00:00:00.000Z",
+     "amount": 14500
+    }
+   ]
+  },
+  {
+   "t": "bankTx",
+   "rec": {
+    "id": "bt7",
+    "type": "Withdrawal",
+    "bankId": "momo",
+    "fromId": "momo",
+    "toId": "bank-1",
+    "amount": 12000,
+    "date": "2025-09-29T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "momo",
+     "date": "2025-09-29T00:00:00.000Z",
+     "amount": -12000
+    },
+    {
+     "kind": "account",
+     "key": "cash-drawer",
+     "date": "2025-09-29T00:00:00.000Z",
+     "amount": 12000
+    }
+   ]
+  },
+  {
+   "t": "bankTx",
+   "rec": {
+    "id": "bt8",
+    "type": "Deposit",
+    "bankId": "bank-1",
+    "fromId": "momo",
+    "toId": "bank-1",
+    "amount": 21000,
+    "date": "2025-05-31T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "cash-drawer",
+     "date": "2025-05-31T00:00:00.000Z",
+     "amount": -21000
+    },
+    {
+     "kind": "account",
+     "key": "bank-1",
+     "date": "2025-05-31T00:00:00.000Z",
+     "amount": 21000
+    }
+   ]
+  },
+  {
+   "t": "bankTx",
+   "rec": {
+    "id": "bt9",
+    "type": "Transfer",
+    "bankId": "momo",
+    "fromId": "momo",
+    "toId": "bank-1",
+    "amount": 2500,
+    "date": "2024-12-06T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "momo",
+     "date": "2024-12-06T00:00:00.000Z",
+     "amount": -2500
+    },
+    {
+     "kind": "account",
+     "key": "bank-1",
+     "date": "2024-12-06T00:00:00.000Z",
+     "amount": 2500
+    }
+   ]
+  },
+  {
+   "t": "bankTx",
+   "rec": {
+    "id": "bt10",
+    "type": "Transfer",
+    "bankId": "momo",
+    "fromId": "momo",
+    "toId": "bank-1",
+    "amount": 7000,
+    "date": "2025-11-07T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "momo",
+     "date": "2025-11-07T00:00:00.000Z",
+     "amount": -7000
+    },
+    {
+     "kind": "account",
+     "key": "bank-1",
+     "date": "2025-11-07T00:00:00.000Z",
+     "amount": 7000
+    }
+   ]
+  },
+  {
+   "t": "bankTx",
+   "rec": {
+    "id": "bt11",
+    "type": "Transfer",
+    "bankId": "momo",
+    "fromId": "momo",
+    "toId": "bank-1",
+    "amount": 6500,
+    "date": "2025-01-09T00:00:00.000Z"
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "momo",
+     "date": "2025-01-09T00:00:00.000Z",
+     "amount": -6500
+    },
+    {
+     "kind": "account",
+     "key": "bank-1",
+     "date": "2025-01-09T00:00:00.000Z",
+     "amount": 6500
+    }
+   ]
+  },
+  {
+   "t": "sales",
+   "rec": {
+    "id": "edge-refund",
+    "total": 1000,
+    "paid": 1000,
+    "date": "2024-01-01T08:00:00.000Z",
+    "status": "refunded",
+    "refundedAt": "2026-11-01T08:00:00.000Z",
+    "customerId": "c1"
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "cash-drawer",
+     "date": "2024-01-01T08:00:00.000Z",
+     "amount": 1000
+    },
+    {
+     "kind": "account",
+     "key": "cash-drawer",
+     "date": "2026-11-01T08:00:00.000Z",
+     "amount": -1000
+    }
+   ]
+  },
+  {
+   "t": "sales",
+   "rec": {
+    "id": "edge-deleted",
+    "total": 5,
+    "deleted": true
+   },
+   "entries": []
+  },
+  {
+   "t": "payments",
+   "rec": {
+    "id": "edge-other",
+    "kind": "other",
+    "partyId": "x",
+    "amount": 300,
+    "date": "2025-01-01"
+   },
+   "entries": [
+    {
+     "kind": "account",
+     "key": "cash-drawer",
+     "date": "2025-01-01",
+     "amount": -300
+    }
+   ]
+  },
+  {
+   "t": "movements",
+   "rec": {
+    "id": "edge-legacy",
+    "productId": "p9",
+    "qty": 5,
+    "date": "2025-01-01"
+   },
+   "entries": [
+    {
+     "kind": "stock",
+     "key": "main|lb-p9",
+     "product": "p9",
+     "branch": "main",
+     "date": "2025-01-01",
+     "amount": 5
+    }
+   ]
+  }
+ ]
+}

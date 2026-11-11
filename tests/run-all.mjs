@@ -47,6 +47,8 @@ const SUITES = [
   ['storage change detection (unit)', 'unit-diff.mjs', []],
   ['cloud restore resend (unit)', 'unit-sync-restore.mjs', []],
   ['first download resume (unit)', 'unit-sync-resume.mjs', []],
+  ['full download in phases (unit)', 'unit-sync-phases.mjs', []],
+  ['balances as dated entries, brought forward (unit)', 'unit-balances.mjs', []],
   ['theme choice (unit)', 'unit-theme.mjs', []],
   ['theme contrast', 'contrast-test.mjs', []],
   ['owner sign-in', 'owner-auth-test.mjs', []],
@@ -119,6 +121,9 @@ const SUITES = [
   ['sign-in finds the pharmacy at scale', 'v48-login-scale.mjs', []],
   ['dashboard sales card opens sales lines', 'v49-dashboard-sales-link.mjs', ['.output/v49']],
   ['scheduled email reports', 'v54-scheduled-reports.mjs', []],
+  ['faster sync: core first, history after', 'v71-sync-phases.mjs', []],
+  ['faster sync: ready-made chunks', 'v72-snapshot.mjs', []],
+  ['faster sync: recent history, brought forward', 'v73-window.mjs', []],
   // performance timings: only on request (npm run bench), never part of npm test
   ...(process.argv[2] === 'bench' ? [['benchmarks', 'bench.mjs', ['.output/bench']]] : []),
   // the Windows app's self-update needs a screen: Windows itself, or xvfb-run on Linux
@@ -131,7 +136,7 @@ const only = process.argv[2];
 const HUB = process.env.RXPOS_TEST_HUB === '1';
 const HUB_SUITES = new Set(['unit-policy.mjs', 'v14-api.mjs', 'v23-perms.mjs', 'v26-ratelimit.mjs', 'v27-secrets.mjs', 'v29-immutable.mjs', 'v38-sync-protocol.mjs',
   'v55-write-policy.mjs', 'v55-staff-ui.mjs', 'v56-sale-checks.mjs', 'v57-passwords.mjs', 'v58-throttle.mjs', 'v59-doc-numbers.mjs', 'v60-credit-limit.mjs',
-  'v61-field-merge.mjs', 'v61-field-merge-app.mjs', 'v37-reliability.mjs', 'hub-move.mjs', 'v63-day-close.mjs', 'v64-discount-blind.mjs', 'v65-gs1.mjs', 'v66-insurance.mjs']);
+  'v61-field-merge.mjs', 'v61-field-merge-app.mjs', 'v37-reliability.mjs', 'hub-move.mjs', 'v63-day-close.mjs', 'v64-discount-blind.mjs', 'v65-gs1.mjs', 'v66-insurance.mjs', 'v71-sync-phases.mjs', 'v72-snapshot.mjs', 'v73-window.mjs']);
 // RXPOS_CI=1 (full-tests.yml): checks that need a service a CI machine can't reach are reported as skipped, not
 // failed, so the deploy gate isn't blocked by the outside world. Listed by exact check name: anything else that fails
 // still fails. Local runs (no RXPOS_CI) count them as failures as before.
@@ -169,6 +174,8 @@ const cloud = HUB
     env: { ...process.env, RXPOS_SYNC_KEY: 'local-test-sync-key-0123456789abcdef', RXPOS_OWNER_KEY: OWNER, PUBLIC_URL: BASE, PBKDF2_ITER: '150000', RXPOS_TRUST_PROXY: '1' } })
   : spawn(process.execPath, [bin('wrangler/bin/wrangler.js'), 'dev', ...cfgArgs, '--port', '8790', '--persist-to', state, '--var', 'DB_BACKEND:', '--var', 'SYNC_KEY:local-test-sync-key-0123456789abcdef',
   '--var', `OWNER_KEY:${OWNER}`, '--var', `PUBLIC_URL:${BASE}`,
+  // faster sync stage 3: small ready-made chunks so the tests cut a small pharmacy into several (the benchmark: the real size)
+  '--var', `SNAPSHOT_CHUNK:${process.argv[2] === 'bench' ? 20000 : 40}`,
   // step 5: a raised password-rounds setting, so every suite signs in through the re-hash path
   '--var', 'PBKDF2_ITER:150000'], { cwd: root, stdio: 'ignore' });
 const stop = () => { try { process.platform === 'win32' ? spawn('taskkill', ['/pid', String(cloud.pid), '/T', '/F'], { stdio: 'ignore' }) : cloud.kill('SIGTERM'); } catch { /* already gone */ } };

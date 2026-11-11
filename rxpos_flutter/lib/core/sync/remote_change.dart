@@ -19,7 +19,7 @@ class RemoteChange {
 
 /// The cloud's reply to POST /api/sync (src/contracts.d.ts SyncResponse).
 class SyncReply {
-  const SyncReply({required this.changes, required this.cursor, required this.more, this.epoch, this.refusedKeys = const [], this.dupes = 0, this.tenant});
+  const SyncReply({required this.changes, required this.cursor, required this.more, this.epoch, this.refusedKeys = const [], this.dupes = 0, this.tenant, this.phase});
 
   final List<RemoteChange> changes;
   final int cursor;
@@ -28,6 +28,8 @@ class SyncReply {
   final List<String> refusedKeys;
   final int dupes;
   final String? tenant;
+  /// Faster sync, stage 2: the phase the cloud sent ('core' or 'history'); null from a cloud without phases.
+  final String? phase;
 
   /// Null when the reply is not a valid sync reply (then nothing is applied and the sync is tried again).
   static SyncReply? parse(Object? body) {
@@ -43,6 +45,7 @@ class SyncReply {
       refusedKeys: [for (final k in (body['refusedKeys'] as List?) ?? const []) '$k'],
       dupes: (body['dupes'] as num?)?.toInt() ?? 0,
       tenant: body['tenant']?.toString(),
+      phase: body['phase'] is String ? body['phase'] as String : null,
     );
   }
 }

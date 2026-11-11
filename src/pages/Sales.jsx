@@ -3,6 +3,7 @@ import { closedSet, inClosedDay } from '../dayclose.js';
 import { useLocation } from 'react-router-dom';
 import { Download, Printer, Undo2, Eye, Pencil, Trash2, Plus, History, FileText } from 'lucide-react';
 import { useStore, dayOf, downloadFile, toCSV, put, move, now, audit, allocate, MAIN_BRANCH, DEFAULT_PAYMENT_METHODS } from '../store.jsx';
+import { useOlderHistory, olderNote } from '../history.js';
 import { Modal, SearchBox, Empty, PdfButton, ReceiptPdfButton, Tabs, PayChip, usePages, Pager, useSort, SortTh } from '../ui.jsx';
 import { ask, toast } from '../feedback.jsx';
 import { Barcode } from '../barcode.jsx';
@@ -130,14 +131,18 @@ export function usePrintSale() {
 const STATUSES = [['', 'All statuses'], ['completed', 'Completed'], ['refunded', 'Refunded'], ['edited', 'Edited']];
 
 export default function Sales() {
-  const { db, update, fmt, user, branchId, can } = useStore();
+  const { db: localDb, syncCfg, update, fmt, user, branchId, can } = useStore();
   // step 18: a closed day's sales can't be edited (a refund still can, and the owner is told)
-  const closed = useMemo(() => closedSet(db.dayCloses), [db.dayCloses]);
-  const locked = (s) => inClosedDay(s, closed, dayOf);
   const location = useLocation();
   const [q, setQ] = useState(location.state?.q || '');
   const [from, setFrom] = useState(location.state?.from || '');
   const [to, setTo] = useState(location.state?.to || '');
+  // stage 4 of the faster sync: a 'From' date before this device's window brings those sales from the cloud
+  // (src/history.js); with no 'From' date the list is what this device holds
+  const older = useOlderHistory(localDb, syncCfg, from || localDb?._window?.W || '', ['sales']);
+  const db = older.db;
+  const closed = useMemo(() => closedSet(db.dayCloses), [db.dayCloses]);
+  const locked = (s) => inClosedDay(s, closed, dayOf);
   const [editing, setEditing] = useState(null);
   const [branch, setBranch] = useState(user.role === 'cashier' ? branchId : 'all');
   const [view, setView] = useState(null);
@@ -195,7 +200,7 @@ export default function Sales() {
   return (
     <div className="page">
       <div className="page-head">
-        <div><h1>Sales History</h1><div className="sub">{valid.length} sales · {fmt(valid.reduce((a, s) => a + s.total, 0))}</div></div>
+        <div><h1>Sales History</h1><div className="sub">{valid.length} sales · {fmt(valid.reduce((a, s) => a + s.total, 0))}{older.W && !from ? ` · this device keeps sales from ${older.W}; choose an earlier "From" date for older ones` : olderNote(older) ? ' · ' + olderNote(older) : ''}</div></div>
         <div className="row gap">
           {db.branches.length > 1 && user.role !== 'cashier' && (
             <select value={branch} onChange={(e) => setBranch(e.target.value)} aria-label="Branch">

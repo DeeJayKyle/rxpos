@@ -31,7 +31,8 @@ export const insurerShare = (s) => (s && s.status !== 'refunded' && s.insurance 
 export const clientOwes = (s) => (s && s.status !== 'refunded' ? num(s.total) - num(s.paid ?? s.total) - insurerShare(s) : 0);
 
 /** What an insurer owes: its share of the sales not refunded, less its payments (payments of kind 'insurer') */
-export function insurerBalance(sales, payments, insurerId) {
+export function insurerBalance(sales, payments, insurerId, sums = null) {
+  if (sums) return sums.insurer.get(insurerId) || 0; // stage 4: a device keeping recent history (balances.js windowSums)
   const owed = (sales || []).filter((s) => s.insurance?.insurerId === insurerId).reduce((a, s) => a + insurerShare(s), 0);
   const paid = (payments || []).filter((p) => p.kind === 'insurer' && p.partyId === insurerId).reduce((a, p) => a + num(p.amount), 0);
   return owed - paid;

@@ -35,6 +35,7 @@ function cloud() {
   c.snapshot = () => new Map([...c.rows].map(([k, v]) => [k, { ...v }]));
   c.restore = (snap) => { c.rows = new Map([...snap].map(([k, v]) => [k, { ...v }])); c.epoch = 'e2'; };
   c.fetch = async (url, init) => {
+    if (!String(url).endsWith('/api/sync')) return { ok: false, status: 404, json: async () => ({}) }; // no ready-made chunks (stage 3), like a hub
     c.calls++;
     if (c.failOn && c.calls === c.failOn) throw new TypeError('Failed to fetch');
     const b = JSON.parse(init.body);

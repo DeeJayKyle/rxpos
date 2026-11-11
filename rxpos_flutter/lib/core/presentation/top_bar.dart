@@ -285,7 +285,10 @@ class FirstDownload extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final s = ref.watch(syncControllerProvider);
     final d = ref.watch(pharmacyProvider).value;
-    if (!(s.first && s.state == SyncState.syncing) || (d != null && d.products.length > 50)) return const SizedBox.shrink();
+    // stage 2 of the faster sync: once the core (medicines, stock, clients, staff) is in, the app is ready to use
+    if (!(s.first && s.state == SyncState.syncing) || s.history || (d != null && d.products.length > 50)) {
+      return const SizedBox.shrink();
+    }
     final name = d == null || d.settings.name == 'My Pharmacy' ? 'your pharmacy' : d.settings.name;
     final t = Theme.of(context);
     return Positioned.fill(
@@ -302,6 +305,39 @@ class FirstDownload extends ConsumerWidget {
               const SizedBox(height: 8),
               Text(s.progress ?? 'Downloading medicines, stock and staff. This happens only once.', textAlign: TextAlign.center, style: t.textTheme.bodyMedium),
             ]),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// While a full download brings the older records (stage 2 of the faster sync): say that reports may still grow
+/// (src/App.jsx HistoryLoading).
+class HistoryLoading extends ConsumerWidget {
+  const HistoryLoading({super.key});
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final s = ref.watch(syncControllerProvider);
+    if (!(s.history && s.state == SyncState.syncing)) return const SizedBox.shrink();
+    final t = Theme.of(context);
+    return Positioned(
+      left: 16, right: 16, bottom: 12,
+      child: IgnorePointer(
+        child: Center(
+          child: Material(
+            key: const Key('history-loading'),
+            elevation: 3,
+            color: t.colorScheme.surfaceContainerHigh,
+            shape: const StadiumBorder(),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              child: Semantics(
+                liveRegion: true,
+                child: Text('${s.progress ?? 'Downloading older records…'} · sales history and reports fill in as they arrive; selling and stock are ready',
+                    textAlign: TextAlign.center, style: t.textTheme.bodySmall),
+              ),
+            ),
           ),
         ),
       ),

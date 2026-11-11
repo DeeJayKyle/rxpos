@@ -65,6 +65,9 @@ for (const size of only) {
   await p.type('input[autocomplete=username]', `bench-${size}@test.rx`); await p.type('input[type=password]', 'bench-pass-1234');
   let t0 = Date.now();
   await p.evaluate(() => [...document.querySelectorAll('form button')].find((x) => /^Sign in/.test(x.textContent.trim()))?.click());
+  // ready to use: the "Setting up" screen has gone (stage 2 of the faster sync: once the core is in)
+  await p.waitForFunction(() => !!document.querySelector('.sidebar') && !document.querySelector('.first-sync') && (/Up to date/.test(document.querySelector('.pill.clock')?.title || '') || !!document.querySelector('.history-loading')), { timeout: 600000, polling: 100 });
+  r.readyMs = Date.now() - t0;
   await p.waitForFunction(() => /Up to date/.test(document.querySelector('.pill.clock')?.title || ''), { timeout: 600000, polling: 200 });
   r.firstDownloadMs = Date.now() - t0;
   await wait(2500); // let the device finish saving
@@ -162,6 +165,8 @@ for (const size of only) {
   await w.type('input[autocomplete=username]', `bench-${size}@test.rx`); await w.type('input[type=password]', 'bench-pass-1234');
   t0 = Date.now();
   await w.evaluate(() => [...document.querySelectorAll('form button')].find((x) => /^Sign in/.test(x.textContent.trim()))?.click());
+  await w.waitForFunction(() => !!document.querySelector('.sidebar') && !document.querySelector('.first-sync') && (/Up to date/.test(document.querySelector('.pill.clock')?.title || '') || !!document.querySelector('.history-loading')), { timeout: 600000, polling: 100 });
+  r.webReadyMs = Date.now() - t0;
   await w.waitForFunction(() => /Up to date/.test(document.querySelector('.pill.clock')?.title || ''), { timeout: 600000, polling: 200 });
   r.webFirstDownloadMs = Date.now() - t0;
   await wctx.close();

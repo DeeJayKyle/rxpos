@@ -116,7 +116,8 @@ Ship stage 1 (build update), measure on the live cloud with a test pharmacy, the
 
 ## Stage 4: recent history on devices (G)
 
-This is the most delicate stage. It starts with a written design (S4.1), shown to the owner before any code.
+This is the most delicate stage. It starts with a written design (S4.1), shown to the owner before any code:
+**`docs/SYNC-HISTORY-WINDOW.md`** (written 11 Nov 2026; **approved 11 Nov 2026: the full design, shipped first with the window off by default, then turned on to 12 months / 1 month once the equality checks on real pharmacies pass**).
 
 **S4.1 Design: everything that adds up history.** List every place in both apps that totals old records, and decide
 how each stays exact with only recent history on the device:
@@ -183,7 +184,8 @@ The classic web version also skips the work of saving to a device it doesn't kee
 | Date | Step | Commit | Result |
 |---|---|---|---|
 | 2026-11-11 | Plan | | Baseline above |
-| 2026-11-11 | Stage 1 (A–D) | (this PR) | See below |
+| 2026-11-11 | Stage 1 (A–D) | PR 30 | See below; published as build updates |
+| 2026-11-11 | Stage 2 (E) | (this PR) | See below |
 
 **Stage 1 results** (this machine, local cloud, no network delay; first download):
 
@@ -206,3 +208,27 @@ Start-up, search and sales are unchanged. Notes:
 - New: `BENCH_SIZES=xlarge` and the web timing in `npm run bench`; `rxpos_flutter/test/cloud/download_speed_test.dart`;
   page-size checks in v38 (cloud and Hub); the *Offer Flutter build* workflow; the compression check after each cloud
   deploy.
+
+**Stage 2 results** (same machine; "ready" = the "Setting up" screen has gone, with stock, clients, debts and
+today's sales complete; "all" = every record in):
+
+| | Ready | All |
+|---|---|---|
+| Classic app, large (51,000) | 1.8 s | 3.2 s |
+| Classic app, extra-large (195,000) | 6.1 s | 10.9 s (stage 1: 15.6 s) |
+| Classic web, large | 0.9 s | 1.5 s |
+| Classic web, extra-large | 2.1 s | 4.5 s |
+| Flutter app, large (51,000) | 1.3 s | 2.0 s |
+| Flutter app, extra-large (186,000) | 4.3 s | 6.9 s |
+
+The split (worker `HISTORY_SQL`):
+- **History:** the audit log, messages, chat, events, quiz results, temperature logs, sale checks, and cash sales to
+  walk-in clients older than 3 days (no insurer, fully paid).
+- **Core:** everything else. That includes every stock movement (stock is their sum); every sale to a named client,
+  unpaid or insured (debts); and the last 3 days of sales (cash-up, returns).
+
+Core and history together are exactly the full download, with no record twice (v71, cloud and Hub). The app resumes
+in the phase it was cut off in, and falls back to one plain download with a cloud before stage 2 (`unit-sync-phases`,
+Flutter `download_test`).
+
+In this sample, stock movements are most of the core. Stage 4 (brought-forward balances) shrinks them.

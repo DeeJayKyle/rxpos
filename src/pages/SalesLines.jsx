@@ -28,8 +28,9 @@ export function saleLines(sales, products) {
 }
 
 /** money: show profit, margin and below-cost (cost prices). Off for staff with the Sales lines report only. */
-export default function SalesLines({ from, to, branch, initial = {}, money = true }) {
-  const { db, products, fmt } = useStore();
+export default function SalesLines({ from, to, branch, initial = {}, money = true, db: given }) {
+  const { db: own, products, fmt } = useStore();
+  const db = given || own; // Reports passes its records (with older ones from the cloud, stage 4 of the faster sync)
   const navigate = useNavigate();
   const ref = useRef(null);
   const [f, setF] = useState({ cashier: ALL, type: ALL, payment: ALL, customer: ALL, medicine: initial.medicine || '' });

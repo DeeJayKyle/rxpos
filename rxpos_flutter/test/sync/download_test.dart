@@ -53,7 +53,8 @@ void main() {
     final urls = <String>[];
     final dio = cloud.dio()..interceptors.insert(0, InterceptorsWrapper(onRequest: (o, h) { urls.add(o.uri.toString()); h.next(o); }));
     await SyncEngine(dio: dio, db: db, cloudUrl: 'https://rxposug.com/').run();
-    expect(urls.first, 'https://api.rxposug.com/api/sync');
+    expect(urls, contains('https://api.rxposug.com/api/sync'));
+    expect(urls.first, 'https://api.rxposug.com/api/snapshot', reason: 'stage 3: a full download asks for ready-made chunks first');
     expect(urls.every((u) => u.startsWith('https://api.rxposug.com/api/')), isTrue);
   });
 
@@ -229,5 +230,68 @@ void main() {
     expect((rest.complete, rest.sent), (true, 500));
     expect(await db.select(db.outbox).get(), isEmpty);
     expect(cloud.current.keys.where((k) => k.startsWith('sales|')).length, 900);
+  });
+
+  group('faster sync, stage 2: core first, history after (same steps as src/sync.js, tests/unit-sync-phases.mjs)', () {
+    late FakeCloud pc;
+    late SyncEngine pd;
+    setUp(() {
+      pc = FakeCloud(pageSize: 7, phases: true);
+      pd = SyncEngine(dio: pc.dio(), db: db, cloudUrl: 'https://rxposug.com');
+      for (var i = 1; i <= 30; i++) {
+        pc.add('products', 'p$i', {'name': 'Sample $i'}, '2026-11-01T08:00:00.000Z');
+        pc.add('sales', 'old$i', {'old': true, 'total': 100}, '2026-11-01T08:00:00.000Z');
+      }
+      for (var i = 31; i <= 40; i++) {
+        pc.add('sales', 'old$i', {'old': true, 'total': 100}, '2026-11-01T08:00:00.000Z');
+      }
+    });
+
+    test('the core comes first, the app hears when it is in, then the history and the rest', () async {
+      final seen = <(bool, int, int)>[];
+      final r = await pd.run(onProgress: (p) => seen.add((p.history, p.received, 0)));
+      expect(r.complete, isTrue);
+      expect((await store.rows('products')).length, 30);
+      expect((await store.rows('sales')).length, 40);
+      final phases = [for (final q in pc.requests) q['phase']];
+      expect(phases.first, 'core');
+      expect(phases.indexOf('history'), greaterThan(phases.lastIndexOf('core')));
+      expect(phases.last, isNull, reason: 'the rest: what changed since the core ended');
+      expect(pc.requests.last['since'], 70, reason: 'where the core ended');
+      final firstHistory = seen.indexWhere((x) => x.$1);
+      expect(firstHistory, greaterThan(0));
+      expect(seen[firstHistory].$2, 30, reason: 'the core (30 medicines) was in when the app heard it');
+      final cfg = await SyncConfig.load(db);
+      expect((cfg.phase, cfg.fullInProgress, cfg.needsFullPull), (null, false, false));
+    });
+
+    test('cut off in the history: the next run carries on there, not in the core; nothing twice', () async {
+      pc.failOnRequest = 8; // the core takes 5 requests (30 medicines, 7 a page); the third history page fails
+      await expectLater(pd.run(), throwsA(isA<ApiFailure>()));
+      expect((await SyncConfig.load(db)).phase, 'history');
+      final before = pc.requests.length;
+      pc.failOnRequest = null;
+      final r = await pd.run();
+      expect(r.complete, isTrue);
+      final resumed = pc.requests.sublist(before);
+      expect(resumed.first['phase'], 'history');
+      expect((resumed.first['since'] as num) > 0, isTrue);
+      expect(resumed.any((q) => q['phase'] == 'core'), isFalse);
+      final sales = await store.rows('sales');
+      expect(sales.length, 40);
+      expect(sales.map((s) => s['id']).toSet().length, 40);
+    });
+
+    test('a cloud without phases still gives everything, as one plain download', () async {
+      final old = FakeCloud(pageSize: 7);
+      for (final r in pc.records) {
+        old.add(r.t, r.id, r.rec!, r.at);
+      }
+      final r = await SyncEngine(dio: old.dio(), db: db, cloudUrl: 'https://rxposug.com').run();
+      expect(r.complete, isTrue);
+      expect((await store.rows('sales')).length, 40);
+      expect(old.requests.first['phase'], 'core');
+      expect(old.requests.skip(1).every((q) => q['phase'] == null), isTrue);
+    });
   });
 }

@@ -15,9 +15,12 @@ class ServerRecord {
 }
 
 class FakeCloud implements HttpClientAdapter {
-  FakeCloud({this.pageSize = 400});
+  FakeCloud({this.pageSize = 400, this.phases = false});
 
   final int pageSize;
+  /// Faster sync, stage 2: split a full download into the core and the history like the worker (HISTORY_SQL; here,
+  /// sales marked `old` are history). Off: a cloud before stage 2, which ignores the phase.
+  final bool phases;
   final records = <ServerRecord>[];
   String epoch = 'epoch-1';
   final requests = <Map<String, Object?>>[];
@@ -130,9 +133,11 @@ class FakeCloud implements HttpClientAdapter {
     final since = (body['since'] as num).toInt();
     final all = body['all'] == true;
     final device = body['deviceId'];
-    final next = records.where((r) => r.seq > since && (all || r.origin != device)).toList();
+    final phase = phases && all && (body['phase'] == 'core' || body['phase'] == 'history') ? body['phase'] as String : null;
+    bool history(ServerRecord r) => r.t == 'sales' && r.rec?['old'] == true;
+    final next = records.where((r) => r.seq > since && (all || r.origin != device) && (phase == null || (phase == 'history') == history(r))).toList();
     final page = next.take(pageSize).toList();
-    final cursor = page.isEmpty ? _seq : page.last.seq;
+    final cursor = page.isEmpty || next.length <= page.length ? _seq : page.last.seq; // the last page: the newest number, like the worker
     final reply = {
       'changes': [
         for (final r in page) {'t': r.t, 'id': r.id, 'at': r.at, if (r.deleted) 'deleted': true else 'rec': r.rec},
@@ -146,6 +151,7 @@ class FakeCloud implements HttpClientAdapter {
       'epoch': epoch,
       'tenant': 't-sample',
       'protocol': 2,
+      if (phases) 'phase': phase,
     };
     return ResponseBody.fromString(jsonEncode(reply), 200, headers: _json);
   }
