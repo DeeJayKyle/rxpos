@@ -18,8 +18,10 @@ const median = (a) => { const s = [...a].sort((x, y) => x - y); return Math.roun
 const iso = (n) => new Date(Date.now() - n * 864e5).toISOString();
 const day = (n) => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10);
 
-const SIZES = { small: { products: 300, sales: 1000, catalog: false }, large: { products: 2000, sales: 15000, catalog: true } };
-const only = process.env.BENCH_SIZES ? process.env.BENCH_SIZES.split(',') : Object.keys(SIZES);
+const SIZES = { small: { products: 300, sales: 1000, catalog: false }, large: { products: 2000, sales: 15000, catalog: true },
+  // faster sync (docs/SYNC-SPEED-PLAN.md): a pharmacy several years old, about 200,000 records; only with BENCH_SIZES=xlarge
+  xlarge: { products: 5000, sales: 60000, catalog: true, only: true } };
+const only = process.env.BENCH_SIZES ? process.env.BENCH_SIZES.split(',') : Object.keys(SIZES).filter((k) => !SIZES[k].only);
 
 async function seed(size) {
   const cfg = SIZES[size];
@@ -150,9 +152,22 @@ for (const size of only) {
   await p.waitForFunction(() => /Up to date/.test(document.querySelector('.pill.clock')?.title || '') && !/waiting|Syncing/i.test(document.querySelector('.pill.clock .clock-state')?.innerText || ''), { timeout: 120000, polling: 100 });
   r.reconnectSync20SalesMs = Date.now() - t0;
 
+  await ctx.close();
+  // 7. the web version (keeps nothing): signing in downloads the pharmacy every time
+  const wctx = await b.createBrowserContext();
+  const w = await wctx.newPage();
+  await w.setViewport({ width: 1366, height: 768 });
+  await w.goto(base + '/' + slug, { waitUntil: 'networkidle2' });
+  await w.evaluate(() => { for (const id of ['pos', 'reports', 'inventory', 'dashboard']) localStorage.setItem('rxpos-tip:' + id, '1'); });
+  await w.type('input[autocomplete=username]', `bench-${size}@test.rx`); await w.type('input[type=password]', 'bench-pass-1234');
+  t0 = Date.now();
+  await w.evaluate(() => [...document.querySelectorAll('form button')].find((x) => /^Sign in/.test(x.textContent.trim()))?.click());
+  await w.waitForFunction(() => /Up to date/.test(document.querySelector('.pill.clock')?.title || ''), { timeout: 600000, polling: 200 });
+  r.webFirstDownloadMs = Date.now() - t0;
+  await wctx.close();
+
   results.sizes[size] = r;
   console.log(size, JSON.stringify(r));
-  await ctx.close();
   await owner('/tenants/' + tid + '/delete', { confirm: slug });
 }
 await b.close();

@@ -71,6 +71,11 @@ jobs:
           }
           throw new Error('Production did not pass build and health verification');
           JS
+      - name: Sync replies are compressed (faster sync, docs/SYNC-SPEED-PLAN.md)
+        # Cloudflare compresses JSON replies for devices that accept it; say so plainly if it ever stops
+        run: |
+          enc=$(curl -sS -o /dev/null -D - -H 'Accept-Encoding: br, gzip' "https://api.rxposug.com/api/version?t=$(date +%s)" | tr -d '\r' | awk -F': ' 'tolower($1)=="content-encoding"{print $2}')
+          if [ -n "$enc" ]; then echo "Replies are compressed: $enc"; else echo "::warning::api.rxposug.com did not compress its reply: the faster sync's downloads are bigger than they need to be."; fi
       - name: Every update file arrives exactly as listed (the Windows app refuses a changed file)
         run: |
           for i in 1 2 3 4; do code=0; node scripts/check-update-files.mjs || code=$?; [ $code = 0 ] && exit 0; sleep 30; done # (|| keeps bash -e from stopping at the first try)

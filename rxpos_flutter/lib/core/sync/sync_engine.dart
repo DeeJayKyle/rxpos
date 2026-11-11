@@ -78,6 +78,9 @@ class SyncResult {
   final bool complete;
 }
 
+/// Records per page asked for (stage 1 of the faster sync; worker/index.js MAX_PAGE).
+const pullLimit = 10000;
+
 class SyncEngine {
   SyncEngine({required this.dio, required this.db, required this.cloudUrl, this.maxRequests = 100000});
 
@@ -102,46 +105,59 @@ class SyncEngine {
     var epoch = cfg.epoch;
     var i = 0, sent = 0, refused = 0, received = 0, applied = 0, requests = 0;
     var complete = false;
-    while (requests++ < maxRequests) {
-      final batch = i < batches.length ? batches[i] : const <OutboxRow>[];
-      final reply = await _post({
-        'deviceId': cfg.deviceId, 'since': cursor, 'changes': await _toChanges(batch), 'v': 2, if (full) 'all': true,
-      });
-      i++;
-      final restored = reply.epoch != null && epoch != null && reply.epoch != epoch;
-      final refusedKeys = reply.refusedKeys.toSet();
-      await db.transaction(() async {
-        if (batch.isNotEmpty) {
-          for (final e in batch) {
-            if (refusedKeys.contains('${e.t}|${e.id}')) {
-              await db.into(db.rejectedOps).insert(RejectedOpsCompanion.insert(op: e.op, t: e.t, id: e.id, at: e.at,
-                  reason: const Value('Refused by the cloud: no permission for this change, or it is too large.')));
-              refused++;
+    // Faster sync, stage 1 (docs/SYNC-SPEED-PLAN.md): bigger pages (a cloud before it sends 2,500), and while one page
+    // is being saved the next one is already on its way. The cursor is still saved with each page's records.
+    Future<SyncReply> ask(int since, List<OutboxRow> batch) async => _post({
+          'deviceId': cfg.deviceId, 'since': since, 'changes': await _toChanges(batch), 'v': 2, 'limit': pullLimit, if (full) 'all': true,
+        });
+    Future<SyncReply>? ahead;
+    try {
+      while (requests++ < maxRequests) {
+        final batch = i < batches.length ? batches[i] : const <OutboxRow>[];
+        final reply = await (ahead ?? ask(cursor, batch));
+        ahead = null;
+        i++;
+        // only downloading, and more to come: ask for the next page now, so it travels while this one is saved
+        if (i >= batches.length && reply.more && reply.epoch == epoch && requests < maxRequests) {
+          ahead = ask(reply.cursor, const []);
+        }
+        final restored = reply.epoch != null && epoch != null && reply.epoch != epoch;
+        final refusedKeys = reply.refusedKeys.toSet();
+        await db.transaction(() async {
+          if (batch.isNotEmpty) {
+            for (final e in batch) {
+              if (refusedKeys.contains('${e.t}|${e.id}')) {
+                await db.into(db.rejectedOps).insert(RejectedOpsCompanion.insert(op: e.op, t: e.t, id: e.id, at: e.at,
+                    reason: const Value('Refused by the cloud: no permission for this change, or it is too large.')));
+                refused++;
+              }
+              await (db.delete(db.outbox)..where((o) => o.seq.equals(e.seq))).go();
             }
-            await (db.delete(db.outbox)..where((o) => o.seq.equals(e.seq))).go();
+            sent += batch.length;
           }
-          sent += batch.length;
+          if (restored) {
+            // the cloud was restored from a backup: download everything again from the start and merge
+            epoch = reply.epoch;
+            cursor = 0;
+          } else {
+            epoch = reply.epoch ?? epoch;
+            applied += await applyRemote(db, reply.changes);
+            received += reply.changes.length;
+            cursor = reply.cursor;
+          }
+          // a restore also means: once the download is done, send everything this device holds again (see below)
+          cfg = cfg.copyWith(cursor: cursor, epoch: epoch, resendAfterRestore: restored ? true : null);
+          await cfg.save(db);
+        });
+        onProgress?.call(SyncProgress(sent: sent, toSend: toSend, received: received, first: first));
+        if (restored) continue;
+        if (i >= batches.length && !reply.more) {
+          complete = true;
+          break;
         }
-        if (restored) {
-          // the cloud was restored from a backup: download everything again from the start and merge
-          epoch = reply.epoch;
-          cursor = 0;
-        } else {
-          epoch = reply.epoch ?? epoch;
-          applied += await applyRemote(db, reply.changes);
-          received += reply.changes.length;
-          cursor = reply.cursor;
-        }
-        // a restore also means: once the download is done, send everything this device holds again (see below)
-        cfg = cfg.copyWith(cursor: cursor, epoch: epoch, resendAfterRestore: restored ? true : null);
-        await cfg.save(db);
-      });
-      onProgress?.call(SyncProgress(sent: sent, toSend: toSend, received: received, first: first));
-      if (restored) continue;
-      if (i >= batches.length && !reply.more) {
-        complete = true;
-        break;
       }
+    } finally {
+      ahead?.ignore(); // stopped early (an error, or the request limit): the page asked for ahead is not used
     }
     // Stopped at the request limit with more to send or fetch: what arrived and the cursor are saved (after every
     // batch above), but the run is not finished, so it must not be recorded as done: no lastSync, and a full download

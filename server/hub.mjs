@@ -14,6 +14,7 @@
 // A hub from before (hub.json) is moved into hub.db once, on first start; hub.json is kept, renamed, as a backup.
 // Devices signed in to an older hub sign in again once (the sign-in passes are made differently now).
 import http from 'node:http';
+import zlib from 'node:zlib';
 import fs from 'node:fs';
 import path from 'node:path';
 import nodeCrypto from 'node:crypto';
@@ -123,8 +124,14 @@ const server = http.createServer(async (req, res) => {
     const r = await cloud.fetch(new Request(url, { method: req.method, headers, body: ['GET', 'HEAD'].includes(req.method) ? undefined : Buffer.concat(chunks) }), env, ctx);
     const out = {};
     r.headers.forEach((v, k) => { out[k] = v; });
+    let buf = req.method === 'HEAD' ? undefined : Buffer.from(await r.arrayBuffer());
+    // compress larger JSON replies (sync pages) when the device accepts it, as Cloudflare does for the cloud
+    if (buf && buf.length > 2048 && /json/.test(out['content-type'] || '') && !out['content-encoding'] && /\bgzip\b/.test(String(req.headers['accept-encoding'] || ''))) {
+      buf = zlib.gzipSync(buf, { level: 5 });
+      out['content-encoding'] = 'gzip'; out.vary = 'Accept-Encoding'; delete out['content-length'];
+    }
     res.writeHead(r.status, out);
-    res.end(req.method === 'HEAD' ? undefined : Buffer.from(await r.arrayBuffer()));
+    res.end(buf);
   } catch (e) {
     console.error(e);
     try { res.writeHead(500, { 'Content-Type': 'application/json' }).end(JSON.stringify({ error: 'Server error' })); } catch { /* reply already started */ }

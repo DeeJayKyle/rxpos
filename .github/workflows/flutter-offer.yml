@@ -1,0 +1,62 @@
+# Offers a tested Flutter build to the installed new RxPOS apps as a build update: same version (2.1), a new build
+# number, no GitHub release (docs/SYNC-SPEED-PLAN.md, "Publishing"). It takes the files the "Flutter apps" workflow put
+# on the flutter-pilot pre-release for that run (no rebuild), checks they are exactly that run's and that the run built
+# main and passed, and uploads them as the update the apps take (scripts/publish-flutter-update.sh). Windows apps
+# update by themselves; Android asks to tap Update. Run by hand with the run number.
+name: Offer Flutter build
+
+on:
+  workflow_dispatch:
+    inputs:
+      build:
+        description: 'The "Flutter apps" run number to offer (a successful run on main)'
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: flutter-release
+  cancel-in-progress: false
+
+jobs:
+  offer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+      BUILD: ${{ inputs.build }}
+      V: '2.1' # flutter-apps.yml VERSION's first two numbers
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: The files of that build, from the pilot release
+        run: |
+          mkdir -p out
+          files="RxPOS.apk RxPOS-arm64.apk RxPOS-armv7.apk RxPOS-x64.apk RxPOS-Setup.exe"
+          for a in $files; do pats+=(--pattern "$a"); done
+          gh release download flutter-pilot --repo "$GITHUB_REPOSITORY" --dir out "${pats[@]}"
+          ls -l out
+          run=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/flutter-apps.yml/runs?per_page=50" \
+            --jq ".workflow_runs[] | select(.run_number == $BUILD) | [.conclusion, .updated_at, .run_started_at, .head_branch] | @tsv")
+          echo "Flutter apps run $BUILD: $run"
+          [ "$(cut -f1 <<<"$run")" = success ] || { echo "::error::Flutter apps run $BUILD has not finished successfully: nothing was offered."; exit 1; }
+          [ "$(cut -f4 <<<"$run")" = main ] || { echo "::error::Flutter apps run $BUILD did not build main: nothing was offered."; exit 1; }
+          for a in $files; do
+            up=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/flutter-pilot" --jq ".assets[] | select(.name == \"$a\") | .updated_at")
+            echo "$a uploaded $up"
+            [[ "$up" < "$(cut -f2 <<<"$run")" ]] || { echo "::error::$a on flutter-pilot is newer than run $BUILD: a later build replaced it."; exit 1; }
+            [[ "$up" > "$(cut -f3 <<<"$run")" ]] || { echo "::error::$a on flutter-pilot is older than run $BUILD: that run did not upload it."; exit 1; }
+          done
+      - name: Offer it to the installed apps
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          scripts/publish-flutter-update.sh android out/RxPOS.apk "$BUILD" "$V.$BUILD"
+          for abi in arm64 armv7 x64; do scripts/publish-flutter-update.sh "android-$abi" "out/RxPOS-$abi.apk" "$BUILD" "$V.$BUILD"; done
+          scripts/publish-flutter-update.sh windows out/RxPOS-Setup.exe "$BUILD" "$V.$BUILD"
+          echo "Offered RxPOS $V.$BUILD to the installed apps."

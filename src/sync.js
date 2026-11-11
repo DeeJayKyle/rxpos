@@ -23,6 +23,8 @@ const ACTIVE = 5000; // no live connection, app in use
 const LIVE_SAFETY = 30000; // live connection up: slow safety-net pull only
 const BACKGROUND = 60000;
 const PUSH_BATCH = 400;
+export const PULL_LIMIT = 10000; // records per page asked for (a cloud before the faster sync sends 2,500)
+export const FLUSH = 10000, FLUSH_MS = 3000; // downloaded records applied and saved together
 export const PROTOCOL = 2;
 // Bumped when every installed app must download the whole pharmacy again once and merge it (nothing is deleted, the
 // newer copy of each record wins, unsent changes are sent first). 1: Windows apps found missing deliveries, batches and
@@ -142,30 +144,57 @@ export function createSync({ getDb, getCfg, saveCfg, applyRemote, onStatus, stor
       const full = (c.fullPull || 0) < FULL_PULL;
       if (full && !c.fullInProgress) await saveCfg({ ...getCfg(), cursor: 0, fullInProgress: true });
       let cursor = full ? getCfg().cursor || 0 : c.cursor || 0, epoch = c.epoch, i = 0, sent = 0, pulled = 0, refused = 0;
-      for (;;) {
-        const batch = batches[i] || [];
-        const r = await post(c.url, c.key, { deviceId: c.deviceId, since: cursor, changes: toChanges(batch, getDb()), v: PROTOCOL, ...(full ? { all: true } : {}) });
-        i++;
-        // the request was applied as a whole: refused changes are kept for review, the rest leave the outbox
-        if (batch.length) {
-          const no = new Set(r.refusedKeys || []);
-          const bad = batch.filter((e) => no.has(e.t + '|' + e.id));
-          if (bad.length) await store.reject(bad, 'Refused by the cloud: no permission for this change, or it is too large.');
-          await store.ack(batch.filter((e) => !no.has(e.t + '|' + e.id)).map((e) => e.key));
-          sent += batch.length; refused += bad.length;
+      // Faster sync, stage 1 (docs/SYNC-SPEED-PLAN.md): downloaded pages are applied and saved in batches (FLUSH records
+      // or every FLUSH_MS) instead of one by one, since each save rewrites the storage buckets it touches and redraws
+      // the app; and while a batch is being saved, the next page is already on its way. The sync position is saved only
+      // after the records before it are on the device, so an interrupted download still resumes where it stopped.
+      let held = [], heldCursor = cursor, heldAt = Date.now();
+      const flush = async () => {
+        if (held.length) { const ch = held; held = []; await applyRemote(ch); pulled += ch.length; }
+        await saveCfg({ ...getCfg(), cursor: heldCursor, epoch });
+        heldAt = Date.now();
+      };
+      const ask = (since, batch) => post(c.url, c.key, { deviceId: c.deviceId, since, changes: toChanges(batch, getDb()), v: PROTOCOL, limit: PULL_LIMIT, ...(full ? { all: true } : {}) });
+      let ahead = null; // the next page, asked for while this one is saved
+      try {
+        for (;;) {
+          const batch = batches[i] || [];
+          const r = ahead ? await ahead : await ask(cursor, batch);
+          ahead = null;
+          i++;
+          // the request was applied as a whole: refused changes are kept for review, the rest leave the outbox
+          if (batch.length) {
+            const no = new Set(r.refusedKeys || []);
+            const bad = batch.filter((e) => no.has(e.t + '|' + e.id));
+            if (bad.length) await store.reject(bad, 'Refused by the cloud: no permission for this change, or it is too large.');
+            await store.ack(batch.filter((e) => !no.has(e.t + '|' + e.id)).map((e) => e.key));
+            sent += batch.length; refused += bad.length;
+          }
+          // 1.4 the cloud was restored from a backup: its database epoch changed, so re-pull everything from the start
+          // and merge (last-writer-wins). Restored rows keep their old sequence numbers, below this device's cursor.
+          // It also lost what this device sent after that backup (already acknowledged, so no longer in the outbox): once
+          // the download is done, everything this device holds goes up once more (resendAfterRestore, kept with the sync
+          // settings so an interrupted run still does it).
+          if (r.epoch !== undefined && epoch !== undefined && r.epoch !== epoch) {
+            if (held.length) await flush(); // what arrived before the restore is still merged (newest copy wins)
+            epoch = r.epoch; cursor = 0; heldCursor = 0;
+            await saveCfg({ ...getCfg(), cursor, epoch, resendAfterRestore: true }); continue;
+          }
+          epoch = r.epoch ?? epoch;
+          cursor = Number(r.cursor);
+          const sending = i < batches.length;
+          // only downloading, and more to come: ask for the next page now, so it travels while this batch is saved
+          if (!sending && r.more) { ahead = ask(cursor, []); ahead.catch(() => {}); }
+          if (r.changes.length) held.push(...r.changes);
+          heldCursor = cursor;
+          if (sending || !r.more || held.length >= FLUSH || Date.now() - heldAt >= FLUSH_MS) await flush();
+          if (!sending && !r.more) break;
+          onStatus({ state: 'syncing', first: !c.lastSync, progress: sending ? `Sending ${sent.toLocaleString()} of ${total.toLocaleString()} changes` : `Downloading… ${(pulled + held.length).toLocaleString()} records`, ...(await counts()) });
         }
-        // 1.4 the cloud was restored from a backup: its database epoch changed, so re-pull everything from the start
-        // and merge (last-writer-wins). Restored rows keep their old sequence numbers, below this device's cursor.
-        // It also lost what this device sent after that backup (already acknowledged, so no longer in the outbox): once
-        // the download is done, everything this device holds goes up once more (resendAfterRestore, kept with the sync
-        // settings so an interrupted run still does it).
-        if (r.epoch !== undefined && epoch !== undefined && r.epoch !== epoch) { epoch = r.epoch; cursor = 0; await saveCfg({ ...getCfg(), cursor, epoch, resendAfterRestore: true }); continue; }
-        epoch = r.epoch ?? epoch;
-        if (r.changes.length) { await applyRemote(r.changes); pulled += r.changes.length; }
-        cursor = Number(r.cursor);
-        await saveCfg({ ...getCfg(), cursor, epoch }); // after the records are on the device: an interrupted download resumes here
-        if (i >= batches.length && !r.more) break;
-        onStatus({ state: 'syncing', first: !c.lastSync, progress: i < batches.length ? `Sending ${sent.toLocaleString()} of ${total.toLocaleString()} changes` : `Downloading… ${pulled.toLocaleString()} records`, ...(await counts()) });
+      } catch (e) {
+        // cut off part-way (the connection dropped): what already arrived is saved, so the next run carries on after it
+        if (held.length) await flush().catch(() => {});
+        throw e;
       }
       if (getCfg().resendAfterRestore) {
         // Each change goes with its own updatedAt, so the cloud keeps whichever copy is newer (last writer wins) and

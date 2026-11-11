@@ -4,6 +4,13 @@ The owner chose recommendations **A to H** (November 2026). Everything ships as 
 take by themselves: the classic app stays **1.8.0** (new build number), the Flutter apps stay **2.1** (build
 2.1.&lt;run&gt;). No new version numbers, no new installers.
 
+## The owner's decisions (11 Nov 2026)
+
+- Windows and Android apps keep **12 months** of history on the device by default (G); the setting can change it.
+- The web versions load **1 month** of history each time they open (H); older history comes from the cloud on request.
+- Stages 1, 2, 3 and 5 are built, tested, merged and published as build updates without asking first; **stage 4 (G)
+  waits for the owner's OK on its written design (S4.1)**.
+
 ## Where the time goes today (measured 11 Nov 2026)
 
 Large pharmacy: 2,000 medicines, 15,000 sales, 51,000 records in all. Local cloud, so no network delay.
@@ -139,7 +146,7 @@ The planned rules:
 - It is checked against the same role rules as sync (payroll, audit…).
 
 **S4.4 Both apps.**
-- A setting on This device: "History kept on this device", with a default to be chosen by the owner.
+- A setting on This device: "History kept on this device" (default 12 months; 6, 24 or everything).
 - Shortening the window removes older records from this device only, never from the cloud. Lengthening it fetches
   them.
 - Reports and lists that go past the window fetch from the cloud and say so. Offline, they say the older part needs
@@ -150,7 +157,7 @@ The planned rules:
 Both web versions keep nothing on the computer, as decided in 1.7. With stages 1 to 4 they:
 - download only the core first (E);
 - use the cached chunks (F);
-- keep a short window of history (G), with older history fetched on request.
+- keep 1 month of history (G), with older history fetched on request.
 
 The classic web version also skips the work of saving to a device it doesn't keep. Target: the till usable in about
 2 seconds on a good connection, whatever the pharmacy's age.
@@ -176,3 +183,26 @@ The classic web version also skips the work of saving to a device it doesn't kee
 | Date | Step | Commit | Result |
 |---|---|---|---|
 | 2026-11-11 | Plan | | Baseline above |
+| 2026-11-11 | Stage 1 (A–D) | (this PR) | See below |
+
+**Stage 1 results** (this machine, local cloud, no network delay; first download):
+
+| | Before | After |
+|---|---|---|
+| Classic app, large (51,000 records) | 7.5 s | 3.0 s |
+| Classic web, large | 2.4 s | 1.4 s |
+| Classic app, extra-large (195,000 records) | 59.4 s | 15.6 s |
+| Classic web, extra-large | 14.3 s | 5.0 s |
+| Flutter app, large (51,000) | 9.0 s | 2.0 s |
+| Flutter app, extra-large (186,000) | not timed | 6.6 s |
+
+Start-up, search and sales are unchanged. Notes:
+- A page cut off part-way still resumes; records already received are saved before the run gives up (found by
+  `unit-sync-resume`).
+- Saving after 25,000 records instead of 10,000 saved only another 0.4 s and would lose more on a dropped
+  connection, so it stays at 10,000 records or 3 s.
+- What remains in the classic app is the storage format, which rewrites each touched bucket on every save; stages 2
+  and 3 reduce it further.
+- New: `BENCH_SIZES=xlarge` and the web timing in `npm run bench`; `rxpos_flutter/test/cloud/download_speed_test.dart`;
+  page-size checks in v38 (cloud and Hub); the *Offer Flutter build* workflow; the compression check after each cloud
+  deploy.
