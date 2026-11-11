@@ -20,7 +20,45 @@ const pharmacyFields = [
 ];
 
 /// Apply [changes] to the device database. Run inside a transaction together with saving the cursor.
+///
+/// Faster sync, stage 1 (docs/SYNC-SPEED-PLAN.md): the page's local copies and tombstones are read with one query per
+/// table (500 ids at a time) instead of one or two per record, and the writes go to the database as one batch, in
+/// the same order. The rules are the same as before.
 Future<int> applyRemote(AppDatabase db, List<RemoteChange> changes) async {
+  // what this device holds for the records in this page, by table and id (kept up to date as the page is applied)
+  final locals = <String, Map<String, RecordRow?>>{};
+  final tombs = <String, Map<String, String>>{};
+  final ids = <String, Set<String>>{};
+  for (final ch in changes) {
+    if (ch.t != 'settings' && syncedTables.contains(ch.t)) (ids[ch.t] ??= <String>{}).add(ch.id);
+  }
+  for (final MapEntry(key: t, value: set) in ids.entries) {
+    final list = set.toList();
+    final have = locals[t] = <String, RecordRow?>{};
+    final gone = tombs[t] = <String, String>{};
+    for (var i = 0; i < list.length; i += 500) {
+      final part = list.sublist(i, i + 500 > list.length ? list.length : i + 500);
+      for (final r in await (db.select(db.records)..where((r) => r.t.equals(t) & r.id.isIn(part))).get()) {
+        have[r.id] = r;
+      }
+      for (final x in await (db.select(db.tombstones)..where((x) => x.t.equals(t) & x.id.isIn(part))).get()) {
+        gone[x.id] = x.at;
+      }
+    }
+  }
+  final writes = <void Function(Batch)>[];
+  void put(String t, String id, Map<String, Object?> rec, String? at) {
+    final json = jsonEncode(rec);
+    writes.add(
+      (b) => b.insert(
+        db.records,
+        RecordsCompanion.insert(t: t, id: id, json: json, updatedAt: Value(at)),
+        mode: InsertMode.insertOrReplace,
+      ),
+    );
+    locals[t]![id] = RecordRow(t: t, id: id, json: json, updatedAt: at);
+  }
+
   var applied = 0;
   for (final ch in changes) {
     if (ch.t == 'settings') {
@@ -28,34 +66,43 @@ Future<int> applyRemote(AppDatabase db, List<RemoteChange> changes) async {
       continue;
     }
     if (!syncedTables.contains(ch.t)) continue; // a table this app version does not know yet
-    final local = await (db.select(db.records)..where((r) => r.t.equals(ch.t) & r.id.equals(ch.id))).getSingleOrNull();
+    final local = locals[ch.t]![ch.id];
     // step 14: a medicine, client, supplier or batch held here merges field by field (the newer value of each wins)
     if (local != null && !ch.deleted && ch.rec != null && fieldTables.contains(ch.t)) {
       final mine = (jsonDecode(local.json) as Map).cast<String, Object?>();
-      final merged = mergeFields(mine, local.updatedAt ?? (mine['updatedAt'] as String?), {...ch.rec!, 'id': ch.id}, ch.at);
+      final merged = mergeFields(mine, local.updatedAt ?? (mine['updatedAt'] as String?), {
+        ...ch.rec!,
+        'id': ch.id,
+      }, ch.at);
       if (!sameRecord(merged, mine)) {
-        await db.into(db.records).insertOnConflictUpdate(
-            RecordsCompanion.insert(t: ch.t, id: ch.id, json: jsonEncode(merged), updatedAt: Value(merged['updatedAt'] as String?)));
+        put(ch.t, ch.id, merged, merged['updatedAt'] as String?);
         applied++;
       }
       continue;
     }
     if (local != null && (local.updatedAt ?? '').compareTo(ch.at) >= 0) continue;
     if (local == null && !ch.deleted) {
-      final tomb = await (db.select(db.tombstones)..where((x) => x.t.equals(ch.t) & x.id.equals(ch.id))).getSingleOrNull();
-      if (tomb != null && tomb.at.compareTo(ch.at) >= 0) continue;
+      final tomb = tombs[ch.t]![ch.id];
+      if (tomb != null && tomb.compareTo(ch.at) >= 0) continue;
     }
     if (ch.deleted) {
       if (local != null) {
-        await (db.delete(db.records)..where((r) => r.t.equals(ch.t) & r.id.equals(ch.id))).go();
+        final t = ch.t, id = ch.id;
+        writes.add((b) => b.deleteWhere(db.records, (r) => r.t.equals(t) & r.id.equals(id)));
+        locals[ch.t]![ch.id] = null;
         applied++;
       }
       continue;
     }
-    final rec = {...?ch.rec, 'id': ch.rec?['id'] ?? ch.id, 'updatedAt': ch.at};
-    await db.into(db.records).insertOnConflictUpdate(
-        RecordsCompanion.insert(t: ch.t, id: ch.id, json: jsonEncode(rec), updatedAt: Value(ch.at)));
+    put(ch.t, ch.id, {...?ch.rec, 'id': ch.rec?['id'] ?? ch.id, 'updatedAt': ch.at}, ch.at);
     applied++;
+  }
+  if (writes.isNotEmpty) {
+    await db.batch((b) {
+      for (final w in writes) {
+        w(b);
+      }
+    });
   }
   return applied;
 }

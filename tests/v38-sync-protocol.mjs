@@ -55,6 +55,19 @@ check('an expired or forged sign-in gets 401 (the device asks to sign in again)'
 const a = await sync(admin, []), c = await sync(admin, [], { since: a.j.cursor });
 check('the cursor is the cloud\'s own sequence: asking after it returns only newer records', Number.isFinite(a.j.cursor) && c.j.changes.length === 0 && c.j.cursor >= a.j.cursor, `${a.j.cursor} → ${c.j.cursor}, ${c.j.changes.length} changes`);
 
+// ---- faster sync, stage 1 (docs/SYNC-SPEED-PLAN.md): an app may ask for bigger or smaller pages ----
+const many = Array.from({ length: 30 }, (_, i) => ({ t: 'products', id: 'pg' + i, rec: { id: 'pg' + i, name: 'Paged Sample ' + i }, at: now(), op: 'op-pg-' + i }));
+await sync(admin, many);
+const small = await sync(admin, [], { deviceId: 'page-dev', limit: 10, all: true });
+check('a page as small as asked for, with more to come', small.j.changes.length === 10 && small.j.more === true && small.j.limit === 10, `${small.j.changes.length} ${small.j.more} ${small.j.limit}`);
+const rest = await sync(admin, [], { deviceId: 'page-dev', since: small.j.cursor, limit: 100000, all: true });
+check('the next page carries on after it, nothing twice', !rest.j.changes.some((x) => small.j.changes.some((y) => y.t === x.t && y.id === x.id)) && rest.j.more === false, `${rest.j.changes.length}`);
+check('a page is never bigger than 10,000 records', rest.j.limit === 10000, rest.j.limit);
+const plain = await sync(admin, [], { deviceId: 'page-dev', all: true });
+check('an app that does not ask gets 2,500 a page, as before', plain.j.limit === 2500, plain.j.limit);
+const bad = await sync(admin, [], { deviceId: 'page-dev', limit: 'lots', all: true });
+check('a limit that is not a number gets the usual 2,500', bad.status === 200 && bad.j.limit === 2500, bad.j.limit);
+
 await owner('/tenants/' + tid + '/delete', { confirm: slug });
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

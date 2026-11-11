@@ -42,7 +42,8 @@ import { localDay } from './dailystock.js';
 // The server needs their permissions too, so a permission check doesn't wrongly refuse a built-in role (1.1/1.9).
 const DEFAULT_ROLE_PERMS = Object.fromEntries(DEFAULT_ROLES.map((r) => [r.id, new Set(r.permissions)]));
 
-const PAGE = 2500;
+const PAGE = 2500; // records per sync reply for apps that don't ask (before the faster sync, SYNC-SPEED-PLAN.md)
+const MAX_PAGE = 10000; // what an app may ask for with `limit` (stage 1: fewer round trips; about 250 KB compressed)
 const MAX_PUSH = 500;
 const TOKEN_DAYS = 30;
 const MAIN = 'main';
@@ -562,6 +563,7 @@ async function sync(env, body, who, ctx) {
   const db = env.DB;
   const tenant = who.tenant;
   const { deviceId, since = 0, changes = [], all = false } = body;
+  const limit = Math.min(MAX_PAGE, Math.max(1, Math.floor(Number(body.limit)) || PAGE)); // stage 1: an app may ask for bigger pages
   if (!deviceId) return json({ error: 'Missing deviceId' }, 400);
   if (!Array.isArray(changes)) return json({ error: 'changes must be a list' }, 400);
   if (changes.length > MAX_PUSH) return json({ error: `Send at most ${MAX_PUSH} changes per request` }, 413);
@@ -806,15 +808,15 @@ async function sync(env, body, who, ctx) {
     // A device normally skips the records it sent itself. A full download (`all`, sync.js FULL_PULL) includes them: a
     // device that lost its own copy, or shares its device id with another one, gets everything back.
     db.prepare('SELECT t, id, rec, deleted, at, seq FROM records WHERE tenant = ?1 AND seq > ?2 AND (?5 = 1 OR origin IS NOT ?3) ORDER BY seq LIMIT ?4')
-      .bind(tenant, Number(since) || 0, deviceId, PAGE + 1, all === true ? 1 : 0),
+      .bind(tenant, Number(since) || 0, deviceId, limit + 1, all === true ? 1 : 0),
     db.prepare('SELECT MAX(seq) m FROM records WHERE tenant = ?1').bind(tenant),
     db.prepare("SELECT v FROM owner_config WHERE k = 'epoch'"), // 1.4 database epoch (changes on a restore)
   ], 'read');
   const results = pageRes.results || [];
   const maxSeq = maxRes.results?.[0]?.m;
   const epoch = epochRes.results?.[0]?.v || '0';
-  const more = results.length > PAGE;
-  const page = more ? results.slice(0, PAGE) : results;
+  const more = results.length > limit;
+  const page = more ? results.slice(0, limit) : results;
   const cursor = more ? page[page.length - 1].seq : Math.max(maxSeq || 0, Number(since) || 0);
   const hideHr = !who.viaKey && page.some((r) => PAYROLL_TABLES.has(r.t)) && !(await roleCan(env, tenant, who.role, 'payroll'));
   // step 3: sale findings are for whoever may read the audit log (admins always), not for the staff they are about
@@ -822,7 +824,7 @@ async function sync(env, body, who, ctx) {
   const shown = hideHr || hideChecks ? page.filter((r) => !(hideHr && PAYROLL_TABLES.has(r.t)) && !(hideChecks && r.t === 'anomalies')) : page;
   // Build the response by hand so records stored as JSON text are not parsed and re-serialised (keeps CPU low)
   const items = shown.map((r) => `{"t":${JSON.stringify(r.t)},"id":${JSON.stringify(r.id)},"at":${JSON.stringify(r.at)},"deleted":${r.deleted ? 'true' : 'false'},"rec":${stripUserSecrets(r.t, r.rec)}}`);
-  return json(`{"changes":[${items.join(',')}],"cursor":${cursor},"more":${more},"applied":${applied},"refused":${refused},"refusedKeys":${JSON.stringify(refusedKeys)},"dupes":${dupes},"protocol":2,"epoch":${JSON.stringify(epoch)},"tenant":${JSON.stringify(tenant)}}`);
+  return json(`{"changes":[${items.join(',')}],"cursor":${cursor},"more":${more},"applied":${applied},"refused":${refused},"refusedKeys":${JSON.stringify(refusedKeys)},"dupes":${dupes},"protocol":2,"limit":${limit},"epoch":${JSON.stringify(epoch)},"tenant":${JSON.stringify(tenant)}}`);
 }
 
 // ---------- Mobile Money (per pharmacy) ----------
