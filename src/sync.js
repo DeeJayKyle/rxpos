@@ -18,6 +18,7 @@
 import { TABLES, now, isUntouchedBase, BASE_AT } from './store.jsx';
 import { liveUp } from './live.js';
 import { LIVE_CLOUD, OWN_SITES } from './cloud.js';
+import { WINDOWED, recordDate } from './historywindow.js';
 
 const ACTIVE = 5000; // no live connection, app in use
 const LIVE_SAFETY = 30000; // live connection up: slow safety-net pull only
@@ -75,6 +76,55 @@ async function post(url, key, body) {
 }
 
 
+/**
+ * Faster sync, stage 3 (docs/SYNC-SPEED-PLAN.md): a full download's ready-made chunks, kept compressed by the cloud
+ * (worker/snapshot.js). The list of chunks for a phase, or null when the cloud has none (a hub, an older cloud, or
+ * any problem): the download then pages as before.
+ */
+async function snapshotList(url, key, body) {
+  try {
+    const res = await fetch(apiBase(url) + '/api/snapshot', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key }, body: JSON.stringify(body), signal: AbortSignal.timeout?.(30000) });
+    if (!res.ok) return null;
+    const j = await res.json();
+    return Array.isArray(j?.chunks) ? j : null;
+  } catch { return null; }
+}
+/** One chunk: { changes } like a sync page (the browser undoes the compression) */
+async function snapshotChunk(url, key, body) {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 90000);
+  try {
+    const res = await fetch(apiBase(url) + '/api/snapshot/chunk', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key }, body: JSON.stringify(body), signal: ctl.signal });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok || !Array.isArray(j.changes)) throw Object.assign(new Error(j.error || `Cloud replied ${res.status}`), { status: res.status });
+    return j;
+  } catch (e) {
+    throw e.name === 'AbortError' ? new Error('The cloud took too long to answer') : e;
+  } finally { clearTimeout(timer); }
+}
+export const CHUNKS_AT_ONCE = 3; // chunks downloaded side by side
+
+/**
+ * Faster sync, stage 4 (docs/SYNC-HISTORY-WINDOW.md): the window start for keeping `months` of history on this device
+ * (the first day of the month that many months back), or '' for everything. Whole months: the window moves once a
+ * month, and every device with the same setting shares the cloud's brought-forward figures.
+ */
+export function windowStart(months, now = new Date()) {
+  const m = Number(months) || 0;
+  if (m <= 0) return '';
+  const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - m, 1));
+  return d.toISOString().slice(0, 10);
+}
+
+/** The cloud's brought-forward figures at window start W (null when it has none: a hub or an older cloud) */
+async function fetchBalances(url, key, W) {
+  const res = await fetch(apiBase(url) + '/api/balances', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key }, body: JSON.stringify({ window: W }) });
+  if (res.status === 404) return null; // this cloud has none
+  const j = res.ok ? await res.json().catch(() => null) : null;
+  if (!(j && j.W === W && Array.isArray(j.stock))) throw new Error(`Cloud replied ${res.status}`);
+  return j;
+}
+
 /** Outbox entries in request-sized groups, never splitting one action (txn) unless it alone is too big */
 export function groupOutbox(entries, max = PUSH_BATCH) {
   const out = [];
@@ -111,7 +161,7 @@ export function toChanges(entries, db) {
   return out;
 }
 
-export function createSync({ getDb, getCfg, saveCfg, applyRemote, onStatus, store }) {
+export function createSync({ getDb, getCfg, saveCfg, applyRemote, onStatus, store, pruneWindow = async () => {} }) {
   let busy = false, again = false, timer = null, stopped = false;
   let lastRun = 0, failures = 0, retryAt = 0;
   let waiters = []; // callers waiting for the sync running now (and the extra round it may need)
@@ -137,6 +187,17 @@ export function createSync({ getDb, getCfg, saveCfg, applyRemote, onStatus, stor
         await store.commit({ puts: [], dels: [], ops: old.map((ch) => ({ op: crypto.randomUUID(), txn, t: ch.t, id: String(ch.id), deleted: !!ch.deleted, at: ch.at })) });
         await saveCfg({ ...getCfg(), outboxV2: true });
       }
+      // stage 4: the history kept on this device (This device → "History kept on this device"; off: everything).
+      // A longer window downloads the pharmacy again with it (the older records arrive and merge); a shorter one, or
+      // the window moving on at a new month, removes the older records from this device only (never in the cloud).
+      {
+        const cc = getCfg(), want = windowStart(cc.historyMonths);
+        if ((cc.window || '') !== want) {
+          const longer = !want || (cc.window && want < cc.window);
+          await saveCfg({ ...cc, window: want, balances: null, ...(longer ? { fullPull: 0, fullInProgress: false } : {}) });
+          if (want && !longer) await pruneWindow(want);
+        }
+      }
       const c = getCfg();
       const batches = groupOutbox(await store.outbox());
       const total = batches.reduce((a, b) => a + b.length, 0);
@@ -146,7 +207,7 @@ export function createSync({ getDb, getCfg, saveCfg, applyRemote, onStatus, stor
       // Faster sync, stage 2: a full download comes in phases. First the core (medicines, stock, clients, staff, open
       // debts: the app is usable once it is in), then the history (older cash sales, audit log, messages…), then
       // whatever changed meanwhile, from where the core ended. A cloud without phases sends everything at once.
-      if (full && !c.fullInProgress) await saveCfg({ ...getCfg(), cursor: 0, fullInProgress: true, phase: 'core', coreCursor: 0, cutoff: new Date(Date.now() - CORE_DAYS * 864e5).toISOString() });
+      if (full && !c.fullInProgress) await saveCfg({ ...getCfg(), cursor: 0, fullInProgress: true, phase: 'core', coreCursor: 0, cutoff: new Date(Date.now() - CORE_DAYS * 864e5).toISOString().slice(0, 10) + 'T00:00:00.000Z' }); // whole days (stage 3 chunks)
       let phase = full ? getCfg().phase || null : null; // a download begun by an older version carries on without phases
       let cursor = full ? getCfg().cursor || 0 : c.cursor || 0, epoch = c.epoch, i = 0, sent = 0, pulled = 0, refused = 0;
       // Faster sync, stage 1 (docs/SYNC-SPEED-PLAN.md): downloaded pages are applied and saved in batches (FLUSH records
@@ -154,17 +215,44 @@ export function createSync({ getDb, getCfg, saveCfg, applyRemote, onStatus, stor
       // the app; and while a batch is being saved, the next page is already on its way. The sync position is saved only
       // after the records before it are on the device, so an interrupted download still resumes where it stopped.
       let held = [], heldCursor = cursor, heldAt = Date.now();
+      let needBalances = false; // stage 4: an old record arrived (an entry before the window may have changed)
       const flush = async () => {
-        if (held.length) { const ch = held; held = []; await applyRemote(ch); pulled += ch.length; }
+        if (held.length) {
+          const ch = held; held = [];
+          const W = getCfg().window;
+          if (W && !needBalances) needBalances = ch.some((x) => WINDOWED.has(x.t) && (x.deleted || recordDate(x.rec) < W || (x.rec?.refundedAt && x.rec.refundedAt < W)));
+          await applyRemote(ch); pulled += ch.length;
+        }
         await saveCfg({ ...getCfg(), cursor: heldCursor, epoch });
         heldAt = Date.now();
       };
       const ask = (since, batch) => post(c.url, c.key, { deviceId: c.deviceId, since, changes: toChanges(batch, getDb()), v: PROTOCOL, limit: PULL_LIMIT, ...(full ? { all: true } : {}),
-        ...(phase === 'core' || phase === 'history' ? { phase, cutoff: getCfg().cutoff } : {}) });
+        ...(phase === 'core' || phase === 'history' ? { phase, cutoff: getCfg().cutoff } : {}), ...(full && getCfg().window ? { window: getCfg().window } : {}) });
       const later = () => phase === 'history' || phase === 'tail'; // the core is in: the app can be used
       let ahead = null; // the next page, asked for while this one is saved
+      const chunked = new Set(); // phases whose ready-made chunks were tried
       try {
         for (;;) {
+          // stage 3: at the start of a phase of a full download, take the cloud's ready-made chunks (several at once),
+          // then page from the last one as before. Each chunk is saved with its position, so a cut-off run resumes.
+          if (full && !ahead && i >= batches.length && (phase === 'core' || phase === 'history') && !chunked.has(phase)) {
+            chunked.add(phase);
+            const list = await snapshotList(c.url, c.key, { deviceId: c.deviceId, phase, cutoff: getCfg().cutoff });
+            if (list && (epoch === undefined || list.epoch === epoch)) {
+              epoch = list.epoch ?? epoch;
+              const todo = list.chunks.filter((ch) => ch.to > cursor);
+              const get = (ch) => { const pr = snapshotChunk(c.url, c.key, { deviceId: c.deviceId, phase, cutoff: getCfg().cutoff, from: ch.from, to: ch.to }); pr.catch(() => {}); return pr; };
+              const inFlight = todo.slice(0, CHUNKS_AT_ONCE).map(get);
+              for (let k = 0; k < todo.length; k++) {
+                const r = await inFlight[k];
+                if (todo[k + CHUNKS_AT_ONCE]) inFlight.push(get(todo[k + CHUNKS_AT_ONCE]));
+                held.push(...r.changes);
+                cursor = heldCursor = todo[k].to;
+                await flush();
+                onStatus({ state: 'syncing', first: !c.lastSync, history: later(), progress: `${later() ? 'Downloading older records' : 'Downloading'}… ${pulled.toLocaleString()} records`, ...(await counts()) });
+              }
+            }
+          }
           const batch = batches[i] || [];
           const r = ahead ? await ahead : await ask(cursor, batch);
           ahead = null;
@@ -212,6 +300,16 @@ export function createSync({ getDb, getCfg, saveCfg, applyRemote, onStatus, stor
         if (held.length) await flush().catch(() => {});
         throw e;
       }
+      // stage 4: brought-forward figures for the window, when there are none yet or an old record changed
+      {
+        const cc = getCfg();
+        if (cc.window && (needBalances || cc.balances?.W !== cc.window)) {
+          const bf = await fetchBalances(c.url, c.key, cc.window).catch(() => undefined); // undefined: try again next time
+          if (bf) await saveCfg({ ...getCfg(), balances: bf });
+          // a cloud or hub without them: this device keeps everything (downloaded again in full, merged)
+          else if (bf === null) await saveCfg({ ...getCfg(), window: '', historyMonths: 0, balances: null, fullPull: 0, fullInProgress: false });
+        }
+      }
       if (getCfg().resendAfterRestore) {
         // Each change goes with its own updatedAt, so the cloud keeps whichever copy is newer (last writer wins) and
         // never changes add-only rows: resending what it already has does nothing. A record deleted and later made
@@ -226,7 +324,8 @@ export function createSync({ getDb, getCfg, saveCfg, applyRemote, onStatus, stor
       const next = { ...getCfg(), lastSync: now(), lastError: '', ...(full ? { fullPull: FULL_PULL, fullInProgress: false, phase: null } : {}) };
       await saveCfg(next);
       failures = 0; retryAt = 0;
-      result = { state: 'ok', lastSync: next.lastSync, pushed: sent, pulled, refused, ...(await counts()) };
+      const pendingBf = !!next.window && next.balances?.W !== next.window; // stage 4: balances not complete yet
+      result = { state: 'ok', lastSync: next.lastSync, pushed: sent, pulled, refused, ...(pendingBf ? { balancesPending: true } : {}), ...(await counts()) };
     } catch (e) {
       failures++;
       const expired = e.status === 401;

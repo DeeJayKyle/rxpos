@@ -34,6 +34,7 @@ function cloud(n) {
   const c = { rows: [], epoch: 'e1', failOn: 0, calls: 0, asked: [] };
   for (let i = 1; i <= n; i++) c.rows.push({ t: 'products', id: 'p' + i, rec: { id: 'p' + i, name: 'Sample medicine ' + i, price: 100 + i }, at: '2026-11-01T00:00:00.000Z', seq: i, origin: 'dev-b' });
   c.fetch = async (url, init) => {
+    if (!String(url).endsWith('/api/sync')) return { ok: false, status: 404, json: async () => ({}) }; // no ready-made chunks (stage 3), like a hub
     c.calls++;
     const b = JSON.parse(init.body);
     c.asked.push({ since: b.since, all: !!b.all });

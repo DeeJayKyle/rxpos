@@ -6,6 +6,7 @@ import { Modal } from '../ui.jsx';
 import { useStore, uid, put, audit } from '../store.jsx';
 import { toast } from '../feedback.jsx';
 import { insurerBalance, insurerShare } from '../insurance.js';
+import { windowSums } from '../balances.js';
 import { PaymentModal } from './Finance.jsx';
 
 const blankScheme = () => ({ id: uid(), name: '', copayPct: 10, copayFixed: 0, limit: 0 });
@@ -17,7 +18,7 @@ export default function Insurers() {
   const [pay, setPay] = useState(null);
   const [show, setShow] = useState('');
   const insurers = useMemo(() => db.insurers || [], [db.insurers]);
-  const rows = useMemo(() => insurers.map((i) => ({ ...i, owed: insurerBalance(db.sales, db.payments, i.id) })).sort((a, b) => (a.archived ? 1 : 0) - (b.archived ? 1 : 0) || b.owed - a.owed || String(a.name).localeCompare(b.name)), [insurers, db.sales, db.payments]);
+  const rows = useMemo(() => insurers.map((i) => ({ ...i, owed: insurerBalance(db.sales, db.payments, i.id, windowSums(db)) })).sort((a, b) => (a.archived ? 1 : 0) - (b.archived ? 1 : 0) || b.owed - a.owed || String(a.name).localeCompare(b.name)), [insurers, db]);
   const billed = useMemo(() => db.sales.filter((s) => s.insurance && (!show || s.insurance.insurerId === show)).sort((a, b) => String(b.date).localeCompare(a.date)).slice(0, 200), [db.sales, show]);
   const editable = can('customers') || can('finance');
 

@@ -86,6 +86,9 @@ const pullLimit = 10000;
 /// Stage 2: a full download's core has every sale from the last days (today's cash-up, returns); src/sync.js CORE_DAYS.
 const coreDays = 3;
 
+/// Stage 3: ready-made chunks downloaded side by side (src/sync.js CHUNKS_AT_ONCE).
+const chunksAtOnce = 3;
+
 class SyncEngine {
   SyncEngine({required this.dio, required this.db, required this.cloudUrl, this.maxRequests = 100000});
 
@@ -105,7 +108,7 @@ class SyncEngine {
     // the core ended. A cloud without phases sends everything at once (src/sync.js, the same steps).
     if (full && !cfg.fullInProgress) {
       cfg = cfg.copyWith(cursor: 0, fullInProgress: true, phase: 'core', coreCursor: 0,
-          cutoff: DateTime.now().toUtc().subtract(const Duration(days: coreDays)).toIso8601String());
+          cutoff: '${DateTime.now().toUtc().subtract(const Duration(days: coreDays)).toIso8601String().substring(0, 10)}T00:00:00.000Z'); // whole days (stage 3 chunks)
       await cfg.save(db);
     }
     var phase = full ? cfg.phase : null; // a download begun by an older version carries on without phases
@@ -122,8 +125,33 @@ class SyncEngine {
           if (phase == 'core' || phase == 'history') ...{'phase': phase, 'cutoff': cfg.cutoff},
         });
     Future<SyncReply>? ahead;
+    final chunked = <String>{}; // phases whose ready-made chunks were tried
     try {
       while (requests++ < maxRequests) {
+        // stage 3: at the start of a phase of a full download, take the cloud's ready-made chunks (several at once),
+        // then page from the last one as before. Each chunk is saved with its position, so a cut-off run resumes.
+        if (full && ahead == null && i >= batches.length && (phase == 'core' || phase == 'history') && chunked.add(phase!)) {
+          final list = await _snapshotList({'deviceId': cfg.deviceId, 'phase': phase, 'cutoff': cfg.cutoff});
+          if (list != null && (epoch == null || list.epoch == epoch)) {
+            epoch = list.epoch ?? epoch;
+            final todo = [for (final ch in list.chunks) if (ch.$2 > cursor) ch];
+            Future<List<RemoteChange>> get((int, int) ch) =>
+                _snapshotChunk({'deviceId': cfg.deviceId, 'phase': phase, 'cutoff': cfg.cutoff, 'from': ch.$1, 'to': ch.$2});
+            final inFlight = [for (final ch in todo.take(chunksAtOnce)) get(ch)..ignore()];
+            for (var k = 0; k < todo.length; k++) {
+              final changes = await inFlight[k];
+              if (k + chunksAtOnce < todo.length) inFlight.add(get(todo[k + chunksAtOnce])..ignore());
+              cursor = todo[k].$2;
+              await db.transaction(() async {
+                applied += await applyRemote(db, changes);
+                cfg = cfg.copyWith(cursor: cursor, epoch: epoch);
+                await cfg.save(db);
+              });
+              received += changes.length;
+              onProgress?.call(SyncProgress(sent: sent, toSend: toSend, received: received, first: first, history: phase == 'history'));
+            }
+          }
+        }
         final batch = i < batches.length ? batches[i] : const <OutboxRow>[];
         final reply = await (ahead ?? ask(cursor, batch));
         ahead = null;
@@ -266,6 +294,36 @@ class SyncEngine {
       }
     }
     return out;
+  }
+
+  /// Stage 3: the ready-made chunks of a full download's phase (from, to), or null when the cloud has none (a hub,
+  /// an older cloud, or any problem): the download then pages as before (src/sync.js snapshotList).
+  Future<({String? epoch, List<(int, int)> chunks})?> _snapshotList(Map<String, Object?> body) async {
+    try {
+      final res = await dio.post<Object?>('${syncBase(cloudUrl)}/api/snapshot', data: body);
+      final d = res.data;
+      if (d is! Map || d['chunks'] is! List) return null;
+      return (
+        epoch: d['epoch']?.toString(),
+        chunks: [for (final c in d['chunks'] as List) if (c is Map && c['from'] is num && c['to'] is num) ((c['from'] as num).toInt(), (c['to'] as num).toInt())],
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// One chunk's records (sent compressed; the HTTP client undoes it).
+  Future<List<RemoteChange>> _snapshotChunk(Map<String, Object?> body) async {
+    final Response<Object?> res;
+    try {
+      res = await dio.post<Object?>('${syncBase(cloudUrl)}/api/snapshot/chunk', data: body, options: Options(extra: {'retry': true}));
+    } on DioException catch (e) {
+      final f = e.error;
+      throw f is ApiFailure ? f : const ApiFailure(ApiFailureKind.offline, 'No connection to the RxPOS cloud.');
+    }
+    final d = res.data;
+    if (d is! Map || d['changes'] is! List) throw const ApiFailure(ApiFailureKind.server, 'The cloud sent an unexpected reply; trying again shortly.');
+    return [for (final x in d['changes'] as List) if (x is Map) RemoteChange.fromJson(x.cast<String, Object?>())];
   }
 
   Future<SyncReply> _post(Map<String, Object?> body) async {

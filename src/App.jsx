@@ -705,6 +705,8 @@ function FirstDownload() {
 /** While a full download brings the older records (stage 2 of the faster sync): say that reports may still grow */
 function HistoryLoading() {
   const { syncStatus } = useStore();
+  // stage 4: a device keeping recent history waits for the cloud's brought-forward figures (needs the internet)
+  if (syncStatus.balancesPending) return <div className="history-loading" role="status">Older balances are still coming from the cloud: stock, debts and cash shown may be incomplete until this device is online</div>;
   if (!(syncStatus.history && syncStatus.state === 'syncing')) return null;
   return <div className="history-loading" role="status">{syncStatus.progress || 'Downloading older records…'} · sales history and reports fill in as they arrive; selling and stock are ready</div>;
 }

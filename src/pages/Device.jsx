@@ -160,7 +160,7 @@ function Notices({ d }) {
  * storage upgrade. The web version is online only and keeps nothing on the computer (src/webpolicy.js).
  */
 function SyncStorage() {
-  const { pending, storageIssue, syncStatus, syncCfg, user, db, pullAll } = useStore();
+  const { pending, storageIssue, syncStatus, syncCfg, saveSyncCfg, syncNow, user, db, pullAll } = useStore();
   const [rejected, setRejected] = useState([]);
   const [est, setEst] = useState(null);
   const [legacy, setLegacy] = useState(false);
@@ -215,6 +215,20 @@ function SyncStorage() {
             else if (r?.error) toast(r.error, 'error');
           })}><Download size={16} />Download everything again</button>
         </div>
+      )}
+      {app && syncCfg?.url && (
+        // stage 4 of the faster sync (docs/SYNC-HISTORY-WINDOW.md): how much history this device keeps
+        <label className="field" style={{ marginTop: 12, maxWidth: 520 }}>
+          <span>History kept on this device</span>
+          <select aria-label="History kept on this device" value={String(syncCfg.historyMonths || 0)} disabled={syncStatus?.state === 'syncing'}
+            onChange={async (e) => { await saveSyncCfg({ ...syncCfg, historyMonths: Number(e.target.value) }); syncNow(); }}>
+            <option value="0">Everything (as before)</option>
+            <option value="24">The last 24 months</option>
+            <option value="12">The last 12 months</option>
+            <option value="6">The last 6 months</option>
+          </select>
+          <small className="muted">Older sales, stock movements and payments stay in the cloud and are never deleted. Stock, debts and cash stay exact. Reports and Sales history fetch the older part from the cloud when your dates go back further (that needs the internet). Unpaid sales and purchases always stay on this device.{syncCfg.window ? ` Keeping records from ${syncCfg.window}.` : ''}</small>
+        </label>
       )}
       {legacy && (
         <div className="row gap">

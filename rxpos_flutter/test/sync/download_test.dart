@@ -53,7 +53,8 @@ void main() {
     final urls = <String>[];
     final dio = cloud.dio()..interceptors.insert(0, InterceptorsWrapper(onRequest: (o, h) { urls.add(o.uri.toString()); h.next(o); }));
     await SyncEngine(dio: dio, db: db, cloudUrl: 'https://rxposug.com/').run();
-    expect(urls.first, 'https://api.rxposug.com/api/sync');
+    expect(urls, contains('https://api.rxposug.com/api/sync'));
+    expect(urls.first, 'https://api.rxposug.com/api/snapshot', reason: 'stage 3: a full download asks for ready-made chunks first');
     expect(urls.every((u) => u.startsWith('https://api.rxposug.com/api/')), isTrue);
   });
 

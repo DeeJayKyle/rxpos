@@ -115,3 +115,39 @@ The web versions start fresh each time with W one month back.
   events). Stock brought forward is simple because movements are never edited, and these are most of the records in
   a typical pharmacy. All money records stay on every device. This gets most of the size reduction with a fraction
   of the risk, but sales history still grows forever.
+
+## Built so far (11 Nov 2026)
+
+**Shared rules**
+- `src/balances.js` lists the entries each record makes. On 40 generated pharmacies they give exactly the figures of
+  `stockindex.js`, `customerBalance`, `supplierBalance`, `insurerBalance`, `accountBalances` and `loanBalance`.
+- `tests/balance-cases.json` holds 145 records. The Flutter app's `core/rules/balances.dart` gives the same entries
+  for all of them.
+- `src/historywindow.js` decides which records a device keeps. The cloud uses the same rule when it sends a windowed
+  download.
+
+**Classic app**
+- With a window, stock and every money balance are brought forward plus the entries from W. On 60 generated
+  devices, every balance equals the whole-history figure (`unit-balances`).
+- A shorter window removes older records from the device only (no outbox entries, no deletion markers). A longer one
+  downloads again. A cloud without brought-forward figures sends the device back to keeping everything.
+  (`unit-sync-phases`)
+- Reports and Sales history fetch dates before W from the cloud (`src/history.js`).
+- The setting is on This device, off by default.
+
+**Cloud** (`worker/window.js`)
+- `/api/balances`.
+- `/api/history`, with role rules as in sync.
+- The window filter on full downloads and chunks (`v73`).
+
+**Found while building, now part of the design**
+- A device must also hold every record that makes an entry from W, such as an old sale refunded since. The cloud
+  sends these.
+- Stock is brought forward per branch, batch **and** medicine.
+- Prescriptions, purchase orders, stock counts and drafts stay on devices whole.
+
+**Not yet**
+- The Flutter apps never send a window yet, so they keep everything as today. Their balance screens will take the
+  brought-forward figures next.
+- The audit log, client statements and stock cards show what the device holds, with older entries in the cloud.
+  They will fetch them like Reports do.

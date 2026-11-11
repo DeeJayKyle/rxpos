@@ -6,6 +6,7 @@ import { Empty, PageTip } from '../ui.jsx';
 import { formatQty } from '../money.js';
 import { useStore, today, dayOf, localDate, downloadFile, toCSV, daysUntil, stockValue, batchValue, MAIN_BRANCH } from '../store.jsx';
 import { Stat, Tabs, BarChart, PdfButton } from '../ui.jsx';
+import { useOlderHistory, olderNote } from '../history.js';
 
 const sumBy = (arr, key, val) => {
   const m = {};
@@ -34,7 +35,7 @@ function Donut({ parts, fmt }) {
 }
 
 export default function Reports() {
-  const { db, products, fmt, batchesOf, can } = useStore();
+  const { db: localDb, syncCfg, products, fmt, batchesOf, can } = useStore();
   const location = useLocation();
   const full = can('reports'); // otherwise 'reports.lines' only (e.g. cashiers): just the Sales lines tab, no profit
   const [tab, setTab] = useState(full ? location.state?.tab || 'sales' : 'lines');
@@ -42,6 +43,9 @@ export default function Reports() {
   const TAB_NAMES = { profit: 'Profit & Margins', sales: 'Sales Report', lines: 'Sales lines', products: 'Sales by Product', consumption: 'Consumption (ABC)', purchases: 'Purchase Report', expenses: 'Expenses Report', stock: 'Stock Valuation', income: 'Income Statement' };
   const [from, setFrom] = useState(location.state?.from || today().slice(0, 8) + '01');
   const [to, setTo] = useState(location.state?.to || today());
+  // stage 4 of the faster sync: dates before this device's window come from the cloud (src/history.js)
+  const older = useOlderHistory(localDb, syncCfg, from, ['sales', 'purchases', 'expenses', 'movements']);
+  const db = older.db;
   const [branch, setBranch] = useState('all');
   const inBranch = (x) => branch === 'all' || (x.branchId || MAIN_BRANCH) === branch;
   const inRange = (x) => dayOf(x.date) >= from && dayOf(x.date) <= to && inBranch(x);
@@ -84,6 +88,7 @@ export default function Reports() {
 
   return (
     <div className="page" ref={pageRef}>
+      {olderNote(older) && <p className="muted small" role="status">{olderNote(older)}</p>}
       <div className="page-head"><h1>Reports</h1><div className="row gap wrap">{tab !== 'stock' && Range}{tab !== 'lines' && <PdfButton target={pageRef} title={TAB_NAMES[tab]} subtitle={tab === 'stock' ? `As at ${new Date().toLocaleDateString()}` : `${from} to ${to}`} />}</div></div>
       {full && <PageTip id="reports" title="Reading your figures">Pick the dates at the top right. Profit &amp; margins shows what each medicine earns and lists prices below your target margin; every table exports to PDF or CSV.</PageTip>}
       <Tabs value={tab} onChange={setTab} tabs={!full ? [['lines', 'Sales lines']] : [['sales', 'Sales Report'], ['lines', 'Sales lines'], ['products', 'Sales by Product'], ['consumption', 'Consumption (ABC)'], ['purchases', 'Purchase Report'], ['expenses', 'Expenses Report'], ['profit', 'Profit & margins'], ['stock', 'Stock Valuation'], ['income', 'Income Statement']]} />
@@ -130,7 +135,7 @@ export default function Reports() {
         </div>
       )}
 
-      {tab === 'lines' && <SalesLines from={from} to={to} branch={branch} money={full} initial={{ medicine: location.state?.medicine }} />}
+      {tab === 'lines' && <SalesLines from={from} to={to} branch={branch} money={full} initial={{ medicine: location.state?.medicine }} db={db} />}
 
       {tab === 'consumption' && <ConsumptionReport sales={sales} from={from} to={to} />}
 

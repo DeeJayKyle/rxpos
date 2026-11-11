@@ -23,7 +23,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const out = await build({ entryPoints: [path.join(root, 'src/sync.js')], bundle: true, format: 'esm', platform: 'node', write: false, loader: { '.js': 'jsx' }, jsx: 'automatic', define: { 'import.meta.env.DEV': 'false' }, logLevel: 'error' });
 const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'rxpos-sync-')), 'sync.mjs');
 fs.writeFileSync(file, out.outputFiles[0].text);
-const { createSync, FULL_PULL } = await import(pathToFileURL(file).href);
+const { createSync, FULL_PULL, windowStart } = await import(pathToFileURL(file).href);
 const TABLES = ['products', 'customers', 'sales', 'movements'];
 // every other table the app knows is empty on this fictional device
 const withAllTables = (db) => new Proxy(db, { get: (o, k) => (k in o || typeof k !== 'string' ? o[k] : []) });
@@ -39,9 +39,10 @@ function cloud({ products = 30, oldSales = 40, phases = true } = {}) {
   c.add = add;
   const isHist = (r) => r.t === 'sales' && r.rec.old;
   c.fetch = async (url, init) => {
+    if (!String(url).endsWith('/api/sync')) return { ok: false, status: 404, json: async () => ({}) }; // no ready-made chunks (stage 3), like a hub
     c.calls++;
     const b = JSON.parse(init.body);
-    c.asked.push({ since: b.since, phase: b.phase || null, all: !!b.all });
+    c.asked.push({ since: b.since, phase: b.phase || null, all: !!b.all, window: b.window || null });
     if (c.failOn && c.calls === c.failOn) throw new TypeError('Failed to fetch');
     const phase = c.phases && b.all && (b.phase === 'core' || b.phase === 'history') ? b.phase : null;
     const next = c.rows.filter((r) => r.seq > b.since && (b.all || r.origin !== b.deviceId) && (!phase || (phase === 'history') === isHist(r)));
@@ -58,9 +59,11 @@ function device(cl) {
   let cfg = { url: 'https://api.rxposug.com', key: 'u.test', deviceId: 'dev-a', outboxV2: true, cursor: 0 };
   const store = { async commit() {}, async outbox() { return []; }, async count() { return 0; }, async ack() {}, async reject() {}, async rejected() { return []; } };
   globalThis.fetch = (url, init) => cl.fetch(url, init);
-  const d = { statuses: [], get db() { return db; }, get cfg() { return cfg; } };
+  let prune = () => {};
+  const d = { statuses: [], get db() { return db; }, get cfg() { return cfg; }, setPrune: (fn) => { prune = fn; }, setCfg: (x) => { cfg = x; } };
   d.sync = createSync({
     getDb: () => withAllTables(db), getCfg: () => cfg, saveCfg: async (x) => { cfg = x; }, onStatus: (s) => d.statuses.push({ ...s, products: db.products.length, sales: db.sales.length }), store,
+    pruneWindow: async (W) => prune(W),
     applyRemote: async (changes) => { for (const ch of changes) db = { ...db, [ch.t]: [...db[ch.t].filter((r) => r.id !== ch.id), { ...ch.rec, updatedAt: ch.at }] }; },
   });
   return d;
@@ -112,6 +115,39 @@ try {
     check('a cloud without phases still gives everything', r.state === 'ok' && a.db.products.length === 30 && a.db.sales.length === 40, `${a.db.products.length} ${a.db.sales.length}`);
     check('…asked once with the core, then as one plain download', cl.asked[0].phase === 'core' && cl.asked.slice(1).every((x) => !x.phase), cl.asked.map((x) => x.phase).join(','));
     a.sync.stop();
+  }
+  {
+    // stage 4: recent history on this device (docs/SYNC-HISTORY-WINDOW.md)
+    check('the window starts on the first day of the month N months back', windowStart(12, new Date('2026-11-11T10:00:00Z')) === '2025-11-01' && windowStart(6, new Date('2026-03-31T23:00:00Z')) === '2025-09-01' && windowStart(0) === '');
+    const cl = cloud(), a = device(cl);
+    await a.sync.run(); // first download, no window
+    const bfAsked = [];
+    let pruned = null;
+    const f = cl.fetch;
+    cl.fetch = async (u, init) => {
+      if (String(u).endsWith('/api/balances')) { const b = JSON.parse(init.body); bfAsked.push(b.window); return { ok: true, status: 200, json: async () => ({ W: b.window, asOf: cl.seq, stock: [], customer: { c1: 500 } }) }; }
+      return f(u, init);
+    };
+    a.setPrune((W) => { pruned = W; });
+    a.setCfg({ ...a.cfg, historyMonths: 12 });
+    const n0 = cl.asked.length;
+    const r = await a.sync.run();
+    const W = windowStart(12);
+    check('choosing 12 months: older records are removed from this device only (no download again)', r.state === 'ok' && pruned === W && !cl.asked.slice(n0).some((x) => x.all), JSON.stringify({ pruned, asked: cl.asked.slice(n0) }));
+    check('…and the cloud\'s brought-forward figures for that window are kept', bfAsked[0] === W && a.cfg.balances?.W === W && a.cfg.balances.customer.c1 === 500);
+    const before = cl.asked.length;
+    a.setCfg({ ...a.cfg, historyMonths: 0 });
+    await a.sync.run();
+    const again = cl.asked.slice(before);
+    check('back to everything: the pharmacy is downloaded again (the older records come back), no window sent', again[0]?.all === true && again.every((x) => !x.window) && !a.cfg.window, JSON.stringify(again[0]));
+  }
+  {
+    // a cloud (or hub) without brought-forward figures: the device keeps everything rather than show wrong balances
+    const cl = cloud(), a = device(cl);
+    await a.sync.run();
+    a.setCfg({ ...a.cfg, historyMonths: 12 });
+    await a.sync.run();
+    check('a cloud without brought-forward figures: the device goes back to keeping everything', !a.cfg.window && !a.cfg.historyMonths && a.cfg.fullPull === 0, JSON.stringify({ w: a.cfg.window, m: a.cfg.historyMonths }));
   }
 } catch (e) { fail++; console.log('FAIL  threw', e.stack); }
 

@@ -9,6 +9,8 @@ import { connectLive, disconnectLive, onLive } from './live.js';
 import { DEFAULT_CLOUD, tillNumber } from './cloud.js';
 import { nextNumber } from './docnumbers.js';
 import { clientOwes } from './insurance.js';
+import { windowSums } from './balances.js';
+import { WINDOWED, keeps as keepsInWindow } from './historywindow.js';
 import { createStockIndexer } from './stockindex.js';
 import { FIELD_TABLES, stampFields, mergeFields, sameRecord } from './fieldmerge.js';
 import { setUnsent } from './update.js';
@@ -371,7 +373,10 @@ export function StoreProvider({ children }) {
   const pharmacyOverrides = useMemo(() => readOverrides(localSettingsKey), [localSettingsKey, overrideRevision]);
   // eslint-disable-next-line react-hooks/exhaustive-deps -- only the shared settings matter here, not every record change
   const effectiveSettings = useMemo(() => db ? { ...db.settings, ...pharmacyOverrides } : null, [db?.settings, pharmacyOverrides]);
-  const viewDb = useMemo(() => db ? { ...db, settings: effectiveSettings } : null, [db, effectiveSettings]);
+  // stage 4 of the faster sync: a device keeping recent history carries the cloud's brought-forward figures with the
+  // records (src/balances.js windowSums, src/stockindex.js); without a window there are none and nothing changes
+  const win = syncCfg?.window && syncCfg?.balances?.W === syncCfg.window ? syncCfg.balances : null;
+  const viewDb = useMemo(() => db ? { ...db, settings: effectiveSettings, ...(win ? { _window: win } : {}) } : null, [db, effectiveSettings, win]);
   const [syncStatus, setSyncStatus] = useState({ state: 'off' });
   const [user, setUserState] = useState(() => {
     try {
@@ -560,6 +565,22 @@ export function StoreProvider({ children }) {
         setState(next);
         return persist(diff(prev, next, { tables: TABLES, local: false, skip: skipRecord }));
       },
+      // stage 4: a shorter window (or the window moving on at a new month) drops the older records from THIS device
+      // only: no outbox entries and no tombstones, so nothing is deleted in the cloud and a longer window brings them back
+      pruneWindow: (W) => {
+        const prev = dbRef.current;
+        const next = { ...prev }, dels = [];
+        for (const t of WINDOWED) {
+          const list = prev[t] || [];
+          const kept = list.filter((r) => keepsInWindow(t, r, W));
+          if (kept.length === list.length) continue;
+          for (const r of list) if (!keepsInWindow(t, r, W)) dels.push({ t, id: String(r.id) });
+          next[t] = kept;
+        }
+        if (!dels.length) return Promise.resolve();
+        setState(next);
+        return persist({ puts: [], dels, ops: [] });
+      },
       onStatus: (st) => {
         setSyncStatus(st);
         if (typeof st.pending === 'number') setPending(st.pending);
@@ -622,7 +643,7 @@ export function StoreProvider({ children }) {
   // step 13 (src/stockindex.js): running balances; after a change only the new movements are added
   const stockIndexer = useRef(null);
   stockIndexer.current ??= createStockIndexer({ onMismatch: () => console.warn('Stock balances re-counted: the running totals differed from the full count') });
-  const stockIndex = useMemo(() => stockIndexer.current(db?.movements), [db?.movements]);
+  const stockIndex = useMemo(() => stockIndexer.current(db?.movements, win), [db?.movements, win]); // stage 4: a window starts from brought-forward stock
 
   const batchMeta = useMemo(() => {
     const m = new Map();
@@ -729,12 +750,16 @@ export function supplierPrices(purchases) {
 
 /** Amount a customer owes: credit sales minus payments received. */
 export function customerBalance(db, id) {
+  const w = windowSums(db); // stage 4: a device keeping recent history (src/balances.js)
+  if (w) return w.customer.get(id) || 0;
   const credit = db.sales.filter((s) => s.customerId === id).reduce((a, s) => a + clientOwes(s), 0); // an insurer's share is not the client's debt (step 22)
   const paid = db.payments.filter((p) => p.kind === 'customer' && p.partyId === id).reduce((a, p) => a + p.amount, 0);
   return credit - paid;
 }
 /** Amount we owe a supplier: purchases minus amounts paid on them, later payments and credit notes for returns. */
 export function supplierBalance(db, id) {
+  const w = windowSums(db);
+  if (w) return w.supplier.get(id) || 0;
   const owed = db.purchases.filter((p) => p.supplierId === id).reduce((a, p) => a + (p.total - (p.paid ?? p.total)), 0);
   const paid = db.payments.filter((p) => p.kind === 'supplier' && p.partyId === id).reduce((a, p) => a + p.amount, 0);
   const credits = (db.supplierReturns || []).filter((r) => r.supplierId === id && r.settle === 'credit').reduce((a, r) => a + (r.total || 0), 0);
