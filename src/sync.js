@@ -19,6 +19,7 @@ import { TABLES, now, isUntouchedBase, BASE_AT } from './store.jsx';
 import { liveUp } from './live.js';
 import { LIVE_CLOUD, OWN_SITES } from './cloud.js';
 import { WINDOWED, recordDate } from './historywindow.js';
+import { isWeb } from './platform.js';
 
 const ACTIVE = 5000; // no live connection, app in use
 const LIVE_SAFETY = 30000; // live connection up: slow safety-net pull only
@@ -109,6 +110,11 @@ export const CHUNKS_AT_ONCE = 3; // chunks downloaded side by side
  * (the first day of the month that many months back), or '' for everything. Whole months: the window moves once a
  * month, and every device with the same setting shares the cloud's brought-forward figures.
  */
+/** How many months of history this device keeps (docs/SYNC-SPEED-PLAN.md, the owner's decisions G and H): what was chosen on
+ * This device, else 12 months in the Windows and Android apps and 1 month on the website. 0 = everything (a choice, or
+ * the fallback when the cloud or hub has no brought-forward figures). */
+export const historyMonthsOf = (cfg) => cfg?.historyMonths ?? (isWeb ? 1 : 12);
+
 export function windowStart(months, now = new Date()) {
   const m = Number(months) || 0;
   if (m <= 0) return '';
@@ -191,7 +197,7 @@ export function createSync({ getDb, getCfg, saveCfg, applyRemote, onStatus, stor
       // A longer window downloads the pharmacy again with it (the older records arrive and merge); a shorter one, or
       // the window moving on at a new month, removes the older records from this device only (never in the cloud).
       {
-        const cc = getCfg(), want = windowStart(cc.historyMonths);
+        const cc = getCfg(), want = windowStart(historyMonthsOf(cc));
         if ((cc.window || '') !== want) {
           const longer = !want || (cc.window && want < cc.window);
           await saveCfg({ ...cc, window: want, balances: null, ...(longer ? { fullPull: 0, fullInProgress: false } : {}) });
