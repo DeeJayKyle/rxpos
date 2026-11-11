@@ -10,7 +10,7 @@ import { DEFAULT_CLOUD, tillNumber } from './cloud.js';
 import { nextNumber } from './docnumbers.js';
 import { clientOwes } from './insurance.js';
 import { windowSums } from './balances.js';
-import { WINDOWED, keeps as keepsInWindow } from './historywindow.js';
+import { pruneOf } from './historywindow.js';
 import { createStockIndexer } from './stockindex.js';
 import { FIELD_TABLES, stampFields, mergeFields, sameRecord } from './fieldmerge.js';
 import { setUnsent } from './update.js';
@@ -567,16 +567,12 @@ export function StoreProvider({ children }) {
       },
       // stage 4: a shorter window (or the window moving on at a new month) drops the older records from THIS device
       // only: no outbox entries and no tombstones, so nothing is deleted in the cloud and a longer window brings them back
-      pruneWindow: (W) => {
+      // A record with a change still waiting to be sent stays until it has gone (src/historywindow.js pruneOf).
+      pruneWindow: async (W) => {
+        const waiting = new Set((await storage().outbox().catch(() => [])).map((e) => e.t + '|' + e.id));
         const prev = dbRef.current;
-        const next = { ...prev }, dels = [];
-        for (const t of WINDOWED) {
-          const list = prev[t] || [];
-          const kept = list.filter((r) => keepsInWindow(t, r, W));
-          if (kept.length === list.length) continue;
-          for (const r of list) if (!keepsInWindow(t, r, W)) dels.push({ t, id: String(r.id) });
-          next[t] = kept;
-        }
+        const { tables, dels } = pruneOf(prev, W, waiting);
+        const next = { ...prev, ...tables };
         if (!dels.length) return Promise.resolve();
         setState(next);
         return persist({ puts: [], dels, ops: [] });

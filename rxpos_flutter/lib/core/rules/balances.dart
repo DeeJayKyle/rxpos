@@ -114,3 +114,48 @@ Map<String, Map<String, double>> sumEntries(Map<String, Iterable<Map<String, Obj
 /// Brought-forward figures at window start [w]: the entries dated before it (what the cloud sends).
 Map<String, Map<String, double>> broughtForward(Map<String, Iterable<Map<String, Object?>>> tables, String w) =>
     sumEntries(tables, keep: (e) => e.date.compareTo(w) < 0);
+
+/// A device keeping recent history (faster sync, stage 4): its window start [w] and the cloud's brought-forward
+/// figures for it. Every money balance is then the brought-forward figure + the entries dated from [w] of the records
+/// the device holds (src/balances.js windowSums); an older record still on the device is not counted twice.
+class BalanceWindow {
+  BalanceWindow(this.w, this.broughtForward);
+
+  /// From the sync settings' `balances` (POST /api/balances: { W, asOf, stock: [...], customer: {id: amount}, … });
+  /// null without a window (the plain sums apply, as before).
+  static BalanceWindow? of(Map<String, Object?>? balances) {
+    final w = balances?['W'];
+    if (w is! String || w.isEmpty) return null;
+    return BalanceWindow(w, {
+      for (final kind in const ['customer', 'supplier', 'insurer', 'account', 'loan'])
+        kind: {for (final MapEntry(:key, :value) in ((balances![kind] as Map?) ?? const {}).entries) '$key': _n(value)},
+    });
+  }
+
+  final String w;
+  final Map<String, Map<String, double>> broughtForward;
+  // the last totals of each kind, with the lists they came from: a screen listing every client adds up once
+  final _last = <String, (List<Object>, Map<String, double>)>{};
+
+  /// Every balance of [kind]: brought forward + the entries from [w] of [tables] (the tables that make that kind).
+  /// [sources]: the lists the tables come from, when the same ones are asked about again (the totals are reused).
+  Map<String, double> all(String kind, Map<String, Iterable<Map<String, Object?>>> tables, {List<Object>? sources}) {
+    final ids = sources ?? tables.values.toList();
+    final kept = _last[kind];
+    if (kept != null && kept.$1.length == ids.length && Iterable.generate(ids.length).every((i) => identical(kept.$1[i], ids[i]))) return kept.$2;
+    final out = {...?broughtForward[kind]};
+    for (final MapEntry(key: t, value: rows) in tables.entries) {
+      for (final r in rows) {
+        for (final e in entriesOf(t, r)) {
+          if (e.kind == kind && e.date.compareTo(w) >= 0) out[e.key] = (out[e.key] ?? 0) + e.amount;
+        }
+      }
+    }
+    _last[kind] = (ids, out);
+    return out;
+  }
+
+  /// One balance: [kind] (customer, supplier, insurer, account, loan) of [key].
+  double one(String kind, String key, Map<String, Iterable<Map<String, Object?>>> tables, {List<Object>? sources}) =>
+      all(kind, tables, sources: sources)[key] ?? 0;
+}

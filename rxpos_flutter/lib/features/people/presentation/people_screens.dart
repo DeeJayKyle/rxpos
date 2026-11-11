@@ -69,7 +69,8 @@ class _PeopleScreenState extends ConsumerState<PeopleScreen> {
     if (rows == null) return const Center(child: CircularProgressIndicator());
     final saleList = sales.map(Sale.fromRecord).toList();
     final purchaseList = purchases.map(Purchase.fromRecord).toList();
-    double owes(String id) => widget.suppliers ? supplierBalance(id, purchaseList, payments, returns) : customerBalance(id, saleList, payments);
+    final win = ref.watch(balanceWindowProvider).value; // stage 4: a device keeping recent history
+    double owes(String id) => widget.suppliers ? supplierBalance(id, purchaseList, payments, returns, win: win) : customerBalance(id, saleList, payments, win: win);
     final q = _q.trim().toLowerCase();
     final list = rows.where((r) => r['id'] != 'walk-in' && (q.isEmpty || '${r['name']} ${r['phone'] ?? ''}'.toLowerCase().contains(q))).toList()
       ..sort((a, b) => '${a['name']}'.toLowerCase().compareTo('${b['name']}'.toLowerCase()));

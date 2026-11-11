@@ -39,7 +39,7 @@ import { LOCKED_TABLES, DOCUMENT_MOVES, closedSet, inClosedDay, recordDay } from
 import { isRefundOnly } from './policy.js';
 import { localDay } from './dailystock.js';
 import { snapshotList, snapshotChunk, pruneSnapshots } from './snapshot.js';
-import { balancesAt, validWindow } from './window.js';
+import { balancesAt, validWindow, pruneWindows } from './window.js';
 import { keeps as keepsInWindow, WINDOWED } from '../src/historywindow.js';
 // The built-in roles (cashier, dispenser, pharmacist, manager) live only in the app; they aren't stored as records.
 // The server needs their permissions too, so a permission check doesn't wrongly refuse a built-in role (1.1/1.9).
@@ -1554,6 +1554,7 @@ export default {
     if (event.cron === '0 18 * * *') {
       ctx.waitUntil((async () => { const e = withDatabase(env); await ensureSchema(e.DB); await pruneSignInTables(e.DB); })().then(() => console.log('sign-in tables pruned')).catch((e) => console.log('prune failed', e.message)));
       ctx.waitUntil(pruneSnapshots(withDatabase(env), epochOf).then((n) => console.log('ready-made downloads pruned', n)).catch((e) => console.log('snapshot prune failed', e.message)));
+      ctx.waitUntil(pruneWindows(withDatabase(env), epochOf).then((n) => console.log('kept brought-forward figures pruned', n)).catch((e) => console.log('window prune failed', e.message)));
       ctx.waitUntil(dailySummaries(withDatabase(env)).then((r) => console.log('daily summaries', r.map((x) => `${x.tenant}:${x.sent}${x.error ? ' ' + x.error : ''}`).join(', '))).catch((e) => console.log('daily summaries failed', e.message)));
       // and the scheduled Excel reports that are due today (worker/reports.js)
       ctx.waitUntil(scheduledReports(withDatabase(env)).then((r) => console.log('scheduled reports', r.map((x) => `${x.tenant}/${x.schedule}:${x.sent}${x.error ? ' ' + x.error : ''}`).join(', '))).catch((e) => console.log('scheduled reports failed', e.message)));

@@ -31,7 +31,7 @@ jobs:
           fetch-depth: 0 # the classic app's build number is its last change (scripts/release-files.mjs)
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22 # node:sqlite (tests/unit-window-incremental.mjs)
           cache: npm
       - run: npm ci
       - name: Lint (ESLint, eslint.config.js)

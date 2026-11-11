@@ -3,19 +3,23 @@
 import '../../../core/data/record_store.dart';
 import '../../../core/entities/purchase.dart';
 import '../../../core/entities/sale.dart';
+import '../../../core/rules/balances.dart';
 import '../../../core/rules/ids.dart';
 
 double _num(Object? v) => (v as num?)?.toDouble() ?? 0;
 
-/// Credit sales not yet paid, less payments received.
-double customerBalance(String id, Iterable<Sale> sales, Iterable<Map<String, Object?>> payments) {
+/// Credit sales not yet paid, less payments received. [win]: a device keeping recent history (stage 4), where it is
+/// the cloud's brought-forward figure + what these records put on the client from the window start.
+double customerBalance(String id, Iterable<Sale> sales, Iterable<Map<String, Object?>> payments, {BalanceWindow? win}) {
+  if (win != null) return win.one('customer', id, {'sales': sales.map((s) => s.raw), 'payments': payments}, sources: [sales, payments]);
   final credit = sales.where((s) => s.customerId == id && s.status != 'refunded').fold(0.0, (a, s) => a + s.balance); // an insurer's share is not the client's debt (step 22)
   final paid = payments.where((p) => p['kind'] == 'customer' && p['partyId'] == id).fold(0.0, (a, p) => a + _num(p['amount']));
   return credit - paid;
 }
 
-/// Purchases not yet paid, less later payments and credit notes for returns.
-double supplierBalance(String id, Iterable<Purchase> purchases, Iterable<Map<String, Object?>> payments, Iterable<Map<String, Object?>> returns) {
+/// Purchases not yet paid, less later payments and credit notes for returns ([win]: as customerBalance).
+double supplierBalance(String id, Iterable<Purchase> purchases, Iterable<Map<String, Object?>> payments, Iterable<Map<String, Object?>> returns, {BalanceWindow? win}) {
+  if (win != null) return win.one('supplier', id, {'purchases': purchases.map((p) => p.raw), 'supplierReturns': returns, 'payments': payments}, sources: [purchases, returns, payments]);
   final owed = purchases.where((p) => p.supplierId == id).fold(0.0, (a, p) => a + (p.total - p.paid));
   final paid = payments.where((p) => p['kind'] == 'supplier' && p['partyId'] == id).fold(0.0, (a, p) => a + _num(p['amount']));
   final credits = returns.where((r) => r['supplierId'] == id && r['settle'] == 'credit').fold(0.0, (a, r) => a + _num(r['total']));

@@ -7,6 +7,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../database/app_database.dart';
 import '../entities/settings.dart';
 import '../rules/dates.dart';
+import '../rules/balances.dart';
 import '../rules/doc_numbers.dart';
 import '../rules/ids.dart';
 import '../sync/field_merge.dart';
@@ -137,20 +138,47 @@ class RecordStore {
   /// Step 13: stock per branch, batch and medicine, added up by SQLite (the same keys as StockIndex.of: an empty
   /// branch is the main branch, a movement without a batch counts under `lb-<medicine>`, quantities read as numbers
   /// like toNum). Re-runs when records change; returns a few thousand totals, not every movement.
+  /// Faster sync, stage 4: on a device keeping recent history (kv "sync": window W with the cloud's brought-forward
+  /// figures for W), stock = the movements dated from W + the brought-forward stock (src/stockindex.js); a movement
+  /// before W that is still on the device is in the brought-forward figure already, so it is not counted twice.
   static const _stockSql = '''
-SELECT CASE WHEN COALESCE(CAST(json_extract(json, '\$.branchId') AS TEXT), '') = '' THEN 'main' ELSE CAST(json_extract(json, '\$.branchId') AS TEXT) END AS br,
-  COALESCE(CAST(json_extract(json, '\$.batchId') AS TEXT), 'lb-' || COALESCE(CAST(json_extract(json, '\$.productId') AS TEXT), '')) AS bk,
-  COALESCE(CAST(json_extract(json, '\$.productId') AS TEXT), '') AS pid,
-  TOTAL(CAST(json_extract(json, '\$.qty') AS REAL)) AS q
-FROM records WHERE t = 'movements' GROUP BY br, bk, pid''';
+WITH w AS (SELECT COALESCE((SELECT json_extract(v, '\$.window') FROM kv WHERE k = 'sync'
+  AND COALESCE(json_extract(v, '\$.window'), '') <> '' AND json_extract(v, '\$.balances.W') = json_extract(v, '\$.window')), '') AS start)
+SELECT br, bk, pid, TOTAL(q) AS q FROM (
+  SELECT CASE WHEN COALESCE(CAST(json_extract(json, '\$.branchId') AS TEXT), '') = '' THEN 'main' ELSE CAST(json_extract(json, '\$.branchId') AS TEXT) END AS br,
+    COALESCE(CAST(json_extract(json, '\$.batchId') AS TEXT), 'lb-' || COALESCE(CAST(json_extract(json, '\$.productId') AS TEXT), '')) AS bk,
+    COALESCE(CAST(json_extract(json, '\$.productId') AS TEXT), '') AS pid,
+    CAST(json_extract(json, '\$.qty') AS REAL) AS q
+  FROM records, w WHERE t = 'movements' AND (w.start = '' OR COALESCE(CAST(json_extract(json, '\$.date') AS TEXT), '') >= w.start)
+  UNION ALL
+  SELECT CAST(json_extract(s.value, '\$.branch') AS TEXT), CAST(json_extract(s.value, '\$.batch') AS TEXT),
+    COALESCE(CAST(json_extract(s.value, '\$.product') AS TEXT), ''), CAST(json_extract(s.value, '\$.qty') AS REAL)
+  FROM kv, w, json_each(kv.v, '\$.balances.stock') s WHERE kv.k = 'sync' AND w.start <> ''
+) GROUP BY br, bk, pid''';
 
   ({String branch, String batchKey, String productId, double qty}) _total(QueryRow r) =>
       (branch: r.read<String>('br'), batchKey: r.read<String>('bk'), productId: r.read<String>('pid'), qty: r.read<double>('q'));
 
   Stream<StockIndex> watchStock() =>
-      db.customSelect(_stockSql, readsFrom: {db.records}).watch().map((rows) => StockIndex.fromTotals(rows.map(_total)));
+      db.customSelect(_stockSql, readsFrom: {db.records, db.kv}).watch().map((rows) => StockIndex.fromTotals(rows.map(_total)));
 
-  Future<StockIndex> stock() async => StockIndex.fromTotals((await db.customSelect(_stockSql, readsFrom: {db.records}).get()).map(_total));
+  Future<StockIndex> stock() async => StockIndex.fromTotals((await db.customSelect(_stockSql, readsFrom: {db.records, db.kv}).get()).map(_total));
+
+  /// Faster sync, stage 4: the brought-forward figures of a device keeping recent history (kv "sync": the window and
+  /// the cloud's figures for it), or null (no window, or its figures not in yet: the plain sums apply).
+  static ({String key, BalanceWindow? win}) _windowOf(String? v) {
+    if (v == null) return (key: '', win: null);
+    final j = (jsonDecode(v) as Map).cast<String, Object?>();
+    final w = j['window'], b = (j['balances'] as Map?)?.cast<String, Object?>();
+    if (w is! String || w.isEmpty || b?['W'] != w) return (key: '', win: null);
+    return (key: '$w|${b!['asOf']}|${jsonEncode(b)}'.hashCode.toString(), win: BalanceWindow.of(b));
+  }
+
+  /// Fires only when the window or its figures change (the sync settings are saved after every downloaded page).
+  Stream<BalanceWindow?> watchBalanceWindow() => (db.select(db.kv)..where((x) => x.k.equals('sync'))).watchSingleOrNull()
+      .map((r) => _windowOf(r?.v)).distinct((a, b) => a.key == b.key).map((x) => x.win);
+
+  Future<BalanceWindow?> balanceWindow() async => _windowOf((await (db.select(db.kv)..where((x) => x.k.equals('sync'))).getSingleOrNull())?.v).win;
 
   Future<Map<String, Object?>?> get(String t, String id) async {
     final r = await (db.select(db.records)..where((x) => x.t.equals(t) & x.id.equals(id))).getSingleOrNull();

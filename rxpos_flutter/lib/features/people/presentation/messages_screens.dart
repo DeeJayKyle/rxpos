@@ -49,12 +49,13 @@ class _RemindersScreenState extends ConsumerState<RemindersScreen> {
     final sales = ref.watch(tableProvider('sales')).value ?? const [];
     final payments = ref.watch(tableProvider('payments')).value ?? const [];
     final smsReady = ref.watch(smsReadyProvider).value ?? false;
+    final win = ref.watch(balanceWindowProvider).value; // stage 4: a device keeping recent history
     if (d == null || rx == null) return const Center(child: CircularProgressIndicator());
     final st = d.settings;
     final saleList = sales.map(Sale.fromRecord).toList();
     final byId = {for (final c in customers) '${c['id']}': c};
     final refills = refillsDue(rx, saleList, d.products, byId.keys.toSet());
-    final debts = [for (final c in customers) (c, customerBalance('${c['id']}', saleList, payments))].where((x) => x.$2 > 0.5).toList()..sort((a, b) => b.$2.compareTo(a.$2));
+    final debts = [for (final c in customers) (c, customerBalance('${c['id']}', saleList, payments, win: win))].where((x) => x.$2 > 0.5).toList()..sort((a, b) => b.$2.compareTo(a.$2));
     final rows = _tab == 'refills'
         ? [for (final r in refills) (key: r.key, c: byId[r.customerId]!, medicine: r.medicine, due: r.due, days: r.days, amount: 0.0)]
         : [for (final (c, a) in debts) (key: '${c['id']}', c: c, medicine: '', due: '', days: 0, amount: a)];
@@ -196,7 +197,8 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
     final chronicIds = {for (final Product p in d.products) if (p.raw['chronic'] == true) p.id};
     final chronicBuyers = {for (final x in saleList) if (x.items.any((i) => chronicIds.contains(i.id))) x.customerId};
     String phoneOf(Map<String, Object?> c) => normalizePhone('${(c['whatsapp'] ?? '') == '' ? c['phone'] ?? '' : c['whatsapp']}');
-    double owes(Map<String, Object?> c) => customerBalance('${c['id']}', saleList, payments);
+    final win = ref.watch(balanceWindowProvider).value;
+    double owes(Map<String, Object?> c) => customerBalance('${c['id']}', saleList, payments, win: win);
     final withPhone = customers.where((c) => c['id'] != 'walk-in' && phoneOf(c).length >= 12).toList();
     final groups = {
       'all': ('All clients with a phone', withPhone),
