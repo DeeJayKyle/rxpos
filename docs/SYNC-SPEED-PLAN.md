@@ -185,7 +185,9 @@ The classic web version also skips the work of saving to a device it doesn't kee
 |---|---|---|---|
 | 2026-11-11 | Plan | | Baseline above |
 | 2026-11-11 | Stage 1 (A–D) | PR 30 | See below; published as build updates |
-| 2026-11-11 | Stage 2 (E) | (this PR) | See below |
+| 2026-11-11 | Stages 2–4 (E–G), window off | PR 31 | See below. Deployed (Deploy cloud 19), Flutter build 118 offered |
+| 2026-11-11 | Window check on real pharmacies | `tools/window-check.mjs` | 4,816 balances equal on JBM, Pharmcare, Pharmcare Hub (1, 6, 12, 24 months) |
+| 2026-11-11 | Stage 4 on: 12 months apps, 1 month web | PR 32 | Full JS suite 2,192 passed (5 need outside services) |
 
 **Stage 1 results** (this machine, local cloud, no network delay; first download):
 
@@ -232,3 +234,17 @@ in the phase it was cut off in, and falls back to one plain download with a clou
 Flutter `download_test`).
 
 In this sample, stock movements are most of the core. Stage 4 (brought-forward balances) shrinks them.
+
+**History window check** (*History window check* workflow, 11 Nov 2026). For each real pharmacy and window, a device
+keeping only what `keeps()` keeps, with the cloud's own brought-forward figures (`worker/window.js`, run on the real
+records), shows the same balance as the whole history for every stock lot, medicine, client, supplier, insurer,
+account and loan. The cloud's figures also match the shared rules entry for entry. Share of history records a device
+keeps:
+
+| | 1 month | 6 months | 12 months | 24 months |
+|---|---|---|---|---|
+| JBM (52,600 history records) | 18% | 39% | 65% | 100% |
+| Pharmcare (7,200) | 48% | 100% | 100% | 100% |
+
+Run it again before changing the balance rules or the window defaults.
+

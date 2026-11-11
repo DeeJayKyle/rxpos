@@ -23,7 +23,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const out = await build({ entryPoints: [path.join(root, 'src/sync.js')], bundle: true, format: 'esm', platform: 'node', write: false, loader: { '.js': 'jsx' }, jsx: 'automatic', define: { 'import.meta.env.DEV': 'false' }, logLevel: 'error' });
 const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'rxpos-sync-')), 'sync.mjs');
 fs.writeFileSync(file, out.outputFiles[0].text);
-const { createSync, FULL_PULL, windowStart } = await import(pathToFileURL(file).href);
+const { createSync, FULL_PULL, windowStart, historyMonthsOf } = await import(pathToFileURL(file).href);
 const TABLES = ['products', 'customers', 'sales', 'movements'];
 // every other table the app knows is empty on this fictional device
 const withAllTables = (db) => new Proxy(db, { get: (o, k) => (k in o || typeof k !== 'string' ? o[k] : []) });
@@ -151,5 +151,10 @@ try {
   }
 } catch (e) { fail++; console.log('FAIL  threw', e.stack); }
 
+// The owner's decisions G and H: a device that never chose keeps 12 months in the Windows / Android apps and 1 month on
+// the website (node runs as the website here); an explicit choice, "everything" (0) included, is always kept
+check('a website that never chose keeps 1 month of history', historyMonthsOf({}) === 1 && historyMonthsOf(undefined) === 1);
+check('"Everything" (0) chosen on This device stays everything', historyMonthsOf({ historyMonths: 0 }) === 0 && windowStart(historyMonthsOf({ historyMonths: 0 })) === '');
+check('6, 12 or 24 months chosen are kept', [6, 12, 24].every((m) => historyMonthsOf({ historyMonths: m }) === m));
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
