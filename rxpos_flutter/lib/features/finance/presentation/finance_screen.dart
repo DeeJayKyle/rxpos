@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/rules/balances.dart' show BalanceWindow;
 import '../../../core/rules/day_close.dart';
 import '../../../core/data/pharmacy_providers.dart';
 import '../../../core/data/record_store.dart';
@@ -39,18 +40,20 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
   String _from = '${today().substring(0, 7)}-01', _to = today();
 
   RecordStore get _store => ref.read(recordStoreProvider);
+  BalanceWindow? _win;
   Future<String> _who() async => (await ref.read(sessionControllerProvider.future))?.userName ?? '';
 
   @override
   Widget build(BuildContext context) {
     final t = {for (final n in _tables) n: ref.watch(tableProvider(n)).value};
     final st = ref.watch(settingsProvider).value ?? const PharmacySettings();
+    _win = ref.watch(balanceWindowProvider).value; // stage 4: a device keeping recent history
     if (t.values.any((v) => v == null)) return const Center(child: CircularProgressIndicator());
     final data = {for (final e in t.entries) e.key: e.value!};
     final banks = [...data['banks']!];
     if (!banks.any((b) => b['id'] == cashDrawer)) banks.insert(0, {'id': cashDrawer, 'name': 'Cash at hand'});
     final all = {...data, 'banks': banks};
-    final bal = accountBalances(all);
+    final bal = accountBalances(all, win: _win);
     final bankOpts = [for (final b in banks) ('${b['id']}', '${b['name']}')];
     final cats = [for (final c in data['expenseCategories']!) ('${c['id']}', '${c['name']}')];
     String bankName(Object? id) => bankOpts.where((b) => b.$1 == (id ?? cashDrawer)).firstOrNull?.$2 ?? '—';
@@ -302,7 +305,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
       Expanded(child: _list([
         for (final l in data['loans']!)
           () {
-            final b = loanBalance(l, data['payments']!);
+            final b = loanBalance(l, data['payments']!, win: _win);
             return ListTile(
               title: Text('${l['lender']}${'${l['purpose'] ?? ''}'.isEmpty ? '' : ' · ${l['purpose']}'}'),
               subtitle: Text('${l['date']}${'${l['dueDate'] ?? ''}'.isEmpty ? '' : ' · due ${l['dueDate']}'} · ${st.money((l['amount'] as num?) ?? 0)} · total due ${st.money(b.total)} · repaid ${st.money(b.repaid)}'),
@@ -323,7 +326,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
     final sales = data['sales']!.map(Sale.fromRecord).toList(), purchases = data['purchases']!.map(Purchase.fromRecord).toList();
     final rows = [
       for (final p in parties)
-        (p, customers ? customerBalance('${p['id']}', sales, data['payments']!) : supplierBalance('${p['id']}', purchases, data['payments']!, data['supplierReturns']!)),
+        (p, customers ? customerBalance('${p['id']}', sales, data['payments']!, win: _win) : supplierBalance('${p['id']}', purchases, data['payments']!, data['supplierReturns']!, win: _win)),
     ].where((x) => x.$2.abs() > 0.001).toList()
       ..sort((a, b) => b.$2.compareTo(a.$2));
     final kind = customers ? 'customer' : 'supplier';

@@ -268,3 +268,19 @@ spread over one year; two runs each, window off → on):
 - Next, if wanted: keep the brought-forward figures per W and add only records newer than the kept sequence number,
   so a busy pharmacy's devices don't repeat the whole pass.
 
+
+### Follow-ups (November 2026)
+
+- **Incremental brought-forward** (done): the cloud keeps each window's figures with the sequence number they cover
+  (`windows/<tenant>/<epoch>/<W>.v2.json`) and adds only newer records; the nightly clean-up removes other epochs and
+  figures not used for 40 days. Windowed devices also ask for the ready-made chunks with their window (they were
+  getting full history through the chunks).
+- **Flutter apps, stage 4 parity** (built, off by default): the same keep rule (`lib/core/rules/history_window.dart`,
+  checked against the React app on `tests/window-cases.json`), the window on full downloads and chunks, brought-forward
+  figures fetched (404: keep everything), older history removed locally when the window shortens, stock from SQLite as
+  the movements from W + brought-forward stock, and every money balance as brought-forward + entries from W. Equality
+  is tested on the shared cases with older records removed and still present. `windowByDefault` stays false and This
+  device has no choice for it yet: reports and sales history must first fetch older history from the cloud
+  (`/api/history`, as the website does) before the apps keep 12 months.
+- Both apps now keep a record whose change is still waiting to be sent when the window moves forward (else that
+  change would be lost).

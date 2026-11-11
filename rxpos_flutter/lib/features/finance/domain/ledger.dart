@@ -1,6 +1,7 @@
 // Money in and out of each account (src/finance.js ledger / accountBalances / loanBalance): sales paid in, refunds,
 // purchases paid, supplier refunds, expenses, client / supplier / loan payments, loans received, deposits, withdrawals
 // and transfers between accounts. Each account starts from its opening balance.
+import '../../../core/rules/balances.dart';
 import '../../../core/rules/money.dart';
 
 const cashDrawer = 'cash-drawer';
@@ -67,16 +68,24 @@ List<LedgerEntry> ledger(Map<String, List<Map<String, Object?>>> t) {
   return e..sort((a, b) => a.date.compareTo(b.date));
 }
 
-Map<String, double> accountBalances(Map<String, List<Map<String, Object?>>> t) {
+/// Each account's balance: its opening balance + what came in and went out. [win]: a device keeping recent history
+/// (stage 4): the cloud's brought-forward figures + the entries from the window start (src/finance.js accountBalances).
+Map<String, double> accountBalances(Map<String, List<Map<String, Object?>>> t, {BalanceWindow? win}) {
   final bal = {for (final b in t['banks'] ?? const <Map<String, Object?>>[]) '${b['id']}': _n(b['opening'])};
+  if (win != null) {
+    for (final MapEntry(:key, :value) in win.all('account', {for (final x in entryTables) x: t[x] ?? const []}).entries) {
+      bal[key] = (bal[key] ?? 0) + value;
+    }
+    return bal;
+  }
   for (final x in ledger(t)) {
     bal[x.account] = (bal[x.account] ?? 0) + x.inAmount - x.outAmount;
   }
   return bal;
 }
 
-({double total, double repaid, double balance}) loanBalance(Map<String, Object?> loan, Iterable<Map<String, Object?>> payments) {
-  final repaid = payments.where((p) => p['kind'] == 'loan' && p['partyId'] == loan['id']).fold(0.0, (a, p) => a + _n(p['amount']));
+({double total, double repaid, double balance}) loanBalance(Map<String, Object?> loan, Iterable<Map<String, Object?>> payments, {BalanceWindow? win}) {
+  final repaid = win != null ? win.one('loan', '${loan['id']}', {'payments': payments}, sources: [payments]) : payments.where((p) => p['kind'] == 'loan' && p['partyId'] == loan['id']).fold(0.0, (a, p) => a + _n(p['amount']));
   // rounded to cents: 50,000 × 1.10 must be 55,000, not 55,000.00000000001
   final total = round(_n(loan['amount']) * (1 + _n(loan['interestRate']) / 100), 2);
   return (total: total, repaid: repaid, balance: total - repaid);

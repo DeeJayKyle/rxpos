@@ -50,6 +50,7 @@ const SUITES = [
   ['first download resume (unit)', 'unit-sync-resume.mjs', []],
   ['full download in phases (unit)', 'unit-sync-phases.mjs', []],
   ['balances as dated entries, brought forward (unit)', 'unit-balances.mjs', []],
+  ['the history window keep rule, shared with the Flutter app (unit)', 'unit-historywindow.mjs', []],
   ['theme choice (unit)', 'unit-theme.mjs', []],
   ['theme contrast', 'contrast-test.mjs', []],
   ['owner sign-in', 'owner-auth-test.mjs', []],

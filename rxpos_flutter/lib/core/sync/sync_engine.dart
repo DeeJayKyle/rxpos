@@ -14,6 +14,7 @@ import 'package:drift/drift.dart';
 
 import '../database/app_database.dart';
 import '../network/api_failure.dart';
+import '../rules/history_window.dart';
 import '../rules/ids.dart';
 import 'merge.dart';
 import 'remote_change.dart';
@@ -101,6 +102,16 @@ class SyncEngine {
   /// cloud problem); everything confirmed before the failure stays done, and the next run continues from there.
   Future<SyncResult> run({void Function(SyncProgress)? onProgress}) async {
     var cfg = await SyncConfig.load(db);
+    // Faster sync, stage 4: the history kept on this device (This device → history kept; 0: everything). A longer
+    // window downloads the pharmacy again with it (the older records arrive and merge); a shorter one, or the window
+    // moving on at a new month, removes the older records from this device only, never in the cloud (src/sync.js).
+    final want = windowStart(cfg.monthsKept);
+    if (cfg.window != want) {
+      final longer = want.isEmpty || (cfg.window.isNotEmpty && want.compareTo(cfg.window) < 0);
+      cfg = cfg.copyWith(window: want, clearBalances: true, fullPull: longer ? 0 : null, fullInProgress: longer ? false : null, clearPhase: longer);
+      await cfg.save(db);
+      if (want.isNotEmpty && !longer) await pruneWindow(db, want);
+    }
     final full = cfg.needsFullPull;
     final first = cfg.lastSync == null;
     // Faster sync, stage 2: a full download comes in phases: the core (medicines, stock, clients, staff, debts; the app
@@ -123,7 +134,17 @@ class SyncEngine {
     Future<SyncReply> ask(int since, List<OutboxRow> batch) async => _post({
           'deviceId': cfg.deviceId, 'since': since, 'changes': await _toChanges(batch), 'v': 2, 'limit': pullLimit, if (full) 'all': true,
           if (phase == 'core' || phase == 'history') ...{'phase': phase, 'cutoff': cfg.cutoff},
+          if (full && cfg.window.isNotEmpty) 'window': cfg.window, // stage 4: the cloud leaves out older history
         });
+    // stage 4: an old record arrived or was removed (a balance entry before the window may have changed), so the
+    // brought-forward figures are asked for again at the end
+    var needBalances = false;
+    void noteOld(List<RemoteChange> changes) {
+      final w = cfg.window;
+      if (w.isEmpty || needBalances) return;
+      needBalances = changes.any((x) => windowed.contains(x.t) &&
+          (x.deleted || x.rec == null || recordDate(x.rec!).compareTo(w) < 0 || '${x.rec!['refundedAt'] ?? ''}'.isNotEmpty && '${x.rec!['refundedAt']}'.compareTo(w) < 0));
+    }
     Future<SyncReply>? ahead;
     final chunked = <String>{}; // phases whose ready-made chunks were tried
     try {
@@ -131,17 +152,20 @@ class SyncEngine {
         // stage 3: at the start of a phase of a full download, take the cloud's ready-made chunks (several at once),
         // then page from the last one as before. Each chunk is saved with its position, so a cut-off run resumes.
         if (full && ahead == null && i >= batches.length && (phase == 'core' || phase == 'history') && chunked.add(phase!)) {
-          final list = await _snapshotList({'deviceId': cfg.deviceId, 'phase': phase, 'cutoff': cfg.cutoff});
+          // stage 4: with the window, so the chunks leave out the older history this device doesn't keep
+          final win = {if (cfg.window.isNotEmpty) 'window': cfg.window};
+          final list = await _snapshotList({'deviceId': cfg.deviceId, 'phase': phase, 'cutoff': cfg.cutoff, ...win});
           if (list != null && (epoch == null || list.epoch == epoch)) {
             epoch = list.epoch ?? epoch;
             final todo = [for (final ch in list.chunks) if (ch.$2 > cursor) ch];
             Future<List<RemoteChange>> get((int, int) ch) =>
-                _snapshotChunk({'deviceId': cfg.deviceId, 'phase': phase, 'cutoff': cfg.cutoff, 'from': ch.$1, 'to': ch.$2});
+                _snapshotChunk({'deviceId': cfg.deviceId, 'phase': phase, 'cutoff': cfg.cutoff, 'from': ch.$1, 'to': ch.$2, ...win});
             final inFlight = [for (final ch in todo.take(chunksAtOnce)) get(ch)..ignore()];
             for (var k = 0; k < todo.length; k++) {
               final changes = await inFlight[k];
               if (k + chunksAtOnce < todo.length) inFlight.add(get(todo[k + chunksAtOnce])..ignore());
               cursor = todo[k].$2;
+              noteOld(changes);
               await db.transaction(() async {
                 applied += await applyRemote(db, changes);
                 cfg = cfg.copyWith(cursor: cursor, epoch: epoch);
@@ -185,6 +209,7 @@ class SyncEngine {
             if (phase != null) phase = 'core';
           } else {
             epoch = reply.epoch ?? epoch;
+            noteOld(reply.changes);
             applied += await applyRemote(db, reply.changes);
             received += reply.changes.length;
             cursor = reply.cursor;
@@ -223,6 +248,16 @@ class SyncEngine {
     // stays in progress so the next run resumes it instead of starting a normal sync from a half-downloaded pharmacy.
     if (!complete) return SyncResult(sent: sent, refused: refused, received: received, applied: applied, full: full, complete: false);
     cfg = cfg.copyWith(lastSync: DateTime.now().toUtc().toIso8601String(), lastError: '', fullPull: full ? fullPullVersion : null, fullInProgress: false, clearPhase: true);
+    // stage 4: brought-forward figures for the window, when there are none yet or an old record changed
+    if (cfg.window.isNotEmpty && (needBalances || cfg.windowBalances == null)) {
+      final bf = await _balances(cfg.window);
+      if (bf != null && bf.isNotEmpty) {
+        cfg = cfg.copyWith(balances: bf);
+      } else if (bf != null) {
+        // a cloud or hub without them: this device keeps everything (downloaded again in full, merged)
+        cfg = cfg.copyWith(window: '', historyMonths: 0, clearBalances: true, fullPull: 0, fullInProgress: false);
+      } // null: no answer this time; asked again after the next sync
+    }
     // step 7: once in sync, a device without a till number asks for one (document numbers, core/rules/doc_numbers.dart).
     // A cloud or hub without /api/till, or no answer: old-style numbers for now, asked again after the next sync.
     if (cfg.till == null) {
@@ -296,6 +331,20 @@ class SyncEngine {
     return out;
   }
 
+  /// Stage 4: the cloud's brought-forward figures at window start [w]; {} when it has none (a hub or an older cloud:
+  /// 404), null when there was no good answer this time (src/sync.js fetchBalances).
+  Future<Map<String, Object?>?> _balances(String w) async {
+    try {
+      final res = await dio.post<Object?>('${syncBase(cloudUrl)}/api/balances', data: {'window': w},
+          options: Options(validateStatus: (code) => code != null && (code < 300 || code == 404)));
+      if (res.statusCode == 404) return const {};
+      final d = res.data;
+      return d is Map && d['W'] == w && d['stock'] is List ? d.cast<String, Object?>() : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Stage 3: the ready-made chunks of a full download's phase (from, to), or null when the cloud has none (a hub,
   /// an older cloud, or any problem): the download then pages as before (src/sync.js snapshotList).
   Future<({String? epoch, List<(int, int)> chunks})?> _snapshotList(Map<String, Object?> body) async {
@@ -338,3 +387,22 @@ class SyncEngine {
         (throw const ApiFailure(ApiFailureKind.server, 'The cloud sent an unexpected reply; trying again shortly.'));
   }
 }
+
+/// Stage 4: remove from this device the history before window start [w] it no longer keeps (core/rules/history_window.dart
+/// keeps; never in the cloud). Records with a change still waiting to be sent stay until it has gone. Returns how many.
+Future<int> pruneWindow(AppDatabase db, String w) => db.transaction(() async {
+      // only records dated before w can go (their date is one of these fields: recordDate), then the rule decides
+      final old = await db.customSelect('''
+SELECT t, id, json FROM records WHERE t IN (${windowed.map((t) => "'$t'").join(', ')})
+  AND COALESCE(NULLIF(CAST(json_extract(json, '\$.date') AS TEXT), ''), NULLIF(CAST(json_extract(json, '\$.at') AS TEXT), ''),
+      NULLIF(CAST(json_extract(json, '\$.startedAt') AS TEXT), ''), NULLIF(CAST(json_extract(json, '\$.createdAt') AS TEXT), ''), '') < ?
+  AND NOT EXISTS (SELECT 1 FROM outbox o WHERE o.t = records.t AND o.id = records.id)''', variables: [Variable.withString(w)], readsFrom: {db.records, db.outbox}).get();
+      var n = 0;
+      for (final r in old) {
+        final t = r.read<String>('t'), id = r.read<String>('id');
+        if (keeps(t, (jsonDecode(r.read<String>('json')) as Map).cast<String, Object?>(), w)) continue;
+        await (db.delete(db.records)..where((x) => x.t.equals(t) & x.id.equals(id))).go();
+        n++;
+      }
+      return n;
+    });
