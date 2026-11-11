@@ -43,6 +43,7 @@ const SUITES = [
   ['inventory value (unit)', 'unit-stockvalue.mjs', []],
   ['stock audit (unit)', 'unit-stockaudit.mjs', []],
   ['stock repair (unit)', 'unit-stockrepair.mjs', []],
+  ['brought forward kept incrementally (unit)', 'unit-window-incremental.mjs', []],
   ['backup verify (unit)', 'unit-verify.mjs', []],
   ['storage change detection (unit)', 'unit-diff.mjs', []],
   ['cloud restore resend (unit)', 'unit-sync-restore.mjs', []],
