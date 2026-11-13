@@ -535,7 +535,8 @@ function OwnerSignIn({ url, onSignedIn }) {
         setBusy(true); setError('');
         try { const j = await ownerGoogleLogin(url, credential); onSignedIn(j.token); } catch (e) { setError(e.message); } finally { setBusy(false); }
       } });
-      window.google.accounts.id.renderButton(googleRef.current, { theme: 'filled_blue', size: 'large', text: 'continue_with', width: 300 });
+      // as wide as the card allows (Google draws it at a fixed width: 300 px ran 38 px off a 360 px phone)
+      window.google.accounts.id.renderButton(googleRef.current, { theme: 'filled_blue', size: 'large', text: 'continue_with', width: Math.max(200, Math.min(300, googleRef.current.clientWidth || 300)) });
     };
     if (window.google?.accounts?.id) { render(); return; }
     const sc = document.createElement('script');

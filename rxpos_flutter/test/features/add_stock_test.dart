@@ -1,4 +1,4 @@
-// Add Stock parity: the line rules (qty / unit cost / line total in step, price following the markup), typed dates,
+// Add Stock parity: the line rules (the line total typed, the unit cost worked out; the retail price only typed), typed dates,
 // invoice scanning (dates, matching, lines), receiving a purchase order / a draft, and correcting a past delivery.
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -21,36 +21,52 @@ void main() {
   const s = PharmacySettings(retailMarkup: 50, priceRound: 50, receiveUnit: 'pack');
   final para = Product.fromRecord({'id': 'p1', 'name': 'Paramol 500mg Tabs', 'unit': 'Tablet', 'price': 60, 'cost': 30, 'packs': [{'name': 'Box', 'size': 100}]});
   final zinc = Product.fromRecord({'id': 'p2', 'name': 'Zinco Syrup 100ml', 'unit': 'Bottle', 'price': 6000, 'cost': 4000});
-  final pf = priceAt(50, s);
 
   group('a line', () {
     test('received in the largest pack; the cost per pack; price kept', () {
       final l = lineFor(para, s);
       expect((l['recvPack'], l['recvSize'], l['cost'], l['total'], l['price']), ('Box', 100.0, '3000', '3000', '60'));
     });
-    test('the line total works out the unit cost (unrounded); an existing medicine keeps its retail price (the owner\'s choice)', () {
+    test('the line total is typed and works out the unit cost (unrounded); the quantity keeps a typed total', () {
       var l = lineFor(zinc, s);
-      l = editLine(l, {'qty': '3'}, pf);
-      expect(l['total'], '12000');
-      l = editLine(l, {'total': '13000'}, pf);
-      expect((l['by'], l['cost'], unitCost(l)), ('total', '4333.33', 13000 / 3));
-      expect(l['price'], '6000', reason: 'the invoice does not change the price (cost + markup would be 6,500: offered, not applied)');
-      l = editLine(l, {'cost': '5000'}, pf);
-      expect(l['price'], '6000');
-      l = editLine(l, {'price': '7000'}, pf);
-      expect(l['auto'], false);
-      l = editLine(l, {'cost': '6000'}, pf);
-      expect(l['price'], '7000', reason: 'a typed price stays');
-      l = editLine(l, {'price': ''}, pf);
-      expect(l['price'], '6000', reason: 'cleared: back to today\'s price');
+      expect((l['cost'], l['total']), ('4000', '4000'), reason: 'starts at the last cost: total prefilled as last cost × qty');
+      l = editLine(l, {'qty': '3'});
+      expect((l['by'], l['cost'], l['total']), ('unit', '4000', '12000'), reason: 'no total typed: the total follows qty × the prefilled cost');
+      l = editLine(l, {'total': '13000'});
+      expect((l['by'], l['cost'], unitCost(l), lineTotal(l)), ('total', '4333.33', 13000 / 3, 13000));
+      l = editLine(l, {'qty': '4'});
+      expect((l['total'], l['cost'], unitCost(l)), ('13000', '3250', 3250), reason: 'a typed total stays; the cost is worked out again');
+      expect(deliveryLines({'lines': [l]}).single.unitCost, 3250);
     });
-    test('a new medicine (no price yet) gets cost + markup until a price is typed, per unit when received by the box', () {
-      var l = editLine({...blankLine(), 'productId': newMedicine, 'name': 'New Drops'}, {'cost': '4000'}, pf);
-      expect(l['price'], '6000', reason: '4000 × 1.5');
-      l = editLine(l, {'recvPack': 'Box', 'recvSize': 10}, pf);
-      expect(l['price'], '600', reason: 'a box of 10 at 4,000: 400 a unit × 1.5');
+    test('the retail price is never set on its own: kept for a medicine in the list, empty for a new one until typed', () {
+      var l = lineFor(zinc, s);
+      for (final patch in [{'qty': '3'}, {'total': '30000'}, {'cost': '9000'}, {'recvPack': 'Box', 'recvSize': 10}, {'reprice': true}]) {
+        l = editLine(l, patch);
+        expect(l['price'], '6000', reason: 'after $patch');
+      }
+      expect(markupFor(l, 50, s), 1350, reason: 'offered only: a box of 10 at 9,000 is 900 a unit × 1.5');
+      l = editLine(l, {'price': '7000'});
+      expect((l['auto'], l['price']), (false, '7000'));
+      l = editLine(l, {'total': '50000'});
+      expect(l['price'], '7000', reason: 'a typed price stays');
+      l = editLine(l, {'price': ''});
+      expect(l['price'], '6000', reason: 'cleared: back to today\'s price');
+
+      var n = {...blankLine(), 'productId': newMedicine, 'name': 'New Drops'};
+      for (final patch in [{'total': '4000'}, {'qty': '2'}, {'cost': '3000'}, {'recvPack': 'Box', 'recvSize': 10}, {'reprice': true}]) {
+        n = editLine(n, patch);
+        expect(n['price'], '', reason: 'a new medicine has no price until one is typed (after $patch)');
+      }
+      expect(markupFor(n, 50, s), 450, reason: 'the hint / "Use" button: 300 a unit × 1.5');
       final noPrice = Product.fromRecord({'id': 'p9', 'name': 'Unpriced', 'cost': 200, 'packs': [{'name': 'Box', 'size': 10}]});
-      expect(lineFor(noPrice, s)['price'], '300', reason: 'received by the box of 10 (2,000), priced per unit: 200 × 1.5');
+      expect((lineFor(noPrice, s)['price'], markupFor(lineFor(noPrice, s), 50, s)), ('', 300), reason: 'no price: empty, cost + markup only offered');
+    });
+    test('a new medicine without a typed price is refused on receiving', () async {
+      final db = AppDatabase(NativeDatabase.memory());
+      addTearDown(db.close);
+      final form = {...blankForm(s), 'lines': [editLine({...blankLine(), 'productId': newMedicine, 'name': 'New Drops', 'batch': 'N1', 'expiry': '2030-01-31'}, {'total': '4000'})]};
+      await expectLater(receiveDelivery(RecordStore(db), lines: deliveryLines(form), products: const {}, settings: s, receivedBy: 'Tia'),
+          throwsA(predicate((e) => '$e'.contains('Enter a retail price for New Drops'))));
     });
     test('a purchase order\'s lines; new medicine lines become delivery lines', () {
       final ls = linesFromPo({'items': [{'productId': 'p2', 'qty': 4, 'cost': 3800}, {'productId': 'gone', 'qty': 1}]}, {'p2': zinc}, s);
@@ -86,17 +102,20 @@ void main() {
       const sup = Supplier(id: 's1', name: 'Sample Wholesalers Ltd');
       expect(matchSupplier('SAMPLE WHOLESALERS (U) LIMITED', [sup])?.id, 's1');
     });
-    test('what was read becomes lines: the box chosen by the nearest cost, the price worked out, what to check', () {
+    test('what was read becomes lines: the box chosen by the nearest cost, the line total preferred, no price set, what to check', () {
       final d = PharmacyData(settings: s, products: [para, zinc], stock: StockView(products: [para, zinc], batches: const [], index: StockIndex.of(const [])),
           customers: const [], suppliers: const [Supplier(id: 's1', name: 'Sample Wholesalers')], drafts: const [], features: const {});
       final r = {'supplier': 'Sample Wholesalers', 'invoiceNo': 'INV-9', 'date': '05/11/2026', 'total': 9300, 'linesTotal': 9300, 'totalMatches': true, 'readings': 2, 'items': [
         {'name': 'Paramol 500mg tabs', 'qty': 2, 'unitCost': 3100, 'batch': 'B1', 'expiry': '12/27'},
         {'name': 'Unknown Cream', 'qty': 1, 'lineTotal': 3100, 'check': ['qty'], 'alt': {'qty': 2}},
+        {'name': 'Paramol 500mg tabs', 'qty': 2, 'unitCost': 3100, 'lineTotal': 6000, 'batch': 'B2', 'expiry': '12/27'},
       ]};
       final x = applyScan(r, blankForm(s), d, user: 'Tia');
       final ls = lines(x.form);
       expect((x.form['supplierId'], x.form['invoice'], x.form['date']), ('s1', 'INV-9', '2026-11-05'));
       expect((ls[0]['productId'], ls[0]['recvPack'], ls[0]['cost'], ls[0]['expiry'], ls[0]['price']), ('p1', 'Box', '3100', '2027-12-31', '60'));
+      expect((ls[1]['price'], ls[2]['by'], ls[2]['total'], ls[2]['cost'], ls[2]['price']), ('', 'total', '6000', '3000', '60'),
+          reason: 'no price from the invoice for a new medicine; the line total preferred over the unit cost');
       expect((ls[1]['productId'], ls[1]['total'], checkTextOf(ls[1]['read'] as Map)), ('', '3100', 'quantity (other reading: 2)'));
       expect((x.summary['unmatched'], x.summary['unclear'], x.summary['supplierMatched']), (1, 1, true));
     });

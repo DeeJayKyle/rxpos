@@ -156,7 +156,7 @@ class _Hit {
 }
 
 /// Ctrl+K: jump to any page, medicine, customer or receipt.
-Future<void> openSearch(BuildContext context, List<Screen> pages) => showDialog<void>(context: context, builder: (_) => CommandPalette(pages: pages));
+Future<void> openSearch(BuildContext context, List<Screen> pages) => showAppDialog<void>(context: context, builder: (_) => CommandPalette(pages: pages));
 
 class CommandPalette extends ConsumerStatefulWidget {
   const CommandPalette({super.key, required this.pages});

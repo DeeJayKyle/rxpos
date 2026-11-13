@@ -40,7 +40,7 @@ Future<String?> askTwice(BuildContext context, {required String title, required 
 Future<String?> _askSecret(BuildContext context, {required String title, String? message, required String action, String? Function(String)? check, bool digits = false}) {
   final c = TextEditingController();
   String? error;
-  return showDialog<String>(
+  return showAppDialog<String>(
     context: context,
     builder: (ctx) => StatefulBuilder(builder: (ctx, set) {
       void done() {
@@ -175,7 +175,7 @@ class _AccountMenuState extends ConsumerState<AccountMenu> {
       onSelected: (v) => switch (v) {
         'password' => changePassword(),
         'pin' => _managePin(),
-        'twostep' => showDialog<void>(context: context, builder: (_) => TwoStepDialog(session: s)),
+        'twostep' => showAppDialog<void>(context: context, builder: (_) => TwoStepDialog(session: s)),
         'logout' => _signOut(),
         _ => null,
       },

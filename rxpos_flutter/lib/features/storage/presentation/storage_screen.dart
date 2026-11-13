@@ -160,7 +160,7 @@ class _StorageScreenState extends ConsumerState<StorageScreen> {
   String _place = 'Fridge';
 
   Future<void> _record(PharmacySettings st, String branch) async {
-    final v = await showDialog<Map<String, Object?>>(context: context, builder: (_) => _ReadingDialog(place: _place));
+    final v = await showAppDialog<Map<String, Object?>>(context: context, builder: (_) => _ReadingDialog(place: _place));
     if (v == null) return;
     final by = (await ref.read(sessionControllerProvider.future))?.userName ?? '';
     final l = storageLimits(st);

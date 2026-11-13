@@ -710,7 +710,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   Future<void> _remove(Map<String, Object?> m, Session me) async {
     final mine = m['fromId'] == me.userId && m['call'] == null;
     if (mine && chat.ageHours(m) < chat.unsendHours && m['deleted'] != true) {
-      final choice = await showDialog<String>(
+      final choice = await showAppDialog<String>(
         context: context,
         builder: (c) => AlertDialog(
           title: const Text('Delete message?'),
@@ -810,7 +810,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     if (!mounted) return;
     final opts = [('team', 'General (whole team)'), for (final u in users) (chat.dmId(me.userId, '${u['id']}'), '${u['name']}')];
     final pick = <String>{};
-    final targets = await showDialog<Set<String>>(
+    final targets = await showAppDialog<Set<String>>(
       context: context,
       builder: (c) => StatefulBuilder(
         builder: (c, set) => AlertDialog(
@@ -846,7 +846,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final reads = (await _store.rows('chatReads')).where((r) => r['conv'] == m['conv'] && r['userId'] != me.userId && '${r['at']}'.compareTo('${m['date']}') >= 0).toList();
     final reacts = (marks['${m['id']}'] ?? const []).where((k) => '${k['emoji'] ?? ''}'.isNotEmpty).toList();
     if (!mounted) return;
-    await showDialog<void>(
+    await showAppDialog<void>(
       context: context,
       builder: (c) => AlertDialog(
         title: const Text('Message info'),

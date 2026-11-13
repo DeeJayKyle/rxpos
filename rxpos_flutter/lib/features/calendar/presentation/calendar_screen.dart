@@ -52,7 +52,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   Future<void> _open(String url) => launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
 
   Future<void> _edit(Map<String, Object?>? e, String branch) async {
-    final v = await showDialog<Map<String, Object?>>(context: context, builder: (_) => _EventDialog(event: e, day: _day));
+    final v = await showAppDialog<Map<String, Object?>>(context: context, builder: (_) => _EventDialog(event: e, day: _day));
     if (v == null) return;
     final by = (await ref.read(sessionControllerProvider.future))?.userName ?? '';
     if (v['_delete'] == true) {

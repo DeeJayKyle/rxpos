@@ -45,7 +45,8 @@ const go = async (h) => { await A.goto(base + '/' + slug + '#' + h, { waitUntil:
 const clickText = (sel, re) => A.evaluate((s, src) => { const el = [...document.querySelectorAll(s)].find((x) => new RegExp(src, 'i').test(x.textContent)); if (el) el.click(); return !!el; }, sel, re.source);
 // set an input's value the way React sees typing (works for date / number boxes in any locale)
 const setVal = (sel, value, n = 0) => A.evaluate((s, v, i) => { const el = document.querySelectorAll(s)[i]; if (!el) return false; Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, v); el.dispatchEvent(new Event('input', { bubbles: true })); return true; }, sel, String(value), n);
-const lineVal = (row, label) => A.evaluate((r, l) => document.querySelectorAll('table.lines tbody tr')[r]?.querySelector(`input[aria-label="${l}"]`)?.value, row, label);
+// an input's value, or the text of a worked-out figure (the unit cost is shown, not typed)
+const lineVal = (row, label) => A.evaluate((r, l) => { const tr = document.querySelectorAll('table.lines tbody tr')[r]; return tr?.querySelector(`input[aria-label="${l}"]`)?.value ?? tr?.querySelector(`output[aria-label="${l}"]`)?.textContent; }, row, label);
 const toastText = () => A.evaluate(() => [...document.querySelectorAll('.toast')].map((x) => x.innerText).join(' | '));
 const stockOf = async () => { await go('/inventory'); await clickText('.tab', /^All$/); await wait(300); return A.evaluate(() => Object.fromEntries([...document.querySelectorAll('tbody tr')].filter((r) => r.cells.length > 5).map((r) => [r.cells[0].innerText.split('\n')[0].trim(), Number(r.cells[5].innerText.trim())]))); };
 
@@ -73,19 +74,20 @@ check('Add Stock: a medicine not in the list can be added from the search box', 
 await A.click('.picker-new'); await wait(300);
 check('…the line becomes a new medicine with the name filled in', (await A.evaluate(() => document.querySelector('tr.new-line input[aria-label="New medicine name"]')?.value)) === 'Zyntrafen 200mg');
 await setVal('tr.new-line input[aria-label="Quantity"]', 10); await setVal('tr.new-line input[aria-label="Line total"]', 15000); await wait(200);
-check('typing the line total works out the unit cost (15,000 ÷ 10 = 1,500)', (await lineVal(0, 'Unit cost')) === '1500', await lineVal(0, 'Unit cost'));
-check('…and the retail price computes itself at the markup (1,500 + 50% = 2,250)', (await lineVal(0, 'New retail price')) === '2250', await lineVal(0, 'New retail price'));
+check('typing the line total works out the unit cost (15,000 ÷ 10 = 1,500)', /^UGX 1,500$/.test(await lineVal(0, 'Unit cost')), await lineVal(0, 'Unit cost'));
+check('the unit cost can\'t be typed (it is worked out from the line total)', await A.evaluate(() => !document.querySelector('table.lines input[aria-label="Unit cost"]')));
+check('…and the retail price is not filled in by itself: cost + 50% (2,250) is only offered', (await lineVal(0, 'New retail price')) === '' && /Use UGX 2,250/.test(await A.evaluate(() => document.querySelector('tr.new-line .price-hint')?.innerText || '')), await lineVal(0, 'New retail price'));
 await setVal('tr.new-line input[aria-label="Quantity"]', 12); await wait(200);
-check('changing the quantity keeps the typed total and re-works cost and price (1,250 → 1,875)', (await lineVal(0, 'Unit cost')) === '1250' && (await lineVal(0, 'New retail price')) === '1875', [await lineVal(0, 'Unit cost'), await lineVal(0, 'New retail price')].join(' / '));
+check('changing the quantity keeps the typed total and re-works the cost (1,250); the price stays empty', /^UGX 1,250$/.test(await lineVal(0, 'Unit cost')) && (await lineVal(0, 'New retail price')) === '', [await lineVal(0, 'Unit cost'), await lineVal(0, 'New retail price')].join(' / '));
 await setVal('tr.new-line input[aria-label="New retail price"]', 3000); await setVal('tr.new-line input[aria-label="Line total"]', 18000); await wait(200);
-check('a retail price typed by hand is kept when the cost changes', (await lineVal(0, 'New retail price')) === '3000' && (await lineVal(0, 'Unit cost')) === '1500', [await lineVal(0, 'Unit cost'), await lineVal(0, 'New retail price')].join(' / '));
+check('a retail price typed by hand is kept when the cost changes', (await lineVal(0, 'New retail price')) === '3000' && /^UGX 1,500$/.test(await lineVal(0, 'Unit cost')), [await lineVal(0, 'Unit cost'), await lineVal(0, 'New retail price')].join(' / '));
 await setVal('tr.new-line input[aria-label="Expiry date"]', future(400)); await setVal('tr.new-line input[aria-label="Batch number"]', 'ZY1');
 // an existing medicine by search + Enter
 await A.type('.picker input', 'Amoxyl'); await A.keyboard.press('Enter'); await wait(300);
 check('Enter in the search adds the first match', /Amoxyl/.test(await A.evaluate(() => document.querySelectorAll('table.lines tbody tr')[1]?.querySelector('.med-pick input')?.value || '')));
-await setVal('table.lines tbody tr:nth-child(2) input[aria-label="Unit cost"]', 600); await wait(200);
+await setVal('table.lines tbody tr:nth-child(2) input[aria-label="Line total"]', 600); await wait(200); // 1 box: cost 600
 check('an existing medicine keeps its price when the cost is lower (600 + 50% = 900: stays 1,000)', (await lineVal(1, 'New retail price')) === '1000', await lineVal(1, 'New retail price'));
-await setVal('table.lines tbody tr:nth-child(2) input[aria-label="Unit cost"]', 800); await wait(200);
+await setVal('table.lines tbody tr:nth-child(2) input[aria-label="Line total"]', 800); await wait(200);
 const hint = await A.evaluate(() => document.querySelectorAll('table.lines tbody tr')[1].querySelector('.price-hint')?.innerText || '');
 check('a higher cost does not change the price (the owner\'s choice): 800 + 50% = 1,200 is offered', (await lineVal(1, 'New retail price')) === '1000' && /Use UGX 1,200/.test(hint), (await lineVal(1, 'New retail price')) + ' · ' + hint);
 await A.evaluate(() => [...document.querySelectorAll('table.lines tbody tr')[1].querySelectorAll('.price-hint button')].find((b) => /^Use/.test(b.textContent))?.click()); await wait(200);
@@ -236,7 +238,7 @@ const sp = await A.evaluate(() => [...document.querySelectorAll('tbody tr')].fin
 check('Purchase History → Supplier prices: Panadol cheapest at Nile Pharma (450) vs Kampala Medics (520), 16% gap', /Nile Pharma UGX 450/.test(sp) && /Kampala Medics: UGX 520/.test(sp) && /16%/.test(sp), sp);
 await go('/add-stock'); await A.select('form.card select', 'sup-km');
 await A.type('.picker input', 'Panadol'); await A.keyboard.press('Enter'); await wait(300);
-await setVal('table.lines tbody tr:nth-child(1) input[aria-label="Unit cost"]', 520); await wait(200);
+await setVal('table.lines tbody tr:nth-child(1) input[aria-label="Line total"]', 520); await wait(200); // 1 unit: cost 520
 check('Add Stock warns when another supplier sold it cheaper', /Nile Pharma: UGX 450/.test(await A.evaluate(() => document.querySelector('table.lines tbody tr')?.innerText || '')));
 await clickText('button', /Start again|Discard/);
 

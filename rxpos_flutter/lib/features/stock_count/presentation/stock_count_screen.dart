@@ -52,7 +52,7 @@ class _StockCountScreenState extends ConsumerState<StockCountScreen> {
       actions: [
         if (can.contains('stock.count') || can.contains('stock.adjust'))
           FilledButton.icon(onPressed: () async {
-            final id = await showDialog<String>(context: context, builder: (_) => const _NewCount());
+            final id = await showAppDialog<String>(context: context, builder: (_) => const _NewCount());
             if (id != null) setState(() => _open = id);
           }, icon: const Icon(Icons.add), label: const Text('New stock count')),
       ],
@@ -390,7 +390,7 @@ class _CountSheetState extends ConsumerState<_CountSheet> {
     final zeroRows = zeroable(all, items, d.stock.batchesOf);
     final zeroCost = zeroRows.fold<double>(0, (a, z) => a + z.b.qty * (z.b.cost != 0 ? z.b.cost : z.p.cost));
     var zero = false;
-    final go = await showDialog<bool>(
+    final go = await showAppDialog<bool>(
       context: context,
       builder: (c) => StatefulBuilder(
         builder: (c, set) => AlertDialog(
@@ -478,7 +478,7 @@ class _CountRowState extends ConsumerState<_CountRow> {
     final item = widget.item!;
     final ctl = {for (final l in item.lines) l.key: TextEditingController(text: formatQty(l.qty))};
     final reason = TextEditingController();
-    final ok = await showDialog<bool>(
+    final ok = await showAppDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
         title: Text('Correct the count of ${widget.p.name}'),

@@ -25,8 +25,9 @@ import 'invoice_scan.dart';
 import '../../../core/presentation/page_tip.dart';
 
 /// Add Stock (src/pages/Purchases.jsx AddStock): a delivery laid out like the supplier's invoice. Search or scan each
-/// medicine (not in the list? add it as new); type the unit cost or the line total (the other is worked out) and the
-/// retail price follows the markup until you type your own; batch and expiry per line. Columns can be moved (kept on
+/// medicine (not in the list? add it as new); type the line total (the unit cost is shown, worked out as total ÷ qty,
+/// and cannot be typed) and the retail price (a medicine in the list keeps its price until you type one; cost + markup
+/// is offered, applied only when tapped); batch and expiry per line. Columns can be moved (kept on
 /// this device); dates are typed in this device's format. Save as draft (synced) or receive. The unfinished delivery
 /// is kept on this device. [po]: receive a purchase order; [draft]: carry on a saved draft.
 class AddStockScreen extends ConsumerStatefulWidget {
@@ -44,6 +45,7 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
   String _q = '';
   final _search = TextEditingController();
   int _round = 0; // rebuilds the typed boxes after the form is replaced
+  final _totalRev = <String, int>{}; // rebuilds one line's total box when the app changes the total (not while it is typed)
   Timer? _keep;
 
   String get _draftKey => 'addstock-draft-${ref.read(pharmacyProvider).value?.branch ?? 'main'}';
@@ -95,8 +97,10 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
 
   void _setLine(String key, Map<String, Object?> patch) {
     final f = _form!;
-    final pf = priceAt(f['markup'], ref.read(pharmacyProvider).value!.settings);
-    _set({...f, 'lines': [for (final l in lines(f)) l['key'] == key ? editLine(l, patch, pf) : l]});
+    final next = [for (final l in lines(f)) l['key'] == key ? editLine(l, patch) : l];
+    final before = lines(f).where((l) => l['key'] == key).firstOrNull, after = next.where((l) => l['key'] == key).firstOrNull;
+    if (!patch.containsKey('total') && before?['total'] != after?['total']) _totalRev[key] = (_totalRev[key] ?? 0) + 1;
+    _set({...f, 'lines': next});
   }
 
   void _replaceLine(String key, Line line) => _set({..._form!, 'lines': [for (final l in lines(_form!)) l['key'] == key ? {...line, 'key': key} : l]});
@@ -110,11 +114,14 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
       _set({..._form!, 'lines': [...ls, line]});
     }
     _search.clear();
-    setState(() => _q = '');
+    setState(() {
+      _q = '';
+      _round++; // the boxes show the placed line
+    });
     return '${empty?['key'] ?? line['key']}';
   }
 
-  void _pick(Product p, PharmacyData d) => _placeLine(lineFor(p, d.settings, markup: _form!['markup']));
+  void _pick(Product p, PharmacyData d) => _placeLine(lineFor(p, d.settings));
   void _addNew(String name, {String barcode = ''}) => _placeLine({...blankLine(), 'productId': newMedicine, 'name': name.trim(), if (barcode.isNotEmpty) 'barcode': barcode});
 
   /// A GS1 pack code (workplan step 21): the medicine with that product number gets a line with the batch and expiry
@@ -123,7 +130,7 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
     final p = d.byGtin(g.gtin);
     final extra = {if (g.batch.isNotEmpty) 'batch': g.batch, if (g.expiry.isNotEmpty) 'expiry': g.expiry};
     if (p != null) {
-      _placeLine(lineFor(p, d.settings, extra: extra, markup: _form!['markup']));
+      _placeLine(lineFor(p, d.settings, extra: extra));
       return '${p.name} added${g.batch.isNotEmpty ? ' · batch ${g.batch}' : ''}';
     }
     _placeLine({...blankLine(), 'productId': newMedicine, 'name': '', 'barcode': g.gtin, ...extra});
@@ -217,12 +224,12 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
   }
 
   Future<void> _choose(Line l, PharmacyData d) async {
-    final picked = await showDialog<Object>(context: context, builder: (_) => _MedicinePicker(data: d, hint: (l['read'] as Map?)?['name'] as String?));
+    final picked = await showAppDialog<Object>(context: context, builder: (_) => _MedicinePicker(data: d, hint: (l['read'] as Map?)?['name'] as String?));
     if (picked == null) return;
     if (picked is Product) {
-      final next = lineFor(picked, d.settings, extra: {'qty': l['qty'], 'batch': l['batch'], 'expiry': l['expiry'], if (l['read'] != null) 'read': l['read']}, markup: _form!['markup']);
+      final next = lineFor(picked, d.settings, extra: {'qty': l['qty'], 'batch': l['batch'], 'expiry': l['expiry'], if (l['read'] != null) 'read': l['read']});
       final read = l['read'] != null && ('${l['cost'] ?? ''}'.isNotEmpty || '${l['total'] ?? ''}'.isNotEmpty);
-      _replaceLine('${l['key']}', read ? editLine(next, l['by'] == 'total' ? {'total': l['total']} : {'cost': l['cost']}, priceAt(_form!['markup'], d.settings)) : next);
+      _replaceLine('${l['key']}', read ? editLine(next, l['by'] == 'total' ? {'total': l['total']} : {'cost': l['cost']}) : next);
     } else {
       _replaceLine('${l['key']}', {...l, 'productId': newMedicine, 'name': '$picked', 'auto': true});
     }
@@ -262,12 +269,13 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
       await ref.read(deviceValueProvider('stock-cols').notifier).set(jsonEncode(next));
     }
 
-    Widget box(String key, String label, Object? value, ValueChanged<String> on, {double w = 110, bool number = true, String? hint}) => SizedBox(
+    Widget box(String key, String label, Object? value, ValueChanged<String>? on, {double w = 110, bool number = true, String? hint}) => SizedBox(
           width: w,
           child: TextFormField(
             key: Key('$key-$_round'),
             initialValue: '${value ?? ''}',
-            decoration: InputDecoration(labelText: label, hintText: hint, isDense: true),
+            readOnly: on == null, // shown, not typed (the unit cost)
+            decoration: InputDecoration(labelText: label, hintText: hint, isDense: true, filled: on == null),
             keyboardType: number ? const TextInputType.numberWithOptions(decimal: true) : TextInputType.text,
             onChanged: on,
           ),
@@ -276,7 +284,7 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
     Widget cell(String c, Line l, int index) {
       final key = '${l['key']}';
       final p = d.byId['${l['productId']}'];
-      final cost = baseCost(l), price = double.tryParse('${l['price'] ?? ''}') ?? 0;
+      final cost = baseCost(l), price = double.tryParse('${l['price'] ?? ''}') ?? 0, suggested = markupFor(l, f['markup'], s);
       final packs = p == null ? const <Pack>[] : packsOf(p);
       return switch (c) {
         'medicine' => SizedBox(
@@ -351,35 +359,36 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
               Text('= ${formatQty((double.tryParse('${l['qty']}') ?? 0) * (double.tryParse('${l['recvSize']}') ?? 1))} ${(p?.unit.isEmpty ?? true ? unitForForm('${l['form'] ?? ''}') : p!.unit).toLowerCase()}s', style: th.textTheme.bodySmall),
           ]),
         'cost' => Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-            box('cost-$key-${l['by'] == 'total' ? l['total'] : ''}', 'Unit cost', l['cost'], (v) => _setLine(key, {'cost': v}), w: 110),
-            if ((double.tryParse('${l['recvSize'] ?? 1}') ?? 1) > 1) Text('per ${'${l['recvPack'] ?? 'pack'}'.toLowerCase()}', style: th.textTheme.bodySmall),
+            // not typed: line total ÷ quantity (the owner's choice, 2026-11-13)
+            box('cost-$key-${numOrBlank(l['cost'])}', 'Unit cost', numOrBlank(l['cost']), null, w: 110),
+            Text((double.tryParse('${l['recvSize'] ?? 1}') ?? 1) > 1 ? 'per ${'${l['recvPack'] ?? 'pack'}'.toLowerCase()} · total ÷ qty' : 'total ÷ qty', style: th.textTheme.bodySmall),
             if (() {
               final best = (prices['${l['productId']}'] ?? const <SupplierPrice>[]).where((o) => o.supplierId != f['supplierId']).firstOrNull;
               return best != null && cost > 0 && best.cost < cost ? best : null;
             }() case final SupplierPrice best)
               Text('${best.supplierName}: ${s.money(best.cost)}', style: TextStyle(color: Colors.orange.shade800, fontSize: 12)),
           ]),
-        'total' => box('total-$key-${l['by'] == 'unit' ? l['cost'] : ''}', 'Line total', l['total'], (v) => _setLine(key, {'total': v}), w: 120),
+        'total' => box('total-$key-${_totalRev[key] ?? 0}', 'Line total', l['total'], (v) => _setLine(key, {'total': v}), w: 120),
         'price' => Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-            box('price-$key-${l['auto'] == true ? '${l['price']}' : ''}', 'New retail price', l['price'], (v) => _setLine(key, {'price': v}), w: 120,
-                hint: cost > 0 ? formatQty(priceAt(f['markup'], s)(cost)) : null),
+            // typed only: never set from the cost, the total, the quantity, the pack or the markup (the owner's choice, 2026-11-13)
+            // the hint: an emptied box keeps today's price; a medicine with no price shows cost + markup
+            box('price-$key', 'New retail price', l['price'], (v) => _setLine(key, {'price': v}), w: 120,
+                hint: p != null && p.price > 0 ? '${formatQty(p.price)} (kept)' : suggested > 0 ? formatQty(suggested) : null),
             Wrap(spacing: 4, children: [
-              if (l['auto'] == true && l['derived'] == true)
-                Text('auto · +${f['markup']}%', style: th.textTheme.bodySmall)
-              else if (l['auto'] != true)
+              if (l['auto'] != true && p != null && p.price > 0)
                 InkWell(onTap: () {
                   _setLine(key, {'price': ''});
                   setState(() => _round++);
-                }, child: Text(p != null && p.price > 0 ? '↺ undo' : '↺ auto', style: TextStyle(color: th.colorScheme.primary, fontSize: 12))),
-              // the owner's choice: the price is kept; cost + markup is offered, not applied
-              if (p != null && p.price > 0 && cost > 0 && priceAt(f['markup'], s)(cost) != price)
+                }, child: Text('↺ undo', style: TextStyle(color: th.colorScheme.primary, fontSize: 12))),
+              // cost + markup is offered, applied only when tapped
+              if (suggested > 0 && suggested != price)
                 InkWell(
                   key: Key('use-price-$key'),
                   onTap: () {
-                    _setLine(key, {'price': formatQty(priceAt(f['markup'], s)(cost))});
+                    _setLine(key, {'price': formatQty(suggested)});
                     setState(() => _round++);
                   },
-                  child: Text('Use ${s.money(priceAt(f['markup'], s)(cost))}', style: TextStyle(color: th.colorScheme.primary, fontSize: 12)),
+                  child: Text('Use ${s.money(suggested)} (+${f['markup']}%)', style: TextStyle(color: th.colorScheme.primary, fontSize: 12)),
                 ),
               if (cost > 0 && price > 0)
                 Text(price < cost ? 'below cost' : 'margin ${((price - cost) / cost * 100).round()}%', style: TextStyle(fontSize: 12, color: price < cost ? th.colorScheme.error : null)),
@@ -421,7 +430,7 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
       const PageTip(
         id: 'add-stock',
         title: 'Receiving a delivery',
-        text: 'Search or scan each medicine (not in the list? type its name and add it as a new medicine). Type the line total from the invoice: the unit cost and the retail price work themselves out, and you can still change the price. Scan invoice reads a photo for you.',
+        text: 'Search or scan each medicine (not in the list? type its name and add it as a new medicine). Type the line total from the invoice: the unit cost is worked out (total ÷ qty). Type the new retail price: a medicine already in the list keeps its price until you do, and cost + markup is offered. Scan invoice reads a photo for you.',
       ),
       if (f['draftId'] != null && '${f['draftId']}'.isNotEmpty)
         const _Notice('Continuing a saved draft. Receiving it removes it from Drafts; "Save as draft" keeps your changes in it.'),
@@ -483,10 +492,8 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
                       },
                     ),
                   ]),
-                  box('markup', 'Retail markup %', f['markup'], (v) {
-                    final pf = priceAt(v, s);
-                    _set({...f, 'markup': v, 'lines': [for (final l in lines(f)) l['auto'] == true && l['derived'] == true ? editLine(l, {'reprice': true}, pf) : l]});
-                  }, w: 320),
+                  // only the offered cost + markup price follows it; no retail price changes on its own
+                  box('markup', 'Retail markup %', f['markup'], (v) => _set({...f, 'markup': v}), w: 320),
                 ]),
               ),
             ]),
@@ -588,7 +595,7 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
               TextButton(onPressed: () => _set({...f, 'lines': [...lines(f), blankLine()]}), child: const Text('+ Add line')),
               TextButton.icon(onPressed: () => _addNew(''), icon: const Icon(Icons.auto_awesome, size: 16), label: const Text('New medicine')),
               if (cols.join() != stockColumns.keys.join()) TextButton(onPressed: () => ref.read(deviceValueProvider('stock-cols').notifier).set(null), child: const Text('reset column order')),
-              Text('Type the unit cost or the line total from the invoice; the other is worked out. Retail prices follow the markup until you type your own.', style: th.textTheme.bodySmall),
+              Text('Type the line total from the invoice; the unit cost is worked out (total ÷ qty). Retail prices change only when you type one (or tap Use for cost + markup); a new medicine needs one.', style: th.textTheme.bodySmall),
             ]),
             const Divider(),
             Wrap(spacing: 24, runSpacing: 12, alignment: WrapAlignment.spaceBetween, children: [
@@ -625,13 +632,21 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
               CheckboxListTile(value: _checked, onChanged: (v) => setState(() => _checked = v ?? false),
                   title: const Text('I have checked every line against the invoice (medicine, quantity, cost, batch and expiry)')),
             const SizedBox(height: 8),
-            Row(children: [
-              Expanded(child: Text(lines(f).any((l) => '${l['productId'] ?? ''}'.isNotEmpty) ? "Check the lines against the supplier's invoice, then receive." : 'Add the medicines on the invoice.',
-                  style: th.textTheme.bodySmall)),
-              OutlinedButton(onPressed: () => _saveDraft(d), child: const Text('Save as draft')),
-              const SizedBox(width: 8),
-              FilledButton(onPressed: _busy || (scanned != null && !_checked) ? null : () => _receive(d), child: const Text('Receive stock')),
-            ]),
+            () {
+              final note = Text(lines(f).any((l) => '${l['productId'] ?? ''}'.isNotEmpty) ? "Check the lines against the supplier's invoice, then receive." : 'Add the medicines on the invoice.',
+                  style: th.textTheme.bodySmall);
+              final keep = OutlinedButton(onPressed: () => _saveDraft(d), child: const Text('Save as draft'));
+              final receive = FilledButton(onPressed: _busy || (scanned != null && !_checked) ? null : () => _receive(d), child: const Text('Receive stock'));
+              // a phone: the note above, the two buttons sharing the width under it
+              if (MediaQuery.sizeOf(context).width < 600) {
+                return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  note,
+                  const SizedBox(height: 8),
+                  Row(children: [Expanded(child: keep), const SizedBox(width: 8), Expanded(child: receive)]),
+                ]);
+              }
+              return Row(children: [Expanded(child: note), keep, const SizedBox(width: 8), receive]);
+            }(),
           ]),
         ),
       ),

@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import '../../../core/presentation/app_dialog.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -131,7 +132,7 @@ Future<Uint8List> receiptPdf(Sale s, PharmacySettings st) async {
 Future<void> showReceipt(BuildContext context, Map<String, Object?> record, PharmacySettings st, {String phone = '', bool autoPrint = false}) {
   final s = Sale.fromRecord(record);
   if (autoPrint) Printing.layoutPdf(onLayout: (_) => receiptPdf(s, st), name: s.number).ignore();
-  return showDialog<void>(
+  return showAppDialog<void>(
     context: context,
     builder: (c) => _ReceiptDialog(s: s, st: st, phone: phone),
   );

@@ -149,12 +149,23 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
         if (_tab == 'drafts')
           Expanded(child: HeldSalesList(kind: 'sale'))
         else ...[
-          Wrap(spacing: 8, runSpacing: 8, children: [
-            pick('Cashier', _cashier, opts((s) => s.cashier), (v) => _cashier = v),
-            pick('Payment', _payment, opts((s) => s.payment), (v) => _payment = v),
-            pick('Customer', _customer, opts((s) => s.customerName), (v) => _customer = v),
-            pick('Status', _status, const [], (v) => _status = v, labelled: _statuses),
-          ]),
+          () {
+            final filters = [
+              pick('Cashier', _cashier, opts((s) => s.cashier), (v) => _cashier = v),
+              pick('Payment', _payment, opts((s) => s.payment), (v) => _payment = v),
+              pick('Customer', _customer, opts((s) => s.customerName), (v) => _customer = v),
+              pick('Status', _status, const [], (v) => _status = v, labelled: _statuses),
+            ];
+            // a phone: the filters in one row that scrolls sideways, so the list keeps the height
+            if (MediaQuery.sizeOf(context).width < 600) {
+              return SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.only(top: 4),
+                child: Row(children: [for (final (i, f) in filters.indexed) Padding(padding: EdgeInsets.only(right: i == filters.length - 1 ? 0 : 8), child: f)]),
+              );
+            }
+            return Wrap(spacing: 8, runSpacing: 8, children: filters);
+          }(),
           const SizedBox(height: 8),
           Expanded(
             child: sales.isEmpty
@@ -249,7 +260,7 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
     final session = await ref.read(sessionControllerProvider.future);
     if (!mounted) return;
     final changes = editHistory(s);
-    await showDialog<void>(
+    await showAppDialog<void>(
       context: context,
       builder: (c) => AlertDialog(
         title: Text('Receipt ${s.number}'),
@@ -308,7 +319,7 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
   }
 
   Future<void> _edit(Sale s, PharmacySettings st) async {
-    final saved = await showDialog<bool>(context: context, builder: (_) => SaleEditor(sale: s));
+    final saved = await showAppDialog<bool>(context: context, builder: (_) => SaleEditor(sale: s));
     if (saved == true && mounted) say(context, s.raw['imported'] != null ? '${s.number} corrected (record only)' : '${s.number} updated; stock adjusted');
   }
 }
@@ -593,7 +604,7 @@ class _HeldSalesListState extends ConsumerState<HeldSalesList> {
     if (mounted) context.go(wholesale ? '/pos/wholesale' : '/pos');
   }
 
-  Future<void> _view(Draft x, PharmacySettings st) => showDialog<void>(
+  Future<void> _view(Draft x, PharmacySettings st) => showAppDialog<void>(
         context: context,
         builder: (c) => AlertDialog(
           title: Text(x.title),

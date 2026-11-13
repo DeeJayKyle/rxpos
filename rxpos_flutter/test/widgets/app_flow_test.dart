@@ -31,6 +31,7 @@ import 'package:rxpos/core/sound/sounds.dart';
 import 'package:rxpos/core/sync/sync_config.dart';
 import 'package:rxpos/core/presentation/app_shell.dart' show sidebarStartsCollapsedProvider;
 import 'package:rxpos/core/presentation/page_tip.dart';
+import 'package:rxpos/core/presentation/screens.dart';
 import 'package:rxpos/features/sales_pos/application/sale_controller.dart';
 import 'package:rxpos/features/sales_pos/presentation/pos_screen.dart';
 import 'package:rxpos/core/update/app_updates.dart';
@@ -1279,8 +1280,48 @@ void main() {
       await settle(tester, 2);
     }
 
+    TextField field(String label) => tester.widget<TextField>(find.descendant(of: find.widgetWithText(TextFormField, label).first, matching: find.byType(TextField)));
+    void costShown(String v) {
+      expect(field('Unit cost').readOnly, isTrue, reason: 'the unit cost is not typed');
+      expect(field('Unit cost').controller!.text, v, reason: 'line total ÷ qty');
+    }
+
+    // a medicine already in the list starts at its last cost, the total prefilled (cost × qty), its price shown
+    await tester.enterText(find.byKey(const Key('stock-search')), 'Calmex');
+    await settle(tester, 3);
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await settle(tester);
+    costShown('300');
+    expect((field('Line total').controller!.text, field('New retail price').controller!.text), ('300', '500'));
+    await tester.enterText(find.widgetWithText(TextFormField, 'Qty').first, '4');
+    await settle(tester, 2);
+    expect(field('Line total').controller!.text, '1200', reason: 'no total typed: it follows qty × the prefilled cost');
+    costShown('300');
+    await tester.ensureVisible(find.byTooltip('Remove line').first);
+    await settle(tester, 2);
+    await tester.tap(find.byTooltip('Remove line').first);
+    await settle(tester);
+    expect(find.text('Search medicine…'), findsOneWidget, reason: 'back to one empty line');
+
     await fillLine();
     expect(find.text('Calmex 500mg Tabs'), findsWidgets);
+    costShown('280');
+    // a typed total stays when the quantity changes: the cost is worked out again
+    await tester.enterText(find.widgetWithText(TextFormField, 'Qty').first, '20');
+    await settle(tester, 2);
+    costShown('140');
+    expect(field('Line total').controller!.text, '2800');
+    await tester.enterText(find.widgetWithText(TextFormField, 'Qty').first, '10');
+    await settle(tester, 2);
+    costShown('280');
+    // the retail price never changes on its own: not from the cost, the total, the qty or the markup
+    await tester.enterText(find.widgetWithText(TextFormField, 'Retail markup %'), '90');
+    await settle(tester, 2);
+    expect(field('New retail price').controller!.text, '500');
+    expect(find.textContaining('Use UGX'), findsOneWidget, reason: 'cost + markup is only offered');
+    await tester.enterText(find.widgetWithText(TextFormField, 'Retail markup %'), '50');
+    await settle(tester, 2);
+    expect(field('New retail price').controller!.text, '500');
     await tester.ensureVisible(find.text('Save as draft'));
     await settle(tester, 2);
     // save as draft, then carry it on from Purchase History → Drafts
@@ -1293,6 +1334,8 @@ void main() {
     await tester.tap(find.text('Continue'));
     await settle(tester, 20);
     expect(find.textContaining('Continuing a saved draft'), findsOneWidget);
+    costShown('280');
+    expect(field('New retail price').controller!.text, '500');
     await tester.ensureVisible(find.text('Receive stock'));
     await settle(tester, 2);
     await tester.tap(find.text('Receive stock'));
@@ -1317,6 +1360,54 @@ void main() {
     await tester.tap(find.text('Supplier prices'));
     await settle(tester);
     expect(find.text('Buy the same medicine from two suppliers and their prices are compared here.'), findsOneWidget);
+    await done(tester);
+  });
+
+  testWidgets('Add Stock: a new medicine has no retail price until one is typed or "Use" is tapped; receiving asks for it', (tester) async {
+    await tester.runAsync(signedIn);
+    await start(tester);
+    final store = RecordStore(db);
+    await tester.sendKeyEvent(LogicalKeyboardKey.f4);
+    await settle(tester);
+    TextField field(String label) => tester.widget<TextField>(find.descendant(of: find.widgetWithText(TextFormField, label).first, matching: find.byType(TextField)));
+    await tester.enterText(find.byKey(const Key('stock-search')), 'Brandnew Syrup 60ml');
+    await settle(tester, 3);
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await settle(tester);
+    expect(field('New medicine name').controller!.text, 'Brandnew Syrup 60ml');
+    await tester.enterText(find.widgetWithText(TextFormField, 'Qty').first, '4');
+    await settle(tester, 2);
+    await tester.enterText(find.widgetWithText(TextFormField, 'Line total').first, '8000');
+    await settle(tester, 2);
+    await tester.enterText(find.widgetWithText(TextFormField, 'Batch').first, 'N1');
+    await tester.enterText(find.widgetWithText(TextField, 'Expiry').first, '12/2030');
+    await settle(tester, 2);
+    expect((field('Unit cost').readOnly, field('Unit cost').controller!.text), (true, '2000'));
+    expect(field('New retail price').controller!.text, '', reason: 'not worked out from the cost');
+    expect(field('New retail price').decoration?.hintText, isNotNull, reason: 'cost + markup shown as a hint');
+    await tester.enterText(find.widgetWithText(TextFormField, 'Retail markup %'), '80');
+    await settle(tester, 2);
+    expect(field('New retail price').controller!.text, '');
+    await tester.ensureVisible(find.text('Receive stock'));
+    await settle(tester, 2);
+    await tester.tap(find.text('Receive stock'));
+    await settle(tester);
+    expect(find.textContaining('Enter a retail price for Brandnew Syrup 60ml'), findsOneWidget);
+    expect(await tester.runAsync(() => store.rows('purchases')), isEmpty);
+    // tapping "Use" applies cost + markup (only then)
+    final use = find.byWidgetPredicate((w) => w.key is ValueKey<String> && (w.key! as ValueKey<String>).value.startsWith('use-price-'));
+    await tester.ensureVisible(use);
+    await settle(tester, 2);
+    final hint = field('New retail price').decoration!.hintText!;
+    await tester.tap(use);
+    await settle(tester, 2);
+    expect(field('New retail price').controller!.text, hint);
+    await tester.ensureVisible(find.text('Receive stock'));
+    await settle(tester, 2);
+    await tester.tap(find.text('Receive stock'));
+    await settle(tester);
+    final created = (await tester.runAsync(() => store.rows('products')))!.where((p) => p['name'] == 'Brandnew Syrup 60ml').single;
+    expect((created['cost'], created['price']), (2000, num.parse(hint)));
     await done(tester);
   });
 
@@ -1511,6 +1602,140 @@ void main() {
     }
     await open('This device');
     expect(find.text('Notification sounds'), findsOneWidget);
+    await done(tester);
+  });
+
+  String whereNow(WidgetTester tester) => GoRouter.of(tester.element(find.byType(Scaffold).first)).routerDelegate.currentConfiguration.uri.toString();
+
+  testWidgets('every page fits a phone: 360×740 and 400×800, and 360×740 with 1.3× text; no overflow, Back and the tabs on each', (tester) async {
+    await tester.runAsync(signedIn);
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    final problems = <String>[];
+    // every error on every page is noted with the widget that caused it (a page with several shows them all)
+    final errors = <FlutterErrorDetails>[];
+    final report = FlutterError.onError;
+    FlutterError.onError = errors.add;
+    for (final (size, scale) in [(const Size(360, 740), 1.0), (const Size(400, 800), 1.0), (const Size(360, 740), 1.3)]) {
+      tester.platformDispatcher.textScaleFactorTestValue = scale;
+      await start(tester, size: size);
+      for (final s in screens) {
+        GoRouter.of(tester.element(find.byType(Scaffold).first)).go(s.path);
+        await settle(tester);
+        for (final e in [...errors, if (tester.takeException() case final x?) FlutterErrorDetails(exception: x)]) {
+          final where = e.toString().split('\n').where((l) => l.contains('file:///')).take(1).join().replaceAll(RegExp(r'.*/lib/'), 'lib/');
+          problems.add('${s.path} at ${size.width.toInt()}×${size.height.toInt()} × $scale: ${e.exceptionAsString().split('\n').first} $where');
+        }
+        errors.clear();
+        expect(whereNow(tester), s.path, reason: 'the admin opens ${s.path}');
+        expect(find.byKey(const Key('bottom-nav')), findsOneWidget, reason: 'the tab bar on ${s.path}');
+        expect(find.byKey(const Key('nav-back')), s.path == '/' ? findsNothing : findsOneWidget, reason: 'Back on ${s.path}');
+        noSnackBars(tester);
+      }
+      await done(tester);
+    }
+    FlutterError.onError = report;
+    expect(problems, isEmpty);
+  });
+
+  testWidgets('on a phone: the tabs, the Back button, Android\'s back button and the swipe from the left edge', (tester) async {
+    await tester.runAsync(signedIn);
+    var leftApp = 0;
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'SystemNavigator.pop') leftApp++;
+      return null;
+    });
+    addTearDown(() => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, null));
+    Future<void> systemBack() async {
+      await tester.binding.defaultBinaryMessenger.handlePlatformMessage('flutter/navigation', const JSONMethodCodec().encodeMethodCall(const MethodCall('popRoute')), (_) {});
+      await settle(tester);
+    }
+
+    await start(tester, size: const Size(400, 800));
+    expect(whereNow(tester), '/');
+    expect(find.byKey(const Key('nav-back')), findsNothing, reason: 'no Back on the dashboard');
+    // the tabs: Home · Stock · Sell · Sales · More
+    for (final k in ['tab-/', 'tab-/inventory', 'tab-/pos', 'tab-/sales']) {
+      expect(find.byKey(ValueKey(k)), findsOneWidget, reason: k);
+    }
+    expect(find.byKey(const Key('tab-more')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('tab-/sales')));
+    await settle(tester);
+    expect(whereNow(tester), '/sales');
+    await tester.tap(find.byKey(const ValueKey('tab-/inventory')));
+    await settle(tester);
+    expect(whereNow(tester), '/inventory');
+    // the Back button: the page before, then the dashboard; the page glides off to the right
+    await tester.tap(find.byKey(const Key('nav-back')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 60));
+    expect(find.byWidgetPredicate((w) => w is FractionalTranslation && w.translation.dx > 0 && w.translation.dx < 1), findsWidgets, reason: 'mid-way through going back');
+    await settle(tester);
+    expect(whereNow(tester), '/sales');
+    await tester.tap(find.byKey(const Key('nav-back')));
+    await settle(tester);
+    expect(whereNow(tester), '/');
+    expect(find.byKey(const Key('nav-back')), findsNothing);
+    // More opens the menu with every page
+    await tester.tap(find.byKey(const Key('tab-more')));
+    await settle(tester);
+    expect(find.byType(Drawer), findsOneWidget);
+    // Android's back button closes the menu first, and stays on the page
+    await systemBack();
+    expect(find.byType(Drawer), findsNothing);
+    expect(whereNow(tester), '/');
+    expect(leftApp, 0);
+    // a page opened from the menu, then Android's back goes back to the dashboard
+    await tester.tap(find.byKey(const Key('tab-more')));
+    await settle(tester);
+    await tester.tap(find.descendant(of: find.byType(Drawer), matching: find.text('Proformas')));
+    await settle(tester);
+    expect(whereNow(tester), '/proformas');
+    // a dialog open: Android's back closes it, the page stays
+    await tester.tap(find.byKey(const Key('search-trigger')));
+    await settle(tester);
+    expect(find.byKey(const Key('palette-input')), findsOneWidget);
+    await systemBack();
+    expect(find.byKey(const Key('palette-input')), findsNothing);
+    expect(whereNow(tester), '/proformas');
+    await systemBack();
+    expect(whereNow(tester), '/');
+    expect(leftApp, 0, reason: 'the app is still open');
+    // on the dashboard Android's back leaves the app
+    await systemBack();
+    expect(leftApp, 1, reason: 'the app is left only from the dashboard');
+    // the edge swipe: a finger from the left edge to the right goes back; the page follows the finger
+    await tester.tap(find.byKey(const ValueKey('tab-/sales')));
+    await settle(tester);
+    expect(whereNow(tester), '/sales');
+    final gesture = await tester.startGesture(const Offset(6, 420));
+    for (var i = 0; i < 6; i++) {
+      await gesture.moveBy(const Offset(25, 0));
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    expect(find.byWidgetPredicate((w) => w is FractionalTranslation && w.translation.dx > .2), findsWidgets, reason: 'the page follows the finger');
+    for (var i = 0; i < 6; i++) {
+      await gesture.moveBy(const Offset(25, 0));
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    await gesture.up();
+    await settle(tester);
+    expect(whereNow(tester), '/', reason: 'swiped back to the dashboard');
+    // a short, slow pull springs back and stays on the page
+    await tester.tap(find.byKey(const ValueKey('tab-/sales')));
+    await settle(tester);
+    await tester.timedDragFrom(const Offset(6, 420), const Offset(60, 0), const Duration(milliseconds: 900));
+    await settle(tester);
+    expect(whereNow(tester), '/sales', reason: 'a short pull is not a swipe back');
+    // a swipe that does not start at the edge is the page's own (never back)
+    await tester.flingFrom(const Offset(120, 420), const Offset(250, 0), 1500);
+    await settle(tester);
+    expect(whereNow(tester), '/sales');
+    // a swipe from the edge on the dashboard opens the menu instead
+    await tester.tap(find.byKey(const ValueKey('tab-/')));
+    await settle(tester);
+    await tester.flingFrom(const Offset(4, 420), const Offset(300, 0), 1500);
+    await settle(tester);
+    expect(find.byType(Drawer), findsOneWidget);
     await done(tester);
   });
 

@@ -23,7 +23,7 @@ typedef MomoPaid = ({Map<String, Object?>? momo, String? txid});
 
 /// Mobile Money: send a payment request to the customer's phone and wait for approval, or record the payment by
 /// its transaction ID. Null when cancelled.
-Future<MomoPaid?> askMomo(BuildContext context, {required double total, required String amount, String phone = ''}) => showDialog<MomoPaid>(
+Future<MomoPaid?> askMomo(BuildContext context, {required double total, required String amount, String phone = ''}) => showAppDialog<MomoPaid>(
   context: context,
   barrierDismissible: false,
   builder: (_) => _MomoDialog(total: total, amount: amount, phone: phone),
@@ -237,7 +237,7 @@ Future<Map<String, Object?>?> askDirections(BuildContext context, CartLine l, Ph
     'notes': [...notes],
     'patient': who.text.trim(),
   };
-  return showDialog<Map<String, Object?>>(
+  return showAppDialog<Map<String, Object?>>(
     context: context,
     builder: (c) => StatefulBuilder(
       builder: (c, set) => AlertDialog(
@@ -321,7 +321,7 @@ Future<Map<String, Object?>?> askDirections(BuildContext context, CartLine l, Ph
 /// Only expired stock is left: sell it anyway? Returns the reason (recorded in the audit log), null when not.
 Future<String?> askExpiredReason(BuildContext context, String name) {
   final why = TextEditingController();
-  return showDialog<String>(
+  return showAppDialog<String>(
     context: context,
     builder: (c) => StatefulBuilder(
       builder: (c, set) => AlertDialog(
@@ -353,7 +353,7 @@ Future<String?> askExpiredReason(BuildContext context, String name) {
 /// told in "Sales to check"), null to go back.
 Future<String?> askCreditReason(BuildContext context, {required String client, required String owed, required String adds, required String limit}) {
   final why = TextEditingController();
-  return showDialog<String>(
+  return showAppDialog<String>(
     context: context,
     builder: (c) => StatefulBuilder(
       builder: (c, set) => AlertDialog(
@@ -383,7 +383,7 @@ Future<String?> askCreditReason(BuildContext context, {required String client, r
 }
 
 /// Drug information for a medicine on the sale (what the pharmacy has on it, and alternatives with the same generic).
-Future<void> showDrugInfo(BuildContext context, Product p, PharmacyData d) => showDialog<void>(
+Future<void> showDrugInfo(BuildContext context, Product p, PharmacyData d) => showAppDialog<void>(
   context: context,
   builder: (c) => AlertDialog(
     title: Text(p.name),
@@ -436,7 +436,7 @@ const posShortcuts = [
   ('?', 'These shortcuts'),
 ];
 
-Future<void> showKeyboardHelp(BuildContext context) => showDialog<void>(
+Future<void> showKeyboardHelp(BuildContext context) => showAppDialog<void>(
   context: context,
   builder: (c) => AlertDialog(
     title: const Text('Keyboard shortcuts'),

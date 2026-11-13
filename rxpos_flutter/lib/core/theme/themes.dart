@@ -251,7 +251,8 @@ ThemeData buildTheme(Palette base, {String accent = '', String surface = 'flat',
     outlineVariant: Color(p.border),
   );
   final glass = tk.glassAlpha != null && tk.hasBackdrop;
-  final radius = tk.radius;
+  // iOS-like grouped cards: rounded at least 14 (designs that are square or nearly so on purpose keep their corners)
+  final radius = tk.radius >= 10 ? math.max(tk.radius, 14.0) : tk.radius;
   // see-through panels over the backdrop: a light veil on deep colours (Sunset), the panel colour elsewhere
   final cardColor = tk.glassAlpha != null
       ? (p.dark && tk.glassAlpha! < .3 ? Colors.white.withValues(alpha: tk.glassAlpha!) : Color(p.surface).withValues(alpha: tk.glassAlpha!))
@@ -322,8 +323,9 @@ ThemeData buildTheme(Palette base, {String accent = '', String surface = 'flat',
     cardTheme: CardThemeData(
       color: cardColor,
       surfaceTintColor: Colors.transparent,
-      elevation: tk.softShadow != null ? 8 : tk.glow != null && !hard ? 2 : switch (surface) { 'clay' => 6, 'skeuomorphism' => 3, 'neumorphism' => 4, _ => 0 },
-      shadowColor: tk.softShadow ?? tk.glow ?? (surface == 'neumorphism' ? Color(p.dark ? 0xFF000000 : 0xFFA3B1C6) : null),
+      // a soft shadow under light cards (iOS), none on dark ones
+      elevation: tk.softShadow != null ? 8 : tk.glow != null && !hard ? 2 : switch (surface) { 'clay' => 6, 'skeuomorphism' => 3, 'neumorphism' => 4, _ => hard || p.dark ? 0 : 1.5 },
+      shadowColor: tk.softShadow ?? tk.glow ?? (surface == 'neumorphism' ? Color(p.dark ? 0xFF000000 : 0xFFA3B1C6) : const Color(0x330F172A)),
       // a hard shadow needs room beside the card
       margin: hard ? EdgeInsets.fromLTRB(4, 4, 4 + tk.hardShadow, 4 + tk.hardShadow) : null,
       shape: shapeOf(radius, side),
@@ -363,7 +365,9 @@ ThemeData buildTheme(Palette base, {String accent = '', String surface = 'flat',
     ),
     textButtonTheme: TextButtonThemeData(style: TextButton.styleFrom(minimumSize: Size(48, tap - 4), shape: shapeOf(tk.controlRadius), textStyle: label, foregroundColor: Color(primaryText))),
     iconButtonTheme: IconButtonThemeData(style: IconButton.styleFrom(minimumSize: Size(tap - 4, tap - 4))),
-    segmentedButtonTheme: SegmentedButtonThemeData(style: SegmentedButton.styleFrom(minimumSize: Size(48, tap - 4), shape: control, side: BorderSide(color: fieldEdge, width: tk.borderWidth))),
+    // segmented controls (iOS): a soft grey groove, the chosen segment lifted in the panel colour
+    segmentedButtonTheme: SegmentedButtonThemeData(style: SegmentedButton.styleFrom(minimumSize: Size(48, tap - 4), shape: control, side: BorderSide(color: fieldEdge, width: tk.borderWidth),
+        backgroundColor: scheme.surfaceContainerHigh.withValues(alpha: .6), selectedBackgroundColor: scheme.primaryContainer, selectedForegroundColor: scheme.onPrimaryContainer)),
     chipTheme: ChipThemeData(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(tk.chipRadius)),
       padding: EdgeInsets.symmetric(horizontal: 8, vertical: ((tap - 36) / 2).clamp(4, 14)),
@@ -384,7 +388,16 @@ ThemeData buildTheme(Palette base, {String accent = '', String surface = 'flat',
       shape: shapeOf(radius + (radius == 0 ? 0 : 4), tk.ink == null ? BorderSide.none : BorderSide(color: tk.ink!, width: tk.borderWidth)),
       titleTextStyle: text.titleLarge?.copyWith(fontSize: 20, color: Color(p.text)),
     ),
-    bottomSheetTheme: BottomSheetThemeData(backgroundColor: Color(p.surface), surfaceTintColor: Colors.transparent, showDragHandle: true),
+    // sheets rise from the bottom with rounded top corners and a grab handle (iOS)
+    bottomSheetTheme: BottomSheetThemeData(backgroundColor: Color(p.surface), surfaceTintColor: Colors.transparent, showDragHandle: true,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(radius == 0 ? 0 : math.max(radius, 16))))),
+    // switches as iOS draws them: a white knob on a track of the brand colour (off: a soft grey), no outline
+    switchTheme: SwitchThemeData(
+      thumbColor: WidgetStateProperty.resolveWith((st) => st.contains(WidgetState.disabled) ? Color(p.dark ? 0xFF6B7280 : 0xFFF1F5F9) : Colors.white),
+      trackColor: WidgetStateProperty.resolveWith((st) => st.contains(WidgetState.selected) ? scheme.primary.withValues(alpha: st.contains(WidgetState.disabled) ? .4 : 1) : scheme.surfaceContainerHighest),
+      trackOutlineColor: WidgetStateProperty.resolveWith((st) => st.contains(WidgetState.selected) ? Colors.transparent : Color(p.borderStrong)),
+      thumbIcon: const WidgetStatePropertyAll(null),
+    ),
     popupMenuTheme: PopupMenuThemeData(color: Color(p.surface), surfaceTintColor: Colors.transparent, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(tk.controlRadius), side: BorderSide(color: tk.ink ?? Color(p.border), width: tk.borderWidth))),
     menuTheme: MenuThemeData(style: MenuStyle(backgroundColor: WidgetStatePropertyAll(Color(p.surface)), surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent))),
     snackBarTheme: SnackBarThemeData(

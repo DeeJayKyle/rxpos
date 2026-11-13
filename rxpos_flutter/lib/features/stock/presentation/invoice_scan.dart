@@ -130,10 +130,10 @@ int toCheck(List<Line> ls) => ls.where((l) {
     }).length;
 
 /// What was read off an invoice → Add Stock lines (medicines matched, packs or units chosen by the nearest cost,
-/// costs and prices worked out) and a summary.
-({Supplier? sup, List<Line> lines, Map<String, Object?> summary, String invoice, String date}) fromScan(Map<String, Object?> r, PharmacyData d, Object? markup, String user) {
+/// the invoice's line total preferred over its unit cost; retail prices are not touched: a medicine already in the list
+/// keeps its price, a new one waits for the person to type one) and a summary.
+({Supplier? sup, List<Line> lines, Map<String, Object?> summary, String invoice, String date}) fromScan(Map<String, Object?> r, PharmacyData d, String user) {
   final s = d.settings;
-  final pf = priceAt(markup, s);
   final sup = matchSupplier('${r['supplier'] ?? ''}', d.suppliers);
   final out = <Line>[];
   for (final it in ((r['items'] as List?) ?? const []).cast<Map>()) {
@@ -145,7 +145,7 @@ int toCheck(List<Line> ls) => ls.where((l) {
       if (it['note'] != null) 'note': it['note'], if (it['page'] != null) 'page': it['page'],
     };
     final base = {'qty': numOrBlank(qty), 'batch': '${it['batch'] ?? ''}', 'expiry': normDate(it['expiry']), 'read': read};
-    final cost = _n(it['unitCost']) > 0 ? _n(it['unitCost']) : (_n(it['lineTotal']) > 0 ? _n(it['lineTotal']) / qty : 0.0);
+    final cost = _n(it['lineTotal']) > 0 ? _n(it['lineTotal']) / qty : _n(it['unitCost']);
     var size = 0.0;
     Pack? k;
     if (p != null && cost > 0 && p.cost > 0) {
@@ -153,9 +153,9 @@ int toCheck(List<Line> ls) => ls.where((l) {
       k = size > 1 ? packsOf(p).where((x) => x.size == size).firstOrNull : null;
     }
     final l = p != null
-        ? lineFor(p, s, extra: {...base, if (size > 0) 'recvPack': k?.name ?? '', if (size > 0) 'recvSize': k != null ? size : 1}, markup: markup)
+        ? lineFor(p, s, extra: {...base, if (size > 0) 'recvPack': k?.name ?? '', if (size > 0) 'recvSize': k != null ? size : 1})
         : {...blankLine(), ...base, 'name': '${it['name'] ?? ''}'};
-    out.add(_n(it['lineTotal']) > 0 && _n(it['unitCost']) == 0 ? editLine(l, {'total': numOrBlank(it['lineTotal'])}, pf) : editLine(l, {'cost': numOrBlank(cost)}, pf));
+    out.add(_n(it['lineTotal']) > 0 ? editLine(l, {'total': numOrBlank(it['lineTotal'])}) : editLine(l, {'cost': numOrBlank(cost)}));
   }
   final summary = <String, Object?>{
     'supplier': r['supplier'], 'supplierMatched': sup != null, 'invoiceNo': r['invoiceNo'], 'total': r['total'], 'linesTotal': r['linesTotal'] ?? 0,
@@ -167,7 +167,7 @@ int toCheck(List<Line> ls) => ls.where((l) {
 
 /// Put what was read on the Add Stock panel (nothing is saved until "Receive stock").
 ({Map<String, Object?> form, Map<String, Object?> summary}) applyScan(Map<String, Object?> r, Map<String, Object?> form, PharmacyData d, {String user = ''}) {
-  final x = fromScan(r, d, form['markup'], user);
+  final x = fromScan(r, d, user);
   final keep = lines(form).where((l) => '${l['productId'] ?? ''}'.isNotEmpty).toList();
   return (
     form: {
@@ -184,7 +184,7 @@ Future<List<Map<String, Object?>>> scansToDrafts(RecordStore store, List<({Map<S
   final recs = [
     for (final x in results)
       () {
-        final f = fromScan(x.r, d, d.settings.retailMarkup, userName);
+        final f = fromScan(x.r, d, userName);
         final form = {...blankForm(d.settings), 'supplierId': f.sup?.id ?? '', 'invoice': f.invoice, 'date': f.date.isEmpty ? today() : f.date, 'lines': f.lines};
         final sum = f.lines.fold<double>(0, (a, l) => a + ('${l['productId']}'.isNotEmpty ? lineTotal(l) : _n(l['total'])));
         return deliveryDraft(form, id: uid(), userId: userId, userName: userName, branchId: d.branch, supplierName: f.sup?.name ?? '${x.r['supplier'] ?? ''}', total: sum,
@@ -206,7 +206,7 @@ Future<List<Map<String, Object?>>> scansToDrafts(RecordStore store, List<({Map<S
 typedef ScanOutcome = ({bool drafts, Map<String, Object?>? result, List<String> pagePaths, List<String> pageImages});
 
 /// The scanner: choose photos or PDFs (one or more invoices, each with its pages), then read them.
-Future<ScanOutcome?> scanInvoices(BuildContext context, WidgetRef ref) => showDialog<ScanOutcome>(context: context, barrierDismissible: false, builder: (_) => const _Scanner());
+Future<ScanOutcome?> scanInvoices(BuildContext context, WidgetRef ref) => showAppDialog<ScanOutcome>(context: context, barrierDismissible: false, builder: (_) => const _Scanner());
 
 class _Invoice {
   _Invoice(this.pages, {this.note = ''});
@@ -405,7 +405,7 @@ class ScanNotice extends StatelessWidget {
             Wrap(spacing: 6, children: [
               for (final (n, src) in images.indexed)
                 InkWell(
-                  onTap: () => showDialog<void>(context: context, builder: (_) => Dialog(child: InteractiveViewer(child: Image.memory(dataUrlBytes(src))))),
+                  onTap: () => showAppDialog<void>(context: context, builder: (_) => Dialog(child: InteractiveViewer(child: Image.memory(dataUrlBytes(src))))),
                   child: Tooltip(message: 'Page ${n + 1}: open to compare', child: Image.memory(dataUrlBytes(src), height: 70)),
                 ),
             ]),

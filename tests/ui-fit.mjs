@@ -112,6 +112,76 @@ const charge = await P.evaluate(() => {
 check('phone till: Charge is fully on screen and nothing covers it', charge.found && charge.inside && charge.top, JSON.stringify(charge));
 await P.screenshot({ path: path.join(out, 'phone-pos-docked.png') });
 
+// every page the admin can open (each one in the menu, and the owner console), at both phone sizes: nothing runs off
+// the side, and the top bar has Back on every page but the dashboard
+const routes = await P.evaluate(() => [...new Set([...document.querySelectorAll('.sidebar nav a[href]')].map((a) => a.getAttribute('href').replace(/^#/, '')))]);
+check('the menu lists the admin\'s pages', routes.length >= 30, routes.length);
+const backShown = () => P.evaluate(() => { const b = document.querySelector('.topbar .back-btn'); if (!b) return null; const r = b.getBoundingClientRect(); return r.width >= 40 && r.height >= 40 && r.left >= 0; });
+for (const [tag, vp] of [['phone', { width: 390, height: 844, isMobile: true, hasTouch: true }], ['small-phone', { width: 360, height: 740, isMobile: true, hasTouch: true }]]) {
+  await P.setViewport(vp); await P.reload({ waitUntil: 'networkidle2' }); await wait(1200);
+  const bad = [], noBack = [];
+  for (const r of routes) {
+    await P.goto(base + '/' + slug + '#' + r, { waitUntil: 'networkidle2' }); await wait(700);
+    await P.keyboard.press('Escape'); await closePopups(); await wait(150);
+    const ok = await P.evaluate(() => !!document.querySelector('.page, .pos') && !/Something went wrong/i.test(document.body.innerText));
+    const o = await overflow();
+    if (!ok || o.page > 1 || o.out.length) bad.push(`${r}: ${ok ? '' : 'did not render '}+${o.page}px ${o.out.join(', ')}`);
+    if (!!(await backShown()) !== (r !== '/')) noBack.push(r);
+    await P.screenshot({ path: path.join(out, `${tag}-all${r.replace(/\//g, '_') || '_home'}.png`) });
+  }
+  check(`${tag}: all ${routes.length} pages render and fit the width`, !bad.length, bad.join(' | '));
+  check(`${tag}: Back is in the top bar on every page but the dashboard`, !noBack.length, noBack.join(', '));
+  // an open form: Add medicine is a sheet that fits the screen, its title bar and Save in view
+  await P.goto(base + '/' + slug + '#/medicines', { waitUntil: 'networkidle2' }); await wait(800);
+  await P.evaluate(() => [...document.querySelectorAll('.page button')].find((x) => /Add medicine/i.test(x.textContent))?.click()); await wait(700);
+  const sheet = await P.evaluate(() => {
+    const m = document.querySelector('.modal'); if (!m) return { found: false };
+    const r = m.getBoundingClientRect(), W = document.documentElement.clientWidth, H = innerHeight;
+    const save = [...m.querySelectorAll('button')].find((x) => /^Save/.test(x.textContent.trim()));
+    const s = save?.getBoundingClientRect(), head = m.querySelector('.modal-head').getBoundingClientRect();
+    const wide = [...m.querySelectorAll('*')].filter((e) => e.getBoundingClientRect().right > W + 1).length;
+    return { found: true, fits: r.left >= -1 && r.right <= W + 1 && r.top >= -1 && r.bottom <= H + 1, wide, save: !!s && s.bottom <= H + 1 && s.top >= 0, head: head.top >= -1 };
+  });
+  check(`${tag}: Add medicine opens as a sheet that fits the screen, Save in view`, sheet.found && sheet.fits && !sheet.wide && sheet.save && sheet.head, JSON.stringify(sheet));
+  await P.screenshot({ path: path.join(out, `${tag}-sheet-add-medicine.png`) });
+  await P.keyboard.press('Escape'); await wait(400);
+}
+// owner console (web): fits a phone too
+await P.goto(base + '/' + slug + '#/owner', { waitUntil: 'networkidle2' }); await wait(1200);
+const ownerFit = await P.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+check('small-phone: owner console fits the width', ownerFit <= 1, `+${ownerFit}px`);
+await P.screenshot({ path: path.join(out, 'small-phone-owner.png') });
+
+// Back and swipe-back on a phone: Stock from the tab bar, then Back returns to the dashboard; again, then a swipe from
+// the left edge does the same; a swipe that starts mid-screen does nothing
+// (the owner page may still be fetching Google's sign-in script, which can hang where it is blocked: wait for the page, not the network)
+await P.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true }); await P.goto(base + '/' + slug + '#/', { waitUntil: 'domcontentloaded' }); await wait(2000);
+const hash = () => P.evaluate(() => location.hash);
+const tabTo = async (label) => { await P.evaluate((l) => [...document.querySelectorAll('.bottom-nav a')].find((a) => a.textContent.trim() === l).click(), label); await wait(700); };
+await tabTo('Stock');
+check('phone: the Stock tab opens Inventory', (await hash()) === '#/inventory', await hash());
+await P.tap('.topbar .back-btn'); await wait(700);
+check('phone: Back returns to the dashboard', (await hash()) === '#/', await hash());
+check('phone: the dashboard has the menu button instead of Back', await P.evaluate(() => !document.querySelector('.topbar .back-btn') && !!document.querySelector('.topbar .menu-btn')));
+const swipe = async (x0, x1, y = 420) => {
+  await P.touchscreen.touchStart(x0, y);
+  for (let i = 1; i <= 8; i++) { await P.touchscreen.touchMove(x0 + ((x1 - x0) * i) / 8, y + i); await wait(16); }
+  await P.touchscreen.touchEnd(); await wait(900);
+};
+await tabTo('Sales');
+await swipe(180, 380);
+check('phone: a swipe that starts mid-screen does not go back', (await hash()) === '#/sales', await hash());
+const moved = await P.evaluate(async () => { const m = document.querySelector('main.content'); return getComputedStyle(m).left; });
+check('phone: the page is back in place after a short swipe', moved === 'auto' || moved === '0px', moved);
+await swipe(6, 330);
+check('phone: swiping from the left edge goes back', (await hash()) === '#/', await hash());
+check('phone: the page is in place after swiping back', await P.evaluate(() => { const m = document.querySelector('main.content'); return m.getBoundingClientRect().left <= 1 && !m.style.left && !document.documentElement.classList.contains('page-swiping'); }));
+// opened directly (no history in the app): Back goes to the dashboard
+await P.goto(base + '/' + slug + '#/expiry', { waitUntil: 'networkidle2' }); await P.reload({ waitUntil: 'networkidle2' }); await wait(1200);
+await P.evaluate(() => history.replaceState({ ...history.state, idx: 0 }, ''));
+await P.tap('.topbar .back-btn'); await wait(700);
+check('phone: Back on a page opened directly goes to the dashboard', (await hash()) === '#/', await hash());
+
 check('no page errors', errors.length === 0, errors.slice(0, 3).join(' | '));
 await b.close();
 await owner('/tenants/' + tid + '/delete', { confirm: slug });

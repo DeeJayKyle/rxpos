@@ -271,7 +271,8 @@ function GoogleReset({ url, code, slug, onDone }) {
         if (pwRef.current.length < 8) { setErr('Type your new password (8+ characters) first, then press the Google button.'); return; }
         try { const j = await resetWithGoogle(url, { credential, tenant: code || slug || undefined, password: pwRef.current }); onDone(j.email); } catch (e) { setErr(e.message); }
       } });
-      window.google.accounts.id.renderButton(ref.current, { theme: 'outline', size: 'large', text: 'continue_with', width: 280 });
+      // as wide as the card allows (Google draws it at a fixed width: 280 px ran off a small phone's screen)
+      window.google.accounts.id.renderButton(ref.current, { theme: 'outline', size: 'large', text: 'continue_with', width: Math.max(200, Math.min(280, ref.current.clientWidth || 280)) });
     };
     if (window.google?.accounts?.id) { render(); return; }
     const sc = document.createElement('script'); sc.src = 'https://accounts.google.com/gsi/client'; sc.async = true; sc.onload = render; document.head.appendChild(sc);

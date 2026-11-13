@@ -46,8 +46,9 @@ await setVal(`${row(1)} select[aria-label="Received as"]`, '__pack__'); await wa
 await setVal(`${row(1)} input[aria-label="Units per pack"]`, '100');
 await setVal(`${row(1)} input[aria-label="Quantity"]`, '3');
 await setVal(`${row(1)} input[aria-label="Line total"]`, '15000'); await wait(300);
-check('the cost is per box (5,000), the price per capsule (50 + markup)', (await val(`${row(1)} input[aria-label="Unit cost"]`)) === '5000' && Number(await val(`${row(1)} input[aria-label="New retail price"]`)) > 50 && Number(await val(`${row(1)} input[aria-label="New retail price"]`)) < 200,
-  [await val(`${row(1)} input[aria-label="Unit cost"]`), await val(`${row(1)} input[aria-label="New retail price"]`)].join(' / '));
+check('the cost is per box (5,000), worked out from the total; the new medicine\'s price is left to type', (await p.evaluate((x) => document.querySelector(x)?.textContent, `${row(1)} output[aria-label="Unit cost"]`)) === 'UGX 5,000' && (await val(`${row(1)} input[aria-label="New retail price"]`)) === '',
+  [await p.evaluate((x) => document.querySelector(x)?.textContent, `${row(1)} output[aria-label="Unit cost"]`), await val(`${row(1)} input[aria-label="New retail price"]`)].join(' / '));
+await setVal(`${row(1)} input[aria-label="New retail price"]`, '80'); // per capsule
 check('…and it shows the capsules received (= 300)', /= 300 capsules/.test(await p.evaluate((s) => document.querySelector(s)?.innerText, `${row(1)} td[data-label="Qty"]`)));
 await setVal(`${row(1)} input[aria-label="Batch number"]`, 'AM1');
 await setVal(`${row(1)} input[aria-label="Expiry date"]`, 'DEC 2029');
@@ -57,7 +58,7 @@ await setVal(`${row(2)} select[aria-label="Received as"]`, '__pack__'); await wa
 await setVal(`${row(2)} input[aria-label="Pack name"]`, 'Carton');
 await setVal(`${row(2)} input[aria-label="Units per pack"]`, '500');
 await setVal(`${row(2)} input[aria-label="Quantity"]`, '2');
-await setVal(`${row(2)} input[aria-label="Unit cost"]`, '15000');
+await setVal(`${row(2)} input[aria-label="Line total"]`, '30000'); // 2 cartons: 15,000 each
 await setVal(`${row(2)} input[aria-label="Batch number"]`, 'PM1');
 await setVal(`${row(2)} input[aria-label="Expiry date"]`, '06/2030'); await wait(300);
 check('Paramol keeps its retail price (100) when received by the carton', (await val(`${row(2)} input[aria-label="New retail price"]`)) === '100', await val(`${row(2)} input[aria-label="New retail price"]`));
