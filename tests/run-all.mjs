@@ -67,6 +67,7 @@ const SUITES = [
   ['two-step sign-in', 'v19-twostep.mjs', ['.output/v19']],
   ['screen tour', 'ui-tour.mjs', ['.output/tour']],
   ['screens fit phones, large text and long names', 'ui-fit.mjs', ['.output/fit-ui']],
+  ['the till on a phone with large text', 'pos-phone.mjs', ['.output/pos-phone']],
   ['crash reports', 'v20-crash.mjs', ['.output/v20']],
   ['device & chat', 'v21-device-chat.mjs', ['.output/v21']],
   ['idle screen fit', 'idle-fit.mjs', ['.output/fit']],
