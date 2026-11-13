@@ -69,17 +69,17 @@ check('the batch costs 32 per tablet (3,200 a box)', bat && bat.cost === 32, JSO
 // 2. retail till: one tablet
 await go('/pos');
 await p.focus('.pos-products input.search'); await p.keyboard.type('7009001'); await p.keyboard.press('Enter'); await wait(500);
-const retail = await p.evaluate(() => { const l = document.querySelector('.cart-line'); return { by: l?.querySelector('select[aria-label="Sell by"]')?.value ?? '', text: l?.innerText.replace(/\s+/g, ' ') }; });
+const retail = await p.evaluate(() => { const l = document.querySelector('.cart-line'); return { by: l?.querySelector('.unit-toggle [aria-checked=true]')?.dataset.value ?? l?.querySelector('select[aria-label="Sell by"]')?.value ?? '', text: l?.innerText.replace(/\s+/g, ' ') }; });
 check('the retail till sells single tablets by default', retail.by === '' && /UGX 60\b/.test(retail.text || ''), JSON.stringify(retail));
 await p.evaluate(() => [...document.querySelectorAll('button')].find((x) => /Clear all/.test(x.textContent))?.click()); await wait(300);
 
 // 3. wholesale till: a whole box at the box's wholesale price
 await go('/pos/wholesale');
 await p.focus('.pos-products input.search'); await p.keyboard.type('7009001'); await p.keyboard.press('Enter'); await wait(500);
-const whole = await p.evaluate(() => { const l = [...document.querySelectorAll('.cart-line')].pop(); return { by: l?.querySelector('select[aria-label="Sell by"]')?.value ?? '', text: l?.innerText.replace(/\s+/g, ' ') }; });
+const whole = await p.evaluate(() => { const l = [...document.querySelectorAll('.cart-line')].pop(); return { by: l?.querySelector('.unit-toggle [aria-checked=true]')?.dataset.value ?? l?.querySelector('select[aria-label="Sell by"]')?.value ?? '', text: l?.innerText.replace(/\s+/g, ' ') }; });
 check('the wholesale till sells a box by default, at the box\'s wholesale price 4,200', whole.by === 'Box' && /4,200/.test(whole.text || ''), JSON.stringify(whole));
-await p.evaluate(() => { const s = [...document.querySelectorAll('.cart-line')].pop().querySelector('select[aria-label="Sell by"]'); s.value = ''; s.dispatchEvent(new Event('change', { bubbles: true })); }); await wait(300);
-const sw = await p.evaluate(() => [...document.querySelectorAll('.cart-line')].pop()?.querySelector('select[aria-label="Sell by"]')?.value);
+await p.evaluate(() => { const l = [...document.querySelectorAll('.cart-line')].pop(); const t = l.querySelector('.unit-toggle button[data-value=""]'); if (t) { t.click(); return; } const s = l.querySelector('select[aria-label="Sell by"]'); s.value = ''; s.dispatchEvent(new Event('change', { bubbles: true })); }); await wait(300);
+const sw = await p.evaluate(() => { const l = [...document.querySelectorAll('.cart-line')].pop(); return l?.querySelector('.unit-toggle [aria-checked=true]')?.dataset.value ?? l?.querySelector('select[aria-label="Sell by"]')?.value; });
 check('…and the line can be switched to single tablets', sw === '', sw);
 await p.screenshot({ path: path.join(out, 'wholesale.png'), fullPage: true });
 

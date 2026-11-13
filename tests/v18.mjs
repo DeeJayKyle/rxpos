@@ -312,7 +312,7 @@ check('price check lists a medicine below the 20% target margin (Cipro 500 → 5
   const before = (await stockOf())['Ciprofloxacin 500mg tabs'];
   await go('/pos'); await wait(500);
   await A.focus('.pos-products input.search'); await A.keyboard.type('6001003'); await A.keyboard.press('Enter'); await wait(400);
-  await A.evaluate(() => { const l = [...document.querySelectorAll('.cart-line')].find((x) => /Ciprofloxacin/.test(x.innerText)); const s2 = l.querySelector('select[aria-label="Sell by"]'); s2.value = 'Strip'; s2.dispatchEvent(new Event('change', { bubbles: true })); }); await wait(200);
+  await A.evaluate(() => { const l = [...document.querySelectorAll('.cart-line')].find((x) => /Ciprofloxacin/.test(x.innerText)); const t = l.querySelector('.unit-toggle button[data-value="Strip"]'); if (t) { t.click(); return; } const s2 = l.querySelector('select[aria-label="Sell by"]'); s2.value = 'Strip'; s2.dispatchEvent(new Event('change', { bubbles: true })); }); await wait(200);
   await A.evaluate(() => [...document.querySelectorAll('.cart-line')].find((x) => /Ciprofloxacin/.test(x.innerText)).querySelector('button[aria-label=More]').click()); await wait(200);
   const line = await A.evaluate(() => [...document.querySelectorAll('.cart-line')].find((x) => /Ciprofloxacin/.test(x.innerText))?.innerText.replace(/\s+/g, ' '));
   check('POS sells by the strip: 2 strips at 4,800 = 9,600', /UGX 9,600/.test(line || ''), line);

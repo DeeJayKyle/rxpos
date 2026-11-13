@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/database/app_database.dart';
 import '../../auth/application/session_controller.dart';
 import '../application/sync_controller.dart';
+import '../../../widgets/ai_system_doctor_card.dart';
 
 @immutable
 class _Rejected {
@@ -29,6 +30,8 @@ class SyncScreen extends ConsumerWidget {
     final th = Theme.of(context);
     return ListView(padding: const EdgeInsets.all(16), children: [
       Text('Sync & storage', style: th.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
+      const SizedBox(height: 12),
+      const AiSystemDoctorCard(),
       const SizedBox(height: 12),
       Card(
         child: Padding(

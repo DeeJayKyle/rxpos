@@ -1,0 +1,140 @@
+/* RxPOS next-gen look (2026-11-13), loaded after styles.css: Bento grid cards, typography-led minimalism, True OLED
+   Dark (palette "oled") and Daylight Clinical (palette "daylight-clinical"), and the AI / clinical-safety components.
+   Structure only here (radii, hairlines, grids, type); colours come from the theme's variables (src/themes.js), which
+   are checked for WCAG AA. Touch targets are at least 48 × 48 px on touch screens; mouse-and-keyboard counters keep
+   their dense layout. */
+
+:root {
+  --radius-bento: 18px;
+  --radius-bento-lg: 20px;
+  --bento-gap: 16px;
+  --hairline: 1px solid var(--border);
+  --font-display: 'Plus Jakarta Sans', 'Inter Variable', 'Segoe UI Variable', 'Segoe UI', system-ui, -apple-system, Roboto, sans-serif;
+}
+
+/* ---------- True OLED Dark: pitch-black canvas, raised cards, white hairlines, no glow or shadow ---------- */
+:root[data-theme='dark'][data-palette='oled'] {
+  --shadow-sm: none; --shadow: none; --shadow-lg: 0 0 0 1px rgba(255, 255, 255, .10);
+  --surface-raised: #121722;
+  --bg-grad: none;
+}
+:root[data-palette='oled'] body, :root[data-palette='oled'] .main, :root[data-palette='oled'] .app { background: #000000; }
+:root[data-palette='oled'] .sidebar { background: #000000; border-right: 1px solid rgba(255, 255, 255, .10); }
+:root[data-palette='oled'] .topbar, :root[data-palette='oled'] .bottom-nav { background: rgba(0, 0, 0, .86); border-color: rgba(255, 255, 255, .10); }
+:root[data-palette='oled'] .sidebar .nav-title, :root[data-palette='oled'] .sidebar kbd { opacity: 1; color: #9aa4b2; } /* faded white is too dim on pure black (AA) */
+:root[data-palette='oled'] .modal { background: #0b0e14; border: 1px solid rgba(255, 255, 255, .10); }
+
+/* ---------- Daylight Clinical: a calm canvas, pure white cards, the faintest shadow ---------- */
+:root[data-theme='light'][data-palette='daylight-clinical'] {
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, .04); --shadow: 0 8px 24px -14px rgba(15, 23, 42, .14);
+  --bg-grad: none;
+}
+
+/* ---------- typography-led minimalism ---------- */
+.num, .price, .stat .value, .stat strong, .totals, .sheet-total, .line-total, .cart-line .qty input, .kpis .stat, table td.num, .fefo-pill, .ai-reorder .num { font-variant-numeric: tabular-nums; }
+h1, .page-head h1, .pos-title { font-family: var(--font-display); letter-spacing: -.02em; font-weight: 750; }
+.micro, .palette-section { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; font-weight: 700; color: var(--muted); }
+.micro { display: block; line-height: 1.3; }
+.totals .grand, .totals .total, .sheet-total { letter-spacing: -.01em; }
+
+/* ---------- Bento cards: one radius, one hairline, no heavy chrome ---------- */
+.card, .bento-card, .bento-tile { border-radius: var(--radius-bento); border: var(--hairline); }
+.pos-cart.card { border-radius: var(--radius-bento-lg); }
+.modal { border-radius: var(--radius-bento-lg); }
+.card .card { box-shadow: none; } /* no card-in-card shadow stacks */
+
+/* Dashboard: an asymmetric bento: the headline KPI wider than the rest, the main panel wider than the side one */
+.stats { gap: var(--bento-gap); }
+@media (min-width: 1200px) {
+  .stats.kpis { grid-template-columns: 1.5fr repeat(3, minmax(0, 1fr)); }
+  .stats.kpis > :first-child .value, .stats.kpis > :first-child strong { font-size: clamp(26px, 2.2vw, 34px); }
+  .page > .grid2 { grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); }
+}
+.grid2 { gap: var(--bento-gap); }
+
+/* This device (and diagnostics): cards pack densely; the AI System Doctor spans two columns on wide screens */
+.bento-page .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); grid-auto-flow: row dense; gap: var(--bento-gap); align-items: start; }
+@media (min-width: 1100px) { .bento-page .grid-2 > .ai-doctor { grid-column: span 2; } }
+
+/* POS (F2 / F3) and Inventory (F7): tiles as bento cells */
+.product-grid { gap: 14px; }
+.product-grid .product { border-radius: var(--radius-bento); border: var(--hairline); box-shadow: none; }
+.product-grid .product .price { font-weight: 750; font-size: 16px; }
+
+/* ---------- FEFO expiry traffic light ---------- */
+.fefo-pill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: .02em; line-height: 1.5; white-space: nowrap; border: 1px solid transparent; }
+.fefo-pill::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.fefo-ok { color: var(--ok); background: var(--ok-soft); }
+.fefo-soon { color: var(--warn); background: var(--warn-soft); }
+.fefo-short { color: var(--warn); background: var(--warn-soft); border-color: currentColor; }
+.fefo-expired { color: var(--danger); background: var(--danger-soft); border-color: currentColor; }
+
+/* clinical metadata on a medicine: prescription-only, controlled (NDA register) */
+.clinical-pill { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; }
+.clinical-pill.rx { color: var(--primary-text); background: var(--primary-soft); }
+.clinical-pill.cd { color: var(--danger); background: var(--danger-soft); border: 1px solid currentColor; }
+
+/* ---------- inline unit toggle on a cart line: Tablet / Strip / Box ---------- */
+.unit-toggle { display: inline-flex; border: var(--hairline); border-radius: 999px; padding: 2px; gap: 2px; background: var(--surface-2); vertical-align: middle; }
+.unit-toggle button { font: inherit; font-size: 12px; font-weight: 650; border: 0; background: none; color: var(--muted); border-radius: 999px; padding: 4px 10px; min-height: 28px; cursor: pointer; }
+.unit-toggle button.on { background: var(--surface); color: var(--text); box-shadow: 0 0 0 1px var(--border); }
+
+/* ---------- the live clinical safety pill above the cart ---------- */
+.safety-pill { border-radius: 14px; border: 1px solid transparent; margin: 2px 0 6px; overflow: hidden; }
+.safety-pill-head { display: flex; align-items: center; gap: 8px; width: 100%; font: inherit; font-size: 13px; font-weight: 650; text-align: left; border: 0; background: none; color: inherit; padding: 8px 12px; min-height: 40px; cursor: pointer; }
+.safety-pill-head:disabled { cursor: default; }
+.safety-pill-head .grow { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.safety-pill .flip { transform: rotate(180deg); }
+.safety-pill.lvl-ok { color: var(--ok); background: var(--ok-soft); }
+.safety-pill.lvl-caution { color: var(--warn); background: var(--warn-soft); border-color: currentColor; }
+.safety-pill.lvl-major { color: var(--danger); background: var(--danger-soft); border-color: currentColor; }
+.safety-list { list-style: none; margin: 0; padding: 0 12px 10px; display: grid; gap: 8px; color: var(--text); font-size: 13px; }
+.safety-list li { background: var(--surface); border: var(--hairline); border-radius: 12px; padding: 8px 10px; }
+.safety-list li.lvl-major .micro { color: var(--danger); }
+.safety-list li.lvl-caution .micro { color: var(--warn); }
+
+/* ---------- AI omnibar ---------- */
+.ai-omnibar { border-radius: var(--radius-bento-lg); max-width: 680px; }
+.ai-omnibar .ai-mark { color: var(--primary-text); flex-shrink: 0; }
+.ai-omnibar .palette-item.ai-row svg { color: var(--primary-text); }
+.ai-omnibar .palette-item:disabled { opacity: .7; cursor: default; }
+.ai-answer { margin: 10px 12px 4px; padding: 12px 14px; border-radius: 14px; background: var(--surface-2); border: var(--hairline); font-size: 14px; display: grid; gap: 10px; }
+.ai-answer .ai-text { margin: 0; white-space: pre-line; line-height: 1.5; }
+.ai-reorder ul { list-style: none; padding: 0; margin: 4px 0 8px; display: grid; gap: 4px; }
+.ai-reorder li { display: flex; justify-content: space-between; gap: 12px; }
+
+/* ---------- vision scanner ---------- */
+.ai-scanner { display: grid; gap: 12px; }
+.drop-zone { border: 2px dashed var(--border-strong); border-radius: var(--radius-bento); padding: 28px 18px; text-align: center; display: grid; gap: 10px; justify-items: center; transition: border-color .15s, background .15s; }
+.drop-zone.over { border-color: var(--primary); background: var(--primary-soft); }
+.drop-zone p { margin: 0; }
+.row.center { justify-content: center; }
+.row.end { justify-content: flex-end; }
+.ai-lines { display: grid; gap: 10px; max-height: 58vh; overflow-y: auto; }
+.ai-line { display: flex; gap: 10px; align-items: flex-start; padding: 12px; background: var(--surface); }
+.ai-line.off { opacity: .55; }
+.ai-line select { width: 100%; margin: 4px 0 8px; }
+.ai-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; align-items: end; }
+.ai-fields label { display: grid; gap: 2px; }
+.ai-fields input, .ai-fields select { width: 100%; min-width: 0; }
+
+/* ---------- AI System Doctor ---------- */
+.ai-doctor { display: grid; gap: 12px; align-content: start; }
+.ai-doctor h3 { margin: 0; }
+.ai-doctor > .btn { justify-self: start; }
+.doctor-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(210px, 100%), 1fr)); gap: 10px; }
+.doctor-actions .btn { justify-content: flex-start; }
+
+/* the prescription scan button beside the camera on the till */
+.rx-scan-btn span { font-weight: 650; }
+@media (max-width: 600px) { .rx-scan-btn span { display: none; } }
+
+/* ---------- touch screens: 48 × 48 px targets ---------- */
+@media (pointer: coarse) {
+  .btn, .chip, .seg button, .palette-item, .icon-btn, .unit-toggle button, .safety-pill-head, .doctor-actions .btn, .drop-zone .btn { min-height: 48px; }
+  .icon-btn { min-width: 48px; }
+  .unit-toggle button { padding: 6px 14px; }
+}
+
+/* all clear: the safety badge beside "Current sale" */
+.safety-badge { display: inline-flex; align-items: center; gap: 4px; vertical-align: middle; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: .04em; color: var(--ok); background: var(--ok-soft); }

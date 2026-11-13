@@ -81,3 +81,6 @@ export const daySummary = (cfg, send = false) => call(cfg, '/api/summary', { met
 
 /** Two-step sign-in for the signed-in person (worker/twostep.js) */
 export const twoStep = (cfg, path = '', body) => call(cfg, '/api/2fa' + path, { method: body ? 'POST' : 'GET', body });
+// AI copilot (till commands, owner questions, device diagnosis) and vision (invoice / prescription photo → strict JSON)
+export const aiCopilot = (cfg, body) => call(cfg, '/api/ai/copilot', { method: 'POST', body, timeout: 60000 });
+export const aiVision = (cfg, mode, image) => call(cfg, '/api/ai/vision', { method: 'POST', body: { mode, image }, timeout: 120000 });

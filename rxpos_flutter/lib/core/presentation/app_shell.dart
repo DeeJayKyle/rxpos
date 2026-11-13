@@ -115,7 +115,7 @@ class AppShell extends ConsumerWidget {
             ),
           )
         else
-          IconButton(key: const Key('search-trigger'), tooltip: 'Search (Ctrl+K)', onPressed: () => openSearch(context, visible), icon: const Icon(Icons.search)),
+          IconButton(key: const Key('search-trigger'), tooltip: 'Search or ask AI (Ctrl+K)', onPressed: () => openSearch(context, visible), icon: const Icon(Icons.auto_awesome)),
         if (wide) const BranchPill(),
         const SizedBox(width: 6),
         ClockPill(compact: !wide, date: MediaQuery.sizeOf(context).width >= 1280),

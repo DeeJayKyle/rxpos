@@ -79,3 +79,14 @@ List<({String? batchId, double qty, String batch})> removalSplit(List<BatchStock
   }
   return out;
 }
+
+/// The traffic light of an expiry date (src/fefo.js expiryLevel): 'ok' more than 6 months away (green), 'soon' 3–6
+/// months (amber), 'short' under 3 months (amber, stronger), 'expired' (red: blocked from sale), '' with no date.
+String expiryLevel(String expiry, {DateTime? today}) {
+  if (expiry.isEmpty) return '';
+  final e = DateTime.tryParse(expiry);
+  if (e == null) return '';
+  final t = today ?? DateTime.now();
+  final d = DateTime.utc(e.year, e.month, e.day).difference(DateTime.utc(t.year, t.month, t.day)).inDays;
+  return d < 0 ? 'expired' : d < 91 ? 'short' : d <= 183 ? 'soon' : 'ok';
+}

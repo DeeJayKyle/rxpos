@@ -1,12 +1,17 @@
 import { mainPack, packPrice, sellInPacks } from '../packs.js';
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useLocation, Link } from 'react-router-dom';
-import { ShoppingCart, Trash2, X, FileText, Printer, AlertTriangle, ScanBarcode, Smartphone, Loader2, CheckCircle2, UserPlus, Tag, BookMarked, Repeat, PauseCircle, Keyboard, Plus, ClipboardList, MessageCircle, MessageSquareText, Star, Search, Command, LayoutGrid, Users } from 'lucide-react';
+import { ShoppingCart, Trash2, X, ScanText, FileText, Printer, AlertTriangle, ScanBarcode, Smartphone, Loader2, CheckCircle2, UserPlus, Tag, BookMarked, Repeat, PauseCircle, Keyboard, Plus, ClipboardList, MessageCircle, MessageSquareText, Star, Search, Command, LayoutGrid, Users } from 'lucide-react';
 import { DrugInfoPanel, genericKey } from './DrugInfo.jsx';
 import { useStore, uid, now, daysUntil, put, del, move, allocate, audit, normalizePhone, customerBalance, DEFAULT_PAYMENT_METHODS } from '../store.jsx';
 import { overLimit } from '../credit.js';
 import { parseGs1, findByGtin } from '../gs1.js';
-import { preferFirst } from '../fefo.js';
+import { preferFirst, expiryLevel } from '../fefo.js';
+import ClinicalSafetyPill, { SafetyBadge } from '../components/ClinicalSafetyPill.jsx';
+import AiVisionScanner from '../components/AiVisionScanner.jsx';
+import { FefoPill } from '../components/FefoPill.jsx';
+import { takeStaged, onStaged } from '../components/aiStage.js';
+import { matchProduct } from '../invoiceScan.js';
 import { copayOf, schemeChoices } from '../insurance.js';
 import { maxDiscountOf } from '../access.js';
 import { draftsFor, saleDraft } from '../drafts.js';
@@ -100,6 +105,8 @@ export default function POS({ mode = 'retail' }) {
   const [swipe, setSwipe] = useState(null); // { id, x0, y0, dx } while a cart line is being swiped
   const [cdForm, setCdForm] = useState(null); // controlled-drug details being filled in
   const cdRef = useRef(null); // the details for this sale, once given
+  const rxRef = useRef(null); // a scanned prescription's patient and prescriber: fills the register when it is asked
+  const [rxScan, setRxScan] = useState(false);
   // Payment methods come from Settings → Payment methods; their type decides the behaviour
   const methods = (db.settings.paymentMethods?.length ? db.settings.paymentMethods : DEFAULT_PAYMENT_METHODS).filter((m) => m.type !== 'momo' || features.momo !== false);
   const [payment, setPayment] = useState(methods[0]?.name || 'Cash');
@@ -251,6 +258,35 @@ export default function POS({ mode = 'retail' }) {
   };
 
   const setLine = (id, patch) => setCart((c) => c.map((l) => (l.id === id ? { ...l, ...patch } : l)));
+  // Medicines staged from the AI omnibar or a scanned prescription: [{ name | productId, qty, unit }] → cart lines in
+  // the asked unit (a strip or box when the medicine has that pack), never more than is in stock. FEFO batches are
+  // chosen at checkout as for any line. Returns how many were added.
+  const stageLines = (items, meta) => {
+    if (meta && (meta.patient || meta.prescriber)) rxRef.current = { patient: meta.patient || '', prescriber: meta.prescriber || '' };
+    const missed = [];
+    const adds = [];
+    for (const it of items || []) {
+      const p = it.productId ? products.find((x) => x.id === it.productId) : matchProduct(it.name, products);
+      if (!p || p.stock <= 0) { missed.push(it.name || p?.name || '?'); continue; }
+      const k = it.unit && it.unit !== 'tablet' ? packsOf(p.id).find((x) => x.name.toLowerCase().includes(it.unit)) : null;
+      const size = k ? Number(k.size) : 1;
+      const qty = Math.max(1, Math.min(Number(it.qty) || 1, Math.floor(p.stock / size))) * size;
+      if (qty > p.stock) { missed.push(p.name); continue; }
+      const pp = k ? packPrice(k, priceOf(p), wholesale) : priceOf(p);
+      adds.push({ id: p.id, name: p.name, price: k ? pp / size : priceOf(p), cost: p.cost, qty, max: p.stock, rx: p.rx, controlled: !!p.controlled, ...(k ? { pack: { name: k.name, size, price: pp } } : {}) });
+    }
+    if (adds.length) setCart((c) => [...c.filter((l) => !adds.some((a) => a.id === l.id)), ...adds]);
+    if (adds.length) toast(`Added ${adds.length} medicine${adds.length === 1 ? '' : 's'} to the sale${missed.length ? `; not found or out of stock: ${missed.join(', ')}` : ''}`, missed.length ? 'warn' : 'success');
+    else if (missed.length) toast(`Not found or out of stock: ${missed.join(', ')}`, 'warn');
+    return adds.length;
+  };
+  const stageRef = useRef(stageLines);
+  stageRef.current = stageLines;
+  useEffect(() => {
+    const take = () => { for (const x of takeStaged()) stageRef.current(x.items, x.meta); };
+    take();
+    return onStaged(take);
+  }, []);
   // step 21 (src/gs1.js): a scanned pack's 2D code names the medicine and its batch; that batch is sold from first.
   // An expired pack is refused at once. Returns the medicine, or null when the scan names none of this pharmacy's.
   const scanPack = (g) => {
@@ -300,7 +336,7 @@ export default function POS({ mode = 'retail' }) {
   // ---- sales on hold: serve the next customer while one is still deciding, then switch back ----
   const snapshot = () => ({ id: uid(), at: now(), cart, customerId, discount, payment, tendered, insKey, memberNo });
   function loadSale(x) {
-    cdRef.current = null;
+    cdRef.current = null; rxRef.current = null;
     // stock may have moved while the sale was on hold: each line's limit is today's stock
     setCart((x.cart || []).map((l) => { const p = products.find((y) => y.id === l.id); return p ? { ...l, max: p.stock, qty: Math.min(l.qty, Math.max(1, p.stock)) } : l; })); setCustomerId(x.customerId || 'walk-in'); setDiscount(x.discount || 0);
     setPayment(methods.some((m) => m.name === x.payment) ? x.payment : methods[0]?.name || 'Cash'); setTendered(x.tendered || ''); setPicked(new Set()); setCursor(-1);
@@ -426,7 +462,8 @@ export default function POS({ mode = 'retail' }) {
     // controlled drugs: patient, prescriber and prescription go in the register (asked once per sale)
     if (cart.some(isCd) && !cdRef.current) {
       const c = customer && customer.id !== 'walk-in' ? customer : null;
-      return setCdForm({ patient: c?.name || '', idNo: c?.phone || '', prescriber: '', prescriberReg: '', rxNo: '' });
+      const rx = rxRef.current;
+      return setCdForm({ patient: rx?.patient || c?.name || '', idNo: c?.phone || '', prescriber: rx?.prescriber || '', prescriberReg: '', rxNo: '' });
     }
     if (cart.some(isRx) && !cart.some(isCd) && !(await ask({ title: 'Prescription-only medicine', message: 'Confirm that a valid prescription has been checked for the Rx items in this sale.', confirmText: 'Prescription verified' }))) return;
     // step 8: a credit sale over the client's limit: Finance roles go on; others give a reason (audited, flagged)
@@ -638,6 +675,7 @@ export default function POS({ mode = 'retail' }) {
             <SearchBox big value={q} onChange={setQ} placeholder={touch ? "Search medicine or scan barcode…" : "Search medicine or scan barcode…  (F8)"} />
           </div>
           <CameraButton className="btn ghost big cam-btn" onClick={() => setCam(true)} />
+          {features.ai !== false && (can('pos.sell') || can('prescriptions')) && <button type="button" className="btn ghost big rx-scan-btn" title="Scan Prescription (Rx)" onClick={() => setRxScan(true)}><ScanText size={18} /><span>Scan Rx</span></button>}
         </div>
         <div className="chips-row" role="toolbar" aria-label="Filter medicines">
           {[['', 'All'], ['instock', 'In stock'], ['recent', 'Recent'], ['fav', `Favourites${favs.size ? ` · ${favs.size}` : ''}`]].map(([k, label]) => (
@@ -663,10 +701,8 @@ export default function POS({ mode = 'retail' }) {
                   <span className={'small stock-tag ' + (p.stock <= 0 ? 'text-danger out' : p.stock <= (p.reorder || 0) ? 'text-warn low' : 'muted')}>{p.stock <= 0 ? 'Out of stock' : `${formatQty(p.stock)} left`}</span>
                 </div>
                 <div className="tags">
-                  {p.rx && <span className="badge">Rx</span>}
-                  {p.controlled && <span className="badge danger">CD</span>}
-                  {d < 0 && <span className="badge danger">Expired</span>}
-                  {d >= 0 && d <= warn && <span className="badge warn">Exp {d}d</span>}
+                  {p.controlled ? <span className="clinical-pill cd" title="Controlled drug (NDA register)">CD · NDA</span> : p.rx && <span className="clinical-pill rx" title="Prescription only">Rx only</span>}
+                  {p.expiry && p.stock > 0 && <FefoPill level={expiryLevel(p.expiry)} expiry={p.expiry} days={d <= warn ? d : undefined} />}
                   {packsOf(p.id).length > 0 && <span className="badge pack-badge">{packsOf(p.id).map((k) => `1 ${k.name.toLowerCase()} = ${k.size} ${(p.unit || 'unit').toLowerCase()}s`).join(' · ')}</span>}
                 </div>
               </button>
@@ -700,7 +736,7 @@ export default function POS({ mode = 'retail' }) {
         )}
         <div className="pos-ledger">
         <div className="cart-head">
-          <h3>Current sale {items > 0 && <span className="badge bump" key={items}>{items} item{items === 1 ? '' : 's'}</span>}</h3>
+          <h3>Current sale {items > 0 && <span className="badge bump" key={items}>{items} item{items === 1 ? '' : 's'}</span>} <SafetyBadge cart={cart} products={products} customer={customer} /></h3>
           {cart.length > 0 && (
             <div className="row gap cart-tools">
               {cart.length > 1 && <label className="check small" title="Tick every line"><input type="checkbox" checked={picked.size === cart.length} onChange={(e) => setPicked(e.target.checked ? new Set(cart.map((l) => l.id)) : new Set())} /><span>All</span></label>}
@@ -731,6 +767,7 @@ export default function POS({ mode = 'retail' }) {
           </div>
         )}
         {customer?.allergies && <div className="error"><AlertTriangle size={14} /> Allergies: {customer.allergies}</div>}
+        <ClinicalSafetyPill cart={cart} products={products} customer={customer} />
         <div className="cart-lines">
           {cart.map((l) => (
             <div key={l.id} style={swipe?.id === l.id && swipe.dx < 0 ? { transform: `translateX(${swipe.dx}px)`, opacity: Math.max(0.35, 1 + swipe.dx / 220) } : undefined}
@@ -743,7 +780,13 @@ export default function POS({ mode = 'retail' }) {
               <div className="grow"><strong>{l.name}</strong>{l.rx && <span className="badge">Rx</span>}
                 {Number(l.price) < (l.cost || 0) && <small className="text-danger below-cost"> below cost{can('reports') ? ` (${fmt(l.cost)})` : ''}</small>}
                 <small className="muted">
-                  {packsOf(l.id).length > 0 && (
+                  {packsOf(l.id).length > 0 && packsOf(l.id).length <= 2 ? (
+                    <span className="unit-toggle" role="radiogroup" aria-label={`Sell ${l.name} by`}>
+                      {[['', products.find((p) => p.id === l.id)?.unit || 'Unit'], ...packsOf(l.id).map((k) => [k.name, k.name])].map(([v, text]) => (
+                        <button key={v || 'unit'} type="button" role="radio" data-value={v} aria-checked={(l.pack?.name || '') === v} className={(l.pack?.name || '') === v ? 'on' : ''} onClick={() => choosePack(l, v)}>{text}</button>
+                      ))}
+                    </span>
+                  ) : packsOf(l.id).length > 0 && (
                     <select className="pack-select" value={l.pack?.name || ''} onChange={(e) => choosePack(l, e.target.value)} aria-label="Sell by">
                       <option value="">{products.find((p) => p.id === l.id)?.unit || 'Unit'}</option>
                       {packsOf(l.id).map((k) => <option key={k.name} value={k.name}>{k.name} ({k.size})</option>)}
@@ -924,6 +967,7 @@ export default function POS({ mode = 'retail' }) {
         </Modal>
       )}
 
+      {rxScan && <AiVisionScanner mode="prescription" onClose={() => setRxScan(false)} onConfirm={(r) => { stageLines(r.items.map((x) => ({ productId: x.productId, qty: x.qty, unit: x.unit })), r); if (r.patient && customerId === 'walk-in') toast(`Prescription for ${r.patient}: choose or add the client if you keep their records`, 'info'); }} />}
       {cam && (
         <CameraScanner title="Scan items into the sale" onClose={() => { setCam(false); focusSearch(); }} onCode={(code) => {
           const g = parseGs1(code);

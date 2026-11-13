@@ -11,6 +11,7 @@ import { isWeb } from '../platform.js';
 import { THEMES } from '../themes.js';
 import { PHARMACY_FIELDS, pharmacyDefaults } from '../pharmacy-settings.js';
 import { PasswordInput } from '../password.jsx';
+import AiSystemDoctor from '../components/AiSystemDoctor.jsx';
 
 const KEY = 'rxpos-owner-key';
 /** GitHub mark (brand icons are not in lucide) */
@@ -723,6 +724,8 @@ function DeviceErrors({ t, api }) {
   const clear = async (k) => { await api('/tenants/' + t.id + '/errors', { clear: true, ...(k ? { k } : {}) }); load(); };
   if (!list) return <div className="card"><div className="skeleton" /></div>;
   return (
+    <>
+    {list.length > 0 && <AiSystemDoctor remote={() => api('/tenants/' + t.id + '/errors', { diagnose: true })} />}
     <div className="card table-wrap">
       <div className="row between gap"><p className="muted small">Errors on this pharmacy's devices, reported privately to the RxPOS cloud (no sales or patient data). The same error is one row.</p>
         {list.length > 0 && <button className="btn sm ghost" onClick={() => clear()}>Clear all</button>}</div>
@@ -742,5 +745,6 @@ function DeviceErrors({ t, api }) {
         </tbody>
       </table>
     </div>
+    </>
   );
 }

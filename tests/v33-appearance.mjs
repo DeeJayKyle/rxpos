@@ -37,7 +37,7 @@ await setVal(p, 'input[autocomplete=username]', 'lena@test.rx'); await setVal(p,
 await p.evaluate(() => [...document.querySelectorAll('form button')].find((x) => /^Sign in/.test(x.textContent.trim()))?.click());
 await p.waitForSelector('.sidebar', { timeout: 20000 }); await wait(3000);
 
-check('a new device starts on RxPOS Hybrid Light (system is light)', (await html(p)).palette === 'hybrid-light', JSON.stringify(await html(p)));
+check('a new device starts on RxPOS Daylight Clinical (system is light)', (await html(p)).palette === 'daylight-clinical', JSON.stringify(await html(p)));
 
 // ---- dashboard on real data ----
 const tiles = await p.evaluate(() => Object.fromEntries([...document.querySelectorAll('.stat')].map((s) => [s.querySelector('small')?.textContent.trim(), s.querySelector('strong')?.textContent.trim()])));
@@ -54,15 +54,15 @@ await p.screenshot({ path: `${out}/dashboard-light.png` });
 const ok0 = await css(p, '--ok');
 await openMenu(p); await wait(200);
 await pickMode(p, 'Dark'); await wait(300);
-check('Dark switches to RxPOS Hybrid Dark', (await html(p)).palette === 'hybrid-dark' && (await html(p)).theme === 'dark', JSON.stringify(await html(p)));
+check('Dark switches to RxPOS OLED Black', (await html(p)).palette === 'oled' && (await html(p)).theme === 'dark', JSON.stringify(await html(p)));
 await openMenu(p); await wait(200);
 await pickMode(p, 'System'); await wait(300);
-check('System follows the OS (light)', (await html(p)).palette === 'hybrid-light');
+check('System follows the OS (light)', (await html(p)).palette === 'daylight-clinical');
 check('System mode is remembered', (await p.evaluate(() => localStorage.getItem('rxpos-theme-mode'))) === 'system');
 await p.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'dark' }, { name: 'prefers-reduced-motion', value: 'reduce' }]); await wait(400);
-check('System switches live when the OS goes dark', (await html(p)).palette === 'hybrid-dark', JSON.stringify(await html(p)));
+check('System switches live when the OS goes dark', (await html(p)).palette === 'oled', JSON.stringify(await html(p)));
 await p.reload({ waitUntil: 'networkidle2' }); await wait(1500);
-check('System mode survives a reload (dark OS → dark)', (await html(p)).palette === 'hybrid-dark');
+check('System mode survives a reload (dark OS → dark)', (await html(p)).palette === 'oled');
 await p.screenshot({ path: `${out}/dashboard-dark.png` });
 
 // ---- picking a palette leaves System mode ----
@@ -71,7 +71,7 @@ await p.evaluate(() => [...document.querySelectorAll('.theme-item')].find((x) =>
 check('picking a palette applies it and stops following the system', (await html(p)).palette === 'tokyo-night' && (await p.evaluate(() => localStorage.getItem('rxpos-theme-mode'))) === null);
 await openMenu(p); await wait(200);
 await pickMode(p, 'Light'); await wait(300);
-check('Light from a dark palette goes to RxPOS Hybrid Light', (await html(p)).palette === 'hybrid-light');
+check('Light from a dark palette goes to RxPOS Daylight Clinical', (await html(p)).palette === 'daylight-clinical');
 
 // ---- accent presets ----
 const prim0 = await css(p, '--primary');

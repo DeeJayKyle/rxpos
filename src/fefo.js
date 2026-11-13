@@ -49,3 +49,14 @@ export function removalSplit(batches, chosenId, qty) {
   }
   return out;
 }
+
+/**
+ * The traffic light of an expiry date (2026-11-13): 'ok' more than 6 months away (green), 'soon' 3–6 months (amber),
+ * 'short' under 3 months (amber, stronger), 'expired' (red: blocked from sale), '' when there is no date.
+ */
+export function expiryLevel(expiry, today) {
+  if (!expiry) return '';
+  const d = today === undefined ? daysUntil(expiry) : Math.round((Date.parse(expiry) - Date.parse(today)) / 864e5);
+  if (!Number.isFinite(d)) return '';
+  return d < 0 ? 'expired' : d < 91 ? 'short' : d <= 183 ? 'soon' : 'ok';
+}

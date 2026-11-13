@@ -32,8 +32,8 @@ Future<double?> askNumber(BuildContext context, String label, double initial) {
 }
 
 /// The controlled-drugs register entry for this sale (patient, prescriber, prescription).
-Future<ControlledEntry?> askControlled(BuildContext context, {String patient = ''}) {
-  final f = [TextEditingController(text: patient), TextEditingController(), TextEditingController(), TextEditingController(), TextEditingController()];
+Future<ControlledEntry?> askControlled(BuildContext context, {String patient = '', String prescriber = ''}) {
+  final f = [TextEditingController(text: patient), TextEditingController(), TextEditingController(text: prescriber), TextEditingController(), TextEditingController()];
   const labels = ['Patient\'s name', 'Patient ID / phone', 'Prescriber', 'Prescriber registration no.', 'Prescription no.'];
   return showAppDialog<ControlledEntry>(
     context: context,

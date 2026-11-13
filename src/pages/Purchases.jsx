@@ -16,6 +16,7 @@ import { invoicePages, readInvoice, matchProduct, matchSupplier, normDate, pageB
 import { uploadAttachment } from '../attach.jsx';
 import { safeFileUrl } from '../safeurl.js';
 import { CameraButton, CameraScanner } from '../camscan.jsx';
+import AiVisionScanner from '../components/AiVisionScanner.jsx';
 import { deliveryDraft, draftsFor, isOld, toCheck, checkText } from '../drafts.js';
 import DraftsList, { useDraftCount } from './Drafts.jsx';
 import { Link, useNavigate } from 'react-router-dom';
@@ -128,6 +129,17 @@ export function AddStock() {
     setScanned({ ...summary, pages, pagePaths });
     setChecked(false);
     setScanOpen(false);
+  };
+  // Scan Invoice with AI (components/AiVisionScanner.jsx): the checked lines go on the panel like a scanned invoice,
+  // in single units (boxes × units per box, the cost per unit), to be confirmed before "Receive stock"
+  const [aiScan, setAiScan] = useState(false);
+  const applyVision = (lines) => {
+    const items = lines.map((l) => {
+      const p = products.find((x) => x.id === l.productId);
+      const qty = Math.max(1, (Number(l.boxes) || 1) * (Number(l.unitsPerBox) || 1));
+      return { name: p ? p.name : l.name, batch: l.batch, expiry: l.expiry, qty, unitCost: Number(l.unitCostUGX) || 0, lineTotal: qty * (Number(l.unitCostUGX) || 0), unclear: !p };
+    });
+    applyScan({ supplier: '', invoiceNo: '', date: '', total: 0, linesTotal: items.reduce((a, x) => a + x.lineTotal, 0), totalMatches: true, readings: 1, items }, [], []);
   };
   // Several invoices read in one go: each becomes a delivery draft waiting for review (Purchase History → Drafts)
   const saveScanDrafts = async (results) => {
@@ -406,7 +418,10 @@ export function AddStock() {
 
   return (
     <div className="page">
-      <div className="page-head"><h1>Add Stock</h1><button type="button" className="btn ghost" onClick={() => setScanOpen(true)}><ScanText size={16} />Scan invoice</button></div>
+      <div className="page-head"><h1>Add Stock</h1><div className="row gap wrap">
+        <button type="button" className="btn primary" onClick={() => setAiScan(true)}><Sparkles size={16} />Scan Invoice with AI</button>
+        <button type="button" className="btn ghost" onClick={() => setScanOpen(true)}><ScanText size={16} />Scan invoice</button>
+      </div></div>
       {cam && <CameraScanner title="Scan medicines into the delivery" onClose={() => setCam(false)} onCode={(code) => {
         const g = parseGs1(code);
         if (g) { const gp = receivePack(g); if (!gp) setCam(false); return gp ? `${gp.name} added (batch ${g.batch || '—'}, expiry ${g.expiry || '—'})` : 'New product number: type the medicine name'; }
@@ -440,6 +455,7 @@ export function AddStock() {
           </form>
         </Modal>
       )}
+      {aiScan && <AiVisionScanner mode="invoice" onClose={() => setAiScan(false)} onConfirm={applyVision} />}
       {scanOpen && <InvoiceScanner cfg={syncCfg} onClose={() => setScanOpen(false)} onRead={applyScan} onDrafts={saveScanDrafts} />}
       {restored && !scanned && (
         <div className="notice info-notice row between gap wrap">

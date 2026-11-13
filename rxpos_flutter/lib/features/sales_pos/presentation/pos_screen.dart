@@ -35,6 +35,11 @@ import 'pos_dialogs.dart';
 import 'receipt.dart';
 import '../../../core/presentation/page_tip.dart';
 import '../../../core/rules/stock.dart' show mainBranch;
+import '../../../screens/ai_vision_scanner_screen.dart';
+import '../../../theme/rxpos_theme.dart';
+import '../../../widgets/clinical_safety_pill.dart';
+import '../../../widgets/fefo_batch_badge.dart';
+import '../../../widgets/glow_status_chip.dart';
 
 /// The till. Type or scan to add (Enter adds the exact barcode, or the first match); F8 back to the search, F9
 /// charge, Alt+H hold the sale. On a phone the sale opens from the bar at the bottom.
@@ -237,7 +242,8 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     MomoPaid? momo;
     var rx = false;
     if (s.lines.any((l) => l.controlled)) {
-      cd = await askControlled(context, patient: s.customerId == walkIn ? '' : s.customerName);
+      final scanned = rxScanFor[widget.wholesale];
+      cd = await askControlled(context, patient: scanned != null && scanned.patient.isNotEmpty ? scanned.patient : s.customerId == walkIn ? '' : s.customerName, prescriber: scanned?.prescriber ?? '');
       if (cd == null) return;
     } else if (s.lines.any((l) => l.rx)) {
       rx = await confirm(
@@ -282,6 +288,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     try {
       final sale = await _sale.complete(controlled: cd, momo: momo?.momo, rxChecked: rx, creditOver: creditOver);
       if (!mounted) return;
+      rxScanFor.remove(widget.wholesale);
       await showReceipt(context, sale, d.settings, phone: client?.phone ?? '', autoPrint: d.settings.autoPrint);
       _searchFocus.requestFocus();
     } on CartProblem catch (e) {
@@ -460,11 +467,39 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     await ref.read(deviceValueProvider('pos-favs').notifier).set(jsonEncode([...next]));
   }
 
+  /// Phones: the sale as a docked sheet dragged up and down by its handle (DraggableScrollableSheet), 90 % high when
+  /// opened, down to 45 % to see the medicines behind it, or swiped away; lines swipe left to remove.
   void _openSale(Widget sale) => showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
-    builder: (_) => SizedBox(height: MediaQuery.sizeOf(context).height * 0.9, child: sale),
+    backgroundColor: Colors.transparent,
+    builder: (_) => DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: .9,
+      minChildSize: .45,
+      maxChildSize: .97,
+      snap: true,
+      snapSizes: const [.45, .9],
+      builder: (ctx, scroll) => ClipRRect(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(kBentoRadiusLarge)),
+        child: Material(
+          color: Theme.of(ctx).colorScheme.surface,
+          child: Column(children: [
+            // the handle: dragging here moves the sheet (the lines below keep their own scrolling)
+            SingleChildScrollView(
+              controller: scroll,
+              child: SizedBox(
+                height: 28,
+                width: double.infinity,
+                child: Center(child: Container(width: 40, height: 5, decoration: BoxDecoration(color: Theme.of(ctx).colorScheme.outline, borderRadius: BorderRadius.circular(3)))),
+              ),
+            ),
+            Expanded(child: sale),
+          ]),
+        ),
+      ),
+    ),
   );
 }
 
@@ -842,7 +877,8 @@ class _ProductPanel extends StatelessWidget {
                     // card size and spacing come from the design tokens (Target Tap: big cards, Split-Pane: dense)
                     gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
                       maxCrossAxisExtent: tokensOf(context).tileWidth,
-                      mainAxisExtent: MediaQuery.textScalerOf(context).scale(tokensOf(context).tileHeight),
+                      // + a row for the FEFO expiry badge
+                      mainAxisExtent: MediaQuery.textScalerOf(context).scale(tokensOf(context).tileHeight + 24),
                       crossAxisSpacing: tokensOf(context).gap,
                       mainAxisSpacing: tokensOf(context).gap,
                     ),
@@ -852,6 +888,8 @@ class _ProductPanel extends StatelessWidget {
                       final stock = data.stockOf(p.id);
                       final out = stock <= 0;
                       final low = !out && p.reorder > 0 && stock <= p.reorder;
+                      // the batch the till sells first (FEFO): its expiry as a traffic light
+                      final first = data.stock.batchesOf(p.id).where((b) => b.qty > 0 && b.expiry.isNotEmpty).firstOrNull;
                       final tk = tokensOf(context);
                       // Target Tap: a stripe in the colour of the medicine's therapeutic area (the name keeps full contrast)
                       final area = tk.colorCoded ? areaColors[drugClassOf(p).area] : null;
@@ -906,6 +944,7 @@ class _ProductPanel extends StatelessWidget {
                                   overflow: TextOverflow.ellipsis,
                                   style: t.textTheme.bodySmall,
                                 ),
+                                if (first != null) Padding(padding: const EdgeInsets.only(top: 4), child: FefoBatchBadge(expiry: first.expiry, warnDays: data.settings.expiryWarnDays.round())),
                                 const Spacer(),
                                 // the price is never cut: when the stock note doesn't fit beside it, it goes under it
                                 SizedBox(
@@ -925,8 +964,7 @@ class _ProductPanel extends StatelessWidget {
                                         // the brand colour made readable on this card (tertiary), on every look
                                         style: TextStyle(color: t.colorScheme.tertiary, fontWeight: FontWeight.w800),
                                       ),
-                                    if (p.rx) const _Tag('Rx'),
-                                    if (p.controlled) const _Tag('CD'),
+                                    if (p.controlled) const _Tag('CD · NDA', danger: true) else if (p.rx) const _Tag('Rx only'),
                                     Text(
                                       out ? 'Out of stock' : '${formatQty(stock)} left',
                                       maxLines: 1,
@@ -955,19 +993,21 @@ class _ProductPanel extends StatelessWidget {
   }
 }
 
+/// A clinical pill on a medicine: prescription only, or controlled (NDA register) in the danger colour
 class _Tag extends StatelessWidget {
-  const _Tag(this.text);
+  const _Tag(this.text, {this.danger = false});
   final String text;
+  final bool danger;
   @override
-  Widget build(BuildContext context) => Container(
-    margin: const EdgeInsets.only(right: 6),
-    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-    decoration: BoxDecoration(
-      borderRadius: BorderRadius.circular(5),
-      border: Border.all(color: Theme.of(context).dividerColor),
-    ),
-    child: Text(text, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
-  );
+  Widget build(BuildContext context) {
+    final (fg, bg) = statusTone(context, danger ? 'error' : 'info');
+    return Container(
+      margin: const EdgeInsets.only(right: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999), border: danger ? Border.all(color: fg) : null),
+      child: Text(text.toUpperCase(), style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, letterSpacing: .6, color: fg)),
+    );
+  }
 }
 
 /// Phones: the sale's count and total, tap to open it.
@@ -1002,6 +1042,22 @@ class _SaleBar extends ConsumerWidget {
     );
   }
 }
+
+/// Scan Prescription (Rx): the checked medicines go on the sale in the read unit and quantity; the patient and
+/// prescriber fill the controlled-drugs register when it is asked (rxScanFor).
+Future<void> _scanRx(BuildContext context, WidgetRef ref, {bool wholesale = false}) async {
+  final r = await openVisionScanner(context, 'prescription');
+  if (r is! VisionPrescription || !context.mounted) return;
+  final d = await ref.read(pharmacyProvider.future);
+  rxScanFor[wholesale] = (patient: r.patient, prescriber: r.prescriber);
+  final done = await ref.read(saleControllerProvider(wholesale).notifier).stage([
+    for (final it in r.items) (product: d.byId[it.productId], name: it.name, qty: it.qty, unit: it.unit),
+  ]);
+  if (context.mounted) say(context, 'Added ${done.added} medicine${done.added == 1 ? '' : 's'} from the prescription${done.missed.isEmpty ? '' : '; not added: ${done.missed.join(', ')}'}', error: done.missed.isNotEmpty);
+}
+
+/// A scanned prescription's patient and prescriber, per till (retail / wholesale), until the sale is charged
+final rxScanFor = <bool, ({String patient, String prescriber})>{};
 
 class _SalePanel extends ConsumerWidget {
   const _SalePanel({required this.wholesale, required this.data, required this.onCharge, required this.onError, this.advanced = false});
@@ -1047,9 +1103,21 @@ class _SalePanel extends ConsumerWidget {
             if (s.proforma != null) Text('Selling proforma ${s.proforma!['number']}', style: TextStyle(color: th.colorScheme.primary)),
             Row(
               children: [
-                Text('Current sale', style: th.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+                Flexible(child: Text('Current sale', maxLines: 1, overflow: TextOverflow.ellipsis, style: th.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700))),
+                SafetyBadge(productIds: [for (final l in s.lines) l.id], products: data.products, customerName: customer?.name ?? '', allergies: customer?.allergies ?? ''),
                 const Spacer(),
-                if (s.lines.isNotEmpty) TextButton.icon(onPressed: c.clear, icon: const Icon(Icons.delete_outline, size: 18), label: const Text('Clear all')),
+                if (data.features['ai'] != false && (can.contains('pos.sell') || can.contains('prescriptions')))
+                  IconButton(
+                    key: const Key('scan-rx'),
+                    tooltip: 'Scan Prescription (Rx)',
+                    icon: const Icon(Icons.document_scanner_outlined),
+                    onPressed: () => _scanRx(context, ref, wholesale: wholesale),
+                  ),
+                // a phone: the bin alone, so the title, the safety badge and Scan Rx keep their room
+                if (s.lines.isNotEmpty)
+                  narrow
+                      ? IconButton(onPressed: c.clear, icon: const Icon(Icons.delete_outline), tooltip: 'Clear all')
+                      : TextButton.icon(onPressed: c.clear, icon: const Icon(Icons.delete_outline, size: 18), label: const Text('Clear all')),
               ],
             ),
             if (s.lines.isNotEmpty)
@@ -1137,6 +1205,13 @@ class _SalePanel extends ConsumerWidget {
                 child: Text('Allergies: ${customer.allergies}', style: TextStyle(color: th.colorScheme.onErrorContainer)),
               ),
             const Divider(),
+            // the live clinical safety check: allergies, the same medicine twice, interactions
+            ClinicalSafetyPill(
+              productIds: [for (final l in s.lines) l.id],
+              products: data.products,
+              customerName: customer?.name ?? '',
+              allergies: customer?.allergies ?? '',
+            ),
             Expanded(
               child: s.lines.isEmpty
                   ? const Center(child: Text('Tap a medicine or scan a barcode to start a sale'))

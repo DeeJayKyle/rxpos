@@ -22,6 +22,7 @@ import '../../sales_pos/presentation/camera_scan.dart';
 import '../domain/delivery.dart';
 import '../domain/stock_form.dart';
 import 'invoice_scan.dart';
+import '../../../screens/ai_vision_scanner_screen.dart';
 import '../../../core/presentation/page_tip.dart';
 
 /// Add Stock (src/pages/Purchases.jsx AddStock): a delivery laid out like the supplier's invoice. Search or scan each
@@ -409,8 +410,10 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
     }
 
     return ListView(padding: const EdgeInsets.all(16), children: [
-      Row(children: [
-        Expanded(child: Text('Add Stock', style: th.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800))),
+      // the title, then the two scan buttons beside it (or under it on a phone)
+      Wrap(spacing: 8, runSpacing: 8, alignment: WrapAlignment.spaceBetween, crossAxisAlignment: WrapCrossAlignment.center, children: [
+        Text('Add Stock', style: th.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
+        Wrap(spacing: 8, runSpacing: 8, children: [
         OutlinedButton.icon(onPressed: () async {
           final r = await scanInvoices(context, ref);
           if (r == null || !mounted) return;
@@ -426,6 +429,27 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
             _round++;
           });
         }, icon: const Icon(Icons.document_scanner_outlined), label: const Text('Scan invoice')),
+        // Scan Invoice with AI (screens/ai_vision_scanner_screen.dart): the checked lines go on the form like a scanned
+        // invoice, in single units (boxes × units per box, the cost per unit), to be confirmed before receiving
+        FilledButton.icon(key: const Key('ai-scan-invoice'), onPressed: () async {
+          final r = await openVisionScanner(context, 'invoice');
+          if (r is! List<VisionInvoiceLine> || r.isEmpty || !mounted) return;
+          final items = [
+            for (final l in r)
+              {
+                'name': d.byId[l.productId]?.name ?? l.name, 'batch': l.batch, 'expiry': l.expiry, 'qty': l.units, 'unitCost': l.unitCost,
+                'lineTotal': l.units * l.unitCost, 'unclear': l.productId == null,
+              },
+          ];
+          final applied = applyScan({'supplier': '', 'invoiceNo': '', 'date': '', 'total': 0, 'linesTotal': items.fold<double>(0, (a, x) => a + (x['lineTotal'] as num)), 'totalMatches': true, 'readings': 1, 'items': items}, _form!, d);
+          setState(() {
+            _form = applied.form;
+            _scanned = {...applied.summary, 'pagePaths': const <String>[], 'pageImages': const <String>[]};
+            _checked = false;
+            _round++;
+          });
+        }, icon: const Icon(Icons.auto_awesome), label: const Text('Scan Invoice with AI')),
+        ]),
       ]),
       const PageTip(
         id: 'add-stock',

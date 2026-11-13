@@ -26,6 +26,7 @@ import { scheduledReports } from './reports.js';
 import { dailyStockFor, toCsv } from './dailystock.js';
 import { clean as cleanInvoice, finish as finishInvoice } from './invoiceread.js';
 import { INVOICE_PROMPT } from './invoiceprompt.js';
+import { aiRoutes, firstJson, runAi } from './ai-routes.js';
 import { twoStepDdl, twoStepOf, totpCheck, markUsed, twoStepRoutes } from './twostep.js';
 import { tokenSecret, purposeLabel } from './secret.js';
 import { pharmacyChanged, validatePharmacyDefaults } from '../src/pharmacy-settings.js';
@@ -1107,6 +1108,13 @@ async function owner(env, req, url, body) {
     const { results } = await db.prepare('SELECT k, message, stack, page, build, platform, kind, count, devices, first_at, last_at FROM client_errors WHERE tenant = ?1 ORDER BY last_at DESC LIMIT 200').bind(t.id).all();
     return json({ errors: results });
   }
+  // the AI System Doctor on the owner's Device errors tab: the reported errors summarised in plain English
+  if (sub === 'errors' && req.method === 'POST' && body?.diagnose) {
+    if (!env.AI) return json({ error: 'AI is not set up on this cloud.' }, 503);
+    const { results } = await db.prepare('SELECT message, stack, page, build, platform, kind, count, devices, last_at FROM client_errors WHERE tenant = ?1 ORDER BY last_at DESC LIMIT 20').bind(t.id).all();
+    const reportedErrors = results.map((e) => ({ message: e.message, where: String(e.stack || '').split('\n').slice(0, 2).join(' | '), page: e.page, build: e.build, platform: e.platform, kind: e.kind, count: e.count, devices: e.devices, lastSeen: e.last_at }));
+    return (await aiRoutes(env, '/api/ai/copilot', { mode: 'diagnose', telemetry: { reportedErrors } }, async () => true, json));
+  }
   if (sub === 'errors' && req.method === 'POST' && body?.clear) {
     await db.prepare('DELETE FROM client_errors WHERE tenant = ?1' + (body.k ? ' AND k = ?2' : '')).bind(...[t.id, ...(body.k ? [String(body.k)] : [])]).run();
     return json({ ok: true });
@@ -1406,26 +1414,6 @@ const VISION = '@cf/mistralai/mistral-small-3.1-24b-instruct';
 const TEXT = VISION;
 // invoices: two different open models read each page independently and are cross-checked (see /api/ai/invoice)
 const INVOICE_MODELS = [VISION, '@cf/meta/llama-4-scout-17b-16e-instruct'];
-const firstJson = (text, open = '{') => {
-  // Some models already return parsed JSON instead of text
-  if (text && typeof text === 'object') {
-    if (open === '[' && !Array.isArray(text)) return Object.values(text).find(Array.isArray) || [];
-    return text;
-  }
-  text = String(text || '');
-  const close = open === '{' ? '}' : ']';
-  const a = text.indexOf(open), b = text.lastIndexOf(close);
-  if (a < 0 || b < a) throw new Error('The AI answer could not be read. Try again.');
-  return JSON.parse(text.slice(a, b + 1));
-};
-async function runAi(env, model, input) {
-  try { return await env.AI.run(model, input); }
-  catch (e) {
-    // Meta's licence for Llama 3.2 Vision has to be accepted once per account
-    if (/agree/i.test(e.message)) { await env.AI.run(model, { prompt: 'agree' }).catch(() => {}); return env.AI.run(model, input); }
-    throw e;
-  }
-}
 async function ai(env, path, body, who) {
   if (!env.AI) return json({ error: 'AI is not set up on this cloud.' }, 503);
   const lic = JSON.parse(who.tenantRow.features || '{}');
@@ -1470,6 +1458,9 @@ async function ai(env, path, body, who) {
     if (!qs.length) return json({ error: 'The AI did not produce a usable quiz. Try again.' }, 502);
     return json({ questions: qs, model: TEXT });
   }
+  // the copilot (till commands, owner questions, device diagnosis) and vision (invoice / prescription) routes
+  const r = await aiRoutes(env, path, body, (perm) => (who.viaKey ? true : roleCan(env, who.tenant, who.role, perm)), json);
+  if (r) return r;
   return json({ error: 'Not found' }, 404);
 }
 

@@ -8,6 +8,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import 'design_tokens.dart';
+import '../../theme/rxpos_theme.dart';
 
 export 'design_tokens.dart';
 
@@ -26,6 +27,8 @@ class Palette {
 
 const palettes = [
   Palette('light', 'RxPOS Teal', false, bg: 0xFFF3F6F9, surface: 0xFFFFFFFF, surface2: 0xFFF7F9FB, border: 0xFFE4E9EF, borderStrong: 0xFFCFD8E3, text: 0xFF0E1726, muted: 0xFF64748B, primary: 0xFF0D9488, primary2: 0xFF0891B2, sidebar: 0xFF0B1220, sidebar2: 0xFF111A2E),
+  // Daylight Clinical (lib/theme/rxpos_theme.dart): clean canvas, pure white cards, hairlines, clinical teal; the default light
+  Palette('daylight-clinical', 'RxPOS Daylight Clinical', false, bg: 0xFFF5F7FA, surface: 0xFFFFFFFF, surface2: 0xFFF8FAFC, border: 0x140F172A, borderStrong: 0x290F172A, text: 0xFF0F172A, muted: 0xFF5B6678, primary: 0xFF0D9488, primary2: 0xFF0891B2, sidebar: 0xFF0B1220, sidebar2: 0xFF111A2E, flat: true, inspired: 'Typography-led minimalism'),
   Palette('hybrid-light', 'RxPOS Hybrid Light', false, bg: 0xFFF5F8FC, surface: 0xFFFFFFFF, surface2: 0xFFEDF3F7, border: 0xFFE1E8F0, borderStrong: 0xFFCBD6E2, text: 0xFF142638, muted: 0xFF64748B, primary: 0xFF008C58, primary2: 0xFF0E9F96, sidebar: 0xFF07131B, sidebar2: 0xFF0D1C28, flat: true, inspired: 'Adaptive Hybrid'),
   Palette('clinic-blue', 'Clinic Blue', false, bg: 0xFFF2F6FC, surface: 0xFFFFFFFF, surface2: 0xFFF5F8FD, border: 0xFFDFE7F3, borderStrong: 0xFFC6D3E6, text: 0xFF0C1A33, muted: 0xFF5B6B86, primary: 0xFF1D64D8, primary2: 0xFF0EA5E9, sidebar: 0xFF0B1A36, sidebar2: 0xFF12264B),
   Palette('mint', 'Fresh Mint', false, bg: 0xFFF1F8F5, surface: 0xFFFFFFFF, surface2: 0xFFF4FAF7, border: 0xFFDCEBE4, borderStrong: 0xFFC2DBCF, text: 0xFF0F231B, muted: 0xFF5A7468, primary: 0xFF059669, primary2: 0xFF65A30D, sidebar: 0xFF062419, sidebar2: 0xFF0B3324),
@@ -39,6 +42,8 @@ const palettes = [
   Palette('coral', 'Coral Care', false, bg: 0xFFFFF5F4, surface: 0xFFFFFFFF, surface2: 0xFFFFF8F7, border: 0xFFF5DEDB, borderStrong: 0xFFECC7C2, text: 0xFF2B1412, muted: 0xFF80605C, primary: 0xFFE8505B, primary2: 0xFFF59E0B, sidebar: 0xFF2B1215, sidebar2: 0xFF3A1A1E),
   Palette('paper', 'High Contrast Light', false, bg: 0xFFFFFFFF, surface: 0xFFFFFFFF, surface2: 0xFFF3F3F3, border: 0xFF9A9A9A, borderStrong: 0xFF555555, text: 0xFF000000, muted: 0xFF333333, primary: 0xFF0050B3, primary2: 0xFF003A80, sidebar: 0xFF000000, sidebar2: 0xFF1A1A1A, inspired: 'accessibility'),
   Palette('dark', 'RxPOS Night', true, bg: 0xFF070B14, surface: 0xFF0F1624, surface2: 0xFF131C2D, border: 0xFF1E293B, borderStrong: 0xFF2B3A52, text: 0xFFE6EDF7, muted: 0xFF8B9AB3, primary: 0xFF2DD4BF, primary2: 0xFF22D3EE, sidebar: 0xFF050912, sidebar2: 0xFF0B1220),
+  // True OLED Black: pitch-black canvas (no backlight on OLED phones), raised cards, white hairlines, bio-teal; the default dark
+  Palette('oled', 'RxPOS OLED Black', true, bg: 0xFF000000, surface: 0xFF0B0E14, surface2: 0xFF121722, border: 0x1AFFFFFF, borderStrong: 0x2EFFFFFF, text: 0xFFF8FAFC, muted: 0xFF9AA4B2, primary: 0xFF2DD4BF, primary2: 0xFF22D3EE, sidebar: 0xFF000000, sidebar2: 0xFF0B0E14, flat: true, inspired: 'True OLED dark'),
   Palette('hybrid-dark', 'RxPOS Hybrid Dark', true, bg: 0xFF07131B, surface: 0xFF101D2B, surface2: 0xFF162635, border: 0xFF2B3A49, borderStrong: 0xFF3A4C5E, text: 0xFFF3F7FB, muted: 0xFF9BAFC2, primary: 0xFF20C9C3, primary2: 0xFF16A36A, sidebar: 0xFF050E15, sidebar2: 0xFF0A1721, flat: true, inspired: 'Adaptive Hybrid'),
   Palette('tokyo-night', 'Tokyo Night', true, bg: 0xFF16161E, surface: 0xFF1A1B26, surface2: 0xFF1F2335, border: 0xFF292E42, borderStrong: 0xFF3B4261, text: 0xFFC0CAF5, muted: 0xFF7F88B8, primary: 0xFF7AA2F7, primary2: 0xFFBB9AF7, sidebar: 0xFF13131A, sidebar2: 0xFF1A1B26, inspired: 'Tokyo Night'),
   Palette('nord', 'Nord Polar', true, bg: 0xFF242933, surface: 0xFF2E3440, surface2: 0xFF343B49, border: 0xFF3B4252, borderStrong: 0xFF4C566A, text: 0xFFECEFF4, muted: 0xFFA3ADBF, primary: 0xFF88C0D0, primary2: 0xFF81A1C1, sidebar: 0xFF1F232B, sidebar2: 0xFF2A2F3A, inspired: 'Nord'),
@@ -84,9 +89,11 @@ List<Palette> allowedPalettes(Map? branding) {
   return ids.isEmpty ? palettes : palettes.where((p) => ids.contains(p.id)).toList();
 }
 
-/// The palette for a light or dark base: Adaptive Hybrid first, then the owner's default, then the first of that base.
+/// The palette for a light or dark base: OLED Black / Daylight Clinical first, then Adaptive Hybrid, then the owner's
+/// default, then the first of that base (src/themes.js paletteFor).
 String paletteFor(bool dark, [List<Palette> list = palettes, String? preferred]) =>
-    (list.where((t) => t.id == 'hybrid-${dark ? 'dark' : 'light'}').firstOrNull ??
+    (list.where((t) => t.id == (dark ? oledPaletteId : daylightClinicalPaletteId)).firstOrNull ??
+            list.where((t) => t.id == 'hybrid-${dark ? 'dark' : 'light'}').firstOrNull ??
             list.where((t) => t.id == preferred && t.dark == dark).firstOrNull ??
             list.where((t) => t.dark == dark).firstOrNull ??
             list.firstOrNull ??
@@ -221,7 +228,10 @@ DesignTokens surfaceTokens(String surface, Palette p) => switch (surface) {
 ThemeData buildTheme(Palette base, {String accent = '', String surface = 'flat', bool vivid = false, DesignTokens? tokens, bool touch = false,
     String? headingFont, String? bodyFont}) {
   final p = withAccent(base, accent);
-  final tk = (tokens ?? surfaceTokens(surface, p)).onDevice(touch: touch);
+  // the next-gen palettes keep their flat bento cards whatever surface style is chosen (no glow on OLED black)
+  final nextGen = tokens == null && nextGenPalettes.contains(base.id);
+  if (nextGen) surface = 'flat';
+  final tk = (tokens ?? (nextGen ? nextGenTokens(dark: p.dark) : surfaceTokens(surface, p))).onDevice(touch: touch);
   final btn = buttonColours(p.primary, p.primary2, p.dark);
   final muted = readable(p.muted, [p.bg, p.surface, p.surface2], p.dark ? 0xFFFFFFFF : 0xFF000000);
   // brand-coloured text must also read on the backdrop the translucent panels let through
