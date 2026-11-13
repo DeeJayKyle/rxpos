@@ -58,11 +58,14 @@ const newPackChoice = '__pack__';
 /// The price worked out from a cost at a markup (rounded to the pharmacy's price step).
 double Function(double) priceAt(Object? markup, PharmacySettings s) => (cost) => markupPrice(cost, _n(markup), s.priceRound);
 
-/// Apply an edit to a line. Quantity, unit cost and line total stay in step (type whichever the invoice shows).
-/// The retail price of a medicine already in the list is never changed by the invoice: it stays until the person types
-/// a new one (the owner's choice, 2026-11-10; "Use" applies the cost + markup price). A medicine with no price yet (a
-/// new one) gets cost + markup until a price is typed. As src/pages/Purchases.jsx editLine.
-Line editLine(Line l, Map<String, Object?> patch, double Function(double) priceFor) {
+/// Apply an edit to a line. The person types the quantity and the LINE TOTAL; the unit cost is never typed (the owner's
+/// choice, 2026-11-13): it is shown as line total ÷ quantity (per pack when received by a pack). A line starts with the
+/// medicine's last cost, its total prefilled as last cost × quantity; when the quantity changes, a typed total keeps the
+/// total and works out a new cost, otherwise the total follows quantity × that cost. A `cost` patch is only made by the
+/// app itself (a scanned invoice, a change of pack). The retail price is never set automatically: a medicine already
+/// in the list keeps its current price until a new one is typed (clearing it goes back to that price); a new medicine
+/// has none until one is typed. Cost + markup is only offered ("Use …"). As src/pages/Purchases.jsx editLine.
+Line editLine(Line l, Map<String, Object?> patch) {
   final n = {...l, ...patch};
   final qty = _n(n['qty']);
   if (patch.containsKey('total')) {
@@ -78,37 +81,30 @@ Line editLine(Line l, Map<String, Object?> patch, double Function(double) priceF
       n['total'] = numOrBlank(_n(n['cost']) * qty);
     }
   }
-  final priced = _n(n['basePrice']) > 0; // a medicine already in the list, with its price
   if (patch.containsKey('price')) {
-    n['auto'] = _blank(patch['price']); // clearing the price: back to today's price (or, for a new medicine, cost + markup)
-    if (_blank(patch['price']) && priced) {
-      n['price'] = _txt(_n(n['basePrice']));
-      n['derived'] = false;
-    }
-  }
-  final costChanged = patch.containsKey('cost') || patch.containsKey('total') || (patch.containsKey('qty') && n['by'] == 'total');
-  if (n['auto'] == true && !priced && (costChanged || (patch.containsKey('price') && _blank(patch['price'])) || patch['reprice'] == true || patch.containsKey('recvSize')) && baseCost(n) > 0) {
-    n['price'] = _txt(priceFor(baseCost(n)));
-    n['derived'] = true;
+    n['auto'] = _blank(patch['price']); // true: no price typed
+    n['derived'] = false;
+    // cleared: a medicine already in the list goes back to its current price; a new one has none
+    if (_blank(patch['price'])) n['price'] = _n(n['basePrice']) > 0 ? _txt(_n(n['basePrice'])) : '';
   }
   n.remove('reprice');
   return n;
 }
 
-/// A line for a medicine already in the list: its current cost and price, received in its largest pack when the
-/// pharmacy receives in packs (the cost is then per pack).
-Line lineFor(Product p, PharmacySettings s, {Map<String, Object?> extra = const {}, Object? markup}) {
+/// The cost + markup price offered for a line (per selling unit, also when received by the box); 0 without a cost.
+/// Only applied when the person taps "Use …".
+double markupFor(Line l, Object? markup, PharmacySettings s) => baseCost(l) > 0 ? priceAt(markup, s)(baseCost(l)) : 0;
+
+/// A line for a medicine already in the list: its last cost (the line total prefilled as cost × quantity) and its
+/// current price (none when it has no price: the person types one), received in its largest pack when the pharmacy
+/// receives in packs (the cost is then per pack).
+Line lineFor(Product p, PharmacySettings s, {Map<String, Object?> extra = const {}}) {
   final k = receiveInPacks(s) && !extra.containsKey('recvPack') ? mainPack(p) : null;
   final l = <String, Object?>{
     ...blankLine(), 'productId': p.id, 'cost': p.cost > 0 ? numOrBlank(p.cost * (k?.size ?? 1)) : '', 'price': p.price > 0 ? _txt(p.price) : '', 'basePrice': p.price, 'derived': false,
     if (k != null) 'recvPack': k.name, if (k != null) 'recvSize': k.size,
     ...extra,
   };
-  if (_blank(l['price']) && baseCost(l) > 0) {
-    // per unit, also when received by the box
-    l['price'] = _txt(priceAt(markup ?? s.retailMarkup, s)(baseCost(l)));
-    l['derived'] = true;
-  }
   return {...l, 'total': !_blank(l['cost']) ? numOrBlank(_n(l['cost']) * _n(l['qty'])) : ''};
 }
 
