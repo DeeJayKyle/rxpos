@@ -269,8 +269,16 @@ export function Stat({ label, value, sub, tone, icon: Icon, delta, to, state }) 
 }
 
 export function Tabs({ tabs, value, onChange }) {
+  // phones show the tabs as one sideways-scrolling strip: keep the chosen one in view
+  const ref = useRef(null);
+  useEffect(() => {
+    const box = ref.current, on = box?.querySelector('.tab.active');
+    if (!box || !on || box.scrollWidth <= box.clientWidth) return;
+    const l = on.offsetLeft - box.offsetLeft, r = l + on.offsetWidth;
+    if (l < box.scrollLeft || r > box.scrollLeft + box.clientWidth) box.scrollLeft = Math.max(0, l - 24);
+  }, [value]);
   return (
-    <div className="tabs" role="tablist">
+    <div className="tabs" role="tablist" ref={ref}>
       {tabs.map(([k, label]) => <button key={k} role="tab" aria-selected={value === k} className={'tab' + (value === k ? ' active' : '')} onClick={() => onChange(k)}>{label}</button>)}
     </div>
   );

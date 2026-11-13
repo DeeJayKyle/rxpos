@@ -31,6 +31,7 @@ import { setBadge } from './badges.js';
 import { ACTIONS, keyOf, keyMatcher, showKey, typing } from './keymap.js';
 import { deviceSettings, setDevice, onDevice } from './device.js';
 import { Modal } from './ui.jsx';
+import { BackButton, markNav, usePageMotion, useEdgeSwipeBack, useKeyboardFit } from './mobilenav.jsx';
 const OwnerConsole = lazy(() => import('./pages/OwnerConsole.jsx'));
 
 // Pages load on demand so the app opens fast, even on low-end PCs and phones
@@ -447,6 +448,11 @@ function Shell() {
   useEffect(() => setBadge(counts.chat + counts.transfers), [counts.chat, counts.transfers]); // the number on the app / taskbar icon
 
   useEffect(() => setDrawer(false), [location.pathname]);
+  // phones: gliding page transitions, swipe from the left edge to go back, room for the on-screen keyboard
+  const contentRef = useRef(null);
+  usePageMotion(contentRef);
+  useEdgeSwipeBack(contentRef);
+  useKeyboardFit();
   // the keyboard map (src/keymap.js): pages, Ctrl+K, ?, back / forward, pin; the keys can be changed per device
   const [help, setHelp] = useState(false);
   const [nav, setNav] = useState(() => ({ pins: deviceSettings().navPins || [], recent: deviceSettings().navRecent || [] }));
@@ -594,7 +600,7 @@ function Shell() {
       </aside>
       <div className="main">
         <header className="topbar">
-          <button className="icon-btn menu-btn" aria-label="Menu" onClick={() => setDrawer(true)}><Menu size={20} /></button>
+          {here === '/' ? <button className="icon-btn menu-btn" aria-label="Menu" onClick={() => setDrawer(true)}><Menu size={20} /></button> : <BackButton />}
           <button className="search-trigger" onClick={() => setPalette(true)}><Search size={16} /><span>Search medicines, customers, receipts…</span><kbd>Ctrl K</kbd></button>
           {(() => {
             const g = groups.find((x) => x.items.some(([t]) => t === here));
@@ -615,7 +621,7 @@ function Shell() {
           <PremiumToggle theme={theme} setTheme={setTheme} setMode={setThemeMode} />
           <ThemePicker theme={theme} setTheme={setTheme} mode={themeMode} setMode={setThemeMode} accent={accent} setAccent={setAccent} style={surface} setStyle={setSurface} />
         </header>
-        <main className="content">
+        <main className="content" ref={contentRef}>
           <Suspense fallback={<div className="page"><div className="skeleton" /><div className="skeleton" style={{ height: 280 }} /></div>}>
             <Routes>
               {groups.flatMap((g) => g.items).map(([to, , , , , el]) => <Route key={to} path={to} element={el} />)}
@@ -625,10 +631,10 @@ function Shell() {
         </main>
       </div>
       <nav className="bottom-nav" aria-label="Main">
-        <NavLink to="/" end><LayoutDashboard size={20} /><span>Home</span></NavLink>
-        <NavLink to="/inventory"><Boxes size={20} /><span>Stock</span></NavLink>
-        <NavLink to="/pos" className="fab"><span className="fab-icon"><ShoppingCart size={22} /></span><span>Sell</span></NavLink>
-        <NavLink to="/sales"><ReceiptText size={20} /><span>Sales</span></NavLink>
+        <NavLink to="/" end onClick={() => markNav('tab')}><LayoutDashboard size={20} /><span>Home</span></NavLink>
+        <NavLink to="/inventory" onClick={() => markNav('tab')}><Boxes size={20} /><span>Stock</span></NavLink>
+        <NavLink to="/pos" className="fab" onClick={() => markNav('tab')}><span className="fab-icon"><ShoppingCart size={22} /></span><span>Sell</span></NavLink>
+        <NavLink to="/sales" onClick={() => markNav('tab')}><ReceiptText size={20} /><span>Sales</span></NavLink>
         <button onClick={() => setDrawer(true)} aria-expanded={drawer}><Menu size={20} /><span>More</span></button>
       </nav>
       <CommandPalette open={palette} onClose={() => setPalette(false)} pages={pages} commands={[
