@@ -1280,8 +1280,48 @@ void main() {
       await settle(tester, 2);
     }
 
+    TextField field(String label) => tester.widget<TextField>(find.descendant(of: find.widgetWithText(TextFormField, label).first, matching: find.byType(TextField)));
+    void costShown(String v) {
+      expect(field('Unit cost').readOnly, isTrue, reason: 'the unit cost is not typed');
+      expect(field('Unit cost').controller!.text, v, reason: 'line total ÷ qty');
+    }
+
+    // a medicine already in the list starts at its last cost, the total prefilled (cost × qty), its price shown
+    await tester.enterText(find.byKey(const Key('stock-search')), 'Calmex');
+    await settle(tester, 3);
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await settle(tester);
+    costShown('300');
+    expect((field('Line total').controller!.text, field('New retail price').controller!.text), ('300', '500'));
+    await tester.enterText(find.widgetWithText(TextFormField, 'Qty').first, '4');
+    await settle(tester, 2);
+    expect(field('Line total').controller!.text, '1200', reason: 'no total typed: it follows qty × the prefilled cost');
+    costShown('300');
+    await tester.ensureVisible(find.byTooltip('Remove line').first);
+    await settle(tester, 2);
+    await tester.tap(find.byTooltip('Remove line').first);
+    await settle(tester);
+    expect(find.text('Search medicine…'), findsOneWidget, reason: 'back to one empty line');
+
     await fillLine();
     expect(find.text('Calmex 500mg Tabs'), findsWidgets);
+    costShown('280');
+    // a typed total stays when the quantity changes: the cost is worked out again
+    await tester.enterText(find.widgetWithText(TextFormField, 'Qty').first, '20');
+    await settle(tester, 2);
+    costShown('140');
+    expect(field('Line total').controller!.text, '2800');
+    await tester.enterText(find.widgetWithText(TextFormField, 'Qty').first, '10');
+    await settle(tester, 2);
+    costShown('280');
+    // the retail price never changes on its own: not from the cost, the total, the qty or the markup
+    await tester.enterText(find.widgetWithText(TextFormField, 'Retail markup %'), '90');
+    await settle(tester, 2);
+    expect(field('New retail price').controller!.text, '500');
+    expect(find.textContaining('Use UGX'), findsOneWidget, reason: 'cost + markup is only offered');
+    await tester.enterText(find.widgetWithText(TextFormField, 'Retail markup %'), '50');
+    await settle(tester, 2);
+    expect(field('New retail price').controller!.text, '500');
     await tester.ensureVisible(find.text('Save as draft'));
     await settle(tester, 2);
     // save as draft, then carry it on from Purchase History → Drafts
@@ -1294,6 +1334,8 @@ void main() {
     await tester.tap(find.text('Continue'));
     await settle(tester, 20);
     expect(find.textContaining('Continuing a saved draft'), findsOneWidget);
+    costShown('280');
+    expect(field('New retail price').controller!.text, '500');
     await tester.ensureVisible(find.text('Receive stock'));
     await settle(tester, 2);
     await tester.tap(find.text('Receive stock'));
@@ -1318,6 +1360,54 @@ void main() {
     await tester.tap(find.text('Supplier prices'));
     await settle(tester);
     expect(find.text('Buy the same medicine from two suppliers and their prices are compared here.'), findsOneWidget);
+    await done(tester);
+  });
+
+  testWidgets('Add Stock: a new medicine has no retail price until one is typed or "Use" is tapped; receiving asks for it', (tester) async {
+    await tester.runAsync(signedIn);
+    await start(tester);
+    final store = RecordStore(db);
+    await tester.sendKeyEvent(LogicalKeyboardKey.f4);
+    await settle(tester);
+    TextField field(String label) => tester.widget<TextField>(find.descendant(of: find.widgetWithText(TextFormField, label).first, matching: find.byType(TextField)));
+    await tester.enterText(find.byKey(const Key('stock-search')), 'Brandnew Syrup 60ml');
+    await settle(tester, 3);
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await settle(tester);
+    expect(field('New medicine name').controller!.text, 'Brandnew Syrup 60ml');
+    await tester.enterText(find.widgetWithText(TextFormField, 'Qty').first, '4');
+    await settle(tester, 2);
+    await tester.enterText(find.widgetWithText(TextFormField, 'Line total').first, '8000');
+    await settle(tester, 2);
+    await tester.enterText(find.widgetWithText(TextFormField, 'Batch').first, 'N1');
+    await tester.enterText(find.widgetWithText(TextField, 'Expiry').first, '12/2030');
+    await settle(tester, 2);
+    expect((field('Unit cost').readOnly, field('Unit cost').controller!.text), (true, '2000'));
+    expect(field('New retail price').controller!.text, '', reason: 'not worked out from the cost');
+    expect(field('New retail price').decoration?.hintText, isNotNull, reason: 'cost + markup shown as a hint');
+    await tester.enterText(find.widgetWithText(TextFormField, 'Retail markup %'), '80');
+    await settle(tester, 2);
+    expect(field('New retail price').controller!.text, '');
+    await tester.ensureVisible(find.text('Receive stock'));
+    await settle(tester, 2);
+    await tester.tap(find.text('Receive stock'));
+    await settle(tester);
+    expect(find.textContaining('Enter a retail price for Brandnew Syrup 60ml'), findsOneWidget);
+    expect(await tester.runAsync(() => store.rows('purchases')), isEmpty);
+    // tapping "Use" applies cost + markup (only then)
+    final use = find.byWidgetPredicate((w) => w.key is ValueKey<String> && (w.key! as ValueKey<String>).value.startsWith('use-price-'));
+    await tester.ensureVisible(use);
+    await settle(tester, 2);
+    final hint = field('New retail price').decoration!.hintText!;
+    await tester.tap(use);
+    await settle(tester, 2);
+    expect(field('New retail price').controller!.text, hint);
+    await tester.ensureVisible(find.text('Receive stock'));
+    await settle(tester, 2);
+    await tester.tap(find.text('Receive stock'));
+    await settle(tester);
+    final created = (await tester.runAsync(() => store.rows('products')))!.where((p) => p['name'] == 'Brandnew Syrup 60ml').single;
+    expect((created['cost'], created['price']), (2000, num.parse(hint)));
     await done(tester);
   });
 
