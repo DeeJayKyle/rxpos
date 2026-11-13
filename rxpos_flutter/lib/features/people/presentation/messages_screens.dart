@@ -106,7 +106,8 @@ class _RemindersScreenState extends ConsumerState<RemindersScreen> {
       ],
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         if (!smsReady) const Card(child: Padding(padding: EdgeInsets.all(10), child: Text('WhatsApp reminders work now. To send SMS automatically, add your Africa’s Talking keys to the cloud.'))),
-        Row(children: [
+        // the tabs and Select all side by side, or under one another on a phone
+        Wrap(alignment: WrapAlignment.spaceBetween, crossAxisAlignment: WrapCrossAlignment.center, spacing: 8, runSpacing: 4, children: [
           SegmentedButton<String>(
             segments: [ButtonSegment(value: 'refills', label: Text('Refills due (${refills.length})')), ButtonSegment(value: 'debts', label: Text('Debtors (${debts.length})'))],
             selected: {_tab},
@@ -115,10 +116,11 @@ class _RemindersScreenState extends ConsumerState<RemindersScreen> {
               _selected.clear();
             }),
           ),
-          const Spacer(),
           if (rows.isNotEmpty)
-            Checkbox(value: chosen.length == rows.length, onChanged: (on) => setState(() => on == true ? _selected.addAll(rows.map((r) => r.key)) : _selected.clear())),
-          if (rows.isNotEmpty) const Text('Select all'),
+            Row(mainAxisSize: MainAxisSize.min, children: [
+              Checkbox(value: chosen.length == rows.length, onChanged: (on) => setState(() => on == true ? _selected.addAll(rows.map((r) => r.key)) : _selected.clear())),
+              const Text('Select all'),
+            ]),
         ]),
         Expanded(
           child: rows.isEmpty

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -19,10 +20,12 @@ import '../../features/engage/application/popups.dart';
 import '../../features/engage/presentation/spotlight.dart';
 import '../../features/engage/presentation/watchers.dart';
 import 'backdrop.dart';
+import 'edge_swipe.dart';
 import 'hardware_hud.dart';
 import 'keymap.dart';
 import 'keys_host.dart';
 import 'nav.dart';
+import 'nav_history.dart';
 import 'screens.dart';
 import 'theme_menu.dart';
 import '../theme/themes.dart';
@@ -57,6 +60,17 @@ class AppShell extends ConsumerWidget {
       if (!wide) Navigator.of(context).maybePop();
       context.go(p);
     });
+    final history = ref.read(navHistoryProvider);
+    final home = location == '/';
+    // Back: to the previous page of this session (or the dashboard); on every page but the dashboard
+    void back([double from = 0]) => history.back(GoRouter.of(context), from: from);
+    final backButton = IconButton(
+      key: const Key('nav-back'),
+      tooltip: 'Back',
+      onPressed: back,
+      icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+    );
+    final glassBar = Theme.of(context).appBarTheme.backgroundColor ?? Theme.of(context).colorScheme.surface;
     final bar = AppBar(
       // the pharmacy, then where you are (group › page) with the page's pin and the ? sheet; the title area shrinks first
       title: Row(children: [
@@ -72,11 +86,23 @@ class AppShell extends ConsumerWidget {
         ),
         if (wide) ...[const SizedBox(width: 16), Flexible(child: _Crumbs(screens: visible, location: location))],
       ]),
-      automaticallyImplyLeading: !wide,
+      // phones: Back on the left (the menu is the More tab at the bottom); the sidebar's own button on wide screens
+      automaticallyImplyLeading: false,
+      leadingWidth: wide && !home ? 96 : null,
+      titleSpacing: !wide && home ? 16 : null,
       leading: wide
-          ? IconButton(key: const Key('sidebar-toggle'), tooltip: rail ? 'Show the menu (Ctrl+B)' : 'Fold the menu to icons (Ctrl+B)', onPressed: toggleRail,
-              icon: Icon(rail ? Icons.menu : Icons.menu_open))
-          : null,
+          ? Row(mainAxisSize: MainAxisSize.min, children: [
+              const SizedBox(width: 4),
+              IconButton(key: const Key('sidebar-toggle'), tooltip: rail ? 'Show the menu (Ctrl+B)' : 'Fold the menu to icons (Ctrl+B)', onPressed: toggleRail,
+                  icon: Icon(rail ? Icons.menu : Icons.menu_open)),
+              if (!home) backButton,
+            ])
+          : home
+              ? null
+              : backButton,
+      // frosted glass: the bar lets the page's colours through, blurred, under a hairline
+      backgroundColor: glassBar.withValues(alpha: glassBar.a * .82),
+      flexibleSpace: ClipRect(child: BackdropFilter(filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18), child: const SizedBox.expand())),
       actions: [
         if (wide)
           Padding(
@@ -109,7 +135,12 @@ class AppShell extends ConsumerWidget {
     );
     final body = Stack(children: [
       // the Hardware Diagnostic HUD design: a status bar (printer, scanner, connection, alerts) over every page
-      Column(children: [if (tokensOf(context).hud) const HardwareHud(), const OfflineBanner(), Expanded(child: child)]),
+      Column(children: [
+        if (tokensOf(context).hud) const HardwareHud(),
+        const OfflineBanner(),
+        // a finger from the screen's left edge pulls the page back (not on the dashboard, where it opens the menu)
+        Expanded(child: EdgeSwipeBack(enabled: !wide && !home, onBack: (f) => history.back(GoRouter.of(context), from: f), child: child)),
+      ]),
       const FirstDownload(),
       const HistoryLoading(),
       PopupHost(location: location),
@@ -136,9 +167,14 @@ class AppShell extends ConsumerWidget {
           backgroundColor: aurora ? Colors.transparent : null,
           appBar: bar,
           drawer: wide ? null : Drawer(child: SafeArea(child: nav)),
-          // a design with a bottom bar (Travel Orange): on a phone the main pages are one tap away at the thumb
-          bottomNavigationBar: !wide && tokensOf(context).bottomNav ? _BottomBar(screens: visible, location: location) : null,
-          body: wide
+          // the left edge swipes back on the other pages; on the dashboard it opens the menu
+          drawerEnableOpenDragGesture: home,
+          // phones and tablets: the main pages at the thumb (Home · Stock · Sell · Sales · More), on every page
+          bottomNavigationBar: wide ? null : TabBarBottom(screens: visible, location: location),
+          body: Builder(
+            // Android's back button: closes the menu or what is open on the page, else goes back a page; the app is
+            // left only from the dashboard
+            builder: (ctx) => BackButtonListener(onBackButtonPressed: () async => _systemBack(ctx, home: home, back: () => history.back(GoRouter.of(ctx))), child: wide
               ? Row(children: [
                   AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
@@ -149,7 +185,8 @@ class AppShell extends ConsumerWidget {
                   VerticalDivider(width: 1, color: aurora ? Theme.of(context).dividerColor.withValues(alpha: .4) : null),
                   Expanded(child: body),
                 ])
-              : body,
+              : body),
+          ),
           ),
         ),
       ),
@@ -330,24 +367,120 @@ Future<void> refreshNow(BuildContext context, WidgetRef ref) async {
   messenger.showSnackBar(SnackBar(content: Text(text)));
 }
 
-/// The phone's icon bar: Dashboard, the till, Inventory and Sales History (those this person may open), and the menu.
-class _BottomBar extends StatelessWidget {
-  const _BottomBar({required this.screens, required this.location});
+/// Android's back button: whatever is open closes first (the menu, a sheet or menu on the page; a dialog is closed by
+/// the router), then back a page; on the dashboard it is not handled, so the app is left.
+bool _systemBack(BuildContext context, {required bool home, required bool Function() back}) {
+  final route = ModalRoute.of(context);
+  if (route != null && !route.isCurrent) return false; // a dialog on top: the router closes it
+  final scaffold = Scaffold.maybeOf(context);
+  if (scaffold != null && (scaffold.isDrawerOpen || scaffold.isEndDrawerOpen)) {
+    scaffold.closeDrawer();
+    scaffold.closeEndDrawer();
+    return true;
+  }
+  final pages = shellNavigatorKey.currentState;
+  if (pages != null && pages.canPop()) {
+    pages.maybePop();
+    return true;
+  }
+  if (home) return false;
+  return back();
+}
+
+/// The phone's tab bar, on every page: Home, Stock, Sell, Sales (those this person may open) and More (the menu with
+/// every page). Frosted glass with a hairline on top, the icons and their names always shown (iOS).
+class TabBarBottom extends ConsumerWidget {
+  const TabBarBottom({super.key, required this.screens, required this.location});
   final List<Screen> screens;
   final String location;
+
+  static const _tabs = [
+    ('/', 'Home', Icons.home_outlined, Icons.home_rounded),
+    ('/inventory', 'Stock', Icons.inventory_2_outlined, Icons.inventory_2),
+    ('/pos', 'Sell', Icons.point_of_sale_outlined, Icons.point_of_sale),
+    ('/sales', 'Sales', Icons.receipt_long_outlined, Icons.receipt_long),
+  ];
+
   @override
-  Widget build(BuildContext context) {
-    final main = [for (final path in const ['/', '/pos', '/inventory', '/sales']) ?screens.where((s) => s.path == path).firstOrNull];
-    final at = main.indexWhere((s) => s.path == location);
-    return NavigationBar(
-      key: const Key('bottom-nav'),
-      selectedIndex: at < 0 ? main.length : at,
-      labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
-      onDestinationSelected: (i) => i == main.length ? Scaffold.of(context).openDrawer() : context.go(main[i].path),
-      destinations: [
-        for (final s in main) NavigationDestination(icon: Icon(s.icon), label: s.label.split(' – ').first),
-        const NavigationDestination(icon: Icon(Icons.menu), label: 'Menu'),
-      ],
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = Theme.of(context);
+    final tabs = [for (final x in _tabs) if (screens.any((s) => s.path == x.$1)) x];
+    final glass = t.appBarTheme.backgroundColor ?? t.colorScheme.surface;
+    final on = t.colorScheme.tertiary, off = t.colorScheme.onSurfaceVariant;
+    Widget item({required Key key, required String label, required String tip, required IconData icon, required bool selected, required VoidCallback onTap}) => Expanded(
+          child: Semantics(
+            button: true,
+            selected: selected,
+            label: label,
+            excludeSemantics: true,
+            child: Tooltip(
+              message: tip,
+              child: InkResponse(
+                key: key,
+                onTap: onTap,
+                containedInkWell: true,
+                highlightShape: BoxShape.rectangle,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 50),
+                  child: Column(mainAxisAlignment: MainAxisAlignment.center, mainAxisSize: MainAxisSize.min, children: [
+                    AnimatedScale(
+                      scale: selected ? 1.08 : 1,
+                      duration: const Duration(milliseconds: 180),
+                      curve: Curves.easeOutBack,
+                      child: Icon(icon, size: 24, color: selected ? on : off),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(label, maxLines: 1, overflow: TextOverflow.ellipsis,
+                        style: t.textTheme.labelSmall?.copyWith(fontSize: 11, color: selected ? on : off, fontWeight: selected ? FontWeight.w700 : FontWeight.w500)),
+                  ]),
+                ),
+              ),
+            ),
+          ),
+        );
+    final selectedTab = tabs.where((x) => x.$1 == '/' ? location == '/' : location == x.$1 || (x.$1 == '/pos' && location.startsWith('/pos'))).firstOrNull;
+    return MediaQuery.withClampedTextScaling(
+      maxScaleFactor: 1.3, // the tab names stay on one line under large text, as iOS does
+      child: ClipRect(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+          child: DecoratedBox(
+            key: const Key('bottom-nav'),
+            decoration: BoxDecoration(
+              color: glass.withValues(alpha: glass.a * .86),
+              border: Border(top: BorderSide(color: t.dividerColor.withValues(alpha: .7), width: .5)),
+            ),
+            child: SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                child: Row(children: [
+                  for (final x in tabs)
+                    item(
+                      key: ValueKey('tab-${x.$1}'),
+                      label: x.$2,
+                      tip: screens.firstWhere((s) => s.path == x.$1).label,
+                      icon: x == selectedTab ? x.$4 : x.$3,
+                      selected: x == selectedTab,
+                      onTap: () {
+                        if (location == x.$1) return;
+                        ref.read(navHistoryProvider).go(GoRouter.of(context), x.$1, how: NavMotion.fade);
+                      },
+                    ),
+                  item(
+                    key: const Key('tab-more'),
+                    label: 'More',
+                    tip: 'Open navigation menu',
+                    icon: Icons.menu_rounded,
+                    selected: false,
+                    onTap: () => Scaffold.of(context).openDrawer(),
+                  ),
+                ]),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

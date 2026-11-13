@@ -90,7 +90,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
       final chosen = {...?r?.permissions};
       final name = TextEditingController(text: copy ? '${r!.name} (copy)' : r?.name ?? '');
       final maxDisc = TextEditingController(text: r?.raw['maxDiscount'] == null ? '' : '${r!.raw['maxDiscount']}');
-      final ok = await showDialog<bool>(
+      final ok = await showAppDialog<bool>(
         context: context,
         builder: (c) => StatefulBuilder(
           builder: (c, set) => AlertDialog(

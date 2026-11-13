@@ -69,6 +69,7 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
     final cards = <Widget>[
       _section('This device', Icons.devices_outlined, [
         DropdownButtonFormField<String>(
+          isExpanded: true,
           initialValue: branches.any((b) => b['id'] == branch) ? branch : null,
           decoration: const InputDecoration(labelText: 'Branch this device works as'),
           items: [for (final b in branches) DropdownMenuItem(value: '${b['id']}', child: Text('${b['name']}'))],
@@ -191,8 +192,10 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
         for (final (kind, label, _) in soundKinds)
           Row(children: [
             Expanded(child: Text('$label${sounds.toneFor(kind) == 'custom' ? ' · ${sounds.names[kind] ?? 'your file'}' : ''}')),
-            DropdownButton<String>(
+            // beside the name on a phone too: the tone's name is shortened rather than pushed off the screen
+            Flexible(child: DropdownButton<String>(
               key: Key('sound-$kind'),
+              isExpanded: true,
               value: sounds.toneFor(kind),
               onChanged: !sounds.on
                   ? null
@@ -223,7 +226,7 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
                 DropdownMenuItem(value: 'custom', child: Text(sounds.toneFor(kind) == 'custom' ? 'My file (change…)' : 'My own file…')),
                 const DropdownMenuItem(value: 'off', child: Text('Silent')),
               ],
-            ),
+            )),
             IconButton(
               tooltip: 'Play it',
               onPressed: !sounds.on || sounds.toneFor(kind) == 'off' ? null : () => ref.read(soundsProvider).play(kind, tone: sounds.toneFor(kind)),

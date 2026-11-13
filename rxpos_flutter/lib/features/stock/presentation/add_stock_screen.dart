@@ -217,7 +217,7 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
   }
 
   Future<void> _choose(Line l, PharmacyData d) async {
-    final picked = await showDialog<Object>(context: context, builder: (_) => _MedicinePicker(data: d, hint: (l['read'] as Map?)?['name'] as String?));
+    final picked = await showAppDialog<Object>(context: context, builder: (_) => _MedicinePicker(data: d, hint: (l['read'] as Map?)?['name'] as String?));
     if (picked == null) return;
     if (picked is Product) {
       final next = lineFor(picked, d.settings, extra: {'qty': l['qty'], 'batch': l['batch'], 'expiry': l['expiry'], if (l['read'] != null) 'read': l['read']}, markup: _form!['markup']);
@@ -625,13 +625,21 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
               CheckboxListTile(value: _checked, onChanged: (v) => setState(() => _checked = v ?? false),
                   title: const Text('I have checked every line against the invoice (medicine, quantity, cost, batch and expiry)')),
             const SizedBox(height: 8),
-            Row(children: [
-              Expanded(child: Text(lines(f).any((l) => '${l['productId'] ?? ''}'.isNotEmpty) ? "Check the lines against the supplier's invoice, then receive." : 'Add the medicines on the invoice.',
-                  style: th.textTheme.bodySmall)),
-              OutlinedButton(onPressed: () => _saveDraft(d), child: const Text('Save as draft')),
-              const SizedBox(width: 8),
-              FilledButton(onPressed: _busy || (scanned != null && !_checked) ? null : () => _receive(d), child: const Text('Receive stock')),
-            ]),
+            () {
+              final note = Text(lines(f).any((l) => '${l['productId'] ?? ''}'.isNotEmpty) ? "Check the lines against the supplier's invoice, then receive." : 'Add the medicines on the invoice.',
+                  style: th.textTheme.bodySmall);
+              final keep = OutlinedButton(onPressed: () => _saveDraft(d), child: const Text('Save as draft'));
+              final receive = FilledButton(onPressed: _busy || (scanned != null && !_checked) ? null : () => _receive(d), child: const Text('Receive stock'));
+              // a phone: the note above, the two buttons sharing the width under it
+              if (MediaQuery.sizeOf(context).width < 600) {
+                return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  note,
+                  const SizedBox(height: 8),
+                  Row(children: [Expanded(child: keep), const SizedBox(width: 8), Expanded(child: receive)]),
+                ]);
+              }
+              return Row(children: [Expanded(child: note), keep, const SizedBox(width: 8), receive]);
+            }(),
           ]),
         ),
       ),

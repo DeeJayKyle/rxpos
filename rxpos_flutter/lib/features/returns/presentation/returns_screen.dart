@@ -82,7 +82,7 @@ class _ReturnsScreenState extends ConsumerState<ReturnsScreen> {
     final bank = banks.where((b) => b['id'] == r['bankId']).firstOrNull?['name'] ?? 'Cash at hand';
     List<String> row(Map i) => ['${i['name']}', '${i['batch'] ?? ''}', '${i['expiry'] ?? ''}', '${i['reason'] ?? ''}', formatQty(i['qty'] as num? ?? 0), st.money(i['credit'] as num? ?? 0),
       st.money(((i['qty'] as num?) ?? 0) * ((i['credit'] as num?) ?? 0))];
-    await showDialog<void>(
+    await showAppDialog<void>(
       context: context,
       builder: (c) => AlertDialog(
         title: Text('Return ${r['number']}'),
@@ -146,7 +146,7 @@ Future<void> showReturnForm(BuildContext context, WidgetRef ref, {({Product p, B
   var date = today();
   final creditNote = TextEditingController(), note = TextEditingController();
   var q = '';
-  final ok = await showDialog<bool>(
+  final ok = await showAppDialog<bool>(
     context: context,
     builder: (c) => StatefulBuilder(builder: (c, set) {
       final matches = q.trim().isEmpty ? <Product>[] : searchProducts(d.products, q, stockOf: (p) => d.stockOf(p.id)).where((p) => d.stockOf(p.id) > 0).take(8).toList();

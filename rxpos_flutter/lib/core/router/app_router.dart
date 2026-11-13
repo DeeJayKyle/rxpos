@@ -5,6 +5,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../features/auth/application/session_controller.dart';
 import '../../features/auth/presentation/sign_in_screen.dart';
 import '../presentation/app_shell.dart';
+import '../presentation/nav_history.dart';
 import '../presentation/screens.dart';
 
 part 'app_router.g.dart';
@@ -31,7 +32,8 @@ class _SessionListenable extends ChangeNotifier {
 GoRouter appRouter(Ref ref) {
   final refresh = _SessionListenable();
   ref.listen(sessionControllerProvider, (_, _) => refresh.ping());
-  return GoRouter(
+  final history = ref.read(navHistoryProvider);
+  final router = GoRouter(
     initialLocation: Routes.home,
     refreshListenable: refresh,
     redirect: (_, state) {
@@ -48,29 +50,33 @@ GoRouter appRouter(Ref ref) {
     routes: [
       GoRoute(path: Routes.signIn, builder: (_, _) => const SignInScreen()),
       ShellRoute(
+        navigatorKey: shellNavigatorKey,
         builder: (_, state, child) => AppShell(location: state.matchedLocation, child: child),
-        // pages change with a quick fade and a slight rise (180 ms): smooth, never in the way
+        // pages glide (iOS): a new page slides in from the right over the old one drifting left, Back slides the
+        // other way, the bottom tabs cross-fade; none when the device asks for less motion
         routes: [
           for (final s in screens)
             GoRoute(
               path: s.path,
-              pageBuilder: (_, st) => CustomTransitionPage<void>(
-                key: st.pageKey,
-                child: s.builder(st.uri.queryParameters),
-                transitionDuration: const Duration(milliseconds: 180),
-                reverseTransitionDuration: const Duration(milliseconds: 120),
-                // none when the device asks for less motion (Settings → Accessibility → Remove animations)
-                transitionsBuilder: (ctx, a, b, child) => MediaQuery.disableAnimationsOf(ctx) ? child : FadeTransition(
-                  opacity: CurvedAnimation(parent: a, curve: Curves.easeOut),
-                  child: FadeTransition(
-                    opacity: Tween<double>(begin: 1, end: 0).animate(CurvedAnimation(parent: b, curve: Curves.easeIn)),
-                    child: SlideTransition(position: Tween(begin: const Offset(0, .015), end: Offset.zero).animate(CurvedAnimation(parent: a, curve: Curves.easeOutCubic)), child: child),
-                  ),
-                ),
-              ),
+              pageBuilder: (ctx, st) {
+                final still = MediaQuery.maybeDisableAnimationsOf(ctx) ?? false;
+                final time = still ? Duration.zero : navDuration(history.motion);
+                return CustomTransitionPage<void>(
+                  key: st.pageKey,
+                  child: s.builder(st.uri.queryParameters),
+                  transitionDuration: time,
+                  reverseTransitionDuration: time,
+                  transitionsBuilder: (_, a, b, child) => GlideTransition(primary: a, secondary: b, history: history, child: child),
+                );
+              },
             ),
         ],
       ),
     ],
   );
+  // the session's page history (Back, Android's back button, the edge swipe, Alt+← / →) and how pages move
+  void moved() => history.visited(router.routerDelegate.currentConfiguration.uri.toString());
+  router.routerDelegate.addListener(moved);
+  ref.onDispose(() => router.routerDelegate.removeListener(moved));
+  return router;
 }

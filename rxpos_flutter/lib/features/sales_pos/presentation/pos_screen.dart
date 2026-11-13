@@ -439,7 +439,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
   final _clientFocus = FocusNode();
 
   Future<void> _openCommandBar(PharmacyData d) async {
-    final pay = await showDialog<bool>(
+    final pay = await showAppDialog<bool>(
       context: context,
       builder: (_) => _CommandBar(wholesale: widget.wholesale, data: d, onAdd: _add),
     );

@@ -1,6 +1,7 @@
 // The theme menu in the top bar (src/App.jsx ThemePicker): Light / Dark / System, the accent colour, the colour themes
 // the owner allows for this pharmacy, the colour level (Calm / Vivid) and the surface style. Kept on this device.
 import 'package:flutter/material.dart';
+import 'app_dialog.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/pharmacy_providers.dart';
@@ -14,7 +15,7 @@ class ThemeMenuButton extends StatelessWidget {
         key: const Key('theme-menu'),
         tooltip: 'Theme',
         icon: const Icon(Icons.palette_outlined),
-        onPressed: () => showDialog<void>(context: context, builder: (_) => const ThemeMenu()),
+        onPressed: () => showAppDialog<void>(context: context, builder: (_) => const ThemeMenu()),
       );
 }
 

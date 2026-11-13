@@ -1,6 +1,7 @@
 // The bell in the top bar (src/engage.jsx NotificationBell): today's alerts grouped as Urgent, Needs attention and
 // For information, each opening its page; the count on the bell (red when something is urgent); sounds on this device.
 import 'package:flutter/material.dart';
+import '../../../core/presentation/app_dialog.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -26,7 +27,7 @@ class NotificationBell extends ConsumerWidget {
     return IconButton(
       key: const Key('bell'),
       tooltip: 'Notifications${alerts.isEmpty ? '' : ': ${alerts.length}${urgent > 0 ? ', $urgent urgent' : ''}'}',
-      onPressed: () => showDialog<void>(context: context, builder: (_) => const _BellMenu()),
+      onPressed: () => showAppDialog<void>(context: context, builder: (_) => const _BellMenu()),
       icon: Badge(
         isLabelVisible: alerts.isNotEmpty,
         backgroundColor: urgent > 0 ? Theme.of(context).colorScheme.error : Colors.orange.shade800,

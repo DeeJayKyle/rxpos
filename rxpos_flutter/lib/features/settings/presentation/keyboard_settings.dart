@@ -3,6 +3,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import '../../../core/presentation/app_dialog.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -25,8 +26,10 @@ class KeyboardSettings extends ConsumerWidget {
         for (final a in keyActions.where((a) => a.$3 == g))
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 1),
+            // the key and its buttons wrap under one another on a phone rather than run off the screen
             child: Row(children: [
               Expanded(child: Text(a.$2)),
+              Flexible(child: Wrap(alignment: WrapAlignment.end, crossAxisAlignment: WrapCrossAlignment.center, children: [
               SizedBox(width: 110, child: Text(showKey(map.keyOf(a.$1)) + (map.isDefault(a.$1) ? '' : ' ·'), key: ValueKey('key-${a.$1}'), style: const TextStyle(fontWeight: FontWeight.w700))),
               TextButton(
                 key: ValueKey('change-${a.$1}'),
@@ -38,6 +41,7 @@ class KeyboardSettings extends ConsumerWidget {
               ),
               if (!map.isDefault(a.$1)) TextButton(onPressed: () => save(a.$1, a.$4), child: const Text('Default')),
               if (map.keyOf(a.$1).isNotEmpty) TextButton(onPressed: () => save(a.$1, ''), child: const Text('Off')),
+              ])),
             ]),
           ),
       ],
@@ -49,7 +53,7 @@ class KeyboardSettings extends ConsumerWidget {
 
 /// Wait for the new key ([sequence]: a letter may be followed by another within 1.2 s). Null when cancelled (Esc).
 Future<String?> recordKey(BuildContext context, String label, {bool sequence = true}) {
-  return showDialog<String>(
+  return showAppDialog<String>(
     context: context,
     builder: (c) {
       var first = '';

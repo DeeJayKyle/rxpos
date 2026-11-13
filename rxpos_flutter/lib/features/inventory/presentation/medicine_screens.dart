@@ -236,7 +236,7 @@ Future<void> editPacks(BuildContext context, WidgetRef ref, Product p) async {
   ];
   final st = ref.read(settingsProvider).value ?? const PharmacySettings();
   final unit = p.unit.isEmpty ? 'Unit' : p.unit;
-  final ok = await showDialog<bool>(
+  final ok = await showAppDialog<bool>(
     context: context,
     builder: (c) => StatefulBuilder(
       builder: (c, set) => AlertDialog(
@@ -529,7 +529,7 @@ Future<void> inventoryEditor(BuildContext context, WidgetRef ref, Product p) asy
       (b: b, batch: TextEditingController(text: b.batch), expiry: TextEditingController(text: b.expiry), qty: TextEditingController(text: formatQty(b.qty))),
   ];
   final reason = TextEditingController();
-  final ok = await showDialog<bool>(
+  final ok = await showAppDialog<bool>(
     context: context,
     builder: (c) => AlertDialog(
       title: Text('Edit ${p.name}'),

@@ -149,7 +149,7 @@ class _ShelvesScreenState extends ConsumerState<ShelvesScreen> {
   /// Ask which shelf (one of [names] or a new one), then put [ps] on it.
   Future<void> _put(List<Product> ps, List<String> names, {String what = ''}) async {
     final ctl = TextEditingController();
-    final shelf = await showDialog<String>(
+    final shelf = await showAppDialog<String>(
       context: context,
       builder: (c) => AlertDialog(
         title: Text('Put ${what.isNotEmpty ? 'all of $what' : '${ps.length} medicine${ps.length == 1 ? '' : 's'}'} on a shelf'),

@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
+import '../../../core/presentation/app_dialog.dart';
 
 import '../domain/cart.dart';
 
 /// Yes / no question; true when confirmed.
 Future<bool> confirm(BuildContext context, String title, String message, String yes) async =>
-    await showDialog<bool>(
+    await showAppDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(title: Text(title), content: Text(message), actions: [
         TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
@@ -16,7 +17,7 @@ Future<bool> confirm(BuildContext context, String title, String message, String 
 /// A number (price, discount): null when cancelled.
 Future<double?> askNumber(BuildContext context, String label, double initial) {
   final ctl = TextEditingController(text: initial == 0 ? '' : (initial == initial.roundToDouble() ? '${initial.toInt()}' : '$initial'));
-  return showDialog<double>(
+  return showAppDialog<double>(
     context: context,
     builder: (c) => AlertDialog(
       title: Text(label),
@@ -34,7 +35,7 @@ Future<double?> askNumber(BuildContext context, String label, double initial) {
 Future<ControlledEntry?> askControlled(BuildContext context, {String patient = ''}) {
   final f = [TextEditingController(text: patient), TextEditingController(), TextEditingController(), TextEditingController(), TextEditingController()];
   const labels = ['Patient\'s name', 'Patient ID / phone', 'Prescriber', 'Prescriber registration no.', 'Prescription no.'];
-  return showDialog<ControlledEntry>(
+  return showAppDialog<ControlledEntry>(
     context: context,
     builder: (c) => StatefulBuilder(
       builder: (c, set) => AlertDialog(
@@ -62,7 +63,7 @@ Future<ControlledEntry?> askControlled(BuildContext context, {String patient = '
 /// The customer paid by Mobile Money to the pharmacy's number: the transaction ID from their message.
 Future<String?> askMomoRef(BuildContext context, String amount) {
   final ctl = TextEditingController();
-  return showDialog<String>(
+  return showAppDialog<String>(
     context: context,
     builder: (c) => AlertDialog(
       title: Text('Mobile Money – $amount'),
@@ -81,7 +82,7 @@ Future<String?> askMomoRef(BuildContext context, String amount) {
 /// A new client: name, phone, allergies (a customers record).
 Future<Map<String, Object?>?> askNewClient(BuildContext context) {
   final name = TextEditingController(), phone = TextEditingController(), allergies = TextEditingController();
-  return showDialog<Map<String, Object?>>(
+  return showAppDialog<Map<String, Object?>>(
     context: context,
     builder: (c) => AlertDialog(
       title: const Text('New client'),
