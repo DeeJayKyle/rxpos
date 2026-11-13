@@ -48,15 +48,15 @@ check('Settings: Add Stock in packs, retail in units, wholesale in packs (the de
 await go('/add-stock');
 await p.select('form.card select', 'pk-sup');
 await p.focus('table.stock-lines tbody tr:first-child .med-pick input'); await p.keyboard.type('paramol'); await wait(400); await p.keyboard.press('Enter'); await wait(400);
-const line = await p.evaluate(() => { const r = document.querySelector('table.stock-lines tbody tr'); return { as: r.querySelector('select[aria-label="Received as"]')?.value, cost: r.querySelector('input[aria-label="Unit cost"]')?.value }; });
-check('Add Stock receives in boxes of 100 by default, cost per box 3,000', line.as === 'Box' && line.cost === '3000', JSON.stringify(line));
+const line = await p.evaluate(() => { const r = document.querySelector('table.stock-lines tbody tr'); return { as: r.querySelector('select[aria-label="Received as"]')?.value, cost: r.querySelector('output[aria-label="Unit cost"]')?.textContent }; });
+check('Add Stock receives in boxes of 100 by default, cost per box 3,000', line.as === 'Box' && line.cost === 'UGX 3,000', JSON.stringify(line));
 await setVal('table.stock-lines tbody tr:first-child input[aria-label="Quantity"]', 2); await wait(200);
 check('…and shows the tablets: 2 boxes = 200', /= 200 tablets/.test(await p.evaluate(() => document.querySelector('table.stock-lines tbody tr').innerText)));
 // switching to strips keeps the cost per tablet
 await p.select('table.stock-lines tbody tr:first-child select[aria-label="Received as"]', 'Strip'); await wait(200);
-check('switching to strips: cost per strip 300 (same per tablet)', (await p.evaluate(() => document.querySelector('table.stock-lines tbody tr input[aria-label="Unit cost"]').value)) === '300');
+check('switching to strips: cost per strip 300 (same per tablet)', (await p.evaluate(() => document.querySelector('table.stock-lines tbody tr output[aria-label="Unit cost"]').textContent)) === 'UGX 300');
 await p.select('table.stock-lines tbody tr:first-child select[aria-label="Received as"]', 'Box'); await wait(200);
-await setVal('table.stock-lines tbody tr:first-child input[aria-label="Unit cost"]', 3200); await wait(100);
+await setVal('table.stock-lines tbody tr:first-child input[aria-label="Line total"]', 6400); await wait(100); // 2 boxes: 3,200 a box
 await setVal('table.stock-lines tbody tr:first-child input[aria-label="Batch number"]', 'PM2');
 await p.click('table.stock-lines tbody tr:first-child input[aria-label="Expiry date"]'); await p.keyboard.type('31/12/2030'); await p.keyboard.press('Tab'); await wait(300);
 await p.evaluate(() => [...document.querySelectorAll('button')].find((x) => /^Receive stock/.test(x.textContent.trim()))?.click());

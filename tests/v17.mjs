@@ -254,7 +254,7 @@ const filled = await until(A, () => !document.querySelector('.modal') && documen
 check('#4 the invoice page was sent to the reader as an image', aiCalls === 1 && /^data:image\/jpeg;base64,/.test(aiImage), aiCalls);
 const form = await A.evaluate(() => ({
   supplier: document.querySelector('select')?.selectedOptions[0]?.text, invoice: [...document.querySelectorAll('input')].find((i) => i.value === 'KM-5521')?.value, date: document.querySelector('input[type=date]')?.value,
-  lines: [...document.querySelectorAll('table.lines tbody tr')].map((tr) => { const v = (l) => tr.querySelector(`input[aria-label="${l}"]`)?.value; return { med: tr.querySelector('.med-pick input')?.value ?? tr.querySelector('select')?.selectedOptions[0]?.text, qty: v('Quantity'), cost: v('Unit cost'), total: v('Line total'), price: v('New retail price'), batch: v('Batch number'), exp: tr.querySelector('.date-input input[type=date]')?.value ?? v('Expiry date'), /* the stored date (the box shows the chosen format) */ read: tr.querySelector('.scan-read')?.innerText.trim() }; }),
+  lines: [...document.querySelectorAll('table.lines tbody tr')].map((tr) => { const v = (l) => tr.querySelector(`input[aria-label="${l}"]`)?.value ?? tr.querySelector(`output[aria-label="${l}"]`)?.textContent.replace(/[^\d.]/g, ''); return { med: tr.querySelector('.med-pick input')?.value ?? tr.querySelector('select')?.selectedOptions[0]?.text, qty: v('Quantity'), cost: v('Unit cost'), total: v('Line total'), price: v('New retail price'), batch: v('Batch number'), exp: tr.querySelector('.date-input input[type=date]')?.value ?? v('Expiry date'), /* the stored date (the box shows the chosen format) */ read: tr.querySelector('.scan-read')?.innerText.trim() }; }),
   saveDisabled: [...document.querySelectorAll('button')].find((x) => /Receive stock/.test(x.innerText))?.disabled,
   notice: document.querySelector('.scan-notice')?.innerText.replace(/\s+/g, ' '),
 }));
@@ -268,7 +268,7 @@ await A.focus('table.lines tbody tr:nth-child(3) .med-pick input'); await wait(3
 await A.evaluate(() => document.querySelector('.med-pick-row.add')?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })));
 await wait(300);
 const newLine = await A.evaluate(() => { const tr = document.querySelectorAll('table.lines tbody tr')[2]; return { name: tr.querySelector('input[aria-label="New medicine name"]')?.value, price: tr.querySelector('input[aria-label="New retail price"]')?.value }; });
-check('#4 "New medicine" keeps the name read off the invoice, and the retail price is worked out from the cost (1200 + 50% = 1800)', /QWERTAZOL/.test(newLine.name || '') && newLine.price === '1800', JSON.stringify(newLine));
+check('#4 "New medicine" keeps the name read off the invoice; its retail price is left for the person to type (not worked out)', /QWERTAZOL/.test(newLine.name || '') && newLine.price === '', JSON.stringify(newLine));
 await A.evaluate(() => {
   const rows = document.querySelectorAll('table.lines tbody tr');
   const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;

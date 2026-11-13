@@ -34,12 +34,13 @@ const baseCost = (l) => unitCost(l) / (Number(l.recvSize) || 1);
 const lineTotal = (l) => (l.by === 'total' && l.total !== '' ? Number(l.total) || 0 : (Number(l.qty) || 0) * (Number(l.cost) || 0));
 
 /**
- * Apply an edit to a line. Quantity, unit cost and line total stay in step (type whichever the invoice shows).
- * The retail price of a medicine already in the list is never changed by the invoice: it stays as it is until the
- * person types a new one (the owner's choice, 2026-11-10; "Use" applies the cost + markup price). A medicine with no
- * price yet (a new one) gets cost + markup until a price is typed.
+ * Apply an edit to a line. The person types the line total; the unit cost is worked out from it (total ÷ quantity) and
+ * can't be typed (the owner's choice, 2026-11-13). A line started from a medicine's last cost keeps that cost as the
+ * quantity changes until a total is typed. The retail price is never set by the app: a medicine already in the list
+ * keeps its price until the person types a new one, and a new medicine has none until typed ("Use" applies the
+ * cost + markup price only when tapped).
  */
-function editLine(l, patch, priceFor) {
+function editLine(l, patch) {
   const n = { ...l, ...patch };
   const qty = Number(n.qty) || 0;
   if ('total' in patch) { n.by = 'total'; n.cost = patch.total !== '' && qty > 0 ? numOrBlank(Number(patch.total) / qty) : ''; }
@@ -49,15 +50,9 @@ function editLine(l, patch, priceFor) {
     else if (n.cost !== '') n.total = numOrBlank(Number(n.cost) * qty);
   }
   const priced = Number(n.basePrice) > 0; // a medicine already in the list, with its price
-  if ('price' in patch) {
-    n.auto = patch.price === ''; // clearing the price: back to today's price (or, for a new medicine, cost + markup)
-    if (patch.price === '' && priced) { n.price = String(Number(n.basePrice)); n.derived = false; }
-  }
-  const costChanged = 'cost' in patch || 'total' in patch || ('qty' in patch && n.by === 'total');
-  if (n.auto && !priced && (costChanged || patch.price === '' || patch.reprice || 'recvSize' in patch) && baseCost(n) > 0) {
-    n.price = String(priceFor(baseCost(n))); n.derived = true;
-  }
-  delete n.reprice;
+  // "undo": back to today's price (a new medicine: no price until one is typed)
+  if ('price' in patch && patch.price === '' && priced) n.price = String(Number(n.basePrice));
+  n.derived = false;
   return n;
 }
 
@@ -97,12 +92,11 @@ export function AddStock() {
   const blank = () => ({ supplierId: '', invoice: '', date: today(), paid: '', bankId: CASH, notes: '', markup: s.retailMarkup ?? 50, lines: [blankLine()] });
   const priceAt = (markup) => (cost) => markupPrice(cost, markup, s.priceRound);
   // A line for a medicine already in the list: its current cost and price, with the totals worked out
-  const lineFor = (p, extra = {}, markup = s.retailMarkup) => {
+  const lineFor = (p, extra = {}) => {
     // received in the medicine's largest pack by default (Settings → Receipts & stock): the cost is then per pack
     const k = receiveInPacks(s) && !('recvPack' in extra) ? mainPack(p) : null;
     const l = { ...blankLine(), productId: p.id, cost: numOrBlank(p.cost ? p.cost * (k ? Number(k.size) : 1) : ''), price: p.price ? String(p.price) : '', basePrice: p.price || 0, derived: false,
       ...(k ? { recvPack: k.name, recvSize: Number(k.size) } : {}), ...extra };
-    if (!l.price && baseCost(l) > 0) { l.price = String(priceAt(markup)(baseCost(l))); l.derived = true; } // per unit, also when received by the box
     return { ...l, total: l.cost !== '' ? numOrBlank(Number(l.cost) * Number(l.qty || 0)) : '' };
   };
   // What was read off an invoice → Add Stock lines (medicines matched, costs and prices worked out) and a summary
@@ -259,7 +253,8 @@ export function AddStock() {
   const prices = useMemo(() => supplierPrices(db.purchases), [db.purchases]);
   const setLine = (key, patch) => setForm((f) => ({ ...f, lines: f.lines.map((l) => (l.key === key ? editLine(l, patch, priceAt(f.markup)) : l)) }));
   const replaceLine = (key, line) => setForm((f) => ({ ...f, lines: f.lines.map((l) => (l.key === key ? { ...line, key } : l)) }));
-  const setMarkup = (markup) => setForm((f) => ({ ...f, markup, lines: f.lines.map((l) => (l.auto && l.derived ? editLine(l, { reprice: true }, priceAt(markup)) : l)) }));
+  // the markup only changes the suggested price ("Use …"); no price changes by itself
+  const setMarkup = (markup) => setForm((f) => ({ ...f, markup }));
   const total = form.lines.reduce((a, l) => a + (l.productId ? lineTotal(l) : 0), 0);
   const ql = q.trim().toLowerCase();
   const matches = ql ? products.filter((p) => [p.name, p.generic, p.barcode].join(' ').toLowerCase().includes(ql)).sort((a, b) => (b.stock > 0) - (a.stock > 0)).slice(0, 8) : [];
@@ -336,7 +331,7 @@ export function AddStock() {
       if (name.length < 2) return toast('Type the name of the new medicine', 'warn');
       const dup = products.find((p) => p.name.trim().toLowerCase() === name.toLowerCase());
       if (dup) return toast(`"${dup.name}" is already in your medicine list. Choose it from the list instead of adding it again.`, 'warn');
-      if (!(Number(l.price) > 0)) return toast(`Enter a retail price for ${name} (or its cost, and the price is worked out)`, 'warn');
+      if (!(Number(l.price) > 0)) return toast(`Enter a retail price for ${name}`, 'warn');
       if (!freshIds.has(name.toLowerCase())) freshIds.set(name.toLowerCase(), uid());
     }
     const nameOf = (l) => (l.productId === NEW ? l.name.trim().replace(/\s+/g, ' ') : products.find((p) => p.id === l.productId)?.name);
@@ -422,7 +417,7 @@ export function AddStock() {
       }} />}
       {form.draftId && <div className="notice info-notice">Continuing a saved draft. Receiving it removes it from Drafts; "Save as draft" keeps your changes in it.</div>}
       {myDrafts.length > 0 && <div className="notice info-notice row gap wrap">You have {myDrafts.length} saved deliver{myDrafts.length === 1 ? 'y' : 'ies'}{myDrafts.some((x) => isOld(x)) ? ', one waiting over a day' : ''}.<Link to="/purchases" state={{ tab: 'drafts' }}>Open drafts</Link></div>}
-      <PageTip id="add-stock" title="Receiving a delivery">Search or scan each medicine (not in the list? type its name and choose “Add as a new medicine”). Type the line total from the invoice: the unit cost and the retail price work themselves out, and you can still change the price. Scan invoice reads a photo for you.</PageTip>
+      <PageTip id="add-stock" title="Receiving a delivery">Search or scan each medicine (not in the list? type its name and choose “Add as a new medicine”). Type the line total from the invoice: the unit cost is worked out from it. The retail price changes only when you type a new one (tap “Use” for cost + markup). Scan invoice reads a photo for you.</PageTip>
       {newSupplier && (
         <Modal title="New supplier" onClose={() => setNewSupplier(null)}>
           <form onSubmit={saveSupplier}>
@@ -567,7 +562,8 @@ export function AddStock() {
                     </td>
                     ),
                     cost: (
-                    <td key="cost" data-label="Unit cost"><input type="number" min="0" step="any" inputMode="decimal" placeholder="0" value={l.cost} onChange={(e) => setLine(l.key, { cost: e.target.value })} aria-label="Unit cost" />
+                    <td key="cost" data-label="Unit cost">{/* worked out from the line total (total ÷ quantity): not typed */}
+                      <output className="unit-cost num" aria-label="Unit cost" title="Line total ÷ quantity">{unitCost(l) > 0 ? fmt(unitCost(l)) : '—'}</output>
                       {Number(l.recvSize) > 1 && <small className="price-hint muted">per {String(l.recvPack || 'pack').toLowerCase()}</small>}
                       {(() => { const best = (prices.get(l.productId) || []).find((o) => o.supplierId !== form.supplierId); return best && cost > 0 && best.cost < cost ? <small className="price-hint text-warn" title={`Last bought from ${best.supplierName} on ${best.date}`}>{best.supplierName}: {fmt(best.cost)}</small> : null; })()}
                     </td>
@@ -579,9 +575,9 @@ export function AddStock() {
                     <td key="price" data-label="Retail price">
                       <input type="number" min="0" step="any" inputMode="decimal" placeholder={cost > 0 ? String(priceFor(cost)) : ''} value={l.price} onChange={(e) => setLine(l.key, { price: e.target.value })} aria-label="New retail price" />
                       <small className="price-hint">
-                        {l.auto && l.derived ? <span className="muted">{`auto · +${form.markup || 0}%`}</span> : !l.auto ? <button type="button" className="link-btn small" title={p?.price > 0 ? 'Back to today\'s price' : 'Work the price out from the cost again'} onClick={() => setLine(l.key, { price: '' })}><RotateCcw size={10} /> {p?.price > 0 ? 'undo' : 'auto'}</button> : null}
-                        {/* the owner's choice: the price is kept; cost + markup is offered, not applied */}
-                        {p?.price > 0 && cost > 0 && priceFor(cost) !== price && <button type="button" className="link-btn small" title={`Cost + ${form.markup || 0}% markup`} onClick={() => setLine(l.key, { price: String(priceFor(cost)) })}>Use {fmt(priceFor(cost))}</button>}
+                        {p?.price > 0 && String(l.price) !== String(p.price) && <button type="button" className="link-btn small" title="Back to today's price" onClick={() => setLine(l.key, { price: '' })}><RotateCcw size={10} /> undo</button>}
+                        {/* the owner's choice: the price is only what the person types; cost + markup is offered, not applied */}
+                        {cost > 0 && priceFor(cost) !== price && <button type="button" className="link-btn small" title={`Cost + ${form.markup || 0}% markup`} onClick={() => setLine(l.key, { price: String(priceFor(cost)) })}>Use {fmt(priceFor(cost))}</button>}
                         {markup !== null && <span className={markup < 0 ? 'text-danger' : 'muted'}> {markup < 0 ? 'below cost' : `margin ${markup}%`}</span>}
                         {p && price !== p.price && p.price > 0 && <span className="muted"> · was {fmt(p.price)}</span>}
                       </small>

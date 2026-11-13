@@ -2819,3 +2819,6 @@ tr.group-head > td { background: var(--surface-2); padding: 6px 10px; }
   .topbar .pill.clock { min-width: 44px; min-height: 44px; justify-content: center; }
   .page select:not(.date-fmt), .pos select:not(.date-fmt) { min-height: 40px; }
 }
+
+/* Add Stock: the unit cost is worked out from the line total (not typed) */
+.unit-cost { display: block; min-height: 36px; padding: 8px 2px; font-weight: 650; color: var(--text); white-space: nowrap; }
