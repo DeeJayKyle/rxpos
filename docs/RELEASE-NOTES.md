@@ -14,6 +14,10 @@ sync and backups are unchanged, and every theme keeps its colours and fonts.
   rise from the bottom. All motion is off when the phone asks for reduced motion.
 - **iOS-like look:** frosted top and bottom bars, rounded cards, large page titles on phones, iOS-style segmented
   tabs and switches, 44 px touch targets.
+- **Add Stock (both apps):** the unit cost is worked out from the line total (line total ÷ quantity, per pack when
+  received by the pack) and can't be typed; you type the line total. The retail price is never set or changed by
+  the app: a medicine already in the list keeps its price until you type a new one, and a new medicine needs a
+  typed price before it can be received. Cost + markup is only offered ("Use UGX …"), applied when tapped.
 - **Fits every screen:** every page was checked at 360 and 390 / 400 px wide (and with larger text); forms open as
   full-height sheets on phones with Save always visible, and the field you type in stays above the keyboard.
 
