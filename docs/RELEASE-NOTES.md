@@ -1,5 +1,22 @@
 # RxPOS release notes
 
+## React (classic) app 1.8.2 · Flutter app 2.1 (next build) · November 2026
+
+A mobile update for both apps with an iOS-like feel. Data, figures, permissions, settings, actions, offline work,
+sync and backups are unchanged, and every theme keeps its colours and fonts.
+
+- **Navigation on every page:** a Back button (to the page you came from, or Home) and the bottom tab bar
+  (Home · Stock · Sell · Sales · More) on phones and tablets. On Android the phone's own Back button steps back
+  through the pages and leaves the app only from Home (Flutter).
+- **Gestures:** swipe from the left edge of the screen to go back; the page follows your finger. It never starts
+  in text boxes, dialogs or sideways-scrolling tables.
+- **Gliding motion:** pages slide in like iOS, Back slides the other way, the bottom tabs cross-fade and dialogs
+  rise from the bottom. All motion is off when the phone asks for reduced motion.
+- **iOS-like look:** frosted top and bottom bars, rounded cards, large page titles on phones, iOS-style segmented
+  tabs and switches, 44 px touch targets.
+- **Fits every screen:** every page was checked at 360 and 390 / 400 px wide (and with larger text); forms open as
+  full-height sheets on phones with Save always visible, and the field you type in stays above the keyboard.
+
 ## React (classic) app 1.8.1 · Flutter app 2.1 (next build) · November 2026
 
 A screen-layout update for both apps: compact, readable and responsive on phones and desktops. Data, figures,
