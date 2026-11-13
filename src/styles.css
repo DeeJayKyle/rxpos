@@ -715,7 +715,7 @@ tr.row-bad td { color: var(--danger); }
 .badge.warn { background: var(--warn-soft); color: var(--warn); margin-left: 6px; }
 .or-line { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
 .or-line::before, .or-line::after { content: ""; flex: 1; height: 1px; background: var(--border); }
-.google-btn { display: flex; justify-content: center; min-height: 44px; }
+.google-btn { display: flex; justify-content: center; min-height: 44px; max-width: 100%; overflow: hidden; }
 
 /* clock pill, theme picker, branding */
 .pill.clock { font-variant-numeric: tabular-nums; gap: 8px; }

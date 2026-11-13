@@ -154,7 +154,8 @@ await P.screenshot({ path: path.join(out, 'small-phone-owner.png') });
 
 // Back and swipe-back on a phone: Stock from the tab bar, then Back returns to the dashboard; again, then a swipe from
 // the left edge does the same; a swipe that starts mid-screen does nothing
-await P.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true }); await P.goto(base + '/' + slug + '#/', { waitUntil: 'networkidle2' }); await wait(1200);
+// (the owner page may still be fetching Google's sign-in script, which can hang where it is blocked: wait for the page, not the network)
+await P.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true }); await P.goto(base + '/' + slug + '#/', { waitUntil: 'domcontentloaded' }); await wait(2000);
 const hash = () => P.evaluate(() => location.hash);
 const tabTo = async (label) => { await P.evaluate((l) => [...document.querySelectorAll('.bottom-nav a')].find((a) => a.textContent.trim() === l).click(), label); await wait(700); };
 await tabTo('Stock');
