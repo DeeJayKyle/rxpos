@@ -2721,3 +2721,101 @@ tr.group-head > td { background: var(--surface-2); padding: 6px 10px; }
   .top-list td:nth-child(3) { width: 16% !important; }
   .top-list td.name small { display: block; }
 }
+
+/* ============================================================================
+   Navigation & motion feel (2026-11, src/mobilenav.jsx): iOS-like on phones and tablets (≤ 900 px), a lighter touch
+   on desktop. Shape, spacing, translucency and motion only: every theme, accent, surface style, Midnight Pro and the
+   chosen fonts keep their own colours. All motion here is off under prefers-reduced-motion (the global rule above).
+   ============================================================================ */
+:root { --ios-ease: cubic-bezier(.32, .72, 0, 1); --hairline: color-mix(in srgb, var(--border-strong) 70%, transparent); }
+
+/* frosted top bar with a hairline edge (desktop too) */
+.topbar { background: color-mix(in srgb, var(--bg) 72%, transparent); -webkit-backdrop-filter: saturate(1.8) blur(20px); backdrop-filter: saturate(1.8) blur(20px); border-bottom: 1px solid var(--hairline); }
+
+/* pages glide in from <main> (src/mobilenav.jsx), so the page itself doesn't also rise; cards and rows still ease in */
+.content > .page { animation-name: none; }
+.page-gliding .main { overflow-x: clip; }
+.page-swiping .content { box-shadow: -10px 0 28px -8px rgba(0, 0, 0, .28); background: var(--bg); user-select: none; -webkit-user-select: none; }
+
+/* Back (phones and tablets): the top bar's first button on every page but the dashboard */
+.back-btn { display: none; }
+@media (max-width: 900px) {
+  .topbar { min-height: 56px; padding-top: calc(8px + env(safe-area-inset-top)); padding-bottom: 8px; padding-left: max(10px, env(safe-area-inset-left)); padding-right: max(10px, env(safe-area-inset-right)); }
+  .topbar .back-btn { display: inline-flex; align-items: center; gap: 0; width: auto; min-width: 44px; height: 44px; padding: 0 10px 0 2px; margin-left: -4px; border-radius: 12px;
+    color: var(--primary-text); font: inherit; font-size: 16px; font-weight: 600; letter-spacing: -.01em; }
+  .topbar .back-btn:hover { background: color-mix(in srgb, var(--primary) 10%, transparent); color: var(--primary-text); }
+  .topbar .back-btn svg { flex: none; margin-right: -1px; }
+  .topbar .menu-btn, .topbar .icon-btn { min-width: 44px; height: 44px; }
+
+  /* frosted bottom tab bar with a hairline top edge; it steps aside while the on-screen keyboard is up */
+  .bottom-nav { background: color-mix(in srgb, var(--surface) 74%, transparent); -webkit-backdrop-filter: saturate(1.8) blur(22px); backdrop-filter: saturate(1.8) blur(22px);
+    border-top: 1px solid var(--hairline); box-shadow: none; padding-left: max(8px, env(safe-area-inset-left)); padding-right: max(8px, env(safe-area-inset-right)); }
+  .bottom-nav a, .bottom-nav button { -webkit-tap-highlight-color: transparent; transition: color .2s var(--ios-ease), transform .12s; }
+  .bottom-nav a:active, .bottom-nav button:active { transform: scale(.94); }
+  .kb-open .bottom-nav, .kb-open .update-pill { display: none; }
+  .kb-open .page { padding-bottom: 24px; }
+
+  /* a clear large page title */
+  .page-head h1 { font-size: 28px; font-weight: 800; letter-spacing: -.025em; line-height: 1.15; }
+  .page-head .sub { font-size: 13.5px; }
+
+  /* grouped rounded cards with soft depth */
+  .page .card { border-radius: 16px; }
+  /* pickers with long medicine names keep to the screen (the chosen name is cut, the list shows it in full) */
+  .page-head > *, .page-head .row { min-width: 0; max-width: 100%; }
+  .page-head .row { flex-wrap: wrap; }
+  .page select { max-width: 100%; text-overflow: ellipsis; }
+
+  /* iOS segmented controls (tabs, period pickers, the appearance switch) */
+  .tabs { gap: 2px; padding: 3px; border-radius: 11px; border: 0; box-shadow: none; background: color-mix(in srgb, var(--text) 7%, var(--surface-2)); }
+  .tabs .tab { border-radius: 8px; padding: 7px 12px; min-height: 36px; color: var(--text); font-weight: 600; }
+  .tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tabs .tab { flex: none; white-space: nowrap; }
+  .tabs .tab.active { background: var(--surface); color: var(--text); box-shadow: 0 1px 2px rgba(0, 0, 0, .12), 0 3px 8px -2px rgba(0, 0, 0, .10); }
+  .seg, .mode-toggle { border: 0; background: color-mix(in srgb, var(--text) 7%, var(--surface-2)); border-radius: 11px; padding: 3px; }
+  .seg button.on, .mode-opt.on { box-shadow: 0 1px 2px rgba(0, 0, 0, .12), 0 3px 8px -2px rgba(0, 0, 0, .10); }
+
+  /* iOS switches for on / off settings (still real checkboxes: keyboard, labels and screen readers unchanged) */
+  .field.check { flex-direction: row-reverse; justify-content: space-between; align-items: center; min-height: 44px; gap: 12px; }
+  .field.check > span { color: var(--text); font-size: 14px; font-weight: 500; }
+  .field.check > input[type='checkbox'] {
+    -webkit-appearance: none; appearance: none; flex: none; width: 50px; height: 30px; margin: 0; border-radius: 99px; cursor: pointer; border: 0; padding: 0;
+    background-color: color-mix(in srgb, var(--muted) 32%, transparent); background-image: radial-gradient(circle at center, #fff 0 12px, transparent 12.5px);
+    background-size: 30px 30px; background-position: left center; background-repeat: no-repeat; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--muted) 18%, transparent);
+    transition: background-color .25s var(--ios-ease), background-position .25s var(--ios-ease);
+  }
+  .field.check > input[type='checkbox']:checked { background-color: var(--primary); background-position: right center; box-shadow: none; }
+  .field.check > input[type='checkbox']:disabled { opacity: .5; cursor: default; }
+  .field.check > input[type='checkbox']:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+  .modal-bg { background: rgba(2, 6, 23, .42); }
+}
+/* sheets: every dialog with a form rises from the bottom as a full-height sheet with a grabber; its title bar and its
+   Save / Cancel row stay in view while it scrolls (and above the on-screen keyboard) */
+@media (max-width: 640px) {
+  .modal-bg { place-items: end center; padding: env(safe-area-inset-top) 0 0; }
+  .modal:not(.dialog) { width: 100%; max-width: none; max-height: calc(100dvh - 8px - env(safe-area-inset-top)); border-radius: 16px 16px 0 0; border-bottom: 0;
+    padding: 0 16px calc(16px + env(safe-area-inset-bottom)); overscroll-behavior: contain; animation: sheet-up .36s var(--ios-ease); }
+  .modal:not(.dialog) > .modal-head { position: sticky; top: 0; z-index: 3; margin: 0 -16px 14px; padding: 20px 10px 10px 16px; min-height: 64px;
+    background: color-mix(in srgb, var(--surface) 88%, transparent); -webkit-backdrop-filter: saturate(1.8) blur(18px); backdrop-filter: saturate(1.8) blur(18px); border-bottom: 1px solid var(--hairline); }
+  .modal:not(.dialog) > .modal-head::before { content: ''; position: absolute; top: 6px; left: 50%; width: 36px; height: 5px; margin-left: -18px; border-radius: 3px; background: var(--border-strong); }
+  .modal:not(.dialog) > .modal-head h3 { font-size: 17px; font-weight: 700; min-width: 0; overflow-wrap: anywhere; }
+  .modal:not(.dialog) > .modal-head .icon-btn { width: 40px; height: 40px; flex: none; border-radius: 50%; background: color-mix(in srgb, var(--text) 7%, transparent); }
+  .modal:not(.dialog) form > .form-actions:last-child, .modal:not(.dialog) > .form-actions:last-child {
+    position: sticky; bottom: calc(-16px - env(safe-area-inset-bottom)); z-index: 2; margin: 14px -16px calc(-16px - env(safe-area-inset-bottom)); padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+    background: color-mix(in srgb, var(--surface) 90%, transparent); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); border-top: 1px solid var(--hairline); flex-wrap: wrap; }
+  .modal:not(.dialog) .form-actions .btn { min-height: 44px; }
+  .modal.dialog { border-radius: 16px; margin: 0 auto calc(16px + env(safe-area-inset-bottom)); width: calc(100% - 32px); max-height: calc(100dvh - 32px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); animation: sheet-up .36s var(--ios-ease); }
+}
+@media (max-width: 380px) {
+  .topbar .back-btn .back-label { display: none; }
+  .topbar .back-btn { padding: 0; justify-content: center; }
+  .page-head h1 { font-size: 25px; }
+}
+@media (max-width: 340px) { .page-head h1 { font-size: 22px; } }
+/* touch: the sync dot and small pickers are comfortable to tap too */
+@media (pointer: coarse) and (max-width: 900px) {
+  .topbar .pill.clock { min-width: 44px; min-height: 44px; justify-content: center; }
+  .page select:not(.date-fmt), .pos select:not(.date-fmt) { min-height: 40px; }
+}
