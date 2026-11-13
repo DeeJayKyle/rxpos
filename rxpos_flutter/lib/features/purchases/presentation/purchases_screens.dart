@@ -138,7 +138,7 @@ class _PurchasesScreenState extends ConsumerState<PurchasesScreen> {
                           ]),
                           TextButton(onPressed: () => _view(p, st, payType(p)), child: const Text('View')),
                           if (can.contains('purchases.edit') && p.raw['imported'] == null)
-                            TextButton(key: Key('edit-${p.number}'), onPressed: () => showDialog<void>(context: context, builder: (_) => PurchaseEditor(purchase: p.toRecord())), child: const Text('Edit')),
+                            TextButton(key: Key('edit-${p.number}'), onPressed: () => showAppDialog<void>(context: context, builder: (_) => PurchaseEditor(purchase: p.toRecord())), child: const Text('Edit')),
                         ]),
                         onTap: () => _view(p, st, payType(p)),
                       );
@@ -150,7 +150,7 @@ class _PurchasesScreenState extends ConsumerState<PurchasesScreen> {
     );
   }
 
-  Future<void> _view(Purchase p, PharmacySettings st, String pay) => showDialog<void>(
+  Future<void> _view(Purchase p, PharmacySettings st, String pay) => showAppDialog<void>(
         context: context,
         builder: (c) => AlertDialog(
           title: Text('Purchase ${p.number}'),
@@ -314,7 +314,7 @@ class _PurchaseEditorState extends ConsumerState<PurchaseEditor> {
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     OutlinedButton(
                       onPressed: l.removed ? null : () async {
-                        final p = await showDialog<Product>(context: context, builder: (_) => _PickMedicine(data: d));
+                        final p = await showAppDialog<Product>(context: context, builder: (_) => _PickMedicine(data: d));
                         if (p != null) setState(() => _lines[k] = _lines[k].copyWith(productId: p.id, name: p.name, cost: l.orig == null && l.cost == 0 ? p.cost : null));
                       },
                       child: Text(l.name.isEmpty ? 'Choose medicine…' : l.name, overflow: TextOverflow.ellipsis),
@@ -524,11 +524,18 @@ class _ReorderScreenState extends ConsumerState<ReorderScreen> {
               child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                 Wrap(spacing: 12, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
                   const Text('Order quantity method', style: TextStyle(fontWeight: FontWeight.w700)),
-                  DropdownButton<OrderMethod>(
-                    key: const Key('order-method'),
-                    value: method,
-                    items: [for (final m in OrderMethod.values) DropdownMenuItem(value: m, child: Text(orderMethodInfo[m]!.$1))],
-                    onChanged: (m) => ref.read(deviceValueProvider('orderMethod').notifier).set(m?.name),
+                  // as wide as its longest method, but never wider than the card (phones)
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 360),
+                    child: IntrinsicWidth(
+                      child: DropdownButton<OrderMethod>(
+                        key: const Key('order-method'),
+                        isExpanded: true,
+                        value: method,
+                        items: [for (final m in OrderMethod.values) DropdownMenuItem(value: m, child: Text(orderMethodInfo[m]!.$1, overflow: TextOverflow.ellipsis))],
+                        onChanged: (m) => ref.read(deviceValueProvider('orderMethod').notifier).set(m?.name),
+                      ),
+                    ),
                   ),
                   if (method != OrderMethod.cover && method != OrderMethod.minMax)
                     DropdownButton<double>(
@@ -562,8 +569,8 @@ class _ReorderScreenState extends ConsumerState<ReorderScreen> {
               ]),
             ),
           ),
-          Row(children: [
-            const Text('Order each medicine from  '),
+          Wrap(spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
+            const Text('Order each medicine from'),
             SegmentedButton<bool>(segments: const [ButtonSegment(value: true, label: Text('Cheapest supplier')), ButtonSegment(value: false, label: Text('Last supplier'))],
                 selected: {_cheapest}, onSelectionChanged: (x) => setState(() {
                   _cheapest = x.first;
@@ -633,7 +640,7 @@ class _ReorderScreenState extends ConsumerState<ReorderScreen> {
     final st = d.settings;
     final days = (st.raw['autoReorderDays'] as num?)?.round() ?? 30, lead = (st.raw['leadDays'] as num?)?.round() ?? 7, safety = (st.raw['safetyDays'] as num?)?.round() ?? 7;
     final changes = computeReorderLevels(sales, d.products, days: days, lead: lead, safety: safety, branch: d.branch);
-    final ok = await showDialog<bool>(
+    final ok = await showAppDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
         title: const Text('Reorder levels from sales'),
@@ -669,7 +676,7 @@ class _ReorderScreenState extends ConsumerState<ReorderScreen> {
       if (po['status'] == 'Draft') await ref.read(recordStoreProvider).update((x) => x.put('purchaseOrders', {...po, 'status': 'Sent'}));
     }
 
-    await showDialog<void>(
+    await showAppDialog<void>(
       context: context,
       builder: (c) => AlertDialog(
         title: Text('Purchase order ${po['number']}'),

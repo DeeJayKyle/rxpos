@@ -69,7 +69,7 @@ class _ProformasScreenState extends ConsumerState<ProformasScreen> {
 
   Future<void> _view(Map<String, Object?> pf, PharmacySettings st) {
     final s = Sale.fromRecord({...pf, 'proforma': true, 'cashier': pf['createdBy'] ?? '', 'paid': pf['total']});
-    return showDialog<void>(
+    return showAppDialog<void>(
       context: context,
       builder: (c) => AlertDialog(
         title: Text('Proforma ${pf['number']}'),

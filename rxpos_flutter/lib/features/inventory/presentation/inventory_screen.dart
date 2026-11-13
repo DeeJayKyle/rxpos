@@ -137,7 +137,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
     if (!mounted) return;
     final batches = d.stock.batchesOf(p.id).where((b) => b.qty != 0).toList();
     final warn = d.settings.expiryWarnDays.round();
-    await showDialog<void>(
+    await showAppDialog<void>(
       context: context,
       builder: (c) => AlertDialog(
         title: Text('${p.name} – batches here'),

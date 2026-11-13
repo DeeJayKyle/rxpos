@@ -5,6 +5,9 @@ import 'package:flutter/material.dart';
 import '../entities/settings.dart';
 import '../theme/themes.dart';
 import '../rules/money.dart';
+import 'app_dialog.dart';
+
+export 'app_dialog.dart';
 
 extension Money on PharmacySettings {
   String money(num n) => formatMoney(n, currency: currency, decimals: decimalPlaces, locale: locale);
@@ -269,7 +272,7 @@ Future<Map<String, Object?>?> editRecord(BuildContext context, {required String 
   final values = Map<String, Object?>.of(initial);
   final ctl = {for (final f in fields) if (f.kind != FieldKind.choice && f.kind != FieldKind.flag) f.key: TextEditingController(text: _show(initial[f.key]))};
   final formKey = GlobalKey<FormState>();
-  return showDialog<Map<String, Object?>>(
+  return showAppDialog<Map<String, Object?>>(
     context: context,
     builder: (c) => StatefulBuilder(
       builder: (c, set) => AlertDialog(
@@ -354,7 +357,7 @@ void say(BuildContext context, String message, {bool error = false}) => Scaffold
 
 /// Yes / no question; true when confirmed.
 Future<bool> confirmAction(BuildContext context, String title, String message, String yes) async =>
-    await showDialog<bool>(
+    await showAppDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(title: Text(title), content: Text(message), actions: [
         TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),

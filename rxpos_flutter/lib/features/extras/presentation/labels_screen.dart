@@ -166,10 +166,17 @@ class _LabelsScreenState extends ConsumerState<LabelsScreen> {
       subtitle: 'Price and barcode labels for shelves and products',
       scroll: !wide,
       actions: [
-        DropdownButton<String>(
-          value: _size,
-          items: [for (final e in labelSizes.entries) DropdownMenuItem(value: e.key, child: Text(e.value.$3))],
-          onChanged: (v) => setState(() => _size = v ?? _size),
+        // as wide as its longest size, never wider than a phone
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 300),
+          child: IntrinsicWidth(
+            child: DropdownButton<String>(
+              isExpanded: true,
+              value: _size,
+              items: [for (final e in labelSizes.entries) DropdownMenuItem(value: e.key, child: Text(e.value.$3, overflow: TextOverflow.ellipsis))],
+              onChanged: (v) => setState(() => _size = v ?? _size),
+            ),
+          ),
         ),
         FilledButton.icon(
           onPressed: labels.isEmpty ? null : () => Printing.layoutPdf(name: 'labels', onLayout: (_) => labelsPdf(d, labels, size: _size, price: _price, expiry: _expiry, pharmacy: _pharmacy)),

@@ -2,6 +2,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'app_dialog.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -9,6 +10,7 @@ import 'package:go_router/go_router.dart';
 import '../data/device_settings.dart';
 import 'keymap.dart';
 import 'nav.dart';
+import 'nav_history.dart';
 
 /// The keys on this device (the defaults with this device's changes).
 final keyMapProvider = Provider<KeyMap>((ref) => KeyMap(ref.watch(deviceValueProvider(keymapKey)).value));
@@ -32,15 +34,6 @@ const _alias = {'/expenses': '/finance?tab=expenses'};
 
 /// The till in its Advanced layout keeps Ctrl+K for its own command bar (as the React app); set by the till.
 final tillOwnsCtrlK = ValueNotifier<bool>(false);
-
-/// Where the pages are, for back / forward (go_router keeps no history for context.go).
-class _History {
-  final List<String> stack = [];
-  int at = -1;
-  bool moving = false;
-}
-
-final _historyProvider = Provider<_History>((_) => _History());
 
 /// Pin or unpin a page.
 void togglePin(WidgetRef ref, BuildContext context, String path) {
@@ -86,25 +79,15 @@ class _KeysHostState extends ConsumerState<KeysHost> {
 
   void _visited(String path) {
     if (!mounted) return;
-    final h = ref.read(_historyProvider);
-    if (h.moving) {
-      h.moving = false;
-    } else if (h.at < 0 || h.stack[h.at] != path) {
-      h.stack.removeRange(h.at + 1, h.stack.length);
-      h.stack.add(path);
-      h.at = h.stack.length - 1;
-    }
     final recent = [path, ...ref.read(navRecentProvider).where((x) => x != path)].take(6).toList();
     ref.read(deviceValueProvider(navRecentKey).notifier).set(jsonEncode(recent));
   }
 
+  /// Alt+← / →: through this session's pages (nav_history.dart, shared with the Back button and the edge swipe).
   void _step(int by) {
-    final h = ref.read(_historyProvider);
-    final to = h.at + by;
-    if (to < 0 || to >= h.stack.length) return;
-    h.at = to;
-    h.moving = true;
-    context.go(h.stack[to]);
+    final h = ref.read(navHistoryProvider);
+    if (by < 0 && h.canStepBack) h.back(GoRouter.of(context));
+    if (by > 0) h.forward(GoRouter.of(context));
   }
 
   bool _onKey(KeyEvent e) {
@@ -153,7 +136,7 @@ Future<void> showKeysHelp(BuildContext context, KeyMap map, List<Screen> screens
           if (a.$3 == group && (!a.$1.startsWith('go:') || allowed.contains(a.$1)) && map.keyOf(a.$1).isNotEmpty)
             Padding(padding: const EdgeInsets.symmetric(vertical: 2), child: Row(children: [SizedBox(width: 130, child: Text(showKey(map.keyOf(a.$1)), style: const TextStyle(fontWeight: FontWeight.w700))), Expanded(child: Text(a.$2))])),
       ]);
-  return showDialog(
+  return showAppDialog(
     context: context,
     builder: (c) => AlertDialog(
       title: const Text('Keyboard and mouse'),

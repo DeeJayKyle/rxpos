@@ -206,7 +206,7 @@ Future<List<Map<String, Object?>>> scansToDrafts(RecordStore store, List<({Map<S
 typedef ScanOutcome = ({bool drafts, Map<String, Object?>? result, List<String> pagePaths, List<String> pageImages});
 
 /// The scanner: choose photos or PDFs (one or more invoices, each with its pages), then read them.
-Future<ScanOutcome?> scanInvoices(BuildContext context, WidgetRef ref) => showDialog<ScanOutcome>(context: context, barrierDismissible: false, builder: (_) => const _Scanner());
+Future<ScanOutcome?> scanInvoices(BuildContext context, WidgetRef ref) => showAppDialog<ScanOutcome>(context: context, barrierDismissible: false, builder: (_) => const _Scanner());
 
 class _Invoice {
   _Invoice(this.pages, {this.note = ''});
@@ -405,7 +405,7 @@ class ScanNotice extends StatelessWidget {
             Wrap(spacing: 6, children: [
               for (final (n, src) in images.indexed)
                 InkWell(
-                  onTap: () => showDialog<void>(context: context, builder: (_) => Dialog(child: InteractiveViewer(child: Image.memory(dataUrlBytes(src))))),
+                  onTap: () => showAppDialog<void>(context: context, builder: (_) => Dialog(child: InteractiveViewer(child: Image.memory(dataUrlBytes(src))))),
                   child: Tooltip(message: 'Page ${n + 1}: open to compare', child: Image.memory(dataUrlBytes(src), height: 70)),
                 ),
             ]),

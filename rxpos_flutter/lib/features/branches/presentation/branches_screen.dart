@@ -125,7 +125,7 @@ class BranchesScreen extends ConsumerWidget {
     var to = '${others.first['id']}';
     final lines = <String, double>{};
     var q = '';
-    final ok = await showDialog<bool>(
+    final ok = await showAppDialog<bool>(
       context: context,
       builder: (c) => StatefulBuilder(builder: (c, set) {
         final found = searchProducts(d.products.where((p) => d.stockOf(p.id) > 0).toList(), q, stockOf: (p) => d.stockOf(p.id)).take(20);
