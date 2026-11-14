@@ -1,5 +1,30 @@
 # RxPOS release notes
 
+## React (classic) app 1.8.3 · Flutter app 2.1 (next build) · November 2026
+
+AI help, a live clinical safety check and a new look for both apps. Data, figures, permissions, offline work, sync
+and backups are unchanged; AI needs the internet and the cloud (a self-hosted hub says it isn't set up), and the owner
+can switch it off per pharmacy as before.
+
+- **The till on a phone:** the open sale sits below the top bar, Charge is always in reach (pinned at the top and
+  again at the bottom), the held sales are never cut off, and slimmer lines show more medicines.
+- **Ctrl+K, now with AI:** the same instant search, offline. Online, it can also do it at the till ("add 2 strips
+  of paracetamol"), answer stock questions (what expires soon, dead stock, a reorder draft) from the pharmacy's own
+  figures, or diagnose a device problem.
+- **Scan Invoice with AI** (Add Stock) and **Scan Rx** (the till): a photo, image or PDF is read, matched to your
+  medicines and shown for checking first. A prescription fills the controlled-drugs register's patient and
+  prescriber. The existing Scan invoice (several pages, drafts) is unchanged.
+- **Clinical safety check** on every sale: the customer's recorded allergies, the same medicine twice and
+  well-known serious interactions. A small "Safety" badge when clear, a pill to open when something needs a look.
+  It never blocks a sale.
+- **Expiry at a glance:** green (over 6 months), amber (3–6 months, days shown inside the warning period), red
+  (expired: not sold). Rx and CD · NDA pills. Tablet / Strip / Box beside each line on the till.
+- **AI System Doctor** (This device; Device errors in the owner console): explains sync, storage and error problems
+  in plain English, with repairs that ask first and never lose unsent changes.
+- **New themes:** RxPOS OLED Black (true black, saves battery on OLED phones) and RxPOS Daylight Clinical, the
+  starting themes for new devices. A theme already chosen on a device is kept. Bento cards, even-width figures,
+  48 px touch targets on touch screens.
+
 ## React (classic) app 1.8.2 · Flutter app 2.1 (next build) · November 2026
 
 A mobile update for both apps with an iOS-like feel. Data, figures, permissions, settings, actions, offline work,
