@@ -73,23 +73,30 @@ const ROUTES = [['/sales', 'table tbody tr, .sale-card'], ['/', '.stats'], ['/po
 const navTimes = [];
 await startProfile();
 for (const [route, sel] of ROUTES) {
+  await P.keyboard.press('Shift'); // a person is using the app (background jobs wait for a quiet moment)
   // RXPOS_PERF_TRACE=/inventory: a browser trace of that page change (style, layout, paint, script), summarised
   const tracing = process.env.RXPOS_PERF_TRACE === route && !navTimes.some(([r]) => r === route);
+  const oneProfile = process.env.RXPOS_PERF_PROFILE_ROUTE === route && !navTimes.some(([r]) => r === route);
+  if (oneProfile) { await cdp.send('Profiler.enable'); await cdp.send('Profiler.start'); }
   if (tracing) await P.tracing.start({ path: path.join(out, 'trace.json'), categories: ['devtools.timeline', 'disabled-by-default-devtools.timeline', 'blink', 'v8.execute'] });
   const ms = await P.evaluate(async (route, sel) => {
     const main = document.querySelector('main');
     const old = main?.firstElementChild;
     const t = performance.now();
     location.hash = '#' + route;
+    let first = 0, kind = '';
     for (;;) {
       await new Promise((r) => requestAnimationFrame(r));
       const now = document.querySelector('main')?.firstElementChild;
+      if (!first && now !== old) { first = Math.round(performance.now() - t); kind = now?.className || now?.tagName || ''; }
       if (now && now !== old && sel.split(', ').some((x) => now.querySelector(x) || now.matches(x))) break;
       if (performance.now() - t > 15000) return -1;
     }
     await new Promise((r) => requestAnimationFrame(r)); // painted
+    window.__navLog = (window.__navLog || []).concat(`${route}: main changed at ${first} ms (${kind})`);
     return Math.round(performance.now() - t);
   }, route, sel);
+  if (oneProfile) { const { profile } = await cdp.send('Profiler.stop'); fs.writeFileSync(path.join(out, 'route.cpuprofile'), JSON.stringify(profile)); }
   if (tracing) {
     await P.tracing.stop();
     const ev = JSON.parse(fs.readFileSync(path.join(out, 'trace.json'))).traceEvents.filter((e) => e.ph === 'X' && e.dur);
@@ -102,6 +109,7 @@ for (const [route, sel] of ROUTES) {
   await wait(400);
 }
 await stopProfile('pages');
+report.push(['page change detail', (await P.evaluate(() => window.__navLog || [])).join(' · ')]);
 const second = navTimes.slice(-2).map(([, ms]) => ms); // the till and dashboard again (code already loaded)
 check(`switching pages is quick on a slow phone CPU (${SLOW}× throttle): every page under 900 ms`, navTimes.every(([, ms]) => ms >= 0 && ms < 900), JSON.stringify(navTimes));
 check('a page opened before comes back under 450 ms', second.every((ms) => ms >= 0 && ms < 450), JSON.stringify(second));

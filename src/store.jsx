@@ -382,6 +382,16 @@ const Ctx = createContext(null);
 // sync running in the background re-renders only what shows them (the clock pill, This device), never the pages.
 const SyncCtx = createContext({ syncStatus: { state: 'off' }, pending: 0, storageIssue: '' });
 
+// when the person last touched the app: heavy background jobs (the daily copy, the weekly reorder levels) wait for a
+// quiet moment, so they never land in the middle of a sale or a page change
+let lastInput = Date.now();
+if (typeof window !== 'undefined') for (const ev of ['pointerdown', 'keydown', 'wheel', 'touchstart']) window.addEventListener(ev, () => { lastInput = Date.now(); }, { passive: true, capture: true });
+/** Resolves once nobody has touched the app for [quietMs], the app is on screen and the browser is idle */
+export async function whenQuiet(quietMs = 30000) {
+  while (Date.now() - lastInput < quietMs || document.visibilityState !== 'visible') await new Promise((r) => setTimeout(r, 5000));
+  await new Promise((r) => (window.requestIdleCallback ? requestIdleCallback(r, { timeout: 30000 }) : setTimeout(r, 1)));
+}
+
 export function StoreProvider({ children }) {
   const [db, setDb] = useState(null);
   const [syncCfg, setSyncCfgState] = useState(null);
@@ -470,7 +480,7 @@ export function StoreProvider({ children }) {
     const t = setTimeout(async () => {
       try {
         if ((await idbKeys()).includes(key)) { snappedDay.current = key; return; }
-        await new Promise((r) => (window.requestIdleCallback ? requestIdleCallback(r, { timeout: 30000 }) : setTimeout(r, 1)));
+        await whenQuiet(); // the copy is one long step the screen can't interrupt
         await idbSet(key, dbRef.current);
         snappedDay.current = key;
         const snaps = (await idbKeys()).filter((k) => String(k).startsWith('snap:')).sort();

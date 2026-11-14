@@ -475,13 +475,14 @@ export function SortTh({ s, k, children, className = '' }) {
  * Long lists draw their first rows at once and the rest a moment later, as a low-priority update that gives way to
  * taps and typing: a page with hundreds of rows opens as fast as a short one. Returns how many rows to draw now.
  */
-export function useProgressive(total, first = 60) {
+export function useProgressive(total, first = 60, step = 80) {
   const [n, setN] = useState(first);
   useEffect(() => {
     if (total <= n) return;
-    const go = () => startTransition(() => setN(total));
+    // a few rows at a time: drawing hundreds of rows at once is one long freeze the browser can't interrupt
+    const go = () => startTransition(() => setN((x) => Math.min(total, x + step)));
     if (window.requestIdleCallback) { const id = requestIdleCallback(go, { timeout: 300 }); return () => cancelIdleCallback(id); }
     const id = setTimeout(go, 50); return () => clearTimeout(id);
-  }, [total, n]);
+  }, [total, n, step]);
   return Math.min(n, total);
 }
