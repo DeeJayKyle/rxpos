@@ -257,8 +257,8 @@ export default function POS({ mode = 'retail' }) {
     const g = parseGs1(q);
     if (g) { scanPack(g); setQ(''); return; }
     const exact = products.find((p) => p.barcode && p.barcode === q.trim());
-    if (exact) add(exact);
-    else if (/^\d{6,}$/.test(q.trim())) toast(`No medicine has the barcode ${q.trim()}`, 'warn'); // a scan that matched nothing: never guess
+    if (exact) return void add(exact);
+    if (/^\d{6,}$/.test(q.trim())) return void toast(`No medicine has the barcode ${q.trim()}`, 'warn'); // a scan that matched nothing: never guess
     // Enter acts on what is typed now, even if the list on screen hasn't caught up with the last keys yet
     const shown = q === dq ? results : resultsFor(q);
     if (shown[active] && (q || active > 0)) add(shown[active]);
