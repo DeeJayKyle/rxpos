@@ -43,10 +43,36 @@ export const MAIN_BRANCH = 'main';
 export async function listSnapshots() {
   return (await idbKeys()).filter((k) => String(k).startsWith('snap:')).sort().reverse().map((k) => k.slice(5));
 }
-export const loadSnapshot = (date) => idbGet('snap:' + date);
+/** A day's undo copy as the screens expect the pharmacy: the copies made by snapshot.worker.js hold the stored
+ *  record buckets ({ v: 2, rows, settings, tomb }); older copies are the whole pharmacy already */
+export async function loadSnapshot(date) {
+  const s = await idbGet('snap:' + date);
+  if (s?.v !== 2) return s;
+  const tables = {};
+  for (const { t, rs } of s.rows || []) { const list = (tables[t] ??= []); for (const r of rs) list.push(r); }
+  return fromRecords({ tables, settings: s.settings, tomb: s.tomb });
+}
+
+/** The daily undo copy made by a worker straight from IndexedDB (true), or not possible here (false: the caller
+ *  makes it the old way) */
+function snapshotOffThread(key) {
+  return new Promise((resolve) => {
+    let w, url;
+    try {
+      url = URL.createObjectURL(new Blob([`(${snapshotWorkerMain})()`], { type: 'text/javascript' }));
+      w = new Worker(url);
+    } catch { if (url) URL.revokeObjectURL(url); return resolve(false); }
+    const end = (ok) => { clearTimeout(t); w.terminate(); URL.revokeObjectURL(url); resolve(ok); };
+    const t = setTimeout(() => end(false), 120000);
+    w.onmessage = ({ data }) => { if (!data?.ok) console.warn('Daily copy:', data?.error); end(!!data?.ok); };
+    w.onerror = (e) => { e.preventDefault?.(); end(false); };
+    w.postMessage({ key });
+  });
+}
 
 // id helper lives in ids.js (pure, unit-tested); imported for use here and re-exported so existing imports work.
 import { uid } from './ids.js';
+import { snapshotWorkerMain } from './snapshot.worker.js';
 export { uid };
 export const now = () => new Date().toISOString();
 // Date helpers live in dates.js (pure, unit-tested); imported for use here and re-exported so existing imports from
@@ -481,11 +507,14 @@ export function StoreProvider({ children }) {
     const t = setTimeout(async () => {
       try {
         if ((await idbKeys()).includes(key)) { snappedDay.current = key; return; }
-        await whenQuiet(); // the copy is one long step the screen can't interrupt
-        await idbSet(key, dbRef.current);
+        await whenQuiet(); // reading every record still competes with a sale's save: wait for a quiet moment
+        // a worker reads the saved records and writes the copy (and keeps the newest 7): nothing on the main thread
+        if (!(await snapshotOffThread(key))) {
+          await idbSet(key, dbRef.current); // no workers here: the old way, one long step
+          const snaps = (await idbKeys()).filter((k) => String(k).startsWith('snap:')).sort();
+          for (const old of snaps.slice(0, -7)) await idbDel(old);
+        }
         snappedDay.current = key;
-        const snaps = (await idbKeys()).filter((k) => String(k).startsWith('snap:')).sort();
-        for (const old of snaps.slice(0, -7)) await idbDel(old);
       } catch (e) { console.error(e); }
     }, 5000);
     return () => clearTimeout(t);
