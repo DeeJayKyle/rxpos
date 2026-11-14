@@ -86,8 +86,6 @@ export default function Dashboard() {
         </div>
       </section>
 
-      <BentoDashboard byDay={m.byDay} db={db} branchId={branchId} fmt={fmt} can={can} counts={{ expiry: exp.soon + exp.expired, low: lowStock.length }} />
-
       <div className="stats kpis">
         {/* today's sales open Reports → Sales lines for today (every medicine sold); staff without it get the sales list */}
         <Stat {...(can('reports') || can('reports.lines') ? { to: '/reports', state: { tab: 'lines', from: today(), to: today() } } : { to: '/sales', state: { from: today(), to: today() } })} label="Today's sales" value={fmt(t.total)} sub={`${t.n} sale${t.n === 1 ? '' : 's'} · vs yesterday`} delta={delta} tone="teal" icon={Banknote} />
@@ -95,6 +93,9 @@ export default function Dashboard() {
         {(can('finance') || can('reports')) && <Stat to="/expenses" label="Today's expenses" value={fmt(t.exp)} sub={`Sales − expenses: ${fmt(t.total - t.exp)}`} tone="orange" icon={Wallet} />}
         <Stat to="/sales" state={{ from: today(), to: today() }} label="Transactions" value={t.n.toLocaleString()} sub="receipts today · vs yesterday" delta={nDelta} tone="blue" icon={ReceiptText} />
       </div>
+
+      {/* the owner's request: today's figures first, then the bento row */}
+      <BentoDashboard byDay={m.byDay} db={db} branchId={branchId} fmt={fmt} can={can} counts={{ expiry: exp.soon + exp.expired, low: lowStock.length }} />
 
       <div className="stats alerts" aria-label="Stock alerts">
         <Stat to="/inventory" state={{ filter: 'low' }} label="Low stock" value={lowStock.length} sub="in stock, at or below reorder level" tone="amber alert" icon={PackageX} />

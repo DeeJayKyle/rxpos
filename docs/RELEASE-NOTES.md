@@ -1,5 +1,10 @@
 # RxPOS release notes
 
+## React (classic) app 1.8.5 · Flutter app 2.1 (next build) · November 2026
+
+- **Dashboard:** today's figures (sales, gross profit, expenses and transactions, each against yesterday) are back at
+  the top, with the new bento row (period sales, daily bars, latest receipts, the next step) just below them.
+
 ## React (classic) app 1.8.4 · Flutter app 2.1 (next build) · November 2026
 
 A faster app, new navigation and a dashboard from the owner's design references, and Notion-like pages. Data,

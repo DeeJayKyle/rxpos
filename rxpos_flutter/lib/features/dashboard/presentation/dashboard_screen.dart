@@ -78,8 +78,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         SizedBox(width: double.infinity, child: GreetingCard(pharmacy: s.name, name: session?.userName ?? '', canSell: can.contains('pos.sell'))),
         const SizedBox(height: 16),
-        BentoRow(byDay: f.byDay, sales: saleList, branch: data.branch, money: s.money, expiring: soonN + expiredN, low: low, can: can),
-        const SizedBox(height: 16),
         StatGrid(children: [
           StatCard(label: 'Today\'s sales', value: s.money(t.total), sub: '${t.count} sale${t.count == 1 ? '' : 's'}${delta(t.total, y.total)}', icon: Icons.payments_outlined,
               onTap: can.contains('sales.view') ? () => context.go('/sales?from=$day&to=$day') : null),
@@ -92,6 +90,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           StatCard(label: 'Transactions', value: '${t.count}', sub: 'receipts today${delta(t.count.toDouble(), y.count.toDouble())}', icon: Icons.receipt_long_outlined, color: Colors.blue,
               onTap: can.contains('sales.view') ? () => context.go('/sales?from=$day&to=$day') : null),
         ]),
+        const SizedBox(height: 16),
+        // the owner's request: today's figures first, then the bento row
+        BentoRow(byDay: f.byDay, sales: saleList, branch: data.branch, money: s.money, expiring: soonN + expiredN, low: low, can: can),
         const SizedBox(height: 16),
         if (phone)
           AlertList(items: [
