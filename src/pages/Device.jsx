@@ -1,6 +1,6 @@
 // "This device": what each person can set for the phone, tablet or PC in front of them. Nothing here is shared.
 import { useEffect, useRef, useState } from 'react';
-import { CalendarDays } from 'lucide-react';
+import { CalendarDays, PanelLeft, PanelTop } from 'lucide-react';
 import { DATE_FORMATS } from '../dateformat.js';
 import { RefreshCw, Download, MonitorSmartphone, Smartphone, Monitor, ZoomIn, RotateCw, Volume2, Upload, Play, BellRing, CheckCircle2, AlertTriangle, PanelBottom } from 'lucide-react';
 import { LABEL, onUpdate, updateNow } from '../update.js';
@@ -53,6 +53,11 @@ export default function Device() {
             <Choice label="Rotation" value={d.rotation} onChange={(rotation) => setDevice({ rotation })} options={[['auto', 'Turns with the phone'], ['portrait', 'Stay upright'], ['landscape', 'Stay sideways']]} />
           </>}
           {d.zoom !== 1 && <button className="link-btn small" onClick={() => setDevice({ zoom: 1 })}>Back to 100%</button>}
+        </section>
+        <section className="card">
+          <h3><PanelLeft size={18} />Navigation</h3>
+          <p className="muted small">How the pages are listed on wide screens. Phones and tablets always use the floating bar at the bottom, and More opens every page.</p>
+          <Choice label="Navigation" value={d.navStyle || 'sidebar'} onChange={(navStyle) => setDevice({ navStyle })} options={[['sidebar', 'Sidebar', PanelLeft], ['top', 'Top bar', PanelTop]]} />
         </section>
         <section className="card">
           <h3><CalendarDays size={18} />Dates</h3>

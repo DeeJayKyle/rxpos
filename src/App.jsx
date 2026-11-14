@@ -31,6 +31,7 @@ import { setBadge } from './badges.js';
 import { ACTIONS, keyOf, keyMatcher, showKey, typing } from './keymap.js';
 import { deviceSettings, setDevice, onDevice } from './device.js';
 import { Modal } from './ui.jsx';
+import { MegaMenu, TopNav, NavPromo } from './components/NavMenus.jsx';
 import { BackButton, markNav, usePageMotion, useEdgeSwipeBack, useKeyboardFit } from './mobilenav.jsx';
 import AiOmnibar from './components/AiOmnibar.jsx';
 import { warmSearchKeys } from './search.js';
@@ -414,7 +415,11 @@ function Shell() {
   // the keyboard map (src/keymap.js): pages, Ctrl+K, ?, back / forward, pin; the keys can be changed per device
   const [help, setHelp] = useState(false);
   const [nav, setNav] = useState(() => ({ pins: deviceSettings().navPins || [], recent: deviceSettings().navRecent || [] }));
-  useEffect(() => onDevice((d) => setNav({ pins: d.navPins || [], recent: d.navRecent || [] })), []);
+  // the navigation style chosen in This device → Navigation: the sidebar (default) or the top pill navbar (wide screens)
+  const [navStyle, setNavStyle] = useState(() => deviceSettings().navStyle || 'sidebar');
+  useEffect(() => onDevice((d) => { setNav({ pins: d.navPins || [], recent: d.navRecent || [] }); setNavStyle(d.navStyle || 'sidebar'); }), []);
+  const [mega, setMega] = useState(false); // every page as a bento sheet (phones: More; top navbar: All)
+  useEffect(() => setMega(false), [location.pathname]);
   const togglePin = (to) => { const pins = nav.pins.includes(to) ? nav.pins.filter((x) => x !== to) : [...nav.pins, to].slice(-8); setDevice({ navPins: pins }); toast(nav.pins.includes(to) ? 'Unpinned from the menu' : 'Pinned to the top of the menu'); };
   const here = location.pathname;
   const pinRef = useRef(); pinRef.current = () => togglePin(here);
@@ -517,7 +522,7 @@ function Shell() {
   const initials = user.name.split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
 
   return (
-    <div className={'shell' + (drawer ? ' drawer-open' : '') + (rail ? ' rail' : '')}>
+    <div className={'shell nav-' + navStyle + (drawer ? ' drawer-open' : '') + (rail ? ' rail' : '')}>
       <div className="drawer-bg" onClick={() => setDrawer(false)} />
       <aside className="sidebar">
         <div className="brand"><BrandLogo src={db.license?.[0]?.branding?.logo} size={34} /> <span className="wordmark">Rx<span className="brand-accent">POS</span></span>
@@ -548,6 +553,7 @@ function Shell() {
             </div>
           ))}
         </nav>
+        {!rail && <NavPromo counts={counts} can={can} />}
         <div className="user-box">
           <span className="avatar">{initials}</span>
           <div className="grow"><strong>{user.name}</strong><small>{user.role}</small></div>
@@ -573,6 +579,7 @@ function Shell() {
               </nav>
             ) : null;
           })()}
+          {navStyle === 'top' && <TopNav groups={groups} counts={counts} can={can} here={here} onAll={() => setMega(true)} />}
           <div className="spacer grow" />
           {db.branches.length > 1 && <NavLink to="/branches" className="pill branch-pill" title="Branch this device works as"><Building2 size={14} />{branch?.name}</NavLink>}
           <ClockPill />
@@ -594,8 +601,9 @@ function Shell() {
         <NavLink to="/inventory" onClick={() => markNav('tab')}><Boxes size={20} /><span>Stock</span></NavLink>
         <NavLink to="/pos" className="fab" onClick={() => markNav('tab')}><span className="fab-icon"><ShoppingCart size={22} /></span><span>Sell</span></NavLink>
         <NavLink to="/sales" onClick={() => markNav('tab')}><ReceiptText size={20} /><span>Sales</span></NavLink>
-        <button onClick={() => setDrawer(true)} aria-expanded={drawer}><Menu size={20} /><span>More</span></button>
+        <button onClick={() => setMega(true)} aria-expanded={mega}><Menu size={20} /><span>More</span></button>
       </nav>
+      <MegaMenu open={mega} onClose={() => setMega(false)} groups={groups} counts={counts} can={can} onFullMenu={() => setDrawer(true)} />
       <AiOmnibar open={palette} onClose={() => setPalette(false)} pages={pages} commands={[
         ...(can('pos.sell') ? [{ label: 'New sale', words: 'sell till pos', Icon: ShoppingCart, hint: showKey(keyOf('go:/pos')), go: () => navigate('/pos') }] : []),
         ...(can('stock.receive') ? [{ label: 'Receive stock', words: 'add stock delivery invoice purchase', Icon: PackagePlus, hint: showKey(keyOf('go:/add-stock')), go: () => navigate('/add-stock') }] : []),

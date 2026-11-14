@@ -138,3 +138,84 @@ h1, .page-head h1, .pos-title { font-family: var(--font-display); letter-spacing
 
 /* all clear: the safety badge beside "Current sale" */
 .safety-badge { display: inline-flex; align-items: center; gap: 4px; vertical-align: middle; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: .04em; color: var(--ok); background: var(--ok-soft); }
+
+/* ---------- Navigation styles (2026-11-14): sidebar action card, floating pill bar, bento mega menu, top pill navbar ---------- */
+.nav-promo { position: relative; overflow: hidden; display: grid; gap: 4px; margin: 10px 4px 8px; padding: 14px; border-radius: 16px; text-decoration: none; color: #fff;
+  background: linear-gradient(145deg, color-mix(in srgb, var(--primary) 34%, #0b0e14), color-mix(in srgb, var(--primary2, var(--primary)) 22%, #0b0e14)); border: 1px solid rgba(255, 255, 255, .10); }
+.nav-promo strong { font-size: 13.5px; }
+.nav-promo small { color: rgba(255, 255, 255, .72); font-size: 12px; line-height: 1.35; }
+.nav-promo svg { color: var(--primary); }
+.nav-promo-cta { justify-self: start; display: inline-flex; gap: 4px; align-items: center; margin-top: 6px; padding: 5px 10px; border-radius: 999px; background: #fff; color: #0b0e14; font-size: 12px; font-weight: 700; }
+.nav-promo-glow { position: absolute; right: -30px; top: -30px; width: 110px; height: 110px; border-radius: 50%; background: radial-gradient(closest-side, color-mix(in srgb, var(--primary) 55%, transparent), transparent); pointer-events: none; }
+.nav-promo:hover .nav-promo-cta { transform: translateX(2px); }
+.nav-promo-cta { transition: transform .12s; }
+@media (max-height: 700px) { .nav-promo small { display: none; } }
+
+/* bento mega menu (phones: More; wide screens: the top navbar's All) */
+.mega-bg { position: fixed; inset: 0; z-index: 70; background: rgba(2, 6, 23, .45); display: flex; align-items: flex-end; justify-content: center; animation: mega-fade .12s ease-out; }
+.mega-sheet { width: min(980px, 100%); max-height: min(86vh, 860px); overflow: auto; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 22px 22px 0 0;
+  padding: 14px 16px calc(16px + env(safe-area-inset-bottom)); box-shadow: 0 -20px 50px -20px rgba(0, 0, 0, .45); animation: mega-up .18s cubic-bezier(.2, .9, .3, 1); }
+@media (min-width: 901px) { .mega-bg { align-items: flex-start; padding-top: 64px; } .mega-sheet { border-radius: 22px; animation-name: mega-drop; } }
+.mega-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.mega-head .micro { flex: 1; }
+.mega-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.mega-group { display: grid; gap: 2px; align-content: start; padding: 10px; border: 1px solid var(--border); border-radius: 16px; background: var(--surface-2); }
+.mega-group h3 { margin: 2px 6px 6px; }
+.mega-item { display: flex; gap: 10px; align-items: center; padding: 8px; border-radius: 12px; text-decoration: none; color: var(--text); min-height: 44px; }
+.mega-item:hover, .mega-item:focus-visible { background: color-mix(in srgb, var(--primary) 10%, transparent); }
+.mega-item.active { background: color-mix(in srgb, var(--primary) 16%, transparent); }
+.mega-item strong { display: block; font-size: 13.5px; font-weight: 600; }
+.mega-item small { display: block; color: var(--muted); font-size: 12px; }
+.mega-icon { display: grid; place-items: center; width: 34px; height: 34px; flex: none; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); color: var(--primary-text, var(--primary)); }
+.mega-item .count, .top-pill .count { min-width: 20px; padding: 1px 6px; border-radius: 999px; background: var(--danger, #ef4444); color: #fff; font-size: 11px; font-weight: 700; text-align: center; }
+.mega-featured { display: grid; gap: 4px; align-content: start; text-align: left; font: inherit; cursor: pointer; padding: 16px; border-radius: 16px; border: 0; color: #fff; text-decoration: none;
+  background: linear-gradient(150deg, color-mix(in srgb, var(--primary) 70%, #0b0e14), color-mix(in srgb, var(--primary2, var(--primary)) 45%, #0b0e14)); }
+.mega-featured strong { font-size: 16px; }
+.mega-featured small { color: rgba(255, 255, 255, .8); }
+.mega-featured.small { padding: 12px; align-self: start; }
+.mega-featured.small strong { font-size: 13.5px; }
+.mega-cta { justify-self: start; display: inline-flex; gap: 4px; align-items: center; margin-top: 8px; padding: 5px 11px; border-radius: 999px; background: #fff; color: #0b0e14; font-size: 12px; font-weight: 700; }
+@keyframes mega-fade { from { opacity: 0; } }
+@keyframes mega-up { from { transform: translateY(24px); opacity: .4; } }
+@keyframes mega-drop { from { transform: translateY(-8px); opacity: 0; } }
+
+/* phones: the bottom bar floats as a pill above the page, the Sell button raised in the middle, a dot under the current tab */
+@media (max-width: 900px) {
+  .bottom-nav { left: 12px; right: 12px; bottom: calc(10px + env(safe-area-inset-bottom)); border: 1px solid var(--border); border-radius: 999px; padding: 6px 8px;
+    box-shadow: 0 14px 34px -14px rgba(0, 0, 0, .45); }
+  .bottom-nav a, .bottom-nav button { position: relative; border-radius: 999px; }
+  .bottom-nav a.active:not(.fab)::after { content: ''; position: absolute; bottom: 1px; left: 50%; width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%; background: var(--primary); }
+  .bottom-nav .fab { border-radius: 999px; margin: -18px 6px 0; }
+  .page, .pos { padding-bottom: calc(100px + env(safe-area-inset-bottom)); }
+  .toasts { bottom: calc(92px + env(safe-area-inset-bottom)); }
+}
+
+/* the top pill navbar (This device → Navigation → Top bar): wide screens hide the sidebar and list the groups as pills */
+.top-nav { display: none; }
+@media (min-width: 1101px) {
+  .shell.nav-top > .sidebar { display: none; }
+  .shell.nav-top .top-nav { display: flex; gap: 4px; align-items: center; padding: 4px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface-2); }
+  .shell.nav-top .crumbs { display: none; }
+  .shell.nav-top .search-trigger span { display: none; }
+  .shell.nav-top .search-trigger { flex: 0 0 auto; }
+}
+.top-group { position: relative; }
+.top-pill { display: inline-flex; gap: 6px; align-items: center; height: 34px; padding: 0 13px; border-radius: 999px; border: 0; background: none; font: inherit; font-size: 13px; font-weight: 600; color: var(--muted); cursor: pointer; text-decoration: none; white-space: nowrap; }
+.top-pill:hover, .top-pill.open { color: var(--text); background: var(--surface); }
+.top-pill.active { color: var(--on-accent, #fff); background: var(--primary); }
+.top-pill svg:last-child { transition: transform .14s; }
+.top-pill.open svg:last-child { transform: rotate(180deg); }
+.top-panel { position: absolute; top: calc(100% + 10px); left: 0; z-index: 65; display: grid; grid-template-columns: minmax(280px, 1fr) 220px; gap: 10px; width: max-content; max-width: min(720px, 90vw);
+  padding: 10px; border-radius: 18px; background: var(--surface); border: 1px solid var(--border); box-shadow: 0 24px 50px -22px rgba(0, 0, 0, .45); animation: mega-drop .14s ease-out; }
+.top-panel-items { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 2px; max-height: 70vh; overflow: auto; }
+@media (prefers-reduced-motion: reduce) { .mega-bg, .mega-sheet, .top-panel { animation: none; } }
+
+/* Gold Night (dark luxury): black canvas, warm ivory text, champagne-gold accents */
+:root[data-palette='gold-night'] { --accent-grad: linear-gradient(135deg, #e3bd6a, #b8862b); --on-accent: #1a1406; }
+:root[data-palette='gold-night'] .sidebar nav a.active::before, :root[data-palette='gold-night'] .bottom-nav a.active:not(.fab)::after { background: #d4a64a; }
+:root[data-palette='gold-night'] .sidebar nav a.active svg { color: #e3bd6a; }
+:root[data-palette='gold-night'] .card, :root[data-palette='gold-night'] .mega-group { border-color: rgba(212, 166, 74, .16); }
+:root[data-palette='gold-night'] .topbar, :root[data-palette='gold-night'] .bottom-nav { background: rgba(11, 11, 12, .88); border-color: rgba(212, 166, 74, .18); }
+:root[data-palette='gold-night'] .nav-promo, :root[data-palette='gold-night'] .mega-featured { background: linear-gradient(150deg, #2a2112, #120f09); border: 1px solid rgba(212, 166, 74, .35); }
+:root[data-palette='gold-night'] .nav-promo-cta, :root[data-palette='gold-night'] .mega-cta { background: linear-gradient(135deg, #e3bd6a, #b8862b); color: #1a1406; }
+:root[data-palette='gold-night'] h1, :root[data-palette='gold-night'] .wordmark { letter-spacing: -.01em; }
