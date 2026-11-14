@@ -70,7 +70,8 @@ const r1 = await sell(A.p, 'Sample Tabs');
 check('offline: the sale completes on the device', !!r1, r1);
 check('…and is on the device before "Sale complete" is shown', r1 && (await deviceHas(A.p, r1)));
 check('…with its changes waiting in the outbox', (await outboxSize(A.p)) >= 2, await outboxSize(A.p));
-await wait(1500);
+// the failed send turns "Syncing…" into "Offline · N waiting"; on a busy runner that can take longer than a moment
+await until(A.p, () => /^Offline · \d+ waiting$/.test(document.querySelector('.pill.clock .clock-state')?.innerText || ''), 15000);
 check('the top bar says Offline with the number waiting', /^Offline · \d+ waiting$/.test(await pill(A.p)), await pill(A.p));
 await A.p.goto('about:blank'); await A.p.goto(base + '/' + slug + '#/sales', { waitUntil: 'networkidle2' }); await wait(1500); // restart (cloud still down)
 check('after a restart the sale is still there', await until(A.p, (n) => document.querySelector('.page tbody')?.innerText.includes(n), 8000, r1));
