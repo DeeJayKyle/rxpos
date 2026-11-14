@@ -4,10 +4,10 @@ import {
   LayoutDashboard, ShoppingCart, PackageOpen, ReceiptText, FileText, ClipboardPlus, Users, Truck, Pill, FlaskConical,
   Boxes, PackagePlus, History, CalendarClock, PencilRuler, ScrollText, Wallet, Tags, Landmark, ArrowLeftRight, HandCoins,
   ArrowDownLeft, ArrowUpRight, ClipboardCheck, RefreshCw, Undo2, ShieldPlus, BookOpen, BarChart3, Settings as SettingsIcon, Search, Sun, Moon, Menu, LogOut, ChevronDown,
-  BellRing, ShoppingBag, Tag, FileUp, Building2, Send, ShieldCheck, Clock, BookMarked, MessagesSquare, UserCog, KeyRound, CalendarDays, Thermometer, Palette, MonitorSmartphone, ScanText, GraduationCap, Megaphone, CalendarRange, LockKeyhole, PanelLeftClose, PanelLeftOpen, WifiOff,
+  BellRing, ShoppingBag, Tag, FileUp, Building2, Send, ShieldCheck, Clock, BookMarked, MessagesSquare, UserCog, KeyRound, CalendarDays, Thermometer, Palette, MonitorSmartphone, ScanText, GraduationCap, Megaphone, CalendarRange, LockKeyhole, NotebookPen, PanelLeftClose, PanelLeftOpen, WifiOff,
   Sparkles, Pin, Keyboard, UserPlus, Archive, BadgeCheck,
 } from 'lucide-react';
-import { useStore, makePassword, put, audit, isLowStock, expiryCounts } from './store.jsx';
+import { useStore, useSyncState, makePassword, put, audit, isLowStock, expiryCounts } from './store.jsx';
 import { askText, ask, toast } from './feedback.jsx';
 import { hasPin, setPin, clearPin } from './offline.js';
 import Auth from './pages/Auth.jsx';
@@ -31,12 +31,25 @@ import { setBadge } from './badges.js';
 import { ACTIONS, keyOf, keyMatcher, showKey, typing } from './keymap.js';
 import { deviceSettings, setDevice, onDevice } from './device.js';
 import { Modal } from './ui.jsx';
+import { MegaMenu, TopNav, NavPromo } from './components/NavMenus.jsx';
 import { BackButton, markNav, usePageMotion, useEdgeSwipeBack, useKeyboardFit } from './mobilenav.jsx';
 import AiOmnibar from './components/AiOmnibar.jsx';
+import { warmSearchKeys } from './search.js';
 const OwnerConsole = lazy(() => import('./pages/OwnerConsole.jsx'));
 
-// Pages load on demand so the app opens fast, even on low-end PCs and phones
-const page = (loader, name = 'default') => lazy(() => loader().then((m) => ({ default: m[name] })));
+// Pages load on demand so the app opens fast, even on low-end PCs and phones; once it is open and idle every page's
+// code is loaded in the background (one at a time), so opening a page for the first time is as quick as the second
+const loaders = new Set();
+const page = (loader, name = 'default') => { loaders.add(loader); return lazy(() => loader().then((m) => ({ default: m[name] }))); };
+const whenIdle = (fn) => (window.requestIdleCallback ? requestIdleCallback(fn, { timeout: 4000 }) : setTimeout(fn, 200));
+let preloaded = false;
+function preloadPages() {
+  if (preloaded) return;
+  preloaded = true;
+  const list = [...loaders];
+  const next = () => { const l = list.shift(); if (l) l().catch(() => {}).finally(() => whenIdle(next)); };
+  setTimeout(() => whenIdle(next), 1500); // after the first screen is drawn and the first sync has started
+}
 const inv = () => import('./pages/Inventory.jsx');
 const fin = () => import('./pages/Finance.jsx');
 const ppl = () => import('./pages/People.jsx');
@@ -68,6 +81,7 @@ const P = {
   DrugInfo: page(() => import('./pages/DrugInfo.jsx')),
   Users: page(() => import('./pages/Users.jsx')),
   Calendar: page(() => import('./pages/Calendar.jsx')),
+  Notes: page(() => import('./pages/Notes.jsx')),
   Scan: page(() => import('./pages/Scan.jsx')),
   Quiz: page(() => import('./pages/Quiz.jsx')),
   Messages: page(() => import('./pages/Messages.jsx')),
@@ -101,6 +115,7 @@ const NAV = [
     ['/reminders', 'Reminders', BellRing, null, null, <P.Reminders />, 'reminders', 'reminders'],
     ['/messages', 'Messages & SMS', Megaphone, null, null, <P.Messages />, 'reminders', 'reminders'],
     ['/calendar', 'Calendar', CalendarDays, null, null, <P.Calendar />, null, 'calendar'],
+    ['/notes', 'Notes & SOPs', NotebookPen, null, null, <P.Notes />, null, 'notes'],
   ] },
   { group: 'Medicine Inventory', items: [
     ['/medicines', 'Medicine List', Pill, null, null, <P.MedicineList />, 'inventory.view'],
@@ -292,7 +307,8 @@ function useOnline() {
  * sign-in). The tooltip says why; clicking tries again (or opens This device when something needs attention).
  */
 function ClockPill() {
-  const { syncStatus, syncNow, setUser, pending, storageIssue } = useStore();
+  const { syncNow, setUser } = useStore();
+  const { syncStatus, pending, storageIssue } = useSyncState();
   const navigate = useNavigate();
   const online = useOnline();
   const [now, setNow] = useState(() => new Date());
@@ -354,6 +370,8 @@ function KeysHelp({ onClose, pages }) {
 
 function Shell() {
   const { db, products, user, setUser, branchId, branch, update, syncNow, syncCfg } = useStore();
+  useEffect(() => preloadPages(), []); // every page's code, in the background once the app is open
+  useEffect(() => warmSearchKeys(products), [products.length]); // eslint-disable-line react-hooks/exhaustive-deps -- once per new medicine count
   const navigate = useNavigate();
   const location = useLocation();
   const [theme, setTheme, themeMode, setThemeMode, accent, setAccent] = useTheme();
@@ -399,7 +417,11 @@ function Shell() {
   // the keyboard map (src/keymap.js): pages, Ctrl+K, ?, back / forward, pin; the keys can be changed per device
   const [help, setHelp] = useState(false);
   const [nav, setNav] = useState(() => ({ pins: deviceSettings().navPins || [], recent: deviceSettings().navRecent || [] }));
-  useEffect(() => onDevice((d) => setNav({ pins: d.navPins || [], recent: d.navRecent || [] })), []);
+  // the navigation style chosen in This device → Navigation: the sidebar (default) or the top pill navbar (wide screens)
+  const [navStyle, setNavStyle] = useState(() => deviceSettings().navStyle || 'sidebar');
+  useEffect(() => onDevice((d) => { setNav({ pins: d.navPins || [], recent: d.navRecent || [] }); setNavStyle(d.navStyle || 'sidebar'); }), []);
+  const [mega, setMega] = useState(false); // every page as a bento sheet (phones: More; top navbar: All)
+  useEffect(() => setMega(false), [location.pathname]);
   const togglePin = (to) => { const pins = nav.pins.includes(to) ? nav.pins.filter((x) => x !== to) : [...nav.pins, to].slice(-8); setDevice({ navPins: pins }); toast(nav.pins.includes(to) ? 'Unpinned from the menu' : 'Pinned to the top of the menu'); };
   const here = location.pathname;
   const pinRef = useRef(); pinRef.current = () => togglePin(here);
@@ -491,7 +513,8 @@ function Shell() {
   useEffect(() => { if (me?.mustChangePassword && !asked.current) { asked.current = true; changePassword(true); } }, [me?.mustChangePassword]); // eslint-disable-line react-hooks/exhaustive-deps
   // Signing out never deletes unsent work: the Windows and Android apps keep it and send it later;
   // the web version keeps nothing, so it asks before letting it go
-  const { pending: unsent, db: dbNow } = useStore();
+  const { db: dbNow } = useStore();
+  const { pending: unsent } = useSyncState();
   const signOut = async () => {
     const mine = (dbNow.drafts || []).filter((d) => d.userId === user.id).length;
     const out = await setUser(null, { confirmLoss: (n) => ask({ title: `${n} change(s) haven't reached the cloud`, message: 'This browser keeps nothing on the computer, so signing out now loses them. Stay signed in until the internet is back, or sign out anyway.', confirmText: 'Sign out anyway', cancelText: 'Stay signed in', danger: true }) });
@@ -501,7 +524,7 @@ function Shell() {
   const initials = user.name.split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
 
   return (
-    <div className={'shell' + (drawer ? ' drawer-open' : '') + (rail ? ' rail' : '')}>
+    <div className={'shell nav-' + navStyle + (drawer ? ' drawer-open' : '') + (rail ? ' rail' : '')}>
       <div className="drawer-bg" onClick={() => setDrawer(false)} />
       <aside className="sidebar">
         <div className="brand"><BrandLogo src={db.license?.[0]?.branding?.logo} size={34} /> <span className="wordmark">Rx<span className="brand-accent">POS</span></span>
@@ -532,6 +555,7 @@ function Shell() {
             </div>
           ))}
         </nav>
+        {!rail && here !== '/' && <NavPromo counts={counts} can={can} />}{/* the Dashboard shows the same card */}
         <div className="user-box">
           <span className="avatar">{initials}</span>
           <div className="grow"><strong>{user.name}</strong><small>{user.role}</small></div>
@@ -550,13 +574,14 @@ function Shell() {
             const pg = pages.find((x) => x.to === here);
             return pg ? (
               <nav className="crumbs" aria-label="You are here">
-                {g?.group && <span className="muted">{g.group}</span>}{g?.group && <span className="muted" aria-hidden="true">›</span>}<strong>{pg.label}</strong>
+                {g?.group && <button type="button" className="link-btn muted crumb-group" title={`Every page under ${g.group}`} onClick={() => setMega(true)}>{g.group}</button>}{g?.group && <span className="muted" aria-hidden="true">›</span>}<strong>{pg.label}</strong>
                 <button className={'icon-btn sm' + (nav.pins.includes(here) ? ' on' : '')} aria-pressed={nav.pins.includes(here)} onClick={() => togglePin(here)}
                   title={`${nav.pins.includes(here) ? 'Unpin this page from' : 'Pin this page to'} the top of the menu (${showKey(keyOf('pin'))})`} aria-label={nav.pins.includes(here) ? 'Unpin this page' : 'Pin this page'}><Pin size={14} /></button>
                 <button className="icon-btn sm" onClick={() => setHelp(true)} title={`Keyboard and mouse (${showKey(keyOf('help'))})`} aria-label="Keyboard and mouse help"><Keyboard size={14} /></button>
               </nav>
             ) : null;
           })()}
+          {navStyle === 'top' && <TopNav groups={groups} counts={counts} can={can} here={here} onAll={() => setMega(true)} />}
           <div className="spacer grow" />
           {db.branches.length > 1 && <NavLink to="/branches" className="pill branch-pill" title="Branch this device works as"><Building2 size={14} />{branch?.name}</NavLink>}
           <ClockPill />
@@ -578,8 +603,9 @@ function Shell() {
         <NavLink to="/inventory" onClick={() => markNav('tab')}><Boxes size={20} /><span>Stock</span></NavLink>
         <NavLink to="/pos" className="fab" onClick={() => markNav('tab')}><span className="fab-icon"><ShoppingCart size={22} /></span><span>Sell</span></NavLink>
         <NavLink to="/sales" onClick={() => markNav('tab')}><ReceiptText size={20} /><span>Sales</span></NavLink>
-        <button onClick={() => setDrawer(true)} aria-expanded={drawer}><Menu size={20} /><span>More</span></button>
+        <button onClick={() => setMega(true)} aria-expanded={mega}><Menu size={20} /><span>More</span></button>
       </nav>
+      <MegaMenu open={mega} onClose={() => setMega(false)} groups={groups} counts={counts} can={can} onFullMenu={() => setDrawer(true)} />
       <AiOmnibar open={palette} onClose={() => setPalette(false)} pages={pages} commands={[
         ...(can('pos.sell') ? [{ label: 'New sale', words: 'sell till pos', Icon: ShoppingCart, hint: showKey(keyOf('go:/pos')), go: () => navigate('/pos') }] : []),
         ...(can('stock.receive') ? [{ label: 'Receive stock', words: 'add stock delivery invoice purchase', Icon: PackagePlus, hint: showKey(keyOf('go:/add-stock')), go: () => navigate('/add-stock') }] : []),
@@ -587,6 +613,8 @@ function Shell() {
         ...(can('suppliers') ? [{ label: 'Add a supplier', words: 'new supplier', Icon: Truck, go: () => navigate('/suppliers', { state: { create: true } }) }] : []),
         ...(can('medicines.manage') ? [{ label: 'Add a medicine', words: 'new product drug', Icon: Pill, go: () => navigate('/medicines', { state: { create: true } }) }] : []),
         ...(can('finance') ? [{ label: 'Add an expense', words: 'new expense spend', Icon: Wallet, go: () => navigate('/expenses', { state: { create: true } }) }] : []),
+        ...(features.notes !== false ? [{ label: 'New note page', words: 'note sop page notion write checklist', Icon: NotebookPen, go: () => navigate('/notes', { state: { create: true } }) }] : []),
+        ...(features.notes !== false ? [{ label: 'New checklist from a template', words: 'template opening checklist sop handover', Icon: NotebookPen, go: () => navigate('/notes', { state: { template: 'opening' } }) }] : []),
         { label: nav.pins.includes(here) ? 'Unpin this page' : 'Pin this page', words: 'pin favourite menu', Icon: Pin, hint: showKey(keyOf('pin')), go: () => togglePin(here) },
         { label: 'Keyboard and mouse help', words: 'shortcuts keys help', Icon: Keyboard, hint: showKey(keyOf('help')), go: () => setHelp(true) },
         { label: 'Change keyboard shortcuts', words: 'keys remap keyboard settings', Icon: Keyboard, go: () => navigate('/device', { state: { tab: 'keyboard' } }) },
@@ -639,7 +667,8 @@ function UpdateHost() {
 
 /** The first sign-in on a device downloads the whole pharmacy: show progress instead of empty pages */
 function FirstDownload() {
-  const { syncStatus, db } = useStore();
+  const { db } = useStore();
+  const { syncStatus } = useSyncState();
   // stage 2 of the faster sync: once the core (medicines, stock, clients, staff) is in, the app is ready to use
   if (!(syncStatus.first && syncStatus.state === 'syncing') || syncStatus.history || db.products.length > 50) return null;
   return (
@@ -653,7 +682,7 @@ function FirstDownload() {
 
 /** While a full download brings the older records (stage 2 of the faster sync): say that reports may still grow */
 function HistoryLoading() {
-  const { syncStatus } = useStore();
+  const { syncStatus } = useSyncState();
   // stage 4: a device keeping recent history waits for the cloud's brought-forward figures (needs the internet)
   if (syncStatus.balancesPending) return <div className="history-loading" role="status">Older balances are still coming from the cloud: stock, debts and cash shown may be incomplete until this device is online</div>;
   if (!(syncStatus.history && syncStatus.state === 'syncing')) return null;

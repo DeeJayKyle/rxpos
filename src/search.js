@@ -4,7 +4,20 @@
 // medicine however it was typed in. Pure functions, so the index is built once per product list and checked in tests.
 
 /** Lower-case, accents and punctuation gone, strengths joined ("500 mg" → "500mg"), spelling variants folded */
+// fold is pure and runs for every medicine on every keystroke: answers are remembered (names repeat), the memory is
+// emptied when it grows large so it never keeps more than a few MB
+const folded = new Map();
 export function fold(s) {
+  const key = String(s || '');
+  let v = folded.get(key);
+  if (v === undefined) {
+    if (folded.size > 60000) folded.clear();
+    v = foldNow(key);
+    folded.set(key, v);
+  }
+  return v;
+}
+function foldNow(s) {
   return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
     .replace(/[^a-z0-9%.]+/g, ' ').replace(/(\d)\s+(mg|mcg|g|ml|iu|%)\b/g, '$1$2')
     .replace(/ph/g, 'f').replace(/ae|oe/g, 'e').replace(/y/g, 'i').replace(/ck/g, 'k')
@@ -30,4 +43,19 @@ export function searchProducts(list, query, keyOf = searchKey) {
     out.push([rank, p]);
   }
   return out.sort((a, b) => a[0] - b[0] || (b[1].stock > 0) - (a[1].stock > 0)).map((x) => x[1]);
+}
+
+/**
+ * Work the search keys out in the background, a slice at a time while the device is idle, so the till's first
+ * search (and opening the till) doesn't have to fold thousands of medicine names first.
+ */
+export function warmSearchKeys(list) {
+  if (typeof window === 'undefined' || !window.requestIdleCallback) return () => {};
+  let i = 0, id = 0;
+  const step = (deadline) => {
+    while (i < list.length && deadline.timeRemaining() > 4) { const p = list[i++]; searchKey(p); fold(p.name); } // the key, and the name the results are ranked by
+    if (i < list.length) id = requestIdleCallback(step);
+  };
+  id = requestIdleCallback(step, { timeout: 5000 });
+  return () => cancelIdleCallback(id);
 }

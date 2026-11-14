@@ -40,16 +40,27 @@ export function unitPrice(packPrice, perPack, decimals = 0) {
 /** A quantity for display: whole units as they are, part units (a split pack, a measured liquid) to at most 2
  * decimals with trailing zeros dropped, so 7.833333333 shows as 7.83. Display only: stored quantities keep their
  * full precision. With a unit, it is appended (singular for exactly 1). */
+// Number formatters are slow to create (each toLocaleString with options builds one): one per locale and decimals,
+// made once and reused. The text is exactly what toLocaleString gives.
+const formatters = new Map();
+const formatterFor = (locale, opts) => {
+  const k = locale + '|' + JSON.stringify(opts);
+  let f = formatters.get(k);
+  if (!f) { f = new Intl.NumberFormat(locale, opts); formatters.set(k, f); }
+  return f;
+};
+const QTY = { maximumFractionDigits: 2, useGrouping: false };
+
 export function formatQty(n, unit = '') {
   const v = Number(n);
   if (!isFinite(v)) return '—';
-  const txt = (Math.abs(v - Math.round(v)) < 1e-9 ? Math.round(v) : round(v, 2)).toLocaleString('en-US', { maximumFractionDigits: 2, useGrouping: false });
+  const txt = formatterFor('en-US', QTY).format(Math.abs(v - Math.round(v)) < 1e-9 ? Math.round(v) : round(v, 2));
   if (!unit) return txt;
   return `${txt} ${Math.abs(v) === 1 ? unit.replace(/s$/i, '') : unit}`;
 }
 
 /** Format for display in the PHARMACY'S locale and currency, not the device's (review Phase 1.5). */
 export function formatMoney(n, { currency = '', decimals = 0, locale } = {}) {
-  const grouped = (Number(n) || 0).toLocaleString(locale || 'en-UG', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+  const grouped = formatterFor(locale || 'en-UG', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(Number(n) || 0);
   return `${currency} ${grouped}`.trim();
 }

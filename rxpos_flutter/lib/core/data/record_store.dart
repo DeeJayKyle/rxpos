@@ -1,5 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:isolate';
+
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 import 'package:drift/drift.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -29,6 +32,7 @@ const syncedTables = [
   'insurers', // step 22: insurers and their schemes (core/rules/insurance.dart)
   // only this app (Payroll & HR, scheduled report emails); the React app skips tables it does not know
   'employees', 'attendance', 'salaryAdvances', 'payrolls', 'reportSchedules',
+  'notes', // 2026-11-14: Notes & SOP pages (features/notes, src/notes.js)
 ];
 
 /// Tables that only ever grow: a row is never changed or deleted (the cloud refuses it too).
@@ -130,10 +134,16 @@ class RecordStore {
   static Map<String, Object?> _decode(String json) => (jsonDecode(json) as Map).cast<String, Object?>();
 
   Future<List<Map<String, Object?>>> rows(String t) async =>
-      [for (final r in await (db.select(db.records)..where((x) => x.t.equals(t))).get()) _decode(r.json)];
+      decodeAll([for (final r in await (db.select(db.records)..where((x) => x.t.equals(t))).get()) r.json]);
 
-  Stream<List<Map<String, Object?>>> watch(String t) =>
-      (db.select(db.records)..where((x) => x.t.equals(t))).watch().map((rs) => [for (final r in rs) _decode(r.json)]);
+  /// A record type, live. It re-reads only when that type changed (its version: createTableVersions), not on every
+  /// write to any record, and a long list is decoded off the screen's thread, so syncing never makes the app stutter.
+  Stream<List<Map<String, Object?>>> watch(String t) => db
+      .customSelect('SELECT COALESCE((SELECT v FROM rec_versions WHERE t = ?1), 0) AS v', variables: [Variable.withString(t)], readsFrom: {db.records})
+      .watchSingle()
+      .map((r) => r.read<int>('v'))
+      .distinct()
+      .asyncMap((_) => rows(t));
 
   /// Step 13: stock per branch, batch and medicine, added up by SQLite (the same keys as StockIndex.of: an empty
   /// branch is the main branch, a movement without a batch counts under `lb-<medicine>`, quantities read as numbers
@@ -159,8 +169,17 @@ SELECT br, bk, pid, TOTAL(q) AS q FROM (
   ({String branch, String batchKey, String productId, double qty}) _total(QueryRow r) =>
       (branch: r.read<String>('br'), batchKey: r.read<String>('bk'), productId: r.read<String>('pid'), qty: r.read<double>('q'));
 
-  Stream<StockIndex> watchStock() =>
-      db.customSelect(_stockSql, readsFrom: {db.records, db.kv}).watch().map((rows) => StockIndex.fromTotals(rows.map(_total)));
+  /// Stock, live: worked out again only when stock movements or the history window change (not on every sale record,
+  /// customer or sync position written)
+  Stream<StockIndex> watchStock() => db
+      .customSelect(
+          "SELECT COALESCE((SELECT v FROM rec_versions WHERE t = 'movements'), 0) || '|' || COALESCE((SELECT COALESCE(json_extract(v, '\$.window'), '') || '|' || "
+          "COALESCE(json_extract(v, '\$.balances.W'), '') || '|' || COALESCE(length(json_extract(v, '\$.balances.stock')), 0) FROM kv WHERE k = 'sync'), '') AS sig",
+          readsFrom: {db.records, db.kv})
+      .watchSingle()
+      .map((r) => r.read<String>('sig'))
+      .distinct()
+      .asyncMap((_) => stock());
 
   Future<StockIndex> stock() async => StockIndex.fromTotals((await db.customSelect(_stockSql, readsFrom: {db.records, db.kv}).get()).map(_total));
 
@@ -251,3 +270,11 @@ SELECT br, bk, pid, TOTAL(q) AS q FROM (
 
 @Riverpod(keepAlive: true)
 RecordStore recordStore(Ref ref) => RecordStore(ref.watch(appDatabaseProvider));
+
+/// Decode stored records; a long list (a sync's worth of sales, the medicine list) on another isolate, handed back
+/// without copying, so the screen keeps drawing meanwhile. The web has no isolates: decoded here.
+Future<List<Map<String, Object?>>> decodeAll(List<String> json) async {
+  List<Map<String, Object?>> run(List<String> js) => [for (final j in js) (jsonDecode(j) as Map).cast<String, Object?>()];
+  if (kIsWeb || json.length < 1500) return run(json);
+  return Isolate.run(() => run(json));
+}

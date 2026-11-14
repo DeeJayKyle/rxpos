@@ -27,7 +27,7 @@ await owner('/tenants/' + tid + '/records', { records: [
   { t: 'sales', id: 'x1', rec: { number: 'R1', date, type: 'retail', branchId: 'main', cashier: 'Ari Admin', items: [{ id: 'p1', name: 'Access Tabs', qty: 1, price: 1000 }], subtotal: 1000, discount: 0, tax: 0, total: 1000, paid: 1000, payment: 'Cash', customerId: 'c1', customerName: 'Grace Achieng', status: 'completed' } },
 ] });
 
-const PAGES = ['dashboard', 'pos', 'sales', 'shifts', 'customers', 'suppliers', 'insurers', 'medicines', 'inventory', 'add-stock', 'purchases', 'expiry',
+const PAGES = ['dashboard', 'notes', 'pos', 'sales', 'shifts', 'customers', 'suppliers', 'insurers', 'medicines', 'inventory', 'add-stock', 'purchases', 'expiry',
   'expenses', 'debtors', 'cash-book', 'reports', 'users', 'settings'];
 const all = process.env.RXPOS_A11Y_ALL === '1';
 // what counts: serious and critical problems (minor and moderate are listed with RXPOS_A11Y_ALL=1)
@@ -36,7 +36,7 @@ const audit = (p) => p.evaluate(async (axeSrc) => {
   const r = await window.axe.run(document, { resultTypes: ['violations'], runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'best-practice'] } });
   return r.violations.map((v) => ({ id: v.id, impact: v.impact, help: v.help, nodes: v.nodes.slice(0, 4).map((n) => n.target.join(' ') + (n.failureSummary ? ' — ' + n.failureSummary.split('\n').slice(1, 2).join('').trim() : '')), count: v.nodes.length }));
 }, AXE);
-const show = (vs) => vs.map((v) => `\n    [${v.impact}] ${v.id} ×${v.count}: ${v.help}\n      ${v.nodes.join('\n      ')}`).join('');
+const show = (vs) => vs.map((v) => ` [${v.impact}] ${v.id} ×${v.count}: ${v.help}\n      ${v.nodes.join('\n      ')}`).join('');
 const serious = (vs) => vs.filter((v) => all || v.impact === 'serious' || v.impact === 'critical');
 
 const b = await puppeteer.launch({ executablePath: CHROME, headless: true });

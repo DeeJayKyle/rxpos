@@ -4,6 +4,8 @@ import { useLocation } from 'react-router-dom';
 import { Download, Printer, Undo2, Eye, Pencil, Trash2, Plus, History, FileText } from 'lucide-react';
 import { useStore, dayOf, downloadFile, toCSV, put, move, now, audit, allocate, MAIN_BRANCH, DEFAULT_PAYMENT_METHODS } from '../store.jsx';
 import { useOlderHistory, olderNote } from '../history.js';
+import { ViewSwitch, BoardView, GalleryView, savedView, saveView } from '../components/DataViews.jsx';
+import { saleStatus } from '../components/BentoDashboard.jsx';
 import { Modal, SearchBox, Empty, PdfButton, ReceiptPdfButton, Tabs, PayChip, usePages, Pager, useSort, SortTh } from '../ui.jsx';
 import { ask, toast } from '../feedback.jsx';
 import { Barcode } from '../barcode.jsx';
@@ -170,6 +172,10 @@ export default function Sales() {
   const canRefund = (x) => x.status !== 'refunded' && !x.imported && user.role !== 'cashier' && can('sales.refund');
   const lc = useListControls({ rows: page.rows, onOpen: (x) => setView(x), onEdit: (x) => canEditSale(x) && setEditing(x), searchRef, onClearSearch: () => setQ(''), enabled: tab === 'sales' });
   const menu = useContextMenu();
+  const [dv, setDv] = useState(() => savedView('sales'));
+  const pickView = (v) => { setDv(v); saveView('sales', v); };
+  const saleCard = (s) => { const [st, cls] = saleStatus(s); return { title: s.number + ' · ' + (s.customerName || 'Walk-in'), sub: `${new Date(s.date).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })} · ${s.cashier || ''}`, value: fmt(s.total),
+    chips: [[st, cls === 'paid' ? 'ok' : cls === 'owing' ? 'warn' : 'danger'], s.payment && [s.payment], s.edits?.length && ['Edited', 'warn'], [`${s.items.length} item${s.items.length === 1 ? '' : 's'}`]].filter(Boolean) }; };
   const saleMenu = (e, x) => menu.open(e, [
     { label: 'View', Icon: Eye, keyId: 'list:open', run: () => setView(x) },
     { label: 'Print the receipt', Icon: Printer, run: () => printSale(x, 'receipt') },
@@ -208,6 +214,7 @@ export default function Sales() {
               {db.branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
             </select>
           )}
+          <ViewSwitch value={dv} onChange={pickView} />
           <SearchBox value={q} onChange={setQ} placeholder="Receipt, customer, medicine…" inputRef={searchRef} />
           <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} title="From" aria-label="From" />
           <input type="date" value={to} onChange={(e) => setTo(e.target.value)} title="To" aria-label="To" />
@@ -227,7 +234,10 @@ export default function Sales() {
         <label>Customer<select value={f.customer} onChange={setFilter('customer')}><option value="">All</option>{opts('customerName').map((x) => <option key={x}>{x}</option>)}</select></label>
         <label>Status<select value={f.status} onChange={setFilter('status')}>{STATUSES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></label>
       </div>
-      <div className="card table-wrap">
+      {dv === 'board' && <BoardView rows={sorted.rows} board={{ groups: [['paid', 'Paid', 'ok'], ['owing', 'Owing', 'warn'], ['refunded', 'Refunded', 'danger']], of: (x) => saleStatus(x)[1] }} card={saleCard} onOpen={setView} onMenu={saleMenu} />}
+      {dv === 'gallery' && <GalleryView rows={sorted.rows} card={saleCard} onOpen={setView} onMenu={saleMenu} />}
+      {dv !== 'table' && menu.node}
+      {dv === 'table' && <div className="card table-wrap">
         <table>
           <thead><tr><SortTh s={sorted} k="number">Receipt</SortTh><SortTh s={sorted} k="date">Date</SortTh><th>Time</th>{db.branches.length > 1 && <th>Branch</th>}<SortTh s={sorted} k="customer">Customer</SortTh><th>Phone</th><SortTh s={sorted} k="payment">Payment</SortTh><th>Status</th><SortTh s={sorted} k="total" className="num">Total</SortTh><SortTh s={sorted} k="cashier">Cashier</SortTh><th /></tr></thead>
           <tbody>
@@ -256,7 +266,7 @@ export default function Sales() {
         </table>
         {menu.node}
         <Pager p={page} />
-      </div>
+      </div>}
       </>}
       {printNode}
       {editing && <SaleEditor sale={editing} onClose={() => setEditing(null)} />}

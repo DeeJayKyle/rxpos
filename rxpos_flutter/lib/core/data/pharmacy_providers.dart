@@ -75,7 +75,10 @@ Future<PharmacyData> pharmacy(Ref ref) async {
   final features = featureSet((license.firstOrNull?['features'] as Map?)?.cast<String, Object?>());
   final hidden = {for (final h in await ref.watch(tableProvider('catalogHidden').future)) '${h['id']}'};
   final cat = features['catalog'] == false ? const <Product>[] : await ref.watch(catalogProvider.future);
-  final products = withCatalog(own, cat, hidden: hidden, on: features['catalog'] != false)..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+  // sorted by name, lower case worked out once per medicine (not twice per comparison: ~350,000 for 12,700 medicines)
+  final merged = withCatalog(own, cat, hidden: hidden, on: features['catalog'] != false);
+  final keyed = [for (final p in merged) (p.name.toLowerCase(), p)]..sort((a, b) => a.$1.compareTo(b.$1));
+  final products = [for (final k in keyed) k.$2];
   final stockIndex = await ref.watch(stockIndexProvider.future);
   final batches = (await ref.watch(tableProvider('batches').future)).map(Batch.fromRecord);
   final customers = (await ref.watch(tableProvider('customers').future)).map(Customer.fromRecord).toList()

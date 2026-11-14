@@ -42,9 +42,12 @@ export function BackButton() {
   );
 }
 
+// the page's running glide (kept here: asking the browser for an element's animations forces a style recalculation
+// of the new page right when it is being drawn, which made page changes slower)
+let running = null;
 function stopMotion(el) {
   if (!el) return;
-  el.getAnimations?.().forEach((a) => a.cancel());
+  if (running) { const a = running; running = null; a.cancel(); }
   el.style.left = ''; el.style.position = ''; el.style.opacity = '';
   document.documentElement.classList.remove('page-swiping', 'page-gliding');
 }
@@ -62,9 +65,12 @@ function glide(el, kind) {
     el.style.position = 'relative';
     document.documentElement.classList.add('page-gliding'); // the page never scrolls sideways while it glides in
   }
-  const a = el.animate(frames, { duration: kind === 'tab' || kind === 'replace' ? 200 : small ? 320 : 240, easing: EASE });
+  // short and light: the new page is usable at once, the motion only eases it in
+  const a = el.animate(frames, { duration: kind === 'tab' || kind === 'replace' ? 120 : small ? 200 : 140, easing: EASE });
+  running = a;
   const done = () => {
-    if (el.getAnimations().some((x) => x !== a && x.playState === 'running')) return;
+    if (running !== a && running?.playState === 'running') return;
+    if (running === a) running = null;
     el.style.position = ''; document.documentElement.classList.remove('page-gliding');
   };
   a.onfinish = done; a.oncancel = done;
@@ -144,6 +150,7 @@ export function useEdgeSwipeBack(ref) {
       const from = { left: g.dx + 'px', opacity: el.style.opacity || '1' };
       if (go) {
         const a = el.animate([from, { left: w + 'px', opacity: 0.6 }], { duration: 180, easing: EASE, fill: 'forwards' });
+        running = a;
         el.style.left = ''; el.style.opacity = '';
         a.onfinish = () => {
           markNav('swipe'); live.current.goBack();
@@ -152,6 +159,7 @@ export function useEdgeSwipeBack(ref) {
         };
       } else {
         const a = el.animate([from, { left: '0px', opacity: 1 }], { duration: 220, easing: EASE });
+        running = a;
         el.style.left = ''; el.style.opacity = '';
         a.onfinish = a.oncancel = () => stopMotion(el);
       }

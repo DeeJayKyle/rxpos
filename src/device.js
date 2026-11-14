@@ -3,7 +3,7 @@
 import { isAndroid, isElectron, isTouch } from './platform.js';
 
 const KEY = 'rxpos-device';
-const DEFAULTS = { view: 'auto', zoom: 1, doubleTap: true, rotation: 'auto', badges: true, tray: true, volume: 0.7, sounds: {} };
+const DEFAULTS = { view: 'auto', zoom: 1, doubleTap: true, rotation: 'auto', badges: true, tray: true, volume: 0.7, sounds: {}, navStyle: 'sidebar' };
 let cache = null;
 const listeners = new Set();
 

@@ -1,5 +1,29 @@
 # RxPOS release notes
 
+## React (classic) app 1.8.4 · Flutter app 2.1 (next build) · November 2026
+
+A faster app, new navigation and a dashboard from the owner's design references, and Notion-like pages. Data,
+figures, permissions, offline work and backups are unchanged; a theme already chosen on a device is kept.
+
+- **Faster:** sync runs in the background and waits for a quiet moment, so typing, tapping and moving between
+  pages stay quick while it works. The till, Inventory and Add Stock open several times faster, and large lists
+  draw in steps. The Flutter app re-reads only the records that changed.
+- **Navigation:** on phones the bottom bar floats as a pill and More opens every page as a sheet, each with a line
+  on what it is for and the pharmacy's next step on top (expiring stock, low stock, the cash-up). On wide screens
+  This device → Navigation offers the sidebar (with that next-step card) or a top bar of pills with dropdowns.
+- **Gold Night:** a new dark theme in black, ivory and gold.
+- **Dashboard:** a new top row with Today / 7 days / 30 days, the sales against the period before, daily bars (tap
+  a day for its sales), the latest receipts marked Paid, Owing or Refunded, and the next step.
+- **Notes & SOPs** (under People): pages for procedures, checklists, handovers and meeting notes, on every device.
+  Type "/" for headings, to-dos, lists, toggles, callouts and more; drag blocks to reorder; put pages inside pages;
+  star and search them; start from templates (opening checklist, cold chain SOP, shift handover, dispensing SOP,
+  staff meeting). A device on an older version sees notes once it updates.
+- **Views:** Medicines, Customers, Suppliers and Sales History (web) and the Medicine List (Flutter) can be shown as
+  a table, a board (by stock status, customer type or paid / owing) or a gallery of cards, kept on each device.
+  Rows and cards have a ⋯ menu with their actions.
+- **"/" commands:** in Ctrl+K "/" lists only commands (now with a new note page); in the till's search box "/"
+  runs the till's commands, such as /pay, /hold, /disc 10 and /void 2.
+
 ## React (classic) app 1.8.3 · Flutter app 2.1 (next build) · November 2026
 
 AI help, a live clinical safety check and a new look for both apps. Data, figures, permissions, offline work, sync

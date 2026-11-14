@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { Store, Printer, MessageSquareText, Cloud, DatabaseBackup, Sheet, Copy, CheckCircle2, XCircle, Smartphone, CreditCard, Plus, Trash2, RotateCcw, ShieldAlert, BellRing, MapPin, Search, Thermometer, RefreshCw } from 'lucide-react';
-import { useStore, uid, audit, downloadFile, today, defaultSettings, DEFAULT_PAYMENT_METHODS } from '../store.jsx';
+import { useStore, useSyncState, uid, audit, downloadFile, today, defaultSettings, DEFAULT_PAYMENT_METHODS } from '../store.jsx';
 import { Tabs } from '../ui.jsx';
 import { ask, toast } from '../feedback.jsx';
 import { cloudConfig, daySummary, dailyStockLink } from '../cloud.js';
@@ -11,7 +11,8 @@ import { Updates } from './Device.jsx';
 import ReportEmails from './ReportEmails.jsx';
 
 export default function Settings() {
-  const { db, update, saveSettings, user, syncCfg, syncStatus, syncNow, branchId, setBranchId, can, features, sharedSettings, pharmacyOverrides, resetPharmacyOverrides } = useStore();
+  const { syncStatus } = useSyncState();
+  const { db, update, saveSettings, user, syncCfg, syncNow, branchId, setBranchId, can, features, sharedSettings, pharmacyOverrides, resetPharmacyOverrides } = useStore();
   const [tab, setTab] = useState('general');
   const [s, setS] = useState(db.settings);
   const settingsBaseline = useRef(db.settings);

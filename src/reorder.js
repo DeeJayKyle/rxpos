@@ -2,7 +2,7 @@
 //   reorder level = average daily sales over the period × (supplier lead time + safety days)
 // Only medicines that sold in the period are changed. Runs weekly (Settings → Receipts & stock) or on demand (Reorder page).
 import { useEffect } from 'react';
-import { useStore, put, audit, now, MAIN_BRANCH, BASE_AT } from './store.jsx';
+import { useStore, putMany, whenQuiet, audit, now, MAIN_BRANCH, BASE_AT } from './store.jsx';
 
 export const reorderSettings = (s = {}) => ({
   days: Number(s.autoReorderDays) || 30,
@@ -34,7 +34,8 @@ export function computeReorderLevels(db, products, settings, branchId = MAIN_BRA
 export function applyReorderLevels(update, user, branchId, changes, auto = false) {
   if (!changes.length) return;
   update((d) => {
-    for (const c of changes) { const cur = d.products.find((x) => x.id === c.p.id); if (cur) put(d, 'products', { ...cur, reorder: c.level }); }
+    const byId = new Map(d.products.map((x) => [x.id, x]));
+    putMany(d, 'products', changes.map((c) => byId.get(c.p.id)).map((cur, k) => cur && { ...cur, reorder: changes[k].level }).filter(Boolean));
     d.settings = { ...d.settings, autoReorderAt: now(), updatedAt: now() };
     audit(d, user, auto ? 'Reorder levels updated automatically' : 'Reorder levels updated from sales', `${changes.length} medicines`, branchId);
   });
@@ -52,12 +53,16 @@ export function AutoReorder() {
     if (!syncCfg?.lastSync || !db.settings.updatedAt || db.settings.updatedAt === BASE_AT) return;
     const last = db.settings.autoReorderAt ? new Date(db.settings.autoReorderAt).getTime() : 0;
     if (Date.now() - last < 7 * 864e5) return;
-    const t = setTimeout(() => {
+    // after the first sync has settled, and only in a quiet moment (it goes through every sale)
+    let gone = false;
+    const t = setTimeout(async () => {
+      await whenQuiet();
+      if (gone) return;
       const changes = computeReorderLevels(db, products, db.settings, branchId);
       if (changes.length) applyReorderLevels(update, user, branchId, changes, true);
       else update((d) => { d.settings = { ...d.settings, autoReorderAt: now(), updatedAt: now() }; });
-    }, 20000); // after the first sync has settled
-    return () => clearTimeout(t);
+    }, 20000);
+    return () => { gone = true; clearTimeout(t); };
   }, [db.settings.autoReorderAt, db.settings.autoReorder, db.settings.updatedAt, !!syncCfg?.lastSync]); // eslint-disable-line react-hooks/exhaustive-deps
   return null;
 }

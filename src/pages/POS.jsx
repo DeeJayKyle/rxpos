@@ -1,9 +1,9 @@
 import { mainPack, packPrice, sellInPacks } from '../packs.js';
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo, useDeferredValue } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import { ShoppingCart, Trash2, X, ScanText, FileText, Printer, AlertTriangle, ScanBarcode, Smartphone, Loader2, CheckCircle2, UserPlus, Tag, BookMarked, Repeat, PauseCircle, Keyboard, Plus, ClipboardList, MessageCircle, MessageSquareText, Star, Search, Command, LayoutGrid, Users } from 'lucide-react';
 import { DrugInfoPanel, genericKey } from './DrugInfo.jsx';
-import { useStore, uid, now, daysUntil, put, del, move, allocate, audit, normalizePhone, customerBalance, DEFAULT_PAYMENT_METHODS } from '../store.jsx';
+import { useStore, useSyncState, uid, now, daysUntil, put, del, move, allocate, audit, normalizePhone, customerBalance, DEFAULT_PAYMENT_METHODS } from '../store.jsx';
 import { overLimit } from '../credit.js';
 import { parseGs1, findByGtin } from '../gs1.js';
 import { preferFirst, expiryLevel } from '../fefo.js';
@@ -30,11 +30,17 @@ import { deviceSettings, setDevice, onDevice } from '../device.js';
 
 // A client with this many sales is shown as a loyalty member (repeat client) on the till
 const LOYAL_VISITS = 5;
+const NO_PACKS = [];
 // the till's layouts (each device keeps its own choice)
 const POS_LAYOUTS = [['classic', 'Classic'], ['standard', 'Standard'], ['advanced', 'Advanced UI']];
 
+// "/" in the till's search box: the command bar's commands (runCommand), with what each one does
+const TILL_SLASH = [['pay', 'Charge this sale'], ['hold', 'Put this sale on hold'], ['disc 10', 'Discount the sale by 10%'], ['disc 2 10', 'Line 2: 10% off'],
+  ['void 2', 'Remove line 2'], ['qty 2 5', 'Line 2: quantity 5'], ['+qty 2', 'One more of line 2'], ['-qty 2', 'One less of line 2']];
+
 export default function POS({ mode = 'retail' }) {
-  const { db, products, update, user, fmt, batchesOf, branchId, syncCfg, features, can, pending, numberFor } = useStore();
+  const { db, products, update, user, fmt, batchesOf, branchId, syncCfg, features, can, numberFor } = useStore();
+  const { pending } = useSyncState();
   const [momo, setMomo] = useState(null);
   const [newClient, setNewClient] = useState(null);   // quick 'add client' form
   const [labelFor, setLabelFor] = useState(null);     // cart line whose dispensing directions are being edited
@@ -189,14 +195,18 @@ export default function POS({ mode = 'retail' }) {
     }
     return seen;
   }, [db.sales, branchId]);
-  const results = useMemo(() => {
+  // the search box shows each key at once; the matching medicines follow a moment later without holding up typing
+  const dq = useDeferredValue(q);
+  const resultsFor = (query) => {
     let list = products.filter((p) => (!category || p.category === category) && (view !== 'instock' || p.stock > 0)
       && (view !== 'fav' || favs.has(p.id)) && (view !== 'recent' || recent.has(p.id)));
-    if (q) return searchProducts(list, q, (p) => keys.get(p.id) || searchKey(p)).slice(0, 80);
+    if (query) return searchProducts(list, query, (p) => keys.get(p.id) || searchKey(p)).slice(0, 80);
     if (view === 'recent') list = [...list].sort((a, b) => recent.get(a.id) - recent.get(b.id));
     else list = [...list].sort((a, b) => (b.stock > 0) - (a.stock > 0));
     return list.slice(0, 80);
-  }, [products, category, q, keys, view, favs, recent]);
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- resultsFor reads exactly these
+  const results = useMemo(() => resultsFor(dq), [products, category, dq, keys, view, favs, recent]);
   useEffect(() => setActive(0), [q, category, view]);
   // how many cards fit across the grid, so ↑/↓ move by a whole row
   const gridCols = () => { const el = gridRef.current; return el ? Math.max(1, getComputedStyle(el).gridTemplateColumns.split(' ').length) : 1; };
@@ -248,13 +258,17 @@ export default function POS({ mode = 'retail' }) {
     else if (e.key === 'ArrowRight' && (q === '' || e.target.selectionStart === q.length)) { e.preventDefault(); moveActive(1); }
     else if (e.key === 'ArrowLeft' && q === '') { e.preventDefault(); moveActive(-1); }
     if (e.key !== 'Enter') return;
+    // "/" commands typed in the search box, as in the command bar: /hold, /pay, /disc 10, /void 2, /qty 2 5 …
+    if (q.startsWith('/')) { e.preventDefault(); const err = runCommand(q.slice(1).trim().toLowerCase()); if (err) toast(err, 'warn'); else setQ(''); return; }
     const g = parseGs1(q);
     if (g) { scanPack(g); setQ(''); return; }
     const exact = products.find((p) => p.barcode && p.barcode === q.trim());
-    if (exact) add(exact);
-    else if (/^\d{6,}$/.test(q.trim())) toast(`No medicine has the barcode ${q.trim()}`, 'warn'); // a scan that matched nothing: never guess
-    else if (results[active] && (q || active > 0)) add(results[active]);
-    else if (results.length === 1) add(results[0]);
+    if (exact) return void add(exact);
+    if (/^\d{6,}$/.test(q.trim())) return void toast(`No medicine has the barcode ${q.trim()}`, 'warn'); // a scan that matched nothing: never guess
+    // Enter acts on what is typed now, even if the list on screen hasn't caught up with the last keys yet
+    const shown = q === dq ? results : resultsFor(q);
+    if (shown[active] && (q || active > 0)) add(shown[active]);
+    else if (shown.length === 1) add(shown[0]);
   };
 
   const setLine = (id, patch) => setCart((c) => c.map((l) => (l.id === id ? { ...l, ...patch } : l)));
@@ -299,7 +313,9 @@ export default function POS({ mode = 'retail' }) {
   };
   const setQty = (id, qty) => setCart((c) => c.map((l) => (l.id === id ? { ...l, qty: Math.max(1, Math.min(Number(qty) || 1, l.max)) } : l)));
   // Packs (strip, box…): stock and line.qty stay in the medicine's smallest unit; a pack line counts whole packs
-  const packsOf = (id) => products.find((p) => p.id === id)?.packs?.filter((k) => k.name && Number(k.size) > 1) || [];
+  // each medicine's packs, looked up by id (a search through every medicine per tile made the grid slow)
+  const packsById = useMemo(() => { const m = new Map(); for (const p of products) if (p.packs?.length) m.set(p.id, p.packs.filter((k) => k.name && Number(k.size) > 1)); return m; }, [products]);
+  const packsOf = (id) => packsById.get(id) || NO_PACKS;
   const stepOf = (l) => l.pack?.size || 1;
   const setCount = (l, n) => {
     const size = stepOf(l), most = Math.floor(l.max / size);
@@ -671,8 +687,15 @@ export default function POS({ mode = 'retail' }) {
             : 'Type or scan to add, ↑↓←→ and Enter to pick. Alt+H holds a sale while you serve the next customer, F9 charges. Press ? for every shortcut.'}
         </PageTip>
         <div className="row gap search-row">
-          <div ref={searchRef} onKeyDown={onSearchKey} className="grow">
-            <SearchBox big value={q} onChange={setQ} placeholder={touch ? "Search medicine or scan barcode…" : "Search medicine or scan barcode…  (F8)"} />
+          <div ref={searchRef} onKeyDown={onSearchKey} className="grow" style={{ position: 'relative' }}>
+            <SearchBox big value={q} onChange={setQ} placeholder={touch ? "Search medicine or scan barcode…" : "Search medicine, scan, or / for commands  (F8)"} />
+            {q.startsWith('/') && (
+              <div className="till-slash" role="listbox" aria-label="Till commands">
+                {TILL_SLASH.filter(([c]) => c.startsWith(q.slice(1).split(' ')[0].toLowerCase())).map(([c, hint]) => (
+                  <button key={c} type="button" role="option" aria-selected="false" onMouseDown={(e) => e.preventDefault()} onClick={() => setQ('/' + c.replace(/ .*/, ' '))}><code>/{c}</code><small>{hint}</small></button>
+                ))}
+              </div>
+            )}
           </div>
           <CameraButton className="btn ghost big cam-btn" onClick={() => setCam(true)} />
           {features.ai !== false && (can('pos.sell') || can('prescriptions')) && <button type="button" className="btn ghost big rx-scan-btn" title="Scan Prescription (Rx)" onClick={() => setRxScan(true)}><ScanText size={18} /><span>Scan Rx</span></button>}

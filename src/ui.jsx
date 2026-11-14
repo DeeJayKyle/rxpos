@@ -1,7 +1,8 @@
 import { useNavigate } from 'react-router-dom';
-import { useEffect, useMemo, useRef, useState, useId } from 'react';
+import { useEffect, useMemo, useRef, useState, useId, startTransition } from 'react';
 import { useLocation } from 'react-router-dom';
-import { X, Search, Download, Plus, Pencil, Trash2, Inbox, Lightbulb, TrendingUp, TrendingDown, FileDown, Loader2, Copy, CheckSquare, Columns3 } from 'lucide-react';
+import { X, Search, Download, Plus, Pencil, Trash2, Inbox, Lightbulb, TrendingUp, TrendingDown, FileDown, Loader2, Copy, CheckSquare, Columns3, Ellipsis } from 'lucide-react';
+import { ViewSwitch, BoardView, GalleryView, savedView, saveView } from './components/DataViews.jsx';
 import { pagePdf, receiptPdf } from './pdf.js';
 import { useStore, uid, downloadFile, toCSV, del as del1 } from './store.jsx';
 import { useListControls, useContextMenu } from './listcontrols.jsx';
@@ -105,7 +106,7 @@ export function Empty({ children = 'Nothing here yet', colSpan, action, icon: Ic
  * together; the columns shown chosen per device; the search kept while the app is open. `bulk(rows)` adds page actions
  * for the ticked rows ([{ label, run }]); `rowMenu(r)` adds items to a row's menu.
  */
-export function CrudPage({ title, subtitle, singular, table, fields, columns, blank = {}, extraActions, rowClass, rows: rowsProp, onSave, headExtra, canDelete = true, filter, readOnly = false, rowLocked, bulk, rowMenu }) {
+export function CrudPage({ title, subtitle, singular, table, fields, columns, blank = {}, extraActions, rowClass, rows: rowsProp, onSave, headExtra, canDelete = true, filter, readOnly = false, rowLocked, bulk, rowMenu, card, board }) {
   const { db, upsert, remove, update } = useStore();
   const location = useLocation();
   const qKey = 'rxpos-q:' + table + ':' + location.pathname;
@@ -127,6 +128,11 @@ export function CrudPage({ title, subtitle, singular, table, fields, columns, bl
   const [chooser, setChooser] = useState(false);
   const setColumn = (label, on) => { const h = new Set(hidden); on ? h.delete(label) : h.add(label); setHidden(h); setDevice({ hiddenCols: { ...(deviceSettings().hiddenCols || {}), [table]: [...h] } }); };
   const cols = columns.filter((c, i) => i === 0 || !hidden.has(c.label));
+  // Table / Board / Gallery (pages that describe a card), per page on this device
+  const viewKey = table + ':' + location.pathname;
+  const [view, setViewState] = useState(() => (card ? savedView(viewKey) : 'table'));
+  const setView = (v) => { setViewState(v); saveView(viewKey, v); };
+  const shownView = !card || (view === 'board' && !board) ? 'table' : view;
 
   const deletable = (r) => canDelete && !readOnly && !rowLocked?.(r);
   const del = async (list) => {
@@ -158,14 +164,15 @@ export function CrudPage({ title, subtitle, singular, table, fields, columns, bl
         <div className="row gap">
           {headExtra}
           <SearchBox value={q} onChange={setQ} inputRef={searchRef} hint={`Search (${showKey(keyOf('list:search'))})`} />
-          <span className="col-chooser-wrap" style={{ position: 'relative' }}>
+          {card && <ViewSwitch value={shownView} onChange={setView} board={!!board} />}
+          {shownView === 'table' && <span className="col-chooser-wrap" style={{ position: 'relative' }}>
             <button className="btn ghost" aria-expanded={chooser} onClick={() => setChooser((c) => !c)} title="Choose the columns shown on this device"><Columns3 size={16} />Columns</button>
             {chooser && (
               <div className="col-chooser" role="group" aria-label="Columns shown" onMouseLeave={() => setChooser(false)}>
                 {columns.map((c, i) => <label key={c.label} className="field check"><input type="checkbox" disabled={i === 0} checked={i === 0 || !hidden.has(c.label)} onChange={(e) => setColumn(c.label, e.target.checked)} /><span>{c.label}</span></label>)}
               </div>
             )}
-          </span>
+          </span>}
           <button className="btn ghost" title="Export CSV (the ticked rows, or all shown)" onClick={() => exportRows(lc.tickedRows.length ? lc.tickedRows : rows)}><Download size={16} />CSV</button>
           {!readOnly && <button className="btn primary" onClick={startNew} title={`Add ${name.toLowerCase()} (${showKey(keyOf('list:new'))})`}><Plus size={16} />Add {name.toLowerCase()}</button>}
         </div>
@@ -179,7 +186,9 @@ export function CrudPage({ title, subtitle, singular, table, fields, columns, bl
           <button className="btn sm ghost" onClick={lc.clear}>Untick all <kbd>Esc</kbd></button>
         </div>
       )}
-      <div className="card table-wrap">
+      {shownView === 'board' && <BoardView rows={rows} board={board} card={card} onOpen={readOnly ? null : editRow} onMenu={(e, r) => rowMenuFor(e, r, shown.indexOf(r))} />}
+      {shownView === 'gallery' && <GalleryView rows={rows} card={card} onOpen={readOnly ? null : editRow} onMenu={(e, r) => rowMenuFor(e, r, shown.indexOf(r))} />}
+      {shownView === 'table' && <div className="card table-wrap">
         <table>
           <thead>
             <tr><th className="tick"><input {...lc.allProps} /></th>{cols.map((c) => <th key={c.label} className={c.num ? 'num' : ''}>{c.label}</th>)}<th /></tr>
@@ -196,6 +205,7 @@ export function CrudPage({ title, subtitle, singular, table, fields, columns, bl
                   {!readOnly && rowLocked?.(r) && <span className="muted" title="This day is closed: it can't be changed">Day closed</span>}
                   {!readOnly && !rowLocked?.(r) && <button className="btn sm ghost" onClick={() => setEditing(r)}><Pencil size={14} />Edit</button>}
                   {deletable(r) && <button className="btn sm danger" title="Delete" aria-label="Delete" onClick={() => del([r])}><Trash2 size={14} /></button>}
+                  <button type="button" className="icon-btn sm row-more" title="More actions" aria-label="More actions" onClick={(e) => rowMenuFor(e, r, i)}><Ellipsis size={16} /></button>
                 </td>
               </tr>
               );
@@ -204,7 +214,7 @@ export function CrudPage({ title, subtitle, singular, table, fields, columns, bl
             {rows.length > 500 && <tr><td colSpan={cols.length + 2} className="empty">Showing 500 of {rows.length}. Use search to narrow down.</td></tr>}
           </tbody>
         </table>
-      </div>
+      </div>}
       {menu.node}
       {editing && (
         <Modal title={(editing._new ? 'Add ' : 'Edit ') + name.toLowerCase()} onClose={() => setEditing(null)} wide>
@@ -469,4 +479,20 @@ export function useSort(rows, keys, initial, dir = -1) {
 export function SortTh({ s, k, children, className = '' }) {
   const on = s.by === k;
   return <th className={className + ' sortable'} aria-sort={on ? (s.dir > 0 ? 'ascending' : 'descending') : 'none'}><button type="button" className="th-sort" onClick={() => s.sort(k)}>{children}<span aria-hidden="true">{on ? (s.dir > 0 ? ' ▲' : ' ▼') : ' ↕'}</span></button></th>;
+}
+
+/**
+ * Long lists draw their first rows at once and the rest a moment later, as a low-priority update that gives way to
+ * taps and typing: a page with hundreds of rows opens as fast as a short one. Returns how many rows to draw now.
+ */
+export function useProgressive(total, first = 60, step = 80) {
+  const [n, setN] = useState(first);
+  useEffect(() => {
+    if (total <= n) return;
+    // a few rows at a time: drawing hundreds of rows at once is one long freeze the browser can't interrupt
+    const go = () => startTransition(() => setN((x) => Math.min(total, x + step)));
+    if (window.requestIdleCallback) { const id = requestIdleCallback(go, { timeout: 300 }); return () => cancelIdleCallback(id); }
+    const id = setTimeout(go, 50); return () => clearTimeout(id);
+  }, [total, n, step]);
+  return Math.min(n, total);
 }

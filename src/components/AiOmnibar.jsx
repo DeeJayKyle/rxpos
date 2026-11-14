@@ -5,7 +5,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Pill, User, ReceiptText, CornerDownLeft, Sparkles, Wand2, Stethoscope, LineChart, WifiOff, Loader2} from 'lucide-react';
-import { useStore } from '../store.jsx';
+import { useStore, useSyncState } from '../store.jsx';
 import { aiCopilot } from '../cloud.js';
 import { searchProducts } from '../search.js';
 import { stageForTill } from './aiStage.js';
@@ -13,7 +13,8 @@ import { ownerFacts } from './aiFacts.js';
 import { deviceTelemetry } from './AiSystemDoctor.jsx';
 
 export default function AiOmnibar({ open, onClose, pages, commands = [] }) {
-  const { db, products, fmt, syncCfg, can, batchesOf, pending, syncStatus } = useStore();
+  const { db, products, fmt, syncCfg, can, batchesOf } = useStore();
+  const { pending, syncStatus } = useSyncState();
   const navigate = useNavigate();
   const [q, setQ] = useState('');
   const [active, setActive] = useState(0);
@@ -47,8 +48,14 @@ export default function AiOmnibar({ open, onClose, pages, commands = [] }) {
   };
 
   const results = useMemo(() => {
-    const s = q.trim().toLowerCase();
+    // "/" first: commands only (Notion's slash menu), then the pages
+    const slash = q.startsWith('/');
+    const s = (slash ? q.slice(1) : q).trim().toLowerCase();
     const has = (...v) => v.join(' ').toLowerCase().includes(s);
+    if (slash) return [
+      ...commands.filter((c) => !s || has(c.label, c.words || '')).map((c) => ({ section: 'Commands', ...c })),
+      ...pages.filter((p) => s && has(p.label)).slice(0, 6).map((p) => ({ section: 'Pages', label: p.label, Icon: p.Icon, hint: p.key, go: () => navigate(p.to) })),
+    ];
     // the owner's request: Ctrl+K also runs commands ("new sale", "receive stock", "add customer"…)
     const out = commands.filter((c) => (s ? has(c.label, c.words || '') : true)).slice(0, s ? 5 : 4).map((c) => ({ section: 'Commands', ...c }));
     out.push(...pages.filter((p) => !s || has(p.label)).slice(0, s ? 6 : 8).map((p) => ({ section: 'Pages', label: p.label, Icon: p.Icon, hint: p.key, go: () => navigate(p.to) })));
@@ -85,7 +92,7 @@ export default function AiOmnibar({ open, onClose, pages, commands = [] }) {
   return (
     <div className="modal-bg palette-bg" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="palette ai-omnibar" onKeyDown={onKey} role="dialog" aria-modal="true" aria-label="Search and AI commands">
-        <div className="palette-input"><Search size={18} /><input ref={inputRef} autoFocus value={q} onChange={(e) => { setQ(e.target.value); setActive(0); setAi(null); }} placeholder="Search, or tell the AI: “add 2 strips of paracetamol”…" aria-label="Search or command" /><Sparkles size={16} className="ai-mark" aria-hidden="true" /><kbd>Esc</kbd></div>
+        <div className="palette-input"><Search size={18} /><input ref={inputRef} autoFocus value={q} onChange={(e) => { setQ(e.target.value); setActive(0); setAi(null); }} placeholder="Search, / for commands, or tell the AI: “add 2 strips of paracetamol”…" aria-label="Search or command" /><Sparkles size={16} className="ai-mark" aria-hidden="true" /><kbd>Esc</kbd></div>
         {ai && (
           <div className="ai-answer" role="status" aria-live="polite">
             {ai.busy ? <p className="row gap"><Loader2 size={16} className="spin" />Thinking…</p> : ai.error ? <p className="text-danger">{ai.error}</p> : <>

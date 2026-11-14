@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, useMemo, useRef, startTransition } from 'react';
 import { idbGet, idbSet, idbDel, idbKeys } from './idb.js';
 import { createSync, collectChanges } from './sync.js';
 import { storage, diff, storageError, STORAGE_VERSION } from './storage.js';
@@ -34,6 +34,7 @@ export const TABLES = [
   'insurers', // step 22: insurers and their schemes (src/insurance.js)
   // step 26 (from the Flutter app): Payroll & HR (the cloud sends them only to roles with Payroll) and report emails
   'employees', 'attendance', 'salaryAdvances', 'payrolls', 'reportSchedules',
+  'notes', // 2026-11-14: Notes & SOP pages (src/notes.js)
 ];
 // What is persisted on the device, one IndexedDB key per part
 const PARTS = [...TABLES, 'settings', '_tomb'];
@@ -117,6 +118,21 @@ export function put(d, table, rec) {
   if (i >= 0) d[table][i] = r;
   else d[table].unshift(r);
   return r;
+}
+/** Many records into one table in a single pass (put() searches the table for each record: slow for thousands) */
+export function putMany(d, table, recs) {
+  const at = now();
+  const index = new Map(d[table].map((x, i) => [x.id, i]));
+  const added = [];
+  const out = recs.map((rec) => {
+    let r = { ...rec, id: rec.id || uid(), updatedAt: at };
+    const i = index.get(r.id);
+    if (i !== undefined && FIELD_TABLES.has(table)) r = stampFields(d[table][i], r, at);
+    if (i !== undefined) d[table][i] = r; else { added.push(r); index.set(r.id, -1); }
+    return r;
+  });
+  if (added.length) d[table] = [...added.reverse(), ...d[table]]; // new ones first, as put() does
+  return out;
 }
 export function del(d, table, id) {
   d[table] = d[table].filter((x) => x.id !== id);
@@ -363,6 +379,19 @@ async function removeOldTableCopies() {
 }
 
 const Ctx = createContext(null);
+// Sync status, changes waiting and storage problems change often while syncing: they have their own context, so a
+// sync running in the background re-renders only what shows them (the clock pill, This device), never the pages.
+const SyncCtx = createContext({ syncStatus: { state: 'off' }, pending: 0, storageIssue: '' });
+
+// when the person last touched the app: heavy background jobs (the daily copy, the weekly reorder levels) wait for a
+// quiet moment, so they never land in the middle of a sale or a page change
+let lastInput = Date.now();
+if (typeof window !== 'undefined') for (const ev of ['pointerdown', 'keydown', 'wheel', 'touchstart']) window.addEventListener(ev, () => { lastInput = Date.now(); }, { passive: true, capture: true });
+/** Resolves once nobody has touched the app for [quietMs], the app is on screen and the browser is idle */
+export async function whenQuiet(quietMs = 30000) {
+  while (Date.now() - lastInput < quietMs || document.visibilityState !== 'visible') await new Promise((r) => setTimeout(r, 5000));
+  await new Promise((r) => (window.requestIdleCallback ? requestIdleCallback(r, { timeout: 30000 }) : setTimeout(r, 1)));
+}
 
 export function StoreProvider({ children }) {
   const [db, setDb] = useState(null);
@@ -391,6 +420,9 @@ export function StoreProvider({ children }) {
   // The latest state, always (updates read and write it synchronously, so two quick actions never lose each other)
   const dbRef = useRef(null);
   const setState = useCallback((next) => { dbRef.current = next; setDb(next); }, []);
+  // Records from the cloud: the device's copy (dbRef) changes at once, the screen catches up as a low-priority
+  // update that React interrupts for any tap or key, so syncing in the background never makes the app lag
+  const setStateInBackground = useCallback((next) => { dbRef.current = next; startTransition(() => setDb(next)); }, []);
   const [storageIssue, setStorageIssue] = useState(''); // a write to the device failed (shown as Needs attention)
 
   // ---------- load (with the one-time move to record-level storage, verified before it is used) ----------
@@ -439,13 +471,19 @@ export function StoreProvider({ children }) {
   }, []);
 
   // Daily on-device snapshot (last 7 kept) so a mistake can be undone even without a hub or manual backup
+  // (checked once a day by key name only: reading the snapshot back to see if it exists copied the whole pharmacy
+  // after every change; the copy is written when the device is idle)
+  const snappedDay = useRef('');
   useEffect(() => {
     if (!db || !db.users.length || !keepsData()) return; // the web version keeps no copies on the computer
     const key = 'snap:' + today();
+    if (snappedDay.current === key) return;
     const t = setTimeout(async () => {
       try {
-        if (await idbGet(key)) return;
-        await idbSet(key, db);
+        if ((await idbKeys()).includes(key)) { snappedDay.current = key; return; }
+        await whenQuiet(); // the copy is one long step the screen can't interrupt
+        await idbSet(key, dbRef.current);
+        snappedDay.current = key;
         const snaps = (await idbKeys()).filter((k) => String(k).startsWith('snap:')).sort();
         for (const old of snaps.slice(0, -7)) await idbDel(old);
       } catch (e) { console.error(e); }
@@ -562,7 +600,7 @@ export function StoreProvider({ children }) {
       applyRemote: (changes) => {
         const prev = dbRef.current;
         const next = withCatalog(mergeRemote(prev, changes));
-        setState(next);
+        setStateInBackground(next);
         return persist(diff(prev, next, { tables: TABLES, local: false, skip: skipRecord }));
       },
       // stage 4: a shorter window (or the window moving on at a new month) drops the older records from THIS device
@@ -574,7 +612,7 @@ export function StoreProvider({ children }) {
         const { tables, dels } = pruneOf(prev, W, waiting);
         const next = { ...prev, ...tables };
         if (!dels.length) return Promise.resolve();
-        setState(next);
+        setStateInBackground(next);
         return persist({ puts: [], dels, ops: [] });
       },
       onStatus: (st) => {
@@ -699,17 +737,27 @@ export function StoreProvider({ children }) {
     return () => clearTimeout(t);
   }, [day]);
 
-  if (!db || !syncCfg) return <div className="loading"><div className="spinner" />Loading RxPOS…</div>;
+  // One value for the pages, made again only when something in it changes (a new object every render would
+  // re-render every page whenever anything in the store moved)
+  const value = useMemo(() => (db && syncCfg ? {
+    db: viewDb, sharedSettings: db.settings, pharmacyOverrides, resetPharmacyOverrides, update, upsert, remove, saveSettings, user, setUser, fmt, products, stockIndex, batchesOf,
+    branchId, branch, setBranchId, numberFor, syncCfg, saveSyncCfg, syncNow, pullAll, linkPharmacy, features, can, day,
+  } : null), [db, viewDb, pharmacyOverrides, resetPharmacyOverrides, update, upsert, remove, saveSettings, user, setUser, fmt, products, stockIndex, batchesOf,
+    branchId, branch, setBranchId, numberFor, syncCfg, saveSyncCfg, syncNow, pullAll, linkPharmacy, features, can, day]);
+  const syncValue = useMemo(() => ({ syncStatus, pending, storageIssue }), [syncStatus, pending, storageIssue]);
+
+  if (!value) return <div className="loading"><div className="spinner" />Loading RxPOS…</div>;
 
   return (
-    <Ctx.Provider value={{ db: viewDb, sharedSettings: db.settings, pharmacyOverrides, resetPharmacyOverrides, update, pending, storageIssue, upsert, remove, saveSettings, user, setUser, fmt, products, stockIndex, batchesOf,
-      branchId, branch, setBranchId, numberFor, syncCfg, saveSyncCfg, syncStatus, syncNow, pullAll, linkPharmacy, features, can, day }}>
-      {children}
+    <Ctx.Provider value={value}>
+      <SyncCtx.Provider value={syncValue}>{children}</SyncCtx.Provider>
     </Ctx.Provider>
   );
 }
 
 export const useStore = () => useContext(Ctx);
+/** Sync status, changes waiting to be sent and storage problems (re-renders only the components that ask for them) */
+export const useSyncState = () => useContext(SyncCtx);
 
 export function downloadFile(name, content, type = 'text/plain') {
   const a = document.createElement('a');

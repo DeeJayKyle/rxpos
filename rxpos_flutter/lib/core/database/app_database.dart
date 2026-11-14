@@ -106,6 +106,7 @@ class AppDatabase extends _$AppDatabase {
         },
         beforeOpen: (details) async {
           await customStatement('PRAGMA foreign_keys = ON');
+          await createTableVersions(this);
           await ensureDefaults(this);
           // a browser: put back this tab's sign-in and the appearance preferences it kept
           for (final e in webKept().entries) {
@@ -120,4 +121,17 @@ AppDatabase appDatabase(Ref ref) {
   final db = AppDatabase();
   ref.onDispose(db.close);
   return db;
+}
+
+/// A version number per record type, counted by SQLite itself on every write to `records` (whoever writes: the till,
+/// sync, sign-out). All record types share one table, and Drift re-runs every watched query on any write to it, so a
+/// synced sale used to make every screen re-read and decode its medicines, customers and batches. With these numbers a
+/// watched type re-reads only when its own number moves (RecordStore.watch). TEMP: per connection, made at every
+/// open, never part of the stored schema (the schema checks and upgrades don't see it).
+Future<void> createTableVersions(AppDatabase db) async {
+  await db.customStatement('CREATE TEMP TABLE IF NOT EXISTS rec_versions (t TEXT PRIMARY KEY, v INTEGER NOT NULL)');
+  for (final (event, row) in const [('INSERT', 'NEW'), ('UPDATE', 'NEW'), ('DELETE', 'OLD')]) {
+    await db.customStatement('CREATE TEMP TRIGGER IF NOT EXISTS rec_v_${event.toLowerCase()} AFTER $event ON main.records BEGIN '
+        'INSERT INTO rec_versions (t, v) VALUES ($row.t, 1) ON CONFLICT (t) DO UPDATE SET v = v + 1; END');
+  }
 }

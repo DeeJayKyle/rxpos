@@ -40,6 +40,7 @@ const SUITES = [
   ['fefo allocate (unit)', 'unit-fefo.mjs', []],
   ['clinical safety check and expiry traffic light (unit)', 'unit-clinical.mjs', []],
   ['date helpers (unit)', 'unit-dates.mjs', []],
+  ['notes and SOP pages (unit)', 'unit-notes.mjs', []],
   ['record ids (unit)', 'unit-ids.mjs', []],
   ['watchdog alerts (unit)', 'unit-watchdog.mjs', []],
   ['inventory value (unit)', 'unit-stockvalue.mjs', []],
@@ -130,8 +131,12 @@ const SUITES = [
   ['faster sync: core first, history after', 'v71-sync-phases.mjs', []],
   ['faster sync: ready-made chunks', 'v72-snapshot.mjs', []],
   ['faster sync: recent history, brought forward', 'v73-window.mjs', []],
+  ['notes and SOP pages: blocks, "/" menu, pages inside pages, sync', 'v74-notes.mjs', []],
+  ['database views (table, board, gallery) and slash commands', 'v75-views.mjs', []],
   // performance timings: only on request (npm run bench), never part of npm test
   ...(process.argv[2] === 'bench' ? [['benchmarks', 'bench.mjs', ['.output/bench']]] : []),
+  // speed on a slow phone CPU with a big pharmacy (timings vary between machines: on request, `npm test -- perf-speed`)
+  ...(/^(bench|perf-speed)$/.test(process.argv[2] || '') ? [['speed with a big pharmacy on a slow phone CPU', 'perf-speed.mjs', ['.output/perf']]] : []),
   // the Windows app's self-update needs a screen: Windows itself, or xvfb-run on Linux
   ...(process.platform === 'win32' || fs.existsSync('/usr/bin/xvfb-run') ? [['windows self-update', 'electron-update.mjs', []]] : []),
 ];
@@ -161,7 +166,8 @@ fs.rmSync(state, { recursive: true, force: true });
 // run the tools with node directly: no shell, so folders with spaces in their names work
 const bin = (p) => path.join(root, 'node_modules', p);
 console.log(HUB ? 'Building the app and starting a local hub (server/hub.mjs)…' : 'Building the app and starting a local cloud…');
-const build = spawn(process.execPath, [bin('vite/bin/vite.js'), 'build'], { cwd: root });
+// RXPOS_NO_MINIFY=1: readable function names in CPU profiles (tests/perf-speed.mjs RXPOS_PERF_PROFILE)
+const build = spawn(process.execPath, [bin('vite/bin/vite.js'), 'build', ...(process.env.RXPOS_NO_MINIFY ? ['--minify', 'false'] : [])], { cwd: root });
 let buildOut = '';
 build.stdout.on('data', (d) => { buildOut += d; });
 build.stderr.on('data', (d) => { buildOut += d; });

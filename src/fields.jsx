@@ -56,6 +56,8 @@ export function DateInput({ value, onChange, min, max, monthYear = false, ...res
  * Choose a medicine by typing: name, generic or barcode, every word; medicines in stock come first, with their stock.
  * `extra` adds rows above the results (e.g. "New medicine"). Calls onPick(id).
  */
+const COLLATOR = new Intl.Collator();
+
 export function MedicinePicker({ products, value, onPick, placeholder = 'Search medicine…', onNew, newLabel }) {
   const current = value ? products.find((p) => p.id === value) : null;
   const [q, setQ] = useState('');
@@ -63,15 +65,18 @@ export function MedicinePicker({ products, value, onPick, placeholder = 'Search 
   const [hi, setHi] = useState(0);
   const [pos, setPos] = useState(null);
   const box = useRef(null);
+  // A–Z once per medicine list (and only once the list is opened): sorting thousands of names with localeCompare on
+  // every opening made Add Stock slow to open; one Collator is many times faster and gives the same order
+  const az = useMemo(() => (open ? products.slice().sort((x, y) => COLLATOR.compare(x.name, y.name)) : null), [open && products]); // eslint-disable-line react-hooks/exhaustive-deps
   const list = useMemo(() => {
     if (!open) return [];
-    const found = q.trim() ? searchProducts(products, q) : products;
+    const typed = q.trim();
+    const found = typed ? searchProducts(products, q) : az || products;
     // in stock first, then the rest; each group keeps the search ranking (or A–Z when nothing is typed)
     const inStock = [], rest = [];
     for (const p of found) ((p.stock > 0 || p.totalStock > 0) ? inStock : rest).push(p);
-    const sort = (a) => (q.trim() ? a : a.slice().sort((x, y) => x.name.localeCompare(y.name)));
-    return [...sort(inStock), ...sort(rest)].slice(0, 60);
-  }, [open, q, products]);
+    return [...inStock, ...rest].slice(0, 60);
+  }, [open, q, products, az]);
   const rows = [...list.map((p) => ({ p })), ...(onNew ? [{ add: true }] : [])];
   useEffect(() => setHi(0), [q]);
   const place = () => { const r = box.current?.getBoundingClientRect(); if (r) setPos({ left: r.left, top: r.bottom + 2, width: Math.max(r.width, 340) }); };
