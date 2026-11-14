@@ -45,8 +45,9 @@ check('dashboard: gross profit today = sales less cost (3 × (1,000 − 600) = 1
 check('dashboard: transactions today = 1', tiles['Transactions'] === '1', tiles['Transactions']);
 check('dashboard: expired tile counts the expired batch in stock', tiles['Expired'] === '1', tiles['Expired']);
 check('dashboard: Low stock and Soon expiring tiles are still there', 'Low stock' in tiles && 'Soon expiring' in tiles);
-await p.evaluate(() => [...document.querySelectorAll('.seg button')].find((x) => /7 days/.test(x.textContent))?.click()); await wait(300);
-check('dashboard: chart period switches to 7 days', /last 7 days/.test(await p.evaluate(() => document.querySelector('.card-head h3')?.textContent || '')));
+// the trend chart's own period (the bento row at the top has its own chips)
+await p.evaluate(() => [...document.querySelectorAll('.seg button')].find((x) => !x.closest('.bento-dash') && /7 days/.test(x.textContent))?.click()); await wait(300);
+check('dashboard: chart period switches to 7 days', /last 7 days/.test(await p.evaluate(() => [...document.querySelectorAll('.card-head h3')].find((x) => !x.closest('.bento-dash'))?.textContent || '')));
 check('dashboard: Promote today shows a picture per medicine', await p.evaluate(() => !document.querySelector('.promo-row') || [...document.querySelectorAll('.promo-row')].every((r) => r.querySelector('.promo-art svg, .promo-art img'))));
 await p.screenshot({ path: `${out}/dashboard-light.png` });
 

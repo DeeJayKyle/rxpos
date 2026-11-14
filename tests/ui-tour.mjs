@@ -77,17 +77,24 @@ await wait(500); await P.screenshot({ path: path.join(out, 'phone-mega-menu.png'
 await P.evaluate(() => [...document.querySelectorAll('.mega-item')].find((x) => /Inventory/.test(x.textContent))?.click()); await wait(600);
 check('phone: a page picked in the sheet opens and the sheet closes', await P.evaluate(() => location.hash.includes('/inventory') && !document.querySelector('.mega-sheet')));
 await P.setViewport({ width: 1440, height: 900 });
-await P.evaluate(() => { const d = JSON.parse(localStorage.getItem('rxpos-device') || '{}'); localStorage.setItem('rxpos-device', JSON.stringify({ ...d, navStyle: 'top' })); localStorage.setItem('pharmapos-theme', 'gold-night'); });
-await P.reload({ waitUntil: 'networkidle2' }); await wait(1500); // (no navigation first: the app saves its recent pages, with the settings it read at start)
+await P.evaluate(() => localStorage.setItem('pharmapos-theme', 'gold-night'));
+await P.reload({ waitUntil: 'networkidle2' }); await wait(1500);
+// chosen in This device → Navigation, as a person does (the app keeps its device settings itself)
+const navChoice = async (label) => {
+  await P.evaluate(() => { location.hash = '#/device'; });
+  await P.waitForSelector('[role=radiogroup][aria-label=Navigation] [role=radio]', { timeout: 15000 });
+  await P.evaluate((l) => [...document.querySelectorAll('[role=radiogroup][aria-label=Navigation] [role=radio]')].find((x) => x.textContent.trim() === l)?.click(), label);
+  await wait(300);
+  await P.evaluate(() => { location.hash = '#/inventory'; }); await wait(1000);
+};
+await navChoice('Top bar');
 await P.waitForSelector('.top-nav .top-pill', { timeout: 15000 }).catch(() => {});
 check('wide screen, top bar chosen: pill navbar shown, sidebar hidden', await P.evaluate(() => !!document.querySelector('.top-nav') && getComputedStyle(document.querySelector('.top-nav')).display === 'flex' && getComputedStyle(document.querySelector('.sidebar')).display === 'none'));
 await P.evaluate(() => [...document.querySelectorAll('.top-group .top-pill')].find((x) => /Medicine Inventory/.test(x.textContent))?.click()); await wait(300);
 check('a group pill opens its pages as a dropdown', await P.evaluate(() => document.querySelectorAll('.top-panel .mega-item').length > 3));
 await P.screenshot({ path: path.join(out, 'desktop-gold-night-topnav.png') });
 await P.keyboard.press('Escape');
-await P.evaluate(() => { const d = JSON.parse(localStorage.getItem('rxpos-device') || '{}'); localStorage.setItem('rxpos-device', JSON.stringify({ ...d, navStyle: 'sidebar' })); });
-await P.reload({ waitUntil: 'networkidle2' }); await wait(1500);
-await P.evaluate(() => { location.hash = '#/inventory'; }); await wait(1000);
+await navChoice('Sidebar');
 check('sidebar style: the action card sits above the account box', await P.evaluate(() => !!document.querySelector('.sidebar .nav-promo')));
 await P.screenshot({ path: path.join(out, 'desktop-gold-night-sidebar.png') });
 check('no page errors', errors.length === 0, errors.slice(0, 3).join(' | '));
