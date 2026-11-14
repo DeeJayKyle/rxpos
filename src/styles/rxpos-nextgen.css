@@ -394,3 +394,4 @@ tr:hover td.actions .row-more, tr.row-active td.actions .row-more, td.actions .r
 .till-slash button:hover { background: var(--surface-2); }
 .till-slash code { font-weight: 700; color: var(--primary-text, var(--primary)); min-width: 86px; }
 .till-slash small { color: var(--muted); }
+.bento-hero .num { text-align: left; }

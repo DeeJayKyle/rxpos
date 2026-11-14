@@ -157,8 +157,16 @@ await P.screenshot({ path: path.join(out, 'small-phone-owner.png') });
 // (the owner page may still be fetching Google's sign-in script, which can hang where it is blocked: wait for the page, not the network)
 await P.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true }); await P.goto(base + '/' + slug + '#/', { waitUntil: 'domcontentloaded' }); await wait(2000);
 const hash = () => P.evaluate(() => location.hash);
-const tabTo = async (label) => { await P.evaluate((l) => [...document.querySelectorAll('.bottom-nav a')].find((a) => a.textContent.trim() === l).click(), label); await wait(700); };
-await tabTo('Stock');
+// a tab, then wait for its page (a slow runner can drop a tap made while the previous page change is finishing: tap once more)
+const tabTo = async (label, path) => {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    await P.evaluate((l) => [...document.querySelectorAll('.bottom-nav a')].find((a) => a.textContent.trim() === l).click(), label);
+    for (let t = 0; t < 30; t++) { if ((await hash()) === '#' + path) break; await wait(100); }
+    if ((await hash()) === '#' + path) break;
+  }
+  await wait(500);
+};
+await tabTo('Stock', '/inventory');
 check('phone: the Stock tab opens Inventory', (await hash()) === '#/inventory', await hash());
 await P.tap('.topbar .back-btn'); await wait(700);
 check('phone: Back returns to the dashboard', (await hash()) === '#/', await hash());
@@ -168,7 +176,7 @@ const swipe = async (x0, x1, y = 420) => {
   for (let i = 1; i <= 8; i++) { await P.touchscreen.touchMove(x0 + ((x1 - x0) * i) / 8, y + i); await wait(16); }
   await P.touchscreen.touchEnd(); await wait(900);
 };
-await tabTo('Sales');
+await tabTo('Sales', '/sales');
 await swipe(180, 380);
 check('phone: a swipe that starts mid-screen does not go back', (await hash()) === '#/sales', await hash());
 const moved = await P.evaluate(async () => { const m = document.querySelector('main.content'); return getComputedStyle(m).left; });
