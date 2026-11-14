@@ -574,7 +574,7 @@ function Shell() {
             const pg = pages.find((x) => x.to === here);
             return pg ? (
               <nav className="crumbs" aria-label="You are here">
-                {g?.group && <span className="muted">{g.group}</span>}{g?.group && <span className="muted" aria-hidden="true">›</span>}<strong>{pg.label}</strong>
+                {g?.group && <button type="button" className="link-btn muted crumb-group" title={`Every page under ${g.group}`} onClick={() => setMega(true)}>{g.group}</button>}{g?.group && <span className="muted" aria-hidden="true">›</span>}<strong>{pg.label}</strong>
                 <button className={'icon-btn sm' + (nav.pins.includes(here) ? ' on' : '')} aria-pressed={nav.pins.includes(here)} onClick={() => togglePin(here)}
                   title={`${nav.pins.includes(here) ? 'Unpin this page from' : 'Pin this page to'} the top of the menu (${showKey(keyOf('pin'))})`} aria-label={nav.pins.includes(here) ? 'Unpin this page' : 'Pin this page'}><Pin size={14} /></button>
                 <button className="icon-btn sm" onClick={() => setHelp(true)} title={`Keyboard and mouse (${showKey(keyOf('help'))})`} aria-label="Keyboard and mouse help"><Keyboard size={14} /></button>
@@ -613,6 +613,8 @@ function Shell() {
         ...(can('suppliers') ? [{ label: 'Add a supplier', words: 'new supplier', Icon: Truck, go: () => navigate('/suppliers', { state: { create: true } }) }] : []),
         ...(can('medicines.manage') ? [{ label: 'Add a medicine', words: 'new product drug', Icon: Pill, go: () => navigate('/medicines', { state: { create: true } }) }] : []),
         ...(can('finance') ? [{ label: 'Add an expense', words: 'new expense spend', Icon: Wallet, go: () => navigate('/expenses', { state: { create: true } }) }] : []),
+        ...(features.notes !== false ? [{ label: 'New note page', words: 'note sop page notion write checklist', Icon: NotebookPen, go: () => navigate('/notes', { state: { create: true } }) }] : []),
+        ...(features.notes !== false ? [{ label: 'New checklist from a template', words: 'template opening checklist sop handover', Icon: NotebookPen, go: () => navigate('/notes', { state: { template: 'opening' } }) }] : []),
         { label: nav.pins.includes(here) ? 'Unpin this page' : 'Pin this page', words: 'pin favourite menu', Icon: Pin, hint: showKey(keyOf('pin')), go: () => togglePin(here) },
         { label: 'Keyboard and mouse help', words: 'shortcuts keys help', Icon: Keyboard, hint: showKey(keyOf('help')), go: () => setHelp(true) },
         { label: 'Change keyboard shortcuts', words: 'keys remap keyboard settings', Icon: Keyboard, go: () => navigate('/device', { state: { tab: 'keyboard' } }) },

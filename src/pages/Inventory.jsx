@@ -8,6 +8,7 @@ import { formatQty } from '../money.js';
 import { removalSplit } from '../fefo.js';
 import { newInternalBarcode } from '../barcode.jsx';
 import { useHoverCard } from '../listcontrols.jsx';
+import { ProductArt } from '../idleart.jsx';
 import { useMedicineOrder, MedicineOrderPicker, groupedRows, useFolded, GroupHeadingRow } from '../medgroups.jsx';
 
 const expiryClass = (expiry, warn) => {
@@ -134,6 +135,9 @@ export function MedicineList() {
         { label: 'Stock card', Icon: ScrollText, run: () => navigate('/stock-card', { state: { productId: p.id } }) },
         manage && { label: 'Packs (strip, box…)', Icon: Boxes, run: () => setPacksFor(p) },
       ].filter(Boolean)}
+      board={{ groups: [['out', 'Out of stock', 'danger'], ['low', 'Running low', 'warn'], ['ok', 'In stock', 'ok']], of: (p) => (p.stock <= 0 ? 'out' : p.stock <= (p.reorder || 0) ? 'low' : 'ok') }}
+      card={(p) => ({ title: p.name, sub: [p.generic, p.strength, p.form].filter(Boolean).join(' · '), value: fmt(p.price), art: <ProductArt p={p} size={56} />,
+        chips: [[`${formatQty(p.stock)} in stock`, p.stock <= 0 ? 'danger' : p.stock <= (p.reorder || 0) ? 'warn' : 'ok'], p.rx && ['Rx'], p.controlled && ['CD', 'danger'], p.shelf && ['Shelf ' + p.shelf]].filter(Boolean) })}
       columns={[
         { label: 'Medicine', render: (p) => <><strong {...peek.bind(p)}>{p.name}</strong> {p.rx && <span className="badge">Rx</span>}{p.chronic && <span className="badge ok">Chronic</span>}{p.controlled && <span className="badge danger">CD</span>}<br /><small className="muted">{[p.generic, p.barcode].filter(Boolean).join(' · ')}</small>
           {review && <span className="status-tags">{recordIssues(p, dupBarcodes).map((x) => <span key={x} className="status warn"><i aria-hidden="true" />{x}</span>)}</span>}</> },

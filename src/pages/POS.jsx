@@ -34,6 +34,10 @@ const NO_PACKS = [];
 // the till's layouts (each device keeps its own choice)
 const POS_LAYOUTS = [['classic', 'Classic'], ['standard', 'Standard'], ['advanced', 'Advanced UI']];
 
+// "/" in the till's search box: the command bar's commands (runCommand), with what each one does
+const TILL_SLASH = [['pay', 'Charge this sale'], ['hold', 'Put this sale on hold'], ['disc 10', 'Discount the sale by 10%'], ['disc 2 10', 'Line 2: 10% off'],
+  ['void 2', 'Remove line 2'], ['qty 2 5', 'Line 2: quantity 5'], ['+qty 2', 'One more of line 2'], ['-qty 2', 'One less of line 2']];
+
 export default function POS({ mode = 'retail' }) {
   const { db, products, update, user, fmt, batchesOf, branchId, syncCfg, features, can, numberFor } = useStore();
   const { pending } = useSyncState();
@@ -254,6 +258,8 @@ export default function POS({ mode = 'retail' }) {
     else if (e.key === 'ArrowRight' && (q === '' || e.target.selectionStart === q.length)) { e.preventDefault(); moveActive(1); }
     else if (e.key === 'ArrowLeft' && q === '') { e.preventDefault(); moveActive(-1); }
     if (e.key !== 'Enter') return;
+    // "/" commands typed in the search box, as in the command bar: /hold, /pay, /disc 10, /void 2, /qty 2 5 …
+    if (q.startsWith('/')) { e.preventDefault(); const err = runCommand(q.slice(1).trim().toLowerCase()); if (err) toast(err, 'warn'); else setQ(''); return; }
     const g = parseGs1(q);
     if (g) { scanPack(g); setQ(''); return; }
     const exact = products.find((p) => p.barcode && p.barcode === q.trim());
@@ -681,8 +687,15 @@ export default function POS({ mode = 'retail' }) {
             : 'Type or scan to add, ↑↓←→ and Enter to pick. Alt+H holds a sale while you serve the next customer, F9 charges. Press ? for every shortcut.'}
         </PageTip>
         <div className="row gap search-row">
-          <div ref={searchRef} onKeyDown={onSearchKey} className="grow">
-            <SearchBox big value={q} onChange={setQ} placeholder={touch ? "Search medicine or scan barcode…" : "Search medicine or scan barcode…  (F8)"} />
+          <div ref={searchRef} onKeyDown={onSearchKey} className="grow" style={{ position: 'relative' }}>
+            <SearchBox big value={q} onChange={setQ} placeholder={touch ? "Search medicine or scan barcode…" : "Search medicine, scan, or / for commands  (F8)"} />
+            {q.startsWith('/') && (
+              <div className="till-slash" role="listbox" aria-label="Till commands">
+                {TILL_SLASH.filter(([c]) => c.startsWith(q.slice(1).split(' ')[0].toLowerCase())).map(([c, hint]) => (
+                  <button key={c} type="button" role="option" aria-selected="false" onMouseDown={(e) => e.preventDefault()} onClick={() => setQ('/' + c.replace(/ .*/, ' '))}><code>/{c}</code><small>{hint}</small></button>
+                ))}
+              </div>
+            )}
           </div>
           <CameraButton className="btn ghost big cam-btn" onClick={() => setCam(true)} />
           {features.ai !== false && (can('pos.sell') || can('prescriptions')) && <button type="button" className="btn ghost big rx-scan-btn" title="Scan Prescription (Rx)" onClick={() => setRxScan(true)}><ScanText size={18} /><span>Scan Rx</span></button>}

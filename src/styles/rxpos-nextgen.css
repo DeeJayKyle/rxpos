@@ -354,3 +354,43 @@ h1, .page-head h1, .pos-title { font-family: var(--font-display); letter-spacing
 .cover-dot { width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--border); cursor: pointer; padding: 0; }
 .cover-dot.on { outline: 2px solid var(--primary); outline-offset: 2px; }
 .note-kids { display: grid; gap: 2px; margin-top: 22px; padding-top: 12px; border-top: 1px solid var(--border); }
+
+/* ---------- Database views: Table / Board / Gallery (2026-11-14) ---------- */
+.view-switch button { display: inline-flex; gap: 5px; align-items: center; }
+@media (max-width: 700px) { .view-switch span { display: none; } }
+.dv-board { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(250px, 1fr); gap: 12px; overflow-x: auto; padding-bottom: 8px; align-items: start; }
+.dv-col { display: grid; gap: 8px; padding: 10px; border-radius: 16px; background: var(--surface-2); border: 1px solid var(--border); min-width: 0; }
+.dv-col header { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 13.5px; padding: 2px 4px; }
+.dv-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
+.tone-ok .dv-dot { background: var(--ok); } .tone-warn .dv-dot { background: var(--warn); } .tone-danger .dv-dot { background: var(--danger); } .tone-info .dv-dot { background: var(--primary); }
+.dv-count { margin-left: auto; padding: 0 8px; border-radius: 999px; background: var(--surface); color: var(--muted); font-size: 12px; font-weight: 600; }
+.dv-col-items { display: grid; gap: 8px; max-height: 70vh; overflow-y: auto; }
+.dv-empty { padding: 8px 4px; }
+.dv-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+.dv-card { position: relative; display: flex; gap: 10px; align-items: flex-start; padding: 12px; border-radius: 14px; background: var(--surface); border: 1px solid var(--border); min-width: 0; outline: none; transition: border-color .12s, box-shadow .12s; }
+.dv-card:hover, .dv-card:focus-visible { border-color: color-mix(in srgb, var(--primary) 45%, var(--border)); box-shadow: 0 8px 22px -16px rgba(0, 0, 0, .35); }
+.dv-gallery .dv-card { flex-direction: column; }
+.dv-art { flex: none; border-radius: 12px; overflow: hidden; display: grid; place-items: center; }
+.dv-gallery .dv-art { width: 100%; }
+.dv-gallery .dv-art > * { width: 100% !important; height: 120px !important; object-fit: cover; }
+.dv-initials { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 12px; background: color-mix(in srgb, var(--primary) 16%, var(--surface-2)); color: var(--primary-text, var(--primary)); font-weight: 800; }
+.dv-gallery .dv-initials { width: 100%; height: 72px; font-size: 22px; }
+.dv-body { display: grid; gap: 3px; min-width: 0; flex: 1; }
+.dv-title { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 22px; }
+.dv-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dv-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
+.dv-chips .badge { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dv-value { font-size: 15px; margin-top: 2px; }
+.dv-more { position: absolute; top: 6px; right: 6px; opacity: 0; }
+.dv-card:hover .dv-more, .dv-card:focus-within .dv-more { opacity: 1; }
+@media (hover: none) { .dv-more { opacity: .75; } }
+/* the ⋯ on table rows appears on hover, like Notion's row actions */
+td.actions .row-more { opacity: 0; transition: opacity .1s; }
+tr:hover td.actions .row-more, tr.row-active td.actions .row-more, td.actions .row-more:focus-visible { opacity: 1; }
+@media (hover: none) { td.actions .row-more { opacity: .75; } }
+/* "/" commands under the till's search box */
+.till-slash { position: absolute; z-index: 25; top: calc(100% + 6px); left: 0; right: 0; display: grid; gap: 2px; padding: 6px; border-radius: 14px; background: var(--surface); border: 1px solid var(--border); box-shadow: 0 18px 40px -18px rgba(0, 0, 0, .4); }
+.till-slash button { display: flex; gap: 10px; align-items: baseline; padding: 8px 10px; border: 0; border-radius: 9px; background: none; font: inherit; color: var(--text); text-align: left; cursor: pointer; }
+.till-slash button:hover { background: var(--surface-2); }
+.till-slash code { font-weight: 700; color: var(--primary-text, var(--primary)); min-width: 86px; }
+.till-slash small { color: var(--muted); }

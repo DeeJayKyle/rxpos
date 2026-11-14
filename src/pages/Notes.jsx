@@ -35,6 +35,12 @@ export default function Notes() {
     return rec;
   };
   const fromTemplate = (t) => create({ title: t.title, icon: t.icon, blocks: t.blocks() });
+  // Ctrl+K → "New note page" / "New checklist from a template"
+  useEffect(() => {
+    if (location.state?.create) create();
+    else if (location.state?.template) fromTemplate(TEMPLATES.find((t) => t.id === location.state.template) || TEMPLATES[0]);
+    if (location.state?.create || location.state?.template) window.history.replaceState({ ...window.history.state, usr: {} }, '');
+  }, [location.state]); // eslint-disable-line react-hooks/exhaustive-deps
   const toggleFav = (id) => {
     const next = favs.includes(id) ? favs.filter((x) => x !== id) : [...favs, id];
     setFavs(next); setDevice({ ['noteFavs:' + user.id]: next });

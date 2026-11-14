@@ -70,16 +70,18 @@ await P.screenshot({ path: path.join(out, 'phone-pos-sheet.png') });
 // navigation styles: on a phone, More opens every page as a bento sheet; on a wide screen the top pill navbar
 // replaces the sidebar when chosen in This device → Navigation; Gold Night (dark luxury) reads everywhere
 await P.goto(base + '/' + slug + '#/', { waitUntil: 'networkidle2' }); await wait(800);
-await P.evaluate(() => [...document.querySelectorAll('.bottom-nav button')].find((x) => /More/.test(x.textContent)).click());
+await P.waitForSelector('.bottom-nav button', { timeout: 10000 });
+await P.evaluate(() => [...document.querySelectorAll('.bottom-nav button')].find((x) => /More/.test(x.textContent))?.click());
 check('phone: More opens the page sheet with every group', await P.waitForSelector('.mega-sheet', { timeout: 5000 }).then(() => P.evaluate(() => document.querySelectorAll('.mega-group').length >= 4), () => false));
 await wait(500); await P.screenshot({ path: path.join(out, 'phone-mega-menu.png') });
-await P.evaluate(() => [...document.querySelectorAll('.mega-item')].find((x) => /Inventory/.test(x.textContent)).click()); await wait(600);
+await P.evaluate(() => [...document.querySelectorAll('.mega-item')].find((x) => /Inventory/.test(x.textContent))?.click()); await wait(600);
 check('phone: a page picked in the sheet opens and the sheet closes', await P.evaluate(() => location.hash.includes('/inventory') && !document.querySelector('.mega-sheet')));
 await P.setViewport({ width: 1440, height: 900 });
 await P.evaluate(() => { const d = JSON.parse(localStorage.getItem('rxpos-device') || '{}'); localStorage.setItem('rxpos-device', JSON.stringify({ ...d, navStyle: 'top' })); localStorage.setItem('pharmapos-theme', 'gold-night'); });
 await P.reload({ waitUntil: 'networkidle2' }); await wait(1500); // (no navigation first: the app saves its recent pages, with the settings it read at start)
-check('wide screen, top bar chosen: pill navbar shown, sidebar hidden', await P.evaluate(() => getComputedStyle(document.querySelector('.top-nav')).display === 'flex' && getComputedStyle(document.querySelector('.sidebar')).display === 'none'));
-await P.evaluate(() => [...document.querySelectorAll('.top-group .top-pill')].find((x) => /Medicine Inventory/.test(x.textContent)).click()); await wait(300);
+await P.waitForSelector('.top-nav .top-pill', { timeout: 15000 }).catch(() => {});
+check('wide screen, top bar chosen: pill navbar shown, sidebar hidden', await P.evaluate(() => !!document.querySelector('.top-nav') && getComputedStyle(document.querySelector('.top-nav')).display === 'flex' && getComputedStyle(document.querySelector('.sidebar')).display === 'none'));
+await P.evaluate(() => [...document.querySelectorAll('.top-group .top-pill')].find((x) => /Medicine Inventory/.test(x.textContent))?.click()); await wait(300);
 check('a group pill opens its pages as a dropdown', await P.evaluate(() => document.querySelectorAll('.top-panel .mega-item').length > 3));
 await P.screenshot({ path: path.join(out, 'desktop-gold-night-topnav.png') });
 await P.keyboard.press('Escape');
