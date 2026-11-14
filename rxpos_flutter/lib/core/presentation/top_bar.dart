@@ -10,6 +10,7 @@ import 'package:go_router/go_router.dart';
 import '../../features/sync_status/application/sync_controller.dart';
 import '../data/pharmacy_providers.dart';
 import '../rules/money.dart';
+import '../../widgets/ai_omnibar_sheet.dart';
 import 'nav.dart';
 import 'widgets.dart';
 
@@ -149,10 +150,12 @@ class BranchPill extends ConsumerWidget {
 }
 
 class _Hit {
-  const _Hit(this.section, this.label, this.icon, this.go, {this.hint = ''});
+  const _Hit(this.section, this.label, this.icon, this.go, {this.hint = '', this.ai});
   final String section, label, hint;
   final IconData icon;
   final String go;
+  /// an AI row (widgets/ai_omnibar_sheet.dart): the typed text goes to the AI copilot
+  final AiMode? ai;
 }
 
 /// Ctrl+K: jump to any page, medicine, customer or receipt.
@@ -200,11 +203,27 @@ class _CommandPaletteState extends ConsumerState<CommandPalette> {
         out.add(_Hit('Receipts', '${x['number']}', Icons.receipt_long_outlined, '/sales?q=${Uri.encodeComponent('${x['number']}')}', hint: st.money((x['total'] as num?) ?? 0)));
       }
     }
+    // the AI omnibar: what was typed, done at the till, asked about the stock, or diagnosed (online; the cloud says
+    // when AI is not available)
+    if (s.length >= 3) {
+      final q = _q.trim();
+      if (can.contains('/pos')) out.add(_Hit('AI', 'Do it: “$q”', Icons.auto_fix_high, '', hint: 'till or page', ai: AiMode.command));
+      if (can.contains('/reports') || can.contains('/inventory')) out.add(_Hit('AI', 'Ask: “$q”', Icons.insights, '', hint: 'expiry, dead stock, reorder', ai: AiMode.ask));
+      out.add(_Hit('AI', 'Diagnose this device: “$q”', Icons.medical_services_outlined, '', hint: 'sync, storage, errors', ai: AiMode.diagnose));
+    }
     return out;
   }
 
   void _pick(_Hit h) {
-    Navigator.pop(context);
+    final nav = Navigator.of(context);
+    if (h.ai != null) {
+      final text = _q.trim();
+      final host = nav.context;
+      nav.pop();
+      showAiOmnibarSheet(host, mode: h.ai!, text: text);
+      return;
+    }
+    nav.pop();
     context.go(h.go);
   }
 
@@ -239,7 +258,7 @@ class _CommandPaletteState extends ConsumerState<CommandPalette> {
                 child: TextField(
                   key: const Key('palette-input'),
                   autofocus: true,
-                  decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Search pages, medicines, customers, receipts…', suffixText: 'Esc'),
+                  decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Search, or tell the AI: “add 2 strips of paracetamol”…', suffixIcon: Icon(Icons.auto_awesome, size: 18), suffixText: 'Esc'),
                   onChanged: (v) => setState(() {
                     _q = v;
                     _active = 0;

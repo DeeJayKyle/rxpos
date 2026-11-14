@@ -244,7 +244,7 @@ A.on('request', (req) => {
   return req.continue();
 });
 await go(A, '/add-stock');
-await clickText(A, '.page-head button', /Scan invoice/); await wait(500);
+await clickText(A, '.page-head button', /^Scan invoice$/); await wait(500);
 const fileInput = await A.$('.modal input[type=file][accept*="pdf"]');
 await fileInput.uploadFile(invPath);
 const opened = await until(A, () => document.querySelectorAll('.modal .scan-thumbs img').length === 1, 20000);

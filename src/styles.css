@@ -2822,3 +2822,56 @@ tr.group-head > td { background: var(--surface-2); padding: 6px 10px; }
 
 /* Add Stock: the unit cost is worked out from the line total (not typed) */
 .unit-cost { display: block; min-height: 36px; padding: 8px 2px; font-weight: 650; color: var(--text); white-space: nowrap; }
+
+/* ---- the till's sale on a phone (2026-11-13, from a pharmacy's phone screenshot) ----
+   Open, it sits just below the top bar whatever height the phone reports, and the WHOLE sale scrolls as one: the bar
+   with the item count, the total and Charge stays pinned on top; nothing inside is squeezed or clipped (held sales,
+   the list of medicines); Charge is also at the end beside Proforma and Hold; spacing is tighter so more medicines fit,
+   also with the phone's large text. */
+@media (max-width: 900px) {
+  .pos-cart.sheet.open { top: calc(60px + env(safe-area-inset-top)); max-height: none; }
+  .pos-cart.sheet > *, .pos-cart.sheet .pos-ledger > *, .pos-cart.sheet .pos-pay > * { flex-shrink: 0; }
+  .pos-cart.sheet .cart-lines { flex: none; overflow: visible; min-height: 0; max-height: none; margin: 0; padding: 0; }
+  .pos-cart.sheet .sale-tabs { overflow-x: auto; overflow-y: hidden; padding: 2px 0 6px; scrollbar-width: none; }
+  .pos-cart.sheet .sale-tabs::-webkit-scrollbar { display: none; }
+  .pos-cart.sheet .sale-tab, .pos-cart.sheet .sale-tab-wrap { flex: none; white-space: nowrap; }
+  .pos-cart.sheet .sheet-handle { position: sticky; top: 0; z-index: 3; }
+  .pos-cart.sheet.open .charge-dup { display: inline-flex; }
+  .pos-cart.sheet { gap: 8px; }
+  .pos-cart.sheet .cart-head { gap: 8px; flex-wrap: wrap; }
+  .pos-cart.sheet .cart-head h3 { font-size: 16px; }
+  .pos-cart.sheet select, .pos-cart.sheet .client-pick select { min-height: 44px; font-size: 15px; padding-top: 6px; padding-bottom: 6px; }
+  .pos-cart.sheet .cart-line { padding: 8px 0; gap: 4px 8px; }
+  .pos-cart.sheet .cart-line > .grow > strong { font-size: 15px; line-height: 1.25; }
+  .pos-cart.sheet .cart-line .line-tools { font-size: 13px; gap: 10px; }
+  .pos-cart.sheet .price-input { width: 5.2em; min-height: 40px; }
+  .pos-cart.sheet .qty button { min-width: 40px; min-height: 40px; }
+  .pos-cart.sheet .totals { padding: 10px 12px; gap: 6px; }
+  .pos-cart.sheet .pay-methods { gap: 6px; }
+  .pos-cart.sheet .pay-methods .chip { padding: 8px 12px; min-height: 40px; }
+  .pos-cart.sheet .pay-row { flex-wrap: wrap; gap: 8px; }
+  .pos-cart.sheet.open .pay-row .charge-dup { flex: 1 0 100%; order: -1; min-height: 52px; }
+}
+@media (max-width: 900px) {
+  /* "@ price" stays on one line with the quantity and the line total */
+  .pos-cart.sheet .cart-line > .grow > small.muted { flex-wrap: nowrap; white-space: nowrap; min-width: 0; }
+  .pos-cart.sheet .price-input { width: 4.6em; padding-left: 6px; padding-right: 6px; }
+  .pos-cart.sheet .cart-line .line-total { min-width: 0; text-align: right; }
+}
+@media (max-width: 900px) {
+  /* the label / drug-info links: a slim row under the price, not a full-height row */
+  .pos-cart.sheet .cart-line > .grow > .line-tools { margin-top: 2px; gap: 14px; }
+  .pos-cart.sheet .cart-line > .grow > .line-tools .link-btn { font-size: 12.5px; padding: 2px 0; min-height: 28px; line-height: 1.1; }
+  .pos-cart.sheet .cart-line > .grow > strong { font-size: 14.5px; }
+}
+@media (max-width: 900px) {
+  /* room for a five-figure shilling price (14500) in the price box */
+  .pos-cart.sheet .price-input { width: 5.8em; }
+}
+@media (max-width: 380px) {
+  /* a small phone: a slimmer quantity stepper leaves the price box room for its number */
+  .pos-cart.sheet .price-input { flex-shrink: 0; min-width: 4.8em; }
+  .pos-cart.sheet .qty button { min-width: 34px; }
+  .pos-cart.sheet .qty input { width: 2.2em; }
+  .pos-cart.sheet .cart-line { column-gap: 6px; }
+}

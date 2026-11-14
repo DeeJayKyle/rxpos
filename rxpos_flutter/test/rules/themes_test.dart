@@ -1,4 +1,4 @@
-// Colour themes (src/themes.js): 28 palettes, readable everywhere (WCAG AA), accents, the owner's choice, light / dark.
+// Colour themes (src/themes.js): 30 palettes, readable everywhere (WCAG AA), accents, the owner's choice, light / dark.
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -9,9 +9,9 @@ import 'package:rxpos/core/theme/themes.dart';
 int argb(Color c) => c.toARGB32();
 
 void main() {
-  test('28 themes, every one readable with every accent', () {
-    expect(palettes, hasLength(28));
-    expect(palettes.where((p) => p.dark), hasLength(15));
+  test('30 themes, every one readable with every accent', () {
+    expect(palettes, hasLength(30));
+    expect(palettes.where((p) => p.dark), hasLength(16));
     for (final p in palettes) {
       for (final a in ['', for (final x in accents) x.$1]) {
         final t = buildTheme(p, accent: a).colorScheme;
@@ -22,13 +22,16 @@ void main() {
     }
   });
 
-  test('light / dark picks the Adaptive Hybrid first, then the owner\'s default; the owner can limit the list', () {
-    expect(paletteFor(true), 'hybrid-dark');
-    expect(paletteFor(false), 'hybrid-light');
+  test('light / dark picks OLED Black / Daylight Clinical, then the Adaptive Hybrid, then the owner\'s default; the owner can limit the list', () {
+    expect(paletteFor(true), 'oled');
+    expect(paletteFor(false), 'daylight-clinical');
+    final noNextGen = palettes.where((p) => !{'oled', 'daylight-clinical'}.contains(p.id)).toList();
+    expect(paletteFor(true, noNextGen), 'hybrid-dark');
+    expect(paletteFor(false, noNextGen), 'hybrid-light');
     final some = allowedPalettes({'themes': ['light', 'dracula', 'nord']});
     expect(some.map((p) => p.id), ['light', 'nord', 'dracula']);
     expect(paletteFor(true, some, 'nord'), 'nord');
-    expect(allowedPalettes(null), hasLength(28));
+    expect(allowedPalettes(null), hasLength(30));
   });
 
   test('accents change only the action colour; the look is kept as JSON', () {

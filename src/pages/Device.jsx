@@ -19,6 +19,7 @@ import { hasOffline, OFFLINE_DAYS } from '../offline.js';
 import { Database, WifiOff, Undo2, Keyboard } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import { ACTIONS, keyOf, isDefault, setKey, resetKeys, showKey, comboOf } from '../keymap.js';
+import AiSystemDoctor from '../components/AiSystemDoctor.jsx';
 
 const Choice = ({ value, onChange, options, label }) => (
   <div className="seg" role="radiogroup" aria-label={label}>
@@ -32,10 +33,11 @@ export default function Device() {
   const [d, setD] = useState(deviceSettings);
   useEffect(() => onDevice(setD), []);
   return (
-    <div className="page device-page">
+    <div className="page device-page bento-page">
       <div className="page-head"><div><h1>This device</h1><div className="sub">Only changes this {isAndroid ? 'phone or tablet' : isElectron ? 'computer' : 'browser'}. Everyone else keeps their own setup.</div></div></div>
       <div className="grid-2">
         <Updates />
+        <AiSystemDoctor />
         <SyncStorage />
         <section className="card">
           <h3><MonitorSmartphone size={18} />Screen</h3>

@@ -21,6 +21,7 @@ import '../../sync_status/application/sync_controller.dart';
 import '../../../core/update/app_updates.dart';
 import 'font_picker.dart';
 import 'keyboard_settings.dart';
+import '../../../widgets/ai_system_doctor_card.dart';
 
 /// This device (src/pages/Device.jsx): its branch and look, sync & storage (waiting changes, refused changes, ready to
 /// work offline, download everything again), text size and rotation, the date format, and notification sounds.
@@ -77,6 +78,7 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
         ),
         SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('Premium UI (Midnight Pro)'), value: premium, onChanged: (v) => ref.read(premiumUiProvider.notifier).set(v)),
       ]),
+      const AiSystemDoctorCard(),
       _section('Sync & storage', Icons.storage_outlined, [
         const Text('This app keeps the pharmacy on this device and works without internet; changes go to the cloud when it is reachable.'),
         const SizedBox(height: 8),

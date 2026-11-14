@@ -4,7 +4,7 @@ import {
   LayoutDashboard, ShoppingCart, PackageOpen, ReceiptText, FileText, ClipboardPlus, Users, Truck, Pill, FlaskConical,
   Boxes, PackagePlus, History, CalendarClock, PencilRuler, ScrollText, Wallet, Tags, Landmark, ArrowLeftRight, HandCoins,
   ArrowDownLeft, ArrowUpRight, ClipboardCheck, RefreshCw, Undo2, ShieldPlus, BookOpen, BarChart3, Settings as SettingsIcon, Search, Sun, Moon, Menu, LogOut, ChevronDown,
-  CornerDownLeft, User, BellRing, ShoppingBag, Tag, FileUp, Building2, Send, ShieldCheck, Clock, BookMarked, MessagesSquare, UserCog, KeyRound, CalendarDays, Thermometer, Palette, MonitorSmartphone, ScanText, GraduationCap, Megaphone, CalendarRange, LockKeyhole, PanelLeftClose, PanelLeftOpen, WifiOff,
+  BellRing, ShoppingBag, Tag, FileUp, Building2, Send, ShieldCheck, Clock, BookMarked, MessagesSquare, UserCog, KeyRound, CalendarDays, Thermometer, Palette, MonitorSmartphone, ScanText, GraduationCap, Megaphone, CalendarRange, LockKeyhole, PanelLeftClose, PanelLeftOpen, WifiOff,
   Sparkles, Pin, Keyboard, UserPlus, Archive, BadgeCheck,
 } from 'lucide-react';
 import { useStore, makePassword, put, audit, isLowStock, expiryCounts } from './store.jsx';
@@ -32,6 +32,7 @@ import { ACTIONS, keyOf, keyMatcher, showKey, typing } from './keymap.js';
 import { deviceSettings, setDevice, onDevice } from './device.js';
 import { Modal } from './ui.jsx';
 import { BackButton, markNav, usePageMotion, useEdgeSwipeBack, useKeyboardFit } from './mobilenav.jsx';
+import AiOmnibar from './components/AiOmnibar.jsx';
 const OwnerConsole = lazy(() => import('./pages/OwnerConsole.jsx'));
 
 // Pages load on demand so the app opens fast, even on low-end PCs and phones
@@ -318,64 +319,6 @@ function ClockPill() {
   );
 }
 
-/** Ctrl+K: jump to any page, medicine, customer or receipt */
-function CommandPalette({ open, onClose, pages, commands = [] }) {
-  const { db, products, fmt } = useStore();
-  const navigate = useNavigate();
-  const [q, setQ] = useState('');
-  const [active, setActive] = useState(0);
-  const inputRef = useRef();
-  useEffect(() => { if (open) { setQ(''); setActive(0); setTimeout(() => inputRef.current?.focus(), 20); } }, [open]);
-
-  const results = useMemo(() => {
-    const s = q.trim().toLowerCase();
-    const has = (...v) => v.join(' ').toLowerCase().includes(s);
-    // the owner's request: Ctrl+K also runs commands ("new sale", "receive stock", "add customer"…)
-    const out = commands.filter((c) => (s ? has(c.label, c.words || '') : true)).slice(0, s ? 5 : 4).map((c) => ({ section: 'Commands', ...c }));
-    out.push(...pages.filter((p) => !s || has(p.label)).slice(0, s ? 6 : 8).map((p) => ({ section: 'Pages', label: p.label, Icon: p.Icon, hint: p.key, go: () => navigate(p.to) })));
-    if (s) {
-      products.filter((p) => has(p.name, p.generic, p.barcode)).slice(0, 6).forEach((p) =>
-        out.push({ section: 'Medicines', label: p.name, Icon: Pill, hint: `${p.stock} in stock · ${fmt(p.price)}`, go: () => navigate('/stock-card', { state: { productId: p.id } }) }));
-      db.customers.filter((c) => has(c.name, c.phone)).slice(0, 4).forEach((c) =>
-        out.push({ section: 'Customers', label: c.name, Icon: User, hint: c.phone, go: () => navigate('/customers', { state: { q: c.name } }) }));
-      db.sales.filter((x) => has(x.number)).slice(0, 4).forEach((x) =>
-        out.push({ section: 'Receipts', label: x.number, Icon: ReceiptText, hint: fmt(x.total), go: () => navigate('/sales', { state: { q: x.number } }) }));
-    }
-    return out;
-  }, [q, pages, commands, products, db.customers, db.sales, fmt, navigate]);
-
-  if (!open) return null;
-  const pick = (r) => { r.go(); onClose(); };
-  const onKey = (e) => {
-    if (e.key === 'Escape') onClose();
-    else if (e.key === 'ArrowDown') { e.preventDefault(); setActive((a) => Math.min(a + 1, results.length - 1)); }
-    else if (e.key === 'ArrowUp') { e.preventDefault(); setActive((a) => Math.max(a - 1, 0)); }
-    else if (e.key === 'Enter' && results[active]) pick(results[active]);
-  };
-  let lastSection = null;
-  return (
-    <div className="modal-bg palette-bg" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="palette" onKeyDown={onKey}>
-        <div className="palette-input"><Search size={18} /><input ref={inputRef} autoFocus value={q} onChange={(e) => { setQ(e.target.value); setActive(0); }} placeholder="Search pages, medicines, customers, receipts, or type a command…" /><kbd>Esc</kbd></div>
-        <div className="palette-list">
-          {results.map((r, i) => {
-            const head = r.section !== lastSection ? <div className="palette-section">{(lastSection = r.section)}</div> : null;
-            return (
-              <div key={r.section + r.label + i}>
-                {head}
-                <button className={'palette-item' + (i === active ? ' active' : '')} onMouseEnter={() => setActive(i)} onClick={() => pick(r)}>
-                  <r.Icon size={17} /><span>{r.label}</span>{r.hint && <small>{r.hint}</small>}{i === active && <CornerDownLeft size={14} />}
-                </button>
-              </div>
-            );
-          })}
-          {!results.length && <div className="empty">Nothing found for “{q}”</div>}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 /** ? on any page: the keys as they are on this device, and what the mouse does */
 function KeysHelp({ onClose, pages }) {
   const navigate = useNavigate();
@@ -601,7 +544,7 @@ function Shell() {
       <div className="main">
         <header className="topbar">
           {here === '/' ? <button className="icon-btn menu-btn" aria-label="Menu" onClick={() => setDrawer(true)}><Menu size={20} /></button> : <BackButton />}
-          <button className="search-trigger" onClick={() => setPalette(true)}><Search size={16} /><span>Search medicines, customers, receipts…</span><kbd>Ctrl K</kbd></button>
+          <button className="search-trigger" onClick={() => setPalette(true)}><Search size={16} /><span>Search or ask AI…</span><kbd>Ctrl K</kbd></button>
           {(() => {
             const g = groups.find((x) => x.items.some(([t]) => t === here));
             const pg = pages.find((x) => x.to === here);
@@ -637,7 +580,7 @@ function Shell() {
         <NavLink to="/sales" onClick={() => markNav('tab')}><ReceiptText size={20} /><span>Sales</span></NavLink>
         <button onClick={() => setDrawer(true)} aria-expanded={drawer}><Menu size={20} /><span>More</span></button>
       </nav>
-      <CommandPalette open={palette} onClose={() => setPalette(false)} pages={pages} commands={[
+      <AiOmnibar open={palette} onClose={() => setPalette(false)} pages={pages} commands={[
         ...(can('pos.sell') ? [{ label: 'New sale', words: 'sell till pos', Icon: ShoppingCart, hint: showKey(keyOf('go:/pos')), go: () => navigate('/pos') }] : []),
         ...(can('stock.receive') ? [{ label: 'Receive stock', words: 'add stock delivery invoice purchase', Icon: PackagePlus, hint: showKey(keyOf('go:/add-stock')), go: () => navigate('/add-stock') }] : []),
         ...(can('customers') ? [{ label: 'Add a customer', words: 'new client patient', Icon: UserPlus, go: () => navigate('/customers', { state: { create: true } }) }] : []),

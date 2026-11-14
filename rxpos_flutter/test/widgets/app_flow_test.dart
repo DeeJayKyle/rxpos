@@ -2308,7 +2308,7 @@ void main() {
     await openThemes(tester);
     await tester.tap(find.text('Dark'));
     await settle(tester, 4);
-    expect((await look())['theme'], 'hybrid-dark');
+    expect((await look())['theme'], 'oled');
     expect(brightness(tester), Brightness.dark);
     final list = find.byKey(const Key('theme-list'));
     await tester.scrollUntilVisible(find.byKey(const ValueKey('theme-dracula')), 120, scrollable: find.descendant(of: list, matching: find.byType(Scrollable)));

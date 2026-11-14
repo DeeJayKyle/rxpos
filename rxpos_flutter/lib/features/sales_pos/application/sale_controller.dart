@@ -14,6 +14,7 @@ import '../../../core/entities/settings.dart';
 import '../../../core/rules/dates.dart';
 import '../../../core/rules/ids.dart';
 import '../../../core/rules/insurance.dart';
+import '../../../core/rules/packs.dart';
 import '../../auth/application/session_controller.dart';
 import '../../people/domain/balances.dart';
 import '../../proformas/domain/proformas.dart';
@@ -185,6 +186,33 @@ class SaleController extends _$SaleController {
       expiredReason: expiredReason,
     );
     state = state.copyWith(lines: lines, cursor: lines.indexWhere((l) => l.id == p.id));
+  }
+
+  /// Medicines staged from the AI omnibar or a scanned prescription (src/pages/POS.jsx stageLines): each added as at
+  /// the till, then put in the asked unit (a strip or box when the medicine has that pack) and quantity. FEFO batches
+  /// are chosen at checkout as for any line. Returns how many were added and the names that couldn't be (not found,
+  /// out of stock, only expired stock left).
+  Future<({int added, List<String> missed})> stage(List<({Product? product, String name, int qty, String unit})> items) async {
+    var added = 0;
+    final missed = <String>[];
+    for (final it in items) {
+      final p = it.product;
+      if (p == null) {
+        missed.add(it.name);
+        continue;
+      }
+      try {
+        await add(p);
+      } catch (_) {
+        missed.add(p.name);
+        continue;
+      }
+      final k = it.unit == 'tablet' ? null : packsOf(p).where((x) => x.name.toLowerCase().contains(it.unit)).firstOrNull;
+      if (k != null) await pack(p.id, k);
+      if (it.qty > 1) count(p.id, it.qty.toDouble());
+      added++;
+    }
+    return (added: added, missed: missed);
   }
 
   /// The Advanced UI command bar (Ctrl+K), like the React till: "+qty 2", "-qty 2 3", "qty 2 5", "void 2",

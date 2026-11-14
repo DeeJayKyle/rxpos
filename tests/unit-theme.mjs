@@ -3,8 +3,10 @@ import { THEMES, paletteFor, allowedThemes, themeVars, ACCENTS, withAccent, cont
 let pass = 0, fail = 0;
 const check = (n, ok, x = '') => { ok ? pass++ : fail++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${n}${x !== '' ? '  ' + x : ''}`); };
 
-check('all themes allowed: light → RxPOS Hybrid Light', paletteFor('light') === 'hybrid-light');
-check('all themes allowed: dark → RxPOS Hybrid Dark', paletteFor('dark') === 'hybrid-dark');
+check('all themes allowed: light → RxPOS Daylight Clinical', paletteFor('light') === 'daylight-clinical');
+check('all themes allowed: dark → RxPOS OLED Black', paletteFor('dark') === 'oled');
+check('without the new defaults: Adaptive Hybrid as before', paletteFor('light', THEMES.filter((t) => !['daylight-clinical', 'oled'].includes(t.id))) === 'hybrid-light' && paletteFor('dark', THEMES.filter((t) => !['daylight-clinical', 'oled'].includes(t.id))) === 'hybrid-dark');
+check('OLED Black is pure black with raised cards; Daylight has white cards', (() => { const o = themeVars(THEMES.find((t) => t.id === 'oled')), d = themeVars(THEMES.find((t) => t.id === 'daylight-clinical')); return o['--bg'] === '#000000' && o['--surface'] === '#0b0e14' && o['--primary'] === '#2dd4bf' && d['--bg'] === '#f5f7fa' && d['--surface'] === '#ffffff' && d['--primary'] === '#0d9488'; })());
 const restricted = allowedThemes({ themes: ['tokyo-night', 'mint', 'clinic-blue'] });
 check('restricted: light prefers the owner\'s default when it is light', paletteFor('light', restricted, 'mint') === 'mint');
 check('restricted: light falls back to the first allowed light palette', paletteFor('light', restricted) === 'clinic-blue');

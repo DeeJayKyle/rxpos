@@ -7,6 +7,8 @@ export const THEMES = [
   // light
   T('light', 'RxPOS Teal', 'light', { bg: '#f3f6f9', surface: '#ffffff', surface2: '#f7f9fb', border: '#e4e9ef', borderStrong: '#cfd8e3', text: '#0e1726', muted: '#64748b', primary: '#0d9488', primary2: '#0891b2', sidebar: '#0b1220', sidebar2: '#111a2e' }),
   // Adaptive Hybrid: a calm medical light and a premium dark, flat (no page gradient; emerald / turquoise action colour)
+  // Daylight Clinical (2026-11-13): a clean clinical canvas, pure white cards, hairline borders, clinical teal; the default light
+  T('daylight-clinical', 'RxPOS Daylight Clinical', 'light', { bg: '#f5f7fa', surface: '#ffffff', surface2: '#f8fafc', border: 'rgba(15, 23, 42, 0.08)', borderStrong: 'rgba(15, 23, 42, 0.16)', text: '#0f172a', muted: '#5b6678', primary: '#0d9488', primary2: '#0891b2', sidebar: '#0b1220', sidebar2: '#111a2e', flat: true }, 'Typography-led minimalism'),
   T('hybrid-light', 'RxPOS Hybrid Light', 'light', { bg: '#f5f8fc', surface: '#ffffff', surface2: '#edf3f7', border: '#e1e8f0', borderStrong: '#cbd6e2', text: '#142638', muted: '#64748b', primary: '#008c58', primary2: '#0e9f96', sidebar: '#07131b', sidebar2: '#0d1c28', flat: true }, 'Adaptive Hybrid'),
   T('clinic-blue', 'Clinic Blue', 'light', { bg: '#f2f6fc', surface: '#ffffff', surface2: '#f5f8fd', border: '#dfe7f3', borderStrong: '#c6d3e6', text: '#0c1a33', muted: '#5b6b86', primary: '#1d64d8', primary2: '#0ea5e9', sidebar: '#0b1a36', sidebar2: '#12264b' }),
   T('mint', 'Fresh Mint', 'light', { bg: '#f1f8f5', surface: '#ffffff', surface2: '#f4faf7', border: '#dcebe4', borderStrong: '#c2dbcf', text: '#0f231b', muted: '#5a7468', primary: '#059669', primary2: '#65a30d', sidebar: '#062419', sidebar2: '#0b3324' }),
@@ -21,6 +23,9 @@ export const THEMES = [
   T('paper', 'High Contrast Light', 'light', { bg: '#ffffff', surface: '#ffffff', surface2: '#f3f3f3', border: '#9a9a9a', borderStrong: '#555555', text: '#000000', muted: '#333333', primary: '#0050b3', primary2: '#003a80', sidebar: '#000000', sidebar2: '#1a1a1a' }, 'accessibility'),
   // dark
   T('dark', 'RxPOS Night', 'dark', { bg: '#070b14', surface: '#0f1624', surface2: '#131c2d', border: '#1e293b', borderStrong: '#2b3a52', text: '#e6edf7', muted: '#8b9ab3', primary: '#2dd4bf', primary2: '#22d3ee', sidebar: '#050912', sidebar2: '#0b1220' }),
+  // True OLED Black (2026-11-13): a pitch-black canvas (no backlight on OLED phones, saves battery), raised cards,
+  // white hairlines and bio-teal; the default dark
+  T('oled', 'RxPOS OLED Black', 'dark', { bg: '#000000', surface: '#0b0e14', surface2: '#121722', border: 'rgba(255, 255, 255, 0.10)', borderStrong: 'rgba(255, 255, 255, 0.18)', text: '#f8fafc', muted: '#9aa4b2', primary: '#2dd4bf', primary2: '#22d3ee', sidebar: '#000000', sidebar2: '#0b0e14', flat: true }, 'True OLED dark'),
   T('hybrid-dark', 'RxPOS Hybrid Dark', 'dark', { bg: '#07131b', surface: '#101d2b', surface2: '#162635', border: '#2b3a49', borderStrong: '#3a4c5e', text: '#f3f7fb', muted: '#9bafc2', primary: '#20c9c3', primary2: '#16a36a', sidebar: '#050e15', sidebar2: '#0a1721', flat: true }, 'Adaptive Hybrid'),
   T('tokyo-night', 'Tokyo Night', 'dark', { bg: '#16161e', surface: '#1a1b26', surface2: '#1f2335', border: '#292e42', borderStrong: '#3b4261', text: '#c0caf5', muted: '#7f88b8', primary: '#7aa2f7', primary2: '#bb9af7', sidebar: '#13131a', sidebar2: '#1a1b26' }, 'Tokyo Night'),
   T('nord', 'Nord Polar', 'dark', { bg: '#242933', surface: '#2e3440', surface2: '#343b49', border: '#3b4252', borderStrong: '#4c566a', text: '#eceff4', muted: '#a3adbf', primary: '#88c0d0', primary2: '#81a1c1', sidebar: '#1f232b', sidebar2: '#2a2f3a' }, 'Nord'),
@@ -128,8 +133,10 @@ const MODE_KEY = 'rxpos-theme-mode';
 export const savedMode = () => { try { return localStorage.getItem(MODE_KEY) === 'system' ? 'system' : ''; } catch { return ''; } };
 export const saveMode = (m) => { try { m === 'system' ? localStorage.setItem(MODE_KEY, m) : localStorage.removeItem(MODE_KEY); } catch {} };
 export const systemDark = () => typeof matchMedia === 'function' && matchMedia('(prefers-color-scheme: dark)').matches;
-/** The palette for a light or dark base among the themes a pharmacy allows: Adaptive Hybrid first, then the owner's default, then the first of that base */
+/** The palette for a light or dark base among the themes a pharmacy allows: Daylight Clinical / OLED Black first, then
+ *  Adaptive Hybrid, then the owner's default, then the first of that base */
+export const DEFAULT_PALETTE = { light: 'daylight-clinical', dark: 'oled' };
 export const paletteFor = (base, list = THEMES, preferred) =>
-  (list.find((t) => t.id === 'hybrid-' + base) || list.find((t) => t.id === preferred && t.base === base) || list.find((t) => t.base === base) || list[0] || THEMES[0]).id;
+  (list.find((t) => t.id === DEFAULT_PALETTE[base]) || list.find((t) => t.id === 'hybrid-' + base) || list.find((t) => t.id === preferred && t.base === base) || list.find((t) => t.base === base) || list[0] || THEMES[0]).id;
 /** The theme to paint at start-up: the saved palette, or the system's light / dark when following it (or nothing is saved yet) */
 export const startupTheme = () => (savedMode() === 'system' || !savedTheme() ? paletteFor(systemDark() ? 'dark' : 'light') : savedTheme());

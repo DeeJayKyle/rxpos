@@ -55,7 +55,7 @@ await p.waitForSelector('.sidebar', { timeout: 30000 }); await wait(2500);
 
 // two invoices in one go
 await p.evaluate(() => { location.hash = '#/add-stock'; }); await wait(1500);
-await click(p, /Scan invoice/);
+await click(p, /^Scan invoice$/);
 await p.waitForSelector('.modal input[type=file][multiple]');
 const multi = await p.$$('.modal input[type=file][multiple]');
 await multi[0].uploadFile(img); await wait(1200);
