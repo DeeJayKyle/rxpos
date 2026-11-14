@@ -84,3 +84,6 @@ export const twoStep = (cfg, path = '', body) => call(cfg, '/api/2fa' + path, { 
 // AI copilot (till commands, owner questions, device diagnosis) and vision (invoice / prescription photo → strict JSON)
 export const aiCopilot = (cfg, body) => call(cfg, '/api/ai/copilot', { method: 'POST', body, timeout: 60000 });
 export const aiVision = (cfg, mode, image) => call(cfg, '/api/ai/vision', { method: 'POST', body: { mode, image }, timeout: 120000 });
+// The idle screen: today's AI-picked cards and wording, and a topic illustration (worker/ai-routes.js idleRoutes)
+export const aiIdleCards = (cfg, body) => call(cfg, '/api/ai/idle-cards', { method: 'POST', body, timeout: 60000 });
+export const aiIdleImage = (cfg, subject, tone) => call(cfg, '/api/ai/idle-image', { method: 'POST', body: { subject, tone }, timeout: 60000 });

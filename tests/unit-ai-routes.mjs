@@ -11,7 +11,7 @@ import os from 'node:os';
 import path from 'node:path';
 import nodeCrypto from 'node:crypto';
 import { createClient } from '@libsql/client';
-import { aiRoutes, cleanCommand, cleanInvoiceLines, cleanPrescription, cleanDiagnosis, scrubTelemetry, isoExpiry, COPILOT_MODEL, VISION_MODEL, FALLBACK_MODEL } from '../worker/ai-routes.js';
+import { aiRoutes, idleRoutes, cleanIdleCards, IDLE_SUBJECTS, IMAGE_MODEL, cleanCommand, cleanInvoiceLines, cleanPrescription, cleanDiagnosis, scrubTelemetry, isoExpiry, COPILOT_MODEL, VISION_MODEL, FALLBACK_MODEL } from '../worker/ai-routes.js';
 
 crypto.subtle.timingSafeEqual ??= (a, b) => nodeCrypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
 let passed = 0, failed = 0;
@@ -126,6 +126,42 @@ await ok('cleaners never pass through unknown fields', () => {
   assert.deepEqual(Object.keys(cleanInvoiceLines([{ name: 'A', evil: 1 }])[0]).sort(), ['batch', 'boxes', 'expiry', 'name', 'unitCostUGX', 'unitsPerBox']);
   assert.deepEqual(Object.keys(cleanPrescription({ patient: 'P', html: '<b>' })).sort(), ['items', 'patient', 'prescriber']);
   assert.deepEqual(Object.keys(cleanDiagnosis({ summary: 's', run: 'x' })).sort(), ['actions', 'causes', 'summary']);
+});
+
+const idle = async (env, p, body) => { const r = await idleRoutes(env, p, body, json); return { status: r.status, j: await r.json() }; };
+await ok('idle cards: only the candidates sent (never another id), safe wording only, tips with a known topic', async () => {
+  const env = { AI: fakeAi({ [COPILOT_MODEL]: JSON.stringify({ cards: [
+    { id: 'p1', headline: 'Rainy season ready', line: 'Commonly used for fever and aches. Ask our pharmacist.', why: 'expires soon' },
+    { id: 'rx9', headline: 'Strong antibiotic', line: 'Ask our pharmacist.' },
+    { id: 'p2', headline: 'Cures every cough', line: 'Guaranteed relief.' },
+    { id: 'p1', headline: 'Again', line: 'Duplicate' },
+  ], tips: [{ text: 'Sleep under a treated net every night.', topic: 'net' }, { text: 'Drink clean water.', topic: 'nonsense' }, { text: 'A miracle diet.', topic: 'food' }] }) }) };
+  const { status, j } = await idle(env, '/api/ai/idle-cards', { month: 4, candidates: [{ id: 'p1', name: 'Paracetamol 500mg', kind: 'expiry' }, { id: 'p2', name: 'Cough syrup', kind: 'slow' }] });
+  assert.equal(status, 200);
+  assert.deepEqual(j.cards.map((c) => c.id), ['p1'], 'a made-up id, a cure claim and a repeat are dropped');
+  assert.deepEqual(j.tips, [{ text: 'Sleep under a treated net every night.', topic: 'net' }, { text: 'Drink clean water.', topic: 'medicine' }]);
+  assert.match(env.AI.calls[0].input.messages[1].content, /Month: 4/);
+});
+await ok('idle cards: nothing to show, no model call', async () => {
+  const env = { AI: fakeAi({}) };
+  assert.deepEqual((await idle(env, '/api/ai/idle-cards', { candidates: [] })).j, { cards: [], tips: [] });
+  assert.equal(env.AI.calls.length, 0);
+});
+await ok('idle picture: only a known subject, drawn without packaging, text or brands', async () => {
+  const env = { AI: fakeAi({ [IMAGE_MODEL]: 'unused' }) };
+  env.AI.run = async (model, input) => { env.AI.calls.push({ model, input }); return { image: Buffer.from('jpeg').toString('base64') }; };
+  assert.equal((await idle(env, '/api/ai/idle-image', { subject: 'a celebrity holding our product' })).status, 400);
+  const { status, j } = await idle(env, '/api/ai/idle-image', { subject: 'Antimalarials', tone: 'amber' });
+  assert.equal(status, 200);
+  assert.match(j.image, /^data:image\/jpeg;base64,/);
+  assert.match(env.AI.calls[0].input.prompt, /mosquito net/);
+  assert.match(env.AI.calls[0].input.prompt, /no medicine packaging/);
+  assert.ok(Object.keys(IDLE_SUBJECTS).length >= 30);
+});
+await ok('cleanIdleCards caps the cards and the tips', () => {
+  const ids = Array.from({ length: 20 }, (_, i) => 'p' + i);
+  const r = cleanIdleCards({ cards: ids.map((id) => ({ id, headline: 'H', line: 'L' })), tips: Array(9).fill({ text: 'T', topic: 'water' }) }, ids);
+  assert.equal(r.cards.length, 12); assert.equal(r.tips.length, 4);
 });
 
 // ---------------- 2. through the whole cloud ----------------

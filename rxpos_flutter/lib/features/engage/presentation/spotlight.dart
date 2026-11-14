@@ -4,6 +4,8 @@
 // the arrows, a swipe, the thumbnails or ← → and space; it moves on every 8 seconds. Any tap outside the card, or Esc,
 // closes it. Never during a sale, and never prescription-only or controlled medicines (it faces customers).
 import 'dart:async';
+import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -13,10 +15,12 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/data/device_settings.dart';
 import '../../../core/data/pharmacy_providers.dart';
 import '../../../core/entities/sale.dart';
+import '../../../core/network/cloud_api.dart';
 import '../../../core/presentation/widgets.dart';
 import '../../dashboard/domain/insights.dart';
 import '../../extras/domain/extras.dart';
 import '../domain/engage.dart';
+import '../domain/idle_ai.dart';
 import 'watchers.dart';
 
 class Spotlight extends ConsumerStatefulWidget {
@@ -31,6 +35,9 @@ class _SpotlightState extends ConsumerState<Spotlight> {
   ProviderSubscription<AsyncValue<PharmacyData>>? _sub;
   bool _shown = false, _paused = false;
   int _i = 0;
+  Timer? _cardsTimer;
+  final _asked = <String>{};
+  final _bytes = <String, Uint8List?>{};
 
   bool get _on {
     final d = ref.read(pharmacyProvider).value;
@@ -46,6 +53,7 @@ class _SpotlightState extends ConsumerState<Spotlight> {
     // start counting once the pharmacy is loaded (and again when its idle minutes change)
     _sub = ref.listenManual<AsyncValue<PharmacyData>>(pharmacyProvider, (prev, next) {
       if (next.value != null && (prev?.value == null || _minutes(prev!.value!) != _minutes(next.value!)) && !_shown) _arm();
+      if (next.value != null && prev?.value == null) _cardsTimer ??= Timer(const Duration(seconds: 15), _fetchCards);
     }, fireImmediately: true);
   }
 
@@ -55,6 +63,7 @@ class _SpotlightState extends ConsumerState<Spotlight> {
     _sub?.close();
     _idle?.cancel();
     _next?.cancel();
+    _cardsTimer?.cancel();
     super.dispose();
   }
 
@@ -115,8 +124,51 @@ class _SpotlightState extends ConsumerState<Spotlight> {
     return true;
   }
 
-  List<Slide> _slides(PharmacyData d) {
-    final sales = (ref.watch(tableProvider('sales')).value ?? const []).map(Sale.fromRecord);
+  /// Today's AI cards: asked once a day (and not again today if that fails); never needed for the screen to work
+  Future<void> _fetchCards() async {
+    final d = ref.read(pharmacyProvider).value;
+    if (!mounted || d == null || !_on || d.features['ai'] == false) return;
+    final store = ref.read(deviceValueProvider('idle-ai').notifier);
+    if (IdleCards.parse(await ref.read(deviceValueProvider('idle-ai').future)).day == idleDay()) return;
+    final candidates = idleCandidates(_slides(d, read: true));
+    if (candidates.isEmpty) return;
+    var cards = IdleCards(day: idleDay());
+    try {
+      final r = await ref.read(cloudApiProvider).post('/api/ai/idle-cards', {'month': DateTime.now().month, 'candidates': candidates});
+      if (r['error'] == null) cards = IdleCards.fromJson({...r, 'day': idleDay()});
+    } catch (_) {/* offline, not linked or no AI: today's own picks */}
+    await store.set(cards.encode());
+  }
+
+  /// A topic picture, fetched the first time a shown card needs it, then kept on this device
+  Uint8List? _picture(String subject, String tone) {
+    final key = 'idle-img:$subject:$tone';
+    final raw = ref.watch(deviceValueProvider(key)).value;
+    if (raw != null && raw.isNotEmpty) {
+      return _bytes.putIfAbsent(key, () {
+        try {
+          return base64Decode(raw.substring(raw.indexOf(',') + 1));
+        } catch (_) {
+          return null;
+        }
+      });
+    }
+    final d = ref.read(pharmacyProvider).value;
+    if (_shown && _asked.add(key) && d?.features['ai'] != false) {
+      Future(() async {
+        if ((await ref.read(deviceValueProvider(key).future)) != null) return;
+        try {
+          final r = await ref.read(cloudApiProvider).post('/api/ai/idle-image', {'subject': subject, 'tone': tone});
+          final img = r['image'];
+          if (img is String && img.startsWith('data:image/')) await ref.read(deviceValueProvider(key).notifier).set(img);
+        } catch (_) {/* the drawn picture stays */}
+      });
+    }
+    return null;
+  }
+
+  List<Slide> _slides(PharmacyData d, {bool read = false}) {
+    final sales = ((read ? ref.read(tableProvider('sales')) : ref.watch(tableProvider('sales'))).value ?? const []).map(Sale.fromRecord);
     return slidesFor(insights(d.products, d.stockOf, d.stock.batchesOf, sales, d.settings), DateTime.now());
   }
 
@@ -131,17 +183,19 @@ class _SpotlightState extends ConsumerState<Spotlight> {
     );
     final d = ref.watch(pharmacyProvider).value;
     if (!_shown || d == null) return body;
-    final slides = _slides(d);
+    final slides = withAi(_slides(d), IdleCards.parse(ref.watch(deviceValueProvider('idle-ai')).value));
     if (slides.isEmpty) return body;
     final n = slides.length;
     final s = slides[((_i % n) + n) % n];
     final st = d.settings;
     final t = Theme.of(context);
     final hour = DateTime.now().hour;
+    // the AI's topic picture instead of the drawing, when this device has one
+    final pic = _picture(subjectOf(s), toneOf(s));
     final kind = s.isTip ? ('Health tip', Icons.favorite_outline, Colors.lightBlue) : slideKinds[s.item!.kind]!;
     final MaterialColor color = kind.$3;
     final share = s.isTip
-        ? '💚 Health tip from ${st.name.isEmpty ? 'your pharmacy' : st.name}: ${s.tip!.text} (${s.tip!.source})'
+        ? '💚 Health tip from ${st.name.isEmpty ? 'your pharmacy' : st.name}: ${s.tip!.text}${s.tip!.source.isEmpty ? '' : ' (${s.tip!.source})'}'
         : shareText(s.item!.p, st);
     final card = GestureDetector(
       key: const Key('spotlight-card'),
@@ -155,20 +209,29 @@ class _SpotlightState extends ConsumerState<Spotlight> {
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(borderRadius: BorderRadius.circular(24), gradient: LinearGradient(colors: [color.shade700, color.shade900])),
         child: LayoutBuilder(builder: (context, c) {
-          final art = Icon(s.isTip ? tipArt(s.tip!.text) : medicineArt(s.item!.p.form, s.item!.p.name), size: c.maxWidth < 500 ? 96 : 160, color: Colors.white.withValues(alpha: .95));
+          final icon = Icon(s.isTip ? tipArt(s.tip!.text) : medicineArt(s.item!.p.form, s.item!.p.name), size: c.maxWidth < 500 ? 96 : 160, color: Colors.white.withValues(alpha: .95));
+          final side = c.maxWidth < 500 ? 150.0 : 220.0;
+          final art = pic == null
+              ? icon
+              : ClipRRect(
+                  key: const Key('spotlight-ai-picture'),
+                  borderRadius: BorderRadius.circular(20),
+                  child: SizedBox(width: side, height: side, child: Image.memory(pic, fit: BoxFit.cover, gaplessPlayback: true)),
+                );
           final text = Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
             Row(children: [
               Icon(kind.$2, size: 15, color: Colors.white70),
               const SizedBox(width: 6),
-              Text(s.isTip ? '${hour < 12 ? 'Morning' : hour < 17 ? 'Afternoon' : 'Evening'} health tip' : 'Available now', style: const TextStyle(color: Colors.white70)),
+              Flexible(child: Text(s.isTip ? '${hour < 12 ? 'Morning' : hour < 17 ? 'Afternoon' : 'Evening'} health tip' : (s.headline ?? 'Available now'), style: const TextStyle(color: Colors.white70))),
             ]),
             const SizedBox(height: 8),
             if (s.isTip) ...[
               Text(s.tip!.text, style: t.textTheme.headlineSmall?.copyWith(color: Colors.white, fontWeight: FontWeight.w700)),
               const SizedBox(height: 8),
-              Text('Source: ${s.tip!.source}. Ask the pharmacist if you have questions.', style: const TextStyle(color: Colors.white70)),
+              Text(s.ai ? 'Written with AI for this season. Ask the pharmacist if you have questions.' : 'Source: ${s.tip!.source}. Ask the pharmacist if you have questions.', style: const TextStyle(color: Colors.white70)),
             ] else ...[
               Text(s.item!.p.name, style: t.textTheme.headlineMedium?.copyWith(color: Colors.white, fontWeight: FontWeight.w800)),
+              if (s.line != null && s.line!.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 4, bottom: 4), child: Text(s.line!, key: const Key('spotlight-ai-line'), style: const TextStyle(color: Colors.white, fontSize: 16))),
               if (s.item!.p.generic.isNotEmpty && s.item!.p.generic != s.item!.p.name)
                 Text('${s.item!.p.generic}${s.item!.p.form.isNotEmpty ? ' · ${s.item!.p.form}' : ''}', style: const TextStyle(color: Colors.white70)),
               const SizedBox(height: 8),
@@ -225,7 +288,37 @@ class _SpotlightState extends ConsumerState<Spotlight> {
                   Expanded(
                     child: Row(children: [
                       IconButton(tooltip: 'Previous', color: Colors.white, iconSize: 32, icon: const Icon(Icons.chevron_left), onPressed: () => _go(_i - 1)),
-                      Expanded(child: Center(child: SingleChildScrollView(child: card))),
+                      Expanded(child: LayoutBuilder(builder: (context, c) {
+                        final centred = Center(child: SingleChildScrollView(child: card));
+                        if (c.maxWidth < 900 || n < 2) return centred;
+                        final cur = ((_i % n) + n) % n;
+                        Widget lean(Slide x, double dir) {
+                          final kx = x.isTip ? ('Health tip', Icons.favorite_outline, Colors.lightBlue) : slideKinds[x.item!.kind]!;
+                          final MaterialColor col = kx.$3;
+                          return IgnorePointer(
+                            child: Transform(
+                              alignment: dir < 0 ? Alignment.centerRight : Alignment.centerLeft,
+                              transform: Matrix4.identity()..setEntry(3, 2, 0.0011)..rotateY(dir * math.pi / 7),
+                              child: Opacity(
+                                opacity: .55,
+                                child: Container(
+                                  width: c.maxWidth * .3,
+                                  height: math.min(c.maxHeight * .7, 360),
+                                  padding: const EdgeInsets.all(20),
+                                  alignment: Alignment.bottomLeft,
+                                  decoration: BoxDecoration(borderRadius: BorderRadius.circular(24), gradient: LinearGradient(colors: [col.shade700, col.shade900])),
+                                  child: Text(x.isTip ? 'Health tip' : (x.headline ?? x.item!.p.name), maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 18)),
+                                ),
+                              ),
+                            ),
+                          );
+                        }
+                        return Stack(alignment: Alignment.center, children: [
+                          if (n > 2) Positioned(left: 0, child: lean(slides[(cur - 1 + n) % n], 1)),
+                          Positioned(right: 0, key: const Key('spotlight-side-next'), child: lean(slides[(cur + 1) % n], -1)),
+                          Padding(padding: EdgeInsets.symmetric(horizontal: c.maxWidth * .08), child: centred),
+                        ]);
+                      })),
                       IconButton(tooltip: 'Next', color: Colors.white, iconSize: 32, icon: const Icon(Icons.chevron_right), onPressed: () => _go(_i + 1)),
                     ]),
                   ),

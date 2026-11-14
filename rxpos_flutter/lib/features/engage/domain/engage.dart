@@ -49,10 +49,15 @@ List<({String title, String url, String date})> nearAlerts(Map<String, Object?>?
 
 // ---------- the idle screen ----------
 class Slide {
-  const Slide.medicine(Insight this.item) : tip = null;
-  const Slide.tip(({String text, String source}) this.tip) : item = null;
+  const Slide.medicine(Insight this.item, {this.headline, this.line}) : tip = null, topic = null, ai = false;
+  const Slide.tip(({String text, String source}) this.tip, {this.topic, this.ai = false}) : item = null, headline = null, line = null;
   final Insight? item;
   final ({String text, String source})? tip;
+  /// the AI's wording for a medicine today (features/engage/domain/idle_ai.dart), when it picked it
+  final String? headline, line;
+  /// a tip's picture topic, and whether the AI wrote it (no WHO source then)
+  final String? topic;
+  final bool ai;
   bool get isTip => tip != null;
   String get id => isTip ? 'tip-${tip!.text.hashCode}' : item!.p.id;
 }

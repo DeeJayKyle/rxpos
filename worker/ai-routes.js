@@ -219,3 +219,97 @@ export async function aiRoutes(env, path, body, can, json) {
   }
   return null;
 }
+
+// ---------- the idle screen ("shop window"): AI-picked promotions, card text and illustrations ----------
+//   POST /api/ai/idle-cards  { candidates: [{ id, name, generic, form, area, kind, note }], month }
+//                            → { cards: [{ id, headline, line, why }], tips: [{ text, topic }] }
+//   POST /api/ai/idle-image  { subject, tone } → { image: 'data:image/jpeg;base64,…', subject }
+// The candidates are worked out on the device and are only medicines that may be shown to customers (never
+// prescription-only or controlled: src/promote.js isFeaturable); the AI can only pick among them and only writes
+// short, general wording. Pictures are illustrations of a health topic, never of a product, packaging or brand.
+export const IMAGE_MODEL = '@cf/black-forest-labs/flux-1-schnell';
+/** subject → what the illustration shows (a fixed list: nothing else can be drawn) */
+export const IDLE_SUBJECTS = {
+  'Anti-infectives': 'a calm shield of light protecting a healthy family',
+  'Antimalarials': 'a family resting safely under a mosquito net at dusk',
+  'Anti-TB': 'healthy lungs breathing fresh morning air',
+  'Antivirals & HIV': 'a confident person holding a red ribbon, community care',
+  'Antifungals': 'clean healthy skin and fresh towels',
+  'Antiparasitics & deworming': 'happy school children with clean hands',
+  'Pain, fever & inflammation': 'a person relaxing comfortably after a long day',
+  'Cardiovascular': 'a glowing heart with a gentle pulse line',
+  'Diabetes & hormones': 'balanced healthy meal with vegetables and fruit',
+  'Respiratory & allergy': 'healthy lungs and blooming flowers in fresh air',
+  'Gastrointestinal': 'a calm stomach and a glass of clean water',
+  'Nervous system & mental health': 'a peaceful mind, a calm lake at sunrise',
+  'Vitamins, minerals & nutrition': 'colourful fresh tropical fruits and vegetables',
+  'Fluids & electrolytes': 'a refreshing glass of water with drops',
+  'Skin': 'soft healthy glowing skin and aloe leaves',
+  'Eye, ear & nose': 'a friendly face with bright clear eyes',
+  "Women's health & family planning": 'a caring mother and baby in soft light',
+  "Urology & men's health": 'a healthy confident man walking outdoors',
+  'Muscle & joint': 'a person stretching gently after exercise',
+  'Medical supplies': 'a tidy first-aid kit with bandages',
+  Other: 'a friendly modern pharmacy counter',
+  'tip:net': 'a family sleeping under a mosquito net',
+  'tip:hands': 'hands washing with soap and clean water',
+  'tip:water': 'a glass of clean drinking water',
+  'tip:heart': 'a glowing heart and a walking path',
+  'tip:food': 'a plate of fresh fruit and vegetables',
+  'tip:walk': 'people walking together in a green park',
+  'tip:sleep': 'a peaceful bedroom at night with a moon',
+  'tip:shield': 'a vaccination shield over a happy child',
+  'tip:baby': 'a mother holding a baby, soft warm light',
+  'tip:medicine': 'a pharmacist kindly explaining to a customer',
+};
+const TONES = { teal: 'teal and mint', amber: 'warm amber and peach', violet: 'soft violet and lilac', green: 'fresh green', sky: 'sky blue', black: 'deep teal on black' };
+// wording a pharmacy's shop window must never use (medicine advertising rules: no cure claims, no guarantees)
+const NOT_ALLOWED = /\b(cure[sd]?|guarantee[sd]?|miracle|100\s?%|instant(ly)?|no side effects|best|cheapest|free)\b/i;
+const safeLine = (s, n) => { const t = str(s, n); return NOT_ALLOWED.test(t) ? '' : t; };
+const TIP_TOPICS = ['net', 'hands', 'water', 'heart', 'food', 'walk', 'sleep', 'shield', 'baby', 'medicine'];
+
+const CARDS_PROMPT = 'You write a pharmacy\'s customer-facing shop window in Uganda (shown on a screen at the counter). From the candidate medicines (all may be sold without a prescription), ' +
+  'pick up to 12 worth showing today, favouring stock that expires soon or sells slowly, and anything seasonal for the month given (rainy season: malaria, colds; dry season: skin, hydration). ' +
+  'For each, write a short friendly headline (max 6 words) and one plain line (max 18 words) about what it is commonly used for, ending with advice to ask the pharmacist. ' +
+  'Never claim it cures, never promise results, no prices, no dosing, nothing about prescription medicines. Also write 3 short general health tips (max 20 words each) for the season. ' +
+  'Reply with ONLY JSON: {"cards":[{"id":"","headline":"","line":"","why":"short reason for the pharmacist"}],"tips":[{"text":"","topic":"' + TIP_TOPICS.join('|') + '"}]}';
+
+export function cleanIdleCards(raw, ids) {
+  const allowed = new Set(ids);
+  const seen = new Set();
+  const cards = (Array.isArray(raw?.cards) ? raw.cards : []).map((c) => ({ id: String(c?.id ?? ''), headline: safeLine(c?.headline, 60), line: safeLine(c?.line, 160), why: str(c?.why, 80) }))
+    .filter((c) => allowed.has(c.id) && c.headline && c.line && !seen.has(c.id) && seen.add(c.id)).slice(0, 12);
+  const tips = (Array.isArray(raw?.tips) ? raw.tips : []).map((t) => ({ text: safeLine(t?.text, 160), topic: TIP_TOPICS.includes(t?.topic) ? t.topic : 'medicine' })).filter((t) => t.text).slice(0, 4);
+  return { cards, tips };
+}
+
+export async function idleRoutes(env, path, body, json) {
+  if (path === '/api/ai/idle-cards') {
+    const list = (Array.isArray(body?.candidates) ? body.candidates : []).slice(0, 40)
+      .map((c) => ({ id: str(c?.id, 64), name: str(c?.name), generic: str(c?.generic), form: str(c?.form, 30), area: str(c?.area, 40), kind: str(c?.kind, 10), note: str(c?.note, 60) })).filter((c) => c.id && c.name);
+    if (!list.length) return json({ cards: [], tips: [] });
+    const month = int(body?.month, 1, 12, new Date().getUTCMonth() + 1);
+    const { out, model } = await runWithFallback(env, COPILOT_MODEL, { messages: [{ role: 'system', content: CARDS_PROMPT }, { role: 'user', content: `Month: ${month}\nCandidates: ${JSON.stringify(list)}` }], max_tokens: 1800, temperature: 0.5 });
+    return json({ ...cleanIdleCards(firstJson(out.response ?? out), list.map((c) => c.id)), model });
+  }
+  if (path === '/api/ai/idle-image') {
+    const subject = String(body?.subject || '');
+    if (!Object.hasOwn(IDLE_SUBJECTS, subject)) return json({ error: 'Unknown picture subject.' }, 400);
+    const tone = Object.hasOwn(TONES, body?.tone) ? body.tone : 'teal';
+    // one picture per subject and colour, kept in the cloud's cache (a hub has none: it has no AI either)
+    const cache = typeof caches !== 'undefined' ? caches.default : null;
+    const key = new Request(`https://rxpos.cache/idle-image-v1/${encodeURIComponent(subject)}/${tone}`);
+    const hit = cache && (await cache.match(key).catch(() => null));
+    if (hit) return hit;
+    const prompt = `Soft modern 3D illustration, ${IDLE_SUBJECTS[subject]}, gentle ${TONES[tone]} colour palette, rounded shapes, studio lighting, calm and hopeful, ` +
+      'African people where people appear, no text, no letters, no logos, no medicine packaging, no pills, no brand, no syringes';
+    const out = await runAi(env, IMAGE_MODEL, { prompt, steps: 4 });
+    const b64 = typeof out?.image === 'string' ? out.image : '';
+    if (!b64) return json({ error: 'The picture could not be made. Try again later.' }, 502);
+    const res = json({ image: 'data:image/jpeg;base64,' + b64, subject, tone });
+    res.headers.set('Cache-Control', 'public, max-age=2592000');
+    if (cache) await cache.put(key, res.clone()).catch(() => {});
+    return res;
+  }
+  return null;
+}

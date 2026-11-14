@@ -26,7 +26,7 @@ import { scheduledReports } from './reports.js';
 import { dailyStockFor, toCsv } from './dailystock.js';
 import { clean as cleanInvoice, finish as finishInvoice } from './invoiceread.js';
 import { INVOICE_PROMPT } from './invoiceprompt.js';
-import { aiRoutes, firstJson, runAi } from './ai-routes.js';
+import { aiRoutes, idleRoutes, firstJson, runAi } from './ai-routes.js';
 import { twoStepDdl, twoStepOf, totpCheck, markUsed, twoStepRoutes } from './twostep.js';
 import { tokenSecret, purposeLabel } from './secret.js';
 import { pharmacyChanged, validatePharmacyDefaults } from '../src/pharmacy-settings.js';
@@ -1461,6 +1461,9 @@ async function ai(env, path, body, who) {
   // the copilot (till commands, owner questions, device diagnosis) and vision (invoice / prescription) routes
   const r = await aiRoutes(env, path, body, (perm) => (who.viaKey ? true : roleCan(env, who.tenant, who.role, perm)), json);
   if (r) return r;
+  // the idle screen's AI cards and pictures (any signed-in person: the screen shows on every till)
+  const idle = await idleRoutes(env, path, body, json);
+  if (idle) return idle;
   return json({ error: 'Not found' }, 404);
 }
 
