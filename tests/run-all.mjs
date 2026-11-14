@@ -70,7 +70,6 @@ const SUITES = [
   ['screen tour', 'ui-tour.mjs', ['.output/tour']],
   ['screens fit phones, large text and long names', 'ui-fit.mjs', ['.output/fit-ui']],
   ['the till on a phone with large text', 'pos-phone.mjs', ['.output/pos-phone']],
-  ['speed with a big pharmacy on a slow phone CPU', 'perf-speed.mjs', ['.output/perf']],
   ['crash reports', 'v20-crash.mjs', ['.output/v20']],
   ['device & chat', 'v21-device-chat.mjs', ['.output/v21']],
   ['idle screen fit', 'idle-fit.mjs', ['.output/fit']],
@@ -133,6 +132,8 @@ const SUITES = [
   ['faster sync: recent history, brought forward', 'v73-window.mjs', []],
   // performance timings: only on request (npm run bench), never part of npm test
   ...(process.argv[2] === 'bench' ? [['benchmarks', 'bench.mjs', ['.output/bench']]] : []),
+  // speed on a slow phone CPU with a big pharmacy (timings vary between machines: on request, `npm test -- perf-speed`)
+  ...(/^(bench|perf-speed)$/.test(process.argv[2] || '') ? [['speed with a big pharmacy on a slow phone CPU', 'perf-speed.mjs', ['.output/perf']]] : []),
   // the Windows app's self-update needs a screen: Windows itself, or xvfb-run on Linux
   ...(process.platform === 'win32' || fs.existsSync('/usr/bin/xvfb-run') ? [['windows self-update', 'electron-update.mjs', []]] : []),
 ];
