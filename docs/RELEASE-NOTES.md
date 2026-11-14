@@ -1,5 +1,12 @@
 # RxPOS release notes
 
+## React (classic) app 1.8.7 · November 2026
+
+- **No pause for the daily backup copy:** the Windows and Android apps keep a copy of the pharmacy each day to undo
+  mistakes. It is now made in the background, straight from what is saved on the device, so the till never stops
+  for it, however big the pharmacy. The newest seven copies are kept, as before. The web version keeps nothing on
+  the computer, so nothing changes there.
+
 ## React (classic) app 1.8.6 · Flutter app 2.1 (next build) · November 2026
 
 - **Shop window (idle screen) with AI:** once a day the AI picks the medicines worth showing from those the screen
