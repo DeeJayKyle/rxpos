@@ -1,7 +1,6 @@
 // Speed: a watched record type re-reads only when that type changes (core/database/app_database.dart
 // createTableVersions), so a synced sale no longer makes every screen re-read its medicines, customers and batches;
 // the stock figures are worked out again only when stock movements change. Fictional records.
-import 'dart:async';
 
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';

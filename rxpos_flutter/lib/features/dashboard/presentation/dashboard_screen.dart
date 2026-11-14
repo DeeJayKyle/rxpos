@@ -14,6 +14,7 @@ import '../../sales_history/presentation/sales_screen.dart' show ageText, isOldD
 import '../../../core/presentation/charts.dart';
 import '../domain/figures.dart';
 import '../domain/insights.dart';
+import 'bento_row.dart';
 import 'dashboard_panels.dart';
 import 'sale_checks.dart';
 import '../../storage/presentation/storage_screen.dart';
@@ -76,6 +77,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       scroll: true,
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         SizedBox(width: double.infinity, child: GreetingCard(pharmacy: s.name, name: session?.userName ?? '', canSell: can.contains('pos.sell'))),
+        const SizedBox(height: 16),
+        BentoRow(byDay: f.byDay, sales: saleList, branch: data.branch, money: s.money, expiring: soonN + expiredN, low: low, can: can),
         const SizedBox(height: 16),
         StatGrid(children: [
           StatCard(label: 'Today\'s sales', value: s.money(t.total), sub: '${t.count} sale${t.count == 1 ? '' : 's'}${delta(t.total, y.total)}', icon: Icons.payments_outlined,

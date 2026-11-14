@@ -13,6 +13,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:rxpos/core/presentation/data_views.dart';
 import 'package:go_router/go_router.dart';
 import 'package:rxpos/core/theme/fonts.dart';
 import 'package:rxpos/core/router/app_router.dart';
@@ -497,6 +498,8 @@ void main() {
     await start(tester, size: const Size(400, 800));
     await tester.tap(find.byTooltip('Open navigation menu'));
     await settle(tester);
+    await tester.tap(find.byKey(const Key('page-sheet-menu'))); // More opens the page sheet; its Account & menu, the drawer
+    await settle(tester);
     await tester.tap(find.text('POS – Retail'));
     await settle(tester);
     expect(find.text('No items yet'), findsOneWidget);
@@ -549,6 +552,7 @@ void main() {
     expect(find.text('R-DISC · Discount without permission'), findsOneWidget);
     expect(find.textContaining('R-OLD'), findsNothing); // already checked
     await tester.ensureVisible(find.widgetWithText(OutlinedButton, 'Checked'));
+    await settle(tester); // the scroll settles before the tap (further down, under the dashboard's bento row)
     await tester.tap(find.widgetWithText(OutlinedButton, 'Checked'));
     await settle(tester);
     expect(find.text('Sales to check'), findsNothing);
@@ -1131,6 +1135,38 @@ void main() {
     await done(tester);
   });
 
+  testWidgets('Medicine List as a board and a gallery (kept on the device); "/" in Ctrl+K lists commands only', (tester) async {
+    await tester.runAsync(signedIn);
+    await start(tester);
+    await navTo(tester, 'Medicine List');
+    await tester.tap(find.byTooltip('Board'));
+    await settle(tester);
+    for (final k in ['out', 'low', 'ok']) {
+      expect(find.byKey(ValueKey('board-col-$k')), findsOneWidget, reason: 'the $k column');
+    }
+    expect(find.descendant(of: find.byKey(const ValueKey('board-col-ok')), matching: find.byType(DataCard)), findsWidgets, reason: 'medicines in stock as cards');
+    await tester.tap(find.byTooltip('Gallery'));
+    await settle(tester);
+    expect(find.byKey(const Key('gallery-view')), findsOneWidget);
+    final kept = await tester.runAsync(() => db.select(db.kv).get());
+    expect(kept!.any((r) => r.k == 'device:view:medicines' && r.v == 'gallery'), isTrue, reason: 'the view is kept on this device');
+    await tester.tap(find.byTooltip('List'));
+    await settle(tester);
+    expect(find.byKey(const Key('gallery-view')), findsNothing);
+    // "/" in Ctrl+K: commands only
+    await tester.tap(find.byKey(const Key('search-trigger')));
+    await settle(tester);
+    await tester.enterText(find.byKey(const Key('palette-input')), '/note');
+    await settle(tester);
+    expect(find.text('New note page'), findsOneWidget);
+    expect(find.text('Medicines'), findsNothing, reason: 'no medicines, customers or AI rows after "/"');
+    // (opening Notes from here starts a page whose save runs on the database's own thread, which a widget test cannot
+    // wait for: test/features/notes_test.dart covers the editor and its saving)
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await settle(tester);
+    await done(tester);
+  });
+
   testWidgets('Inventory parity: Medicine List add with opening stock, packs, quick edit, stock card, expiry write-off', (tester) async {
     await tester.runAsync(signedIn);
     await tester.runAsync(() => RecordStore(db).update((d) {
@@ -1581,6 +1617,8 @@ void main() {
     Future<void> open(String label) async {
       await tester.tap(find.byTooltip('Open navigation menu'));
       await settle(tester);
+      await tester.tap(find.byKey(const Key('page-sheet-menu'))); // More opens the page sheet; its Account & menu, the drawer
+      await settle(tester);
       final list = find.descendant(of: find.byType(Drawer), matching: find.byType(Scrollable)).first;
       await tester.scrollUntilVisible(find.descendant(of: find.byType(Drawer), matching: find.text(label)), 150, scrollable: list);
       await settle(tester, 2);
@@ -1675,8 +1713,19 @@ void main() {
     await settle(tester);
     expect(whereNow(tester), '/');
     expect(find.byKey(const Key('nav-back')), findsNothing);
-    // More opens the menu with every page
+    // More opens every page as a sheet (a line on each and the next step); Android's back closes it
     await tester.tap(find.byKey(const Key('tab-more')));
+    await settle(tester);
+    expect(find.byKey(const Key('page-sheet')), findsOneWidget);
+    expect(find.byKey(const Key('page-sheet-featured')), findsOneWidget);
+    expect(find.text('Quotations for clients'), findsOneWidget, reason: 'what each page is for');
+    await systemBack();
+    expect(find.byKey(const Key('page-sheet')), findsNothing);
+    expect(whereNow(tester), '/');
+    // its Account & menu opens the full menu
+    await tester.tap(find.byKey(const Key('tab-more')));
+    await settle(tester);
+    await tester.tap(find.byKey(const Key('page-sheet-menu')));
     await settle(tester);
     expect(find.byType(Drawer), findsOneWidget);
     // Android's back button closes the menu first, and stays on the page
@@ -1684,10 +1733,12 @@ void main() {
     expect(find.byType(Drawer), findsNothing);
     expect(whereNow(tester), '/');
     expect(leftApp, 0);
-    // a page opened from the menu, then Android's back goes back to the dashboard
+    // a page opened from the sheet, then Android's back goes back to the dashboard
     await tester.tap(find.byKey(const Key('tab-more')));
     await settle(tester);
-    await tester.tap(find.descendant(of: find.byType(Drawer), matching: find.text('Proformas')));
+    await tester.ensureVisible(find.byKey(const ValueKey('sheet-/proformas')));
+    await settle(tester);
+    await tester.tap(find.byKey(const ValueKey('sheet-/proformas')));
     await settle(tester);
     expect(whereNow(tester), '/proformas');
     // a dialog open: Android's back closes it, the page stays
@@ -1832,6 +1883,8 @@ void main() {
     await start(tester, size: const Size(400, 800));
     await tester.tap(find.byTooltip('Open navigation menu'));
     await settle(tester);
+    await tester.tap(find.byKey(const Key('page-sheet-menu'))); // More opens the page sheet; its Account & menu, the drawer
+    await settle(tester);
     final list = find.descendant(of: find.byType(Drawer), matching: find.byType(Scrollable)).first;
     await tester.scrollUntilVisible(find.descendant(of: find.byType(Drawer), matching: find.text('Drug quiz')), 150, scrollable: list);
     await settle(tester, 2);
@@ -1916,6 +1969,8 @@ void main() {
     await tester.runAsync(signedIn);
     await start(tester, size: const Size(400, 800));
     await tester.tap(find.byTooltip('Open navigation menu'));
+    await settle(tester);
+    await tester.tap(find.byKey(const Key('page-sheet-menu'))); // More opens the page sheet; its Account & menu, the drawer
     await settle(tester);
     final list = find.descendant(of: find.byType(Drawer), matching: find.byType(Scrollable)).first;
     await tester.scrollUntilVisible(find.descendant(of: find.byType(Drawer), matching: find.text('Weather & Storage')), 150, scrollable: list);
@@ -2015,6 +2070,8 @@ void main() {
     await tester.runAsync(signedIn);
     await start(tester, size: const Size(400, 800));
     await tester.tap(find.byTooltip('Open navigation menu'));
+    await settle(tester);
+    await tester.tap(find.byKey(const Key('page-sheet-menu'))); // More opens the page sheet; its Account & menu, the drawer
     await settle(tester);
     final list = find.descendant(of: find.byType(Drawer), matching: find.byType(Scrollable)).first;
     await tester.scrollUntilVisible(find.descendant(of: find.byType(Drawer), matching: find.text('Calendar')), 150, scrollable: list);
@@ -3170,6 +3227,8 @@ void main() {
       await shot(tester, 'phone-01-dashboard');
       await tester.tap(find.byTooltip('Open navigation menu'));
       await settle(tester);
+      await tester.tap(find.byKey(const Key('page-sheet-menu'))); // More opens the page sheet; its Account & menu, the drawer
+      await settle(tester);
       await shot(tester, 'phone-02-menu');
       await tester.tap(find.text('POS – Retail'));
       await settle(tester);
@@ -3183,6 +3242,8 @@ void main() {
       await start(tester, size: const Size(375, 812));
       await shot(tester, 'phone-04-large-text-dashboard');
       await tester.tap(find.byTooltip('Open navigation menu'));
+      await settle(tester);
+      await tester.tap(find.byKey(const Key('page-sheet-menu'))); // More opens the page sheet; its Account & menu, the drawer
       await settle(tester);
       await tester.tap(find.text('POS – Retail'));
       await settle(tester);

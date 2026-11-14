@@ -25,6 +25,7 @@ import 'hardware_hud.dart';
 import 'keymap.dart';
 import 'keys_host.dart';
 import 'nav.dart';
+import 'page_sheet.dart';
 import 'nav_history.dart';
 import 'screens.dart';
 import 'theme_menu.dart';
@@ -441,19 +442,26 @@ class TabBarBottom extends ConsumerWidget {
     final selectedTab = tabs.where((x) => x.$1 == '/' ? location == '/' : location == x.$1 || (x.$1 == '/pos' && location.startsWith('/pos'))).firstOrNull;
     return MediaQuery.withClampedTextScaling(
       maxScaleFactor: 1.3, // the tab names stay on one line under large text, as iOS does
-      child: ClipRect(
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+      // a floating pill above the page (the owner's design references), frosted, with a soft shadow
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
           child: DecoratedBox(
+            decoration: BoxDecoration(borderRadius: BorderRadius.circular(32), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: .18), blurRadius: 24, offset: const Offset(0, 10))]),
+            child: ClipRRect(
+            borderRadius: BorderRadius.circular(32),
+            child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+            child: DecoratedBox(
             key: const Key('bottom-nav'),
             decoration: BoxDecoration(
-              color: glass.withValues(alpha: glass.a * .86),
-              border: Border(top: BorderSide(color: t.dividerColor.withValues(alpha: .7), width: .5)),
+              color: glass.withValues(alpha: glass.a * .9),
+              borderRadius: BorderRadius.circular(32),
+              border: Border.all(color: t.dividerColor.withValues(alpha: .7), width: .5),
             ),
-            child: SafeArea(
-              top: false,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+            child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 child: Row(children: [
                   for (final x in tabs)
                     item(
@@ -473,12 +481,15 @@ class TabBarBottom extends ConsumerWidget {
                     tip: 'Open navigation menu',
                     icon: Icons.menu_rounded,
                     selected: false,
-                    onTap: () => Scaffold.of(context).openDrawer(),
+                    // every page as a bento sheet; its Account & menu opens the full menu
+                    onTap: () => showPageSheet(context, screens: screens, onFullMenu: () => Scaffold.of(context).openDrawer()),
                   ),
                 ]),
               ),
             ),
           ),
+        ),
+      ),
         ),
       ),
     );

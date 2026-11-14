@@ -9,6 +9,8 @@ import '../../../core/data/record_store.dart';
 import '../../../core/entities/movement.dart';
 import '../../../core/entities/product.dart';
 import '../../../core/entities/settings.dart';
+import '../../../core/data/device_settings.dart';
+import '../../../core/presentation/data_views.dart';
 import '../../../core/presentation/export.dart';
 import '../../../core/presentation/list_controls.dart';
 import '../../../core/presentation/widgets.dart';
@@ -93,16 +95,37 @@ class _MedicineListScreenState extends ConsumerState<MedicineListScreen> {
     var list = _q.trim().isEmpty ? d.products : searchProducts(d.products, _q, stockOf: (p) => d.stockOf(p.id));
     if (_review) list = list.where((p) => recordIssues(p, dup).isNotEmpty).toList();
     final manage = can.contains('medicines.manage');
+    // list, board (by stock status) or gallery, kept on this device
+    final view = ref.watch(deviceValueProvider('view:medicines')).value ?? 'list';
+    CardData card(Product p) {
+      final st = d.stockOf(p.id);
+      final tone = st <= 0 ? Theme.of(context).colorScheme.error : isLowStock(p, st) ? Colors.orange.shade800 : Colors.green.shade700;
+      return CardData(title: p.name, sub: [p.generic, p.strength, p.form].where((x) => x.isNotEmpty).join(' · '), value: s.money(p.price), chips: [
+        ('${formatQty(st)} in stock', tone), if (p.rx) ('Rx', null), if (p.controlled) ('CD', Theme.of(context).colorScheme.error), if ('${p.raw['shelf'] ?? ''}'.isNotEmpty) ('Shelf ${p.raw['shelf']}', null),
+      ], actions: [
+        if (manage) ('Edit', () => editMedicine(context, ref, p)),
+        ('Stock card', () => context.go('/stock-card?id=${Uri.encodeComponent(p.id)}')),
+        if (manage) ('Packs (strip, box…)', () => editPacks(context, ref, p)),
+      ]);
+    }
+
     return PageFrame(
       title: 'Medicine List',
       subtitle: _review ? '$issues records need a look. Open one to fix it; nothing is changed automatically.' : '${d.products.length} medicines and items',
       actions: [
+        ViewSwitch(value: view, onChanged: (v) => ref.read(deviceValueProvider('view:medicines').notifier).set(v == 'list' ? null : v)),
         SearchField(controller: _search, focusNode: _searchFocus, onChanged: (v) => setState(() => _q = v), hint: 'Medicine, generic, barcode…'),
         FilterChip(label: Text('Needs review${issues > 0 ? ' ($issues)' : ''}'), selected: _review, onSelected: (v) => setState(() => _review = v)),
         if (manage) FilledButton.icon(onPressed: () => editMedicine(context, ref, null), icon: const Icon(Icons.add), label: const Text('Add medicine')),
       ],
       child: list.isEmpty
           ? EmptyState(_review ? 'Every record looks complete' : 'No medicines match')
+          : view == 'board'
+          ? BoardView<Product>(items: list.take(1000).toList(), card: card, onTap: manage ? (p) => editMedicine(context, ref, p) : null,
+              groups: [('out', 'Out of stock', Theme.of(context).colorScheme.error), ('low', 'Running low', Colors.orange.shade800), ('ok', 'In stock', Colors.green.shade700)],
+              groupOf: (p) { final st = d.stockOf(p.id); return st <= 0 ? 'out' : isLowStock(p, st) ? 'low' : 'ok'; })
+          : view == 'gallery'
+          ? GalleryView<Product>(items: list, card: card, onTap: manage ? (p) => editMedicine(context, ref, p) : null)
           : () {
               final shown = list.take(400).toList();
               // the owner's request: keys, double-click, right-click and ticks, as every list (list_controls.dart)

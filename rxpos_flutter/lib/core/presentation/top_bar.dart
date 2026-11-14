@@ -173,7 +173,9 @@ class _CommandPaletteState extends ConsumerState<CommandPalette> {
   int _active = 0;
 
   List<_Hit> _results() {
-    final s = _q.trim().toLowerCase();
+    // "/" first: commands only (Notion's slash menu), then the pages
+    final slash = _q.startsWith('/');
+    final s = (slash ? _q.substring(1) : _q).trim().toLowerCase();
     bool has(List<Object?> v) => v.join(' ').toLowerCase().contains(s);
     // the owner's request: Ctrl+K also runs commands ("new sale", "receive stock", "add a customer"…), as the React app
     final can = {for (final p in widget.pages) p.path};
@@ -182,8 +184,16 @@ class _CommandPaletteState extends ConsumerState<CommandPalette> {
       if (can.contains('/add-stock')) ('Receive stock', 'add stock delivery invoice purchase', Icons.add_box_outlined, '/add-stock'),
       if (can.contains('/customers')) ('Add a customer', 'new client patient', Icons.person_add_alt, '/customers?new=1'),
       if (can.contains('/suppliers')) ('Add a supplier', 'new supplier', Icons.local_shipping_outlined, '/suppliers?new=1'),
+      if (can.contains('/notes')) ('New note page', 'note sop page notion write checklist', Icons.edit_note, '/notes?new=1'),
+      if (can.contains('/notes')) ('New checklist from a template', 'template opening checklist sop handover', Icons.checklist, '/notes?template=opening'),
       if (can.contains('/device')) ('Change keyboard shortcuts', 'keys remap keyboard settings', Icons.keyboard_outlined, '/device'),
     ];
+    if (slash) {
+      return [
+        for (final c in commands.where((c) => s.isEmpty || has([c.$1, c.$2]))) _Hit('Commands', c.$1, c.$3, c.$4),
+        if (s.isNotEmpty) for (final p in widget.pages.where((p) => has([p.label])).take(6)) _Hit('Pages', p.label, p.icon, p.path, hint: p.keyLabel),
+      ];
+    }
     final out = <_Hit>[
       for (final c in commands.where((c) => s.isNotEmpty ? has([c.$1, c.$2]) : true).take(s.isEmpty ? 3 : 5)) _Hit('Commands', c.$1, c.$3, c.$4),
       for (final p in widget.pages.where((p) => s.isEmpty || has([p.label])).take(s.isEmpty ? 8 : 6)) _Hit('Pages', p.label, p.icon, p.path, hint: p.keyLabel),
@@ -258,7 +268,7 @@ class _CommandPaletteState extends ConsumerState<CommandPalette> {
                 child: TextField(
                   key: const Key('palette-input'),
                   autofocus: true,
-                  decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Search, or tell the AI: “add 2 strips of paracetamol”…', suffixIcon: Icon(Icons.auto_awesome, size: 18), suffixText: 'Esc'),
+                  decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Search, / for commands, or tell the AI: “add 2 strips…”', suffixIcon: Icon(Icons.auto_awesome, size: 18), suffixText: 'Esc'),
                   onChanged: (v) => setState(() {
                     _q = v;
                     _active = 0;
