@@ -553,7 +553,7 @@ function Shell() {
             </div>
           ))}
         </nav>
-        {!rail && <NavPromo counts={counts} can={can} />}
+        {!rail && here !== '/' && <NavPromo counts={counts} can={can} />}{/* the Dashboard shows the same card */}
         <div className="user-box">
           <span className="avatar">{initials}</span>
           <div className="grow"><strong>{user.name}</strong><small>{user.role}</small></div>

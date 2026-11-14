@@ -85,6 +85,7 @@ await P.screenshot({ path: path.join(out, 'desktop-gold-night-topnav.png') });
 await P.keyboard.press('Escape');
 await P.evaluate(() => { const d = JSON.parse(localStorage.getItem('rxpos-device') || '{}'); localStorage.setItem('rxpos-device', JSON.stringify({ ...d, navStyle: 'sidebar' })); });
 await P.reload({ waitUntil: 'networkidle2' }); await wait(1500);
+await P.evaluate(() => { location.hash = '#/inventory'; }); await wait(1000);
 check('sidebar style: the action card sits above the account box', await P.evaluate(() => !!document.querySelector('.sidebar .nav-promo')));
 await P.screenshot({ path: path.join(out, 'desktop-gold-night-sidebar.png') });
 check('no page errors', errors.length === 0, errors.slice(0, 3).join(' | '));

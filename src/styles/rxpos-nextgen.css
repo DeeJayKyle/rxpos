@@ -219,3 +219,47 @@ h1, .page-head h1, .pos-title { font-family: var(--font-display); letter-spacing
 :root[data-palette='gold-night'] .nav-promo, :root[data-palette='gold-night'] .mega-featured { background: linear-gradient(150deg, #2a2112, #120f09); border: 1px solid rgba(212, 166, 74, .35); }
 :root[data-palette='gold-night'] .nav-promo-cta, :root[data-palette='gold-night'] .mega-cta { background: linear-gradient(135deg, #e3bd6a, #b8862b); color: #1a1406; }
 :root[data-palette='gold-night'] h1, :root[data-palette='gold-night'] .wordmark { letter-spacing: -.01em; }
+
+/* ---------- Bento KPI row on the Dashboard (2026-11-14) ---------- */
+.bento-dash { display: grid; gap: 12px; margin-bottom: 16px; }
+.bento-chips { justify-self: start; }
+.bento-grid { display: grid; gap: 14px; grid-template-columns: minmax(250px, 1.1fr) minmax(280px, 1.5fr) minmax(280px, 1.3fr) minmax(200px, .9fr); }
+@media (max-width: 1300px) { .bento-grid { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 640px) { .bento-grid { grid-template-columns: 1fr; } }
+.bento-grid > * { min-width: 0; margin: 0; }
+.bento-hero { display: flex; flex-direction: column; gap: 8px; padding: 18px; border-radius: var(--radius-bento-lg); text-decoration: none; color: #f8fafc;
+  background: radial-gradient(120% 90% at 100% 0%, color-mix(in srgb, var(--primary) 40%, transparent), transparent 60%), linear-gradient(160deg, #111827, #05070b); border: 1px solid rgba(255, 255, 255, .08); }
+.bento-hero .micro { color: rgba(248, 250, 252, .7); }
+.bento-big { font-family: var(--font-display); font-size: clamp(26px, 3vw, 34px); font-weight: 800; letter-spacing: -.02em; line-height: 1.1; overflow-wrap: anywhere; }
+.bento-delta-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.bento-delta-row small { color: rgba(248, 250, 252, .7); }
+.bento-delta { display: inline-flex; align-items: center; gap: 2px; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+.bento-delta.up { background: rgba(34, 197, 94, .18); color: #86efac; }
+.bento-delta.down { background: rgba(239, 68, 68, .18); color: #fca5a5; }
+.bento-mini { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: auto; padding-top: 6px; }
+.bento-mini > span { display: grid; gap: 2px; padding: 10px; border-radius: 12px; background: rgba(255, 255, 255, .06); }
+.bento-mini small { color: rgba(248, 250, 252, .65); font-size: 11.5px; }
+.bento-mini b { font-size: 15px; overflow-wrap: anywhere; }
+.bento-chart { display: grid; grid-template-rows: auto 1fr; }
+.bento-bars { display: flex; align-items: flex-end; gap: 4px; min-height: 130px; }
+.bento-bar { flex: 1; min-width: 0; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 4px; padding: 0; border: 0; background: none; cursor: pointer; font: inherit; }
+.bento-bar i { display: block; width: 100%; max-width: 34px; border-radius: 8px 8px 4px 4px; background: color-mix(in srgb, var(--primary) 22%, var(--surface-2)); transition: background .12s; }
+.bento-bar:hover i { background: color-mix(in srgb, var(--primary) 45%, var(--surface-2)); }
+.bento-bar.now i { background: var(--accent-grad, var(--primary)); }
+.bento-bar small { color: var(--muted); font-size: 11px; }
+.bento-recent ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.bento-recent li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 7px 0; border-bottom: 1px solid var(--border); }
+.bento-recent li:last-child { border-bottom: 0; }
+.bento-recent li strong { display: block; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bento-recent li small { display: block; font-size: 12px; }
+.bento-recent li .grow { min-width: 0; flex-basis: 140px; }
+.status-pill { padding: 2px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 700; white-space: nowrap; }
+.status-pill.paid { background: color-mix(in srgb, #16a34a 16%, transparent); color: var(--ok); }
+.status-pill.owing { background: color-mix(in srgb, #f59e0b 18%, transparent); color: var(--warn); }
+.status-pill.refunded { background: color-mix(in srgb, #ef4444 15%, transparent); color: var(--danger); }
+.bento-action { display: grid; gap: 6px; align-content: start; padding: 18px; border-radius: var(--radius-bento-lg); text-decoration: none; color: #fff;
+  background: linear-gradient(150deg, color-mix(in srgb, var(--primary) 75%, #0b0e14), color-mix(in srgb, var(--primary2, var(--primary)) 50%, #0b0e14)); }
+.bento-action strong { font-size: 17px; }
+.bento-action small { color: rgba(255, 255, 255, .82); }
+:root[data-palette='gold-night'] .bento-action { background: linear-gradient(150deg, #2a2112, #120f09); border: 1px solid rgba(212, 166, 74, .35); }
+:root[data-palette='gold-night'] .bento-hero { background: radial-gradient(120% 90% at 100% 0%, rgba(212, 166, 74, .28), transparent 60%), linear-gradient(160deg, #17140d, #070707); }

@@ -36,7 +36,7 @@ const audit = (p) => p.evaluate(async (axeSrc) => {
   const r = await window.axe.run(document, { resultTypes: ['violations'], runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'best-practice'] } });
   return r.violations.map((v) => ({ id: v.id, impact: v.impact, help: v.help, nodes: v.nodes.slice(0, 4).map((n) => n.target.join(' ') + (n.failureSummary ? ' — ' + n.failureSummary.split('\n').slice(1, 2).join('').trim() : '')), count: v.nodes.length }));
 }, AXE);
-const show = (vs) => vs.map((v) => `\n    [${v.impact}] ${v.id} ×${v.count}: ${v.help}\n      ${v.nodes.join('\n      ')}`).join('');
+const show = (vs) => vs.map((v) => ` [${v.impact}] ${v.id} ×${v.count}: ${v.help}\n      ${v.nodes.join('\n      ')}`).join('');
 const serious = (vs) => vs.filter((v) => all || v.impact === 'serious' || v.impact === 'critical');
 
 const b = await puppeteer.launch({ executablePath: CHROME, headless: true });

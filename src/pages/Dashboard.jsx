@@ -9,6 +9,7 @@ import { ProductArt } from '../idleart.jsx';
 import { useInsights, shareText } from '../engage.jsx';
 import { whatsappLink } from '../cloud.js';
 import { WeatherCard } from './Storage.jsx';
+import BentoDashboard from '../components/BentoDashboard.jsx';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const TOP_BY = [['amount', 'Amount'], ['qty', 'Quantity'], ['profit', 'Profit']];
@@ -84,6 +85,8 @@ export default function Dashboard() {
           <Link className="btn primary big" to="/pos"><ShoppingCart size={18} />New sale</Link>
         </div>
       </section>
+
+      <BentoDashboard byDay={m.byDay} db={db} branchId={branchId} fmt={fmt} can={can} counts={{ expiry: exp.soon + exp.expired, low: lowStock.length }} />
 
       <div className="stats kpis">
         {/* today's sales open Reports → Sales lines for today (every medicine sold); staff without it get the sales list */}
