@@ -171,6 +171,11 @@ void main() {
       }
 
       var ls = editLinesOf(purchase);
+      // the unit cost is line total ÷ quantity, never typed (the owner's choice, 2026-11-14)
+      final t = ls[0].withTotal(36000);
+      expect((t.cost, t.total), (3600.0, 36000.0));
+      expect((t.withQty(12).cost, t.withQty(12).total), (3000.0, 36000.0));
+      expect((ls[0].withQty(8).cost, ls[0].withQty(8).total), (4000.0, 32000.0));
       expect(() async => editPurchase(store, purchase, ls, supplierId: '', supplierName: '', invoice: '', notes: '', date: '2026-11-01', paid: 0, reason: '', user: 'T',
           batchesOf: await view(), settings: s), throwsA(isA<DeliveryProblem>()));
       ls = [ls[0].copyWith(qty: 8), ls[1].copyWith(removed: true), const PurchaseEditLine(productId: 'p1', name: 'Paramol', qty: 3, cost: 300, batch: 'P9', expiry: '2031-01-31')];

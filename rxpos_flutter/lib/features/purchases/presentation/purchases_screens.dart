@@ -273,6 +273,7 @@ class _PurchaseEditorState extends ConsumerState<PurchaseEditor> {
   late String _date = '${widget.purchase['date'] ?? today()}';
   final _reason = TextEditingController();
   int _round = 0;
+  final _totalRev = <int, int>{};
 
   @override
   Widget build(BuildContext context) {
@@ -281,7 +282,7 @@ class _PurchaseEditorState extends ConsumerState<PurchaseEditor> {
     final st = d.settings;
     final pu = widget.purchase;
     final orig = ((pu['items'] as List?) ?? const []).cast<Map>();
-    final total = _lines.where((l) => !l.removed).fold<double>(0, (a, l) => a + l.qty * l.cost);
+    final total = _lines.where((l) => !l.removed).fold<double>(0, (a, l) => a + l.total);
     Widget numBox(String key, double v, ValueChanged<double> on, {double w = 80, String label = ''}) => SizedBox(
         width: w,
         child: TextFormField(key: Key('$key-$_round'), initialValue: formatQty(v), keyboardType: TextInputType.number, decoration: InputDecoration(labelText: label, isDense: true),
@@ -315,7 +316,12 @@ class _PurchaseEditorState extends ConsumerState<PurchaseEditor> {
                     OutlinedButton(
                       onPressed: l.removed ? null : () async {
                         final p = await showAppDialog<Product>(context: context, builder: (_) => _PickMedicine(data: d));
-                        if (p != null) setState(() => _lines[k] = _lines[k].copyWith(productId: p.id, name: p.name, cost: l.orig == null && l.cost == 0 ? p.cost : null));
+                        if (p != null) {
+                          setState(() {
+                            _lines[k] = _lines[k].copyWith(productId: p.id, name: p.name, cost: l.orig == null && l.cost == 0 && l.typed == null ? p.cost : null);
+                            _totalRev[k] = (_totalRev[k] ?? 0) + 1;
+                          });
+                        }
                       },
                       child: Text(l.name.isEmpty ? 'Choose medicine…' : l.name, overflow: TextOverflow.ellipsis),
                     ),
@@ -331,10 +337,19 @@ class _PurchaseEditorState extends ConsumerState<PurchaseEditor> {
                 SizedBox(width: 120, child: TextFormField(key: Key('e-$k-$_round'), initialValue: l.expiry, enabled: !l.removed, decoration: const InputDecoration(labelText: 'Expiry', hintText: 'YYYY-MM-DD', isDense: true),
                     onChanged: (v) => _lines[k] = _lines[k].copyWith(expiry: v.trim()))),
                 const SizedBox(width: 6),
-                numBox('q-$k', l.qty, (v) => _lines[k] = _lines[k].copyWith(qty: v), label: 'Qty'),
+                numBox('q-$k', l.qty, (v) {
+                  if (_lines[k].typed == null) _totalRev[k] = (_totalRev[k] ?? 0) + 1;
+                  _lines[k] = _lines[k].withQty(v);
+                }, label: 'Qty'),
                 const SizedBox(width: 6),
-                numBox('c-$k', l.cost, (v) => _lines[k] = _lines[k].copyWith(cost: v), label: 'Cost', w: 100),
-                SizedBox(width: 110, child: Text(l.removed ? 'removed' : st.money(l.qty * l.cost), textAlign: TextAlign.right)),
+                // not typed: line total ÷ quantity, as on Add stock (the owner's choice, 2026-11-14)
+                SizedBox(width: 110, child: InputDecorator(key: Key('c-$k-$_round'), decoration: const InputDecoration(labelText: 'Unit cost', helperText: 'total ÷ qty', isDense: true),
+                    child: Text(l.removed ? 'removed' : st.money(l.cost)))),
+                const SizedBox(width: 6),
+                if (l.removed)
+                  const SizedBox(width: 110)
+                else
+                  numBox('t-$k-${_totalRev[k] ?? 0}', l.total, (v) => _lines[k] = _lines[k].withTotal(v), label: 'Line total', w: 110),
                 l.removed
                     ? TextButton(onPressed: () => setState(() => _lines[k] = l.copyWith(removed: false)), child: const Text('Undo'))
                     : IconButton(tooltip: 'Remove this line', icon: const Icon(Icons.delete_outline), onPressed: () => setState(() {

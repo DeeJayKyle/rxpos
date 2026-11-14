@@ -1,5 +1,12 @@
 # RxPOS release notes
 
+## React (classic) app 1.8.8 · Flutter app 2.1 (next build) · November 2026
+
+- **Correcting a delivery works like Add stock:** in Purchase history, Edit purchase no longer lets you type the
+  unit cost. Type the line total from the invoice and the unit cost is worked out as line total ÷ quantity. Change
+  the quantity afterwards and the typed total stays, with the unit cost following it. A line with no typed total
+  stays at cost × quantity.
+
 ## React (classic) app 1.8.7 · November 2026
 
 - **No pause for the daily backup copy:** the Windows and Android apps keep a copy of the pharmacy each day to undo
