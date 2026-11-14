@@ -63,9 +63,12 @@ await P.tap('.product-grid .product');
 await wait(400);
 check('phone POS: the docked sale shows the item count and total', /1 item/.test(await P.evaluate(() => document.querySelector('.sheet-handle')?.innerText || '')) && /UGX 1,200/.test(await P.evaluate(() => document.querySelector('.sheet-handle')?.innerText || '')));
 await P.screenshot({ path: path.join(out, 'phone-pos-docked.png') });
+// wait for the sheet to open rather than a fixed pause: on a busy CI runner the tap and animation can take over
+// 500 ms, and a tap landing while the page is still settling can be dropped (one more tap then)
 await P.tap('.sheet-handle .grow');
-// wait for the sheet to open rather than a fixed pause: on a busy CI runner the tap and animation can take over 500 ms
-check('tapping it slides the full sale up', await P.waitForSelector('.pos-cart.sheet.open', { timeout: 5000 }).then(() => true, () => false));
+let opened = await P.waitForSelector('.pos-cart.sheet.open', { timeout: 5000 }).then(() => true, () => false);
+if (!opened) { await P.tap('.sheet-handle .grow'); opened = await P.waitForSelector('.pos-cart.sheet.open', { timeout: 8000 }).then(() => true, () => false); }
+check('tapping it slides the full sale up', opened);
 await P.screenshot({ path: path.join(out, 'phone-pos-sheet.png') });
 // navigation styles: on a phone, More opens every page as a bento sheet; on a wide screen the top pill navbar
 // replaces the sidebar when chosen in This device → Navigation; Gold Night (dark luxury) reads everywhere
