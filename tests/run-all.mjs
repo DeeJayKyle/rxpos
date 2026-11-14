@@ -40,6 +40,7 @@ const SUITES = [
   ['fefo allocate (unit)', 'unit-fefo.mjs', []],
   ['clinical safety check and expiry traffic light (unit)', 'unit-clinical.mjs', []],
   ['date helpers (unit)', 'unit-dates.mjs', []],
+  ['notes and SOP pages (unit)', 'unit-notes.mjs', []],
   ['record ids (unit)', 'unit-ids.mjs', []],
   ['watchdog alerts (unit)', 'unit-watchdog.mjs', []],
   ['inventory value (unit)', 'unit-stockvalue.mjs', []],
@@ -130,6 +131,7 @@ const SUITES = [
   ['faster sync: core first, history after', 'v71-sync-phases.mjs', []],
   ['faster sync: ready-made chunks', 'v72-snapshot.mjs', []],
   ['faster sync: recent history, brought forward', 'v73-window.mjs', []],
+  ['notes and SOP pages: blocks, "/" menu, pages inside pages, sync', 'v74-notes.mjs', []],
   // performance timings: only on request (npm run bench), never part of npm test
   ...(process.argv[2] === 'bench' ? [['benchmarks', 'bench.mjs', ['.output/bench']]] : []),
   // speed on a slow phone CPU with a big pharmacy (timings vary between machines: on request, `npm test -- perf-speed`)

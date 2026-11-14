@@ -4,7 +4,7 @@ import {
   LayoutDashboard, ShoppingCart, PackageOpen, ReceiptText, FileText, ClipboardPlus, Users, Truck, Pill, FlaskConical,
   Boxes, PackagePlus, History, CalendarClock, PencilRuler, ScrollText, Wallet, Tags, Landmark, ArrowLeftRight, HandCoins,
   ArrowDownLeft, ArrowUpRight, ClipboardCheck, RefreshCw, Undo2, ShieldPlus, BookOpen, BarChart3, Settings as SettingsIcon, Search, Sun, Moon, Menu, LogOut, ChevronDown,
-  BellRing, ShoppingBag, Tag, FileUp, Building2, Send, ShieldCheck, Clock, BookMarked, MessagesSquare, UserCog, KeyRound, CalendarDays, Thermometer, Palette, MonitorSmartphone, ScanText, GraduationCap, Megaphone, CalendarRange, LockKeyhole, PanelLeftClose, PanelLeftOpen, WifiOff,
+  BellRing, ShoppingBag, Tag, FileUp, Building2, Send, ShieldCheck, Clock, BookMarked, MessagesSquare, UserCog, KeyRound, CalendarDays, Thermometer, Palette, MonitorSmartphone, ScanText, GraduationCap, Megaphone, CalendarRange, LockKeyhole, NotebookPen, PanelLeftClose, PanelLeftOpen, WifiOff,
   Sparkles, Pin, Keyboard, UserPlus, Archive, BadgeCheck,
 } from 'lucide-react';
 import { useStore, useSyncState, makePassword, put, audit, isLowStock, expiryCounts } from './store.jsx';
@@ -81,6 +81,7 @@ const P = {
   DrugInfo: page(() => import('./pages/DrugInfo.jsx')),
   Users: page(() => import('./pages/Users.jsx')),
   Calendar: page(() => import('./pages/Calendar.jsx')),
+  Notes: page(() => import('./pages/Notes.jsx')),
   Scan: page(() => import('./pages/Scan.jsx')),
   Quiz: page(() => import('./pages/Quiz.jsx')),
   Messages: page(() => import('./pages/Messages.jsx')),
@@ -114,6 +115,7 @@ const NAV = [
     ['/reminders', 'Reminders', BellRing, null, null, <P.Reminders />, 'reminders', 'reminders'],
     ['/messages', 'Messages & SMS', Megaphone, null, null, <P.Messages />, 'reminders', 'reminders'],
     ['/calendar', 'Calendar', CalendarDays, null, null, <P.Calendar />, null, 'calendar'],
+    ['/notes', 'Notes & SOPs', NotebookPen, null, null, <P.Notes />, null, 'notes'],
   ] },
   { group: 'Medicine Inventory', items: [
     ['/medicines', 'Medicine List', Pill, null, null, <P.MedicineList />, 'inventory.view'],

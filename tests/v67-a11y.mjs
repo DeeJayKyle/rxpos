@@ -27,7 +27,7 @@ await owner('/tenants/' + tid + '/records', { records: [
   { t: 'sales', id: 'x1', rec: { number: 'R1', date, type: 'retail', branchId: 'main', cashier: 'Ari Admin', items: [{ id: 'p1', name: 'Access Tabs', qty: 1, price: 1000 }], subtotal: 1000, discount: 0, tax: 0, total: 1000, paid: 1000, payment: 'Cash', customerId: 'c1', customerName: 'Grace Achieng', status: 'completed' } },
 ] });
 
-const PAGES = ['dashboard', 'pos', 'sales', 'shifts', 'customers', 'suppliers', 'insurers', 'medicines', 'inventory', 'add-stock', 'purchases', 'expiry',
+const PAGES = ['dashboard', 'notes', 'pos', 'sales', 'shifts', 'customers', 'suppliers', 'insurers', 'medicines', 'inventory', 'add-stock', 'purchases', 'expiry',
   'expenses', 'debtors', 'cash-book', 'reports', 'users', 'settings'];
 const all = process.env.RXPOS_A11Y_ALL === '1';
 // what counts: serious and critical problems (minor and moderate are listed with RXPOS_A11Y_ALL=1)
