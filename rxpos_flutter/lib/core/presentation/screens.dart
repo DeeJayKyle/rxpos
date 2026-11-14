@@ -11,6 +11,7 @@ import '../../features/users/presentation/users_screen.dart';
 import '../../features/extras/presentation/extras_screens.dart';
 import '../../features/drug_info/presentation/drug_info_screen.dart';
 import '../../features/calendar/presentation/calendar_screen.dart';
+import '../../features/notes/presentation/notes_screen.dart';
 import '../../features/quiz/presentation/quiz_screen.dart';
 import '../../features/storage/presentation/storage_screen.dart';
 import '../../features/extras/presentation/import_screen.dart';
@@ -74,6 +75,7 @@ final screens = <Screen>[
   Screen('/drug-info', 'Drug information', Icons.menu_book_outlined, 'Insights', (_) => const DrugInfoScreen(), feature: 'drugInfo'),
   Screen('/quiz', 'Drug quiz', Icons.quiz_outlined, 'Insights', (_) => const QuizScreen(), feature: 'drugInfo'),
   Screen('/calendar', 'Calendar', Icons.calendar_month_outlined, 'Insights', (_) => const CalendarScreen(), feature: 'calendar'),
+  Screen('/notes', 'Notes & SOPs', Icons.edit_note, 'People', (q) => NotesScreen(key: ValueKey('notes-${q['new']}-${q['template']}'), create: q['new'] == '1', template: q['template'] ?? ''), feature: 'notes'),
   Screen('/finance', 'Finance', Icons.account_balance_outlined, 'Finance', (q) => FinanceScreen(key: ValueKey('finance-${q['tab']}'), tab: q['tab'] ?? 'accounts'), permission: 'finance', feature: 'finance'),
   Screen('/payroll', 'Payroll & HR', Icons.badge_outlined, 'Finance', (q) => PayrollScreen(key: ValueKey('payroll-${q['tab']}'), tab: q['tab'] ?? 'staff'), permission: 'payroll', feature: 'finance'),
   Screen('/weekly', 'Weekly Summary', Icons.date_range_outlined, 'Insights', (_) => const WeeklyScreen(), permission: 'reports', feature: 'reports'),

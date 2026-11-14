@@ -1,4 +1,4 @@
-// Colour themes (src/themes.js): 30 palettes, readable everywhere (WCAG AA), accents, the owner's choice, light / dark.
+// Colour themes (src/themes.js): 31 palettes, readable everywhere (WCAG AA), accents, the owner's choice, light / dark.
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -9,9 +9,9 @@ import 'package:rxpos/core/theme/themes.dart';
 int argb(Color c) => c.toARGB32();
 
 void main() {
-  test('30 themes, every one readable with every accent', () {
-    expect(palettes, hasLength(30));
-    expect(palettes.where((p) => p.dark), hasLength(16));
+  test('31 themes, every one readable with every accent', () {
+    expect(palettes, hasLength(31));
+    expect(palettes.where((p) => p.dark), hasLength(17));
     for (final p in palettes) {
       for (final a in ['', for (final x in accents) x.$1]) {
         final t = buildTheme(p, accent: a).colorScheme;
@@ -31,7 +31,7 @@ void main() {
     final some = allowedPalettes({'themes': ['light', 'dracula', 'nord']});
     expect(some.map((p) => p.id), ['light', 'nord', 'dracula']);
     expect(paletteFor(true, some, 'nord'), 'nord');
-    expect(allowedPalettes(null), hasLength(30));
+    expect(allowedPalettes(null), hasLength(31));
   });
 
   test('accents change only the action colour; the look is kept as JSON', () {

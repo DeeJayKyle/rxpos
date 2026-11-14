@@ -32,6 +32,7 @@ const syncedTables = [
   'insurers', // step 22: insurers and their schemes (core/rules/insurance.dart)
   // only this app (Payroll & HR, scheduled report emails); the React app skips tables it does not know
   'employees', 'attendance', 'salaryAdvances', 'payrolls', 'reportSchedules',
+  'notes', // 2026-11-14: Notes & SOP pages (features/notes, src/notes.js)
 ];
 
 /// Tables that only ever grow: a row is never changed or deleted (the cloud refuses it too).
