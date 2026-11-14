@@ -4,8 +4,8 @@
 // shelf. It writes each medicine's "Shelf / location", the same field in both apps.
 import { useMemo, useState } from 'react';
 import { Archive, CheckCheck, Download } from 'lucide-react';
-import { Modal, SearchBox } from '../ui.jsx';
-import { useStore, put, audit, isUntouchedBase, downloadFile, toCSV } from '../store.jsx';
+import { Modal, SearchBox, useProgressive } from '../ui.jsx';
+import { useStore, putMany, audit, isUntouchedBase, downloadFile, toCSV } from '../store.jsx';
 import { toast } from '../feedback.jsx';
 import { searchProducts } from '../search.js';
 import { drugClassOf, groupMedicines, shelfOf, UNCLASSIFIED } from '../drugclass.js';
@@ -32,7 +32,8 @@ export default function Shelves() {
   const unshelved = mine.filter((p) => !shelfOf(p)).length;
   let list = q.trim() ? searchProducts(mine, q) : mine;
   if (shelf === '-') list = list.filter((p) => !shelfOf(p)); else if (shelf) list = list.filter((p) => shelfOf(p) === shelf);
-  const rows = groupedRows(list.slice(0, 1500), by, folded);
+  const drawn = useProgressive(Math.min(list.length, 1500));
+  const rows = groupedRows(list.slice(0, drawn), by, folded);
   const tickedList = list.filter((p) => picked.has(p.id));
 
   const save = async (ps, to, what = '') => {
@@ -40,7 +41,8 @@ export default function Shelves() {
     const change = ps.filter((p) => shelfOf(p) !== s);
     if (!change.length) { setPicked(new Set()); return; }
     await update((d) => {
-      for (const p of change) put(d, 'products', { ...(d.products.find((x) => x.id === p.id) || p), shelf: s });
+      const byId = new Map(d.products.map((x) => [x.id, x]));
+      putMany(d, 'products', change.map((p) => ({ ...(byId.get(p.id) || p), shelf: s })));
       const who = what || (change.length <= 5 ? change.map((p) => p.name).join(', ') : `${change.length} medicines`);
       audit(d, user, 'Shelf assigned', s ? `${who} → shelf ${s}` : `${who}: taken off their shelf`, branchId);
     });

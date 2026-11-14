@@ -7,7 +7,7 @@ import {
   BellRing, ShoppingBag, Tag, FileUp, Building2, Send, ShieldCheck, Clock, BookMarked, MessagesSquare, UserCog, KeyRound, CalendarDays, Thermometer, Palette, MonitorSmartphone, ScanText, GraduationCap, Megaphone, CalendarRange, LockKeyhole, PanelLeftClose, PanelLeftOpen, WifiOff,
   Sparkles, Pin, Keyboard, UserPlus, Archive, BadgeCheck,
 } from 'lucide-react';
-import { useStore, makePassword, put, audit, isLowStock, expiryCounts } from './store.jsx';
+import { useStore, useSyncState, makePassword, put, audit, isLowStock, expiryCounts } from './store.jsx';
 import { askText, ask, toast } from './feedback.jsx';
 import { hasPin, setPin, clearPin } from './offline.js';
 import Auth from './pages/Auth.jsx';
@@ -33,10 +33,22 @@ import { deviceSettings, setDevice, onDevice } from './device.js';
 import { Modal } from './ui.jsx';
 import { BackButton, markNav, usePageMotion, useEdgeSwipeBack, useKeyboardFit } from './mobilenav.jsx';
 import AiOmnibar from './components/AiOmnibar.jsx';
+import { warmSearchKeys } from './search.js';
 const OwnerConsole = lazy(() => import('./pages/OwnerConsole.jsx'));
 
-// Pages load on demand so the app opens fast, even on low-end PCs and phones
-const page = (loader, name = 'default') => lazy(() => loader().then((m) => ({ default: m[name] })));
+// Pages load on demand so the app opens fast, even on low-end PCs and phones; once it is open and idle every page's
+// code is loaded in the background (one at a time), so opening a page for the first time is as quick as the second
+const loaders = new Set();
+const page = (loader, name = 'default') => { loaders.add(loader); return lazy(() => loader().then((m) => ({ default: m[name] }))); };
+const whenIdle = (fn) => (window.requestIdleCallback ? requestIdleCallback(fn, { timeout: 4000 }) : setTimeout(fn, 200));
+let preloaded = false;
+function preloadPages() {
+  if (preloaded) return;
+  preloaded = true;
+  const list = [...loaders];
+  const next = () => { const l = list.shift(); if (l) l().catch(() => {}).finally(() => whenIdle(next)); };
+  setTimeout(() => whenIdle(next), 1500); // after the first screen is drawn and the first sync has started
+}
 const inv = () => import('./pages/Inventory.jsx');
 const fin = () => import('./pages/Finance.jsx');
 const ppl = () => import('./pages/People.jsx');
@@ -292,7 +304,8 @@ function useOnline() {
  * sign-in). The tooltip says why; clicking tries again (or opens This device when something needs attention).
  */
 function ClockPill() {
-  const { syncStatus, syncNow, setUser, pending, storageIssue } = useStore();
+  const { syncNow, setUser } = useStore();
+  const { syncStatus, pending, storageIssue } = useSyncState();
   const navigate = useNavigate();
   const online = useOnline();
   const [now, setNow] = useState(() => new Date());
@@ -354,6 +367,8 @@ function KeysHelp({ onClose, pages }) {
 
 function Shell() {
   const { db, products, user, setUser, branchId, branch, update, syncNow, syncCfg } = useStore();
+  useEffect(() => preloadPages(), []); // every page's code, in the background once the app is open
+  useEffect(() => warmSearchKeys(products), [products.length]); // eslint-disable-line react-hooks/exhaustive-deps -- once per new medicine count
   const navigate = useNavigate();
   const location = useLocation();
   const [theme, setTheme, themeMode, setThemeMode, accent, setAccent] = useTheme();
@@ -491,7 +506,8 @@ function Shell() {
   useEffect(() => { if (me?.mustChangePassword && !asked.current) { asked.current = true; changePassword(true); } }, [me?.mustChangePassword]); // eslint-disable-line react-hooks/exhaustive-deps
   // Signing out never deletes unsent work: the Windows and Android apps keep it and send it later;
   // the web version keeps nothing, so it asks before letting it go
-  const { pending: unsent, db: dbNow } = useStore();
+  const { db: dbNow } = useStore();
+  const { pending: unsent } = useSyncState();
   const signOut = async () => {
     const mine = (dbNow.drafts || []).filter((d) => d.userId === user.id).length;
     const out = await setUser(null, { confirmLoss: (n) => ask({ title: `${n} change(s) haven't reached the cloud`, message: 'This browser keeps nothing on the computer, so signing out now loses them. Stay signed in until the internet is back, or sign out anyway.', confirmText: 'Sign out anyway', cancelText: 'Stay signed in', danger: true }) });
@@ -639,7 +655,8 @@ function UpdateHost() {
 
 /** The first sign-in on a device downloads the whole pharmacy: show progress instead of empty pages */
 function FirstDownload() {
-  const { syncStatus, db } = useStore();
+  const { db } = useStore();
+  const { syncStatus } = useSyncState();
   // stage 2 of the faster sync: once the core (medicines, stock, clients, staff) is in, the app is ready to use
   if (!(syncStatus.first && syncStatus.state === 'syncing') || syncStatus.history || db.products.length > 50) return null;
   return (
@@ -653,7 +670,7 @@ function FirstDownload() {
 
 /** While a full download brings the older records (stage 2 of the faster sync): say that reports may still grow */
 function HistoryLoading() {
-  const { syncStatus } = useStore();
+  const { syncStatus } = useSyncState();
   // stage 4: a device keeping recent history waits for the cloud's brought-forward figures (needs the internet)
   if (syncStatus.balancesPending) return <div className="history-loading" role="status">Older balances are still coming from the cloud: stock, debts and cash shown may be incomplete until this device is online</div>;
   if (!(syncStatus.history && syncStatus.state === 'syncing')) return null;

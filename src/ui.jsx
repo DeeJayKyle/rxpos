@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { useEffect, useMemo, useRef, useState, useId } from 'react';
+import { useEffect, useMemo, useRef, useState, useId, startTransition } from 'react';
 import { useLocation } from 'react-router-dom';
 import { X, Search, Download, Plus, Pencil, Trash2, Inbox, Lightbulb, TrendingUp, TrendingDown, FileDown, Loader2, Copy, CheckSquare, Columns3 } from 'lucide-react';
 import { pagePdf, receiptPdf } from './pdf.js';
@@ -469,4 +469,19 @@ export function useSort(rows, keys, initial, dir = -1) {
 export function SortTh({ s, k, children, className = '' }) {
   const on = s.by === k;
   return <th className={className + ' sortable'} aria-sort={on ? (s.dir > 0 ? 'ascending' : 'descending') : 'none'}><button type="button" className="th-sort" onClick={() => s.sort(k)}>{children}<span aria-hidden="true">{on ? (s.dir > 0 ? ' ▲' : ' ▼') : ' ↕'}</span></button></th>;
+}
+
+/**
+ * Long lists draw their first rows at once and the rest a moment later, as a low-priority update that gives way to
+ * taps and typing: a page with hundreds of rows opens as fast as a short one. Returns how many rows to draw now.
+ */
+export function useProgressive(total, first = 60) {
+  const [n, setN] = useState(first);
+  useEffect(() => {
+    if (total <= n) return;
+    const go = () => startTransition(() => setN(total));
+    if (window.requestIdleCallback) { const id = requestIdleCallback(go, { timeout: 300 }); return () => cancelIdleCallback(id); }
+    const id = setTimeout(go, 50); return () => clearTimeout(id);
+  }, [total, n]);
+  return Math.min(n, total);
 }

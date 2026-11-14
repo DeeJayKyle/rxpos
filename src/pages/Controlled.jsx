@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef } from 'react';
 import { ShieldAlert, Search } from 'lucide-react';
 import { useStore, MAIN_BRANCH, downloadFile, toCSV } from '../store.jsx';
-import { Tabs, Empty, PdfButton, SearchBox } from '../ui.jsx';
+import { Tabs, Empty, PdfButton, SearchBox, useProgressive } from '../ui.jsx';
 
 /**
  * Controlled drugs register: every movement of each controlled medicine at this branch with a running balance, and
@@ -32,6 +32,7 @@ function Register() {
     return db.movements.filter((m) => m.productId === id && (m.branchId || MAIN_BRANCH) === branchId)
       .sort((a, b) => a.date.localeCompare(b.date)).map((m) => ({ ...m, bal: (bal += m.qty), sale: m.type === 'Sale' ? saleBy.get(m.ref) : null }));
   }, [db.movements, id, branchId, saleBy]);
+  const drawn = useProgressive(Math.min(lines.length, 500));
   if (!list.length) return <div className="card"><Empty>No medicine is marked as a controlled drug. Tick "Controlled drug" on a medicine in the Medicine List.</Empty></div>;
   const rows = lines.slice().reverse();
   const csv = () => downloadFile(`register-${(p?.name || '').replace(/\W+/g, '-')}.csv`, toCSV(lines.map((m) => ({ date: m.date, type: m.type, reference: m.ref, batch: batchName.get(m.batchId) || '', in: m.qty > 0 ? m.qty : '', out: m.qty < 0 ? -m.qty : '', balance: m.bal,
@@ -49,7 +50,7 @@ function Register() {
         <table>
           <thead><tr><th>Date</th><th>Type</th><th>Reference</th><th>Batch</th><th>Patient · ID</th><th>Prescriber · prescription</th><th className="num">In</th><th className="num">Out</th><th className="num">Balance</th><th>By</th></tr></thead>
           <tbody>
-            {rows.slice(0, 500).map((m) => {
+            {rows.slice(0, drawn).map((m) => {
               const c = m.sale?.controlled;
               return (
                 <tr key={m.id}>

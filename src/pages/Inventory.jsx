@@ -1,8 +1,8 @@
 import { useState, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Download, Barcode as BarcodeIcon, SlidersHorizontal, Save, Undo2, Pencil, ScrollText, Boxes } from 'lucide-react';
-import { CrudPage, Tabs, Modal, SearchBox, Empty, PdfButton } from '../ui.jsx';
-import { useStore, daysUntil, put, move, addBatch, audit, downloadFile, toCSV, batchValue, stockValue, markupPrice, MAIN_BRANCH } from '../store.jsx';
+import { CrudPage, Tabs, Modal, SearchBox, Empty, PdfButton, useProgressive } from '../ui.jsx';
+import { useStore, daysUntil, put, move, addBatch, audit, downloadFile, toCSV, batchValue, stockValue, markupPrice, MAIN_BRANCH, putMany } from '../store.jsx';
 import { ask, askText, toast } from '../feedback.jsx';
 import { formatQty } from '../money.js';
 import { removalSplit } from '../fefo.js';
@@ -70,7 +70,7 @@ export function MedicineList() {
     if (v === null || v === undefined) return;
     const val = key === 'reorder' ? Number(v) : String(v).trim();
     if (key === 'reorder' && !(val >= 0)) return toast('A reorder level is 0 or more', 'warn');
-    await update((d) => { for (const p of rows) put(d, 'products', { ...d.products.find((x) => x.id === p.id) || p, [key]: val }); audit(d, user, 'Medicines changed', `${label} set to "${val}" for ${rows.length}: ${rows.slice(0, 5).map((p) => p.name).join(', ')}${rows.length > 5 ? '…' : ''}`, branchId); });
+    await update((d) => { const byId = new Map(d.products.map((x) => [x.id, x])); putMany(d, 'products', rows.map((p) => ({ ...byId.get(p.id) || p, [key]: val }))); audit(d, user, 'Medicines changed', `${label} set to "${val}" for ${rows.length}: ${rows.slice(0, 5).map((p) => p.name).join(', ')}${rows.length > 5 ? '…' : ''}`, branchId); });
     toast(`${label} saved for ${rows.length}`); done();
   };
   // the list is open to anyone who may see stock; changing it needs medicines.manage (the cloud enforces the same)
@@ -175,16 +175,18 @@ export function StockLevels() {
   const warn = db.settings.expiryWarnDays || 90;
   const multi = db.branches.length > 1;
   const ql = q.toLowerCase();
-  const rows = products.filter((p) =>
+  // the list and its totals are worked out once per change of medicines, search or filter (not on every redraw)
+  const rows = useMemo(() => products.filter((p) =>
     (!q || `${p.name} ${p.generic} ${p.barcode} ${p.category}`.toLowerCase().includes(ql)) &&
-    (filter === 'all' || (filter === 'instock' && p.stock > 0) || (filter === 'low' && p.stock <= (p.reorder || 0) && p.stock > 0) || (filter === 'out' && p.stock <= 0)));
+    (filter === 'all' || (filter === 'instock' && p.stock > 0) || (filter === 'low' && p.stock <= (p.reorder || 0) && p.stock > 0) || (filter === 'out' && p.stock <= 0))), [products, q, ql, filter]);
   const sv = useMemo(() => stockValue(rows, batchesOf), [rows, batchesOf]); // physical stock × the medicine's current cost, expired apart
   const total = sv.value;
-  const retail = rows.reduce((a, p) => a + Math.max(p.stock, 0) * (p.price || 0), 0);
+  const retail = useMemo(() => rows.reduce((a, p) => a + Math.max(p.stock, 0) * (p.price || 0), 0), [rows]);
   // step 26 (from the Flutter app): sorted and grouped by class, therapeutic area, form or shelf, per device
   const [order, setOrder] = useMedicineOrder();
   const [folded, toggleFold] = useFolded();
-  const shownRows = groupedRows(rows.slice(0, 500), order, folded);
+  const drawn = useProgressive(Math.min(rows.length, 500)); // the first rows at once, the rest just after
+  const shownRows = useMemo(() => groupedRows(rows.slice(0, drawn), order, folded), [rows, drawn, order, folded]);
   const cols = 8 + (multi ? 1 : 0) + (can('inventory.edit') ? 1 : 0);
   return (
     <div className="page">

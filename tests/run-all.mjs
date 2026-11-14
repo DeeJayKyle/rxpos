@@ -70,6 +70,7 @@ const SUITES = [
   ['screen tour', 'ui-tour.mjs', ['.output/tour']],
   ['screens fit phones, large text and long names', 'ui-fit.mjs', ['.output/fit-ui']],
   ['the till on a phone with large text', 'pos-phone.mjs', ['.output/pos-phone']],
+  ['speed with a big pharmacy on a slow phone CPU', 'perf-speed.mjs', ['.output/perf']],
   ['crash reports', 'v20-crash.mjs', ['.output/v20']],
   ['device & chat', 'v21-device-chat.mjs', ['.output/v21']],
   ['idle screen fit', 'idle-fit.mjs', ['.output/fit']],
@@ -161,7 +162,8 @@ fs.rmSync(state, { recursive: true, force: true });
 // run the tools with node directly: no shell, so folders with spaces in their names work
 const bin = (p) => path.join(root, 'node_modules', p);
 console.log(HUB ? 'Building the app and starting a local hub (server/hub.mjs)…' : 'Building the app and starting a local cloud…');
-const build = spawn(process.execPath, [bin('vite/bin/vite.js'), 'build'], { cwd: root });
+// RXPOS_NO_MINIFY=1: readable function names in CPU profiles (tests/perf-speed.mjs RXPOS_PERF_PROFILE)
+const build = spawn(process.execPath, [bin('vite/bin/vite.js'), 'build', ...(process.env.RXPOS_NO_MINIFY ? ['--minify', 'false'] : [])], { cwd: root });
 let buildOut = '';
 build.stdout.on('data', (d) => { buildOut += d; });
 build.stderr.on('data', (d) => { buildOut += d; });

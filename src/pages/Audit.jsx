@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Download, ShieldCheck } from 'lucide-react';
 import { useStore, dayOf, downloadFile, toCSV, MAIN_BRANCH } from '../store.jsx';
-import { SearchBox, Empty } from '../ui.jsx';
+import { SearchBox, Empty, useProgressive } from '../ui.jsx';
 
 /** Who did what, when and where. Entries sync from every device and cannot be edited in the app. */
 export default function Audit() {
@@ -16,6 +16,7 @@ export default function Audit() {
   const ql = q.toLowerCase();
   const rows = db.audit.filter((a) => (!who || a.user === who) && (!action || a.action === action) && (!from || dayOf(a.date) >= from) &&
     (!q || `${a.user} ${a.action} ${a.details}`.toLowerCase().includes(ql)));
+  const drawn = useProgressive(Math.min(rows.length, 1000));
 
   return (
     <div className="page">
@@ -33,7 +34,7 @@ export default function Audit() {
         <table>
           <thead><tr><th>When</th><th>Who</th><th>Action</th><th>Details</th>{db.branches.length > 1 && <th>Branch</th>}</tr></thead>
           <tbody>
-            {rows.slice(0, 1000).map((a) => (
+            {rows.slice(0, drawn).map((a) => (
               <tr key={a.id}>
                 <td className="nowrap">{new Date(a.date).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</td>
                 <td>{a.user}</td><td><span className="badge">{a.action}</span></td><td>{a.details}</td>

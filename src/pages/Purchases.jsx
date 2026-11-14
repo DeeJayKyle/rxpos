@@ -7,7 +7,7 @@ import { DATE_FORMATS } from '../dateformat.js';
 import { mainPack, packsOf, receiveInPacks } from '../packs.js';
 import { deviceSettings, setDevice } from '../device.js';
 import { isWeb } from '../platform.js';
-import { useStore, uid, today, now, put, del, move, addBatch, audit, downloadFile, toCSV, markupPrice, daysUntil, supplierPrices, MAIN_BRANCH } from '../store.jsx';
+import { useStore, useSyncState, uid, today, now, put, del, move, addBatch, audit, downloadFile, toCSV, markupPrice, daysUntil, supplierPrices, MAIN_BRANCH } from '../store.jsx';
 import { CASH } from '../finance.js';
 import { Modal, PdfButton, Tabs, Empty, PageTip, usePages, Pager, useSort, SortTh } from '../ui.jsx';
 import { ask, toast } from '../feedback.jsx';
@@ -74,7 +74,8 @@ function DateFormatChoice({ fmt }) {
 
 /** Receive stock from a supplier: every line becomes a batch (number + expiry) at this branch. */
 export function AddStock() {
-  const { db, products, update, fmt, user, branchId, syncCfg, syncStatus, can, numberFor } = useStore();
+  const { db, products, update, fmt, user, branchId, syncCfg, can, numberFor } = useStore();
+  const { syncStatus } = useSyncState();
   const location = useLocation();
   const s = db.settings;
   const dateFmt = useDateFormat();

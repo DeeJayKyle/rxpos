@@ -118,9 +118,10 @@ final navHistoryProvider = Provider<NavHistory>((ref) {
 });
 
 /// How long a page change takes: short and gliding; none when the device asks for less motion.
+/// Short: the new page is usable at once, the motion only eases it in (as the web app: src/mobilenav.jsx)
 Duration navDuration(NavMotion how) => switch (how) {
-      NavMotion.fade => const Duration(milliseconds: 220),
-      _ => const Duration(milliseconds: 320),
+      NavMotion.fade => const Duration(milliseconds: 140),
+      _ => const Duration(milliseconds: 220),
     };
 
 /// A page's way in and out: iOS push (the new page from the right, the old one drifting left), back the other way

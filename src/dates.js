@@ -8,5 +8,8 @@ export const today = () => localDate();
 /** The local day a record belongs to: plain dates ("2026-10-15") stay as they are, timestamps are converted */
 export const dayOf = (v) => { const s = String(v || ''); return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : s ? localDate(s) : ''; };
 export const monthOf = (v) => dayOf(v).slice(0, 7);
-export const daysUntil = (date) => Math.ceil((new Date(date) - new Date(today())) / 864e5);
+// today's midnight, worked out once a minute at most (daysUntil runs for every medicine in long lists)
+let midnight = { at: 0, ms: 0 };
+const todayMs = () => { const n = Date.now(); if (n - midnight.at > 60000) midnight = { at: n, ms: new Date(today()).getTime() }; return midnight.ms; };
+export const daysUntil = (date) => Math.ceil((new Date(date) - todayMs()) / 864e5);
 export const daysSince = (date) => Math.floor((Date.now() - new Date(date)) / 864e5);

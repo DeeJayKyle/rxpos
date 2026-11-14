@@ -8,7 +8,7 @@
 //   reload-app         restart the app (open sales and drafts survive, as with an update)
 import { useState } from 'react';
 import { Stethoscope, Loader2, HardDrive, RefreshCcw, Wifi, RotateCw, Sparkles, CheckCircle2, AlertTriangle } from 'lucide-react';
-import { useStore } from '../store.jsx';
+import { useStore, useSyncState } from '../store.jsx';
 import { aiCopilot } from '../cloud.js';
 import { idbKeys, idbDel } from '../idb.js';
 import { keepsData } from '../webpolicy.js';
@@ -46,7 +46,7 @@ const REPAIRS = {
 /** remote: the owner's Device errors tab (diagnose → the cloud's summary of a pharmacy's reported errors); the repairs
  *  then run on the affected device, so they are listed as steps instead of buttons */
 export default function AiSystemDoctor({ remote }) {
-  const store = useStore();
+  const store = { ...useStore(), ...useSyncState() };
   const { syncCfg, pullAll } = store;
   const [busy, setBusy] = useState('');
   const [dx, setDx] = useState(null);

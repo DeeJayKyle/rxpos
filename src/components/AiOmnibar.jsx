@@ -5,7 +5,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Pill, User, ReceiptText, CornerDownLeft, Sparkles, Wand2, Stethoscope, LineChart, WifiOff, Loader2} from 'lucide-react';
-import { useStore } from '../store.jsx';
+import { useStore, useSyncState } from '../store.jsx';
 import { aiCopilot } from '../cloud.js';
 import { searchProducts } from '../search.js';
 import { stageForTill } from './aiStage.js';
@@ -13,7 +13,8 @@ import { ownerFacts } from './aiFacts.js';
 import { deviceTelemetry } from './AiSystemDoctor.jsx';
 
 export default function AiOmnibar({ open, onClose, pages, commands = [] }) {
-  const { db, products, fmt, syncCfg, can, batchesOf, pending, syncStatus } = useStore();
+  const { db, products, fmt, syncCfg, can, batchesOf } = useStore();
+  const { pending, syncStatus } = useSyncState();
   const navigate = useNavigate();
   const [q, setQ] = useState('');
   const [active, setActive] = useState(0);

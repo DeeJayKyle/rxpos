@@ -9,7 +9,7 @@ import { deviceSettings, setDevice, onDevice, canSwitchView, canRotate, hasTray 
 import { SOUND_KINDS, TONE_CHOICES, playSound, setCustomSound, soundsOn, setSounds } from '../notify.jsx';
 import { askNotifyPermission, notifyPermission } from '../badges.js';
 import { toast, ask } from '../feedback.jsx';
-import { useStore, restoreLegacyCopy } from '../store.jsx';
+import { useStore, useSyncState, restoreLegacyCopy } from '../store.jsx';
 import { storage } from '../storage.js';
 import { historyMonthsOf } from '../sync.js';
 import { idbGet } from '../idb.js';
@@ -163,7 +163,8 @@ function Notices({ d }) {
  * storage upgrade. The web version is online only and keeps nothing on the computer (src/webpolicy.js).
  */
 function SyncStorage() {
-  const { pending, storageIssue, syncStatus, syncCfg, saveSyncCfg, syncNow, user, db, pullAll } = useStore();
+  const { syncCfg, saveSyncCfg, syncNow, user, db, pullAll } = useStore();
+  const { pending, storageIssue, syncStatus } = useSyncState();
   const [rejected, setRejected] = useState([]);
   const [est, setEst] = useState(null);
   const [legacy, setLegacy] = useState(false);
