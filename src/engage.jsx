@@ -13,6 +13,7 @@ import { popup, systemNotify, soundsOn, setSounds } from './notify.jsx';
 import { tipFor, HEALTH_TIPS } from './data/health-tips.js';
 import { isFeaturable } from './promote.js';
 import { ProductArt, TipArt } from './idleart.jsx';
+import { useIdleAi, productSubject, tipTopic } from './components/idleAi.js';
 import { messagePreview } from './pages/Chat.jsx';
 
 const addDays = (date, n) => new Date(new Date(date).getTime() + n * 864e5).toISOString().slice(0, 10); // plain dates: UTC arithmetic is exact
@@ -95,18 +96,28 @@ export function Spotlight() {
   const minutes = Number(db.settings.idleMinutes ?? 3);
   const [idle, wake] = useIdle(Math.max(minutes, 0.5) * 60000, features.promos !== false && minutes > 0);
   const ins = useInsights();
-  const slides = useMemo(() => {
-    // interleave the lists so the slideshow mixes kinds, with a health tip after every third medicine
+  // the medicines the screen may show (customer-safe only), mixed: what the AI picks from
+  const candidates = useMemo(() => {
     const lists = [ins.shortExpiry, ins.highMargin, ins.slow, ins.highValue];
     const items = [], seen = new Set();
     for (let i = 0; i < 10; i++) for (const l of lists) if (l[i] && !seen.has(l[i].p.id)) { seen.add(l[i].p.id); items.push({ ...l[i], id: l[i].p.id }); }
+    return items;
+  }, [ins]);
+  const ai = useIdleAi(candidates, { active: idle });
+  const slides = useMemo(() => {
+    // the AI's picks for today first (with its wording), then the rest; a health tip after every third medicine
+    const byId = new Map(candidates.map((x) => [x.id, x]));
+    const picked = ai.order.map((id) => byId.get(id)).filter(Boolean).map((x) => ({ ...x, ai: ai.cards.get(x.id) }));
+    const items = [...picked, ...candidates.filter((x) => !ai.cards.has(x.id))];
     const start = Math.floor(Date.now() / 864e5) * 3;
-    const tips = Array.from({ length: 5 }, (_, i) => HEALTH_TIPS[(start + i) % HEALTH_TIPS.length]).map(([text, source], i) => ({ kind: 'tip', id: 'tip' + i, text, source }));
+    const who = Array.from({ length: 5 }, (_, i) => HEALTH_TIPS[(start + i) % HEALTH_TIPS.length]).map(([text, source], i) => ({ kind: 'tip', id: 'tip' + i, text, source }));
+    const aiTips = ai.tips.slice(0, 2).map((t, i) => ({ kind: 'tip', id: 'aitip' + i, text: t.text, topic: t.topic, source: '', ai: true }));
+    const tips = [...aiTips, ...who].slice(0, 5);
     const out = [];
     items.slice(0, 18).forEach((x, i) => { out.push(x); if (i % 3 === 2 && tips.length) out.push(tips.shift()); });
     if (tips.length === 5) out.push(...tips.slice(0, items.length ? 2 : 5)); // few medicines to show: still mix in some tips
     return out;
-  }, [ins]);
+  }, [candidates, ai]);
   const [i, setI] = useState(0);
   const [dir, setDir] = useState(1);
   const [paused, setPaused] = useState(false);
@@ -124,7 +135,16 @@ export function Spotlight() {
   useEffect(() => { strip.current?.querySelector('.on')?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' }); }, [i]);
   if (!idle || !slides.length) return null;
   const s = slides[i % slides.length];
-  const tone = s.kind === 'tip' ? 'sky' : KIND[s.kind].tone;
+  const toneOf = (x) => (x.kind === 'tip' ? 'sky' : KIND[x.kind].tone);
+  const tone = toneOf(s);
+  const subjectOf = (x) => (x.kind === 'tip' ? 'tip:' + (x.topic || tipTopic(x.text)) : productSubject(x.p));
+  const pic = ai.picture(subjectOf(s), tone);
+  const side = (x, where) => x && (
+    <div className={'spot-side ' + where + ' tone-' + toneOf(x)} aria-hidden="true">
+      <span className="side-art">{x.kind === 'tip' ? <TipArt text={x.text} size={90} /> : <ProductArt p={x.p} size={90} />}</span>
+      <strong>{x.kind === 'tip' ? 'Health tip' : x.ai?.headline || x.p.name}</strong>
+    </div>
+  );
   const hour = new Date().getHours();
   return (
     <div className="spotlight" role="dialog" aria-label="Shop window" onClick={(e) => e.target === e.currentTarget && wake()}>
@@ -137,9 +157,14 @@ export function Spotlight() {
         </div>
         <div className="spot-row">
           <button className="spot-arrow" onClick={prev} aria-label="Previous"><ChevronLeft size={26} /></button>
+          {/* a 3D carousel: the cards before and after lean back on either side; the art follows the pointer a little */}
+          <div className="spot-deck" onPointerMove={(e) => { const r = e.currentTarget.getBoundingClientRect(); e.currentTarget.style.setProperty('--px', ((e.clientX - r.left) / r.width - 0.5).toFixed(3)); e.currentTarget.style.setProperty('--py', ((e.clientY - r.top) / r.height - 0.5).toFixed(3)); }}>
+          {slides.length > 2 && side(slides[(i - 1 + slides.length) % slides.length], 'left')}
+          {slides.length > 1 && side(slides[(i + 1) % slides.length], 'right')}
           <div className={'spot-card tone-' + tone + (dir > 0 ? ' from-right' : ' from-left')} key={s.id}
             onPointerDown={(e) => { swipe.current = e.clientX; }} onPointerUp={(e) => { const dx = e.clientX - (swipe.current ?? e.clientX); swipe.current = null; if (Math.abs(dx) > 50) (dx < 0 ? next : prev)(); }}>
             <div className="spot-art" aria-hidden="true">
+              {pic && !(s.kind !== 'tip' && s.p.image) && <img className="spot-ai-img" src={pic} alt="" />}
               <span className="orb o1" /><span className="orb o2" /><span className="orb o3" />
               {s.kind === 'tip' ? <TipArt text={s.text} /> : <ProductArt p={s.p} />}
             </div>
@@ -147,19 +172,21 @@ export function Spotlight() {
               <div className="spot-body">
                 <span className="spot-kind"><HeartPulse size={15} />{hour < 12 ? 'Morning' : hour < 17 ? 'Afternoon' : 'Evening'} health tip</span>
                 <h2 className="spot-tip">{s.text}</h2>
-                <p className="spot-note">Source: {s.source}. Ask the pharmacist if you have questions.</p>
-                <div className="row gap"><a className="btn primary" target="_blank" rel="noreferrer" href={whatsappLink('', `💚 Health tip from ${db.settings.name || 'your pharmacy'}: ${s.text} (${s.source})`)}><Share2 size={16} />Share this tip</a></div>
+                <p className="spot-note">{s.ai ? 'Written with AI for this season. Ask the pharmacist if you have questions.' : `Source: ${s.source}. Ask the pharmacist if you have questions.`}</p>
+                <div className="row gap"><a className="btn primary" target="_blank" rel="noreferrer" href={whatsappLink('', `💚 Health tip from ${db.settings.name || 'your pharmacy'}: ${s.text}${s.source ? ` (${s.source})` : ''}`)}><Share2 size={16} />Share this tip</a></div>
               </div>
             ) : (() => { const k = KIND[s.kind]; return (
               <div className="spot-body">
-                <span className="spot-kind"><k.Icon size={15} />Available now</span>
+                <span className="spot-kind"><k.Icon size={15} />{s.ai?.headline || 'Available now'}</span>
                 <h2>{s.p.name}</h2>
+                {s.ai?.line && <p className="spot-ai-line">{s.ai.line}</p>}
                 {s.p.generic && s.p.generic !== s.p.name && <p className="spot-generic">{s.p.generic}{s.p.form ? ` · ${s.p.form}` : ''}</p>}
                 <div className="spot-price">{fmt(s.p.price)}</div>
                 <p className="spot-note">In stock at {db.settings.name || 'our pharmacy'} — ask our pharmacist for advice.</p>
                 <div className="row gap"><a className="btn primary" target="_blank" rel="noreferrer" href={whatsappLink('', shareText(s.p, db.settings, fmt))}><Share2 size={16} />Share on WhatsApp</a></div>
               </div>
             ); })()}
+          </div>
           </div>
           <button className="spot-arrow" onClick={next} aria-label="Next"><ChevronRight size={26} /></button>
         </div>

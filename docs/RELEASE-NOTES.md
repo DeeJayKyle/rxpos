@@ -1,5 +1,16 @@
 # RxPOS release notes
 
+## React (classic) app 1.8.6 · Flutter app 2.1 (next build) · November 2026
+
+- **Shop window (idle screen) with AI:** once a day the AI picks the medicines worth showing from those the screen
+  may already show customers (never prescription-only or controlled), writes a short headline and a plain line for
+  each, and adds a few seasonal health tips, marked as written with AI. No cure claims, prices or doses. Each card
+  gets an illustration of its health topic: never a product, packaging or brand. The pictures are kept on the
+  device, so each topic is fetched once.
+- **3D carousel:** on wide screens the cards before and after lean back on either side of the one in front.
+- Offline, without the cloud or with AI switched off, the screen shows its own picks, the WHO tips and the drawn
+  pictures, as before.
+
 ## React (classic) app 1.8.5 · Flutter app 2.1 (next build) · November 2026
 
 - **Dashboard:** today's figures (sales, gross profit, expenses and transactions, each against yesterday) are back at

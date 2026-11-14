@@ -2600,6 +2600,45 @@ void main() {
     await done(tester);
   });
 
+  testWidgets('the idle screen with AI: today\'s picks and wording first, an AI tip, a topic picture kept on the device', (tester) async {
+    await tester.runAsync(signedIn);
+    await tester.runAsync(() => RecordStore(db).update((d) => d.saveSettings({'name': 'Sample Pharmacy', 'idleMinutes': 0.5})));
+    const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+    cloud.api['ai/idle-cards'] = (b) {
+      final ids = [for (final c in (b['candidates'] as List)) (c as Map)['id']];
+      return (200, {
+        'cards': [if (ids.contains('p1')) {'id': 'p1', 'headline': 'Ease everyday aches', 'line': 'Commonly used for headaches and fever; ask our pharmacist which is right for you.'}],
+        'tips': [{'text': 'Sleep under a treated mosquito net every night in the rainy season.', 'topic': 'net'}],
+      });
+    };
+    cloud.api['ai/idle-image'] = (b) => (200, {'image': png, 'subject': b['subject']});
+    await engageStart(tester);
+    await tester.pump(const Duration(seconds: 16)); // the day's cards are asked for a little after the app opens
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 200)));
+    await tester.pump(const Duration(seconds: 16));
+    await settle(tester);
+    expect(find.byKey(const Key('spotlight')), findsOneWidget);
+    expect(find.text('Ease everyday aches'), findsWidgets, reason: 'the AI pick comes first, with its headline');
+    expect(find.byKey(const Key('spotlight-ai-line')), findsOneWidget);
+    expect(cloud.calls.where((c) => c.$1 == 'ai/idle-cards'), hasLength(1));
+    final sent = cloud.calls.firstWhere((c) => c.$1 == 'ai/idle-cards').$2;
+    final sentIds = [for (final c in (sent['candidates'] as List)) (c as Map)['id']];
+    final products = (await tester.runAsync(() => RecordStore(db).rows('products')))!;
+    expect(sentIds, contains('p1'));
+    expect(products.where((p) => sentIds.contains(p['id'])).every((p) => p['rx'] != true && p['controlled'] != true), isTrue, reason: 'only medicines the screen may show customers');
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 300)));
+    await settle(tester);
+    expect(cloud.calls.where((c) => c.$1 == 'ai/idle-image'), isNotEmpty, reason: 'a topic picture for the card shown');
+    expect(find.byKey(const Key('spotlight-ai-picture')), findsOneWidget);
+    // the AI tip, said to be written with AI
+    for (var k = 0; k < 4 && find.textContaining('Written with AI').evaluate().isEmpty; k++) {
+      await tester.tap(find.byTooltip('Next'));
+      await settle(tester, 3);
+    }
+    expect(find.textContaining('Written with AI'), findsOneWidget);
+    await done(tester);
+  });
+
   testWidgets('the idle screen and the pop-ups on a phone fit the screen', (tester) async {
     final day = today();
     await tester.runAsync(signedIn);
