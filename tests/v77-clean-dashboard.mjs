@@ -90,7 +90,14 @@ check('…and "Back to the standard dashboard" restores the clean layout', JSON.
 check('sidebar groups show how many pages they hold', await p.evaluate(() => [...document.querySelectorAll('.nav-title .nav-count')].length >= 4));
 await p.evaluate(() => [...document.querySelectorAll('.nav-title')].find((x) => /Finance/.test(x.textContent))?.click()); await wait(500);
 check('a group opens with its pages', await p.evaluate(() => { const g = [...document.querySelectorAll('.nav-group')].find((x) => /Finance/.test(x.querySelector('.nav-title')?.textContent || '')); return g.classList.contains('open') && [...g.querySelectorAll('a')].some((a) => !a.hidden); }));
+await p.evaluate(() => { location.hash = '#/customers'; }); await wait(900);
+await p.evaluate(() => document.activeElement?.blur()); await p.keyboard.press('g'); await p.keyboard.press('g'); await wait(500);
+await p.evaluate(() => { location.hash = '#/'; }); await wait(900);
+check('no Recent list; Pinned is a group that folds', await p.evaluate(() => !document.querySelector('a.nav-recent') && /Pinned/.test(document.querySelector('.nav-quick .nav-title')?.textContent || '')));
 await p.screenshot({ path: path.join(out, 'sidebar-open.png'), clip: { x: 0, y: 0, width: 260, height: 1000 } });
+await p.evaluate(() => document.querySelector('.nav-quick .nav-title').click()); await wait(300);
+check('…Pinned folds', await p.evaluate(() => document.querySelector('.nav-quick').classList.contains('collapsed')));
+await p.screenshot({ path: path.join(out, 'sidebar-pinned-folded.png'), clip: { x: 0, y: 0, width: 260, height: 600 } });
 await p.evaluate(() => [...document.querySelectorAll('.nav-add')].find((x) => /Receive stock/.test(x.title))?.click()); await wait(800);
 check('the + of Medicine Inventory opens Add Stock', await p.evaluate(() => location.hash.includes('add-stock')));
 await p.evaluate(() => { location.hash = '#/'; }); await wait(1200);

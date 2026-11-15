@@ -537,18 +537,20 @@ function Shell() {
           {(() => {
             const byTo = Object.fromEntries(pages.map((pg) => [pg.to, pg]));
             const pinned = nav.pins.map((t) => byTo[t]).filter(Boolean);
-            const recent = nav.recent.filter((t) => t !== here && !nav.pins.includes(t)).map((t) => byTo[t]).filter(Boolean).slice(0, 4);
-            const item = (pg, kind) => <NavLink key={kind + pg.to} to={pg.to} end title={rail ? pg.label : undefined} className={'nav-' + kind}><pg.Icon size={17} /><span className="grow">{pg.label}</span></NavLink>;
-            return (<>
-              {pinned.length > 0 && <div className="nav-group nav-quick"><div className="nav-title static">Pinned</div>{pinned.map((pg) => item(pg, 'pin'))}</div>}
-              {recent.length > 0 && !rail && <div className="nav-group nav-quick"><div className="nav-title static">Recent</div>{recent.map((pg) => item(pg, 'recent'))}</div>}
-            </>);
+            // the owner's choice (2026-11-15): no Recent list; Pinned folds like every other group
+            const shut = !rail && collapsed.Pinned;
+            return pinned.length > 0 && (
+              <div className={'nav-group nav-quick' + (shut ? ' collapsed' : ' open')}>
+                <div className="nav-title-row"><button className="nav-title" aria-expanded={!shut} onClick={() => toggleGroup('Pinned')}><ChevronDown size={13} className="nav-chev" />Pinned<span className="nav-count">{pinned.length}</span></button></div>
+                {pinned.map((pg, n) => <NavLink key={'pin' + pg.to} to={pg.to} end style={{ '--i': n }} hidden={shut && pg.to !== location.pathname} title={rail ? pg.label : undefined} className="nav-pin"><pg.Icon size={17} /><span className="grow">{pg.label}</span></NavLink>)}
+              </div>
+            );
           })()}
           {groups.map((g, i) => { const add = QUICK_ADD[g.group] && can(QUICK_ADD[g.group][2]) ? QUICK_ADD[g.group] : null; const alerts = g.items.reduce((a, it) => a + (it[4] && counts[it[4]] > 0 ? counts[it[4]] : 0), 0); return (
             <div key={i} className={'nav-group' + (collapsed[g.group] ? ' collapsed' : ' open')}>
               {g.group && <div className="nav-title-row">
                 <button className="nav-title" aria-expanded={!collapsed[g.group]} onClick={() => toggleGroup(g.group)}>
-                  <ChevronDown size={13} className="nav-chev" />{g.group}<span className="nav-count" title={`${g.items.length} pages`}>{g.items.length}</span>
+                  <ChevronDown size={13} className="nav-chev" /><span className="nav-name">{g.group}</span><span className="nav-count" title={`${g.items.length} pages`}>{g.items.length}</span>
                   {collapsed[g.group] && alerts > 0 && <span className="count">{alerts}</span>}
                 </button>
                 {add && <button type="button" className="nav-add" title={add[0]} aria-label={add[0]} onClick={() => navigate(add[1], add[3] ? { state: add[3] } : undefined)}><Plus size={14} /></button>}

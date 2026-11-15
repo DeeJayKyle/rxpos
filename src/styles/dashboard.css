@@ -148,4 +148,6 @@
 @keyframes nav-slide { from { opacity: 0; transform: translateX(-8px); } }
 .sidebar .nav-group.open > a { animation: nav-slide .3s cubic-bezier(.2, .8, .2, 1) both; animation-delay: calc(var(--i, 0) * 28ms); }
 @media (prefers-reduced-motion: reduce) { .sidebar .nav-group.open > a, .nav-chev { animation: none; transition: none; } }
-.nav-title-row .nav-title { white-space: nowrap; overflow: hidden; min-width: 0; }
+.nav-title-row .nav-title { white-space: nowrap; min-width: 0; }
+.nav-name { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.nav-title .nav-count, .nav-title .count { flex: none; }

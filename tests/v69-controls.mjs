@@ -59,10 +59,13 @@ const helpText = await p.evaluate(() => document.querySelector('.modal')?.innerT
 check('? shows the keys for every page, lists and the mouse', /Keyboard and mouse/.test(helpText) && /G then C/.test(helpText) && /Double-click/.test(helpText) && /Right-click/.test(helpText), helpText.slice(0, 200));
 await key('Escape');
 
-// pin and recent
+// pin (the Recent list was removed)
 await key('g', 'c'); await focusBody(); await key('g', 'g');
 check('G then G pins the page to the top of the menu', await p.evaluate(() => [...document.querySelectorAll('.nav-quick a.nav-pin')].some((a) => /Customers/.test(a.innerText))));
-check('recent pages are listed in the menu', await p.evaluate(() => [...document.querySelectorAll('.nav-quick a.nav-recent')].some((a) => /Sales History/.test(a.innerText))));
+check('no Recent list in the menu (the owner\'s choice, 2026-11-15)', await p.evaluate(() => !document.querySelector('a.nav-recent')));
+await p.evaluate(() => [...document.querySelectorAll('.nav-title')].find((x) => /Pinned/.test(x.textContent)).click()); await wait(300);
+check('…and Pinned folds like every other group', await p.evaluate(() => document.querySelector('.nav-quick').classList.contains('collapsed')));
+await p.evaluate(() => [...document.querySelectorAll('.nav-title')].find((x) => /Pinned/.test(x.textContent)).click()); await wait(300);
 
 // Ctrl+K commands
 await p.keyboard.down('Control'); await p.keyboard.press('k'); await p.keyboard.up('Control'); await wait(300);

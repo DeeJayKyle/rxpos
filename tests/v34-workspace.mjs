@@ -94,7 +94,7 @@ await p.keyboard.press('Escape');
 await go('/inventory');
 const invSub = await p.evaluate(() => document.querySelector('.page-head .sub')?.textContent || '');
 await go('/reports');
-await p.evaluate(() => [...document.querySelectorAll('.tab')].find((x) => /Stock Valuation/.test(x.textContent))?.click()); await wait(400);
+await p.evaluate(() => [...document.querySelectorAll('.report-groups button')].find((x) => /^Stock$/.test(x.textContent))?.click()); await wait(400);
 const rep = await p.evaluate(() => Object.fromEntries([...document.querySelectorAll('.stat')].map((s) => [s.querySelector('small')?.textContent.trim(), s.querySelector('strong')?.textContent.trim()])));
 // at the medicine's cost: Amoxyl good batch 10 × 600 + Zinc 30 × 90 = 8,700; expired (Amoxyl old batch, 2 units) not included
 check('Stock Valuation: stock at cost, expired excluded (8,700)', /8,700/.test(rep['Stock at cost'] || ''), JSON.stringify(rep));

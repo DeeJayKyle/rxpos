@@ -245,7 +245,7 @@ await clickText('button', /Start again|Discard/);
 // ---------- profit & margins ----------
 await owner('/tenants/' + tid + '/records', { records: [P('p-cip', 'Ciprofloxacin 500mg tabs', { shelf: 'B2', barcode: '6001003', price: 520 })] });
 await A.click('.pill.clock'); await wait(3000);
-await go('/reports'); await clickText('.tab', /Profit & margins/); await wait(500);
+await go('/reports'); await clickText('.report-groups button', /^Money$/); await wait(300); await clickText('.tab', /Profit & margins/); await wait(500);
 await setVal('.page-head input[type=date]', new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10)); await wait(500);
 const prof = await A.evaluate(() => document.querySelector('.page')?.innerText.replace(/\s+/g, ' ') || '');
 check('Reports → Profit & margins: gross profit and margin over the period', /Gross profit UGX [\d,]+/i.test(prof) && /Gross margin \d+%/i.test(prof), prof.slice(0, 200));
