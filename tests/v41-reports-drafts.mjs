@@ -98,10 +98,13 @@ check('tiles carry their meaning: expenses orange, profit violet', await A.evalu
 await wait(2500); await A.screenshot({ path: `${out}/dashboard-vivid.png`, fullPage: true });
 
 // ---- dashboard charts ----
-check('daily sales chart with total, average and best day', /Daily average/.test(await text(A)) && /Best day/.test(await text(A)) && await A.evaluate(() => document.querySelectorAll('.trend-svg').length >= 2));
+check('daily sales chart with total, average and best day', /Daily average/.test(await text(A)) && /Best day/.test(await text(A)) && await A.evaluate(() => document.querySelectorAll('.trend-svg').length >= 1));
 await clickText(A, '.seg button', /^90 days$/); await wait(300);
 check('…switches to 90 days (with real dates and "Today")', /last 90 days/.test(await text(A)) && await A.evaluate(() => [...document.querySelectorAll('.trend-axis')].some((x) => x.textContent === 'Today')));
+// one sales chart with a Daily / Monthly switch (the clean dashboard, 2026-11-15)
+await clickText(A, '.chart-card .seg button', /^Monthly$/); await wait(400);
 check('money in & out month by month: sales, purchases, expenses, gross profit', await A.evaluate(() => ['in', 'purch', 'exp', 'profit'].every((c) => document.querySelector('.trend-series.' + c))));
+await clickText(A, '.chart-card .seg button', /^Daily$/); await wait(400);
 check('top 10 ranks by amount, with quantity and profit under each name', /Sample Tabs 500mg/.test(await text(A, '.top-list')) && /sold · profit/.test(await text(A, '.top-list')));
 await clickText(A, '.seg button', /^Quantity$/); await wait(200);
 check('…and can rank by quantity', /^1\s*Sample Tabs/.test((await text(A, '.top-list')).trim()));
@@ -126,7 +129,7 @@ await wait(2500); await A.screenshot({ path: `${out}/sales-lines.png`, fullPage:
 // ---- Sales History ----
 await go(A, '#/sales'); await A.evaluate(() => { for (const i of document.querySelectorAll('.page-head input[type=date]')) { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(i, ''); i.dispatchEvent(new Event('input', { bubbles: true })); i.dispatchEvent(new Event('change', { bubbles: true })); } }); await wait(500);
 check('Sales History: 25 per page with page buttons (61 sales)', await A.evaluate(() => [...document.querySelectorAll('.page tbody tr')].filter((r) => !r.classList.contains('total-row')).length === 25 && /of 61/.test(document.querySelector('.pager')?.innerText || '')));
-check('…separate time column and the customer\'s phone', await A.evaluate(() => [...document.querySelectorAll('.page thead th')].some((x) => /^Time/.test(x.textContent.trim())) && /0772000111/.test(document.querySelector('.page tbody').innerText)));
+check('…the time under the date, and the customer\'s phone', await A.evaluate(() => /\d{1,2}:\d{2}/.test(document.querySelector('.page tbody td[data-label=Date] small')?.textContent || '') && /0772000111/.test(document.querySelector('.page tbody').innerText)));
 check('…payment shown as a labelled chip', await A.evaluate(() => !!document.querySelector('.pay-chip.cash') && !!document.querySelector('.pay-chip.momo')));
 await select(A, 'Payment', 'Mobile Money'); await wait(400);
 check('…filter by payment (30 Mobile Money sales)', /30 sales/.test(await text(A, 'tr.total-row')), await text(A, 'tr.total-row'));

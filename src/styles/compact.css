@@ -181,3 +181,15 @@ td small, td .small { font-size: 11.5px; }
   .card.table-wrap > table:not(.phone-rows):has(td.empty) thead { display: none; }
   .card.table-wrap > table td.empty { white-space: normal; }
 }
+
+/* tablets: the floating bottom bar never hides the end of a page */
+@media (min-width: 641px) and (max-width: 900px) { .page { padding-bottom: 110px; } }
+/* the till keeps its dense sale lines (at least 7 in view on a 1440 × 900 screen) */
+.cart-line input, .cart-line select { min-height: 24px; padding: 2px 7px; font-size: 12.5px; }
+.pos .totals input, .pos-cart .totals input { min-height: 30px; padding: 3px 10px; }
+.pos .cart-line { padding: 2px 0; }
+.cart-line .btn, .cart-line .icon-btn { min-height: 28px; }
+.cart-line .icon-btn { width: 28px; height: 28px; }
+.lay-std .pos-cart .cart-line { padding-top: 2px; padding-bottom: 2px; }
+.pos-cart .cart-line input, .pos-cart .cart-line select { min-height: 20px; height: 22px; padding: 1px 6px; font-size: 12px; }
+.pos-cart .totals { padding-top: 10px; padding-bottom: 10px; }

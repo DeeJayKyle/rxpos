@@ -13,7 +13,7 @@ const mk = async (ctx) => { const p = await ctx.newPage(); await p.setViewport({
 const text = (p) => p.evaluate(() => document.body.innerText);
 const clickText = (p, t, sel = 'button') => p.evaluate((t, sel) => { const el = [...document.querySelectorAll(sel)].find((x) => x.textContent.trim().includes(t)); el?.click(); return !!el; }, t, sel);
 const fill = async (p, label, value, root = 'body') => {
-  const h = await p.evaluateHandle((l, root) => [...document.querySelector(root).querySelectorAll('label.field')].find((f) => f.querySelector('span')?.textContent.trim().startsWith(l))?.querySelector('input,select,textarea'), label, root);
+  const h = await p.evaluateHandle((l, root) => [...[...document.querySelectorAll(root)].at(-1).querySelectorAll('label.field')].find((f) => f.querySelector('span')?.textContent.trim().startsWith(l))?.querySelector('input,select,textarea'), label, root);
   const el = h.asElement(); if (!el) throw new Error('no field ' + label);
   if ((await el.evaluate((e) => e.tagName)) === 'SELECT') await el.select(value); else { await el.focus(); await p.keyboard.down('Control'); await p.keyboard.press('KeyA'); await p.keyboard.up('Control'); await p.keyboard.press('Backspace'); await el.type(value); }
 };
@@ -130,7 +130,8 @@ check('spotlight has a WhatsApp share link', /wa\.me\/\?text=/.test(share));
 const before = p.url();
 await p.mouse.click(120, 203); await wait(600);
 check('a tap closes the spotlight without clicking what is underneath', !(await p.$('.spotlight')) && p.url() === before, p.url());
-await p.click('.bell .icon-btn'); await wait(300);
+// the dashboard has its own bell in its header (the top bar's steps aside there on wide screens)
+await p.evaluate(() => [...document.querySelectorAll('.bell .icon-btn[aria-label^="Notifications"]')].find((b) => b.offsetParent)?.click()); await wait(300);
 const bell = await p.evaluate(() => document.querySelector('.bell-menu')?.innerText || '');
 check('notification bell lists expiring stock and today\'s event', /expires? within 30 days/.test(bell) && /Supplier delivery/.test(bell), bell.replace(/\n/g, ' | ').slice(0, 160));
 await p.screenshot({ path: out + '/09-bell.png' });

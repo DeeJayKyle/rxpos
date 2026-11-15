@@ -13,7 +13,7 @@
 .date-pill { display: inline-flex; align-items: center; gap: 8px; height: 42px; padding: 0 14px; border-radius: 12px; border: 1.5px solid var(--text); color: var(--text); font-weight: 700; text-decoration: none; background: var(--surface); }
 .date-pill:hover { background: var(--surface-2); }
 /* the top bar's own search and bell step aside on the dashboard on wide screens (the header has them) */
-@media (min-width: 900px) { .shell.on-home .topbar .search-trigger, .shell.on-home .topbar > .bell { display: none; } }
+@media (min-width: 900px) { .shell.on-home .topbar .search-trigger, .shell.on-home .topbar > .bell:has(> button[aria-label^='Notifications']) { display: none; } }
 @media (max-width: 899px) { .dash-search, .dash-bell { display: none; } }
 
 .dash-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 4px 0 14px; flex-wrap: wrap; }
