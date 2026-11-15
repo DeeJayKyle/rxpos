@@ -800,7 +800,10 @@ export default function POS({ mode = 'retail' }) {
               className={'cart-line' + (pulse[l.id] ? (pulse[l.id] % 2 ? ' pulse-a' : ' pulse-b') : '') + (picked.has(l.id) ? ' picked' : '') + (cart.length > 1 && lineAt?.id === l.id && cursor >= 0 ? ' cursor' : '')} onClick={() => setCursor(cart.indexOf(l))}>
               {useAdvancedLayout && <span className="line-num" aria-label={`Line ${cart.indexOf(l) + 1}`}>{cart.indexOf(l) + 1}</span>}
               <input type="checkbox" className="line-check" checked={picked.has(l.id)} onChange={() => togglePick(l.id)} aria-label={`Select ${l.name}`} />
-              <div className="grow"><strong>{l.name}</strong>{l.rx && <span className="badge">Rx</span>}
+              <div className="grow"><strong>{l.name}</strong>
+                {/* safety in words, not colour alone */}
+                {isCd(l) ? <span className="badge safety-cd" title="Controlled drug: recorded in the register">CD · register</span> : isRx(l) && <span className="badge safety-rx" title="Prescription only">Rx only</span>}
+                {l.allowExpired && <span className="badge safety-expired" title={`Expired stock, reason: ${l.expiredReason || '—'}`}><AlertTriangle size={11} aria-hidden="true" /> Expired stock · reason recorded</span>}
                 {Number(l.price) < (l.cost || 0) && <small className="text-danger below-cost"> below cost{can('reports') ? ` (${fmt(l.cost)})` : ''}</small>}
                 <small className="muted">
                   {packsOf(l.id).length > 0 && packsOf(l.id).length <= 2 ? (
@@ -1046,6 +1049,7 @@ export default function POS({ mode = 'retail' }) {
               <strong className="num">{fmt(done.total)}</strong>
             </div>
           )}
+          {!done.proforma && !done.reprint && <SaleSaved />}
           <Receipt sale={done} />
           {!done.proforma && <SendReceipt sale={done} />}
           <div className="form-actions no-print">
@@ -1136,5 +1140,23 @@ function SendReceipt({ sale }) {
       </div>
       {sent && <span className="text-ok small">{sent === 'sms' ? '✓ Sent by SMS' : '✓ Opened WhatsApp with the receipt'}</span>}
     </div>
+  );
+}
+
+/** Where the sale is now: saved on this device, waiting to reach the cloud, or synced. Other devices' stock only
+ * changes once it has synced, so the till never implies more than it knows. */
+function SaleSaved() {
+  const { syncStatus, pending } = useSyncState();
+  const st = syncStatus?.state;
+  const offline = st === 'offline' || (typeof navigator !== 'undefined' && navigator.onLine === false);
+  const [text, tone] = st === 'off'
+    ? ['Saved on this device. This device does not sync with the cloud.', 'ok']
+    : pending > 0 || st === 'syncing' || offline || st === 'error'
+      ? [`Saved on this device${keepsData() ? '' : ' (in this browser tab)'} · not synced yet${offline ? ' (offline)' : ''}. Other devices see this sale and its stock change once it syncs.`, 'warn']
+      : ['Saved and synced to the cloud.', 'ok'];
+  return (
+    <p className={'sale-saved small ' + tone} role="status" data-testid="sale-saved">
+      {tone === 'ok' ? <CheckCircle2 size={14} aria-hidden="true" /> : <Loader2 size={14} aria-hidden="true" />} {text}
+    </p>
   );
 }

@@ -207,3 +207,11 @@ label.check.small { display: inline-flex; align-items: center; gap: 6px; min-hei
 .report-scope { margin: 4px 0 10px; color: var(--muted); line-height: 1.45; }
 .report-scope strong { color: var(--text); }
 .report-scope .block { display: block; margin-top: 2px; }
+/* POS: safety in words (not colour alone) and where a finished sale is (saved here / synced) */
+.cart-line .badge.safety-rx, .cart-line .badge.safety-cd, .cart-line .badge.safety-expired { margin-left: 6px; font-size: 11px; font-weight: 700; }
+.cart-line .badge.safety-cd { background: color-mix(in srgb, var(--danger, #c0392b) 14%, transparent); color: var(--danger, #c0392b); }
+.cart-line .badge.safety-expired { background: color-mix(in srgb, var(--warn, #b45309) 16%, transparent); color: var(--warn, #b45309); display: inline-flex; align-items: center; gap: 3px; }
+.sale-saved { display: flex; align-items: flex-start; gap: 6px; margin: 4px 0 8px; padding: 6px 10px; border-radius: 8px; line-height: 1.4; }
+.sale-saved svg { flex: none; margin-top: 2px; }
+.sale-saved.ok { background: color-mix(in srgb, var(--ok, #15803d) 10%, transparent); color: var(--text); }
+.sale-saved.warn { background: color-mix(in srgb, var(--warn, #b45309) 12%, transparent); color: var(--text); }

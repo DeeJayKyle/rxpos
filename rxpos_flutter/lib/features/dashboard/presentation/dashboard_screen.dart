@@ -51,7 +51,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final pf = periodFigures(f.byDay, period);
     final c = pf.cur, pv = pf.prev, vs = vsWords[period]!;
     final isToday = period == 'today';
-    final multiBranch = (ref.watch(tableProvider('branches')).value ?? const []).length > 1; // expenses are pharmacy-wide
+    final branchRows = ref.watch(tableProvider('branches')).value ?? const [];
+    final multiBranch = branchRows.length > 1; // expenses are pharmacy-wide
+    final branchName = multiBranch ? '${branchRows.where((b) => b['id'] == data.branch).firstOrNull?['name'] ?? 'Main branch'} · ' : '';
     final day = today();
     final range = pf.range;
     final topFrom = isToday ? '${day.substring(0, 8)}01' : range.from, topWords = isToday ? 'this month' : periodWords[period]!;
@@ -173,6 +175,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 : TextButton.icon(key: const Key('edit-widgets-open'), onPressed: () => showEditWidgets(context, layout, save), icon: const Icon(Icons.tune, size: 18), label: const Text('Edit widgets')),
           ]);
         }),
+        // what the figures cover, in words
+        Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Text('$branchName${isToday ? 'today' : periodWords[period]} · sales incl. tax, refunds left out · gross profit = sales less tax and cost of goods',
+              key: const Key('dash-scope'), style: Theme.of(context).textTheme.bodySmall),
+        ),
         const SizedBox(height: 12),
         LayoutBuilder(builder: (context, box) {
           final cols = box.maxWidth >= 1100 ? 12 : box.maxWidth >= 760 ? 6 : 1;

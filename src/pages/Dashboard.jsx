@@ -46,7 +46,7 @@ export function dashLayout(d = deviceSettings()) {
 const saveDash = (patch) => setDevice({ dash: { ...(deviceSettings().dash || {}), ...patch } });
 
 export default function Dashboard() {
-  const { db, products, fmt, user, branchId, features, batchesOf, day, can } = useStore();
+  const { db, products, fmt, user, branchId, branch, features, batchesOf, day, can } = useStore();
   const [topBy, setTopBy] = useState('amount');
   const [layout, setLayout] = useState(dashLayout);
   useEffect(() => onDevice((d) => setLayout(dashLayout(d))), []);
@@ -224,7 +224,7 @@ export default function Dashboard() {
         <div className="welcome-text">
           <span className="welcome-store"><Store size={14} />{db.settings.name}</span>
           <h1>{greet}, {user.name.split(' ')[0]}</h1>
-          <div className="sub">Here&apos;s your pharmacy {isToday ? 'today' : PERIOD_WORDS[period]}</div>
+          <div className="sub">Here&apos;s {db.branches.length > 1 ? (branch?.name || 'this branch') : 'your pharmacy'} {isToday ? 'today' : PERIOD_WORDS[period]} <span className="muted" title="Sales are completed receipts at this branch (refunds left out), including tax. Gross profit is sales less tax and the cost recorded on each line.">· sales incl. tax, refunds left out</span></div>
         </div>
         <div className="dash-tools">
           <button type="button" className="dash-search" onClick={() => window.dispatchEvent(new Event('rxpos:search'))}><Search size={16} /><span>Search medicines, sales…</span></button>
