@@ -47,10 +47,10 @@ const heads = () => p.evaluate(() => [...document.querySelectorAll('table.stock-
 check('columns start in the usual order', (await heads()).startsWith('Medicine|Qty|Unit cost'), await heads());
 await p.click('button[aria-label="Move Medicine right"]'); await wait(200);
 await p.click('button[aria-label="Move Expiry left"]'); await wait(200);
-check('a column moves with its arrows', (await heads()) === 'Qty|Medicine|Unit cost|Line total|New retail price|Expiry|Batch', await heads());
+check('a column moves with its arrows', (await heads()) === 'Qty|Medicine|Unit cost (worked out)|Line total|New retail price|Expiry|Batch', await heads());
 check('…and the cells move with it', await p.evaluate(() => { const tds = [...document.querySelectorAll('table.stock-lines tbody tr:first-child td:not(.line-no)')]; return tds[0].dataset.label === 'Qty' && tds[1].dataset.label === 'Medicine' && tds[5].dataset.label === 'Expiry'; }));
 await p.reload({ waitUntil: 'networkidle2' }); await wait(2000);
-check('the order is kept on this device after a reload', (await heads()) === 'Qty|Medicine|Unit cost|Line total|New retail price|Expiry|Batch', await heads());
+check('the order is kept on this device after a reload', (await heads()) === 'Qty|Medicine|Unit cost (worked out)|Line total|New retail price|Expiry|Batch', await heads());
 await p.evaluate(() => [...document.querySelectorAll('button')].find((x) => /reset column order/.test(x.textContent))?.click()); await wait(300);
 check('"reset column order" puts them back', (await heads()).startsWith('Medicine|Qty|Unit cost'), await heads());
 
