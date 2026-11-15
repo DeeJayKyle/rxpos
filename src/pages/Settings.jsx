@@ -82,7 +82,7 @@ export default function Settings() {
     <div className={'page settings-page' + (tab ? ' has-section' : '')}>
       <div className="page-head"><div><h1>Settings</h1><div className="sub">{db.settings.name} · shared by every device</div></div></div>
       <div className="settings-layout">
-        <aside className="settings-side" role="tablist" aria-label="Settings sections" aria-orientation="vertical">
+        <aside className="settings-side" aria-label="Settings sections">
           <SettingsSearch can={can} />
           <SettingsGroup label="Quick switches">
             <ToggleRow icon={Printer} label="Print receipts automatically" desc="After each sale" checked={!!db.settings.autoPrint} onChange={(v) => quick('autoPrint', v)} />

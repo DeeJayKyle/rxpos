@@ -93,7 +93,7 @@ export function SettingsGroup({ label, children }) {
 /** A row that opens a section: icon, name, one line, › (a tab, so the keyboard and screen readers know it) */
 export function SettingsRow({ icon: Icon, label, desc, active, onClick, tab = true }) {
   return (
-    <button type="button" role={tab ? 'tab' : undefined} aria-selected={tab ? !!active : undefined} className={'settings-row' + (tab ? ' tab' : '') + (active ? ' active' : '')} onClick={onClick}>
+    <button type="button" aria-current={active ? 'page' : undefined} className={'settings-row' + (tab ? ' tab' : '') + (active ? ' active' : '')} onClick={onClick}>
       {Icon && <span className="settings-icon"><Icon size={17} /></span>}
       <span className="settings-text"><strong>{label}</strong>{desc && <small>{desc}</small>}</span>
       <ChevronRight size={16} className="settings-chevron" aria-hidden="true" />
