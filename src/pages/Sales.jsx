@@ -1,12 +1,12 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { closedSet, inClosedDay } from '../dayclose.js';
 import { useLocation } from 'react-router-dom';
-import { Download, Printer, Undo2, Eye, Pencil, Trash2, Plus, History, FileText } from 'lucide-react';
+import { Download, Printer, Undo2, Eye, Pencil, Trash2, Plus, History, FileText, PauseCircle } from 'lucide-react';
 import { useStore, dayOf, downloadFile, toCSV, put, move, now, audit, allocate, MAIN_BRANCH, DEFAULT_PAYMENT_METHODS } from '../store.jsx';
 import { useOlderHistory, olderNote } from '../history.js';
 import { ViewSwitch, BoardView, GalleryView, savedView, saveView } from '../components/DataViews.jsx';
 import { saleStatus } from '../components/BentoDashboard.jsx';
-import { Modal, SearchBox, Empty, PdfButton, ReceiptPdfButton, Tabs, PayChip, usePages, Pager, useSort, SortTh } from '../ui.jsx';
+import { Modal, SearchBox, Empty, PdfButton, ReceiptPdfButton, PayChip, usePages, Pager, useSort, SortTh, SubViews } from '../ui.jsx';
 import { ask, toast } from '../feedback.jsx';
 import { Barcode } from '../barcode.jsx';
 // step 22: what the client still owes on a sale (an insurer's share is billed to the insurer); shown on the receipt
@@ -225,7 +225,7 @@ export default function Sales() {
               foot: ['', '', '', '', '', 'Total (excl. refunds)', fmt(valid.reduce((a, s) => a + s.total, 0))] }]} />
         </div>
       </div>
-      <Tabs tabs={[['sales', 'Sales'], ['drafts', <>Held sales{draftCount > 0 && <span className="badge-count">{draftCount}</span>}</>]]} value={tab} onChange={setTab} />
+      <SubViews value={tab} onChange={setTab} main="sales" mainLabel="All sales" views={[['drafts', 'Held sales', draftCount, PauseCircle]]} />
       {tab === 'drafts' && <DraftsList kind="sale" />}
       {tab === 'sales' && <>
       <div className="report-filters">
@@ -238,20 +238,19 @@ export default function Sales() {
       {dv === 'gallery' && <GalleryView rows={sorted.rows} card={saleCard} onOpen={setView} onMenu={saleMenu} />}
       {dv !== 'table' && menu.node}
       {dv === 'table' && <div className="card table-wrap">
-        <table>
-          <thead><tr><SortTh s={sorted} k="number">Receipt</SortTh><SortTh s={sorted} k="date">Date</SortTh><th>Time</th>{db.branches.length > 1 && <th>Branch</th>}<SortTh s={sorted} k="customer">Customer</SortTh><th>Phone</th><SortTh s={sorted} k="payment">Payment</SortTh><th>Status</th><SortTh s={sorted} k="total" className="num">Total</SortTh><SortTh s={sorted} k="cashier">Cashier</SortTh><th /></tr></thead>
+        <table className="phone-rows">
+          <thead><tr><SortTh s={sorted} k="number">Receipt</SortTh><SortTh s={sorted} k="date">Date</SortTh>{db.branches.length > 1 && <th>Branch</th>}<SortTh s={sorted} k="customer">Customer</SortTh><th>Phone</th><SortTh s={sorted} k="payment">Payment</SortTh><th>Status</th><SortTh s={sorted} k="total" className="num">Total</SortTh><SortTh s={sorted} k="cashier">Cashier</SortTh><th /></tr></thead>
           <tbody>
             {page.rows.map((s, i) => { const rp = lc.rowProps(s, i, saleMenu); return (
               <tr key={s.id} {...rp} className={[(s.status === 'refunded' ? 'dim' : ''), (s.edits?.length ? 'edited-row' : ''), rp.className].filter(Boolean).join(' ')} title={s.edits?.length ? `Edited ${s.edits.length}× · last by ${s.editedBy || s.edits.at(-1).by}` : undefined}>
-                <td><strong>{s.number}</strong><br /><small className="muted cap">{s.type || 'retail'}</small></td>
-                <td>{new Date(s.date).toLocaleDateString([], { dateStyle: 'medium' })}</td>
-                <td>{new Date(s.date).toLocaleTimeString([], { timeStyle: 'short' })}</td>
-                {db.branches.length > 1 && <td>{branchName(s.branchId)}</td>}
-                <td>{s.customerName}</td><td className="muted">{phoneOf(s) || '—'}</td>
-                <td><PayChip name={s.payment} />{s.momo?.txid ? <><br /><small className="muted">{s.momo.txid}</small></> : null}</td>
-                <td><span className={'badge ' + (s.status === 'refunded' ? 'danger' : 'ok')}>{s.status}</span>{s.edits?.length > 0 && <><br /><button type="button" className="badge warn edited-badge" onClick={() => setView(s)} title="See what was changed and by whom"><History size={11} /> Edited{s.edits.length > 1 ? ` ×${s.edits.length}` : ''}</button></>}</td>
-                <td className="num"><strong>{fmt(s.total)}</strong></td>
-                <td>{s.cashier}</td>
+                <td className="row-title"><strong>{s.number}</strong> <small className="muted cap">{s.type || 'retail'}</small></td>
+                <td data-label="Date" className="nowrap">{new Date(s.date).toLocaleDateString([], { dateStyle: 'medium' })}<br /><small className="muted">{new Date(s.date).toLocaleTimeString([], { timeStyle: 'short' })}</small></td>
+                {db.branches.length > 1 && <td data-label="Branch">{branchName(s.branchId)}</td>}
+                <td data-label="Customer">{s.customerName}</td><td data-label="Phone" className="muted">{phoneOf(s) || '—'}</td>
+                <td data-label="Payment"><PayChip name={s.payment} />{s.momo?.txid ? <><br /><small className="muted">{s.momo.txid}</small></> : null}</td>
+                <td data-label="Status"><span className={'badge ' + (s.status === 'refunded' ? 'danger' : 'ok')}>{s.status}</span>{s.edits?.length > 0 && <><br /><button type="button" className="badge warn edited-badge" onClick={() => setView(s)} title="See what was changed and by whom"><History size={11} /> Edited{s.edits.length > 1 ? ` ×${s.edits.length}` : ''}</button></>}</td>
+                <td data-label="Total" className="num"><strong>{fmt(s.total)}</strong></td>
+                <td data-label="Cashier">{s.cashier}</td>
                 <td className="actions"><div className="row-acts">
                   <button className="btn sm ghost" onClick={() => setView(s)}><Eye size={14} />View</button>
                   <button className="btn sm ghost act-print" onClick={() => printSale(s, 'receipt')} title="Print the till receipt"><Printer size={14} />Receipt</button>
@@ -260,8 +259,8 @@ export default function Sales() {
                 </div></td>
               </tr>
             ); })}
-            {!rows.length && (db.sales.length ? <Empty colSpan={11}>No sales match. Try another receipt number, customer, filter or date.</Empty> : <Empty colSpan={11} action={{ label: 'Open the POS', to: '/pos' }}>No sales yet. Every sale rung up at the POS appears here with its receipt, to reprint, refund or correct.</Empty>)}
-            {rows.length > 0 && <tr className="total-row"><td colSpan={db.branches.length > 1 ? 8 : 7}>Total (excl. refunds) · {valid.length.toLocaleString()} sales</td><td className="num">{fmt(valid.reduce((a, s) => a + s.total, 0))}</td><td colSpan={2} /></tr>}
+            {!rows.length && (db.sales.length ? <Empty colSpan={10}>No sales match. Try another receipt number, customer, filter or date.</Empty> : <Empty colSpan={10} action={{ label: 'Open the POS', to: '/pos' }}>No sales yet. Every sale rung up at the POS appears here with its receipt, to reprint, refund or correct.</Empty>)}
+            {rows.length > 0 && <tr className="total-row"><td colSpan={db.branches.length > 1 ? 7 : 6}>Total (excl. refunds) · {valid.length.toLocaleString()} sales</td><td className="num">{fmt(valid.reduce((a, s) => a + s.total, 0))}</td><td colSpan={2} /></tr>}
           </tbody>
         </table>
         {menu.node}

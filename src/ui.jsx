@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { useEffect, useMemo, useRef, useState, useId, startTransition } from 'react';
 import { useLocation } from 'react-router-dom';
-import { X, Search, Download, Plus, Pencil, Trash2, Inbox, Lightbulb, TrendingUp, TrendingDown, FileDown, Loader2, Copy, CheckSquare, Columns3, Ellipsis } from 'lucide-react';
+import { X, Search, Download, Plus, Pencil, Trash2, Inbox, Lightbulb, TrendingUp, TrendingDown, FileDown, Loader2, Copy, CheckSquare, Columns3, Ellipsis, ChevronLeft } from 'lucide-react';
 import { ViewSwitch, BoardView, GalleryView, savedView, saveView } from './components/DataViews.jsx';
 import { pagePdf, receiptPdf } from './pdf.js';
 import { useStore, uid, downloadFile, toCSV, del as del1 } from './store.jsx';
@@ -189,7 +189,7 @@ export function CrudPage({ title, subtitle, singular, table, fields, columns, bl
       {shownView === 'board' && <BoardView rows={rows} board={board} card={card} onOpen={readOnly ? null : editRow} onMenu={(e, r) => rowMenuFor(e, r, shown.indexOf(r))} />}
       {shownView === 'gallery' && <GalleryView rows={rows} card={card} onOpen={readOnly ? null : editRow} onMenu={(e, r) => rowMenuFor(e, r, shown.indexOf(r))} />}
       {shownView === 'table' && <div className="card table-wrap">
-        <table>
+        <table className="phone-rows">
           <thead>
             <tr><th className="tick"><input {...lc.allProps} /></th>{cols.map((c) => <th key={c.label} className={c.num ? 'num' : ''}>{c.label}</th>)}<th /></tr>
           </thead>
@@ -199,7 +199,7 @@ export function CrudPage({ title, subtitle, singular, table, fields, columns, bl
               return (
               <tr key={r.id} {...rp} className={[rowClass?.(r), rp.className].filter(Boolean).join(' ')}>
                 <td className="tick"><input {...lc.tickProps(r, i)} /></td>
-                {cols.map((c) => <td key={c.label} className={c.num ? 'num' : ''}>{c.render ? c.render(r) : r[c.key]}</td>)}
+                {cols.map((c, ci) => <td key={c.label} data-label={ci ? c.label : undefined} className={[c.num ? 'num' : '', ci ? '' : 'row-title'].filter(Boolean).join(' ')}>{c.render ? c.render(r) : r[c.key]}</td>)}
                 <td className="actions">
                   {extraActions?.(r)}
                   {!readOnly && rowLocked?.(r) && <span className="muted" title="This day is closed: it can't be changed">Day closed</span>}
@@ -274,6 +274,36 @@ export function Stat({ label, value, sub, tone, icon: Icon, delta, to, state, go
         )}
         {sub}
       </span>
+    </div>
+  );
+}
+
+/** A page's side view (held sales, drafts, supplier prices): a button to open it, and "‹ back" while it is open
+ *  (the owner's choice, 2026-11-15: a button instead of a tab) */
+export function SubViews({ value, main, mainLabel, views, onChange }) {
+  const cur = views.find(([k]) => k === value);
+  if (value !== main && cur) return (
+    <div className="subview-bar">
+      <button type="button" className="btn ghost sm" onClick={() => onChange(main)}><ChevronLeft size={16} />{mainLabel}</button>
+      <h2>{cur[1]}</h2>
+    </div>
+  );
+  return (
+    <div className="list-filters end">
+      {views.map(([k, label, n, Icon]) => <button key={k} type="button" className={'btn sm ghost subview-btn' + (n > 0 ? ' has-count' : '')} onClick={() => onChange(k)}>{Icon && <Icon size={15} />}{label}{n > 0 && <span className="badge-count">{n}</span>}</button>)}
+    </div>
+  );
+}
+
+/** A small filter beside a page's search box (the owner's choice, 2026-11-15: filters, not a strip of tabs) */
+export function FilterChips({ options, value, onChange, label = 'Show' }) {
+  return (
+    <div className="seg filter-chips" role="radiogroup" aria-label={label}>
+      {options.map(([k, text, n]) => (
+        <button key={k} type="button" role="radio" aria-checked={value === k} className={value === k ? 'on' : ''} onClick={() => onChange(k)}>
+          {text}{n != null && <span className="chip-count">{n.toLocaleString()}</span>}
+        </button>
+      ))}
     </div>
   );
 }
@@ -417,10 +447,13 @@ export function ReceiptPdfButton({ sale, className = 'btn ghost', label = 'PDF' 
 
 /** A tip shown the first time someone opens a page; dismissed once, remembered on this device */
 export function PageTip({ id, title, children }) {
+  // a small "Tip" chip that opens the tip (the owner's choice, 2026-11-15: pages stay uncluttered); "Got it" hides both
   const key = 'rxpos-tip:' + id;
-  const [open, setOpen] = useState(() => { try { return !localStorage.getItem(key); } catch { return false; } });
-  if (!open) return null;
-  const close = () => { try { localStorage.setItem(key, '1'); } catch { /* storage blocked */ } setOpen(false); };
+  const [gone, setGone] = useState(() => { try { return !!localStorage.getItem(key); } catch { return true; } });
+  const [open, setOpen] = useState(false);
+  if (gone) return null;
+  const close = () => { try { localStorage.setItem(key, '1'); } catch { /* storage blocked */ } setGone(true); };
+  if (!open) return <button type="button" className="tip-chip" onClick={() => setOpen(true)} aria-expanded="false"><Lightbulb size={14} />Tip: {title}</button>;
   return (
     <div className="page-tip" role="note">
       <Lightbulb size={18} />

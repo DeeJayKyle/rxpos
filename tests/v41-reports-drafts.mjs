@@ -153,7 +153,7 @@ check('…the draft reaches the cloud', await untilNode(async () => (await owner
 check('…and a held sale does not change stock', (await stock(A, 'p1')) === before, `${before} → ${await stock(A, 'p1')}`);
 
 const B = await device('robin@test.rx', 'robin-pass-1234');
-await go(B, '#/sales'); await clickText(B, '.tabs .tab', /^Held sales/); await wait(500);
+await go(B, '#/sales'); await clickText(B, '.subview-btn', /^Held sales/); await wait(500);
 check('another device of the same person shows it under Sales History → Held sales', await until(B, () => /Sample Tabs 500mg|Sale/.test(document.querySelector('.draft-card')?.innerText || ''), 20000));
 await clickText(B, '.draft-card button', /^Continue$/);
 check('…Continue opens it at the till on that device', await until(B, () => /#\/pos/.test(location.hash) && document.querySelectorAll('.cart-line').length === 1, 15000));
@@ -169,14 +169,14 @@ await C.evaluate(() => { const i = document.querySelector('.search-row input'); 
 await C.evaluate(() => document.querySelector('.product')?.click()); await wait(300);
 await C.keyboard.down('Alt'); await C.keyboard.press('h'); await C.keyboard.up('Alt'); await wait(800);
 await untilNode(async () => (await owner(`/tenants/${tid}/records?t=drafts`)).total === 1);
-await go(B, '#/sales'); await clickText(B, '.tabs .tab', /^Held sales/); await wait(400);
+await go(B, '#/sales'); await clickText(B, '.subview-btn', /^Held sales/); await wait(400);
 await clickText(B, '.seg button', /^Everyone/);
 check('a supervisor sees everyone\'s held sales, with who started them', await until(B, () => /started by Casey Cashier/.test(document.querySelector('.draft-grid')?.innerText || ''), 20000));
 await clickText(B, '.seg button', /^Mine$/); await wait(200);
 check('…"Mine" shows only their own', !/Casey Cashier/.test(await text(B, '.draft-grid')));
 await clickText(B, '.seg button', /^Everyone/); await wait(200);
 check('the dashboard shows an "Open drafts" tile', await (async () => { await go(B, '#/'); return /open drafts\s*1/i.test(await text(B, '.stats.alerts')); })());
-await go(B, '#/sales'); await clickText(B, '.tabs .tab', /^Held sales/); await wait(300); await clickText(B, '.seg button', /^Everyone/); await wait(200);
+await go(B, '#/sales'); await clickText(B, '.subview-btn', /^Held sales/); await wait(300); await clickText(B, '.seg button', /^Everyone/); await wait(200);
 await clickText(B, '.draft-card button', /^Discard$/); await wait(300); await clickText(B, '.modal button', /^Discard$/);
 check('…discarding it asks, removes it and writes the audit log', await untilNode(async () => (await owner(`/tenants/${tid}/records?t=drafts`)).total === 0 && (await owner(`/tenants/${tid}/records?t=audit&q=Draft%20discarded`)).total >= 1));
 
@@ -189,7 +189,7 @@ await B.evaluate(() => { const sel = document.querySelector('.page form select')
 await clickText(B, 'button', /^Save as draft$/); await wait(800);
 check('Add Stock: "Save as draft" keeps the delivery and starts a fresh one', await untilNode(async () => (await owner(`/tenants/${tid}/records?t=drafts`)).total === 1) && /saved deliver/.test(await text(B, '.page')));
 check('…a delivery draft does not change stock', (await stock(B, 'p1')) === s0);
-await go(B, '#/purchases'); await clickText(B, '.tabs .tab', /^Drafts/); await wait(400);
+await go(B, '#/purchases'); await clickText(B, '.subview-btn', /^Drafts/); await wait(400);
 await clickText(B, '.draft-card button', /^Continue$/);
 check('…Purchase History → Drafts → Continue brings it back into Add Stock (with its supplier)', await until(B, () => /Continuing a saved draft/.test(document.body.innerText) && document.querySelector('.page form select')?.value === 's1' && document.querySelectorAll('.page table tbody tr').length >= 1, 15000));
 await B.evaluate(() => { const i = document.querySelector('.page table input[type=date]'); if (i) { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(i, new Date(Date.now() + 400 * 864e5).toISOString().slice(0, 10)); i.dispatchEvent(new Event('input', { bubbles: true })); i.dispatchEvent(new Event('change', { bubbles: true })); } }); await wait(200);

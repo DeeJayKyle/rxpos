@@ -53,7 +53,7 @@ const stockOf = async (name) => { await go(A, '/inventory'); return A.evaluate((
 // #10 dashboard links
 await go(A, '/');
 await A.evaluate(() => [...document.querySelectorAll('.stat.link')].find((s) => /low stock/i.test(s.innerText)).click()); await wait(1000);
-check('dashboard "Low stock" tile opens Inventory on the Low stock tab', A.url().includes('#/inventory') && /low stock/i.test(await A.evaluate(() => document.querySelector('.tab.active')?.innerText || '')));
+check('dashboard "Low stock" tile opens Inventory on the Low stock tab', A.url().includes('#/inventory') && /low stock/i.test(await A.evaluate(() => document.querySelector('.filter-chips [aria-checked=true]')?.innerText || '')));
 await go(A, '/');
 await A.evaluate(() => [...document.querySelectorAll('.stat.link')].find((s) => /today's sales/i.test(s.innerText)).click()); await wait(1000);
 check('"Today\'s sales" tile opens Reports → Sales lines for today', A.url().includes('#/reports') && /sales lines/i.test(await A.evaluate(() => document.querySelector('.tab.active')?.innerText || '')) && (await A.evaluate(() => [...document.querySelectorAll('input[type=date]')].map((i) => i.value).join(','))) === `${new Date().toISOString().slice(0, 10)},${new Date().toISOString().slice(0, 10)}`);

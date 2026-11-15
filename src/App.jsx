@@ -31,7 +31,7 @@ import { setBadge } from './badges.js';
 import { ACTIONS, keyOf, keyMatcher, showKey, typing } from './keymap.js';
 import { deviceSettings, setDevice, onDevice } from './device.js';
 import { Modal } from './ui.jsx';
-import { MegaMenu, TopNav, NavPromo } from './components/NavMenus.jsx';
+import { MegaMenu, TopNav } from './components/NavMenus.jsx';
 import { BackButton, markNav, usePageMotion, useEdgeSwipeBack, useKeyboardFit } from './mobilenav.jsx';
 import AiOmnibar from './components/AiOmnibar.jsx';
 import { warmSearchKeys } from './search.js';
@@ -565,7 +565,7 @@ function Shell() {
             </div>
           ); })}
         </nav>
-        {!rail && here !== '/' && <NavPromo counts={counts} can={can} />}{/* the Dashboard shows the same card */}
+        {/* the sidebar keeps to the pages (the owner's clean-up, 2026-11-15): the next step is on the Dashboard and in More */}
         <div className="user-box">
           <span className="avatar">{initials}</span>
           <div className="grow"><strong>{user.name}</strong><small>{user.role}</small></div>

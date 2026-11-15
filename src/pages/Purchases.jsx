@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { parseGs1, findByGtin } from '../gs1.js';
 import { useLocation } from 'react-router-dom';
-import { Pencil, Trash2, ScanText, Camera, FileUp, Loader2, AlertTriangle, CheckCircle2, X, Plus, RotateCcw, Sparkles, GripVertical, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Pencil, Trash2, ScanText, Camera, FileUp, Loader2, AlertTriangle, CheckCircle2, X, Plus, RotateCcw, Sparkles, GripVertical, ChevronLeft, ChevronRight, PauseCircle, Tags } from 'lucide-react';
 import { DateInput, MedicinePicker, useDateFormat } from '../fields.jsx';
 import { DATE_FORMATS } from '../dateformat.js';
 import { mainPack, packsOf, receiveInPacks } from '../packs.js';
@@ -9,7 +9,7 @@ import { deviceSettings, setDevice } from '../device.js';
 import { isWeb } from '../platform.js';
 import { useStore, useSyncState, uid, today, now, put, del, move, addBatch, audit, downloadFile, toCSV, markupPrice, daysUntil, supplierPrices, MAIN_BRANCH } from '../store.jsx';
 import { CASH } from '../finance.js';
-import { Modal, PdfButton, Tabs, Empty, PageTip, usePages, Pager, useSort, SortTh } from '../ui.jsx';
+import { Modal, PdfButton, Empty, PageTip, usePages, Pager, useSort, SortTh, SubViews } from '../ui.jsx';
 import { ask, toast } from '../feedback.jsx';
 import { newInternalBarcode } from '../barcode.jsx';
 import { invoicePages, readInvoice, matchProduct, matchSupplier, normDate, pageBlob } from '../invoiceScan.js';
@@ -685,7 +685,7 @@ export default function Purchases() {
           <button className="btn ghost" onClick={() => downloadFile('purchases.csv', toCSV(rows.map((p) => ({ date: p.date, number: p.number, supplier: p.supplierName, invoice: p.invoice, paymentType: payType(p), items: p.items.length, total: p.total, paid: p.paid ?? p.total, receivedBy: p.receivedBy, notes: p.notes || '' }))), 'text/csv')}>Export CSV</button>
         </div>
       </div>
-      <Tabs tabs={[['history', 'Deliveries'], ['drafts', <>Drafts{draftCount > 0 && <span className="badge-count">{draftCount}</span>}</>], ['prices', 'Supplier prices']]} value={tab} onChange={setTab} />
+      <SubViews value={tab} onChange={setTab} main="history" mainLabel="All deliveries" views={[['drafts', 'Drafts', draftCount, PauseCircle], ['prices', 'Supplier prices', 0, Tags]]} />
       {tab === 'drafts' && <DraftsList kind="delivery" />}
       {tab === 'prices' && <SupplierPrices q={q} />}
       {tab === 'history' && <div className="report-filters">

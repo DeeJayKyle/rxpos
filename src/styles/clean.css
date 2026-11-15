@@ -1,0 +1,20 @@
+/* Clean pages (2026-11-15, the owner's choice): filters instead of tab strips, side views behind a button, reports in
+   three groups, one page header per page. */
+.list-filters { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 14px; }
+.list-filters.end { justify-content: flex-end; }
+.filter-chips { display: inline-flex; flex-wrap: wrap; }
+.filter-chips button { display: inline-flex; align-items: center; gap: 6px; }
+.chip-count { font-size: 11px; font-weight: 700; padding: 0 6px; border-radius: 99px; line-height: 17px; background: color-mix(in srgb, var(--text) 8%, transparent); color: var(--muted); font-variant-numeric: tabular-nums; }
+.filter-chips button.on .chip-count { background: var(--primary-soft); color: var(--primary-ink); }
+.subview-bar { display: flex; align-items: center; gap: 12px; margin: 0 0 14px; animation: fade-up .25s ease-out; }
+.subview-bar h2 { margin: 0; font-size: 20px; letter-spacing: -.02em; }
+.subview-btn .badge-count { margin-left: 4px; }
+.report-groups { margin: 0 0 12px; }
+.report-groups button { min-width: 84px; font-weight: 650; }
+.report-groups + .tabs { margin-top: 0; }
+@media (max-width: 640px) {
+  .filter-chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; max-width: 100%; }
+  .filter-chips button { flex: none; white-space: nowrap; }
+  .report-groups { display: flex; }
+  .report-groups button { flex: 1; min-width: 0; }
+}

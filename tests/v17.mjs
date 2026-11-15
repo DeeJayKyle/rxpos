@@ -129,7 +129,7 @@ await go(A, '/expiry');
 const expRows = await A.evaluate(() => [...document.querySelectorAll('tbody tr')].map((r) => r.innerText.split('\t')[0]).join(','));
 check('#7 Expiring list shows only in-stock batches', expRows.includes('Expiry Beta') && !expRows.includes('Expiry Alpha') && !expRows.includes('Expiry Gamma'), expRows);
 await go(A, '/inventory');
-await clickText(A, '.tab', /Low stock/); await wait(500);
+await clickText(A, '.filter-chips button', /Low stock/); await wait(500);
 const lowRows = await A.evaluate(() => [...document.querySelectorAll('tbody tr')].map((r) => r.innerText.split('\t')[0]).join(','));
 check('#7 Inventory "Low stock" tab: only in-stock items', lowRows.includes('Lowstock Syrup') && !lowRows.includes('Neverstocked'), lowRows);
 await go(A, '/reorder');
