@@ -56,7 +56,7 @@ check('new menu: Calendar and Weather & Storage', m.includes('Calendar') && m.in
 await p.screenshot({ path: out + '/03-dashboard.png' });
 
 await p.goto(base + '/mukono-health-pharmacy#/settings', { waitUntil: 'networkidle2' }); await wait(800);
-const tabs = await p.evaluate(() => [...document.querySelectorAll('.tab')].map((t) => t.textContent));
+const tabs = await p.evaluate(() => [...document.querySelectorAll('.tab')].map((t) => (t.querySelector('strong') || t).textContent));
 check('settings: no Features tab, has Alerts & storage', !tabs.includes('Features') && tabs.includes('Alerts & storage'), tabs.join(' | '));
 await p.goto(base + '/mukono-health-pharmacy#/branches', { waitUntil: 'networkidle2' }); await wait(800);
 check('branches page has no Add branch button', !(await text(p)).includes('Add branch'));

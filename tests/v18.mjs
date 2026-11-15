@@ -48,7 +48,7 @@ const setVal = (sel, value, n = 0) => A.evaluate((s, v, i) => { const el = docum
 // an input's value, or the text of a worked-out figure (the unit cost is shown, not typed)
 const lineVal = (row, label) => A.evaluate((r, l) => { const tr = document.querySelectorAll('table.lines tbody tr')[r]; return tr?.querySelector(`input[aria-label="${l}"]`)?.value ?? tr?.querySelector(`output[aria-label="${l}"]`)?.textContent; }, row, label);
 const toastText = () => A.evaluate(() => [...document.querySelectorAll('.toast')].map((x) => x.innerText).join(' | '));
-const stockOf = async () => { await go('/inventory'); await clickText('.tab', /^All$/); await wait(300); return A.evaluate(() => Object.fromEntries([...document.querySelectorAll('tbody tr')].filter((r) => r.cells.length > 5).map((r) => [r.cells[0].innerText.split('\n')[0].trim(), Number(r.cells[5].innerText.trim())]))); };
+const stockOf = async () => { await go('/inventory'); await clickText('.filter-chips button', /^All/); await wait(300); return A.evaluate(() => Object.fromEntries([...document.querySelectorAll('tbody tr')].filter((r) => r.cells.length > 5).map((r) => [r.cells[0].innerText.split('\n')[0].trim(), Number(r.cells[5].innerText.trim())]))); };
 
 await A.goto(base + '/' + slug, { waitUntil: 'networkidle2' }); await wait(800);
 await A.type('input[autocomplete=username]', 'sam@test.rx'); await A.type('input[type=password]', 'sam-pass-123');
@@ -136,7 +136,7 @@ check('scanning a barcode jumps to that medicine\'s count box', focused === 'p-a
 await A.keyboard.type('115'); await A.keyboard.press('Enter'); await wait(600);
 // Panadol has two batches: one box each
 await A.evaluate(() => { const i = document.querySelector('.count-search input'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(i, ''); i.dispatchEvent(new Event('input', { bubbles: true })); });
-await clickText('.tab', /^All$/); await wait(300);
+await clickText('.filter-chips button', /^All/); await wait(300);
 const panBoxes = await A.evaluate(() => document.querySelectorAll('[data-count-row="p-pan"] [data-count-input]').length);
 check('a medicine with two batches gets a count box per batch', panBoxes === 2, panBoxes);
 await A.focus('[data-count-row="p-pan"] [data-count-input]'); await A.keyboard.type('50'); await A.keyboard.press('Enter'); await wait(400);
@@ -233,7 +233,7 @@ A.off('request', onReq); await A.setRequestInterception(false);
 await wait(1500);
 
 // ---------- supplier price comparison ----------
-await go('/purchases'); await clickText('.tab', /Supplier prices/); await wait(400);
+await go('/purchases'); await clickText('.subview-btn', /Supplier prices/); await wait(400);
 const sp = await A.evaluate(() => [...document.querySelectorAll('tbody tr')].find((r) => /Panadol/.test(r.innerText))?.innerText.replace(/\s+/g, ' ') || '');
 check('Purchase History → Supplier prices: Panadol cheapest at Nile Pharma (450) vs Kampala Medics (520), 16% gap', /Nile Pharma UGX 450/.test(sp) && /Kampala Medics: UGX 520/.test(sp) && /16%/.test(sp), sp);
 await go('/add-stock'); await A.select('form.card select', 'sup-km');
