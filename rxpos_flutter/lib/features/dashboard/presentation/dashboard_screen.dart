@@ -165,8 +165,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             onSelectionChanged: (v) => save(layout.encode(period: v.first)),
           );
           return Row(children: [
-            if (narrow) Expanded(child: chips) else chips,
-            if (!narrow) const Spacer(),
+            if (narrow) Expanded(child: chips) else Expanded(child: Align(alignment: Alignment.centerLeft, child: SingleChildScrollView(scrollDirection: Axis.horizontal, child: chips))),
             const SizedBox(width: 6),
             narrow
                 ? IconButton.outlined(key: const Key('edit-widgets-open'), tooltip: 'Edit widgets', onPressed: () => showEditWidgets(context, layout, save), icon: const Icon(Icons.tune, size: 18))
