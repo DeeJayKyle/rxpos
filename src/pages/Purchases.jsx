@@ -726,19 +726,37 @@ export default function Purchases() {
   );
 }
 
-/** Admin, manager or pharmacist: correct a past delivery: change any line (medicine, batch, expiry, quantity, cost),
- *  remove lines and add lines that were missed. Every change moves stock with a "Purchase edit" movement on the right
+/** Admin, manager or pharmacist: correct a past delivery: change any line (medicine, batch, expiry, quantity, line
+ *  total), remove lines and add lines that were missed. As in Add Stock (the owner's choice, 2026-11-14), the unit cost
+ *  is not typed: it is the line total ÷ quantity. A line keeps its unit cost when only the quantity changes, until a
+ *  new total is typed (then the total stays and the cost follows the quantity). Every change moves stock with a "Purchase edit" movement on the right
  *  batch, so stock and history stay true; stock that was already sold can't be taken back. */
 function PurchaseEditor({ purchase, onClose }) {
   const { db, products, fmt, update, user, batchesOf } = useStore();
   const br = purchase.branchId || MAIN_BRANCH;
   const dateFmt = useDateFormat();
   const [f, setF] = useState(() => ({ supplierId: purchase.supplierId || '', invoice: purchase.invoice || '', notes: purchase.notes || '', date: purchase.date, paid: purchase.paid ?? purchase.total, reason: '',
-    items: purchase.items.map((i, n) => ({ ...i, key: uid(), orig: n })) }));
+    items: purchase.items.map((i, n) => ({ ...i, key: uid(), orig: n, total: numOrBlank((Number(i.qty) || 0) * (Number(i.cost) || 0)), by: 'unit' })) }));
   const live = f.items.filter((i) => !i.removed);
-  const total = live.reduce((a, i) => a + Number(i.qty || 0) * Number(i.cost || 0), 0);
-  const setItem = (key, patch) => setF((x) => ({ ...x, items: x.items.map((i) => (i.key === key ? { ...i, ...patch } : i)) }));
-  const addItem = () => setF((x) => ({ ...x, items: [...x.items, { key: uid(), productId: '', name: '', batch: '', expiry: '', qty: 1, cost: '' }] }));
+  /** the line's cost: total ÷ quantity once a total was typed (unrounded, so quantity × cost = the invoice total) */
+  const costOf = (i) => (i.by === 'total' && i.total !== '' && Number(i.qty) > 0 ? Number(i.total) / Number(i.qty) : Number(i.cost) || 0);
+  const totalOf = (i) => (i.by === 'total' && i.total !== '' ? Number(i.total) || 0 : (Number(i.qty) || 0) * (Number(i.cost) || 0));
+  const total = live.reduce((a, i) => a + totalOf(i), 0);
+  // the same rule as Add Stock's editLine: a typed total stays and the cost follows; otherwise the total follows qty × cost
+  const setItem = (key, patch) => setF((x) => ({ ...x, items: x.items.map((i) => {
+    if (i.key !== key) return i;
+    const n = { ...i, ...patch };
+    const qty = Number(n.qty) || 0;
+    if ('total' in patch) { n.by = 'total'; n.cost = patch.total !== '' && qty > 0 ? Number(patch.total) / qty : ''; }
+    else if ('cost' in patch) { n.by = 'unit'; n.total = patch.cost !== '' ? numOrBlank(Number(patch.cost) * qty) : ''; }
+    else if ('qty' in patch) {
+      if (n.by === 'total' && n.total !== '') n.cost = qty > 0 ? Number(n.total) / qty : '';
+      else if (n.cost !== '') n.total = numOrBlank(Number(n.cost) * qty);
+    }
+    return n;
+  }) }));
+  const addItem = () => setF((x) => ({ ...x, items: [...x.items, { key: uid(), productId: '', name: '', batch: '', expiry: '', qty: 1, cost: '', total: '', by: 'unit' }] }));
+  // a line added (or its medicine changed) starts from that medicine's last cost, until its total is typed
   const pickMedicine = (i, id) => { const p = products.find((x) => x.id === id); if (p) setItem(i.key, { productId: p.id, name: p.name, ...(i.cost === '' || i.orig == null ? { cost: p.cost || '' } : {}) }); };
   const findBatch = (d, i) => (i.batchId && d.batches.find((b) => b.id === i.batchId)) || d.batches.find((b) => b.productId === i.productId && b.batch === String(i.batch || '').trim() && (b.expiry || '') === (i.expiry || ''));
   // what happens to each original line: kept (maybe changed), or taken out (removed, quantity 0, or another medicine)
@@ -774,7 +792,7 @@ function PurchaseEditor({ purchase, onClose }) {
       for (const { o, i, out } of plan()) {
         const old = findBatch(d, o);
         if (out) { if (old) mv(o.productId, -o.qty, old.id, i && !i.removed && Number(i.qty) > 0 ? 'medicine corrected' : 'line removed'); continue; }
-        const qty = Math.max(0, Math.round(Number(i.qty) || 0)), cost = Number(i.cost) || 0;
+        const qty = Math.max(0, Math.round(Number(i.qty) || 0)), cost = costOf(i);
         let batchId = old?.id;
         if ((i.batch !== o.batch || i.expiry !== o.expiry) && old) {
           mv(o.productId, -o.qty, old.id, 'batch corrected');
@@ -785,15 +803,15 @@ function PurchaseEditor({ purchase, onClose }) {
           mv(o.productId, qty - o.qty, batchId);
         }
         if (batchId && cost !== o.cost) { const b = d.batches.find((x) => x.id === batchId); if (b) put(d, 'batches', { ...b, cost }); }
-        const { key, orig, removed, ...rest } = i;
+        const { key, orig, removed, total: _t, by: _b, ...rest } = i;
         items.push({ ...rest, qty, cost, batchId });
       }
       // lines added on this edit (or a line whose medicine was corrected): new stock into their batch
       for (const i of added) {
-        const qty = Math.max(0, Math.round(Number(i.qty) || 0)), cost = Number(i.cost) || 0;
+        const qty = Math.max(0, Math.round(Number(i.qty) || 0)), cost = costOf(i);
         const b = addBatch(d, { productId: i.productId, batch: i.batch, expiry: i.expiry, cost });
         mv(i.productId, qty, b.id, i.orig == null ? 'line added' : 'medicine corrected');
-        const { key, orig, removed, ...rest } = i;
+        const { key, orig, removed, total: _t, by: _b, ...rest } = i;
         items.push({ ...rest, name: products.find((x) => x.id === i.productId)?.name || i.name, qty, cost, batchId: b.id });
       }
       const newTotal = items.reduce((a, i) => a + i.qty * i.cost, 0);
@@ -822,7 +840,7 @@ function PurchaseEditor({ purchase, onClose }) {
         </div>
         <div className="table-wrap invoice-sheet flat">
         <table className="lines">
-          <thead><tr><th>Medicine</th><th>Batch</th><th>Expiry</th><th>Qty</th><th>Cost</th><th className="num">Total</th><th /></tr></thead>
+          <thead><tr><th>Medicine</th><th>Batch</th><th>Expiry</th><th>Qty</th><th className="num">Unit cost</th><th>Line total</th><th /></tr></thead>
           <tbody>
             {f.items.map((i) => (
               <tr key={i.key} className={i.removed ? 'line-removed' : i.orig == null ? 'new-line' : ''}>
@@ -832,8 +850,9 @@ function PurchaseEditor({ purchase, onClose }) {
                 <td><input value={i.batch || ''} disabled={i.removed} onChange={(e) => setItem(i.key, { batch: e.target.value })} aria-label="Batch" /></td>
                 <td><DateInput value={i.expiry || ''} monthYear disabled={i.removed} onChange={(v) => setItem(i.key, { expiry: v })} aria-label="Expiry" /></td>
                 <td><input type="number" min="0" value={i.qty} disabled={i.removed} onChange={(e) => setItem(i.key, { qty: e.target.value })} aria-label="Quantity" /></td>
-                <td><input type="number" min="0" step="any" value={i.cost} disabled={i.removed} onChange={(e) => setItem(i.key, { cost: e.target.value })} aria-label="Cost" /></td>
-                <td className="num">{i.removed ? <span className="muted">removed</span> : fmt(Number(i.qty || 0) * Number(i.cost || 0))}</td>
+                <td className="num">{/* worked out from the line total (total ÷ quantity): not typed, as in Add Stock */}
+                  {i.removed ? <span className="muted">removed</span> : <output className="unit-cost num" aria-label="Unit cost" title="Line total ÷ quantity">{costOf(i) > 0 ? fmt(costOf(i)) : '—'}</output>}</td>
+                <td><input type="number" min="0" step="any" inputMode="decimal" placeholder="Total amount" className={i.by === 'total' ? 'typed' : ''} value={i.total} disabled={i.removed} onChange={(e) => setItem(i.key, { total: e.target.value })} aria-label="Line total" /></td>
                 <td>{i.removed
                   ? <button type="button" className="btn sm ghost nowrap" style={{ whiteSpace: 'nowrap' }} onClick={() => setItem(i.key, { removed: false })}><RotateCcw size={13} />Undo</button>
                   : <button type="button" className="icon-btn" title="Remove this line" aria-label="Remove line" onClick={() => (i.orig == null ? setF((x) => ({ ...x, items: x.items.filter((y) => y.key !== i.key) })) : setItem(i.key, { removed: true }))}><Trash2 size={15} /></button>}</td>

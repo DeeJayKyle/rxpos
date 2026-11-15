@@ -110,7 +110,9 @@ check('Edit purchase opens with its lines as medicine pickers', await p.evaluate
 await p.evaluate(() => [...document.querySelectorAll('.modal button')].find((x) => /Add an item/.test(x.textContent))?.click()); await wait(300);
 await p.focus('.modal tbody tr:nth-child(3) .med-pick input'); await p.keyboard.type('beta'); await wait(300); await p.keyboard.press('Enter'); await wait(300);
 await p.evaluate(() => { const r = document.querySelector('.modal tbody tr:nth-child(3)'); const set = (l, v) => { const i = r.querySelector(`input[aria-label="${l}"]`); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(i, v); i.dispatchEvent(new Event('input', { bubbles: true })); }; set('Quantity', '6'); set('Batch', 'BC9'); set('Expiry', '2031-03-31'); });
-check('an added line takes the medicine\'s cost', (await p.evaluate(() => document.querySelector('.modal tbody tr:nth-child(3) input[aria-label="Cost"]').value)) === '3500');
+check('an added line takes the medicine\'s cost (shown, not typed)', /3,500/.test(await p.evaluate(() => document.querySelector('.modal tbody tr:nth-child(3) output[aria-label="Unit cost"]')?.textContent || '')));
+check('…and its line total is cost × quantity', (await p.evaluate(() => document.querySelector('.modal tbody tr:nth-child(3) input[aria-label="Line total"]').value)) === '21000');
+check('the unit cost cannot be typed in Edit purchase', await p.evaluate(() => !document.querySelector('.modal input[aria-label="Cost"], .modal input[aria-label="Unit cost"]')));
 // remove the Alphamol line, undo, remove again
 const removeAlphamol = () => p.evaluate(() => [...document.querySelectorAll('.modal tbody tr')].find((r) => /Alphamol/.test(r.querySelector('.med-pick input')?.value || ''))?.querySelector('button[aria-label="Remove line"]')?.click());
 await removeAlphamol(); await wait(200);

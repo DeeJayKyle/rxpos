@@ -11,14 +11,26 @@ import 'delivery.dart';
 
 /// A line on the editor. [orig]: the index of the delivery's line it started as (null: added now).
 class PurchaseEditLine {
-  const PurchaseEditLine({this.orig, required this.productId, required this.name, this.batch = '', this.expiry = '', required this.qty, required this.cost, this.removed = false});
+  const PurchaseEditLine({this.orig, required this.productId, required this.name, this.batch = '', this.expiry = '', required this.qty, required this.cost, this.removed = false, this.typed});
   final int? orig;
   final String productId, name, batch, expiry;
   final double qty, cost;
   final bool removed;
+
+  /// The line total as typed, if it was: the unit cost is not typed but worked out as line total ÷ quantity, as on
+  /// Add stock (the owner's choice, 2026-11-14)
+  final double? typed;
+  double get total => typed ?? qty * cost;
   PurchaseEditLine copyWith({String? productId, String? name, String? batch, String? expiry, double? qty, double? cost, bool? removed}) => PurchaseEditLine(
       orig: orig, productId: productId ?? this.productId, name: name ?? this.name, batch: batch ?? this.batch, expiry: expiry ?? this.expiry,
-      qty: qty ?? this.qty, cost: cost ?? this.cost, removed: removed ?? this.removed);
+      qty: qty ?? this.qty, cost: cost ?? this.cost, removed: removed ?? this.removed, typed: typed);
+
+  /// A typed line total: the unit cost follows it
+  PurchaseEditLine withTotal(double t) => PurchaseEditLine(orig: orig, productId: productId, name: name, batch: batch, expiry: expiry, qty: qty,
+      cost: qty > 0 ? t / qty : cost, removed: removed, typed: t);
+
+  /// A typed quantity: a typed line total stays and the unit cost follows it; otherwise the total is cost × quantity
+  PurchaseEditLine withQty(double q) => copyWith(qty: q, cost: typed != null && q > 0 ? typed! / q : cost);
 }
 
 List<PurchaseEditLine> editLinesOf(Map<String, Object?> purchase) => [
