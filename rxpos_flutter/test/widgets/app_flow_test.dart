@@ -50,6 +50,12 @@ import 'package:rxpos/features/drug_info/presentation/drug_info_screen.dart';
 import 'package:rxpos/features/storage/application/weather_controller.dart';
 import 'package:rxpos/features/sync_status/application/sync_controller.dart';
 
+import 'package:dio/dio.dart';
+import 'package:rxpos/features/auth/application/session_controller.dart' show keyVaultProvider, systemCheckProvider;
+import 'package:rxpos/features/auth/data/auth_repository.dart' show AuthRepository;
+import 'package:rxpos/features/auth/domain/device_unlock.dart';
+
+import '../auth/device_unlock_test.dart' show FakeCheck;
 import '../sync/fake_cloud.dart';
 
 void main() {
@@ -2222,11 +2228,59 @@ void main() {
     await settle(tester, 6);
   }
 
+  testWidgets('fingerprint unlock: offered only where the system has it, turned on after the password, then signs in', (tester) async {
+    final check = FakeCheck(), vault = MemoryVault();
+    await tester.runAsync(signedIn);
+    await tester.runAsync(() => RecordStore(db).update((d) => d.put('users', {'id': 'u1', 'name': 'Tia Admin', 'email': 'tia@test.rx', 'username': 'tia', 'role': 'admin'})));
+    await tester.runAsync(() => AuthRepository(dio: Dio(), db: db, cloudUrl: 'x').secrets.remember('t1', 'u1', 'tia-pass-1'));
+    await start(tester, extra: [systemCheckProvider.overrideWithValue(check), keyVaultProvider.overrideWithValue(vault)]);
+    await menu(tester, 'Use fingerprint or face unlock on this device');
+    expect(find.textContaining('RxPOS never sees or keeps it'), findsOneWidget);
+    expect(find.textContaining('only one person per device'), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, 'Continue'));
+    await settle(tester, 4);
+    await typeSecret(tester, 'tia-pass-1', 'Continue');
+    await untilShown(tester, find.text('Fingerprint or face unlock is on for this device'));
+    expect(vault.values.keys, ['rxpos.unlock.t1.u1']);
+    noSnackBars(tester);
+    await menu(tester, 'Log out');
+    await settle(tester);
+    cloud.login = null; // no internet
+    await tester.enterText(find.widgetWithText(TextField, 'Email or username'), 'tia');
+    await untilShown(tester, find.byKey(const Key('signin-unlock')));
+    expect(find.text('Use fingerprint or face unlock'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('signin-unlock')));
+    await untilShown(tester, find.byKey(const Key('account-menu')));
+    expect(find.byKey(const Key('account-menu')), findsOneWidget, reason: 'unlocked with the system check');
+    expect(check.asked.last, 'Unlock RxPOS as Tia Admin');
+    await done(tester);
+  });
+
+  testWidgets('no fingerprint, face or Windows Hello here (e.g. the web): device unlock is not offered at all', (tester) async {
+    await tester.runAsync(signedIn);
+    await start(tester);
+    await tester.tap(find.byKey(const Key('account-menu')));
+    await settle(tester, 8);
+    expect(find.textContaining('fingerprint'), findsNothing);
+    expect(find.textContaining('Windows Hello'), findsNothing);
+    expect(find.text('Set a quick PIN for this device'), findsOneWidget, reason: 'PIN and password stay');
+    await done(tester);
+  });
+
   testWidgets('account menu: change my password, a quick PIN, log out, then the PIN signs in offline', (tester) async {
     await tester.runAsync(signedIn);
     await tester.runAsync(() => RecordStore(db).update((d) => d.put('users', {'id': 'u1', 'name': 'Tia Admin', 'email': 'tia@test.rx', 'username': 'tia', 'role': 'admin'})));
+    // this device remembers Tia's password from her last sign-in here (the changes below ask for it first)
+    await tester.runAsync(() => AuthRepository(dio: Dio(), db: db, cloudUrl: 'x').secrets.remember('t1', 'u1', 'tia-pass-1'));
     await start(tester);
     await menu(tester, 'Change my password');
+    await typeSecret(tester, 'not-her-pass', 'Continue');
+    await untilShown(tester, find.text('Wrong password. Your password was not changed.'));
+    expect(find.text('Wrong password. Your password was not changed.'), findsOneWidget);
+    noSnackBars(tester);
+    await menu(tester, 'Change my password');
+    await typeSecret(tester, 'tia-pass-1', 'Continue');
+    await settle(tester, 6);
     await typeSecret(tester, 'short', 'Next');
     expect(find.text('Use a password of at least 8 characters.'), findsOneWidget);
     await typeSecret(tester, 'new-pass-9', 'Next');
@@ -2237,6 +2291,8 @@ void main() {
     noSnackBars(tester);
 
     await menu(tester, 'Set a quick PIN for this device');
+    await typeSecret(tester, 'new-pass-9', 'Continue'); // the password first (the new one now)
+    await settle(tester, 6);
     await typeSecret(tester, '2468', 'Next');
     await typeSecret(tester, '2468', 'Save PIN');
     await untilShown(tester, find.text('Quick PIN set for this device'));

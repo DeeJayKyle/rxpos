@@ -38,6 +38,11 @@ check('0.2 the device stored an offline verifier on sign-in', remembered);
 
 // ----- set a quick PIN from the profile -----
 await P.click('button[title="Set a quick PIN for this device"]'); await wait(500);
+// the current password first (a wrong one changes nothing)
+await P.type('.modal.dialog input', 'not-al-pass'); await confirmDialog(P); await wait(700);
+check('a wrong current password sets no PIN', !(await P.evaluate(() => !!document.querySelector('.modal.dialog'))) && !(await P.evaluate(() => { try { return Object.values(JSON.parse(localStorage.getItem('rxpos-offline-v1') || '{}')).some((e) => e.pin); } catch { return false; } })));
+await P.click('button[title="Set a quick PIN for this device"]'); await wait(500);
+await P.type('.modal.dialog input', 'al-pass-1234'); await confirmDialog(P); await wait(700);
 await P.type('.modal.dialog input', '2468'); await confirmDialog(P); await wait(500);
 await P.type('.modal.dialog input', '2468'); await confirmDialog(P); await wait(700);
 const pinStored = await P.evaluate(() => { try { return Object.values(JSON.parse(localStorage.getItem('rxpos-offline-v1') || '{}')).some((e) => e.pin); } catch { return false; } });

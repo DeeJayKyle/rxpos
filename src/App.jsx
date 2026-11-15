@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { useStore, useSyncState, makePassword, put, audit, isLowStock, expiryCounts } from './store.jsx';
 import { askText, ask, toast } from './feedback.jsx';
-import { hasPin, setPin, clearPin } from './offline.js';
+import { hasPin, setPin, clearPin, verifyOffline } from './offline.js';
 import Auth from './pages/Auth.jsx';
 import { BrandLogo } from './logo.jsx';
 import { unreadCount } from './pages/Chat.jsx';
@@ -496,20 +496,31 @@ function Shell() {
   };
   // Quick device PIN (0.2): a per-device offline shortcut, stored only on this device, never synced.
   const [pinSet, setPinSet] = useState(() => hasPin(syncCfg?.tenant, user.id));
+  /** The current password before a change to how someone signs in on this device (checked with this device's verifier) */
+  const confirmItsYou = async (why) => {
+    const pw = await askText({ title: 'Confirm it is you', message: `${why} Type your current password.`, type: 'password', minLength: 1, confirmText: 'Continue' });
+    if (pw === null || pw === undefined) return false;
+    const ok = await verifyOffline(syncCfg?.tenant, user.id, pw).catch(() => false);
+    if (!ok) toast('Wrong password. Nothing was changed.', 'error');
+    return ok;
+  };
   const manageDevicePin = async () => {
     const tenant = syncCfg?.tenant;
     if (hasPin(tenant, user.id)) {
       if (await ask({ title: 'Remove this device’s quick PIN?', message: 'You will sign in with your full password on this device. You can set a new PIN any time.', confirmText: 'Remove PIN', danger: true })) {
+        if (!(await confirmItsYou('Removing the quick PIN changes how you sign in on this device.'))) return;
         clearPin(tenant, user.id); setPinSet(false); toast('PIN removed from this device');
+        update((d) => audit(d, user, 'Quick PIN removed from a device', 'this device only', branchId));
       }
       return;
     }
+    if (!(await confirmItsYou('A quick PIN lets you sign in on this device without your full password.'))) return;
     const pin = await askText({ title: 'Set a quick PIN for this device', message: 'A 4–8 digit PIN signs you in on this device, even offline, without typing your full password. It is kept on this device only, never synced.', type: 'password', minLength: 4, confirmText: 'Next' });
     if (!pin) return;
     const again = await askText({ title: 'Type the PIN again', type: 'password', minLength: 4, confirmText: 'Save PIN' });
     if (again === null) return;
     if (again !== pin) return toast('The two PINs did not match. Try again.', 'error');
-    try { await setPin(tenant, user.id, pin); setPinSet(true); toast('Quick PIN set for this device'); } catch (e) { toast(e.message, 'error'); }
+    try { await setPin(tenant, user.id, pin); setPinSet(true); toast('Quick PIN set for this device'); update((d) => audit(d, user, 'Quick PIN set on a device', 'this device only', branchId)); } catch (e) { toast(e.message, 'error'); }
   };
   const asked = useRef(false);
   useEffect(() => { if (me?.mustChangePassword && !asked.current) { asked.current = true; changePassword(true); } }, [me?.mustChangePassword]); // eslint-disable-line react-hooks/exhaustive-deps

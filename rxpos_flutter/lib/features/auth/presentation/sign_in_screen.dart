@@ -14,6 +14,7 @@ import '../../../core/sync/sync_engine.dart';
 import '../../extras/domain/extras.dart';
 import '../application/session_controller.dart';
 import '../data/auth_repository.dart' show classicChoice, ownerChoice;
+import '../domain/device_unlock.dart';
 import '../domain/session.dart';
 
 const lastEmailKey = 'last-email', rememberChoiceKey = 'remember-choice';
@@ -63,6 +64,8 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   String? _error, _pharmacy, _held, _channel, _forgotNote;
   String _adminPhone = '', _pharmacyName = '';
   Map<String, Object?>? _pinUser;
+  Map<String, Object?>? _unlockUser; // the typed account has device unlock (fingerprint / face / Windows Hello) here
+  UnlockKind _unlockKind = UnlockKind.none;
   List<PharmacyChoice> _choices = const [];
 
   @override
@@ -95,9 +98,26 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   }
 
   Future<void> _findPin() async {
-    final u = await ref.read(authRepositoryProvider).pinUser(_email.text);
-    if (mounted && u?['id'] != _pinUser?['id']) setState(() => _pinUser = u);
+    final repo = ref.read(authRepositoryProvider);
+    final u = await repo.pinUser(_email.text);
+    final b = await repo.unlockUser(_email.text);
+    final kind = b == null ? UnlockKind.none : await repo.check.kind(); // only methods this device supports now
+    if (mounted && (u?['id'] != _pinUser?['id'] || b?['id'] != _unlockUser?['id'] || kind != _unlockKind)) {
+      setState(() {
+        _pinUser = u;
+        _unlockUser = kind == UnlockKind.none ? null : b;
+        _unlockKind = kind;
+      });
+    }
   }
+
+  Future<void> _signInUnlock() => _run(() async {
+        final out = await ref.read(sessionControllerProvider.notifier).signInWithUnlock(_email.text, remember: _remember);
+        if (out is SignInFailed && mounted) {
+          setState(() => _error = out.message);
+          await _findPin();
+        }
+      });
 
   Future<void> _run(Future<void> Function() fn) async {
     setState(() {
@@ -206,9 +226,10 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   }
 
   /// A full-width button whose label wraps on a narrow phone instead of running off the card.
-  Widget _option(IconData icon, String label, VoidCallback? onTap) => Padding(
+  Widget _option(IconData icon, String label, VoidCallback? onTap, {Key? key}) => Padding(
         padding: const EdgeInsets.only(top: 8),
         child: OutlinedButton(
+          key: key,
           onPressed: onTap,
           child: Padding(padding: const EdgeInsets.symmetric(vertical: 10), child: Row(children: [Icon(icon, size: 18), const SizedBox(width: 10), Expanded(child: Text(label))])),
         ),
@@ -265,6 +286,10 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
         onPressed: _busy ? null : _submit,
         child: Padding(padding: const EdgeInsets.all(12), child: Text(_busy ? 'Signing in…' : 'Sign in')),
       ),
+      if (_unlockUser != null) ...[
+        const SizedBox(height: 8),
+        _option(_unlockKind == UnlockKind.windowsHello ? Icons.face_retouching_natural : Icons.fingerprint, 'Use ${unlockName(_unlockKind)}', _busy ? null : _signInUnlock, key: const Key('signin-unlock')),
+      ],
       if (_pinUser != null) ...[
         const SizedBox(height: 8),
         _option(Icons.lock_outline, 'Use the PIN for this device', () => setState(() {

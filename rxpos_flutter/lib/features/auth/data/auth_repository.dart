@@ -12,6 +12,7 @@ import '../../../core/data/record_store.dart';
 import '../../../core/database/app_database.dart';
 import '../../../core/sync/sync_config.dart';
 import '../../../core/sync/sync_engine.dart';
+import '../domain/device_unlock.dart';
 import '../domain/offline_secrets.dart';
 import '../domain/session.dart';
 
@@ -51,12 +52,19 @@ List<PharmacyChoice> ownerPlaces(List<PharmacyChoice> pharmacies) => [
     ];
 
 class AuthRepository {
-  AuthRepository({required this.dio, required this.db, required this.cloudUrl, DateTime Function()? now}) : _now = now ?? DateTime.now, secrets = OfflineSecrets(_KvSecrets(db), now: now);
+  AuthRepository({required this.dio, required this.db, required this.cloudUrl, DateTime Function()? now, SystemCheck? check, KeyVault? vault})
+      : _now = now ?? DateTime.now,
+        secrets = OfflineSecrets(_KvSecrets(db), now: now),
+        check = check ?? const NoSystemCheck(),
+        vault = vault ?? MemoryVault();
 
   final Dio dio;
   final AppDatabase db;
   final String cloudUrl;
   final OfflineSecrets secrets;
+  /// The system's fingerprint / face / Windows Hello check, and its secure storage (device unlock)
+  final SystemCheck check;
+  final KeyVault vault;
   final DateTime Function() _now;
 
   Future<String?> _kv(String k) async => (await (db.select(db.kv)..where((x) => x.k.equals(k))).getSingleOrNull())?.v;
@@ -150,6 +158,7 @@ class AuthRepository {
       if (problem != null) return SignInFailed(problem);
       await _put(_sessionKey, jsonEncode(session.toJson()));
       await secrets.remember(session.tenant, session.userId, password); // this device can now sign them in offline
+      await pruneRevoked(session.tenant, keep: session.userId);
       if (code != null && code.isNotEmpty) await _put(trustKey(session.tenant, session.userId), '1');
       return SignedIn(session);
     }
@@ -177,6 +186,114 @@ class AuthRepository {
     }
     if (u['twoFactor'] == true && !await trusted(tenant, '${u['id']}')) {
       return const SignInFailed('You use two-step sign-in, and this device has not been signed in with your code yet. Connect to the internet once to sign in here.');
+    }
+    final s = _sessionFor(held, u, remember);
+    await _put(_sessionKey, jsonEncode(s.toJson()));
+    return SignedIn(s);
+  }
+
+  /// Type the password again before changing how you sign in on this device (PIN, device unlock). Checked against this
+  /// device's own verifier of the password, so it works offline too; false when wrong or never signed in here.
+  Future<bool> reauthenticate(String tenant, String userId, String password) async {
+    try {
+      if (password.isEmpty) return false;
+      // an account this device still holds an older synced hash for (signed in before verifiers) is checked once with it
+      final u = (await RecordStore(db).rows('users')).where((x) => x['id'] == userId && x['disabled'] != true).firstOrNull;
+      return await secrets.verify(tenant, userId, password, legacyUser: u != null && u['hash'] != null ? u : null);
+    } on OfflineError {
+      return false;
+    }
+  }
+
+  /// Set or change the quick PIN, after the password.
+  Future<String?> setPin(String tenant, String userId, {required String password, required String pin}) async {
+    if (!await reauthenticate(tenant, userId, password)) return 'Wrong password. The PIN was not changed.';
+    try {
+      await secrets.setPin(tenant, userId, pin);
+    } on OfflineError catch (e) {
+      return e.message;
+    }
+    await _audit(tenant, userId, 'Quick PIN set on a device');
+    return null;
+  }
+
+  /// Remove the quick PIN, after the password.
+  Future<String?> clearPin(String tenant, String userId, {required String password}) async {
+    if (!await reauthenticate(tenant, userId, password)) return 'Wrong password. The PIN was kept.';
+    await secrets.clearPin(tenant, userId);
+    await _audit(tenant, userId, 'Quick PIN removed from a device');
+    return null;
+  }
+
+  /// Turn on device unlock (fingerprint / face / Windows Hello): the password, then the system's own check.
+  Future<String?> enableUnlock(String tenant, String userId, {required String password}) async {
+    final kind = await check.kind();
+    if (kind == UnlockKind.none) return 'This device has no fingerprint, face or Windows Hello set up.';
+    if (!await reauthenticate(tenant, userId, password)) return 'Wrong password. ${_cap(unlockName(kind))} was not turned on.';
+    if (!await check.confirm('Confirm it is you to turn on ${unlockName(kind)} for RxPOS')) return '${_cap(unlockName(kind))} was not confirmed. Nothing changed.';
+    try {
+      await secrets.enableUnlock(tenant, userId, vault);
+    } on OfflineError catch (e) {
+      return e.message;
+    } catch (_) {
+      return 'This device could not keep the unlock key safely. Use a quick PIN instead.';
+    }
+    await _audit(tenant, userId, 'Device unlock (${unlockName(kind)}) turned on');
+    return null;
+  }
+
+  /// Turn off device unlock, after the password.
+  Future<String?> disableUnlock(String tenant, String userId, {required String password}) async {
+    if (!await reauthenticate(tenant, userId, password)) return 'Wrong password. Device unlock was kept.';
+    await secrets.clearUnlock(tenant, userId, vault);
+    await _audit(tenant, userId, 'Device unlock turned off');
+    return null;
+  }
+
+  static String _cap(String s) => s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
+
+  /// A note in the pharmacy's audit log (who changed how they sign in; never the PIN or any key).
+  Future<void> _audit(String tenant, String userId, String action) async {
+    try {
+      final u = (await RecordStore(db).rows('users')).where((x) => x['id'] == userId).firstOrNull;
+      await RecordStore(db).update((d) => d.audit('${u?['name'] ?? userId}', action, 'this device only'));
+    } catch (_) {/* the change itself is done; the log is best effort */}
+  }
+
+  /// Forget the PINs and device unlock of people disabled or removed since (learnt from the last sync).
+  Future<void> pruneRevoked(String tenant, {String keep = ''}) async {
+    final active = {for (final u in await RecordStore(db).rows('users')) if (u['disabled'] != true) '${u['id']}', if (keep.isNotEmpty) keep};
+    if (active.isEmpty) return; // nothing synced yet: never forget everyone
+    await secrets.prune(tenant, active, vault: vault);
+  }
+
+  /// The person whose device unlock this device holds for the typed email or username.
+  Future<Map<String, Object?>?> unlockUser(String login) async {
+    final held = await link();
+    final u = await localUser(login);
+    if (held == null || u == null) return null;
+    return await secrets.hasUnlock('${held['tenant']}', '${u['id']}') ? u : null;
+  }
+
+  /// Sign in with the system's check (fingerprint / face / Windows Hello) for the typed account. Same limits as the PIN:
+  /// set up on this device after a password sign-in, 30 days offline, two-step sign-in must have trusted this device.
+  Future<SignInOutcome> signInWithUnlock(String login, {bool remember = true}) async {
+    final held = await link();
+    final u = await unlockUser(login);
+    if (held == null || u == null) return const SignInFailed('Device unlock is not set up on this device for that account. Use your PIN or password.');
+    final tenant = '${held['tenant']}';
+    if (u['twoFactor'] == true && !await trusted(tenant, '${u['id']}')) {
+      return const SignInFailed('You use two-step sign-in, and this device has not been signed in with your code yet. Use your password.');
+    }
+    final kind = await check.kind();
+    if (kind == UnlockKind.none) return const SignInFailed('No fingerprint, face or Windows Hello is available now. Use your PIN or password.');
+    if (!await check.confirm('Unlock RxPOS as ${u['name'] ?? login}')) return const SignInFailed('Not confirmed. Try again, or use your PIN or password.');
+    try {
+      if (!await secrets.verifyUnlock(tenant, '${u['id']}', vault)) {
+        return const SignInFailed('Device unlock could not be checked on this device, so it was turned off. Sign in with your password.');
+      }
+    } on OfflineError catch (e) {
+      return SignInFailed(e.message);
     }
     final s = _sessionFor(held, u, remember);
     await _put(_sessionKey, jsonEncode(s.toJson()));

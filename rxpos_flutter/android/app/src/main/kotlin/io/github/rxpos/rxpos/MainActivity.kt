@@ -1,5 +1,6 @@
 package io.github.rxpos.rxpos
 
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 
-class MainActivity : FlutterActivity()
+// A FragmentActivity so Android's own fingerprint / face prompt (BiometricPrompt, used by local_auth) can show.
+class MainActivity : FlutterFragmentActivity()
