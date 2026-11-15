@@ -115,7 +115,7 @@ export default function Dashboard() {
         {/* sales open Reports → Sales lines for the period (every medicine sold); staff without it get the sales list */}
         <Stat {...salesTo} label={isToday ? "Today's sales" : 'Sales'} value={fmt(c.total)} sub={`${c.n} sale${c.n === 1 ? '' : 's'} · ${VS_WORDS[period]}`} delta={dl.total} tone="teal" icon={Banknote} />
         {can('reports') && <Stat to="/reports" state={{ tab: 'profit', ...rangeState }} label={isToday ? 'Gross profit today' : 'Gross profit'} value={fmt(c.gp)} sub={`after cost of goods · ${VS_WORDS[period]}`} delta={dl.gp} tone="violet" icon={TrendingUp} />}
-        {(can('finance') || can('reports')) && <Stat to="/expenses" label={isToday ? "Today's expenses" : 'Expenses'} value={fmt(c.exp)} sub={`Sales − expenses: ${fmt(c.total - c.exp)}`} delta={dl.exp} goodDown tone="orange" icon={Wallet} />}
+        {(can('finance') || can('reports')) && <Stat to="/expenses" label={isToday ? "Today's expenses" : 'Expenses'} value={fmt(c.exp)} sub={db.branches.length > 1 ? `Whole pharmacy (expenses have no branch) · sales here − expenses: ${fmt(c.total - c.exp)}` : `Sales − expenses: ${fmt(c.total - c.exp)}`} delta={dl.exp} goodDown tone="orange" icon={Wallet} />}
         <Stat to="/sales" state={rangeState} label="Transactions" value={c.n.toLocaleString()} sub={`receipts ${isToday ? 'today' : PERIOD_WORDS[period]} · ${VS_WORDS[period]}`} delta={dl.n} tone="blue" icon={ReceiptText} />
       </div>
     ),

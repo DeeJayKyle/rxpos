@@ -89,10 +89,20 @@ export default function Reports() {
     </div>
   );
 
+  // what the figures cover, said in words on the page and on the PDF (the report itself is unchanged)
+  const multi = db.branches.length > 1;
+  const branchWords = !multi ? '' : branch === 'all' ? 'All branches' : db.branches.find((b) => b.id === branch)?.name || 'Main branch';
+  const scopeWords = [branchWords, tab === 'stock' ? `As at ${new Date().toLocaleDateString()} (this device's branch stock)` : `${from} to ${to}`].filter(Boolean).join(' · ');
+  // expenses are kept for the whole pharmacy (no branch): a branch's report counts them under the main branch only
+  const expenseNote = multi && branch !== 'all' && ['expenses', 'income'].includes(tab)
+    ? (branch === MAIN_BRANCH ? 'Expenses are recorded for the whole pharmacy, not per branch; all of them are counted under the main branch.' : 'Expenses are recorded for the whole pharmacy, not per branch, so none are counted for this branch. Choose All branches or the main branch to see them.')
+    : '';
+  const DEFS = { sales: 'Sales include tax and exclude refunded receipts.', lines: 'Every medicine sold; refunded receipts left out.', products: 'Revenue is quantity × price per line, before receipt discounts.', profit: 'Gross profit = sales less tax, less the cost recorded on each line.', purchases: 'Deliveries received in the period, at invoice cost.', expenses: 'Expenses recorded in Finance in the period.', income: 'Sales less tax, cost of goods, expenses and expired write-offs.', consumption: 'Medicines ranked by sales value (A = top 80%).', stock: 'Each batch at its cost; expired batches shown apart.' };
+
   return (
     <div className="page" ref={pageRef}>
       {olderNote(older) && <p className="muted small" role="status">{olderNote(older)}</p>}
-      <div className="page-head"><h1>Reports</h1><div className="row gap wrap">{tab !== 'stock' && Range}{tab !== 'lines' && <PdfButton target={pageRef} title={TAB_NAMES[tab]} subtitle={tab === 'stock' ? `As at ${new Date().toLocaleDateString()}` : `${from} to ${to}`} />}</div></div>
+      <div className="page-head"><h1>Reports</h1><div className="row gap wrap">{tab !== 'stock' && Range}{tab !== 'lines' && <PdfButton target={pageRef} title={TAB_NAMES[tab]} subtitle={scopeWords} />}</div></div>
       {full && <PageTip id="reports" title="Reading your figures">Pick the dates at the top right. Profit &amp; margins shows what each medicine earns and lists prices below your target margin; every table exports to PDF or CSV.</PageTip>}
       {/* nine reports in three groups (the owner's choice, 2026-11-15): Sales, Money and Stock, each with its views */}
       {full && (
@@ -104,6 +114,11 @@ export default function Reports() {
         const views = !full ? ['lines'] : REPORT_GROUPS.find(([, , v]) => v.includes(tab))[2];
         return views.length > 1 || !full ? <Tabs value={tab} onChange={setTab} tabs={views.map((v) => [v, VIEW_NAMES[v]])} /> : null;
       })()}
+
+      <p className="report-scope small" role="note" data-testid="report-scope">
+        <strong>{TAB_NAMES[tab]}</strong> · {scopeWords}{DEFS[tab] ? ` · ${DEFS[tab]}` : ''}
+        {expenseNote && <span className="text-warn block"><span aria-hidden="true">⚠ </span>{expenseNote}</span>}
+      </p>
 
       {tab === 'sales' && (
         <>

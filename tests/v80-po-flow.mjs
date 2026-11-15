@@ -26,6 +26,9 @@ const recs = [
   { t: 'batches', id: 'b2', rec: { productId: 'p2', batch: 'C1', expiry: '2029-06-30', cost: 300, branchId: 'main' } },
   { t: 'movements', id: 'm1', rec: { productId: 'p1', qty: 12, type: 'Opening stock', branchId: 'main', batchId: 'b1', date: iso(40) } },
   { t: 'movements', id: 'm2', rec: { productId: 'p2', qty: 6, type: 'Opening stock', branchId: 'main', batchId: 'b2', date: iso(40) } },
+  { t: 'branches', id: 'br2', rec: { name: 'Ntinda branch' } },
+  { t: 'expenseCategories', id: 'ec1', rec: { name: 'Rent' } },
+  { t: 'expenses', id: 'e1', rec: { date: iso(1), categoryId: 'ec1', description: 'Shop rent', amount: 5000, method: 'Cash' } },
   { t: 'suppliers', id: 'sA', rec: { name: 'Alpha Supplies', phone: '' } },
   { t: 'suppliers', id: 'sB', rec: { name: 'Beta Pharma', phone: '' } },
   // Alpha sold Amoxil cheaper earlier; Beta is the last supplier of both
@@ -102,6 +105,18 @@ await p.screenshot({ path: path.join(out, 'po-sent.png') });
 await p.keyboard.press('Escape'); await wait(300);
 await go('#/audit');
 check('marking sent is in the audit log', await until(p, () => /Purchase order marked sent/.test(document.body.innerText), 8000));
+
+// Reports say what they cover; expenses (no branch) are explained, not silently redefined
+await go('#/reports');
+check('reports: a scope line with branch, dates and what Sales counts', await until(p, () => /All branches · \d{4}-\d\d-\d\d to \d{4}-\d\d-\d\d · Sales include tax/.test(document.querySelector('[data-testid=report-scope]')?.innerText || ''), 8000));
+await p.evaluate(() => [...document.querySelectorAll('.report-groups button')].find((x) => x.textContent === 'Money').click()); await wait(300);
+await click(/^Expenses Report$/); await wait(400);
+await p.select('select[aria-label=Branch]', 'br2'); await wait(500);
+const sc = await p.evaluate(() => document.querySelector('[data-testid=report-scope]').innerText);
+check('…for a branch other than main, Expenses says none are counted there and why', /Ntinda branch/.test(sc) && /whole pharmacy, not per branch, so none are counted for this branch/.test(sc), sc);
+await p.screenshot({ path: path.join(out, 'reports-scope.png') });
+await go('#/');
+check('dashboard: the expenses card says expenses are for the whole pharmacy', await until(p, () => /Whole pharmacy \(expenses have no branch\)/.test(document.body.innerText), 8000));
 
 // phone
 await p.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true, deviceScaleFactor: 1 });

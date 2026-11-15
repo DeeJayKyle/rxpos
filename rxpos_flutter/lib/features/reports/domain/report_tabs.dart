@@ -174,3 +174,29 @@ class AbcRow {
 
 /// The batches of a medicine for a list of [BatchStock] (kept for callers that build their own views).
 List<BatchStock> batchesFor(StockView v, String id) => v.batchesOf(id);
+
+/// What each report counts, said on the page (src/pages/Reports.jsx DEFS).
+const reportDefinitions = <String, String>{
+  'sales': 'Sales include tax and exclude refunded receipts.',
+  'lines': 'Every medicine sold; refunded receipts left out.',
+  'products': 'Revenue is quantity × price per line, before receipt discounts.',
+  'profit': 'Gross profit = sales less tax, less the cost recorded on each line.',
+  'purchases': 'Deliveries received in the period, at invoice cost.',
+  'expenses': 'Expenses recorded in Finance in the period.',
+  'income': 'Sales less tax, cost of goods, expenses and expired write-offs.',
+  'consumption': 'Medicines ranked by sales value (A = top 80%).',
+  'stock': 'Each batch at its cost; expired batches shown apart.',
+};
+
+/// The branch and dates a report covers, for the page and its PDF. [branchName] is empty with one branch.
+String reportScope({required String tab, required String from, required String to, required String branchName, required String today}) =>
+    [if (branchName.isNotEmpty) branchName, tab == 'stock' ? "As at $today (this device's branch stock)" : '$from to $to'].join(' · ');
+
+/// Expenses have no branch (they are for the whole pharmacy); a report for one branch counts them under the main branch.
+/// Returns the warning to show, or '' when there is nothing to say.
+String expenseScopeNote({required String tab, required String branch, required int branches}) {
+  if (branches < 2 || branch == 'all' || !const {'expenses', 'income'}.contains(tab)) return '';
+  return branch == mainBranch
+      ? 'Expenses are recorded for the whole pharmacy, not per branch; all of them are counted under the main branch.'
+      : 'Expenses are recorded for the whole pharmacy, not per branch, so none are counted for this branch. Choose All branches or the main branch to see them.';
+}

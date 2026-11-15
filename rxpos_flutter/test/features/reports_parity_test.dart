@@ -91,4 +91,18 @@ void main() {
     expect(promoteToday(i).map((x) => x.p.id), ['d', 'a']);
     expect(shareText(a, const PharmacySettings(name: 'Sample Pharmacy', phone: '0700')), '💊 *A* is available at Sample Pharmacy for UGX 100. Call or WhatsApp 0700. Ask our pharmacist for advice. Get well soon!');
   });
+
+  test('scope: the branch and dates are said; expenses (no branch) are counted under the main branch only, and the page says so', () {
+    final ex = [{'date': '2026-11-04', 'amount': 300}];
+    Period at(String b) => Period(from: '2026-11-01', to: '2026-11-30', branch: b, sales: const [], purchases: const [], expenses: ex, movements: const []);
+    expect((at('all').expenseTotal, at('main').expenseTotal, at('br2').expenseTotal), (300.0, 300.0, 0.0), reason: 'regression: the rule itself is unchanged');
+    expect(expenseScopeNote(tab: 'income', branch: 'br2', branches: 2), contains('none are counted for this branch'));
+    expect(expenseScopeNote(tab: 'expenses', branch: 'main', branches: 2), contains('counted under the main branch'));
+    expect(expenseScopeNote(tab: 'expenses', branch: 'all', branches: 2), '');
+    expect(expenseScopeNote(tab: 'sales', branch: 'br2', branches: 2), '');
+    expect(expenseScopeNote(tab: 'expenses', branch: 'main', branches: 1), '');
+    expect(reportScope(tab: 'sales', from: '2026-11-01', to: '2026-11-30', branchName: 'Ntinda', today: '2026-11-15'), 'Ntinda · 2026-11-01 to 2026-11-30');
+    expect(reportScope(tab: 'stock', from: 'x', to: 'y', branchName: '', today: '2026-11-15'), "As at 2026-11-15 (this device's branch stock)");
+    expect(reportDefinitions.keys, containsAll(['sales', 'lines', 'products', 'consumption', 'purchases', 'expenses', 'profit', 'income', 'stock']));
+  });
 }

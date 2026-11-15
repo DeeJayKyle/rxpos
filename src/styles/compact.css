@@ -203,3 +203,7 @@ label.check.small { display: inline-flex; align-items: center; gap: 6px; min-hei
 .po-plan-group { padding: 10px 12px; }
 .po-plan-group table { margin-top: 6px; }
 @media (max-width: 640px) { .qty-input { width: 70px; } }
+/* Reports: what the figures cover (branch, dates, definition) */
+.report-scope { margin: 4px 0 10px; color: var(--muted); line-height: 1.45; }
+.report-scope strong { color: var(--text); }
+.report-scope .block { display: block; margin-top: 2px; }
