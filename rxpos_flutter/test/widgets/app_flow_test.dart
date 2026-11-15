@@ -1009,7 +1009,7 @@ void main() {
     await settle(tester, 2);
     await tester.tap(find.text('Sell expired'));
     await settle(tester);
-    expect(find.text('Expired stock · No alternative in town'), findsOneWidget);
+    expect(find.text('Expired stock · reason recorded: No alternative in town'), findsOneWidget);
 
     // directions label
     await tester.tap(find.byKey(const Key('directions-p3')));
@@ -1028,7 +1028,7 @@ void main() {
     await start(tester);
     await toTill(tester);
     await settle(tester);
-    expect(find.text('Expired stock · No alternative in town'), findsOneWidget, reason: 'the sale came back after the restart');
+    expect(find.text('Expired stock · reason recorded: No alternative in town'), findsOneWidget, reason: 'the sale came back after the restart');
     expect(find.text('Edit label'), findsOneWidget);
 
     // charge it: the expired override is on the sale and in the audit log
@@ -3429,6 +3429,85 @@ void main() {
           await settle(tester, 4);
           await shot(tester, '$tag-${i.toString().padLeft(2, '0')}${page.replaceAll('/', '-')}');
         }
+        await done(tester);
+      }, skip: !on);
+    }
+
+    // the 2026-11-15 changes: order review, Mark as sent, a finished sale's sync note, fingerprint unlock
+    for (final (size, tag) in [(const Size(1440, 900), 'new-pc'), (const Size(400, 860), 'new-phone')]) {
+      testWidgets('screens of the new flows, $tag', (tester) async {
+        final check = FakeCheck(), vault = MemoryVault();
+        await tester.runAsync(signedIn);
+        await tester.runAsync(() => look('hybrid-light'));
+        await tester.runAsync(() => RecordStore(db).update((d) {
+              d.put('users', {'id': 'u1', 'name': 'Tia Admin', 'email': 'tia@test.rx', 'username': 'tia', 'role': 'admin'});
+              d.put('suppliers', {'id': 's1', 'name': 'Sample Wholesalers', 'phone': ''});
+              d.put('suppliers', {'id': 's2', 'name': 'Example Pharma Distributors Ltd', 'phone': ''});
+              d.put('products', {'id': 'p7', 'name': 'Ciprofloxacin 500mg Film-coated Tablets (long name)', 'unit': 'Tablet', 'price': 800, 'cost': 300, 'reorder': 10, 'packs': [{'name': 'Box', 'size': 10}]});
+              d.put('products', {'id': 'p8', 'name': 'Zinco Syrup 100ml', 'unit': 'Bottle', 'price': 6000, 'cost': 4000, 'reorder': 6});
+              d.put('batches', {'id': 'b7', 'productId': 'p7', 'batch': 'C1', 'expiry': '2029-01-31', 'cost': 300});
+              d.put('batches', {'id': 'b8', 'productId': 'p8', 'batch': 'Z1', 'expiry': '2029-01-31', 'cost': 4000});
+              d.move(productId: 'p7', qty: 3, type: 'Opening stock', batchId: 'b7');
+              d.move(productId: 'p8', qty: 2, type: 'Opening stock', batchId: 'b8');
+              d.put('purchases', {'id': 'u7', 'date': '2026-10-01', 'supplierId': 's1', 'supplierName': 'Sample Wholesalers', 'items': [{'productId': 'p7', 'name': 'Ciprofloxacin', 'qty': 10, 'cost': 280}]});
+              d.put('purchases', {'id': 'u8', 'date': '2026-10-02', 'supplierId': 's2', 'supplierName': 'Example Pharma Distributors Ltd', 'items': [{'productId': 'p8', 'name': 'Zinco', 'qty': 5, 'cost': 3900}]});
+            }));
+        await tester.runAsync(() => AuthRepository(dio: Dio(), db: db, cloudUrl: 'x').secrets.remember('t1', 'u1', 'tia-pass-1'));
+        await start(tester, size: size, extra: [systemCheckProvider.overrideWithValue(check), keyVaultProvider.overrideWithValue(vault)]);
+        GoRouter.of(tester.element(find.byType(Scaffold).first)).go('/reorder');
+        await settle(tester, 4);
+        await tester.enterText(find.byKey(const Key('qty-p7')), '25');
+        await tester.tap(find.byKey(const Key('round-packs')));
+        await settle(tester, 3);
+        await shot(tester, '$tag-01-reorder-quantities');
+        await tester.tap(find.textContaining('Review orders'));
+        await settle(tester);
+        await shot(tester, '$tag-02-review-orders');
+        await tester.tap(find.textContaining('draft order'));
+        await settle(tester);
+        await tester.tap(find.text('Open').first);
+        await settle(tester);
+        await shot(tester, '$tag-03-po-draft-mark-as-sent');
+        await tester.tap(find.byKey(const Key('po-mark-sent')));
+        await settle(tester, 4);
+        await tester.tap(find.widgetWithText(FilledButton, 'Mark as sent').last);
+        await settle(tester);
+        await shot(tester, '$tag-04-po-sent');
+        await done(tester);
+        await start(tester, size: size, extra: [systemCheckProvider.overrideWithValue(check), keyVaultProvider.overrideWithValue(vault)]);
+        GoRouter.of(tester.element(find.byType(Scaffold).first)).go('/pos');
+        await settle(tester, 4);
+        await tester.tap(find.text('Calmex 500mg Tabs'));
+        await settle(tester, 4);
+        if (size.width < 600) {
+          await tester.tap(find.text('1 item'));
+          await settle(tester);
+        }
+        await tester.tap(find.textContaining('Charge').last);
+        await settle(tester);
+        await shot(tester, '$tag-05-sale-saved-note');
+        await done(tester);
+        await start(tester, size: size, extra: [systemCheckProvider.overrideWithValue(check), keyVaultProvider.overrideWithValue(vault)]);
+        await tester.tap(find.byKey(const Key('account-menu')));
+        await settle(tester, 8);
+        await shot(tester, '$tag-06-account-menu-unlock');
+        await tester.tap(find.text('Use fingerprint or face unlock on this device'));
+        await settle(tester, 4);
+        await shot(tester, '$tag-07-unlock-explained');
+        await tester.tap(find.widgetWithText(FilledButton, 'Continue'));
+        await settle(tester, 4);
+        await shot(tester, '$tag-08-password-first');
+        await tester.enterText(find.descendant(of: find.byKey(const Key('secret')), matching: find.byType(EditableText)), 'tia-pass-1');
+        await tester.tap(find.widgetWithText(FilledButton, 'Continue'));
+        await settle(tester, 8);
+        noSnackBars(tester);
+        await tester.tap(find.byKey(const Key('account-menu')));
+        await settle(tester, 8);
+        await tester.tap(find.text('Log out'));
+        await settle(tester);
+        await tester.enterText(find.widgetWithText(TextField, 'Email or username'), 'tia');
+        await untilShown(tester, find.byKey(const Key('signin-unlock')));
+        await shot(tester, '$tag-09-sign-in-fingerprint');
         await done(tester);
       }, skip: !on);
     }
