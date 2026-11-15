@@ -22,12 +22,13 @@ const TOP_BY = [['amount', 'Amount'], ['qty', 'Quantity'], ['profit', 'Profit']]
 // span: of 12 columns on wide screens
 const WIDGETS = [
   { id: 'figures', name: 'Figures for the period', span: 12, on: true },
+  // the bento row stays (the owner's request, 2026-11-15: "Maintain the bento UI")
+  { id: 'bento', name: 'Sales at a glance (dark card, daily bars, latest receipts, next step)', span: 12, on: true },
   { id: 'chart', name: 'Sales chart', span: 8, on: true },
   { id: 'health', name: 'Stock health', span: 4, on: true },
   { id: 'top', name: 'Top medicines', span: 6, on: true },
   { id: 'recent', name: 'Latest sales', span: 6, on: true },
   { id: 'checks', name: 'Sales to check (when there are some)', span: 12, on: true },
-  { id: 'bento', name: 'Sales at a glance (dark card, daily bars, next step)', span: 12, on: false },
   { id: 'alerts', name: 'Stock alert tiles', span: 12, on: false },
   { id: 'promote', name: 'Promote today', span: 6, on: false },
   { id: 'weather', name: 'Weather and storage', span: 6, on: false },

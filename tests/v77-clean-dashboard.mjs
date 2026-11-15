@@ -50,7 +50,7 @@ await wait(1500);
 const tiles = () => p.evaluate(() => Object.fromEntries([...document.querySelectorAll('.kpis .stat')].map((s) => [s.querySelector('small').textContent.trim(), s.querySelector('strong').innerText.trim()])));
 const widgets = () => p.evaluate(() => [...document.querySelectorAll('.dash-cell')].map((c) => c.dataset.widget));
 
-check('clean layout: figures, chart, health, top medicines, latest sales (and nothing else)', JSON.stringify(await widgets()) === JSON.stringify(['figures', 'chart', 'health', 'top', 'recent']), JSON.stringify(await widgets()));
+check('clean layout: figures, the bento row, chart, health, top medicines, latest sales', JSON.stringify(await widgets()) === JSON.stringify(['figures', 'bento', 'chart', 'health', 'top', 'recent']), JSON.stringify(await widgets()));
 check('header: search, bell and today\'s date', await p.evaluate(() => !!document.querySelector('.dash-search') && !!document.querySelector('.dash-bell .icon-btn') && /\d{4}/.test(document.querySelector('.date-pill')?.innerText || '')));
 let t = await tiles();
 check('Today: today\'s sales 2,800 with ↑ against yesterday', /2,800/.test(t["Today's sales"]) && await p.evaluate(() => /up/.test(document.querySelector('.kpis .stat .delta')?.className || '')), JSON.stringify(t));
@@ -85,7 +85,7 @@ check('…kept on this device after a reload', w.includes('alerts') && !w.includ
 await p.evaluate(() => [...document.querySelectorAll('button')].find((x) => /Edit widgets/.test(x.textContent)).click()); await wait(300);
 await p.evaluate(() => [...document.querySelectorAll('.modal button')].find((x) => /standard dashboard/.test(x.textContent)).click()); await wait(300);
 await p.keyboard.press('Escape'); await wait(400);
-check('…and "Back to the standard dashboard" restores the clean layout', JSON.stringify(await widgets()) === JSON.stringify(['figures', 'chart', 'health', 'top', 'recent']));
+check('…and "Back to the standard dashboard" restores the clean layout', JSON.stringify(await widgets()) === JSON.stringify(['figures', 'bento', 'chart', 'health', 'top', 'recent']));
 // sidebar groups: a count, a + quick add, opening and closing
 check('sidebar groups show how many pages they hold', await p.evaluate(() => [...document.querySelectorAll('.nav-title .nav-count')].length >= 4));
 await p.evaluate(() => [...document.querySelectorAll('.nav-title')].find((x) => /Finance/.test(x.textContent))?.click()); await wait(500);

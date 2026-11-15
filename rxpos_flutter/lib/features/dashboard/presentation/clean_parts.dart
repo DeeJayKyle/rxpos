@@ -13,12 +13,13 @@ import '../domain/figures.dart';
 /// The dashboard's cards: id, name, columns of 12 on a wide screen, shown at first
 const dashWidgets = [
   ('figures', 'Figures for the period', 12, true),
+  // the bento row stays (the owner's request, 2026-11-15: "Maintain the bento UI")
+  ('bento', 'Sales at a glance (dark card, daily bars, latest receipts, next step)', 12, true),
   ('chart', 'Sales chart', 8, true),
   ('health', 'Stock health', 4, true),
   ('top', 'Top medicines', 6, true),
   ('recent', 'Latest sales', 6, true),
   ('checks', 'Sales to check (when there are some)', 12, true),
-  ('bento', 'Sales at a glance (dark card, daily bars, next step)', 12, false),
   ('alerts', 'Stock alert tiles', 12, false),
   ('promote', 'Promote today', 6, false),
   ('weather', 'Weather and storage', 6, false),
