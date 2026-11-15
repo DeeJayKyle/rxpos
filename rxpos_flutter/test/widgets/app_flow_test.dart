@@ -611,6 +611,51 @@ void main() {
     await done(tester);
   });
 
+  testWidgets('inventory: more than 300 matches are counted and exported in full, drawn page by page; per-batch expiry filters', (tester) async {
+    await tester.runAsync(signedIn);
+    String day(int n) => DateTime.now().add(Duration(days: n)).toIso8601String().substring(0, 10);
+    await tester.runAsync(() => RecordStore(db).update((d) {
+          for (var i = 0; i < 320; i++) {
+            d.put('products', {'id': 'm$i', 'name': 'Bulkmed ${i.toString().padLeft(3, '0')} Tabs', 'unit': 'Tablet', 'price': 100, 'cost': 50});
+            d.put('batches', {'id': 'mb$i', 'productId': 'm$i', 'batch': 'B$i', 'expiry': '2029-01-31', 'cost': 50});
+            d.move(productId: 'm$i', qty: 1, type: 'Opening stock', batchId: 'mb$i');
+          }
+          // one medicine with an expired batch and a batch expiring soon
+          d.put('products', {'id': 'mix', 'name': 'Mixdate Syrup', 'unit': 'Bottle', 'price': 100, 'cost': 50});
+          d.put('batches', {'id': 'mx1', 'productId': 'mix', 'batch': 'OLD', 'expiry': day(-10), 'cost': 50});
+          d.put('batches', {'id': 'mx2', 'productId': 'mix', 'batch': 'NEW', 'expiry': day(20), 'cost': 50});
+          d.move(productId: 'mix', qty: 2, type: 'Opening stock', batchId: 'mx1');
+          d.move(productId: 'mix', qty: 5, type: 'Opening stock', batchId: 'mx2');
+        }));
+    await start(tester);
+    await tester.sendKeyEvent(LogicalKeyboardKey.f7);
+    await settle(tester);
+    await tester.enterText(find.byType(TextField).first, 'Bulkmed');
+    await settle(tester);
+    expect(find.textContaining('Showing 300 of 320 items'), findsOneWidget);
+    await tester.scrollUntilVisible(find.byKey(const Key('inventory-more')), 600, scrollable: find.byType(Scrollable).last);
+    expect(find.textContaining('20 not shown; totals and exports include them'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('inventory-more')));
+    await settle(tester);
+    expect(find.textContaining('Showing'), findsNothing);
+    expect(find.textContaining('320 items'), findsOneWidget);
+    await tester.enterText(find.byType(TextField).first, '');
+    await settle(tester);
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Expired'));
+    await settle(tester);
+    expect(find.text('Mixdate Syrup'), findsOneWidget, reason: 'it has an expired batch');
+    expect(find.textContaining('has an EXPIRED batch · next sells, expires in'), findsOneWidget);
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Expiring'));
+    await settle(tester);
+    expect(find.text('Mixdate Syrup'), findsOneWidget, reason: 'it also has a batch expiring soon');
+    await tester.tap(find.text('Mixdate Syrup'));
+    await settle(tester);
+    expect(find.textContaining('(EXPIRED, not sold)'), findsOneWidget);
+    final next = find.ancestor(of: find.byKey(const Key('sells-next')), matching: find.byType(Row));
+    expect(find.descendant(of: next.first, matching: find.textContaining('Batch NEW')), findsOneWidget, reason: 'the expired batch never sells next');
+    await done(tester);
+  });
+
   testWidgets('group 2: shift open and close; a stock take posted; purchase history, reorder and expiry open', (tester) async {
     await tester.runAsync(signedIn);
     await start(tester);

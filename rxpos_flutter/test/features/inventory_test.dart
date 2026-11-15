@@ -81,4 +81,16 @@ void main() {
     expect(stockCard(moves, 'a', 'main').map((x) => (x.$1.type, x.$2)), [('Opening stock', 10.0), ('Inventory edit', 8.0), ('Expired write-off', 0.0)]);
     expect((await store.rows('audit')).map((a) => a['action']), ['Price changed', 'Inventory edited', 'Expired write-off']);
   });
+
+  test('expiry views go by every batch in stock: one expired and one expiring soon is in both; the next batch to sell is never expired', () {
+    final now = DateTime(2026, 11, 15);
+    BatchStock b(String id, String expiry, double qty) => BatchStock(id: id, qty: qty, expiry: expiry);
+    final both = [b('x', '2026-10-01', 4), b('y', '2026-12-01', 6), b('z', '2028-01-01', 10)];
+    expect(expiryFlags(both, 90, now: now), (expired: true, expiring: true));
+    expect(expiryFlags([b('x', '2026-10-01', 0), b('y', '2026-12-01', 6)], 90, now: now), (expired: false, expiring: true), reason: 'an empty expired batch does not count');
+    expect(expiryFlags([b('z', '2028-01-01', 10), b('n', '', 3)], 90, now: now), (expired: false, expiring: false));
+    expect(sellsNext(both, now: now)?.id, 'y', reason: 'the expired batch is skipped');
+    expect(sellsNext([b('x', '2026-10-01', 4)], now: now), isNull);
+    expect(sellsNext([b('y', '2026-12-01', 0), b('n', '', 3)], now: now)?.id, 'n');
+  });
 }

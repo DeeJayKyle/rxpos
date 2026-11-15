@@ -9,6 +9,7 @@ import '../../../core/entities/movement.dart';
 import '../../../core/entities/product.dart';
 import '../../../core/entities/settings.dart';
 import '../../../core/presentation/widgets.dart';
+import '../../../core/rules/dates.dart';
 import '../../../core/rules/fefo.dart';
 import '../../../core/rules/ids.dart';
 import '../../../core/rules/money.dart';
@@ -221,3 +222,24 @@ Future<int> assignShelf(RecordStore store, Iterable<Product> products, String sh
   });
   return change.length;
 }
+
+/// Which expiry views a medicine belongs in, from each of its batches in stock (not only the soonest): a medicine with
+/// one expired batch and another expiring within [warn] days is in both Expired and Expiring.
+({bool expired, bool expiring}) expiryFlags(Iterable<BatchStock> batches, int warn, {DateTime? now}) {
+  var expired = false, expiring = false;
+  for (final b in batches) {
+    if (b.qty <= 0 || b.expiry.isEmpty) continue;
+    final days = daysUntil(b.expiry, now: now);
+    if (days < 0) {
+      expired = true;
+    } else if (days <= warn) {
+      expiring = true;
+    }
+  }
+  return (expired: expired, expiring: expiring);
+}
+
+/// The batch the till sells next (first expiry first out): the earliest-expiring batch in stock that has not expired.
+/// [batches] in earliest-expiry order, as [StockView.batchesOf] gives them.
+BatchStock? sellsNext(List<BatchStock> batches, {DateTime? now}) =>
+    batches.where((b) => b.qty > 0 && (b.expiry.isEmpty || daysUntil(b.expiry, now: now) >= 0)).firstOrNull;
