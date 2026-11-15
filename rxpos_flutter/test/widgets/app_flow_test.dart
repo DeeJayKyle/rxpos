@@ -50,6 +50,12 @@ import 'package:rxpos/features/drug_info/presentation/drug_info_screen.dart';
 import 'package:rxpos/features/storage/application/weather_controller.dart';
 import 'package:rxpos/features/sync_status/application/sync_controller.dart';
 
+import 'package:dio/dio.dart';
+import 'package:rxpos/features/auth/application/session_controller.dart' show keyVaultProvider, systemCheckProvider;
+import 'package:rxpos/features/auth/data/auth_repository.dart' show AuthRepository;
+import 'package:rxpos/features/auth/domain/device_unlock.dart';
+
+import '../auth/device_unlock_test.dart' show FakeCheck;
 import '../sync/fake_cloud.dart';
 
 void main() {
@@ -611,6 +617,51 @@ void main() {
     await done(tester);
   });
 
+  testWidgets('inventory: more than 300 matches are counted and exported in full, drawn page by page; per-batch expiry filters', (tester) async {
+    await tester.runAsync(signedIn);
+    String day(int n) => DateTime.now().add(Duration(days: n)).toIso8601String().substring(0, 10);
+    await tester.runAsync(() => RecordStore(db).update((d) {
+          for (var i = 0; i < 320; i++) {
+            d.put('products', {'id': 'm$i', 'name': 'Bulkmed ${i.toString().padLeft(3, '0')} Tabs', 'unit': 'Tablet', 'price': 100, 'cost': 50});
+            d.put('batches', {'id': 'mb$i', 'productId': 'm$i', 'batch': 'B$i', 'expiry': '2029-01-31', 'cost': 50});
+            d.move(productId: 'm$i', qty: 1, type: 'Opening stock', batchId: 'mb$i');
+          }
+          // one medicine with an expired batch and a batch expiring soon
+          d.put('products', {'id': 'mix', 'name': 'Mixdate Syrup', 'unit': 'Bottle', 'price': 100, 'cost': 50});
+          d.put('batches', {'id': 'mx1', 'productId': 'mix', 'batch': 'OLD', 'expiry': day(-10), 'cost': 50});
+          d.put('batches', {'id': 'mx2', 'productId': 'mix', 'batch': 'NEW', 'expiry': day(20), 'cost': 50});
+          d.move(productId: 'mix', qty: 2, type: 'Opening stock', batchId: 'mx1');
+          d.move(productId: 'mix', qty: 5, type: 'Opening stock', batchId: 'mx2');
+        }));
+    await start(tester);
+    await tester.sendKeyEvent(LogicalKeyboardKey.f7);
+    await settle(tester);
+    await tester.enterText(find.byType(TextField).first, 'Bulkmed');
+    await settle(tester);
+    expect(find.textContaining('Showing 300 of 320 items'), findsOneWidget);
+    await tester.scrollUntilVisible(find.byKey(const Key('inventory-more')), 600, scrollable: find.byType(Scrollable).last);
+    expect(find.textContaining('20 not shown; totals and exports include them'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('inventory-more')));
+    await settle(tester);
+    expect(find.textContaining('Showing'), findsNothing);
+    expect(find.textContaining('320 items'), findsOneWidget);
+    await tester.enterText(find.byType(TextField).first, '');
+    await settle(tester);
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Expired'));
+    await settle(tester);
+    expect(find.text('Mixdate Syrup'), findsOneWidget, reason: 'it has an expired batch');
+    expect(find.textContaining('has an EXPIRED batch · next sells, expires in'), findsOneWidget);
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Expiring'));
+    await settle(tester);
+    expect(find.text('Mixdate Syrup'), findsOneWidget, reason: 'it also has a batch expiring soon');
+    await tester.tap(find.text('Mixdate Syrup'));
+    await settle(tester);
+    expect(find.textContaining('(EXPIRED, not sold)'), findsOneWidget);
+    final next = find.ancestor(of: find.byKey(const Key('sells-next')), matching: find.byType(Row));
+    expect(find.descendant(of: next.first, matching: find.textContaining('Batch NEW')), findsOneWidget, reason: 'the expired batch never sells next');
+    await done(tester);
+  });
+
   testWidgets('group 2: shift open and close; a stock take posted; purchase history, reorder and expiry open', (tester) async {
     await tester.runAsync(signedIn);
     await start(tester);
@@ -958,7 +1009,7 @@ void main() {
     await settle(tester, 2);
     await tester.tap(find.text('Sell expired'));
     await settle(tester);
-    expect(find.text('Expired stock · No alternative in town'), findsOneWidget);
+    expect(find.text('Expired stock · reason recorded: No alternative in town'), findsOneWidget);
 
     // directions label
     await tester.tap(find.byKey(const Key('directions-p3')));
@@ -977,7 +1028,7 @@ void main() {
     await start(tester);
     await toTill(tester);
     await settle(tester);
-    expect(find.text('Expired stock · No alternative in town'), findsOneWidget, reason: 'the sale came back after the restart');
+    expect(find.text('Expired stock · reason recorded: No alternative in town'), findsOneWidget, reason: 'the sale came back after the restart');
     expect(find.text('Edit label'), findsOneWidget);
 
     // charge it: the expired override is on the sale and in the audit log
@@ -1293,6 +1344,54 @@ void main() {
     await tester.tap(find.text('Orders'));
     await settle(tester);
     expect(find.text('No purchase orders yet. Create them from Reorder suggestions.'), findsOneWidget);
+    await done(tester);
+  });
+
+  testWidgets('Reorder: quantities typed and rounded to packs, a review grouped by supplier, then Mark as sent (Print does not)', (tester) async {
+    await tester.runAsync(signedIn);
+    await tester.runAsync(() => RecordStore(db).update((d) {
+          d.put('suppliers', {'id': 's1', 'name': 'Sample Wholesalers', 'phone': ''});
+          d.put('products', {'id': 'p7', 'name': 'Cipra 500 Tabs', 'unit': 'Tablet', 'price': 800, 'cost': 300, 'reorder': 10, 'packs': [{'name': 'Box', 'size': 10}]});
+          d.put('batches', {'id': 'b7', 'productId': 'p7', 'batch': 'C1', 'expiry': '2029-01-31', 'cost': 300});
+          d.move(productId: 'p7', qty: 3, type: 'Opening stock', batchId: 'b7');
+          d.put('purchases', {'id': 'u7', 'date': '2026-10-01', 'supplierId': 's1', 'supplierName': 'Sample Wholesalers', 'items': [{'productId': 'p7', 'name': 'Cipra 500 Tabs', 'qty': 10, 'cost': 280}]});
+        }));
+    await start(tester);
+    final store = RecordStore(db);
+    await navTo(tester, 'Reorder');
+    expect(find.text('Cipra 500 Tabs'), findsOneWidget);
+    await tester.enterText(find.byKey(const Key('qty-p7')), '0');
+    await settle(tester, 3);
+    expect(find.text('Whole number ≥ 1'), findsOneWidget);
+    await tester.tap(find.textContaining('Review orders'));
+    await settle(tester, 4);
+    expect(find.textContaining('Review 1 purchase order'), findsNothing, reason: 'a bad quantity blocks the review');
+    await tester.enterText(find.byKey(const Key('qty-p7')), '25');
+    await tester.tap(find.byKey(const Key('round-packs')));
+    await settle(tester, 3);
+    expect(find.textContaining('3 boxes of 10'), findsOneWidget);
+    await tester.tap(find.textContaining('Review orders'));
+    await settle(tester);
+    expect(find.text('Review 1 purchase order'), findsOneWidget);
+    expect(find.textContaining('the cheapest supplier for each medicine'), findsOneWidget);
+    expect(find.textContaining('not sent to anyone'), findsOneWidget);
+    expect(find.text('Sample Wholesalers'), findsWidgets);
+    await tester.tap(find.text('Create 1 draft order'));
+    await settle(tester);
+    final po = (await tester.runAsync(() => store.rows('purchaseOrders')))!.single;
+    final line = ((po['items'] as List).single as Map).cast<String, Object?>();
+    expect((po['status'], line['qty'], line['cost']), ('Draft', 30.0, 280.0));
+    await tester.tap(find.text('Open'));
+    await settle(tester);
+    expect(find.textContaining('Status: Draft'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('po-mark-sent')));
+    await settle(tester, 4);
+    await tester.tap(find.widgetWithText(FilledButton, 'Mark as sent').last);
+    await settle(tester);
+    expect((await tester.runAsync(() => store.rows('purchaseOrders')))!.single['status'], 'Sent');
+    expect(find.textContaining('Status: Sent'), findsOneWidget);
+    expect(find.byKey(const Key('po-mark-sent')), findsNothing);
+    expect((await tester.runAsync(() => store.rows('audit')))!.map((a) => a['action']), contains('Purchase order marked sent'));
     await done(tester);
   });
 
@@ -2130,11 +2229,59 @@ void main() {
     await settle(tester, 6);
   }
 
+  testWidgets('fingerprint unlock: offered only where the system has it, turned on after the password, then signs in', (tester) async {
+    final check = FakeCheck(), vault = MemoryVault();
+    await tester.runAsync(signedIn);
+    await tester.runAsync(() => RecordStore(db).update((d) => d.put('users', {'id': 'u1', 'name': 'Tia Admin', 'email': 'tia@test.rx', 'username': 'tia', 'role': 'admin'})));
+    await tester.runAsync(() => AuthRepository(dio: Dio(), db: db, cloudUrl: 'x').secrets.remember('t1', 'u1', 'tia-pass-1'));
+    await start(tester, extra: [systemCheckProvider.overrideWithValue(check), keyVaultProvider.overrideWithValue(vault)]);
+    await menu(tester, 'Use fingerprint or face unlock on this device');
+    expect(find.textContaining('RxPOS never sees or keeps it'), findsOneWidget);
+    expect(find.textContaining('only one person per device'), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, 'Continue'));
+    await settle(tester, 4);
+    await typeSecret(tester, 'tia-pass-1', 'Continue');
+    await untilShown(tester, find.text('Fingerprint or face unlock is on for this device'));
+    expect(vault.values.keys, ['rxpos.unlock.t1.u1']);
+    noSnackBars(tester);
+    await menu(tester, 'Log out');
+    await settle(tester);
+    cloud.login = null; // no internet
+    await tester.enterText(find.widgetWithText(TextField, 'Email or username'), 'tia');
+    await untilShown(tester, find.byKey(const Key('signin-unlock')));
+    expect(find.text('Use fingerprint or face unlock'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('signin-unlock')));
+    await untilShown(tester, find.byKey(const Key('account-menu')));
+    expect(find.byKey(const Key('account-menu')), findsOneWidget, reason: 'unlocked with the system check');
+    expect(check.asked.last, 'Unlock RxPOS as Tia Admin');
+    await done(tester);
+  });
+
+  testWidgets('no fingerprint, face or Windows Hello here (e.g. the web): device unlock is not offered at all', (tester) async {
+    await tester.runAsync(signedIn);
+    await start(tester);
+    await tester.tap(find.byKey(const Key('account-menu')));
+    await settle(tester, 8);
+    expect(find.textContaining('fingerprint'), findsNothing);
+    expect(find.textContaining('Windows Hello'), findsNothing);
+    expect(find.text('Set a quick PIN for this device'), findsOneWidget, reason: 'PIN and password stay');
+    await done(tester);
+  });
+
   testWidgets('account menu: change my password, a quick PIN, log out, then the PIN signs in offline', (tester) async {
     await tester.runAsync(signedIn);
     await tester.runAsync(() => RecordStore(db).update((d) => d.put('users', {'id': 'u1', 'name': 'Tia Admin', 'email': 'tia@test.rx', 'username': 'tia', 'role': 'admin'})));
+    // this device remembers Tia's password from her last sign-in here (the changes below ask for it first)
+    await tester.runAsync(() => AuthRepository(dio: Dio(), db: db, cloudUrl: 'x').secrets.remember('t1', 'u1', 'tia-pass-1'));
     await start(tester);
     await menu(tester, 'Change my password');
+    await typeSecret(tester, 'not-her-pass', 'Continue');
+    await untilShown(tester, find.text('Wrong password. Your password was not changed.'));
+    expect(find.text('Wrong password. Your password was not changed.'), findsOneWidget);
+    noSnackBars(tester);
+    await menu(tester, 'Change my password');
+    await typeSecret(tester, 'tia-pass-1', 'Continue');
+    await settle(tester, 6);
     await typeSecret(tester, 'short', 'Next');
     expect(find.text('Use a password of at least 8 characters.'), findsOneWidget);
     await typeSecret(tester, 'new-pass-9', 'Next');
@@ -2145,6 +2292,8 @@ void main() {
     noSnackBars(tester);
 
     await menu(tester, 'Set a quick PIN for this device');
+    await typeSecret(tester, 'new-pass-9', 'Continue'); // the password first (the new one now)
+    await settle(tester, 6);
     await typeSecret(tester, '2468', 'Next');
     await typeSecret(tester, '2468', 'Save PIN');
     await untilShown(tester, find.text('Quick PIN set for this device'));
@@ -3280,6 +3429,85 @@ void main() {
           await settle(tester, 4);
           await shot(tester, '$tag-${i.toString().padLeft(2, '0')}${page.replaceAll('/', '-')}');
         }
+        await done(tester);
+      }, skip: !on);
+    }
+
+    // the 2026-11-15 changes: order review, Mark as sent, a finished sale's sync note, fingerprint unlock
+    for (final (size, tag) in [(const Size(1440, 900), 'new-pc'), (const Size(400, 860), 'new-phone')]) {
+      testWidgets('screens of the new flows, $tag', (tester) async {
+        final check = FakeCheck(), vault = MemoryVault();
+        await tester.runAsync(signedIn);
+        await tester.runAsync(() => look('hybrid-light'));
+        await tester.runAsync(() => RecordStore(db).update((d) {
+              d.put('users', {'id': 'u1', 'name': 'Tia Admin', 'email': 'tia@test.rx', 'username': 'tia', 'role': 'admin'});
+              d.put('suppliers', {'id': 's1', 'name': 'Sample Wholesalers', 'phone': ''});
+              d.put('suppliers', {'id': 's2', 'name': 'Example Pharma Distributors Ltd', 'phone': ''});
+              d.put('products', {'id': 'p7', 'name': 'Ciprofloxacin 500mg Film-coated Tablets (long name)', 'unit': 'Tablet', 'price': 800, 'cost': 300, 'reorder': 10, 'packs': [{'name': 'Box', 'size': 10}]});
+              d.put('products', {'id': 'p8', 'name': 'Zinco Syrup 100ml', 'unit': 'Bottle', 'price': 6000, 'cost': 4000, 'reorder': 6});
+              d.put('batches', {'id': 'b7', 'productId': 'p7', 'batch': 'C1', 'expiry': '2029-01-31', 'cost': 300});
+              d.put('batches', {'id': 'b8', 'productId': 'p8', 'batch': 'Z1', 'expiry': '2029-01-31', 'cost': 4000});
+              d.move(productId: 'p7', qty: 3, type: 'Opening stock', batchId: 'b7');
+              d.move(productId: 'p8', qty: 2, type: 'Opening stock', batchId: 'b8');
+              d.put('purchases', {'id': 'u7', 'date': '2026-10-01', 'supplierId': 's1', 'supplierName': 'Sample Wholesalers', 'items': [{'productId': 'p7', 'name': 'Ciprofloxacin', 'qty': 10, 'cost': 280}]});
+              d.put('purchases', {'id': 'u8', 'date': '2026-10-02', 'supplierId': 's2', 'supplierName': 'Example Pharma Distributors Ltd', 'items': [{'productId': 'p8', 'name': 'Zinco', 'qty': 5, 'cost': 3900}]});
+            }));
+        await tester.runAsync(() => AuthRepository(dio: Dio(), db: db, cloudUrl: 'x').secrets.remember('t1', 'u1', 'tia-pass-1'));
+        await start(tester, size: size, extra: [systemCheckProvider.overrideWithValue(check), keyVaultProvider.overrideWithValue(vault)]);
+        GoRouter.of(tester.element(find.byType(Scaffold).first)).go('/reorder');
+        await settle(tester, 4);
+        await tester.enterText(find.byKey(const Key('qty-p7')), '25');
+        await tester.tap(find.byKey(const Key('round-packs')));
+        await settle(tester, 3);
+        await shot(tester, '$tag-01-reorder-quantities');
+        await tester.tap(find.textContaining('Review orders'));
+        await settle(tester);
+        await shot(tester, '$tag-02-review-orders');
+        await tester.tap(find.textContaining('draft order'));
+        await settle(tester);
+        await tester.tap(find.text('Open').first);
+        await settle(tester);
+        await shot(tester, '$tag-03-po-draft-mark-as-sent');
+        await tester.tap(find.byKey(const Key('po-mark-sent')));
+        await settle(tester, 4);
+        await tester.tap(find.widgetWithText(FilledButton, 'Mark as sent').last);
+        await settle(tester);
+        await shot(tester, '$tag-04-po-sent');
+        await done(tester);
+        await start(tester, size: size, extra: [systemCheckProvider.overrideWithValue(check), keyVaultProvider.overrideWithValue(vault)]);
+        GoRouter.of(tester.element(find.byType(Scaffold).first)).go('/pos');
+        await settle(tester, 4);
+        await tester.tap(find.text('Calmex 500mg Tabs'));
+        await settle(tester, 4);
+        if (size.width < 600) {
+          await tester.tap(find.text('1 item'));
+          await settle(tester);
+        }
+        await tester.tap(find.textContaining('Charge').last);
+        await settle(tester);
+        await shot(tester, '$tag-05-sale-saved-note');
+        await done(tester);
+        await start(tester, size: size, extra: [systemCheckProvider.overrideWithValue(check), keyVaultProvider.overrideWithValue(vault)]);
+        await tester.tap(find.byKey(const Key('account-menu')));
+        await settle(tester, 8);
+        await shot(tester, '$tag-06-account-menu-unlock');
+        await tester.tap(find.text('Use fingerprint or face unlock on this device'));
+        await settle(tester, 4);
+        await shot(tester, '$tag-07-unlock-explained');
+        await tester.tap(find.widgetWithText(FilledButton, 'Continue'));
+        await settle(tester, 4);
+        await shot(tester, '$tag-08-password-first');
+        await tester.enterText(find.descendant(of: find.byKey(const Key('secret')), matching: find.byType(EditableText)), 'tia-pass-1');
+        await tester.tap(find.widgetWithText(FilledButton, 'Continue'));
+        await settle(tester, 8);
+        noSnackBars(tester);
+        await tester.tap(find.byKey(const Key('account-menu')));
+        await settle(tester, 8);
+        await tester.tap(find.text('Log out'));
+        await settle(tester);
+        await tester.enterText(find.widgetWithText(TextField, 'Email or username'), 'tia');
+        await untilShown(tester, find.byKey(const Key('signin-unlock')));
+        await shot(tester, '$tag-09-sign-in-fingerprint');
         await done(tester);
       }, skip: !on);
     }

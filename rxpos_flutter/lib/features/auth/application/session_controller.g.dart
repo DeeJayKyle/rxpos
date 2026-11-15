@@ -48,7 +48,7 @@ final class AuthRepositoryProvider
   }
 }
 
-String _$authRepositoryHash() => r'07e18e0b24c5f557205f5ed7c42b7639c5dfc57f';
+String _$authRepositoryHash() => r'd018de47ee5b6e0446c012761ab3355e6688b125';
 
 /// The signed-in session (restored from the device at start-up, so the till opens without internet).
 
@@ -78,7 +78,7 @@ final class SessionControllerProvider
   SessionController create() => SessionController();
 }
 
-String _$sessionControllerHash() => r'd814feda3079931563ec962a0f4d5fac86ba6d70';
+String _$sessionControllerHash() => r'e6956dfd38a1bf82c552cec2b9775bde7d27ada2';
 
 /// The signed-in session (restored from the device at start-up, so the till opens without internet).
 

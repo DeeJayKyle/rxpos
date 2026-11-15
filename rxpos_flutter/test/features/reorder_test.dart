@@ -68,6 +68,34 @@ void main() {
     expect((await store.rows('audit')).single['details'], '2 order(s), 2 lines');
   });
 
+  test('review before creating: typed quantities, pack rounding, the supplier rule, grouped by the chosen supplier', () {
+    expect([for (final v in ['12', ' 3 ', '0', '-2', '1.5', 'abc', '', '99999999']) validOrderQty(v)], [12, 3, null, null, null, null, null, null]);
+    expect((roundToPack(25, 10), roundToPack(30, 10), roundToPack(7, 1), roundToPack(7, null)), (30.0, 30.0, 7.0, 7.0));
+    expect(supplierRule(cheapest: true), contains('cheapest'));
+    expect(supplierRule(cheapest: true), isNot(contains('last bought')));
+    expect(supplierRule(cheapest: false), contains('last bought'));
+    expect(supplierRule(cheapest: true, handPicked: 2), contains('2 you chose by hand'));
+    final a = Product.fromRecord({'id': 'a', 'name': 'Amoxa', 'cost': 90}), z = Product.fromRecord({'id': 'z', 'name': 'Zinca', 'cost': 0});
+    const alpha = (supplierId: 's1', supplierName: 'Alpha', cost: 100.0, date: '');
+    final plan = planOrders([Suggestion(a, 1, 1, 1, 10, alpha, const []).withQty(12), Suggestion(z, 1, 1, 1, 5, null, const [])], {'s1': 'Alpha Supplies'});
+    expect(plan.map((o) => (o.supplierName, o.lines.length, o.total, o.unpriced)), [('Alpha Supplies', 1, 1200.0, 0), ('No supplier yet', 1, 0.0, 1)]);
+  });
+
+  test('marking a purchase order sent is deliberate, only from Draft, and audited', () async {
+    final db = AppDatabase(NativeDatabase.memory());
+    addTearDown(db.close);
+    final store = RecordStore(db);
+    final po = {'id': 'po1', 'number': 'PO-1', 'status': 'Draft', 'supplierName': 'Alpha', 'items': const []};
+    expect(nextPoStatus('Draft'), 'Sent');
+    expect(nextPoStatus('Sent'), isNull);
+    expect(nextPoStatus('Received'), isNull);
+    final saved = await markPoSent(store, po, user: 'Tia');
+    expect((saved?['status'], saved?['sentBy']), ('Sent', 'Tia'));
+    expect((await store.rows('purchaseOrders')).single['status'], 'Sent');
+    expect((await store.rows('audit')).single['action'], 'Purchase order marked sent');
+    expect(await markPoSent(store, saved!, user: 'Tia'), isNull, reason: 'already sent');
+  });
+
   group('order quantity methods', () {
     final f = Product.fromRecord({'id': 'f', 'name': 'Fastol', 'cost': 100});
     final v = Product.fromRecord({'id': 'v', 'name': 'Varix', 'cost': 100});

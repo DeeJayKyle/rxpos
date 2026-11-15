@@ -1271,8 +1271,17 @@ class _SalePanel extends ConsumerWidget {
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       Text(advanced ? '${i + 1}  ${l.name}' : l.name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                                      // safety in words and an icon, never colour alone
+                                      if (l.controlled)
+                                        const _Tag('CD · register', danger: true)
+                                      else if (l.rx)
+                                        const _Tag('Rx only'),
                                       if (l.allowExpired)
-                                        Text('Expired stock · ${l.expiredReason}', style: TextStyle(color: th.colorScheme.error, fontSize: 12)),
+                                        Row(mainAxisSize: MainAxisSize.min, children: [
+                                          Icon(Icons.warning_amber_rounded, size: 14, color: th.colorScheme.error, semanticLabel: 'Warning'),
+                                          const SizedBox(width: 3),
+                                          Flexible(child: Text('Expired stock · reason recorded: ${l.expiredReason}', style: TextStyle(color: th.colorScheme.error, fontSize: 12))),
+                                        ]),
                                       if (l.directions != null)
                                         Text(
                                           ['dose', 'freq'].map((k) => '${l.directions![k] ?? ''}').where((x) => x.isNotEmpty).join(' ').ifBlank('Label ready'),

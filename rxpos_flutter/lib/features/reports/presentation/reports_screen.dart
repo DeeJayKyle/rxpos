@@ -58,6 +58,10 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     final per = Period(from: _from, to: _to, branch: _branch, sales: sales.map(Sale.fromRecord), purchases: purchases, expenses: expenses, movements: moves.map(Movement.fromRecord));
     String catName(Object? id) => '${cats.where((c) => c['id'] == id).firstOrNull?['name'] ?? 'Other'}';
     final title = reportTabs.firstWhere((x) => x.$1 == tab).$2;
+    // what the figures cover, on the page and the PDF (the figures themselves are unchanged)
+    final branchName = branches.length < 2 ? '' : _branch == 'all' ? 'All branches' : '${branches.where((b) => b['id'] == _branch).firstOrNull?['name'] ?? 'Main branch'}';
+    final scope = reportScope(tab: tab, from: _from, to: _to, branchName: branchName, today: today());
+    final expenseNote = expenseScopeNote(tab: tab, branch: _branch, branches: branches.length);
     final body = switch (tab) {
       'lines' => SalesLinesView(key: ValueKey('$_from|$_to|$_branch'), from: _from, to: _to, branch: _branch, money: full),
       'products' => _products(per, st),
@@ -71,7 +75,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     };
     return PageFrame(
       title: 'Reports',
-      subtitle: tab == 'stock' ? 'As at ${today()}' : '$_from to $_to',
+      subtitle: scope,
       actions: [
         if (tab != 'stock') ...[
           if (branches.length > 1)
@@ -85,7 +89,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         ],
         if (tab != 'lines')
           OutlinedButton.icon(
-            onPressed: () => Printing.layoutPdf(name: title, onLayout: (_) => tablesPdf(st, title: title, subtitle: tab == 'stock' ? 'As at ${today()}' : '$_from to $_to', tables: _pdf(tab, per, d, st, catName))),
+            onPressed: () => Printing.layoutPdf(name: title, onLayout: (_) => tablesPdf(st, title: title, subtitle: scope, tables: _pdf(tab, per, d, st, catName))),
             icon: const Icon(Icons.print_outlined),
             label: const Text('Print / PDF'),
           ),
@@ -117,6 +121,22 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                 ChoiceChip(label: Text(l), selected: tab == k, onSelected: (_) => setState(() => _tab = k)),
             ]),
           ),
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Semantics(
+            container: true,
+            child: Column(key: const Key('report-scope'), crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text.rich(TextSpan(children: [TextSpan(text: title, style: const TextStyle(fontWeight: FontWeight.w700)), TextSpan(text: ' · $scope${reportDefinitions[tab] == null ? '' : ' · ${reportDefinitions[tab]}'}')]),
+                  style: Theme.of(context).textTheme.bodySmall),
+              if (expenseNote.isNotEmpty)
+                Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Icon(Icons.warning_amber_rounded, size: 16, color: Colors.orange.shade800, semanticLabel: 'Note'),
+                  const SizedBox(width: 4),
+                  Expanded(child: Text(expenseNote, style: TextStyle(color: Colors.orange.shade800, fontSize: 12))),
+                ]),
+            ]),
+          ),
+        ),
         const SizedBox(height: 12),
         body,
       ]),

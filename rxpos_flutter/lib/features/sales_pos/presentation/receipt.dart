@@ -13,6 +13,7 @@ import '../../../core/entities/settings.dart';
 import '../../../core/network/cloud_api.dart';
 import '../../../core/rules/money.dart';
 import '../../extras/domain/extras.dart';
+import '../../sync_status/application/sync_controller.dart';
 
 // step 22: what an insurer is billed on a sale, and what the client still owes (shown on the receipt even after a
 // refund, as before; src/pages/Sales.jsx billed / unpaid)
@@ -178,6 +179,7 @@ class _ReceiptDialogState extends ConsumerState<_ReceiptDialog> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              const SaleSavedNote(),
               Text('Receipt ${s.number}', style: const TextStyle(fontWeight: FontWeight.w700)),
               const Divider(),
               for (final i in s.items)
@@ -340,4 +342,32 @@ Future<Uint8List> invoicePdf(Sale s, PharmacySettings st, {String customerPhone 
 
 extension on String {
   String get ifBlankDash => trim().isEmpty ? '—' : this;
+}
+
+/// Where a finished sale is: saved on this device and waiting for the cloud, or synced. Other devices' stock changes
+/// only once it has synced, so the till never implies more than it knows.
+class SaleSavedNote extends ConsumerWidget {
+  const SaleSavedNote({super.key});
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final st = ref.watch(syncControllerProvider);
+    final waiting = st.state != SyncState.synced || st.pending > 0;
+    final (text, icon, color) = st.state == SyncState.signedOut
+        ? ('Saved on this device.', Icons.check_circle_outline, Colors.green.shade700)
+        : waiting
+            ? ('Saved on this device · not synced yet${st.state == SyncState.offline ? ' (offline)' : ''}. Other devices see this sale and its stock change once it syncs.',
+                Icons.cloud_upload_outlined, Colors.orange.shade800)
+            : ('Saved and synced to the cloud.', Icons.cloud_done_outlined, Colors.green.shade700);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Semantics(
+        liveRegion: true,
+        child: Row(key: const Key('sale-saved'), crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: 6),
+          Expanded(child: Text(text, style: Theme.of(context).textTheme.bodySmall)),
+        ]),
+      ),
+    );
+  }
 }

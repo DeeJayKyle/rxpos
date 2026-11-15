@@ -58,7 +58,7 @@ function editLine(l, patch) {
 }
 
 // Add Stock's columns: their order can be changed (drag a heading, or its arrows) and is kept on this device
-const COL_LABEL = { medicine: 'Medicine', qty: 'Qty', cost: 'Unit cost', total: 'Line total', price: 'New retail price', batch: 'Batch', expiry: 'Expiry' };
+const COL_LABEL = { medicine: 'Medicine', qty: 'Qty', cost: 'Unit cost (worked out)', total: 'Line total', price: 'New retail price', batch: 'Batch', expiry: 'Expiry' };
 const COLS = Object.keys(COL_LABEL);
 const colOrder = (saved) => { const ok = (saved || []).filter((c) => COLS.includes(c)); return [...ok, ...COLS.filter((c) => !ok.includes(c))]; };
 const NEW_SUPPLIER = '__new_supplier__';
@@ -502,7 +502,7 @@ export function AddStock() {
             <div className="invoice-title">Purchase invoice<small>Goods received{branchId !== MAIN_BRANCH ? ` · ${db.branches.find((x) => x.id === branchId)?.name || ''}` : ''}</small></div>
             <label className="invoice-meta-row"><span>Invoice no.</span><input value={form.invoice} placeholder="as on the invoice" onChange={(e) => setForm({ ...form, invoice: e.target.value })} aria-label="Invoice number" /></label>
             <label className="invoice-meta-row"><span>Date <DateFormatChoice fmt={dateFmt} /></span><DateInput value={form.date} max={today()} onChange={(v) => setForm((f) => ({ ...f, date: v || today() }))} aria-label="Delivery date" /></label>
-            <label className="invoice-meta-row"><span>Retail markup %</span><input type="number" min="0" step="any" value={form.markup} onChange={(e) => setMarkup(e.target.value)} aria-label="Retail markup for worked-out prices (%)" title="Retail prices are worked out from the cost with this markup" /></label>
+            <label className="invoice-meta-row"><span>Retail markup %</span><input type="number" min="0" step="any" value={form.markup} onChange={(e) => setMarkup(e.target.value)} aria-label="Retail markup for worked-out prices (%)" title="Only for the suggested price (tap “Use” on a line); no price changes by itself" /></label>
           </div>
         </div>
         <div className="picker row gap search-row">
@@ -590,7 +590,7 @@ export function AddStock() {
                     ),
                     price: (
                     <td key="price" data-label="Retail price">
-                      <input type="number" min="0" step="any" inputMode="decimal" placeholder={cost > 0 ? String(priceFor(cost)) : ''} value={l.price} onChange={(e) => setLine(l.key, { price: e.target.value })} aria-label="New retail price" />
+                      <input type="number" min="0" step="any" inputMode="decimal" placeholder={p?.price > 0 ? `keeps ${p.price}` : 'retail price'} value={l.price} onChange={(e) => setLine(l.key, { price: e.target.value })} aria-label="New retail price" />
                       <small className="price-hint">
                         {p?.price > 0 && String(l.price) !== String(p.price) && <button type="button" className="link-btn small" title="Back to today's price" onClick={() => setLine(l.key, { price: '' })}><RotateCcw size={10} /> undo</button>}
                         {/* the owner's choice: the price is only what the person types; cost + markup is offered, not applied */}
@@ -621,7 +621,7 @@ export function AddStock() {
         <div className="row gap">
           <button type="button" className="btn sm ghost" onClick={() => setForm((f) => ({ ...f, lines: [...f.lines, blankLine()] }))}>+ Add line</button>
           <button type="button" className="btn sm ghost" onClick={() => addNew('')}><Sparkles size={14} />New medicine</button>
-          <small className="muted grow line-help">Type the unit cost or the line total from the invoice; the other is worked out. Retail prices follow the markup until you type your own. Enter goes to the next line (a new one on the last line). Drag a column heading (or use its arrows) to move it{cols.join() !== COLS.join() ? <> · <button type="button" className="link-btn small" onClick={resetCols}>reset column order</button></> : null}.</small>
+          <small className="muted grow line-help">Type the quantity and the line total from the invoice; the unit cost is worked out (total ÷ quantity). The retail price stays as it is unless you type a new one or tap “Use” for cost + markup. Enter goes to the next line (a new one on the last line). Drag a column heading (or use its arrows) to move it{cols.join() !== COLS.join() ? <> · <button type="button" className="link-btn small" onClick={resetCols}>reset column order</button></> : null}.</small>
         </div>
         <div className="invoice-foot">
           <div className="invoice-notes">

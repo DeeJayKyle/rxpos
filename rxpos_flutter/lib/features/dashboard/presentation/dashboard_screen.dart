@@ -51,6 +51,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final pf = periodFigures(f.byDay, period);
     final c = pf.cur, pv = pf.prev, vs = vsWords[period]!;
     final isToday = period == 'today';
+    final branchRows = ref.watch(tableProvider('branches')).value ?? const [];
+    final multiBranch = branchRows.length > 1; // expenses are pharmacy-wide
+    final branchName = multiBranch ? '${branchRows.where((b) => b['id'] == data.branch).firstOrNull?['name'] ?? 'Main branch'} · ' : '';
     final day = today();
     final range = pf.range;
     final topFrom = isToday ? '${day.substring(0, 8)}01' : range.from, topWords = isToday ? 'this month' : periodWords[period]!;
@@ -78,7 +81,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 StatCard(label: isToday ? 'Gross profit today' : 'Gross profit', value: s.money(c.grossProfit), sub: 'after cost of goods${deltaText(c.grossProfit, pv.grossProfit, vs)}', icon: Icons.trending_up, color: Colors.deepPurple,
                     onTap: () => context.go('/reports?tab=profit&from=${range.from}&to=${range.to}')),
               if (can.contains('finance') || can.contains('reports'))
-                StatCard(label: isToday ? 'Today\'s expenses' : 'Expenses', value: s.money(c.expenses), sub: 'Sales − expenses: ${s.money(c.total - c.expenses)}', icon: Icons.account_balance_wallet_outlined, color: Colors.orange.shade800,
+                StatCard(label: isToday ? 'Today\'s expenses' : 'Expenses', value: s.money(c.expenses), sub: '${multiBranch ? 'Whole pharmacy (expenses have no branch) · sales here − expenses' : 'Sales − expenses'}: ${s.money(c.total - c.expenses)}', icon: Icons.account_balance_wallet_outlined, color: Colors.orange.shade800,
                     onTap: () => context.go(can.contains('finance') ? '/finance?tab=expenses' : '/reports?tab=expenses&from=${range.from}&to=${range.to}')),
               StatCard(label: 'Transactions', value: '${c.count}', sub: 'receipts ${isToday ? 'today' : periodWords[period]}${deltaText(c.count.toDouble(), pv.count.toDouble(), vs)}', icon: Icons.receipt_long_outlined, color: Colors.blue,
                   onTap: can.contains('sales.view') ? () => context.go('/sales?from=${range.from}&to=${range.to}') : null),
@@ -172,6 +175,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 : TextButton.icon(key: const Key('edit-widgets-open'), onPressed: () => showEditWidgets(context, layout, save), icon: const Icon(Icons.tune, size: 18), label: const Text('Edit widgets')),
           ]);
         }),
+        // what the figures cover, in words
+        Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Text('$branchName${isToday ? 'today' : periodWords[period]} · sales incl. tax, refunds left out · gross profit = sales less tax and cost of goods',
+              key: const Key('dash-scope'), style: Theme.of(context).textTheme.bodySmall),
+        ),
         const SizedBox(height: 12),
         LayoutBuilder(builder: (context, box) {
           final cols = box.maxWidth >= 1100 ? 12 : box.maxWidth >= 760 ? 6 : 1;

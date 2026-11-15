@@ -46,7 +46,7 @@ export function dashLayout(d = deviceSettings()) {
 const saveDash = (patch) => setDevice({ dash: { ...(deviceSettings().dash || {}), ...patch } });
 
 export default function Dashboard() {
-  const { db, products, fmt, user, branchId, features, batchesOf, day, can } = useStore();
+  const { db, products, fmt, user, branchId, branch, features, batchesOf, day, can } = useStore();
   const [topBy, setTopBy] = useState('amount');
   const [layout, setLayout] = useState(dashLayout);
   useEffect(() => onDevice((d) => setLayout(dashLayout(d))), []);
@@ -115,7 +115,7 @@ export default function Dashboard() {
         {/* sales open Reports → Sales lines for the period (every medicine sold); staff without it get the sales list */}
         <Stat {...salesTo} label={isToday ? "Today's sales" : 'Sales'} value={fmt(c.total)} sub={`${c.n} sale${c.n === 1 ? '' : 's'} · ${VS_WORDS[period]}`} delta={dl.total} tone="teal" icon={Banknote} />
         {can('reports') && <Stat to="/reports" state={{ tab: 'profit', ...rangeState }} label={isToday ? 'Gross profit today' : 'Gross profit'} value={fmt(c.gp)} sub={`after cost of goods · ${VS_WORDS[period]}`} delta={dl.gp} tone="violet" icon={TrendingUp} />}
-        {(can('finance') || can('reports')) && <Stat to="/expenses" label={isToday ? "Today's expenses" : 'Expenses'} value={fmt(c.exp)} sub={`Sales − expenses: ${fmt(c.total - c.exp)}`} delta={dl.exp} goodDown tone="orange" icon={Wallet} />}
+        {(can('finance') || can('reports')) && <Stat to="/expenses" label={isToday ? "Today's expenses" : 'Expenses'} value={fmt(c.exp)} sub={db.branches.length > 1 ? `Whole pharmacy (expenses have no branch) · sales here − expenses: ${fmt(c.total - c.exp)}` : `Sales − expenses: ${fmt(c.total - c.exp)}`} delta={dl.exp} goodDown tone="orange" icon={Wallet} />}
         <Stat to="/sales" state={rangeState} label="Transactions" value={c.n.toLocaleString()} sub={`receipts ${isToday ? 'today' : PERIOD_WORDS[period]} · ${VS_WORDS[period]}`} delta={dl.n} tone="blue" icon={ReceiptText} />
       </div>
     ),
@@ -224,7 +224,7 @@ export default function Dashboard() {
         <div className="welcome-text">
           <span className="welcome-store"><Store size={14} />{db.settings.name}</span>
           <h1>{greet}, {user.name.split(' ')[0]}</h1>
-          <div className="sub">Here&apos;s your pharmacy {isToday ? 'today' : PERIOD_WORDS[period]}</div>
+          <div className="sub">Here&apos;s {db.branches.length > 1 ? (branch?.name || 'this branch') : 'your pharmacy'} {isToday ? 'today' : PERIOD_WORDS[period]} <span className="muted" title="Sales are completed receipts at this branch (refunds left out), including tax. Gross profit is sales less tax and the cost recorded on each line.">· sales incl. tax, refunds left out</span></div>
         </div>
         <div className="dash-tools">
           <button type="button" className="dash-search" onClick={() => window.dispatchEvent(new Event('rxpos:search'))}><Search size={16} /><span>Search medicines, sales…</span></button>

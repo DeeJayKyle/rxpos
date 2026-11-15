@@ -17,6 +17,8 @@ import '../../../core/presentation/widgets.dart';
 import '../../../core/rules/passwords.dart';
 import '../application/session_controller.dart';
 import '../data/auth_repository.dart';
+import '../domain/device_unlock.dart';
+import '../domain/offline_secrets.dart' show offlineDays;
 import '../domain/session.dart';
 import 'sign_in_screen.dart';
 
@@ -37,7 +39,10 @@ Future<String?> askTwice(BuildContext context, {required String title, required 
   }
 }
 
-Future<String?> _askSecret(BuildContext context, {required String title, String? message, required String action, String? Function(String)? check, bool digits = false}) {
+/// Ask for the current password before a change to how someone signs in (null when cancelled).
+Future<String?> askCurrentPassword(BuildContext context, String why) => _askSecret(context, title: 'Confirm it is you', message: '$why\nType your current password.', action: 'Continue', current: true);
+
+Future<String?> _askSecret(BuildContext context, {required String title, String? message, required String action, String? Function(String)? check, bool digits = false, bool current = false}) {
   final c = TextEditingController();
   String? error;
   return showAppDialog<String>(
@@ -59,7 +64,7 @@ Future<String?> _askSecret(BuildContext context, {required String title, String?
             digits
                 ? TextField(key: const Key('secret'), controller: c, autofocus: true, obscureText: true, keyboardType: TextInputType.number, maxLength: 8,
                     inputFormatters: [FilteringTextInputFormatter.digitsOnly], decoration: InputDecoration(errorText: error, counterText: ''), onSubmitted: (_) => done())
-                : PasswordField(key: const Key('secret'), controller: c, label: 'Password', autofocus: true, hints: const [AutofillHints.newPassword], onSubmitted: (_) => done()),
+                : PasswordField(key: const Key('secret'), controller: c, label: current ? 'Current password' : 'Password', autofocus: true, hints: [current ? AutofillHints.password : AutofillHints.newPassword], onSubmitted: (_) => done()),
             if (!digits && error != null) Padding(padding: const EdgeInsets.only(top: 6), child: Text(error!, style: TextStyle(color: Theme.of(ctx).colorScheme.error))),
           ]),
         ),
@@ -78,7 +83,8 @@ class AccountMenu extends ConsumerStatefulWidget {
 }
 
 class _AccountMenuState extends ConsumerState<AccountMenu> {
-  bool _pin = false, _asked = false;
+  bool _pin = false, _unlock = false, _asked = false;
+  UnlockKind _kind = UnlockKind.none; // what this device's system offers (none on the web)
 
   Session get s => widget.session;
 
@@ -89,12 +95,31 @@ class _AccountMenuState extends ConsumerState<AccountMenu> {
   }
 
   Future<void> _loadPin() async {
-    final v = await ref.read(authRepositoryProvider).secrets.hasPin(s.tenant, s.userId);
-    if (mounted) setState(() => _pin = v);
+    final repo = ref.read(authRepositoryProvider);
+    final v = await repo.secrets.hasPin(s.tenant, s.userId);
+    final u = await repo.secrets.hasUnlock(s.tenant, s.userId);
+    final k = await repo.check.kind();
+    if (mounted) {
+      setState(() {
+        _pin = v;
+        _unlock = u;
+        _kind = k;
+      });
+    }
   }
 
   Future<void> changePassword({bool forced = false}) async {
     final first = s.userName.split(RegExp(r'\s+')).first;
+    // a change asked for (not the first-sign-in one) needs the current password first
+    if (!forced) {
+      final now = await askCurrentPassword(context, 'You are about to change your password.');
+      if (now == null || !mounted) return;
+      if (!await ref.read(authRepositoryProvider).reauthenticate(s.tenant, s.userId, now)) {
+        if (mounted) say(context, 'Wrong password. Your password was not changed.', error: true);
+        return;
+      }
+      if (!mounted) return;
+    }
     final pw = await askTwice(
       context,
       title: forced ? 'Welcome, $first. Set your own password' : 'Change my password',
@@ -118,14 +143,24 @@ class _AccountMenuState extends ConsumerState<AccountMenu> {
   }
 
   Future<void> _managePin() async {
-    final secrets = ref.read(authRepositoryProvider).secrets;
-    if (await secrets.hasPin(s.tenant, s.userId)) {
+    final repo = ref.read(authRepositoryProvider);
+    if (await repo.secrets.hasPin(s.tenant, s.userId)) {
       if (!mounted) return;
       if (await confirmAction(context, 'Remove this device’s quick PIN?', 'You will sign in with your full password on this device. You can set a new PIN any time.', 'Remove PIN')) {
-        await secrets.clearPin(s.tenant, s.userId);
+        if (!mounted) return;
+        final pw = await askCurrentPassword(context, 'Removing the quick PIN changes how you sign in on this device.');
+        if (pw == null) return;
+        final err = await repo.clearPin(s.tenant, s.userId, password: pw);
         await _loadPin();
-        if (mounted) say(context, 'PIN removed from this device');
+        if (mounted) say(context, err ?? 'PIN removed from this device', error: err != null);
       }
+      return;
+    }
+    if (!mounted) return;
+    final pw = await askCurrentPassword(context, 'A quick PIN lets you sign in on this device without your full password.');
+    if (pw == null || !mounted) return;
+    if (!await repo.reauthenticate(s.tenant, s.userId, pw)) {
+      if (mounted) say(context, 'Wrong password. No PIN was set.', error: true);
       return;
     }
     if (!mounted) return;
@@ -139,9 +174,40 @@ class _AccountMenuState extends ConsumerState<AccountMenu> {
       check: (v) => RegExp(r'^\d{4,8}$').hasMatch(v) ? null : 'A PIN is 4 to 8 digits.',
     );
     if (pin == null) return;
-    await secrets.setPin(s.tenant, s.userId, pin);
+    final err = await repo.setPin(s.tenant, s.userId, password: pw, pin: pin);
     await _loadPin();
-    if (mounted) say(context, 'Quick PIN set for this device');
+    if (mounted) say(context, err ?? 'Quick PIN set for this device', error: err != null);
+  }
+
+  /// Fingerprint / face (Android) or Windows Hello: turned on or off only after the current password.
+  Future<void> _manageUnlock() async {
+    final repo = ref.read(authRepositoryProvider);
+    final name = unlockName(_kind);
+    if (_unlock) {
+      if (!await confirmAction(context, 'Turn off $name?', 'You will sign in with your PIN or password on this device.', 'Turn off')) return;
+      if (!mounted) return;
+      final pw = await askCurrentPassword(context, 'Turning off $name changes how you sign in on this device.');
+      if (pw == null) return;
+      final err = await repo.disableUnlock(s.tenant, s.userId, password: pw);
+      await _loadPin();
+      if (mounted) say(context, err ?? '${name[0].toUpperCase()}${name.substring(1)} turned off on this device', error: err != null);
+      return;
+    }
+    final ok = await confirmAction(
+      context,
+      'Use $name to sign in?',
+      'Your ${_kind == UnlockKind.windowsHello ? 'Windows Hello face, fingerprint or PIN' : 'fingerprint or face'} is checked by '
+          '${_kind == UnlockKind.windowsHello ? 'Windows' : 'Android'}; RxPOS never sees or keeps it. Only for a device that only you use: '
+          'anyone whose fingerprint or face is set up on this device could open your account, so only one person per device can turn this on. '
+          'Your password is still needed after $offlineDays days without signing in online, and when this is turned off.',
+      'Continue',
+    );
+    if (!ok || !mounted) return;
+    final pw = await askCurrentPassword(context, 'Turning on $name changes how you sign in on this device.');
+    if (pw == null) return;
+    final err = await repo.enableUnlock(s.tenant, s.userId, password: pw);
+    await _loadPin();
+    if (mounted) say(context, err ?? '${name[0].toUpperCase()}${name.substring(1)} is on for this device', error: err != null);
   }
 
   Future<void> _signOut() async {
@@ -175,6 +241,7 @@ class _AccountMenuState extends ConsumerState<AccountMenu> {
       onSelected: (v) => switch (v) {
         'password' => changePassword(),
         'pin' => _managePin(),
+        'unlock' => _manageUnlock(),
         'twostep' => showAppDialog<void>(context: context, builder: (_) => TwoStepDialog(session: s)),
         'logout' => _signOut(),
         _ => null,
@@ -182,7 +249,14 @@ class _AccountMenuState extends ConsumerState<AccountMenu> {
       itemBuilder: (_) => [
         PopupMenuItem(enabled: false, child: Text('${s.userName} · ${s.role}')),
         const PopupMenuItem(value: 'password', child: ListTile(leading: Icon(Icons.key_outlined), title: Text('Change my password'))),
-        PopupMenuItem(value: 'pin', child: ListTile(leading: Icon(Icons.lock_outline, color: _pin ? Colors.green : null), title: Text(_pin ? 'Quick PIN is set for this device' : 'Set a quick PIN for this device'))),
+        PopupMenuItem(value: 'pin', child: ListTile(leading: Icon(_pin ? Icons.lock : Icons.lock_outline, color: _pin ? Colors.green : null), title: Text(_pin ? 'Quick PIN is set for this device' : 'Set a quick PIN for this device'))),
+        // only what this device supports (Android fingerprint / face, Windows Hello; never on the web)
+        if (_kind != UnlockKind.none || _unlock)
+          PopupMenuItem(
+              value: 'unlock',
+              child: ListTile(
+                  leading: Icon(_kind == UnlockKind.windowsHello ? Icons.face_retouching_natural : Icons.fingerprint, color: _unlock ? Colors.green : null),
+                  title: Text(_unlock ? '${unlockName(_kind)[0].toUpperCase()}${unlockName(_kind).substring(1)} is on for this device' : 'Use ${unlockName(_kind)} on this device'))),
         if (s.token.startsWith('u.'))
           PopupMenuItem(value: 'twostep', child: ListTile(leading: Icon(Icons.verified_user_outlined, color: twoFactor ? Colors.green : null), title: Text(twoFactor ? 'Two-step sign-in is on' : 'Two-step sign-in'))),
         const PopupMenuItem(value: 'logout', child: ListTile(leading: Icon(Icons.logout), title: Text('Log out'))),

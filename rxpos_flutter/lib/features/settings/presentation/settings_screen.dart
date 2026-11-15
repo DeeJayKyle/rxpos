@@ -120,7 +120,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final can = ref.watch(permissionsProvider).value ?? const <String>{};
     return PageFrame(
       title: 'Settings',
-      subtitle: d.settings.name,
+      subtitle: '${d.settings.name} · shared by every device (This device holds the per-device options)',
       child: LayoutBuilder(builder: (context, box) {
         // the owner's choice (2026-11-15, the "app settings" references): settings in labelled groups with an icon and a
         // line each, a search, quick switches and a Danger zone. A PC shows the list beside the section; a phone, the

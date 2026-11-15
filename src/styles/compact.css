@@ -193,3 +193,25 @@ td small, td .small { font-size: 11.5px; }
 .lay-std .pos-cart .cart-line { padding-top: 2px; padding-bottom: 2px; }
 .pos-cart .cart-line input, .pos-cart .cart-line select { min-height: 20px; height: 22px; padding: 1px 6px; font-size: 12px; }
 .pos-cart .totals { padding-top: 10px; padding-bottom: 10px; }
+
+/* Reorder: order quantities typed by hand, and the review of orders before they are created (2026-11-15) */
+.reorder-qty, .qty-input { width: 84px; text-align: right; min-height: 36px; }
+.qty-input.invalid { border-color: var(--danger, #c0392b); outline: 2px solid color-mix(in srgb, var(--danger, #c0392b) 35%, transparent); }
+small.block { display: block; margin-top: 2px; white-space: nowrap; }
+label.check.small { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; cursor: pointer; }
+.po-plan { display: grid; gap: 10px; }
+.po-plan-group { padding: 10px 12px; }
+.po-plan-group table { margin-top: 6px; }
+@media (max-width: 640px) { .qty-input { width: 70px; } }
+/* Reports: what the figures cover (branch, dates, definition) */
+.report-scope { margin: 4px 0 10px; color: var(--muted); line-height: 1.45; }
+.report-scope strong { color: var(--text); }
+.report-scope .block { display: block; margin-top: 2px; }
+/* POS: safety in words (not colour alone) and where a finished sale is (saved here / synced) */
+.cart-line .badge.safety-rx, .cart-line .badge.safety-cd, .cart-line .badge.safety-expired { margin-left: 6px; font-size: 11px; font-weight: 700; }
+.cart-line .badge.safety-cd { background: color-mix(in srgb, var(--danger, #c0392b) 14%, transparent); color: var(--danger, #c0392b); }
+.cart-line .badge.safety-expired { background: color-mix(in srgb, var(--warn, #b45309) 16%, transparent); color: var(--warn, #b45309); display: inline-flex; align-items: center; gap: 3px; }
+.sale-saved { display: flex; align-items: flex-start; gap: 6px; margin: 4px 0 8px; padding: 6px 10px; border-radius: 8px; line-height: 1.4; }
+.sale-saved svg { flex: none; margin-top: 2px; }
+.sale-saved.ok { background: color-mix(in srgb, var(--ok, #15803d) 10%, transparent); color: var(--text); }
+.sale-saved.warn { background: color-mix(in srgb, var(--warn, #b45309) 12%, transparent); color: var(--text); }

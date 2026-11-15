@@ -18,6 +18,7 @@ const SUITES = [
   ['AI copilot and vision routes, mocked Workers AI (unit)', 'unit-ai-routes.mjs', []],
   ['date formats (unit)', 'unit-dateformat.mjs', []],
   ['packs (unit)', 'unit-packs.mjs', []],
+  ['purchase order plan (unit)', 'unit-poplan.mjs', []],
   ['GS1 pack codes (unit)', 'unit-gs1.mjs', []],
   ['insurance co-pay and balances (unit)', 'unit-insurance.mjs', []],
   ['expiry dates in any format (unit)', 'unit-expiry.mjs', []],
@@ -137,6 +138,7 @@ const SUITES = [
   ['the clean dashboard, widgets and the reference themes', 'v77-clean-dashboard.mjs', ['.output/v77']],
   ['settings and this device: groups, search, quick switches, danger zone', 'v78-settings.mjs', ['.output/v78']],
   ['clean pages: report groups, filter chips, side views', 'v79-clean-pages.mjs', ['.output/v79']],
+  ['purchase orders: review, quantities, mark as sent', 'v80-po-flow.mjs', ['.output/v80']],
   // every page on a PC and a phone, for design review: only on request (`npm test -- shots-all`)
   ...(process.argv[2] === 'shots-all' ? [['every page, PC and phone screenshots', 'shots-all.mjs', ['.output/all']]] : []),
   // performance timings: only on request (npm run bench), never part of npm test

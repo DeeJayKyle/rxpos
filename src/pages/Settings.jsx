@@ -80,7 +80,7 @@ export default function Settings() {
   const SecIcon = section?.[3];
   return (
     <div className={'page settings-page' + (tab ? ' has-section' : '')}>
-      <div className="page-head"><div><h1>Settings</h1><div className="sub">{db.settings.name} · shared by every device</div></div></div>
+      <div className="page-head"><div><h1>Settings</h1><div className="sub">{db.settings.name} · shared by every device (per-device options are in This device)</div></div></div>
       <div className="settings-layout">
         <aside className="settings-side" aria-label="Settings sections">
           <SettingsSearch can={can} />

@@ -1,5 +1,30 @@
 # RxPOS release notes
 
+## React (classic) app 1.9.1 · Flutter app 2.1 (next build) · November 2026
+
+Safer ordering, complete inventory figures, clearer screens and quicker, secure sign-in.
+
+- **Purchase orders (both apps):** a review before any order is saved, one group per supplier actually chosen
+  (cheapest, last or picked by hand), with estimated totals, lines without a known price flagged and a note to
+  confirm prices. Order quantities can be typed (whole numbers of 1 or more) and rounded up to whole packs.
+  **Print and WhatsApp no longer mark an order Sent**: a separate **Mark as sent** asks first and is audited.
+- **Inventory (Windows / Android):** every match is counted, totalled and exported (the list used to stop at 300);
+  rows load 300 at a time with "Showing X of Y" and Show more. Expiring / Expired look at every batch, so a medicine
+  with an expired batch and one expiring soon is in both. The batch list marks the batch that sells next (never an
+  expired one) and says EXPIRED in words.
+- **Reports and dashboard:** a scope line on every report (branch, dates, what it counts) that also goes on the PDF;
+  the dashboard says the branch, period and what sales and gross profit count. Expenses have no branch: the
+  expense card and the Expenses / Income reports now say so plainly (the figures themselves are unchanged).
+- **Till:** a finished sale says whether it is only saved on this device or saved and synced (other devices see it
+  once it syncs). Cart lines say Rx only, CD · register or expired stock (with the recorded reason) in words.
+- **Add Stock (web):** the help, markup field and empty price box say what really happens: the unit cost is the line
+  total ÷ quantity, and the retail price stays as it is unless you type one or tap "Use".
+- **Sign-in:** optional **fingerprint / face unlock on Android and Windows Hello on Windows** through the system's own
+  check (RxPOS never sees biometric data; a random unlock key lives in the system's secure storage). One person per
+  device; set up only after a password sign-in and the password again. Setting or removing a PIN, turning unlock on
+  or off and changing your password now ask for your current password, and are audited. PINs and unlock of disabled
+  or removed staff are deleted at the next sign-in on the device. Details: docs/SIGN-IN-AND-UNLOCK.md.
+
 ## React (classic) app 1.9.0 · Flutter app 2.1 (next build) · November 2026
 
 A clean, compact look across the whole app, from the owner's dashboard and settings references.

@@ -362,7 +362,8 @@ class _QuickEditScreenState extends ConsumerState<QuickEditScreen> {
     if (d == null) return const Center(child: CircularProgressIndicator());
     final s = d.settings;
     final stocked = d.products.where((p) => d.stockOf(p.id) > 0).toList();
-    final rows = (_q.trim().isEmpty ? stocked : searchProducts(stocked, _q, stockOf: (p) => d.stockOf(p.id))).take(300).toList();
+    final matched = _q.trim().isEmpty ? stocked : searchProducts(stocked, _q, stockOf: (p) => d.stockOf(p.id));
+    final rows = matched.take(300).toList(); // a page of rows to edit; the subtitle says when there are more
     String val(Product p, String k) => _edits[p.id]?[k] ?? switch (k) {
           'cost' => formatQty(p.cost), 'wholesale' => formatQty(p.wholesale), 'price' => formatQty(p.price), 'reorder' => formatQty(p.reorder),
           'barcode' => p.barcode, _ => '${p.raw[k] ?? ''}',
@@ -370,7 +371,7 @@ class _QuickEditScreenState extends ConsumerState<QuickEditScreen> {
     final n = _edits.length;
     return PageFrame(
       title: 'Quick Edit',
-      subtitle: '${stocked.length} medicines in stock · edit many prices at once, then save',
+      subtitle: '${stocked.length} medicines in stock${matched.length > rows.length ? ' · showing ${rows.length} of ${matched.length}, search to find the others' : ''} · edit many prices at once, then save',
       actions: [
         SearchField(onChanged: (v) => setState(() => _q = v)),
         OutlinedButton.icon(onPressed: () async {
