@@ -4,7 +4,7 @@ import {
   LayoutDashboard, ShoppingCart, PackageOpen, ReceiptText, FileText, ClipboardPlus, Users, Truck, Pill, FlaskConical,
   Boxes, PackagePlus, History, CalendarClock, PencilRuler, ScrollText, Wallet, Tags, Landmark, ArrowLeftRight, HandCoins,
   ArrowDownLeft, ArrowUpRight, ClipboardCheck, RefreshCw, Undo2, ShieldPlus, BookOpen, BarChart3, Settings as SettingsIcon, Search, Sun, Moon, Menu, LogOut, ChevronDown,
-  BellRing, ShoppingBag, Tag, FileUp, Building2, Send, ShieldCheck, Clock, BookMarked, MessagesSquare, UserCog, KeyRound, CalendarDays, Thermometer, Palette, MonitorSmartphone, ScanText, GraduationCap, Megaphone, CalendarRange, LockKeyhole, NotebookPen, PanelLeftClose, PanelLeftOpen, WifiOff,
+  BellRing, Plus, ShoppingBag, Tag, FileUp, Building2, Send, ShieldCheck, Clock, BookMarked, MessagesSquare, UserCog, KeyRound, CalendarDays, Thermometer, Palette, MonitorSmartphone, ScanText, GraduationCap, Megaphone, CalendarRange, LockKeyhole, NotebookPen, PanelLeftClose, PanelLeftOpen, WifiOff,
   Sparkles, Pin, Keyboard, UserPlus, Archive, BadgeCheck,
 } from 'lucide-react';
 import { useStore, useSyncState, makePassword, put, audit, isLowStock, expiryCounts } from './store.jsx';
@@ -544,18 +544,24 @@ function Shell() {
               {recent.length > 0 && !rail && <div className="nav-group nav-quick"><div className="nav-title static">Recent</div>{recent.map((pg) => item(pg, 'recent'))}</div>}
             </>);
           })()}
-          {groups.map((g, i) => (
-            <div key={i} className="nav-group">
-              {g.group && <button className="nav-title" aria-expanded={!collapsed[g.group]} onClick={() => toggleGroup(g.group)}>{g.group}<ChevronDown size={13} style={{ transform: collapsed[g.group] ? 'rotate(-90deg)' : '', transition: 'transform .15s' }} /></button>}
-              {g.items.map(([to, label, Icon, , badge]) => { const key = keyOf('go:' + to) && showKey(keyOf('go:' + to)); return (
-                <NavLink key={to} to={to} end title={rail ? label + (key ? ` (${key})` : '') : undefined} hidden={!rail && collapsed[g.group] && !g.items.some(([t]) => t === location.pathname) && !(badge && counts[badge] > 0)}>
+          {groups.map((g, i) => { const add = QUICK_ADD[g.group] && can(QUICK_ADD[g.group][2]) ? QUICK_ADD[g.group] : null; const alerts = g.items.reduce((a, it) => a + (it[4] && counts[it[4]] > 0 ? counts[it[4]] : 0), 0); return (
+            <div key={i} className={'nav-group' + (collapsed[g.group] ? ' collapsed' : ' open')}>
+              {g.group && <div className="nav-title-row">
+                <button className="nav-title" aria-expanded={!collapsed[g.group]} onClick={() => toggleGroup(g.group)}>
+                  <ChevronDown size={13} className="nav-chev" />{g.group}<span className="nav-count" title={`${g.items.length} pages`}>{g.items.length}</span>
+                  {collapsed[g.group] && alerts > 0 && <span className="count">{alerts}</span>}
+                </button>
+                {add && <button type="button" className="nav-add" title={add[0]} aria-label={add[0]} onClick={() => navigate(add[1], add[3] ? { state: add[3] } : undefined)}><Plus size={14} /></button>}
+              </div>}
+              {g.items.map(([to, label, Icon, , badge], n) => { const key = keyOf('go:' + to) && showKey(keyOf('go:' + to)); return (
+                <NavLink key={to} to={to} end style={{ '--i': n }} title={rail ? label + (key ? ` (${key})` : '') : undefined} hidden={!rail && collapsed[g.group] && !g.items.some(([t]) => t === location.pathname) && !(badge && counts[badge] > 0)}>
                   <Icon size={17} /><span className="grow">{label}</span>
                   {badge && counts[badge] > 0 && <span className="count">{counts[badge]}</span>}
                   {key && <kbd>{key}</kbd>}
                 </NavLink>
               ); })}
             </div>
-          ))}
+          ); })}
         </nav>
         {!rail && here !== '/' && <NavPromo counts={counts} can={can} />}{/* the Dashboard shows the same card */}
         <div className="user-box">
@@ -709,6 +715,14 @@ function Gate() {
   if (location.pathname === '/owner' && isWeb) return <Suspense fallback={<div className="loading"><div className="spinner" /></div>}><OwnerConsole /></Suspense>;
   return user ? <Shell /> : <Auth />;
 }
+
+// The + beside a menu group: its most common "new …" (the sidebar groups from the owner's references, 2026-11-15)
+const QUICK_ADD = {
+  Sales: ['New sale', '/pos', 'pos.sell'],
+  People: ['Add a customer', '/customers', 'customers', { create: true }],
+  'Medicine Inventory': ['Receive stock', '/add-stock', 'stock.receive'],
+  Finance: ['Add an expense', '/expenses', 'finance', { create: true }],
+};
 
 export default function App() {
   useHideSplash();

@@ -86,6 +86,14 @@ await p.evaluate(() => [...document.querySelectorAll('button')].find((x) => /Edi
 await p.evaluate(() => [...document.querySelectorAll('.modal button')].find((x) => /standard dashboard/.test(x.textContent)).click()); await wait(300);
 await p.keyboard.press('Escape'); await wait(400);
 check('…and "Back to the standard dashboard" restores the clean layout', JSON.stringify(await widgets()) === JSON.stringify(['figures', 'chart', 'health', 'top', 'recent']));
+// sidebar groups: a count, a + quick add, opening and closing
+check('sidebar groups show how many pages they hold', await p.evaluate(() => [...document.querySelectorAll('.nav-title .nav-count')].length >= 4));
+await p.evaluate(() => [...document.querySelectorAll('.nav-title')].find((x) => /Finance/.test(x.textContent))?.click()); await wait(500);
+check('a group opens with its pages', await p.evaluate(() => { const g = [...document.querySelectorAll('.nav-group')].find((x) => /Finance/.test(x.querySelector('.nav-title')?.textContent || '')); return g.classList.contains('open') && [...g.querySelectorAll('a')].some((a) => !a.hidden); }));
+await p.screenshot({ path: path.join(out, 'sidebar-open.png'), clip: { x: 0, y: 0, width: 260, height: 1000 } });
+await p.evaluate(() => [...document.querySelectorAll('.nav-add')].find((x) => /Receive stock/.test(x.title))?.click()); await wait(800);
+check('the + of Medicine Inventory opens Add Stock', await p.evaluate(() => location.hash.includes('add-stock')));
+await p.evaluate(() => { location.hash = '#/'; }); await wait(1200);
 // themes from the references
 for (const [id, side] of [['royal-violet', 'dark'], ['cobalt', 'dark'], ['soft-grey', 'light'], ['sage', 'light'], ['ember-forge', 'dark']]) {
   await p.evaluate((x) => { localStorage.setItem('pharmapos-theme', x); }, id);
