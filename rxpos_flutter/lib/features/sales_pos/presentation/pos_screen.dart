@@ -1408,10 +1408,16 @@ class _SalePanel extends ConsumerWidget {
               Row(
                 children: [
                   Text('Total', style: th.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
-                  const Spacer(),
-                  Text(
-                    fmt(t.total),
-                    style: th.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900, color: th.colorScheme.primary),
+                  const SizedBox(width: 8),
+                  // large text: the amount shrinks to fit rather than running off the panel
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(fmt(t.total), style: th.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900, color: th.colorScheme.primary)),
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -1500,6 +1506,29 @@ class _SalePanel extends ConsumerWidget {
                 buttons,
               ];
               // on a phone, and with Split-Pane (the sale and payment always in full view), the payment area is not resized
+              // a phone with large text or a short screen: the payment details fold behind one row so the sale's lines keep
+              // their room; the total and Charge always stay in view (the method shown is the one Charge uses)
+              final mq = MediaQuery.of(context);
+              final tight = narrow && (mq.textScaler.scale(10) >= 12.5 || mq.size.height < 700);
+              if (tight) {
+                return _FoldablePay(
+                  key: const Key('pay-fold'),
+                  summary: Row(children: [
+                    Text('Total', style: th.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+                    const SizedBox(width: 6),
+                    Flexible(flex: 0, child: Text(method.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: th.textTheme.bodySmall)),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: FittedBox(fit: BoxFit.scaleDown, child: Text(fmt(due), style: th.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900, color: th.colorScheme.primary))),
+                      ),
+                    ),
+                  ]),
+                  details: pay.sublist(0, pay.length - 1),
+                  buttons: buttons,
+                );
+              }
               if (narrow || tokensOf(context).splitPane) return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: pay);
               // the payment area's height is dragged on its handle, or it folds down to the total and Charge
               return ResizableSection(
@@ -1527,6 +1556,43 @@ class _SalePanel extends ConsumerWidget {
 
 extension on String {
   String ifBlank(String other) => trim().isEmpty ? other : this;
+}
+
+/// A phone's payment area when space is tight: the total and Charge always shown; discount, method, amount tendered
+/// and the rest behind "Payment options" (scrolls when open, so it never pushes Charge off the screen).
+class _FoldablePay extends StatefulWidget {
+  const _FoldablePay({super.key, required this.summary, required this.details, required this.buttons});
+  final Widget summary, buttons;
+  final List<Widget> details;
+  @override
+  State<_FoldablePay> createState() => _FoldablePayState();
+}
+
+class _FoldablePayState extends State<_FoldablePay> {
+  bool _open = false;
+  @override
+  Widget build(BuildContext context) {
+    final h = MediaQuery.sizeOf(context).height;
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
+      const Divider(height: 8),
+      widget.summary,
+      Align(
+        alignment: Alignment.centerLeft,
+        child: TextButton.icon(
+          key: const Key('pay-options'),
+          onPressed: () => setState(() => _open = !_open),
+          icon: Icon(_open ? Icons.expand_less : Icons.expand_more),
+          label: Text(_open ? 'Hide payment options' : 'Payment options (method, discount, amount tendered)'),
+        ),
+      ),
+      if (_open)
+        ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: h * .2),
+          child: SingleChildScrollView(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: widget.details)),
+        ),
+      widget.buttons,
+    ]);
+  }
 }
 
 /// The small actions under a sale line (Directions, Drug info): compact, still easy to hit.

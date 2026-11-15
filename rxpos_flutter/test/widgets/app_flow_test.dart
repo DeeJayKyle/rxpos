@@ -470,6 +470,30 @@ void main() {
     await done(tester);
   });
 
+  testWidgets('phone with large text: payment options fold so the lines keep their room; Charge stays in view and charges', (tester) async {
+    await tester.runAsync(signedIn);
+    tester.platformDispatcher.textScaleFactorTestValue = 1.5;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    await start(tester, size: const Size(375, 812));
+    GoRouter.of(tester.element(find.byType(Scaffold).first)).go('/pos');
+    await settle(tester, 4);
+    await tester.tap(find.text('Calmex 500mg Tabs'));
+    await settle(tester, 4);
+    await tester.tap(find.text('1 item'));
+    await settle(tester);
+    expect(find.byKey(const Key('pay-fold')), findsOneWidget);
+    expect(find.text('Amount tendered'), findsNothing, reason: 'folded');
+    expect(find.textContaining('Charge UGX'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('pay-options')));
+    await settle(tester, 4);
+    expect(find.widgetWithText(TextField, 'Amount tendered'), findsOneWidget);
+    expect(tester.takeException(), isNull, reason: 'no overflow');
+    await tester.tap(find.textContaining('Charge UGX'));
+    await settle(tester);
+    expect(find.text('Sale complete'), findsOneWidget);
+    await done(tester);
+  });
+
   testWidgets('a sale can be held and resumed', (tester) async {
     await tester.runAsync(signedIn);
     await start(tester);
