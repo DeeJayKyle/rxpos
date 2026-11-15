@@ -1,5 +1,28 @@
 # RxPOS release notes
 
+## React (classic) app 1.9.0 · Flutter app 2.1 (next build) · November 2026
+
+A clean, compact look across the whole app, from the owner's dashboard and settings references.
+
+- **Dashboard:** period chips (Today, 1M, 6M, 12M, YTD) with each figure's ↑ / ↓ against the period before; one sales
+  chart (Daily or Monthly) with a tooltip and Export (figures as CSV, or a picture); **Stock health**, a gauge with
+  what drives it (expiring, expired, out of stock, low) and the biggest problem in one sentence; the top medicines of
+  the period and the latest sales with Paid / Owing pills. Everything else is a widget you can switch back on:
+  **Edit widgets** shows, hides and orders the cards on each device.
+- **Settings and This device:** settings in labelled groups, each with an icon and a line on what it is for; a search
+  that takes you to any setting; quick switches that save at once; rarely changed reordering options under
+  Advanced; and a red **Danger zone** whose actions show a warning screen and then ask once more.
+- **Sidebar:** no Recent list; every group folds (Pinned too) and shows how many pages it holds; a + beside Sales,
+  People, Medicine Inventory and Finance for the most common "new …".
+- **Fewer tabs:** Reports' nine tabs are three groups (Sales, Money, Stock); Inventory and Expiry filter with chips
+  beside the search; held sales, drafts and supplier prices open from a button with "‹ back".
+- **Compact everywhere:** one type and spacing scale, smaller controls and tables, quieter top bar, small "Tip" chips
+  instead of banners, smaller empty states; one action per table row with the rest on hover; on phones every list
+  is one card per row and toolbars fit one line.
+- **Motion:** cards rise in one after another, numbers count up, chart lines draw in, the gauge fills, tooltips pop,
+  menu groups slide open. Off when the device asks for reduced motion.
+- **Five new themes** from the references: Royal Violet, Cobalt Blue, Soft Grey, Sage Garden and Ember Forge.
+
 ## React (classic) app 1.8.8 · Flutter app 2.1 (next build) · November 2026
 
 - **Correcting a delivery works like Add stock:** in Purchase history, Edit purchase no longer lets you type the

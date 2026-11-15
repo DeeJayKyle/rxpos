@@ -175,7 +175,7 @@ check('a supervisor sees everyone\'s held sales, with who started them', await u
 await clickText(B, '.seg button', /^Mine$/); await wait(200);
 check('…"Mine" shows only their own', !/Casey Cashier/.test(await text(B, '.draft-grid')));
 await clickText(B, '.seg button', /^Everyone/); await wait(200);
-check('the dashboard shows an "Open drafts" tile', await (async () => { await go(B, '#/'); return /open drafts\s*1/i.test(await text(B, '.stats.alerts')); })());
+check('the dashboard\'s Stock health shows "Open drafts"', await (async () => { await go(B, '#/'); return /open drafts[\s\S]*?\b1\b/i.test(await text(B, '.health-card')); })());
 await go(B, '#/sales'); await clickText(B, '.subview-btn', /^Held sales/); await wait(300); await clickText(B, '.seg button', /^Everyone/); await wait(200);
 await clickText(B, '.draft-card button', /^Discard$/); await wait(300); await clickText(B, '.modal button', /^Discard$/);
 check('…discarding it asks, removes it and writes the audit log', await untilNode(async () => (await owner(`/tenants/${tid}/records?t=drafts`)).total === 0 && (await owner(`/tenants/${tid}/records?t=audit&q=Draft%20discarded`)).total >= 1));

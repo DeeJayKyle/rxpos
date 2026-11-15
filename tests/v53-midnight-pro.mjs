@@ -55,7 +55,7 @@ check('the open page: no block highlight, its icon cyan', (await css('.sidebar n
 check('cards are glass: blur, rounded 16px, translucent slate', /blur\(16px\)/.test(await css('.stats.kpis .card', 'backdropFilter')) && (await css('.stats.kpis .card', 'borderRadius')) === '16px');
 const bento = await p.evaluate(() => [...document.querySelectorAll('.stats.kpis > .card')].map((c) => Math.round(c.getBoundingClientRect().width)));
 check('dashboard figures as a bento grid: today\'s sales is the large tile', bento.length >= 2 && bento[0] > bento[1] * 1.5, bento.join());
-check('stock alerts are one strip of tabs', (await css('.stats.alerts', 'display')) === 'flex');
+check('stock figures are one list in Stock health', !!(await p.$('.health-card .health-rows')));
 check('figures in tight mono', /mono|Menlo|Consolas/i.test(await css('.stat strong', 'fontFamily')));
 await p.screenshot({ path: path.join(out, 'dashboard.png') });
 // the till

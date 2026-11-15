@@ -122,7 +122,8 @@ await until(A, () => !!document.querySelector('.sidebar'), 20000); await wait(50
 
 // #7 in-stock-only alerts
 await go(A, '/');
-const tiles = await A.evaluate(() => Object.fromEntries([...document.querySelectorAll('.stat')].map((s) => [s.querySelector('small')?.textContent.trim(), s.querySelector('strong')?.textContent.trim()])));
+// the stock figures are in the dashboard's Stock health card (2026-11-15)
+const tiles = await A.evaluate(() => Object.fromEntries([...[...document.querySelectorAll('.stat')].map((s) => [s.querySelector('small')?.textContent.trim(), s.querySelector('strong')?.textContent.trim()]), ...[...document.querySelectorAll('.health-rows a')].map((a) => [a.querySelector('.grow').firstChild.textContent.trim(), a.querySelector('b').textContent.trim()])]));
 check('#7 dashboard "Low stock" counts only medicines in stock (1: Lowstock Syrup, not the never-stocked cream)', tiles['Low stock'] === '1', JSON.stringify(tiles));
 check('#7 dashboard "Soon expiring" counts only batches with stock left (1: Expiry Beta)', tiles['Soon expiring'] === '1', tiles['Soon expiring']);
 await go(A, '/expiry');
