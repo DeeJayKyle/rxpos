@@ -1,7 +1,9 @@
 import { useEffect, useState, useRef } from 'react';
-import { Store, Printer, MessageSquareText, Cloud, DatabaseBackup, Sheet, Copy, CheckCircle2, XCircle, Smartphone, CreditCard, Plus, Trash2, RotateCcw, ShieldAlert, BellRing, MapPin, Search, Thermometer, RefreshCw } from 'lucide-react';
+import { Store, Printer, MessageSquareText, Cloud, DatabaseBackup, Sheet, Copy, CheckCircle2, XCircle, Smartphone, CreditCard, Plus, Trash2, RotateCcw, BellRing, MapPin, Search, Thermometer, RefreshCw } from 'lucide-react';
 import { useStore, useSyncState, uid, audit, downloadFile, today, defaultSettings, DEFAULT_PAYMENT_METHODS } from '../store.jsx';
-import { Tabs } from '../ui.jsx';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { ChevronLeft, Printer as PrinterIcon, ScanBarcode, Repeat, Clock, MonitorSmartphone, UserCog } from 'lucide-react';
+import { SettingsSearch, SettingsGroup, SettingsRow, ToggleRow, DangerZone, useFindSetting } from '../components/SettingsKit.jsx';
 import { ask, toast } from '../feedback.jsx';
 import { cloudConfig, daySummary, dailyStockLink } from '../cloud.js';
 import { searchPlaces, DEFAULT_PLACE, storageLimits } from '../weather.js';
@@ -13,7 +15,14 @@ import ReportEmails from './ReportEmails.jsx';
 export default function Settings() {
   const { syncStatus } = useSyncState();
   const { db, update, saveSettings, user, syncCfg, syncNow, branchId, setBranchId, can, features, sharedSettings, pharmacyOverrides, resetPharmacyOverrides } = useStore();
-  const [tab, setTab] = useState('general');
+  const location = useLocation();
+  const navigate = useNavigate();
+  const wide = () => typeof innerWidth === 'number' && innerWidth >= 900;
+  // phones open on the list of settings; a PC shows the list beside the first section
+  const [tab, setTabRaw] = useState(() => location.state?.tab || (wide() ? 'general' : null));
+  const setTab = (t) => { setTabRaw(t); if (!wide()) scrollTo(0, 0); };
+  useEffect(() => { if (location.state?.tab) setTabRaw(location.state.tab === 'danger' ? (wide() ? 'general' : null) : location.state.tab); }, [location.key]); // eslint-disable-line react-hooks/exhaustive-deps
+  useFindSetting(true);
   const [s, setS] = useState(db.settings);
   const settingsBaseline = useRef(db.settings);
   useEffect(() => {
@@ -47,11 +56,54 @@ export default function Settings() {
   const findPlace = async (e) => { e.preventDefault(); if (!placeQ.trim()) return; try { setPlaces(await searchPlaces(placeQ.trim())); } catch { toast('Could not search places. Check the internet.', 'error'); } };
   const lim = storageLimits(s);
 
-  const tabs = [['general', 'Pharmacy'], ['payments', 'Payment methods'], ['receipts', 'Receipts & stock'], ['messages', 'Messages & recovery'], ['alerts', 'Alerts & storage'], ['online', 'Online & Mobile Money'], ['backup', 'Data & backup']];
+  // a quick switch saves at once, for every device (like Save on its section)
+  const quick = async (k, v) => {
+    try {
+      await saveSettings({ ...db.settings, [k]: v }); setS((x) => ({ ...x, [k]: v }));
+      await update((d) => audit(d, user, 'Settings changed', `${k}: ${v ? 'on' : 'off'}`, branchId));
+    } catch (e) { toast(e.message, 'error'); }
+  };
+  const restoreDefaults = async () => {
+    const keep = Object.fromEntries([...Object.keys(pharmacyDefaults()), 'adminWhatsApp', 'weatherPlace'].map((k) => [k, db.settings[k]]));
+    const next = { ...defaultSettings(), ...keep };
+    await saveSettings(next); setS(next);
+    await update((d) => audit(d, user, 'Settings restored to defaults', '', branchId));
+    toast('Default settings restored');
+  };
+  const groups = [
+    ['Pharmacy', [['general', 'Pharmacy', 'Name, contacts, tax and markups', Store], ['payments', 'Payment methods', 'Cash, mobile money, card and insurance at the till', CreditCard]]],
+    ['Selling & stock', [['receipts', 'Receipts & stock', 'Printing, packs, expiry warnings and reordering', PrinterIcon]]],
+    ['Alerts & messages', [['messages', 'Messages & recovery', 'Reminder texts, password recovery, client details', MessageSquareText], ['alerts', 'Alerts & storage', 'Daily summary, report emails, reminders, weather, storage limits', BellRing]]],
+    ['Online & data', [['online', 'Online & Mobile Money', 'Cloud sync, Mobile Money and SMS', Cloud], ['backup', 'Data & backup', 'Updates, backups and the daily stock sheet', DatabaseBackup]]],
+  ];
+  const section = groups.flatMap(([, rows]) => rows).find(([k]) => k === tab);
+  const SecIcon = section?.[3];
   return (
-    <div className="page">
-      <div className="page-head"><div><h1>Settings</h1><div className="sub">{db.settings.name}</div></div></div>
-      <Tabs value={tab} onChange={setTab} tabs={tabs} />
+    <div className={'page settings-page' + (tab ? ' has-section' : '')}>
+      <div className="page-head"><div><h1>Settings</h1><div className="sub">{db.settings.name} · shared by every device</div></div></div>
+      <div className="settings-layout">
+        <aside className="settings-side" role="tablist" aria-label="Settings sections" aria-orientation="vertical">
+          <SettingsSearch can={can} />
+          <SettingsGroup label="Quick switches">
+            <ToggleRow icon={Printer} label="Print receipts automatically" desc="After each sale" checked={!!db.settings.autoPrint} onChange={(v) => quick('autoPrint', v)} />
+            <ToggleRow icon={ScanBarcode} label="Blind cash-up" desc="Count the cash before seeing the total" checked={!!db.settings.blindCashUp} onChange={(v) => quick('blindCashUp', v)} />
+            <ToggleRow icon={Repeat} label="Automatic reorder levels" desc="Set every week from sales" checked={db.settings.autoReorder !== false} onChange={(v) => quick('autoReorder', v)} />
+            {features.hourly !== false && <ToggleRow icon={Clock} label="Hourly reminder" desc="Time and today's to-dos" checked={db.settings.hourlyChime !== false} onChange={(v) => quick('hourlyChime', v)} />}
+          </SettingsGroup>
+          {groups.map(([label, rows]) => (
+            <SettingsGroup key={label} label={label}>
+              {rows.map(([k, name, desc, Icon]) => <SettingsRow key={k} icon={Icon} label={name} desc={desc} active={tab === k} onClick={() => setTab(k)} />)}
+            </SettingsGroup>
+          ))}
+          <SettingsGroup label="More">
+            <SettingsRow tab={false} icon={MonitorSmartphone} label="This device" desc="Screen, sounds, keyboard, updates" onClick={() => navigate('/device')} />
+            {can('users.manage') && <SettingsRow tab={false} icon={UserCog} label="Users & roles" desc="Staff accounts and permissions" onClick={() => navigate('/users')} />}
+          </SettingsGroup>
+          <DangerZone actions={[can('data.reset') && { icon: RotateCcw, label: 'Restore default settings', desc: 'Every setting except the pharmacy details', title: 'Restore every setting to its default?', text: 'Receipt, stock, message, alert and payment-method settings go back to factory defaults on every device. Pharmacy name, address, phone, TIN and licence are kept. Sales, stock and records are not touched.', confirm: 'Restore defaults', final: 'All settings except your pharmacy details go back to factory defaults on every device.', note: 'To erase or restore a pharmacy\'s data, contact your RxPOS provider.', run: restoreDefaults }]} />
+        </aside>
+        <div className="settings-main">
+          {section && <button type="button" className="btn ghost sm settings-back" onClick={() => setTab(null)}><ChevronLeft size={16} />All settings</button>}
+          {section && <div className="settings-section-head"><span className="settings-icon big"><SecIcon size={20} /></span><div><h2>{section[1]}</h2><small className="muted">{section[2]}</small></div></div>}
 
       {tab === 'general' && (
         <form className="card" onSubmit={submitSettings}>
@@ -111,13 +163,18 @@ export default function Settings() {
             </label>
             <p className="muted small full">Stock is always counted in single units. A medicine's packs are set in Medicine List → Packs; each line in Add Stock or at the till can still be switched between packs and units.</p>
             {field('expiryWarnDays', 'Warn about expiry (days before)', 'number')}
-            {field('leadDays', 'Supplier lead time (days)', 'number')}
-            {field('coverDays', 'Reorder enough stock for (days)', 'number')}
-            {field('deadDays', 'Dead stock after no sales for (days)', 'number')}
             <label className="field check"><input type="checkbox" checked={s.autoReorder !== false} onChange={(e) => setS({ ...s, autoReorder: e.target.checked })} /><span>Set reorder levels automatically every week from sales</span></label>
-            {field('autoReorderDays', 'Use sales from the last (days)', 'number', { placeholder: '30' })}
-            {field('safetyDays', 'Safety stock (extra days of sales)', 'number', { placeholder: '7' })}
           </div>
+          <details className="advanced">
+            <summary>Advanced reordering</summary>
+            <div className="form-grid">
+              {field('leadDays', 'Supplier lead time (days)', 'number')}
+              {field('coverDays', 'Reorder enough stock for (days)', 'number')}
+              {field('deadDays', 'Dead stock after no sales for (days)', 'number')}
+              {field('autoReorderDays', 'Use sales from the last (days)', 'number', { placeholder: '30' })}
+              {field('safetyDays', 'Safety stock (extra days of sales)', 'number', { placeholder: '7' })}
+            </div>
+          </details>
           <p className="muted small">Tip: in the print dialog choose your thermal printer, set margins to “None” and scale to 100%. For silent printing on the desktop app, set the thermal printer as the Windows default printer.</p>
           <div className="form-actions"><button className="btn primary">Save</button></div>
         </form>
@@ -256,24 +313,10 @@ export default function Settings() {
             <button className="btn primary" onClick={() => downloadFile(`rxpos-backup-${today()}.json`, JSON.stringify({ ...db, settings: sharedSettings }), 'application/json')}>Download a backup</button>
           </div>
           {can('settings.manage') && syncCfg?.url && <DailyStockSheet syncCfg={syncCfg} />}
-          {can('data.reset') && (
-            <div className="danger-zone">
-              <h3><ShieldAlert size={18} />Restore default settings</h3>
-              <div className="row between gap">
-                <p className="muted small">Receipt, stock, message, alert and payment-method settings go back to factory defaults. Pharmacy name, address, phone, TIN and licence are kept. To erase or restore a pharmacy's data, contact your RxPOS provider.</p>
-                <button type="button" className="btn ghost" onClick={async () => {
-                  if (!(await ask({ title: 'Restore default settings?', message: 'All settings except your pharmacy details go back to factory defaults on every device.', confirmText: 'Restore defaults', danger: true }))) return;
-                  const keep = Object.fromEntries([...Object.keys(pharmacyDefaults()), 'adminWhatsApp', 'weatherPlace'].map((k) => [k, db.settings[k]]));
-                  const next = { ...defaultSettings(), ...keep };
-                  saveSettings(next); setS(next);
-                  update((d) => audit(d, user, 'Settings restored to defaults', '', branchId));
-                  toast('Default settings restored');
-                }}><RotateCcw size={16} />Restore defaults</button>
-              </div>
-            </div>
-          )}
         </div>
       )}
+        </div>
+      </div>
     </div>
   );
 }

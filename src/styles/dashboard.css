@@ -118,3 +118,16 @@
   .gauge-fill, .bento-bar i, .meter i, .health-rows li, .recent-table tbody tr, .top-list tbody tr, .chart-tip, .chart-export-menu { animation: none !important; }
   .trend-line, .trend-series path { stroke-dasharray: none; }
 }
+
+/* phones and narrow windows: the greeting above, the date and New sale under it; chart tools on one line */
+@media (max-width: 899px) {
+  .dash-page .welcome { flex-direction: column; align-items: stretch; }
+  .dash-tools { justify-content: flex-start; }
+  .dash-tools .btn.primary { margin-left: auto; }
+}
+@media (max-width: 640px) {
+  .chart-card .card-head { flex-direction: column; align-items: stretch; gap: 8px; }
+  .chart-tools { justify-content: space-between; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .chart-tools .seg { flex: none; }
+  .chart-export .btn span, .chart-export .btn { white-space: nowrap; }
+}
