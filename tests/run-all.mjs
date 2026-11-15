@@ -134,6 +134,7 @@ const SUITES = [
   ['notes and SOP pages: blocks, "/" menu, pages inside pages, sync', 'v74-notes.mjs', []],
   ['database views (table, board, gallery) and slash commands', 'v75-views.mjs', []],
   ['the daily on-device copy is made by a worker', 'v76-daily-copy.mjs', []],
+  ['the clean dashboard, widgets and the reference themes', 'v77-clean-dashboard.mjs', ['.output/v77']],
   // performance timings: only on request (npm run bench), never part of npm test
   ...(process.argv[2] === 'bench' ? [['benchmarks', 'bench.mjs', ['.output/bench']]] : []),
   // speed on a slow phone CPU with a big pharmacy (timings vary between machines: on request, `npm test -- perf-speed`)

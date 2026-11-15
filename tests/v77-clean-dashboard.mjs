@@ -1,0 +1,107 @@
+// The clean dashboard (2026-11-15, the owner's choice from the dashboard references): period chips with ↑ / ↓ on the
+// four figures, one sales chart (Daily / Monthly) with a tooltip and Export, stock health with what drives it, the
+// top medicines and the latest sales; Edit widgets shows, hides and orders the cards on this device; the reference
+// themes (Royal Violet, Cobalt Blue, Soft Grey, Sage Garden, Ember Forge). Fictional data only.
+//   node v77-clean-dashboard.mjs <base> <ownerKey> <outDir>
+import puppeteer from 'puppeteer-core';
+import fs from 'node:fs';
+import path from 'node:path';
+import { CHROME } from './chrome.mjs';
+const [base, ownerKey, out = '.output/v77'] = process.argv.slice(2);
+fs.mkdirSync(out, { recursive: true });
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+let pass = 0, fail = 0;
+const check = (n, ok, x = '') => { ok ? pass++ : fail++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${n}${x !== '' ? '  ' + String(x).slice(0, 300) : ''}`); };
+const owner = (p, body) => fetch(base + '/api/owner' + p, { method: body ? 'POST' : 'GET', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + ownerKey }, body: body ? JSON.stringify(body) : undefined }).then((r) => r.json());
+const until = async (p, fn, ms = 20000) => { const end = Date.now() + ms; while (Date.now() < end) { if (await p.evaluate(fn).catch(() => false)) return true; await wait(250); } return false; };
+
+const T = await owner('/tenants', { name: 'Clean Dash Pharmacy', admin: { name: 'Dana Admin', email: 'dana@clean.rx', password: 'dana-pass-1234' } });
+const tid = T.tenant.id, slug = T.tenant.slug;
+await owner('/tenants/' + tid, { features: { catalog: false } });
+const at = (daysAgo) => { const d = new Date(); d.setDate(d.getDate() - daysAgo); d.setHours(10, 0, 0, 0); return d.toISOString(); };
+const exp = (days) => { const d = new Date(); d.setDate(d.getDate() + days); return d.toISOString().slice(0, 10); };
+const sale = (id, n, daysAgo, pid, name, qty, price, cost, paid) => ({ t: 'sales', id, rec: { number: 'R' + n, date: at(daysAgo), type: 'retail', branchId: 'main', items: [{ id: pid, name, qty, price, cost, alloc: [] }], subtotal: qty * price, discount: 0, tax: 0, total: qty * price, payment: paid === 0 ? 'Credit' : 'Cash', paid: paid ?? qty * price, customerId: 'walk-in', customerName: paid === 0 ? 'Test Clinic One' : 'Walk-in Customer', cashier: 'Dana Admin', status: 'completed' } });
+await owner('/tenants/' + tid + '/records', { records: [
+  { t: 'products', id: 'p1', rec: { name: 'Amoxil 500mg Caps', generic: 'Amoxicillin', form: 'Capsules', price: 500, cost: 200, reorder: 5 } },
+  { t: 'products', id: 'p2', rec: { name: 'Cipro 500', generic: 'Ciprofloxacin', form: 'Tablets', price: 800, cost: 300, reorder: 50 } },
+  { t: 'products', id: 'p3', rec: { name: 'Zinc 20mg', generic: 'Zinc', form: 'Tablets', price: 200, cost: 90, reorder: 5 } },
+  { t: 'batches', id: 'b1', rec: { productId: 'p1', batch: 'A1', expiry: exp(400), cost: 200, branchId: 'main' } },
+  { t: 'batches', id: 'b2', rec: { productId: 'p2', batch: 'C1', expiry: exp(20), cost: 300, branchId: 'main' } },
+  { t: 'movements', id: 'm1', rec: { productId: 'p1', qty: 40, type: 'Opening stock', branchId: 'main', batchId: 'b1', date: at(60) } },
+  { t: 'movements', id: 'm2', rec: { productId: 'p2', qty: 10, type: 'Opening stock', branchId: 'main', batchId: 'b2', date: at(60) } },
+  sale('s1', 1, 0, 'p1', 'Amoxil 500mg Caps', 4, 500, 200),
+  sale('s2', 2, 0, 'p2', 'Cipro 500', 1, 800, 300, 0),
+  sale('s3', 3, 1, 'p1', 'Amoxil 500mg Caps', 2, 500, 200),
+  sale('s4', 4, 12, 'p2', 'Cipro 500', 3, 800, 300),
+  sale('s5', 5, 45, 'p1', 'Amoxil 500mg Caps', 10, 500, 200),
+] });
+const b = await puppeteer.launch({ executablePath: CHROME, headless: true });
+const p = await (await b.createBrowserContext()).newPage();
+await p.setViewport({ width: 1440, height: 1000 });
+const errors = []; p.on('pageerror', (e) => errors.push(e.message));
+await p.goto(base + '/' + slug, { waitUntil: 'networkidle2' }); await wait(500);
+await p.evaluate(() => { for (const id of ['pos', 'dashboard']) localStorage.setItem('rxpos-tip:' + id, '1'); });
+await p.type('input[autocomplete=username]', 'dana@clean.rx'); await p.type('input[type=password]', 'dana-pass-1234');
+await p.evaluate(() => [...document.querySelectorAll('form button')].find((x) => /^Sign in/.test(x.textContent.trim()))?.click());
+await p.waitForSelector('.sidebar', { timeout: 20000 });
+await until(p, () => /Synced/.test(document.querySelector('.pill.clock .clock-state')?.innerText || ''), 30000);
+await until(p, () => document.querySelectorAll('.recent-table tbody tr').length >= 5, 15000);
+await wait(1500);
+const tiles = () => p.evaluate(() => Object.fromEntries([...document.querySelectorAll('.kpis .stat')].map((s) => [s.querySelector('small').textContent.trim(), s.querySelector('strong').innerText.trim()])));
+const widgets = () => p.evaluate(() => [...document.querySelectorAll('.dash-cell')].map((c) => c.dataset.widget));
+
+check('clean layout: figures, chart, health, top medicines, latest sales (and nothing else)', JSON.stringify(await widgets()) === JSON.stringify(['figures', 'chart', 'health', 'top', 'recent']), JSON.stringify(await widgets()));
+check('header: search, bell and today\'s date', await p.evaluate(() => !!document.querySelector('.dash-search') && !!document.querySelector('.dash-bell .icon-btn') && /\d{4}/.test(document.querySelector('.date-pill')?.innerText || '')));
+let t = await tiles();
+check('Today: today\'s sales 2,800 with ↑ against yesterday', /2,800/.test(t["Today's sales"]) && await p.evaluate(() => /up/.test(document.querySelector('.kpis .stat .delta')?.className || '')), JSON.stringify(t));
+await p.evaluate(() => [...document.querySelectorAll('.period-chips button')].find((x) => x.textContent === '1M').click()); await wait(900);
+t = await tiles();
+check('1M: sales of the last 30 days (6,200) compared with the 30 days before', /6,200/.test(t.Sales) && /vs the 30 days before/.test(await p.evaluate(() => document.querySelector('.kpis .stat').innerText)), JSON.stringify(t));
+check('…the top medicines follow the period', /last 30 days/.test(await p.evaluate(() => document.querySelector('[data-widget=top] h3').innerText)) && /Amoxil/.test(await p.evaluate(() => document.querySelector('.top-list').innerText)));
+await p.reload({ waitUntil: 'networkidle2' }); await wait(2000);
+check('the period chip is kept on this device', await p.evaluate(() => document.querySelector('.period-chips [aria-checked=true]')?.textContent === '1M'));
+check('stock health: a gauge, an insight and what drives it (expiring Cipro)', await p.evaluate(() => /\d+%/.test(document.querySelector('.gauge-num')?.textContent || '') && /Expiring/.test(document.querySelector('.driven-by')?.innerText || '') && !!document.querySelector('.health-insight strong')));
+check('latest sales: a Paid and an Owing pill', await p.evaluate(() => { const t = document.querySelector('.recent-table').innerText; return /Paid/.test(t) && /Owing/.test(t); }));
+// chart tooltip and export
+const hit = await p.$$('.trend-hit');
+await hit[hit.length - 2].hover(); await wait(400);
+check('chart: pointing at a day shows a tooltip', await p.evaluate(() => /Sales/.test(document.querySelector('.chart-tip')?.innerText || '')));
+await p.evaluate(() => [...document.querySelectorAll('.chart-card .seg button')].find((x) => x.textContent === 'Monthly').click()); await wait(600);
+check('chart: Monthly shows money in and out', /month by month/.test(await p.evaluate(() => document.querySelector('.chart-card h3').innerText)));
+await p.evaluate(() => document.querySelector('.chart-export button').click()); await wait(200);
+check('chart: Export offers figures (CSV) and a picture (PNG)', await p.evaluate(() => /CSV/.test(document.querySelector('.chart-export-menu')?.innerText || '') && /PNG/.test(document.querySelector('.chart-export-menu').innerText)));
+await p.keyboard.press('Escape');
+await p.screenshot({ path: path.join(out, 'dashboard.png'), fullPage: true });
+// edit widgets
+await p.evaluate(() => [...document.querySelectorAll('button')].find((x) => /Edit widgets/.test(x.textContent)).click()); await wait(400);
+await p.evaluate(() => { const li = [...document.querySelectorAll('.widget-list li')].find((x) => /Stock alert tiles/.test(x.innerText)); li.querySelector('input').click(); });
+await p.evaluate(() => { const li = [...document.querySelectorAll('.widget-list li')].find((x) => /Latest sales/.test(x.innerText)); li.querySelector('input').click(); });
+await p.evaluate(() => [...document.querySelectorAll('.modal button')].find((x) => /Done/.test(x.textContent)).click()); await wait(600);
+let w = await widgets();
+check('Edit widgets: the alert tiles come back, latest sales goes', w.includes('alerts') && !w.includes('recent'), JSON.stringify(w));
+await p.reload({ waitUntil: 'networkidle2' }); await wait(2000);
+w = await widgets();
+check('…kept on this device after a reload', w.includes('alerts') && !w.includes('recent'), JSON.stringify(w));
+await p.evaluate(() => [...document.querySelectorAll('button')].find((x) => /Edit widgets/.test(x.textContent)).click()); await wait(300);
+await p.evaluate(() => [...document.querySelectorAll('.modal button')].find((x) => /standard dashboard/.test(x.textContent)).click()); await wait(300);
+await p.keyboard.press('Escape'); await wait(400);
+check('…and "Back to the standard dashboard" restores the clean layout', JSON.stringify(await widgets()) === JSON.stringify(['figures', 'chart', 'health', 'top', 'recent']));
+// themes from the references
+for (const [id, side] of [['royal-violet', 'dark'], ['cobalt', 'dark'], ['soft-grey', 'light'], ['sage', 'light'], ['ember-forge', 'dark']]) {
+  await p.evaluate((x) => { localStorage.setItem('pharmapos-theme', x); }, id);
+  await p.reload({ waitUntil: 'networkidle2' }); await wait(1800);
+  const got = await p.evaluate(() => [document.documentElement.dataset.palette, document.documentElement.dataset.sidebar]);
+  check(`theme ${id} applies (sidebar ${side})`, got[0] === id && got[1] === side, JSON.stringify(got));
+  await p.screenshot({ path: path.join(out, `theme-${id}.png`) });
+}
+// phone
+await p.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true, deviceScaleFactor: 1 });
+await p.reload({ waitUntil: 'networkidle2' }); await wait(2000);
+check('phone: nothing runs off the screen', await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), await p.evaluate(() => document.documentElement.scrollWidth));
+await p.screenshot({ path: path.join(out, 'dashboard-phone.png'), fullPage: true });
+check('no page errors', !errors.length, errors.join(' | '));
+
+await b.close();
+await owner('/tenants/' + tid + '/delete', { confirm: T.tenant.slug });
+console.log(`\n${pass} passed, ${fail} failed`);
+process.exit(fail ? 1 : 0);

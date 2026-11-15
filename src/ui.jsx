@@ -260,7 +260,7 @@ export function CountUp({ value, ms = 700 }) {
   return str.replace(m[0], m[0].includes(',') ? txt : txt.replace(/,/g, ''));
 }
 
-export function Stat({ label, value, sub, tone, icon: Icon, delta, to, state }) {
+export function Stat({ label, value, sub, tone, icon: Icon, delta, to, state, goodDown }) {
   const navigate = useNavigate();
   const go = to ? () => navigate(to, state ? { state } : undefined) : undefined;
   return (
@@ -270,7 +270,7 @@ export function Stat({ label, value, sub, tone, icon: Icon, delta, to, state }) 
       <strong><CountUp value={value} /></strong>
       <span className="muted small">
         {delta != null && isFinite(delta) && (
-          <span className={'delta ' + (delta >= 0 ? 'up' : 'down')}>{delta >= 0 ? <TrendingUp size={13} /> : <TrendingDown size={13} />}{Math.abs(Math.round(delta))}% </span>
+          <span className={'delta ' + (delta >= 0 ? 'up' : 'down') + (goodDown ? ' inverse' : '')}>{delta >= 0 ? <TrendingUp size={13} /> : <TrendingDown size={13} />}{Math.abs(Math.round(delta))}% </span>
         )}
         {sub}
       </span>

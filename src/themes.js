@@ -20,6 +20,11 @@ export const THEMES = [
   T('nord-snow', 'Nord Snow', 'light', { bg: '#eceff4', surface: '#ffffff', surface2: '#f2f4f8', border: '#d8dee9', borderStrong: '#c5ccda', text: '#2e3440', muted: '#4c566a', primary: '#5e81ac', primary2: '#88c0d0', sidebar: '#2e3440', sidebar2: '#3b4252' }, 'Nord'),
   T('sand', 'Savanna Sand', 'light', { bg: '#f9f5d7', surface: '#fbf1c7', surface2: '#f2e5bc', border: '#e5d5a8', borderStrong: '#d5c4a1', text: '#3c3836', muted: '#665c54', primary: '#af3a03', primary2: '#79740e', sidebar: '#282828', sidebar2: '#32302f' }, 'Gruvbox Light'),
   T('coral', 'Coral Care', 'light', { bg: '#fff5f4', surface: '#ffffff', surface2: '#fff8f7', border: '#f5dedb', borderStrong: '#ecc7c2', text: '#2b1412', muted: '#80605c', primary: '#e8505b', primary2: '#f59e0b', sidebar: '#2b1215', sidebar2: '#3a1a1e' }),
+  // From the owner's dashboard references (2026-11-15): one theme per style, named by the look
+  T('royal-violet', 'Royal Violet', 'light', { bg: '#f6f5fb', surface: '#ffffff', surface2: '#f8f7fd', border: 'rgba(46, 16, 101, 0.08)', borderStrong: 'rgba(46, 16, 101, 0.16)', text: '#1e1147', muted: '#5f5a7a', primary: '#6d3fd9', primary2: '#8b5cf6', sidebar: '#2e1065', sidebar2: '#4c1d95', flat: true }, 'Purple sidebar, white cards'),
+  T('cobalt', 'Cobalt Blue', 'light', { bg: '#f5f7fb', surface: '#ffffff', surface2: '#f7f9fd', border: 'rgba(15, 23, 42, 0.08)', borderStrong: 'rgba(15, 23, 42, 0.16)', text: '#0b1533', muted: '#586179', primary: '#1d4fd8', primary2: '#2563eb', sidebar: '#1d4ed8', sidebar2: '#1e40af', flat: true }, 'Blue sidebar, white cards'),
+  T('soft-grey', 'Soft Grey', 'light', { bg: '#f4f5f7', surface: '#ffffff', surface2: '#f7f8fa', border: 'rgba(15, 23, 42, 0.08)', borderStrong: 'rgba(15, 23, 42, 0.15)', text: '#111827', muted: '#5b6472', primary: '#3b5bdb', primary2: '#7048e8', sidebar: '#ffffff', sidebar2: '#fafbfc', sidebarText: '#374151', flat: true }, 'Light sidebar, pastel icons'),
+  T('sage', 'Sage Garden', 'light', { bg: '#f3f5f1', surface: '#ffffff', surface2: '#f6f8f4', border: 'rgba(23, 51, 34, 0.09)', borderStrong: 'rgba(23, 51, 34, 0.18)', text: '#173322', muted: '#56685b', primary: '#3f7d58', primary2: '#5f9a73', sidebar: '#b5cdb8', sidebar2: '#a4c0a8', sidebarText: '#1d3a28', flat: true }, 'Sage green, calm'),
   T('paper', 'High Contrast Light', 'light', { bg: '#ffffff', surface: '#ffffff', surface2: '#f3f3f3', border: '#9a9a9a', borderStrong: '#555555', text: '#000000', muted: '#333333', primary: '#0050b3', primary2: '#003a80', sidebar: '#000000', sidebar2: '#1a1a1a' }, 'accessibility'),
   // dark
   T('dark', 'RxPOS Night', 'dark', { bg: '#070b14', surface: '#0f1624', surface2: '#131c2d', border: '#1e293b', borderStrong: '#2b3a52', text: '#e6edf7', muted: '#8b9ab3', primary: '#2dd4bf', primary2: '#22d3ee', sidebar: '#050912', sidebar2: '#0b1220' }),
@@ -28,6 +33,7 @@ export const THEMES = [
   T('oled', 'RxPOS OLED Black', 'dark', { bg: '#000000', surface: '#0b0e14', surface2: '#121722', border: 'rgba(255, 255, 255, 0.10)', borderStrong: 'rgba(255, 255, 255, 0.18)', text: '#f8fafc', muted: '#9aa4b2', primary: '#2dd4bf', primary2: '#22d3ee', sidebar: '#000000', sidebar2: '#0b0e14', flat: true }, 'True OLED dark'),
   // Gold Night (2026-11-14, the owner's "dark luxury" reference): black canvas, warm ivory text, champagne gold
   T('gold-night', 'Gold Night', 'dark', { bg: '#0b0b0c', surface: '#141416', surface2: '#1b1b1e', border: 'rgba(212, 166, 74, 0.16)', borderStrong: 'rgba(212, 166, 74, 0.32)', text: '#f5f1e8', muted: '#a8a29e', primary: '#d4a64a', primary2: '#b8862b', sidebar: '#080808', sidebar2: '#121212', flat: true }, 'Dark luxury'),
+  T('ember-forge', 'Ember Forge', 'dark', { bg: '#101011', surface: '#1a1a1c', surface2: '#212124', border: 'rgba(255, 255, 255, 0.08)', borderStrong: 'rgba(255, 255, 255, 0.16)', text: '#f5f5f4', muted: '#a8a29e', primary: '#f97316', primary2: '#fb923c', sidebar: '#0c0c0d', sidebar2: '#141415', flat: true }, 'Charcoal and orange'),
   T('hybrid-dark', 'RxPOS Hybrid Dark', 'dark', { bg: '#07131b', surface: '#101d2b', surface2: '#162635', border: '#2b3a49', borderStrong: '#3a4c5e', text: '#f3f7fb', muted: '#9bafc2', primary: '#20c9c3', primary2: '#16a36a', sidebar: '#050e15', sidebar2: '#0a1721', flat: true }, 'Adaptive Hybrid'),
   T('tokyo-night', 'Tokyo Night', 'dark', { bg: '#16161e', surface: '#1a1b26', surface2: '#1f2335', border: '#292e42', borderStrong: '#3b4261', text: '#c0caf5', muted: '#7f88b8', primary: '#7aa2f7', primary2: '#bb9af7', sidebar: '#13131a', sidebar2: '#1a1b26' }, 'Tokyo Night'),
   T('nord', 'Nord Polar', 'dark', { bg: '#242933', surface: '#2e3440', surface2: '#343b49', border: '#3b4252', borderStrong: '#4c566a', text: '#eceff4', muted: '#a3adbf', primary: '#88c0d0', primary2: '#81a1c1', sidebar: '#1f232b', sidebar2: '#2a2f3a' }, 'Nord'),
@@ -90,7 +96,7 @@ export function themeVars(t) {
     '--primary-soft': dark ? rgba(c.primary, 0.14) : mix(c.primary, '#ffffff', 0.84),
     '--primary-ink': dark ? mix(c.primary, '#ffffff', 0.25) : mix(c.primary, '#000000', 0.35),
     '--bg-grad': c.flat ? 'none' : `radial-gradient(1100px 560px at 100% -10%, ${rgba(c.primary, dark ? 0.12 : 0.13)} 0%, transparent 60%), radial-gradient(850px 500px at -10% 110%, ${rgba(c.primary2, dark ? 0.1 : 0.1)} 0%, transparent 55%)`,
-    '--sidebar': c.sidebar, '--sidebar-2': c.sidebar2,
+    '--sidebar': c.sidebar, '--sidebar-2': c.sidebar2, ...(c.sidebarText ? { '--sidebar-text': c.sidebarText } : {}),
   };
 }
 
@@ -121,6 +127,8 @@ export function applyTheme(id, accentId = '') {
   const root = document.documentElement;
   root.dataset.theme = t.base;
   root.dataset.palette = t.id;
+  root.dataset.sidebar = lum(c.sidebar) > 0.4 ? 'light' : 'dark'; // light sidebars use dark text (styles/themes-ref.css)
+  if (!c.sidebarText) root.style.removeProperty('--sidebar-text');
   if (ACCENTS.some((a) => a.id === accentId)) root.dataset.accent = accentId; else delete root.dataset.accent;
   for (const [k, val] of Object.entries(themeVars(t))) root.style.setProperty(k, val);
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', dark ? c.sidebar : c.primary);

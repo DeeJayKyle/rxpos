@@ -450,7 +450,9 @@ function Shell() {
     };
     // capture: before the lists' keys (src/listcontrols.jsx), so G then E is Expenses and not also "edit the row"
     window.addEventListener('keydown', onKey, true);
-    return () => window.removeEventListener('keydown', onKey, true);
+    const search = () => setPalette(true); // the Dashboard's search box
+    window.addEventListener('rxpos:search', search);
+    return () => { window.removeEventListener('keydown', onKey, true); window.removeEventListener('rxpos:search', search); };
   }, [navigate]);
   // recent pages (this device), and each page's scroll position, kept while the app is open
   const scrolls = useRef({});
@@ -524,7 +526,7 @@ function Shell() {
   const initials = user.name.split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
 
   return (
-    <div className={'shell nav-' + navStyle + (drawer ? ' drawer-open' : '') + (rail ? ' rail' : '')}>
+    <div className={'shell nav-' + navStyle + (drawer ? ' drawer-open' : '') + (rail ? ' rail' : '') + (here === '/' ? ' on-home' : '')}>
       <div className="drawer-bg" onClick={() => setDrawer(false)} />
       <aside className="sidebar">
         <div className="brand"><BrandLogo src={db.license?.[0]?.branding?.logo} size={34} /> <span className="wordmark">Rx<span className="brand-accent">POS</span></span>

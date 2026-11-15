@@ -8,6 +8,8 @@ import { FeedbackHost } from './feedback.jsx';
 import { idbGet, idbKeys } from './idb.js';
 import './styles.css';
 import './styles/rxpos-nextgen.css';
+import './styles/themes-ref.css';
+import './styles/dashboard.css';
 import { applyTheme, startupTheme, savedAccent } from './themes.js';
 import { applyStyle, savedStyle } from './surface.js';
 import { applyLevel, savedLevel } from './vivid.js';
