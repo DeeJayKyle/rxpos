@@ -153,18 +153,26 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         RiseIn(index: 0, child: SizedBox(width: double.infinity, child: GreetingCard(pharmacy: s.name, name: session?.userName ?? '', canSell: can.contains('pos.sell')))),
         const SizedBox(height: 12),
-        Row(children: [
-          Expanded(child: SingleChildScrollView(scrollDirection: Axis.horizontal, child: SegmentedButton<String>(
+        LayoutBuilder(builder: (context, box) {
+          // the period chips share the row; on a phone Edit widgets is an icon so all five chips fit
+          final narrow = box.maxWidth < 520;
+          final chips = SegmentedButton<String>(
             key: const Key('period-chips'),
             style: const ButtonStyle(visualDensity: VisualDensity.compact),
             showSelectedIcon: false,
             segments: [for (final (k, l) in periods) ButtonSegment(value: k, label: Text(l))],
             selected: {period},
             onSelectionChanged: (v) => save(layout.encode(period: v.first)),
-          ))),
-          const SizedBox(width: 8),
-          TextButton.icon(key: const Key('edit-widgets-open'), onPressed: () => showEditWidgets(context, layout, save), icon: const Icon(Icons.tune, size: 18), label: const Text('Edit widgets')),
-        ]),
+          );
+          return Row(children: [
+            if (narrow) Expanded(child: chips) else chips,
+            if (!narrow) const Spacer(),
+            const SizedBox(width: 6),
+            narrow
+                ? IconButton.outlined(key: const Key('edit-widgets-open'), tooltip: 'Edit widgets', onPressed: () => showEditWidgets(context, layout, save), icon: const Icon(Icons.tune, size: 18))
+                : TextButton.icon(key: const Key('edit-widgets-open'), onPressed: () => showEditWidgets(context, layout, save), icon: const Icon(Icons.tune, size: 18), label: const Text('Edit widgets')),
+          ]);
+        }),
         const SizedBox(height: 12),
         LayoutBuilder(builder: (context, box) {
           final cols = box.maxWidth >= 1100 ? 12 : box.maxWidth >= 760 ? 6 : 1;

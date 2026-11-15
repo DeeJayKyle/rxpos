@@ -493,7 +493,7 @@ class _ReorderScreenState extends ConsumerState<ReorderScreen> {
         Align(
           alignment: Alignment.centerLeft,
           child: SegmentedButton<String>(
-            segments: const [ButtonSegment(value: 'reorder', label: Text('Reorder suggestions')), ButtonSegment(value: 'dead', label: Text('Dead stock')), ButtonSegment(value: 'orders', label: Text('Purchase orders'))],
+            segments: const [ButtonSegment(value: 'reorder', label: Text('Suggestions')), ButtonSegment(value: 'dead', label: Text('Dead stock')), ButtonSegment(value: 'orders', tooltip: 'Purchase orders', label: Text('Orders'))],
             selected: {_tab},
             onSelectionChanged: (x) => setState(() => _tab = x.first),
           ),
@@ -784,7 +784,7 @@ class _ExpiryScreenState extends ConsumerState<ExpiryScreen> {
         Align(
           alignment: Alignment.centerLeft,
           child: SegmentedButton<String>(
-            segments: [ButtonSegment(value: 'soon', label: Text('Expiring within $warn days (${e.soon.length})')), ButtonSegment(value: 'expired', label: Text('Expired (${e.expired.length})'))],
+            segments: [ButtonSegment(value: 'soon', tooltip: 'Expiring within $warn days', label: Text('Expiring (${e.soon.length})')), ButtonSegment(value: 'expired', label: Text('Expired (${e.expired.length})'))],
             selected: {_tab},
             onSelectionChanged: (v) => setState(() => _tab = v.first),
           ),

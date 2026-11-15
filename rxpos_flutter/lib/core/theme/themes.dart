@@ -387,7 +387,9 @@ ThemeData buildTheme(Palette base, {String accent = '', String surface = 'flat',
     textButtonTheme: TextButtonThemeData(style: TextButton.styleFrom(minimumSize: Size(48, tap - 4), shape: shapeOf(tk.controlRadius), textStyle: label, foregroundColor: Color(primaryText))),
     iconButtonTheme: IconButtonThemeData(style: IconButton.styleFrom(minimumSize: Size(tap - 4, tap - 4))),
     // segmented controls (iOS): a soft grey groove, the chosen segment lifted in the panel colour
-    segmentedButtonTheme: SegmentedButtonThemeData(style: SegmentedButton.styleFrom(minimumSize: Size(48, tap - 4), shape: control, side: BorderSide(color: fieldEdge, width: tk.borderWidth),
+    // tabs that fit (the owner's request, 2026-11-15): no tick taking room in the chosen segment, tighter padding, one
+    // line of text
+    segmentedButtonTheme: SegmentedButtonThemeData(selectedIcon: const SizedBox.shrink(), style: SegmentedButton.styleFrom(minimumSize: Size(40, tap - 4), padding: const EdgeInsets.symmetric(horizontal: 10), shape: control, side: BorderSide(color: fieldEdge, width: tk.borderWidth),
         backgroundColor: scheme.surfaceContainerHigh.withValues(alpha: .6), selectedBackgroundColor: scheme.primaryContainer, selectedForegroundColor: scheme.onPrimaryContainer)),
     chipTheme: ChipThemeData(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(tk.chipRadius)),
