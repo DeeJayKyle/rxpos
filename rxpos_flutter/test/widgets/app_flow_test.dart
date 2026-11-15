@@ -421,7 +421,7 @@ void main() {
     await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
     await settle(tester);
     expect(find.text('Keyboard and mouse'), findsOneWidget);
-    expect(find.text('G then C'), findsOneWidget);
+    expect(find.descendant(of: find.byType(Dialog), matching: find.text('G then C')), findsOneWidget);
     expect(find.text('Right-click'), findsOneWidget);
     await tester.tap(find.widgetWithText(FilledButton, 'Close'));
     await settle(tester);
@@ -780,6 +780,7 @@ void main() {
 
     cloud.api['reports/send'] = (b) => (200, {'period': '2026-11-07', 'to': ['owner@example.com'], 'sent': 1, 'error': '', 'file': 'Weekly.xlsx', 'sheets': const []});
     await navTo(tester, 'Settings');
+    noSnackBars(tester);
     await tester.ensureVisible(find.text('Alerts & storage'));
     await settle(tester, 2);
     await tester.tap(find.text('Alerts & storage'));
@@ -1523,6 +1524,7 @@ void main() {
     expect((shared['paymentMethods'] as List).length, 7);
     expect(((shared['paymentMethods'] as List).last as Map)['name'], 'Jubilee Insurance');
 
+    noSnackBars(tester);
     await tester.ensureVisible(find.text('Messages & recovery'));
     await tester.tap(find.text('Messages & recovery'));
     await settle(tester);
@@ -1536,6 +1538,7 @@ void main() {
     final audit = (await tester.runAsync(() => RecordStore(db).rows('audit')))!;
     expect(audit.where((a) => a['action'] == 'Settings changed').length, 2);
 
+    noSnackBars(tester);
     await tester.ensureVisible(find.text('Data & backup'));
     await tester.tap(find.text('Data & backup'));
     await settle(tester);
@@ -1634,6 +1637,11 @@ void main() {
     await settle(tester);
     await open('Settings');
     for (final t in ['Payment methods', 'Receipts & stock', 'Messages & recovery', 'Alerts & storage', 'Online & Mobile Money', 'Data & backup']) {
+      // a phone shows the list of settings, then the section with "All settings" to go back (2026-11-15)
+      if (find.byKey(const Key('settings-back')).evaluate().isNotEmpty) {
+        await tester.tap(find.byKey(const Key('settings-back')));
+        await settle(tester);
+      }
       await tester.ensureVisible(find.text(t));
       await tester.tap(find.text(t));
       await settle(tester);
@@ -1909,7 +1917,8 @@ void main() {
       }),
     );
     await start(tester);
-    expect(find.byKey(const Key('weather-card')), findsOneWidget, reason: 'the dashboard shows the weather');
+    // the clean dashboard (2026-11-15) keeps the weather card as a widget switched off at first (Edit widgets)
+    expect(find.byKey(const Key('weather-card')), findsNothing, reason: 'the dashboard\'s weather card is off at first');
     await navTo(tester, 'Weather & Storage');
     expect(find.text('Kampala, UG'), findsOneWidget, reason: "the connection's location");
     expect(find.text('31°C'), findsOneWidget);

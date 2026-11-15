@@ -270,13 +270,28 @@ class _Sidebar extends ConsumerWidget {
       ]);
     }
 
-    // pinned pages (G then G, or the pin in the top bar) and the last pages used, on this device
+    // pinned pages (G then G, or the pin in the top bar), on this device. The owner's choice (2026-11-15): no Recent list,
+    // and Pinned folds like every other group
     final byPath = {for (final s in screens) s.path: s};
     final pinned = [for (final p in ref.watch(navPinsProvider)) ?byPath[p]];
-    final recent = [for (final p in ref.watch(navRecentProvider)) if (p != location && !pinned.any((x) => x.path == p)) ?byPath[p]].take(4).toList();
+    final pinShut = collapsed['Pinned'] ?? false;
     Widget quick(String title, List<Screen> list, String kind) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          Padding(padding: const EdgeInsets.fromLTRB(20, 12, 12, 6), child: Text(title.toUpperCase(), style: t.textTheme.labelSmall?.copyWith(letterSpacing: .8, fontWeight: FontWeight.w700))),
+          InkWell(
+            key: const ValueKey('nav-group-Pinned'),
+            borderRadius: BorderRadius.circular(8),
+            onTap: () => toggle('Pinned'),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 12, 6),
+              child: Row(children: [
+                Expanded(child: Text(title.toUpperCase(), style: t.textTheme.labelSmall?.copyWith(letterSpacing: .8, fontWeight: FontWeight.w700))),
+                Text('${list.length}', style: t.textTheme.labelSmall?.copyWith(color: t.colorScheme.onSurfaceVariant)),
+                const SizedBox(width: 4),
+                AnimatedRotation(turns: pinShut ? -0.25 : 0, duration: const Duration(milliseconds: 150), child: Icon(Icons.expand_more, size: 18, color: t.colorScheme.onSurfaceVariant)),
+              ]),
+            ),
+          ),
           for (final s in list)
+            if (!pinShut || s.path == location)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
               child: ListTile(
@@ -292,7 +307,6 @@ class _Sidebar extends ConsumerWidget {
         ]);
     return ListView(key: const Key('sidebar'), padding: const EdgeInsets.symmetric(vertical: 8), children: [
       if (pinned.isNotEmpty) quick('Pinned', pinned, 'pin'),
-      if (recent.isNotEmpty) quick('Recent', recent, 'recent'),
       for (final g in navGroups)
         if (screens.any((s) => s.group == g)) ...[
           () {

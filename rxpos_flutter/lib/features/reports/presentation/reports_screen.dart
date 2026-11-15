@@ -19,6 +19,11 @@ const reportTabs = [
   ('sales', 'Sales Report'), ('lines', 'Sales lines'), ('products', 'Sales by Product'), ('consumption', 'Consumption (ABC)'), ('purchases', 'Purchase Report'),
   ('expenses', 'Expenses Report'), ('profit', 'Profit & margins'), ('stock', 'Stock Valuation'), ('income', 'Income Statement'),
 ];
+const reportGroups = [
+  ('sales', 'Sales', ['sales', 'lines', 'products', 'consumption']),
+  ('money', 'Money', ['purchases', 'expenses', 'profit', 'income']),
+  ('stock', 'Stock', ['stock']),
+];
 
 /// Reports (src/pages/Reports.jsx): a period (and branch); Sales Report, Sales lines, Sales by Product, Consumption
 /// (ABC), Purchase Report, Expenses Report, Profit & margins, Stock Valuation, Income Statement; every tab prints or
@@ -92,13 +97,26 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
             title: const Text('Reading your figures'),
             children: const [Padding(padding: EdgeInsets.all(8), child: Text('Pick the dates at the top right. Profit & margins shows what each medicine earns and lists prices below your target margin; every table prints to PDF, and lists export to CSV.'))],
           ),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Wrap(spacing: 6, children: [
-            for (final (k, l) in full ? reportTabs : reportTabs.where((x) => x.$1 == 'lines'))
-              ChoiceChip(label: Text(l), selected: tab == k, onSelected: (_) => setState(() => _tab = k)),
-          ]),
-        ),
+        // nine reports in three groups (src/pages/Reports.jsx; the owner's choice, 2026-11-15): Sales, Money and Stock
+        if (full) ...[
+          SegmentedButton<String>(
+            key: const Key('report-groups'),
+            showSelectedIcon: false,
+            style: const ButtonStyle(visualDensity: VisualDensity.compact),
+            segments: [for (final (k, l, _) in reportGroups) ButtonSegment(value: k, label: Text(l))],
+            selected: {reportGroups.firstWhere((g) => g.$3.contains(tab)).$1},
+            onSelectionChanged: (v) => setState(() => _tab = reportGroups.firstWhere((g) => g.$1 == v.first).$3.first),
+          ),
+          const SizedBox(height: 8),
+        ],
+        if (!full || reportGroups.firstWhere((g) => g.$3.contains(tab)).$3.length > 1)
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Wrap(spacing: 6, children: [
+              for (final (k, l) in full ? reportTabs.where((x) => reportGroups.firstWhere((g) => g.$3.contains(tab)).$3.contains(x.$1)) : reportTabs.where((x) => x.$1 == 'lines'))
+                ChoiceChip(label: Text(l), selected: tab == k, onSelected: (_) => setState(() => _tab = k)),
+            ]),
+          ),
         const SizedBox(height: 12),
         body,
       ]),

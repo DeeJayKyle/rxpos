@@ -40,12 +40,18 @@ const palettes = [
   Palette('nord-snow', 'Nord Snow', false, bg: 0xFFECEFF4, surface: 0xFFFFFFFF, surface2: 0xFFF2F4F8, border: 0xFFD8DEE9, borderStrong: 0xFFC5CCDA, text: 0xFF2E3440, muted: 0xFF4C566A, primary: 0xFF5E81AC, primary2: 0xFF88C0D0, sidebar: 0xFF2E3440, sidebar2: 0xFF3B4252, inspired: 'Nord'),
   Palette('sand', 'Savanna Sand', false, bg: 0xFFF9F5D7, surface: 0xFFFBF1C7, surface2: 0xFFF2E5BC, border: 0xFFE5D5A8, borderStrong: 0xFFD5C4A1, text: 0xFF3C3836, muted: 0xFF665C54, primary: 0xFFAF3A03, primary2: 0xFF79740E, sidebar: 0xFF282828, sidebar2: 0xFF32302F, inspired: 'Gruvbox Light'),
   Palette('coral', 'Coral Care', false, bg: 0xFFFFF5F4, surface: 0xFFFFFFFF, surface2: 0xFFFFF8F7, border: 0xFFF5DEDB, borderStrong: 0xFFECC7C2, text: 0xFF2B1412, muted: 0xFF80605C, primary: 0xFFE8505B, primary2: 0xFFF59E0B, sidebar: 0xFF2B1215, sidebar2: 0xFF3A1A1E),
+  // from the owner's dashboard references (2026-11-15), named by the look (src/themes.js)
+  Palette('royal-violet', 'Royal Violet', false, bg: 0xFFF6F5FB, surface: 0xFFFFFFFF, surface2: 0xFFF8F7FD, border: 0x142E1065, borderStrong: 0x292E1065, text: 0xFF1E1147, muted: 0xFF5F5A7A, primary: 0xFF6D3FD9, primary2: 0xFF8B5CF6, sidebar: 0xFF2E1065, sidebar2: 0xFF4C1D95, flat: true, inspired: 'Purple sidebar, white cards'),
+  Palette('cobalt', 'Cobalt Blue', false, bg: 0xFFF5F7FB, surface: 0xFFFFFFFF, surface2: 0xFFF7F9FD, border: 0x140F172A, borderStrong: 0x290F172A, text: 0xFF0B1533, muted: 0xFF586179, primary: 0xFF1D4FD8, primary2: 0xFF2563EB, sidebar: 0xFF1D4ED8, sidebar2: 0xFF1E40AF, flat: true, inspired: 'Blue sidebar, white cards'),
+  Palette('soft-grey', 'Soft Grey', false, bg: 0xFFF4F5F7, surface: 0xFFFFFFFF, surface2: 0xFFF7F8FA, border: 0x140F172A, borderStrong: 0x260F172A, text: 0xFF111827, muted: 0xFF5B6472, primary: 0xFF3B5BDB, primary2: 0xFF7048E8, sidebar: 0xFFFFFFFF, sidebar2: 0xFFFAFBFC, flat: true, inspired: 'Light sidebar, pastel icons'),
+  Palette('sage', 'Sage Garden', false, bg: 0xFFF3F5F1, surface: 0xFFFFFFFF, surface2: 0xFFF6F8F4, border: 0x17173322, borderStrong: 0x2E173322, text: 0xFF173322, muted: 0xFF56685B, primary: 0xFF3F7D58, primary2: 0xFF5F9A73, sidebar: 0xFFB5CDB8, sidebar2: 0xFFA4C0A8, flat: true, inspired: 'Sage green, calm'),
   Palette('paper', 'High Contrast Light', false, bg: 0xFFFFFFFF, surface: 0xFFFFFFFF, surface2: 0xFFF3F3F3, border: 0xFF9A9A9A, borderStrong: 0xFF555555, text: 0xFF000000, muted: 0xFF333333, primary: 0xFF0050B3, primary2: 0xFF003A80, sidebar: 0xFF000000, sidebar2: 0xFF1A1A1A, inspired: 'accessibility'),
   Palette('dark', 'RxPOS Night', true, bg: 0xFF070B14, surface: 0xFF0F1624, surface2: 0xFF131C2D, border: 0xFF1E293B, borderStrong: 0xFF2B3A52, text: 0xFFE6EDF7, muted: 0xFF8B9AB3, primary: 0xFF2DD4BF, primary2: 0xFF22D3EE, sidebar: 0xFF050912, sidebar2: 0xFF0B1220),
   // True OLED Black: pitch-black canvas (no backlight on OLED phones), raised cards, white hairlines, bio-teal; the default dark
   Palette('oled', 'RxPOS OLED Black', true, bg: 0xFF000000, surface: 0xFF0B0E14, surface2: 0xFF121722, border: 0x1AFFFFFF, borderStrong: 0x2EFFFFFF, text: 0xFFF8FAFC, muted: 0xFF9AA4B2, primary: 0xFF2DD4BF, primary2: 0xFF22D3EE, sidebar: 0xFF000000, sidebar2: 0xFF0B0E14, flat: true, inspired: 'True OLED dark'),
   // Gold Night (2026-11-14, the owner's "dark luxury" reference): black canvas, warm ivory text, champagne gold
   Palette('gold-night', 'Gold Night', true, bg: 0xFF0B0B0C, surface: 0xFF141416, surface2: 0xFF1B1B1E, border: 0x29D4A64A, borderStrong: 0x52D4A64A, text: 0xFFF5F1E8, muted: 0xFFA8A29E, primary: 0xFFD4A64A, primary2: 0xFFB8862B, sidebar: 0xFF080808, sidebar2: 0xFF121212, flat: true, inspired: 'Dark luxury'),
+  Palette('ember-forge', 'Ember Forge', true, bg: 0xFF101011, surface: 0xFF1A1A1C, surface2: 0xFF212124, border: 0x14FFFFFF, borderStrong: 0x29FFFFFF, text: 0xFFF5F5F4, muted: 0xFFA8A29E, primary: 0xFFF97316, primary2: 0xFFFB923C, sidebar: 0xFF0C0C0D, sidebar2: 0xFF141415, flat: true, inspired: 'Charcoal and orange'),
   Palette('hybrid-dark', 'RxPOS Hybrid Dark', true, bg: 0xFF07131B, surface: 0xFF101D2B, surface2: 0xFF162635, border: 0xFF2B3A49, borderStrong: 0xFF3A4C5E, text: 0xFFF3F7FB, muted: 0xFF9BAFC2, primary: 0xFF20C9C3, primary2: 0xFF16A36A, sidebar: 0xFF050E15, sidebar2: 0xFF0A1721, flat: true, inspired: 'Adaptive Hybrid'),
   Palette('tokyo-night', 'Tokyo Night', true, bg: 0xFF16161E, surface: 0xFF1A1B26, surface2: 0xFF1F2335, border: 0xFF292E42, borderStrong: 0xFF3B4261, text: 0xFFC0CAF5, muted: 0xFF7F88B8, primary: 0xFF7AA2F7, primary2: 0xFFBB9AF7, sidebar: 0xFF13131A, sidebar2: 0xFF1A1B26, inspired: 'Tokyo Night'),
   Palette('nord', 'Nord Polar', true, bg: 0xFF242933, surface: 0xFF2E3440, surface2: 0xFF343B49, border: 0xFF3B4252, borderStrong: 0xFF4C566A, text: 0xFFECEFF4, muted: 0xFFA3ADBF, primary: 0xFF88C0D0, primary2: 0xFF81A1C1, sidebar: 0xFF1F232B, sidebar2: 0xFF2A2F3A, inspired: 'Nord'),
@@ -142,6 +148,9 @@ const vivid = {
 };
 
 // ---- contrast ----
+/// A dark colour for snack bars and tooltips on light themes: the sidebar's, or the text colour when the sidebar is light
+int _ink(Palette p) => _lum(p.sidebar) > .4 ? p.text : p.sidebar;
+
 double _lum(int c) {
   double ch(int v) {
     final x = v / 255;
@@ -415,13 +424,13 @@ ThemeData buildTheme(Palette base, {String accent = '', String surface = 'flat',
     snackBarTheme: SnackBarThemeData(
       behavior: SnackBarBehavior.floating,
       width: tk.touch ? null : 520,
-      backgroundColor: Color(p.dark ? mix(p.surface2, 0xFFFFFFFF, .12) : p.sidebar),
+      backgroundColor: Color(p.dark ? mix(p.surface2, 0xFFFFFFFF, .12) : _ink(p)),
       contentTextStyle: text.bodyMedium?.copyWith(color: Colors.white),
       actionTextColor: Color(p.dark ? p.primary : mix(p.primary, 0xFFFFFFFF, .45)),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(tk.controlRadius)),
     ),
     tooltipTheme: TooltipThemeData(
-      decoration: BoxDecoration(color: Color(p.dark ? mix(p.surface2, 0xFFFFFFFF, .15) : p.sidebar), borderRadius: BorderRadius.circular(6)),
+      decoration: BoxDecoration(color: Color(p.dark ? mix(p.surface2, 0xFFFFFFFF, .15) : _ink(p)), borderRadius: BorderRadius.circular(6)),
       textStyle: text.bodySmall?.copyWith(color: Colors.white),
       waitDuration: const Duration(milliseconds: 400),
     ),
