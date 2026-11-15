@@ -215,3 +215,19 @@ label.check.small { display: inline-flex; align-items: center; gap: 6px; min-hei
 .sale-saved svg { flex: none; margin-top: 2px; }
 .sale-saved.ok { background: color-mix(in srgb, var(--ok, #15803d) 10%, transparent); color: var(--text); }
 .sale-saved.warn { background: color-mix(in srgb, var(--warn, #b45309) 12%, transparent); color: var(--text); }
+/* Web sign-in: browser or app? (components/AppDownloads.jsx) */
+.auth-side { align-content: center; gap: 16px; }
+.app-downloads { gap: 12px; padding: 22px; }
+.app-dl-title { display: flex; align-items: center; gap: 8px; font-size: 16px; margin: 0; }
+.app-dl-choices { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.app-dl-choice { display: flex; flex-direction: column; gap: 4px; padding: 10px; border: 1px solid var(--border); border-radius: 12px; }
+.app-dl-choice strong { display: flex; align-items: center; gap: 6px; font-size: 13.5px; }
+.app-dl-buttons { gap: 8px; }
+.btn.app-dl { display: flex; align-items: center; gap: 8px; min-height: 44px; text-decoration: none; }
+.btn.app-dl { justify-content: flex-start; text-align: left; padding-top: 6px; padding-bottom: 6px; }
+.app-dl-label { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
+.app-dl-label small { opacity: .85; font-weight: 500; }
+.app-dl-foot { margin: 0; line-height: 1.45; }
+.app-dl-note { display: flex; gap: 6px; align-items: flex-start; margin: 0; line-height: 1.45; }
+.app-dl-note a { white-space: nowrap; }
+@media (max-width: 480px) { .app-dl-choices { grid-template-columns: 1fr; } }

@@ -7,6 +7,7 @@ import { toast, ask } from '../feedback.jsx';
 import { cloudLogin, cloudUrl, forgotPassword, resetPassword, whatsappLink, pharmacyInfo, googleClient, resetWithGoogle, DEFAULT_CLOUD } from '../cloud.js';
 import { isWeb, isNative, pharmacySlugFromUrl } from '../platform.js';
 import { PasswordInput } from '../password.jsx';
+import AppDownloads from '../components/AppDownloads.jsx';
 
 const LAST_EMAIL = 'rxpos-last-email';
 const REMEMBER_CHOICE = 'rxpos-remember-choice';
@@ -250,6 +251,8 @@ export default function Auth() {
             </form>
           )}
         </div>
+        {/* the web version only: continue here, or install the Windows / Android app */}
+        {isWeb && !choices && !twoStep && !forgot && <AppDownloads />}
       </div>
     </div>
   );

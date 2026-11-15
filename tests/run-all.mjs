@@ -19,6 +19,7 @@ const SUITES = [
   ['date formats (unit)', 'unit-dateformat.mjs', []],
   ['packs (unit)', 'unit-packs.mjs', []],
   ['purchase order plan (unit)', 'unit-poplan.mjs', []],
+  ['app downloads on the web sign-in (unit)', 'unit-appdownloads.mjs', []],
   ['GS1 pack codes (unit)', 'unit-gs1.mjs', []],
   ['insurance co-pay and balances (unit)', 'unit-insurance.mjs', []],
   ['expiry dates in any format (unit)', 'unit-expiry.mjs', []],
@@ -139,6 +140,7 @@ const SUITES = [
   ['settings and this device: groups, search, quick switches, danger zone', 'v78-settings.mjs', ['.output/v78']],
   ['clean pages: report groups, filter chips, side views', 'v79-clean-pages.mjs', ['.output/v79']],
   ['purchase orders: review, quantities, mark as sent', 'v80-po-flow.mjs', ['.output/v80']],
+  ['web sign-in: browser or app, download links', 'v81-app-downloads.mjs', ['.output/v81']],
   // every page on a PC and a phone, for design review: only on request (`npm test -- shots-all`)
   ...(process.argv[2] === 'shots-all' ? [['every page, PC and phone screenshots', 'shots-all.mjs', ['.output/all']]] : []),
   // performance timings: only on request (npm run bench), never part of npm test

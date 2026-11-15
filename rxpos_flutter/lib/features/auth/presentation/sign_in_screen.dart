@@ -2,6 +2,7 @@
 // 30 days", offline with this device's own verifier, the quick PIN for this device, two-step sign-in, a choice when
 // one email works at several pharmacies, a question before switching this device to another pharmacy, and the
 // forgotten password (a code by email or SMS, Google on the web page, or the administrator on WhatsApp).
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -14,7 +15,9 @@ import '../../../core/sync/sync_engine.dart';
 import '../../extras/domain/extras.dart';
 import '../application/session_controller.dart';
 import '../data/auth_repository.dart' show classicChoice, ownerChoice;
+import '../domain/app_downloads.dart' show WebDevice;
 import '../domain/device_unlock.dart';
+import 'app_downloads_card.dart';
 import '../domain/session.dart';
 
 const lastEmailKey = 'last-email', rememberChoiceKey = 'remember-choice';
@@ -50,7 +53,10 @@ class _PasswordFieldState extends State<PasswordField> {
 enum _Stage { main, choose, twoStep, forgotAsk, forgotCode, pin }
 
 class SignInScreen extends ConsumerStatefulWidget {
-  const SignInScreen({super.key});
+  const SignInScreen({super.key, this.showDownloads = false, this.downloadsDevice});
+  /// tests: show the browser's "Browser or app?" card outside the browser too, as this device
+  final bool showDownloads;
+  final WebDevice? downloadsDevice;
 
   @override
   ConsumerState<SignInScreen> createState() => _SignInScreenState();
@@ -450,7 +456,17 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
         Text('© ${DateTime.now().year} RxPOS', style: const TextStyle(color: Colors.white54)),
       ]),
     );
-    final side = Center(child: SingleChildScrollView(padding: const EdgeInsets.all(24), child: card));
+    // the browser only: continue here, or install the Windows / Android app
+    final downloads = kIsWeb || widget.showDownloads ? AppDownloadsCard(device: widget.downloadsDevice) : null;
+    final side = Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          card,
+          if (downloads != null && _stage == _Stage.main) ...[const SizedBox(height: 16), downloads],
+        ]),
+      ),
+    );
     return Scaffold(body: wide ? Row(children: [Expanded(child: hero), Expanded(child: side)]) : side);
   }
 }
