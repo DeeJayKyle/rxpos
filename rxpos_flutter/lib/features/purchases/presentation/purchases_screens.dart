@@ -15,6 +15,7 @@ import '../../../core/presentation/export.dart';
 import '../../../core/presentation/widgets.dart';
 import '../../../core/presentation/sub_views.dart';
 import '../../../core/rules/fefo.dart';
+import '../../../core/rules/packs.dart';
 import '../../inventory/domain/medicines.dart';
 import '../../../core/rules/dates.dart';
 import '../../../core/rules/money.dart';
@@ -454,6 +455,16 @@ class _ReorderScreenState extends ConsumerState<ReorderScreen> {
   double _z = 1.65, _orderCost = 20000, _holding = 25;
   final _picked = <String, bool>{};
   final _chosen = <String, String>{};
+  final _qty = <String, String>{}; // productId → quantity typed by hand (checked before use)
+  bool _roundPacks = false; // round order quantities up to whole packs
+
+  /// The quantity to order: the suggestion, or what was typed (null when that is not a whole number ≥ 1)
+  double? _qtyOf(Suggestion r) {
+    final typed = _qty[r.p.id];
+    final q = typed == null ? r.qty : validOrderQty(typed)?.toDouble();
+    if (q == null) return null;
+    return _roundPacks ? roundToPack(q, mainPack(r.p)?.size) : q;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -473,7 +484,8 @@ class _ReorderScreenState extends ConsumerState<ReorderScreen> {
     final suggestions = orderSuggestions(d.products, d.stockOf, dailyDemand(saleList, days: _window, branch: d.branch), method: method, window: _window, lead: lead,
         cover: cover, z: _z, orderCost: _orderCost, holdingRate: _holding / 100, prices: prices, last: lastBuys(purchases), fromCheapest: _cheapest, chosen: _chosen);
     final dead = deadStock(d.products, d.stockOf, v.lastSale, deadDays: deadDays);
-    final chosen = suggestions.where((r) => _picked[r.p.id] ?? true).toList();
+    final chosen = [for (final r in suggestions.where((r) => _picked[r.p.id] ?? true)) if (_qtyOf(r) case final q?) r.withQty(q) else r];
+    final badQty = suggestions.where((r) => (_picked[r.p.id] ?? true) && _qtyOf(r) == null).toList();
     final orders = pos.where((o) => (o['branchId'] ?? 'main') == d.branch).toList()..sort((a, b) => '${b['date']}'.compareTo('${a['date']}'));
     final deadValue = dead.fold<double>(0, (a, r) => a + r.value);
     Widget numBox(String label, int value, ValueChanged<int> set) => SizedBox(width: 170,
@@ -485,7 +497,7 @@ class _ReorderScreenState extends ConsumerState<ReorderScreen> {
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         StatGrid(children: [
           StatCard(label: 'Need reordering', value: '${suggestions.length}', sub: 'cover ${lead + cover} days', color: Colors.orange.shade800),
-          StatCard(label: 'Est. order value', value: st.money(suggestions.fold<double>(0, (a, r) => a + r.cost))),
+          StatCard(label: 'Est. order value', value: st.money(chosen.fold<double>(0, (a, r) => a + r.cost)), sub: '${chosen.length} picked · estimate'),
           StatCard(label: 'Dead stock', value: '${dead.length}', sub: '${st.money(deadValue)} tied up', color: Theme.of(context).colorScheme.error),
           StatCard(label: 'Open purchase orders', value: '${orders.where((o) => o['status'] != 'Received').length}', color: Colors.deepPurple),
         ]),
@@ -514,16 +526,22 @@ class _ReorderScreenState extends ConsumerState<ReorderScreen> {
               OutlinedButton.icon(onPressed: () => _levels(saleList, d), icon: const Icon(Icons.auto_fix_high), label: const Text('Set reorder levels from sales')),
             FilledButton.icon(
               onPressed: chosen.isEmpty ? null : () async {
-                final groups = {for (final r in chosen) r.buy?.supplierId ?? ''}.length;
-                if (!await confirmAction(context, 'Create $groups purchase order${groups == 1 ? '' : 's'}?', '${chosen.length} medicines, grouped by the supplier you buy each from.', 'Create')) return;
+                if (badQty.isNotEmpty) {
+                  say(context, 'Fix the order quantity for ${badQty.first.p.name}${badQty.length > 1 ? ' and ${badQty.length - 1} more' : ''}');
+                  return;
+                }
+                final names = {for (final x in d.suppliers) x.id: x.name};
+                final plan = planOrders(chosen, names);
+                // the orders are shown first, grouped by the supplier actually chosen for each medicine; nothing is saved until Create
+                if (!await _review(plan, st, supplierRule(cheapest: _cheapest, handPicked: chosen.where((r) => _chosen.containsKey(r.p.id)).length))) return;
                 final user = (await ref.read(sessionControllerProvider.future))?.userName ?? '';
-                await createPurchaseOrders(ref.read(recordStoreProvider), chosen, supplierNames: {for (final x in d.suppliers) x.id: x.name}, user: user, branchId: d.branch);
+                final n = await createPurchaseOrders(ref.read(recordStoreProvider), chosen, supplierNames: names, user: user, branchId: d.branch);
                 if (!context.mounted) return;
-                say(context, 'Purchase orders created');
+                say(context, '$n draft purchase order${n == 1 ? '' : 's'} created. Nothing was sent to suppliers.');
                 setState(() => _tab = 'orders');
               },
               icon: const Icon(Icons.assignment_outlined),
-              label: Text('Create purchase orders (${chosen.length})'),
+              label: Text('Review orders (${chosen.length})'),
             ),
           ]),
           Card(
@@ -584,6 +602,7 @@ class _ReorderScreenState extends ConsumerState<ReorderScreen> {
                   _cheapest = x.first;
                   _chosen.clear();
                 })),
+            FilterChip(key: const Key('round-packs'), label: const Text('Round up to whole packs'), selected: _roundPacks, onSelected: (x) => setState(() => _roundPacks = x)),
           ]),
           if (suggestions.isEmpty) const Padding(padding: EdgeInsets.all(16), child: Text('Stock levels look healthy. Nothing needs ordering.')),
           for (final r in suggestions)
@@ -604,10 +623,7 @@ class _ReorderScreenState extends ConsumerState<ReorderScreen> {
                   Text(r.buy?.supplierName ?? '—'),
                 if (r.options.length > 1 && r.buy != null && r.buy!.cost > r.options.first.cost)
                   Text('${st.money(r.buy!.cost - r.options.first.cost)} more than ${r.options.first.supplierName}', style: TextStyle(color: Colors.orange.shade800, fontSize: 12)),
-              ]),
-              trailing: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.end, children: [
-                Text('order ${formatQty(r.qty)}', style: const TextStyle(fontWeight: FontWeight.w800)),
-                Text(st.money(r.cost), style: Theme.of(context).textTheme.bodySmall),
+                Padding(padding: const EdgeInsets.only(top: 4), child: _qtyBox(r, st)),
               ]),
             ),
         ],
@@ -641,6 +657,81 @@ class _ReorderScreenState extends ConsumerState<ReorderScreen> {
       ]),
     );
   }
+
+  /// Order quantity typed by hand, with what it means in packs and its estimated cost
+  Widget _qtyBox(Suggestion r, PharmacySettings st) {
+    final q = _qtyOf(r), pk = mainPack(r.p);
+    final small = Theme.of(context).textTheme.bodySmall;
+    return Wrap(spacing: 10, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
+      SizedBox(
+        width: 130,
+        child: TextFormField(
+          key: Key('qty-${r.p.id}'),
+          initialValue: _qty[r.p.id] ?? formatQty(r.qty),
+          keyboardType: TextInputType.number,
+          textAlign: TextAlign.right,
+          decoration: InputDecoration(isDense: true, labelText: 'Order qty', errorText: q == null ? 'Whole number ≥ 1' : null),
+          onChanged: (x) => setState(() => _qty[r.p.id] = x),
+        ),
+      ),
+      if (q != null) ...[
+        if (pk != null || q != r.qty) Text([if (q != r.qty) 'suggested ${formatQty(r.qty)}', if (pk != null) packCountText(q, pk.name, pk.size)].join(' · '), style: small),
+        Text('est. ${st.money(q * ((r.buy?.cost ?? 0) > 0 ? r.buy!.cost : r.p.cost))}', style: small?.copyWith(fontWeight: FontWeight.w700)),
+      ],
+    ]);
+  }
+
+  /// The orders about to be created, grouped by supplier, with estimated totals. True when the user chose Create.
+  Future<bool> _review(List<PoPlan> plan, PharmacySettings st, String rule) async {
+    final ok = await showAppDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: Text('Review ${plan.length} purchase order${plan.length == 1 ? '' : 's'}'),
+        content: SizedBox(
+          width: 560,
+          child: ListView(shrinkWrap: true, children: [
+            Text('Grouped by $rule. Costs are estimates from past purchases; confirm prices with each supplier. '
+                'The orders are saved as drafts and are not sent to anyone.', style: Theme.of(c).textTheme.bodySmall),
+            for (final o in plan)
+              Card(
+                margin: const EdgeInsets.only(top: 8),
+                child: Padding(
+                  padding: const EdgeInsets.all(10),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                    Row(children: [
+                      Expanded(child: Text(o.supplierName, style: const TextStyle(fontWeight: FontWeight.w800))),
+                      Text('${o.lines.length} line${o.lines.length == 1 ? '' : 's'} · ', style: Theme.of(c).textTheme.bodySmall),
+                      Text(st.money(o.total), style: const TextStyle(fontWeight: FontWeight.w800)),
+                    ]),
+                    if (o.supplierId.isEmpty) const _Warn('These medicines have no past supplier. Choose a supplier on the order before sending it.'),
+                    for (final l in o.lines)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Row(children: [
+                          Expanded(child: Text(l.p.name, overflow: TextOverflow.ellipsis, maxLines: 2)),
+                          Text('${formatQty(l.qty)} × ${_unitCost(l) > 0 ? st.money(_unitCost(l)) : 'no price yet'} = ${st.money(l.cost)}'),
+                        ]),
+                      ),
+                    if (o.unpriced > 0) _Warn('${o.unpriced} line${o.unpriced == 1 ? ' has' : 's have'} no known price; the total leaves ${o.unpriced == 1 ? 'it' : 'them'} out.'),
+                  ]),
+                ),
+              ),
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text('Estimated total ${st.money(plan.fold<double>(0, (a, o) => a + o.total))}', textAlign: TextAlign.right, style: const TextStyle(fontWeight: FontWeight.w800)),
+            ),
+          ]),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Back')),
+          FilledButton.icon(onPressed: () => Navigator.pop(c, true), icon: const Icon(Icons.assignment_outlined), label: Text('Create ${plan.length} draft order${plan.length == 1 ? '' : 's'}')),
+        ],
+      ),
+    );
+    return ok == true;
+  }
+
+  double _unitCost(Suggestion l) => (l.buy?.cost ?? 0) > 0 ? l.buy!.cost : l.p.cost;
 
   double _poValue(Map<String, Object?> po) => ((po['items'] as List?) ?? const []).cast<Map>().fold<double>(0, (a, i) => a + ((i['qty'] as num?) ?? 0) * ((i['cost'] as num?) ?? 0));
 
@@ -680,18 +771,18 @@ class _ReorderScreenState extends ConsumerState<ReorderScreen> {
     final supplier = d.suppliers.where((x) => x.id == po['supplierId']).firstOrNull;
     final phone = normalizePhone(supplier?.phone ?? '');
     final items = ((po['items'] as List?) ?? const []).cast<Map>();
-    Future<void> markSent() async {
-      if (po['status'] == 'Draft') await ref.read(recordStoreProvider).update((x) => x.put('purchaseOrders', {...po, 'status': 'Sent'}));
-    }
-
+    // Printing or opening WhatsApp does not mean the order reached the supplier: marking it sent is a separate, deliberate step
+    var current = po;
     await showAppDialog<void>(
       context: context,
-      builder: (c) => AlertDialog(
+      builder: (c) => StatefulBuilder(builder: (c, setDialog) => AlertDialog(
         title: Text('Purchase order ${po['number']}'),
         content: SizedBox(
           width: 520,
           child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            Text('${st.name} · ${dayOf('${po['date']}')}\nTo: ${po['supplierName']} · ${po['status']}'),
+            Text('${st.name} · ${dayOf('${po['date']}')}\nTo: ${po['supplierName']}'),
+            Text('Status: ${current['status']}${current['sentAt'] != null ? ' · marked sent ${dayOf('${current['sentAt']}')}${current['sentBy'] != null ? ' by ${current['sentBy']}' : ''}' : ''}. '
+                'Printing or opening WhatsApp does not change the status.', key: const Key('po-status'), style: Theme.of(c).textTheme.bodySmall),
             const Divider(),
             for (final (n, i) in items.indexed)
               Row(children: [Expanded(child: Text('${n + 1}. ${i['name']} × ${formatQty(i['qty'] as num? ?? 0)} @ ${st.money(i['cost'] as num? ?? 0)}')), Text(st.money(((i['qty'] as num?) ?? 0) * ((i['cost'] as num?) ?? 0)))]),
@@ -712,15 +803,13 @@ class _ReorderScreenState extends ConsumerState<ReorderScreen> {
             ),
           TextButton.icon(
             onPressed: phone.length < 12 ? null : () async {
-              await markSent();
               await launchUrl(Uri.parse(whatsappLink(phone, poText(po, st.name))), mode: LaunchMode.externalApplication);
             },
             icon: const Icon(Icons.chat_outlined),
             label: Text(phone.length < 12 ? 'Add the supplier’s phone number first' : 'WhatsApp to supplier'),
           ),
-          FilledButton.icon(
+          OutlinedButton.icon(
             onPressed: () async {
-              await markSent();
               await Printing.layoutPdf(name: '${po['number']}', onLayout: (_) => tablesPdf(st, title: 'Purchase order ${po['number']}', subtitle: 'To: ${po['supplierName']} · ${dayOf('${po['date']}')}', tables: [
                 PdfTable(head: const ['#', 'Medicine', 'Qty', 'Last cost', 'Total'], numeric: const [2, 3, 4], body: [
                   for (final (n, i) in items.indexed) ['${n + 1}', '${i['name']}', formatQty(i['qty'] as num? ?? 0), st.money(i['cost'] as num? ?? 0), st.money(((i['qty'] as num?) ?? 0) * ((i['cost'] as num?) ?? 0))],
@@ -730,10 +819,49 @@ class _ReorderScreenState extends ConsumerState<ReorderScreen> {
             icon: const Icon(Icons.print),
             label: const Text('Print'),
           ),
+          if (nextPoStatus(current['status']) != null)
+            FilledButton.icon(
+              key: const Key('po-mark-sent'),
+              onPressed: () async {
+                if (!await confirmAction(c, 'Mark ${po['number']} as sent?', 'Only do this once ${po['supplierName']} has the order.', 'Mark as sent')) return;
+                final user = (await ref.read(sessionControllerProvider.future))?.userName ?? '';
+                final saved = await markPoSent(ref.read(recordStoreProvider), current, user: user, branchId: d.branch);
+                if (saved != null && c.mounted) {
+                  setDialog(() => current = saved);
+                  say(c, '${po['number']} marked as sent');
+                }
+              },
+              icon: const Icon(Icons.outgoing_mail),
+              label: const Text('Mark as sent'),
+            ),
         ],
-      ),
+      )),
     );
   }
+}
+
+/// A warning with an icon and words (never colour alone)
+class _Warn extends StatelessWidget {
+  const _Warn(this.text);
+  final String text;
+  @override
+  Widget build(BuildContext context) {
+    final color = Colors.orange.shade800;
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Icon(Icons.warning_amber_rounded, size: 16, color: color, semanticLabel: 'Warning'),
+        const SizedBox(width: 4),
+        Expanded(child: Text(text, style: TextStyle(color: color, fontSize: 12))),
+      ]),
+    );
+  }
+}
+
+/// '3 boxes of 10'
+String packCountText(double q, String name, num size) {
+  final n = (q / size).ceil(), w = name.toLowerCase();
+  return '$n ${n == 1 ? w : RegExp(r'(s|x|ch|sh)$').hasMatch(w) ? '${w}es' : '${w}s'} of ${formatQty(size)}';
 }
 
 extension _Let<T> on T {

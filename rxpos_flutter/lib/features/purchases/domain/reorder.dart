@@ -114,6 +114,62 @@ class Suggestion {
   /// how the quantity was worked out (the other methods than [OrderMethod.cover])
   final String why;
   double get cost => qty * ((buy?.cost ?? 0) > 0 ? buy!.cost : p.cost);
+  /// the same line with a quantity typed or rounded by hand
+  Suggestion withQty(double q) => Suggestion(p, stock, perDay, daysLeft, q, buy, options, why: why);
+}
+
+/// A quantity typed by hand: a whole number of units, at least 1 (else null).
+int? validOrderQty(String v) {
+  final s = v.trim();
+  if (!RegExp(r'^\d+$').hasMatch(s)) return null;
+  final n = int.tryParse(s);
+  return n != null && n >= 1 && n <= 10000000 ? n : null;
+}
+
+/// Round a quantity up to whole packs (size 2 or more); otherwise unchanged.
+double roundToPack(double qty, num? size) => size == null || size <= 1 || qty <= 0 ? qty : (qty / size).ceil() * size.toDouble();
+
+/// What the review says about where each medicine is bought.
+String supplierRule({required bool cheapest, int handPicked = 0}) {
+  final base = cheapest ? 'the cheapest supplier for each medicine (from past purchases)' : 'the supplier you last bought each medicine from';
+  return handPicked > 0 ? '$base, except $handPicked you chose by hand' : base;
+}
+
+/// One order in the review before purchase orders are created.
+class PoPlan {
+  PoPlan(this.supplierId, this.supplierName);
+  final String supplierId, supplierName;
+  final lines = <Suggestion>[];
+  double total = 0;
+  int unpriced = 0;
+}
+
+/// Chosen lines grouped by the supplier actually chosen for each, with estimated totals.
+List<PoPlan> planOrders(List<Suggestion> chosen, Map<String, String> supplierNames) {
+  final g = <String, PoPlan>{};
+  for (final r in chosen) {
+    final id = r.buy?.supplierId ?? '';
+    final o = g[id] ??= PoPlan(id, id.isEmpty ? 'No supplier yet' : supplierNames[id] ?? r.buy?.supplierName ?? 'Any supplier');
+    o.lines.add(r);
+    o.total += r.cost;
+    if (!(((r.buy?.cost ?? 0) > 0 ? r.buy!.cost : r.p.cost) > 0)) o.unpriced++;
+  }
+  return g.values.toList();
+}
+
+/// Status a purchase order can be moved to by hand. Printing or opening WhatsApp never changes it.
+String? nextPoStatus(Object? status) => status == 'Draft' ? 'Sent' : null;
+
+/// Mark a Draft order as sent (a deliberate step, audited). Returns the saved order, or null when it was not a Draft.
+Future<Map<String, Object?>?> markPoSent(RecordStore store, Map<String, Object?> po, {required String user, String branchId = mainBranch}) async {
+  final next = nextPoStatus(po['status']);
+  if (next == null) return null;
+  return store.update((d) {
+    final saved = {...po, 'status': next, 'sentAt': d.now, 'sentBy': user};
+    d.put('purchaseOrders', saved);
+    d.audit(user, 'Purchase order marked sent', '${po['number']} to ${po['supplierName']}', branchId);
+    return saved;
+  });
 }
 
 /// What to order: sells a day × (lead + cover days) − in stock (rounded up); a medicine with no sales but at or below

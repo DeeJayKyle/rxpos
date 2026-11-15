@@ -6,6 +6,11 @@ import { Tabs, Empty, Modal, Stat } from '../ui.jsx';
 import { toast, ask } from '../feedback.jsx';
 import { whatsappLink } from '../cloud.js';
 import { computeReorderLevels, applyReorderLevels, reorderSettings } from '../reorder.js';
+import { validQty, roundToPack, supplierRule, planOrders, nextStatus } from '../poPlan.js';
+import { mainPack } from '../packs.js';
+
+/** '3 boxes of 10' */
+const packCount = (q, pk) => { const n = Math.ceil(q / pk.size), w = pk.name.toLowerCase(); return `${n} ${n === 1 ? w : /(s|x|ch|sh)$/.test(w) ? w + 'es' : w + 's'} of ${pk.size}`; };
 
 /** Smart reorder suggestions, dead stock and purchase orders. */
 export default function Reorder() {
@@ -22,6 +27,9 @@ export default function Reorder() {
   const [levels, setLevels] = useState(null); // preview of automatic reorder levels
   const [from, setFrom] = useState('cheapest'); // buy each medicine from its cheapest or its last supplier
   const [chosenSup, setChosenSup] = useState({}); // productId → supplierId picked by hand
+  const [qtyEdit, setQtyEdit] = useState({}); // productId → quantity typed by hand (text, checked before use)
+  const [roundPacks, setRoundPacks] = useState(false); // round order quantities up to whole packs
+  const [plan, setPlan] = useState(null); // the orders about to be created, shown before anything is saved
 
   // Sales velocity per product at this branch, and last sale date
   const velocity = useMemo(() => {
@@ -67,31 +75,36 @@ export default function Reorder() {
     return { p, last, idle: last ? daysSince(last) : Infinity, value: p.stock * (p.cost || 0) };
   }).filter((r) => r.idle >= deadDays).sort((a, b) => b.value - a.value), [products, velocity, deadDays]);
 
+  /** The quantity to order: the suggestion, or what was typed (null when what was typed is not a whole number ≥ 1) */
+  const qtyOf = (r) => {
+    const q = qtyEdit[r.p.id] !== undefined ? validQty(qtyEdit[r.p.id]) : r.qty;
+    return q == null ? null : roundPacks ? roundToPack(q, mainPack(r.p)?.size) : q;
+  };
   const chosen = suggestions.filter((r) => picked[r.p.id] ?? true);
-  const bySupplier = useMemo(() => {
-    const g = new Map();
-    for (const r of chosen) {
-      const k = r.buy?.supplierId || '';
-      if (!g.has(k)) g.set(k, []);
-      g.get(k).push(r);
-    }
-    return g;
-  }, [chosen]);
+  const badQty = chosen.filter((r) => qtyOf(r) == null);
+  const handPicked = chosen.filter((r) => chosenSup[r.p.id]).length;
 
-  const createPOs = async () => {
+  // Show the orders first, grouped by the supplier actually chosen for each medicine; nothing is saved until Create
+  const reviewPOs = () => {
     if (!chosen.length) return;
-    if (!(await ask({ title: `Create ${bySupplier.size} purchase order${bySupplier.size === 1 ? '' : 's'}?`, message: `${chosen.length} medicines, grouped by the supplier you last bought each from.`, confirmText: 'Create' }))) return;
+    if (badQty.length) { toast(`Fix the order quantity for ${badQty[0].p.name}${badQty.length > 1 ? ` and ${badQty.length - 1} more` : ''}`, 'error'); return; }
+    setPlan(planOrders(chosen.map((r) => ({ ...r, qty: qtyOf(r) })), db.suppliers));
+  };
+  const createPOs = () => {
+    if (!plan?.length) return;
+    const lines = plan.reduce((a, o) => a + o.lines.length, 0);
     update((d) => {
-      for (const [supplierId, list] of bySupplier) {
+      for (const o of plan) {
         put(d, 'purchaseOrders', {
           id: uid(), number: numberFor(d, 'PO'), date: now(), status: 'Draft', branchId,
-          supplierId, supplierName: db.suppliers.find((x) => x.id === supplierId)?.name || 'Any supplier', createdBy: user.name,
-          items: list.map((r) => ({ productId: r.p.id, name: r.p.name, qty: r.qty, cost: r.buy?.cost || r.p.cost })),
+          supplierId: o.supplierId, supplierName: db.suppliers.find((x) => x.id === o.supplierId)?.name || 'Any supplier', createdBy: user.name,
+          items: o.lines.map((l) => ({ productId: l.productId, name: l.name, qty: l.qty, cost: l.cost })),
         });
       }
-      audit(d, user, 'Purchase orders created', `${bySupplier.size} order(s), ${chosen.length} lines`, branchId);
+      audit(d, user, 'Purchase orders created', `${plan.length} order(s), ${lines} lines`, branchId);
     });
-    toast('Purchase orders created');
+    setPlan(null);
+    toast(`${plan.length} draft purchase order${plan.length === 1 ? '' : 's'} created. Nothing was sent to suppliers.`);
     setTab('orders');
   };
 
@@ -105,7 +118,7 @@ export default function Reorder() {
       <div className="page-head"><div><h1>Reorder & dead stock</h1><div className="sub">{branch?.name} · based on how fast each item really sells</div></div></div>
       <div className="stats">
         <Stat label="Need reordering" value={suggestions.length} icon={ShoppingBag} tone="amber" sub={`cover ${Number(lead) + Number(cover)} days`} />
-        <Stat label="Est. order value" value={fmt(suggestions.reduce((a, r) => a + r.qty * (r.buy?.cost || r.p.cost || 0), 0))} />
+        <Stat label="Est. order value" value={fmt(chosen.reduce((a, r) => a + (qtyOf(r) || 0) * (r.buy?.cost || r.p.cost || 0), 0))} sub={`${chosen.length} picked · estimate`} />
         <Stat label="Dead stock" value={dead.length} icon={PackageX} tone="red" sub={`${fmt(deadValue)} tied up`} />
         <Stat label="Open purchase orders" value={orders.filter((o) => o.status !== 'Received').length} icon={ClipboardList} tone="violet" />
       </div>
@@ -118,9 +131,9 @@ export default function Reorder() {
             <label className="field"><span>Supplier lead time (days)</span><input type="number" min="0" value={lead} onChange={(e) => setLead(e.target.value)} /></label>
             <label className="field"><span>Order enough for (days)</span><input type="number" min="1" value={cover} onChange={(e) => setCover(e.target.value)} /></label>
             <div className="grow" />
-            <button className="btn ghost" onClick={() => downloadFile('reorder.csv', toCSV(chosen.map((r) => ({ medicine: r.p.name, inStock: r.p.stock, soldPerDay: r.perDay.toFixed(2), daysLeft: isFinite(r.daysLeft) ? Math.floor(r.daysLeft) : '', orderQty: r.qty, supplier: r.buy?.supplierName || '', lastCost: r.buy?.cost || r.p.cost }))), 'text/csv')}><Download size={16} />CSV</button>
+            <button className="btn ghost" onClick={() => downloadFile('reorder.csv', toCSV(chosen.map((r) => ({ medicine: r.p.name, inStock: r.p.stock, soldPerDay: r.perDay.toFixed(2), daysLeft: isFinite(r.daysLeft) ? Math.floor(r.daysLeft) : '', orderQty: qtyOf(r) ?? '', supplier: r.buy?.supplierName || '', lastCost: r.buy?.cost || r.p.cost }))), 'text/csv')}><Download size={16} />CSV</button>
             {can('medicines.manage') && <button className="btn ghost" onClick={() => setLevels(computeReorderLevels(db, products, db.settings, branchId))}><Wand2 size={16} />Set reorder levels from sales</button>}
-            <button className="btn primary" disabled={!chosen.length} onClick={createPOs}><ClipboardList size={16} />Create purchase orders ({chosen.length})</button>
+            <button className="btn primary" disabled={!chosen.length} onClick={reviewPOs}><ClipboardList size={16} />Review orders ({chosen.length})</button>
           </div>
           {levels && (() => { const c = reorderSettings(db.settings); return (
             <Modal title="Reorder levels from sales" onClose={() => setLevels(null)} wide>
@@ -137,6 +150,26 @@ export default function Reorder() {
               <div className="form-actions"><button className="btn ghost" onClick={() => setLevels(null)}>Cancel</button>
                 <button className="btn primary" disabled={!levels.length} onClick={() => { applyReorderLevels(update, user, branchId, levels); toast(`${levels.length} reorder levels updated`); setLevels(null); }}>Apply {levels.length} change{levels.length === 1 ? '' : 's'}</button></div>
             </Modal>); })()}
+          {plan && (
+            <Modal title={`Review ${plan.length} purchase order${plan.length === 1 ? '' : 's'}`} onClose={() => setPlan(null)} wide>
+              <p className="muted small">Grouped by {supplierRule(from, handPicked)}. Costs are estimates from past purchases; confirm prices with each supplier. The orders are saved as drafts and are not sent to anyone.</p>
+              <div className="po-plan" style={{ maxHeight: '55vh', overflow: 'auto' }}>
+                {plan.map((o) => (
+                  <section key={o.supplierId || 'none'} className="card po-plan-group" aria-label={`Order for ${o.supplierName}`}>
+                    <div className="row gap"><strong className="grow">{o.supplierName}</strong><span className="muted small">{o.lines.length} line{o.lines.length === 1 ? '' : 's'}</span><strong>{fmt(o.total)}</strong></div>
+                    {!o.supplierId && <p className="text-warn small">⚠ These medicines have no past supplier. Choose a supplier on the order before sending it.</p>}
+                    <table><thead><tr><th>Medicine</th><th className="num">Qty</th><th className="num">Est. cost</th><th className="num">Line total</th></tr></thead>
+                      <tbody>{o.lines.map((l) => <tr key={l.productId}><td>{l.name}</td><td className="num">{l.qty}</td><td className="num">{l.priced ? fmt(l.cost) : <span className="text-warn">No price yet</span>}</td><td className="num">{fmt(l.qty * l.cost)}</td></tr>)}</tbody>
+                    </table>
+                    {o.unpriced > 0 && <small className="text-warn">⚠ {o.unpriced} line{o.unpriced === 1 ? ' has' : 's have'} no known price; the total leaves {o.unpriced === 1 ? 'it' : 'them'} out.</small>}
+                  </section>
+                ))}
+              </div>
+              <p className="num"><strong>Estimated total {fmt(plan.reduce((a, o) => a + o.total, 0))}</strong></p>
+              <div className="form-actions"><button className="btn ghost" onClick={() => setPlan(null)}>Back</button>
+                <button className="btn primary" onClick={createPOs}><ClipboardList size={16} />Create {plan.length} draft order{plan.length === 1 ? '' : 's'}</button></div>
+            </Modal>
+          )}
           <details className="explain">
             <summary>How the order quantity is worked out</summary>
             <p>Two different signals: the <b>reorder level</b> is a fixed number set on each medicine (Medicine list or "Set reorder levels from sales"); it drives the
@@ -148,6 +181,7 @@ export default function Reorder() {
           <div className="row gap">
             <span className="muted small">Order each medicine from</span>
             <Tabs tabs={[['cheapest', 'Cheapest supplier'], ['last', 'Last supplier']]} value={from} onChange={(v) => { setFrom(v); setChosenSup({}); }} />
+            <label className="check small"><input type="checkbox" checked={roundPacks} onChange={(e) => setRoundPacks(e.target.checked)} /> Round up to whole packs</label>
           </div>
           <div className="card table-wrap">
             <table>
@@ -166,7 +200,13 @@ export default function Reorder() {
                       ) : r.buy?.supplierName || <span className="muted">—</span>}
                       {r.options.length > 1 && r.buy && r.buy.cost > r.options[0].cost && <small className="text-warn"> {fmt(r.buy.cost - r.options[0].cost)} more than {r.options[0].supplierName}</small>}
                     </td>
-                    <td className="num"><strong>{r.qty}</strong></td><td className="num">{fmt(r.qty * (r.buy?.cost || r.p.cost || 0))}</td>
+                    <td className="num">{(() => { const q = qtyOf(r), pk = mainPack(r.p); return (<>
+                      <input type="number" inputMode="numeric" min="1" step="1" className={'qty-input' + (q == null ? ' invalid' : '')} aria-invalid={q == null} aria-label={`Order quantity for ${r.p.name}`}
+                        value={qtyEdit[r.p.id] ?? r.qty} onChange={(e) => setQtyEdit({ ...qtyEdit, [r.p.id]: e.target.value })} />
+                      {q == null ? <small className="text-danger block">Whole number, 1 or more</small>
+                        : <small className="muted block">{q !== r.qty ? `suggested ${r.qty}` : ''}{pk && q !== r.qty ? ' · ' : ''}{pk ? packCount(q, pk) : ''}</small>}
+                    </>); })()}</td>
+                    <td className="num">{qtyOf(r) == null ? '—' : fmt(qtyOf(r) * (r.buy?.cost || r.p.cost || 0))}</td>
                   </tr>
                 ))}
                 {!suggestions.length && <Empty colSpan={8}>Stock levels look healthy. Nothing needs ordering.</Empty>}
@@ -221,7 +261,15 @@ export default function Reorder() {
       {viewPo && (() => {
         const supplier = db.suppliers.find((x) => x.id === viewPo.supplierId);
         const phone = normalizePhone(supplier?.phone);
-        const markSent = () => { update((d) => { put(d, 'purchaseOrders', { ...viewPo, status: viewPo.status === 'Draft' ? 'Sent' : viewPo.status }); }); };
+        // Printing or opening WhatsApp does not mean the order reached the supplier: marking it sent is a separate, deliberate step
+        const next = nextStatus(viewPo.status);
+        const markSent = async () => {
+          if (!next || !(await ask({ title: `Mark ${viewPo.number} as sent?`, message: `Only do this once ${viewPo.supplierName} has the order.`, confirmText: 'Mark as sent' }))) return;
+          const po = { ...viewPo, status: next, sentAt: now(), sentBy: user.name };
+          update((d) => { put(d, 'purchaseOrders', po); audit(d, user, 'Purchase order marked sent', `${viewPo.number} to ${viewPo.supplierName}`, branchId); });
+          setViewPo(po);
+          toast(`${viewPo.number} marked as sent`);
+        };
         return (
           <Modal title={`Purchase order ${viewPo.number}`} onClose={() => setViewPo(null)} wide>
             <div className="print-area po-doc">
@@ -233,10 +281,12 @@ export default function Reorder() {
               </table>
               <p className="num"><strong>Estimated total {fmt(viewPo.items.reduce((a, i) => a + i.qty * i.cost, 0))}</strong></p>
             </div>
+            <p className="muted small no-print">Status: <strong>{viewPo.status}</strong>{viewPo.sentAt ? ` · marked sent ${new Date(viewPo.sentAt).toLocaleString()}${viewPo.sentBy ? ' by ' + viewPo.sentBy : ''}` : ''}. Printing or opening WhatsApp does not change the status.</p>
             <div className="form-actions no-print">
               {viewPo.status !== 'Received' && <button className="btn danger" onClick={async () => (await ask({ title: 'Delete this purchase order?', danger: true, confirmText: 'Delete' })) && (update((d) => del(d, 'purchaseOrders', viewPo.id)), setViewPo(null))}>Delete</button>}
-              <a className={'btn ghost' + (phone.length < 12 ? ' disabled-link' : '')} href={phone.length >= 12 ? whatsappLink(phone, poText(viewPo)) : undefined} target="_blank" rel="noreferrer" onClick={markSent} title={phone.length < 12 ? 'Add the supplier’s phone number first' : ''}><MessageCircle size={16} />WhatsApp to supplier</a>
-              <button className="btn primary" onClick={() => { markSent(); window.print(); }}><Printer size={16} />Print</button>
+              <a className={'btn ghost' + (phone.length < 12 ? ' disabled-link' : '')} href={phone.length >= 12 ? whatsappLink(phone, poText(viewPo)) : undefined} target="_blank" rel="noreferrer" title={phone.length < 12 ? 'Add the supplier’s phone number first' : ''}><MessageCircle size={16} />WhatsApp to supplier</a>
+              <button className="btn ghost" onClick={() => window.print()}><Printer size={16} />Print</button>
+              {next && <button className="btn primary" onClick={markSent}>Mark as sent</button>}
             </div>
           </Modal>
         );

@@ -1296,6 +1296,53 @@ void main() {
     await done(tester);
   });
 
+  testWidgets('Reorder: quantities typed and rounded to packs, a review grouped by supplier, then Mark as sent (Print does not)', (tester) async {
+    await tester.runAsync(signedIn);
+    await tester.runAsync(() => RecordStore(db).update((d) {
+          d.put('suppliers', {'id': 's1', 'name': 'Sample Wholesalers', 'phone': ''});
+          d.put('products', {'id': 'p7', 'name': 'Cipra 500 Tabs', 'unit': 'Tablet', 'price': 800, 'cost': 300, 'reorder': 10, 'packs': [{'name': 'Box', 'size': 10}]});
+          d.put('batches', {'id': 'b7', 'productId': 'p7', 'batch': 'C1', 'expiry': '2029-01-31', 'cost': 300});
+          d.move(productId: 'p7', qty: 3, type: 'Opening stock', batchId: 'b7');
+          d.put('purchases', {'id': 'u7', 'date': '2026-10-01', 'supplierId': 's1', 'supplierName': 'Sample Wholesalers', 'items': [{'productId': 'p7', 'name': 'Cipra 500 Tabs', 'qty': 10, 'cost': 280}]});
+        }));
+    await start(tester);
+    final store = RecordStore(db);
+    await navTo(tester, 'Reorder');
+    expect(find.text('Cipra 500 Tabs'), findsOneWidget);
+    await tester.enterText(find.byKey(const Key('qty-p7')), '0');
+    await settle(tester, 3);
+    expect(find.text('Whole number ≥ 1'), findsOneWidget);
+    await tester.tap(find.textContaining('Review orders'));
+    await settle(tester, 4);
+    expect(find.textContaining('Review 1 purchase order'), findsNothing, reason: 'a bad quantity blocks the review');
+    await tester.enterText(find.byKey(const Key('qty-p7')), '25');
+    await tester.tap(find.byKey(const Key('round-packs')));
+    await settle(tester, 3);
+    expect(find.textContaining('3 boxes of 10'), findsOneWidget);
+    await tester.tap(find.textContaining('Review orders'));
+    await settle(tester);
+    expect(find.text('Review 1 purchase order'), findsOneWidget);
+    expect(find.textContaining('the cheapest supplier for each medicine'), findsOneWidget);
+    expect(find.textContaining('not sent to anyone'), findsOneWidget);
+    expect(find.text('Sample Wholesalers'), findsWidgets);
+    await tester.tap(find.text('Create 1 draft order'));
+    await settle(tester);
+    final po = (await tester.runAsync(() => store.rows('purchaseOrders')))!.single;
+    expect((po['status'], (po['items'] as List).single['qty'], (po['items'] as List).single['cost']), ('Draft', 30.0, 280.0));
+    await tester.tap(find.text('Open'));
+    await settle(tester);
+    expect(find.textContaining('Status: Draft'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('po-mark-sent')));
+    await settle(tester, 4);
+    await tester.tap(find.widgetWithText(FilledButton, 'Mark as sent').last);
+    await settle(tester);
+    expect((await tester.runAsync(() => store.rows('purchaseOrders')))!.single['status'], 'Sent');
+    expect(find.textContaining('Status: Sent'), findsOneWidget);
+    expect(find.byKey(const Key('po-mark-sent')), findsNothing);
+    expect((await tester.runAsync(() => store.rows('audit')))!.map((a) => a['action']), contains('Purchase order marked sent'));
+    await done(tester);
+  });
+
   testWidgets('Add Stock parity: search, line total, batch and expiry, receive; a draft continued from Purchase History; edit a delivery', (tester) async {
     await tester.runAsync(signedIn);
     await tester.runAsync(() => RecordStore(db).update((d) => d.put('suppliers', {'id': 's1', 'name': 'Sample Wholesalers'})));
