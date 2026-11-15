@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Download, Barcode as BarcodeIcon, SlidersHorizontal, Save, Undo2, Pencil, ScrollText, Boxes } from 'lucide-react';
-import { CrudPage, Tabs, Modal, SearchBox, Empty, PdfButton, useProgressive } from '../ui.jsx';
+import { CrudPage, Tabs, Modal, SearchBox, Empty, PdfButton, useProgressive, FilterChips } from '../ui.jsx';
 import { useStore, daysUntil, put, move, addBatch, audit, downloadFile, toCSV, batchValue, stockValue, markupPrice, MAIN_BRANCH, putMany } from '../store.jsx';
 import { ask, askText, toast } from '../feedback.jsx';
 import { formatQty } from '../money.js';
@@ -184,6 +184,7 @@ export function StockLevels() {
     (!q || `${p.name} ${p.generic} ${p.barcode} ${p.category}`.toLowerCase().includes(ql)) &&
     (filter === 'all' || (filter === 'instock' && p.stock > 0) || (filter === 'low' && p.stock <= (p.reorder || 0) && p.stock > 0) || (filter === 'out' && p.stock <= 0))), [products, q, ql, filter]);
   const sv = useMemo(() => stockValue(rows, batchesOf), [rows, batchesOf]); // physical stock × the medicine's current cost, expired apart
+  const counts = useMemo(() => products.reduce((c, p) => { if (p.stock > 0) { c.instock++; if (p.stock <= (p.reorder || 0)) c.low++; } else c.out++; return c; }, { instock: 0, low: 0, out: 0 }), [products]);
   const total = sv.value;
   const retail = useMemo(() => rows.reduce((a, p) => a + Math.max(p.stock, 0) * (p.price || 0), 0), [rows]);
   // step 26 (from the Flutter app): sorted and grouped by class, therapeutic area, form or shelf, per device
@@ -203,7 +204,9 @@ export function StockLevels() {
           <PdfButton target={listRef} title={{ instock: 'Stock in hand', low: 'Low stock', out: 'Out of stock', all: 'All medicines' }[filter]} subtitle={`${branch?.name || ''} · ${rows.length} items · ${fmt(total)} at cost · ${fmt(retail)} at retail${sv.expired > 0 ? ` · ${fmt(sv.expired)} expired (not included)` : ''}`} />
         </div>
       </div>
-      <Tabs tabs={[['instock', 'In stock'], ['low', 'Low stock'], ['out', 'Out of stock'], ['all', 'All']]} value={filter} onChange={setFilter} />
+      <div className="list-filters">
+        <FilterChips label="Show" value={filter} onChange={setFilter} options={[['instock', 'In stock', counts.instock], ['low', 'Low stock', counts.low], ['out', 'Out of stock', counts.out], ['all', 'All', products.length]]} />
+      </div>
       <div className="card table-wrap" ref={listRef}>
         <table className="phone-rows">
           <thead><tr><th>Medicine</th><th>Next batch</th><th>Expiry</th><th>Shelf</th><th className="num">Reorder at</th><th className="num">In stock</th>{multi && <th className="num">All branches</th>}<th className="num">Value (cost)</th>{can('inventory.edit') && <th />}</tr></thead>
@@ -245,7 +248,8 @@ export function StockLevels() {
 export function Expiry() {
   const { db, products, update, fmt, user, batchesOf, branchId, can } = useStore();
   const navigate = useNavigate();
-  const [tab, setTab] = useState('soon');
+  const location = useLocation();
+  const [tab, setTab] = useState(location.state?.tab === 'expired' ? 'expired' : 'soon');
   const expRef = useRef(null);
   const warn = db.settings.expiryWarnDays || 90;
   const rows = useMemo(() => products.filter((p) => p.stock > 0).flatMap((p) => batchesOf(p.id).filter((b) => b.qty > 0 && b.expiry).map((b) => ({ ...b, p, days: daysUntil(b.expiry) })))
@@ -263,7 +267,9 @@ export function Expiry() {
     <div className="page">
       <div className="page-head"><div><h1>Expiring / Expired</h1><div className="sub">{rows.length} batches · {fmt(rows.reduce((a, r) => a + r.qty * (r.cost || r.p.cost), 0))} at cost</div></div>
         <PdfButton target={expRef} title={tab === 'expired' ? 'Expired stock' : `Expiring within ${warn} days`} subtitle={`${rows.length} batches in stock · ${fmt(rows.reduce((a, r) => a + r.qty * (r.cost || r.p.cost), 0))} at cost`} /></div>
-      <Tabs tabs={[['soon', `Expiring within ${warn} days`], ['expired', 'Expired']]} value={tab} onChange={setTab} />
+      <div className="list-filters">
+        <FilterChips label="Show" value={tab} onChange={setTab} options={[['soon', `Expiring within ${warn} days`], ['expired', 'Expired']]} />
+      </div>
       <div className="card table-wrap" ref={expRef}>
         <table className="phone-rows">
           <thead><tr><th>Medicine</th><th>Batch</th><th>Expiry</th><th>When</th><th className="num">Qty</th><th className="num">Value</th><th /></tr></thead>

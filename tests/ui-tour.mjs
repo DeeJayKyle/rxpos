@@ -98,7 +98,7 @@ check('a group pill opens its pages as a dropdown', await P.evaluate(() => docum
 await P.screenshot({ path: path.join(out, 'desktop-gold-night-topnav.png') });
 await P.keyboard.press('Escape');
 await navChoice('Sidebar');
-check('sidebar style: the action card sits above the account box', await P.evaluate(() => !!document.querySelector('.sidebar .nav-promo')));
+check('sidebar style: the menu keeps to the pages (no card; the next step is on the Dashboard and in More)', await P.evaluate(() => !document.querySelector('.sidebar .nav-promo') && !!document.querySelector('.sidebar .user-box')));
 await P.screenshot({ path: path.join(out, 'desktop-gold-night-sidebar.png') });
 check('no page errors', errors.length === 0, errors.slice(0, 3).join(' | '));
 await b.close();

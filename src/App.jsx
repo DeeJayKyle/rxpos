@@ -4,7 +4,7 @@ import {
   LayoutDashboard, ShoppingCart, PackageOpen, ReceiptText, FileText, ClipboardPlus, Users, Truck, Pill, FlaskConical,
   Boxes, PackagePlus, History, CalendarClock, PencilRuler, ScrollText, Wallet, Tags, Landmark, ArrowLeftRight, HandCoins,
   ArrowDownLeft, ArrowUpRight, ClipboardCheck, RefreshCw, Undo2, ShieldPlus, BookOpen, BarChart3, Settings as SettingsIcon, Search, Sun, Moon, Menu, LogOut, ChevronDown,
-  BellRing, ShoppingBag, Tag, FileUp, Building2, Send, ShieldCheck, Clock, BookMarked, MessagesSquare, UserCog, KeyRound, CalendarDays, Thermometer, Palette, MonitorSmartphone, ScanText, GraduationCap, Megaphone, CalendarRange, LockKeyhole, NotebookPen, PanelLeftClose, PanelLeftOpen, WifiOff,
+  BellRing, Plus, ShoppingBag, Tag, FileUp, Building2, Send, ShieldCheck, Clock, BookMarked, MessagesSquare, UserCog, KeyRound, CalendarDays, Thermometer, Palette, MonitorSmartphone, ScanText, GraduationCap, Megaphone, CalendarRange, LockKeyhole, NotebookPen, PanelLeftClose, PanelLeftOpen, WifiOff,
   Sparkles, Pin, Keyboard, UserPlus, Archive, BadgeCheck,
 } from 'lucide-react';
 import { useStore, useSyncState, makePassword, put, audit, isLowStock, expiryCounts } from './store.jsx';
@@ -31,7 +31,7 @@ import { setBadge } from './badges.js';
 import { ACTIONS, keyOf, keyMatcher, showKey, typing } from './keymap.js';
 import { deviceSettings, setDevice, onDevice } from './device.js';
 import { Modal } from './ui.jsx';
-import { MegaMenu, TopNav, NavPromo } from './components/NavMenus.jsx';
+import { MegaMenu, TopNav } from './components/NavMenus.jsx';
 import { BackButton, markNav, usePageMotion, useEdgeSwipeBack, useKeyboardFit } from './mobilenav.jsx';
 import AiOmnibar from './components/AiOmnibar.jsx';
 import { warmSearchKeys } from './search.js';
@@ -450,7 +450,9 @@ function Shell() {
     };
     // capture: before the lists' keys (src/listcontrols.jsx), so G then E is Expenses and not also "edit the row"
     window.addEventListener('keydown', onKey, true);
-    return () => window.removeEventListener('keydown', onKey, true);
+    const search = () => setPalette(true); // the Dashboard's search box
+    window.addEventListener('rxpos:search', search);
+    return () => { window.removeEventListener('keydown', onKey, true); window.removeEventListener('rxpos:search', search); };
   }, [navigate]);
   // recent pages (this device), and each page's scroll position, kept while the app is open
   const scrolls = useRef({});
@@ -524,7 +526,7 @@ function Shell() {
   const initials = user.name.split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
 
   return (
-    <div className={'shell nav-' + navStyle + (drawer ? ' drawer-open' : '') + (rail ? ' rail' : '')}>
+    <div className={'shell nav-' + navStyle + (drawer ? ' drawer-open' : '') + (rail ? ' rail' : '') + (here === '/' ? ' on-home' : '')}>
       <div className="drawer-bg" onClick={() => setDrawer(false)} />
       <aside className="sidebar">
         <div className="brand"><BrandLogo src={db.license?.[0]?.branding?.logo} size={34} /> <span className="wordmark">Rx<span className="brand-accent">POS</span></span>
@@ -535,27 +537,35 @@ function Shell() {
           {(() => {
             const byTo = Object.fromEntries(pages.map((pg) => [pg.to, pg]));
             const pinned = nav.pins.map((t) => byTo[t]).filter(Boolean);
-            const recent = nav.recent.filter((t) => t !== here && !nav.pins.includes(t)).map((t) => byTo[t]).filter(Boolean).slice(0, 4);
-            const item = (pg, kind) => <NavLink key={kind + pg.to} to={pg.to} end title={rail ? pg.label : undefined} className={'nav-' + kind}><pg.Icon size={17} /><span className="grow">{pg.label}</span></NavLink>;
-            return (<>
-              {pinned.length > 0 && <div className="nav-group nav-quick"><div className="nav-title static">Pinned</div>{pinned.map((pg) => item(pg, 'pin'))}</div>}
-              {recent.length > 0 && !rail && <div className="nav-group nav-quick"><div className="nav-title static">Recent</div>{recent.map((pg) => item(pg, 'recent'))}</div>}
-            </>);
+            // the owner's choice (2026-11-15): no Recent list; Pinned folds like every other group
+            const shut = !rail && collapsed.Pinned;
+            return pinned.length > 0 && (
+              <div className={'nav-group nav-quick' + (shut ? ' collapsed' : ' open')}>
+                <div className="nav-title-row"><button className="nav-title" aria-expanded={!shut} onClick={() => toggleGroup('Pinned')}><ChevronDown size={13} className="nav-chev" />Pinned<span className="nav-count">{pinned.length}</span></button></div>
+                {pinned.map((pg, n) => <NavLink key={'pin' + pg.to} to={pg.to} end style={{ '--i': n }} hidden={shut && pg.to !== location.pathname} title={rail ? pg.label : undefined} className="nav-pin"><pg.Icon size={17} /><span className="grow">{pg.label}</span></NavLink>)}
+              </div>
+            );
           })()}
-          {groups.map((g, i) => (
-            <div key={i} className="nav-group">
-              {g.group && <button className="nav-title" aria-expanded={!collapsed[g.group]} onClick={() => toggleGroup(g.group)}>{g.group}<ChevronDown size={13} style={{ transform: collapsed[g.group] ? 'rotate(-90deg)' : '', transition: 'transform .15s' }} /></button>}
-              {g.items.map(([to, label, Icon, , badge]) => { const key = keyOf('go:' + to) && showKey(keyOf('go:' + to)); return (
-                <NavLink key={to} to={to} end title={rail ? label + (key ? ` (${key})` : '') : undefined} hidden={!rail && collapsed[g.group] && !g.items.some(([t]) => t === location.pathname) && !(badge && counts[badge] > 0)}>
+          {groups.map((g, i) => { const add = QUICK_ADD[g.group] && can(QUICK_ADD[g.group][2]) ? QUICK_ADD[g.group] : null; const alerts = g.items.reduce((a, it) => a + (it[4] && counts[it[4]] > 0 ? counts[it[4]] : 0), 0); return (
+            <div key={i} className={'nav-group' + (collapsed[g.group] ? ' collapsed' : ' open')}>
+              {g.group && <div className="nav-title-row">
+                <button className="nav-title" aria-expanded={!collapsed[g.group]} onClick={() => toggleGroup(g.group)}>
+                  <ChevronDown size={13} className="nav-chev" /><span className="nav-name">{g.group}</span><span className="nav-count" title={`${g.items.length} pages`}>{g.items.length}</span>
+                  {collapsed[g.group] && alerts > 0 && <span className="count">{alerts}</span>}
+                </button>
+                {add && <button type="button" className="nav-add" title={add[0]} aria-label={add[0]} onClick={() => navigate(add[1], add[3] ? { state: add[3] } : undefined)}><Plus size={14} /></button>}
+              </div>}
+              {g.items.map(([to, label, Icon, , badge], n) => { const key = keyOf('go:' + to) && showKey(keyOf('go:' + to)); return (
+                <NavLink key={to} to={to} end style={{ '--i': n }} title={rail ? label + (key ? ` (${key})` : '') : undefined} hidden={!rail && collapsed[g.group] && !g.items.some(([t]) => t === location.pathname) && !(badge && counts[badge] > 0)}>
                   <Icon size={17} /><span className="grow">{label}</span>
                   {badge && counts[badge] > 0 && <span className="count">{counts[badge]}</span>}
                   {key && <kbd>{key}</kbd>}
                 </NavLink>
               ); })}
             </div>
-          ))}
+          ); })}
         </nav>
-        {!rail && here !== '/' && <NavPromo counts={counts} can={can} />}{/* the Dashboard shows the same card */}
+        {/* the sidebar keeps to the pages (the owner's clean-up, 2026-11-15): the next step is on the Dashboard and in More */}
         <div className="user-box">
           <span className="avatar">{initials}</span>
           <div className="grow"><strong>{user.name}</strong><small>{user.role}</small></div>
@@ -707,6 +717,14 @@ function Gate() {
   if (location.pathname === '/owner' && isWeb) return <Suspense fallback={<div className="loading"><div className="spinner" /></div>}><OwnerConsole /></Suspense>;
   return user ? <Shell /> : <Auth />;
 }
+
+// The + beside a menu group: its most common "new …" (the sidebar groups from the owner's references, 2026-11-15)
+const QUICK_ADD = {
+  Sales: ['New sale', '/pos', 'pos.sell'],
+  People: ['Add a customer', '/customers', 'customers', { create: true }],
+  'Medicine Inventory': ['Receive stock', '/add-stock', 'stock.receive'],
+  Finance: ['Add an expense', '/expenses', 'finance', { create: true }],
+};
 
 export default function App() {
   useHideSplash();

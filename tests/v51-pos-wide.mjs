@@ -81,6 +81,7 @@ check('a discount shows as "Promos / member discount" in the totals', await p.ev
 await p.screenshot({ path: path.join(out, 'pos-1440.png') });
 for (let i = 0; i < 8; i++) { await p.focus('.pos-products input.search'); await p.keyboard.type('70200' + (10 + i)); await p.keyboard.press('Enter'); await wait(250); }
 const seen = await p.evaluate(() => { const box = document.querySelector('.cart-lines').getBoundingClientRect(); return [...document.querySelectorAll('.cart-line')].filter((l) => { const r = l.getBoundingClientRect(); return r.top >= box.top - 1 && r.bottom <= box.bottom + 1; }).length; });
+await p.screenshot({ path: path.join(out, 'pos-lines.png') });
 check('at 1440 × 900 at least 7 sale lines are in view at once', seen >= 7, seen);
 await p.screenshot({ path: path.join(out, 'pos-many.png') });
 await p.evaluate(() => [...document.querySelectorAll('.pos-cart button')].find((x) => /Clear all/.test(x.textContent)).click()); await wait(300);

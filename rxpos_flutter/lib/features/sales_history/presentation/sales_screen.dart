@@ -13,6 +13,7 @@ import '../../../core/entities/sale.dart';
 import '../../../core/entities/settings.dart';
 import '../../../core/presentation/export.dart';
 import '../../../core/presentation/widgets.dart';
+import '../../../core/presentation/sub_views.dart';
 import '../../../core/rules/dates.dart';
 import '../../../core/rules/money.dart';
 import '../../../core/rules/search.dart';
@@ -137,14 +138,8 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
         ),
       ],
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Align(
-          alignment: Alignment.centerLeft,
-          child: SegmentedButton<String>(
-            segments: [const ButtonSegment(value: 'sales', label: Text('Sales')), ButtonSegment(value: 'drafts', label: Text('Held sales${held.isEmpty ? '' : ' (${held.length})'}'))],
-            selected: {_tab},
-            onSelectionChanged: (v) => setState(() => _tab = v.first),
-          ),
-        ),
+        SubViews(value: _tab, main: 'sales', mainLabel: 'All sales', onChange: (v) => setState(() => _tab = v),
+            views: [('drafts', 'Held sales${held.isEmpty ? '' : ' (${held.length})'}', Icons.pause_circle_outline)]),
         const SizedBox(height: 8),
         if (_tab == 'drafts')
           Expanded(child: HeldSalesList(kind: 'sale'))

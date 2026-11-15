@@ -122,14 +122,15 @@ await until(A, () => !!document.querySelector('.sidebar'), 20000); await wait(50
 
 // #7 in-stock-only alerts
 await go(A, '/');
-const tiles = await A.evaluate(() => Object.fromEntries([...document.querySelectorAll('.stat')].map((s) => [s.querySelector('small')?.textContent.trim(), s.querySelector('strong')?.textContent.trim()])));
+// the stock figures are in the dashboard's Stock health card (2026-11-15)
+const tiles = await A.evaluate(() => Object.fromEntries([...[...document.querySelectorAll('.stat')].map((s) => [s.querySelector('small')?.textContent.trim(), s.querySelector('strong')?.textContent.trim()]), ...[...document.querySelectorAll('.health-rows a')].map((a) => [a.querySelector('.grow').firstChild.textContent.trim(), a.querySelector('b').textContent.trim()])]));
 check('#7 dashboard "Low stock" counts only medicines in stock (1: Lowstock Syrup, not the never-stocked cream)', tiles['Low stock'] === '1', JSON.stringify(tiles));
 check('#7 dashboard "Soon expiring" counts only batches with stock left (1: Expiry Beta)', tiles['Soon expiring'] === '1', tiles['Soon expiring']);
 await go(A, '/expiry');
 const expRows = await A.evaluate(() => [...document.querySelectorAll('tbody tr')].map((r) => r.innerText.split('\t')[0]).join(','));
 check('#7 Expiring list shows only in-stock batches', expRows.includes('Expiry Beta') && !expRows.includes('Expiry Alpha') && !expRows.includes('Expiry Gamma'), expRows);
 await go(A, '/inventory');
-await clickText(A, '.tab', /Low stock/); await wait(500);
+await clickText(A, '.filter-chips button', /Low stock/); await wait(500);
 const lowRows = await A.evaluate(() => [...document.querySelectorAll('tbody tr')].map((r) => r.innerText.split('\t')[0]).join(','));
 check('#7 Inventory "Low stock" tab: only in-stock items', lowRows.includes('Lowstock Syrup') && !lowRows.includes('Neverstocked'), lowRows);
 await go(A, '/reorder');

@@ -1,0 +1,53 @@
+/* Themes from the owner's dashboard references (2026-11-15): Royal Violet, Cobalt Blue, Soft Grey, Sage Garden and
+   Ember Forge. The palettes are in src/themes.js; this file adds what a palette alone can't: light sidebars with dark
+   text, and each look's menu items and icon chips. */
+
+/* ---- light sidebars (Soft Grey, Sage Garden): dark text, soft hover, the brand in the theme's colour ---- */
+:root[data-sidebar='light'] .sidebar { border-right: 1px solid var(--border); }
+:root[data-sidebar='light'] .sidebar .brand,
+:root[data-sidebar='light'] .sidebar .user-box strong { color: var(--text); }
+:root[data-sidebar='light'] .sidebar nav a:hover { background: color-mix(in srgb, var(--text) 6%, transparent); color: var(--text); }
+:root[data-sidebar='light'] .sidebar nav a.active { background: color-mix(in srgb, var(--primary) 14%, transparent); color: var(--text); font-weight: 650; }
+:root[data-sidebar='light'] .sidebar .nav-title { color: color-mix(in srgb, var(--sidebar-text) 70%, transparent); }
+:root[data-sidebar='light'] .sidebar kbd { border-color: color-mix(in srgb, var(--text) 18%, transparent); }
+:root[data-sidebar='light'] .sidebar nav { scrollbar-color: color-mix(in srgb, var(--text) 20%, transparent) transparent; }
+:root[data-sidebar='light'] .sidebar .user-box { border-color: var(--border); }
+:root[data-sidebar='light'] .sidebar .count { color: var(--text); }
+
+/* ---- Royal Violet: a deep purple sidebar whose items are white pills, lavender icon chips on the figures ---- */
+:root[data-palette='royal-violet'] .sidebar nav a { background: rgba(255, 255, 255, .08); margin-bottom: 4px; border-radius: 12px; }
+:root[data-palette='royal-violet'] .sidebar nav a:hover { background: rgba(255, 255, 255, .16); }
+:root[data-palette='royal-violet'] .sidebar nav a.active { background: #fff; color: #2e1065; font-weight: 700; box-shadow: 0 6px 18px -8px rgba(0, 0, 0, .5); }
+:root[data-palette='royal-violet'] .sidebar nav a.active svg { color: #6d3fd9; }
+:root[data-palette='royal-violet'] .sidebar nav a.active::before { display: none; }
+:root[data-palette='royal-violet'] .stat-icon { background: #ddd2fb; color: #4c1d95; border-radius: 12px; }
+:root[data-palette='royal-violet'] h1 { color: #1e1147; letter-spacing: -.02em; }
+
+/* ---- Cobalt Blue: a royal blue sidebar, the active page a lighter blue pill ---- */
+:root[data-palette='cobalt'] .sidebar { color: #dbe6ff; }
+:root[data-palette='cobalt'] .sidebar nav a { color: #e6edff; }
+:root[data-palette='cobalt'] .sidebar nav a.active { background: rgba(255, 255, 255, .2); color: #fff; }
+:root[data-palette='cobalt'] .sidebar nav a.active::before { background: #fff; }
+:root[data-palette='cobalt'] .sidebar nav a.active svg { color: #fff; }
+:root[data-palette='cobalt'] .stat .delta.up { background: #dcfce7; border-radius: 99px; padding: 1px 7px; }
+:root[data-palette='cobalt'] .stat .delta.down { background: #fee2e2; border-radius: 99px; padding: 1px 7px; }
+
+/* ---- Soft Grey: everything white and grey; each figure's icon in its own pastel circle ---- */
+:root[data-palette='soft-grey'] .stat-icon { border-radius: 99px; }
+:root[data-palette='soft-grey'] .stat.teal .stat-icon { background: #ccfbf1; color: #0f766e; }
+:root[data-palette='soft-grey'] .stat.violet .stat-icon { background: #ede9fe; color: #6d28d9; }
+:root[data-palette='soft-grey'] .stat.orange .stat-icon { background: #ffedd5; color: #c2410c; }
+:root[data-palette='soft-grey'] .stat.blue .stat-icon { background: #dbeafe; color: #1d4ed8; }
+
+/* ---- Sage Garden: a sage sidebar, green icon circles ---- */
+:root[data-palette='sage'] .sidebar nav a.active { background: rgba(255, 255, 255, .45); }
+:root[data-palette='sage'] .sidebar nav a.active::before { background: #2f5e42; }
+:root[data-palette='sage'] .sidebar nav a.active svg { color: #2f5e42; }
+:root[data-palette='sage'] .stat-icon { background: #dfeadf; color: #2f5e42; border-radius: 99px; }
+
+/* ---- Ember Forge: charcoal, the active page an orange pill, orange icon circles ---- */
+:root[data-palette='ember-forge'] .sidebar nav a.active { background: #f97316; color: #1a0b02; font-weight: 700; border-radius: 12px; }
+:root[data-palette='ember-forge'] .sidebar nav a.active svg { color: #1a0b02; }
+:root[data-palette='ember-forge'] .sidebar nav a.active::before { display: none; }
+:root[data-palette='ember-forge'] .stat-icon { background: #f97316; color: #1a0b02; border-radius: 99px; }
+:root[data-palette='ember-forge'] .bento-hero, :root[data-palette='ember-forge'] .nav-promo { background: radial-gradient(120% 90% at 100% 0%, rgba(249, 115, 22, .3), transparent 60%), linear-gradient(160deg, #1f1209, #0b0b0c); }

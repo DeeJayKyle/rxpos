@@ -13,6 +13,7 @@ import '../../../core/entities/settings.dart';
 import '../../../core/entities/product.dart';
 import '../../../core/presentation/export.dart';
 import '../../../core/presentation/widgets.dart';
+import '../../../core/presentation/sub_views.dart';
 import '../../../core/rules/fefo.dart';
 import '../../inventory/domain/medicines.dart';
 import '../../../core/rules/dates.dart';
@@ -88,18 +89,10 @@ class _PurchasesScreenState extends ConsumerState<PurchasesScreen> {
         ),
       ],
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Align(
-          alignment: Alignment.centerLeft,
-          child: SegmentedButton<String>(
-            segments: [
-              const ButtonSegment(value: 'history', label: Text('Deliveries')),
-              ButtonSegment(value: 'drafts', label: Text('Drafts${drafts.isEmpty ? '' : ' (${drafts.length})'}')),
-              const ButtonSegment(value: 'prices', label: Text('Supplier prices')),
-            ],
-            selected: {_tab},
-            onSelectionChanged: (v) => setState(() => _tab = v.first),
-          ),
-        ),
+        SubViews(value: _tab, main: 'history', mainLabel: 'All deliveries', onChange: (v) => setState(() => _tab = v), views: [
+          ('drafts', 'Drafts${drafts.isEmpty ? '' : ' (${drafts.length})'}', Icons.pause_circle_outline),
+          ('prices', 'Supplier prices', Icons.sell_outlined),
+        ]),
         const SizedBox(height: 8),
         if (_tab == 'drafts') Expanded(child: _DeliveryDrafts(drafts: drafts, settings: st)),
         if (_tab == 'prices') Expanded(child: _SupplierPrices(rows: rows, q: _q, names: {for (final p in d.products) p.id: p.name}, settings: st)),
@@ -500,7 +493,7 @@ class _ReorderScreenState extends ConsumerState<ReorderScreen> {
         Align(
           alignment: Alignment.centerLeft,
           child: SegmentedButton<String>(
-            segments: const [ButtonSegment(value: 'reorder', label: Text('Reorder suggestions')), ButtonSegment(value: 'dead', label: Text('Dead stock')), ButtonSegment(value: 'orders', label: Text('Purchase orders'))],
+            segments: const [ButtonSegment(value: 'reorder', label: Text('Suggestions')), ButtonSegment(value: 'dead', label: Text('Dead stock')), ButtonSegment(value: 'orders', tooltip: 'Purchase orders', label: Text('Orders'))],
             selected: {_tab},
             onSelectionChanged: (x) => setState(() => _tab = x.first),
           ),
@@ -791,7 +784,7 @@ class _ExpiryScreenState extends ConsumerState<ExpiryScreen> {
         Align(
           alignment: Alignment.centerLeft,
           child: SegmentedButton<String>(
-            segments: [ButtonSegment(value: 'soon', label: Text('Expiring within $warn days (${e.soon.length})')), ButtonSegment(value: 'expired', label: Text('Expired (${e.expired.length})'))],
+            segments: [ButtonSegment(value: 'soon', tooltip: 'Expiring within $warn days', label: Text('Expiring (${e.soon.length})')), ButtonSegment(value: 'expired', label: Text('Expired (${e.expired.length})'))],
             selected: {_tab},
             onSelectionChanged: (v) => setState(() => _tab = v.first),
           ),

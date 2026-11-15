@@ -105,7 +105,7 @@ await A.p.evaluate(() => window.dispatchEvent(new Event('online'))); await B.p.e
 await untilNode(async () => (await cloudCount('sales', 'Last Unit')) === 2, 30000);
 check('reconnected: the cloud keeps both sales (none is overwritten)', (await cloudCount('sales', 'Last Unit')) === 2, await cloudCount('sales', 'Last Unit'));
 await A.p.evaluate(() => window.dispatchEvent(new Event('focus'))); await wait(3000);
-await go(A.p, '#/inventory'); await A.p.evaluate(() => [...document.querySelectorAll('.tab')].find((x) => /^All$/.test(x.textContent.trim()))?.click());
+await go(A.p, '#/inventory'); await A.p.evaluate(() => [...document.querySelectorAll('.filter-chips button')].find((x) => /^All/.test(x.textContent.trim()))?.click());
 check('…the shared stock shows the oversell honestly (-1)', await until(A.p, () => [...document.querySelectorAll('tbody tr')].some((r) => /Last Unit/.test(r.innerText) && /-1\b/.test(r.innerText)), 20000));
 await A.p.evaluate(() => document.querySelector('button[title="Notifications"]')?.click()); await wait(300);
 check('…and an urgent alert asks for a count and correction', await A.p.evaluate(() => /stock below zero/.test(document.querySelector('.bell-menu')?.innerText || '')));

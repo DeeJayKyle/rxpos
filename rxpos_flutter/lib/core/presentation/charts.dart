@@ -3,7 +3,11 @@
 // drawn as "so far" (a dashed end), so an unfinished day never looks like a collapse.
 import 'dart:math';
 
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+
+import 'export.dart';
 
 const moneyIn = Color(0xFF0D9488), purchasesColor = Color(0xFFEA580C), expensesColor = Color(0xFFDC2626), profitColor = Color(0xFF7C3AED);
 const shareColors = [Color(0xFF0D9488), Color(0xFF7C3AED), Color(0xFFEA580C), Color(0xFF2563EB), Color(0xFFDB2777)];
@@ -45,7 +49,9 @@ void _text(Canvas c, String s, Offset at, {Color? color, double size = 10, TextA
 
 /// Daily sales over the last [days] (keys oldest first, the last one is today). Tap a day to open it.
 class DailyTrend extends StatefulWidget {
-  const DailyTrend({super.key, required this.byDay, required this.keysFor, required this.money, this.onDay});
+  const DailyTrend({super.key, required this.byDay, required this.keysFor, required this.money, this.onDay, this.extra});
+  /// shown beside the title (the dashboard's Daily / Monthly switch)
+  final Widget? extra;
   final Map<String, double> byDay;
   /// the day keys for a range (oldest first, today last)
   final List<String> Function(int days) keysFor;
@@ -75,7 +81,11 @@ class _DailyTrendState extends State<DailyTrend> {
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       Wrap(spacing: 8, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
         Text('Daily sales · last $_range days', style: th.textTheme.titleMedium),
+        ?widget.extra,
+        ChartExportButton(name: 'daily-sales-$_range-days', rows: () => [for (final (i, k) in keys.indexed) {'date': k, 'sales': vals[i]}]),
         SegmentedButton<int>(
+          showSelectedIcon: false,
+          style: const ButtonStyle(visualDensity: VisualDensity.compact),
           segments: const [ButtonSegment(value: 7, label: Text('7 days')), ButtonSegment(value: 30, label: Text('30 days')), ButtonSegment(value: 90, label: Text('90 days'))],
           selected: {_range},
           onSelectionChanged: (v) => setState(() {
@@ -105,9 +115,18 @@ class _DailyTrendState extends State<DailyTrend> {
               tween: Tween(begin: 0, end: 1),
               duration: const Duration(milliseconds: 420),
               curve: Curves.easeOutCubic,
-              builder: (_, grow, _) => CustomPaint(
+              builder: (_, grow, _) => Stack(clipBehavior: Clip.none, children: [
+                CustomPaint(
                   size: Size(w, h),
                   painter: _DailyBarsPainter(keys, vals, avg, done.isNotEmpty && done[best] > 0 ? best : null, _hover, th.dividerColor, grow, th.colorScheme.onSurface)),
+                // a tooltip over the day pointed at (the reference video)
+                if (_hover != null)
+                  Positioned(
+                    left: (46 + (w - 60) / keys.length * (_hover! + .5)).clamp(0, w - 150).toDouble(),
+                    top: 4,
+                    child: ChartTip(title: '${_day(keys[_hover!])}${_hover == keys.length - 1 ? ' (so far)' : ''}', rows: [('Sales', widget.money(vals[_hover!]), moneyIn)]),
+                  ),
+              ]),
             ),
           ),
         );
@@ -180,7 +199,8 @@ class _DailyBarsPainter extends CustomPainter {
 
 /// One line per series over the last 6 or 12 months. [series]: (name, colour, month key → value).
 class MonthLines extends StatefulWidget {
-  const MonthLines({super.key, required this.series, required this.money, required this.monthKeys});
+  const MonthLines({super.key, required this.series, required this.money, required this.monthKeys, this.extra});
+  final Widget? extra;
   final List<(String, Color, Map<String, double>)> series;
   final String Function(num) money;
   /// the last [n] month keys (YYYY-MM), oldest first
@@ -199,7 +219,11 @@ class _MonthLinesState extends State<MonthLines> {
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       Wrap(spacing: 8, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
         Text('Money in & out, month by month', style: th.textTheme.titleMedium),
+        ?widget.extra,
+        ChartExportButton(name: 'money-in-out-$_months-months', rows: () => [for (final k in keys) {'month': k, for (final (n, _, v) in widget.series) n: v[k] ?? 0}]),
         SegmentedButton<int>(
+          showSelectedIcon: false,
+          style: const ButtonStyle(visualDensity: VisualDensity.compact),
           segments: const [ButtonSegment(value: 6, label: Text('6 months')), ButtonSegment(value: 12, label: Text('12 months'))],
           selected: {_months},
           onSelectionChanged: (v) => setState(() => _months = v.first),
@@ -356,4 +380,53 @@ class ShareTable extends StatelessWidget {
         ),
     ]);
   }
+}
+
+
+/// A tooltip card over a chart (pops in)
+class ChartTip extends StatelessWidget {
+  const ChartTip({super.key, required this.title, required this.rows});
+  final String title;
+  final List<(String, String, Color)> rows;
+  @override
+  Widget build(BuildContext context) => TweenAnimationBuilder<double>(
+        tween: Tween(begin: .9, end: 1),
+        duration: const Duration(milliseconds: 160),
+        builder: (_, k, c) => Transform.scale(scale: k, alignment: Alignment.topLeft, child: c),
+        child: IgnorePointer(
+          child: Container(
+            key: const Key('chart-tip'),
+            constraints: const BoxConstraints(minWidth: 140),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(color: const Color(0xFF0F172A), borderRadius: BorderRadius.circular(10), boxShadow: const [BoxShadow(blurRadius: 18, color: Color(0x55000000), offset: Offset(0, 8))]),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+              Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12)),
+              for (final (k, v, c) in rows)
+                Row(mainAxisSize: MainAxisSize.min, children: [
+                  Container(width: 8, height: 8, decoration: BoxDecoration(color: c, shape: BoxShape.circle)),
+                  const SizedBox(width: 6),
+                  Text(k, style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 12)),
+                  const SizedBox(width: 12),
+                  Text(v, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12)),
+                ]),
+            ]),
+          ),
+        ),
+      );
+}
+
+/// Export a chart's figures as CSV
+class ChartExportButton extends StatelessWidget {
+  const ChartExportButton({super.key, required this.name, required this.rows});
+  final String name;
+  final List<Map<String, Object?>> Function() rows;
+  @override
+  Widget build(BuildContext context) => IconButton(
+        tooltip: 'Export the figures (CSV)',
+        icon: const Icon(Icons.download_outlined, size: 20),
+        onPressed: () async {
+          final f = await saveDownload('$name.csv', utf8.encode(toCsv(rows())));
+          if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Saved $name.csv${f.path.isEmpty ? '' : ' · ${f.path}'}')));
+        },
+      );
 }

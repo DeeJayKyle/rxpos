@@ -1,0 +1,195 @@
+/* ==========================================================================================================
+   Compact design system (2026-11-15, the owner's request: "a thorough clean-up of the whole UI as a professional
+   UX/UI designer: compressed, compact and not overcrowded"). Loaded last, so it sets one rhythm for every page:
+   - type: 13.5 px body, 22 px page titles, 15 px card titles, 12 px help text; numbers tabular
+   - space: 4 px grid; page 20 / 24 px, cards 16 px, gaps 12-14 px; groups separated by space, not lines
+   - controls: 36 px buttons and fields (40 px for touch on phones), 30 px small buttons
+   - tables: 40 px rows, quiet headers, hover highlight
+   - surfaces: one hairline border, a soft shadow only on hover; no cards inside cards
+   Layout and readability only: nothing a page can do is removed.
+   ========================================================================================================== */
+:root { --radius: 14px; --radius-lg: 18px; --radius-sm: 10px; --ctl: 36px; }
+body { font-size: 13.5px; line-height: 1.45; }
+
+/* ---- page frame ---- */
+.page { padding: 20px 24px 36px; gap: 14px; max-width: 1400px; }
+.page-head { gap: 10px 16px; min-height: 40px; }
+.page-head h1, h1 { font-size: 22px; line-height: 1.2; letter-spacing: -.025em; }
+.page-head .sub { font-size: 12.5px; margin-top: 2px; }
+h2 { font-size: 17px; letter-spacing: -.015em; }
+.card h3, h3 { font-size: 14.5px; margin-bottom: 10px; }
+.card { padding: 16px; box-shadow: none; border-radius: var(--radius); }
+.card .card { box-shadow: none; border: 0; padding: 0; background: transparent; } /* no cards inside cards */
+.card.link:hover, .stat.link:hover { box-shadow: 0 6px 20px -12px rgba(15, 23, 42, .25); }
+.card-head { margin-bottom: 10px; gap: 8px; }
+.card-head h3 { margin: 0; }
+p.muted, .card > p.small, .card > .muted.small { font-size: 12.5px; line-height: 1.5; margin: 0 0 10px; max-width: 80ch; }
+.grid2, .grid-2 { gap: 14px; }
+
+/* ---- controls ---- */
+.btn { min-height: var(--ctl); padding: 0 14px; font-size: 13.5px; border-radius: 10px; gap: 6px; }
+.btn.sm { min-height: 30px; padding: 0 10px; font-size: 12.5px; border-radius: 8px; }
+.btn.big { min-height: 42px; padding: 0 18px; }
+.icon-btn { width: 34px; height: 34px; border-radius: 9px; }
+.icon-btn.sm { width: 28px; height: 28px; }
+input, select, textarea { min-height: var(--ctl); padding: 7px 11px; font-size: 13.5px; border-radius: 10px; }
+textarea { min-height: 72px; }
+.field { gap: 5px; }
+.field > span { font-size: 12.5px; font-weight: 600; }
+.form-grid { gap: 12px 14px; }
+.form-actions { margin-top: 14px; gap: 8px; }
+.seg button, .tab { min-height: 32px; font-size: 13px; padding: 0 12px; }
+.tabs { padding: 3px; gap: 2px; }
+
+/* ---- top bar and sidebar ---- */
+.topbar { min-height: 52px; padding-top: 6px; padding-bottom: 6px; }
+.topbar .icon-btn { width: 36px; height: 36px; border-radius: 10px; }
+.search-trigger, .pill { min-height: 36px; }
+.sidebar { padding: 14px 10px 12px; width: 236px; }
+.sidebar nav a { padding: 7px 10px; font-size: 13px; gap: 10px; border-radius: 8px; }
+.sidebar nav a svg { width: 16px; height: 16px; }
+.nav-title { padding: 10px 10px 3px; }
+.brand { font-size: 16.5px; }
+.store-name { padding-bottom: 10px; }
+.nav-promo { padding: 12px; font-size: 12.5px; }
+
+/* ---- figures ---- */
+.stats { gap: 12px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+.stat { min-height: 0; padding: 14px 16px; gap: 3px; }
+.stat strong { font-size: clamp(19px, 1.8vw, 24px); }
+.stat small { font-size: 10.5px; }
+.stat > .muted.small { font-size: 12px; }
+.stat .stat-icon { width: 34px; height: 34px; border-radius: 10px; right: 12px; top: 12px; }
+.stat .stat-icon svg { width: 17px; height: 17px; }
+.stat .stat-icon ~ small, .stat .stat-icon ~ strong { padding-right: 42px; }
+
+/* ---- tables ---- */
+th, td { padding: 9px 12px; }
+th { font-size: 10.5px; letter-spacing: .06em; height: 34px; }
+td { font-size: 13px; }
+tbody tr { transition: background .12s; }
+tbody tr:hover { background: color-mix(in srgb, var(--primary) 4%, transparent); }
+td small, td .small { font-size: 11.5px; }
+.table-wrap { border-radius: var(--radius); }
+.card.table-wrap { padding: 0; overflow: auto; }
+.report-filters { gap: 10px; margin-bottom: 4px; }
+.report-filters label { font-size: 12px; gap: 4px; }
+
+/* ---- tips, badges, pills ---- */
+.tip-chip { display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; height: 26px; padding: 0 10px; border-radius: 99px; border: 1px dashed color-mix(in srgb, var(--primary) 40%, var(--border));
+  background: transparent; color: var(--primary-text); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+.tip-chip:hover { background: var(--primary-soft); }
+.page-tip { padding: 10px 12px; font-size: 12.5px; }
+.badge, .status, .status-pill { font-size: 11px; }
+.empty { padding: 28px 12px; font-size: 13px; }
+
+/* ---- dialogs ---- */
+.modal { padding: 0 18px 18px; }
+.modal-head { padding: 14px 0 10px; }
+.modal-head h3 { font-size: 16px; margin: 0; }
+
+/* ---- the dashboard keeps its own rhythm, one step tighter ---- */
+.dash-page .welcome { padding: 18px 22px; }
+.dash-page .welcome h1 { font-size: clamp(22px, 2.4vw, 30px); }
+.dash-grid { gap: 14px; }
+.dash-bar { margin: 0 0 2px; }
+
+/* ---- phones and small tablets: same rhythm, touch-sized controls ---- */
+@media (max-width: 640px) {
+  :root { --ctl: 40px; }
+  .page { padding: 12px 12px 96px; gap: 12px; }
+  .page-head h1, h1 { font-size: 20px; }
+  .card { padding: 14px; }
+  .stats { gap: 10px; }
+  .stat { padding: 12px 14px; }
+  th, td { padding: 8px 10px; }
+  .dash-page .welcome { padding: 14px 16px; }
+}
+
+/* ---- clean-up round 2 (from every page's PC and phone screenshots) ---- */
+/* the sync pill: state and time; the date is in the clock's tooltip */
+.pill.clock .clock-date { display: none; }
+/* the Premium UI switch: just its icon and knob on narrower screens */
+@media (max-width: 1280px) { .premium-toggle > span:not(.premium-knob) { display: none; } }
+/* empty states: smaller and calmer */
+.empty { padding: 22px 12px !important; }
+.empty-art { width: 56px; height: 56px; margin: 0 auto 2px; }
+.empty-art::before { inset: 6px; border-radius: 18px; }
+.empty-art svg { width: 22px; height: 22px; }
+/* row actions: the main one shows, the rest appear on hover or keyboard focus (PCs with a mouse) */
+@media (min-width: 900px) {
+  tbody tr td.actions > .btn:not(:first-child), tbody tr td.actions .row-acts > .btn:not(:first-child) { opacity: 0; transition: opacity .12s; }
+  tbody tr:hover td.actions > .btn, tbody tr:focus-within td.actions > .btn, tbody tr:hover td.actions .row-acts > .btn, tbody tr:focus-within td.actions .row-acts > .btn { opacity: 1; }
+  tbody tr td.actions .row-more { opacity: .55; }
+  tbody tr:hover td.actions .row-more { opacity: 1; }
+}
+/* the menu's bottom card is gone: the account box sits at the bottom */
+.sidebar .user-box { margin-top: auto; }
+
+@media (max-width: 640px) {
+  /* top bar: Back as an arrow, no Premium UI switch (it is in This device → Theme), fewer icons */
+  .back-btn .back-label { display: none; }
+  .topbar .premium-toggle { display: none; }
+  /* filters scroll sideways in one row instead of stacking */
+  .report-filters { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+  .report-filters label { flex: none; min-width: 120px; }
+  /* tables without a phone layout scroll sideways, each cell on one line */
+  .card.table-wrap > table:not(.phone-rows) { min-width: 560px; }
+  .card.table-wrap > table:not(.phone-rows) td { white-space: nowrap; }
+  /* list rows as cards: the name, then the figures two to a row, the actions last */
+  table.phone-rows tr:not(.group-head) { padding: 10px 12px; gap: 4px 12px; }
+  table.phone-rows td.tick { display: none !important; }
+  table.phone-rows td.row-title strong { font-size: 14px; }
+  table.phone-rows td[data-label]::before { font-size: 10px; margin-bottom: 0; }
+  .page-head .row { gap: 6px; }
+}
+
+/* pills and figures never break inside a word */
+.badge, .status, .status-pill, .pay-chip, td.num, td .num { white-space: nowrap; }
+@media (max-width: 640px) { .view-switch { display: none !important; } }
+@media (max-width: 640px) {
+  /* toolbars: the search takes the row, ghost buttons with an icon become icon-only, Columns is for the PC table */
+  .page-head .btn.ghost:has(svg), .page-head .btn:not(.primary):has(> svg:first-child):not(:has(.badge-count)) { font-size: 0; gap: 0; padding: 0 11px; min-width: var(--ctl); }
+  .page-head .btn.ghost:has(svg) > svg, .page-head .btn:not(.primary):has(> svg:first-child) > svg { width: 17px; height: 17px; }
+  .col-chooser-wrap { display: none !important; }
+  .page-head input.search, .page-head .search-box { flex: 1 1 100%; }
+  /* figures stay on one line */
+  .stat strong { white-space: nowrap; font-size: clamp(16px, 5vw, 22px); overflow-wrap: normal; }
+}
+
+/* ---- tabs and buttons that fit (the owner's request, 2026-11-15) ---- */
+.tabs .tab, .seg button { white-space: nowrap; }
+.page-head .row, .page-head > .row { flex-wrap: wrap; }
+@media (max-width: 640px) {
+  /* tab strips and filter chips wrap onto a second line instead of running off the edge */
+  .page > .tabs, .card > .tabs, .filter-chips { flex-wrap: wrap !important; overflow: visible !important; }
+  .page > .tabs .tab, .card > .tabs .tab, .filter-chips button { flex: 1 1 auto; min-height: 32px; padding: 0 10px; font-size: 12.5px; }
+  .seg button { padding: 0 9px; font-size: 12.5px; }
+  .chart-tools .seg button { padding: 0 8px; }
+  .period-chips { display: flex; width: 100%; }
+  .period-chips button { flex: 1; min-width: 0; }
+  .dash-bar { flex-wrap: nowrap; }
+  .dash-bar .btn { font-size: 0; gap: 0; padding: 0 10px; } /* Edit widgets: just its icon */
+  .dash-bar .btn svg { width: 17px; height: 17px; }
+  .subview-btn { flex: 1 1 auto; }
+  .form-actions { flex-wrap: wrap; }
+  .form-actions .btn { flex: 1 1 auto; }
+}
+@media (max-width: 640px) {
+  /* an empty list fits the screen: its message and button are never cut by the sideways scroll */
+  .card.table-wrap > table:not(.phone-rows):has(td.empty) { min-width: 0; }
+  .card.table-wrap > table:not(.phone-rows):has(td.empty) thead { display: none; }
+  .card.table-wrap > table td.empty { white-space: normal; }
+}
+
+/* tablets: the floating bottom bar never hides the end of a page */
+@media (min-width: 641px) and (max-width: 900px) { .page { padding-bottom: 110px; } }
+/* the till keeps its dense sale lines (at least 7 in view on a 1440 × 900 screen) */
+.cart-line input, .cart-line select { min-height: 24px; padding: 2px 7px; font-size: 12.5px; }
+.pos .totals input, .pos-cart .totals input { min-height: 30px; padding: 3px 10px; }
+.pos .cart-line { padding: 2px 0; }
+.cart-line .btn, .cart-line .icon-btn { min-height: 28px; }
+.cart-line .icon-btn { width: 28px; height: 28px; }
+.lay-std .pos-cart .cart-line { padding-top: 2px; padding-bottom: 2px; }
+.pos-cart .cart-line input, .pos-cart .cart-line select { min-height: 20px; height: 22px; padding: 1px 6px; font-size: 12px; }
+.pos-cart .totals { padding-top: 10px; padding-bottom: 10px; }

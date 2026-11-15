@@ -20,6 +20,7 @@ import '../../../core/presentation/widgets.dart';
 import '../../auth/application/session_controller.dart';
 import '../../sync_status/application/sync_controller.dart';
 import 'report_schedules.dart';
+import 'settings_kit.dart';
 
 const defaultPlace = {'name': 'Kampala, Uganda', 'lat': 0.3476, 'lon': 32.5825};
 
@@ -44,6 +45,8 @@ class SettingsScreen extends ConsumerStatefulWidget {
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   late String _tab = widget.tab;
+  // phones open on the list unless a section was asked for
+  late bool _list = widget.tab == 'general';
   final Map<String, Object?> _s = {};
   final Set<String> _dirty = {};
   List<Map<String, Object?>>? _methods;
@@ -51,11 +54,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   String? _preview, _busy;
   List<Map<String, Object?>>? _places;
   String _placeQ = '';
-
-  static const _tabs = [
-    ('general', 'Pharmacy'), ('payments', 'Payment methods'), ('receipts', 'Receipts & stock'), ('messages', 'Messages & recovery'),
-    ('alerts', 'Alerts & storage'), ('online', 'Online & Mobile Money'), ('backup', 'Data & backup'),
-  ];
 
   void _set(String k, Object? v) => setState(() {
         _s[k] = v;
@@ -123,28 +121,58 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     return PageFrame(
       title: 'Settings',
       subtitle: d.settings.name,
-      scroll: true,
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: SegmentedButton<String>(
-            showSelectedIcon: false,
-            segments: [for (final (k, l) in _tabs) ButtonSegment(value: k, label: Text(l))],
-            selected: {_tab},
-            onSelectionChanged: (v) => setState(() => _tab = v.first),
-          ),
-        ),
-        const SizedBox(height: 12),
-        ...switch (_tab) {
-          'general' => _general(shared.raw, over, d),
-          'payments' => _payments(shared.raw),
-          'receipts' => _receipts(),
-          'messages' => _messages(),
-          'alerts' => _alerts(d.features, can),
-          'online' => _online(),
-          _ => _backup(can, shared.raw),
-        },
-      ]),
+      child: LayoutBuilder(builder: (context, box) {
+        // the owner's choice (2026-11-15, the "app settings" references): settings in labelled groups with an icon and a
+        // line each, a search, quick switches and a Danger zone. A PC shows the list beside the section; a phone, the
+        // list, then the section with "All settings" to go back.
+        final wide = box.maxWidth >= 860;
+        final section = Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          if (!wide) Align(alignment: Alignment.centerLeft, child: TextButton.icon(key: const Key('settings-back'), onPressed: () => setState(() => _list = true), icon: const Icon(Icons.chevron_left), label: const Text('All settings'))),
+          ...switch (_tab) {
+            'general' => _general(shared.raw, over, d),
+            'payments' => _payments(shared.raw),
+            'receipts' => _receipts(),
+            'messages' => _messages(),
+            'alerts' => _alerts(d.features, can),
+            'online' => _online(),
+            _ => _backup(can, shared.raw),
+          },
+        ]);
+        final list = SettingsList(
+          tab: wide ? _tab : null,
+          onTab: (t) => setState(() {
+            _tab = t;
+            _list = false;
+          }),
+          quick: [
+            ('Print receipts automatically', 'After each sale', Icons.print_outlined, 'autoPrint', _s['autoPrint'] == true),
+            ('Blind cash-up', 'Count the cash before seeing the total', Icons.visibility_off_outlined, 'blindCashUp', _s['blindCashUp'] == true),
+            ('Automatic reorder levels', 'Set every week from sales', Icons.autorenew, 'autoReorder', _s['autoReorder'] != false),
+            if (d.features['hourly'] != false) ('Hourly reminder', 'Time and today\'s to-dos', Icons.schedule, 'hourlyChime', _s['hourlyChime'] != false),
+          ],
+          onQuick: (k, v) async {
+            final store = ref.read(recordStoreProvider);
+            final me = await ref.read(sessionControllerProvider.future);
+            await store.update((x) async {
+              x.saveSettings({...await store.settingsRecord(), k: v});
+              x.audit(me?.userName ?? '', 'Settings changed', '$k: ${v ? 'on' : 'off'}');
+            });
+            setState(() => _s[k] = v);
+          },
+          danger: can.contains('data.reset')
+              ? [('Restore default settings', 'Every setting except the pharmacy details', 'Restore every setting to its default?',
+                  'Receipt, stock, message, alert and payment-method settings go back to factory defaults on every device. Pharmacy name, address, phone, TIN and licence are kept. Sales, stock and records are not touched.',
+                  'Restore defaults', _restoreDefaults)]
+              : const [],
+        );
+        // the list and the open section scroll on their own (the list stays in view on a PC)
+        if (!wide) return SingleChildScrollView(key: ValueKey(_list ? 'settings-list' : 'settings-$_tab'), padding: const EdgeInsets.only(bottom: 96), child: _list ? list : section);
+        return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          SizedBox(width: 320, child: SingleChildScrollView(padding: const EdgeInsets.only(bottom: 24), child: list)),
+          const SizedBox(width: 20),
+          Expanded(child: SingleChildScrollView(padding: const EdgeInsets.only(bottom: 24), child: section)),
+        ]);
+      }),
     );
   }
 
@@ -530,6 +558,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               child: OutlinedButton.icon(
                 onPressed: () async {
                   if (!await confirmAction(context, 'Restore default settings?', 'All settings except your pharmacy details go back to factory defaults on every device.', 'Restore defaults')) return;
+                  await _restoreDefaults();
+                },
+                icon: const Icon(Icons.restore),
+                label: const Text('Restore defaults'),
+              ),
+            ),
+          ]),
+        ],
+      ];
+
+  Future<void> _restoreDefaults() async {
                   final store = ref.read(recordStoreProvider);
                   final me = await ref.read(sessionControllerProvider.future);
                   final next = restoredSettings(await store.settingsRecord());
@@ -544,14 +583,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     _gen++;
                   });
                   if (mounted) say(context, 'Default settings restored');
-                },
-                icon: const Icon(Icons.restore),
-                label: const Text('Restore defaults'),
-              ),
-            ),
-          ]),
-        ],
-      ];
+  }
 }
 
 final _cloudConfigProvider = FutureProvider.autoDispose<Map<String, Object?>>((ref) => ref.watch(cloudApiProvider).config());

@@ -20,6 +20,8 @@ import { Database, WifiOff, Undo2, Keyboard } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import { ACTIONS, keyOf, isDefault, setKey, resetKeys, showKey, comboOf } from '../keymap.js';
 import AiSystemDoctor from '../components/AiSystemDoctor.jsx';
+import { SettingsSearch, SettingsGroup, ToggleRow, DangerZone, useFindSetting } from '../components/SettingsKit.jsx';
+import { MousePointerClick, BadgeCheck, RotateCcw, Eraser } from 'lucide-react';
 
 const Choice = ({ value, onChange, options, label }) => (
   <div className="seg" role="radiogroup" aria-label={label}>
@@ -32,9 +34,20 @@ const Choice = ({ value, onChange, options, label }) => (
 export default function Device() {
   const [d, setD] = useState(deviceSettings);
   useEffect(() => onDevice(setD), []);
+  const { can } = useStore();
+  const [sound, setSound] = useState(soundsOn);
+  useFindSetting(true);
   return (
     <div className="page device-page bento-page">
       <div className="page-head"><div><h1>This device</h1><div className="sub">Only changes this {isAndroid ? 'phone or tablet' : isElectron ? 'computer' : 'browser'}. Everyone else keeps their own setup.</div></div></div>
+      <div className="device-top">
+        <SettingsSearch can={can} />
+        <SettingsGroup label="Quick switches">
+          <ToggleRow icon={Volume2} label="Sounds" desc="Alert and message sounds on this device" checked={sound} onChange={(v) => { setSounds(v); setSound(v); }} />
+          {canSwitchView && <ToggleRow icon={MousePointerClick} label="Double-tap to zoom" desc="On an empty spot, and again to zoom out" checked={d.doubleTap} onChange={(v) => setDevice({ doubleTap: v })} />}
+          <ToggleRow icon={BadgeCheck} label="Counts on the app icon" desc="Alerts and messages waiting" checked={d.badges !== false} onChange={(v) => setDevice({ badges: v })} />
+        </SettingsGroup>
+      </div>
       <div className="grid-2">
         <Updates />
         <AiSystemDoctor />
@@ -68,6 +81,10 @@ export default function Device() {
         <Notices d={d} />
         <KeyboardCard d={d} />
       </div>
+      <DangerZone actions={[
+        Object.keys(d.keymap || {}).length > 0 && { icon: RotateCcw, label: 'Reset all keyboard shortcuts', desc: 'Every key back to the standard one', title: 'Put every key back as it was?', text: 'All the shortcuts you changed on this device go back to the standard keys.', confirm: 'Reset the keys', run: () => { resetKeys(); toast('Keyboard shortcuts reset'); } },
+        { icon: Eraser, label: 'Reset this device\'s layout', desc: 'Screen, text size, navigation and dashboard back to standard', title: 'Reset this device\'s layout?', text: 'The screen view, text size, rotation, navigation style and your dashboard widgets go back to the standard ones on this device only. Nothing in the pharmacy is changed.', confirm: 'Reset the layout', run: () => { setDevice({ view: 'auto', zoom: 1, rotation: 'auto', navStyle: 'sidebar', dash: undefined }); toast('This device\'s layout is back to standard'); } },
+      ]} />
     </div>
   );
 }

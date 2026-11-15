@@ -34,6 +34,9 @@ function Donut({ parts, fmt }) {
   );
 }
 
+const REPORT_GROUPS = [['sales', 'Sales', ['sales', 'lines', 'products', 'consumption']], ['money', 'Money', ['purchases', 'expenses', 'profit', 'income']], ['stock', 'Stock', ['stock']]];
+const VIEW_NAMES = { sales: 'Sales Report', lines: 'Sales lines', products: 'Sales by Product', consumption: 'Consumption (ABC)', purchases: 'Purchase Report', expenses: 'Expenses Report', profit: 'Profit & margins', stock: 'Stock Valuation', income: 'Income Statement' };
+
 export default function Reports() {
   const { db: localDb, syncCfg, products, fmt, batchesOf, can } = useStore();
   const location = useLocation();
@@ -91,7 +94,16 @@ export default function Reports() {
       {olderNote(older) && <p className="muted small" role="status">{olderNote(older)}</p>}
       <div className="page-head"><h1>Reports</h1><div className="row gap wrap">{tab !== 'stock' && Range}{tab !== 'lines' && <PdfButton target={pageRef} title={TAB_NAMES[tab]} subtitle={tab === 'stock' ? `As at ${new Date().toLocaleDateString()}` : `${from} to ${to}`} />}</div></div>
       {full && <PageTip id="reports" title="Reading your figures">Pick the dates at the top right. Profit &amp; margins shows what each medicine earns and lists prices below your target margin; every table exports to PDF or CSV.</PageTip>}
-      <Tabs value={tab} onChange={setTab} tabs={!full ? [['lines', 'Sales lines']] : [['sales', 'Sales Report'], ['lines', 'Sales lines'], ['products', 'Sales by Product'], ['consumption', 'Consumption (ABC)'], ['purchases', 'Purchase Report'], ['expenses', 'Expenses Report'], ['profit', 'Profit & margins'], ['stock', 'Stock Valuation'], ['income', 'Income Statement']]} />
+      {/* nine reports in three groups (the owner's choice, 2026-11-15): Sales, Money and Stock, each with its views */}
+      {full && (
+        <div className="seg report-groups" role="radiogroup" aria-label="Reports">
+          {REPORT_GROUPS.map(([k, label, views]) => <button key={k} type="button" role="radio" aria-checked={views.includes(tab)} className={views.includes(tab) ? 'on' : ''} onClick={() => !views.includes(tab) && setTab(views[0])}>{label}</button>)}
+        </div>
+      )}
+      {(() => {
+        const views = !full ? ['lines'] : REPORT_GROUPS.find(([, , v]) => v.includes(tab))[2];
+        return views.length > 1 || !full ? <Tabs value={tab} onChange={setTab} tabs={views.map((v) => [v, VIEW_NAMES[v]])} /> : null;
+      })()}
 
       {tab === 'sales' && (
         <>

@@ -1,0 +1,88 @@
+/* Settings and This device (2026-11-15, from the "app settings" references): labelled groups in rounded containers,
+   smaller gaps inside a group and larger between groups, an icon and a one-line description on every row, › when a
+   row opens a section, switches for quick on / off settings, a search box, and a red Danger zone. */
+.settings-layout { display: grid; grid-template-columns: minmax(280px, 340px) minmax(0, 1fr); gap: 22px; align-items: start; }
+.settings-side { position: sticky; top: 76px; max-height: calc(100vh - 92px); overflow-y: auto; padding: 2px 4px 16px 2px; display: flex; flex-direction: column; gap: 18px; scrollbar-width: thin; }
+.settings-main { min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+.settings-main > .card, .settings-main > form.card { margin: 0; }
+.settings-back { display: none; align-self: flex-start; }
+.settings-section-head { display: flex; align-items: center; gap: 12px; }
+.settings-section-head h2 { margin: 0; font-size: 22px; letter-spacing: -.02em; }
+
+/* phones: the list, or the open section with "All settings" */
+@media (max-width: 899px) {
+  .settings-layout { grid-template-columns: minmax(0, 1fr); }
+  .settings-side { position: static; max-height: none; overflow: visible; padding: 0; }
+  .settings-page.has-section .settings-side { display: none; }
+  .settings-page:not(.has-section) .settings-main { display: none; }
+  .settings-back { display: inline-flex; }
+}
+
+.settings-group { display: flex; flex-direction: column; gap: 6px; }
+.settings-group-label { font-size: 12px; font-weight: 650; color: var(--muted); padding: 0 6px; }
+.settings-group-label.danger { color: var(--danger); }
+.settings-group-box { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 4px; display: flex; flex-direction: column; }
+
+.settings-row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 54px; padding: 8px 10px; border: 0; border-radius: 12px; background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.settings-row + .settings-row { box-shadow: 0 -1px 0 color-mix(in srgb, var(--border) 80%, transparent); }
+.settings-row:hover { background: var(--surface-2); }
+.settings-row.active { background: var(--primary-soft); box-shadow: none; }
+.settings-row.active + .settings-row { box-shadow: none; }
+.settings-row.active .settings-text strong { color: var(--primary-ink); }
+.settings-row.tab { border: 0; } /* .tab keeps the old tests' selector; it isn't a tab strip any more */
+.settings-icon { flex: none; width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: var(--primary-soft); color: var(--primary-ink); }
+.settings-icon.big { width: 44px; height: 44px; border-radius: 13px; }
+.settings-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.settings-text strong { font-size: 14px; font-weight: 650; }
+.settings-text small { font-size: 12px; color: var(--muted); line-height: 1.35; }
+.settings-chevron { flex: none; color: var(--muted); }
+.settings-row.toggle { cursor: default; }
+
+/* the switch (a real checkbox) */
+input.switch { -webkit-appearance: none; appearance: none; flex: none; width: 46px; height: 28px; margin: 0; border-radius: 99px; cursor: pointer; border: 0; padding: 0;
+  background-color: color-mix(in srgb, var(--muted) 32%, transparent); background-image: radial-gradient(circle at center, #fff 0 10.5px, transparent 11px);
+  background-size: 28px 28px; background-position: left center; background-repeat: no-repeat; transition: background-color .22s, background-position .22s; }
+input.switch:checked { background-color: var(--primary); background-position: right center; }
+input.switch:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+/* search */
+.settings-search { position: relative; display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 12px; border-radius: 14px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); }
+.settings-search:focus-within { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
+.settings-search input { flex: 1; border: 0; background: none; outline: none; font: inherit; color: var(--text); min-width: 0; height: 100%; padding: 0; box-shadow: none; }
+.settings-hits { position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 20; list-style: none; margin: 0; padding: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: 0 18px 40px -16px rgba(0, 0, 0, .35); animation: fade-up .18s ease-out; }
+.settings-hits button { display: flex; flex-direction: column; align-items: flex-start; width: 100%; padding: 8px 10px; border: 0; background: none; border-radius: 10px; font: inherit; color: var(--text); text-align: left; cursor: pointer; }
+.settings-hits button:hover, .settings-hits button:focus-visible { background: var(--surface-2); }
+.settings-hits small { color: var(--muted); font-size: 12px; }
+
+/* a setting found by the search flashes */
+.flash { animation: setting-flash 2s ease-out; border-radius: 12px; }
+@keyframes setting-flash { 0%, 30% { box-shadow: 0 0 0 3px var(--primary), 0 0 0 9px var(--primary-soft); } 100% { box-shadow: 0 0 0 0 transparent; } }
+
+/* Advanced: rarely changed options folded away */
+details.advanced { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 10px; }
+details.advanced > summary { cursor: pointer; font-weight: 650; color: var(--primary-text); list-style: none; display: flex; align-items: center; gap: 6px; }
+details.advanced > summary::before { content: '›'; display: inline-block; transition: transform .2s; font-size: 18px; line-height: 1; }
+details.advanced[open] > summary::before { transform: rotate(90deg); }
+details.advanced > .form-grid { margin-top: 10px; animation: fade-up .25s ease-out; }
+
+/* Danger zone */
+.danger-zone-box .settings-group-box { border-color: color-mix(in srgb, var(--danger) 35%, var(--border)); }
+.settings-row.danger .settings-icon { background: var(--danger-soft); color: var(--danger); }
+.settings-row.danger strong { color: var(--danger); }
+.danger-sheet { max-width: 420px; text-align: center; display: flex; flex-direction: column; align-items: stretch; gap: 10px; padding: 28px 24px 22px; position: relative; }
+.danger-sheet h3 { margin: 0; font-size: 20px; }
+.danger-sheet p { margin: 0 0 6px; line-height: 1.45; }
+.danger-close { position: absolute; top: 10px; right: 10px; }
+.danger-art { display: grid; place-items: center; margin: 4px auto 8px; width: 92px; height: 92px; border-radius: 28px; color: #fff; background: linear-gradient(160deg, #f87171, #b91c1c);
+  box-shadow: 0 18px 36px -12px rgba(185, 28, 28, .55); animation: danger-pop .45s cubic-bezier(.2, .9, .3, 1.3); }
+@keyframes danger-pop { from { transform: scale(.6) rotate(-8deg); opacity: 0; } }
+.btn.danger-outline { border: 1.5px solid var(--danger); color: var(--danger); background: transparent; font-weight: 700; min-height: 46px; }
+.btn.danger-outline:hover { background: var(--danger-soft); }
+
+@media (prefers-reduced-motion: reduce) { .settings-hits, .flash, details.advanced > .form-grid, .danger-art { animation: none; } }
+
+/* This device: search and quick switches above the cards; the Danger zone below them */
+.device-top { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 16px; align-items: start; margin-bottom: 16px; }
+.device-page > .danger-zone-box { margin-top: 18px; max-width: 640px; }
+@media (max-width: 899px) { .device-top { grid-template-columns: minmax(0, 1fr); } }
+.settings-side > * { flex-shrink: 0; }

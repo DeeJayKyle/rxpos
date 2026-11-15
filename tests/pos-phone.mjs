@@ -40,7 +40,7 @@ for (const [tag, vp, zoom] of [['android-412', { width: 412, height: 915 }, 130]
   await P.evaluate(() => [...document.querySelectorAll('button')].find((x) => x.textContent.includes('Sign in')).click());
   await P.waitForSelector('.bottom-nav', { timeout: 20000 }); await wait(3000);
   await P.goto(base + '/' + slug + '#/pos', { waitUntil: 'networkidle2' }); await wait(1500);
-  await P.evaluate(() => document.querySelectorAll('.page-tip button').forEach((x) => /Got it/i.test(x.textContent) && x.click()));
+  await P.evaluate(() => document.querySelectorAll('.page-tip button, .tip-chip').forEach((x) => /Got it/i.test(x.textContent) && x.click()));
   for (let i = 0; i < 3; i++) { await P.evaluate((n) => document.querySelectorAll('.product-grid .product')[n]?.click(), i); await wait(300); }
   // docked: Charge and the total in reach, not under the bottom bar
   const docked = await P.evaluate(() => {

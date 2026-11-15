@@ -98,10 +98,13 @@ check('tiles carry their meaning: expenses orange, profit violet', await A.evalu
 await wait(2500); await A.screenshot({ path: `${out}/dashboard-vivid.png`, fullPage: true });
 
 // ---- dashboard charts ----
-check('daily sales chart with total, average and best day', /Daily average/.test(await text(A)) && /Best day/.test(await text(A)) && await A.evaluate(() => document.querySelectorAll('.trend-svg').length >= 2));
+check('daily sales chart with total, average and best day', /Daily average/.test(await text(A)) && /Best day/.test(await text(A)) && await A.evaluate(() => document.querySelectorAll('.trend-svg').length >= 1));
 await clickText(A, '.seg button', /^90 days$/); await wait(300);
 check('…switches to 90 days (with real dates and "Today")', /last 90 days/.test(await text(A)) && await A.evaluate(() => [...document.querySelectorAll('.trend-axis')].some((x) => x.textContent === 'Today')));
+// one sales chart with a Daily / Monthly switch (the clean dashboard, 2026-11-15)
+await clickText(A, '.chart-card .seg button', /^Monthly$/); await wait(400);
 check('money in & out month by month: sales, purchases, expenses, gross profit', await A.evaluate(() => ['in', 'purch', 'exp', 'profit'].every((c) => document.querySelector('.trend-series.' + c))));
+await clickText(A, '.chart-card .seg button', /^Daily$/); await wait(400);
 check('top 10 ranks by amount, with quantity and profit under each name', /Sample Tabs 500mg/.test(await text(A, '.top-list')) && /sold · profit/.test(await text(A, '.top-list')));
 await clickText(A, '.seg button', /^Quantity$/); await wait(200);
 check('…and can rank by quantity', /^1\s*Sample Tabs/.test((await text(A, '.top-list')).trim()));
@@ -126,7 +129,7 @@ await wait(2500); await A.screenshot({ path: `${out}/sales-lines.png`, fullPage:
 // ---- Sales History ----
 await go(A, '#/sales'); await A.evaluate(() => { for (const i of document.querySelectorAll('.page-head input[type=date]')) { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(i, ''); i.dispatchEvent(new Event('input', { bubbles: true })); i.dispatchEvent(new Event('change', { bubbles: true })); } }); await wait(500);
 check('Sales History: 25 per page with page buttons (61 sales)', await A.evaluate(() => [...document.querySelectorAll('.page tbody tr')].filter((r) => !r.classList.contains('total-row')).length === 25 && /of 61/.test(document.querySelector('.pager')?.innerText || '')));
-check('…separate time column and the customer\'s phone', await A.evaluate(() => [...document.querySelectorAll('.page thead th')].some((x) => /^Time/.test(x.textContent.trim())) && /0772000111/.test(document.querySelector('.page tbody').innerText)));
+check('…the time under the date, and the customer\'s phone', await A.evaluate(() => /\d{1,2}:\d{2}/.test(document.querySelector('.page tbody td[data-label=Date] small')?.textContent || '') && /0772000111/.test(document.querySelector('.page tbody').innerText)));
 check('…payment shown as a labelled chip', await A.evaluate(() => !!document.querySelector('.pay-chip.cash') && !!document.querySelector('.pay-chip.momo')));
 await select(A, 'Payment', 'Mobile Money'); await wait(400);
 check('…filter by payment (30 Mobile Money sales)', /30 sales/.test(await text(A, 'tr.total-row')), await text(A, 'tr.total-row'));
@@ -153,7 +156,7 @@ check('…the draft reaches the cloud', await untilNode(async () => (await owner
 check('…and a held sale does not change stock', (await stock(A, 'p1')) === before, `${before} → ${await stock(A, 'p1')}`);
 
 const B = await device('robin@test.rx', 'robin-pass-1234');
-await go(B, '#/sales'); await clickText(B, '.tabs .tab', /^Held sales/); await wait(500);
+await go(B, '#/sales'); await clickText(B, '.subview-btn', /^Held sales/); await wait(500);
 check('another device of the same person shows it under Sales History → Held sales', await until(B, () => /Sample Tabs 500mg|Sale/.test(document.querySelector('.draft-card')?.innerText || ''), 20000));
 await clickText(B, '.draft-card button', /^Continue$/);
 check('…Continue opens it at the till on that device', await until(B, () => /#\/pos/.test(location.hash) && document.querySelectorAll('.cart-line').length === 1, 15000));
@@ -169,14 +172,14 @@ await C.evaluate(() => { const i = document.querySelector('.search-row input'); 
 await C.evaluate(() => document.querySelector('.product')?.click()); await wait(300);
 await C.keyboard.down('Alt'); await C.keyboard.press('h'); await C.keyboard.up('Alt'); await wait(800);
 await untilNode(async () => (await owner(`/tenants/${tid}/records?t=drafts`)).total === 1);
-await go(B, '#/sales'); await clickText(B, '.tabs .tab', /^Held sales/); await wait(400);
+await go(B, '#/sales'); await clickText(B, '.subview-btn', /^Held sales/); await wait(400);
 await clickText(B, '.seg button', /^Everyone/);
 check('a supervisor sees everyone\'s held sales, with who started them', await until(B, () => /started by Casey Cashier/.test(document.querySelector('.draft-grid')?.innerText || ''), 20000));
 await clickText(B, '.seg button', /^Mine$/); await wait(200);
 check('…"Mine" shows only their own', !/Casey Cashier/.test(await text(B, '.draft-grid')));
 await clickText(B, '.seg button', /^Everyone/); await wait(200);
-check('the dashboard shows an "Open drafts" tile', await (async () => { await go(B, '#/'); return /open drafts\s*1/i.test(await text(B, '.stats.alerts')); })());
-await go(B, '#/sales'); await clickText(B, '.tabs .tab', /^Held sales/); await wait(300); await clickText(B, '.seg button', /^Everyone/); await wait(200);
+check('the dashboard\'s Stock health shows "Open drafts"', await (async () => { await go(B, '#/'); return /open drafts[\s\S]*?\b1\b/i.test(await text(B, '.health-card')); })());
+await go(B, '#/sales'); await clickText(B, '.subview-btn', /^Held sales/); await wait(300); await clickText(B, '.seg button', /^Everyone/); await wait(200);
 await clickText(B, '.draft-card button', /^Discard$/); await wait(300); await clickText(B, '.modal button', /^Discard$/);
 check('…discarding it asks, removes it and writes the audit log', await untilNode(async () => (await owner(`/tenants/${tid}/records?t=drafts`)).total === 0 && (await owner(`/tenants/${tid}/records?t=audit&q=Draft%20discarded`)).total >= 1));
 
@@ -189,7 +192,7 @@ await B.evaluate(() => { const sel = document.querySelector('.page form select')
 await clickText(B, 'button', /^Save as draft$/); await wait(800);
 check('Add Stock: "Save as draft" keeps the delivery and starts a fresh one', await untilNode(async () => (await owner(`/tenants/${tid}/records?t=drafts`)).total === 1) && /saved deliver/.test(await text(B, '.page')));
 check('…a delivery draft does not change stock', (await stock(B, 'p1')) === s0);
-await go(B, '#/purchases'); await clickText(B, '.tabs .tab', /^Drafts/); await wait(400);
+await go(B, '#/purchases'); await clickText(B, '.subview-btn', /^Drafts/); await wait(400);
 await clickText(B, '.draft-card button', /^Continue$/);
 check('…Purchase History → Drafts → Continue brings it back into Add Stock (with its supplier)', await until(B, () => /Continuing a saved draft/.test(document.body.innerText) && document.querySelector('.page form select')?.value === 's1' && document.querySelectorAll('.page table tbody tr').length >= 1, 15000));
 await B.evaluate(() => { const i = document.querySelector('.page table input[type=date]'); if (i) { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(i, new Date(Date.now() + 400 * 864e5).toISOString().slice(0, 10)); i.dispatchEvent(new Event('input', { bubbles: true })); i.dispatchEvent(new Event('change', { bubbles: true })); } }); await wait(200);

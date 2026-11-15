@@ -40,11 +40,11 @@ await p.waitForSelector('.sidebar', { timeout: 20000 }); await wait(3000);
 check('a new device starts on RxPOS Daylight Clinical (system is light)', (await html(p)).palette === 'daylight-clinical', JSON.stringify(await html(p)));
 
 // ---- dashboard on real data ----
-const tiles = await p.evaluate(() => Object.fromEntries([...document.querySelectorAll('.stat')].map((s) => [s.querySelector('small')?.textContent.trim(), s.querySelector('strong')?.textContent.trim()])));
+const tiles = await p.evaluate(() => Object.fromEntries([...[...document.querySelectorAll('.stat')].map((s) => [s.querySelector('small')?.textContent.trim(), s.querySelector('strong')?.textContent.trim()]), ...[...document.querySelectorAll('.health-rows a')].map((a) => [a.querySelector('.grow').firstChild.textContent.trim(), a.querySelector('b').textContent.trim()])]));
 check('dashboard: gross profit today = sales less cost (3 × (1,000 − 600) = 1,200)', /1,200/.test(tiles['Gross profit today'] || ''), JSON.stringify(tiles));
 check('dashboard: transactions today = 1', tiles['Transactions'] === '1', tiles['Transactions']);
-check('dashboard: expired tile counts the expired batch in stock', tiles['Expired'] === '1', tiles['Expired']);
-check('dashboard: Low stock and Soon expiring tiles are still there', 'Low stock' in tiles && 'Soon expiring' in tiles);
+check('dashboard: Stock health counts the expired batch in stock', tiles['Expired'] === '1', tiles['Expired']);
+check('dashboard: Low stock and Soon expiring are in Stock health', 'Low stock' in tiles && 'Soon expiring' in tiles);
 // the trend chart's own period (the bento row at the top has its own chips)
 await p.evaluate(() => [...document.querySelectorAll('.seg button')].find((x) => !x.closest('.bento-dash') && /7 days/.test(x.textContent))?.click()); await wait(300);
 check('dashboard: chart period switches to 7 days', /last 7 days/.test(await p.evaluate(() => [...document.querySelectorAll('.card-head h3')].find((x) => !x.closest('.bento-dash'))?.textContent || '')));
@@ -98,8 +98,8 @@ await p.screenshot({ path: `${out}/reports-light.png` });
 // ---- phone: two KPIs per row (amounts still readable), the alerts as one list, Sell button in the bar ----
 await p.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
 await p.goto(base + '/' + slug + '#/', { waitUntil: 'networkidle2' }); await wait(1500);
-const cols = await p.evaluate(() => ['.kpis', '.alerts'].map((s) => getComputedStyle(document.querySelector(s)).gridTemplateColumns.split(' ').length));
-check('phone: KPI cards two per row, alerts one list', cols[0] === 2 && cols[1] === 1, cols.join(','));
+const cols = await p.evaluate(() => [getComputedStyle(document.querySelector('.kpis')).gridTemplateColumns.split(' ').length, document.querySelectorAll('.health-rows li').length]);
+check('phone: KPI cards two per row, the stock figures as one list', cols[0] === 2 && cols[1] >= 4, cols.join(','));
 check('phone: no horizontal overflow', await p.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1));
 check('phone: bottom nav is Home · Stock · Sell · Sales · More', (await p.evaluate(() => [...document.querySelectorAll('.bottom-nav > *')].map((x) => x.textContent.trim()).join('·'))) === 'Home·Stock·Sell·Sales·More');
 await p.screenshot({ path: `${out}/phone-dashboard.png` });
