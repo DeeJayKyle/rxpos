@@ -1379,7 +1379,8 @@ void main() {
     await tester.tap(find.text('Create 1 draft order'));
     await settle(tester);
     final po = (await tester.runAsync(() => store.rows('purchaseOrders')))!.single;
-    expect((po['status'], (po['items'] as List).single['qty'], (po['items'] as List).single['cost']), ('Draft', 30.0, 280.0));
+    final line = ((po['items'] as List).single as Map).cast<String, Object?>();
+    expect((po['status'], line['qty'], line['cost']), ('Draft', 30.0, 280.0));
     await tester.tap(find.text('Open'));
     await settle(tester);
     expect(find.textContaining('Status: Draft'), findsOneWidget);
