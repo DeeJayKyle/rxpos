@@ -151,3 +151,13 @@
 .nav-title-row .nav-title { white-space: nowrap; min-width: 0; }
 .nav-name { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .nav-title .nav-count, .nav-title .count { flex: none; }
+
+/* fit checks (tests/ui-fit.mjs): New sale keeps a touch-sized button; on narrow screens and large text the latest
+   sales table scrolls inside its card and the chart's tools wrap */
+.dash-page .welcome .btn.primary, .date-pill, .dash-search, .dash-bell .icon-btn { min-height: 42px; height: 42px; }
+.recent-card { overflow-x: auto; }
+@media (max-width: 480px) {
+  .recent-table th:nth-child(4), .recent-table td:nth-child(4) { display: none; }
+  .recent-table td:first-child { white-space: normal; }
+  .chart-tools { flex-wrap: wrap !important; overflow: visible !important; }
+}

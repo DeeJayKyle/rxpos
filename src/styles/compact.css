@@ -175,3 +175,9 @@ td small, td .small { font-size: 11.5px; }
   .form-actions { flex-wrap: wrap; }
   .form-actions .btn { flex: 1 1 auto; }
 }
+@media (max-width: 640px) {
+  /* an empty list fits the screen: its message and button are never cut by the sideways scroll */
+  .card.table-wrap > table:not(.phone-rows):has(td.empty) { min-width: 0; }
+  .card.table-wrap > table:not(.phone-rows):has(td.empty) thead { display: none; }
+  .card.table-wrap > table td.empty { white-space: normal; }
+}
