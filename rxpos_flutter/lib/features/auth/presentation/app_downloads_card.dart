@@ -65,7 +65,7 @@ class AppDownloadsCard extends ConsumerWidget {
       return Padding(
         padding: const EdgeInsets.only(top: 8),
         child: Semantics(
-          label: 'Download RxPOS for ${d.name}${d.version.isEmpty ? '' : ', version ${d.version}'}${d.size.isEmpty ? '' : ', ${d.size}'}',
+          label: 'Download for ${d.name}${d.version.isEmpty ? '' : ', version ${d.version}'}${d.size.isEmpty ? '' : ', ${d.size}'}',
           button: true,
           excludeSemantics: true,
           child: mine

@@ -23,7 +23,7 @@ export default function AppDownloads() {
     const l = links[k], mine = device === k;
     return (
       <a key={k} className={'btn block app-dl ' + (mine ? 'primary' : 'ghost')} href={l.url} target={l.direct ? undefined : '_blank'} rel="noreferrer" data-platform={k}
-        download={l.direct ? '' : undefined} aria-label={`Download RxPOS for ${l.name}${l.version ? `, version ${l.version}` : ''}${l.size ? `, ${l.size}` : ''}`}>
+        download={l.direct ? '' : undefined} >
         {k === 'windows' ? <Monitor size={16} /> : <Smartphone size={16} />}
         <span className="grow app-dl-label"><span>Download for {l.name}</span>
           <small>{[mine && 'this device', l.version && `v${l.version}`, l.size].filter(Boolean).join(' · ') || 'release page'}</small></span>
