@@ -1,7 +1,7 @@
 import { useState, useRef, useMemo } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import SalesLines from './SalesLines.jsx';
-import { AlertTriangle, Boxes, Crown, TrendingDown, PackageX, Banknote, Receipt, Percent, Undo2 } from 'lucide-react';
+import { AlertTriangle, Boxes, Crown, TrendingDown, PackageX, Banknote, Receipt, Percent, Undo2, CalendarClock, Truck, Wallet, ChevronRight } from 'lucide-react';
 import { Empty, PageTip } from '../ui.jsx';
 import { formatQty } from '../money.js';
 import { useStore, today, dayOf, localDate, downloadFile, toCSV, daysUntil, stockValue, batchValue, MAIN_BRANCH } from '../store.jsx';
@@ -40,6 +40,7 @@ const VIEW_NAMES = { sales: 'Sales Report', lines: 'Sales lines', products: 'Sal
 export default function Reports() {
   const { db: localDb, syncCfg, products, fmt, batchesOf, can } = useStore();
   const location = useLocation();
+  const navigate = useNavigate();
   const full = can('reports'); // otherwise 'reports.lines' only (e.g. cashiers): just the Sales lines tab, no profit
   const [tab, setTab] = useState(full ? location.state?.tab || 'sales' : 'lines');
   const pageRef = useRef(null);
@@ -99,11 +100,31 @@ export default function Reports() {
     : '';
   const DEFS = { sales: 'Sales include tax and exclude refunded receipts.', lines: 'Every medicine sold; refunded receipts left out.', products: 'Revenue is quantity × price per line, before receipt discounts.', profit: 'Gross profit = sales less tax, less the cost recorded on each line.', purchases: 'Deliveries received in the period, at invoice cost.', expenses: 'Expenses recorded in Finance in the period.', income: 'Sales less tax, cost of goods, expenses and expired write-offs.', consumption: 'Medicines ranked by sales value (A = top 80%).', stock: 'Each batch at its cost; expired batches shown apart.' };
 
+  // the reports opened most often, one tap each (sets the dates and the report; the date boxes above still change them)
+  const monthStart = today().slice(0, 8) + '01';
+  const QUICK = [
+    ['Today\'s sales', 'Every receipt today', Banknote, () => { setFrom(today()); setTo(today()); setTab('sales'); }],
+    ['Expiring stock', 'Batches to sell or return first', CalendarClock, () => navigate('/expiry')],
+    ['Purchases this month', 'Deliveries received', Truck, () => { setFrom(monthStart); setTo(today()); setTab('purchases'); }],
+    ['Expenses this month', 'By category', Wallet, () => { setFrom(monthStart); setTo(today()); setTab('expenses'); }],
+  ];
+
   return (
     <div className="page" ref={pageRef}>
       {olderNote(older) && <p className="muted small" role="status">{olderNote(older)}</p>}
       <div className="page-head"><h1>Reports</h1><div className="row gap wrap">{tab !== 'stock' && Range}{tab !== 'lines' && <PdfButton target={pageRef} title={TAB_NAMES[tab]} subtitle={scopeWords} />}</div></div>
       {full && <PageTip id="reports" title="Reading your figures">Pick the dates at the top right. Profit &amp; margins shows what each medicine earns and lists prices below your target margin; every table exports to PDF or CSV.</PageTip>}
+      {full && (
+        <nav className="quick-reports" aria-label="Quick reports">
+          {QUICK.map(([label, desc, Icon, go]) => (
+            <button key={label} type="button" className="quick-report" onClick={go}>
+              <span className="quick-report-icon" aria-hidden="true"><Icon size={18} /></span>
+              <span className="grow"><strong>{label}</strong><small className="muted">{desc}</small></span>
+              <ChevronRight size={16} aria-hidden="true" />
+            </button>
+          ))}
+        </nav>
+      )}
       {/* nine reports in three groups (the owner's choice, 2026-11-15): Sales, Money and Stock, each with its views */}
       {full && (
         <div className="seg report-groups" role="radiogroup" aria-label="Reports">

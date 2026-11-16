@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ShoppingBag, PackageX, ClipboardList, MessageCircle, Printer, PackageCheck, Download, Wand2 } from 'lucide-react';
 import { useStore, daysSince, uid, now, put, del, audit, downloadFile, toCSV, normalizePhone, supplierPrices, MAIN_BRANCH } from '../store.jsx';
-import { Tabs, Empty, Modal, Stat } from '../ui.jsx';
+import { Tabs, Empty, Modal, Stat, StatusPill } from '../ui.jsx';
 import { toast, ask } from '../feedback.jsx';
 import { whatsappLink } from '../cloud.js';
 import { computeReorderLevels, applyReorderLevels, reorderSettings } from '../reorder.js';
@@ -244,7 +244,7 @@ export default function Reorder() {
               {orders.map((po) => (
                 <tr key={po.id}>
                   <td><strong>{po.number}</strong></td><td>{new Date(po.date).toLocaleDateString()}</td><td>{po.supplierName}</td><td>{po.items.length}</td>
-                  <td><span className={'badge ' + (po.status === 'Received' ? 'ok' : po.status === 'Sent' ? '' : 'warn')}>{po.status}</span></td>
+                  <td><StatusPill status={po.status} /></td>
                   <td className="num">{fmt(po.items.reduce((a, i) => a + i.qty * (i.cost || 0), 0))}</td>
                   <td className="actions">
                     <button className="btn sm ghost" onClick={() => setViewPo(po)}>Open</button>
@@ -281,7 +281,7 @@ export default function Reorder() {
               </table>
               <p className="num"><strong>Estimated total {fmt(viewPo.items.reduce((a, i) => a + i.qty * i.cost, 0))}</strong></p>
             </div>
-            <p className="muted small no-print">Status: <strong>{viewPo.status}</strong>{viewPo.sentAt ? ` · marked sent ${new Date(viewPo.sentAt).toLocaleString()}${viewPo.sentBy ? ' by ' + viewPo.sentBy : ''}` : ''}. Printing or opening WhatsApp does not change the status.</p>
+            <p className="muted small no-print">Status: <StatusPill status={viewPo.status} />{viewPo.sentAt ? ` · marked sent ${new Date(viewPo.sentAt).toLocaleString()}${viewPo.sentBy ? ' by ' + viewPo.sentBy : ''}` : ''}. Printing or opening WhatsApp does not change the status.</p>
             <div className="form-actions no-print">
               {viewPo.status !== 'Received' && <button className="btn danger" onClick={async () => (await ask({ title: 'Delete this purchase order?', danger: true, confirmText: 'Delete' })) && (update((d) => del(d, 'purchaseOrders', viewPo.id)), setViewPo(null))}>Delete</button>}
               <a className={'btn ghost' + (phone.length < 12 ? ' disabled-link' : '')} href={phone.length >= 12 ? whatsappLink(phone, poText(viewPo)) : undefined} target="_blank" rel="noreferrer" title={phone.length < 12 ? 'Add the supplier’s phone number first' : ''}><MessageCircle size={16} />WhatsApp to supplier</a>

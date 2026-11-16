@@ -1407,13 +1407,13 @@ void main() {
     expect((po['status'], line['qty'], line['cost']), ('Draft', 30.0, 280.0));
     await tester.tap(find.text('Open'));
     await settle(tester);
-    expect(find.textContaining('Status: Draft'), findsOneWidget);
+    expect(find.descendant(of: find.byType(AlertDialog), matching: find.byKey(const Key('status-Draft'))), findsOneWidget);
     await tester.tap(find.byKey(const Key('po-mark-sent')));
     await settle(tester, 4);
     await tester.tap(find.widgetWithText(FilledButton, 'Mark as sent').last);
     await settle(tester);
     expect((await tester.runAsync(() => store.rows('purchaseOrders')))!.single['status'], 'Sent');
-    expect(find.textContaining('Status: Sent'), findsOneWidget);
+    expect(find.descendant(of: find.byType(AlertDialog), matching: find.byKey(const Key('status-Sent'))), findsOneWidget);
     expect(find.byKey(const Key('po-mark-sent')), findsNothing);
     expect((await tester.runAsync(() => store.rows('audit')))!.map((a) => a['action']), contains('Purchase order marked sent'));
     await done(tester);
@@ -2278,6 +2278,37 @@ void main() {
     await untilShown(tester, find.byKey(const Key('account-menu')));
     expect(find.byKey(const Key('account-menu')), findsOneWidget, reason: 'unlocked with the system check');
     expect(check.asked.last, 'Unlock RxPOS as Tia Admin');
+    await done(tester);
+  });
+
+  testWidgets('This device: the account card (name, role, sign-in methods) and its Log out; Reports: quick report cards', (tester) async {
+    await tester.runAsync(signedIn);
+    await start(tester);
+    GoRouter.of(tester.element(find.byType(Scaffold).first)).go('/reports');
+    await settle(tester, 4);
+    await tester.tap(find.byKey(const Key("quick-Today's sales")));
+    await settle(tester, 4);
+    final day = DateTime.now().toIso8601String().substring(0, 10);
+    expect(find.textContaining('$day to $day'), findsWidgets, reason: "today's sales: from and to are today");
+    await tester.tap(find.byKey(const Key('quick-Expenses this month')));
+    await settle(tester, 4);
+    expect(find.textContaining('Expenses Report'), findsWidgets);
+    GoRouter.of(tester.element(find.byType(Scaffold).first)).go('/device');
+    await settle(tester, 4);
+    expect(find.byKey(const Key('account-card')), findsOneWidget);
+    expect(find.descendant(of: find.byKey(const Key('account-card')), matching: find.text('Tia Admin')), findsOneWidget);
+    expect(find.byKey(const Key('card-password')), findsOneWidget);
+    expect(find.byKey(const Key('card-pin')), findsOneWidget);
+    expect(find.byKey(const Key('card-unlock')), findsNothing, reason: 'no fingerprint here');
+    await tester.tap(find.byKey(const Key('card-pin')));
+    await settle(tester, 6);
+    expect(find.text('Confirm it is you'), findsOneWidget, reason: 'the password first, as in the account menu');
+    await tester.tap(find.text('Cancel'));
+    await settle(tester, 4);
+    await tester.ensureVisible(find.byKey(const Key('card-logout')));
+    await tester.tap(find.byKey(const Key('card-logout')));
+    await settle(tester);
+    expect(find.text('Sign in · this device: Sample Pharmacy'), findsOneWidget);
     await done(tester);
   });
 

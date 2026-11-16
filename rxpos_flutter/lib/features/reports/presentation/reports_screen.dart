@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:printing/printing.dart';
 
 import '../../../core/data/pharmacy_providers.dart';
@@ -101,6 +102,12 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
             title: const Text('Reading your figures'),
             children: const [Padding(padding: EdgeInsets.all(8), child: Text('Pick the dates at the top right. Profit & margins shows what each medicine earns and lists prices below your target margin; every table prints to PDF, and lists export to CSV.'))],
           ),
+        // the reports opened most often, one tap each (src/pages/Reports.jsx QUICK)
+        if (full) _QuickReports(onPick: (tab, from, to) => setState(() {
+              _tab = tab;
+              _from = from;
+              _to = to;
+            })),
         // nine reports in three groups (src/pages/Reports.jsx; the owner's choice, 2026-11-15): Sales, Money and Stock
         if (full) ...[
           SegmentedButton<String>(
@@ -376,5 +383,46 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           pairs('Daily sales', p.daily()),
         ];
     }
+  }
+}
+
+/// Four one-tap reports: today's sales, expiring stock, this month's purchases and expenses.
+class _QuickReports extends StatelessWidget {
+  const _QuickReports({required this.onPick});
+  final void Function(String tab, String from, String to) onPick;
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    final day = today(), month = '${day.substring(0, 7)}-01';
+    final items = <(String, String, IconData, VoidCallback)>[
+      ("Today's sales", 'Every receipt today', Icons.payments_outlined, () => onPick('sales', day, day)),
+      ('Expiring stock', 'Batches to sell or return first', Icons.event_busy_outlined, () => context.go('/expiry')),
+      ('Purchases this month', 'Deliveries received', Icons.local_shipping_outlined, () => onPick('purchases', month, day)),
+      ('Expenses this month', 'By category', Icons.account_balance_wallet_outlined, () => onPick('expenses', month, day)),
+    ];
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: LayoutBuilder(builder: (context, box) {
+        final cols = box.maxWidth >= 900 ? 4 : box.maxWidth >= 420 ? 2 : 1;
+        final w = (box.maxWidth - 10 * (cols - 1)) / cols;
+        return Wrap(spacing: 10, runSpacing: 10, children: [
+          for (final (label, desc, icon, go) in items)
+            SizedBox(
+              width: w,
+              child: Card(
+                margin: EdgeInsets.zero,
+                child: ListTile(
+                  key: Key('quick-$label'),
+                  onTap: go,
+                  leading: CircleAvatar(radius: 18, backgroundColor: t.colorScheme.primaryContainer, child: Icon(icon, size: 18, color: t.colorScheme.onPrimaryContainer)),
+                  title: Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+                  subtitle: Text(desc),
+                  trailing: const Icon(Icons.chevron_right),
+                ),
+              ),
+            ),
+        ]);
+      }),
+    );
   }
 }

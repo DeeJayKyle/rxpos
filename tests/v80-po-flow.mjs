@@ -94,12 +94,12 @@ await p.evaluate(() => { window.print = () => { window.__printed = (window.__pri
 await click(/^Open$/); await wait(500);
 await click(/^Print$/, '.modal'); await wait(600);
 check('Print prints…', await p.evaluate(() => window.__printed === 1));
-check('…but leaves the order a Draft', /Status: Draft/.test(await modal()));
+check('…but leaves the order a Draft', /Status: \W*Draft/.test(await modal()));
 check('the WhatsApp link no longer changes the status on click', await p.evaluate(() => { const a = [...document.querySelectorAll('.modal a.btn')].find((x) => /WhatsApp/.test(x.textContent)); return a && !a.onclick; }));
 await p.screenshot({ path: path.join(out, 'po-draft.png') });
 await click(/^Mark as sent$/, '.modal'); await wait(500);
 await click(/^Mark as sent$/); await wait(1000);
-check('Mark as sent (after asking) sets the status to Sent', /Status: Sent/.test(await modal()) && /marked sent/.test(await modal()));
+check('Mark as sent (after asking) sets the status to Sent', /Status: \W*Sent/.test(await modal()) && /marked sent/.test(await modal()));
 check('…and the Mark as sent button goes away', !(await p.evaluate(() => [...document.querySelectorAll('.modal button')].some((x) => x.textContent.trim() === 'Mark as sent'))));
 await p.screenshot({ path: path.join(out, 'po-sent.png') });
 await p.keyboard.press('Escape'); await wait(300);
@@ -115,6 +115,12 @@ await p.select('select[aria-label=Branch]', 'br2'); await wait(500);
 const sc = await p.evaluate(() => document.querySelector('[data-testid=report-scope]').innerText);
 check('…for a branch other than main, Expenses says none are counted there and why', /Ntinda branch/.test(sc) && /whole pharmacy, not per branch, so none are counted for this branch/.test(sc), sc);
 await p.screenshot({ path: path.join(out, 'reports-scope.png') });
+// quick report cards: one tap sets the dates and the report
+await p.select('select[aria-label=Branch]', 'all'); await wait(300);
+await p.evaluate(() => [...document.querySelectorAll('.quick-report')].find((x) => /Today's sales/.test(x.textContent)).click()); await wait(600);
+const todayIso = await p.evaluate(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; });
+check("quick report: Today's sales shows the Sales Report for today only", await p.evaluate((t) => new RegExp(`Sales Report · All branches · ${t} to ${t}`).test(document.querySelector('[data-testid=report-scope]').innerText), todayIso));
+await p.screenshot({ path: path.join(out, 'reports-quick.png') });
 await go('#/');
 check('dashboard: the expenses card says expenses are for the whole pharmacy', await until(p, () => /Whole pharmacy \(expenses have no branch\)/.test(document.body.innerText), 8000));
 
@@ -123,6 +129,17 @@ await p.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true, d
 await go('#/reorder');
 await p.screenshot({ path: path.join(out, 'reorder-phone.png'), fullPage: true });
 check('phone: no sideways scroll on Reorder', await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+// status pills on the orders list
+await p.setViewport({ width: 1440, height: 900 }); await go('#/reorder'); await click(/^Purchase orders$/); await wait(500);
+check('orders list: the status is a pill with words (Sent)', await p.evaluate(() => !!document.querySelector('.status-pill[data-status=Sent]') && /Sent/.test(document.querySelector('.status-pill').innerText)));
+// This device: the account card and Log out
+await go('#/device');
+check('This device: account card with the name, role and Change password', await p.evaluate(() => /Ola Admin/.test(document.querySelector('.account-card')?.innerText || '') && /admin/i.test(document.querySelector('.account-card').innerText) && /Change password/.test(document.querySelector('.account-card').innerText)));
+await p.screenshot({ path: path.join(out, 'device-account.png') });
+await p.evaluate(() => document.querySelector('.account-logout').click()); await wait(1500);
+check('…its Log out signs out', await until(p, () => !!document.querySelector('input[autocomplete=username]'), 8000));
+check('sign-in: icons inside the boxes and a large Sign in button', await p.evaluate(() => document.querySelectorAll('.field.with-icon .input-icon').length === 2 && document.querySelector('.btn.auth-submit').getBoundingClientRect().height >= 48));
+await p.screenshot({ path: path.join(out, 'signin.png') });
 check('no page errors', !errors.length, errors.join(' | '));
 await b.close();
 console.log(`\n${pass} passed, ${fail} failed`);

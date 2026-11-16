@@ -535,6 +535,14 @@ function Shell() {
     else if (out && mine) toast(`Your ${mine} held sale${mine === 1 ? '' : 's'}/draft${mine === 1 ? '' : 's'} stay saved: continue ${mine === 1 ? 'it' : 'them'} after signing in, on any device.`, 'info');
   };
   const initials = user.name.split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
+  // the account card on This device asks for these (pages/Device.jsx AccountCard)
+  const accountRef = useRef(null);
+  accountRef.current = { password: () => changePassword(false), pin: manageDevicePin, twostep: () => setTwoStepOpen(true), logout: signOut };
+  useEffect(() => {
+    const on = (e) => accountRef.current?.[e.detail]?.();
+    window.addEventListener('rxpos:account', on);
+    return () => window.removeEventListener('rxpos:account', on);
+  }, []);
 
   return (
     <div className={'shell nav-' + navStyle + (drawer ? ' drawer-open' : '') + (rail ? ' rail' : '') + (here === '/' ? ' on-home' : '')}>

@@ -2,6 +2,7 @@
 // 30 days", offline with this device's own verifier, the quick PIN for this device, two-step sign-in, a choice when
 // one email works at several pharmacies, a question before switching this device to another pharmacy, and the
 // forgotten password (a code by email or SMS, Google on the web page, or the administrator on WhatsApp).
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -14,15 +15,19 @@ import '../../../core/sync/sync_engine.dart';
 import '../../extras/domain/extras.dart';
 import '../application/session_controller.dart';
 import '../data/auth_repository.dart' show classicChoice, ownerChoice;
+import '../domain/app_downloads.dart' show WebDevice;
 import '../domain/device_unlock.dart';
+import 'app_downloads_card.dart';
 import '../domain/session.dart';
 
 const lastEmailKey = 'last-email', rememberChoiceKey = 'remember-choice';
 
 /// A password box with a show / hide eye (src/password.jsx).
 class PasswordField extends StatefulWidget {
-  const PasswordField({super.key, required this.controller, this.label = 'Password', this.onSubmitted, this.autofocus = false, this.hints = const [AutofillHints.password]});
+  const PasswordField({super.key, required this.controller, this.label = 'Password', this.onSubmitted, this.autofocus = false, this.hints = const [AutofillHints.password], this.icon});
   final TextEditingController controller;
+  /// an icon inside the box, on the left (the sign-in form)
+  final IconData? icon;
   final String label;
   final ValueChanged<String>? onSubmitted;
   final bool autofocus;
@@ -42,6 +47,7 @@ class _PasswordFieldState extends State<PasswordField> {
         onSubmitted: widget.onSubmitted,
         decoration: InputDecoration(
           labelText: widget.label,
+          prefixIcon: widget.icon == null ? null : Icon(widget.icon),
           suffixIcon: IconButton(tooltip: _show ? 'Hide password' : 'Show password', icon: Icon(_show ? Icons.visibility_off_outlined : Icons.visibility_outlined), onPressed: () => setState(() => _show = !_show)),
         ),
       );
@@ -50,7 +56,10 @@ class _PasswordFieldState extends State<PasswordField> {
 enum _Stage { main, choose, twoStep, forgotAsk, forgotCode, pin }
 
 class SignInScreen extends ConsumerStatefulWidget {
-  const SignInScreen({super.key});
+  const SignInScreen({super.key, this.showDownloads = false, this.downloadsDevice});
+  /// tests: show the browser's "Browser or app?" card outside the browser too, as this device
+  final bool showDownloads;
+  final WebDevice? downloadsDevice;
 
   @override
   ConsumerState<SignInScreen> createState() => _SignInScreenState();
@@ -266,10 +275,10 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     return [
       Text(_held?.isNotEmpty == true ? 'Sign in · this device: $_held' : 'Sign in with your pharmacy account', style: t.textTheme.bodyMedium),
       const SizedBox(height: 20),
-      TextField(controller: _email, decoration: const InputDecoration(labelText: 'Email or username'), keyboardType: TextInputType.emailAddress,
+      TextField(controller: _email, decoration: const InputDecoration(labelText: 'Email or username', prefixIcon: Icon(Icons.mail_outline)), keyboardType: TextInputType.emailAddress,
           autofillHints: const [AutofillHints.username], textInputAction: TextInputAction.next, autocorrect: false, onChanged: (_) => setState(() {})),
       const SizedBox(height: 12),
-      PasswordField(controller: _password, onSubmitted: (_) => _submit()),
+      PasswordField(controller: _password, icon: Icons.lock_outline, onSubmitted: (_) => _submit()),
       if (_needsCode || (isUsername && _held == null)) ...[const SizedBox(height: 12), _codeField()],
       const SizedBox(height: 8),
       Wrap(alignment: WrapAlignment.spaceBetween, crossAxisAlignment: WrapCrossAlignment.center, children: [
@@ -282,9 +291,12 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
       if (_remember) Text('Stays signed in on this device. Leave it off on a shared computer.', style: t.textTheme.bodySmall),
       _errorText(t),
       const SizedBox(height: 16),
-      FilledButton(
+      FilledButton.icon(
+        key: const Key('sign-in-submit'),
         onPressed: _busy ? null : _submit,
-        child: Padding(padding: const EdgeInsets.all(12), child: Text(_busy ? 'Signing in…' : 'Sign in')),
+        style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52), textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+        icon: const Icon(Icons.login),
+        label: Text(_busy ? 'Signing in…' : 'Sign in'),
       ),
       if (_unlockUser != null) ...[
         const SizedBox(height: 8),
@@ -450,7 +462,17 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
         Text('© ${DateTime.now().year} RxPOS', style: const TextStyle(color: Colors.white54)),
       ]),
     );
-    final side = Center(child: SingleChildScrollView(padding: const EdgeInsets.all(24), child: card));
+    // the browser only: continue here, or install the Windows / Android app
+    final downloads = kIsWeb || widget.showDownloads ? AppDownloadsCard(device: widget.downloadsDevice) : null;
+    final side = Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          card,
+          if (downloads != null && _stage == _Stage.main) ...[const SizedBox(height: 16), downloads],
+        ]),
+      ),
+    );
     return Scaffold(body: wide ? Row(children: [Expanded(child: hero), Expanded(child: side)]) : side);
   }
 }

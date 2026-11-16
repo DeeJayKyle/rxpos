@@ -646,7 +646,10 @@ class _ReorderScreenState extends ConsumerState<ReorderScreen> {
           for (final po in orders)
             ListTile(
               title: Text('${po['number']} · ${po['supplierName']}', style: const TextStyle(fontWeight: FontWeight.w700)),
-              subtitle: Text('${dayOf('${po['date']}')} · ${((po['items'] as List?) ?? const []).length} lines · ${po['status']}'),
+              subtitle: Wrap(spacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
+                Text('${dayOf('${po['date']}')} · ${((po['items'] as List?) ?? const []).length} lines'),
+                StatusPill('${po['status']}'),
+              ]),
               trailing: Wrap(spacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
                 Text(st.money(_poValue(po))),
                 TextButton(onPressed: () => _openPo(po, d), child: const Text('Open')),
@@ -781,8 +784,12 @@ class _ReorderScreenState extends ConsumerState<ReorderScreen> {
           width: 520,
           child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Text('${st.name} · ${dayOf('${po['date']}')}\nTo: ${po['supplierName']}'),
-            Text('Status: ${current['status']}${current['sentAt'] != null ? ' · marked sent ${dayOf('${current['sentAt']}')}${current['sentBy'] != null ? ' by ${current['sentBy']}' : ''}' : ''}. '
-                'Printing or opening WhatsApp does not change the status.', key: const Key('po-status'), style: Theme.of(c).textTheme.bodySmall),
+            Wrap(spacing: 6, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
+              Text('Status:', style: Theme.of(c).textTheme.bodySmall),
+              StatusPill('${current['status']}'),
+              Text('${current['sentAt'] != null ? 'marked sent ${dayOf('${current['sentAt']}')}${current['sentBy'] != null ? ' by ${current['sentBy']}' : ''} · ' : ''}'
+                  'Printing or opening WhatsApp does not change the status.', key: const Key('po-status'), style: Theme.of(c).textTheme.bodySmall),
+            ]),
             const Divider(),
             for (final (n, i) in items.indexed)
               Row(children: [Expanded(child: Text('${n + 1}. ${i['name']} × ${formatQty(i['qty'] as num? ?? 0)} @ ${st.money(i['cost'] as num? ?? 0)}')), Text(st.money(((i['qty'] as num?) ?? 0) * ((i['cost'] as num?) ?? 0)))]),
@@ -953,3 +960,28 @@ class _ExpiryScreenState extends ConsumerState<ExpiryScreen> {
   }
 }
 
+/// A status in words, a mark and a colour (never colour alone): Draft, Sent, Received …
+class StatusPill extends StatelessWidget {
+  const StatusPill(this.status, {super.key});
+  final String status;
+  static const _look = <String, (String, String)>{
+    'Draft': ('warn', '✎'), 'Sent': ('info', '➤'), 'Received': ('ok', '✓'), 'Pending': ('warn', '•'), 'Paid': ('ok', '✓'), 'Owing': ('warn', '!'),
+    'Refunded': ('muted', '↺'), 'Cancelled': ('muted', '×'),
+  };
+  @override
+  Widget build(BuildContext context) {
+    final (tone, mark) = _look[status] ?? ('muted', '•');
+    final cs = Theme.of(context).colorScheme;
+    final fg = switch (tone) { 'ok' => Colors.green.shade800, 'warn' => Colors.orange.shade900, 'info' => Colors.blue.shade800, _ => cs.onSurfaceVariant };
+    return Semantics(
+      label: 'Status $status',
+      excludeSemantics: true,
+      child: Container(
+        key: Key('status-$status'),
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 2),
+        decoration: BoxDecoration(color: fg.withValues(alpha: .13), borderRadius: BorderRadius.circular(999)),
+        child: Text('$mark $status', style: TextStyle(color: fg, fontSize: 12, fontWeight: FontWeight.w700)),
+      ),
+    );
+  }
+}
