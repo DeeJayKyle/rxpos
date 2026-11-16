@@ -157,3 +157,21 @@ export function matchTemplate(t, products) {
     return { productId: best?.id || '', qty: it.qty, looking: it.find[0] };
   });
 }
+
+/** The medicines a sale line used up, as [productId, units]: a kit line counts its components (reorder levels and
+ *  "how fast it sells" see the lancets a kit used), a plain line itself */
+export function unitsUsed(item) {
+  if (item?.kit && Array.isArray(item.kit.components)) return item.kit.components.map((c) => [String(c.id), num(c.qty)]);
+  return [[String(item?.id ?? ''), num(item?.qty)]];
+}
+
+/** "Contains 1 × HIV Test Strip, 2 × Blood Lancets, Testing fee · Safety Lancets instead of Blood Lancets" for a
+ *  receipt, per kit ('' for a plain line) */
+export function kitContents(item) {
+  const k = item?.kit;
+  if (!k || !Array.isArray(k.components)) return '';
+  const n = num(item.qty) || 1;
+  const parts = [...k.components.map((c) => `${r2(num(c.per) || num(c.qty) / n)} × ${c.name}`), ...(k.services || []).map((s) => s.name)];
+  const swaps = k.components.filter((c) => c.swappedFromName).map((c) => `${c.name} instead of ${c.swappedFromName}`);
+  return `Contains ${parts.join(', ')}${swaps.length ? ' · ' + swaps.join(', ') : ''}`;
+}

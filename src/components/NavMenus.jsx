@@ -14,7 +14,7 @@ export const PAGE_INFO = {
   '/drug-info': 'Uses, doses, interactions', '/quiz': 'Train the team', '/customers': 'Clients, balances, allergies', '/suppliers': 'Who you buy from',
   '/insurers': 'Schemes and claims', '/chat': 'Team chat', '/reminders': 'Refill reminders', '/messages': 'SMS and WhatsApp', '/calendar': 'What is coming up',
   '/notes': 'SOPs, handovers, notes', '/medicines': 'The medicine list', '/formulations': 'Dosage forms', '/inventory': 'Stock on hand',
-  '/add-stock': 'Receive a delivery', '/returns': 'Send stock back', '/purchases': 'Deliveries received', '/shelves': 'Where things are kept',
+  '/add-stock': 'Receive a delivery', '/kits': 'Kits sold at the till', '/returns': 'Send stock back', '/purchases': 'Deliveries received', '/shelves': 'Where things are kept',
   '/stock-count': 'Count the shelves', '/controlled': 'Register and recalls', '/expiry': 'Expiring and expired', '/reorder': 'What to buy, dead stock',
   '/quick-edit': 'Prices in bulk', '/stock-card': 'One medicine\'s history', '/labels': 'Print barcodes', '/import': 'From a spreadsheet',
   '/storage': 'Temperature and humidity', '/branches': 'Every branch', '/transfers': 'Between branches', '/expenses': 'Money going out',

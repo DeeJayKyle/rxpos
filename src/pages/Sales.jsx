@@ -9,6 +9,7 @@ import { saleStatus } from '../components/BentoDashboard.jsx';
 import { Modal, SearchBox, Empty, PdfButton, ReceiptPdfButton, PayChip, usePages, Pager, useSort, SortTh, SubViews } from '../ui.jsx';
 import { ask, toast } from '../feedback.jsx';
 import { Barcode } from '../barcode.jsx';
+import { stockParts, kitContents } from '../kits.js';
 // step 22: what the client still owes on a sale (an insurer's share is billed to the insurer); shown on the receipt
 // even after a refund, as before
 const billed = (s) => (s.insurance ? Math.max(0, Number(s.insurance.share) || 0) : 0);
@@ -42,7 +43,7 @@ export function Receipt({ sale }) {
         <tbody>
           {sale.items.map((i) => (
             <tr key={i.id}>
-              <td>{i.name}<br /><small>{i.pack ? `${i.pack.count} × ${i.pack.name} (${i.pack.size}) @ ${fmt(i.pack.price)}` : `${i.qty} × ${fmt(i.price)}`}{i.alloc?.length === 1 && i.alloc[0].batch ? ` · B/N ${i.alloc[0].batch}` : ''}{i.alloc?.[0]?.expiry ? ` · Exp ${i.alloc[0].expiry}` : ''}</small>{i.directions && <><br /><small className="receipt-dir">{[i.directions.dose, i.directions.freq, i.directions.days && `for ${i.directions.days} days`].filter(Boolean).join(' ')}{i.directions.notes?.length ? ` · ${i.directions.notes.join(', ')}` : ''}</small></>}</td>
+              <td>{i.name}<br /><small>{i.pack ? `${i.pack.count} × ${i.pack.name} (${i.pack.size}) @ ${fmt(i.pack.price)}` : `${i.qty} × ${fmt(i.price)}`}{i.alloc?.length === 1 && i.alloc[0].batch ? ` · B/N ${i.alloc[0].batch}` : ''}{i.alloc?.[0]?.expiry ? ` · Exp ${i.alloc[0].expiry}` : ''}</small>{i.kit && <><br /><small className="receipt-kit">KIT · {kitContents(i)}</small></>}{i.directions && <><br /><small className="receipt-dir">{[i.directions.dose, i.directions.freq, i.directions.days && `for ${i.directions.days} days`].filter(Boolean).join(' ')}{i.directions.notes?.length ? ` · ${i.directions.notes.join(', ')}` : ''}</small></>}</td>
               <td className="num">{fmt(i.qty * i.price)}</td>
             </tr>
           ))}
@@ -97,7 +98,7 @@ export function SaleInvoice({ sale }) {
       <table className="invoice-lines">
         <thead><tr><th>#</th><th>Description</th><th>Batch / expiry</th><th className="num">Qty</th><th className="num">Unit price</th><th className="num">Amount</th></tr></thead>
         <tbody>{sale.items.map((i, n) => (
-          <tr key={n}><td>{n + 1}</td><td>{i.name}</td><td>{(i.alloc || []).map((a) => [a.batch, a.expiry].filter(Boolean).join(' · ')).filter(Boolean).join(', ') || '—'}</td><td className="num">{i.qty}</td><td className="num">{fmt(i.price)}</td><td className="num">{fmt(i.qty * i.price)}</td></tr>
+          <tr key={n}><td>{n + 1}</td><td>{i.name}{i.kit && <><br /><small>{kitContents(i)}</small></>}</td><td>{(i.kit ? i.kit.components.flatMap((c) => c.alloc || []) : i.alloc || []).map((a) => [a.batch, a.expiry].filter(Boolean).join(' · ')).filter(Boolean).join(', ') || '—'}</td><td className="num">{i.qty}</td><td className="num">{fmt(i.price)}</td><td className="num">{fmt(i.qty * i.price)}</td></tr>
         ))}</tbody>
       </table>
       <div className="invoice-totals">
@@ -191,8 +192,8 @@ export default function Sales() {
     update((d) => {
       put(d, 'sales', { ...sale, status: 'refunded', refundedBy: user.name, refundedAt: now() });
       for (const i of sale.items) {
-        const parts = i.alloc?.length ? i.alloc : [{ batchId: null, qty: i.qty }];
-        for (const a of parts) move(d, { productId: i.id, qty: a.qty, type: 'Refund', ref: sale.number, user: user.name, batchId: a.batchId, branchId: sale.branchId || MAIN_BRANCH });
+        // a kit line returns each of its medicines to the batches they came from (src/kits.js)
+        for (const a of stockParts(i)) move(d, { productId: a.productId, qty: a.qty, type: 'Refund', ref: sale.number, user: user.name, batchId: a.batchId, branchId: sale.branchId || MAIN_BRANCH });
       }
       audit(d, user, 'Refund', `${sale.number} · ${fmt(sale.total)}`, sale.branchId || MAIN_BRANCH);
     });
@@ -319,7 +320,7 @@ function SaleEditor({ sale, onClose }) {
       const items = [];
       for (const it of f.items) {
         const o = old.get(it.id);
-        const q0 = o?.qty || 0, q1 = Math.max(0, Math.round(Number(it.qty) || 0));
+        const q0 = o?.qty || 0, q1 = it.kit && o ? q0 : Math.max(0, Math.round(Number(it.qty) || 0)); // a kit's count is not changed here
         let alloc = (o?.alloc || []).map((a) => ({ ...a }));
         if (recordOnly) { /* history only */ } else if (q1 > q0) {
           for (const a of allocate(batchesOf(it.id, br), q1 - q0)) {
@@ -342,8 +343,7 @@ function SaleEditor({ sale, onClose }) {
         old.delete(it.id);
       }
       if (!recordOnly) for (const o of old.values()) { // removed lines: everything back to stock
-        const parts = o.alloc?.length ? o.alloc : [{ batchId: null, qty: o.qty }];
-        for (const a of parts) move(d, { productId: o.id, qty: a.qty, type: 'Sale edit', ref: sale.number, user: user.name, batchId: a.batchId, branchId: br });
+        for (const a of stockParts(o)) move(d, { productId: a.productId, qty: a.qty, type: 'Sale edit', ref: sale.number, user: user.name, batchId: a.batchId, branchId: br });
       }
       const paid = ptype === 'credit' ? Math.min(Number(f.paid) || 0, total) : total;
       put(d, 'sales', { ...sale, items, subtotal, discount: disc, tax, total, payment: f.payment, paid, tendered: ptype === 'cash' ? Math.max(sale.tendered || 0, total) : paid,
@@ -366,8 +366,8 @@ function SaleEditor({ sale, onClose }) {
           <tbody>
             {f.items.map((i, k) => (
               <tr key={i.id}>
-                <td>{i.name}</td>
-                <td><input type="number" min="0" value={i.qty} onChange={(e) => setItem(k, { qty: e.target.value })} /></td>
+                <td>{i.name}{i.kit && <><br /><small className="muted">KIT · {kitContents(i)}</small></>}</td>
+                <td><input type="number" min="0" value={i.qty} disabled={!!i.kit} title={i.kit ? 'A kit\'s count can\'t be changed here: remove the line (its medicines go back to stock) or refund the sale' : undefined} onChange={(e) => setItem(k, { qty: e.target.value })} /></td>
                 <td><input type="number" min="0" step="any" value={i.price} onChange={(e) => setItem(k, { price: e.target.value })} /></td>
                 <td className="num">{fmt(Number(i.qty || 0) * Number(i.price || 0))}</td>
                 <td><button type="button" className="icon-btn" title="Remove" onClick={() => setF({ ...f, items: f.items.filter((_, n) => n !== k) })}><Trash2 size={15} /></button></td>
@@ -440,7 +440,7 @@ export function receiptText(sale, s, fmt) {
   L.push(`Receipt ${sale.number} · ${new Date(sale.date).toLocaleString()}`);
   if (sale.customerName && sale.customerName !== 'Walk-in Customer') L.push('Customer: ' + sale.customerName);
   L.push('--------------------------------');
-  for (const i of sale.items) L.push(`${i.qty} × ${i.name} — ${fmt(i.qty * i.price)}`);
+  for (const i of sale.items) { L.push(`${i.qty} × ${i.name} — ${fmt(i.qty * i.price)}`); if (i.kit) L.push('  ' + kitContents(i)); }
   L.push('--------------------------------');
   if (sale.discount > 0) L.push(`Subtotal: ${fmt(sale.subtotal)}`);
   if (sale.discount > 0) L.push(`Discount: -${fmt(sale.discount)}`);

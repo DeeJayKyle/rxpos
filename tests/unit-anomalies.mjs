@@ -95,5 +95,16 @@ check('more taken out than the sale has is flagged', stockFindings('R1', [mv('Sa
 check('a medicine not on the sale is flagged', stockFindings('R1', [mv('Sale', -1, 'p9')], base).length === 1);
 check('stock put back for a sale that is not refunded is flagged', stockFindings('R1', [mv('Refund', 2)], base).length === 1);
 check('a refund of a refunded sale is fine', stockFindings('R1', [mv('Refund', 2)], { ...base, status: 'refunded' }).length === 0);
+// kits (1.10.0): a kit line is priced at its fixed price, else the sum of its components; its stock is its components'
+const kp = new Map([...products, ['kit1', { name: 'Test Kit', kit: { items: [{ productId: 'p1', qty: 2 }, { productId: 'p2', qty: 1 }, { service: true, name: 'Fee', price: 300 }] }, updatedAt: '2026-01-01T00:00:00Z' }],
+  ['kit2', { name: 'Fixed Kit', kit: { items: [{ productId: 'p1', qty: 1 }], price: 1500 }, updatedAt: '2026-01-01T00:00:00Z' }]]);
+const kitLine = (id, price, comps) => ({ id, name: 'Kit', qty: 1, price, kit: { components: comps } });
+const kk = async (s) => (await saleFindings(s, kp, cashier)).map((f) => f.kind).sort().join(',');
+check('a kit sold at the sum of its components is fine (2×1000 + 500 + 300)', (await kk(sale({ items: [kitLine('kit1', 2800, [{ id: 'p1', qty: 2 }, { id: 'p2', qty: 1 }])], subtotal: 2800, total: 2800, paid: 2800 }))) === '');
+check('a kit sold below that by a role without "Change prices" is flagged', (await kk(sale({ items: [kitLine('kit1', 2000, [])], subtotal: 2000, total: 2000, paid: 2000 }))) === 'price');
+check('a kit with a fixed price is checked against it', (await kk(sale({ items: [kitLine('kit2', 1500, [])], subtotal: 1500, total: 1500, paid: 1500 }))) === '' && (await kk(sale({ items: [kitLine('kit2', 1000, [])], subtotal: 1000, total: 1000, paid: 1000 }))) === 'price');
+const ksale = { ...base, items: [kitLine('kit1', 2800, [{ id: 'p1', qty: 2 }, { id: 'p2', qty: 1 }])] };
+check('stock taken for a kit\'s components is not flagged', stockFindings('R1', [mv('Sale', -2, 'p1'), mv('Sale', -1, 'p2')], ksale).length === 0);
+check('…more than the kit holds is', stockFindings('R1', [mv('Sale', -3, 'p1')], ksale).length === 1);
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -25,6 +25,8 @@ import { payRequest, payStatus, guessNetwork, cloudConfig, whatsappLink, sendSms
 import { Receipt, receiptText } from './Sales.jsx';
 import { CameraButton, CameraScanner } from '../camscan.jsx';
 import { deviceSettings, setDevice, onDevice } from '../device.js';
+import { kitView, basketDemand, shortText, stockParts } from '../kits.js';
+import KitIcon from '../components/KitIcon.jsx';
 
 // Receipt numbers must be unique across synced devices, so they are time-based rather than sequential
 
@@ -39,7 +41,14 @@ const TILL_SLASH = [['pay', 'Charge this sale'], ['hold', 'Put this sale on hold
   ['void 2', 'Remove line 2'], ['qty 2 5', 'Line 2: quantity 5'], ['+qty 2', 'One more of line 2'], ['-qty 2', 'One less of line 2']];
 
 export default function POS({ mode = 'retail' }) {
-  const { db, products, update, user, fmt, batchesOf, branchId, syncCfg, features, can, numberFor } = useStore();
+  const { db, products, kits, update, user, fmt, batchesOf, branchId, syncCfg, features, can, numberFor } = useStore();
+  // Kits (1.10.0, src/kits.js): sold at the till next to the medicines; their stock is what their components make
+  const catalog = useMemo(() => [...kits.filter((k) => k.active !== false), ...products], [kits, products]);
+  const prodById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
+  const sellable = (pid) => batchesOf(pid).reduce((a, b) => a + (b.qty > 0 && (!b.expiry || daysUntil(b.expiry) >= 0) ? b.qty : 0), 0);
+  /** a kit as it would be sold now, with this sale's swaps */
+  const kitNow = (k, swaps) => kitView(k, prodById, { stockOf: sellable, swaps });
+  const [swapFor, setSwapFor] = useState(null); // { lineId | kit, from } a kit component being swapped for this sale
   const { pending } = useSyncState();
   const [momo, setMomo] = useState(null);
   const [newClient, setNewClient] = useState(null);   // quick 'add client' form
@@ -177,14 +186,14 @@ export default function POS({ mode = 'retail' }) {
   useEffect(() => {
     const pf = location.state?.proforma;
     if (!pf) return;
-    setCart(pf.items.map((i) => ({ ...i, max: products.find((p) => p.id === i.id)?.stock ?? 0 })));
+    setCart(pf.items.map((i) => ({ ...i, max: catalog.find((p) => p.id === i.id)?.stock ?? 0 })));
     setCustomerId(pf.customerId || 'walk-in');
     setDiscount(pf.discount || 0);
   }, [location.state]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const categories = useMemo(() => [...new Set(products.map((p) => p.category).filter(Boolean))].sort().slice(0, 14), [products]);
   // one folded search string per medicine, rebuilt only when the medicine list changes (src/search.js)
-  const keys = useMemo(() => new Map(products.map((p) => [p.id, searchKey(p)])), [products]);
+  const keys = useMemo(() => new Map(catalog.map((p) => [p.id, searchKey(p)])), [catalog]);
   // medicines sold most recently at this branch (newest first), for the "Recent" filter
   const recent = useMemo(() => {
     const seen = new Map();
@@ -198,7 +207,7 @@ export default function POS({ mode = 'retail' }) {
   // the search box shows each key at once; the matching medicines follow a moment later without holding up typing
   const dq = useDeferredValue(q);
   const resultsFor = (query) => {
-    let list = products.filter((p) => (!category || p.category === category) && (view !== 'instock' || p.stock > 0)
+    let list = catalog.filter((p) => (!category || p.category === category) && (view !== 'instock' || p.stock > 0)
       && (view !== 'fav' || favs.has(p.id)) && (view !== 'recent' || recent.has(p.id)));
     if (query) return searchProducts(list, query, (p) => keys.get(p.id) || searchKey(p)).slice(0, 80);
     if (view === 'recent') list = [...list].sort((a, b) => recent.get(a.id) - recent.get(b.id));
@@ -206,7 +215,7 @@ export default function POS({ mode = 'retail' }) {
     return list.slice(0, 80);
   };
   // eslint-disable-next-line react-hooks/exhaustive-deps -- resultsFor reads exactly these
-  const results = useMemo(() => resultsFor(dq), [products, category, dq, keys, view, favs, recent]);
+  const results = useMemo(() => resultsFor(dq), [catalog, category, dq, keys, view, favs, recent]);
   useEffect(() => setActive(0), [q, category, view]);
   // how many cards fit across the grid, so ↑/↓ move by a whole row
   const gridCols = () => { const el = gridRef.current; return el ? Math.max(1, getComputedStyle(el).gridTemplateColumns.split(' ').length) : 1; };
@@ -216,7 +225,48 @@ export default function POS({ mode = 'retail' }) {
     return n;
   });
 
+  // a kit: the warning first (once per sale), then one more kit if its components (after any swap) make one
+  const addKit = async (k) => {
+    const inCart = cart.find((l) => l.id === k.id);
+    if (!inCart && k.kit?.warning && !(await ask({ title: `${k.name}: before you sell it`, message: k.kit.warning + (k.kit.ack ? '\n\nYou will tick that the client was told before charging.' : ''), confirmText: 'Add the kit' }))) return;
+    const v = kitNow(k, inCart?.swaps);
+    const others = basketDemand(cart.filter((l) => l.id !== k.id)); // what the rest of the basket already takes
+    const most = v.canMake == null ? Infinity : Math.min(v.canMake, ...v.components.map((c) => Math.floor((c.have - (others.get(c.productId) || 0)) / c.qty)));
+    const want = (inCart?.qty || 0) + 1;
+    if (most < want) {
+      const c = v.short?.[0];
+      if (c && !c.missing) { toast(`${k.name}: ${shortText(v)}. Swap it for another medicine for this sale, or sell fewer kits.`, 'warn'); return setSwapFor({ kit: k, lineId: inCart?.id, from: c.swappedFrom || c.productId }); }
+      return toast(`${k.name}: ${most <= 0 ? 'none can be made' : `only ${most} can be made`} (${shortText(v) || 'not enough stock'})`, 'error');
+    }
+    setCart((cs) => {
+      if (inCart) return cs.map((l) => (l.id === k.id ? { ...l, qty: want, max: most } : l));
+      return [...cs, kitLine(k, v, {}, most)];
+    });
+    setQ('');
+    focusSearch();
+  };
+  const kitLine = (k, v, swaps, most) => ({ id: k.id, name: k.name, price: priceOf(v), cost: v.cost, qty: 1, max: most, rx: v.rx, controlled: v.controlled, swaps,
+    kit: { icon: k.kit.icon, color: k.kit.color, warning: k.kit.warning || '', ack: !!k.kit.ack, services: v.services,
+      components: v.components.map((c) => ({ productId: c.productId, name: c.name, qty: c.qty, cost: c.cost, ...(c.swappedFrom ? { swappedFrom: c.swappedFrom, swappedFromName: prodById.get(c.swappedFrom)?.name || '' } : {}) })) } });
+  /** swap one of a kit's medicines for another for this sale only (recommendation 3) */
+  const swapComponent = (to) => {
+    const { kit: k0, lineId, from } = swapFor;
+    const k = k0 || kits.find((x) => x.id === lineId);
+    const line = cart.find((l) => l.id === (lineId || k.id));
+    const swaps = { ...(line?.swaps || {}) };
+    if (to === from) delete swaps[from]; else swaps[from] = to;
+    const v = kitNow(k, swaps);
+    const others = basketDemand(cart.filter((l) => l.id !== k.id));
+    const most = v.canMake == null ? Infinity : Math.min(v.canMake, ...v.components.map((c) => Math.floor((c.have - (others.get(c.productId) || 0)) / c.qty)));
+    if (most < (line?.qty || 1)) return toast(`Still not enough: ${shortText(v) || 'not enough stock'}`, 'warn');
+    const next = { ...kitLine(k, v, swaps, most), qty: line?.qty || 1, price: line?.price ?? priceOf(v), acked: line?.acked || false };
+    setCart((cs) => (line ? cs.map((l) => (l.id === line.id ? next : l)) : [...cs, next]));
+    setSwapFor(null);
+    if (to !== from) toast(`${prodById.get(to)?.name} instead of ${prodById.get(from)?.name} in this ${k.name}`, 'info');
+  };
+
   const add = async (p) => {
+    if (p.isKit) return addKit(p);
     if (p.stock <= 0) {
       const g = genericKey(p.generic || p.name);
       const list = g ? products.filter((x) => x.id !== p.id && x.stock > 0 && genericKey(x.generic || x.name) === g).slice(0, 8) : [];
@@ -262,7 +312,7 @@ export default function POS({ mode = 'retail' }) {
     if (q.startsWith('/')) { e.preventDefault(); const err = runCommand(q.slice(1).trim().toLowerCase()); if (err) toast(err, 'warn'); else setQ(''); return; }
     const g = parseGs1(q);
     if (g) { scanPack(g); setQ(''); return; }
-    const exact = products.find((p) => p.barcode && p.barcode === q.trim());
+    const exact = catalog.find((p) => p.barcode && p.barcode === q.trim()); // a kit's label scans too
     if (exact) return void add(exact);
     if (/^\d{6,}$/.test(q.trim())) return void toast(`No medicine has the barcode ${q.trim()}`, 'warn'); // a scan that matched nothing: never guess
     // Enter acts on what is typed now, even if the list on screen hasn't caught up with the last keys yet
@@ -354,7 +404,7 @@ export default function POS({ mode = 'retail' }) {
   function loadSale(x) {
     cdRef.current = null; rxRef.current = null;
     // stock may have moved while the sale was on hold: each line's limit is today's stock
-    setCart((x.cart || []).map((l) => { const p = products.find((y) => y.id === l.id); return p ? { ...l, max: p.stock, qty: Math.min(l.qty, Math.max(1, p.stock)) } : l; })); setCustomerId(x.customerId || 'walk-in'); setDiscount(x.discount || 0);
+    setCart((x.cart || []).map((l) => { const p = catalog.find((y) => y.id === l.id); return p ? { ...l, max: p.stock, qty: Math.min(l.qty, Math.max(1, p.stock)) } : l; })); setCustomerId(x.customerId || 'walk-in'); setDiscount(x.discount || 0);
     setPayment(methods.some((m) => m.name === x.payment) ? x.payment : methods[0]?.name || 'Cash'); setTendered(x.tendered || ''); setPicked(new Set()); setCursor(-1);
     setInsKey(x.insKey || ''); setMemberNo(x.memberNo || '');
   }
@@ -384,8 +434,8 @@ export default function POS({ mode = 'retail' }) {
   };
   const heldTotal = (h) => h.cart.reduce((a, l) => a + l.price * l.qty, 0) - (Number(h.discount) || 0);
   // Rx / controlled status comes from the medicine as it is now (a line may have been rung up before it was changed)
-  const isRx = (l) => !!(products.find((p) => p.id === l.id)?.rx ?? l.rx);
-  const isCd = (l) => !!(products.find((p) => p.id === l.id)?.controlled ?? l.controlled);
+  const isRx = (l) => !!(catalog.find((p) => p.id === l.id)?.rx ?? l.rx);
+  const isCd = (l) => !!(l.kit ? l.controlled || l.kit.components.some((c) => prodById.get(c.productId)?.controlled) : products.find((p) => p.id === l.id)?.controlled ?? l.controlled);
   const lineAt = cursor >= 0 && cursor < cart.length ? cart[cursor] : cart[cart.length - 1];
   // ---- wide screens (1280px+): the client panel on the left, with the quick actions ----
   const [custQ, setCustQ] = useState('');
@@ -463,8 +513,24 @@ export default function POS({ mode = 'retail' }) {
     return 'Not a command. Try +qty 2, -qty 2, qty 2 5, void 2, disc 2 10, disc 10, hold or pay';
   };
 
+  /** a kit line's medicines and the other lines together must be in stock: the first one short, in words ('' = fine) */
+  const basketShort = () => {
+    const kitIds = new Set(cart.filter((l) => l.kit).flatMap((l) => l.kit.components.map((c) => c.productId)));
+    const expiredOk = new Set(cart.filter((l) => !l.kit && l.allowExpired).map((l) => l.id));
+    for (const [pid, need] of basketDemand(cart)) {
+      if (!kitIds.has(pid) || expiredOk.has(pid)) continue;
+      const have = sellable(pid);
+      if (need > have + 1e-9) return `${prodById.get(pid)?.name || 'A medicine'}: this sale needs ${need} (kits included) but only ${have} can be sold`;
+    }
+    return '';
+  };
   const checkout = async () => {
     if (!cart.length) return;
+    // recommendation 5: a kit whose warning must be given: the cashier ticks it on the line before charging
+    const unticked = cart.find((l) => l.kit?.ack && !l.acked);
+    if (unticked) return toast(`${unticked.name}: tick that the client was given the warning before charging`, 'warn');
+    const short = basketShort();
+    if (short) return toast(short, 'error');
     const credit = ptype === 'credit';
     if (credit && customerId === 'walk-in') return toast('Select a registered customer for a credit sale', 'warn');
     if (capture === 'required' && customerId === 'walk-in') return toast('Choose or add the client for this sale', 'warn');
@@ -508,11 +574,24 @@ export default function POS({ mode = 'retail' }) {
     if (saving.current) return;
     const credit = ptype === 'credit';
     const paid = credit ? Math.min(Number(tendered) || 0, due) : due;
-    // Split each line across batches, earliest expiry first
-    const items = cart.map((l) => ({ ...l, controlled: isCd(l) })).map(({ id, name, price, cost, qty, allowExpired, directions, controlled, pack, preferBatch }) => ({
+    // Split each line across batches, earliest expiry first. What one line takes from a batch is not offered to the next
+    // (a kit and a plain line, or two kits, may share a medicine).
+    const used = new Map();
+    const take = (pid, qty, opts, prefer) => {
+      const list = preferFirst(batchesOf(pid), prefer).map((b) => ({ ...b, qty: b.qty - (used.get(b.id) || 0) }));
+      const alloc = allocate(list, qty, opts).map(({ batchId, qty: q, batch, expiry }) => ({ batchId, qty: q, batch, expiry }));
+      for (const a of alloc) if (a.batchId) used.set(a.batchId, (used.get(a.batchId) || 0) + a.qty);
+      return alloc;
+    };
+    const items = cart.map((l) => ({ ...l, controlled: isCd(l) })).map(({ id, name, price, cost, qty, allowExpired, directions, controlled, pack, preferBatch, kit, acked }) => (kit ? {
+      // a kit: one line on the receipt; its medicines leave stock from their own batches (src/kits.js)
+      id, name, price: Number(price), cost, qty, ...(controlled ? { controlled: true } : {}), alloc: [],
+      kit: { icon: kit.icon, color: kit.color, ...(kit.ack ? { warning: kit.warning, acked: !!acked } : {}), services: kit.services || [],
+        components: kit.components.map((c) => ({ id: c.productId, name: c.name, per: c.qty, qty: c.qty * qty, cost: c.cost, ...(c.swappedFrom ? { swappedFrom: c.swappedFrom, swappedFromName: c.swappedFromName } : {}), alloc: take(c.productId, c.qty * qty, {}) })) },
+    } : {
       id, name, price: Number(price), cost, qty, ...(directions ? { directions } : {}), ...(controlled ? { controlled: true } : {}),
       ...(pack ? { pack: { name: pack.name, size: pack.size, count: qty / pack.size, price: Number(price) * pack.size } } : {}),
-      alloc: allocate(preferFirst(batchesOf(id), preferBatch), qty, { allowExpired }).map(({ batchId, qty: q, batch, expiry }) => ({ batchId, qty: q, batch, expiry })),
+      alloc: take(id, qty, { allowExpired }, preferBatch),
     }));
     const sale = {
       id: uid(), number: '', date: now(), type: mode, branchId, // numbered in the commit below (step 7)
@@ -528,7 +607,13 @@ export default function POS({ mode = 'retail' }) {
     await update((d) => {
       sale.number = numberFor(d, 'R'); // saved with the sale: never repeats, even offline
       put(d, 'sales', sale);
-      for (const i of items) for (const a of i.alloc) move(d, { productId: i.id, qty: -a.qty, type: 'Sale', ref: sale.number, user: user.name, batchId: a.batchId, branchId });
+      for (const a of items.flatMap(stockParts)) move(d, { productId: a.productId, qty: -a.qty, type: 'Sale', ref: sale.number, user: user.name, batchId: a.batchId, branchId });
+      // kits: the warning given (recommendation 5) and any medicine swapped for this sale (recommendation 3)
+      for (const i of items.filter((x) => x.kit)) {
+        if (i.kit.acked) audit(d, user, 'Kit warning given', `${sale.number}: ${i.name}: ${i.kit.warning}`, branchId);
+        const sw = i.kit.components.filter((c) => c.swappedFrom);
+        if (sw.length) audit(d, user, 'Kit item swapped', `${sale.number}: ${i.name}: ${sw.map((c) => `${c.name} instead of ${c.swappedFromName}`).join(', ')}`, branchId);
+      }
       const pf = location.state?.proforma;
       if (pf) put(d, 'proformas', { ...d.proformas.find((x) => x.id === pf.id), status: 'Converted', saleNumber: sale.number });
       if (disc > 0) audit(d, user, 'Discount given', `${sale.number}: ${fmt(disc)}`, branchId);
@@ -581,7 +666,7 @@ export default function POS({ mode = 'retail' }) {
     if (!cart.length) return;
     const pf = {
       id: uid(), number: '', date: now(), type: mode, status: 'Open',
-      items: cart.map(({ id, name, price, cost, qty }) => ({ id, name, price: Number(price), cost, qty })),
+      items: cart.map(({ id, name, price, cost, qty, kit, swaps }) => ({ id, name, price: Number(price), cost, qty, ...(kit ? { kit, swaps } : {}) })),
       subtotal, discount: disc, tax, total, customerId, customerName: customer?.name || 'Walk-in Customer', createdBy: user.name,
     };
     update((d) => { pf.number = numberFor(d, 'PF'); put(d, 'proformas', pf); });
@@ -593,7 +678,7 @@ export default function POS({ mode = 'retail' }) {
   // Alt+←/→ switch held sales, Alt+↑/↓ choose a cart line, +/− its quantity, Delete removes it, Alt+1…9 payment method
   useEffect(() => {
     const onKey = (e) => {
-      if (done || momo || newClient || labelFor || infoFor || subs || cdForm || cam || help || omni) return;
+      if (done || momo || newClient || labelFor || infoFor || subs || swapFor || cdForm || cam || help || omni) return;
       const inSearch = e.target.tagName === 'INPUT' && searchRef.current?.contains(e.target);
       const typing = /INPUT|TEXTAREA|SELECT/.test(e.target.tagName) && !inSearch;
       if (e.key === 'F8') { e.preventDefault(); focusSearch(); }
@@ -714,6 +799,25 @@ export default function POS({ mode = 'retail' }) {
         <div className="product-grid" ref={gridRef}>
           {results.map((p, i) => {
             const d = p.expiry ? daysUntil(p.expiry) : 999;
+            if (p.isKit) return (
+              // a kit looks different from a medicine: its colour, icon, a KIT badge, what it holds and how many can be made
+              <div key={p.id} className="product-wrap">
+              <button className={'product kit-tile' + (p.stock <= 0 ? ' disabled' : '') + (i === active && !touch ? ' active' : '')} style={{ '--kit': p.kit.color || '#be185d' }} onClick={() => add(p)} onMouseEnter={() => setActive(i)}>
+                <span className="kit-tile-head"><KitIcon icon={p.kit.icon} color={p.kit.color} size={16} /><strong>{p.name}</strong><span className="kit-badge">KIT</span></span>
+                <small className="muted kit-contents">{[...p.components.map((c) => `${c.qty} × ${c.name}`), ...p.services.map((x) => x.name)].join(' · ')}</small>
+                <div className="row between">
+                  <span className="price">{fmt(priceOf(p))}<small className="per-unit"> / kit</small></span>
+                  <span className={'small stock-tag ' + (p.stock <= 0 ? 'text-danger out' : p.stock <= 3 ? 'text-warn low' : 'muted')}>{p.canMake == null ? 'service' : p.stock <= 0 ? 'None can be made' : `Can make ${p.stock}`}</span>
+                </div>
+                <div className="tags">
+                  {p.controlled ? <span className="clinical-pill cd" title="Holds a controlled drug">CD · NDA</span> : p.rx && <span className="clinical-pill rx" title="Holds a prescription-only medicine">Rx only</span>}
+                  {p.kit.warning && <span className="kit-warn-tag" title={p.kit.warning}><AlertTriangle size={11} aria-hidden="true" /> {p.kit.ack ? 'Warning to give' : 'Warning'}</span>}
+                  {p.stock <= 3 && p.canMake != null && shortText(p) && <span className="kit-short-tag">{shortText(p)}</span>}
+                </div>
+              </button>
+              <button type="button" className={'fav-btn' + (favs.has(p.id) ? ' on' : '')} aria-pressed={favs.has(p.id)} aria-label={(favs.has(p.id) ? 'Remove ' : 'Add ') + p.name + (favs.has(p.id) ? ' from favourites' : ' to favourites')} title={favs.has(p.id) ? 'Favourite' : 'Add to favourites'} onClick={() => toggleFav(p.id)}><Star size={14} /></button>
+              </div>
+            );
             return (
               <div key={p.id} className="product-wrap">
               <button className={'product' + (p.stock <= 0 ? ' disabled' : '') + (i === active && !touch ? ' active' : '')} onClick={() => add(p)} onMouseEnter={() => setActive(i)}>
@@ -793,14 +897,15 @@ export default function POS({ mode = 'retail' }) {
         <ClinicalSafetyPill cart={cart} products={products} customer={customer} />
         <div className="cart-lines">
           {cart.map((l) => (
-            <div key={l.id} style={swipe?.id === l.id && swipe.dx < 0 ? { transform: `translateX(${swipe.dx}px)`, opacity: Math.max(0.35, 1 + swipe.dx / 220) } : undefined}
+            <div key={l.id}
               onTouchStart={(e) => setSwipe({ id: l.id, x0: e.touches[0].clientX, y0: e.touches[0].clientY, dx: 0 })}
               onTouchMove={(e) => setSwipe((w) => { if (!w || w.id !== l.id) return w; const dx = e.touches[0].clientX - w.x0, dy = e.touches[0].clientY - w.y0; return Math.abs(dx) > Math.abs(dy) ? { ...w, dx: Math.min(0, dx) } : { ...w, dx: 0 }; })}
               onTouchEnd={() => { if (swipe?.id === l.id && swipe.dx < -90) removeLines([l.id]); setSwipe(null); }}
-              className={'cart-line' + (pulse[l.id] ? (pulse[l.id] % 2 ? ' pulse-a' : ' pulse-b') : '') + (picked.has(l.id) ? ' picked' : '') + (cart.length > 1 && lineAt?.id === l.id && cursor >= 0 ? ' cursor' : '')} onClick={() => setCursor(cart.indexOf(l))}>
+              style={l.kit ? { '--kit': l.kit.color || '#be185d', ...(swipe?.id === l.id && swipe.dx < 0 ? { transform: `translateX(${swipe.dx}px)`, opacity: Math.max(0.35, 1 + swipe.dx / 220) } : {}) } : swipe?.id === l.id && swipe.dx < 0 ? { transform: `translateX(${swipe.dx}px)`, opacity: Math.max(0.35, 1 + swipe.dx / 220) } : undefined}
+              className={'cart-line' + (l.kit ? ' kit-line' : '') + (pulse[l.id] ? (pulse[l.id] % 2 ? ' pulse-a' : ' pulse-b') : '') + (picked.has(l.id) ? ' picked' : '') + (cart.length > 1 && lineAt?.id === l.id && cursor >= 0 ? ' cursor' : '')} onClick={() => setCursor(cart.indexOf(l))}>
               {useAdvancedLayout && <span className="line-num" aria-label={`Line ${cart.indexOf(l) + 1}`}>{cart.indexOf(l) + 1}</span>}
               <input type="checkbox" className="line-check" checked={picked.has(l.id)} onChange={() => togglePick(l.id)} aria-label={`Select ${l.name}`} />
-              <div className="grow"><strong>{l.name}</strong>
+              <div className="grow">{l.kit && <KitIcon icon={l.kit.icon} color={l.kit.color} size={14} className="kit-line-icon" />}<strong>{l.name}</strong>{l.kit && <span className="kit-badge">KIT</span>}
                 {/* safety in words, not colour alone */}
                 {isCd(l) ? <span className="badge safety-cd" title="Controlled drug: recorded in the register">CD · register</span> : isRx(l) && <span className="badge safety-rx" title="Prescription only">Rx only</span>}
                 {l.allowExpired && <span className="badge safety-expired" title={`Expired stock, reason: ${l.expiredReason || '—'}`}><AlertTriangle size={11} aria-hidden="true" /> Expired stock · reason recorded</span>}
@@ -822,10 +927,25 @@ export default function POS({ mode = 'retail' }) {
                     ? <input className="price-input" type="number" step="any" aria-label="Pack price" disabled={!can('pos.price_edit')} value={Math.round(l.price * l.pack.size * 100) / 100} onChange={(e) => setLine(l.id, { price: Number(e.target.value) / l.pack.size, pack: { ...l.pack, price: Number(e.target.value) } })} />
                     : <input className="price-input" type="number" step="any" aria-label="Unit price" disabled={!can('pos.price_edit')} value={l.price} onChange={(e) => setLine(l.id, { price: e.target.value })} />}
                 </small>
-                <div className="line-tools">
+                {l.kit && (
+                  <div className="kit-parts">
+                    <small className="muted">Can make {l.max >= 999999 ? 'any' : l.max} · per kit: </small>
+                    {l.kit.components.map((c) => (
+                      <span key={c.productId} className={'kit-part' + (c.swappedFrom ? ' swapped' : '')}>
+                        {c.qty} × {c.name}{c.swappedFrom && <em> (for {c.swappedFromName})</em>}
+                        <button type="button" className="link-btn small" onClick={(e) => { e.stopPropagation(); setSwapFor({ lineId: l.id, from: c.swappedFrom || c.productId }); }} aria-label={`Swap ${c.name} in ${l.name}`}>swap</button>
+                      </span>
+                    ))}
+                    {(l.kit.services || []).map((x) => <span key={x.name} className="kit-part service">{x.name}</span>)}
+                    {l.kit.warning && (l.kit.ack
+                      ? <label className={'kit-ack' + (l.acked ? ' done' : '')} onClick={(e) => e.stopPropagation()}><input type="checkbox" checked={!!l.acked} onChange={(e) => setLine(l.id, { acked: e.target.checked })} /><span><AlertTriangle size={12} aria-hidden="true" /> {l.kit.warning} <b>I told the client</b></span></label>
+                      : <div className="kit-ack info"><AlertTriangle size={12} aria-hidden="true" /> {l.kit.warning}</div>)}
+                  </div>
+                )}
+                {!l.kit && <div className="line-tools">
                   <button className={'link-btn small' + (l.directions ? ' text-ok' : '')} title={l.directions ? 'Directions ✓' : 'Directions / label'} onClick={() => setLabelFor(l)}><Tag size={12} />{l.directions ? 'Directions ✓' : 'Directions / label'}</button>
                   {features.drugInfo !== false && <button className="link-btn small" title="Drug info" onClick={() => setInfoFor(products.find((p) => p.id === l.id) || l)}><BookMarked size={12} />Drug info</button>}
-                </div>
+                </div>}
               </div>
               <div className="qty">
                 <button onClick={() => (l.qty > stepOf(l) ? setCount(l, l.qty / stepOf(l) - 1) : removeLines([l.id]))} aria-label="Less">−</button>
@@ -940,6 +1060,33 @@ export default function POS({ mode = 'retail' }) {
         </Modal>
       )}
 
+      {swapFor && (() => {
+        const k = swapFor.kit || kits.find((x) => x.id === swapFor.lineId);
+        const from = prodById.get(swapFor.from);
+        const g = genericKey(from?.generic || from?.name || '');
+        const used = new Set((k ? kitNow(k).components : []).map((c) => c.productId));
+        const alike = products.filter((x) => x.id !== swapFor.from && !used.has(x.id) && sellable(x.id) > 0);
+        const same = g ? alike.filter((x) => genericKey(x.generic || x.name) === g) : [];
+        const word = String(from?.name || '').split(/\s+/).find((w) => w.length > 3)?.toLowerCase();
+        const near = alike.filter((x) => !same.includes(x) && word && x.name.toLowerCase().includes(word));
+        const list = [...same, ...near].slice(0, 12);
+        return (
+          <Modal title={<><Repeat size={18} /> Swap {from?.name || 'a medicine'} in {k?.name}</>} onClose={() => setSwapFor(null)}>
+            <p className="muted">For this sale only: the kit stays as it is. The swap is written on the receipt and in the audit log.</p>
+            <div className="stack">
+              {(cart.find((l) => l.id === k?.id)?.swaps || {})[swapFor.from] && <button className="btn ghost" onClick={() => swapComponent(swapFor.from)}>Back to {from?.name}</button>}
+              {list.map((x) => (
+                <button key={x.id} className="product" onClick={() => swapComponent(x.id)}>
+                  <strong>{x.name}</strong>
+                  <div className="row between"><span className="muted small">{[x.generic, x.form].filter(Boolean).join(' · ')}</span><span className="muted small">{sellable(x.id)} in stock · cost {fmt(x.cost)}</span></div>
+                </button>
+              ))}
+              {!list.length && <p className="muted">No other medicine like it is in stock.</p>}
+            </div>
+          </Modal>
+        );
+      })()}
+
       {subs && (
         <Modal title={<><Repeat size={18} /> {subs.p.name} is out of stock</>} onClose={() => setSubs(null)}>
           <p className="muted">In-stock alternatives with the same active ingredient:</p>
@@ -998,7 +1145,7 @@ export default function POS({ mode = 'retail' }) {
         <CameraScanner title="Scan items into the sale" onClose={() => { setCam(false); focusSearch(); }} onCode={(code) => {
           const g = parseGs1(code);
           if (g) { const sp = scanPack(g); return sp ? `${sp.name} added${g.batch ? ` (batch ${g.batch})` : ''}` : false; }
-          const p = products.find((x) => x.barcode && x.barcode === code);
+          const p = catalog.find((x) => x.barcode && x.barcode === code);
           if (!p) return false;
           add(p);
           return `${p.name} added`;

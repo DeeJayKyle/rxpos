@@ -14,6 +14,7 @@ import './styles/settings.css';
 import './styles/clean.css';
 import './styles/compact.css';
 import './styles/linecolors.css';
+import './styles/kits.css';
 import { applyTheme, startupTheme, savedAccent } from './themes.js';
 import { applyStyle, savedStyle } from './surface.js';
 import { applyLevel, savedLevel } from './vivid.js';

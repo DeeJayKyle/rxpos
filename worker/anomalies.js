@@ -9,12 +9,15 @@
 import { lineTotal } from '../src/money.js';
 import { packPrice } from '../src/packs.js';
 import { overLimit } from '../src/credit.js';
+import { isKit, kitExpectedPrice, unitsUsed } from '../src/kits.js';
 
 const num = (v) => Number(v) || 0;
 const money = (n) => Math.round(num(n)).toLocaleString('en-US');
 
 /** Price a line should have had: the medicine's retail or wholesale price, per unit (a pack line per its pack's own price) */
-function expectedUnitPrice(p, item, wholesale) {
+function expectedUnitPrice(p, item, wholesale, products) {
+  // a kit (1.10.0): its fixed price, else the sum of its components' prices (src/kits.js); 0 = not checked
+  if (isKit(p)) return products ? kitExpectedPrice(p, products, wholesale) : 0;
   const unit = wholesale ? num(p.wholesale) || num(p.price) : num(p.price);
   if (!item.pack?.name) return unit;
   const k = (p.packs || []).find((x) => x && x.name === item.pack.name && num(x.size) > 1);
@@ -77,7 +80,7 @@ export async function saleFindings(sale, products, can, ctx = {}) {
       const p = products.get(String(i.id));
       // compare only with the medicine as it was when the sale was made: a price raised later is not a finding
       if (!p || (p.updatedAt && sale.date && p.updatedAt > sale.date)) continue;
-      const want = expectedUnitPrice(p, i, wholesale);
+      const want = expectedUnitPrice(p, i, wholesale, products);
       const gap = (want - num(i.price)) * num(i.qty);
       if (want > 0 && gap > 1) { cheap.push(`${i.name || i.id} at ${money(num(i.price) * (i.pack?.size || 1))} instead of ${money(want * (i.pack?.size || 1))}`); lost += gap; }
     }
@@ -120,7 +123,8 @@ export function stockFindings(ref, moves, sale) {
   const out = [];
   const units = (list) => { const m = new Map(); for (const x of list) m.set(String(x.productId ?? x.id ?? ''), (m.get(String(x.productId ?? x.id ?? '')) || 0) + Math.abs(num(x.qty))); return m; };
   if (!sale) return [{ kind: 'stock', detail: `Stock was ${moves.some((x) => x.type === 'Refund') ? 'returned' : 'taken'} for receipt ${ref}, which the cloud doesn't have`, amount: 0 }];
-  const sold = units(Array.isArray(sale.items) ? sale.items : []);
+  // a kit line's stock is its components' (src/kits.js unitsUsed)
+  const sold = units((Array.isArray(sale.items) ? sale.items : []).flatMap(unitsUsed).map(([id, qty]) => ({ id, qty })));
   const refund = moves.filter((x) => x.type === 'Refund');
   if (refund.length && sale.status !== 'refunded') out.push({ kind: 'stock', detail: `Stock was returned for ${ref}, but that sale is not refunded`, amount: 0 });
   for (const [type, list] of [['Sale', moves.filter((x) => x.type === 'Sale')], ['Refund', refund]]) {

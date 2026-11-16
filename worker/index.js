@@ -870,11 +870,18 @@ async function sync(env, body, who, ctx) {
   const toCheckAll = [...toCheck.values(), ...pfCheck.values()];
   const finding = (rec) => { stmts.push(insertOnly.bind(tenant, 'anomalies|' + rec.id, 'anomalies', rec.id, JSON.stringify(rec), nowIso, 'server')); ledger.add(stmts.length - 1); }; // not one of the device's own changes
   if (toCheckAll.length) {
-    const ids = [...new Set(toCheckAll.flatMap((r) => (Array.isArray(r.items) ? r.items : []).map((i) => String(i?.id ?? ''))))].filter(Boolean);
+    // a kit line also needs its components (their prices make the kit's price, src/kits.js); a kit's own record lists
+    // them, so they are fetched in a second step below
+    const ids = [...new Set(toCheckAll.flatMap((r) => (Array.isArray(r.items) ? r.items : []).flatMap((i) => [String(i?.id ?? ''), ...(Array.isArray(i?.kit?.components) ? i.kit.components.map((c) => String(c?.id ?? '')) : [])])))].filter(Boolean);
     const products = new Map();
     if (ids.length) {
       const { results } = await db.prepare("SELECT id, rec FROM records WHERE tenant = ?1 AND t = 'products' AND deleted = 0 AND id IN (SELECT value FROM json_each(?2))").bind(tenant, JSON.stringify(ids)).all();
       for (const r of results || []) { try { products.set(r.id, JSON.parse(r.rec)); } catch { /* skip */ } }
+      const more = [...new Set([...products.values()].flatMap((p) => (Array.isArray(p?.kit?.items) ? p.kit.items.map((x) => String(x?.productId ?? '')) : [])))].filter((x) => x && !products.has(x));
+      if (more.length) {
+        const { results: r2 } = await db.prepare("SELECT id, rec FROM records WHERE tenant = ?1 AND t = 'products' AND deleted = 0 AND id IN (SELECT value FROM json_each(?2))").bind(tenant, JSON.stringify(more)).all();
+        for (const r of r2 || []) { try { products.set(r.id, JSON.parse(r.rec)); } catch { /* skip */ } }
+      }
     }
     // a built-in catalog medicine this pharmacy never edited is not stored: its price is the catalog's
     const col = Object.fromEntries(CATALOG.columns.map((c, i) => [c, i]));
