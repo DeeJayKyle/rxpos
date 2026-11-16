@@ -77,7 +77,7 @@ function Recall() {
   const name = useMemo(() => new Map(products.map((p) => [p.id, p.name])), [products]);
   const batches = useMemo(() => (code.length < 2 ? [] : db.batches.filter((b) => String(b.batch || '').toLowerCase() === code)), [db.batches, code]);
   const ids = new Set(batches.map((b) => b.id));
-  const sold = useMemo(() => db.sales.filter((s) => s.status !== 'refunded').flatMap((s) => s.items.flatMap((i) => (i.alloc || []).filter((a) => ids.has(a.batchId))
+  const sold = useMemo(() => db.sales.filter((s) => s.status !== 'refunded').flatMap((s) => s.items.flatMap((i) => (i.kit ? (i.kit.components || []).flatMap((c) => c.alloc || []) : i.alloc || []).filter((a) => ids.has(a.batchId)) // a kit's medicines too
     .map((a) => ({ s, i, qty: a.qty, phone: db.customers.find((c) => c.id === s.customerId)?.phone || s.controlled?.idNo || '' })))), [db.sales, db.customers, code]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <>
@@ -96,7 +96,7 @@ function Recall() {
             <table>
               <thead><tr><th>Date</th><th>Receipt</th><th>Customer</th><th>Phone / ID</th><th>Medicine</th><th className="num">Qty</th><th className="num">Value</th></tr></thead>
               <tbody>
-                {sold.map((r, n) => <tr key={n}><td>{new Date(r.s.date).toLocaleDateString()}</td><td>{r.s.number}</td><td>{r.s.controlled?.patient || r.s.customerName}</td><td>{r.phone}</td><td>{r.i.name}</td><td className="num">{r.qty}</td><td className="num">{fmt(r.qty * r.i.price)}</td></tr>)}
+                {sold.map((r, n) => <tr key={n}><td>{new Date(r.s.date).toLocaleDateString()}</td><td>{r.s.number}</td><td>{r.s.controlled?.patient || r.s.customerName}</td><td>{r.phone}</td><td>{r.i.name}{r.i.kit ? ' (kit)' : ''}</td><td className="num">{r.qty}</td><td className="num">{r.i.kit ? '—' : fmt(r.qty * r.i.price)}</td></tr>)}
                 {!sold.length && <Empty colSpan={7}>Nothing sold from this batch</Empty>}
               </tbody>
             </table>

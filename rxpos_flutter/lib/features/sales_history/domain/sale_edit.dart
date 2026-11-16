@@ -8,6 +8,7 @@ import '../../../core/entities/settings.dart';
 import '../../../core/presentation/widgets.dart';
 import '../../../core/rules/fefo.dart';
 import '../../../core/rules/money.dart';
+import '../../../core/rules/kits.dart';
 import '../../../core/rules/stock.dart';
 
 class SaleEditProblem implements Exception {
@@ -42,6 +43,8 @@ Future<Map<String, Object?>> editSale(RecordStore store, Sale sale, {required Li
   if (!lines.any((l) => l.qty > 0)) throw SaleEditProblem('A sale needs at least one item. To cancel the whole sale, refund it.');
   if (reason.trim().isEmpty) throw SaleEditProblem('Say why the sale is being changed');
   if (sale.status == 'refunded') throw SaleEditProblem('${sale.number} was refunded and cannot be changed');
+  // a kit sale is corrected in the React app (web, Windows, Android): here its lines would lose their contents
+  if (saleHasKit(sale.raw)) throw SaleEditProblem('${sale.number} has a kit: correct it in RxPOS on the web or Windows, or refund it here');
   final br = sale.branchId.isEmpty ? mainBranch : sale.branchId;
   final recordOnly = '${sale.raw['imported'] ?? ''}'.isNotEmpty;
   if (!recordOnly) {

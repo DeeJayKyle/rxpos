@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Printer, Tag, Trash2 } from 'lucide-react';
 import { useStore, put } from '../store.jsx';
 import { SearchBox, Empty } from '../ui.jsx';
@@ -9,24 +10,30 @@ const SIZES = { '38x25': { w: 38, h: 25, label: '38 × 25 mm (small)' }, '50x30'
 
 /** Print price & barcode labels for shelves and products (thermal label printer or A4 label sheets). */
 export default function Labels() {
-  const { db, products, fmt, update } = useStore();
+  const { db, products, kits, fmt, update } = useStore();
+  // kits (1.10.0) get labels too: scanning a kit's label at the till adds the kit (recommendation 4)
+  const all = [...kits, ...products];
+  const location = useLocation();
   const [q, setQ] = useState('');
   const [items, setItems] = useState([]);
   const [size, setSize] = useState('50x30');
   const [show, setShow] = useState({ price: true, expiry: true, pharmacy: true });
   const ql = q.toLowerCase();
-  const matches = q ? products.filter((p) => `${p.name} ${p.generic} ${p.barcode}`.toLowerCase().includes(ql)).slice(0, 10) : [];
+  const matches = q ? all.filter((p) => `${p.name} ${p.generic} ${p.barcode}`.toLowerCase().includes(ql)).slice(0, 10) : [];
 
   const add = (p, qty = 1) => {
     if (!p.barcode) {
       const code = newInternalBarcode(new Set(db.products.map((x) => x.barcode)));
       update((d) => { put(d, 'products', { ...d.products.find((x) => x.id === p.id), barcode: code }); });
+      // (a kit's barcode lives on its own record too: the view is rebuilt from it)
       p = { ...p, barcode: code };
       toast(`Barcode ${code} created for ${p.name}`, 'info');
     }
     setItems((list) => (list.some((i) => i.p.id === p.id) ? list : [...list, { p, qty }]));
     setQ('');
   };
+  // Kits → "Print label": that kit is added once the page opens
+  useEffect(() => { const k = location.state?.kitId && kits.find((x) => x.id === location.state.kitId); if (k) add(k, 1); }, [location.state?.kitId]); // eslint-disable-line react-hooks/exhaustive-deps
   const addLowStock = () => products.filter((p) => p.stock > 0).slice(0, 60).forEach((p) => add(p, 1));
   const labels = items.flatMap((i) => Array.from({ length: Math.max(0, Number(i.qty) || 0) }, () => i.p));
   const sz = SIZES[size];
@@ -45,7 +52,7 @@ export default function Labels() {
           <h3>Choose medicines</h3>
           <div className="picker">
             <SearchBox value={q} onChange={setQ} placeholder="Search medicine or scan barcode…" />
-            {matches.length > 0 && <div className="picker-list">{matches.map((p) => <button key={p.id} onClick={() => add(p)}>{p.name} <small className="muted">{fmt(p.price)} · {p.barcode || 'no barcode yet'}</small></button>)}</div>}
+            {matches.length > 0 && <div className="picker-list">{matches.map((p) => <button key={p.id} onClick={() => add(p)}>{p.isKit && <span className="kit-badge" style={{ '--kit': p.kit.color }}>KIT</span>} {p.name} <small className="muted">{fmt(p.price)} · {p.barcode || 'no barcode yet'}</small></button>)}</div>}
           </div>
           <div className="row gap" style={{ marginBottom: 10 }}>
             <button className="btn sm ghost" onClick={addLowStock}>Add all in-stock items</button>
@@ -74,7 +81,7 @@ export default function Labels() {
             {labels.slice(0, 200).map((p, n) => (
               <div key={n} className="label">
                 {show.pharmacy && <div className="label-shop">{db.settings.name}</div>}
-                <div className="label-name">{p.name}</div>
+                <div className="label-name">{p.isKit && <b>KIT · </b>}{p.name}</div>
                 <Barcode value={p.barcode} height={30} module={1.4} />
                 <div className="label-foot">
                   {show.price && <strong>{fmt(p.price)}</strong>}

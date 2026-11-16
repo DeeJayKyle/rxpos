@@ -8,6 +8,7 @@ import '../entities/product.dart';
 import '../entities/settings.dart';
 import '../rules/balances.dart';
 import '../rules/gs1.dart';
+import '../rules/kits.dart';
 import '../rules/permissions.dart';
 import '../rules/stock.dart';
 import 'catalog.dart';
@@ -70,7 +71,8 @@ class PharmacyData {
 Future<PharmacyData> pharmacy(Ref ref) async {
   final settings = await ref.watch(settingsProvider.future);
   final branch = await ref.watch(deviceBranchProvider.future);
-  final own = (await ref.watch(tableProvider('products').future)).map(Product.fromRecord).toList();
+  // kits (1.10.0) are recipes sold by the React app, not stock: kept out of this app's medicine lists (rules/kits.dart)
+  final own = (await ref.watch(tableProvider('products').future)).where((r) => !isKitRecord(r)).map(Product.fromRecord).toList();
   final license = await ref.watch(tableProvider('license').future);
   final features = featureSet((license.firstOrNull?['features'] as Map?)?.cast<String, Object?>());
   final hidden = {for (final h in await ref.watch(tableProvider('catalogHidden').future)) '${h['id']}'};

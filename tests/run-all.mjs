@@ -41,6 +41,7 @@ const SUITES = [
   ['medicine search (unit)', 'unit-search.mjs', []],
   ['drug labels (unit)', 'unit-druglabel.mjs', []],
   ['fefo allocate (unit)', 'unit-fefo.mjs', []],
+  ['kits: can make, cost, price, swaps (unit)', 'unit-kits.mjs', []],
   ['clinical safety check and expiry traffic light (unit)', 'unit-clinical.mjs', []],
   ['date helpers (unit)', 'unit-dates.mjs', []],
   ['notes and SOP pages (unit)', 'unit-notes.mjs', []],
@@ -142,6 +143,7 @@ const SUITES = [
   ['clean pages: report groups, filter chips, side views', 'v79-clean-pages.mjs', ['.output/v79']],
   ['purchase orders: review, quantities, mark as sent', 'v80-po-flow.mjs', ['.output/v80']],
   ['web sign-in: browser or app, download links', 'v81-app-downloads.mjs', ['.output/v81']],
+  ['kits: build, sell, swap, label, refund', 'v82-kits.mjs', ['.output/v82']],
   // every page on a PC and a phone, for design review: only on request (`npm test -- shots-all`)
   ...(process.argv[2] === 'shots-all' ? [['every page, PC and phone screenshots', 'shots-all.mjs', ['.output/all']]] : []),
   // performance timings: only on request (npm run bench), never part of npm test
