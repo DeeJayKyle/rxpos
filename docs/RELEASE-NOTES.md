@@ -1,5 +1,29 @@
 # RxPOS release notes
 
+## React (classic) app 1.9.3 · Flutter app 2.1 (next build) · November 2026
+
+Security release from the November 2026 audit (docs/AUDIT-2026-11-16.md). Nothing to do on the tills: they update by
+themselves. What staff and owners will notice:
+
+- **Each role receives only what its screens use.** A cashier's device no longer downloads expenses, bank transactions,
+  loans, deliveries or the audit log. A shared till keeps what its manager needs offline, and devices that existed
+  before keep the old view for 30 days.
+- **Safer sales:** moving a sale to another day or cashier needs *Edit sales*; stock taken or returned must match its
+  sale; a proforma must be the real, matching quotation; prices cut at the till count towards the role's discount
+  limit. Anything unusual is shown to the owner under sale checks, never refused at the counter.
+- **No silent losses:** a change older than the cloud's copy (a device clock that is behind) is listed on This
+  device, the cloud's copy is put on the device, and the classic app warns when the clock is wrong.
+- **Sign-ins:** a new or reset password signs the person out on their other devices; new **Sign out everywhere else**
+  (account card) and **Sign out on every device** (Users & roles). The web version's sign-out ends that sign-in.
+- **Two-step sign-in:** **recovery codes** for a lost phone (both apps), and only an administrator, or your RxPOS
+  provider, can switch off an administrator's two-step sign-in.
+- **Files in chat** can no longer be replaced by someone else, and are checked when they arrive.
+- **Calendar:** the link is for staff who handle prescriptions or reminders, can be replaced by an administrator, and
+  can show refills with initials only.
+- **Hub:** optional HTTPS; plain http only on the pharmacy's own network. The apps won't send a password over plain
+  http to the internet.
+- Updated PDF reader (invoice scanning), page navigation library and the Windows app's Electron.
+
 ## React (classic) app 1.9.2 · Flutter app 2.1 (next build) · November 2026
 
 Browser or app, a clearer sign-in, your account on This device, quick reports and status pills.
