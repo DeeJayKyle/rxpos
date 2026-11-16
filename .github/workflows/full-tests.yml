@@ -4,8 +4,9 @@ name: Full test suite
 # app in headless Chrome. build.yml calls it on every push and pull request to main and gates releases and deploys on
 # it; deploy-cloud.yml gates on it too, so nothing reaches rxposug.com without passing it. Can also be run on demand.
 #
-# Fast (2026-11): the suites run side by side on several machines (RXPOS_SHARD): 6 groups against the local cloud and
-# 2 against the self-hosted hub, about 8 minutes instead of 44 one after the other. And code that already passed is
+# Fast (2026-11): the suites run side by side on several machines (RXPOS_SHARD): 8 groups against the local cloud and
+# 2 against the self-hosted hub, made even by time (tests/suite-times.json), about 7 minutes instead of 44 one after the
+# other. And code that already passed is
 # not tested again: a pass is recorded as an artifact named after the code's git tree (identical files = identical
 # tree), so the push to main after a pull request, and the release of that commit, reuse the pull request's pass. A
 # manual run of this workflow always tests (reuse: false).
@@ -58,12 +59,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { target: cloud, shard: '0/6' }
-          - { target: cloud, shard: '1/6' }
-          - { target: cloud, shard: '2/6' }
-          - { target: cloud, shard: '3/6' }
-          - { target: cloud, shard: '4/6' }
-          - { target: cloud, shard: '5/6' }
+          - { target: cloud, shard: '0/8' }
+          - { target: cloud, shard: '1/8' }
+          - { target: cloud, shard: '2/8' }
+          - { target: cloud, shard: '3/8' }
+          - { target: cloud, shard: '4/8' }
+          - { target: cloud, shard: '5/8' }
+          - { target: cloud, shard: '6/8' }
+          - { target: cloud, shard: '7/8' }
           - { target: hub, shard: '0/2' }
           - { target: hub, shard: '1/2' }
     name: ${{ matrix.target }} ${{ matrix.shard }}

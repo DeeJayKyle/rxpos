@@ -10,7 +10,7 @@ What that means here:
 - **Don't redo what is already done.** Code that already passed the full suite is not tested again (`full-tests.yml`
   reuses a pass by git tree). Don't re-run a suite, re-build or re-read what you already have.
 - **Run things side by side.** Independent work (test groups, builds, lookups, tool calls) runs in parallel, never one
-  after the other. New test suites go into `tests/run-all.mjs`, which `RXPOS_SHARD` splits across machines.
+  after the other. New test suites go into `tests/run-all.mjs`, which `RXPOS_SHARD` splits across machines; add a new suite's time to `tests/suite-times.json`.
 - **Test only what you touched while working:** `npm test -- v82` (one suite) or `npm test -- v49,v82`. The full
   `npm test` is for the end, and CI runs it in parallel groups anyway.
 - **Release in one step:** Actions → *Build RxPOS* → Run workflow on `main` with *release* `vX.Y.Z` and *deploy* on
