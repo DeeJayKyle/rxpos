@@ -62,7 +62,7 @@ export async function snapshotChunk(env, body, who, { json, epochOf, historySql,
   if (i < 0 || b[i + 1] !== to) return json({ error: 'Not a chunk of this pharmacy (download the list again)' }, 404);
   const phase = body?.phase === 'core' || body?.phase === 'history' ? body.phase : 'all';
   const day = phase === 'all' ? '0000-00-00' : cutoffDay(body?.cutoff); // a whole download does not depend on the day
-  const view = await viewOf(who); // { key, hideHr, hideChecks }
+  const view = await viewOf(who, body?.deviceId); // { key, hidden, hideHr, hideChecks }
   const W = windowOf(body); // stage 4: a device keeping recent history
   const key = `snapshots/${who.tenant}/${epoch}/${phase}-${day}-${view.key}${W ? '-w' + W.slice(0, 10) : ''}-${from}-${to}.json.gz`;
   const headers = { 'Content-Type': 'application/json', 'Content-Encoding': 'gzip', 'Cache-Control': 'private, no-store', 'X-RxPOS-Chunk': 'stored' };
@@ -74,8 +74,7 @@ export async function snapshotChunk(env, body, who, { json, epochOf, historySql,
     .bind(...(filter ? [who.tenant, from, to, 0, 0, day + 'T00:00:00.000Z'] : [who.tenant, from, to])).all();
   const items = [];
   for (const r of results || []) {
-    if (view.hideHr && view.payroll.has(r.t)) continue;
-    if (view.hideChecks && r.t === 'anomalies') continue;
+    if (view.hidden ? view.hidden.has(r.t) : (view.hideHr && view.payroll.has(r.t)) || (view.hideChecks && r.t === 'anomalies')) continue; // 2026-11 audit: per-role tables
     if (W && !keepsRow(r, W)) continue;
     items.push(itemJson(r));
   }

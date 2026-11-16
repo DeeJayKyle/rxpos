@@ -85,8 +85,16 @@ export async function twoStepRoutes(env, req, path, body, who, { json, roleCan, 
     if (!(await roleCan(env, tenant, who.role, 'users.manage'))) return json({ error: 'Only administrators' }, 403);
     if (path === '/api/2fa/users') return json({ enabled: (await db.prepare('SELECT uid FROM twofa WHERE tenant = ?1 AND enabled = 1').bind(tenant).all()).results.map((r) => r.uid) });
     if (req.method !== 'POST' || !body?.uid) return json({ error: 'Bad request' }, 400);
-    await db.prepare('DELETE FROM twofa WHERE tenant = ?1 AND uid = ?2').bind(tenant, String(body.uid)).run();
-    await flag(String(body.uid), false);
+    const uid = String(body.uid);
+    const target = await existingRec(db, tenant, 'users', uid);
+    if (!target) return json({ error: 'No such staff member' }, 404);
+    // 2026-11 audit: anyone with "Manage users" (a manager, by default) could switch off an ADMINISTRATOR's two-step
+    // sign-in, the protection that matters most. Only an administrator may, as for every other change to an
+    // administrator's account (worker/index.js adminChangeRefused); the RxPOS owner can from the owner console.
+    if (target.role === 'admin' && who.role !== 'admin') return json({ error: 'Only an administrator (or your RxPOS provider) can reset an administrator\'s two-step sign-in.' }, 403);
+    await db.prepare('DELETE FROM twofa WHERE tenant = ?1 AND uid = ?2').bind(tenant, uid).run();
+    if (target.twoFactor) await flag(uid, false);
+    await serverWriteMany(env, tenant, [audit('Two-step sign-in reset', `${target.name || uid} · by ${who.name || 'an administrator'}`)]);
     return json({ ok: true });
   }
   return json({ error: 'Not found' }, 404);

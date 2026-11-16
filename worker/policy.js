@@ -56,7 +56,62 @@ export const MOVEMENT_RULES = {
 };
 
 /** Tables whose decision depends on the stored record: worker/index.js fetches it only for these */
-export const NEEDS_OLD = new Set(['sales', 'purchases', 'payments']);
+export const NEEDS_OLD = new Set(['sales', 'purchases', 'payments', 'proformas']);
+
+// 2026-11 audit: every table the apps sync (src/store.jsx TABLES, rxpos_flutter record_store.dart syncedTables), plus
+// `settings` and the old `controlled` register. A staff device writing any other name is refused (a made-up table was
+// stored and sent to every device before). The pharmacy key (owner console, import tools) is not limited by this.
+export const KNOWN_TABLES = new Set([
+  'products', 'formulations', 'customers', 'suppliers', 'sales', 'proformas', 'purchases', 'movements',
+  'prescriptions', 'expenses', 'expenseCategories', 'banks', 'bankTx', 'loans', 'payments', 'users',
+  'batches', 'branches', 'transfers', 'audit', 'purchaseOrders', 'roles', 'messages', 'shifts', 'license', 'events', 'tempLogs',
+  'catalogHidden', 'quizResults', 'stockCounts', 'countItems', 'supplierReturns', 'chatMarks', 'chatPins', 'chatReads', 'drafts',
+  'anomalies', 'dayCloses', 'counters', 'insurers', 'employees', 'attendance', 'salaryAdvances', 'payrolls', 'reportSchedules',
+  'notes', 'settings', 'controlled',
+]);
+
+// 2026-11 audit: who RECEIVES which records. Before, every staff role downloaded every table except payroll and the
+// sale checks, so a cashier's device held all expenses, bank transactions, loans, deliveries and the audit log even
+// though no screen of theirs shows them. Each group lists the permissions of every screen (both apps) that reads those
+// tables; a role with any one of them receives the group. Tables not listed (medicines, stock, sales, clients,
+// payments, insurers…) are what selling, stock and debts need offline, and stay with everyone.
+// `code` goes into the view key, which keys the cloud's ready-made download chunks (worker/snapshot.js).
+export const READ_GROUPS = [
+  { code: 'h', tables: ['employees', 'attendance', 'salaryAdvances', 'payrolls'], perms: ['payroll'] },
+  { code: 'c', tables: ['anomalies'], perms: ['audit'] },
+  // Finance, Reports, the dashboard's expense figures (finance|reports), a payroll run's expenses, Close the day
+  { code: 'f', tables: ['expenses', 'expenseCategories', 'bankTx', 'loans'], perms: ['finance', 'reports', 'payroll', 'day.close'] },
+  // Add stock / Purchases, Returns, Reorder, supplier balances (People → Suppliers), Reports, Close the day
+  { code: 'p', tables: ['purchases', 'supplierReturns', 'purchaseOrders'], perms: ['stock.receive', 'purchases.edit', 'stock.adjust', 'suppliers', 'reorder', 'reports', 'finance', 'day.close'] },
+  { code: 'a', tables: ['audit'], perms: ['audit'] },
+];
+/** Tables that only some roles receive */
+export const RESTRICTED_TABLES = new Set(READ_GROUPS.flatMap((g) => g.tables));
+
+/**
+ * What this person may receive. perms: Set of the role's permissions, or 'all' (administrator / pharmacy key).
+ * → { key, hidden: Set<table> }. key is 'all' when nothing is hidden (as before), else the hidden groups' codes.
+ */
+export function readView(perms) {
+  let codes = '';
+  if (perms !== 'all') for (const g of READ_GROUPS) if (!g.perms.some((p) => perms.has(p))) codes += g.code;
+  return viewOfCodes(codes);
+}
+/** The view that hides these groups (a key from readView, or a string of group codes) */
+export function viewOfCodes(codes) {
+  const c = codes === 'all' ? '' : String(codes || '');
+  const hidden = new Set();
+  let key = '';
+  for (const g of READ_GROUPS) if (c.includes(g.code)) { key += g.code; for (const t of g.tables) hidden.add(t); }
+  return { key: key || 'all', hidden };
+}
+/**
+ * A device is used by everyone who signs in on it (a shared till), and keeps what each of them needs offline. Its
+ * view hides only what is hidden from every one of them: the groups common to all their keys.
+ */
+export const widestView = (keys) => viewOfCodes(READ_GROUPS.map((g) => g.code).filter((c) => keys.every((k) => k !== 'all' && k.includes(c))).join(''));
+/** What the cloud hid before the 2026-11 audit (payroll and the sale checks only), for devices it already served */
+export const legacyView = (key) => viewOfCodes([...(key === 'all' ? '' : key)].filter((c) => c === 'h' || c === 'c').join(''));
 
 const num = (v) => Number(v) || 0;
 /** What a sale is worth and to whom: two records with the same money view are the same sale for permission purposes */
@@ -69,10 +124,26 @@ export function moneyView(s) {
     ...(s?.insurance ? [[String(s.insurance.insurerId ?? ''), num(s.insurance.share)]] : []),
   ]);
 }
+// 2026-11 audit: the money view alone let anyone who sells move a sale to another day or shift, renumber it or put
+// it under another cashier's name ("the money is the same"). These are what a sale IS, besides its money; only
+// someone with sales.edit may change them. (moneyView itself is unchanged: it also names the sale checks.)
+const s = (v) => String(v ?? '');
+export const identityView = (r) => moneyView(r) + JSON.stringify([s(r?.date), s(r?.number), s(r?.cashier), s(r?.createdBy), s(r?.proformaId), s(r?.shiftId)]);
 /** A refund changes only the status (to refunded) and who/when; the money stays exactly as it was */
-export const isRefundOnly = (old, rec) => !!old && !!rec && old.status !== 'refunded' && rec.status === 'refunded' && moneyView(old) === moneyView(rec);
+export const isRefundOnly = (old, rec) => !!old && !!rec && old.status !== 'refunded' && rec.status === 'refunded' && identityView(old) === identityView(rec);
 /** Nothing that matters changed (a re-send, or an older app pushing the same sale again) */
-const unchanged = (old, rec) => !!old && !!rec && moneyView(old) === moneyView(rec) && (old.status ?? '') === (rec.status ?? '');
+const unchanged = (old, rec) => !!old && !!rec && identityView(old) === identityView(rec) && (old.status ?? '') === (rec.status ?? '');
+
+/** Selling a quotation: the till sets status "Converted" and the receipt number; nothing else may change */
+const pfView = (p) => JSON.stringify([num(p?.subtotal), num(p?.discount), num(p?.tax), num(p?.total), s(p?.customerId), s(p?.type), s(p?.number), s(p?.date),
+  (Array.isArray(p?.items) ? p.items : []).map((i) => [s(i?.id), num(i?.qty), num(i?.price)])]);
+export const isConversionOnly = (old, rec) => !!old && !!rec && rec.status === 'Converted' && pfView(old) === pfView(rec);
+
+// 2026-11 audit: stock changes a sale or a refund makes. A "Sale" movement takes stock out (negative quantity), a
+// "Refund" puts it back (positive), in both apps (src/pages/POS.jsx, Sales.jsx; rxpos_flutter cart.dart, refund.dart).
+// Anything else under those types was a way for anyone who sells to add or remove stock with no sale behind it.
+const SIGN = { Sale: -1, Refund: 1 };
+export const movementSignOk = (rec) => !SIGN[rec?.type] || Math.sign(Number(rec?.qty) || 0) === SIGN[rec.type];
 
 const anyOf = async (can, perms) => { for (const p of perms) if (await can(p)) return true; return false; };
 
@@ -106,10 +177,21 @@ export async function decide(ch, old, role, can) {
   }
   if (t === 'movements') {
     if (deleted) return { ok: true }; // refused anyway as append-only, with its own reason
+    if (!movementSignOk(rec)) return { ok: false, need: `a ${rec.type === 'Sale' ? 'negative' : 'positive'} quantity for a ${rec.type}` };
     const perms = MOVEMENT_RULES[rec?.type] || ['stock.adjust'];
     return (await anyOf(can, perms)) ? { ok: true } : { ok: false, need: perms.join('|') };
   }
-  const rule = TABLE_RULES[t];
+  if (t === 'proformas') {
+    // a seller may only mark an existing quotation "Converted" (the till does on a sale); anything else is Proformas
+    if (await can('proformas')) return { ok: true };
+    // the classic till saves a quotation (F10) for anyone who sells; the cloud checks its discount and prices
+    // (worker/anomalies.js) since its figures are trusted when it is sold
+    if (!deleted && !old && (await anyOf(can, SELL))) return { ok: true };
+    if (!deleted && old && (await anyOf(can, SELL)) && (isConversionOnly(old, rec) || pfView(old) + s(old.status) === pfView(rec) + s(rec?.status))) return { ok: true };
+    return { ok: false, need: 'proformas' };
+  }
+  if (!KNOWN_TABLES.has(t)) return { ok: false, need: 'a known table' };
+  const rule = Object.hasOwn(TABLE_RULES, t) ? TABLE_RULES[t] : null;
   if (!rule) return { ok: true };
   const perms = deleted ? rule.delete : rule.write;
   return (await anyOf(can, perms)) ? { ok: true } : { ok: false, need: perms.join('|') };

@@ -22,9 +22,11 @@ export async function uploadAttachment(cfg, file, name = file.name, onProgress) 
   const chunks = Math.max(1, Math.ceil(bytes.length / PIECE));
   const type = typeOf({ type: file.type, name });
   let path = '';
+  // the whole file's SHA-256 with the last piece: the cloud checks the pieces it put together are this file (2026-11 audit)
+  const sha256 = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map((x) => x.toString(16).padStart(2, '0')).join('');
   for (let n = 0; n < chunks; n++) {
     const r = await fetch(cfg.url + '/api/files', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + cfg.key },
-      body: JSON.stringify({ id, n, chunks, size: bytes.length, name, type, data: b64(bytes.subarray(n * PIECE, (n + 1) * PIECE)) }) });
+      body: JSON.stringify({ id, n, chunks, size: bytes.length, name, type, data: b64(bytes.subarray(n * PIECE, (n + 1) * PIECE)), ...(n === chunks - 1 ? { sha256 } : {}) }) });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(j.error || 'Upload failed');
     if (j.path) path = j.path;

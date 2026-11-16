@@ -209,6 +209,8 @@ function TenantAdmin({ id, api, url, onBack }) {
   const roles = DEFAULT_ROLES.map((r) => r.id);
 
   const saveUser = (e) => { e.preventDefault(); const { _new, ...user } = userEdit; doing(async () => { await api(`/tenants/${t.id}/users`, { user }); setUserEdit(null); }, _new ? `${user.name} can now sign in` : 'User saved'); };
+  // 2026-11 audit: an administrator who lost the phone with their authenticator app (only an administrator or the owner may)
+  const resetTwoStep = async (u) => (await ask({ title: `Switch off two-step sign-in for ${u.name}?`, message: 'Only once you are sure it is really them (they lost their phone). They sign in with their password and can set it up again.', danger: true, confirmText: 'Switch off' })) && doing(() => api(`/tenants/${t.id}/users/${encodeURIComponent(u.id)}/reset-2fa`, {}), 'Two-step sign-in switched off');
   const deleteUser = async (u) => (await ask({ title: `Delete ${u.name}?`, message: 'They can no longer sign in on any device.', danger: true, confirmText: 'Delete' })) && doing(() => api(`/tenants/${t.id}/users/${encodeURIComponent(u.id)}/delete`, {}), 'User deleted');
   const saveBranch = (e) => { e.preventDefault(); doing(async () => { await api(`/tenants/${t.id}/branches`, { branch: branchEdit }); setBranchEdit(null); }, 'Branch saved'); };
   const deletePharmacy = async () => {
@@ -289,6 +291,7 @@ function TenantAdmin({ id, api, url, onBack }) {
                         <button className="btn sm ghost" onClick={() => setUserEdit({ ...u, password: '' })}>Edit</button>
                         <button className="btn sm ghost" onClick={async () => { const pw = await askText({ title: `New password for ${u.name}`, minLength: 8, confirmText: 'Set password', placeholder: genPassword() }); if (pw) doing(() => api(`/tenants/${t.id}/users`, { user: { ...u, password: pw, mustChange: true } }), 'Password set. They choose their own at next sign-in.'); }}><KeyRound size={14} />Password</button>
                         <button className="btn sm ghost" onClick={() => doing(() => api(`/tenants/${t.id}/users`, { user: { ...u, disabled: !u.disabled } }), u.disabled ? 'Enabled' : 'Disabled')}>{u.disabled ? 'Enable' : 'Disable'}</button>
+                        {u.twoFactor && <button className="btn sm ghost" title="Switch off two-step sign-in (lost phone)" onClick={() => resetTwoStep(u)}>Reset 2-step</button>}
                         <button className="btn sm danger" onClick={() => deleteUser(u)}><Trash2 size={14} /></button>
                       </td>
                     </tr>

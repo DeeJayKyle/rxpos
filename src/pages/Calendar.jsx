@@ -49,7 +49,7 @@ function icsFile(events, name) {
 }
 
 export default function Calendar() {
-  const { db, update, user, branchId, batchesOf, products, syncCfg } = useStore();
+  const { db, update, user, branchId, batchesOf, products, syncCfg, can } = useStore();
   const [month, setMonth] = useState(() => today().slice(0, 7));
   const [day, setDay] = useState(today());
   const [edit, setEdit] = useState(null);
@@ -156,7 +156,8 @@ export default function Calendar() {
                   <a className="btn sm primary" target="_blank" rel="noreferrer" href={`https://calendar.google.com/calendar/render?cid=${encodeURIComponent(link.replace(/^https:/, 'webcal:'))}`}><CalendarPlus size={14} />Add to Google Calendar</a>
                   <a className="btn sm ghost" href={link.replace(/^https:/, 'webcal:')}>Apple / Outlook / phone</a>
                 </div>
-                <p className="muted small">Outlook: Add calendar → Subscribe from web → paste the link. Keep the link private: anyone with it can see these events.</p>
+                <p className="muted small">Outlook: Add calendar → Subscribe from web → paste the link. Keep the link private: anyone with it can see these events, including patients' refills.</p>
+                {can('settings.manage') && <button className="btn sm ghost" onClick={async () => { if (!(await ask({ title: 'Replace the calendar link?', message: 'The current link stops working at once (for example after someone who had it left). Everyone who subscribed must add the new link.', confirmText: 'Replace link', danger: true }))) return; try { setLink((await calendarLink(syncCfg, true)).url); toast('New calendar link made: the old one no longer works'); } catch (e) { toast(e.message, 'error'); } }}>Replace link</button>}
               </>
             ) : <p className="muted small">{navigator.onLine ? 'Connecting to the cloud…' : 'Go online to get your calendar subscription link.'}</p>}
             <button className="btn sm ghost" onClick={() => downloadFile(`rxpos-calendar-${today()}.ics`, icsFile([...db.events, ...auto.filter((e) => e.date >= today())], db.settings.name + ' · RxPOS'), 'text/calendar')}><Download size={14} />Download .ics file</button>

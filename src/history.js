@@ -12,7 +12,7 @@ export async function fetchOlder(cfg, t, from, to) {
   const out = [];
   let after = 0;
   for (let n = 0; n < 200; n++) {
-    const res = await fetch(base(cfg.url) + '/api/history', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + cfg.key }, body: JSON.stringify({ t, from, to, after }) });
+    const res = await fetch(base(cfg.url) + '/api/history', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + cfg.key }, body: JSON.stringify({ t, from, to, after, deviceId: cfg.deviceId }) });
     const j = await res.json().catch(() => ({}));
     if (!res.ok || !Array.isArray(j.records)) throw new Error(j.error || `Cloud replied ${res.status}`);
     out.push(...j.records);
