@@ -1,5 +1,36 @@
 # RxPOS release notes
 
+## React (classic) app 1.10.0 · Flutter app 2.1 (next build) · November 2026
+
+A colourful Add Stock and **kits**: medicines sold together as one item. Nothing to do on the tills: they update by
+themselves. Deploy the cloud first (its sale checks understand kits), then the apps.
+
+- **Add Stock in colour.** Every line has its own colour (a stripe, a numbered badge and a light tint across the row)
+  that stays with it when other lines are removed; every column heading has its own colour band that moves with the
+  column; grid lines between rows and columns; tinted supplier and invoice panels and a highlighted total. Edit
+  purchase and the phone cards look the same. Readable in all 36 themes, dark ones included.
+- **Kits** (Medicine Inventory → Kits): build a kit from medicines in stock, e.g. an HIV Test Kit = test strip +
+  lancets + alcohol swabs + water for injection, plus service lines such as a testing fee. A kit has no stock of its
+  own: the till shows how many can be made, and each sale takes every medicine from its own batches (earliest expiry
+  first). Its cost is what its medicines cost now; its price is their retail prices added up, unless you set a price.
+  Earliest expiry, Rx and controlled flags come from its medicines.
+- **Kits at the till** look different from other stock: their colour, icon, a KIT badge, what they hold, "Can make N"
+  and their warning. A warning can be one the cashier must tick before charging (written to the audit log).
+- **Swap at the till:** when a medicine in a kit runs short, swap it for a similar one for that sale only; the receipt
+  and the audit log say so.
+- **Ready-made kits:** HIV test, malaria RDT, pregnancy test, injection set, wound dressing and mama kit, matched to
+  your own medicines by name.
+- **Kit labels** with a barcode from the Kits page; scanning one at the till adds the kit.
+- **Kits running low:** the dashboard and the menu say when a kit can be made 3 times or fewer, and which medicine
+  holds it back.
+- Receipts and invoices list a kit's contents. A refund puts each medicine back in the batches it came from. Kit
+  sales and their profit are on the Kits page; reorder levels and consumption count the medicines kits use. Kits stay
+  out of Inventory, Add Stock, stock counts, reorder and stock value.
+- The till: the Enter of a barcode scanner no longer confirms a dialog the scan opens; "Only 3 in stock in stock"
+  now reads "Only 3 in stock".
+- **Flutter app:** kits are kept out of its lists, a kit sale is refunded correctly, and kit sales are corrected in the
+  React app. Building and selling kits and the colourful Add Stock come to the Flutter app later (PARITY.md).
+
 ## React (classic) app 1.9.3 · Flutter app 2.1 (next build) · November 2026
 
 Security release from the November 2026 audit (docs/AUDIT-2026-11-16.md). Nothing to do on the tills: they update by
