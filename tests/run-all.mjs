@@ -212,11 +212,32 @@ if (!up) { console.error('The local cloud did not start'); stop(); process.exit(
 const owner = (p, body) => fetch(BASE + '/api/owner' + p, { method: body ? 'POST' : 'GET', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + OWNER }, body: body ? JSON.stringify(body) : undefined }).then((r) => r.json());
 const clearAll = async () => { for (const t of (await owner('/tenants')).tenants || []) await owner('/tenants/' + t.id + '/delete', { confirm: t.slug }); };
 
+// RXPOS_SHARD=k/n (full-tests.yml): run only every n-th of the chosen suites, starting at the k-th (0-based), so n
+// machines run the whole set side by side. Each machine has its own local cloud; together they run every suite once.
+const [shardK, shardN] = (process.env.RXPOS_SHARD || '0/1').split('/').map(Number);
+if (!(shardN >= 1 && shardK >= 0 && shardK < shardN)) { console.error('RXPOS_SHARD must be k/n with 0 ≤ k < n'); process.exit(1); }
+// Groups are made even by time (tests/suite-times.json: seconds per suite from a full run; 10 s when unknown): the
+// longest suites are dealt first, each to the group with the least time so far. Every machine works out the same split.
+const picked = SUITES.filter(([, file]) => (!only || only.split(',').some((o) => file.includes(o))) // several, comma-separated: npm test -- owner-auth,v14-ui
+  && (!HUB || HUB_SUITES.has(file)));
+let chosen = picked;
+if (shardN > 1) {
+  let times = {};
+  try { times = JSON.parse(fs.readFileSync(path.join(here, 'suite-times.json'), 'utf8')); } catch { /* none: equal weights */ }
+  const cost = (file) => times[file] ?? 10;
+  const load = Array(shardN).fill(0), mine = new Set();
+  for (const [i, s] of picked.map((x, k) => [k, x]).sort((a, b) => cost(b[1][1]) - cost(a[1][1]) || a[0] - b[0])) {
+    const g = load.indexOf(Math.min(...load));
+    load[g] += cost(s[1]);
+    if (g === shardK) mine.add(i);
+  }
+  chosen = picked.filter((_, i) => mine.has(i)); // in their usual order
+  console.log(`Group ${shardK + 1} of ${shardN}: ${chosen.length} suites, about ${Math.round(load[shardK] / 60)} min`);
+}
+
 const results = [];
 let totalSkipped = 0;
-for (const [label, file, extra] of SUITES) {
-  if (only && !only.split(',').some((o) => file.includes(o))) continue; // several, comma-separated: npm test -- owner-auth,v14-ui
-  if (HUB && !HUB_SUITES.has(file)) continue;
+for (const [label, file, extra] of chosen) {
   await clearAll();
   const outDir = extra[0] ? path.join(here, extra[0]) : null;
   const args = [path.join(here, file), BASE, OWNER, ...(outDir ? [outDir] : [])];
