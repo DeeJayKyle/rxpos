@@ -308,6 +308,9 @@ export default function POS({ mode = 'retail' }) {
     else if (e.key === 'ArrowRight' && (q === '' || e.target.selectionStart === q.length)) { e.preventDefault(); moveActive(1); }
     else if (e.key === 'ArrowLeft' && q === '') { e.preventDefault(); moveActive(-1); }
     if (e.key !== 'Enter') return;
+    // the Enter that adds an item (a scanner sends one after every code) must not also press the button of a dialog the
+    // item opens (a kit's warning): without this, the warning was confirmed before anyone saw it
+    e.preventDefault();
     // "/" commands typed in the search box, as in the command bar: /hold, /pay, /disc 10, /void 2, /qty 2 5 …
     if (q.startsWith('/')) { e.preventDefault(); const err = runCommand(q.slice(1).trim().toLowerCase()); if (err) toast(err, 'warn'); else setQ(''); return; }
     const g = parseGs1(q);
@@ -369,7 +372,7 @@ export default function POS({ mode = 'retail' }) {
   const stepOf = (l) => l.pack?.size || 1;
   const setCount = (l, n) => {
     const size = stepOf(l), most = Math.floor(l.max / size);
-    if (Number(n) > most) toast(`Only ${most} ${l.pack ? l.pack.name.toLowerCase() + (most === 1 ? '' : 's') : 'in stock'} in stock`, 'warn');
+    if (Number(n) > most) toast(l.kit ? `Only ${most} ${l.name} can be made from the stock` : `Only ${most} ${l.pack ? l.pack.name.toLowerCase() + (most === 1 ? '' : 's') + ' ' : ''}in stock`, 'warn');
     setQty(l.id, Math.max(1, Math.min(Math.round(Number(n) || 1), Math.max(1, most))) * size);
   };
   const choosePack = (l, name) => {
@@ -1067,8 +1070,10 @@ export default function POS({ mode = 'retail' }) {
         const used = new Set((k ? kitNow(k).components : []).map((c) => c.productId));
         const alike = products.filter((x) => x.id !== swapFor.from && !used.has(x.id) && sellable(x.id) > 0);
         const same = g ? alike.filter((x) => genericKey(x.generic || x.name) === g) : [];
-        const word = String(from?.name || '').split(/\s+/).find((w) => w.length > 3)?.toLowerCase();
-        const near = alike.filter((x) => !same.includes(x) && word && x.name.toLowerCase().includes(word));
+        // then medicines sharing a word of its name (Blood Lancets → Safety Lancets), most words in common first
+        const words = String(from?.name || '').toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 3);
+        const common = (x) => words.filter((w) => x.name.toLowerCase().includes(w)).length;
+        const near = alike.filter((x) => !same.includes(x) && common(x) > 0).sort((a, b) => common(b) - common(a));
         const list = [...same, ...near].slice(0, 12);
         return (
           <Modal title={<><Repeat size={18} /> Swap {from?.name || 'a medicine'} in {k?.name}</>} onClose={() => setSwapFor(null)}>

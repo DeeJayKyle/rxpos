@@ -104,6 +104,16 @@ Every feature of the React app (`src/pages/*.jsx`, `src/*.jsx`), screen by scree
 - ✅ Edit a past delivery (add, remove, change lines; stock adjusted; sold stock protected; audit)
 - ✅ Supplier prices tab; Drafts tab
 - ✅ Filters (dates, supplier), payment type, unpaid, Export CSV / PDF
+- ✗ 1.10.0 colourful lines: a colour per line (stripe, number badge, row tint), a colour band per column, grid lines,
+  tinted supplier / invoice panels (React: src/linecolors.js, styles/linecolors.css) — pending in add_stock_screen.dart
+
+## Kits (Kits.jsx, src/kits.js; 1.10.0)
+- ✅ Kits are kept out of this app's medicine lists, till, stock and reorder (core/rules/kits.dart; they are recipes
+  with no stock of their own)
+- ✅ Refunding a kit sale made in the React app puts each of its medicines back in its batches (test/features/group1_test.dart)
+- ✅ A kit sale is not corrected here (its lines would lose their contents): the app says to correct it in the React app or refund it
+- ✗ Build and edit kits (icon, colour, warning, services, ready-made kits), sell them at the till (KIT tiles and lines,
+  can make N, warning to tick, swap a medicine for one sale), kit labels, kit sales, low-kit alert — pending
 
 ## Stock take (StockCount.jsx)
 - ✅ Start, count per batch, found batch, review, post (same records as the React app: system quantity kept when counted)

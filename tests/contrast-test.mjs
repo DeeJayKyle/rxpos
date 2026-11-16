@@ -3,6 +3,7 @@
 import { THEMES, themeVars, contrast } from '../src/themes.js';
 import { VIVID, VIVID_TEXT } from '../src/vivid.js';
 import { LINE_HUES, COL_HUES, ROW_TINT, HEAD_TINT, LABEL_MIX } from '../src/linecolors.js';
+import { KIT_COLORS } from '../src/kits.js';
 let pass = 0, fail = 0;
 const check = (n, ok, x = '') => { ok ? pass++ : fail++; if (!ok) console.log(`FAIL  ${n}  ${x}`); };
 for (const t of THEMES) {
@@ -49,6 +50,13 @@ for (const t of THEMES) {
   tinted++;
 }
 console.log(`PASS  Add Stock line colours checked in ${tinted} themes`);
+// kits (1.10.0, styles/kits.css): text on a kit tile (9%), a kit basket line (7%) and a hovered tile in every theme
+for (const t of THEMES) {
+  const v = themeVars(t);
+  if (!/^#[0-9a-f]{6}$/i.test(v['--surface']) || !/^#[0-9a-f]{6}$/i.test(v['--text'])) continue;
+  for (const h of KIT_COLORS) for (const w of [0.07, 0.09]) { const r = contrast(v['--text'], mix(h, v['--surface'], w)); check(`${t.name}: text on kit ${h} ${w}`, r >= 4.5, r.toFixed(2)); }
+}
+console.log('PASS  kit tints checked');
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

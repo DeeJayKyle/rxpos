@@ -1,5 +1,5 @@
 // A kit's icon (1.10.0, src/kits.js KIT_ICONS): the lucide drawing for its name, on the kit's colour
-import { TestTube, Syringe, Bandage, Baby, HeartPulse, Pill, Package, Stethoscope, Droplet, ShieldPlus } from 'lucide-react';
+import { TestTubeDiagonal as TestTube, Syringe, Bandage, Baby, HeartPulse, Pill, Package, Stethoscope, Droplet, ShieldPlus } from 'lucide-react';
 
 const ICONS = { 'test-tube': TestTube, syringe: Syringe, bandage: Bandage, baby: Baby, 'heart-pulse': HeartPulse, pill: Pill, package: Package, stethoscope: Stethoscope, droplet: Droplet, 'shield-plus': ShieldPlus };
 

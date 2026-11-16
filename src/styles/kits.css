@@ -49,3 +49,11 @@
 .kit-figures b { display: block; font-size: 1.1rem; }
 .kit-alert { display: flex; align-items: center; gap: 8px; }
 .kit-low-alert { display: block; margin-bottom: 12px; }
+/* the tile: icon and KIT badge on top, the kit's name on its own full line under them */
+.kit-tile-head { flex-wrap: wrap; }
+.kit-tile-head strong { order: 3; flex-basis: 100%; }
+.kit-tile-head .kit-badge { margin-left: 0; }
+.cart-line.kit-line .grow { min-width: 0; }
+.kit-ack span, .kit-parts { white-space: normal; overflow-wrap: anywhere; }
+.kit-ack { max-width: 100%; }
+.kit-ack input { flex: none; width: 18px; height: 18px; }
