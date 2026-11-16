@@ -2455,6 +2455,28 @@ void main() {
     await done(tester);
   });
 
+  testWidgets('two-step sign-in: recovery codes are shown once after switching on (2026-11 audit)', (tester) async {
+    var enabled = false;
+    cloud.api['2fa'] = (_) => (200, {'enabled': enabled, 'recoveryLeft': enabled ? 10 : 0});
+    cloud.api['2fa/setup'] = (_) => (200, {'uri': 'otpauth://totp/RxPOS:tia?secret=JBSWY3DPEHPK3PXP', 'secret': 'JBSWY3DPEHPK3PXP'});
+    cloud.api['2fa/enable'] = (b) => (200, {'enabled': (enabled = true), 'recovery': ['ABCDE-FGHJK', 'MNPQR-STUVW']});
+    await tester.runAsync(signedIn);
+    await start(tester);
+    await menu(tester, 'Two-step sign-in');
+    await tester.tap(find.text('Set it up'));
+    await settle(tester);
+    await tester.enterText(find.byKey(const Key('twostep-code')), '246810');
+    await tester.pump();
+    await tester.tap(find.text('Switch on'));
+    await settle(tester);
+    expect(find.text('ABCDE-FGHJK\nMNPQR-STUVW'), findsOneWidget);
+    await tester.tap(find.text('I have kept them'));
+    await settle(tester);
+    expect(find.text('Two-step sign-in is on for your account.'), findsOneWidget);
+    expect(find.text('2 recovery codes left.'), findsOneWidget);
+    await done(tester);
+  });
+
   testWidgets('sign-in and the account menu on a phone fit the screen', (tester) async {
     await start(tester, size: const Size(400, 800));
     await tester.tap(find.text('Forgot password?'));

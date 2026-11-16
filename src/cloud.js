@@ -54,6 +54,8 @@ export const ownerGoogleLogin = (url, credential) => call({ url: cleanUrl(url) }
 /** Public name of the pharmacy at a web address (for its sign-in page) */
 export const pharmacyInfo = (url, slug) => call({ url: cleanUrl(url) }, '/api/pharmacy/' + encodeURIComponent(slug), { timeout: 8000 });
 export const calendarLink = (cfg, renew = false) => call(cfg, '/api/calendar-link', { method: renew ? 'POST' : 'GET', body: renew ? {} : undefined, timeout: 8000 });
+/** Initials only, no medicines, for refills in the calendar feed (2026-11 audit) */
+export const calendarPrivacy = (cfg, on) => call(cfg, '/api/calendar-link', { method: 'POST', body: { private: !!on }, timeout: 8000 });
 /** step 7: this device's till number in its pharmacy (src/docnumbers.js) */
 // 2026-11 audit: end this sign-in in the cloud (the web version signing out), or every other one of this person
 export const cloudLogout = (cfg) => call(cfg, '/api/logout', { method: 'POST', body: {}, timeout: 5000 });

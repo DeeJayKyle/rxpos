@@ -8,7 +8,7 @@ import nodeCrypto from 'node:crypto';
 import { createClient } from '@libsql/client';
 import worker from '../worker/index.js';
 import { d1FromLibsql } from '../worker/libsql-d1.js';
-import { totpAt } from '../worker/twostep.js';
+import { totpAt, newRecoveryCodes } from '../worker/twostep.js';
 import { tokenSecret } from '../worker/secret.js';
 import { readView, widestView, legacyView } from '../worker/policy.js';
 import { isLocalAddress, plainHttpToInternet } from '../server/netaddr.js';
@@ -20,7 +20,7 @@ const check = (n, ok, x = '') => { ok ? pass++ : fail++; console.log(`${ok ? 'PA
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rxpos-audit-'));
 const env = {
   DB: d1FromLibsql(createClient({ url: 'file:' + path.join(dir, 'd1.db').replace(/\\/g, '/') })),
-  SYNC_KEY: 'test-main-sync-key-0123456789abcdef', TOKEN_SECRET: 'test-token-secret-'.padEnd(40, 'x'), OWNER_KEY: 'test-owner-key-0123456789abcdef',
+  SYNC_KEY: 'test-main-sync-key-0123456789abcdef', TOKEN_SECRET: 'test-token-secret-'.padEnd(40, 'x'), OWNER_KEY: 'test-owner-key-0123456789abcdef', BACKUP_KEY: 'test-backup-only-key-0123456789abcdef',
   ASSETS: { fetch: () => new Response('{}') },
 };
 const call = async (p, { method = 'POST', body, token, headers = {} } = {}) => {
@@ -150,6 +150,21 @@ await call('/api/2fa/enable', { token: at, body: { code: await totpAt(su.j.secre
 r = await call('/api/2fa/reset', { token: mt, body: { uid: adminId } });
 const still = await env.DB.prepare('SELECT enabled FROM twofa WHERE uid = ?1').bind(adminId).first('enabled');
 check('a manager can no longer switch off an administrator\'s two-step sign-in', r.status === 403 && Number(still) === 1, `${r.status} ${still}`);
+// recovery codes: shown once, each signs in once, then is used up
+const enabledNow = await env.DB.prepare('SELECT recovery FROM twofa WHERE uid = ?1').bind(adminId).first('recovery');
+check('switching two-step on keeps ten recovery codes, hashed', JSON.parse(enabledNow || '[]').length === 10 && !/[A-Z]{5}-/.test(enabledNow));
+const rc = await newRecoveryCodes('audit-test', adminId);
+await env.DB.prepare('UPDATE twofa SET recovery = ?2 WHERE uid = ?1').bind(adminId, JSON.stringify(rc.hashes)).run();
+const withCode = (otp) => call('/api/login', { body: { email: 'admin@audit.test', password: 'Admin-pass-123', tenant: 'audit-test', otp } });
+r = await withCode(rc.codes[0].toLowerCase());
+check('a recovery code signs in instead of the app\'s code', r.status === 200 && !!r.j.token, r.status);
+r = await withCode(rc.codes[0]);
+check('…only once', r.status === 401);
+check('…and it is written in the audit log', (await env.DB.prepare("SELECT COUNT(*) n FROM records WHERE t = 'audit' AND rec LIKE '%recovery code%'").first('n')) >= 1);
+r = await withCode(rc.codes[1].replace('-', ''));
+check('codes work with or without the dash', r.status === 200);
+const left = await call('/api/2fa', { method: 'GET', token: r.j.token });
+check('the person sees how many are left', left.j.recoveryLeft === 8, JSON.stringify(left.j));
 r = await call(`/api/owner/tenants/audit-test/users/${adminId}/reset-2fa`, { token: OWN, body: {} });
 check('…the RxPOS owner can, for an administrator who lost their phone', r.j.ok === true && !(await env.DB.prepare('SELECT enabled FROM twofa WHERE uid = ?1').bind(adminId).first('enabled')));
 
@@ -160,12 +175,24 @@ const link1 = (await call('/api/calendar-link', { method: 'GET', token: at })).j
 const link2 = (await call('/api/calendar-link', { token: at, body: {} })).j.url;
 const feed = async (u) => (await worker.fetch(new Request('http://local' + new URL(u).pathname), env, {})).status;
 check('an administrator can replace the calendar link, and the old one stops', link1 !== link2 && (await feed(link1)) === 404 && (await feed(link2)) === 200);
+await sync(at, [{ t: 'customers', id: 'pc1', rec: { id: 'pc1', name: 'Grace Nakato' }, at: iso() },
+  { t: 'prescriptions', id: 'rx1', rec: { id: 'rx1', customerId: 'pc1', status: 'Dispensed', refillDays: 2, dispensedOn: iso().slice(0, 10), medications: 'Metformin 500mg' }, at: iso() }]);
+const ics = async () => (await worker.fetch(new Request('http://local' + new URL(link2).pathname), env, {})).text();
+const before = await ics();
+await call('/api/calendar-link', { token: at, body: { private: true } });
+const after = await ics();
+check('the calendar feed can show refills with initials only, without medicines', /Grace Nakato/.test(before) && /Metformin/.test(before) && /G\. N\./.test(after) && !/Nakato|Metformin/.test(after));
+check('…and choosing that keeps the same link', (await call('/api/calendar-link', { method: 'GET', token: at })).j.url === link2);
 for (let i = 0; i < 5; i++) await call('/api/owner-auth/login', { body: { password: 'wrong' }, headers: { 'CF-Connecting-IP': '203.0.113.9' } });
 await call('/api/owner/account', { token: OWN, body: { password: 'Owner-pass-12345' } });
 r = await call('/api/owner-auth/login', { body: { password: 'Owner-pass-12345' }, headers: { 'CF-Connecting-IP': '198.51.100.7' } });
 check('a stranger\'s wrong owner passwords no longer lock the owner out', r.status === 200, r.status);
 r = await call('/api/owner-auth/login', { body: { password: 'Owner-pass-12345' }, headers: { 'CF-Connecting-IP': '203.0.113.9' } });
 check('…the address that tried them is locked', r.status === 429);
+const BK = env.BACKUP_KEY;
+check('the backup-only key downloads the backup', (await call('/api/owner/backup', { method: 'GET', token: BK })).status === 200);
+check('…and records the heartbeat', (await call('/api/owner/heartbeat', { token: BK, body: { bytes: 1, records: 1 } })).status === 200);
+check('…but opens nothing else in the owner console', (await call('/api/owner/tenants', { method: 'GET', token: BK })).status === 403 && (await call('/api/owner/restore', { token: BK, body: {} })).status === 403);
 check('API replies are marked nosniff', h.headers.get('x-content-type-options') === 'nosniff');
 check('local addresses are local, the internet is not', isLocalAddress('192.168.1.5') && isLocalAddress('::ffff:10.0.0.2') && !isLocalAddress('41.210.1.1') && !isLocalAddress('172.32.0.1'));
 check('apps refuse plain http to the internet only', plainHttpToInternet('http://41.210.1.1:8686') && !plainHttpToInternet('http://192.168.1.5:8686') && !plainHttpToInternet('https://hub.example.com'));

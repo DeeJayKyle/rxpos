@@ -21,6 +21,7 @@ Keep every login in a password manager (e.g. Bitwarden, free and open source): G
 | Secret | Used for | Stored in |
 |---|---|---|
 | Owner key | Owner console master key, backups, admin scripts | `Documents/RxPOS-Data/RxPOS-OWNER-KEY.txt`, Worker secret `OWNER_KEY`, GitHub secret `OWNER_KEY` |
+| `BACKUP_KEY` (added in the November 2026 audit) | The nightly backup only: it can download backups and record the heartbeat, nothing else in the owner console. Make one with 32+ random characters | Worker secret `BACKUP_KEY` and GitHub secret `BACKUP_KEY`. Until both are set, backups keep using `OWNER_KEY` |
 | Backup passphrase | Opening the nightly backups | `Documents/RxPOS-Data/RxPOS-BACKUP-PASSPHRASE.txt`, GitHub secret `BACKUP_PASSPHRASE` |
 | `TOKEN_SECRET` | Signing every sign-in pass (at least 32 random characters; required since 1.7). Changing it signs every device out once | Worker secret only (Cloudflare → pharmapos → Settings → Variables and Secrets). Check: `https://api.rxposug.com/api/health` shows `"signing": true` and `"tokenSecret": "dedicated"` (`"sync-key"` means TOKEN_SECRET is missing and the main pharmacy's sync key signs every pass: set TOKEN_SECRET) |
 | `FILES_QUOTA_MB`, `AI_PER_HOUR` (optional settings, not secret) | Shared-file storage per pharmacy (default 2048 MB) and AI calls per pharmacy per hour (default 400), both added in the November 2026 audit | Worker variables |

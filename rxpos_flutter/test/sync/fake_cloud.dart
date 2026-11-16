@@ -39,6 +39,8 @@ class FakeCloud implements HttpClientAdapter {
 
   /// changes the cloud refuses (no permission): "table|id"
   final refuse = <String>{};
+  /// 2026-11 audit: the role view the cloud reports (worker/policy.js READ_GROUPS); null = not sent, as an older cloud
+  String? view;
 
   /// op ids already applied (the cloud's sync_ops ledger)
   final applied = <String>{};
@@ -99,7 +101,8 @@ class FakeCloud implements HttpClientAdapter {
     }
     if (garbageOnRequest == requests.length) return ResponseBody.fromString('{"hello":"world"}', 200, headers: _json);
     if (expiredOnRequest == requests.length) return ResponseBody.fromString('{"error":"Not signed in"}', 401, headers: _json);
-    final refusedKeys = <String>[];
+    final refusedKeys = <String>[], staleKeys = <String>[];
+    final staleRows = <ServerRecord>[];
     var appliedNow = 0;
     for (final raw in (body['changes'] as List? ?? const [])) {
       final ch = (raw as Map).cast<String, Object?>();
@@ -121,7 +124,15 @@ class FakeCloud implements HttpClientAdapter {
         continue;
       }
       if (op != null) applied.add(op);
-      if (have != null && have.at.compareTo(at) >= 0) continue; // an older edit: the newer one stays
+      if (have != null && have.at.compareTo(at) >= 0) {
+        // an older edit: the newer one stays, and (as worker/index.js since the 2026-11 audit) the device is told and
+        // gets the cloud's copy back
+        if (have.at.compareTo(at) > 0) {
+          staleKeys.add(key);
+          staleRows.add(have);
+        }
+        continue;
+      }
       records.add(
         ServerRecord(_seq + 1, t, id, (ch['rec'] as Map?)?.cast<String, Object?>(), at, origin: '${body['deviceId']}', deleted: ch['deleted'] == true),
       );
@@ -140,8 +151,10 @@ class FakeCloud implements HttpClientAdapter {
     final cursor = page.isEmpty || next.length <= page.length ? _seq : page.last.seq; // the last page: the newest number, like the worker
     final reply = {
       'changes': [
-        for (final r in page) {'t': r.t, 'id': r.id, 'at': r.at, if (r.deleted) 'deleted': true else 'rec': r.rec},
+        for (final r in [...page, ...staleRows]) {'t': r.t, 'id': r.id, 'at': r.at, if (r.deleted) 'deleted': true else 'rec': r.rec},
       ],
+      'staleKeys': staleKeys,
+      if (view != null) 'view': view,
       'cursor': cursor,
       'more': next.length > page.length,
       'applied': appliedNow,

@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight, Plus, CalendarPlus, Copy, Download, Repeat, 
 import { useStore, today, uid, put, del, audit, downloadFile } from '../store.jsx';
 import { Modal, Empty } from '../ui.jsx';
 import { toast, ask } from '../feedback.jsx';
-import { calendarLink } from '../cloud.js';
+import { calendarLink, calendarPrivacy } from '../cloud.js';
 
 const WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -54,10 +54,11 @@ export default function Calendar() {
   const [day, setDay] = useState(today());
   const [edit, setEdit] = useState(null);
   const [link, setLink] = useState(null);
+  const [privateFeed, setPrivateFeed] = useState(false);
 
   useEffect(() => {
     if (!syncCfg.url || !syncCfg.key || !navigator.onLine) return;
-    calendarLink(syncCfg).then((j) => setLink(j.url)).catch(() => setLink(null));
+    calendarLink(syncCfg).then((j) => { setLink(j.url); setPrivateFeed(!!j.private); }).catch(() => setLink(null));
   }, [syncCfg.url, syncCfg.key]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Things RxPOS knows are coming: refills due and stock expiring
@@ -157,6 +158,7 @@ export default function Calendar() {
                   <a className="btn sm ghost" href={link.replace(/^https:/, 'webcal:')}>Apple / Outlook / phone</a>
                 </div>
                 <p className="muted small">Outlook: Add calendar → Subscribe from web → paste the link. Keep the link private: anyone with it can see these events, including patients' refills.</p>
+                {can('settings.manage') && <label className="check small"><input type="checkbox" checked={privateFeed} onChange={async (e) => { const on = e.target.checked; try { setPrivateFeed(!!(await calendarPrivacy(syncCfg, on)).private); toast(on ? 'Refills in the feed now show initials only, without medicines' : 'Refills in the feed show names and medicines'); } catch (er) { toast(er.message, 'error'); } }} /> Show refills with initials only (no names or medicines)</label>}
                 {can('settings.manage') && <button className="btn sm ghost" onClick={async () => { if (!(await ask({ title: 'Replace the calendar link?', message: 'The current link stops working at once (for example after someone who had it left). Everyone who subscribed must add the new link.', confirmText: 'Replace link', danger: true }))) return; try { setLink((await calendarLink(syncCfg, true)).url); toast('New calendar link made: the old one no longer works'); } catch (e) { toast(e.message, 'error'); } }}>Replace link</button>}
               </>
             ) : <p className="muted small">{navigator.onLine ? 'Connecting to the cloud…' : 'Go online to get your calendar subscription link.'}</p>}

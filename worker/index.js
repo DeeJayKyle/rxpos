@@ -27,7 +27,7 @@ import { dailyStockFor, toCsv } from './dailystock.js';
 import { clean as cleanInvoice, finish as finishInvoice } from './invoiceread.js';
 import { INVOICE_PROMPT } from './invoiceprompt.js';
 import { aiRoutes, idleRoutes, firstJson, runAi } from './ai-routes.js';
-import { twoStepDdl, twoStepOf, totpCheck, markUsed, twoStepRoutes } from './twostep.js';
+import { twoStepDdl, twoStepOf, totpCheck, markUsed, twoStepRoutes, looksLikeRecovery, useRecoveryCode } from './twostep.js';
 import { tokenSecret, purposeLabel } from './secret.js';
 import { pharmacyChanged, validatePharmacyDefaults } from '../src/pharmacy-settings.js';
 import { DEFAULT_ROLES } from '../src/access.js';
@@ -160,6 +160,7 @@ function ensureSchema(db) {
     if (!have.has('tenants_slug')) ddl.push('CREATE UNIQUE INDEX tenants_slug ON tenants(slug)');
     if (!have.has('client_errors')) ddl.push('CREATE TABLE client_errors (tenant TEXT NOT NULL, k TEXT NOT NULL, message TEXT, stack TEXT, page TEXT, build INTEGER, platform TEXT, kind TEXT, count INTEGER NOT NULL DEFAULT 1, devices INTEGER NOT NULL DEFAULT 1, first_at TEXT, last_at TEXT, PRIMARY KEY (tenant, k))'); // crash reports from devices (src/crash.js)
     if (!have.has('twofa')) ddl.push(twoStepDdl); // two-step sign-in secrets (worker/twostep.js), never synced
+    else if (!/\brecovery\b/.test(have.get('twofa'))) ddl.push('ALTER TABLE twofa ADD COLUMN recovery TEXT'); // 2026-11 audit: recovery codes
     // 1.6 sync protocol 2: op ids already applied, so a request repeated after a lost reply is applied once
     if (!have.has('sync_ops')) ddl.push('CREATE TABLE sync_ops (tenant TEXT NOT NULL, op TEXT NOT NULL, at TEXT NOT NULL, PRIMARY KEY (tenant, op))');
     if (!have.has('snapshot_bounds')) ddl.push('CREATE TABLE snapshot_bounds (tenant TEXT PRIMARY KEY, v TEXT NOT NULL)'); // faster sync stage 3 (worker/snapshot.js)
@@ -519,7 +520,9 @@ async function pharmacyLogin(env, body, ownerToken, ip = 'noip') {
   const tf = await twoStepOf(env, match.tenant, u.id);
   if (tf?.enabled) {
     if (!body.otp) return json({ twoFactor: true });
-    const step = await totpCheck(tf.secret, body.otp, tf.last_step);
+    // 2026-11 audit: a one-time recovery code works instead of the app's code (and is used up)
+    const recovery = looksLikeRecovery(body.otp);
+    const step = recovery ? ((await useRecoveryCode(env, match.tenant, u.id, tf, body.otp)) ? 0 : -1) : await totpCheck(tf.secret, body.otp, tf.last_step);
     if (step < 0) {
       await throttleFail(env, slowKey, slow); // a wrong two-step code counts like a wrong password
       const n = (fail && fail.until <= Date.now() && fail.until > 0 ? 0 : fail?.n || 0) + 1;
@@ -527,7 +530,8 @@ async function pharmacyLogin(env, body, ownerToken, ip = 'noip') {
       await env.DB.prepare('INSERT INTO login_fail (email, n, until) VALUES (?1, ?2, ?3) ON CONFLICT(email) DO UPDATE SET n = ?2, until = ?3').bind(lockKey, until ? 0 : n, until).run();
       return json({ twoFactor: true, error: until ? `Too many wrong codes. Sign-in is locked for ${LOCK_MINUTES} minutes.` : 'That code is not right. Type the newest code from your authenticator app.' }, until ? 429 : 401);
     }
-    await markUsed(env, match.tenant, u.id, step);
+    if (recovery) await serverWrite(env, match.tenant, 'audit', crypto.randomUUID(), { date: new Date().toISOString(), user: u.name, action: 'Signed in with a two-step recovery code', details: '', branchId: 'main' });
+    else await markUsed(env, match.tenant, u.id, step);
   }
   if (fail) await env.DB.prepare('DELETE FROM login_fail WHERE email = ?1').bind(lockKey).run(); // only once the code is right too
   if (slow) await throttleClear(env, slowKey);
@@ -1208,9 +1212,14 @@ async function tenantUsers(env, tenant) {
 
 async function owner(env, req, url, body) {
   if (!env.OWNER_KEY || env.OWNER_KEY.length < 20) throw httpError(503, 'The owner console is not enabled (OWNER_KEY secret missing).');
-  if (!(await isOwner(env, (req.headers.get('Authorization') || '').replace(/^Bearer /, ''), safeEqual))) throw httpError(401, 'Owner sign-in expired or wrong. Sign in again.');
-  const db = env.DB;
+  const bearer = (req.headers.get('Authorization') || '').replace(/^Bearer /, '');
   const parts = url.pathname.split('/').slice(3).map(decodeURIComponent); // /api/owner/<...>
+  // 2026-11 audit: a key for the nightly backup only (BACKUP_KEY, 32+ characters): it can download the backup and
+  // record its heartbeat, nothing else, so the CI secret no longer opens the whole owner console
+  const backupOnly = (env.BACKUP_KEY || '').length >= 32 && safeEqual(bearer, env.BACKUP_KEY);
+  if (backupOnly && !((parts[0] === 'backup' && req.method === 'GET') || (parts[0] === 'heartbeat' && req.method === 'POST'))) throw httpError(403, 'The backup key can only download backups.');
+  if (!backupOnly && !(await isOwner(env, bearer, safeEqual))) throw httpError(401, 'Owner sign-in expired or wrong. Sign in again.');
+  const db = env.DB;
   if (parts[0] === 'move-to-turso') return moveToTurso(env, req, body);
   if (parts[0] === 'backup' && req.method === 'GET') return backup(env, url, json);
   if (parts[0] === 'restore' && req.method === 'POST') return restore(env, body, json);
@@ -1738,10 +1747,14 @@ async function calendarFeed(env, tenant) {
   const ev = [];
   for (const e of await rows('events')) if (e.date) ev.push({ uid: 'ev-' + e.id, date: e.date, time: e.time, end: e.endTime, title: e.title, notes: e.notes, repeat: ['daily', 'weekly', 'monthly', 'yearly'].includes(e.repeat) ? e.repeat : '' });
   const customers = new Map((await rows('customers')).map((c) => [c.id, c.name]));
+  // 2026-11 audit: a pharmacy can choose initials and no medicines in the feed (it lives in phones' calendars)
+  const privateFeed = !!JSON.parse(t?.secrets || '{}').calendarPrivate;
+  const initials = (n) => String(n || '').split(/\s+/).filter(Boolean).map((w) => w[0].toUpperCase() + '.').join(' ') || 'patient';
   for (const p of await rows('prescriptions')) {
     if (!p.refillDays || p.status !== 'Dispensed') continue;
     const due = addDays(p.dispensedOn || p.date, Number(p.refillDays));
-    if (due >= addDays(today, -30) && due <= horizon) ev.push({ uid: 'rx-' + p.id + '-' + due, date: due, title: `Refill due: ${customers.get(p.customerId) || 'patient'}`, notes: p.medications });
+    const who = customers.get(p.customerId);
+    if (due >= addDays(today, -30) && due <= horizon) ev.push({ uid: 'rx-' + p.id + '-' + due, date: due, title: `Refill due: ${privateFeed ? initials(who) : who || 'patient'}`, notes: privateFeed ? '' : p.medications });
   }
   // Expiring stock (only batches that still have stock)
   const { results: stock } = await db.prepare("SELECT json_extract(rec, '$.batchId') b, SUM(json_extract(rec, '$.qty')) q FROM records WHERE tenant = ?1 AND t = 'movements' AND deleted = 0 GROUP BY b HAVING q > 0").bind(tenant).all();
@@ -1988,11 +2001,13 @@ export default {
         const t = await tenantById(env, who.tenant);
         const secrets = JSON.parse(t?.secrets || '{}');
         if (req.method === 'POST') {
-          if (!who.viaKey && !(await roleCan(env, who.tenant, who.role, 'settings.manage'))) return json({ error: 'Only an administrator can replace the calendar link.' }, 403);
-          secrets.calendarKey = b64url(crypto.getRandomValues(new Uint8Array(18))); // 24 characters, as the old links
+          if (!who.viaKey && !(await roleCan(env, who.tenant, who.role, 'settings.manage'))) return json({ error: 'Only an administrator can change the calendar link.' }, 403);
+          // { private: true|false } chooses initials-only refills; anything else makes a new link
+          if (typeof body.private === 'boolean') secrets.calendarPrivate = body.private;
+          else secrets.calendarKey = b64url(crypto.getRandomValues(new Uint8Array(18))); // 24 characters, as the old links
           await env.DB.prepare('UPDATE tenants SET secrets = ?2 WHERE id = ?1').bind(who.tenant, JSON.stringify(secrets)).run();
         }
-        return json({ url: `${url.origin}/api/calendar/${who.tenant}/${secrets.calendarKey || (await calendarSig(env, who.tenant))}.ics`, replaceable: true });
+        return json({ url: `${url.origin}/api/calendar/${who.tenant}/${secrets.calendarKey || (await calendarSig(env, who.tenant))}.ics`, replaceable: true, private: !!secrets.calendarPrivate });
       }
       if (path === '/api/pay/request' && req.method === 'POST') {
         if (!who.viaKey && !(await roleCan(env, who.tenant, who.role, 'pos.sell'))) return json({ error: 'You are not allowed to take payments.' }, 403); // 1.9

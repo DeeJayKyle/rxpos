@@ -189,6 +189,7 @@ class SyncEngine {
         final plain = !restored && (phase == 'core' || phase == 'history') && reply.phase != phase;
         if (plain) phase = null;
         final refusedKeys = reply.refusedKeys.toSet();
+        final staleKeys = reply.staleKeys.toSet();
         var moved = false;
         await db.transaction(() async {
           if (batch.isNotEmpty) {
@@ -196,6 +197,12 @@ class SyncEngine {
               if (refusedKeys.contains('${e.t}|${e.id}')) {
                 await db.into(db.rejectedOps).insert(RejectedOpsCompanion.insert(op: e.op, t: e.t, id: e.id, at: e.at,
                     reason: const Value('Refused by the cloud: no permission for this change, or it is too large.')));
+                refused++;
+              } else if (staleKeys.contains('${e.t}|${e.id}')) {
+                // 2026-11 audit: the cloud had a newer copy (sent in this reply, so this device now matches); the change
+                // that lost is listed for review, never dropped silently
+                await db.into(db.rejectedOps).insert(RejectedOpsCompanion.insert(op: e.op, t: e.t, id: e.id, at: e.at,
+                    reason: const Value("Not applied: the cloud has a newer copy of this record (is this device's clock behind?). The cloud's copy is now on this device.")));
                 refused++;
               }
               await (db.delete(db.outbox)..where((o) => o.seq.equals(e.seq))).go();
@@ -217,6 +224,12 @@ class SyncEngine {
           // a restore also means: once the download is done, send everything this device holds again (see below)
           cfg = cfg.copyWith(cursor: cursor, epoch: epoch, resendAfterRestore: restored ? true : null,
               phase: phase, clearPhase: phase == null, coreCursor: restored ? 0 : null);
+          // 2026-11 audit: this device now receives tables it did not before (someone with more permissions syncs from
+          // it): their older records are behind the cursor, so the next run downloads everything again and merges
+          if (reply.view != null && reply.view != cfg.view) {
+            final wider = cfg.view != null && SyncConfig.widened(cfg.view, reply.view);
+            cfg = cfg.copyWith(view: reply.view, fullPull: wider ? 0 : null, fullInProgress: wider ? false : null, clearBalances: wider);
+          }
           // the core is in: the history next, from the start; then what changed since the core ended
           if (!restored && i >= batches.length && !reply.more && (phase == 'core' || phase == 'history')) {
             moved = true;
