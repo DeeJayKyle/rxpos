@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Zap, WifiOff, MonitorSmartphone, ShieldCheck, Mail, MessageSquareText, MessageCircle, ArrowLeft, Crown, Building2, LogIn } from 'lucide-react';
+import { Zap, WifiOff, MonitorSmartphone, ShieldCheck, Mail, Lock, MessageSquareText, MessageCircle, ArrowLeft, Crown, Building2, LogIn } from 'lucide-react';
 import { useStore, verifyPassword, normalizePhone } from '../store.jsx';
 import { rememberOffline, verifyOffline, hasPin, verifyPin } from '../offline.js';
 import { Logo, BrandLogo } from '../logo.jsx';
@@ -235,8 +235,8 @@ export default function Auth() {
           ) : (
             <form onSubmit={signIn} className="stack">
               {pharmacy?.error ? <div className="error" role="alert">{pharmacy.error}</div> : <p className="muted center auth-title"><Building2 size={15} /> {title}</p>}
-              <label className="field"><span>Email or username</span><input type="text" inputMode="email" autoComplete="username" autoCapitalize="none" spellCheck={false} value={form.email} onChange={set('email')} required autoFocus={!form.email} /></label>
-              <label className="field"><span>Password</span><PasswordInput autoComplete="current-password" value={form.password} onChange={set('password')} required autoFocus={!!form.email} /></label>
+              <label className="field with-icon"><span>Email or username</span><span className="input-icon-wrap"><Mail size={16} className="input-icon" aria-hidden="true" /><input type="text" inputMode="email" autoComplete="username" autoCapitalize="none" spellCheck={false} value={form.email} onChange={set('email')} required autoFocus={!form.email} placeholder="you@pharmacy.com or username" /></span></label>
+              <label className="field with-icon"><span>Password</span><span className="input-icon-wrap"><Lock size={16} className="input-icon" aria-hidden="true" /><PasswordInput autoComplete="current-password" value={form.password} onChange={set('password')} required autoFocus={!!form.email} placeholder="Your password" /></span></label>
               {(needCode || (isUsername && !slug)) && codeField}
               <div className="row between remember-row">
                 {isNative
@@ -246,7 +246,7 @@ export default function Auth() {
               </div>
               {isNative && remember && <p className="muted small remember-note">Stays signed in on this device. Leave it off on a shared computer.</p>}
               {error && <div className="error" role="alert">{error}</div>}
-              <button className="btn primary block" disabled={busy}><LogIn size={16} />{busy ? 'Signing in…' : 'Sign in'}</button>
+              <button className="btn primary block auth-submit" disabled={busy}><LogIn size={18} />{busy ? 'Signing in…' : 'Sign in'}</button>
               {pinUser && <button type="button" className="btn ghost block" onClick={() => { setPinMode(true); setError(''); }}><ShieldCheck size={16} />Use the PIN for this device</button>}
             </form>
           )}

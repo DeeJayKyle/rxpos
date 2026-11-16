@@ -15,13 +15,38 @@ import { historyMonthsOf } from '../sync.js';
 import { idbGet } from '../idb.js';
 import { isWeb } from '../platform.js';
 import { keepsData, reloadForMode } from '../webpolicy.js';
-import { hasOffline, OFFLINE_DAYS } from '../offline.js';
+import { hasOffline, hasPin, OFFLINE_DAYS } from '../offline.js';
 import { Database, WifiOff, Undo2, Keyboard } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import { ACTIONS, keyOf, isDefault, setKey, resetKeys, showKey, comboOf } from '../keymap.js';
 import AiSystemDoctor from '../components/AiSystemDoctor.jsx';
 import { SettingsSearch, SettingsGroup, ToggleRow, DangerZone, useFindSetting } from '../components/SettingsKit.jsx';
-import { MousePointerClick, BadgeCheck, RotateCcw, Eraser } from 'lucide-react';
+import { MousePointerClick, BadgeCheck, RotateCcw, Eraser, KeyRound, LockKeyhole, ShieldCheck, LogOut } from 'lucide-react';
+
+const account = (action) => window.dispatchEvent(new CustomEvent('rxpos:account', { detail: action }));
+
+/** Who is signed in here, how they sign in on this device, and Log out (the owner's reference, 2026-11-16) */
+function AccountCard() {
+  const { user, syncCfg, db } = useStore();
+  const me = db.users?.find((u) => u.id === user?.id);
+  if (!user) return null;
+  const initials = user.name.split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
+  const pin = isElectron || isAndroid ? hasPin(syncCfg?.tenant, user.id) : false;
+  return (
+    <section className="account-card" aria-label="Your account">
+      <div className="account-head">
+        <span className="account-avatar" aria-hidden="true">{initials}</span>
+        <div className="grow"><strong className="account-name">{user.name}</strong><span className="muted small">{[me?.email || user.email, user.role].filter(Boolean).join(' · ')}</span></div>
+      </div>
+      <div className="account-actions">
+        <button type="button" className="btn ghost" onClick={() => account('password')}><KeyRound size={16} />Change password</button>
+        {(isElectron || isAndroid) && <button type="button" className="btn ghost" onClick={() => account('pin')}><LockKeyhole size={16} />{pin ? 'Quick PIN is set' : 'Set a quick PIN'}</button>}
+        {syncCfg?.key?.startsWith('u.') && <button type="button" className="btn ghost" onClick={() => account('twostep')}><ShieldCheck size={16} />{me?.twoFactor ? 'Two-step sign-in is on' : 'Two-step sign-in'}</button>}
+      </div>
+      <button type="button" className="account-logout" onClick={() => account('logout')}><LogOut size={17} />Log out</button>
+    </section>
+  );
+}
 
 const Choice = ({ value, onChange, options, label }) => (
   <div className="seg" role="radiogroup" aria-label={label}>
@@ -40,6 +65,7 @@ export default function Device() {
   return (
     <div className="page device-page bento-page">
       <div className="page-head"><div><h1>This device</h1><div className="sub">Only changes this {isAndroid ? 'phone or tablet' : isElectron ? 'computer' : 'browser'}. Everyone else keeps their own setup.</div></div></div>
+      <AccountCard />
       <div className="device-top">
         <SettingsSearch can={can} />
         <SettingsGroup label="Quick switches">

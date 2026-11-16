@@ -1,5 +1,23 @@
 # RxPOS release notes
 
+## React (classic) app 1.9.2 · Flutter app 2.1 (next build) · November 2026
+
+Browser or app, a clearer sign-in, your account on This device, quick reports and status pills.
+
+- **Web sign-in: Browser or app?** Both web versions explain when to stay in the browser (nothing to install, online
+  only, nothing kept on the computer) and when to install the app (keeps selling offline, scanners and printers, PIN or
+  fingerprint sign-in, updates itself), with **Download for Windows** and **Download for Android** buttons that always
+  fetch the newest released apps. The visitor's own device comes first; iPhone and Mac are told there is no app yet.
+- **Sign-in:** an icon inside the email and password boxes and a larger Sign in button.
+- **This device: your account.** Your name, email and role at the top, with Change password, Quick PIN, Fingerprint /
+  Windows Hello (where the device has it) and Two-step sign-in, and a red **Log out** row. Each still asks for your
+  current password where it changes how you sign in.
+- **Reports: quick report cards.** Today's sales, Expiring stock, Purchases this month and Expenses this month, one tap
+  each (the dates and the report are set for you; the date boxes still change them).
+- **Status pills:** purchase orders show Draft / Sent / Received as a pill with a mark and the word, not colour alone.
+- **Phone till at large text (Flutter):** the payment options fold behind one row so the sale's lines keep their room;
+  the total and Charge always stay in view.
+
 ## React (classic) app 1.9.1 · Flutter app 2.1 (next build) · November 2026
 
 Safer ordering, complete inventory figures, clearer screens and quicker, secure sign-in.

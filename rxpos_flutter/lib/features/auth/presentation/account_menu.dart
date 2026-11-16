@@ -82,10 +82,10 @@ class AccountMenu extends ConsumerStatefulWidget {
   ConsumerState<AccountMenu> createState() => _AccountMenuState();
 }
 
-class _AccountMenuState extends ConsumerState<AccountMenu> {
-  bool _pin = false, _unlock = false, _asked = false;
-  UnlockKind _kind = UnlockKind.none; // what this device's system offers (none on the web)
+class _AccountMenuState extends ConsumerState<AccountMenu> with _AccountActions<AccountMenu> {
+  bool _asked = false;
 
+  @override
   Session get s => widget.session;
 
   @override
@@ -93,6 +93,62 @@ class _AccountMenuState extends ConsumerState<AccountMenu> {
     super.initState();
     _loadPin();
   }
+
+  @override
+  Widget build(BuildContext context) {
+    // staff brought over from another system set their own password on first sign-in
+    final me = ref.watch(tableProvider('users')).value?.where((u) => u['id'] == s.userId).firstOrNull;
+    if (me?['mustChangePassword'] == true && !_asked) {
+      _asked = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) changePassword(forced: true);
+      });
+    }
+    final twoFactor = me?['twoFactor'] == true;
+    return PopupMenuButton<String>(
+      key: const Key('account-menu'),
+      tooltip: 'My account',
+      onSelected: (v) => switch (v) {
+        'password' => changePassword(),
+        'pin' => _managePin(),
+        'unlock' => _manageUnlock(),
+        'twostep' => showAppDialog<void>(context: context, builder: (_) => TwoStepDialog(session: s)),
+        'logout' => _signOut(),
+        _ => null,
+      },
+      itemBuilder: (_) => [
+        PopupMenuItem(enabled: false, child: Text('${s.userName} · ${s.role}')),
+        const PopupMenuItem(value: 'password', child: ListTile(leading: Icon(Icons.key_outlined), title: Text('Change my password'))),
+        PopupMenuItem(value: 'pin', child: ListTile(leading: Icon(_pin ? Icons.lock : Icons.lock_outline, color: _pin ? Colors.green : null), title: Text(_pin ? 'Quick PIN is set for this device' : 'Set a quick PIN for this device'))),
+        // only what this device supports (Android fingerprint / face, Windows Hello; never on the web)
+        if (_kind != UnlockKind.none || _unlock)
+          PopupMenuItem(
+              value: 'unlock',
+              child: ListTile(
+                  leading: Icon(_kind == UnlockKind.windowsHello ? Icons.face_retouching_natural : Icons.fingerprint, color: _unlock ? Colors.green : null),
+                  title: Text(_unlock ? '${unlockName(_kind)[0].toUpperCase()}${unlockName(_kind).substring(1)} is on for this device' : 'Use ${unlockName(_kind)} on this device'))),
+        if (s.token.startsWith('u.'))
+          PopupMenuItem(value: 'twostep', child: ListTile(leading: Icon(Icons.verified_user_outlined, color: twoFactor ? Colors.green : null), title: Text(twoFactor ? 'Two-step sign-in is on' : 'Two-step sign-in'))),
+        const PopupMenuItem(value: 'logout', child: ListTile(leading: Icon(Icons.logout), title: Text('Log out'))),
+      ],
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          const Icon(Icons.account_circle_outlined),
+          if (widget.showName) ...[const SizedBox(width: 6), Text(s.userName)],
+        ]),
+      ),
+    );
+  }
+}
+
+/// The account actions, shared by the account menu and the account card on This device: each asks for the current
+/// password where it changes how someone signs in (auth_repository.dart).
+mixin _AccountActions<T extends ConsumerStatefulWidget> on ConsumerState<T> {
+  bool _pin = false, _unlock = false;
+  UnlockKind _kind = UnlockKind.none; // what this device's system offers (none on the web)
+
+  Session get s;
 
   Future<void> _loadPin() async {
     final repo = ref.read(authRepositoryProvider);
@@ -222,53 +278,6 @@ class _AccountMenuState extends ConsumerState<AccountMenu> {
             ? 'Your $mine held sale${mine == 1 ? '' : 's'}/draft${mine == 1 ? '' : 's'} stay saved: continue ${mine == 1 ? 'it' : 'them'} after signing in, on any device.'
             : null;
     if (note != null) messenger.showSnackBar(SnackBar(content: Text(note)));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // staff brought over from another system set their own password on first sign-in
-    final me = ref.watch(tableProvider('users')).value?.where((u) => u['id'] == s.userId).firstOrNull;
-    if (me?['mustChangePassword'] == true && !_asked) {
-      _asked = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) changePassword(forced: true);
-      });
-    }
-    final twoFactor = me?['twoFactor'] == true;
-    return PopupMenuButton<String>(
-      key: const Key('account-menu'),
-      tooltip: 'My account',
-      onSelected: (v) => switch (v) {
-        'password' => changePassword(),
-        'pin' => _managePin(),
-        'unlock' => _manageUnlock(),
-        'twostep' => showAppDialog<void>(context: context, builder: (_) => TwoStepDialog(session: s)),
-        'logout' => _signOut(),
-        _ => null,
-      },
-      itemBuilder: (_) => [
-        PopupMenuItem(enabled: false, child: Text('${s.userName} · ${s.role}')),
-        const PopupMenuItem(value: 'password', child: ListTile(leading: Icon(Icons.key_outlined), title: Text('Change my password'))),
-        PopupMenuItem(value: 'pin', child: ListTile(leading: Icon(_pin ? Icons.lock : Icons.lock_outline, color: _pin ? Colors.green : null), title: Text(_pin ? 'Quick PIN is set for this device' : 'Set a quick PIN for this device'))),
-        // only what this device supports (Android fingerprint / face, Windows Hello; never on the web)
-        if (_kind != UnlockKind.none || _unlock)
-          PopupMenuItem(
-              value: 'unlock',
-              child: ListTile(
-                  leading: Icon(_kind == UnlockKind.windowsHello ? Icons.face_retouching_natural : Icons.fingerprint, color: _unlock ? Colors.green : null),
-                  title: Text(_unlock ? '${unlockName(_kind)[0].toUpperCase()}${unlockName(_kind).substring(1)} is on for this device' : 'Use ${unlockName(_kind)} on this device'))),
-        if (s.token.startsWith('u.'))
-          PopupMenuItem(value: 'twostep', child: ListTile(leading: Icon(Icons.verified_user_outlined, color: twoFactor ? Colors.green : null), title: Text(twoFactor ? 'Two-step sign-in is on' : 'Two-step sign-in'))),
-        const PopupMenuItem(value: 'logout', child: ListTile(leading: Icon(Icons.logout), title: Text('Log out'))),
-      ],
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          const Icon(Icons.account_circle_outlined),
-          if (widget.showName) ...[const SizedBox(width: 6), Text(s.userName)],
-        ]),
-      ),
-    );
   }
 }
 
@@ -448,4 +457,81 @@ class QrPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(QrPainter old) => old.data != data;
+}
+
+/// This device: who is signed in, how they sign in here (password, quick PIN, fingerprint / Windows Hello, two-step)
+/// and a Log out row (the owner's reference, 2026-11-16). The same actions as the account menu.
+class AccountCard extends ConsumerStatefulWidget {
+  const AccountCard({super.key, required this.session});
+  final Session session;
+  @override
+  ConsumerState<AccountCard> createState() => _AccountCardState();
+}
+
+class _AccountCardState extends ConsumerState<AccountCard> with _AccountActions<AccountCard> {
+  @override
+  Session get s => widget.session;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPin();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    final me = ref.watch(tableProvider('users')).value?.where((u) => u['id'] == s.userId).firstOrNull;
+    final initials = s.userName.trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).take(2).map((w) => w[0].toUpperCase()).join();
+    final name = unlockName(_kind);
+    Widget action(Key key, IconData icon, String label, VoidCallback onTap, {bool on = false}) =>
+        OutlinedButton.icon(key: key, onPressed: onTap, icon: Icon(icon, color: on ? Colors.green.shade700 : null), label: Text(label));
+    return Card(
+      key: const Key('account-card'),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Row(children: [
+            CircleAvatar(radius: 26, backgroundColor: t.colorScheme.primaryContainer, child: Text(initials, style: TextStyle(fontWeight: FontWeight.w800, color: t.colorScheme.onPrimaryContainer))),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(s.userName, style: t.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800), maxLines: 2, overflow: TextOverflow.ellipsis),
+                Text([if (s.email.isNotEmpty) s.email, s.role].join(' · '), style: t.textTheme.bodySmall),
+              ]),
+            ),
+          ]),
+          const SizedBox(height: 12),
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            action(const Key('card-password'), Icons.key_outlined, 'Change password', () => changePassword()),
+            action(const Key('card-pin'), _pin ? Icons.lock : Icons.lock_outline, _pin ? 'Quick PIN is set' : 'Set a quick PIN', _managePin, on: _pin),
+            if (_kind != UnlockKind.none || _unlock)
+              action(const Key('card-unlock'), _kind == UnlockKind.windowsHello ? Icons.face_retouching_natural : Icons.fingerprint,
+                  _unlock ? '${name[0].toUpperCase()}${name.substring(1)} is on' : 'Use $name', _manageUnlock, on: _unlock),
+            if (s.token.startsWith('u.'))
+              action(const Key('card-twostep'), Icons.verified_user_outlined, me?['twoFactor'] == true ? 'Two-step sign-in is on' : 'Two-step sign-in',
+                  () => showAppDialog<void>(context: context, builder: (_) => TwoStepDialog(session: s)), on: me?['twoFactor'] == true),
+          ]),
+          const SizedBox(height: 12),
+          Material(
+            color: t.colorScheme.errorContainer.withValues(alpha: .55),
+            borderRadius: BorderRadius.circular(12),
+            child: InkWell(
+              key: const Key('card-logout'),
+              borderRadius: BorderRadius.circular(12),
+              onTap: _signOut,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                child: Row(children: [
+                  Icon(Icons.logout, color: t.colorScheme.error),
+                  const SizedBox(width: 10),
+                  Text('Log out', style: TextStyle(color: t.colorScheme.error, fontWeight: FontWeight.w700)),
+                ]),
+              ),
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
 }

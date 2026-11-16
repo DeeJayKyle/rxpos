@@ -19,6 +19,8 @@ import '../../../core/sync/sync_config.dart';
 import '../../../core/theme/theme_choice.dart';
 import '../../sync_status/application/sync_controller.dart';
 import '../../../core/update/app_updates.dart';
+import '../../auth/application/session_controller.dart' show sessionControllerProvider;
+import '../../auth/presentation/account_menu.dart' show AccountCard;
 import 'font_picker.dart';
 import 'keyboard_settings.dart';
 import '../../../widgets/ai_system_doctor_card.dart';
@@ -278,13 +280,17 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
       title: 'This device',
       subtitle: 'Only changes this ${onAndroid ? 'phone or tablet' : 'computer'}. Everyone else keeps their own setup.',
       scroll: true,
-      child: wide
-          ? Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Expanded(child: Column(children: [for (var i = 0; i < cards.length; i += 2) cards[i]])),
-              const SizedBox(width: 12),
-              Expanded(child: Column(children: [for (var i = 1; i < cards.length; i += 2) cards[i]])),
-            ])
-          : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: cards),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        // who is signed in, how they sign in on this device, and Log out
+        if (ref.watch(sessionControllerProvider).value case final session?) ...[AccountCard(session: session), const SizedBox(height: 12)],
+        wide
+            ? Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Expanded(child: Column(children: [for (var i = 0; i < cards.length; i += 2) cards[i]])),
+                const SizedBox(width: 12),
+                Expanded(child: Column(children: [for (var i = 1; i < cards.length; i += 2) cards[i]])),
+              ])
+            : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: cards),
+      ]),
     );
   }
 }

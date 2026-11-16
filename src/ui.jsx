@@ -529,3 +529,12 @@ export function useProgressive(total, first = 60, step = 80) {
   }, [total, n, step]);
   return Math.min(n, total);
 }
+
+/** A status in words, an icon and a colour (never colour alone): purchase orders and other records with a stage */
+const STATUS_LOOK = {
+  Draft: ['warn', '✎'], Sent: ['info', '➤'], Received: ['ok', '✓'], Pending: ['warn', '•'], Paid: ['ok', '✓'], Owing: ['warn', '!'], Refunded: ['muted', '↺'], Cancelled: ['muted', '×'],
+};
+export function StatusPill({ status }) {
+  const [tone, mark] = STATUS_LOOK[status] || ['muted', '•'];
+  return <span className={'status-pill ' + tone} data-status={status}><span aria-hidden="true">{mark}</span> {status}</span>;
+}
