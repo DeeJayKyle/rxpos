@@ -292,13 +292,21 @@ class TwoStepDialog extends ConsumerStatefulWidget {
 class _TwoStepDialogState extends ConsumerState<TwoStepDialog> {
   String _stage = 'loading', _error = '', _uri = '', _secret = '';
   bool _busy = false;
+  // 2026-11 audit: one-time recovery codes, shown once after switching on or asking for new ones
+  List<String> _codes = const [];
+  int? _left;
   final _code = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     ref.read(cloudApiProvider).get('/api/2fa').then((r) {
-      if (mounted) setState(() => _stage = r['enabled'] == true ? 'on' : 'off');
+      if (mounted) {
+        setState(() {
+          _stage = r['enabled'] == true ? 'on' : 'off';
+          _left = (r['recoveryLeft'] as num?)?.toInt();
+        });
+      }
     }, onError: (Object e) {
       if (mounted) {
         setState(() {
@@ -395,26 +403,59 @@ class _TwoStepDialogState extends ConsumerState<TwoStepDialog> {
             onPressed: _busy || _code.text.length != 6
                 ? null
                 : () => _go(() async {
-                      await _post('/enable', {'code': _code.text});
+                      final r = await _post('/enable', {'code': _code.text});
                       await ref.read(recordStoreProvider).db.into(ref.read(recordStoreProvider).db.kv).insertOnConflictUpdate(
                             KvCompanion.insert(k: trustKey(s.tenant, s.userId), v: '1'),
                           );
-                      setState(() => _stage = 'on');
+                      setState(() {
+                        _codes = [for (final c in (r['recovery'] as List?) ?? const []) '$c'];
+                        _stage = _codes.isEmpty ? 'on' : 'codes';
+                      });
                       _code.clear();
                       if (context.mounted) say(context, 'Two-step sign-in is on. Signing in on a new device will ask for a code.');
                     }),
             child: const Text('Switch on'),
           ),
         ]);
+      case 'codes':
+        body = Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          const Text('Two-step sign-in is on. Keep these recovery codes somewhere safe (print them or write them down): each one signs you in once if you lose your phone. They are shown only now.'),
+          const SizedBox(height: 10),
+          SelectableText(_codes.join('\n'), key: const Key('twostep-recovery'), textAlign: TextAlign.center, style: const TextStyle(fontSize: 16, height: 1.6, fontFamily: 'monospace')),
+        ]);
+        actions.addAll([
+          TextButton(onPressed: () => Clipboard.setData(ClipboardData(text: _codes.join('\n'))), child: const Text('Copy')),
+          FilledButton(
+            onPressed: () => setState(() {
+              _left = _codes.length;
+              _stage = 'on';
+            }),
+            child: const Text('I have kept them'),
+          ),
+        ]);
       default: // on
         body = Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           const Row(children: [Icon(Icons.verified_user, color: Colors.green), SizedBox(width: 6), Expanded(child: Text('Two-step sign-in is on for your account.'))]),
           const SizedBox(height: 8),
-          Text('To switch it off (or move it to a new phone), type a current code from the app:', style: t.textTheme.bodySmall),
+          if (_left != null) Text('$_left recovery code${_left == 1 ? '' : 's'} left.', style: t.textTheme.bodySmall),
+          Text('To switch it off (or move it to a new phone), or to get new recovery codes, type a current code from the app:', style: t.textTheme.bodySmall),
           _codeBox(),
         ]);
         actions.addAll([
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+          TextButton(
+            onPressed: _busy || _code.text.length != 6
+                ? null
+                : () => _go(() async {
+                      final r = await _post('/recovery', {'code': _code.text});
+                      setState(() {
+                        _codes = [for (final c in (r['recovery'] as List?) ?? const []) '$c'];
+                        _stage = 'codes';
+                      });
+                      _code.clear();
+                    }),
+            child: const Text('New recovery codes'),
+          ),
           FilledButton.icon(
             style: FilledButton.styleFrom(backgroundColor: t.colorScheme.error),
             onPressed: _busy || _code.text.length != 6

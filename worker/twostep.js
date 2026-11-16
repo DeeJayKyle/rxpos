@@ -35,7 +35,39 @@ export async function totpCheck(secret, code, after = 0, now = Date.now()) {
   return -1;
 }
 
-export const twoStepDdl = 'CREATE TABLE twofa (tenant TEXT NOT NULL, uid TEXT NOT NULL, secret TEXT, pending TEXT, enabled INTEGER NOT NULL DEFAULT 0, last_step INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (tenant, uid))';
+export const twoStepDdl = 'CREATE TABLE twofa (tenant TEXT NOT NULL, uid TEXT NOT NULL, secret TEXT, pending TEXT, enabled INTEGER NOT NULL DEFAULT 0, last_step INTEGER NOT NULL DEFAULT 0, recovery TEXT, PRIMARY KEY (tenant, uid))';
+
+// ---------- recovery codes (2026-11 audit) ----------
+// Ten one-time codes given when two-step sign-in is switched on (and on request): each signs in once instead of the
+// app's code, so a lost phone doesn't always need an administrator. Only their SHA-256 is kept (column `recovery`, a
+// JSON list); a code is 10 letters/digits from an alphabet without look-alikes, shown as XXXXX-XXXXX (about 50 bits:
+// guessing is hopeless at five tries before the sign-in lock).
+const RC_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+const normRc = (c) => String(c || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+const rcHash = async (tenant, uid, code) => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`rc:${tenant}:${uid}:${normRc(code)}`)))].map((b) => b.toString(16).padStart(2, '0')).join('');
+/** → { codes (to show once), hashes (to keep) } */
+export async function newRecoveryCodes(tenant, uid, n = 10) {
+  const codes = [];
+  for (let i = 0; i < n; i++) {
+    const r = crypto.getRandomValues(new Uint8Array(10));
+    const c = [...r].map((b) => RC_ALPHABET[b % RC_ALPHABET.length]).join('');
+    codes.push(c.slice(0, 5) + '-' + c.slice(5));
+  }
+  return { codes, hashes: await Promise.all(codes.map((c) => rcHash(tenant, uid, c))) };
+}
+/** Is this a recovery code (not a 6-digit app code)? */
+export const looksLikeRecovery = (code) => normRc(code).length === 10;
+/** If `code` is one of the person's unused recovery codes, use it up and return true */
+export async function useRecoveryCode(env, tenant, uid, row, code) {
+  let list;
+  try { list = JSON.parse(row?.recovery || '[]'); } catch { list = []; }
+  const h = await rcHash(tenant, uid, code);
+  if (!list.includes(h)) return false;
+  // the WHERE makes it single-use even if two sign-ins race with the same code
+  const r = await env.DB.prepare('UPDATE twofa SET recovery = ?3 WHERE tenant = ?1 AND uid = ?2 AND recovery = ?4').bind(tenant, uid, JSON.stringify(list.filter((x) => x !== h)), row.recovery).run();
+  return (r.meta?.changes || 0) > 0;
+}
+const recoveryLeft = (row) => { try { return JSON.parse(row?.recovery || '[]').length; } catch { return 0; } };
 export const twoStepOf = (env, tenant, uid) => env.DB.prepare('SELECT * FROM twofa WHERE tenant = ?1 AND uid = ?2').bind(tenant, uid).first();
 export const markUsed = (env, tenant, uid, step) => env.DB.prepare('UPDATE twofa SET last_step = ?3 WHERE tenant = ?1 AND uid = ?2').bind(tenant, uid, step).run();
 
@@ -57,7 +89,7 @@ export async function twoStepRoutes(env, req, path, body, who, { json, roleCan, 
     if (u && !!u.twoFactor !== on) await serverWriteMany(env, tenant, [{ t: 'users', id: uid, rec: { ...u, twoFactor: on } }, audit(on ? 'Two-step sign-in switched on' : 'Two-step sign-in switched off', u.name)]);
   };
   const row = await twoStepOf(env, tenant, who.uid);
-  if (path === '/api/2fa' && req.method === 'GET') return json({ enabled: !!row?.enabled });
+  if (path === '/api/2fa' && req.method === 'GET') return json({ enabled: !!row?.enabled, recoveryLeft: row?.enabled ? recoveryLeft(row) : 0 });
   if (path === '/api/2fa/setup' && req.method === 'POST') {
     if (row?.enabled) return json({ error: 'Two-step sign-in is already on. Switch it off first to move it to a new phone.' }, 409);
     const secret = b32encode(crypto.getRandomValues(new Uint8Array(20)));
@@ -69,9 +101,20 @@ export async function twoStepRoutes(env, req, path, body, who, { json, roleCan, 
   if (path === '/api/2fa/enable' && req.method === 'POST') {
     const step = await totpCheck(row?.pending, body?.code);
     if (step < 0) return json({ error: 'That code is not right. Check the time on the phone is correct and type the newest code.' }, 400);
-    await db.prepare('UPDATE twofa SET secret = pending, pending = NULL, enabled = 1, last_step = ?3 WHERE tenant = ?1 AND uid = ?2').bind(tenant, who.uid, step).run();
+    const rc = await newRecoveryCodes(tenant, who.uid);
+    await db.prepare('UPDATE twofa SET secret = pending, pending = NULL, enabled = 1, last_step = ?3, recovery = ?4 WHERE tenant = ?1 AND uid = ?2').bind(tenant, who.uid, step, JSON.stringify(rc.hashes)).run();
     await flag(who.uid, true);
-    return json({ enabled: true });
+    return json({ enabled: true, recovery: rc.codes });
+  }
+  // a new set of recovery codes (the old ones stop working), with a current code from the app
+  if (path === '/api/2fa/recovery' && req.method === 'POST') {
+    if (!row?.enabled) return json({ error: 'Two-step sign-in is off.' }, 400);
+    const step = await totpCheck(row.secret, body?.code, row.last_step);
+    if (step < 0) return json({ error: 'That code is not right.' }, 400);
+    const rc = await newRecoveryCodes(tenant, who.uid);
+    await db.prepare('UPDATE twofa SET recovery = ?3, last_step = ?4 WHERE tenant = ?1 AND uid = ?2').bind(tenant, who.uid, JSON.stringify(rc.hashes), step).run();
+    await serverWriteMany(env, tenant, [audit('New two-step recovery codes made', who.name || '')]);
+    return json({ recovery: rc.codes });
   }
   if (path === '/api/2fa/disable' && req.method === 'POST') {
     if (!row?.enabled) return json({ enabled: false });
@@ -85,8 +128,16 @@ export async function twoStepRoutes(env, req, path, body, who, { json, roleCan, 
     if (!(await roleCan(env, tenant, who.role, 'users.manage'))) return json({ error: 'Only administrators' }, 403);
     if (path === '/api/2fa/users') return json({ enabled: (await db.prepare('SELECT uid FROM twofa WHERE tenant = ?1 AND enabled = 1').bind(tenant).all()).results.map((r) => r.uid) });
     if (req.method !== 'POST' || !body?.uid) return json({ error: 'Bad request' }, 400);
-    await db.prepare('DELETE FROM twofa WHERE tenant = ?1 AND uid = ?2').bind(tenant, String(body.uid)).run();
-    await flag(String(body.uid), false);
+    const uid = String(body.uid);
+    const target = await existingRec(db, tenant, 'users', uid);
+    if (!target) return json({ error: 'No such staff member' }, 404);
+    // 2026-11 audit: anyone with "Manage users" (a manager, by default) could switch off an ADMINISTRATOR's two-step
+    // sign-in, the protection that matters most. Only an administrator may, as for every other change to an
+    // administrator's account (worker/index.js adminChangeRefused); the RxPOS owner can from the owner console.
+    if (target.role === 'admin' && who.role !== 'admin') return json({ error: 'Only an administrator (or your RxPOS provider) can reset an administrator\'s two-step sign-in.' }, 403);
+    await db.prepare('DELETE FROM twofa WHERE tenant = ?1 AND uid = ?2').bind(tenant, uid).run();
+    if (target.twoFactor) await flag(uid, false);
+    await serverWriteMany(env, tenant, [audit('Two-step sign-in reset', `${target.name || uid} · by ${who.name || 'an administrator'}`)]);
     return json({ ok: true });
   }
   return json({ error: 'Not found' }, 404);

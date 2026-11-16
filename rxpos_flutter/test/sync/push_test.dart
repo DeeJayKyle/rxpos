@@ -95,6 +95,38 @@ void main() {
     await a.db.close();
   });
 
+  test('2026-11 audit: an edit older than the cloud\'s copy is listed for review and the cloud\'s copy comes back', () async {
+    final a = Device(cloud, 'A');
+    await a.store.update((d) => d.put('customers', {'id': 'c9', 'name': 'From this device'}));
+    // someone else's newer copy is already in the cloud (this device's clock is behind)
+    cloud.add('customers', 'c9', {'id': 'c9', 'name': 'Newer in the cloud'}, '2999-01-01T00:00:00.000Z');
+    await a.sync.run();
+    final rejected = await a.db.select(a.db.rejectedOps).get();
+    expect(rejected.single.id, 'c9');
+    expect(rejected.single.reason, contains('newer copy'));
+    expect(await a.waiting(), 0);
+    final local = await a.db.select(a.db.records).get();
+    expect(local.where((r) => r.id == 'c9').single.json, contains('Newer in the cloud'));
+    await a.db.close();
+  });
+
+  test('2026-11 audit: when the role view widens the device downloads everything again', () async {
+    final a = Device(cloud, 'A');
+    cloud.view = 'hcfpa';
+    await a.sync.run();
+    expect((await SyncConfig.load(a.db)).view, 'hcfpa');
+    cloud.view = 'hc'; // a manager synced from this device: finance and deliveries now come too
+    await a.sync.run();
+    final cfg = await SyncConfig.load(a.db);
+    expect(cfg.view, 'hc');
+    expect(cfg.needsFullPull, isTrue, reason: 'their older records are behind the cursor');
+    cloud.view = 'hcfpa'; // narrower again: nothing to download
+    expect(SyncConfig.widened('hc', 'hcfpa'), isFalse);
+    expect(SyncConfig.widened('hcfpa', 'all'), isTrue);
+    expect(SyncConfig.widened(null, 'all'), isFalse);
+    await a.db.close();
+  });
+
   test('two devices selling the same medicine offline: both sales count everywhere', () async {
     final a = Device(cloud, 'A'), b = Device(cloud, 'B');
     cloud.add('products', 'p1', {'name': 'Amoxyl'}, '2026-11-01T00:00:00.000Z');

@@ -6,7 +6,7 @@ import { featureSet, permissionsOf } from './access.js';
 import { platformName } from './platform.js';
 import { endWebSession, isLeaving, keepsData } from './webpolicy.js';
 import { connectLive, disconnectLive, onLive } from './live.js';
-import { DEFAULT_CLOUD, tillNumber } from './cloud.js';
+import { DEFAULT_CLOUD, tillNumber, cloudLogout } from './cloud.js';
 import { nextNumber } from './docnumbers.js';
 import { clientOwes } from './insurance.js';
 import { windowSums } from './balances.js';
@@ -607,7 +607,9 @@ export function StoreProvider({ children }) {
         else if (remember === false) localStorage.removeItem(REMEMBER_KEY);
       } else { sessionStorage.removeItem(SESSION_KEY); localStorage.removeItem(REMEMBER_KEY); } // signing out always forgets
     } catch { /* storage blocked */ }
-    if (!u && !keepsData()) { endWebSession(); return true; } // clear this tab and start clean (nothing stays on the computer)
+    // the web version keeps nothing, so its sign-in pass is ended in the cloud too (2026-11 audit); the apps keep their
+    // link so the till keeps syncing for whoever signs in next, offline included
+    if (!u && !keepsData()) { if (cfgRef.current?.key?.startsWith('u.')) await cloudLogout(cfgRef.current).catch(() => {}); endWebSession(); return true; } // clear this tab and start clean (nothing stays on the computer)
     if (u && !user) update((d) => audit(d, u, 'Signed in', platformName, branchId));
     setUserState(u);
     return true;

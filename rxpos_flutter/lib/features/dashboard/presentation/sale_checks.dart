@@ -20,6 +20,9 @@ const saleCheckKinds = {
   'discount-limit': 'Discount above the role\'s limit',
   'closed-refund': 'Refund from a closed day',
   'insurance': 'Insurance split doesn’t add up',
+  'proforma': 'Proforma doesn’t match',
+  'stock': 'Stock doesn’t match the sale',
+  'stale': 'Older change not applied',
 };
 
 class SaleChecksCard extends ConsumerWidget {

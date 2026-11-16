@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { UserPlus, ShieldCheck, KeyRound, Trash2, Plus, Copy } from 'lucide-react';
+import { UserPlus, ShieldCheck, KeyRound, Trash2, Plus, Copy, LogOut } from 'lucide-react';
 import { useStore, makePassword, uid, put, del, audit, normalizePhone } from '../store.jsx';
 import { PERMISSIONS, rolesOf, DEFAULT_ROLES } from '../access.js';
 import { Modal, Tabs, Empty } from '../ui.jsx';
 import { ask, askText, toast } from '../feedback.jsx';
-import { twoStep } from '../cloud.js';
+import { twoStep, endSessionsOf } from '../cloud.js';
 import { PasswordInput } from '../password.jsx';
 
 /** Staff accounts and roles. Every person signs in with their own email; roles decide what they can do. */
@@ -42,12 +42,17 @@ export default function Users() {
     if (!(await ask({ title: `Switch off two-step sign-in for ${u.name}?`, message: 'Only if they lost their phone. They sign in with the password and can set it up again.', confirmText: 'Switch off', danger: true }))) return;
     try { await twoStep(syncCfg, '/reset', { uid: u.id }); toast(`Two-step sign-in switched off for ${u.name}`); } catch (e) { toast(e.message, 'error'); }
   };
+  // 2026-11 audit: end every sign-in of a staff member (a lost phone, someone who left); their account stays
+  const signOutEverywhere = async (u) => {
+    if (!(await ask({ title: `Sign ${u.name} out on every device?`, message: 'Every phone, computer and browser signed in as them needs their password again. A till that syncs as them stops syncing until someone signs in on it with the internet; nothing on it is lost.', confirmText: 'Sign out everywhere', danger: true }))) return;
+    try { await endSessionsOf(syncCfg, u.id); toast(`${u.name} is signed out on every device`); } catch (e) { toast(e.message, 'error'); }
+  };
   const resetPassword = async (u) => {
     const pw = await askText({ title: `New password for ${u.name}`, type: 'password', minLength: 8, confirmText: 'Set password' });
     if (!pw) return;
     const fields = await makePassword(pw);
     update((d) => { put(d, 'users', { ...u, ...fields }); audit(d, user, 'Password reset', u.name, branchId); });
-    toast('Password updated. Tell the user their new password.');
+    toast('Password updated: they are signed out on their other devices. Tell them their new password.');
   };
 
   const removeUser = async (u) => {
@@ -103,7 +108,8 @@ export default function Users() {
                     <button className="btn sm ghost" onClick={() => resetPassword(u)}><KeyRound size={14} />Password</button>
                     </>}
                     {u.id !== user.id && !isAdminRow(u) && <button className="btn sm ghost" onClick={() => update((d) => { put(d, 'users', { ...u, disabled: !u.disabled }); audit(d, user, u.disabled ? 'User enabled' : 'User disabled', u.name, branchId); })}>{u.disabled ? 'Enable' : 'Disable'}</button>}
-                    {u.twoFactor && u.id !== user.id && <button className="btn sm ghost" title="They lost their phone: switch two-step sign-in off so they can sign in with the password, then set it up again" onClick={() => resetTwoStep(u)}>Reset 2-step</button>}
+                    {u.id !== user.id && syncCfg?.key?.startsWith('u.') && (!isAdminRow(u) || user.role === 'admin') && <button className="btn sm ghost" title="Sign out on every device" onClick={() => signOutEverywhere(u)}><LogOut size={14} /></button>}
+                    {u.twoFactor && u.id !== user.id && (!isAdminRow(u) || user.role === 'admin') && <button className="btn sm ghost" title="They lost their phone: switch two-step sign-in off so they can sign in with the password, then set it up again" onClick={() => resetTwoStep(u)}>Reset 2-step</button>}
                     {u.id !== user.id && !isAdminRow(u) && <button className="btn sm danger" title="Delete" onClick={() => removeUser(u)}><Trash2 size={14} /></button>}
                   </td>
                 </tr>

@@ -20,6 +20,7 @@ import { liveUp } from './live.js';
 import { LIVE_CLOUD, OWN_SITES } from './cloud.js';
 import { WINDOWED, recordDate } from './historywindow.js';
 import { isWeb } from './platform.js';
+import { plainHttpToInternet, INSECURE_LINK } from '../server/netaddr.js';
 
 const ACTIVE = 5000; // no live connection, app in use
 const LIVE_SAFETY = 30000; // live connection up: slow safety-net pull only
@@ -57,6 +58,7 @@ export function collectChanges(db, since) {
 }
 
 async function post(url, key, body) {
+  if (plainHttpToInternet(url)) throw new Error(INSECURE_LINK); // 2026-11 audit: no sign-in pass over plain http to the internet
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), 45000);
   try {
@@ -123,13 +125,16 @@ export function windowStart(months, now = new Date()) {
 }
 
 /** The cloud's brought-forward figures at window start W (null when it has none: a hub or an older cloud) */
-async function fetchBalances(url, key, W) {
-  const res = await fetch(apiBase(url) + '/api/balances', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key }, body: JSON.stringify({ window: W }) });
+async function fetchBalances(url, key, W, deviceId) {
+  const res = await fetch(apiBase(url) + '/api/balances', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key }, body: JSON.stringify({ window: W, deviceId }) });
   if (res.status === 404) return null; // this cloud has none
   const j = res.ok ? await res.json().catch(() => null) : null;
   if (!(j && j.W === W && Array.isArray(j.stock))) throw new Error(`Cloud replied ${res.status}`);
   return j;
 }
+
+/** Does the view `next` show any table `before` hid? Views are the codes of the hidden groups ('all' = none hidden) */
+export const widened = (before, next) => { const hid = (v) => (v === 'all' ? '' : String(v || '')); return [...hid(before)].some((c) => !hid(next).includes(c)); };
 
 /** Outbox entries in request-sized groups, never splitting one action (txn) unless it alone is too big */
 export function groupOutbox(entries, max = PUSH_BATCH) {
@@ -215,7 +220,7 @@ export function createSync({ getDb, getCfg, saveCfg, applyRemote, onStatus, stor
       // whatever changed meanwhile, from where the core ended. A cloud without phases sends everything at once.
       if (full && !c.fullInProgress) await saveCfg({ ...getCfg(), cursor: 0, fullInProgress: true, phase: 'core', coreCursor: 0, cutoff: new Date(Date.now() - CORE_DAYS * 864e5).toISOString().slice(0, 10) + 'T00:00:00.000Z' }); // whole days (stage 3 chunks)
       let phase = full ? getCfg().phase || null : null; // a download begun by an older version carries on without phases
-      let cursor = full ? getCfg().cursor || 0 : c.cursor || 0, epoch = c.epoch, i = 0, sent = 0, pulled = 0, refused = 0;
+      let cursor = full ? getCfg().cursor || 0 : c.cursor || 0, epoch = c.epoch, i = 0, sent = 0, pulled = 0, refused = 0, stale = 0, clockSkew = 0;
       // Faster sync, stage 1 (docs/SYNC-SPEED-PLAN.md): downloaded pages are applied and saved in batches (FLUSH records
       // or every FLUSH_MS) instead of one by one, since each save rewrites the storage buckets it touches and redraws
       // the app; and while a batch is being saved, the next page is already on its way. The sync position is saved only
@@ -268,10 +273,16 @@ export function createSync({ getDb, getCfg, saveCfg, applyRemote, onStatus, stor
           // the request was applied as a whole: refused changes are kept for review, the rest leave the outbox
           if (batch.length) {
             const no = new Set(r.refusedKeys || []);
+            // 2026-11 audit: changes the cloud kept its newer copy over (this device's clock is behind, or someone
+            // changed the record later). The reply carries the cloud's copy, which is now on this device; the change
+            // that lost is listed on This device so it is not lost silently (and the owner sees it as a sale check).
+            const late = new Set((r.staleKeys || []).filter((k) => !no.has(k)));
             const bad = batch.filter((e) => no.has(e.t + '|' + e.id));
+            const older = batch.filter((e) => late.has(e.t + '|' + e.id));
             if (bad.length) await store.reject(bad, 'Refused by the cloud: no permission for this change, or it is too large.');
-            await store.ack(batch.filter((e) => !no.has(e.t + '|' + e.id)).map((e) => e.key));
-            sent += batch.length; refused += bad.length;
+            if (older.length) await store.reject(older, "Not applied: the cloud has a newer copy of this record (is this device's clock behind?). The cloud's copy is now on this device.");
+            await store.ack(batch.filter((e) => !no.has(e.t + '|' + e.id) && !late.has(e.t + '|' + e.id)).map((e) => e.key));
+            sent += batch.length; refused += bad.length; stale += older.length;
           }
           // 1.4 the cloud was restored from a backup: its database epoch changed, so re-pull everything from the start
           // and merge (last-writer-wins). Restored rows keep their old sequence numbers, below this device's cursor.
@@ -287,6 +298,15 @@ export function createSync({ getDb, getCfg, saveCfg, applyRemote, onStatus, stor
           // a cloud without phases ignored the phase and sent everything in order: carry on as one plain download
           if ((phase === 'core' || phase === 'history') && r.phase !== phase) { phase = null; await saveCfg({ ...getCfg(), phase: null }); }
           epoch = r.epoch ?? epoch;
+          // how far this device's clock is from the cloud's (its edits are timed by it: one far behind loses them)
+          if (typeof r.serverTime === 'number') clockSkew = Date.now() - r.serverTime;
+          // 2026-11 audit: the cloud sends each role only the tables it uses. When this person's role now receives
+          // more (a promotion, a changed role), the records they didn't get before are behind the cursor: start again
+          if (typeof r.view === 'string' && getCfg().view !== r.view) {
+            const before = getCfg().view;
+            await saveCfg({ ...getCfg(), view: r.view, ...(before && widened(before, r.view) ? { fullPull: 0, fullInProgress: false, balances: null } : {}) });
+            if (before && widened(before, r.view)) again = true;
+          }
           cursor = Number(r.cursor);
           const sending = i < batches.length;
           // only downloading, and more to come: ask for the next page now, so it travels while this batch is saved
@@ -312,7 +332,7 @@ export function createSync({ getDb, getCfg, saveCfg, applyRemote, onStatus, stor
       {
         const cc = getCfg();
         if (cc.window && (needBalances || cc.balances?.W !== cc.window)) {
-          const bf = await fetchBalances(c.url, c.key, cc.window).catch(() => undefined); // undefined: try again next time
+          const bf = await fetchBalances(c.url, c.key, cc.window, c.deviceId).catch(() => undefined); // undefined: try again next time
           if (bf) await saveCfg({ ...getCfg(), balances: bf });
           // a cloud or hub without them: this device keeps everything (downloaded again in full, merged)
           else if (bf === null) await saveCfg({ ...getCfg(), window: '', historyMonths: 0, balances: null, fullPull: 0, fullInProgress: false });
@@ -333,7 +353,7 @@ export function createSync({ getDb, getCfg, saveCfg, applyRemote, onStatus, stor
       await saveCfg(next);
       failures = 0; retryAt = 0;
       const pendingBf = !!next.window && next.balances?.W !== next.window; // stage 4: balances not complete yet
-      result = { state: 'ok', lastSync: next.lastSync, pushed: sent, pulled, refused, ...(pendingBf ? { balancesPending: true } : {}), ...(await counts()) };
+      result = { state: 'ok', lastSync: next.lastSync, pushed: sent, pulled, refused, stale, clockSkew, ...(pendingBf ? { balancesPending: true } : {}), ...(await counts()) };
     } catch (e) {
       failures++;
       const expired = e.status === 401;

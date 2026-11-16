@@ -64,23 +64,36 @@ async function checkPassword(env, cfg, pw) {
  * only when nothing else matched, so the owner's own staff sign-ins never lock the owner out).
  * → { match: true, token } | { locked: true } | { owner: true } (owner email, wrong password) | null (not the owner's email)
  */
-export async function ownerMainLogin(env, email, password) {
+// 2026-11 audit: wrong owner passwords are counted per address (5, then 15 minutes), plus a slower lock for everyone
+// after 50 in 15 minutes. Before, one shared counter let anyone lock the owner out with five wrong tries.
+const lockKey = (ip) => 'owner:' + String(ip || 'noip').slice(0, 64);
+const GLOBAL = 'owner:*', GLOBAL_FAILS = 50;
+async function ownerLocked(db, ip) {
+  const { results } = await db.prepare('SELECT email, n, until FROM login_fail WHERE email IN (?1, ?2)').bind(lockKey(ip), GLOBAL).all();
+  return (results || []).find((r) => r.until > Date.now()) || null;
+}
+async function ownerFail(db, ip) {
+  for (const [k, max] of [[lockKey(ip), MAX_FAILS], [GLOBAL, GLOBAL_FAILS]]) {
+    const fail = await db.prepare('SELECT n, until FROM login_fail WHERE email = ?1').bind(k).first();
+    const n = (fail && fail.until <= Date.now() && fail.until > 0 ? 0 : fail?.n || 0) + 1;
+    const until = n >= max ? Date.now() + LOCK_MINUTES * 60000 : 0;
+    await db.prepare('INSERT INTO login_fail (email, n, until) VALUES (?1, ?2, ?3) ON CONFLICT(email) DO UPDATE SET n = ?2, until = ?3').bind(k, until ? 0 : n, until).run();
+    if (k !== GLOBAL && until) return true;
+  }
+  return false;
+}
+
+export async function ownerMainLogin(env, email, password, ip) {
   if (!env.OWNER_KEY || env.OWNER_KEY.length < 20) return null;
   const cfg = await getConfig(env.DB);
   if (!cfg.email || !cfg.pw || String(email || '').trim().toLowerCase() !== cfg.email.toLowerCase()) return null;
-  const fail = await env.DB.prepare('SELECT n, until FROM login_fail WHERE email = ?1').bind('owner:').first();
-  if (fail && fail.until > Date.now()) return { locked: true };
+  if (await ownerLocked(env.DB, ip)) return { locked: true };
   if (!(await checkPassword(env, cfg, String(password || '')))) return { owner: true };
-  if (fail) await env.DB.prepare('DELETE FROM login_fail WHERE email = ?1').bind('owner:').run();
+  await env.DB.prepare('DELETE FROM login_fail WHERE email = ?1').bind(lockKey(ip)).run();
   return { match: true, token: await ownerSession(env, 'password') };
 }
 /** Count a wrong owner password tried on the main page */
-export async function ownerMainFail(env) {
-  const fail = await env.DB.prepare('SELECT n, until FROM login_fail WHERE email = ?1').bind('owner:').first();
-  const n = (fail && fail.until <= Date.now() && fail.until > 0 ? 0 : fail?.n || 0) + 1;
-  const until = n >= MAX_FAILS ? Date.now() + LOCK_MINUTES * 60000 : 0;
-  await env.DB.prepare('INSERT INTO login_fail (email, n, until) VALUES (?1, ?2, ?3) ON CONFLICT(email) DO UPDATE SET n = ?2, until = ?3').bind('owner:', until ? 0 : n, until).run();
-}
+export async function ownerMainFail(env, ip) { await ownerFail(env.DB, ip); }
 
 // ---------- Google: verify the ID token from "Sign in with Google" ----------
 let googleKeys = null;
@@ -116,22 +129,20 @@ export async function ownerAuthRoutes(env, req, url, body, { json, safeEqual }) 
   }
 
   if (path === '/login' && req.method === 'POST') {
-    const lock = 'owner:';
-    const fail = await db.prepare('SELECT n, until FROM login_fail WHERE email = ?1').bind(lock).first();
+    const ip = req.headers.get('CF-Connecting-IP') || 'noip';
+    const fail = await ownerLocked(db, ip);
     const secret = String(body.password || '');
     // The master key (long and random) always works, even during a lock: it is the emergency way back in
     const master = safeEqual(secret, env.OWNER_KEY);
-    if (!master && fail && fail.until > Date.now()) return json({ error: `Too many wrong tries. Try again in ${Math.ceil((fail.until - Date.now()) / 60000)} minutes, sign in with Google / GitHub, or use the master key.` }, 429);
+    if (!master && fail) return json({ error: `Too many wrong tries. Try again in ${Math.ceil((fail.until - Date.now()) / 60000)} minutes, sign in with Google / GitHub, or use the master key.` }, 429);
     let via = null;
     if (master) via = 'master key';
     else if (await checkPassword(env, cfg, secret)) via = 'password';
     if (!via) {
-      const n = (fail && fail.until <= Date.now() && fail.until > 0 ? 0 : fail?.n || 0) + 1;
-      const until = n >= MAX_FAILS ? Date.now() + LOCK_MINUTES * 60000 : 0;
-      await db.prepare('INSERT INTO login_fail (email, n, until) VALUES (?1, ?2, ?3) ON CONFLICT(email) DO UPDATE SET n = ?2, until = ?3').bind(lock, until ? 0 : n, until).run();
+      const until = await ownerFail(db, ip);
       return json({ error: until ? `Too many wrong tries. Locked for ${LOCK_MINUTES} minutes; use Google / GitHub to sign in.` : cfg.pw ? 'Wrong password.' : 'Wrong owner key.' }, until ? 429 : 401);
     }
-    if (fail) await db.prepare('DELETE FROM login_fail WHERE email = ?1').bind(lock).run();
+    await db.prepare('DELETE FROM login_fail WHERE email = ?1').bind(lockKey(ip)).run();
     return json({ token: await ownerSession(env, via), via, mustSetPassword: !cfg.pw });
   }
 

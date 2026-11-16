@@ -21,6 +21,8 @@ await owner('/tenants/' + tid + '/records', { records: [
   { t: 'products', id: 'p1', rec: { name: 'Check Tabs 500mg', form: 'Tablets', unit: 'Tablet', price: 1000, cost: 400, reorder: 0, updatedAt: '2026-01-01T00:00:00.000Z' } },
   { t: 'batches', id: 'b1', rec: { productId: 'p1', batch: 'C1', expiry: '2030-01-01', cost: 400 } },
   { t: 'movements', id: 'm1', rec: { productId: 'p1', qty: 100, type: 'Opening stock', batchId: 'b1', branchId: 'main', date: new Date().toISOString() } },
+  // the quotation R-PF below is sold from (2026-11 audit: the cloud checks that a proforma really exists and matches)
+  { t: 'proformas', id: 'pf-1', rec: { number: 'PF-1', status: 'Open', type: 'retail', items: [{ id: 'p1', name: 'Check Tabs 500mg', qty: 2, price: 1000 }], subtotal: 2000, discount: 300, tax: 0, total: 1700, customerId: 'walk-in', createdBy: 'Ann Admin' } },
 ] });
 await owner('/tenants/' + tid + '/users', { user: { name: 'Cid Cashier', email: 'cid@chk.rx', role: 'cashier', password: 'cid-pass-1234' } });
 const login = async (email) => (await api('/api/login', { email, password: email.split('@')[0] + '-pass-1234', tenant: slug })).token;

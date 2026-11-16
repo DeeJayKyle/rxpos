@@ -10,8 +10,14 @@ export function tokenSecret(env) {
   if (typeof s !== 'string' || s.length < MIN_SECRET_BYTES) {
     throw new Error(`Server signing secret missing or too short (need TOKEN_SECRET or SYNC_KEY of at least ${MIN_SECRET_BYTES} characters).`);
   }
+  if (!(env.TOKEN_SECRET && env.TOKEN_SECRET.length >= MIN_SECRET_BYTES) && !warned) {
+    warned = true;
+    // 2026-11 audit: never the value, only that the fallback is in use (see /api/health "tokenSecret")
+    console.warn('Sign-in passes are signed with SYNC_KEY because TOKEN_SECRET is not set: set a dedicated TOKEN_SECRET (32+ random characters).');
+  }
   return s;
 }
+let warned = false;
 
 /** A per-purpose label mixed into the signing input, so a token signature can't be replayed as a file or calendar URL. */
 export function purposeLabel(purpose) {

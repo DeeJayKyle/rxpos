@@ -41,6 +41,7 @@ function AccountCard() {
       <div className="account-actions">
         <button type="button" className="btn ghost" onClick={() => account('password')}><KeyRound size={16} />Change password</button>
         {(isElectron || isAndroid) && <button type="button" className="btn ghost" onClick={() => account('pin')}><LockKeyhole size={16} />{pin ? 'Quick PIN is set' : 'Set a quick PIN'}</button>}
+        {syncCfg?.key?.startsWith('u.') && <button type="button" className="btn ghost" onClick={() => account('others')}><LogOut size={16} />Sign out everywhere else</button>}
         {syncCfg?.key?.startsWith('u.') && <button type="button" className="btn ghost" onClick={() => account('twostep')}><ShieldCheck size={16} />{me?.twoFactor ? 'Two-step sign-in is on' : 'Two-step sign-in'}</button>}
       </div>
       <button type="button" className="account-logout" onClick={() => account('logout')}><LogOut size={17} />Log out</button>
@@ -240,10 +241,16 @@ function SyncStorage() {
         {est?.usage != null && <li>Using {mb(est.usage)}{est.quota ? ` of ${mb(est.quota)} available` : ''}</li>}
       </ul>
       {storageIssue && <div className="error">{storageIssue}</div>}
+      {Math.abs(syncStatus?.clockSkew || 0) > 120000 && (
+        <div className="notice warn-notice" role="alert">
+          <strong>This device's clock is {Math.round(Math.abs(syncStatus.clockSkew) / 60000)} minutes {syncStatus.clockSkew < 0 ? 'behind' : 'ahead of'} the cloud</strong>
+          <p className="small">Changes are timed by this clock, so a clock that is behind can lose to older changes made on other devices. Set the date and time to automatic in this device's settings.</p>
+        </div>
+      )}
       {rejected.length > 0 && (
         <div className="notice warn-notice">
-          <strong>{rejected.length} change{rejected.length === 1 ? ' was' : 's were'} refused by the cloud</strong>
-          <p className="small">They are kept here so nothing disappears silently. Usually the person who made them didn't have permission (ask an administrator to make the change), or the record was too large.</p>
+          <strong>{rejected.length} change{rejected.length === 1 ? ' was' : 's were'} not applied by the cloud</strong>
+          <p className="small">They are kept here so nothing disappears silently. Usually the person who made them didn't have permission (ask an administrator to make the change), the record was too large, or the cloud already had a newer copy (then the cloud's copy is now on this device, and the owner can see the version that was not applied under sale checks).</p>
           <ul className="small">{rejected.slice(-8).map((r, i) => <li key={i}>{r.t} · {r.id} · {new Date(r.at || Date.now()).toLocaleString()} — {r.reason}</li>)}</ul>
           <button className="btn sm ghost" onClick={() => run(async () => { if (await ask({ title: 'Clear the refused changes?', message: 'Only clear them once someone has made them again with the right permission. They are not sent anywhere.', confirmText: 'Clear' })) { await storage().clearRejected(); setRejected([]); } })}>Reviewed: clear the list</button>
         </div>
