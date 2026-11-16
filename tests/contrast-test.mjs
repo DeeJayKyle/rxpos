@@ -43,6 +43,8 @@ for (const t of THEMES) {
   if (!/^#[0-9a-f]{6}$/i.test(v['--surface']) || !/^#[0-9a-f]{6}$/i.test(v['--text'])) continue;
   for (const h of hues) {
     for (const [n, w] of [['row', ROW_TINT], ['row hover', 0.12], ['heading', HEAD_TINT]]) { const r = contrast(v['--text'], mix(h, v['--surface'], w)); check(`${t.name}: text on ${n} ${h}`, r >= 4.5, r.toFixed(2)); }
+    // every page's lists and tables (styles/pagecolors.css): muted text, drawn 70% muted / 30% text, on a row and its hover
+    if (/^#[0-9a-f]{6}$/i.test(v['--muted'])) for (const w of [ROW_TINT, 0.12]) { const r = contrast(mix(v['--muted'], v['--text'], 0.7), mix(h, v['--surface'], w)); check(`${t.name}: muted text on page row ${h} ${w}`, r >= 4.5, r.toFixed(2)); }
     const label = mix(h, v['--text'], LABEL_MIX), card = mix(h, v['--surface'], ROW_TINT);
     if (contrast(label, card) < 4.5) { const r = contrast(label, card); check(`${t.name}: phone label ${h}`, false, r.toFixed(2)); }
     else pass++;

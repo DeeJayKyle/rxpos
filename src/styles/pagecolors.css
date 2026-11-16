@@ -1,0 +1,54 @@
+/* Every page in colour (1.10.x, the owner's request after the colourful Add Stock): each list and table row gets its own
+   colour (a stripe down its left edge and a light tint across it), each column heading its own colour band, with grid
+   lines between rows and columns, the same look as Add Stock (styles/linecolors.css, src/linecolors.js LINE_HUES).
+   Colours rotate through the eight line hues by position; tints are mixed into the theme's own surface at the strengths
+   tests/contrast-test.mjs checks (row 7%, hover 12%, heading 16%), so every theme, dark ones included, stays readable.
+   Screen only: receipts, labels and printed pages keep their plain look. */
+@media screen {
+  :is(.page, .modal) table:not(.stock-lines, .invoice-totals, .keys, .keys-table, .invoice-lines, .edit-diff, .receipt table, .label-sheet table, .print-area table) > tbody > tr:nth-child(8n+1) { --line: #0f766e; }
+  :is(.page, .modal) table:not(.stock-lines, .invoice-totals, .keys, .keys-table, .invoice-lines, .edit-diff, .receipt table, .label-sheet table, .print-area table) > tbody > tr:nth-child(8n+2) { --line: #1d4ed8; }
+  :is(.page, .modal) table:not(.stock-lines, .invoice-totals, .keys, .keys-table, .invoice-lines, .edit-diff, .receipt table, .label-sheet table, .print-area table) > tbody > tr:nth-child(8n+3) { --line: #6d28d9; }
+  :is(.page, .modal) table:not(.stock-lines, .invoice-totals, .keys, .keys-table, .invoice-lines, .edit-diff, .receipt table, .label-sheet table, .print-area table) > tbody > tr:nth-child(8n+4) { --line: #be185d; }
+  :is(.page, .modal) table:not(.stock-lines, .invoice-totals, .keys, .keys-table, .invoice-lines, .edit-diff, .receipt table, .label-sheet table, .print-area table) > tbody > tr:nth-child(8n+5) { --line: #c2410c; }
+  :is(.page, .modal) table:not(.stock-lines, .invoice-totals, .keys, .keys-table, .invoice-lines, .edit-diff, .receipt table, .label-sheet table, .print-area table) > tbody > tr:nth-child(8n+6) { --line: #b45309; }
+  :is(.page, .modal) table:not(.stock-lines, .invoice-totals, .keys, .keys-table, .invoice-lines, .edit-diff, .receipt table, .label-sheet table, .print-area table) > tbody > tr:nth-child(8n+7) { --line: #15803d; }
+  :is(.page, .modal) table:not(.stock-lines, .invoice-totals, .keys, .keys-table, .invoice-lines, .edit-diff, .receipt table, .label-sheet table, .print-area table) > tbody > tr:nth-child(8n+8) { --line: #0e7490; }
+  :is(.page, .modal) table:not(.stock-lines, .invoice-totals, .keys, .keys-table, .invoice-lines, .edit-diff, .receipt table, .label-sheet table, .print-area table) > thead > tr > th:nth-child(8n+1) { --col: #0f766e; }
+  :is(.page, .modal) table:not(.stock-lines, .invoice-totals, .keys, .keys-table, .invoice-lines, .edit-diff, .receipt table, .label-sheet table, .print-area table) > thead > tr > th:nth-child(8n+2) { --col: #1d4ed8; }
+  :is(.page, .modal) table:not(.stock-lines, .invoice-totals, .keys, .keys-table, .invoice-lines, .edit-diff, .receipt table, .label-sheet table, .print-area table) > thead > tr > th:nth-child(8n+3) { --col: #6d28d9; }
+  :is(.page, .modal) table:not(.stock-lines, .invoice-totals, .keys, .keys-table, .invoice-lines, .edit-diff, .receipt table, .label-sheet table, .print-area table) > thead > tr > th:nth-child(8n+4) { --col: #be185d; }
+  :is(.page, .modal) table:not(.stock-lines, .invoice-totals, .keys, .keys-table, .invoice-lines, .edit-diff, .receipt table, .label-sheet table, .print-area table) > thead > tr > th:nth-child(8n+5) { --col: #c2410c; }
+  :is(.page, .modal) table:not(.stock-lines, .invoice-totals, .keys, .keys-table, .invoice-lines, .edit-diff, .receipt table, .label-sheet table, .print-area table) > thead > tr > th:nth-child(8n+6) { --col: #b45309; }
+  :is(.page, .modal) table:not(.stock-lines, .invoice-totals, .keys, .keys-table, .invoice-lines, .edit-diff, .receipt table, .label-sheet table, .print-area table) > thead > tr > th:nth-child(8n+7) { --col: #15803d; }
+  :is(.page, .modal) table:not(.stock-lines, .invoice-totals, .keys, .keys-table, .invoice-lines, .edit-diff, .receipt table, .label-sheet table, .print-area table) > thead > tr > th:nth-child(8n+8) { --col: #0e7490; }
+  :is(.page, .modal) table:not(.stock-lines, .invoice-totals, .keys, .keys-table, .invoice-lines, .edit-diff, .receipt table, .label-sheet table, .print-area table) { border-collapse: separate; border-spacing: 0; }
+  :is(.page, .modal) table:not(.stock-lines, .invoice-totals, .keys, .keys-table, .invoice-lines, .edit-diff, .receipt table, .label-sheet table, .print-area table) > thead > tr > th { background: color-mix(in srgb, var(--col, var(--text)) 16%, var(--surface)); color: var(--text);
+    border-top: 3px solid var(--col, var(--text)); border-right: 1px solid var(--border); }
+  :is(.page, .modal) table:not(.stock-lines, .invoice-totals, .keys, .keys-table, .invoice-lines, .edit-diff, .receipt table, .label-sheet table, .print-area table) > tbody > tr > td { background: color-mix(in srgb, var(--line, transparent) 7%, var(--surface));
+    border-bottom: 1px solid color-mix(in srgb, var(--line, var(--border)) 28%, var(--border)); border-right: 1px solid var(--border); }
+  :is(.page, .modal) table:not(.stock-lines, .invoice-totals, .keys, .keys-table, .invoice-lines, .edit-diff, .receipt table, .label-sheet table, .print-area table) > thead > tr > th:last-child, :is(.page, .modal) table:not(.stock-lines, .invoice-totals, .keys, .keys-table, .invoice-lines, .edit-diff, .receipt table, .label-sheet table, .print-area table) > tbody > tr > td:last-child { border-right: 0; }
+  :is(.page, .modal) table:not(.stock-lines, .invoice-totals, .keys, .keys-table, .invoice-lines, .edit-diff, .receipt table, .label-sheet table, .print-area table) > tbody > tr > td:first-child { box-shadow: inset 4px 0 0 var(--line, transparent); }
+  :is(.page, .modal) table:not(.stock-lines, .invoice-totals, .keys, .keys-table, .invoice-lines, .edit-diff, .receipt table, .label-sheet table, .print-area table) > tbody > tr:hover > td { background: color-mix(in srgb, var(--line, transparent) 12%, var(--surface)); }
+  :is(.page, .modal) table:not(.stock-lines, .invoice-totals, .keys, .keys-table, .invoice-lines, .edit-diff, .receipt table, .label-sheet table, .print-area table) > tbody > tr > td .muted, :is(.page, .modal) table:not(.stock-lines, .invoice-totals, .keys, .keys-table, .invoice-lines, .edit-diff, .receipt table, .label-sheet table, .print-area table) > tbody > tr > td.muted { color: color-mix(in srgb, var(--muted) 70%, var(--text)); }
+  /* a table on a card: the card gets a coloured top edge */
+  .page .card:has(> table, > .table-wrap > table), .page .card.table-wrap { border-top: 4px solid var(--primary); }
+
+  /* phones: lists become cards; the colour goes on the whole card (stripe down its left edge), not on each cell */
+  @media (max-width: 760px) {
+    :is(.page, .modal) table:not(.stock-lines, .invoice-totals, .keys, .keys-table, .invoice-lines, .edit-diff, .receipt table, .label-sheet table, .print-area table) > tbody > tr { background: color-mix(in srgb, var(--line, transparent) 7%, var(--surface)); border-left: 5px solid var(--line, transparent); }
+    :is(.page, .modal) table:not(.stock-lines, .invoice-totals, .keys, .keys-table, .invoice-lines, .edit-diff, .receipt table, .label-sheet table, .print-area table) > tbody > tr > td, :is(.page, .modal) table:not(.stock-lines, .invoice-totals, .keys, .keys-table, .invoice-lines, .edit-diff, .receipt table, .label-sheet table, .print-area table) > tbody > tr:hover > td, :is(.page, .modal) table:not(.stock-lines, .invoice-totals, .keys, .keys-table, .invoice-lines, .edit-diff, .receipt table, .label-sheet table, .print-area table) > tbody > tr > td:first-child { background: transparent; box-shadow: none; border-right: 0; }
+  }
+
+  /* the till: each line of the sale its own colour, as on Add Stock */
+  .pos-cart .cart-lines > .cart-line:not(.kit-line):nth-child(8n+1) { --line: #0f766e; }
+  .pos-cart .cart-lines > .cart-line:not(.kit-line):nth-child(8n+2) { --line: #1d4ed8; }
+  .pos-cart .cart-lines > .cart-line:not(.kit-line):nth-child(8n+3) { --line: #6d28d9; }
+  .pos-cart .cart-lines > .cart-line:not(.kit-line):nth-child(8n+4) { --line: #be185d; }
+  .pos-cart .cart-lines > .cart-line:not(.kit-line):nth-child(8n+5) { --line: #c2410c; }
+  .pos-cart .cart-lines > .cart-line:not(.kit-line):nth-child(8n+6) { --line: #b45309; }
+  .pos-cart .cart-lines > .cart-line:not(.kit-line):nth-child(8n+7) { --line: #15803d; }
+  .pos-cart .cart-lines > .cart-line:not(.kit-line):nth-child(8n+8) { --line: #0e7490; }
+  .pos-cart .cart-lines > .cart-line:not(.kit-line) { background: color-mix(in srgb, var(--line) 7%, var(--surface)); box-shadow: inset 4px 0 0 var(--line);
+    border-bottom: 1px solid color-mix(in srgb, var(--line) 28%, var(--border)); padding-left: 10px; padding-right: 6px; border-radius: 6px; margin-bottom: 4px; }
+  .pos-cart .cart-lines > .cart-line .muted { color: color-mix(in srgb, var(--muted) 70%, var(--text)); }
+}
