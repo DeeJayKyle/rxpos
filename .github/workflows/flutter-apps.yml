@@ -5,6 +5,10 @@
 # Electron / Capacitor apps are not touched. Builds of the pilot branch are also offered to the installed new RxPOS
 # apps (the R2 bucket rxpos-apps, read through the cloud at /api/app/; scripts/publish-flutter-update.sh).
 name: Flutter apps
+# Publishing to the flutter-pilot pre-release (2026-11-16): only from main and the pilot branch. Its RxPOS-web.zip is
+# what every classic deploy puts on rxposug.com (scripts/site-with-app.sh) and flutter-release.yml releases its files,
+# so a build of any other branch (a feature branch, a Dependabot update) must never replace them. Other branches still
+# build and test.
 
 on:
   push:
@@ -135,6 +139,7 @@ jobs:
           cp build/app/outputs/bundle/release/app-release.aab "../out/RxPOS$s.aab"
           ls -l ../out
       - name: Remove the files with the old name (RxPOS New) from the pilot release
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/ccr-54387795-ifu3p1'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -142,6 +147,7 @@ jobs:
             gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/assets/$id" && echo "removed asset $id"
           done
       - name: Publish to the pilot pre-release
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/ccr-54387795-ifu3p1'
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           tag_name: flutter-pilot # (the tag exists: moving it to each build's commit was refused by GitHub)
@@ -197,6 +203,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Move-Item out\RxPOS-Setup-*.exe out\RxPOS-Setup.exe
       - name: Publish to the pilot pre-release
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/ccr-54387795-ifu3p1'
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           tag_name: flutter-pilot # (the tag exists: moving it to each build's commit was refused by GitHub)
@@ -253,6 +260,7 @@ jobs:
           printf '{"build":%s,"label":"%s"}\n' "${{ github.run_number }}" "$VERSION" > rxpos_flutter/build/web/rxpos-web.json
           (cd rxpos_flutter/build/web && zip -qr ../../../out/RxPOS-web.zip .)
       - name: Publish to the pilot pre-release (the classic deploys put the website together with it)
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/ccr-54387795-ifu3p1'
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           tag_name: flutter-pilot
