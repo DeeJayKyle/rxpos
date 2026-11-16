@@ -2,6 +2,7 @@
 // The theme engine adjusts colours when a theme is applied (src/themes.js → themeVars); this checks the result.
 import { THEMES, themeVars, contrast } from '../src/themes.js';
 import { VIVID, VIVID_TEXT } from '../src/vivid.js';
+import { LINE_HUES, COL_HUES, ROW_TINT, HEAD_TINT, LABEL_MIX } from '../src/linecolors.js';
 let pass = 0, fail = 0;
 const check = (n, ok, x = '') => { ok ? pass++ : fail++; if (!ok) console.log(`FAIL  ${n}  ${x}`); };
 for (const t of THEMES) {
@@ -28,6 +29,26 @@ for (const [n, x, y] of STATUS) { const r = contrast(x, y); check(`status: ${n}`
 // payment chips (values mirror src/styles.css .pay-chip, light theme)
 for (const [k, ends] of Object.entries(VIVID)) for (const [i, c] of ends.entries()) { const r = contrast(VIVID_TEXT, c); check(`vivid ${k} tile (${i ? 'end' : 'start'})`, r >= 4.5, r.toFixed(2)); }
 for (const [n, x, y] of [['cash', '#065f46', '#d1fae5'], ['momo', '#92400e', '#fef3c7'], ['card', '#1e40af', '#dbeafe'], ['credit', '#5b21b6', '#ede9fe']]) { const r = contrast(x, y); check(`payment chip ${n}`, r >= 4.5, r.toFixed(2)); }
+
+// Colourful Add Stock (1.10.0, src/linecolors.js + styles/linecolors.css): white on every line badge; in every theme the
+// text on a tinted row (and its hover), on a coloured heading band and the coloured phone-card labels stay readable.
+const hex = (c) => c.replace('#', '').match(/../g).map((x) => parseInt(x, 16));
+const mix = (a, b, w) => '#' + hex(a).map((x, i) => Math.round(x * w + hex(b)[i] * (1 - w)).toString(16).padStart(2, '0')).join('');
+const hues = [...new Set([...LINE_HUES, ...Object.values(COL_HUES)])];
+for (const h of hues) { const r = contrast('#ffffff', h); check(`line badge ${h}`, r >= 4.5, r.toFixed(2)); }
+let tinted = 0;
+for (const t of THEMES) {
+  const v = themeVars(t);
+  if (!/^#[0-9a-f]{6}$/i.test(v['--surface']) || !/^#[0-9a-f]{6}$/i.test(v['--text'])) continue;
+  for (const h of hues) {
+    for (const [n, w] of [['row', ROW_TINT], ['row hover', 0.12], ['heading', HEAD_TINT]]) { const r = contrast(v['--text'], mix(h, v['--surface'], w)); check(`${t.name}: text on ${n} ${h}`, r >= 4.5, r.toFixed(2)); }
+    const label = mix(h, v['--text'], LABEL_MIX), card = mix(h, v['--surface'], ROW_TINT);
+    if (contrast(label, card) < 4.5) { const r = contrast(label, card); check(`${t.name}: phone label ${h}`, false, r.toFixed(2)); }
+    else pass++;
+  }
+  tinted++;
+}
+console.log(`PASS  Add Stock line colours checked in ${tinted} themes`);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

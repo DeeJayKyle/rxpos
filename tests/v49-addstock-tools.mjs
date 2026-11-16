@@ -97,7 +97,39 @@ check('"New supplier" adds the supplier and chooses it', await p.evaluate(() => 
 // receive: 10 Alpha + 1 Alphamol at their costs
 await p.evaluate(() => { const i = document.querySelector('table.stock-lines tbody tr:nth-child(2) input[aria-label="Quantity"]'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(i, '4'); i.dispatchEvent(new Event('input', { bubbles: true })); });
 await wait(200);
+// 1.10.0: colourful lines and columns (src/linecolors.js)
+const colours = () => p.evaluate(() => {
+  const rows = [...document.querySelectorAll('table.stock-lines tbody tr')];
+  return { rows: rows.map((r) => getComputedStyle(r).getPropertyValue('--line').trim()), stripe: rows.map((r) => getComputedStyle(r.querySelector('td')).boxShadow),
+    badge: rows.map((r) => getComputedStyle(r.querySelector('.line-badge')).backgroundColor), keys: rows.map((r) => r.dataset.line),
+    heads: [...document.querySelectorAll('table.stock-lines thead th[class*="col-"]')].map((t) => [t.className.match(/col-(\w+)/g).pop(), getComputedStyle(t).borderTopColor]),
+    grid: getComputedStyle(rows[0].querySelector('td.col-qty')).borderRightWidth };
+});
+let c = await colours();
+check('each line has its own colour (stripe and number badge)', c.rows.length === 2 && c.rows[0] && c.rows[0] !== c.rows[1] && c.badge[0] !== c.badge[1] && /inset/.test(c.stripe[0]), JSON.stringify(c.rows));
+check('every column heading has its own colour band', new Set(c.heads.map((h) => h[1])).size === c.heads.length && c.heads.length === 7, JSON.stringify(c.heads));
+check('grid lines between the columns', c.grid === '1px', c.grid);
+const qtyBand = c.heads.find((h) => h[0] === 'col-qty')[1];
+await p.click('button[aria-label="Move Qty right"]'); await wait(200);
+const moved = await colours();
+check('a column keeps its colour when it moves', moved.heads[2][0] === 'col-qty' && moved.heads[2][1] === qtyBand, JSON.stringify(moved.heads.slice(0, 3)));
+await p.evaluate(() => [...document.querySelectorAll('button')].find((x) => /reset column order/.test(x.textContent))?.click()); await wait(200);
+await p.evaluate(() => [...document.querySelectorAll('button')].find((x) => /\+ Add line/.test(x.textContent))?.click()); await wait(200);
+c = await colours();
+const second = c.rows[1];
+await p.evaluate(() => document.querySelector('table.stock-lines tbody tr:nth-child(3) button[aria-label="Remove line"]').click()); await wait(200);
+c = await colours();
+check('a line keeps its colour when another is removed', c.rows[1] === second && c.rows.length === 2, JSON.stringify(c.rows));
 await p.screenshot({ path: path.join(out, 'add-stock.png'), fullPage: true });
+const themeMode = async (l) => { await p.evaluate(() => { if (!document.querySelector('.theme-menu')) document.querySelector('button[title="Theme"]')?.click(); }); await wait(200); await p.evaluate((x) => [...document.querySelectorAll('.mode-opt')].find((o) => o.textContent.trim() === x)?.click(), l); await wait(300); if (await p.evaluate(() => !!document.querySelector('.theme-menu'))) await p.evaluate(() => document.querySelector('button[title="Theme"]')?.click()); await p.mouse.click(5, 890); await wait(300); };
+await themeMode('Dark');
+check('the line colours stay on a dark theme', await p.evaluate(() => document.documentElement.dataset.theme === 'dark' && !!getComputedStyle(document.querySelector('table.stock-lines tbody tr')).getPropertyValue('--line').trim()));
+await p.screenshot({ path: path.join(out, 'add-stock-dark.png'), fullPage: true });
+await themeMode('Light');
+await p.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 }); await wait(500);
+check('on a phone each line is a card with its colour stripe', await p.evaluate(() => { const r = document.querySelector('table.stock-lines tbody tr'); const st = getComputedStyle(r); return st.display === 'grid' && parseFloat(st.borderLeftWidth) >= 5; }));
+await p.screenshot({ path: path.join(out, 'add-stock-phone.png'), fullPage: true });
+await p.setViewport({ width: 1366, height: 900, deviceScaleFactor: 1 }); await wait(500);
 await p.evaluate(() => [...document.querySelectorAll('button')].find((x) => /^Receive stock/.test(x.textContent.trim()))?.click());
 check('the delivery is received', await until(p, () => /Received 2 item/.test(document.body.innerText)));
 let st = await (async () => { for (let k = 0; k < 20; k++) { const r = await stock(); if (r.s['tl-alsy'] === 4) return r.s; await wait(500); } return (await stock()).s; })();
@@ -121,6 +153,7 @@ await p.evaluate(() => [...document.querySelectorAll('.modal tr.line-removed but
 check('…Undo brings it back', await p.evaluate(() => !document.querySelector('.modal tr.line-removed')));
 await removeAlphamol(); await wait(200);
 await p.evaluate(() => { const i = [...document.querySelectorAll('.modal input')].find((x) => /audit/i.test(x.closest('label')?.innerText || '')); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(i, 'Alphamol not delivered; Beta Cream was missed'); i.dispatchEvent(new Event('input', { bubbles: true })); });
+check('Edit purchase lines have the same colours', await p.evaluate(() => { const r = [...document.querySelectorAll('.modal table.stock-lines tbody tr.hued')]; return r.length === 3 && new Set(r.map((x) => getComputedStyle(x).getPropertyValue('--line').trim())).size === 3; }));
 await p.screenshot({ path: path.join(out, 'edit-purchase.png'), fullPage: true });
 await p.evaluate(() => [...document.querySelectorAll('.modal button')].find((x) => /Save changes/.test(x.textContent))?.click()); await wait(1200);
 st = await (async () => { for (let k = 0; k < 20; k++) { const r = await stock(); if (r.s['tl-beta'] === 6) return r; await wait(500); } return stock(); })();
