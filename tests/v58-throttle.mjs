@@ -8,7 +8,9 @@ const check = (n, ok, x = '') => { ok ? pass++ : fail++; console.log(`${ok ? 'PA
 const owner = (p, body) => fetch(base + '/api/owner' + p, { method: body ? 'POST' : 'GET', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + ownerKey }, body: body ? JSON.stringify(body) : undefined }).then((r) => r.json());
 let ipN = 0;
 const from = (ip = `198.51.100.${(ipN++ % 250) + 1}`) => ip; // documentation addresses (RFC 5737), a new one per try
-const login = (body, ip = from()) => fetch(base + '/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json', 'CF-Connecting-IP': ip, 'X-Forwarded-For': ip }, body: JSON.stringify(body) })
+// each address arrives as through an HTTPS proxy (X-Forwarded-Proto: https), as on a hub behind Caddy or nginx: a
+// hub refuses plain http from internet addresses (2026-11 audit); the cloud ignores the header
+const login = (body, ip = from()) => fetch(base + '/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json', 'CF-Connecting-IP': ip, 'X-Forwarded-For': ip, 'X-Forwarded-Proto': 'https' }, body: JSON.stringify(body) })
   .then(async (r) => ({ status: r.status, ...(await r.json().catch(() => ({}))) }));
 
 const t = await owner('/tenants', { name: 'Slow Pharmacy', admin: { name: 'Sam Admin', email: 'sam@slow.rx', password: 'sam-pass-1234' } });
