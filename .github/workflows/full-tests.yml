@@ -3,17 +3,70 @@ name: Full test suite
 # Every RxPOS suite (tests/run-all.mjs): builds the app, starts a throw-away local cloud (wrangler dev) and drives the
 # app in headless Chrome. build.yml calls it on every push and pull request to main and gates releases and deploys on
 # it; deploy-cloud.yml gates on it too, so nothing reaches rxposug.com without passing it. Can also be run on demand.
+#
+# Fast (2026-11): the suites run side by side on several machines (RXPOS_SHARD): 6 groups against the local cloud and
+# 2 against the self-hosted hub, about 8 minutes instead of 44 one after the other. And code that already passed is
+# not tested again: a pass is recorded as an artifact named after the code's git tree (identical files = identical
+# tree), so the push to main after a pull request, and the release of that commit, reuse the pull request's pass. A
+# manual run of this workflow always tests (reuse: false).
 on:
   workflow_dispatch:
+    inputs:
+      reuse:
+        description: 'Skip the tests when this exact code already passed them'
+        type: boolean
+        default: false
   workflow_call:
+    inputs:
+      reuse:
+        type: boolean
+        default: true
 
 permissions:
   contents: read
+  actions: read # to find an earlier pass of the same code
 
 jobs:
-  full:
+  # has this exact code (same git tree) already passed? Then nothing needs to run again.
+  check:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    outputs:
+      tree: ${{ steps.tree.outputs.tree }}
+      passed: ${{ steps.find.outputs.passed }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - id: tree
+        run: echo "tree=$(git rev-parse HEAD^{tree})" >> "$GITHUB_OUTPUT"
+      - id: find
+        if: inputs.reuse
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NAME: full-tests-passed-${{ steps.tree.outputs.tree }}
+        run: |
+          n=$(gh api "repos/${{ github.repository }}/actions/artifacts?name=$NAME&per_page=5" --jq '[.artifacts[] | select(.expired == false)] | length' || echo 0)
+          if [ "${n:-0}" -gt 0 ]; then
+            echo "passed=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::This exact code (tree ${{ steps.tree.outputs.tree }}) already passed every suite: not run again."
+          fi
+
+  shard:
+    needs: check
+    if: needs.check.outputs.passed != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: cloud, shard: '0/6' }
+          - { target: cloud, shard: '1/6' }
+          - { target: cloud, shard: '2/6' }
+          - { target: cloud, shard: '3/6' }
+          - { target: cloud, shard: '4/6' }
+          - { target: cloud, shard: '5/6' }
+          - { target: hub, shard: '0/2' }
+          - { target: hub, shard: '1/2' }
+    name: ${{ matrix.target }} ${{ matrix.shard }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -23,28 +76,43 @@ jobs:
           node-version: 22 # wrangler needs Node 22+
           cache: npm
       - run: npm ci
-      - name: Run every suite against a local cloud
+      - name: Run this group of suites (${{ matrix.target == 'hub' && 'self-hosted hub, server/hub.mjs on Node''s SQLite' || 'local cloud' }})
         shell: bash # explicit bash runs with -o pipefail, so a failing suite isn't hidden by tee
         env:
           CHROME_PATH: /usr/bin/google-chrome
           # suites that need services this machine can't reach (Workers AI, Open-Meteo, a screen) are skipped, not failed
           RXPOS_CI: '1'
-        run: node tests/run-all.mjs 2>&1 | tee full-tests.log
-      - name: The same rules on the self-hosted hub (server/hub.mjs on Node's SQLite)
-        shell: bash
-        env:
-          CHROME_PATH: /usr/bin/google-chrome
-          RXPOS_CI: '1'
-          RXPOS_TEST_HUB: '1'
-        run: node tests/run-all.mjs 2>&1 | tee hub-tests.log
+          RXPOS_SHARD: ${{ matrix.shard }}
+          RXPOS_TEST_HUB: ${{ matrix.target == 'hub' && '1' || '' }}
+        run: node tests/run-all.mjs 2>&1 | tee tests.log
       - name: Keep the log and screenshots
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: full-tests
+          name: full-tests-${{ matrix.target }}-${{ strategy.job-index }}
           retention-days: 7
           path: |
-            full-tests.log
-            hub-tests.log
+            tests.log
             tests/.output/
           if-no-files-found: ignore
+
+  # the one result callers wait for: every group passed, or this code had already passed
+  full:
+    needs: [check, shard]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every group passed
+        run: |
+          if [ "${{ needs.check.result }}" != "success" ]; then echo "::error::The check for an earlier pass failed"; exit 1; fi
+          if [ "${{ needs.check.outputs.passed }}" = "true" ]; then echo "Already passed: reused."; exit 0; fi
+          if [ "${{ needs.shard.result }}" != "success" ]; then echo "::error::A group of suites failed (see the shard jobs and their logs)"; exit 1; fi
+      - name: Record the pass for this code
+        if: needs.check.outputs.passed != 'true'
+        run: echo "${{ needs.check.outputs.tree }} passed at ${{ github.sha }} (${{ github.event_name }})" > passed.txt
+      - if: needs.check.outputs.passed != 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: full-tests-passed-${{ needs.check.outputs.tree }}
+          retention-days: 30
+          path: passed.txt

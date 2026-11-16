@@ -212,11 +212,17 @@ if (!up) { console.error('The local cloud did not start'); stop(); process.exit(
 const owner = (p, body) => fetch(BASE + '/api/owner' + p, { method: body ? 'POST' : 'GET', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + OWNER }, body: body ? JSON.stringify(body) : undefined }).then((r) => r.json());
 const clearAll = async () => { for (const t of (await owner('/tenants')).tenants || []) await owner('/tenants/' + t.id + '/delete', { confirm: t.slug }); };
 
+// RXPOS_SHARD=k/n (full-tests.yml): run only every n-th of the chosen suites, starting at the k-th (0-based), so n
+// machines run the whole set side by side. Each machine has its own local cloud; together they run every suite once.
+const [shardK, shardN] = (process.env.RXPOS_SHARD || '0/1').split('/').map(Number);
+if (!(shardN >= 1 && shardK >= 0 && shardK < shardN)) { console.error('RXPOS_SHARD must be k/n with 0 ≤ k < n'); process.exit(1); }
+const chosen = SUITES.filter(([, file]) => (!only || only.split(',').some((o) => file.includes(o))) // several, comma-separated: npm test -- owner-auth,v14-ui
+  && (!HUB || HUB_SUITES.has(file))).filter((_, i) => i % shardN === shardK);
+if (shardN > 1) console.log(`Group ${shardK + 1} of ${shardN}: ${chosen.length} suites`);
+
 const results = [];
 let totalSkipped = 0;
-for (const [label, file, extra] of SUITES) {
-  if (only && !only.split(',').some((o) => file.includes(o))) continue; // several, comma-separated: npm test -- owner-auth,v14-ui
-  if (HUB && !HUB_SUITES.has(file)) continue;
+for (const [label, file, extra] of chosen) {
   await clearAll();
   const outDir = extra[0] ? path.join(here, extra[0]) : null;
   const args = [path.join(here, file), BASE, OWNER, ...(outDir ? [outDir] : [])];

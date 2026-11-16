@@ -44,8 +44,12 @@ jobs:
         run: npm run build
 
   # Every suite against a local cloud in headless Chrome (full-tests.yml). Releases and deploys wait for it.
+  # Code that already passed (e.g. in its pull request) is not tested again; otherwise the groups run side by side.
   full:
     uses: ./.github/workflows/full-tests.yml
+    permissions:
+      contents: read
+      actions: read
 
   windows:
     runs-on: windows-latest
@@ -247,6 +251,7 @@ jobs:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           path: artifacts
+          pattern: RxPOS-* # the apps only, not the test logs and screenshots
       - run: ls -R artifacts
       - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:

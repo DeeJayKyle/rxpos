@@ -14,6 +14,9 @@ jobs:
   # every suite must pass first (full-tests.yml)
   full:
     uses: ./.github/workflows/full-tests.yml
+    permissions:
+      contents: read
+      actions: read
 
   deploy:
     needs: full
