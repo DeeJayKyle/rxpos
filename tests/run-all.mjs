@@ -41,6 +41,7 @@ const SUITES = [
   ['medicine search (unit)', 'unit-search.mjs', []],
   ['drug labels (unit)', 'unit-druglabel.mjs', []],
   ['fefo allocate (unit)', 'unit-fefo.mjs', []],
+  ['kits: can make, cost, price, swaps (unit)', 'unit-kits.mjs', []],
   ['clinical safety check and expiry traffic light (unit)', 'unit-clinical.mjs', []],
   ['date helpers (unit)', 'unit-dates.mjs', []],
   ['notes and SOP pages (unit)', 'unit-notes.mjs', []],
