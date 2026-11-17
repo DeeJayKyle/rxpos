@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 
 import '../../../core/entities/sale.dart';
 import '../../../core/entities/settings.dart';
-import '../../../core/presentation/app_dialog.dart';
 import '../../../core/presentation/widgets.dart';
 import '../../../core/rules/kits.dart';
 import '../../../core/rules/money.dart';
