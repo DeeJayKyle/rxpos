@@ -978,8 +978,9 @@ class _ProductPanel extends StatelessWidget {
                     // card size and spacing come from the design tokens (Target Tap: big cards, Split-Pane: dense)
                     gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
                       maxCrossAxisExtent: tokensOf(context).tileWidth,
-                      // + a row for the FEFO expiry badge
-                      mainAxisExtent: MediaQuery.textScalerOf(context).scale(tokensOf(context).tileHeight + 24),
+                      // + a row for the FEFO expiry badge, + 8 for the React look's roomier card padding (#66: the price,
+                      // a tag and the stock note wrapping to two lines overflowed by 6 px)
+                      mainAxisExtent: MediaQuery.textScalerOf(context).scale(tokensOf(context).tileHeight + 32),
                       crossAxisSpacing: tokensOf(context).gap,
                       mainAxisSpacing: tokensOf(context).gap,
                     ),
