@@ -159,9 +159,10 @@ await P.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true })
 const hash = () => P.evaluate(() => location.hash);
 // a tab, then wait for its page (a slow runner can drop a tap made while the previous page change is finishing: tap once more)
 const tabTo = async (label, path) => {
-  for (let attempt = 0; attempt < 2; attempt++) {
-    await P.evaluate((l) => [...document.querySelectorAll('.bottom-nav a')].find((a) => a.textContent.trim() === l).click(), label);
-    for (let t = 0; t < 30; t++) { if ((await hash()) === '#' + path) break; await wait(100); }
+  // a slow CI machine can still be finishing the last page's glide: try up to 4 times, 5 s each
+  for (let attempt = 0; attempt < 4; attempt++) {
+    await P.evaluate((l) => [...document.querySelectorAll('.bottom-nav a')].find((a) => a.textContent.trim() === l)?.click(), label);
+    for (let t = 0; t < 50; t++) { if ((await hash()) === '#' + path) break; await wait(100); }
     if ((await hash()) === '#' + path) break;
   }
   await wait(500);
@@ -179,11 +180,11 @@ const swipe = async (x0, x1, y = 420) => {
 await tabTo('Sales', '/sales');
 await swipe(180, 380);
 check('phone: a swipe that starts mid-screen does not go back', (await hash()) === '#/sales', await hash());
-const moved = await P.evaluate(async () => { const m = document.querySelector('main.content'); return getComputedStyle(m).left; });
+const moved = await P.evaluate(async () => { const m = document.querySelector('main.content'); return m ? getComputedStyle(m).left : 'no page'; });
 check('phone: the page is back in place after a short swipe', moved === 'auto' || moved === '0px', moved);
 await swipe(6, 330);
 check('phone: swiping from the left edge goes back', (await hash()) === '#/', await hash());
-check('phone: the page is in place after swiping back', await P.evaluate(() => { const m = document.querySelector('main.content'); return m.getBoundingClientRect().left <= 1 && !m.style.left && !document.documentElement.classList.contains('page-swiping'); }));
+check('phone: the page is in place after swiping back', await P.evaluate(() => { const m = document.querySelector('main.content'); return !!m && m.getBoundingClientRect().left <= 1 && !m.style.left && !document.documentElement.classList.contains('page-swiping'); }));
 // opened directly (no history in the app): Back goes to the dashboard
 await P.goto(base + '/' + slug + '#/expiry', { waitUntil: 'networkidle2' }); await P.reload({ waitUntil: 'networkidle2' }); await wait(1200);
 await P.evaluate(() => history.replaceState({ ...history.state, idx: 0 }, ''));
