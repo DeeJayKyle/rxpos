@@ -6,21 +6,6 @@
 @media screen {
   /* the menu: the active page and its bar in the theme's strong colour */
   :root[data-palette] .sidebar nav a.active::before { background: var(--primary); }
-  :root[data-palette][data-sidebar='dark'] .sidebar nav a.active svg { color: color-mix(in srgb, var(--primary) 70%, #fff); }
-  :root[data-palette][data-sidebar='dark'] .sidebar nav a.active { background: color-mix(in srgb, var(--primary) 26%, transparent); }
-  :root[data-palette][data-sidebar='dark'][data-palette$='blue'] .sidebar nav a.active,
-  :root[data-palette][data-sidebar='dark'][data-palette='forest-green'] .sidebar nav a.active,
-  :root[data-palette][data-sidebar='dark'][data-palette='lavender'] .sidebar nav a.active,
-  :root[data-palette][data-sidebar='dark'][data-palette='mint-teal'] .sidebar nav a.active,
-  :root[data-palette][data-sidebar='dark'][data-palette='sunny-orange'] .sidebar nav a.active { background: rgba(255, 255, 255, .2); color: #fff; }
-  :root[data-palette][data-sidebar='dark'][data-palette$='blue'] .sidebar nav a.active::before,
-  :root[data-palette][data-sidebar='dark'][data-palette='forest-green'] .sidebar nav a.active::before,
-  :root[data-palette][data-sidebar='dark'][data-palette='lavender'] .sidebar nav a.active::before,
-  :root[data-palette][data-sidebar='dark'][data-palette='mint-teal'] .sidebar nav a.active::before { background: #fff; }
-  :root[data-palette][data-sidebar='dark'][data-palette$='blue'] .sidebar nav a.active svg,
-  :root[data-palette][data-sidebar='dark'][data-palette='forest-green'] .sidebar nav a.active svg,
-  :root[data-palette][data-sidebar='dark'][data-palette='lavender'] .sidebar nav a.active svg,
-  :root[data-palette][data-sidebar='dark'][data-palette='mint-teal'] .sidebar nav a.active svg { color: #fff; }
   :root[data-palette] .sidebar .count, :root[data-palette] .mega-item .count, :root[data-palette] .top-pill .count { background: color-mix(in srgb, var(--primary) 85%, #fff); color: var(--on-accent); }
   :root[data-palette] .avatar { background: linear-gradient(135deg, var(--primary), var(--sidebar)); }
   :root[data-palette] .brand-accent, :root[data-palette] .auth-hero h1 em, :root[data-palette] .auth-hero li svg { color: var(--primary); }
@@ -95,18 +80,21 @@
 
   :root[data-palette][data-sidebar='light'] .bento-hero { background: radial-gradient(120% 90% at 100% 0%, color-mix(in srgb, var(--sidebar) 30%, transparent), transparent 60%), linear-gradient(160deg, var(--primary), color-mix(in srgb, var(--primary) 70%, #000)); }
   :root[data-palette] .bento-hero :is(.bento-delta, .bento-delta.up, .bento-delta.down) { background: rgba(255, 255, 255, .2); color: #fff; }
-  /* the menu's pages as white buttons with dark words (the owner's request, 17 Nov 2026); the open one ringed and lit
-     in the brand colour */
-  :root[data-palette] .sidebar nav a { background: #ffffff; color: var(--menu-ink); margin: 0 4px 5px; border-radius: 10px; font-weight: 600;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, .12); }
-  :root[data-palette] .sidebar nav a svg { color: var(--menu-ink); }
-  :root[data-palette] .sidebar nav a:hover { background: #f1f4f8; color: var(--menu-ink); padding-left: 10px; }
-  :root[data-palette] .sidebar nav a.active, :root[data-palette][data-sidebar] .sidebar nav a.active { background: #ffffff; color: var(--menu-ink); font-weight: 750;
-    box-shadow: inset 0 0 0 2px var(--menu-lit), 0 4px 12px -4px rgba(0, 0, 0, .35); }
-  :root[data-palette] .sidebar nav a.active svg, :root[data-palette][data-sidebar] .sidebar nav a.active svg { color: var(--menu-lit); }
+  /* the menu's pages as light, soft-glass buttons (the owner's review, 17 Nov 2026): a faint see-through fill with a
+     soft edge on the menu colour; the open page a brighter frosted button with a gentle lift */
+  :root[data-palette] .sidebar nav a { margin: 0 4px 4px; border-radius: 12px; background: rgba(255, 255, 255, .07); border: 1px solid rgba(255, 255, 255, .10);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08); transition: background .15s, box-shadow .15s; }
+  :root[data-palette] .sidebar nav a:hover { background: rgba(255, 255, 255, .14); }
+  :root[data-palette] .sidebar nav a.active, :root[data-palette][data-sidebar] .sidebar nav a.active { background: rgba(255, 255, 255, .24); color: #ffffff; font-weight: 700;
+    border-color: rgba(255, 255, 255, .32); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), 0 8px 18px -10px rgba(0, 0, 0, .55); }
+  :root[data-palette] .sidebar nav a.active svg, :root[data-palette][data-sidebar] .sidebar nav a.active svg { color: #ffffff; }
   :root[data-palette] .sidebar nav a.active::before, :root[data-palette][data-sidebar] .sidebar nav a.active::before { display: none; }
-  :root[data-palette] .sidebar nav a kbd { color: var(--menu-ink); border-color: color-mix(in srgb, var(--menu-ink) 25%, transparent); background: color-mix(in srgb, var(--menu-ink) 6%, #fff); opacity: 1; }
-  :root[data-palette] .sidebar nav a .count { background: var(--primary); color: var(--on-accent); }
+  /* light menus (Lime, Sage): the same glass, whiter, with the menu's dark words */
+  :root[data-palette][data-sidebar='light'] .sidebar nav a { background: rgba(255, 255, 255, .32); border-color: rgba(255, 255, 255, .5); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .6); }
+  :root[data-palette][data-sidebar='light'] .sidebar nav a:hover { background: rgba(255, 255, 255, .5); }
+  :root[data-palette][data-sidebar='light'] .sidebar nav a.active { background: rgba(255, 255, 255, .78); color: var(--sidebar-text); border-color: #ffffff;
+    box-shadow: inset 0 1px 0 #ffffff, 0 8px 18px -10px rgba(0, 0, 0, .35); }
+  :root[data-palette][data-sidebar='light'] .sidebar nav a.active svg { color: var(--sidebar-text); }
 
   /* the page and its cards: colour 2 under, white cards over */
   :root[data-palette] body { background-image: none; }
