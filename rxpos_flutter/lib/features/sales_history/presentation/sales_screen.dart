@@ -377,7 +377,7 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
 
 const _saleCols = [ColourCol('Receipt', flex: 3), ColourCol('Date', flex: 2), ColourCol('Customer', flex: 3), ColourCol('Phone', flex: 2), ColourCol('Payment', flex: 2),
   ColourCol('Status', flex: 2), ColourCol('Total', flex: 2, numeric: true), ColourCol('Cashier', flex: 2)];
-const _saleActions = 140.0;
+const _saleActions = 156.0;
 
 String _when(String iso) {
   final d = DateTime.tryParse(iso)?.toLocal();

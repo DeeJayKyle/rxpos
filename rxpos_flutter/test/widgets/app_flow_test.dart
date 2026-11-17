@@ -1210,7 +1210,9 @@ void main() {
     await start(tester);
     await tester.sendKeyEvent(LogicalKeyboardKey.f6);
     await settle(tester);
-    expect(find.text('RXA1 · Walk-in Customer'), findsOneWidget);
+    // a computer: the React app's table, the receipt and the customer in their own columns
+    expect(find.text('RXA1'), findsOneWidget);
+    expect(find.text('Walk-in Customer'), findsOneWidget);
 
     // edit: 3 → 2, with a reason
     await tester.tap(find.byTooltip('Actions for RXA1'));
@@ -1236,8 +1238,8 @@ void main() {
     await settle(tester, 4);
     await tester.tap(find.text('Edited').last);
     await settle(tester);
-    expect(find.text('RXA1 · Walk-in Customer'), findsOneWidget);
-    await tester.tap(find.text('RXA1 · Walk-in Customer'));
+    expect(find.text('RXA1'), findsOneWidget);
+    await tester.tap(find.text('RXA1'));
     await settle(tester);
     expect(find.text('Edit history (1)'), findsOneWidget);
     expect(find.text('Reason: wrong quantity entered'), findsOneWidget);
