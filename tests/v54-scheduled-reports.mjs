@@ -24,12 +24,12 @@ check('"send now" covers the period up to today', td.from === '2026-11-01' && td
 const sales = [{ id: 's1', number: 'R1', date: '2026-11-07T08:00:00.000Z', total: 3000, paid: 3000, payment: 'Cash', cashier: 'Ann Admin', branchId: 'main',
   items: [{ name: 'Paracetamol 500mg', qty: 10, price: 300, cost: 100 }] }, { id: 's2', number: 'R2', date: '2026-11-07T09:00:00.000Z', total: 500, status: 'refunded', items: [] }];
 const { sheets, figures } = reportSheets({ sales, expenses: [{ date: '2026-11-07', amount: 700, description: 'Airtime', categoryId: 'x' }], label: '2026-11-07' });
-check('sheets: summary, sales, by medicine, expenses, stock', sheets.map((s) => s.name).join('|') === 'Summary|Sales|Sales by medicine|Expenses|Expiring|Low stock');
+check('sheets: summary, sales, by medicine, expenses, stock', sheets.map((s) => s.name).join('|') === 'Summary|Sales|Refunds|Sales by medicine|Expenses|Expiring|Low stock');
 check('figures: sales, profit, net', figures.total === 3000 && figures.profit === 2000 && figures.net === 1300, JSON.stringify([figures.total, figures.profit, figures.net]));
-check('by medicine: quantity, sales, profit', JSON.stringify(sheets[2].rows) === JSON.stringify([{ medicine: 'Paracetamol 500mg', quantity: 10, sales: 3000, cost: 1000, profit: 2000 }]));
+check('by medicine: quantity, sales, profit', JSON.stringify(sheets[3].rows) === JSON.stringify([{ medicine: 'Paracetamol 500mg', quantity: 10, sales: 3000, cost: 1000, profit: 2000 }]));
 const book = xlsx([...sheets, { name: 'Risky', rows: [{ text: '=1+1' }] }]);
 const str = new TextDecoder('latin1').decode(book);
-check('a zip with one worksheet per sheet', book[0] === 0x50 && book[1] === 0x4b && str.includes('xl/worksheets/sheet7.xml') && !str.includes('sheet8.xml'));
+check('a zip with one worksheet per sheet', book[0] === 0x50 && book[1] === 0x4b && str.includes('xl/worksheets/sheet8.xml') && !str.includes('sheet9.xml'));
 check('numbers stay numbers; formulas stay text', str.includes('<c r="I2" s="2"><v>3000</v></c>') && str.includes("<t xml:space=\"preserve\">'=1+1</t>"));
 
 // the cloud: who may keep schedules, preview and "send now"
@@ -50,7 +50,7 @@ check('an administrator saves a schedule', j.applied === 3 && j.refused === 0, J
 [s, j] = await call('/api/reports/send?id=rs1', { auth: cashier });
 check('a cashier cannot send one', s === 403);
 [s, j] = await call('/api/reports/send?id=rs1', { auth: admin });
-check('preview: only the valid address, the chosen sheets, today\'s sale', s === 200 && j.to.join() === 'owner@example.com' && j.sheets.map((x) => x.name).join() === 'Summary,Sales' && j.sheets[1].rows === 1 && j.file.endsWith('.xlsx'), JSON.stringify(j));
+check('preview: only the valid address, the chosen sheets, today\'s sale', s === 200 && j.to.join() === 'owner@example.com' && j.sheets.map((x) => x.name).join() === 'Summary,Sales,Refunds' && j.sheets[1].rows === 1 && j.file.endsWith('.xlsx'), JSON.stringify(j));
 [s, j] = await call('/api/reports/send', { auth: admin, body: { id: 'rs1' } });
 check('send now without an email account says so', s === 200 && j.sent === 0 && j.error === 'email not set up', JSON.stringify(j));
 [s, j] = await call('/api/reports/send?id=nope', { auth: admin });

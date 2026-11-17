@@ -71,10 +71,12 @@ export function dailyStock({ movements, batches, products, sales, expenses, from
   apply(before);
   let opening = valueAt(before);
   const salesBy = new Map(), expBy = new Map();
+  // a sale counts on its own day; a refund takes its money off the day of the refund (Nov 2026), the same day its
+  // Refund movement puts the stock back, so each day's Profit matches its Cost of stock sold
   for (const s of sales) {
-    if (s.status === 'refunded') continue;
     const d = localDay(s.date), r = salesBy.get(d) || { total: 0, n: 0 };
     r.total += Number(s.total) || 0; r.n++; salesBy.set(d, r);
+    if (s.status === 'refunded') { const rd = localDay(s.refundedAt || s.date), x = salesBy.get(rd) || { total: 0, n: 0 }; x.total -= Number(s.total) || 0; salesBy.set(rd, x); }
   }
   for (const e of expenses) { const d = localDay(e.date); expBy.set(d, (expBy.get(d) || 0) + (Number(e.amount) || 0)); }
   const rows = [];
@@ -106,7 +108,9 @@ export async function dailyStockFor(db, tenant, { days = 62, today = localDay(ne
   const startIso = new Date(Date.parse(from + 'T00:00:00Z') - EAT).toISOString();
   const all = (t) => db.prepare("SELECT rec FROM records WHERE tenant = ?1 AND t = ?2 AND deleted = 0").bind(tenant, t).all();
   const since = (t, field, value) => db.prepare(`SELECT rec FROM records WHERE tenant = ?1 AND t = ?2 AND deleted = 0 AND json_extract(rec, '$.${field}') >= ?3`).bind(tenant, t, value).all();
-  const [mv, bt, pr, sl, ex] = await Promise.all([all('movements'), all('batches'), all('products'), since('sales', 'date', startIso), since('expenses', 'date', from)]);
+  // the period's sales, and earlier sales refunded in the period (their refund lands on a day of the sheet)
+  const sales = db.prepare("SELECT rec FROM records WHERE tenant = ?1 AND t = 'sales' AND deleted = 0 AND (json_extract(rec, '$.date') >= ?2 OR json_extract(rec, '$.refundedAt') >= ?2)").bind(tenant, startIso).all();
+  const [mv, bt, pr, sl, ex] = await Promise.all([all('movements'), all('batches'), all('products'), sales, since('expenses', 'date', from)]);
   const parse = (r) => (r.results || []).map((x) => { try { return JSON.parse(x.rec); } catch { return null; } }).filter(Boolean);
   return dailyStock({ movements: parse(mv), batches: parse(bt), products: parse(pr), sales: parse(sl), expenses: parse(ex), from, to: today });
 }

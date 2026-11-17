@@ -1,6 +1,6 @@
 // Daily stock sheet figures (worker/dailystock.js), fictional pharmacy: each day reconciles (Opening + Purchases −
 // Cost of stock sold − Other = Closing), Uganda days, expired stock left out like the app's Inventory value, a sale
-// sent late lands on its own day, refunded sales don't count, labels match the pharmacy's sheet ("Thur 22nd Oct").
+// sent late lands on its own day, a refund counts on its own day, labels match the pharmacy's sheet ("Thur 22nd Oct").
 import assert from 'node:assert/strict';
 import { dailyStock, dayLabel, localDay, toCsv } from '../worker/dailystock.js';
 let passed = 0;
@@ -36,7 +36,7 @@ ok('opening of the first day = stock before it', () => assert.equal(by['2026-10-
 ok('a sale costs its batch value', () => { assert.equal(by['2026-10-22'].cost, 300); assert.equal(by['2026-10-22'].profit, 300); });
 ok('purchases at cost', () => assert.equal(by['2026-10-23'].purchases, 1000));
 ok('a sale after 21:00 UTC is on the next Kampala day', () => { assert.equal(by['2026-10-23'].sales, 0); assert.equal(by['2026-10-24'].sales, 900); });
-ok('refunded sales are not counted', () => assert.equal(by['2026-10-24'].count, 2));
+ok('a sale refunded the same day: counted, and its refund takes the money back', () => { assert.equal(by['2026-10-24'].count, 3); assert.equal(by['2026-10-24'].sales, 900); });
 ok('a batch with no cost uses the medicine\'s cost', () => assert.equal(by['2026-10-24'].cost, 2 * 100 + 5 * 50));
 ok('expired stock leaves the value (as Inventory value shows it) under Other', () => {
   // b2 expires on the 24th: still counted on the 24th, gone on the 25th

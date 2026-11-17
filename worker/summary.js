@@ -13,40 +13,51 @@ export function eatDay(now = new Date()) {
   return { day, startIso: start.toISOString(), endIso: new Date(start.getTime() + 864e5).toISOString() };
 }
 
-/** Plain figures for one day, from that day's sales and expenses (pure: also used by the tests) */
-export function summarise({ sales, expenses, branches = [], lowStock = [], expiring = [] }) {
-  const ok = sales.filter((s) => s.status !== 'refunded');
-  const refunded = sales.filter((s) => s.status === 'refunded');
+/** When a refunded sale was refunded (records from before refundedAt was kept fall back to the sale's own date) */
+export const refundedOn = (s) => s.refundedAt || s.date;
+/** SQL for the refunds made in [?2, ?3): refunded sales whose refund (not the sale) falls in the period */
+export const REFUNDS_SQL = "SELECT rec FROM records WHERE tenant = ?1 AND t = 'sales' AND deleted = 0 AND json_extract(rec, '$.status') = 'refunded' AND COALESCE(json_extract(rec, '$.refundedAt'), json_extract(rec, '$.date')) >= ?2 AND COALESCE(json_extract(rec, '$.refundedAt'), json_extract(rec, '$.date')) < ?3";
+
+/**
+ * Plain figures for a period (pure: also used by the tests). [sales] are the sales MADE in the period, refunded later
+ * or not; [refunds] are the refunds MADE in the period, whenever their sale was (Nov 2026: a refund counts on the day
+ * it happens, as in Finance and Shifts, not on its sale's day). Without [refunds], the refunded ones among [sales].
+ */
+export function summarise({ sales, refunds = sales.filter((s) => s.status === 'refunded'), expenses, branches = [], lowStock = [], expiring = [] }) {
   const sum = (a, f) => a.reduce((x, y) => x + (Number(f(y)) || 0), 0);
-  const total = sum(ok, (s) => s.total);
-  const cost = sum(ok, (s) => sum(s.items || [], (i) => (i.cost || 0) * i.qty));
-  const tax = sum(ok, (s) => s.tax);
-  const byPay = {};
-  for (const s of ok) byPay[s.payment || 'Cash'] = (byPay[s.payment || 'Cash'] || 0) + (Number(s.total) || 0);
-  const credit = sum(ok, (s) => s.total - (s.paid ?? s.total));
-  const byBranch = {};
-  for (const s of ok) { const b = s.branchId || 'main'; byBranch[b] = (byBranch[b] || 0) + (Number(s.total) || 0); }
+  const costOf = (s) => sum(s.items || [], (i) => (i.cost || 0) * i.qty);
+  const gross = sum(sales, (s) => s.total), refundValue = sum(refunds, (s) => s.total);
+  const total = gross - refundValue;
+  const cost = sum(sales, costOf) - sum(refunds, costOf);
+  const tax = sum(sales, (s) => s.tax) - sum(refunds, (s) => s.tax);
+  // takings by payment and by branch, after the refunds paid back from them
+  const net = (key) => { const m = {}; for (const [list, sign] of [[sales, 1], [refunds, -1]]) for (const s of list) { const k = key(s); m[k] = (m[k] || 0) + sign * (Number(s.total) || 0); } return m; };
+  const byPay = net((s) => s.payment || 'Cash'), byBranch = net((s) => s.branchId || 'main');
+  // still owed: the period's sales on credit that were not refunded
+  const credit = sum(sales.filter((s) => s.status !== 'refunded'), (s) => s.total - (s.paid ?? s.total));
   const items = {};
-  for (const s of ok) for (const i of s.items || []) { const r = (items[i.name] ||= { name: i.name, qty: 0, value: 0 }); r.qty += i.qty; r.value += i.qty * i.price; }
+  for (const [list, sign] of [[sales, 1], [refunds, -1]]) for (const s of list) for (const i of s.items || []) {
+    const r = (items[i.name] ||= { name: i.name, qty: 0, value: 0 }); r.qty += sign * i.qty; r.value += sign * i.qty * i.price;
+  }
   const exp = sum(expenses, (e) => e.amount);
   return {
-    count: ok.length, total, cost, profit: total - tax - cost, tax, expenses: exp, net: total - tax - cost - exp,
-    discounts: sum(ok, (s) => s.discount), refunds: refunded.length, refundValue: sum(refunded, (s) => s.total), credit,
-    byPay: Object.entries(byPay).sort((a, b) => b[1] - a[1]),
+    count: sales.length, gross, total, cost, profit: total - tax - cost, tax, expenses: exp, net: total - tax - cost - exp,
+    discounts: sum(sales, (s) => s.discount), refunds: refunds.length, refundValue, credit,
+    byPay: Object.entries(byPay).filter(([, v]) => v).sort((a, b) => b[1] - a[1]),
     byBranch: Object.entries(byBranch).map(([id, v]) => [branches.find((b) => b.id === id)?.name || (id === 'main' ? 'Main branch' : id), v]).sort((a, b) => b[1] - a[1]),
-    top: Object.values(items).sort((a, b) => b.value - a.value).slice(0, 5), lowStock, expiring,
+    top: Object.values(items).filter((t) => t.qty > 0).sort((a, b) => b.value - a.value).slice(0, 5), lowStock, expiring,
   };
 }
 
 /** The message: short lines that read well in an email and on WhatsApp */
 export function summaryText(name, day, f, money) {
   const L = [`${name}: daily summary for ${day}`, '',
-    `Sales: ${money(f.total)} (${f.count} sale${f.count === 1 ? '' : 's'})`,
+    `Sales: ${money(f.gross ?? f.total)} (${f.count} sale${f.count === 1 ? '' : 's'})`,
+    ...(f.refunds > 0 ? [`Refunds made today: ${f.refunds} (${money(f.refundValue)})`, `Sales after refunds: ${money(f.total)}`] : []),
     ...f.byPay.map(([k, v]) => `  ${k}: ${money(v)}`),
     ...(f.credit > 0 ? [`  of which on credit: ${money(f.credit)}`] : []),
     `Gross profit: ${money(f.profit)}`, `Expenses: ${money(f.expenses)}`, `Net for the day: ${money(f.net)}`];
   if (f.discounts > 0) L.push(`Discounts given: ${money(f.discounts)}`);
-  if (f.refunds > 0) L.push(`Refunds: ${f.refunds} (${money(f.refundValue)})`);
   if (f.byBranch.length > 1) L.push('', 'By branch:', ...f.byBranch.map(([k, v]) => `  ${k}: ${money(v)}`));
   if (f.top.length) L.push('', 'Best sellers:', ...f.top.map((t) => `  ${t.name}: ${t.qty} (${money(t.value)})`));
   if (f.expiring.length) L.push('', `Expiring within 30 days: ${f.expiring.length} batch${f.expiring.length === 1 ? '' : 'es'}`, ...f.expiring.slice(0, 5).map((e) => `  ${e}`));
@@ -89,12 +100,13 @@ export async function dailySummaries(env, { now = new Date(), dry = false, tenan
     if (!to.length && !tenantId) continue;
     const rows = async (sql, ...args) => (await db.prepare(sql).bind(t.id, ...args).all()).results.map((r) => JSON.parse(r.rec || 'null')).filter(Boolean);
     const sales = await rows("SELECT rec FROM records WHERE tenant = ?1 AND t = 'sales' AND deleted = 0 AND json_extract(rec, '$.date') >= ?2 AND json_extract(rec, '$.date') < ?3", startIso, endIso);
+    const refunds = await rows(REFUNDS_SQL, startIso, endIso);
     const expenses = await rows("SELECT rec FROM records WHERE tenant = ?1 AND t = 'expenses' AND deleted = 0 AND substr(json_extract(rec, '$.date'), 1, 10) = ?2", day);
     const branches = await rows("SELECT rec FROM records WHERE tenant = ?1 AND t = 'branches' AND deleted = 0");
     const att = await attention(db, t.id, day);
     const expiring = att.expiring.map((b) => `${b.medicine} batch ${b.batch}: ${b.left} left, expires ${b.expiry}`);
     const lowStock = att.low.map((p) => `${p.medicine}: ${p.left} left (reorder at ${p.reorder})`);
-    const f = summarise({ sales, expenses, branches, lowStock, expiring });
+    const f = summarise({ sales, refunds, expenses, branches, lowStock, expiring });
     const text = summaryText(settings.name || t.name, day, f, fmtMoney(settings));
     let sent = 0, error = '';
     if (!dry && to.length) {
