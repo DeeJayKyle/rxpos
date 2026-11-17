@@ -14,6 +14,7 @@ const OWNER = 'local-owner-key-0123456789abcdef';
 const SUITES = [
   ['secret helper (unit)', 'unit-secret.mjs', []],
   ['daily stock figures (unit)', 'unit-daily-stock.mjs', []],
+  ['refunds counted on the refund day in cloud reports (unit)', 'unit-refund-day.mjs', []],
   ['invoice reading cross-check (unit)', 'unit-invoice-read.mjs', []],
   ['AI copilot and vision routes, mocked Workers AI (unit)', 'unit-ai-routes.mjs', []],
   ['date formats (unit)', 'unit-dateformat.mjs', []],

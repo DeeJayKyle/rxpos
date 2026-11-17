@@ -3,7 +3,7 @@
 // sends each schedule that is due an email with an Excel workbook attached: daily (that day), weekly (on Sundays: the
 // last 7 days) or monthly (on the last day: the month). Sheets: summary, sales, sales by medicine, expenses, and stock
 // that needs attention. Sent through Brevo like the daily summary. The workbook is written here, with no dependency.
-import { eatDay, summarise, attention } from './summary.js';
+import { eatDay, summarise, attention, refundedOn, REFUNDS_SQL } from './summary.js';
 /** A sale's time on the pharmacy's clock (East Africa, UTC+3), 'YYYY-MM-DD HH:MM' (2026-11-17 audit: it showed UTC) */
 const eatClock = (d) => { const ms = Date.parse(d); return Number.isFinite(ms) ? new Date(ms + 3 * 3600e3).toISOString().replace('T', ' ').slice(0, 16) : String(d || ''); };
 
@@ -120,17 +120,19 @@ const b64 = (bytes) => { let s = ''; for (let i = 0; i < bytes.length; i += 0x80
 const n = (v) => Number(v) || 0;
 
 /** The sheets of a report from the period's records (pure: also used by the tests). */
-export function reportSheets({ kinds, sales, expenses, categories = [], branches = [], attention: att = { expiring: [], low: [] }, label }) {
+export function reportSheets({ kinds, sales, refunds = sales.filter((s) => s.status === 'refunded'), expenses, categories = [], branches = [], attention: att = { expiring: [], low: [] }, label }) {
   const want = new Set(kinds?.length ? kinds : REPORT_KINDS);
-  const f = summarise({ sales, expenses, branches });
+  const f = summarise({ sales, refunds, expenses, branches });
   const branch = (id) => branches.find((b) => b.id === id)?.name || (!id || id === 'main' ? 'Main branch' : id);
   const cat = (id) => categories.find((c) => c.id === id)?.name || 'Expense';
   const out = [];
   if (want.has('summary')) {
     out.push({ name: 'Summary', rows: [
-      { figure: 'Period', value: label }, { figure: 'Sales', value: f.total }, { figure: 'Number of sales', value: f.count },
+      { figure: 'Period', value: label }, { figure: 'Sales made', value: f.gross }, { figure: 'Number of sales', value: f.count },
+      { figure: 'Refunds made (on the day of the refund)', value: f.refundValue }, { figure: 'Number of refunds', value: f.refunds },
+      { figure: 'Sales after refunds', value: f.total },
       ...f.byPay.map(([k, v]) => ({ figure: `  paid by ${k}`, value: v })), { figure: 'On credit', value: f.credit },
-      { figure: 'Discounts', value: f.discounts }, { figure: 'Refunds', value: f.refundValue }, { figure: 'Tax', value: f.tax },
+      { figure: 'Discounts', value: f.discounts }, { figure: 'Tax', value: f.tax },
       { figure: 'Cost of medicines sold', value: f.cost }, { figure: 'Gross profit', value: f.profit }, { figure: 'Expenses', value: f.expenses },
       { figure: 'Net', value: f.net }, ...f.byBranch.map(([k, v]) => ({ figure: `Sales at ${k}`, value: v })),
     ] });
@@ -139,13 +141,19 @@ export function reportSheets({ kinds, sales, expenses, categories = [], branches
     out.push({ name: 'Sales', rows: [...sales].sort((a, b) => String(a.date).localeCompare(String(b.date))).map((s) => ({
       date: eatClock(s.date), number: s.number || '', customer: s.customerName || '', cashier: s.cashier || '', branch: branch(s.branchId),
       payment: s.payment || 'Cash', items: (s.items || []).length, discount: n(s.discount), total: n(s.total), paid: n(s.paid ?? s.total), status: s.status || 'completed',
+      refundedOn: s.status === 'refunded' ? eatClock(refundedOn(s)) : '',
+    })) });
+    out.push({ name: 'Refunds', rows: [...refunds].sort((a, b) => String(refundedOn(a)).localeCompare(String(refundedOn(b)))).map((s) => ({
+      refundedOn: eatClock(refundedOn(s)), number: s.number || '', soldOn: eatClock(s.date), customer: s.customerName || '', refundedBy: s.refundedBy || '',
+      branch: branch(s.branchId), payment: s.payment || 'Cash', total: n(s.total),
     })) });
   }
   if (want.has('items')) {
     const by = new Map();
-    for (const s of sales) if (s.status !== 'refunded') for (const i of s.items || []) {
+    // sold in the period, less what was refunded in the period (refunds count on their own day)
+    for (const [list, k] of [[sales, 1], [refunds, -1]]) for (const s of list) for (const i of s.items || []) {
       const r = by.get(i.name) || { medicine: i.name, quantity: 0, sales: 0, cost: 0 };
-      r.quantity += n(i.qty); r.sales += n(i.qty) * n(i.price); r.cost += n(i.qty) * n(i.cost); by.set(i.name, r);
+      r.quantity += k * n(i.qty); r.sales += k * n(i.qty) * n(i.price); r.cost += k * n(i.qty) * n(i.cost); by.set(i.name, r);
     }
     out.push({ name: 'Sales by medicine', rows: [...by.values()].sort((a, b) => b.sales - a.sales).map((r) => ({ ...r, profit: r.sales - r.cost })) });
   }
@@ -181,14 +189,15 @@ export async function scheduledReports(env, { now = new Date(), dry = false, ten
       const to = String(s.emails || '').split(/[,;\s]+/).map((x) => x.trim()).filter((x) => EMAIL.test(x)).slice(0, 10);
       const kinds = (Array.isArray(s.reports) ? s.reports : []).filter((k) => REPORT_KINDS.includes(k));
       const sales = await rows("SELECT rec FROM records WHERE tenant = ?1 AND t = 'sales' AND deleted = 0 AND json_extract(rec, '$.date') >= ?2 AND json_extract(rec, '$.date') < ?3", p.startIso, p.endIso);
+      const refunds = await rows(REFUNDS_SQL, p.startIso, p.endIso);
       const expenses = await rows("SELECT rec FROM records WHERE tenant = ?1 AND t = 'expenses' AND deleted = 0 AND substr(json_extract(rec, '$.date'), 1, 10) BETWEEN ?2 AND ?3", p.from, p.to);
       const categories = await rows("SELECT rec FROM records WHERE tenant = ?1 AND t = 'expenseCategories' AND deleted = 0");
       const branches = await rows("SELECT rec FROM records WHERE tenant = ?1 AND t = 'branches' AND deleted = 0");
       const att = !kinds.length || kinds.includes('stock') ? await attention(db, t.id, p.to) : undefined;
-      const { sheets, figures } = reportSheets({ kinds, sales, expenses, categories, branches, attention: att, label: p.label });
+      const { sheets, figures } = reportSheets({ kinds, sales, refunds, expenses, categories, branches, attention: att, label: p.label });
       const file = `${name.replace(/[^\w -]+/g, '').trim() || 'RxPOS'} ${s.name || 'report'} ${p.label}.xlsx`.replace(/\s+/g, ' ');
       const money = (v) => `${settings.currency || 'UGX'} ${Math.round(n(v)).toLocaleString('en-US')}`;
-      const text = [`${name}: ${s.name || 'report'} for ${p.label}`, '', `Sales: ${money(figures.total)} (${figures.count})`, `Gross profit: ${money(figures.profit)}`,
+      const text = [`${name}: ${s.name || 'report'} for ${p.label}`, '', `Sales: ${money(figures.gross)} (${figures.count})`, ...(figures.refunds ? [`Refunds: ${money(figures.refundValue)} (${figures.refunds})`, `Sales after refunds: ${money(figures.total)}`] : []), `Gross profit: ${money(figures.profit)}`,
         `Expenses: ${money(figures.expenses)}`, `Net: ${money(figures.net)}`, '', `The full report is in the attached workbook (${sheets.map((x) => x.name).join(', ')}).`, '', '— RxPOS'].join('\n');
       let sent = 0, error = to.length ? '' : 'no email addresses';
       if (!dry && to.length) {

@@ -1,5 +1,20 @@
 # RxPOS release notes
 
+## React (classic) app 1.10.3 · Cloud · November 2026 (refunds on the day they happen)
+
+Nothing to do on the tills. **Past figures in the cloud reports change** (read this before comparing with old emails).
+
+- **Refunds count on the day they happen.** The evening summary email, the scheduled Excel reports and the daily
+  stock sheet used to leave a refunded sale out of its own day. Now the sale stays on the day it was made and the
+  refund takes its money, profit and medicines off the day it was refunded, the way Finance and Shifts already
+  count it. A sale on Monday refunded on Wednesday: Monday's sales go **up** by that sale, Wednesday's go **down** by
+  it, and a day with more refunds than sales can show a negative figure. Totals over a whole week or month are the
+  same unless the sale and its refund fall in different periods.
+- **What the reports show:** "Sales made", "Refunds made" and "Sales after refunds"; takings by payment and by
+  branch after refunds; a new **Refunds** sheet (refund date, receipt, sale date, who refunded it); "Sales by medicine"
+  net of refunds; a "refunded on" column in the Sales sheet.
+- **Old refunds** recorded before the app kept the refund date stay on their sale's day.
+
 ## React (classic) app 1.10.2 · Flutter app 2.1 (next build) · Cloud · November 2026 (security and safety release)
 
 Fixes from the 17 November 2026 audit. Tills update by themselves. **Hub users sign in once more** after the update
