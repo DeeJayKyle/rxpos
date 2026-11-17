@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/theme/line_colors.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:printing/printing.dart';
@@ -39,7 +40,7 @@ class _ProformasScreenState extends ConsumerState<ProformasScreen> {
           : ListView.separated(
               itemCount: list.length,
               separatorBuilder: (_, _) => const Divider(height: 1),
-              itemBuilder: (_, i) {
+              itemBuilder: hued((_, i) {
                 final pf = list[i];
                 final converted = pf['status'] == 'Converted';
                 return ListTile(
@@ -62,7 +63,7 @@ class _ProformasScreenState extends ConsumerState<ProformasScreen> {
                   ]),
                   onTap: () => _view(pf, st),
                 );
-              },
+              }),
             ),
     );
   }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/theme/line_colors.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -110,7 +111,7 @@ class _PeopleScreenState extends ConsumerState<PeopleScreen> {
               builder: (context, row) => ListView.separated(
               itemCount: list.length,
               separatorBuilder: (_, _) => const Divider(height: 1),
-              itemBuilder: (_, i) {
+              itemBuilder: hued((_, i) {
                 final r = list[i];
                 final bal = owes('${r['id']}');
                 final st = row(i);
@@ -126,7 +127,7 @@ class _PeopleScreenState extends ConsumerState<PeopleScreen> {
                     IconButton(tooltip: 'Edit', icon: const Icon(Icons.edit_outlined), onPressed: () => _edit(r)),
                   ]),
                 ));
-              },
+              }),
             ),
             ),
     );

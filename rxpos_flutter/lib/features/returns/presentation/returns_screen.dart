@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/theme/line_colors.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:printing/printing.dart';
 
@@ -57,7 +58,7 @@ class _ReturnsScreenState extends ConsumerState<ReturnsScreen> {
           : ListView.separated(
               itemCount: list.length,
               separatorBuilder: (_, _) => const Divider(height: 1),
-              itemBuilder: (_, i) {
+              itemBuilder: hued((_, i) {
                 final r = list[i];
                 final names = items(r).map((x) => '${x['name']}').toList();
                 return ListTile(
@@ -70,7 +71,7 @@ class _ReturnsScreenState extends ConsumerState<ReturnsScreen> {
                   ]),
                   onTap: () => _view(r, st),
                 );
-              },
+              }),
             ),
     );
   }

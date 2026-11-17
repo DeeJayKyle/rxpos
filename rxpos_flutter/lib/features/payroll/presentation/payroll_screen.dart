@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import '../../../core/theme/line_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pdf/pdf.dart';
@@ -77,7 +78,7 @@ class _PayrollScreenState extends ConsumerState<PayrollScreen> {
   }
 
   Widget _head(List<Widget> children) => Padding(padding: const EdgeInsets.only(bottom: 8), child: Wrap(spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: children));
-  Widget _list(List<Widget> rows, String empty) => rows.isEmpty ? EmptyState(empty) : ListView.separated(itemCount: rows.length, separatorBuilder: (_, _) => const Divider(height: 1), itemBuilder: (_, i) => rows[i]);
+  Widget _list(List<Widget> rows, String empty) => rows.isEmpty ? EmptyState(empty) : ListView.separated(itemCount: rows.length, separatorBuilder: (_, _) => const Divider(height: 1), itemBuilder: hued((_, i) => rows[i]));
   Widget _monthField() => SizedBox(width: 140, child: TextFormField(key: ValueKey('month-$_tab'), initialValue: _month, decoration: const InputDecoration(labelText: 'Month', hintText: 'YYYY-MM', isDense: true),
       onChanged: (v) => setState(() => _month = RegExp(r'^\d{4}-\d{2}$').hasMatch(v.trim()) ? v.trim() : _month)));
 

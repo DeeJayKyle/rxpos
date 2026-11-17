@@ -1,6 +1,7 @@
 // The remaining screens: reminders, team chat, the controlled-drugs register,
 // barcode labels, importing medicines and drug information.
 
+import '../../../core/theme/line_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -94,7 +95,7 @@ class _ControlledScreenState extends ConsumerState<ControlledScreen> {
             : ListView.separated(
                 itemCount: rows.length,
                 separatorBuilder: (_, _) => const Divider(height: 1),
-                itemBuilder: (_, i) {
+                itemBuilder: hued((_, i) {
                   final x = rows[i];
                   return ListTile(
                     dense: true,
@@ -106,7 +107,7 @@ class _ControlledScreenState extends ConsumerState<ControlledScreen> {
                       Text('Balance ${formatQty(x.bal)}', style: const TextStyle(fontWeight: FontWeight.w700)),
                     ]),
                   );
-                },
+                }),
               ),
       ),
     ]);

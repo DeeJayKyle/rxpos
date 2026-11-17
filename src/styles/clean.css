@@ -4,7 +4,7 @@
 .list-filters.end { justify-content: flex-end; }
 .filter-chips { display: inline-flex; flex-wrap: wrap; }
 .filter-chips button { display: inline-flex; align-items: center; gap: 6px; }
-.chip-count { font-size: 11px; font-weight: 700; padding: 0 6px; border-radius: 99px; line-height: 17px; background: color-mix(in srgb, var(--text) 8%, transparent); color: var(--muted); font-variant-numeric: tabular-nums; }
+.chip-count { font-size: 11px; font-weight: 700; padding: 0 6px; border-radius: 99px; line-height: 17px; background: color-mix(in srgb, var(--text) 8%, var(--surface)); color: var(--muted); font-variant-numeric: tabular-nums; }
 .filter-chips button.on .chip-count { background: var(--primary-soft); color: var(--primary-ink); }
 .subview-bar { display: flex; align-items: center; gap: 12px; margin: 0 0 14px; animation: fade-up .25s ease-out; }
 .subview-bar h2 { margin: 0; font-size: 20px; letter-spacing: -.02em; }

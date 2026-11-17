@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/theme/line_colors.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -116,7 +117,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
                   physics: phone ? const NeverScrollableScrollPhysics() : null,
                   itemCount: rows.length + (more > 0 ? 1 : 0),
                   separatorBuilder: (_, _) => const Divider(height: 1),
-                  itemBuilder: (_, i) {
+                  itemBuilder: hued((_, i) {
                     if (i == rows.length) {
                       return Padding(
                         padding: const EdgeInsets.all(12),
@@ -147,7 +148,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
                       ]),
                       onTap: () => _open(p),
                     );
-                  },
+                  }),
                 ),
         ),
       ]),
