@@ -4,6 +4,7 @@
 //   line  { key, productId ('' | '__new__' | id), name, form, qty, cost, total, price, auto, by ('unit' | 'total'),
 //           batch, expiry, recvPack?, recvSize?, basePrice?, derived?, kept?, read?, barcode? }
 // Numbers typed in the boxes are kept as text (as typed), like the React inputs.
+import '../../../core/theme/line_colors.dart';
 import '../../../core/data/pharmacy_providers.dart';
 import '../../../core/data/record_store.dart';
 import '../../../core/entities/party.dart';
@@ -46,7 +47,7 @@ double formTotal(Map<String, Object?> form) => lines(form).fold<double>(0, (a, l
 
 List<Line> lines(Map<String, Object?> form) => [for (final l in (form['lines'] as List?) ?? const []) (l as Map).cast<String, Object?>()];
 
-Line blankLine() => {'key': uid(), 'productId': '', 'name': '', 'form': 'Tablets', 'qty': '1', 'cost': '', 'total': '', 'price': '', 'auto': true, 'by': 'unit', 'batch': '', 'expiry': ''};
+Line blankLine() => {'key': uid(), 'hue': nextHue(), 'productId': '', 'name': '', 'form': 'Tablets', 'qty': '1', 'cost': '', 'total': '', 'price': '', 'auto': true, 'by': 'unit', 'batch': '', 'expiry': ''};
 
 Map<String, Object?> blankForm(PharmacySettings s) => {
       'supplierId': '', 'invoice': '', 'date': today(), 'paid': '', 'bankId': 'cash-drawer', 'notes': '', 'markup': _txt(s.retailMarkup), 'lines': [blankLine()],

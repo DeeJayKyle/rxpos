@@ -115,6 +115,12 @@ Every feature of the React app (`src/pages/*.jsx`, `src/*.jsx`), screen by scree
 - ✗ Build and edit kits (icon, colour, warning, services, ready-made kits), sell them at the till (KIT tiles and lines,
   can make N, warning to tick, swap a medicine for one sale), kit labels, kit sales, low-kit alert — pending
 
+## Colour (1.10.1)
+- ✅ Colourful Add Stock: each line its own colour (stripe, numbered badge, tint; kept when a line is removed), a colour
+  band per column heading, grid lines, tinted supplier and invoice panels, highlighted total (lib/core/theme/line_colors.dart)
+- ✅ Every list in colour (classic: styles/pagecolors.css): each row its line colour as a stripe and tint (`hued(...)`
+  item builders); column-heading bands are only on Add Stock here, as the other Flutter lists have no column headings
+
 ## Stock take (StockCount.jsx)
 - ✅ Start, count per batch, found batch, review, post (same records as the React app: system quantity kept when counted)
 - ✅ Scan & count (each scan counts one pack), blind count with show / hide, scopes: all, shelf, formulation, expiring, top by value, random, scan as you go

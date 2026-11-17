@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/theme/line_colors.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/rules/balances.dart' show BalanceWindow;
@@ -86,7 +87,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
 
   Widget _head(List<Widget> children) => Padding(padding: const EdgeInsets.only(bottom: 8), child: Wrap(spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: children));
 
-  Widget _list(List<Widget> rows, String empty) => rows.isEmpty ? EmptyState(empty) : ListView.separated(itemCount: rows.length, separatorBuilder: (_, _) => const Divider(height: 1), itemBuilder: (_, i) => rows[i]);
+  Widget _list(List<Widget> rows, String empty) => rows.isEmpty ? EmptyState(empty) : ListView.separated(itemCount: rows.length, separatorBuilder: (_, _) => const Divider(height: 1), itemBuilder: hued((_, i) => rows[i]));
 
   Future<void> _delete(String table, Map<String, Object?> r, String what) async {
     if (!await confirmAction(context, 'Delete this $what?', 'It is removed on every device.', 'Delete')) return;

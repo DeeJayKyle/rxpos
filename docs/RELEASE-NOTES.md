@@ -1,5 +1,19 @@
 # RxPOS release notes
 
+## React (classic) app 1.10.1 · Flutter app 2.1 (next build) · November 2026
+
+Every page in colour, the way Add Stock is. Nothing to do on the tills: they update by themselves.
+
+- **Every list and table** (classic app): each row has its own colour, a stripe down its left edge and a light tint
+  across it; each column heading has its own colour band; grid lines separate rows and columns. On phones, where a list
+  turns into cards, the whole card takes the colour. Receipts, labels and printed pages stay plain. Every colour theme,
+  dark ones included, stays readable (checked in all 36 themes).
+- **The till:** each line of the sale has its own colour; kit lines keep their kit colour.
+- **Flutter app:** Add Stock in colour (each line its own colour with a numbered badge, a colour band per column, grid
+  lines, tinted supplier and invoice panels, highlighted total), and the same row colours on its lists: inventory,
+  medicines, sales history, the till's sale lines, purchases, stock count, customers and suppliers, proformas,
+  prescriptions, returns, shelves, finance, payroll and the audit log.
+
 ## React (classic) app 1.10.0 · Flutter app 2.1 (next build) · November 2026
 
 A colourful Add Stock and **kits**: medicines sold together as one item. Nothing to do on the tills: they update by

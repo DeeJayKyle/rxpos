@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import '../../../core/theme/line_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -1218,7 +1219,7 @@ class _SalePanel extends ConsumerWidget {
                   : ListView.separated(
                       itemCount: s.lines.length,
                       separatorBuilder: (_, _) => const Divider(height: 1),
-                      itemBuilder: (_, i) {
+                      itemBuilder: hued((_, i) {
                         final l = s.lines[i];
                         final p = data.byId[l.id];
                         final packs = p == null ? const <Pack>[] : packsOf(p);
@@ -1347,7 +1348,7 @@ class _SalePanel extends ConsumerWidget {
                             ),
                           ),
                         );
-                      },
+                      }),
                     ),
             ),
             () {

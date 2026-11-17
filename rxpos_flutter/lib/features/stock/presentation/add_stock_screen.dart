@@ -11,6 +11,7 @@ import '../../../core/data/pharmacy_providers.dart';
 import '../../../core/data/record_store.dart';
 import '../../../core/entities/product.dart';
 import '../../../core/presentation/widgets.dart';
+import '../../../core/theme/line_colors.dart';
 import '../../../core/rules/dates.dart';
 import '../../../core/rules/gs1.dart';
 import '../../../core/rules/money.dart';
@@ -477,7 +478,8 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
           padding: const EdgeInsets.all(16),
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Wrap(spacing: 24, runSpacing: 12, alignment: WrapAlignment.spaceBetween, children: [
-              SizedBox(
+              _Panel(
+                color: lineColors[0],
                 width: 320,
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   DropdownButtonFormField<String>(
@@ -499,7 +501,8 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
                   Text([s.address, s.phone].where((x) => x.isNotEmpty).join(' · '), style: th.textTheme.bodySmall),
                 ]),
               ),
-              SizedBox(
+              _Panel(
+                color: lineColors[1],
                 width: 330,
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Text('Purchase invoice', style: th.textTheme.titleLarge),
@@ -580,11 +583,15 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Row(children: [
-                  const SizedBox(width: 32, child: Text('#')),
+                Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const SizedBox(width: 40, child: Padding(padding: EdgeInsets.all(8), child: Text('#'))),
                   for (final (i, c) in cols.indexed)
-                    SizedBox(
+                    Container(
                       width: switch (c) { 'medicine' => 260, 'qty' => 120, 'cost' => 140, 'total' => 130, 'price' => 170, 'batch' => 120, _ => 170 } + 8,
+                      padding: const EdgeInsets.fromLTRB(6, 6, 2, 6),
+                      // 1.10 each column heading has its own colour band (lib/core/theme/line_colors.dart)
+                      decoration: BoxDecoration(color: tint(columnColors[c] ?? th.colorScheme.primary, th.colorScheme.surface, 16),
+                          border: Border(top: BorderSide(color: columnColors[c] ?? th.colorScheme.primary, width: 4), right: BorderSide(color: th.colorScheme.outlineVariant))),
                       child: Row(children: [
                         Flexible(child: Text(stockColumns[c]!, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700))),
                         InkWell(onTap: i == 0 ? null : () => moveCol(c, i - 1), child: Tooltip(message: 'Move ${stockColumns[c]} left', child: Icon(Icons.chevron_left, size: 18, color: i == 0 ? Theme.of(context).disabledColor : null))),
@@ -594,13 +601,25 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
                 ]),
                 const Divider(),
                 for (final (i, l) in lines(f).indexed)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 6),
-                    child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      SizedBox(width: 32, child: Padding(padding: const EdgeInsets.only(top: 12), child: Text('${i + 1}'))),
+                  // 1.10 each line its own colour: a stripe, a numbered badge and a light tint; grid lines between cells
+                  Container(
+                    decoration: BoxDecoration(color: tint(lineColor(l['hue'], i), th.colorScheme.surface, 9),
+                        border: Border(left: BorderSide(color: lineColor(l['hue'], i), width: 5), bottom: BorderSide(color: th.colorScheme.outlineVariant))),
+                    child: Stack(children: [
+                      // grid lines between the columns, the full height of the line
+                      Positioned.fill(child: IgnorePointer(child: Row(children: [
+                        const SizedBox(width: 35),
+                        for (final c in cols)
+                          Container(width: switch (c) { 'medicine' => 260, 'qty' => 120, 'cost' => 140, 'total' => 130, 'price' => 170, 'batch' => 120, _ => 170 } + 8,
+                              decoration: BoxDecoration(border: Border(left: BorderSide(color: th.colorScheme.outlineVariant)))),
+                      ]))),
+                      Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      SizedBox(width: 35, child: Padding(padding: const EdgeInsets.only(top: 12),
+                          child: Center(child: CircleAvatar(radius: 11, backgroundColor: lineColor(l['hue'], i), child: Text('${i + 1}', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800)))))),
                       for (final c in cols)
-                        SizedBox(
+                        Container(
                           width: switch (c) { 'medicine' => 260, 'qty' => 120, 'cost' => 140, 'total' => 130, 'price' => 170, 'batch' => 120, _ => 170 } + 8,
+                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
                           child: Align(alignment: Alignment.topLeft, child: cell(c, l, i)),
                         ),
                       IconButton(tooltip: 'Remove line', icon: const Icon(Icons.close), onPressed: () {
@@ -608,6 +627,7 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
                         _set({...f, 'lines': ls.length > 1 ? ls.where((x) => x['key'] != l['key']).toList() : [blankLine()]});
                         setState(() => _round++);
                       }),
+                    ]),
                     ]),
                   ),
                 for (final l in lines(f).where((l) => l['read'] != null))
@@ -646,7 +666,7 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
                 child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                   _TotalRow('Lines', '${lines(f).where((l) => '${l['productId'] ?? ''}'.isNotEmpty).length}'),
                   _TotalRow('Sub-total', s.money(total)),
-                  _TotalRow('Total', s.money(total), bold: true),
+                  Container(color: tint(th.colorScheme.primary, th.colorScheme.surface, 12), padding: const EdgeInsets.symmetric(horizontal: 4), child: _TotalRow('Total', s.money(total), bold: true)),
                   _TotalRow('Amount paid', s.money(paidNow < total ? paidNow : total)),
                   _TotalRow('Balance (on credit)', s.money(total - paidNow > 0 ? total - paidNow : 0), warn: paidNow < total),
                 ]),
@@ -675,6 +695,25 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
         ),
       ),
     ]);
+  }
+}
+
+/// 1.10 a tinted panel with a coloured edge (the supplier and the invoice details)
+class _Panel extends StatelessWidget {
+  const _Panel({required this.color, required this.width, required this.child});
+  final Color color;
+  final double width;
+  final Widget child;
+  @override
+  Widget build(BuildContext context) {
+    final surface = Theme.of(context).colorScheme.surface;
+    return Container(
+      width: width + 28,
+      padding: const EdgeInsets.fromLTRB(9, 10, 14, 10),
+      decoration: BoxDecoration(color: tint(color, surface, 7),
+          border: Border(left: BorderSide(color: color, width: 5), top: BorderSide(color: tint(color, surface, 30)), right: BorderSide(color: tint(color, surface, 30)), bottom: BorderSide(color: tint(color, surface, 30)))),
+      child: child,
+    );
   }
 }
 

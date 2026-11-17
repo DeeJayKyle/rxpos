@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/theme/line_colors.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -189,7 +190,7 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
                     builder: (context, row) => ListView.separated(
                     itemCount: sales.length + 1,
                     separatorBuilder: (_, _) => const Divider(height: 1),
-                    itemBuilder: (_, i) {
+                    itemBuilder: hued((_, i) {
                       if (i == sales.length) {
                         return ListTile(
                           title: Text('Total (excl. refunds) · ${valid.length} sales', style: const TextStyle(fontWeight: FontWeight.w700)),
@@ -233,7 +234,7 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
                         ]),
                         onTap: () => _open(s, st),
                       ));
-                    },
+                    }),
                   ),
                   ),
           ),
