@@ -80,26 +80,20 @@
 
   :root[data-palette][data-sidebar='light'] .bento-hero { background: radial-gradient(120% 90% at 100% 0%, color-mix(in srgb, var(--sidebar) 30%, transparent), transparent 60%), linear-gradient(160deg, var(--primary), color-mix(in srgb, var(--primary) 70%, #000)); }
   :root[data-palette] .bento-hero :is(.bento-delta, .bento-delta.up, .bento-delta.down) { background: rgba(255, 255, 255, .2); color: #fff; }
-  /* the menu's pages as light, soft-glass buttons (the owner's review, 17 Nov 2026): a faint see-through fill with a
-     soft edge on the menu colour; the open page a brighter frosted button with a gentle lift */
+  /* the menu (the owner's review, 17 Nov 2026, after Charcoal Lime): a deep menu, its pages as light soft-glass buttons,
+     the open page a solid pill in the theme's bright colour with the button text colour on it */
   :root[data-palette] .sidebar nav a { margin: 0 4px 4px; border-radius: 12px; background: rgba(255, 255, 255, .07); border: 1px solid rgba(255, 255, 255, .10);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08); transition: background .15s, box-shadow .15s; }
   :root[data-palette] .sidebar nav a:hover { background: rgba(255, 255, 255, .14); }
-  :root[data-palette] .sidebar nav a.active, :root[data-palette][data-sidebar] .sidebar nav a.active { background: rgba(255, 255, 255, .24); color: #ffffff; font-weight: 700;
-    border-color: rgba(255, 255, 255, .32); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), 0 8px 18px -10px rgba(0, 0, 0, .55); }
-  :root[data-palette] .sidebar nav a.active svg, :root[data-palette][data-sidebar] .sidebar nav a.active svg { color: #ffffff; }
-  :root[data-palette] .sidebar nav a.active::before, :root[data-palette][data-sidebar] .sidebar nav a.active::before { display: none; }
-  /* light menus (Lime, Sage): the same glass, whiter, with the menu's dark words */
+  :root[data-palette][data-sidebar] .sidebar nav a.active { background: var(--pill); color: var(--pill-on); font-weight: 700; border-color: var(--pill);
+    box-shadow: 0 8px 18px -10px color-mix(in srgb, var(--pill) 70%, transparent); }
+  :root[data-palette][data-sidebar] .sidebar nav a.active svg { color: var(--pill-on); }
+  :root[data-palette][data-sidebar] .sidebar nav a.active::before { display: none; }
+  :root[data-palette][data-sidebar] .sidebar nav a.active kbd { color: var(--pill-on); border-color: color-mix(in srgb, var(--pill-on) 35%, transparent); background: transparent; }
+  :root[data-palette][data-sidebar] .sidebar nav a.active .count { background: var(--pill-on); color: var(--pill); }
+  /* a light menu (Lime Charcoal): whiter glass with the menu's dark words; the pill stays solid */
   :root[data-palette][data-sidebar='light'] .sidebar nav a { background: rgba(255, 255, 255, .32); border-color: rgba(255, 255, 255, .5); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .6); }
   :root[data-palette][data-sidebar='light'] .sidebar nav a:hover { background: rgba(255, 255, 255, .5); }
-  :root[data-palette][data-sidebar='light'] .sidebar nav a.active { background: rgba(255, 255, 255, .78); color: var(--sidebar-text); border-color: #ffffff;
-    box-shadow: inset 0 1px 0 #ffffff, 0 8px 18px -10px rgba(0, 0, 0, .35); }
-  :root[data-palette][data-sidebar='light'] .sidebar nav a.active svg { color: var(--sidebar-text); }
-
-  /* Charcoal Lime (the owner's reference): the open page a solid lime pill with charcoal words */
-  :root[data-palette='night-lime'][data-sidebar] .sidebar nav a.active { background: #c8f169; color: #1f1f2a; border-color: #c8f169; box-shadow: 0 8px 18px -10px rgba(200, 241, 105, .6); }
-  :root[data-palette='night-lime'][data-sidebar] .sidebar nav a.active svg { color: #1f1f2a; }
-  :root[data-palette='night-lime'][data-sidebar] .sidebar nav a.active kbd { color: #1f1f2a; border-color: rgba(31, 31, 42, .3); background: transparent; }
 
   /* the page and its cards: colour 2 under, white cards over */
   :root[data-palette] body { background-image: none; }

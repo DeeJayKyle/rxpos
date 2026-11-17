@@ -56,18 +56,18 @@ const duo = (id, name, group, { c1, c2, side = c1, sideText, base = 'light', ins
 
 export const THEMES = [
   // Bold sidebars: the menu in colour 1, the pages tinted with colour 2
-  duo('electric-blue', 'Electric Blue', 'Bold sidebars', { c1: '#0a4dff', c2: '#dfe8ff', strong: true, inspired: 'Bright blue menu, blue-washed pages' }),
-  duo('royal-purple', 'Royal Purple', 'Bold sidebars', { c1: '#6d4ae8', c2: '#f4f1fd', side: '#3b1a7a', inspired: 'Deep purple menu with white words, violet actions' }),
-  duo('forest-green', 'Forest Green', 'Bold sidebars', { c1: '#1e8c4e', c2: '#dcefe3', strong: true, inspired: 'Green menu, green-washed pages' }),
+  duo('electric-blue', 'Electric Blue', 'Bold sidebars', { c1: '#0a4dff', c2: '#dfe8ff', side: '#101a3a', strong: true, inspired: 'Deep blue menu, bright blue pills' }),
+  duo('royal-purple', 'Royal Purple', 'Bold sidebars', { c1: '#6d4ae8', c2: '#f4f1fd', side: '#1e1433', inspired: 'Deep purple menu with white words, violet actions' }),
+  duo('forest-green', 'Forest Green', 'Bold sidebars', { c1: '#1e8c4e', c2: '#dcefe3', side: '#0f2419', strong: true, inspired: 'Green menu, green-washed pages' }),
   // Dark sidebars and the dark theme
   duo('night-lime', 'Charcoal Lime', 'Dark sidebars', { c1: '#c8f169', c2: '#f4f4f0', side: '#1f1f2a', inspired: 'Charcoal menu, lime pills and buttons with dark words' }),
   duo('charcoal-lime', 'Lime Charcoal', 'Dark sidebars', { c1: '#1f1f2a', c2: '#eef7d6', side: '#c8f169', sideText: '#1f1f2a', strong: true, inspired: 'Lime menu with charcoal words, charcoal actions' }),
   duo('midnight-indigo', 'Midnight Indigo', 'Dark sidebars', { c1: '#5b5bf0', c2: '#e6e6fb', side: '#1b1d2e', strong: true, inspired: 'Midnight menu, indigo actions' }),
   duo('navy-teal', 'RxPOS Navy Teal', 'Dark sidebars', { c1: '#14b8a6', c2: '#0a2233', side: '#0f2a44', base: 'dark', strong: true, inspired: 'Navy and teal: the RxPOS till' }),
   // Soft tints: the whole page washed in colour 2
-  duo('lavender', 'Lavender', 'Soft tints', { c1: '#7451eb', c2: '#e4dcff', strong: true, inspired: 'Violet on lavender' }),
-  duo('sage', 'Sage', 'Soft tints', { c1: '#2f6b45', c2: '#e3eee1', side: '#8fb98b', strong: true, inspired: 'Sage menu, deep green words' }),
-  duo('mint-teal', 'Mint Teal', 'Soft tints', { c1: '#0f8a8a', c2: '#cfe6e6', strong: true, inspired: 'Teal on mint, the RxPOS colour' }),
+  duo('lavender', 'Lavender', 'Soft tints', { c1: '#7451eb', c2: '#e4dcff', side: '#1f1a33', strong: true, inspired: 'Violet on lavender' }),
+  duo('sage', 'Sage', 'Soft tints', { c1: '#2f6b45', c2: '#e3eee1', side: '#18241b', strong: true, inspired: 'Deep sage menu, green pills' }),
+  duo('mint-teal', 'Mint Teal', 'Soft tints', { c1: '#0f8a8a', c2: '#cfe6e6', side: '#0f2222', strong: true, inspired: 'Teal on mint, the RxPOS colour' }),
 ];
 /** Themes retired → the new theme closest to each, so a saved choice or an owner's list keeps working */
 export const RETIRED = {
@@ -119,6 +119,14 @@ export function themeVars(t) {
   };
 }
 
+/** The open page's pill on the menu: the brand colour, brightened (or deepened on a light menu) until it stands out from
+ *  the menu (3:1), with white or dark words, whichever reads better (at least 4.5:1) */
+const menuPill = (c) => {
+  const pill = readable(c.primary, [c.sidebar], lightMenu(c.sidebar) ? '#000000' : '#ffffff', 3);
+  const on = contrast('#ffffff', pill) >= contrast(INK, pill) ? '#ffffff' : INK;
+  return { '--pill': readable(pill, [on], on === '#ffffff' ? '#000000' : '#ffffff'), '--pill-on': on };
+};
+
 /** The logo's second colour (the capsule's lower half): the menu colour when it differs from the brand colour, else a
  *  deeper shade of it */
 const logo2 = (c) => (c.sidebar.toLowerCase() !== c.primary.toLowerCase() && !lightMenu(c.sidebar) ? c.sidebar : mix(c.primary, '#000000', 0.35));
@@ -141,7 +149,7 @@ function duoVars(c, dark) {
   return {
     '--ok': ok, '--ok-soft': soft(0.14), '--warn': warn, '--warn-soft': soft(0.2), '--danger': danger, '--danger-soft': soft(0.26),
     '--violet': shade(0.2), '--violet-soft': soft(0.16), '--info': shade(0.12), '--info-soft': soft(0.14), '--blue': shade(0.1), '--blue-soft': soft(0.14),
-    '--c2': c.c2 || c.bg, '--c1-deep': shade(0.25), '--logo-2': logo2(c), '--menu-lit': readable(c.primary, ['#ffffff'], '#000000'), '--menu-ink': readable(mix(lightMenu(c.sidebar) || c.sidebar === c.primary ? c.primary : c.sidebar, '#000000', 0.62), ['#ffffff', '#f1f4f8'], '#000000', 7), '--row-tint': `${c.rowTint ?? 7}%`, '--row-hover': `${(c.rowTint ?? 7) + 4}%`, '--head-tint': `${c.headTint ?? 16}%`,
+    '--c2': c.c2 || c.bg, '--c1-deep': shade(0.25), '--logo-2': logo2(c), '--menu-lit': readable(c.primary, ['#ffffff'], '#000000'), ...menuPill(c), '--menu-ink': readable(mix(lightMenu(c.sidebar) || c.sidebar === c.primary ? c.primary : c.sidebar, '#000000', 0.62), ['#ffffff', '#f1f4f8'], '#000000', 7), '--row-tint': `${c.rowTint ?? 7}%`, '--row-hover': `${(c.rowTint ?? 7) + 4}%`, '--head-tint': `${c.headTint ?? 16}%`,
     // charts, the till's actions and the Vivid tiles: the same two colours
     '--viz-1': c.primary, '--viz-2': c.sidebar === c.primary ? mix(c.primary, toward, 0.45) : c.sidebar,
     '--m-in': c.primary, '--m-purch': mix(c.primary, toward, 0.35), '--m-exp': danger, '--m-profit': c.sidebar === c.primary ? warn : c.sidebar,

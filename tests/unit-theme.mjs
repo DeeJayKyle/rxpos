@@ -45,6 +45,7 @@ check('every theme: warning text reads at AA on the page and on cards', low.leng
 low = [];
 for (const t of THEMES) { const v = themeVars(t); for (let i = 0; i < 8; i++) if (contrast('#ffffff', v[`--hue-${i}`]) < 4.5) low.push(`${t.id} hue-${i}`); }
 check('every theme: white numbers read on every table colour (Add Stock badges)', low.length === 0, low.join(', '));
+check('every theme: the open page\'s pill stands out from the menu (3:1) and its words read on it (4.5:1)', THEMES.every((t) => { const v = themeVars(t); return contrast(v['--pill'], t.c.sidebar) >= 3 && contrast(v['--pill-on'], v['--pill']) >= 4.5; }), THEMES.map((t) => { const v = themeVars(t); return `${t.id} ${contrast(v['--pill'], t.c.sidebar).toFixed(1)}/${contrast(v['--pill-on'], v['--pill']).toFixed(1)}`; }).join(' '));
 check('every menu reads (its text on the menu colour ≥ 4.5:1)', THEMES.every((t) => contrast(t.c.sidebarText || '#aab6ca', t.c.sidebar) >= 4.5));
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
