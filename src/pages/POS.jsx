@@ -1,6 +1,7 @@
 import { mainPack, packPrice, sellInPacks } from '../packs.js';
 import { useState, useRef, useEffect, useMemo, useDeferredValue } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
+import FKeyBar, { fkeyItems, fkeysShown, showFkeys } from '../components/FKeyBar.jsx';
 import { ShoppingCart, Trash2, X, ScanText, FileText, Printer, AlertTriangle, ScanBarcode, Smartphone, Loader2, CheckCircle2, UserPlus, Tag, BookMarked, Repeat, PauseCircle, Keyboard, Plus, ClipboardList, MessageCircle, MessageSquareText, Star, Search, Command, LayoutGrid, Users } from 'lucide-react';
 import { DrugInfoPanel, genericKey } from './DrugInfo.jsx';
 import { useStore, useSyncState, uid, now, daysUntil, put, del, move, allocate, audit, normalizePhone, customerBalance, DEFAULT_PAYMENT_METHODS } from '../store.jsx';
@@ -93,6 +94,7 @@ export default function POS({ mode = 'retail' }) {
   const [cursor, setCursor] = useState(-1); // cart line chosen with Alt+↑/↓ (−1 = the last one)
   const [active, setActive] = useState(0);  // highlighted medicine card (arrow keys)
   const [help, setHelp] = useState(false);
+  const [fkeys, setFkeys] = useState(fkeysShown); // the F-key legend under the till (src/components/FKeyBar.jsx)
   const [cam, setCam] = useState(false); // camera barcode scanner
   // Phones and tablets: the sale is a sheet docked at the bottom (total and Charge always in reach), slid up to edit it
   const [narrow, setNarrow] = useState(() => typeof matchMedia === 'function' && matchMedia('(max-width: 900px)').matches);
@@ -754,6 +756,7 @@ export default function POS({ mode = 'retail' }) {
   }, [useAdvancedLayout]);
 
   return (
+    <>
     <div ref={posRef} className={'pos lay-' + (layout === 'standard' ? 'std' : layout === 'advanced' ? 'adv' : 'classic') + (resizable && sized.w ? ' sized' : '')} style={resizable && sized.w ? { '--pos-sale-w': sized.w + 'px' } : undefined}>
       {/* wide screens only (CSS): client & loyalty */}
       {layout !== 'classic' && (
@@ -877,6 +880,8 @@ export default function POS({ mode = 'retail' }) {
             <div className="cart-empty" style={{ gridColumn: '1/-1' }}><ScanBarcode size={36} /><span>{q ? `No medicines match “${q}”` : view === 'fav' ? 'No favourites yet: tap the star on a medicine to keep it here' : view === 'recent' ? 'Nothing sold at this branch yet' : 'No medicines here'}</span></div>
           )}
         </div>
+      {fkeys && !touch && <FKeyBar items={fkeyItems({ can, features, wholesale })} onGo={(to) => navigate(to)} onHide={() => { showFkeys(false); setFkeys(false); }}
+        onRun={(a) => (a === 'search' ? focusSearch() : a === 'charge' ? checkout() : a === 'proforma' ? saveProforma() : setHelp(true))} />}
       </section>
 
       {!narrow && cart.length > 0 && !cartInView && (
@@ -1232,6 +1237,7 @@ export default function POS({ mode = 'retail' }) {
                 ['F2 / F3', 'Retail / wholesale'], ['Alt+C', 'Find a client (wide screens)'], ['Alt+D', 'Discount'], ['Alt+R', 'Last receipt again'], ['Ctrl+K', 'Advanced UI: command bar (+qty 2, void 2, disc 2 10, hold, pay)'], ['F8', 'Back to the search box'], ['Ctrl+K', 'Search everything'], ['?', 'This list']].map(([k, v]) => <tr key={k}><td><kbd>{k}</kbd></td><td>{v}</td></tr>)}
             </tbody>
           </table>
+          {!touch && <label className="row gap small"><input type="checkbox" checked={fkeys} onChange={(e) => { showFkeys(e.target.checked); setFkeys(e.target.checked); }} /> Show the function keys under the till</label>}
         </Modal>
       )}
 
@@ -1256,6 +1262,7 @@ export default function POS({ mode = 'retail' }) {
         </Modal>
       )}
     </div>
+    </>
   );
 }
 

@@ -117,9 +117,9 @@ On a PC (with the passphrase from `RxPOS-BACKUP-PASSPHRASE.txt`):
 # what's inside
 BACKUP_PASSPHRASE=… node tools/restore.mjs rxpos-backup-2026-10-15.rxbak
 # put ONE pharmacy back (e.g. after it was deleted by mistake)
-BACKUP_PASSPHRASE=… OWNER_KEY=… node tools/restore.mjs rxpos-backup-2026-10-15.rxbak --restore --tenant mcb-pharma
+BACKUP_PASSPHRASE=… RXPOS_API=https://api.rxposug.com OWNER_KEY=… node tools/restore.mjs rxpos-backup-2026-10-15.rxbak --restore --tenant mcb-pharma
 # put EVERYTHING back (e.g. into a new, empty database)
-BACKUP_PASSPHRASE=… OWNER_KEY=… node tools/restore.mjs rxpos-backup-2026-10-15.rxbak --restore
+BACKUP_PASSPHRASE=… RXPOS_API=https://api.rxposug.com OWNER_KEY=… node tools/restore.mjs rxpos-backup-2026-10-15.rxbak --restore
 # a manual backup now
 OWNER_KEY=… BACKUP_PASSPHRASE=… npm run backup -- backups
 ```

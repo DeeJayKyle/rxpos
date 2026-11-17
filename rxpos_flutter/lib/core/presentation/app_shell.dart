@@ -8,6 +8,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../features/auth/application/session_controller.dart';
 import '../../features/auth/presentation/account_menu.dart';
+import '../../features/auth/presentation/person_guard.dart';
+import '../network/cloud_api.dart' show personGuard;
 import '../../features/alerts/application/alerts_provider.dart';
 import '../../features/alerts/presentation/notification_bell.dart';
 import '../data/device_settings.dart';
@@ -45,7 +47,9 @@ class AppShell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    ref.read(crashReportsProvider).page = location;
+    ref.read(crashReportsProvider).page = location.split('?').first; // never the query (receipt numbers, ids)
+    // audit P2-7: a borrowed sign-in confirms with its own password before a personal cloud call (person_guard.dart)
+    personGuard = () => confirmPersonIfBorrowed(context, ref);
     final session = ref.watch(sessionControllerProvider).value;
     final can = ref.watch(permissionsProvider).value ?? const <String>{};
     final features = ref.watch(pharmacyProvider).value?.features ?? const {};
@@ -357,24 +361,32 @@ bool _systemBack(BuildContext context, {required bool home, required bool Functi
   return back();
 }
 
-/// The phone's tab bar, on every page: Home, Stock, Sell, Sales (those this person may open) and More (the menu with
+/// The phone's tab bar, on every page: Home, Stock, Sell, Sales (or, for a role without some of them, Clients, Rx or
+/// Shift: only pages this person may open) and More (the menu with
 /// every page). Frosted glass with a hairline on top, the icons and their names always shown (iOS).
 class TabBarBottom extends ConsumerWidget {
   const TabBarBottom({super.key, required this.screens, required this.location});
   final List<Screen> screens;
   final String location;
 
-  static const _tabs = [
+  // role-based (src/landing.js): up to two pages before Sell and one after, the first this person may open of each list
+  static const _left = [
     ('/', 'Home', Icons.home_outlined, Icons.home_rounded),
     ('/inventory', 'Stock', Icons.inventory_2_outlined, Icons.inventory_2),
-    ('/pos', 'Sell', Icons.point_of_sale_outlined, Icons.point_of_sale),
+    ('/customers', 'Clients', Icons.people_outline, Icons.people),
+    ('/prescriptions', 'Rx', Icons.medication_outlined, Icons.medication),
+  ];
+  static const _sell = ('/pos', 'Sell', Icons.point_of_sale_outlined, Icons.point_of_sale);
+  static const _right = [
     ('/sales', 'Sales', Icons.receipt_long_outlined, Icons.receipt_long),
+    ('/shifts', 'Shift', Icons.schedule_outlined, Icons.schedule),
   ];
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final t = Theme.of(context);
-    final tabs = [for (final x in _tabs) if (screens.any((s) => s.path == x.$1)) x];
+    bool open((String, String, IconData, IconData) x) => screens.any((s) => s.path == x.$1);
+    final tabs = [..._left.where(open).take(2), if (open(_sell)) _sell, ..._right.where(open).take(1)];
     final glass = t.appBarTheme.backgroundColor ?? t.colorScheme.surface;
     final on = t.colorScheme.tertiary, off = t.colorScheme.onSurfaceVariant;
     Widget item({required Key key, required String label, required String tip, required IconData icon, required bool selected, required VoidCallback onTap}) => Expanded(

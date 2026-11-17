@@ -166,6 +166,20 @@ await focusBody(); await key('g', 'k');
 check('…and works at once', (await hash()) === '#/customers', await hash());
 await focusBody(); await key('g', 'c');
 check('…the old key no longer does', (await hash()) === '#/customers');
+// the F-key legend under the till (src/components/FKeyBar.jsx)
+await focusBody(); await key('F2'); await wait(800);
+const bar = await p.evaluate(() => document.querySelector('.fkey-bar')?.innerText || '');
+check('the till shows its function keys', /F9\s*Charge/.test(bar) && /F7\s*Inventory/.test(bar) && /F10\s*Proforma/.test(bar), bar.replace(/\n/g, ' '));
+check('…and the till plus the bar fit the window (no page scroll)', await p.evaluate(() => document.scrollingElement.scrollHeight <= innerHeight + 1), await p.evaluate(() => [document.scrollingElement.scrollHeight, innerHeight].join('/')));
+await p.evaluate(() => [...document.querySelectorAll('.fkey')].find((x) => /Inventory/.test(x.innerText))?.click()); await wait(600);
+check('…a key in the bar can be clicked', (await hash()) === '#/inventory', await hash());
+await key('F2'); await wait(600);
+await p.evaluate(() => document.querySelector('.fkey-hide')?.click()); await wait(300);
+check('…and hidden on this device', !(await p.$('.fkey-bar')));
+await focusBody(); await key('?'); await wait(300);
+await p.evaluate(() => [...document.querySelectorAll('.modal label')].find((l) => /function keys/.test(l.innerText))?.querySelector('input').click()); await wait(300);
+check('…the shortcuts sheet shows it again', !!(await p.$('.fkey-bar')));
+await key('Escape');
 check('no errors on the page', errors.length === 0, errors.join(' | '));
 
 await b.close();

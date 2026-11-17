@@ -21,6 +21,9 @@ const _tenantKey = 'tenant';
 /// The pharmacy this device is linked to (kept after signing out, like the React app's sync settings), so someone
 /// can sign in again without the internet.
 const _linkKey = 'link';
+
+/// Whose cloud sign-in token this device holds (audit P2-7).
+const _tokenUserKey = 'token-user';
 const rememberFor = Duration(days: 30);
 
 String trustKey(String tenant, String userId) => 'device:2fa-ok:$tenant:$userId';
@@ -157,6 +160,7 @@ class AuthRepository {
       final problem = await _switchTo(session);
       if (problem != null) return SignInFailed(problem);
       await _put(_sessionKey, jsonEncode(session.toJson()));
+      await _put(_tokenUserKey, session.userId); // whose sign-in token the device now holds (audit P2-7)
       await secrets.remember(session.tenant, session.userId, password); // this device can now sign them in offline
       await pruneRevoked(session.tenant, keep: session.userId);
       if (code != null && code.isNotEmpty) await _put(trustKey(session.tenant, session.userId), '1');
@@ -395,6 +399,35 @@ class AuthRepository {
     }
     await (db.delete(db.kv)..where((x) => x.k.equals(_sessionKey))).go();
     webKeep(_sessionKey, null);
+  }
+
+  // ---------- audit P2-7, option 1 (owner's decision, 17 Nov 2026) ----------
+  // The device keeps the cloud token of the last person who signed in with their password; someone else unlocking it
+  // with a PIN, fingerprint or offline password keeps syncing and selling with it, but confirms with their own password
+  // before a call that acts as a person in the cloud (core/network/cloud_api.dart personGuard).
+
+  /// Does [s] use a token that belongs to someone else? (a device from before, with no owner kept, counts as yes)
+  Future<bool> borrowedToken(Session s) async => s.token.startsWith('u.') && (await _kv(_tokenUserKey)) != s.userId;
+
+  /// Sign [s]'s person in to the cloud with their own [password]: the device then holds their token (returned).
+  Future<String> confirmPerson(Session s, String password) async {
+    final u = (await RecordStore(db).rows('users')).where((x) => x['id'] == s.userId).firstOrNull;
+    final login = s.email.isNotEmpty ? s.email : '${u?['username'] ?? ''}';
+    final Response<Object?> res;
+    try {
+      res = await dio.post<Object?>('${syncBase(cloudUrl)}/api/login', data: {'email': login, 'password': password, 'tenant': s.tenant}, options: Options(validateStatus: (_) => true));
+    } on DioException {
+      throw const OfflineError('No connection to the RxPOS cloud. Check the internet.');
+    }
+    final j = res.data is Map ? (res.data as Map).cast<String, Object?>() : const <String, Object?>{};
+    if (j['twoFactor'] == true) throw const OfflineError('You use two-step sign-in: sign out, then sign in with your password and code to do this.');
+    final token = j['token'], user = j['user'];
+    if (res.statusCode != 200 || token is! String) throw OfflineError('${j['error'] ?? 'Wrong password. Nothing was done.'}');
+    if (user is! Map || '${user['id']}' != s.userId) throw const OfflineError('That password signed in a different account. Nothing was done.');
+    final stored = await _kv(_sessionKey);
+    if (stored != null) await _put(_sessionKey, jsonEncode({...(jsonDecode(stored) as Map).cast<String, Object?>(), 'token': token}));
+    await _put(_tokenUserKey, s.userId);
+    return token;
   }
 
   /// Changes waiting to reach the cloud (told when signing out).

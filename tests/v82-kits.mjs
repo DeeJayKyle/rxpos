@@ -170,8 +170,14 @@ await click('.cart-tools button', 'Clear all'); await wait(200);
 await go('#/sales'); await wait(800);
 await p.evaluate((n) => { const r = [...document.querySelectorAll('.page table tbody tr')].find((x) => x.innerText.includes(n)); const td = r.querySelector('td:nth-child(2)'); const bx = td.getBoundingClientRect(); td.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: bx.x + 5, clientY: bx.y + 5 })); }, sale1.number); await wait(300);
 await click('.ctx-menu button, .ctx-menu [role=menuitem]', 'Refund'); await wait(400);
-await confirmDialog(); await wait(1200);
+// the refund sheet: each kit medicine and its batch, the money back, a reason
+const sheet = await p.evaluate(() => document.querySelector('.refund-sheet')?.innerText || '');
+check('the refund sheet lists the kit\'s medicines and the money going back', /Money back to the customer/.test(sheet) && /Back to stock/i.test(sheet), sheet.slice(0, 300));
+check('…and needs a reason first', await p.evaluate(() => document.querySelector('.refund-sheet button[type=submit]')?.disabled === true));
+await p.select('.refund-sheet select', 'Customer returned it'); await wait(100);
+await p.evaluate(() => document.querySelector('.refund-sheet button[type=submit]').click()); await wait(1200);
 c = await cloudUntil((r) => (r.ex.sales || []).some((x) => x.number === sale1.number && x.status === 'refunded') && r.s['k-strip'] === 8);
+check('the reason is kept on the sale', (c.ex.sales || []).find((x) => x.number === sale1.number)?.refundReason === 'Customer returned it');
 check('a kit refund returns its medicines to stock', c.s['k-strip'] === 8 && c.s['k-lancet'] === 7 && c.s['k-swab'] === 98 && c.s['k-wfi'] === 18, JSON.stringify(c.s));
 const back = (c.ex.movements || []).filter((m) => m.type === 'Refund' && m.productId === 'k-lancet').map((m) => [m.batchId, m.qty]).sort();
 check('…into the batches they came from', JSON.stringify(back) === JSON.stringify([['b-l1', 3], ['b-l2', 1]]), JSON.stringify(back));

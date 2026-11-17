@@ -59,5 +59,25 @@ m = make({ email: 'me@rx.test' });
 r = await watchdog(m.env, { mailer: m.mailer });
 check('no backup heartbeat yet → no false alarm', m.sent.length === 0);
 
+// 7) audit 2026-11-17 (2nd pass): reports that arrive while a digest isn't due yet go in the next digest
+const t0 = Date.parse('2026-11-17T10:00:00Z'), at = (min) => new Date(t0 + min * 60000);
+m = make({ email: 'me@rx.test', errors: [{ message: 'First', platform: 'Android', count: 1, last_at: at(0).toISOString() }] });
+await watchdog(m.env, { mailer: m.mailer, now: at(1) });
+m.sent.length = 0;
+// a new report at 10:10: no digest yet (the last was at 10:01)…
+const errs = [{ message: 'Second', platform: 'Windows', count: 1, last_at: at(10).toISOString() }];
+const m2 = make({ email: 'me@rx.test', errors: errs, cfg: { ...m.config } });
+await watchdog(m2.env, { mailer: m2.mailer, now: at(11) });
+check('a report inside the 30 minutes waits (no email yet)', m2.sent.length === 0);
+await watchdog(m2.env, { mailer: m2.mailer, now: at(32) });
+check('…and is in the next digest, not lost', m2.sent.length === 1 && /1 new device error/.test(m2.sent[0].subject), JSON.stringify(m2.sent));
+
+// 8) a digest that could not be sent is tried again
+const m3 = make({ email: 'me@rx.test', errors: [{ message: 'Boom', platform: 'Android', count: 1, last_at: at(0).toISOString() }] });
+let tries = 0; const flaky = async (...a) => (++tries === 1 ? false : m3.mailer(...a));
+await watchdog(m3.env, { mailer: flaky, now: at(1) });
+await watchdog(m3.env, { mailer: flaky, now: at(6) });
+check('a digest that failed to send goes out on the next pass', m3.sent.length === 1 && tries === 2);
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:rxpos/core/platform.dart';
 
 import '../../../core/data/device_settings.dart';
@@ -38,6 +39,7 @@ import '../application/sale_controller.dart';
 import '../domain/cart.dart';
 import 'camera_scan.dart';
 import 'checkout_dialogs.dart';
+import 'fkey_bar.dart';
 import 'pos_dialogs.dart';
 import 'receipt.dart';
 import '../../../core/presentation/page_tip.dart';
@@ -478,7 +480,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
         final client = wide && layout != 'classic' && d.settings.clientCapture != 'off'
             ? _ClientStrip(wholesale: widget.wholesale, data: d, focus: _clientFocus, onDone: _focusSearch)
             : null;
-        return Focus(
+        final till = Focus(
           // "?" opens the shortcuts, except while typing
           onKeyEvent: (_, e) {
             if (e is KeyDownEvent && e.character == '?' && FocusManager.instance.primaryFocus?.context?.widget is! EditableText) {
@@ -534,6 +536,17 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                   ),
           ),
         );
+        // the F-key legend under the till on a computer (src/components/FKeyBar.jsx; fkey_bar.dart)
+        if (touch || !wide || ref.watch(deviceValueProvider('pos-fkeys')).value == 'off') return till;
+        return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Expanded(child: till),
+          FKeyBar(
+            items: fkeyItems(can: (x) => (ref.read(permissionsProvider).value ?? const <String>{}).contains(x), wholesale: widget.wholesale),
+            onGo: (to) => context.go(to),
+            onRun: (a) => switch (a) { 'search' => _searchFocus.requestFocus(), 'charge' => _charge(), 'proforma' => _proformaKey(), _ => showKeyboardHelp(context) },
+            onHide: () => ref.read(deviceValueProvider('pos-fkeys').notifier).set('off'),
+          ),
+        ]);
       },
     );
   }
@@ -978,8 +991,9 @@ class _ProductPanel extends StatelessWidget {
                     // card size and spacing come from the design tokens (Target Tap: big cards, Split-Pane: dense)
                     gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
                       maxCrossAxisExtent: tokensOf(context).tileWidth,
-                      // + a row for the FEFO expiry badge
-                      mainAxisExtent: MediaQuery.textScalerOf(context).scale(tokensOf(context).tileHeight + 24),
+                      // + a row for the FEFO expiry badge, + 8 for the React look's roomier card padding (#66: the price,
+                      // a tag and the stock note wrapping to two lines overflowed by 6 px)
+                      mainAxisExtent: MediaQuery.textScalerOf(context).scale(tokensOf(context).tileHeight + 32),
                       crossAxisSpacing: tokensOf(context).gap,
                       mainAxisSpacing: tokensOf(context).gap,
                     ),

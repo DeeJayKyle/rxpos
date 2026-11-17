@@ -17,7 +17,17 @@ export const cleanUrl = (u) => {
   return url;
 };
 
-async function call(cfg, path, { method = 'GET', body, timeout = 20000 } = {}) {
+// Audit P2-7, option 1 (owner's decision, 17 Nov 2026): a device keeps the sign-in token of the last person who signed
+// in with their password. Someone else unlocking it with a PIN or offline password still syncs and sells with it, but
+// a call that acts as a PERSON in the cloud (sessions, two-step sign-in, links, sending reports) first asks for their
+// own password (App.jsx installs the guard): the device then holds their own token, and the call goes as them.
+let personGuard = null;
+export const setPersonGuard = (fn) => { personGuard = fn; };
+/** Does the device's token belong to someone other than the person signed in? (a pharmacy sync key never does) */
+export const borrowedToken = (cfg, userId) => !!cfg?.key && String(cfg.key).startsWith('u.') && !!userId && cfg.keyUser !== userId;
+
+async function call(cfg, path, { method = 'GET', body, timeout = 20000, personal = false } = {}) {
+  if (personal && personGuard) cfg = await personGuard(cfg); // throws when the person does not confirm
   if (!cfg?.url) throw new Error('This device is not connected to the RxPOS cloud. Set it up in Settings → Online sync.');
   if (plainHttpToInternet(cfg.url)) throw new Error(INSECURE_LINK); // 2026-11 audit: no secrets over plain http to the internet
   if (!navigator.onLine) throw new Error('No internet connection right now.');
@@ -53,17 +63,17 @@ export const ownerLogin = (url, password) => call({ url: cleanUrl(url) }, '/api/
 export const ownerGoogleLogin = (url, credential) => call({ url: cleanUrl(url) }, '/api/owner-auth/google', { method: 'POST', body: { credential }, timeout: 30000 });
 /** Public name of the pharmacy at a web address (for its sign-in page) */
 export const pharmacyInfo = (url, slug) => call({ url: cleanUrl(url) }, '/api/pharmacy/' + encodeURIComponent(slug), { timeout: 8000 });
-export const calendarLink = (cfg, renew = false) => call(cfg, '/api/calendar-link', { method: renew ? 'POST' : 'GET', body: renew ? {} : undefined, timeout: 8000 });
+export const calendarLink = (cfg, renew = false) => call(cfg, '/api/calendar-link', { method: renew ? 'POST' : 'GET', body: renew ? {} : undefined, timeout: 8000, personal: true });
 /** Initials only, no medicines, for refills in the calendar feed (2026-11 audit) */
-export const calendarPrivacy = (cfg, on) => call(cfg, '/api/calendar-link', { method: 'POST', body: { private: !!on }, timeout: 8000 });
+export const calendarPrivacy = (cfg, on) => call(cfg, '/api/calendar-link', { method: 'POST', body: { private: !!on }, timeout: 8000, personal: true });
 /** step 7: this device's till number in its pharmacy (src/docnumbers.js) */
 // 2026-11 audit: end this sign-in in the cloud (the web version signing out), or every other one of this person
 export const cloudLogout = (cfg) => call(cfg, '/api/logout', { method: 'POST', body: {}, timeout: 5000 });
-export const endOtherSessions = (cfg) => call(cfg, '/api/sessions/others', { method: 'POST', body: {}, timeout: 15000 });
-export const endSessionsOf = (cfg, uid) => call(cfg, '/api/sessions/end', { method: 'POST', body: { uid }, timeout: 15000 });
+export const endOtherSessions = (cfg) => call(cfg, '/api/sessions/others', { method: 'POST', body: {}, timeout: 15000, personal: true });
+export const endSessionsOf = (cfg, uid) => call(cfg, '/api/sessions/end', { method: 'POST', body: { uid }, timeout: 15000, personal: true });
 export const tillNumber = (cfg) => call(cfg, '/api/till', { method: 'POST', body: { deviceId: cfg.deviceId }, timeout: 15000 });
 /** The pharmacy's daily stock sheet link for a Google Sheet (=IMPORTDATA); renew = a new link, the old one stops */
-export const dailyStockLink = (cfg, renew = false) => call(cfg, '/api/daily-stock-link', { method: renew ? 'POST' : 'GET', body: renew ? {} : undefined, timeout: 15000 });
+export const dailyStockLink = (cfg, renew = false) => call(cfg, '/api/daily-stock-link', { method: renew ? 'POST' : 'GET', body: renew ? {} : undefined, timeout: 15000, personal: true });
 // AI (Cloudflare Workers AI): read a prescription photo; make a drug quiz
 export const aiPrescription = (cfg, image) => call(cfg, '/api/ai/prescription', { method: 'POST', body: { image }, timeout: 90000 });
 export const aiInvoice = (cfg, image) => call(cfg, '/api/ai/invoice', { method: 'POST', body: { image }, timeout: 120000 });
@@ -85,11 +95,11 @@ export const whatsappLink = (phone, text) => `https://wa.me/${String(phone).repl
 
 /** Today's owner summary (worker/summary.js): preview, or email it now to the addresses in Settings */
 // step 26: a scheduled report email, previewed (what would be sent) or sent now (worker/reports.js)
-export const reportSend = (cfg, id, send = false) => call(cfg, '/api/reports/send' + (send ? '' : '?id=' + encodeURIComponent(id)), { method: send ? 'POST' : 'GET', body: send ? { id } : undefined, timeout: 60000 });
-export const daySummary = (cfg, send = false) => call(cfg, '/api/summary', { method: send ? 'POST' : 'GET', body: send ? {} : undefined });
+export const reportSend = (cfg, id, send = false) => call(cfg, '/api/reports/send' + (send ? '' : '?id=' + encodeURIComponent(id)), { method: send ? 'POST' : 'GET', body: send ? { id } : undefined, personal: send, timeout: 60000 });
+export const daySummary = (cfg, send = false) => call(cfg, '/api/summary', { method: send ? 'POST' : 'GET', body: send ? {} : undefined, personal: send });
 
 /** Two-step sign-in for the signed-in person (worker/twostep.js) */
-export const twoStep = (cfg, path = '', body) => call(cfg, '/api/2fa' + path, { method: body ? 'POST' : 'GET', body });
+export const twoStep = (cfg, path = '', body) => call(cfg, '/api/2fa' + path, { method: body ? 'POST' : 'GET', body, personal: true });
 // AI copilot (till commands, owner questions, device diagnosis) and vision (invoice / prescription photo → strict JSON)
 export const aiCopilot = (cfg, body) => call(cfg, '/api/ai/copilot', { method: 'POST', body, timeout: 60000 });
 export const aiVision = (cfg, mode, image) => call(cfg, '/api/ai/vision', { method: 'POST', body: { mode, image }, timeout: 120000 });

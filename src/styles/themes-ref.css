@@ -51,3 +51,65 @@
 :root[data-palette='ember-forge'] .sidebar nav a.active::before { display: none; }
 :root[data-palette='ember-forge'] .stat-icon { background: #f97316; color: #1a0b02; border-radius: 99px; }
 :root[data-palette='ember-forge'] .bento-hero, :root[data-palette='ember-forge'] .nav-promo { background: radial-gradient(120% 90% at 100% 0%, rgba(249, 115, 22, .3), transparent 60%), linear-gradient(160deg, #1f1209, #0b0b0c); }
+
+/* =====================================================================================================================
+   Dashboard looks (the owner's references, 17 Nov 2026). Each look styles the whole app, and gives its own page the
+   reference's signature (main[data-page] is the page shown):
+   Charcoal & Sky → the dashboard and Finance · Lime Studio → Calendar, Drug Quiz, Weekly Summary
+   Aqua Navy → Reports and Sales History · Forest Green → Purchases, Expenses, Banks
+   ===================================================================================================================== */
+
+/* shared by the five: rounder cards, pill buttons and soft status pills */
+:root:is([data-palette='charcoal-sky'], [data-palette='lime-studio'], [data-palette='aqua-navy'], [data-palette='forest-green']) .card { border-radius: 20px; box-shadow: 0 1px 2px rgba(15, 23, 42, .04), 0 10px 30px -18px rgba(15, 23, 42, .18); }
+:root:is([data-palette='charcoal-sky'], [data-palette='lime-studio'], [data-palette='aqua-navy'], [data-palette='forest-green']) .btn { border-radius: 999px; }
+:root:is([data-palette='charcoal-sky'], [data-palette='lime-studio'], [data-palette='aqua-navy'], [data-palette='forest-green']) .badge { padding: 3px 10px; font-weight: 650; }
+:root:is([data-palette='charcoal-sky'], [data-palette='lime-studio'], [data-palette='aqua-navy'], [data-palette='forest-green']) .badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+/* ---- Charcoal & Sky: a charcoal frame, white rounded content, the first figure a charcoal card, sky-blue pills ---- */
+:root[data-palette='charcoal-sky'] .sidebar nav a.active { background: rgba(255, 255, 255, .14); color: #fff; }
+:root[data-palette='charcoal-sky'] .sidebar nav a.active::before { background: #8ab8ec; }
+:root[data-palette='charcoal-sky'] .bento-hero { background: radial-gradient(110% 90% at 100% 0%, rgba(138, 184, 236, .22), transparent 60%), linear-gradient(160deg, #3a3a3d, #252527); }
+:root[data-palette='charcoal-sky'] .stat-icon { background: #dbe9f9; color: #1f4f86; border-radius: 99px; }
+:root[data-palette='charcoal-sky'] main:is([data-page='/'], [data-page='/finance']) .stats > .stat:first-child { background: linear-gradient(160deg, #3a3a3d, #252527); color: #f5f5f6; border-color: transparent; }
+:root[data-palette='charcoal-sky'] main:is([data-page='/'], [data-page='/finance']) .stats > .stat:first-child :is(.label, .sub, .muted, small) { color: rgba(245, 245, 246, .78); }
+:root[data-palette='charcoal-sky'] main:is([data-page='/'], [data-page='/finance']) .stats > .stat:first-child .stat-icon { background: rgba(255, 255, 255, .14); color: #fff; }
+
+/* ---- Lime Studio: a navy menu whose page is a lime pill, lime buttons with dark text, pastel icon chips ---- */
+:root[data-palette='lime-studio'] .sidebar nav a { border-radius: 12px; }
+:root[data-palette='lime-studio'] .sidebar nav a.active { background: #d4f56a; color: #18181f; font-weight: 700; }
+:root[data-palette='lime-studio'] .sidebar nav a.active svg { color: #18181f; }
+:root[data-palette='lime-studio'] .sidebar nav a.active::before { display: none; }
+:root[data-palette='lime-studio'] .btn.primary { background: #c8ef5c; color: #18181f; border-color: transparent; }
+:root[data-palette='lime-studio'] .btn.primary:hover { background: #b9e443; }
+:root[data-palette='lime-studio'] .stat-icon { background: #ecf8c6; color: #3f6212; border-radius: 12px; }
+:root[data-palette='lime-studio'] .bento-hero { background: radial-gradient(110% 90% at 100% 0%, rgba(212, 245, 106, .25), transparent 60%), linear-gradient(160deg, #262735, #17181f); }
+:root[data-palette='lime-studio'] main:is([data-page='/calendar'], [data-page='/quiz'], [data-page='/weekly']) .card { border: 0; }
+:root[data-palette='lime-studio'] main:is([data-page='/calendar'], [data-page='/quiz'], [data-page='/weekly']) :is(.today, .on, [aria-current='date']) { background: #d4f56a; color: #18181f; }
+
+/* ---- Aqua Navy: a navy menu, the first figure a navy card, aqua bars and green "up" pills ---- */
+:root[data-palette='aqua-navy'] .sidebar nav a.active { background: rgba(255, 255, 255, .16); color: #fff; }
+:root[data-palette='aqua-navy'] .sidebar nav a.active::before { background: #5ee0e6; }
+:root[data-palette='aqua-navy'] .bento-hero { background: radial-gradient(120% 90% at 100% 0%, rgba(94, 224, 230, .25), transparent 60%), linear-gradient(160deg, #1b4b8a, #0f2c55); }
+:root[data-palette='aqua-navy'] .stat .delta.up { background: #d6f5ef; color: #0f766e; border-radius: 99px; padding: 1px 8px; }
+:root[data-palette='aqua-navy'] .stat .delta.down { background: #fde2e2; border-radius: 99px; padding: 1px 8px; }
+:root[data-palette='aqua-navy'] .bento-bars i, :root[data-palette='aqua-navy'] .bar-fill { background: linear-gradient(180deg, #5ee0e6, #1f8fa8); }
+:root[data-palette='aqua-navy'] main:is([data-page='/reports'], [data-page='/sales'], [data-page='/sales-lines']) .stats > .stat:first-child { background: linear-gradient(150deg, #1b4b8a, #0f2c55); color: #f2f7ff; border-color: transparent; }
+:root[data-palette='aqua-navy'] main:is([data-page='/reports'], [data-page='/sales'], [data-page='/sales-lines']) .stats > .stat:first-child :is(.label, .sub, .muted, small) { color: rgba(242, 247, 255, .8); }
+
+/* ---- Forest Green: white with a light icon menu, the page a forest-green pill, green figure cards ---- */
+:root[data-palette='forest-green'] .sidebar nav a.active { background: #15803d; color: #fff; border-radius: 12px; }
+:root[data-palette='forest-green'] .sidebar nav a.active svg { color: #fff; }
+:root[data-palette='forest-green'] .sidebar nav a.active::before { display: none; }
+:root[data-palette='forest-green'] .stat-icon { background: #dcfce7; color: #15803d; border-radius: 99px; }
+:root[data-palette='forest-green'] .bento-hero { background: radial-gradient(120% 90% at 100% 0%, rgba(134, 239, 172, .25), transparent 60%), linear-gradient(160deg, #15803d, #0f5a2b); }
+:root[data-palette='forest-green'] main:is([data-page='/purchases'], [data-page='/expenses'], [data-page='/banks']) .stats > .stat:first-child { background: linear-gradient(150deg, #15803d, #0f5a2b); color: #f0fdf4; border-color: transparent; }
+:root[data-palette='forest-green'] main:is([data-page='/purchases'], [data-page='/expenses'], [data-page='/banks']) .stats > .stat:first-child :is(.label, .sub, .muted, small) { color: rgba(240, 253, 244, .82); }
+:root[data-palette='forest-green'] main:is([data-page='/purchases'], [data-page='/expenses'], [data-page='/banks']) .stats > .stat:first-child .stat-icon { background: rgba(255, 255, 255, .16); color: #fff; }
+
+/* the theme menu, grouped */
+.theme-group + .theme-group { margin-top: 2px; }
+/* the dark figure cards: their number in the card's own light text */
+:root[data-palette='charcoal-sky'] main:is([data-page='/'], [data-page='/finance']) .stats > .stat:first-child strong,
+:root[data-palette='aqua-navy'] main:is([data-page='/reports'], [data-page='/sales'], [data-page='/sales-lines']) .stats > .stat:first-child strong,
+:root[data-palette='forest-green'] main:is([data-page='/purchases'], [data-page='/expenses'], [data-page='/banks']) .stats > .stat:first-child strong { color: inherit; }
+:root[data-palette='aqua-navy'] main:is([data-page='/reports'], [data-page='/sales'], [data-page='/sales-lines']) .stats > .stat:first-child .stat-icon { background: rgba(255, 255, 255, .16); color: #fff; }

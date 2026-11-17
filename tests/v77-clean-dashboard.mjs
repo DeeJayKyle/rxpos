@@ -102,7 +102,7 @@ await p.evaluate(() => [...document.querySelectorAll('.nav-add')].find((x) => /R
 check('the + of Medicine Inventory opens Add Stock', await p.evaluate(() => location.hash.includes('add-stock')));
 await p.evaluate(() => { location.hash = '#/'; }); await wait(1200);
 // themes from the references
-for (const [id, side] of [['royal-violet', 'dark'], ['cobalt', 'dark'], ['soft-grey', 'light'], ['sage', 'light'], ['ember-forge', 'dark']]) {
+for (const [id, side] of [['royal-violet', 'dark'], ['cobalt', 'dark'], ['forest-green', 'light'], ['charcoal-sky', 'dark'], ['lime-studio', 'dark']]) {
   await p.evaluate((x) => { localStorage.setItem('pharmapos-theme', x); }, id);
   await p.reload({ waitUntil: 'networkidle2' }); await wait(1800);
   const got = await p.evaluate(() => [document.documentElement.dataset.palette, document.documentElement.dataset.sidebar]);

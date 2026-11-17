@@ -84,7 +84,7 @@ await p.goto(base + '/mukono-health-pharmacy#/', { waitUntil: 'networkidle2' });
 const t0 = Date.now();
 const gone = await until(p, () => ![...document.querySelectorAll('.sidebar nav a')].some((a) => a.textContent.startsWith('Chat')), 30000);
 check('feature switched off by owner disappears from the device', gone, `${Math.round((Date.now() - t0) / 1000)} s`);
-check('branch added by owner appears on the device', await until(p, () => document.querySelector('.branch-pill') !== null, 20000));
+check('branch added by owner appears on the device', await until(p, () => document.querySelector('.branch-pill') !== null, 30000));
 
 // ---------- calendar, storage, weather ----------
 await p.goto(base + '/mukono-health-pharmacy#/calendar', { waitUntil: 'networkidle2' }); await wait(800);

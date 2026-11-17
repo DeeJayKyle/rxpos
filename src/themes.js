@@ -1,60 +1,44 @@
-// Colour themes. Each theme is a light or dark base plus its own palette, applied as CSS variables.
-// Inspired by well-known open palettes (Nord, Dracula, Catppuccin, Gruvbox, Solarized, Tokyo Night, Rosé Pine,
-// One Dark, GitHub Primer) and by pharmacy / clinic brand colours. The owner chooses which themes each pharmacy may use.
+// Colour themes. Each theme is a light or dark base plus its own palette, applied as CSS variables. Since Nov 2026,
+// the top 10 themes in three groups (THEME_GROUPS), three colours each; the look-alikes (Nord, Dracula,
+// Catppuccin, Gruvbox, Solarized, Tokyo Night, …) were retired and map to the closest kept theme (RETIRED). The owner
+// chooses which themes each pharmacy may use.
 
-const T = (id, name, base, c, inspired = '') => ({ id, name, base, c, inspired });
+const T = (id, name, base, c, inspired = '', group = '') => ({ id, name, base, c, inspired, group });
+/** The groups of the theme menu, in order (Nov 2026: 36 themes cut to the top 10) */
+export const THEME_GROUPS = ['Light', 'Dashboard looks', 'Dark'];
 export const THEMES = [
-  // light
-  T('light', 'RxPOS Teal', 'light', { bg: '#f3f6f9', surface: '#ffffff', surface2: '#f7f9fb', border: '#e4e9ef', borderStrong: '#cfd8e3', text: '#0e1726', muted: '#64748b', primary: '#0d9488', primary2: '#0891b2', sidebar: '#0b1220', sidebar2: '#111a2e' }),
-  // Adaptive Hybrid: a calm medical light and a premium dark, flat (no page gradient; emerald / turquoise action colour)
-  // Daylight Clinical (2026-11-13): a clean clinical canvas, pure white cards, hairline borders, clinical teal; the default light
-  T('daylight-clinical', 'RxPOS Daylight Clinical', 'light', { bg: '#f5f7fa', surface: '#ffffff', surface2: '#f8fafc', border: 'rgba(15, 23, 42, 0.08)', borderStrong: 'rgba(15, 23, 42, 0.16)', text: '#0f172a', muted: '#5b6678', primary: '#0d9488', primary2: '#0891b2', sidebar: '#0b1220', sidebar2: '#111a2e', flat: true }, 'Typography-led minimalism'),
-  T('hybrid-light', 'RxPOS Hybrid Light', 'light', { bg: '#f5f8fc', surface: '#ffffff', surface2: '#edf3f7', border: '#e1e8f0', borderStrong: '#cbd6e2', text: '#142638', muted: '#64748b', primary: '#008c58', primary2: '#0e9f96', sidebar: '#07131b', sidebar2: '#0d1c28', flat: true }, 'Adaptive Hybrid'),
-  T('clinic-blue', 'Clinic Blue', 'light', { bg: '#f2f6fc', surface: '#ffffff', surface2: '#f5f8fd', border: '#dfe7f3', borderStrong: '#c6d3e6', text: '#0c1a33', muted: '#5b6b86', primary: '#1d64d8', primary2: '#0ea5e9', sidebar: '#0b1a36', sidebar2: '#12264b' }),
-  T('mint', 'Fresh Mint', 'light', { bg: '#f1f8f5', surface: '#ffffff', surface2: '#f4faf7', border: '#dcebe4', borderStrong: '#c2dbcf', text: '#0f231b', muted: '#5a7468', primary: '#059669', primary2: '#65a30d', sidebar: '#062419', sidebar2: '#0b3324' }),
-  T('sunrise', 'Sunrise', 'light', { bg: '#fbf6f1', surface: '#ffffff', surface2: '#fdf9f5', border: '#efe3d6', borderStrong: '#e2cfbb', text: '#2a1a0e', muted: '#7c6553', primary: '#d97706', primary2: '#e11d48', sidebar: '#2a160a', sidebar2: '#3b2010' }),
-  T('lavender', 'Lavender', 'light', { bg: '#eff1f5', surface: '#ffffff', surface2: '#f4f5f9', border: '#dce0e8', borderStrong: '#ccd0da', text: '#4c4f69', muted: '#6c6f85', primary: '#8839ef', primary2: '#1e66f5', sidebar: '#1e1e2e', sidebar2: '#292a3e' }, 'Catppuccin Latte'),
-  T('rose-dawn', 'Rose Dawn', 'light', { bg: '#faf4ed', surface: '#fffaf3', surface2: '#f8efe6', border: '#ebdfd3', borderStrong: '#dfdad9', text: '#575279', muted: '#797593', primary: '#b4637a', primary2: '#d7827e', sidebar: '#191724', sidebar2: '#1f1d2e' }, 'Rosé Pine Dawn'),
-  T('solarized-light', 'Solarized Light', 'light', { bg: '#fdf6e3', surface: '#fffbef', surface2: '#f6efdc', border: '#e8dfc6', borderStrong: '#d9cfb3', text: '#073642', muted: '#657b83', primary: '#268bd2', primary2: '#2aa198', sidebar: '#002b36', sidebar2: '#073642' }, 'Solarized'),
-  T('github-light', 'Clean Grey', 'light', { bg: '#f6f8fa', surface: '#ffffff', surface2: '#f6f8fa', border: '#d0d7de', borderStrong: '#afb8c1', text: '#1f2328', muted: '#59636e', primary: '#0969da', primary2: '#8250df', sidebar: '#24292f', sidebar2: '#32383f' }, 'GitHub Primer'),
-  T('nord-snow', 'Nord Snow', 'light', { bg: '#eceff4', surface: '#ffffff', surface2: '#f2f4f8', border: '#d8dee9', borderStrong: '#c5ccda', text: '#2e3440', muted: '#4c566a', primary: '#5e81ac', primary2: '#88c0d0', sidebar: '#2e3440', sidebar2: '#3b4252' }, 'Nord'),
-  T('sand', 'Savanna Sand', 'light', { bg: '#f9f5d7', surface: '#fbf1c7', surface2: '#f2e5bc', border: '#e5d5a8', borderStrong: '#d5c4a1', text: '#3c3836', muted: '#665c54', primary: '#af3a03', primary2: '#79740e', sidebar: '#282828', sidebar2: '#32302f' }, 'Gruvbox Light'),
-  T('coral', 'Coral Care', 'light', { bg: '#fff5f4', surface: '#ffffff', surface2: '#fff8f7', border: '#f5dedb', borderStrong: '#ecc7c2', text: '#2b1412', muted: '#80605c', primary: '#e8505b', primary2: '#f59e0b', sidebar: '#2b1215', sidebar2: '#3a1a1e' }),
-  // From the owner's dashboard references (2026-11-15): one theme per style, named by the look
-  T('royal-violet', 'Royal Violet', 'light', { bg: '#f6f5fb', surface: '#ffffff', surface2: '#f8f7fd', border: 'rgba(46, 16, 101, 0.08)', borderStrong: 'rgba(46, 16, 101, 0.16)', text: '#1e1147', muted: '#5f5a7a', primary: '#6d3fd9', primary2: '#8b5cf6', sidebar: '#2e1065', sidebar2: '#4c1d95', flat: true }, 'Purple sidebar, white cards'),
-  T('cobalt', 'Cobalt Blue', 'light', { bg: '#f5f7fb', surface: '#ffffff', surface2: '#f7f9fd', border: 'rgba(15, 23, 42, 0.08)', borderStrong: 'rgba(15, 23, 42, 0.16)', text: '#0b1533', muted: '#586179', primary: '#1d4fd8', primary2: '#2563eb', sidebar: '#1d4ed8', sidebar2: '#1e40af', flat: true }, 'Blue sidebar, white cards'),
-  T('soft-grey', 'Soft Grey', 'light', { bg: '#f4f5f7', surface: '#ffffff', surface2: '#f7f8fa', border: 'rgba(15, 23, 42, 0.08)', borderStrong: 'rgba(15, 23, 42, 0.15)', text: '#111827', muted: '#5b6472', primary: '#3b5bdb', primary2: '#7048e8', sidebar: '#ffffff', sidebar2: '#fafbfc', sidebarText: '#374151', flat: true }, 'Light sidebar, pastel icons'),
-  T('sage', 'Sage Garden', 'light', { bg: '#f3f5f1', surface: '#ffffff', surface2: '#f6f8f4', border: 'rgba(23, 51, 34, 0.09)', borderStrong: 'rgba(23, 51, 34, 0.18)', text: '#173322', muted: '#56685b', primary: '#3f7d58', primary2: '#5f9a73', sidebar: '#b5cdb8', sidebar2: '#a4c0a8', sidebarText: '#1d3a28', flat: true }, 'Sage green, calm'),
-  T('paper', 'High Contrast Light', 'light', { bg: '#ffffff', surface: '#ffffff', surface2: '#f3f3f3', border: '#9a9a9a', borderStrong: '#555555', text: '#000000', muted: '#333333', primary: '#0050b3', primary2: '#003a80', sidebar: '#000000', sidebar2: '#1a1a1a' }, 'accessibility'),
-  // dark
-  T('dark', 'RxPOS Night', 'dark', { bg: '#070b14', surface: '#0f1624', surface2: '#131c2d', border: '#1e293b', borderStrong: '#2b3a52', text: '#e6edf7', muted: '#8b9ab3', primary: '#2dd4bf', primary2: '#22d3ee', sidebar: '#050912', sidebar2: '#0b1220' }),
-  // True OLED Black (2026-11-13): a pitch-black canvas (no backlight on OLED phones, saves battery), raised cards,
-  // white hairlines and bio-teal; the default dark
-  T('oled', 'RxPOS OLED Black', 'dark', { bg: '#000000', surface: '#0b0e14', surface2: '#121722', border: 'rgba(255, 255, 255, 0.10)', borderStrong: 'rgba(255, 255, 255, 0.18)', text: '#f8fafc', muted: '#9aa4b2', primary: '#2dd4bf', primary2: '#22d3ee', sidebar: '#000000', sidebar2: '#0b0e14', flat: true }, 'True OLED dark'),
-  // Gold Night (2026-11-14, the owner's "dark luxury" reference): black canvas, warm ivory text, champagne gold
-  T('gold-night', 'Gold Night', 'dark', { bg: '#0b0b0c', surface: '#141416', surface2: '#1b1b1e', border: 'rgba(212, 166, 74, 0.16)', borderStrong: 'rgba(212, 166, 74, 0.32)', text: '#f5f1e8', muted: '#a8a29e', primary: '#d4a64a', primary2: '#b8862b', sidebar: '#080808', sidebar2: '#121212', flat: true }, 'Dark luxury'),
-  T('ember-forge', 'Ember Forge', 'dark', { bg: '#101011', surface: '#1a1a1c', surface2: '#212124', border: 'rgba(255, 255, 255, 0.08)', borderStrong: 'rgba(255, 255, 255, 0.16)', text: '#f5f5f4', muted: '#a8a29e', primary: '#f97316', primary2: '#fb923c', sidebar: '#0c0c0d', sidebar2: '#141415', flat: true }, 'Charcoal and orange'),
-  T('hybrid-dark', 'RxPOS Hybrid Dark', 'dark', { bg: '#07131b', surface: '#101d2b', surface2: '#162635', border: '#2b3a49', borderStrong: '#3a4c5e', text: '#f3f7fb', muted: '#9bafc2', primary: '#20c9c3', primary2: '#16a36a', sidebar: '#050e15', sidebar2: '#0a1721', flat: true }, 'Adaptive Hybrid'),
-  T('tokyo-night', 'Tokyo Night', 'dark', { bg: '#16161e', surface: '#1a1b26', surface2: '#1f2335', border: '#292e42', borderStrong: '#3b4261', text: '#c0caf5', muted: '#7f88b8', primary: '#7aa2f7', primary2: '#bb9af7', sidebar: '#13131a', sidebar2: '#1a1b26' }, 'Tokyo Night'),
-  T('nord', 'Nord Polar', 'dark', { bg: '#242933', surface: '#2e3440', surface2: '#343b49', border: '#3b4252', borderStrong: '#4c566a', text: '#eceff4', muted: '#a3adbf', primary: '#88c0d0', primary2: '#81a1c1', sidebar: '#1f232b', sidebar2: '#2a2f3a' }, 'Nord'),
-  T('dracula', 'Dracula', 'dark', { bg: '#21222c', surface: '#282a36', surface2: '#2f3241', border: '#383a4a', borderStrong: '#44475a', text: '#f8f8f2', muted: '#a4a8c4', primary: '#bd93f9', primary2: '#ff79c6', sidebar: '#1b1c24', sidebar2: '#22232e' }, 'Dracula'),
-  T('mocha', 'Mocha', 'dark', { bg: '#11111b', surface: '#1e1e2e', surface2: '#232336', border: '#313244', borderStrong: '#45475a', text: '#cdd6f4', muted: '#9399b2', primary: '#cba6f7', primary2: '#89b4fa', sidebar: '#0d0d15', sidebar2: '#181825' }, 'Catppuccin Mocha'),
-  T('gruvbox', 'Gruvbox Ember', 'dark', { bg: '#1d2021', surface: '#282828', surface2: '#2f2c2a', border: '#3c3836', borderStrong: '#504945', text: '#ebdbb2', muted: '#a89984', primary: '#fabd2f', primary2: '#fe8019', sidebar: '#161819', sidebar2: '#1d2021' }, 'Gruvbox'),
-  T('solarized-dark', 'Solarized Dark', 'dark', { bg: '#00212b', surface: '#002b36', surface2: '#073642', border: '#0b4352', borderStrong: '#1d5361', text: '#e3ddc8', muted: '#93a1a1', primary: '#2aa198', primary2: '#268bd2', sidebar: '#001a22', sidebar2: '#00212b' }, 'Solarized'),
-  T('one-dark', 'One Dark', 'dark', { bg: '#1e2127', surface: '#282c34', surface2: '#2e333c', border: '#3a3f4b', borderStrong: '#4b5263', text: '#dcdfe4', muted: '#9da5b4', primary: '#61afef', primary2: '#c678dd', sidebar: '#191c21', sidebar2: '#21252b' }, 'Atom One Dark'),
-  T('github-dark', 'Graphite', 'dark', { bg: '#0d1117', surface: '#161b22', surface2: '#1c2129', border: '#30363d', borderStrong: '#484f58', text: '#e6edf3', muted: '#9198a1', primary: '#58a6ff', primary2: '#3fb950', sidebar: '#010409', sidebar2: '#0d1117' }, 'GitHub Primer'),
-  T('rose-pine', 'Rosé Night', 'dark', { bg: '#191724', surface: '#1f1d2e', surface2: '#26233a', border: '#2a273f', borderStrong: '#403d52', text: '#e0def4', muted: '#908caa', primary: '#ebbcba', primary2: '#c4a7e7', sidebar: '#141220', sidebar2: '#191724' }, 'Rosé Pine'),
-  T('forest', 'Forest Pharmacy', 'dark', { bg: '#07130e', surface: '#0d1f17', surface2: '#12281e', border: '#1b3a2c', borderStrong: '#285240', text: '#e3f5ec', muted: '#89b09d', primary: '#34d399', primary2: '#a3e635', sidebar: '#050e0a', sidebar2: '#0a1912' }),
-  T('ocean', 'Deep Ocean', 'dark', { bg: '#04121f', surface: '#0a1d30', surface2: '#0f263d', border: '#163452', borderStrong: '#22486e', text: '#e2eefa', muted: '#86a3c0', primary: '#38bdf8', primary2: '#2dd4bf', sidebar: '#030d17', sidebar2: '#071827' }),
-  // Midnight Pro: an atmospheric slate-dark canvas with glass panels, a translucent sidebar and emerald / cyan actions
-  // (styles in styles.css under [data-palette='midnight-pro'])
-  T('midnight-pro', 'Midnight Pro', 'dark', { bg: '#0b0f19', surface: '#0f172a', surface2: '#131c31', border: '#1e293b', borderStrong: '#334155', text: '#e2e8f0', muted: '#94a3b8', primary: '#10b981', primary2: '#14b8a6', sidebar: '#020617', sidebar2: '#0b1220', flat: true }, 'Linear / Vercel'),
-  T('contrast-dark', 'High Contrast Dark', 'dark', { bg: '#000000', surface: '#0a0a0a', surface2: '#141414', border: '#7a7a7a', borderStrong: '#bdbdbd', text: '#ffffff', muted: '#d6d6d6', primary: '#ffd60a', primary2: '#4cc9f0', sidebar: '#000000', sidebar2: '#0f0f0f' }, 'accessibility'),
+  // The top 10 (Nov 2026, the owner's choice): ranked for working speed (no blur or heavy effects), vivid and clear colour
+  // coding on every page, readability (AA everywhere) and smooth transitions. Each uses three colours at most: a neutral
+  // base, the frame (menu) colour and one brand colour (its second tone is a shade of the same colour).
+  // Light
+  T('daylight-clinical', 'RxPOS Daylight Clinical', 'light', { bg: '#f5f7fa', surface: '#ffffff', surface2: '#f8fafc', border: 'rgba(15, 23, 42, 0.08)', borderStrong: 'rgba(15, 23, 42, 0.16)', text: '#0f172a', muted: '#5b6678', primary: '#0d9488', primary2: '#0f766e', sidebar: '#0b1220', sidebar2: '#111a2e', flat: true }, 'Typography-led minimalism', 'Light'),
+  T('cobalt', 'Cobalt Blue', 'light', { bg: '#f5f7fb', surface: '#ffffff', surface2: '#f7f9fd', border: 'rgba(15, 23, 42, 0.08)', borderStrong: 'rgba(15, 23, 42, 0.16)', text: '#0b1533', muted: '#586179', primary: '#1d4fd8', primary2: '#1e40af', sidebar: '#1d4ed8', sidebar2: '#1e40af', flat: true }, 'Blue sidebar, white cards', 'Light'),
+  T('royal-violet', 'Royal Violet', 'light', { bg: '#f6f5fb', surface: '#ffffff', surface2: '#f8f7fd', border: 'rgba(46, 16, 101, 0.08)', borderStrong: 'rgba(46, 16, 101, 0.16)', text: '#1e1147', muted: '#5f5a7a', primary: '#6d3fd9', primary2: '#7c4ee4', sidebar: '#2e1065', sidebar2: '#4c1d95', flat: true }, 'Purple sidebar, white cards', 'Light'),
+  T('sunrise', 'Sunrise', 'light', { bg: '#fbf6f1', surface: '#ffffff', surface2: '#fdf9f5', border: '#efe3d6', borderStrong: '#e2cfbb', text: '#2a1a0e', muted: '#7c6553', primary: '#d97706', primary2: '#b45309', sidebar: '#2a160a', sidebar2: '#3b2010' }, '', 'Light'),
+  // Dashboard looks (the owner's references, 17 Nov 2026), each with its own page treatment in styles/themes-ref.css
+  T('charcoal-sky', 'Charcoal & Sky', 'light', { bg: '#eceef2', surface: '#ffffff', surface2: '#f4f5f7', border: 'rgba(17, 17, 20, 0.08)', borderStrong: 'rgba(17, 17, 20, 0.16)', text: '#18181b', muted: '#62656c', primary: '#2f6fb5', primary2: '#3b82c4', sidebar: '#38383b', sidebar2: '#2b2b2e', flat: true }, 'Charcoal frame, sky-blue actions: Finance and the dashboard', 'Dashboard looks'),
+  T('lime-studio', 'Lime Studio', 'light', { bg: '#f3f3ee', surface: '#ffffff', surface2: '#f7f7f2', border: 'rgba(24, 24, 32, 0.08)', borderStrong: 'rgba(24, 24, 32, 0.16)', text: '#18181f', muted: '#62626b', primary: '#3f6212', primary2: '#4d7c0f', sidebar: '#1f2029', sidebar2: '#2a2b36', flat: true }, 'Navy menu, lime highlights: schedules, calendar, quiz', 'Dashboard looks'),
+  T('aqua-navy', 'Aqua Navy', 'light', { bg: '#edf2f7', surface: '#ffffff', surface2: '#f3f7fb', border: 'rgba(15, 36, 64, 0.08)', borderStrong: 'rgba(15, 36, 64, 0.16)', text: '#0f2440', muted: '#56677e', primary: '#1b4b8a', primary2: '#2563a8', sidebar: '#163a6b', sidebar2: '#1b4b8a', flat: true }, 'Navy and aqua: sales overview, reports', 'Dashboard looks'),
+  T('forest-green', 'Forest Green', 'light', { bg: '#eff1f2', surface: '#ffffff', surface2: '#f5f6f7', border: 'rgba(17, 22, 20, 0.08)', borderStrong: 'rgba(17, 22, 20, 0.16)', text: '#111614', muted: '#5b6360', primary: '#15803d', primary2: '#166534', sidebar: '#ffffff', sidebar2: '#f6f7f7', sidebarText: '#323a37', flat: true }, 'White and forest green: payments, purchases, Finance', 'Dashboard looks'),
+  // Dark
+  T('oled', 'RxPOS OLED Black', 'dark', { bg: '#000000', surface: '#0b0e14', surface2: '#121722', border: 'rgba(255, 255, 255, 0.10)', borderStrong: 'rgba(255, 255, 255, 0.18)', text: '#f8fafc', muted: '#9aa4b2', primary: '#2dd4bf', primary2: '#14b8a6', sidebar: '#000000', sidebar2: '#0b0e14', flat: true }, 'True OLED dark', 'Dark'),
+  T('midnight-pro', 'Midnight Pro', 'dark', { bg: '#0b0f19', surface: '#0f172a', surface2: '#131c31', border: '#1e293b', borderStrong: '#334155', text: '#e2e8f0', muted: '#94a3b8', primary: '#10b981', primary2: '#059669', sidebar: '#020617', sidebar2: '#0b1220', flat: true }, 'Linear / Vercel', 'Dark'),
 ];
-export const themeById = (id) => THEMES.find((t) => t.id === id) || THEMES[0];
+/** Themes retired in Nov 2026 → the kept theme closest to each, so a saved choice or an owner's list keeps working */
+export const RETIRED = {
+  light: 'daylight-clinical', 'hybrid-light': 'daylight-clinical', 'solarized-light': 'daylight-clinical', 'clinic-blue': 'cobalt', mint: 'forest-green',
+  lavender: 'royal-violet', 'rose-dawn': 'sunrise', sand: 'sunrise', coral: 'sunrise', 'github-light': 'daylight-clinical', 'nord-snow': 'daylight-clinical',
+  'soft-grey': 'daylight-clinical', sage: 'forest-green', 'teal-glass': 'daylight-clinical', paper: 'daylight-clinical',
+  dark: 'midnight-pro', 'hybrid-dark': 'midnight-pro', 'tokyo-night': 'midnight-pro', nord: 'midnight-pro', dracula: 'midnight-pro', mocha: 'midnight-pro',
+  'solarized-dark': 'midnight-pro', 'one-dark': 'midnight-pro', 'rose-pine': 'midnight-pro', forest: 'midnight-pro', ocean: 'midnight-pro',
+  gruvbox: 'oled', 'github-dark': 'oled', 'gold-night': 'oled', 'ember-forge': 'oled', 'contrast-dark': 'oled',
+};
+/** A theme id as it is now (a retired one → its replacement) */
+export const currentThemeId = (id) => RETIRED[id] || id;
+export const themeById = (id) => THEMES.find((t) => t.id === currentThemeId(id)) || THEMES[0];
 /** Themes a pharmacy may use (set by the owner); everything when the owner hasn't restricted it */
 export const allowedThemes = (branding) => {
-  const ids = branding?.themes?.length ? branding.themes : THEMES.map((t) => t.id);
+  const ids = branding?.themes?.length ? branding.themes.map(currentThemeId) : THEMES.map((t) => t.id);
   return THEMES.filter((t) => ids.includes(t.id));
 };
 
@@ -135,7 +119,7 @@ export function applyTheme(id, accentId = '') {
 }
 
 const KEY = 'pharmapos-theme';
-export const savedTheme = () => { try { return localStorage.getItem(KEY) || ''; } catch { return ''; } };
+export const savedTheme = () => { try { return currentThemeId(localStorage.getItem(KEY) || ''); } catch { return ''; } };
 export const saveTheme = (id) => { try { localStorage.setItem(KEY, id); } catch {} };
 
 // Light / Dark / Follow system. "system" is kept apart from the palette, so the chosen palette survives switching back.
@@ -144,9 +128,9 @@ export const savedMode = () => { try { return localStorage.getItem(MODE_KEY) ===
 export const saveMode = (m) => { try { m === 'system' ? localStorage.setItem(MODE_KEY, m) : localStorage.removeItem(MODE_KEY); } catch {} };
 export const systemDark = () => typeof matchMedia === 'function' && matchMedia('(prefers-color-scheme: dark)').matches;
 /** The palette for a light or dark base among the themes a pharmacy allows: Daylight Clinical / OLED Black first, then
- *  Adaptive Hybrid, then the owner's default, then the first of that base */
+ *  the owner's default, then the first of that base */
 export const DEFAULT_PALETTE = { light: 'daylight-clinical', dark: 'oled' };
 export const paletteFor = (base, list = THEMES, preferred) =>
-  (list.find((t) => t.id === DEFAULT_PALETTE[base]) || list.find((t) => t.id === 'hybrid-' + base) || list.find((t) => t.id === preferred && t.base === base) || list.find((t) => t.base === base) || list[0] || THEMES[0]).id;
+  (list.find((t) => t.id === DEFAULT_PALETTE[base]) || list.find((t) => t.id === currentThemeId(preferred) && t.base === base) || list.find((t) => t.base === base) || list[0] || THEMES[0]).id;
 /** The theme to paint at start-up: the saved palette, or the system's light / dark when following it (or nothing is saved yet) */
 export const startupTheme = () => (savedMode() === 'system' || !savedTheme() ? paletteFor(systemDark() ? 'dark' : 'light') : savedTheme());

@@ -70,6 +70,20 @@ void main() {
     expect(mv, [('lancet', 'bl1', 1), ('lancet', 'bl2', 1), ('strip', 'bs', 1)]);
   });
 
+  test('the refund sheet: the reason is kept, and the money back follows what was paid', () async {
+    final s = sale('s2', '2026-11-05T08:00:00', 2000, paid: 1500);
+    await store.update((d) => d.put('sales', s.toRecord()));
+    await refundSale(store, Sale.fromRecord((await store.get('sales', 's2'))!), user: 'Tia', settings: const PharmacySettings(), reason: 'Customer returned it');
+    expect((await store.get('sales', 's2'))!['refundReason'], 'Customer returned it');
+    expect((await store.rows('audit')).single['details'], contains('Customer returned it'));
+    final m = refundMoney(s);
+    expect((m.back, m.unpaid, m.insurer), (1500.0, 500.0, 0.0));
+    String money(num n) => 'UGX $n';
+    expect(refundHow(Sale.fromRecord({...s.toRecord(), 'payment': 'Mobile Money'}), 1500, money), contains('by Mobile Money'));
+    expect(refundHow(Sale.fromRecord({...s.toRecord(), 'payment': 'Cash'}), 1500, money), contains('cash drawer'));
+    expect(refundHow(s, 0, money), contains('no money goes back'));
+  });
+
   group('stock adjustments', () {
     const p = Product(id: 'p1', name: 'Amoxa', cost: 300);
     const batches = [BatchStock(id: 'a', batch: 'A', qty: 5, expiry: '2027-01-01'), BatchStock(id: 'b', batch: 'B', qty: 10, expiry: '2028-01-01')];

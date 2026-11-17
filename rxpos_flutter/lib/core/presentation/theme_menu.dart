@@ -132,8 +132,11 @@ class ThemeMenu extends ConsumerWidget {
                     ),
                 ]),
               ),
-              head('Theme'),
-              for (final p in allowed)
+              // the themes by group (themes.dart paletteGroups): Light, Dashboard looks, Dark
+              for (final g in paletteGroups)
+                if (allowed.any((p) => (p.group.isEmpty ? 'Light' : p.group) == g)) ...[
+              head(g),
+              for (final p in allowed.where((p) => (p.group.isEmpty ? 'Light' : p.group) == g))
                 ListTile(
                   key: ValueKey('theme-${p.id}'),
                   dense: true,
@@ -147,6 +150,7 @@ class ThemeMenu extends ConsumerWidget {
                     close();
                   },
                 ),
+                ],
               head('Colour'),
               for (final (id, name, hint) in colourLevels)
                 ListTile(

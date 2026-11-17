@@ -19,6 +19,7 @@ import CATALOG from '../src/data/catalog.json' with { type: 'json' };
 import { withDatabase } from './database.js';
 import { isOwner, ownerAuthRoutes, ownerAccount, verifyGoogle, getConfig, ownerMainLogin, ownerMainFail } from './owner-auth.js';
 import { backup, restore } from './backup.js';
+import { scrubText, scrubPage } from './crashscrub.js';
 import { uptimeCheck } from './uptime.js';
 import { watchdog } from './watchdog.js';
 import { dailySummaries } from './summary.js';
@@ -2017,7 +2018,7 @@ export default {
         const up = env.DB.prepare(`INSERT INTO client_errors (tenant, k, message, stack, page, build, platform, kind, first_at, last_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9)
           ON CONFLICT(tenant, k) DO UPDATE SET count = count + 1, devices = devices + 1, last_at = excluded.last_at, build = excluded.build, page = excluded.page, platform = excluded.platform`);
         const s = (v, n) => String(v ?? '').slice(0, n);
-        const stmts = list.filter((e) => e && e.key && e.message).map((e) => up.bind(who.tenant, s(e.key, 40), s(e.message, 300), s(e.stack, 3000), s(e.page, 80), Number(e.build) || 0, s(e.platform, 40), s(e.kind, 20), new Date().toISOString()));
+        const stmts = list.filter((e) => e && e.key && e.message).map((e) => up.bind(who.tenant, s(e.key, 40), scrubText(e.message, 300), scrubText(e.stack, 3000), scrubPage(e.page), Number(e.build) || 0, s(e.platform, 40), s(e.kind, 20), new Date().toISOString()));
         if (stmts.length) await env.DB.batch(stmts);
         // keep the 300 most recent kinds of error per pharmacy
         await env.DB.prepare('DELETE FROM client_errors WHERE tenant = ?1 AND k NOT IN (SELECT k FROM client_errors WHERE tenant = ?1 ORDER BY last_at DESC LIMIT 300)').bind(who.tenant).run();

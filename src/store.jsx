@@ -722,7 +722,7 @@ export function StoreProvider({ children }) {
    * Changes another pharmacy's sign-in hasn't sent yet are never carried over to this one: they are sent first (with
    * that pharmacy's own sign-in), and if they can't be, switching is refused with the reason.
    */
-  const linkPharmacy = useCallback(async ({ url, token, account, tenant, slug, pharmacy }) => {
+  const linkPharmacy = useCallback(async ({ url, token, account, tenant, slug, pharmacy, keyUser }) => {
     const cur = cfgRef.current || {};
     const other = cur.tenant ? cur.tenant !== tenant : (dbRef.current?.users.length || 0) > 0;
     if (other && cur.tenant) {
@@ -743,7 +743,8 @@ export function StoreProvider({ children }) {
       setPending(0);
     }
     // a new link (another pharmacy, another cloud, or device-only data joining one) sends everything it holds once
-    const next = { ...cur, url, key: token, account, tenant, slug, pharmacy, ...(other || cur.url !== url ? { cursor: 0, pushedAt: '', lastSync: '', outboxV2: false, till: undefined } : {}) };
+    // keyUser: whose sign-in token this is (audit P2-7: someone else unlocking with a PIN confirms before a personal call)
+    const next = { ...cur, url, key: token, keyUser: keyUser || '', account, tenant, slug, pharmacy, ...(other || cur.url !== url ? { cursor: 0, pushedAt: '', lastSync: '', outboxV2: false, till: undefined } : {}) };
     await saveSyncCfg(next);
     return other || !cur.lastSync;
   }, [saveSyncCfg, persist, setState]);

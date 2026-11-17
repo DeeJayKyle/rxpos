@@ -7,6 +7,16 @@ import '../sync/sync_engine.dart';
 import 'api_failure.dart';
 import 'dio_client.dart';
 
+/// Audit P2-7, option 1: set by the app shell. Before a call that acts as a person in the cloud, someone signed in with a
+/// PIN, fingerprint or offline password on a device holding another person's token confirms with their own password
+/// (it throws when they don't). Sync and the till's own calls never wait for it.
+Future<void> Function()? personGuard;
+
+/// Calls that act as a person in the cloud (the classic app marks the same ones `personal` in src/cloud.js).
+bool personalCall(String path, {required bool post}) =>
+    path.startsWith('/api/2fa') || path.startsWith('/api/sessions/') || path.startsWith('/api/calendar-link') || path.startsWith('/api/daily-stock-link') ||
+    (post && (path.startsWith('/api/reports/send') || path.startsWith('/api/summary')));
+
 class CloudApi {
   CloudApi(this._dio, this._base);
   final Dio _dio;
@@ -14,6 +24,7 @@ class CloudApi {
 
   /// [passRefusals]: "sign in again" and "refused" come out as the [ApiFailure] itself (no point asking again).
   Future<Map<String, Object?>> _call(String path, {Object? body, Duration timeout = const Duration(seconds: 20), bool passRefusals = false}) async {
+    if (personalCall(path, post: body != null)) await personGuard?.call();
     try {
       final o = Options(sendTimeout: timeout, receiveTimeout: timeout);
       final res = body == null ? await _dio.get<Object?>('$_base$path', options: o) : await _dio.post<Object?>('$_base$path', data: body, options: o);

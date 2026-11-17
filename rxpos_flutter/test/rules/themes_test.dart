@@ -1,4 +1,4 @@
-// Colour themes (src/themes.js): 36 palettes, readable everywhere (WCAG AA), accents, the owner's choice, light / dark.
+// Colour themes (src/themes.js): the top 10 palettes, readable everywhere (WCAG AA), accents, the owner's choice, light / dark.
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -9,9 +9,12 @@ import 'package:rxpos/core/theme/themes.dart';
 int argb(Color c) => c.toARGB32();
 
 void main() {
-  test('36 themes, every one readable with every accent', () {
-    expect(palettes, hasLength(36));
-    expect(palettes.where((p) => p.dark), hasLength(18));
+  test('the top 10 themes in three groups, three colours each, every one readable with every accent', () {
+    expect(palettes, hasLength(10));
+    expect(palettes.where((p) => p.dark), hasLength(2));
+    expect(palettes.every((p) => paletteGroups.contains(p.group)), isTrue);
+    // a retired theme opens as the kept one closest to it
+    expect((paletteById('tokyo-night').id, paletteById('mint').id, paletteById('light').id), ('midnight-pro', 'forest-green', 'daylight-clinical'));
     for (final p in palettes) {
       for (final a in ['', for (final x in accents) x.$1]) {
         final t = buildTheme(p, accent: a).colorScheme;
@@ -35,16 +38,17 @@ void main() {
       }
     }
   });
-  test('light / dark picks OLED Black / Daylight Clinical, then the Adaptive Hybrid, then the owner\'s default; the owner can limit the list', () {
+  test('light / dark picks OLED Black / Daylight Clinical, then the owner\'s default; the owner can limit the list', () {
     expect(paletteFor(true), 'oled');
     expect(paletteFor(false), 'daylight-clinical');
     final noNextGen = palettes.where((p) => !{'oled', 'daylight-clinical'}.contains(p.id)).toList();
-    expect(paletteFor(true, noNextGen), 'hybrid-dark');
-    expect(paletteFor(false, noNextGen), 'hybrid-light');
+    expect(paletteFor(true, noNextGen), 'midnight-pro');
+    expect(paletteFor(false, noNextGen), 'cobalt');
+    // an owner's list made before Nov 2026: retired ids count as their replacements
     final some = allowedPalettes({'themes': ['light', 'dracula', 'nord']});
-    expect(some.map((p) => p.id), ['light', 'nord', 'dracula']);
-    expect(paletteFor(true, some, 'nord'), 'nord');
-    expect(allowedPalettes(null), hasLength(36));
+    expect(some.map((p) => p.id), ['daylight-clinical', 'midnight-pro']);
+    expect(paletteFor(true, some, 'nord'), 'midnight-pro');
+    expect(allowedPalettes(null), hasLength(10));
   });
 
   test('accents change only the action colour; the look is kept as JSON', () {
@@ -52,7 +56,7 @@ void main() {
     expect(withAccent(p, 'ocean').primary, 0xFF267BFF);
     expect(withAccent(p, 'ocean').bg, p.bg);
     final l = Look.parse('{"theme":"nord","mode":"system","accent":"violet","surface":"glass","level":"vivid"}');
-    expect((l.theme, l.system, l.accent, l.surface, l.level), ('nord', true, 'violet', 'glass', 'vivid'));
+    expect((l.theme, l.system, l.accent, l.surface, l.level), ('midnight-pro', true, 'violet', 'glass', 'vivid'));
     expect(Look.parse('{"theme":"nope","surface":"x"}').theme, 'daylight-clinical');
     // the React app's look from the start: Daylight Clinical (OLED Black when the system is dark), no design system
     expect((Look.parse('garbage').design, Look.parse('garbage').theme, Look.parse('garbage').system, Look.parse('garbage').surface), ('', 'daylight-clinical', true, 'flat'));
@@ -69,10 +73,10 @@ void main() {
     expect(Look.parse('{"v":3,"design":"split-pane","theme":"split-pane"}').design, 'split-pane');
     expect(Look.parse('{"v":2,"theme":"dracula","surface":"aurora"}').design, '');
     expect(Look.parse(jsonEncode(Look.parse('{"surface":"flat"}').copyWith(surface: 'flat').toJson())).surface, 'flat');
-    final t = buildTheme(paletteById('light'), surface: 'aurora');
+    final t = buildTheme(paletteById('cobalt'), surface: 'aurora');
     expect(t.extension<DesignTokens>()!.hasBackdrop, isTrue);
     expect(t.cardTheme.color!.a, lessThan(1), reason: 'translucent panels over the backdrop');
-    expect(buildTheme(paletteById('light')).extension<DesignTokens>()!.hasBackdrop, isFalse);
+    expect(buildTheme(paletteById('cobalt')).extension<DesignTokens>()!.hasBackdrop, isFalse);
   });
 
   group('design systems', () {

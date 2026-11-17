@@ -8,7 +8,7 @@ import { toast, ask, askText } from '../feedback.jsx';
 import { Logo } from '../logo.jsx';
 import { downloadFile, today } from '../store.jsx';
 import { isWeb } from '../platform.js';
-import { THEMES } from '../themes.js';
+import { THEMES, currentThemeId } from '../themes.js';
 import { PHARMACY_FIELDS, pharmacyDefaults } from '../pharmacy-settings.js';
 import { PasswordInput } from '../password.jsx';
 import AiSystemDoctor from '../components/AiSystemDoctor.jsx';
@@ -672,8 +672,8 @@ function shrinkImage(file) {
 function BrandingTab({ t, onSave, busy }) {
   const b = t.branding || {};
   const [logo, setLogo] = useState(b.logo || '');
-  const [themes, setThemes] = useState(() => new Set(b.themes?.length ? b.themes : THEMES.map((x) => x.id)));
-  const [def, setDef] = useState(b.defaultTheme || '');
+  const [themes, setThemes] = useState(() => new Set(b.themes?.length ? b.themes.map(currentThemeId) : THEMES.map((x) => x.id)));
+  const [def, setDef] = useState(currentThemeId(b.defaultTheme || ''));
   const pick = async (file) => { try { const d = await shrinkImage(file); if (d.length > 200000) throw new Error('That logo is too large even after resizing. Use a simpler image.'); setLogo(d); } catch (e) { toast(e.message, 'error'); } };
   const toggle = (id) => { const n = new Set(themes); n.has(id) ? n.delete(id) : n.add(id); setThemes(n); };
   const all = themes.size === THEMES.length;
@@ -695,7 +695,7 @@ function BrandingTab({ t, onSave, busy }) {
       </div>
       <div className="card">
         <div className="row between"><h3>Themes this pharmacy can use</h3>
-          <button className="btn sm ghost" onClick={() => setThemes(all ? new Set(['light', 'dark', 'clinic-blue']) : new Set(THEMES.map((x) => x.id)))}>{all ? 'Choose a few' : 'Allow all'}</button></div>
+          <button className="btn sm ghost" onClick={() => setThemes(all ? new Set(['daylight-clinical', 'oled', 'cobalt']) : new Set(THEMES.map((x) => x.id)))}>{all ? 'Choose a few' : 'Allow all'}</button></div>
         <p className="muted small">Staff pick from these with the palette button. Allow at least 3. {themes.size} of {THEMES.length} allowed.</p>
         <div className="theme-grid">
           {THEMES.map((x) => (
@@ -704,7 +704,7 @@ function BrandingTab({ t, onSave, busy }) {
               <span className="theme-demo" style={{ background: x.c.bg, borderColor: x.c.borderStrong }}>
                 <i style={{ background: x.c.sidebar }} /><b style={{ background: x.c.surface, borderColor: x.c.border }}><em style={{ background: `linear-gradient(135deg, ${x.c.primary}, ${x.c.primary2})` }} /><u style={{ background: x.c.muted }} /></b>
               </span>
-              <span className="theme-name">{x.name}<small className="muted">{x.base}{x.inspired && x.inspired !== x.name ? ' · ' + x.inspired : ''}</small></span>
+              <span className="theme-name">{x.name}<small className="muted">{x.group ? x.group + ' · ' : ''}{x.base}{x.inspired && x.inspired !== x.name ? ' · ' + x.inspired : ''}</small></span>
             </label>
           ))}
         </div>

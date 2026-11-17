@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Zap, WifiOff, MonitorSmartphone, ShieldCheck, Mail, Lock, MessageSquareText, MessageCircle, ArrowLeft, Crown, Building2, LogIn } from 'lucide-react';
+import { Zap, WifiOff, MonitorSmartphone, ShieldCheck, Mail, Lock, MessageSquareText, MessageCircle, ArrowLeft, ArrowRight, Crown, Building2, LogIn } from 'lucide-react';
 import { useStore, verifyPassword, normalizePhone } from '../store.jsx';
 import { rememberOffline, verifyOffline, hasPin, verifyPin } from '../offline.js';
 import { Logo, BrandLogo } from '../logo.jsx';
@@ -115,7 +115,7 @@ export default function Auth() {
       message: `This device holds ${syncCfg.pharmacy || syncCfg.slug || 'another pharmacy'}. Signing in to ${r.pharmacy || r.slug} downloads that pharmacy instead (it needs the internet). ${syncCfg.pharmacy || 'The other pharmacy'} stays safe in the cloud, a copy is kept on this device, and changes it has not sent yet are sent first. Its staff sign in again to switch back.`,
       confirmText: `Switch to ${r.pharmacy || r.slug}`, cancelText: 'Cancel',
     }))) return;
-    await linkPharmacy({ url, token: r.token, account: email, tenant: r.tenant, slug: r.slug, pharmacy: r.pharmacy });
+    await linkPharmacy({ url, token: r.token, account: email, tenant: r.tenant, slug: r.slug, pharmacy: r.pharmacy, keyUser: r.user?.id });
     if (isNative) await rememberOffline(r.tenant, r.user.id, form.password); // the Windows / Android app can now sign this person in offline
     if (twoStep) try { localStorage.setItem(trustKey(r.tenant, r.user.id), '1'); } catch { /* storage blocked */ }
     setTwoStep(null);
@@ -183,19 +183,19 @@ export default function Auth() {
 
   const title = pharmacy?.name ? (slug ? `Sign in to ${pharmacy.name}` : `Sign in · this device: ${pharmacy.name}`) : 'Sign in to your pharmacy';
   return (
+    <div className="auth-page">
     <div className="auth-bg">
+      {/* the brand panel (Nov 2026, the owner's references): short, in the theme's own colour, with soft shapes */}
       <section className="auth-hero">
-        <div className="brand"><Logo size={36} /> <span className="wordmark">Rx<span className="brand-accent">POS</span></span></div>
-        <div>
-          <h1>Run your pharmacy <em>anywhere</em>, even offline.</h1>
-          <ul>
-            <li><Zap size={18} />Lightning-fast checkout, barcode scanning and Mobile Money</li>
-            <li><WifiOff size={18} />Keeps selling when the internet is down, then syncs automatically</li>
-            <li><MonitorSmartphone size={18} />One system on Windows PCs, Android phones and the web, across all your branches</li>
-            <li><ShieldCheck size={18} />Batch & expiry tracking, drug information, audit trail, finance and reports built in</li>
-          </ul>
+        <span className="blob b1" aria-hidden="true" /><span className="blob b2" aria-hidden="true" /><span className="blob b3" aria-hidden="true" /><span className="blob b4" aria-hidden="true" />
+        <svg className="auth-wave" viewBox="0 0 400 220" preserveAspectRatio="none" aria-hidden="true"><path d="M0 220 C 120 120, 220 40, 400 30 L 400 220 Z" /><path d="M0 220 C 140 150, 260 90, 400 80 L 400 220 Z" /></svg>
+        <div className="brand"><Logo size={34} /> <span className="wordmark">Rx<span className="brand-accent">POS</span></span></div>
+        <div className="auth-pitch">
+          <h1>Your pharmacy,<br /><em>in one place.</em></h1>
+          <p>Fast sales, safe stock and clear figures, online or off.</p>
+          <div className="auth-chips"><span><WifiOff size={14} />Works offline</span><span><ShieldCheck size={14} />Batch &amp; expiry</span><span><Zap size={14} />Mobile Money</span><span><MonitorSmartphone size={14} />PC, phone, web</span></div>
         </div>
-        <small style={{ opacity: .6 }}>© {new Date().getFullYear()} RxPOS</small>
+        <small>© {new Date().getFullYear()} RxPOS</small>
       </section>
       <div className="auth-side">
         <div className="auth-card">
@@ -238,7 +238,8 @@ export default function Auth() {
             </form>
           ) : (
             <form onSubmit={signIn} className="stack">
-              {pharmacy?.error ? <div className="error" role="alert">{pharmacy.error}</div> : <p className="muted center auth-title"><Building2 size={15} /> {title}</p>}
+              <div className="auth-welcome"><h2>Welcome back</h2>
+                {pharmacy?.error ? <div className="error" role="alert">{pharmacy.error}</div> : <p className="muted auth-title"><Building2 size={15} /> {title}</p>}</div>
               <label className="field with-icon"><span>Email or username</span><span className="input-icon-wrap"><Mail size={16} className="input-icon" aria-hidden="true" /><input type="text" inputMode="email" autoComplete="username" autoCapitalize="none" spellCheck={false} value={form.email} onChange={set('email')} required autoFocus={!form.email} placeholder="you@pharmacy.com or username" /></span></label>
               <label className="field with-icon"><span>Password</span><span className="input-icon-wrap"><Lock size={16} className="input-icon" aria-hidden="true" /><PasswordInput autoComplete="current-password" value={form.password} onChange={set('password')} required autoFocus={!!form.email} placeholder="Your password" /></span></label>
               {(needCode || (isUsername && !slug)) && codeField}
@@ -250,14 +251,16 @@ export default function Auth() {
               </div>
               {isNative && remember && <p className="muted small remember-note">Stays signed in on this device. Leave it off on a shared computer.</p>}
               {error && <div className="error" role="alert">{error}</div>}
-              <button className="btn primary block auth-submit" disabled={busy}><LogIn size={18} />{busy ? 'Signing in…' : 'Sign in'}</button>
-              {pinUser && <button type="button" className="btn ghost block" onClick={() => { setPinMode(true); setError(''); }}><ShieldCheck size={16} />Use the PIN for this device</button>}
+              <button className="btn primary block auth-submit" disabled={busy}>{busy ? 'Signing in…' : <>Sign in <ArrowRight size={18} /></>}</button>
+              {pinUser && <><div className="or-line"><span>or</span></div>
+                <button type="button" className="btn ghost block auth-alt" onClick={() => { setPinMode(true); setError(''); }}><ShieldCheck size={16} />Use the PIN for this device</button></>}
             </form>
           )}
         </div>
         {/* the web version only: continue here, or install the Windows / Android app */}
         {isWeb && !choices && !twoStep && !forgot && <AppDownloads />}
       </div>
+    </div>
     </div>
   );
 }

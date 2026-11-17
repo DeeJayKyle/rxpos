@@ -7,7 +7,7 @@ import {
   BellRing, Plus, ShoppingBag, Tag, FileUp, Building2, Send, ShieldCheck, Clock, BookMarked, MessagesSquare, UserCog, KeyRound, CalendarDays, Thermometer, Palette, MonitorSmartphone, ScanText, GraduationCap, Megaphone, CalendarRange, LockKeyhole, NotebookPen, PanelLeftClose, PanelLeftOpen, WifiOff,
   Sparkles, Pin, Keyboard, UserPlus, Archive, BadgeCheck, BriefcaseMedical,
 } from 'lucide-react';
-import { endOtherSessions } from './cloud.js';
+import { endOtherSessions, setPersonGuard, borrowedToken, cloudLogin } from './cloud.js';
 import { useStore, useSyncState, makePassword, put, audit, isLowStock, expiryCounts } from './store.jsx';
 import { askText, ask, toast } from './feedback.jsx';
 import { hasPin, setPin, clearPin, verifyOffline } from './offline.js';
@@ -23,11 +23,12 @@ import { isWeb, isNative } from './platform.js';
 import { keepsData } from './webpolicy.js';
 import RefreshHost from './refresh.jsx';
 import { startUpdates, onUpdate, applyUpdate, justUpdated, LABEL } from './update.js';
-import { applyTheme, saveTheme, allowedThemes, savedMode, saveMode, systemDark, paletteFor, startupTheme, ACCENTS, savedAccent, saveAccent, withAccent } from './themes.js';
+import { applyTheme, saveTheme, allowedThemes, THEME_GROUPS, currentThemeId, savedMode, saveMode, systemDark, paletteFor, startupTheme, ACCENTS, savedAccent, saveAccent, withAccent } from './themes.js';
 import { STYLES, applyStyle, savedStyle, saveStyle } from './surface.js';
 import { LEVELS, applyLevel, savedLevel, saveLevel } from './vivid.js';
 import { TwoStepModal } from './twostep.jsx';
 import { setCrashCloud } from './crash.js';
+import { homeFor, bottomTabs } from './landing.js';
 import { setBadge } from './badges.js';
 import { ACTIONS, keyOf, keyMatcher, showKey, typing } from './keymap.js';
 import { deviceSettings, setDevice, onDevice } from './device.js';
@@ -96,6 +97,7 @@ const P = {
 };
 
 // [path, label, Icon, shortcut, badge, element, permission, feature]
+const TAB_ICONS = { '/': LayoutDashboard, '/inventory': Boxes, '/customers': Users, '/prescriptions': ClipboardPlus, '/sales': ReceiptText, '/shifts': Clock };
 const NAV = [
   { items: [['/', 'Dashboard', LayoutDashboard, null, null, <P.Dashboard />]] },
   { group: 'Sales', items: [
@@ -228,7 +230,7 @@ function ThemePicker({ theme, setTheme, mode, setMode, accent, setAccent, style,
   const ref = useRef();
   const current = list.find((t) => t.id === theme);
   // Keep within what the owner allows for this pharmacy
-  useEffect(() => { if (list.length && !list.some((t) => t.id === theme)) setTheme(branding?.defaultTheme && list.some((t) => t.id === branding.defaultTheme) ? branding.defaultTheme : list[0].id); }, [branding]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (list.length && !list.some((t) => t.id === theme)) { const d = currentThemeId(branding?.defaultTheme || ''); setTheme(d && list.some((t) => t.id === d) ? d : list[0].id); } }, [branding]); // eslint-disable-line react-hooks/exhaustive-deps
   // Follow system: light or dark with the operating system, live when it changes
   useEffect(() => {
     if (mode !== 'system') return;
@@ -270,13 +272,18 @@ function ThemePicker({ theme, setTheme, mode, setMode, accent, setAccent, style,
               );
             })}
           </div>
-          <div className="bell-head">Theme</div>
-          {list.map((t) => (
-            <button key={t.id} className={'theme-item' + (t.id === theme ? ' on' : '')} onClick={() => { setMode(''); setTheme(t.id); setOpen(false); }}>
-              <span className="swatch" style={{ background: `linear-gradient(135deg, ${t.c.surface} 0 45%, ${t.c.primary} 45% 72%, ${t.c.primary2} 72%)`, borderColor: t.c.borderStrong }} />
-              <span className="grow">{t.name}{t.inspired && t.inspired !== t.name && <small className="muted"> · {t.inspired}</small>}</span>
-              {t.base === 'dark' ? <Moon size={13} /> : <Sun size={13} />}
-            </button>
+          {/* themes by group (src/themes.js THEME_GROUPS): Clinical, Colourful, Dashboard looks, Dark, High contrast */}
+          {THEME_GROUPS.map((g) => [g, list.filter((t) => (t.group || 'Clinical') === g)]).filter(([, ts]) => ts.length).map(([g, ts]) => (
+            <div key={g} className="theme-group" role="group" aria-label={g}>
+              <div className="bell-head">{g}</div>
+              {ts.map((t) => (
+                <button key={t.id} className={'theme-item' + (t.id === theme ? ' on' : '')} onClick={() => { setMode(''); setTheme(t.id); setOpen(false); }}>
+                  <span className="swatch" style={{ background: `linear-gradient(135deg, ${t.c.sidebar} 0 30%, ${t.c.surface} 30% 55%, ${t.c.primary} 55% 78%, ${t.c.primary2} 78%)`, borderColor: t.c.borderStrong }} />
+                  <span className="grow">{t.name}{t.inspired && t.inspired !== t.name && <small className="muted"> · {t.inspired}</small>}</span>
+                  {t.base === 'dark' ? <Moon size={13} /> : <Sun size={13} />}
+                </button>
+              ))}
+            </div>
           ))}
           <div className="bell-head">Colour</div>
           <ColourLevel onPick={() => setOpen(false)} />
@@ -372,7 +379,29 @@ function KeysHelp({ onClose, pages }) {
 }
 
 function Shell() {
-  const { db, products, user, setUser, branchId, branch, update, syncNow, syncCfg } = useStore();
+  const { db, products, user, setUser, branchId, branch, update, syncNow, syncCfg, saveSyncCfg } = useStore();
+  // Audit P2-7, option 1: before a call that acts as a person in the cloud, someone who signed in with a PIN or offline
+  // password on a device holding another person's token confirms with their own password (src/cloud.js personGuard).
+  // The device then keeps their token; syncing and selling never wait for this.
+  const guardRef = useRef({});
+  guardRef.current = { user, syncCfg, saveSyncCfg, users: db.users };
+  useEffect(() => {
+    setPersonGuard(async (cfg) => {
+      const { user: u, syncCfg: sc, saveSyncCfg: save, users } = guardRef.current;
+      if (!u || !borrowedToken(cfg, u.id)) return cfg;
+      const me = users.find((x) => x.id === u.id) || u;
+      const pw = await askText({ title: 'Confirm it is you', message: `This device is still signed in to the cloud as someone else (they signed in last with their password). To do this as ${u.name}, type your password.`, type: 'password', confirmText: 'Continue' });
+      if (!pw) throw new Error('Not done: it needs your own password on this device.');
+      const r = await cloudLogin(cfg.url, me.email || me.username || '', pw, cfg.tenant);
+      if (r.twoFactor) throw new Error('You use two-step sign-in: sign out, then sign in with your password and code to do this.');
+      if (!r.token || r.user?.id !== u.id) throw new Error('That password signed in a different account. Nothing was done.');
+      const next = { ...(sc || cfg), key: r.token, keyUser: r.user.id };
+      await save(next);
+      toast('Signed in to the cloud as you on this device');
+      return { ...cfg, key: r.token, keyUser: r.user.id };
+    });
+    return () => setPersonGuard(null);
+  }, []);
   useEffect(() => preloadPages(), []); // every page's code, in the background once the app is open
   useEffect(() => warmSearchKeys(products), [products.length]); // eslint-disable-line react-hooks/exhaustive-deps -- once per new medicine count
   const navigate = useNavigate();
@@ -400,6 +429,16 @@ function Shell() {
   // Show only what this person's role may use and what is switched on for this pharmacy
   const groups = NAV.map((g) => ({ ...g, items: g.items.filter(([, , , , , , perm, feat]) => (!perm || [].concat(perm).some(can)) && (!feat || features[feat] !== false)) })).filter((g) => g.items.length);
   const pages = groups.flatMap((g) => g.items.map(([to, label, Icon, key]) => ({ to, label, Icon, key })));
+  const tabs = bottomTabs(can, (to) => pages.some((x) => x.to === to));
+  // role-based landing (src/landing.js): once per sign-in in this tab, from the dashboard to the role's own page
+  useEffect(() => {
+    if (!user?.id) return;
+    let seen = null; try { seen = sessionStorage.getItem('rxpos-landed'); } catch { /* storage blocked */ }
+    if (seen === user.id) return;
+    try { sessionStorage.setItem('rxpos-landed', user.id); } catch { /* storage blocked */ }
+    const home = homeFor(user.role, can);
+    if (location.pathname === '/' && home !== '/' && pages.some((x) => x.to === home)) navigate(home, { replace: true });
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const [updReady, setUpdReady] = useState(false);
   useEffect(() => onUpdate((u) => setUpdReady(u.status === 'ready')), []);
   const counts = useMemo(() => ({
@@ -628,7 +667,7 @@ function Shell() {
           <PremiumToggle theme={theme} setTheme={setTheme} setMode={setThemeMode} />
           <ThemePicker theme={theme} setTheme={setTheme} mode={themeMode} setMode={setThemeMode} accent={accent} setAccent={setAccent} style={surface} setStyle={setSurface} />
         </header>
-        <main className="content" ref={contentRef}>
+        <main className="content" ref={contentRef} data-page={here}>
           <Suspense fallback={<div className="page"><div className="skeleton" /><div className="skeleton" style={{ height: 280 }} /></div>}>
             <Routes>
               {groups.flatMap((g) => g.items).map(([to, , , , , el]) => <Route key={to} path={to} element={el} />)}
@@ -638,10 +677,10 @@ function Shell() {
         </main>
       </div>
       <nav className="bottom-nav" aria-label="Main">
-        <NavLink to="/" end onClick={() => markNav('tab')}><LayoutDashboard size={20} /><span>Home</span></NavLink>
-        <NavLink to="/inventory" onClick={() => markNav('tab')}><Boxes size={20} /><span>Stock</span></NavLink>
-        <NavLink to="/pos" className="fab" onClick={() => markNav('tab')}><span className="fab-icon"><ShoppingCart size={22} /></span><span>Sell</span></NavLink>
-        <NavLink to="/sales" onClick={() => markNav('tab')}><ReceiptText size={20} /><span>Sales</span></NavLink>
+        {/* the pages this role may open (src/landing.js) */}
+        {tabs.left.map(([to, label]) => <NavLink key={to} to={to} end={to === '/'} onClick={() => markNav('tab')}>{(() => { const I = TAB_ICONS[to]; return <I size={20} />; })()}<span>{label}</span></NavLink>)}
+        {tabs.sell && <NavLink to="/pos" className="fab" onClick={() => markNav('tab')}><span className="fab-icon"><ShoppingCart size={22} /></span><span>Sell</span></NavLink>}
+        {tabs.right.map(([to, label]) => <NavLink key={to} to={to} onClick={() => markNav('tab')}>{(() => { const I = TAB_ICONS[to]; return <I size={20} />; })()}<span>{label}</span></NavLink>)}
         <button onClick={() => setMega(true)} aria-expanded={mega}><Menu size={20} /><span>More</span></button>
       </nav>
       <MegaMenu open={mega} onClose={() => setMega(false)} groups={groups} counts={counts} can={can} onFullMenu={() => setDrawer(true)} />

@@ -1,6 +1,5 @@
 // Colour themes (src/themes.js), surface styles (src/surface.js) and the colour level (src/vivid.js). Each theme is a
-// light or dark base with its own palette, inspired by well-known open palettes (Nord, Dracula, Catppuccin, Gruvbox,
-// Solarized, Tokyo Night, Rosé Pine, One Dark, GitHub Primer) and by pharmacy / clinic brand colours. Every theme is
+// light or dark base with its own palette; since Nov 2026 the top 10, three colours each, in three groups. Every theme is
 // made readable when it is applied: text and buttons are moved towards black or white until they pass WCAG AA (4.5:1).
 // The owner chooses which themes each pharmacy may use.
 import 'dart:math' as math;
@@ -15,8 +14,10 @@ export 'design_tokens.dart';
 class Palette {
   const Palette(this.id, this.name, this.dark,
       {required this.bg, required this.surface, required this.surface2, required this.border, required this.borderStrong, required this.text,
-      required this.muted, required this.primary, required this.primary2, required this.sidebar, required this.sidebar2, this.flat = false, this.inspired = '', this.sidebarText});
+      required this.muted, required this.primary, required this.primary2, required this.sidebar, required this.sidebar2, this.flat = false, this.inspired = '', this.sidebarText, this.group = ''});
   final String id, name, inspired;
+  /// the theme menu's group (paletteGroups)
+  final String group;
   /// the menu's text colour where the palette sets its own (light menus: Soft Grey, Sage Garden)
   final int? sidebarText;
   final bool dark, flat;
@@ -24,51 +25,61 @@ class Palette {
 
   Palette withPrimary(int p1, int p2) => Palette(id, name, dark,
       bg: bg, surface: surface, surface2: surface2, border: border, borderStrong: borderStrong, text: text, muted: muted, primary: p1, primary2: p2,
-      sidebar: sidebar, sidebar2: sidebar2, flat: flat, inspired: inspired, sidebarText: sidebarText);
+      sidebar: sidebar, sidebar2: sidebar2, flat: flat, inspired: inspired, sidebarText: sidebarText, group: group);
 }
 
+/// The top 10 (Nov 2026, the owner's choice; the same list as src/themes.js): three colours at most each, grouped.
+const paletteGroups = ['Light', 'Dashboard looks', 'Dark'];
 const palettes = [
-  Palette('light', 'RxPOS Teal', false, bg: 0xFFF3F6F9, surface: 0xFFFFFFFF, surface2: 0xFFF7F9FB, border: 0xFFE4E9EF, borderStrong: 0xFFCFD8E3, text: 0xFF0E1726, muted: 0xFF64748B, primary: 0xFF0D9488, primary2: 0xFF0891B2, sidebar: 0xFF0B1220, sidebar2: 0xFF111A2E),
-  // Daylight Clinical (lib/theme/rxpos_theme.dart): clean canvas, pure white cards, hairlines, clinical teal; the default light
-  Palette('daylight-clinical', 'RxPOS Daylight Clinical', false, bg: 0xFFF5F7FA, surface: 0xFFFFFFFF, surface2: 0xFFF8FAFC, border: 0x140F172A, borderStrong: 0x290F172A, text: 0xFF0F172A, muted: 0xFF5B6678, primary: 0xFF0D9488, primary2: 0xFF0891B2, sidebar: 0xFF0B1220, sidebar2: 0xFF111A2E, flat: true, inspired: 'Typography-led minimalism'),
-  Palette('hybrid-light', 'RxPOS Hybrid Light', false, bg: 0xFFF5F8FC, surface: 0xFFFFFFFF, surface2: 0xFFEDF3F7, border: 0xFFE1E8F0, borderStrong: 0xFFCBD6E2, text: 0xFF142638, muted: 0xFF64748B, primary: 0xFF008C58, primary2: 0xFF0E9F96, sidebar: 0xFF07131B, sidebar2: 0xFF0D1C28, flat: true, inspired: 'Adaptive Hybrid'),
-  Palette('clinic-blue', 'Clinic Blue', false, bg: 0xFFF2F6FC, surface: 0xFFFFFFFF, surface2: 0xFFF5F8FD, border: 0xFFDFE7F3, borderStrong: 0xFFC6D3E6, text: 0xFF0C1A33, muted: 0xFF5B6B86, primary: 0xFF1D64D8, primary2: 0xFF0EA5E9, sidebar: 0xFF0B1A36, sidebar2: 0xFF12264B),
-  Palette('mint', 'Fresh Mint', false, bg: 0xFFF1F8F5, surface: 0xFFFFFFFF, surface2: 0xFFF4FAF7, border: 0xFFDCEBE4, borderStrong: 0xFFC2DBCF, text: 0xFF0F231B, muted: 0xFF5A7468, primary: 0xFF059669, primary2: 0xFF65A30D, sidebar: 0xFF062419, sidebar2: 0xFF0B3324),
-  Palette('sunrise', 'Sunrise', false, bg: 0xFFFBF6F1, surface: 0xFFFFFFFF, surface2: 0xFFFDF9F5, border: 0xFFEFE3D6, borderStrong: 0xFFE2CFBB, text: 0xFF2A1A0E, muted: 0xFF7C6553, primary: 0xFFD97706, primary2: 0xFFE11D48, sidebar: 0xFF2A160A, sidebar2: 0xFF3B2010),
-  Palette('lavender', 'Lavender', false, bg: 0xFFEFF1F5, surface: 0xFFFFFFFF, surface2: 0xFFF4F5F9, border: 0xFFDCE0E8, borderStrong: 0xFFCCD0DA, text: 0xFF4C4F69, muted: 0xFF6C6F85, primary: 0xFF8839EF, primary2: 0xFF1E66F5, sidebar: 0xFF1E1E2E, sidebar2: 0xFF292A3E, inspired: 'Catppuccin Latte'),
-  Palette('rose-dawn', 'Rose Dawn', false, bg: 0xFFFAF4ED, surface: 0xFFFFFAF3, surface2: 0xFFF8EFE6, border: 0xFFEBDFD3, borderStrong: 0xFFDFDAD9, text: 0xFF575279, muted: 0xFF797593, primary: 0xFFB4637A, primary2: 0xFFD7827E, sidebar: 0xFF191724, sidebar2: 0xFF1F1D2E, inspired: 'Rosé Pine Dawn'),
-  Palette('solarized-light', 'Solarized Light', false, bg: 0xFFFDF6E3, surface: 0xFFFFFBEF, surface2: 0xFFF6EFDC, border: 0xFFE8DFC6, borderStrong: 0xFFD9CFB3, text: 0xFF073642, muted: 0xFF657B83, primary: 0xFF268BD2, primary2: 0xFF2AA198, sidebar: 0xFF002B36, sidebar2: 0xFF073642, inspired: 'Solarized'),
-  Palette('github-light', 'Clean Grey', false, bg: 0xFFF6F8FA, surface: 0xFFFFFFFF, surface2: 0xFFF6F8FA, border: 0xFFD0D7DE, borderStrong: 0xFFAFB8C1, text: 0xFF1F2328, muted: 0xFF59636E, primary: 0xFF0969DA, primary2: 0xFF8250DF, sidebar: 0xFF24292F, sidebar2: 0xFF32383F, inspired: 'GitHub Primer'),
-  Palette('nord-snow', 'Nord Snow', false, bg: 0xFFECEFF4, surface: 0xFFFFFFFF, surface2: 0xFFF2F4F8, border: 0xFFD8DEE9, borderStrong: 0xFFC5CCDA, text: 0xFF2E3440, muted: 0xFF4C566A, primary: 0xFF5E81AC, primary2: 0xFF88C0D0, sidebar: 0xFF2E3440, sidebar2: 0xFF3B4252, inspired: 'Nord'),
-  Palette('sand', 'Savanna Sand', false, bg: 0xFFF9F5D7, surface: 0xFFFBF1C7, surface2: 0xFFF2E5BC, border: 0xFFE5D5A8, borderStrong: 0xFFD5C4A1, text: 0xFF3C3836, muted: 0xFF665C54, primary: 0xFFAF3A03, primary2: 0xFF79740E, sidebar: 0xFF282828, sidebar2: 0xFF32302F, inspired: 'Gruvbox Light'),
-  Palette('coral', 'Coral Care', false, bg: 0xFFFFF5F4, surface: 0xFFFFFFFF, surface2: 0xFFFFF8F7, border: 0xFFF5DEDB, borderStrong: 0xFFECC7C2, text: 0xFF2B1412, muted: 0xFF80605C, primary: 0xFFE8505B, primary2: 0xFFF59E0B, sidebar: 0xFF2B1215, sidebar2: 0xFF3A1A1E),
-  // from the owner's dashboard references (2026-11-15), named by the look (src/themes.js)
-  Palette('royal-violet', 'Royal Violet', false, bg: 0xFFF6F5FB, surface: 0xFFFFFFFF, surface2: 0xFFF8F7FD, border: 0x142E1065, borderStrong: 0x292E1065, text: 0xFF1E1147, muted: 0xFF5F5A7A, primary: 0xFF6D3FD9, primary2: 0xFF8B5CF6, sidebar: 0xFF2E1065, sidebar2: 0xFF4C1D95, flat: true, inspired: 'Purple sidebar, white cards'),
-  Palette('cobalt', 'Cobalt Blue', false, bg: 0xFFF5F7FB, surface: 0xFFFFFFFF, surface2: 0xFFF7F9FD, border: 0x140F172A, borderStrong: 0x290F172A, text: 0xFF0B1533, muted: 0xFF586179, primary: 0xFF1D4FD8, primary2: 0xFF2563EB, sidebar: 0xFF1D4ED8, sidebar2: 0xFF1E40AF, flat: true, inspired: 'Blue sidebar, white cards'),
-  Palette('soft-grey', 'Soft Grey', false, bg: 0xFFF4F5F7, surface: 0xFFFFFFFF, surface2: 0xFFF7F8FA, border: 0x140F172A, borderStrong: 0x260F172A, text: 0xFF111827, muted: 0xFF5B6472, primary: 0xFF3B5BDB, primary2: 0xFF7048E8, sidebar: 0xFFFFFFFF, sidebar2: 0xFFFAFBFC, flat: true, inspired: 'Light sidebar, pastel icons', sidebarText: 0xFF374151),
-  Palette('sage', 'Sage Garden', false, bg: 0xFFF3F5F1, surface: 0xFFFFFFFF, surface2: 0xFFF6F8F4, border: 0x17173322, borderStrong: 0x2E173322, text: 0xFF173322, muted: 0xFF56685B, primary: 0xFF3F7D58, primary2: 0xFF5F9A73, sidebar: 0xFFB5CDB8, sidebar2: 0xFFA4C0A8, flat: true, inspired: 'Sage green, calm', sidebarText: 0xFF1D3A28),
-  Palette('paper', 'High Contrast Light', false, bg: 0xFFFFFFFF, surface: 0xFFFFFFFF, surface2: 0xFFF3F3F3, border: 0xFF9A9A9A, borderStrong: 0xFF555555, text: 0xFF000000, muted: 0xFF333333, primary: 0xFF0050B3, primary2: 0xFF003A80, sidebar: 0xFF000000, sidebar2: 0xFF1A1A1A, inspired: 'accessibility'),
-  Palette('dark', 'RxPOS Night', true, bg: 0xFF070B14, surface: 0xFF0F1624, surface2: 0xFF131C2D, border: 0xFF1E293B, borderStrong: 0xFF2B3A52, text: 0xFFE6EDF7, muted: 0xFF8B9AB3, primary: 0xFF2DD4BF, primary2: 0xFF22D3EE, sidebar: 0xFF050912, sidebar2: 0xFF0B1220),
-  // True OLED Black: pitch-black canvas (no backlight on OLED phones), raised cards, white hairlines, bio-teal; the default dark
-  Palette('oled', 'RxPOS OLED Black', true, bg: 0xFF000000, surface: 0xFF0B0E14, surface2: 0xFF121722, border: 0x1AFFFFFF, borderStrong: 0x2EFFFFFF, text: 0xFFF8FAFC, muted: 0xFF9AA4B2, primary: 0xFF2DD4BF, primary2: 0xFF22D3EE, sidebar: 0xFF000000, sidebar2: 0xFF0B0E14, flat: true, inspired: 'True OLED dark'),
-  // Gold Night (2026-11-14, the owner's "dark luxury" reference): black canvas, warm ivory text, champagne gold
-  Palette('gold-night', 'Gold Night', true, bg: 0xFF0B0B0C, surface: 0xFF141416, surface2: 0xFF1B1B1E, border: 0x29D4A64A, borderStrong: 0x52D4A64A, text: 0xFFF5F1E8, muted: 0xFFA8A29E, primary: 0xFFD4A64A, primary2: 0xFFB8862B, sidebar: 0xFF080808, sidebar2: 0xFF121212, flat: true, inspired: 'Dark luxury'),
-  Palette('ember-forge', 'Ember Forge', true, bg: 0xFF101011, surface: 0xFF1A1A1C, surface2: 0xFF212124, border: 0x14FFFFFF, borderStrong: 0x29FFFFFF, text: 0xFFF5F5F4, muted: 0xFFA8A29E, primary: 0xFFF97316, primary2: 0xFFFB923C, sidebar: 0xFF0C0C0D, sidebar2: 0xFF141415, flat: true, inspired: 'Charcoal and orange'),
-  Palette('hybrid-dark', 'RxPOS Hybrid Dark', true, bg: 0xFF07131B, surface: 0xFF101D2B, surface2: 0xFF162635, border: 0xFF2B3A49, borderStrong: 0xFF3A4C5E, text: 0xFFF3F7FB, muted: 0xFF9BAFC2, primary: 0xFF20C9C3, primary2: 0xFF16A36A, sidebar: 0xFF050E15, sidebar2: 0xFF0A1721, flat: true, inspired: 'Adaptive Hybrid'),
-  Palette('tokyo-night', 'Tokyo Night', true, bg: 0xFF16161E, surface: 0xFF1A1B26, surface2: 0xFF1F2335, border: 0xFF292E42, borderStrong: 0xFF3B4261, text: 0xFFC0CAF5, muted: 0xFF7F88B8, primary: 0xFF7AA2F7, primary2: 0xFFBB9AF7, sidebar: 0xFF13131A, sidebar2: 0xFF1A1B26, inspired: 'Tokyo Night'),
-  Palette('nord', 'Nord Polar', true, bg: 0xFF242933, surface: 0xFF2E3440, surface2: 0xFF343B49, border: 0xFF3B4252, borderStrong: 0xFF4C566A, text: 0xFFECEFF4, muted: 0xFFA3ADBF, primary: 0xFF88C0D0, primary2: 0xFF81A1C1, sidebar: 0xFF1F232B, sidebar2: 0xFF2A2F3A, inspired: 'Nord'),
-  Palette('dracula', 'Dracula', true, bg: 0xFF21222C, surface: 0xFF282A36, surface2: 0xFF2F3241, border: 0xFF383A4A, borderStrong: 0xFF44475A, text: 0xFFF8F8F2, muted: 0xFFA4A8C4, primary: 0xFFBD93F9, primary2: 0xFFFF79C6, sidebar: 0xFF1B1C24, sidebar2: 0xFF22232E, inspired: 'Dracula'),
-  Palette('mocha', 'Mocha', true, bg: 0xFF11111B, surface: 0xFF1E1E2E, surface2: 0xFF232336, border: 0xFF313244, borderStrong: 0xFF45475A, text: 0xFFCDD6F4, muted: 0xFF9399B2, primary: 0xFFCBA6F7, primary2: 0xFF89B4FA, sidebar: 0xFF0D0D15, sidebar2: 0xFF181825, inspired: 'Catppuccin Mocha'),
-  Palette('gruvbox', 'Gruvbox Ember', true, bg: 0xFF1D2021, surface: 0xFF282828, surface2: 0xFF2F2C2A, border: 0xFF3C3836, borderStrong: 0xFF504945, text: 0xFFEBDBB2, muted: 0xFFA89984, primary: 0xFFFABD2F, primary2: 0xFFFE8019, sidebar: 0xFF161819, sidebar2: 0xFF1D2021, inspired: 'Gruvbox'),
-  Palette('solarized-dark', 'Solarized Dark', true, bg: 0xFF00212B, surface: 0xFF002B36, surface2: 0xFF073642, border: 0xFF0B4352, borderStrong: 0xFF1D5361, text: 0xFFE3DDC8, muted: 0xFF93A1A1, primary: 0xFF2AA198, primary2: 0xFF268BD2, sidebar: 0xFF001A22, sidebar2: 0xFF00212B, inspired: 'Solarized'),
-  Palette('one-dark', 'One Dark', true, bg: 0xFF1E2127, surface: 0xFF282C34, surface2: 0xFF2E333C, border: 0xFF3A3F4B, borderStrong: 0xFF4B5263, text: 0xFFDCDFE4, muted: 0xFF9DA5B4, primary: 0xFF61AFEF, primary2: 0xFFC678DD, sidebar: 0xFF191C21, sidebar2: 0xFF21252B, inspired: 'Atom One Dark'),
-  Palette('github-dark', 'Graphite', true, bg: 0xFF0D1117, surface: 0xFF161B22, surface2: 0xFF1C2129, border: 0xFF30363D, borderStrong: 0xFF484F58, text: 0xFFE6EDF3, muted: 0xFF9198A1, primary: 0xFF58A6FF, primary2: 0xFF3FB950, sidebar: 0xFF010409, sidebar2: 0xFF0D1117, inspired: 'GitHub Primer'),
-  Palette('rose-pine', 'Rosé Night', true, bg: 0xFF191724, surface: 0xFF1F1D2E, surface2: 0xFF26233A, border: 0xFF2A273F, borderStrong: 0xFF403D52, text: 0xFFE0DEF4, muted: 0xFF908CAA, primary: 0xFFEBBCBA, primary2: 0xFFC4A7E7, sidebar: 0xFF141220, sidebar2: 0xFF191724, inspired: 'Rosé Pine'),
-  Palette('forest', 'Forest Pharmacy', true, bg: 0xFF07130E, surface: 0xFF0D1F17, surface2: 0xFF12281E, border: 0xFF1B3A2C, borderStrong: 0xFF285240, text: 0xFFE3F5EC, muted: 0xFF89B09D, primary: 0xFF34D399, primary2: 0xFFA3E635, sidebar: 0xFF050E0A, sidebar2: 0xFF0A1912),
-  Palette('ocean', 'Deep Ocean', true, bg: 0xFF04121F, surface: 0xFF0A1D30, surface2: 0xFF0F263D, border: 0xFF163452, borderStrong: 0xFF22486E, text: 0xFFE2EEFA, muted: 0xFF86A3C0, primary: 0xFF38BDF8, primary2: 0xFF2DD4BF, sidebar: 0xFF030D17, sidebar2: 0xFF071827),
-  Palette('midnight-pro', 'Midnight Pro', true, bg: 0xFF0B0F19, surface: 0xFF0F172A, surface2: 0xFF131C31, border: 0xFF1E293B, borderStrong: 0xFF334155, text: 0xFFE2E8F0, muted: 0xFF94A3B8, primary: 0xFF10B981, primary2: 0xFF14B8A6, sidebar: 0xFF020617, sidebar2: 0xFF0B1220, flat: true, inspired: 'Linear / Vercel'),
-  Palette('contrast-dark', 'High Contrast Dark', true, bg: 0xFF000000, surface: 0xFF0A0A0A, surface2: 0xFF141414, border: 0xFF7A7A7A, borderStrong: 0xFFBDBDBD, text: 0xFFFFFFFF, muted: 0xFFD6D6D6, primary: 0xFFFFD60A, primary2: 0xFF4CC9F0, sidebar: 0xFF000000, sidebar2: 0xFF0F0F0F, inspired: 'accessibility'),
+  Palette('daylight-clinical', 'RxPOS Daylight Clinical', false, bg: 0xFFF5F7FA, surface: 0xFFFFFFFF, surface2: 0xFFF8FAFC, border: 0x140F172A, borderStrong: 0x290F172A, text: 0xFF0F172A, muted: 0xFF5B6678, primary: 0xFF0D9488, primary2: 0xFF0F766E, sidebar: 0xFF0B1220, sidebar2: 0xFF111A2E, flat: true, inspired: 'Typography-led minimalism', group: 'Light'),
+  Palette('cobalt', 'Cobalt Blue', false, bg: 0xFFF5F7FB, surface: 0xFFFFFFFF, surface2: 0xFFF7F9FD, border: 0x140F172A, borderStrong: 0x290F172A, text: 0xFF0B1533, muted: 0xFF586179, primary: 0xFF1D4FD8, primary2: 0xFF1E40AF, sidebar: 0xFF1D4ED8, sidebar2: 0xFF1E40AF, flat: true, inspired: 'Blue sidebar, white cards', group: 'Light'),
+  Palette('royal-violet', 'Royal Violet', false, bg: 0xFFF6F5FB, surface: 0xFFFFFFFF, surface2: 0xFFF8F7FD, border: 0x142E1065, borderStrong: 0x292E1065, text: 0xFF1E1147, muted: 0xFF5F5A7A, primary: 0xFF6D3FD9, primary2: 0xFF7C4EE4, sidebar: 0xFF2E1065, sidebar2: 0xFF4C1D95, flat: true, inspired: 'Purple sidebar, white cards', group: 'Light'),
+  Palette('sunrise', 'Sunrise', false, bg: 0xFFFBF6F1, surface: 0xFFFFFFFF, surface2: 0xFFFDF9F5, border: 0xFFEFE3D6, borderStrong: 0xFFE2CFBB, text: 0xFF2A1A0E, muted: 0xFF7C6553, primary: 0xFFD97706, primary2: 0xFFB45309, sidebar: 0xFF2A160A, sidebar2: 0xFF3B2010, group: 'Light'),
+  Palette('charcoal-sky', 'Charcoal & Sky', false, bg: 0xFFECEEF2, surface: 0xFFFFFFFF, surface2: 0xFFF4F5F7, border: 0x14111114, borderStrong: 0x29111114, text: 0xFF18181B, muted: 0xFF62656C, primary: 0xFF2F6FB5, primary2: 0xFF3B82C4, sidebar: 0xFF38383B, sidebar2: 0xFF2B2B2E, flat: true, inspired: 'Charcoal frame, sky-blue actions: Finance and the dashboard', group: 'Dashboard looks'),
+  Palette('lime-studio', 'Lime Studio', false, bg: 0xFFF3F3EE, surface: 0xFFFFFFFF, surface2: 0xFFF7F7F2, border: 0x14181820, borderStrong: 0x29181820, text: 0xFF18181F, muted: 0xFF62626B, primary: 0xFF3F6212, primary2: 0xFF4D7C0F, sidebar: 0xFF1F2029, sidebar2: 0xFF2A2B36, flat: true, inspired: 'Navy menu, lime highlights: schedules, calendar, quiz', group: 'Dashboard looks'),
+  Palette('aqua-navy', 'Aqua Navy', false, bg: 0xFFEDF2F7, surface: 0xFFFFFFFF, surface2: 0xFFF3F7FB, border: 0x140F2440, borderStrong: 0x290F2440, text: 0xFF0F2440, muted: 0xFF56677E, primary: 0xFF1B4B8A, primary2: 0xFF2563A8, sidebar: 0xFF163A6B, sidebar2: 0xFF1B4B8A, flat: true, inspired: 'Navy and aqua: sales overview, reports', group: 'Dashboard looks'),
+  Palette('forest-green', 'Forest Green', false, bg: 0xFFEFF1F2, surface: 0xFFFFFFFF, surface2: 0xFFF5F6F7, border: 0x14111614, borderStrong: 0x29111614, text: 0xFF111614, muted: 0xFF5B6360, primary: 0xFF15803D, primary2: 0xFF166534, sidebar: 0xFFFFFFFF, sidebar2: 0xFFF6F7F7, flat: true, inspired: 'White and forest green: payments, purchases, Finance', sidebarText: 0xFF323A37, group: 'Dashboard looks'),
+  Palette('oled', 'RxPOS OLED Black', true, bg: 0xFF000000, surface: 0xFF0B0E14, surface2: 0xFF121722, border: 0x1AFFFFFF, borderStrong: 0x2EFFFFFF, text: 0xFFF8FAFC, muted: 0xFF9AA4B2, primary: 0xFF2DD4BF, primary2: 0xFF14B8A6, sidebar: 0xFF000000, sidebar2: 0xFF0B0E14, flat: true, inspired: 'True OLED dark', group: 'Dark'),
+  Palette('midnight-pro', 'Midnight Pro', true, bg: 0xFF0B0F19, surface: 0xFF0F172A, surface2: 0xFF131C31, border: 0xFF1E293B, borderStrong: 0xFF334155, text: 0xFFE2E8F0, muted: 0xFF94A3B8, primary: 0xFF10B981, primary2: 0xFF059669, sidebar: 0xFF020617, sidebar2: 0xFF0B1220, flat: true, inspired: 'Linear / Vercel', group: 'Dark'),
 ];
+
+/// Themes retired in Nov 2026 → the kept theme closest to each (a saved choice or an owner's list keeps working).
+const retiredPalettes = {
+  'light': 'daylight-clinical',
+  'hybrid-light': 'daylight-clinical',
+  'solarized-light': 'daylight-clinical',
+  'clinic-blue': 'cobalt',
+  'mint': 'forest-green',
+  'lavender': 'royal-violet',
+  'rose-dawn': 'sunrise',
+  'sand': 'sunrise',
+  'coral': 'sunrise',
+  'github-light': 'daylight-clinical',
+  'nord-snow': 'daylight-clinical',
+  'soft-grey': 'daylight-clinical',
+  'sage': 'forest-green',
+  'teal-glass': 'daylight-clinical',
+  'paper': 'daylight-clinical',
+  'dark': 'midnight-pro',
+  'hybrid-dark': 'midnight-pro',
+  'tokyo-night': 'midnight-pro',
+  'nord': 'midnight-pro',
+  'dracula': 'midnight-pro',
+  'mocha': 'midnight-pro',
+  'solarized-dark': 'midnight-pro',
+  'one-dark': 'midnight-pro',
+  'rose-pine': 'midnight-pro',
+  'forest': 'midnight-pro',
+  'ocean': 'midnight-pro',
+  'gruvbox': 'oled',
+  'github-dark': 'oled',
+  'gold-night': 'oled',
+  'ember-forge': 'oled',
+  'contrast-dark': 'oled',
+};
+
+/// A theme id as it is now (a retired one → its replacement).
+String currentPaletteId(String id) => retiredPalettes[id] ?? id;
 
 /// The design systems' own palettes (design_systems.dart): used only through a design system, so the owner's choice
 /// of themes and the theme list stay those of the React app.
@@ -91,11 +102,14 @@ const designPalettes = [
 
 const premiumTheme = 'midnight-pro';
 
-Palette paletteById(String id) => palettes.where((p) => p.id == id).firstOrNull ?? designPalettes.where((p) => p.id == id).firstOrNull ?? palettes.first;
+/// A palette by id: one of the 10, a design system's own (some share an old theme's id, e.g. Lavender Dream), or the
+/// kept theme a retired id moved to.
+Palette paletteById(String id) =>
+    palettes.where((p) => p.id == id).firstOrNull ?? designPalettes.where((p) => p.id == id).firstOrNull ?? palettes.where((p) => p.id == currentPaletteId(id)).firstOrNull ?? palettes.first;
 
 /// Themes a pharmacy may use (set by the owner); all of them when the owner hasn't restricted it.
 List<Palette> allowedPalettes(Map? branding) {
-  final ids = [for (final x in (branding?['themes'] as List?) ?? const []) '$x'];
+  final ids = [for (final x in (branding?['themes'] as List?) ?? const []) currentPaletteId('$x')];
   return ids.isEmpty ? palettes : palettes.where((p) => ids.contains(p.id)).toList();
 }
 
@@ -103,8 +117,7 @@ List<Palette> allowedPalettes(Map? branding) {
 /// default, then the first of that base (src/themes.js paletteFor).
 String paletteFor(bool dark, [List<Palette> list = palettes, String? preferred]) =>
     (list.where((t) => t.id == (dark ? oledPaletteId : daylightClinicalPaletteId)).firstOrNull ??
-            list.where((t) => t.id == 'hybrid-${dark ? 'dark' : 'light'}').firstOrNull ??
-            list.where((t) => t.id == preferred && t.dark == dark).firstOrNull ??
+            list.where((t) => t.id == currentPaletteId(preferred ?? '') && t.dark == dark).firstOrNull ??
             list.where((t) => t.dark == dark).firstOrNull ??
             list.firstOrNull ??
             palettes.first)

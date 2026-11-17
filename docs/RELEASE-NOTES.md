@@ -1,5 +1,49 @@
 # RxPOS release notes
 
+## React (classic) app 1.10.5 · Flutter app 2.1 (next build) · November 2026 (refund sheet, landing pages, F-keys, top 10 themes, new sign-in)
+
+Nothing to do on the tills: they update by themselves.
+
+- **A proper refund sheet** (both apps). Before a refund, one sheet shows each line and the batch its stock goes back
+  to (a kit: each of its medicines), the money going back and how ("Give UGX 3,000 back from the cash drawer",
+  "Send it back by Mobile Money: RxPOS does not send the money"), any unpaid balance cancelled or insurer share no
+  longer billed, and a warning when the sale is in a closed day. A reason is required (Customer returned it, Wrong
+  medicine or strength, Wrong price or quantity, Side effect or reaction, Sold twice by mistake, Other). It is kept
+  on the sale, shown on its receipt in Sales History, and written in the audit log.
+- **Each role lands on its own page.** After signing in, pharmacists, dispensers and cashiers (and any custom role
+  that sells but doesn't see reports) open on the till; administrators and managers on the dashboard. A page
+  opened from a link still opens that page.
+- **The phone's bottom bar only offers pages the role may open.** A cashier used to see "Stock", which sent them
+  back home. Now they get Home, Clients, Sell and Sales; the manager's bar is unchanged.
+- **Function keys under the till** (computers). A thin bar shows what F2–F10 do there (Retail or Wholesale, Add
+  stock, Sales, Inventory, Search, Charge, Proforma, all keys). Each key can be clicked and follows this device's own
+  key map. × hides it on this device; the shortcuts sheet (?) shows it again.
+- **Flutter till:** medicine tiles are a little taller, so a long price row no longer overflows.
+- **The top 10 themes** (both apps). 36 themes are now 10, chosen for working speed, clear colour coding on every
+  page, readability and smooth transitions, each with three colours at most (a neutral base, the menu colour and one
+  brand colour). They are grouped in the theme menu: **Light** (RxPOS Daylight Clinical, Cobalt Blue, Royal Violet,
+  Sunrise), **Dashboard looks** from the owner's references (Charcoal & Sky for the dashboard and Finance, Lime Studio
+  for Calendar, Drug Quiz and the weekly summary, Aqua Navy for Reports and Sales History, Forest Green for Purchases,
+  Expenses and Banks) and **Dark** (RxPOS OLED Black, Midnight Pro). A device or a pharmacy on a retired theme moves
+  to the closest kept one by itself.
+- **Security (audit P2-7):** a device keeps the cloud sign-in of the last person who signed in with their password.
+  Someone who then unlocks it with a quick PIN, fingerprint or offline password keeps selling and syncing as before,
+  but is asked for their own password before acting as themselves in the cloud (two-step sign-in, signing out other
+  devices, calendar and daily-stock links, sending reports). The device then holds their own sign-in.
+- **A new sign-in page** (both apps): one rounded frame, a pale brand panel in the theme's colour with soft shapes and
+  a short headline, and a clean "Welcome back" form with a large Sign in button.
+
+## React (classic) app 1.10.4 · Flutter app 2.1 (next build) · Cloud · November 2026 (audit, second pass)
+
+Fixes from the second audit pass of 17 November (docs/AUDIT-2026-11-17-PASS2.md). Nothing to do on the tills.
+
+- **Owner alerts:** a device error reported within 30 minutes of the last error email is now in the next email
+  (before, it was never emailed); the first "RxPOS problem" email is tried again when it fails to send (before, the
+  owner heard nothing for the whole outage).
+- **Privacy of error reports:** the cloud removes emails, phone numbers and long numbers from error reports itself,
+  whatever device sent them; the Flutter app no longer sends the screen's search or record id.
+- **Restore:** the restore tool asks which cloud to write to (`RXPOS_API`) and never assumes the live one.
+
 ## React (classic) app 1.10.3 · Cloud · November 2026 (refunds on the day they happen)
 
 Nothing to do on the tills. **Past figures in the cloud reports change** (read this before comparing with old emails).
