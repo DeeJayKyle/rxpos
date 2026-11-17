@@ -96,6 +96,11 @@
     box-shadow: inset 0 1px 0 #ffffff, 0 8px 18px -10px rgba(0, 0, 0, .35); }
   :root[data-palette][data-sidebar='light'] .sidebar nav a.active svg { color: var(--sidebar-text); }
 
+  /* Charcoal Lime (the owner's reference): the open page a solid lime pill with charcoal words */
+  :root[data-palette='night-lime'][data-sidebar] .sidebar nav a.active { background: #c8f169; color: #1f1f2a; border-color: #c8f169; box-shadow: 0 8px 18px -10px rgba(200, 241, 105, .6); }
+  :root[data-palette='night-lime'][data-sidebar] .sidebar nav a.active svg { color: #1f1f2a; }
+  :root[data-palette='night-lime'][data-sidebar] .sidebar nav a.active kbd { color: #1f1f2a; border-color: rgba(31, 31, 42, .3); background: transparent; }
+
   /* the page and its cards: colour 2 under, white cards over */
   :root[data-palette] body { background-image: none; }
   :root[data-palette] .kit-icon { --kit: var(--primary) !important; }

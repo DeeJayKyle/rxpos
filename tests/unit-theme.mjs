@@ -12,7 +12,7 @@ check('restricted: light prefers the owner\'s default when it is light (a retire
 check('restricted: light falls back to the first allowed light palette', paletteFor('light', restricted) === 'electric-blue');
 check('restricted: dark → the only allowed dark palette', paletteFor('dark', restricted, 'mint') === 'navy-teal');
 check('no palette of that base: falls back to the first allowed', paletteFor('dark', allowedThemes({ themes: ['mint', 'clinic-blue', 'sunrise'] })) === 'electric-blue');
-check('the 9 two-colour themes in 3 groups, each one in a group', THEMES.length === 9 && THEMES.every((t) => THEME_GROUPS.includes(t.group)));
+check('the 10 two-colour themes in 3 groups, each one in a group', THEMES.length === 10 && THEMES.every((t) => THEME_GROUPS.includes(t.group)));
 check('every retired id resolves to a kept theme (saved preferences keep working)', Object.entries(RETIRED).every(([o, n]) => !THEMES.some((t) => t.id === o) && themeById(o).id === n) && themeById('daylight-clinical').id === 'mint-teal' && themeById('midnight-pro').id === 'navy-teal' && themeById('oled').id === 'navy-teal');
 check('every theme is flat (no page gradient)', THEMES.every((t) => themeVars(t)['--bg-grad'] === 'none'));
 

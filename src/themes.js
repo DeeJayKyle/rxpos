@@ -1,6 +1,6 @@
 import { LOGO_SVG } from './logomark.js';
 // Colour themes. Each theme is a light or dark base plus its own palette, applied as CSS variables. Since 17 Nov 2026
-// (the owner's references and review), 9 two-colour themes: colour 1 is strong (the menu, buttons, the active tab, headings),
+// (the owner's references and review), 10 two-colour themes: colour 1 is strong (the menu, buttons, the active tab, headings),
 // colour 2 is soft (the page, cards, table headings and row stripes); text is near black or white. Warnings, tables and
 // pills use shades of the same two colours (themeVars), with their words and icons, so every page keeps to two colours.
 // Older themes map to the closest new one (RETIRED). The owner chooses which themes each pharmacy may use.
@@ -60,6 +60,7 @@ export const THEMES = [
   duo('royal-purple', 'Royal Purple', 'Bold sidebars', { c1: '#6d4ae8', c2: '#f4f1fd', side: '#3b1a7a', inspired: 'Deep purple menu with white words, violet actions' }),
   duo('forest-green', 'Forest Green', 'Bold sidebars', { c1: '#1e8c4e', c2: '#dcefe3', strong: true, inspired: 'Green menu, green-washed pages' }),
   // Dark sidebars and the dark theme
+  duo('night-lime', 'Charcoal Lime', 'Dark sidebars', { c1: '#c8f169', c2: '#f4f4f0', side: '#1f1f2a', inspired: 'Charcoal menu, lime pills and buttons with dark words' }),
   duo('charcoal-lime', 'Lime Charcoal', 'Dark sidebars', { c1: '#1f1f2a', c2: '#eef7d6', side: '#c8f169', sideText: '#1f1f2a', strong: true, inspired: 'Lime menu with charcoal words, charcoal actions' }),
   duo('midnight-indigo', 'Midnight Indigo', 'Dark sidebars', { c1: '#5b5bf0', c2: '#e6e6fb', side: '#1b1d2e', strong: true, inspired: 'Midnight menu, indigo actions' }),
   duo('navy-teal', 'RxPOS Navy Teal', 'Dark sidebars', { c1: '#14b8a6', c2: '#0a2233', side: '#0f2a44', base: 'dark', strong: true, inspired: 'Navy and teal: the RxPOS till' }),
