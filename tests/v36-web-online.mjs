@@ -54,7 +54,7 @@ check('sign-in screen offers no "Remember me" and says nothing is kept', await p
 await setVal(p, 'input[autocomplete=username]', 'robin@test.rx'); await setVal(p, 'input[type=password]', 'robin-pass-1234');
 await p.evaluate(() => [...document.querySelectorAll('form button')].find((x) => /^Sign in/.test(x.textContent.trim()))?.click());
 await p.waitForSelector('.sidebar', { timeout: 20000 }); await wait(2500);
-check('no quick-PIN button on the web', await p.evaluate(() => !document.querySelector('.user-box button[title*="PIN"]')));
+check('no quick-PIN button on the web', await p.evaluate(() => !document.querySelector('.account-drop button[title*="PIN"]')));
 await p.evaluate(() => { location.hash = '#/pos'; }); await wait(1200);
 await p.evaluate(() => document.querySelector('.product')?.click()); await wait(300);
 await p.keyboard.press('F9'); await wait(1500);

@@ -587,6 +587,15 @@ function Shell() {
     try { await endOtherSessions(syncCfg); toast('Signed out everywhere else'); } catch (e) { toast(e.message, 'error'); }
   };
   accountRef.current = { password: () => changePassword(false), pin: manageDevicePin, twostep: () => setTwoStepOpen(true), logout: signOut, others: signOutOthers };
+  const [accountOpen, setAccountOpen] = useState(false);
+  const accountMenuRef = useRef(null);
+  useEffect(() => {
+    if (!accountOpen) return;
+    const off = (e) => !accountMenuRef.current?.contains(e.target) && setAccountOpen(false);
+    const esc = (e) => e.key === 'Escape' && setAccountOpen(false);
+    window.addEventListener('pointerdown', off); window.addEventListener('keydown', esc);
+    return () => { window.removeEventListener('pointerdown', off); window.removeEventListener('keydown', esc); };
+  }, [accountOpen]);
   useEffect(() => {
     const on = (e) => accountRef.current?.[e.detail]?.();
     window.addEventListener('rxpos:account', on);
@@ -633,15 +642,6 @@ function Shell() {
             </div>
           ); })}
         </nav>
-        {/* the sidebar keeps to the pages (the owner's clean-up, 2026-11-15): the next step is on the Dashboard and in More */}
-        <div className="user-box">
-          <span className="avatar">{initials}</span>
-          <div className="grow"><strong>{user.name}</strong><small>{user.role}</small></div>
-          <button className="icon-btn" title="Change my password" onClick={() => changePassword(false)}><KeyRound size={17} /></button>
-          {isNative && <button className={'icon-btn' + (pinSet ? ' text-ok' : '')} title={pinSet ? 'Quick PIN is set for this device' : 'Set a quick PIN for this device'} onClick={manageDevicePin}><LockKeyhole size={17} /></button>}{/* web: nothing is kept on the computer, so no device PIN */}
-          {syncCfg?.key?.startsWith('u.') && <button className={'icon-btn' + (me?.twoFactor ? ' text-ok' : '')} title={me?.twoFactor ? 'Two-step sign-in is on' : 'Two-step sign-in'} onClick={() => setTwoStepOpen(true)}><ShieldCheck size={17} /></button>}
-          <button className="icon-btn" title="Log out" onClick={signOut}><LogOut size={17} /></button>
-        </div>
       </aside>
       <div className="main">
         <header className="topbar">
@@ -666,6 +666,19 @@ function Shell() {
           <NotificationBell />
           <PremiumToggle theme={theme} setTheme={setTheme} setMode={setThemeMode} />
           <ThemePicker theme={theme} setTheme={setTheme} mode={themeMode} setMode={setThemeMode} accent={accent} setAccent={setAccent} style={surface} setStyle={setSurface} />
+          {/* the signed-in person: top right beside the theme, a drop-down (the owner's request, 17 Nov 2026) */}
+          <div className="account-menu" ref={accountMenuRef}>
+            <button className="account-btn" aria-haspopup="menu" aria-expanded={accountOpen} title="My account" onClick={() => setAccountOpen((o) => !o)}>
+              <span className="avatar">{initials}</span><span className="account-who"><strong>{user.name}</strong><small>{user.role}</small></span><ChevronDown size={15} />
+            </button>
+            <div className="account-drop" role="menu" hidden={!accountOpen} onClick={() => setAccountOpen(false)}>
+              <div className="account-drop-head"><span className="avatar">{initials}</span><div><strong>{user.name}</strong><small>{user.role}</small></div></div>
+              <button className="menu-item" role="menuitem" title="Change my password" onClick={() => changePassword(false)}><KeyRound size={16} />Change my password</button>
+              {isNative && <button className={'menu-item' + (pinSet ? ' text-ok' : '')} role="menuitem" title={pinSet ? 'Quick PIN is set for this device' : 'Set a quick PIN for this device'} onClick={manageDevicePin}><LockKeyhole size={16} />{pinSet ? 'Quick PIN is set for this device' : 'Set a quick PIN for this device'}</button>}{/* web: nothing is kept on the computer, so no device PIN */}
+              {syncCfg?.key?.startsWith('u.') && <button className={'menu-item' + (me?.twoFactor ? ' text-ok' : '')} role="menuitem" title={me?.twoFactor ? 'Two-step sign-in is on' : 'Two-step sign-in'} onClick={() => setTwoStepOpen(true)}><ShieldCheck size={16} />{me?.twoFactor ? 'Two-step sign-in is on' : 'Two-step sign-in'}</button>}
+              <button className="menu-item danger" role="menuitem" title="Log out" onClick={signOut}><LogOut size={16} />Log out</button>
+            </div>
+          </div>
         </header>
         <main className="content" ref={contentRef} data-page={here}>
           <Suspense fallback={<div className="page"><div className="skeleton" /><div className="skeleton" style={{ height: 280 }} /></div>}>

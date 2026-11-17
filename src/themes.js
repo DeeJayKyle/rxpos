@@ -1,5 +1,6 @@
+import { LOGO_SVG } from './logomark.js';
 // Colour themes. Each theme is a light or dark base plus its own palette, applied as CSS variables. Since 17 Nov 2026
-// (the owner's references), 11 two-colour themes: colour 1 is strong (the menu, buttons, the active tab, headings),
+// (the owner's references and review), 9 two-colour themes: colour 1 is strong (the menu, buttons, the active tab, headings),
 // colour 2 is soft (the page, cards, table headings and row stripes); text is near black or white. Warnings, tables and
 // pills use shades of the same two colours (themeVars), with their words and icons, so every page keeps to two colours.
 // Older themes map to the closest new one (RETIRED). The owner chooses which themes each pharmacy may use.
@@ -47,7 +48,8 @@ const duo = (id, name, group, { c1, c2, side = c1, sideText, base = 'light', ins
     sidebar2: mix(side, '#000000', lightSide ? 0.06 : 0.14),
     sidebarText: sideText || (lightSide ? mix(side, '#000000', 0.78) : lum(side) > 0.03 ? '#ffffff' : undefined),
     // stronger colour (the owner's review, 17 Nov 2026): deeper table row and heading tints
-    rowTint: strong ? 12 : 7, headTint: strong ? 26 : 16,
+    // table stripes kept light (the owner's review, 17 Nov 2026): a soft wash of the row colour, the headings stronger
+    rowTint: strong ? 6 : 4, headTint: strong ? 22 : 16,
     flat: true,
   }, inspired, group);
 };
@@ -116,6 +118,13 @@ export function themeVars(t) {
   };
 }
 
+/** The logo's second colour (the capsule's lower half): the menu colour when it differs from the brand colour, else a
+ *  deeper shade of it */
+const logo2 = (c) => (c.sidebar.toLowerCase() !== c.primary.toLowerCase() && !lightMenu(c.sidebar) ? c.sidebar : mix(c.primary, '#000000', 0.35));
+
+/** The RxPOS mark in a theme's colours (the browser tab's icon follows the theme too) */
+export const themedLogo = (c) => LOGO_SVG.replace(/#0f766e|#0d9488|#10b981/g, c.primary).replace('#f59e0b', logo2(c));
+
 /** Two colours only (the owner's choice, 17 Nov 2026): warnings, pills and table colours are shades of the theme's
  *  strong colour, each readable (AA) on the page; their words and icons tell them apart. */
 function duoVars(c, dark) {
@@ -131,7 +140,7 @@ function duoVars(c, dark) {
   return {
     '--ok': ok, '--ok-soft': soft(0.14), '--warn': warn, '--warn-soft': soft(0.2), '--danger': danger, '--danger-soft': soft(0.26),
     '--violet': shade(0.2), '--violet-soft': soft(0.16), '--info': shade(0.12), '--info-soft': soft(0.14), '--blue': shade(0.1), '--blue-soft': soft(0.14),
-    '--c2': c.c2 || c.bg, '--c1-deep': shade(0.25), '--row-tint': `${c.rowTint ?? 7}%`, '--row-hover': `${(c.rowTint ?? 7) + 5}%`, '--head-tint': `${c.headTint ?? 16}%`,
+    '--c2': c.c2 || c.bg, '--c1-deep': shade(0.25), '--logo-2': logo2(c), '--row-tint': `${c.rowTint ?? 7}%`, '--row-hover': `${(c.rowTint ?? 7) + 4}%`, '--head-tint': `${c.headTint ?? 16}%`,
     // charts, the till's actions and the Vivid tiles: the same two colours
     '--viz-1': c.primary, '--viz-2': c.sidebar === c.primary ? mix(c.primary, toward, 0.45) : c.sidebar,
     '--m-in': c.primary, '--m-purch': mix(c.primary, toward, 0.35), '--m-exp': danger, '--m-profit': c.sidebar === c.primary ? warn : c.sidebar,
@@ -176,6 +185,9 @@ export function applyTheme(id, accentId = '') {
   if (ACCENTS.some((a) => a.id === accentId)) root.dataset.accent = accentId; else delete root.dataset.accent;
   for (const [k, val] of Object.entries(themeVars(t))) root.style.setProperty(k, val);
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', dark ? c.sidebar : c.primary);
+  // the browser tab's icon in the theme's colours
+  const icon = document.querySelector('link[rel="icon"]');
+  if (icon) { icon.setAttribute('type', 'image/svg+xml'); icon.setAttribute('href', 'data:image/svg+xml,' + encodeURIComponent(themedLogo(c))); }
 }
 
 const KEY = 'pharmapos-theme';

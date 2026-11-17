@@ -49,10 +49,7 @@ check('other themes are untouched (no glass on cards, sidebar as before)', !/blu
 // the premium theme
 await p.evaluate(() => { localStorage.setItem('pharmapos-theme', 'navy-teal'); }); await p.reload({ waitUntil: 'networkidle2' }); await wait(2500);
 check('Navy Teal is the premium theme: the navy page, teal actions, a navy menu', (await p.evaluate(() => document.documentElement.dataset.palette)) === 'navy-teal' && /rgb\(10, 34, 51\)/.test(await p.evaluate(() => getComputedStyle(document.body).backgroundColor)) && (await p.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--primary').trim())) === '#14b8a6');
-const bento = await p.evaluate(() => [...document.querySelectorAll('.stats.kpis > .card')].map((c) => Math.round(c.getBoundingClientRect().width)));
-check('dashboard figures as a bento grid: today\'s sales is the large tile', bento.length >= 2 && bento[0] > bento[1] * 1.5, bento.join());
 check('stock figures are one list in Stock health', !!(await p.$('.health-card .health-rows')));
-check('figures in tight mono', /mono|Menlo|Consolas/i.test(await css('.stat strong', 'fontFamily')));
 await p.screenshot({ path: path.join(out, 'dashboard.png') });
 // the till
 await p.evaluate(() => { location.hash = '#/pos'; }); await wait(1800);

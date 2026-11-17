@@ -79,7 +79,8 @@ const prim0 = await css(p, '--primary');
 await openMenu(p); await wait(200);
 await p.evaluate(() => document.querySelector('.accent-opt[aria-label="Violet"]')?.click()); await wait(300);
 check('Violet accent is applied', (await html(p)).accent === 'violet' && (await css(p, '--primary')) !== prim0, await css(p, '--primary'));
-check('an accent never changes the status colours', (await css(p, '--ok')) === ok0, `${ok0} → ${await css(p, '--ok')}`);
+// two colours only (17 Nov 2026): the status colours are shades of the brand colour, so they follow the accent too
+check('an accent carries the status colours with it (two colours on the page)', (await css(p, '--ok')) !== ok0 && (await css(p, '--ok')).startsWith('#'), `${ok0} → ${await css(p, '--ok')}`);
 await p.reload({ waitUntil: 'networkidle2' }); await wait(1500);
 check('the accent survives a reload', (await html(p)).accent === 'violet');
 await openMenu(p); await wait(200);

@@ -82,7 +82,9 @@
   :root[data-palette] .sidebar .brand-accent { color: color-mix(in srgb, var(--primary) 50%, var(--sidebar-text, #ffffff)); }
   :root[data-palette][data-sidebar='light'] .sidebar .brand-accent { color: var(--sidebar-text); }
   :root[data-palette] .logo-mark:not(.logo-img) svg [fill='url(#rxg)'], :root[data-palette] .logo-mark:not(.logo-img) svg [fill='#0d9488'] { fill: var(--primary); }
-  :root[data-palette] .logo-mark:not(.logo-img) svg [fill='#f59e0b'] { fill: color-mix(in srgb, var(--primary) 45%, #ffffff); }
+  :root[data-palette] .logo-mark:not(.logo-img) svg [fill='#f59e0b'] { fill: var(--logo-2); }
+  /* the logo always in the theme's colours; a thin white ring keeps it clear on a menu of the same colour */
+  :root[data-palette] .sidebar .logo-mark:not(.logo-img) { border-radius: 10px; box-shadow: 0 0 0 1.5px rgba(255, 255, 255, .6); }
   :root[data-palette] .logo-mark { filter: none; }
   :root[data-palette][data-sidebar='light'] .sidebar nav a.active { background: color-mix(in srgb, var(--sidebar-text) 12%, transparent); color: var(--sidebar-text); font-weight: 650; }
   :root[data-palette][data-sidebar='light'] .sidebar :is(nav a, .nav-title, kbd, .user-box, .icon-btn) { color: var(--sidebar-text); }

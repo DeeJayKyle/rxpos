@@ -2935,3 +2935,23 @@ tr.group-head > td { background: var(--surface-2); padding: 6px 10px; }
   .auth-page .auth-side { padding: 28px 18px; }
 }
 .auth-page .auth-hero .brand-accent { color: var(--primary-text); }
+
+/* ---- the account drop-down, top right beside the theme (17 Nov 2026; it was the user box at the foot of the menu) ---- */
+.account-menu { position: relative; }
+.account-btn { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 8px 0 4px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; cursor: pointer; }
+.account-btn:hover, .account-btn[aria-expanded='true'] { border-color: var(--border-strong); background: var(--surface-2); }
+.account-btn .avatar, .account-drop-head .avatar { width: 32px; height: 32px; font-size: 12px; flex: none; }
+.account-who { display: grid; text-align: left; line-height: 1.15; max-width: 140px; }
+.account-who strong { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.account-who small { font-size: 11px; color: var(--muted); text-transform: capitalize; }
+.account-drop { position: absolute; right: 0; top: calc(100% + 8px); z-index: 60; width: min(280px, calc(100vw - 24px)); display: grid; gap: 2px; padding: 6px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow-lg); animation: pop-in .14s ease-out; }
+.account-drop[hidden] { display: none; }
+.account-drop-head { display: flex; align-items: center; gap: 10px; padding: 10px 10px 12px; border-bottom: 1px solid var(--border); margin-bottom: 4px; }
+.account-drop-head .avatar { width: 40px; height: 40px; font-size: 14px; }
+.account-drop-head div { display: grid; }
+.account-drop-head small { color: var(--muted); text-transform: capitalize; }
+.account-drop .menu-item { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 40px; padding: 8px 10px; border: 0; border-radius: 10px; background: none; color: var(--text); font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
+.account-drop .menu-item:hover, .account-drop .menu-item:focus-visible { background: var(--primary-soft); color: var(--primary-ink); }
+.account-drop .menu-item.danger { color: var(--danger); }
+.account-drop .menu-item.danger:hover { background: var(--danger-soft); color: var(--danger); }
+@media (max-width: 900px) { .account-who, .account-btn > svg { display: none; } .account-btn { padding: 0 4px; border: 0; } }
