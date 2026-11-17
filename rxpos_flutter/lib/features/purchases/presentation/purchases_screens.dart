@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/theme/line_colors.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:printing/printing.dart';
@@ -116,7 +117,7 @@ class _PurchasesScreenState extends ConsumerState<PurchasesScreen> {
                 : ListView.separated(
                     itemCount: list.length + 1,
                     separatorBuilder: (_, _) => const Divider(height: 1),
-                    itemBuilder: (_, i) {
+                    itemBuilder: hued((_, i) {
                       if (i == list.length) {
                         return ListTile(title: Text('Total · ${list.length} deliveries', style: const TextStyle(fontWeight: FontWeight.w700)),
                             trailing: Text('${st.money(total)}${owed > 0 ? ' · unpaid ${st.money(owed)}' : ''}', style: const TextStyle(fontWeight: FontWeight.w800)));
@@ -136,7 +137,7 @@ class _PurchasesScreenState extends ConsumerState<PurchasesScreen> {
                         ]),
                         onTap: () => _view(p, st, payType(p)),
                       );
-                    },
+                    }),
                   ),
           ),
         ],
@@ -931,7 +932,7 @@ class _ExpiryScreenState extends ConsumerState<ExpiryScreen> {
               : ListView.separated(
                   itemCount: rows.length,
                   separatorBuilder: (_, _) => const Divider(height: 1),
-                  itemBuilder: (_, i) {
+                  itemBuilder: hued((_, i) {
                     final (p, b, days) = rows[i];
                     return ListTile(
                       title: Text(p.name),
@@ -952,7 +953,7 @@ class _ExpiryScreenState extends ConsumerState<ExpiryScreen> {
                           ),
                       ]),
                     );
-                  },
+                  }),
                 ),
         ),
       ]),

@@ -6,7 +6,7 @@ import { featureSet, permissionsOf } from './access.js';
 import { platformName } from './platform.js';
 import { endWebSession, isLeaving, keepsData } from './webpolicy.js';
 import { connectLive, disconnectLive, onLive } from './live.js';
-import { DEFAULT_CLOUD, tillNumber } from './cloud.js';
+import { DEFAULT_CLOUD, tillNumber, cloudLogout } from './cloud.js';
 import { nextNumber } from './docnumbers.js';
 import { clientOwes } from './insurance.js';
 import { windowSums } from './balances.js';
@@ -16,6 +16,7 @@ import { FIELD_TABLES, stampFields, mergeFields, sameRecord } from './fieldmerge
 import { setUnsent } from './update.js';
 import { formatMoney } from './money.js';
 import { pharmacyDefaults, overrideKey, readOverrides, writeOverrides, editOverrides, settingsEqual, PHARMACY_FIELDS } from './pharmacy-settings.js';
+import { isKit, kitView } from './kits.js';
 
 const SESSION_KEY = 'pharmapos-session';
 // "Remember me": the sign-in survives closing the app on this device for 30 days (otherwise it ends with the session)
@@ -607,7 +608,9 @@ export function StoreProvider({ children }) {
         else if (remember === false) localStorage.removeItem(REMEMBER_KEY);
       } else { sessionStorage.removeItem(SESSION_KEY); localStorage.removeItem(REMEMBER_KEY); } // signing out always forgets
     } catch { /* storage blocked */ }
-    if (!u && !keepsData()) { endWebSession(); return true; } // clear this tab and start clean (nothing stays on the computer)
+    // the web version keeps nothing, so its sign-in pass is ended in the cloud too (2026-11 audit); the apps keep their
+    // link so the till keeps syncing for whoever signs in next, offline included
+    if (!u && !keepsData()) { if (cfgRef.current?.key?.startsWith('u.')) await cloudLogout(cfgRef.current).catch(() => {}); endWebSession(); return true; } // clear this tab and start clean (nothing stays on the computer)
     if (u && !user) update((d) => audit(d, u, 'Signed in', platformName, branchId));
     setUserState(u);
     return true;
@@ -726,7 +729,10 @@ export function StoreProvider({ children }) {
   }, [batchMeta, stockIndex, productById, branchId]);
 
   // Products as seen from this device's branch: stock here, and the next batch to sell (earliest expiry with stock)
-  const products = useMemo(() => (db?.products || []).map((p) => {
+  // Kits (1.10.0, src/kits.js) are products records with a `kit` recipe and no stock of their own: they are kept out of
+  // `products` (so Inventory, Add Stock, stock counts, reorder, stock value and expiry lists never see them) and shown
+  // as `kits`, each with how many can be made from its components' sellable stock, its live cost and price.
+  const products = useMemo(() => (db?.products || []).filter((p) => !isKit(p)).map((p) => {
     const stock = stockIndex.product.get(branchId + '|' + p.id) || 0;
     let next = null;
     for (const b of batchMeta.get(p.id) || []) {
@@ -735,6 +741,13 @@ export function StoreProvider({ children }) {
     if (!next && (stockIndex.batch.get(branchId + '|lb-' + p.id) || 0) > 0) next = { batch: p.batch, expiry: p.expiry };
     return { ...p, stock, totalStock: stockIndex.total.get(p.id) || 0, batch: next?.batch ?? p.batch, expiry: next?.expiry ?? p.expiry };
   }), [db?.products, stockIndex, batchMeta, branchId]);
+  const kits = useMemo(() => {
+    const recs = (db?.products || []).filter(isKit);
+    if (!recs.length) return [];
+    const byId = new Map(products.map((p) => [p.id, p]));
+    const sellable = (pid) => batchesOf(pid).reduce((a, b) => a + (b.qty > 0 && (!b.expiry || daysUntil(b.expiry) >= 0) ? b.qty : 0), 0);
+    return recs.map((k) => kitView(k, byId, { stockOf: sellable })).sort((a, b) => a.name.localeCompare(b.name));
+  }, [db?.products, products, batchesOf]);
 
   const fmt = useCallback((n) => {
     const s = effectiveSettings || {};
@@ -769,9 +782,9 @@ export function StoreProvider({ children }) {
   // One value for the pages, made again only when something in it changes (a new object every render would
   // re-render every page whenever anything in the store moved)
   const value = useMemo(() => (db && syncCfg ? {
-    db: viewDb, sharedSettings: db.settings, pharmacyOverrides, resetPharmacyOverrides, update, upsert, remove, saveSettings, user, setUser, fmt, products, stockIndex, batchesOf,
+    db: viewDb, sharedSettings: db.settings, pharmacyOverrides, resetPharmacyOverrides, update, upsert, remove, saveSettings, user, setUser, fmt, products, kits, stockIndex, batchesOf,
     branchId, branch, setBranchId, numberFor, syncCfg, saveSyncCfg, syncNow, pullAll, linkPharmacy, features, can, day,
-  } : null), [db, viewDb, pharmacyOverrides, resetPharmacyOverrides, update, upsert, remove, saveSettings, user, setUser, fmt, products, stockIndex, batchesOf,
+  } : null), [db, viewDb, pharmacyOverrides, resetPharmacyOverrides, update, upsert, remove, saveSettings, user, setUser, fmt, products, kits, stockIndex, batchesOf,
     branchId, branch, setBranchId, numberFor, syncCfg, saveSyncCfg, syncNow, pullAll, linkPharmacy, features, can, day]);
   const syncValue = useMemo(() => ({ syncStatus, pending, storageIssue }), [syncStatus, pending, storageIssue]);
 

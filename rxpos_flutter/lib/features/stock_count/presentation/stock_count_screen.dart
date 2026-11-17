@@ -1,4 +1,5 @@
 
+import '../../../core/theme/line_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rxpos/core/platform.dart';
@@ -365,7 +366,7 @@ class _CountSheetState extends ConsumerState<_CountSheet> {
                   final rows = groupedRows(shown.take(_limit), order, _folded);
                   return ListView.builder(
                     itemCount: rows.length + (shown.length > _limit ? 1 : 0),
-                    itemBuilder: (_, i) {
+                    itemBuilder: hued((_, i) {
                       if (i == rows.length) return TextButton(onPressed: () => setState(() => _limit += 150), child: Text('Show more (${shown.length - _limit} left)'));
                       final row = rows[i];
                       if (row is GroupHeading) {
@@ -373,7 +374,7 @@ class _CountSheetState extends ConsumerState<_CountSheet> {
                       }
                       final p = (row as GroupedMedicine).p;
                       return _CountRow(key: ValueKey('row-${p.id}-${itemBy[p.id]?.at}'), count: count, p: p, item: itemBy[p.id], blind: blind, readOnly: readOnly, warn: st.expiryWarnDays.round());
-                    },
+                    }),
                   );
                 }),
         ),

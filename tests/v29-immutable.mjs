@@ -16,28 +16,30 @@ const tid = t.tenant.id, slug = t.tenant.slug;
 await owner('/tenants/' + tid + '/users', { user: { name: 'Cax Cashier', email: 'cax@test.rx', role: 'cashier', password: 'cax-pass-1234' } });
 const caxTok = (await api('/api/login', { email: 'cax@test.rx', password: 'cax-pass-1234', tenant: slug })).token;
 check('cashier signs in', !!caxTok);
+// the audit log is read back as the administrator: cashiers no longer receive it (2026-11 audit, per-role reading)
+const alTok = (await api('/api/login', { email: 'al@test.rx', password: 'al-pass-1234', tenant: slug })).token;
 
 // ----- movements are append-only -----
-let r = await push(caxTok, 'dev-cax', [{ t: 'movements', id: 'm1', at: now(), rec: { id: 'm1', productId: 'p1', qty: 10, type: 'Sale' } }]);
+let r = await push(caxTok, 'dev-cax', [{ t: 'movements', id: 'm1', at: now(), rec: { id: 'm1', productId: 'p1', qty: -10, type: 'Sale' } }]);
 check('a new movement is accepted', r.applied === 1, JSON.stringify({ a: r.applied, ref: r.refused }));
-r = await push(caxTok, 'dev-cax', [{ t: 'movements', id: 'm1', at: later(60000), rec: { id: 'm1', productId: 'p1', qty: 999, type: 'Sale' } }]);
+r = await push(caxTok, 'dev-cax', [{ t: 'movements', id: 'm1', at: later(60000), rec: { id: 'm1', productId: 'p1', qty: -999, type: 'Sale' } }]);
 check('1.1 overwriting a movement does not change it (no-op)', r.applied === 0, JSON.stringify({ a: r.applied, ref: r.refused }));
 r = await push(caxTok, 'dev-cax', [{ t: 'movements', id: 'm1', at: later(120000), deleted: true }]);
 check('1.1 deleting a movement is refused', r.applied === 0 && r.refused === 1);
 let rows = await pullAll(caxTok, 'dev-other');
 let m1 = rows.find((x) => x.t === 'movements' && x.id === 'm1');
-check('1.1 the movement keeps its original value and still exists', m1 && !m1.deleted && m1.rec.qty === 10, JSON.stringify(m1));
+check('1.1 the movement keeps its original value and still exists', m1 && !m1.deleted && m1.rec.qty === -10, JSON.stringify(m1));
 
 // ----- audit is append-only and server-stamped -----
 r = await push(caxTok, 'dev-cax', [{ t: 'audit', id: 'a1', at: now(), rec: { id: 'a1', user: 'SOMEONE ELSE', date: '2000-01-01T00:00:00.000Z', action: 'Sale', details: 'x' } }]);
 check('a new audit line is accepted', r.applied === 1);
-rows = await pullAll(caxTok, 'dev-other2');
+rows = await pullAll(alTok, 'dev-other2');
 const a1 = rows.find((x) => x.t === 'audit' && x.id === 'a1');
 check('1.1 the audit actor is stamped from the signed-in user, not the client', a1 && a1.rec.user === 'Cax Cashier', JSON.stringify(a1?.rec));
 check('1.1 the audit time is the server’s, not the client’s back-dated value', a1 && !a1.rec.date.startsWith('2000'), a1?.rec?.date);
 r = await push(caxTok, 'dev-cax', [{ t: 'audit', id: 'a1', at: later(60000), rec: { id: 'a1', action: 'Tampered' } }]);
 check('1.1 overwriting an audit line does not change it (no-op)', r.applied === 0);
-rows = await pullAll(caxTok, 'dev-other3');
+rows = await pullAll(alTok, 'dev-other3');
 const a1b = rows.find((x) => x.t === 'audit' && x.id === 'a1');
 check('1.1 the audit line keeps its original action', a1b && a1b.rec.action === 'Sale', JSON.stringify(a1b?.rec));
 

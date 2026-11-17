@@ -2,6 +2,8 @@
 // staff sign-in, Mobile Money payment requests and SMS. Sync itself lives in sync.js.
 import { isNative } from './platform.js';
 
+import { plainHttpToInternet, INSECURE_LINK } from '../server/netaddr.js';
+
 export const DEFAULT_CLOUD = 'https://rxposug.com';
 /** The Worker itself (live connection). The website addresses below only forward normal requests to it. */
 export const LIVE_CLOUD = 'https://api.rxposug.com';
@@ -17,6 +19,7 @@ export const cleanUrl = (u) => {
 
 async function call(cfg, path, { method = 'GET', body, timeout = 20000 } = {}) {
   if (!cfg?.url) throw new Error('This device is not connected to the RxPOS cloud. Set it up in Settings → Online sync.');
+  if (plainHttpToInternet(cfg.url)) throw new Error(INSECURE_LINK); // 2026-11 audit: no secrets over plain http to the internet
   if (!navigator.onLine) throw new Error('No internet connection right now.');
   const ctl = new AbortController();
   const t = setTimeout(() => ctl.abort(), timeout);
@@ -50,8 +53,14 @@ export const ownerLogin = (url, password) => call({ url: cleanUrl(url) }, '/api/
 export const ownerGoogleLogin = (url, credential) => call({ url: cleanUrl(url) }, '/api/owner-auth/google', { method: 'POST', body: { credential }, timeout: 30000 });
 /** Public name of the pharmacy at a web address (for its sign-in page) */
 export const pharmacyInfo = (url, slug) => call({ url: cleanUrl(url) }, '/api/pharmacy/' + encodeURIComponent(slug), { timeout: 8000 });
-export const calendarLink = (cfg) => call(cfg, '/api/calendar-link', { timeout: 8000 });
+export const calendarLink = (cfg, renew = false) => call(cfg, '/api/calendar-link', { method: renew ? 'POST' : 'GET', body: renew ? {} : undefined, timeout: 8000 });
+/** Initials only, no medicines, for refills in the calendar feed (2026-11 audit) */
+export const calendarPrivacy = (cfg, on) => call(cfg, '/api/calendar-link', { method: 'POST', body: { private: !!on }, timeout: 8000 });
 /** step 7: this device's till number in its pharmacy (src/docnumbers.js) */
+// 2026-11 audit: end this sign-in in the cloud (the web version signing out), or every other one of this person
+export const cloudLogout = (cfg) => call(cfg, '/api/logout', { method: 'POST', body: {}, timeout: 5000 });
+export const endOtherSessions = (cfg) => call(cfg, '/api/sessions/others', { method: 'POST', body: {}, timeout: 15000 });
+export const endSessionsOf = (cfg, uid) => call(cfg, '/api/sessions/end', { method: 'POST', body: { uid }, timeout: 15000 });
 export const tillNumber = (cfg) => call(cfg, '/api/till', { method: 'POST', body: { deviceId: cfg.deviceId }, timeout: 15000 });
 /** The pharmacy's daily stock sheet link for a Google Sheet (=IMPORTDATA); renew = a new link, the old one stops */
 export const dailyStockLink = (cfg, renew = false) => call(cfg, '/api/daily-stock-link', { method: renew ? 'POST' : 'GET', body: renew ? {} : undefined, timeout: 15000 });

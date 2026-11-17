@@ -13,7 +13,7 @@ const _key = 'sync';
 
 /// Where this device is in the conversation with the cloud, kept in the device database (kv "sync").
 class SyncConfig {
-  const SyncConfig({required this.deviceId, this.cursor = 0, this.epoch, this.fullPull = 0, this.fullInProgress = false, this.lastSync, this.lastError = '', this.resendAfterRestore = false, this.till, this.phase, this.coreCursor = 0, this.cutoff, this.historyMonths, this.window = '', this.balances});
+  const SyncConfig({required this.deviceId, this.cursor = 0, this.epoch, this.fullPull = 0, this.fullInProgress = false, this.lastSync, this.lastError = '', this.resendAfterRestore = false, this.till, this.phase, this.coreCursor = 0, this.cutoff, this.historyMonths, this.window = '', this.balances, this.view});
 
   /// This device's id: the cloud does not send a device the records it wrote itself (unless a full download).
   final String deviceId;
@@ -47,6 +47,9 @@ class SyncConfig {
   /// The cloud's brought-forward figures at [window] (POST /api/balances: { W, asOf, stock: [...], customer: {…}, … }),
   /// added to the entries from [window] of the records this device holds; null until fetched.
   final Map<String, Object?>? balances;
+  /// 2026-11 audit: the cloud sends each role only the tables its screens use; this is the codes of the groups it last
+  /// left out ('all' = none, worker/policy.js READ_GROUPS). When a reply leaves out less, the device downloads again.
+  final String? view;
 
   /// The months of history kept: the choice on This device, else the default (src/sync.js historyMonthsOf).
   int get monthsKept => historyMonths ?? defaultHistoryMonths();
@@ -58,23 +61,23 @@ class SyncConfig {
 
   SyncConfig copyWith({int? cursor, String? epoch, int? fullPull, bool? fullInProgress, String? lastSync, String? lastError, bool? resendAfterRestore, int? till,
           String? phase, bool clearPhase = false, int? coreCursor, String? cutoff,
-          int? historyMonths, String? window, Map<String, Object?>? balances, bool clearBalances = false}) => SyncConfig(
+          int? historyMonths, String? window, Map<String, Object?>? balances, bool clearBalances = false, String? view}) => SyncConfig(
       deviceId: deviceId, cursor: cursor ?? this.cursor, epoch: epoch ?? this.epoch, fullPull: fullPull ?? this.fullPull,
       fullInProgress: fullInProgress ?? this.fullInProgress, lastSync: lastSync ?? this.lastSync, lastError: lastError ?? this.lastError,
       resendAfterRestore: resendAfterRestore ?? this.resendAfterRestore, till: till ?? this.till,
       phase: clearPhase ? null : phase ?? this.phase, coreCursor: coreCursor ?? this.coreCursor, cutoff: cutoff ?? this.cutoff,
-      historyMonths: historyMonths ?? this.historyMonths, window: window ?? this.window, balances: clearBalances ? null : balances ?? this.balances);
+      historyMonths: historyMonths ?? this.historyMonths, window: window ?? this.window, balances: clearBalances ? null : balances ?? this.balances, view: view ?? this.view);
 
   Map<String, Object?> toJson() => {'deviceId': deviceId, 'cursor': cursor, 'epoch': epoch, 'fullPull': fullPull,
     'fullInProgress': fullInProgress, 'lastSync': lastSync, 'lastError': lastError, 'resendAfterRestore': resendAfterRestore, 'till': till, 'phase': phase, 'coreCursor': coreCursor, 'cutoff': cutoff,
-    'historyMonths': historyMonths, 'window': window, 'balances': balances};
+    'historyMonths': historyMonths, 'window': window, 'balances': balances, 'view': view};
 
   factory SyncConfig.fromJson(Map<String, Object?> j) => SyncConfig(
       deviceId: j['deviceId'] as String, cursor: (j['cursor'] as num?)?.toInt() ?? 0, epoch: j['epoch'] as String?,
       fullPull: (j['fullPull'] as num?)?.toInt() ?? 0, fullInProgress: j['fullInProgress'] == true, lastSync: j['lastSync'] as String?, lastError: (j['lastError'] as String?) ?? '',
       resendAfterRestore: j['resendAfterRestore'] == true, till: (j['till'] as num?)?.toInt(),
       phase: j['phase'] as String?, coreCursor: (j['coreCursor'] as num?)?.toInt() ?? 0, cutoff: j['cutoff'] as String?,
-      historyMonths: (j['historyMonths'] as num?)?.toInt(), window: (j['window'] as String?) ?? '', balances: (j['balances'] as Map?)?.cast<String, Object?>());
+      historyMonths: (j['historyMonths'] as num?)?.toInt(), window: (j['window'] as String?) ?? '', balances: (j['balances'] as Map?)?.cast<String, Object?>(), view: j['view'] as String?);
 
   /// This device's sync state (made, with a new device id, the first time).
   static Future<SyncConfig> load(AppDatabase db) async {
@@ -86,6 +89,12 @@ class SyncConfig {
   }
 
   Future<void> save(AppDatabase db) => db.into(db.kv).insertOnConflictUpdate(KvCompanion.insert(k: _key, v: jsonEncode(toJson())));
+
+  /// Does the view [next] show any group [before] left out? (src/sync.js widened)
+  static bool widened(String? before, String? next) {
+    String hid(String? v) => v == null || v == 'all' ? '' : v;
+    return hid(before).split('').any((c) => c.isNotEmpty && !hid(next).contains(c));
+  }
 
   /// "Download everything again": the next sync downloads the whole pharmacy and merges it.
   static Future<void> requestFullPull(AppDatabase db) async => (await load(db)).copyWith(fullPull: 0, fullInProgress: false, clearPhase: true).save(db);

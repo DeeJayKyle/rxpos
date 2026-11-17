@@ -40,7 +40,7 @@ final alertsProvider = Provider.autoDispose<List<Alert>>((ref) {
   );
 });
 
-/// The numbers beside menu items: expiring + expired medicines, low stock, transfers on their way here, unread chat.
+/// The numbers beside menu items: expiring + expired medicines, low stock, kits running low, transfers on their way here, unread chat.
 final navCountsProvider = Provider.autoDispose<Map<String, int>>((ref) {
   final d = ref.watch(pharmacyProvider).value;
   final transfers = ref.watch(tableProvider('transfers')).value ?? const [];
@@ -59,6 +59,8 @@ final navCountsProvider = Provider.autoDispose<Map<String, int>>((ref) {
     'expiry': e,
     'low': d.products.where((p) => d.stockOf(p.id) > 0 && p.reorder > 0 && d.stockOf(p.id) <= p.reorder).length,
     'transfers': transfers.where((t) => t['toId'] == d.branch && t['status'] == 'In transit').length,
+    // recommendation 6 (1.10): kits that can be made 3 times or fewer
+    'kits': d.tillKits.where((k) => k.canMake != null && k.canMake! <= 3).length,
     'chat': me == null ? 0 : unreadCount(messages, me.userId, read),
   };
 });

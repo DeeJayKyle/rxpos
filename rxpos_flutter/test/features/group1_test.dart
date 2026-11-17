@@ -61,6 +61,15 @@ void main() {
     expect(() => refundSale(store, Sale.fromRecord(saved), user: 'Tia', settings: const PharmacySettings()), throwsA(isA<RefundProblem>()));
   });
 
+  test('a kit sale refund (sold in the React app) puts each of its medicines back in its batches, not the kit', () async {
+    await store.update((d) => d.put('sales', {'id': 'k1', 'number': 'R-k1', 'date': '2026-11-05T08:00:00', 'total': 7750, 'status': 'completed', 'paid': 7750,
+      'customerId': 'walk-in', 'branchId': 'main', 'items': [{'id': 'kit1', 'name': 'HIV Test Kit', 'price': 7750, 'cost': 3350, 'qty': 1, 'alloc': [],
+        'kit': {'components': [{'id': 'strip', 'qty': 1, 'alloc': [{'batchId': 'bs', 'qty': 1}]}, {'id': 'lancet', 'qty': 2, 'alloc': [{'batchId': 'bl1', 'qty': 1}, {'batchId': 'bl2', 'qty': 1}]}]}}]}));
+    await refundSale(store, Sale.fromRecord((await store.get('sales', 'k1'))!), user: 'Tia', settings: const PharmacySettings());
+    final mv = [for (final m in await store.rows('movements')) (m['productId'], m['batchId'], m['qty'])]..sort((a, b) => '$a'.compareTo('$b'));
+    expect(mv, [('lancet', 'bl1', 1), ('lancet', 'bl2', 1), ('strip', 'bs', 1)]);
+  });
+
   group('stock adjustments', () {
     const p = Product(id: 'p1', name: 'Amoxa', cost: 300);
     const batches = [BatchStock(id: 'a', batch: 'A', qty: 5, expiry: '2027-01-01'), BatchStock(id: 'b', batch: 'B', qty: 10, expiry: '2028-01-01')];

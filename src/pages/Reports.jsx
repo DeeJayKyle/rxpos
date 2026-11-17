@@ -267,7 +267,7 @@ function ProfitReport({ sales }) {
     const m = new Map();
     for (const s of sales) for (const i of s.items) {
       const p = byId.get(i.id);
-      const key = by === 'product' ? i.id || i.name : (p?.category || p?.form || 'Other');
+      const key = by === 'product' ? i.id || i.name : i.kit ? 'Kits' : (p?.category || p?.form || 'Other'); // a kit's profit is from its medicines' costs
       const r = m.get(key) || { key, name: by === 'product' ? i.name : key, qty: 0, revenue: 0, cost: 0 };
       // the line's share of a sale discount comes off its revenue
       const share = s.subtotal > 0 ? (i.qty * i.price) / s.subtotal : 0;
@@ -330,7 +330,8 @@ function ConsumptionReport({ sales, from, to }) {
 
   const { rows, totalValue, idle } = useMemo(() => {
     const m = new Map();
-    for (const s of sales) for (const i of s.items) {
+    // a kit's medicines are consumed one by one (src/kits.js): they count here; the kit's takings stay on the medicines' rows as 0
+    for (const s of sales) for (const i of s.items.flatMap((x) => (x.kit ? (x.kit.components || []).map((c) => ({ id: c.id, name: c.name, qty: c.qty, price: 0, cost: c.cost })) : [x]))) {
       const p = byId.get(i.id);
       const key = i.id || i.name;
       const r = m.get(key) || { id: i.id, name: i.name, form: p?.form || '', qty: 0, revenue: 0, cost: p?.cost || i.cost || 0, stock: p?.stock ?? null };

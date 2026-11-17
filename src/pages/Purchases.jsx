@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo, cloneElement } from 'react';
+import { nextHue, lineStyle, COL_HUES } from '../linecolors.js';
 import { parseGs1, findByGtin } from '../gs1.js';
 import { useLocation } from 'react-router-dom';
 import { Pencil, Trash2, ScanText, Camera, FileUp, Loader2, AlertTriangle, CheckCircle2, X, Plus, RotateCcw, Sparkles, GripVertical, ChevronLeft, ChevronRight, PauseCircle, Tags } from 'lucide-react';
@@ -84,7 +85,7 @@ export function AddStock() {
   const [newSupplier, setNewSupplier] = useState(null); // the "New supplier" form, when open
   const [renaming, setRenaming] = useState(null); // { product, name } while renaming a medicine
   const draftKey = 'rxpos-addstock-draft:' + (syncCfg.tenant || 'device') + ':' + branchId;
-  const blankLine = () => ({ key: uid(), productId: '', name: '', form: 'Tablets', qty: 1, cost: '', total: '', price: '', auto: true, by: 'unit', batch: '', expiry: '' });
+  const blankLine = () => ({ key: uid(), hue: nextHue(), productId: '', name: '', form: 'Tablets', qty: 1, cost: '', total: '', price: '', auto: true, by: 'unit', batch: '', expiry: '' });
   const [scanOpen, setScanOpen] = useState(false);
   // a scanned delivery draft being reviewed brings its invoice pages (kept in the pharmacy's cloud) and what was read
   const resumed = useRef(location.state?.draftId ? (db.drafts || []).find((x) => x.id === location.state.draftId) : null).current;
@@ -518,7 +519,7 @@ export function AddStock() {
         <div className="table-wrap">
           <table className="lines stock-lines" ref={tableRef} onKeyDown={onLinesKey}>
             <thead><tr><th className="line-no">#</th>{cols.map((c, i) => (
-              <th key={c} className={'col-move' + (dragCol === c ? ' dragging' : '')} draggable onDragStart={(e) => { setDragCol(c); e.dataTransfer.effectAllowed = 'move'; }} onDragEnd={() => setDragCol(null)}
+              <th key={c} className={`col-move col-${c}` + (dragCol === c ? ' dragging' : '')} style={{ '--col': COL_HUES[c] }} draggable onDragStart={(e) => { setDragCol(c); e.dataTransfer.effectAllowed = 'move'; }} onDragEnd={() => setDragCol(null)}
                 onDragOver={(e) => { if (dragCol && dragCol !== c) e.preventDefault(); }} onDrop={(e) => { e.preventDefault(); if (dragCol) moveCol(dragCol, i); setDragCol(null); }} title="Drag to move this column">
                 <span className="col-head"><GripVertical size={12} className="col-grip" aria-hidden="true" />{COL_LABEL[c]}
                   <span className="col-arrows"><button type="button" className="icon-btn xs" disabled={i === 0} aria-label={`Move ${COL_LABEL[c]} left`} onClick={() => moveCol(c, i - 1)}><ChevronLeft size={12} /></button><button type="button" className="icon-btn xs" disabled={i === cols.length - 1} aria-label={`Move ${COL_LABEL[c]} right`} onClick={() => moveCol(c, i + 1)}><ChevronRight size={12} /></button></span></span>
@@ -608,9 +609,9 @@ export function AddStock() {
                     ),
                   };
                   return (
-                  <tr key={l.key} data-line={l.key} className={l.productId === NEW ? 'new-line' : ''}>
-                    <td className="line-no" aria-hidden="true">{lineIndex + 1}</td>
-                    {cols.map((c) => cells[c])}
+                  <tr key={l.key} data-line={l.key} className={'hued' + (l.productId === NEW ? ' new-line' : '')} style={lineStyle(l, lineIndex)}>
+                    <td className="line-no" aria-hidden="true"><span className="line-badge">{lineIndex + 1}</span></td>
+                    {cols.map((c) => cloneElement(cells[c], { className: `${cells[c].props.className || ''} col-${c}`.trim(), style: { '--col': COL_HUES[c] } }))}
                     <td key="x" className="line-x"><button type="button" className="icon-btn" title="Remove line" aria-label="Remove line" onClick={() => setForm((f) => ({ ...f, lines: f.lines.length > 1 ? f.lines.filter((x) => x.key !== l.key) : [blankLine()] }))}><X size={15} /></button></td>
                   </tr>
                 );
@@ -736,7 +737,7 @@ function PurchaseEditor({ purchase, onClose }) {
   const br = purchase.branchId || MAIN_BRANCH;
   const dateFmt = useDateFormat();
   const [f, setF] = useState(() => ({ supplierId: purchase.supplierId || '', invoice: purchase.invoice || '', notes: purchase.notes || '', date: purchase.date, paid: purchase.paid ?? purchase.total, reason: '',
-    items: purchase.items.map((i, n) => ({ ...i, key: uid(), orig: n, total: numOrBlank((Number(i.qty) || 0) * (Number(i.cost) || 0)), by: 'unit' })) }));
+    items: purchase.items.map((i, n) => ({ ...i, key: uid(), hue: n % 8, orig: n, total: numOrBlank((Number(i.qty) || 0) * (Number(i.cost) || 0)), by: 'unit' })) }));
   const live = f.items.filter((i) => !i.removed);
   /** the line's cost: total ÷ quantity once a total was typed (unrounded, so quantity × cost = the invoice total) */
   const costOf = (i) => (i.by === 'total' && i.total !== '' && Number(i.qty) > 0 ? Number(i.total) / Number(i.qty) : Number(i.cost) || 0);
@@ -755,7 +756,7 @@ function PurchaseEditor({ purchase, onClose }) {
     }
     return n;
   }) }));
-  const addItem = () => setF((x) => ({ ...x, items: [...x.items, { key: uid(), productId: '', name: '', batch: '', expiry: '', qty: 1, cost: '', total: '', by: 'unit' }] }));
+  const addItem = () => setF((x) => ({ ...x, items: [...x.items, { key: uid(), hue: nextHue(), productId: '', name: '', batch: '', expiry: '', qty: 1, cost: '', total: '', by: 'unit' }] }));
   // a line added (or its medicine changed) starts from that medicine's last cost, until its total is typed
   const pickMedicine = (i, id) => { const p = products.find((x) => x.id === id); if (p) setItem(i.key, { productId: p.id, name: p.name, ...(i.cost === '' || i.orig == null ? { cost: p.cost || '' } : {}) }); };
   const findBatch = (d, i) => (i.batchId && d.batches.find((b) => b.id === i.batchId)) || d.batches.find((b) => b.productId === i.productId && b.batch === String(i.batch || '').trim() && (b.expiry || '') === (i.expiry || ''));
@@ -803,7 +804,7 @@ function PurchaseEditor({ purchase, onClose }) {
           mv(o.productId, qty - o.qty, batchId);
         }
         if (batchId && cost !== o.cost) { const b = d.batches.find((x) => x.id === batchId); if (b) put(d, 'batches', { ...b, cost }); }
-        const { key, orig, removed, total: _t, by: _b, ...rest } = i;
+        const { key, orig, removed, hue: _h, total: _t, by: _b, ...rest } = i;
         items.push({ ...rest, qty, cost, batchId });
       }
       // lines added on this edit (or a line whose medicine was corrected): new stock into their batch
@@ -811,7 +812,7 @@ function PurchaseEditor({ purchase, onClose }) {
         const qty = Math.max(0, Math.round(Number(i.qty) || 0)), cost = costOf(i);
         const b = addBatch(d, { productId: i.productId, batch: i.batch, expiry: i.expiry, cost });
         mv(i.productId, qty, b.id, i.orig == null ? 'line added' : 'medicine corrected');
-        const { key, orig, removed, total: _t, by: _b, ...rest } = i;
+        const { key, orig, removed, hue: _h, total: _t, by: _b, ...rest } = i;
         items.push({ ...rest, name: products.find((x) => x.id === i.productId)?.name || i.name, qty, cost, batchId: b.id });
       }
       const newTotal = items.reduce((a, i) => a + i.qty * i.cost, 0);
@@ -839,21 +840,22 @@ function PurchaseEditor({ purchase, onClose }) {
           <label className="field"><span>Amount paid</span><input type="number" min="0" step="any" value={f.paid} onChange={(e) => setF({ ...f, paid: e.target.value })} /></label>
         </div>
         <div className="table-wrap invoice-sheet flat">
-        <table className="lines">
-          <thead><tr><th>Medicine</th><th>Batch</th><th>Expiry</th><th>Qty</th><th className="num">Unit cost</th><th>Line total</th><th /></tr></thead>
+        <table className="lines stock-lines edit-lines">
+          <thead><tr><th className="line-no">#</th>{[['medicine', 'Medicine'], ['batch', 'Batch'], ['expiry', 'Expiry'], ['qty', 'Qty'], ['cost', 'Unit cost'], ['total', 'Line total']].map(([k, t]) => <th key={k} className={`col-${k}${k === 'cost' ? ' num' : ''}`} style={{ '--col': COL_HUES[k] }}>{t}</th>)}<th /></tr></thead>
           <tbody>
-            {f.items.map((i) => (
-              <tr key={i.key} className={i.removed ? 'line-removed' : i.orig == null ? 'new-line' : ''}>
-                <td>{i.removed ? <s>{i.name}</s> : <MedicinePicker products={products} value={i.productId} onPick={(id) => pickMedicine(i, id)} placeholder="Search medicine…" />}
+            {f.items.map((i, n) => (
+              <tr key={i.key} className={'hued' + (i.removed ? ' line-removed' : i.orig == null ? ' new-line' : '')} style={lineStyle(i, n)}>
+                <td className="line-no" aria-hidden="true"><span className="line-badge">{n + 1}</span></td>
+                <td data-label="Medicine" className="line-med col-medicine">{i.removed ? <s>{i.name}</s> : <MedicinePicker products={products} value={i.productId} onPick={(id) => pickMedicine(i, id)} placeholder="Search medicine…" />}
                   {!i.removed && i.orig != null && i.productId !== purchase.items[i.orig].productId && <small className="text-warn">was {purchase.items[i.orig].name}: its stock is taken back, this one is added</small>}
                   {!i.removed && i.orig == null && <small className="muted">added on this edit</small>}</td>
-                <td><input value={i.batch || ''} disabled={i.removed} onChange={(e) => setItem(i.key, { batch: e.target.value })} aria-label="Batch" /></td>
-                <td><DateInput value={i.expiry || ''} monthYear disabled={i.removed} onChange={(v) => setItem(i.key, { expiry: v })} aria-label="Expiry" /></td>
-                <td><input type="number" min="0" value={i.qty} disabled={i.removed} onChange={(e) => setItem(i.key, { qty: e.target.value })} aria-label="Quantity" /></td>
-                <td className="num">{/* worked out from the line total (total ÷ quantity): not typed, as in Add Stock */}
+                <td data-label="Batch" className="col-batch"><input value={i.batch || ''} disabled={i.removed} onChange={(e) => setItem(i.key, { batch: e.target.value })} aria-label="Batch" /></td>
+                <td data-label="Expiry" className="col-expiry"><DateInput value={i.expiry || ''} monthYear disabled={i.removed} onChange={(v) => setItem(i.key, { expiry: v })} aria-label="Expiry" /></td>
+                <td data-label="Qty" className="col-qty"><input type="number" min="0" value={i.qty} disabled={i.removed} onChange={(e) => setItem(i.key, { qty: e.target.value })} aria-label="Quantity" /></td>
+                <td data-label="Unit cost" className="num col-cost">{/* worked out from the line total (total ÷ quantity): not typed, as in Add Stock */}
                   {i.removed ? <span className="muted">removed</span> : <output className="unit-cost num" aria-label="Unit cost" title="Line total ÷ quantity">{costOf(i) > 0 ? fmt(costOf(i)) : '—'}</output>}</td>
-                <td><input type="number" min="0" step="any" inputMode="decimal" placeholder="Total amount" className={i.by === 'total' ? 'typed' : ''} value={i.total} disabled={i.removed} onChange={(e) => setItem(i.key, { total: e.target.value })} aria-label="Line total" /></td>
-                <td>{i.removed
+                <td data-label="Line total" className="col-total"><input type="number" min="0" step="any" inputMode="decimal" placeholder="Total amount" className={i.by === 'total' ? 'typed' : ''} value={i.total} disabled={i.removed} onChange={(e) => setItem(i.key, { total: e.target.value })} aria-label="Line total" /></td>
+                <td className="line-x">{i.removed
                   ? <button type="button" className="btn sm ghost nowrap" style={{ whiteSpace: 'nowrap' }} onClick={() => setItem(i.key, { removed: false })}><RotateCcw size={13} />Undo</button>
                   : <button type="button" className="icon-btn" title="Remove this line" aria-label="Remove line" onClick={() => (i.orig == null ? setF((x) => ({ ...x, items: x.items.filter((y) => y.key !== i.key) })) : setItem(i.key, { removed: true }))}><Trash2 size={15} /></button>}</td>
               </tr>

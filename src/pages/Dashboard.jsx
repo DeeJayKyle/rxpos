@@ -13,6 +13,7 @@ import BentoDashboard, { saleStatus } from '../components/BentoDashboard.jsx';
 import { NotificationBell } from '../engage.jsx';
 import { deviceSettings, setDevice, onDevice } from '../device.js';
 import { PERIODS, PERIOD_WORDS, VS_WORDS, periodFigures, topMedicines, stockHealth } from '../dashboard.js';
+import { shortText } from '../kits.js';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const TOP_BY = [['amount', 'Amount'], ['qty', 'Quantity'], ['profit', 'Profit']];
@@ -46,7 +47,9 @@ export function dashLayout(d = deviceSettings()) {
 const saveDash = (patch) => setDevice({ dash: { ...(deviceSettings().dash || {}), ...patch } });
 
 export default function Dashboard() {
-  const { db, products, fmt, user, branchId, branch, features, batchesOf, day, can } = useStore();
+  const { db, products, kits, fmt, user, branchId, branch, features, batchesOf, day, can } = useStore();
+  // recommendation 6 (1.10.0): kits that can be made 3 times or fewer, with the medicine that holds them back
+  const lowKits = kits.filter((k) => k.active !== false && k.canMake != null && k.canMake <= 3);
   const [topBy, setTopBy] = useState('amount');
   const [layout, setLayout] = useState(dashLayout);
   useEffect(() => onDevice((d) => setLayout(dashLayout(d))), []);
@@ -241,6 +244,14 @@ export default function Dashboard() {
         <button type="button" className="btn sm ghost" onClick={() => setEditing(true)}><SlidersHorizontal size={15} />Edit widgets</button>
       </div>
 
+      {lowKits.length > 0 && (
+        <div className="notice warn-notice kit-low-alert" role="status">
+          <PackageX size={16} aria-hidden="true" /> <strong>Kits running low:</strong>{' '}
+          {lowKits.slice(0, 4).map((k, i) => <span key={k.id}>{i ? '; ' : ''}{k.name}: {k.canMake === 0 ? 'none can be made' : `only ${k.canMake} can be made`}{shortText(k) ? `, ${shortText(k)}` : ''}</span>)}
+          {lowKits.length > 4 && <span> and {lowKits.length - 4} more</span>} <Link to="/kits">Open kits</Link>
+        </div>
+      )}
+
       <div className="dash-grid">
         {layout.order.filter((id) => layout.shown.has(id)).map((id) => {
           const el = cards[id]();
@@ -349,7 +360,7 @@ function EditWidgets({ layout, onClose }) {
 
 // Step 3: what the cloud found when it re-checked a sale (worker/anomalies.js). Only roles with the audit log receive
 // these records; the sale itself was kept as it was sold. "Checked" keeps the finding, marked, in the audit trail.
-const CHECK_KINDS = { totals: 'Totals don’t add up', discount: 'Discount without permission', price: 'Sold below price', paid: 'Paid more than the total', invalid: 'Invalid amounts', credit: 'Over credit limit', late: 'Recorded after the day was closed', 'discount-limit': 'Discount above the role\'s limit', 'closed-refund': 'Refund from a closed day', insurance: 'Insurance split doesn’t add up' };
+const CHECK_KINDS = { proforma: 'Proforma doesn’t match', stock: 'Stock doesn’t match the sale', stale: 'Older change not applied', totals: 'Totals don’t add up', discount: 'Discount without permission', price: 'Sold below price', paid: 'Paid more than the total', invalid: 'Invalid amounts', credit: 'Over credit limit', late: 'Recorded after the day was closed', 'discount-limit': 'Discount above the role\'s limit', 'closed-refund': 'Refund from a closed day', insurance: 'Insurance split doesn’t add up' };
 function SaleChecks() {
   const { db, fmt, user, update, branchId } = useStore();
   const open = (db.anomalies || []).filter((a) => !a.reviewed).sort((a, b) => String(b.saleDate).localeCompare(String(a.saleDate)));

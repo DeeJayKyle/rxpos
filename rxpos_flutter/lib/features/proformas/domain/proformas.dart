@@ -11,7 +11,7 @@ Future<Map<String, Object?>> saveProforma(RecordStore store, {required List<Cart
   final t = totalsOf(cart, discount: discount, settings: settings);
   return store.update((d) async => d.put('proformas', {
         'id': uid(), 'number': await d.number('PF', branchId: branchId), 'date': d.now, 'type': wholesale ? 'wholesale' : 'retail', 'status': 'Open',
-        'items': [for (final l in cart) {'id': l.id, 'name': l.name, 'price': l.price, 'cost': l.cost, 'qty': l.qty}],
+        'items': [for (final l in cart) {'id': l.id, 'name': l.name, 'price': l.price, 'cost': l.cost, 'qty': l.qty, if (l.kit != null) ...{'kit': l.kit!.toJson(), 'swaps': l.kit!.swaps}}],
         'subtotal': t.subtotal, 'discount': t.discount, 'tax': t.tax, 'total': t.total, 'customerId': customerId, 'customerName': customerName, 'createdBy': by,
       }));
 }

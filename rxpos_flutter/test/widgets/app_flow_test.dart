@@ -267,6 +267,61 @@ void main() {
     await done(tester);
   });
 
+  testWidgets('1.10 kits: a kit on the till (warning, tick, charge) leaves its medicines\' stock; a new kit is built on the Kits screen', (tester) async {
+    await tester.runAsync(signedIn);
+    final store = RecordStore(db);
+    await tester.runAsync(() => store.update((d) => d.put('products', {'id': 'k1', 'name': 'Calmex Starter Kit', 'barcode': '2000001', 'active': true, 'form': 'Kit', 'unit': 'Kit',
+          'kit': {'icon': 'pill', 'color': '#1d4ed8', 'warning': 'Explain the dose.', 'ack': true,
+            'items': [{'productId': 'p1', 'qty': 2}, {'service': true, 'name': 'Advice fee', 'price': 300, 'cost': 0}]}})));
+    await start(tester);
+    await toTill(tester);
+    expect(find.byKey(const Key('kit-k1')), findsOneWidget, reason: 'the kit is on the till');
+    expect(find.descendant(of: find.byKey(const Key('kit-k1')), matching: find.text('Can make 50')), findsOneWidget);
+    // scanning the kit's label adds it, after its warning
+    await tester.enterText(find.widgetWithText(TextField, 'Search medicine or scan barcode…  (F8)'), '2000001');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await settle(tester);
+    expect(find.text('Explain the dose.\n\nYou will tick that the client was told before charging.'), findsOneWidget);
+    await tester.tap(find.text('Add the kit'));
+    await settle(tester);
+    expect(find.byKey(const Key('kitack-k1')), findsOneWidget, reason: 'the warning to tick is on the line');
+    await tester.tap(find.textContaining('Charge UGX 1,300'));
+    await settle(tester);
+    expect(find.textContaining('tick that the client was told'), findsOneWidget, reason: 'not charged before the warning is ticked');
+    expect((await tester.runAsync(() => store.rows('sales')))!, isEmpty);
+    await tester.tap(find.byKey(const Key('kitack-k1')));
+    await settle(tester);
+    await tester.tap(find.textContaining('Charge UGX 1,300'));
+    await settle(tester);
+    expect(find.text('Sale complete'), findsOneWidget);
+    expect(find.textContaining('Contains 2 × Calmex 500mg Tabs, Advice fee'), findsWidgets, reason: 'the receipt lists what the kit held');
+    final sale = (await tester.runAsync(() => store.rows('sales')))!.single;
+    final item = (sale['items'] as List).single as Map;
+    expect((item['id'], item['price'], ((item['kit'] as Map)['components'] as List).length, (item['kit'] as Map)['acked']), ('k1', 1300, 1, true));
+    final moves = (await tester.runAsync(() => store.rows('movements')))!.where((m) => m['type'] == 'Sale').toList();
+    expect([for (final m in moves) (m['productId'], m['qty'], m['batchId'])], [('p1', -2, 'b1')]);
+    await tester.tap(find.text('New sale'));
+    await settle(tester);
+    // the Kits screen: the kit's card, and a new kit built from a medicine
+    await navTo(tester, 'Kits');
+    expect(find.byKey(const Key('kitcard-k1')), findsOneWidget);
+    expect(find.textContaining('Last 30 days: 1 sold'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('kit-new')));
+    await settle(tester);
+    await tester.enterText(find.byKey(const Key('kit-name')), 'Zinco Pack');
+    await tester.tap(find.byKey(const Key('kit-line-0')));
+    await settle(tester);
+    await tester.tap(find.byKey(const Key('kit-med-p1')));
+    await settle(tester);
+    await tester.tap(find.byKey(const Key('kit-save')));
+    await settle(tester);
+    final kit = (await tester.runAsync(() => store.rows('products')))!.firstWhere((p) => p['name'] == 'Zinco Pack');
+    expect(((kit['kit'] as Map)['items'] as List).single, {'productId': 'p1', 'qty': 1});
+    expect((kit['form'], kit['price'], kit['cost'], '${kit['barcode']}'.isNotEmpty), ('Kit', 500, 300, true), reason: 'priced as the React app keeps it');
+    expect((await tester.runAsync(() => store.rows('audit')))!.map((a) => a['action']), containsAll(['Kit warning given', 'Kit created']));
+    await done(tester);
+  });
+
   testWidgets('step 21: a GS1 pack code sells that batch, an expired pack is refused, Add Stock fills batch and expiry', (tester) async {
     await tester.runAsync(signedIn);
     final store = RecordStore(db);
@@ -2452,6 +2507,28 @@ void main() {
     expect(enabled, isTrue);
     final trusted = await tester.runAsync(() => (db.select(db.kv)..where((x) => x.k.equals('device:2fa-ok:t1:u1'))).getSingleOrNull());
     expect(trusted?.v, '1', reason: 'this device may sign them in offline');
+    await done(tester);
+  });
+
+  testWidgets('two-step sign-in: recovery codes are shown once after switching on (2026-11 audit)', (tester) async {
+    var enabled = false;
+    cloud.api['2fa'] = (_) => (200, {'enabled': enabled, 'recoveryLeft': enabled ? 10 : 0});
+    cloud.api['2fa/setup'] = (_) => (200, {'uri': 'otpauth://totp/RxPOS:tia?secret=JBSWY3DPEHPK3PXP', 'secret': 'JBSWY3DPEHPK3PXP'});
+    cloud.api['2fa/enable'] = (b) => (200, {'enabled': (enabled = true), 'recovery': ['ABCDE-FGHJK', 'MNPQR-STUVW']});
+    await tester.runAsync(signedIn);
+    await start(tester);
+    await menu(tester, 'Two-step sign-in');
+    await tester.tap(find.text('Set it up'));
+    await settle(tester);
+    await tester.enterText(find.byKey(const Key('twostep-code')), '246810');
+    await tester.pump();
+    await tester.tap(find.text('Switch on'));
+    await settle(tester);
+    expect(find.text('ABCDE-FGHJK\nMNPQR-STUVW'), findsOneWidget);
+    await tester.tap(find.text('I have kept them'));
+    await settle(tester);
+    expect(find.text('Two-step sign-in is on for your account.'), findsOneWidget);
+    expect(find.text('2 recovery codes left.'), findsOneWidget);
     await done(tester);
   });
 

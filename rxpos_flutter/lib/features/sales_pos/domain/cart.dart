@@ -6,6 +6,7 @@ import '../../../core/entities/product.dart';
 import '../../../core/entities/settings.dart';
 import '../../../core/rules/fefo.dart';
 import '../../../core/rules/insurance.dart';
+import '../../../core/rules/kits.dart';
 import '../../../core/rules/ids.dart';
 import '../../../core/rules/money.dart';
 import '../../../core/rules/packs.dart';
@@ -24,6 +25,27 @@ class LinePack {
       LinePack(name: '${j['name']}', size: (j['size'] as num).toDouble(), price: (j['price'] as num).toDouble());
 }
 
+/// 1.10 a kit on the sale (src/pages/POS.jsx kitLine): what it holds per kit, after this sale's swaps. Stored with a
+/// held sale exactly as the React app stores it, so a held kit sale carries on in either app.
+class KitLine {
+  const KitLine({required this.icon, required this.color, this.warning = '', this.ack = false, this.services = const [], required this.components, this.swaps = const {}});
+  final String icon, color, warning;
+  final bool ack;
+  /// [{name, price, cost}]
+  final List<Map<String, Object?>> services;
+  /// per kit: [{productId, name, qty, cost, swappedFrom?, swappedFromName?}]
+  final List<Map<String, Object?>> components;
+  /// this sale's substitutions: {productId: substituteId}
+  final Map<String, String> swaps;
+  Map<String, Object?> toJson() => {'icon': icon, 'color': color, 'warning': warning, 'ack': ack, 'services': services, 'components': components};
+  factory KitLine.fromJson(Map<String, Object?> j, Object? swaps) => KitLine(
+    icon: '${j['icon'] ?? 'package'}', color: '${j['color'] ?? '#be185d'}', warning: '${j['warning'] ?? ''}', ack: j['ack'] == true,
+    services: [for (final x in (j['services'] is List ? j['services'] as List : const [])) if (x is Map) x.cast<String, Object?>()],
+    components: [for (final x in (j['components'] is List ? j['components'] as List : const [])) if (x is Map) x.cast<String, Object?>()],
+    swaps: swaps is Map ? {for (final e in swaps.entries) '${e.key}': '${e.value}'} : const {},
+  );
+}
+
 /// One line of the sale. [qty] is always in single units; [price] is per unit.
 class CartLine {
   const CartLine({
@@ -40,7 +62,13 @@ class CartLine {
     this.allowExpired = false,
     this.expiredReason = '',
     this.preferBatch,
+    this.kit,
+    this.acked = false,
   });
+
+  /// 1.10 a kit line (one per kit: [qty] counts kits), and whether its warning was ticked as given
+  final KitLine? kit;
+  final bool acked;
 
   final String id, name;
   /// step 21: the batch of a scanned pack, sold from first (core/rules/gs1.dart)
@@ -72,6 +100,8 @@ class CartLine {
     String? expiredReason,
     double? max,
     String? preferBatch,
+    KitLine? kit,
+    bool? acked,
   }) => CartLine(
     id: id,
     name: name,
@@ -86,6 +116,8 @@ class CartLine {
     allowExpired: allowExpired ?? this.allowExpired,
     expiredReason: expiredReason ?? this.expiredReason,
     preferBatch: preferBatch ?? this.preferBatch,
+    kit: kit ?? this.kit,
+    acked: acked ?? this.acked,
   );
 
   Map<String, Object?> toJson() => {
@@ -101,6 +133,7 @@ class CartLine {
     if (directions != null) 'directions': directions,
     if (allowExpired) 'allowExpired': true,
     if (expiredReason.isNotEmpty) 'expiredReason': expiredReason,
+    if (kit != null) ...{'kit': kit!.toJson(), 'swaps': kit!.swaps, 'acked': acked},
   };
   factory CartLine.fromJson(Map<String, Object?> j) => CartLine(
     id: '${j['id']}',
@@ -115,7 +148,97 @@ class CartLine {
     directions: (j['directions'] as Map?)?.cast<String, Object?>(),
     allowExpired: j['allowExpired'] == true,
     expiredReason: '${j['expiredReason'] ?? ''}',
+    kit: j['kit'] is Map ? KitLine.fromJson((j['kit'] as Map).cast<String, Object?>(), j['swaps']) : null,
+    acked: j['acked'] == true,
   );
+}
+
+/// Units of each medicine the sale needs: plain lines by their quantity, kit lines by their components × kits
+Map<String, double> basketDemand(Iterable<CartLine> lines) {
+  final m = <String, double>{};
+  for (final l in lines) {
+    if (l.kit != null) {
+      for (final c in l.kit!.components) {
+        final id = '${c['productId']}';
+        m[id] = (m[id] ?? 0) + ((c['qty'] as num?)?.toDouble() ?? 0) * l.qty;
+      }
+    } else {
+      m[l.id] = (m[l.id] ?? 0) + l.qty;
+    }
+  }
+  return m;
+}
+
+/// The kit's line for this sale, from what it is now ([v], with its swaps)
+CartLine kitCartLine(KitView v, {required bool wholesale, required double most, Map<String, String> swaps = const {}, Map<String, String> names = const {}}) => CartLine(
+  id: v.id, name: v.name, price: wholesale ? v.wholesale : v.price, cost: v.cost, qty: 1, max: most, rx: v.rx, controlled: v.controlled,
+  kit: KitLine(
+    icon: v.icon, color: v.color, warning: v.warning, ack: v.ack, swaps: swaps,
+    services: [for (final x in v.services) {'name': x.name, 'price': numOut(x.price), 'cost': numOut(x.cost)}],
+    components: [
+      for (final c in v.components)
+        {'productId': c.productId, 'name': c.name, 'qty': numOut(c.qty), 'cost': numOut(c.cost),
+          if (c.swappedFrom.isNotEmpty) ...{'swappedFrom': c.swappedFrom, 'swappedFromName': names[c.swappedFrom] ?? ''}},
+    ],
+  ),
+);
+
+/// How many of kit [v] this sale can hold, after what its other lines already take
+double kitMost(KitView v, List<CartLine> cart) {
+  if (v.canMake == null) return double.infinity;
+  final others = basketDemand(cart.where((l) => l.id != v.id));
+  var most = v.canMake!.toDouble();
+  for (final c in v.components) {
+    final n = ((c.have - (others[c.productId] ?? 0) + 1e-9) / c.qty).floorToDouble();
+    if (n < most) most = n;
+  }
+  return most < 0 ? 0 : most;
+}
+
+/// A kit that can't be made for this sale: [component] is the part that is short (offer a swap for it), null when
+/// nothing can be swapped (a medicine in the kit was deleted)
+class KitShort implements Exception {
+  KitShort(this.message, this.component);
+  final String message;
+  final KitComponent? component;
+  @override
+  String toString() => message;
+}
+
+/// One more of kit [v] (a new line, or one more on its line). Throws [KitShort] when the stock can't make it.
+List<CartLine> addKitToCart(List<CartLine> cart, KitView v, {required bool wholesale, Map<String, String> names = const {}}) {
+  final i = cart.indexWhere((l) => l.id == v.id);
+  final most = kitMost(v, cart);
+  final want = (i >= 0 ? cart[i].qty : 0) + 1;
+  if (most < want) {
+    final c = v.short.firstOrNull;
+    final what = kitShortText(v);
+    if (c != null && !c.missing) throw KitShort('${v.name}: ${what.isEmpty ? 'not enough stock' : what}. Swap it for another medicine for this sale, or sell fewer kits.', c);
+    throw KitShort('${v.name}: ${most <= 0 ? 'none can be made' : 'only ${formatQty(most)} can be made'} (${what.isEmpty ? 'not enough stock' : what})', null);
+  }
+  if (i >= 0) return [...cart]..[i] = cart[i].copyWith(qty: want.toDouble(), max: most);
+  return [...cart, kitCartLine(v, wholesale: wholesale, most: most, names: names)];
+}
+
+/// Swap one of a kit's medicines ([from], the kit's own) for [to] on this sale only (recommendation 3; [to] == [from]
+/// puts it back). [rec]: the kit record; [now] works out the kit with swaps. Throws [CartProblem] when still short.
+List<CartLine> swapKitPartIn(List<CartLine> cart, Map<String, Object?> rec, String from, String to,
+    {required KitView Function(Map<String, String> swaps) now, required bool wholesale, Map<String, String> names = const {}}) {
+  final id = '${rec['id']}';
+  final i = cart.indexWhere((l) => l.id == id);
+  final line = i >= 0 ? cart[i] : null;
+  final swaps = {...?line?.kit?.swaps};
+  if (to == from) {
+    swaps.remove(from);
+  } else {
+    swaps[from] = to;
+  }
+  final v = now(swaps);
+  final most = kitMost(v, cart);
+  if (most < (line?.qty ?? 1)) throw CartProblem('Still not enough: ${kitShortText(v).isEmpty ? 'not enough stock' : kitShortText(v)}');
+  final next = kitCartLine(v, wholesale: wholesale, most: most, swaps: swaps, names: names)
+      .copyWith(qty: line?.qty ?? 1, price: line?.price, acked: line?.acked ?? false);
+  return line == null ? [...cart, next] : ([...cart]..[i] = next);
 }
 
 /// All remaining stock of a medicine has expired: it can be sold only with a recorded reason.
@@ -281,6 +404,9 @@ class Checkout {
 /// Check the sale can be completed; throws [CartProblem] with what to fix (src/pages/POS.jsx checkout()).
 void checkCheckout(List<CartLine> cart, Checkout c, Totals t, {required PharmacySettings settings}) {
   if (cart.isEmpty) throw CartProblem('The sale is empty');
+  // recommendation 5: a kit whose warning must be given: the cashier ticks it on the line before charging
+  final unticked = cart.where((l) => l.kit != null && l.kit!.ack && !l.acked).firstOrNull;
+  if (unticked != null) throw CartProblem('${unticked.name}: tick that the client was told (${unticked.kit!.warning}) before charging');
   final type = c.method.type;
   if (type == 'credit' && c.customerId == walkIn) throw CartProblem('Select a registered customer for a credit sale');
   if (settings.clientCapture == 'required' && c.customerId == walkIn) throw CartProblem('Choose or add the client for this sale');
@@ -315,14 +441,18 @@ Future<Map<String, Object?>> completeSale(
   checkCheckout(cart, c, t, settings: settings);
   // The stock may have changed since a line was added (another device's sale arrived by sync, a held sale resumed
   // later): a sale can't go beyond the stock this device knows of. Checked per medicine, before anything is saved.
-  final want = <String, double>{};
-  for (final l in cart) {
-    want[l.id] = (want[l.id] ?? 0) + l.qty;
-  }
+  // (a kit's medicines count too: a kit and a plain line, or two kits, may share a medicine)
+  final want = basketDemand(cart);
+  final kitIds = {for (final l in cart) if (l.kit != null) for (final c in l.kit!.components) '${c['productId']}'};
   for (final e in want.entries) {
-    final l = cart.firstWhere((x) => x.id == e.key);
+    final l = cart.where((x) => x.id == e.key).firstOrNull;
+    final name = l?.name ?? cart.expand((x) => x.kit?.components ?? const <Map<String, Object?>>[]).firstWhere((c) => '${c['productId']}' == e.key)['name'];
     final have = sellable(stock.batchesOf(e.key, atBranch: branchId), allowExpired: cart.any((x) => x.id == e.key && x.allowExpired), now: now);
-    if (e.value > have + stockTolerance) throw CartProblem('Only ${formatQty(have)} ${l.name} in stock here: lower the quantity or remove it.');
+    if (e.value > have + stockTolerance) {
+      throw CartProblem(kitIds.contains(e.key)
+          ? '$name: this sale needs ${formatQty(e.value)} (kits included) but only ${formatQty(have)} can be sold'
+          : 'Only ${formatQty(have)} $name in stock here: lower the quantity or remove it.');
+    }
   }
   final type = c.method.type;
   final credit = type == 'credit';
@@ -331,8 +461,51 @@ Future<Map<String, Object?>> completeSale(
   final paid = credit ? [c.tendered ?? 0, due].reduce((a, b) => a < b ? a : b) : due;
   return store.update((d) async {
     final number = await d.number('R', branchId: branchId);
+    // what one line takes from a batch is not offered to the next (a kit and a plain line may share a medicine)
+    final used = <String, double>{};
+    List<Map<String, Object?>> take(String pid, double qty, {bool allowExpired = false, String? prefer}) {
+      final left = [
+        for (final b in preferFirst(stock.batchesOf(pid, atBranch: branchId), prefer))
+          BatchStock(id: b.id, qty: b.qty - (used[b.id] ?? 0), productId: b.productId, batch: b.batch, expiry: b.expiry, cost: b.cost, legacy: b.legacy),
+      ];
+      final out = allocate(left, qty, allowExpired: allowExpired, now: now);
+      for (final a in out) {
+        if (a.batchId != null) used[a.batchId!] = (used[a.batchId!] ?? 0) + a.qty;
+      }
+      return [for (final a in out) {'batchId': a.batchId, 'qty': numOut(a.qty), 'batch': a.batch, 'expiry': a.expiry}];
+    }
     final items = [
       for (final l in cart)
+        if (l.kit != null)
+          // a kit: one line on the receipt; its medicines leave stock from their own batches (src/pages/POS.jsx)
+          {
+            'id': l.id,
+            'name': l.name,
+            'price': numOut(l.price),
+            'cost': numOut(l.cost),
+            'qty': numOut(l.qty),
+            if (l.controlled) 'controlled': true,
+            'alloc': const <Object?>[],
+            'kit': {
+              'icon': l.kit!.icon,
+              'color': l.kit!.color,
+              if (l.kit!.ack) ...{'warning': l.kit!.warning, 'acked': l.acked},
+              'services': l.kit!.services,
+              'components': [
+                for (final c in l.kit!.components)
+                  {
+                    'id': c['productId'],
+                    'name': c['name'],
+                    'per': c['qty'],
+                    'qty': numOut(((c['qty'] as num?)?.toDouble() ?? 0) * l.qty),
+                    'cost': c['cost'],
+                    if ('${c['swappedFrom'] ?? ''}'.isNotEmpty) ...{'swappedFrom': c['swappedFrom'], 'swappedFromName': c['swappedFromName'] ?? ''},
+                    'alloc': take('${c['productId']}', ((c['qty'] as num?)?.toDouble() ?? 0) * l.qty),
+                  },
+              ],
+            },
+          }
+        else
         {
           'id': l.id,
           'name': l.name,
@@ -343,15 +516,7 @@ Future<Map<String, Object?>> completeSale(
           if (l.directions != null) 'directions': l.directions,
           if (l.pack != null)
             'pack': {'name': l.pack!.name, 'size': numOut(l.pack!.size), 'count': numOut(l.qty / l.pack!.size), 'price': numOut(l.price * l.pack!.size)},
-          'alloc': [
-            for (final a in allocate(
-              preferFirst(stock.batchesOf(l.id, atBranch: branchId), l.preferBatch),
-              l.qty,
-              allowExpired: l.allowExpired,
-              now: now,
-            ))
-              {'batchId': a.batchId, 'qty': numOut(a.qty), 'batch': a.batch, 'expiry': a.expiry},
-          ],
+          'alloc': take(l.id, l.qty, allowExpired: l.allowExpired, prefer: l.preferBatch),
         },
     ];
     final sale = d.put('sales', {
@@ -391,6 +556,20 @@ Future<Map<String, Object?>> completeSale(
         },
     });
     for (final i in items) {
+      // a kit line's stock: each of its medicines, from the batches they came from
+      final kit = i['kit'];
+      if (kit is Map) {
+        for (final c in (kit['components'] as List).cast<Map<String, Object?>>()) {
+          for (final a in (c['alloc'] as List).cast<Map<String, Object?>>()) {
+            d.move(productId: '${c['id']}', qty: -(a['qty'] as num).toDouble(), type: 'Sale', ref: number, user: cashier, batchId: a['batchId'] as String?, branchId: branchId);
+          }
+        }
+        // the warning given (recommendation 5) and any medicine swapped for this sale (recommendation 3)
+        if (kit['acked'] == true) d.audit(cashier, 'Kit warning given', '$number: ${i['name']}: ${kit['warning']}', branchId);
+        final sw = (kit['components'] as List).cast<Map<String, Object?>>().where((c) => '${c['swappedFrom'] ?? ''}'.isNotEmpty).toList();
+        if (sw.isNotEmpty) d.audit(cashier, 'Kit item swapped', '$number: ${i['name']}: ${sw.map((c) => '${c['name']} instead of ${c['swappedFromName']}').join(', ')}', branchId);
+        continue;
+      }
       for (final a in (i['alloc'] as List).cast<Map<String, Object?>>()) {
         d.move(
           productId: i['id'] as String,

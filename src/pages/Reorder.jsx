@@ -8,6 +8,7 @@ import { whatsappLink } from '../cloud.js';
 import { computeReorderLevels, applyReorderLevels, reorderSettings } from '../reorder.js';
 import { validQty, roundToPack, supplierRule, planOrders, nextStatus } from '../poPlan.js';
 import { mainPack } from '../packs.js';
+import { unitsUsed } from '../kits.js';
 
 /** '3 boxes of 10' */
 const packCount = (q, pk) => { const n = Math.ceil(q / pk.size), w = pk.name.toLowerCase(); return `${n} ${n === 1 ? w : /(s|x|ch|sh)$/.test(w) ? w + 'es' : w + 's'} of ${pk.size}`; };
@@ -38,9 +39,9 @@ export default function Reorder() {
     for (const sale of db.sales) {
       if (sale.status === 'refunded' || (sale.branchId || MAIN_BRANCH) !== branchId) continue;
       const t = new Date(sale.date).getTime();
-      for (const i of sale.items) {
-        if (t >= since) sold.set(i.id, (sold.get(i.id) || 0) + i.qty);
-        if (!lastSale.has(i.id) || lastSale.get(i.id) < sale.date) lastSale.set(i.id, sale.date);
+      for (const [id, qty] of sale.items.flatMap(unitsUsed)) { // a kit counts the medicines it used (src/kits.js)
+        if (t >= since) sold.set(id, (sold.get(id) || 0) + qty);
+        if (!lastSale.has(id) || lastSale.get(id) < sale.date) lastSale.set(id, sale.date);
       }
     }
     return { sold, lastSale };

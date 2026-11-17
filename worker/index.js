@@ -27,12 +27,12 @@ import { dailyStockFor, toCsv } from './dailystock.js';
 import { clean as cleanInvoice, finish as finishInvoice } from './invoiceread.js';
 import { INVOICE_PROMPT } from './invoiceprompt.js';
 import { aiRoutes, idleRoutes, firstJson, runAi } from './ai-routes.js';
-import { twoStepDdl, twoStepOf, totpCheck, markUsed, twoStepRoutes } from './twostep.js';
+import { twoStepDdl, twoStepOf, totpCheck, markUsed, twoStepRoutes, looksLikeRecovery, useRecoveryCode } from './twostep.js';
 import { tokenSecret, purposeLabel } from './secret.js';
 import { pharmacyChanged, validatePharmacyDefaults } from '../src/pharmacy-settings.js';
 import { DEFAULT_ROLES } from '../src/access.js';
-import { decide, NEEDS_OLD, moneyView } from './policy.js';
-import { saleFindings, fingerprint } from './anomalies.js';
+import { decide, NEEDS_OLD, moneyView, readView, viewOfCodes, widestView, legacyView } from './policy.js';
+import { saleFindings, fingerprint, stockFindings } from './anomalies.js';
 import { verify as verifyPassword, hashNew, upgrade as upgradeHash } from './passwords.js';
 import { waitFor, afterFail, waitText } from './throttle.js';
 import { FIELD_TABLES, mergeFields, clampFields, sameRecord } from '../src/fieldmerge.js';
@@ -98,7 +98,8 @@ const existingRec = async (db, tenant, t, id) => {
 // Password secrets live only on the server (0.2). Devices receive user records without them, so a lost device — or a
 // copy of its stored data — no longer exposes every staff member's password hash. A device still verifies its own
 // users offline with a device-bound verifier it keeps locally (src/offline.js), never with these synced fields.
-const USER_SECRETS = ['hash', 'salt', 'algo', 'iter'];
+// sessionsFrom / sessionKeep / revoked (2026-11 audit): which sign-ins still count; kept on the server like the hash
+const USER_SECRETS = ['hash', 'salt', 'algo', 'iter', 'sessionsFrom', 'sessionKeep', 'revoked'];
 // Strip the secrets from a stored record's JSON before it is sent to a device (users only; everything else untouched).
 const stripUserSecrets = (t, recJson) => {
   if (recJson == null) return 'null';
@@ -159,6 +160,7 @@ function ensureSchema(db) {
     if (!have.has('tenants_slug')) ddl.push('CREATE UNIQUE INDEX tenants_slug ON tenants(slug)');
     if (!have.has('client_errors')) ddl.push('CREATE TABLE client_errors (tenant TEXT NOT NULL, k TEXT NOT NULL, message TEXT, stack TEXT, page TEXT, build INTEGER, platform TEXT, kind TEXT, count INTEGER NOT NULL DEFAULT 1, devices INTEGER NOT NULL DEFAULT 1, first_at TEXT, last_at TEXT, PRIMARY KEY (tenant, k))'); // crash reports from devices (src/crash.js)
     if (!have.has('twofa')) ddl.push(twoStepDdl); // two-step sign-in secrets (worker/twostep.js), never synced
+    else if (!/\brecovery\b/.test(have.get('twofa'))) ddl.push('ALTER TABLE twofa ADD COLUMN recovery TEXT'); // 2026-11 audit: recovery codes
     // 1.6 sync protocol 2: op ids already applied, so a request repeated after a lost reply is applied once
     if (!have.has('sync_ops')) ddl.push('CREATE TABLE sync_ops (tenant TEXT NOT NULL, op TEXT NOT NULL, at TEXT NOT NULL, PRIMARY KEY (tenant, op))');
     if (!have.has('snapshot_bounds')) ddl.push('CREATE TABLE snapshot_bounds (tenant TEXT PRIMARY KEY, v TEXT NOT NULL)'); // faster sync stage 3 (worker/snapshot.js)
@@ -172,8 +174,13 @@ function ensureSchema(db) {
     if (!have.has('rtc')) ddl.push('CREATE TABLE rtc (id INTEGER PRIMARY KEY AUTOINCREMENT, tenant TEXT NOT NULL, to_uid TEXT NOT NULL, from_uid TEXT NOT NULL, from_name TEXT, type TEXT NOT NULL, call_id TEXT NOT NULL, data TEXT, at INTEGER NOT NULL)');
     if (!have.has('rtc_to')) ddl.push('CREATE INDEX rtc_to ON rtc(tenant, to_uid, id)'); // instant look-up of calls waiting for a person
     if (!have.has('file_chunks')) ddl.push('CREATE TABLE file_chunks (tenant TEXT NOT NULL, id TEXT NOT NULL, n INTEGER NOT NULL, data BLOB NOT NULL, PRIMARY KEY (tenant, id, n))');
-    if (!have.has('files')) ddl.push('CREATE TABLE files (tenant TEXT NOT NULL, id TEXT NOT NULL, name TEXT, type TEXT, size INTEGER, chunks INTEGER, by_uid TEXT, at INTEGER, PRIMARY KEY (tenant, id))');
+    if (!have.has('files')) ddl.push('CREATE TABLE files (tenant TEXT NOT NULL, id TEXT NOT NULL, name TEXT, type TEXT, size INTEGER, chunks INTEGER, by_uid TEXT, at INTEGER, sha256 TEXT, PRIMARY KEY (tenant, id))');
+    // 2026-11 audit: each file's SHA-256 (added: older files have none), and uploads still arriving, with their sender
+    else if (!/\bsha256\b/.test(have.get('files'))) ddl.push('ALTER TABLE files ADD COLUMN sha256 TEXT');
+    if (!have.has('file_uploads')) ddl.push('CREATE TABLE file_uploads (tenant TEXT NOT NULL, id TEXT NOT NULL, by_uid TEXT NOT NULL, size INTEGER NOT NULL, chunks INTEGER NOT NULL, type TEXT NOT NULL, next INTEGER NOT NULL, got INTEGER NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (tenant, id))');
     if (!have.has('owner_config')) ddl.push('CREATE TABLE owner_config (k TEXT PRIMARY KEY, v TEXT NOT NULL)');
+    // 2026-11 audit: who synced from which device, so a shared till keeps what each of its users needs (deviceView)
+    if (!have.has('device_views')) ddl.push('CREATE TABLE device_views (tenant TEXT NOT NULL, device TEXT NOT NULL, uid TEXT NOT NULL, view TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (tenant, device, uid))');
     if (!have.has('reset_codes')) ddl.push('CREATE TABLE reset_codes (k TEXT PRIMARY KEY, code_hash TEXT NOT NULL, expires INTEGER NOT NULL, tries INTEGER NOT NULL DEFAULT 0, sent INTEGER NOT NULL DEFAULT 0, window_start INTEGER NOT NULL DEFAULT 0)');
     // dropping an old index is optional: never let it block the API (e.g. when the daily write limit is reached)
     for (const sql of ddl) await db.prepare(sql).run().catch((e) => { if (!sql.startsWith('DROP')) throw e; });
@@ -188,7 +195,7 @@ const cors = {
   'Access-Control-Max-Age': '86400', // browsers remember the permission check for a day: one round trip less per sync
 };
 const json = (body, status = 200) =>
-  new Response(typeof body === 'string' ? body : JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...cors } });
+  new Response(typeof body === 'string' ? body : JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', ...cors } });
 const httpError = (status, message) => Object.assign(new Error(message), { status });
 
 /** One file of the new apps' updates from the APPS bucket; names are plain file names, nothing else is reachable */
@@ -281,9 +288,10 @@ async function authenticate(req, env) {
   const got = (req.headers.get('Authorization') || '').replace(/^Bearer /, '');
   if (!got) return null;
   let who = null;
+  let pass = null;
   if (got.startsWith('u.')) {
     const p = await readToken(env, got).catch(() => null);
-    if (p) who = { tenant: p.tn || MAIN, role: p.role, name: p.name, uid: p.sub };
+    if (p) { who = { tenant: p.tn || MAIN, role: p.role, name: p.name, uid: p.sub, sig: sigOf(got) }; pass = p; }
   } else {
     const t = await env.DB.prepare('SELECT id FROM tenants WHERE key_hash = ?1').bind(await sha256(got)).first();
     if (t) who = { tenant: t.id, role: 'admin', name: 'sync key', viaKey: true };
@@ -298,12 +306,77 @@ async function authenticate(req, env) {
     const u = await env.DB.prepare('SELECT rec FROM records WHERE tenant = ?1 AND k = ?2 AND deleted = 0').bind(who.tenant, 'users|' + who.uid).first();
     const rec = u ? JSON.parse(u.rec || '{}') : null;
     if (!rec || rec.disabled) return null;
+    // 2026-11 audit: a password reset, "sign out everywhere" or a sign-out ends sign-in passes issued before it
+    if (!sessionOk(rec, pass, who.sig)) return null;
     // 1.2 trust the role on the user record, not the one baked into the token: a demotion takes effect on the next
     // request instead of lingering until the token expires. (This record is already read for the disabled check.)
     if (rec.role) who.role = rec.role;
   }
   return { ...who, tenantRow: t };
 }
+
+/** Every permission of this role in this pharmacy, read once: a Set, or 'all' for an administrator */
+async function permsOf(env, tenant, role) {
+  if (role === 'admin') return 'all';
+  const r = await env.DB.prepare('SELECT rec FROM records WHERE tenant = ?1 AND k = ?2 AND deleted = 0').bind(tenant, 'roles|' + role).first();
+  let rec;
+  try { rec = r?.rec ? JSON.parse(r.rec) : null; } catch { rec = null; }
+  if (Array.isArray(rec?.permissions)) return new Set(rec.permissions);
+  return DEFAULT_ROLE_PERMS[role] || new Set();
+}
+/** 2026-11 audit: which tables this person receives (worker/policy.js READ_GROUPS); the pharmacy key gets everything */
+const viewFor = async (env, who) => readView(who.viaKey ? 'all' : await permsOf(env, who.tenant, who.role));
+
+// 2026-11 audit: a device's view is the widest of the people who synced from it in the offline window, so a shared
+// till keeps what its manager needs offline while a cashier's own phone only gets the cashier's tables. Devices the
+// cloud already served before this rule (they registered a till number before it began) keep the old view for 30
+// days, so no record they already expected stops arriving at once.
+const DEVICE_VIEW_DAYS = 30; // src/offline.js OFFLINE_DAYS
+let viewsSince = null; // when this rule began on this database (owner_config 'views_since'), read once per instance
+async function deviceView(env, who, deviceId, mine) {
+  if (who.viaKey || !who.uid || !deviceId) return mine;
+  const db = env.DB, dev = String(deviceId).slice(0, 80), now = Date.now();
+  if (viewsSince === null) {
+    await db.prepare("INSERT INTO owner_config (k, v) VALUES ('views_since', ?1) ON CONFLICT(k) DO NOTHING").bind(String(now)).run().catch(() => {});
+    viewsSince = Number(await db.prepare("SELECT v FROM owner_config WHERE k = 'views_since'").first('v')) || now;
+  }
+  const { results } = await db.prepare('SELECT uid, view, at FROM device_views WHERE tenant = ?1 AND device = ?2').bind(who.tenant, dev).all();
+  const rows = results || [];
+  const own = rows.find((r) => r.uid === who.uid);
+  // written when it changes, and at most once a day otherwise (a sync every 10 s must not cost a write each time)
+  if (!own || own.view !== mine.key || now - own.at > 864e5) {
+    await db.prepare('INSERT INTO device_views (tenant, device, uid, view, at) VALUES (?1, ?2, ?3, ?4, ?5) ON CONFLICT(tenant, device, uid) DO UPDATE SET view = ?4, at = ?5')
+      .bind(who.tenant, dev, who.uid, mine.key, now).run().catch((e) => console.warn('device view not saved', e.message));
+  }
+  const recent = rows.filter((r) => r.uid !== who.uid && now - r.at < DEVICE_VIEW_DAYS * 864e5).map((r) => r.view);
+  const v = widestView([mine.key, ...recent]);
+  if (now - viewsSince < DEVICE_VIEW_DAYS * 864e5) {
+    const at = await db.prepare('SELECT at FROM tills WHERE tenant = ?1 AND device = ?2').bind(who.tenant, dev).first('at');
+    if (at && Date.parse(at) < viewsSince) return widestView([v.key, legacyView(mine.key).key]);
+  }
+  return v;
+}
+
+// ---------- revocable sign-ins (2026-11 audit) ----------
+// A pass used to count for 30 days whatever happened: a new password or a sign-out left every old pass working.
+// The user record now carries, on the server only (USER_SECRETS): sessionsFrom (passes issued before it are over),
+// sessionKeep (the one pass that made the change and stays, e.g. the device where the person changed their own
+// password) and revoked (passes signed out one by one, until they would have expired anyway).
+/** A short, stable name for one pass: the first 22 characters of its signature (not enough to forge anything) */
+const sigOf = (token) => String(token || '').split('.')[2]?.slice(0, 22) || '';
+/** When a pass was issued; passes from before 2026-11 carry no iat, so it is worked out from their expiry */
+const issuedAt = (p) => Number(p?.iat) || (Number(p?.exp) || 0) - TOKEN_DAYS * 864e5;
+export function sessionOk(rec, p, sig) {
+  if (!p) return true; // the pharmacy key: not a person's pass
+  if (rec.sessionsFrom && issuedAt(p) < Number(rec.sessionsFrom) && !(rec.sessionKeep && rec.sessionKeep === sig)) return false;
+  if (Array.isArray(rec.revoked) && rec.revoked.some((x) => x && x.s === sig)) return false;
+  return true;
+}
+/** The user's fields that end every pass issued until now, except `keep` (a pass's sigOf) */
+const endSessions = (keep = '') => ({ sessionsFrom: Date.now(), sessionKeep: keep || undefined, revoked: [] });
+
+/** Has this person any one of these permissions? (one read of the role) */
+const anyPerm = async (env, who, list) => { if (who.viaKey) return true; const p = await permsOf(env, who.tenant, who.role); return p === 'all' || list.some((x) => p.has(x)); };
 
 /** Does this role (in this pharmacy) have the permission? Admin always does. */
 async function roleCan(env, tenant, role, perm) {
@@ -369,10 +442,10 @@ async function pickUser(env, body) {
 async function login(env, body, ip) {
   // The owner can sign in here too (main page, no pharmacy chosen): owner email + owner password → owner console
   if (!body.tenant) {
-    const own = await ownerMainLogin(env, body.email, body.password);
+    const own = await ownerMainLogin(env, body.email, body.password, ip);
     if (own) {
       const res = await pharmacyLogin(env, body, own.match ? own.token : null, ip);
-      if ((res.status === 401 || res.status === 429) && own.owner && !own.locked) await ownerMainFail(env); // wrong owner password and no staff account opened either
+      if ((res.status === 401 || res.status === 429) && own.owner && !own.locked) await ownerMainFail(env, ip); // wrong owner password and no staff account opened either
       if (res.status === 401 && own.locked) return json({ error: 'Too many wrong passwords. Owner sign-in is locked for a few minutes; use the master key on the owner page.' }, 429);
       return res;
     }
@@ -447,7 +520,9 @@ async function pharmacyLogin(env, body, ownerToken, ip = 'noip') {
   const tf = await twoStepOf(env, match.tenant, u.id);
   if (tf?.enabled) {
     if (!body.otp) return json({ twoFactor: true });
-    const step = await totpCheck(tf.secret, body.otp, tf.last_step);
+    // 2026-11 audit: a one-time recovery code works instead of the app's code (and is used up)
+    const recovery = looksLikeRecovery(body.otp);
+    const step = recovery ? ((await useRecoveryCode(env, match.tenant, u.id, tf, body.otp)) ? 0 : -1) : await totpCheck(tf.secret, body.otp, tf.last_step);
     if (step < 0) {
       await throttleFail(env, slowKey, slow); // a wrong two-step code counts like a wrong password
       const n = (fail && fail.until <= Date.now() && fail.until > 0 ? 0 : fail?.n || 0) + 1;
@@ -455,7 +530,8 @@ async function pharmacyLogin(env, body, ownerToken, ip = 'noip') {
       await env.DB.prepare('INSERT INTO login_fail (email, n, until) VALUES (?1, ?2, ?3) ON CONFLICT(email) DO UPDATE SET n = ?2, until = ?3').bind(lockKey, until ? 0 : n, until).run();
       return json({ twoFactor: true, error: until ? `Too many wrong codes. Sign-in is locked for ${LOCK_MINUTES} minutes.` : 'That code is not right. Type the newest code from your authenticator app.' }, until ? 429 : 401);
     }
-    await markUsed(env, match.tenant, u.id, step);
+    if (recovery) await serverWrite(env, match.tenant, 'audit', crypto.randomUUID(), { date: new Date().toISOString(), user: u.name, action: 'Signed in with a two-step recovery code', details: '', branchId: 'main' });
+    else await markUsed(env, match.tenant, u.id, step);
   }
   if (fail) await env.DB.prepare('DELETE FROM login_fail WHERE email = ?1').bind(lockKey).run(); // only once the code is right too
   if (slow) await throttleClear(env, slowKey);
@@ -465,7 +541,7 @@ async function pharmacyLogin(env, body, ownerToken, ip = 'noip') {
     const next = await upgradeHash(u, String(body.password || ''), env);
     if (next) await serverWrite(env, match.tenant, 'users', u.id, { ...u, ...next });
   } catch (e) { console.warn('password re-hash skipped:', e.message); }
-  const token = await signToken(env, { sub: u.id, tn: match.tenant, name: u.name, role: u.role, exp: Date.now() + TOKEN_DAYS * 864e5 });
+  const token = await signToken(env, { sub: u.id, tn: match.tenant, name: u.name, role: u.role, iat: Date.now(), exp: Date.now() + TOKEN_DAYS * 864e5 });
   return json({ token, tenant: match.tenant, slug: t.slug || match.tenant, pharmacy: t.name, app: webAppOf(t), user: { id: u.id, name: u.name, email: u.email, role: u.role } });
 }
 
@@ -547,7 +623,7 @@ async function resetPassword(env, body) {
     await env.DB.prepare('UPDATE reset_codes SET tries = tries + 1 WHERE k = ?1').bind(k).run();
     return json({ error: 'Wrong code.' }, 400);
   }
-  const u = { ...match.u, ...(await hashNew(env, pw)) };
+  const u = { ...match.u, ...(await hashNew(env, pw)), ...endSessions() }; // every device signed in as them is signed out
   await serverWrite(env, match.tenant, 'users', u.id, u);
   await serverWrite(env, match.tenant, 'audit', crypto.randomUUID(), { date: new Date().toISOString(), user: u.name, action: 'Password reset (forgot password)', details: 'via ' + (body.channel || 'email') + ' code', branchId: 'main' });
   await env.DB.batch([env.DB.prepare('DELETE FROM reset_codes WHERE k = ?1').bind(k), env.DB.prepare("DELETE FROM login_fail WHERE email LIKE '%|' || ?1").bind(k)]);
@@ -565,7 +641,7 @@ async function resetWithGoogle(env, body) {
   try { email = await verifyGoogle(body.credential, cfg.google_client_id); } catch (e) { return json({ error: e.message }, 401); }
   const { tenant, match } = await pickUser(env, { email, tenant: body.tenant });
   if (!match) return json({ error: `No RxPOS account uses ${email}. Use the Google account whose Gmail is on your RxPOS account.` }, 404);
-  const u = { ...match.u, ...(await hashNew(env, pw)) };
+  const u = { ...match.u, ...(await hashNew(env, pw)), ...endSessions() };
   delete u.mustChangePassword;
   await serverWrite(env, match.tenant, 'users', u.id, u);
   await serverWrite(env, match.tenant, 'audit', crypto.randomUUID(), { date: new Date().toISOString(), user: u.name, action: 'Password reset (Google)', details: email, branchId: 'main' });
@@ -579,11 +655,10 @@ async function resetWithGoogle(env, body) {
 const itemJson = (r) => `{"t":${JSON.stringify(r.t)},"id":${JSON.stringify(r.id)},"at":${JSON.stringify(r.at)},"deleted":${r.deleted ? 'true' : 'false'},"rec":${stripUserSecrets(r.t, r.rec)}}`;
 /** The pharmacy database's epoch (changes on a restore) */
 const epochOf = async (db) => (await db.prepare("SELECT v FROM owner_config WHERE k = 'epoch'").first())?.v || '0';
-/** What a person's role may see in a full download: payroll, sale checks (as in sync) */
-const viewOf = (env) => async (who) => {
-  const hideHr = !who.viaKey && !(await roleCan(env, who.tenant, who.role, 'payroll'));
-  const hideChecks = !who.viaKey && !(await roleCan(env, who.tenant, who.role, 'audit'));
-  return { key: (hideHr ? 'h' : '') + (hideChecks ? 'c' : '') || 'all', hideHr, hideChecks, payroll: PAYROLL_TABLES };
+/** What a person's role may see in a full download (as in sync): worker/policy.js READ_GROUPS */
+const viewOf = (env) => async (who, deviceId) => {
+  const v = await deviceView(env, who, deviceId, await viewFor(env, who));
+  return { ...v, hideHr: v.hidden.has('payrolls'), hideChecks: v.hidden.has('anomalies'), payroll: PAYROLL_TABLES };
 };
 /** Stage 4: does a device with window start W keep this stored row? (src/historywindow.js; a deleted record: yes) */
 const keepsRow = (r, W) => {
@@ -638,7 +713,9 @@ async function sync(env, body, who, ctx) {
   // step 2 write policy (worker/policy.js): the stored sales, purchases and payments this push touches, read in one
   // query; `current` then follows this request's own accepted changes, so a create and a refund of the same sale in
   // one push are judged in order
-  const can = async (perm) => (allowed[perm] ??= await roleCan(env, tenant, who.role, perm));
+  // the role's permissions, read once for the whole request (each check used to read the role record again)
+  let permSet = who.viaKey ? 'all' : null;
+  const can = async (perm) => { permSet ??= await permsOf(env, tenant, who.role); return permSet === 'all' || permSet.has(perm); };
   const current = new Map();
   const toCheck = new Map(); // sale key → the accepted record, for the step 3 checks
   if (!who.viaKey) {
@@ -673,6 +750,16 @@ async function sync(env, body, who, ctx) {
       }
     }
   }
+  // 2026-11 audit: visible conflicts. An edit older than the cloud's copy (a device whose clock is behind) used to be
+  // dropped without a word and the device kept showing its own version for good. Each plain write is remembered here
+  // so that, after the batch, the ones the cloud did not take are answered with the cloud's copy (the device then
+  // matches everyone else) and reported in `staleKeys`, with the version that lost kept for the owner.
+  const upserts = []; // { i: position in stmts, k, t, id, at, rec, deleted }
+  const stale = []; // { k, t, id, rec, deleted, stored? }
+  // 2026-11 audit: the stock a sale or refund moves, and quotations made at the till, checked after the loop
+  const moves = new Map(); // receipt number → [movement]
+  const saleByNumber = new Map(); // receipt number → sale pushed in this request
+  const pfCheck = new Map(); // proforma key → a new quotation pushed by someone without the Proformas permission
   const upsertMerged = db.prepare(
     `INSERT INTO records (tenant, k, t, id, rec, deleted, at, origin, seq) VALUES (?1, ?2, ?3, ?4, ?5, 0, ?6, ?7, (SELECT COALESCE(MAX(seq), 0) + 1 FROM records))
      ON CONFLICT(tenant, k) DO UPDATE SET rec = excluded.rec, deleted = 0, at = excluded.at, origin = excluded.origin, seq = excluded.seq`);
@@ -687,7 +774,7 @@ async function sync(env, body, who, ctx) {
     }
     const perm = GUARDED[ch.t];
     if (perm && !who.viaKey) {
-      allowed[perm] ??= await roleCan(env, tenant, who.role, perm);
+      allowed[perm] ??= await can(perm);
       if (!allowed[perm] && !(ch.t === 'users' && (await ownProfileEdit(db, tenant, who, ch)))) { refuse(ch); continue; }
       if (ch.t === 'users' && (await adminChangeRefused(db, tenant, ch, who))) { refuse(ch); continue; }
     }
@@ -700,9 +787,18 @@ async function sync(env, body, who, ctx) {
     let rec = ch.rec;
     // Devices no longer hold password secrets, so a user edit (a rename, a role change) arrives without them: keep
     // whatever the server already stores. A real password set/change/reset still carries a fresh hash and wins. (0.2)
-    if (ch.t === 'users' && !ch.deleted && rec && !rec.hash) {
+    if (ch.t === 'users' && !ch.deleted && rec) {
       const old = await existingRec(db, tenant, 'users', id);
-      if (old) { rec = { ...rec }; for (const f of USER_SECRETS) if (old[f] !== undefined) rec[f] = old[f]; }
+      rec = { ...rec };
+      for (const f of ['sessionsFrom', 'sessionKeep', 'revoked']) delete rec[f]; // never from a device
+      if (!rec.hash) { if (old) for (const f of USER_SECRETS) if (old[f] !== undefined) rec[f] = old[f]; }
+      else {
+        // a new password from a device (the person's own change, or an administrator's reset): every other pass of
+        // theirs ends; the device of a person changing their own password stays signed in
+        const fresh = !old || old.hash !== rec.hash;
+        if (fresh && old) Object.assign(rec, endSessions(String(who.uid) === id ? who.sig : ''));
+        else if (old) for (const f of ['sessionsFrom', 'sessionKeep', 'revoked']) if (old[f] !== undefined) rec[f] = old[f];
+      }
     }
     // 1.1 append-only tables: refuse any delete or overwrite, and stamp the actor + server time on audit rows so the
     // trail cannot be back-dated or attributed to someone else from a device.
@@ -747,25 +843,45 @@ async function sync(env, body, who, ctx) {
       const incoming = clampFields({ ...rec, id }, at);
       const merged = mergeFields(old.rec, old.at, incoming, at);
       const unchanged = sameRecord(merged, old.rec);
-      if (!unchanged) stmts.push(upsertMerged.bind(tenant, k, ch.t, id, JSON.stringify(merged), merged.updatedAt, sameRecord(merged, { ...incoming, updatedAt: merged.updatedAt }) ? deviceId : 'server'));
+      const asSent = sameRecord(merged, { ...incoming, updatedAt: merged.updatedAt });
+      if (!unchanged) stmts.push(upsertMerged.bind(tenant, k, ch.t, id, JSON.stringify(merged), merged.updatedAt, asSent ? deviceId : 'server'));
+      // every field the device sent was older than the cloud's: nothing changes here, so the device gets the cloud's copy
+      else if (!asSent) stale.push({ k, t: ch.t, id, rec, deleted: false });
       stored.set(k, { rec: merged, at: merged.updatedAt });
     } else if (INSERT_ONLY.has(ch.t)) stmts.push(insertOnly.bind(tenant, k, ch.t, id, body, at, deviceId));
     else {
       stmts.push(upsert.bind(tenant, k, ch.t, id, body, ch.deleted ? 1 : 0, at, deviceId));
+      upserts.push({ i: stmts.length - 1, k, t: ch.t, id, at, rec, deleted: !!ch.deleted });
       if (FIELD_TABLES.has(ch.t) && !ch.deleted && rec) stored.set(k, { rec: { ...rec, id }, at });
     }
+    const prior = current.get(k);
     if (NEEDS_OLD.has(ch.t)) { if (ch.deleted) current.delete(k); else current.set(k, rec); } // accepted: later changes see it
     if (ch.t === 'sales' && !ch.deleted && rec && !who.viaKey) toCheck.set(k, rec); // step 3: re-checked below
+    if (!who.viaKey && !ch.deleted && rec) {
+      if (ch.t === 'sales' && rec.number) saleByNumber.set(String(rec.number), rec);
+      if (ch.t === 'movements' && (rec.type === 'Sale' || rec.type === 'Refund') && rec.ref) { const r = String(rec.ref); if (!moves.has(r)) moves.set(r, []); moves.get(r).push(rec); }
+      if (ch.t === 'proformas' && !prior && !(await can('proformas'))) pfCheck.set(k, rec);
+    }
     if (typeof ch.op === 'string' && ch.op.length <= 64) { stmts.push(remember.bind(tenant, ch.op, nowIso)); ledger.add(stmts.length - 1); seen.add(ch.op); }
   }
   // step 3 (worker/anomalies.js): re-check each accepted sale's money. Findings are stored next to the sale, in the
   // same transaction, for whoever may read the audit log; the sale itself is never refused for them.
-  if (toCheck.size) {
-    const ids = [...new Set([...toCheck.values()].flatMap((r) => (Array.isArray(r.items) ? r.items : []).map((i) => String(i?.id ?? ''))))].filter(Boolean);
+  // 2026-11 audit: a seller's new quotations are checked like sales (their prices are trusted when they are sold)
+  const toCheckAll = [...toCheck.values(), ...pfCheck.values()];
+  const finding = (rec) => { stmts.push(insertOnly.bind(tenant, 'anomalies|' + rec.id, 'anomalies', rec.id, JSON.stringify(rec), nowIso, 'server')); ledger.add(stmts.length - 1); }; // not one of the device's own changes
+  if (toCheckAll.length) {
+    // a kit line also needs its components (their prices make the kit's price, src/kits.js); a kit's own record lists
+    // them, so they are fetched in a second step below
+    const ids = [...new Set(toCheckAll.flatMap((r) => (Array.isArray(r.items) ? r.items : []).flatMap((i) => [String(i?.id ?? ''), ...(Array.isArray(i?.kit?.components) ? i.kit.components.map((c) => String(c?.id ?? '')) : [])])))].filter(Boolean);
     const products = new Map();
     if (ids.length) {
       const { results } = await db.prepare("SELECT id, rec FROM records WHERE tenant = ?1 AND t = 'products' AND deleted = 0 AND id IN (SELECT value FROM json_each(?2))").bind(tenant, JSON.stringify(ids)).all();
       for (const r of results || []) { try { products.set(r.id, JSON.parse(r.rec)); } catch { /* skip */ } }
+      const more = [...new Set([...products.values()].flatMap((p) => (Array.isArray(p?.kit?.items) ? p.kit.items.map((x) => String(x?.productId ?? '')) : [])))].filter((x) => x && !products.has(x));
+      if (more.length) {
+        const { results: r2 } = await db.prepare("SELECT id, rec FROM records WHERE tenant = ?1 AND t = 'products' AND deleted = 0 AND id IN (SELECT value FROM json_each(?2))").bind(tenant, JSON.stringify(more)).all();
+        for (const r of r2 || []) { try { products.set(r.id, JSON.parse(r.rec)); } catch { /* skip */ } }
+      }
     }
     // a built-in catalog medicine this pharmacy never edited is not stored: its price is the catalog's
     const col = Object.fromEntries(CATALOG.columns.map((c, i) => [c, i]));
@@ -779,6 +895,14 @@ async function sync(env, body, who, ctx) {
       const r = await db.prepare("SELECT rec FROM records WHERE tenant = ?1 AND t = 'roles' AND id = ?2 AND deleted = 0").bind(tenant, who.role).first('rec');
       const v = r ? JSON.parse(r).maxDiscount : null;
       maxDiscount = v === '' || v == null || !(Number(v) >= 0) ? null : Number(v);
+    }
+    // the quotations these sales say they are: from this push, else the cloud (null when it has none)
+    const pfIds = [...new Set([...toCheck.values()].map((x) => x.proformaId).filter(Boolean).map(String))];
+    const pfs = new Map(pfIds.filter((x) => current.has('proformas|' + x)).map((x) => [x, current.get('proformas|' + x)]));
+    const missing = pfIds.filter((x) => !pfs.has(x));
+    if (missing.length) {
+      const { results } = await db.prepare("SELECT id, rec FROM records WHERE tenant = ?1 AND t = 'proformas' AND deleted = 0 AND id IN (SELECT value FROM json_each(?2))").bind(tenant, JSON.stringify(missing)).all();
+      for (const r of results || []) { try { pfs.set(r.id, JSON.parse(r.rec)); } catch { /* unreadable */ } }
     }
     for (const sale of toCheck.values()) {
       // step 8: a sale left partly unpaid, to a client with a credit limit: what they owed before it, from the cloud's
@@ -796,15 +920,32 @@ async function sync(env, body, who, ctx) {
           credit = { limit, owed: Number(unpaid.results?.[0]?.v || 0) - Number(paidIn.results?.[0]?.v || 0) };
         }
       }
-      const found = await saleFindings(sale, products, can, { credit, maxDiscount });
+      const proforma = sale.proformaId ? pfs.get(String(sale.proformaId)) ?? null : undefined;
+      const found = await saleFindings(sale, products, can, { credit, maxDiscount, proforma });
       const fp = fingerprint(moneyView(sale));
-      found.forEach((f, n) => {
-        const id = `${sale.id}~${f.kind}${n}~${fp}`;
-        const rec = { id, saleId: sale.id, saleNumber: sale.number || '', saleDate: sale.date || '', branchId: sale.branchId || '', cashier: sale.cashier || '',
-          pushedBy: who.name || '', kind: f.kind, detail: f.detail, amount: f.amount, reviewed: false, createdAt: nowIso, updatedAt: nowIso };
-        stmts.push(insertOnly.bind(tenant, 'anomalies|' + id, 'anomalies', id, JSON.stringify(rec), nowIso, 'server'));
-        ledger.add(stmts.length - 1); // not one of the device's own changes
-      });
+      found.forEach((f, n) => finding({ id: `${sale.id}~${f.kind}${n}~${fp}`, saleId: sale.id, saleNumber: sale.number || '', saleDate: sale.date || '', branchId: sale.branchId || '', cashier: sale.cashier || '',
+        pushedBy: who.name || '', kind: f.kind, detail: f.detail, amount: f.amount, reviewed: false, createdAt: nowIso, updatedAt: nowIso }));
+    }
+    for (const pf of pfCheck.values()) {
+      const found = await saleFindings({ ...pf, proformaId: undefined }, products, can, { maxDiscount });
+      const fp = fingerprint(moneyView(pf));
+      found.forEach((f, n) => finding({ id: `pf:${pf.id}~${f.kind}${n}~${fp}`, saleId: pf.id, saleNumber: pf.number || 'Proforma', saleDate: pf.date || '', branchId: pf.branchId || '', table: 'proformas',
+        cashier: pf.createdBy || '', pushedBy: who.name || '', kind: f.kind, detail: `Proforma ${pf.number || ''}: ${f.detail}`, amount: f.amount, reviewed: false, createdAt: nowIso, updatedAt: nowIso }));
+    }
+  }
+  // 2026-11 audit: the stock each sale and refund in this push moved, against that sale (worker/anomalies.js)
+  if (moves.size) {
+    const want = [...moves.keys()].filter((ref) => !saleByNumber.has(ref));
+    const found = new Map(saleByNumber);
+    if (want.length) {
+      const { results } = await db.prepare("SELECT rec FROM records WHERE tenant = ?1 AND t = 'sales' AND deleted = 0 AND json_extract(rec, '$.number') IN (SELECT value FROM json_each(?2))").bind(tenant, JSON.stringify(want)).all();
+      for (const r of results || []) { try { const x = JSON.parse(r.rec); found.set(String(x.number), x); } catch { /* unreadable */ } }
+    }
+    for (const [ref, list] of moves) {
+      const sale = found.get(ref) || null;
+      const fp = fingerprint(list.map((m) => m.id).sort().join(','));
+      stockFindings(ref, list, sale).forEach((f, n) => finding({ id: `stock:${ref}~${n}~${fp}`, saleId: sale?.id || ref, saleNumber: ref, saleDate: sale?.date || list[0]?.date || '', branchId: list[0]?.branchId || '', table: 'movements',
+        cashier: sale?.cashier || list[0]?.user || '', pushedBy: who.name || '', kind: f.kind, detail: f.detail, amount: f.amount, reviewed: false, createdAt: nowIso, updatedAt: nowIso }));
     }
   }
   // step 18: the closed-day findings, next to the records, for whoever may read the audit log (as the sale checks)
@@ -828,6 +969,37 @@ async function sync(env, body, who, ctx) {
   if (stmts.length) {
     const res = await db.batch(stmts);
     res.forEach((r, i) => { if (!ledger.has(i)) applied += r.meta?.changes || 0; });
+    for (const u of upserts) if (!(res[u.i]?.meta?.changes > 0)) stale.push(u); // the cloud kept its own copy
+  }
+  // 2026-11 audit: answer each change the cloud did not take with its own copy, and keep the version that lost
+  const staleKeys = [];
+  const staleRows = [];
+  if (stale.length) {
+    const { results } = await db.prepare('SELECT k, t, id, rec, deleted, at, seq FROM records WHERE tenant = ?1 AND k IN (SELECT value FROM json_each(?2))').bind(tenant, JSON.stringify([...new Set(stale.map((x) => x.k))])).all();
+    const byK = new Map((results || []).map((r) => [r.k, r]));
+    const bare = (r) => { if (!r || typeof r !== 'object') return r ?? null; const { updatedAt: _u, _f, ...x } = r; return x; };
+    const lost = [];
+    for (const x of stale) {
+      const row = byK.get(x.k);
+      // only when the cloud's copy is newer: the same time is a repeat of what it already has, not a conflict
+      if (!row || (x.at && !(row.at > x.at))) continue;
+      staleKeys.push(x.k);
+      staleRows.push(row);
+      let theirs;
+      try { theirs = row.rec ? JSON.parse(row.rec) : null; } catch { theirs = null; }
+      const same = !!row.deleted === !!x.deleted && sameRecord(bare(theirs), bare(x.rec ? { ...x.rec, id: x.id } : null));
+      if (same || who.viaKey) continue;
+      const fp = fingerprint(JSON.stringify(x.rec ?? null));
+      const label = { sales: 'Sale', expenses: 'Expense', payments: 'Payment', bankTx: 'Bank transaction', purchases: 'Delivery', products: 'Medicine', customers: 'Client', suppliers: 'Supplier', batches: 'Batch' }[x.t] || x.t;
+      const what = `${label}${x.rec?.number ? ' ' + x.rec.number : x.rec?.name ? ' ' + x.rec.name : ''}`;
+      const aid = `${x.t}:${x.id}~stale~${fp}`;
+      lost.push(insertOnly.bind(tenant, 'anomalies|' + aid, 'anomalies', aid, JSON.stringify({
+        id: aid, saleId: x.id, saleNumber: x.rec?.number || what, saleDate: x.rec?.date || '', branchId: x.rec?.branchId || '', table: x.t, cashier: '', pushedBy: who.name || '', kind: 'stale',
+        detail: `${x.deleted ? 'A removal of' : 'A change to'} ${what} from ${who.name || 'a device'} was older than the cloud's copy, so it was not applied (is that device's clock behind?). The version that was not applied is kept here.`,
+        amount: 0, lost: JSON.stringify(x.deleted ? { deleted: true } : x.rec ?? null).slice(0, 20000), reviewed: false, createdAt: nowIso, updatedAt: nowIso,
+      }), nowIso, 'server'));
+    }
+    if (lost.length) await db.batch(lost).catch((e) => console.warn('stale findings not saved', e.message));
   }
   // keep the op ledger small: ops older than 60 days can't be repeats any more (devices retry within minutes or days)
   if (ops.length && Math.random() < 0.01) await db.prepare('DELETE FROM sync_ops WHERE tenant = ?1 AND at < ?2').bind(tenant, new Date(Date.now() - 60 * 864e5).toISOString()).run().catch(() => {});
@@ -856,14 +1028,17 @@ async function sync(env, body, who, ctx) {
   const more = results.length > limit;
   const page = more ? results.slice(0, limit) : results;
   const cursor = more ? page[page.length - 1].seq : Math.max(maxSeq || 0, Number(since) || 0);
-  const hideHr = !who.viaKey && page.some((r) => PAYROLL_TABLES.has(r.t)) && !(await roleCan(env, tenant, who.role, 'payroll'));
-  // step 3: sale findings are for whoever may read the audit log (admins always), not for the staff they are about
-  const hideChecks = !who.viaKey && page.some((r) => r.t === 'anomalies') && !(await roleCan(env, tenant, who.role, 'audit'));
+  // 2026-11 audit: each role receives only the tables its screens use (worker/policy.js READ_GROUPS); `view` tells
+  // the device which, so it downloads everything again when the person's role is given more (src/sync.js)
+  const view = await deviceView(env, who, deviceId, readView(who.viaKey ? 'all' : (permSet ??= await permsOf(env, tenant, who.role))));
   const W = all === true ? windowOf(body) : null; // stage 4: a full download for a device keeping recent history
-  const shown = hideHr || hideChecks || W ? page.filter((r) => !(hideHr && PAYROLL_TABLES.has(r.t)) && !(hideChecks && r.t === 'anomalies') && !(W && !keepsRow(r, W))) : page;
+  const hides = view.hidden.size > 0;
+  const shown = hides || W ? page.filter((r) => !(hides && view.hidden.has(r.t)) && !(W && !keepsRow(r, W))) : page;
+  // the cloud's copies of the changes it did not take, after the page (a device applies the newer copy of a record)
+  const back = staleRows.filter((r) => !view.hidden.has(r.t));
   // Build the response by hand so records stored as JSON text are not parsed and re-serialised (keeps CPU low)
-  const items = shown.map(itemJson);
-  return json(`{"changes":[${items.join(',')}],"cursor":${cursor},"more":${more},"applied":${applied},"refused":${refused},"refusedKeys":${JSON.stringify(refusedKeys)},"dupes":${dupes},"protocol":2,"limit":${limit},"phase":${JSON.stringify(phase)},"window":${JSON.stringify(W)},"epoch":${JSON.stringify(epoch)},"tenant":${JSON.stringify(tenant)}}`);
+  const items = [...shown, ...back].map(itemJson);
+  return json(`{"changes":[${items.join(',')}],"cursor":${cursor},"more":${more},"applied":${applied},"refused":${refused},"refusedKeys":${JSON.stringify(refusedKeys)},"staleKeys":${JSON.stringify(staleKeys)},"dupes":${dupes},"protocol":2,"limit":${limit},"phase":${JSON.stringify(phase)},"window":${JSON.stringify(W)},"epoch":${JSON.stringify(epoch)},"tenant":${JSON.stringify(tenant)},"view":${JSON.stringify(view.key)},"serverTime":${Date.now()}}`);
 }
 
 /**
@@ -875,8 +1050,8 @@ async function olderHistory(env, body, who) {
   if (!WINDOWED.has(t)) return json({ error: 'Not a table with older history' }, 400);
   const from = validWindow(body?.from) || '0000-00-00', to = validWindow(body?.to);
   if (!to) return json({ error: 'to must be a date' }, 400);
-  const v = await viewOf(env)(who);
-  if ((v.hideHr && PAYROLL_TABLES.has(t)) || (v.hideChecks && t === 'anomalies')) return json({ records: [], more: false, after: 0 });
+  const v = await viewOf(env)(who, body?.deviceId);
+  if (v.hidden.has(t)) return json({ records: [], more: false, after: 0 }); // 2026-11 audit: per-role tables
   const after = Number(body?.after) || 0, PAGE_H = 5000;
   const { results } = await env.DB.prepare(`SELECT rec, seq FROM records WHERE tenant = ?1 AND t = ?2 AND deleted = 0 AND seq > ?3
     AND COALESCE(json_extract(rec, '$.date'), json_extract(rec, '$.at'), '') >= ?4 AND COALESCE(json_extract(rec, '$.date'), json_extract(rec, '$.at'), '') < ?5 ORDER BY seq LIMIT ${PAGE_H + 1}`)
@@ -1044,9 +1219,14 @@ async function tenantUsers(env, tenant) {
 
 async function owner(env, req, url, body) {
   if (!env.OWNER_KEY || env.OWNER_KEY.length < 20) throw httpError(503, 'The owner console is not enabled (OWNER_KEY secret missing).');
-  if (!(await isOwner(env, (req.headers.get('Authorization') || '').replace(/^Bearer /, ''), safeEqual))) throw httpError(401, 'Owner sign-in expired or wrong. Sign in again.');
-  const db = env.DB;
+  const bearer = (req.headers.get('Authorization') || '').replace(/^Bearer /, '');
   const parts = url.pathname.split('/').slice(3).map(decodeURIComponent); // /api/owner/<...>
+  // 2026-11 audit: a key for the nightly backup only (BACKUP_KEY, 32+ characters): it can download the backup and
+  // record its heartbeat, nothing else, so the CI secret no longer opens the whole owner console
+  const backupOnly = (env.BACKUP_KEY || '').length >= 32 && safeEqual(bearer, env.BACKUP_KEY);
+  if (backupOnly && !((parts[0] === 'backup' && req.method === 'GET') || (parts[0] === 'heartbeat' && req.method === 'POST'))) throw httpError(403, 'The backup key can only download backups.');
+  if (!backupOnly && !(await isOwner(env, bearer, safeEqual))) throw httpError(401, 'Owner sign-in expired or wrong. Sign in again.');
+  const db = env.DB;
   if (parts[0] === 'move-to-turso') return moveToTurso(env, req, body);
   if (parts[0] === 'backup' && req.method === 'GET') return backup(env, url, json);
   if (parts[0] === 'restore' && req.method === 'POST') return restore(env, body, json);
@@ -1176,7 +1356,9 @@ async function owner(env, req, url, body) {
       db.prepare('DELETE FROM tills WHERE tenant = ?1').bind(t.id),
     ]);
     // its chat attachments go too (personal data must not outlive the pharmacy)
-    await db.batch([db.prepare('DELETE FROM file_chunks WHERE tenant = ?1').bind(t.id), db.prepare('DELETE FROM files WHERE tenant = ?1').bind(t.id)]).catch(() => {});
+    await db.batch([db.prepare('DELETE FROM file_chunks WHERE tenant = ?1').bind(t.id), db.prepare('DELETE FROM files WHERE tenant = ?1').bind(t.id), db.prepare('DELETE FROM file_uploads WHERE tenant = ?1').bind(t.id)]).catch(() => {});
+    // 2026-11 audit: everything else kept per pharmacy goes too (two-step secrets, devices, crash reports, calls…)
+    await db.batch(['twofa', 'sync_ops', 'client_errors', 'snapshot_bounds', 'rtc', 'device_views'].map((x) => db.prepare(`DELETE FROM ${x} WHERE tenant = ?1`).bind(t.id))).catch((e) => console.warn('pharmacy clean-up incomplete', e.message));
     return json({ ok: true, deleted: r.meta.changes || 0 });
   }
   if (sub === 'rotate-key' && req.method === 'POST') {
@@ -1219,9 +1401,18 @@ async function owner(env, req, url, body) {
     const old = users.find((x) => x.id === id) || {};
     if (!old.id && !u.password) return json({ error: 'Set a password for the new user.' }, 400);
     const rec = { ...old, name: String(u.name || old.name || '').slice(0, 80), email, phone: String(u.phone ?? old.phone ?? ''), role: String(u.role || old.role || 'cashier'),
-      branchId: u.branchId ?? old.branchId ?? '', disabled: !!u.disabled, ...(u.password ? { ...(await passwordFields(env, u.password)), mustChangePassword: !!u.mustChange } : {}) };
+      branchId: u.branchId ?? old.branchId ?? '', disabled: !!u.disabled, ...(u.password ? { ...(await passwordFields(env, u.password)), mustChangePassword: !!u.mustChange, ...endSessions() } : {}) };
     await serverWriteMany(env, t.id, [{ t: 'users', id, rec }, { t: 'audit', id: crypto.randomUUID(), rec: { date: new Date().toISOString(), user: 'RxPOS owner', action: old.id ? 'User updated by owner' : 'User created by owner', details: `${rec.name} (${rec.role})`, branchId: 'main' } }]);
     return json({ user: publicUser({ ...rec, id }) });
+  }
+  // 2026-11 audit: the way back in for an administrator who lost the phone with their authenticator app
+  if (sub === 'users' && parts[4] === 'reset-2fa' && req.method === 'POST') {
+    const u = (await tenantUsers(env, t.id)).find((x) => x.id === parts[3]);
+    if (!u) return json({ error: 'No such user.' }, 404);
+    await db.prepare('DELETE FROM twofa WHERE tenant = ?1 AND uid = ?2').bind(t.id, u.id).run();
+    await serverWriteMany(env, t.id, [{ t: 'users', id: u.id, rec: { ...u, twoFactor: false } },
+      { t: 'audit', id: crypto.randomUUID(), rec: { date: new Date().toISOString(), user: 'RxPOS owner', action: 'Two-step sign-in reset by owner', details: u.name || u.id, branchId: 'main' } }]);
+    return json({ ok: true });
   }
   if (sub === 'users' && parts[4] === 'delete' && req.method === 'POST') {
     await serverWriteMany(env, t.id, [{ t: 'users', id: parts[3], deleted: true }]);
@@ -1263,7 +1454,7 @@ async function owner(env, req, url, body) {
     const items = (Array.isArray(body.records) ? body.records : [body]).filter((x) => x && TABLE_RE.test(x.t || '') && x.id != null && x.t !== 'license');
     if (!items.length) return json({ error: 'Nothing to save.' }, 400);
     if (items.length > 500) return json({ error: 'Send at most 500 records at a time.' }, 413);
-    for (const x of items) if (x.t === 'users' && x.rec?.password) { Object.assign(x.rec, await passwordFields(env, x.rec.password)); delete x.rec.password; }
+    for (const x of items) if (x.t === 'users' && x.rec?.password) { Object.assign(x.rec, await passwordFields(env, x.rec.password), endSessions()); delete x.rec.password; }
     const n = await serverWriteMany(env, t.id, items.map((x) => ({ t: x.t, id: x.id, rec: x.rec || {}, deleted: !!x.deleted })));
     return json({ ok: true, written: n });
   }
@@ -1321,24 +1512,78 @@ async function fileSig(env, tenant, id) {
   const sig = await crypto.subtle.sign('HMAC', await hmacKey(env), te.encode('file:' + tenant + ':' + id));
   return b64url(sig).slice(0, 24);
 }
+// 2026-11 audit: an upload belongs to whoever began it. Before, any colleague could send pieces under an id that was
+// already in use and replace a finished file behind its signed link; the pieces' sizes were never added up (40 pieces
+// of 800 KB passed a "15 MB" file) and pieces of abandoned uploads stayed for ever. Now: the first piece starts an
+// upload owned by its sender; the others must come from them, in order (a repeat of the last one is fine, for a
+// retry); the bytes must add up to the size declared, and match its SHA-256 when the app sends one; a finished file is
+// never replaced; each pharmacy has a storage allowance; unfinished uploads are removed after a day (pruneUploads).
+const FILE_PIECE_MAX = 800 * 1024;
+const uploadsQuota = (env) => (Number(env.FILES_QUOTA_MB) || 2048) * 1024 * 1024;
 async function uploadChunk(env, body, who) {
   const db = env.DB;
   const id = String(body.id || ''), n = Number(body.n), chunks = Number(body.chunks), size = Number(body.size);
-  if (!/^[A-Za-z0-9_-]{8,40}$/.test(id) || !(n >= 0) || !(chunks >= 1) || n >= chunks || chunks > 40) return json({ error: 'Bad upload' }, 400);
+  if (!/^[A-Za-z0-9_-]{8,40}$/.test(id) || !Number.isInteger(n) || !Number.isInteger(chunks) || n < 0 || chunks < 1 || n >= chunks || chunks > 40) return json({ error: 'Bad upload' }, 400);
   if (!(size > 0) || size > MAX_FILE) return json({ error: 'Files can be up to 15 MB.' }, 413);
+  if (chunks > Math.ceil(size / (64 * 1024)) + 1) return json({ error: 'Bad upload' }, 400); // pieces far smaller than any app sends
   const type = String(body.type || 'application/octet-stream').split(';')[0];
   if (!FILE_TYPES.test(type)) return json({ error: 'That kind of file can’t be shared here.' }, 415);
-  const bytes = Uint8Array.from(atob(String(body.data || '')), (c) => c.charCodeAt(0));
-  if (!bytes.length || bytes.length > 800 * 1024) return json({ error: 'Bad upload piece' }, 400);
-  // The first piece of an image must have that image's magic bytes, so a disguised SVG/HTML can't be stored.
-  if (n === 0 && IMAGE_TYPES.has(type) && !imageMagicOk(type, bytes)) return json({ error: 'That image could not be read.' }, 415);
-  await db.prepare('INSERT OR REPLACE INTO file_chunks (tenant, id, n, data) VALUES (?1, ?2, ?3, ?4)').bind(who.tenant, id, n, bytes).run();
-  if (n === chunks - 1) {
-    await db.prepare('INSERT OR REPLACE INTO files (tenant, id, name, type, size, chunks, by_uid, at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)')
-      .bind(who.tenant, id, String(body.name || 'file').slice(0, 120), type, size, chunks, who.uid || '', Date.now()).run();
-    return json({ ok: true, done: true, path: '/api/files/' + who.tenant + '/' + id + '/' + (await fileSig(env, who.tenant, id)) });
+  let bytes;
+  try { bytes = Uint8Array.from(atob(String(body.data || '')), (c) => c.charCodeAt(0)); } catch { return json({ error: 'Bad upload piece' }, 400); }
+  if (!bytes.length || bytes.length > FILE_PIECE_MAX) return json({ error: 'Bad upload piece' }, 400);
+  const by = who.uid || '';
+  if (await db.prepare('SELECT 1 x FROM files WHERE tenant = ?1 AND id = ?2').bind(who.tenant, id).first('x')) return json({ error: 'That file is already shared. Send it again as a new file.' }, 409);
+  let up = await db.prepare('SELECT * FROM file_uploads WHERE tenant = ?1 AND id = ?2').bind(who.tenant, id).first();
+  if (up && up.by_uid !== by) return json({ error: 'Someone else is sending a file with this name. Send it again.' }, 409);
+  if (n === 0) {
+    // The first piece of an image must have that image's magic bytes, so a disguised SVG/HTML can't be stored.
+    if (IMAGE_TYPES.has(type) && !imageMagicOk(type, bytes)) return json({ error: 'That image could not be read.' }, 415);
+    if (!up || up.next > 1 || up.size !== size || up.chunks !== chunks || up.type !== type) {
+      const used = Number(await db.prepare('SELECT COALESCE(SUM(size), 0) s FROM files WHERE tenant = ?1').bind(who.tenant).first('s')) || 0;
+      if (used + size > uploadsQuota(env)) return json({ error: 'This pharmacy’s file storage is full. Ask your RxPOS provider for more space, or share a smaller file.' }, 413);
+      await db.batch([
+        db.prepare('DELETE FROM file_chunks WHERE tenant = ?1 AND id = ?2').bind(who.tenant, id),
+        db.prepare('INSERT INTO file_uploads (tenant, id, by_uid, size, chunks, type, next, got, at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0, 0, ?7) ON CONFLICT(tenant, id) DO UPDATE SET by_uid = ?3, size = ?4, chunks = ?5, type = ?6, next = 0, got = 0, at = ?7')
+          .bind(who.tenant, id, by, size, chunks, type, Date.now()),
+      ]);
+      up = { by_uid: by, size, chunks, type, next: 0, got: 0 };
+    }
+  } else if (!up || up.size !== size || up.chunks !== chunks || up.type !== type) return json({ error: 'That upload was not started (or has expired). Send the file again.' }, 409);
+  if (n > up.next) return json({ error: 'A piece of the file is missing. Send the file again.' }, 409);
+  const before = n < up.next ? Number(await db.prepare('SELECT length(data) l FROM file_chunks WHERE tenant = ?1 AND id = ?2 AND n = ?3').bind(who.tenant, id, n).first('l')) || 0 : 0;
+  const got = up.got - before + bytes.length;
+  if (got > size) return json({ error: 'The file is bigger than it said. Send it again.' }, 400);
+  const next = n === up.next ? up.next + 1 : up.next;
+  await db.batch([
+    db.prepare('INSERT OR REPLACE INTO file_chunks (tenant, id, n, data) VALUES (?1, ?2, ?3, ?4)').bind(who.tenant, id, n, bytes),
+    db.prepare('UPDATE file_uploads SET next = ?3, got = ?4, at = ?5 WHERE tenant = ?1 AND id = ?2').bind(who.tenant, id, next, got, Date.now()),
+  ]);
+  if (n === chunks - 1 && next === chunks) {
+    const fail = async (msg) => { await db.batch([db.prepare('DELETE FROM file_chunks WHERE tenant = ?1 AND id = ?2').bind(who.tenant, id), db.prepare('DELETE FROM file_uploads WHERE tenant = ?1 AND id = ?2').bind(who.tenant, id)]); return json({ error: msg }, 400); };
+    if (got !== size) return fail('The file arrived incomplete. Send it again.');
+    const { results } = await db.prepare('SELECT data FROM file_chunks WHERE tenant = ?1 AND id = ?2 ORDER BY n').bind(who.tenant, id).all();
+    const all = new Uint8Array(size);
+    let o = 0;
+    for (const r of results || []) { const b = new Uint8Array(r.data); all.set(b, o); o += b.length; }
+    const digest = hex(await crypto.subtle.digest('SHA-256', all));
+    const sent = String(body.sha256 || '').toLowerCase();
+    if (sent && sent !== digest) return fail('The file was damaged on the way. Send it again.');
+    await db.batch([
+      db.prepare('INSERT INTO files (tenant, id, name, type, size, chunks, by_uid, at, sha256) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)')
+        .bind(who.tenant, id, String(body.name || 'file').slice(0, 120), type, size, chunks, by, Date.now(), digest),
+      db.prepare('DELETE FROM file_uploads WHERE tenant = ?1 AND id = ?2').bind(who.tenant, id),
+    ]);
+    return json({ ok: true, done: true, sha256: digest, path: '/api/files/' + who.tenant + '/' + id + '/' + (await fileSig(env, who.tenant, id)) });
   }
   return json({ ok: true });
+}
+/** Daily: pieces of uploads nobody finished within a day */
+export async function pruneUploads(db) {
+  const old = Date.now() - 864e5;
+  await db.batch([
+    db.prepare('DELETE FROM file_chunks WHERE EXISTS (SELECT 1 FROM file_uploads u WHERE u.tenant = file_chunks.tenant AND u.id = file_chunks.id AND u.at < ?1)').bind(old),
+    db.prepare('DELETE FROM file_uploads WHERE at < ?1').bind(old),
+  ]);
 }
 async function downloadFile(env, tenant, id, sig) {
   if (!safeEqual(sig, await fileSig(env, tenant, id))) return json({ error: 'Not found' }, 404);
@@ -1418,6 +1663,14 @@ async function ai(env, path, body, who) {
   if (!env.AI) return json({ error: 'AI is not set up on this cloud.' }, 503);
   const lic = JSON.parse(who.tenantRow.features || '{}');
   if (lic.ai === false) return json({ error: 'AI features are switched off for this pharmacy.' }, 403);
+  // 2026-11 audit: AI costs the cloud's allowance on every call (an invoice page runs two models), and any signed-in
+  // pass could call it without limit: now an hourly allowance per pharmacy, and the permission of the screen using it
+  const need = { '/api/ai/prescription': ['pos.sell', 'prescriptions'], '/api/ai/invoice': ['stock.receive', 'purchases.edit'] }[path];
+  if (need && !(await anyPerm(env, who, need))) return json({ error: need.includes('stock.receive') ? 'Only staff who receive stock can read invoices.' : 'Only staff who sell or dispense can read prescriptions.' }, 403);
+  const quota = Number(env.AI_PER_HOUR) || 400;
+  const w = await resetWindow(env, '__ai__:' + who.tenant);
+  if (w.sent >= quota) return json({ error: 'The AI has been used a lot in the last hour at this pharmacy. Try again a little later.' }, 429);
+  await bumpReset(env, '__ai__:' + who.tenant, w);
   if (path === '/api/ai/prescription') {
     const m = /^data:image\/(jpeg|png|webp);base64,(.+)$/.exec(String(body.image || ''));
     if (!m || m[2].length > 2_000_000) return json({ error: 'Send a JPG or PNG photo under 1.5 MB.' }, 400);
@@ -1501,10 +1754,14 @@ async function calendarFeed(env, tenant) {
   const ev = [];
   for (const e of await rows('events')) if (e.date) ev.push({ uid: 'ev-' + e.id, date: e.date, time: e.time, end: e.endTime, title: e.title, notes: e.notes, repeat: ['daily', 'weekly', 'monthly', 'yearly'].includes(e.repeat) ? e.repeat : '' });
   const customers = new Map((await rows('customers')).map((c) => [c.id, c.name]));
+  // 2026-11 audit: a pharmacy can choose initials and no medicines in the feed (it lives in phones' calendars)
+  const privateFeed = !!JSON.parse(t?.secrets || '{}').calendarPrivate;
+  const initials = (n) => String(n || '').split(/\s+/).filter(Boolean).map((w) => w[0].toUpperCase() + '.').join(' ') || 'patient';
   for (const p of await rows('prescriptions')) {
     if (!p.refillDays || p.status !== 'Dispensed') continue;
     const due = addDays(p.dispensedOn || p.date, Number(p.refillDays));
-    if (due >= addDays(today, -30) && due <= horizon) ev.push({ uid: 'rx-' + p.id + '-' + due, date: due, title: `Refill due: ${customers.get(p.customerId) || 'patient'}`, notes: p.medications });
+    const who = customers.get(p.customerId);
+    if (due >= addDays(today, -30) && due <= horizon) ev.push({ uid: 'rx-' + p.id + '-' + due, date: due, title: `Refill due: ${privateFeed ? initials(who) : who || 'patient'}`, notes: privateFeed ? '' : p.medications });
   }
   // Expiring stock (only batches that still have stock)
   const { results: stock } = await db.prepare("SELECT json_extract(rec, '$.batchId') b, SUM(json_extract(rec, '$.qty')) q FROM records WHERE tenant = ?1 AND t = 'movements' AND deleted = 0 GROUP BY b HAVING q > 0").bind(tenant).all();
@@ -1526,6 +1783,8 @@ async function calendarFeed(env, tenant) {
     `X-WR-CALNAME:${icsText((t?.name || 'Pharmacy') + ' · RxPOS')}`, 'REFRESH-INTERVAL;VALUE=DURATION:PT1H', 'X-PUBLISHED-TTL:PT1H'];
   for (const e of ev) {
     lines.push('BEGIN:VEVENT', `UID:${e.uid}@rxpos`, `DTSTAMP:${stamp}`);
+    if (e.time && !/^\d{2}:\d{2}$/.test(e.time)) e.time = ''; // only a clock time goes into DTSTART (2026-11 audit)
+    if (e.end && !/^\d{2}:\d{2}$/.test(e.end)) e.end = '';
     if (e.time) {
       const start = icsDate(e.date) + 'T' + e.time.replace(':', '') + '00';
       const endT = e.end && e.end > e.time ? e.end : `${String(Math.min(23, Number(e.time.slice(0, 2)) + 1)).padStart(2, '0')}${e.time.slice(2)}`;
@@ -1546,7 +1805,7 @@ export default {
   async scheduled(event, env, ctx) {
     // 18:00 UTC = 21:00 in Uganda: each pharmacy's daily summary email (worker/summary.js)
     if (event.cron === '0 18 * * *') {
-      ctx.waitUntil((async () => { const e = withDatabase(env); await ensureSchema(e.DB); await pruneSignInTables(e.DB); })().then(() => console.log('sign-in tables pruned')).catch((e) => console.log('prune failed', e.message)));
+      ctx.waitUntil((async () => { const e = withDatabase(env); await ensureSchema(e.DB); await pruneSignInTables(e.DB); await pruneUploads(e.DB); })().then(() => console.log('sign-in tables and unfinished uploads pruned')).catch((e) => console.log('prune failed', e.message)));
       ctx.waitUntil(pruneSnapshots(withDatabase(env), epochOf).then((n) => console.log('ready-made downloads pruned', n)).catch((e) => console.log('snapshot prune failed', e.message)));
       ctx.waitUntil(pruneWindows(withDatabase(env), epochOf).then((n) => console.log('kept brought-forward figures pruned', n)).catch((e) => console.log('window prune failed', e.message)));
       ctx.waitUntil(dailySummaries(withDatabase(env)).then((r) => console.log('daily summaries', r.map((x) => `${x.tenant}:${x.sent}${x.error ? ' ' + x.error : ''}`).join(', '))).catch((e) => console.log('daily summaries failed', e.message)));
@@ -1583,7 +1842,10 @@ export default {
         // signing: whether sign-in passes can be issued (TOKEN_SECRET / SYNC_KEY long enough); the deploy check needs it
         let signing = true;
         try { tokenSecret(env); } catch { signing = false; }
-        return json({ ok: signing, app: 'rxpos-cloud', configured: (env.SYNC_KEY || '').length >= 12, signing, multiPharmacy: true, version: 5, database: env.DB_BACKEND === 'turso' ? 'turso' : 'd1' });
+        // 2026-11 audit: which secret signs the passes. "sync-key" means TOKEN_SECRET is not set and the main pharmacy's
+        // sync key signs them: whoever holds that key could make a pass for anyone. It tells only which, never the value.
+        const tokenSecretSource = !signing ? 'none' : (env.TOKEN_SECRET || '').length >= 32 ? 'dedicated' : 'sync-key';
+        return json({ ok: signing, app: 'rxpos-cloud', configured: (env.SYNC_KEY || '').length >= 12, signing, tokenSecret: tokenSecretSource, multiPharmacy: true, version: 5, database: env.DB_BACKEND === 'turso' ? 'turso' : 'd1' });
       }
       // Public: latest WHO Disease Outbreak News (cached 3 h); outbreaks in or near Uganda are flagged
       if (path === '/api/health-alerts') return await healthAlerts();
@@ -1612,7 +1874,10 @@ export default {
       }
       const cm = path.match(/^\/api\/calendar\/([a-z0-9-]{1,40})\/([A-Za-z0-9_-]{24})\.ics$/);
       if (cm) {
-        if (!safeEqual(cm[2], await calendarSig(env, cm[1]))) return json({ error: 'Not found' }, 404);
+        const ct = await tenantById(env, cm[1]);
+        const key = ct ? JSON.parse(ct.secrets || '{}').calendarKey : '';
+        // a replaced link (calendarKey) is the only one; until then the original signed link still works
+        if (!ct || !safeEqual(cm[2], key || (await calendarSig(env, cm[1])))) return json({ error: 'Not found' }, 404);
         return await calendarFeed(env, cm[1]);
       }
       if (path === '/api/live') {
@@ -1649,13 +1914,41 @@ export default {
       if (path === '/api/balances' && req.method === 'POST') {
         const W = windowOf(body);
         if (!W) return json({ error: 'window must be a date' }, 400);
-        return json(await balancesAt(env, who.tenant, W, { epochOf }));
+        const bf = await balancesAt(env, who.tenant, W, { epochOf });
+        // 2026-11 audit: a role that doesn't receive the books doesn't get their brought-forward totals either
+        // (an older app names no device: it gets them as before, so a shared till's figures stay whole)
+        const v = body.deviceId ? await deviceView(env, who, body.deviceId, await viewFor(env, who)) : viewOfCodes('');
+        if (v.hidden.has('bankTx')) { bf.account = {}; bf.loan = {}; }
+        if (v.hidden.has('purchases')) bf.supplier = {};
+        return json(bf);
       }
       if (path === '/api/history' && req.method === 'POST') return await olderHistory(env, body, who);
       // A short-lived ticket to open the live WebSocket without putting the sign-in token in the URL (1.2)
       if (path === '/api/live-ticket' && req.method === 'POST') {
         if (!who.uid) return json({ error: 'Not available for this connection' }, 400);
         return json({ ticket: await signTicket(env, { sub: who.uid, tn: who.tenant, name: who.name || '', exp: Date.now() + LIVE_TICKET_MS }) });
+      }
+      // 2026-11 audit: sign-ins that can be ended. /api/logout ends this pass (the web version signing out);
+      // /api/sessions/others ends every other pass of this person ("Sign out everywhere else");
+      // /api/sessions/end {uid} ends all of a staff member's passes (Users: users.manage; an administrator's: an administrator)
+      if ((path === '/api/logout' || path === '/api/sessions/others' || path === '/api/sessions/end') && req.method === 'POST') {
+        if (!who.uid) return json({ error: 'Not available for this connection' }, 400);
+        const target = path === '/api/sessions/end' ? String(body.uid || '') : who.uid;
+        const u = target && (await existingRec(env.DB, who.tenant, 'users', target));
+        if (!u) return json({ error: 'No such staff member' }, 404);
+        if (path === '/api/sessions/end' && target !== who.uid) {
+          if (!(await roleCan(env, who.tenant, who.role, 'users.manage'))) return json({ error: 'Only staff who manage users can sign someone out' }, 403);
+          if (u.role === 'admin' && who.role !== 'admin') return json({ error: 'Only an administrator can sign out an administrator' }, 403);
+        }
+        let next;
+        if (path === '/api/logout') {
+          const live = (Array.isArray(u.revoked) ? u.revoked : []).filter((x) => x && x.exp > Date.now()).slice(-199);
+          next = { ...u, revoked: [...live, { s: who.sig, exp: Date.now() + TOKEN_DAYS * 864e5 }] };
+        } else next = { ...u, ...endSessions(path === '/api/sessions/others' ? who.sig : '') };
+        const what = path === '/api/logout' ? 'Signed out (this sign-in ended)' : path === '/api/sessions/others' ? 'Signed out everywhere else' : `Signed out on every device by ${who.name || 'an administrator'}`;
+        await serverWriteMany(env, who.tenant, [{ t: 'users', id: target, rec: next },
+          { t: 'audit', id: crypto.randomUUID(), rec: { date: new Date().toISOString(), user: who.name || '', action: what, details: u.name || '', branchId: 'main' } }]);
+        return json({ ok: true });
       }
       // step 7: this device's till number in this pharmacy (the same device always gets the same one)
       if (path === '/api/till' && req.method === 'POST') {
@@ -1706,7 +1999,23 @@ export default {
         }
         return json({ url: secrets.dailyStockKey ? `https://api.rxposug.com/api/daily-stock/${who.tenant}/${secrets.dailyStockKey}.csv` : null });
       }
-      if (path === '/api/calendar-link') return json({ url: `${url.origin}/api/calendar/${who.tenant}/${await calendarSig(env, who.tenant)}.ics` });
+      // 2026-11 audit: the feed lists patients' refills and medicines, so only staff who work with them get its link
+      // (any signed-in person could), and an administrator can replace it: the old link stops working at once
+      // (before, it was fixed for the life of the signing secret)
+      if (path === '/api/calendar-link') {
+        const allowed = await anyPerm(env, who, ['prescriptions', 'reminders', 'settings.manage']);
+        if (!allowed) return json({ error: 'Only staff who handle prescriptions or reminders can see the calendar link.' }, 403);
+        const t = await tenantById(env, who.tenant);
+        const secrets = JSON.parse(t?.secrets || '{}');
+        if (req.method === 'POST') {
+          if (!who.viaKey && !(await roleCan(env, who.tenant, who.role, 'settings.manage'))) return json({ error: 'Only an administrator can change the calendar link.' }, 403);
+          // { private: true|false } chooses initials-only refills; anything else makes a new link
+          if (typeof body.private === 'boolean') secrets.calendarPrivate = body.private;
+          else secrets.calendarKey = b64url(crypto.getRandomValues(new Uint8Array(18))); // 24 characters, as the old links
+          await env.DB.prepare('UPDATE tenants SET secrets = ?2 WHERE id = ?1').bind(who.tenant, JSON.stringify(secrets)).run();
+        }
+        return json({ url: `${url.origin}/api/calendar/${who.tenant}/${secrets.calendarKey || (await calendarSig(env, who.tenant))}.ics`, replaceable: true, private: !!secrets.calendarPrivate });
+      }
       if (path === '/api/pay/request' && req.method === 'POST') {
         if (!who.viaKey && !(await roleCan(env, who.tenant, who.role, 'pos.sell'))) return json({ error: 'You are not allowed to take payments.' }, 403); // 1.9
         const p = PROVIDERS[body.provider];
@@ -1736,7 +2045,12 @@ export default {
       }
       return json({ error: 'Not found' }, 404);
     } catch (e) {
-      return json({ error: e.message || 'Server error' }, e.status || 500);
+      // 2026-11 audit: a message we wrote (httpError) is shown; anything else (a database or code error) is logged with
+      // a reference and the device gets only the reference, not the internals
+      if (e.status) return json({ error: e.message || 'Server error' }, e.status);
+      const ref = crypto.randomUUID().slice(0, 8);
+      console.error('server error', ref, path, e?.stack || e?.message || e);
+      return json({ error: `Something went wrong on the cloud (reference ${ref}). Try again; if it keeps happening, tell your RxPOS provider the reference.` }, 500);
     }
   },
 };

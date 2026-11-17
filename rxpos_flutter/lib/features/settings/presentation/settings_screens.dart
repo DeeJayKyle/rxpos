@@ -1,4 +1,5 @@
 
+import '../../../core/theme/line_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -346,14 +347,14 @@ class _AuditScreenState extends ConsumerState<AuditScreen> {
           : ListView.separated(
               itemCount: list.length > 1000 ? 1000 : list.length,
               separatorBuilder: (_, _) => const Divider(height: 1),
-              itemBuilder: (_, i) {
+              itemBuilder: hued((_, i) {
                 final a = list[i];
                 return ListTile(
                   dense: true,
                   title: Text('${a['action']} · ${a['user']}'),
                   subtitle: Text('${'${a['date']}'.replaceFirst('T', ' ').split('.').first} · ${a['details'] ?? ''}${branches.length > 1 ? ' · ${branch(a['branchId'])}' : ''}'),
                 );
-              },
+              }),
             ),
     );
   }

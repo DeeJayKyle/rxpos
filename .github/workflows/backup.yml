@@ -5,7 +5,8 @@ name: Nightly cloud backup
 # run (Actions → Nightly cloud backup → the run → Artifacts). Either store is enough: a problem with one (e.g. the
 # GitHub artifact storage quota) never stops the other. The job fails only if the backup was saved NOWHERE, and the
 # success heartbeat the cloud watchdog checks is recorded only after the backup is actually saved.
-# Needs repository secrets OWNER_KEY and BACKUP_PASSPHRASE. Restore with tools/restore.mjs (see MAINTENANCE.md).
+# Needs repository secrets BACKUP_KEY (the Worker's backup-only key; OWNER_KEY still works until it is set) and
+# BACKUP_PASSPHRASE. Restore with tools/restore.mjs (see MAINTENANCE.md).
 on:
   schedule:
     # not on the hour: GitHub queues top-of-the-hour schedules behind everyone else's (they ran ~3 hours late)
@@ -22,13 +23,14 @@ jobs:
     env:
       RXPOS_API: https://api.rxposug.com
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
       - name: Download and encrypt
         env:
-          OWNER_KEY: ${{ secrets.OWNER_KEY }}
+          # 2026-11 audit: the backup-only key when it is set; the master key only until then
+          BACKUP_KEY: ${{ secrets.BACKUP_KEY || secrets.OWNER_KEY }}
           BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
           BACKUP_HEARTBEAT: '0' # recorded below, only once the backup is stored somewhere
         run: node tools/backup.mjs backups | tee backup-info.json
@@ -55,7 +57,7 @@ jobs:
       - name: Keep a 30-day copy on this run
         id: artifact
         continue-on-error: true
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: rxpos-backup-${{ github.run_id }}
           path: backups/*.rxbak
@@ -63,7 +65,7 @@ jobs:
           if-no-files-found: error
       - name: Record success, or fail if the backup was saved nowhere
         env:
-          OWNER_KEY: ${{ secrets.OWNER_KEY }}
+          BACKUP_KEY: ${{ secrets.BACKUP_KEY || secrets.OWNER_KEY }}
           R2: ${{ steps.r2.outcome }}
           ARTIFACT: ${{ steps.artifact.outcome }}
         run: |
@@ -75,6 +77,6 @@ jobs:
           fi
           # the heartbeat the cloud watchdog checks: it emails the owner if this goes stale
           body=$(node -e "const i=JSON.parse(require('fs').readFileSync('backup-info.json','utf8').trim().split('\n').pop()); console.log(JSON.stringify({bytes:i.bytes,records:i.records}))")
-          curl -fsS -X POST "$RXPOS_API/api/owner/heartbeat" -H "Authorization: Bearer $OWNER_KEY" -H 'Content-Type: application/json' -d "$body" > /dev/null \
+          curl -fsS -X POST "$RXPOS_API/api/owner/heartbeat" -H "Authorization: Bearer $BACKUP_KEY" -H 'Content-Type: application/json' -d "$body" > /dev/null \
             || echo "::warning::Backup saved, but the success heartbeat could not be recorded."
           echo "Backup saved."

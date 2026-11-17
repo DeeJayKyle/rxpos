@@ -1,6 +1,7 @@
 // Shelves: which medicines sit on which shelf, so they are quick to find when dispensing (the shelf shows on the till).
 // Medicines are picked one by one or a whole group at a time (a pharmacological class, a therapeutic area or a dosage
 // form) and put on a shelf. It writes each medicine's "Shelf / location", the same field as the React app.
+import '../../../core/theme/line_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -108,7 +109,7 @@ class _ShelvesScreenState extends ConsumerState<ShelvesScreen> {
               ? const EmptyState('No medicines here')
               : ListView.builder(
                   itemCount: rows.length,
-                  itemBuilder: (_, i) {
+                  itemBuilder: hued((_, i) {
                     final row = rows[i];
                     if (row is GroupHeading) {
                       final members = list.where((p) => groupOf(p, order == MedicineOrder.name ? MedicineOrder.shelf : order) == row.name).toList();
@@ -139,7 +140,7 @@ class _ShelvesScreenState extends ConsumerState<ShelvesScreen> {
                       subtitle: Text([p.form, if (c.cls != unclassified) c.cls, c.area].where((x) => x.isNotEmpty).join(' · ')),
                       secondary: shelf.isEmpty ? null : Chip(avatar: const Icon(Icons.shelves, size: 14), label: Text(shelf), visualDensity: VisualDensity.compact),
                     );
-                  },
+                  }),
                 ),
         ),
       ]),

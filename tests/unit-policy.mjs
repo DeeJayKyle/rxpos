@@ -54,7 +54,7 @@ check('a cashier can mark a proforma converted (selling it)', await ok(cashier({
 check('a cashier cannot delete a proforma', !(await ok(cashier({ t: 'proformas', id: 'pf', deleted: true }))));
 
 // stock movements by type
-const M = (type) => ({ t: 'movements', id: 'm-' + type, rec: { type, qty: -1, productId: 'p1' } });
+const M = (type, qty = type === 'Refund' ? 1 : -1) => ({ t: 'movements', id: 'm-' + type, rec: { type, qty, productId: 'p1' } }); // a refund puts stock back
 check('a cashier records the stock movement of a sale', await ok(cashier(M('Sale'))));
 for (const type of ['Inventory edit', 'Expired write-off', 'Stock count', 'Purchase', 'Refund', 'Sale edit', 'Transfer out', 'Opening stock'])
   check(`a cashier cannot record a "${type}" movement`, !(await ok(cashier(M(type)))));
@@ -70,5 +70,23 @@ check('an admin can do everything', (await ok(admin(P(null, true)))) && (await o
 const I = (deleted) => ({ t: 'insurers', id: 'i1', rec: deleted ? undefined : { name: 'Jubilee', schemes: [] }, deleted });
 check('insurers: staff who manage clients (or Finance) may add one; deleting needs Finance', (await ok(manager(I()))) && !(await ok(dispenser(I()))) === !permsOf('dispenser').has('customers') && (await ok(admin(I(true)))) && !(await ok(cashier(I(true)))));
 
+// 2026-11 audit
+check('a "Sale" movement must take stock out', !(await ok(cashier(M('Sale', 500)))) && (await ok(cashier(M('Sale', -2)))));
+check('a "Refund" movement must put stock back', !(await ok(pharmacist(M('Refund', -3)))));
+check('an unknown table is refused, even a prototype name', !(await ok(cashier({ t: 'zzJunk', id: 'x', rec: {} }))) && !(await ok(cashier({ t: '__proto__', id: 'x', rec: {} }))) && !(await ok(cashier({ t: 'constructor', id: 'x', rec: {} }))));
+const S0 = { id: 's1', number: 'R-1', date: '2026-11-10T10:00:00Z', cashier: 'Ann', items: [{ id: 'p1', qty: 1, price: 1000 }], subtotal: 1000, total: 1000, paid: 1000, payment: 'Cash', status: 'completed' };
+const cashierOld = (old, rec) => decide({ t: 'sales', id: 's1', rec }, old, 'cashier', (p) => ['pos.sell', 'sales.view'].includes(p)).then((v) => v.ok);
+check('a cashier cannot move a sale to another day', !(await cashierOld(S0, { ...S0, date: '2025-01-01T09:00:00Z' })));
+check('…put it under another cashier', !(await cashierOld(S0, { ...S0, cashier: 'Bob' })));
+check('…or renumber it', !(await cashierOld(S0, { ...S0, number: 'R-2' })));
+check('…but can send the same sale again', await cashierOld(S0, { ...S0, updatedAt: 'x' }));
+check('a refund that also re-dates the sale is not a refund', !isRefundOnly(S0, { ...S0, status: 'refunded', date: '2025-01-01T00:00:00Z' }) && isRefundOnly(S0, { ...S0, status: 'refunded', refundedBy: 'Ann', refundedAt: 'now' }));
+const PF = { id: 'pf', number: 'PF-1', status: 'Open', items: [{ id: 'p1', qty: 1, price: 1000 }], discount: 0, total: 1000 };
+const pfBy = (role, can, old, rec, deleted = false) => decide({ t: 'proformas', id: 'pf', rec, deleted }, old, role, can).then((v) => v.ok);
+const sells = (p) => p === 'pos.sell';
+check('the classic till may still save a new proforma for anyone who sells', await pfBy('cashier', sells, null, PF));
+check('a seller may sell (convert) a proforma', await pfBy('cashier', sells, PF, { ...PF, status: 'Converted', saleNumber: 'R-1' }));
+check('…but not change its prices or discount', !(await pfBy('cashier', sells, PF, { ...PF, discount: 900 })) && !(await pfBy('cashier', sells, PF, { ...PF, items: [{ id: 'p1', qty: 1, price: 10 }] })));
+check('someone with Proformas may edit it', await pfBy('pharmacist', (p) => p === 'proformas', PF, { ...PF, discount: 900 }));
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

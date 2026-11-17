@@ -2,6 +2,7 @@
 // Web / Windows: the file downloads. Android: it is saved and the share sheet opens (WhatsApp, Drive, Files…).
 import { isAndroid } from './platform.js';
 import { downloadFile, localDate } from './store.jsx';
+import { kitContents } from './kits.js';
 
 const load = async () => {
   const [{ jsPDF }, { autoTable }] = await Promise.all([import('jspdf'), import('jspdf-autotable')]);
@@ -75,6 +76,7 @@ export async function receiptPdf(sale, { db, fmt }) {
       const meta = [i.pack ? `${i.pack.count} × ${i.pack.name} (${i.pack.size}) @ ${money(fmt, i.pack.price)}` : `${i.qty} × ${money(fmt, i.price)}`, i.alloc?.length === 1 && i.alloc[0].batch ? 'B/N ' + i.alloc[0].batch : '', i.alloc?.[0]?.expiry ? 'Exp ' + i.alloc[0].expiry : ''].filter(Boolean).join(' · ');
       doc.setFontSize(fs - 1); doc.setTextColor(90);
       for (const t of doc.splitTextToSize(meta, inner)) { doc.text(t, M, y + 2.3); y += (fs - 1) * 0.42; }
+      if (i.kit) for (const t of doc.splitTextToSize('KIT · ' + kitContents(i), inner)) { doc.text(t, M, y + 2.3); y += (fs - 1) * 0.42; }
       if (i.directions) {
         const d = [i.directions.dose, i.directions.freq, i.directions.days && `for ${i.directions.days} days`].filter(Boolean).join(' ') + (i.directions.notes?.length ? ' · ' + i.directions.notes.join(', ') : '');
         for (const t of doc.splitTextToSize(d, inner)) { doc.text(t, M, y + 2.3); y += (fs - 1) * 0.42; }

@@ -1,0 +1,21 @@
+# 2026-11 audit: keep dependencies and the pinned GitHub Actions current. Pull requests only, weekly, grouped so the
+# list stays short; nothing is merged without a person (and CI, .github/workflows/full-tests.yml) checking it.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 5
+    groups:
+      security-and-patches:
+        update-types: [patch, minor]
+  - package-ecosystem: pub
+    directory: /rxpos_flutter
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 3
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly }
+    groups:
+      actions:
+        patterns: ['*']

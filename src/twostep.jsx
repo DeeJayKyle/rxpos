@@ -21,10 +21,12 @@ export function TwoStepModal({ onClose }) {
   const [state, setState] = useState({ stage: 'loading' }); // loading | off | setup | on | error
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
-  useEffect(() => { twoStep(syncCfg).then((r) => setState({ stage: r.enabled ? 'on' : 'off' })).catch((e) => setState({ stage: 'error', error: e.message })); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { twoStep(syncCfg).then((r) => setState({ stage: r.enabled ? 'on' : 'off', left: r.recoveryLeft })).catch((e) => setState({ stage: 'error', error: e.message })); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const go = async (fn) => { setBusy(true); try { await fn(); } catch (e) { toast(e.message, 'error'); } finally { setBusy(false); } };
   const start = () => go(async () => { const r = await twoStep(syncCfg, '/setup', {}); setState({ stage: 'setup', ...r }); setCode(''); });
-  const enable = (e) => { e.preventDefault(); go(async () => { await twoStep(syncCfg, '/enable', { code }); try { localStorage.setItem(`rxpos-2fa-ok:${syncCfg.tenant || 'device'}:${user.id}`, '1'); } catch { /* ignore */ } setState({ stage: 'on' }); toast('Two-step sign-in is on. Signing in on a new device will ask for a code.'); }); };
+  const enable = (e) => { e.preventDefault(); go(async () => { const r = await twoStep(syncCfg, '/enable', { code }); try { localStorage.setItem(`rxpos-2fa-ok:${syncCfg.tenant || 'device'}:${user.id}`, '1'); } catch { /* ignore */ } setState({ stage: 'codes', codes: r.recovery || [] }); setCode(''); toast('Two-step sign-in is on. Signing in on a new device will ask for a code.'); }); };
+  // 2026-11 audit: a new set of one-time recovery codes (the old ones stop working)
+  const renew = () => go(async () => { const r = await twoStep(syncCfg, '/recovery', { code }); setState({ stage: 'codes', codes: r.recovery || [] }); setCode(''); });
   const disable = (e) => { e.preventDefault(); go(async () => { await twoStep(syncCfg, '/disable', { code }); setState({ stage: 'off' }); setCode(''); toast('Two-step sign-in is off', 'info'); }); };
   const codeBox = <input className="otp-input" value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))} inputMode="numeric" autoComplete="one-time-code" placeholder="000000" aria-label="Authenticator code" required minLength={6} autoFocus />;
   return (
@@ -47,12 +49,23 @@ export function TwoStepModal({ onClose }) {
           <div className="form-actions"><button type="button" className="btn ghost" onClick={onClose}>Cancel</button><button className="btn primary" disabled={busy || code.length !== 6}>Switch on</button></div>
         </form>
       )}
+      {state.stage === 'codes' && (
+        <div className="stack">
+          <p className="notice"><ShieldCheck size={15} /> Two-step sign-in is on. Keep these recovery codes somewhere safe (print them or write them down): each one signs you in once if you lose your phone. They are shown only now.</p>
+          <pre className="keybox" style={{ fontSize: 16, lineHeight: 1.7, textAlign: 'center' }} aria-label="Recovery codes">{(state.codes || []).join('\n')}</pre>
+          <div className="form-actions">
+            <button type="button" className="btn ghost" onClick={() => navigator.clipboard?.writeText((state.codes || []).join('\n')).then(() => toast('Recovery codes copied'), () => {})}>Copy</button>
+            <button type="button" className="btn primary" onClick={() => setState({ stage: 'on', left: (state.codes || []).length })}>I have kept them</button>
+          </div>
+        </div>
+      )}
       {state.stage === 'on' && (
         <form className="stack" onSubmit={disable}>
           <p className="notice"><ShieldCheck size={15} /> Two-step sign-in is on for your account.</p>
-          <p className="small muted">To switch it off (or move it to a new phone), type a current code from the app:</p>
+          {state.left != null && <p className="small muted">{state.left} recovery code{state.left === 1 ? '' : 's'} left.</p>}
+          <p className="small muted">To switch it off (or move it to a new phone), or to get new recovery codes, type a current code from the app:</p>
           {codeBox}
-          <div className="form-actions"><button type="button" className="btn ghost" onClick={onClose}>Close</button><button className="btn danger" disabled={busy || code.length !== 6}><ShieldOff size={16} />Switch off</button></div>
+          <div className="form-actions"><button type="button" className="btn ghost" onClick={onClose}>Close</button><button type="button" className="btn ghost" disabled={busy || code.length !== 6} onClick={renew}>New recovery codes</button><button className="btn danger" disabled={busy || code.length !== 6}><ShieldOff size={16} />Switch off</button></div>
         </form>
       )}
     </Modal>

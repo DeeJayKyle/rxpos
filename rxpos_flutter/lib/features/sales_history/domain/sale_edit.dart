@@ -2,12 +2,14 @@
 // reason. Extra units are taken first-expiry-first-out; units given back return to the batches they came from (last
 // first); removed lines go back entirely. The sale keeps every change ("edits": who, when, why, before and after) and
 // the audit log says so. A sale copied from another system is corrected as a record only: stock is not touched.
+import '../../../core/data/json_fields.dart' show numOut;
 import '../../../core/data/record_store.dart';
 import '../../../core/entities/sale.dart';
 import '../../../core/entities/settings.dart';
 import '../../../core/presentation/widgets.dart';
 import '../../../core/rules/fefo.dart';
 import '../../../core/rules/money.dart';
+import '../../../core/rules/kits.dart';
 import '../../../core/rules/stock.dart';
 
 class SaleEditProblem implements Exception {
@@ -42,10 +44,14 @@ Future<Map<String, Object?>> editSale(RecordStore store, Sale sale, {required Li
   if (!lines.any((l) => l.qty > 0)) throw SaleEditProblem('A sale needs at least one item. To cancel the whole sale, refund it.');
   if (reason.trim().isEmpty) throw SaleEditProblem('Say why the sale is being changed');
   if (sale.status == 'refunded') throw SaleEditProblem('${sale.number} was refunded and cannot be changed');
+  // 1.10 kit lines (src/pages/Sales.jsx): a kit's count is not changed here (its price may be); a kit line removed puts
+  // each of its medicines back in the batches they came from. Its contents are kept as they were saved.
+  final rawKits = {for (final r in rawSaleItems(sale.raw)) if (r['kit'] is Map) '${r['id']}': r};
   final br = sale.branchId.isEmpty ? mainBranch : sale.branchId;
   final recordOnly = '${sale.raw['imported'] ?? ''}'.isNotEmpty;
   if (!recordOnly) {
     for (final l in lines) {
+      if (rawKits.containsKey(l.id)) continue;
       final extra = l.qty.roundToDouble() - (l.original?.qty ?? 0);
       final have = stock.batchesOf(l.id, atBranch: br).fold<double>(0, (a, b) => a + (b.qty > 0 ? b.qty : 0));
       if (extra > have) throw SaleEditProblem('Only ${formatQty(have)} more ${l.name} in stock');
@@ -53,7 +59,8 @@ Future<Map<String, Object?>> editSale(RecordStore store, Sale sale, {required Li
   }
   final base = sale.subtotal - sale.discount;
   final rate = sale.tax > 0 && base > 0 ? sale.tax / base : 0.0;
-  final subtotal = lines.fold<double>(0, (a, l) => a + l.qty.roundToDouble() * l.price);
+  double qtyOf(EditLine l) => rawKits.containsKey(l.id) && l.original != null ? l.original!.qty : l.qty.roundToDouble();
+  final subtotal = lines.fold<double>(0, (a, l) => a + qtyOf(l) * l.price);
   final disc = discount.clamp(0, subtotal).toDouble();
   final tax = (subtotal - disc) * rate;
   final total = subtotal - disc + tax;
@@ -62,9 +69,9 @@ Future<Map<String, Object?>> editSale(RecordStore store, Sale sale, {required Li
     final items = <SaleItem>[];
     for (final l in lines) {
       final o = old[l.id];
-      final q0 = o?.qty ?? 0, q1 = l.qty < 0 ? 0.0 : l.qty.roundToDouble();
+      final q0 = o?.qty ?? 0, q1 = rawKits.containsKey(l.id) && o != null ? q0 : (l.qty < 0 ? 0.0 : l.qty.roundToDouble());
       var alloc = [...?o?.alloc];
-      if (recordOnly) {
+      if (recordOnly || rawKits.containsKey(l.id)) {
         // history only
       } else if (q1 > q0) {
         final List<Allocation> taken;
@@ -106,6 +113,13 @@ Future<Map<String, Object?>> editSale(RecordStore store, Sale sale, {required Li
     }
     if (!recordOnly) {
       for (final o in old.values) {
+        final kitParts = rawKits[o.id] == null ? null : kitStockParts(rawKits[o.id]!);
+        if (kitParts != null) {
+          for (final (pid, batchId, qty) in kitParts) {
+            d.move(productId: pid, qty: qty, type: 'Sale edit', ref: sale.number, user: user, batchId: batchId, branchId: br);
+          }
+          continue;
+        }
         final parts = o.alloc.isNotEmpty ? [for (final a in o.alloc) (a.batchId, a.qty)] : [(null, o.qty)];
         for (final (batchId, qty) in parts) {
           d.move(productId: o.id, qty: qty, type: 'Sale edit', ref: sale.number, user: user, batchId: batchId, branchId: br);
@@ -121,7 +135,7 @@ Future<Map<String, Object?>> editSale(RecordStore store, Sale sale, {required Li
     });
     final rec = {
       ...sale.toRecord(),
-      'items': [for (final i in items) i.toJson()], 'subtotal': subtotal, 'discount': disc, 'tax': tax, 'total': total, 'payment': payment,
+      'items': [for (final i in items) rawKits[i.id] != null ? {...rawKits[i.id]!, 'price': numOut(i.price)} : i.toJson()], 'subtotal': subtotal, 'discount': disc, 'tax': tax, 'total': total, 'payment': payment,
       'paid': paidNow, 'tendered': tendered, 'customerId': customerId, 'customerName': customerName, 'editedBy': user, 'editedAt': d.now, 'edits': edits,
     };
     d.put('sales', rec);

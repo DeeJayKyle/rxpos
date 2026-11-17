@@ -32,6 +32,7 @@ export default function Auth() {
   const keepChoice = (v) => { setRemember(v); try { localStorage.setItem(REMEMBER_CHOICE, v ? '1' : '0'); } catch { /* ignore */ } };
   const [twoStep, setTwoStep] = useState(null); // { tenant } while the authenticator code is asked
   const [totp, setTotp] = useState('');
+  const [useRc, setUseRc] = useState(false); // 2026-11 audit: a one-time recovery code instead of the app's code
   const [choices, setChoices] = useState(null); // pharmacies this email + password opens
   const [ownerToken, setOwnerToken] = useState(''); // set when the same email + password is also the RxPOS owner's
   // The owner's email and password open the owner console (web only: it isn't part of the apps)
@@ -218,11 +219,14 @@ export default function Auth() {
           ) : twoStep ? (
             <form onSubmit={signIn} className="stack">
               <button type="button" className="btn sm ghost" style={{ alignSelf: 'flex-start' }} onClick={() => { setTwoStep(null); setError(''); }} disabled={busy}><ArrowLeft size={14} />Back</button>
-              <div className="center twostep-head"><ShieldCheck size={26} /><strong>Two-step sign-in</strong><span className="muted small">Type the 6-digit code from the authenticator app on your phone</span></div>
-              <input className="otp-input" value={totp} onChange={(e) => setTotp(e.target.value.replace(/\D/g, '').slice(0, 6))} inputMode="numeric" autoComplete="one-time-code" placeholder="000000" autoFocus aria-label="Authenticator code" required minLength={6} />
+              <div className="center twostep-head"><ShieldCheck size={26} /><strong>Two-step sign-in</strong><span className="muted small">{useRc ? 'Type one of the recovery codes you kept when you switched two-step sign-in on (each works once)' : 'Type the 6-digit code from the authenticator app on your phone'}</span></div>
+              {useRc
+                ? <input className="otp-input" key="rc" value={totp} onChange={(e) => setTotp(e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 11))} autoComplete="off" autoCapitalize="characters" placeholder="XXXXX-XXXXX" autoFocus aria-label="Recovery code" required />
+                : <input className="otp-input" key="otp" value={totp} onChange={(e) => setTotp(e.target.value.replace(/\D/g, '').slice(0, 6))} inputMode="numeric" autoComplete="one-time-code" placeholder="000000" autoFocus aria-label="Authenticator code" required minLength={6} />}
               {error && <div className="error" role="alert">{error}</div>}
-              <button className="btn primary block" disabled={busy || totp.length !== 6}><LogIn size={16} />{busy ? 'Checking…' : 'Sign in'}</button>
-              <p className="muted small center">Lost your phone? Your administrator can switch two-step sign-in off for you (Users &amp; Roles).</p>
+              <button className="btn primary block" disabled={busy || (useRc ? totp.replace(/-/g, '').length !== 10 : totp.length !== 6)}><LogIn size={16} />{busy ? 'Checking…' : 'Sign in'}</button>
+              <button type="button" className="btn sm ghost" onClick={() => { setUseRc((x) => !x); setTotp(''); setError(''); }}>{useRc ? 'Use the code from the app instead' : 'Lost your phone? Use a recovery code'}</button>
+              <p className="muted small center">No recovery codes? Your administrator can switch two-step sign-in off for you (Users &amp; Roles).</p>
             </form>
           ) : forgot ? forgotPanel() : pinMode ? (
             <form onSubmit={signInPin} className="stack">

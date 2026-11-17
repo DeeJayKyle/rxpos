@@ -9,12 +9,15 @@
 import { lineTotal } from '../src/money.js';
 import { packPrice } from '../src/packs.js';
 import { overLimit } from '../src/credit.js';
+import { isKit, kitExpectedPrice, unitsUsed } from '../src/kits.js';
 
 const num = (v) => Number(v) || 0;
 const money = (n) => Math.round(num(n)).toLocaleString('en-US');
 
 /** Price a line should have had: the medicine's retail or wholesale price, per unit (a pack line per its pack's own price) */
-function expectedUnitPrice(p, item, wholesale) {
+function expectedUnitPrice(p, item, wholesale, products) {
+  // a kit (1.10.0): its fixed price, else the sum of its components' prices (src/kits.js); 0 = not checked
+  if (isKit(p)) return products ? kitExpectedPrice(p, products, wholesale) : 0;
   const unit = wholesale ? num(p.wholesale) || num(p.price) : num(p.price);
   if (!item.pack?.name) return unit;
   const k = (p.packs || []).find((x) => x && x.name === item.pack.name && num(x.size) > 1);
@@ -62,27 +65,72 @@ export async function saleFindings(sale, products, can, ctx = {}) {
       out.push({ kind: 'credit', detail: `${sale.customerName || 'The client'} owed ${money(over.owed)}; this sale put ${money(over.adds)} on credit, over the limit of ${money(over.limit)}. ${why}`, amount: Math.round(over.owed + over.adds - over.limit) });
     }
   }
-  // a proforma's discount and prices were set by whoever made the quotation (proformas permission)
-  if (!sale.proformaId) {
-    // step 20: above the role's discount ceiling (Users & roles); the till refuses it, an older app may not
+  // A proforma's discount and prices were set by whoever made the quotation (proformas permission), so a sale of one
+  // is not re-checked for them, but only when it really is that quotation (2026-11 audit: any proformaId, even a made-up
+  // one, used to switch these checks off). ctx.proforma: the stored or pushed proforma, null when the cloud has none,
+  // undefined when the caller did not look.
+  const pf = sale.proformaId ? proformaVerdict(sale, ctx.proforma) : null;
+  if (pf?.finding) out.push(pf.finding);
+  if (!pf?.trusted) {
+    // what the lines were sold below the medicine's list price (a price changed at the till), per line
+    const wholesale = sale.type === 'wholesale';
+    const cheap = [];
+    let lost = 0;
+    for (const i of items) {
+      const p = products.get(String(i.id));
+      // compare only with the medicine as it was when the sale was made: a price raised later is not a finding
+      if (!p || (p.updatedAt && sale.date && p.updatedAt > sale.date)) continue;
+      const want = expectedUnitPrice(p, i, wholesale, products);
+      const gap = (want - num(i.price)) * num(i.qty);
+      if (want > 0 && gap > 1) { cheap.push(`${i.name || i.id} at ${money(num(i.price) * (i.pack?.size || 1))} instead of ${money(want * (i.pack?.size || 1))}`); lost += gap; }
+    }
+    // step 20: above the role's discount ceiling (Users & roles); the till refuses it, an older app may not. Prices
+    // lowered at the till count towards the ceiling too (2026-11 audit: "Change prices" went round it with no limit).
     const max = ctx.maxDiscount;
-    if (max != null && discount > 0 && subtotal > 0 && (discount / subtotal) * 100 > max + 1e-9)
-      out.push({ kind: 'discount-limit', detail: `Discount of ${money(discount)} (${Math.round((discount / subtotal) * 1000) / 10}% of the sale) is above this role's limit of ${max}%`, amount: Math.round(discount - (subtotal * max) / 100) });
+    const given = discount + lost, gross = subtotal + lost;
+    if (max != null && given > 0 && gross > 0 && (given / gross) * 100 > max + 1e-9)
+      out.push({ kind: 'discount-limit', detail: `Discount of ${money(given)} (${Math.round((given / gross) * 1000) / 10}% of the sale${lost > 1 ? `, of which ${money(lost)} by prices below the list price` : ''}) is above this role's limit of ${max}%`, amount: Math.round(given - (gross * max) / 100) });
     if (discount > 0 && !(await can('pos.discount')))
       out.push({ kind: 'discount', detail: `Discount of ${money(discount)} given by a role without "Give discounts"`, amount: discount });
-    if (!(await can('pos.price_edit'))) {
-      const wholesale = sale.type === 'wholesale';
-      const cheap = [];
-      let lost = 0;
-      for (const i of items) {
-        const p = products.get(String(i.id));
-        // compare only with the medicine as it was when the sale was made: a price raised later is not a finding
-        if (!p || (p.updatedAt && sale.date && p.updatedAt > sale.date)) continue;
-        const want = expectedUnitPrice(p, i, wholesale);
-        const gap = (want - num(i.price)) * num(i.qty);
-        if (want > 0 && gap > 1) { cheap.push(`${i.name || i.id} at ${money(num(i.price) * (i.pack?.size || 1))} instead of ${money(want * (i.pack?.size || 1))}`); lost += gap; }
-      }
-      if (cheap.length) out.push({ kind: 'price', detail: `Sold below the medicine's price by a role without "Change prices": ${cheap.join('; ')}`, amount: Math.round(lost) });
+    if (cheap.length && !(await can('pos.price_edit'))) out.push({ kind: 'price', detail: `Sold below the medicine's price by a role without "Change prices": ${cheap.join('; ')}`, amount: Math.round(lost) });
+  }
+  return out;
+}
+
+const lineKey = (items) => (Array.isArray(items) ? items : []).map((i) => [String(i?.id ?? ''), num(i?.qty), Math.round(num(i?.price) * 100)]).sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : a[1] - b[1]));
+/**
+ * Is this sale the quotation it names? → { trusted, finding? }. Trusted when the proforma exists, was not already sold
+ * as another receipt, and the sale has its lines at its prices with no more discount than it gave.
+ */
+export function proformaVerdict(sale, pf) {
+  if (pf === undefined) return { trusted: false };
+  const name = `proforma ${pf?.number || sale.proformaId}`;
+  const flag = (why) => ({ trusted: false, finding: { kind: 'proforma', detail: `Sold as ${name}, but ${why}; its discount and prices were checked as an ordinary sale`, amount: num(sale.discount) } });
+  if (!pf) return flag('the cloud has no such proforma');
+  if (pf.status === 'Converted' && pf.saleNumber && sale.number && pf.saleNumber !== sale.number) return flag(`that proforma was already sold as ${pf.saleNumber}`);
+  if (JSON.stringify(lineKey(sale.items)) !== JSON.stringify(lineKey(pf.items))) return flag('the lines or prices differ from the proforma');
+  if (num(sale.discount) > num(pf.discount) + 1) return flag(`the discount ${money(sale.discount)} is more than the proforma's ${money(pf.discount)}`);
+  return { trusted: true };
+}
+
+/**
+ * 2026-11 audit: the stock a sale or a refund moved, against the sale. moves: the "Sale"/"Refund" movements of one
+ * push that name this sale (ref = its receipt number). sale: the sale, from this push or the cloud; null if neither has
+ * it. → [{ kind, detail, amount }]. A till sends a sale and its stock in one push (src/sync.js groupOutbox keeps them
+ * together), so anything else is worth a look; nothing is refused (an older till may still be catching up).
+ */
+export function stockFindings(ref, moves, sale) {
+  const out = [];
+  const units = (list) => { const m = new Map(); for (const x of list) m.set(String(x.productId ?? x.id ?? ''), (m.get(String(x.productId ?? x.id ?? '')) || 0) + Math.abs(num(x.qty))); return m; };
+  if (!sale) return [{ kind: 'stock', detail: `Stock was ${moves.some((x) => x.type === 'Refund') ? 'returned' : 'taken'} for receipt ${ref}, which the cloud doesn't have`, amount: 0 }];
+  // a kit line's stock is its components' (src/kits.js unitsUsed)
+  const sold = units((Array.isArray(sale.items) ? sale.items : []).flatMap(unitsUsed).map(([id, qty]) => ({ id, qty })));
+  const refund = moves.filter((x) => x.type === 'Refund');
+  if (refund.length && sale.status !== 'refunded') out.push({ kind: 'stock', detail: `Stock was returned for ${ref}, but that sale is not refunded`, amount: 0 });
+  for (const [type, list] of [['Sale', moves.filter((x) => x.type === 'Sale')], ['Refund', refund]]) {
+    for (const [pid, q] of units(list)) {
+      const max = sold.get(pid) || 0;
+      if (q > max + 1e-6) out.push({ kind: 'stock', detail: `${type === 'Sale' ? 'Taken out of' : 'Put back into'} stock for ${ref}: ${Math.round(q * 100) / 100} of ${pid}, but the sale has ${Math.round(max * 100) / 100}`, amount: 0 });
     }
   }
   return out;

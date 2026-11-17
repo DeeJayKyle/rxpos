@@ -1,5 +1,6 @@
 // Medicine List, Formulations, Quick Edit and Stock Card (src/pages/Inventory.jsx), with the pack sizes and inventory
 // editors used from the lists.
+import '../../../core/theme/line_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -153,7 +154,7 @@ class _MedicineListScreenState extends ConsumerState<MedicineListScreen> {
               builder: (context, row) => ListView.separated(
               itemCount: shown.length,
               separatorBuilder: (_, _) => const Divider(height: 1),
-              itemBuilder: (_, i) {
+              itemBuilder: hued((_, i) {
                 final p = shown[i];
                 final st = d.stockOf(p.id);
                 final packs = p.packs.where((k) => k.name.isNotEmpty && k.size > 1);
@@ -185,7 +186,7 @@ class _MedicineListScreenState extends ConsumerState<MedicineListScreen> {
                   ]),
                   onTap: manage ? () => editMedicine(context, ref, p) : null,
                 ));
-              },
+              }),
             ),
             );
             }(),
@@ -400,7 +401,7 @@ class _QuickEditScreenState extends ConsumerState<QuickEditScreen> {
           ? EmptyState(stocked.isEmpty ? 'No medicines in stock yet. Receive stock with Add Stock first.' : 'Nothing matches')
           : ListView.builder(
               itemCount: rows.length,
-              itemBuilder: (_, i) {
+              itemBuilder: hued((_, i) {
                 final p = rows[i];
                 final price = double.tryParse(val(p, 'price')) ?? 0, cost = double.tryParse(val(p, 'cost')) ?? 0;
                 return Container(
@@ -424,7 +425,7 @@ class _QuickEditScreenState extends ConsumerState<QuickEditScreen> {
                     SizedBox(width: 90, child: Text(price > 0 ? '${((price - cost) / price * 100).round()}%\n${s.money(price - cost)}' : '—', textAlign: TextAlign.right, style: const TextStyle(fontSize: 12))),
                   ]),
                 );
-              },
+              }),
             ),
     );
   }
@@ -491,7 +492,7 @@ class _StockCardScreenState extends ConsumerState<StockCardScreen> {
               : ListView.separated(
                   itemCount: lines.length,
                   separatorBuilder: (_, _) => const Divider(height: 1),
-                  itemBuilder: (_, i) {
+                  itemBuilder: hued((_, i) {
                     final (m, bal) = lines[i];
                     return ListTile(
                       dense: true,
@@ -502,7 +503,7 @@ class _StockCardScreenState extends ConsumerState<StockCardScreen> {
                         Text('Balance ${formatQty(bal)}', style: const TextStyle(fontWeight: FontWeight.w700)),
                       ]),
                     );
-                  },
+                  }),
                 ),
         ),
       ]),

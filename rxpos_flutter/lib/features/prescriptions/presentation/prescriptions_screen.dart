@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/theme/line_colors.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/data/pharmacy_providers.dart';
@@ -61,7 +62,7 @@ class PrescriptionsScreen extends ConsumerWidget {
           : ListView.separated(
               itemCount: list.length,
               separatorBuilder: (_, _) => const Divider(height: 1),
-              itemBuilder: (_, i) {
+              itemBuilder: hued((_, i) {
                 final r = list[i];
                 final due = nextRefillDue(r);
                 return ListTile(
@@ -84,7 +85,7 @@ class PrescriptionsScreen extends ConsumerWidget {
                         }, child: const Text('Record refill'))
                       : null,
                 );
-              },
+              }),
             ),
     );
   }

@@ -3,6 +3,7 @@
 // Only medicines that sold in the period are changed. Runs weekly (Settings → Receipts & stock) or on demand (Reorder page).
 import { useEffect } from 'react';
 import { useStore, putMany, whenQuiet, audit, now, MAIN_BRANCH, BASE_AT } from './store.jsx';
+import { unitsUsed } from './kits.js';
 
 export const reorderSettings = (s = {}) => ({
   days: Number(s.autoReorderDays) || 30,
@@ -18,7 +19,7 @@ export function computeReorderLevels(db, products, settings, branchId = MAIN_BRA
   const sold = new Map();
   for (const s of db.sales) {
     if (s.status === 'refunded' || (s.branchId || MAIN_BRANCH) !== branchId || new Date(s.date).getTime() < since) continue;
-    for (const i of s.items) sold.set(i.id, (sold.get(i.id) || 0) + Number(i.qty || 0));
+    for (const [id, qty] of s.items.flatMap(unitsUsed)) sold.set(id, (sold.get(id) || 0) + qty); // a kit: its medicines
   }
   const out = [];
   for (const p of products) {

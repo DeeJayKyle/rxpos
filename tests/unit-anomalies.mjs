@@ -1,6 +1,6 @@
 // Sale checks on the cloud (workplan step 3, worker/anomalies.js): what is flagged for the owner, and what is not.
 //   node unit-anomalies.mjs
-import { saleFindings, fingerprint } from '../worker/anomalies.js';
+import { saleFindings, fingerprint, stockFindings } from '../worker/anomalies.js';
 import { moneyView } from '../worker/policy.js';
 let pass = 0, fail = 0;
 const check = (n, ok, x = '') => { ok ? pass++ : fail++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${n}${x !== '' ? '  ' + String(x) : ''}`); };
@@ -25,7 +25,15 @@ check('paid more than the total', (await kinds(sale({ paid: 5000 }))) === 'paid'
 check('a negative quantity is invalid', (await kinds(sale({ items: [{ id: 'p1', qty: -2, price: 1000 }], subtotal: 0, total: 0, paid: 0 }), boss)).includes('invalid'));
 check('a discount by a role without "Give discounts"', (await kinds(sale({ discount: 200, total: 1800, paid: 1800 }))) === 'discount');
 check('…not when the role may give discounts', (await kinds(sale({ discount: 200, total: 1800, paid: 1800 }), (p) => p === 'pos.discount')) === '');
-check('…not when it came from a proforma', (await kinds(sale({ discount: 200, total: 1800, paid: 1800, proformaId: 'pf1' }))) === '');
+// 2026-11 audit: a sale of a quotation is trusted only when it really is that quotation
+const pf1 = { id: 'pf1', number: 'PF-1', status: 'Open', items: [{ id: 'p1', qty: 2, price: 1000 }], discount: 200 };
+const withPf = async (s, pf, can = cashier) => (await saleFindings(s, products, can, { proforma: pf })).map((f) => f.kind).sort().join(',');
+check('…not when it came from a proforma (the cloud has it, same lines and discount)', (await withPf(sale({ discount: 200, total: 1800, paid: 1800, proformaId: 'pf1' }), pf1)) === '');
+check('a made-up proformaId no longer switches the checks off', (await withPf(sale({ discount: 200, total: 1800, paid: 1800, proformaId: 'nope' }), null)) === 'discount,proforma');
+check('…nor does a proforma with a smaller discount', (await withPf(sale({ discount: 900, total: 1100, paid: 1100, proformaId: 'pf1' }), pf1)) === 'discount,proforma');
+check('…nor one whose lines were changed', (await withPf(sale({ items: [{ id: 'p1', qty: 2, price: 100 }], subtotal: 200, discount: 0, total: 200, paid: 200, proformaId: 'pf1' }), { ...pf1, discount: 0 })) === 'price,proforma');
+check('…nor one already sold as another receipt', (await withPf(sale({ discount: 200, total: 1800, paid: 1800, proformaId: 'pf1' }), { ...pf1, status: 'Converted', saleNumber: 'R-OTHER' })) === 'discount,proforma');
+check('the same receipt sent again keeps trusting its own conversion', (await withPf(sale({ discount: 200, total: 1800, paid: 1800, proformaId: 'pf1' }), { ...pf1, status: 'Converted', saleNumber: 'R1' })) === '');
 check('a line below the medicine\'s price by a role without "Change prices"', (await kinds(sale({ items: [{ id: 'p1', qty: 2, price: 600 }], subtotal: 1200, total: 1200, paid: 1200 }))) === 'price');
 const priceF = (await saleFindings(sale({ items: [{ id: 'p1', name: 'Amox', qty: 2, price: 600 }], subtotal: 1200, total: 1200, paid: 1200 }), products, cashier))[0];
 check('…says what it was sold at and what is lost', priceF?.amount === 800 && /600 instead of 1,000/.test(priceF?.detail), priceF?.detail);
@@ -60,7 +68,12 @@ const dl = (await saleFindings(disc15, products, (p) => p === 'pos.discount', { 
 check('…saying by how much (15% against 10%, 100 too much)', /15% of the sale\) is above this role's limit of 10%/.test(dl?.detail) && dl?.amount === 100, dl?.detail);
 check('at or under the limit is fine', (await lim(disc15, 15)) === '' && (await lim(sale({ discount: 100, total: 1900, paid: 1900 }), 10)) === '');
 check('no limit set: never flagged', (await lim(disc15, null)) === '');
-check('a proforma\'s discount is not the cashier\'s', (await lim({ ...disc15, proformaId: 'pf1' }, 10)) === '');
+check('a proforma\'s discount is not the cashier\'s', ((await saleFindings({ ...disc15, proformaId: 'pf1' }, products, (p) => p === 'pos.discount', { maxDiscount: 10, proforma: { ...pf1, discount: 300 } })).map((f) => f.kind).join(',')) === '');
+// 2026-11 audit: prices lowered at the till count towards the role's discount ceiling
+const cut = sale({ items: [{ id: 'p1', name: 'Amox', qty: 2, price: 800 }], subtotal: 1600, total: 1600, paid: 1600 });
+const cutF = await saleFindings(cut, products, (p) => p === 'pos.price_edit', { maxDiscount: 10 });
+check('a price cut by a role with "Change prices" counts towards its discount limit', cutF.map((f) => f.kind).join(',') === 'discount-limit' && /of which 400 by prices below the list price/.test(cutF[0].detail), cutF[0]?.detail);
+check('…and is not flagged without a limit', (await saleFindings(cut, products, (p) => p === 'pos.price_edit', { maxDiscount: null })).length === 0);
 const { maxDiscountOf } = await import('../src/access.js');
 const roleDb = { roles: [{ id: 'cashier', permissions: ['pos.sell'], maxDiscount: 10 }, { id: 'stock', permissions: [], maxDiscount: '' }] };
 check('a role\'s limit from Users & roles; none set = no limit; admins never limited', maxDiscountOf(roleDb, 'cashier') === 10 && maxDiscountOf(roleDb, 'stock') === null && maxDiscountOf(roleDb, 'pharmacist') === null && maxDiscountOf({ roles: [{ id: 'admin', maxDiscount: 1 }] }, 'admin') === null);
@@ -74,5 +87,24 @@ check('a negative insurer share is flagged', (await kinds(ins(-5, 2000))) === 'i
 check('the insurer\'s share is not credit: a client with a credit limit is not flagged for it', (await saleFindings(ins(1800, 200), products, cashier, { credit: { limit: 100, owed: 0 } })).length === 0);
 check('the insurer share is part of the money view (changing it is a sale edit); an uninsured sale\'s view is unchanged', moneyView(ins(1800, 200)) !== moneyView(ins(1700, 200)) && moneyView(sale()) === moneyView({ ...sale(), insurance: undefined }) && !moneyView(sale()).includes('i1'));
 
+// 2026-11 audit: the stock a sale or refund moved, against that sale
+const mv = (type, qty, productId = 'p1') => ({ id: type + qty + productId, type, qty, productId, ref: 'R1' });
+check('a sale\'s own stock changes are fine', stockFindings('R1', [mv('Sale', -2)], base).length === 0);
+check('stock for a receipt the cloud doesn\'t have is flagged', stockFindings('R9', [mv('Sale', -2)], null).map((f) => f.kind).join() === 'stock');
+check('more taken out than the sale has is flagged', stockFindings('R1', [mv('Sale', -5)], base).length === 1);
+check('a medicine not on the sale is flagged', stockFindings('R1', [mv('Sale', -1, 'p9')], base).length === 1);
+check('stock put back for a sale that is not refunded is flagged', stockFindings('R1', [mv('Refund', 2)], base).length === 1);
+check('a refund of a refunded sale is fine', stockFindings('R1', [mv('Refund', 2)], { ...base, status: 'refunded' }).length === 0);
+// kits (1.10.0): a kit line is priced at its fixed price, else the sum of its components; its stock is its components'
+const kp = new Map([...products, ['kit1', { name: 'Test Kit', kit: { items: [{ productId: 'p1', qty: 2 }, { productId: 'p2', qty: 1 }, { service: true, name: 'Fee', price: 300 }] }, updatedAt: '2026-01-01T00:00:00Z' }],
+  ['kit2', { name: 'Fixed Kit', kit: { items: [{ productId: 'p1', qty: 1 }], price: 1500 }, updatedAt: '2026-01-01T00:00:00Z' }]]);
+const kitLine = (id, price, comps) => ({ id, name: 'Kit', qty: 1, price, kit: { components: comps } });
+const kk = async (s) => (await saleFindings(s, kp, cashier)).map((f) => f.kind).sort().join(',');
+check('a kit sold at the sum of its components is fine (2×1000 + 500 + 300)', (await kk(sale({ items: [kitLine('kit1', 2800, [{ id: 'p1', qty: 2 }, { id: 'p2', qty: 1 }])], subtotal: 2800, total: 2800, paid: 2800 }))) === '');
+check('a kit sold below that by a role without "Change prices" is flagged', (await kk(sale({ items: [kitLine('kit1', 2000, [])], subtotal: 2000, total: 2000, paid: 2000 }))) === 'price');
+check('a kit with a fixed price is checked against it', (await kk(sale({ items: [kitLine('kit2', 1500, [])], subtotal: 1500, total: 1500, paid: 1500 }))) === '' && (await kk(sale({ items: [kitLine('kit2', 1000, [])], subtotal: 1000, total: 1000, paid: 1000 }))) === 'price');
+const ksale = { ...base, items: [kitLine('kit1', 2800, [{ id: 'p1', qty: 2 }, { id: 'p2', qty: 1 }])] };
+check('stock taken for a kit\'s components is not flagged', stockFindings('R1', [mv('Sale', -2, 'p1'), mv('Sale', -1, 'p2')], ksale).length === 0);
+check('…more than the kit holds is', stockFindings('R1', [mv('Sale', -3, 'p1')], ksale).length === 1);
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

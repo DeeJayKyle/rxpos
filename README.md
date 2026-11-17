@@ -81,6 +81,22 @@ Put it behind HTTPS (e.g. Caddy, nginx, or a host such as Render/Railway/Fly.io)
 so each device's own address counts for the sign-in limits. Open `https://your-hub-address` in any browser to use RxPOS
 online. The hub serves the web app too. The `RxPOS-Hub.zip` artifact from GitHub Actions contains everything needed.
 
+**HTTPS and plain HTTP (since the November 2026 audit).** Plain `http://` carries the sync key, passwords and sign-in
+passes unprotected, so:
+
+* The hub accepts plain HTTP **only from the pharmacy's own network** (192.168.x.x, 10.x.x.x, 172.16–31.x.x, this
+  computer, link-local, and VPN ranges such as Tailscale's 100.64.x.x). Offline work on the LAN is unchanged.
+  A plain-HTTP request from an internet address gets a clear "use https" refusal.
+* The hub can serve **HTTPS itself**: `--tls-cert cert.pem --tls-key key.pem` (or `RXPOS_TLS_CERT` / `RXPOS_TLS_KEY`).
+  The certificate must be one the devices trust: for a real domain (e.g. from Let's Encrypt), or on a LAN one made
+  with [mkcert](https://github.com/FiloSottile/mkcert) whose root is installed on each computer. Android's WebView
+  does not trust a home-made root, so Android tills should keep using the LAN address or a real domain.
+* Behind an HTTPS proxy, set `RXPOS_TRUST_PROXY=1`. Requests the proxy marks `X-Forwarded-Proto: https` are accepted
+  from anywhere.
+* `RXPOS_ALLOW_PUBLIC_HTTP=1` turns the refusal off. Use it only if you understand the risk.
+* The apps also refuse to send a password or a sign-in pass over plain `http://` to an internet address. Use the
+  hub's `https://` address, or connect over the shop's network.
+
 The hub runs the **same code as the RxPOS cloud** (since 1.x), so it applies the same rules: permissions per table,
 stock movements that can't be changed or deleted, field-by-field merge, sale checks, the sign-in slowdown, document
 numbers. Its data is in `hub-data/hub.db` (SQLite), with a copy every day in `hub-data/backups` (last 30 kept).

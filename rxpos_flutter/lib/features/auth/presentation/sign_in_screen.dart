@@ -68,6 +68,8 @@ class SignInScreen extends ConsumerStatefulWidget {
 class _SignInScreenState extends ConsumerState<SignInScreen> {
   final _email = TextEditingController(), _password = TextEditingController(), _code = TextEditingController();
   final _totp = TextEditingController(), _otp = TextEditingController(), _newPassword = TextEditingController(), _pin = TextEditingController();
+  bool _useRc = false; // 2026-11 audit: a one-time recovery code instead of the app's code
+  bool get _codeReady => _useRc ? _totp.text.replaceAll('-', '').length == 10 : _totp.text.length == 6;
   _Stage _stage = _Stage.main;
   bool _busy = false, _needsCode = false, _remember = false, _google = false;
   String? _error, _pharmacy, _held, _channel, _forgotNote;
@@ -348,14 +350,38 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
         _back('Back', () => setState(() => _stage = _Stage.main)),
         const Icon(Icons.verified_user_outlined, size: 28),
         Text('Two-step sign-in', textAlign: TextAlign.center, style: t.textTheme.titleMedium),
-        Text('Type the 6-digit code from the authenticator app on your phone', textAlign: TextAlign.center, style: t.textTheme.bodySmall),
+        Text(_useRc ? 'Type one of the recovery codes you kept when you switched two-step sign-in on (each works once)' : 'Type the 6-digit code from the authenticator app on your phone',
+            textAlign: TextAlign.center, style: t.textTheme.bodySmall),
         const SizedBox(height: 12),
-        _otpBox(_totp, '000000', 'totp', onDone: () => _totp.text.length == 6 ? _submit() : null),
+        if (_useRc)
+          TextField(
+            key: const Key('otp-recovery'),
+            controller: _totp,
+            autofocus: true,
+            textAlign: TextAlign.center,
+            textCapitalization: TextCapitalization.characters,
+            autocorrect: false,
+            maxLength: 11,
+            style: const TextStyle(fontSize: 22, letterSpacing: 3),
+            decoration: const InputDecoration(hintText: 'XXXXX-XXXXX', counterText: ''),
+            onChanged: (_) => setState(() {}),
+            onSubmitted: (_) => _codeReady ? _submit() : null,
+          )
+        else
+          _otpBox(_totp, '000000', 'totp', onDone: () => _codeReady ? _submit() : null),
         _errorText(t),
         const SizedBox(height: 12),
-        FilledButton(onPressed: _busy || _totp.text.length != 6 ? null : _submit, child: Padding(padding: const EdgeInsets.all(12), child: Text(_busy ? 'Checking…' : 'Sign in'))),
+        FilledButton(onPressed: _busy || !_codeReady ? null : _submit, child: Padding(padding: const EdgeInsets.all(12), child: Text(_busy ? 'Checking…' : 'Sign in'))),
         const SizedBox(height: 8),
-        Text('Lost your phone? Your administrator can switch two-step sign-in off for you (Users & Roles).', textAlign: TextAlign.center, style: t.textTheme.bodySmall),
+        TextButton(
+          key: const Key('use-recovery'),
+          onPressed: () => setState(() {
+            _useRc = !_useRc;
+            _totp.clear();
+          }),
+          child: Text(_useRc ? 'Use the code from the app instead' : 'Lost your phone? Use a recovery code'),
+        ),
+        Text('No recovery codes? Your administrator can switch two-step sign-in off for you (Users & Roles).', textAlign: TextAlign.center, style: t.textTheme.bodySmall),
       ];
 
   List<Widget> _pinStage(ThemeData t) => [

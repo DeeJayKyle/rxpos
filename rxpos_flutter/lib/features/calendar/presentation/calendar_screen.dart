@@ -37,16 +37,39 @@ class CalendarScreen extends ConsumerStatefulWidget {
 class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   late String _month = today().substring(0, 7), _day = today();
   String? _link;
-  bool _linkFailed = false;
+  bool _linkFailed = false, _private = false;
 
   @override
   void initState() {
     super.initState();
     ref.read(cloudApiProvider).get('/api/calendar-link').then((j) {
-      if (mounted) setState(() => j['url'] is String ? _link = '${j['url']}' : _linkFailed = true);
+      if (mounted) setState(() { if (j['url'] is String) { _link = '${j['url']}'; _private = j['private'] == true; } else { _linkFailed = true; } });
     }, onError: (Object _) {
       if (mounted) setState(() => _linkFailed = true);
     });
+  }
+
+  Future<void> _setPrivate(bool on) async {
+    try {
+      final j = await ref.read(cloudApiProvider).post('/api/calendar-link', {'private': on}, timeout: const Duration(seconds: 8));
+      if (!mounted) return;
+      setState(() => _private = j['private'] == true);
+      say(context, on ? 'Refills in the feed now show initials only, without medicines' : 'Refills in the feed show names and medicines');
+    } catch (e) {
+      if (mounted) say(context, '$e'.replaceFirst('Exception: ', ''), error: true);
+    }
+  }
+
+  Future<void> _renewLink() async {
+    if (!await confirmAction(context, 'Replace the calendar link?', 'The current link stops working at once (for example after someone who had it left). Everyone who subscribed must add the new link.', 'Replace link')) return;
+    try {
+      final j = await ref.read(cloudApiProvider).post('/api/calendar-link', const {}, timeout: const Duration(seconds: 8));
+      if (!mounted) return;
+      setState(() => _link = '${j['url'] ?? _link}');
+      say(context, 'New calendar link made: the old one no longer works');
+    } catch (e) {
+      if (mounted) say(context, '$e'.replaceFirst('Exception: ', ''), error: true);
+    }
   }
 
   Future<void> _open(String url) => launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
@@ -195,6 +218,17 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                 icon: const Icon(Icons.copy, size: 16),
                 label: const Text('Copy'),
               ),
+              // 2026-11 audit (src/pages/Calendar.jsx): refills in the feed with initials only; a new link (the old one stops)
+              if ((ref.watch(permissionsProvider).value ?? const <String>{}).contains('settings.manage'))
+                PopupMenuButton<String>(
+                  key: const Key('calendar-link-menu'),
+                  tooltip: 'Link options',
+                  itemBuilder: (_) => [
+                    CheckedPopupMenuItem(key: const Key('calendar-private'), value: 'private', checked: _private, child: const Text('Refills with initials only (no names or medicines)')),
+                    const PopupMenuItem(key: Key('calendar-renew'), value: 'renew', child: Text('Replace link…')),
+                  ],
+                  onSelected: (v) => v == 'private' ? _setPrivate(!_private) : _renewLink(),
+                ),
             ]),
             Wrap(spacing: 8, runSpacing: 6, children: [
               FilledButton.icon(
@@ -205,7 +239,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
               OutlinedButton(onPressed: () => _open(link.replaceFirst(RegExp('^https:'), 'webcal:')), child: const Text('Apple / Outlook / phone')),
             ]),
             const SizedBox(height: 6),
-            Text('Outlook: Add calendar → Subscribe from web → paste the link. Keep the link private: anyone with it can see these events.', style: t.textTheme.bodySmall),
+            Text("Outlook: Add calendar → Subscribe from web → paste the link. Keep the link private: anyone with it can see these events, including patients' refills.", style: t.textTheme.bodySmall),
           ] else
             Text(_linkFailed ? 'Go online to get your calendar subscription link.' : 'Connecting to the cloud…', style: t.textTheme.bodySmall),
           const SizedBox(height: 6),

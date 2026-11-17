@@ -5,8 +5,9 @@ import {
   Boxes, PackagePlus, History, CalendarClock, PencilRuler, ScrollText, Wallet, Tags, Landmark, ArrowLeftRight, HandCoins,
   ArrowDownLeft, ArrowUpRight, ClipboardCheck, RefreshCw, Undo2, ShieldPlus, BookOpen, BarChart3, Settings as SettingsIcon, Search, Sun, Moon, Menu, LogOut, ChevronDown,
   BellRing, Plus, ShoppingBag, Tag, FileUp, Building2, Send, ShieldCheck, Clock, BookMarked, MessagesSquare, UserCog, KeyRound, CalendarDays, Thermometer, Palette, MonitorSmartphone, ScanText, GraduationCap, Megaphone, CalendarRange, LockKeyhole, NotebookPen, PanelLeftClose, PanelLeftOpen, WifiOff,
-  Sparkles, Pin, Keyboard, UserPlus, Archive, BadgeCheck,
+  Sparkles, Pin, Keyboard, UserPlus, Archive, BadgeCheck, BriefcaseMedical,
 } from 'lucide-react';
+import { endOtherSessions } from './cloud.js';
 import { useStore, useSyncState, makePassword, put, audit, isLowStock, expiryCounts } from './store.jsx';
 import { askText, ask, toast } from './feedback.jsx';
 import { hasPin, setPin, clearPin, verifyOffline } from './offline.js';
@@ -62,6 +63,7 @@ const P = {
   Customers: page(ppl, 'Customers'), Suppliers: page(ppl, 'Suppliers'),
   Insurers: page(() => import('./pages/Insurers.jsx')),
   Shelves: page(() => import('./pages/Shelves.jsx')),
+  Kits: page(() => import('./pages/Kits.jsx')),
   Payroll: page(() => import('./pages/Payroll.jsx')),
   MedicineList: page(inv, 'MedicineList'), Formulations: page(inv, 'Formulations'), StockLevels: page(inv, 'StockLevels'),
   QuickEdit: page(inv, 'QuickEdit'), StockCard: page(inv, 'StockCard'), Expiry: page(inv, 'Expiry'),
@@ -122,6 +124,7 @@ const NAV = [
     ['/formulations', 'Formulations', FlaskConical, null, null, <P.Formulations />, 'medicines.manage'],
     ['/inventory', 'Inventory', Boxes, 'F7', 'low', <P.StockLevels />, 'inventory.view'],
     ['/add-stock', 'Add Stock', PackagePlus, 'F4', null, <P.AddStock />, 'stock.receive'],
+    ['/kits', 'Kits', BriefcaseMedical, null, 'kits', <P.Kits />, 'inventory.view'],
     ['/returns', 'Returns to Supplier', Undo2, null, null, <P.Returns />, ['stock.receive', 'stock.adjust']],
     ['/purchases', 'Purchase History', History, null, null, <P.Purchases />, 'stock.receive'],
     ['/shelves', 'Shelves', Archive, null, null, <P.Shelves />, 'inventory.view'],
@@ -393,7 +396,7 @@ function Shell() {
     return Object.fromEntries(NAV.filter((g) => g.group && g.group !== 'Sales').map((g) => [g.group, true]));
   });
 
-  const { can, features, batchesOf, day } = useStore();
+  const { can, features, batchesOf, day, kits } = useStore();
   // Show only what this person's role may use and what is switched on for this pharmacy
   const groups = NAV.map((g) => ({ ...g, items: g.items.filter(([, , , , , , perm, feat]) => (!perm || [].concat(perm).some(can)) && (!feat || features[feat] !== false)) })).filter((g) => g.items.length);
   const pages = groups.flatMap((g) => g.items.map(([to, label, Icon, key]) => ({ to, label, Icon, key })));
@@ -403,9 +406,10 @@ function Shell() {
     update: updReady ? 1 : 0,
     expiry: (() => { const c = expiryCounts(products, batchesOf, db.settings.expiryWarnDays || 90); return c.soon + c.expired; })(),
     low: products.filter(isLowStock).length,
+    kits: kits.filter((k) => k.active !== false && k.canMake != null && k.canMake <= 3).length, // recommendation 6: kits running low
     transfers: db.transfers.filter((t) => t.toId === branchId && t.status === 'In transit').length,
     chat: unreadCount(db, user),
-  }), [products, batchesOf, db.settings.expiryWarnDays, db.transfers, db.messages, branchId, user, day, updReady]); // eslint-disable-line react-hooks/exhaustive-deps
+  }), [products, kits, batchesOf, db.settings.expiryWarnDays, db.transfers, db.messages, branchId, user, day, updReady]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => setBadge(counts.chat + counts.transfers), [counts.chat, counts.transfers]); // the number on the app / taskbar icon
 
   useEffect(() => setDrawer(false), [location.pathname]);
@@ -537,7 +541,13 @@ function Shell() {
   const initials = user.name.split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
   // the account card on This device asks for these (pages/Device.jsx AccountCard)
   const accountRef = useRef(null);
-  accountRef.current = { password: () => changePassword(false), pin: manageDevicePin, twostep: () => setTwoStepOpen(true), logout: signOut };
+  // 2026-11 audit: end every other sign-in of this person (a lost phone, a shared computer); this device stays signed in
+  const signOutOthers = async () => {
+    if (passOwner(syncCfg?.key) !== user.id) return toast('Sign out and sign in again with the internet on this device first, so it is signed in as you.', 'warn');
+    if (!(await ask({ title: 'Sign out everywhere else?', message: 'Every other phone, computer or browser signed in as you is signed out now (they need your password again). This device stays signed in.', confirmText: 'Sign out everywhere else', danger: true }))) return;
+    try { await endOtherSessions(syncCfg); toast('Signed out everywhere else'); } catch (e) { toast(e.message, 'error'); }
+  };
+  accountRef.current = { password: () => changePassword(false), pin: manageDevicePin, twostep: () => setTwoStepOpen(true), logout: signOut, others: signOutOthers };
   useEffect(() => {
     const on = (e) => accountRef.current?.[e.detail]?.();
     window.addEventListener('rxpos:account', on);
@@ -744,6 +754,9 @@ const QUICK_ADD = {
   'Medicine Inventory': ['Receive stock', '/add-stock', 'stock.receive'],
   Finance: ['Add an expense', '/expenses', 'finance', { create: true }],
 };
+
+/** Whose sign-in pass this is (the person it was issued to); '' for a pharmacy key */
+export const passOwner = (key) => { try { return String(key || '').startsWith('u.') ? JSON.parse(atob(key.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).sub || '' : ''; } catch { return ''; } };
 
 export default function App() {
   useHideSplash();

@@ -1,5 +1,88 @@
 # RxPOS release notes
 
+## Flutter app 2.1 (next build) · November 2026
+
+The Flutter app now does everything the classic app does. Nothing changes in the classic app.
+
+- **Kits in the Flutter app.** The Kits screen (Medicine inventory → Kits): build and edit kits, ready-made kits, kit
+  sales by period, labels, switch off, delete. At the till: kit tiles in their own colour with a KIT badge, what they
+  hold and how many can be made; the warning before adding and the tick before charging; swap a medicine for one sale;
+  scanning a kit's label adds it. A kit sale is saved exactly as the classic till saves it, so either app can refund or
+  correct it. Receipts list a kit's contents; the dashboard warns when kits run low; reorder levels count the medicines
+  kits used.
+- **Sign-ins:** Sign out everywhere else (account card), and an administrator can sign a staff member out on every
+  device (Users).
+- **Calendar link:** refills with initials only, and Replace link (the old one stops working), in the link's ⋮ menu.
+
+## React (classic) app 1.10.1 · Flutter app 2.1 (next build) · November 2026
+
+Every page in colour, the way Add Stock is. Nothing to do on the tills: they update by themselves.
+
+- **Every list and table** (classic app): each row has its own colour, a stripe down its left edge and a light tint
+  across it; each column heading has its own colour band; grid lines separate rows and columns. On phones, where a list
+  turns into cards, the whole card takes the colour. Receipts, labels and printed pages stay plain. Every colour theme,
+  dark ones included, stays readable (checked in all 36 themes).
+- **The till:** each line of the sale has its own colour; kit lines keep their kit colour.
+- **Flutter app:** Add Stock in colour (each line its own colour with a numbered badge, a colour band per column, grid
+  lines, tinted supplier and invoice panels, highlighted total), and the same row colours on its lists: inventory,
+  medicines, sales history, the till's sale lines, purchases, stock count, customers and suppliers, proformas,
+  prescriptions, returns, shelves, finance, payroll and the audit log.
+
+## React (classic) app 1.10.0 · Flutter app 2.1 (next build) · November 2026
+
+A colourful Add Stock and **kits**: medicines sold together as one item. Nothing to do on the tills: they update by
+themselves. Deploy the cloud first (its sale checks understand kits), then the apps.
+
+- **Add Stock in colour.** Every line has its own colour (a stripe, a numbered badge and a light tint across the row)
+  that stays with it when other lines are removed; every column heading has its own colour band that moves with the
+  column; grid lines between rows and columns; tinted supplier and invoice panels and a highlighted total. Edit
+  purchase and the phone cards look the same. Readable in all 36 themes, dark ones included.
+- **Kits** (Medicine Inventory → Kits): build a kit from medicines in stock, e.g. an HIV Test Kit = test strip +
+  lancets + alcohol swabs + water for injection, plus service lines such as a testing fee. A kit has no stock of its
+  own: the till shows how many can be made, and each sale takes every medicine from its own batches (earliest expiry
+  first). Its cost is what its medicines cost now; its price is their retail prices added up, unless you set a price.
+  Earliest expiry, Rx and controlled flags come from its medicines.
+- **Kits at the till** look different from other stock: their colour, icon, a KIT badge, what they hold, "Can make N"
+  and their warning. A warning can be one the cashier must tick before charging (written to the audit log).
+- **Swap at the till:** when a medicine in a kit runs short, swap it for a similar one for that sale only; the receipt
+  and the audit log say so.
+- **Ready-made kits:** HIV test, malaria RDT, pregnancy test, injection set, wound dressing and mama kit, matched to
+  your own medicines by name.
+- **Kit labels** with a barcode from the Kits page; scanning one at the till adds the kit.
+- **Kits running low:** the dashboard and the menu say when a kit can be made 3 times or fewer, and which medicine
+  holds it back.
+- Receipts and invoices list a kit's contents. A refund puts each medicine back in the batches it came from. Kit
+  sales and their profit are on the Kits page; reorder levels and consumption count the medicines kits use. Kits stay
+  out of Inventory, Add Stock, stock counts, reorder and stock value.
+- The till: the Enter of a barcode scanner no longer confirms a dialog the scan opens; "Only 3 in stock in stock"
+  now reads "Only 3 in stock".
+- **Flutter app:** kits are kept out of its lists, a kit sale is refunded correctly, and kit sales are corrected in the
+  React app. Building and selling kits and the colourful Add Stock come to the Flutter app later (PARITY.md).
+
+## React (classic) app 1.9.3 · Flutter app 2.1 (next build) · November 2026
+
+Security release from the November 2026 audit (docs/AUDIT-2026-11-16.md). Nothing to do on the tills: they update by
+themselves. What staff and owners will notice:
+
+- **Each role receives only what its screens use.** A cashier's device no longer downloads expenses, bank transactions,
+  loans, deliveries or the audit log. A shared till keeps what its manager needs offline, and devices that existed
+  before keep the old view for 30 days.
+- **Safer sales:** moving a sale to another day or cashier needs *Edit sales*; stock taken or returned must match its
+  sale; a proforma must be the real, matching quotation; prices cut at the till count towards the role's discount
+  limit. Anything unusual is shown to the owner under sale checks, never refused at the counter.
+- **No silent losses:** a change older than the cloud's copy (a device clock that is behind) is listed on This
+  device, the cloud's copy is put on the device, and the classic app warns when the clock is wrong.
+- **Sign-ins:** a new or reset password signs the person out on their other devices; new **Sign out everywhere else**
+  (account card) and **Sign out on every device** (Users & roles). The web version's sign-out ends that sign-in.
+- **Two-step sign-in:** **recovery codes** for a lost phone (both apps), and only an administrator, or your RxPOS
+  provider, can switch off an administrator's two-step sign-in.
+- **Files in chat** can no longer be replaced by someone else, and are checked when they arrive.
+- **Calendar:** the link is for staff who handle prescriptions or reminders, can be replaced by an administrator, and
+  can show refills with initials only.
+- **Hub:** optional HTTPS; plain http only on the pharmacy's own network. The apps won't send a password over plain
+  http to the internet.
+- Updated PDF reader (invoice scanning), page navigation library and the Windows app's Electron.
+
 ## React (classic) app 1.9.2 · Flutter app 2.1 (next build) · November 2026
 
 Browser or app, a clearer sign-in, your account on This device, quick reports and status pills.

@@ -8,6 +8,8 @@ import '../entities/product.dart';
 import '../entities/settings.dart';
 import '../rules/balances.dart';
 import '../rules/gs1.dart';
+import '../rules/fefo.dart' show sellable;
+import '../rules/kits.dart';
 import '../rules/permissions.dart';
 import '../rules/stock.dart';
 import 'catalog.dart';
@@ -43,7 +45,7 @@ Future<List<Product>> catalog(Ref ref) => loadCatalog();
 /// The pharmacy as the till and Add Stock see it.
 class PharmacyData {
   PharmacyData({required this.settings, required this.products, required this.stock, required this.customers,
-      required this.suppliers, required this.drafts, required this.features, this.branch = mainBranch});
+      required this.suppliers, required this.drafts, required this.features, this.branch = mainBranch, this.kits = const []});
 
   final PharmacySettings settings;
   final List<Product> products;
@@ -56,6 +58,17 @@ class PharmacyData {
   final String branch;
 
   late final Map<String, Product> byId = {for (final p in products) p.id: p};
+  /// 1.10 kits (core/rules/kits.dart): their stored records, kept out of [products] (they have no stock of their own)
+  final List<Map<String, Object?>> kits;
+  late final _kitMeds = {
+    for (final p in products)
+      p.id: (name: p.name, cost: p.cost, price: p.price, wholesale: p.wholesale, rx: p.rx, controlled: p.controlled,
+          expiry: stock.batchesOf(p.id).where((b) => b.qty > 0 && b.expiry.isNotEmpty).map((b) => b.expiry).firstOrNull ?? ''),
+  };
+  /// A kit as it can be sold now: made from stock that has not expired, with this sale's [swaps]
+  KitView kitNow(Map<String, Object?> rec, {Map<String, String> swaps = const {}}) => kitView(rec, _kitMeds, (id) => sellable(stock.batchesOf(id)), swaps: swaps);
+  /// The kits on the till (switched on), as they are now
+  late final List<KitView> tillKits = [for (final k in kits) if (kitActive(k)) kitNow(k)];
   late final Map<String, Product> byBarcode = {for (final p in products) if (p.barcode.isNotEmpty) p.barcode: p};
   /// step 21: the medicine whose barcode is this product number (a GTIN-14 from a pack's 2D code, or its EAN-13)
   Product? byGtin(String gtin) => products.where((p) => sameGtin(p.barcode, gtin)).firstOrNull;
@@ -70,7 +83,10 @@ class PharmacyData {
 Future<PharmacyData> pharmacy(Ref ref) async {
   final settings = await ref.watch(settingsProvider.future);
   final branch = await ref.watch(deviceBranchProvider.future);
-  final own = (await ref.watch(tableProvider('products').future)).map(Product.fromRecord).toList();
+  // kits (1.10.0) are recipes sold by the React app, not stock: kept out of this app's medicine lists (rules/kits.dart)
+  final rows = await ref.watch(tableProvider('products').future);
+  final own = rows.where((r) => !isKitRecord(r)).map(Product.fromRecord).toList();
+  final kits = rows.where(isKitRecord).toList()..sort((a, b) => '${a['name']}'.toLowerCase().compareTo('${b['name']}'.toLowerCase()));
   final license = await ref.watch(tableProvider('license').future);
   final features = featureSet((license.firstOrNull?['features'] as Map?)?.cast<String, Object?>());
   final hidden = {for (final h in await ref.watch(tableProvider('catalogHidden').future)) '${h['id']}'};
@@ -92,6 +108,7 @@ Future<PharmacyData> pharmacy(Ref ref) async {
     suppliers: (await ref.watch(tableProvider('suppliers').future)).map(Supplier.fromRecord).toList()..sort((a, b) => a.name.compareTo(b.name)),
     drafts: (await ref.watch(tableProvider('drafts').future)).map(Draft.fromRecord).where((x) => (x.branchId.isEmpty ? mainBranch : x.branchId) == branch).toList()..sort((a, b) => b.order.compareTo(a.order)),
     features: features,
+    kits: kits,
   );
 }
 
