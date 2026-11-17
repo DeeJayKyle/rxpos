@@ -20,6 +20,18 @@ const double kBentoGap = 16;
 const double kMinTouch = 48; // WCAG / Material minimum touch target
 /// The counter layout switches to the wide split screen at this width (Windows, landscape tablets)
 const double kWideCounter = 900;
+/// Below this width the app is laid out for a phone (bottom bar, the sale as a sheet)
+const double kCompactMax = 600;
+
+/// The Material window size classes the layouts switch on: phones, portrait tablets, Windows / landscape tablets.
+enum WindowClass { compact, medium, expanded }
+
+/// The window class for a width in logical pixels: < 600 compact, < 900 medium, else expanded.
+WindowClass windowClassFor(double width) =>
+    width < kCompactMax ? WindowClass.compact : (width < kWideCounter ? WindowClass.medium : WindowClass.expanded);
+
+/// The window class of the current screen (rebuilds only when the size changes).
+WindowClass windowClass(BuildContext context) => windowClassFor(MediaQuery.sizeOf(context).width);
 
 /// Flat bento tokens for the two next-gen palettes: 18 px corners, hairlines, no glow, no translucency
 DesignTokens nextGenTokens({required bool dark}) => DesignTokens(

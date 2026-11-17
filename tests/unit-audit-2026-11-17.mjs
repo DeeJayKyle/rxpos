@@ -144,6 +144,16 @@ const piece = Buffer.alloc(300 * 1024, 7).toString('base64');
 const starts = await Promise.all(['qa', 'qb', 'qc'].map((id) => call('/api/files', { token: at, body: { id: 'quota-' + id + '00000', n: 0, chunks: 2, size: 600 * 1024, type: 'application/pdf', data: piece } })));
 check('several uploads started at once can\'t pass the allowance together', starts.filter((s) => s.status === 200).length <= 1, JSON.stringify(starts.map((s) => s.status)));
 
+// ----- P2-10: crash reports count devices, not reports -----
+const crash = { errors: [{ key: 'e-dev-count', message: 'TypeError: x is undefined', kind: 'error', platform: 'web', build: 1 }] };
+await call('/api/errors', { token: at, body: crash });
+await call('/api/errors', { token: at, body: crash });
+const one = await env.DB.prepare("SELECT count, devices FROM client_errors WHERE tenant = 'audit-17' AND k = 'e-dev-count'").first();
+await call('/api/errors', { token: ct2, body: crash });
+const two = await env.DB.prepare("SELECT count, devices FROM client_errors WHERE tenant = 'audit-17' AND k = 'e-dev-count'").first();
+check('the same device reporting an error twice counts as one device', one?.count === 2 && one?.devices === 1, JSON.stringify(one));
+check('…and another device makes it two', two?.count === 3 && two?.devices === 2, JSON.stringify(two));
+
 // ----- deleting a pharmacy removes its R2 copies -----
 bucket.set('windows/audit-17/0/2026-06-01.v2.json', '{}'); bucket.set('snapshots/audit-17/0/all-x.json.gz', 'x'); bucket.set('windows/other/0/x.json', '{}');
 await call('/api/owner/tenants/audit-17/delete', { token: OWN, body: { confirm: 'audit-17' } });
