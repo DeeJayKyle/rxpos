@@ -1,7 +1,7 @@
 // The bento row at the top of the Dashboard (src/components/BentoDashboard.jsx): period chips (today, 7 days, 30
 // days), a dark hero card with the period's sales against the period before, daily bars with today picked out (tap
 // a day for its sales), the latest receipts with a Paid / Owing / Refunded pill, and the pharmacy's next step.
-import 'package:rxpos/core/theme/themes.dart' show TonesOfContext;
+import 'package:rxpos/core/theme/themes.dart' show TonesOfContext, SideColors;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -79,7 +79,7 @@ class _BentoRowState extends State<BentoRow> {
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(20),
-          gradient: RadialGradient(center: Alignment.topRight, radius: 1.3, colors: [t.colorScheme.primary.withValues(alpha: .45), const Color(0xFF05070B)], stops: const [0, .7]),
+          gradient: RadialGradient(center: Alignment.topRight, radius: 1.3, colors: [t.colorScheme.primary.withValues(alpha: .45), t.extension<SideColors>()?.top ?? const Color(0xFF05070B)], stops: const [0, .7]),
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
           Text('SALES · ${_n == 1 ? 'TODAY' : '$_n DAYS'}', style: t.textTheme.labelSmall?.copyWith(color: white.withValues(alpha: .7), letterSpacing: .8)),
@@ -90,8 +90,8 @@ class _BentoRowState extends State<BentoRow> {
             if (delta != null)
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(borderRadius: BorderRadius.circular(99), color: (delta >= 0 ? context.tones.ok : context.tones.danger).withValues(alpha: .2)),
-                child: Text('${delta >= 0 ? '↗' : '↘'} ${delta.abs().toStringAsFixed(1)}%', style: TextStyle(color: delta >= 0 ? const Color(0xFF86EFAC) : const Color(0xFFFCA5A5), fontWeight: FontWeight.w700, fontSize: 12)),
+                decoration: BoxDecoration(borderRadius: BorderRadius.circular(99), color: Colors.white.withValues(alpha: .2)),
+                child: Text('${delta >= 0 ? '↗' : '↘'} ${delta.abs().toStringAsFixed(1)}%', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12)),
               ),
             Text(delta != null ? 'vs the ${_n == 1 ? 'day' : '$_n days'} before' : 'nothing to compare with yet', style: TextStyle(color: white.withValues(alpha: .7), fontSize: 12)),
           ]),

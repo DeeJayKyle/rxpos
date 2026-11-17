@@ -23,14 +23,13 @@ Widget host(Widget child, {String palette = oledPaletteId, double width = 400}) 
     );
 
 void main() {
-  test('OLED Black is a pitch-black canvas with raised cards; Daylight Clinical a calm canvas with white cards', () {
+  test('the two default themes: RxPOS Navy Teal a navy canvas, Mint Teal a mint canvas with white cards', () {
     final o = buildTheme(paletteById(oledPaletteId));
-    expect(o.scaffoldBackgroundColor, const Color(0xFF000000));
-    expect(o.cardTheme.color, const Color(0xFF0B0E14));
+    expect(o.scaffoldBackgroundColor, const Color(0xFF0A2233));
     final d = buildTheme(paletteById(daylightClinicalPaletteId));
-    expect(d.scaffoldBackgroundColor, const Color(0xFFF5F7FA));
+    expect(d.scaffoldBackgroundColor, const Color(0xFFCFE6E6));
     expect(d.cardTheme.color, const Color(0xFFFFFFFF));
-    // whatever surface style the device chose, the next-gen palettes keep flat bento cards (no glow on OLED)
+    // whatever surface style the device chose, the default palettes keep flat bento cards
     expect(buildTheme(paletteById(oledPaletteId), surface: 'aurora').extension<DesignTokens>()!.glows, isEmpty);
     expect(buildTheme(paletteById(oledPaletteId), surface: 'aurora').extension<DesignTokens>()!.radius, kBentoRadius);
   });

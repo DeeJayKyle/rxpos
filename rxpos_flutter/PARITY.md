@@ -3,6 +3,16 @@
 Every feature of the React app (`src/pages/*.jsx`, `src/*.jsx`), screen by screen, and where the Flutter app stands.
 ✅ done · ◐ partly · ✗ not yet. Items are ticked only when built and covered by a test.
 
+## Two-colour themes (React 1.11.0, 17 Nov 2026)
+| React (classic) | Flutter |
+|---|---|
+| 15 themes in five sets (src/themes.js THEMES, THEME_GROUPS, RETIRED) | `palettes`, `paletteGroups`, `retiredPalettes`, generated from src/themes.js (same colours) |
+| warnings, table colours and tints, pill, logo in the theme's shades (duoVars) | `Duo` on each palette → `Tones` (`context.tones`), `SideColors.pill`, `lineColorOf`, chart colours |
+| the menu: deep menu colour, soft-glass pages, the open page a solid pill | `_NavItem` |
+| account drop-down top right | `AccountMenu(card: true)` in the top bar, Sync now in it |
+| the sync pill only when offline or something needs the person | `ClockPill` hidden while all is well |
+| no pin on the Dashboard | `_Crumbs` |
+
 ## The React look (2026-11-17)
 | React (classic) | Flutter |
 |---|---|

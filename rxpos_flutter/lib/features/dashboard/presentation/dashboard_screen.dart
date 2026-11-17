@@ -100,10 +100,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               return _chart == 'daily'
                   ? DailyTrend(byDay: {for (final e in f.byDay.entries) e.key: e.value.total}, keysFor: (n) => lastDays(n), money: s.money, extra: pick, onDay: (k) => context.go('/sales?from=$k&to=$k'))
                   : MonthLines(money: s.money, monthKeys: (n) => lastMonths(n), extra: pick, series: [
-                      ('Sales', moneyIn, {for (final e in f.byMonth.entries) e.key: e.value.total}),
-                      if (can.contains('reports')) ('Purchases', purchasesColor, f.purchasesByMonth),
-                      if (can.contains('finance') || can.contains('reports')) ('Expenses', expensesColor, {for (final e in f.byMonth.entries) e.key: e.value.expenses}),
-                      if (can.contains('reports')) ('Gross profit', profitColor, {for (final e in f.byMonth.entries) e.key: e.value.grossProfit}),
+                      ('Sales', moneyInOf(context), {for (final e in f.byMonth.entries) e.key: e.value.total}),
+                      if (can.contains('reports')) ('Purchases', purchasesColorOf(context), f.purchasesByMonth),
+                      if (can.contains('finance') || can.contains('reports')) ('Expenses', expensesColorOf(context), {for (final e in f.byMonth.entries) e.key: e.value.expenses}),
+                      if (can.contains('reports')) ('Gross profit', profitColorOf(context), {for (final e in f.byMonth.entries) e.key: e.value.grossProfit}),
                     ]);
             }())),
           'health' => HealthCard(health: health, rows: [

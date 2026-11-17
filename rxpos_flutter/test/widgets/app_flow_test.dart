@@ -2665,20 +2665,20 @@ void main() {
     await openThemes(tester);
     await tester.tap(find.text('Dark').first); // the mode button (the Dark group's heading comes after it)
     await settle(tester, 4);
-    expect((await look())['theme'], 'oled');
+    expect((await look())['theme'], 'navy-teal');
     expect(brightness(tester), Brightness.dark);
     final list = find.byKey(const Key('theme-list'));
-    await tester.scrollUntilVisible(find.byKey(const ValueKey('theme-royal-violet')), 120, scrollable: find.descendant(of: list, matching: find.byType(Scrollable)));
-    await tester.ensureVisible(find.byKey(const ValueKey('theme-royal-violet')));
+    await tester.scrollUntilVisible(find.byKey(const ValueKey('theme-royal-purple')), 120, scrollable: find.descendant(of: list, matching: find.byType(Scrollable)));
+    await tester.ensureVisible(find.byKey(const ValueKey('theme-royal-purple')));
     await settle(tester);
-    await tester.tap(find.byKey(const ValueKey('theme-royal-violet')));
+    await tester.tap(find.byKey(const ValueKey('theme-royal-purple')));
     await settle(tester, 4);
-    expect((await look())['theme'], 'royal-violet');
+    expect((await look())['theme'], 'royal-purple');
     await openThemes(tester);
     await tester.tap(find.byKey(const ValueKey('accent-ocean')));
     await settle(tester, 3);
     expect((await look())['accent'], 'ocean');
-    expect(Theme.of(tester.element(find.byKey(const Key('theme-menu')))).colorScheme.secondary, isNot(const Color(0xFF7C4EE4)), reason: 'the ocean accent replaced Royal Violet\'s violet');
+    expect(Theme.of(tester.element(find.byKey(const Key('theme-menu')))).colorScheme.secondary, isNot(Color(paletteById('royal-purple').primary2)), reason: 'the ocean accent replaced Royal Purple\'s violet');
     await tester.scrollUntilVisible(find.byKey(const ValueKey('level-vivid')), 120, scrollable: find.descendant(of: list, matching: find.byType(Scrollable)));
     await tester.ensureVisible(find.byKey(const ValueKey('level-vivid')));
     await settle(tester);
@@ -2702,31 +2702,34 @@ void main() {
     Navigator.of(tester.element(find.text('Appearance'))).pop();
     await settle(tester, 3);
 
-    // Premium UI: Midnight Pro, then back to the theme from before
+    // Premium UI: RxPOS Navy Teal (the dark theme), then back to the theme from before
     await tester.tap(find.byType(Switch).first);
     await settle(tester, 4);
-    expect((await look())['theme'], 'midnight-pro');
+    expect((await look())['theme'], 'navy-teal');
     expect(brightness(tester), Brightness.dark);
     await tester.tap(find.byType(Switch).first);
     await settle(tester, 4);
-    expect((await look())['theme'], 'royal-violet');
+    expect((await look())['theme'], 'royal-purple');
     await done(tester);
   });
 
-  testWidgets('the owner limits the themes: only those are offered, no Premium switch without Midnight Pro; on a phone', (tester) async {
+  testWidgets('the owner limits the themes: only those are offered, no Premium switch without RxPOS Navy Teal; on a phone', (tester) async {
     tester0 = tester;
     await tester.runAsync(signedIn);
+    // an owner's list from before the two-colour themes: the retired ids count as their replacements
     await tester.runAsync(() => RecordStore(db).update((d) => d.put('license', {'id': 'lic', 'branding': {'themes': ['daylight-clinical', 'oled']}})));
     await start(tester, size: const Size(400, 800));
     await openThemes(tester);
-    expect(find.byKey(const ValueKey('theme-oled')), findsOneWidget);
-    expect(find.byKey(const ValueKey('theme-midnight-pro')), findsNothing);
-    await tester.tap(find.text('Dark').first); // the mode button, not the Dark group's heading
+    expect(find.byKey(const ValueKey('theme-navy-teal')), findsOneWidget);
+    expect(find.byKey(const ValueKey('theme-mint-teal')), findsOneWidget);
+    expect(find.byKey(const ValueKey('theme-royal-purple')), findsNothing);
+    await tester.tap(find.text('Dark').first); // the mode button, not the Dark & Calm group's heading
     await settle(tester, 4);
-    expect((await look())['theme'], 'oled', reason: 'the only dark theme allowed');
+    expect((await look())['theme'], 'navy-teal', reason: 'the only dark theme allowed');
     await done(tester);
+    await tester.runAsync(() => RecordStore(db).update((d) => d.put('license', {'id': 'lic', 'branding': {'themes': ['mint-teal', 'amber-gold', 'sky-blue']}})));
     await start(tester);
-    expect(find.byType(Switch), findsNothing, reason: 'Midnight Pro is not among the allowed themes');
+    expect(find.byType(Switch), findsNothing, reason: 'RxPOS Navy Teal is not among the allowed themes');
     await done(tester);
   });
 

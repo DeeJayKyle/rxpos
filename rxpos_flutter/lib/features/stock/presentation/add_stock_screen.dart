@@ -615,7 +615,7 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
                       ]))),
                       Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       SizedBox(width: 35, child: Padding(padding: const EdgeInsets.only(top: 12),
-                          child: Center(child: CircleAvatar(radius: 11, backgroundColor: lineColorOf(context, l['hue'], i), child: Text('${i + 1}', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800)))))),
+                          child: Center(child: CircleAvatar(radius: 11, backgroundColor: Color.lerp(lineColorOf(context, l['hue'], i), Colors.black, .15), child: Text('${i + 1}', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800)))))),
                       for (final c in cols)
                         Container(
                           width: switch (c) { 'medicine' => 260, 'qty' => 120, 'cost' => 140, 'total' => 130, 'price' => 170, 'batch' => 120, _ => 170 } + 8,

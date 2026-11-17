@@ -699,7 +699,8 @@ class _SearchBox extends StatelessWidget {
             Icon(Icons.search, size: 18, color: muted),
             const SizedBox(width: 8),
             Expanded(child: Text('Search or ask AI…', maxLines: 1, overflow: TextOverflow.ellipsis, style: t.textTheme.bodyMedium?.copyWith(color: muted))),
-            Container(
+            // the key cap only when there is room for it (large text, a narrow bar)
+            if (c.maxWidth >= 150 * MediaQuery.textScalerOf(context).scale(1)) Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
               decoration: BoxDecoration(border: Border.all(color: t.dividerColor), borderRadius: BorderRadius.circular(5)),
               child: Text('Ctrl K', style: t.textTheme.labelSmall?.copyWith(color: muted)),

@@ -145,7 +145,7 @@ class _PurchasesScreenState extends ConsumerState<PurchasesScreen> {
                             Text(p.date),
                             Text(p.supplierName.isEmpty ? '—' : p.supplierName, maxLines: 2, overflow: TextOverflow.ellipsis),
                             Text(p.invoice.isEmpty ? '—' : p.invoice),
-                            TonePill(payType(p), color: unpaid ? context.tones.warn : Color(Theme.of(context).brightness == Brightness.dark ? 0xFF34D399 : 0xFF047857), dot: false),
+                            TonePill(payType(p), color: unpaid ? context.tones.warn : context.tones.ok, dot: false),
                             Text('${p.items.length}'),
                             Column(crossAxisAlignment: CrossAxisAlignment.end, mainAxisSize: MainAxisSize.min, children: [
                               Text(st.money(p.total), style: const TextStyle(fontWeight: FontWeight.w800)),

@@ -207,8 +207,7 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
                       final momo = '${(s.raw['momo'] as Map?)?['txid'] ?? ''}';
                       if (MediaQuery.sizeOf(context).width >= 1100) {
                         final th = Theme.of(context);
-                        final dark = th.brightness == Brightness.dark;
-                        final green = Color(dark ? 0xFF34D399 : 0xFF047857), violet = Color(dark ? 0xFFC4B5FD : 0xFF6D28D9);
+                        final green = context.tones.ok, violet = context.tones.violet;
                         final credit = s.payment.toLowerCase() == 'credit' || (s.paid < s.total && !refunded);
                         final when = DateTime.tryParse(s.date)?.toLocal();
                         String two(int n) => n.toString().padLeft(2, '0');

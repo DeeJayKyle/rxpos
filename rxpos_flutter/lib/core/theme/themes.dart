@@ -364,14 +364,15 @@ ThemeData buildTheme(Palette base, {String accent = '', String surface = 'flat',
     String? headingFont, String? bodyFont}) {
   final p = withAccent(base, accent);
   // the next-gen palettes keep their flat bento cards whatever surface style is chosen (no glow on OLED black)
-  // the two-colour themes (and the next-gen ones) keep their flat bento cards whatever surface style is chosen
-  final nextGen = tokens == null && (base.duo != null || nextGenPalettes.contains(base.id));
+  // the two default themes keep their flat bento cards; the others follow the chosen surface style (as the React app)
+  final nextGen = tokens == null && nextGenPalettes.contains(base.id);
   if (nextGen) surface = 'flat';
   final tk = (tokens ?? (nextGen ? nextGenTokens(dark: p.dark) : surfaceTokens(surface, p))).onDevice(touch: touch);
   final btn = buttonColours(p.primary, p.primary2, p.dark);
   final muted = readable(p.muted, [p.bg, p.surface, p.surface2], p.dark ? 0xFFFFFFFF : 0xFF000000);
   // brand-coloured text must also read on the backdrop the translucent panels let through
-  final behind = [p.surface, p.surface2, if (tk.glassAlpha != null) ...tk.backdrop.map((c) => c.toARGB32())];
+  // ... and on the tinted page itself (links such as Edit widgets sit on it)
+  final behind = [p.surface, p.surface2, p.bg, if (tk.glassAlpha != null) ...tk.backdrop.map((c) => c.toARGB32())];
   final primaryText = readable(p.primary, behind, p.dark ? 0xFFFFFFFF : 0xFF000000);
   final errorColour = p.dark ? 0xFFF87171 : 0xFFB91C1C;
   // a container: a pale (dark themes: deep) tint of [c], its text deepened (lightened) until it passes AA on it

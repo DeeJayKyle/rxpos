@@ -627,6 +627,8 @@ class _UserCard extends StatelessWidget {
           decoration: BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: [t.colorScheme.primary, t.colorScheme.secondary])),
           child: Text(initials, style: TextStyle(color: t.colorScheme.onPrimary, fontWeight: FontWeight.w700, fontSize: 12)),
         ),
+        // the name and role when the bar has room for them (a wide screen); the initials alone otherwise
+        if (MediaQuery.sizeOf(context).width >= 1500) ...[
         const SizedBox(width: 8),
         ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 140),
@@ -635,6 +637,7 @@ class _UserCard extends StatelessWidget {
             Text('${role.isEmpty ? '' : role[0].toUpperCase()}${role.length > 1 ? role.substring(1) : ''}', maxLines: 1, style: TextStyle(fontSize: 11, color: t.colorScheme.onSurfaceVariant)),
           ]),
         ),
+        ],
         const SizedBox(width: 4),
         Icon(Icons.expand_more, size: 18, color: t.colorScheme.onSurfaceVariant),
       ]),

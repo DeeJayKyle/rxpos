@@ -165,7 +165,7 @@ class _MedicineListScreenState extends ConsumerState<MedicineListScreen> {
                 final packs = p.packs.where((k) => k.name.isNotEmpty && k.size > 1);
                 final rs = row(i);
                 if (table) {
-                  final stockC = st <= 0 ? Theme.of(context).colorScheme.error : isLowStock(p, st) ? context.tones.warn : Color(Theme.of(context).brightness == Brightness.dark ? 0xFF34D399 : 0xFF047857);
+                  final stockC = st <= 0 ? Theme.of(context).colorScheme.error : isLowStock(p, st) ? context.tones.warn : context.tones.ok;
                   return rs.wrap(ColourTableRow(
                     columns: cols,
                     onTap: manage ? () => editMedicine(context, ref, p) : null,

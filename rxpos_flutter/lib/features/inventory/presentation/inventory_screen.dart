@@ -103,7 +103,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
     const cols = [ColourCol('Medicine', flex: 4), ColourCol('Next batch', flex: 2), ColourCol('Expiry', flex: 2), ColourCol('Shelf'), ColourCol('Reorder at', flex: 2, numeric: true),
       ColourCol('In stock', flex: 2, numeric: true), ColourCol('Value (cost)', flex: 2, numeric: true)];
     const editWidth = 96.0;
-    final ok = Color(Theme.of(context).brightness == Brightness.dark ? 0xFF34D399 : 0xFF047857), warnC = Color(Theme.of(context).brightness == Brightness.dark ? 0xFFFBBF24 : 0xFFB45309);
+    final ok = context.tones.ok, warnC = context.tones.warn;
     return PageFrame(
       scroll: phone,
       title: 'Inventory',
