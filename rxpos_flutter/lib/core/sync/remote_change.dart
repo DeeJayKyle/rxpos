@@ -2,13 +2,26 @@
 class RemoteChange {
   const RemoteChange({required this.t, required this.id, required this.at, this.rec, this.deleted = false});
 
-  factory RemoteChange.fromJson(Map<String, Object?> j) => RemoteChange(
-        t: j['t'] as String,
-        id: '${j['id']}',
-        at: (j['at'] as String?) ?? '',
-        rec: (j['rec'] as Map?)?.cast<String, Object?>(),
-        deleted: j['deleted'] == true,
-      );
+  /// Throws [FormatException] when the change has no table name or id; [tryParse] skips such a change instead.
+  factory RemoteChange.fromJson(Map<String, Object?> j) {
+    final c = tryParse(j);
+    if (c == null) throw FormatException('Not a sync change', j);
+    return c;
+  }
+
+  /// Null when [j] is not a usable change (no table name or id), so one malformed item never stops a sync.
+  static RemoteChange? tryParse(Object? j) {
+    if (j is! Map) return null;
+    final t = j['t'], id = j['id'], at = j['at'], rec = j['rec'];
+    if (t is! String || t.isEmpty || id == null || '$id'.isEmpty) return null;
+    return RemoteChange(
+      t: t,
+      id: '$id',
+      at: at is String ? at : '',
+      rec: rec is Map ? rec.cast<String, Object?>() : null,
+      deleted: j['deleted'] == true,
+    );
+  }
 
   final String t;
   final String id;
@@ -41,16 +54,18 @@ class SyncReply {
     final c = cursor is num ? cursor : num.tryParse('$cursor');
     if (changes is! List || c == null || !c.isFinite) return null;
     return SyncReply(
-      changes: [for (final x in changes) if (x is Map) RemoteChange.fromJson(x.cast<String, Object?>())],
+      changes: [for (final x in changes) if (RemoteChange.tryParse(x) case final rc?) rc],
       cursor: c.toInt(),
       more: body['more'] == true,
       epoch: body['epoch']?.toString(),
-      refusedKeys: [for (final k in (body['refusedKeys'] as List?) ?? const []) '$k'],
-      dupes: (body['dupes'] as num?)?.toInt() ?? 0,
+      refusedKeys: _keys(body['refusedKeys']),
+      dupes: switch (body['dupes']) { final num d when d.isFinite => d.toInt(), _ => 0 },
       tenant: body['tenant']?.toString(),
       phase: body['phase'] is String ? body['phase'] as String : null,
-      staleKeys: [for (final k in (body['staleKeys'] as List?) ?? const []) '$k'],
+      staleKeys: _keys(body['staleKeys']),
       view: body['view'] is String ? body['view'] as String : null,
     );
   }
+
+  static List<String> _keys(Object? v) => [if (v is List) for (final k in v) if (k != null) '$k'];
 }

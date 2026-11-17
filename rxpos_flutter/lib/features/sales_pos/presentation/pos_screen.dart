@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import '../../../core/theme/line_colors.dart';
@@ -61,6 +62,25 @@ class _PosScreenState extends ConsumerState<PosScreen> {
   final _search = TextEditingController();
   final _searchFocus = FocusNode();
   String _q = '';
+
+  /// The search waits this long after the last key before it filters (Enter acts at once).
+  static const _searchPause = Duration(milliseconds: 120);
+  Timer? _searchTimer;
+
+  /// True while a sale is being charged: Charge is disabled and a second F9 / tap does nothing.
+  final _charging = ValueNotifier<bool>(false);
+
+  /// Back to the search box, on a keyboard device only: on a touch screen it would pop the on-screen keyboard up.
+  void _focusSearch() {
+    if (mounted && !tokensOf(context).touch) _searchFocus.requestFocus();
+  }
+
+  void _searchChanged(String v) {
+    _searchTimer?.cancel();
+    _searchTimer = Timer(_searchPause, () {
+      if (mounted) setState(() => _q = v);
+    });
+  }
 
   /// '' all, 'instock', 'recent', 'fav', or 'cat:' + a category (like the React till's filters)
   String _view = '';
@@ -170,9 +190,10 @@ class _PosScreenState extends ConsumerState<PosScreen> {
   }
 
   void _clearSearch() {
+    _searchTimer?.cancel();
     _search.clear();
     setState(() => _q = '');
-    _searchFocus.requestFocus();
+    _focusSearch();
   }
 
   /// The sale line the keyboard works on: the chosen one (Alt+↑/↓), else the last (src/pages/POS.jsx lineAt).
@@ -250,7 +271,18 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     await showReceipt(context, sales.first, d.settings, phone: phone);
   }
 
+  /// Charge once: a second F9, Ctrl+Enter or tap while a sale is being charged is ignored.
   Future<void> _charge() async {
+    if (_charging.value) return;
+    _charging.value = true;
+    try {
+      await _chargeNow();
+    } finally {
+      _charging.value = false;
+    }
+  }
+
+  Future<void> _chargeNow() async {
     final d = await ref.read(pharmacyProvider.future);
     final s = ref.read(saleControllerProvider(widget.wholesale));
     if (s.lines.isEmpty || !mounted) return;
@@ -321,7 +353,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
       if (!mounted) return;
       rxScanFor.remove(widget.wholesale);
       await showReceipt(context, sale, d.settings, phone: client?.phone ?? '', autoPrint: d.settings.autoPrint);
-      _searchFocus.requestFocus();
+      _focusSearch();
     } on CartProblem catch (e) {
       _say(e.message, error: true);
     } catch (e) {
@@ -332,12 +364,14 @@ class _PosScreenState extends ConsumerState<PosScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _searchFocus.requestFocus());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _focusSearch());
   }
 
   @override
   void dispose() {
     tillOwnsCtrlK.value = false;
+    _searchTimer?.cancel();
+    _charging.dispose();
     _search.dispose();
     _searchFocus.dispose();
     super.dispose();
@@ -347,6 +381,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
   Widget build(BuildContext context) {
     final data = ref.watch(pharmacyProvider);
     return data.when(
+      skipLoadingOnReload: true, // a sync refreshing the data keeps the till (and the sale on it) on screen
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => Center(child: Text('Could not open the pharmacy on this device: $e')),
       data: (d) {
@@ -377,8 +412,19 @@ class _PosScreenState extends ConsumerState<PosScreen> {
           results: results,
           controller: _search,
           focus: _searchFocus,
-          onChanged: (v) => setState(() => _q = v),
-          onSubmit: () => _submitSearch(d, results),
+          onChanged: _searchChanged,
+          onSubmit: () {
+            // Enter acts on what is typed now, not on the last (debounced) filter
+            _searchTimer?.cancel();
+            final q = _search.text;
+            if (q == _q) {
+              _submitSearch(d, results);
+              return;
+            }
+            setState(() => _q = q);
+            _submitSearch(
+                d, _view == 'kits' || q.trim().isEmpty ? const <Product>[] : searchProducts(pool, q, stockOf: (p) => d.stockOf(p.id)).take(120).toList());
+          },
           onPick: _add,
           kits: kits,
           onKit: (k) => _addKit(d, k),
@@ -409,7 +455,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                     await _add(p);
                     return '${p.name} added';
                   });
-                  _searchFocus.requestFocus();
+                  _focusSearch();
                 }
               : null,
         );
@@ -427,9 +473,9 @@ class _PosScreenState extends ConsumerState<PosScreen> {
           ),
           Expanded(child: productPanel),
         ]);
-        final sale = _SalePanel(wholesale: widget.wholesale, data: d, onCharge: _charge, onError: (m) => _say(m, error: true), advanced: advanced);
+        final sale = _SalePanel(wholesale: widget.wholesale, data: d, onCharge: _charge, charging: _charging, onError: (m) => _say(m, error: true), advanced: advanced);
         final client = wide && layout != 'classic' && d.settings.clientCapture != 'off'
-            ? _ClientStrip(wholesale: widget.wholesale, data: d, focus: _clientFocus, onDone: _searchFocus.requestFocus)
+            ? _ClientStrip(wholesale: widget.wholesale, data: d, focus: _clientFocus, onDone: _focusSearch)
             : null;
         return Focus(
           // "?" opens the shortcuts, except while typing
@@ -499,7 +545,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
       builder: (_) => _CommandBar(wholesale: widget.wholesale, data: d, onAdd: _add),
     );
     if (pay == true) await _charge();
-    if (mounted) _searchFocus.requestFocus();
+    _focusSearch();
   }
 
   static Set<String> _favs(String? raw) {
@@ -971,18 +1017,17 @@ class _ProductPanel extends StatelessWidget {
                                         style: const TextStyle(fontWeight: FontWeight.w700),
                                       ),
                                     ),
-                                    // step 24: a screen reader says what the star does (it was an unnamed button)
-                                    Semantics(
-                                      button: true,
-                                      label: favs.contains(p.id) ? 'Remove ${p.name} from favourites' : 'Add ${p.name} to favourites',
-                                      child: InkWell(
-                                        key: Key('star-${p.id}'),
-                                        onTap: onStar == null ? null : () => onStar!(p),
-                                        child: Icon(
-                                          favs.contains(p.id) ? Icons.star : Icons.star_border,
-                                          size: 18,
-                                          color: favs.contains(p.id) ? Colors.amber.shade700 : t.hintColor,
-                                        ),
+                                    // step 24: a screen reader (and the tooltip) says what the star does; a full 48 px target
+                                    IconButton(
+                                      key: Key('star-${p.id}'),
+                                      tooltip: favs.contains(p.id) ? 'Remove ${p.name} from favourites' : 'Add ${p.name} to favourites',
+                                      onPressed: onStar == null ? null : () => onStar!(p),
+                                      constraints: const BoxConstraints.tightFor(width: 48, height: 48),
+                                      padding: EdgeInsets.zero,
+                                      icon: Icon(
+                                        favs.contains(p.id) ? Icons.star : Icons.star_border,
+                                        size: 20,
+                                        color: favs.contains(p.id) ? Colors.amber.shade700 : t.hintColor,
                                       ),
                                     ),
                                   ],
@@ -1214,12 +1259,14 @@ Future<void> _scanRx(BuildContext context, WidgetRef ref, {bool wholesale = fals
 final rxScanFor = <bool, ({String patient, String prescriber})>{};
 
 class _SalePanel extends ConsumerWidget {
-  const _SalePanel({required this.wholesale, required this.data, required this.onCharge, required this.onError, this.advanced = false});
+  const _SalePanel({required this.wholesale, required this.data, required this.onCharge, required this.charging, required this.onError, this.advanced = false});
   /// Advanced UI: numbered lines (for the command bar) and "Process checkout"
   final bool advanced;
   final bool wholesale;
   final PharmacyData data;
   final VoidCallback onCharge;
+  /// true while a sale is being charged (Charge is disabled meanwhile)
+  final ValueListenable<bool> charging;
   final ValueChanged<String> onError;
 
   @override
@@ -1574,10 +1621,14 @@ class _SalePanel extends ConsumerWidget {
                       label: const Text('Proforma'),
                     )
                   : null;
-              final charge = FilledButton(
-                onPressed: s.lines.isEmpty ? null : onCharge,
-                style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16)),
-                child: Text('${advanced ? 'Process checkout' : 'Charge'} ${fmt(due)}   [F9]', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+              final charge = ValueListenableBuilder<bool>(
+                valueListenable: charging,
+                builder: (_, busy, _) => FilledButton(
+                  onPressed: s.lines.isEmpty || busy ? null : onCharge,
+                  style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16)),
+                  child: Text('${busy ? 'Charging…' : advanced ? 'Process checkout' : 'Charge'} ${fmt(due)}   [F9]',
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                ),
               );
               // on a phone: Hold and Proforma side by side, then Charge across the whole width
               if (narrow) {

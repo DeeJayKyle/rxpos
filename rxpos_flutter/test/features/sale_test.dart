@@ -11,12 +11,32 @@ import 'package:rxpos/core/entities/sale.dart';
 import 'package:rxpos/core/entities/settings.dart';
 import 'package:rxpos/core/rules/stock.dart';
 import 'package:rxpos/features/sales_pos/domain/cart.dart';
+import 'package:rxpos/features/sales_pos/application/sale_controller.dart' show lineNumbered, discounted;
 
 void main() {
   const s = PharmacySettings();
   final para = Product.fromRecord({'id': 'p1', 'name': 'Paramol 500mg', 'unit': 'Tablet', 'price': 60, 'wholesale': 45, 'cost': 30,
     'packs': [{'name': 'Strip', 'size': 10, 'price': 550}, {'name': 'Box', 'size': 100, 'price': 5000, 'wholesale': 4200}]});
   const cash = PaymentMethod(id: 'cash', name: 'Cash', type: 'cash');
+
+  group('the command bar (Ctrl+K)', () {
+    const a = CartLine(id: 'a', name: 'A', price: 65, cost: 30, qty: 1, max: 10, pack: LinePack(name: 'Strip', size: 10, price: 555));
+    const b = CartLine(id: 'b', name: 'B', price: 100, cost: 50, qty: 1, max: 10);
+    test('lines are numbered from 1; a number that is no line (or too long to read) is no line, not a crash', () {
+      expect(lineNumbered([a, b], '1'), same(a));
+      expect(lineNumbered([a, b], '2'), same(b));
+      expect(lineNumbered([a, b], '0'), isNull);
+      expect(lineNumbered([a, b], '3'), isNull);
+      expect(lineNumbered([a, b], '99999999999999999999999'), isNull);
+    });
+    test('a line discount rounds the unit and the pack price the same way, as money, to the pharmacy\'s places', () {
+      final whole = discounted(a, 10, 0);
+      expect((whole.price, whole.pack!.price, whole.pack!.name, whole.pack!.size), (59.0, 500.0, 'Strip', 10.0));
+      final cents = discounted(a, 10, 2);
+      expect((cents.price, cents.pack!.price), (58.5, 499.5));
+      expect(discounted(b, 25, 0).pack, isNull);
+    });
+  });
 
   group('adding to the sale', () {
     test('retail sells single units, at the retail price', () {

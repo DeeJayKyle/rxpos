@@ -108,17 +108,18 @@ class SyncController extends _$SyncController {
       unawaited(ref.read(crashReportsProvider).flush()); // crash reports waiting on this device go up too
     } on ApiFailure catch (f) {
       _failures++;
-      final c = await _counts();
-      final cfg = await SyncConfig.load(ref.read(appDatabaseProvider));
-      await cfg.copyWith(lastError: f.message).save(ref.read(appDatabaseProvider));
-      state = SyncStatus(
-        state: switch (f.kind) {
-          ApiFailureKind.offline => SyncState.offline,
-          ApiFailureKind.signInAgain => SyncState.signInAgain,
-          _ => SyncState.needsAttention,
-        },
-        pending: c.pending, rejected: c.rejected, lastSync: cfg.lastSync, error: f.message,
-      );
+      await _failed(
+          switch (f.kind) {
+            ApiFailureKind.offline => SyncState.offline,
+            ApiFailureKind.signInAgain => SyncState.signInAgain,
+            _ => SyncState.needsAttention,
+          },
+          f.message);
+    } catch (e, st) {
+      // anything else (a bad record, a database error): show it, report it, and try again later instead of stopping
+      _failures++;
+      unawaited(ref.read(crashReportsProvider).report(e, st));
+      await _failed(SyncState.needsAttention, 'Sync stopped on an unexpected error; trying again shortly.');
     } finally {
       _busy = false;
     }
@@ -129,6 +130,20 @@ class SyncController extends _$SyncController {
     _again = false;
     _schedule();
     return state;
+  }
+
+  /// After a failed round: record [message] and show [to]. Never throws, so the next round is always scheduled.
+  Future<void> _failed(SyncState to, String message) async {
+    var c = (pending: state.pending, rejected: state.rejected);
+    String? lastSync = state.lastSync;
+    try {
+      c = await _counts();
+      final db = ref.read(appDatabaseProvider);
+      final cfg = await SyncConfig.load(db);
+      lastSync = cfg.lastSync;
+      await cfg.copyWith(lastError: message).save(db);
+    } catch (_) {/* the database itself failed: show what we had */}
+    state = SyncStatus(state: to, pending: c.pending, rejected: c.rejected, lastSync: lastSync, error: message);
   }
 
   void _schedule() {

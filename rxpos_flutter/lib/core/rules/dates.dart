@@ -27,15 +27,30 @@ String monthOf(String? v) {
   return d.length >= 7 ? d.substring(0, 7) : d;
 }
 
-// JavaScript reads "2026-11-05" as UTC midnight, and so does this, so day differences are whole days.
-DateTime _js(String s) => DateTime.parse(_plainDate.hasMatch(s) ? '${s}T00:00:00Z' : s).toUtc();
+// JavaScript reads "2026-11-05" as UTC midnight, and so does this, so day differences are whole days. A month alone
+// ("2026-11", from a month/year expiry) is its first day, as in [dayOf]. Null when [s] is not a date.
+final _plainMonth = RegExp(r'^\d{4}-\d{2}$');
+DateTime? _js(String s) {
+  final v = s.trim();
+  final iso = _plainMonth.hasMatch(v) ? '$v-01T00:00:00Z' : _plainDate.hasMatch(v) ? '${v}T00:00:00Z' : v;
+  return DateTime.tryParse(iso)?.toUtc();
+}
+
+/// What [daysUntil] gives for a date it cannot read: so far ahead that it never counts as expired or expiring.
+const noExpiry = 1 << 30;
 
 /// Whole days from today to [date] (0 today, negative when past). Like src/dates.js daysUntil.
+/// An unreadable [date] means "no expiry" ([noExpiry]), never "expired".
 int daysUntil(String date, {DateTime? now}) {
-  final diff = _js(date).difference(_js(today(now)));
+  final d = _js(date);
+  if (d == null) return noExpiry;
+  final diff = d.difference(_js(today(now))!);
   return (diff.inMilliseconds / 864e5).ceil();
 }
 
-/// Whole days since [date].
-int daysSince(String date, {DateTime? now}) =>
-    ((now ?? DateTime.now()).toUtc().difference(_js(date)).inMilliseconds / 864e5).floor();
+/// Whole days since [date]; 0 when [date] cannot be read.
+int daysSince(String date, {DateTime? now}) {
+  final d = _js(date);
+  if (d == null) return 0;
+  return ((now ?? DateTime.now()).toUtc().difference(d).inMilliseconds / 864e5).floor();
+}

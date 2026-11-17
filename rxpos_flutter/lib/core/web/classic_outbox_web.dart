@@ -6,21 +6,23 @@ import 'dart:js_interop';
 
 import 'package:web/web.dart' as web;
 
+/// Throws when the classic app's database is there but cannot be read: that is not "nothing waiting".
 Future<int> classicPending() async {
+  final bool there;
   try {
-    final dbs = (await web.window.indexedDB.databases().toDart).toDart;
-    if (!dbs.any((d) => d.name == 'pharmapos')) return 0;
-    final open = web.window.indexedDB.open('pharmapos');
-    final db = await _done<web.IDBDatabase>(open);
-    try {
-      if (!db.objectStoreNames.contains('outbox')) return 0;
-      final count = db.transaction('outbox'.toJS, 'readonly').objectStore('outbox').count();
-      return (await _done<JSNumber>(count)).toDartInt;
-    } finally {
-      db.close();
-    }
+    there = (await web.window.indexedDB.databases().toDart).toDart.any((d) => d.name == 'pharmapos');
   } catch (_) {
-    return 0;
+    return 0; // this browser cannot list its databases (or has no IndexedDB): it cannot hold the classic app's work
+  }
+  if (!there) return 0;
+  final open = web.window.indexedDB.open('pharmapos');
+  final db = await _done<web.IDBDatabase>(open);
+  try {
+    if (!db.objectStoreNames.contains('outbox')) return 0;
+    final count = db.transaction('outbox'.toJS, 'readonly').objectStore('outbox').count();
+    return (await _done<JSNumber>(count)).toDartInt;
+  } finally {
+    db.close();
   }
 }
 

@@ -41,7 +41,10 @@ class RxposApp extends ConsumerWidget {
     final design = look.designSystem;
     // this device's fonts (This device → Fonts), used once they are ready
     final (headingFont, bodyFont) = fontsInUse(ref.watch(fontsProvider).value ?? const FontChoice(), ref.watch(loadedFontsProvider));
-    final touch = !kIsWeb && (onAndroid || Platform.isIOS);
+    // a finger on a phone or tablet, including the web app opened on one (there the browser reports the device's platform)
+    final touch = kIsWeb
+        ? defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS
+        : onAndroid || Platform.isIOS;
     final theme = design != null
         ? buildTheme(paletteById(design.palette), surface: design.surface, vivid: look.level == 'vivid', tokens: design.tokens, touch: touch, headingFont: headingFont, bodyFont: bodyFont)
         : buildTheme(paletteById(look.system ? paletteFor(false, allowed) : chosen), accent: look.accent, surface: look.surface, vivid: look.level == 'vivid', touch: touch,
@@ -50,7 +53,8 @@ class RxposApp extends ConsumerWidget {
     return MaterialApp.router(
       key: ValueKey('app-${ref.watch(appRestartProvider)}'),
       // in a browser that ran the classic RxPOS, its unsent changes go up first (ClassicGate)
-      builder: (context, child) => ClassicGate(child: zoom == 1 ? child! : MediaQuery(data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(zoom)), child: child!)),
+      // the zoom multiplies the system's text size (accessibility setting) instead of replacing it
+      builder: (context, child) => ClassicGate(child: zoom == 1 ? child! : MediaQuery(data: MediaQuery.of(context).copyWith(textScaler: _zoomed(MediaQuery.textScalerOf(context), zoom)), child: child!)),
       title: 'RxPOS',
       debugShowCheckedModeBanner: false,
       // following the system: its light and dark themes, live when it changes
@@ -62,3 +66,8 @@ class RxposApp extends ConsumerWidget {
     );
   }
 }
+
+/// The system's text scale times this device's zoom (measured at body size, where Android's scaling is non-linear).
+TextScaler _zoomed(TextScaler system, double zoom) => TextScaler.linear(system.scale(_bodySize) / _bodySize * zoom);
+
+const _bodySize = 14.0;
