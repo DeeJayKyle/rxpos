@@ -7,12 +7,12 @@ check('all themes allowed: light → Mint Teal', paletteFor('light') === 'mint-t
 check('all themes allowed: dark → RxPOS Navy Teal', paletteFor('dark') === 'navy-teal');
 check('without the defaults: the first palette of that base', paletteFor('light', THEMES.filter((t) => t.id !== 'mint-teal')) === 'electric-blue' && paletteFor('dark', THEMES.filter((t) => t.id !== 'navy-teal')) === 'electric-blue');
 check('Navy Teal: the navy page, teal actions; Mint Teal: white cards on the mint page', (() => { const o = themeVars(THEMES.find((t) => t.id === 'navy-teal')), d = themeVars(THEMES.find((t) => t.id === 'mint-teal')); return o['--bg'] === '#0a2233' && o['--primary'] === '#14b8a6' && d['--bg'] === '#cfe6e6' && d['--surface'] === '#ffffff' && d['--primary'] === '#0f8a8a'; })());
-const restricted = allowedThemes({ themes: ['tokyo-night', 'mint', 'clinic-blue'] }); // retired ids: navy-teal, forest-green, electric-blue
-check('restricted: light prefers the owner\'s default when it is light (a retired id counts as its replacement)', paletteFor('light', restricted, 'mint') === 'forest-green');
-check('restricted: light falls back to the first allowed light palette', paletteFor('light', restricted) === 'electric-blue');
+const restricted = allowedThemes({ themes: ['tokyo-night', 'mint', 'clinic-blue'] }); // retired ids: navy-teal, emerald-mint, sky-blue
+check('restricted: light prefers the owner\'s default when it is light (a retired id counts as its replacement)', paletteFor('light', restricted, 'mint') === 'emerald-mint');
+check('restricted: light falls back to the first allowed light palette', paletteFor('light', restricted) === 'sky-blue');
 check('restricted: dark → the only allowed dark palette', paletteFor('dark', restricted, 'mint') === 'navy-teal');
-check('no palette of that base: falls back to the first allowed', paletteFor('dark', allowedThemes({ themes: ['mint', 'clinic-blue', 'sunrise'] })) === 'electric-blue');
-check('the 10 two-colour themes in 3 groups, each one in a group', THEMES.length === 10 && THEMES.every((t) => THEME_GROUPS.includes(t.group)));
+check('no palette of that base: falls back to the first allowed', paletteFor('dark', allowedThemes({ themes: ['mint', 'clinic-blue', 'sunrise'] })) === 'sky-blue');
+check('the 15 two-colour themes in 5 sets of 3, each one in a group', THEMES.length === 15 && THEME_GROUPS.length === 5 && THEME_GROUPS.every((g) => THEMES.filter((t) => t.group === g).length === 3) && THEMES.every((t) => THEME_GROUPS.includes(t.group)));
 check('every retired id resolves to a kept theme (saved preferences keep working)', Object.entries(RETIRED).every(([o, n]) => !THEMES.some((t) => t.id === o) && themeById(o).id === n) && themeById('daylight-clinical').id === 'mint-teal' && themeById('midnight-pro').id === 'navy-teal' && themeById('oled').id === 'navy-teal');
 check('every theme is flat (no page gradient)', THEMES.every((t) => themeVars(t)['--bg-grad'] === 'none'));
 

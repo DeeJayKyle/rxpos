@@ -1,13 +1,13 @@
 import { LOGO_SVG } from './logomark.js';
 // Colour themes. Each theme is a light or dark base plus its own palette, applied as CSS variables. Since 17 Nov 2026
-// (the owner's references and review), 10 two-colour themes: colour 1 is strong (the menu, buttons, the active tab, headings),
+// (the owner's references and review), 15 two-colour themes in five sets: colour 1 is strong (the menu, buttons, the active tab, headings),
 // colour 2 is soft (the page, cards, table headings and row stripes); text is near black or white. Warnings, tables and
 // pills use shades of the same two colours (themeVars), with their words and icons, so every page keeps to two colours.
 // Older themes map to the closest new one (RETIRED). The owner chooses which themes each pharmacy may use.
 
 const T = (id, name, base, c, inspired = '', group = '') => ({ id, name, base, c, inspired, group });
 /** The groups of the theme menu, in order */
-export const THEME_GROUPS = ['Bold sidebars', 'Dark sidebars', 'Soft tints'];
+export const THEME_GROUPS = ['Blues', 'Greens', 'Purples', 'Warm & Lime', 'Dark & Calm'];
 
 const hexToRgb = (h) => { const n = parseInt(h.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
 const rgba = (h, a) => `rgba(${hexToRgb(h).join(', ')}, ${a})`;
@@ -55,27 +55,34 @@ const duo = (id, name, group, { c1, c2, side = c1, sideText, base = 'light', ins
 };
 
 export const THEMES = [
-  // Bold sidebars: the menu in colour 1, the pages tinted with colour 2
-  duo('electric-blue', 'Electric Blue', 'Bold sidebars', { c1: '#0a4dff', c2: '#dfe8ff', side: '#101a3a', strong: true, inspired: 'Deep blue menu, bright blue pills' }),
-  duo('royal-purple', 'Royal Purple', 'Bold sidebars', { c1: '#6d4ae8', c2: '#f4f1fd', side: '#1e1433', inspired: 'Deep purple menu with white words, violet actions' }),
-  duo('forest-green', 'Forest Green', 'Bold sidebars', { c1: '#1e8c4e', c2: '#dcefe3', side: '#0f2419', strong: true, inspired: 'Green menu, green-washed pages' }),
-  // Dark sidebars and the dark theme
-  duo('night-lime', 'Charcoal Lime', 'Dark sidebars', { c1: '#c8f169', c2: '#f4f4f0', side: '#1f1f2a', inspired: 'Charcoal menu, lime pills and buttons with dark words' }),
-  duo('charcoal-lime', 'Lime Charcoal', 'Dark sidebars', { c1: '#1f1f2a', c2: '#eef7d6', side: '#c8f169', sideText: '#1f1f2a', strong: true, inspired: 'Lime menu with charcoal words, charcoal actions' }),
-  duo('midnight-indigo', 'Midnight Indigo', 'Dark sidebars', { c1: '#5b5bf0', c2: '#e6e6fb', side: '#1b1d2e', strong: true, inspired: 'Midnight menu, indigo actions' }),
-  duo('navy-teal', 'RxPOS Navy Teal', 'Dark sidebars', { c1: '#14b8a6', c2: '#0a2233', side: '#0f2a44', base: 'dark', strong: true, inspired: 'Navy and teal: the RxPOS till' }),
-  // Soft tints: the whole page washed in colour 2
-  duo('lavender', 'Lavender', 'Soft tints', { c1: '#7451eb', c2: '#e4dcff', side: '#1f1a33', strong: true, inspired: 'Violet on lavender' }),
-  duo('sage', 'Sage', 'Soft tints', { c1: '#2f6b45', c2: '#e3eee1', side: '#18241b', strong: true, inspired: 'Deep sage menu, green pills' }),
-  duo('mint-teal', 'Mint Teal', 'Soft tints', { c1: '#0f8a8a', c2: '#cfe6e6', side: '#0f2222', strong: true, inspired: 'Teal on mint, the RxPOS colour' }),
+  // Blues
+  duo('electric-blue', 'Electric Blue', 'Blues', { c1: '#0a4dff', c2: '#dfe8ff', side: '#101a3a', strong: true, inspired: 'Deep blue menu, bright blue pills' }),
+  duo('sky-blue', 'Sky Blue', 'Blues', { c1: '#38bdf8', c2: '#e8f5fd', side: '#0c1b2b', strong: true, inspired: 'Deep navy menu, sky-blue pills' }),
+  duo('ocean-cyan', 'Ocean Cyan', 'Blues', { c1: '#06b6d4', c2: '#e3f6fa', side: '#0b2530', strong: true, inspired: 'Deep ocean menu, cyan pills' }),
+  // Greens
+  duo('forest-green', 'Forest Green', 'Greens', { c1: '#1e8c4e', c2: '#dcefe3', side: '#0f2419', strong: true, inspired: 'Deep green menu, green pills' }),
+  duo('emerald-mint', 'Emerald Mint', 'Greens', { c1: '#10b981', c2: '#e4f7ef', side: '#0b221a', strong: true, inspired: 'Deep green menu, emerald pills' }),
+  duo('mint-teal', 'Mint Teal', 'Greens', { c1: '#0f8a8a', c2: '#cfe6e6', side: '#0f2222', strong: true, inspired: 'Teal on mint, the RxPOS colour' }),
+  // Purples
+  duo('royal-purple', 'Royal Purple', 'Purples', { c1: '#6d4ae8', c2: '#f4f1fd', side: '#1e1433', inspired: 'Deep purple menu, violet pills' }),
+  duo('lavender', 'Lavender', 'Purples', { c1: '#7451eb', c2: '#e4dcff', side: '#1f1a33', strong: true, inspired: 'Violet on lavender' }),
+  duo('midnight-indigo', 'Midnight Indigo', 'Purples', { c1: '#5b5bf0', c2: '#e6e6fb', side: '#1b1d2e', strong: true, inspired: 'Midnight menu, indigo pills' }),
+  // Warm & Lime
+  duo('amber-gold', 'Amber Gold', 'Warm & Lime', { c1: '#f5b301', c2: '#fdf6e3', side: '#241c0a', strong: true, inspired: 'Deep brown menu, gold pills with dark words' }),
+  duo('night-lime', 'Charcoal Lime', 'Warm & Lime', { c1: '#c8f169', c2: '#f4f4f0', side: '#1f1f2a', inspired: 'Charcoal menu, lime pills and buttons with dark words' }),
+  duo('charcoal-lime', 'Lime Charcoal', 'Warm & Lime', { c1: '#1f1f2a', c2: '#eef7d6', side: '#c8f169', sideText: '#1f1f2a', strong: true, inspired: 'Lime menu, charcoal pills' }),
+  // Dark & Calm
+  duo('navy-teal', 'RxPOS Navy Teal', 'Dark & Calm', { c1: '#14b8a6', c2: '#0a2233', side: '#0f2a44', base: 'dark', strong: true, inspired: 'Navy and teal: the RxPOS till' }),
+  duo('steel-blue', 'Steel Blue', 'Dark & Calm', { c1: '#4f7cac', c2: '#edf1f6', side: '#161c26', strong: true, inspired: 'Slate menu, steel-blue pills: calm for long shifts' }),
+  duo('sage', 'Sage', 'Dark & Calm', { c1: '#2f6b45', c2: '#e3eee1', side: '#18241b', strong: true, inspired: 'Deep sage menu, green pills' }),
 ];
 /** Themes retired → the new theme closest to each, so a saved choice or an owner's list keeps working */
 export const RETIRED = {
-  'daylight-clinical': 'mint-teal', cobalt: 'electric-blue', 'royal-violet': 'royal-purple', sunrise: 'mint-teal', 'charcoal-sky': 'midnight-indigo',
-  'lime-studio': 'charcoal-lime', 'aqua-navy': 'electric-blue', 'cobalt-blue': 'electric-blue', 'sunny-orange': 'mint-teal', oled: 'navy-teal', 'midnight-pro': 'navy-teal',
-  light: 'mint-teal', 'hybrid-light': 'mint-teal', 'solarized-light': 'mint-teal', 'clinic-blue': 'electric-blue', mint: 'forest-green',
-  'rose-dawn': 'mint-teal', sand: 'mint-teal', coral: 'mint-teal', 'github-light': 'midnight-indigo', 'nord-snow': 'electric-blue',
-  'soft-grey': 'midnight-indigo', 'teal-glass': 'mint-teal', paper: 'mint-teal',
+  'daylight-clinical': 'mint-teal', cobalt: 'electric-blue', 'royal-violet': 'royal-purple', sunrise: 'amber-gold', 'charcoal-sky': 'steel-blue',
+  'lime-studio': 'charcoal-lime', 'aqua-navy': 'ocean-cyan', 'cobalt-blue': 'electric-blue', 'sunny-orange': 'amber-gold', oled: 'navy-teal', 'midnight-pro': 'navy-teal',
+  light: 'mint-teal', 'hybrid-light': 'mint-teal', 'solarized-light': 'mint-teal', 'clinic-blue': 'sky-blue', mint: 'emerald-mint',
+  'rose-dawn': 'amber-gold', sand: 'amber-gold', coral: 'amber-gold', 'github-light': 'steel-blue', 'nord-snow': 'electric-blue',
+  'soft-grey': 'steel-blue', 'teal-glass': 'mint-teal', paper: 'mint-teal',
   dark: 'navy-teal', 'hybrid-dark': 'navy-teal', 'tokyo-night': 'navy-teal', nord: 'navy-teal', dracula: 'navy-teal', mocha: 'navy-teal',
   'solarized-dark': 'navy-teal', 'one-dark': 'navy-teal', 'rose-pine': 'navy-teal', forest: 'navy-teal', ocean: 'navy-teal',
   gruvbox: 'navy-teal', 'github-dark': 'navy-teal', 'gold-night': 'navy-teal', 'ember-forge': 'navy-teal', 'contrast-dark': 'navy-teal',
