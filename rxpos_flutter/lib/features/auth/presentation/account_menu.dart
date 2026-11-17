@@ -75,9 +75,11 @@ Future<String?> _askSecret(BuildContext context, {required String title, String?
 }
 
 class AccountMenu extends ConsumerStatefulWidget {
-  const AccountMenu({super.key, required this.session, this.showName = true});
+  const AccountMenu({super.key, required this.session, this.showName = true, this.card = false});
   final Session session;
   final bool showName;
+  /// the person's card at the foot of the menu (src/App.jsx .user-box): initials, name and role
+  final bool card;
   @override
   ConsumerState<AccountMenu> createState() => _AccountMenuState();
 }
@@ -131,13 +133,15 @@ class _AccountMenuState extends ConsumerState<AccountMenu> with _AccountActions<
           PopupMenuItem(value: 'twostep', child: ListTile(leading: Icon(Icons.verified_user_outlined, color: twoFactor ? Colors.green : null), title: Text(twoFactor ? 'Two-step sign-in is on' : 'Two-step sign-in'))),
         const PopupMenuItem(value: 'logout', child: ListTile(leading: Icon(Icons.logout), title: Text('Log out'))),
       ],
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          const Icon(Icons.account_circle_outlined),
-          if (widget.showName) ...[const SizedBox(width: 6), Text(s.userName)],
-        ]),
-      ),
+      child: widget.card
+          ? _UserCard(name: s.userName, role: s.role)
+          : Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                const Icon(Icons.account_circle_outlined),
+                if (widget.showName) ...[const SizedBox(width: 6), Text(s.userName)],
+              ]),
+            ),
     );
   }
 }
@@ -592,5 +596,36 @@ class _AccountCardState extends ConsumerState<AccountCard> with _AccountActions<
         ]),
       ),
     );
+  }
+}
+
+
+/// Initials in a ring of the brand colours, with the name and role beside them on the menu's foot.
+class _UserCard extends StatelessWidget {
+  const _UserCard({required this.name, required this.role});
+  final String name, role;
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    final parts = name.trim().split(RegExp(r'\s+')).where((x) => x.isNotEmpty).toList();
+    final initials = parts.isEmpty ? '?' : parts.take(2).map((x) => x[0].toUpperCase()).join();
+    final avatar = Container(
+      width: 36,
+      height: 36,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: [t.colorScheme.primary, t.colorScheme.secondary])),
+      child: Text(initials, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13)),
+    );
+    return Row(children: [
+      avatar,
+      const SizedBox(width: 10),
+      Expanded(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+          Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5, color: t.colorScheme.onSurface)),
+          Text('${role.isEmpty ? '' : role[0].toUpperCase()}${role.length > 1 ? role.substring(1) : ''}', maxLines: 1, style: TextStyle(fontSize: 12, color: t.colorScheme.onSurfaceVariant)),
+        ]),
+      ),
+      Icon(Icons.unfold_more_rounded, size: 18, color: t.colorScheme.onSurfaceVariant),
+    ]);
   }
 }

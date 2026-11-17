@@ -40,18 +40,21 @@ void main() {
     expect(withAccent(p, 'ocean').bg, p.bg);
     final l = Look.parse('{"theme":"nord","mode":"system","accent":"violet","surface":"glass","level":"vivid"}');
     expect((l.theme, l.system, l.accent, l.surface, l.level), ('nord', true, 'violet', 'glass', 'vivid'));
-    expect(Look.parse('{"theme":"nope","surface":"x"}').theme, 'light');
-    expect((Look.parse('garbage').design, Look.parse('garbage').surface), ('rxpos-green', 'flat'));
+    expect(Look.parse('{"theme":"nope","surface":"x"}').theme, 'daylight-clinical');
+    // the React app's look from the start: Daylight Clinical (OLED Black when the system is dark), no design system
+    expect((Look.parse('garbage').design, Look.parse('garbage').theme, Look.parse('garbage').system, Look.parse('garbage').surface), ('', 'daylight-clinical', true, 'flat'));
     expect(buildTheme(p, vivid: true).extension<LookLevel>()!.vivid, isTrue);
   });
 
   test('Aurora is the standard look: a device on the old standard moves to it once; Flat chosen since stays', () {
     expect(Look.parse('{"theme":"nord","surface":"flat"}').surface, 'aurora');
     expect(Look.parse('{"v":2,"theme":"nord","surface":"flat"}').surface, 'flat');
-    // RxPOS Green is the standard from version 3: light looks move to it once; dark ones and the system's stay
-    expect(Look.parse('{"v":2,"theme":"light","surface":"aurora"}').design, 'rxpos-green');
+    // version 4: the React app's look is the standard; a device on RxPOS Green (the old Flutter standard) moves off it once
+    expect(Look.parse('{"v":3,"design":"rxpos-green","theme":"rxpos-green"}').design, '');
+    expect(Look.parse('{"v":3,"design":"rxpos-green","theme":"rxpos-green"}').theme, 'daylight-clinical');
+    expect(Look.parse('{"v":4,"design":"rxpos-green","theme":"rxpos-green"}').design, 'rxpos-green', reason: 'chosen since: kept');
+    expect(Look.parse('{"v":3,"design":"split-pane","theme":"split-pane"}').design, 'split-pane');
     expect(Look.parse('{"v":2,"theme":"dracula","surface":"aurora"}').design, '');
-    expect(Look.parse('{"v":3,"theme":"light","surface":"aurora"}').design, '');
     expect(Look.parse(jsonEncode(Look.parse('{"surface":"flat"}').copyWith(surface: 'flat').toJson())).surface, 'flat');
     final t = buildTheme(paletteById('light'), surface: 'aurora');
     expect(t.extension<DesignTokens>()!.hasBackdrop, isTrue);

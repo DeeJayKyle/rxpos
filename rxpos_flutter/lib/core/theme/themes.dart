@@ -15,14 +15,16 @@ export 'design_tokens.dart';
 class Palette {
   const Palette(this.id, this.name, this.dark,
       {required this.bg, required this.surface, required this.surface2, required this.border, required this.borderStrong, required this.text,
-      required this.muted, required this.primary, required this.primary2, required this.sidebar, required this.sidebar2, this.flat = false, this.inspired = ''});
+      required this.muted, required this.primary, required this.primary2, required this.sidebar, required this.sidebar2, this.flat = false, this.inspired = '', this.sidebarText});
   final String id, name, inspired;
+  /// the menu's text colour where the palette sets its own (light menus: Soft Grey, Sage Garden)
+  final int? sidebarText;
   final bool dark, flat;
   final int bg, surface, surface2, border, borderStrong, text, muted, primary, primary2, sidebar, sidebar2;
 
   Palette withPrimary(int p1, int p2) => Palette(id, name, dark,
       bg: bg, surface: surface, surface2: surface2, border: border, borderStrong: borderStrong, text: text, muted: muted, primary: p1, primary2: p2,
-      sidebar: sidebar, sidebar2: sidebar2, flat: flat, inspired: inspired);
+      sidebar: sidebar, sidebar2: sidebar2, flat: flat, inspired: inspired, sidebarText: sidebarText);
 }
 
 const palettes = [
@@ -43,8 +45,8 @@ const palettes = [
   // from the owner's dashboard references (2026-11-15), named by the look (src/themes.js)
   Palette('royal-violet', 'Royal Violet', false, bg: 0xFFF6F5FB, surface: 0xFFFFFFFF, surface2: 0xFFF8F7FD, border: 0x142E1065, borderStrong: 0x292E1065, text: 0xFF1E1147, muted: 0xFF5F5A7A, primary: 0xFF6D3FD9, primary2: 0xFF8B5CF6, sidebar: 0xFF2E1065, sidebar2: 0xFF4C1D95, flat: true, inspired: 'Purple sidebar, white cards'),
   Palette('cobalt', 'Cobalt Blue', false, bg: 0xFFF5F7FB, surface: 0xFFFFFFFF, surface2: 0xFFF7F9FD, border: 0x140F172A, borderStrong: 0x290F172A, text: 0xFF0B1533, muted: 0xFF586179, primary: 0xFF1D4FD8, primary2: 0xFF2563EB, sidebar: 0xFF1D4ED8, sidebar2: 0xFF1E40AF, flat: true, inspired: 'Blue sidebar, white cards'),
-  Palette('soft-grey', 'Soft Grey', false, bg: 0xFFF4F5F7, surface: 0xFFFFFFFF, surface2: 0xFFF7F8FA, border: 0x140F172A, borderStrong: 0x260F172A, text: 0xFF111827, muted: 0xFF5B6472, primary: 0xFF3B5BDB, primary2: 0xFF7048E8, sidebar: 0xFFFFFFFF, sidebar2: 0xFFFAFBFC, flat: true, inspired: 'Light sidebar, pastel icons'),
-  Palette('sage', 'Sage Garden', false, bg: 0xFFF3F5F1, surface: 0xFFFFFFFF, surface2: 0xFFF6F8F4, border: 0x17173322, borderStrong: 0x2E173322, text: 0xFF173322, muted: 0xFF56685B, primary: 0xFF3F7D58, primary2: 0xFF5F9A73, sidebar: 0xFFB5CDB8, sidebar2: 0xFFA4C0A8, flat: true, inspired: 'Sage green, calm'),
+  Palette('soft-grey', 'Soft Grey', false, bg: 0xFFF4F5F7, surface: 0xFFFFFFFF, surface2: 0xFFF7F8FA, border: 0x140F172A, borderStrong: 0x260F172A, text: 0xFF111827, muted: 0xFF5B6472, primary: 0xFF3B5BDB, primary2: 0xFF7048E8, sidebar: 0xFFFFFFFF, sidebar2: 0xFFFAFBFC, flat: true, inspired: 'Light sidebar, pastel icons', sidebarText: 0xFF374151),
+  Palette('sage', 'Sage Garden', false, bg: 0xFFF3F5F1, surface: 0xFFFFFFFF, surface2: 0xFFF6F8F4, border: 0x17173322, borderStrong: 0x2E173322, text: 0xFF173322, muted: 0xFF56685B, primary: 0xFF3F7D58, primary2: 0xFF5F9A73, sidebar: 0xFFB5CDB8, sidebar2: 0xFFA4C0A8, flat: true, inspired: 'Sage green, calm', sidebarText: 0xFF1D3A28),
   Palette('paper', 'High Contrast Light', false, bg: 0xFFFFFFFF, surface: 0xFFFFFFFF, surface2: 0xFFF3F3F3, border: 0xFF9A9A9A, borderStrong: 0xFF555555, text: 0xFF000000, muted: 0xFF333333, primary: 0xFF0050B3, primary2: 0xFF003A80, sidebar: 0xFF000000, sidebar2: 0xFF1A1A1A, inspired: 'accessibility'),
   Palette('dark', 'RxPOS Night', true, bg: 0xFF070B14, surface: 0xFF0F1624, surface2: 0xFF131C2D, border: 0xFF1E293B, borderStrong: 0xFF2B3A52, text: 0xFFE6EDF7, muted: 0xFF8B9AB3, primary: 0xFF2DD4BF, primary2: 0xFF22D3EE, sidebar: 0xFF050912, sidebar2: 0xFF0B1220),
   // True OLED Black: pitch-black canvas (no backlight on OLED phones), raised cards, white hairlines, bio-teal; the default dark
@@ -203,6 +205,28 @@ class LookLevel extends ThemeExtension<LookLevel> {
   LookLevel lerp(LookLevel? other, double t) => t < .5 ? this : (other ?? this);
 }
 
+/// The menu's colours (src/styles.css .sidebar): the palette's two menu colours top to bottom, its text colour, and the
+/// brand colour for the page you are on, as the React app paints them.
+class SideColors extends ThemeExtension<SideColors> {
+  const SideColors({required this.top, required this.bottom, required this.text, required this.active, required this.dark});
+  final Color top, bottom, text, active;
+  /// a dark menu (light text on it)
+  final bool dark;
+  @override
+  SideColors copyWith({Color? top, Color? bottom, Color? text, Color? active, bool? dark}) =>
+      SideColors(top: top ?? this.top, bottom: bottom ?? this.bottom, text: text ?? this.text, active: active ?? this.active, dark: dark ?? this.dark);
+  @override
+  SideColors lerp(SideColors? other, double t) => t < .5 ? this : (other ?? this);
+}
+
+/// The menu colours of a palette: React's --sidebar-text (#aab6ca on the standard navy) or the palette's own.
+SideColors sideColorsOf(Palette p) {
+  final dark = _lum(p.sidebar) < .4;
+  final text = p.sidebarText ?? (dark ? readable(mix(0xFFFFFFFF, p.sidebar, .30), [p.sidebar, p.sidebar2], 0xFFFFFFFF) : p.text);
+  final active = readable(p.primary, [p.sidebar, p.sidebar2], dark ? 0xFFFFFFFF : 0xFF000000, 3);
+  return SideColors(top: Color(p.sidebar), bottom: Color(p.sidebar2), text: Color(text), active: Color(active), dark: dark);
+}
+
 /// The Vivid tile colours for a colour a screen uses (the one closest in hue; teal when none).
 (Color, Color) vividFor(Color? c) {
   if (c == null) return (Color(vivid['teal']!.$1), Color(vivid['teal']!.$2));
@@ -338,7 +362,7 @@ ThemeData buildTheme(Palette base, {String accent = '', String surface = 'flat',
     // a finger needs room (Android); a mouse is precise (Windows)
     visualDensity: tk.touch ? VisualDensity.standard : const VisualDensity(horizontal: 0, vertical: -.5),
     materialTapTargetSize: tk.touch ? MaterialTapTargetSize.padded : MaterialTapTargetSize.shrinkWrap,
-    extensions: [LookLevel(vivid: vivid), tk.copyWith(backdrop: tk.backdrop, glows: tk.glows)],
+    extensions: [LookLevel(vivid: vivid), tk.copyWith(backdrop: tk.backdrop, glows: tk.glows), sideColorsOf(p)],
     scaffoldBackgroundColor: Color(p.bg),
     dividerColor: Color(p.border),
     cardTheme: CardThemeData(
@@ -382,15 +406,18 @@ ThemeData buildTheme(Palette base, {String accent = '', String surface = 'flat',
         elevation: tk.glow != null ? 3 : null, shadowColor: tk.glow)),
     elevatedButtonTheme: ElevatedButtonThemeData(style: ElevatedButton.styleFrom(minimumSize: Size(64, tap), shape: control, textStyle: label)),
     outlinedButtonTheme: OutlinedButtonThemeData(
-      style: OutlinedButton.styleFrom(minimumSize: Size(64, tap), shape: control, textStyle: label, side: BorderSide(color: tk.ink ?? tk.glow?.withValues(alpha: .6) ?? Color(p.borderStrong), width: tk.borderWidth)),
+      style: OutlinedButton.styleFrom(minimumSize: Size(64, tap), shape: control, textStyle: label, foregroundColor: tk.ink ?? Color(p.text), backgroundColor: tk.ink == null ? Color(p.surface) : null, side: BorderSide(color: tk.ink ?? tk.glow?.withValues(alpha: .6) ?? Color(p.borderStrong), width: tk.borderWidth)),
     ),
     textButtonTheme: TextButtonThemeData(style: TextButton.styleFrom(minimumSize: Size(48, tap - 4), shape: shapeOf(tk.controlRadius), textStyle: label, foregroundColor: Color(primaryText))),
     iconButtonTheme: IconButtonThemeData(style: IconButton.styleFrom(minimumSize: Size(tap - 4, tap - 4))),
     // segmented controls (iOS): a soft grey groove, the chosen segment lifted in the panel colour
     // tabs that fit (the owner's request, 2026-11-15): no tick taking room in the chosen segment, tighter padding, one
     // line of text
-    segmentedButtonTheme: SegmentedButtonThemeData(selectedIcon: const SizedBox.shrink(), style: SegmentedButton.styleFrom(minimumSize: Size(40, tap - 4), padding: const EdgeInsets.symmetric(horizontal: 10), shape: control, side: BorderSide(color: fieldEdge, width: tk.borderWidth),
-        backgroundColor: scheme.surfaceContainerHigh.withValues(alpha: .6), selectedBackgroundColor: scheme.primaryContainer, selectedForegroundColor: scheme.onPrimaryContainer)),
+    // React's .tabs: one panel-coloured strip under a hairline, the chosen tab a soft grey with bold text in the text colour
+    segmentedButtonTheme: SegmentedButtonThemeData(selectedIcon: const SizedBox.shrink(), style: SegmentedButton.styleFrom(minimumSize: Size(40, tap - 4), padding: const EdgeInsets.symmetric(horizontal: 12), shape: control,
+        side: BorderSide(color: tk.ink ?? Color(p.border), width: tk.borderWidth),
+        backgroundColor: Color(p.surface), foregroundColor: Color(muted), selectedBackgroundColor: Color(mix(p.surface, p.text, p.dark ? .10 : .045)), selectedForegroundColor: Color(p.text),
+        textStyle: label?.copyWith(fontWeight: FontWeight.w600))),
     chipTheme: ChipThemeData(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(tk.chipRadius)),
       padding: EdgeInsets.symmetric(horizontal: 8, vertical: ((tap - 36) / 2).clamp(4, 14)),
@@ -401,6 +428,7 @@ ThemeData buildTheme(Palette base, {String accent = '', String surface = 'flat',
       labelStyle: text.labelLarge?.copyWith(color: Color(p.text)),
       selectedColor: scheme.primaryContainer,
       checkmarkColor: scheme.onPrimaryContainer,
+      showCheckmark: false, // React's filter tabs: the chosen one is filled, no tick
       elevation: 0,
       selectedShadowColor: tk.glow,
       pressElevation: tk.glow != null ? 4 : null,
@@ -408,8 +436,9 @@ ThemeData buildTheme(Palette base, {String accent = '', String surface = 'flat',
     dialogTheme: DialogThemeData(
       backgroundColor: Color(p.surface),
       surfaceTintColor: Colors.transparent,
-      shape: shapeOf(radius + (radius == 0 ? 0 : 4), tk.ink == null ? BorderSide.none : BorderSide(color: tk.ink!, width: tk.borderWidth)),
-      titleTextStyle: text.titleLarge?.copyWith(fontSize: 20, color: Color(p.text)),
+      // React's .modal: 20 px corners under a hairline, an 18 px bold title
+      shape: shapeOf(radius + (radius == 0 ? 0 : 2), BorderSide(color: tk.ink ?? Color(p.border), width: tk.borderWidth)),
+      titleTextStyle: text.titleLarge?.copyWith(fontSize: 18, fontWeight: FontWeight.w700, color: Color(p.text)),
     ),
     // sheets rise from the bottom with rounded top corners and a grab handle (iOS)
     bottomSheetTheme: BottomSheetThemeData(backgroundColor: Color(p.surface), surfaceTintColor: Colors.transparent, showDragHandle: true,

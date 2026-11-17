@@ -78,6 +78,13 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
     final count = more > 0 ? 'Showing ${drawn.length} of ${list.length} items' : '${list.length} items';
     // phones: the heading, search and filters scroll away with the list, so the medicines always get the screen
     final phone = MediaQuery.sizeOf(context).width < 600;
+    // a computer: the React app's table, each column heading its own colour (src/pages/Inventory.jsx)
+    final table = MediaQuery.sizeOf(context).width >= 1100;
+    final canEdit = can.contains('medicines.manage');
+    const cols = [ColourCol('Medicine', flex: 4), ColourCol('Next batch', flex: 2), ColourCol('Expiry', flex: 2), ColourCol('Shelf'), ColourCol('Reorder at', flex: 2, numeric: true),
+      ColourCol('In stock', flex: 2, numeric: true), ColourCol('Value (cost)', flex: 2, numeric: true)];
+    const editWidth = 96.0;
+    final ok = Color(Theme.of(context).brightness == Brightness.dark ? 0xFF34D399 : 0xFF047857), warnC = Color(Theme.of(context).brightness == Brightness.dark ? 0xFFFBBF24 : 0xFFB45309);
     return PageFrame(
       scroll: phone,
       title: 'Inventory',
@@ -108,6 +115,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
           const MedicineOrderMenu(),
         ]),
         const SizedBox(height: 8),
+        if (table && list.isNotEmpty) ColourTableHead(columns: cols, trailing: canEdit ? editWidth : 0),
         _fill(
           phone,
           list.isEmpty
@@ -137,6 +145,44 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
                     final st = d.stockOf(p.id);
                     final days = soonest(p);
                     final cls = drugClassOf(p).cls;
+                    if (table) {
+                      final next = sellsNext(d.stock.batchesOf(p.id).where((b) => b.qty > 0).toList());
+                      final low = isLowStock(p, st);
+                      final soon = days != null && days >= 0 && days <= warn;
+                      final err = Theme.of(context).colorScheme.error;
+                      final stockC = st <= 0 ? err : low ? warnC : ok;
+                      return ColourTableRow(
+                        columns: cols,
+                        onTap: () => _open(p),
+                        trailingWidth: canEdit ? editWidth : 0,
+                        trailing: canEdit
+                            ? OutlinedButton.icon(style: OutlinedButton.styleFrom(minimumSize: const Size(0, 34), padding: const EdgeInsets.symmetric(horizontal: 10)),
+                                onPressed: () => editMedicine(context, ref, p), icon: const Icon(Icons.edit_outlined, size: 16), label: const Text('Edit'))
+                            : null,
+                        cells: [
+                          Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+                            Text(p.name, style: const TextStyle(fontWeight: FontWeight.w700)),
+                            if (p.form.isNotEmpty) Text(p.form, style: Theme.of(context).textTheme.bodySmall),
+                            const SizedBox(height: 3),
+                            Wrap(spacing: 6, runSpacing: 4, children: [
+                              StatusPill(st <= 0 ? 'Out of stock' : low ? 'Low stock' : 'In stock', color: stockC),
+                              if (soon) StatusPill('Expiring soon', color: warnC),
+                            ]),
+                            if (days != null && days < 0) Text(_expiredNote(d.stock.batchesOf(p.id)), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: err)),
+                          ]),
+                          Text(next?.batch.isNotEmpty == true ? next!.batch : '—'),
+                          Text(next?.expiry.isNotEmpty == true ? next!.expiry : '—', style: TextStyle(color: soon ? warnC : null)),
+                          Text(shelfLabel(p).isEmpty ? '—' : shelfLabel(p)),
+                          Text(formatQty(p.reorder)),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                            decoration: BoxDecoration(color: tint(stockC, Theme.of(context).colorScheme.surface, 16), borderRadius: BorderRadius.circular(99)),
+                            child: Text(formatQty(st, '${p.unit.isEmpty ? 'unit' : p.unit.toLowerCase()}s'), style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12.5, color: stockC)),
+                          ),
+                          Text(s.money(stockValue([p], d.stock.batchesOf).value)),
+                        ],
+                      );
+                    }
                     return ListTile(
                       title: Text(p.name),
                       subtitle: Text([p.generic, p.form, if (order != MedicineOrder.drugClass && cls != unclassified) cls, if (order != MedicineOrder.shelf && shelfLabel(p).isNotEmpty) 'shelf ${shelfLabel(p)}',

@@ -104,7 +104,12 @@ class StatCard extends StatelessWidget {
         color: tinted ? wash : null,
         shape: tinted ? RoundedRectangleBorder(borderRadius: BorderRadius.circular(t.extension<DesignTokens>()!.radius), side: BorderSide(color: tone.withValues(alpha: .28))) : null,
         child: Ink(
-          decoration: vivid ? BoxDecoration(gradient: LinearGradient(colors: [va, vb], begin: Alignment.topLeft, end: Alignment.bottomRight)) : null,
+          // as the React app's figure cards (src/styles/dashboard.css .kpi): a 3 px band of the figure's colour on top
+          decoration: vivid
+              ? BoxDecoration(gradient: LinearGradient(colors: [va, vb], begin: Alignment.topLeft, end: Alignment.bottomRight))
+              : tinted
+                  ? null
+                  : BoxDecoration(border: Border(top: BorderSide(color: tone, width: 3))),
           child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(12),
@@ -114,8 +119,8 @@ class StatCard extends StatelessWidget {
               Row(children: [
                 Expanded(child: Text(label.toUpperCase(), style: t.textTheme.labelSmall?.copyWith(letterSpacing: .6, fontWeight: FontWeight.w700, color: ink))),
                 if (icon != null)
-                  tinted
-                      ? Container(padding: const EdgeInsets.all(7), decoration: BoxDecoration(color: tone.withValues(alpha: .14), borderRadius: BorderRadius.circular(10)),
+                  !vivid
+                      ? Container(padding: const EdgeInsets.all(9), decoration: BoxDecoration(color: tone.withValues(alpha: .14), borderRadius: BorderRadius.circular(12)),
                           child: Icon(icon, size: 20, color: shown ?? t.colorScheme.tertiary))
                       : Icon(icon, size: 20, color: ink ?? shown ?? t.colorScheme.primary),
               ]),
@@ -123,7 +128,8 @@ class StatCard extends StatelessWidget {
               FittedBox(
                 fit: BoxFit.scaleDown,
                 alignment: Alignment.centerLeft,
-                child: Text(value, maxLines: 1, style: t.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800, color: ink ?? shown)),
+                // the figure in the text colour, as React (the colour is in the band and the icon tile)
+                child: Text(value, maxLines: 1, style: t.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -.3, color: ink ?? (tinted ? shown : null))),
               ),
               if (sub != null || onTap != null)
                 Row(crossAxisAlignment: CrossAxisAlignment.end, children: [

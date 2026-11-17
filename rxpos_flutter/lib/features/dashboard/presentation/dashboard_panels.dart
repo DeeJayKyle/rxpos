@@ -45,7 +45,7 @@ class GreetingCard extends StatelessWidget {
             ]),
           );
     final text = Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-      Text('$greet${first.isEmpty ? '' : ', $first'} 👋', style: (phone ? th.textTheme.titleMedium : th.textTheme.titleLarge)?.copyWith(fontWeight: FontWeight.w800)),
+      Text('$greet${first.isEmpty ? '' : ', $first'} 👋', style: (phone ? th.textTheme.titleLarge : th.textTheme.headlineMedium)?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -.5)),
       Text('${_days[t.weekday - 1]}, ${_months[t.month - 1]} ${t.day}, ${t.year}', style: th.textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
     ]);
     final sale = canSell
@@ -63,7 +63,8 @@ class GreetingCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: Container(
         decoration: BoxDecoration(
-          gradient: LinearGradient(colors: [cs.primary.withValues(alpha: .12), cs.secondary.withValues(alpha: .04)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+          // as the React app's hero (src/styles/dashboard.css .dash-hero): a white card with a soft brand glow at its right
+          gradient: RadialGradient(center: const Alignment(.95, -1.1), radius: 1.6, colors: [cs.primary.withValues(alpha: .16), cs.primary.withValues(alpha: .04), cs.surface.withValues(alpha: 0)], stops: const [0, .35, .7]),
           borderRadius: BorderRadius.circular(r),
         ),
         padding: EdgeInsets.symmetric(horizontal: phone ? 14 : 20, vertical: phone ? 12 : 14),
