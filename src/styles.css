@@ -2955,3 +2955,6 @@ tr.group-head > td { background: var(--surface-2); padding: 6px 10px; }
 .account-drop .menu-item.danger { color: var(--danger); }
 .account-drop .menu-item.danger:hover { background: var(--danger-soft); color: var(--danger); }
 @media (max-width: 900px) { .account-who, .account-btn > svg { display: none; } .account-btn { padding: 0 4px; border: 0; } }
+
+/* the sync pill shows only when something needs the person (offline, refused changes, sign in again) */
+.pill.clock[hidden] { display: none; }

@@ -338,7 +338,9 @@ function ClockPill() {
   const click = () => (syncStatus.expired ? setUser(null) : storageIssue || syncStatus.rejected > 0 ? navigate('/device') : syncNow());
   return (
     // step 24: the spoken name starts with the words on the pill (axe label-content-name-mismatch), then the detail
-    <button className={'pill clock ' + tone} title={tip} aria-label={`${label} ${clockTime} ${clockDate}. ${tip}`} onClick={click}>
+    // shown only when something needs the person (offline, refused changes, sign in again, storage): the owner asked for
+    // no sync button while all is well (17 Nov 2026); F5 still syncs, and the account menu has Sync now
+    <button className={'pill clock ' + tone} hidden={tone === 'ok' || tone === 'syncing'} title={tip} aria-label={`${label} ${clockTime} ${clockDate}. ${tip}`} onClick={click}>
       <i /><span className="clock-state" aria-live="polite">{label}</span>{' '}<span className="clock-time">{clockTime}</span>{' '}
       <span className="clock-date">{clockDate}</span>
     </button>
@@ -653,8 +655,8 @@ function Shell() {
             return pg ? (
               <nav className="crumbs" aria-label="You are here">
                 {g?.group && <button type="button" className="link-btn muted crumb-group" title={`Every page under ${g.group}`} onClick={() => setMega(true)}>{g.group}</button>}{g?.group && <span className="muted" aria-hidden="true">›</span>}<strong>{pg.label}</strong>
-                <button className={'icon-btn sm' + (nav.pins.includes(here) ? ' on' : '')} aria-pressed={nav.pins.includes(here)} onClick={() => togglePin(here)}
-                  title={`${nav.pins.includes(here) ? 'Unpin this page from' : 'Pin this page to'} the top of the menu (${showKey(keyOf('pin'))})`} aria-label={nav.pins.includes(here) ? 'Unpin this page' : 'Pin this page'}><Pin size={14} /></button>
+                {here !== '/' && <button className={'icon-btn sm' + (nav.pins.includes(here) ? ' on' : '')} aria-pressed={nav.pins.includes(here)} onClick={() => togglePin(here)}
+                  title={`${nav.pins.includes(here) ? 'Unpin this page from' : 'Pin this page to'} the top of the menu (${showKey(keyOf('pin'))})`} aria-label={nav.pins.includes(here) ? 'Unpin this page' : 'Pin this page'}><Pin size={14} /></button>}
                 <button className="icon-btn sm" onClick={() => setHelp(true)} title={`Keyboard and mouse (${showKey(keyOf('help'))})`} aria-label="Keyboard and mouse help"><Keyboard size={14} /></button>
               </nav>
             ) : null;
@@ -676,6 +678,7 @@ function Shell() {
               <button className="menu-item" role="menuitem" title="Change my password" onClick={() => changePassword(false)}><KeyRound size={16} />Change my password</button>
               {isNative && <button className={'menu-item' + (pinSet ? ' text-ok' : '')} role="menuitem" title={pinSet ? 'Quick PIN is set for this device' : 'Set a quick PIN for this device'} onClick={manageDevicePin}><LockKeyhole size={16} />{pinSet ? 'Quick PIN is set for this device' : 'Set a quick PIN for this device'}</button>}{/* web: nothing is kept on the computer, so no device PIN */}
               {syncCfg?.key?.startsWith('u.') && <button className={'menu-item' + (me?.twoFactor ? ' text-ok' : '')} role="menuitem" title={me?.twoFactor ? 'Two-step sign-in is on' : 'Two-step sign-in'} onClick={() => setTwoStepOpen(true)}><ShieldCheck size={16} />{me?.twoFactor ? 'Two-step sign-in is on' : 'Two-step sign-in'}</button>}
+              <button className="menu-item" role="menuitem" title="Sync now (F5)" onClick={() => syncNow()}><RefreshCw size={16} />Sync now</button>
               <button className="menu-item danger" role="menuitem" title="Log out" onClick={signOut}><LogOut size={16} />Log out</button>
             </div>
           </div>

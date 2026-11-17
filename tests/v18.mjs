@@ -144,7 +144,7 @@ await A.keyboard.type('28'); await A.keyboard.press('Enter'); await wait(800);
 check('Enter moves to the next box (counts saved: 2 of 4)', /2 of 4 counted/.test(await A.evaluate(() => document.querySelector('.count-progress')?.innerText || '')), await A.evaluate(() => document.querySelector('.count-progress')?.innerText || ''));
 // a sale happens on another till after Amoxyl was counted: it must not be undone by the count
 await owner('/tenants/' + tid + '/records', { records: [M('m-sale-during', 'p-amox', -5, 'b-amox', 'Sale', 0)] });
-await A.click('.pill.clock'); await wait(3000);
+await A.evaluate(() => document.querySelector('.pill.clock').click()); /* sync now (the pill is hidden while all is well; the account menu and F5 do the same) */ await wait(3000);
 await clickText('.page-head button', /Review/); await wait(500);
 const review = await A.evaluate(() => document.querySelector('.modal')?.innerText.replace(/\s+/g, ' ') || '');
 check('review lists the differences: Amoxyl −5 (115 counted vs 120) and Panadol batch B-PAN2 −2', /Amoxyl 500mg caps B-AMOX \S+ 120 115 -5/.test(review) && /B-PAN2 \S+ 30 28 -2/.test(review), review.slice(0, 300));
@@ -244,7 +244,7 @@ await clickText('button', /Start again|Discard/);
 
 // ---------- profit & margins ----------
 await owner('/tenants/' + tid + '/records', { records: [P('p-cip', 'Ciprofloxacin 500mg tabs', { shelf: 'B2', barcode: '6001003', price: 520 })] });
-await A.click('.pill.clock'); await wait(3000);
+await A.evaluate(() => document.querySelector('.pill.clock').click()); /* sync now (the pill is hidden while all is well; the account menu and F5 do the same) */ await wait(3000);
 await go('/reports'); await clickText('.report-groups button', /^Money$/); await wait(300); await clickText('.tab', /Profit & margins/); await wait(500);
 await setVal('.page-head input[type=date]', new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10)); await wait(500);
 const prof = await A.evaluate(() => document.querySelector('.page')?.innerText.replace(/\s+/g, ' ') || '');
@@ -272,7 +272,7 @@ check('price check lists a medicine below the 20% target margin (Cipro 500 → 5
 // ---------- controlled drugs register & batch recall ----------
 {
   await owner('/tenants/' + tid + '/records', { records: [P('p-amox', 'Amoxyl 500mg caps', { shelf: 'A1', barcode: '6001001', controlled: true, price: 1200, cost: 800 })] });
-  await A.click('.pill.clock'); await wait(3000);
+  await A.evaluate(() => document.querySelector('.pill.clock').click()); /* sync now (the pill is hidden while all is well; the account menu and F5 do the same) */ await wait(3000);
   await go('/pos'); await wait(500);
   await A.focus('.pos-products input.search'); await A.keyboard.type('6001001'); await A.keyboard.press('Enter'); await wait(400);
   await A.keyboard.down('Alt'); await A.keyboard.press('1'); await A.keyboard.up('Alt'); // cash
