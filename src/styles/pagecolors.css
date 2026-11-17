@@ -49,6 +49,6 @@
   .pos-cart .cart-lines > .cart-line:not(.kit-line):nth-child(8n+7) { --line: #15803d; }
   .pos-cart .cart-lines > .cart-line:not(.kit-line):nth-child(8n+8) { --line: #0e7490; }
   .pos-cart .cart-lines > .cart-line:not(.kit-line) { background: color-mix(in srgb, var(--line) 7%, var(--surface)); box-shadow: inset 4px 0 0 var(--line);
-    border-bottom: 1px solid color-mix(in srgb, var(--line) 28%, var(--border)); padding-left: 10px; padding-right: 6px; border-radius: 6px; margin-bottom: 4px; }
+    border-bottom: 1px solid color-mix(in srgb, var(--line) 28%, var(--border)); padding-left: 10px; padding-right: 6px; }
   .pos-cart .cart-lines > .cart-line .muted { color: color-mix(in srgb, var(--muted) 70%, var(--text)); }
 }
