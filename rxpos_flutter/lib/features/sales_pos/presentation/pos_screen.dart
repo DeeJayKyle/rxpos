@@ -37,6 +37,7 @@ import '../../../core/rules/search.dart';
 import '../../auth/application/session_controller.dart';
 import '../application/sale_controller.dart';
 import '../domain/cart.dart';
+import '../domain/scan_buffer.dart';
 import 'camera_scan.dart';
 import 'checkout_dialogs.dart';
 import 'fkey_bar.dart';
@@ -69,6 +70,33 @@ class _PosScreenState extends ConsumerState<PosScreen> {
   /// The search waits this long after the last key before it filters (Enter acts at once).
   static const _searchPause = Duration(milliseconds: 120);
   Timer? _searchTimer;
+
+  /// A keyboard-wedge scanner's burst, caught when nothing (or no text field) has focus; the search box takes its own.
+  final _scan = ScanBuffer();
+
+  /// The search box's Enter as last built (it needs the data and the results of this build).
+  VoidCallback? _submitNow;
+
+  /// A scan with the search box unfocused goes into the box and through its Enter. Never on a touch screen, never over
+  /// a dialog or while another text field is typed in, and the search box's own typing is left to the box.
+  bool _onScanKey(KeyEvent e) {
+    if (e is! KeyDownEvent || !mounted || tokensOf(context).touch) return false;
+    if (ModalRoute.of(context)?.isCurrent == false) return false;
+    final f = FocusManager.instance.primaryFocus;
+    final fc = f?.context;
+    // a text field's focus node sits on a Focus inside its EditableText, so look up the tree as well
+    if (f == _searchFocus || fc?.widget is EditableText || fc?.findAncestorStateOfType<EditableTextState>() != null) {
+      _scan.reset();
+      return false;
+    }
+    final enter = e.logicalKey == LogicalKeyboardKey.enter || e.logicalKey == LogicalKeyboardKey.numpadEnter;
+    final code = _scan.key(character: e.character, enter: enter, at: e.timeStamp);
+    final submit = _submitNow;
+    if (code == null || submit == null) return false;
+    _search.text = code;
+    submit();
+    return true; // the Enter that ended the scan is not passed on (it would press the focused button)
+  }
 
   /// True while a sale is being charged: Charge is disabled and a second F9 / tap does nothing.
   final _charging = ValueNotifier<bool>(false);
@@ -368,10 +396,12 @@ class _PosScreenState extends ConsumerState<PosScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _focusSearch());
+    HardwareKeyboard.instance.addHandler(_onScanKey);
   }
 
   @override
   void dispose() {
+    HardwareKeyboard.instance.removeHandler(_onScanKey);
     tillOwnsCtrlK.value = false;
     _searchTimer?.cancel();
     _charging.dispose();
@@ -404,7 +434,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                   if ((ql.isEmpty || '${k.name} ${k.contents} ${k.barcode}'.toLowerCase().contains(ql)) && (_view != 'instock' || k.stock > 0)) k,
               ]
             : const <KitView>[];
-        final wide = MediaQuery.sizeOf(context).width >= 900;
+        final wide = windowClass(context) == WindowClass.expanded;
         final stored = ref.watch(deviceValueProvider('pos-layout')).value;
         final layout = posLayouts.any((x) => x.$1 == stored) ? stored! : 'standard';
         final advanced = wide && layout == 'advanced';
@@ -416,7 +446,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
           controller: _search,
           focus: _searchFocus,
           onChanged: _searchChanged,
-          onSubmit: () {
+          onSubmit: _submitNow = () {
             // Enter acts on what is typed now, not on the last (debounced) filter
             _searchTimer?.cancel();
             final q = _search.text;
@@ -1287,7 +1317,7 @@ class _SalePanel extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final th = Theme.of(context);
-    final narrow = MediaQuery.sizeOf(context).width < 600; // the sale opens as a sheet on a phone
+    final narrow = windowClass(context) == WindowClass.compact; // the sale opens as a sheet on a phone
     final s = ref.watch(saleControllerProvider(wholesale));
     final c = ref.read(saleControllerProvider(wholesale).notifier);
     final can = ref.watch(permissionsProvider).value ?? const <String>{};

@@ -163,6 +163,8 @@ function ensureSchema(db) {
     }
     if (!have.has('tenants_slug')) ddl.push('CREATE UNIQUE INDEX tenants_slug ON tenants(slug)');
     if (!have.has('client_errors')) ddl.push('CREATE TABLE client_errors (tenant TEXT NOT NULL, k TEXT NOT NULL, message TEXT, stack TEXT, page TEXT, build INTEGER, platform TEXT, kind TEXT, count INTEGER NOT NULL DEFAULT 1, devices INTEGER NOT NULL DEFAULT 1, first_at TEXT, last_at TEXT, PRIMARY KEY (tenant, k))'); // crash reports from devices (src/crash.js)
+    // 2026-11-17 audit P2-10: which devices (by sign-in pass, hashed) reported each error, so "devices" counts devices, not reports
+    if (!have.has('client_error_devices')) ddl.push('CREATE TABLE client_error_devices (tenant TEXT NOT NULL, k TEXT NOT NULL, dev TEXT NOT NULL, PRIMARY KEY (tenant, k, dev))');
     if (!have.has('twofa')) ddl.push(twoStepDdl); // two-step sign-in secrets (worker/twostep.js), never synced
     else if (!/\brecovery\b/.test(have.get('twofa'))) ddl.push('ALTER TABLE twofa ADD COLUMN recovery TEXT'); // 2026-11 audit: recovery codes
     // 1.6 sync protocol 2: op ids already applied, so a request repeated after a lost reply is applied once
@@ -1324,6 +1326,7 @@ async function owner(env, req, url, body) {
   }
   if (sub === 'errors' && req.method === 'POST' && body?.clear) {
     await db.prepare('DELETE FROM client_errors WHERE tenant = ?1' + (body.k ? ' AND k = ?2' : '')).bind(...[t.id, ...(body.k ? [String(body.k)] : [])]).run();
+    await db.prepare('DELETE FROM client_error_devices WHERE tenant = ?1' + (body.k ? ' AND k = ?2' : '')).bind(...[t.id, ...(body.k ? [String(body.k)] : [])]).run();
     return json({ ok: true });
   }
 
@@ -1385,7 +1388,7 @@ async function owner(env, req, url, body) {
     // its chat attachments go too (personal data must not outlive the pharmacy)
     await db.batch([db.prepare('DELETE FROM file_chunks WHERE tenant = ?1').bind(t.id), db.prepare('DELETE FROM files WHERE tenant = ?1').bind(t.id), db.prepare('DELETE FROM file_uploads WHERE tenant = ?1').bind(t.id)]).catch(() => {});
     // 2026-11 audit: everything else kept per pharmacy goes too (two-step secrets, devices, crash reports, calls…)
-    await db.batch(['twofa', 'sync_ops', 'client_errors', 'snapshot_bounds', 'rtc', 'device_views'].map((x) => db.prepare(`DELETE FROM ${x} WHERE tenant = ?1`).bind(t.id))).catch((e) => console.warn('pharmacy clean-up incomplete', e.message));
+    await db.batch(['twofa', 'sync_ops', 'client_errors', 'client_error_devices', 'snapshot_bounds', 'rtc', 'device_views'].map((x) => db.prepare(`DELETE FROM ${x} WHERE tenant = ?1`).bind(t.id))).catch((e) => console.warn('pharmacy clean-up incomplete', e.message));
     // 2026-11-17 audit: its ready-made downloads and brought-forward figures in R2 too. They were keyed by the pharmacy's
     // address, so a new pharmacy given the same address was served the deleted one's balances.
     if (env.APPS) {
@@ -2016,13 +2019,19 @@ export default {
       if (path === '/api/errors' && req.method === 'POST') {
         const list = Array.isArray(body?.errors) ? body.errors.slice(0, 20) : [];
         const up = env.DB.prepare(`INSERT INTO client_errors (tenant, k, message, stack, page, build, platform, kind, first_at, last_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9)
-          ON CONFLICT(tenant, k) DO UPDATE SET count = count + 1, devices = devices + 1, last_at = excluded.last_at, build = excluded.build, page = excluded.page, platform = excluded.platform`);
+          ON CONFLICT(tenant, k) DO UPDATE SET count = count + 1, last_at = excluded.last_at, build = excluded.build, page = excluded.page, platform = excluded.platform`);
+        // 2026-11-17 audit P2-10: "devices" is the number of different devices (sign-in passes, hashed) that sent it
+        const dev = (await sha256('crash-device:' + (who.sig || who.uid || 'key'))).slice(0, 16);
+        const seen = env.DB.prepare('INSERT OR IGNORE INTO client_error_devices (tenant, k, dev) VALUES (?1, ?2, ?3)');
+        const count = env.DB.prepare('UPDATE client_errors SET devices = (SELECT COUNT(*) FROM client_error_devices WHERE tenant = ?1 AND k = ?2) WHERE tenant = ?1 AND k = ?2');
         const s = (v, n) => String(v ?? '').slice(0, n);
-        const stmts = list.filter((e) => e && e.key && e.message).map((e) => up.bind(who.tenant, s(e.key, 40), scrubText(e.message, 300), scrubText(e.stack, 3000), scrubPage(e.page), Number(e.build) || 0, s(e.platform, 40), s(e.kind, 20), new Date().toISOString()));
+        const stmts = list.filter((e) => e && e.key && e.message).flatMap((e) => [up.bind(who.tenant, s(e.key, 40), scrubText(e.message, 300), scrubText(e.stack, 3000), scrubPage(e.page), Number(e.build) || 0, s(e.platform, 40), s(e.kind, 20), new Date().toISOString()),
+          seen.bind(who.tenant, s(e.key, 40), dev), count.bind(who.tenant, s(e.key, 40))]);
         if (stmts.length) await env.DB.batch(stmts);
         // keep the 300 most recent kinds of error per pharmacy
         await env.DB.prepare('DELETE FROM client_errors WHERE tenant = ?1 AND k NOT IN (SELECT k FROM client_errors WHERE tenant = ?1 ORDER BY last_at DESC LIMIT 300)').bind(who.tenant).run();
-        return json({ ok: true, saved: stmts.length });
+        await env.DB.prepare('DELETE FROM client_error_devices WHERE tenant = ?1 AND k NOT IN (SELECT k FROM client_errors WHERE tenant = ?1)').bind(who.tenant).run();
+        return json({ ok: true, saved: stmts.length / 3 });
       }
       if (path === '/api/2fa' || path.startsWith('/api/2fa/')) return await twoStepRoutes(env, req, path, body, who, { json, roleCan, existingRec, serverWriteMany,
         audit: (action, details) => ({ t: 'audit', id: crypto.randomUUID(), rec: { date: new Date().toISOString(), user: who.name || '', action, details, branchId: 'main' } }) });

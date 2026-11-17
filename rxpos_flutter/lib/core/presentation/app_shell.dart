@@ -35,6 +35,7 @@ import '../theme/themes.dart';
 import 'top_bar.dart';
 import '../../features/calls/presentation/call_overlay.dart';
 import '../update/update_pill.dart';
+import '../../theme/rxpos_theme.dart' show WindowClass, windowClass;
 
 /// The frame around every screen: the sidebar with its groups (Sales, People, Medicine inventory, Finance, Insights,
 /// System) on Windows and tablets, a drawer on phones; the pharmacy, who is signed in, the sync status, the Premium UI
@@ -55,7 +56,10 @@ class AppShell extends ConsumerWidget {
     final features = ref.watch(pharmacyProvider).value?.features ?? const {};
     final premium = ref.watch(premiumUiProvider).value ?? false;
     final visible = screens.where((s) => s.allowed(can, features)).toList();
-    final wide = MediaQuery.sizeOf(context).width >= 900;
+    final size = windowClass(context);
+    final wide = size == WindowClass.expanded;
+    // portrait tablets (600-900 dp): a rail of icons at the side in place of the phone's bottom bar
+    final medium = size == WindowClass.medium;
     final aurora = auroraOn(context);
     final counts = ref.watch(navCountsProvider);
     // the sidebar folds down to a rail of icons (kept on this device)
@@ -171,7 +175,7 @@ class AppShell extends ConsumerWidget {
           // the left edge swipes back on the other pages; on the dashboard it opens the menu
           drawerEnableOpenDragGesture: home,
           // phones and tablets: the main pages at the thumb (Home · Stock · Sell · Sales · More), on every page
-          bottomNavigationBar: wide ? null : TabBarBottom(screens: visible, location: location),
+          bottomNavigationBar: wide || medium ? null : TabBarBottom(screens: visible, location: location),
           body: Builder(
             // Android's back button: closes the menu or what is open on the page, else goes back a page; the app is
             // left only from the dashboard
@@ -189,6 +193,19 @@ class AppShell extends ConsumerWidget {
                   ),
                   // the top bar over the page only, beside the full-height menu (src/styles.css .main > .topbar)
                   Expanded(child: Column(children: [SizedBox(height: bar.preferredSize.height, child: bar), Expanded(child: body)])),
+                ])
+              : medium
+              ? Row(children: [
+                  SizedBox(
+                    width: 72,
+                    child: _SidebarSurface(
+                      aurora: aurora,
+                      // the menu button opens the full menu (pins, groups) in the drawer
+                      header: _SideHeader(pharmacy: session?.pharmacy ?? '', rail: true, onToggle: () => Scaffold.of(ctx).openDrawer()),
+                      child: _Sidebar(screens: visible, location: location, counts: counts, rail: true, onGo: (p) => context.go(p)),
+                    ),
+                  ),
+                  Expanded(child: body),
                 ])
               : body),
           ),

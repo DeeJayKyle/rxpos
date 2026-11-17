@@ -26,6 +26,15 @@ Nothing to do on the tills: they update by themselves.
 - **No sync button while all is well.** The sync pill shows only when the device is offline or something needs you
   (changes the cloud refused, sign in again). F5 and the account menu's Sync now still sync.
 - **No pin on the Dashboard** (it is always at the top of the menu).
+## React (classic) app 1.10.6 · Flutter app 2.1 (next build) · November 2026 (tablets, scanners, Device errors)
+
+- **Tablets (Flutter):** on a tablet held upright (600–900 dp wide) the app now shows a slim menu down the side, in place
+  of the phone's bottom bar; phones and computers look as before.
+- **Barcode scanners on the Flutter till (computers):** a scan is caught even when the search box doesn't have the
+  cursor (after a click on a button, say), and goes to the sale as if typed in the search box. Typing in other boxes is
+  never taken over.
+- **Device errors (owner console):** "devices" now counts the different devices that reported an error, not the number
+  of reports (audit P2-10).
 
 ## React (classic) app 1.10.5 · Flutter app 2.1 (next build) · November 2026 (refund sheet, landing pages, F-keys, top 10 themes, new sign-in)
 
