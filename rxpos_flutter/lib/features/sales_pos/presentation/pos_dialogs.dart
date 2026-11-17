@@ -443,7 +443,8 @@ Future<void> showKeyboardHelp(BuildContext context) => showAppDialog<void>(
     title: const Text('Keyboard shortcuts'),
     content: SizedBox(
       width: 380,
-      child: Column(
+      // scrolls when the window is short (the function-key switch made it taller)
+      child: SingleChildScrollView(child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           for (final (k, what) in posShortcuts)
@@ -470,7 +471,7 @@ Future<void> showKeyboardHelp(BuildContext context) => showAppDialog<void>(
                 onChanged: (on) => ref.read(deviceValueProvider('pos-fkeys').notifier).set(on ? null : 'off'),
               )),
         ],
-      ),
+      )),
     ),
     actions: [FilledButton(onPressed: () => Navigator.pop(c), child: const Text('Close'))],
   ),

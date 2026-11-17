@@ -102,7 +102,10 @@ const designPalettes = [
 
 const premiumTheme = 'midnight-pro';
 
-Palette paletteById(String id) => palettes.where((p) => p.id == currentPaletteId(id)).firstOrNull ?? designPalettes.where((p) => p.id == id).firstOrNull ?? palettes.first;
+/// A palette by id: one of the 10, a design system's own (some share an old theme's id, e.g. Lavender Dream), or the
+/// kept theme a retired id moved to.
+Palette paletteById(String id) =>
+    palettes.where((p) => p.id == id).firstOrNull ?? designPalettes.where((p) => p.id == id).firstOrNull ?? palettes.where((p) => p.id == currentPaletteId(id)).firstOrNull ?? palettes.first;
 
 /// Themes a pharmacy may use (set by the owner); all of them when the owner hasn't restricted it.
 List<Palette> allowedPalettes(Map? branding) {

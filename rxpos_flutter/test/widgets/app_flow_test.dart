@@ -617,7 +617,12 @@ void main() {
     await settle(tester);
     await tester.tap(find.text('Refund'));
     await settle(tester);
-    await tester.tap(find.widgetWithText(FilledButton, 'Refund'));
+    // the refund sheet (refund_sheet.dart): a reason first, then "Refund <amount>"
+    await tester.tap(find.byType(DropdownButtonFormField<String>));
+    await settle(tester);
+    await tester.tap(find.text('Customer returned it').last);
+    await settle(tester);
+    await tester.tap(find.ancestor(of: find.byIcon(Icons.undo), matching: find.byType(FilledButton)));
     await settle(tester);
     expect(find.text('refunded'), findsOneWidget);
     final moves = (await tester.runAsync(() => RecordStore(db).rows('movements')))!;
@@ -2658,17 +2663,17 @@ void main() {
     expect((await look())['theme'], 'oled');
     expect(brightness(tester), Brightness.dark);
     final list = find.byKey(const Key('theme-list'));
-    await tester.scrollUntilVisible(find.byKey(const ValueKey('theme-dracula')), 120, scrollable: find.descendant(of: list, matching: find.byType(Scrollable)));
-    await tester.ensureVisible(find.byKey(const ValueKey('theme-dracula')));
+    await tester.scrollUntilVisible(find.byKey(const ValueKey('theme-royal-violet')), 120, scrollable: find.descendant(of: list, matching: find.byType(Scrollable)));
+    await tester.ensureVisible(find.byKey(const ValueKey('theme-royal-violet')));
     await settle(tester);
-    await tester.tap(find.byKey(const ValueKey('theme-dracula')));
+    await tester.tap(find.byKey(const ValueKey('theme-royal-violet')));
     await settle(tester, 4);
-    expect((await look())['theme'], 'dracula');
+    expect((await look())['theme'], 'royal-violet');
     await openThemes(tester);
     await tester.tap(find.byKey(const ValueKey('accent-ocean')));
     await settle(tester, 3);
     expect((await look())['accent'], 'ocean');
-    expect(Theme.of(tester.element(find.byKey(const Key('theme-menu')))).colorScheme.secondary, isNot(const Color(0xFFFF79C6)), reason: 'the ocean accent replaced Dracula\'s pink');
+    expect(Theme.of(tester.element(find.byKey(const Key('theme-menu')))).colorScheme.secondary, isNot(const Color(0xFF7C4EE4)), reason: 'the ocean accent replaced Royal Violet\'s violet');
     await tester.scrollUntilVisible(find.byKey(const ValueKey('level-vivid')), 120, scrollable: find.descendant(of: list, matching: find.byType(Scrollable)));
     await tester.ensureVisible(find.byKey(const ValueKey('level-vivid')));
     await settle(tester);
@@ -2699,21 +2704,21 @@ void main() {
     expect(brightness(tester), Brightness.dark);
     await tester.tap(find.byType(Switch).first);
     await settle(tester, 4);
-    expect((await look())['theme'], 'dracula');
+    expect((await look())['theme'], 'royal-violet');
     await done(tester);
   });
 
   testWidgets('the owner limits the themes: only those are offered, no Premium switch without Midnight Pro; on a phone', (tester) async {
     tester0 = tester;
     await tester.runAsync(signedIn);
-    await tester.runAsync(() => RecordStore(db).update((d) => d.put('license', {'id': 'lic', 'branding': {'themes': ['light', 'nord']}})));
+    await tester.runAsync(() => RecordStore(db).update((d) => d.put('license', {'id': 'lic', 'branding': {'themes': ['daylight-clinical', 'oled']}})));
     await start(tester, size: const Size(400, 800));
     await openThemes(tester);
-    expect(find.byKey(const ValueKey('theme-nord')), findsOneWidget);
-    expect(find.byKey(const ValueKey('theme-dracula')), findsNothing);
+    expect(find.byKey(const ValueKey('theme-oled')), findsOneWidget);
+    expect(find.byKey(const ValueKey('theme-midnight-pro')), findsNothing);
     await tester.tap(find.text('Dark'));
     await settle(tester, 4);
-    expect((await look())['theme'], 'nord', reason: 'the only dark theme allowed');
+    expect((await look())['theme'], 'oled', reason: 'the only dark theme allowed');
     await done(tester);
     await start(tester);
     expect(find.byType(Switch), findsNothing, reason: 'Midnight Pro is not among the allowed themes');

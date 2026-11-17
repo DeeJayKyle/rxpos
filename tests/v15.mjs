@@ -164,7 +164,7 @@ await O.goto(base + '/#/owner', { waitUntil: 'networkidle2' }); await wait(800);
 await O.type('input[type=password]', ownerKey); await O.evaluate(() => [...document.querySelectorAll('button')].find((x) => x.textContent.includes('Sign in')).click()); await wait(2000);
 await O.evaluate(() => [...document.querySelectorAll('.tenant-card')].find((c) => c.textContent.includes('Bugolobi')).click()); await wait(1500);
 await O.evaluate(() => [...document.querySelectorAll('.tab')].find((x) => x.textContent.includes('Look')).click()); await wait(500);
-check('owner Look & logo tab lists all themes', (await O.evaluate(() => document.querySelectorAll('.theme-card').length)) >= 20);
+check('owner Look & logo tab lists all 10 themes', (await O.evaluate(() => document.querySelectorAll('.theme-card').length)) === 10);
 await O.screenshot({ path: out + '/10-owner-look.png' });
 
 // phone width
