@@ -111,6 +111,8 @@ class _PurchasesScreenState extends ConsumerState<PurchasesScreen> {
             )),
           ]),
           const SizedBox(height: 8),
+          // a computer: the React app's table, each column heading its own colour (src/pages/PurchaseHistory.jsx)
+          if (MediaQuery.sizeOf(context).width >= 1100 && list.isNotEmpty) ColourTableHead(columns: _buyCols, trailing: can.contains('purchases.edit') ? 160 : 90),
           Expanded(
             child: list.isEmpty
                 ? EmptyState(all.isEmpty ? 'No deliveries yet. Each delivery you receive in Add Stock is kept here with its invoice, to view or correct.' : 'No deliveries match')
@@ -123,6 +125,36 @@ class _PurchasesScreenState extends ConsumerState<PurchasesScreen> {
                             trailing: Text('${st.money(total)}${owed > 0 ? ' · unpaid ${st.money(owed)}' : ''}', style: const TextStyle(fontWeight: FontWeight.w800)));
                       }
                       final p = list[i];
+                      final editable = can.contains('purchases.edit') && p.raw['imported'] == null;
+                      if (MediaQuery.sizeOf(context).width >= 1100) {
+                        final unpaid = p.total > p.paid;
+                        return ColourTableRow(
+                          columns: _buyCols,
+                          onTap: () => _view(p, st, payType(p)),
+                          trailingWidth: can.contains('purchases.edit') ? 160 : 90,
+                          trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                            TextButton(onPressed: () => _view(p, st, payType(p)), child: const Text('View')),
+                            if (editable)
+                              TextButton(key: Key('edit-${p.number}'), onPressed: () => showAppDialog<void>(context: context, builder: (_) => PurchaseEditor(purchase: p.toRecord())), child: const Text('Edit')),
+                          ]),
+                          cells: [
+                            Wrap(spacing: 6, children: [
+                              Text(p.number, style: const TextStyle(fontWeight: FontWeight.w700)),
+                              if (p.raw['editedAt'] != null) Text('edited', style: Theme.of(context).textTheme.bodySmall),
+                            ]),
+                            Text(p.date),
+                            Text(p.supplierName.isEmpty ? '—' : p.supplierName, maxLines: 2, overflow: TextOverflow.ellipsis),
+                            Text(p.invoice.isEmpty ? '—' : p.invoice),
+                            TonePill(payType(p), color: unpaid ? Colors.orange.shade800 : Color(Theme.of(context).brightness == Brightness.dark ? 0xFF34D399 : 0xFF047857), dot: false),
+                            Text('${p.items.length}'),
+                            Column(crossAxisAlignment: CrossAxisAlignment.end, mainAxisSize: MainAxisSize.min, children: [
+                              Text(st.money(p.total), style: const TextStyle(fontWeight: FontWeight.w800)),
+                              if (unpaid) Text('${st.money(p.total - p.paid)} unpaid', style: TextStyle(color: Colors.orange.shade800, fontSize: 12)),
+                            ]),
+                            Text(p.receivedBy.isEmpty ? '—' : p.receivedBy, maxLines: 2, overflow: TextOverflow.ellipsis),
+                          ],
+                        );
+                      }
                       return ListTile(
                         title: Text('${p.number} · ${p.supplierName}${p.raw['editedAt'] != null ? ' · edited' : ''}'),
                         subtitle: Text('${p.date} · ${payType(p)} · invoice ${p.invoice.isEmpty ? '—' : p.invoice} · ${p.items.length} lines · by ${p.receivedBy}${p.notes.isEmpty ? '' : ' · ${p.notes}'}'),
@@ -132,7 +164,7 @@ class _PurchasesScreenState extends ConsumerState<PurchasesScreen> {
                             if (p.total > p.paid) Text('${st.money(p.total - p.paid)} unpaid', style: TextStyle(color: Colors.orange.shade800, fontSize: 12)),
                           ]),
                           TextButton(onPressed: () => _view(p, st, payType(p)), child: const Text('View')),
-                          if (can.contains('purchases.edit') && p.raw['imported'] == null)
+                          if (editable)
                             TextButton(key: Key('edit-${p.number}'), onPressed: () => showAppDialog<void>(context: context, builder: (_) => PurchaseEditor(purchase: p.toRecord())), child: const Text('Edit')),
                         ]),
                         onTap: () => _view(p, st, payType(p)),
@@ -986,3 +1018,6 @@ class StatusPill extends StatelessWidget {
     );
   }
 }
+
+const _buyCols = [ColourCol('Delivery', flex: 2), ColourCol('Date', flex: 2), ColourCol('Supplier', flex: 3), ColourCol('Invoice', flex: 2), ColourCol('Payment', flex: 2),
+  ColourCol('Lines', numeric: true), ColourCol('Total', flex: 2, numeric: true), ColourCol('Received by', flex: 2)];

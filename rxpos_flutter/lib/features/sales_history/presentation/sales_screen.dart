@@ -164,6 +164,8 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
             return Wrap(spacing: 8, runSpacing: 8, children: filters);
           }(),
           const SizedBox(height: 8),
+          // a computer: the React app's table, each column heading its own colour (src/pages/Sales.jsx)
+          if (MediaQuery.sizeOf(context).width >= 1100 && sales.isNotEmpty) const ColourTableHead(columns: _saleCols, trailing: _saleActions),
           Expanded(
             child: sales.isEmpty
                 ? EmptyState(rows.isEmpty
@@ -202,6 +204,54 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
                       final refunded = s.status == 'refunded';
                       final n = ((s.raw['edits'] as List?) ?? const []).length;
                       final momo = '${(s.raw['momo'] as Map?)?['txid'] ?? ''}';
+                      if (MediaQuery.sizeOf(context).width >= 1100) {
+                        final th = Theme.of(context);
+                        final dark = th.brightness == Brightness.dark;
+                        final green = Color(dark ? 0xFF34D399 : 0xFF047857), violet = Color(dark ? 0xFFC4B5FD : 0xFF6D28D9);
+                        final credit = s.payment.toLowerCase() == 'credit' || (s.paid < s.total && !refunded);
+                        final when = DateTime.tryParse(s.date)?.toLocal();
+                        String two(int n) => n.toString().padLeft(2, '0');
+                        return row(i).wrap(ColourTableRow(
+                          columns: _saleCols,
+                          onTap: () => _open(s, st),
+                          trailingWidth: _saleActions,
+                          trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                            OutlinedButton.icon(style: OutlinedButton.styleFrom(minimumSize: const Size(0, 34), padding: const EdgeInsets.symmetric(horizontal: 10)),
+                                onPressed: () => _open(s, st), icon: const Icon(Icons.visibility_outlined, size: 16), label: const Text('View')),
+                            PopupMenuButton<String>(
+                              tooltip: 'Actions for ${s.number}',
+                              onSelected: (v) => switch (v) {
+                                'receipt' => Printing.layoutPdf(onLayout: (_) => receiptPdf(s, st), name: s.number),
+                                'invoice' => _invoice(s, st),
+                                'edit' => _edit(s, st),
+                                _ => _open(s, st),
+                              },
+                              itemBuilder: (_) => [
+                                const PopupMenuItem(value: 'receipt', child: Text('Print receipt')),
+                                const PopupMenuItem(value: 'invoice', child: Text('Invoice (A4)')),
+                                if (!refunded && _can('sales.edit') && !_locked(s)) const PopupMenuItem(value: 'edit', child: Text('Edit')),
+                              ],
+                            ),
+                          ]),
+                          cells: [
+                            Wrap(spacing: 6, runSpacing: 2, crossAxisAlignment: WrapCrossAlignment.center, children: [
+                              Text(s.number, style: TextStyle(fontWeight: FontWeight.w700, decoration: refunded ? TextDecoration.lineThrough : null)),
+                              Text(s.type.isEmpty || s.type == 'retail' ? 'Retail' : 'Wholesale', style: th.textTheme.bodySmall),
+                              if (n > 0) InkWell(onTap: () => _open(s, st), child: _Badge('Edited${n > 1 ? ' ×$n' : ''}', warn: true)),
+                            ]),
+                            Text(when == null ? s.date : '${when.year}-${two(when.month)}-${two(when.day)}\n${two(when.hour)}:${two(when.minute)}'),
+                            Text(s.customerName, maxLines: 2, overflow: TextOverflow.ellipsis),
+                            Text((phoneOf[s.customerId] ?? '').isEmpty ? '—' : phoneOf[s.customerId]!),
+                            TonePill('${s.payment}${momo.isEmpty ? '' : ' $momo'}', color: credit ? violet : green, dot: false),
+                            TonePill(refunded ? 'refunded' : s.status, color: refunded ? th.colorScheme.error : green, dot: false),
+                            Column(crossAxisAlignment: CrossAxisAlignment.end, mainAxisSize: MainAxisSize.min, children: [
+                              Text(st.money(s.total), style: const TextStyle(fontWeight: FontWeight.w800)),
+                              if (s.paid < s.total && !refunded) Text('${st.money(s.total - s.paid)} on credit', style: th.textTheme.bodySmall?.copyWith(color: violet)),
+                            ]),
+                            Text(s.cashier, maxLines: 2, overflow: TextOverflow.ellipsis),
+                          ],
+                        ));
+                      }
                       return row(i).wrap(ListTile(
                         title: Wrap(spacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
                           Text('${s.number} · ${s.customerName}', style: TextStyle(fontWeight: FontWeight.w700, decoration: refunded ? TextDecoration.lineThrough : null)),
@@ -324,6 +374,10 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
     if (saved == true && mounted) say(context, s.raw['imported'] != null ? '${s.number} corrected (record only)' : '${s.number} updated; stock adjusted');
   }
 }
+
+const _saleCols = [ColourCol('Receipt', flex: 3), ColourCol('Date', flex: 2), ColourCol('Customer', flex: 3), ColourCol('Phone', flex: 2), ColourCol('Payment', flex: 2),
+  ColourCol('Status', flex: 2), ColourCol('Total', flex: 2, numeric: true), ColourCol('Cashier', flex: 2)];
+const _saleActions = 156.0;
 
 String _when(String iso) {
   final d = DateTime.tryParse(iso)?.toLocal();

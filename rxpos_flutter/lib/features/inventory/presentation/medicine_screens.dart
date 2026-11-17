@@ -151,7 +151,12 @@ class _MedicineListScreenState extends ConsumerState<MedicineListScreen> {
                         ('Set reorder level…', Icons.low_priority, (rows, done) => _bulkField([for (final i in rows) shown[i]], 'reorder', 'Reorder level', done)),
                       ]
                   : null,
-              builder: (context, row) => ListView.separated(
+              builder: (context, row) {
+                // a computer: the React app's table, each column heading its own colour (src/pages/Products.jsx)
+                final table = MediaQuery.sizeOf(context).width >= 1100;
+                const cols = [ColourCol('Medicine', flex: 4), ColourCol('Generic', flex: 2), ColourCol('Form · unit', flex: 2), ColourCol('Category', flex: 2),
+                  ColourCol('Cost', flex: 2, numeric: true), ColourCol('Wholesale', flex: 2, numeric: true), ColourCol('Retail', flex: 2, numeric: true), ColourCol('Stock', flex: 2, numeric: true)];
+                final listView = ListView.separated(
               itemCount: shown.length,
               separatorBuilder: (_, _) => const Divider(height: 1),
               itemBuilder: hued((_, i) {
@@ -159,6 +164,42 @@ class _MedicineListScreenState extends ConsumerState<MedicineListScreen> {
                 final st = d.stockOf(p.id);
                 final packs = p.packs.where((k) => k.name.isNotEmpty && k.size > 1);
                 final rs = row(i);
+                if (table) {
+                  final stockC = st <= 0 ? Theme.of(context).colorScheme.error : isLowStock(p, st) ? Colors.orange.shade800 : Color(Theme.of(context).brightness == Brightness.dark ? 0xFF34D399 : 0xFF047857);
+                  return rs.wrap(ColourTableRow(
+                    columns: cols,
+                    onTap: manage ? () => editMedicine(context, ref, p) : null,
+                    trailingWidth: manage ? 110 : 0,
+                    trailing: manage
+                        ? TextButton(key: Key('packs-${p.id}'), onPressed: () => editPacks(context, ref, p), child: Text('Packs${p.packs.isEmpty ? '' : ' (${p.packs.length})'}'))
+                        : null,
+                    cells: [
+                      Row(children: [
+                        if (manage) ...[rs.tickBox, const SizedBox(width: 6)],
+                        Expanded(child: Wrap(spacing: 6, runSpacing: 2, crossAxisAlignment: WrapCrossAlignment.center, children: [
+                          Text(p.name, style: const TextStyle(fontWeight: FontWeight.w700)),
+                          if (p.rx) const _Tag('Rx'),
+                          if (p.raw['chronic'] == true) const _Tag('Chronic'),
+                          if (p.controlled) const _Tag('CD'),
+                          if (_review) for (final x in recordIssues(p, dup)) _Tag(x, warn: true),
+                          if (p.barcode.isNotEmpty) Text(p.barcode, style: Theme.of(context).textTheme.bodySmall),
+                        ])),
+                      ]),
+                      Text(p.generic.isEmpty ? '—' : p.generic),
+                      Text([[p.strength, p.form].where((x) => x.isNotEmpty).join(' '), p.unit.isEmpty ? '' : 'sold as ${p.unit}${packs.isEmpty ? '' : ' (${packs.map((k) => '1 ${k.name.toLowerCase()} = ${formatQty(k.size)}').join(', ')})'}']
+                          .where((x) => x.isNotEmpty).join('\n')),
+                      Text(p.category.isEmpty ? '—' : p.category),
+                      Text(s.money(p.cost)),
+                      Text(s.money(p.wholesale)),
+                      Text(s.money(p.price), style: const TextStyle(fontWeight: FontWeight.w700)),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                        decoration: BoxDecoration(color: tint(stockC, Theme.of(context).colorScheme.surface, 16), borderRadius: BorderRadius.circular(99)),
+                        child: Text(formatQty(st), style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12.5, color: stockC)),
+                      ),
+                    ],
+                  ));
+                }
                 return rs.wrap(ListTile(
                   leading: manage ? rs.tickBox : null,
                   title: Wrap(spacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
@@ -187,7 +228,9 @@ class _MedicineListScreenState extends ConsumerState<MedicineListScreen> {
                   onTap: manage ? () => editMedicine(context, ref, p) : null,
                 ));
               }),
-            ),
+            );
+                return table ? Column(children: [ColourTableHead(columns: cols, trailing: manage ? 110 : 0), Expanded(child: listView)]) : listView;
+              },
             );
             }(),
     );

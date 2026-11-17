@@ -184,8 +184,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
                             if (p.form.isNotEmpty) Text(p.form, style: Theme.of(context).textTheme.bodySmall),
                             const SizedBox(height: 3),
                             Wrap(spacing: 6, runSpacing: 4, children: [
-                              StatusPill(st <= 0 ? 'Out of stock' : low ? 'Low stock' : 'In stock', color: stockC),
-                              if (soon) StatusPill('Expiring soon', color: warnC),
+                              TonePill(st <= 0 ? 'Out of stock' : low ? 'Low stock' : 'In stock', color: stockC),
+                              if (soon) TonePill('Expiring soon', color: warnC),
                             ]),
                             if (days != null && days < 0) Text(_expiredNote(d.stock.batchesOf(p.id)), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: err)),
                           ]),

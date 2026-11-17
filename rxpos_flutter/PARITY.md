@@ -12,7 +12,7 @@ Every feature of the React app (`src/pages/*.jsx`, `src/*.jsx`), screen by scree
 | .tabs: one strip, the chosen tab soft grey in bold | `segmentedButtonTheme`; filter chips without ticks |
 | Ghost buttons in the text colour; .modal 20 px corners under a hairline, 18 px title | `outlinedButtonTheme`, `dialogTheme` |
 | Figure cards (.kpi) with a coloured top band and icon tile; the hero card white with a brand glow | `StatCard`, `GreetingCard` |
-| Inventory table on a computer: a colour per column heading, tinted rows with a stripe, status pills, In stock pill, Edit | `ColourTableHead`, `ColourTableRow`, `StatusPill` (line_colors.dart), inventory_screen.dart |
+| Tables on a computer (Inventory, Sales History, Medicine List, Customers, Suppliers, Purchase History): a colour per column heading, tinted rows with a stripe, status pills, In stock pill, Edit | `ColourTableHead`, `ColourTableRow`, `TonePill` (line_colors.dart): Inventory, Sales History, Medicine List, Customers, Suppliers and Purchase History |
 
 ## Sign-in and the app frame (Auth.jsx, App.jsx, main.jsx, engage.jsx, notify.jsx, refresh.jsx, twostep.jsx)
 - ✅ 2026-11 audit: Sign out everywhere else (account card); an administrator signs a staff member out on every device
