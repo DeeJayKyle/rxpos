@@ -23,7 +23,7 @@ import { isWeb, isNative } from './platform.js';
 import { keepsData } from './webpolicy.js';
 import RefreshHost from './refresh.jsx';
 import { startUpdates, onUpdate, applyUpdate, justUpdated, LABEL } from './update.js';
-import { applyTheme, saveTheme, allowedThemes, savedMode, saveMode, systemDark, paletteFor, startupTheme, ACCENTS, savedAccent, saveAccent, withAccent } from './themes.js';
+import { applyTheme, saveTheme, allowedThemes, THEME_GROUPS, currentThemeId, savedMode, saveMode, systemDark, paletteFor, startupTheme, ACCENTS, savedAccent, saveAccent, withAccent } from './themes.js';
 import { STYLES, applyStyle, savedStyle, saveStyle } from './surface.js';
 import { LEVELS, applyLevel, savedLevel, saveLevel } from './vivid.js';
 import { TwoStepModal } from './twostep.jsx';
@@ -230,7 +230,7 @@ function ThemePicker({ theme, setTheme, mode, setMode, accent, setAccent, style,
   const ref = useRef();
   const current = list.find((t) => t.id === theme);
   // Keep within what the owner allows for this pharmacy
-  useEffect(() => { if (list.length && !list.some((t) => t.id === theme)) setTheme(branding?.defaultTheme && list.some((t) => t.id === branding.defaultTheme) ? branding.defaultTheme : list[0].id); }, [branding]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (list.length && !list.some((t) => t.id === theme)) { const d = currentThemeId(branding?.defaultTheme || ''); setTheme(d && list.some((t) => t.id === d) ? d : list[0].id); } }, [branding]); // eslint-disable-line react-hooks/exhaustive-deps
   // Follow system: light or dark with the operating system, live when it changes
   useEffect(() => {
     if (mode !== 'system') return;
@@ -272,13 +272,18 @@ function ThemePicker({ theme, setTheme, mode, setMode, accent, setAccent, style,
               );
             })}
           </div>
-          <div className="bell-head">Theme</div>
-          {list.map((t) => (
-            <button key={t.id} className={'theme-item' + (t.id === theme ? ' on' : '')} onClick={() => { setMode(''); setTheme(t.id); setOpen(false); }}>
-              <span className="swatch" style={{ background: `linear-gradient(135deg, ${t.c.surface} 0 45%, ${t.c.primary} 45% 72%, ${t.c.primary2} 72%)`, borderColor: t.c.borderStrong }} />
-              <span className="grow">{t.name}{t.inspired && t.inspired !== t.name && <small className="muted"> · {t.inspired}</small>}</span>
-              {t.base === 'dark' ? <Moon size={13} /> : <Sun size={13} />}
-            </button>
+          {/* themes by group (src/themes.js THEME_GROUPS): Clinical, Colourful, Dashboard looks, Dark, High contrast */}
+          {THEME_GROUPS.map((g) => [g, list.filter((t) => (t.group || 'Clinical') === g)]).filter(([, ts]) => ts.length).map(([g, ts]) => (
+            <div key={g} className="theme-group" role="group" aria-label={g}>
+              <div className="bell-head">{g}</div>
+              {ts.map((t) => (
+                <button key={t.id} className={'theme-item' + (t.id === theme ? ' on' : '')} onClick={() => { setMode(''); setTheme(t.id); setOpen(false); }}>
+                  <span className="swatch" style={{ background: `linear-gradient(135deg, ${t.c.sidebar} 0 30%, ${t.c.surface} 30% 55%, ${t.c.primary} 55% 78%, ${t.c.primary2} 78%)`, borderColor: t.c.borderStrong }} />
+                  <span className="grow">{t.name}{t.inspired && t.inspired !== t.name && <small className="muted"> · {t.inspired}</small>}</span>
+                  {t.base === 'dark' ? <Moon size={13} /> : <Sun size={13} />}
+                </button>
+              ))}
+            </div>
           ))}
           <div className="bell-head">Colour</div>
           <ColourLevel onPick={() => setOpen(false)} />
@@ -640,7 +645,7 @@ function Shell() {
           <PremiumToggle theme={theme} setTheme={setTheme} setMode={setThemeMode} />
           <ThemePicker theme={theme} setTheme={setTheme} mode={themeMode} setMode={setThemeMode} accent={accent} setAccent={setAccent} style={surface} setStyle={setSurface} />
         </header>
-        <main className="content" ref={contentRef}>
+        <main className="content" ref={contentRef} data-page={here}>
           <Suspense fallback={<div className="page"><div className="skeleton" /><div className="skeleton" style={{ height: 280 }} /></div>}>
             <Routes>
               {groups.flatMap((g) => g.items).map(([to, , , , , el]) => <Route key={to} path={to} element={el} />)}

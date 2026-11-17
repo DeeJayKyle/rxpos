@@ -275,8 +275,11 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   List<Widget> _main(ThemeData t) {
     final isUsername = _email.text.trim().isNotEmpty && !_email.text.contains('@');
     return [
-      Text(_held?.isNotEmpty == true ? 'Sign in · this device: $_held' : 'Sign in with your pharmacy account', style: t.textTheme.bodyMedium),
-      const SizedBox(height: 20),
+      // "Welcome back" (the owner's references, Nov 2026), with the pharmacy this device holds under it
+      Text('Welcome back', textAlign: TextAlign.center, style: t.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -.8)),
+      const SizedBox(height: 4),
+      Text(_held?.isNotEmpty == true ? 'Sign in · this device: $_held' : 'Sign in with your pharmacy account', textAlign: TextAlign.center, style: t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurfaceVariant)),
+      const SizedBox(height: 22),
       TextField(controller: _email, decoration: const InputDecoration(labelText: 'Email or username', prefixIcon: Icon(Icons.mail_outline)), keyboardType: TextInputType.emailAddress,
           autofillHints: const [AutofillHints.username], textInputAction: TextInputAction.next, autocorrect: false, onChanged: (_) => setState(() {})),
       const SizedBox(height: 12),
@@ -296,8 +299,9 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
       FilledButton.icon(
         key: const Key('sign-in-submit'),
         onPressed: _busy ? null : _submit,
-        style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52), textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-        icon: const Icon(Icons.login),
+        style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(54), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            textStyle: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800), iconAlignment: IconAlignment.end),
+        icon: const Icon(Icons.arrow_forward),
         label: Text(_busy ? 'Signing in…' : 'Sign in'),
       ),
       if (_unlockUser != null) ...[
@@ -442,63 +446,120 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   Widget build(BuildContext context) {
     final t = Theme.of(context);
     final wide = MediaQuery.sizeOf(context).width >= 980;
+    final cs = t.colorScheme;
     final card = ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 420),
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: AutofillGroup(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
-              Row(children: [
+      constraints: const BoxConstraints(maxWidth: 440),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: AutofillGroup(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
+            if (!wide) ...[
+              Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                 ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.asset('assets/icon.png', width: 36, height: 36)),
                 const SizedBox(width: 10),
                 Text('RxPOS', style: t.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
               ]),
-              const SizedBox(height: 6),
-              ...switch (_stage) {
-                _Stage.main => _main(t),
-                _Stage.choose => _choose(t),
-                _Stage.twoStep => _twoStep(t),
-                _Stage.pin => _pinStage(t),
-                _Stage.forgotAsk => _forgotAsk(t),
-                _Stage.forgotCode => _forgotCode(t),
-              },
-            ]),
-          ),
+              const SizedBox(height: 18),
+            ],
+            ...switch (_stage) {
+              _Stage.main => _main(t),
+              _Stage.choose => _choose(t),
+              _Stage.twoStep => _twoStep(t),
+              _Stage.pin => _pinStage(t),
+              _Stage.forgotAsk => _forgotAsk(t),
+              _Stage.forgotCode => _forgotCode(t),
+            },
+          ]),
         ),
       ),
     );
-    Widget point(IconData i, String s) => Padding(
-          padding: const EdgeInsets.only(bottom: 14),
-          child: Row(children: [Icon(i, color: Colors.white70), const SizedBox(width: 12), Expanded(child: Text(s, style: const TextStyle(color: Colors.white, fontSize: 16)))]),
+    // the brand panel (src/pages/Auth.jsx): pale, in the theme's own colour, soft shapes, a short headline
+    Widget blob(double w, double h, BorderRadius r, Color c) => Container(width: w, height: h, decoration: BoxDecoration(color: c, borderRadius: r));
+    Widget chip(IconData i, String s) => Container(
+          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+          decoration: BoxDecoration(color: cs.surface.withValues(alpha: .8), borderRadius: BorderRadius.circular(99), border: Border.all(color: cs.primary.withValues(alpha: .18))),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(i, size: 14, color: cs.primary), const SizedBox(width: 6), Text(s, style: t.textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600))]),
         );
     final hero = Container(
-      color: const Color(0xFF0B3B3C),
-      padding: const EdgeInsets.all(48),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-        const Text('RxPOS', style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w800)),
-        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('Run your pharmacy anywhere, even offline.', style: TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.w800)),
-          const SizedBox(height: 24),
-          point(Icons.bolt, 'Lightning-fast checkout, barcode scanning and Mobile Money'),
-          point(Icons.wifi_off, 'Keeps selling when the internet is down, then syncs automatically'),
-          point(Icons.devices, 'One system on Windows PCs, Android phones and the web, across all your branches'),
-          point(Icons.verified_user_outlined, 'Batch & expiry tracking, drug information, audit trail, finance and reports built in'),
-        ]),
-        Text('© ${DateTime.now().year} RxPOS', style: const TextStyle(color: Colors.white54)),
+      color: Color.alphaBlend(cs.primary.withValues(alpha: .07), cs.surface),
+      child: Stack(children: [
+        Positioned(top: 18, left: 18, child: blob(44, 44, BorderRadius.circular(22), cs.primary)),
+        Positioned(top: 0, right: 0, child: blob(150, 140, const BorderRadius.only(bottomLeft: Radius.circular(48)), cs.primary)),
+        Positioned(top: 300, right: 18, child: blob(42, 42, BorderRadius.circular(21), cs.primary.withValues(alpha: .6))),
+        Positioned(bottom: 64, left: 0, child: blob(104, 128, const BorderRadius.horizontal(right: Radius.circular(48)), cs.primary.withValues(alpha: .9))),
+        Positioned(left: 0, right: 0, bottom: 0, height: 260, child: CustomPaint(painter: _WavePainter(cs.primary))),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(40, 76, 40, 32),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            Row(children: [
+              ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.asset('assets/icon.png', width: 34, height: 34)),
+              const SizedBox(width: 10),
+              Text('RxPOS', style: t.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
+            ]),
+            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text.rich(TextSpan(children: [
+                const TextSpan(text: 'Your pharmacy,\n'),
+                TextSpan(text: 'in one place.', style: TextStyle(color: cs.tertiary)),
+              ]), style: t.textTheme.displaySmall?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -1.2, height: 1.05)),
+              const SizedBox(height: 14),
+              Text('Fast sales, safe stock and clear figures, online or off.', style: t.textTheme.bodyLarge?.copyWith(color: cs.onSurfaceVariant)),
+              const SizedBox(height: 22),
+              Wrap(spacing: 8, runSpacing: 8, children: [
+                chip(Icons.wifi_off, 'Works offline'), chip(Icons.verified_user_outlined, 'Batch & expiry'),
+                chip(Icons.bolt, 'Mobile Money'), chip(Icons.devices, 'PC, phone, web'),
+              ]),
+            ]),
+            Text('© ${DateTime.now().year} RxPOS', style: t.textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+          ]),
+        ),
       ]),
     );
     // the browser only: continue here, or install the Windows / Android app
     final downloads = kIsWeb || widget.showDownloads ? AppDownloadsCard(device: widget.downloadsDevice) : null;
     final side = Center(
       child: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 32),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           card,
           if (downloads != null && _stage == _Stage.main) ...[const SizedBox(height: 16), downloads],
         ]),
       ),
     );
-    return Scaffold(body: wide ? Row(children: [Expanded(child: hero), Expanded(child: side)]) : side);
+    if (!wide) return Scaffold(body: SafeArea(child: side));
+    // one rounded frame on a tint of the theme's colour
+    return Scaffold(
+      backgroundColor: Color.alphaBlend(cs.primary.withValues(alpha: .09), t.scaffoldBackgroundColor),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1180, maxHeight: 780),
+            child: Material(
+              color: cs.surface,
+              elevation: 12,
+              shadowColor: cs.primary.withValues(alpha: .35),
+              borderRadius: BorderRadius.circular(28),
+              clipBehavior: Clip.antiAlias,
+              child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [Expanded(flex: 41, child: hero), Expanded(flex: 59, child: side)]),
+            ),
+          ),
+        ),
+      ),
+    );
   }
+}
+
+/// The two soft waves at the foot of the brand panel.
+class _WavePainter extends CustomPainter {
+  const _WavePainter(this.color);
+  final Color color;
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width, h = size.height;
+    canvas.drawPath(Path()..moveTo(0, h)..cubicTo(w * .3, h * .55, w * .55, h * .18, w, h * .14)..lineTo(w, h)..close(), Paint()..color = color.withValues(alpha: .16));
+    canvas.drawPath(Path()..moveTo(0, h)..cubicTo(w * .35, h * .68, w * .65, h * .41, w, h * .36)..lineTo(w, h)..close(), Paint()..color = color.withValues(alpha: .12));
+  }
+
+  @override
+  bool shouldRepaint(_WavePainter old) => old.color != color;
 }

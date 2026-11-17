@@ -45,7 +45,8 @@ class Look {
       // version 4: the React app's look is the standard; a device still on RxPOS Green (the old Flutter standard) moves to it once
       final oldGreen = ver < 4 && (j['design'] == 'rxpos-green' || j['design'] == null);
       return Look(
-        theme: palettes.any((p) => p.id == theme) ? theme : daylightClinicalPaletteId,
+        // a theme retired in Nov 2026 → the kept one closest to it (themes.dart retiredPalettes)
+        theme: palettes.any((p) => p.id == currentPaletteId(theme)) ? currentPaletteId(theme) : daylightClinicalPaletteId,
         system: j['mode'] == 'system',
         accent: accents.any((a) => a.$1 == j['accent']) ? '${j['accent']}' : '',
         // Aurora is the standard look from version 2 of the saved look; a device still on the old standard (Flat) moves to it once

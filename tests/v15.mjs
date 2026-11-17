@@ -13,9 +13,9 @@ const LOGO = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76L
 // ----- owner: pharmacy with logo + 3 themes, stock that expires soon, a sale last week -----
 const t = await owner('/tenants', { name: 'Bugolobi Care Pharmacy', admin: { name: 'Bea Admin', email: 'bea@test.rx', password: 'bea-pass-123' } });
 const slug = t.tenant.slug, tid = t.tenant.id;
-let j = await owner('/tenants/' + tid, { branding: { logo: LOGO, themes: ['tokyo-night', 'mint', 'clinic-blue'], defaultTheme: 'mint' } });
+let j = await owner('/tenants/' + tid, { branding: { logo: LOGO, themes: ['midnight-pro', 'forest-green', 'cobalt'], defaultTheme: 'forest-green' } });
 check('owner sets logo and 3 allowed themes', j.tenant?.branding?.logo === LOGO && j.tenant.branding.themes.length === 3, j.error);
-j = await owner('/tenants/' + tid, { branding: { themes: ['mint', 'dark'] } });
+j = await owner('/tenants/' + tid, { branding: { themes: ['forest-green', 'oled'] } });
 check('fewer than 3 themes refused', !!j.error);
 j = await fetch(base + '/api/pharmacy/' + slug).then((r) => r.json());
 check('sign-in page gets the pharmacy logo', j.logo === LOGO);
@@ -77,10 +77,10 @@ check('dashboard has no Add stock button', !(await A.evaluate(() => [...document
 await A.evaluate(() => document.querySelector('button[title="Theme"]').click()); await wait(300);
 const themes = await A.evaluate(() => [...document.querySelectorAll('.theme-item')].map((x) => x.innerText.split('\n')[0]));
 check('theme picker offers exactly the 3 themes the owner allowed', themes.length === 3, themes.join(', '));
-check('device starts on the owner\'s default theme (Fresh Mint)', await A.evaluate(() => document.documentElement.dataset.palette === 'mint'));
-await A.evaluate(() => [...document.querySelectorAll('.theme-item')].find((x) => x.textContent.includes('Tokyo')).click()); await wait(300);
-check('switching theme applies it', await A.evaluate(() => document.documentElement.dataset.palette === 'tokyo-night' && document.documentElement.dataset.theme === 'dark'));
-await A.screenshot({ path: out + '/01-tokyo-dashboard.png' });
+check('device starts on the owner\'s default theme (Forest Green)', await A.evaluate(() => document.documentElement.dataset.palette === 'forest-green'));
+await A.evaluate(() => [...document.querySelectorAll('.theme-item')].find((x) => x.textContent.includes('Midnight Pro')).click()); await wait(300);
+check('switching theme applies it', await A.evaluate(() => document.documentElement.dataset.palette === 'midnight-pro' && document.documentElement.dataset.theme === 'dark'));
+await A.screenshot({ path: out + '/01-midnight-dashboard.png' });
 check('expiry pop-up with sound appears', await (async () => { for (let i = 0; i < 20; i++) { if (await A.evaluate(() => /attention/i.test(document.querySelector('.popups')?.innerText || ''))) return true; await wait(500); } return false; })());
 await A.screenshot({ path: out + '/02-popup.png' });
 check('weekly summary pop-up for last week', await (async () => { for (let i = 0; i < 24; i++) { if (await A.evaluate(() => /Last week at a glance/.test(document.querySelector('.popups')?.innerText || ''))) return true; await wait(500); } return false; })());

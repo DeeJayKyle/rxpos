@@ -757,7 +757,7 @@ export default function POS({ mode = 'retail' }) {
 
   return (
     <>
-    <div ref={posRef} className={'pos lay-' + (layout === 'standard' ? 'std' : layout === 'advanced' ? 'adv' : 'classic') + (resizable && sized.w ? ' sized' : '') + (fkeys && !touch ? ' has-fkeys' : '')} style={resizable && sized.w ? { '--pos-sale-w': sized.w + 'px' } : undefined}>
+    <div ref={posRef} className={'pos lay-' + (layout === 'standard' ? 'std' : layout === 'advanced' ? 'adv' : 'classic') + (resizable && sized.w ? ' sized' : '')} style={resizable && sized.w ? { '--pos-sale-w': sized.w + 'px' } : undefined}>
       {/* wide screens only (CSS): client & loyalty */}
       {layout !== 'classic' && (
       <aside className="pos-side" aria-label="Client">
@@ -880,6 +880,8 @@ export default function POS({ mode = 'retail' }) {
             <div className="cart-empty" style={{ gridColumn: '1/-1' }}><ScanBarcode size={36} /><span>{q ? `No medicines match “${q}”` : view === 'fav' ? 'No favourites yet: tap the star on a medicine to keep it here' : view === 'recent' ? 'Nothing sold at this branch yet' : 'No medicines here'}</span></div>
           )}
         </div>
+      {fkeys && !touch && <FKeyBar items={fkeyItems({ can, features, wholesale })} onGo={(to) => navigate(to)} onHide={() => { showFkeys(false); setFkeys(false); }}
+        onRun={(a) => (a === 'search' ? focusSearch() : a === 'charge' ? checkout() : a === 'proforma' ? saveProforma() : setHelp(true))} />}
       </section>
 
       {!narrow && cart.length > 0 && !cartInView && (
@@ -1260,8 +1262,6 @@ export default function POS({ mode = 'retail' }) {
         </Modal>
       )}
     </div>
-    {fkeys && !touch && <FKeyBar items={fkeyItems({ can, features, wholesale })} onGo={(to) => navigate(to)} onHide={() => { showFkeys(false); setFkeys(false); }}
-      onRun={(a) => (a === 'search' ? focusSearch() : a === 'charge' ? checkout() : a === 'proforma' ? saveProforma() : setHelp(true))} />}
     </>
   );
 }

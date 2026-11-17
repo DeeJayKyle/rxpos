@@ -1,6 +1,6 @@
 # RxPOS release notes
 
-## React (classic) app 1.10.5 · Flutter app 2.1 (next build) · November 2026 (refund sheet, landing pages, F-keys)
+## React (classic) app 1.10.5 · Flutter app 2.1 (next build) · November 2026 (refund sheet, landing pages, F-keys, top 10 themes, new sign-in)
 
 Nothing to do on the tills: they update by themselves.
 
@@ -19,6 +19,15 @@ Nothing to do on the tills: they update by themselves.
   stock, Sales, Inventory, Search, Charge, Proforma, all keys). Each key can be clicked and follows this device's own
   key map. × hides it on this device; the shortcuts sheet (?) shows it again.
 - **Flutter till:** medicine tiles are a little taller, so a long price row no longer overflows.
+- **The top 10 themes** (both apps). 36 themes are now 10, chosen for working speed, clear colour coding on every
+  page, readability and smooth transitions, each with three colours at most (a neutral base, the menu colour and one
+  brand colour). They are grouped in the theme menu: **Light** (RxPOS Daylight Clinical, Cobalt Blue, Royal Violet,
+  Sunrise), **Dashboard looks** from the owner's references (Charcoal & Sky for the dashboard and Finance, Lime Studio
+  for Calendar, Drug Quiz and the weekly summary, Aqua Navy for Reports and Sales History, Forest Green for Purchases,
+  Expenses and Banks) and **Dark** (RxPOS OLED Black, Midnight Pro). A device or a pharmacy on a retired theme moves
+  to the closest kept one by itself.
+- **A new sign-in page** (both apps): one rounded frame, a pale brand panel in the theme's colour with soft shapes and
+  a short headline, and a clean "Welcome back" form with a large Sign in button.
 
 ## React (classic) app 1.10.4 · Flutter app 2.1 (next build) · Cloud · November 2026 (audit, second pass)
 
