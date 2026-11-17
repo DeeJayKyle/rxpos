@@ -390,7 +390,7 @@ function Shell() {
       const { user: u, syncCfg: sc, saveSyncCfg: save, users } = guardRef.current;
       if (!u || !borrowedToken(cfg, u.id)) return cfg;
       const me = users.find((x) => x.id === u.id) || u;
-      const pw = await askText({ title: 'Confirm it is you', message: `This device is still signed in to the cloud as someone else (they signed in last with their password). To do this as ${u.name}, type your password.`, type: 'password', minLength: 1, confirmText: 'Continue' });
+      const pw = await askText({ title: 'Confirm it is you', message: `This device is still signed in to the cloud as someone else (they signed in last with their password). To do this as ${u.name}, type your password.`, type: 'password', confirmText: 'Continue' });
       if (!pw) throw new Error('Not done: it needs your own password on this device.');
       const r = await cloudLogin(cfg.url, me.email || me.username || '', pw, cfg.tenant);
       if (r.twoFactor) throw new Error('You use two-step sign-in: sign out, then sign in with your password and code to do this.');
