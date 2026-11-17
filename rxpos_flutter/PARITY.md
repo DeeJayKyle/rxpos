@@ -3,6 +3,17 @@
 Every feature of the React app (`src/pages/*.jsx`, `src/*.jsx`), screen by screen, and where the Flutter app stands.
 ✅ done · ◐ partly · ✗ not yet. Items are ticked only when built and covered by a test.
 
+## The React look (2026-11-17)
+| React (classic) | Flutter |
+|---|---|
+| Daylight Clinical / OLED Black from the start, following the system (src/themes.js startupTheme) | `Look()` default; saved looks on the old RxPOS Green standard move to it once (look v4) |
+| Full-height navy menu (.sidebar): RxPOS mark and pharmacy, group heads with counts, 13.5 px items, the page lit with a bar, amber counts, key caps, the user card at the foot | `_SidebarSurface`, `_SideHeader`, `_GroupHead`, `_NavItem`, `AccountMenu(card: true)` (`SideColors` from each palette, its `sidebarText` too) |
+| Top bar over the page: Search or ask AI · Ctrl K, group › page crumbs, the Premium UI pill | `_SearchBox`, `_Crumbs`, the Premium pill |
+| .tabs: one strip, the chosen tab soft grey in bold | `segmentedButtonTheme`; filter chips without ticks |
+| Ghost buttons in the text colour; .modal 20 px corners under a hairline, 18 px title | `outlinedButtonTheme`, `dialogTheme` |
+| Figure cards (.kpi) with a coloured top band and icon tile; the hero card white with a brand glow | `StatCard`, `GreetingCard` |
+| Inventory table on a computer: a colour per column heading, tinted rows with a stripe, status pills, In stock pill, Edit | `ColourTableHead`, `ColourTableRow`, `StatusPill` (line_colors.dart), inventory_screen.dart |
+
 ## Sign-in and the app frame (Auth.jsx, App.jsx, main.jsx, engage.jsx, notify.jsx, refresh.jsx, twostep.jsx)
 - ✅ 2026-11 audit: Sign out everywhere else (account card); an administrator signs a staff member out on every device
   (Users); Calendar: refills with initials only and Replace link (test/cloud/real_cloud_test.dart). Signing out keeps the

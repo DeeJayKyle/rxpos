@@ -39,3 +39,87 @@ class Hued extends StatelessWidget {
 
 /// An item builder whose rows are [Hued]: `itemBuilder: hued((_, i) => …)`
 IndexedWidgetBuilder hued(IndexedWidgetBuilder build) => (context, i) => Hued(index: i, child: build(context, i));
+
+/// A column of a [ColourTable]: its heading, its share of the width, and whether it holds figures (right-aligned).
+class ColourCol {
+  const ColourCol(this.title, {this.flex = 1, this.numeric = false});
+  final String title;
+  final int flex;
+  final bool numeric;
+}
+
+/// The column headings of a table as the React app draws them on a computer (src/styles/pagecolors.css): each heading
+/// its own colour, a band of it (16%) under a 3 px line of it.
+class ColourTableHead extends StatelessWidget {
+  const ColourTableHead({super.key, required this.columns, this.trailing = 0});
+  final List<ColourCol> columns;
+  /// room kept at the right for the rows' buttons
+  final double trailing;
+  @override
+  Widget build(BuildContext context) {
+    final th = Theme.of(context), surface = th.colorScheme.surface;
+    return SizedBox(height: 38 * MediaQuery.textScalerOf(context).scale(1), child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      const SizedBox(width: 4),
+      for (final (i, c) in columns.indexed)
+        Expanded(
+          flex: c.flex,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            alignment: c.numeric ? Alignment.centerRight : Alignment.centerLeft,
+            decoration: BoxDecoration(color: tint(lineColor(null, i), surface, 16), border: Border(top: BorderSide(color: lineColor(null, i), width: 3))),
+            child: Text(c.title.toUpperCase(), textAlign: c.numeric ? TextAlign.right : TextAlign.left, maxLines: 1, overflow: TextOverflow.ellipsis,
+                style: th.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w700, letterSpacing: .7, color: th.colorScheme.onSurface)),
+          ),
+        ),
+      if (trailing > 0) Container(width: trailing, color: tint(lineColor(null, columns.length), surface, 16), foregroundDecoration: BoxDecoration(border: Border(top: BorderSide(color: lineColor(null, columns.length), width: 3)))),
+    ]));
+  }
+}
+
+/// A row of a [ColourTableHead]'s table: the cells in the same shares of the width (put it in [Hued] for the row's colour).
+class ColourTableRow extends StatelessWidget {
+  const ColourTableRow({super.key, required this.columns, required this.cells, this.trailing, this.trailingWidth = 0, this.onTap});
+  final List<ColourCol> columns;
+  final List<Widget> cells;
+  final Widget? trailing;
+  final double trailingWidth;
+  final VoidCallback? onTap;
+  @override
+  Widget build(BuildContext context) => InkWell(
+        onTap: onTap,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 56),
+          child: Row(children: [
+            for (final (i, c) in columns.indexed)
+              Expanded(
+                flex: c.flex,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  child: Align(alignment: c.numeric ? Alignment.centerRight : Alignment.centerLeft, child: i < cells.length ? cells[i] : const SizedBox()),
+                ),
+              ),
+            if (trailingWidth > 0) SizedBox(width: trailingWidth, child: Center(child: trailing)),
+          ]),
+        ),
+      );
+}
+
+/// A status pill with a dot (src/styles.css .status-pill): In stock, Low stock, Expiring soon…
+class StatusPill extends StatelessWidget {
+  const StatusPill(this.text, {super.key, required this.color});
+  final String text;
+  final Color color;
+  @override
+  Widget build(BuildContext context) {
+    final surface = Theme.of(context).colorScheme.surface;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(color: tint(color, surface, 14), borderRadius: BorderRadius.circular(99)),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Container(width: 6, height: 6, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+        const SizedBox(width: 5),
+        Flexible(child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: color))),
+      ]),
+    );
+  }
+}

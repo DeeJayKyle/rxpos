@@ -29,6 +29,7 @@ DesignTokens nextGenTokens({required bool dark}) => DesignTokens(
       tapTarget: kMinTouch,
       gap: 12,
       cardPadding: 14,
+      tileHeight: 140, // the till's tiles keep room for the wider padding
       headingWeight: FontWeight.w700,
       headingSpacing: -0.2,
     );

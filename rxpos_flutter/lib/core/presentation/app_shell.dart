@@ -74,7 +74,14 @@ class AppShell extends ConsumerWidget {
     final glassBar = Theme.of(context).appBarTheme.backgroundColor ?? Theme.of(context).colorScheme.surface;
     final bar = AppBar(
       // the pharmacy, then where you are (group › page) with the page's pin and the ? sheet; the title area shrinks first
-      title: Row(children: [
+      title: wide
+          // wide screens (as the React app): the search box, then where you are; the pharmacy is at the top of the menu
+          ? Row(children: [
+              Flexible(flex: 2, child: _SearchBox(onTap: () => openSearch(context, visible))),
+              const SizedBox(width: 16),
+              Flexible(flex: 3, child: _Crumbs(screens: visible, location: location)),
+            ])
+          : Row(children: [
         // the pharmacy's name: on a narrow screen up to two smaller lines, so a long name is read in full
         Flexible(
           child: Text(
@@ -85,37 +92,16 @@ class AppShell extends ConsumerWidget {
             style: wide ? null : Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700, height: 1.15),
           ),
         ),
-        if (wide) ...[const SizedBox(width: 16), Flexible(child: _Crumbs(screens: visible, location: location))],
       ]),
       // phones: Back on the left (the menu is the More tab at the bottom); the sidebar's own button on wide screens
       automaticallyImplyLeading: false,
-      leadingWidth: wide && !home ? 96 : null,
-      titleSpacing: !wide && home ? 16 : null,
-      leading: wide
-          ? Row(mainAxisSize: MainAxisSize.min, children: [
-              const SizedBox(width: 4),
-              IconButton(key: const Key('sidebar-toggle'), tooltip: rail ? 'Show the menu (Ctrl+B)' : 'Fold the menu to icons (Ctrl+B)', onPressed: toggleRail,
-                  icon: Icon(rail ? Icons.menu : Icons.menu_open)),
-              if (!home) backButton,
-            ])
-          : home
-              ? null
-              : backButton,
+      titleSpacing: (wide || home) ? 16 : null,
+      leading: home ? null : backButton,
       // frosted glass: the bar lets the page's colours through, blurred, under a hairline
       backgroundColor: glassBar.withValues(alpha: glassBar.a * .82),
       flexibleSpace: ClipRect(child: BackdropFilter(filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18), child: const SizedBox.expand())),
       actions: [
-        if (wide)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: OutlinedButton.icon(
-              key: const Key('search-trigger'),
-              onPressed: () => openSearch(context, visible),
-              icon: const Icon(Icons.search, size: 18),
-              label: const Text('Search…  Ctrl K'),
-            ),
-          )
-        else
+        if (!wide)
           IconButton(key: const Key('search-trigger'), tooltip: 'Search or ask AI (Ctrl+K)', onPressed: () => openSearch(context, visible), icon: const Icon(Icons.auto_awesome)),
         if (wide) const BranchPill(),
         const SizedBox(width: 6),
@@ -125,13 +111,23 @@ class AppShell extends ConsumerWidget {
         if (wide && allowedPalettes(ref.watch(brandingProvider)).any((p) => p.id == premiumTheme))
           Tooltip(
             message: 'Premium UI: the dark Midnight Pro look',
-            child: Row(children: [
-              const Icon(Icons.auto_awesome, size: 18),
-              Switch(value: premium, onChanged: (v) => ref.read(premiumUiProvider.notifier).set(v)),
-            ]),
+            // a pill as the React app's: the sparkle, the words and the switch
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 4),
+              padding: const EdgeInsets.only(left: 12),
+              decoration: BoxDecoration(color: Theme.of(context).colorScheme.surface, borderRadius: BorderRadius.circular(99), border: Border.all(color: Theme.of(context).dividerColor)),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(Icons.auto_awesome, size: 16, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                const SizedBox(width: 6),
+                Text('Premium UI', style: Theme.of(context).textTheme.labelLarge?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                Transform.scale(scale: .78, child: Switch(value: premium, onChanged: (v) => ref.read(premiumUiProvider.notifier).set(v))),
+              ]),
+            ),
           ),
         const ThemeMenuButton(),
-        if (session != null) AccountMenu(session: session, showName: wide),
+        // wide screens: the signed-in person is at the foot of the menu (as the React app)
+        if (session != null && !wide) AccountMenu(session: session, showName: false),
+        const SizedBox(width: 8),
       ],
     );
     final body = Stack(children: [
@@ -166,8 +162,8 @@ class AppShell extends ConsumerWidget {
         child: AuroraBackground(
           child: Scaffold(
           backgroundColor: aurora ? Colors.transparent : null,
-          appBar: bar,
-          drawer: wide ? null : Drawer(child: SafeArea(child: nav)),
+          appBar: wide ? null : bar,
+          drawer: wide ? null : Drawer(child: _SidebarSurface(aurora: aurora, header: SafeArea(bottom: false, child: _SideHeader(pharmacy: session?.pharmacy ?? '', rail: false)), child: nav)),
           // the left edge swipes back on the other pages; on the dashboard it opens the menu
           drawerEnableOpenDragGesture: home,
           // phones and tablets: the main pages at the thumb (Home · Stock · Sell · Sales · More), on every page
@@ -180,11 +176,16 @@ class AppShell extends ConsumerWidget {
                   AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
                     curve: Curves.easeOutCubic,
-                    width: rail ? 72 : 240,
-                    child: _SidebarSurface(aurora: aurora, child: nav),
+                    width: rail ? 72 : 236,
+                    child: _SidebarSurface(
+                      aurora: aurora,
+                      header: _SideHeader(pharmacy: session?.pharmacy ?? '', rail: rail, onToggle: toggleRail),
+                      footer: session == null ? null : Padding(padding: const EdgeInsets.all(10), child: AccountMenu(session: session, card: !rail, showName: false)),
+                      child: nav,
+                    ),
                   ),
-                  VerticalDivider(width: 1, color: aurora ? Theme.of(context).dividerColor.withValues(alpha: .4) : null),
-                  Expanded(child: body),
+                  // the top bar over the page only, beside the full-height menu (src/styles.css .main > .topbar)
+                  Expanded(child: Column(children: [SizedBox(height: bar.preferredSize.height, child: bar), Expanded(child: body)])),
                 ])
               : body),
           ),
@@ -280,30 +281,11 @@ class _Sidebar extends ConsumerWidget {
             key: const ValueKey('nav-group-Pinned'),
             borderRadius: BorderRadius.circular(8),
             onTap: () => toggle('Pinned'),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 12, 6),
-              child: Row(children: [
-                Expanded(child: Text(title.toUpperCase(), style: t.textTheme.labelSmall?.copyWith(letterSpacing: .8, fontWeight: FontWeight.w700))),
-                Text('${list.length}', style: t.textTheme.labelSmall?.copyWith(color: t.colorScheme.onSurfaceVariant)),
-                const SizedBox(width: 4),
-                AnimatedRotation(turns: pinShut ? -0.25 : 0, duration: const Duration(milliseconds: 150), child: Icon(Icons.expand_more, size: 18, color: t.colorScheme.onSurfaceVariant)),
-              ]),
-            ),
+            child: _GroupHead(title: title, shut: pinShut, count: list.length),
           ),
           for (final s in list)
             if (!pinShut || s.path == location)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
-              child: ListTile(
-                key: ValueKey('nav-$kind-${s.path}'),
-                dense: !tokensOf(context).touch,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-                leading: Icon(s.icon, size: 20),
-                title: Text(s.label),
-                onTap: () => onGo(s.path),
-              ),
-            ),
+              _NavItem(key: ValueKey('nav-$kind-${s.path}'), icon: s.icon, label: s.label, selected: false, onTap: () => onGo(s.path)),
         ]);
     return ListView(key: const Key('sidebar'), padding: const EdgeInsets.symmetric(vertical: 8), children: [
       if (pinned.isNotEmpty) quick('Pinned', pinned, 'pin'),
@@ -312,7 +294,6 @@ class _Sidebar extends ConsumerWidget {
           () {
             final shut = collapsed[g] ?? false;
             // a folded group still shows the page you are on and any page with a count (as the React app)
-            final hidden = shut ? screens.where((s) => s.group == g && s.path != location && badge(s) == 0).length : 0;
             return Semantics(
               button: true,
               expanded: !shut,
@@ -320,50 +301,24 @@ class _Sidebar extends ConsumerWidget {
                 key: ValueKey('nav-group-$g'),
                 borderRadius: BorderRadius.circular(8),
                 onTap: () => toggle(g),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 12, 12, 6),
-                  child: Row(children: [
-                    Expanded(child: Text(g.toUpperCase(), style: t.textTheme.labelSmall?.copyWith(letterSpacing: .8, fontWeight: FontWeight.w700))),
-                    if (shut && hidden > 0) Text('$hidden', style: t.textTheme.labelSmall?.copyWith(color: t.colorScheme.onSurfaceVariant)),
-                    const SizedBox(width: 4),
-                    AnimatedRotation(
-                      turns: shut ? -0.25 : 0,
-                      duration: const Duration(milliseconds: 150),
-                      child: Icon(Icons.expand_more, size: 18, color: t.colorScheme.onSurfaceVariant, semanticLabel: shut ? 'Show $g' : 'Hide $g'),
-                    ),
-                  ]),
-                ),
+                child: _GroupHead(title: g, shut: shut, count: screens.where((s) => s.group == g).length),
               ),
             );
           }(),
           for (final s in screens.where((s) => s.group == g))
             if (!(collapsed[g] ?? false) || s.path == location || badge(s) > 0)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
-              child: ListTile(
-              dense: !tokensOf(context).touch, // full-size rows under a finger
-              selected: s.path == location,
-              // the page you are on: a filled pill, not only a colour change
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-              selectedTileColor: t.colorScheme.primaryContainer,
-              selectedColor: t.colorScheme.onPrimaryContainer,
-              titleTextStyle: t.textTheme.bodyMedium?.copyWith(fontWeight: s.path == location ? FontWeight.w700 : FontWeight.w500),
-              leading: Icon(s.icon, size: 20),
-              title: Text(s.label),
-              trailing: () {
-                final n = badge(s);
-                final k = ref.watch(keyMapProvider).keyOf('go:${s.path}');
-                final key = k.isEmpty ? null : Text(showKey(k), style: t.textTheme.labelSmall);
-                if (n == 0) return key;
-                return Row(mainAxisSize: MainAxisSize.min, children: [
-                  Badge(key: ValueKey('count-${s.path}'), label: Text('$n'), backgroundColor: t.colorScheme.primary),
-                  if (key != null) ...[const SizedBox(width: 6), key],
-                ]);
-              }(),
-              onTap: () => onGo(s.path),
-            ),
-            ),
+              _NavItem(
+                icon: s.icon,
+                label: s.label,
+                selected: s.path == location,
+                count: badge(s),
+                countKey: ValueKey('count-${s.path}'),
+                shortcut: () {
+                  final k = ref.watch(keyMapProvider).keyOf('go:${s.path}');
+                  return k.isEmpty ? '' : showKey(k);
+                }(),
+                onTap: () => onGo(s.path),
+              ),
         ],
     ]);
   }
@@ -510,36 +465,242 @@ class TabBarBottom extends ConsumerWidget {
   }
 }
 
-/// The sidebar's panel: the theme's panel colour, or a design's deep colour (RxPOS Green) with white text on it.
+/// The menu's colours where the menu is: the theme's (React's navy menu), or a design's own deep colour.
+SideColors sideColors(BuildContext context) {
+  final fill = tokensOf(context).sidebarFill;
+  final t = Theme.of(context);
+  if (fill.isNotEmpty) return SideColors(top: fill.first, bottom: fill.last, text: Colors.white.withValues(alpha: .80), active: Colors.white, dark: true);
+  return t.extension<SideColors>() ??
+      SideColors(top: t.colorScheme.surfaceContainerLow, bottom: t.colorScheme.surfaceContainerLow, text: t.colorScheme.onSurfaceVariant, active: t.colorScheme.primary, dark: false);
+}
+
+/// The sidebar's panel (src/styles.css .sidebar): the palette's menu colours top to bottom, its text colour on them, and
+/// the brand header and the signed-in person's card as the React app has them.
 class _SidebarSurface extends StatelessWidget {
-  const _SidebarSurface({required this.child, required this.aurora});
+  const _SidebarSurface({required this.child, required this.aurora, this.header, this.footer});
   final Widget child;
   final bool aurora;
+  final Widget? header, footer;
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    final fill = tokensOf(context).sidebarFill;
-    if (fill.isEmpty) return Material(color: t.colorScheme.surfaceContainerLow.withValues(alpha: aurora ? .55 : 1), child: child);
-    const white = Colors.white;
+    final sc = sideColors(context);
+    final on = sc.dark ? Colors.white : t.colorScheme.onSurface;
     final cs = t.colorScheme.copyWith(
-      onSurface: white, onSurfaceVariant: white.withValues(alpha: .78), primary: white,
-      primaryContainer: white.withValues(alpha: .16), onPrimaryContainer: white,
+      onSurface: on, onSurfaceVariant: sc.text, primary: sc.active,
+      primaryContainer: sc.active.withValues(alpha: .16), onPrimaryContainer: on,
     );
     return DecoratedBox(
-      decoration: BoxDecoration(gradient: LinearGradient(colors: fill.length > 1 ? fill : [fill.first, fill.first], begin: Alignment.topCenter, end: Alignment.bottomCenter)),
+      decoration: BoxDecoration(gradient: LinearGradient(colors: [sc.top, sc.bottom], begin: Alignment.topCenter, end: Alignment.bottomCenter)),
       child: Theme(
         data: t.copyWith(
           colorScheme: cs,
-          textTheme: t.textTheme.apply(bodyColor: white, displayColor: white),
-          listTileTheme: t.listTileTheme.copyWith(iconColor: white.withValues(alpha: .82), textColor: white, selectedColor: white, selectedTileColor: white.withValues(alpha: .16)),
-          iconTheme: const IconThemeData(color: white),
+          dividerColor: on.withValues(alpha: .10),
+          dividerTheme: t.dividerTheme.copyWith(color: on.withValues(alpha: .10)),
+          textTheme: t.textTheme.apply(bodyColor: sc.text, displayColor: sc.text),
+          listTileTheme: t.listTileTheme.copyWith(iconColor: sc.text, textColor: sc.text, selectedColor: on, selectedTileColor: sc.active.withValues(alpha: .16)),
+          iconTheme: IconThemeData(color: sc.text),
+          iconButtonTheme: IconButtonThemeData(style: IconButton.styleFrom(foregroundColor: sc.text)),
         ),
-        child: Material(type: MaterialType.transparency, child: child),
+        child: Material(
+          type: MaterialType.transparency,
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            ?header,
+            Expanded(child: child),
+            if (footer != null) DecoratedBox(decoration: BoxDecoration(border: Border(top: BorderSide(color: on.withValues(alpha: .08)))), child: footer),
+          ]),
+        ),
       ),
     );
   }
 }
 
+/// The RxPOS mark: a white cross on the brand colours (src/App.jsx .brand-mark).
+class RxMark extends StatelessWidget {
+  const RxMark({super.key, this.size = 34});
+  final double size;
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(size * .3),
+        gradient: LinearGradient(colors: [cs.primary, cs.secondary], begin: Alignment.topLeft, end: Alignment.bottomRight),
+      ),
+      child: Icon(Icons.add_rounded, color: Colors.white, size: size * .82, weight: 900),
+    );
+  }
+}
+
+/// The top of the menu: the mark, RxPOS, the pharmacy, and the button that folds the menu to icons.
+class _SideHeader extends StatelessWidget {
+  const _SideHeader({required this.pharmacy, required this.rail, this.onToggle});
+  final String pharmacy;
+  final bool rail;
+  final VoidCallback? onToggle;
+  @override
+  Widget build(BuildContext context) {
+    final sc = sideColors(context);
+    final toggle = onToggle == null
+        ? null
+        : IconButton(key: const Key('sidebar-toggle'), tooltip: rail ? 'Show the menu (Ctrl+B)' : 'Fold the menu to icons (Ctrl+B)', onPressed: onToggle,
+            icon: Icon(rail ? Icons.menu : Icons.view_sidebar_outlined, size: 20, color: sc.text));
+    if (rail) return Padding(padding: const EdgeInsets.only(top: 12, bottom: 4), child: Column(children: [const RxMark(), ?toggle]));
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 14, 6, 10),
+      child: Row(children: [
+        const RxMark(),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+            Text.rich(TextSpan(children: [
+              TextSpan(text: 'Rx', style: TextStyle(color: sc.dark ? Colors.white : Theme.of(context).colorScheme.onSurface)),
+              TextSpan(text: 'POS', style: TextStyle(color: sc.active)),
+            ]), style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, letterSpacing: -.3, height: 1.2)),
+            if (pharmacy.isNotEmpty)
+              Text(pharmacy, key: const Key('sidebar-pharmacy'), maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12.5, color: sc.text, height: 1.3)),
+          ]),
+        ),
+        ?toggle,
+      ]),
+    );
+  }
+}
+
+/// A group's heading in the menu: the fold arrow, the name in small capitals and how many pages it holds (as React).
+class _GroupHead extends StatelessWidget {
+  const _GroupHead({required this.title, required this.shut, required this.count});
+  final String title;
+  final bool shut;
+  final int count;
+  @override
+  Widget build(BuildContext context) {
+    final sc = sideColors(context);
+    final dim = sc.text.withValues(alpha: .75);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 14, 12, 6),
+      child: Row(children: [
+        AnimatedRotation(
+          turns: shut ? -0.25 : 0,
+          duration: const Duration(milliseconds: 150),
+          child: Icon(Icons.expand_more, size: 15, color: dim, semanticLabel: shut ? 'Show $title' : 'Hide $title'),
+        ),
+        const SizedBox(width: 6),
+        Flexible(child: Text(title.toUpperCase(), maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11, letterSpacing: .9, fontWeight: FontWeight.w700, color: dim))),
+        const SizedBox(width: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+          decoration: BoxDecoration(color: sc.text.withValues(alpha: .14), borderRadius: BorderRadius.circular(99)),
+          child: Text('$count', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: dim)),
+        ),
+        const Spacer(),
+      ]),
+    );
+  }
+}
+
+/// One page in the menu (src/styles.css .sidebar nav a): 13.5 px, the page you are on lit in the brand colour with a bar
+/// on its left, its count in amber and its shortcut key in a small key cap.
+class _NavItem extends StatelessWidget {
+  const _NavItem({super.key, required this.icon, required this.label, required this.selected, required this.onTap, this.count = 0, this.countKey, this.shortcut = ''});
+  final IconData icon;
+  final String label, shortcut;
+  final bool selected;
+  final int count;
+  final Key? countKey;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) {
+    final sc = sideColors(context);
+    final on = sc.dark ? Colors.white : Theme.of(context).colorScheme.onSurface;
+    final touch = tokensOf(context).touch;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
+      child: Semantics(
+        selected: selected,
+        button: true,
+        child: Material(
+          color: selected ? sc.active.withValues(alpha: .16) : Colors.transparent,
+          borderRadius: BorderRadius.circular(9),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(9),
+            hoverColor: on.withValues(alpha: .06),
+            onTap: onTap,
+            child: Stack(children: [
+              if (selected) Positioned(left: 0, top: 8, bottom: 8, child: Container(width: 3, decoration: BoxDecoration(color: sc.active, borderRadius: BorderRadius.circular(3)))),
+              SizedBox(
+                height: touch ? 44 : 34,
+                child: Row(children: [
+                  const SizedBox(width: 10),
+                  Icon(icon, size: 18, color: selected ? sc.active : sc.text),
+                  const SizedBox(width: 11),
+                  Expanded(
+                    child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 13.5, fontWeight: selected ? FontWeight.w600 : FontWeight.w500, color: selected ? on : sc.text)),
+                  ),
+                  if (count > 0)
+                    Container(
+                      key: countKey,
+                      margin: const EdgeInsets.only(left: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
+                      decoration: BoxDecoration(color: const Color(0xFFF59E0B), borderRadius: BorderRadius.circular(99)),
+                      child: Text('$count', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF1F1300))),
+                    ),
+                  if (shortcut.isNotEmpty)
+                    Container(
+                      margin: const EdgeInsets.only(left: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                      decoration: BoxDecoration(border: Border.all(color: sc.text.withValues(alpha: .28)), borderRadius: BorderRadius.circular(5)),
+                      child: Text(shortcut, style: TextStyle(fontSize: 10, color: sc.text.withValues(alpha: .85))),
+                    ),
+                  const SizedBox(width: 8),
+                ]),
+              ),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The search box at the left of the top bar (src/App.jsx .topbar-search): opens search and Ask AI (Ctrl+K).
+class _SearchBox extends StatelessWidget {
+  const _SearchBox({required this.onTap});
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    final muted = t.colorScheme.onSurfaceVariant;
+    return Material(
+      color: t.colorScheme.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10), side: BorderSide(color: t.dividerColor)),
+      child: InkWell(
+        key: const Key('search-trigger'),
+        borderRadius: BorderRadius.circular(10),
+        onTap: onTap,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 226, minHeight: 38, maxHeight: 38),
+          // a narrow bar keeps the magnifier only
+          child: LayoutBuilder(builder: (context, c) => c.maxWidth < 140 ? Center(child: Icon(Icons.search, size: 18, color: muted)) : Row(children: [
+            const SizedBox(width: 12),
+            Icon(Icons.search, size: 18, color: muted),
+            const SizedBox(width: 8),
+            Expanded(child: Text('Search or ask AI…', maxLines: 1, overflow: TextOverflow.ellipsis, style: t.textTheme.bodyMedium?.copyWith(color: muted))),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+              decoration: BoxDecoration(border: Border.all(color: t.dividerColor), borderRadius: BorderRadius.circular(5)),
+              child: Text('Ctrl K', style: t.textTheme.labelSmall?.copyWith(color: muted)),
+            ),
+            const SizedBox(width: 8),
+          ])),
+        ),
+      ),
+    );
+  }
+}
 
 /// Where you are (group › page), with the page's pin and the ? sheet, in the top bar.
 class _Crumbs extends ConsumerWidget {
@@ -556,8 +717,12 @@ class _Crumbs extends ConsumerWidget {
     // shown only when there is room for it (the pharmacy's name, the clock and the menus come first)
     return LayoutBuilder(builder: (context, c) => c.maxWidth < 84 ? const SizedBox() : Row(mainAxisSize: MainAxisSize.min, children: [
       if (c.maxWidth >= 190) ...[
-        Flexible(child: Text('${s.group} › ', style: t.textTheme.bodySmall, overflow: TextOverflow.ellipsis, maxLines: 1)),
-        Flexible(child: Text(s.label, key: const Key('crumb-page'), style: t.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w700), overflow: TextOverflow.ellipsis, maxLines: 1)),
+        // as the React app: the group in the brand colour, the page in bold
+        if (location != '/') ...[
+          Flexible(child: Text(s.group, style: t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.tertiary, fontWeight: FontWeight.w500), overflow: TextOverflow.ellipsis, maxLines: 1)),
+          Text('  ›  ', style: t.textTheme.bodyMedium?.copyWith(color: t.colorScheme.onSurfaceVariant)),
+        ],
+        Flexible(child: Text(s.label, key: const Key('crumb-page'), style: t.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700), overflow: TextOverflow.ellipsis, maxLines: 1)),
       ],
       IconButton(
         key: const Key('pin-page'),

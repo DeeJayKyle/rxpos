@@ -3553,13 +3553,20 @@ void main() {
     for (final (size, tag) in [(const Size(400, 860), 'fit-phone'), (const Size(1440, 900), 'fit-pc')]) {
       testWidgets('screens of every page, $tag', (tester) async {
         await tester.runAsync(signedIn);
-        await tester.runAsync(() => look('hybrid-light'));
+        await tester.runAsync(() => db.into(db.kv).insertOnConflictUpdate(KvCompanion.insert(k: 'device:look', v: const String.fromEnvironment('LOOK', defaultValue: '{"theme":"hybrid-light"}'))));
         await start(tester, size: size);
         for (final (i, page) in ['/', '/pos', '/sales', '/inventory', '/medicines', '/add-stock', '/purchases', '/reports', '/customers', '/suppliers', '/finance',
             '/payroll', '/settings', '/device', '/reorder', '/stock-count', '/shifts', '/notes', '/calendar', '/chat', '/expiry', '/returns'].indexed) {
           GoRouter.of(tester.element(find.byType(Scaffold).first)).go(page);
           await settle(tester, 4);
           await shot(tester, '$tag-${i.toString().padLeft(2, '0')}${page.replaceAll('/', '-')}');
+        }
+        if (tag == 'fit-pc') {
+          GoRouter.of(tester.element(find.byType(Scaffold).first)).go('/inventory');
+          await settle(tester, 4);
+          await tester.tap(find.text('Calmex 500mg Tabs').first);
+          await settle(tester);
+          await shot(tester, '$tag-30-dialog');
         }
         await done(tester);
       }, skip: !on);
