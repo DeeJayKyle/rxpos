@@ -408,7 +408,7 @@ class SyncEngine {
     }
     final d = res.data;
     if (d is! Map || d['changes'] is! List) throw const ApiFailure(ApiFailureKind.server, 'The cloud sent an unexpected reply; trying again shortly.');
-    return [for (final x in d['changes'] as List) if (RemoteChange.tryParse(x) case final rc?) rc];
+    return [for (final x in d['changes'] as List) ?RemoteChange.tryParse(x)];
   }
 
   Future<SyncReply> _post(Map<String, Object?> body) async {

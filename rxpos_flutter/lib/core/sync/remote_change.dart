@@ -54,7 +54,7 @@ class SyncReply {
     final c = cursor is num ? cursor : num.tryParse('$cursor');
     if (changes is! List || c == null || !c.isFinite) return null;
     return SyncReply(
-      changes: [for (final x in changes) if (RemoteChange.tryParse(x) case final rc?) rc],
+      changes: [for (final x in changes) ?RemoteChange.tryParse(x)],
       cursor: c.toInt(),
       more: body['more'] == true,
       epoch: body['epoch']?.toString(),
