@@ -201,6 +201,8 @@ void main() {
             }),
           ),
         );
+    // the device's cloud token is Tia's own (audit P2-7: no password prompt before her personal cloud calls)
+    await db.into(db.kv).insertOnConflictUpdate(KvCompanion.insert(k: 'token-user', v: 'u1'));
     final store = RecordStore(db);
     await store.update((d) {
       d.put('products', {
@@ -618,7 +620,7 @@ void main() {
     await tester.tap(find.text('Refund'));
     await settle(tester);
     // the refund sheet (refund_sheet.dart): a reason first, then "Refund <amount>"
-    await tester.tap(find.byType(DropdownButtonFormField<String>));
+    await tester.tap(find.byKey(const Key('refund-reason')));
     await settle(tester);
     await tester.tap(find.text('Customer returned it').last);
     await settle(tester);

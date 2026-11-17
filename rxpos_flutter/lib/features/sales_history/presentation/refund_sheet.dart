@@ -89,6 +89,7 @@ class _RefundSheetState extends State<RefundSheet> {
           Text('Every item goes back into stock, in the batch it came from.', style: t.textTheme.bodySmall),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
+            key: const Key('refund-reason'),
             initialValue: _reason,
             decoration: const InputDecoration(labelText: 'Why is it refunded?'),
             items: [for (final r in refundReasons) DropdownMenuItem(value: r, child: Text(r))],
