@@ -2660,7 +2660,7 @@ void main() {
     await start(tester);
     expect(brightness(tester), Brightness.light);
     await openThemes(tester);
-    await tester.tap(find.text('Dark'));
+    await tester.tap(find.text('Dark').first); // the mode button (the Dark group's heading comes after it)
     await settle(tester, 4);
     expect((await look())['theme'], 'oled');
     expect(brightness(tester), Brightness.dark);
@@ -2718,7 +2718,7 @@ void main() {
     await openThemes(tester);
     expect(find.byKey(const ValueKey('theme-oled')), findsOneWidget);
     expect(find.byKey(const ValueKey('theme-midnight-pro')), findsNothing);
-    await tester.tap(find.text('Dark'));
+    await tester.tap(find.text('Dark').first); // the mode button, not the Dark group's heading
     await settle(tester, 4);
     expect((await look())['theme'], 'oled', reason: 'the only dark theme allowed');
     await done(tester);
