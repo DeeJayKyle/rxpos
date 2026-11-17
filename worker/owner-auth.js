@@ -68,27 +68,43 @@ async function checkPassword(env, cfg, pw) {
 // after 50 in 15 minutes. Before, one shared counter let anyone lock the owner out with five wrong tries.
 const lockKey = (ip) => 'owner:' + String(ip || 'noip').slice(0, 64);
 const GLOBAL = 'owner:*', GLOBAL_FAILS = 50;
-async function ownerLocked(db, ip) {
-  const { results } = await db.prepare('SELECT email, n, until FROM login_fail WHERE email IN (?1, ?2)').bind(lockKey(ip), GLOBAL).all();
-  return (results || []).find((r) => r.until > Date.now()) || null;
-}
-async function ownerFail(db, ip) {
-  for (const [k, max] of [[lockKey(ip), MAX_FAILS], [GLOBAL, GLOBAL_FAILS]]) {
-    const fail = await db.prepare('SELECT n, until FROM login_fail WHERE email = ?1').bind(k).first();
-    const n = (fail && fail.until <= Date.now() && fail.until > 0 ? 0 : fail?.n || 0) + 1;
-    const until = n >= max ? Date.now() + LOCK_MINUTES * 60000 : 0;
-    await db.prepare('INSERT INTO login_fail (email, n, until) VALUES (?1, ?2, ?3) ON CONFLICT(email) DO UPDATE SET n = ?2, until = ?3').bind(k, until ? 0 : n, until).run();
-    if (k !== GLOBAL && until) return true;
+// 2026-11-17 audit: the counters are changed in one statement each (read-then-write let a burst of concurrent tries
+// all pass the lock), and a try is reserved before the password is checked, so a burst can't all be checked at once.
+const BUMP = `INSERT INTO login_fail (email, n, until) VALUES (?1, 1, 0) ON CONFLICT(email) DO UPDATE SET
+  n = CASE WHEN until > 0 AND until <= ?2 THEN 1 ELSE n + 1 END, until = CASE WHEN until > 0 AND until <= ?2 THEN 0 ELSE until END RETURNING n, until`;
+const keysOf = (ip) => [[lockKey(ip), MAX_FAILS], [GLOBAL, GLOBAL_FAILS]];
+const lockAt = (db, k) => db.prepare('UPDATE login_fail SET n = 0, until = ?2 WHERE email = ?1').bind(k, Date.now() + LOCK_MINUTES * 60000).run();
+/** Reserve one try → the lock that refuses it ({ until }) or null */
+async function ownerReserve(db, ip) {
+  let locked = null;
+  for (const [k, max] of keysOf(ip)) {
+    const r = await db.prepare(BUMP).bind(k, Date.now()).first();
+    if (r.until > Date.now()) locked = locked || r;
+    else if (r.n > max) { await lockAt(db, k); locked = locked || { until: Date.now() + LOCK_MINUTES * 60000 }; }
   }
-  return false;
+  if (locked) await ownerRelease(db, ip);
+  return locked;
+}
+/** Give a reserved try back (the password was right, or the caller counts it its own way) */
+const ownerRelease = (db, ip) => db.batch(keysOf(ip).map(([k]) => db.prepare('UPDATE login_fail SET n = MAX(n - 1, 0) WHERE email = ?1 AND until = 0').bind(k)));
+/** Count a wrong owner password (one statement per counter) → true when this address is now locked */
+async function ownerFail(db, ip) {
+  let mine = false;
+  for (const [k, max] of keysOf(ip)) {
+    const r = await db.prepare(BUMP).bind(k, Date.now()).first();
+    if (r.until <= Date.now() && r.n >= max) { await lockAt(db, k); if (k !== GLOBAL) mine = true; }
+  }
+  return mine;
 }
 
 export async function ownerMainLogin(env, email, password, ip) {
   if (!env.OWNER_KEY || env.OWNER_KEY.length < 20) return null;
   const cfg = await getConfig(env.DB);
   if (!cfg.email || !cfg.pw || String(email || '').trim().toLowerCase() !== cfg.email.toLowerCase()) return null;
-  if (await ownerLocked(env.DB, ip)) return { locked: true };
-  if (!(await checkPassword(env, cfg, String(password || '')))) return { owner: true };
+  if (await ownerReserve(env.DB, ip)) return { locked: true };
+  const right = await checkPassword(env, cfg, String(password || ''));
+  await ownerRelease(env.DB, ip); // a wrong one is counted by the caller only when no staff account opened either
+  if (!right) return { owner: true };
   await env.DB.prepare('DELETE FROM login_fail WHERE email = ?1').bind(lockKey(ip)).run();
   return { match: true, token: await ownerSession(env, 'password') };
 }
@@ -130,14 +146,15 @@ export async function ownerAuthRoutes(env, req, url, body, { json, safeEqual }) 
 
   if (path === '/login' && req.method === 'POST') {
     const ip = req.headers.get('CF-Connecting-IP') || 'noip';
-    const fail = await ownerLocked(db, ip);
     const secret = String(body.password || '');
     // The master key (long and random) always works, even during a lock: it is the emergency way back in
     const master = safeEqual(secret, env.OWNER_KEY);
-    if (!master && fail) return json({ error: `Too many wrong tries. Try again in ${Math.ceil((fail.until - Date.now()) / 60000)} minutes, sign in with Google / GitHub, or use the master key.` }, 429);
+    const fail = master ? null : await ownerReserve(db, ip);
+    if (fail) return json({ error: `Too many wrong tries. Try again in ${Math.max(1, Math.ceil((fail.until - Date.now()) / 60000))} minutes, sign in with Google / GitHub, or use the master key.` }, 429);
     let via = null;
     if (master) via = 'master key';
     else if (await checkPassword(env, cfg, secret)) via = 'password';
+    if (!master) await ownerRelease(db, ip);
     if (!via) {
       const until = await ownerFail(db, ip);
       return json({ error: until ? `Too many wrong tries. Locked for ${LOCK_MINUTES} minutes; use Google / GitHub to sign in.` : cfg.pw ? 'Wrong password.' : 'Wrong owner key.' }, until ? 429 : 401);

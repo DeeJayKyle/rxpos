@@ -293,6 +293,8 @@ class SyncEngine {
     return SyncResult(sent: sent, refused: refused, received: received, applied: applied, full: full);
   }
 
+  static const _resendPage = 1000;
+
   /// Everything this device holds, into the outbox (one action per record), and [cfg] saved with the flag cleared.
   Future<int> _resendEverything(SyncConfig cfg) => db.transaction(() async {
         var n = 0;
@@ -303,15 +305,36 @@ class SyncEngine {
 
         final now = DateTime.now().toUtc().toIso8601String();
         final live = <String>{};
-        for (final r in await db.select(db.records).get()) {
-          live.add('${r.t}|${r.id}');
-          if ((jsonDecode(r.json) as Map)['_base'] == true) continue; // an untouched built-in catalogue row
-          await queue(r.t, r.id, r.updatedAt ?? now);
+        // read in pages (by primary key) so a large pharmacy is never loaded into memory at once
+        for (var after = (t: '', id: ''), first = true;; first = false) {
+          final q = db.select(db.records)
+            ..orderBy([(x) => OrderingTerm(expression: x.t), (x) => OrderingTerm(expression: x.id)])
+            ..limit(_resendPage);
+          final a = after;
+          if (!first) q.where((x) => x.t.isBiggerThanValue(a.t) | (x.t.equals(a.t) & x.id.isBiggerThanValue(a.id)));
+          final page = await q.get();
+          for (final r in page) {
+            live.add('${r.t}|${r.id}');
+            if ((jsonDecode(r.json) as Map)['_base'] == true) continue; // an untouched built-in catalogue row
+            await queue(r.t, r.id, r.updatedAt ?? now);
+          }
+          if (page.length < _resendPage) break;
+          after = (t: page.last.t, id: page.last.id);
         }
-        for (final x in await db.select(db.tombstones).get()) {
-          // a record deleted and later made again keeps its old tombstone: the record is what this device has now
-          if (live.contains('${x.t}|${x.id}')) continue;
-          await queue(x.t, x.id, x.at, deleted: true);
+        for (var after = (t: '', id: ''), first = true;; first = false) {
+          final q = db.select(db.tombstones)
+            ..orderBy([(x) => OrderingTerm(expression: x.t), (x) => OrderingTerm(expression: x.id)])
+            ..limit(_resendPage);
+          final a = after;
+          if (!first) q.where((x) => x.t.isBiggerThanValue(a.t) | (x.t.equals(a.t) & x.id.isBiggerThanValue(a.id)));
+          final page = await q.get();
+          for (final x in page) {
+            // a record deleted and later made again keeps its old tombstone: the record is what this device has now
+            if (live.contains('${x.t}|${x.id}')) continue;
+            await queue(x.t, x.id, x.at, deleted: true);
+          }
+          if (page.length < _resendPage) break;
+          after = (t: page.last.t, id: page.last.id);
         }
         if (await (db.select(db.kv)..where((x) => x.k.equals('settings'))).getSingleOrNull() != null) await queue('settings', 'settings', now);
         await cfg.copyWith(resendAfterRestore: false).save(db);
@@ -385,7 +408,7 @@ class SyncEngine {
     }
     final d = res.data;
     if (d is! Map || d['changes'] is! List) throw const ApiFailure(ApiFailureKind.server, 'The cloud sent an unexpected reply; trying again shortly.');
-    return [for (final x in d['changes'] as List) if (x is Map) RemoteChange.fromJson(x.cast<String, Object?>())];
+    return [for (final x in d['changes'] as List) ?RemoteChange.tryParse(x)];
   }
 
   Future<SyncReply> _post(Map<String, Object?> body) async {

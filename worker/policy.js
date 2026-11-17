@@ -56,7 +56,7 @@ export const MOVEMENT_RULES = {
 };
 
 /** Tables whose decision depends on the stored record: worker/index.js fetches it only for these */
-export const NEEDS_OLD = new Set(['sales', 'purchases', 'payments', 'proformas']);
+export const NEEDS_OLD = new Set(['sales', 'purchases', 'payments', 'proformas', 'dayCloses']);
 
 // 2026-11 audit: every table the apps sync (src/store.jsx TABLES, rxpos_flutter record_store.dart syncedTables), plus
 // `settings` and the old `controlled` register. A staff device writing any other name is refused (a made-up table was
@@ -128,7 +128,9 @@ export function moneyView(s) {
 // it under another cashier's name ("the money is the same"). These are what a sale IS, besides its money; only
 // someone with sales.edit may change them. (moneyView itself is unchanged: it also names the sale checks.)
 const s = (v) => String(v ?? '');
-export const identityView = (r) => moneyView(r) + JSON.stringify([s(r?.date), s(r?.number), s(r?.cashier), s(r?.createdBy), s(r?.proformaId), s(r?.shiftId)]);
+// 2026-11-17 audit: bankId added: it decides which account (cash drawer, bank, mobile money) the takings are booked to
+// (src/finance.js), so a seller re-sending a sale must not move them. isRefundOnly uses the same view.
+export const identityView = (r) => moneyView(r) + JSON.stringify([s(r?.date), s(r?.number), s(r?.cashier), s(r?.createdBy), s(r?.proformaId), s(r?.shiftId), s(r?.bankId)]);
 /** A refund changes only the status (to refunded) and who/when; the money stays exactly as it was */
 export const isRefundOnly = (old, rec) => !!old && !!rec && old.status !== 'refunded' && rec.status === 'refunded' && identityView(old) === identityView(rec);
 /** Nothing that matters changed (a re-send, or an older app pushing the same sale again) */
@@ -163,7 +165,10 @@ export async function decide(ch, old, role, can) {
   }
   if (t === 'dayCloses') {
     // step 18: closing a day needs "Close the day"; reopening one (or removing a close) needs an administrator
-    if (deleted || rec?.open === true) return role === 'admin' ? { ok: true } : { ok: false, need: 'admin' };
+    // 2026-11-17 audit: any truthy `open` reopens the day (src/dayclose.js closedSet), and moving a close to another day
+    // or branch reopens the original one, so both need an administrator too (open: 1 used to get through)
+    const moved = old && ((old.day ?? '') !== (rec?.day ?? '') || (old.branchId || 'main') !== (rec?.branchId || 'main'));
+    if (deleted || rec?.open || moved) return role === 'admin' ? { ok: true } : { ok: false, need: 'admin' };
     return (await can('day.close')) ? { ok: true } : { ok: false, need: 'day.close' };
   }
   if (t === 'purchases') {
@@ -178,7 +183,10 @@ export async function decide(ch, old, role, can) {
   if (t === 'movements') {
     if (deleted) return { ok: true }; // refused anyway as append-only, with its own reason
     if (!movementSignOk(rec)) return { ok: false, need: `a ${rec.type === 'Sale' ? 'negative' : 'positive'} quantity for a ${rec.type}` };
-    const perms = MOVEMENT_RULES[rec?.type] || ['stock.adjust'];
+    // 2026-11-17 audit: a Sale or Refund movement with no receipt number skipped the check against its sale, so anyone
+    // who sells could take stock out with nothing behind it. Both apps always set `ref`; without one it is an adjustment.
+    const noRef = (rec?.type === 'Sale' || rec?.type === 'Refund') && !String(rec?.ref ?? '').trim();
+    const perms = noRef ? ['stock.adjust'] : MOVEMENT_RULES[rec?.type] || ['stock.adjust'];
     return (await anyOf(can, perms)) ? { ok: true } : { ok: false, need: perms.join('|') };
   }
   if (t === 'proformas') {
@@ -195,4 +203,14 @@ export async function decide(ch, old, role, can) {
   if (!rule) return { ok: true };
   const perms = deleted ? rule.delete : rule.write;
   return (await anyOf(can, perms)) ? { ok: true } : { ok: false, need: perms.join('|') };
+}
+
+// 2026-11-17 audit: direct chats ("dm:<uid>:<uid>") were sent to every staff device and only the apps hid them. A row
+// of a chat table in a direct conversation now reaches its two participants only (the pharmacy key sees everything).
+const DM_TABLES = new Set(['messages', 'chatReads', 'chatPins', 'chatMarks']);
+export function dmHidden(t, recText, uid) {
+  if (!uid || !DM_TABLES.has(t)) return false;
+  let conv;
+  try { conv = String(JSON.parse(recText || 'null')?.conv || ''); } catch { return true; }
+  return conv.startsWith('dm:') && !conv.slice(3).split(':').includes(String(uid));
 }

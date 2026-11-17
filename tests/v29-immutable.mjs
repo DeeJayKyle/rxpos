@@ -20,9 +20,9 @@ check('cashier signs in', !!caxTok);
 const alTok = (await api('/api/login', { email: 'al@test.rx', password: 'al-pass-1234', tenant: slug })).token;
 
 // ----- movements are append-only -----
-let r = await push(caxTok, 'dev-cax', [{ t: 'movements', id: 'm1', at: now(), rec: { id: 'm1', productId: 'p1', qty: -10, type: 'Sale' } }]);
+let r = await push(caxTok, 'dev-cax', [{ t: 'movements', id: 'm1', at: now(), rec: { id: 'm1', productId: 'p1', qty: -10, type: 'Sale', ref: 'R-1' } }]);
 check('a new movement is accepted', r.applied === 1, JSON.stringify({ a: r.applied, ref: r.refused }));
-r = await push(caxTok, 'dev-cax', [{ t: 'movements', id: 'm1', at: later(60000), rec: { id: 'm1', productId: 'p1', qty: -999, type: 'Sale' } }]);
+r = await push(caxTok, 'dev-cax', [{ t: 'movements', id: 'm1', at: later(60000), rec: { id: 'm1', productId: 'p1', qty: -999, type: 'Sale', ref: 'R-1' } }]);
 check('1.1 overwriting a movement does not change it (no-op)', r.applied === 0, JSON.stringify({ a: r.applied, ref: r.refused }));
 r = await push(caxTok, 'dev-cax', [{ t: 'movements', id: 'm1', at: later(120000), deleted: true }]);
 check('1.1 deleting a movement is refused', r.applied === 0 && r.refused === 1);

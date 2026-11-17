@@ -138,6 +138,7 @@ h1, .page-head h1, .pos-title { font-family: var(--font-display); letter-spacing
 
 /* all clear: the safety badge beside "Current sale" */
 .safety-badge { display: inline-flex; align-items: center; gap: 4px; vertical-align: middle; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: .04em; color: var(--ok); background: var(--ok-soft); }
+.safety-badge.unknown { color: var(--warn); background: var(--warn-soft); }
 
 /* ---------- Navigation styles (2026-11-14): sidebar action card, floating pill bar, bento mega menu, top pill navbar ---------- */
 .nav-promo { position: relative; overflow: hidden; display: grid; gap: 4px; margin: 10px 4px 8px; padding: 14px; border-radius: 16px; text-decoration: none; color: #fff;
@@ -167,7 +168,7 @@ h1, .page-head h1, .pos-title { font-family: var(--font-display); letter-spacing
 .mega-item strong { display: block; font-size: 13.5px; font-weight: 600; }
 .mega-item small { display: block; color: var(--muted); font-size: 12px; }
 .mega-icon { display: grid; place-items: center; width: 34px; height: 34px; flex: none; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); color: var(--primary-text, var(--primary)); }
-.mega-item .count, .top-pill .count { min-width: 20px; padding: 1px 6px; border-radius: 999px; background: var(--danger, #ef4444); color: #fff; font-size: 11px; font-weight: 700; text-align: center; }
+.mega-item .count, .top-pill .count { min-width: 20px; padding: 1px 6px; border-radius: 999px; background: var(--danger, #b91c1c); color: #fff; font-size: 11px; font-weight: 700; text-align: center; }
 .mega-featured { display: grid; gap: 4px; align-content: start; text-align: left; font: inherit; cursor: pointer; padding: 16px; border-radius: 16px; border: 0; color: #fff; text-decoration: none;
   background: linear-gradient(150deg, color-mix(in srgb, var(--primary) 70%, #0b0e14), color-mix(in srgb, var(--primary2, var(--primary)) 45%, #0b0e14)); }
 .mega-featured strong { font-size: 16px; }

@@ -264,10 +264,13 @@ function CountSheet({ count, onBack }) {
     update((d) => { put(d, 'stockCounts', { ...count, status: 'cancelled', postedBy: user.name, postedAt: now(), summary: sum }); audit(d, user, 'Stock count cancelled', count.name, branchId); });
     onBack();
   };
+  // a blind count's file leaves out the system quantity, the difference and its value until the count is posted
+  // (they would tell the counters what to find)
+  const blindNow = count.blind && !readOnly;
   const exportCsv = () => downloadFile(`${count.name.replace(/[^\w-]+/g, '-')}.csv`, toCSV(all.flatMap((p) => {
     const it = itemBy.get(p.id);
-    if (!it) return [{ medicine: p.name, shelf: p.shelf || '', batch: '', expiry: '', system: readOnly || !count.blind ? p.stock : '', counted: '', difference: '', value: '' }];
-    return linesWithDiff(it, p).map((l) => ({ medicine: p.name, shelf: p.shelf || '', batch: l.batch, expiry: l.expiry, system: l.sys, counted: l.qty, difference: l.diff, value: l.value, countedBy: it.by }));
+    if (!it) return [{ medicine: p.name, shelf: p.shelf || '', batch: '', expiry: '', ...(blindNow ? {} : { system: p.stock }), counted: '', ...(blindNow ? {} : { difference: '', value: '' }), countedBy: '' }];
+    return linesWithDiff(it, p).map((l) => ({ medicine: p.name, shelf: p.shelf || '', batch: l.batch, expiry: l.expiry, ...(blindNow ? {} : { system: l.sys }), counted: l.qty, ...(blindNow ? {} : { difference: l.diff, value: l.value }), countedBy: it.by }));
   })), 'text/csv');
   const sheetData = () => [{ heading: `${count.name} – count sheet`, head: ['Medicine', 'Shelf', 'Batch', 'Expiry', ...(count.blind ? [] : ['System']), 'Counted'],
     body: all.flatMap((p) => { const bs = systemBatches(batchesOf, p.id); return (bs.length ? bs : [{ batch: '', expiry: '', qty: 0 }]).map((b, n) => [n ? '' : p.name, n ? '' : p.shelf || '', b.batch || '', b.expiry || '', ...(count.blind ? [] : [String(b.qty)]), '']); }) }];
@@ -452,7 +455,11 @@ function ReviewPost({ count, items, all, sum, onClose, onPosted }) {
   const post = async () => {
     if (!(await ask({ title: 'Post this stock count?', message: `${diffRows.length} batch quantities${zeroRows.length ? ` and ${zeroRows.length} uncounted batches (set to 0)` : ''} will be corrected so RxPOS matches what was counted. Net change ${fmt(sum.net + zeroValue)} at cost.`, confirmText: 'Post count' }))) return;
     setBusy(true);
-    update((d) => {
+    // the count as it is now: posted once only (a second press, or another device that posted or cancelled it)
+    let already = false;
+    try { await update((d) => {
+      const cur = d.stockCounts.find((x) => x.id === count.id);
+      if (!cur || cur.status !== 'open') { already = true; return; }
       const ref2 = count.number || count.name;
       for (const r of diffRows) {
         let batchId = r.batchId && !String(r.batchId).startsWith(LEGACY) ? r.batchId : null;
@@ -461,9 +468,11 @@ function ReviewPost({ count, items, all, sum, onClose, onPosted }) {
       }
       for (const z of zeroRows) move(d, { productId: z.p.id, qty: -z.b.qty, type: 'Stock count', ref: ref2, note: `${count.name} (not found)`, user: user.name, batchId: z.b.legacy ? null : z.b.id, branchId });
       const summary = { ...sum, zeroed: zeroRows.length, net: sum.net + zeroValue, shortValue: sum.shortValue - zeroValue };
-      put(d, 'stockCounts', { ...count, status: 'posted', postedBy: user.name, postedAt: now(), postedOn: today(), summary });
+      put(d, 'stockCounts', { ...cur, status: 'posted', postedBy: user.name, postedAt: now(), postedOn: today(), summary });
       audit(d, user, 'Stock count posted', `${count.name}: ${sum.counted} counted, ${sum.matched} matched, ${sum.short} short (${fmt(summary.shortValue)}), ${sum.over} extra (${fmt(sum.overValue)})${zeroRows.length ? `, ${zeroRows.length} uncounted batches set to 0` : ''}`, branchId);
-    });
+    }); } catch (e) { setBusy(false); return toast('The count was NOT posted; stock is unchanged. ' + e.message, 'error'); }
+    setBusy(false);
+    if (already) { toast('This count was already posted or cancelled; nothing was changed', 'warn'); return onPosted(); }
     toast('Stock count posted: stock now matches what was counted');
     onPosted();
   };

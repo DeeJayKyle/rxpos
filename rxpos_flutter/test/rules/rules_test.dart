@@ -56,6 +56,13 @@ void main() {
       expect(daysUntil('2099-01-01'), greaterThan(0));
       expect(daysSince('2000-01-01'), greaterThan(0));
     });
+    test('a month alone is its first day; an unreadable date is "no expiry", never expired', () {
+      expect(daysUntil('2026-11', now: now), -4);
+      expect(daysUntil('2026-12', now: now), 26);
+      expect(daysUntil('', now: now), noExpiry);
+      expect(daysUntil('soon', now: now), noExpiry);
+      expect(daysSince('not a date', now: now), 0);
+    });
   });
   test('ids and document numbers', () {
     expect(uid(), matches(RegExp(r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')));

@@ -15,9 +15,12 @@ class ClassicGate extends ConsumerWidget {
   final Widget child;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final n = ref.watch(classicPendingProvider).value ?? 0;
-    if (n == 0) return child;
+    final pending = ref.watch(classicPendingProvider);
     final th = Theme.of(context);
+    // a read error is not "nothing waiting": the classic app's unsent work could be lost, so ask to check again
+    if (pending.hasError) return _couldNotCheck(context, ref, th, retrying: pending.isLoading);
+    final n = pending.value ?? 0;
+    if (n == 0) return child;
     return Material(
       key: const Key('classic-gate'),
       color: th.scaffoldBackgroundColor,
@@ -53,4 +56,37 @@ class ClassicGate extends ConsumerWidget {
       ),
     );
   }
+
+  Widget _couldNotCheck(BuildContext context, WidgetRef ref, ThemeData th, {required bool retrying}) => Material(
+        key: const Key('classic-gate-error'),
+        color: th.scaffoldBackgroundColor,
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: Card(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  Icon(Icons.error_outline, size: 48, color: th.colorScheme.error),
+                  const SizedBox(height: 12),
+                  Text("Couldn't check for earlier work", style: th.textTheme.headlineSmall, textAlign: TextAlign.center),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'This browser may still hold changes from the classic RxPOS that have not reached the cloud, '
+                    "but they couldn't be read just now. Try again.",
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 18),
+                  FilledButton.icon(
+                    key: const Key('classic-retry'),
+                    onPressed: retrying ? null : () => ref.invalidate(classicPendingProvider),
+                    icon: const Icon(Icons.refresh),
+                    label: Text(retrying ? 'Checking…' : 'Retry'),
+                  ),
+                ]),
+              ),
+            ),
+          ),
+        ),
+      );
 }

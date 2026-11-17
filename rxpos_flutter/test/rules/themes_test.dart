@@ -22,6 +22,19 @@ void main() {
     }
   });
 
+  test('containers and the inverse surface (snack bars) are readable at AA in every theme, light and dark', () {
+    for (final p in palettes) {
+      final t = buildTheme(p).colorScheme;
+      for (final (name, on, bg) in [
+        ('error', t.onErrorContainer, t.errorContainer),
+        ('secondary', t.onSecondaryContainer, t.secondaryContainer),
+        ('tertiary', t.onTertiaryContainer, t.tertiaryContainer),
+        ('inverse', t.onInverseSurface, t.inverseSurface),
+      ]) {
+        expect(contrast(argb(on), argb(bg)), greaterThanOrEqualTo(4.5), reason: '${p.id} $name container');
+      }
+    }
+  });
   test('light / dark picks OLED Black / Daylight Clinical, then the Adaptive Hybrid, then the owner\'s default; the owner can limit the list', () {
     expect(paletteFor(true), 'oled');
     expect(paletteFor(false), 'daylight-clinical');

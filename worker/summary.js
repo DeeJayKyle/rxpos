@@ -67,7 +67,8 @@ export async function attention(db, tenant, day) {
   const name = new Map((await rows("SELECT rec FROM records WHERE tenant = ?1 AND t = 'products' AND deleted = 0")).map((p) => [p.id, p.name]));
   return {
     expiring: batches.sort((a, b) => a.expiry.localeCompare(b.expiry)).map((b) => ({ medicine: name.get(b.productId) || 'Medicine', batch: b.batch, left: byBatch.get(b.id), expiry: b.expiry })),
-    low: products.filter((p) => { const q = byProduct.get(p.id) || 0; return q > 0 && q <= p.reorder; }).map((p) => ({ medicine: p.name, left: byProduct.get(p.id), reorder: p.reorder })),
+    // 2026-11-17 audit: out of stock (0 or less) is the most urgent kind of low, and used to be left out
+    low: products.filter((p) => { const q = byProduct.get(p.id) || 0; return q <= p.reorder; }).map((p) => ({ medicine: p.name, left: byProduct.get(p.id) || 0, reorder: p.reorder })),
   };
 }
 
@@ -80,6 +81,8 @@ export async function dailySummaries(env, { now = new Date(), dry = false, tenan
   const tenants = (await db.prepare("SELECT id, name, status FROM tenants WHERE status IS NULL OR status = 'active'").all()).results.filter((t) => !tenantId || t.id === tenantId);
   const out = [];
   for (const t of tenants) {
+    // 2026-11-17 audit: one pharmacy's bad record no longer stops every later pharmacy's email
+    try {
     const rec = async (table, id) => { const r = await db.prepare('SELECT rec FROM records WHERE tenant = ?1 AND t = ?2 AND id = ?3 AND deleted = 0').bind(t.id, table, id).first(); return r ? JSON.parse(r.rec || 'null') : null; };
     const settings = (await rec('settings', 'settings')) || {};
     const to = String(settings.summaryEmails || '').split(/[,;\s]+/).map((x) => x.trim()).filter((x) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x)).slice(0, 5);
@@ -105,6 +108,7 @@ export async function dailySummaries(env, { now = new Date(), dry = false, tenan
       }
     }
     out.push({ tenant: t.id, day, to, sent, error, figures: f, text });
+      } catch (e) { console.warn('scheduled job skipped a pharmacy', t.id, e.message); out.push({ tenant: t.id, error: e.message }); }
   }
   return out;
 }

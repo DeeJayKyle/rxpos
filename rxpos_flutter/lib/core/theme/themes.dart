@@ -248,6 +248,18 @@ ThemeData buildTheme(Palette base, {String accent = '', String surface = 'flat',
   // brand-coloured text must also read on the backdrop the translucent panels let through
   final behind = [p.surface, p.surface2, if (tk.glassAlpha != null) ...tk.backdrop.map((c) => c.toARGB32())];
   final primaryText = readable(p.primary, behind, p.dark ? 0xFFFFFFFF : 0xFF000000);
+  final errorColour = p.dark ? 0xFFF87171 : 0xFFB91C1C;
+  // a container: a pale (dark themes: deep) tint of [c], its text deepened (lightened) until it passes AA on it
+  (Color, Color) box(int c) {
+    final bg = p.dark ? mix(c, 0xFF000000, .62) : mix(c, 0xFFFFFFFF, .85);
+    final on = readable(p.dark ? mix(c, 0xFFFFFFFF, .6) : mix(c, 0xFF000000, .45), [bg], p.dark ? 0xFFFFFFFF : 0xFF000000);
+    return (Color(bg), Color(on));
+  }
+
+  final errorBox = box(errorColour), secondaryBox = box(btn.b), tertiaryBox = box(primaryText);
+  // snack bars and tooltips: dark ink on light themes, the text colour on dark ones; their text checked against it
+  final inverse = p.dark ? p.text : readable(_ink(p), const [0xFFFFFFFF], 0xFF000000);
+  final onInverse = readable(p.dark ? p.surface : 0xFFFFFFFF, [inverse], p.dark ? 0xFF000000 : 0xFFFFFFFF);
   final scheme = ColorScheme(
     brightness: p.dark ? Brightness.dark : Brightness.light,
     primary: Color(btn.a),
@@ -256,10 +268,18 @@ ThemeData buildTheme(Palette base, {String accent = '', String surface = 'flat',
     onPrimaryContainer: Color(p.dark ? mix(p.primary, 0xFFFFFFFF, .25) : mix(p.primary, 0xFF000000, .35)),
     secondary: Color(btn.b),
     onSecondary: Color(btn.on),
+    secondaryContainer: secondaryBox.$1,
+    onSecondaryContainer: secondaryBox.$2,
     tertiary: Color(primaryText),
     onTertiary: Color(btn.on),
-    error: Color(p.dark ? 0xFFF87171 : 0xFFB91C1C),
+    tertiaryContainer: tertiaryBox.$1,
+    onTertiaryContainer: tertiaryBox.$2,
+    error: Color(errorColour),
     onError: Color(p.dark ? 0xFF0B1220 : 0xFFFFFFFF),
+    errorContainer: errorBox.$1,
+    onErrorContainer: errorBox.$2,
+    inverseSurface: Color(inverse),
+    onInverseSurface: Color(onInverse),
     surface: Color(p.surface),
     onSurface: Color(p.text),
     onSurfaceVariant: Color(muted),

@@ -38,8 +38,27 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final d = ref.watch(pharmacyProvider).value;
+    final data = ref.watch(pharmacyProvider);
+    final d = data.value;
     final can = ref.watch(permissionsProvider).value ?? const <String>{};
+    if (d == null && data.hasError) {
+      // a failed load is said, with a way to try again, never left as an endless spinner
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Text('Could not load the medicines: ${data.error}', textAlign: TextAlign.center),
+            const SizedBox(height: 12),
+            FilledButton.icon(
+              key: const Key('inventory-retry'),
+              onPressed: data.isLoading ? null : () => ref.invalidate(pharmacyProvider),
+              icon: const Icon(Icons.refresh),
+              label: const Text('Retry'),
+            ),
+          ]),
+        ),
+      );
+    }
     if (d == null) return const Center(child: CircularProgressIndicator());
     final s = d.settings;
     final warn = s.expiryWarnDays.round();

@@ -172,6 +172,22 @@ export function toChanges(entries, db) {
   return out;
 }
 
+/**
+ * Entries of a batch that cannot be sent: their record is gone from this device and nothing later in the outbox (a
+ * delete) is coming for it. toChanges leaves them out; they are listed as rejected ("record not found on this
+ * device"), never acknowledged as if the cloud had them. laterKeys: `t|id` of the entries queued after this batch.
+ */
+export function missingEntries(entries, db, laterKeys = new Set()) {
+  const latest = new Map();
+  for (const e of entries) latest.set(e.t + '|' + e.id, e);
+  const gone = new Set();
+  for (const [k, e] of latest) {
+    if (e.deleted || e.t === 'settings' || !db[e.t] || laterKeys.has(k)) continue;
+    if (!db[e.t].some((r) => String(r.id) === String(e.id))) gone.add(k);
+  }
+  return entries.filter((e) => gone.has(e.t + '|' + e.id));
+}
+
 export function createSync({ getDb, getCfg, saveCfg, applyRemote, onStatus, store, pruneWindow = async () => {} }) {
   let busy = false, again = false, timer = null, stopped = false;
   let lastRun = 0, failures = 0, retryAt = 0;
@@ -237,8 +253,13 @@ export function createSync({ getDb, getCfg, saveCfg, applyRemote, onStatus, stor
         await saveCfg({ ...getCfg(), cursor: heldCursor, epoch });
         heldAt = Date.now();
       };
-      const ask = (since, batch) => post(c.url, c.key, { deviceId: c.deviceId, since, changes: toChanges(batch, getDb()), v: PROTOCOL, limit: PULL_LIMIT, ...(full ? { all: true } : {}),
+      let missing = []; // entries of the batch being sent whose record is gone (see missingEntries)
+      const ask = (since, batch) => {
+        const db = getDb();
+        if (batch.length) missing = missingEntries(batch, db, new Set(batches.slice(i + 1).flat().map((e) => e.t + '|' + e.id)));
+        return post(c.url, c.key, { deviceId: c.deviceId, since, changes: toChanges(batch, db), v: PROTOCOL, limit: PULL_LIMIT, ...(full ? { all: true } : {}),
         ...(phase === 'core' || phase === 'history' ? { phase, cutoff: getCfg().cutoff } : {}), ...(full && getCfg().window ? { window: getCfg().window } : {}) });
+      };
       const later = () => phase === 'history' || phase === 'tail'; // the core is in: the app can be used
       let ahead = null; // the next page, asked for while this one is saved
       const chunked = new Set(); // phases whose ready-made chunks were tried
@@ -281,7 +302,11 @@ export function createSync({ getDb, getCfg, saveCfg, applyRemote, onStatus, stor
             const older = batch.filter((e) => late.has(e.t + '|' + e.id));
             if (bad.length) await store.reject(bad, 'Refused by the cloud: no permission for this change, or it is too large.');
             if (older.length) await store.reject(older, "Not applied: the cloud has a newer copy of this record (is this device's clock behind?). The cloud's copy is now on this device.");
-            await store.ack(batch.filter((e) => !no.has(e.t + '|' + e.id) && !late.has(e.t + '|' + e.id)).map((e) => e.key));
+            // not sent at all (the record is gone from this device): kept for review, not acknowledged as sent
+            const gone = new Set(missing.filter((e) => !no.has(e.t + '|' + e.id) && !late.has(e.t + '|' + e.id)).map((e) => e.t + '|' + e.id));
+            if (gone.size) await store.reject(batch.filter((e) => gone.has(e.t + '|' + e.id)), 'record not found on this device');
+            await store.ack(batch.filter((e) => !no.has(e.t + '|' + e.id) && !late.has(e.t + '|' + e.id) && !gone.has(e.t + '|' + e.id)).map((e) => e.key));
+            missing = [];
             sent += batch.length; refused += bad.length; stale += older.length;
           }
           // 1.4 the cloud was restored from a backup: its database epoch changed, so re-pull everything from the start
@@ -360,7 +385,7 @@ export function createSync({ getDb, getCfg, saveCfg, applyRemote, onStatus, stor
       // the cloud can't be reached (no route, DNS, refused): that is "offline", not a fault to look into
       const unreachable = !e.status && (e instanceof TypeError || /fetch|network|took too long/i.test(e.message || ''));
       retryAt = expired ? 0 : Date.now() + backoff(failures);
-      await saveCfg({ ...getCfg(), lastError: e.message });
+      await saveCfg({ ...getCfg(), lastError: e.message }).catch(() => {}); // a storage problem is already shown
       result = unreachable ? { state: 'offline', error: 'The cloud can\'t be reached right now.', lastSync: cfg.lastSync, retryAt, ...(await counts()) }
         : { state: 'error', error: expired ? 'Sign-in expired. Sign out and sign in again to keep syncing.' : e.message, lastSync: cfg.lastSync, expired, retryAt, ...(await counts()) };
     } finally {

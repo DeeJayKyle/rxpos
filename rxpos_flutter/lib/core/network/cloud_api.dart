@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../sync/sync_engine.dart';
+import 'api_failure.dart';
 import 'dio_client.dart';
 
 class CloudApi {
@@ -11,13 +12,16 @@ class CloudApi {
   final Dio _dio;
   final String _base;
 
-  Future<Map<String, Object?>> _call(String path, {Object? body, Duration timeout = const Duration(seconds: 20)}) async {
+  /// [passRefusals]: "sign in again" and "refused" come out as the [ApiFailure] itself (no point asking again).
+  Future<Map<String, Object?>> _call(String path, {Object? body, Duration timeout = const Duration(seconds: 20), bool passRefusals = false}) async {
     try {
       final o = Options(sendTimeout: timeout, receiveTimeout: timeout);
       final res = body == null ? await _dio.get<Object?>('$_base$path', options: o) : await _dio.post<Object?>('$_base$path', data: body, options: o);
       final j = res.data;
       return j is Map ? j.cast<String, Object?>() : const {};
     } on DioException catch (e) {
+      final f = e.error;
+      if (passRefusals && f is ApiFailure && (f.kind == ApiFailureKind.signInAgain || f.kind == ApiFailureKind.refused)) throw f;
       throw Exception(e.message ?? 'No connection to the RxPOS cloud.');
     }
   }
@@ -35,8 +39,9 @@ class CloudApi {
     return '${j['ref'] ?? ''}';
   }
 
-  /// PENDING, SUCCESSFUL or FAILED, with txid / reason.
-  Future<Map<String, Object?>> payStatus(String provider, String ref) => _call('/api/pay/status?provider=$provider&ref=${Uri.encodeComponent(ref)}');
+  /// PENDING, SUCCESSFUL or FAILED, with txid / reason. Throws [ApiFailure] when the cloud says sign in again or refuses.
+  Future<Map<String, Object?>> payStatus(String provider, String ref) =>
+      _call('/api/pay/status?provider=$provider&ref=${Uri.encodeComponent(ref)}', passRefusals: true);
 
   Future<void> sendSms(List<String> to, String message) => _call('/api/sms', body: {'to': to, 'message': message});
 
@@ -78,10 +83,23 @@ Future<Map<String, Object?>> requestMomo(
   final reference = 'PP${DateTime.now().millisecondsSinceEpoch.toRadixString(36).toUpperCase()}';
   final ref = await api.payRequest(provider: provider, phone: phone, amount: amount, reference: reference, note: '$pharmacy payment');
   onRef?.call(ref);
+  var failures = 0;
   for (var i = 0; i < tries; i++) {
     await Future<void>.delayed(every);
     if (cancelled?.call() ?? false) throw const MomoCancelled();
-    final s = await api.payStatus(provider, ref).catchError((_) => <String, Object?>{'status': 'PENDING'});
+    final Map<String, Object?> s;
+    try {
+      s = await api.payStatus(provider, ref);
+      failures = 0;
+    } on ApiFailure {
+      rethrow; // sign in again / refused: asking again will not help
+    } catch (_) {
+      // a dropped check is not "still waiting" for ever: after a few in a row, say so (the payment may have gone through)
+      if (++failures >= maxStatusFailures) {
+        throw Exception('Couldn’t check the payment status. Ask the customer whether the payment went through before charging again.');
+      }
+      continue;
+    }
     if (s['status'] == 'SUCCESSFUL') return {'provider': provider, 'phone': phone, 'ref': ref, 'txid': '${s['txid'] ?? ''}'};
     if (s['status'] == 'FAILED') {
       throw Exception('The customer declined or the payment failed${(s['reason'] ?? '') == '' ? '' : ': ${s['reason']}'}');
@@ -89,6 +107,9 @@ Future<Map<String, Object?>> requestMomo(
   }
   throw Exception('No answer from the customer’s phone. Try again or record the payment manually.');
 }
+
+/// Status checks that may fail in a row before the cashier is told the status couldn't be checked.
+const maxStatusFailures = 3;
 
 class MomoCancelled implements Exception {
   const MomoCancelled();

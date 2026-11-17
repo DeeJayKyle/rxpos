@@ -9,11 +9,14 @@ check('a long fraction shows 2 decimals', formatQty(7.833333333333333) === '7.83
 check('whole quantities stay whole (no grouping, so a count still reads as a plain number)', formatQty(1200) === '1200' && formatQty(5.0000000001) === '5', formatQty(5.0000000001));
 check('trailing zeros are dropped', formatQty(2.5) === '2.5');
 check('a unit is appended, singular for 1', formatQty(1, 'tablets') === '1 tablet' && formatQty(3, 'tablets') === '3 tablets');
+check('a unit ending in -es is made singular properly', formatQty(1, 'Boxes') === '1 Box' && formatQty(1, 'Bottles') === '1 Bottle' && formatQty(2, 'Boxes') === '2 Boxes', formatQty(1, 'Boxes'));
 check('junk shows a dash', formatQty('x') === '—');
 
 // round
 check('round to whole shillings', round(666.666 * 3) === 2000, round(666.666 * 3));
 check('round keeps 2 decimals when asked', round(1.005, 2) === 1.01, round(1.005, 2));
+check('round is symmetric for negative halves', round(-2.5) === -3 && round(2.5) === 3 && round(-1.005, 2) === -1.01, round(-2.5));
+check('round of a small negative to 0 is 0, not -0', Object.is(round(-0.2), 0), round(-0.2));
 check('round of junk is 0', round(undefined) === 0 && round(NaN) === 0);
 
 // lineTotal

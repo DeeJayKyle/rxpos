@@ -31,15 +31,16 @@ import { twoStepDdl, twoStepOf, totpCheck, markUsed, twoStepRoutes, looksLikeRec
 import { tokenSecret, purposeLabel } from './secret.js';
 import { pharmacyChanged, validatePharmacyDefaults } from '../src/pharmacy-settings.js';
 import { DEFAULT_ROLES } from '../src/access.js';
-import { decide, NEEDS_OLD, moneyView, readView, viewOfCodes, widestView, legacyView } from './policy.js';
+import { decide, NEEDS_OLD, moneyView, readView, widestView, legacyView } from './policy.js';
 import { saleFindings, fingerprint, stockFindings } from './anomalies.js';
 import { verify as verifyPassword, hashNew, upgrade as upgradeHash } from './passwords.js';
-import { waitFor, afterFail, waitText } from './throttle.js';
+import { waitFor, waitText, WINDOW_MS, STEPS } from './throttle.js';
 import { FIELD_TABLES, mergeFields, clampFields, sameRecord } from '../src/fieldmerge.js';
 import { LOCKED_TABLES, DOCUMENT_MOVES, closedSet, inClosedDay, recordDay } from '../src/dayclose.js';
 import { isRefundOnly } from './policy.js';
 import { localDay } from './dailystock.js';
 import { snapshotList, snapshotChunk, pruneSnapshots } from './snapshot.js';
+import { dmHidden } from './policy.js';
 import { balancesAt, validWindow, pruneWindows } from './window.js';
 import { keeps as keepsInWindow, WINDOWED } from '../src/historywindow.js';
 // The built-in roles (cashier, dispenser, pharmacist, manager) live only in the app; they aren't stored as records.
@@ -131,13 +132,15 @@ async function adminChangeRefused(db, tenant, ch, who) {
   return false;
 }
 
-const schemaReady = new WeakMap();
+// keyed by the database (or, for Turso, whose client is made per request, by its URL: db.schemaKey)
+const schemaReady = new Map();
 /**
  * Create whatever tables/indexes are missing. It only reads when everything exists, so it costs no D1 writes
  * (the free plan allows 100,000 row writes a day, and every index multiplies the cost of each record write).
  */
 function ensureSchema(db) {
-  if (!schemaReady.has(db)) schemaReady.set(db, (async () => {
+  const key = db.schemaKey || db;
+  if (!schemaReady.has(key)) schemaReady.set(key, (async () => {
     const { results } = await db.prepare("SELECT name, sql FROM sqlite_master WHERE type IN ('table', 'index')").all();
     const have = new Map(results.map((r) => [r.name, r.sql || '']));
     const ddl = [];
@@ -184,8 +187,8 @@ function ensureSchema(db) {
     if (!have.has('reset_codes')) ddl.push('CREATE TABLE reset_codes (k TEXT PRIMARY KEY, code_hash TEXT NOT NULL, expires INTEGER NOT NULL, tries INTEGER NOT NULL DEFAULT 0, sent INTEGER NOT NULL DEFAULT 0, window_start INTEGER NOT NULL DEFAULT 0)');
     // dropping an old index is optional: never let it block the API (e.g. when the daily write limit is reached)
     for (const sql of ddl) await db.prepare(sql).run().catch((e) => { if (!sql.startsWith('DROP')) throw e; });
-  })().catch((e) => { schemaReady.delete(db); throw e; }));
-  return schemaReady.get(db);
+  })().catch((e) => { schemaReady.delete(key); throw e; }));
+  return schemaReady.get(key);
 }
 
 const cors = {
@@ -374,6 +377,9 @@ export function sessionOk(rec, p, sig) {
 }
 /** The user's fields that end every pass issued until now, except `keep` (a pass's sigOf) */
 const endSessions = (keep = '') => ({ sessionsFrom: Date.now(), sessionKeep: keep || undefined, revoked: [] });
+/** 2026-11-17 audit: end these people's open live connections (calls, change pushes); never fails the caller */
+const closeLive = (env, tenant, uids) => (env.HUB && uids.length ? env.HUB.get(env.HUB.idFromName(tenant)).fetch('https://hub/close', { method: 'POST', body: JSON.stringify({ uids }), signal: AbortSignal.timeout(5000) })
+  .catch((e) => console.warn('closing live connections failed', e.message)) : null);
 
 /** Has this person any one of these permissions? (one read of the role) */
 const anyPerm = async (env, who, list) => { if (who.viaKey) return true; const p = await permsOf(env, who.tenant, who.role); return p === 'all' || list.some((x) => p.has(x)); };
@@ -404,7 +410,15 @@ const LOCK_MINUTES = 15;
 // step 6 (worker/throttle.js): the per-account slowdown. Keyed by pharmacy and email/username whether or not such an
 // account exists, so the answer never tells anyone which accounts are real.
 const throttleRow = (env, k) => env.DB.prepare('SELECT n, last_at FROM login_throttle WHERE k = ?1').bind(k).first();
-const throttleFail = (env, k, row) => { const r = afterFail(row); return env.DB.prepare('INSERT INTO login_throttle (k, n, last_at) VALUES (?1, ?2, ?3) ON CONFLICT(k) DO UPDATE SET n = ?2, last_at = ?3').bind(k, r.n, r.last_at).run(); };
+// 2026-11-17 audit: one statement per wrong try (a read-then-write lost the count under concurrent tries), and while an
+// account is slowed down each try claims its slot by moving last_at (compare-and-set), so a burst gets one try per slot
+const throttleFail = (env, k) => env.DB.prepare(`INSERT INTO login_throttle (k, n, last_at) VALUES (?1, 1, ?2) ON CONFLICT(k) DO UPDATE SET
+  n = CASE WHEN ?2 - last_at > ?3 THEN 1 ELSE n + 1 END, last_at = ?2`).bind(k, Date.now(), WINDOW_MS).run();
+const throttleClaim = async (env, k, row) => {
+  if (!row || Date.now() - Number(row.last_at) > WINDOW_MS || Number(row.n) < STEPS[STEPS.length - 1][0]) return true; // not slowed down
+  const r = await env.DB.prepare('UPDATE login_throttle SET last_at = ?3 WHERE k = ?1 AND last_at = ?2').bind(k, row.last_at, Date.now()).run();
+  return (r.meta?.changes || 0) > 0; // another try took this slot first
+};
 const throttleClear = (env, ...keys) => env.DB.batch(keys.map((k) => env.DB.prepare('DELETE FROM login_throttle WHERE k = ?1').bind(k)));
 const slowedDown = (ms) => json({ error: `Too many wrong passwords for this account. Try again in ${waitText(ms)}, or use "Forgot password".`, retryAfter: Math.ceil(ms / 1000) }, 429);
 /** Daily: forget finished locks, part-counts of wrong tries and old slowdowns (both tables grew forever before) */
@@ -469,12 +483,12 @@ async function pharmacyLogin(env, body, ownerToken, ip = 'noip') {
         return json({ error: `Too many wrong passwords. Try again in ${mins} minute${mins === 1 ? '' : 's'}, or use "Forgot password".` }, 429);
       }
       const slowKey = '*:' + email0, slow = await throttleRow(env, slowKey);
-      if (waitFor(slow) && !ownerToken) return slowedDown(waitFor(slow));
+      if ((waitFor(slow) || !(await throttleClaim(env, slowKey, slow))) && !ownerToken) return slowedDown(waitFor(slow) || 60000);
       const ok = [];
       for (const f of found.slice(0, 10)) if (await verifyPassword(f.u, String(body.password || ''))) ok.push(f);
       if (!ok.length && ownerToken) return json({ owner: { token: ownerToken } });
       if (!ok.length) {
-        await throttleFail(env, slowKey, slow);
+        await throttleFail(env, slowKey);
         const n = (fail && fail.until <= Date.now() && fail.until > 0 ? 0 : fail?.n || 0) + 1;
         const until = n >= MAX_FAILS ? Date.now() + LOCK_MINUTES * 60000 : 0;
         await env.DB.prepare('INSERT INTO login_fail (email, n, until) VALUES (?1, ?2, ?3) ON CONFLICT(email) DO UPDATE SET n = ?2, until = ?3').bind(key, until ? 0 : n, until).run();
@@ -495,20 +509,24 @@ async function pharmacyLogin(env, body, ownerToken, ip = 'noip') {
   }
   const { email, tenant, match } = await pickUser(env, body);
   const lockKey = ip + '|' + tenant + ':' + email;
-  const fail = await env.DB.prepare('SELECT n, until FROM login_fail WHERE email = ?1').bind(lockKey).first();
-  if (fail && fail.until > Date.now()) {
+  // 2026-11-17 audit: a try is reserved (counted) before the password is checked, in one statement, so concurrent
+  // tries can't all pass a lock check made on a stale count; the count is cleared when the sign-in succeeds
+  const fail = await env.DB.prepare(`INSERT INTO login_fail (email, n, until) VALUES (?1, 1, 0) ON CONFLICT(email) DO UPDATE SET
+    n = CASE WHEN until > 0 AND until <= ?2 THEN 1 ELSE n + 1 END, until = CASE WHEN until > 0 AND until <= ?2 THEN 0 ELSE until END RETURNING n, until`).bind(lockKey, Date.now()).first();
+  if (fail.until <= Date.now() && fail.n > MAX_FAILS) { fail.until = Date.now() + LOCK_MINUTES * 60000; await env.DB.prepare('UPDATE login_fail SET n = 0, until = ?2 WHERE email = ?1').bind(lockKey, fail.until).run(); }
+  if (fail.until > Date.now()) {
     if (ownerToken) return json({ owner: { token: ownerToken } }); // staff account locked, but this is the owner's correct password
     const mins = Math.ceil((fail.until - Date.now()) / 60000);
     return json({ error: `Too many wrong passwords. Try again in ${mins} minute${mins === 1 ? '' : 's'}, or use "Forgot password".` }, 429);
   }
   const slowKey = tenant + ':' + email, slow = await throttleRow(env, slowKey);
-  if (waitFor(slow) && !ownerToken) return slowedDown(waitFor(slow));
+  if ((waitFor(slow) || !(await throttleClaim(env, slowKey, slow))) && !ownerToken) return slowedDown(waitFor(slow) || 60000);
   if (!match || !(await verifyPassword(match.u, String(body.password || '')))) {
     if (ownerToken) return json({ owner: { token: ownerToken } }); // it is the owner's password: straight to the owner console
-    await throttleFail(env, slowKey, slow);
-    const n = (fail && fail.until <= Date.now() && fail.until > 0 ? 0 : fail?.n || 0) + 1;
+    await throttleFail(env, slowKey);
+    const n = fail.n; // this try was counted when it was reserved
     const until = n >= MAX_FAILS ? Date.now() + LOCK_MINUTES * 60000 : 0;
-    await env.DB.prepare('INSERT INTO login_fail (email, n, until) VALUES (?1, ?2, ?3) ON CONFLICT(email) DO UPDATE SET n = ?2, until = ?3').bind(lockKey, until ? 0 : n, until).run();
+    if (until) await env.DB.prepare('UPDATE login_fail SET n = 0, until = ?2 WHERE email = ?1').bind(lockKey, until).run();
     return json({ error: until ? `Too many wrong passwords. Sign-in is locked for ${LOCK_MINUTES} minutes.` : `Wrong email or password (${MAX_FAILS - n} attempt${MAX_FAILS - n === 1 ? '' : 's'} left before a ${LOCK_MINUTES}-minute lock).` }, until ? 429 : 401);
   }
   const t = await tenantById(env, match.tenant);
@@ -524,16 +542,16 @@ async function pharmacyLogin(env, body, ownerToken, ip = 'noip') {
     const recovery = looksLikeRecovery(body.otp);
     const step = recovery ? ((await useRecoveryCode(env, match.tenant, u.id, tf, body.otp)) ? 0 : -1) : await totpCheck(tf.secret, body.otp, tf.last_step);
     if (step < 0) {
-      await throttleFail(env, slowKey, slow); // a wrong two-step code counts like a wrong password
-      const n = (fail && fail.until <= Date.now() && fail.until > 0 ? 0 : fail?.n || 0) + 1;
+      await throttleFail(env, slowKey); // a wrong two-step code counts like a wrong password
+      const n = fail.n; // a wrong two-step code uses up the try reserved above
       const until = n >= MAX_FAILS ? Date.now() + LOCK_MINUTES * 60000 : 0;
-      await env.DB.prepare('INSERT INTO login_fail (email, n, until) VALUES (?1, ?2, ?3) ON CONFLICT(email) DO UPDATE SET n = ?2, until = ?3').bind(lockKey, until ? 0 : n, until).run();
+      if (until) await env.DB.prepare('UPDATE login_fail SET n = 0, until = ?2 WHERE email = ?1').bind(lockKey, until).run();
       return json({ twoFactor: true, error: until ? `Too many wrong codes. Sign-in is locked for ${LOCK_MINUTES} minutes.` : 'That code is not right. Type the newest code from your authenticator app.' }, until ? 429 : 401);
     }
     if (recovery) await serverWrite(env, match.tenant, 'audit', crypto.randomUUID(), { date: new Date().toISOString(), user: u.name, action: 'Signed in with a two-step recovery code', details: '', branchId: 'main' });
     else await markUsed(env, match.tenant, u.id, step);
   }
-  if (fail) await env.DB.prepare('DELETE FROM login_fail WHERE email = ?1').bind(lockKey).run(); // only once the code is right too
+  await env.DB.prepare('DELETE FROM login_fail WHERE email = ?1').bind(lockKey).run(); // only once the code is right too
   if (slow) await throttleClear(env, slowKey);
   // step 5: the password was right, so a weaker hash (fewer rounds than PBKDF2_ITER, or the old unsalted one) is
   // replaced now. Never at the cost of the sign-in: a failure here is logged and the person is signed in as usual.
@@ -561,20 +579,21 @@ async function sendEmail(env, to, subject, text) {
 
 const RESET_PER_ACCOUNT = 3, RESET_PER_TENANT = 20; // reset codes per hour
 // Payments and SMS (1.9): a sane ceiling and an hourly per-pharmacy cap. Generous for a busy counter; a per-tenant
-// override can come later. resetWindow/bumpReset below are a generic hourly per-key counter, reused here.
+// override can come later. takeHourly below is a generic hourly per-key allowance, reused here.
 const MAX_PAY_UGX = 20_000_000; // one Mobile Money request
 const PAY_PER_TENANT = 240, SMS_PER_TENANT = 240; // per hour, per pharmacy
+const SMS_MAX_RECIPIENTS = 20; // 2026-11-17 audit: phones in one /api/sms request (the apps send one at a time)
 
-/** The running count of reset sends for a key in the current hour window. */
-async function resetWindow(env, k) {
-  const row = await env.DB.prepare('SELECT sent, window_start FROM reset_codes WHERE k = ?1').bind(k).first();
-  const windowStart = row && Date.now() - row.window_start < 3600e3 ? row.window_start : Date.now();
-  const sent = row && windowStart === row.window_start ? row.sent : 0;
-  return { windowStart, sent };
+// 2026-11-17 audit: take `units` from an hourly allowance in one statement (a read-then-write let a burst of concurrent
+// requests all pass the cap). → true when taken, false when the hour's allowance is used up.
+async function takeHourly(env, k, cap, units = 1) {
+  const now = Date.now();
+  const r = await env.DB.prepare(`INSERT INTO reset_codes (k, code_hash, expires, tries, sent, window_start) VALUES (?1, '', 0, 0, ?3, ?2)
+    ON CONFLICT(k) DO UPDATE SET sent = CASE WHEN ?2 - window_start >= 3600000 THEN ?3 ELSE sent + ?3 END,
+      window_start = CASE WHEN ?2 - window_start >= 3600000 THEN ?2 ELSE window_start END
+    WHERE ?2 - window_start >= 3600000 OR sent + ?3 <= ?4 RETURNING sent`).bind(k, now, units, cap).first();
+  return !!r && units <= cap;
 }
-/** A prepared statement that increments a reset-send counter row (used in a batch). */
-const bumpResetStmt = (env, k, w) => env.DB.prepare("INSERT INTO reset_codes (k, code_hash, expires, tries, sent, window_start) VALUES (?1, '', 0, 0, 1, ?2) ON CONFLICT(k) DO UPDATE SET sent = ?3, window_start = ?2").bind(k, w.windowStart, w.sent + 1);
-const bumpReset = (env, k, w) => bumpResetStmt(env, k, w).run();
 
 async function forgotPassword(env, body, ip = 'noip') {
   const { email, tenant, match } = await pickUser(env, body);
@@ -582,16 +601,14 @@ async function forgotPassword(env, body, ip = 'noip') {
   // Same answer whether or not the account exists, so this can't be used to discover staff emails
   const generic = { sent: true, channel, message: channel === 'sms' ? 'If that account has a phone number, a code is on its way by SMS.' : 'If that account exists, a code is on its way to its email inbox.' };
   // Per-IP cap first — applies even when the account doesn't exist, so the endpoint can't be used to fan out sends.
-  const iw = await resetWindow(env, '__reset_ip__:' + ip);
-  if (iw.sent >= RESET_PER_TENANT) return json({ error: 'Too many reset codes requested. Try again later.' }, 429);
-  if (!match) { await bumpReset(env, '__reset_ip__:' + ip, iw); return json(generic); }
+  // 2026-11-17 audit: each allowance is taken in one statement (a burst of concurrent requests passed read-then-write caps)
+  if (!(await takeHourly(env, '__reset_ip__:' + ip, RESET_PER_TENANT))) return json({ error: 'Too many reset codes requested. Try again later.' }, 429);
+  if (!match) return json(generic);
   const k = tenant + ':' + email;
   // Per-account AND per-tenant caps, so one account can't be spammed and a whole pharmacy can't be used to burn SMS credit.
   const tenantKey = '__reset_tenant__:' + match.tenant;
-  const tw = await resetWindow(env, tenantKey);
-  if (tw.sent >= RESET_PER_TENANT) return json({ error: 'Too many reset codes requested for this pharmacy. Try again later or ask your administrator.' }, 429);
-  const { windowStart, sent } = await resetWindow(env, k);
-  if (sent >= RESET_PER_ACCOUNT) return json({ error: 'Too many reset codes requested. Try again in an hour or ask your administrator.' }, 429);
+  if (!(await takeHourly(env, tenantKey, RESET_PER_TENANT))) return json({ error: 'Too many reset codes requested for this pharmacy. Try again later or ask your administrator.' }, 429);
+  if (!(await takeHourly(env, '__reset_acct__:' + k, RESET_PER_ACCOUNT))) return json({ error: 'Too many reset codes requested. Try again in an hour or ask your administrator.' }, 429);
   const code = String(crypto.getRandomValues(new Uint32Array(1))[0] % 1000000).padStart(6, '0');
   const t = await tenantById(env, match.tenant);
   const text = `Your RxPOS password reset code for ${t?.name || 'your pharmacy'} is ${code}. It expires in 15 minutes. If you did not ask for this, ignore this message.`;
@@ -603,12 +620,8 @@ async function forgotPassword(env, body, ip = 'noip') {
   } else {
     await sendEmail(env, match.u.email, 'Your RxPOS password reset code', text);
   }
-  await env.DB.batch([
-    env.DB.prepare('INSERT INTO reset_codes (k, code_hash, expires, tries, sent, window_start) VALUES (?1, ?2, ?3, 0, ?4, ?5) ON CONFLICT(k) DO UPDATE SET code_hash = ?2, expires = ?3, tries = 0, sent = ?4, window_start = ?5')
-      .bind(k, await sha256(k + ':' + code), Date.now() + 15 * 60000, sent + 1, windowStart),
-    bumpResetStmt(env, tenantKey, tw),
-    bumpResetStmt(env, '__reset_ip__:' + ip, iw),
-  ]);
+  await env.DB.prepare('INSERT INTO reset_codes (k, code_hash, expires, tries, sent, window_start) VALUES (?1, ?2, ?3, 0, 0, 0) ON CONFLICT(k) DO UPDATE SET code_hash = ?2, expires = ?3, tries = 0')
+    .bind(k, await sha256(k + ':' + code), Date.now() + 15 * 60000).run();
   return json({ ...generic, hint: channel === 'sms' ? mask(String(match.u.phone || ''), 4) : mask(match.u.email) });
 }
 
@@ -617,14 +630,14 @@ async function resetPassword(env, body) {
   const pw = String(body.password || '');
   if (pw.length < 8) return json({ error: 'Use a password of at least 8 characters.' }, 400);
   const k = tenant + ':' + email;
-  const row = await env.DB.prepare('SELECT * FROM reset_codes WHERE k = ?1').bind(k).first();
-  if (!row || row.expires < Date.now() || row.tries >= 5) return json({ error: 'That code has expired. Request a new one.' }, 400);
-  if (!match || !safeEqual(row.code_hash, await sha256(k + ':' + String(body.code || '').trim()))) {
-    await env.DB.prepare('UPDATE reset_codes SET tries = tries + 1 WHERE k = ?1').bind(k).run();
-    return json({ error: 'Wrong code.' }, 400);
-  }
+  // 2026-11-17 audit: a try is used up in the same statement that checks the limit, before the code is compared, so
+  // concurrent guesses can't all be checked against one stale count (a burst used to get far more than 5 guesses)
+  const row = await env.DB.prepare('UPDATE reset_codes SET tries = tries + 1 WHERE k = ?1 AND tries < 5 AND expires >= ?2 AND code_hash <> \'\' RETURNING code_hash').bind(k, Date.now()).first();
+  if (!row) return json({ error: 'That code has expired. Request a new one.' }, 400);
+  if (!match || !safeEqual(row.code_hash, await sha256(k + ':' + String(body.code || '').trim()))) return json({ error: 'Wrong code.' }, 400);
   const u = { ...match.u, ...(await hashNew(env, pw)), ...endSessions() }; // every device signed in as them is signed out
   await serverWrite(env, match.tenant, 'users', u.id, u);
+  await closeLive(env, match.tenant, [u.id]);
   await serverWrite(env, match.tenant, 'audit', crypto.randomUUID(), { date: new Date().toISOString(), user: u.name, action: 'Password reset (forgot password)', details: 'via ' + (body.channel || 'email') + ' code', branchId: 'main' });
   await env.DB.batch([env.DB.prepare('DELETE FROM reset_codes WHERE k = ?1').bind(k), env.DB.prepare("DELETE FROM login_fail WHERE email LIKE '%|' || ?1").bind(k)]);
   await throttleClear(env, k, '*:' + email); // a reset password starts with no slowdown
@@ -644,6 +657,7 @@ async function resetWithGoogle(env, body) {
   const u = { ...match.u, ...(await hashNew(env, pw)), ...endSessions() };
   delete u.mustChangePassword;
   await serverWrite(env, match.tenant, 'users', u.id, u);
+  await closeLive(env, match.tenant, [u.id]);
   await serverWrite(env, match.tenant, 'audit', crypto.randomUUID(), { date: new Date().toISOString(), user: u.name, action: 'Password reset (Google)', details: email, branchId: 'main' });
   await env.DB.prepare("DELETE FROM login_fail WHERE email LIKE '%|' || ?1").bind(tenant + ':' + email).run();
   await throttleClear(env, match.tenant + ':' + email, tenant + ':' + email, '*:' + email);
@@ -758,6 +772,7 @@ async function sync(env, body, who, ctx) {
   const stale = []; // { k, t, id, rec, deleted, stored? }
   // 2026-11 audit: the stock a sale or refund moves, and quotations made at the till, checked after the loop
   const moves = new Map(); // receipt number → [movement]
+  const liveEnd = []; // 2026-11-17 audit: people whose open live connections end (disabled, removed, new password)
   const saleByNumber = new Map(); // receipt number → sale pushed in this request
   const pfCheck = new Map(); // proforma key → a new quotation pushed by someone without the Proformas permission
   const upsertMerged = db.prepare(
@@ -787,6 +802,7 @@ async function sync(env, body, who, ctx) {
     let rec = ch.rec;
     // Devices no longer hold password secrets, so a user edit (a rename, a role change) arrives without them: keep
     // whatever the server already stores. A real password set/change/reset still carries a fresh hash and wins. (0.2)
+    if (ch.t === 'users' && (ch.deleted || rec?.disabled)) liveEnd.push(id); // 2026-11-17 audit: removed or disabled
     if (ch.t === 'users' && !ch.deleted && rec) {
       const old = await existingRec(db, tenant, 'users', id);
       rec = { ...rec };
@@ -796,7 +812,7 @@ async function sync(env, body, who, ctx) {
         // a new password from a device (the person's own change, or an administrator's reset): every other pass of
         // theirs ends; the device of a person changing their own password stays signed in
         const fresh = !old || old.hash !== rec.hash;
-        if (fresh && old) Object.assign(rec, endSessions(String(who.uid) === id ? who.sig : ''));
+        if (fresh && old) { Object.assign(rec, endSessions(String(who.uid) === id ? who.sig : '')); liveEnd.push(id); }
         else if (old) for (const f of ['sessionsFrom', 'sessionKeep', 'revoked']) if (old[f] !== undefined) rec[f] = old[f];
       }
     }
@@ -835,7 +851,9 @@ async function sync(env, body, who, ctx) {
     // 1.3 clamp a device's clock to server time plus a little skew. A wrong or deliberately future-dated clock can
     // otherwise win last-writer-wins forever and leave a record that no normal edit can ever overwrite.
     const atMs = Date.parse(ch.at);
-    const at = atMs <= Date.now() + CLOCK_SKEW_MS ? ch.at : new Date(Date.now() + CLOCK_SKEW_MS).toISOString();
+    // 2026-11-17 audit: always stored as canonical ISO. Rows are ordered by comparing `at` as text, so a time the clock
+    // check accepted but written another way ("Jan 1 2000" sorts after every ISO time) won every later edit for good.
+    const at = new Date(Math.min(Number.isFinite(atMs) ? atMs : Date.now(), Date.now() + CLOCK_SKEW_MS)).toISOString();
     const old = FIELD_TABLES.has(ch.t) && !ch.deleted && rec ? stored.get(k) : null;
     if (old) {
       // step 14: newer value of each field wins; the record's time becomes the newest field time. If the result is not
@@ -941,6 +959,11 @@ async function sync(env, body, who, ctx) {
       const { results } = await db.prepare("SELECT rec FROM records WHERE tenant = ?1 AND t = 'sales' AND deleted = 0 AND json_extract(rec, '$.number') IN (SELECT value FROM json_each(?2))").bind(tenant, JSON.stringify(want)).all();
       for (const r of results || []) { try { const x = JSON.parse(r.rec); found.set(String(x.number), x); } catch { /* unreadable */ } }
     }
+    // 2026-11-17 audit: count the movements already stored for each receipt too, so extra stock taken against a real
+    // sale in a later push is caught (the check used to see one push at a time)
+    const pushed = new Set([...moves.values()].flat().map((m) => String(m.id)));
+    const { results: before } = await db.prepare("SELECT rec FROM records WHERE tenant = ?1 AND t = 'movements' AND deleted = 0 AND json_extract(rec, '$.type') IN ('Sale', 'Refund') AND json_extract(rec, '$.ref') IN (SELECT value FROM json_each(?2))").bind(tenant, JSON.stringify([...moves.keys()])).all();
+    for (const r of before || []) { try { const x = JSON.parse(r.rec); if (!pushed.has(String(x.id)) && moves.has(String(x.ref))) moves.get(String(x.ref)).unshift(x); } catch { /* unreadable */ } }
     for (const [ref, list] of moves) {
       const sale = found.get(ref) || null;
       const fp = fingerprint(list.map((m) => m.id).sort().join(','));
@@ -1004,6 +1027,7 @@ async function sync(env, body, who, ctx) {
   // keep the op ledger small: ops older than 60 days can't be repeats any more (devices retry within minutes or days)
   if (ops.length && Math.random() < 0.01) await db.prepare('DELETE FROM sync_ops WHERE tenant = ?1 AND at < ?2').bind(tenant, new Date(Date.now() - 60 * 864e5).toISOString()).run().catch(() => {});
   // Tell the pharmacy's other devices to pull, while this reply is being prepared (not one after the other)
+  if (applied && liveEnd.length) await closeLive(env, tenant, liveEnd);
   if (applied && env.HUB) {
     const notified = env.HUB.get(env.HUB.idFromName(tenant)).fetch('https://hub/notify', { method: 'POST', body: JSON.stringify({ from: deviceId }), signal: AbortSignal.timeout(5000) }).catch((e) => console.warn('sync notification failed', e.message));
     ctx?.waitUntil(notified);
@@ -1033,9 +1057,10 @@ async function sync(env, body, who, ctx) {
   const view = await deviceView(env, who, deviceId, readView(who.viaKey ? 'all' : (permSet ??= await permsOf(env, tenant, who.role))));
   const W = all === true ? windowOf(body) : null; // stage 4: a full download for a device keeping recent history
   const hides = view.hidden.size > 0;
-  const shown = hides || W ? page.filter((r) => !(hides && view.hidden.has(r.t)) && !(W && !keepsRow(r, W))) : page;
+  const uid = who.viaKey ? '' : who.uid;
+  const shown = page.filter((r) => !(hides && view.hidden.has(r.t)) && !(W && !keepsRow(r, W)) && !dmHidden(r.t, r.rec, uid));
   // the cloud's copies of the changes it did not take, after the page (a device applies the newer copy of a record)
-  const back = staleRows.filter((r) => !view.hidden.has(r.t));
+  const back = staleRows.filter((r) => !view.hidden.has(r.t) && !dmHidden(r.t, r.rec, uid));
   // Build the response by hand so records stored as JSON text are not parsed and re-serialised (keeps CPU low)
   const items = [...shown, ...back].map(itemJson);
   return json(`{"changes":[${items.join(',')}],"cursor":${cursor},"more":${more},"applied":${applied},"refused":${refused},"refusedKeys":${JSON.stringify(refusedKeys)},"staleKeys":${JSON.stringify(staleKeys)},"dupes":${dupes},"protocol":2,"limit":${limit},"phase":${JSON.stringify(phase)},"window":${JSON.stringify(W)},"epoch":${JSON.stringify(epoch)},"tenant":${JSON.stringify(tenant)},"view":${JSON.stringify(view.key)},"serverTime":${Date.now()}}`);
@@ -1058,7 +1083,8 @@ async function olderHistory(env, body, who) {
     .bind(who.tenant, t, after, from, to).all();
   const more = (results || []).length > PAGE_H;
   const rows = more ? results.slice(0, PAGE_H) : results || [];
-  return json(`{"records":[${rows.map((r) => stripUserSecrets(t, r.rec)).join(',')}],"more":${more},"after":${rows.length ? rows[rows.length - 1].seq : after}}`);
+  const mine = rows.filter((r) => !dmHidden(t, r.rec, who.viaKey ? '' : who.uid)); // 2026-11-17 audit: direct chats
+  return json(`{"records":[${mine.map((r) => stripUserSecrets(t, r.rec)).join(',')}],"more":${more},"after":${rows.length ? rows[rows.length - 1].seq : after}}`);
 }
 
 // ---------- Mobile Money (per pharmacy) ----------
@@ -1359,6 +1385,18 @@ async function owner(env, req, url, body) {
     await db.batch([db.prepare('DELETE FROM file_chunks WHERE tenant = ?1').bind(t.id), db.prepare('DELETE FROM files WHERE tenant = ?1').bind(t.id), db.prepare('DELETE FROM file_uploads WHERE tenant = ?1').bind(t.id)]).catch(() => {});
     // 2026-11 audit: everything else kept per pharmacy goes too (two-step secrets, devices, crash reports, calls…)
     await db.batch(['twofa', 'sync_ops', 'client_errors', 'snapshot_bounds', 'rtc', 'device_views'].map((x) => db.prepare(`DELETE FROM ${x} WHERE tenant = ?1`).bind(t.id))).catch((e) => console.warn('pharmacy clean-up incomplete', e.message));
+    // 2026-11-17 audit: its ready-made downloads and brought-forward figures in R2 too. They were keyed by the pharmacy's
+    // address, so a new pharmacy given the same address was served the deleted one's balances.
+    if (env.APPS) {
+      for (const prefix of [`windows/${t.id}/`, `snapshots/${t.id}/`]) {
+        let cursor;
+        do {
+          const page = await env.APPS.list({ prefix, cursor, limit: 1000 });
+          if (page.objects.length) await env.APPS.delete(page.objects.map((o) => o.key));
+          cursor = page.truncated ? page.cursor : undefined;
+        } while (cursor);
+      }
+    }
     return json({ ok: true, deleted: r.meta.changes || 0 });
   }
   if (sub === 'rotate-key' && req.method === 'POST') {
@@ -1403,6 +1441,7 @@ async function owner(env, req, url, body) {
     const rec = { ...old, name: String(u.name || old.name || '').slice(0, 80), email, phone: String(u.phone ?? old.phone ?? ''), role: String(u.role || old.role || 'cashier'),
       branchId: u.branchId ?? old.branchId ?? '', disabled: !!u.disabled, ...(u.password ? { ...(await passwordFields(env, u.password)), mustChangePassword: !!u.mustChange, ...endSessions() } : {}) };
     await serverWriteMany(env, t.id, [{ t: 'users', id, rec }, { t: 'audit', id: crypto.randomUUID(), rec: { date: new Date().toISOString(), user: 'RxPOS owner', action: old.id ? 'User updated by owner' : 'User created by owner', details: `${rec.name} (${rec.role})`, branchId: 'main' } }]);
+    if (rec.disabled || u.password) await closeLive(env, t.id, [id]);
     return json({ user: publicUser({ ...rec, id }) });
   }
   // 2026-11 audit: the way back in for an administrator who lost the phone with their authenticator app
@@ -1539,7 +1578,11 @@ async function uploadChunk(env, body, who) {
     // The first piece of an image must have that image's magic bytes, so a disguised SVG/HTML can't be stored.
     if (IMAGE_TYPES.has(type) && !imageMagicOk(type, bytes)) return json({ error: 'That image could not be read.' }, 415);
     if (!up || up.next > 1 || up.size !== size || up.chunks !== chunks || up.type !== type) {
-      const used = Number(await db.prepare('SELECT COALESCE(SUM(size), 0) s FROM files WHERE tenant = ?1').bind(who.tenant).first('s')) || 0;
+      // 2026-11-17 audit: uploads under way count too (several started at once used to pass a check of finished files
+      // only), and one person has at most 5 unfinished at a time; the total is checked again when a file completes
+      const used = Number(await db.prepare('SELECT (SELECT COALESCE(SUM(size), 0) FROM files WHERE tenant = ?1) + (SELECT COALESCE(SUM(size), 0) FROM file_uploads WHERE tenant = ?1 AND id <> ?2) s').bind(who.tenant, id).first('s')) || 0;
+      const open = Number(await db.prepare('SELECT COUNT(*) c FROM file_uploads WHERE tenant = ?1 AND by_uid = ?2 AND id <> ?3').bind(who.tenant, by, id).first('c')) || 0;
+      if (open >= 5) return json({ error: 'You are already sending 5 files. Wait for them to finish.' }, 429);
       if (used + size > uploadsQuota(env)) return json({ error: 'This pharmacy’s file storage is full. Ask your RxPOS provider for more space, or share a smaller file.' }, 413);
       await db.batch([
         db.prepare('DELETE FROM file_chunks WHERE tenant = ?1 AND id = ?2').bind(who.tenant, id),
@@ -1568,6 +1611,8 @@ async function uploadChunk(env, body, who) {
     const digest = hex(await crypto.subtle.digest('SHA-256', all));
     const sent = String(body.sha256 || '').toLowerCase();
     if (sent && sent !== digest) return fail('The file was damaged on the way. Send it again.');
+    const done = Number(await db.prepare('SELECT COALESCE(SUM(size), 0) s FROM files WHERE tenant = ?1').bind(who.tenant).first('s')) || 0;
+    if (done + size > uploadsQuota(env)) return fail('This pharmacy’s file storage is full. Ask your RxPOS provider for more space, or share a smaller file.');
     await db.batch([
       db.prepare('INSERT INTO files (tenant, id, name, type, size, chunks, by_uid, at, sha256) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)')
         .bind(who.tenant, id, String(body.name || 'file').slice(0, 120), type, size, chunks, by, Date.now(), digest),
@@ -1668,9 +1713,7 @@ async function ai(env, path, body, who) {
   const need = { '/api/ai/prescription': ['pos.sell', 'prescriptions'], '/api/ai/invoice': ['stock.receive', 'purchases.edit'] }[path];
   if (need && !(await anyPerm(env, who, need))) return json({ error: need.includes('stock.receive') ? 'Only staff who receive stock can read invoices.' : 'Only staff who sell or dispense can read prescriptions.' }, 403);
   const quota = Number(env.AI_PER_HOUR) || 400;
-  const w = await resetWindow(env, '__ai__:' + who.tenant);
-  if (w.sent >= quota) return json({ error: 'The AI has been used a lot in the last hour at this pharmacy. Try again a little later.' }, 429);
-  await bumpReset(env, '__ai__:' + who.tenant, w);
+  if (!(await takeHourly(env, '__ai__:' + who.tenant, quota))) return json({ error: 'The AI has been used a lot in the last hour at this pharmacy. Try again a little later.' }, 429);
   if (path === '/api/ai/prescription') {
     const m = /^data:image\/(jpeg|png|webp);base64,(.+)$/.exec(String(body.image || ''));
     if (!m || m[2].length > 2_000_000) return json({ error: 'Send a JPG or PNG photo under 1.5 MB.' }, 400);
@@ -1885,7 +1928,13 @@ export default {
         // Prefer a short-lived ticket (1.2); fall back to the bearer token for devices on an older build.
         const ticket = url.searchParams.get('ticket');
         let who = null;
-        if (ticket) { const p = await readTicket(env, ticket).catch(() => null); if (p) who = { tenant: p.tn, uid: p.sub, name: p.name }; }
+        if (ticket) {
+          const p = await readTicket(env, ticket).catch(() => null);
+          // 2026-11-17 audit: the person must still exist, be enabled and not signed out since (authenticate's checks)
+          const u = p && await env.DB.prepare('SELECT rec FROM records WHERE tenant = ?1 AND k = ?2 AND deleted = 0').bind(p.tn, 'users|' + p.sub).first();
+          const rec = u ? JSON.parse(u.rec || '{}') : null;
+          if (p && rec && !rec.disabled && (await tenantById(env, p.tn))?.status === 'active' && sessionOk(rec, { iat: p.iat || 0 }, p.s)) who = { tenant: p.tn, uid: p.sub, name: p.name };
+        }
         else { const fake = new Request(req.url, { headers: { Authorization: 'Bearer ' + (url.searchParams.get('token') || '') } }); who = await authenticate(fake, env); }
         if (!who?.uid) return json({ error: 'Not signed in' }, 401);
         const u = new URL('https://hub/live');
@@ -1917,7 +1966,9 @@ export default {
         const bf = await balancesAt(env, who.tenant, W, { epochOf });
         // 2026-11 audit: a role that doesn't receive the books doesn't get their brought-forward totals either
         // (an older app names no device: it gets them as before, so a shared till's figures stay whole)
-        const v = body.deviceId ? await deviceView(env, who, body.deviceId, await viewFor(env, who)) : viewOfCodes('');
+        // 2026-11-17 audit: with no device named, the caller's own role view (it used to be the full view)
+        const mine = await viewFor(env, who);
+        const v = body.deviceId ? await deviceView(env, who, body.deviceId, mine) : mine;
         if (v.hidden.has('bankTx')) { bf.account = {}; bf.loan = {}; }
         if (v.hidden.has('purchases')) bf.supplier = {};
         return json(bf);
@@ -1926,7 +1977,7 @@ export default {
       // A short-lived ticket to open the live WebSocket without putting the sign-in token in the URL (1.2)
       if (path === '/api/live-ticket' && req.method === 'POST') {
         if (!who.uid) return json({ error: 'Not available for this connection' }, 400);
-        return json({ ticket: await signTicket(env, { sub: who.uid, tn: who.tenant, name: who.name || '', exp: Date.now() + LIVE_TICKET_MS }) });
+        return json({ ticket: await signTicket(env, { sub: who.uid, tn: who.tenant, name: who.name || '', s: who.sig, iat: Date.now(), exp: Date.now() + LIVE_TICKET_MS }) });
       }
       // 2026-11 audit: sign-ins that can be ended. /api/logout ends this pass (the web version signing out);
       // /api/sessions/others ends every other pass of this person ("Sign out everywhere else");
@@ -1948,6 +1999,7 @@ export default {
         const what = path === '/api/logout' ? 'Signed out (this sign-in ended)' : path === '/api/sessions/others' ? 'Signed out everywhere else' : `Signed out on every device by ${who.name || 'an administrator'}`;
         await serverWriteMany(env, who.tenant, [{ t: 'users', id: target, rec: next },
           { t: 'audit', id: crypto.randomUUID(), rec: { date: new Date().toISOString(), user: who.name || '', action: what, details: u.name || '', branchId: 'main' } }]);
+        if (path !== '/api/logout') await closeLive(env, who.tenant, [target]);
         return json({ ok: true });
       }
       // step 7: this device's till number in this pharmacy (the same device always gets the same one)
@@ -2023,9 +2075,8 @@ export default {
         const amount = Number(body.amount);
         if (!(amount > 0) || !body.phone) return json({ error: 'Phone and amount are required' }, 400);
         if (amount > MAX_PAY_UGX) return json({ error: 'That amount is above the single-payment limit.' }, 400); // 1.9 cap
-        const w = await resetWindow(env, '__pay__:' + who.tenant); // 1.9 per-pharmacy hourly cap
-        if (w.sent >= PAY_PER_TENANT) return json({ error: 'Too many payment requests right now. Please try again shortly.' }, 429);
-        await bumpReset(env, '__pay__:' + who.tenant, w);
+        // 1.9 per-pharmacy hourly cap, taken in one statement (2026-11-17 audit)
+        if (!(await takeHourly(env, '__pay__:' + who.tenant, PAY_PER_TENANT))) return json({ error: 'Too many payment requests right now. Please try again shortly.' }, 429);
         const ref = await p.request(penv, { phone: String(body.phone).replace(/\D/g, ''), amount, reference: String(body.reference || 'RxPOS'), note: String(body.note || 'RxPOS payment') });
         return json({ ref, provider: body.provider });
       }
@@ -2038,9 +2089,12 @@ export default {
       }
       if (path === '/api/sms' && req.method === 'POST') {
         if (!who.viaKey && !(await roleCan(env, who.tenant, who.role, 'reminders'))) return json({ error: 'You are not allowed to send messages.' }, 403); // 1.9
-        const w = await resetWindow(env, '__sms__:' + who.tenant); // 1.9 per-pharmacy hourly cap
-        if (w.sent >= SMS_PER_TENANT) return json({ error: 'Too many messages right now. Please try again shortly.' }, 429);
-        await bumpReset(env, '__sms__:' + who.tenant, w);
+        // 1.9 per-pharmacy hourly cap. 2026-11-17 audit: it counts messages (recipients × 153-character parts), not
+        // requests (one request could send to any number of phones), taken in one statement; at most 20 phones a request
+        const to = (Array.isArray(body.to) ? body.to : [body.to]).filter((x) => x != null && String(x).trim());
+        if (to.length > SMS_MAX_RECIPIENTS) return json({ error: `Send to at most ${SMS_MAX_RECIPIENTS} phones at a time.` }, 400);
+        const units = to.length * Math.max(1, Math.ceil(Math.min(String(body.message || '').length, 918) / 153));
+        if (!(await takeHourly(env, '__sms__:' + who.tenant, SMS_PER_TENANT, units))) return json({ error: 'Too many messages right now. Please try again shortly.' }, 429);
         return await sendSms(penv, body);
       }
       return json({ error: 'Not found' }, 404);

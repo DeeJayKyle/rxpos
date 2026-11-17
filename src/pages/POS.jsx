@@ -1,6 +1,6 @@
 import { mainPack, packPrice, sellInPacks } from '../packs.js';
 import { useState, useRef, useEffect, useMemo, useDeferredValue } from 'react';
-import { useLocation, Link } from 'react-router-dom';
+import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { ShoppingCart, Trash2, X, ScanText, FileText, Printer, AlertTriangle, ScanBarcode, Smartphone, Loader2, CheckCircle2, UserPlus, Tag, BookMarked, Repeat, PauseCircle, Keyboard, Plus, ClipboardList, MessageCircle, MessageSquareText, Star, Search, Command, LayoutGrid, Users } from 'lucide-react';
 import { DrugInfoPanel, genericKey } from './DrugInfo.jsx';
 import { useStore, useSyncState, uid, now, daysUntil, put, del, move, allocate, audit, normalizePhone, customerBalance, DEFAULT_PAYMENT_METHODS } from '../store.jsx';
@@ -8,6 +8,7 @@ import { overLimit } from '../credit.js';
 import { parseGs1, findByGtin } from '../gs1.js';
 import { preferFirst, expiryLevel } from '../fefo.js';
 import ClinicalSafetyPill, { SafetyBadge } from '../components/ClinicalSafetyPill.jsx';
+import { safetyCheck } from '../clinical.js';
 import AiVisionScanner from '../components/AiVisionScanner.jsx';
 import { FefoPill } from '../components/FefoPill.jsx';
 import { takeStaged, onStaged } from '../components/aiStage.js';
@@ -58,6 +59,7 @@ export default function POS({ mode = 'retail' }) {
   const capture = db.settings.clientCapture || 'optional';
   const [payCfg, setPayCfg] = useState(null); // which mobile money networks the cloud has switched on
   const location = useLocation();
+  const navigate = useNavigate();
   const wholesale = mode === 'wholesale';
   const priceOf = (p) => (wholesale ? p.wholesale || p.price : p.price);
   const [q, setQ] = useState('');
@@ -121,6 +123,7 @@ export default function POS({ mode = 'retail' }) {
   const [cdForm, setCdForm] = useState(null); // controlled-drug details being filled in
   const cdRef = useRef(null); // the details for this sale, once given
   const rxRef = useRef(null); // a scanned prescription's patient and prescriber: fills the register when it is asked
+  const safetyRef = useRef(null); // a major allergy / interaction the pharmacist acknowledged at this checkout, with the reason
   const [rxScan, setRxScan] = useState(false);
   // Payment methods come from Settings → Payment methods; their type decides the behaviour
   const methods = (db.settings.paymentMethods?.length ? db.settings.paymentMethods : DEFAULT_PAYMENT_METHODS).filter((m) => m.type !== 'momo' || features.momo !== false);
@@ -197,7 +200,8 @@ export default function POS({ mode = 'retail' }) {
   // medicines sold most recently at this branch (newest first), for the "Recent" filter
   const recent = useMemo(() => {
     const seen = new Map();
-    for (let i = db.sales.length - 1; i >= 0 && seen.size < 40; i--) {
+    // db.sales is kept newest first (put() unshifts), so walk it from the front
+    for (let i = 0; i < db.sales.length && seen.size < 40; i++) {
       const s = db.sales[i];
       if ((s.branchId || 'main') !== branchId) continue;
       for (const it of s.items) if (!seen.has(it.id)) seen.set(it.id, seen.size);
@@ -278,7 +282,9 @@ export default function POS({ mode = 'retail' }) {
     const inCart = cart.find((l) => l.id === p.id);
     let allowExpired = inCart?.allowExpired || false;
     let expiredReason = inCart?.expiredReason || '';
-    if (!allowExpired && (inCart?.qty || 0) >= sellable) {
+    if (inCart && inCart.qty + (inCart.pack?.size || 1) > p.stock) return toast(`Only ${p.stock} ${p.unit || 'units'} of ${p.name} in stock`, 'warn');
+    // asked only when what is added now must come from expired batches (the unexpired stock is all in the cart already)
+    if (!allowExpired && (inCart?.qty || 0) + (inCart?.pack?.size || 1) > sellable) {
       if (!(await ask({ title: 'Only expired stock left', message: `All remaining ${p.name} stock has expired. Sell expired stock anyway?`, confirmText: 'Sell expired', danger: true }))) return;
       // 1.6 selling expired stock needs a recorded reason; it is audited and flags the sale at checkout
       const reason = await askText({ title: 'Why sell expired stock?', message: 'This is written to the audit log and flags the sale.', confirmText: 'Confirm', minLength: 3 });
@@ -286,7 +292,6 @@ export default function POS({ mode = 'retail' }) {
       allowExpired = true;
       expiredReason = reason;
     }
-    if (inCart && inCart.qty + (inCart.pack?.size || 1) > p.stock) return toast(`Only ${p.stock} ${p.unit || 'units'} of ${p.name} in stock`, 'warn');
     setCart((c) => {
       const line = c.find((l) => l.id === p.id);
       if (line) return c.map((l) => (l.id === p.id ? { ...l, allowExpired, expiredReason, qty: Math.min(l.qty + (l.pack?.size || 1), p.stock) } : l));
@@ -388,7 +393,7 @@ export default function POS({ mode = 'retail' }) {
   // tail on the stored total, and tax rounds once.
   const money = Number(db.settings.decimals ?? 0);
   const subtotal = cartSubtotal(cart, money);
-  const disc = Math.min(round(Number(discount) || 0, money), subtotal);
+  const disc = Math.max(0, Math.min(round(Number(discount) || 0, money), subtotal)); // a negative discount would raise the total
   const tax = taxOf(subtotal - disc, db.settings.taxRate, { decimals: money });
   const total = round(subtotal - disc + tax, money);
   // step 22 (src/insurance.js): an insured sale is split; the patient pays the co-pay now, the insurer owes the rest
@@ -401,11 +406,17 @@ export default function POS({ mode = 'retail' }) {
   const items = cart.reduce((a, l) => a + l.qty, 0);
 
   const branchName = db.branches.find((b) => b.id === branchId)?.name || 'this branch';
+  // screen readers hear the sale's total once the cashier pauses (500 ms), not at every key or scan
+  const [spoken, setSpoken] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => setSpoken(cart.length ? `Sale total ${fmt(total)}, ${items} item${items === 1 ? '' : 's'}` : ''), 500);
+    return () => clearTimeout(t);
+  }, [total, items, cart.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---- sales on hold: serve the next customer while one is still deciding, then switch back ----
   const snapshot = () => ({ id: uid(), at: now(), cart, customerId, discount, payment, tendered, insKey, memberNo });
   function loadSale(x) {
-    cdRef.current = null; rxRef.current = null;
+    cdRef.current = null; rxRef.current = null; safetyRef.current = null;
     // stock may have moved while the sale was on hold: each line's limit is today's stock
     setCart((x.cart || []).map((l) => { const p = catalog.find((y) => y.id === l.id); return p ? { ...l, max: p.stock, qty: Math.min(l.qty, Math.max(1, p.stock)) } : l; })); setCustomerId(x.customerId || 'walk-in'); setDiscount(x.discount || 0);
     setPayment(methods.some((m) => m.name === x.payment) ? x.payment : methods[0]?.name || 'Cash'); setTendered(x.tendered || ''); setPicked(new Set()); setCursor(-1);
@@ -529,6 +540,7 @@ export default function POS({ mode = 'retail' }) {
   };
   const checkout = async () => {
     if (!cart.length) return;
+    safetyRef.current = null; // acknowledged again at every checkout, for the basket and client as they are now
     // recommendation 5: a kit whose warning must be given: the cashier ticks it on the line before charging
     const unticked = cart.find((l) => l.kit?.ack && !l.acked);
     if (unticked) return toast(`${unticked.name}: tick that the client was given the warning before charging`, 'warn');
@@ -550,7 +562,18 @@ export default function POS({ mode = 'retail' }) {
       const rx = rxRef.current;
       return setCdForm({ patient: rx?.patient || c?.name || '', idNo: c?.phone || '', prescriber: rx?.prescriber || '', prescriberReg: '', rxNo: '' });
     }
-    if (cart.some(isRx) && !cart.some(isCd) && !(await ask({ title: 'Prescription-only medicine', message: 'Confirm that a valid prescription has been checked for the Rx items in this sale.', confirmText: 'Prescription verified' }))) return;
+    // Cancel has the focus: an Enter from a barcode scanner must not confirm a prescription nobody checked
+    if (cart.some(isRx) && !cart.some(isCd) && !(await ask({ title: 'Prescription-only medicine', message: 'Confirm that a valid prescription has been checked for the Rx items in this sale.', confirmText: 'Prescription verified', focusCancel: true }))) return;
+    // clinical safety (src/clinical.js): a major allergy or interaction is charged only once the pharmacist has
+    // acknowledged it with a reason, which goes in the audit log (as for expired stock)
+    const safety = safetyCheck(cart, products, customer && customer.id !== 'walk-in' ? customer : null);
+    if (safety.level === 'major') {
+      const major = safety.findings.filter((f) => f.level === 'major').map((f) => f.text);
+      if (!(await ask({ title: 'Major allergy or interaction', message: major.join('\n') + '\n\nSell anyway?', confirmText: 'Sell anyway', danger: true }))) return;
+      const reason = await askText({ title: 'Why sell despite the warning?', message: 'This is written to the audit log with the sale.', confirmText: 'Confirm', minLength: 3 });
+      if (!reason) return;
+      safetyRef.current = { findings: major, reason };
+    }
     // step 8: a credit sale over the client's limit: Finance roles go on; others give a reason (audited, flagged)
     let creditOver = null;
     if (credit) {
@@ -573,8 +596,9 @@ export default function POS({ mode = 'retail' }) {
   // 1.6 a sale is only "complete" once it is saved on the device (sale, stock movements, audit and the note to send it
   // to the cloud, in one transaction); a second press while it is being saved is ignored
   const saving = useRef(false);
+  // Returns true once the sale is saved, false when it was not (the basket is then kept)
   const finalize = async (extra = {}) => {
-    if (saving.current) return;
+    if (saving.current) return false;
     const credit = ptype === 'credit';
     const paid = credit ? Math.min(Number(tendered) || 0, due) : due;
     // Split each line across batches, earliest expiry first. What one line takes from a batch is not offered to the next
@@ -605,6 +629,7 @@ export default function POS({ mode = 'retail' }) {
       ...(split ? { insurance: { insurerId: insured.insurer.id, insurer: insured.insurer.name, schemeId: insured.scheme.id, scheme: insured.scheme.name, memberNo: memberNo.trim(), share: split.insurer } } : {}), ...extra,
     };
     const expiredLines = cart.filter((l) => l.allowExpired); // 1.6
+    const safetyAck = safetyRef.current;
     saving.current = true;
     try {
     await update((d) => {
@@ -623,18 +648,21 @@ export default function POS({ mode = 'retail' }) {
       if (sale.creditOver) audit(d, user, 'Credit limit exceeded', `${sale.number}: ${sale.customerName} owed ${fmt(sale.creditOver.owed)}, + ${fmt(sale.creditOver.adds)} on credit, limit ${fmt(sale.creditOver.limit)}${sale.creditOver.reason ? ' · ' + sale.creditOver.reason : ''}`, branchId);
       // 1.6 an expired-stock sale is recorded in the audit log, with the pharmacist's reason per medicine
       if (expiredLines.length) audit(d, user, 'Expired stock sold', `${sale.number}: ${expiredLines.map((l) => `${l.name} (${l.expiredReason || 'no reason given'})`).join('; ')}`, branchId);
+      if (safetyAck) audit(d, user, 'Clinical warning overridden', `${sale.number}: ${safetyAck.findings.join('; ')} · ${safetyAck.reason}`, branchId);
     });
     } catch (e) {
       // nothing was kept: the basket stays as it is so the sale can be charged again
       toast(`The sale was NOT recorded. ${e.message}`, 'error');
-      return;
+      return false;
     } finally { saving.current = false; }
-    window.history.replaceState({}, '');
+    // the router's state, not only the browser's: a proforma left in it would be converted again by the next sale
+    if (location.state) navigate(location.pathname, { replace: true, state: null });
     setDone(sale);
     setMomo(null);
     setSheet(false);
     clearSale();
     if (db.settings.autoPrint) setTimeout(() => window.print(), 350);
+    return true;
   };
 
   // Mobile Money: ask the customer's phone to approve the payment, then poll until approved/declined
@@ -655,7 +683,11 @@ export default function POS({ mode = 'retail' }) {
         if (s.status === 'SUCCESSFUL') {
           setMomo((m) => ({ ...m, stage: 'paid' }));
           toast('Mobile Money payment received');
-          return finalize({ momo: { provider: momo.network, phone, ref, txid: s.txid || '', confirmed: true } }); // confirmed by the network
+          const paid = { provider: momo.network, phone, ref, txid: s.txid || '', confirmed: true }; // confirmed by the network
+          // the customer has paid: if the sale could not be saved, keep the payment and offer to save it again,
+          // never a second charge to the phone
+          if (!(await finalize({ momo: paid }))) setMomo((m) => ({ ...m, stage: 'unsaved', paid }));
+          return;
         }
         if (s.status === 'FAILED') return setMomo((m) => ({ ...m, stage: 'enter', error: 'The customer declined or the payment failed' + (s.reason ? `: ${s.reason}` : '') }));
       }
@@ -665,14 +697,15 @@ export default function POS({ mode = 'retail' }) {
     }
   };
 
-  const saveProforma = () => {
+  const saveProforma = async () => {
     if (!cart.length) return;
+    if (!(await ask({ title: 'Save as a proforma?', message: 'The sale is saved as a quotation and the till is cleared.', confirmText: 'Save proforma' }))) return;
     const pf = {
       id: uid(), number: '', date: now(), type: mode, status: 'Open',
       items: cart.map(({ id, name, price, cost, qty, kit, swaps }) => ({ id, name, price: Number(price), cost, qty, ...(kit ? { kit, swaps } : {}) })),
       subtotal, discount: disc, tax, total, customerId, customerName: customer?.name || 'Walk-in Customer', createdBy: user.name,
     };
-    update((d) => { pf.number = numberFor(d, 'PF'); put(d, 'proformas', pf); });
+    try { await update((d) => { pf.number = numberFor(d, 'PF'); put(d, 'proformas', pf); }); } catch (e) { return toast('The proforma was not saved: ' + e.message, 'error'); }
     setDone({ ...pf, proforma: true });
     clearSale();
   };
@@ -865,6 +898,7 @@ export default function POS({ mode = 'retail' }) {
           </div>
         )}
         <div className="pos-ledger">
+        <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">{spoken}</div>
         <div className="cart-head">
           <h3>Current sale {items > 0 && <span className="badge bump" key={items}>{items} item{items === 1 ? '' : 's'}</span>} <SafetyBadge cart={cart} products={products} customer={customer} /></h3>
           {cart.length > 0 && (
@@ -872,7 +906,7 @@ export default function POS({ mode = 'retail' }) {
               {cart.length > 1 && <label className="check small" title="Tick every line"><input type="checkbox" checked={picked.size === cart.length} onChange={(e) => setPicked(e.target.checked ? new Set(cart.map((l) => l.id)) : new Set())} /><span>All</span></label>}
               {picked.size > 0
                 ? <button className="btn sm danger" onClick={() => removeLines([...picked])}><Trash2 size={14} />Remove {picked.size === 1 ? 'item' : `${picked.size} items`}</button>
-                : <button className="btn sm ghost" onClick={() => { setCart([]); setPicked(new Set()); }}><Trash2 size={14} />Clear all</button>}
+                : <button className="btn sm ghost" onClick={async () => { if (await ask({ title: 'Clear the sale?', message: `${cart.length} line${cart.length === 1 ? '' : 's'} · ${fmt(total)} will be removed.`, confirmText: 'Clear all', danger: true })) { setCart([]); setPicked(new Set()); } }}><Trash2 size={14} />Clear all</button>}
             </div>
           )}
         </div>
@@ -896,7 +930,7 @@ export default function POS({ mode = 'retail' }) {
             {can('customers') && <button className="btn ghost" title="Add a new client" onClick={() => setNewClient({ name: '', phone: '', allergies: '' })}><UserPlus size={16} /></button>}
           </div>
         )}
-        {customer?.allergies && <div className="error"><AlertTriangle size={14} /> Allergies: {customer.allergies}</div>}
+        {customer?.allergies && <div className="error" role="alert"><AlertTriangle size={14} /> Allergies: {customer.allergies}</div>}
         <ClinicalSafetyPill cart={cart} products={products} customer={customer} />
         <div className="cart-lines">
           {cart.map((l) => (
@@ -1004,8 +1038,18 @@ export default function POS({ mode = 'retail' }) {
       </section>
 
       {momo && (
-        <Modal title={<><Smartphone size={18} /> Mobile Money – {fmt(due)}</>} onClose={() => { pollRef.current++; setMomo(null); }}>
-          {momo.stage === 'waiting' ? (
+        <Modal title={<><Smartphone size={18} /> Mobile Money – {fmt(due)}</>} onClose={async () => {
+          if (momo.stage === 'unsaved' && !(await ask({ title: 'The customer has already paid', message: `Payment ${momo.paid.ref || momo.paid.txid} was received but the sale is not saved. Close without saving it?`, confirmText: 'Close', danger: true }))) return;
+          pollRef.current++; setMomo(null);
+        }}>
+          {momo.stage === 'unsaved' ? (
+            <div className="cart-empty">
+              <AlertTriangle size={40} className="text-danger" aria-hidden="true" />
+              <strong>Payment received, but the sale was not saved</strong>
+              <span className="muted">Reference {momo.paid.ref}{momo.paid.txid ? ` · transaction ${momo.paid.txid}` : ''}. Do not charge the customer again.</span>
+              <button className="btn primary" onClick={() => finalize({ momo: momo.paid })}>Retry saving this sale</button>
+            </div>
+          ) : momo.stage === 'waiting' ? (
             <div className="cart-empty">
               <Loader2 size={40} className="spin" />
               <strong>Waiting for the customer to approve on their phone…</strong>

@@ -25,6 +25,12 @@ let capgo = null, bundleId = null;
 // proxy answers every property, `then` included, so awaiting it calls the native "then" and the await never finishes
 // (Android 1.0 hung on "Downloading…" and never told the updater it had started fine).
 const withPlugin = async (fn) => fn((capgo ??= await import('@capgo/capacitor-updater')).CapacitorUpdater);
+// The bundle comes only from our own cloud: an absolute or protocol-relative `zip` naming another host is refused
+const zipUrl = (zip) => {
+  const u = new URL(String(zip || ''), DEFAULT_CLOUD);
+  if (u.origin !== new URL(DEFAULT_CLOUD).origin) throw new Error('The update file is not on the RxPOS cloud, so it was not downloaded.');
+  return u.href;
+};
 const versionUrl = () => (isAndroid ? DEFAULT_CLOUD + '/api/version' : './version.json');
 
 /** Ask for the newest build; download it when it is newer than this one */
@@ -53,7 +59,7 @@ export async function checkForUpdate() {
         let timer;
         try {
           const b = await Promise.race([
-            u.download({ url: `${DEFAULT_CLOUD}/${latest.zip}`, version: String(latest.build), checksum: latest.zipSha256 }),
+            u.download({ url: zipUrl(latest.zip), version: String(latest.build), checksum: latest.zipSha256 }),
             new Promise((_, no) => { timer = setTimeout(() => no(new Error(`The download stopped at ${state.percent || 0}%. It will try again by itself; check the internet if this repeats.`)), DOWNLOAD_LIMIT); }),
           ]);
           bundleId = b.id;

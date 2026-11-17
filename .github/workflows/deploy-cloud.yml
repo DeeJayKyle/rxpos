@@ -21,12 +21,14 @@ jobs:
   deploy:
     needs: full
     runs-on: ubuntu-latest
+    environment: production # 2026-11-17 audit: the Cloudflare token only on the protected environment (main only)
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          persist-credentials: false # 2026-11-17 audit
           fetch-depth: 0 # the classic app's build number is its last change (scripts/release-files.mjs)
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:

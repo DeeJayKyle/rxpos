@@ -5,11 +5,14 @@
 // explicitly, so a figure and its reversal (a refund) match to the unit and a pack-split price (e.g. a box of three
 // priced at 2,000 → 666.67 each) can never leave a floating-point tail like 1999.9999 on a stored total.
 //
-// Rounding rule: half away from zero (Math.round on a non-negative amount), applied per line and once per tax.
+// Rounding rule: half away from zero, applied per line and once per tax. Math.round alone rounds -2.5 to -2, so the
+// sign is taken off first and put back: a refund (a negative amount) rounds exactly like the sale it reverses.
 
 export const round = (n, decimals = 0) => {
   const f = 10 ** (Number(decimals) || 0);
-  return Math.round(((Number(n) || 0) + Number.EPSILON) * f) / f;
+  const v = Number(n) || 0;
+  const r = Math.round((Math.abs(v) + Number.EPSILON) * f) / f;
+  return v < 0 && r ? -r : r;
 };
 
 /** A sale line's net after its (amount) discount, rounded to the currency's precision. Never negative. */
@@ -56,8 +59,11 @@ export function formatQty(n, unit = '') {
   if (!isFinite(v)) return '—';
   const txt = formatterFor('en-US', QTY).format(Math.abs(v - Math.round(v)) < 1e-9 ? Math.round(v) : round(v, 2));
   if (!unit) return txt;
-  return `${txt} ${Math.abs(v) === 1 ? unit.replace(/s$/i, '') : unit}`;
+  return `${txt} ${Math.abs(v) === 1 ? singular(unit) : unit}`;
 }
+
+// 'Boxes' → 'Box', 'Glasses' → 'Glass', 'tablets' → 'tablet', 'Bottles' → 'Bottle'.
+const singular = (unit) => (/(x|z|ch|sh|ss)es$/i.test(unit) ? unit.slice(0, -2) : unit.replace(/s$/i, ''));
 
 /** Format for display in the PHARMACY'S locale and currency, not the device's (review Phase 1.5). */
 export function formatMoney(n, { currency = '', decimals = 0, locale } = {}) {

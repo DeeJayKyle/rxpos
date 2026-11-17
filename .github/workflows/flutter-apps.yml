@@ -21,8 +21,10 @@ on:
 
 # the pilot builds are published to a pre-release (the account's artifact storage is full); the current apps update from
 # the website's version.json, never from GitHub releases, so this cannot reach them
+# 2026-11-17 audit: read-only by default; only the jobs that publish to the pilot release may write, and production
+# secrets come from the `production` environment, which only main may use (Settings → Environments)
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: flutter-apps-${{ github.ref }}
@@ -40,6 +42,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          persist-credentials: false # 2026-11-17 audit
           fetch-depth: 0 # the classic app's build number is its last change (scripts/release-files.mjs)
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
@@ -85,10 +88,14 @@ jobs:
     name: Android apps
     needs: test
     runs-on: ubuntu-latest
+    environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'build' }} # 2026-11-17 audit: secrets only on main
+    permissions:
+      contents: write
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          persist-credentials: false # 2026-11-17 audit
           fetch-depth: 0 # the classic app's build number is its last change (scripts/release-files.mjs)
       - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
         with:
@@ -178,10 +185,14 @@ jobs:
     name: Windows installer
     needs: [test, android] # after Android, so the two never create the pilot pre-release at the same moment
     runs-on: windows-latest
+    environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'build' }} # 2026-11-17 audit: secrets only on main
+    permissions:
+      contents: write
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          persist-credentials: false # 2026-11-17 audit
           fetch-depth: 0 # the classic app's build number is its last change (scripts/release-files.mjs)
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
@@ -228,6 +239,9 @@ jobs:
     name: Website (the app in the browser)
     needs: [test, android] # after Android, as the Windows job: never two jobs updating the pilot release at once
     runs-on: ubuntu-latest
+    environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'build' }} # 2026-11-17 audit: secrets only on main
+    permissions:
+      contents: write
     timeout-minutes: 40
     concurrency: production-deploy # the same lock as the other website deploys (build.yml, deploy-cloud.yml)
     env:
@@ -237,6 +251,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          persist-credentials: false # 2026-11-17 audit
           fetch-depth: 0 # the classic app's build number is its last change (scripts/release-files.mjs)
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:

@@ -14,6 +14,7 @@ import '../../../core/entities/settings.dart';
 import '../../../core/rules/dates.dart';
 import '../../../core/rules/ids.dart';
 import '../../../core/rules/insurance.dart';
+import '../../../core/rules/money.dart' as money;
 import '../../../core/rules/packs.dart';
 import '../../auth/application/session_controller.dart';
 import '../../people/domain/balances.dart';
@@ -107,6 +108,21 @@ double sellableOf(PharmacyData d, String id, {DateTime? now}) {
       .fold<double>(0, (a, b) => a + b.qty);
   final left = d.stockOf(id) - expired;
   return left < 0 ? 0 : left;
+}
+
+/// Line [n] of [lines] as the command bar numbers them (from 1); null when there is none, or [n] is not a number
+/// that can be read (too long).
+CartLine? lineNumbered(List<CartLine> lines, String n) {
+  final i = (int.tryParse(n.trim()) ?? 0) - 1;
+  return i >= 0 && i < lines.length ? lines[i] : null;
+}
+
+/// [l] with [pct]% off its unit and its pack price, both rounded as money (half up) to the pharmacy's [decimals].
+CartLine discounted(CartLine l, double pct, int decimals) {
+  final f = 1 - pct / 100;
+  double r(double v) => money.round(v, decimals);
+  final k = l.pack;
+  return l.copyWith(price: r(l.price * f), pack: k == null ? null : LinePack(name: k.name, size: k.size, price: r(k.price * f)));
 }
 
 @Riverpod(keepAlive: true)
@@ -247,10 +263,7 @@ class SaleController extends _$SaleController {
   Future<({String? error, bool pay})> command(String text, {required bool canEditPrice}) async {
     final t = text.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
     final lines = state.lines;
-    CartLine? rowOf(String n) {
-      final i = int.parse(n) - 1;
-      return i >= 0 && i < lines.length ? lines[i] : null;
-    }
+    CartLine? rowOf(String n) => lineNumbered(lines, n);
 
     ({String? error, bool pay}) err(String e) => (error: e, pay: false);
     const ok = (error: null, pay: false);
@@ -259,7 +272,9 @@ class SaleController extends _$SaleController {
       if ((m = RegExp(r'^([+-])\s?qty (\d+)(?: (\d+))?$').firstMatch(t)) != null) {
         final l = rowOf(m![2]!);
         if (l == null) return err('There is no line ${m[2]}');
-        final by = int.parse(m[3] ?? '1') * (m[1] == '+' ? 1 : -1);
+        final n = int.tryParse(m[3] ?? '1');
+        if (n == null) return err('${m[3]} is not a quantity');
+        final by = n * (m[1] == '+' ? 1 : -1);
         if (l.count + by <= 0) {
           remove(l.id);
           return err('Line ${m[2]} removed');
@@ -271,7 +286,9 @@ class SaleController extends _$SaleController {
       if ((m = RegExp(r'^qty (\d+) (\d+)$').firstMatch(t)) != null) {
         final l = rowOf(m![1]!);
         if (l == null) return err('There is no line ${m[1]}');
-        count(l.id, double.parse(m[2]!));
+        final q = int.tryParse(m[2]!);
+        if (q == null) return err('${m[2]} is not a quantity');
+        count(l.id, q.toDouble());
         cursor(lines.indexOf(l));
         return ok;
       }
@@ -282,23 +299,21 @@ class SaleController extends _$SaleController {
         return ok;
       }
       final st = (await _data).settings;
-      double round(double v, int dp) => double.parse(v.toStringAsFixed(dp));
+      double round(double v) => money.round(v, st.decimalPlaces);
       if ((m = RegExp(r'^disc (\d+) (\d+(?:\.\d+)?)%?$').firstMatch(t)) != null) {
         final l = rowOf(m![1]!);
         final pct = double.parse(m[2]!);
         if (l == null) return err('There is no line ${m[1]}');
         if (!canEditPrice) return err('You are not allowed to change prices');
         if (!(pct > 0 && pct < 100)) return err('A discount is between 1 and 99%');
-        final f = 1 - pct / 100;
-        _replace(l.id, (x) => x.copyWith(price: round(x.price * f, 2),
-            pack: x.pack == null ? null : LinePack(name: x.pack!.name, size: x.pack!.size, price: round(x.pack!.price * f, st.decimalPlaces))));
+        _replace(l.id, (x) => discounted(x, pct, st.decimalPlaces));
         cursor(lines.indexOf(l));
         return ok;
       }
       if ((m = RegExp(r'^disc (\d+(?:\.\d+)?)%?$').firstMatch(t)) != null) {
         final pct = double.parse(m![1]!);
         if (!(pct > 0 && pct < 100)) return err('A discount is between 1 and 99%');
-        discount(round(totalsOf(lines, discount: 0, settings: st).subtotal * pct / 100, st.decimalPlaces));
+        discount(round(totalsOf(lines, discount: 0, settings: st).subtotal * pct / 100));
         return ok;
       }
       if (t == 'hold') {
@@ -448,34 +463,39 @@ class SaleController extends _$SaleController {
   }
 
   Future<Map<String, Object?>> complete({ControlledEntry? controlled, String? momoRef, Map<String, Object?>? momo, bool rxChecked = false, Map<String, Object?>? creditOver}) async {
+    // the sale as it is now: a line scanned while the sale is being saved is not part of it, and stays on the till
+    final s = state;
     final d = await _data;
     final session = await ref.read(sessionControllerProvider.future);
-    final method = state.method ?? d.methods.first;
+    final method = s.method ?? d.methods.first;
     final sale = await completeSale(
       ref.read(recordStoreProvider),
-      cart: state.lines,
+      cart: s.lines,
       c: Checkout(
         method: method,
-        tendered: state.tendered,
-        customerId: state.customerId,
-        customerName: state.customerName,
-        discount: state.discount,
+        tendered: s.tendered,
+        customerId: s.customerId,
+        customerName: s.customerName,
+        discount: s.discount,
         controlled: controlled,
         momoRef: momoRef,
         momo: momo,
         rxChecked: rxChecked,
         creditOver: creditOver,
-        insured: state.insured,
+        insured: s.insured,
       ),
       settings: d.settings,
       stock: d.stock,
       wholesale: wholesale,
       cashier: session?.userName ?? '',
       branchId: d.branch,
-      proformaId: state.proforma?['id']?.toString(),
-      also: state.proforma == null ? null : (x, sale) => x.put('proformas', {...state.proforma!, 'status': 'Converted', 'saleNumber': sale['number']}),
+      proformaId: s.proforma?['id']?.toString(),
+      also: s.proforma == null ? null : (x, sale) => x.put('proformas', {...s.proforma!, 'status': 'Converted', 'saleNumber': sale['number']}),
     );
-    state = SaleState(method: state.method);
+    // clear only what was sold (by line, so a sold medicine is never left on to be sold twice)
+    final sold = {for (final l in s.lines) l.id};
+    final left = [for (final l in state.lines) if (!sold.contains(l.id)) l];
+    state = SaleState(method: state.method, lines: left);
     return sale;
   }
 

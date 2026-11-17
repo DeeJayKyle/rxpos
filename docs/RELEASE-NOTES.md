@@ -1,5 +1,28 @@
 # RxPOS release notes
 
+## React (classic) app 1.10.2 · Flutter app 2.1 (next build) · Cloud · November 2026 (security and safety release)
+
+Fixes from the 17 November 2026 audit. Tills update by themselves. **Hub users sign in once more** after the update
+(the Hub now signs sign-ins with its own random secret).
+
+- **Safer sales:** a serious allergy or interaction warning now needs "Sell anyway" and a reason, kept in the audit
+  log; walk-in customers show "Allergies unknown"; the prescription check no longer confirms on a stray Enter.
+- **Nothing lost or counted twice:** Receive stock, Charge (Flutter), refunds, sale edits and stock-count posts can't
+  run twice or overwrite a newer copy; a failed save says so; a Mobile Money payment whose sale didn't save offers
+  "Retry saving this sale"; a sync problem never stops the Flutter app syncing for good.
+- **Stock and money:** stock can't be taken out with no sale behind it; a sale's takings can't be moved to another
+  account by a seller; reopening a closed day needs an administrator.
+- **Sign-in:** reset codes, sign-in locks and the owner lock hold even against many tries at once; signing someone
+  out, disabling them or resetting their password also ends their live connection (calls, instant updates).
+- **Privacy:** private chats reach only the two people in them; cashiers no longer receive bank and supplier balances;
+  a deleted pharmacy's figures are removed everywhere.
+- **Limits:** SMS counts every phone and message part; files being sent count towards a pharmacy's storage.
+- **Reports:** times on the sales sheet in East Africa time; the daily stock sheet no longer fails on an undated record;
+  out-of-stock medicines appear as low stock; one pharmacy's bad record no longer stops everyone's daily email.
+- **Exports:** CSV files can no longer carry spreadsheet formulas.
+- **Accessibility:** dialogs keep the keyboard inside them; the sale total is read out; larger cart inputs; warning
+  colours readable in the Flutter app.
+
 ## Flutter app 2.1 (next build) · November 2026
 
 The Flutter app now does everything the classic app does. Nothing changes in the classic app.
