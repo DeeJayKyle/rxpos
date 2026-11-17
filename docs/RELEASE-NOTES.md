@@ -26,6 +26,10 @@ Nothing to do on the tills: they update by themselves.
   for Calendar, Drug Quiz and the weekly summary, Aqua Navy for Reports and Sales History, Forest Green for Purchases,
   Expenses and Banks) and **Dark** (RxPOS OLED Black, Midnight Pro). A device or a pharmacy on a retired theme moves
   to the closest kept one by itself.
+- **Security (audit P2-7):** a device keeps the cloud sign-in of the last person who signed in with their password.
+  Someone who then unlocks it with a quick PIN, fingerprint or offline password keeps selling and syncing as before,
+  but is asked for their own password before acting as themselves in the cloud (two-step sign-in, signing out other
+  devices, calendar and daily-stock links, sending reports). The device then holds their own sign-in.
 - **A new sign-in page** (both apps): one rounded frame, a pale brand panel in the theme's colour with soft shapes and
   a short headline, and a clean "Welcome back" form with a large Sign in button.
 

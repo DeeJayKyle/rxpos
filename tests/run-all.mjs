@@ -16,6 +16,7 @@ const SUITES = [
   ['daily stock figures (unit)', 'unit-daily-stock.mjs', []],
   ['refunds counted on the refund day in cloud reports (unit)', 'unit-refund-day.mjs', []],
   ['role-based landing and bottom bar (unit)', 'unit-landing.mjs', []],
+  ['a borrowed sign-in confirms before a personal cloud call (unit)', 'unit-person-guard.mjs', []],
   ['invoice reading cross-check (unit)', 'unit-invoice-read.mjs', []],
   ['AI copilot and vision routes, mocked Workers AI (unit)', 'unit-ai-routes.mjs', []],
   ['date formats (unit)', 'unit-dateformat.mjs', []],

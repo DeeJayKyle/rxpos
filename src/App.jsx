@@ -7,7 +7,7 @@ import {
   BellRing, Plus, ShoppingBag, Tag, FileUp, Building2, Send, ShieldCheck, Clock, BookMarked, MessagesSquare, UserCog, KeyRound, CalendarDays, Thermometer, Palette, MonitorSmartphone, ScanText, GraduationCap, Megaphone, CalendarRange, LockKeyhole, NotebookPen, PanelLeftClose, PanelLeftOpen, WifiOff,
   Sparkles, Pin, Keyboard, UserPlus, Archive, BadgeCheck, BriefcaseMedical,
 } from 'lucide-react';
-import { endOtherSessions } from './cloud.js';
+import { endOtherSessions, setPersonGuard, borrowedToken, cloudLogin } from './cloud.js';
 import { useStore, useSyncState, makePassword, put, audit, isLowStock, expiryCounts } from './store.jsx';
 import { askText, ask, toast } from './feedback.jsx';
 import { hasPin, setPin, clearPin, verifyOffline } from './offline.js';
@@ -379,7 +379,29 @@ function KeysHelp({ onClose, pages }) {
 }
 
 function Shell() {
-  const { db, products, user, setUser, branchId, branch, update, syncNow, syncCfg } = useStore();
+  const { db, products, user, setUser, branchId, branch, update, syncNow, syncCfg, saveSyncCfg } = useStore();
+  // Audit P2-7, option 1: before a call that acts as a person in the cloud, someone who signed in with a PIN or offline
+  // password on a device holding another person's token confirms with their own password (src/cloud.js personGuard).
+  // The device then keeps their token; syncing and selling never wait for this.
+  const guardRef = useRef({});
+  guardRef.current = { user, syncCfg, saveSyncCfg, users: db.users };
+  useEffect(() => {
+    setPersonGuard(async (cfg) => {
+      const { user: u, syncCfg: sc, saveSyncCfg: save, users } = guardRef.current;
+      if (!u || !borrowedToken(cfg, u.id)) return cfg;
+      const me = users.find((x) => x.id === u.id) || u;
+      const pw = await askText({ title: 'Confirm it is you', message: `This device is still signed in to the cloud as someone else (they signed in last with their password). To do this as ${u.name}, type your password.`, type: 'password', minLength: 1, confirmText: 'Continue' });
+      if (!pw) throw new Error('Not done: it needs your own password on this device.');
+      const r = await cloudLogin(cfg.url, me.email || me.username || '', pw, cfg.tenant);
+      if (r.twoFactor) throw new Error('You use two-step sign-in: sign out, then sign in with your password and code to do this.');
+      if (!r.token || r.user?.id !== u.id) throw new Error('That password signed in a different account. Nothing was done.');
+      const next = { ...(sc || cfg), key: r.token, keyUser: r.user.id };
+      await save(next);
+      toast('Signed in to the cloud as you on this device');
+      return { ...cfg, key: r.token, keyUser: r.user.id };
+    });
+    return () => setPersonGuard(null);
+  }, []);
   useEffect(() => preloadPages(), []); // every page's code, in the background once the app is open
   useEffect(() => warmSearchKeys(products), [products.length]); // eslint-disable-line react-hooks/exhaustive-deps -- once per new medicine count
   const navigate = useNavigate();

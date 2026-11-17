@@ -8,6 +8,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../features/auth/application/session_controller.dart';
 import '../../features/auth/presentation/account_menu.dart';
+import '../../features/auth/presentation/person_guard.dart';
+import '../network/cloud_api.dart' show personGuard;
 import '../../features/alerts/application/alerts_provider.dart';
 import '../../features/alerts/presentation/notification_bell.dart';
 import '../data/device_settings.dart';
@@ -46,6 +48,8 @@ class AppShell extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     ref.read(crashReportsProvider).page = location.split('?').first; // never the query (receipt numbers, ids)
+    // audit P2-7: a borrowed sign-in confirms with its own password before a personal cloud call (person_guard.dart)
+    personGuard = () => confirmPersonIfBorrowed(context, ref);
     final session = ref.watch(sessionControllerProvider).value;
     final can = ref.watch(permissionsProvider).value ?? const <String>{};
     final features = ref.watch(pharmacyProvider).value?.features ?? const {};
