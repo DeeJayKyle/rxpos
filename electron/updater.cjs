@@ -94,11 +94,16 @@ function check() {
     if (!m.build || m.build <= running() || state.bad.includes(m.build)) return { status: 'current', label: m.label, build: m.build };
     if ((m.shell || 1) > SHELL) return { status: 'shell', label: m.label, build: m.build };
     if (state.active?.build === m.build && usable(state.active)) return { status: 'ready', label: m.label, build: m.build };
+    // 2026-11-17 audit: the build number becomes a folder name, so it must be a whole number: '../../Startup' used to
+    // pass (a text compares as newer) and let the manifest delete and fill any folder the user can write to
+    if (!Number.isSafeInteger(m.build) || m.build <= 0) throw new Error('The update server sent a build number that is not valid.');
     const dir = path.join(root, String(m.build)), tmp = dir + '.part';
+    if (path.dirname(dir) !== path.resolve(root)) throw new Error('The update server sent a build number that is not valid.');
     fs.rmSync(tmp, { recursive: true, force: true });
     for (const f of m.files) {
-      if (f.path.includes('..')) continue;
+      if (typeof f.path !== 'string' || f.path.includes('..') || f.path.includes('\\') || path.isAbsolute(f.path) || /^[a-z]:/i.test(f.path)) continue;
       const out = path.join(tmp, f.path);
+      if (path.relative(tmp, out).startsWith('..')) continue;
       fs.mkdirSync(path.dirname(out), { recursive: true });
       // the same file already on this computer (unchanged since the last build): copy it instead of downloading
       const have = sources().map((d) => path.join(d, f.path)).find((p) => fs.existsSync(p) && fs.statSync(p).size === f.size && sha256(fs.readFileSync(p)) === f.sha256);

@@ -22,6 +22,13 @@ export class TenantHub extends DurableObject {
       }
       return new Response('ok');
     }
+    // 2026-11-17 audit: a person signed out everywhere, disabled or removed: their open connections end now (a hibernating
+    // socket used to keep receiving changes and call offers, and could ring colleagues, until it dropped by itself)
+    if (url.pathname === '/close') {
+      const { uids } = await req.json();
+      for (const uid of Array.isArray(uids) ? uids : []) for (const ws of this.ctx.getWebSockets('u:' + uid)) try { ws.close(4001, 'signed out'); } catch {}
+      return new Response('ok');
+    }
     if (req.headers.get('Upgrade') !== 'websocket') return new Response('Expected a WebSocket', { status: 426 });
     const pair = new WebSocketPair();
     const uid = url.searchParams.get('uid') || '', device = url.searchParams.get('device') || '', name = url.searchParams.get('name') || '';

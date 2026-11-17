@@ -36,7 +36,9 @@ export async function watchdog(env, { now = new Date(), mailer = sendAlert } = {
     const lines = results.slice(0, 10).map((r) => `- [${r.platform || '?'}] ${String(r.message || '').slice(0, 140)} (seen ${r.count}×)`);
     out.errorsMailed = await mailer(env, to, `RxPOS: ${results.length} new device error${results.length > 1 ? 's' : ''} reported`,
       `New error reports from devices since ${er.since}:\n\n${lines.join('\n')}${results.length > 10 ? `\n…and ${results.length - 10} more.` : ''}\n\nOpen the owner console → Errors to see details. Patient and sales data are scrubbed from these reports.`);
-    await cfgSet(env, 'alert_errors', { since: now.toISOString(), lastMail: now.toISOString() });
+    // 2026-11-17 audit: only a mail that went out moves the watermark (a failed mail used to lose those reports)
+    if (out.errorsMailed) await cfgSet(env, 'alert_errors', { since: now.toISOString(), lastMail: now.toISOString() });
+    else console.warn('watchdog: the error digest mail was not sent; it will be retried');
   } else {
     // no email due: still advance the watermark so old rows aren't rescanned forever (keep the last-mail time)
     await cfgSet(env, 'alert_errors', { since: now.toISOString(), lastMail: er.lastMail });
@@ -50,7 +52,8 @@ export async function watchdog(env, { now = new Date(), mailer = sendAlert } = {
     if (ageH > BACKUP_STALE_H && (!bs.lastMail || nowMs - Date.parse(bs.lastMail) >= BACKUP_REMIND_H * 3600e3)) {
       out.backupMailed = await mailer(env, to, 'RxPOS: nightly backup has not run',
         `The last successful cloud backup was ${bh.at} — about ${Math.round(ageH)} hours ago. A backup is expected every night.\n\nCheck the "Nightly cloud backup" GitHub Action (Actions tab). Your data is still in the cloud; this only means the off-site copy is not being refreshed.`);
-      await cfgSet(env, 'alert_backup', { lastMail: now.toISOString() });
+      if (out.backupMailed) await cfgSet(env, 'alert_backup', { lastMail: now.toISOString() });
+      else console.warn('watchdog: the backup reminder mail was not sent; it will be retried');
     } else if (ageH <= BACKUP_STALE_H && bs.lastMail) {
       await cfgSet(env, 'alert_backup', { lastMail: null }); // backup healthy again: reset the reminder
     }

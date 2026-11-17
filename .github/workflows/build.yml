@@ -28,6 +28,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          persist-credentials: false # 2026-11-17 audit
           fetch-depth: 0 # the classic app's build number is its last change (scripts/release-files.mjs)
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
@@ -53,9 +54,11 @@ jobs:
 
   windows:
     runs-on: windows-latest
+    environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'build' }} # 2026-11-17 audit: secrets only on main
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          persist-credentials: false # 2026-11-17 audit
           fetch-depth: 0 # the classic app's build number is its last change (scripts/release-files.mjs)
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
@@ -88,6 +91,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          persist-credentials: false # 2026-11-17 audit
           fetch-depth: 0 # the classic app's build number is its last change (scripts/release-files.mjs)
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
@@ -111,6 +115,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          persist-credentials: false # 2026-11-17 audit
           fetch-depth: 0 # the classic app's build number is its last change (scripts/release-files.mjs)
       - name: Build hub image
         run: docker build -t rxpos-hub .
@@ -125,9 +130,11 @@ jobs:
 
   android:
     runs-on: ubuntu-latest
+    environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'build' }} # 2026-11-17 audit: secrets only on main
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          persist-credentials: false # 2026-11-17 audit
           fetch-depth: 0 # the classic app's build number is its last change (scripts/release-files.mjs)
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
@@ -277,6 +284,7 @@ jobs:
       always() && github.event_name == 'workflow_dispatch' && needs.unit.result == 'success' && needs.full.result == 'success' &&
       ((inputs.deploy == 'with release' && inputs.release != '' && needs.release.result == 'success') || inputs.deploy == 'now')
     runs-on: ubuntu-latest
+    environment: production # 2026-11-17 audit: the Cloudflare token only on the protected environment
     concurrency: production-deploy
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -290,6 +298,7 @@ jobs:
           fi
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          persist-credentials: false # 2026-11-17 audit
           fetch-depth: 0 # the classic app's build number is its last change (scripts/release-files.mjs)
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:

@@ -76,11 +76,21 @@ const ASSETS = {
   },
 };
 
+/** The hub's own pass-signing secret: RXPOS_TOKEN_SECRET (32+ characters), else 32 random bytes made once and kept */
+function tokenSecretFile() {
+  const given = process.env.RXPOS_TOKEN_SECRET || '';
+  if (given.length >= 32) return given;
+  const file = path.join(DATA_DIR, 'token-secret');
+  try { return fs.readFileSync(file, 'utf8').trim(); } catch { /* first start */ }
+  fs.writeFileSync(file, nodeCrypto.randomBytes(32).toString('hex'), { mode: 0o600, flag: 'wx' });
+  return fs.readFileSync(file, 'utf8').trim();
+}
 const env = {
   DB: db,
   SYNC_KEY: KEY,
-  // sign-in passes are signed with a key made from the sync key (the cloud wants 32+ characters)
-  TOKEN_SECRET: sha256('rxpos-hub-token:' + KEY),
+  // 2026-11-17 audit: sign-in passes are signed with their own random secret, kept in the data folder. It used to be
+  // made from the sync key, so any staff member's pass let them guess the sync key (= administrator) offline.
+  TOKEN_SECRET: tokenSecretFile(),
   ...(process.env.RXPOS_OWNER_KEY ? { OWNER_KEY: process.env.RXPOS_OWNER_KEY } : {}),
   ...(process.env.PBKDF2_ITER ? { PBKDF2_ITER: process.env.PBKDF2_ITER } : {}),
   ...(process.env.PUBLIC_URL ? { PUBLIC_URL: process.env.PUBLIC_URL } : {}),

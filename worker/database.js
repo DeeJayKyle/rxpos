@@ -28,5 +28,7 @@ export function withDatabase(env) {
     authToken: env.TURSO_AUTH_TOKEN,
     fetch: databaseFetch,
   });
-  return { ...env, D1: env.DB, DB: d1FromLibsql(client) };
+  const db = d1FromLibsql(client);
+  db.schemaKey = 'turso:' + env.TURSO_URL; // 2026-11-17 audit: lets the schema check run once per isolate, not per request
+  return { ...env, D1: env.DB, DB: db };
 }

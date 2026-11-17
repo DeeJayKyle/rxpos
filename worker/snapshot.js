@@ -1,3 +1,4 @@
+import { dmHidden } from './policy.js';
 // Faster sync, stage 3 (docs/SYNC-SPEED-PLAN.md): ready-made, compressed chunks of a full download.
 //
 // A pharmacy's records are cut into chunks by sequence number at fixed boundaries, about CHUNK records each. The
@@ -64,7 +65,9 @@ export async function snapshotChunk(env, body, who, { json, epochOf, historySql,
   const day = phase === 'all' ? '0000-00-00' : cutoffDay(body?.cutoff); // a whole download does not depend on the day
   const view = await viewOf(who, body?.deviceId); // { key, hidden, hideHr, hideChecks }
   const W = windowOf(body); // stage 4: a device keeping recent history
-  const key = `snapshots/${who.tenant}/${epoch}/${phase}-${day}-${view.key}${W ? '-w' + W.slice(0, 10) : ''}-${from}-${to}.json.gz`;
+  // 2026-11-17 audit: a staff member's chunk holds only their own direct chats, so it is kept per person
+  const uid = who.viaKey ? '' : String(who.uid || '');
+  const key = `snapshots/${who.tenant}/${epoch}/${phase}-${day}-${view.key}${W ? '-w' + W.slice(0, 10) : ''}${uid ? '-u' + uid : ''}-${from}-${to}.json.gz`;
   const headers = { 'Content-Type': 'application/json', 'Content-Encoding': 'gzip', 'Cache-Control': 'private, no-store', 'X-RxPOS-Chunk': 'stored' };
   const kept = await env.APPS.get(key);
   if (kept) return new Response(kept.body, { headers, encodeBody: 'manual' });
@@ -76,6 +79,7 @@ export async function snapshotChunk(env, body, who, { json, epochOf, historySql,
   for (const r of results || []) {
     if (view.hidden ? view.hidden.has(r.t) : (view.hideHr && view.payroll.has(r.t)) || (view.hideChecks && r.t === 'anomalies')) continue; // 2026-11 audit: per-role tables
     if (W && !keepsRow(r, W)) continue;
+    if (dmHidden(r.t, r.rec, uid)) continue;
     items.push(itemJson(r));
   }
   const text = `{"changes":[${items.join(',')}],"from":${from},"to":${to},"phase":${JSON.stringify(phase)}}`;

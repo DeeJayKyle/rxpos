@@ -17,7 +17,9 @@ const PURCHASE = new Set(['Purchase', 'Purchase edit', 'Supplier return']);
 const SOLD = new Set(['Sale', 'Sale edit', 'Refund']);
 
 /** The local (Uganda) day of an ISO time or a plain YYYY-MM-DD date */
-export const localDay = (d) => (/^\d{4}-\d{2}-\d{2}$/.test(String(d)) ? String(d) : new Date(new Date(d).getTime() + EAT).toISOString().slice(0, 10));
+// 2026-11-17 audit: a record with no date (or one that isn't a date) is '' (before every day) instead of throwing, which
+// failed the whole sheet with a 500
+export const localDay = (d) => { if (/^\d{4}-\d{2}-\d{2}$/.test(String(d))) return String(d); const ms = new Date(d ?? NaN).getTime(); return Number.isFinite(ms) ? new Date(ms + EAT).toISOString().slice(0, 10) : ''; };
 const nextDay = (day) => new Date(Date.parse(day + 'T00:00:00Z') + 864e5).toISOString().slice(0, 10);
 /** "Thur 22nd Oct", the way the pharmacy's sheet labels a day (so a lookup on the label works) */
 export function dayLabel(day) {

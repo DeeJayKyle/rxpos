@@ -32,6 +32,7 @@ const SUITES = [
   ['money math (unit)', 'unit-money.mjs', []],
   ['server write policy (unit)', 'unit-policy.mjs', []],
   ['2026-11 audit fixes, against the real cloud code (unit)', 'unit-audit-2026-11.mjs', []],
+  ['2026-11-17 audit fixes, against the real cloud code (unit)', 'unit-audit-2026-11-17.mjs', []],
   ['sale checks (unit)', 'unit-anomalies.mjs', []],
   ['password hashing (unit)', 'unit-passwords.mjs', []],
   ['sign-in slowdown (unit)', 'unit-throttle.mjs', []],

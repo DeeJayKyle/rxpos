@@ -54,8 +54,9 @@ check('a cashier can mark a proforma converted (selling it)', await ok(cashier({
 check('a cashier cannot delete a proforma', !(await ok(cashier({ t: 'proformas', id: 'pf', deleted: true }))));
 
 // stock movements by type
-const M = (type, qty = type === 'Refund' ? 1 : -1) => ({ t: 'movements', id: 'm-' + type, rec: { type, qty, productId: 'p1' } }); // a refund puts stock back
+const M = (type, qty = type === 'Refund' ? 1 : -1, ref = 'R-1') => ({ t: 'movements', id: 'm-' + type, rec: { type, qty, productId: 'p1', ref } }); // a refund puts stock back; both apps always name the receipt
 check('a cashier records the stock movement of a sale', await ok(cashier(M('Sale'))));
+check('…but not a Sale movement that names no receipt (2026-11-17 audit)', !(await ok(cashier(M('Sale', -1, '')))));
 for (const type of ['Inventory edit', 'Expired write-off', 'Stock count', 'Purchase', 'Refund', 'Sale edit', 'Transfer out', 'Opening stock'])
   check(`a cashier cannot record a "${type}" movement`, !(await ok(cashier(M(type)))));
 check('an unknown movement type needs stock.adjust', !(await ok(dispenser(M('Mystery')))) && (await ok(pharmacist(M('Mystery')))));

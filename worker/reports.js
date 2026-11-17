@@ -4,6 +4,8 @@
 // last 7 days) or monthly (on the last day: the month). Sheets: summary, sales, sales by medicine, expenses, and stock
 // that needs attention. Sent through Brevo like the daily summary. The workbook is written here, with no dependency.
 import { eatDay, summarise, attention } from './summary.js';
+/** A sale's time on the pharmacy's clock (East Africa, UTC+3), 'YYYY-MM-DD HH:MM' (2026-11-17 audit: it showed UTC) */
+const eatClock = (d) => { const ms = Date.parse(d); return Number.isFinite(ms) ? new Date(ms + 3 * 3600e3).toISOString().replace('T', ' ').slice(0, 16) : String(d || ''); };
 
 export const REPORT_KINDS = ['summary', 'sales', 'items', 'expenses', 'stock'];
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
@@ -135,7 +137,7 @@ export function reportSheets({ kinds, sales, expenses, categories = [], branches
   }
   if (want.has('sales')) {
     out.push({ name: 'Sales', rows: [...sales].sort((a, b) => String(a.date).localeCompare(String(b.date))).map((s) => ({
-      date: String(s.date || '').replace('T', ' ').slice(0, 16), number: s.number || '', customer: s.customerName || '', cashier: s.cashier || '', branch: branch(s.branchId),
+      date: eatClock(s.date), number: s.number || '', customer: s.customerName || '', cashier: s.cashier || '', branch: branch(s.branchId),
       payment: s.payment || 'Cash', items: (s.items || []).length, discount: n(s.discount), total: n(s.total), paid: n(s.paid ?? s.total), status: s.status || 'completed',
     })) });
   }
@@ -165,6 +167,8 @@ export async function scheduledReports(env, { now = new Date(), dry = false, ten
   const tenants = (await db.prepare("SELECT id, name FROM tenants WHERE status IS NULL OR status = 'active'").all()).results.filter((t) => !tenantId || t.id === tenantId);
   const out = [];
   for (const t of tenants) {
+    // 2026-11-17 audit: one pharmacy's bad record no longer stops every later pharmacy's email
+    try {
     const rows = async (sql, ...args) => (await db.prepare(sql).bind(t.id, ...args).all()).results.map((r) => JSON.parse(r.rec || 'null')).filter(Boolean);
     const schedules = (await rows("SELECT rec FROM records WHERE tenant = ?1 AND t = 'reportSchedules' AND deleted = 0"))
       .filter((s) => (scheduleId ? s.id === scheduleId : s.active !== false));
@@ -201,6 +205,7 @@ export async function scheduledReports(env, { now = new Date(), dry = false, ten
       }
       out.push({ tenant: t.id, schedule: s.id, period: p.label, to, sent, error, file, sheets: sheets.map((x) => ({ name: x.name, rows: x.rows.length })) });
     }
+      } catch (e) { console.warn('scheduled job skipped a pharmacy', t.id, e.message); out.push({ tenant: t.id, error: e.message }); }
   }
   return out;
 }
