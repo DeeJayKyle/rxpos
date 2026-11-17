@@ -2,6 +2,7 @@
 // a temporary password), the quick PIN for this device, two-step sign-in (src/twostep.jsx) and log out. Signing out
 // never deletes unsent work: it stays on this device and is sent when someone signs in again.
 
+import 'package:rxpos/core/theme/themes.dart' show TonesOfContext;
 import 'package:barcode/barcode.dart';
 import 'package:flutter/foundation.dart' show compute;
 import 'package:flutter/material.dart';
@@ -16,6 +17,7 @@ import '../../../core/network/cloud_api.dart';
 import '../../../core/presentation/widgets.dart';
 import '../../../core/rules/passwords.dart';
 import '../application/session_controller.dart';
+import '../../sync_status/application/sync_controller.dart';
 import '../data/auth_repository.dart';
 import '../domain/device_unlock.dart';
 import '../domain/offline_secrets.dart' show offlineDays;
@@ -116,21 +118,23 @@ class _AccountMenuState extends ConsumerState<AccountMenu> with _AccountActions<
         'unlock' => _manageUnlock(),
         'twostep' => showAppDialog<void>(context: context, builder: (_) => TwoStepDialog(session: s)),
         'logout' => _signOut(),
+        'sync' => ref.read(syncControllerProvider.notifier).runNow(),
         _ => null,
       },
       itemBuilder: (_) => [
         PopupMenuItem(enabled: false, child: Text('${s.userName} · ${s.role}')),
         const PopupMenuItem(value: 'password', child: ListTile(leading: Icon(Icons.key_outlined), title: Text('Change my password'))),
-        PopupMenuItem(value: 'pin', child: ListTile(leading: Icon(_pin ? Icons.lock : Icons.lock_outline, color: _pin ? Colors.green : null), title: Text(_pin ? 'Quick PIN is set for this device' : 'Set a quick PIN for this device'))),
+        PopupMenuItem(value: 'pin', child: ListTile(leading: Icon(_pin ? Icons.lock : Icons.lock_outline, color: _pin ? context.tones.ok : null), title: Text(_pin ? 'Quick PIN is set for this device' : 'Set a quick PIN for this device'))),
         // only what this device supports (Android fingerprint / face, Windows Hello; never on the web)
         if (_kind != UnlockKind.none || _unlock)
           PopupMenuItem(
               value: 'unlock',
               child: ListTile(
-                  leading: Icon(_kind == UnlockKind.windowsHello ? Icons.face_retouching_natural : Icons.fingerprint, color: _unlock ? Colors.green : null),
+                  leading: Icon(_kind == UnlockKind.windowsHello ? Icons.face_retouching_natural : Icons.fingerprint, color: _unlock ? context.tones.ok : null),
                   title: Text(_unlock ? '${unlockName(_kind)[0].toUpperCase()}${unlockName(_kind).substring(1)} is on for this device' : 'Use ${unlockName(_kind)} on this device'))),
         if (s.token.startsWith('u.'))
-          PopupMenuItem(value: 'twostep', child: ListTile(leading: Icon(Icons.verified_user_outlined, color: twoFactor ? Colors.green : null), title: Text(twoFactor ? 'Two-step sign-in is on' : 'Two-step sign-in'))),
+          PopupMenuItem(value: 'twostep', child: ListTile(leading: Icon(Icons.verified_user_outlined, color: twoFactor ? context.tones.ok : null), title: Text(twoFactor ? 'Two-step sign-in is on' : 'Two-step sign-in'))),
+        const PopupMenuItem(value: 'sync', child: ListTile(leading: Icon(Icons.sync), title: Text('Sync now (F5)'))),
         const PopupMenuItem(value: 'logout', child: ListTile(leading: Icon(Icons.logout), title: Text('Log out'))),
       ],
       child: widget.card
@@ -455,7 +459,7 @@ class _TwoStepDialogState extends ConsumerState<TwoStepDialog> {
         ]);
       default: // on
         body = Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          const Row(children: [Icon(Icons.verified_user, color: Colors.green), SizedBox(width: 6), Expanded(child: Text('Two-step sign-in is on for your account.'))]),
+          Row(children: [Icon(Icons.verified_user, color: context.tones.ok), SizedBox(width: 6), Expanded(child: Text('Two-step sign-in is on for your account.'))]),
           const SizedBox(height: 8),
           if (_left != null) Text('$_left recovery code${_left == 1 ? '' : 's'} left.', style: t.textTheme.bodySmall),
           Text('To switch it off (or move it to a new phone), or to get new recovery codes, type a current code from the app:', style: t.textTheme.bodySmall),
@@ -546,7 +550,7 @@ class _AccountCardState extends ConsumerState<AccountCard> with _AccountActions<
     final initials = s.userName.trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).take(2).map((w) => w[0].toUpperCase()).join();
     final name = unlockName(_kind);
     Widget action(Key key, IconData icon, String label, VoidCallback onTap, {bool on = false}) =>
-        OutlinedButton.icon(key: key, onPressed: onTap, icon: Icon(icon, color: on ? Colors.green.shade700 : null), label: Text(label));
+        OutlinedButton.icon(key: key, onPressed: onTap, icon: Icon(icon, color: on ? context.tones.ok : null), label: Text(label));
     return Card(
       key: const Key('account-card'),
       child: Padding(
@@ -600,7 +604,8 @@ class _AccountCardState extends ConsumerState<AccountCard> with _AccountActions<
 }
 
 
-/// Initials in a ring of the brand colours, with the name and role beside them on the menu's foot.
+/// The signed-in person in the top bar (src/App.jsx .account-btn): initials in a ring of the brand colours, the name and
+/// role, and the arrow that opens the menu.
 class _UserCard extends StatelessWidget {
   const _UserCard({required this.name, required this.role});
   final String name, role;
@@ -609,23 +614,30 @@ class _UserCard extends StatelessWidget {
     final t = Theme.of(context);
     final parts = name.trim().split(RegExp(r'\s+')).where((x) => x.isNotEmpty).toList();
     final initials = parts.isEmpty ? '?' : parts.take(2).map((x) => x[0].toUpperCase()).join();
-    final avatar = Container(
-      width: 36,
-      height: 36,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: [t.colorScheme.primary, t.colorScheme.secondary])),
-      child: Text(initials, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13)),
+    return Container(
+      key: const Key('account-pill'),
+      margin: const EdgeInsets.symmetric(horizontal: 4),
+      padding: const EdgeInsets.fromLTRB(4, 4, 8, 4),
+      decoration: BoxDecoration(color: t.colorScheme.surface, borderRadius: BorderRadius.circular(99), border: Border.all(color: t.dividerColor)),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Container(
+          width: 32,
+          height: 32,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: [t.colorScheme.primary, t.colorScheme.secondary])),
+          child: Text(initials, style: TextStyle(color: t.colorScheme.onPrimary, fontWeight: FontWeight.w700, fontSize: 12)),
+        ),
+        const SizedBox(width: 8),
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 140),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+            Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: t.colorScheme.onSurface)),
+            Text('${role.isEmpty ? '' : role[0].toUpperCase()}${role.length > 1 ? role.substring(1) : ''}', maxLines: 1, style: TextStyle(fontSize: 11, color: t.colorScheme.onSurfaceVariant)),
+          ]),
+        ),
+        const SizedBox(width: 4),
+        Icon(Icons.expand_more, size: 18, color: t.colorScheme.onSurfaceVariant),
+      ]),
     );
-    return Row(children: [
-      avatar,
-      const SizedBox(width: 10),
-      Expanded(
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-          Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5, color: t.colorScheme.onSurface)),
-          Text('${role.isEmpty ? '' : role[0].toUpperCase()}${role.length > 1 ? role.substring(1) : ''}', maxLines: 1, style: TextStyle(fontSize: 12, color: t.colorScheme.onSurfaceVariant)),
-        ]),
-      ),
-      Icon(Icons.unfold_more_rounded, size: 18, color: t.colorScheme.onSurfaceVariant),
-    ]);
   }
 }

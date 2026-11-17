@@ -1,5 +1,6 @@
 // Settings (src/pages/Settings.jsx): Pharmacy (this device's overrides of the Owner's details), Payment methods,
 // Receipts & stock, Messages & recovery, Alerts & storage, Online & Mobile Money, Data & backup.
+import 'package:rxpos/core/theme/themes.dart' show TonesOfContext;
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
@@ -505,7 +506,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final sync = ref.watch(syncControllerProvider);
     final me = ref.watch(sessionControllerProvider).value;
     final cfg = ref.watch(_cloudConfigProvider);
-    Widget status(bool ok, String t) => Row(children: [Icon(ok ? Icons.check_circle : Icons.cancel, size: 16, color: ok ? Colors.green : Colors.grey), const SizedBox(width: 6), Expanded(child: Text(t))]);
+    Widget status(bool ok, String t) => Row(children: [Icon(ok ? Icons.check_circle : Icons.cancel, size: 16, color: ok ? context.tones.ok : Colors.grey), const SizedBox(width: 6), Expanded(child: Text(t))]);
     return [
       _card('Online sync', Icons.cloud_outlined, save: false, [
         const Text("RxPOS works offline on this device and syncs automatically: your changes go up within seconds, and other devices' changes come down while the app is open."),

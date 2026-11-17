@@ -1,6 +1,7 @@
 // Calendar (src/pages/Calendar.jsx): the month with team events (also repeating ones), refills due and expiring
 // stock; the chosen day's agenda (Today jumps back), each item to Google Calendar; add, edit and delete events;
 // the private subscription link (copy, Google, Apple / Outlook / phone) and the .ics file.
+import 'package:rxpos/core/theme/themes.dart' show TonesOfContext;
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -21,7 +22,7 @@ import '../domain/calendar.dart';
 const _months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const _days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
-Color kindColor(String kind) => switch (kind) { 'refill' => Colors.deepPurple, 'expiry' => Colors.orange.shade800, _ => Colors.teal };
+Color kindColor(BuildContext context, String kind) => switch (kind) { 'refill' => context.tones.violet, 'expiry' => context.tones.warn, _ => context.tones.info };
 
 String longDay(String day) {
   final d = DateTime.parse(day);
@@ -155,7 +156,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                               width: double.infinity,
                               margin: const EdgeInsets.only(top: 1),
                               padding: const EdgeInsets.symmetric(horizontal: 2),
-                              color: kindColor('${e['kind']}').withValues(alpha: .15),
+                              color: kindColor(context, '${e['kind']}').withValues(alpha: .15),
                               child: Text('${(e['time'] ?? '') == '' ? '' : '${e['time']} '}${e['title']}', maxLines: 1, overflow: TextOverflow.clip, style: const TextStyle(fontSize: 9)),
                             ),
                           if (evs.length > 3) Text('+${evs.length - 3} more', style: const TextStyle(fontSize: 9)),
@@ -179,7 +180,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
           for (final e in agenda)
             Container(
               margin: const EdgeInsets.only(bottom: 4),
-              decoration: BoxDecoration(border: Border(left: BorderSide(width: 3, color: kindColor('${e['kind']}')))),
+              decoration: BoxDecoration(border: Border(left: BorderSide(width: 3, color: kindColor(context, '${e['kind']}')))),
               child: ListTile(
                 dense: true,
                 title: Text('${(e['time'] ?? '') == '' ? '' : '${e['time']}${(e['endTime'] ?? '') == '' ? '' : '–${e['endTime']}'} · '}${e['title']}', style: const TextStyle(fontWeight: FontWeight.w700)),
@@ -255,7 +256,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
           const SizedBox(height: 8),
           Wrap(spacing: 8, children: [
             for (final k in kinds.entries)
-              Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), color: kindColor(k.key).withValues(alpha: .15), child: Text(k.value, style: t.textTheme.labelSmall)),
+              Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), color: kindColor(context, k.key).withValues(alpha: .15), child: Text(k.value, style: t.textTheme.labelSmall)),
           ]),
         ]),
       ),

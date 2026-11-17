@@ -1,6 +1,7 @@
 // Dashboard panels: the greeting card (pharmacy, greeting, date, New sale), stock alerts (low stock and expiring
 // batches, each with a way to act on it) and the most recent sales as a table. Colours come from the theme, so
 // every look and design system draws them its own way.
+import 'package:rxpos/core/theme/themes.dart' show TonesOfContext;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -107,10 +108,10 @@ class AlertList extends StatelessWidget {
             child: InkWell(
               onTap: x.onTap,
               child: Container(
-                decoration: BoxDecoration(border: Border(left: BorderSide(color: x.color ?? Colors.green.shade600, width: 4))),
+                decoration: BoxDecoration(border: Border(left: BorderSide(color: x.color ?? context.tones.ok, width: 4))),
                 padding: const EdgeInsets.fromLTRB(12, 10, 14, 10),
                 child: Row(children: [
-                  Icon(x.icon, size: 22, color: x.color ?? Colors.green.shade700),
+                  Icon(x.icon, size: 22, color: x.color ?? context.tones.ok),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -154,7 +155,7 @@ class _StockAlertsCardState extends State<StockAlertsCard> {
               row([
                 _Name(p),
                 Text(b.batch.isEmpty ? '—' : b.batch),
-                Text(days <= 0 ? 'today' : 'in $days d', style: TextStyle(color: days <= 30 ? th.colorScheme.error : Colors.orange.shade800, fontWeight: FontWeight.w700)),
+                Text(days <= 0 ? 'today' : 'in $days d', style: TextStyle(color: days <= 30 ? th.colorScheme.error : context.tones.warn, fontWeight: FontWeight.w700)),
                 Text(formatQty(b.qty), textAlign: TextAlign.end),
               ]),
           ]
@@ -249,7 +250,7 @@ class RecentSalesCard extends StatelessWidget {
     String items(Sale s) => s.items.map((i) => '${i.name} ×${formatQty(i.qty)}').join(', ');
     Widget pay(String m) {
       final mobile = m.toLowerCase().contains('mobile') || m.toLowerCase().contains('momo');
-      final c = mobile ? Colors.blue : m.toLowerCase().contains('cash') ? Colors.green : Colors.purple;
+      final c = mobile ? context.tones.info : m.toLowerCase().contains('cash') ? context.tones.ok : context.tones.violet;
       return Align(
         alignment: Alignment.centerLeft,
         child: Container(

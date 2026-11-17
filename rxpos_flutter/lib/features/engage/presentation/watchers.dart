@@ -8,6 +8,7 @@
 //  • last week at a glance, once at the start of each week
 //  • reorder levels from sales, automatically once a week
 // Nothing pops up in quiet hours.
+import 'package:rxpos/core/theme/themes.dart' show TonesOfContext;
 import 'dart:async';
 import 'dart:convert';
 
@@ -292,7 +293,7 @@ class EngageWatchersState extends ConsumerState<EngageWatchers> {
             for (final x in who)
               Padding(
                 padding: const EdgeInsets.only(top: 4),
-                child: InkWell(onTap: () => launchUrl(Uri.parse(x.url), mode: LaunchMode.externalApplication), child: Text('WHO alert · ${x.title} (${x.date})', style: TextStyle(color: Colors.orange.shade900))),
+                child: InkWell(onTap: () => launchUrl(Uri.parse(x.url), mode: LaunchMode.externalApplication), child: Text('WHO alert · ${x.title} (${x.date})', style: TextStyle(color: context.tones.warn))),
               ),
             const SizedBox(height: 4),
             Text("Share today's message with clients (one tap, free):", style: Theme.of(c).textTheme.bodySmall),
@@ -333,7 +334,7 @@ class EngageWatchersState extends ConsumerState<EngageWatchers> {
           content: (c, _) => Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
             Row(children: [
               Expanded(child: Text('${w.start} → ${w.end}', style: Theme.of(c).textTheme.bodySmall)),
-              Icon(up ? Icons.trending_up : Icons.trending_down, size: 14, color: up ? Colors.green.shade700 : Theme.of(c).colorScheme.error),
+              Icon(up ? Icons.trending_up : Icons.trending_down, size: 14, color: up ? context.tones.ok : Theme.of(c).colorScheme.error),
               Text(' $change%'),
             ]),
             Text(st.money(w.total), key: const Key('weekly-total'), style: Theme.of(c).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),

@@ -9,8 +9,10 @@ import 'package:flutter/material.dart';
 import '../core/theme/design_tokens.dart';
 
 /// The palette ids (also in src/themes.js)
-const oledPaletteId = 'oled';
-const daylightClinicalPaletteId = 'daylight-clinical';
+/// the dark theme new devices take when the system is dark (RxPOS Navy Teal, 17 Nov 2026)
+const oledPaletteId = 'navy-teal';
+/// the light theme new devices start on (Mint Teal, 17 Nov 2026)
+const daylightClinicalPaletteId = 'mint-teal';
 const nextGenPalettes = {oledPaletteId, daylightClinicalPaletteId};
 
 /// Bento measures

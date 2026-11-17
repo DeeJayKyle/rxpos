@@ -1,3 +1,4 @@
+import 'package:rxpos/core/theme/themes.dart' show TonesOfContext;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -79,12 +80,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               StatCard(label: isToday ? 'Today\'s sales' : 'Sales', value: s.money(c.total), sub: '${c.count} sale${c.count == 1 ? '' : 's'}${deltaText(c.total, pv.total, vs)}', icon: Icons.payments_outlined,
                   onTap: can.contains('sales.view') ? () => context.go('/sales?from=${range.from}&to=${range.to}') : null),
               if (can.contains('reports'))
-                StatCard(label: isToday ? 'Gross profit today' : 'Gross profit', value: s.money(c.grossProfit), sub: 'after cost of goods${deltaText(c.grossProfit, pv.grossProfit, vs)}', icon: Icons.trending_up, color: Colors.deepPurple,
+                StatCard(label: isToday ? 'Gross profit today' : 'Gross profit', value: s.money(c.grossProfit), sub: 'after cost of goods${deltaText(c.grossProfit, pv.grossProfit, vs)}', icon: Icons.trending_up, color: context.tones.violet,
                     onTap: () => context.go('/reports?tab=profit&from=${range.from}&to=${range.to}')),
               if (can.contains('finance') || can.contains('reports'))
-                StatCard(label: isToday ? 'Today\'s expenses' : 'Expenses', value: s.money(c.expenses), sub: '${multiBranch ? 'Whole pharmacy (expenses have no branch) · sales here − expenses' : 'Sales − expenses'}: ${s.money(c.total - c.expenses)}', icon: Icons.account_balance_wallet_outlined, color: Colors.orange.shade800,
+                StatCard(label: isToday ? 'Today\'s expenses' : 'Expenses', value: s.money(c.expenses), sub: '${multiBranch ? 'Whole pharmacy (expenses have no branch) · sales here − expenses' : 'Sales − expenses'}: ${s.money(c.total - c.expenses)}', icon: Icons.account_balance_wallet_outlined, color: context.tones.warn,
                     onTap: () => context.go(can.contains('finance') ? '/finance?tab=expenses' : '/reports?tab=expenses&from=${range.from}&to=${range.to}')),
-              StatCard(label: 'Transactions', value: '${c.count}', sub: 'receipts ${isToday ? 'today' : periodWords[period]}${deltaText(c.count.toDouble(), pv.count.toDouble(), vs)}', icon: Icons.receipt_long_outlined, color: Colors.blue,
+              StatCard(label: 'Transactions', value: '${c.count}', sub: 'receipts ${isToday ? 'today' : periodWords[period]}${deltaText(c.count.toDouble(), pv.count.toDouble(), vs)}', icon: Icons.receipt_long_outlined, color: context.tones.info,
                   onTap: can.contains('sales.view') ? () => context.go('/sales?from=${range.from}&to=${range.to}') : null),
             ]),
           'chart' => Card(child: Padding(padding: const EdgeInsets.all(12), child: () {
@@ -120,10 +121,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           'checks' => checks ? SaleChecksCard(branch: data.branch, money: s.money) : null,
           'bento' => BentoRow(byDay: f.byDay, sales: saleList, branch: data.branch, money: s.money, expiring: soonN + expiredN, low: low, can: can),
           'alerts' => StatGrid(children: [
-              StatCard(label: 'Low stock', value: '$low', sub: 'in stock, at or below reorder level', icon: Icons.inventory_2_outlined, color: low > 0 ? Colors.orange.shade800 : null, onTap: () => context.go('/inventory?filter=low')),
-              StatCard(label: 'Soon expiring', value: '$soonN', sub: 'within $warn days', icon: Icons.event_outlined, color: soonN > 0 ? Colors.orange.shade800 : null, onTap: () => context.go('/inventory?filter=expiring')),
+              StatCard(label: 'Low stock', value: '$low', sub: 'in stock, at or below reorder level', icon: Icons.inventory_2_outlined, color: low > 0 ? context.tones.warn : null, onTap: () => context.go('/inventory?filter=low')),
+              StatCard(label: 'Soon expiring', value: '$soonN', sub: 'within $warn days', icon: Icons.event_outlined, color: soonN > 0 ? context.tones.warn : null, onTap: () => context.go('/inventory?filter=expiring')),
               StatCard(label: 'Expired', value: '$expiredN', sub: expiredN == 0 ? 'nothing expired in stock' : 'in stock: return or write off', icon: Icons.gpp_maybe_outlined,
-                  color: expiredN > 0 ? Theme.of(context).colorScheme.error : Colors.green, onTap: () => context.go('/inventory?filter=expired')),
+                  color: expiredN > 0 ? Theme.of(context).colorScheme.error : context.tones.ok, onTap: () => context.go('/inventory?filter=expired')),
             ]),
           'promote' => promote.isEmpty
               ? null
@@ -196,7 +197,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 child: Padding(
                   padding: const EdgeInsets.all(12),
                   child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Icon(Icons.inventory_outlined, size: 18, color: Colors.orange.shade900),
+                    Icon(Icons.inventory_outlined, size: 18, color: context.tones.warn),
                     const SizedBox(width: 8),
                     Expanded(child: Text.rich(TextSpan(children: [
                       const TextSpan(text: 'Kits running low: ', style: TextStyle(fontWeight: FontWeight.w800)),

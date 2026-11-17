@@ -83,10 +83,11 @@ List<Slide> slidesFor(({List<Insight> shortExpiry, List<Insight> slow, List<Insi
   return out;
 }
 
+/// a slide's label, icon and colour; the colour is a fixed fallback: screens show it in the theme's tones (slideTone)
 const slideKinds = {
-  'expiry': ('Sell first', Icons.hourglass_bottom, Colors.amber),
+  'expiry': ('Sell first', Icons.hourglass_bottom, Colors.orange),
   'slow': ('Slow mover', Icons.timer_outlined, Colors.deepPurple),
-  'value': ('Premium', Icons.diamond_outlined, Colors.teal),
+  'value': ('Premium', Icons.diamond_outlined, Colors.blue),
   'margin': ('Top margin', Icons.trending_up, Colors.green),
 };
 

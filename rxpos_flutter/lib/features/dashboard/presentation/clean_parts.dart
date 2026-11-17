@@ -1,5 +1,6 @@
 // The clean dashboard's parts (src/pages/Dashboard.jsx; the owner's choice, 2026-11-15): stock health with a gauge,
 // the top medicines of the period, cards rising in one after another (the reference video) and Edit widgets.
+import 'package:rxpos/core/theme/themes.dart' show TonesOfContext;
 import 'dart:convert';
 import 'dart:math' as math;
 
@@ -85,7 +86,7 @@ class HealthCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = Theme.of(context);
     final cs = t.colorScheme;
-    final tone = health.score >= 80 ? Colors.green.shade600 : health.score >= 60 ? Colors.orange.shade700 : cs.error;
+    final tone = health.score >= 80 ? context.tones.ok : health.score >= 60 ? context.tones.warn : cs.error;
     return Card(
       key: const Key('stock-health'),
       child: Padding(
@@ -124,8 +125,8 @@ class HealthCard extends StatelessWidget {
                 ActionChip(
                   visualDensity: VisualDensity.compact,
                   label: Text(d.label),
-                  labelStyle: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: d.danger ? cs.error : Colors.orange.shade900),
-                  backgroundColor: (d.danger ? cs.error : Colors.orange).withValues(alpha: .12),
+                  labelStyle: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: d.danger ? cs.error : context.tones.warn),
+                  backgroundColor: (d.danger ? cs.error : context.tones.warn).withValues(alpha: .12),
                   side: BorderSide.none,
                   onPressed: () => context.go(d.to),
                 ),

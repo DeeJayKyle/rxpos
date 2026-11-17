@@ -2,9 +2,28 @@
 // tint), each column heading its own colour band. The colour belongs to the line (`hue` kept on it), not its place.
 import 'package:flutter/material.dart';
 
+import 'themes.dart';
+
+export 'themes.dart' show Tones, TonesOfContext;
+
 /// teal, blue, violet, pink, orange, amber, green, cyan: white numbers read on all of them
 const lineColors = [Color(0xFF0F766E), Color(0xFF1D4ED8), Color(0xFF6D28D9), Color(0xFFBE185D), Color(0xFFC2410C), Color(0xFFA16207), Color(0xFF15803D), Color(0xFF0E7490)];
 const columnColors = {'medicine': Color(0xFF0F766E), 'qty': Color(0xFF1D4ED8), 'cost': Color(0xFF6D28D9), 'total': Color(0xFFBE185D), 'price': Color(0xFFC2410C), 'batch': Color(0xFFA16207), 'expiry': Color(0xFF15803D)};
+
+/// A line's colour in this theme: the theme's own table colours (shades of its two colours, themes.dart Tones.hues),
+/// or the fixed eight when a design system has none.
+Color lineColorOf(BuildContext context, Object? hue, int index) {
+  final hues = context.tones.hues;
+  if (hues.isEmpty) return lineColor(hue, index);
+  final i = hue is num ? hue.toInt() : int.tryParse('${hue ?? ''}') ?? index;
+  return hues[((i % hues.length) + hues.length) % hues.length];
+}
+
+/// A column's colour in this theme (Add Stock's headings): its fixed colour's place among the eight, in the theme's shades
+Color columnColorOf(BuildContext context, String key) {
+  final c = columnColors[key];
+  return c == null ? Theme.of(context).colorScheme.primary : lineColorOf(context, lineColors.indexOf(c), 0);
+}
 
 Color lineColor(Object? hue, int index) {
   final i = hue is num ? hue.toInt() : int.tryParse('${hue ?? ''}') ?? index;
@@ -26,7 +45,7 @@ class Hued extends StatelessWidget {
   final Widget child;
   @override
   Widget build(BuildContext context) {
-    final th = Theme.of(context), c = lineColor(null, index), surface = th.colorScheme.surface, bg = tint(c, surface, 7);
+    final th = Theme.of(context), c = lineColorOf(context, null, index), surface = th.colorScheme.surface, bg = tint(c, surface, context.tones.rowTint.toDouble());
     return Theme(
       data: th.copyWith(
         cardTheme: th.cardTheme.copyWith(color: bg, surfaceTintColor: Colors.transparent),
@@ -66,12 +85,12 @@ class ColourTableHead extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12),
             alignment: c.numeric ? Alignment.centerRight : Alignment.centerLeft,
-            decoration: BoxDecoration(color: tint(lineColor(null, i), surface, 16), border: Border(top: BorderSide(color: lineColor(null, i), width: 3))),
+            decoration: BoxDecoration(color: tint(lineColorOf(context, null, i), surface, context.tones.headTint.toDouble()), border: Border(top: BorderSide(color: lineColorOf(context, null, i), width: 3))),
             child: Text(c.title.toUpperCase(), textAlign: c.numeric ? TextAlign.right : TextAlign.left, maxLines: 1, overflow: TextOverflow.ellipsis,
                 style: th.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w700, letterSpacing: .7, color: th.colorScheme.onSurface)),
           ),
         ),
-      if (trailing > 0) Container(width: trailing, color: tint(lineColor(null, columns.length), surface, 16), foregroundDecoration: BoxDecoration(border: Border(top: BorderSide(color: lineColor(null, columns.length), width: 3)))),
+      if (trailing > 0) Container(width: trailing, color: tint(lineColorOf(context, null, columns.length), surface, context.tones.headTint.toDouble()), foregroundDecoration: BoxDecoration(border: Border(top: BorderSide(color: lineColorOf(context, null, columns.length), width: 3)))),
     ]));
   }
 }

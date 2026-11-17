@@ -2,6 +2,7 @@
 // src/pages/Purchases.jsx): photos or PDFs → page images → kept in the pharmacy's cloud → two AI models read every page
 // (/api/ai/invoice) → lines matched to this pharmacy's medicines → filled in now, or one delivery draft per invoice
 // waiting for review. Nothing reaches stock until someone checks it and presses "Receive stock".
+import 'package:rxpos/core/theme/themes.dart' show TonesOfContext;
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -340,7 +341,7 @@ class _ScannerState extends ConsumerState<_Scanner> {
                         _cur = 0;
                       }), child: const Text('Remove')),
                     ]),
-                    if (inv.note.isNotEmpty) Text(inv.note, style: TextStyle(color: Colors.orange.shade800)),
+                    if (inv.note.isNotEmpty) Text(inv.note, style: TextStyle(color: context.tones.warn)),
                     Wrap(spacing: 6, runSpacing: 6, children: [
                       for (final (n, src) in inv.pages.indexed)
                         Stack(children: [
@@ -381,7 +382,7 @@ class ScanNotice extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = scanned;
-    final warn = TextStyle(color: Colors.orange.shade800);
+    final warn = TextStyle(color: context.tones.warn);
     final check = toCheck(lines(form));
     final images = ((s['pageImages'] as List?) ?? const []).cast<String>();
     return Card(

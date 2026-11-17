@@ -100,7 +100,7 @@ class _MedicineListScreenState extends ConsumerState<MedicineListScreen> {
     final view = ref.watch(deviceValueProvider('view:medicines')).value ?? 'list';
     CardData card(Product p) {
       final st = d.stockOf(p.id);
-      final tone = st <= 0 ? Theme.of(context).colorScheme.error : isLowStock(p, st) ? Colors.orange.shade800 : Colors.green.shade700;
+      final tone = st <= 0 ? Theme.of(context).colorScheme.error : isLowStock(p, st) ? context.tones.warn : context.tones.ok;
       return CardData(title: p.name, sub: [p.generic, p.strength, p.form].where((x) => x.isNotEmpty).join(' · '), value: s.money(p.price), chips: [
         ('${formatQty(st)} in stock', tone), if (p.rx) ('Rx', null), if (p.controlled) ('CD', Theme.of(context).colorScheme.error), if ('${p.raw['shelf'] ?? ''}'.isNotEmpty) ('Shelf ${p.raw['shelf']}', null),
       ], actions: [
@@ -123,7 +123,7 @@ class _MedicineListScreenState extends ConsumerState<MedicineListScreen> {
           ? EmptyState(_review ? 'Every record looks complete' : 'No medicines match')
           : view == 'board'
           ? BoardView<Product>(items: list.take(1000).toList(), card: card, onTap: manage ? (p) => editMedicine(context, ref, p) : null,
-              groups: [('out', 'Out of stock', Theme.of(context).colorScheme.error), ('low', 'Running low', Colors.orange.shade800), ('ok', 'In stock', Colors.green.shade700)],
+              groups: [('out', 'Out of stock', Theme.of(context).colorScheme.error), ('low', 'Running low', context.tones.warn), ('ok', 'In stock', context.tones.ok)],
               groupOf: (p) { final st = d.stockOf(p.id); return st <= 0 ? 'out' : isLowStock(p, st) ? 'low' : 'ok'; })
           : view == 'gallery'
           ? GalleryView<Product>(items: list, card: card, onTap: manage ? (p) => editMedicine(context, ref, p) : null)
@@ -165,7 +165,7 @@ class _MedicineListScreenState extends ConsumerState<MedicineListScreen> {
                 final packs = p.packs.where((k) => k.name.isNotEmpty && k.size > 1);
                 final rs = row(i);
                 if (table) {
-                  final stockC = st <= 0 ? Theme.of(context).colorScheme.error : isLowStock(p, st) ? Colors.orange.shade800 : Color(Theme.of(context).brightness == Brightness.dark ? 0xFF34D399 : 0xFF047857);
+                  final stockC = st <= 0 ? Theme.of(context).colorScheme.error : isLowStock(p, st) ? context.tones.warn : Color(Theme.of(context).brightness == Brightness.dark ? 0xFF34D399 : 0xFF047857);
                   return rs.wrap(ColourTableRow(
                     columns: cols,
                     onTap: manage ? () => editMedicine(context, ref, p) : null,
@@ -217,7 +217,7 @@ class _MedicineListScreenState extends ConsumerState<MedicineListScreen> {
                   ].where((x) => x.isNotEmpty).join('\n')),
                   isThreeLine: true,
                   trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                    Text(formatQty(st), style: TextStyle(fontWeight: FontWeight.w700, color: st <= 0 ? Theme.of(context).colorScheme.error : isLowStock(p, st) ? Colors.orange.shade800 : null)),
+                    Text(formatQty(st), style: TextStyle(fontWeight: FontWeight.w700, color: st <= 0 ? Theme.of(context).colorScheme.error : isLowStock(p, st) ? context.tones.warn : null)),
                     if (manage)
                       TextButton(
                         key: Key('packs-${p.id}'),
@@ -244,8 +244,8 @@ class _Tag extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-        decoration: BoxDecoration(color: warn ? Colors.amber.shade100 : Theme.of(context).colorScheme.secondaryContainer, borderRadius: BorderRadius.circular(6)),
-        child: Text(text, style: TextStyle(fontSize: 11, color: warn ? Colors.brown.shade800 : null)),
+        decoration: BoxDecoration(color: warn ? context.tones.warnSoft : Theme.of(context).colorScheme.secondaryContainer, borderRadius: BorderRadius.circular(6)),
+        child: Text(text, style: TextStyle(fontSize: 11, color: warn ? context.tones.warn : null)),
       );
 }
 
@@ -526,7 +526,7 @@ class _StockCardScreenState extends ConsumerState<StockCardScreen> {
             StatCard(label: 'In stock here', value: formatQty(d.stockOf(p.id)), sub: p.unit.isEmpty ? 'units' : p.unit),
             for (final b in d.stock.batchesOf(p.id).where((b) => b.qty != 0).take(3))
               StatCard(label: 'Batch ${b.batch}', value: formatQty(b.qty), sub: 'Expires ${b.expiry.isEmpty ? '—' : b.expiry}',
-                  color: b.expiry.isNotEmpty && daysUntil(b.expiry) < 0 ? Theme.of(context).colorScheme.error : b.expiry.isNotEmpty && daysUntil(b.expiry) <= warn ? Colors.orange.shade800 : null),
+                  color: b.expiry.isNotEmpty && daysUntil(b.expiry) < 0 ? Theme.of(context).colorScheme.error : b.expiry.isNotEmpty && daysUntil(b.expiry) <= warn ? context.tones.warn : null),
           ]),
         const SizedBox(height: 8),
         Expanded(
@@ -542,7 +542,7 @@ class _StockCardScreenState extends ConsumerState<StockCardScreen> {
                       title: Text('${m.type}${m.ref.isEmpty ? '' : ' · ${m.ref}'}${m.note.isEmpty ? '' : ' (${m.note})'}'),
                       subtitle: Text('${m.date.replaceFirst('T', ' ').split('.').first} · batch ${m.batchId == null ? '—' : names[m.batchId] ?? '—'} · ${m.user}'),
                       trailing: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.end, children: [
-                        Text(m.qty > 0 ? 'In ${formatQty(m.qty)}' : 'Out ${formatQty(-m.qty)}', style: TextStyle(color: m.qty > 0 ? Colors.green.shade700 : Theme.of(context).colorScheme.error)),
+                        Text(m.qty > 0 ? 'In ${formatQty(m.qty)}' : 'Out ${formatQty(-m.qty)}', style: TextStyle(color: m.qty > 0 ? context.tones.ok : Theme.of(context).colorScheme.error)),
                         Text('Balance ${formatQty(bal)}', style: const TextStyle(fontWeight: FontWeight.w700)),
                       ]),
                     );

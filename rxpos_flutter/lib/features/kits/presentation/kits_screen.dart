@@ -4,6 +4,7 @@
 // prices added up unless a price is set. Each kit has an icon, a colour and a warning (that the cashier may have to
 // tick before charging). Ready-made kits are matched to this pharmacy's own medicines by name. The records are the
 // React app's, field for field.
+import 'package:rxpos/core/theme/themes.dart' show TonesOfContext;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -202,12 +203,12 @@ class _KitCard extends StatelessWidget {
               for (final s in v.services) Text('${s.name} · ${fmt(s.price)}', style: t.textTheme.bodySmall?.copyWith(fontStyle: FontStyle.italic)),
               const SizedBox(height: 8),
               Wrap(spacing: 18, runSpacing: 6, children: [
-                fig('Can make', v.canMake == null ? 'any' : '${v.canMake}', color: v.canMake == 0 ? t.colorScheme.error : (v.canMake ?? 99) <= 3 ? Colors.orange.shade800 : null),
+                fig('Can make', v.canMake == null ? 'any' : '${v.canMake}', color: v.canMake == 0 ? t.colorScheme.error : (v.canMake ?? 99) <= 3 ? context.tones.warn : null),
                 fig('Cost', fmt(v.cost)),
                 fig((v.kit['price'] as num? ?? 0) > 0 ? 'Price (fixed)' : 'Price', fmt(v.price)),
                 fig('Margin', v.margin == null ? '—' : '${v.margin}%', color: (v.margin ?? 0) < 0 ? t.colorScheme.error : null),
               ]),
-              if (short.isNotEmpty && (v.canMake ?? 99) <= 3) Padding(padding: const EdgeInsets.only(top: 6), child: Text('⚠ $short', style: TextStyle(color: Colors.orange.shade900, fontSize: 12.5))),
+              if (short.isNotEmpty && (v.canMake ?? 99) <= 3) Padding(padding: const EdgeInsets.only(top: 6), child: Text('⚠ $short', style: TextStyle(color: context.tones.warn, fontSize: 12.5))),
               if (v.warning.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 4), child: Text('⚠ ${v.warning}${v.ack ? ' (the cashier ticks it before charging)' : ''}', style: t.textTheme.bodySmall)),
               const SizedBox(height: 4),
               Text(
@@ -377,7 +378,7 @@ class _KitEditorState extends ConsumerState<_KitEditor> {
                           child: Align(alignment: Alignment.centerLeft, child: Text(
                             d.byId['${i['productId']}']?.name ?? (i['looking'] != null ? 'Not found: “${i['looking']}”, choose…' : 'Choose a medicine…'),
                             overflow: TextOverflow.ellipsis,
-                            style: TextStyle(color: d.byId['${i['productId']}'] == null && i['looking'] != null ? Colors.orange.shade900 : null),
+                            style: TextStyle(color: d.byId['${i['productId']}'] == null && i['looking'] != null ? context.tones.warn : null),
                           )),
                         )),
                         SizedBox(width: 70, child: TextFormField(initialValue: '${i['qty'] ?? 1}', keyboardType: TextInputType.number, textAlign: TextAlign.center,

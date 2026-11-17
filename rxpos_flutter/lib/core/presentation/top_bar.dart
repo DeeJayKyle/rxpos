@@ -1,5 +1,6 @@
 // Top bar pieces (src/App.jsx): the live clock with where this device's work stands, the "No internet connection"
 // banner, the branch this device works as, and Ctrl+K search over pages, medicines, customers and receipts.
+import 'package:rxpos/core/theme/themes.dart' show TonesOfContext;
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -49,10 +50,10 @@ class _ClockPillState extends ConsumerState<ClockPill> {
     final color = attention
         ? Theme.of(context).colorScheme.error
         : s.state == SyncState.offline
-            ? Colors.orange.shade800
+            ? context.tones.warn
             : s.state == SyncState.syncing || s.pending > 0
                 ? Theme.of(context).colorScheme.primary
-                : Colors.green.shade700;
+                : context.tones.ok;
     String time(String? iso) {
       final d = DateTime.tryParse(iso ?? '')?.toLocal();
       return d == null ? '' : _hms(d);
@@ -69,6 +70,9 @@ class _ClockPillState extends ConsumerState<ClockPill> {
                     : s.lastSync != null
                         ? '${s.pending > 0 ? '${s.pending} change(s) on their way · ' : ''}Up to date ${time(s.lastSync)}'
                         : 'Connecting…';
+    // the owner's request (17 Nov 2026): no sync button while all is well; it shows when the device is offline or
+    // something needs the person (refused changes, sign in again). F5 and the account menu's Sync now still sync.
+    if (!attention && s.state != SyncState.offline) return const SizedBox.shrink(key: Key('clock-pill-hidden'));
     final label = s.rejected > 0 ? 'Needs attention' : s.label;
     // on a phone the dot alone (its colour says it; the words are in the tooltip and read out), so the pharmacy name fits
     final dotOnly = widget.compact && MediaQuery.sizeOf(context).width < 480;
@@ -114,16 +118,16 @@ class OfflineBanner extends ConsumerWidget {
     if (s.state != SyncState.offline) return const SizedBox.shrink();
     return Material(
       key: const Key('offline-banner'),
-      color: Colors.orange.shade100,
+      color: context.tones.warnSoft,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         child: Row(children: [
-          Icon(Icons.wifi_off, size: 18, color: Colors.orange.shade900),
+          Icon(Icons.wifi_off, size: 18, color: context.tones.warn),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               'No internet connection. Keep working: everything is saved on this device${s.pending > 0 ? ' (${s.pending} change${s.pending == 1 ? '' : 's'} waiting)' : ''} and goes up when the internet is back.',
-              style: TextStyle(color: Colors.orange.shade900),
+              style: TextStyle(color: context.tones.warn),
             ),
           ),
           TextButton(onPressed: () => ref.read(syncControllerProvider.notifier).runNow(), child: const Text('Try again')),

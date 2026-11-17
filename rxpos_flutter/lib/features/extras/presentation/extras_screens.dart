@@ -103,7 +103,7 @@ class _ControlledScreenState extends ConsumerState<ControlledScreen> {
                     subtitle: Text('${x.m.date.replaceFirst('T', ' ').split('.').first} · by ${x.m.user}'
                         '${x.c != null ? '\nPatient ${x.c!['patient']} ${x.c!['idNo'] ?? ''} · prescriber ${x.c!['prescriber']}${'${x.c!['prescriberReg'] ?? ''}'.isEmpty ? '' : ' (${x.c!['prescriberReg']})'} · Rx ${x.c!['rxNo'] ?? ''}' : x.m.type == 'Sale' ? '\nPatient not recorded' : ''}'),
                     trailing: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.end, children: [
-                      Text(x.m.qty > 0 ? 'In ${formatQty(x.m.qty)}' : 'Out ${formatQty(-x.m.qty)}', style: TextStyle(color: x.m.qty > 0 ? Colors.green.shade700 : Theme.of(context).colorScheme.error)),
+                      Text(x.m.qty > 0 ? 'In ${formatQty(x.m.qty)}' : 'Out ${formatQty(-x.m.qty)}', style: TextStyle(color: x.m.qty > 0 ? context.tones.ok : Theme.of(context).colorScheme.error)),
                       Text('Balance ${formatQty(x.bal)}', style: const TextStyle(fontWeight: FontWeight.w700)),
                     ]),
                   );

@@ -1,3 +1,4 @@
+import 'package:rxpos/core/theme/themes.dart' show TonesOfContext;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -138,7 +139,7 @@ class _RemindersScreenState extends ConsumerState<RemindersScreen> {
                           'last reminded ${r.c['lastReminderAt'] == null ? '—' : dayOf('${r.c['lastReminderAt']}')}',
                         ].join(' · ')),
                         trailing: Wrap(spacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
-                          if (_tab == 'debts') Text(st.money(r.amount), style: TextStyle(fontWeight: FontWeight.w700, color: Colors.orange.shade800)),
+                          if (_tab == 'debts') Text(st.money(r.amount), style: TextStyle(fontWeight: FontWeight.w700, color: context.tones.warn)),
                           IconButton(tooltip: 'WhatsApp', icon: const Icon(Icons.chat_outlined), onPressed: phone.length < 12 ? null : () async {
                             await _open(phone, message(r));
                             await markSent([r.c], 'WhatsApp');

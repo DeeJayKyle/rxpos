@@ -1,3 +1,4 @@
+import 'package:rxpos/core/theme/themes.dart' show TonesOfContext;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -75,7 +76,7 @@ class ShiftsScreen extends ConsumerWidget {
                 ? null
                 : Row(mainAxisSize: MainAxisSize.min, children: [
                     Text(x.variance == 0 ? 'Balanced' : '${x.variance >= 0 ? '+' : ''}${st.money(x.variance)}',
-                        style: TextStyle(fontWeight: FontWeight.w700, color: x.variance.abs() < 1 ? Colors.green : x.variance < 0 ? Theme.of(context).colorScheme.error : Colors.orange.shade800)),
+                        style: TextStyle(fontWeight: FontWeight.w700, color: x.variance.abs() < 1 ? context.tones.ok : x.variance < 0 ? Theme.of(context).colorScheme.error : context.tones.warn)),
                     TextButton.icon(onPressed: () => Printing.layoutPdf(name: 'Shift report', onLayout: (_) => shiftReportPdf(x, st)), icon: const Icon(Icons.print_outlined, size: 18), label: const Text('Report')),
                   ]),
           ),

@@ -145,11 +145,11 @@ class _PurchasesScreenState extends ConsumerState<PurchasesScreen> {
                             Text(p.date),
                             Text(p.supplierName.isEmpty ? '—' : p.supplierName, maxLines: 2, overflow: TextOverflow.ellipsis),
                             Text(p.invoice.isEmpty ? '—' : p.invoice),
-                            TonePill(payType(p), color: unpaid ? Colors.orange.shade800 : Color(Theme.of(context).brightness == Brightness.dark ? 0xFF34D399 : 0xFF047857), dot: false),
+                            TonePill(payType(p), color: unpaid ? context.tones.warn : Color(Theme.of(context).brightness == Brightness.dark ? 0xFF34D399 : 0xFF047857), dot: false),
                             Text('${p.items.length}'),
                             Column(crossAxisAlignment: CrossAxisAlignment.end, mainAxisSize: MainAxisSize.min, children: [
                               Text(st.money(p.total), style: const TextStyle(fontWeight: FontWeight.w800)),
-                              if (unpaid) Text('${st.money(p.total - p.paid)} unpaid', style: TextStyle(color: Colors.orange.shade800, fontSize: 12)),
+                              if (unpaid) Text('${st.money(p.total - p.paid)} unpaid', style: TextStyle(color: context.tones.warn, fontSize: 12)),
                             ]),
                             Text(p.receivedBy.isEmpty ? '—' : p.receivedBy, maxLines: 2, overflow: TextOverflow.ellipsis),
                           ],
@@ -161,7 +161,7 @@ class _PurchasesScreenState extends ConsumerState<PurchasesScreen> {
                         trailing: Row(mainAxisSize: MainAxisSize.min, children: [
                           Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.end, children: [
                             Text(st.money(p.total), style: const TextStyle(fontWeight: FontWeight.w700)),
-                            if (p.total > p.paid) Text('${st.money(p.total - p.paid)} unpaid', style: TextStyle(color: Colors.orange.shade800, fontSize: 12)),
+                            if (p.total > p.paid) Text('${st.money(p.total - p.paid)} unpaid', style: TextStyle(color: context.tones.warn, fontSize: 12)),
                           ]),
                           TextButton(onPressed: () => _view(p, st, payType(p)), child: const Text('View')),
                           if (editable)
@@ -273,7 +273,7 @@ class _SupplierPrices extends StatelessWidget {
                         '${r.list.skip(1).map((o) => '${o.supplierName}: ${settings.money(o.cost)} (${o.date})').join('\n')}'),
                     isThreeLine: true,
                     trailing: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.end, children: [
-                      Text('${r.pct}%', style: TextStyle(fontWeight: FontWeight.w800, color: r.pct >= 10 ? Colors.orange.shade800 : null)),
+                      Text('${r.pct}%', style: TextStyle(fontWeight: FontWeight.w800, color: r.pct >= 10 ? context.tones.warn : null)),
                       Text('${settings.money(r.gap)} per unit', style: const TextStyle(fontSize: 12)),
                     ]),
                   ),
@@ -353,7 +353,7 @@ class _PurchaseEditorState extends ConsumerState<PurchaseEditor> {
                       child: Text(l.name.isEmpty ? 'Choose medicine…' : l.name, overflow: TextOverflow.ellipsis),
                     ),
                     if (!l.removed && l.orig != null && l.productId != '${orig[l.orig!]['productId']}')
-                      Text('was ${orig[l.orig!]['name']}: its stock is taken back, this one is added', style: TextStyle(fontSize: 11, color: Colors.orange.shade800)),
+                      Text('was ${orig[l.orig!]['name']}: its stock is taken back, this one is added', style: TextStyle(fontSize: 11, color: context.tones.warn)),
                     if (!l.removed && l.orig == null) const Text('added on this edit', style: TextStyle(fontSize: 11)),
                   ]),
                 ),
@@ -529,10 +529,10 @@ class _ReorderScreenState extends ConsumerState<ReorderScreen> {
       scroll: true,
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         StatGrid(children: [
-          StatCard(label: 'Need reordering', value: '${suggestions.length}', sub: 'cover ${lead + cover} days', color: Colors.orange.shade800),
+          StatCard(label: 'Need reordering', value: '${suggestions.length}', sub: 'cover ${lead + cover} days', color: context.tones.warn),
           StatCard(label: 'Est. order value', value: st.money(chosen.fold<double>(0, (a, r) => a + r.cost)), sub: '${chosen.length} picked · estimate'),
           StatCard(label: 'Dead stock', value: '${dead.length}', sub: '${st.money(deadValue)} tied up', color: Theme.of(context).colorScheme.error),
-          StatCard(label: 'Open purchase orders', value: '${orders.where((o) => o['status'] != 'Received').length}', color: Colors.deepPurple),
+          StatCard(label: 'Open purchase orders', value: '${orders.where((o) => o['status'] != 'Received').length}', color: context.tones.violet),
         ]),
         const SizedBox(height: 12),
         Align(
@@ -655,7 +655,7 @@ class _ReorderScreenState extends ConsumerState<ReorderScreen> {
                 else
                   Text(r.buy?.supplierName ?? '—'),
                 if (r.options.length > 1 && r.buy != null && r.buy!.cost > r.options.first.cost)
-                  Text('${st.money(r.buy!.cost - r.options.first.cost)} more than ${r.options.first.supplierName}', style: TextStyle(color: Colors.orange.shade800, fontSize: 12)),
+                  Text('${st.money(r.buy!.cost - r.options.first.cost)} more than ${r.options.first.supplierName}', style: TextStyle(color: context.tones.warn, fontSize: 12)),
                 Padding(padding: const EdgeInsets.only(top: 4), child: _qtyBox(r, st)),
               ]),
             ),
@@ -886,7 +886,7 @@ class _Warn extends StatelessWidget {
   final String text;
   @override
   Widget build(BuildContext context) {
-    final color = Colors.orange.shade800;
+    final color = context.tones.warn;
     return Padding(
       padding: const EdgeInsets.only(top: 4),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -969,7 +969,7 @@ class _ExpiryScreenState extends ConsumerState<ExpiryScreen> {
                     return ListTile(
                       title: Text(p.name),
                       subtitle: Text('batch ${b.batch} · ${formatQty(b.qty)} in stock · ${st.money(b.qty * (b.cost != 0 ? b.cost : p.cost))} · expires ${b.expiry} (${days < 0 ? '${-days} days ago' : days == 0 ? 'today' : 'in $days days'})'),
-                      leading: Icon(days < 0 ? Icons.error_outline : Icons.schedule, color: days < 0 ? Theme.of(context).colorScheme.error : Colors.orange.shade800),
+                      leading: Icon(days < 0 ? Icons.error_outline : Icons.schedule, color: days < 0 ? Theme.of(context).colorScheme.error : context.tones.warn),
                       trailing: Wrap(spacing: 4, children: [
                         if (can.contains('stock.receive') || can.contains('stock.adjust'))
                           TextButton(onPressed: () => returnDialog(context, ref, p, b, days < 0 ? 'Expired' : 'Short expiry'), child: const Text('Return')),
@@ -1005,7 +1005,7 @@ class StatusPill extends StatelessWidget {
   Widget build(BuildContext context) {
     final (tone, mark) = _look[status] ?? ('muted', '•');
     final cs = Theme.of(context).colorScheme;
-    final fg = switch (tone) { 'ok' => Colors.green.shade800, 'warn' => Colors.orange.shade900, 'info' => Colors.blue.shade800, _ => cs.onSurfaceVariant };
+    final fg = switch (tone) { 'ok' => context.tones.ok, 'warn' => context.tones.warn, 'info' => context.tones.info, _ => cs.onSurfaceVariant };
     return Semantics(
       label: 'Status $status',
       excludeSemantics: true,

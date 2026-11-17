@@ -94,7 +94,7 @@ class _StockCountScreenState extends ConsumerState<StockCountScreen> {
                 if (s != null) '${s.counted} counted · ${s.matched} matched · ${s.short} short · ${s.over} extra',
               ].join(' · ')),
               trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                if (s != null) Text(st.money(s.net), style: TextStyle(fontWeight: FontWeight.w700, color: s.net < 0 ? Theme.of(context).colorScheme.error : s.net > 0 ? Colors.green.shade700 : null)),
+                if (s != null) Text(st.money(s.net), style: TextStyle(fontWeight: FontWeight.w700, color: s.net < 0 ? Theme.of(context).colorScheme.error : s.net > 0 ? context.tones.ok : null)),
                 TextButton(onPressed: () => setState(() => _open = c['id'] as String), child: const Text('View')),
               ]),
             );
@@ -401,7 +401,7 @@ class _CountSheetState extends ConsumerState<_CountSheet> {
             child: ListView(shrinkWrap: true, children: [
               Wrap(spacing: 8, runSpacing: 8, children: [
                 StatCard(label: 'Counted', value: '${sum.counted}', sub: 'of ${all.length}'),
-                StatCard(label: 'Match', value: '${sum.matched}', color: Colors.green.shade700),
+                StatCard(label: 'Match', value: '${sum.matched}', color: context.tones.ok),
                 StatCard(label: 'Short', value: '${sum.short}', sub: st.money(sum.shortValue), color: Theme.of(c).colorScheme.error),
                 StatCard(label: 'Extra', value: '${sum.over}', sub: st.money(sum.overValue)),
               ]),
@@ -413,7 +413,7 @@ class _CountSheetState extends ConsumerState<_CountSheet> {
                   dense: true,
                   title: Text('${r.p.name} · ${r.l.batch.isEmpty ? '—' : r.l.batch}${r.l.found ? ' (found)' : ''}${r.l.expiry.isEmpty ? '' : ' · exp ${r.l.expiry}'}'),
                   subtitle: Text('system ${formatQty(r.l.sys)} → counted ${formatQty(r.l.qty)} · by ${r.by}'),
-                  trailing: Text('${r.l.diff > 0 ? '+' : ''}${formatQty(r.l.diff)} · ${st.money(lineValue(r.l, r.p))}', style: TextStyle(color: r.l.diff < 0 ? Theme.of(c).colorScheme.error : Colors.green.shade700)),
+                  trailing: Text('${r.l.diff > 0 ? '+' : ''}${formatQty(r.l.diff)} · ${st.money(lineValue(r.l, r.p))}', style: TextStyle(color: r.l.diff < 0 ? Theme.of(c).colorScheme.error : context.tones.ok)),
                 ),
               if (all.length > items.length)
                 CheckboxListTile(
@@ -423,7 +423,7 @@ class _CountSheetState extends ConsumerState<_CountSheet> {
                   subtitle: Text('…unless you tick this: not found on the shelf, set them to 0 (${st.money(zeroCost)} at cost)'),
                 ),
               if (!can.contains('stock.adjust'))
-                Text('A manager or pharmacist with “Stock counts, adjustments” permission posts the count.', style: TextStyle(color: Colors.orange.shade800)),
+                Text('A manager or pharmacist with “Stock counts, adjustments” permission posts the count.', style: TextStyle(color: context.tones.warn)),
             ]),
           ),
           actions: [
@@ -539,7 +539,7 @@ class _CountRowState extends ConsumerState<_CountRow> {
             ? const Chip(label: Text('Counted'), visualDensity: VisualDensity.compact)
             : diffs.every((l) => l.diff == 0)
                 ? const Chip(label: Text('Matches'), visualDensity: VisualDensity.compact)
-                : Chip(label: Text('${diff > 0 ? '+' : ''}${formatQty(diff)}'), backgroundColor: diff < 0 ? th.colorScheme.errorContainer : Colors.amber.shade100, visualDensity: VisualDensity.compact);
+                : Chip(label: Text('${diff > 0 ? '+' : ''}${formatQty(diff)}'), backgroundColor: diff < 0 ? th.colorScheme.errorContainer : context.tones.warnSoft, visualDensity: VisualDensity.compact);
     return Card(
       color: counted ? (diffs.any((l) => l.diff != 0) && !widget.blind ? Colors.amber.withValues(alpha: .08) : Colors.green.withValues(alpha: .06)) : null,
       child: Padding(
@@ -559,7 +559,7 @@ class _CountRowState extends ConsumerState<_CountRow> {
                 child: Text.rich(TextSpan(children: [
                   TextSpan(text: 'Batch ${r.batch.isEmpty ? '—' : r.batch}${r.saved?.found == true ? ' (found)' : ''}'),
                   if (r.expiry.isNotEmpty)
-                    TextSpan(text: ' · exp ${r.expiry}', style: TextStyle(color: daysUntil(r.expiry) < 0 ? th.colorScheme.error : daysUntil(r.expiry) <= widget.warn ? Colors.orange.shade800 : null)),
+                    TextSpan(text: ' · exp ${r.expiry}', style: TextStyle(color: daysUntil(r.expiry) < 0 ? th.colorScheme.error : daysUntil(r.expiry) <= widget.warn ? context.tones.warn : null)),
                   if (!widget.blind && rows.length > 1) TextSpan(text: ' · system ${formatQty(r.sysNow)}'),
                 ]), style: th.textTheme.bodySmall),
               ),

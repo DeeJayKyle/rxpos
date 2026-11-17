@@ -2630,7 +2630,8 @@ void main() {
     await start(tester);
     expect(find.byKey(const Key('branch-pill')), findsOneWidget);
     expect(find.text('Kampala Road'), findsWidgets);
-    await tester.tap(find.byKey(const Key('clock-pill')));
+    // sync now (the sync pill hides while all is well; F5 syncs, as the account menu's Sync now)
+    await tester.sendKeyEvent(LogicalKeyboardKey.f5);
     await settle(tester);
     expect(find.byKey(const Key('offline-banner')), findsOneWidget);
     expect(find.textContaining('No internet connection. Keep working'), findsOneWidget);
