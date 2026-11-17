@@ -15,6 +15,9 @@ What that means here:
   `npm test` is for the end, and CI runs it in parallel groups anyway.
 - **Release in one step:** Actions → *Build RxPOS* → Run workflow on `main` with *release* `vX.Y.Z` and *deploy* on
   *with release* (MAINTENANCE.md §5). Don't deploy the cloud and the website by hand when the workflow does both.
+- **One source for the Flutter apps:** a merge to `main` that changes `rxpos_flutter/` tests, builds and publishes
+  Android, Windows and web once, offers them to the installed apps and puts the web app live (flutter-apps.yml).
+  Don't merge `main` into the old pilot branch or rebuild elsewhere to ship a Flutter update.
 - **Pick the recommended option** when the owner hasn't decided, and say so, rather than stopping to ask.
 - **Fix the cause once** rather than retrying or working around it.
 

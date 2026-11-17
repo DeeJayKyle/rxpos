@@ -1,11 +1,13 @@
 # The Flutter RxPOS apps (rxpos_flutter/), version 2.0.<run number>: tests, then the Windows installer, the Android
 # apps (one APK for all phones, smaller APKs per processor, and an app bundle for app stores) and the website
 # (rxposug.com: the app for the browser, with the classic app kept at /classic/). One commit, one version, all three.
-# Runs on every push that changes rxpos_flutter/ (any branch) and by hand. The live website, cloud and current
-# Electron / Capacitor apps are not touched. Builds of the pilot branch are also offered to the installed new RxPOS
-# apps (the R2 bucket rxpos-apps, read through the cloud at /api/app/; scripts/publish-flutter-update.sh).
+# Runs on every push that changes rxpos_flutter/ (any branch) and by hand. The cloud and the classic Electron /
+# Capacitor apps are not touched. Builds of main (the one source, the owner's choice of 17 Nov 2026) are
+# offered to the installed new RxPOS apps and put live on rxposug.com, so a merge to main updates all three
+# (Android, Windows, web) with no other branch, merge or rebuild. The installed apps take updates from one place
+# (the R2 bucket rxpos-apps, read through the cloud at /api/app/; scripts/publish-flutter-update.sh).
 name: Flutter apps
-# Publishing to the flutter-pilot pre-release (2026-11-16): only from main and the pilot branch. Its RxPOS-web.zip is
+# Publishing to the flutter-pilot pre-release: only from main. Its RxPOS-web.zip is
 # what every classic deploy puts on rxposug.com (scripts/site-with-app.sh) and flutter-release.yml releases its files,
 # so a build of any other branch (a feature branch, a Dependabot update) must never replace them. Other branches still
 # build and test.
@@ -139,7 +141,7 @@ jobs:
           cp build/app/outputs/bundle/release/app-release.aab "../out/RxPOS$s.aab"
           ls -l ../out
       - name: Remove the files with the old name (RxPOS New) from the pilot release
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/ccr-54387795-ifu3p1'
+        if: github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -147,7 +149,7 @@ jobs:
             gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/assets/$id" && echo "removed asset $id"
           done
       - name: Publish to the pilot pre-release
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/ccr-54387795-ifu3p1'
+        if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           tag_name: flutter-pilot # (the tag exists: moving it to each build's commit was refused by GitHub)
@@ -161,8 +163,8 @@ jobs:
             out/*.apk
             out/*.aab
           fail_on_unmatched_files: true
-      - name: Offer it to the installed apps (pilot branch, release-signed only, as a debug key can't update an install)
-        if: github.ref == 'refs/heads/ccr-54387795-ifu3p1' && env.SIGNED == 'release'
+      - name: Offer it to the installed apps (main, release-signed only, as a debug key can't update an install)
+        if: github.ref == 'refs/heads/main' && env.SIGNED == 'release'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -203,7 +205,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Move-Item out\RxPOS-Setup-*.exe out\RxPOS-Setup.exe
       - name: Publish to the pilot pre-release
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/ccr-54387795-ifu3p1'
+        if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           tag_name: flutter-pilot # (the tag exists: moving it to each build's commit was refused by GitHub)
@@ -214,8 +216,8 @@ jobs:
             out/RxPOS-Setup.exe
             out/RxPOS-windows-portable.zip
           fail_on_unmatched_files: true
-      - name: Offer it to the installed apps (pilot branch)
-        if: github.ref == 'refs/heads/ccr-54387795-ifu3p1'
+      - name: Offer it to the installed apps (main)
+        if: github.ref == 'refs/heads/main'
         shell: bash
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -260,7 +262,7 @@ jobs:
           printf '{"build":%s,"label":"%s"}\n' "${{ github.run_number }}" "$VERSION" > rxpos_flutter/build/web/rxpos-web.json
           (cd rxpos_flutter/build/web && zip -qr ../../../out/RxPOS-web.zip .)
       - name: Publish to the pilot pre-release (the classic deploys put the website together with it)
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/ccr-54387795-ifu3p1'
+        if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           tag_name: flutter-pilot
@@ -269,10 +271,10 @@ jobs:
           files: out/RxPOS-web.zip
           fail_on_unmatched_files: true
       - name: Browser for the checks
-        if: github.ref == 'refs/heads/ccr-54387795-ifu3p1'
+        if: github.ref == 'refs/heads/main'
         run: npm i --no-save playwright@1.49.1 && npx playwright install --with-deps chromium
       - name: Preview, check, go live (and back to the previous site by itself if the live check fails)
-        if: github.ref == 'refs/heads/ccr-54387795-ifu3p1'
+        if: github.ref == 'refs/heads/main'
         run: |
           if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then echo "::warning::Cloudflare credentials are not set: the website was not deployed."; exit 0; fi
           API="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/rxpos"
