@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/rules/kits.dart';
 import '../../../core/data/pharmacy_providers.dart';
 import '../../../core/entities/sale.dart';
 import '../../../core/presentation/widgets.dart';
@@ -181,6 +182,35 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           child: Text('$branchName${isToday ? 'today' : periodWords[period]} · sales incl. tax, refunds left out · gross profit = sales less tax and cost of goods',
               key: const Key('dash-scope'), style: Theme.of(context).textTheme.bodySmall),
         ),
+        // recommendation 6 (1.10, as src/pages/Dashboard.jsx): kits that can be made 3 times or fewer, with what holds them back
+        if ([for (final k in data.tillKits) if (k.canMake != null && k.canMake! <= 3) k] case final low when low.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: Material(
+              key: const Key('kit-low-alert'),
+              color: Colors.orange.withValues(alpha: .12),
+              borderRadius: BorderRadius.circular(10),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(10),
+                onTap: () => context.go('/kits'),
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Icon(Icons.inventory_outlined, size: 18, color: Colors.orange.shade900),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text.rich(TextSpan(children: [
+                      const TextSpan(text: 'Kits running low: ', style: TextStyle(fontWeight: FontWeight.w800)),
+                      TextSpan(text: [
+                        for (final k in low.take(4))
+                          '${k.name}: ${k.canMake == 0 ? 'none can be made' : 'only ${k.canMake} can be made'}${kitShortText(k).isEmpty ? '' : ', ${kitShortText(k)}'}',
+                      ].join('; ') + (low.length > 4 ? ' and ${low.length - 4} more' : '')),
+                      const TextSpan(text: '  Open kits', style: TextStyle(decoration: TextDecoration.underline)),
+                    ]))),
+                  ]),
+                ),
+              ),
+            ),
+          ),
         const SizedBox(height: 12),
         LayoutBuilder(builder: (context, box) {
           final cols = box.maxWidth >= 1100 ? 12 : box.maxWidth >= 760 ? 6 : 1;

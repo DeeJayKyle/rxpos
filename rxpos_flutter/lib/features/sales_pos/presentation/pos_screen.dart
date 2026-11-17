@@ -1123,13 +1123,12 @@ class _KitTile extends StatelessWidget {
           padding: EdgeInsets.all(tk.cardPadding),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
-              KitIcon(icon: v.icon, color: v.color, size: 14),
+              KitIcon(icon: v.icon, color: v.color, size: 12),
               const SizedBox(width: 6),
-              Expanded(child: Text(v.name, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700))),
+              Expanded(child: Text(v.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700))),
               KitBadge(color: v.color),
             ]),
-            const SizedBox(height: 2),
-            Text(v.contents, maxLines: 2, overflow: TextOverflow.ellipsis, style: t.textTheme.bodySmall),
+            Text(v.contents, maxLines: 1, overflow: TextOverflow.ellipsis, style: t.textTheme.bodySmall),
             const Spacer(),
             Wrap(alignment: WrapAlignment.spaceBetween, crossAxisAlignment: WrapCrossAlignment.center, spacing: 4, children: [
               Text('${formatMoney(wholesale ? v.wholesale : v.price, currency: settings.currency, decimals: settings.decimalPlaces)} / kit',
@@ -1464,7 +1463,7 @@ class _SalePanel extends ConsumerWidget {
                                         ]),
                                         if (l.kit!.warning.isNotEmpty)
                                           l.kit!.ack
-                                              ? CheckboxListTile(
+                                              ? Material(type: MaterialType.transparency, child: CheckboxListTile(
                                                   key: Key('kitack-${l.id}'),
                                                   dense: true,
                                                   contentPadding: EdgeInsets.zero,
@@ -1473,7 +1472,7 @@ class _SalePanel extends ConsumerWidget {
                                                   onChanged: (v) => c.ackKit(l.id, v == true),
                                                   title: Text('⚠ ${l.kit!.warning}', style: TextStyle(fontSize: 12.5, color: l.acked ? null : Colors.orange.shade900, fontWeight: FontWeight.w600)),
                                                   subtitle: const Text('Tick once the client was told'),
-                                                )
+                                                ))
                                               : Text('⚠ ${l.kit!.warning}', style: TextStyle(fontSize: 12.5, color: Colors.orange.shade900)),
                                       ],
                                       // safety in words and an icon, never colour alone

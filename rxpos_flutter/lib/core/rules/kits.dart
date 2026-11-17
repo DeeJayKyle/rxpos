@@ -3,6 +3,8 @@
 // build kits yet (PARITY.md): it keeps them out of its medicine lists, gives a kit's medicines back on a refund, and
 // leaves the correcting of a kit sale to the React app (its lines would lose their contents here).
 
+import '../entities/sale.dart';
+
 /// Is this stored product record a kit?
 bool isKitRecord(Map<String, Object?> rec) => rec['kit'] is Map;
 
@@ -222,3 +224,17 @@ List<({String productId, double qty, String looking})> matchTemplate(List<({List
           return (productId: best?.id ?? '', qty: it.qty, looking: it.find.first);
         }(),
     ];
+
+/// Each line of a saved sale as the medicines it used up (src/kits.js unitsUsed): a kit line → its components, with
+/// their names and costs; a plain line → itself. Reorder levels, "how fast it sells" and consumption count these.
+List<({String id, String name, double qty, double cost})> usedBy(Map<String, Object?> sale) => [
+  for (final i in rawSaleItems(sale))
+    if (i['kit'] is Map && (i['kit'] as Map)['components'] is List)
+      for (final c in ((i['kit'] as Map)['components'] as List).whereType<Map>()) (id: '${c['id'] ?? ''}', name: '${c['name'] ?? ''}', qty: _num(c['qty']), cost: _num(c['cost']))
+    else
+      (id: '${i['id'] ?? ''}', name: '${i['name'] ?? ''}', qty: _num(i['qty']), cost: _num(i['cost'])),
+];
+
+/// [usedBy] for a sale entity: its saved record when it has one (kits keep their contents there), else its lines
+List<({String id, String name, double qty, double cost})> usedBySale(Sale s) =>
+    rawSaleItems(s.raw).isNotEmpty ? usedBy(s.raw) : [for (final i in s.items) (id: i.id, name: i.name, qty: i.qty, cost: i.cost)];

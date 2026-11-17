@@ -14,6 +14,7 @@ import 'package:rxpos/core/entities/movement.dart';
 import 'package:rxpos/core/entities/product.dart';
 import 'package:rxpos/core/entities/settings.dart';
 import 'package:rxpos/core/network/interceptors.dart';
+import 'package:rxpos/core/rules/kits.dart';
 import 'package:rxpos/core/rules/stock.dart';
 import 'package:rxpos/core/sync/sync_engine.dart';
 import 'package:rxpos/features/auth/data/auth_repository.dart';
@@ -164,5 +165,29 @@ void main() {
     expect(priv['private'], true);
     final renewed = ((await app.post<Object?>('/api/calendar-link', data: const {})).data as Map)['url'];
     expect(renewed, isNot(first));
+  }, skip: skip);
+  test('1.10 a kit sold here passes the real cloud\'s sale checks: its price and its medicines\' stock are as the React app writes them', () async {
+    await own('/tenants/$tenantId/records', {'records': [
+      {'t': 'products', 'id': 'fl-kit', 'rec': {'name': 'Amoxa Course Kit', 'form': 'Kit', 'unit': 'Kit', 'active': true,
+        'kit': {'icon': 'pill', 'color': '#1d4ed8', 'items': [{'productId': 'fl-amox', 'qty': 3}, {'service': true, 'name': 'Advice', 'price': 200, 'cost': 0}]}}},
+    ]});
+    await sync.run();
+    final kitRec = (await store.get('products', 'fl-kit'))!;
+    final amox = Product.fromRecord((await store.get('products', 'fl-amox'))!);
+    final view = StockView(products: [amox], batches: (await store.rows('batches')).map(Batch.fromRecord), index: StockIndex.of((await store.rows('movements')).map(Movement.fromRecord)));
+    final kv = kitView(kitRec, {amox.id: (name: amox.name, cost: amox.cost, price: amox.price, wholesale: amox.wholesale, rx: amox.rx, controlled: amox.controlled, expiry: '')},
+        (id) => view.stockOf(id));
+    final sale = await completeSale(store, cart: addKitToCart([], kv, wholesale: false),
+        c: const Checkout(method: PaymentMethod(id: 'cash', name: 'Cash', type: 'cash'), rxChecked: true),
+        settings: const PharmacySettings(), stock: view, wholesale: false, cashier: 'Fiona Admin');
+    expect(sale['total'], 1700, reason: '3 × 500 + 200 advice');
+    final r = await sync.run();
+    expect(r.refused, 0);
+    final findings = ((await own('/tenants/$tenantId/records?t=anomalies'))['rows'] as List? ?? const []).cast<Map>()
+        .where((f) => '${(f['rec'] as Map?)?['saleId'] ?? (f['rec'] as Map?)?['ref'] ?? ''}'.contains('${sale['id']}') || '${f['rec']}'.contains('${sale['number']}')).toList();
+    expect(findings, isEmpty, reason: 'the cloud found nothing wrong with the kit sale');
+    final ex = await own('/tenants/$tenantId/export');
+    final moves = (ex['movements'] as List).cast<Map>().where((m) => m['ref'] == sale['number']).toList();
+    expect([for (final m in moves) (m['productId'], m['qty'])], [('fl-amox', -3)], reason: 'the medicine left stock, not the kit');
   }, skip: skip);
 }

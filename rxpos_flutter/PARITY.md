@@ -4,6 +4,9 @@ Every feature of the React app (`src/pages/*.jsx`, `src/*.jsx`), screen by scree
 ✅ done · ◐ partly · ✗ not yet. Items are ticked only when built and covered by a test.
 
 ## Sign-in and the app frame (Auth.jsx, App.jsx, main.jsx, engage.jsx, notify.jsx, refresh.jsx, twostep.jsx)
+- ✅ 2026-11 audit: Sign out everywhere else (account card); an administrator signs a staff member out on every device
+  (Users); Calendar: refills with initials only and Replace link (test/cloud/real_cloud_test.dart). Signing out keeps the
+  device's link to the pharmacy, as the installed React apps do (only the React web version that keeps nothing ends it)
 - ✅ Sign in by email / username and password; choose a pharmacy; two-step code
 - ✅ Forgot password: email me a code, send a code by SMS, reset with Google (opens the web page, as the React apps do), ask the administrator on WhatsApp
 - ✅ PIN for this device (quick sign-in, five tries), "Use password instead"; offline sign-in with this device's own verifier (30 days); remember me for 30 days
@@ -104,16 +107,26 @@ Every feature of the React app (`src/pages/*.jsx`, `src/*.jsx`), screen by scree
 - ✅ Edit a past delivery (add, remove, change lines; stock adjusted; sold stock protected; audit)
 - ✅ Supplier prices tab; Drafts tab
 - ✅ Filters (dates, supplier), payment type, unpaid, Export CSV / PDF
-- ✗ 1.10.0 colourful lines: a colour per line (stripe, number badge, row tint), a colour band per column, grid lines,
-  tinted supplier / invoice panels (React: src/linecolors.js, styles/linecolors.css) — pending in add_stock_screen.dart
+- ✅ 1.10.0 colourful lines: a colour per line (stripe, number badge, row tint), a colour band per column, grid lines,
+  tinted supplier / invoice panels (done in 1.10.1, see Colour below)
 
 ## Kits (Kits.jsx, src/kits.js; 1.10.0)
 - ✅ Kits are kept out of this app's medicine lists, till, stock and reorder (core/rules/kits.dart; they are recipes
   with no stock of their own)
 - ✅ Refunding a kit sale made in the React app puts each of its medicines back in its batches (test/features/group1_test.dart)
-- ✅ A kit sale is not corrected here (its lines would lose their contents): the app says to correct it in the React app or refund it
-- ✗ Build and edit kits (icon, colour, warning, services, ready-made kits), sell them at the till (KIT tiles and lines,
-  can make N, warning to tick, swap a medicine for one sale), kit labels, kit sales, low-kit alert — pending
+- ✅ Correcting a kit sale (as Sales.jsx): a kit's count stays, its price may change, its contents are kept; a kit taken off
+  the sale puts its medicines back in their batches (test/features/kit_sale_test.dart)
+- ✅ Kits screen (features/kits): kit cards (what it holds, can make, cost, price, margin, earliest expiry, warning), kit
+  sales by period with profit, new / edit (icon, colour, medicines, services, kit and wholesale price, warning to tick,
+  on/off, barcode made for you), ready-made kits matched to this pharmacy's medicines, switch off, delete, Label
+- ✅ Selling kits at the till: KIT tiles (colour, icon, contents, can make N, warning) and a Kits filter; scanning a kit's
+  label; the warning before adding and the tick before charging (audited); swap a medicine for one sale (audited); a
+  kit and plain lines share the stock; the sale is the React app's record (one line, components with their batches);
+  held sales and proformas keep kits; receipts (screen, PDF, WhatsApp) and Sales History list a kit's contents
+  (test/features/kit_sale_test.dart, test/widgets/app_flow_test.dart "1.10 kits", test/cloud: passes the cloud's sale checks)
+- ✅ Kit labels (Barcode labels, or Label on a kit's card); low-kit count beside Kits in the menu and "Kits running low"
+  on the dashboard; reorder levels, "how fast it sells" and consumption count the medicines a kit used; profit by
+  category groups kits
 
 ## Colour (1.10.1)
 - ✅ Colourful Add Stock: each line its own colour (stripe, numbered badge, tint; kept when a line is removed), a colour

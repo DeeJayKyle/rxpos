@@ -212,7 +212,7 @@ class _Sidebar extends ConsumerWidget {
   /// only the icons (the name on hover)
   final bool rail;
   final Map<String, int> counts;
-  static const _badges = {'/chat': 'chat', '/inventory': 'low', '/expiry': 'expiry', '/branches': 'transfers'};
+  static const _badges = {'/chat': 'chat', '/inventory': 'low', '/expiry': 'expiry', '/kits': 'kits', '/branches': 'transfers'};
   final String location;
   final ValueChanged<String> onGo;
 

@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../features/kits/presentation/kits_screen.dart';
 import '../../features/branches/presentation/branches_screen.dart';
 import '../../features/chat/presentation/chat_screen.dart';
 import '../../features/dashboard/presentation/dashboard_screen.dart';
@@ -62,6 +63,7 @@ final screens = <Screen>[
       permission: 'inventory.view', key: LogicalKeyboardKey.f7),
   Screen('/add-stock', 'Add Stock', Icons.add_box_outlined, 'Medicine inventory', (q) => AddStockScreen(key: ValueKey('stock-${q['po']}-${q['draft']}'), po: q['po'] ?? '', draft: q['draft'] ?? ''), permission: 'stock.receive', key: LogicalKeyboardKey.f4),
   Screen('/purchases', 'Purchase history', Icons.local_shipping_outlined, 'Medicine inventory', (q) => PurchasesScreen(key: ValueKey('purchases-${q['tab']}'), tab: q['tab'] ?? 'history'), permission: 'stock.receive'),
+  Screen('/kits', 'Kits', Icons.medical_services_outlined, 'Medicine inventory', (_) => const KitsScreen(), permission: 'inventory.view'),
   Screen('/shelves', 'Shelves', Icons.shelves, 'Medicine inventory', (_) => const ShelvesScreen(), permission: 'inventory.view'),
   Screen('/stock-count', 'Stock take', Icons.fact_check_outlined, 'Medicine inventory', (_) => const StockCountScreen(), permission: 'stock.count'),
   Screen('/reorder', 'Reorder', Icons.shopping_cart_checkout, 'Medicine inventory', (_) => const ReorderScreen(), permission: 'inventory.view', feature: 'reorder'),
@@ -69,7 +71,7 @@ final screens = <Screen>[
   Screen('/stock-card', 'Stock Card', Icons.receipt_outlined, 'Medicine inventory', (q) => StockCardScreen(key: ValueKey('card-${q['id']}'), productId: q['id'] ?? ''), permission: 'inventory.view'),
   Screen('/expiry', 'Expiring / Expired', Icons.event_busy_outlined, 'Medicine inventory', (_) => const ExpiryScreen(), permission: 'inventory.view'),
   Screen('/returns', 'Returns to suppliers', Icons.assignment_return_outlined, 'Medicine inventory', (_) => const ReturnsScreen(), permission: 'stock.receive'),
-  Screen('/labels', 'Barcode labels', Icons.qr_code_2, 'Medicine inventory', (_) => const LabelsScreen(), permission: 'medicines.manage', feature: 'labels'),
+  Screen('/labels', 'Barcode labels', Icons.qr_code_2, 'Medicine inventory', (q) => LabelsScreen(key: ValueKey('labels-${q['kit']}'), kit: q['kit'] ?? ''), permission: 'medicines.manage', feature: 'labels'),
   Screen('/import', 'Import medicines', Icons.upload_file_outlined, 'Medicine inventory', (_) => const ImportScreen(), permission: 'medicines.manage', feature: 'import'),
   Screen('/storage', 'Weather & Storage', Icons.thermostat_outlined, 'Medicine inventory', (_) => const StorageScreen(), permission: 'inventory.view', feature: 'weather'),
   Screen('/drug-info', 'Drug information', Icons.menu_book_outlined, 'Insights', (_) => const DrugInfoScreen(), feature: 'drugInfo'),

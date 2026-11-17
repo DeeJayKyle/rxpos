@@ -1,6 +1,7 @@
 // The figures of every Reports tab, ported from src/pages/Reports.jsx: Sales Report, Sales by Product, Consumption
 // (ABC), Purchase Report, Expenses Report, Profit & margins, Stock Valuation and the Income Statement. A period
 // (from–to, inclusive) and a branch ('all' or one).
+import '../../../core/rules/kits.dart';
 import '../../../core/entities/movement.dart';
 import '../../../core/entities/product.dart';
 import '../../../core/entities/sale.dart';
@@ -89,9 +90,12 @@ class ProfitRow {
 List<ProfitRow> profitRows(List<Sale> sales, Map<String, Product> byId, {bool byCategory = false}) {
   final m = <String, ProfitRow>{};
   for (final s in sales) {
+    final kitIds = {for (final r in rawSaleItems(s.raw)) if (r['kit'] is Map) '${r['id']}'};
     for (final i in s.items) {
       final p = byId[i.id];
-      final key = !byCategory ? (i.id.isEmpty ? i.name : i.id) : ((p?.category ?? '').isNotEmpty ? p!.category : (p?.form ?? '').isNotEmpty ? p!.form : 'Other');
+      // a kit's profit is from its medicines' costs; by category, kits are one group (src/pages/Reports.jsx)
+      final isKit = kitIds.contains(i.id);
+      final key = !byCategory ? (i.id.isEmpty ? i.name : i.id) : isKit ? 'Kits' : ((p?.category ?? '').isNotEmpty ? p!.category : (p?.form ?? '').isNotEmpty ? p!.form : 'Other');
       final r = m.putIfAbsent(key, () => ProfitRow(key, byCategory ? key : i.name));
       final share = s.subtotal > 0 ? i.qty * i.price / s.subtotal : 0;
       r.qty += i.qty;
@@ -129,7 +133,15 @@ class AbcRow {
   final periodDays = days < 1 ? 1 : days;
   final m = <String, AbcRow>{};
   for (final s in sales) {
-    for (final i in s.items) {
+    // a kit's medicines are consumed one by one (src/pages/Reports.jsx): they count here, with no takings of their own
+    final kitIds = {for (final r in rawSaleItems(s.raw)) if (r['kit'] is Map) '${r['id']}'};
+    final lines = [
+      for (final i in s.items) if (!kitIds.contains(i.id)) (id: i.id, name: i.name, qty: i.qty, price: i.price, cost: i.cost),
+      for (final r in rawSaleItems(s.raw)) if (r['kit'] is Map)
+        for (final c in (((r['kit'] as Map)['components'] as List?) ?? const []).whereType<Map>())
+          (id: '${c['id']}', name: '${c['name']}', qty: (c['qty'] as num?)?.toDouble() ?? 0, price: 0.0, cost: (c['cost'] as num?)?.toDouble() ?? 0),
+    ];
+    for (final i in lines) {
       final p = byId[i.id];
       final key = i.id.isEmpty ? i.name : i.id;
       final r = m.putIfAbsent(key, () => AbcRow(i.id, i.name, p?.form ?? '', p?.cost != null && p!.cost != 0 ? p.cost : i.cost, p == null ? null : stockOf(p.id)));

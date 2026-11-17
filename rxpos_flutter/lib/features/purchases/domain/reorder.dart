@@ -2,6 +2,7 @@
 // safety days). Only medicines that sold in the period change.
 import 'dart:math';
 
+import '../../../core/rules/kits.dart';
 import '../../../core/data/record_store.dart';
 import '../../../core/rules/money.dart';
 import '../../../core/entities/product.dart';
@@ -25,7 +26,7 @@ List<ReorderChange> computeReorderLevels(Iterable<Sale> sales, Iterable<Product>
     if (s.status == 'refunded' || (s.branchId.isEmpty ? mainBranch : s.branchId) != branch) continue;
     final at = DateTime.tryParse(s.date);
     if (at == null || at.isBefore(since)) continue;
-    for (final i in s.items) {
+    for (final i in usedBySale(s)) { // a kit counts the medicines it used
       sold[i.id] = (sold[i.id] ?? 0) + i.qty;
     }
   }
@@ -97,7 +98,7 @@ Map<String, SupplierPrice> lastBuys(Iterable<Map<String, Object?>> purchases) {
   for (final s in sales) {
     if (s.status == 'refunded' || (s.branchId.isEmpty ? mainBranch : s.branchId) != branch) continue;
     final at = DateTime.tryParse(s.date);
-    for (final i in s.items) {
+    for (final i in usedBySale(s)) { // a kit counts the medicines it used
       if (at != null && !at.isBefore(since)) sold[i.id] = (sold[i.id] ?? 0) + i.qty;
       if ((last[i.id] ?? '').compareTo(s.date) < 0) last[i.id] = s.date;
     }
@@ -272,7 +273,7 @@ Map<String, List<double>> dailyDemand(Iterable<Sale> sales, {required int days, 
     if (at == null) continue;
     final ago = today.difference(DateTime(at.year, at.month, at.day)).inDays;
     if (ago < 0 || ago >= days) continue;
-    for (final i in s.items) {
+    for (final i in usedBySale(s)) { // a kit counts the medicines it used
       (out[i.id] ??= List.filled(days, 0.0))[days - 1 - ago] += i.qty;
     }
   }
