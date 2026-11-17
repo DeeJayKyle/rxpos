@@ -2875,3 +2875,20 @@ tr.group-head > td { background: var(--surface-2); padding: 6px 10px; }
   .pos-cart.sheet .qty input { width: 2.2em; }
   .pos-cart.sheet .cart-line { column-gap: 6px; }
 }
+
+/* the refund sheet (src/components/RefundSheet.jsx) */
+.notice.warn { background: var(--warn-soft); color: var(--warn); }
+.refund-money { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 14px; display: grid; gap: 6px; }
+.refund-money .grand { font-size: 1.1em; }
+.refund-money p { margin: 0; }
+
+/* the F-key legend under the till (src/components/FKeyBar.jsx): computers only, the till gives it its height */
+.pos.has-fkeys { height: calc(100vh - 61px - 34px); }
+.shell.rail .pos.has-fkeys { height: calc(100vh - 61px - 34px); }
+.fkey-bar { height: 34px; display: flex; align-items: center; gap: 4px; padding: 0 18px; border-top: 1px solid var(--border); background: var(--surface, var(--card, #fff)); overflow-x: auto; scrollbar-width: none; }
+.fkey { display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border: 0; border-radius: 6px; background: transparent; color: inherit; font: inherit; font-size: 12.5px; cursor: pointer; white-space: nowrap; }
+.fkey:hover, .fkey:focus-visible { background: var(--border); }
+.fkey kbd { min-width: 26px; text-align: center; font-size: 11.5px; font-weight: 700; padding: 1px 5px; border: 1px solid var(--border-strong); border-bottom-width: 2px; border-radius: 5px; background: transparent; }
+.fkey-hide { margin-left: auto; opacity: .6; }
+@media (max-width: 900px) { .fkey-bar { display: none; } .pos.has-fkeys { height: auto; } }
+@media print { .fkey-bar { display: none; } }

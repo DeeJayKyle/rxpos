@@ -28,6 +28,7 @@ import '../../sales_pos/application/sale_controller.dart';
 import '../../sales_pos/presentation/checkout_dialogs.dart';
 import '../../sales_pos/presentation/receipt.dart';
 import '../domain/refund.dart';
+import 'refund_sheet.dart';
 import '../domain/sale_edit.dart';
 
 /// Sales History (src/pages/Sales.jsx): every sale, newest first; search, dates, branch, cashier, payment, client and
@@ -283,7 +284,9 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
             Text('Paid ${st.money(s.paid)} by ${s.payment}'),
             if (s.raw['momo'] case final Map m)
               Text(m['confirmed'] == true ? 'Mobile Money ${m['txid'] ?? ''} · confirmed by the mobile network' : 'Mobile Money ${m['txid'] ?? ''} · recorded by staff (not confirmed by the network)'),
-            if (s.status == 'refunded') Text('Refunded by ${s.raw['refundedBy'] ?? ''}', style: TextStyle(color: Theme.of(c).colorScheme.error)),
+            if (s.status == 'refunded')
+              Text(['Refunded by ${s.raw['refundedBy'] ?? ''}', if ('${s.raw['refundedAt'] ?? ''}'.isNotEmpty) 'on ${_when('${s.raw['refundedAt']}')}', if ('${s.raw['refundReason'] ?? ''}'.isNotEmpty) '${s.raw['refundReason']}'].join(' · '),
+                  style: TextStyle(color: Theme.of(c).colorScheme.error)),
             if ('${s.raw['imported'] ?? ''}'.isNotEmpty) Text('Copied from ${s.raw['imported']}', style: Theme.of(c).textTheme.bodySmall),
             if (changes.isNotEmpty) ...[const SizedBox(height: 12), EditHistoryView(changes: changes, settings: st)],
           ])),
@@ -298,9 +301,11 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
             TextButton.icon(
               style: TextButton.styleFrom(foregroundColor: Theme.of(c).colorScheme.error),
               onPressed: () async {
-                if (!await confirm(c, 'Refund ${s.number}?', '${st.money(s.total)} will be refunded and the items returned to stock (same batches).', 'Refund')) return;
+                // the refund sheet: what goes back to stock and to the customer, and why (refund_sheet.dart)
+                final why = await showRefundSheet(c, s, st, batches: ref.read(tableProvider('batches')).value ?? const [], closedDay: _locked(s));
+                if (why == null) return;
                 try {
-                  await refundSale(ref.read(recordStoreProvider), s, user: session?.userName ?? '', settings: st);
+                  await refundSale(ref.read(recordStoreProvider), s, user: session?.userName ?? '', settings: st, reason: why);
                   if (c.mounted) Navigator.pop(c);
                   if (mounted) say(context, '${s.number} refunded and items returned to stock');
                 } catch (e) {

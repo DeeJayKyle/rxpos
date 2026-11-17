@@ -7,6 +7,7 @@ import '../../features/auth/presentation/sign_in_screen.dart';
 import '../presentation/app_shell.dart';
 import '../presentation/nav_history.dart';
 import '../presentation/screens.dart';
+import '../rules/landing.dart';
 
 part 'app_router.g.dart';
 
@@ -22,6 +23,9 @@ abstract final class Routes {
 
 /// Is [path] one of the app's pages (or sign-in)?
 bool knownPage(String path) => path == Routes.signIn || screens.any((s) => s.path == path);
+
+/// Before the role's permissions have loaded: the built-in roles that sell (so the first redirect already lands right).
+bool _builtInSells(String role, String p) => p == 'pos.sell' && role != 'admin' && role != 'manager';
 
 /// Notifies the router when the session changes (sign in / sign out).
 class _SessionListenable extends ChangeNotifier {
@@ -41,7 +45,12 @@ GoRouter appRouter(Ref ref) {
       if (s.isLoading) return null;
       final signedIn = s.value != null;
       if (!signedIn) return state.matchedLocation == Routes.signIn ? null : Routes.signIn;
-      if (state.matchedLocation == Routes.signIn) return Routes.home;
+      // role-based landing (core/rules/landing.dart): the till for people who sell, the dashboard for managers
+      if (state.matchedLocation == Routes.signIn) {
+        final perms = ref.read(permissionsProvider).value;
+        final role = s.value!.role;
+        return homeFor(role, (p) => perms == null ? _builtInSells(role, p) : perms.contains(p));
+      }
       // an address the app has no page for (a pharmacy's own address bookmarked from the classic app, /pharmcare):
       // the dashboard
       if (!knownPage(state.uri.path)) return Routes.home;

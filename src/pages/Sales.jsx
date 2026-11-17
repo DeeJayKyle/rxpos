@@ -7,9 +7,10 @@ import { useOlderHistory, olderNote } from '../history.js';
 import { ViewSwitch, BoardView, GalleryView, savedView, saveView } from '../components/DataViews.jsx';
 import { saleStatus } from '../components/BentoDashboard.jsx';
 import { Modal, SearchBox, Empty, PdfButton, ReceiptPdfButton, PayChip, usePages, Pager, useSort, SortTh, SubViews } from '../ui.jsx';
-import { ask, toast } from '../feedback.jsx';
+import { toast } from '../feedback.jsx';
 import { Barcode } from '../barcode.jsx';
 import { stockParts, kitContents } from '../kits.js';
+import RefundSheet from '../components/RefundSheet.jsx';
 import { cartSubtotal, lineTotal, taxOf, round } from '../money.js';
 // step 22: what the client still owes on a sale (an insurer's share is billed to the insurer); shown on the receipt
 // even after a refund, as before
@@ -63,6 +64,7 @@ export function Receipt({ sale }) {
       {sale.momo?.txid && <div className="row between"><span>{sale.momo.provider === 'airtel' ? 'Airtel' : 'MoMo'} Ref</span><span>{sale.momo.txid}</span></div>}
       {sale.momo && <div className="small muted">{sale.momo.confirmed ? 'Payment confirmed by the mobile network' : sale.momo.manual ? 'Payment recorded by staff (transaction ID from the customer; not confirmed by the network)' : ''}</div>}
       {sale.status === 'refunded' && <div className="center receipt-tag">REFUNDED</div>}
+      {sale.status === 'refunded' && (sale.refundedAt || sale.refundReason) && <div className="center small muted no-print">{[sale.refundedAt && `On ${new Date(sale.refundedAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}`, sale.refundedBy && `by ${sale.refundedBy}`, sale.refundReason].filter(Boolean).join(' · ')}</div>}
       <div className="receipt-barcode"><Barcode value={sale.number} height={34} module={1.6} /></div>
       <p className="center">{isProforma ? 'Prices valid for 7 days.' : s.receiptFooter}</p>
     </div>
@@ -188,8 +190,10 @@ export default function Sales() {
     canRefund(x) && { label: 'Refund…', Icon: Undo2, danger: true, run: () => refund(x) },
   ]);
 
-  const refund = async (sale) => {
-    if (!(await ask({ title: `Refund ${sale.number}?`, message: `${fmt(sale.total)} will be refunded and the items returned to stock (same batches).`, confirmText: 'Refund', danger: true }))) return;
+  // the refund sheet (src/components/RefundSheet.jsx) shows what goes back and asks why; doRefund does it
+  const [refunding, setRefunding] = useState(null);
+  const refund = (sale) => setRefunding(sale);
+  const doRefund = async (sale, why) => {
     // the sale as it is now (another device, or a second click, may have refunded or edited it since this list was
     // drawn): refunded once only, and what goes back to stock is what the sale holds now
     let already = false;
@@ -197,15 +201,15 @@ export default function Sales() {
       await update((d) => {
         const cur = d.sales.find((x) => x.id === sale.id);
         if (!cur || cur.status === 'refunded') { already = true; return; }
-        put(d, 'sales', { ...cur, status: 'refunded', refundedBy: user.name, refundedAt: now() });
+        put(d, 'sales', { ...cur, status: 'refunded', refundedBy: user.name, refundedAt: now(), ...(why ? { refundReason: String(why).slice(0, 240) } : {}) });
         for (const i of cur.items) {
           // a kit line returns each of its medicines to the batches they came from (src/kits.js)
           for (const a of stockParts(i)) move(d, { productId: a.productId, qty: a.qty, type: 'Refund', ref: cur.number, user: user.name, batchId: a.batchId, branchId: cur.branchId || MAIN_BRANCH });
         }
-        audit(d, user, 'Refund', `${cur.number} · ${fmt(cur.total)}`, cur.branchId || MAIN_BRANCH);
+        audit(d, user, 'Refund', `${cur.number} · ${fmt(cur.total)}${why ? ' · ' + why : ''}`, cur.branchId || MAIN_BRANCH);
       });
     } catch (e) { return toast(`${sale.number} was NOT refunded: ${e.message}`, 'error'); }
-    setView(null);
+    setView(null); setRefunding(null);
     if (already) return toast(`${sale.number} was already refunded; nothing was changed`, 'warn');
     toast(`${sale.number} refunded and items returned to stock`);
   };
@@ -279,6 +283,7 @@ export default function Sales() {
       </>}
       {printNode}
       {editing && <SaleEditor sale={editing} onClose={() => setEditing(null)} />}
+      {refunding && <RefundSheet sale={refunding} fmt={fmt} batches={db.batches} closedDay={locked(refunding)} onCancel={() => setRefunding(null)} onConfirm={(why) => doRefund(refunding, why)} />}
       {view && (
         <Modal title={`Receipt ${view.number}`} onClose={() => setView(null)}>
           <Receipt sale={view} />

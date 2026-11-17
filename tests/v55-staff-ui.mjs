@@ -58,6 +58,11 @@ check('the sale and its stock movement are in the cloud', cloudSales === 1 && cl
 
 // a dispenser sees stock but is not offered what the cloud would refuse
 const dee = await signIn('dee@staff.rx', 'dee-pass-1234');
+// role-based landing (src/landing.js): a dispenser opens on the till; the bottom bar only offers what they may open
+await wait(500);
+check('a dispenser lands on the till after signing in', await dee.evaluate(() => location.hash === '#/pos'), await dee.evaluate(() => location.hash));
+const tabsDee = await dee.evaluate(() => [...document.querySelectorAll('.bottom-nav a')].map((a) => a.innerText.trim()));
+check('…and the bottom bar has only their pages', tabsDee.join() === 'Home,Stock,Sell,Sales', tabsDee.join());
 await go(dee, '#/medicines');
 const med = await buttons(dee);
 check('a dispenser sees the medicine list', await dee.evaluate(() => /Sample Tabs/.test(document.querySelector('.page')?.innerText || '')));

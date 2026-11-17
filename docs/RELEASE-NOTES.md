@@ -1,5 +1,25 @@
 # RxPOS release notes
 
+## React (classic) app 1.10.5 · Flutter app 2.1 (next build) · November 2026 (refund sheet, landing pages, F-keys)
+
+Nothing to do on the tills: they update by themselves.
+
+- **A proper refund sheet** (both apps). Before a refund, one sheet shows each line and the batch its stock goes back
+  to (a kit: each of its medicines), the money going back and how ("Give UGX 3,000 back from the cash drawer",
+  "Send it back by Mobile Money: RxPOS does not send the money"), any unpaid balance cancelled or insurer share no
+  longer billed, and a warning when the sale is in a closed day. A reason is required (Customer returned it, Wrong
+  medicine or strength, Wrong price or quantity, Side effect or reaction, Sold twice by mistake, Other). It is kept
+  on the sale, shown on its receipt in Sales History, and written in the audit log.
+- **Each role lands on its own page.** After signing in, pharmacists, dispensers and cashiers (and any custom role
+  that sells but doesn't see reports) open on the till; administrators and managers on the dashboard. A page
+  opened from a link still opens that page.
+- **The phone's bottom bar only offers pages the role may open.** A cashier used to see "Stock", which sent them
+  back home. Now they get Home, Clients, Sell and Sales; the manager's bar is unchanged.
+- **Function keys under the till** (computers). A thin bar shows what F2–F10 do there (Retail or Wholesale, Add
+  stock, Sales, Inventory, Search, Charge, Proforma, all keys). Each key can be clicked and follows this device's own
+  key map. × hides it on this device; the shortcuts sheet (?) shows it again.
+- **Flutter till:** medicine tiles are a little taller, so a long price row no longer overflows.
+
 ## React (classic) app 1.10.4 · Flutter app 2.1 (next build) · Cloud · November 2026 (audit, second pass)
 
 Fixes from the second audit pass of 17 November (docs/AUDIT-2026-11-17-PASS2.md). Nothing to do on the tills.

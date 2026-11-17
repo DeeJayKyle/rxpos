@@ -9,6 +9,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
 import '../../drug_info/presentation/drug_info_screen.dart';
+import '../../../core/data/device_settings.dart';
 import '../../../core/data/pharmacy_providers.dart';
 import '../../../core/entities/product.dart';
 import '../../../core/entities/settings.dart';
@@ -461,6 +462,13 @@ Future<void> showKeyboardHelp(BuildContext context) => showAppDialog<void>(
                 ],
               ),
             ),
+          // the F-key legend under the till (fkey_bar.dart): turned back on here once hidden
+          Consumer(builder: (_, ref, _) => SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Show the function keys under the till'),
+                value: ref.watch(deviceValueProvider('pos-fkeys')).value != 'off',
+                onChanged: (on) => ref.read(deviceValueProvider('pos-fkeys').notifier).set(on ? null : 'off'),
+              )),
         ],
       ),
     ),

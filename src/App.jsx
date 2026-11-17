@@ -28,6 +28,7 @@ import { STYLES, applyStyle, savedStyle, saveStyle } from './surface.js';
 import { LEVELS, applyLevel, savedLevel, saveLevel } from './vivid.js';
 import { TwoStepModal } from './twostep.jsx';
 import { setCrashCloud } from './crash.js';
+import { homeFor, bottomTabs } from './landing.js';
 import { setBadge } from './badges.js';
 import { ACTIONS, keyOf, keyMatcher, showKey, typing } from './keymap.js';
 import { deviceSettings, setDevice, onDevice } from './device.js';
@@ -96,6 +97,7 @@ const P = {
 };
 
 // [path, label, Icon, shortcut, badge, element, permission, feature]
+const TAB_ICONS = { '/': LayoutDashboard, '/inventory': Boxes, '/customers': Users, '/prescriptions': ClipboardPlus, '/sales': ReceiptText, '/shifts': Clock };
 const NAV = [
   { items: [['/', 'Dashboard', LayoutDashboard, null, null, <P.Dashboard />]] },
   { group: 'Sales', items: [
@@ -400,6 +402,16 @@ function Shell() {
   // Show only what this person's role may use and what is switched on for this pharmacy
   const groups = NAV.map((g) => ({ ...g, items: g.items.filter(([, , , , , , perm, feat]) => (!perm || [].concat(perm).some(can)) && (!feat || features[feat] !== false)) })).filter((g) => g.items.length);
   const pages = groups.flatMap((g) => g.items.map(([to, label, Icon, key]) => ({ to, label, Icon, key })));
+  const tabs = bottomTabs(can, (to) => pages.some((x) => x.to === to));
+  // role-based landing (src/landing.js): once per sign-in in this tab, from the dashboard to the role's own page
+  useEffect(() => {
+    if (!user?.id) return;
+    let seen = null; try { seen = sessionStorage.getItem('rxpos-landed'); } catch { /* storage blocked */ }
+    if (seen === user.id) return;
+    try { sessionStorage.setItem('rxpos-landed', user.id); } catch { /* storage blocked */ }
+    const home = homeFor(user.role, can);
+    if (location.pathname === '/' && home !== '/' && pages.some((x) => x.to === home)) navigate(home, { replace: true });
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const [updReady, setUpdReady] = useState(false);
   useEffect(() => onUpdate((u) => setUpdReady(u.status === 'ready')), []);
   const counts = useMemo(() => ({
@@ -638,10 +650,10 @@ function Shell() {
         </main>
       </div>
       <nav className="bottom-nav" aria-label="Main">
-        <NavLink to="/" end onClick={() => markNav('tab')}><LayoutDashboard size={20} /><span>Home</span></NavLink>
-        <NavLink to="/inventory" onClick={() => markNav('tab')}><Boxes size={20} /><span>Stock</span></NavLink>
-        <NavLink to="/pos" className="fab" onClick={() => markNav('tab')}><span className="fab-icon"><ShoppingCart size={22} /></span><span>Sell</span></NavLink>
-        <NavLink to="/sales" onClick={() => markNav('tab')}><ReceiptText size={20} /><span>Sales</span></NavLink>
+        {/* the pages this role may open (src/landing.js) */}
+        {tabs.left.map(([to, label]) => <NavLink key={to} to={to} end={to === '/'} onClick={() => markNav('tab')}>{(() => { const I = TAB_ICONS[to]; return <I size={20} />; })()}<span>{label}</span></NavLink>)}
+        {tabs.sell && <NavLink to="/pos" className="fab" onClick={() => markNav('tab')}><span className="fab-icon"><ShoppingCart size={22} /></span><span>Sell</span></NavLink>}
+        {tabs.right.map(([to, label]) => <NavLink key={to} to={to} onClick={() => markNav('tab')}>{(() => { const I = TAB_ICONS[to]; return <I size={20} />; })()}<span>{label}</span></NavLink>)}
         <button onClick={() => setMega(true)} aria-expanded={mega}><Menu size={20} /><span>More</span></button>
       </nav>
       <MegaMenu open={mega} onClose={() => setMega(false)} groups={groups} counts={counts} can={can} onFullMenu={() => setDrawer(true)} />
