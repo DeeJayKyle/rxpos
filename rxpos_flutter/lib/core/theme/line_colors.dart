@@ -105,10 +105,12 @@ class ColourTableRow extends StatelessWidget {
 }
 
 /// A status pill with a dot (src/styles.css .status-pill): In stock, Low stock, Expiring soon…
-class StatusPill extends StatelessWidget {
-  const StatusPill(this.text, {super.key, required this.color});
+class TonePill extends StatelessWidget {
+  const TonePill(this.text, {super.key, required this.color, this.dot = true});
   final String text;
   final Color color;
+  /// the dot before the words (React's payment and sale-status pills have none)
+  final bool dot;
   @override
   Widget build(BuildContext context) {
     final surface = Theme.of(context).colorScheme.surface;
@@ -116,8 +118,7 @@ class StatusPill extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(color: tint(color, surface, 14), borderRadius: BorderRadius.circular(99)),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Container(width: 6, height: 6, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
-        const SizedBox(width: 5),
+        if (dot) ...[Container(width: 6, height: 6, decoration: BoxDecoration(color: color, shape: BoxShape.circle)), const SizedBox(width: 5)],
         Flexible(child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: color))),
       ]),
     );

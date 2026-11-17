@@ -108,13 +108,53 @@ class _PeopleScreenState extends ConsumerState<PeopleScreen> {
                   done();
                 }),
               ],
-              builder: (context, row) => ListView.separated(
+              builder: (context, row) {
+                // a computer: the React app's table, each column heading its own colour (src/pages/People.jsx)
+                final table = MediaQuery.sizeOf(context).width >= 1100;
+                final cols = widget.suppliers
+                    ? const [ColourCol('Name', flex: 3), ColourCol('Phone', flex: 2), ColourCol('Contact', flex: 2), ColourCol('Total bought', flex: 2, numeric: true), ColourCol('We owe', flex: 2, numeric: true)]
+                    : const [ColourCol('Name', flex: 3), ColourCol('Phone', flex: 2), ColourCol('Type', flex: 2), ColourCol('Allergies', flex: 2), ColourCol('Total bought', flex: 2, numeric: true), ColourCol('Owes', flex: 2, numeric: true)];
+                final bought = <String, double>{};
+                if (table) {
+                  if (widget.suppliers) {
+                    for (final p in purchaseList) {
+                      bought[p.supplierId] = (bought[p.supplierId] ?? 0) + p.total;
+                    }
+                  } else {
+                    for (final x in saleList) {
+                      if (x.status != 'refunded') bought[x.customerId] = (bought[x.customerId] ?? 0) + x.total;
+                    }
+                  }
+                }
+                final listView = ListView.separated(
               itemCount: list.length,
               separatorBuilder: (_, _) => const Divider(height: 1),
               itemBuilder: hued((_, i) {
                 final r = list[i];
                 final bal = owes('${r['id']}');
                 final st = row(i);
+                final payable = bal > 0.5 && (can.contains('finance') || can.contains('customers'));
+                if (table) {
+                  String or(Object? x) => '${x ?? ''}'.trim().isEmpty ? '—' : '$x';
+                  return st.wrap(ColourTableRow(
+                    columns: cols,
+                    onTap: () => _edit(r),
+                    trailingWidth: 150,
+                    trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                      if (payable) IconButton(tooltip: widget.suppliers ? 'Pay supplier' : 'Record payment', icon: const Icon(Icons.payments_outlined, size: 20), onPressed: () => _pay(r, bal, settings)),
+                      OutlinedButton.icon(style: OutlinedButton.styleFrom(minimumSize: const Size(0, 34), padding: const EdgeInsets.symmetric(horizontal: 10)),
+                          onPressed: () => _edit(r), icon: const Icon(Icons.edit_outlined, size: 16), label: const Text('Edit')),
+                    ]),
+                    cells: [
+                      Row(children: [st.tickBox, const SizedBox(width: 6), Expanded(child: Text('${r['name']}', style: const TextStyle(fontWeight: FontWeight.w600)))]),
+                      Text(or(r['phone'])),
+                      Text(or(widget.suppliers ? r['contact'] : r['type'])),
+                      if (!widget.suppliers) Text(or(r['allergies']), maxLines: 2, overflow: TextOverflow.ellipsis),
+                      Text((bought['${r['id']}'] ?? 0) == 0 ? '—' : settings.money(bought['${r['id']}']!)),
+                      Text(bal.abs() > 0.5 ? settings.money(bal) : '—', style: TextStyle(fontWeight: FontWeight.w700, color: bal > 0.5 ? Colors.orange.shade800 : null)),
+                    ],
+                  ));
+                }
                 return st.wrap(ListTile(
                   leading: st.tickBox,
                   title: Text('${r['name']}'),
@@ -128,7 +168,9 @@ class _PeopleScreenState extends ConsumerState<PeopleScreen> {
                   ]),
                 ));
               }),
-            ),
+            );
+                return table ? Column(children: [ColourTableHead(columns: cols, trailing: 150), Expanded(child: listView)]) : listView;
+              },
             ),
     );
   }
