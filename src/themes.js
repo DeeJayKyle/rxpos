@@ -55,7 +55,7 @@ const duo = (id, name, group, { c1, c2, side = c1, sideText, base = 'light', ins
 export const THEMES = [
   // Bold sidebars: the menu in colour 1, the pages tinted with colour 2
   duo('electric-blue', 'Electric Blue', 'Bold sidebars', { c1: '#0a4dff', c2: '#dfe8ff', strong: true, inspired: 'Bright blue menu, blue-washed pages' }),
-  duo('royal-purple', 'Royal Purple', 'Bold sidebars', { c1: '#6d4ae8', c2: '#f4f1fd', side: '#ffffff', sideText: '#3b1a7a', inspired: 'White menu with deep purple words, violet actions' }),
+  duo('royal-purple', 'Royal Purple', 'Bold sidebars', { c1: '#6d4ae8', c2: '#f4f1fd', side: '#3b1a7a', inspired: 'Deep purple menu with white words, violet actions' }),
   duo('forest-green', 'Forest Green', 'Bold sidebars', { c1: '#1e8c4e', c2: '#dcefe3', strong: true, inspired: 'Green menu, green-washed pages' }),
   // Dark sidebars and the dark theme
   duo('charcoal-lime', 'Lime Charcoal', 'Dark sidebars', { c1: '#1f1f2a', c2: '#eef7d6', side: '#c8f169', sideText: '#1f1f2a', strong: true, inspired: 'Lime menu with charcoal words, charcoal actions' }),
