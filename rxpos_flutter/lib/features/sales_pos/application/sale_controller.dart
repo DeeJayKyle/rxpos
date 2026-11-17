@@ -166,6 +166,11 @@ class SaleController extends _$SaleController {
     for (final j in ((snap['cart'] as List?) ?? const []).cast<Map>())
       () {
         final l = CartLine.fromJson(j.cast<String, Object?>());
+        if (l.kit != null) {
+          // a kit: what its medicines (after this sale's swaps) make now
+          final rec = d.kits.where((k) => '${k['id']}' == l.id).firstOrNull;
+          return rec == null ? l : l.copyWith(max: kitMost(d.kitNow(rec, swaps: l.kit!.swaps), const []));
+        }
         return l.copyWith(max: d.stockOf(l.id));
       }(),
   ];
@@ -187,6 +192,27 @@ class SaleController extends _$SaleController {
     );
     state = state.copyWith(lines: lines, cursor: lines.indexWhere((l) => l.id == p.id));
   }
+
+  /// 1.10 one more of a kit (src/pages/POS.jsx addKit). Throws [KitShort] when the stock can't make it (with the
+  /// part to swap), [CartProblem] otherwise.
+  Future<void> addKit(Map<String, Object?> rec) async {
+    final d = await _data;
+    final line = state.lines.where((l) => l.id == '${rec['id']}').firstOrNull;
+    final v = d.kitNow(rec, swaps: line?.kit?.swaps ?? const {});
+    final lines = addKitToCart(state.lines, v, wholesale: wholesale, names: {for (final p in d.products) p.id: p.name});
+    state = state.copyWith(lines: lines, cursor: lines.indexWhere((l) => l.id == v.id));
+  }
+
+  /// Swap one of a kit's medicines ([from], the kit's own) for [to] on this sale only; [to] == [from] puts it back
+  Future<void> swapKitPart(Map<String, Object?> rec, String from, String to) async {
+    final d = await _data;
+    final lines = swapKitPartIn(state.lines, rec, from, to, now: (sw) => d.kitNow(rec, swaps: sw), wholesale: wholesale,
+        names: {for (final p in d.products) p.id: p.name});
+    state = state.copyWith(lines: lines, cursor: lines.indexWhere((l) => l.id == '${rec['id']}'));
+  }
+
+  /// The kit's warning was given to the client (ticked on the line, recommendation 5)
+  void ackKit(String id, bool on) => _replace(id, (l) => l.copyWith(acked: on));
 
   /// Medicines staged from the AI omnibar or a scanned prescription (src/pages/POS.jsx stageLines): each added as at
   /// the till, then put in the asked unit (a strip or box when the medicine has that pack) and quantity. FEFO batches
@@ -475,9 +501,20 @@ class SaleController extends _$SaleController {
   /// Load a proforma into this till to sell it (prices as quoted, quantities up to what is in stock).
   Future<void> loadProforma(Map<String, Object?> pf) async {
     final d = await _data;
+    final kitRecs = {for (final k in d.kits) '${k['id']}': k};
     final lines = <CartLine>[
+      // a kit on the quotation: its medicines as they are now (with the quotation's swaps), at the quoted price
       for (final i in ((pf['items'] as List?) ?? const []).cast<Map>())
-        if (d.stockOf('${i['id']}') > 0)
+        if (kitRecs['${i['id']}'] != null)
+          () {
+            final swaps = i['swaps'] is Map ? {for (final e in (i['swaps'] as Map).entries) '${e.key}': '${e.value}'} : const <String, String>{};
+            final v = d.kitNow(kitRecs['${i['id']}']!, swaps: swaps);
+            final most = kitMost(v, const []);
+            return kitCartLine(v, wholesale: wholesale, most: most, swaps: swaps, names: {for (final p in d.products) p.id: p.name})
+                .copyWith(price: ((i['price'] as num?) ?? v.price).toDouble(), qty: [((i['qty'] as num?) ?? 1).toDouble(), most].reduce((a, b) => a < b ? a : b));
+          }(),
+      for (final i in ((pf['items'] as List?) ?? const []).cast<Map>())
+        if (kitRecs['${i['id']}'] == null && d.stockOf('${i['id']}') > 0)
           CartLine(
             id: '${i['id']}',
             name: '${i['name']}',

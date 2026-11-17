@@ -85,6 +85,21 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
       }
     }
 
+    // 2026-11 audit (src/pages/Users.jsx): end every sign-in of a staff member (a lost phone, someone who left); their account stays
+    Future<void> signOutEverywhere(Map<String, Object?> u) async {
+      if (!await confirmAction(context, 'Sign ${u['name']} out on every device?',
+          'Every phone, computer and browser signed in as them needs their password again. A till that syncs as them stops syncing until someone signs in on it with the internet; nothing on it is lost.',
+          'Sign out everywhere')) {
+        return;
+      }
+      try {
+        await ref.read(cloudApiProvider).post('/api/sessions/end', {'uid': u['id']}, timeout: const Duration(seconds: 15));
+        if (context.mounted) say(context, '${u['name']} is signed out on every device');
+      } catch (e) {
+        if (context.mounted) say(context, '$e'.replaceFirst('Exception: ', ''), error: true);
+      }
+    }
+
     Future<void> editRole(Role? r, {bool copy = false}) async {
       final isNew = r == null || copy;
       final chosen = {...?r?.permissions};
@@ -194,6 +209,8 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
                                     child: Text(u['disabled'] == true || u['active'] == false ? 'Enable' : 'Disable'),
                                   ),
                                 if (u['twoFactor'] == true && u['id'] != me?.userId) TextButton(onPressed: () => resetTwoStep(u), child: const Text('Reset 2-step')),
+                                if (u['id'] != me?.userId && (me?.token.startsWith('u.') ?? false))
+                                  IconButton(key: Key('signout-${u['id']}'), tooltip: 'Sign out on every device', icon: const Icon(Icons.logout, size: 18), onPressed: () => signOutEverywhere(u)),
                                 if (u['id'] != me?.userId)
                                   IconButton(tooltip: 'Delete', icon: Icon(Icons.delete_outline, color: th.colorScheme.error), onPressed: () async {
                                     if (!await confirmAction(context, 'Delete ${u['name']}?', 'They will no longer be able to sign in on any device. Their past sales stay in the records.', 'Delete user')) return;

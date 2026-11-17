@@ -29,7 +29,9 @@ String labelExpiry(PharmacyData d, String productId) =>
     d.stock.batchesOf(productId).where((b) => b.qty > 0 && b.expiry.isNotEmpty).map((b) => b.expiry).firstOrNull ?? '';
 
 class LabelsScreen extends ConsumerStatefulWidget {
-  const LabelsScreen({super.key});
+  const LabelsScreen({super.key, this.kit = ''});
+  /// 1.10 a kit to start with (Kits → Label): its label scans at the till and adds the kit
+  final String kit;
   @override
   ConsumerState<LabelsScreen> createState() => _LabelsScreenState();
 }
@@ -39,6 +41,18 @@ class _LabelsScreenState extends ConsumerState<LabelsScreen> {
   final _search = TextEditingController();
   String _q = '', _size = '50x30';
   bool _price = true, _expiry = true, _pharmacy = true;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.kit.isNotEmpty) _items.add((id: widget.kit, qty: 1));
+  }
+
+  /// the medicines and the kits (1.10: kits get labels too), each kit at its price as it is now
+  static List<Product> _pool(PharmacyData d) => [
+    for (final k in d.kits) Product.fromRecord({...k, 'price': d.kitNow(k).price}),
+    ...d.products,
+  ];
 
   @override
   void dispose() {
@@ -65,8 +79,10 @@ class _LabelsScreenState extends ConsumerState<LabelsScreen> {
   Widget build(BuildContext context) {
     final d = ref.watch(pharmacyProvider).value;
     if (d == null) return const Center(child: CircularProgressIndicator());
-    final matches = _q.trim().isEmpty ? const <Product>[] : searchProducts(d.products, _q, stockOf: (p) => d.stockOf(p.id)).take(10).toList();
-    final items = [for (final i in _items) if (d.byId[i.id] != null) (p: d.byId[i.id]!, qty: i.qty)];
+    final pool = _pool(d);
+    final byId = {for (final p in pool) p.id: p};
+    final matches = _q.trim().isEmpty ? const <Product>[] : searchProducts(pool, _q, stockOf: (p) => d.stockOf(p.id)).take(10).toList();
+    final items = [for (final i in _items) if (byId[i.id] != null) (p: byId[i.id]!, qty: i.qty)];
     final labels = [for (final i in items) for (var n = 0; n < i.qty; n++) i.p];
     final sz = labelSizes[_size]!;
     final st = d.settings;
@@ -75,7 +91,7 @@ class _LabelsScreenState extends ConsumerState<LabelsScreen> {
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          Text('Choose medicines', style: Theme.of(context).textTheme.titleMedium),
+          Text('Choose medicines or kits', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           TextField(
             key: const Key('labels-search'),
@@ -87,7 +103,7 @@ class _LabelsScreenState extends ConsumerState<LabelsScreen> {
             },
           ),
           for (final p in matches)
-            ListTile(dense: true, title: Text(p.name), subtitle: Text('${st.money(p.price)} · ${p.barcode.isEmpty ? 'no barcode yet' : p.barcode}'), onTap: () => _add(d, p)),
+            ListTile(dense: true, title: Text(p.form == 'Kit' ? '${p.name} (KIT)' : p.name), subtitle: Text('${st.money(p.price)} · ${p.barcode.isEmpty ? 'no barcode yet' : p.barcode}'), onTap: () => _add(d, p)),
           const SizedBox(height: 8),
           Wrap(spacing: 8, children: [
             OutlinedButton(

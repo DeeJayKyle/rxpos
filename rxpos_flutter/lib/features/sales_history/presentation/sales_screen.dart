@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:printing/printing.dart';
 
+import '../../../core/rules/kits.dart';
 import '../../../core/rules/day_close.dart';
 import '../../../core/data/device_settings.dart';
 import '../../../core/data/pharmacy_providers.dart';
@@ -266,11 +267,15 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
             Text('${_when(s.date)} · ${s.cashier}'),
             Text('Client: ${s.customerName} · ${s.type}'),
             const Divider(),
-            for (final i in s.items)
+            for (final (n, i) in s.items.indexed) ...[
               Row(children: [
                 Expanded(child: Text('${i.name} × ${i.pack != null ? '${formatQty(i.pack!.count)} ${i.pack!.name}' : formatQty(i.qty)}')),
                 Text(st.money(i.price * i.qty)),
               ]),
+              // 1.10 a kit: what it contained
+              if (n < rawSaleItems(s.raw).length && kitContents(rawSaleItems(s.raw)[n]).isNotEmpty)
+                Padding(padding: const EdgeInsets.only(left: 12, bottom: 4), child: Text(kitContents(rawSaleItems(s.raw)[n]), style: Theme.of(c).textTheme.bodySmall)),
+            ],
             const Divider(),
             if (s.discount > 0) Text('Discount −${st.money(s.discount)}'),
             if (s.tax > 0) Text('Tax ${st.money(s.tax)}'),
@@ -391,6 +396,7 @@ class SaleEditor extends ConsumerStatefulWidget {
 }
 
 class _SaleEditorState extends ConsumerState<SaleEditor> {
+  bool _isKit(String id) => rawSaleItems(widget.sale.raw).any((r) => '${r['id']}' == id && r['kit'] is Map);
   late List<EditLine> _lines = [for (final i in widget.sale.items) EditLine(id: i.id, name: i.name, price: i.price, qty: i.qty, cost: i.cost, original: i)];
   late String _customerId = widget.sale.customerId, _payment = widget.sale.payment;
   late double _discount = widget.sale.discount, _paid = widget.sale.paid;
@@ -448,9 +454,13 @@ class _SaleEditorState extends ConsumerState<SaleEditor> {
           const SizedBox(height: 10),
           for (var k = 0; k < _lines.length; k++)
             Row(children: [
-              Expanded(child: Text(_lines[k].name)),
+              Expanded(child: Text(_isKit(_lines[k].id) ? '${_lines[k].name} (KIT)' : _lines[k].name)),
               const Text('Qty '),
-              num('edit-qty-${_lines[k].id}', _lines[k].qty, (v) => _lines[k] = _lines[k].copyWith(qty: v), width: 70),
+              // a kit's count can't be changed here: remove the line (its medicines go back to stock) or refund the sale
+              if (_isKit(_lines[k].id))
+                Tooltip(message: "A kit's count can't be changed here: remove the line or refund the sale", child: SizedBox(width: 70, child: Text(formatQty(_lines[k].qty), textAlign: TextAlign.center)))
+              else
+                num('edit-qty-${_lines[k].id}', _lines[k].qty, (v) => _lines[k] = _lines[k].copyWith(qty: v), width: 70),
               const Text('  Price '),
               num('edit-price-${_lines[k].id}', _lines[k].price, (v) => _lines[k] = _lines[k].copyWith(price: v)),
               SizedBox(width: 110, child: Text(st.money(_lines[k].qty.roundToDouble() * _lines[k].price), textAlign: TextAlign.right)),

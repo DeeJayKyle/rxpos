@@ -8,7 +8,10 @@ import 'package:rxpos/core/platform.dart';
 
 import '../../../core/data/device_settings.dart';
 import '../../../core/data/pharmacy_providers.dart';
+import '../../../core/rules/fefo.dart' show sellable;
 import '../../../core/rules/gs1.dart';
+import '../../../core/rules/kits.dart';
+import '../../kits/presentation/kit_widgets.dart';
 import '../../../core/rules/insurance.dart';
 import '../../../core/rules/dates.dart';
 import '../../../core/entities/people.dart';
@@ -17,6 +20,7 @@ import '../../../core/data/record_store.dart';
 import '../../../core/entities/draft.dart';
 import '../../../core/entities/product.dart';
 import '../../../core/entities/sale.dart';
+import '../../../core/entities/settings.dart' show PharmacySettings;
 import '../../../core/presentation/backdrop.dart';
 import '../../../core/presentation/hardware_hud.dart';
 import '../../../core/presentation/keys_host.dart' show tillOwnsCtrlK;
@@ -88,6 +92,25 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     }
   });
 
+  /// 1.10 a kit (src/pages/POS.jsx addKit): its warning first (once per sale), then one more kit if its medicines (after
+  /// any swap) make one; when one is short, offer to swap it for this sale
+  Future<void> _addKit(PharmacyData d, KitView k) => _try(() async {
+    final inCart = ref.read(saleControllerProvider(widget.wholesale)).lines.any((l) => l.id == k.id);
+    if (!inCart && k.warning.isNotEmpty) {
+      final ok = await confirmAction(context, '${k.name}: before you sell it',
+          '${k.warning}${k.ack ? '\n\nYou will tick that the client was told before charging.' : ''}', 'Add the kit');
+      if (!ok) return;
+    }
+    try {
+      await _sale.addKit(k.rec);
+    } on KitShort catch (e) {
+      _say(e.message, error: e.component == null);
+      if (e.component != null && mounted) await _swapDialog(d, k.rec, e.component!.swappedFrom.isNotEmpty ? e.component!.swappedFrom : e.component!.productId);
+    }
+  });
+
+  Future<void> _swapDialog(PharmacyData d, Map<String, Object?> rec, String from) => kitSwapDialog(context, ref, d, rec, from, widget.wholesale, _say);
+
   /// Alt+→ / Alt+←: carry on with the next / previous held sale (the current one is held).
   Future<void> _switchHeld(int by) async {
     final d = await ref.read(pharmacyProvider.future);
@@ -121,6 +144,13 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     final g = parseGs1(code);
     if (g != null) {
       await _scanPack(d, g);
+      _clearSearch();
+      return;
+    }
+    final kitCode = d.tillKits.where((k) => k.barcode.isNotEmpty && k.barcode == code).firstOrNull;
+    if (kitCode != null) {
+      ref.read(lastScanProvider.notifier).now(); // a kit's label scans too
+      await _addKit(d, kitCode);
       _clearSearch();
       return;
     }
@@ -323,9 +353,19 @@ class _PosScreenState extends ConsumerState<PosScreen> {
         final favs = _favs(ref.watch(deviceValueProvider('pos-favs')).value);
         final recent = recentIds(ref.watch(tableProvider('sales')).value ?? const [], d.branch);
         final pool = filterProducts(d, _view, favs: favs, recent: recent);
-        final results = _q.trim().isEmpty
+        final results = _view == 'kits'
+            ? const <Product>[]
+            : _q.trim().isEmpty
             ? (_view == 'recent' ? pool : ([...pool]..sort((a, b) => (d.stockOf(b.id) > 0 ? 1 : 0) - (d.stockOf(a.id) > 0 ? 1 : 0)))).take(120).toList()
             : searchProducts(pool, _q, stockOf: (p) => d.stockOf(p.id)).take(120).toList();
+        // 1.10 kits first (all, in stock and the Kits filter), matched by name, what they hold or their barcode
+        final ql = _q.trim().toLowerCase();
+        final kits = _view == '' || _view == 'instock' || _view == 'kits'
+            ? [
+                for (final k in d.tillKits)
+                  if ((ql.isEmpty || '${k.name} ${k.contents} ${k.barcode}'.toLowerCase().contains(ql)) && (_view != 'instock' || k.stock > 0)) k,
+              ]
+            : const <KitView>[];
         final wide = MediaQuery.sizeOf(context).width >= 900;
         final stored = ref.watch(deviceValueProvider('pos-layout')).value;
         final layout = posLayouts.any((x) => x.$1 == stored) ? stored! : 'standard';
@@ -340,6 +380,8 @@ class _PosScreenState extends ConsumerState<PosScreen> {
           onChanged: (v) => setState(() => _q = v),
           onSubmit: () => _submitSearch(d, results),
           onPick: _add,
+          kits: kits,
+          onKit: (k) => _addKit(d, k),
           view: _view,
           favs: favs,
           categories: categoriesOf(d.products),
@@ -355,6 +397,11 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                     if (g != null) {
                       final sp = await _scanPack(d, g);
                       return sp == null ? null : '${sp.name} added${g.batch.isEmpty ? '' : ' (batch ${g.batch})'}';
+                    }
+                    final kc = d.tillKits.where((k) => k.barcode.isNotEmpty && k.barcode == code.trim()).firstOrNull;
+                    if (kc != null) {
+                      await _addKit(d, kc);
+                      return '${kc.name} added';
                     }
                     final p = d.byBarcode[code.trim()];
                     if (p == null) return null;
@@ -752,7 +799,12 @@ class _ProductPanel extends StatelessWidget {
     this.layout,
     this.onLayout,
     this.onCommand,
+    this.kits = const [],
+    this.onKit,
   });
+  /// 1.10 kits shown first on the till (core/rules/kits.dart), and what a tap on one does
+  final List<KitView> kits;
+  final ValueChanged<KitView>? onKit;
   /// the till's layout on wide screens (null on a phone: no choice)
   final String? layout;
   final ValueChanged<String>? onLayout;
@@ -847,6 +899,7 @@ class _ProductPanel extends StatelessWidget {
                   ('instock', 'In stock'),
                   ('recent', 'Recent'),
                   ('fav', 'Favourites'),
+                  if (data.tillKits.isNotEmpty) ('kits', 'Kits'),
                   for (final c in categories) ('cat:$c', c),
                 ])
                   Padding(
@@ -863,7 +916,7 @@ class _ProductPanel extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Expanded(
-            child: results.isEmpty
+            child: results.isEmpty && kits.isEmpty
                 ? Center(
                     child: Text(
                       view == 'fav'
@@ -883,9 +936,10 @@ class _ProductPanel extends StatelessWidget {
                       crossAxisSpacing: tokensOf(context).gap,
                       mainAxisSpacing: tokensOf(context).gap,
                     ),
-                    itemCount: results.length,
+                    itemCount: kits.length + results.length,
                     itemBuilder: (_, i) {
-                      final p = results[i];
+                      if (i < kits.length) return _KitTile(v: kits[i], wholesale: wholesale, settings: s, onTap: onKit);
+                      final p = results[i - kits.length];
                       final stock = data.stockOf(p.id);
                       final out = stock <= 0;
                       final low = !out && p.reorder > 0 && stock <= p.reorder;
@@ -989,6 +1043,105 @@ class _ProductPanel extends StatelessWidget {
                   ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Swap one of a kit's medicines for another for this sale only (recommendation 3)
+Future<void> kitSwapDialog(BuildContext context, WidgetRef ref, PharmacyData d, Map<String, Object?> rec, String from, bool wholesale,
+  void Function(String msg, {bool error}) say) async {
+final sale = ref.read(saleControllerProvider(wholesale).notifier);
+  final line = ref.read(saleControllerProvider(wholesale)).lines.where((l) => l.id == '${rec['id']}').firstOrNull;
+  final per = kitParts(rec['kit'] is Map ? (rec['kit'] as Map).cast<String, Object?>() : const {}).stock.where((x) => x.$1 == from).firstOrNull?.$2 ?? 1;
+  final need = per * (line?.qty ?? 1);
+  final own = d.byId[from];
+  final inKit = {for (final x in kitParts(rec['kit'] is Map ? (rec['kit'] as Map).cast<String, Object?>() : const {}).stock) x.$1};
+  var q = '';
+  final to = await showAppDialog<String>(
+    context: context,
+    builder: (c) => StatefulBuilder(builder: (c, set) {
+      final pool = d.products.where((p) => !inKit.contains(p.id) && sellable(d.stock.batchesOf(p.id)) >= need).toList();
+      final list = (q.trim().isEmpty ? pool : searchProducts(pool, q, stockOf: (p) => d.stockOf(p.id))).take(12).toList();
+      return AlertDialog(
+        title: Text('Swap ${own?.name ?? 'a medicine'} in ${rec['name']}'),
+        content: SizedBox(
+          width: 460,
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Text('For this sale only: the substitute leaves stock instead, and the receipt and the audit log say so. ${formatQty(need)} needed.',
+                style: Theme.of(c).textTheme.bodySmall),
+            const SizedBox(height: 8),
+            TextField(key: const Key('swap-search'), autofocus: true, decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Search a substitute…'), onChanged: (v) => set(() => q = v)),
+            const SizedBox(height: 8),
+            if ((line?.kit?.swaps ?? const {}).containsKey(from))
+              TextButton(onPressed: () => Navigator.pop(c, from), child: Text('Back to ${own?.name ?? "the kit's own"}')),
+            Flexible(
+              child: ListView(shrinkWrap: true, children: [
+                for (final p in list)
+                  ListTile(key: Key('swap-${p.id}'), dense: true, title: Text(p.name), subtitle: Text('${formatQty(sellable(d.stock.batchesOf(p.id)))} in stock'), onTap: () => Navigator.pop(c, p.id)),
+                if (list.isEmpty) Padding(padding: const EdgeInsets.all(8), child: Text('Nothing with ${formatQty(need)} in stock${q.trim().isEmpty ? '' : ' matches "$q"'}')),
+              ]),
+            ),
+          ]),
+        ),
+        actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text('Cancel'))],
+      );
+    }),
+  );
+  if (to == null) return;
+  try {
+    await sale.swapKitPart(rec, from, to);
+    if (to != from) say('${d.byId[to]?.name} instead of ${own?.name} in this ${rec['name']}');
+  } on CartProblem catch (e) {
+    say(e.message, error: true);
+  }
+}
+
+/// 1.10 a kit on the till (src/pages/POS.jsx kit-tile): its colour, icon, a KIT badge, what it holds, how many can
+/// be made and its warning, so it never looks like a medicine
+class _KitTile extends StatelessWidget {
+  const _KitTile({required this.v, required this.wholesale, required this.settings, this.onTap});
+  final KitView v;
+  final bool wholesale;
+  final PharmacySettings settings;
+  final ValueChanged<KitView>? onTap;
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context), tk = tokensOf(context), c = kitColor(v.color);
+    final out = v.stock <= 0;
+    final short = kitShortText(v);
+    return Card(
+      key: Key('kit-${v.id}'),
+      margin: EdgeInsets.zero,
+      color: Color.alphaBlend(c.withValues(alpha: .07), t.colorScheme.surface),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(tk.radius), side: BorderSide(color: c, width: 2)),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap == null ? null : () => onTap!(v),
+        child: Container(
+          decoration: BoxDecoration(border: Border(left: BorderSide(color: c, width: 6))),
+          padding: EdgeInsets.all(tk.cardPadding),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              KitIcon(icon: v.icon, color: v.color, size: 12),
+              const SizedBox(width: 6),
+              Expanded(child: Text(v.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700))),
+              KitBadge(color: v.color),
+            ]),
+            Text(v.contents, maxLines: 1, overflow: TextOverflow.ellipsis, style: t.textTheme.bodySmall),
+            const Spacer(),
+            Wrap(alignment: WrapAlignment.spaceBetween, crossAxisAlignment: WrapCrossAlignment.center, spacing: 4, children: [
+              Text('${formatMoney(wholesale ? v.wholesale : v.price, currency: settings.currency, decimals: settings.decimalPlaces)} / kit',
+                  style: TextStyle(color: t.colorScheme.tertiary, fontWeight: FontWeight.w800)),
+              if (v.controlled) const _Tag('CD · NDA', danger: true) else if (v.rx) const _Tag('Rx only'),
+              Text(v.canMake == null ? 'Services only' : out ? "Can't be made" : 'Can make ${formatQty(v.stock)}',
+                  style: t.textTheme.bodySmall?.copyWith(color: out ? t.colorScheme.error : v.stock <= 3 ? Colors.orange.shade800 : null)),
+            ]),
+            if (v.warning.isNotEmpty || (v.stock <= 3 && short.isNotEmpty))
+              Text([if (v.warning.isNotEmpty) '⚠ ${v.ack ? 'Warning to give' : 'Warning'}', if (v.stock <= 3 && short.isNotEmpty) short].join(' · '),
+                  maxLines: 1, overflow: TextOverflow.ellipsis, style: t.textTheme.bodySmall?.copyWith(color: Colors.orange.shade900, fontWeight: FontWeight.w600)),
+          ]),
+        ),
       ),
     );
   }
@@ -1257,7 +1410,15 @@ class _SalePanel extends ConsumerWidget {
                           onDismissed: (_) => c.remove(l.id),
                           child: Container(
                             key: chosen ? const Key('line-chosen') : null,
-                            color: chosen ? th.colorScheme.primaryContainer.withValues(alpha: 0.5) : null,
+                            // a kit line in its own colour, with a stripe (src/styles/kits.css .kit-line)
+                            decoration: BoxDecoration(
+                              color: chosen
+                                  ? th.colorScheme.primaryContainer.withValues(alpha: 0.5)
+                                  : l.kit != null
+                                  ? Color.alphaBlend(kitColor(l.kit!.color).withValues(alpha: .07), th.colorScheme.surface)
+                                  : null,
+                              border: l.kit != null ? Border(left: BorderSide(color: kitColor(l.kit!.color), width: 4)) : null,
+                            ),
                             padding: const EdgeInsets.symmetric(vertical: 6),
                             child: Row(
                               children: [
@@ -1271,7 +1432,49 @@ class _SalePanel extends ConsumerWidget {
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
+                                      if (l.kit != null)
+                                        Row(children: [
+                                          KitIcon(icon: l.kit!.icon, color: l.kit!.color, size: 12),
+                                          const SizedBox(width: 6),
+                                          Flexible(child: Text(advanced ? '${i + 1}  ${l.name}' : l.name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15))),
+                                          KitBadge(color: l.kit!.color),
+                                        ])
+                                      else
                                       Text(advanced ? '${i + 1}  ${l.name}' : l.name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                                      // a kit: what it holds per kit (each can be swapped for this sale), how many can be made, its warning
+                                      if (l.kit != null) ...[
+                                        Wrap(spacing: 4, runSpacing: 2, crossAxisAlignment: WrapCrossAlignment.center, children: [
+                                          Text('Can make ${l.max >= 999999 ? 'any' : formatQty(l.max)} · per kit:', style: th.textTheme.bodySmall),
+                                          for (final kc in l.kit!.components)
+                                            InkWell(
+                                              key: Key('kitpart-${l.id}-${kc['productId']}'),
+                                              onTap: () {
+                                                final rec = data.kits.where((k) => '${k['id']}' == l.id).firstOrNull;
+                                                if (rec == null) return;
+                                                final from = '${kc['swappedFrom'] ?? ''}'.isNotEmpty ? '${kc['swappedFrom']}' : '${kc['productId']}';
+                                                kitSwapDialog(context, ref, data, rec, from, wholesale, (m, {bool error = false}) => error ? onError(m) : ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m))));
+                                              },
+                                              child: Text(
+                                                '${formatQty((kc['qty'] as num?)?.toDouble() ?? 0)} × ${kc['name']}${'${kc['swappedFromName'] ?? ''}'.isNotEmpty ? ' (instead of ${kc['swappedFromName']})' : ''} ⇄',
+                                                style: th.textTheme.bodySmall?.copyWith(decoration: TextDecoration.underline, fontWeight: '${kc['swappedFrom'] ?? ''}'.isNotEmpty ? FontWeight.w700 : null),
+                                              ),
+                                            ),
+                                          for (final sv in l.kit!.services) Text('${sv['name']}', style: th.textTheme.bodySmall),
+                                        ]),
+                                        if (l.kit!.warning.isNotEmpty)
+                                          l.kit!.ack
+                                              ? Material(type: MaterialType.transparency, child: CheckboxListTile(
+                                                  key: Key('kitack-${l.id}'),
+                                                  dense: true,
+                                                  contentPadding: EdgeInsets.zero,
+                                                  controlAffinity: ListTileControlAffinity.leading,
+                                                  value: l.acked,
+                                                  onChanged: (v) => c.ackKit(l.id, v == true),
+                                                  title: Text('⚠ ${l.kit!.warning}', style: TextStyle(fontSize: 12.5, color: l.acked ? null : Colors.orange.shade900, fontWeight: FontWeight.w600)),
+                                                  subtitle: const Text('Tick once the client was told'),
+                                                ))
+                                              : Text('⚠ ${l.kit!.warning}', style: TextStyle(fontSize: 12.5, color: Colors.orange.shade900)),
+                                      ],
                                       // safety in words and an icon, never colour alone
                                       if (l.controlled)
                                         const _Tag('CD · register', danger: true)
@@ -1318,6 +1521,7 @@ class _SalePanel extends ConsumerWidget {
                                           ),
                                           if (l.price < l.cost) Text('  below cost', style: TextStyle(color: th.colorScheme.error, fontSize: 12)),
                                           if (p != null && shelfLabel(p).isNotEmpty) Padding(padding: const EdgeInsets.only(left: 6), child: _ShelfTag(shelfLabel(p))),
+                                          if (l.kit == null)
                                           TextButton.icon(
                                             key: Key('directions-${l.id}'),
                                             style: _lineActionFor(context),

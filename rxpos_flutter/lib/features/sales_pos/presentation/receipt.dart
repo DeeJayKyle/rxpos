@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import '../../../core/rules/kits.dart';
 import '../../../core/presentation/app_dialog.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pdf/pdf.dart';
@@ -41,7 +42,10 @@ String receiptText(Sale s, PharmacySettings st) {
     'Receipt ${s.number} · ${when.length > 16 ? when.substring(0, 16) : when}',
     if (s.customerName.isNotEmpty && s.customerName != 'Walk-in Customer') 'Customer: ${s.customerName}',
     '--------------------------------',
-    for (final i in s.items) '${formatQty(i.qty)} × ${i.name} — ${fmt(i.qty * i.price)}',
+    for (final (n, i) in s.items.indexed) ...[
+      '${formatQty(i.qty)} × ${i.name} — ${fmt(i.qty * i.price)}',
+      if (_kitText(s, n).isNotEmpty) '   ${_kitText(s, n)}',
+    ],
     '--------------------------------',
     if (s.discount > 0) 'Subtotal: ${fmt(s.subtotal)}',
     if (s.discount > 0) 'Discount: -${fmt(s.discount)}',
@@ -90,8 +94,9 @@ Future<Uint8List> receiptPdf(Sale s, PharmacySettings st) async {
           pw.Text('${proforma ? 'Prepared by' : 'Served by'} ${s.cashier.isEmpty ? '${s.raw['createdBy'] ?? ''}' : s.cashier}'),
           if (s.customerName.isNotEmpty && s.customerName != 'Walk-in Customer') pw.Text('Customer: ${s.customerName}'),
           pw.Divider(),
-          for (final i in s.items) ...[
+          for (final (n, i) in s.items.indexed) ...[
             pw.Text(i.name),
+            if (_kitText(s, n).isNotEmpty) pw.Text('  ${_kitText(s, n)}', style: const pw.TextStyle(fontSize: 8)),
             row(
               i.pack != null
                   ? '  ${formatQty(i.pack!.count)} × ${i.pack!.name} (${formatQty(i.pack!.size)}) @ ${fmt(i.pack!.price)}'
@@ -182,13 +187,15 @@ class _ReceiptDialogState extends ConsumerState<_ReceiptDialog> {
               const SaleSavedNote(),
               Text('Receipt ${s.number}', style: const TextStyle(fontWeight: FontWeight.w700)),
               const Divider(),
-              for (final i in s.items)
+              for (final (n, i) in s.items.indexed) ...[
                 Row(
                   children: [
                     Expanded(child: Text('${i.name}  ×${i.pack != null ? '${formatQty(i.pack!.count)} ${i.pack!.name}' : formatQty(i.qty)}')),
                     Text(fmt(i.price * i.qty)),
                   ],
                 ),
+                if (_kitText(s, n).isNotEmpty) Text(_kitText(s, n), style: Theme.of(context).textTheme.bodySmall),
+              ],
               const Divider(),
               Row(
                 children: [
@@ -370,4 +377,10 @@ class SaleSavedNote extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// 1.10 what a kit line on the sale contained ('' for a medicine), as the React app's receipt says it
+String _kitText(Sale s, int n) {
+  final items = rawSaleItems(s.raw);
+  return n < items.length ? kitContents(items[n]) : '';
 }

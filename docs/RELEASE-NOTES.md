@@ -1,5 +1,19 @@
 # RxPOS release notes
 
+## Flutter app 2.1 (next build) · November 2026
+
+The Flutter app now does everything the classic app does. Nothing changes in the classic app.
+
+- **Kits in the Flutter app.** The Kits screen (Medicine inventory → Kits): build and edit kits, ready-made kits, kit
+  sales by period, labels, switch off, delete. At the till: kit tiles in their own colour with a KIT badge, what they
+  hold and how many can be made; the warning before adding and the tick before charging; swap a medicine for one sale;
+  scanning a kit's label adds it. A kit sale is saved exactly as the classic till saves it, so either app can refund or
+  correct it. Receipts list a kit's contents; the dashboard warns when kits run low; reorder levels count the medicines
+  kits used.
+- **Sign-ins:** Sign out everywhere else (account card), and an administrator can sign a staff member out on every
+  device (Users).
+- **Calendar link:** refills with initials only, and Replace link (the old one stops working), in the link's ⋮ menu.
+
 ## React (classic) app 1.10.1 · Flutter app 2.1 (next build) · November 2026
 
 Every page in colour, the way Add Stock is. Nothing to do on the tills: they update by themselves.
