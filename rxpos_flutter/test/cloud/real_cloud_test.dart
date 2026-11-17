@@ -146,4 +146,23 @@ void main() {
     expect(r.refused, 1);
     expect((await db.select(db.rejectedOps).get()).single.id, m['id']);
   }, skip: skip);
+
+  // 2026-11 audit, as the account card and the calendar screen call them (cloudApi.post): the same routes as the React app
+  test('"sign out everywhere else" ends the other sign-ins and keeps this one', () async {
+    final other = await AuthRepository(dio: app, db: db, cloudUrl: base!).signIn(email: email, password: password);
+    final otherToken = (other as SignedIn).session.token;
+    final res = await app.post<Object?>('/api/sessions/others', data: const {});
+    expect(res.statusCode, 200);
+    final old = Dio(BaseOptions(baseUrl: base, headers: {'Authorization': 'Bearer $otherToken'}, validateStatus: (_) => true));
+    expect((await old.get<Object?>('/api/calendar-link')).statusCode, 401, reason: 'the other sign-in is over');
+    expect((await app.get<Object?>('/api/calendar-link')).statusCode, 200, reason: 'this device stays signed in');
+  }, skip: skip);
+
+  test('the calendar link: initials only, and a new link that replaces the old one', () async {
+    final first = ((await app.get<Object?>('/api/calendar-link')).data as Map)['url'];
+    final priv = (await app.post<Object?>('/api/calendar-link', data: {'private': true})).data as Map;
+    expect(priv['private'], true);
+    final renewed = ((await app.post<Object?>('/api/calendar-link', data: const {})).data as Map)['url'];
+    expect(renewed, isNot(first));
+  }, skip: skip);
 }

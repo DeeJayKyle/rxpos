@@ -266,6 +266,22 @@ mixin _AccountActions<T extends ConsumerStatefulWidget> on ConsumerState<T> {
     if (mounted) say(context, err ?? '${name[0].toUpperCase()}${name.substring(1)} is on for this device', error: err != null);
   }
 
+  // 2026-11 audit (src/App.jsx signOutOthers): end every other sign-in of this person (a lost phone, a shared
+  // computer); this device stays signed in
+  Future<void> _signOutOthers() async {
+    if (!await confirmAction(context, 'Sign out everywhere else?',
+        'Every other phone, computer or browser signed in as you is signed out now (they need your password again). This device stays signed in.',
+        'Sign out everywhere else')) {
+      return;
+    }
+    try {
+      await ref.read(cloudApiProvider).post('/api/sessions/others', const {}, timeout: const Duration(seconds: 15));
+      if (mounted) say(context, 'Signed out everywhere else');
+    } catch (e) {
+      if (mounted) say(context, '$e'.replaceFirst('Exception: ', ''), error: true);
+    }
+  }
+
   Future<void> _signOut() async {
     final messenger = ScaffoldMessenger.of(context);
     final repo = ref.read(authRepositoryProvider);
@@ -552,6 +568,8 @@ class _AccountCardState extends ConsumerState<AccountCard> with _AccountActions<
             if (s.token.startsWith('u.'))
               action(const Key('card-twostep'), Icons.verified_user_outlined, me?['twoFactor'] == true ? 'Two-step sign-in is on' : 'Two-step sign-in',
                   () => showAppDialog<void>(context: context, builder: (_) => TwoStepDialog(session: s)), on: me?['twoFactor'] == true),
+            if (s.token.startsWith('u.'))
+              action(const Key('card-others'), Icons.devices_other_outlined, 'Sign out everywhere else', _signOutOthers),
           ]),
           const SizedBox(height: 12),
           Material(
