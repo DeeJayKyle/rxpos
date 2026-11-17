@@ -35,12 +35,14 @@ export async function watchdog(env, { now = new Date(), mailer = sendAlert } = {
   if (results.length && (!er.lastMail || nowMs - Date.parse(er.lastMail) >= ERROR_GAP_MIN * 60000)) {
     const lines = results.slice(0, 10).map((r) => `- [${r.platform || '?'}] ${String(r.message || '').slice(0, 140)} (seen ${r.count}×)`);
     out.errorsMailed = await mailer(env, to, `RxPOS: ${results.length} new device error${results.length > 1 ? 's' : ''} reported`,
-      `New error reports from devices since ${er.since}:\n\n${lines.join('\n')}${results.length > 10 ? `\n…and ${results.length - 10} more.` : ''}\n\nOpen the owner console → Errors to see details. Patient and sales data are scrubbed from these reports.`);
+      `New error reports from devices since ${er.since}:\n\n${lines.join('\n')}${results.length > 10 ? `\n…and ${results.length - 10} more.` : ''}\n\nOpen the owner console → the pharmacy → Device errors to see details. Patient and sales data are scrubbed from these reports.`);
     // 2026-11-17 audit: only a mail that went out moves the watermark (a failed mail used to lose those reports)
     if (out.errorsMailed) await cfgSet(env, 'alert_errors', { since: now.toISOString(), lastMail: now.toISOString() });
     else console.warn('watchdog: the error digest mail was not sent; it will be retried');
-  } else {
-    // no email due: still advance the watermark so old rows aren't rescanned forever (keep the last-mail time)
+  } else if (!results.length) {
+    // nothing new: still advance the watermark so old rows aren't rescanned forever (keep the last-mail time).
+    // Audit 2026-11-17 (2nd pass): new reports that arrive while a digest isn't due yet keep the watermark where it
+    // is, so the next digest includes them (they used to be skipped for good)
     await cfgSet(env, 'alert_errors', { since: now.toISOString(), lastMail: er.lastMail });
   }
 

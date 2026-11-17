@@ -50,6 +50,7 @@ const SUITES = [
   ['notes and SOP pages (unit)', 'unit-notes.mjs', []],
   ['record ids (unit)', 'unit-ids.mjs', []],
   ['watchdog alerts (unit)', 'unit-watchdog.mjs', []],
+  ['uptime watch: sync probe, alert retry (unit)', 'unit-uptime-sync.mjs', []],
   ['inventory value (unit)', 'unit-stockvalue.mjs', []],
   ['stock audit (unit)', 'unit-stockaudit.mjs', []],
   ['stock repair (unit)', 'unit-stockrepair.mjs', []],

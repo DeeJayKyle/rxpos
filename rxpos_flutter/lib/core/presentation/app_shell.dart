@@ -45,7 +45,7 @@ class AppShell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    ref.read(crashReportsProvider).page = location;
+    ref.read(crashReportsProvider).page = location.split('?').first; // never the query (receipt numbers, ids)
     final session = ref.watch(sessionControllerProvider).value;
     final can = ref.watch(permissionsProvider).value ?? const <String>{};
     final features = ref.watch(pharmacyProvider).value?.features ?? const {};

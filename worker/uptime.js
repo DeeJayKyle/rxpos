@@ -13,7 +13,7 @@ async function withTimeout(p, ms, what) {
 }
 
 /** Runs the checks; returns { problems, dbOk, mailed }. `test: true` always sends one email (owner console test). */
-export async function uptimeCheck(env, { now = new Date(), test = false, sync } = {}) {
+export async function uptimeCheck(env, { now = new Date(), test = false, sync, mailer = mail } = {}) {
   const problems = [];
   let dbOk = true;
   try { await withTimeout(env.DB.prepare('SELECT 1 AS ok').first(), 15000, 'Database (Turso)'); }
@@ -55,12 +55,13 @@ export async function uptimeCheck(env, { now = new Date(), test = false, sync } 
   let mailed = false;
 
   if (test) {
-    mailed = await mail(env, to, 'RxPOS monitor: test email', `This is a test from the RxPOS uptime monitor, ${local}.\n\nCurrent status: ${problems.length ? 'PROBLEMS:\n- ' + problems.join('\n- ') : 'everything is working.'}\n\nYou will get an email like this if the RxPOS database or website stops working, and another when it works again.`);
+    mailed = await mailer(env, to, 'RxPOS monitor: test email', `This is a test from the RxPOS uptime monitor, ${local}.\n\nCurrent status: ${problems.length ? 'PROBLEMS:\n- ' + problems.join('\n- ') : 'everything is working.'}\n\nYou will get an email like this if the RxPOS database or website stops working, and another when it works again.`);
   } else if (problems.length) {
     // When the database itself is down we can't remember earlier emails, so remind at most once an hour (minutes 0-4)
-    const due = dbOk ? !state.down || mins(state.lastMail) >= REMIND_MIN : now.getUTCMinutes() < 5;
+    // (audit 2026-11-17, 2nd pass: an outage whose first email failed has no lastMail; it is due again, not never)
+    const due = dbOk ? !state.down || !state.lastMail || mins(state.lastMail) >= REMIND_MIN : now.getUTCMinutes() < 5;
     if (due) {
-      mailed = await mail(env, to, (state.down ? 'Still down: ' : '') + 'RxPOS problem: ' + problems[0].split(':')[0],
+      mailed = await mailer(env, to, (state.down ? 'Still down: ' : '') + 'RxPOS problem: ' + problems[0].split(':')[0],
         `The RxPOS uptime monitor found a problem at ${local}:\n\n- ${problems.join('\n- ')}\n\nTills keep selling offline; sales sync again once this is fixed. Status pages: https://www.cloudflarestatus.com and https://status.turso.tech\n\nYou will get another email when it works again.`);
     }
     state = { down: true, since: state.down ? state.since : iso, lastOk: state.lastOk, lastMail: mailed ? iso : state.lastMail, problems };
@@ -69,7 +70,7 @@ export async function uptimeCheck(env, { now = new Date(), test = false, sync } 
     const wasDown = state.down || (state.lastOk && mins(state.lastOk) > 12);
     if (wasDown) {
       const since = state.down ? state.since : state.lastOk;
-      mailed = await mail(env, to, 'RxPOS is working again', `RxPOS is working again (${local}). It had a problem for about ${mins(since)} minutes${state.problems ? ':\n- ' + state.problems.join('\n- ') : '.'}\n\nDevices send any waiting sales automatically.`);
+      mailed = await mailer(env, to, 'RxPOS is working again', `RxPOS is working again (${local}). It had a problem for about ${mins(since)} minutes${state.problems ? ':\n- ' + state.problems.join('\n- ') : '.'}\n\nDevices send any waiting sales automatically.`);
     }
     state = { down: false, since: null, lastOk: iso, lastMail: mailed ? iso : state.lastMail };
   }

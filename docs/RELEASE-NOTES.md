@@ -1,5 +1,16 @@
 # RxPOS release notes
 
+## React (classic) app 1.10.4 · Flutter app 2.1 (next build) · Cloud · November 2026 (audit, second pass)
+
+Fixes from the second audit pass of 17 November (docs/AUDIT-2026-11-17-PASS2.md). Nothing to do on the tills.
+
+- **Owner alerts:** a device error reported within 30 minutes of the last error email is now in the next email
+  (before, it was never emailed); the first "RxPOS problem" email is tried again when it fails to send (before, the
+  owner heard nothing for the whole outage).
+- **Privacy of error reports:** the cloud removes emails, phone numbers and long numbers from error reports itself,
+  whatever device sent them; the Flutter app no longer sends the screen's search or record id.
+- **Restore:** the restore tool asks which cloud to write to (`RXPOS_API`) and never assumes the live one.
+
 ## React (classic) app 1.10.3 · Cloud · November 2026 (refunds on the day they happen)
 
 Nothing to do on the tills. **Past figures in the cloud reports change** (read this before comparing with old emails).

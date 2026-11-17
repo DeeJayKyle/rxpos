@@ -44,9 +44,12 @@ if (flag('--verify')) {
 if (val('--json')) { fs.writeFileSync(val('--json'), JSON.stringify(data, null, 1)); console.log('Saved plain JSON to', val('--json'), '(it contains password hashes and keys: keep it private)'); }
 
 if (flag('--restore')) {
-  const API = (process.env.RXPOS_API || 'https://api.rxposug.com').replace(/\/+$/, '');
+  // audit 2026-11-17 (2nd pass): a restore overwrites records, so the cloud to write to is never assumed
+  if (!process.env.RXPOS_API) throw new Error('Set RXPOS_API to the cloud to restore into (e.g. https://api.rxposug.com): a restore overwrites its records');
+  const API = process.env.RXPOS_API.replace(/\/+$/, '');
   const KEY = process.env.OWNER_KEY;
   if (!KEY) throw new Error('Set OWNER_KEY to restore');
+  console.log(`Restoring into ${API}${only ? ` (pharmacy ${only} only)` : ' (every pharmacy)'}`);
   const send = async (part, rows, size = 500) => {
     for (let i = 0; i < rows.length; i += size) {
       const r = await fetch(`${API}/api/owner/restore`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + KEY }, body: JSON.stringify({ confirm: 'RESTORE', part, rows: rows.slice(i, i + size) }) });
