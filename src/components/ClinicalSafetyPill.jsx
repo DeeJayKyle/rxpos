@@ -1,7 +1,7 @@
 // The live clinical safety pill above the till's cart (src/clinical.js): green when nothing is found, amber for a
 // caution, red for a major allergy or interaction; tap to see each finding. A prompt for the pharmacist, never a block.
 import { useMemo, useState } from 'react';
-import { ShieldCheck, ShieldAlert, ShieldX, ChevronDown } from 'lucide-react';
+import { ShieldCheck, ShieldAlert, ShieldX, ShieldQuestion, ChevronDown } from 'lucide-react';
 import { safetyCheck } from '../clinical.js';
 
 const useCheck = (cart, products, customer) => useMemo(() => safetyCheck(cart, products, customer && customer.id !== 'walk-in' ? customer : null), [cart, products, customer]);
@@ -10,6 +10,9 @@ const useCheck = (cart, products, customer) => useMemo(() => safetyCheck(cart, p
 export function SafetyBadge({ cart, products, customer }) {
   const r = useCheck(cart, products, customer);
   if (!cart.length || r.level !== 'ok') return null;
+  // a walk-in has no allergy record: say so, never a green "no allergy found" (only interactions were checked)
+  if (!customer || customer.id === 'walk-in')
+    return <span className="safety-badge unknown" role="status" title="Walk-in: allergies unknown. Ask the client; only interactions were checked"><ShieldQuestion size={13} aria-hidden="true" />Allergies unknown</span>;
   return <span className="safety-badge" role="status" title="No allergy or interaction found"><ShieldCheck size={13} aria-hidden="true" />Safety</span>;
 }
 

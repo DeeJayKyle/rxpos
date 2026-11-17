@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Trophy, Star, BarC
 import { useStore, MAIN_BRANCH } from '../store.jsx';
 import { Stat, BarChart, Empty, PdfButton } from '../ui.jsx';
 import { popup } from '../notify.jsx';
+import { dayOf } from '../dates.js';
 
 const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 /** Monday of the week containing `date`, shifted by `weeks` */
@@ -20,10 +21,11 @@ export function weeklyStats(db, start, branch = 'all') {
   const s = iso(start), e = iso(new Date(start.getTime() + 7 * 864e5)), ps = iso(new Date(start.getTime() - 7 * 864e5));
   const inBranch = (x) => branch === 'all' || (x.branchId || MAIN_BRANCH) === branch;
   const sales = db.sales.filter((x) => x.status !== 'refunded' && inBranch(x));
-  const cur = sales.filter((x) => x.date >= s && x.date < e), prev = sales.filter((x) => x.date >= ps && x.date < s);
+  // by the sale's local day, not its UTC time (a late-evening sale belongs to the day it was made)
+  const cur = sales.filter((x) => dayOf(x.date) >= s && dayOf(x.date) < e), prev = sales.filter((x) => dayOf(x.date) >= ps && dayOf(x.date) < s);
   const sum = (list) => list.reduce((a, x) => a + x.total, 0);
   const profit = (list) => list.reduce((a, x) => a + x.items.reduce((b, i) => b + i.qty * (i.price - (i.cost || 0)), 0) - (x.discount || 0), 0);
-  const byDay = DAY.map((label, i) => { const d = iso(new Date(start.getTime() + i * 864e5)); const pd = iso(new Date(start.getTime() + (i - 7) * 864e5)); return { label, values: [sum(cur.filter((x) => x.date.slice(0, 10) === d)), sum(prev.filter((x) => x.date.slice(0, 10) === pd))] }; });
+  const byDay = DAY.map((label, i) => { const d = iso(new Date(start.getTime() + i * 864e5)); const pd = iso(new Date(start.getTime() + (i - 7) * 864e5)); return { label, values: [sum(cur.filter((x) => dayOf(x.date) === d)), sum(prev.filter((x) => dayOf(x.date) === pd))] }; });
   const items = (list) => { const m = new Map(); for (const x of list) for (const i of x.items) { const r = m.get(i.id) || { id: i.id, name: i.name, qty: 0, amount: 0 }; r.qty += i.qty; r.amount += i.qty * i.price; m.set(i.id, r); } return m; };
   const ci = items(cur), pi = items(prev);
   const top = [...ci.values()].sort((a, b) => b.amount - a.amount).slice(0, 8);

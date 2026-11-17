@@ -16,6 +16,7 @@
  "unit-promote.mjs":0,
  "unit-offline.mjs":1,
  "unit-money.mjs":0,
+ "unit-csv.mjs":1,
  "unit-policy.mjs":0,
  "unit-audit-2026-11.mjs":1,
  "unit-audit-2026-11-17.mjs":2,

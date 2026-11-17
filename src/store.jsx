@@ -296,6 +296,30 @@ export function addSampleData(d, user, branchId = MAIN_BRANCH) {
   put(d, 'suppliers', { name: 'Sample Wholesale Ltd', contact: '', phone: '', email: '', address: '' });
 }
 
+/**
+ * Take back one change that could not be saved when other changes were made after it: each record it wrote or
+ * removed goes back to how it was before, unless a later change touched that record since (the later one stands).
+ * cur: the state now, prev / d: the state before and after the failed change, c: its diff.
+ */
+function undoChange(cur, prev, d, c) {
+  const next = { ...cur };
+  const touched = new Map();
+  for (const { t, rec } of c.puts || []) (touched.get(t) || touched.set(t, new Set()).get(t)).add(String(rec.id));
+  for (const { t, id } of c.dels || []) (touched.get(t) || touched.set(t, new Set()).get(t)).add(String(id));
+  for (const [t, ids] of touched) {
+    const pick = (list) => new Map((list || []).filter((r) => ids.has(String(r.id))).map((r) => [String(r.id), r]));
+    const was = pick(prev[t]), mine = pick(d[t]), now = pick(cur[t]);
+    const revert = new Set([...ids].filter((id) => (mine.has(id) ? now.get(id) === mine.get(id) : !now.has(id))));
+    if (!revert.size) continue;
+    const list = (cur[t] || []).flatMap((r) => (revert.has(String(r.id)) ? (was.has(String(r.id)) ? [was.get(String(r.id))] : []) : [r]));
+    for (const id of revert) if (!now.has(id) && was.has(id)) list.unshift(was.get(id)); // removed by the failed change
+    next[t] = list;
+  }
+  if (c.settings && cur.settings === d.settings) next.settings = prev.settings;
+  if (c.tomb && cur._tomb === d._tomb) next._tomb = prev._tomb;
+  return next;
+}
+
 function draft(db) {
   const d = { ...db, settings: { ...db.settings }, _tomb: db._tomb.slice() };
   TABLES.forEach((t) => (d[t] = (db[t] || []).slice()));
@@ -372,6 +396,12 @@ async function migrateLegacy(base, fill, cfg) {
   const parts = await Promise.all(PARTS.map((k) => idbGet('t:' + k)));
   if (parts.some((p) => p !== undefined)) saved = Object.fromEntries(PARTS.map((k, i) => [k, parts[i]]).filter(([, v]) => v !== undefined));
   else saved = (await idbGet('db')) || null; // data saved by version 1.0
+  // no copy from before the upgrade was read: starting clean would wipe records or unsent changes that are still
+  // stored (a missing storage-version key, say), so that is refused and shown as a storage problem instead
+  if (!saved) {
+    const [recs, left] = await Promise.all([storage().recordCount(), storage().count()]);
+    if (recs || left) throw new Error(`the stored pharmacy (${recs} record group(s), ${left} unsent change(s)) could not be opened, and it was not replaced`);
+  }
   const d = saved ? fill(saved) : base;
   const want = countOf(d);
   const unsent = saved && cfg?.key ? collectChanges(d, cfg.pushedAt).map((ch) => ({ op: uid(), txn: 'migration', t: ch.t, id: String(ch.id), deleted: !!ch.deleted, at: ch.at })) : [];
@@ -452,6 +482,7 @@ export function StoreProvider({ children }) {
   const setStateInBackground = useCallback((next) => { dbRef.current = next; startTransition(() => setDb(next)); }, []);
   const [storageIssue, setStorageIssue] = useState(''); // a write to the device failed (shown as Needs attention)
 
+  const readFailed = useRef(''); // set when the stored pharmacy could not be read: commits and sync are blocked
   // ---------- load (with the one-time move to record-level storage, verified before it is used) ----------
   useEffect(() => {
     (async () => {
@@ -474,7 +505,10 @@ export function StoreProvider({ children }) {
         }
       } catch (e) {
         console.error(e);
-        setStorageIssue('RxPOS could not read this device\'s storage: ' + (e.message || e) + '. Nothing was deleted; close other RxPOS windows and reopen.');
+        // the pharmacy could not be read: the app opens empty, but nothing is written and nothing syncs until it is
+        // reopened and reads again, so an empty screen can never be saved over (or sent in place of) the real records
+        readFailed.current = 'RxPOS could not read this device\'s storage: ' + (e.message || e) + '. Nothing was deleted; close other RxPOS windows and reopen. Changes are not saved until it can be read.';
+        setStorageIssue(readFailed.current);
       }
       setState(loaded || base);
       loadCatalog().then((cat) => { const prev = dbRef.current; const next = withCatalog(prev, cat); if (next !== prev) setState(next); }).catch(console.error);
@@ -492,6 +526,7 @@ export function StoreProvider({ children }) {
   const chain = useRef(Promise.resolve());
   const persist = useCallback((c) => {
     if (!c.puts.length && !c.dels.length && !c.ops.length && !c.settings && !c.tomb && !c.reset) return Promise.resolve();
+    if (readFailed.current) return Promise.reject(new Error(readFailed.current));
     const p = chain.current.then(() => storage().commit(c));
     chain.current = p.catch(() => {});
     return p.then(() => setStorageIssue((x) => (x ? '' : x)), (e) => { setStorageIssue(e.message); throw e; });
@@ -524,7 +559,8 @@ export function StoreProvider({ children }) {
   const saveSyncCfg = useCallback((cfg) => {
     setSyncCfgState(cfg);
     cfgRef.current = cfg;
-    return idbSet('sync', cfg).catch((e) => { console.error(e); setStorageIssue(storageError(e).message); });
+    // the caller is told too (a sign-in must not report it is linked when the link was not saved)
+    return idbSet('sync', cfg).catch((e) => { console.error(e); const err = storageError(e); setStorageIssue(err.message); throw err; });
   }, []);
 
   // Every local change is pushed to the cloud almost at once (0.4 s, so a burst of edits goes up together; never
@@ -555,7 +591,9 @@ export function StoreProvider({ children }) {
     changedAt.current = Date.now();
     const c = diff(prev, d, { tables: TABLES, local: true, txn: uid(), skip: skipRecord, noOp: noSync });
     const p = persist(c).then(() => { setPending((n) => n + c.ops.length); queuePush(); }, (e) => {
+      // nothing changed since: back to before; another change came after it: only this one is taken back
       if (dbRef.current === d) setState(prev);
+      else setState(undoChange(dbRef.current, prev, d, c));
       throw e;
     });
     p.catch(() => {}); // callers that don't wait still see the problem as "Needs attention"
@@ -622,7 +660,7 @@ export function StoreProvider({ children }) {
   cfgRef.current = syncCfg;
   const hasCfg = !!syncCfg;
   useEffect(() => {
-    if (!hasCfg) return;
+    if (!hasCfg || readFailed.current) return; // nothing is synced from (or onto) a pharmacy that could not be read
     syncRef.current = createSync({
       getDb: () => dbRef.current,
       getCfg: () => cfgRef.current,
@@ -632,8 +670,10 @@ export function StoreProvider({ children }) {
       applyRemote: (changes) => {
         const prev = dbRef.current;
         const next = withCatalog(mergeRemote(prev, changes));
+        const c = diff(prev, next, { tables: TABLES, local: false, skip: skipRecord });
         setStateInBackground(next);
-        return persist(diff(prev, next, { tables: TABLES, local: false, skip: skipRecord }));
+        // not saved: the screen goes back to what the device holds (the sync position does not move, so they come again)
+        return persist(c).catch((e) => { setStateInBackground(dbRef.current === next ? prev : undoChange(dbRef.current, prev, next, c)); throw e; });
       },
       // stage 4: a shorter window (or the window moving on at a new month) drops the older records from THIS device
       // only: no outbox entries and no tombstones, so nothing is deleted in the cloud and a longer window brings them back
@@ -644,8 +684,9 @@ export function StoreProvider({ children }) {
         const { tables, dels } = pruneOf(prev, W, waiting);
         const next = { ...prev, ...tables };
         if (!dels.length) return Promise.resolve();
+        const c = { puts: [], dels, ops: [] };
         setStateInBackground(next);
-        return persist({ puts: [], dels, ops: [] });
+        return persist(c).catch((e) => { setStateInBackground(dbRef.current === next ? prev : undoChange(dbRef.current, prev, next, c)); throw e; });
       },
       onStatus: (st) => {
         setSyncStatus(st);
@@ -692,7 +733,9 @@ export function StoreProvider({ children }) {
       if (left) throw new Error(`This device still has ${left} change(s) for ${cur.pharmacy || 'another pharmacy'} that haven't reached the cloud. Connect to the internet and let them send (or sign in to that pharmacy again) before signing in to a different pharmacy.`);
     }
     if (other) {
-      try { await idbSet('backup:' + (cur.tenant || 'device') + ':' + now().slice(0, 19), dbRef.current); } catch (e) { console.error(e); }
+      // the safety copy must exist before anything is cleared: if it cannot be written, nothing is switched
+      try { await idbSet('backup:' + (cur.tenant || 'device') + ':' + now().slice(0, 19), dbRef.current); }
+      catch (e) { console.error(e); throw new Error(`This device's data could not be kept aside as a backup (${storageError(e).message}), so it was not cleared. Free some space or close other RxPOS windows, then sign in again.`, { cause: e }); }
       for (const k of await idbKeys().catch(() => [])) if (String(k).startsWith('snap:')) await idbDel(k).catch(() => {});
       const blank = withCatalog(blankDb());
       await persist({ ...diff(null, blank, { tables: TABLES, local: false, skip: skipRecord }), reset: true, clearOutbox: true, version: STORAGE_VERSION });
@@ -812,7 +855,10 @@ export function downloadFile(name, content, type = 'text/plain') {
 export function toCSV(rows) {
   if (!rows.length) return '';
   const cols = Object.keys(rows[0]);
-  const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  // never a formula: text starting with = + - @, a tab or a carriage return is opened by a spreadsheet as a formula
+  // (CSV injection), so it gets a leading ' like worker/reports.js does. Numbers (a refund's -500) stay numbers.
+  const safe = (v) => (typeof v !== 'number' && /^[=+\-@\t\r]/.test(String(v ?? '')) ? "'" + v : String(v ?? ''));
+  const esc = (v) => `"${safe(v).replace(/"/g, '""')}"`;
   return [cols.join(','), ...rows.map((r) => cols.map((c) => esc(r[c])).join(','))].join('\n');
 }
 

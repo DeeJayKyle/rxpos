@@ -9,18 +9,18 @@ import { useListControls, useContextMenu } from './listcontrols.jsx';
 import { keyOf, showKey } from './keymap.js';
 import { deviceSettings, setDevice } from './device.js';
 import { ask, toast } from './feedback.jsx';
+import { useFocusTrap } from './focustrap.js';
 
 export function Modal({ title, onClose, children, wide }) {
-  useEffect(() => {
-    const onKey = (e) => e.key === 'Escape' && onClose();
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  // focus kept inside, Escape closes only the top dialog, focus goes back on close (src/focustrap.js)
+  const ref = useRef(null);
+  const titleId = useId();
+  useFocusTrap(ref, onClose);
   return (
     <div className="modal-bg" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className={'modal' + (wide ? ' wide' : '')} role="dialog" aria-modal="true" aria-label={typeof title === 'string' ? title : undefined}>
+      <div ref={ref} tabIndex={-1} className={'modal' + (wide ? ' wide' : '')} role="dialog" aria-modal="true" aria-labelledby={titleId}>
         <div className="modal-head">
-          <h3>{title}</h3>
+          <h3 id={titleId}>{title}</h3>
           <button className="icon-btn" onClick={onClose} aria-label="Close"><X size={18} /></button>
         </div>
         {children}

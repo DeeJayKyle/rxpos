@@ -505,7 +505,7 @@ details input { width: 100%; }
   .po-doc th, .po-doc td { color: #000; background: none; }
 }
 
-@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
 
 /* Phone POS: floating cart bar above the bottom navigation (shown while the cart is off screen) */
 .cart-bar { display: none; }

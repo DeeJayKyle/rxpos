@@ -2,7 +2,7 @@
 // before, and the stock health score with what drives it. The owner's choice (2026-11-15): one clean dashboard, from
 // the dashboard references: period chips, four figures with ↑ / ↓, one sales chart, a stock health gauge, the top
 // medicines and the latest sales. Everything else is a widget that can be switched back on (Edit widgets).
-import { localDate } from './dates.js';
+import { localDate, dayOf } from './dates.js';
 import { daysUntil } from './dates.js';
 
 /** The period chips: Today, the last month (30 days), 6 months, 12 months and the year so far */
@@ -60,7 +60,7 @@ export function periodFigures(byDay, period, now) {
 export function topMedicines(sales, from, to, by = 'amount', limit = 5) {
   const top = {};
   for (const s of sales) {
-    const d = String(s.date).slice(0, 10);
+    const d = dayOf(s.date); // the local day, not the UTC one (a sale after 9 pm in Kampala is the next UTC day)
     if (d < from || d > to) continue;
     for (const i of s.items || []) {
       const t = (top[i.name] ??= { name: i.name, qty: 0, amount: 0, cost: 0 });

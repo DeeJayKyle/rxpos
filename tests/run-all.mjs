@@ -30,6 +30,7 @@ const SUITES = [
   ['idle promote (unit)', 'unit-promote.mjs', []],
   ['offline sign-in (unit)', 'unit-offline.mjs', []],
   ['money math (unit)', 'unit-money.mjs', []],
+  ['CSV export never a formula (unit)', 'unit-csv.mjs', []],
   ['server write policy (unit)', 'unit-policy.mjs', []],
   ['2026-11 audit fixes, against the real cloud code (unit)', 'unit-audit-2026-11.mjs', []],
   ['2026-11-17 audit fixes, against the real cloud code (unit)', 'unit-audit-2026-11-17.mjs', []],

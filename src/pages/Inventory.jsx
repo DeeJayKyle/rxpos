@@ -255,12 +255,18 @@ export function Expiry() {
   const rows = useMemo(() => products.filter((p) => p.stock > 0).flatMap((p) => batchesOf(p.id).filter((b) => b.qty > 0 && b.expiry).map((b) => ({ ...b, p, days: daysUntil(b.expiry) })))
     .filter((r) => (tab === 'expired' ? r.days < 0 : r.days >= 0 && r.days <= warn))
     .sort((a, b) => a.expiry.localeCompare(b.expiry)), [products, batchesOf, tab, warn]);
+  const [busy, setBusy] = useState(''); // the batch being written off (its button is disabled until it is saved)
   const writeOff = async (r) => {
+    if (busy) return;
     if (!(await ask({ title: 'Write off expired stock?', message: `${r.qty} × ${r.p.name} (batch ${r.batch}) will be removed from stock.`, confirmText: 'Write off', danger: true }))) return;
-    update((d) => {
-      move(d, { productId: r.p.id, qty: -r.qty, type: 'Expired write-off', ref: r.batch, user: user.name, batchId: r.legacy ? null : r.id, branchId });
-      audit(d, user, 'Expired write-off', `${r.p.name} batch ${r.batch}: ${r.qty} units (${fmt(r.qty * (r.cost || r.p.cost))})`, branchId);
-    });
+    setBusy(r.p.id + r.id);
+    try {
+      await update((d) => {
+        move(d, { productId: r.p.id, qty: -r.qty, type: 'Expired write-off', ref: r.batch, user: user.name, batchId: r.legacy ? null : r.id, branchId });
+        audit(d, user, 'Expired write-off', `${r.p.name} batch ${r.batch}: ${r.qty} units (${fmt(r.qty * (r.cost || r.p.cost))})`, branchId);
+      });
+    } catch (e) { return toast(`${r.p.name} batch ${r.batch} was NOT written off: ${e.message}`, 'error'); }
+    finally { setBusy(''); }
     toast(`${r.p.name} batch ${r.batch} written off`);
   };
   return (
@@ -281,7 +287,7 @@ export function Expiry() {
                 <td data-label="Qty" className="num">{formatQty(r.qty)}</td><td data-label="Value" className="num">{fmt(r.qty * (r.cost || r.p.cost))}</td>
                 <td className="actions">
                   {(can('stock.receive') || can('stock.adjust')) && <button className="btn sm ghost" title="Send it back to the supplier for a credit note or refund" onClick={() => navigate('/returns', { state: { returnBatch: { productId: r.p.id, batchId: r.id, reason: r.days < 0 ? 'Expired' : 'Short expiry' } } })}>Return</button>}
-                  {tab === 'expired' && can('stock.adjust') && <button className="btn sm danger" onClick={() => writeOff(r)}>Write off</button>}
+                  {tab === 'expired' && can('stock.adjust') && <button className="btn sm danger" disabled={!!busy} onClick={() => writeOff(r)}>{busy === r.p.id + r.id ? 'Writing off…' : 'Write off'}</button>}
                 </td>
               </tr>
             ))}

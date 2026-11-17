@@ -10,6 +10,7 @@ import { deviceSettings, setDevice } from '../device.js';
 import { isWeb } from '../platform.js';
 import { useStore, useSyncState, uid, today, now, put, del, move, addBatch, audit, downloadFile, toCSV, markupPrice, daysUntil, supplierPrices, MAIN_BRANCH } from '../store.jsx';
 import { CASH } from '../finance.js';
+import { round } from '../money.js';
 import { Modal, PdfButton, Empty, PageTip, usePages, Pager, useSort, SortTh, SubViews } from '../ui.jsx';
 import { ask, toast } from '../feedback.jsx';
 import { newInternalBarcode } from '../barcode.jsx';
@@ -269,7 +270,8 @@ export function AddStock() {
   const replaceLine = (key, line) => setForm((f) => ({ ...f, lines: f.lines.map((l) => (l.key === key ? { ...line, key } : l)) }));
   // the markup only changes the suggested price ("Use …"); no price changes by itself
   const setMarkup = (markup) => setForm((f) => ({ ...f, markup }));
-  const total = form.lines.reduce((a, l) => a + (l.productId ? lineTotal(l) : 0), 0);
+  // rounded once to the currency's precision (a pack-split cost leaves no floating tail on the stored total)
+  const total = round(form.lines.reduce((a, l) => a + (l.productId ? lineTotal(l) : 0), 0), Number(s.decimals ?? 0));
   const ql = q.trim().toLowerCase();
   const matches = ql ? products.filter((p) => [p.name, p.generic, p.barcode].join(' ').toLowerCase().includes(ql)).sort((a, b) => (b.stock > 0) - (a.stock > 0)).slice(0, 8) : [];
   const exactName = ql && products.some((p) => p.name.trim().toLowerCase() === ql);
@@ -328,8 +330,17 @@ export function AddStock() {
   };
   const myDrafts = draftsFor(db, { user, branchId, kind: 'delivery' }).filter((x) => x.id !== form.draftId);
 
+  // one delivery per press: a second click (or Enter) while the first is still being saved is ignored, so stock is
+  // never received twice
+  const receivingRef = useRef(false);
+  const [receiving, setReceiving] = useState(false);
   const save = async (e) => {
     e.preventDefault();
+    if (receivingRef.current) return;
+    receivingRef.current = true; setReceiving(true);
+    try { await receive(e); } finally { receivingRef.current = false; setReceiving(false); }
+  };
+  const receive = async (e) => {
     const badDate = e.currentTarget.querySelector('.date-input.bad input[type=text]');
     if (badDate) { badDate.focus(); return toast(`${badDate.getAttribute('aria-label') || 'A date'}: ${badDate.title.replace(/^This date is in the past$/, 'that date has already passed')}. Fix the box marked in red; nothing was received.`, 'error'); }
     const unpicked = form.lines.filter((l) => l.read && !l.productId && Number(l.qty) > 0);
@@ -653,7 +664,7 @@ export function AddStock() {
         <div className="form-actions">
           <div className="grow muted small">{form.lines.some((l) => l.productId) ? 'Check the lines against the supplier\'s invoice, then receive.' : 'Add the medicines on the invoice.'}</div>
           <button type="button" className="btn ghost" onClick={saveDraft} title="Keep this delivery to finish later (also from another device)">Save as draft</button>
-          <button className="btn primary" disabled={!!scanned && !checked}>Receive stock</button>
+          <button className="btn primary" disabled={(!!scanned && !checked) || receiving}>{receiving ? <><Loader2 size={16} className="spin" />Receiving…</> : 'Receive stock'}</button>
         </div>
       </form>
     </div>

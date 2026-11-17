@@ -10,6 +10,7 @@ import { Modal, SearchBox, Empty, PdfButton, ReceiptPdfButton, PayChip, usePages
 import { ask, toast } from '../feedback.jsx';
 import { Barcode } from '../barcode.jsx';
 import { stockParts, kitContents } from '../kits.js';
+import { cartSubtotal, lineTotal, taxOf, round } from '../money.js';
 // step 22: what the client still owes on a sale (an insurer's share is billed to the insurer); shown on the receipt
 // even after a refund, as before
 const billed = (s) => (s.insurance ? Math.max(0, Number(s.insurance.share) || 0) : 0);
@@ -189,15 +190,23 @@ export default function Sales() {
 
   const refund = async (sale) => {
     if (!(await ask({ title: `Refund ${sale.number}?`, message: `${fmt(sale.total)} will be refunded and the items returned to stock (same batches).`, confirmText: 'Refund', danger: true }))) return;
-    update((d) => {
-      put(d, 'sales', { ...sale, status: 'refunded', refundedBy: user.name, refundedAt: now() });
-      for (const i of sale.items) {
-        // a kit line returns each of its medicines to the batches they came from (src/kits.js)
-        for (const a of stockParts(i)) move(d, { productId: a.productId, qty: a.qty, type: 'Refund', ref: sale.number, user: user.name, batchId: a.batchId, branchId: sale.branchId || MAIN_BRANCH });
-      }
-      audit(d, user, 'Refund', `${sale.number} · ${fmt(sale.total)}`, sale.branchId || MAIN_BRANCH);
-    });
+    // the sale as it is now (another device, or a second click, may have refunded or edited it since this list was
+    // drawn): refunded once only, and what goes back to stock is what the sale holds now
+    let already = false;
+    try {
+      await update((d) => {
+        const cur = d.sales.find((x) => x.id === sale.id);
+        if (!cur || cur.status === 'refunded') { already = true; return; }
+        put(d, 'sales', { ...cur, status: 'refunded', refundedBy: user.name, refundedAt: now() });
+        for (const i of cur.items) {
+          // a kit line returns each of its medicines to the batches they came from (src/kits.js)
+          for (const a of stockParts(i)) move(d, { productId: a.productId, qty: a.qty, type: 'Refund', ref: cur.number, user: user.name, batchId: a.batchId, branchId: cur.branchId || MAIN_BRANCH });
+        }
+        audit(d, user, 'Refund', `${cur.number} · ${fmt(cur.total)}`, cur.branchId || MAIN_BRANCH);
+      });
+    } catch (e) { return toast(`${sale.number} was NOT refunded: ${e.message}`, 'error'); }
     setView(null);
+    if (already) return toast(`${sale.number} was already refunded; nothing was changed`, 'warn');
     toast(`${sale.number} refunded and items returned to stock`);
   };
 
@@ -296,15 +305,17 @@ function SaleEditor({ sale, onClose }) {
   const [f, setF] = useState(() => ({ customerId: sale.customerId || 'walk-in', payment: sale.payment, discount: sale.discount || 0, paid: sale.paid ?? sale.total, reason: '', items: sale.items.map((i) => ({ ...i })) }));
   const [q, setQ] = useState('');
   const br = sale.branchId || MAIN_BRANCH;
-  const subtotal = f.items.reduce((a, i) => a + Number(i.qty || 0) * Number(i.price || 0), 0);
-  const disc = Math.min(Number(f.discount) || 0, subtotal);
-  const tax = (subtotal - disc) * rate;
-  const total = subtotal - disc + tax;
+  // the same money rules as the till (src/money.js): each line rounds to the currency's precision, tax rounds once
+  const money = Number(db.settings.decimals ?? 0);
+  const subtotal = cartSubtotal(f.items, money);
+  const disc = Math.max(0, Math.min(round(Number(f.discount) || 0, money), subtotal));
+  const tax = taxOf(subtotal - disc, rate * 100, { decimals: money });
+  const total = round(subtotal - disc + tax, money);
   const ptype = methods.find((m) => m.name === f.payment)?.type || (f.payment === 'Credit' ? 'credit' : 'cash');
   const setItem = (k, patch) => setF((x) => ({ ...x, items: x.items.map((i, n) => (n === k ? { ...i, ...patch } : i)) }));
   const matches = q.trim() ? products.filter((p) => p.stock > 0 && `${p.name} ${p.generic} ${p.barcode}`.toLowerCase().includes(q.toLowerCase()) && !f.items.some((i) => i.id === p.id)).slice(0, 8) : [];
   const recordOnly = !!sale.imported; // copied from another system: correct the record, today's stock is not touched
-  const save = (e) => {
+  const save = async (e) => {
     e.preventDefault();
     if (!f.items.some((i) => Number(i.qty) > 0)) return toast('A sale needs at least one item. To cancel the whole sale, refund it.', 'warn');
     if (!f.reason.trim()) return toast('Say why the sale is being changed', 'warn');
@@ -315,7 +326,12 @@ function SaleEditor({ sale, onClose }) {
       if (extra > have) return toast(`Only ${have} more ${i.name} in stock`, 'error');
     }
     const customer = db.customers.find((c) => c.id === f.customerId);
-    update((d) => {
+    // the stock moves below are worked out from the sale as it was opened: if it was refunded or changed since (on
+    // another device, say), nothing is saved and the editor asks for the sale to be opened again
+    let stale = false;
+    try { await update((d) => {
+      const cur = d.sales.find((x) => x.id === sale.id);
+      if (!cur || cur.status === 'refunded' || (cur.updatedAt || '') !== (sale.updatedAt || '')) { stale = true; return; }
       const old = new Map(sale.items.map((i) => [i.id, i]));
       const items = [];
       for (const it of f.items) {
@@ -350,7 +366,8 @@ function SaleEditor({ sale, onClose }) {
         customerId: f.customerId, customerName: customer?.name || 'Walk-in Customer', editedBy: user.name, editedAt: now(),
         edits: [...(sale.edits || []), { at: now(), by: user.name, role: user.role, reason: f.reason.trim(), recordOnly, before: saleSnapshot(sale), after: saleSnapshot({ items, total, payment: f.payment, discount: disc, customerName: customer?.name || 'Walk-in Customer', paid }) }] });
       audit(d, user, 'Sale edited', `${sale.number}: ${fmt(sale.total)} → ${fmt(total)} (${f.reason.trim()})`, br);
-    });
+    }); } catch (err) { return toast(`${sale.number} was NOT changed: ${err.message}`, 'error'); }
+    if (stale) { onClose(); return toast(`${sale.number} was refunded or changed since it was opened; nothing was saved. Open it again to edit it.`, 'warn'); }
     toast(recordOnly ? `${sale.number} corrected (record only)` : `${sale.number} updated; stock adjusted`);
     onClose();
   };
@@ -369,7 +386,7 @@ function SaleEditor({ sale, onClose }) {
                 <td>{i.name}{i.kit && <><br /><small className="muted">KIT · {kitContents(i)}</small></>}</td>
                 <td><input type="number" min="0" value={i.qty} disabled={!!i.kit} title={i.kit ? 'A kit\'s count can\'t be changed here: remove the line (its medicines go back to stock) or refund the sale' : undefined} onChange={(e) => setItem(k, { qty: e.target.value })} /></td>
                 <td><input type="number" min="0" step="any" value={i.price} onChange={(e) => setItem(k, { price: e.target.value })} /></td>
-                <td className="num">{fmt(Number(i.qty || 0) * Number(i.price || 0))}</td>
+                <td className="num">{fmt(lineTotal(i, money))}</td>
                 <td><button type="button" className="icon-btn" title="Remove" onClick={() => setF({ ...f, items: f.items.filter((_, n) => n !== k) })}><Trash2 size={15} /></button></td>
               </tr>
             ))}

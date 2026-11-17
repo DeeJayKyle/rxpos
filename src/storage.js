@@ -111,6 +111,11 @@ function idbStorage() {
       const db = await conn();
       return /** @type {number} */ (await req(db.transaction('outbox').objectStore('outbox').count()));
     },
+    /** How many record buckets are stored (0 = nothing at all, whatever the storage version says) */
+    async recordCount() {
+      const db = await conn();
+      return /** @type {number} */ (await req(db.transaction('records').objectStore('records').count()));
+    },
     /** Remove entries the cloud has accepted. @param {number[]} keys */
     async ack(keys) {
       if (!keys.length) return;
@@ -165,6 +170,7 @@ function memoryStorage() {
     },
     async outbox() { return [...ob.entries()].map(([k, v]) => ({ ...v, key: k })); },
     async count() { return ob.size; },
+    async recordCount() { return records.size; },
     /** @param {number[]} keys */ async ack(keys) { for (const k of keys) ob.delete(k); },
     /** @param {OutboxEntry[]} entries */ async reject(entries, reason = '') { rejected = [...rejected, ...entries.map((e) => ({ ...e, reason }))]; for (const e of entries) if (e.key != null) ob.delete(e.key); },
     async rejected() { return rejected; },
