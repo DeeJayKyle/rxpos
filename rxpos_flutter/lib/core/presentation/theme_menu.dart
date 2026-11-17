@@ -52,48 +52,6 @@ class ThemeMenu extends ConsumerWidget {
           child: ConstrainedBox(
             constraints: BoxConstraints(maxWidth: 380, maxHeight: (MediaQuery.sizeOf(context).height - 72).clamp(200, 620)),
             child: ListView(key: const Key('theme-list'), shrinkWrap: true, padding: const EdgeInsets.only(bottom: 8), children: [
-              // the ten design systems, folded into one row (the current one named) so the menu stays short
-              ExpansionTile(
-                key: const Key('design-systems'),
-                initiallyExpanded: false,
-                leading: const Icon(Icons.dashboard_customize_outlined),
-                title: Text('Design system', style: t.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800)),
-                subtitle: Text(look.designSystem?.name ?? 'None: the theme and style below'),
-                childrenPadding: const EdgeInsets.only(bottom: 6),
-                children: [
-                  for (final (g, gname) in designGroups) ...[
-                    Padding(padding: const EdgeInsets.fromLTRB(16, 2, 16, 2), child: Text(gname, style: t.textTheme.labelSmall?.copyWith(color: t.colorScheme.onSurfaceVariant))),
-                    for (final d in designSystems.where((d) => d.group == g))
-                      ListTile(
-                        key: ValueKey('design-${d.id}'),
-                        dense: true,
-                        selected: look.design == d.id,
-                        leading: _DesignSwatch(d),
-                        title: Row(children: [
-                          Flexible(child: Text(d.name, overflow: TextOverflow.ellipsis)),
-                          if (d.forTouch && tokensOf(context).touch) ...[
-                            const SizedBox(width: 6),
-                            Text('Best for this device', style: t.textTheme.labelSmall?.copyWith(color: t.colorScheme.tertiary, fontWeight: FontWeight.w700)),
-                          ],
-                        ]),
-                        subtitle: Text(d.description, maxLines: 2, overflow: TextOverflow.ellipsis),
-                        trailing: look.design == d.id ? const Icon(Icons.check_circle, size: 20) : null,
-                        onTap: () {
-                          ctl.designSystem(d.id);
-                          close();
-                        },
-                      ),
-                  ],
-                  if (look.design.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      child: TextButton.icon(key: const Key('design-off'), onPressed: () {
-                        ctl.designSystem('');
-                        close();
-                      }, icon: const Icon(Icons.undo, size: 18), label: const Text('Leave the design system (keep its colours)')),
-                    ),
-                ],
-              ),
               head('Appearance'),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -107,30 +65,6 @@ class ThemeMenu extends ConsumerWidget {
                   selected: {mode},
                   onSelectionChanged: (v) => v.first == 'system' ? ctl.followSystem() : ctl.base(v.first == 'dark', allowed, preferred: '${branding?['defaultTheme'] ?? ''}'),
                 ),
-              ),
-              head('Accent'),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: Wrap(spacing: 10, children: [
-                  for (final (id, name) in [('', 'Theme colour'), for (final a in accents) (a.$1, a.$2)])
-                    Tooltip(
-                      message: name,
-                      child: InkWell(
-                        key: ValueKey('accent-${id.isEmpty ? 'theme' : id}'),
-                        customBorder: const CircleBorder(),
-                        onTap: () => ctl.accent(id),
-                        child: Container(
-                          width: 30,
-                          height: 30,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(color: look.accent == id ? t.colorScheme.onSurface : Colors.transparent, width: 2.5),
-                            gradient: LinearGradient(colors: [Color(withAccent(current, id).primary), Color(withAccent(current, id).primary2)]),
-                          ),
-                        ),
-                      ),
-                    ),
-                ]),
               ),
               // the themes by group (themes.dart paletteGroups): Light, Dashboard looks, Dark
               for (final g in paletteGroups)
@@ -187,34 +121,3 @@ class ThemeMenu extends ConsumerWidget {
   }
 }
 
-/// A small preview of a design system: its backdrop or page colour, a panel, and its two brand colours.
-class _DesignSwatch extends StatelessWidget {
-  const _DesignSwatch(this.d);
-  final DesignSystem d;
-  @override
-  Widget build(BuildContext context) {
-    final p = paletteById(d.palette);
-    final t = d.tokens;
-    final r = BorderRadius.circular(t.radius.clamp(0, 8));
-    return Container(
-      width: 44,
-      height: 32,
-      decoration: BoxDecoration(
-        borderRadius: r,
-        border: Border.all(color: t.ink ?? t.glow ?? Color(p.borderStrong), width: t.ink != null ? 2 : 1),
-        color: Color(p.bg),
-        gradient: t.backdrop.length > 1 ? LinearGradient(colors: t.backdrop) : null,
-        boxShadow: t.hardShadow > 0 ? [BoxShadow(color: t.ink ?? Colors.black, offset: const Offset(2, 2))] : t.glow != null ? [BoxShadow(color: t.glow!.withValues(alpha: .6), blurRadius: 6)] : null,
-      ),
-      padding: const EdgeInsets.all(5),
-      child: Row(children: [
-        Expanded(child: Container(decoration: BoxDecoration(color: Color(p.surface).withValues(alpha: t.glassAlpha ?? 1), borderRadius: r))),
-        const SizedBox(width: 3),
-        Column(children: [
-          Expanded(child: Container(width: 8, color: Color(p.primary))),
-          Expanded(child: Container(width: 8, color: Color(p.primary2))),
-        ]),
-      ]),
-    );
-  }
-}

@@ -16,19 +16,12 @@ check('the 15 two-colour themes in 5 sets of 3, each one in a group', THEMES.len
 check('every retired id resolves to a kept theme (saved preferences keep working)', Object.entries(RETIRED).every(([o, n]) => !THEMES.some((t) => t.id === o) && themeById(o).id === n) && themeById('daylight-clinical').id === 'mint-teal' && themeById('midnight-pro').id === 'navy-teal' && themeById('oled').id === 'navy-teal');
 check('every theme is flat (no page gradient)', THEMES.every((t) => themeVars(t)['--bg-grad'] === 'none'));
 
-// Accent presets: only the brand colour changes, and every palette stays AA readable with every preset
+// only the 15 themes (the owner's choice, 17 Nov 2026): no accent presets; a saved one changes nothing
+check('no accent presets: only the themes\' own colours', ACCENTS.length === 0 && withAccent(THEMES[0], 'violet') === THEMES[0]);
 let worst = Infinity, where = '';
-for (const t of THEMES) for (const a of ACCENTS) {
-  const v = themeVars(withAccent(t, a.id));
-  const [g1, g2] = v['--accent-grad'].match(/#[0-9a-f]{6}/gi);
-  for (const [x, y] of [[v['--primary-text'], v['--surface']], [v['--on-accent'], g1], [v['--on-accent'], g2], [v['--muted'], v['--surface']]]) {
-    const r = contrast(x, y); if (r < worst) { worst = r; where = `${t.id} + ${a.id}`; }
-  }
-}
-check(`every theme × accent preset keeps links, button text and muted text at AA (worst ${worst.toFixed(2)}, ${where})`, worst >= 4.5);
-const hl = THEMES.find((t) => t.id === 'mint-teal');
-check('an accent changes only the brand colours', JSON.stringify({ ...withAccent(hl, 'violet').c, primary: 0, primary2: 0 }) === JSON.stringify({ ...hl.c, primary: 0, primary2: 0 }));
-check('an unknown accent leaves the palette as it is', withAccent(hl, 'nope') === hl);
+for (const t of THEMES) { const v = themeVars(t); const [g1, g2] = v['--accent-grad'].match(/#[0-9a-f]{6}/gi);
+  for (const [x, y] of [[v['--primary-text'], v['--surface']], [v['--on-accent'], g1], [v['--on-accent'], g2], [v['--muted'], v['--surface']]]) { const r = contrast(x, y); if (r < worst) { worst = r; where = t.id; } } }
+check(`every theme keeps links, button text and muted text at AA (worst ${worst.toFixed(2)}, ${where})`, worst >= 4.5);
 
 // two colours (the owner's choice, 17 Nov 2026): every colour a page shows is a shade of the strong colour or the menu
 // colour (or white / near black); warnings and the table colours included, each readable on the page

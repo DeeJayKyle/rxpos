@@ -17,6 +17,8 @@ Nothing to do on the tills: they update by themselves.
   - **Dark & Calm:** RxPOS Navy Teal (the dark theme, and Premium UI), Steel Blue, Sage
 
   A device or a pharmacy on an older theme moves to the closest new one by itself.
+- **Only these 15 themes.** The accent presets (both apps) and the Flutter design systems are gone, so nothing can put
+  other colours on a page; a device that used one keeps its theme, or moves to Mint Teal.
 - **The menu, as Charcoal Lime:** a deep menu in the theme's own colour, its pages as light soft-glass buttons and the
   open page a solid bright pill.
 - **Your account is top right**, beside the theme button: a drop-down with Change my password, quick PIN, two-step

@@ -1,4 +1,4 @@
-// Appearance: Light / Dark / Follow system (live with the OS), accent presets that never touch status colours,
+// Appearance: Light / Dark / Follow system (live with the OS), no accent presets (only the 15 themes),
 // and the premium dashboard (profit, transactions, alert tiles, chart period) on real data.
 //   node v33-appearance.mjs <base> <ownerKey> <outDir>
 import puppeteer from 'puppeteer-core';
@@ -74,18 +74,13 @@ await openMenu(p); await wait(200);
 await pickMode(p, 'Light'); await wait(300);
 check('Light from a dark palette goes to Mint Teal', (await html(p)).palette === 'mint-teal');
 
-// ---- accent presets ----
+// ---- only the 15 themes (17 Nov 2026): no accent presets; an accent saved before is ignored ----
+await openMenu(p); await wait(200);
+check('the theme menu offers no accent presets', await p.evaluate(() => !document.querySelector('.accent-row, .accent-opt')));
 const prim0 = await css(p, '--primary');
-await openMenu(p); await wait(200);
-await p.evaluate(() => document.querySelector('.accent-opt[aria-label="Violet"]')?.click()); await wait(300);
-check('Violet accent is applied', (await html(p)).accent === 'violet' && (await css(p, '--primary')) !== prim0, await css(p, '--primary'));
-// two colours only (17 Nov 2026): the status colours are shades of the brand colour, so they follow the accent too
-check('an accent carries the status colours with it (two colours on the page)', (await css(p, '--ok')) !== ok0 && (await css(p, '--ok')).startsWith('#'), `${ok0} → ${await css(p, '--ok')}`);
-await p.reload({ waitUntil: 'networkidle2' }); await wait(1500);
-check('the accent survives a reload', (await html(p)).accent === 'violet');
-await openMenu(p); await wait(200);
-await p.evaluate(() => document.querySelector('.accent-opt[aria-label="Theme colour"]')?.click()); await wait(300);
-check('Theme colour removes the accent', (await html(p)).accent === '' && (await p.evaluate(() => localStorage.getItem('rxpos-accent'))) === null);
+await p.evaluate(() => localStorage.setItem('rxpos-accent', 'violet')); await p.reload({ waitUntil: 'networkidle2' }); await wait(1500);
+check('an accent saved before changes nothing', (await html(p)).accent === '' && (await css(p, '--primary')) === prim0);
+await p.evaluate(() => localStorage.removeItem('rxpos-accent'));
 
 // ---- POS payment buttons coloured by kind; Reports payment donut ----
 await p.goto(base + '/' + slug + '#/pos', { waitUntil: 'networkidle2' }); await wait(1200);

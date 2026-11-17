@@ -172,12 +172,9 @@ function duoVars(c, dark) {
 // Accent presets: change only the brand / action colour of a palette (buttons, links, highlights). Status colours
 // (ok / warn / danger) are separate tokens and never follow the accent. Each pair is [primary, primary-2] per base;
 // themeVars() still makes the result readable (AA), as for any palette.
-export const ACCENTS = [
-  { id: 'emerald', name: 'Emerald', light: ['#008c58', '#0e9f96'], dark: ['#16a36a', '#20c9c3'] },
-  { id: 'ocean', name: 'Ocean Blue', light: ['#1d64d8', '#267bff'], dark: ['#267bff', '#20c9c3'] },
-  { id: 'violet', name: 'Violet', light: ['#6d43e0', '#8456f5'], dark: ['#8456f5', '#267bff'] },
-  { id: 'midnight', name: 'Midnight Turquoise', light: ['#0b7f86', '#13a3a0'], dark: ['#20c9c3', '#267bff'] },
-];
+// Accent presets were retired with the two-colour themes (the owner's choice, 17 Nov 2026: only the 15 themes' own
+// colours); a saved accent is ignored.
+export const ACCENTS = [];
 /** A palette with an accent preset applied (or unchanged when there is none) */
 export function withAccent(t, accentId) {
   const a = ACCENTS.find((x) => x.id === accentId);

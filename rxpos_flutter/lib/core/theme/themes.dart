@@ -125,22 +125,7 @@ String currentPaletteId(String id) => retiredPalettes[id] ?? id;
 
 /// The design systems' own palettes (design_systems.dart): used only through a design system, so the owner's choice
 /// of themes and the theme list stay those of the React app.
-const designPalettes = [
-  Palette('split-pane', 'Split-Pane Slate', false, bg: 0xFFF4F6F8, surface: 0xFFFFFFFF, surface2: 0xFFF7F9FB, border: 0xFFDCE2E8, borderStrong: 0xFFC3CCD6, text: 0xFF0F172A, muted: 0xFF5B6573, primary: 0xFF0F766E, primary2: 0xFF1D4ED8, sidebar: 0xFF0F172A, sidebar2: 0xFF1E293B, inspired: 'Split-Pane Hybrid Grid'),
-  Palette('target-tap', 'Target Tap', false, bg: 0xFFF1F6F5, surface: 0xFFFFFFFF, surface2: 0xFFF5FAF9, border: 0xFFD3E2DF, borderStrong: 0xFFA9C2BD, text: 0xFF0B1F1C, muted: 0xFF4A615C, primary: 0xFF0B7A75, primary2: 0xFF2563EB, sidebar: 0xFF0B1F1C, sidebar2: 0xFF12302B, inspired: 'Target Tap Ergonomic'),
-  Palette('nightlife', 'Nightlife Contrast', true, bg: 0xFF121212, surface: 0xFF1E1E1E, surface2: 0xFF242424, border: 0xFF333333, borderStrong: 0xFF4A4A4A, text: 0xFFEDEDED, muted: 0xFFA8A8A8, primary: 0xFF22D3EE, primary2: 0xFFA3E635, sidebar: 0xFF0D0D0D, sidebar2: 0xFF161616, inspired: 'Nightlife Contrast'),
-  Palette('daylight', 'Daylight Retail', false, bg: 0xFFFFFFFF, surface: 0xFFFFFFFF, surface2: 0xFFF3F4F6, border: 0xFFD1D5DB, borderStrong: 0xFF9CA3AF, text: 0xFF030712, muted: 0xFF374151, primary: 0xFF0B5FD7, primary2: 0xFF0E7490, sidebar: 0xFF111827, sidebar2: 0xFF1F2937, inspired: 'Daylight Retail'),
-  Palette('hud', 'Diagnostic HUD', true, bg: 0xFF0B1117, surface: 0xFF111A22, surface2: 0xFF16212B, border: 0xFF22313D, borderStrong: 0xFF34495A, text: 0xFFE6EDF3, muted: 0xFF9FB0C0, primary: 0xFF22C55E, primary2: 0xFF38BDF8, sidebar: 0xFF070C11, sidebar2: 0xFF0D151C, inspired: 'Hardware Diagnostic HUD'),
-  Palette('brutalist', 'Neo-Brutalist Pop', false, bg: 0xFFFFF1C1, surface: 0xFFFFFFFF, surface2: 0xFFFFF8E1, border: 0xFF000000, borderStrong: 0xFF000000, text: 0xFF000000, muted: 0xFF2B2B2B, primary: 0xFF2563EB, primary2: 0xFFFF4D6D, sidebar: 0xFF000000, sidebar2: 0xFF1A1A1A, inspired: 'Neo-Brutalist Pop'),
-  Palette('holo', 'Aurora Holographic', false, bg: 0xFFF3F0FF, surface: 0xFFFFFFFF, surface2: 0xFFF7F5FF, border: 0xFFE4DDF7, borderStrong: 0xFFCFC4EE, text: 0xFF1E1B2E, muted: 0xFF5B5675, primary: 0xFF7C3AED, primary2: 0xFF0EA5A4, sidebar: 0xFF1E1B2E, sidebar2: 0xFF2A2540, inspired: 'Aurora Glow / Holographic'),
-  Palette('retrowave', 'Retrowave Cyber-Tech', true, bg: 0xFF140B2E, surface: 0xFF1E1340, surface2: 0xFF26194F, border: 0xFF3A2A6E, borderStrong: 0xFF5B3FA0, text: 0xFFF5F0FF, muted: 0xFFB9AEDC, primary: 0xFFFF2E97, primary2: 0xFF00E5FF, sidebar: 0xFF0E0722, sidebar2: 0xFF160D34, inspired: 'Retrowave Cyber-Tech'),
-  Palette('bauhaus', 'Editorial Bauhaus', false, bg: 0xFFF4EFE6, surface: 0xFFFFFFFF, surface2: 0xFFFAF6EE, border: 0xFF111111, borderStrong: 0xFF111111, text: 0xFF111111, muted: 0xFF3A3A3A, primary: 0xFF1F4FD8, primary2: 0xFFD7263D, sidebar: 0xFF111111, sidebar2: 0xFF1F1F1F, inspired: 'Editorial Bauhaus'),
-  Palette('sunset', 'Sunset Glass', true, bg: 0xFF4A0E3F, surface: 0xFF2A0B3D, surface2: 0xFF3A1050, border: 0xFF7A3B7A, borderStrong: 0xFFA05A9A, text: 0xFFFFFFFF, muted: 0xFFF3DDEB, primary: 0xFFFFB86B, primary2: 0xFFFF7AA8, sidebar: 0xFF1F0830, sidebar2: 0xFF2A0B3D, inspired: 'Sunset Glassmorphic'),
-  Palette('rxpos-green', 'RxPOS Green', false, bg: 0xFFF7F6F0, surface: 0xFFFFFFFF, surface2: 0xFFF2F5EF, border: 0xFFE3E7DF, borderStrong: 0xFFC8D1C3, text: 0xFF13241A, muted: 0xFF56665B, primary: 0xFF1B7A45, primary2: 0xFF2E9E5B, sidebar: 0xFF0E4D2C, sidebar2: 0xFF11603A, inspired: 'RxPOS Green'),
-  Palette('studio', 'Studio Grid', false, bg: 0xFFFFFFFF, surface: 0xFFFFFFFF, surface2: 0xFFF7F7F8, border: 0xFFE6E6EA, borderStrong: 0xFFCFCFD6, text: 0xFF0A0A0B, muted: 0xFF5C5C66, primary: 0xFF5B4FF0, primary2: 0xFF7C6CF7, sidebar: 0xFF111113, sidebar2: 0xFF1B1B1F, inspired: 'Studio Grid'),
-  Palette('lavender', 'Lavender Dream', false, bg: 0xFFEDE7FF, surface: 0xFFFFFFFF, surface2: 0xFFF6F2FF, border: 0xFFE3DAFB, borderStrong: 0xFFC9BCF2, text: 0xFF241B45, muted: 0xFF5E5580, primary: 0xFF7B5CF5, primary2: 0xFFE76BB8, sidebar: 0xFF241B45, sidebar2: 0xFF30255A, inspired: 'Lavender Dream'),
-  Palette('travel', 'Travel Orange', false, bg: 0xFFF3F1F8, surface: 0xFFFFFFFF, surface2: 0xFFF8F6FB, border: 0xFFE4DEEC, borderStrong: 0xFFC9BED8, text: 0xFF2B1C38, muted: 0xFF6A5C78, primary: 0xFFE8650A, primary2: 0xFF4A2B5E, sidebar: 0xFF2B1C38, sidebar2: 0xFF3A2650, inspired: 'Travel Orange'),
-];
+const designPalettes = <Palette>[]; // retired with the design systems (17 Nov 2026)
 
 const premiumTheme = 'navy-teal';
 
@@ -166,12 +151,7 @@ String paletteFor(bool dark, [List<Palette> list = palettes, String? preferred])
         .id;
 
 /// Accent presets: change only the brand / action colour of a palette; status colours never follow the accent.
-const accents = [
-  ('emerald', 'Emerald', (0xFF008C58, 0xFF0E9F96), (0xFF16A36A, 0xFF20C9C3)),
-  ('ocean', 'Ocean Blue', (0xFF1D64D8, 0xFF267BFF), (0xFF267BFF, 0xFF20C9C3)),
-  ('violet', 'Violet', (0xFF6D43E0, 0xFF8456F5), (0xFF8456F5, 0xFF267BFF)),
-  ('midnight', 'Midnight Turquoise', (0xFF0B7F86, 0xFF13A3A0), (0xFF20C9C3, 0xFF267BFF)),
-];
+const accents = <(String, String, (int, int), (int, int))>[]; // retired: only the 15 themes' own colours (17 Nov 2026)
 
 Palette withAccent(Palette p, String accent) {
   final a = accents.where((x) => x.$1 == accent).firstOrNull;

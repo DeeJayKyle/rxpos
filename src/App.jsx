@@ -261,17 +261,6 @@ function ThemePicker({ theme, setTheme, mode, setMode, accent, setAccent, style,
                 onClick={() => (id === 'system' ? setMode('system') : pickBase(id))}><Icon size={14} />{label}</button>
             ))}
           </div>
-          <div className="bell-head">Accent</div>
-          <div className="accent-row" role="radiogroup" aria-label="Accent colour">
-            {[{ id: '', name: 'Theme colour' }, ...ACCENTS].map((a) => {
-              const c = (current ? withAccent(current, a.id) : null)?.c;
-              return (
-                <button key={a.id || 'default'} role="radio" aria-checked={accent === a.id} title={a.name} aria-label={a.name}
-                  className={'accent-opt' + (accent === a.id ? ' on' : '')} style={c ? { background: `linear-gradient(135deg, ${c.primary}, ${c.primary2})` } : undefined}
-                  onClick={() => setAccent(a.id)} />
-              );
-            })}
-          </div>
           {/* themes by group (src/themes.js THEME_GROUPS): Clinical, Colourful, Dashboard looks, Dark, High contrast */}
           {THEME_GROUPS.map((g) => [g, list.filter((t) => (t.group || 'Clinical') === g)]).filter(([, ts]) => ts.length).map(([g, ts]) => (
             <div key={g} className="theme-group" role="group" aria-label={g}>

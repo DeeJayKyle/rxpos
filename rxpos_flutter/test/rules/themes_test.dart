@@ -1,4 +1,4 @@
-// Colour themes (src/themes.js): the 15 two-colour palettes in five sets, readable everywhere (WCAG AA), accents, the owner's choice, light / dark.
+// Colour themes (src/themes.js): the 15 two-colour palettes in five sets, readable everywhere (WCAG AA), the owner's choice, light / dark.
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -53,16 +53,18 @@ void main() {
     expect(allowedPalettes(null), hasLength(15));
   });
 
-  test('accents change only the action colour; the look is kept as JSON', () {
-    final p = paletteById('lavender');
-    expect(withAccent(p, 'ocean').primary, 0xFF1D64D8);
-    expect(withAccent(p, 'ocean').bg, p.bg);
+  test('only the 15 themes (the owner\'s choice): no accent presets, no design systems; old saved looks fall back to them', () {
+    expect(accents, isEmpty);
+    expect(designSystems, isEmpty);
+    expect(designPalettes, isEmpty);
     final l = Look.parse('{"theme":"nord","mode":"system","accent":"violet","surface":"glass","level":"vivid"}');
-    expect((l.theme, l.system, l.accent, l.surface, l.level), ('navy-teal', true, 'violet', 'glass', 'vivid'));
+    expect((l.theme, l.system, l.accent, l.surface, l.level), ('navy-teal', true, '', 'glass', 'vivid'), reason: 'the accent is dropped');
+    expect(Look.parse('{"v":4,"design":"brutalist","theme":"brutalist"}').design, '');
+    expect(Look.parse('{"v":4,"design":"brutalist","theme":"brutalist"}').theme, 'mint-teal');
     expect(Look.parse('{"theme":"nope","surface":"x"}').theme, 'mint-teal');
-    // the React app's look from the start: Mint Teal (RxPOS Navy Teal when the system is dark), no design system
+    // the React app's look from the start: Mint Teal (RxPOS Navy Teal when the system is dark)
     expect((Look.parse('garbage').design, Look.parse('garbage').theme, Look.parse('garbage').system, Look.parse('garbage').surface), ('', 'mint-teal', true, 'flat'));
-    expect(buildTheme(p, vivid: true).extension<LookLevel>()!.vivid, isTrue);
+    expect(buildTheme(paletteById('lavender'), vivid: true).extension<LookLevel>()!.vivid, isTrue);
   });
 
   test('Aurora is the standard look: a device on the old standard moves to it once; Flat chosen since stays', () {
@@ -71,59 +73,11 @@ void main() {
     // version 4: the React app's look is the standard; a device on RxPOS Green (the old Flutter standard) moves off it once
     expect(Look.parse('{"v":3,"design":"rxpos-green","theme":"rxpos-green"}').design, '');
     expect(Look.parse('{"v":3,"design":"rxpos-green","theme":"rxpos-green"}').theme, 'mint-teal');
-    expect(Look.parse('{"v":4,"design":"rxpos-green","theme":"rxpos-green"}').design, 'rxpos-green', reason: 'chosen since: kept');
-    expect(Look.parse('{"v":3,"design":"split-pane","theme":"split-pane"}').design, 'split-pane');
     expect(Look.parse('{"v":2,"theme":"dracula","surface":"aurora"}').design, '');
     expect(Look.parse(jsonEncode(Look.parse('{"surface":"flat"}').copyWith(surface: 'flat').toJson())).surface, 'flat');
     final t = buildTheme(paletteById('electric-blue'), surface: 'aurora');
     expect(t.extension<DesignTokens>()!.hasBackdrop, isTrue);
     expect(t.cardTheme.color!.a, lessThan(1), reason: 'translucent panels over the backdrop');
     expect(buildTheme(paletteById('electric-blue')).extension<DesignTokens>()!.hasBackdrop, isFalse);
-  });
-
-  group('design systems', () {
-    test('fourteen of them, each with its own palette; picked by id, unknown ids ignored', () {
-      expect(designSystems.length, 14);
-      expect(designSystems.where((d) => d.group == 'pos').length, 6);
-      for (final d in designSystems) {
-        expect(paletteById(d.palette).id, d.palette, reason: d.id);
-      }
-      expect(Look.parse('{"design":"brutalist"}').designSystem?.name, 'Neo-Brutalist Pop');
-      expect(Look.parse('{"v":3,"design":"nope"}').design, '');
-    });
-
-    test('every design is readable: text on its page and panels at least 4.5:1, white or dark text on its buttons', () {
-      for (final d in designSystems) {
-        final t = buildTheme(paletteById(d.palette), surface: d.surface, tokens: d.tokens);
-        final cs = t.colorScheme;
-        final bg = d.tokens.backdrop.isNotEmpty ? d.tokens.backdrop : [t.scaffoldBackgroundColor];
-        for (final b in [...bg, cs.surface]) {
-          expect(contrast(cs.onSurface.toARGB32(), b.toARGB32()), greaterThanOrEqualTo(4.5), reason: '${d.id}: text on ${b.toARGB32().toRadixString(16)}');
-        }
-        expect(contrast(cs.onPrimary.toARGB32(), cs.primary.toARGB32()), greaterThanOrEqualTo(4.5), reason: '${d.id}: button text');
-        for (final b in [if (d.tokens.glassAlpha != null) ...d.tokens.backdrop, cs.surface]) {
-          expect(contrast(cs.tertiary.toARGB32(), b.toARGB32()), greaterThanOrEqualTo(4.5), reason: '${d.id}: prices and links');
-        }
-      }
-    });
-
-    test('tap targets: 44 px with a mouse, 48 dp with a finger, 64 for Target Tap whatever the device', () {
-      Size? filled(ThemeData t) => t.filledButtonTheme.style!.minimumSize!.resolve({});
-      final split = designById('split-pane')!, tap = designById('target-tap')!;
-      expect(filled(buildTheme(paletteById(split.palette), tokens: split.tokens))!.height, 44);
-      expect(filled(buildTheme(paletteById(split.palette), tokens: split.tokens, touch: true))!.height, 48);
-      expect(filled(buildTheme(paletteById(tap.palette), tokens: tap.tokens))!.height, 64);
-      expect(buildTheme(paletteById('light'), touch: true).materialTapTargetSize, MaterialTapTargetSize.padded);
-    });
-
-    test('Neo-Brutalist: thick black borders and a hard shadow drawn only outside the card; Bauhaus: square corners', () {
-      final b = designById('brutalist')!;
-      final shape = buildTheme(paletteById(b.palette), tokens: b.tokens).cardTheme.shape! as HardShadowBorder;
-      expect((shape.side.width, shape.side.color, shape.offset), (2.5, Colors.black, 2.0));
-      final bau = designById('bauhaus')!;
-      final r = buildTheme(paletteById(bau.palette), tokens: bau.tokens).cardTheme.shape! as RoundedRectangleBorder;
-      expect(r.borderRadius, BorderRadius.circular(0));
-      expect(buildTheme(paletteById(bau.palette), tokens: bau.tokens).textTheme.headlineSmall!.fontFamily, 'Georgia');
-    });
   });
 }
