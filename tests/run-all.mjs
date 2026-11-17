@@ -152,6 +152,8 @@ const SUITES = [
   ['kits: build, sell, swap, label, refund', 'v82-kits.mjs', ['.output/v82']],
   // every page on a PC and a phone, for design review: only on request (`npm test -- shots-all`)
   ...(process.argv[2] === 'shots-all' ? [['every page, PC and phone screenshots', 'shots-all.mjs', ['.output/all']]] : []),
+  // every theme on the dashboard and Sales History, for the owner's review: only on request (`npm test -- shots-themes`)
+  ...(process.argv[2] === 'shots-themes' ? [['every theme, two pages', 'shots-themes.mjs', ['.output/themes']]] : []),
   // performance timings: only on request (npm run bench), never part of npm test
   ...(process.argv[2] === 'bench' ? [['benchmarks', 'bench.mjs', ['.output/bench']]] : []),
   // speed on a slow phone CPU with a big pharmacy (timings vary between machines: on request, `npm test -- perf-speed`)

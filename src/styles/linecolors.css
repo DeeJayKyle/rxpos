@@ -4,7 +4,7 @@
    surface so every theme, dark ones included, keeps its text colour (checked in tests/contrast-test.mjs). */
 .invoice-sheet table.stock-lines { border-collapse: separate; border-spacing: 0; border: 1px solid var(--rule, var(--border)); border-radius: 8px; overflow: hidden; }
 .invoice-sheet table.stock-lines thead th {
-  background: color-mix(in srgb, var(--col, var(--text)) 16%, var(--surface));
+  background: color-mix(in srgb, var(--col, var(--text)) var(--head-tint, 16%), var(--surface));
   border-top: 4px solid var(--col, var(--text)); border-bottom: 1px solid color-mix(in srgb, var(--text) 35%, transparent);
   border-right: 1px solid var(--rule, var(--border)); color: var(--text);
 }

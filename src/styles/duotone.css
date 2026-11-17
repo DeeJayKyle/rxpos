@@ -1,0 +1,99 @@
+/* Two colours on every page (the owner's choice, 17 Nov 2026): whatever the theme, only its two colours show. Colour 1
+   (--primary, the menu --sidebar) is strong: buttons, the active tab, headings, warnings; colour 2 (--c2, the page) is
+   soft: tints of cards, table headings and row stripes. Warnings are shades of colour 1 (src/themes.js duoVars) and
+   always carry their words and icons. Loaded last, over the fixed colours in the other stylesheets. Screen only:
+   receipts and labels print as they always did. */
+@media screen {
+  /* the menu: the active page and its bar in the theme's strong colour */
+  :root[data-palette] .sidebar nav a.active::before { background: var(--primary); }
+  :root[data-palette][data-sidebar='dark'] .sidebar nav a.active svg { color: color-mix(in srgb, var(--primary) 70%, #fff); }
+  :root[data-palette][data-sidebar='dark'] .sidebar nav a.active { background: color-mix(in srgb, var(--primary) 26%, transparent); }
+  :root[data-palette][data-sidebar='dark'][data-palette$='blue'] .sidebar nav a.active,
+  :root[data-palette][data-sidebar='dark'][data-palette='forest-green'] .sidebar nav a.active,
+  :root[data-palette][data-sidebar='dark'][data-palette='lavender'] .sidebar nav a.active,
+  :root[data-palette][data-sidebar='dark'][data-palette='mint-teal'] .sidebar nav a.active,
+  :root[data-palette][data-sidebar='dark'][data-palette='sunny-orange'] .sidebar nav a.active { background: rgba(255, 255, 255, .2); color: #fff; }
+  :root[data-palette][data-sidebar='dark'][data-palette$='blue'] .sidebar nav a.active::before,
+  :root[data-palette][data-sidebar='dark'][data-palette='forest-green'] .sidebar nav a.active::before,
+  :root[data-palette][data-sidebar='dark'][data-palette='lavender'] .sidebar nav a.active::before,
+  :root[data-palette][data-sidebar='dark'][data-palette='mint-teal'] .sidebar nav a.active::before { background: #fff; }
+  :root[data-palette][data-sidebar='dark'][data-palette$='blue'] .sidebar nav a.active svg,
+  :root[data-palette][data-sidebar='dark'][data-palette='forest-green'] .sidebar nav a.active svg,
+  :root[data-palette][data-sidebar='dark'][data-palette='lavender'] .sidebar nav a.active svg,
+  :root[data-palette][data-sidebar='dark'][data-palette='mint-teal'] .sidebar nav a.active svg { color: #fff; }
+  :root[data-palette] .sidebar .count, :root[data-palette] .mega-item .count, :root[data-palette] .top-pill .count { background: color-mix(in srgb, var(--primary) 85%, #fff); color: var(--on-accent); }
+  :root[data-palette] .avatar { background: linear-gradient(135deg, var(--primary), var(--sidebar)); }
+  :root[data-palette] .brand-accent, :root[data-palette] .auth-hero h1 em, :root[data-palette] .auth-hero li svg { color: var(--primary); }
+
+  /* banners, covers and promos: the strong colour, deepened toward the menu */
+  :root[data-palette] :is(.spot-card, :root[data-palette] .spot-thumb, :root[data-palette] .spot-side):is(.tone-amber, :root[data-palette] .tone-violet, :root[data-palette] .tone-green, :root[data-palette] .tone-sky, :root[data-palette] .tone-teal),
+  :root[data-palette] .spot-card, :root[data-palette] :is(.cover-teal, :root[data-palette] .cover-violet, :root[data-palette] .cover-amber, :root[data-palette] .cover-slate) { background: linear-gradient(135deg, var(--sidebar), color-mix(in srgb, var(--primary) 70%, var(--sidebar))); }
+  :root[data-palette] :is(.spot-card, :root[data-palette] .spot-side) .spot-art { color: color-mix(in srgb, var(--primary) 60%, #fff); }
+  :root[data-palette] .promo-expiry .promo-art, :root[data-palette] .danger-art { background: linear-gradient(135deg, var(--primary), var(--sidebar)); }
+
+  /* warnings, toasts and pills: shades of the strong colour, with their words */
+  :root[data-palette] .pill.warn i, :root[data-palette] .toast.warn, :root[data-palette] .compose-ctx.edit { --warn: var(--warn); border-color: var(--warn); }
+  :root[data-palette] .toast.warn { background: var(--warn); }
+  :root[data-palette] .status-pill.ok, :root[data-palette] .status-pill.paid, :root[data-palette] .sale-saved.ok, :root[data-palette] .kit-ack.done { color: var(--ok); background: var(--ok-soft); border-color: transparent; }
+  :root[data-palette] .status-pill.warn, :root[data-palette] .status-pill.owing, :root[data-palette] .sale-saved.warn, :root[data-palette] .kit-ack, :root[data-palette] .kit-warn-tag, :root[data-palette] .kit-part.swapped, :root[data-palette] .omni-msg.warn { color: var(--warn); background: var(--warn-soft); border-color: transparent; }
+  :root[data-palette] .status-pill.info { color: var(--info); background: var(--info-soft); border-color: transparent; }
+  :root[data-palette] .status-pill.refunded, :root[data-palette] .kit-short-tag, :root[data-palette] .cart-line .badge.safety-cd, :root[data-palette] .cart-line .badge.safety-expired, :root[data-palette] .qty-input.invalid,
+  :root[data-palette] .account-logout, :root[data-palette] .ctx-menu button.danger { color: var(--danger); border-color: var(--danger); }
+  :root[data-palette] .date-input.bad > input[type=text], :root[data-palette] .invoice-sheet table.lines tbody .date-input.bad input[type=text] { border-color: var(--danger); color: var(--danger); }
+  :root[data-palette] .bento-delta.up { color: var(--ok); } .bento-delta.down { color: var(--danger); }
+  :root[data-palette] .invoice-totals tr.due td { color: var(--warn); }
+  :root[data-palette] .kit-badge { background: var(--primary); color: var(--on-accent); }
+
+  /* payments: one colour family, told apart by their names */
+  :root[data-palette] .pay-methods .chip.pay-cash { --pay: var(--primary); --pay-on: var(--on-accent); }
+  :root[data-palette] .pay-methods .chip.pay-momo { --pay: var(--c1-deep); --pay-on: #fff; }
+  :root[data-palette] .pay-methods .chip.pay-credit, :root[data-palette] .pay-methods .chip:not(.pay-cash):not(.pay-momo):not(.pay-credit) { --pay: var(--sidebar); --pay-on: #fff; }
+  :root[data-palette] .pay-chip:is(.cash, :root[data-palette] .momo, :root[data-palette] .card, :root[data-palette] .credit) { background: var(--primary-soft); color: var(--primary-ink); }
+  :root[data-palette] .pay-chip.credit { background: var(--violet-soft); color: var(--violet); }
+
+  /* the till: quick actions, accents and customer tags */
+  :root[data-palette] :is(.q-void, :root[data-palette] .q-hold, :root[data-palette] .q-disc, :root[data-palette] .q-receipt, :root[data-palette] .q-proforma, :root[data-palette] .q-keys) { --q: var(--primary-text); color: var(--primary-text); }
+  :root[data-palette] .q-void { --q: var(--warn); color: var(--warn); }
+  :root[data-palette] .lay-std .pos-side :is(.accent-teal, :root[data-palette] .accent-blue), :root[data-palette] .lay-adv .pos-side .accent-teal { border-color: var(--primary); }
+  :root[data-palette] .lay-std .pos-side .accent-teal h3 svg { color: var(--primary-text); }
+  :root[data-palette] .lay-adv .pos-pay .pay-row .btn.primary { background: var(--accent-grad); color: var(--on-accent); }
+  :root[data-palette] .cust-loyal { background: var(--primary-soft); color: var(--primary-ink); }
+  :root[data-palette] .cust-credit { background: var(--warn-soft); color: var(--warn); }
+  :root[data-palette] .med-pick-row.hi, :root[data-palette] .med-pick-row:hover { border-color: var(--primary); }
+  :root[data-palette] .med-pick-row.add, :root[data-palette] .med-pick-row .stock-in { color: var(--primary-text); }
+  :root[data-palette] .fav-btn.on, :root[data-palette] .star-on { color: var(--primary-text); }
+  :root[data-palette] .tick.read { color: var(--primary); }
+  :root[data-palette] .scan-invoice.on { background: var(--primary); border-color: var(--primary); }
+  :root[data-palette] .abc.a { background: var(--primary); } .abc.b { background: var(--c1-deep); }
+  :root[data-palette] .meter.qty i { background: var(--primary); }
+  :root[data-palette] .share-bar .c0, :root[data-palette] .donut-seg.c0 { background: var(--primary); stroke: var(--primary); }
+
+  /* messages and calls */
+  :root[data-palette] .bubble.whatsapp, :root[data-palette] .bubble.sms, :root[data-palette] .bubble.reply { border-color: var(--primary); }
+  :root[data-palette] .call-btn.accept { background: var(--primary); border-color: var(--primary); }
+  :root[data-palette] .call-btn.end { background: var(--danger); border-color: var(--danger); }
+
+  /* Add Stock's panels */
+  :root[data-palette] .invoice-to, :root[data-palette] .invoice-sheet .invoice-from { border-color: var(--primary); }
+  :root[data-palette] .invoice-sheet .invoice-meta { border-color: var(--sidebar); }
+  :root[data-palette] .invoice-sheet .invoice-totals tr.grand td, :root[data-palette] .invoice-sheet .invoice-totals tr.grand td:first-child { color: var(--primary-text); border-color: var(--primary); }
+
+  /* the logo's POS, the RxPOS mark and the menu's open page on a light (orange, sage) menu */
+  :root[data-palette] .sidebar .brand-accent { color: color-mix(in srgb, var(--primary) 50%, var(--sidebar-text, #ffffff)); }
+  :root[data-palette][data-sidebar='light'] .sidebar .brand-accent { color: var(--sidebar-text); }
+  :root[data-palette] .logo-mark:not(.logo-img) svg [fill='url(#rxg)'], :root[data-palette] .logo-mark:not(.logo-img) svg [fill='#0d9488'] { fill: var(--primary); }
+  :root[data-palette] .logo-mark:not(.logo-img) svg [fill='#f59e0b'] { fill: color-mix(in srgb, var(--primary) 45%, #ffffff); }
+  :root[data-palette] .logo-mark { filter: none; }
+  :root[data-palette][data-sidebar='light'] .sidebar nav a.active { background: color-mix(in srgb, var(--sidebar-text) 12%, transparent); color: var(--sidebar-text); font-weight: 650; }
+  :root[data-palette][data-sidebar='light'] .sidebar :is(nav a, .nav-title, kbd, .user-box, .icon-btn) { color: var(--sidebar-text); }
+  :root[data-palette][data-sidebar='light'] .sidebar nav a.active::before { background: var(--sidebar-text); }
+  :root[data-palette][data-sidebar='light'] .sidebar nav a.active svg { color: var(--sidebar-text); }
+  /* the dark figure card (7 days): the menu colour, a soft glow of the strong colour */
+  :root[data-palette] .bento-hero { background: radial-gradient(120% 90% at 100% 0%, color-mix(in srgb, var(--primary) 35%, transparent), transparent 60%), linear-gradient(160deg, var(--sidebar), color-mix(in srgb, var(--sidebar) 70%, #000)); }
+
+  :root[data-palette][data-sidebar='light'] .bento-hero { background: radial-gradient(120% 90% at 100% 0%, color-mix(in srgb, var(--sidebar) 30%, transparent), transparent 60%), linear-gradient(160deg, var(--primary), color-mix(in srgb, var(--primary) 70%, #000)); }
+  :root[data-palette] .bento-hero :is(.bento-delta, .bento-delta.up, .bento-delta.down) { background: rgba(255, 255, 255, .2); color: #fff; }
+  /* the page and its cards: colour 2 under, white cards over */
+  :root[data-palette] body { background-image: none; }
+  :root[data-palette] .kit-icon { --kit: var(--primary) !important; }
+}

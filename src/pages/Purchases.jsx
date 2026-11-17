@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo, cloneElement } from 'react';
-import { nextHue, lineStyle, COL_HUES } from '../linecolors.js';
+import { nextHue, lineStyle, COL_VARS as COL_HUES } from '../linecolors.js';
 import { parseGs1, findByGtin } from '../gs1.js';
 import { useLocation } from 'react-router-dom';
 import { Pencil, Trash2, ScanText, Camera, FileUp, Loader2, AlertTriangle, CheckCircle2, X, Plus, RotateCcw, Sparkles, GripVertical, ChevronLeft, ChevronRight, PauseCircle, Tags } from 'lucide-react';

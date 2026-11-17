@@ -197,7 +197,7 @@ function ColourLevel({ onPick }) {
 
 /** One switch between this device's usual theme and the premium dark look (Midnight Pro). The setting is kept on the
  *  device; switching only repaints, so the sale on the till, its client and totals stay exactly as they are. */
-const PREMIUM = 'midnight-pro', PREMIUM_PREV = 'rxpos-premium-prev', PREMIUM_KEY = 'rxpos-advanced-ui';
+const PREMIUM = 'navy-teal', PREMIUM_PREV = 'rxpos-premium-prev', PREMIUM_KEY = 'rxpos-advanced-ui';
 function PremiumToggle({ theme, setTheme, setMode }) {
   const { db } = useStore();
   const list = allowedThemes(db.license?.[0]?.branding);

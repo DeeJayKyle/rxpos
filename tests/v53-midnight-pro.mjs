@@ -1,6 +1,5 @@
-// Midnight Pro theme (fictional pharmacy): dark canvas, translucent sidebar with a cyan icon on the open page, glass
-// bento dashboard, alert tabs with mono numbers, the sale with a light beam, glass totals dock, emerald checkout and a
-// green flash on a line that changes. Every other theme is untouched.
+// The Premium UI switch (fictional pharmacy): since the two-colour themes (17 Nov 2026) it moves to the dark RxPOS Navy
+// Teal and back, the sale untouched; the dashboard keeps its bento grid; F9 charges and F5 never does.
 //   node v53-midnight-pro.mjs <base> <ownerKey> <outDir>
 import puppeteer from 'puppeteer-core';
 import fs from 'node:fs';
@@ -47,12 +46,9 @@ const css = (sel, prop, pseudo = null) => p.evaluate((s, pr, ps) => { const e = 
 // another theme first: none of this applies
 await p.evaluate(() => { localStorage.setItem('pharmapos-theme', 'light'); }); await p.reload({ waitUntil: 'networkidle2' }); await wait(2000);
 check('other themes are untouched (no glass on cards, sidebar as before)', !/blur/.test((await css('.card', 'backdropFilter')) || '') && !/blur/.test((await css('.sidebar', 'backdropFilter')) || ''));
-// Midnight Pro
-await p.evaluate(() => { localStorage.setItem('pharmapos-theme', 'midnight-pro'); }); await p.reload({ waitUntil: 'networkidle2' }); await wait(2500);
-check('Midnight Pro is a theme: dark #0B0F19 canvas', (await p.evaluate(() => document.documentElement.dataset.palette)) === 'midnight-pro' && /rgb\(11, 15, 25\)/.test(await p.evaluate(() => getComputedStyle(document.body).backgroundColor)));
-check('translucent sidebar with blur and a hairline edge', /blur\(24px\)/.test(await css('.sidebar', 'backdropFilter')) && /rgba\(2, 6, 23, 0\.4\)/.test(await css('.sidebar', 'backgroundColor')));
-check('the open page: no block highlight, its icon cyan', (await css('.sidebar nav a.active', 'backgroundColor')) === 'rgba(0, 0, 0, 0)' && (await css('.sidebar nav a.active svg', 'color')) === 'rgb(34, 211, 238)');
-check('cards are glass: blur, rounded 16px, translucent slate', /blur\(16px\)/.test(await css('.stats.kpis .card', 'backdropFilter')) && (await css('.stats.kpis .card', 'borderRadius')) === '16px');
+// the premium theme
+await p.evaluate(() => { localStorage.setItem('pharmapos-theme', 'navy-teal'); }); await p.reload({ waitUntil: 'networkidle2' }); await wait(2500);
+check('Navy Teal is the premium theme: the navy page, teal actions, a navy menu', (await p.evaluate(() => document.documentElement.dataset.palette)) === 'navy-teal' && /rgb\(10, 34, 51\)/.test(await p.evaluate(() => getComputedStyle(document.body).backgroundColor)) && (await p.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--primary').trim())) === '#14b8a6');
 const bento = await p.evaluate(() => [...document.querySelectorAll('.stats.kpis > .card')].map((c) => Math.round(c.getBoundingClientRect().width)));
 check('dashboard figures as a bento grid: today\'s sales is the large tile', bento.length >= 2 && bento[0] > bento[1] * 1.5, bento.join());
 check('stock figures are one list in Stock health', !!(await p.$('.health-card .health-rows')));
@@ -61,14 +57,9 @@ await p.screenshot({ path: path.join(out, 'dashboard.png') });
 // the till
 await p.evaluate(() => { location.hash = '#/pos'; }); await wait(1800);
 await p.focus('.pos-products input.search'); await p.keyboard.type('7010001'); await p.keyboard.press('Enter'); await wait(150);
-check('a scanned line flashes green', /mpFlash/.test(await css('.cart-line', 'animationName')));
 await wait(800);
-check('the sale has the light beam while it has lines', (await css('.pos-cart', 'content', '::after')) === '""' && /mpBeam/.test(await css('.pos-cart', 'animationName', '::after')));
-check('totals: glass dock (blur 40px, 16px corners)', /blur\(40px\)/.test(await css('.pos-cart .totals', 'backdropFilter')) && (await css('.pos-cart .totals', 'borderRadius')) === '16px');
-check('Charge: emerald → teal gradient with its key tag', /linear-gradient\(90deg, rgb\(5, 150, 105\), rgb\(13, 148, 136\)\)/.test(await css('.pos-cart .pay-row .btn.primary', 'backgroundImage')) && /\[F9\]/.test(await p.evaluate(() => document.querySelector('.pos-cart .pay-row .btn.primary').innerText)));
 await p.screenshot({ path: path.join(out, 'pos.png') });
 await p.select('select[aria-label="Till layout"]', 'advanced'); await wait(500);
-check('Advanced UI: the totals panel is the glass dock with the beam', /blur\(40px\)/.test(await css('.pos-pay', 'backdropFilter')) && /mpBeam/.test(await css('.pos-pay', 'animationName', '::after')));
 await p.screenshot({ path: path.join(out, 'pos-advanced.png') });
 
 // the Premium UI switch: back to the usual look and on again, the sale untouched; F9 charges and F5 never does (step 4)
@@ -77,13 +68,12 @@ const saleNow = () => p.evaluate(() => [...document.querySelectorAll('.cart-line
 const before = await saleNow();
 check('the top bar has a "Premium UI" switch, on', await p.evaluate(() => document.querySelector('.premium-toggle')?.getAttribute('aria-checked') === 'true'));
 await p.click('.premium-toggle'); await wait(500);
-check('switching it off goes back to a usual theme and keeps the sale exactly', (await p.evaluate(() => document.documentElement.dataset.palette)) !== 'midnight-pro' && (await saleNow()) === before, await saleNow());
+check('switching it off goes back to a usual theme and keeps the sale exactly', (await p.evaluate(() => document.documentElement.dataset.palette)) !== 'navy-teal' && (await saleNow()) === before, await saleNow());
 check('…with Charge as before ([F9])', /\[F9\]/.test(await p.evaluate(() => document.querySelector('.pos-cart .pay-row .btn.primary').innerText)));
 await p.click('.premium-toggle'); await wait(500);
-check('on again: Midnight Pro, same sale', (await p.evaluate(() => document.documentElement.dataset.palette)) === 'midnight-pro' && (await saleNow()) === before);
+check('on again: Navy Teal, same sale', (await p.evaluate(() => document.documentElement.dataset.palette)) === 'navy-teal' && (await saleNow()) === before);
 await p.reload({ waitUntil: 'networkidle2' }); await wait(2500);
-check('the switch is remembered after a reload', (await p.evaluate(() => document.documentElement.dataset.palette)) === 'midnight-pro' && await p.evaluate(() => localStorage.getItem('rxpos-advanced-ui') === '1'));
-check('medicine tiles are see-through with stock as a pill', /rgba\(15, 23, 42, 0\.[48]\)/.test(await css('.product', 'backgroundColor')) && /rgba\(30, 41, 59, 0\.6\)/.test(await css('.product .stock-tag', 'backgroundColor')), [await css('.product', 'backgroundColor'), await css('.product .stock-tag', 'backgroundColor')].join(' / '));
+check('the switch is remembered after a reload', (await p.evaluate(() => document.documentElement.dataset.palette)) === 'navy-teal' && await p.evaluate(() => localStorage.getItem('rxpos-advanced-ui') === '1'));
 check('Charge shows [F9], as on every theme', /\[F9\]/.test(await p.evaluate(() => document.querySelector('.pos-cart .pay-row .btn.primary').innerText)));
 const lines = await saleNow();
 await p.focus('.pos-products input.search'); await p.keyboard.press('F5'); await wait(1500);
