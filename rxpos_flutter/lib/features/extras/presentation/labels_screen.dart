@@ -29,9 +29,11 @@ String labelExpiry(PharmacyData d, String productId) =>
     d.stock.batchesOf(productId).where((b) => b.qty > 0 && b.expiry.isNotEmpty).map((b) => b.expiry).firstOrNull ?? '';
 
 class LabelsScreen extends ConsumerStatefulWidget {
-  const LabelsScreen({super.key, this.kit = ''});
+  const LabelsScreen({super.key, this.kit = '', this.ids = ''});
   /// 1.10 a kit to start with (Kits → Label): its label scans at the till and adds the kit
   final String kit;
+  /// medicines to start with, comma-separated (Inventory → ticked → Print labels, UI batch 3 C4)
+  final String ids;
   @override
   ConsumerState<LabelsScreen> createState() => _LabelsScreenState();
 }
@@ -46,6 +48,9 @@ class _LabelsScreenState extends ConsumerState<LabelsScreen> {
   void initState() {
     super.initState();
     if (widget.kit.isNotEmpty) _items.add((id: widget.kit, qty: 1));
+    for (final id in widget.ids.split(',')) {
+      if (id.isNotEmpty && !_items.any((i) => i.id == id)) _items.add((id: id, qty: 1));
+    }
   }
 
   /// the medicines and the kits (1.10: kits get labels too), each kit at its price as it is now

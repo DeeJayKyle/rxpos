@@ -6,11 +6,15 @@ import { useStore, dayOf, downloadFile, toCSV, put, move, now, audit, allocate, 
 import { useOlderHistory, olderNote } from '../history.js';
 import { ViewSwitch, BoardView, GalleryView, savedView, saveView } from '../components/DataViews.jsx';
 import { saleStatus } from '../components/BentoDashboard.jsx';
-import { Modal, SearchBox, Empty, PdfButton, ReceiptPdfButton, PayChip, usePages, Pager, useSort, SortTh, SubViews } from '../ui.jsx';
+import { Modal, SearchBox, Empty, PdfButton, ReceiptPdfButton, PayChip, useSort, SortTh, SubViews, WhoChanged } from '../ui.jsx';
+import { useLoadMore, useColumns, BulkBar, useSwipe, useWide, DetailsPane } from '../tablekit.jsx';
+import { DateRange } from '../forms.jsx';
 import { toast } from '../feedback.jsx';
 import { Barcode } from '../barcode.jsx';
 import { stockParts, kitContents } from '../kits.js';
-import RefundSheet from '../components/RefundSheet.jsx';
+import RefundSheet, { refundMoney, REFUND_APPROVE_ABOVE, isApprover } from '../components/RefundSheet.jsx';
+import { hasPin, verifyPin, verifyOffline } from '../offline.js';
+import { cloudLogin, cloudLogout } from '../cloud.js';
 import { cartSubtotal, lineTotal, taxOf, round } from '../money.js';
 // step 22: what the client still owes on a sale (an insurer's share is billed to the insurer); shown on the receipt
 // even after a refund, as before
@@ -19,6 +23,7 @@ const unpaid = (s) => s.total - (s.paid ?? s.total) - billed(s);
 import DraftsList, { useDraftCount } from './Drafts.jsx';
 import { useListControls, useContextMenu } from '../listcontrols.jsx';
 import { Copy } from 'lucide-react';
+import { pharmacyLogo } from '../logo.jsx';
 
 /** Thermal-printer friendly receipt (58 mm or 80 mm, set in Settings). */
 export function Receipt({ sale }) {
@@ -29,13 +34,14 @@ export function Receipt({ sale }) {
   return (
     <div className={'receipt print-area paper-' + (s.paperWidth || 80)}>
       <div className="center">
-        {db.license?.[0]?.branding?.logo && <img className="receipt-logo" src={db.license[0].branding.logo} alt="" />}
+        {pharmacyLogo(db) && <img className="receipt-logo" src={pharmacyLogo(db)} alt="" />}
         <strong className="receipt-title">{s.name}</strong>
         {db.branches.length > 1 && branch && <div>{branch.name}</div>}
         {((db.branches.length > 1 && branch?.address) ? branch.address : s.address) && <div>{(db.branches.length > 1 && branch?.address) ? branch.address : s.address}</div>}
         {s.phone && <div>Tel: {s.phone}</div>}
         {s.tin && <div>TIN: {s.tin}</div>}
         {isProforma && <div className="receipt-tag">PROFORMA INVOICE</div>}
+        {sale.training && <div className="receipt-tag">TRAINING – NOT A SALE</div>}
         <div>{sale.number} · {new Date(sale.date).toLocaleString()}</div>
         <div>{isProforma ? 'Prepared by' : 'Served by'}: {sale.cashier || sale.createdBy}</div>
         {sale.customerName && sale.customerName !== 'Walk-in Customer' && <div>Customer: {sale.customerName}</div>}
@@ -82,7 +88,7 @@ export function SaleInvoice({ sale }) {
     <div className="invoice-doc print-area paper-210">
       <div className="invoice-head">
         <div>
-          {db.license?.[0]?.branding?.logo && <img className="receipt-logo" src={db.license[0].branding.logo} alt="" />}
+          {pharmacyLogo(db) && <img className="receipt-logo" src={pharmacyLogo(db)} alt="" />}
           <strong className="invoice-name">{s.name}</strong>
           {db.branches.length > 1 && branch && <div>{branch.name}</div>}
           {((db.branches.length > 1 && branch?.address) ? branch.address : s.address) && <div>{(db.branches.length > 1 && branch?.address) ? branch.address : s.address}</div>}
@@ -169,7 +175,11 @@ export default function Sales() {
     (!f.status || (f.status === 'edited' ? s.edits?.length > 0 : f.status === 'refunded' ? s.status === 'refunded' : s.status !== 'refunded')));
   const valid = rows.filter((s) => s.status !== 'refunded');
   const sorted = useSort(rows, { number: (s) => s.number, date: (s) => s.date, customer: (s) => s.customerName || '', cashier: (s) => s.cashier || '', payment: (s) => s.payment || '', total: (s) => s.total }, 'date');
-  const page = usePages(sorted.rows, 25);
+  // UI batch 3: 100 rows then more as the list scrolls (C7), columns chosen and ordered on this device (C2)
+  const page = useLoadMore(sorted.rows, { resetKey: [q, from, to, branch, f.cashier, f.payment, f.customer, f.status, sorted.by, sorted.dir].join('|') });
+  const colsK = useColumns('sales', [{ id: 'number', label: 'Receipt', fixed: true }, { id: 'date', label: 'Date' }, ...(db.branches.length > 1 ? [{ id: 'branch', label: 'Branch' }] : []), { id: 'customer', label: 'Customer' }, { id: 'phone', label: 'Phone' }, { id: 'payment', label: 'Payment' }, { id: 'status', label: 'Status' }, { id: 'total', label: 'Total' }, { id: 'cashier', label: 'Cashier' }]);
+  const wide = useWide(); // C8: the receipt beside the list on wide screens
+  const swipe = useSwipe(); // C10: phones: swipe a sale for Print / Refund
   // the owner's request: keys, double-click and right-click on the sales too (src/listcontrols.jsx)
   const searchRef = useRef(null);
   const canEditSale = (x) => x.status !== 'refunded' && can('sales.edit') && !locked(x);
@@ -193,7 +203,23 @@ export default function Sales() {
   // the refund sheet (src/components/RefundSheet.jsx) shows what goes back and asks why; doRefund does it
   const [refunding, setRefunding] = useState(null);
   const refund = (sale) => setRefunding(sale);
-  const doRefund = async (sale, why) => {
+  // safer refunds (2026-11-18): over the limit, someone who isn't a manager needs a manager's PIN or password (checked on
+  // this device, as at sign-in); the approver is kept on the sale and in the audit log
+  const approvalFor = (sale) => {
+    const limit = Number(localDb.settings.refundApproveAbove ?? REFUND_APPROVE_ABOVE) || 0;
+    if (!limit || isApprover(user) || refundMoney(sale).back <= limit) return null;
+    const approvers = localDb.users.filter((u) => isApprover(u) && u.id !== user.id && u.active !== false).map((u) => ({ id: u.id, name: u.name }));
+    return { limit, approvers, verify: async (id, secret) => {
+      // this device first (a quick PIN, or a password remembered by the Windows / Android app), then the cloud: a
+      // sign-in as the manager that is closed again at once
+      if (hasPin(syncCfg.tenant, id) && /^\d{4,8}$/.test(secret) && (await verifyPin(syncCfg.tenant, id, secret)).ok) return true;
+      if (await verifyOffline(syncCfg.tenant, id, secret).catch(() => false)) return true;
+      const email = localDb.users.find((u) => u.id === id)?.email;
+      if (!email || !syncCfg.url || !navigator.onLine) return false;
+      try { const r = await cloudLogin(syncCfg.url, email, secret, syncCfg.tenant); cloudLogout({ url: syncCfg.url, key: r.token }).catch(() => {}); return !!r.token; } catch { return false; }
+    } };
+  };
+  const doRefund = async (sale, why, approvedBy = null) => {
     // the sale as it is now (another device, or a second click, may have refunded or edited it since this list was
     // drawn): refunded once only, and what goes back to stock is what the sale holds now
     let already = false;
@@ -201,12 +227,12 @@ export default function Sales() {
       await update((d) => {
         const cur = d.sales.find((x) => x.id === sale.id);
         if (!cur || cur.status === 'refunded') { already = true; return; }
-        put(d, 'sales', { ...cur, status: 'refunded', refundedBy: user.name, refundedAt: now(), ...(why ? { refundReason: String(why).slice(0, 240) } : {}) });
+        put(d, 'sales', { ...cur, status: 'refunded', refundedBy: user.name, refundedAt: now(), ...(why ? { refundReason: String(why).slice(0, 240) } : {}), ...(approvedBy ? { refundApprovedBy: approvedBy } : {}) });
         for (const i of cur.items) {
           // a kit line returns each of its medicines to the batches they came from (src/kits.js)
           for (const a of stockParts(i)) move(d, { productId: a.productId, qty: a.qty, type: 'Refund', ref: cur.number, user: user.name, batchId: a.batchId, branchId: cur.branchId || MAIN_BRANCH });
         }
-        audit(d, user, 'Refund', `${cur.number} · ${fmt(cur.total)}${why ? ' · ' + why : ''}`, cur.branchId || MAIN_BRANCH);
+        audit(d, user, 'Refund', `${cur.number} · ${fmt(cur.total)}${why ? ' · ' + why : ''}${approvedBy ? ' · approved by ' + approvedBy : ''}`, cur.branchId || MAIN_BRANCH);
       });
     } catch (e) { return toast(`${sale.number} was NOT refunded: ${e.message}`, 'error'); }
     setView(null); setRefunding(null);
@@ -216,6 +242,23 @@ export default function Sales() {
 
   const branchName = (id) => db.branches.find((b) => b.id === (id || MAIN_BRANCH))?.name || '—';
   const exportRows = rows.map((s) => ({ receipt: s.number, date: s.date, branch: branchName(s.branchId), type: s.type || 'retail', customer: s.customerName, cashier: s.cashier, payment: s.payment, momoRef: s.momo?.txid || '', items: s.items.length, discount: s.discount, tax: s.tax, total: s.total, paid: s.paid ?? s.total, status: s.status }));
+
+  // C8: the receipt and its actions, beside the list on wide screens or as a pop-up
+  const saleDetails = () => (
+    <DetailsPane title={`Receipt ${view.number}`} onClose={() => setView(null)} wide={wide && dv === 'table' && tab === 'sales'}>
+          <WhoChanged keyText={view.number} by={view.editedBy || view.refundedBy} at={view.edits?.at(-1)?.at || view.refundedAt} />
+          <Receipt sale={view} />
+          <EditHistory sale={view} />
+          <div className="form-actions no-print">
+            {view.status !== 'refunded' && can('sales.edit') && !locked(view) && <button className="btn ghost" onClick={() => { setEditing(view); setView(null); }}><Pencil size={16} />Edit sale</button>}
+            {view.imported && <small className="muted">Copied from {view.imported}</small>}
+            {view.status !== 'refunded' && !view.imported && user.role !== 'cashier' && can('sales.refund') && <button className="btn danger" onClick={() => refund(view)}><Undo2 size={16} />Refund</button>}
+            <ReceiptPdfButton sale={view} />
+            <button className="btn ghost act-invoice" onClick={() => { printSale(view, 'invoice'); }}><FileText size={16} />Invoice</button>
+            <button className="btn primary" onClick={() => window.print()}><Printer size={16} />Print</button>
+          </div>
+    </DetailsPane>
+  );
 
   return (
     <div className="page">
@@ -229,9 +272,9 @@ export default function Sales() {
             </select>
           )}
           <ViewSwitch value={dv} onChange={pickView} />
+          {dv === 'table' && colsK.button}
           <SearchBox value={q} onChange={setQ} placeholder="Receipt, customer, medicine…" inputRef={searchRef} />
-          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} title="From" aria-label="From" />
-          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} title="To" aria-label="To" />
+          <DateRange from={from} to={to} onChange={(r) => { setFrom(r.from); setTo(r.to); }} />
           <button className="btn ghost" onClick={() => downloadFile('sales.csv', toCSV(exportRows), 'text/csv')}><Download size={16} />CSV</button>
           <PdfButton title="Sales history" subtitle={[from || to ? `${from || 'start'} to ${to || 'today'}` : 'All dates', q && `search "${q}"`, onlyEdited && 'edited sales only', `${valid.length} sales · ${fmt(valid.reduce((a, s) => a + s.total, 0))}`].filter(Boolean).join(' · ')}
             data={() => [{ head: ['Receipt', 'Date', 'Customer', 'Cashier', 'Payment', 'Status', 'Total'], numeric: [6],
@@ -251,53 +294,57 @@ export default function Sales() {
       {dv === 'board' && <BoardView rows={sorted.rows} board={{ groups: [['paid', 'Paid', 'ok'], ['owing', 'Owing', 'warn'], ['refunded', 'Refunded', 'danger']], of: (x) => saleStatus(x)[1] }} card={saleCard} onOpen={setView} onMenu={saleMenu} />}
       {dv === 'gallery' && <GalleryView rows={sorted.rows} card={saleCard} onOpen={setView} onMenu={saleMenu} />}
       {dv !== 'table' && menu.node}
-      {dv === 'table' && <div className="card table-wrap">
+      {dv === 'table' && <div className={'list-and-details' + (view && wide ? ' with-details' : '')}><div className="card table-wrap">
         <table className="phone-rows">
-          <thead><tr><SortTh s={sorted} k="number">Receipt</SortTh><SortTh s={sorted} k="date">Date</SortTh>{db.branches.length > 1 && <th>Branch</th>}<SortTh s={sorted} k="customer">Customer</SortTh><th>Phone</th><SortTh s={sorted} k="payment">Payment</SortTh><th>Status</th><SortTh s={sorted} k="total" className="num">Total</SortTh><SortTh s={sorted} k="cashier">Cashier</SortTh><th /></tr></thead>
+          <thead><tr><th className="tick"><input {...lc.allProps} /></th>{colsK.shown.map((id) => ({
+            number: <SortTh key={id} s={sorted} k="number">Receipt</SortTh>, date: <SortTh key={id} s={sorted} k="date">Date</SortTh>, branch: <th key={id}>Branch</th>,
+            customer: <SortTh key={id} s={sorted} k="customer">Customer</SortTh>, phone: <th key={id}>Phone</th>, payment: <SortTh key={id} s={sorted} k="payment">Payment</SortTh>,
+            status: <th key={id}>Status</th>, total: <SortTh key={id} s={sorted} k="total" className="num">Total</SortTh>, cashier: <SortTh key={id} s={sorted} k="cashier">Cashier</SortTh> }[id]))}<th /></tr></thead>
           <tbody>
-            {page.rows.map((s, i) => { const rp = lc.rowProps(s, i, saleMenu); return (
-              <tr key={s.id} {...rp} className={[(s.status === 'refunded' ? 'dim' : ''), (s.edits?.length ? 'edited-row' : ''), rp.className].filter(Boolean).join(' ')} title={s.edits?.length ? `Edited ${s.edits.length}× · last by ${s.editedBy || s.edits.at(-1).by}` : undefined}>
-                <td className="row-title"><strong>{s.number}</strong> <small className="muted cap">{s.type || 'retail'}</small></td>
-                <td data-label="Date" className="nowrap">{new Date(s.date).toLocaleDateString([], { dateStyle: 'medium' })}<br /><small className="muted">{new Date(s.date).toLocaleTimeString([], { timeStyle: 'short' })}</small></td>
-                {db.branches.length > 1 && <td data-label="Branch">{branchName(s.branchId)}</td>}
-                <td data-label="Customer">{s.customerName}</td><td data-label="Phone" className="muted">{phoneOf(s) || '—'}</td>
-                <td data-label="Payment"><PayChip name={s.payment} />{s.momo?.txid ? <><br /><small className="muted">{s.momo.txid}</small></> : null}</td>
-                <td data-label="Status">{s.status === 'refunded' ? <span className="badge danger">refunded</span> : <span className="muted small status-plain">{s.status}</span>}{s.edits?.length > 0 && <><br /><button type="button" className="badge warn edited-badge" onClick={() => setView(s)} title="See what was changed and by whom"><History size={11} /> Edited{s.edits.length > 1 ? ` ×${s.edits.length}` : ''}</button></>}</td>
-                <td data-label="Total" className="num"><strong>{fmt(s.total)}</strong></td>
-                <td data-label="Cashier">{s.cashier}</td>
+            {page.rows.map((s, i) => { const rp = lc.rowProps(s, i, saleMenu); const cell = {
+              number: <td key="number" className="row-title"><strong>{s.number}</strong> <small className="muted cap">{s.type || 'retail'}</small></td>,
+              date: <td key="date" data-label="Date" className="nowrap">{new Date(s.date).toLocaleDateString([], { dateStyle: 'medium' })}<br /><small className="muted">{new Date(s.date).toLocaleTimeString([], { timeStyle: 'short' })}</small></td>,
+              branch: <td key="branch" data-label="Branch">{branchName(s.branchId)}</td>,
+              customer: <td key="customer" data-label="Customer">{s.customerName}</td>,
+              phone: <td key="phone" data-label="Phone" className="muted">{phoneOf(s) || '—'}</td>,
+              payment: <td key="payment" data-label="Payment"><PayChip name={s.payment} />{s.momo?.txid ? <><br /><small className="muted">{s.momo.txid}</small></> : null}</td>,
+              status: <td key="status" data-label="Status">{s.status === 'refunded' ? <span className="badge danger">refunded</span> : <span className="muted small status-plain">{s.status}</span>}{s.edits?.length > 0 && <><br /><button type="button" className="badge warn edited-badge" onClick={() => setView(s)} title="See what was changed and by whom"><History size={11} /> Edited{s.edits.length > 1 ? ` ×${s.edits.length}` : ''}</button></>}</td>,
+              total: <td key="total" data-label="Total" className="num"><strong>{fmt(s.total)}</strong></td>,
+              cashier: <td key="cashier" data-label="Cashier">{s.cashier}</td>,
+            }; return (
+              <tr key={s.id} {...rp} {...swipe.props(s.id)} className={[(s.status === 'refunded' ? 'dim' : ''), (s.edits?.length ? 'edited-row' : ''), (view?.id === s.id && wide ? 'row-open' : ''), rp.className].filter(Boolean).join(' ')} title={s.edits?.length ? `Edited ${s.edits.length}× · last by ${s.editedBy || s.edits.at(-1).by}` : undefined}>
+                <td className="tick"><input {...lc.tickProps(s, i)} /></td>
+                {colsK.shown.map((id) => cell[id])}
                 <td className="actions"><div className="row-acts">
                   <button className="btn sm ghost" onClick={() => setView(s)}><Eye size={14} />View</button>
                   <button className="btn sm ghost act-print" onClick={() => printSale(s, 'receipt')} title="Print the till receipt"><Printer size={14} />Receipt</button>
                   <button className="btn sm ghost act-invoice" onClick={() => printSale(s, 'invoice')} title="Print a full-page invoice"><FileText size={14} />Invoice</button>
                   {s.status !== 'refunded' && can('sales.edit') && !locked(s) && <button className="btn sm ghost act-edit" onClick={() => setEditing(s)}><Pencil size={14} />Edit</button>}
-                </div></td>
+                </div>
+                {swipe.openId === s.id && <div className="swipe-acts">
+                  <button type="button" className="btn sm" onClick={() => { swipe.close(); printSale(s, 'receipt'); }}><Printer size={14} />Print</button>
+                  {canRefund(s) && <button type="button" className="btn sm danger" onClick={() => { swipe.close(); refund(s); }}><Undo2 size={14} />Refund</button>}
+                </div>}</td>
               </tr>
             ); })}
-            {!rows.length && (db.sales.length ? <Empty colSpan={10}>No sales match. Try another receipt number, customer, filter or date.</Empty> : <Empty colSpan={10} action={{ label: 'Open the POS', to: '/pos' }}>No sales yet. Every sale rung up at the POS appears here with its receipt, to reprint, refund or correct.</Empty>)}
-            {rows.length > 0 && <tr className="total-row"><td colSpan={db.branches.length > 1 ? 7 : 6}>Total (excl. refunds) · {valid.length.toLocaleString()} sales</td><td className="num">{fmt(valid.reduce((a, s) => a + s.total, 0))}</td><td colSpan={2} /></tr>}
+            {!rows.length && (db.sales.length ? <Empty colSpan={colsK.shown.length + 2}>No sales match. Try another receipt number, customer, filter or date.</Empty> : <Empty colSpan={colsK.shown.length + 2} action={{ label: 'Open the POS', to: '/pos' }}>No sales yet. Every sale rung up at the POS appears here with its receipt, to reprint, refund or correct.</Empty>)}
           </tbody>
+          {rows.length > 0 && <tfoot><tr className="total-row"><td colSpan={Math.max(1, colsK.shown.indexOf('total') + 1)}>Total (excl. refunds) · {valid.length.toLocaleString()} sales</td>{colsK.has('total') && <td className="num">{fmt(valid.reduce((a, s) => a + s.total, 0))}</td>}<td colSpan={Math.max(1, colsK.shown.length - colsK.shown.indexOf('total'))} /></tr></tfoot>}
         </table>
         {menu.node}
-        <Pager p={page} />
+        {page.footer}
+      </div>
+      {view && wide && saleDetails()}
       </div>}
+      <BulkBar count={lc.ticked.size} onClear={lc.clear} actions={[
+        { label: 'Print receipts', Icon: Printer, run: () => { for (const x of lc.tickedRows) printSale(x, 'receipt'); } },
+        { label: 'Export', Icon: Download, run: () => downloadFile('sales.csv', toCSV(exportRows.filter((r) => lc.tickedRows.some((x) => x.number === r.receipt))), 'text/csv') },
+      ]} />
       </>}
       {printNode}
       {editing && <SaleEditor sale={editing} onClose={() => setEditing(null)} />}
-      {refunding && <RefundSheet sale={refunding} fmt={fmt} batches={db.batches} closedDay={locked(refunding)} onCancel={() => setRefunding(null)} onConfirm={(why) => doRefund(refunding, why)} />}
-      {view && (
-        <Modal title={`Receipt ${view.number}`} onClose={() => setView(null)}>
-          <Receipt sale={view} />
-          <EditHistory sale={view} />
-          <div className="form-actions no-print">
-            {view.status !== 'refunded' && can('sales.edit') && !locked(view) && <button className="btn ghost" onClick={() => { setEditing(view); setView(null); }}><Pencil size={16} />Edit sale</button>}
-            {view.imported && <small className="muted">Copied from {view.imported}</small>}
-            {view.status !== 'refunded' && !view.imported && user.role !== 'cashier' && can('sales.refund') && <button className="btn danger" onClick={() => refund(view)}><Undo2 size={16} />Refund</button>}
-            <ReceiptPdfButton sale={view} />
-            <button className="btn ghost act-invoice" onClick={() => { printSale(view, 'invoice'); }}><FileText size={16} />Invoice</button>
-            <button className="btn primary" onClick={() => window.print()}><Printer size={16} />Print</button>
-          </div>
-        </Modal>
-      )}
+      {refunding && <RefundSheet sale={refunding} fmt={fmt} batches={db.batches} closedDay={locked(refunding)} onCancel={() => setRefunding(null)} approval={approvalFor(refunding)} onConfirm={(why, by) => doRefund(refunding, why, by)} />}
+      {view && !(wide && dv === 'table' && tab === 'sales') && saleDetails()}
     </div>
   );
 }

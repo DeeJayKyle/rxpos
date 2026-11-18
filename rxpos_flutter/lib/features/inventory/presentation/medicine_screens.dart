@@ -1,5 +1,6 @@
 // Medicine List, Formulations, Quick Edit and Stock Card (src/pages/Inventory.jsx), with the pack sizes and inventory
 // editors used from the lists.
+import 'branch_stock.dart' show BranchStockButton;
 import '../../../core/theme/line_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -16,6 +17,9 @@ import '../../../core/presentation/export.dart';
 import '../../../core/presentation/list_controls.dart';
 import '../../../core/presentation/widgets.dart';
 import '../../../core/rules/dates.dart';
+import 'dart:typed_data';
+import '../../../core/network/files.dart';
+import '../../../core/network/cloud_api.dart' show cloudApiProvider;
 import '../../../core/rules/ids.dart';
 import '../../../core/rules/money.dart';
 import '../../../core/rules/pricing.dart';
@@ -24,6 +28,7 @@ import '../../../core/rules/stock.dart';
 import '../../auth/application/session_controller.dart';
 import '../domain/adjust.dart';
 import '../domain/medicines.dart';
+import '../../../core/rules/audit_text.dart';
 
 Future<String> _user(WidgetRef ref) async => (await ref.read(sessionControllerProvider.future))?.userName ?? '';
 
@@ -177,6 +182,7 @@ class _MedicineListScreenState extends ConsumerState<MedicineListScreen> {
                       Row(children: [
                         if (manage) ...[rs.tickBox, const SizedBox(width: 6)],
                         Expanded(child: Wrap(spacing: 6, runSpacing: 2, crossAxisAlignment: WrapCrossAlignment.center, children: [
+                          BranchStockButton(product: p, label: false), // G4: the same medicine in each branch
                           Text(p.name, style: const TextStyle(fontWeight: FontWeight.w700)),
                           if (p.rx) const _Tag('Rx'),
                           if (p.raw['chronic'] == true) const _Tag('Chronic'),
@@ -218,6 +224,7 @@ class _MedicineListScreenState extends ConsumerState<MedicineListScreen> {
                   isThreeLine: true,
                   trailing: Row(mainAxisSize: MainAxisSize.min, children: [
                     Text(formatQty(st), style: TextStyle(fontWeight: FontWeight.w700, color: st <= 0 ? Theme.of(context).colorScheme.error : isLowStock(p, st) ? context.tones.warn : null)),
+                    BranchStockButton(product: p, label: false), // G4
                     if (manage)
                       TextButton(
                         key: Key('packs-${p.id}'),
@@ -250,28 +257,52 @@ class _Tag extends StatelessWidget {
 }
 
 /// Add or edit a medicine (the Medicine List form).
+/// Tests choose the photo here instead of the system's picker
+Future<List<({String name, Uint8List bytes})>> Function()? medicinePhotoPicker;
+
+String? _notPast(String v, Map<String, Object?> _) => v.compareTo(today()) < 0 ? 'This expiry date has passed' : null;
+
 Future<void> editMedicine(BuildContext context, WidgetRef ref, Product? p) async {
   final d = await ref.read(pharmacyProvider.future);
   final forms = (await ref.read(recordStoreProvider).rows('formulations')).map((f) => '${f['name']}').toList()..sort();
   final s = d.settings;
   if (!context.mounted) return;
-  final v = await editRecord(context, title: p == null ? 'Add medicine' : 'Edit ${p.name}', delete: p == null ? null : 'medicine', initial: p?.toRecord() ?? {'form': 'Tablets', 'unit': 'Piece', 'reorder': 10}, fields: [
+  // A5: a photo taken or chosen, made small and stored with the pharmacy's files (as prescription scans are)
+  Future<String?> pickPhoto() async {
+    try {
+      final files = await (medicinePhotoPicker ?? () => pickFiles(extensions: const ['jpg', 'jpeg', 'png', 'webp'], multiple: false))();
+      if (files.isEmpty) return null;
+      final up = await uploadFile(ref.read(cloudApiProvider), medicinePhoto(files.first.bytes), 'medicine.jpg', type: 'image/jpeg');
+      return '${up['path'] ?? ''}'.isEmpty ? null : '${up['path']}';
+    } catch (e) {
+      if (context.mounted) say(context, 'The photo could not be saved: $e', error: true);
+      return null;
+    }
+  }
+  final v = await editRecord(context, pickPhoto: pickPhoto, note: editedLine(p?.raw), title: p == null ? 'Add medicine' : 'Edit ${p.name}', delete: p == null ? null : 'medicine', initial: p?.toRecord() ?? {'form': 'Tablets', 'unit': 'Piece', 'reorder': 10}, fields: [
     const FormFieldSpec('name', 'Medicine name', required: true),
     const FormFieldSpec('generic', 'Generic name'),
     const FormFieldSpec('category', 'Category / class'),
     FormFieldSpec('form', 'Formulation', kind: FieldKind.choice, options: [for (final f in {...forms, if (p != null && p.form.isNotEmpty) p.form}) (f, f)]),
     const FormFieldSpec('strength', 'Strength'),
     FormFieldSpec('unit', 'Selling unit', kind: FieldKind.choice, options: [for (final u in {...sellingUnits, if (p != null && p.unit.isNotEmpty) p.unit}) (u, u)]),
-    const FormFieldSpec('barcode', 'Barcode / SKU (blank = generate)'),
-    const FormFieldSpec('cost', 'Cost price', kind: FieldKind.number, required: true),
-    FormFieldSpec('price', 'Retail price (blank = cost +${formatQty(s.retailMarkup)}%)', kind: FieldKind.number),
-    FormFieldSpec('wholesale', 'Wholesale price (blank = cost +${formatQty(s.wholesaleMarkup)}%)', kind: FieldKind.number),
-    const FormFieldSpec('reorder', 'Reorder level', kind: FieldKind.number),
+    // D1: checked as each field is left: a barcode another medicine has, a price under the cost, an expiry gone by
+    FormFieldSpec('barcode', 'Barcode / SKU (blank = generate)', validate: (v, _) {
+      final other = d.products.where((x) => x.barcode == v.trim() && x.id != p?.id).firstOrNull;
+      return other == null ? null : 'Another medicine has this barcode (${other.name})';
+    }),
+    const FormFieldSpec('cost', 'Cost price', kind: FieldKind.money, required: true),
+    FormFieldSpec('price', 'Retail price (blank = cost +${formatQty(s.retailMarkup)}%)', kind: FieldKind.money,
+        validate: (v, all) => moneyValue(v) > 0 && moneyValue('${all['cost'] ?? ''}') > moneyValue(v) ? 'The retail price is below the cost' : null),
+    FormFieldSpec('wholesale', 'Wholesale price (blank = cost +${formatQty(s.wholesaleMarkup)}%)', kind: FieldKind.money, help: helpTexts['wholesale'],
+        validate: (v, all) => moneyValue(v) > 0 && moneyValue('${all['cost'] ?? ''}') > moneyValue(v) ? 'The wholesale price is below the cost' : null),
+    FormFieldSpec('reorder', 'Reorder level', kind: FieldKind.number, help: helpTexts['reorder']),
     const FormFieldSpec('shelf', 'Shelf / location'),
+    const FormFieldSpec('photo', 'Photo', kind: FieldKind.photo),
     if (p == null) ...const [
       FormFieldSpec('openingStock', 'Opening stock (quantity)', kind: FieldKind.number),
       FormFieldSpec('openingBatch', 'Opening stock batch no.'),
-      FormFieldSpec('openingExpiry', 'Opening stock expiry', kind: FieldKind.date),
+      FormFieldSpec('openingExpiry', 'Opening stock expiry', kind: FieldKind.date, validate: _notPast),
     ],
     const FormFieldSpec('rx', 'Prescription only (Rx)', kind: FieldKind.flag),
     const FormFieldSpec('chronic', 'Chronic medicine (refill reminders)', kind: FieldKind.flag),
@@ -288,7 +319,8 @@ Future<void> editMedicine(BuildContext context, WidgetRef ref, Product? p) async
     return;
   }
   try {
-    final saved = await saveMedicine(ref.read(recordStoreProvider), v, before: p, all: d.products, settings: s, user: await _user(ref), branchId: d.branch);
+    // F5: an edit says who made it and when
+    final saved = await saveMedicine(ref.read(recordStoreProvider), p == null ? v : {...v, ...editStamp(await _user(ref))}, before: p, all: d.products, settings: s, user: await _user(ref), branchId: d.branch);
     if (context.mounted) say(context, p == null ? '${saved['name']} added' : '${saved['name']} saved');
   } on MedicineProblem catch (e) {
     if (context.mounted) say(context, e.message, error: true);

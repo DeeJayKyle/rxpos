@@ -32,6 +32,8 @@ export default function Labels() {
     setItems((list) => (list.some((i) => i.p.id === p.id) ? list : [...list, { p, qty }]));
     setQ('');
   };
+  // Inventory → ticked medicines → Print labels (UI batch 3, C4): those medicines are added once the page opens
+  useEffect(() => { for (const id of location.state?.productIds || []) { const p = products.find((x) => x.id === id); if (p) add(p, 1); } }, [location.state?.productIds]); // eslint-disable-line react-hooks/exhaustive-deps
   // Kits → "Print label": that kit is added once the page opens
   useEffect(() => { const k = location.state?.kitId && kits.find((x) => x.id === location.state.kitId); if (k) add(k, 1); }, [location.state?.kitId]); // eslint-disable-line react-hooks/exhaustive-deps
   const addLowStock = () => products.filter((p) => p.stock > 0).slice(0, 60).forEach((p) => add(p, 1));

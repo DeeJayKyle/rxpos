@@ -25,6 +25,8 @@ import '../../auth/presentation/account_menu.dart' show AccountCard;
 import 'font_picker.dart';
 import 'keyboard_settings.dart';
 import '../../../widgets/ai_system_doctor_card.dart';
+import '../../../core/rules/audit_text.dart';
+import '../../../core/presentation/app_shell.dart' show barChoices, barChoice;
 
 /// This device (src/pages/Device.jsx): its branch and look, sync & storage (waiting changes, refused changes, ready to
 /// work offline, download everything again), text size and rotation, the date format, and notification sounds.
@@ -153,6 +155,35 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
         ),
       ]),
       _section('Screen', Icons.screenshot_monitor, [
+        // F8 (UI batch 3): the four pages of the phone's bottom bar, in the order they are picked (More is always last)
+        Text('Phone bottom bar · pick four pages, two either side of Sell', style: Theme.of(context).textTheme.bodySmall),
+        Builder(builder: (context) {
+          final cur = barChoice(ref.watch(deviceValueProvider('bottomBar')).value);
+          void save(List<String> v) => ref.read(deviceValueProvider('bottomBar').notifier).set(v.isEmpty ? null : v.join(','));
+          return Wrap(key: const Key('bar-pick'), spacing: 6, runSpacing: 6, children: [
+            for (final c in barChoices)
+              FilterChip(
+                key: ValueKey('bar-${c.$1}'),
+                avatar: Icon(c.$3, size: 16),
+                label: Text(cur.contains(c.$1) ? '${cur.indexOf(c.$1) + 1}. ${c.$2}' : c.$2),
+                selected: cur.contains(c.$1),
+                onSelected: (on) => save(on ? [...cur, c.$1].take(4).toList() : [...cur]..remove(c.$1)),
+              ),
+            if (cur.isNotEmpty) TextButton(onPressed: () => save(const []), child: const Text('Standard bar')),
+          ]);
+        }),
+        const SizedBox(height: 12),
+        // E2: four sizes at a tap, the slider for anything between
+        Wrap(spacing: 6, runSpacing: 6, children: [
+          for (final (z, l) in const [(0.9, 'Small'), (1.0, 'Normal'), (1.15, 'Large'), (1.3, 'Extra large')])
+            ChoiceChip(
+              key: Key('text-size-$l'),
+              label: Text('$l ${(z * 100).round()}%'),
+              selected: (zoom - z).abs() < .001,
+              onSelected: (_) => ref.read(deviceValueProvider(zoomKey).notifier).set(z == 1 ? null : z.toStringAsFixed(2)),
+            ),
+        ]),
+        const SizedBox(height: 8),
         Text('Text and button size · ${(zoom * 100).round()}%'),
         Slider(
           key: const Key('zoom'),
@@ -313,7 +344,7 @@ class AuditScreen extends ConsumerStatefulWidget {
 }
 
 class _AuditScreenState extends ConsumerState<AuditScreen> {
-  String _q = '', _who = '', _action = '', _from = '';
+  String _q = '', _who = '', _action = '', _from = '', _to = '', _kind = '';
   @override
   Widget build(BuildContext context) {
     final rows = ref.watch(tableProvider('audit')).value;
@@ -325,7 +356,7 @@ class _AuditScreenState extends ConsumerState<AuditScreen> {
     String branch(Object? id) => '${branches.where((b) => b['id'] == ('${id ?? ''}'.isEmpty ? 'main' : id)).firstOrNull?['name'] ?? ''}';
     final q = _q.trim().toLowerCase();
     final list = rows
-        .where((a) => (_who.isEmpty || a['user'] == _who) && (_action.isEmpty || a['action'] == _action) && (_from.isEmpty || dayOf('${a['date']}').compareTo(_from) >= 0) &&
+        .where((a) => (_who.isEmpty || a['user'] == _who) && (_action.isEmpty || a['action'] == _action) && (_kind.isEmpty || auditKind(a) == _kind) && (_from.isEmpty || dayOf('${a['date']}').compareTo(_from) >= 0) && (_to.isEmpty || dayOf('${a['date']}').compareTo(_to) <= 0) &&
             (q.isEmpty || '${a['user']} ${a['action']} ${a['details']}'.toLowerCase().contains(q)))
         .toList()
       ..sort((a, b) => '${b['date']}'.compareTo('${a['date']}'));
@@ -343,7 +374,7 @@ class _AuditScreenState extends ConsumerState<AuditScreen> {
           items: [const DropdownMenuItem(value: '', child: Text('All actions')), for (final a in actions) DropdownMenuItem(value: a, child: Text(a))],
           onChanged: (v) => setState(() => _action = v ?? ''),
         ),
-        DateBox(label: 'From date', value: _from, onChanged: (v) => setState(() => _from = v)),
+        DateRangeBox(from: _from, to: _to, onChanged: (f, t) => setState(() { _from = f; _to = t; })), // E5
         SearchField(onChanged: (v) => setState(() => _q = v), hint: 'Person, action, details…', width: 220),
         ExportButtons(
           name: 'audit-log',
@@ -351,20 +382,35 @@ class _AuditScreenState extends ConsumerState<AuditScreen> {
           csv: () => [for (final a in list) {'date': a['date'], 'user': a['user'], 'action': a['action'], 'details': a['details'], 'branch': branch(a['branchId'])}],
         ),
       ],
-      child: list.isEmpty
-          ? const EmptyState('No activity recorded yet')
-          : ListView.separated(
-              itemCount: list.length > 1000 ? 1000 : list.length,
-              separatorBuilder: (_, _) => const Divider(height: 1),
-              itemBuilder: hued((_, i) {
-                final a = list[i];
-                return ListTile(
-                  dense: true,
-                  title: Text('${a['action']} · ${a['user']}'),
-                  subtitle: Text('${'${a['date']}'.replaceFirst('T', ' ').split('.').first} · ${a['details'] ?? ''}${branches.length > 1 ? ' · ${branch(a['branchId'])}' : ''}'),
-                );
-              }),
-            ),
+      // F6 (UI batch 3): chips by person and by kind of action; each entry as a sentence
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Wrap(key: const Key('audit-people'), spacing: 6, runSpacing: 6, children: [
+          ChoiceChip(label: const Text('Everyone'), selected: _who.isEmpty, onSelected: (_) => setState(() => _who = '')),
+          for (final u in users.take(8)) ChoiceChip(key: ValueKey('audit-who-$u'), label: Text(u), selected: _who == u, onSelected: (_) => setState(() => _who = _who == u ? '' : u)),
+        ]),
+        const SizedBox(height: 6),
+        Wrap(key: const Key('audit-kinds'), spacing: 6, runSpacing: 6, children: [
+          ChoiceChip(label: const Text('Everything'), selected: _kind.isEmpty, onSelected: (_) => setState(() => _kind = '')),
+          for (final (k, l) in auditKinds) ChoiceChip(key: ValueKey('audit-kind-$k'), label: Text(l), selected: _kind == k, onSelected: (_) => setState(() => _kind = _kind == k ? '' : k)),
+        ]),
+        const SizedBox(height: 8),
+        Expanded(
+          child: list.isEmpty
+              ? const EmptyState('Nothing recorded yet. Sign-ins, refunds, price changes and other changes are listed here as they happen.')
+              : ListView.separated(
+                  itemCount: list.length > 1000 ? 1000 : list.length,
+                  separatorBuilder: (_, _) => const Divider(height: 1),
+                  itemBuilder: hued((_, i) {
+                    final a = list[i];
+                    return ListTile(
+                      dense: true,
+                      title: Text(auditSentence(a)),
+                      subtitle: Text('${a['action']} · ${'${a['date']}'.replaceFirst('T', ' ').split('.').first}${branches.length > 1 ? ' · ${branch(a['branchId'])}' : ''}'),
+                    );
+                  }),
+                ),
+        ),
+      ]),
     );
   }
 }

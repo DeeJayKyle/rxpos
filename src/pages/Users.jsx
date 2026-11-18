@@ -75,7 +75,7 @@ export default function Users() {
   };
   const deleteRole = async (r) => {
     if (db.users.some((u) => u.role === r.id)) return toast(`Some users still have the ${r.name} role`, 'warn');
-    if (!(await ask({ title: `Delete the ${r.name} role?`, danger: true, confirmText: 'Delete' }))) return;
+    if (!(await ask({ title: `Delete the ${r.name} role?`, effects: [`${db.users.filter((u) => u.role === r.id).length} staff have this role`, 'their permissions go with it'], danger: true, confirmText: 'Delete' }))) return;
     update((d) => { del(d, 'roles', r.id); audit(d, user, 'Role deleted', r.name, branchId); });
   };
 
@@ -114,7 +114,7 @@ export default function Users() {
                   </td>
                 </tr>
               ))}
-              {!db.users.length && <Empty colSpan={7}>No users yet</Empty>}
+              {!db.users.length && <Empty colSpan={7}>No staff accounts yet. Add each person who uses RxPOS, so their sales and changes carry their name.</Empty>}
             </tbody>
           </table>
         </div>

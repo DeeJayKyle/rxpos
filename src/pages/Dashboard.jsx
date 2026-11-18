@@ -10,6 +10,7 @@ import { useInsights, shareText } from '../engage.jsx';
 import { whatsappLink } from '../cloud.js';
 import { WeatherCard } from './Storage.jsx';
 import BentoDashboard, { saleStatus } from '../components/BentoDashboard.jsx';
+import { BusyHours, SetupChecklist, WhatsNewCard } from '../components/DashExtras.jsx';
 import { deviceSettings, setDevice, onDevice } from '../device.js';
 import { PERIODS, PERIOD_WORDS, VS_WORDS, periodFigures, topMedicines, stockHealth } from '../dashboard.js';
 import { shortText } from '../kits.js';
@@ -28,6 +29,8 @@ const WIDGETS = [
   { id: 'health', name: 'Stock health', span: 4, on: true },
   { id: 'top', name: 'Top medicines', span: 6, on: true },
   { id: 'recent', name: 'Latest sales', span: 6, on: true },
+  // UI batch 3, B5: sales by weekday and hour
+  { id: 'busy', name: 'Busy hours (sales by day and hour)', span: 12, on: true },
   { id: 'checks', name: 'Sales to check (when there are some)', span: 12, on: true },
   { id: 'alerts', name: 'Stock alert tiles', span: 12, on: false },
   { id: 'promote', name: 'Promote today', span: 6, on: false },
@@ -46,7 +49,7 @@ export function dashLayout(d = deviceSettings()) {
 const saveDash = (patch) => setDevice({ dash: { ...(deviceSettings().dash || {}), ...patch } });
 
 export default function Dashboard() {
-  const { db, products, kits, fmt, user, branchId, branch, features, batchesOf, day, can } = useStore();
+  const { db, products, kits, fmt, fmtShort, user, branchId, branch, features, batchesOf, day, can } = useStore();
   // recommendation 6 (1.10.0): kits that can be made 3 times or fewer, with the medicine that holds them back
   const lowKits = kits.filter((k) => k.active !== false && k.canMake != null && k.canMake <= 3);
   const [topBy, setTopBy] = useState('amount');
@@ -120,9 +123,9 @@ export default function Dashboard() {
     figures: () => (
       <div className="stats kpis">
         {/* sales open Reports → Sales lines for the period (every medicine sold); staff without it get the sales list */}
-        <Stat {...salesTo} label={isToday ? "Today's sales" : 'Sales'} value={fmt(c.total)} sub={`${c.n} sale${c.n === 1 ? '' : 's'} · ${VS_WORDS[period]}`} delta={dl.total} spark={spark.total} tone="teal" icon={Banknote} />
-        {can('reports') && <Stat to="/reports" state={{ tab: 'profit', ...rangeState }} label={isToday ? 'Gross profit today' : 'Gross profit'} value={fmt(c.gp)} sub={`after cost of goods · ${VS_WORDS[period]}`} delta={dl.gp} spark={spark.gp} tone="violet" icon={TrendingUp} />}
-        {(can('finance') || can('reports')) && <Stat to="/expenses" label={isToday ? "Today's expenses" : 'Expenses'} value={fmt(c.exp)} sub={db.branches.length > 1 ? `Whole pharmacy (expenses have no branch) · sales here − expenses: ${fmt(c.total - c.exp)}` : `Sales − expenses: ${fmt(c.total - c.exp)}`} delta={dl.exp} spark={spark.exp} goodDown tone="orange" icon={Wallet} />}
+        <Stat {...salesTo} label={isToday ? "Today's sales" : 'Sales'} value={fmtShort(c.total)} full={fmt(c.total)} sub={`${c.n} sale${c.n === 1 ? '' : 's'} · ${VS_WORDS[period]}`} delta={dl.total} spark={spark.total} tone="teal" icon={Banknote} />
+        {can('reports') && <Stat to="/reports" state={{ tab: 'profit', ...rangeState }} label={isToday ? 'Gross profit today' : 'Gross profit'} value={fmtShort(c.gp)} full={fmt(c.gp)} sub={`after cost of goods · ${VS_WORDS[period]}`} delta={dl.gp} spark={spark.gp} tone="violet" icon={TrendingUp} />}
+        {(can('finance') || can('reports')) && <Stat to="/expenses" label={isToday ? "Today's expenses" : 'Expenses'} value={fmtShort(c.exp)} full={fmt(c.exp)} sub={db.branches.length > 1 ? `Whole pharmacy (expenses have no branch) · sales here − expenses: ${fmt(c.total - c.exp)}` : `Sales − expenses: ${fmt(c.total - c.exp)}`} delta={dl.exp} spark={spark.exp} goodDown tone="orange" icon={Wallet} />}
         <Stat to="/sales" state={rangeState} label="Transactions" value={c.n.toLocaleString()} sub={`receipts ${isToday ? 'today' : PERIOD_WORDS[period]} · ${VS_WORDS[period]}`} delta={dl.n} spark={spark.n} tone="blue" icon={ReceiptText} />
       </div>
     ),
@@ -173,7 +176,9 @@ export default function Dashboard() {
     ),
     recent: () => <RecentSales sales={db.sales} branchId={branchId} fmt={fmt} />,
     checks: () => (can('audit') && (db.anomalies || []).some((a) => !a.reviewed) ? <SaleChecks /> : null),
-    bento: () => <BentoDashboard byDay={m.byDay} db={db} branchId={branchId} fmt={fmt} can={can} counts={{ expiry: exp.soon + exp.expired, low: lowStock.length }} />,
+    busy: () => { const wk = new Date(); wk.setDate(wk.getDate() - 6); const w7 = dayOf(wk.toISOString()); const from = fig.range.from < w7 ? fig.range.from : w7;
+      return <BusyHours sales={db.sales} branchId={branchId} from={from} words={from === fig.range.from && !isToday ? (PERIOD_WORDS[period].startsWith('last') ? 'in the ' : '') + PERIOD_WORDS[period] : 'in the last 7 days'} />; },
+    bento: () => <BentoDashboard byDay={m.byDay} db={db} branchId={branchId} fmt={fmt} fmtShort={fmtShort} can={can} counts={{ expiry: exp.soon + exp.expired, low: lowStock.length }} />,
     alerts: () => (
       <div className="stats alerts" aria-label="Stock alerts">
         <Stat to="/inventory" state={{ filter: 'low' }} label="Low stock" value={lowStock.length} sub="in stock, at or below reorder level" tone="amber alert" icon={PackageX} />
@@ -205,9 +210,9 @@ export default function Dashboard() {
     totals: () => (
       <div className="stats">
         <Stat to="/medicines" label="Products" value={products.length.toLocaleString()} icon={Pill} />
-        <Stat to="/inventory" label="Inventory value" value={fmt(sv.value)} sub={`at cost · expired ${fmt(sv.expired)} not included`} icon={Coins} />
+        <Stat to="/inventory" label="Inventory value" value={fmtShort(sv.value)} full={fmt(sv.value)} sub={`at cost · expired ${fmt(sv.expired)} not included`} icon={Coins} />
         <Stat to="/customers" label="Customers" value={db.customers.length.toLocaleString()} icon={Users} />
-        <Stat to="/sales" state={{ from: today().slice(0, 7) + '-01', to: today() }} label="This month" value={fmt(m.byMonth[today().slice(0, 7)]?.total)} sub={`${m.byMonth[today().slice(0, 7)]?.n || 0} sales`} icon={ReceiptText} />
+        <Stat to="/sales" state={{ from: today().slice(0, 7) + '-01', to: today() }} label="This month" value={fmtShort(m.byMonth[today().slice(0, 7)]?.total)} full={fmt(m.byMonth[today().slice(0, 7)]?.total)} sub={`${m.byMonth[today().slice(0, 7)]?.n || 0} sales`} icon={ReceiptText} />
       </div>
     ),
     monthly: () => (
@@ -245,6 +250,9 @@ export default function Dashboard() {
         </div>
         <button type="button" className="btn sm ghost" onClick={() => setEditing(true)}><SlidersHorizontal size={15} />Edit widgets</button>
       </div>
+
+      <WhatsNewCard db={db} />
+      <SetupChecklist db={db} products={products} can={can} />
 
       {lowKits.length > 0 && (
         <div className="notice warn-notice kit-low-alert" role="status">
@@ -329,7 +337,7 @@ function RecentSales({ sales, branchId, fmt }) {
               <td className="num"><b>{fmt(s.total)}</b></td>
             </tr>
           ); })}
-          {!recent.length && <Empty colSpan={5}>No sales yet</Empty>}
+          {!recent.length && <Empty colSpan={5} action={{ label: 'New sale', to: '/pos' }}>No sales yet. Your latest sales show here as you sell.</Empty>}
         </tbody>
       </table>
     </div>
@@ -341,7 +349,7 @@ function EditWidgets({ layout, onClose }) {
   const move = (i, d) => { const o = [...layout.order]; [o[i], o[i + d]] = [o[i + d], o[i]]; saveDash({ order: o }); };
   const toggle = (id) => { const s = new Set(layout.shown); s.has(id) ? s.delete(id) : s.add(id); saveDash({ shown: [...s] }); };
   return (
-    <Modal title="Edit widgets" onClose={onClose}>
+    <Modal title="Edit widgets" onClose={onClose} size="sm">
       <p className="muted small">Choose the cards on your dashboard and their order. Only this device changes.</p>
       <ul className="widget-list">
         {layout.order.map((id, i) => { const w = WIDGETS.find((x) => x.id === id); return (

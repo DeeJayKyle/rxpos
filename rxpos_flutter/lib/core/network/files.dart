@@ -23,6 +23,9 @@ String shrinkPhoto(Uint8List bytes, {int max = 1280, int quality = 82}) {
   return 'data:image/jpeg;base64,${base64Encode(img.encodeJpg(small, quality: quality))}';
 }
 
+/// A5: a medicine's photo made small: at most 256 px on its longer side, a JPEG (the image package writes no WebP)
+Uint8List medicinePhoto(Uint8List bytes) => dataUrlBytes(shrinkPhoto(bytes, max: 256, quality: 82));
+
 /// A data URL → its bytes.
 Uint8List dataUrlBytes(String dataUrl) => base64Decode(dataUrl.substring(dataUrl.indexOf(',') + 1));
 

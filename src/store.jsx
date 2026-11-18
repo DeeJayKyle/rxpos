@@ -14,7 +14,7 @@ import { pruneOf } from './historywindow.js';
 import { createStockIndexer } from './stockindex.js';
 import { FIELD_TABLES, stampFields, mergeFields, sameRecord } from './fieldmerge.js';
 import { setUnsent } from './update.js';
-import { formatMoney } from './money.js';
+import { formatMoney, shortMoney } from './money.js';
 import { pharmacyDefaults, overrideKey, readOverrides, writeOverrides, editOverrides, settingsEqual, PHARMACY_FIELDS } from './pharmacy-settings.js';
 import { isKit, kitView } from './kits.js';
 
@@ -690,6 +690,8 @@ export function StoreProvider({ children }) {
       },
       onStatus: (st) => {
         setSyncStatus(st);
+        // the save marks on toasts (UI batch 3, D4) follow the cloud from here
+        try { window.dispatchEvent(new CustomEvent('rxpos-sync', { detail: { state: st.state, pending: st.pending } })); } catch { /* no window (tests) */ }
         if (typeof st.pending === 'number') setPending(st.pending);
         if (st.state === 'ok' && !st.pending) sentAt.current = Date.now();
       },
@@ -798,6 +800,11 @@ export function StoreProvider({ children }) {
     // The pharmacy's own locale (default en-UG), not the device's, so grouping/decimals are the same on every device (1.5)
     return formatMoney(n, { currency: s.currency || '', decimals: Number(s.decimals ?? 0), locale: s.locale || 'en-UG' });
   }, [effectiveSettings]);
+  // UGX 1.2M / UGX 350K on figure cards (UI batch 3, B6); the full amount goes in their tooltip
+  const fmtShort = useCallback((n) => {
+    const s = effectiveSettings || {};
+    return shortMoney(n, { currency: s.currency || '', decimals: Number(s.decimals ?? 0), locale: s.locale || 'en-UG' });
+  }, [effectiveSettings]);
 
   const branch = db?.branches.find((b) => b.id === branchId) || db?.branches[0];
   // step 7: document numbers (src/docnumbers.js). Called inside update(): the count is saved with the document.
@@ -826,9 +833,9 @@ export function StoreProvider({ children }) {
   // One value for the pages, made again only when something in it changes (a new object every render would
   // re-render every page whenever anything in the store moved)
   const value = useMemo(() => (db && syncCfg ? {
-    db: viewDb, sharedSettings: db.settings, pharmacyOverrides, resetPharmacyOverrides, update, upsert, remove, saveSettings, user, setUser, fmt, products, kits, stockIndex, batchesOf,
+    db: viewDb, sharedSettings: db.settings, pharmacyOverrides, resetPharmacyOverrides, update, upsert, remove, saveSettings, user, setUser, fmt, fmtShort, products, kits, stockIndex, batchesOf,
     branchId, branch, setBranchId, numberFor, syncCfg, saveSyncCfg, syncNow, pullAll, linkPharmacy, features, can, day,
-  } : null), [db, viewDb, pharmacyOverrides, resetPharmacyOverrides, update, upsert, remove, saveSettings, user, setUser, fmt, products, kits, stockIndex, batchesOf,
+  } : null), [db, viewDb, pharmacyOverrides, resetPharmacyOverrides, update, upsert, remove, saveSettings, user, setUser, fmt, fmtShort, products, kits, stockIndex, batchesOf,
     branchId, branch, setBranchId, numberFor, syncCfg, saveSyncCfg, syncNow, pullAll, linkPharmacy, features, can, day]);
   const syncValue = useMemo(() => ({ syncStatus, pending, storageIssue }), [syncStatus, pending, storageIssue]);
 

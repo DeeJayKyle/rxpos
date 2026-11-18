@@ -1,6 +1,6 @@
 // Money math (review Phase 1.5): integer-UGX rounding, per-line totals, tax, pack splitting, locale formatting.
 //   node unit-money.mjs
-import { round, lineTotal, cartSubtotal, taxOf, unitPrice, formatMoney, formatQty } from '../src/money.js';
+import { round, lineTotal, cartSubtotal, taxOf, unitPrice, formatMoney, formatQty, shortMoney } from '../src/money.js';
 let pass = 0, fail = 0;
 const check = (n, ok, x = '') => { ok ? pass++ : fail++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${n}${x !== '' ? '  ' + String(x) : ''}`); };
 
@@ -43,6 +43,13 @@ check('unit price of a single is the price', unitPrice(1500, 1) === 1500);
 check('format groups thousands with the currency prefix', formatMoney(1234567, { currency: 'UGX', decimals: 0, locale: 'en-UG' }) === 'UGX 1,234,567', formatMoney(1234567, { currency: 'UGX', decimals: 0, locale: 'en-UG' }));
 check('format respects decimals', formatMoney(1234.5, { currency: 'USD', decimals: 2, locale: 'en-US' }) === 'USD 1,234.50', formatMoney(1234.5, { currency: 'USD', decimals: 2, locale: 'en-US' }));
 check('format with no currency is just the number', formatMoney(1000, { locale: 'en-UG' }) === '1,000');
+
+// shortMoney (UI batch 3, B6): long amounts said short on figure cards
+const sm = (n) => shortMoney(n, { currency: 'UGX', locale: 'en-UG' });
+check('short money: below 100K in full', sm(99500) === 'UGX 99,500', sm(99500));
+check('short money: thousands', sm(350000) === 'UGX 350K', sm(350000));
+check('short money: millions with one decimal', sm(1234567) === 'UGX 1.2M' && sm(1000000) === 'UGX 1M', sm(1234567));
+check('short money: billions, and a negative', sm(2500000000) === 'UGX 2.5B' && sm(-4500000) === 'UGX −4.5M', sm(-4500000));
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

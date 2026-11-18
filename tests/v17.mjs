@@ -131,7 +131,7 @@ const expRows = await A.evaluate(() => [...document.querySelectorAll('tbody tr')
 check('#7 Expiring list shows only in-stock batches', expRows.includes('Expiry Beta') && !expRows.includes('Expiry Alpha') && !expRows.includes('Expiry Gamma'), expRows);
 await go(A, '/inventory');
 await clickText(A, '.filter-chips button', /Low stock/); await wait(500);
-const lowRows = await A.evaluate(() => [...document.querySelectorAll('tbody tr')].map((r) => r.innerText.split('\t')[0]).join(','));
+const lowRows = await A.evaluate(() => [...document.querySelectorAll('tbody tr')].map((r) => (r.querySelector('td.row-title') || r).innerText.split('\n')[0]).join(','));
 check('#7 Inventory "Low stock" tab: only in-stock items', lowRows.includes('Lowstock Syrup') && !lowRows.includes('Neverstocked'), lowRows);
 await go(A, '/reorder');
 const reo = await A.evaluate(() => document.body.innerText);
@@ -186,7 +186,7 @@ check('#6 viewing it shows who edited, why, and before → after', /Ada Admin/.t
 await A.screenshot({ path: path.join(out, '6-edit-history.png') });
 // #3 receipt PDF from Sales History
 const t2 = Date.now();
-await clickText(A, '.modal button', /^PDF$/); await wait(3000);
+await clickText(A, '.modal button, .details-pane button', /^PDF$/); await wait(3000);
 got = fs.readdirSync(dl).find((f) => /^receipt-.*\.pdf$/.test(f) && fs.statSync(path.join(dl, f)).mtimeMs >= t2 - 500);
 check('#3 Sales History receipt downloads as PDF', !!got, got);
 await A.keyboard.press('Escape'); await wait(300);
@@ -281,7 +281,7 @@ await clickText(A, 'button', /Receive stock/); await wait(1500);
 const savedMsg = await A.evaluate(() => document.querySelector('.notice')?.innerText || '');
 check('#4 after checking and ticking, "Receive stock" saves it', /Received 3 item/.test(savedMsg), savedMsg);
 await go(A, '/inventory');
-const inv2 = await A.evaluate(() => Object.fromEntries([...document.querySelectorAll('tbody tr')].map((r) => [r.cells[0].innerText.split('\n')[0].trim(), r.innerText.replace(/\s+/g, ' ')])));
+const inv2 = await A.evaluate(() => Object.fromEntries([...document.querySelectorAll('tbody tr')].map((r) => [(r.querySelector('td.row-title') || r.cells[0]).innerText.split('\n')[0].trim(), r.innerText.replace(/\s+/g, ' ')])));
 check('#4 stock went up by the corrected amounts (Amoxyl 100 → 120, Panadol 80 → 92)', /\b120\b/.test(inv2['Amoxyl 500mg caps'] || '') && /\b92\b/.test(inv2['Panadol Extra tabs'] || ''), JSON.stringify([inv2['Amoxyl 500mg caps'], inv2['Panadol Extra tabs']]).slice(0, 200));
 check('#4 the unknown line became a new medicine in stock', Object.keys(inv2).some((k) => /QWERTAZOL/i.test(k)), Object.keys(inv2).join(','));
 await go(A, '/purchases');

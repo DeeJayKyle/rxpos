@@ -194,10 +194,16 @@ export default function Reorder() {
                     <td><strong>{r.p.name}</strong></td><td className="num">{r.p.stock}</td><td className="num">{r.perDay.toFixed(1)}</td>
                     <td className={'num ' + (r.daysLeft <= Number(lead) ? 'text-danger' : 'text-warn')}>{isFinite(r.daysLeft) ? Math.floor(r.daysLeft) : '—'}</td>
                     <td>
+                      {/* G3: each supplier's last price as a chip, the cheapest marked; a tap uses that supplier and price */}
                       {r.options.length > 1 ? (
-                        <select value={r.buy?.supplierId || ''} onChange={(e) => setChosenSup({ ...chosenSup, [r.p.id]: e.target.value })} aria-label={`Supplier for ${r.p.name}`}>
-                          {r.options.map((o, n) => <option key={o.supplierId} value={o.supplierId}>{n === 0 ? '★ ' : ''}{o.supplierName} · {fmt(o.cost)}</option>)}
-                        </select>
+                        <div className="price-chips" role="radiogroup" aria-label={`Supplier for ${r.p.name}`}>
+                          {r.options.map((o, n) => (
+                            <button key={o.supplierId} type="button" role="radio" aria-checked={r.buy?.supplierId === o.supplierId} className={'price-chip' + (r.buy?.supplierId === o.supplierId ? ' on' : '') + (n === 0 ? ' cheapest' : '')}
+                              title={`Last bought ${String(o.date || '').slice(0, 10)}`} onClick={() => setChosenSup({ ...chosenSup, [r.p.id]: o.supplierId })}>
+                              <span>{o.supplierName}</span><b className="num">{fmt(o.cost)}</b>{n === 0 && <small>Cheapest</small>}
+                            </button>
+                          ))}
+                        </div>
                       ) : r.buy?.supplierName || <span className="muted">—</span>}
                       {r.options.length > 1 && r.buy && r.buy.cost > r.options[0].cost && <small className="text-warn"> {fmt(r.buy.cost - r.options[0].cost)} more than {r.options[0].supplierName}</small>}
                     </td>
@@ -253,7 +259,7 @@ export default function Reorder() {
                   </td>
                 </tr>
               ))}
-              {!orders.length && <Empty colSpan={7}>No purchase orders yet. Create them from Reorder suggestions.</Empty>}
+              {!orders.length && <Empty colSpan={7} action={{ label: 'See what to reorder', onClick: () => setTab('reorder') }}>No purchase orders yet. Create them from the reorder suggestions and send them to your suppliers.</Empty>}
             </tbody>
           </table>
         </div>

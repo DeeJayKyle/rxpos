@@ -48,7 +48,7 @@ const signIn = async (email, pw) => {
 };
 const go = async (p, h) => { await p.goto(base + '/' + slug + '#' + h, { waitUntil: 'networkidle2' }); await wait(1200); };
 const A = await signIn('ada@test.rx', 'ada-pass-123');
-const stockOf = async (name) => { await go(A, '/inventory'); return A.evaluate((n) => { const r = [...document.querySelectorAll('tbody tr')].find((x) => x.innerText.includes(n)); return r ? Number(r.querySelectorAll('td')[5].innerText.trim()) : null; }, name); };
+const stockOf = async (name) => { await go(A, '/inventory'); return A.evaluate((n) => { const r = [...document.querySelectorAll('tbody tr')].find((x) => x.innerText.includes(n)); return r ? Number(r.querySelector('td[data-label="In stock"]').innerText.trim()) : null; }, name); };
 
 // #10 dashboard links
 await go(A, '/');
@@ -132,7 +132,7 @@ check('reorder level computed from 30 days of sales (3/day × 14 days = 42)', lv
 await A.screenshot({ path: out + '/03-reorder.png' });
 await A.evaluate(() => [...document.querySelectorAll('.modal button')].find((x) => /^Apply/.test(x.textContent.trim())).click()); await wait(800);
 await go(A, '/inventory');
-check('reorder level saved on the medicine', await A.evaluate(() => [...document.querySelectorAll('tbody tr')].some((r) => r.querySelectorAll('td')[4]?.innerText.trim() === '42')));
+check('reorder level saved on the medicine', await A.evaluate(() => [...document.querySelectorAll('tbody tr')].some((r) => r.querySelector('td[data-label="Reorder at"]')?.innerText.trim() === '42')));
 
 // #3 chat audience
 await go(A, '/chat');

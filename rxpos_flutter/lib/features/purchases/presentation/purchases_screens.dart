@@ -31,6 +31,7 @@ import '../../sales_history/presentation/sales_screen.dart' show ageText, isOldD
 import '../../stock/domain/delivery.dart';
 import '../../stock/domain/purchase_edit.dart';
 import '../domain/reorder.dart';
+import '../../inventory/presentation/expiry_calendar.dart';
 
 /// Purchase History (src/pages/Purchases.jsx): deliveries with dates / supplier filters, payment type and what is
 /// unpaid, CSV and PDF, view, edit a delivery (purchases.edit); the Drafts tab (deliveries to finish, scanned invoices
@@ -100,8 +101,10 @@ class _PurchasesScreenState extends ConsumerState<PurchasesScreen> {
         if (_tab == 'prices') Expanded(child: _SupplierPrices(rows: rows, q: _q, names: {for (final p in d.products) p.id: p.name}, settings: st)),
         if (_tab == 'history') ...[
           Wrap(spacing: 8, runSpacing: 8, children: [
-            DateBox(label: 'From', value: _from, onChanged: (v) => setState(() => _from = v)),
-            DateBox(label: 'To', value: _to, onChanged: (v) => setState(() => _to = v)),
+            DateRangeBox(from: _from, to: _to, onChanged: (f, t) => setState(() {
+          _from = f;
+          _to = t;
+        })),
             SizedBox(width: 220, child: DropdownButtonFormField<String>(
               initialValue: _supplier,
               isExpanded: true,
@@ -645,13 +648,16 @@ class _ReorderScreenState extends ConsumerState<ReorderScreen> {
               subtitle: Wrap(crossAxisAlignment: WrapCrossAlignment.center, spacing: 8, children: [
                 if (r.why.isNotEmpty) SizedBox(width: double.infinity, child: Text(r.why, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.tertiary))),
                 Text('in stock ${formatQty(r.stock)} · sells ${r.perDay.toStringAsFixed(1)}/day · days left ${r.daysLeft.isFinite ? r.daysLeft.floor() : '—'} · buy from'),
+                // G3: each supplier's last price as a chip, the cheapest marked; a tap uses that supplier and price
                 if (r.options.length > 1)
-                  DropdownButton<String>(
-                    value: r.buy?.supplierId,
-                    isDense: true,
-                    items: [for (final (n, o) in r.options.indexed) DropdownMenuItem(value: o.supplierId, child: Text('${n == 0 ? '★ ' : ''}${o.supplierName} · ${st.money(o.cost)}'))],
-                    onChanged: (x) => setState(() => _chosen[r.p.id] = x ?? ''),
-                  )
+                  for (final (n, o) in r.options.indexed)
+                    ChoiceChip(
+                      key: Key('price-${r.p.id}-${o.supplierId}'),
+                      label: Text('${o.supplierName} · ${st.money(o.cost)}${n == 0 ? ' · cheapest' : ''}'),
+                      selected: r.buy?.supplierId == o.supplierId,
+                      tooltip: 'Last bought ${o.date.length >= 10 ? o.date.substring(0, 10) : o.date}',
+                      onSelected: (_) => setState(() => _chosen[r.p.id] = o.supplierId),
+                    )
                 else
                   Text(r.buy?.supplierName ?? '—'),
                 if (r.options.length > 1 && r.buy != null && r.buy!.cost > r.options.first.cost)
@@ -918,6 +924,7 @@ class ExpiryScreen extends ConsumerStatefulWidget {
 
 class _ExpiryScreenState extends ConsumerState<ExpiryScreen> {
   String _tab = 'soon';
+  bool _calendar = false; // F1: List | Calendar
 
   @override
   Widget build(BuildContext context) {
@@ -949,17 +956,29 @@ class _ExpiryScreenState extends ConsumerState<ExpiryScreen> {
         ),
       ],
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Align(
-          alignment: Alignment.centerLeft,
-          child: SegmentedButton<String>(
-            segments: [ButtonSegment(value: 'soon', tooltip: 'Expiring within $warn days', label: Text('Expiring (${e.soon.length})')), ButtonSegment(value: 'expired', label: Text('Expired (${e.expired.length})'))],
-            selected: {_tab},
-            onSelectionChanged: (v) => setState(() => _tab = v.first),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          if (!_calendar)
+            SegmentedButton<String>(
+              segments: [ButtonSegment(value: 'soon', tooltip: 'Expiring within $warn days', label: Text('Expiring (${e.soon.length})')), ButtonSegment(value: 'expired', label: Text('Expired (${e.expired.length})'))],
+              selected: {_tab},
+              onSelectionChanged: (v) => setState(() => _tab = v.first),
+            ),
+          SegmentedButton<bool>(
+            key: const Key('expiry-view'),
+            segments: const [ButtonSegment(value: false, label: Text('List')), ButtonSegment(value: true, label: Text('Calendar'))],
+            selected: {_calendar},
+            onSelectionChanged: (v) => setState(() => _calendar = v.first),
           ),
-        ),
+        ]),
         const SizedBox(height: 8),
         Expanded(
-          child: rows.isEmpty
+          child: _calendar
+              ? SingleChildScrollView(child: ExpiryCalendar(warn: warn, batches: [
+                  for (final p in d.products.where((p) => d.stockOf(p.id) > 0))
+                    for (final b in d.stock.batchesOf(p.id))
+                      if (b.qty > 0 && b.expiry.isNotEmpty) (p, b, daysUntil(b.expiry)),
+                ]))
+              : rows.isEmpty
               ? EmptyState(_tab == 'expired' ? 'No expired stock 🎉' : 'Nothing expiring soon 🎉')
               : ListView.separated(
                   itemCount: rows.length,

@@ -4,9 +4,10 @@
 // shelf. It writes each medicine's "Shelf / location", the same field in both apps.
 import { useMemo, useState } from 'react';
 import { Archive, CheckCheck, Download } from 'lucide-react';
-import { Modal, SearchBox, useProgressive } from '../ui.jsx';
+import { Modal, SearchBox, useProgressive, Empty } from '../ui.jsx';
 import { useStore, putMany, audit, isUntouchedBase, downloadFile, toCSV } from '../store.jsx';
 import { toast } from '../feedback.jsx';
+import ShelfMap from '../components/ShelfMap.jsx';
 import { searchProducts } from '../search.js';
 import { drugClassOf, groupMedicines, shelfOf, UNCLASSIFIED } from '../drugclass.js';
 import { formatQty } from '../money.js';
@@ -60,6 +61,8 @@ export default function Shelves() {
           <button className="btn ghost" onClick={exportList}><Download size={16} />CSV</button>
         </div>
       </div>
+      {/* F2: the shelves as a picture; tap one for its medicines */}
+      <ShelfMap counts={shelves} value={shelf} onPick={setShelf} />
       <div className="row gap wrap chips">
         <button type="button" className={'chip' + (!shelf ? ' active' : '')} onClick={() => setShelf('')}>All ({mine.length})</button>
         <button type="button" className={'chip' + (shelf === '-' ? ' active' : '')} onClick={() => setShelf('-')}>No shelf ({unshelved})</button>
@@ -98,7 +101,7 @@ export default function Shelves() {
                 </tr>
               );
             })())}
-            {!rows.length && <tr><td colSpan={5} className="empty">No medicines here</td></tr>}
+            {!rows.length && <Empty colSpan={5}>No medicines on this shelf. Set a medicine's shelf in the Medicine List and it shows here.</Empty>}
           </tbody>
         </table>
       </div>

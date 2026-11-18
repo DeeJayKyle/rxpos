@@ -1,3 +1,6 @@
+import '../domain/delivery_check.dart';
+import '../../../core/network/cloud_api.dart' show cloudApiProvider;
+import '../../../core/network/files.dart' show dataUrlBytes;
 import 'dart:async';
 import 'dart:convert';
 
@@ -56,6 +59,7 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
   void dispose() {
     _keep?.cancel();
     _search.dispose();
+    _dcode.dispose();
     super.dispose();
   }
 
@@ -94,8 +98,11 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
     _keep = Timer(const Duration(milliseconds: 300), () {
       final has = lines(f).any((l) => '${l['productId'] ?? ''}'.isNotEmpty);
       ref.read(deviceValueProvider(_draftKey).notifier).set(has ? jsonEncode(f) : null).ignore();
+      if (mounted) setState(() => _draftAt = has ? DateTime.now() : null);
     });
   }
+  // D2: "Draft saved 10:42" under the title, each time the delivery is kept on this device
+  DateTime? _draftAt;
 
   void _setLine(String key, Map<String, Object?> patch) {
     final f = _form!;
@@ -105,7 +112,14 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
     _set({...f, 'lines': next});
   }
 
-  void _replaceLine(String key, Line line) => _set({..._form!, 'lines': [for (final l in lines(_form!)) l['key'] == key ? {...line, 'key': key} : l]});
+  String? _activeLine; // G1: the line last edited, outlined on the invoice
+  DeliveryCheck? _dcheck; // G2: the order being checked by scan (null until started)
+  String _dmsg = '';
+  final _dcode = TextEditingController();
+  void _replaceLine(String key, Line line) {
+    _activeLine = key;
+    _set({..._form!, 'lines': [for (final l in lines(_form!)) l['key'] == key ? {...line, 'key': key} : l]});
+  }
 
   String _placeLine(Line line) {
     final ls = lines(_form!);
@@ -154,6 +168,15 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
     final f = _form!;
     final problem = checkForm(f, scanned: _scanned != null, checked: _checked);
     if (problem != null) return say(context, problem, error: true);
+    // G2: what is missing or extra after a check by scan is said before anything is received
+    if (_dcheck != null) {
+      final probs = checkProblems(_dcheck!, lines(f), (l) => d.byId['${l['productId']}']?.name ?? '${l['name'] ?? 'A medicine'}');
+      if (probs.isNotEmpty &&
+          !await confirmAction(context, 'Not everything matches the scan', 'Receive the quantities on the lines as they are? You can still change them first.', 'Receive stock', effects: probs)) {
+        return;
+      }
+      if (!mounted) return;
+    }
     final below = belowCost(f, d.byId);
     if (below.isNotEmpty &&
         !await confirmAction(context, 'Selling below cost?', '${below.take(5).join(', ')}${below.length > 5 ? '…' : ''}: the retail price is lower than the cost. Receive anyway?', 'Receive anyway')) {
@@ -410,7 +433,7 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
       };
     }
 
-    return ListView(padding: const EdgeInsets.all(16), children: [
+    final list = ListView(padding: const EdgeInsets.all(16), children: [
       // the title, then the two scan buttons beside it (or under it on a phone)
       Wrap(spacing: 8, runSpacing: 8, alignment: WrapAlignment.spaceBetween, crossAxisAlignment: WrapCrossAlignment.center, children: [
         Text('Add Stock', style: th.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
@@ -452,6 +475,16 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
         }, icon: const Icon(Icons.auto_awesome), label: const Text('Scan Invoice with AI')),
         ]),
       ]),
+      if (_draftAt != null)
+        Padding(
+          key: const Key('draft-saved'),
+          padding: const EdgeInsets.only(bottom: 6),
+          child: Row(children: [
+            Container(width: 7, height: 7, decoration: BoxDecoration(shape: BoxShape.circle, color: context.tones.ok)),
+            const SizedBox(width: 6),
+            Text('Draft saved ${_draftAt!.hour.toString().padLeft(2, '0')}:${_draftAt!.minute.toString().padLeft(2, '0')}', style: Theme.of(context).textTheme.bodySmall),
+          ]),
+        ),
       const PageTip(
         id: 'add-stock',
         title: 'Receiving a delivery',
@@ -463,6 +496,42 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
         _Notice('You have ${myDrafts.length} saved deliver${myDrafts.length == 1 ? 'y' : 'ies'}.', action: ('Open drafts', () => context.go('/purchases?tab=drafts'))),
       if (_restored && scanned == null)
         _Notice('Your unfinished delivery was kept on this device. Carry on, or start again.', action: ('Start again', () => _discard(d)), action2: ('Carry on', () => setState(() => _restored = false))),
+      // G2: receiving an order: scan each pack; its line ticks and counts up, anything not on the order is listed
+      if (f['poId'] != null && '${f['poId']}'.isNotEmpty)
+        Card(
+          key: const Key('dcheck'),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                const Icon(Icons.qr_code_scanner, size: 18),
+                const SizedBox(width: 6),
+                const Expanded(child: Text('Check the delivery by scan', style: TextStyle(fontWeight: FontWeight.w700))),
+                _dcheck == null
+                    ? OutlinedButton(key: const Key('dcheck-start'), onPressed: () => setState(() { _dcheck = const DeliveryCheck(); _dmsg = 'Scan each pack (or type its barcode and press Enter)'; }), child: const Text('Start checking'))
+                    : TextButton(onPressed: () => setState(() { _dcheck = null; _dmsg = ''; }), child: const Text('Stop checking')),
+              ]),
+              if (_dcheck != null) ...[
+                SizedBox(
+                  width: 360,
+                  child: TextField(
+                    key: const Key('dcheck-input'),
+                    controller: _dcode,
+                    autofocus: true,
+                    decoration: const InputDecoration(labelText: 'Scan a pack', isDense: true),
+                    onSubmitted: (v) {
+                      if (v.trim().isEmpty) return;
+                      final r = scanInto(_dcheck!, lines(f), d.products, v);
+                      setState(() { _dcheck = r.check; _dmsg = r.text; if (r.lineKey != null) _activeLine = r.lineKey; });
+                      _dcode.clear();
+                    },
+                  ),
+                ),
+                if (_dmsg.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 6), child: Text(_dmsg, key: const Key('dcheck-msg'))),
+              ],
+            ]),
+          ),
+        ),
       if (scanned != null) ScanNotice(scanned: scanned, form: f, total: total, settings: s, onDiscard: () => _discard(d), onAddSupplier: () async {
         final user = (await ref.read(sessionControllerProvider.future))?.userName ?? '';
         final r = await addSupplier(ref.read(recordStoreProvider), d.suppliers, name: '${scanned['supplier']}', user: user, branchId: d.branch);
@@ -615,7 +684,15 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
                       ]))),
                       Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       SizedBox(width: 35, child: Padding(padding: const EdgeInsets.only(top: 12),
-                          child: Center(child: CircleAvatar(radius: 11, backgroundColor: Color.lerp(lineColorOf(context, l['hue'], i), Colors.black, .15), child: Text('${i + 1}', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800)))))),
+                          child: Column(children: [
+                            Center(child: CircleAvatar(radius: 11, backgroundColor: Color.lerp(lineColorOf(context, l['hue'], i), Colors.black, .15), child: Text('${i + 1}', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800)))),
+                            // G2: packs scanned of this line's quantity, ticked when all are in
+                            if (_dcheck != null && '${l['productId'] ?? ''}'.isNotEmpty)
+                              Builder(builder: (_) {
+                                final got = _dcheck!.counts['${l['productId']}'] ?? 0, want = num.tryParse('${l['qty'] ?? ''}') ?? 0;
+                                return Text('${got >= want ? '✓' : ''}$got/${want == want.roundToDouble() ? want.toInt() : want}', key: Key('dcheck-${l['key']}'), style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: got >= want ? context.tones.ok : th.hintColor));
+                              }),
+                          ]))),
                       for (final c in cols)
                         Container(
                           width: switch (c) { 'medicine' => 260, 'qty' => 120, 'cost' => 140, 'total' => 130, 'price' => 170, 'batch' => 120, _ => 170 } + 8,
@@ -695,6 +772,22 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
         ),
       ),
     ]);
+    // G1: the supplier's invoice beside the form on a wide screen (its pages, the line last edited outlined when its
+    // place on the page is known)
+    final pages = <String>[
+      for (final x in ((scanned?['pageImages'] as List?) ?? const [])) '$x',
+      if (((scanned?['pageImages'] as List?) ?? const []).isEmpty)
+        for (final x in ((scanned?['pagePaths'] as List?) ?? const [])) ref.read(cloudApiProvider).fileUrl('$x'),
+    ].where((x) => x.isNotEmpty).toList();
+    final active = lines(f).where((l) => '${l['key']}' == _activeLine).firstOrNull;
+    return LayoutBuilder(
+      builder: (_, box) => box.maxWidth >= 1280 && pages.isNotEmpty
+          ? Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              SizedBox(width: box.maxWidth * .38, child: InvoicePane(pages: pages, box: active?['box'] is Map ? (active!['box'] as Map).cast<String, Object?>() : null)),
+              Expanded(child: list),
+            ])
+          : list,
+    );
   }
 }
 
@@ -846,3 +939,71 @@ class _MedicinePickerState extends State<_MedicinePicker> {
   }
 }
 
+
+
+/// G1: the supplier's invoice beside the Add Stock form: its pages one at a time; [box] (page, x, y, w, h as fractions)
+/// is outlined on its page.
+class InvoicePane extends StatefulWidget {
+  const InvoicePane({super.key, required this.pages, this.box});
+  final List<String> pages;
+  final Map<String, Object?>? box;
+  @override
+  State<InvoicePane> createState() => _InvoicePaneState();
+}
+
+class _InvoicePaneState extends State<InvoicePane> {
+  int _page = 0;
+  @override
+  Widget build(BuildContext context) {
+    final n = widget.pages.length;
+    final b = widget.box;
+    final bp = (b?['page'] as num?)?.toInt();
+    final shown = bp != null && bp >= 0 && bp < n ? bp : _page.clamp(0, n - 1);
+    final src = widget.pages[shown];
+    final img = src.startsWith('data:') ? Image.memory(dataUrlBytes(src), fit: BoxFit.fitWidth) : Image.network(src, fit: BoxFit.fitWidth, errorBuilder: (_, _, _) => const Text('The page could not be shown'));
+    final cs = Theme.of(context).colorScheme;
+    return Card(
+      key: const Key('invoice-pane'),
+      margin: const EdgeInsets.fromLTRB(16, 16, 0, 16),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(12),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Row(children: [
+            Expanded(child: Text(n > 1 ? 'Invoice · page ${shown + 1} of $n' : 'Invoice', style: const TextStyle(fontWeight: FontWeight.w700))),
+            if (n > 1) IconButton(tooltip: 'Previous page', onPressed: shown == 0 ? null : () => setState(() => _page = shown - 1), icon: const Icon(Icons.chevron_left)),
+            if (n > 1) IconButton(tooltip: 'Next page', onPressed: shown == n - 1 ? null : () => setState(() => _page = shown + 1), icon: const Icon(Icons.chevron_right)),
+          ]),
+          const SizedBox(height: 8),
+          LayoutBuilder(builder: (_, c) => Stack(children: [
+                img,
+                if (b != null && bp == shown)
+                  Positioned.fill(
+                    child: FractionallySizedBox(
+                      alignment: Alignment.topLeft,
+                      widthFactor: 1,
+                      heightFactor: 1,
+                      child: CustomPaint(key: const Key('invoice-mark'), painter: _MarkPainter(b, cs.primary)),
+                    ),
+                  ),
+              ])),
+        ]),
+      ),
+    );
+  }
+}
+
+class _MarkPainter extends CustomPainter {
+  _MarkPainter(this.b, this.color);
+  final Map<String, Object?> b;
+  final Color color;
+  @override
+  void paint(Canvas c, Size s) {
+    double v(String k) => (b[k] as num).toDouble();
+    final r = RRect.fromRectAndRadius(Rect.fromLTWH(v('x') * s.width, v('y') * s.height, v('w') * s.width, v('h') * s.height), const Radius.circular(4));
+    c.drawRRect(r, Paint()..color = color.withValues(alpha: .14));
+    c.drawRRect(r, Paint()..color = color..style = PaintingStyle.stroke..strokeWidth = 2.5);
+  }
+
+  @override
+  bool shouldRepaint(_MarkPainter o) => o.b != b || o.color != color;
+}

@@ -10,27 +10,59 @@ import '../../../core/rules/kits.dart';
 import '../../../core/rules/money.dart';
 import '../domain/refund.dart';
 
-Future<String?> showRefundSheet(BuildContext context, Sale sale, PharmacySettings st, {List<Map<String, Object?>> batches = const [], bool closedDay = false}) =>
-    showAppDialog<String>(context: context, builder: (_) => RefundSheet(sale: sale, settings: st, batches: batches, closedDay: closedDay));
+/// A manager's approval for a big refund (2026-11-18): who may approve, and a check of their PIN or password.
+class RefundApproval {
+  const RefundApproval({required this.limit, required this.approvers, required this.verify});
+  final double limit;
+  final List<(String id, String name)> approvers;
+  final Future<bool> Function(String userId, String secret) verify;
+}
+
+/// The reason, and the manager who approved it (empty when none was needed); null when the sale is kept.
+typedef RefundChoice = ({String why, String approvedBy});
+
+Future<RefundChoice?> showRefundSheet(BuildContext context, Sale sale, PharmacySettings st, {List<Map<String, Object?>> batches = const [], bool closedDay = false, RefundApproval? approval}) =>
+    showAppDialog<RefundChoice>(context: context, builder: (_) => RefundSheet(sale: sale, settings: st, batches: batches, closedDay: closedDay, approval: approval));
 
 class RefundSheet extends StatefulWidget {
-  const RefundSheet({super.key, required this.sale, required this.settings, this.batches = const [], this.closedDay = false});
+  const RefundSheet({super.key, required this.sale, required this.settings, this.batches = const [], this.closedDay = false, this.approval});
   final Sale sale;
   final PharmacySettings settings;
   final List<Map<String, Object?>> batches;
   final bool closedDay;
+  final RefundApproval? approval;
   @override
   State<RefundSheet> createState() => _RefundSheetState();
 }
 
 class _RefundSheetState extends State<RefundSheet> {
-  String? _reason;
-  final _note = TextEditingController();
+  String? _reason, _approver, _approveErr;
+  bool _busy = false;
+  final _note = TextEditingController(), _secret = TextEditingController();
 
   @override
   void dispose() {
     _note.dispose();
+    _secret.dispose();
     super.dispose();
+  }
+
+  Future<void> _go() async {
+    final a = widget.approval;
+    if (a == null) return Navigator.pop(context, (why: _why, approvedBy: ''));
+    final who = a.approvers.where((x) => x.$1 == _approver).firstOrNull;
+    if (who == null || _secret.text.isEmpty) return setState(() => _approveErr = 'Choose the manager and enter their PIN or password.');
+    setState(() => _busy = true);
+    final ok = await a.verify(who.$1, _secret.text).catchError((_) => false);
+    if (!mounted) return;
+    if (!ok) {
+      _secret.clear();
+      return setState(() {
+        _busy = false;
+        _approveErr = 'That PIN or password is not right for ${who.$2}.';
+      });
+    }
+    Navigator.pop(context, (why: _why, approvedBy: who.$2));
   }
 
   String _batch(String? id) => id == null ? 'no batch' : '${widget.batches.where((b) => b['id'] == id).firstOrNull?['batch'] ?? 'batch'}';
@@ -80,7 +112,7 @@ class _RefundSheetState extends State<RefundSheet> {
           Row(children: [const Expanded(child: Text('Sale total')), Text(money(s.total))]),
           Row(children: [
             const Expanded(child: Text('Money back to the customer', style: TextStyle(fontWeight: FontWeight.w800))),
-            Text(money(m.back), style: const TextStyle(fontWeight: FontWeight.w800)),
+            Text(money(m.back), style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 22)),
           ]),
           if (m.unpaid > 0.005) Row(children: [const Expanded(child: Text('Unpaid balance cancelled')), Text(money(m.unpaid))]),
           if (m.insurer > 0.005) Row(children: [const Expanded(child: Text('No longer billed to the insurer')), Text(money(m.insurer))]),
@@ -102,13 +134,39 @@ class _RefundSheetState extends State<RefundSheet> {
             onChanged: (_) => setState(() {}),
             decoration: InputDecoration(labelText: _reason == 'Other' ? 'Say why' : 'Note (optional)'),
           ),
+          if (widget.approval case final a?) ...[
+            const SizedBox(height: 8),
+            Text('A manager must approve a refund over ${money(a.limit)}', key: const Key('refund-approve'), style: const TextStyle(fontWeight: FontWeight.w700)),
+            if (a.approvers.isEmpty)
+              Text('This pharmacy has no other manager to approve it. Ask a manager to do the refund.', style: t.textTheme.bodySmall)
+            else ...[
+              DropdownButtonFormField<String>(
+                key: const Key('refund-approver'),
+                initialValue: _approver,
+                decoration: const InputDecoration(labelText: 'Manager'),
+                items: [for (final (id, name) in a.approvers) DropdownMenuItem(value: id, child: Text(name))],
+                onChanged: (v) => setState(() {
+                  _approver = v;
+                  _approveErr = null;
+                }),
+              ),
+              TextField(
+                key: const Key('refund-secret'),
+                controller: _secret,
+                obscureText: true,
+                onChanged: (_) => setState(() => _approveErr = null),
+                decoration: const InputDecoration(labelText: 'Their PIN or password'),
+              ),
+            ],
+            if (_approveErr != null) Text(_approveErr!, style: TextStyle(color: t.colorScheme.error)),
+          ],
         ])),
       ),
       actions: [
         TextButton(onPressed: () => Navigator.pop(context), child: const Text('Keep the sale')),
         FilledButton.icon(
           style: FilledButton.styleFrom(backgroundColor: t.colorScheme.error, foregroundColor: t.colorScheme.onError),
-          onPressed: _ready ? () => Navigator.pop(context, _why) : null,
+          onPressed: _ready && !_busy && (widget.approval == null || widget.approval!.approvers.isNotEmpty) ? _go : null,
           icon: const Icon(Icons.undo),
           label: Text('Refund ${money(m.back)}'),
         ),

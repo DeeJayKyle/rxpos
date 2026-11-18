@@ -1,16 +1,24 @@
 // Pieces every screen uses: a page with a title and actions, figure cards, a search box, an empty state, a record form,
 // money formatted in the pharmacy's currency.
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../features/sync_status/application/sync_controller.dart';
 
 import '../entities/settings.dart';
 import '../theme/themes.dart';
 import '../rules/money.dart';
 import 'app_dialog.dart';
+import 'form_kit.dart';
+import 'package:flutter/services.dart';
 
 export 'app_dialog.dart';
+export 'form_kit.dart';
 
 extension Money on PharmacySettings {
   String money(num n) => formatMoney(n, currency: currency, decimals: decimalPlaces, locale: locale);
+  /// UGX 1.2M / UGX 350K on figure cards (UI batch 3, B6)
+  String moneyShort(num n) => formatMoneyShort(n, currency: currency, decimals: decimalPlaces, locale: locale);
 }
 
 /// A screen's frame: title (and a line under it), actions on the right, then the content.
@@ -55,7 +63,8 @@ class PageFrame extends StatelessWidget {
         ),
       );
     }
-    Widget body(Widget c) => tk.rails ? _Rails(child: c) : c;
+    // phones: pull a list down to sync now (UI batch 3, C11)
+    Widget body(Widget c) => PullToSync(child: tk.rails ? _Rails(child: c) : c);
     if (scroll) {
       return body(ListView(padding: const EdgeInsets.only(bottom: 24), children: [head, Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: child)]));
     }
@@ -100,10 +109,39 @@ class _SparkPainter extends CustomPainter {
   bool shouldRepaint(_SparkPainter o) => o.data != data || o.color != color;
 }
 
+/// Phones: a list pulled down past its top syncs now and says "Synced just now" (UI batch 3, C11, as the classic
+/// app's src/refresh.jsx). Elsewhere it is the child as it is.
+class PullToSync extends ConsumerWidget {
+  const PullToSync({super.key, required this.child});
+  final Widget child;
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (MediaQuery.sizeOf(context).width >= 600) return child;
+    return RefreshIndicator(
+      key: const Key('pull-to-sync'),
+      notificationPredicate: (n) => n.metrics.axis == Axis.vertical,
+      onRefresh: () async {
+        final r = await ref.read(syncControllerProvider.notifier).runNow();
+        if (!context.mounted) return;
+        say(context, switch (r.state) {
+          SyncState.synced => 'Synced just now',
+          SyncState.offline => 'Offline: your work is saved and goes up when the internet is back',
+          SyncState.signedOut => 'This device is not linked to the cloud',
+          _ => r.error ?? 'Could not reach the cloud',
+        }, error: r.state != SyncState.synced && r.state != SyncState.offline);
+      },
+      child: child,
+    );
+  }
+}
+
 /// A figure with its label (and a line under it); tappable when [onTap] is set.
 class StatCard extends StatelessWidget {
-  const StatCard({super.key, required this.label, required this.value, this.sub, this.icon, this.color, this.onTap, this.spark});
+  const StatCard({super.key, required this.label, required this.value, this.full, this.sub, this.icon, this.color, this.onTap, this.spark});
   final String label, value;
+  /// the whole amount when [value] is said short (UGX 1.2M, UI batch 3 B6): the figure's tooltip and what screen
+  /// readers say
+  final String? full;
   /// the last 7 days of this figure, drawn as a small trend line (2026-11-18)
   final List<double>? spark;
   final String? sub;
@@ -159,13 +197,17 @@ class StatCard extends StatelessWidget {
                 fit: BoxFit.scaleDown,
                 alignment: Alignment.centerLeft,
                 // the figure in the text colour, as React (the colour is in the band and the icon tile)
-                child: Text(value, maxLines: 1, style: t.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -.3, color: ink ?? (tinted ? shown : null))),
+                child: () {
+                  final txt = Text(value, maxLines: 1, semanticsLabel: full, style: t.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -.3, color: ink ?? (tinted ? shown : null)));
+                  return full != null && full != value ? Tooltip(key: const Key('stat-full'), message: full!, child: txt) : txt;
+                }(),
               ),
               if (spark != null && spark!.any((v) => v != 0))
                 Padding(padding: const EdgeInsets.symmetric(vertical: 2), child: Spark(key: const Key('spark'), data: spark!, color: ink ?? t.colorScheme.primary)),
               if (sub != null || onTap != null)
                 Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                  Expanded(child: Text(sub ?? '', style: t.textTheme.bodySmall?.copyWith(color: ink?.withValues(alpha: .9)))),
+                  // the change and "vs yesterday" on one line (UI batch 3, B2); the whole line in the tooltip
+                  Expanded(child: Tooltip(message: sub ?? '', child: Text(sub ?? '', key: const Key('stat-sub'), maxLines: 1, overflow: TextOverflow.ellipsis, style: t.textTheme.bodySmall?.copyWith(color: ink?.withValues(alpha: .9))))),
                   // a card that opens a page says so
                   if (onTap != null) Icon(Icons.arrow_outward, size: 16, color: (ink ?? shown ?? t.colorScheme.primary).withValues(alpha: .8)),
                 ]),
@@ -289,16 +331,21 @@ class EmptyState extends StatelessWidget {
 
 /// One field of a [RecordForm].
 class FormFieldSpec {
-  const FormFieldSpec(this.key, this.label, {this.kind = FieldKind.text, this.required = false, this.options = const [], this.hint});
+  const FormFieldSpec(this.key, this.label, {this.kind = FieldKind.text, this.required = false, this.options = const [], this.hint, this.help, this.validate});
   final String key, label;
   final FieldKind kind;
   final bool required;
   /// for [FieldKind.choice]: (value, label)
   final List<(String, String)> options;
   final String? hint;
+  /// D3: one sentence shown by a (?) beside the field
+  final String? help;
+  /// D1: a check of its own: the message, or null when fine (value as typed, the form's values so far)
+  final String? Function(String value, Map<String, Object?> values)? validate;
 }
 
-enum FieldKind { text, number, multiline, choice, flag, date }
+/// money (D5): the currency in front and commas while typing, kept as a number; phone (D6): formatted as typed
+enum FieldKind { text, number, multiline, choice, flag, date, money, phone, photo }
 
 /// What [editRecord] returns when its Delete button is pressed (and the deletion confirmed).
 const deleteRecord = {'_delete': true};
@@ -306,81 +353,135 @@ const deleteRecord = {'_delete': true};
 /// A dialog that edits a record's fields and returns the edited values (null when cancelled). With [delete] (the
 /// record's name, e.g. 'medicine'), a Delete button asks "Delete this medicine?" and then returns [deleteRecord].
 Future<Map<String, Object?>?> editRecord(BuildContext context, {required String title, required List<FormFieldSpec> fields,
-    Map<String, Object?> initial = const {}, String save = 'Save', String? delete}) {
+    Map<String, Object?> initial = const {}, String save = 'Save', String? delete, bool side = false, String currency = 'UGX', Future<String?> Function()? pickPhoto, String note = ''}) {
   final values = Map<String, Object?>.of(initial);
-  final ctl = {for (final f in fields) if (f.kind != FieldKind.choice && f.kind != FieldKind.flag) f.key: TextEditingController(text: _show(initial[f.key]))};
+  final ctl = {
+    for (final f in fields)
+      if (f.kind != FieldKind.choice && f.kind != FieldKind.flag && f.kind != FieldKind.photo)
+        f.key: TextEditingController(text: f.kind == FieldKind.money ? groupDigits(_show(initial[f.key])) : f.kind == FieldKind.phone ? formatPhone(_show(initial[f.key])) : _show(initial[f.key])),
+  };
   final formKey = GlobalKey<FormState>();
+  final texts = [for (final f in fields) if (ctl.containsKey(f.key)) f.key];
+  // the values as typed so far, for the checks that compare fields (a price under the cost)
+  Map<String, Object?> now() => {...values, for (final e in ctl.entries) e.key: e.value.text};
   return showAppDialog<Map<String, Object?>>(
+    side: side, // a record's details beside its list on a wide screen (UI batch 3, C8)
     context: context,
     builder: (c) => StatefulBuilder(
-      builder: (c, set) => AlertDialog(
-        title: Text(title),
-        content: SizedBox(
-          width: 460,
-          child: Form(
-            key: formKey,
-            child: SingleChildScrollView(
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-                for (final f in fields)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: switch (f.kind) {
-                      FieldKind.flag => SwitchListTile(contentPadding: EdgeInsets.zero, title: Text(f.label), value: values[f.key] == true, onChanged: (v) => set(() => values[f.key] = v)),
-                      FieldKind.choice => DropdownButtonFormField<String>(
-                          initialValue: f.options.any((o) => o.$1 == values[f.key]) ? values[f.key] as String : null,
-                          decoration: InputDecoration(labelText: f.label),
-                          // the field's full width; a long choice ends in "…" instead of running off the edge
-                          isExpanded: true,
-                          items: [for (final o in f.options) DropdownMenuItem(value: o.$1, child: Text(o.$2, maxLines: 1, overflow: TextOverflow.ellipsis))],
-                          validator: (v) => f.required && v == null ? 'Choose ${f.label.toLowerCase()}' : null,
-                          onChanged: (v) => values[f.key] = v,
-                        ),
-                      _ => TextFormField(
-                          controller: ctl[f.key],
-                          decoration: InputDecoration(labelText: f.label, hintText: f.hint ?? (f.kind == FieldKind.date ? 'YYYY-MM-DD' : null)),
-                          maxLines: f.kind == FieldKind.multiline ? 3 : 1,
-                          keyboardType: f.kind == FieldKind.number ? const TextInputType.numberWithOptions(decimal: true) : null,
-                          validator: (v) {
-                            final s = (v ?? '').trim();
-                            if (f.required && s.isEmpty) return 'Required';
-                            if (f.kind == FieldKind.number && s.isNotEmpty && double.tryParse(s.replaceAll(',', '')) == null) return 'A number';
-                            if (f.kind == FieldKind.date && s.isNotEmpty && !RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(s)) return 'YYYY-MM-DD';
-                            return null;
-                          },
-                        ),
-                    },
-                  ),
+      builder: (c, set) {
+        void submit() {
+          if (!(formKey.currentState?.validate() ?? false)) return;
+          for (final f in fields) {
+            final x = ctl[f.key];
+            if (x == null) continue;
+            final s = x.text.trim();
+            values[f.key] = f.kind == FieldKind.number || f.kind == FieldKind.money ? (s.isEmpty ? 0 : _num(moneyValue(s))) : s;
+          }
+          Navigator.pop(c, values);
+        }
+
+        return CallbackShortcuts(
+          // D7: Ctrl+Enter saves from any field
+          bindings: {const SingleActivator(LogicalKeyboardKey.enter, control: true): submit, const SingleActivator(LogicalKeyboardKey.enter, meta: true): submit},
+          child: AlertDialog(
+            // F5: "Edited by Amina · 2 h ago" under the title
+            title: note.isEmpty ? Text(title) : Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+                Text(title),
+                Text(note, key: const Key('who-changed'), style: Theme.of(c).textTheme.bodySmall),
               ]),
+            content: SizedBox(
+              width: dialogMd, // D9: the middle of the three sizes
+              child: Form(
+                key: formKey,
+                // D1: each field is checked when it is left
+                autovalidateMode: AutovalidateMode.onUnfocus,
+                child: SingleChildScrollView(
+                  child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    for (final f in fields)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: switch (f.kind) {
+                          // A5: a photo: taken or chosen by [pickPhoto], which returns its address once stored
+                          FieldKind.photo => Row(key: ValueKey('field-${f.key}'), children: [
+                              MedThumb(name: '${values['name'] ?? ''}', photo: '${values[f.key] ?? ''}', size: 56),
+                              const SizedBox(width: 10),
+                              OutlinedButton.icon(
+                                onPressed: pickPhoto == null
+                                    ? null
+                                    : () async {
+                                        final path = await pickPhoto();
+                                        if (path != null) set(() => values[f.key] = path);
+                                      },
+                                icon: const Icon(Icons.photo_camera_outlined, size: 18),
+                                label: Text('${values[f.key] ?? ''}'.isEmpty ? 'Add a photo' : 'Change photo'),
+                              ),
+                              if ('${values[f.key] ?? ''}'.isNotEmpty) TextButton(onPressed: () => set(() => values[f.key] = ''), child: const Text('Remove')),
+                            ]),
+                          FieldKind.flag => SwitchListTile(contentPadding: EdgeInsets.zero, title: Text(f.label), value: values[f.key] == true, onChanged: (v) => set(() => values[f.key] = v)),
+                          FieldKind.choice => DropdownButtonFormField<String>(
+                              initialValue: f.options.any((o) => o.$1 == values[f.key]) ? values[f.key] as String : null,
+                              decoration: InputDecoration(labelText: f.label, suffixIcon: f.help == null ? null : HelpTip(f.help!)),
+                              // the field's full width; a long choice ends in "…" instead of running off the edge
+                              isExpanded: true,
+                              items: [for (final o in f.options) DropdownMenuItem(value: o.$1, child: Text(o.$2, maxLines: 1, overflow: TextOverflow.ellipsis))],
+                              validator: (v) => f.required && v == null ? 'Choose ${f.label.toLowerCase()}' : null,
+                              onChanged: (v) => values[f.key] = v,
+                            ),
+                          _ => TextFormField(
+                              key: ValueKey('field-${f.key}'),
+                              controller: ctl[f.key],
+                              // D7: the cursor in the first field; Enter to the next, the last one saves
+                              autofocus: texts.isNotEmpty && texts.first == f.key,
+                              textInputAction: f.kind == FieldKind.multiline ? TextInputAction.newline : texts.last == f.key ? TextInputAction.done : TextInputAction.next,
+                              // (TextInputAction.next moves the focus on by itself; the last field sends the form)
+                              onFieldSubmitted: f.kind == FieldKind.multiline || texts.last != f.key ? null : (_) => submit(),
+                              decoration: InputDecoration(
+                                labelText: f.label,
+                                hintText: f.hint ?? (f.kind == FieldKind.date ? 'YYYY-MM-DD' : f.kind == FieldKind.phone ? '0772 123 456' : null),
+                                prefixText: f.kind == FieldKind.money && currency.isNotEmpty ? '$currency ' : null,
+                                suffixIcon: f.kind == FieldKind.phone && phoneOk(ctl[f.key]!.text)
+                                    ? Icon(Icons.check_circle, key: ValueKey('phone-ok-${f.key}'), color: c.tones.ok, semanticLabel: 'Valid for WhatsApp and SMS')
+                                    : f.help == null
+                                        ? null
+                                        : HelpTip(f.help!),
+                              ),
+                              maxLines: f.kind == FieldKind.multiline ? 3 : 1,
+                              keyboardType: f.kind == FieldKind.number || f.kind == FieldKind.money ? const TextInputType.numberWithOptions(decimal: true) : f.kind == FieldKind.phone ? TextInputType.phone : null,
+                              inputFormatters: f.kind == FieldKind.money ? [MoneyFormatter()] : f.kind == FieldKind.phone ? [PhoneFormatter()] : null,
+                              onChanged: f.kind == FieldKind.phone ? (_) => set(() {}) : null,
+                              validator: (v) {
+                                final s = (v ?? '').trim();
+                                if (f.required && s.isEmpty) return '${f.label} is needed';
+                                if ((f.kind == FieldKind.number || f.kind == FieldKind.money) && s.isNotEmpty && double.tryParse(s.replaceAll(',', '')) == null) return 'A number';
+                                if (f.kind == FieldKind.date && s.isNotEmpty && !RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(s)) return 'YYYY-MM-DD';
+                                if (f.kind == FieldKind.phone && s.isNotEmpty && !phoneOk(s)) return 'Not a full phone number (e.g. 0772 123 456)';
+                                if (s.isNotEmpty && f.key == 'email' && !RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(s)) return 'Not an email address';
+                                return s.isEmpty ? null : f.validate?.call(s, now());
+                              },
+                            ),
+                        },
+                      ),
+                  ]),
+                ),
+              ),
             ),
+            actions: [
+              if (delete != null)
+                TextButton(
+                  key: const Key('record-delete'),
+                  style: TextButton.styleFrom(foregroundColor: Theme.of(c).colorScheme.error),
+                  onPressed: () async {
+                    if (!await confirmAction(c, 'Delete this $delete?', 'This cannot be undone.', 'Delete', danger: true, effects: ['this $delete removed on every device'])) return;
+                    if (c.mounted) Navigator.pop(c, deleteRecord);
+                  },
+                  child: const Text('Delete'),
+                ),
+              TextButton(onPressed: () => Navigator.pop(c), child: const Text('Cancel')),
+              FilledButton(onPressed: submit, child: Text(save)),
+            ],
           ),
-        ),
-        actions: [
-          if (delete != null)
-            TextButton(
-              key: const Key('record-delete'),
-              style: TextButton.styleFrom(foregroundColor: Theme.of(c).colorScheme.error),
-              onPressed: () async {
-                if (!await confirmAction(c, 'Delete this $delete?', 'This cannot be undone.', 'Delete')) return;
-                if (c.mounted) Navigator.pop(c, deleteRecord);
-              },
-              child: const Text('Delete'),
-            ),
-          TextButton(onPressed: () => Navigator.pop(c), child: const Text('Cancel')),
-          FilledButton(
-            onPressed: () {
-              if (!(formKey.currentState?.validate() ?? false)) return;
-              for (final f in fields) {
-                final x = ctl[f.key];
-                if (x == null) continue;
-                final s = x.text.trim();
-                values[f.key] = f.kind == FieldKind.number ? (s.isEmpty ? 0 : _num(double.parse(s.replaceAll(',', '')))) : s;
-              }
-              Navigator.pop(c, values);
-            },
-            child: Text(save),
-          ),
-        ],
-      ),
+        );
+      },
     ),
   );
 }
@@ -393,14 +494,41 @@ void say(BuildContext context, String message, {bool error = false}) => Scaffold
   ..hideCurrentSnackBar()
   ..showSnackBar(SnackBar(content: Text(message), backgroundColor: error ? Theme.of(context).colorScheme.error : null));
 
-/// Yes / no question; true when confirmed.
-Future<bool> confirmAction(BuildContext context, String title, String message, String yes) async =>
+/// Yes / no question; true when confirmed. danger (D10): what will happen listed ([effects]), Cancel has the focus, the
+/// one real red on the button at the right.
+Future<bool> confirmAction(BuildContext context, String title, String message, String yes, {bool danger = false, List<String> effects = const []}) async =>
     await showAppDialog<bool>(
       context: context,
-      builder: (c) => AlertDialog(title: Text(title), content: Text(message), actions: [
-        TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
-        FilledButton(onPressed: () => Navigator.pop(c, true), child: Text(yes)),
-      ]),
+      builder: (c) => AlertDialog(
+        title: Text(title),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: dialogSm),
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            if (message.isNotEmpty) Text(message),
+            if (effects.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              for (final e in effects)
+                Padding(
+                  key: ValueKey('dialog-effect-$e'),
+                  padding: const EdgeInsets.only(bottom: 2),
+                  child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('•  ', style: TextStyle(color: danger ? c.tones.block : null, fontWeight: FontWeight.w800)),
+                    Expanded(child: Text(e)),
+                  ]),
+                ),
+            ],
+          ]),
+        ),
+        actions: [
+          TextButton(autofocus: danger, onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
+          FilledButton(
+            key: const Key('confirm-yes'),
+            style: danger ? FilledButton.styleFrom(backgroundColor: c.tones.block, foregroundColor: Colors.white) : null,
+            onPressed: () => Navigator.pop(c, true),
+            child: Text(yes),
+          ),
+        ],
+      ),
     ) ??
     false;
 
@@ -481,5 +609,53 @@ class _PageSkeletonState extends State<PageSkeleton> with SingleTickerProviderSt
         },
       ),
     ));
+  }
+}
+
+/// E5 (as src/forms.jsx rangePresets): Today, Yesterday, 7 days, This month, Last month: (id, label, from, to)
+List<(String, String, String, String)> rangePresets([DateTime? now]) {
+  final n = now ?? DateTime.now();
+  String ymd(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+  String day(int k) => ymd(DateTime(n.year, n.month, n.day + k));
+  return [
+    ('today', 'Today', day(0), day(0)), ('yesterday', 'Yesterday', day(-1), day(-1)), ('7d', '7 days', day(-6), day(0)),
+    ('month', 'This month', ymd(DateTime(n.year, n.month, 1)), day(0)), ('last', 'Last month', ymd(DateTime(n.year, n.month - 1, 1)), ymd(DateTime(n.year, n.month, 0))),
+  ];
+}
+
+/// E5: one date-range control everywhere: a quick choice (Today … Last month, All, Custom) and the two dates
+class DateRangeBox extends StatelessWidget {
+  const DateRangeBox({super.key, required this.from, required this.to, required this.onChanged, this.allowAll = true});
+  final String from, to;
+  final void Function(String from, String to) onChanged;
+  final bool allowAll;
+  @override
+  Widget build(BuildContext context) {
+    final presets = rangePresets();
+    final hit = presets.where((p) => p.$3 == from && p.$4 == to).firstOrNull;
+    final cur = hit?.$1 ?? (from.isEmpty && to.isEmpty && allowAll ? 'all' : 'custom');
+    return Wrap(key: const Key('date-range'), spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
+      SizedBox(
+        width: 150,
+        child: DropdownButtonFormField<String>(
+          key: ValueKey('date-range-$cur'),
+          initialValue: cur,
+          isExpanded: true,
+          decoration: const InputDecoration(labelText: 'Dates', isDense: true),
+          items: [
+            if (allowAll) const DropdownMenuItem(value: 'all', child: Text('All dates')),
+            for (final p in presets) DropdownMenuItem(value: p.$1, child: Text(p.$2)),
+            const DropdownMenuItem(value: 'custom', child: Text('Custom')),
+          ],
+          onChanged: (v) {
+            if (v == 'all') onChanged('', '');
+            final p = presets.where((x) => x.$1 == v).firstOrNull;
+            if (p != null) onChanged(p.$3, p.$4);
+          },
+        ),
+      ),
+      DateBox(label: 'From', value: from, onChanged: (v) => onChanged(v, to)),
+      DateBox(label: 'To', value: to, onChanged: (v) => onChanged(from, v)),
+    ]);
   }
 }

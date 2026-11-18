@@ -36,7 +36,9 @@ class FinanceScreen extends ConsumerStatefulWidget {
 
 class _FinanceScreenState extends ConsumerState<FinanceScreen> {
   late String _tab = widget.tab;
-  String _month = today().substring(0, 7);
+  // E5: the same date control as every page (this month to start with, as before)
+  String _eFrom = '${today().substring(0, 7)}-01', _eTo = today();
+  String get _month => _eFrom.isEmpty ? 'all' : _eFrom.substring(0, 7);
   String _account = cashDrawer;
   String _from = '${today().substring(0, 7)}-01', _to = today();
 
@@ -137,8 +139,10 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
       _head([
         DropdownButton<String>(value: banks.any((b) => b['id'] == _account) ? _account : cashDrawer, items: [for (final b in banks) DropdownMenuItem(value: '${b['id']}', child: Text('${b['name']}'))],
             onChanged: (v) => setState(() => _account = v ?? cashDrawer)),
-        DateBox(label: 'From', value: _from, onChanged: (v) => setState(() => _from = v.isEmpty ? _from : v)),
-        DateBox(label: 'To', value: _to, onChanged: (v) => setState(() => _to = v.isEmpty ? _to : v)),
+        DateRangeBox(from: _from, to: _to, allowAll: false, onChanged: (f, t) => setState(() {
+          if (f.isNotEmpty) _from = f;
+          if (t.isNotEmpty) _to = t;
+        })),
         ExportButtons(name: 'cash-book', settings: st, title: 'Cash Book – ${bank?['name'] ?? ''}', subtitle: '$_from to $_to',
             csv: () => [for (final (e, b) in book.rows) {'date': e.date, 'description': e.desc, 'type': e.kind, 'in': e.inAmount, 'out': e.outAmount, 'balance': b}],
             pdf: () => [PdfTable(head: const ['Date', 'Description', 'Type', 'Money in', 'Money out', 'Balance'], numeric: const [3, 4, 5], body: [
@@ -166,7 +170,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
 
   // ---- Expenses ----
   Widget _expenses(Map<String, List<Map<String, Object?>>> data, List<(String, String)> cats, List<(String, String)> bankOpts, String Function(Object?) bankName, PharmacySettings st) {
-    final rows = data['expenses']!.where((e) => _month.isEmpty || '${e['date']}'.startsWith(_month)).toList()..sort((a, b) => '${b['date']}'.compareTo('${a['date']}'));
+    final rows = data['expenses']!.where((e) { final d = dayOf('${e['date']}'); return (_eFrom.isEmpty || d.compareTo(_eFrom) >= 0) && (_eTo.isEmpty || d.compareTo(_eTo) <= 0); }).toList()..sort((a, b) => '${b['date']}'.compareTo('${a['date']}'));
     final total = rows.fold<double>(0, (a, e) => a + ((e['amount'] as num?)?.toDouble() ?? 0));
     String cat(Object? id) => cats.where((c) => c.$1 == id).firstOrNull?.$2 ?? 'Expense';
     Future<void> edit(Map<String, Object?>? e) async {
@@ -176,7 +180,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
         const FormFieldSpec('date', 'Date', kind: FieldKind.date, required: true),
         FormFieldSpec('categoryId', 'Category', kind: FieldKind.choice, required: true, options: cats),
         const FormFieldSpec('description', 'What for', required: true),
-        const FormFieldSpec('amount', 'Amount', kind: FieldKind.number, required: true),
+        const FormFieldSpec('amount', 'Amount', kind: FieldKind.money, required: true),
         FormFieldSpec('method', 'Payment method', kind: FieldKind.choice, options: [for (final m in payMethods) (m, m)]),
         FormFieldSpec('bankId', 'Paid from', kind: FieldKind.choice, options: bankOpts),
         const FormFieldSpec('payee', 'Paid to'),
@@ -191,8 +195,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       _head([
         FilledButton.icon(onPressed: () => edit(null), icon: const Icon(Icons.add), label: const Text('Add expense')),
-        SizedBox(width: 140, child: TextFormField(initialValue: _month, decoration: const InputDecoration(labelText: 'Month', hintText: 'YYYY-MM', isDense: true),
-            onChanged: (v) => setState(() => _month = RegExp(r'^\d{4}-\d{2}$').hasMatch(v.trim()) ? v.trim() : (v.trim().isEmpty ? '' : _month)))),
+        DateRangeBox(from: _eFrom, to: _eTo, onChanged: (f, t) => setState(() { _eFrom = f; _eTo = t; })), // E5
         Text('Total ${st.money(total)}'),
         ExportButtons(name: 'expenses-$_month', settings: st, csv: () => [
           for (final e in rows) {'date': e['date'], 'category': cat(e['categoryId']), 'description': e['description'], 'paidTo': e['payee'], 'from': bankName(e['bankId']), 'amount': e['amount']},
@@ -246,7 +249,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
         FormFieldSpec('bankId', 'Bank account (deposit / withdrawal)', kind: FieldKind.choice, options: bankOpts),
         FormFieldSpec('fromId', 'From account (transfer)', kind: FieldKind.choice, options: bankOpts),
         FormFieldSpec('toId', 'To account (transfer)', kind: FieldKind.choice, options: bankOpts),
-        const FormFieldSpec('amount', 'Amount', kind: FieldKind.number, required: true),
+        const FormFieldSpec('amount', 'Amount', kind: FieldKind.money, required: true),
         const FormFieldSpec('ref', 'Slip / reference'),
         const FormFieldSpec('note', 'Note'),
       ]);
@@ -276,7 +279,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
     if (!mounted) return;
     final v = await editRecord(context, title: '$title (outstanding ${st.money(max)})', save: 'Record payment', initial: {'date': today(), 'amount': max > 0 ? max : 0, 'method': 'Cash', 'bankId': cashDrawer}, fields: [
       const FormFieldSpec('date', 'Date', kind: FieldKind.date, required: true),
-      const FormFieldSpec('amount', 'Amount', kind: FieldKind.number, required: true),
+      const FormFieldSpec('amount', 'Amount', kind: FieldKind.money, required: true),
       FormFieldSpec('method', 'Method', kind: FieldKind.choice, options: [for (final m in payMethods) (m, m)]),
       FormFieldSpec('bankId', kind == 'customer' || kind == 'insurer' ? 'Received into' : 'Paid from', kind: FieldKind.choice, options: bankOpts),
       const FormFieldSpec('note', 'Note'),
@@ -290,7 +293,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
       final v = await editRecord(context, title: l == null ? 'New loan' : 'Edit loan', delete: l == null ? null : 'loan', initial: l ?? {'date': today(), 'bankId': cashDrawer, 'interestRate': 0}, fields: [
         const FormFieldSpec('lender', 'Lender', required: true),
         const FormFieldSpec('date', 'Date received', kind: FieldKind.date, required: true),
-        const FormFieldSpec('amount', 'Amount', kind: FieldKind.number, required: true),
+        const FormFieldSpec('amount', 'Amount', kind: FieldKind.money, required: true),
         const FormFieldSpec('interestRate', 'Total interest (%)', kind: FieldKind.number),
         const FormFieldSpec('dueDate', 'Due date', kind: FieldKind.date),
         FormFieldSpec('bankId', 'Received into', kind: FieldKind.choice, options: bankOpts),

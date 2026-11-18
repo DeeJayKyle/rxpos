@@ -20,9 +20,13 @@ await owner('/tenants/' + tid + '/records', { records: [
   { t: 'batches', id: 'b0', rec: { productId: 'p1', batch: 'OLD', expiry: day(-5), cost: 300 } },
   { t: 'movements', id: 'm1', rec: { productId: 'p1', qty: 40, type: 'Opening stock', batchId: 'b1', branchId: 'main', date: new Date().toISOString() } },
   { t: 'movements', id: 'm0', rec: { productId: 'p1', qty: 3, type: 'Opening stock', batchId: 'b0', branchId: 'main', date: new Date().toISOString() } },
+  // a big sale for the refund approval (2026-11-18: refunds over UGX 100,000 need a manager unless a manager refunds)
+  { t: 'sales', id: 'big1', rec: { number: 'RBIG1', date: new Date().toISOString(), type: 'retail', branchId: 'main', items: [{ id: 'p1', name: 'Sample Tabs 500mg', qty: 300, price: 500, cost: 300, alloc: [] }], subtotal: 150000, discount: 0, tax: 0, total: 150000, payment: 'Cash', paid: 150000, customerId: 'walk-in', customerName: 'Walk-in Customer', cashier: 'Cal Cashier', status: 'completed' } },
 ] });
 await owner('/tenants/' + tid + '/users', { user: { name: 'Cal Cashier', email: 'cal@staff.rx', role: 'cashier', password: 'cal-pass-1234' } });
 await owner('/tenants/' + tid + '/users', { user: { name: 'Dee Dispenser', email: 'dee@staff.rx', role: 'dispenser', password: 'dee-pass-1234' } });
+await owner('/tenants/' + tid + '/users', { user: { name: 'Mia Manager', email: 'mia@staff.rx', role: 'manager', password: 'mia-pass-1234' } });
+await owner('/tenants/' + tid + '/users', { user: { name: 'Pat Pharmacist', email: 'pat@staff.rx', role: 'pharmacist', password: 'pat-pass-1234' } });
 
 const b = await puppeteer.launch({ executablePath: CHROME, headless: true });
 const signIn = async (email, pw) => {
@@ -54,7 +58,7 @@ const synced = await until(cal, () => /^Synced/.test(document.querySelector('.pi
 check('…and it syncs with nothing refused (not "Needs attention")', synced, await pill(cal));
 const cloudSales = (await owner(`/tenants/${tid}/records?t=sales`)).total;
 const cloudMoves = (await owner(`/tenants/${tid}/records?t=movements`)).total;
-check('the sale and its stock movement are in the cloud', cloudSales === 1 && cloudMoves === 3, JSON.stringify({ cloudSales, cloudMoves }));
+check('the sale and its stock movement are in the cloud (beside the seeded big sale)', cloudSales === 2 && cloudMoves === 3, JSON.stringify({ cloudSales, cloudMoves }));
 
 // a dispenser sees stock but is not offered what the cloud would refuse
 const dee = await signIn('dee@staff.rx', 'dee-pass-1234');
@@ -77,6 +81,23 @@ const saleBtns = await buttons(dee);
 check('a dispenser opens the sale', saleBtns.some((x) => /Print|Close/.test(x)), saleBtns.slice(-8).join(','));
 check('…without "Refund" (needs sales.refund)', !saleBtns.includes('Refund'));
 check('the dispenser device has nothing refused either', /^Synced/.test(await pill(dee)), await pill(dee));
+
+// safer refunds: a pharmacist refunding over UGX 100,000 needs a manager's password; the approver is recorded
+const pat = await signIn('pat@staff.rx', 'pat-pass-1234');
+await go(pat, '#/sales');
+await pat.evaluate(() => { const r = [...document.querySelectorAll('.page table tbody tr')].find((x) => x.innerText.includes('RBIG1')); const td = r.querySelector('td:nth-child(2)'); const bx = td.getBoundingClientRect(); td.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: bx.x + 5, clientY: bx.y + 5 })); }); await wait(300);
+await pat.evaluate(() => [...document.querySelectorAll('.ctx-menu button, .ctx-menu [role=menuitem]')].find((x) => /Refund/.test(x.textContent))?.click()); await wait(500);
+check('a big refund by a pharmacist asks for a manager', await pat.evaluate(() => /A manager must approve/.test(document.querySelector('.refund-approve')?.innerText || '') && [...document.querySelectorAll('.refund-approve option')].some((o) => o.textContent === 'Mia Manager')));
+await pat.select('.refund-sheet select', 'Customer returned it');
+await pat.select('.refund-approve select', await pat.evaluate(() => [...document.querySelectorAll('.refund-approve option')].find((o) => o.textContent === 'Mia Manager').value));
+const setPw = (v) => pat.evaluate((v) => { const i = document.querySelector('.refund-approve input[type=password]'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(i, v); i.dispatchEvent(new Event('input', { bubbles: true })); }, v);
+await setPw('wrong-pass-0000');
+await pat.evaluate(() => document.querySelector('.refund-sheet button[type=submit]').click()); await wait(2500);
+check('…a wrong password is refused and nothing is refunded', await pat.evaluate(() => /not right for Mia Manager/.test(document.querySelector('.refund-approve')?.innerText || '')) && !/refunded/.test(JSON.stringify(((await owner(`/tenants/${tid}/records?t=sales`)).rows || []).map((r) => r.rec))));
+await setPw('mia-pass-1234');
+await pat.evaluate(() => document.querySelector('.refund-sheet button[type=submit]').click());
+const approved = await (async () => { for (let i = 0; i < 40; i++) { const r = await owner(`/tenants/${tid}/records?t=sales`); const rec = (r.rows || []).find((y) => y.id === 'big1')?.rec; if (rec?.status === 'refunded') return rec; await wait(500); } return null; })();
+check('…the manager\'s password approves it; the approver is on the sale', approved?.refundApprovedBy === 'Mia Manager', JSON.stringify(approved && { status: approved.status, by: approved.refundApprovedBy }));
 
 await b.close();
 await owner('/tenants/' + tid + '/delete', { confirm: slug });

@@ -234,3 +234,66 @@ Every feature of the React app (`src/pages/*.jsx`, `src/*.jsx`), screen by scree
 
 ## Owner console (OwnerConsole.jsx)
 - Stays on the website (rxposug.com): it manages every pharmacy, not one.
+
+## UI batch 3 (1.13.0, docs/plans/1.13-ui-batch-3.md)
+- ✅ A1 Undo on the till instead of a confirm (line remove, clear, held sale): toast / SnackBar with Undo
+- ✅ A2 Phones: total and Charge pinned at the bottom, the sale as a pull-up sheet
+- ✅ A3 Quantity stepper on sale lines, 44 px on touch; Enter in the quantity returns to search
+- ✅ A4 Add-to-sale pulse and a light vibration (reduced motion respected)
+- ✅ A5 Medicine photos: camera or file in the medicine form, made small, kept as a file in the pharmacy's cloud (the record holds its address); shown on till tiles, the initial when none
+- ✅ A6 Customer display (`#/display` / `/display`): items, total, paid, change in large text, read-only
+- ✅ A7 Training mode on the till: TRAINING receipt, nothing saved
+- ✅ A8 Guided till tour (5 steps, once per person per device)
+- ✅ A9 Safer refunds: reason, large amount, a manager's approval over the limit
+- ✅ B1 Daily bars: amount on hover / focus / long-press and above today's bar, a dashed average line
+- ✅ B2 Figure cards: the change and "vs yesterday" on one line (ellipsis, the whole line in the tooltip)
+- ✅ B3 Latest sales: amounts in one right column, the Owing pill beside the name, no wrapping
+- ✅ B4 The sales hero card: best day and busiest hour
+- ✅ B5 Busy hours widget: 7 days × opening hours, shade = number of sales (Edit widgets can hide it)
+- ✅ B6 Short money on figure cards (UGX 1.2M / 350K; `shortMoney` / `formatMoneyShort`), the full amount in the tooltip
+- ✅ B7 Setup checklist of a new pharmacy, ticked from the data; Hide on this device
+- ✅ B8 What's new once after an update (`src/whatsnew.js` = `core/config/whats_new.dart`)
+- ✅ C1 Sticky headings; money totals pinned under Sales, Purchases, Expenses and Inventory
+- ✅ C2 Columns: show / hide and order on Sales and Inventory (React also Purchases and every CrudPage list), per device
+- ✅ C3 Empty lists say what goes there, with the one button that fills them
+- ✅ C4 Ticked rows: a bar at the bottom, "N selected", actions by page (Sales: print / export; Inventory: labels / export / price)
+- ✅ C5 Inventory: retail price and reorder level edited in the table, Enter saves, Esc cancels, audited
+- ✅ C6 Arrow keys, Enter, Space, Home / End on the lists (`useListControls` / `ListControls`)
+- ✅ C7 Load more: 100 rows, more as the list scrolls ("Showing 100 of N"), no page buttons
+- ✅ C8 ≥ 1280 px: Sales, Clients, Inventory details beside the list (React pane; Flutter right-hand panel)
+- ✅ C9 Stock bar on inventory rows (2 × reorder = full)
+- ✅ C10 Phones: swipe a client for Call / WhatsApp, a sale for Print / Refund (the refund sheet and approval as before)
+- ✅ C11 Pull to refresh on phones: "Synced just now" (classic: Android app; Flutter: every page)
+- ✅ D1 Fields checked as they are left (required, numbers, phone, email, duplicate barcode, price below cost, past expiry)
+- ✅ D2 Add Stock: "Draft saved hh:mm"
+- ✅ D3 (?) help on tricky fields and settings (one set of sentences, `HELP` / `helpTexts`)
+- ✅ D4 Saves close at once; a dot then a tick when the cloud has it
+- ✅ D5 Money inputs: currency in front, commas while typing (`MoneyInput` / `MoneyFormatter`)
+- ✅ D6 Phone inputs format as typed with a tick when WhatsApp / SMS can reach them
+- ✅ D7 First field focused, Enter to the next, Ctrl+Enter saves
+- ✅ D8 Phones: pop-ups as sheets from the bottom (React full height; Flutter sized to content)
+- ✅ D9 Three pop-up sizes 420 / 640 / 960
+- ✅ D10 Danger dialogs list what will happen, Cancel focused, the one red on the right
+- ✅ E1 One type scale 28 / 20 / 16 / 14 / 12, money in tabular figures (web `--t-1..5`, Flutter text theme)
+- ✅ E2 Text size presets Small / Normal / Large / Extra large above the slider (the same zoom setting)
+- ✅ E3 Chart series after the first dashed / dotted / dash-dot, the legend the same
+- ✅ E4 Touch screens: buttons, chips and icon buttons ≥ 44 px (Flutter: 48 on touch already)
+- ✅ E5 One date control with presets: Sales, Reports, Expenses, Cash Book, Audit, Purchases
+- ✅ E6 The pharmacy's logo (Settings → Pharmacy, a file in its cloud): menu, sign-in, receipts, invoices, customer display
+- ✅ E7 Branded sign-in: the pharmacy's name and logo, a welcome, a PIN pad
+- ✅ E8 Opening screen: the logo and "Getting your pharmacy ready"
+- ✅ E9 This device's recent staff on sign-in (apps only; the web version keeps nothing); "Use another account"
+- ✅ E10 Friendly error page: Try again, Go to the dashboard, Send report
+- ✅ G1 Add Stock ≥ 1280 px: the scanned invoice beside the form; the line being edited outlined when its place is known
+- ✅ G2 Receiving an order: check by scan, lines tick and count up, missing / extra said before "Receive stock"
+- ✅ G3 Order lines: each supplier's last price as a chip, the cheapest marked; a tap uses it
+- ✅ G4 Stock in each branch: on the medicine and on an out-of-stock till tile
+- ✅ F1 Expiry: List | Calendar (month grid, shaded by urgency, a batch opens its stock card)
+- ✅ F2 Shelves: a shelf map from the shelf codes; tap a shelf for its medicines
+- ✅ F3 Ctrl+K: recent searches and suggested actions before typing
+- ✅ F4 Offline banner under the top bar; "All sent" for 3 s when back
+- ✅ F5 "Edited by … · 2 h ago" on records (clients, suppliers, medicines, sales; React also purchases and every list record)
+- ✅ F6 Audit log as sentences, chips by person and kind of action
+- ✅ F7 Chat: ✓ / ✓✓ and reactions (already), "… is typing" over the live connection
+- ✅ F8 This device: the four pages of the phone's bottom bar
+- ✅ F9 A one-line summary on each report

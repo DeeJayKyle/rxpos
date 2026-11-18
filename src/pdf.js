@@ -3,6 +3,7 @@
 import { isAndroid } from './platform.js';
 import { downloadFile, localDate } from './store.jsx';
 import { kitContents } from './kits.js';
+import { pharmacyLogo } from './logo.jsx';
 
 const load = async () => {
   const [{ jsPDF }, { autoTable }] = await Promise.all([import('jspdf'), import('jspdf-autotable')]);
@@ -35,7 +36,7 @@ export async function receiptPdf(sale, { db, fmt }) {
   const W = paper <= 80 ? paper : 148; // A4-ish setting: use a tidy A5-width slip
   const M = paper <= 58 ? 3 : 4, inner = W - 2 * M;
   const branch = db.branches.find((b) => b.id === (sale.branchId || 'main'));
-  const logo = db.license?.[0]?.branding?.logo;
+  const logo = pharmacyLogo(db);
   const head = [
     ...(db.branches.length > 1 && branch ? [branch.name] : []),
     ...(((db.branches.length > 1 && branch?.address) ? branch.address : s.address) ? [(db.branches.length > 1 && branch?.address) ? branch.address : s.address] : []),

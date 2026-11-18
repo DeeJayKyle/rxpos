@@ -47,7 +47,7 @@ check('dashboard: Stock health counts the expired batch in stock', tiles['Expire
 check('dashboard: Low stock and Soon expiring are in Stock health', 'Low stock' in tiles && 'Soon expiring' in tiles);
 // the trend chart's own period (the bento row at the top has its own chips)
 await p.evaluate(() => [...document.querySelectorAll('.seg button')].find((x) => !x.closest('.bento-dash') && /7 days/.test(x.textContent))?.click()); await wait(300);
-check('dashboard: chart period switches to 7 days', /last 7 days/.test(await p.evaluate(() => [...document.querySelectorAll('.card-head h3')].find((x) => !x.closest('.bento-dash'))?.textContent || '')));
+check('dashboard: chart period switches to 7 days', /last 7 days/.test(await p.evaluate(() => [...document.querySelectorAll('.card-head h3')].find((x) => !x.closest('.bento-dash, .setup-card, .whats-new'))?.textContent || '')));
 check('dashboard: Promote today shows a picture per medicine', await p.evaluate(() => !document.querySelector('.promo-row') || [...document.querySelectorAll('.promo-row')].every((r) => r.querySelector('.promo-art svg, .promo-art img'))));
 await p.screenshot({ path: `${out}/dashboard-light.png` });
 

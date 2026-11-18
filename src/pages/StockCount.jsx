@@ -105,7 +105,7 @@ function CountList({ onOpen }) {
                 <td className="actions"><button className="btn sm ghost" onClick={() => onOpen(c.id)}>View</button></td>
               </tr>
             ))}
-            {!done.length && <Empty colSpan={9}>No finished counts yet</Empty>}
+            {!done.length && <Empty colSpan={9}>No finished counts yet. A stock count you post shows here with what was found over or short.</Empty>}
           </tbody>
         </table>
       </div>

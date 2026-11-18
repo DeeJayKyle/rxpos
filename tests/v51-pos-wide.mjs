@@ -84,7 +84,27 @@ const seen = await p.evaluate(() => { const box = document.querySelector('.cart-
 await p.screenshot({ path: path.join(out, 'pos-lines.png') });
 check('at 1440 × 900 at least 7 sale lines are in view at once', seen >= 7, seen);
 await p.screenshot({ path: path.join(out, 'pos-many.png') });
+const linesBefore = await p.evaluate(() => document.querySelectorAll('.cart-line').length);
 await p.evaluate(() => [...document.querySelectorAll('.pos-cart button')].find((x) => /Clear all/.test(x.textContent)).click()); await wait(300);
+check('Clear all empties the sale at once, with Undo (no confirm)', await p.evaluate(() => !document.querySelector('.cart-line') && !document.querySelector('.modal') && !!document.querySelector('.toast .toast-action')));
+await p.evaluate(() => document.querySelector('.toast .toast-action').click()); await wait(300);
+check('…Undo puts every line back', await p.evaluate((n) => document.querySelectorAll('.cart-line').length === n, linesBefore));
+await p.evaluate(() => document.querySelector('.cart-line .line-remove').click()); await wait(300);
+check('removing one line: gone at once, Undo offered', await p.evaluate((n) => document.querySelectorAll('.cart-line').length === n - 1 && /Removed/.test(document.querySelector('.toast')?.innerText || ''), linesBefore));
+await p.evaluate(() => [...document.querySelectorAll('.toast .toast-action')].pop().click()); await wait(300);
+check('…and Undo brings it back in its place', await p.evaluate((n) => document.querySelectorAll('.cart-line').length === n, linesBefore));
+// training mode: practise a whole sale; nothing is saved or synced (no sale, no stock movement)
+const counts = async () => { const r = (t) => owner(`/tenants/${tid}/records?t=${t}`).then((x) => x.total); return { sales: await r('sales'), moves: await r('movements') }; };
+const before = await counts();
+await p.evaluate(() => document.querySelector('.pos-training').click()); await wait(300);
+check('Training: a striped banner says nothing is saved', await p.evaluate(() => /Training mode/.test(document.querySelector('.training-banner')?.innerText || '')));
+await p.evaluate(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'F9', bubbles: true }))); await wait(1200);
+check('…Charge gives a practice receipt marked TRAINING – NOT A SALE', await p.evaluate(() => /Training sale \(not saved\)/.test(document.querySelector('.modal')?.innerText || '') && /TRAINING – NOT A SALE/.test(document.querySelector('.modal .receipt')?.innerText || '')));
+await p.keyboard.press('Escape'); await wait(4000);
+const after = await counts();
+check('…and no sale or stock movement reaches the cloud', JSON.stringify(after) === JSON.stringify(before), JSON.stringify({ before, after }));
+await p.evaluate(() => document.querySelector('.pos-training').click()); await wait(300);
+check('…Stop training: the banner goes', await p.evaluate(() => !document.querySelector('.training-banner')));
 for (const code of ['7010001', '7010002']) { await p.focus('.pos-products input.search'); await p.keyboard.type(code); await p.keyboard.press('Enter'); await wait(300); }
 check('no quick actions panel', await p.evaluate(() => !document.querySelector('.quick-tile')));
 await p.evaluate(() => [...document.querySelectorAll('.pos-cart button')].find((x) => /^Hold$/.test(x.textContent.trim())).click()); await wait(800);
@@ -99,6 +119,29 @@ check('below 1280px the client strip is hidden and the till is as before', await
 await p.setViewport({ width: 1280, height: 800 }); await wait(500);
 check('at exactly 1280px: two sides, nothing spills sideways', await p.evaluate(() => getComputedStyle(document.querySelector('.pos')).gridTemplateColumns.split(' ').length === 2 && document.documentElement.scrollWidth <= 1280));
 await p.screenshot({ path: path.join(out, 'pos-1280.png') });
+
+// the customer display: a second window that follows the till (items, total) and needs no sign-in
+const disp = await p.browserContext().newPage(); await disp.setViewport({ width: 1024, height: 720 });
+await disp.goto(p.url().replace(/#.*$/, '') + '#/display', { waitUntil: 'networkidle2' }); await wait(800);
+check('customer display opens without signing in, waiting for a sale', await disp.evaluate(() => /Your items will show here/.test(document.body.innerText) && !document.querySelector('.sidebar')));
+await p.bringToFront();
+await p.focus('.pos-products input.search'); await p.keyboard.type('7010001'); await p.keyboard.press('Enter'); await wait(800);
+check('…it shows what the cashier adds, with the total', await disp.evaluate(() => /Calmex 500mg Tabs/.test(document.querySelector('.cd-lines')?.innerText || '') && /UGX/.test(document.querySelector('.cd-total')?.innerText || '')), await disp.evaluate(() => document.body.innerText.slice(0, 200)));
+await disp.screenshot({ path: path.join(out, 'customer-display.png') });
+await disp.close();
+await p.evaluate(() => [...document.querySelectorAll('.pos-cart button')].find((x) => /Clear all/.test(x.textContent))?.click()); await wait(300);
+
+// the first visit's tour: a card beside each part, Next / Done, once per person on this device; it never takes the cursor
+await p.setViewport({ width: 1440, height: 900 });
+await p.evaluate(() => { for (const k of Object.keys(localStorage)) if (/^rxpos-(tour|tip):/.test(k)) localStorage.removeItem(k); });
+await p.reload({ waitUntil: 'networkidle2' }); await wait(2500);
+check('first visit: the till tour starts at "Find or scan"', await p.evaluate(() => /1 of \d[\s\S]*Find or scan/.test(document.querySelector('.tour-card')?.innerText || '') && !!document.querySelector('.pos-products input.search.tour-lit')), await p.evaluate(() => JSON.stringify({ card: document.querySelector('.tour-card')?.innerText, keys: Object.keys(localStorage).filter((k) => /tour|tip/.test(k)), hash: location.hash })));
+check('…and the search keeps the cursor (a scanner still types there)', await p.evaluate(() => document.activeElement === document.querySelector('.pos-products input.search')));
+await p.screenshot({ path: path.join(out, 'pos-tour.png') });
+for (let i = 0; i < 6 && await p.$('.tour-card'); i++) { await p.evaluate(() => [...document.querySelectorAll('.tour-card button')].pop().click()); await wait(200); }
+check('…Next through the steps, then Done closes it', await p.evaluate(() => !document.querySelector('.tour-card') && !document.querySelector('.tour-lit')));
+await p.reload({ waitUntil: 'networkidle2' }); await wait(2500);
+check('…and it is not shown again', await p.evaluate(() => !document.querySelector('.tour-card')));
 
 await b.close();
 await owner('/tenants/' + tid + '/delete', { confirm: T.tenant.slug });

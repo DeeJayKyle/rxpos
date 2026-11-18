@@ -1,3 +1,4 @@
+import { DateRange } from '../forms.jsx';
 import { useState, useRef, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import SalesLines from './SalesLines.jsx';
@@ -7,6 +8,7 @@ import { formatQty } from '../money.js';
 import { useStore, today, dayOf, localDate, downloadFile, toCSV, daysUntil, stockValue, batchValue, MAIN_BRANCH } from '../store.jsx';
 import { Stat, Tabs, BarChart, PdfButton } from '../ui.jsx';
 import { useOlderHistory, olderNote } from '../history.js';
+import { reportSummary } from '../reportSummary.js';
 
 const sumBy = (arr, key, val) => {
   const m = {};
@@ -86,7 +88,7 @@ export default function Reports() {
           {db.branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
         </select>
       )}
-      <input type="date" aria-label="From" value={from} onChange={(e) => setFrom(e.target.value)} /><span>to</span><input type="date" aria-label="To" value={to} onChange={(e) => setTo(e.target.value)} />
+      <DateRange from={from} to={to} allowAll={false} onChange={(r) => { setFrom(r.from); setTo(r.to); }} />
     </div>
   );
 
@@ -136,6 +138,27 @@ export default function Reports() {
         return views.length > 1 || !full ? <Tabs value={tab} onChange={setTab} tabs={views.map((v) => [v, VIEW_NAMES[v]])} /> : null;
       })()}
 
+      {/* F9: one plain line from the report's own figures */}
+      {(() => {
+        const span = Math.round((Date.parse(to) - Date.parse(from)) / 864e5) + 1;
+        const pf = localDate(new Date(Date.parse(from) - span * 864e5)), pt = localDate(new Date(Date.parse(from) - 864e5));
+        const prevSales = db.sales.filter((x) => x.status !== 'refunded' && inBranch(x) && dayOf(x.date) >= pf && dayOf(x.date) <= pt);
+        const top = (pairs) => pairs[0]?.[0];
+        const salesTotal = revenue + tax, gp = revenue - cogs;
+        const prevGp = prevSales.reduce((a, x) => a + x.total - x.tax - x.items.reduce((b, i) => b + (i.cost || 0) * i.qty, 0), 0);
+        const inStock = tab === 'stock' ? products.filter((p) => p.stock > 0) : [];
+        const sv = tab === 'stock' ? stockValue(inStock, batchesOf) : { value: 0, expired: 0 };
+        const line = reportSummary(tab, {
+          sales: salesTotal, prevSales: prevSales.reduce((a, x) => a + x.total, 0), receipts: sales.length, topProduct: productRows[0]?.product,
+          topProductShare: productRows[0] && revenue ? Math.round((productRows[0].revenue / revenue) * 100) : null,
+          lines: sales.reduce((a, x) => a + x.items.length, 0),
+          purchases: purchases.reduce((a, x) => a + (x.total || 0), 0), topSupplier: top(sumBy(purchases, (x) => x.supplierName, (x) => x.total)),
+          expenses: expTotal, topCategory: top(sumBy(expenses, (e) => db.expenseCategories.find((c) => c.id === e.categoryId)?.name || 'Other', (e) => e.amount)),
+          profit: gp, margin: revenue ? Math.round((gp / revenue) * 100) : null, prevProfit: prevSales.length ? prevGp : null,
+          stockValue: sv.value, expiredValue: sv.expired,
+        }, fmt);
+        return line ? <p className="report-summary" data-testid="report-summary">{line}</p> : null;
+      })()}
       <p className="report-scope small" role="note" data-testid="report-scope">
         <strong>{TAB_NAMES[tab]}</strong> · {scopeWords}{DEFS[tab] ? ` · ${DEFS[tab]}` : ''}
         {expenseNote && <span className="text-warn block"><span aria-hidden="true">⚠ </span>{expenseNote}</span>}
@@ -311,7 +334,7 @@ function ProfitReport({ sales }) {
           <thead><tr><th>{by === 'product' ? 'Medicine' : 'Category'}</th><th className="num">Qty</th><th className="num">Sales</th><th className="num">Cost</th><th className="num">Profit</th><th className="num">Margin</th></tr></thead>
           <tbody>
             {rows.slice(0, 300).map((r) => <tr key={r.key}><td>{r.name}</td><td className="num">{formatQty(r.qty)}</td><td className="num">{fmt(r.revenue)}</td><td className="num">{fmt(r.cost)}</td><td className={'num ' + (r.profit < 0 ? 'text-danger' : '')}>{fmt(r.profit)}</td><td className={'num ' + low(r.margin)}>{Math.round(r.margin)}%</td></tr>)}
-            {!rows.length && <Empty colSpan={6}>No sales in this period</Empty>}
+            {!rows.length && <Empty colSpan={6}>No sales in this period. Choose other dates, or sell at the POS and they show here.</Empty>}
           </tbody>
         </table>
       </div>

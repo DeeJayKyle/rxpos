@@ -1,6 +1,7 @@
+import { DateRange } from '../forms.jsx';
 import { useState, useMemo } from 'react';
 import { closedSet, inClosedDay } from '../dayclose.js';
-import { CrudPage, Modal, RecordForm } from '../ui.jsx';
+import { CrudPage, Modal, RecordForm, Empty } from '../ui.jsx';
 import { useStore, today, dayOf, uid, put, customerBalance, supplierBalance, downloadFile, toCSV } from '../store.jsx';
 import { CASH, ledger, accountBalances, loanBalance } from '../finance.js';
 
@@ -13,18 +14,22 @@ const useDayLock = (db) => { const closed = useMemo(() => closedSet(db.dayCloses
 export function Expenses() {
   const { db, fmt, user } = useStore();
   const rowLocked = useDayLock(db);
-  const [month, setMonth] = useState(today().slice(0, 7));
-  const inMonth = (e) => !month || String(e.date).startsWith(month);
+  // E5: the one date-range control (this month to start with)
+  const [range, setRange] = useState(() => ({ from: today().slice(0, 8) + '01', to: today() }));
+  const month = range.from || range.to;
+  const inMonth = (e) => (!range.from || String(e.date).slice(0, 10) >= range.from) && (!range.to || String(e.date).slice(0, 10) <= range.to);
   const total = db.expenses.filter(inMonth).reduce((a, e) => a + e.amount, 0);
   return (
     <CrudPage
       title="Expenses" table="expenses" filter={inMonth} rowLocked={rowLocked}
-      headExtra={<><input type="month" aria-label="Month" value={month} onChange={(e) => setMonth(e.target.value)} /><span className="muted">Total {fmt(total)}</span></>}
+      totals={{ Amount: (rs) => fmt(rs.reduce((a, e) => a + (Number(e.amount) || 0), 0)) }}
+      emptyText={month ? 'No expenses in these dates. Record rent, salaries, transport and other costs here: they come off the profit in reports.' : undefined}
+      headExtra={<><DateRange from={range.from} to={range.to} onChange={setRange} /><span className="muted">Total {fmt(total)}</span></>}
       blank={{ date: today(), bankId: CASH, method: 'Cash', recordedBy: user.name }}
       fields={[
         { key: 'date', label: 'Date', type: 'date', required: true },
         { key: 'categoryId', label: 'Category', type: 'select', required: true, options: db.expenseCategories.map((c) => ({ value: c.id, label: c.name })) },
-        { key: 'amount', label: 'Amount', type: 'number', required: true },
+        { key: 'amount', label: 'Amount', type: 'money', required: true, validate: (v) => (Number(v) > 0 ? '' : 'An expense is more than 0') },
         { key: 'method', label: 'Payment method', type: 'select', options: METHODS },
         { key: 'bankId', label: 'Paid from', type: 'select', options: bankOptions(db) },
         { key: 'payee', label: 'Paid to' },
@@ -113,7 +118,7 @@ export function PaymentModal({ title, kind, partyId, max, onClose }) {
         initial={{ date: today(), amount: max > 0 ? max : 0, method: 'Cash', bankId: CASH }}
         fields={[
           { key: 'date', label: 'Date', type: 'date', required: true },
-          { key: 'amount', label: 'Amount', type: 'number', required: true },
+          { key: 'amount', label: 'Amount', type: 'money', required: true, validate: (v) => (Number(v) > 0 ? '' : 'A payment is more than 0') },
           { key: 'method', label: 'Method', type: 'select', options: METHODS },
           { key: 'bankId', label: kind === 'customer' || kind === 'insurer' ? 'Received into' : 'Paid from', type: 'select', options: bankOptions(db) },
           { key: 'note', label: 'Note', full: true },
@@ -142,7 +147,7 @@ function BalancesPage({ title, kind, parties, balanceOf, note }) {
               <tr key={r.id}><td>{r.name}</td><td>{r.phone}</td><td className="num"><strong>{fmt(r.bal)}</strong></td>
                 <td className="actions"><button className="btn sm primary" onClick={() => setPay(r)}>{kind === 'customer' ? 'Receive payment' : 'Pay'}</button></td></tr>
             ))}
-            {!rows.length && <tr><td colSpan={4} className="empty">No outstanding balances</td></tr>}
+            {!rows.length && <Empty colSpan={4}>{kind === 'customer' ? 'Nobody owes the pharmacy money. Sales on credit show here until they are paid.' : 'The pharmacy owes no supplier. Deliveries on credit show here until they are paid.'}</Empty>}
           </tbody>
         </table>
       </div>
@@ -152,7 +157,7 @@ function BalancesPage({ title, kind, parties, balanceOf, note }) {
           <thead><tr><th>Date</th><th>Name</th><th>Method</th><th>Note</th><th className="num">Amount</th></tr></thead>
           <tbody>
             {history.slice(0, 200).map((p) => <tr key={p.id}><td>{p.date}</td><td>{parties.find((x) => x.id === p.partyId)?.name}</td><td>{p.method}</td><td>{p.note}</td><td className="num">{fmt(p.amount)}</td></tr>)}
-            {!history.length && <tr><td colSpan={5} className="empty">No payments yet</td></tr>}
+            {!history.length && <Empty colSpan={5}>No payments yet. Payments you receive or make on a balance are listed here.</Empty>}
           </tbody>
         </table>
       </div>
@@ -218,7 +223,7 @@ export function CashBook() {
         <h1>Cash Book</h1>
         <div className="row gap">
           <select aria-label="Account" value={account} onChange={(e) => setAccount(e.target.value)}>{db.banks.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select>
-          <input type="date" aria-label="From" value={from} onChange={(e) => setFrom(e.target.value)} /><input type="date" aria-label="To" value={to} onChange={(e) => setTo(e.target.value)} />
+          <DateRange from={from} to={to} allowAll={false} onChange={(r) => { setFrom(r.from); setTo(r.to); }} />
           <button className="btn ghost" onClick={() => downloadFile('cash-book.csv', toCSV(rows.map(({ date, desc, kind, in: i, out, bal: b }) => ({ date, description: desc, type: kind, in: i, out, balance: b }))), 'text/csv')}>Export CSV</button>
         </div>
       </div>

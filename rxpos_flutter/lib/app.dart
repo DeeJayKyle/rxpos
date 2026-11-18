@@ -1,3 +1,4 @@
+import 'core/presentation/pharmacy_logo.dart' show PharmacyLogo;
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -17,6 +18,7 @@ import 'core/theme/themes.dart';
 import 'core/theme/fonts.dart';
 import 'core/theme/theme_choice.dart';
 import 'features/sync_status/application/sync_controller.dart';
+import 'features/auth/application/session_controller.dart';
 
 class RxposApp extends ConsumerWidget {
   const RxposApp({super.key});
@@ -62,7 +64,7 @@ class RxposApp extends ConsumerWidget {
       key: ValueKey('app-${ref.watch(appRestartProvider)}'),
       // in a browser that ran the classic RxPOS, its unsent changes go up first (ClassicGate)
       // the zoom multiplies the system's text size (accessibility setting) instead of replacing it
-      builder: (context, child) => ClassicGate(child: zoom == 1 ? child! : MediaQuery(data: MediaQuery.of(context).copyWith(textScaler: _zoomed(MediaQuery.textScalerOf(context), zoom)), child: child!)),
+      builder: (context, child) => ClassicGate(child: !ref.watch(sessionControllerProvider).hasValue && !ref.watch(sessionControllerProvider).hasError ? const OpeningScreen() : zoom == 1 ? child! : MediaQuery(data: MediaQuery.of(context).copyWith(textScaler: _zoomed(MediaQuery.textScalerOf(context), zoom)), child: child!)),
       title: 'RxPOS',
       debugShowCheckedModeBanner: false,
       // following the system: its light and dark themes, live when it changes
@@ -79,3 +81,25 @@ class RxposApp extends ConsumerWidget {
 TextScaler _zoomed(TextScaler system, double zoom) => TextScaler.linear(system.scale(_bodySize) / _bodySize * zoom);
 
 const _bodySize = 14.0;
+
+/// E8 (1.13; index.html's splash): while the app opens, the pharmacy's logo and "Getting your pharmacy ready".
+class OpeningScreen extends StatelessWidget {
+  const OpeningScreen({super.key});
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    return Material(
+      key: const Key('opening-screen'),
+      color: t.colorScheme.surface,
+      child: Center(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          PharmacyLogo(size: 72, fallback: ClipRRect(borderRadius: BorderRadius.circular(18), child: Image.asset('assets/icon.png', width: 72, height: 72))),
+          const SizedBox(height: 18),
+          Text('Getting your pharmacy ready', style: t.textTheme.titleMedium),
+          const SizedBox(height: 14),
+          const SizedBox(width: 160, child: LinearProgressIndicator()),
+        ]),
+      ),
+    );
+  }
+}

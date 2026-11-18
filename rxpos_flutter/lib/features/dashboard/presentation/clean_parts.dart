@@ -20,6 +20,8 @@ const dashWidgets = [
   ('health', 'Stock health', 4, true),
   ('top', 'Top medicines', 6, true),
   ('recent', 'Latest sales', 6, true),
+  // UI batch 3, B5: sales by weekday and hour
+  ('busy', 'Busy hours (sales by day and hour)', 12, true),
   ('checks', 'Sales to check (when there are some)', 12, true),
   ('alerts', 'Stock alert tiles', 12, false),
   ('promote', 'Promote today', 6, false),

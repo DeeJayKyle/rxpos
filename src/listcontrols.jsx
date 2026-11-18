@@ -21,11 +21,13 @@ export function useListControls({ rows, onOpen, onEdit, onDelete, onNew, searchR
   useEffect(() => { setTicked((t) => { const keep = new Set([...t].filter((id) => ids.includes(id))); return keep.size === t.size ? t : keep; }); }, [ids]);
   useEffect(() => { if (active >= rows.length) setActive(rows.length - 1); }, [rows.length, active]);
   const toggle = useCallback((i, shift) => {
+    // the row ticked before, read now: the update below may run later, after last.current has moved on to i
+    const prev = last.current;
     setTicked((t) => {
       const n = new Set(t);
-      if (shift && last.current >= 0) {
+      if (shift && prev >= 0) {
         const on = !t.has(ids[i]);
-        const [a, b] = [Math.min(last.current, i), Math.max(last.current, i)];
+        const [a, b] = [Math.min(prev, i), Math.max(prev, i)];
         for (let k = a; k <= b; k++) on ? n.add(ids[k]) : n.delete(ids[k]);
       } else if (n.has(ids[i])) n.delete(ids[i]); else n.add(ids[i]);
       return n;

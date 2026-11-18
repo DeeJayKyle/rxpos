@@ -24,7 +24,7 @@ export function reportError(error, extra = {}) {
     const message = scrub(error?.message || error, 300);
     if (!message || /ResizeObserver loop|Script error\.?$|Load failed$/i.test(message)) return; // browser noise
     const stack = scrub(error?.stack || extra.componentStack || '', 3000);
-    const key = hash(message + stack.split('\n').slice(0, 3).join('|'));
+    const key = hash(message + stack.split('\n').slice(0, 3).join('|') + (extra.sentByUser ? '|asked' : '')); // E10: "Send report" is a report of its own, never dropped as today's repeat
     const today = new Date().toISOString().slice(0, 10);
     const sent = read(SENT, {});
     if (sent[key] === today) return; // already reported today from this device

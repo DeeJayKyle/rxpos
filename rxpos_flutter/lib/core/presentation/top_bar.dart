@@ -1,3 +1,4 @@
+import 'dart:convert';
 // Top bar pieces (src/App.jsx): the live clock with where this device's work stands, the "No internet connection"
 // banner, the branch this device works as, and Ctrl+K search over pages, medicines, customers and receipts.
 import 'package:rxpos/core/theme/themes.dart' show TonesOfContext;
@@ -14,6 +15,7 @@ import '../rules/money.dart';
 import '../../widgets/ai_omnibar_sheet.dart';
 import 'nav.dart';
 import 'widgets.dart';
+import '../data/device_settings.dart' show deviceValueProvider;
 
 String _hms(DateTime d) => [d.hour, d.minute, d.second].map((v) => v.toString().padLeft(2, '0')).join(':');
 const _wd = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], _mo = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -109,13 +111,52 @@ class _ClockPillState extends ConsumerState<ClockPill> {
   }
 }
 
-/// A strip under the top bar while the internet is down: the work is saved here and goes up later.
-class OfflineBanner extends ConsumerWidget {
+/// A strip under the top bar while the internet is down: the work is saved here and goes up later. Back online, it
+/// says "All sent" for 3 s once everything has gone (UI batch 3, F4, as src/App.jsx OfflineBanner).
+class OfflineBanner extends ConsumerStatefulWidget {
   const OfflineBanner({super.key});
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<OfflineBanner> createState() => _OfflineBannerState();
+}
+
+class _OfflineBannerState extends ConsumerState<OfflineBanner> {
+  bool _wasOff = false, _back = false;
+  Timer? _hide;
+  @override
+  void dispose() {
+    _hide?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final s = ref.watch(syncControllerProvider);
-    if (s.state != SyncState.offline) return const SizedBox.shrink();
+    if (s.state == SyncState.offline) {
+      _wasOff = true;
+      _back = false;
+    } else if (_wasOff) {
+      _wasOff = false;
+      _back = true;
+    }
+    if (s.state != SyncState.offline) {
+      if (!_back) return const SizedBox.shrink();
+      final sent = s.state == SyncState.synced && s.pending == 0;
+      if (sent && _hide == null) {
+        _hide = Timer(const Duration(seconds: 3), () {
+          _hide = null;
+          if (mounted) setState(() => _back = false);
+        });
+      }
+      return Material(
+        key: const Key('all-sent-banner'),
+        color: (sent ? context.tones.ok : context.tones.info).withValues(alpha: .14),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+          child: Text(sent ? 'All sent' : 'Back online · sending ${s.pending} change${s.pending == 1 ? '' : 's'}…',
+              textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.w700, color: sent ? context.tones.ok : null)),
+        ),
+      );
+    }
     return Material(
       key: const Key('offline-banner'),
       color: context.tones.warnSoft,
@@ -154,8 +195,10 @@ class BranchPill extends ConsumerWidget {
 }
 
 class _Hit {
-  const _Hit(this.section, this.label, this.icon, this.go, {this.hint = '', this.ai});
+  const _Hit(this.section, this.label, this.icon, this.go, {this.hint = '', this.ai, this.recent = false});
   final String section, label, hint;
+  /// a recent search: picking it types it again
+  final bool recent;
   final IconData icon;
   final String go;
   /// an AI row (widgets/ai_omnibar_sheet.dart): the typed text goes to the AI copilot
@@ -175,6 +218,27 @@ class CommandPalette extends ConsumerStatefulWidget {
 class _CommandPaletteState extends ConsumerState<CommandPalette> {
   String _q = '';
   int _active = 0;
+  final _input = TextEditingController();
+  @override
+  void dispose() {
+    _input.dispose();
+    super.dispose();
+  }
+
+  // F3 (as src/components/AiOmnibar.jsx): the last searches on this device, offered before anything is typed
+  List<String> get _recent {
+    try {
+      return [for (final x in (jsonDecode(ref.watch(deviceValueProvider('recent-search')).value ?? '[]') as List)) '$x'];
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  void _keepSearch() {
+    final t = _q.trim();
+    if (t.length < 2 || t.startsWith('/')) return;
+    ref.read(deviceValueProvider('recent-search').notifier).set(jsonEncode([t, ..._recent.where((x) => x.toLowerCase() != t.toLowerCase())].take(5).toList()));
+  }
 
   List<_Hit> _results() {
     // "/" first: commands only (Notion's slash menu), then the pages
@@ -190,12 +254,22 @@ class _CommandPaletteState extends ConsumerState<CommandPalette> {
       if (can.contains('/suppliers')) ('Add a supplier', 'new supplier', Icons.local_shipping_outlined, '/suppliers?new=1'),
       if (can.contains('/notes')) ('New note page', 'note sop page notion write checklist', Icons.edit_note, '/notes?new=1'),
       if (can.contains('/notes')) ('New checklist from a template', 'template opening checklist sop handover', Icons.checklist, '/notes?template=opening'),
+      if (can.contains('/finance')) ('Add an expense', 'new expense spend', Icons.account_balance_wallet_outlined, '/finance?tab=expenses'),
       if (can.contains('/device')) ('Change keyboard shortcuts', 'keys remap keyboard settings', Icons.keyboard_outlined, '/device'),
     ];
     if (slash) {
       return [
         for (final c in commands.where((c) => s.isEmpty || has([c.$1, c.$2]))) _Hit('Commands', c.$1, c.$3, c.$4),
         if (s.isNotEmpty) for (final p in widget.pages.where((p) => has([p.label])).take(6)) _Hit('Pages', p.label, p.icon, p.path, hint: p.keyLabel),
+      ];
+    }
+    // F3: before anything is typed: the recent searches, the suggested actions, then the pages
+    if (s.isEmpty) {
+      const suggested = ['New sale', 'Receive stock', 'Add a customer', 'Add an expense'];
+      return [
+        for (final r in _recent) _Hit('Recent searches', r, Icons.history, '', recent: true),
+        for (final l in suggested) ...[for (final c in commands.where((c) => c.$1 == l)) _Hit('Suggested', c.$1, c.$3, c.$4)],
+        for (final p in widget.pages.take(6)) _Hit('Pages', p.label, p.icon, p.path, hint: p.keyLabel),
       ];
     }
     final out = <_Hit>[
@@ -229,6 +303,15 @@ class _CommandPaletteState extends ConsumerState<CommandPalette> {
   }
 
   void _pick(_Hit h) {
+    if (h.recent) {
+      _input.text = h.label;
+      setState(() {
+        _q = h.label;
+        _active = 0;
+      });
+      return;
+    }
+    if (h.ai == null) _keepSearch();
     final nav = Navigator.of(context);
     if (h.ai != null) {
       final text = _q.trim();
@@ -271,6 +354,7 @@ class _CommandPaletteState extends ConsumerState<CommandPalette> {
                 padding: const EdgeInsets.all(12),
                 child: TextField(
                   key: const Key('palette-input'),
+                  controller: _input,
                   autofocus: true,
                   decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Search, / for commands, or tell the AI: “add 2 strips…”', suffixIcon: Icon(Icons.auto_awesome, size: 18), suffixText: 'Esc'),
                   onChanged: (v) => setState(() {

@@ -86,7 +86,7 @@ class _InsurersScreenState extends ConsumerState<InsurersScreen> {
     final v = await editRecord(context, title: 'Payment from ${i['name']} (owes ${st.money(owed)})', save: 'Record payment',
         initial: {'date': today(), 'amount': owed, 'method': 'Cash', 'bankId': 'cash-drawer'}, fields: [
       const FormFieldSpec('date', 'Date', kind: FieldKind.date, required: true),
-      const FormFieldSpec('amount', 'Amount', kind: FieldKind.number, required: true),
+      const FormFieldSpec('amount', 'Amount', kind: FieldKind.money, required: true),
       FormFieldSpec('method', 'Method', kind: FieldKind.choice, options: [for (final m in _methods) (m, m)]),
       FormFieldSpec('bankId', 'Received into', kind: FieldKind.choice, options: [for (final b in banks) ('${b['id']}', '${b['name']}')]),
       const FormFieldSpec('note', 'Note'),

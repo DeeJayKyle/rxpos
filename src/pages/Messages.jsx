@@ -85,7 +85,7 @@ export default function Messages() {
             {audience === 'pick' && (
               <div className="pick-list">
                 {withPhone.map((c) => <label key={c.id} className="field check"><input type="checkbox" checked={!!picked[c.id]} onChange={(e) => setPicked({ ...picked, [c.id]: e.target.checked })} /><span>{c.name} <small className="muted">{c.phone}</small></span></label>)}
-                {!withPhone.length && <Empty>No clients with a phone number yet</Empty>}
+                {!withPhone.length && <Empty action={{ label: 'Open clients', to: '/customers' }}>No clients with a phone number yet. Add phone numbers to your clients to send them reminders and offers.</Empty>}
               </div>
             )}
             <p className="muted small">{list.length} client{list.length === 1 ? '' : 's'} selected. Only clients with a phone number are listed.</p>

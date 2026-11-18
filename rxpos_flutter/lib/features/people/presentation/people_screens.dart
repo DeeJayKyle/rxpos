@@ -14,6 +14,13 @@ import '../../../core/rules/ids.dart';
 import '../../auth/application/session_controller.dart';
 import '../domain/balances.dart';
 import '../../../core/presentation/list_controls.dart';
+import '../../../core/presentation/table_kit.dart';
+import '../../extras/domain/extras.dart' show normalizePhone;
+import 'package:url_launcher/url_launcher.dart';
+import '../../../core/rules/audit_text.dart';
+
+String? _positive(String v, Map<String, Object?> _) => moneyValue(v) > 0 ? null : 'More than 0';
+String? _notFuture(String v, Map<String, Object?> _) => v.compareTo(today()) > 0 ? 'A date of birth can’t be in the future' : null;
 
 /// Customers or Suppliers: the list with what each owes, add / edit, record a payment.
 class PeopleScreen extends ConsumerStatefulWidget {
@@ -48,13 +55,13 @@ class _PeopleScreenState extends ConsumerState<PeopleScreen> {
 
   List<FormFieldSpec> get _fields => widget.suppliers
       // the same fields as the React app (src/pages/People.jsx)
-      ? const [FormFieldSpec('name', 'Company name', required: true), FormFieldSpec('contact', 'Contact person'), FormFieldSpec('phone', 'Phone'),
+      ? const [FormFieldSpec('name', 'Company name', required: true), FormFieldSpec('contact', 'Contact person'), FormFieldSpec('phone', 'Phone', kind: FieldKind.phone),
           FormFieldSpec('email', 'Email'), FormFieldSpec('tin', 'TIN / tax number'), FormFieldSpec('address', 'Address', kind: FieldKind.multiline)]
       : const [
-          FormFieldSpec('name', 'Full name / company', required: true), FormFieldSpec('phone', 'Phone'), FormFieldSpec('email', 'Email'),
-          FormFieldSpec('address', 'Address'), FormFieldSpec('dob', 'Date of birth', kind: FieldKind.date),
+          FormFieldSpec('name', 'Full name / company', required: true), FormFieldSpec('phone', 'Phone', kind: FieldKind.phone), FormFieldSpec('email', 'Email'),
+          FormFieldSpec('address', 'Address'), FormFieldSpec('dob', 'Date of birth', kind: FieldKind.date, validate: _notFuture),
           FormFieldSpec('type', 'Type', kind: FieldKind.choice, options: [('Retail', 'Retail'), ('Wholesale', 'Wholesale'), ('Clinic / Hospital', 'Clinic / Hospital'), ('Insurance', 'Insurance')]),
-          FormFieldSpec('insurance', 'Insurance / HMO'), FormFieldSpec('insuranceNo', 'Policy number'), FormFieldSpec('creditLimit', 'Credit limit', kind: FieldKind.number),
+          FormFieldSpec('insurance', 'Insurance / HMO'), FormFieldSpec('insuranceNo', 'Policy number'), FormFieldSpec('creditLimit', 'Credit limit', kind: FieldKind.money, help: 'The most this client may owe. A sale on credit that would go over it needs a manager.'),
           FormFieldSpec('allergies', 'Allergies', kind: FieldKind.multiline), FormFieldSpec('notes', 'Notes', kind: FieldKind.multiline),
         ];
 
@@ -85,7 +92,11 @@ class _PeopleScreenState extends ConsumerState<PeopleScreen> {
       ],
       // the owner's request: keys, double-click, right-click and ticks, as every list (list_controls.dart)
       child: list.isEmpty
-          ? EmptyState(widget.suppliers ? 'No suppliers yet' : 'No clients yet')
+          ? EmptyState(q.isNotEmpty
+              ? 'No one matches “${_q.trim()}”. Try fewer letters or the phone number.'
+              : widget.suppliers
+                  ? 'No suppliers yet. Add the companies you buy from: deliveries, prices and what you owe them are kept together.'
+                  : 'No clients yet. Add a client to keep their phone, allergies and what they owe; the till finds them by name or phone.')
           : ListControls(
               ids: [for (final r in list) '${r['id']}'],
               search: _searchFocus,
@@ -155,7 +166,12 @@ class _PeopleScreenState extends ConsumerState<PeopleScreen> {
                     ],
                   ));
                 }
-                return st.wrap(ListTile(
+                final phone = '${r['phone'] ?? ''}'.trim();
+                // C10: a phone: swipe a client for Call or WhatsApp
+                return SwipeRow(key: ValueKey('swipe-${r['id']}'), actions: [
+                  if (phone.isNotEmpty) ('Call', Icons.call_outlined, () => launchUrl(Uri.parse('tel:${phone.replaceAll(RegExp(r'[^\d+]'), '')}'))),
+                  if (phone.isNotEmpty) ('WhatsApp', Icons.chat_outlined, () => launchUrl(Uri.parse('https://wa.me/${normalizePhone(phone)}'), mode: LaunchMode.externalApplication)),
+                ], child: st.wrap(ListTile(
                   leading: st.tickBox,
                   title: Text('${r['name']}'),
                   subtitle: Text([r['phone'], widget.suppliers ? r['contact'] : r['allergies'] == null || '${r['allergies']}'.isEmpty ? null : 'Allergies: ${r['allergies']}']
@@ -166,7 +182,7 @@ class _PeopleScreenState extends ConsumerState<PeopleScreen> {
                       IconButton(tooltip: widget.suppliers ? 'Pay supplier' : 'Record payment', icon: const Icon(Icons.payments_outlined), onPressed: () => _pay(r, bal, settings)),
                     IconButton(tooltip: 'Edit', icon: const Icon(Icons.edit_outlined), onPressed: () => _edit(r)),
                   ]),
-                ));
+                )));
               }),
             );
                 return table ? Column(children: [ColourTableHead(columns: cols, trailing: 150), Expanded(child: listView)]) : listView;
@@ -176,16 +192,18 @@ class _PeopleScreenState extends ConsumerState<PeopleScreen> {
   }
 
   Future<void> _edit(Map<String, Object?>? r) async {
-    final v = await editRecord(context, title: r == null ? (widget.suppliers ? 'New supplier' : 'New client') : 'Edit ${r['name']}', fields: _fields, initial: r ?? const {});
+    final v = await editRecord(context, title: r == null ? (widget.suppliers ? 'New supplier' : 'New client') : 'Edit ${r['name']}', fields: _fields, initial: r ?? const {}, side: r != null, note: editedLine(r));
     if (v == null) return;
-    await ref.read(recordStoreProvider).update((d) => d.put(_t, {...?r, ...v, 'id': r?['id'] ?? uid()}));
-    if (mounted) say(context, '${v['name']} saved');
+    final who = (await ref.read(sessionControllerProvider.future))?.userName ?? '';
+    // F5: an edit says who made it and when
+    await ref.read(recordStoreProvider).update((d) => d.put(_t, {...?r, ...v, 'id': r?['id'] ?? uid(), if (r != null) ...editStamp(who)}));
+    if (mounted) saySaved(context, '${v['name']} saved'); // D4: saved here at once, the mark follows the cloud
   }
 
   Future<void> _pay(Map<String, Object?> r, double owed, PharmacySettings st) async {
     final v = await editRecord(context, title: widget.suppliers ? 'Pay ${r['name']}' : 'Payment from ${r['name']}', save: 'Record payment',
         initial: {'amount': owed, 'date': today(), 'method': 'Cash'}, fields: const [
-          FormFieldSpec('amount', 'Amount', kind: FieldKind.number, required: true),
+          FormFieldSpec('amount', 'Amount', kind: FieldKind.money, required: true, validate: _positive),
           FormFieldSpec('date', 'Date', kind: FieldKind.date, required: true),
           FormFieldSpec('method', 'Method', kind: FieldKind.choice, options: [('Cash', 'Cash'), ('Mobile Money', 'Mobile Money'), ('Bank', 'Bank'), ('Card', 'Card')]),
           FormFieldSpec('note', 'Note'),

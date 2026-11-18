@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { Zap, WifiOff, MonitorSmartphone, ShieldCheck, Mail, Lock, MessageSquareText, MessageCircle, ArrowLeft, ArrowRight, Crown, Building2, LogIn } from 'lucide-react';
 import { useStore, verifyPassword, normalizePhone } from '../store.jsx';
 import { rememberOffline, verifyOffline, hasPin, verifyPin } from '../offline.js';
-import { Logo, BrandLogo } from '../logo.jsx';
+import { rememberStaff, recentStaff } from '../offline.js';
+import { Logo, BrandLogo, pharmacyLogo } from '../logo.jsx';
 import { toast, ask } from '../feedback.jsx';
 import { cloudLogin, cloudUrl, forgotPassword, resetPassword, whatsappLink, pharmacyInfo, googleClient, resetWithGoogle, DEFAULT_CLOUD } from '../cloud.js';
 import { isWeb, isNative, pharmacySlugFromUrl } from '../platform.js';
@@ -25,7 +26,7 @@ export default function Auth() {
   const { db, setUser, syncCfg, linkPharmacy } = useStore();
   const url = cloudUrl();
   const slug = pharmacySlugFromUrl();
-  const [pharmacy, setPharmacy] = useState(() => (syncCfg.tenant && (!slug || slug === syncCfg.slug) ? { name: syncCfg.pharmacy || db.settings.name, slug: syncCfg.slug, logo: db.license?.[0]?.branding?.logo } : null));
+  const [pharmacy, setPharmacy] = useState(() => (syncCfg.tenant && (!slug || slug === syncCfg.slug) ? { name: syncCfg.pharmacy || db.settings.name, slug: syncCfg.slug, logo: pharmacyLogo(db) } : null));
   const [form, setForm] = useState(() => ({ email: (() => { try { return localStorage.getItem(LAST_EMAIL) || ''; } catch { return ''; } })(), password: '', code: slug || '', otp: '', newPassword: '' }));
   const [needCode, setNeedCode] = useState(false);
   const [remember, setRemember] = useState(() => { try { return localStorage.getItem(REMEMBER_CHOICE) === '1'; } catch { return false; } });
@@ -52,7 +53,7 @@ export default function Auth() {
   // The pharmacy behind this web address (rxposug.com/<pharmacy>)
   useEffect(() => {
     if (!slug || (pharmacy && pharmacy.slug === slug)) return;
-    pharmacyInfo(url, slug).then((p) => setPharmacy({ name: p.name, slug: p.slug, logo: p.logo })).catch((e) => setPharmacy({ error: e.message }));
+    pharmacyInfo(url, slug).then((p) => setPharmacy({ name: p.name, slug: p.slug, logo: p.logo && p.logo.startsWith('/') ? String(url).replace(/\/+$/, '') + p.logo : p.logo })).catch((e) => setPharmacy({ error: e.message }));
   }, [slug]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const isUsername = form.email.trim().length > 0 && !form.email.includes('@');
@@ -90,6 +91,7 @@ export default function Auth() {
     if (!offlineOk) throw new Error('Wrong email or password.');
     if (local.twoFactor && !trusted(syncCfg.tenant, local.id)) throw new Error('You use two-step sign-in, and this device has not been signed in with your code yet. Connect to the internet once to sign in here.');
     await rememberOffline(syncCfg.tenant, local.id, form.password); // keep this device able to sign in offline next time
+    rememberStaff(syncCfg.tenant, local.id);
     setUser({ id: local.id, name: local.name, email: local.email, role: local.role }, { remember });
   }); };
 
@@ -120,6 +122,7 @@ export default function Auth() {
     if (twoStep) try { localStorage.setItem(trustKey(r.tenant, r.user.id), '1'); } catch { /* storage blocked */ }
     setTwoStep(null);
     if (isWeb && r.slug && slug !== r.slug) history.replaceState(null, '', '/' + r.slug + location.hash);
+    rememberStaff(r.tenant, r.user.id);
     setUser(r.user, { remember });
   };
   const choose = (c) => run(async () => {
@@ -131,6 +134,10 @@ export default function Auth() {
     await finish(r, email);
   });
   // The person whose quick PIN this device holds for the typed email/username (offline sign-in shortcut).
+  // E9: the people who signed in on this device lately (never anyone else)
+  const recent = recentStaff(syncCfg.tenant).map((id) => db.users.find((u) => u.id === id && !u.disabled && u.active !== false)).filter(Boolean);
+  const [picked, setPicked] = useState(null);
+  const initialsOf = (n = '') => n.split(/\s+/).filter(Boolean).map((w) => w[0]).slice(0, 2).join('').toUpperCase() || '?';
   const pinUser = (() => {
     const e = form.email.trim().toLowerCase();
     if (!e) return null;
@@ -143,6 +150,7 @@ export default function Auth() {
     const r = await verifyPin(syncCfg.tenant, pinUser.id, pin);
     if (!r.ok) throw new Error(r.left > 0 ? `Wrong PIN. ${r.left} ${r.left === 1 ? 'try' : 'tries'} left.` : 'Too many wrong PINs. Sign in with your password.');
     setPin(''); setPinMode(false);
+    rememberStaff(syncCfg.tenant, pinUser.id);
     setUser({ id: pinUser.id, name: pinUser.name, email: pinUser.email, role: pinUser.role }, { remember });
   }); };
 
@@ -233,12 +241,30 @@ export default function Auth() {
               <button type="button" className="btn sm ghost" style={{ alignSelf: 'flex-start' }} onClick={() => { setPinMode(false); setPin(''); setError(''); }} disabled={busy}><ArrowLeft size={14} />Use password instead</button>
               <div className="center twostep-head"><ShieldCheck size={26} /><strong>Quick PIN</strong><span className="muted small">Enter the PIN set on this device{pinUser?.name ? ` for ${pinUser.name}` : ''}</span></div>
               <input className="otp-input" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 8))} inputMode="numeric" autoComplete="off" placeholder="PIN" autoFocus aria-label="Device PIN" required minLength={4} />
+              {/* E7: a clear PIN pad for touch screens (the keyboard still types) */}
+              <div className="pin-pad" role="group" aria-label="PIN pad">
+                {['1', '2', '3', '4', '5', '6', '7', '8', '9', 'clear', '0', 'back'].map((k) => (
+                  <button key={k} type="button" className={'pin-key ' + k} aria-label={k === 'back' ? 'Delete a digit' : k === 'clear' ? 'Clear' : k}
+                    onClick={() => setPin((p) => (k === 'back' ? p.slice(0, -1) : k === 'clear' ? '' : (p + k).slice(0, 8)))}>{k === 'back' ? '⌫' : k === 'clear' ? 'C' : k}</button>
+                ))}
+              </div>
               {error && <div className="error" role="alert">{error}</div>}
               <button className="btn primary block" disabled={busy || pin.length < 4}><LogIn size={16} />{busy ? 'Checking…' : 'Sign in'}</button>
             </form>
           ) : (
             <form onSubmit={signIn} className="stack">
-              <div className="auth-welcome"><h2>Welcome back</h2>
+              {/* E9: this device's recent staff: tap one, then the PIN (or the password) */}
+              {recent.length > 0 && !picked && (
+                <div className="recent-staff" role="group" aria-label="Recent staff on this device">
+                  {recent.map((u) => (
+                    <button key={u.id} type="button" className="staff-avatar" onClick={() => { setPicked(u); setForm((f) => ({ ...f, email: u.email || u.username || '' })); setError(''); if (isNative && hasPin(syncCfg.tenant, u.id)) setPinMode(true); else setTimeout(() => document.querySelector('.auth-card input[type=password]')?.focus(), 0); }}>
+                      <span className="avatar" aria-hidden="true">{initialsOf(u.name)}</span><small>{u.name.split(' ')[0]}</small>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {picked && <button type="button" className="link-btn small" onClick={() => { setPicked(null); setForm((f) => ({ ...f, email: '', password: '' })); }}>Use another account</button>}
+              <div className="auth-welcome"><h2>{picked ? `Welcome back, ${picked.name.split(' ')[0]}` : 'Welcome back'}</h2>
                 {pharmacy?.error ? <div className="error" role="alert">{pharmacy.error}</div> : <p className="muted auth-title"><Building2 size={15} /> {title}</p>}</div>
               <label className="field with-icon"><span>Email or username</span><span className="input-icon-wrap"><Mail size={16} className="input-icon" aria-hidden="true" /><input type="text" inputMode="email" autoComplete="username" autoCapitalize="none" spellCheck={false} value={form.email} onChange={set('email')} required autoFocus={!form.email} placeholder="you@pharmacy.com or username" /></span></label>
               <label className="field with-icon"><span>Password</span><span className="input-icon-wrap"><Lock size={16} className="input-icon" aria-hidden="true" /><PasswordInput autoComplete="current-password" value={form.password} onChange={set('password')} required autoFocus={!!form.email} placeholder="Your password" /></span></label>

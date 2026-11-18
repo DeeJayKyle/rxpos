@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../features/sales_pos/presentation/customer_display.dart' show CustomerDisplayScreen;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../features/auth/application/session_controller.dart';
@@ -22,7 +23,7 @@ abstract final class Routes {
 }
 
 /// Is [path] one of the app's pages (or sign-in)?
-bool knownPage(String path) => path == Routes.signIn || screens.any((s) => s.path == path);
+bool knownPage(String path) => path == Routes.signIn || path == '/display' || screens.any((s) => s.path == path);
 
 /// Before the role's permissions have loaded: the built-in roles that sell (so the first redirect already lands right).
 bool _builtInSells(String role, String p) => p == 'pos.sell' && role != 'admin' && role != 'manager';
@@ -41,6 +42,8 @@ GoRouter appRouter(Ref ref) {
     initialLocation: Routes.home,
     refreshListenable: refresh,
     redirect: (_, state) {
+      // the customer display only shows the till's sale: no sign-in in front of it
+      if (state.matchedLocation == '/display') return null;
       final s = ref.read(sessionControllerProvider);
       if (s.isLoading) return null;
       final signedIn = s.value != null;
@@ -58,6 +61,7 @@ GoRouter appRouter(Ref ref) {
     },
     routes: [
       GoRoute(path: Routes.signIn, builder: (_, _) => const SignInScreen()),
+      GoRoute(path: '/display', builder: (_, _) => const CustomerDisplayScreen()),
       ShellRoute(
         navigatorKey: shellNavigatorKey,
         builder: (_, state, child) => AppShell(location: state.matchedLocation, child: child),

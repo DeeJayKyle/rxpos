@@ -123,7 +123,7 @@
   :root[data-palette] .chips-row .chip.active { background: var(--primary-soft); color: var(--primary-ink); border-color: color-mix(in srgb, var(--primary) 45%, transparent); box-shadow: none; }
   :root[data-palette] .lay-std .pos-side .pos-client, :root[data-palette] .lay-std .pos-client.accent-teal { border-color: var(--border); border-top: 1px solid var(--border); }
   :root[data-palette] .product .price { color: var(--text); }
-  :root[data-palette] .pos-cart .pay-row .btn.primary:not(:disabled) { box-shadow: 0 10px 22px -10px color-mix(in srgb, var(--primary) 80%, transparent); font-size: 17px; }
+  :root[data-palette] .pos-cart .pay-row .btn.primary:not(:disabled) { box-shadow: 0 10px 22px -10px color-mix(in srgb, var(--primary) 80%, transparent); font-size: var(--t-3); }
 
   /* the page and its cards: colour 2 under, white cards over */
   :root[data-palette] body { background-image: none; }
@@ -164,7 +164,7 @@
   :root[data-palette] .pos-cart .grand .num { font-size: clamp(24px, 2.4vw, 30px); transition: font-size .15s; }
   :root[data-palette] .pos-cart:has(.tender-row.typing) .grand .num { font-size: clamp(28px, 2.8vw, 34px); }
   :root[data-palette] .change strong { transition: font-size .15s; }
-  :root[data-palette] .change.live strong { font-size: 26px; color: var(--ok); }
+  :root[data-palette] .change.live strong { font-size: var(--t-1); color: var(--ok); }
   :root[data-palette] .change.short strong { color: var(--warn); }
 
   /* the sale is done: a clear banner with the receipt number and the two next steps */
@@ -197,3 +197,48 @@
 .sk-table { min-height: 300px; border-radius: 18px; padding: 16px; display: grid; gap: 12px; align-content: start; }
 .sk-line { height: 14px; border-radius: 8px; background: color-mix(in srgb, var(--text) 7%, transparent); }
 @media (prefers-reduced-motion: reduce) { .sk { animation: none; } }
+
+/* UI batch 3 (the owner's picks, 18 Nov 2026; docs/plans/1.13-ui-batch-3.md) */
+@media screen {
+  /* A1: the Undo button in a toast */
+  .toast .toast-action { flex: none; font-weight: 700; color: var(--primary-text); background: var(--primary-soft); border: 0; }
+  /* A3: quantity − / + big enough for a finger */
+  @media (pointer: coarse) { .cart-line .qty button { min-width: 44px; min-height: 44px; font-size: var(--t-2); } .cart-line .qty input { min-height: 44px; } }
+}
+@media screen {
+  /* A7: training mode, striped so nobody mistakes it for real selling */
+  .pos-training { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: var(--r-ctl, 12px); border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .pos-training.on { background: var(--warn-soft); color: var(--warn); border-color: var(--warn); }
+  .training-banner { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 14px; border-radius: var(--r-ctl, 12px); color: var(--warn); border: 1.5px dashed var(--warn);
+    background: repeating-linear-gradient(135deg, var(--warn-soft) 0 14px, transparent 14px 28px); }
+}
+@media screen {
+  /* A8: the guided tour: a card beside the part, which gets a ring; nothing else is covered */
+  .tour-card { position: fixed; z-index: 1200; display: grid; gap: 6px; padding: 14px 16px; border-radius: var(--r-card, 18px); background: var(--surface); color: var(--text);
+    border: 1px solid var(--border-strong); box-shadow: 0 18px 40px -16px rgba(0, 0, 0, .35); }
+  .tour-card p { margin: 0; }
+  .tour-card .tour-x { position: absolute; top: 6px; right: 6px; }
+  .tour-lit { outline: 3px solid var(--primary) !important; outline-offset: 3px; border-radius: var(--r-ctl, 12px); }
+}
+/* A6: the customer display, large and calm, in the theme's colours */
+.cust-display { min-height: 100vh; display: grid; grid-template-rows: auto 1fr auto; gap: 24px; padding: 32px 48px; background: var(--bg); color: var(--text); font-size: clamp(18px, 2.4vw, 28px); }
+.cust-display header { display: flex; align-items: center; gap: 16px; font-size: 1.3em; }
+.cust-display header img { height: 56px; width: auto; border-radius: 12px; }
+.cust-display .cd-lines { list-style: none; margin: 0; padding: 0; align-self: start; display: grid; gap: 8px; }
+.cust-display .cd-lines li { display: grid; grid-template-columns: 1fr auto 8em; gap: 16px; padding: 12px 16px; border-radius: 12px; background: var(--surface); }
+.cust-display .cd-lines li b { text-align: right; }
+.cust-display footer, .cust-display .cd-done { display: grid; gap: 8px; padding: 20px 24px; border-radius: 18px; background: var(--surface); }
+.cust-display .cd-row { display: flex; justify-content: space-between; gap: 16px; }
+.cust-display .cd-total { font-size: 1.8em; font-weight: 800; color: var(--primary-text); }
+.cust-display .cd-change { font-size: 1.4em; font-weight: 800; color: var(--ok); }
+.cust-display .cd-thanks { font-size: 2.2em; font-weight: 800; color: var(--primary-text); }
+.cust-display .cd-idle { display: grid; place-items: center; color: var(--muted); }
+.cust-display .num { font-variant-numeric: tabular-nums; }
+
+/* E1 (UI batch 3): one type scale, five sizes: 28 / 20 / 16 / 14 / 12 (the Flutter app's textTheme maps to the same);
+   money always in tabular figures so amounts line up */
+:root { --t-1: 28px; --t-2: 20px; --t-3: 16px; --t-4: 14px; --t-5: 12px; }
+:root[data-palette] .page-head h1 { font-size: var(--t-1); }
+:root[data-palette] :is(.card-head h3, .card > h3, .modal-head h3, .details-head h2) { font-size: var(--t-3); }
+:root[data-palette] .page-head .sub, :root[data-palette] :is(small, .small, .muted.small) { font-size: var(--t-5); }
+:root[data-palette] :is(.num, .price, td.num, .money-input input, .stat strong, .bento-big, .grand, .change strong, .line-total) { font-variant-numeric: tabular-nums; }

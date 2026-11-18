@@ -16,6 +16,10 @@ class RefundProblem implements Exception {
 }
 
 /// The reasons the refund sheet offers (the same as src/components/RefundSheet.jsx).
+/// Refunds above this need a manager's approval unless a manager refunds (Settings: refundApproveAbove; 0 = never).
+const refundApproveAbove = 100000.0;
+bool isApproverRole(String role) => role == 'admin' || role == 'manager';
+
 const refundReasons = ['Customer returned it', 'Wrong medicine or strength', 'Wrong price or quantity', 'Side effect or reaction', 'Sold twice by mistake', 'Other'];
 
 /// What a refund gives back: money to the customer, a debt cancelled, a share no longer billed to the insurer.
@@ -38,12 +42,12 @@ String refundHow(Sale sale, double back, String Function(num) money) {
 }
 
 /// [reason] (from the refund sheet) is kept on the sale and in the audit log.
-Future<void> refundSale(RecordStore store, Sale sale, {required String user, required PharmacySettings settings, String reason = ''}) async {
+Future<void> refundSale(RecordStore store, Sale sale, {required String user, required PharmacySettings settings, String reason = '', String approvedBy = ''}) async {
   if (sale.status == 'refunded') throw RefundProblem('${sale.number} was already refunded');
   final branch = sale.branchId.isEmpty ? mainBranch : sale.branchId;
   await store.update((d) {
     final why = reason.trim().length > 240 ? reason.trim().substring(0, 240) : reason.trim();
-    d.put('sales', {...sale.toRecord(), 'status': 'refunded', 'refundedBy': user, 'refundedAt': d.now, if (why.isNotEmpty) 'refundReason': why});
+    d.put('sales', {...sale.toRecord(), 'status': 'refunded', 'refundedBy': user, 'refundedAt': d.now, if (why.isNotEmpty) 'refundReason': why, if (approvedBy.isNotEmpty) 'refundApprovedBy': approvedBy});
     final raw = rawSaleItems(sale.raw);
     for (var n = 0; n < sale.items.length; n++) {
       final i = sale.items[n];
@@ -60,6 +64,6 @@ Future<void> refundSale(RecordStore store, Sale sale, {required String user, req
         d.move(productId: i.id, qty: qty, type: 'Refund', ref: sale.number, user: user, batchId: batchId, branchId: branch);
       }
     }
-    d.audit(user, 'Refund', '${sale.number} · ${settings.money(sale.total)}${why.isEmpty ? '' : ' · $why'}', branch);
+    d.audit(user, 'Refund', '${sale.number} · ${settings.money(sale.total)}${why.isEmpty ? '' : ' · $why'}${approvedBy.isEmpty ? '' : ' · approved by $approvedBy'}', branch);
   });
 }

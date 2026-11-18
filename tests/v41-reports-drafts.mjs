@@ -128,7 +128,7 @@ await wait(2500); await A.screenshot({ path: `${out}/sales-lines.png`, fullPage:
 
 // ---- Sales History ----
 await go(A, '#/sales'); await A.evaluate(() => { for (const i of document.querySelectorAll('.page-head input[type=date]')) { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(i, ''); i.dispatchEvent(new Event('input', { bubbles: true })); i.dispatchEvent(new Event('change', { bubbles: true })); } }); await wait(500);
-check('Sales History: 25 per page with page buttons (61 sales)', await A.evaluate(() => [...document.querySelectorAll('.page tbody tr')].filter((r) => !r.classList.contains('total-row')).length === 25 && /of 61/.test(document.querySelector('.pager')?.innerText || '')));
+check('Sales History: all 61 sales, no page buttons (UI batch 3: 100 rows, then more as the list scrolls)', await A.evaluate(() => [...document.querySelectorAll('.page tbody tr')].filter((r) => !r.classList.contains('total-row')).length === 61 && !document.querySelector('.pager')));
 check('…the time under the date, and the customer\'s phone', await A.evaluate(() => /\d{1,2}:\d{2}/.test(document.querySelector('.page tbody td[data-label=Date] small')?.textContent || '') && /0772000111/.test(document.querySelector('.page tbody').innerText)));
 check('…payment shown as a labelled chip', await A.evaluate(() => !!document.querySelector('.pay-chip.cash') && !!document.querySelector('.pay-chip.momo')));
 await select(A, 'Payment', 'Mobile Money'); await wait(400);

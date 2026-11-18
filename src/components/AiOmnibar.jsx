@@ -4,7 +4,14 @@
 // strips of paracetamol"), ask about the stock ("what expires before March?"), or diagnose this device ("sync stuck").
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Pill, User, ReceiptText, CornerDownLeft, Sparkles, Wand2, Stethoscope, LineChart, WifiOff, Loader2} from 'lucide-react';
+import { Search, Pill, User, ReceiptText, CornerDownLeft, Sparkles, Wand2, Stethoscope, LineChart, WifiOff, Loader2, History } from 'lucide-react';
+
+// F3: the last searches on this device (newest first, at most 5), offered before anything is typed
+const RECENT_Q = 'rxpos-recent-search';
+export const recentSearches = () => { try { return JSON.parse(localStorage.getItem(RECENT_Q) || '[]'); } catch { return []; } };
+const keepSearch = (q) => { const t = q.trim(); if (t.length < 2 || t.startsWith('/')) return; try { localStorage.setItem(RECENT_Q, JSON.stringify([t, ...recentSearches().filter((x) => x.toLowerCase() !== t.toLowerCase())].slice(0, 5))); } catch { /* storage blocked */ } };
+// the actions offered first: what a pharmacy does most
+const SUGGESTED = ['New sale', 'Receive stock', 'Add a customer', 'Add an expense'];
 import { useStore, useSyncState } from '../store.jsx';
 import { aiCopilot } from '../cloud.js';
 import { searchProducts } from '../search.js';
@@ -56,6 +63,13 @@ export default function AiOmnibar({ open, onClose, pages, commands = [] }) {
       ...commands.filter((c) => !s || has(c.label, c.words || '')).map((c) => ({ section: 'Commands', ...c })),
       ...pages.filter((p) => s && has(p.label)).slice(0, 6).map((p) => ({ section: 'Pages', label: p.label, Icon: p.Icon, hint: p.key, go: () => navigate(p.to) })),
     ];
+    // F3: before anything is typed: the recent searches and the suggested actions, then the pages
+    if (!s) {
+      const out = recentSearches().map((t) => ({ section: 'Recent searches', label: t, Icon: History, keep: true, go: () => { setQ(t); setActive(0); } }));
+      out.push(...SUGGESTED.map((l) => commands.find((c) => c.label === l)).filter(Boolean).map((c) => ({ section: 'Suggested', ...c })));
+      out.push(...pages.slice(0, 6).map((p) => ({ section: 'Pages', label: p.label, Icon: p.Icon, hint: p.key, go: () => navigate(p.to) })));
+      return out;
+    }
     // the owner's request: Ctrl+K also runs commands ("new sale", "receive stock", "add customer"…)
     const out = commands.filter((c) => (s ? has(c.label, c.words || '') : true)).slice(0, s ? 5 : 4).map((c) => ({ section: 'Commands', ...c }));
     out.push(...pages.filter((p) => !s || has(p.label)).slice(0, s ? 6 : 8).map((p) => ({ section: 'Pages', label: p.label, Icon: p.Icon, hint: p.key, go: () => navigate(p.to) })));
@@ -81,7 +95,7 @@ export default function AiOmnibar({ open, onClose, pages, commands = [] }) {
   }, [q, pages, commands, products, db.customers, db.sales, fmt, navigate, online, linked, can]);
 
   if (!open) return null;
-  const pick = (r) => { if (r.disabled) return; r.go(); if (!r.keep) onClose(); };
+  const pick = (r) => { if (r.disabled) return; if (r.section !== 'Recent searches' && r.section !== 'AI') keepSearch(q); r.go(); if (!r.keep) onClose(); };
   const onKey = (e) => {
     if (e.key === 'Escape') onClose();
     else if (e.key === 'ArrowDown') { e.preventDefault(); setActive((a) => Math.min(a + 1, results.length - 1)); }

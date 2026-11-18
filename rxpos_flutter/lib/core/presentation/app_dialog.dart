@@ -2,13 +2,40 @@
 // asks for less motion. The same as Flutter's showDialog otherwise (the root navigator, the themes, the barrier).
 import 'package:flutter/material.dart';
 
-Future<T?> showAppDialog<T>({required BuildContext context, required WidgetBuilder builder, bool barrierDismissible = true}) {
+/// side: a record's details (UI batch 3, C8): on a screen 1280 px or wider the dialog sits as a panel on the right,
+/// the list beside it still in view behind a light barrier.
+Future<T?> showAppDialog<T>({required BuildContext context, required WidgetBuilder builder, bool barrierDismissible = true, bool side = false}) {
   final nav = Navigator.of(context, rootNavigator: true);
+  final size = MediaQuery.sizeOf(context);
+  final wide = side && size.width >= 1280;
+  // D8: phones: the pop-up rises from the bottom as a sheet across the screen, its buttons at the bottom edge
+  final phone = size.width < 600;
   return nav.push<T>(_RiseDialogRoute<T>(
     context: context,
-    builder: builder,
+    builder: wide
+        ? (c) {
+            final t = Theme.of(c);
+            return Theme(
+              data: t.copyWith(dialogTheme: t.dialogTheme.copyWith(alignment: Alignment.centerRight, insetPadding: const EdgeInsets.fromLTRB(0, 16, 16, 16))),
+              child: KeyedSubtree(key: const Key('side-panel'), child: builder(c)),
+            );
+          }
+        : phone
+            ? (c) {
+                final t = Theme.of(c);
+                return Theme(
+                  data: t.copyWith(dialogTheme: t.dialogTheme.copyWith(
+                    alignment: Alignment.bottomCenter,
+                    insetPadding: EdgeInsets.only(top: MediaQuery.paddingOf(c).top + 8),
+                    constraints: BoxConstraints(minWidth: size.width, maxWidth: size.width),
+                    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+                  )),
+                  child: KeyedSubtree(key: const Key('phone-sheet'), child: builder(c)),
+                );
+              }
+            : builder,
     barrierDismissible: barrierDismissible,
-    barrierColor: DialogTheme.of(context).barrierColor ?? Colors.black54,
+    barrierColor: wide ? Colors.black12 : DialogTheme.of(context).barrierColor ?? Colors.black54,
     themes: InheritedTheme.capture(from: context, to: nav.context),
   ));
 }

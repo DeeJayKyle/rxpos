@@ -1,0 +1,127 @@
+/* Forms and dialogs, UI batch 3 (D): src/forms.jsx, ui.jsx Modal */
+
+/* D9: three pop-up sizes */
+.modal.size-sm { max-width: 420px; }
+.modal.size-md { max-width: 640px; }
+.modal.size-lg, .modal.wide { max-width: 960px; }
+.modal.dialog { max-width: 420px; }
+
+/* D8: phones: a full-height sheet, the main button fixed at the bottom (styles.css has the sheet itself) */
+@media (max-width: 599px) {
+  .modal:not(.dialog) { min-height: calc(100dvh - 8px - env(safe-area-inset-top)); display: flex; flex-direction: column; }
+  .modal:not(.dialog) > form { flex: 1; display: flex; flex-direction: column; }
+  .modal:not(.dialog) > form > .form-actions:last-child { margin-top: auto; }
+}
+
+/* D1: a field's own message, shown when it is left */
+.field.has-error input, .field.has-error select, .field.has-error textarea, .field.has-error .money-input, .field.has-error .phone-input input { border-color: var(--block, var(--danger)); box-shadow: 0 0 0 1px var(--block, var(--danger)); }
+.field-error { color: var(--block, var(--danger)); font-size: 12px; font-weight: 600; margin-top: 3px; display: block; }
+
+/* D5: amounts with the currency in front */
+.money-input { position: relative; display: flex; align-items: center; }
+.money-input .money-cur { position: absolute; left: 10px; font-size: 12.5px; font-weight: 650; color: var(--muted); pointer-events: none; }
+.money-input input { width: 100%; padding-left: 46px; text-align: right; font-variant-numeric: tabular-nums; }
+
+/* D6: phone numbers with a tick once WhatsApp / SMS can reach them */
+.phone-input { position: relative; display: flex; align-items: center; }
+.phone-input input { width: 100%; padding-right: 32px; font-variant-numeric: tabular-nums; }
+.phone-input .phone-ok { position: absolute; right: 8px; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; background: var(--ok-soft); color: var(--ok); }
+
+/* D3: a (?) beside a tricky field */
+.help-tip { position: relative; display: inline-flex; vertical-align: middle; margin-left: 4px; }
+.help-btn { border: 0; background: none; padding: 2px; color: var(--muted); cursor: help; display: inline-grid; place-items: center; border-radius: 50%; min-height: 0 !important; }
+.help-btn:hover, .help-btn:focus-visible { color: var(--primary); }
+.help-pop { position: absolute; left: 50%; bottom: calc(100% + 6px); transform: translateX(-50%); z-index: 90; width: max-content; max-width: 260px; padding: 8px 10px; border-radius: 10px;
+  background: var(--text); color: var(--surface); font-size: 12.5px; font-weight: 500; line-height: 1.4; text-transform: none; letter-spacing: 0; white-space: normal; box-shadow: var(--shadow); }
+
+/* D2: when the draft was last kept */
+.draft-saved { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); }
+.draft-saved::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--ok); }
+
+/* D4: saved here at once; a dot while it goes to the cloud, a tick when the cloud has it */
+.sync-mark { display: inline-grid; place-items: center; width: 16px; height: 16px; margin-left: 6px; vertical-align: -3px; }
+.sync-mark.pending::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: currentColor; opacity: .55; animation: sync-pulse 1s ease-in-out infinite; }
+@keyframes sync-pulse { 50% { opacity: .15; } }
+@media (prefers-reduced-motion: reduce) { .sync-mark.pending::before { animation: none; } }
+
+/* D10: what a danger dialog will do */
+.dialog-effects { margin: 4px 0 8px; padding-left: 18px; display: grid; gap: 3px; font-size: 14px; }
+.dialog-effects li::marker { color: var(--block, var(--danger)); }
+.btn.danger-solid { background: var(--block, var(--danger)); }
+.money-input:not(:has(.money-cur)) input { padding-left: 10px; }
+.money-input.small-input { width: 110px; padding: 0; }
+.money-input.small-input input { width: 110px; }
+.field-error.inline { display: inline; margin: 0; }
+
+/* A5: a medicine's photo, or its first letter */
+.med-thumb { width: var(--sz, 36px); height: var(--sz, 36px); flex: none; border-radius: 8px; object-fit: cover; background: var(--surface-2); }
+.med-thumb.initial { display: inline-grid; place-items: center; font-weight: 750; font-size: calc(var(--sz, 36px) * .45); color: var(--primary-text, var(--primary)); background: var(--primary-soft); }
+.product .prod-head { display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
+.product .prod-head strong { min-width: 0; }
+.photo-field { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+/* E10: the error page */
+.crash-card { display: grid; gap: 14px; padding: 24px; border-radius: var(--r-card, 18px); background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow); }
+.crash-card h1 { margin: 0; font-size: 22px; }
+.crash-more summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+.crash-more { display: grid; gap: 8px; }
+/* E2: text size presets */
+.text-size-presets button small { opacity: .7; font-weight: 500; }
+
+/* E4: touch screens: every button, chip and icon button at least 44 px, with a little more room between them */
+:root[data-touch] :is(.btn, .btn.sm, .icon-btn, .icon-btn.sm, .chip, .seg button, .tabs button, .chip-pill, .link-btn, .fav-btn, .help-btn) { min-height: 44px; min-width: 44px; }
+:root[data-touch] :is(.row.gap, .row-acts, .chips-row, .bulk-bar, .form-actions) { gap: 10px; }
+:root[data-touch] .help-btn { min-height: 32px !important; min-width: 32px; }
+
+/* E5: one date-range control */
+.date-range { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.date-range select { min-width: 130px; }
+/* E6: the pharmacy's logo in Settings */
+.logo-preview { width: 72px; height: 72px; object-fit: contain; border-radius: 12px; background: var(--surface-2); display: inline-grid; place-items: center; }
+
+/* E9: recent staff on this device */
+.recent-staff { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+.staff-avatar { display: grid; justify-items: center; gap: 4px; border: 0; background: none; cursor: pointer; padding: 4px; border-radius: 12px; color: var(--text); font: inherit; min-width: 64px; }
+.staff-avatar .avatar { width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; font-weight: 750; background: var(--primary); color: var(--on-primary, #fff); }
+.staff-avatar:hover .avatar, .staff-avatar:focus-visible .avatar { box-shadow: 0 0 0 3px var(--primary-soft); }
+/* E7: a PIN pad */
+.pin-pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.pin-key { min-height: 52px; border-radius: 14px; border: 1px solid var(--border); background: var(--surface-2); font: inherit; font-size: var(--t-2, 20px); font-weight: 700; color: var(--text); cursor: pointer; }
+.pin-key:active { background: var(--primary-soft); }
+.pin-key.clear, .pin-key.back { font-size: var(--t-3, 16px); color: var(--muted); }
+/* E8: the opening screen with the pharmacy's logo and name */
+#splash .splash-pharmacy { display: flex; align-items: center; gap: 10px; color: #e2e8f0; font-weight: 650; font-size: 15px; }
+#splash .splash-pharmacy img { width: 36px; height: 36px; object-fit: contain; border-radius: 8px; background: #fff; }
+/* the till's discount and tendered amounts keep the compact height they had as plain inputs (7 sale lines in view) */
+.money-input.small-input input { padding: 6px 10px; }
+@media (min-width: 1280px) {
+  .lay-std .pos-cart .totals .money-input.small-input input { padding-top: 2px; padding-bottom: 2px; }
+  .lay-std .pos-cart .field > .money-input > input { padding-top: 6px; padding-bottom: 6px; }
+}
+/* the till's "Promos / member discount" line is not the dashboard's "Promote today" row (which shares the class name) */
+.pos-cart .totals .promo-row { min-height: 0; padding: 0; border-bottom: 0; gap: 8px; }
+/* G1: the invoice beside the Add Stock form on a wide screen */
+.addstock-split.on { display: grid; grid-template-columns: minmax(320px, 2fr) 3fr; gap: 16px; align-items: start; }
+.invoice-view { position: sticky; top: 12px; display: grid; gap: 10px; max-height: calc(100vh - 24px); overflow: auto; }
+.invoice-page { position: relative; }
+.invoice-page img { display: block; width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--border); }
+.invoice-mark { position: absolute; border: 2.5px solid var(--primary); border-radius: 4px; background: color-mix(in srgb, var(--primary) 14%, transparent); pointer-events: none; }
+/* G2: checking a delivery by scan */
+.dcheck { display: grid; gap: 8px; margin-bottom: 12px; }
+.dcheck-input { max-width: 360px; font-size: var(--t-3); }
+.dcheck-count { display: block; margin-top: 2px; font-size: var(--t-5); font-weight: 700; color: var(--muted); white-space: nowrap; }
+.dcheck-count.done { color: var(--ok); }
+/* G3: supplier price chips on an order line */
+.price-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.price-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-size: var(--t-5); cursor: pointer; }
+.price-chip.on { border-color: var(--primary); background: var(--primary-soft); color: var(--primary-text); font-weight: 650; }
+.price-chip.cheapest small { color: var(--ok); font-weight: 700; }
+/* G4: stock in the other branches */
+.branch-stock { width: 100%; border-collapse: collapse; font-size: var(--t-5); }
+.branch-stock td { padding: 2px 0; }
+.branch-stock tr.here td { font-weight: 700; }
+.branch-stock-wrap { position: absolute; left: 8px; bottom: 8px; z-index: 2; }
+.branch-btn { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-size: var(--t-5); cursor: pointer; }
+.branch-pop { position: absolute; left: 0; bottom: calc(100% + 6px); min-width: 220px; padding: 10px 12px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border-strong); box-shadow: 0 12px 30px -12px rgba(0, 0, 0, .35); display: grid; gap: 6px; }
+.product-wrap { position: relative; }
+.med-thumb.initial::before { content: attr(data-initial); }

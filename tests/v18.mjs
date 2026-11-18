@@ -48,7 +48,7 @@ const setVal = (sel, value, n = 0) => A.evaluate((s, v, i) => { const el = docum
 // an input's value, or the text of a worked-out figure (the unit cost is shown, not typed)
 const lineVal = (row, label) => A.evaluate((r, l) => { const tr = document.querySelectorAll('table.lines tbody tr')[r]; return tr?.querySelector(`input[aria-label="${l}"]`)?.value ?? tr?.querySelector(`output[aria-label="${l}"]`)?.textContent; }, row, label);
 const toastText = () => A.evaluate(() => [...document.querySelectorAll('.toast')].map((x) => x.innerText).join(' | '));
-const stockOf = async () => { await go('/inventory'); await clickText('.filter-chips button', /^All/); await wait(300); return A.evaluate(() => Object.fromEntries([...document.querySelectorAll('tbody tr')].filter((r) => r.cells.length > 5).map((r) => [r.cells[0].innerText.split('\n')[0].trim(), Number(r.cells[5].innerText.trim())]))); };
+const stockOf = async () => { await go('/inventory'); await clickText('.filter-chips button', /^All/); await wait(300); return A.evaluate(() => Object.fromEntries([...document.querySelectorAll('tbody tr')].filter((r) => r.querySelector('td[data-label="In stock"]')).map((r) => [r.querySelector('td.row-title').innerText.split('\n')[0].trim(), Number(r.querySelector('td[data-label="In stock"]').innerText.trim())]))); };
 
 await A.goto(base + '/' + slug, { waitUntil: 'networkidle2' }); await wait(800);
 await A.type('input[autocomplete=username]', 'sam@test.rx'); await A.type('input[type=password]', 'sam-pass-123');

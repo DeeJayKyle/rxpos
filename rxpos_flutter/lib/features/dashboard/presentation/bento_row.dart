@@ -43,12 +43,47 @@ String saleStatusOf(Sale s) {
   return (to: '/pos', title: 'Ready to sell', text: 'Open the till and serve the next customer.', cta: 'Open till');
 }
 
+/// The busiest hour of the sales from day key [from] on: (hour, count), or null (UI batch 3, B4)
+(int, int)? busiestHour(List<Sale> sales, String branch, String from) {
+  final h = List.filled(24, 0);
+  for (final s in sales) {
+    if (s.status == 'refunded' || s.branchId != branch) continue;
+    final d = DateTime.tryParse(s.date)?.toLocal();
+    if (d == null || localDate(d).compareTo(from) < 0) continue;
+    h[d.hour]++;
+  }
+  var best = 0;
+  for (var i = 1; i < 24; i++) {
+    if (h[i] > h[best]) best = i;
+  }
+  return h[best] == 0 ? null : (best, h[best]);
+}
+
+const _wd = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+String _shortDay(String k) { final d = DateTime.parse(k); return '${_wd[d.weekday - 1]} ${d.day}'; }
+
+/// A faint dashed line across the bars at the average (UI batch 3, B1)
+class _DashLine extends CustomPainter {
+  const _DashLine(this.color);
+  final Color color;
+  @override
+  void paint(Canvas c, Size s) {
+    final p = Paint()..color = color..strokeWidth = 1.5;
+    for (var x = 0.0; x < s.width; x += 7) {
+      c.drawLine(Offset(x, 0), Offset((x + 4).clamp(0, s.width), 0), p);
+    }
+  }
+  @override
+  bool shouldRepaint(_DashLine o) => o.color != color;
+}
+
 class BentoRow extends StatefulWidget {
-  const BentoRow({super.key, required this.byDay, required this.sales, required this.branch, required this.money, required this.expiring, required this.low, required this.can});
+  const BentoRow({super.key, required this.byDay, required this.sales, required this.branch, required this.money, this.moneyShort, required this.expiring, required this.low, required this.can});
   final Map<String, DayFigures> byDay;
   final List<Sale> sales;
   final String branch;
   final String Function(num) money;
+  final String Function(num)? moneyShort;
   final int expiring, low;
   final Set<String> can;
   @override
@@ -70,6 +105,12 @@ class _BentoRowState extends State<BentoRow> {
     final f = featuredAction(expiring: widget.expiring, low: widget.low, can: widget.can);
     final from = localDate(now.subtract(Duration(days: _n - 1)));
     const white = Colors.white;
+    final short = widget.moneyShort ?? widget.money;
+    // B1: the average of the bars shown; B4: the period's best day and busiest hour
+    final avg = bars.fold<double>(0, (a, k) => a + (widget.byDay[k]?.total ?? 0)) / bars.length;
+    final bestDay = [for (var i = 0; i < _n; i++) localDate(now.subtract(Duration(days: i)))].reduce((b, k) => (widget.byDay[k]?.total ?? 0) > (widget.byDay[b]?.total ?? 0) ? k : b);
+    final peak = busiestHour(widget.sales, widget.branch, from);
+    final labelled = bars.length <= 7;
 
     final hero = InkWell(
       key: const Key('bento-hero'),
@@ -95,6 +136,23 @@ class _BentoRowState extends State<BentoRow> {
               ),
             Text(delta != null ? 'vs the ${_n == 1 ? 'day' : '$_n days'} before' : 'nothing to compare with yet', style: TextStyle(color: white.withValues(alpha: .7), fontSize: 12)),
           ]),
+          if (cur.count > 0) ...[
+            const SizedBox(height: 8),
+            for (final (k, label, v) in [
+              if (_n > 1 && (widget.byDay[bestDay]?.total ?? 0) > 0) ('bento-best-day', 'Best day', '${_shortDay(bestDay)} · ${short(widget.byDay[bestDay]!.total)}'),
+              if (peak != null) ('bento-busiest', 'Busiest hour', '${peak.$1.toString().padLeft(2, '0')}:00 · ${peak.$2} sale${peak.$2 == 1 ? '' : 's'}'),
+            ])
+              Container(
+                key: Key(k),
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                decoration: BoxDecoration(border: Border(top: BorderSide(color: white.withValues(alpha: .12)))),
+                child: Row(children: [
+                  Text(label, style: TextStyle(color: white.withValues(alpha: .7), fontSize: 12)),
+                  const SizedBox(width: 10),
+                  Expanded(child: Text(v, textAlign: TextAlign.right, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: white, fontWeight: FontWeight.w700, fontSize: 13.5))),
+                ]),
+              ),
+          ],
           const SizedBox(height: 12),
           Row(children: [
             for (final (label, v) in [('Receipts', '${cur.count}'), ('Average sale', widget.money(cur.count == 0 ? 0 : cur.total / cur.count))])
@@ -122,38 +180,65 @@ class _BentoRowState extends State<BentoRow> {
           Text('Daily sales', style: t.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
           const SizedBox(height: 10),
           SizedBox(
-            height: 130,
-            child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-              for (final k in bars)
-                Expanded(
-                  child: Tooltip(
-                    message: '$k: ${widget.money(widget.byDay[k]?.total ?? 0)}',
-                    child: InkWell(
-                      onTap: () => context.go('/sales?from=$k&to=$k'),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 2),
-                        child: Column(mainAxisAlignment: MainAxisAlignment.end, children: [
-                          Flexible(
-                            child: FractionallySizedBox(
-                              heightFactor: ((widget.byDay[k]?.total ?? 0) / maxV).clamp(.03, 1),
-                              child: Container(
-                                key: k == today() ? const Key('bento-bar-today') : null,
-                                decoration: BoxDecoration(
-                                  borderRadius: const BorderRadius.vertical(top: Radius.circular(8), bottom: Radius.circular(4)),
-                                  // the theme's colour at full strength, today a deeper shade (the owner's review, 18 Nov 2026)
-                                  color: k == today() ? Color.lerp(t.colorScheme.primary, Colors.black, .25) : t.colorScheme.primary.withValues(alpha: .85),
+            height: 150,
+            child: LayoutBuilder(builder: (context, box) {
+              const top = 18.0;
+              final lab = labelled ? 18.0 : 0.0;
+              final area = box.maxHeight - top - lab;
+              return Stack(children: [
+                Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                  for (final k in bars)
+                    Expanded(
+                      child: Tooltip(
+                        // B1: the day and its amount on hover, long-press and focus
+                        message: '${_shortDay(k)} · ${widget.money(widget.byDay[k]?.total ?? 0)}',
+                        child: InkWell(
+                          onTap: () => context.go('/sales?from=$k&to=$k'),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 2),
+                            child: Column(children: [
+                              SizedBox(
+                                height: top,
+                                child: k == today() && (widget.byDay[k]?.total ?? 0) > 0
+                                    ? FittedBox(fit: BoxFit.scaleDown, child: Text(short(widget.byDay[k]!.total), key: const Key('bento-today-value'), style: t.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w700)))
+                                    : null,
+                              ),
+                              SizedBox(
+                                height: area,
+                                child: Align(
+                                  alignment: Alignment.bottomCenter,
+                                  child: FractionallySizedBox(
+                                    heightFactor: ((widget.byDay[k]?.total ?? 0) / maxV).clamp(.03, 1),
+                                    child: Container(
+                                      key: k == today() ? const Key('bento-bar-today') : null,
+                                      decoration: BoxDecoration(
+                                        borderRadius: const BorderRadius.vertical(top: Radius.circular(8), bottom: Radius.circular(4)),
+                                        // the theme's colour at full strength, today a deeper shade (the owner's review, 18 Nov 2026)
+                                        color: k == today() ? Color.lerp(t.colorScheme.primary, Colors.black, .25) : t.colorScheme.primary.withValues(alpha: .85),
+                                      ),
+                                    ),
+                                  ),
                                 ),
                               ),
-                            ),
+                              if (labelled) SizedBox(height: lab, child: Text(_wd[DateTime.parse(k).weekday - 1], style: t.textTheme.labelSmall)),
+                            ]),
                           ),
-                          if (bars.length <= 7) Text(DateTime.parse(k).day.toString(), style: t.textTheme.labelSmall),
-                        ]),
+                        ),
                       ),
                     ),
+                ]),
+                if (avg > 0)
+                  Positioned(
+                    key: const Key('bento-avg'),
+                    left: 0,
+                    right: 0,
+                    bottom: lab + area * (avg / maxV).clamp(0, 1),
+                    child: IgnorePointer(child: CustomPaint(size: const Size(double.infinity, 1.5), painter: _DashLine(t.colorScheme.onSurface.withValues(alpha: .45)))),
                   ),
-                ),
-            ]),
+              ]);
+            }),
           ),
+          if (avg > 0) Padding(padding: const EdgeInsets.only(top: 6), child: Text('- - Average ${widget.money(avg)} a day', style: t.textTheme.bodySmall)),
         ]),
       ),
     );
@@ -174,24 +259,31 @@ class _BentoRowState extends State<BentoRow> {
               key: ValueKey('bento-sale-${s.id}'),
               padding: const EdgeInsets.symmetric(vertical: 5),
               child: Row(children: [
+                // B3: the Owing pill beside the name, the amounts in one right column, nothing wrapping
                 Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(s.customerName.isEmpty ? 'Walk-in' : s.customerName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600)),
-                    Text(s.number, style: t.textTheme.bodySmall),
+                    Row(children: [
+                      Flexible(child: Text(s.customerName.isEmpty ? 'Walk-in' : s.customerName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600))),
+                      Builder(builder: (_) {
+                        final st = saleStatusOf(s);
+                        // only unusual states carry a pill (2026-11-18)
+                        if (st == 'paid') return const SizedBox.shrink();
+                        return Container(
+                          margin: const EdgeInsets.only(left: 6),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(borderRadius: BorderRadius.circular(99), color: pill(st).withValues(alpha: .14)),
+                          child: Text(switch (st) { 'owing' => 'Owing', 'refunded' => 'Refunded', _ => 'Paid' }, style: TextStyle(color: pill(st), fontSize: 11.5, fontWeight: FontWeight.w700)),
+                        );
+                      }),
+                    ]),
+                    Text(s.number, maxLines: 1, overflow: TextOverflow.ellipsis, style: t.textTheme.bodySmall),
                   ]),
                 ),
-                Builder(builder: (_) {
-                  final st = saleStatusOf(s);
-                  // only unusual states carry a pill (2026-11-18)
-                  if (st == 'paid') return const SizedBox.shrink();
-                  return Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(borderRadius: BorderRadius.circular(99), color: pill(st).withValues(alpha: .14)),
-                    child: Text(switch (st) { 'owing' => 'Owing', 'refunded' => 'Refunded', _ => 'Paid' }, style: TextStyle(color: pill(st), fontSize: 11.5, fontWeight: FontWeight.w700)),
-                  );
-                }),
-                const SizedBox(width: 8),
-                Text(widget.money(s.total), style: const TextStyle(fontWeight: FontWeight.w700)),
+                const SizedBox(width: 12),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(minWidth: 88),
+                  child: Text(widget.money(s.total), key: const Key('bento-amount'), textAlign: TextAlign.right, maxLines: 1, style: const TextStyle(fontWeight: FontWeight.w700, fontFeatures: [FontFeature.tabularFigures()])),
+                ),
               ]),
             ),
         ]),

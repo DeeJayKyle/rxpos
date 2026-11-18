@@ -33,6 +33,7 @@ const SUITES = [
   ['idle promote (unit)', 'unit-promote.mjs', []],
   ['offline sign-in (unit)', 'unit-offline.mjs', []],
   ['money math (unit)', 'unit-money.mjs', []],
+  ['delivery check by scan (unit)', 'unit-deliverycheck.mjs', []],
   ['CSV export never a formula (unit)', 'unit-csv.mjs', []],
   ['server write policy (unit)', 'unit-policy.mjs', []],
   ['2026-11 audit fixes, against the real cloud code (unit)', 'unit-audit-2026-11.mjs', []],
@@ -65,6 +66,8 @@ const SUITES = [
   ['balances as dated entries, brought forward (unit)', 'unit-balances.mjs', []],
   ['the history window keep rule, shared with the Flutter app (unit)', 'unit-historywindow.mjs', []],
   ['theme choice (unit)', 'unit-theme.mjs', []],
+  ['what\'s new, the same in both apps (unit)', 'unit-whatsnew.mjs', []],
+  ['report summary sentences (unit)', 'unit-report-summary.mjs', []],
   ['theme contrast', 'contrast-test.mjs', []],
   ['owner sign-in', 'owner-auth-test.mjs', []],
   ['cloud rules', 'v14-api.mjs', []],
@@ -150,6 +153,11 @@ const SUITES = [
   ['purchase orders: review, quantities, mark as sent', 'v80-po-flow.mjs', ['.output/v80']],
   ['web sign-in: browser or app, download links', 'v81-app-downloads.mjs', ['.output/v81']],
   ['kits: build, sell, swap, label, refund', 'v82-kits.mjs', ['.output/v82']],
+  ['tables and lists (UI batch 3, C)', 'v83-tables.mjs', ['.output/v83']],
+  ['forms and dialogs (UI batch 3, D)', 'v84-forms.mjs', ['.output/v84']],
+  ['look and readability (UI batch 3, E)', 'v85-look.mjs', ['.output/v85-look']],
+  ['pages (UI batch 3, F)', 'v85-pages.mjs', ['.output/v85']],
+  ['buying stock (UI batch 3, G)', 'v86-buying.mjs', ['.output/v86']],
   // every page on a PC and a phone, for design review: only on request (`npm test -- shots-all`)
   ...(process.argv[2] === 'shots-all' ? [['every page, PC and phone screenshots', 'shots-all.mjs', ['.output/all']]] : []),
   // every theme on the dashboard and Sales History, for the owner's review: only on request (`npm test -- shots-themes`)

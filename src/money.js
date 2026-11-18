@@ -70,3 +70,15 @@ export function formatMoney(n, { currency = '', decimals = 0, locale } = {}) {
   const grouped = formatterFor(locale || 'en-UG', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(Number(n) || 0);
   return `${currency} ${grouped}`.trim();
 }
+
+/** A long amount said short for a figure card (UI batch 3, B6): UGX 1.2M, UGX 350K, UGX 2.5B. Below 100,000 the
+ * amount is shown in full (formatMoney). The full amount stays in the card's tooltip and for screen readers. */
+export function shortMoney(n, { currency = '', decimals = 0, locale } = {}) {
+  const v = Number(n) || 0, a = Math.abs(v);
+  if (a < 100000) return formatMoney(v, { currency, decimals, locale });
+  const [d, s] = a >= 1e9 ? [1e9, 'B'] : a >= 1e6 ? [1e6, 'M'] : [1e3, 'K'];
+  const x = a / d;
+  // one decimal while it says something (1.2M), none once the number is long (350K, 12M)
+  const txt = (x >= 100 ? Math.round(x) : Math.round(x * 10) / 10).toString().replace(/\.0$/, '');
+  return `${currency} ${v < 0 ? '−' : ''}${txt}${s}`.trim();
+}

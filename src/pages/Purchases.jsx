@@ -11,7 +11,10 @@ import { isWeb } from '../platform.js';
 import { useStore, useSyncState, uid, today, now, put, del, move, addBatch, audit, downloadFile, toCSV, markupPrice, daysUntil, supplierPrices, MAIN_BRANCH } from '../store.jsx';
 import { CASH } from '../finance.js';
 import { round } from '../money.js';
-import { Modal, PdfButton, Empty, PageTip, usePages, Pager, useSort, SortTh, SubViews } from '../ui.jsx';
+import { Modal, PdfButton, Empty, PageTip, useSort, SortTh, SubViews, WhoChanged } from '../ui.jsx';
+import { useLoadMore, useColumns, useWide } from '../tablekit.jsx';
+import { DateRange } from '../forms.jsx';
+import { useListControls } from '../listcontrols.jsx';
 import { ask, toast } from '../feedback.jsx';
 import { newInternalBarcode } from '../barcode.jsx';
 import { invoicePages, readInvoice, matchProduct, matchSupplier, normDate, pageBlob } from '../invoiceScan.js';
@@ -22,6 +25,8 @@ import AiVisionScanner from '../components/AiVisionScanner.jsx';
 import { deliveryDraft, draftsFor, isOld, toCheck, checkText } from '../drafts.js';
 import DraftsList, { useDraftCount } from './Drafts.jsx';
 import { Link, useNavigate } from 'react-router-dom';
+import InvoiceView from '../components/InvoiceView.jsx';
+import { emptyCheck, scanInto, checkSummary } from '../deliverycheck.js';
 
 const NEW = '__new__'; // a line for a medicine that is not in the list yet
 const FORMS = ['Tablets', 'Capsules', 'Syrups', 'Suspensions', 'Injectables', 'Creams', 'Ointments', 'Drops', 'Sachets', 'Devices', 'Surgicals', 'Others'];
@@ -110,7 +115,9 @@ export function AddStock() {
       const p = matchProduct(it.name, products);
       const qty = it.qty || 1;
       const read = { name: it.name, unclear: !!it.unclear, matched: !!p, ...(it.check?.length ? { check: it.check } : {}), ...(it.alt ? { alt: it.alt } : {}), ...(it.why ? { why: it.why } : {}), ...(it.note ? { note: it.note } : {}), ...(it.page ? { page: it.page } : {}) };
-      const base = { qty, batch: it.batch || '', expiry: normDate(it.expiry), read };
+      // G1: where the line was on the invoice, when the reading gave it (page and x, y, w, h as fractions of the page)
+      const box = it.box && [it.box.x, it.box.y, it.box.w, it.box.h].every((v) => Number.isFinite(v) && v >= 0 && v <= 1) ? { page: Number(it.box.page) || 0, x: it.box.x, y: it.box.y, w: it.box.w, h: it.box.h } : undefined;
+      const base = { qty, batch: it.batch || '', expiry: normDate(it.expiry), read, ...(box ? { box } : {}) };
       const cost = it.unitCost || (it.lineTotal && qty ? it.lineTotal / qty : 0);
       // packs or single units? whichever makes the invoice's price nearest the medicine's known cost per unit
       const size = p && cost > 0 && p.cost > 0 ? [1, ...packsOf(p).map((k) => Number(k.size))].reduce((b, z) => (Math.abs(Math.log(cost / z / p.cost)) < Math.abs(Math.log(cost / b / p.cost)) ? z : b), 1) : 0;
@@ -201,12 +208,14 @@ export function AddStock() {
     if (pendingDraft.current && !form.lines.some((l) => l.productId)) return; // still waiting for the medicines: keep the draft
     const t = setTimeout(() => {
       try {
-        if (form.lines.some((l) => l.productId)) localStorage.setItem(draftKey, JSON.stringify(form));
-        else localStorage.removeItem(draftKey);
+        if (form.lines.some((l) => l.productId)) { localStorage.setItem(draftKey, JSON.stringify(form)); setDraftAt(new Date()); }
+        else { localStorage.removeItem(draftKey); setDraftAt(null); }
       } catch { /* storage full or blocked: the panel still works */ }
     }, 300);
     return () => clearTimeout(t);
   }, [form, draftKey]);
+  // D2: "Draft saved 10:42" under the title, each time the delivery is kept on this device
+  const [draftAt, setDraftAt] = useState(null);
   const [restored, setRestored] = useState(restoredDraft.current);
   const [q, setQ] = useState('');
   const [saved, setSaved] = useState(null);
@@ -224,6 +233,13 @@ export function AddStock() {
   // Enter in a line goes on to the next line, and on the last one adds a new line: it never receives the delivery
   const tableRef = useRef(null);
   const [focusLine, setFocusLine] = useState(null);
+  const [activeLine, setActiveLine] = useState(null); // G1: the line being edited, outlined on the invoice
+  // G2: an order checked by scanning each pack ({ counts, extra }, null until started) and the last scan's message
+  const [dcheck, setDcheck] = useState(null);
+  const [dmsg, setDmsg] = useState('');
+  const dScan = (code) => { const r = scanInto(dcheck || emptyCheck(), form.lines, products, code); setDcheck(r.state); setDmsg(r.text); if (r.line) setActiveLine(r.line.key); };
+  const wide = useWide(1280);
+  const split = wide && scanned?.pages?.length > 0;
   useEffect(() => {
     if (!focusLine) return;
     tableRef.current?.querySelector(`tr[data-line="${focusLine}"] .med-pick input, tr[data-line="${focusLine}"] .new-med input`)?.focus();
@@ -349,6 +365,12 @@ export function AddStock() {
     const lines = form.lines.filter((l) => l.productId && Number(l.qty) > 0);
     if (!lines.length) return toast('Add at least one medicine', 'warn');
     if (form.lines.some((l) => l.productId && !(Number(l.qty) > 0))) return toast('Every line needs a quantity above 0 (or remove the line)', 'warn');
+    // G2: a delivery checked by scan: what is missing or extra is said before anything is received
+    if (dcheck) {
+      const sum = checkSummary(dcheck, form.lines, (l) => products.find((p) => p.id === l.productId)?.name || l.name || 'A medicine');
+      const effects = [...sum.missing.map((x) => `${x.name}: ${x.got} of ${x.want} scanned`), ...sum.over.map((x) => `${x.name}: ${x.got} scanned, ${x.want} on the order`), ...sum.extra.map((x) => `Extra: ${x.name || x.code}`)];
+      if (effects.length && !(await ask({ title: 'Not everything matches the scan', message: 'Receive the quantities on the lines as they are? You can still change them first.', effects, confirmText: 'Receive stock' }))) return;
+    }
     // new medicines: a name that isn't already in the list (the same new name on two lines is one medicine)
     const freshIds = new Map();
     for (const l of lines.filter((x) => x.productId === NEW)) {
@@ -431,7 +453,7 @@ export function AddStock() {
 
   return (
     <div className="page">
-      <div className="page-head"><h1>Add Stock</h1><div className="row gap wrap">
+      <div className="page-head"><div><h1>Add Stock</h1>{draftAt && <div className="sub draft-saved" role="status" title="This delivery is kept on this device while you work; Save as draft keeps it for other devices too">Draft saved {draftAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>}</div><div className="row gap wrap">
         <button type="button" className="btn primary" onClick={() => setAiScan(true)}><Sparkles size={16} />Scan Invoice with AI</button>
         <button type="button" className="btn ghost" onClick={() => setScanOpen(true)}><ScanText size={16} />Scan invoice</button>
       </div></div>
@@ -443,6 +465,23 @@ export function AddStock() {
         addNew('', code); setCam(false);
         return 'New barcode: type the medicine name';
       }} />}
+      {form.poId && (
+        // G2: receiving an order: scan each pack; its line ticks and counts up, anything not on the order is listed
+        <div className="card dcheck">
+          <div className="row between gap wrap">
+            <strong><ScanText size={15} /> Check the delivery by scan</strong>
+            {!dcheck ? <button type="button" className="btn sm ghost" onClick={() => { setDcheck(emptyCheck()); setDmsg('Scan each pack (or type its barcode and press Enter)'); }}>Start checking</button>
+              : <button type="button" className="link-btn small" onClick={() => { setDcheck(null); setDmsg(''); }}>Stop checking</button>}
+          </div>
+          {dcheck && <>
+            <input className="dcheck-input" aria-label="Scan a pack" placeholder="Scan a pack…" autoFocus onKeyDown={(e) => { if (e.key === 'Enter' && e.currentTarget.value.trim()) { e.preventDefault(); dScan(e.currentTarget.value); e.currentTarget.value = ''; } }} />
+            {dmsg && <div className="small" role="status">{dmsg}</div>}
+            {(() => { const sum = checkSummary(dcheck, form.lines, (l) => products.find((p) => p.id === l.productId)?.name || l.name); return (sum.missing.length > 0 || sum.extra.length > 0) && (
+              <div className="small muted dcheck-left">{sum.missing.length > 0 && <>Still to scan: {sum.missing.map((x) => `${x.name} (${x.want - x.got})`).join(', ')}. </>}{sum.extra.length > 0 && <span className="text-warn">Extra: {sum.extra.map((x) => x.name || x.code).join(', ')}</span>}</div>
+            ); })()}
+          </>}
+        </div>
+      )}
       {form.draftId && <div className="notice info-notice">Continuing a saved draft. Receiving it removes it from Drafts; "Save as draft" keeps your changes in it.</div>}
       {myDrafts.length > 0 && <div className="notice info-notice row gap wrap">You have {myDrafts.length} saved deliver{myDrafts.length === 1 ? 'y' : 'ies'}{myDrafts.some((x) => isOld(x)) ? ', one waiting over a day' : ''}.<Link to="/purchases" state={{ tab: 'drafts' }}>Open drafts</Link></div>}
       <PageTip id="add-stock" title="Receiving a delivery">Search or scan each medicine (not in the list? type its name and choose “Add as a new medicine”). Type the line total from the invoice: the unit cost is worked out from it. The retail price changes only when you type a new one (tap “Use” for cost + markup). Scan invoice reads a photo for you.</PageTip>
@@ -493,7 +532,10 @@ export function AddStock() {
         </div>
       )}
       {saved && <div className="notice">Received {saved.items.length} item(s) worth {fmt(saved.total)} from {saved.supplierName}{saved.items.some((i) => i.added) ? ` (${saved.items.filter((i) => i.added).length} new medicine${saved.items.filter((i) => i.added).length > 1 ? 's' : ''} added to the list)` : ''}. {saved.paid < saved.total && `${fmt(saved.total - saved.paid)} added to creditors.`}</div>}
-      <form className="card invoice-sheet" onSubmit={save}>
+      {/* G1: the invoice beside the form on a wide screen, the line being edited outlined on it */}
+      <div className={'addstock-split' + (split ? ' on' : '')}>
+      {split && <InvoiceView pages={scanned.pages} active={form.lines.find((l) => l.key === activeLine)} />}
+      <form className="card invoice-sheet" onSubmit={save} onFocus={(e) => { const k = e.target.closest?.('tr[data-line]')?.dataset.line; if (k) setActiveLine(k); }}>
         <div className="invoice-head">
           <div className="invoice-from">
           <label className="field"><span className="invoice-caption">Supplier</span>
@@ -607,7 +649,7 @@ export function AddStock() {
                         {p?.price > 0 && String(l.price) !== String(p.price) && <button type="button" className="link-btn small" title="Back to today's price" onClick={() => setLine(l.key, { price: '' })}><RotateCcw size={10} /> undo</button>}
                         {/* the owner's choice: the price is only what the person types; cost + markup is offered, not applied */}
                         {cost > 0 && priceFor(cost) !== price && <button type="button" className="link-btn small" title={`Cost + ${form.markup || 0}% markup`} onClick={() => setLine(l.key, { price: String(priceFor(cost)) })}>Use {fmt(priceFor(cost))}</button>}
-                        {markup !== null && <span className={markup < 0 ? 'text-danger' : 'muted'}> {markup < 0 ? 'below cost' : `margin ${markup}%`}</span>}
+                        {markup !== null && <span className={markup < 0 ? 'field-error inline' : 'muted'} role={markup < 0 ? 'alert' : undefined}> {markup < 0 ? 'below the cost' : `margin ${markup}%`}</span>}
                         {p && price !== p.price && p.price > 0 && <span className="muted"> · was {fmt(p.price)}</span>}
                       </small>
                     </td>
@@ -616,12 +658,15 @@ export function AddStock() {
                     <td key="batch" data-label="Batch"><input value={l.batch} placeholder="Batch no." onChange={(e) => replaceLine(l.key, { ...l, batch: e.target.value })} aria-label="Batch number" /></td>
                     ),
                     expiry: (
-                    <td key="expiry" data-label="Expiry"><DateInput value={l.expiry} min={today()} monthYear onChange={(v) => replaceLine(l.key, { ...l, expiry: v })} aria-label="Expiry date" /></td>
+                    <td key="expiry" data-label="Expiry" className={l.expiry && daysUntil(l.expiry) < 0 ? 'has-error' : ''}><DateInput value={l.expiry} min={today()} monthYear onChange={(v) => replaceLine(l.key, { ...l, expiry: v })} aria-label="Expiry date" />
+                      {/* D1: said at once, not only when receiving */}
+                      {l.expiry && daysUntil(l.expiry) < 0 && <small className="field-error" role="alert">This date has passed</small>}</td>
                     ),
                   };
                   return (
                   <tr key={l.key} data-line={l.key} className={'hued' + (l.productId === NEW ? ' new-line' : '')} style={lineStyle(l, lineIndex)}>
-                    <td className="line-no" aria-hidden="true"><span className="line-badge">{lineIndex + 1}</span></td>
+                    <td className="line-no" aria-hidden="true"><span className="line-badge">{lineIndex + 1}</span>
+                      {dcheck && l.productId && <span className={'dcheck-count' + ((dcheck.counts[l.productId] || 0) >= Number(l.qty) ? ' done' : '')} data-testid="dcheck-count">{(dcheck.counts[l.productId] || 0) >= Number(l.qty) ? '✓ ' : ''}{dcheck.counts[l.productId] || 0}/{Number(l.qty) || 0}</span>}</td>
                     {cols.map((c) => cloneElement(cells[c], { className: `${cells[c].props.className || ''} col-${c}`.trim(), style: { '--col': COL_HUES[c] } }))}
                     <td key="x" className="line-x"><button type="button" className="icon-btn" title="Remove line" aria-label="Remove line" onClick={() => setForm((f) => ({ ...f, lines: f.lines.length > 1 ? f.lines.filter((x) => x.key !== l.key) : [blankLine()] }))}><X size={15} /></button></td>
                   </tr>
@@ -667,6 +712,7 @@ export function AddStock() {
           <button className="btn primary" disabled={(!!scanned && !checked) || receiving}>{receiving ? <><Loader2 size={16} className="spin" />Receiving…</> : 'Receive stock'}</button>
         </div>
       </form>
+      </div>
     </div>
   );
 }
@@ -685,15 +731,20 @@ export default function Purchases() {
   const rows = db.purchases.filter((p) => (!q || [p.supplierName, p.invoice, p.number, p.notes, p.receivedBy].join(' ').toLowerCase().includes(q.toLowerCase()))
     && (!pf.from || p.date >= pf.from) && (!pf.to || p.date <= pf.to) && (!pf.supplier || p.supplierName === pf.supplier));
   const sorted = useSort(rows, { date: (p) => p.date + (p.number || ''), number: (p) => p.number || '', supplier: (p) => p.supplierName || '', invoice: (p) => p.invoice || '', total: (p) => p.total, by: (p) => p.receivedBy || '' }, 'date');
-  const page = usePages(sorted.rows, 25);
+  // UI batch 3: 100 rows then more (C7), columns (C2), arrow keys / Enter (C6)
+  const page = useLoadMore(sorted.rows, { resetKey: [q, pf.from, pf.to, pf.supplier, sorted.by, sorted.dir].join('|') });
   const histRef = useRef(null);
+  const searchRef = useRef(null);
+  const lc = useListControls({ rows: page.rows, onOpen: (p) => setView(p), onEdit: can('purchases.edit') ? (p) => !p.imported && setEditing(p) : null, searchRef, onClearSearch: () => setQ(''), enabled: tab === 'history' });
+  const colsK = useColumns('purchases', [{ id: 'date', label: 'Date', fixed: true }, { id: 'number', label: 'GRN' }, { id: 'supplier', label: 'Supplier' }, { id: 'pay', label: 'Payment type' }, { id: 'invoice', label: 'Invoice' }, { id: 'items', label: 'Items' }, { id: 'by', label: 'Received by' }, { id: 'notes', label: 'Notes' }, { id: 'total', label: 'Total' }, { id: 'unpaid', label: 'Unpaid' }]);
   return (
     <div className="page">
       <div className="page-head">
         <h1>Purchase History</h1>
         <div className="row gap">
           <PdfButton target={histRef} title="Purchase history" subtitle={`${rows.length} deliveries · ${fmt(rows.reduce((a, p) => a + (p.total || 0), 0))}`} />
-          <input className="search" placeholder="Search…" value={q} onChange={(e) => setQ(e.target.value)} />
+          <input className="search" placeholder="Search…" value={q} ref={searchRef} onChange={(e) => setQ(e.target.value)} />
+          {tab === 'history' && colsK.button}
           <button className="btn ghost" onClick={() => downloadFile('purchases.csv', toCSV(rows.map((p) => ({ date: p.date, number: p.number, supplier: p.supplierName, invoice: p.invoice, paymentType: payType(p), items: p.items.length, total: p.total, paid: p.paid ?? p.total, receivedBy: p.receivedBy, notes: p.notes || '' }))), 'text/csv')}>Export CSV</button>
         </div>
       </div>
@@ -701,31 +752,36 @@ export default function Purchases() {
       {tab === 'drafts' && <DraftsList kind="delivery" />}
       {tab === 'prices' && <SupplierPrices q={q} />}
       {tab === 'history' && <div className="report-filters">
-        <label>From<input type="date" value={pf.from} onChange={(e) => setPf({ ...pf, from: e.target.value })} /></label>
-        <label>To<input type="date" value={pf.to} onChange={(e) => setPf({ ...pf, to: e.target.value })} /></label>
+        <DateRange from={pf.from} to={pf.to} onChange={(r) => setPf({ ...pf, ...r })} />
         <label>Supplier<select value={pf.supplier} onChange={(e) => setPf({ ...pf, supplier: e.target.value })}><option value="">All</option>{suppliers.map((x) => <option key={x}>{x}</option>)}</select></label>
       </div>}
       {tab === 'history' && <div className="card table-wrap" ref={histRef}>
         <table>
-          <thead><tr><SortTh s={sorted} k="date">Date</SortTh><SortTh s={sorted} k="number">GRN</SortTh><SortTh s={sorted} k="supplier">Supplier</SortTh><th>Payment type</th><SortTh s={sorted} k="invoice">Invoice</SortTh><th>Items</th><SortTh s={sorted} k="by">Received by</SortTh><th>Notes</th><SortTh s={sorted} k="total" className="num">Total</SortTh><th className="num">Unpaid</th><th /></tr></thead>
+          <thead><tr>{colsK.shown.map((id) => ({ date: <SortTh key={id} s={sorted} k="date">Date</SortTh>, number: <SortTh key={id} s={sorted} k="number">GRN</SortTh>, supplier: <SortTh key={id} s={sorted} k="supplier">Supplier</SortTh>, pay: <th key={id}>Payment type</th>,
+            invoice: <SortTh key={id} s={sorted} k="invoice">Invoice</SortTh>, items: <th key={id}>Items</th>, by: <SortTh key={id} s={sorted} k="by">Received by</SortTh>, notes: <th key={id}>Notes</th>, total: <SortTh key={id} s={sorted} k="total" className="num">Total</SortTh>, unpaid: <th key={id} className="num">Unpaid</th> }[id]))}<th /></tr></thead>
           <tbody>
-            {page.rows.map((p) => (
-              <tr key={p.id}>
-                <td>{p.date}</td><td>{p.number}</td><td>{p.supplierName}</td><td>{payType(p)}</td><td>{p.invoice}</td><td>{p.items.length}</td><td>{p.receivedBy}</td>
-                <td className="muted notes-cell" title={p.notes || undefined}>{p.notes || '—'}</td>
-                <td className="num"><strong>{fmt(p.total)}</strong></td><td className="num">{p.total - (p.paid ?? p.total) > 0 ? <span className="text-warn">{fmt(p.total - p.paid)}</span> : '—'}</td>
-                <td className="actions"><div className="row-acts"><button className="btn sm ghost" onClick={() => setView(p)}>View</button>{can('purchases.edit') && !p.imported && <button className="btn sm ghost act-edit" onClick={() => setEditing(p)}><Pencil size={14} />Edit</button>}</div>{p.editedAt && <small className="muted">edited</small>}</td>
+            {page.rows.map((p, i) => { const c = {
+              date: <td key="date">{p.date}</td>, number: <td key="number">{p.number}</td>, supplier: <td key="supplier">{p.supplierName}</td>, pay: <td key="pay">{payType(p)}</td>, invoice: <td key="invoice">{p.invoice}</td>, items: <td key="items">{p.items.length}</td>, by: <td key="by">{p.receivedBy}</td>,
+              notes: <td key="notes" className="muted notes-cell" title={p.notes || undefined}>{p.notes || '—'}</td>,
+              total: <td key="total" className="num"><strong>{fmt(p.total)}</strong></td>, unpaid: <td key="unpaid" className="num">{p.total - (p.paid ?? p.total) > 0 ? <span className="text-warn">{fmt(p.total - p.paid)}</span> : '—'}</td>,
+            }; return (
+              <tr key={p.id} {...lc.rowProps(p, i)}>
+                {colsK.shown.map((id) => c[id])}
+                <td className="actions"><div className="row-acts"><button className="btn sm ghost" onClick={() => setView(p)}>View</button>{can('purchases.edit') && !p.imported && <button className="btn sm ghost act-edit" onClick={() => setEditing(p)}><Pencil size={14} />Edit</button>}</div></td>
               </tr>
-            ))}
-            {!rows.length && (db.purchases.length ? <Empty colSpan={11}>No deliveries match</Empty> : <Empty colSpan={11} action={{ label: 'Add stock', to: '/add-stock' }}>No deliveries yet. Each delivery you receive in Add Stock is kept here with its invoice, to view or correct.</Empty>)}
-            {rows.length > 0 && <tr className="total-row"><td colSpan={8}>Total · {rows.length.toLocaleString()} deliveries</td><td className="num">{fmt(rows.reduce((a, p) => a + (p.total || 0), 0))}</td><td className="num">{fmt(rows.reduce((a, p) => a + Math.max(0, p.total - (p.paid ?? p.total)), 0))}</td><td /></tr>}
+            ); })}
+            {!rows.length && (db.purchases.length ? <Empty colSpan={colsK.shown.length + 1}>No deliveries match. Try another supplier, invoice number or dates.</Empty> : <Empty colSpan={colsK.shown.length + 1} action={{ label: 'Add stock', to: '/add-stock' }}>No deliveries yet. Each delivery you receive in Add Stock is kept here with its invoice, to view, correct or pay.</Empty>)}
           </tbody>
+          {rows.length > 0 && <tfoot><tr className="total-row">{colsK.shown.map((id, k) => (id === 'total' ? <td key={id} className="num">{fmt(rows.reduce((a, p) => a + (p.total || 0), 0))}</td>
+            : id === 'unpaid' ? <td key={id} className="num">{fmt(rows.reduce((a, p) => a + Math.max(0, (p.total || 0) - (p.paid ?? p.total)), 0))}</td>
+              : <td key={id}>{k === 0 ? `Total · ${rows.length.toLocaleString()} deliveries` : ''}</td>))}<td /></tr></tfoot>}
         </table>
-        <Pager p={page} />
+        {page.footer}
       </div>}
       {editing && <PurchaseEditor purchase={editing} onClose={() => setEditing(null)} />}
       {view && (
         <Modal title={`Purchase ${view.number || ''}`} onClose={() => setView(null)} wide>
+          <WhoChanged keyText={view.number} />
           <p className="muted">{view.supplierName} · invoice {view.invoice || '—'} · {view.date} · {payType(view)}</p>
           {view.notes && <p><strong>Notes:</strong> {view.notes}</p>}
           <table>

@@ -5,7 +5,7 @@ import { Tabs, Empty, Modal } from '../ui.jsx';
 import { toast, ask } from '../feedback.jsx';
 import { sendSms, whatsappLink, cloudConfig } from '../cloud.js';
 import { CallMenu, startCall } from '../calls.jsx';
-import { liveUp } from '../live.js';
+import { liveUp, liveSend, onLive } from '../live.js';
 import { uploadAttachment, Attachment, VoiceRecorder, ATTACH_ACCEPT } from '../attach.jsx';
 
 const READ_KEY = 'rxpos-chat-read';
@@ -48,6 +48,15 @@ export default function Chat() {
   const [tab, setTab] = useState('team');
   const [conv, setConv] = useState('team');
   const [text, setText] = useState('');
+  // F7 (UI batch 3): "Amina is typing…" over the live connection; nothing is stored. Sent at most every 3 s while typing,
+  // shown for 4 s after the last notice
+  const [typing, setTyping] = useState({}); // conv → { name: until }
+  const lastTyped = useRef(0);
+  useEffect(() => onLive((m) => {
+    if (m.type !== 'typing' || !m.conv) return;
+    setTyping((t) => ({ ...t, [m.conv]: { ...(t[m.conv] || {}), [m.from_name || 'Someone']: Date.now() + 4000 } }));
+    setTimeout(() => setTyping((t) => ({ ...t })), 4100);
+  }), []);
   const [q, setQ] = useState('');
   const [smsReady, setSmsReady] = useState(false);
   const [read, setRead] = useState(getRead);
@@ -108,6 +117,8 @@ export default function Chat() {
   const seenBy = (m) => readers.filter((r) => r.at >= m.date);
   const lastOf = (c) => db.messages.filter((m) => m.conv === c).reduce((a, m) => (!a || m.date > a.date ? m : a), null);
 
+  const typingNow = Object.entries(typing[conv] || {}).filter(([, until]) => until > Date.now()).map(([n]) => n.split(' ')[0]);
+  const sayTyping = () => { if (conv.startsWith('client:') || Date.now() - lastTyped.current < 3000) return; lastTyped.current = Date.now(); liveSend({ type: 'typing', conv }); };
   const log = (msg, c = conv) => { const r = { id: uid(), date: now(), fromId: user.id, fromName: user.name, conv: c, branchId, ...msg }; update((d) => { put(d, 'messages', r); }); setTimeout(syncNow, 300); return r; };
   const quote = (m) => (m ? { id: m.id, fromName: m.fromId === user.id ? 'You' : m.fromName, text: messagePreview(m).slice(0, 140) } : undefined);
   const sendTeam = (e) => {
@@ -229,7 +240,7 @@ export default function Chat() {
           <div className="chat-head">
             <button className="icon-btn chat-back" aria-label="Back to chats" onClick={() => setOpened(false)}><ChevronLeft size={20} /></button>
             {client ? <UsersIcon size={18} /> : conv === 'team' ? <span className="chat-avatar group sm"><Hash size={14} /></span> : avatar(title, true)}
-            <div className="grow chat-title"><strong>{title}</strong><small className="muted">{subtitle}</small></div>
+            <div className="grow chat-title"><strong>{title}</strong><small className="muted" aria-live="polite">{typingNow.length ? <span className="typing-now" data-testid="typing">{typingNow.join(', ')} {typingNow.length === 1 ? 'is' : 'are'} typing…</span> : subtitle}</small></div>
             {!client && <button className={'icon-btn' + (find !== null ? ' on' : '')} title="Search this chat" onClick={() => setFind(find === null ? '' : null)}><Search size={17} /></button>}
             <button className={'icon-btn' + (starredOnly ? ' on' : '')} title="Starred messages" onClick={() => setStarredOnly((v) => !v)}><Star size={17} /></button>
             {client && <CallMenu person={client} />}
@@ -311,7 +322,7 @@ export default function Chat() {
                   {!editing && <label className="icon-btn" title="Attach a photo, PDF, video, audio or spreadsheet (up to 15 MB)"><Paperclip size={18} />
                     <input type="file" hidden multiple accept={ATTACH_ACCEPT} onChange={(e) => { const fs = [...e.target.files]; e.target.value = ''; if (fs.length) sendFiles(fs); }} /></label>}
                   <textarea ref={inputRef} rows={1} className="grow chat-input" placeholder={editing ? 'Edit your message' : peer ? `Message ${peer.name.split(' ')[0]}` : 'Message the team'} value={text}
-                    onChange={(e) => { setText(e.target.value); e.target.style.height = 'auto'; e.target.style.height = Math.min(140, e.target.scrollHeight) + 'px'; }}
+                    onChange={(e) => { setText(e.target.value); sayTyping(); e.target.style.height = 'auto'; e.target.style.height = Math.min(140, e.target.scrollHeight) + 'px'; }}
                     onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendTeam(e); } if (e.key === 'Escape') { setReplyTo(null); if (editing) { setEditing(null); setText(''); } } }}
                     onPaste={(e) => { const fs = [...(e.clipboardData?.files || [])]; if (fs.length && !editing) { e.preventDefault(); sendFiles(fs); } }} />
                   {text.trim() || editing ? <button className="btn primary send-btn" aria-label={editing ? 'Save' : 'Send'}>{editing ? <Check size={17} /> : <Send size={17} />}</button>

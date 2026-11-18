@@ -1,4 +1,7 @@
+import { DateRange } from '../forms.jsx';
 import { useMemo, useState } from 'react';
+import { useLocation } from 'react-router-dom';
+import { auditSentence, auditKind, AUDIT_KINDS } from '../auditText.js';
 import { Download, ShieldCheck } from 'lucide-react';
 import { useStore, dayOf, downloadFile, toCSV, MAIN_BRANCH } from '../store.jsx';
 import { SearchBox, Empty, useProgressive } from '../ui.jsx';
@@ -6,15 +9,18 @@ import { SearchBox, Empty, useProgressive } from '../ui.jsx';
 /** Who did what, when and where. Entries sync from every device and cannot be edited in the app. */
 export default function Audit() {
   const { db } = useStore();
-  const [q, setQ] = useState('');
+  const location = useLocation();
+  const [q, setQ] = useState(location.state?.q || ''); // F5: "Edited by …" on a record opens its entries
+  const [kind, setKind] = useState('');
   const [who, setWho] = useState('');
   const [action, setAction] = useState('');
   const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
   const users = useMemo(() => [...new Set(db.audit.map((a) => a.user).filter(Boolean))].sort(), [db.audit]);
   const actions = useMemo(() => [...new Set(db.audit.map((a) => a.action))].sort(), [db.audit]);
   const branch = (id) => db.branches.find((b) => b.id === (id || MAIN_BRANCH))?.name || '';
   const ql = q.toLowerCase();
-  const rows = db.audit.filter((a) => (!who || a.user === who) && (!action || a.action === action) && (!from || dayOf(a.date) >= from) &&
+  const rows = db.audit.filter((a) => (!who || a.user === who) && (!action || a.action === action) && (!kind || auditKind(a) === kind) && (!from || dayOf(a.date) >= from) && (!to || dayOf(a.date) <= to) &&
     (!q || `${a.user} ${a.action} ${a.details}`.toLowerCase().includes(ql)));
   const drawn = useProgressive(Math.min(rows.length, 1000));
 
@@ -25,25 +31,32 @@ export default function Audit() {
         <div className="row gap">
           <select value={who} onChange={(e) => setWho(e.target.value)}><option value="">Everyone</option>{users.map((u) => <option key={u}>{u}</option>)}</select>
           <select value={action} onChange={(e) => setAction(e.target.value)}><option value="">All actions</option>{actions.map((a) => <option key={a}>{a}</option>)}</select>
-          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} title="From date" />
+          <DateRange from={from} to={to} onChange={(r) => { setFrom(r.from); setTo(r.to); }} />
           <SearchBox value={q} onChange={setQ} />
           <button className="btn ghost" onClick={() => downloadFile('audit-log.csv', toCSV(rows.map(({ date, user, action, details, branchId }) => ({ date, user, action, details, branch: branch(branchId) }))), 'text/csv')}><Download size={16} />CSV</button>
         </div>
       </div>
-      <div className="card table-wrap">
-        <table>
-          <thead><tr><th>When</th><th>Who</th><th>Action</th><th>Details</th>{db.branches.length > 1 && <th>Branch</th>}</tr></thead>
-          <tbody>
-            {rows.slice(0, drawn).map((a) => (
-              <tr key={a.id}>
-                <td className="nowrap">{new Date(a.date).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</td>
-                <td>{a.user}</td><td><span className="badge">{a.action}</span></td><td>{a.details}</td>
-                {db.branches.length > 1 && <td>{branch(a.branchId)}</td>}
-              </tr>
-            ))}
-            {!rows.length && <Empty colSpan={5}>No activity recorded yet</Empty>}
-          </tbody>
-        </table>
+      {/* F6: chips by person and by kind of action; each entry as a sentence */}
+      <div className="list-filters audit-chips">
+        <div className="chips-row" role="group" aria-label="Person">
+          <button type="button" className={'chip' + (!who ? ' active' : '')} onClick={() => setWho('')}>Everyone</button>
+          {users.slice(0, 8).map((u) => <button key={u} type="button" className={'chip' + (who === u ? ' active' : '')} aria-pressed={who === u} onClick={() => setWho(who === u ? '' : u)}>{u}</button>)}
+        </div>
+        <div className="chips-row" role="group" aria-label="Kind of action">
+          <button type="button" className={'chip' + (!kind ? ' active' : '')} onClick={() => setKind('')}>Everything</button>
+          {AUDIT_KINDS.map(([k, l]) => <button key={k} type="button" className={'chip' + (kind === k ? ' active' : '')} aria-pressed={kind === k} onClick={() => setKind(kind === k ? '' : k)}>{l}</button>)}
+        </div>
+      </div>
+      <div className="card audit-list">
+        <ul>
+          {rows.slice(0, drawn).map((a) => (
+            <li key={a.id} className={'audit-row kind-' + auditKind(a)}>
+              <span className="audit-sentence">{auditSentence(a)}</span>
+              <small className="muted"><span className="badge">{a.action}</span> {new Date(a.date).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}{db.branches.length > 1 && branch(a.branchId) ? ' · ' + branch(a.branchId) : ''}</small>
+            </li>
+          ))}
+        </ul>
+        {!rows.length && <Empty>Nothing recorded yet. Sign-ins, refunds, price changes and other changes are listed here as they happen.</Empty>}
       </div>
     </div>
   );

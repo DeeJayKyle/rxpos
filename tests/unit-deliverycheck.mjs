@@ -1,0 +1,22 @@
+// G2: checking a delivery by scanning each pack (src/deliverycheck.js)
+import { emptyCheck, scanInto, checkSummary, productForCode } from '../src/deliverycheck.js';
+let pass = 0, fail = 0;
+const check = (n, ok, x = '') => { ok ? pass++ : fail++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${n}${x !== '' ? '  ' + x : ''}`); };
+const products = [{ id: 'a', name: 'Calmex 500mg', barcode: '7010001' }, { id: 'b', name: 'Zinco Syrup', barcode: '07012345678908' }, { id: 'c', name: 'Not ordered', barcode: '555' }];
+const lines = [{ key: '1', productId: 'a', qty: 2, name: 'Calmex 500mg' }, { key: '2', productId: 'b', qty: 1, name: 'Zinco Syrup' }];
+let s = emptyCheck(), r;
+r = scanInto(s, lines, products, '7010001'); s = r.state;
+check('a scanned pack counts up its line', s.counts.a === 1 && r.line.key === '1' && /1 of 2/.test(r.text), r.text);
+r = scanInto(s, lines, products, '7010001'); s = r.state;
+check('…and ticks it when all are in', /2 of 2 ✓/.test(r.text), r.text);
+check('a GS1 pack code finds its medicine by the GTIN in it', productForCode('(01)07012345678908(17)290131(10)Z1', products)?.id === 'b' && productForCode('0107012345678908172901311' + '0Z1', products)?.id === 'b');
+r = scanInto(s, lines, products, '555'); s = r.state;
+check('a medicine on no line is listed as extra', s.extra.length === 1 && s.extra[0].name === 'Not ordered' && !r.line, r.text);
+r = scanInto(s, lines, products, '999999'); s = r.state;
+check('…and so is an unknown code', s.extra.length === 2 && /not a medicine on this order/.test(r.text));
+const sum = checkSummary(s, lines);
+check('before receiving: what is missing and what is extra', sum.missing.length === 1 && sum.missing[0].name === 'Zinco Syrup' && sum.missing[0].got === 0 && sum.extra.length === 2 && sum.over.length === 0, JSON.stringify(sum));
+r = scanInto(s, lines, products, '7010001'); s = r.state;
+check('more than ordered is said', /more than ordered/.test(r.text) && checkSummary(s, lines).over[0]?.got === 3);
+console.log(`\n${pass} passed, ${fail} failed`);
+process.exit(fail ? 1 : 0);
