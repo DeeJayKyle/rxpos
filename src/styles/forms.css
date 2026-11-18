@@ -100,3 +100,4 @@
 }
 /* the till's "Promos / member discount" line is not the dashboard's "Promote today" row (which shares the class name) */
 .pos-cart .totals .promo-row { min-height: 0; padding: 0; border-bottom: 0; gap: 8px; }
+.med-thumb.initial::before { content: attr(data-initial); }
