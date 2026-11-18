@@ -79,7 +79,7 @@ check('no finding for a correct insured sale', !(await recs(tid, 'anomalies')).s
 
 // the insurer's share is not Grace's debt
 await go('#/debtors');
-check('Grace owes nothing (Debtors)', !/Grace Achieng/.test(await body()) && /No outstanding balances/.test(await body()));
+check('Grace owes nothing (Debtors)', !/Grace Achieng/.test(await body()) && /Nobody owes the pharmacy money\./.test(await body()));
 
 // Insurers: Jubilee owes 1,500; its payment clears it and goes into the cash book as money in
 await go('#/insurers');
