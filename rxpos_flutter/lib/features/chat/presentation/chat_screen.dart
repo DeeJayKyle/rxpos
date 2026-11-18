@@ -31,6 +31,7 @@ import '../../sync_status/application/sync_controller.dart';
 import '../domain/chat.dart' as chat;
 import '../../calls/application/call_controller.dart';
 import '../../calls/presentation/call_menu.dart';
+import '../../../core/live/live_connection.dart' show liveProvider;
 
 const _attachTypes = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'pdf', 'mp4', 'mov', 'webm', 'mp3', 'm4a', 'ogg', 'wav', 'csv', 'xls', 'xlsx', 'ods', 'doc', 'docx', 'ppt', 'pptx'];
 
@@ -83,11 +84,35 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       final at = _scroll.offset < 80;
       if (at != _atBottom) setState(() => _atBottom = at);
     });
-    _text.addListener(() => setState(() {}));
+    _text.addListener(() {
+      setState(() {});
+      _sayTyping();
+    });
+    // F7 (UI batch 3): "Amina is typing…" from the live connection, shown for 4 s after the last notice
+    _typingSub = ref.read(liveProvider.notifier).typingMessages.listen((m) {
+      final conv = '${m['conv'] ?? ''}', name = '${m['from_name'] ?? 'Someone'}';
+      if (!mounted || conv.isEmpty) return;
+      setState(() => (_typing[conv] ??= {})[name] = DateTime.now().add(const Duration(seconds: 4)));
+      Future.delayed(const Duration(milliseconds: 4100), () {
+        if (mounted) setState(() {});
+      });
+    });
   }
+
+  StreamSubscription<Map<String, Object?>>? _typingSub;
+  final _typing = <String, Map<String, DateTime>>{};
+  DateTime _typedAt = DateTime(0);
+  void _sayTyping() {
+    if (_conv.startsWith('client:') || _text.text.isEmpty || DateTime.now().difference(_typedAt) < const Duration(seconds: 3)) return;
+    _typedAt = DateTime.now();
+    ref.read(liveProvider.notifier).send({'type': 'typing', 'conv': _conv});
+  }
+
+  List<String> get _typingNow => [for (final e in (_typing[_conv] ?? const <String, DateTime>{}).entries) if (e.value.isAfter(DateTime.now())) e.key.split(' ').first];
 
   @override
   void dispose() {
+    _typingSub?.cancel();
     _poll?.cancel();
     _text.dispose();
     _input.dispose();
@@ -414,7 +439,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             client != null ? const Icon(Icons.people_outline) : conv == 'team' ? const CircleAvatar(radius: 16, child: Icon(Icons.tag, size: 16)) : CircleAvatar(radius: 16, child: Text(_initials(title), style: const TextStyle(fontSize: 12))),
           ]),
           title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
-          subtitle: Text(subtitle),
+          subtitle: _typingNow.isEmpty
+              ? Text(subtitle)
+              : Text('${_typingNow.join(', ')} ${_typingNow.length == 1 ? 'is' : 'are'} typing…', key: const Key('typing-now'), style: TextStyle(fontStyle: FontStyle.italic, color: Theme.of(context).colorScheme.primary)),
           trailing: Row(mainAxisSize: MainAxisSize.min, children: [
             if (client == null)
               IconButton(tooltip: 'Search this chat', isSelected: _find != null, onPressed: () => setState(() => _find = _find == null ? '' : null), icon: const Icon(Icons.search)),

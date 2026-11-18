@@ -52,6 +52,9 @@ class LiveConnection extends Notifier<LiveState> {
   /// Call set-up messages from colleagues ({type: 'rtc', kind, call_id, from_uid, from_name, data, at}) and
   /// "that colleague isn't on the live line" ({type: 'rtc-offline', to, call_id}).
   Stream<Map<String, Object?>> get rtcMessages => _rtc.stream;
+  // F7 (UI batch 3): "Amina is typing…" notices from the cloud (worker/live.js 'typing'); nothing is stored
+  final _typing = StreamController<Map<String, Object?>>.broadcast();
+  Stream<Map<String, Object?>> get typingMessages => _typing.stream;
 
   /// Send a message over the live line; false when it is down (the caller then sends it by HTTP).
   bool send(Map<String, Object?> m) {
@@ -132,6 +135,10 @@ class LiveConnection extends Notifier<LiveState> {
     try {
       m = jsonDecode(data);
     } catch (_) {
+      return;
+    }
+    if (m is Map && m['type'] == 'typing') {
+      _typing.add(m.cast<String, Object?>());
       return;
     }
     if (m is Map && (m['type'] == 'rtc' || m['type'] == 'rtc-offline')) {

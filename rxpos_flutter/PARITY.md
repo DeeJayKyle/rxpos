@@ -240,6 +240,7 @@ Every feature of the React app (`src/pages/*.jsx`, `src/*.jsx`), screen by scree
 - ✅ A2 Phones: total and Charge pinned at the bottom, the sale as a pull-up sheet
 - ✅ A3 Quantity stepper on sale lines, 44 px on touch; Enter in the quantity returns to search
 - ✅ A4 Add-to-sale pulse and a light vibration (reduced motion respected)
+- ✅ A5 Medicine photos: camera or file in the medicine form, made small, kept as a file in the pharmacy's cloud (the record holds its address); shown on till tiles, the initial when none
 - ✅ A6 Customer display (`#/display` / `/display`): items, total, paid, change in large text, read-only
 - ✅ A7 Training mode on the till: TRAINING receipt, nothing saved
 - ✅ A8 Guided till tour (5 steps, once per person per device)
@@ -287,3 +288,12 @@ Every feature of the React app (`src/pages/*.jsx`, `src/*.jsx`), screen by scree
 - ✅ G2 Receiving an order: check by scan, lines tick and count up, missing / extra said before "Receive stock"
 - ✅ G3 Order lines: each supplier's last price as a chip, the cheapest marked; a tap uses it
 - ✅ G4 Stock in each branch: on the medicine and on an out-of-stock till tile
+- ✅ F1 Expiry: List | Calendar (month grid, shaded by urgency, a batch opens its stock card)
+- ✅ F2 Shelves: a shelf map from the shelf codes; tap a shelf for its medicines
+- ✅ F3 Ctrl+K: recent searches and suggested actions before typing
+- ✅ F4 Offline banner under the top bar; "All sent" for 3 s when back
+- ✅ F5 "Edited by … · 2 h ago" on records (clients, suppliers, medicines, sales; React also purchases and every list record)
+- ✅ F6 Audit log as sentences, chips by person and kind of action
+- ✅ F7 Chat: ✓ / ✓✓ and reactions (already), "… is typing" over the live connection
+- ✅ F8 This device: the four pages of the phone's bottom bar
+- ✅ F9 A one-line summary on each report

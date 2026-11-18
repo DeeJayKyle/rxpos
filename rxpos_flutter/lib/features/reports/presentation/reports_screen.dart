@@ -16,6 +16,8 @@ import '../../../core/rules/money.dart';
 import '../../auth/application/session_controller.dart';
 import '../../sales_history/presentation/sales_lines.dart';
 import '../domain/report_tabs.dart';
+import '../domain/report_summary.dart';
+import '../../../core/rules/stock.dart' show stockValue;
 
 const reportTabs = [
   ('sales', 'Sales Report'), ('lines', 'Sales lines'), ('products', 'Sales by Product'), ('consumption', 'Consumption (ABC)'), ('purchases', 'Purchase Report'),
@@ -64,6 +66,27 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     final branchName = branches.length < 2 ? '' : _branch == 'all' ? 'All branches' : '${branches.where((b) => b['id'] == _branch).firstOrNull?['name'] ?? 'Main branch'}';
     final scope = reportScope(tab: tab, from: _from, to: _to, branchName: branchName, today: today());
     final expenseNote = expenseScopeNote(tab: tab, branch: _branch, branches: branches.length);
+    final summary = () {
+      final f0 = DateTime.parse(_from), t0 = DateTime.parse(_to);
+      final span = t0.difference(f0).inDays + 1;
+      final prev = Period(from: localDate(f0.subtract(Duration(days: span))), to: localDate(f0.subtract(const Duration(days: 1))), branch: _branch, sales: sales.map(Sale.fromRecord), purchases: const [], expenses: const [], movements: const []);
+      final prods = salesByProduct(per.sales);
+      String? topOf(Map<String, double> m) => m.isEmpty ? null : (m.entries.toList()..sort((a, b) => b.value.compareTo(a.value))).first.key;
+      final bySup = <String, double>{}, byCat = <String, double>{};
+      for (final p in per.purchases) {
+        bySup['${p['supplierName'] ?? ''}'] = (bySup['${p['supplierName'] ?? ''}'] ?? 0) + ((p['total'] as num?)?.toDouble() ?? 0);
+      }
+      for (final e in per.expenses) {
+        byCat[catName(e['categoryId'])] = (byCat[catName(e['categoryId'])] ?? 0) + ((e['amount'] as num?)?.toDouble() ?? 0);
+      }
+      final gp = per.revenue - per.cogs, prevGp = prev.revenue - prev.cogs;
+      final sv = tab == 'stock' ? stockValue(d.products.where((p) => d.stockOf(p.id) > 0), d.stock.batchesOf) : (value: 0.0, expired: 0.0);
+      return reportSummary(tab, money: st.money, sales: per.revenue + per.tax, prevSales: prev.sales.fold(0.0, (a, x) => a + x.total), receipts: per.sales.length,
+          topProduct: prods.isEmpty ? null : prods.first.product, topProductShare: prods.isEmpty || per.revenue == 0 ? null : (prods.first.revenue / per.revenue * 100).round(),
+          lines: per.sales.fold(0, (a, x) => a + x.items.length), purchases: per.purchases.fold(0.0, (a, x) => a + ((x['total'] as num?)?.toDouble() ?? 0)), topSupplier: topOf(bySup),
+          expenses: per.expenseTotal, topCategory: topOf(byCat), profit: gp, margin: per.revenue == 0 ? null : (gp / per.revenue * 100).round(), prevProfit: prev.sales.isEmpty ? null : prevGp,
+          stockValue: sv.value, expiredValue: sv.expired);
+    }();
     final body = switch (tab) {
       'lines' => SalesLinesView(key: ValueKey('$_from|$_to|$_branch'), from: _from, to: _to, branch: _branch, money: full),
       'products' => _products(per, st),
@@ -136,6 +159,8 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           child: Semantics(
             container: true,
             child: Column(key: const Key('report-scope'), crossAxisAlignment: CrossAxisAlignment.start, children: [
+              // F9 (UI batch 3): one plain line from the report's own figures
+              if (summary.isNotEmpty) Padding(padding: const EdgeInsets.only(bottom: 4), child: Text(summary, key: const Key('report-summary'), style: Theme.of(context).textTheme.titleSmall)),
               Text.rich(TextSpan(children: [TextSpan(text: title, style: const TextStyle(fontWeight: FontWeight.w700)), TextSpan(text: ' · $scope${reportDefinitions[tab] == null ? '' : ' · ${reportDefinitions[tab]}'}')]),
                   style: Theme.of(context).textTheme.bodySmall),
               if (expenseNote.isNotEmpty)

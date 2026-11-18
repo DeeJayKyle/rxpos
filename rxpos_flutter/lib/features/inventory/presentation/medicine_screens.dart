@@ -28,6 +28,7 @@ import '../../../core/rules/stock.dart';
 import '../../auth/application/session_controller.dart';
 import '../domain/adjust.dart';
 import '../domain/medicines.dart';
+import '../../../core/rules/audit_text.dart';
 
 Future<String> _user(WidgetRef ref) async => (await ref.read(sessionControllerProvider.future))?.userName ?? '';
 
@@ -278,7 +279,7 @@ Future<void> editMedicine(BuildContext context, WidgetRef ref, Product? p) async
       return null;
     }
   }
-  final v = await editRecord(context, pickPhoto: pickPhoto, title: p == null ? 'Add medicine' : 'Edit ${p.name}', delete: p == null ? null : 'medicine', initial: p?.toRecord() ?? {'form': 'Tablets', 'unit': 'Piece', 'reorder': 10}, fields: [
+  final v = await editRecord(context, pickPhoto: pickPhoto, note: editedLine(p?.raw), title: p == null ? 'Add medicine' : 'Edit ${p.name}', delete: p == null ? null : 'medicine', initial: p?.toRecord() ?? {'form': 'Tablets', 'unit': 'Piece', 'reorder': 10}, fields: [
     const FormFieldSpec('name', 'Medicine name', required: true),
     const FormFieldSpec('generic', 'Generic name'),
     const FormFieldSpec('category', 'Category / class'),
@@ -318,7 +319,8 @@ Future<void> editMedicine(BuildContext context, WidgetRef ref, Product? p) async
     return;
   }
   try {
-    final saved = await saveMedicine(ref.read(recordStoreProvider), v, before: p, all: d.products, settings: s, user: await _user(ref), branchId: d.branch);
+    // F5: an edit says who made it and when
+    final saved = await saveMedicine(ref.read(recordStoreProvider), p == null ? v : {...v, ...editStamp(await _user(ref))}, before: p, all: d.products, settings: s, user: await _user(ref), branchId: d.branch);
     if (context.mounted) say(context, p == null ? '${saved['name']} added' : '${saved['name']} saved');
   } on MedicineProblem catch (e) {
     if (context.mounted) say(context, e.message, error: true);
