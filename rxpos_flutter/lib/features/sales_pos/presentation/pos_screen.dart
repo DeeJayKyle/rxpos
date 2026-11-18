@@ -5,6 +5,7 @@ import '../../../core/theme/line_colors.dart';
 import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'customer_display.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:rxpos/core/platform.dart';
@@ -392,6 +393,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     }
     try {
       final sale = await _sale.complete(controlled: cd, momo: momo?.momo, rxChecked: rx, creditOver: creditOver);
+      if (displayChannelAvailable) displaySend(_lastDisplay = displayDone(sale, d.settings, logo: '${ref.read(brandingProvider)?['logo'] ?? ''}'));
       if (!mounted) return;
       rxScanFor.remove(widget.wholesale);
       await showReceipt(context, sale, d.settings, phone: client?.phone ?? '', autoPrint: d.settings.autoPrint);
@@ -403,15 +405,21 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     }
   }
 
+  Map<String, Object?>? _lastDisplay;
+  void Function()? _displayHello;
+
   @override
   void initState() {
     super.initState();
+    // a customer display opened later asks for the sale as it is now
+    if (displayChannelAvailable) _displayHello = displayListen((m) { if (m['hello'] == true && _lastDisplay != null) displaySend(_lastDisplay!); });
     WidgetsBinding.instance.addPostFrameCallback((_) => _focusSearch());
     HardwareKeyboard.instance.addHandler(_onScanKey);
   }
 
   @override
   void dispose() {
+    _displayHello?.call();
     HardwareKeyboard.instance.removeHandler(_onScanKey);
     tillOwnsCtrlK.value = false;
     _searchTimer?.cancel();
@@ -424,6 +432,13 @@ class _PosScreenState extends ConsumerState<PosScreen> {
   @override
   Widget build(BuildContext context) {
     final data = ref.watch(pharmacyProvider);
+    // the customer display in another browser window follows this till's sale
+    if (displayChannelAvailable) {
+      ref.listen(saleControllerProvider(widget.wholesale), (_, s) {
+        final d = data.value;
+        if (d != null) displaySend(_lastDisplay = displayMessage(s, d.settings, logo: '${ref.read(brandingProvider)?['logo'] ?? ''}'));
+      });
+    }
     return data.when(
       skipLoadingOnReload: true, // a sync refreshing the data keeps the till (and the sale on it) on screen
       loading: () => const Center(child: CircularProgressIndicator()),
@@ -957,6 +972,12 @@ class _ProductPanel extends StatelessWidget {
               ),
               // with large text in a narrow panel the count and the layout menu shrink instead of running off the side
               Flexible(child: Text('${data.products.length} medicines', maxLines: 1, overflow: TextOverflow.ellipsis, style: t.textTheme.bodySmall)),
+              IconButton(
+                key: const Key('pos-display'),
+                tooltip: 'Customer display: a second window or screen facing the client',
+                icon: const Icon(Icons.connected_tv_outlined),
+                onPressed: () => displayChannelAvailable ? openDisplayWindow() : GoRouter.of(context).push('/display'),
+              ),
               Consumer(builder: (context, ref, _) {
                 final on = ref.watch(tillTrainingProvider);
                 return Padding(

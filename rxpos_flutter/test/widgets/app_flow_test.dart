@@ -325,6 +325,21 @@ void main() {
     await done(tester);
   });
 
+  testWidgets('customer display: the till\'s sale in large text, no editing', (tester) async {
+    await tester.runAsync(signedIn);
+    await start(tester);
+    await toTill(tester);
+    await tester.tap(find.text('Calmex 500mg Tabs'));
+    await settle(tester);
+    await tester.tap(find.byKey(const Key('pos-display')));
+    await settle(tester);
+    expect(find.byKey(const Key('customer-display')), findsOneWidget);
+    expect(find.text('Calmex 500mg Tabs'), findsOneWidget);
+    expect(find.text('UGX 500'), findsWidgets);
+    expect(find.byType(TextField), findsNothing, reason: 'nothing to type into');
+    await done(tester);
+  });
+
   testWidgets('phone till: the bottom bar keeps the total and Charge in reach', (tester) async {
     await tester.runAsync(signedIn);
     await start(tester, size: const Size(400, 860));

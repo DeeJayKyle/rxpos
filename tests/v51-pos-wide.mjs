@@ -120,6 +120,17 @@ await p.setViewport({ width: 1280, height: 800 }); await wait(500);
 check('at exactly 1280px: two sides, nothing spills sideways', await p.evaluate(() => getComputedStyle(document.querySelector('.pos')).gridTemplateColumns.split(' ').length === 2 && document.documentElement.scrollWidth <= 1280));
 await p.screenshot({ path: path.join(out, 'pos-1280.png') });
 
+// the customer display: a second window that follows the till (items, total) and needs no sign-in
+const disp = await p.browserContext().newPage(); await disp.setViewport({ width: 1024, height: 720 });
+await disp.goto(p.url().replace(/#.*$/, '') + '#/display', { waitUntil: 'networkidle2' }); await wait(800);
+check('customer display opens without signing in, waiting for a sale', await disp.evaluate(() => /Your items will show here/.test(document.body.innerText) && !document.querySelector('.sidebar')));
+await p.bringToFront();
+await p.focus('.pos-products input.search'); await p.keyboard.type('7010001'); await p.keyboard.press('Enter'); await wait(800);
+check('…it shows what the cashier adds, with the total', await disp.evaluate(() => /Calmex 500mg Tabs/.test(document.querySelector('.cd-lines')?.innerText || '') && /UGX/.test(document.querySelector('.cd-total')?.innerText || '')), await disp.evaluate(() => document.body.innerText.slice(0, 200)));
+await disp.screenshot({ path: path.join(out, 'customer-display.png') });
+await disp.close();
+await p.evaluate(() => [...document.querySelectorAll('.pos-cart button')].find((x) => /Clear all/.test(x.textContent))?.click()); await wait(300);
+
 // the first visit's tour: a card beside each part, Next / Done, once per person on this device; it never takes the cursor
 await p.setViewport({ width: 1440, height: 900 });
 await p.evaluate(() => { for (const k of Object.keys(localStorage)) if (/^rxpos-(tour|tip):/.test(k)) localStorage.removeItem(k); });

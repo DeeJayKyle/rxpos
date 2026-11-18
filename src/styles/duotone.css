@@ -220,3 +220,17 @@
   .tour-card .tour-x { position: absolute; top: 6px; right: 6px; }
   .tour-lit { outline: 3px solid var(--primary) !important; outline-offset: 3px; border-radius: var(--r-ctl, 12px); }
 }
+/* A6: the customer display, large and calm, in the theme's colours */
+.cust-display { min-height: 100vh; display: grid; grid-template-rows: auto 1fr auto; gap: 24px; padding: 32px 48px; background: var(--bg); color: var(--text); font-size: clamp(18px, 2.4vw, 28px); }
+.cust-display header { display: flex; align-items: center; gap: 16px; font-size: 1.3em; }
+.cust-display header img { height: 56px; width: auto; border-radius: 12px; }
+.cust-display .cd-lines { list-style: none; margin: 0; padding: 0; align-self: start; display: grid; gap: 8px; }
+.cust-display .cd-lines li { display: grid; grid-template-columns: 1fr auto 8em; gap: 16px; padding: 12px 16px; border-radius: 12px; background: var(--surface); }
+.cust-display .cd-lines li b { text-align: right; }
+.cust-display footer, .cust-display .cd-done { display: grid; gap: 8px; padding: 20px 24px; border-radius: 18px; background: var(--surface); }
+.cust-display .cd-row { display: flex; justify-content: space-between; gap: 16px; }
+.cust-display .cd-total { font-size: 1.8em; font-weight: 800; color: var(--primary-text); }
+.cust-display .cd-change { font-size: 1.4em; font-weight: 800; color: var(--ok); }
+.cust-display .cd-thanks { font-size: 2.2em; font-weight: 800; color: var(--primary-text); }
+.cust-display .cd-idle { display: grid; place-items: center; color: var(--muted); }
+.cust-display .num { font-variant-numeric: tabular-nums; }

@@ -3,6 +3,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import '@fontsource-variable/inter';
 import App from './App.jsx';
+import CustomerDisplay from './components/CustomerDisplay.jsx';
 import { StoreProvider } from './store.jsx';
 import { FeedbackHost } from './feedback.jsx';
 import { idbGet, idbKeys } from './idb.js';
@@ -72,22 +73,28 @@ class ErrorBoundary extends React.Component {
   }
 }
 
+// the customer display (a second window facing the client, opened from the till): it only listens to the till
+const customerDisplay = typeof location !== 'undefined' && location.hash.startsWith('#/display');
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <ErrorBoundary>
-      <StoreProvider>
-        <App />
-      </StoreProvider>
-      <FeedbackHost />
+      {customerDisplay ? <CustomerDisplay /> : <>
+        <StoreProvider>
+          <App />
+        </StoreProvider>
+        <FeedbackHost />
+      </>}
     </ErrorBoundary>
   </React.StrictMode>
 );
 
 // Self-updates start with the app (also on the sign-in screen): the new build reports that it started, so the
 // Windows and Android updaters keep it instead of rolling back
-startUpdates();
-startDevice(); // this device's layout, text size, rotation and tray (src/device.js)
-startCrashReports(); // private error reports to the pharmacy's own cloud (src/crash.js)
+if (!customerDisplay) {
+  startUpdates();
+  startDevice(); // this device's layout, text size, rotation and tray (src/device.js)
+  startCrashReports(); // private error reports to the pharmacy's own cloud (src/crash.js)
+}
 
 // The Windows and Android apps keep the pharmacy for offline work: ask the system not to evict it when space is low.
 // (The web version is online only: no offline service worker, nothing stored; see src/webpolicy.js.)

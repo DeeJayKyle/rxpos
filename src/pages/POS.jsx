@@ -3,7 +3,8 @@ import { useState, useRef, useEffect, useMemo, useDeferredValue } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import FKeyBar, { fkeyItems, fkeysShown, showFkeys } from '../components/FKeyBar.jsx';
 import Tour, { knewPage } from '../components/Tour.jsx';
-import { ShoppingCart, Trash2, X, ScanText, FileText, Printer, AlertTriangle, ScanBarcode, Smartphone, Loader2, CheckCircle2, UserPlus, Tag, BookMarked, Repeat, PauseCircle, Keyboard, Plus, ClipboardList, MessageCircle, MessageSquareText, Star, Search, Command, LayoutGrid, Users, GraduationCap } from 'lucide-react';
+import { DISPLAY_CHANNEL } from '../components/CustomerDisplay.jsx';
+import { ShoppingCart, Trash2, X, ScanText, FileText, Printer, AlertTriangle, ScanBarcode, Smartphone, Loader2, CheckCircle2, UserPlus, Tag, BookMarked, Repeat, PauseCircle, Keyboard, Plus, ClipboardList, MessageCircle, MessageSquareText, Star, Search, Command, LayoutGrid, Users, GraduationCap, Monitor } from 'lucide-react';
 import { DrugInfoPanel, genericKey } from './DrugInfo.jsx';
 import { useStore, useSyncState, uid, now, daysUntil, put, del, move, allocate, audit, normalizePhone, customerBalance, DEFAULT_PAYMENT_METHODS } from '../store.jsx';
 import { overLimit } from '../credit.js';
@@ -423,6 +424,25 @@ export default function POS({ mode = 'retail' }) {
   const split = insured ? copayOf(insured.scheme, total, money) : null;
   const due = split ? split.copay : total; // what is paid at the till
   const change = (Number(tendered) || 0) - due;
+  // the customer display (a second window facing the client): the sale as it is now, sent over a BroadcastChannel
+  const displayRef = useRef({ ch: null, last: null });
+  useEffect(() => {
+    let ch = null;
+    try { ch = new BroadcastChannel(DISPLAY_CHANNEL); } catch { return undefined; }
+    ch.onmessage = (e) => { if (e.data?.hello && displayRef.current.last) ch.postMessage(displayRef.current.last); };
+    displayRef.current.ch = ch;
+    return () => { ch.close(); displayRef.current.ch = null; };
+  }, []);
+  useEffect(() => {
+    const base = { pharmacy: db.settings.name, logo: db.license?.[0]?.branding?.logo || '' };
+    const msg = done && !done.proforma && !done.reprint
+      ? { ...base, done: true, total: fmt(done.total), paid: done.tendered ? fmt(done.tendered) : '', change: done.tendered > done.total ? fmt(done.tendered - done.total) : '' }
+      : { ...base, lines: cart.map((l) => ({ name: l.name, qty: l.pack ? `${l.qty / l.pack.size} ${l.pack.name}` : String(l.qty), amount: fmt(l.price * l.qty) })),
+        discount: disc > 0 ? fmt(disc) : '', total: fmt(due), paid: tendered !== '' && ptype === 'cash' ? fmt(Number(tendered) || 0) : '', change: tendered !== '' && ptype === 'cash' && change > 0 ? fmt(change) : '' };
+    displayRef.current.last = msg;
+    try { displayRef.current.ch?.postMessage(msg); } catch { /* closed */ }
+  }, [cart, disc, due, tendered, ptype, change, done, db.settings.name]); // eslint-disable-line react-hooks/exhaustive-deps
+  const openDisplay = () => window.open(location.pathname + '#/display', 'rxpos-display', 'popup,width=1024,height=720');
   const customer = db.customers.find((c) => c.id === customerId);
   const items = cart.reduce((a, l) => a + l.qty, 0);
 
@@ -833,6 +853,7 @@ export default function POS({ mode = 'retail' }) {
                 {POS_LAYOUTS.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
               </select>
             </label>
+            <button type="button" className="icon-btn pos-display-btn" title="Customer display: a second window or screen facing the client" aria-label="Customer display" onClick={openDisplay}><Monitor size={18} /></button>
             <button type="button" className={'pos-training' + (training ? ' on' : '')} aria-pressed={training} title="Practise on the till: nothing is saved" onClick={() => { setTraining((t) => !t); setTimeout(focusSearch, 0); }}><GraduationCap size={15} aria-hidden="true" />Training</button>
             {useAdvancedLayout && <button className="icon-btn" title="Command bar (Ctrl+K)" aria-label="Command bar" onClick={() => setOmni(true)}><Command size={18} /></button>}
             <button className="icon-btn" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts" onClick={() => setHelp(true)}><Keyboard size={19} /></button>
