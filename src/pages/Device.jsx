@@ -22,6 +22,7 @@ import { ACTIONS, keyOf, isDefault, setKey, resetKeys, showKey, comboOf } from '
 import AiSystemDoctor from '../components/AiSystemDoctor.jsx';
 import { SettingsSearch, SettingsGroup, ToggleRow, DangerZone, useFindSetting } from '../components/SettingsKit.jsx';
 import { MousePointerClick, BadgeCheck, RotateCcw, Eraser, KeyRound, LockKeyhole, ShieldCheck, LogOut } from 'lucide-react';
+import { BAR_CHOICES } from '../landing.js';
 
 const account = (action) => window.dispatchEvent(new CustomEvent('rxpos:account', { detail: action }));
 
@@ -86,6 +87,24 @@ export default function Device() {
             <p className="muted small">Desktop view shows the full PC layout. Pinch or double-tap to read the small print.</p>
             <Choice label="Layout" value={d.view} onChange={(view) => setDevice({ view })} options={[['auto', 'Automatic', MonitorSmartphone], ['phone', 'Phone view', Smartphone], ['desktop', 'Desktop view', Monitor]]} />
           </>}
+          {/* F8: the four pages of the phone's bottom bar (Sell in the middle, More always last) */}
+          <fieldset className="bar-pick" style={{ marginTop: 14 }}>
+            <legend className="small"><strong>Phone bottom bar</strong> <span className="muted">· four pages, two either side of Sell; More is always last</span></legend>
+            <div className="row gap wrap">
+              {[0, 1, 2, 3].map((i) => {
+                const cur = d.bottomBar || [];
+                const opts = BAR_CHOICES.filter(([, , perm]) => !perm || can(perm));
+                return (
+                  <label key={i} className="field"><span>{i < 2 ? `Left ${i + 1}` : `Right ${i - 1}`}</span>
+                    <select data-slot={i} value={cur[i] || ''} onChange={(e) => { const next = [...cur]; next[i] = e.target.value; setDevice({ bottomBar: next.filter(Boolean).length ? next.slice(0, 4).map((x) => x || '') : null }); }}>
+                      <option value="">{d.bottomBar ? '— none —' : 'Standard'}</option>
+                      {opts.map(([path, label]) => <option key={path} value={path} disabled={cur.includes(path) && cur[i] !== path}>{label}</option>)}
+                    </select></label>
+                );
+              })}
+              {d.bottomBar && <button type="button" className="link-btn small" onClick={() => setDevice({ bottomBar: null })}>Back to the standard bar</button>}
+            </div>
+          </fieldset>
           {/* E2: four sizes at a tap, the slider for anything between */}
           <div className="seg text-size-presets" role="radiogroup" aria-label="Text size" style={{ marginTop: 14 }}>
             {[[0.9, 'Small'], [1, 'Normal'], [1.15, 'Large'], [1.3, 'Extra large']].map(([z, l]) => <button key={l} type="button" role="radio" aria-checked={Math.abs(d.zoom - z) < 0.001} className={Math.abs(d.zoom - z) < 0.001 ? 'on' : ''} onClick={() => setDevice({ zoom: z })}>{l}<small> {Math.round(z * 100)}%</small></button>)}

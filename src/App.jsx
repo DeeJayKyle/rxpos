@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { HashRouter, Routes, Route, NavLink, Navigate, useNavigate, useLocation } from 'react-router-dom';
-import {
+import { MessageCircle,
   LayoutDashboard, ShoppingCart, PackageOpen, ReceiptText, FileText, ClipboardPlus, Users, Truck, Pill, FlaskConical,
   Boxes, PackagePlus, History, CalendarClock, PencilRuler, ScrollText, Wallet, Tags, Landmark, ArrowLeftRight, HandCoins,
   ArrowDownLeft, ArrowUpRight, ClipboardCheck, RefreshCw, Undo2, ShieldPlus, BookOpen, BarChart3, Settings as SettingsIcon, Search, Sun, Moon, Menu, LogOut, ChevronDown,
@@ -28,7 +28,7 @@ import { STYLES, applyStyle, savedStyle, saveStyle } from './surface.js';
 import { LEVELS, applyLevel, savedLevel, saveLevel } from './vivid.js';
 import { TwoStepModal } from './twostep.jsx';
 import { setCrashCloud } from './crash.js';
-import { homeFor, bottomTabs } from './landing.js';
+import { homeFor, chosenTabs } from './landing.js';
 import { setBadge } from './badges.js';
 import { ACTIONS, keyOf, keyMatcher, showKey, typing } from './keymap.js';
 import { deviceSettings, setDevice, onDevice } from './device.js';
@@ -97,7 +97,7 @@ const P = {
 };
 
 // [path, label, Icon, shortcut, badge, element, permission, feature]
-const TAB_ICONS = { '/': LayoutDashboard, '/inventory': Boxes, '/customers': Users, '/prescriptions': ClipboardPlus, '/sales': ReceiptText, '/shifts': Clock };
+const TAB_ICONS = { '/': LayoutDashboard, '/inventory': Boxes, '/customers': Users, '/prescriptions': ClipboardPlus, '/sales': ReceiptText, '/shifts': Clock, '/expiry': CalendarClock, '/add-stock': PackagePlus, '/chat': MessageCircle, '/reports': BarChart3, '/expenses': Wallet };
 const NAV = [
   { items: [['/', 'Dashboard', LayoutDashboard, null, null, <P.Dashboard />]] },
   { group: 'Sales', items: [
@@ -292,6 +292,31 @@ function ThemePicker({ theme, setTheme, mode, setMode, style, setStyle }) {
   );
 }
 
+/** F4 (UI batch 3): a slim banner under the top bar while offline ("Offline · 3 changes waiting to send"), which turns
+ *  green ("All sent") for 3 s once the internet is back and everything has gone */
+function OfflineBanner() {
+  const online = useOnline();
+  const { pending = 0, syncStatus } = useSyncState() || {};
+  const [back, setBack] = useState(false);
+  const was = useRef(online);
+  useEffect(() => {
+    if (online && !was.current) setBack(true);
+    was.current = online;
+  }, [online]);
+  useEffect(() => {
+    if (!back || pending) return undefined;
+    const t = setTimeout(() => setBack(false), 3000);
+    return () => clearTimeout(t);
+  }, [back, pending]);
+  const off = !online || syncStatus?.state === 'offline';
+  if (!off && !back) return null;
+  return (
+    <div className={'offline-banner' + (off ? '' : pending ? ' sending' : ' sent')} role="status" aria-live="polite">
+      {off ? <>Offline · {pending ? `${pending} change${pending === 1 ? '' : 's'} waiting to send` : 'your work is kept on this device'}</> : pending ? <>Back online · sending {pending} change{pending === 1 ? '' : 's'}…</> : <>All sent</>}
+    </div>
+  );
+}
+
 function useOnline() {
   const [online, setOnline] = useState(navigator.onLine);
   useEffect(() => {
@@ -427,7 +452,10 @@ function Shell() {
   // Show only what this person's role may use and what is switched on for this pharmacy
   const groups = NAV.map((g) => ({ ...g, items: g.items.filter(([, , , , , , perm, feat]) => (!perm || [].concat(perm).some(can)) && (!feat || features[feat] !== false)) })).filter((g) => g.items.length);
   const pages = groups.flatMap((g) => g.items.map(([to, label, Icon, key]) => ({ to, label, Icon, key })));
-  const tabs = bottomTabs(can, (to) => pages.some((x) => x.to === to));
+  // F8: the four pages this device chose for the phone's bottom bar (This device), else the role's standard bar
+  const [barPick, setBarPick] = useState(() => deviceSettings().bottomBar || null);
+  useEffect(() => onDevice((d) => setBarPick(d.bottomBar || null)), []);
+  const tabs = chosenTabs(barPick, can, (to) => pages.some((x) => x.to === to));
   // role-based landing (src/landing.js): once per sign-in in this tab, from the dashboard to the role's own page
   useEffect(() => {
     if (!user?.id) return;
@@ -679,6 +707,7 @@ function Shell() {
             </div>
           </div>
         </header>
+        <OfflineBanner />
         <main className="content" ref={contentRef} data-page={here}>
           <Suspense fallback={<PageSkeleton />}>
             <Routes>

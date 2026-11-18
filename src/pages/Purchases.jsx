@@ -11,7 +11,7 @@ import { isWeb } from '../platform.js';
 import { useStore, useSyncState, uid, today, now, put, del, move, addBatch, audit, downloadFile, toCSV, markupPrice, daysUntil, supplierPrices, MAIN_BRANCH } from '../store.jsx';
 import { CASH } from '../finance.js';
 import { round } from '../money.js';
-import { Modal, PdfButton, Empty, PageTip, useSort, SortTh, SubViews } from '../ui.jsx';
+import { Modal, PdfButton, Empty, PageTip, useSort, SortTh, SubViews, WhoChanged } from '../ui.jsx';
 import { useLoadMore, useColumns } from '../tablekit.jsx';
 import { DateRange } from '../forms.jsx';
 import { useListControls } from '../listcontrols.jsx';
@@ -742,6 +742,7 @@ export default function Purchases() {
       {editing && <PurchaseEditor purchase={editing} onClose={() => setEditing(null)} />}
       {view && (
         <Modal title={`Purchase ${view.number || ''}`} onClose={() => setView(null)} wide>
+          <WhoChanged keyText={view.number} />
           <p className="muted">{view.supplierName} · invoice {view.invoice || '—'} · {view.date} · {payType(view)}</p>
           {view.notes && <p><strong>Notes:</strong> {view.notes}</p>}
           <table>

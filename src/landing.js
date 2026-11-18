@@ -21,3 +21,17 @@ export function bottomTabs(can, has = () => true) {
   const right = [['/sales', 'Sales', 'sales.view'], ['/shifts', 'Shift', 'shifts']].filter(([path, , perm]) => ok(perm, path)).slice(0, 1);
   return { left, sell: can('pos.sell') && has('/pos'), right };
 }
+
+/** F8 (UI batch 3): the pages a person may put in the phone's bottom bar: [path, label, permission] */
+export const BAR_CHOICES = [['/', 'Home', null], ['/inventory', 'Stock', 'inventory.view'], ['/customers', 'Clients', 'customers'], ['/prescriptions', 'Rx', 'prescriptions'],
+  ['/sales', 'Sales', 'sales.view'], ['/shifts', 'Shift', 'shifts'], ['/expiry', 'Expiry', 'inventory.view'], ['/add-stock', 'Add stock', 'stock.receive'],
+  ['/chat', 'Chat', 'chat'], ['/reports', 'Reports', 'reports'], ['/expenses', 'Expenses', 'finance']];
+
+/** F8: this device's own four bottom-bar pages (chosen: [path…]), two either side of Sell; More is always last. Pages
+ *  this role may not open are left out; with no choice, the role's standard bar (bottomTabs). */
+export function chosenTabs(chosen, can, has = () => true) {
+  const ok = BAR_CHOICES.filter(([path, , perm]) => (!perm || can(perm)) && has(path));
+  const picked = (chosen || []).filter(Boolean).map((p) => ok.find(([path]) => path === p)).filter(Boolean).slice(0, 4);
+  if (!picked.length) return bottomTabs(can, has);
+  return { left: picked.slice(0, 2), sell: can('pos.sell') && has('/pos'), right: picked.slice(2, 4) };
+}

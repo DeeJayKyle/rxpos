@@ -1,6 +1,6 @@
 // Role-based landing and the phone's bottom bar (src/landing.js).
 import assert from 'node:assert/strict';
-import { homeFor, bottomTabs } from '../src/landing.js';
+import { homeFor, bottomTabs, chosenTabs } from '../src/landing.js';
 import { DEFAULT_ROLES } from '../src/access.js';
 let passed = 0;
 const ok = (name, fn) => { fn(); passed++; console.log('PASS ', name); };
@@ -24,5 +24,15 @@ ok('a manager keeps Home, Stock, Sell, Sales', () => {
 ok('a page switched off for the pharmacy is never a tab', () => {
   const t = bottomTabs(canOf('manager'), (to) => to !== '/inventory');
   assert.ok(!t.left.some((x) => x[0] === '/inventory'));
+});
+// F8 (UI batch 3): this device's own four bottom-bar pages
+ok('four chosen pages: two either side of Sell', () => {
+  const t = chosenTabs(['/expiry', '/sales', '/chat', '/customers'], canOf('admin'));
+  assert.deepEqual([t.left.map((x) => x[0]), t.right.map((x) => x[0]), t.sell], [['/expiry', '/sales'], ['/chat', '/customers'], true]);
+});
+ok('a chosen page this role may not open is left out; no choice: the standard bar', () => {
+  const t = chosenTabs(['/reports', '/sales'], canOf('cashier'));
+  assert.ok(!t.left.concat(t.right).some((x) => x[0] === '/reports'));
+  assert.deepEqual(chosenTabs(null, canOf('manager')), bottomTabs(canOf('manager')));
 });
 console.log(`\n${passed} passed, 0 failed`);
