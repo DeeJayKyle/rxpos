@@ -428,20 +428,23 @@ ThemeData buildTheme(Palette base, {String accent = '', String surface = 'flat',
   TextStyle? head(TextStyle? x, [FontWeight? w]) => tab(x, w ?? tk.headingWeight)
       ?.copyWith(fontFamily: headFamily, fontFamilyFallback: headFamily == null || headingFont != null ? null : const ['Georgia', 'Noto Serif', 'serif'], letterSpacing: tk.headingSpacing);
   TextStyle? body(TextStyle? x) => tk.textScale == 1 || x?.fontSize == null ? tab(x) : tab(x)?.copyWith(fontSize: x!.fontSize! * tk.textScale);
+  // E1 (UI batch 3): one type scale, as the classic app's --t-1..5: 28 / 20 / 16 / 14 / 12 (headlineMedium and the
+  // display sizes stay for the few large figures)
+  TextStyle? sz(TextStyle? x, double px) => x?.copyWith(fontSize: px);
   final text = m3.copyWith(
     displaySmall: head(m3.displaySmall, FontWeight.w700),
     headlineLarge: head(m3.headlineLarge),
     headlineMedium: head(m3.headlineMedium),
-    headlineSmall: head(m3.headlineSmall),
-    titleLarge: head(m3.titleLarge, tk.headingWeight == FontWeight.w800 ? FontWeight.w700 : tk.headingWeight),
-    titleMedium: tab(m3.titleMedium, FontWeight.w600),
-    titleSmall: tab(m3.titleSmall, FontWeight.w600),
-    bodyLarge: body(m3.bodyLarge),
-    bodyMedium: body(m3.bodyMedium),
-    bodySmall: body(m3.bodySmall)?.copyWith(color: Color(muted)),
-    labelLarge: tab(m3.labelLarge, FontWeight.w600),
-    labelMedium: tab(m3.labelMedium, FontWeight.w600),
-    labelSmall: tab(m3.labelSmall),
+    headlineSmall: sz(head(m3.headlineSmall), 28),
+    titleLarge: sz(head(m3.titleLarge, tk.headingWeight == FontWeight.w800 ? FontWeight.w700 : tk.headingWeight), 20),
+    titleMedium: sz(tab(m3.titleMedium, FontWeight.w600), 16),
+    titleSmall: sz(tab(m3.titleSmall, FontWeight.w600), 14),
+    bodyLarge: sz(body(m3.bodyLarge), 16 * tk.textScale),
+    bodyMedium: sz(body(m3.bodyMedium), 14 * tk.textScale),
+    bodySmall: sz(body(m3.bodySmall)?.copyWith(color: Color(muted)), 12 * tk.textScale),
+    labelLarge: sz(tab(m3.labelLarge, FontWeight.w600), 14),
+    labelMedium: sz(tab(m3.labelMedium, FontWeight.w600), 12),
+    labelSmall: sz(tab(m3.labelSmall), 12),
   );
   final hard = tk.hardShadow > 0;
   OutlinedBorder shapeOf(double r, [BorderSide s = BorderSide.none]) =>
@@ -516,7 +519,8 @@ ThemeData buildTheme(Palette base, {String accent = '', String surface = 'flat',
       style: OutlinedButton.styleFrom(minimumSize: Size(64, tap), shape: control, textStyle: label, foregroundColor: tk.ink ?? Color(p.text), backgroundColor: tk.ink == null ? Color(p.surface) : null, side: BorderSide(color: tk.ink ?? tk.glow?.withValues(alpha: .6) ?? Color(p.borderStrong), width: tk.borderWidth)),
     ),
     textButtonTheme: TextButtonThemeData(style: TextButton.styleFrom(minimumSize: Size(48, tap - 4), shape: shapeOf(tk.controlRadius), textStyle: label, foregroundColor: Color(primaryText))),
-    iconButtonTheme: IconButtonThemeData(style: IconButton.styleFrom(minimumSize: Size(tap - 4, tap - 4))),
+    // E4: on a touch screen every icon button is a full finger's target (48 px)
+    iconButtonTheme: IconButtonThemeData(style: IconButton.styleFrom(minimumSize: tk.touch ? Size(tap, tap) : Size(tap - 4, tap - 4))),
     // segmented controls (iOS): a soft grey groove, the chosen segment lifted in the panel colour
     // tabs that fit (the owner's request, 2026-11-15): no tick taking room in the chosen segment, tighter padding, one
     // line of text

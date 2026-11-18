@@ -125,8 +125,10 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
             onChanged: (v) => setState(() => _branch = v),
           ),
         SearchField(key: ValueKey('q-${widget.q}'), onChanged: (v) => setState(() => _q = v), hint: 'Receipt, customer, medicine…', initial: widget.q),
-        DateBox(label: 'From', value: _from, onChanged: (v) => setState(() => _from = v)),
-        DateBox(label: 'To', value: _to, onChanged: (v) => setState(() => _to = v)),
+        DateRangeBox(from: _from, to: _to, onChanged: (f, t) => setState(() {
+          _from = f;
+          _to = t;
+        })),
         ExportButtons(
           name: 'sales',
           settings: st,

@@ -86,8 +86,10 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
               items: [const DropdownMenuItem(value: 'all', child: Text('All branches')), for (final b in branches) DropdownMenuItem(value: '${b['id']}', child: Text('${b['name']}'))],
               onChanged: (v) => setState(() => _branch = v ?? 'all'),
             ),
-          DateBox(label: 'From', value: _from, onChanged: (v) => setState(() => _from = v.isEmpty ? _from : v)),
-          DateBox(label: 'To', value: _to, onChanged: (v) => setState(() => _to = v.isEmpty ? _to : v)),
+          DateRangeBox(from: _from, to: _to, allowAll: false, onChanged: (f, t) => setState(() {
+          if (f.isNotEmpty) _from = f;
+          if (t.isNotEmpty) _to = t;
+        })),
         ],
         if (tab != 'lines')
           OutlinedButton.icon(

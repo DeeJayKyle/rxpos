@@ -1,3 +1,4 @@
+import { DateRange } from '../forms.jsx';
 import { useState, useRef, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import SalesLines from './SalesLines.jsx';
@@ -86,7 +87,7 @@ export default function Reports() {
           {db.branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
         </select>
       )}
-      <input type="date" aria-label="From" value={from} onChange={(e) => setFrom(e.target.value)} /><span>to</span><input type="date" aria-label="To" value={to} onChange={(e) => setTo(e.target.value)} />
+      <DateRange from={from} to={to} allowAll={false} onChange={(r) => { setFrom(r.from); setTo(r.to); }} />
     </div>
   );
 

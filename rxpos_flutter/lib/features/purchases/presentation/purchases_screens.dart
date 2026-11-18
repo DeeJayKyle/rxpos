@@ -100,8 +100,10 @@ class _PurchasesScreenState extends ConsumerState<PurchasesScreen> {
         if (_tab == 'prices') Expanded(child: _SupplierPrices(rows: rows, q: _q, names: {for (final p in d.products) p.id: p.name}, settings: st)),
         if (_tab == 'history') ...[
           Wrap(spacing: 8, runSpacing: 8, children: [
-            DateBox(label: 'From', value: _from, onChanged: (v) => setState(() => _from = v)),
-            DateBox(label: 'To', value: _to, onChanged: (v) => setState(() => _to = v)),
+            DateRangeBox(from: _from, to: _to, onChanged: (f, t) => setState(() {
+          _from = f;
+          _to = t;
+        })),
             SizedBox(width: 220, child: DropdownButtonFormField<String>(
               initialValue: _supplier,
               isExpanded: true,

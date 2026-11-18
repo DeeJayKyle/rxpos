@@ -6,6 +6,8 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { HelpCircle, Check } from 'lucide-react';
 import { normalizePhone } from './store.jsx';
+import { safeFileUrl } from './safeurl.js';
+import { uploadAttachment } from './attach.jsx';
 
 /** 1234567.5 → "1,234,567.5" while typing (the decimals typed are kept as typed) */
 export function groupDigits(text) {
@@ -86,4 +88,84 @@ export function checkField(f, value, rec = {}) {
   if (f.type === 'phone' && !phoneOk(value)) return 'Not a full phone number (e.g. 0772 123 456)';
   if (f.type === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value))) return 'Not an email address';
   return f.validate?.(value, rec) || '';
+}
+
+/** A picture made small for a medicine (UI batch 3, A5): at most 256 px on its longer side, WebP (JPEG where the
+ *  browser can't write WebP) */
+export async function smallPicture(file, max = 256) {
+  const img = await createImageBitmap(file);
+  const k = Math.min(1, max / Math.max(img.width, img.height));
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(img.width * k)); c.height = Math.max(1, Math.round(img.height * k));
+  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+  const blob = await new Promise((r) => c.toBlob(r, 'image/webp', 0.82));
+  const type = blob?.type === 'image/webp' ? 'image/webp' : 'image/jpeg';
+  const out = type === 'image/webp' ? blob : await new Promise((r) => c.toBlob(r, 'image/jpeg', 0.85));
+  return new File([out], 'medicine.' + (type === 'image/webp' ? 'webp' : 'jpg'), { type });
+}
+
+/** A5: a medicine's photo, or its first letter when it has none (till tiles, search results, the form) */
+export function MedThumb({ p, base, size = 36 }) {
+  const url = p?.photo ? safeFileUrl(base, p.photo) : null;
+  const [broken, setBroken] = useState(false);
+  if (url && !broken) return <img className="med-thumb" src={url} alt="" width={size} height={size} loading="lazy" onError={() => setBroken(true)} style={{ '--sz': size + 'px' }} />;
+  return <span className="med-thumb initial" aria-hidden="true" style={{ '--sz': size + 'px' }}>{String(p?.name || '?').trim().charAt(0).toUpperCase()}</span>;
+}
+
+/** A5: the Photo field of the medicine form: take one with the camera or choose a file; kept small, stored with the
+ *  pharmacy's files (as prescription scans are), the record holds only its address */
+export function PhotoField({ value, onChange, cfg, name }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const pick = async (file) => {
+    if (!file) return;
+    setBusy(true); setErr('');
+    try { const small = await smallPicture(file); const up = await uploadAttachment(cfg, small, small.name); onChange(up.path); }
+    catch (e) { setErr(e.message || 'The photo could not be saved'); }
+    finally { setBusy(false); }
+  };
+  return (
+    <span className="photo-field">
+      <MedThumb p={{ name, photo: value }} base={cfg?.url} size={56} />
+      <label className="btn sm ghost">{busy ? 'Saving…' : value ? 'Change photo' : 'Add a photo'}
+        <input type="file" accept="image/*" capture="environment" hidden disabled={busy} onChange={(e) => pick(e.target.files?.[0])} aria-label="Photo of the medicine" /></label>
+      {value && !busy && <button type="button" className="btn sm ghost" onClick={() => onChange('')}>Remove</button>}
+      {err && <small className="field-error" role="alert">{err}</small>}
+    </span>
+  );
+}
+
+const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+/** E5: the date presets, worked out for today: [id, label, from, to] */
+export function rangePresets(now = new Date()) {
+  const day = (n) => { const d = new Date(now); d.setDate(d.getDate() + n); return ymd(d); };
+  const first = new Date(now.getFullYear(), now.getMonth(), 1), lastStart = new Date(now.getFullYear(), now.getMonth() - 1, 1), lastEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+  return [['today', 'Today', day(0), day(0)], ['yesterday', 'Yesterday', day(-1), day(-1)], ['7d', '7 days', day(-6), day(0)],
+    ['month', 'This month', ymd(first), day(0)], ['last', 'Last month', ymd(lastStart), ymd(lastEnd)]];
+}
+
+/** E5: one date-range control everywhere: Today, Yesterday, 7 days, This month, Last month, Custom (two dates), and
+ *  All when the page allows no range. value { from, to } ('' = open); onChange({ from, to }) */
+export function DateRange({ from = '', to = '', onChange, allowAll = true, label = 'Dates' }) {
+  const presets = rangePresets();
+  const hit = presets.find(([, , f, t]) => f === from && t === to);
+  const cur = hit ? hit[0] : !from && !to && allowAll ? 'all' : 'custom';
+  return (
+    <div className="date-range" role="group" aria-label={label}>
+      <select aria-label={label + ': quick choice'} value={cur} onChange={(e) => {
+        const v = e.target.value;
+        if (v === 'custom') return;
+        if (v === 'all') onChange({ from: '', to: '' });
+        else { const p = presets.find(([k]) => k === v); onChange({ from: p[2], to: p[3] }); }
+      }}>
+        {allowAll && <option value="all">All dates</option>}
+        {presets.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+        <option value="custom">Custom</option>
+      </select>
+      {/* Custom: the two dates, always there to type or pick */}
+      <input type="date" aria-label="From" title="From" value={from} max={to || undefined} onChange={(e) => onChange({ from: e.target.value, to })} />
+      <span className="muted" aria-hidden="true">–</span>
+      <input type="date" aria-label="To" title="To" value={to} min={from || undefined} onChange={(e) => onChange({ from, to: e.target.value })} />
+    </div>
+  );
 }

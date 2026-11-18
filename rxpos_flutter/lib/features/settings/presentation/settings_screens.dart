@@ -153,6 +153,17 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
         ),
       ]),
       _section('Screen', Icons.screenshot_monitor, [
+        // E2: four sizes at a tap, the slider for anything between
+        Wrap(spacing: 6, runSpacing: 6, children: [
+          for (final (z, l) in const [(0.9, 'Small'), (1.0, 'Normal'), (1.15, 'Large'), (1.3, 'Extra large')])
+            ChoiceChip(
+              key: Key('text-size-$l'),
+              label: Text('$l ${(z * 100).round()}%'),
+              selected: (zoom - z).abs() < .001,
+              onSelected: (_) => ref.read(deviceValueProvider(zoomKey).notifier).set(z == 1 ? null : z.toStringAsFixed(2)),
+            ),
+        ]),
+        const SizedBox(height: 8),
         Text('Text and button size · ${(zoom * 100).round()}%'),
         Slider(
           key: const Key('zoom'),

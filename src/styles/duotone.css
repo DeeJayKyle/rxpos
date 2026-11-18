@@ -123,7 +123,7 @@
   :root[data-palette] .chips-row .chip.active { background: var(--primary-soft); color: var(--primary-ink); border-color: color-mix(in srgb, var(--primary) 45%, transparent); box-shadow: none; }
   :root[data-palette] .lay-std .pos-side .pos-client, :root[data-palette] .lay-std .pos-client.accent-teal { border-color: var(--border); border-top: 1px solid var(--border); }
   :root[data-palette] .product .price { color: var(--text); }
-  :root[data-palette] .pos-cart .pay-row .btn.primary:not(:disabled) { box-shadow: 0 10px 22px -10px color-mix(in srgb, var(--primary) 80%, transparent); font-size: 17px; }
+  :root[data-palette] .pos-cart .pay-row .btn.primary:not(:disabled) { box-shadow: 0 10px 22px -10px color-mix(in srgb, var(--primary) 80%, transparent); font-size: var(--t-3); }
 
   /* the page and its cards: colour 2 under, white cards over */
   :root[data-palette] body { background-image: none; }
@@ -164,7 +164,7 @@
   :root[data-palette] .pos-cart .grand .num { font-size: clamp(24px, 2.4vw, 30px); transition: font-size .15s; }
   :root[data-palette] .pos-cart:has(.tender-row.typing) .grand .num { font-size: clamp(28px, 2.8vw, 34px); }
   :root[data-palette] .change strong { transition: font-size .15s; }
-  :root[data-palette] .change.live strong { font-size: 26px; color: var(--ok); }
+  :root[data-palette] .change.live strong { font-size: var(--t-1); color: var(--ok); }
   :root[data-palette] .change.short strong { color: var(--warn); }
 
   /* the sale is done: a clear banner with the receipt number and the two next steps */
@@ -203,7 +203,7 @@
   /* A1: the Undo button in a toast */
   .toast .toast-action { flex: none; font-weight: 700; color: var(--primary-text); background: var(--primary-soft); border: 0; }
   /* A3: quantity − / + big enough for a finger */
-  @media (pointer: coarse) { .cart-line .qty button { min-width: 44px; min-height: 44px; font-size: 20px; } .cart-line .qty input { min-height: 44px; } }
+  @media (pointer: coarse) { .cart-line .qty button { min-width: 44px; min-height: 44px; font-size: var(--t-2); } .cart-line .qty input { min-height: 44px; } }
 }
 @media screen {
   /* A7: training mode, striped so nobody mistakes it for real selling */
@@ -234,3 +234,11 @@
 .cust-display .cd-thanks { font-size: 2.2em; font-weight: 800; color: var(--primary-text); }
 .cust-display .cd-idle { display: grid; place-items: center; color: var(--muted); }
 .cust-display .num { font-variant-numeric: tabular-nums; }
+
+/* E1 (UI batch 3): one type scale, five sizes: 28 / 20 / 16 / 14 / 12 (the Flutter app's textTheme maps to the same);
+   money always in tabular figures so amounts line up */
+:root { --t-1: 28px; --t-2: 20px; --t-3: 16px; --t-4: 14px; --t-5: 12px; }
+:root[data-palette] .page-head h1 { font-size: var(--t-1); }
+:root[data-palette] :is(.card-head h3, .card > h3, .modal-head h3, .details-head h2) { font-size: var(--t-3); }
+:root[data-palette] .page-head .sub, :root[data-palette] :is(small, .small, .muted.small) { font-size: var(--t-5); }
+:root[data-palette] :is(.num, .price, td.num, .money-input input, .stat strong, .bento-big, .grand, .change strong, .line-total) { font-variant-numeric: tabular-nums; }

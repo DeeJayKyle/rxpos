@@ -108,3 +108,11 @@ export async function verifyPin(tenant, userId, pin) {
   write(all);
   return { ok: false, left };
 }
+
+// UI batch 3, E9: the staff who signed in on this device lately (their ids only, newest first, at most 6). The
+// sign-in page shows them as avatars; nobody who never signed in here is ever shown.
+const RECENT = 'rxpos-recent-staff:';
+export function rememberStaff(tenant, userId) {
+  try { const k = RECENT + (tenant || ''); const list = [userId, ...JSON.parse(localStorage.getItem(k) || '[]').filter((x) => x !== userId)].slice(0, 6); localStorage.setItem(k, JSON.stringify(list)); } catch { /* storage blocked */ }
+}
+export function recentStaff(tenant) { try { return JSON.parse(localStorage.getItem(RECENT + (tenant || '')) || '[]'); } catch { return []; } }

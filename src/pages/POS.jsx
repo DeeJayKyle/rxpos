@@ -24,7 +24,7 @@ import { CASH } from '../finance.js';
 import { cartSubtotal, taxOf, round, formatQty } from '../money.js';
 import { searchProducts, searchKey } from '../search.js';
 import { Modal, SearchBox, ReceiptPdfButton, PageTip } from '../ui.jsx';
-import { MoneyInput } from '../forms.jsx';
+import { MoneyInput, MedThumb } from '../forms.jsx';
 import { toast, ask, askText } from '../feedback.jsx';
 import { payRequest, payStatus, guessNetwork, cloudConfig, whatsappLink, sendSms } from '../cloud.js';
 import { Receipt, receiptText } from './Sales.jsx';
@@ -32,6 +32,7 @@ import { CameraButton, CameraScanner } from '../camscan.jsx';
 import { deviceSettings, setDevice, onDevice } from '../device.js';
 import { kitView, basketDemand, shortText, stockParts } from '../kits.js';
 import KitIcon from '../components/KitIcon.jsx';
+import { pharmacyLogo } from '../logo.jsx';
 
 // Receipt numbers must be unique across synced devices, so they are time-based rather than sequential
 
@@ -436,7 +437,7 @@ export default function POS({ mode = 'retail' }) {
     return () => { ch.close(); box.ch = null; };
   }, []);
   useEffect(() => {
-    const base = { pharmacy: db.settings.name, logo: db.license?.[0]?.branding?.logo || '' };
+    const base = { pharmacy: db.settings.name, logo: pharmacyLogo(db) };
     const msg = done && !done.proforma && !done.reprint
       ? { ...base, done: true, total: fmt(done.total), paid: done.tendered ? fmt(done.tendered) : '', change: done.tendered > done.total ? fmt(done.tendered - done.total) : '' }
       : { ...base, lines: cart.map((l) => ({ name: l.name, qty: l.pack ? `${l.qty / l.pack.size} ${l.pack.name}` : String(l.qty), amount: fmt(l.price * l.qty) })),
@@ -923,7 +924,7 @@ export default function POS({ mode = 'retail' }) {
             return (
               <div key={p.id} className="product-wrap">
               <button className={'product' + (p.stock <= 0 ? ' disabled' : '') + (i === active && !touch ? ' active' : '')} onClick={() => add(p)} onMouseEnter={() => setActive(i)}>
-                <strong>{p.name.replace(/\//g, '/\u200b')}</strong>
+                <span className="prod-head"><MedThumb p={p} base={syncCfg?.url} size={30} /><strong>{p.name.replace(/\//g, '/\u200b')}</strong></span>
                 <small className="muted">{[p.generic, p.form].filter(Boolean).join(' · ')}</small>
                 <div className="row between">
                   <span className="price">{fmt(priceOf(p))}<small className="per-unit"> / {(p.unit || 'unit').toLowerCase()}</small></span>

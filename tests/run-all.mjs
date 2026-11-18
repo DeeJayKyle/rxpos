@@ -152,6 +152,7 @@ const SUITES = [
   ['web sign-in: browser or app, download links', 'v81-app-downloads.mjs', ['.output/v81']],
   ['kits: build, sell, swap, label, refund', 'v82-kits.mjs', ['.output/v82']],
   ['tables and lists (UI batch 3, C)', 'v83-tables.mjs', ['.output/v83']],
+  ['forms and dialogs (UI batch 3, D)', 'v84-forms.mjs', ['.output/v84']],
   // every page on a PC and a phone, for design review: only on request (`npm test -- shots-all`)
   ...(process.argv[2] === 'shots-all' ? [['every page, PC and phone screenshots', 'shots-all.mjs', ['.output/all']]] : []),
   // every theme on the dashboard and Sales History, for the owner's review: only on request (`npm test -- shots-themes`)

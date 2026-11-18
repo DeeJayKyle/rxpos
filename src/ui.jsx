@@ -11,7 +11,7 @@ import { deviceSettings } from './device.js';
 import { ask, toast } from './feedback.jsx';
 import { useFocusTrap } from './focustrap.js';
 import { useLoadMore, useColumns, BulkBar, useSwipe, useWide, DetailsPane } from './tablekit.jsx';
-import { MoneyInput, PhoneInput, Help, checkField } from './forms.jsx';
+import { MoneyInput, PhoneInput, Help, checkField, PhotoField } from './forms.jsx';
 
 /** D7: in a pop-up's form, Enter moves to the next field (the last one sends the form) and Ctrl+Enter sends it at once;
  *  a text area keeps Enter for new lines */
@@ -63,7 +63,8 @@ export function Field({ f, value, onChange, error, onBlur }) {
   // A unique id per field instance (1.10): f.key alone collides when two forms on a page share a key, which breaks
   // the label-to-input link and aria wiring.
   const id = useId(), errId = useId();
-  const { db } = useStore() || {};
+  const store = useStore();
+  const db = store?.db;
   const aria = error ? { 'aria-invalid': true, 'aria-describedby': errId } : {};
   const common = { id, required: f.required, value: value ?? '', onChange: (e) => onChange(e.target.value), placeholder: f.placeholder, autoFocus: f.autoFocus, onBlur, ...aria };
   let input;
@@ -79,6 +80,8 @@ export function Field({ f, value, onChange, error, onBlur }) {
   else if (f.type === 'textarea') input = <textarea rows={3} {...common} />;
   // D5 / D6: amounts with the currency and commas; phone numbers formatted with a tick when they can take WhatsApp
   else if (f.type === 'money') input = <MoneyInput {...aria} id={id} required={f.required} autoFocus={f.autoFocus} placeholder={f.placeholder} onBlur={onBlur} currency={db?.settings?.currency || ''} value={value ?? ''} onChange={onChange} />;
+  // A5: a medicine's photo (camera or file, made small, stored with the pharmacy's files)
+  else if (f.type === 'photo') input = <PhotoField value={value || ''} onChange={onChange} cfg={store?.syncCfg} name={f.name} />;
   else if (f.type === 'phone') input = <PhoneInput {...aria} id={id} required={f.required} autoFocus={f.autoFocus} placeholder={f.placeholder || '0772 123 456'} onBlur={onBlur} value={value ?? ''} onChange={onChange} />;
   else input = <input type={f.type || 'text'} step={f.type === 'number' ? 'any' : undefined} min={f.type === 'number' ? f.min ?? 0 : undefined} {...common} />;
   return (
@@ -110,7 +113,7 @@ export function RecordForm({ fields, initial, onSave, onCancel, saveLabel = 'Sav
     <form onSubmit={submit} noValidate>
       <div className="form-grid">
         {shownFields.map((f, i) => (
-          <Field key={f.key} f={i === 0 ? { ...f, autoFocus: true } : f} value={rec[f.key]} error={errors[f.key]}
+          <Field key={f.key} f={i === 0 ? { ...f, autoFocus: true } : f.type === 'photo' ? { ...f, name: rec.name } : f} value={rec[f.key]} error={errors[f.key]}
             onBlur={() => check(f)}
             onChange={(v) => { const r = { ...rec, [f.key]: v }; setRec(r); if (errors[f.key]) check(f, r); }} />
         ))}

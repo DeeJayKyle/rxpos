@@ -1,3 +1,4 @@
+import { DateRange } from '../forms.jsx';
 import { useMemo, useState } from 'react';
 import { Download, ShieldCheck } from 'lucide-react';
 import { useStore, dayOf, downloadFile, toCSV, MAIN_BRANCH } from '../store.jsx';
@@ -10,11 +11,12 @@ export default function Audit() {
   const [who, setWho] = useState('');
   const [action, setAction] = useState('');
   const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
   const users = useMemo(() => [...new Set(db.audit.map((a) => a.user).filter(Boolean))].sort(), [db.audit]);
   const actions = useMemo(() => [...new Set(db.audit.map((a) => a.action))].sort(), [db.audit]);
   const branch = (id) => db.branches.find((b) => b.id === (id || MAIN_BRANCH))?.name || '';
   const ql = q.toLowerCase();
-  const rows = db.audit.filter((a) => (!who || a.user === who) && (!action || a.action === action) && (!from || dayOf(a.date) >= from) &&
+  const rows = db.audit.filter((a) => (!who || a.user === who) && (!action || a.action === action) && (!from || dayOf(a.date) >= from) && (!to || dayOf(a.date) <= to) &&
     (!q || `${a.user} ${a.action} ${a.details}`.toLowerCase().includes(ql)));
   const drawn = useProgressive(Math.min(rows.length, 1000));
 
@@ -25,7 +27,7 @@ export default function Audit() {
         <div className="row gap">
           <select value={who} onChange={(e) => setWho(e.target.value)}><option value="">Everyone</option>{users.map((u) => <option key={u}>{u}</option>)}</select>
           <select value={action} onChange={(e) => setAction(e.target.value)}><option value="">All actions</option>{actions.map((a) => <option key={a}>{a}</option>)}</select>
-          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} title="From date" />
+          <DateRange from={from} to={to} onChange={(r) => { setFrom(r.from); setTo(r.to); }} />
           <SearchBox value={q} onChange={setQ} />
           <button className="btn ghost" onClick={() => downloadFile('audit-log.csv', toCSV(rows.map(({ date, user, action, details, branchId }) => ({ date, user, action, details, branch: branch(branchId) }))), 'text/csv')}><Download size={16} />CSV</button>
         </div>

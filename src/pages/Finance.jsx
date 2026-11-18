@@ -1,3 +1,4 @@
+import { DateRange } from '../forms.jsx';
 import { useState, useMemo } from 'react';
 import { closedSet, inClosedDay } from '../dayclose.js';
 import { CrudPage, Modal, RecordForm, Empty } from '../ui.jsx';
@@ -13,15 +14,17 @@ const useDayLock = (db) => { const closed = useMemo(() => closedSet(db.dayCloses
 export function Expenses() {
   const { db, fmt, user } = useStore();
   const rowLocked = useDayLock(db);
-  const [month, setMonth] = useState(today().slice(0, 7));
-  const inMonth = (e) => !month || String(e.date).startsWith(month);
+  // E5: the one date-range control (this month to start with)
+  const [range, setRange] = useState(() => ({ from: today().slice(0, 8) + '01', to: today() }));
+  const month = range.from || range.to;
+  const inMonth = (e) => (!range.from || String(e.date).slice(0, 10) >= range.from) && (!range.to || String(e.date).slice(0, 10) <= range.to);
   const total = db.expenses.filter(inMonth).reduce((a, e) => a + e.amount, 0);
   return (
     <CrudPage
       title="Expenses" table="expenses" filter={inMonth} rowLocked={rowLocked}
       totals={{ Amount: (rs) => fmt(rs.reduce((a, e) => a + (Number(e.amount) || 0), 0)) }}
-      emptyText={month ? 'No expenses in this month. Record rent, salaries, transport and other costs here: they come off the profit in reports.' : undefined}
-      headExtra={<><input type="month" aria-label="Month" value={month} onChange={(e) => setMonth(e.target.value)} /><span className="muted">Total {fmt(total)}</span></>}
+      emptyText={month ? 'No expenses in these dates. Record rent, salaries, transport and other costs here: they come off the profit in reports.' : undefined}
+      headExtra={<><DateRange from={range.from} to={range.to} onChange={setRange} /><span className="muted">Total {fmt(total)}</span></>}
       blank={{ date: today(), bankId: CASH, method: 'Cash', recordedBy: user.name }}
       fields={[
         { key: 'date', label: 'Date', type: 'date', required: true },
@@ -220,7 +223,7 @@ export function CashBook() {
         <h1>Cash Book</h1>
         <div className="row gap">
           <select aria-label="Account" value={account} onChange={(e) => setAccount(e.target.value)}>{db.banks.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select>
-          <input type="date" aria-label="From" value={from} onChange={(e) => setFrom(e.target.value)} /><input type="date" aria-label="To" value={to} onChange={(e) => setTo(e.target.value)} />
+          <DateRange from={from} to={to} allowAll={false} onChange={(r) => { setFrom(r.from); setTo(r.to); }} />
           <button className="btn ghost" onClick={() => downloadFile('cash-book.csv', toCSV(rows.map(({ date, desc, kind, in: i, out, bal: b }) => ({ date, description: desc, type: kind, in: i, out, balance: b }))), 'text/csv')}>Export CSV</button>
         </div>
       </div>

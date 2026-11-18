@@ -263,3 +263,13 @@ Every feature of the React app (`src/pages/*.jsx`, `src/*.jsx`), screen by scree
 - ✅ C9 Stock bar on inventory rows (2 × reorder = full)
 - ✅ C10 Phones: swipe a client for Call / WhatsApp, a sale for Print / Refund (the refund sheet and approval as before)
 - ✅ C11 Pull to refresh on phones: "Synced just now" (classic: Android app; Flutter: every page)
+- ✅ D1 Fields checked as they are left (required, numbers, phone, email, duplicate barcode, price below cost, past expiry)
+- ✅ D2 Add Stock: "Draft saved hh:mm"
+- ✅ D3 (?) help on tricky fields and settings (one set of sentences, `HELP` / `helpTexts`)
+- ✅ D4 Saves close at once; a dot then a tick when the cloud has it
+- ✅ D5 Money inputs: currency in front, commas while typing (`MoneyInput` / `MoneyFormatter`)
+- ✅ D6 Phone inputs format as typed with a tick when WhatsApp / SMS can reach them
+- ✅ D7 First field focused, Enter to the next, Ctrl+Enter saves
+- ✅ D8 Phones: pop-ups as sheets from the bottom (React full height; Flutter sized to content)
+- ✅ D9 Three pop-up sizes 420 / 640 / 960
+- ✅ D10 Danger dialogs list what will happen, Cancel focused, the one red on the right

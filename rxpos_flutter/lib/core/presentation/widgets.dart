@@ -345,7 +345,7 @@ class FormFieldSpec {
 }
 
 /// money (D5): the currency in front and commas while typing, kept as a number; phone (D6): formatted as typed
-enum FieldKind { text, number, multiline, choice, flag, date, money, phone }
+enum FieldKind { text, number, multiline, choice, flag, date, money, phone, photo }
 
 /// What [editRecord] returns when its Delete button is pressed (and the deletion confirmed).
 const deleteRecord = {'_delete': true};
@@ -353,11 +353,11 @@ const deleteRecord = {'_delete': true};
 /// A dialog that edits a record's fields and returns the edited values (null when cancelled). With [delete] (the
 /// record's name, e.g. 'medicine'), a Delete button asks "Delete this medicine?" and then returns [deleteRecord].
 Future<Map<String, Object?>?> editRecord(BuildContext context, {required String title, required List<FormFieldSpec> fields,
-    Map<String, Object?> initial = const {}, String save = 'Save', String? delete, bool side = false, String currency = 'UGX'}) {
+    Map<String, Object?> initial = const {}, String save = 'Save', String? delete, bool side = false, String currency = 'UGX', Future<String?> Function()? pickPhoto}) {
   final values = Map<String, Object?>.of(initial);
   final ctl = {
     for (final f in fields)
-      if (f.kind != FieldKind.choice && f.kind != FieldKind.flag)
+      if (f.kind != FieldKind.choice && f.kind != FieldKind.flag && f.kind != FieldKind.photo)
         f.key: TextEditingController(text: f.kind == FieldKind.money ? groupDigits(_show(initial[f.key])) : f.kind == FieldKind.phone ? formatPhone(_show(initial[f.key])) : _show(initial[f.key])),
   };
   final formKey = GlobalKey<FormState>();
@@ -397,6 +397,22 @@ Future<Map<String, Object?>?> editRecord(BuildContext context, {required String 
                       Padding(
                         padding: const EdgeInsets.only(bottom: 8),
                         child: switch (f.kind) {
+                          // A5: a photo: taken or chosen by [pickPhoto], which returns its address once stored
+                          FieldKind.photo => Row(key: ValueKey('field-${f.key}'), children: [
+                              MedThumb(name: '${values['name'] ?? ''}', photo: '${values[f.key] ?? ''}', size: 56),
+                              const SizedBox(width: 10),
+                              OutlinedButton.icon(
+                                onPressed: pickPhoto == null
+                                    ? null
+                                    : () async {
+                                        final path = await pickPhoto();
+                                        if (path != null) set(() => values[f.key] = path);
+                                      },
+                                icon: const Icon(Icons.photo_camera_outlined, size: 18),
+                                label: Text('${values[f.key] ?? ''}'.isEmpty ? 'Add a photo' : 'Change photo'),
+                              ),
+                              if ('${values[f.key] ?? ''}'.isNotEmpty) TextButton(onPressed: () => set(() => values[f.key] = ''), child: const Text('Remove')),
+                            ]),
                           FieldKind.flag => SwitchListTile(contentPadding: EdgeInsets.zero, title: Text(f.label), value: values[f.key] == true, onChanged: (v) => set(() => values[f.key] = v)),
                           FieldKind.choice => DropdownButtonFormField<String>(
                               initialValue: f.options.any((o) => o.$1 == values[f.key]) ? values[f.key] as String : null,
@@ -489,7 +505,7 @@ Future<bool> confirmAction(BuildContext context, String title, String message, S
               const SizedBox(height: 8),
               for (final e in effects)
                 Padding(
-                  key: const Key('dialog-effect'),
+                  key: ValueKey('dialog-effect-$e'),
                   padding: const EdgeInsets.only(bottom: 2),
                   child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Text('•  ', style: TextStyle(color: danger ? c.tones.block : null, fontWeight: FontWeight.w800)),
@@ -589,5 +605,53 @@ class _PageSkeletonState extends State<PageSkeleton> with SingleTickerProviderSt
         },
       ),
     ));
+  }
+}
+
+/// E5 (as src/forms.jsx rangePresets): Today, Yesterday, 7 days, This month, Last month: (id, label, from, to)
+List<(String, String, String, String)> rangePresets([DateTime? now]) {
+  final n = now ?? DateTime.now();
+  String ymd(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+  String day(int k) => ymd(DateTime(n.year, n.month, n.day + k));
+  return [
+    ('today', 'Today', day(0), day(0)), ('yesterday', 'Yesterday', day(-1), day(-1)), ('7d', '7 days', day(-6), day(0)),
+    ('month', 'This month', ymd(DateTime(n.year, n.month, 1)), day(0)), ('last', 'Last month', ymd(DateTime(n.year, n.month - 1, 1)), ymd(DateTime(n.year, n.month, 0))),
+  ];
+}
+
+/// E5: one date-range control everywhere: a quick choice (Today … Last month, All, Custom) and the two dates
+class DateRangeBox extends StatelessWidget {
+  const DateRangeBox({super.key, required this.from, required this.to, required this.onChanged, this.allowAll = true});
+  final String from, to;
+  final void Function(String from, String to) onChanged;
+  final bool allowAll;
+  @override
+  Widget build(BuildContext context) {
+    final presets = rangePresets();
+    final hit = presets.where((p) => p.$3 == from && p.$4 == to).firstOrNull;
+    final cur = hit?.$1 ?? (from.isEmpty && to.isEmpty && allowAll ? 'all' : 'custom');
+    return Wrap(key: const Key('date-range'), spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
+      SizedBox(
+        width: 150,
+        child: DropdownButtonFormField<String>(
+          key: ValueKey('date-range-$cur'),
+          initialValue: cur,
+          isExpanded: true,
+          decoration: const InputDecoration(labelText: 'Dates', isDense: true),
+          items: [
+            if (allowAll) const DropdownMenuItem(value: 'all', child: Text('All dates')),
+            for (final p in presets) DropdownMenuItem(value: p.$1, child: Text(p.$2)),
+            const DropdownMenuItem(value: 'custom', child: Text('Custom')),
+          ],
+          onChanged: (v) {
+            if (v == 'all') onChanged('', '');
+            final p = presets.where((x) => x.$1 == v).firstOrNull;
+            if (p != null) onChanged(p.$3, p.$4);
+          },
+        ),
+      ),
+      DateBox(label: 'From', value: from, onChanged: (v) => onChanged(v, to)),
+      DateBox(label: 'To', value: to, onChanged: (v) => onChanged(from, v)),
+    ]);
   }
 }

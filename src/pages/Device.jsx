@@ -86,7 +86,11 @@ export default function Device() {
             <p className="muted small">Desktop view shows the full PC layout. Pinch or double-tap to read the small print.</p>
             <Choice label="Layout" value={d.view} onChange={(view) => setDevice({ view })} options={[['auto', 'Automatic', MonitorSmartphone], ['phone', 'Phone view', Smartphone], ['desktop', 'Desktop view', Monitor]]} />
           </>}
-          <label className="field" style={{ marginTop: 14 }}><span><ZoomIn size={14} /> Text and button size · {Math.round(d.zoom * 100)}%</span>
+          {/* E2: four sizes at a tap, the slider for anything between */}
+          <div className="seg text-size-presets" role="radiogroup" aria-label="Text size" style={{ marginTop: 14 }}>
+            {[[0.9, 'Small'], [1, 'Normal'], [1.15, 'Large'], [1.3, 'Extra large']].map(([z, l]) => <button key={l} type="button" role="radio" aria-checked={Math.abs(d.zoom - z) < 0.001} className={Math.abs(d.zoom - z) < 0.001 ? 'on' : ''} onClick={() => setDevice({ zoom: z })}>{l}<small> {Math.round(z * 100)}%</small></button>)}
+          </div>
+          <label className="field" style={{ marginTop: 10 }}><span><ZoomIn size={14} /> Text and button size · {Math.round(d.zoom * 100)}%</span>
             <input type="range" min="0.8" max="1.6" step="0.05" value={d.zoom} onChange={(e) => setDevice({ zoom: Number(e.target.value) })} /></label>
           {canSwitchView && <label className="field check"><input type="checkbox" checked={d.doubleTap} onChange={(e) => setDevice({ doubleTap: e.target.checked })} /><span>Double-tap an empty spot to zoom in, and again to zoom out</span></label>}
           {canRotate && <>

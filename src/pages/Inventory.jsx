@@ -97,6 +97,7 @@ export function MedicineList() {
     { key: 'wholesale', label: `Wholesale price (blank = cost +${s.wholesaleMarkup}%)`, type: 'money', help: HELP.wholesale, validate: (v, r) => (Number(v) > 0 && Number(r.cost) > Number(v) ? 'The wholesale price is below the cost' : '') },
     { key: 'reorder', label: 'Reorder level', type: 'number', help: HELP.reorder },
     { key: 'shelf', label: 'Shelf / location' },
+    { key: 'photo', label: 'Photo', type: 'photo', full: true },
     { key: 'openingStock', label: 'Opening stock (quantity)', type: 'number', hidden: (r) => !r._new },
     { key: 'openingBatch', label: 'Opening stock batch no.', hidden: (r) => !r._new },
     { key: 'openingExpiry', label: 'Opening stock expiry', type: 'date', hidden: (r) => !r._new, validate: (v) => (v && v < today() ? 'This expiry date has passed' : '') },

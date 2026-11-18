@@ -16,6 +16,9 @@ import '../../../core/presentation/export.dart';
 import '../../../core/presentation/list_controls.dart';
 import '../../../core/presentation/widgets.dart';
 import '../../../core/rules/dates.dart';
+import 'dart:typed_data';
+import '../../../core/network/files.dart';
+import '../../../core/network/cloud_api.dart' show cloudApiProvider;
 import '../../../core/rules/ids.dart';
 import '../../../core/rules/money.dart';
 import '../../../core/rules/pricing.dart';
@@ -250,6 +253,9 @@ class _Tag extends StatelessWidget {
 }
 
 /// Add or edit a medicine (the Medicine List form).
+/// Tests choose the photo here instead of the system's picker
+Future<List<({String name, Uint8List bytes})>> Function()? medicinePhotoPicker;
+
 String? _notPast(String v, Map<String, Object?> _) => v.compareTo(today()) < 0 ? 'This expiry date has passed' : null;
 
 Future<void> editMedicine(BuildContext context, WidgetRef ref, Product? p) async {
@@ -257,7 +263,19 @@ Future<void> editMedicine(BuildContext context, WidgetRef ref, Product? p) async
   final forms = (await ref.read(recordStoreProvider).rows('formulations')).map((f) => '${f['name']}').toList()..sort();
   final s = d.settings;
   if (!context.mounted) return;
-  final v = await editRecord(context, title: p == null ? 'Add medicine' : 'Edit ${p.name}', delete: p == null ? null : 'medicine', initial: p?.toRecord() ?? {'form': 'Tablets', 'unit': 'Piece', 'reorder': 10}, fields: [
+  // A5: a photo taken or chosen, made small and stored with the pharmacy's files (as prescription scans are)
+  Future<String?> pickPhoto() async {
+    try {
+      final files = await (medicinePhotoPicker ?? () => pickFiles(extensions: const ['jpg', 'jpeg', 'png', 'webp'], multiple: false))();
+      if (files.isEmpty) return null;
+      final up = await uploadFile(ref.read(cloudApiProvider), medicinePhoto(files.first.bytes), 'medicine.jpg', type: 'image/jpeg');
+      return '${up['path'] ?? ''}'.isEmpty ? null : '${up['path']}';
+    } catch (e) {
+      if (context.mounted) say(context, 'The photo could not be saved: $e', error: true);
+      return null;
+    }
+  }
+  final v = await editRecord(context, pickPhoto: pickPhoto, title: p == null ? 'Add medicine' : 'Edit ${p.name}', delete: p == null ? null : 'medicine', initial: p?.toRecord() ?? {'form': 'Tablets', 'unit': 'Piece', 'reorder': 10}, fields: [
     const FormFieldSpec('name', 'Medicine name', required: true),
     const FormFieldSpec('generic', 'Generic name'),
     const FormFieldSpec('category', 'Category / class'),
@@ -276,6 +294,7 @@ Future<void> editMedicine(BuildContext context, WidgetRef ref, Product? p) async
         validate: (v, all) => moneyValue(v) > 0 && moneyValue('${all['cost'] ?? ''}') > moneyValue(v) ? 'The wholesale price is below the cost' : null),
     FormFieldSpec('reorder', 'Reorder level', kind: FieldKind.number, help: helpTexts['reorder']),
     const FormFieldSpec('shelf', 'Shelf / location'),
+    const FormFieldSpec('photo', 'Photo', kind: FieldKind.photo),
     if (p == null) ...const [
       FormFieldSpec('openingStock', 'Opening stock (quantity)', kind: FieldKind.number),
       FormFieldSpec('openingBatch', 'Opening stock batch no.'),

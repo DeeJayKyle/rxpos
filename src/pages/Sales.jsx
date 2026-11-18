@@ -8,6 +8,7 @@ import { ViewSwitch, BoardView, GalleryView, savedView, saveView } from '../comp
 import { saleStatus } from '../components/BentoDashboard.jsx';
 import { Modal, SearchBox, Empty, PdfButton, ReceiptPdfButton, PayChip, useSort, SortTh, SubViews } from '../ui.jsx';
 import { useLoadMore, useColumns, BulkBar, useSwipe, useWide, DetailsPane } from '../tablekit.jsx';
+import { DateRange } from '../forms.jsx';
 import { toast } from '../feedback.jsx';
 import { Barcode } from '../barcode.jsx';
 import { stockParts, kitContents } from '../kits.js';
@@ -22,6 +23,7 @@ const unpaid = (s) => s.total - (s.paid ?? s.total) - billed(s);
 import DraftsList, { useDraftCount } from './Drafts.jsx';
 import { useListControls, useContextMenu } from '../listcontrols.jsx';
 import { Copy } from 'lucide-react';
+import { pharmacyLogo } from '../logo.jsx';
 
 /** Thermal-printer friendly receipt (58 mm or 80 mm, set in Settings). */
 export function Receipt({ sale }) {
@@ -32,7 +34,7 @@ export function Receipt({ sale }) {
   return (
     <div className={'receipt print-area paper-' + (s.paperWidth || 80)}>
       <div className="center">
-        {db.license?.[0]?.branding?.logo && <img className="receipt-logo" src={db.license[0].branding.logo} alt="" />}
+        {pharmacyLogo(db) && <img className="receipt-logo" src={pharmacyLogo(db)} alt="" />}
         <strong className="receipt-title">{s.name}</strong>
         {db.branches.length > 1 && branch && <div>{branch.name}</div>}
         {((db.branches.length > 1 && branch?.address) ? branch.address : s.address) && <div>{(db.branches.length > 1 && branch?.address) ? branch.address : s.address}</div>}
@@ -86,7 +88,7 @@ export function SaleInvoice({ sale }) {
     <div className="invoice-doc print-area paper-210">
       <div className="invoice-head">
         <div>
-          {db.license?.[0]?.branding?.logo && <img className="receipt-logo" src={db.license[0].branding.logo} alt="" />}
+          {pharmacyLogo(db) && <img className="receipt-logo" src={pharmacyLogo(db)} alt="" />}
           <strong className="invoice-name">{s.name}</strong>
           {db.branches.length > 1 && branch && <div>{branch.name}</div>}
           {((db.branches.length > 1 && branch?.address) ? branch.address : s.address) && <div>{(db.branches.length > 1 && branch?.address) ? branch.address : s.address}</div>}
@@ -271,8 +273,7 @@ export default function Sales() {
           <ViewSwitch value={dv} onChange={pickView} />
           {dv === 'table' && colsK.button}
           <SearchBox value={q} onChange={setQ} placeholder="Receipt, customer, medicine…" inputRef={searchRef} />
-          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} title="From" aria-label="From" />
-          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} title="To" aria-label="To" />
+          <DateRange from={from} to={to} onChange={(r) => { setFrom(r.from); setTo(r.to); }} />
           <button className="btn ghost" onClick={() => downloadFile('sales.csv', toCSV(exportRows), 'text/csv')}><Download size={16} />CSV</button>
           <PdfButton title="Sales history" subtitle={[from || to ? `${from || 'start'} to ${to || 'today'}` : 'All dates', q && `search "${q}"`, onlyEdited && 'edited sales only', `${valid.length} sales · ${fmt(valid.reduce((a, s) => a + s.total, 0))}`].filter(Boolean).join(' · ')}
             data={() => [{ head: ['Receipt', 'Date', 'Customer', 'Cashier', 'Payment', 'Status', 'Total'], numeric: [6],

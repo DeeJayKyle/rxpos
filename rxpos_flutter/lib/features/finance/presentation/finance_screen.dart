@@ -137,8 +137,10 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
       _head([
         DropdownButton<String>(value: banks.any((b) => b['id'] == _account) ? _account : cashDrawer, items: [for (final b in banks) DropdownMenuItem(value: '${b['id']}', child: Text('${b['name']}'))],
             onChanged: (v) => setState(() => _account = v ?? cashDrawer)),
-        DateBox(label: 'From', value: _from, onChanged: (v) => setState(() => _from = v.isEmpty ? _from : v)),
-        DateBox(label: 'To', value: _to, onChanged: (v) => setState(() => _to = v.isEmpty ? _to : v)),
+        DateRangeBox(from: _from, to: _to, allowAll: false, onChanged: (f, t) => setState(() {
+          if (f.isNotEmpty) _from = f;
+          if (t.isNotEmpty) _to = t;
+        })),
         ExportButtons(name: 'cash-book', settings: st, title: 'Cash Book – ${bank?['name'] ?? ''}', subtitle: '$_from to $_to',
             csv: () => [for (final (e, b) in book.rows) {'date': e.date, 'description': e.desc, 'type': e.kind, 'in': e.inAmount, 'out': e.outAmount, 'balance': b}],
             pdf: () => [PdfTable(head: const ['Date', 'Description', 'Type', 'Money in', 'Money out', 'Balance'], numeric: const [3, 4, 5], body: [

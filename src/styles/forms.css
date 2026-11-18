@@ -52,3 +52,43 @@
 .money-input.small-input { width: 110px; padding: 0; }
 .money-input.small-input input { width: 110px; }
 .field-error.inline { display: inline; margin: 0; }
+
+/* A5: a medicine's photo, or its first letter */
+.med-thumb { width: var(--sz, 36px); height: var(--sz, 36px); flex: none; border-radius: 8px; object-fit: cover; background: var(--surface-2); }
+.med-thumb.initial { display: inline-grid; place-items: center; font-weight: 750; font-size: calc(var(--sz, 36px) * .45); color: var(--primary-text, var(--primary)); background: var(--primary-soft); }
+.product .prod-head { display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
+.product .prod-head strong { min-width: 0; }
+.photo-field { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+/* E10: the error page */
+.crash-card { display: grid; gap: 14px; padding: 24px; border-radius: var(--r-card, 18px); background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow); }
+.crash-card h1 { margin: 0; font-size: 22px; }
+.crash-more summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+.crash-more { display: grid; gap: 8px; }
+/* E2: text size presets */
+.text-size-presets button small { opacity: .7; font-weight: 500; }
+
+/* E4: touch screens: every button, chip and icon button at least 44 px, with a little more room between them */
+:root[data-touch] :is(.btn, .btn.sm, .icon-btn, .icon-btn.sm, .chip, .seg button, .tabs button, .chip-pill, .link-btn, .fav-btn, .help-btn) { min-height: 44px; min-width: 44px; }
+:root[data-touch] :is(.row.gap, .row-acts, .chips-row, .bulk-bar, .form-actions) { gap: 10px; }
+:root[data-touch] .help-btn { min-height: 32px !important; min-width: 32px; }
+
+/* E5: one date-range control */
+.date-range { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.date-range select { min-width: 130px; }
+/* E6: the pharmacy's logo in Settings */
+.logo-preview { width: 72px; height: 72px; object-fit: contain; border-radius: 12px; background: var(--surface-2); display: inline-grid; place-items: center; }
+
+/* E9: recent staff on this device */
+.recent-staff { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+.staff-avatar { display: grid; justify-items: center; gap: 4px; border: 0; background: none; cursor: pointer; padding: 4px; border-radius: 12px; color: var(--text); font: inherit; min-width: 64px; }
+.staff-avatar .avatar { width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; font-weight: 750; background: var(--primary); color: var(--on-primary, #fff); }
+.staff-avatar:hover .avatar, .staff-avatar:focus-visible .avatar { box-shadow: 0 0 0 3px var(--primary-soft); }
+/* E7: a PIN pad */
+.pin-pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.pin-key { min-height: 52px; border-radius: 14px; border: 1px solid var(--border); background: var(--surface-2); font: inherit; font-size: var(--t-2, 20px); font-weight: 700; color: var(--text); cursor: pointer; }
+.pin-key:active { background: var(--primary-soft); }
+.pin-key.clear, .pin-key.back { font-size: var(--t-3, 16px); color: var(--muted); }
+/* E8: the opening screen with the pharmacy's logo and name */
+#splash .splash-pharmacy { display: flex; align-items: center; gap: 10px; color: #e2e8f0; font-weight: 650; font-size: 15px; }
+#splash .splash-pharmacy img { width: 36px; height: 36px; object-fit: contain; border-radius: 8px; background: #fff; }

@@ -239,8 +239,13 @@ class _MonthLinesState extends State<MonthLines> {
         ),
       ]),
       Wrap(spacing: 12, children: [
-        for (final (name, color, _) in widget.series)
-          Row(mainAxisSize: MainAxisSize.min, children: [Container(width: 12, height: 3, color: color), const SizedBox(width: 4), Text(name)]),
+        for (final (k, (name, color, _)) in widget.series.indexed)
+          Row(mainAxisSize: MainAxisSize.min, children: [
+            // the legend shows each series' pattern (E3)
+            CustomPaint(key: ValueKey('legend-pattern-$k'), size: const Size(18, 3), painter: _KeyPainter(color, seriesPattern(k))),
+            const SizedBox(width: 4),
+            Text(name),
+          ]),
       ]),
       const SizedBox(height: 6),
       LayoutBuilder(builder: (_, box) => CustomPaint(size: Size(box.maxWidth, 200), painter: _LinesPainter(keys, widget.series, th.dividerColor))),
@@ -274,14 +279,15 @@ class _LinesPainter extends CustomPainter {
       _text(c, keys.length > 6 && i % 3 != 0 ? m : '$m ${keys[i].substring(2, 4)}', Offset(x(i), s.height - 8),
           align: i == 0 ? TextAlign.left : i == keys.length - 1 ? TextAlign.right : TextAlign.center);
     }
-    for (final (_, color, values) in series) {
+    for (final (k, (_, color, values)) in series.indexed) {
       final p = Path();
       for (var i = 0; i < keys.length; i++) {
         final pt = Offset(x(i), y(values[keys[i]] ?? 0));
         i == 0 ? p.moveTo(pt.dx, pt.dy) : p.lineTo(pt.dx, pt.dy);
         c.drawCircle(pt, 3.2, Paint()..color = color);
       }
-      c.drawPath(p, Paint()..color = color..strokeWidth = 2..style = PaintingStyle.stroke);
+      // E3 (UI batch 3): each series after the first has its own pattern, so close hues stay apart
+      c.drawPath(dashed(p, seriesPattern(k)), Paint()..color = color..strokeWidth = 2..style = PaintingStyle.stroke..strokeCap = StrokeCap.round);
     }
   }
 
@@ -438,4 +444,33 @@ class ChartExportButton extends StatelessWidget {
           if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Saved $name.csv${f.path.isEmpty ? '' : ' · ${f.path}'}')));
         },
       );
+}
+
+/// E3: the line pattern of series [i] (as src/styles/dashboard.css): solid, dashed, dotted, dash-dot; on and off lengths
+List<double> seriesPattern(int i) => const <List<double>>[[], [9, 5], [1.5, 5], [9, 4, 1.5, 4]][i % 4];
+
+/// [p] cut into the [pattern]'s dashes (the path as it is when the pattern is empty)
+Path dashed(Path p, List<double> pattern) {
+  if (pattern.isEmpty) return p;
+  final out = Path();
+  for (final m in p.computeMetrics()) {
+    var d = 0.0, k = 0;
+    while (d < m.length) {
+      final len = pattern[k % pattern.length];
+      if (k.isEven) out.addPath(m.extractPath(d, min(d + len, m.length)), Offset.zero);
+      d += len;
+      k++;
+    }
+  }
+  return out;
+}
+
+class _KeyPainter extends CustomPainter {
+  const _KeyPainter(this.color, this.pattern);
+  final Color color;
+  final List<double> pattern;
+  @override
+  void paint(Canvas c, Size s) => c.drawPath(dashed(Path()..moveTo(0, s.height / 2)..lineTo(s.width, s.height / 2), pattern), Paint()..color = color..strokeWidth = 3..style = PaintingStyle.stroke);
+  @override
+  bool shouldRepaint(_KeyPainter o) => o.color != color;
 }

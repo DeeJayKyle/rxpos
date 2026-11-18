@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../features/sync_status/application/sync_controller.dart';
 import '../theme/themes.dart' show TonesOfContext;
+import '../network/cloud_api.dart' show cloudApiProvider;
 
 const dialogSm = 420.0, dialogMd = 640.0, dialogLg = 960.0;
 
@@ -125,3 +126,28 @@ class SyncMark extends ConsumerWidget {
 void saySaved(BuildContext context, String message) => ScaffoldMessenger.of(context)
   ..hideCurrentSnackBar()
   ..showSnackBar(SnackBar(key: const Key('saved-snack'), content: Row(children: [Flexible(child: Text(message)), const SyncMark()])));
+
+/// A5: a medicine's photo (its address in the pharmacy's files), or its first letter when it has none
+class MedThumb extends ConsumerWidget {
+  const MedThumb({super.key, required this.name, required this.photo, this.size = 30});
+  final String name, photo;
+  final double size;
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = Theme.of(context);
+    final initial = Container(
+      key: const Key('med-initial'),
+      width: size,
+      height: size,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(color: t.colorScheme.primary.withValues(alpha: .14), borderRadius: BorderRadius.circular(8)),
+      child: Text(name.trim().isEmpty ? '?' : name.trim()[0].toUpperCase(), style: TextStyle(fontWeight: FontWeight.w800, fontSize: size * .45, color: t.colorScheme.primary)),
+    );
+    if (photo.isEmpty) return ExcludeSemantics(child: initial);
+    return ClipRRect(
+      key: const Key('med-photo'),
+      borderRadius: BorderRadius.circular(8),
+      child: Image.network(ref.read(cloudApiProvider).fileUrl(photo), width: size, height: size, fit: BoxFit.cover, excludeFromSemantics: true, errorBuilder: (_, _, _) => initial),
+    );
+  }
+}

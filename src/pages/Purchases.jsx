@@ -13,6 +13,7 @@ import { CASH } from '../finance.js';
 import { round } from '../money.js';
 import { Modal, PdfButton, Empty, PageTip, useSort, SortTh, SubViews } from '../ui.jsx';
 import { useLoadMore, useColumns } from '../tablekit.jsx';
+import { DateRange } from '../forms.jsx';
 import { useListControls } from '../listcontrols.jsx';
 import { ask, toast } from '../feedback.jsx';
 import { newInternalBarcode } from '../barcode.jsx';
@@ -712,8 +713,7 @@ export default function Purchases() {
       {tab === 'drafts' && <DraftsList kind="delivery" />}
       {tab === 'prices' && <SupplierPrices q={q} />}
       {tab === 'history' && <div className="report-filters">
-        <label>From<input type="date" value={pf.from} onChange={(e) => setPf({ ...pf, from: e.target.value })} /></label>
-        <label>To<input type="date" value={pf.to} onChange={(e) => setPf({ ...pf, to: e.target.value })} /></label>
+        <DateRange from={pf.from} to={pf.to} onChange={(r) => setPf({ ...pf, ...r })} />
         <label>Supplier<select value={pf.supplier} onChange={(e) => setPf({ ...pf, supplier: e.target.value })}><option value="">All</option>{suppliers.map((x) => <option key={x}>{x}</option>)}</select></label>
       </div>}
       {tab === 'history' && <div className="card table-wrap" ref={histRef}>

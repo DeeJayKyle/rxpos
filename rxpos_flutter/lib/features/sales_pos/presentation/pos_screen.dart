@@ -1126,6 +1126,8 @@ class _ProductPanel extends StatelessWidget {
                                 Row(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
+                                    // A5: the medicine's photo, or its first letter
+                                    Padding(padding: const EdgeInsets.only(right: 8, top: 2), child: MedThumb(key: ValueKey('thumb-${p.id}'), name: p.name, photo: '${p.raw['photo'] ?? ''}')),
                                     Expanded(
                                       child: Text(
                                         p.name,

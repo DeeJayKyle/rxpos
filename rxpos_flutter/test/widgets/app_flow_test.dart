@@ -6,6 +6,8 @@ import 'dart:ui' show Tristate;
 
 import 'package:rxpos/core/presentation/list_controls.dart' show ListControls;
 import 'package:rxpos/core/presentation/form_kit.dart' show HelpTip, SyncMark;
+import 'package:image/image.dart' as img;
+import 'package:rxpos/features/inventory/presentation/medicine_screens.dart' show medicinePhotoPicker;
 import 'package:rxpos/core/theme/line_colors.dart' show ColourTableHead;
 import 'package:crypto/crypto.dart';
 
@@ -904,7 +906,7 @@ void main() {
     await settle(tester);
     final yes = confirmAction(tester.element(find.byType(Scaffold).first), 'Delete this medicine?', 'This cannot be undone.', 'Delete', danger: true, effects: ['1 medicine removed on every device', '2 batches and their history']);
     await settle(tester);
-    expect(find.byKey(const Key('dialog-effect')), findsNWidgets(2));
+    expect(find.byKey(const ValueKey('dialog-effect-2 batches and their history')), findsOneWidget);
     expect(tester.widget<FilledButton>(find.byKey(const Key('confirm-yes'))).style?.backgroundColor?.resolve({}), isNotNull);
     await tester.tap(find.text('Cancel'));
     await settle(tester);
@@ -929,6 +931,41 @@ void main() {
     expect(find.byKey(const Key('phone-sheet')), findsOneWidget);
     final r = tester.getRect(find.byType(AlertDialog));
     expect((r.width, r.bottom), (400.0, 800.0));
+    await done(tester);
+  });
+
+  testWidgets('A5 medicine photos: taken in the medicine form, made small, stored as a file (the record keeps its address), shown on the till tile; a first letter when none', (tester) async {
+    await tester.runAsync(signedIn);
+    final uploads = <Map<String, Object?>>[];
+    cloud.api['files'] = (b) {
+      uploads.add(b);
+      return (200, {'ok': true, 'done': true, 'path': '/api/files/t1/${b['id']}/sig'});
+    };
+    // a 600 × 400 picture: kept at most 256 px wide
+    final big = img.encodePng(img.Image(width: 600, height: 400));
+    medicinePhotoPicker = () async => [(name: 'pill.png', bytes: Uint8List.fromList(big))];
+    addTearDown(() => medicinePhotoPicker = null);
+    await start(tester);
+    GoRouter.of(tester.element(find.byType(Scaffold).first)).go('/medicines');
+    await settle(tester);
+    await tester.tap(find.text('Calmex 500mg Tabs').first, buttons: kSecondaryMouseButton);
+    await settle(tester);
+    await tester.tap(find.text('Edit').last);
+    await settle(tester);
+    await tester.ensureVisible(find.text('Add a photo'));
+    await tester.tap(find.text('Add a photo'));
+    await settle(tester);
+    expect(find.text('Change photo'), findsOneWidget);
+    final sent = img.decodeImage(base64Decode('${uploads.single['data']}'))!;
+    expect((sent.width, sent.height), (256, 171));
+    await tester.tap(find.text('Save'));
+    await settle(tester);
+    final p1 = (await tester.runAsync(() => RecordStore(db).get('products', 'p1')))!;
+    expect('${p1['photo']}', startsWith('/api/files/t1/'));
+    await tester.sendKeyEvent(LogicalKeyboardKey.f2);
+    await settle(tester);
+    expect(find.descendant(of: find.byKey(const ValueKey('thumb-p1')), matching: find.byKey(const Key('med-photo'))), findsOneWidget);
+    expect(find.descendant(of: find.byKey(const ValueKey('thumb-p2')), matching: find.byKey(const Key('med-initial'))), findsOneWidget);
     await done(tester);
   });
 
@@ -3086,20 +3123,27 @@ void main() {
     await done(tester);
   });
 
-  testWidgets('a broken screen: Something went wrong, then Reload RxPOS brings the app back', (tester) async {
+  testWidgets('a broken screen: Something went wrong on this page, Send report, then Try again brings the app back', (tester) async {
     await tester.runAsync(signedIn);
     await start(tester);
     final c = ProviderScope.containerOf(tester.element(find.byType(MaterialApp)));
     c.read(appCrashProvider.notifier).crashed(StateError('A test break'));
     await settle(tester, 3);
-    expect(find.text('Something went wrong'), findsOneWidget);
+    expect(find.text('Something went wrong on this page'), findsOneWidget);
+    // E10: Try again, Go to the dashboard, Send report; the details and the rescue download folded away
+    expect(find.text('Go to the dashboard'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('send-report')));
+    await settle(tester, 3);
+    expect(find.text('Report sent, thank you'), findsOneWidget);
+    await tester.tap(find.text('Details for support'));
+    await settle(tester, 3);
     expect(find.text('Bad state: A test break'), findsOneWidget);
     expect(find.text('Download my data'), findsOneWidget);
     final rescue = jsonDecode((await tester.runAsync(() => rescueJson(RecordStore(db))))!) as Map;
     expect(((rescue['products']! as List).first as Map)['name'], 'Calmex 500mg Tabs', reason: 'everything on this device');
-    await tester.tap(find.text('Reload RxPOS'));
+    await tester.tap(find.text('Try again'));
     await settle(tester);
-    expect(find.text('Something went wrong'), findsNothing);
+    expect(find.text('Something went wrong on this page'), findsNothing);
     expect(find.byKey(const Key('account-menu')), findsOneWidget);
     await done(tester);
   });

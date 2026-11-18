@@ -5,7 +5,9 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { ChevronLeft, Printer as PrinterIcon, ScanBarcode, Repeat, Clock, MonitorSmartphone, UserCog } from 'lucide-react';
 import { SettingsSearch, SettingsGroup, SettingsRow, ToggleRow, DangerZone, useFindSetting } from '../components/SettingsKit.jsx';
 import { ask, toast } from '../feedback.jsx';
-import { Help, HELP } from '../forms.jsx';
+import { Help, HELP, smallPicture } from '../forms.jsx';
+import { pharmacyLogo } from '../logo.jsx';
+import { uploadAttachment } from '../attach.jsx';
 import { cloudConfig, daySummary, dailyStockLink } from '../cloud.js';
 import { searchPlaces, DEFAULT_PLACE, storageLimits } from '../weather.js';
 import { isWeb, platformName } from '../platform.js';
@@ -108,6 +110,23 @@ export default function Settings() {
           {section && <button type="button" className="btn ghost sm settings-back" onClick={() => setTab(null)}><ChevronLeft size={16} />All settings</button>}
           {section && <div className="settings-section-head"><span className="settings-icon big"><SecIcon size={20} /></span><div><h2>{section[1]}</h2><small className="muted">{section[2]}</small></div></div>}
 
+      {tab === 'general' && can('settings.manage') && (
+        // E6: the pharmacy's own logo, for every device: the menu, sign-in, receipts, invoices, the customer display
+        <div className="card logo-card">
+          <h3><Store size={18} />Pharmacy logo</h3>
+          <div className="row gap wrap">
+            {pharmacyLogo(db) ? <img className="logo-preview" src={pharmacyLogo(db)} alt="The pharmacy's logo" /> : <span className="logo-preview none muted small">No logo yet</span>}
+            <label className="btn ghost">{db.settings.logo ? 'Change logo' : 'Upload a logo'}
+              <input type="file" accept="image/*" hidden aria-label="Pharmacy logo" onChange={async (e) => {
+                const f = e.target.files?.[0]; if (!f) return;
+                try { const small = await smallPicture(f, 512); const up = await uploadAttachment(syncCfg, small, 'logo.' + small.name.split('.').pop()); await quick('logo', up.path); toast('Logo saved for every device', 'success', { sync: true }); }
+                catch (err) { toast(err.message || 'The logo could not be saved', 'error'); }
+              }} /></label>
+            {db.settings.logo && <button type="button" className="btn ghost" onClick={() => quick('logo', '')}>Remove</button>}
+          </div>
+          <small className="muted">Shown on the sign-in page, at the top of the menu, on receipts and invoices and on the customer display. {db.license?.[0]?.branding?.logo ? 'Your RxPOS provider has set a logo too: theirs is shown.' : ''}</small>
+        </div>
+      )}
       {tab === 'general' && (
         <form className="card" onSubmit={submitSettings}>
           <h3><Store size={18} />Pharmacy details · this device</h3>

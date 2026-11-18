@@ -1904,7 +1904,11 @@ export default {
       const pm = path.match(/^\/api\/pharmacy\/([a-z0-9-]{1,40})$/);
       if (pm) {
         const t = await tenantByCode(env, pm[1]);
-        return t ? json({ id: t.id, slug: t.slug || t.id, name: t.name, status: t.status, logo: brandingOf(t).logo || null, app: webAppOf(t) }) : json({ error: 'No pharmacy at this address. Check the link with your RxPOS provider.' }, 404);
+        if (!t) return json({ error: 'No pharmacy at this address. Check the link with your RxPOS provider.' }, 404);
+        // UI batch 3, E6: the owner's logo, else the one the pharmacy uploaded (a file path in its own cloud)
+        let logo = brandingOf(t).logo || null;
+        if (!logo) { try { const st = await existingRec(env.DB, t.id, 'settings', 'settings'); if (typeof st?.logo === 'string' && st.logo.startsWith('/api/files/' + t.id + '/')) logo = st.logo; } catch { /* no settings yet */ } }
+        return json({ id: t.id, slug: t.slug || t.id, name: t.name, status: t.status, logo, app: webAppOf(t) });
       }
       const fm = path.match(/^\/api\/files\/([a-z0-9-]{1,40})\/([A-Za-z0-9_-]{8,40})\/([A-Za-z0-9_-]{24})$/);
       if (fm && req.method === 'GET') return await downloadFile(env, fm[1], fm[2], fm[3]);

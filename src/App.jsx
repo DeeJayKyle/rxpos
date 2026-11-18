@@ -12,7 +12,7 @@ import { useStore, useSyncState, makePassword, put, audit, isLowStock, expiryCou
 import { askText, ask, toast } from './feedback.jsx';
 import { hasPin, setPin, clearPin, verifyOffline } from './offline.js';
 import Auth from './pages/Auth.jsx';
-import { BrandLogo } from './logo.jsx';
+import { BrandLogo, pharmacyLogo, setFileBase } from './logo.jsx';
 import { unreadCount } from './pages/Chat.jsx';
 import { Spotlight, HourlyReminder, NotificationBell, AlertWatcher, MessageWatcher, WeatherLogger } from './engage.jsx';
 import { PopupHost } from './notify.jsx';
@@ -412,6 +412,10 @@ function Shell() {
   const [palette, setPalette] = useState(false);
   const [twoStepOpen, setTwoStepOpen] = useState(false);
   useEffect(() => { setCrashCloud(syncCfg?.url && syncCfg?.key ? { url: syncCfg.url, key: syncCfg.key } : null); }, [syncCfg?.url, syncCfg?.key]);
+  setFileBase(syncCfg?.url); // E6: the pharmacy's logo and other files come from its cloud
+  // E8: the opening screen next time shows this pharmacy's logo and name
+  const splashLogo = pharmacyLogo(db), splashName = db.settings?.name || '';
+  useEffect(() => { try { localStorage.setItem('rxpos-splash', JSON.stringify({ logo: splashLogo, name: splashName })); } catch { /* storage blocked */ } }, [splashLogo, splashName]);
   // Menu groups: someone who never folded the menu starts with only Sales open (plus the page they are on), so
   // ~45 pages don't all compete for attention; their own choices are remembered after that
   const [collapsed, setCollapsed] = useState(() => {
@@ -600,7 +604,7 @@ function Shell() {
     <div className={'shell nav-' + navStyle + (drawer ? ' drawer-open' : '') + (rail ? ' rail' : '') + (here === '/' ? ' on-home' : '')}>
       <div className="drawer-bg" onClick={() => setDrawer(false)} />
       <aside className="sidebar">
-        <div className="brand"><BrandLogo src={db.license?.[0]?.branding?.logo} size={34} /> <span className="wordmark">Rx<span className="brand-accent">POS</span></span>
+        <div className="brand"><BrandLogo src={pharmacyLogo(db)} size={34} /> <span className="wordmark">Rx<span className="brand-accent">POS</span></span>
           <button className="icon-btn rail-btn" onClick={toggleRail} aria-pressed={rail} aria-label={rail ? 'Expand the menu' : 'Collapse the menu to icons'} title={rail ? 'Expand the menu' : 'Collapse the menu to icons'}>{rail ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}</button></div>
         <div className="store-name">{db.settings.name}</div>
         <nav>

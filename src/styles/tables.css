@@ -48,3 +48,4 @@ td.num .health-bar { margin-left: auto; }
 .cell-edit input { width: 9ch; text-align: right; padding: 3px 6px; min-height: 0; }
 .cell-editable { cursor: text; border-bottom: 1px dashed var(--border-strong); }
 .cell-editable:hover, .cell-editable:focus-visible { border-bottom-color: var(--primary); }
+td.tick input[type=checkbox], th.tick input[type=checkbox] { min-height: 0; height: 16px; width: 16px; margin: 0; padding: 0; }
