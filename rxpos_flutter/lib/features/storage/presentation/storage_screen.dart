@@ -180,7 +180,7 @@ class _StorageScreenState extends ConsumerState<StorageScreen> {
   Widget build(BuildContext context) {
     final rows = ref.watch(tableProvider('tempLogs')).value;
     final d = ref.watch(pharmacyProvider).value;
-    if (rows == null || d == null) return const Center(child: CircularProgressIndicator());
+    if (rows == null || d == null) return const PageSkeleton();
     final t = Theme.of(context);
     final st = d.settings;
     final l = storageLimits(st);

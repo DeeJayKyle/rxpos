@@ -95,6 +95,16 @@ class ColourTableHead extends StatelessWidget {
   }
 }
 
+/// Compact tables (This device, 2026-11-18): rows of 36 px instead of 56.
+class TableDensity extends ThemeExtension<TableDensity> {
+  const TableDensity({this.compact = false});
+  final bool compact;
+  @override
+  TableDensity copyWith({bool? compact}) => TableDensity(compact: compact ?? this.compact);
+  @override
+  TableDensity lerp(TableDensity? other, double t) => t < .5 ? this : (other ?? this);
+}
+
 /// A row of a [ColourTableHead]'s table: the cells in the same shares of the width (put it in [Hued] for the row's colour).
 class ColourTableRow extends StatelessWidget {
   const ColourTableRow({super.key, required this.columns, required this.cells, this.trailing, this.trailingWidth = 0, this.onTap});
@@ -104,16 +114,18 @@ class ColourTableRow extends StatelessWidget {
   final double trailingWidth;
   final VoidCallback? onTap;
   @override
-  Widget build(BuildContext context) => InkWell(
+  Widget build(BuildContext context) {
+    final compact = Theme.of(context).extension<TableDensity>()?.compact ?? false;
+    return InkWell(
         onTap: onTap,
         child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 56),
+          constraints: BoxConstraints(minHeight: compact ? 36 : 56),
           child: Row(children: [
             for (final (i, c) in columns.indexed)
               Expanded(
                 flex: c.flex,
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: compact ? 4 : 10),
                   child: Align(alignment: c.numeric ? Alignment.centerRight : Alignment.centerLeft, child: i < cells.length ? cells[i] : const SizedBox()),
                 ),
               ),
@@ -121,6 +133,7 @@ class ColourTableRow extends StatelessWidget {
           ]),
         ),
       );
+  }
 }
 
 /// A status pill with a dot (src/styles.css .status-pill): In stock, Low stock, Expiring soon…

@@ -241,10 +241,10 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
   @override
   Widget build(BuildContext context) {
     final d = ref.watch(pharmacyProvider).value;
-    if (d == null) return const Center(child: CircularProgressIndicator());
+    if (d == null) return const PageSkeleton();
     if (_form == null) {
       Future.microtask(() => _init(d));
-      return const Center(child: CircularProgressIndicator());
+      return const PageSkeleton();
     }
     final f = _form!;
     final s = d.settings;

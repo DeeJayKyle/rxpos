@@ -32,7 +32,7 @@ class _ControlledScreenState extends ConsumerState<ControlledScreen> {
     final sales = ref.watch(tableProvider('sales')).value;
     final moves = ref.watch(tableProvider('movements')).value ?? const [];
     final batches = ref.watch(tableProvider('batches')).value ?? const [];
-    if (d == null || sales == null) return const Center(child: CircularProgressIndicator());
+    if (d == null || sales == null) return const PageSkeleton();
     final st = d.settings;
     final saleList = sales.map(Sale.fromRecord).toList();
     return PageFrame(

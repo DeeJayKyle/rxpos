@@ -69,8 +69,8 @@ const palettes = [
       duo: Duo(ok: 0xFF617533, warn: 0xFF5E7131, danger: 0xFF3C4820, info: 0xFF5F7231, violet: 0xFF627634, pill: 0xFFC8F169, pillOn: 0xFF0B1220, logo2: 0xFF1F1F2A, rowTint: 4, headTint: 16, hues: [0xFF667A35, 0xFF1F1F2A, 0xFF677C37, 0xFF667842, 0xFF687D37, 0xFF191922, 0xFF677D37, 0xFF677B3B])),
   Palette('charcoal-lime', 'Lime Charcoal', false, bg: 0xFFEEF7D6, surface: 0xFFFFFFFF, surface2: 0xFFF7FBEB, border: 0x1F131319, borderStrong: 0x3D131319, text: 0xFF050507, muted: 0xFF69696A, primary: 0xFF1F1F2A, primary2: 0xFF1B1B24, sidebar: 0xFFC8F169, sidebar2: 0xFFBCE363, flat: true, inspired: 'Lime menu, charcoal pills', sidebarText: 0xFF1F1F2A, group: 'Warm & Lime',
       duo: Duo(ok: 0xFF1D1D28, warn: 0xFF131319, danger: 0xFF09090D, info: 0xFF1B1B25, violet: 0xFF191922, pill: 0xFF1F1F2A, pillOn: 0xFFFFFFFF, logo2: 0xFF14141B, rowTint: 6, headTint: 22, hues: [0xFF1F1F2A, 0xFF667A35, 0xFF16161D, 0xFF667842, 0xFF1A1A24, 0xFF687D37, 0xFF111117, 0xFF525E3D])),
-  Palette('navy-teal', 'RxPOS Navy Teal', true, bg: 0xFF0A2233, surface: 0xFF162D3D, surface2: 0xFF203645, border: 0x1AFFFFFF, borderStrong: 0x33FFFFFF, text: 0xFFE7E9EB, muted: 0xFF939DA5, primary: 0xFF14B8A6, primary2: 0xFF119E8F, sidebar: 0xFF0F2A44, sidebar2: 0xFF0D243A, flat: true, inspired: 'Navy and teal: the RxPOS till', group: 'Dark & Calm',
-      duo: Duo(ok: 0xFF51CBBD, warn: 0xFF5BCDC1, danger: 0xFFA1E3DB, info: 0xFF53CBBE, violet: 0xFF59CCC0, pill: 0xFF14B8A6, pillOn: 0xFF0B1220, logo2: 0xFF0F2A44, rowTint: 6, headTint: 22, hues: [0xFF0E7F73, 0xFF0F2A44, 0xFF0E8174, 0xFF127175, 0xFF0E8276, 0xFF0C2236, 0xFF0B655B, 0xFF117D79])),
+  Palette('navy-teal', 'RxPOS Navy Teal', true, bg: 0xFF0A2233, surface: 0xFF1E3443, surface2: 0xFF2A3F4E, border: 0x24FFFFFF, borderStrong: 0x33FFFFFF, text: 0xFFE7E9EB, muted: 0xFF939DA5, primary: 0xFF14B8A6, primary2: 0xFF119E8F, sidebar: 0xFF0F2A44, sidebar2: 0xFF0D243A, flat: true, inspired: 'Navy and teal: the RxPOS till', group: 'Dark & Calm',
+      duo: Duo(ok: 0xFF65D1C5, warn: 0xFF6ED3C8, danger: 0xFFA1E3DB, info: 0xFF67D1C6, violet: 0xFF6CD2C8, pill: 0xFF14B8A6, pillOn: 0xFF0B1220, logo2: 0xFF0F2A44, rowTint: 6, headTint: 22, hues: [0xFF0E7F73, 0xFF0F2A44, 0xFF0E8174, 0xFF127175, 0xFF0E8276, 0xFF0C2236, 0xFF0B655B, 0xFF117D79])),
   Palette('steel-blue', 'Steel Blue', false, bg: 0xFFEDF1F6, surface: 0xFFFFFFFF, surface2: 0xFFF6F8FB, border: 0x1F2F4A67, borderStrong: 0x3D2F4A67, text: 0xFF0D141C, muted: 0xFF6E7277, primary: 0xFF4F7CAC, primary2: 0xFF446B94, sidebar: 0xFF161C26, sidebar2: 0xFF131821, flat: true, inspired: 'Slate menu, steel-blue pills: calm for long shifts', group: 'Dark & Calm',
       duo: Duo(ok: 0xFF3F6287, warn: 0xFF2F4A67, danger: 0xFF182534, info: 0xFF3E6085, violet: 0xFF3F638A, pill: 0xFF4A75A2, pillOn: 0xFFFFFFFF, logo2: 0xFF161C26, rowTint: 6, headTint: 22, hues: [0xFF4A75A2, 0xFF161C26, 0xFF375778, 0xFF334C69, 0xFF436992, 0xFF12161E, 0xFF2B445F, 0xFF3E5F84])),
   Palette('sage', 'Sage', false, bg: 0xFFE3EEE1, surface: 0xFFFFFFFF, surface2: 0xFFF1F7F0, border: 0x1F1C4029, borderStrong: 0x3D1C4029, text: 0xFF08110B, muted: 0xFF6B706D, primary: 0xFF2F6B45, primary2: 0xFF285C3B, sidebar: 0xFF18241B, sidebar2: 0xFF151F17, flat: true, inspired: 'Deep sage menu, green pills', group: 'Dark & Calm',
@@ -256,6 +256,9 @@ class Tones extends ThemeExtension<Tones> {
   Color get dangerSoft => soft(danger, .2);
   Color get infoSoft => soft(info);
   Color get violetSoft => soft(violet);
+  /// the one real red (an exception to the two colours, 2026-11-18): only for what blocks a sale (expired stock)
+  Color get block => surface.computeLuminance() < .2 ? const Color(0xFFF87171) : const Color(0xFFC62828);
+  Color get blockSoft => soft(block, .14);
   @override
   Tones copyWith() => this;
   @override
@@ -334,7 +337,8 @@ DesignTokens surfaceTokens(String surface, Palette p) => switch (surface) {
       'glass' => DesignTokens(radius: 16, glassAlpha: p.dark ? .62 : .72),
       'clay' => const DesignTokens(radius: 22, controlRadius: 14, chipRadius: 14),
       'neumorphism' => const DesignTokens(radius: 18, controlRadius: 12, chipRadius: 12),
-      _ => const DesignTokens(),
+      // three corner sizes (2026-11-18): 8 for chips and pills, 12 for buttons and fields, 18 for cards
+      _ => const DesignTokens(radius: 18, controlRadius: 12, chipRadius: 8),
     };
 
 /// The Flutter theme for a palette, an accent, a surface style, the colour level and the design tokens ([tokens]: a
@@ -410,7 +414,8 @@ ThemeData buildTheme(Palette base, {String accent = '', String surface = 'flat',
   final side = edge != null
       ? BorderSide(color: edge, width: tk.borderWidth)
       : switch (surface) {
-          'flat' => BorderSide(color: Color(p.border), width: tk.borderWidth),
+          // dark cards: a lighter step above the page under a clearer hairline (2026-11-18)
+          'flat' => BorderSide(color: p.dark ? Color(mix(p.border, 0xFFFFFFFF, .06)) : Color(p.border), width: tk.borderWidth),
           'glass' || 'aurora' => BorderSide(color: Color(p.dark ? 0x1FFFFFFF : 0xCCFFFFFF)),
           'skeuomorphism' => BorderSide(color: Color(p.borderStrong), width: 1.2),
           _ => BorderSide.none,
@@ -571,7 +576,8 @@ ThemeData buildTheme(Palette base, {String accent = '', String surface = 'flat',
     dividerTheme: DividerThemeData(color: tk.ink ?? Color(p.border), space: 1, thickness: tk.ink != null ? tk.borderWidth / 2 : 1),
     checkboxTheme: CheckboxThemeData(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(tk.radius == 0 ? 0 : 4))),
     // a clear ring around whatever the keyboard is on (Tab / arrow keys at the till)
-    focusColor: focusRing.withValues(alpha: p.dark ? .22 : .14),
+    // a clear ring in the theme's colour (2026-11-18)
+    focusColor: focusRing.withValues(alpha: p.dark ? .32 : .22),
     scrollbarTheme: ScrollbarThemeData(radius: const Radius.circular(8), thickness: WidgetStatePropertyAll(tk.touch ? 4 : 8), thumbColor: WidgetStatePropertyAll(Color(p.borderStrong))),
   );
 }

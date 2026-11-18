@@ -8,6 +8,7 @@ import 'package:rxpos/core/platform.dart';
 import 'package:rxpos/core/web/classic_gate.dart';
 
 import 'core/data/device_settings.dart';
+import 'core/theme/line_colors.dart' show TableDensity;
 import 'core/router/app_router.dart';
 import 'core/crash/crash_screen.dart';
 import 'core/live/live_connection.dart';
@@ -26,7 +27,8 @@ class RxposApp extends ConsumerWidget {
     ref.watch(liveProvider); // and the live line brings other devices' changes at once
     final look = ref.watch(lookProvider).value ?? const Look();
     final allowed = allowedPalettes(ref.watch(brandingProvider));
-    final chosen = allowed.any((p) => p.id == look.theme) ? look.theme : (allowed.firstOrNull ?? palettes.first).id;
+    final preview = ref.watch(themePreviewProvider);
+    final chosen = preview != null && allowed.any((p) => p.id == preview) ? preview : allowed.any((p) => p.id == look.theme) ? look.theme : (allowed.firstOrNull ?? palettes.first).id;
     final zoom = double.tryParse(ref.watch(deviceValueProvider(zoomKey)).value ?? '') ?? 1;
     final rotation = ref.watch(deviceValueProvider(rotationKey)).value ?? 'auto';
     if (!kIsWeb && onAndroid) {
@@ -45,10 +47,16 @@ class RxposApp extends ConsumerWidget {
     final touch = kIsWeb
         ? defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS
         : onAndroid || Platform.isIOS;
-    final theme = design != null
+    var theme = design != null
         ? buildTheme(paletteById(design.palette), surface: design.surface, vivid: look.level == 'vivid', tokens: design.tokens, touch: touch, headingFont: headingFont, bodyFont: bodyFont)
-        : buildTheme(paletteById(look.system ? paletteFor(false, allowed) : chosen), accent: look.accent, surface: look.surface, vivid: look.level == 'vivid', touch: touch,
+        : buildTheme(paletteById(look.system && preview == null ? paletteFor(false, allowed) : chosen), accent: look.accent, surface: look.surface, vivid: look.level == 'vivid', touch: touch,
             headingFont: headingFont, bodyFont: bodyFont);
+    // compact tables (This device): 36 px rows in lists and tables
+    final compact = ref.watch(deviceValueProvider(compactTablesKey)).value == '1';
+    ThemeData dense(ThemeData t) => !compact ? t : t.copyWith(extensions: [...t.extensions.values, const TableDensity(compact: true)], listTileTheme: t.listTileTheme.copyWith(dense: true, minTileHeight: 36, minVerticalPadding: 2));
+    theme = dense(theme);
+    // a theme previewed from the theme menu shows whatever the system's mode
+    final followSystem = look.system && design == null && preview == null;
     if (crash != null) return MaterialApp(debugShowCheckedModeBanner: false, title: 'RxPOS', theme: theme, home: CrashScreen(error: crash));
     return MaterialApp.router(
       key: ValueKey('app-${ref.watch(appRestartProvider)}'),
@@ -59,9 +67,9 @@ class RxposApp extends ConsumerWidget {
       debugShowCheckedModeBanner: false,
       // following the system: its light and dark themes, live when it changes
       theme: theme,
-      darkTheme: look.system && design == null ? buildTheme(paletteById(paletteFor(true, allowed)), accent: look.accent, surface: look.surface, vivid: look.level == 'vivid', touch: touch,
-          headingFont: headingFont, bodyFont: bodyFont) : null,
-      themeMode: look.system && design == null ? ThemeMode.system : ThemeMode.light,
+      darkTheme: followSystem ? dense(buildTheme(paletteById(paletteFor(true, allowed)), accent: look.accent, surface: look.surface, vivid: look.level == 'vivid', touch: touch,
+          headingFont: headingFont, bodyFont: bodyFont)) : null,
+      themeMode: followSystem ? ThemeMode.system : ThemeMode.light,
       routerConfig: ref.watch(appRouterProvider),
     );
   }

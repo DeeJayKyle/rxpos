@@ -102,7 +102,7 @@ await p.evaluate(() => [...document.querySelectorAll('.nav-add')].find((x) => /R
 check('the + of Medicine Inventory opens Add Stock', await p.evaluate(() => location.hash.includes('add-stock')));
 await p.evaluate(() => { location.hash = '#/'; }); await wait(1200);
 // UI batch 2 (2026-11-18)
-check('figure cards carry a 7-day trend line', await p.evaluate(() => document.querySelectorAll('.kpis .stat .spark polyline').length >= 3), await p.evaluate(() => document.querySelectorAll('.kpis .stat .spark').length));
+check('figure cards carry a small 7-day trend line', await p.evaluate(() => document.querySelectorAll('.kpis .stat .spark polyline').length >= 3 && [...document.querySelectorAll('.kpis .stat .spark')].every((s) => s.getBoundingClientRect().width <= 100 && s.getBoundingClientRect().height <= 30)), await p.evaluate(() => document.querySelectorAll('.kpis .stat .spark').length));
 check('latest sales: only unusual states carry a pill (Owing, not Paid)', await p.evaluate(() => { const t = [...document.querySelectorAll('.recent-table .status-pill')].map((x) => x.innerText.trim()); return t.includes('Owing') && !t.includes('Paid'); }), await p.evaluate(() => [...document.querySelectorAll('.recent-table .status-pill')].map((x) => x.innerText).join()));
 await p.evaluate(() => document.querySelector('button[aria-label=Theme]').click()); await wait(300);
 const before = await p.evaluate(() => document.documentElement.dataset.palette);

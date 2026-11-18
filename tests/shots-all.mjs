@@ -47,7 +47,7 @@ await P.waitForSelector('.sidebar', { timeout: 20000 }); await wait(4000);
 if (process.env.SHOTS_THEME) { await P.evaluate((t) => { localStorage.setItem('pharmapos-theme', t); localStorage.removeItem('rxpos-theme-mode'); }, process.env.SHOTS_THEME); await P.reload({ waitUntil: 'networkidle2' }); await wait(3000); }
 // every page the menu lists (folded groups opened first)
 await P.evaluate(() => document.querySelectorAll('.nav-group.collapsed .nav-title').forEach((x) => x.click())); await wait(400);
-const routes = [...new Set(await P.evaluate(() => [...document.querySelectorAll('.sidebar nav a[href]')].map((a) => a.getAttribute('href').replace(/^#/, ''))))].filter((r) => !filter || r.includes(filter));
+const routes = [...new Set(await P.evaluate(() => [...document.querySelectorAll('.sidebar nav a[href]')].map((a) => a.getAttribute('href').replace(/^#/, ''))))].filter((r) => !filter || filter.split(',').some((f) => (f === '/' ? r === '/' : r.includes(f))));
 fs.writeFileSync(path.join(out, 'routes.txt'), routes.join('\n'));
 const name = (r) => (r === '/' ? 'dashboard' : r.slice(1).replace(/\//g, '-'));
 for (const [w, h, tag] of process.env.SHOTS_PC ? [[1440, 900, 'pc']] : [[1440, 900, 'pc'], [390, 844, 'phone']]) {

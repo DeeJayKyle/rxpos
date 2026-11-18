@@ -89,7 +89,7 @@ class _MedicineListScreenState extends ConsumerState<MedicineListScreen> {
   Widget build(BuildContext context) {
     final d = ref.watch(pharmacyProvider).value;
     final can = ref.watch(permissionsProvider).value ?? const <String>{};
-    if (d == null) return const Center(child: CircularProgressIndicator());
+    if (d == null) return const PageSkeleton();
     final s = d.settings;
     final dup = duplicateBarcodes(d.products);
     final issues = d.products.where((p) => recordIssues(p, dup).isNotEmpty).length;
@@ -349,7 +349,7 @@ class FormulationsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final rows = ref.watch(tableProvider('formulations')).value;
     final d = ref.watch(pharmacyProvider).value;
-    if (rows == null) return const Center(child: CircularProgressIndicator());
+    if (rows == null) return const PageSkeleton();
     final count = <String, int>{};
     for (final p in [...?d?.products]) {
       count[p.form] = (count[p.form] ?? 0) + 1;
@@ -403,7 +403,7 @@ class _QuickEditScreenState extends ConsumerState<QuickEditScreen> {
   @override
   Widget build(BuildContext context) {
     final d = ref.watch(pharmacyProvider).value;
-    if (d == null) return const Center(child: CircularProgressIndicator());
+    if (d == null) return const PageSkeleton();
     final s = d.settings;
     final stocked = d.products.where((p) => d.stockOf(p.id) > 0).toList();
     final matched = _q.trim().isEmpty ? stocked : searchProducts(stocked, _q, stockOf: (p) => d.stockOf(p.id));
@@ -492,7 +492,7 @@ class _StockCardScreenState extends ConsumerState<StockCardScreen> {
     final moves = ref.watch(tableProvider('movements')).value;
     final batchRows = ref.watch(tableProvider('batches')).value ?? const [];
     final can = ref.watch(permissionsProvider).value ?? const <String>{};
-    if (d == null || moves == null) return const Center(child: CircularProgressIndicator());
+    if (d == null || moves == null) return const PageSkeleton();
     final stocked = d.products.where((p) => d.stockOf(p.id) > 0).toList();
     if (_id.isEmpty && stocked.isNotEmpty) _id = stocked.first.id;
     final p = d.byId[_id];

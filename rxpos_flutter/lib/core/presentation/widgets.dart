@@ -72,10 +72,40 @@ class PageFrame extends StatelessWidget {
   }
 }
 
+/// A tiny 7-day trend line for a figure card (src/ui.jsx Spark); the last point is today.
+class Spark extends StatelessWidget {
+  const Spark({super.key, required this.data, required this.color});
+  final List<double> data;
+  final Color color;
+  @override
+  Widget build(BuildContext context) => SizedBox(width: 84, height: 26, child: CustomPaint(painter: _SparkPainter(data, color)));
+}
+
+class _SparkPainter extends CustomPainter {
+  _SparkPainter(this.data, this.color);
+  final List<double> data;
+  final Color color;
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (data.length < 2) return;
+    final hi = data.reduce((a, b) => a > b ? a : b), lo = data.reduce((a, b) => a < b ? a : b), span = hi - lo == 0 ? 1 : hi - lo;
+    final pts = [for (final (i, v) in data.indexed) Offset(i / (data.length - 1) * size.width, size.height - 3 - (v - lo) / span * (size.height - 6))];
+    final line = Path()..addPolygon(pts, false);
+    final area = Path()..moveTo(0, size.height)..addPolygon(pts, false)..lineTo(size.width, size.height)..close();
+    canvas.drawPath(area, Paint()..color = color.withValues(alpha: .14));
+    canvas.drawPath(line, Paint()..color = color..style = PaintingStyle.stroke..strokeWidth = 2..strokeCap = StrokeCap.round..strokeJoin = StrokeJoin.round);
+    canvas.drawCircle(pts.last, 2.6, Paint()..color = color);
+  }
+  @override
+  bool shouldRepaint(_SparkPainter o) => o.data != data || o.color != color;
+}
+
 /// A figure with its label (and a line under it); tappable when [onTap] is set.
 class StatCard extends StatelessWidget {
-  const StatCard({super.key, required this.label, required this.value, this.sub, this.icon, this.color, this.onTap});
+  const StatCard({super.key, required this.label, required this.value, this.sub, this.icon, this.color, this.onTap, this.spark});
   final String label, value;
+  /// the last 7 days of this figure, drawn as a small trend line (2026-11-18)
+  final List<double>? spark;
   final String? sub;
   final IconData? icon;
   final Color? color;
@@ -131,6 +161,8 @@ class StatCard extends StatelessWidget {
                 // the figure in the text colour, as React (the colour is in the band and the icon tile)
                 child: Text(value, maxLines: 1, style: t.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -.3, color: ink ?? (tinted ? shown : null))),
               ),
+              if (spark != null && spark!.any((v) => v != 0))
+                Padding(padding: const EdgeInsets.symmetric(vertical: 2), child: Spark(key: const Key('spark'), data: spark!, color: ink ?? t.colorScheme.primary)),
               if (sub != null || onTap != null)
                 Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
                   Expanded(child: Text(sub ?? '', style: t.textTheme.bodySmall?.copyWith(color: ink?.withValues(alpha: .9)))),
@@ -406,4 +438,48 @@ class _Hatch extends CustomPainter {
 
   @override
   bool shouldRepaint(_Hatch o) => o.color != color;
+}
+
+/// A page's shape while it loads (2026-11-18: skeletons, not a spinner or a blank page; src/ui.jsx PageSkeleton).
+class PageSkeleton extends StatefulWidget {
+  const PageSkeleton({super.key});
+  @override
+  State<PageSkeleton> createState() => _PageSkeletonState();
+}
+
+class _PageSkeletonState extends State<PageSkeleton> with SingleTickerProviderStateMixin {
+  late final AnimationController _a = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200))..repeat(reverse: true);
+  @override
+  void dispose() {
+    _a.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = Theme.of(context).colorScheme;
+    final reduce = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    return LayoutBuilder(builder: (context, box0) => !box0.maxWidth.isFinite || !box0.maxHeight.isFinite
+        // somewhere without a page's room (inside a row or a scrolling list): a small spinner as before
+        ? const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator()))
+        : Semantics(
+      label: 'Loading',
+      child: AnimatedBuilder(
+        animation: _a,
+        builder: (context, _) {
+          final c = Color.lerp(s.surfaceContainerHigh, s.surfaceContainerHighest, reduce ? 0 : _a.value)!;
+          Widget box(double h, {double? w, double r = 12}) => Container(height: h, width: w, decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(r)));
+          return ListView(key: const Key('page-skeleton'), padding: const EdgeInsets.all(16), physics: const NeverScrollableScrollPhysics(), children: [
+            Align(alignment: Alignment.centerLeft, child: box(28, w: 260)),
+            const SizedBox(height: 8),
+            Align(alignment: Alignment.centerLeft, child: box(14, w: 380)),
+            const SizedBox(height: 16),
+            Wrap(spacing: 16, runSpacing: 16, children: [for (var i = 0; i < 4; i++) box(104, w: 200, r: 18)]),
+            const SizedBox(height: 16),
+            for (var i = 0; i < 6; i++) Padding(padding: const EdgeInsets.only(bottom: 10), child: box(16, r: 8)),
+          ]);
+        },
+      ),
+    ));
+  }
 }

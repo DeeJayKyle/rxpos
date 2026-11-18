@@ -49,7 +49,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
     final t = {for (final n in _tables) n: ref.watch(tableProvider(n)).value};
     final st = ref.watch(settingsProvider).value ?? const PharmacySettings();
     _win = ref.watch(balanceWindowProvider).value; // stage 4: a device keeping recent history
-    if (t.values.any((v) => v == null)) return const Center(child: CircularProgressIndicator());
+    if (t.values.any((v) => v == null)) return const PageSkeleton();
     final data = {for (final e in t.entries) e.key: e.value!};
     final banks = [...data['banks']!];
     if (!banks.any((b) => b['id'] == cashDrawer)) banks.insert(0, {'id': cashDrawer, 'name': 'Cash at hand'});

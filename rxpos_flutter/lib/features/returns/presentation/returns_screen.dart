@@ -35,7 +35,7 @@ class _ReturnsScreenState extends ConsumerState<ReturnsScreen> {
   Widget build(BuildContext context) {
     final rows = ref.watch(tableProvider('supplierReturns')).value;
     final st = ref.watch(settingsProvider).value ?? const PharmacySettings();
-    if (rows == null) return const Center(child: CircularProgressIndicator());
+    if (rows == null) return const PageSkeleton();
     final q = _q.trim().toLowerCase();
     List<Map> items(Map r) => ((r['items'] as List?) ?? const []).cast<Map>();
     final list = rows.where((r) => q.isEmpty || [r['number'], r['supplierName'], r['creditNote'], ...items(r).map((i) => i['name'])].join(' ').toLowerCase().contains(q)).toList()

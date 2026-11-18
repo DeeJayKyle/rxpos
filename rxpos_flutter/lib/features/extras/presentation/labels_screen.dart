@@ -78,7 +78,7 @@ class _LabelsScreenState extends ConsumerState<LabelsScreen> {
   @override
   Widget build(BuildContext context) {
     final d = ref.watch(pharmacyProvider).value;
-    if (d == null) return const Center(child: CircularProgressIndicator());
+    if (d == null) return const PageSkeleton();
     final pool = _pool(d);
     final byId = {for (final p in pool) p.id: p};
     final matches = _q.trim().isEmpty ? const <Product>[] : searchProducts(pool, _q, stockOf: (p) => d.stockOf(p.id)).take(10).toList();

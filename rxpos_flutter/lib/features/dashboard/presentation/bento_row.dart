@@ -182,6 +182,8 @@ class _BentoRowState extends State<BentoRow> {
                 ),
                 Builder(builder: (_) {
                   final st = saleStatusOf(s);
+                  // only unusual states carry a pill (2026-11-18)
+                  if (st == 'paid') return const SizedBox.shrink();
                   return Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(borderRadius: BorderRadius.circular(99), color: pill(st).withValues(alpha: .14)),

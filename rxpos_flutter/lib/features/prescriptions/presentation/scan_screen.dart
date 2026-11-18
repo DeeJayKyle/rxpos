@@ -94,7 +94,7 @@ class _ScanPrescriptionScreenState extends ConsumerState<ScanPrescriptionScreen>
   @override
   Widget build(BuildContext context) {
     final d = ref.watch(pharmacyProvider).value;
-    if (d == null) return const Center(child: CircularProgressIndicator());
+    if (d == null) return const PageSkeleton();
     final st = d.settings;
     final r = _result;
     final meds = ((r?['medicines'] as List?) ?? const []).cast<Map>().map((m) => m.cast<String, Object?>()).toList();

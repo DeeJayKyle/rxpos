@@ -32,7 +32,7 @@ class _WeeklyScreenState extends ConsumerState<WeeklyScreen> {
     final st = ref.watch(settingsProvider).value ?? const PharmacySettings();
     final session = ref.watch(sessionControllerProvider).value;
     final device = ref.watch(deviceBranchProvider).value ?? 'main';
-    if (sales == null) return const Center(child: CircularProgressIndicator());
+    if (sales == null) return const PageSkeleton();
     final branch = _branch ?? (session?.role == 'cashier' ? device : 'all');
     final w = weeklyStats(sales.map(Sale.fromRecord), weekStart(DateTime.now(), _offset), branch: branch);
     String delta(double a, double b) {

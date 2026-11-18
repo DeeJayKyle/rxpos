@@ -121,6 +121,15 @@ class LookController extends AsyncNotifier<Look> {
 
 final lookProvider = AsyncNotifierProvider<LookController, Look>(LookController.new);
 
+/// A theme shown while the pointer is on it in the theme menu (2026-11-18); null shows the chosen one.
+class ThemePreview extends Notifier<String?> {
+  @override
+  String? build() => null;
+  void show(String? id) => state = id;
+}
+
+final themePreviewProvider = NotifierProvider<ThemePreview, String?>(ThemePreview.new);
+
 /// The Premium UI switch (src/App.jsx PremiumToggle): Midnight Pro on this device.
 @Riverpod(keepAlive: true)
 class PremiumUi extends _$PremiumUi {

@@ -30,7 +30,7 @@ class PrescriptionsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final rows = ref.watch(tableProvider('prescriptions')).value;
     final customers = ref.watch(tableProvider('customers')).value ?? const [];
-    if (rows == null) return const Center(child: CircularProgressIndicator());
+    if (rows == null) return const PageSkeleton();
     String nameOf(Object? id) => '${customers.where((c) => c['id'] == id).firstOrNull?['name'] ?? '—'}';
     final list = [...rows]..sort((a, b) => '${b['date']}'.compareTo('${a['date']}'));
 

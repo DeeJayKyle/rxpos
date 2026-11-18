@@ -1,5 +1,32 @@
 # RxPOS release notes
 
+## React (classic) app 1.12.0 · Flutter app (next build) · November 2026 (a cleaner, calmer look; safer till)
+
+Nothing to do on the tills: they update by themselves. Every change is in both apps.
+
+- **Cleaner**
+  - The dashboard greeting no longer repeats the search box and the bell: they are in the top bar.
+  - Ordinary sales carry no "Paid" or "completed" pill (Sales History, Latest sales); only Owing and Refunded stand out.
+  - A page tip shows once: the next visit it is gone, even without "Got it".
+  - Equal medicine tiles at the till: names on up to two lines, the stock pill beside the expiry pill.
+- **Polish**
+  - Three corner sizes everywhere (8 chips and pills, 12 buttons and fields, 18 cards) and one spacing scale.
+  - Dark themes: cards a clearer step above the page, under a hairline.
+  - **Compact tables** on This device: 36 px rows, more lines on the screen.
+  - Payment methods on one line, the F-key bar fits, menu labels on one line, full-strength sales bars, one strong
+    button per area at the till (Charge), rises and falls as ▲ + / ▼ −.
+- **Safety**
+  - One real red, only for what blocks a sale: "Expired · blocked" and "Out of stock". Everything else keeps the
+    theme's two colours.
+  - A bigger total at the till; the total and the change grow while cash is typed, and short of the total it says
+    what is still due.
+  - A clear "Sale complete · Receipt R…" banner with Print and New sale at the top.
+  - A clear keyboard focus ring in the theme's colour.
+- **More**
+  - Small 7-day trend lines in the dashboard's figure cards.
+  - The theme menu previews a theme while the pointer is on it.
+  - Pages show their shape while they load instead of a spinner.
+
 ## React (classic) app 1.11.0 · Flutter app (next build) · November 2026 (15 two-colour themes, the new menu, the account drop-down)
 
 Nothing to do on the tills: they update by themselves.

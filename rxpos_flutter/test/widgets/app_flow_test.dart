@@ -16,6 +16,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:rxpos/core/presentation/data_views.dart';
 import 'package:go_router/go_router.dart';
 import 'package:rxpos/core/theme/fonts.dart';
+import 'package:rxpos/core/theme/line_colors.dart' show TableDensity;
 import 'package:rxpos/core/router/app_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:rxpos/app.dart';
@@ -245,6 +246,9 @@ void main() {
     expect(find.text('Point of sale'), findsOneWidget);
     expect(find.text('100 left'), findsOneWidget);
     expect(find.text('Out of stock'), findsOneWidget, reason: 'Zinco has no stock');
+    // the stock pill sits with the expiry pill; out of stock in the one real red
+    final zinco = tester.widget<Container>(find.ancestor(of: find.text('Out of stock'), matching: find.byWidgetPredicate((w) => w is Container && w.key is ValueKey && '${(w.key! as ValueKey).value}'.startsWith('stock-pill-'))));
+    expect(((zinco.decoration! as BoxDecoration).border! as Border).top.color, const Color(0xFFC62828));
     // the scanner types the barcode and Enter
     await tester.enterText(find.widgetWithText(TextField, 'Search medicine or scan barcode…  (F8)'), '7010001');
     await tester.testTextInput.receiveAction(TextInputAction.done);
@@ -256,6 +260,10 @@ void main() {
     await tester.tap(find.text('Charge UGX 1,000   [F9]'));
     await settle(tester);
     expect(find.text('Sale complete'), findsOneWidget);
+    // a clear done moment (2026-11-18): the receipt number with Print and New sale at the top
+    expect(find.descendant(of: find.byKey(const Key('sale-done-banner')), matching: find.textContaining('Sale complete · Receipt ')), findsOneWidget);
+    expect(find.descendant(of: find.byKey(const Key('sale-done-banner')), matching: find.text('Print')), findsOneWidget);
+    expect(find.descendant(of: find.byKey(const Key('sale-done-banner')), matching: find.text('New sale')), findsOneWidget);
     final store = RecordStore(db);
     final sale = (await tester.runAsync(() => store.rows('sales')))!.single;
     expect((sale['total'], sale['cashier'], sale['payment']), (1000, 'Tia Admin', 'Cash'));
@@ -2670,6 +2678,15 @@ void main() {
     await tester.scrollUntilVisible(find.byKey(const ValueKey('theme-royal-purple')), 120, scrollable: find.descendant(of: list, matching: find.byType(Scrollable)));
     await tester.ensureVisible(find.byKey(const ValueKey('theme-royal-purple')));
     await settle(tester);
+    // the pointer on a theme previews it; moving off puts the chosen one back (2026-11-18)
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: tester.getCenter(find.byKey(const ValueKey('theme-royal-purple'))));
+    await settle(tester, 4);
+    expect(brightness(tester), Brightness.light, reason: 'Royal Purple previewed');
+    await mouse.moveTo(const Offset(4, 600));
+    await settle(tester, 4);
+    expect(brightness(tester), Brightness.dark, reason: 'back to the chosen dark theme');
+    await mouse.removePointer();
     await tester.tap(find.byKey(const ValueKey('theme-royal-purple')));
     await settle(tester, 4);
     expect((await look())['theme'], 'royal-purple');
@@ -3431,14 +3448,29 @@ void main() {
       await done(tester);
     });
 
-    testWidgets('a first-visit tip on the till, gone for good after "Got it"', (tester) async {
+    testWidgets('a first-visit tip on the till, shown once only (gone next time even without "Got it")', (tester) async {
       await tester.runAsync(signedIn);
       await start(tester, tips: true);
       await toTill(tester);
       expect(find.text('Selling quickly'), findsOneWidget);
+      await settle(tester);
+      expect(find.text('Selling quickly'), findsOneWidget, reason: 'stays for this visit');
       await tester.tap(find.text('Got it'));
       await settle(tester);
       expect(find.text('Selling quickly'), findsNothing);
+      await done(tester);
+      await start(tester, tips: true);
+      await toTill(tester);
+      expect(find.text('Selling quickly'), findsNothing, reason: 'remembered on this device');
+      await done(tester);
+    });
+
+    testWidgets('a tip seen once is not shown again, "Got it" or not', (tester) async {
+      await tester.runAsync(signedIn);
+      await start(tester, tips: true);
+      await toTill(tester);
+      expect(find.text('Selling quickly'), findsOneWidget);
+      await settle(tester);
       await done(tester);
       await start(tester, tips: true);
       await toTill(tester);
@@ -3746,6 +3778,24 @@ void main() {
     await settle(tester);
     expect(find.text('Notifications are allowed'), findsOneWidget);
     expect(osNotify.asked, 1);
+    await done(tester);
+  });
+  testWidgets('This device: Compact tables gives 36 px rows; the dashboard figures carry a 7-day trend line', (tester) async {
+    await tester.runAsync(signedIn);
+    await tester.runAsync(() => RecordStore(db).update((d) => d.put('sales', {'id': 's-today', 'number': 'R-T1', 'date': today(), 'branchId': 'main', 'type': 'retail',
+          'items': [{'id': 'p1', 'name': 'Calmex 500mg Tabs', 'qty': 1, 'price': 500}], 'subtotal': 500, 'discount': 0, 'tax': 0, 'total': 500, 'paid': 500,
+          'payment': 'Cash', 'customerId': 'walk-in', 'customerName': 'Walk-in Customer', 'status': 'completed'})));
+    await start(tester);
+    expect(find.byKey(const Key('spark')), findsWidgets, reason: 'sales were made this week');
+    await navTo(tester, 'This device');
+    await tester.ensureVisible(find.byKey(const Key('compact-tables')));
+    await settle(tester, 2);
+    await tester.tap(find.byKey(const Key('compact-tables')));
+    await settle(tester);
+    expect(Theme.of(tester.element(find.byKey(const Key('compact-tables')))).extension<TableDensity>()?.compact, isTrue);
+    await tester.tap(find.byKey(const Key('compact-tables')));
+    await settle(tester);
+    expect(Theme.of(tester.element(find.byKey(const Key('compact-tables')))).extension<TableDensity>()?.compact ?? false, isFalse);
     await done(tester);
   });
   group('shelves, drug classes and stock corrections', () {

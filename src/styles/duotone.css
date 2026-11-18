@@ -177,7 +177,7 @@
   :root[data-palette] :is(input, select, textarea):focus-visible { outline-offset: 0; box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 22%, transparent); }
 
   /* small 7-day trend lines in the figure cards */
-  :root[data-palette] .stat .spark { display: block; margin: 2px 0 2px; overflow: visible; }
+  :root[data-palette] .stat svg.spark { display: block; width: 84px !important; height: 26px !important; margin: 4px 0 2px; overflow: visible; flex: none; position: static; opacity: 1; }
   :root[data-palette] .stat .spark polyline { fill: none; stroke: var(--primary); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
   :root[data-palette] .stat .spark polygon { fill: color-mix(in srgb, var(--primary) 14%, transparent); }
   :root[data-palette] .stat .spark circle { fill: var(--primary); }

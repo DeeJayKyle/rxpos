@@ -50,7 +50,7 @@ class _PayrollScreenState extends ConsumerState<PayrollScreen> {
   Widget build(BuildContext context) {
     final t = {for (final n in [...payrollTables, 'banks', 'expenseCategories']) n: ref.watch(tableProvider(n)).value};
     final st = ref.watch(settingsProvider).value ?? const PharmacySettings();
-    if (t.values.any((v) => v == null)) return const Center(child: CircularProgressIndicator());
+    if (t.values.any((v) => v == null)) return const PageSkeleton();
     final staff = t[employeesTable]!.map(Employee.fromRecord).toList()..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
     final banks = [(cashDrawer, 'Cash at hand'), for (final b in t['banks']!) if (b['id'] != cashDrawer) ('${b['id']}', '${b['name']}')];
     final body = switch (_tab) {

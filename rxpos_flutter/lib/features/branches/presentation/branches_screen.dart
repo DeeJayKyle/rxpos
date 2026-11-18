@@ -23,7 +23,7 @@ class BranchesScreen extends ConsumerWidget {
     final branches = ref.watch(tableProvider('branches')).value;
     final transfers = ref.watch(tableProvider('transfers')).value ?? const [];
     final d = ref.watch(pharmacyProvider).value;
-    if (branches == null || d == null) return const Center(child: CircularProgressIndicator());
+    if (branches == null || d == null) return const PageSkeleton();
     String nameOf(Object? id) => '${branches.where((b) => b['id'] == id).firstOrNull?['name'] ?? id}';
     Future<String> by() async => (await ref.read(sessionControllerProvider.future))?.userName ?? '';
     final incoming = transfers.where((t) => t['toId'] == d.branch && t['status'] == 'In transit').toList();

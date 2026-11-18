@@ -3,6 +3,24 @@
 Every feature of the React app (`src/pages/*.jsx`, `src/*.jsx`), screen by screen, and where the Flutter app stands.
 ✅ done · ◐ partly · ✗ not yet. Items are ticked only when built and covered by a test.
 
+## Cleaner, calmer, safer (React 1.12.0, 18 Nov 2026)
+| React (classic) | Flutter |
+|---|---|
+| no search or bell in the dashboard greeting | (never had them) |
+| no Paid / completed pills on ordinary sales | the bento row's latest sales, Sales History rows |
+| tips once only (PageTip) | `PageTip` marks itself seen on first show |
+| equal tiles, stock pill beside the expiry pill | till tiles: `stock-pill-<id>` beside `FefoBatchBadge` |
+| corners 8 / 12 / 18, spacing 4–24 (duotone.css) | `surfaceTokens` flat: chip 8, control 12, card 18 |
+| dark cards a lighter step under a hairline (themes.js duo) | palettes regenerated; flat card border on dark |
+| Compact tables (This device, data-density) | `compactTablesKey` → `TableDensity`, dense list tiles |
+| one real red for blocking (--block) | `Tones.block` / `blockSoft` on Expired and Out of stock |
+| bigger total, live change / still due | `till-total`, `till-change` |
+| sale-done banner with Print and New sale | `sale-done-banner` in `_ReceiptDialog` |
+| focus ring in the theme colour | `focusColor` stronger |
+| 7-day sparklines on the figure cards (Spark) | `StatCard(spark:)`, `Spark` |
+| theme preview on hover | `themePreviewProvider` |
+| page skeletons while loading (PageSkeleton) | `PageSkeleton` |
+
 ## Two-colour themes (React 1.11.0, 17 Nov 2026)
 | React (classic) | Flutter |
 |---|---|

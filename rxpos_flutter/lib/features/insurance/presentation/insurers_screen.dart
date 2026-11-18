@@ -112,7 +112,7 @@ class _InsurersScreenState extends ConsumerState<InsurersScreen> {
     final win = ref.watch(balanceWindowProvider).value; // stage 4: a device keeping recent history
     final can = ref.watch(permissionsProvider).value ?? const <String>{};
     final editable = can.contains('customers') || can.contains('finance');
-    if (insurers == null) return const Center(child: CircularProgressIndicator());
+    if (insurers == null) return const PageSkeleton();
     String fmt(num v) => st.money(v);
     final rows = [
       for (final i in insurers) (i: i, owed: insurerBalance(sales, payments, '${i['id']}', win: win)),

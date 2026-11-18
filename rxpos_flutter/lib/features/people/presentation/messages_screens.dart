@@ -51,7 +51,7 @@ class _RemindersScreenState extends ConsumerState<RemindersScreen> {
     final payments = ref.watch(tableProvider('payments')).value ?? const [];
     final smsReady = ref.watch(smsReadyProvider).value ?? false;
     final win = ref.watch(balanceWindowProvider).value; // stage 4: a device keeping recent history
-    if (d == null || rx == null) return const Center(child: CircularProgressIndicator());
+    if (d == null || rx == null) return const PageSkeleton();
     final st = d.settings;
     final saleList = sales.map(Sale.fromRecord).toList();
     final byId = {for (final c in customers) '${c['id']}': c};
@@ -188,7 +188,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
     final payments = ref.watch(tableProvider('payments')).value ?? const [];
     final can = ref.watch(permissionsProvider).value ?? const <String>{};
     final smsReady = ref.watch(smsReadyProvider).value ?? false;
-    if (d == null) return const Center(child: CircularProgressIndicator());
+    if (d == null) return const PageSkeleton();
     final s = d.settings;
     final templates = _templates(s);
     if (!_init && templates.isNotEmpty) {
