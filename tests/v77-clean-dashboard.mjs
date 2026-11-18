@@ -51,7 +51,7 @@ const tiles = () => p.evaluate(() => Object.fromEntries([...document.querySelect
 const widgets = () => p.evaluate(() => [...document.querySelectorAll('.dash-cell')].map((c) => c.dataset.widget));
 
 check('clean layout: figures, the bento row, chart, health, top medicines, latest sales', JSON.stringify(await widgets()) === JSON.stringify(['figures', 'bento', 'chart', 'health', 'top', 'recent']), JSON.stringify(await widgets()));
-check('header: no repeated search or bell (they are in the top bar), today\'s date', await p.evaluate(() => !document.querySelector('.dash-search') && !document.querySelector('.dash-bell') && /\d{4}/.test(document.querySelector('.date-pill')?.innerText || '')));
+check('header: no repeated search or bell (the top bar\'s show), today\'s date', await p.evaluate(() => !document.querySelector('.dash-search') && !document.querySelector('.dash-bell') && !!document.querySelector('.topbar .search-trigger')?.offsetParent && !!document.querySelector('.topbar > .bell button[aria-label^=Notifications]')?.offsetParent && /\d{4}/.test(document.querySelector('.date-pill')?.innerText || '')));
 let t = await tiles();
 check('Today: today\'s sales 2,800 with ↑ against yesterday', /2,800/.test(t["Today's sales"]) && await p.evaluate(() => /up/.test(document.querySelector('.kpis .stat .delta')?.className || '')), JSON.stringify(t));
 await p.evaluate(() => [...document.querySelectorAll('.period-chips button')].find((x) => x.textContent === '1M').click()); await wait(900);

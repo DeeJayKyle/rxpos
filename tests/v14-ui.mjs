@@ -130,7 +130,7 @@ check('spotlight has a WhatsApp share link', /wa\.me\/\?text=/.test(share));
 const before = p.url();
 await p.mouse.click(120, 203); await wait(600);
 check('a tap closes the spotlight without clicking what is underneath', !(await p.$('.spotlight')) && p.url() === before, p.url());
-// the dashboard has its own bell in its header (the top bar's steps aside there on wide screens)
+// the top bar's bell (the dashboard no longer repeats it in its header, 2026-11-18)
 await p.evaluate(() => [...document.querySelectorAll('.bell .icon-btn[aria-label^="Notifications"]')].find((b) => b.offsetParent)?.click()); await wait(300);
 const bell = await p.evaluate(() => document.querySelector('.bell-menu')?.innerText || '');
 check('notification bell lists expiring stock and today\'s event', /expires? within 30 days/.test(bell) && /Supplier delivery/.test(bell), bell.replace(/\n/g, ' | ').slice(0, 160));
