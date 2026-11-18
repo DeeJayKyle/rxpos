@@ -676,6 +676,51 @@ void main() {
     await done(tester);
   });
 
+  testWidgets('safer refunds: a pharmacist refunding over UGX 100,000 needs a manager\'s PIN or password; the approver is kept', (tester) async {
+    await tester.runAsync(signedIn);
+    await tester.runAsync(() async {
+      final kv = await (db.select(db.kv)..where((x) => x.k.equals('session'))).getSingle();
+      await db.into(db.kv).insertOnConflictUpdate(KvCompanion.insert(k: 'session', v: jsonEncode({...(jsonDecode(kv.v) as Map), 'role': 'pharmacist'})));
+      await RecordStore(db).update((d) {
+        d.put('users', {'id': 'u9', 'name': 'Mia Manager', 'role': 'manager', 'email': 'mia@test.rx'});
+        d.put('sales', {'id': 's-big', 'number': 'RBIG1', 'date': today(), 'branchId': 'main', 'type': 'retail',
+          'items': [{'id': 'p1', 'name': 'Calmex 500mg Tabs', 'qty': 300, 'price': 500}], 'subtotal': 150000, 'discount': 0, 'tax': 0, 'total': 150000, 'paid': 150000,
+          'payment': 'Cash', 'customerId': 'walk-in', 'customerName': 'Walk-in Customer', 'cashier': 'Tia Admin', 'status': 'completed'});
+      });
+      await AuthRepository(dio: Dio(), db: db, cloudUrl: 'x').secrets.remember('t1', 'u9', 'mia-pass-1');
+    });
+    await start(tester);
+    await tester.sendKeyEvent(LogicalKeyboardKey.f6);
+    await settle(tester);
+    await tester.tap(find.textContaining('RBIG1').first);
+    await settle(tester);
+    await tester.tap(find.text('Refund'));
+    await settle(tester);
+    expect(find.byKey(const Key('refund-approve')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('refund-reason')));
+    await settle(tester);
+    await tester.tap(find.text('Customer returned it').last);
+    await settle(tester);
+    await tester.tap(find.byKey(const Key('refund-approver')));
+    await settle(tester);
+    await tester.tap(find.text('Mia Manager').last);
+    await settle(tester);
+    await tester.enterText(find.byKey(const Key('refund-secret')), 'wrong-pass');
+    final refundBtn = find.ancestor(of: find.byIcon(Icons.undo), matching: find.byType(FilledButton));
+    await tester.tap(refundBtn);
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 400)));
+    await settle(tester);
+    expect(find.text('That PIN or password is not right for Mia Manager.'), findsOneWidget);
+    expect((await tester.runAsync(() => RecordStore(db).rows('sales')))!.single['status'], 'completed', reason: 'nothing refunded');
+    await tester.enterText(find.byKey(const Key('refund-secret')), 'mia-pass-1');
+    await tester.tap(refundBtn);
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 400)));
+    await settle(tester);
+    final sale = (await tester.runAsync(() => RecordStore(db).rows('sales')))!.single;
+    expect((sale['status'], sale['refundApprovedBy']), ('refunded', 'Mia Manager'));
+    await done(tester);
+  });
+
   testWidgets('sales to check (workplan step 3): the cloud\'s findings on the dashboard, "Checked" marks one and logs it', (tester) async {
     await tester.runAsync(signedIn);
     await tester.runAsync(() => RecordStore(db).update((d) {

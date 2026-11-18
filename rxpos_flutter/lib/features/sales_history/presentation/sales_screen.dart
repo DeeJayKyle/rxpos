@@ -352,10 +352,21 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
               style: TextButton.styleFrom(foregroundColor: Theme.of(c).colorScheme.error),
               onPressed: () async {
                 // the refund sheet: what goes back to stock and to the customer, and why (refund_sheet.dart)
-                final why = await showRefundSheet(c, s, st, batches: ref.read(tableProvider('batches')).value ?? const [], closedDay: _locked(s));
-                if (why == null) return;
+                // safer refunds (2026-11-18): over the limit, someone who isn't a manager needs a manager's PIN or password
+                final limit = (st.raw['refundApproveAbove'] as num?)?.toDouble() ?? refundApproveAbove;
+                RefundApproval? approval;
+                if (limit > 0 && !isApproverRole(session?.role ?? '') && refundMoney(s).back > limit) {
+                  final users = ref.read(tableProvider('users')).value ?? const [];
+                  approval = RefundApproval(
+                    limit: limit,
+                    approvers: [for (final u in users) if (isApproverRole('${u['role']}') && u['id'] != session?.userId && u['disabled'] != true && u['active'] != false) ('${u['id']}', '${u['name']}')],
+                    verify: (id, secret) => ref.read(authRepositoryProvider).approve(session?.tenant ?? '', id, secret),
+                  );
+                }
+                final choice = await showRefundSheet(c, s, st, batches: ref.read(tableProvider('batches')).value ?? const [], closedDay: _locked(s), approval: approval);
+                if (choice == null) return;
                 try {
-                  await refundSale(ref.read(recordStoreProvider), s, user: session?.userName ?? '', settings: st, reason: why);
+                  await refundSale(ref.read(recordStoreProvider), s, user: session?.userName ?? '', settings: st, reason: choice.why, approvedBy: choice.approvedBy);
                   if (c.mounted) Navigator.pop(c);
                   if (mounted) say(context, '${s.number} refunded and items returned to stock');
                 } catch (e) {

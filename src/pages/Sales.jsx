@@ -10,7 +10,9 @@ import { Modal, SearchBox, Empty, PdfButton, ReceiptPdfButton, PayChip, usePages
 import { toast } from '../feedback.jsx';
 import { Barcode } from '../barcode.jsx';
 import { stockParts, kitContents } from '../kits.js';
-import RefundSheet from '../components/RefundSheet.jsx';
+import RefundSheet, { refundMoney, REFUND_APPROVE_ABOVE, isApprover } from '../components/RefundSheet.jsx';
+import { hasPin, verifyPin, verifyOffline } from '../offline.js';
+import { cloudLogin, cloudLogout } from '../cloud.js';
 import { cartSubtotal, lineTotal, taxOf, round } from '../money.js';
 // step 22: what the client still owes on a sale (an insurer's share is billed to the insurer); shown on the receipt
 // even after a refund, as before
@@ -193,7 +195,23 @@ export default function Sales() {
   // the refund sheet (src/components/RefundSheet.jsx) shows what goes back and asks why; doRefund does it
   const [refunding, setRefunding] = useState(null);
   const refund = (sale) => setRefunding(sale);
-  const doRefund = async (sale, why) => {
+  // safer refunds (2026-11-18): over the limit, someone who isn't a manager needs a manager's PIN or password (checked on
+  // this device, as at sign-in); the approver is kept on the sale and in the audit log
+  const approvalFor = (sale) => {
+    const limit = Number(localDb.settings.refundApproveAbove ?? REFUND_APPROVE_ABOVE) || 0;
+    if (!limit || isApprover(user) || refundMoney(sale).back <= limit) return null;
+    const approvers = localDb.users.filter((u) => isApprover(u) && u.id !== user.id && u.active !== false).map((u) => ({ id: u.id, name: u.name }));
+    return { limit, approvers, verify: async (id, secret) => {
+      // this device first (a quick PIN, or a password remembered by the Windows / Android app), then the cloud: a
+      // sign-in as the manager that is closed again at once
+      if (hasPin(syncCfg.tenant, id) && /^\d{4,8}$/.test(secret) && (await verifyPin(syncCfg.tenant, id, secret)).ok) return true;
+      if (await verifyOffline(syncCfg.tenant, id, secret).catch(() => false)) return true;
+      const email = localDb.users.find((u) => u.id === id)?.email;
+      if (!email || !syncCfg.url || !navigator.onLine) return false;
+      try { const r = await cloudLogin(syncCfg.url, email, secret, syncCfg.tenant); cloudLogout({ url: syncCfg.url, key: r.token }).catch(() => {}); return !!r.token; } catch { return false; }
+    } };
+  };
+  const doRefund = async (sale, why, approvedBy = null) => {
     // the sale as it is now (another device, or a second click, may have refunded or edited it since this list was
     // drawn): refunded once only, and what goes back to stock is what the sale holds now
     let already = false;
@@ -201,12 +219,12 @@ export default function Sales() {
       await update((d) => {
         const cur = d.sales.find((x) => x.id === sale.id);
         if (!cur || cur.status === 'refunded') { already = true; return; }
-        put(d, 'sales', { ...cur, status: 'refunded', refundedBy: user.name, refundedAt: now(), ...(why ? { refundReason: String(why).slice(0, 240) } : {}) });
+        put(d, 'sales', { ...cur, status: 'refunded', refundedBy: user.name, refundedAt: now(), ...(why ? { refundReason: String(why).slice(0, 240) } : {}), ...(approvedBy ? { refundApprovedBy: approvedBy } : {}) });
         for (const i of cur.items) {
           // a kit line returns each of its medicines to the batches they came from (src/kits.js)
           for (const a of stockParts(i)) move(d, { productId: a.productId, qty: a.qty, type: 'Refund', ref: cur.number, user: user.name, batchId: a.batchId, branchId: cur.branchId || MAIN_BRANCH });
         }
-        audit(d, user, 'Refund', `${cur.number} · ${fmt(cur.total)}${why ? ' · ' + why : ''}`, cur.branchId || MAIN_BRANCH);
+        audit(d, user, 'Refund', `${cur.number} · ${fmt(cur.total)}${why ? ' · ' + why : ''}${approvedBy ? ' · approved by ' + approvedBy : ''}`, cur.branchId || MAIN_BRANCH);
       });
     } catch (e) { return toast(`${sale.number} was NOT refunded: ${e.message}`, 'error'); }
     setView(null); setRefunding(null);
@@ -283,7 +301,7 @@ export default function Sales() {
       </>}
       {printNode}
       {editing && <SaleEditor sale={editing} onClose={() => setEditing(null)} />}
-      {refunding && <RefundSheet sale={refunding} fmt={fmt} batches={db.batches} closedDay={locked(refunding)} onCancel={() => setRefunding(null)} onConfirm={(why) => doRefund(refunding, why)} />}
+      {refunding && <RefundSheet sale={refunding} fmt={fmt} batches={db.batches} closedDay={locked(refunding)} onCancel={() => setRefunding(null)} approval={approvalFor(refunding)} onConfirm={(why, by) => doRefund(refunding, why, by)} />}
       {view && (
         <Modal title={`Receipt ${view.number}`} onClose={() => setView(null)}>
           <Receipt sale={view} />

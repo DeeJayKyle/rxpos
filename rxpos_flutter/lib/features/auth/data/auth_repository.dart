@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -428,6 +429,32 @@ class AuthRepository {
     if (stored != null) await _put(_sessionKey, jsonEncode({...(jsonDecode(stored) as Map).cast<String, Object?>(), 'token': token}));
     await _put(_tokenUserKey, s.userId);
     return token;
+  }
+
+  /// A manager approves something on this device (a big refund, 2026-11-18): their quick PIN or the password this device
+  /// knows, else a cloud sign-in as them that is closed again at once. True only for the right secret.
+  Future<bool> approve(String tenant, String userId, String secret) async {
+    if (secret.isEmpty) return false;
+    try {
+      if (RegExp(r'^\d{4,8}$').hasMatch(secret) && await secrets.hasPin(tenant, userId) && (await secrets.verifyPin(tenant, userId, secret)).ok) return true;
+    } on OfflineError {
+      // the PIN's window has passed: the password is asked instead
+    }
+    if (await reauthenticate(tenant, userId, secret)) return true;
+    final u = (await RecordStore(db).rows('users')).where((x) => x['id'] == userId && x['disabled'] != true).firstOrNull;
+    final login = '${u?['email'] ?? ''}'.isNotEmpty ? '${u!['email']}' : '${u?['username'] ?? ''}';
+    if (login.isEmpty) return false;
+    try {
+      final res = await dio.post<Object?>('${syncBase(cloudUrl)}/api/login', data: {'email': login, 'password': secret, 'tenant': tenant}, options: Options(validateStatus: (_) => true));
+      final j = res.data is Map ? (res.data as Map).cast<String, Object?>() : const <String, Object?>{};
+      final token = j['token'], user = j['user'];
+      if (res.statusCode != 200 || token is! String || user is! Map || '${user['id']}' != userId) return false;
+      // the approval's own sign-in is closed straight away
+      unawaited(dio.post<Object?>('${syncBase(cloudUrl)}/api/logout', data: const {}, options: Options(headers: {'Authorization': 'Bearer $token'}, validateStatus: (_) => true)).then((_) {}, onError: (_) {}));
+      return true;
+    } on DioException {
+      return false;
+    }
   }
 
   /// Changes waiting to reach the cloud (told when signing out).

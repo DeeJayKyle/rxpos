@@ -151,6 +151,8 @@ export default function Settings() {
             </label>
             <label className="field check"><input type="checkbox" checked={!!s.autoPrint} onChange={(e) => setS({ ...s, autoPrint: e.target.checked })} /><span>Print the receipt automatically after each sale</span></label>
             <label className="field check"><input type="checkbox" checked={!!s.blindCashUp} onChange={(e) => setS({ ...s, blindCashUp: e.target.checked })} /><span>Blind cash-up: staff count the cash before they see what the drawer should hold</span></label>
+            <label className="field"><span>Refunds above this need a manager (0 = never)</span>
+              <input type="number" min="0" step="1000" value={s.refundApproveAbove ?? 100000} onChange={(e) => setS({ ...s, refundApproveAbove: Math.max(0, Number(e.target.value) || 0) })} /></label>
             {field('receiptFooter', 'Receipt footer message')}
             <label className="field"><span>Add Stock receives medicines with packs in</span>
               <select value={s.receiveUnit || 'pack'} onChange={(e) => setS({ ...s, receiveUnit: e.target.value })}><option value="pack">Packs (the largest pack, e.g. boxes)</option><option value="unit">Single units</option></select>

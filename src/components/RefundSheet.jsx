@@ -26,7 +26,15 @@ export function refundHow(sale, back, fmt) {
   return `Pay ${fmt(back)} back the way it was paid (${p}).`;
 }
 
-export default function RefundSheet({ sale, fmt, batches = [], closedDay = false, onCancel, onConfirm }) {
+/** Refunds above this need a manager's approval (Settings: refundApproveAbove; 0 turns it off) unless a manager refunds */
+export const REFUND_APPROVE_ABOVE = 100000;
+export const isApprover = (u) => u && ['admin', 'manager'].includes(u.role);
+
+export default function RefundSheet({ sale, fmt, batches = [], closedDay = false, onCancel, onConfirm, approval = null }) {
+  // approval: { approvers: [{ id, name }], verify(userId, secret) → Promise<boolean> } when a manager must approve
+  const [approver, setApprover] = useState('');
+  const [secret, setSecret] = useState('');
+  const [approveErr, setApproveErr] = useState('');
   const [reason, setReason] = useState('');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
@@ -34,7 +42,20 @@ export default function RefundSheet({ sale, fmt, batches = [], closedDay = false
   const { back, insurer, unpaid } = refundMoney(sale);
   const why = reason === 'Other' ? note.trim() : [reason, note.trim()].filter(Boolean).join(': ');
   const ready = reason && (reason !== 'Other' || note.trim());
-  const go = async (e) => { e.preventDefault(); if (!ready || busy) return; setBusy(true); try { await onConfirm(why); } finally { setBusy(false); } };
+  const go = async (e) => {
+    e.preventDefault(); if (!ready || busy) return;
+    setBusy(true);
+    try {
+      let by = null;
+      if (approval) {
+        const a = approval.approvers.find((x) => x.id === approver);
+        if (!a || !secret) { setApproveErr('Choose the manager and enter their PIN or password.'); return; }
+        if (!(await approval.verify(a.id, secret).catch(() => false))) { setApproveErr(`That PIN or password is not right for ${a.name}.`); setSecret(''); return; }
+        by = a.name;
+      }
+      await onConfirm(why, by);
+    } finally { setBusy(false); }
+  };
   return (
     <Modal title={`Refund ${sale.number}`} onClose={onCancel} wide>
       <form className="stack refund-sheet" onSubmit={go}>
@@ -57,7 +78,7 @@ export default function RefundSheet({ sale, fmt, batches = [], closedDay = false
         </div>
         <div className="refund-money">
           <div className="row between"><span>Sale total</span><strong>{fmt(sale.total)}</strong></div>
-          <div className="row between grand"><span>Money back to the customer</span><strong>{fmt(back)}</strong></div>
+          <div className="row between grand refund-amount"><span>Money back to the customer</span><strong className="num">{fmt(back)}</strong></div>
           {unpaid > 0.005 && <div className="row between"><span>Unpaid balance cancelled</span><span>{fmt(unpaid)}</span></div>}
           {insurer > 0.005 && <div className="row between"><span>No longer billed to {sale.insurance.insurer || 'the insurer'}</span><span>{fmt(insurer)}</span></div>}
           <p className="small">{refundHow(sale, back, fmt)}</p>
@@ -71,9 +92,24 @@ export default function RefundSheet({ sale, fmt, batches = [], closedDay = false
         </label>
         <label className="field"><span>{reason === 'Other' ? 'Say why' : 'Note (optional)'}</span>
           <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={200} required={reason === 'Other'} placeholder={reason === 'Side effect or reaction' ? 'What happened (also record it on the customer)' : ''} /></label>
+        {approval && (
+          <fieldset className="refund-approve">
+            <legend>A manager must approve a refund over {fmt(approval.limit)}</legend>
+            {approval.approvers.length ? <>
+              <label className="field"><span>Manager</span>
+                <select value={approver} onChange={(e) => { setApprover(e.target.value); setApproveErr(''); }} required>
+                  <option value="">Choose…</option>
+                  {approval.approvers.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                </select></label>
+              <label className="field"><span>Their PIN or password</span>
+                <input type="password" autoComplete="off" value={secret} onChange={(e) => { setSecret(e.target.value); setApproveErr(''); }} required /></label>
+            </> : <p className="small">This pharmacy has no other manager to approve it. Ask a manager to do the refund.</p>}
+            {approveErr && <p className="small text-danger" role="alert">{approveErr}</p>}
+          </fieldset>
+        )}
         <div className="form-actions">
           <button type="button" className="btn ghost" onClick={onCancel}>Keep the sale</button>
-          <button type="submit" className="btn danger" disabled={!ready || busy}><Undo2 size={16} />Refund {fmt(back)}</button>
+          <button type="submit" className="btn danger" disabled={!ready || busy || (approval && !approval.approvers.length)}><Undo2 size={16} />Refund {fmt(back)}</button>
         </div>
       </form>
     </Modal>
