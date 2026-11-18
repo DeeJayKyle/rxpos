@@ -23,7 +23,7 @@ import { isWeb, isNative } from './platform.js';
 import { keepsData } from './webpolicy.js';
 import RefreshHost from './refresh.jsx';
 import { startUpdates, onUpdate, applyUpdate, justUpdated, LABEL } from './update.js';
-import { applyTheme, saveTheme, allowedThemes, THEME_GROUPS, currentThemeId, savedMode, saveMode, systemDark, paletteFor, startupTheme, ACCENTS, savedAccent, saveAccent, withAccent } from './themes.js';
+import { applyTheme, saveTheme, allowedThemes, THEME_GROUPS, currentThemeId, savedMode, saveMode, systemDark, paletteFor, startupTheme, savedAccent, saveAccent } from './themes.js';
 import { STYLES, applyStyle, savedStyle, saveStyle } from './surface.js';
 import { LEVELS, applyLevel, savedLevel, saveLevel } from './vivid.js';
 import { TwoStepModal } from './twostep.jsx';
@@ -222,7 +222,7 @@ function PremiumToggle({ theme, setTheme, setMode }) {
   );
 }
 
-function ThemePicker({ theme, setTheme, mode, setMode, accent, setAccent, style, setStyle }) {
+function ThemePicker({ theme, setTheme, mode, setMode, style, setStyle }) {
   const { db } = useStore();
   const branding = db.license?.[0]?.branding;
   const list = allowedThemes(branding);

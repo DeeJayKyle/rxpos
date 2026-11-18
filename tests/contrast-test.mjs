@@ -52,6 +52,8 @@ for (const t of THEMES) {
   tinted++;
 }
 console.log(`PASS  Add Stock line colours checked in ${tinted} themes`);
+// links and brand text on the tinted page itself, not only on cards (axe found Notes' link button at 3.94 on Mint Teal)
+for (const t of THEMES) { const v = themeVars(t); if (/^#[0-9a-f]{6}$/i.test(v['--bg'])) { const r = contrast(v['--primary-text'], v['--bg']); check(`${t.name}: links on the page`, r >= 4.5, r.toFixed(2)); } }
 // the two-colour themes (17 Nov 2026): each theme's own table colours (--hue-0…7) at its own row, hover and heading
 // tints (stronger on the strong themes), with text, muted text and white badge numbers
 for (const t of THEMES) {

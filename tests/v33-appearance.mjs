@@ -52,7 +52,6 @@ check('dashboard: Promote today shows a picture per medicine', await p.evaluate(
 await p.screenshot({ path: `${out}/dashboard-light.png` });
 
 // ---- Light / Dark / System ----
-const ok0 = await css(p, '--ok');
 await openMenu(p); await wait(200);
 await pickMode(p, 'Dark'); await wait(300);
 check('Dark switches to RxPOS Navy Teal', (await html(p)).palette === 'navy-teal' && (await html(p)).theme === 'dark', JSON.stringify(await html(p)));

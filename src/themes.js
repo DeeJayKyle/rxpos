@@ -97,9 +97,8 @@ export const allowedThemes = (branding) => {
 };
 
 /** Button gradient and its text colour: white or dark ink, whichever reads better; the colours deepen until it passes */
-function accent(p1, p2, dark) {
+function accent(p1, p2) {
   const score = (on, a, b) => Math.min(contrast(on, a), contrast(on, b));
-  // light themes keep the classic white-on-colour button (the colour deepens); dark themes use whichever reads better
   // whichever reads better (lime and orange buttons take dark ink, as the owner's references)
   const on = score('#ffffff', p1, p2) >= score(INK, p1, p2) ? '#ffffff' : INK;
   const toward = on === '#ffffff' ? '#000000' : '#ffffff';
@@ -111,12 +110,13 @@ function accent(p1, p2, dark) {
 /** The CSS variables of a theme (pure, so it can be checked) */
 export function themeVars(t) {
   const c = t.c, dark = t.base === 'dark';
-  const btn = accent(c.primary, c.primary2, dark);
+  const btn = accent(c.primary, c.primary2);
   return {
     '--bg': c.bg, '--surface': c.surface, '--surface-2': c.surface2, '--border': c.border, '--border-strong': c.borderStrong,
     '--text': c.text, '--muted': readable(c.muted, [c.bg, c.surface, c.surface2], dark ? '#ffffff' : '#000000'), '--primary': c.primary, '--primary-2': c.primary2,
-    '--primary-text': readable(c.primary, [c.surface, c.surface2], dark ? '#ffffff' : '#000000'),
-    '--on-accent': btn.on, '--accent-grad': `linear-gradient(135deg, ${btn.a} 0%, ${btn.b} 100%)`,
+    // links and brand text: readable on cards and on the tinted page itself (links sit on it)
+    '--primary-text': readable(c.primary, [c.surface, c.surface2, c.bg], dark ? '#ffffff' : '#000000'),
+    '--on-accent': btn.on, '--primary-solid': btn.a, '--accent-grad': `linear-gradient(135deg, ${btn.a} 0%, ${btn.b} 100%)`,
     '--primary-dark': dark ? mix(c.primary, '#000000', 0.12) : mix(c.primary, '#000000', 0.18),
     '--primary-soft': dark ? rgba(c.primary, 0.14) : mix(c.primary, '#ffffff', 0.84),
     '--primary-ink': dark ? mix(c.primary, '#ffffff', 0.25) : readable(mix(c.primary, '#000000', 0.35), [mix(c.primary, '#ffffff', 0.84), c.surface], '#000000'),
@@ -145,7 +145,8 @@ export const themedLogo = (c) => LOGO_SVG.replace(/#0f766e|#0d9488|#10b981/g, c.
  *  strong colour, each readable (AA) on the page; their words and icons tell them apart. */
 function duoVars(c, dark) {
   const toward = dark ? '#ffffff' : '#000000';
-  const on = [c.surface, c.surface2, c.bg];
+  // readable on the page, on cards and on the soft tinted pills they sit in (status pills, badges)
+  const on = [c.surface, c.surface2, c.bg, dark ? mix(c.surface, c.primary, 0.26) : mix(c.primary, '#ffffff', 0.74)];
   const shade = (t) => readable(dark ? mix(c.primary, '#ffffff', t) : mix(c.primary, '#000000', t), on, toward);
   const soft = (t) => (dark ? rgba(c.primary, t) : mix(c.primary, '#ffffff', 1 - t));
   const ok = shade(0.05), warn = shade(dark ? 0.3 : 0.4), danger = shade(dark ? 0.6 : 0.7);
