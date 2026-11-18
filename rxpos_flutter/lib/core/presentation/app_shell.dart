@@ -133,8 +133,8 @@ class AppShell extends ConsumerWidget {
             ),
           ),
         const ThemeMenuButton(),
-        // wide screens: the signed-in person is at the foot of the menu (as the React app)
-        if (session != null && !wide) AccountMenu(session: session, showName: false),
+        // the signed-in person: top right beside the theme, a drop-down (the owner's request, 17 Nov 2026)
+        if (session != null) AccountMenu(session: session, showName: false, card: wide),
         const SizedBox(width: 8),
       ],
     );
@@ -188,7 +188,6 @@ class AppShell extends ConsumerWidget {
                     child: _SidebarSurface(
                       aurora: aurora,
                       header: _SideHeader(pharmacy: session?.pharmacy ?? '', rail: rail, onToggle: toggleRail),
-                      footer: session == null ? null : Padding(padding: const EdgeInsets.all(10), child: AccountMenu(session: session, card: !rail, showName: false)),
                       child: nav,
                     ),
                   ),
@@ -506,10 +505,10 @@ SideColors sideColors(BuildContext context) {
 /// The sidebar's panel (src/styles.css .sidebar): the palette's menu colours top to bottom, its text colour on them, and
 /// the brand header and the signed-in person's card as the React app has them.
 class _SidebarSurface extends StatelessWidget {
-  const _SidebarSurface({required this.child, required this.aurora, this.header, this.footer});
+  const _SidebarSurface({required this.child, required this.aurora, this.header});
   final Widget child;
   final bool aurora;
-  final Widget? header, footer;
+  final Widget? header;
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
@@ -536,7 +535,6 @@ class _SidebarSurface extends StatelessWidget {
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             ?header,
             Expanded(child: child),
-            if (footer != null) DecoratedBox(decoration: BoxDecoration(border: Border(top: BorderSide(color: on.withValues(alpha: .08)))), child: footer),
           ]),
         ),
       ),
@@ -643,31 +641,31 @@ class _NavItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final sc = sideColors(context);
-    final on = sc.dark ? Colors.white : Theme.of(context).colorScheme.onSurface;
     final touch = tokensOf(context).touch;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
+      padding: const EdgeInsets.fromLTRB(10, 2, 10, 2),
       child: Semantics(
         selected: selected,
         button: true,
+        // light soft-glass buttons on the menu; the open page a solid pill in the theme's bright colour (src/styles/duotone.css)
         child: Material(
-          color: selected ? sc.active.withValues(alpha: .16) : Colors.transparent,
-          borderRadius: BorderRadius.circular(9),
+          color: selected ? sc.pill : Colors.white.withValues(alpha: sc.dark ? .07 : .32),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: selected ? sc.pill : Colors.white.withValues(alpha: sc.dark ? .10 : .5))),
           child: InkWell(
-            borderRadius: BorderRadius.circular(9),
-            hoverColor: on.withValues(alpha: .06),
+            borderRadius: BorderRadius.circular(12),
+            hoverColor: Colors.white.withValues(alpha: sc.dark ? .08 : .2),
             onTap: onTap,
             child: Stack(children: [
-              if (selected) Positioned(left: 0, top: 8, bottom: 8, child: Container(width: 3, decoration: BoxDecoration(color: sc.active, borderRadius: BorderRadius.circular(3)))),
               SizedBox(
                 height: touch ? 44 : 34,
                 child: Row(children: [
                   const SizedBox(width: 10),
-                  Icon(icon, size: 18, color: selected ? sc.active : sc.text),
+                  Icon(icon, size: 18, color: selected ? sc.pillOn : sc.text),
                   const SizedBox(width: 11),
                   Expanded(
                     child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 13.5, fontWeight: selected ? FontWeight.w600 : FontWeight.w500, color: selected ? on : sc.text)),
+                        style: TextStyle(fontSize: 13.5, fontWeight: selected ? FontWeight.w700 : FontWeight.w500, color: selected ? sc.pillOn : sc.text)),
                   ),
                   if (count > 0)
                     Container(
@@ -718,7 +716,8 @@ class _SearchBox extends StatelessWidget {
             Icon(Icons.search, size: 18, color: muted),
             const SizedBox(width: 8),
             Expanded(child: Text('Search or ask AI…', maxLines: 1, overflow: TextOverflow.ellipsis, style: t.textTheme.bodyMedium?.copyWith(color: muted))),
-            Container(
+            // the key cap only when there is room for it (large text, a narrow bar)
+            if (c.maxWidth >= 150 * MediaQuery.textScalerOf(context).scale(1)) Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
               decoration: BoxDecoration(border: Border.all(color: t.dividerColor), borderRadius: BorderRadius.circular(5)),
               child: Text('Ctrl K', style: t.textTheme.labelSmall?.copyWith(color: muted)),
@@ -753,7 +752,7 @@ class _Crumbs extends ConsumerWidget {
         ],
         Flexible(child: Text(s.label, key: const Key('crumb-page'), style: t.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700), overflow: TextOverflow.ellipsis, maxLines: 1)),
       ],
-      IconButton(
+      if (location != '/') IconButton(
         key: const Key('pin-page'),
         visualDensity: VisualDensity.compact,
         tooltip: '${pinned ? 'Unpin this page from' : 'Pin this page to'} the top of the menu (${showKey(map.keyOf('pin'))})',

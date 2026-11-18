@@ -1,4 +1,4 @@
-// Appearance: Light / Dark / Follow system (live with the OS), accent presets that never touch status colours,
+// Appearance: Light / Dark / Follow system (live with the OS), no accent presets (only the 15 themes),
 // and the premium dashboard (profit, transactions, alert tiles, chart period) on real data.
 //   node v33-appearance.mjs <base> <ownerKey> <outDir>
 import puppeteer from 'puppeteer-core';
@@ -37,7 +37,7 @@ await setVal(p, 'input[autocomplete=username]', 'lena@test.rx'); await setVal(p,
 await p.evaluate(() => [...document.querySelectorAll('form button')].find((x) => /^Sign in/.test(x.textContent.trim()))?.click());
 await p.waitForSelector('.sidebar', { timeout: 20000 }); await wait(3000);
 
-check('a new device starts on RxPOS Daylight Clinical (system is light)', (await html(p)).palette === 'daylight-clinical', JSON.stringify(await html(p)));
+check('a new device starts on Mint Teal (system is light)', (await html(p)).palette === 'mint-teal', JSON.stringify(await html(p)));
 
 // ---- dashboard on real data ----
 const tiles = await p.evaluate(() => Object.fromEntries([...[...document.querySelectorAll('.stat')].map((s) => [s.querySelector('small')?.textContent.trim(), s.querySelector('strong')?.textContent.trim()]), ...[...document.querySelectorAll('.health-rows a')].map((a) => [a.querySelector('.grow').firstChild.textContent.trim(), a.querySelector('b').textContent.trim()])]));
@@ -52,39 +52,34 @@ check('dashboard: Promote today shows a picture per medicine', await p.evaluate(
 await p.screenshot({ path: `${out}/dashboard-light.png` });
 
 // ---- Light / Dark / System ----
-const ok0 = await css(p, '--ok');
 await openMenu(p); await wait(200);
 await pickMode(p, 'Dark'); await wait(300);
-check('Dark switches to RxPOS OLED Black', (await html(p)).palette === 'oled' && (await html(p)).theme === 'dark', JSON.stringify(await html(p)));
+check('Dark switches to RxPOS Navy Teal', (await html(p)).palette === 'navy-teal' && (await html(p)).theme === 'dark', JSON.stringify(await html(p)));
 await openMenu(p); await wait(200);
 await pickMode(p, 'System'); await wait(300);
-check('System follows the OS (light)', (await html(p)).palette === 'daylight-clinical');
+check('System follows the OS (light)', (await html(p)).palette === 'mint-teal');
 check('System mode is remembered', (await p.evaluate(() => localStorage.getItem('rxpos-theme-mode'))) === 'system');
 await p.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'dark' }, { name: 'prefers-reduced-motion', value: 'reduce' }]); await wait(400);
-check('System switches live when the OS goes dark', (await html(p)).palette === 'oled', JSON.stringify(await html(p)));
+check('System switches live when the OS goes dark', (await html(p)).palette === 'navy-teal', JSON.stringify(await html(p)));
 await p.reload({ waitUntil: 'networkidle2' }); await wait(1500);
-check('System mode survives a reload (dark OS → dark)', (await html(p)).palette === 'oled');
+check('System mode survives a reload (dark OS → dark)', (await html(p)).palette === 'navy-teal');
 await p.screenshot({ path: `${out}/dashboard-dark.png` });
 
 // ---- picking a palette leaves System mode ----
 await openMenu(p); await wait(200);
-await p.evaluate(() => [...document.querySelectorAll('.theme-item')].find((x) => x.textContent.includes('Midnight Pro'))?.click()); await wait(300);
-check('picking a palette applies it and stops following the system', (await html(p)).palette === 'midnight-pro' && (await p.evaluate(() => localStorage.getItem('rxpos-theme-mode'))) === null);
+await p.evaluate(() => [...document.querySelectorAll('.theme-item')].find((x) => x.textContent.includes('RxPOS Navy Teal'))?.click()); await wait(300);
+check('picking a palette applies it and stops following the system', (await html(p)).palette === 'navy-teal' && (await p.evaluate(() => localStorage.getItem('rxpos-theme-mode'))) === null);
 await openMenu(p); await wait(200);
 await pickMode(p, 'Light'); await wait(300);
-check('Light from a dark palette goes to RxPOS Daylight Clinical', (await html(p)).palette === 'daylight-clinical');
+check('Light from a dark palette goes to Mint Teal', (await html(p)).palette === 'mint-teal');
 
-// ---- accent presets ----
+// ---- only the 15 themes (17 Nov 2026): no accent presets; an accent saved before is ignored ----
+await openMenu(p); await wait(200);
+check('the theme menu offers no accent presets', await p.evaluate(() => !document.querySelector('.accent-row, .accent-opt')));
 const prim0 = await css(p, '--primary');
-await openMenu(p); await wait(200);
-await p.evaluate(() => document.querySelector('.accent-opt[aria-label="Violet"]')?.click()); await wait(300);
-check('Violet accent is applied', (await html(p)).accent === 'violet' && (await css(p, '--primary')) !== prim0, await css(p, '--primary'));
-check('an accent never changes the status colours', (await css(p, '--ok')) === ok0, `${ok0} → ${await css(p, '--ok')}`);
-await p.reload({ waitUntil: 'networkidle2' }); await wait(1500);
-check('the accent survives a reload', (await html(p)).accent === 'violet');
-await openMenu(p); await wait(200);
-await p.evaluate(() => document.querySelector('.accent-opt[aria-label="Theme colour"]')?.click()); await wait(300);
-check('Theme colour removes the accent', (await html(p)).accent === '' && (await p.evaluate(() => localStorage.getItem('rxpos-accent'))) === null);
+await p.evaluate(() => localStorage.setItem('rxpos-accent', 'violet')); await p.reload({ waitUntil: 'networkidle2' }); await wait(1500);
+check('an accent saved before changes nothing', (await html(p)).accent === '' && (await css(p, '--primary')) === prim0);
+await p.evaluate(() => localStorage.removeItem('rxpos-accent'));
 
 // ---- POS payment buttons coloured by kind; Reports payment donut ----
 await p.goto(base + '/' + slug + '#/pos', { waitUntil: 'networkidle2' }); await wait(1200);

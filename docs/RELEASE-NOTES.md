@@ -1,5 +1,33 @@
 # RxPOS release notes
 
+## React (classic) app 1.11.0 · Flutter app (next build) · November 2026 (15 two-colour themes, the new menu, the account drop-down)
+
+Nothing to do on the tills: they update by themselves.
+
+- **15 two-colour themes in five sets** (both apps), from the owner's references and review. Every page of a theme
+  keeps to its two colours: colour 1 is strong (the menu's pill, buttons, the open tab, headings), colour 2 is the soft
+  tint of the page, cards and table headings. Warnings, table stripes, charts, payment chips, the till's actions and
+  the logo are all shades of the same two colours, and always carry their words and icons ("Out of stock", "Expired",
+  "Balance due"), so nothing relies on colour alone. Every theme is checked for readability (WCAG AA) on its pages,
+  rows, headings, pills and menu.
+  - **Blues:** Electric Blue, Sky Blue, Ocean Cyan
+  - **Greens:** Forest Green, Emerald Mint, Mint Teal (the light theme new devices start on)
+  - **Purples:** Royal Purple, Lavender, Midnight Indigo
+  - **Warm & Lime:** Amber Gold, Charcoal Lime, Lime Charcoal
+  - **Dark & Calm:** RxPOS Navy Teal (the dark theme, and Premium UI), Steel Blue, Sage
+
+  A device or a pharmacy on an older theme moves to the closest new one by itself.
+- **Only these 15 themes.** The accent presets (both apps) and the Flutter design systems are gone, so nothing can put
+  other colours on a page; a device that used one keeps its theme, or moves to Mint Teal.
+- **The menu, as Charcoal Lime:** a deep menu in the theme's own colour, its pages as light soft-glass buttons and the
+  open page a solid bright pill.
+- **Your account is top right**, beside the theme button: a drop-down with Change my password, quick PIN, two-step
+  sign-in, Sync now and Log out. It used to be at the foot of the menu.
+- **The logo follows the theme**, in the menu, on the sign-in page and on the browser tab.
+- **Lighter table stripes** on every theme; the column headings keep their colour.
+- **No sync button while all is well.** The sync pill shows only when the device is offline or something needs you
+  (changes the cloud refused, sign in again). F5 and the account menu's Sync now still sync.
+- **No pin on the Dashboard** (it is always at the top of the menu).
 ## React (classic) app 1.10.6 · Flutter app 2.1 (next build) · November 2026 (tablets, scanners, Device errors)
 
 - **Tablets (Flutter):** on a tablet held upright (600–900 dp wide) the app now shows a slim menu down the side, in place

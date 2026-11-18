@@ -368,7 +368,7 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
               final best = (prices['${l['productId']}'] ?? const <SupplierPrice>[]).where((o) => o.supplierId != f['supplierId']).firstOrNull;
               return best != null && cost > 0 && best.cost < cost ? best : null;
             }() case final SupplierPrice best)
-              Text('${best.supplierName}: ${s.money(best.cost)}', style: TextStyle(color: Colors.orange.shade800, fontSize: 12)),
+              Text('${best.supplierName}: ${s.money(best.cost)}', style: TextStyle(color: context.tones.warn, fontSize: 12)),
           ]),
         'total' => box('total-$key-${_totalRev[key] ?? 0}', 'Line total', l['total'], (v) => _setLine(key, {'total': v}), w: 120),
         'price' => Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
@@ -479,7 +479,7 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Wrap(spacing: 24, runSpacing: 12, alignment: WrapAlignment.spaceBetween, children: [
               _Panel(
-                color: lineColors[0],
+                color: lineColorOf(context, 0, 0),
                 width: 320,
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   DropdownButtonFormField<String>(
@@ -502,7 +502,7 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
                 ]),
               ),
               _Panel(
-                color: lineColors[1],
+                color: lineColorOf(context, 1, 0),
                 width: 330,
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Text('Purchase invoice', style: th.textTheme.titleLarge),
@@ -590,8 +590,8 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
                       width: switch (c) { 'medicine' => 260, 'qty' => 120, 'cost' => 140, 'total' => 130, 'price' => 170, 'batch' => 120, _ => 170 } + 8,
                       padding: const EdgeInsets.fromLTRB(6, 6, 2, 6),
                       // 1.10 each column heading has its own colour band (lib/core/theme/line_colors.dart)
-                      decoration: BoxDecoration(color: tint(columnColors[c] ?? th.colorScheme.primary, th.colorScheme.surface, 16),
-                          border: Border(top: BorderSide(color: columnColors[c] ?? th.colorScheme.primary, width: 4), right: BorderSide(color: th.colorScheme.outlineVariant))),
+                      decoration: BoxDecoration(color: tint(columnColorOf(context, c), th.colorScheme.surface, context.tones.headTint.toDouble()),
+                          border: Border(top: BorderSide(color: columnColorOf(context, c), width: 4), right: BorderSide(color: th.colorScheme.outlineVariant))),
                       child: Row(children: [
                         Flexible(child: Text(stockColumns[c]!, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700))),
                         InkWell(onTap: i == 0 ? null : () => moveCol(c, i - 1), child: Tooltip(message: 'Move ${stockColumns[c]} left', child: Icon(Icons.chevron_left, size: 18, color: i == 0 ? Theme.of(context).disabledColor : null))),
@@ -603,8 +603,8 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
                 for (final (i, l) in lines(f).indexed)
                   // 1.10 each line its own colour: a stripe, a numbered badge and a light tint; grid lines between cells
                   Container(
-                    decoration: BoxDecoration(color: tint(lineColor(l['hue'], i), th.colorScheme.surface, 9),
-                        border: Border(left: BorderSide(color: lineColor(l['hue'], i), width: 5), bottom: BorderSide(color: th.colorScheme.outlineVariant))),
+                    decoration: BoxDecoration(color: tint(lineColorOf(context, l['hue'], i), th.colorScheme.surface, context.tones.rowTint + 2.0),
+                        border: Border(left: BorderSide(color: lineColorOf(context, l['hue'], i), width: 5), bottom: BorderSide(color: th.colorScheme.outlineVariant))),
                     child: Stack(children: [
                       // grid lines between the columns, the full height of the line
                       Positioned.fill(child: IgnorePointer(child: Row(children: [
@@ -615,7 +615,7 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
                       ]))),
                       Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       SizedBox(width: 35, child: Padding(padding: const EdgeInsets.only(top: 12),
-                          child: Center(child: CircleAvatar(radius: 11, backgroundColor: lineColor(l['hue'], i), child: Text('${i + 1}', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800)))))),
+                          child: Center(child: CircleAvatar(radius: 11, backgroundColor: Color.lerp(lineColorOf(context, l['hue'], i), Colors.black, .15), child: Text('${i + 1}', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800)))))),
                       for (final c in cols)
                         Container(
                           width: switch (c) { 'medicine' => 260, 'qty' => 120, 'cost' => 140, 'total' => 130, 'price' => 170, 'batch' => 120, _ => 170 } + 8,
@@ -632,7 +632,7 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
                   ),
                 for (final l in lines(f).where((l) => l['read'] != null))
                   Text('Line ${lines(f).indexOf(l) + 1} on the invoice: ${(l['read'] as Map)['name']}${checkTextOf(l['read'] as Map).isEmpty ? '' : ' · check ${checkTextOf(l['read'] as Map)}'}',
-                      style: TextStyle(fontSize: 12, color: '${l['productId'] ?? ''}'.isEmpty || (l['read'] as Map)['unclear'] == true ? Colors.orange.shade800 : null)),
+                      style: TextStyle(fontSize: 12, color: '${l['productId'] ?? ''}'.isEmpty || (l['read'] as Map)['unclear'] == true ? context.tones.warn : null)),
               ]),
             ),
             Wrap(spacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
@@ -726,7 +726,7 @@ class _TotalRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 2),
         child: Row(children: [
           Expanded(child: Text(label, style: TextStyle(fontWeight: bold ? FontWeight.w800 : null))),
-          Text(value, style: TextStyle(fontWeight: bold ? FontWeight.w800 : FontWeight.w600, color: warn ? Colors.orange.shade800 : null)),
+          Text(value, style: TextStyle(fontWeight: bold ? FontWeight.w800 : FontWeight.w600, color: warn ? context.tones.warn : null)),
         ]),
       );
 }

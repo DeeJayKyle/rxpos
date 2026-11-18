@@ -1,3 +1,4 @@
+import 'package:rxpos/core/theme/themes.dart' show TonesOfContext;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -137,9 +138,9 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                   style: Theme.of(context).textTheme.bodySmall),
               if (expenseNote.isNotEmpty)
                 Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Icon(Icons.warning_amber_rounded, size: 16, color: Colors.orange.shade800, semanticLabel: 'Note'),
+                  Icon(Icons.warning_amber_rounded, size: 16, color: context.tones.warn, semanticLabel: 'Note'),
                   const SizedBox(width: 4),
-                  Expanded(child: Text(expenseNote, style: TextStyle(color: Colors.orange.shade800, fontSize: 12))),
+                  Expanded(child: Text(expenseNote, style: TextStyle(color: context.tones.warn, fontSize: 12))),
                 ]),
             ]),
           ),
@@ -175,8 +176,8 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       StatGrid(children: [
         StatCard(label: 'Sales', value: st.money(all), sub: '${p.sales.length} receipts', icon: Icons.payments_outlined),
-        StatCard(label: 'Average sale', value: st.money(p.sales.isEmpty ? 0 : all / p.sales.length), icon: Icons.receipt_outlined, color: Colors.blue),
-        StatCard(label: 'Discounts given', value: st.money(p.discounts), icon: Icons.percent, color: Colors.deepPurple),
+        StatCard(label: 'Average sale', value: st.money(p.sales.isEmpty ? 0 : all / p.sales.length), icon: Icons.receipt_outlined, color: context.tones.info),
+        StatCard(label: 'Discounts given', value: st.money(p.discounts), icon: Icons.percent, color: context.tones.violet),
         StatCard(label: 'Refunds', value: st.money(p.refunds.fold<double>(0, (a, s) => a + s.total)), sub: '${p.refunds.length} receipts', icon: Icons.undo, color: Theme.of(context).colorScheme.error),
       ]),
       const SizedBox(height: 12),
@@ -211,14 +212,14 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       StatGrid(children: [
         StatCard(label: 'Consumption (at cost)', value: st.money(c.total), sub: '${formatQty(c.rows.fold<double>(0, (a, r) => a + r.qty))} units · $days days'),
-        StatCard(label: 'Class A', value: '${count('A')}', sub: '${st.money(value('A'))} · the vital few', color: Colors.deepPurple),
-        StatCard(label: 'Running out (<14 days)', value: '${soon.length}', sub: 'at this rate', color: soon.isNotEmpty ? Colors.orange.shade800 : null),
+        StatCard(label: 'Class A', value: '${count('A')}', sub: '${st.money(value('A'))} · the vital few', color: context.tones.violet),
+        StatCard(label: 'Running out (<14 days)', value: '${soon.length}', sub: 'at this rate', color: soon.isNotEmpty ? context.tones.warn : null),
         StatCard(label: 'Not sold (in stock)', value: '${c.idle.length}', sub: '${st.money(c.idle.fold<double>(0, (a, r) => a + r.value))} tied up', color: c.idle.isNotEmpty ? Theme.of(context).colorScheme.error : null),
       ]),
       if (soon.isNotEmpty)
         _card('Fast movers about to run out', [
           for (final r in soon.take(20)) _row('${r.name}${r.cls == 'A' ? '  (A)' : ''} · ${r.perDay.toStringAsFixed(1)}/day · ${formatQty(r.stock ?? 0)} in stock', '${r.daysLeft!.round()} days left',
-              color: r.daysLeft! < 7 ? Theme.of(context).colorScheme.error : Colors.orange.shade800),
+              color: r.daysLeft! < 7 ? Theme.of(context).colorScheme.error : context.tones.warn),
           const Text('Based on how fast each item sold in this period. Reorder the class A items first.', style: TextStyle(fontSize: 12)),
         ]),
       _card('Consumption by medicine (A/B/C by value)', [
@@ -277,13 +278,13 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     final revenue = rows.fold<double>(0, (a, r) => a + r.revenue), cost = rows.fold<double>(0, (a, r) => a + r.cost);
     final check = priceCheck(d.products, d.stockOf, target);
     final err = Theme.of(context).colorScheme.error;
-    Color? low(double m) => m < 0 ? err : m < target ? Colors.orange.shade800 : null;
+    Color? low(double m) => m < 0 ? err : m < target ? context.tones.warn : null;
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       StatGrid(children: [
         StatCard(label: 'Gross profit', value: st.money(revenue - cost), sub: 'on ${st.money(revenue)} sales'),
         StatCard(label: 'Gross margin', value: '${revenue == 0 ? 0 : ((revenue - cost) / revenue * 100).round()}%', sub: 'target ${formatQty(target)}% (Settings)'),
         StatCard(label: 'Priced below cost', value: '${check.where((r) => r.margin < 0).length}', sub: 'in stock now', color: check.any((r) => r.margin < 0) ? err : null),
-        StatCard(label: 'Below ${formatQty(target)}% margin', value: '${check.where((r) => r.margin >= 0).length}', sub: 'in stock now', color: Colors.orange.shade800),
+        StatCard(label: 'Below ${formatQty(target)}% margin', value: '${check.where((r) => r.margin >= 0).length}', sub: 'in stock now', color: context.tones.warn),
       ]),
       if (check.isNotEmpty)
         _card('Price check: ${check.length} medicine${check.length == 1 ? '' : 's'} below the ${formatQty(target)}% margin', [
@@ -334,7 +335,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       for (final (k, v) in sumBy(p.expenses, (e) => cat(e['categoryId']), (e) => (e['amount'] as num?)?.toDouble() ?? 0)) _row('    $k', '(${st.money(v)})'),
       if (w > 0) _row('    Expired stock written off', '(${st.money(w)})'),
       _row('Total operating expenses', '(${st.money(p.expenseTotal + w)})', bold: true),
-      _row('Net profit', st.money(net), bold: true, color: net < 0 ? Theme.of(context).colorScheme.error : Colors.green.shade700),
+      _row('Net profit', st.money(net), bold: true, color: net < 0 ? Theme.of(context).colorScheme.error : context.tones.ok),
       _row('Tax collected (not income)', st.money(p.tax), color: Colors.grey),
     ]);
   }

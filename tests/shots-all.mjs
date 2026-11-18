@@ -43,12 +43,14 @@ await P.evaluate(() => { for (const k of Object.keys(localStorage)) if (k.starts
 await P.type('input[autocomplete=username]', 'amina@shots.rx'); await P.type('input[type=password]', 'amina-pass-123');
 await P.evaluate(() => [...document.querySelectorAll('button')].find((x) => x.textContent.includes('Sign in')).click());
 await P.waitForSelector('.sidebar', { timeout: 20000 }); await wait(4000);
+// SHOTS_THEME: every page in one theme (the two-colour review); SHOTS_PC: the PC size only
+if (process.env.SHOTS_THEME) { await P.evaluate((t) => { localStorage.setItem('pharmapos-theme', t); localStorage.removeItem('rxpos-theme-mode'); }, process.env.SHOTS_THEME); await P.reload({ waitUntil: 'networkidle2' }); await wait(3000); }
 // every page the menu lists (folded groups opened first)
 await P.evaluate(() => document.querySelectorAll('.nav-group.collapsed .nav-title').forEach((x) => x.click())); await wait(400);
 const routes = [...new Set(await P.evaluate(() => [...document.querySelectorAll('.sidebar nav a[href]')].map((a) => a.getAttribute('href').replace(/^#/, ''))))].filter((r) => !filter || r.includes(filter));
 fs.writeFileSync(path.join(out, 'routes.txt'), routes.join('\n'));
 const name = (r) => (r === '/' ? 'dashboard' : r.slice(1).replace(/\//g, '-'));
-for (const [w, h, tag] of [[1440, 900, 'pc'], [390, 844, 'phone']]) {
+for (const [w, h, tag] of process.env.SHOTS_PC ? [[1440, 900, 'pc']] : [[1440, 900, 'pc'], [390, 844, 'phone']]) {
   await P.setViewport({ width: w, height: h, isMobile: tag === 'phone', hasTouch: tag === 'phone', deviceScaleFactor: 1 });
   for (const [i, r] of routes.entries()) {
     await P.evaluate((x) => { location.hash = x; }, r); await wait(1300);

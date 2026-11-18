@@ -11,10 +11,21 @@ import '../../theme/rxpos_theme.dart';
 
 export 'design_tokens.dart';
 
+/// A theme's shades of its two colours (src/themes.js duoVars), each readable where it is used.
+class Duo {
+  const Duo({required this.ok, required this.warn, required this.danger, required this.info, required this.violet, required this.pill, required this.pillOn,
+      required this.logo2, required this.rowTint, required this.headTint, required this.hues});
+  final int ok, warn, danger, info, violet, pill, pillOn, logo2;
+  /// table row and heading tints (percent)
+  final int rowTint, headTint;
+  /// the eight table colours
+  final List<int> hues;
+}
+
 class Palette {
   const Palette(this.id, this.name, this.dark,
       {required this.bg, required this.surface, required this.surface2, required this.border, required this.borderStrong, required this.text,
-      required this.muted, required this.primary, required this.primary2, required this.sidebar, required this.sidebar2, this.flat = false, this.inspired = '', this.sidebarText, this.group = ''});
+      required this.muted, required this.primary, required this.primary2, required this.sidebar, required this.sidebar2, this.flat = false, this.inspired = '', this.sidebarText, this.group = '', this.duo});
   final String id, name, inspired;
   /// the theme menu's group (paletteGroups)
   final String group;
@@ -22,60 +33,91 @@ class Palette {
   final int? sidebarText;
   final bool dark, flat;
   final int bg, surface, surface2, border, borderStrong, text, muted, primary, primary2, sidebar, sidebar2;
+  /// the two-colour shades (src/themes.js duoVars): warnings, table colours and tints, the menu's pill
+  final Duo? duo;
 
   Palette withPrimary(int p1, int p2) => Palette(id, name, dark,
       bg: bg, surface: surface, surface2: surface2, border: border, borderStrong: borderStrong, text: text, muted: muted, primary: p1, primary2: p2,
-      sidebar: sidebar, sidebar2: sidebar2, flat: flat, inspired: inspired, sidebarText: sidebarText, group: group);
+      sidebar: sidebar, sidebar2: sidebar2, flat: flat, inspired: inspired, sidebarText: sidebarText, group: group, duo: duo);
 }
 
-/// The top 10 (Nov 2026, the owner's choice; the same list as src/themes.js): three colours at most each, grouped.
-const paletteGroups = ['Light', 'Dashboard looks', 'Dark'];
+/// The 15 two-colour themes in five sets (17 Nov 2026, the owner's review; generated from src/themes.js, so both apps
+/// show the same colours): colour 1 strong (the menu's pill, buttons, headings, warnings), colour 2 the soft page.
+const paletteGroups = ['Blues', 'Greens', 'Purples', 'Warm & Lime', 'Dark & Calm'];
 const palettes = [
-  Palette('daylight-clinical', 'RxPOS Daylight Clinical', false, bg: 0xFFF5F7FA, surface: 0xFFFFFFFF, surface2: 0xFFF8FAFC, border: 0x140F172A, borderStrong: 0x290F172A, text: 0xFF0F172A, muted: 0xFF5B6678, primary: 0xFF0D9488, primary2: 0xFF0F766E, sidebar: 0xFF0B1220, sidebar2: 0xFF111A2E, flat: true, inspired: 'Typography-led minimalism', group: 'Light'),
-  Palette('cobalt', 'Cobalt Blue', false, bg: 0xFFF5F7FB, surface: 0xFFFFFFFF, surface2: 0xFFF7F9FD, border: 0x140F172A, borderStrong: 0x290F172A, text: 0xFF0B1533, muted: 0xFF586179, primary: 0xFF1D4FD8, primary2: 0xFF1E40AF, sidebar: 0xFF1D4ED8, sidebar2: 0xFF1E40AF, flat: true, inspired: 'Blue sidebar, white cards', group: 'Light'),
-  Palette('royal-violet', 'Royal Violet', false, bg: 0xFFF6F5FB, surface: 0xFFFFFFFF, surface2: 0xFFF8F7FD, border: 0x142E1065, borderStrong: 0x292E1065, text: 0xFF1E1147, muted: 0xFF5F5A7A, primary: 0xFF6D3FD9, primary2: 0xFF7C4EE4, sidebar: 0xFF2E1065, sidebar2: 0xFF4C1D95, flat: true, inspired: 'Purple sidebar, white cards', group: 'Light'),
-  Palette('sunrise', 'Sunrise', false, bg: 0xFFFBF6F1, surface: 0xFFFFFFFF, surface2: 0xFFFDF9F5, border: 0xFFEFE3D6, borderStrong: 0xFFE2CFBB, text: 0xFF2A1A0E, muted: 0xFF7C6553, primary: 0xFFD97706, primary2: 0xFFB45309, sidebar: 0xFF2A160A, sidebar2: 0xFF3B2010, group: 'Light'),
-  Palette('charcoal-sky', 'Charcoal & Sky', false, bg: 0xFFECEEF2, surface: 0xFFFFFFFF, surface2: 0xFFF4F5F7, border: 0x14111114, borderStrong: 0x29111114, text: 0xFF18181B, muted: 0xFF62656C, primary: 0xFF2F6FB5, primary2: 0xFF3B82C4, sidebar: 0xFF38383B, sidebar2: 0xFF2B2B2E, flat: true, inspired: 'Charcoal frame, sky-blue actions: Finance and the dashboard', group: 'Dashboard looks'),
-  Palette('lime-studio', 'Lime Studio', false, bg: 0xFFF3F3EE, surface: 0xFFFFFFFF, surface2: 0xFFF7F7F2, border: 0x14181820, borderStrong: 0x29181820, text: 0xFF18181F, muted: 0xFF62626B, primary: 0xFF3F6212, primary2: 0xFF4D7C0F, sidebar: 0xFF1F2029, sidebar2: 0xFF2A2B36, flat: true, inspired: 'Navy menu, lime highlights: schedules, calendar, quiz', group: 'Dashboard looks'),
-  Palette('aqua-navy', 'Aqua Navy', false, bg: 0xFFEDF2F7, surface: 0xFFFFFFFF, surface2: 0xFFF3F7FB, border: 0x140F2440, borderStrong: 0x290F2440, text: 0xFF0F2440, muted: 0xFF56677E, primary: 0xFF1B4B8A, primary2: 0xFF2563A8, sidebar: 0xFF163A6B, sidebar2: 0xFF1B4B8A, flat: true, inspired: 'Navy and aqua: sales overview, reports', group: 'Dashboard looks'),
-  Palette('forest-green', 'Forest Green', false, bg: 0xFFEFF1F2, surface: 0xFFFFFFFF, surface2: 0xFFF5F6F7, border: 0x14111614, borderStrong: 0x29111614, text: 0xFF111614, muted: 0xFF5B6360, primary: 0xFF15803D, primary2: 0xFF166534, sidebar: 0xFFFFFFFF, sidebar2: 0xFFF6F7F7, flat: true, inspired: 'White and forest green: payments, purchases, Finance', sidebarText: 0xFF323A37, group: 'Dashboard looks'),
-  Palette('oled', 'RxPOS OLED Black', true, bg: 0xFF000000, surface: 0xFF0B0E14, surface2: 0xFF121722, border: 0x1AFFFFFF, borderStrong: 0x2EFFFFFF, text: 0xFFF8FAFC, muted: 0xFF9AA4B2, primary: 0xFF2DD4BF, primary2: 0xFF14B8A6, sidebar: 0xFF000000, sidebar2: 0xFF0B0E14, flat: true, inspired: 'True OLED dark', group: 'Dark'),
-  Palette('midnight-pro', 'Midnight Pro', true, bg: 0xFF0B0F19, surface: 0xFF0F172A, surface2: 0xFF131C31, border: 0xFF1E293B, borderStrong: 0xFF334155, text: 0xFFE2E8F0, muted: 0xFF94A3B8, primary: 0xFF10B981, primary2: 0xFF059669, sidebar: 0xFF020617, sidebar2: 0xFF0B1220, flat: true, inspired: 'Linear / Vercel', group: 'Dark'),
+  Palette('electric-blue', 'Electric Blue', false, bg: 0xFFDFE8FF, surface: 0xFFFFFFFF, surface2: 0xFFEFF4FF, border: 0x1F062E99, borderStrong: 0x3D062E99, text: 0xFF020C29, muted: 0xFF676D7F, primary: 0xFF0A4DFF, primary2: 0xFF0942DB, sidebar: 0xFF101A3A, sidebar2: 0xFF0E1632, flat: true, inspired: 'Deep blue menu, bright blue pills', group: 'Blues',
+      duo: Duo(ok: 0xFF0945E3, warn: 0xFF062E99, danger: 0xFF03174D, info: 0xFF0944E0, violet: 0xFF083ECC, pill: 0xFF1958FF, pillOn: 0xFFFFFFFF, logo2: 0xFF101A3A, rowTint: 6, headTint: 22, hues: [0xFF0A4DFF, 0xFF101A3A, 0xFF0736B3, 0xFF0D349D, 0xFF0941D9, 0xFF0D152E, 0xFF062A8C, 0xFF0C3EC4])),
+  Palette('sky-blue', 'Sky Blue', false, bg: 0xFFE8F5FD, surface: 0xFFFFFFFF, surface2: 0xFFF4FAFE, border: 0x1F227195, borderStrong: 0x3D227195, text: 0xFF091E28, muted: 0xFF6B787E, primary: 0xFF38BDF8, primary2: 0xFF30A3D5, sidebar: 0xFF0C1B2B, sidebar2: 0xFF0A1725, flat: true, inspired: 'Deep navy menu, sky-blue pills', group: 'Blues',
+      duo: Duo(ok: 0xFF216E90, warn: 0xFF206A8C, danger: 0xFF11394A, info: 0xFF206C8D, violet: 0xFF216F92, pill: 0xFF38BDF8, pillOn: 0xFF0B1220, logo2: 0xFF0C1B2B, rowTint: 6, headTint: 22, hues: [0xFF257BA1, 0xFF0C1B2B, 0xFF257CA4, 0xFF226C92, 0xFF257DA5, 0xFF0A1622, 0xFF1F6888, 0xFF267CA5])),
+  Palette('ocean-cyan', 'Ocean Cyan', false, bg: 0xFFE3F6FA, surface: 0xFFFFFFFF, surface2: 0xFFF1FBFD, border: 0x1F046D7F, borderStrong: 0x3D046D7F, text: 0xFF011D22, muted: 0xFF67777A, primary: 0xFF06B6D4, primary2: 0xFF059DB6, sidebar: 0xFF0B2530, sidebar2: 0xFF092029, flat: true, inspired: 'Deep ocean menu, cyan pills', group: 'Blues',
+      duo: Duo(ok: 0xFF067083, warn: 0xFF046D7F, danger: 0xFF023740, info: 0xFF056F81, violet: 0xFF056B7D, pill: 0xFF06B6D4, pillOn: 0xFF0B1220, logo2: 0xFF0B2530, rowTint: 6, headTint: 22, hues: [0xFF067D92, 0xFF0B2530, 0xFF047F94, 0xFF096E82, 0xFF058195, 0xFF091E26, 0xFF036475, 0xFF087B90])),
+  Palette('forest-green', 'Forest Green', false, bg: 0xFFDCEFE3, surface: 0xFFFFFFFF, surface2: 0xFFEEF7F1, border: 0x1F12542F, borderStrong: 0x3D12542F, text: 0xFF05160C, muted: 0xFF69736D, primary: 0xFF1E8C4E, primary2: 0xFF1A7843, sidebar: 0xFF0F2419, sidebar2: 0xFF0D1F16, flat: true, inspired: 'Deep green menu, green pills', group: 'Greens',
+      duo: Duo(ok: 0xFF17683A, warn: 0xFF12542F, danger: 0xFF092A17, info: 0xFF176D3D, violet: 0xFF17693A, pill: 0xFF2C9359, pillOn: 0xFF0B1220, logo2: 0xFF0F2419, rowTint: 6, headTint: 22, hues: [0xFF1C8449, 0xFF0F2419, 0xFF156237, 0xFF175834, 0xFF1A7742, 0xFF0C1D14, 0xFF114D2B, 0xFF1A6D3E])),
+  Palette('emerald-mint', 'Emerald Mint', false, bg: 0xFFE4F7EF, surface: 0xFFFFFFFF, surface2: 0xFFF2FBF7, border: 0x1F0A6F4D, borderStrong: 0x3D0A6F4D, text: 0xFF031E15, muted: 0xFF687873, primary: 0xFF10B981, primary2: 0xFF0E9F6F, sidebar: 0xFF0B221A, sidebar2: 0xFF091D16, flat: true, inspired: 'Deep green menu, emerald pills', group: 'Greens',
+      duo: Duo(ok: 0xFF087250, warn: 0xFF0A6F4D, danger: 0xFF053827, info: 0xFF08704F, violet: 0xFF097451, pill: 0xFF10B981, pillOn: 0xFF0B1220, logo2: 0xFF0B221A, rowTint: 6, headTint: 22, hues: [0xFF0A8059, 0xFF0B221A, 0xFF0B825A, 0xFF0E6E4E, 0xFF0B835B, 0xFF091B15, 0xFF096647, 0xFF0E845C])),
+  Palette('mint-teal', 'Mint Teal', false, bg: 0xFFCFE6E6, surface: 0xFFFFFFFF, surface2: 0xFFE7F3F3, border: 0x1F095353, borderStrong: 0x3D095353, text: 0xFF021616, muted: 0xFF677373, primary: 0xFF0F8A8A, primary2: 0xFF0D7777, sidebar: 0xFF0F2222, sidebar2: 0xFF0D1D1D, flat: true, inspired: 'Teal on mint, the RxPOS colour', group: 'Greens',
+      duo: Duo(ok: 0xFF0A6666, warn: 0xFF095353, danger: 0xFF052929, info: 0xFF0B6B6B, violet: 0xFF0B6767, pill: 0xFF1D9191, pillOn: 0xFF0B1220, logo2: 0xFF0F2222, rowTint: 6, headTint: 22, hues: [0xFF0E8282, 0xFF0F2222, 0xFF0B6161, 0xFF0F5656, 0xFF0D7575, 0xFF0C1B1B, 0xFF084C4C, 0xFF0F6B6B])),
+  Palette('royal-purple', 'Royal Purple', false, bg: 0xFFF4F1FD, surface: 0xFFFFFFFF, surface2: 0xFFFAF8FE, border: 0x1F412C8B, borderStrong: 0x3D412C8B, text: 0xFF110C25, muted: 0xFF706D7C, primary: 0xFF6D4AE8, primary2: 0xFF5E40C8, sidebar: 0xFF1E1433, sidebar2: 0xFF1A112C, flat: true, inspired: 'Deep purple menu, violet pills', group: 'Purples',
+      duo: Duo(ok: 0xFF5C3EC3, warn: 0xFF412C8B, danger: 0xFF211646, info: 0xFF6041CC, violet: 0xFF573BBA, pill: 0xFF6D4AE8, pillOn: 0xFFFFFFFF, logo2: 0xFF1E1433, rowTint: 4, headTint: 16, hues: [0xFF6D4AE8, 0xFF1E1433, 0xFF4C34A2, 0xFF462F8E, 0xFF5D3FC5, 0xFF181029, 0xFF3C2980, 0xFF553AB2])),
+  Palette('lavender', 'Lavender', false, bg: 0xFFE4DCFF, surface: 0xFFFFFFFF, surface2: 0xFFF2EEFF, border: 0x1F46318D, borderStrong: 0x3D46318D, text: 0xFF130D26, muted: 0xFF716E7D, primary: 0xFF7451EB, primary2: 0xFF6446CA, sidebar: 0xFF1F1A33, sidebar2: 0xFF1B162C, flat: true, inspired: 'Violet on lavender', group: 'Purples',
+      duo: Duo(ok: 0xFF6144C5, warn: 0xFF46318D, danger: 0xFF231847, info: 0xFF6043C3, violet: 0xFF5D41BC, pill: 0xFF7451EB, pillOn: 0xFFFFFFFF, logo2: 0xFF1F1A33, rowTint: 6, headTint: 22, hues: [0xFF7451EB, 0xFF1F1A33, 0xFF5139A5, 0xFF4A368F, 0xFF6345C8, 0xFF191529, 0xFF402D81, 0xFF5B41B4])),
+  Palette('midnight-indigo', 'Midnight Indigo', false, bg: 0xFFE6E6FB, surface: 0xFFFFFFFF, surface2: 0xFFF3F3FD, border: 0x1F373790, borderStrong: 0x3D373790, text: 0xFF0F0F26, muted: 0xFF6F6F7D, primary: 0xFF5B5BF0, primary2: 0xFF4E4ECE, sidebar: 0xFF1B1D2E, sidebar2: 0xFF171928, flat: true, inspired: 'Midnight menu, indigo pills', group: 'Purples',
+      duo: Duo(ok: 0xFF4C4CC9, warn: 0xFF373790, danger: 0xFF1B1B48, info: 0xFF4B4BC6, violet: 0xFF4949C0, pill: 0xFF5B5BF0, pillOn: 0xFFFFFFFF, logo2: 0xFF1B1D2E, rowTint: 6, headTint: 22, hues: [0xFF5B5BF0, 0xFF1B1D2E, 0xFF4040A8, 0xFF3B3C8F, 0xFF4D4DCC, 0xFF161725, 0xFF323284, 0xFF4848B6])),
+  Palette('amber-gold', 'Amber Gold', false, bg: 0xFFFDF6E3, surface: 0xFFFFFFFF, surface2: 0xFFFEFBF1, border: 0x1F936B01, borderStrong: 0x3D936B01, text: 0xFF271D00, muted: 0xFF7D7766, primary: 0xFFF5B301, primary2: 0xFFD39A01, sidebar: 0xFF241C0A, sidebar2: 0xFF1F1809, flat: true, inspired: 'Deep brown menu, gold pills with dark words', group: 'Warm & Lime',
+      duo: Duo(ok: 0xFF856201, warn: 0xFF8A6501, danger: 0xFF4A3600, info: 0xFF846101, violet: 0xFF876201, pill: 0xFFF5B301, pillOn: 0xFF0B1220, logo2: 0xFF241C0A, rowTint: 6, headTint: 22, hues: [0xFF956E01, 0xFF241C0A, 0xFF986F01, 0xFF8D6806, 0xFF996F01, 0xFF1D1608, 0xFF876201, 0xFF976F04])),
+  Palette('night-lime', 'Charcoal Lime', false, bg: 0xFFF4F4F0, surface: 0xFFFFFFFF, surface2: 0xFFFAFAF8, border: 0x1F78913F, borderStrong: 0x3D78913F, text: 0xFF202711, muted: 0xFF797D70, primary: 0xFFC8F169, primary2: 0xFFACCF5A, sidebar: 0xFF1F1F2A, sidebar2: 0xFF1B1B24, flat: true, inspired: 'Charcoal menu, lime pills and buttons with dark words', group: 'Warm & Lime',
+      duo: Duo(ok: 0xFF617533, warn: 0xFF5E7131, danger: 0xFF3C4820, info: 0xFF5F7231, violet: 0xFF627634, pill: 0xFFC8F169, pillOn: 0xFF0B1220, logo2: 0xFF1F1F2A, rowTint: 4, headTint: 16, hues: [0xFF667A35, 0xFF1F1F2A, 0xFF677C37, 0xFF667842, 0xFF687D37, 0xFF191922, 0xFF677D37, 0xFF677B3B])),
+  Palette('charcoal-lime', 'Lime Charcoal', false, bg: 0xFFEEF7D6, surface: 0xFFFFFFFF, surface2: 0xFFF7FBEB, border: 0x1F131319, borderStrong: 0x3D131319, text: 0xFF050507, muted: 0xFF69696A, primary: 0xFF1F1F2A, primary2: 0xFF1B1B24, sidebar: 0xFFC8F169, sidebar2: 0xFFBCE363, flat: true, inspired: 'Lime menu, charcoal pills', sidebarText: 0xFF1F1F2A, group: 'Warm & Lime',
+      duo: Duo(ok: 0xFF1D1D28, warn: 0xFF131319, danger: 0xFF09090D, info: 0xFF1B1B25, violet: 0xFF191922, pill: 0xFF1F1F2A, pillOn: 0xFFFFFFFF, logo2: 0xFF14141B, rowTint: 6, headTint: 22, hues: [0xFF1F1F2A, 0xFF667A35, 0xFF16161D, 0xFF667842, 0xFF1A1A24, 0xFF687D37, 0xFF111117, 0xFF525E3D])),
+  Palette('navy-teal', 'RxPOS Navy Teal', true, bg: 0xFF0A2233, surface: 0xFF162D3D, surface2: 0xFF203645, border: 0x1AFFFFFF, borderStrong: 0x33FFFFFF, text: 0xFFE7E9EB, muted: 0xFF939DA5, primary: 0xFF14B8A6, primary2: 0xFF119E8F, sidebar: 0xFF0F2A44, sidebar2: 0xFF0D243A, flat: true, inspired: 'Navy and teal: the RxPOS till', group: 'Dark & Calm',
+      duo: Duo(ok: 0xFF51CBBD, warn: 0xFF5BCDC1, danger: 0xFFA1E3DB, info: 0xFF53CBBE, violet: 0xFF59CCC0, pill: 0xFF14B8A6, pillOn: 0xFF0B1220, logo2: 0xFF0F2A44, rowTint: 6, headTint: 22, hues: [0xFF0E7F73, 0xFF0F2A44, 0xFF0E8174, 0xFF127175, 0xFF0E8276, 0xFF0C2236, 0xFF0B655B, 0xFF117D79])),
+  Palette('steel-blue', 'Steel Blue', false, bg: 0xFFEDF1F6, surface: 0xFFFFFFFF, surface2: 0xFFF6F8FB, border: 0x1F2F4A67, borderStrong: 0x3D2F4A67, text: 0xFF0D141C, muted: 0xFF6E7277, primary: 0xFF4F7CAC, primary2: 0xFF446B94, sidebar: 0xFF161C26, sidebar2: 0xFF131821, flat: true, inspired: 'Slate menu, steel-blue pills: calm for long shifts', group: 'Dark & Calm',
+      duo: Duo(ok: 0xFF3F6287, warn: 0xFF2F4A67, danger: 0xFF182534, info: 0xFF3E6085, violet: 0xFF3F638A, pill: 0xFF4A75A2, pillOn: 0xFFFFFFFF, logo2: 0xFF161C26, rowTint: 6, headTint: 22, hues: [0xFF4A75A2, 0xFF161C26, 0xFF375778, 0xFF334C69, 0xFF436992, 0xFF12161E, 0xFF2B445F, 0xFF3E5F84])),
+  Palette('sage', 'Sage', false, bg: 0xFFE3EEE1, surface: 0xFFFFFFFF, surface2: 0xFFF1F7F0, border: 0x1F1C4029, borderStrong: 0x3D1C4029, text: 0xFF08110B, muted: 0xFF6B706D, primary: 0xFF2F6B45, primary2: 0xFF285C3B, sidebar: 0xFF18241B, sidebar2: 0xFF151F17, flat: true, inspired: 'Deep sage menu, green pills', group: 'Dark & Calm',
+      duo: Duo(ok: 0xFF2D6642, warn: 0xFF1C4029, danger: 0xFF0E2015, info: 0xFF295E3D, violet: 0xFF265637, pill: 0xFF477C5B, pillOn: 0xFFFFFFFF, logo2: 0xFF18241B, rowTint: 6, headTint: 22, hues: [0xFF2F6B45, 0xFF18241B, 0xFF214B30, 0xFF244830, 0xFF285B3B, 0xFF131D16, 0xFF1A3B26, 0xFF285638])),
 ];
-
-/// Themes retired in Nov 2026 → the kept theme closest to each (a saved choice or an owner's list keeps working).
+/// Themes retired → the new theme closest to each (a saved choice or an owner's list keeps working).
 const retiredPalettes = {
-  'light': 'daylight-clinical',
-  'hybrid-light': 'daylight-clinical',
-  'solarized-light': 'daylight-clinical',
-  'clinic-blue': 'cobalt',
-  'mint': 'forest-green',
-  'lavender': 'royal-violet',
-  'rose-dawn': 'sunrise',
-  'sand': 'sunrise',
-  'coral': 'sunrise',
-  'github-light': 'daylight-clinical',
-  'nord-snow': 'daylight-clinical',
-  'soft-grey': 'daylight-clinical',
-  'sage': 'forest-green',
-  'teal-glass': 'daylight-clinical',
-  'paper': 'daylight-clinical',
-  'dark': 'midnight-pro',
-  'hybrid-dark': 'midnight-pro',
-  'tokyo-night': 'midnight-pro',
-  'nord': 'midnight-pro',
-  'dracula': 'midnight-pro',
-  'mocha': 'midnight-pro',
-  'solarized-dark': 'midnight-pro',
-  'one-dark': 'midnight-pro',
-  'rose-pine': 'midnight-pro',
-  'forest': 'midnight-pro',
-  'ocean': 'midnight-pro',
-  'gruvbox': 'oled',
-  'github-dark': 'oled',
-  'gold-night': 'oled',
-  'ember-forge': 'oled',
-  'contrast-dark': 'oled',
+  'daylight-clinical': 'mint-teal',
+  'cobalt': 'electric-blue',
+  'royal-violet': 'royal-purple',
+  'sunrise': 'amber-gold',
+  'charcoal-sky': 'steel-blue',
+  'lime-studio': 'charcoal-lime',
+  'aqua-navy': 'ocean-cyan',
+  'cobalt-blue': 'electric-blue',
+  'sunny-orange': 'amber-gold',
+  'oled': 'navy-teal',
+  'midnight-pro': 'navy-teal',
+  'light': 'mint-teal',
+  'hybrid-light': 'mint-teal',
+  'solarized-light': 'mint-teal',
+  'clinic-blue': 'sky-blue',
+  'mint': 'emerald-mint',
+  'rose-dawn': 'amber-gold',
+  'sand': 'amber-gold',
+  'coral': 'amber-gold',
+  'github-light': 'steel-blue',
+  'nord-snow': 'electric-blue',
+  'soft-grey': 'steel-blue',
+  'teal-glass': 'mint-teal',
+  'paper': 'mint-teal',
+  'dark': 'navy-teal',
+  'hybrid-dark': 'navy-teal',
+  'tokyo-night': 'navy-teal',
+  'nord': 'navy-teal',
+  'dracula': 'navy-teal',
+  'mocha': 'navy-teal',
+  'solarized-dark': 'navy-teal',
+  'one-dark': 'navy-teal',
+  'rose-pine': 'navy-teal',
+  'forest': 'navy-teal',
+  'ocean': 'navy-teal',
+  'gruvbox': 'navy-teal',
+  'github-dark': 'navy-teal',
+  'gold-night': 'navy-teal',
+  'ember-forge': 'navy-teal',
+  'contrast-dark': 'navy-teal',
 };
 
 /// A theme id as it is now (a retired one → its replacement).
@@ -83,24 +125,9 @@ String currentPaletteId(String id) => retiredPalettes[id] ?? id;
 
 /// The design systems' own palettes (design_systems.dart): used only through a design system, so the owner's choice
 /// of themes and the theme list stay those of the React app.
-const designPalettes = [
-  Palette('split-pane', 'Split-Pane Slate', false, bg: 0xFFF4F6F8, surface: 0xFFFFFFFF, surface2: 0xFFF7F9FB, border: 0xFFDCE2E8, borderStrong: 0xFFC3CCD6, text: 0xFF0F172A, muted: 0xFF5B6573, primary: 0xFF0F766E, primary2: 0xFF1D4ED8, sidebar: 0xFF0F172A, sidebar2: 0xFF1E293B, inspired: 'Split-Pane Hybrid Grid'),
-  Palette('target-tap', 'Target Tap', false, bg: 0xFFF1F6F5, surface: 0xFFFFFFFF, surface2: 0xFFF5FAF9, border: 0xFFD3E2DF, borderStrong: 0xFFA9C2BD, text: 0xFF0B1F1C, muted: 0xFF4A615C, primary: 0xFF0B7A75, primary2: 0xFF2563EB, sidebar: 0xFF0B1F1C, sidebar2: 0xFF12302B, inspired: 'Target Tap Ergonomic'),
-  Palette('nightlife', 'Nightlife Contrast', true, bg: 0xFF121212, surface: 0xFF1E1E1E, surface2: 0xFF242424, border: 0xFF333333, borderStrong: 0xFF4A4A4A, text: 0xFFEDEDED, muted: 0xFFA8A8A8, primary: 0xFF22D3EE, primary2: 0xFFA3E635, sidebar: 0xFF0D0D0D, sidebar2: 0xFF161616, inspired: 'Nightlife Contrast'),
-  Palette('daylight', 'Daylight Retail', false, bg: 0xFFFFFFFF, surface: 0xFFFFFFFF, surface2: 0xFFF3F4F6, border: 0xFFD1D5DB, borderStrong: 0xFF9CA3AF, text: 0xFF030712, muted: 0xFF374151, primary: 0xFF0B5FD7, primary2: 0xFF0E7490, sidebar: 0xFF111827, sidebar2: 0xFF1F2937, inspired: 'Daylight Retail'),
-  Palette('hud', 'Diagnostic HUD', true, bg: 0xFF0B1117, surface: 0xFF111A22, surface2: 0xFF16212B, border: 0xFF22313D, borderStrong: 0xFF34495A, text: 0xFFE6EDF3, muted: 0xFF9FB0C0, primary: 0xFF22C55E, primary2: 0xFF38BDF8, sidebar: 0xFF070C11, sidebar2: 0xFF0D151C, inspired: 'Hardware Diagnostic HUD'),
-  Palette('brutalist', 'Neo-Brutalist Pop', false, bg: 0xFFFFF1C1, surface: 0xFFFFFFFF, surface2: 0xFFFFF8E1, border: 0xFF000000, borderStrong: 0xFF000000, text: 0xFF000000, muted: 0xFF2B2B2B, primary: 0xFF2563EB, primary2: 0xFFFF4D6D, sidebar: 0xFF000000, sidebar2: 0xFF1A1A1A, inspired: 'Neo-Brutalist Pop'),
-  Palette('holo', 'Aurora Holographic', false, bg: 0xFFF3F0FF, surface: 0xFFFFFFFF, surface2: 0xFFF7F5FF, border: 0xFFE4DDF7, borderStrong: 0xFFCFC4EE, text: 0xFF1E1B2E, muted: 0xFF5B5675, primary: 0xFF7C3AED, primary2: 0xFF0EA5A4, sidebar: 0xFF1E1B2E, sidebar2: 0xFF2A2540, inspired: 'Aurora Glow / Holographic'),
-  Palette('retrowave', 'Retrowave Cyber-Tech', true, bg: 0xFF140B2E, surface: 0xFF1E1340, surface2: 0xFF26194F, border: 0xFF3A2A6E, borderStrong: 0xFF5B3FA0, text: 0xFFF5F0FF, muted: 0xFFB9AEDC, primary: 0xFFFF2E97, primary2: 0xFF00E5FF, sidebar: 0xFF0E0722, sidebar2: 0xFF160D34, inspired: 'Retrowave Cyber-Tech'),
-  Palette('bauhaus', 'Editorial Bauhaus', false, bg: 0xFFF4EFE6, surface: 0xFFFFFFFF, surface2: 0xFFFAF6EE, border: 0xFF111111, borderStrong: 0xFF111111, text: 0xFF111111, muted: 0xFF3A3A3A, primary: 0xFF1F4FD8, primary2: 0xFFD7263D, sidebar: 0xFF111111, sidebar2: 0xFF1F1F1F, inspired: 'Editorial Bauhaus'),
-  Palette('sunset', 'Sunset Glass', true, bg: 0xFF4A0E3F, surface: 0xFF2A0B3D, surface2: 0xFF3A1050, border: 0xFF7A3B7A, borderStrong: 0xFFA05A9A, text: 0xFFFFFFFF, muted: 0xFFF3DDEB, primary: 0xFFFFB86B, primary2: 0xFFFF7AA8, sidebar: 0xFF1F0830, sidebar2: 0xFF2A0B3D, inspired: 'Sunset Glassmorphic'),
-  Palette('rxpos-green', 'RxPOS Green', false, bg: 0xFFF7F6F0, surface: 0xFFFFFFFF, surface2: 0xFFF2F5EF, border: 0xFFE3E7DF, borderStrong: 0xFFC8D1C3, text: 0xFF13241A, muted: 0xFF56665B, primary: 0xFF1B7A45, primary2: 0xFF2E9E5B, sidebar: 0xFF0E4D2C, sidebar2: 0xFF11603A, inspired: 'RxPOS Green'),
-  Palette('studio', 'Studio Grid', false, bg: 0xFFFFFFFF, surface: 0xFFFFFFFF, surface2: 0xFFF7F7F8, border: 0xFFE6E6EA, borderStrong: 0xFFCFCFD6, text: 0xFF0A0A0B, muted: 0xFF5C5C66, primary: 0xFF5B4FF0, primary2: 0xFF7C6CF7, sidebar: 0xFF111113, sidebar2: 0xFF1B1B1F, inspired: 'Studio Grid'),
-  Palette('lavender', 'Lavender Dream', false, bg: 0xFFEDE7FF, surface: 0xFFFFFFFF, surface2: 0xFFF6F2FF, border: 0xFFE3DAFB, borderStrong: 0xFFC9BCF2, text: 0xFF241B45, muted: 0xFF5E5580, primary: 0xFF7B5CF5, primary2: 0xFFE76BB8, sidebar: 0xFF241B45, sidebar2: 0xFF30255A, inspired: 'Lavender Dream'),
-  Palette('travel', 'Travel Orange', false, bg: 0xFFF3F1F8, surface: 0xFFFFFFFF, surface2: 0xFFF8F6FB, border: 0xFFE4DEEC, borderStrong: 0xFFC9BED8, text: 0xFF2B1C38, muted: 0xFF6A5C78, primary: 0xFFE8650A, primary2: 0xFF4A2B5E, sidebar: 0xFF2B1C38, sidebar2: 0xFF3A2650, inspired: 'Travel Orange'),
-];
+const designPalettes = <Palette>[]; // retired with the design systems (17 Nov 2026)
 
-const premiumTheme = 'midnight-pro';
+const premiumTheme = 'navy-teal';
 
 /// A palette by id: one of the 10, a design system's own (some share an old theme's id, e.g. Lavender Dream), or the
 /// kept theme a retired id moved to.
@@ -124,12 +151,7 @@ String paletteFor(bool dark, [List<Palette> list = palettes, String? preferred])
         .id;
 
 /// Accent presets: change only the brand / action colour of a palette; status colours never follow the accent.
-const accents = [
-  ('emerald', 'Emerald', (0xFF008C58, 0xFF0E9F96), (0xFF16A36A, 0xFF20C9C3)),
-  ('ocean', 'Ocean Blue', (0xFF1D64D8, 0xFF267BFF), (0xFF267BFF, 0xFF20C9C3)),
-  ('violet', 'Violet', (0xFF6D43E0, 0xFF8456F5), (0xFF8456F5, 0xFF267BFF)),
-  ('midnight', 'Midnight Turquoise', (0xFF0B7F86, 0xFF13A3A0), (0xFF20C9C3, 0xFF267BFF)),
-];
+const accents = <(String, String, (int, int), (int, int))>[]; // retired: only the 15 themes' own colours (17 Nov 2026)
 
 Palette withAccent(Palette p, String accent) {
   final a = accents.where((x) => x.$1 == accent).firstOrNull;
@@ -198,7 +220,8 @@ int readable(int fg, List<int> bgs, int toward, [double min = 4.5]) {
 ({int a, int b, int on}) buttonColours(int p1, int p2, bool dark) {
   const ink = 0xFF0B1220, white = 0xFFFFFFFF;
   double score(int on, int a, int b) => math.min(contrast(on, a), contrast(on, b));
-  final on = !dark || score(white, p1, p2) >= score(ink, p1, p2) ? white : ink;
+  // whichever reads better (lime, gold and sky buttons take dark ink, as src/themes.js)
+  final on = score(white, p1, p2) >= score(ink, p1, p2) ? white : ink;
   final toward = on == white ? 0xFF000000 : white;
   var a = p1, b = p2;
   for (var i = 0; i < 30 && score(on, a, b) < 4.5; i++) {
@@ -218,26 +241,70 @@ class LookLevel extends ThemeExtension<LookLevel> {
   LookLevel lerp(LookLevel? other, double t) => t < .5 ? this : (other ?? this);
 }
 
+/// The theme's tones for meanings (src/themes.js duoVars): ok, warn, danger, info and a second accent, each with a soft
+/// fill; on the two-colour themes they are shades of the theme's own colour (the owner's choice, 17 Nov 2026), and their
+/// words and icons tell them apart. Also the table colours and tints. Read with `context.tones`.
+class Tones extends ThemeExtension<Tones> {
+  const Tones({required this.ok, required this.warn, required this.danger, required this.info, required this.violet, required this.surface,
+      this.hues = const [], this.rowTint = 7, this.headTint = 16});
+  final Color ok, warn, danger, info, violet, surface;
+  final List<Color> hues;
+  final int rowTint, headTint;
+  Color soft(Color c, [double a = .14]) => Color.alphaBlend(c.withValues(alpha: a), surface);
+  Color get okSoft => soft(ok);
+  Color get warnSoft => soft(warn, .18);
+  Color get dangerSoft => soft(danger, .2);
+  Color get infoSoft => soft(info);
+  Color get violetSoft => soft(violet);
+  @override
+  Tones copyWith() => this;
+  @override
+  Tones lerp(Tones? other, double t) => t < .5 ? this : (other ?? this);
+}
+
+/// The tones of a palette: its two-colour shades, or the classic fixed colours for a design system's own palette.
+Tones tonesOf(Palette p) {
+  final d = p.duo;
+  if (d != null) {
+    return Tones(ok: Color(d.ok), warn: Color(d.warn), danger: Color(d.danger), info: Color(d.info), violet: Color(d.violet), surface: Color(p.surface),
+        hues: [for (final h in d.hues) Color(h)], rowTint: d.rowTint, headTint: d.headTint);
+  }
+  return Tones(
+    ok: Color(p.dark ? 0xFF34D399 : 0xFF047857), warn: Color(p.dark ? 0xFFFB923C : 0xFFC2410C), danger: Color(p.dark ? 0xFFFB7185 : 0xFFBE123C),
+    info: Color(p.dark ? 0xFF60A5FA : 0xFF1D4ED8), violet: Color(p.dark ? 0xFFA78BFA : 0xFF6D28D9), surface: Color(p.surface));
+}
+
+extension TonesOfContext on BuildContext {
+  /// this theme's tones (ok, warn, danger, info, violet)
+  Tones get tones => Theme.of(this).extension<Tones>() ?? tonesOf(palettes.first);
+}
+
 /// The menu's colours (src/styles.css .sidebar): the palette's two menu colours top to bottom, its text colour, and the
 /// brand colour for the page you are on, as the React app paints them.
 class SideColors extends ThemeExtension<SideColors> {
-  const SideColors({required this.top, required this.bottom, required this.text, required this.active, required this.dark});
+  const SideColors({required this.top, required this.bottom, required this.text, required this.active, required this.dark, Color? pill, Color? pillOn})
+      : pill = pill ?? active, pillOn = pillOn ?? (dark ? const Color(0xFF0B1220) : Colors.white);
   final Color top, bottom, text, active;
+  /// the open page's solid pill and its words (src/themes.js menuPill)
+  final Color pill, pillOn;
   /// a dark menu (light text on it)
   final bool dark;
   @override
   SideColors copyWith({Color? top, Color? bottom, Color? text, Color? active, bool? dark}) =>
-      SideColors(top: top ?? this.top, bottom: bottom ?? this.bottom, text: text ?? this.text, active: active ?? this.active, dark: dark ?? this.dark);
+      SideColors(top: top ?? this.top, bottom: bottom ?? this.bottom, text: text ?? this.text, active: active ?? this.active, dark: dark ?? this.dark, pill: pill, pillOn: pillOn);
   @override
   SideColors lerp(SideColors? other, double t) => t < .5 ? this : (other ?? this);
 }
 
 /// The menu colours of a palette: React's --sidebar-text (#aab6ca on the standard navy) or the palette's own.
 SideColors sideColorsOf(Palette p) {
-  final dark = _lum(p.sidebar) < .4;
-  final text = p.sidebarText ?? (dark ? readable(mix(0xFFFFFFFF, p.sidebar, .30), [p.sidebar, p.sidebar2], 0xFFFFFFFF) : p.text);
+  // a menu takes white words unless it is light (orange, lime, sage: src/themes.js lightMenu)
+  final dark = _lum(p.sidebar) <= .22;
+  final text = p.sidebarText ?? (dark ? readable(0xFFAAB6CA, [p.sidebar, p.sidebar2], 0xFFFFFFFF) : p.text);
   final active = readable(p.primary, [p.sidebar, p.sidebar2], dark ? 0xFFFFFFFF : 0xFF000000, 3);
-  return SideColors(top: Color(p.sidebar), bottom: Color(p.sidebar2), text: Color(text), active: Color(active), dark: dark);
+  final d = p.duo;
+  return SideColors(top: Color(p.sidebar), bottom: Color(p.sidebar2), text: Color(text), active: Color(active), dark: dark,
+      pill: d == null ? null : Color(d.pill), pillOn: d == null ? null : Color(d.pillOn));
 }
 
 /// The Vivid tile colours for a colour a screen uses (the one closest in hue; teal when none).
@@ -277,13 +344,15 @@ ThemeData buildTheme(Palette base, {String accent = '', String surface = 'flat',
     String? headingFont, String? bodyFont}) {
   final p = withAccent(base, accent);
   // the next-gen palettes keep their flat bento cards whatever surface style is chosen (no glow on OLED black)
+  // the two default themes keep their flat bento cards; the others follow the chosen surface style (as the React app)
   final nextGen = tokens == null && nextGenPalettes.contains(base.id);
   if (nextGen) surface = 'flat';
   final tk = (tokens ?? (nextGen ? nextGenTokens(dark: p.dark) : surfaceTokens(surface, p))).onDevice(touch: touch);
   final btn = buttonColours(p.primary, p.primary2, p.dark);
   final muted = readable(p.muted, [p.bg, p.surface, p.surface2], p.dark ? 0xFFFFFFFF : 0xFF000000);
   // brand-coloured text must also read on the backdrop the translucent panels let through
-  final behind = [p.surface, p.surface2, if (tk.glassAlpha != null) ...tk.backdrop.map((c) => c.toARGB32())];
+  // ... and on the tinted page itself (links such as Edit widgets sit on it)
+  final behind = [p.surface, p.surface2, p.bg, if (tk.glassAlpha != null) ...tk.backdrop.map((c) => c.toARGB32())];
   final primaryText = readable(p.primary, behind, p.dark ? 0xFFFFFFFF : 0xFF000000);
   final errorColour = p.dark ? 0xFFF87171 : 0xFFB91C1C;
   // a container: a pale (dark themes: deep) tint of [c], its text deepened (lightened) until it passes AA on it
@@ -395,7 +464,7 @@ ThemeData buildTheme(Palette base, {String accent = '', String surface = 'flat',
     // a finger needs room (Android); a mouse is precise (Windows)
     visualDensity: tk.touch ? VisualDensity.standard : const VisualDensity(horizontal: 0, vertical: -.5),
     materialTapTargetSize: tk.touch ? MaterialTapTargetSize.padded : MaterialTapTargetSize.shrinkWrap,
-    extensions: [LookLevel(vivid: vivid), tk.copyWith(backdrop: tk.backdrop, glows: tk.glows), sideColorsOf(p)],
+    extensions: [LookLevel(vivid: vivid), tk.copyWith(backdrop: tk.backdrop, glows: tk.glows), sideColorsOf(p), tonesOf(p)],
     scaffoldBackgroundColor: Color(p.bg),
     dividerColor: Color(p.border),
     cardTheme: CardThemeData(

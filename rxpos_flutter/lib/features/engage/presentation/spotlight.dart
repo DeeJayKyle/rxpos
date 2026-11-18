@@ -3,6 +3,7 @@
 // margin, slow movers, premium) mixed with health tips, each with a picture and a one-tap WhatsApp share. Browse with
 // the arrows, a swipe, the thumbnails or ← → and space; it moves on every 8 seconds. Any tap outside the card, or Esc,
 // closes it. Never during a sale, and never prescription-only or controlled medicines (it faces customers).
+import 'package:rxpos/core/theme/themes.dart' show TonesOfContext;
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
@@ -192,8 +193,8 @@ class _SpotlightState extends ConsumerState<Spotlight> {
     final hour = DateTime.now().hour;
     // the AI's topic picture instead of the drawing, when this device has one
     final pic = _picture(subjectOf(s), toneOf(s));
-    final kind = s.isTip ? ('Health tip', Icons.favorite_outline, Colors.lightBlue) : slideKinds[s.item!.kind]!;
-    final MaterialColor color = kind.$3;
+    final kind = s.isTip ? ('Health tip', Icons.favorite_outline, context.tones.info) : _toned(context, s.item!.kind);
+    final Color color = kind.$3;
     final share = s.isTip
         ? '💚 Health tip from ${st.name.isEmpty ? 'your pharmacy' : st.name}: ${s.tip!.text}${s.tip!.source.isEmpty ? '' : ' (${s.tip!.source})'}'
         : shareText(s.item!.p, st);
@@ -207,7 +208,7 @@ class _SpotlightState extends ConsumerState<Spotlight> {
       child: Container(
         constraints: const BoxConstraints(maxWidth: 820),
         padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(borderRadius: BorderRadius.circular(24), gradient: LinearGradient(colors: [color.shade700, color.shade900])),
+        decoration: BoxDecoration(borderRadius: BorderRadius.circular(24), gradient: LinearGradient(colors: [_deep(color, .1), _deep(color, .45)])),
         child: LayoutBuilder(builder: (context, c) {
           final icon = Icon(s.isTip ? tipArt(s.tip!.text) : medicineArt(s.item!.p.form, s.item!.p.name), size: c.maxWidth < 500 ? 96 : 160, color: Colors.white.withValues(alpha: .95));
           final side = c.maxWidth < 500 ? 150.0 : 220.0;
@@ -240,7 +241,7 @@ class _SpotlightState extends ConsumerState<Spotlight> {
             ],
             const SizedBox(height: 14),
             FilledButton.icon(
-              style: FilledButton.styleFrom(backgroundColor: Colors.white, foregroundColor: color.shade900),
+              style: FilledButton.styleFrom(backgroundColor: Colors.white, foregroundColor: _deep(color, .45)),
               onPressed: () => launchUrl(Uri.parse(whatsappLink('', share)), mode: LaunchMode.externalApplication),
               icon: const Icon(Icons.share_outlined),
               label: Text(s.isTip ? 'Share this tip' : 'Share on WhatsApp'),
@@ -293,8 +294,8 @@ class _SpotlightState extends ConsumerState<Spotlight> {
                         if (c.maxWidth < 900 || n < 2) return centred;
                         final cur = ((_i % n) + n) % n;
                         Widget lean(Slide x, double dir) {
-                          final kx = x.isTip ? ('Health tip', Icons.favorite_outline, Colors.lightBlue) : slideKinds[x.item!.kind]!;
-                          final MaterialColor col = kx.$3;
+                          final kx = x.isTip ? ('Health tip', Icons.favorite_outline, context.tones.info) : _toned(context, x.item!.kind);
+                          final Color col = kx.$3;
                           return IgnorePointer(
                             child: Transform(
                               alignment: dir < 0 ? Alignment.centerRight : Alignment.centerLeft,
@@ -306,7 +307,7 @@ class _SpotlightState extends ConsumerState<Spotlight> {
                                   height: math.min(c.maxHeight * .7, 360),
                                   padding: const EdgeInsets.all(20),
                                   alignment: Alignment.bottomLeft,
-                                  decoration: BoxDecoration(borderRadius: BorderRadius.circular(24), gradient: LinearGradient(colors: [col.shade700, col.shade900])),
+                                  decoration: BoxDecoration(borderRadius: BorderRadius.circular(24), gradient: LinearGradient(colors: [_deep(col, .1), _deep(col, .45)])),
                                   child: Text(x.isTip ? 'Health tip' : (x.headline ?? x.item!.p.name), maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 18)),
                                 ),
                               ),
@@ -355,3 +356,13 @@ class _SpotlightState extends ConsumerState<Spotlight> {
     ]);
   }
 }
+
+/// a slide's label, icon and colour, the colour in this theme's tones (two colours on every page)
+(String, IconData, Color) _toned(BuildContext context, String kind) {
+  final k = slideKinds[kind]!;
+  final t = context.tones;
+  return (k.$1, k.$2, switch (kind) { 'expiry' => t.warn, 'slow' => t.violet, 'value' => t.info, _ => t.ok });
+}
+
+/// a tone deepened toward black (the slide's two-tone backdrop, white text on it)
+Color _deep(Color c, double t) => Color.lerp(c, Colors.black, t)!;

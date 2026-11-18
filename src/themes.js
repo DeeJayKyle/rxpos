@@ -1,37 +1,91 @@
-// Colour themes. Each theme is a light or dark base plus its own palette, applied as CSS variables. Since Nov 2026,
-// the top 10 themes in three groups (THEME_GROUPS), three colours each; the look-alikes (Nord, Dracula,
-// Catppuccin, Gruvbox, Solarized, Tokyo Night, …) were retired and map to the closest kept theme (RETIRED). The owner
-// chooses which themes each pharmacy may use.
+import { LOGO_SVG } from './logomark.js';
+// Colour themes. Each theme is a light or dark base plus its own palette, applied as CSS variables. Since 17 Nov 2026
+// (the owner's references and review), 15 two-colour themes in five sets: colour 1 is strong (the menu, buttons, the active tab, headings),
+// colour 2 is soft (the page, cards, table headings and row stripes); text is near black or white. Warnings, tables and
+// pills use shades of the same two colours (themeVars), with their words and icons, so every page keeps to two colours.
+// Older themes map to the closest new one (RETIRED). The owner chooses which themes each pharmacy may use.
 
 const T = (id, name, base, c, inspired = '', group = '') => ({ id, name, base, c, inspired, group });
-/** The groups of the theme menu, in order (Nov 2026: 36 themes cut to the top 10) */
-export const THEME_GROUPS = ['Light', 'Dashboard looks', 'Dark'];
+/** The groups of the theme menu, in order */
+export const THEME_GROUPS = ['Blues', 'Greens', 'Purples', 'Warm & Lime', 'Dark & Calm'];
+
+const hexToRgb = (h) => { const n = parseInt(h.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
+const rgba = (h, a) => `rgba(${hexToRgb(h).join(', ')}, ${a})`;
+const mix = (h, w, t) => { const a = hexToRgb(h), b = hexToRgb(w); return '#' + a.map((v, i) => Math.round(v + (b[i] - v) * t).toString(16).padStart(2, '0')).join(''); };
+const lum = (h) => { const [r, g, b] = hexToRgb(h).map((x) => { x /= 255; return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+
+// ---- contrast: every theme is made readable (WCAG AA, 4.5:1 for text) when it is applied ----
+export const contrast = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+const INK = '#0b1220';
+/** Move a colour towards black or white until it reads on every background given */
+function readable(fg, bgs, toward, min = 4.5) {
+  let c = fg;
+  for (let i = 0; i < 30 && Math.min(...bgs.map((b) => contrast(c, b))) < min; i++) c = mix(c, toward, 0.06);
+  return c;
+}
+/** A menu colour that takes dark text (orange, sage) rather than white: the one that reads better */
+export const lightMenu = (side) => lum(side) > 0.22;
+
+/** A two-colour theme: [c1] strong (buttons, active, headings), [c2] the soft page tint, [side] the menu (c1 by default) */
+const duo = (id, name, group, { c1, c2, side = c1, sideText, base = 'light', inspired = '', strong = false }) => {
+  const dark = base === 'dark';
+  const lightSide = lightMenu(side);
+  // a coloured menu with white text: deepened just enough for AA
+  if (!lightSide) side = readable(side, ['#ffffff'], '#000000');
+  const text = dark ? mix(c2, '#ffffff', 0.9) : mix(c1, '#000000', 0.84);
+  return T(id, name, base, {
+    c1, c2,
+    bg: c2,
+    surface: dark ? mix(c2, '#ffffff', 0.05) : '#ffffff',
+    surface2: dark ? mix(c2, '#ffffff', 0.09) : mix(c2, '#ffffff', 0.5),
+    border: dark ? 'rgba(255, 255, 255, 0.10)' : rgba(mix(c1, '#000000', 0.4), 0.12),
+    borderStrong: dark ? 'rgba(255, 255, 255, 0.20)' : rgba(mix(c1, '#000000', 0.4), 0.24),
+    text,
+    muted: dark ? mix(text, c2, 0.38) : mix(text, '#ffffff', 0.4),
+    primary: c1,
+    primary2: mix(c1, '#000000', 0.14),
+    sidebar: side,
+    sidebar2: mix(side, '#000000', lightSide ? 0.06 : 0.14),
+    sidebarText: sideText || (lightSide ? mix(side, '#000000', 0.78) : lum(side) > 0.03 ? '#ffffff' : undefined),
+    // stronger colour (the owner's review, 17 Nov 2026): deeper table row and heading tints
+    // table stripes kept light (the owner's review, 17 Nov 2026): a soft wash of the row colour, the headings stronger
+    rowTint: strong ? 6 : 4, headTint: strong ? 22 : 16,
+    flat: true,
+  }, inspired, group);
+};
+
 export const THEMES = [
-  // The top 10 (Nov 2026, the owner's choice): ranked for working speed (no blur or heavy effects), vivid and clear colour
-  // coding on every page, readability (AA everywhere) and smooth transitions. Each uses three colours at most: a neutral
-  // base, the frame (menu) colour and one brand colour (its second tone is a shade of the same colour).
-  // Light
-  T('daylight-clinical', 'RxPOS Daylight Clinical', 'light', { bg: '#f5f7fa', surface: '#ffffff', surface2: '#f8fafc', border: 'rgba(15, 23, 42, 0.08)', borderStrong: 'rgba(15, 23, 42, 0.16)', text: '#0f172a', muted: '#5b6678', primary: '#0d9488', primary2: '#0f766e', sidebar: '#0b1220', sidebar2: '#111a2e', flat: true }, 'Typography-led minimalism', 'Light'),
-  T('cobalt', 'Cobalt Blue', 'light', { bg: '#f5f7fb', surface: '#ffffff', surface2: '#f7f9fd', border: 'rgba(15, 23, 42, 0.08)', borderStrong: 'rgba(15, 23, 42, 0.16)', text: '#0b1533', muted: '#586179', primary: '#1d4fd8', primary2: '#1e40af', sidebar: '#1d4ed8', sidebar2: '#1e40af', flat: true }, 'Blue sidebar, white cards', 'Light'),
-  T('royal-violet', 'Royal Violet', 'light', { bg: '#f6f5fb', surface: '#ffffff', surface2: '#f8f7fd', border: 'rgba(46, 16, 101, 0.08)', borderStrong: 'rgba(46, 16, 101, 0.16)', text: '#1e1147', muted: '#5f5a7a', primary: '#6d3fd9', primary2: '#7c4ee4', sidebar: '#2e1065', sidebar2: '#4c1d95', flat: true }, 'Purple sidebar, white cards', 'Light'),
-  T('sunrise', 'Sunrise', 'light', { bg: '#fbf6f1', surface: '#ffffff', surface2: '#fdf9f5', border: '#efe3d6', borderStrong: '#e2cfbb', text: '#2a1a0e', muted: '#7c6553', primary: '#d97706', primary2: '#b45309', sidebar: '#2a160a', sidebar2: '#3b2010' }, '', 'Light'),
-  // Dashboard looks (the owner's references, 17 Nov 2026), each with its own page treatment in styles/themes-ref.css
-  T('charcoal-sky', 'Charcoal & Sky', 'light', { bg: '#eceef2', surface: '#ffffff', surface2: '#f4f5f7', border: 'rgba(17, 17, 20, 0.08)', borderStrong: 'rgba(17, 17, 20, 0.16)', text: '#18181b', muted: '#62656c', primary: '#2f6fb5', primary2: '#3b82c4', sidebar: '#38383b', sidebar2: '#2b2b2e', flat: true }, 'Charcoal frame, sky-blue actions: Finance and the dashboard', 'Dashboard looks'),
-  T('lime-studio', 'Lime Studio', 'light', { bg: '#f3f3ee', surface: '#ffffff', surface2: '#f7f7f2', border: 'rgba(24, 24, 32, 0.08)', borderStrong: 'rgba(24, 24, 32, 0.16)', text: '#18181f', muted: '#62626b', primary: '#3f6212', primary2: '#4d7c0f', sidebar: '#1f2029', sidebar2: '#2a2b36', flat: true }, 'Navy menu, lime highlights: schedules, calendar, quiz', 'Dashboard looks'),
-  T('aqua-navy', 'Aqua Navy', 'light', { bg: '#edf2f7', surface: '#ffffff', surface2: '#f3f7fb', border: 'rgba(15, 36, 64, 0.08)', borderStrong: 'rgba(15, 36, 64, 0.16)', text: '#0f2440', muted: '#56677e', primary: '#1b4b8a', primary2: '#2563a8', sidebar: '#163a6b', sidebar2: '#1b4b8a', flat: true }, 'Navy and aqua: sales overview, reports', 'Dashboard looks'),
-  T('forest-green', 'Forest Green', 'light', { bg: '#eff1f2', surface: '#ffffff', surface2: '#f5f6f7', border: 'rgba(17, 22, 20, 0.08)', borderStrong: 'rgba(17, 22, 20, 0.16)', text: '#111614', muted: '#5b6360', primary: '#15803d', primary2: '#166534', sidebar: '#ffffff', sidebar2: '#f6f7f7', sidebarText: '#323a37', flat: true }, 'White and forest green: payments, purchases, Finance', 'Dashboard looks'),
-  // Dark
-  T('oled', 'RxPOS OLED Black', 'dark', { bg: '#000000', surface: '#0b0e14', surface2: '#121722', border: 'rgba(255, 255, 255, 0.10)', borderStrong: 'rgba(255, 255, 255, 0.18)', text: '#f8fafc', muted: '#9aa4b2', primary: '#2dd4bf', primary2: '#14b8a6', sidebar: '#000000', sidebar2: '#0b0e14', flat: true }, 'True OLED dark', 'Dark'),
-  T('midnight-pro', 'Midnight Pro', 'dark', { bg: '#0b0f19', surface: '#0f172a', surface2: '#131c31', border: '#1e293b', borderStrong: '#334155', text: '#e2e8f0', muted: '#94a3b8', primary: '#10b981', primary2: '#059669', sidebar: '#020617', sidebar2: '#0b1220', flat: true }, 'Linear / Vercel', 'Dark'),
+  // Blues
+  duo('electric-blue', 'Electric Blue', 'Blues', { c1: '#0a4dff', c2: '#dfe8ff', side: '#101a3a', strong: true, inspired: 'Deep blue menu, bright blue pills' }),
+  duo('sky-blue', 'Sky Blue', 'Blues', { c1: '#38bdf8', c2: '#e8f5fd', side: '#0c1b2b', strong: true, inspired: 'Deep navy menu, sky-blue pills' }),
+  duo('ocean-cyan', 'Ocean Cyan', 'Blues', { c1: '#06b6d4', c2: '#e3f6fa', side: '#0b2530', strong: true, inspired: 'Deep ocean menu, cyan pills' }),
+  // Greens
+  duo('forest-green', 'Forest Green', 'Greens', { c1: '#1e8c4e', c2: '#dcefe3', side: '#0f2419', strong: true, inspired: 'Deep green menu, green pills' }),
+  duo('emerald-mint', 'Emerald Mint', 'Greens', { c1: '#10b981', c2: '#e4f7ef', side: '#0b221a', strong: true, inspired: 'Deep green menu, emerald pills' }),
+  duo('mint-teal', 'Mint Teal', 'Greens', { c1: '#0f8a8a', c2: '#cfe6e6', side: '#0f2222', strong: true, inspired: 'Teal on mint, the RxPOS colour' }),
+  // Purples
+  duo('royal-purple', 'Royal Purple', 'Purples', { c1: '#6d4ae8', c2: '#f4f1fd', side: '#1e1433', inspired: 'Deep purple menu, violet pills' }),
+  duo('lavender', 'Lavender', 'Purples', { c1: '#7451eb', c2: '#e4dcff', side: '#1f1a33', strong: true, inspired: 'Violet on lavender' }),
+  duo('midnight-indigo', 'Midnight Indigo', 'Purples', { c1: '#5b5bf0', c2: '#e6e6fb', side: '#1b1d2e', strong: true, inspired: 'Midnight menu, indigo pills' }),
+  // Warm & Lime
+  duo('amber-gold', 'Amber Gold', 'Warm & Lime', { c1: '#f5b301', c2: '#fdf6e3', side: '#241c0a', strong: true, inspired: 'Deep brown menu, gold pills with dark words' }),
+  duo('night-lime', 'Charcoal Lime', 'Warm & Lime', { c1: '#c8f169', c2: '#f4f4f0', side: '#1f1f2a', inspired: 'Charcoal menu, lime pills and buttons with dark words' }),
+  duo('charcoal-lime', 'Lime Charcoal', 'Warm & Lime', { c1: '#1f1f2a', c2: '#eef7d6', side: '#c8f169', sideText: '#1f1f2a', strong: true, inspired: 'Lime menu, charcoal pills' }),
+  // Dark & Calm
+  duo('navy-teal', 'RxPOS Navy Teal', 'Dark & Calm', { c1: '#14b8a6', c2: '#0a2233', side: '#0f2a44', base: 'dark', strong: true, inspired: 'Navy and teal: the RxPOS till' }),
+  duo('steel-blue', 'Steel Blue', 'Dark & Calm', { c1: '#4f7cac', c2: '#edf1f6', side: '#161c26', strong: true, inspired: 'Slate menu, steel-blue pills: calm for long shifts' }),
+  duo('sage', 'Sage', 'Dark & Calm', { c1: '#2f6b45', c2: '#e3eee1', side: '#18241b', strong: true, inspired: 'Deep sage menu, green pills' }),
 ];
-/** Themes retired in Nov 2026 → the kept theme closest to each, so a saved choice or an owner's list keeps working */
+/** Themes retired → the new theme closest to each, so a saved choice or an owner's list keeps working */
 export const RETIRED = {
-  light: 'daylight-clinical', 'hybrid-light': 'daylight-clinical', 'solarized-light': 'daylight-clinical', 'clinic-blue': 'cobalt', mint: 'forest-green',
-  lavender: 'royal-violet', 'rose-dawn': 'sunrise', sand: 'sunrise', coral: 'sunrise', 'github-light': 'daylight-clinical', 'nord-snow': 'daylight-clinical',
-  'soft-grey': 'daylight-clinical', sage: 'forest-green', 'teal-glass': 'daylight-clinical', paper: 'daylight-clinical',
-  dark: 'midnight-pro', 'hybrid-dark': 'midnight-pro', 'tokyo-night': 'midnight-pro', nord: 'midnight-pro', dracula: 'midnight-pro', mocha: 'midnight-pro',
-  'solarized-dark': 'midnight-pro', 'one-dark': 'midnight-pro', 'rose-pine': 'midnight-pro', forest: 'midnight-pro', ocean: 'midnight-pro',
-  gruvbox: 'oled', 'github-dark': 'oled', 'gold-night': 'oled', 'ember-forge': 'oled', 'contrast-dark': 'oled',
+  'daylight-clinical': 'mint-teal', cobalt: 'electric-blue', 'royal-violet': 'royal-purple', sunrise: 'amber-gold', 'charcoal-sky': 'steel-blue',
+  'lime-studio': 'charcoal-lime', 'aqua-navy': 'ocean-cyan', 'cobalt-blue': 'electric-blue', 'sunny-orange': 'amber-gold', oled: 'navy-teal', 'midnight-pro': 'navy-teal',
+  light: 'mint-teal', 'hybrid-light': 'mint-teal', 'solarized-light': 'mint-teal', 'clinic-blue': 'sky-blue', mint: 'emerald-mint',
+  'rose-dawn': 'amber-gold', sand: 'amber-gold', coral: 'amber-gold', 'github-light': 'steel-blue', 'nord-snow': 'electric-blue',
+  'soft-grey': 'steel-blue', 'teal-glass': 'mint-teal', paper: 'mint-teal',
+  dark: 'navy-teal', 'hybrid-dark': 'navy-teal', 'tokyo-night': 'navy-teal', nord: 'navy-teal', dracula: 'navy-teal', mocha: 'navy-teal',
+  'solarized-dark': 'navy-teal', 'one-dark': 'navy-teal', 'rose-pine': 'navy-teal', forest: 'navy-teal', ocean: 'navy-teal',
+  gruvbox: 'navy-teal', 'github-dark': 'navy-teal', 'gold-night': 'navy-teal', 'ember-forge': 'navy-teal', 'contrast-dark': 'navy-teal',
 };
 /** A theme id as it is now (a retired one → its replacement) */
 export const currentThemeId = (id) => RETIRED[id] || id;
@@ -42,25 +96,11 @@ export const allowedThemes = (branding) => {
   return THEMES.filter((t) => ids.includes(t.id));
 };
 
-const hexToRgb = (h) => { const n = parseInt(h.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
-const rgba = (h, a) => `rgba(${hexToRgb(h).join(', ')}, ${a})`;
-const mix = (h, w, t) => { const a = hexToRgb(h), b = hexToRgb(w); return '#' + a.map((v, i) => Math.round(v + (b[i] - v) * t).toString(16).padStart(2, '0')).join(''); };
-
-// ---- contrast: every theme is made readable (WCAG AA, 4.5:1 for text) when it is applied ----
-const lum = (h) => { const [r, g, b] = hexToRgb(h).map((x) => { x /= 255; return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
-export const contrast = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
-const INK = '#0b1220';
-/** Move a colour towards black or white until it reads on every background given */
-function readable(fg, bgs, toward, min = 4.5) {
-  let c = fg;
-  for (let i = 0; i < 30 && Math.min(...bgs.map((b) => contrast(c, b))) < min; i++) c = mix(c, toward, 0.06);
-  return c;
-}
 /** Button gradient and its text colour: white or dark ink, whichever reads better; the colours deepen until it passes */
-function accent(p1, p2, dark) {
+function accent(p1, p2) {
   const score = (on, a, b) => Math.min(contrast(on, a), contrast(on, b));
-  // light themes keep the classic white-on-colour button (the colour deepens); dark themes use whichever reads better
-  const on = !dark || score('#ffffff', p1, p2) >= score(INK, p1, p2) ? '#ffffff' : INK;
+  // whichever reads better (lime and orange buttons take dark ink, as the owner's references)
+  const on = score('#ffffff', p1, p2) >= score(INK, p1, p2) ? '#ffffff' : INK;
   const toward = on === '#ffffff' ? '#000000' : '#ffffff';
   let a = p1, b = p2;
   for (let i = 0; i < 30 && score(on, a, b) < 4.5; i++) { if (contrast(on, a) < 4.5) a = mix(a, toward, 0.05); if (contrast(on, b) < 4.5) b = mix(b, toward, 0.05); }
@@ -70,29 +110,72 @@ function accent(p1, p2, dark) {
 /** The CSS variables of a theme (pure, so it can be checked) */
 export function themeVars(t) {
   const c = t.c, dark = t.base === 'dark';
-  const btn = accent(c.primary, c.primary2, dark);
+  const btn = accent(c.primary, c.primary2);
   return {
     '--bg': c.bg, '--surface': c.surface, '--surface-2': c.surface2, '--border': c.border, '--border-strong': c.borderStrong,
     '--text': c.text, '--muted': readable(c.muted, [c.bg, c.surface, c.surface2], dark ? '#ffffff' : '#000000'), '--primary': c.primary, '--primary-2': c.primary2,
-    '--primary-text': readable(c.primary, [c.surface, c.surface2], dark ? '#ffffff' : '#000000'),
-    '--on-accent': btn.on, '--accent-grad': `linear-gradient(135deg, ${btn.a} 0%, ${btn.b} 100%)`,
+    // links and brand text: readable on cards and on the tinted page itself (links sit on it)
+    '--primary-text': readable(c.primary, [c.surface, c.surface2, c.bg], dark ? '#ffffff' : '#000000'),
+    '--on-accent': btn.on, '--primary-solid': btn.a, '--accent-grad': `linear-gradient(135deg, ${btn.a} 0%, ${btn.b} 100%)`,
     '--primary-dark': dark ? mix(c.primary, '#000000', 0.12) : mix(c.primary, '#000000', 0.18),
     '--primary-soft': dark ? rgba(c.primary, 0.14) : mix(c.primary, '#ffffff', 0.84),
-    '--primary-ink': dark ? mix(c.primary, '#ffffff', 0.25) : mix(c.primary, '#000000', 0.35),
+    '--primary-ink': dark ? mix(c.primary, '#ffffff', 0.25) : readable(mix(c.primary, '#000000', 0.35), [mix(c.primary, '#ffffff', 0.84), c.surface], '#000000'),
     '--bg-grad': c.flat ? 'none' : `radial-gradient(1100px 560px at 100% -10%, ${rgba(c.primary, dark ? 0.12 : 0.13)} 0%, transparent 60%), radial-gradient(850px 500px at -10% 110%, ${rgba(c.primary2, dark ? 0.1 : 0.1)} 0%, transparent 55%)`,
     '--sidebar': c.sidebar, '--sidebar-2': c.sidebar2, ...(c.sidebarText ? { '--sidebar-text': c.sidebarText } : {}),
+    ...duoVars(c, dark),
+  };
+}
+
+/** The open page's pill on the menu: the brand colour, brightened (or deepened on a light menu) until it stands out from
+ *  the menu (3:1), with white or dark words, whichever reads better (at least 4.5:1) */
+const menuPill = (c) => {
+  const pill = readable(c.primary, [c.sidebar], lightMenu(c.sidebar) ? '#000000' : '#ffffff', 3);
+  const on = contrast('#ffffff', pill) >= contrast(INK, pill) ? '#ffffff' : INK;
+  return { '--pill': readable(pill, [on], on === '#ffffff' ? '#000000' : '#ffffff'), '--pill-on': on };
+};
+
+/** The logo's second colour (the capsule's lower half): the menu colour when it differs from the brand colour, else a
+ *  deeper shade of it */
+const logo2 = (c) => (c.sidebar.toLowerCase() !== c.primary.toLowerCase() && !lightMenu(c.sidebar) ? c.sidebar : mix(c.primary, '#000000', 0.35));
+
+/** The RxPOS mark in a theme's colours (the browser tab's icon follows the theme too) */
+export const themedLogo = (c) => LOGO_SVG.replace(/#0f766e|#0d9488|#10b981/g, c.primary).replace('#f59e0b', logo2(c));
+
+/** Two colours only (the owner's choice, 17 Nov 2026): warnings, pills and table colours are shades of the theme's
+ *  strong colour, each readable (AA) on the page; their words and icons tell them apart. */
+function duoVars(c, dark) {
+  const toward = dark ? '#ffffff' : '#000000';
+  // readable on the page, on cards and on the soft tinted pills they sit in (status pills, badges)
+  const on = [c.surface, c.surface2, c.bg, dark ? mix(c.surface, c.primary, 0.26) : mix(c.primary, '#ffffff', 0.74)];
+  const shade = (t) => readable(dark ? mix(c.primary, '#ffffff', t) : mix(c.primary, '#000000', t), on, toward);
+  const soft = (t) => (dark ? rgba(c.primary, t) : mix(c.primary, '#ffffff', 1 - t));
+  const ok = shade(0.05), warn = shade(dark ? 0.3 : 0.4), danger = shade(dark ? 0.6 : 0.7);
+  // eight table colours, all from the theme: the strong colour, the menu colour and shades between
+  // (deep enough for the white numbers on Add Stock's line badges)
+  const hues = [c.primary, c.sidebar, mix(c.primary, '#000000', 0.3), mix(c.sidebar, c.primary, 0.5), mix(c.primary, '#000000', 0.15), mix(c.sidebar, '#000000', 0.2), mix(c.primary, '#000000', 0.45), mix(c.primary, c.sidebar, 0.3)]
+    .map((h) => readable(h, ['#ffffff'], '#000000'));
+  return {
+    '--ok': ok, '--ok-soft': soft(0.14), '--warn': warn, '--warn-soft': soft(0.2), '--danger': danger, '--danger-soft': soft(0.26),
+    '--violet': shade(0.2), '--violet-soft': soft(0.16), '--info': shade(0.12), '--info-soft': soft(0.14), '--blue': shade(0.1), '--blue-soft': soft(0.14),
+    '--c2': c.c2 || c.bg, '--c1-deep': shade(0.25), '--logo-2': logo2(c), '--menu-lit': readable(c.primary, ['#ffffff'], '#000000'), ...menuPill(c), '--menu-ink': readable(mix(lightMenu(c.sidebar) || c.sidebar === c.primary ? c.primary : c.sidebar, '#000000', 0.62), ['#ffffff', '#f1f4f8'], '#000000', 7), '--row-tint': `${c.rowTint ?? 7}%`, '--row-hover': `${(c.rowTint ?? 7) + 4}%`, '--head-tint': `${c.headTint ?? 16}%`,
+    // charts, the till's actions and the Vivid tiles: the same two colours
+    '--viz-1': c.primary, '--viz-2': c.sidebar === c.primary ? mix(c.primary, toward, 0.45) : c.sidebar,
+    '--m-in': c.primary, '--m-purch': mix(c.primary, toward, 0.35), '--m-exp': danger, '--m-profit': c.sidebar === c.primary ? warn : c.sidebar,
+    '--pos-action': c.primary, '--pos-action-2': mix(c.primary, toward, 0.25), '--pos-halt': danger,
+    ...Object.fromEntries(['teal', 'blue', 'violet', 'orange', 'amber', 'red', 'green'].flatMap((k, i) => {
+      const a = readable(mix(c.primary, '#000000', 0.18 + i * 0.05), ['#ffffff'], '#000000'), b = readable(mix(c.primary, '#000000', 0.05 + i * 0.05), ['#ffffff'], '#000000');
+      return [[`--v-${k}-a`, a], [`--v-${k}-b`, b]];
+    })),
+    ...Object.fromEntries(hues.map((h, i) => [`--hue-${i}`, h])),
   };
 }
 
 // Accent presets: change only the brand / action colour of a palette (buttons, links, highlights). Status colours
 // (ok / warn / danger) are separate tokens and never follow the accent. Each pair is [primary, primary-2] per base;
 // themeVars() still makes the result readable (AA), as for any palette.
-export const ACCENTS = [
-  { id: 'emerald', name: 'Emerald', light: ['#008c58', '#0e9f96'], dark: ['#16a36a', '#20c9c3'] },
-  { id: 'ocean', name: 'Ocean Blue', light: ['#1d64d8', '#267bff'], dark: ['#267bff', '#20c9c3'] },
-  { id: 'violet', name: 'Violet', light: ['#6d43e0', '#8456f5'], dark: ['#8456f5', '#267bff'] },
-  { id: 'midnight', name: 'Midnight Turquoise', light: ['#0b7f86', '#13a3a0'], dark: ['#20c9c3', '#267bff'] },
-];
+// Accent presets were retired with the two-colour themes (the owner's choice, 17 Nov 2026: only the 15 themes' own
+// colours); a saved accent is ignored.
+export const ACCENTS = [];
 /** A palette with an accent preset applied (or unchanged when there is none) */
 export function withAccent(t, accentId) {
   const a = ACCENTS.find((x) => x.id === accentId);
@@ -111,11 +194,14 @@ export function applyTheme(id, accentId = '') {
   const root = document.documentElement;
   root.dataset.theme = t.base;
   root.dataset.palette = t.id;
-  root.dataset.sidebar = lum(c.sidebar) > 0.4 ? 'light' : 'dark'; // light sidebars use dark text (styles/themes-ref.css)
+  root.dataset.sidebar = lightMenu(c.sidebar) ? 'light' : 'dark'; // light sidebars use dark text (styles/themes-ref.css)
   if (!c.sidebarText) root.style.removeProperty('--sidebar-text');
   if (ACCENTS.some((a) => a.id === accentId)) root.dataset.accent = accentId; else delete root.dataset.accent;
   for (const [k, val] of Object.entries(themeVars(t))) root.style.setProperty(k, val);
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', dark ? c.sidebar : c.primary);
+  // the browser tab's icon in the theme's colours
+  const icon = document.querySelector('link[rel="icon"]');
+  if (icon) { icon.setAttribute('type', 'image/svg+xml'); icon.setAttribute('href', 'data:image/svg+xml,' + encodeURIComponent(themedLogo(c))); }
 }
 
 const KEY = 'pharmapos-theme';
@@ -127,9 +213,9 @@ const MODE_KEY = 'rxpos-theme-mode';
 export const savedMode = () => { try { return localStorage.getItem(MODE_KEY) === 'system' ? 'system' : ''; } catch { return ''; } };
 export const saveMode = (m) => { try { m === 'system' ? localStorage.setItem(MODE_KEY, m) : localStorage.removeItem(MODE_KEY); } catch {} };
 export const systemDark = () => typeof matchMedia === 'function' && matchMedia('(prefers-color-scheme: dark)').matches;
-/** The palette for a light or dark base among the themes a pharmacy allows: Daylight Clinical / OLED Black first, then
+/** The palette for a light or dark base among the themes a pharmacy allows: Mint Teal / RxPOS Navy Teal first, then
  *  the owner's default, then the first of that base */
-export const DEFAULT_PALETTE = { light: 'daylight-clinical', dark: 'oled' };
+export const DEFAULT_PALETTE = { light: 'mint-teal', dark: 'navy-teal' };
 export const paletteFor = (base, list = THEMES, preferred) =>
   (list.find((t) => t.id === DEFAULT_PALETTE[base]) || list.find((t) => t.id === currentThemeId(preferred) && t.base === base) || list.find((t) => t.base === base) || list[0] || THEMES[0]).id;
 /** The theme to paint at start-up: the saved palette, or the system's light / dark when following it (or nothing is saved yet) */

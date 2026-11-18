@@ -4,21 +4,21 @@
    surface so every theme, dark ones included, keeps its text colour (checked in tests/contrast-test.mjs). */
 .invoice-sheet table.stock-lines { border-collapse: separate; border-spacing: 0; border: 1px solid var(--rule, var(--border)); border-radius: 8px; overflow: hidden; }
 .invoice-sheet table.stock-lines thead th {
-  background: color-mix(in srgb, var(--col, var(--text)) 16%, var(--surface));
+  background: color-mix(in srgb, var(--col, var(--text)) var(--head-tint, 16%), var(--surface));
   border-top: 4px solid var(--col, var(--text)); border-bottom: 1px solid color-mix(in srgb, var(--text) 35%, transparent);
   border-right: 1px solid var(--rule, var(--border)); color: var(--text);
 }
 .invoice-sheet table.stock-lines thead th.line-no { --col: var(--muted); }
 .invoice-sheet table.stock-lines thead th:last-child { border-right: 0; }
 .invoice-sheet table.stock-lines tbody tr.hued > td {
-  background: color-mix(in srgb, var(--line) 7%, var(--surface));
+  background: color-mix(in srgb, var(--line) var(--row-tint, 7%), var(--surface));
   border-bottom: 1px solid color-mix(in srgb, var(--line) 30%, var(--rule, var(--border)));
   border-right: 1px solid var(--rule, var(--border));
 }
 .invoice-sheet table.stock-lines tbody tr.hued > td:last-child { border-right: 0; }
 .invoice-sheet table.stock-lines tbody tr.hued > td:first-child { box-shadow: inset 5px 0 0 var(--line); }
-.invoice-sheet table.stock-lines tbody tr.hued:hover > td { background: color-mix(in srgb, var(--line) 12%, var(--surface)); }
-.invoice-sheet table.stock-lines tbody tr.hued.new-line > td { background: color-mix(in srgb, var(--ok-soft) 40%, color-mix(in srgb, var(--line) 7%, var(--surface))); }
+.invoice-sheet table.stock-lines tbody tr.hued:hover > td { background: color-mix(in srgb, var(--line) var(--row-hover, 12%), var(--surface)); }
+.invoice-sheet table.stock-lines tbody tr.hued.new-line > td { background: color-mix(in srgb, var(--ok-soft) 40%, color-mix(in srgb, var(--line) var(--row-tint, 7%), var(--surface))); }
 .invoice-sheet table.stock-lines tbody tr.hued.line-removed > td { opacity: .6; }
 .invoice-sheet table.stock-lines tbody tr:last-child td { border-bottom: 0; }
 .line-badge {
@@ -36,7 +36,7 @@
 /* phone cards (≤ 760 px): the line's stripe down the left of its card, the badge in the corner */
 @media (max-width: 760px) {
   .invoice-sheet table.stock-lines { border: 0; overflow: visible; border-radius: 0; }
-  .invoice-sheet table.stock-lines tbody tr.hued { background: color-mix(in srgb, var(--line) 7%, var(--surface)); border: 1px solid color-mix(in srgb, var(--line) 35%, var(--border)); border-left: 6px solid var(--line); }
+  .invoice-sheet table.stock-lines tbody tr.hued { background: color-mix(in srgb, var(--line) var(--row-tint, 7%), var(--surface)); border: 1px solid color-mix(in srgb, var(--line) 35%, var(--border)); border-left: 6px solid var(--line); }
   .invoice-sheet table.stock-lines tbody tr.hued > td { background: transparent; border: 0; box-shadow: none; }
   .invoice-sheet table.stock-lines tbody tr.hued > td.line-no { display: block; grid-column: 1 / -1; padding: 0; text-align: left; }
   .invoice-sheet table.stock-lines tbody tr.hued > td[class*='col-']::before { color: color-mix(in srgb, var(--col, var(--muted)) 40%, var(--text)); }

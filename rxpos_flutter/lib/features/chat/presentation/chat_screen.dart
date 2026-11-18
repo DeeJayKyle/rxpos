@@ -3,6 +3,7 @@
 // voice notes; each message has a menu (react, reply, copy, forward, pin, star, edit within 24 h, info, delete for
 // everyone within 48 h or just on this device). Messages to clients go out on WhatsApp or SMS, and their replies can be
 // recorded to keep the history together.
+import 'package:rxpos/core/theme/themes.dart' show TonesOfContext;
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -357,7 +358,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     ),
                   ]),
                   Row(mainAxisSize: MainAxisSize.min, children: [
-                    if (myMark(m)?['star'] == true) const Icon(Icons.star, size: 11, color: Colors.amber),
+                    if (myMark(m)?['star'] == true) Icon(Icons.star, size: 11, color: context.tones.warn),
                     if (pinned) const Icon(Icons.push_pin, size: 11),
                     Text(
                       '${channel == 'whatsapp' ? 'WhatsApp · ' : channel == 'sms' ? 'SMS · ' : channel == 'reply' ? 'client reply · ' : ''}'
@@ -370,7 +371,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                         child: Icon(
                           seen.isNotEmpty ? Icons.done_all : Icons.check,
                           size: 14,
-                          color: allSeen ? Colors.blue : null,
+                          color: allSeen ? context.tones.info : null,
                           semanticLabel: allSeen ? 'Read' : seen.isNotEmpty ? 'Read by some' : 'Sent',
                         ),
                       ),
@@ -858,7 +859,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             Text('Sent ${_when('${m['date']}')} by ${m['fromName']}${m['editedAt'] != null ? ' · edited ${_when('${m['editedAt']}')}' : ''}'),
             if (m['fromId'] == me.userId) ...[
               const SizedBox(height: 12),
-              const Row(children: [Icon(Icons.done_all, size: 15, color: Colors.blue), SizedBox(width: 4), Text('Read by', style: TextStyle(fontWeight: FontWeight.w700))]),
+              Row(children: [Icon(Icons.done_all, size: 15, color: context.tones.info), SizedBox(width: 4), Text('Read by', style: TextStyle(fontWeight: FontWeight.w700))]),
               for (final r in reads) Text('• ${users.where((u) => u['id'] == r['userId']).firstOrNull?['name'] ?? 'Colleague'}'),
               if (reads.isEmpty) const Text('Nobody yet'),
             ],
@@ -1066,7 +1067,7 @@ class _VoiceRecorderState extends State<_VoiceRecorder> {
       padding: const EdgeInsets.all(8),
       child: Row(children: [
         if (_state != 'ready') ...[
-          const Icon(Icons.fiber_manual_record, color: Colors.red, size: 14),
+          Icon(Icons.fiber_manual_record, color: context.tones.danger, size: 14),
           const SizedBox(width: 6),
           Expanded(child: Text('Recording… $t')),
           TextButton.icon(onPressed: () => widget.onCancel(null), icon: const Icon(Icons.close), label: const Text('Cancel')),

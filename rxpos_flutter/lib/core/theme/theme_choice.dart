@@ -20,7 +20,7 @@ part 'theme_choice.g.dart';
 class Look {
   // the React app's look from the start (src/themes.js startupTheme): Daylight Clinical, or OLED Black when the system is
   // dark, with no design system on top
-  const Look({this.theme = 'daylight-clinical', this.system = true, this.accent = '', this.surface = 'flat', this.level = 'calm', this.beforePremium = '', this.design = ''});
+  const Look({this.theme = daylightClinicalPaletteId, this.system = true, this.accent = '', this.surface = 'flat', this.level = 'calm', this.beforePremium = '', this.design = ''});
   final String theme, accent, surface, level, beforePremium;
   /// the design system in use ('' for none)
   final String design;

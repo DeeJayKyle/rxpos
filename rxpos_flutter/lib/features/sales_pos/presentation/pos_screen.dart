@@ -818,7 +818,7 @@ class _CommandBarState extends ConsumerState<_CommandBar> {
                   },
                 ),
               if (_msg.isNotEmpty)
-                Padding(padding: const EdgeInsets.only(top: 8), child: Text(_msg, style: TextStyle(color: good ? Colors.green.shade700 : th.colorScheme.error))),
+                Padding(padding: const EdgeInsets.only(top: 8), child: Text(_msg, style: TextStyle(color: good ? context.tones.ok : th.colorScheme.error))),
               const SizedBox(height: 8),
               Wrap(spacing: 12, runSpacing: 4, children: [
                 if (s.lines.isEmpty) Text("No lines yet: type a medicine's name to add one.", style: th.textTheme.bodySmall),
@@ -995,7 +995,7 @@ class _ProductPanel extends StatelessWidget {
                   Padding(
                     padding: const EdgeInsets.only(right: 6),
                     child: ChoiceChip(
-                      avatar: v == 'fav' && view != v ? const Icon(Icons.star_rounded, size: 18, color: Colors.amber) : null,
+                      avatar: v == 'fav' && view != v ? Icon(Icons.star_rounded, size: 18, color: context.tones.warn) : null,
                       label: Text(label),
                       selected: view == v,
                       onSelected: (_) => onView?.call(v),
@@ -1072,7 +1072,7 @@ class _ProductPanel extends StatelessWidget {
                                       icon: Icon(
                                         favs.contains(p.id) ? Icons.star : Icons.star_border,
                                         size: 20,
-                                        color: favs.contains(p.id) ? Colors.amber.shade700 : t.hintColor,
+                                        color: favs.contains(p.id) ? context.tones.warn : t.hintColor,
                                       ),
                                     ),
                                   ],
@@ -1117,7 +1117,7 @@ class _ProductPanel extends StatelessWidget {
                                         color: out
                                             ? t.colorScheme.error
                                             : low
-                                            ? Colors.orange.shade800
+                                            ? context.tones.warn
                                             : null,
                                       ),
                                     ),
@@ -1225,11 +1225,11 @@ class _KitTile extends StatelessWidget {
                   style: TextStyle(color: t.colorScheme.tertiary, fontWeight: FontWeight.w800)),
               if (v.controlled) const _Tag('CD · NDA', danger: true) else if (v.rx) const _Tag('Rx only'),
               Text(v.canMake == null ? 'Services only' : out ? "Can't be made" : 'Can make ${formatQty(v.stock)}',
-                  style: t.textTheme.bodySmall?.copyWith(color: out ? t.colorScheme.error : v.stock <= 3 ? Colors.orange.shade800 : null)),
+                  style: t.textTheme.bodySmall?.copyWith(color: out ? t.colorScheme.error : v.stock <= 3 ? context.tones.warn : null)),
             ]),
             if (v.warning.isNotEmpty || (v.stock <= 3 && short.isNotEmpty))
               Text([if (v.warning.isNotEmpty) '⚠ ${v.ack ? 'Warning to give' : 'Warning'}', if (v.stock <= 3 && short.isNotEmpty) short].join(' · '),
-                  maxLines: 1, overflow: TextOverflow.ellipsis, style: t.textTheme.bodySmall?.copyWith(color: Colors.orange.shade900, fontWeight: FontWeight.w600)),
+                  maxLines: 1, overflow: TextOverflow.ellipsis, style: t.textTheme.bodySmall?.copyWith(color: context.tones.warn, fontWeight: FontWeight.w600)),
           ]),
         ),
       ),
@@ -1562,10 +1562,10 @@ class _SalePanel extends ConsumerWidget {
                                                   controlAffinity: ListTileControlAffinity.leading,
                                                   value: l.acked,
                                                   onChanged: (v) => c.ackKit(l.id, v == true),
-                                                  title: Text('⚠ ${l.kit!.warning}', style: TextStyle(fontSize: 12.5, color: l.acked ? null : Colors.orange.shade900, fontWeight: FontWeight.w600)),
+                                                  title: Text('⚠ ${l.kit!.warning}', style: TextStyle(fontSize: 12.5, color: l.acked ? null : context.tones.warn, fontWeight: FontWeight.w600)),
                                                   subtitle: const Text('Tick once the client was told'),
                                                 ))
-                                              : Text('⚠ ${l.kit!.warning}', style: TextStyle(fontSize: 12.5, color: Colors.orange.shade900)),
+                                              : Text('⚠ ${l.kit!.warning}', style: TextStyle(fontSize: 12.5, color: context.tones.warn)),
                                       ],
                                       // safety in words and an icon, never colour alone
                                       if (l.controlled)
@@ -1798,7 +1798,7 @@ class _SalePanel extends ConsumerWidget {
                     else
                       Text(
                         'On credit ${fmt((due - (s.tendered ?? 0)).clamp(0, double.infinity))}',
-                        style: TextStyle(color: Colors.orange.shade800, fontWeight: FontWeight.w700),
+                        style: TextStyle(color: context.tones.warn, fontWeight: FontWeight.w700),
                       ),
                   ],
                 ),

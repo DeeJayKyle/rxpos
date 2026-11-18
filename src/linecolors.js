@@ -8,6 +8,11 @@ export const LINE_HUES = ['#0f766e', '#1d4ed8', '#6d28d9', '#be185d', '#c2410c',
 /** one colour per Add Stock column (keys of COL_LABEL in pages/Purchases.jsx); it moves with the column */
 export const COL_HUES = { medicine: '#0f766e', qty: '#1d4ed8', cost: '#6d28d9', total: '#be185d', price: '#c2410c', batch: '#b45309', expiry: '#15803d' };
 
+/** The same colours as the theme gives them (src/themes.js duoVars --hue-0…7: shades of its two colours), the fixed
+ *  ones above as the fallback */
+export const lineVar = (i) => `var(--hue-${i}, ${LINE_HUES[i]})`;
+export const COL_VARS = Object.fromEntries(Object.entries(COL_HUES).map(([k, h]) => [k, lineVar(LINE_HUES.indexOf(h))]));
+
 /** how much of the colour is mixed into the surface: row tint and heading band (kept in step with styles.css) */
 export const ROW_TINT = 0.07, HEAD_TINT = 0.16, LABEL_MIX = 0.4;
 
@@ -25,4 +30,4 @@ export const hueOf = (line, fallback = 0) => {
 };
 
 /** inline style for a row: the line colour as a CSS variable */
-export const lineStyle = (line, fallback) => ({ '--line': LINE_HUES[hueOf(line, fallback)] });
+export const lineStyle = (line, fallback) => ({ '--line': lineVar(hueOf(line, fallback)) });

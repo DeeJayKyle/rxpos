@@ -120,7 +120,7 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
                 ),
               const SizedBox(height: 8),
               Row(children: [
-                Icon(data ? Icons.check_circle : Icons.warning_amber, size: 16, color: data ? Colors.green : Colors.orange),
+                Icon(data ? Icons.check_circle : Icons.warning_amber, size: 16, color: data ? context.tones.ok : context.tones.warn),
                 const SizedBox(width: 6),
                 Expanded(child: Text(data ? 'Ready to work offline' : 'Not ready to work offline yet', style: const TextStyle(fontWeight: FontWeight.w700))),
               ]),
@@ -380,7 +380,7 @@ class _NotifyPermissionState extends ConsumerState<_NotifyPermission> {
   @override
   Widget build(BuildContext context) {
     if (_perm == 'granted') {
-      return const Row(key: Key('notify-allowed'), children: [Icon(Icons.check_circle, color: Colors.green, size: 18), SizedBox(width: 6), Flexible(child: Text('Notifications are allowed'))]);
+      return Row(key: Key('notify-allowed'), children: [Icon(Icons.check_circle, color: context.tones.ok, size: 18), SizedBox(width: 6), Flexible(child: Text('Notifications are allowed'))]);
     }
     return OutlinedButton.icon(
       key: const Key('notify-allow'),

@@ -1,6 +1,7 @@
 // Weather & Storage (src/pages/Storage.jsx): the weather outside with advice for medicine storage, the last reading
 // for each place, a trend chart with the safe range shaded, every reading (delete one), and recording a reading.
 // Out-of-range readings stand out and go in the audit log. The weather card is also on the dashboard.
+import 'package:rxpos/core/theme/themes.dart' show TonesOfContext;
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -83,8 +84,8 @@ class WeatherCard extends ConsumerWidget {
               Container(
                 margin: const EdgeInsets.only(top: 6),
                 padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(color: (tone == 'danger' ? t.colorScheme.error : Colors.orange).withValues(alpha: .12), borderRadius: BorderRadius.circular(8)),
-                child: Row(children: [Icon(Icons.warning_amber, size: 14, color: tone == 'danger' ? t.colorScheme.error : Colors.orange.shade800), const SizedBox(width: 6), Expanded(child: Text(text, style: t.textTheme.bodySmall))]),
+                decoration: BoxDecoration(color: (tone == 'danger' ? t.colorScheme.error : context.tones.warn).withValues(alpha: .12), borderRadius: BorderRadius.circular(8)),
+                child: Row(children: [Icon(Icons.warning_amber, size: 14, color: tone == 'danger' ? t.colorScheme.error : context.tones.warn), const SizedBox(width: 6), Expanded(child: Text(text, style: t.textTheme.bodySmall))]),
               ),
             if (w.error.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 6), child: Text(w.error, style: t.textTheme.bodySmall)),
           ] else if (w.error.isNotEmpty)
@@ -210,9 +211,9 @@ class _StorageScreenState extends ConsumerState<StorageScreen> {
           final r = lastOf(p);
           final h = r == null ? null : _hum(r);
           return stat('$p · last reading', r == null ? '—' : '${_n(_temp(r))}°C', r == null ? 'no readings yet' : '${_when('${r['at']}', short: true)}${h != null ? ' · ${_n(h)}% RH' : ''}', icon,
-              r != null && !readingOk(r, st) ? t.colorScheme.error : Colors.teal);
+              r != null && !readingOk(r, st) ? t.colorScheme.error : context.tones.info);
         }(),
-      stat('Readings today', '$todays', bad > 0 ? '$bad out of range in total' : 'all within range', Icons.thermostat, bad > 0 ? Colors.orange.shade800 : Colors.deepPurple),
+      stat('Readings today', '$todays', bad > 0 ? '$bad out of range in total' : 'all within range', Icons.thermostat, bad > 0 ? context.tones.warn : context.tones.violet),
     ]);
 
     final trend = Card(
@@ -256,7 +257,7 @@ class _StorageScreenState extends ConsumerState<StorageScreen> {
                   key: ValueKey('reading-${r['id']}'),
                   dense: true,
                   tileColor: readingOk(r, st) ? null : t.colorScheme.error.withValues(alpha: .08),
-                  leading: Icon(readingOk(r, st) ? Icons.check_circle_outline : Icons.warning_amber, color: readingOk(r, st) ? Colors.green : t.colorScheme.error),
+                  leading: Icon(readingOk(r, st) ? Icons.check_circle_outline : Icons.warning_amber, color: readingOk(r, st) ? context.tones.ok : t.colorScheme.error),
                   title: Text('${r['place']} · ${_n(_temp(r))}°C${_hum(r) == null ? '' : ' · ${_n(_hum(r)!)}%'}'),
                   subtitle: Text([_when('${r['at']}'), '${r['by'] ?? ''}', '${r['note'] ?? ''}'].where((x) => x.isNotEmpty).join(' · ')),
                   trailing: IconButton(

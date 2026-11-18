@@ -23,7 +23,7 @@ import { isWeb, isNative } from './platform.js';
 import { keepsData } from './webpolicy.js';
 import RefreshHost from './refresh.jsx';
 import { startUpdates, onUpdate, applyUpdate, justUpdated, LABEL } from './update.js';
-import { applyTheme, saveTheme, allowedThemes, THEME_GROUPS, currentThemeId, savedMode, saveMode, systemDark, paletteFor, startupTheme, ACCENTS, savedAccent, saveAccent, withAccent } from './themes.js';
+import { applyTheme, saveTheme, allowedThemes, THEME_GROUPS, currentThemeId, savedMode, saveMode, systemDark, paletteFor, startupTheme, savedAccent, saveAccent } from './themes.js';
 import { STYLES, applyStyle, savedStyle, saveStyle } from './surface.js';
 import { LEVELS, applyLevel, savedLevel, saveLevel } from './vivid.js';
 import { TwoStepModal } from './twostep.jsx';
@@ -197,7 +197,7 @@ function ColourLevel({ onPick }) {
 
 /** One switch between this device's usual theme and the premium dark look (Midnight Pro). The setting is kept on the
  *  device; switching only repaints, so the sale on the till, its client and totals stay exactly as they are. */
-const PREMIUM = 'midnight-pro', PREMIUM_PREV = 'rxpos-premium-prev', PREMIUM_KEY = 'rxpos-advanced-ui';
+const PREMIUM = 'navy-teal', PREMIUM_PREV = 'rxpos-premium-prev', PREMIUM_KEY = 'rxpos-advanced-ui';
 function PremiumToggle({ theme, setTheme, setMode }) {
   const { db } = useStore();
   const list = allowedThemes(db.license?.[0]?.branding);
@@ -222,7 +222,7 @@ function PremiumToggle({ theme, setTheme, setMode }) {
   );
 }
 
-function ThemePicker({ theme, setTheme, mode, setMode, accent, setAccent, style, setStyle }) {
+function ThemePicker({ theme, setTheme, mode, setMode, style, setStyle }) {
   const { db } = useStore();
   const branding = db.license?.[0]?.branding;
   const list = allowedThemes(branding);
@@ -260,17 +260,6 @@ function ThemePicker({ theme, setTheme, mode, setMode, accent, setAccent, style,
               <button key={id} role="radio" aria-checked={activeMode === id} className={'mode-opt' + (activeMode === id ? ' on' : '')}
                 onClick={() => (id === 'system' ? setMode('system') : pickBase(id))}><Icon size={14} />{label}</button>
             ))}
-          </div>
-          <div className="bell-head">Accent</div>
-          <div className="accent-row" role="radiogroup" aria-label="Accent colour">
-            {[{ id: '', name: 'Theme colour' }, ...ACCENTS].map((a) => {
-              const c = (current ? withAccent(current, a.id) : null)?.c;
-              return (
-                <button key={a.id || 'default'} role="radio" aria-checked={accent === a.id} title={a.name} aria-label={a.name}
-                  className={'accent-opt' + (accent === a.id ? ' on' : '')} style={c ? { background: `linear-gradient(135deg, ${c.primary}, ${c.primary2})` } : undefined}
-                  onClick={() => setAccent(a.id)} />
-              );
-            })}
           </div>
           {/* themes by group (src/themes.js THEME_GROUPS): Clinical, Colourful, Dashboard looks, Dark, High contrast */}
           {THEME_GROUPS.map((g) => [g, list.filter((t) => (t.group || 'Clinical') === g)]).filter(([, ts]) => ts.length).map(([g, ts]) => (
@@ -338,7 +327,9 @@ function ClockPill() {
   const click = () => (syncStatus.expired ? setUser(null) : storageIssue || syncStatus.rejected > 0 ? navigate('/device') : syncNow());
   return (
     // step 24: the spoken name starts with the words on the pill (axe label-content-name-mismatch), then the detail
-    <button className={'pill clock ' + tone} title={tip} aria-label={`${label} ${clockTime} ${clockDate}. ${tip}`} onClick={click}>
+    // shown only when something needs the person (offline, refused changes, sign in again, storage): the owner asked for
+    // no sync button while all is well (17 Nov 2026); F5 still syncs, and the account menu has Sync now
+    <button className={'pill clock ' + tone} hidden={tone === 'ok' || tone === 'syncing'} title={tip} aria-label={`${label} ${clockTime} ${clockDate}. ${tip}`} onClick={click}>
       <i /><span className="clock-state" aria-live="polite">{label}</span>{' '}<span className="clock-time">{clockTime}</span>{' '}
       <span className="clock-date">{clockDate}</span>
     </button>
@@ -587,6 +578,15 @@ function Shell() {
     try { await endOtherSessions(syncCfg); toast('Signed out everywhere else'); } catch (e) { toast(e.message, 'error'); }
   };
   accountRef.current = { password: () => changePassword(false), pin: manageDevicePin, twostep: () => setTwoStepOpen(true), logout: signOut, others: signOutOthers };
+  const [accountOpen, setAccountOpen] = useState(false);
+  const accountMenuRef = useRef(null);
+  useEffect(() => {
+    if (!accountOpen) return;
+    const off = (e) => !accountMenuRef.current?.contains(e.target) && setAccountOpen(false);
+    const esc = (e) => e.key === 'Escape' && setAccountOpen(false);
+    window.addEventListener('pointerdown', off); window.addEventListener('keydown', esc);
+    return () => { window.removeEventListener('pointerdown', off); window.removeEventListener('keydown', esc); };
+  }, [accountOpen]);
   useEffect(() => {
     const on = (e) => accountRef.current?.[e.detail]?.();
     window.addEventListener('rxpos:account', on);
@@ -633,15 +633,6 @@ function Shell() {
             </div>
           ); })}
         </nav>
-        {/* the sidebar keeps to the pages (the owner's clean-up, 2026-11-15): the next step is on the Dashboard and in More */}
-        <div className="user-box">
-          <span className="avatar">{initials}</span>
-          <div className="grow"><strong>{user.name}</strong><small>{user.role}</small></div>
-          <button className="icon-btn" title="Change my password" onClick={() => changePassword(false)}><KeyRound size={17} /></button>
-          {isNative && <button className={'icon-btn' + (pinSet ? ' text-ok' : '')} title={pinSet ? 'Quick PIN is set for this device' : 'Set a quick PIN for this device'} onClick={manageDevicePin}><LockKeyhole size={17} /></button>}{/* web: nothing is kept on the computer, so no device PIN */}
-          {syncCfg?.key?.startsWith('u.') && <button className={'icon-btn' + (me?.twoFactor ? ' text-ok' : '')} title={me?.twoFactor ? 'Two-step sign-in is on' : 'Two-step sign-in'} onClick={() => setTwoStepOpen(true)}><ShieldCheck size={17} /></button>}
-          <button className="icon-btn" title="Log out" onClick={signOut}><LogOut size={17} /></button>
-        </div>
       </aside>
       <div className="main">
         <header className="topbar">
@@ -653,8 +644,8 @@ function Shell() {
             return pg ? (
               <nav className="crumbs" aria-label="You are here">
                 {g?.group && <button type="button" className="link-btn muted crumb-group" title={`Every page under ${g.group}`} onClick={() => setMega(true)}>{g.group}</button>}{g?.group && <span className="muted" aria-hidden="true">›</span>}<strong>{pg.label}</strong>
-                <button className={'icon-btn sm' + (nav.pins.includes(here) ? ' on' : '')} aria-pressed={nav.pins.includes(here)} onClick={() => togglePin(here)}
-                  title={`${nav.pins.includes(here) ? 'Unpin this page from' : 'Pin this page to'} the top of the menu (${showKey(keyOf('pin'))})`} aria-label={nav.pins.includes(here) ? 'Unpin this page' : 'Pin this page'}><Pin size={14} /></button>
+                {here !== '/' && <button className={'icon-btn sm' + (nav.pins.includes(here) ? ' on' : '')} aria-pressed={nav.pins.includes(here)} onClick={() => togglePin(here)}
+                  title={`${nav.pins.includes(here) ? 'Unpin this page from' : 'Pin this page to'} the top of the menu (${showKey(keyOf('pin'))})`} aria-label={nav.pins.includes(here) ? 'Unpin this page' : 'Pin this page'}><Pin size={14} /></button>}
                 <button className="icon-btn sm" onClick={() => setHelp(true)} title={`Keyboard and mouse (${showKey(keyOf('help'))})`} aria-label="Keyboard and mouse help"><Keyboard size={14} /></button>
               </nav>
             ) : null;
@@ -666,6 +657,20 @@ function Shell() {
           <NotificationBell />
           <PremiumToggle theme={theme} setTheme={setTheme} setMode={setThemeMode} />
           <ThemePicker theme={theme} setTheme={setTheme} mode={themeMode} setMode={setThemeMode} accent={accent} setAccent={setAccent} style={surface} setStyle={setSurface} />
+          {/* the signed-in person: top right beside the theme, a drop-down (the owner's request, 17 Nov 2026) */}
+          <div className="account-menu" ref={accountMenuRef}>
+            <button className="account-btn" aria-haspopup="menu" aria-expanded={accountOpen} title="My account" onClick={() => setAccountOpen((o) => !o)}>
+              <span className="avatar">{initials}</span><span className="account-who"><strong>{user.name}</strong><small>{user.role}</small></span><ChevronDown size={15} />
+            </button>
+            <div className="account-drop" role="menu" hidden={!accountOpen} onClick={() => setAccountOpen(false)}>
+              <div className="account-drop-head"><span className="avatar">{initials}</span><div><strong>{user.name}</strong><small>{user.role}</small></div></div>
+              <button className="menu-item" role="menuitem" title="Change my password" onClick={() => changePassword(false)}><KeyRound size={16} />Change my password</button>
+              {isNative && <button className={'menu-item' + (pinSet ? ' text-ok' : '')} role="menuitem" title={pinSet ? 'Quick PIN is set for this device' : 'Set a quick PIN for this device'} onClick={manageDevicePin}><LockKeyhole size={16} />{pinSet ? 'Quick PIN is set for this device' : 'Set a quick PIN for this device'}</button>}{/* web: nothing is kept on the computer, so no device PIN */}
+              {syncCfg?.key?.startsWith('u.') && <button className={'menu-item' + (me?.twoFactor ? ' text-ok' : '')} role="menuitem" title={me?.twoFactor ? 'Two-step sign-in is on' : 'Two-step sign-in'} onClick={() => setTwoStepOpen(true)}><ShieldCheck size={16} />{me?.twoFactor ? 'Two-step sign-in is on' : 'Two-step sign-in'}</button>}
+              <button className="menu-item" role="menuitem" title="Sync now (F5)" onClick={() => syncNow()}><RefreshCw size={16} />Sync now</button>
+              <button className="menu-item danger" role="menuitem" title="Log out" onClick={signOut}><LogOut size={16} />Log out</button>
+            </div>
+          </div>
         </header>
         <main className="content" ref={contentRef} data-page={here}>
           <Suspense fallback={<div className="page"><div className="skeleton" /><div className="skeleton" style={{ height: 280 }} /></div>}>

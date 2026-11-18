@@ -1,3 +1,4 @@
+import 'package:rxpos/core/theme/themes.dart' show TonesOfContext;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -136,7 +137,7 @@ class _InsurersScreenState extends ConsumerState<InsurersScreen> {
                   Expanded(
                     child: Text('${r.i['name']}${r.i['archived'] == true ? ' · archived' : ''}', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
                   ),
-                  Text('Owes ${fmt(r.owed)}', style: TextStyle(fontWeight: FontWeight.w800, color: r.owed > 0.5 ? Colors.orange.shade800 : null)),
+                  Text('Owes ${fmt(r.owed)}', style: TextStyle(fontWeight: FontWeight.w800, color: r.owed > 0.5 ? context.tones.warn : null)),
                 ]),
                 if ('${r.i['phone'] ?? ''}${r.i['email'] ?? ''}'.isNotEmpty)
                   Text([r.i['phone'], r.i['email']].where((x) => '${x ?? ''}'.isNotEmpty).join(' · '), style: Theme.of(context).textTheme.bodySmall),

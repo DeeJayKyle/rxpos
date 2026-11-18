@@ -103,7 +103,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
     const cols = [ColourCol('Medicine', flex: 4), ColourCol('Next batch', flex: 2), ColourCol('Expiry', flex: 2), ColourCol('Shelf'), ColourCol('Reorder at', flex: 2, numeric: true),
       ColourCol('In stock', flex: 2, numeric: true), ColourCol('Value (cost)', flex: 2, numeric: true)];
     const editWidth = 96.0;
-    final ok = Color(Theme.of(context).brightness == Brightness.dark ? 0xFF34D399 : 0xFF047857), warnC = Color(Theme.of(context).brightness == Brightness.dark ? 0xFFFBBF24 : 0xFFB45309);
+    final ok = context.tones.ok, warnC = context.tones.warn;
     return PageFrame(
       scroll: phone,
       title: 'Inventory',
@@ -208,7 +208,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
                         if (days != null) days >= 0 ? 'expires in $days days' : _expiredNote(d.stock.batchesOf(p.id))].where((x) => x.isNotEmpty).join(' · ')),
                       trailing: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.end, children: [
                         Text(formatQty(st, '${p.unit.isEmpty ? 'unit' : p.unit.toLowerCase()}s'),
-                            style: TextStyle(fontWeight: FontWeight.w700, color: st <= 0 ? Theme.of(context).colorScheme.error : isLowStock(p, st) ? Colors.orange.shade800 : null)),
+                            style: TextStyle(fontWeight: FontWeight.w700, color: st <= 0 ? Theme.of(context).colorScheme.error : isLowStock(p, st) ? context.tones.warn : null)),
                         Text(s.money(p.price), style: Theme.of(context).textTheme.bodySmall),
                       ]),
                       onTap: () => _open(p),
@@ -253,7 +253,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
                 Expanded(child: Text('Batch ${b.batch}${b.expiry.isEmpty ? '' : ' · expires ${b.expiry}'}'
                     '${b.expiry.isEmpty ? '' : daysUntil(b.expiry) < 0 ? ' (EXPIRED, not sold)' : daysUntil(b.expiry) <= warn ? ' (expires in ${daysUntil(b.expiry)} days)' : ''}'
                     ' · ${d.settings.money(b.cost != 0 ? b.cost : p.cost)}',
-                    style: TextStyle(color: b.expiry.isEmpty ? null : daysUntil(b.expiry) < 0 ? Theme.of(c).colorScheme.error : daysUntil(b.expiry) <= warn ? Colors.orange.shade800 : null))),
+                    style: TextStyle(color: b.expiry.isEmpty ? null : daysUntil(b.expiry) < 0 ? Theme.of(c).colorScheme.error : daysUntil(b.expiry) <= warn ? context.tones.warn : null))),
                 if (identical(b, next)) const Padding(padding: EdgeInsets.only(right: 8), child: Chip(key: Key('sells-next'), label: Text('Sells next'), visualDensity: VisualDensity.compact)),
                 Text(formatQty(b.qty), style: const TextStyle(fontWeight: FontWeight.w700)),
               ]),

@@ -488,7 +488,7 @@ export default function POS({ mode = 'retail' }) {
   // the theme (Premium UI changes it without reloading): watched so the key tag follows it at once
   const [palette, setPalette] = useState(() => document.documentElement.dataset.palette || '');
   useEffect(() => { const o = new MutationObserver(() => setPalette(document.documentElement.dataset.palette || '')); o.observe(document.documentElement, { attributes: true, attributeFilter: ['data-palette'] }); return () => o.disconnect(); }, []);
-  const premium = palette === 'midnight-pro';
+  const premium = palette === 'navy-teal'; // Premium UI: the dark RxPOS Navy Teal
   const setLayout = (k) => { setDevice({ posLayout: k }); setLayoutState(k); };
   const [omni, setOmni] = useState(false);
   // a line that was just added or changed pulses briefly

@@ -1,5 +1,6 @@
 // The call screen over the whole app (src/calls.jsx): the colleague's initials and name, "Ringing…" / the call's
 // length, Answer and Decline for an incoming call, Mute and Hang up otherwise. Stays up while moving between screens.
+import 'package:rxpos/core/theme/themes.dart' show TonesOfContext;
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -87,13 +88,13 @@ class _CallOverlayState extends ConsumerState<CallOverlay> {
                   const SizedBox(height: 20),
                   if (ringingIn)
                     Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
-                      btn('Decline', Icons.call_end, calls.decline, color: Colors.red.shade600),
-                      btn('Answer', Icons.call, calls.accept, color: Colors.green.shade600),
+                      btn('Decline', Icons.call_end, calls.decline, color: context.tones.danger),
+                      btn('Answer', Icons.call, calls.accept, color: context.tones.ok),
                     ])
                   else if (c.active)
                     Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
                       btn(c.muted ? 'Unmute' : 'Mute', c.muted ? Icons.mic_off : Icons.mic, calls.mute),
-                      btn('Hang up', Icons.call_end, calls.hangup, color: Colors.red.shade600),
+                      btn('Hang up', Icons.call_end, calls.hangup, color: context.tones.danger),
                     ]),
                 ]),
               ),

@@ -154,7 +154,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
             title: Text(e.desc),
             subtitle: Text('${dayOf(e.date)} · ${e.kind}'),
             trailing: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.end, children: [
-              Text(e.inAmount > 0 ? '+${st.money(e.inAmount)}' : '−${st.money(e.outAmount)}', style: TextStyle(color: e.inAmount > 0 ? Colors.green.shade700 : Theme.of(context).colorScheme.error)),
+              Text(e.inAmount > 0 ? '+${st.money(e.inAmount)}' : '−${st.money(e.outAmount)}', style: TextStyle(color: e.inAmount > 0 ? context.tones.ok : Theme.of(context).colorScheme.error)),
               Text(st.money(b), style: const TextStyle(fontWeight: FontWeight.w700)),
             ]),
           ),
@@ -387,7 +387,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
             title: Text('${label[p['kind']] ?? p['kind']} · ${who(p)}'),
             subtitle: Text('${p['date']} · ${p['method'] ?? ''} · ${bankName(p['bankId'])}${'${p['note'] ?? ''}'.isEmpty ? '' : ' · ${p['note']}'}${p['by'] == null ? '' : ' · by ${p['by']}'}'),
             trailing: Text('${p['kind'] == 'customer' || p['kind'] == 'insurer' ? '+' : '−'}${st.money((p['amount'] as num?) ?? 0)}',
-                style: TextStyle(color: p['kind'] == 'customer' || p['kind'] == 'insurer' ? Colors.green.shade700 : Theme.of(context).colorScheme.error)),
+                style: TextStyle(color: p['kind'] == 'customer' || p['kind'] == 'insurer' ? context.tones.ok : Theme.of(context).colorScheme.error)),
           ),
       ], 'No payments yet')),
     ]);

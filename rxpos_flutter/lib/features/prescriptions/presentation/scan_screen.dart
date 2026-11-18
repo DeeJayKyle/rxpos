@@ -1,3 +1,4 @@
+import 'package:rxpos/core/theme/themes.dart' show TonesOfContext;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -128,7 +129,7 @@ class _ScanPrescriptionScreenState extends ConsumerState<ScanPrescriptionScreen>
                 ],
                 const SizedBox(height: 8),
                 Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Icon(Icons.warning_amber_rounded, size: 18, color: Colors.orange.shade800),
+                  Icon(Icons.warning_amber_rounded, size: 18, color: context.tones.warn),
                   const SizedBox(width: 6),
                   Expanded(child: Text('AI can misread handwriting. A pharmacist must always check the prescription before dispensing.', style: th.textTheme.bodySmall)),
                 ]),
@@ -152,7 +153,7 @@ class _ScanPrescriptionScreenState extends ConsumerState<ScanPrescriptionScreen>
                   for (final (i, m) in meds.indexed)
                     () {
                       final x = matchMedicine(m, d.products, d.stockOf);
-                      final color = x.inStock.isNotEmpty ? Colors.green.shade700 : x.alternatives.isNotEmpty ? Colors.orange.shade800 : th.colorScheme.error;
+                      final color = x.inStock.isNotEmpty ? context.tones.ok : x.alternatives.isNotEmpty ? context.tones.warn : th.colorScheme.error;
                       return Padding(
                         padding: const EdgeInsets.symmetric(vertical: 6),
                         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

@@ -1,3 +1,4 @@
+import 'package:rxpos/core/theme/themes.dart' show TonesOfContext;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -55,7 +56,7 @@ class BranchesScreen extends ConsumerWidget {
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         StatGrid(children: [
           StatCard(label: 'Sales today – all branches', value: st.money(stats.fold<double>(0, (a, x) => a + x.today))),
-          StatCard(label: 'Sales this month', value: st.money(stats.fold<double>(0, (a, x) => a + x.month)), color: Colors.deepPurple),
+          StatCard(label: 'Sales this month', value: st.money(stats.fold<double>(0, (a, x) => a + x.month)), color: context.tones.violet),
           StatCard(label: 'Stock value – all branches', value: st.money(stats.fold<double>(0, (a, x) => a + x.value)),
               sub: 'at cost · expired ${st.money(stats.fold<double>(0, (a, x) => a + x.expired))} not included'),
         ]),
@@ -75,7 +76,7 @@ class BranchesScreen extends ConsumerWidget {
                     Text('Today ${st.money(x.today)} · ${x.todayN} sales'),
                     Text('This month ${st.money(x.month)}'),
                     Text('Stock value ${st.money(x.value)}${x.expired > 0 ? ' + ${st.money(x.expired)} expired' : ''}'),
-                    Text('Low / out of stock ${x.low}', style: TextStyle(color: x.low > 0 ? Colors.orange.shade800 : null)),
+                    Text('Low / out of stock ${x.low}', style: TextStyle(color: x.low > 0 ? context.tones.warn : null)),
                     const SizedBox(height: 6),
                     if (x.b['id'] == d.branch)
                       const Chip(label: Text('This device'))
@@ -115,7 +116,7 @@ class BranchesScreen extends ConsumerWidget {
         for (final t in list)
           ListTile(dense: true, title: Text('${t['number']} · ${nameOf(t['fromId'])} → ${nameOf(t['toId'])}${t['toId'] == d.branch ? ' (incoming)' : t['fromId'] == d.branch ? ' (outgoing)' : ''}'),
               subtitle: Text('${'${t['date']}'.split('T').first} · ${((t['items'] as List?) ?? const []).length} lines · sent by ${t['sentBy'] ?? ''}${t['receivedBy'] != null ? ' · received by ${t['receivedBy']}' : ''}'),
-              trailing: Text('${t['status']}', style: TextStyle(color: t['status'] == 'In transit' ? Colors.orange.shade800 : t['status'] == 'Received' ? Colors.green.shade700 : Theme.of(context).colorScheme.error))),
+              trailing: Text('${t['status']}', style: TextStyle(color: t['status'] == 'In transit' ? context.tones.warn : t['status'] == 'Received' ? context.tones.ok : Theme.of(context).colorScheme.error))),
       ]),
     );
   }

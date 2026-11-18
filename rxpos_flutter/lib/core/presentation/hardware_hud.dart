@@ -2,6 +2,7 @@
 // cloud connection, the receipt printer, the barcode scanner and the camera, and short alert banners (unsent work,
 // low stock, expiring stock) that open the page that deals with them. It only reads what the app already knows.
 
+import 'package:rxpos/core/theme/themes.dart' show TonesOfContext;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -42,7 +43,7 @@ class HardwareHud extends ConsumerWidget {
     final printers = ref.watch(hudPrintersProvider).value ?? const [];
     final scan = ref.watch(lastScanProvider);
     final counts = ref.watch(navCountsProvider);
-    final ok = th.colorScheme.primary, warn = Colors.amber.shade600, bad = th.colorScheme.error;
+    final ok = th.colorScheme.primary, warn = context.tones.warn, bad = th.colorScheme.error;
     final online = sync.state == SyncState.synced || sync.state == SyncState.syncing;
     String ago(DateTime t) {
       final m = DateTime.now().difference(t).inMinutes;

@@ -1,6 +1,7 @@
 // A status chip (sync state, queue depth, database health): a dot and a label in the status colour on its soft tint,
 // with a faint glow on dark themes (none on OLED black, where light would bleed). The colours are the web app's
 // status tokens, AA on their tints in light and dark.
+import 'package:rxpos/core/theme/themes.dart' show TonesOfContext;
 import 'package:flutter/material.dart';
 
 import '../theme/rxpos_theme.dart';
@@ -9,9 +10,9 @@ import '../theme/rxpos_theme.dart';
 (Color, Color) statusTone(BuildContext context, String status) {
   final dark = Theme.of(context).brightness == Brightness.dark;
   final fg = switch (status) {
-    'ok' => dark ? const Color(0xFF34D399) : const Color(0xFF047857),
-    'warn' => dark ? const Color(0xFFFB923C) : const Color(0xFFC2410C),
-    'error' => dark ? const Color(0xFFFB7185) : const Color(0xFFBE123C),
+    'ok' => context.tones.ok,
+    'warn' => context.tones.warn,
+    'error' => context.tones.danger,
     _ => Theme.of(context).colorScheme.tertiary,
   };
   return (fg, fg.withValues(alpha: dark ? .16 : .10));

@@ -1,3 +1,4 @@
+import 'package:rxpos/core/theme/themes.dart' show TonesOfContext;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:printing/printing.dart';
@@ -87,9 +88,9 @@ class _WeeklyScreenState extends ConsumerState<WeeklyScreen> {
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         StatGrid(children: [
           StatCard(label: 'Sales', value: st.money(w.total), sub: delta(w.total, w.prevTotal), icon: Icons.payments_outlined),
-          StatCard(label: 'Transactions', value: '${w.count}', sub: delta(w.count.toDouble(), w.prevCount.toDouble()), icon: Icons.receipt_long_outlined, color: Colors.deepPurple),
+          StatCard(label: 'Transactions', value: '${w.count}', sub: delta(w.count.toDouble(), w.prevCount.toDouble()), icon: Icons.receipt_long_outlined, color: context.tones.violet),
           StatCard(label: 'Average basket', value: st.money(w.basket), sub: 'per sale', icon: Icons.shopping_basket_outlined),
-          StatCard(label: 'Gross profit', value: st.money(w.profit), sub: '${delta(w.profit, w.prevProfit)} · sales − cost − discounts', icon: Icons.trending_up, color: Colors.orange.shade800),
+          StatCard(label: 'Gross profit', value: st.money(w.profit), sub: '${delta(w.profit, w.prevProfit)} · sales − cost − discounts', icon: Icons.trending_up, color: context.tones.warn),
         ]),
         const SizedBox(height: 12),
         Card(child: Padding(padding: const EdgeInsets.all(12), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [

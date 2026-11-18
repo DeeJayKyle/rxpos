@@ -1,6 +1,7 @@
 // Charts drawn by hand (src/charts.jsx, the bar chart and donut of src/ui.jsx / Reports): one colour per meaning (money
 // in teal, purchases orange, expenses red, gross profit violet), the value axis always starts at 0, and today is
 // drawn as "so far" (a dashed end), so an unfinished day never looks like a collapse.
+import 'package:rxpos/core/theme/themes.dart' show TonesOfContext;
 import 'dart:math';
 
 import 'dart:convert';
@@ -9,8 +10,15 @@ import 'package:flutter/material.dart';
 
 import 'export.dart';
 
-const moneyIn = Color(0xFF0D9488), purchasesColor = Color(0xFFEA580C), expensesColor = Color(0xFFDC2626), profitColor = Color(0xFF7C3AED);
-const shareColors = [Color(0xFF0D9488), Color(0xFF7C3AED), Color(0xFFEA580C), Color(0xFF2563EB), Color(0xFFDB2777)];
+// chart colours in this theme's two colours (src/themes.js --m-in, --m-purch, --m-exp, --m-profit; the owner's choice,
+// 17 Nov 2026): sales the brand colour, purchases a deeper shade, expenses the danger shade, profit the menu colour
+Color moneyInOf(BuildContext c) => Theme.of(c).colorScheme.primary;
+Color purchasesColorOf(BuildContext c) => Color.lerp(Theme.of(c).colorScheme.primary, Colors.black, .35)!;
+Color expensesColorOf(BuildContext c) => c.tones.danger;
+/// the chart colours the painters use, taken from the theme where a chart is drawn (_axisFrom)
+(Color, Color, List<Color>) _paintColors = (const Color(0xFF0D9488), const Color(0xFF7C3AED), const [Color(0xFF0D9488)]);
+Color profitColorOf(BuildContext c) => c.tones.hues.length > 1 ? c.tones.hues[1] : c.tones.violet;
+List<Color> shareColorsOf(BuildContext c) => c.tones.hues.isNotEmpty ? c.tones.hues : const [Color(0xFF0D9488), Color(0xFF7C3AED), Color(0xFFEA580C), Color(0xFF2563EB), Color(0xFFDB2777)];
 
 /// A round axis maximum (1, 2, 2.5, 5, 10 × 10ⁿ at or above [v]).
 double niceMax(double v) {
@@ -37,6 +45,7 @@ String _day(String k) => '${int.parse(k.substring(8, 10))} ${_monthNames[int.par
 TextStyle _axis = const TextStyle(color: Color(0xFF6B7280));
 
 void _axisFrom(BuildContext context) {
+  _paintColors = (moneyInOf(context), profitColorOf(context), shareColorsOf(context));
   final t = Theme.of(context);
   _axis = (t.textTheme.labelSmall ?? const TextStyle()).copyWith(color: t.colorScheme.onSurfaceVariant, fontFeatures: const [FontFeature.tabularFigures()]);
 }
@@ -124,7 +133,7 @@ class _DailyTrendState extends State<DailyTrend> {
                   Positioned(
                     left: (46 + (w - 60) / keys.length * (_hover! + .5)).clamp(0, w - 150).toDouble(),
                     top: 4,
-                    child: ChartTip(title: '${_day(keys[_hover!])}${_hover == keys.length - 1 ? ' (so far)' : ''}', rows: [('Sales', widget.money(vals[_hover!]), moneyIn)]),
+                    child: ChartTip(title: '${_day(keys[_hover!])}${_hover == keys.length - 1 ? ' (so far)' : ''}', rows: [('Sales', widget.money(vals[_hover!]), moneyInOf(context))]),
                   ),
               ]),
             ),
@@ -174,7 +183,7 @@ class _DailyBarsPainter extends CustomPainter {
       final v = vals[i] * grow;
       if (v <= 0) continue;
       final rect = Rect.fromLTRB(cx(i) - bar / 2, y(v), cx(i) + bar / 2, base);
-      final color = i == best ? profitColor : moneyIn;
+      final color = i == best ? _paintColors.$2 : _paintColors.$1;
       final today = i == n - 1;
       final paint = Paint()
         ..shader = LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter,
@@ -317,7 +326,7 @@ class _BarsPainter extends CustomPainter {
     final every = max(1, (data.length / 8).ceil());
     for (var i = 0; i < data.length; i++) {
       final x0 = l + i * w;
-      c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTRB(x0 + w * .15, y(data[i].$2), x0 + w * .85, y(0)), const Radius.circular(2)), Paint()..color = moneyIn);
+      c.drawRRect(RRect.fromRectAndRadius(Rect.fromLTRB(x0 + w * .15, y(data[i].$2), x0 + w * .85, y(0)), const Radius.circular(2)), Paint()..color = _paintColors.$1);
       if (i % every == 0) _text(c, data[i].$1.length == 10 ? _day(data[i].$1) : data[i].$1, Offset(x0 + w / 2, s.height - 8), align: TextAlign.center);
     }
   }
@@ -349,7 +358,7 @@ class _DonutPainter extends CustomPainter {
     var a = -pi / 2;
     for (final (i, p) in parts.indexed) {
       final sweep = p.$2 / total * 2 * pi;
-      c.drawArc(rect, a, sweep, false, Paint()..color = shareColors[i % shareColors.length]..style = PaintingStyle.stroke..strokeWidth = 22);
+      c.drawArc(rect, a, sweep, false, Paint()..color = _paintColors.$3[i % _paintColors.$3.length]..style = PaintingStyle.stroke..strokeWidth = 22);
       a += sweep;
     }
   }
@@ -373,7 +382,7 @@ class ShareTable extends StatelessWidget {
           padding: const EdgeInsets.symmetric(vertical: 3),
           child: Row(children: [
             SizedBox(width: 130, child: Text(k.isEmpty ? '—' : k, overflow: TextOverflow.ellipsis)),
-            Expanded(child: LinearProgressIndicator(value: all == 0 ? 0 : v / all, color: shareColors[i % shareColors.length], minHeight: 8)),
+            Expanded(child: LinearProgressIndicator(value: all == 0 ? 0 : v / all, color: shareColorsOf(context)[i % shareColorsOf(context).length], minHeight: 8)),
             SizedBox(width: 44, child: Text('${all == 0 ? 0 : (v / all * 100).round()}%', textAlign: TextAlign.right)),
             SizedBox(width: 120, child: Text(money(v), textAlign: TextAlign.right)),
           ]),

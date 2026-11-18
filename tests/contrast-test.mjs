@@ -52,6 +52,21 @@ for (const t of THEMES) {
   tinted++;
 }
 console.log(`PASS  Add Stock line colours checked in ${tinted} themes`);
+// links and brand text on the tinted page itself, not only on cards (axe found Notes' link button at 3.94 on Mint Teal)
+for (const t of THEMES) { const v = themeVars(t); if (/^#[0-9a-f]{6}$/i.test(v['--bg'])) { const r = contrast(v['--primary-text'], v['--bg']); check(`${t.name}: links on the page`, r >= 4.5, r.toFixed(2)); } }
+// the two-colour themes (17 Nov 2026): each theme's own table colours (--hue-0…7) at its own row, hover and heading
+// tints (stronger on the strong themes), with text, muted text and white badge numbers
+for (const t of THEMES) {
+  const v = themeVars(t);
+  if (!/^#[0-9a-f]{6}$/i.test(v['--surface'])) continue;
+  const row = parseFloat(v['--row-tint']) / 100, hover = parseFloat(v['--row-hover']) / 100, head = parseFloat(v['--head-tint']) / 100;
+  for (let i = 0; i < 8; i++) {
+    const h = v[`--hue-${i}`];
+    for (const [n, w] of [['row', row], ['row hover', hover], ['heading', head]]) { const r = contrast(v['--text'], mix(h, v['--surface'], w)); check(`${t.name}: text on its ${n} hue-${i}`, r >= 4.5, r.toFixed(2)); }
+    if (/^#[0-9a-f]{6}$/i.test(v['--muted'])) for (const w of [row, hover]) { const r = contrast(mix(v['--muted'], v['--text'], 0.7), mix(h, v['--surface'], w)); check(`${t.name}: muted text on its row hue-${i} ${w}`, r >= 4.5, r.toFixed(2)); }
+    check(`${t.name}: white on its badge hue-${i}`, contrast('#ffffff', h) >= 4.5);
+  }
+}
 // kits (1.10.0, styles/kits.css): text on a kit tile (9%), a kit basket line (7%) and a hovered tile in every theme
 for (const t of THEMES) {
   const v = themeVars(t);

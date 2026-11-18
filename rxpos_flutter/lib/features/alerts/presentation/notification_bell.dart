@@ -1,5 +1,6 @@
 // The bell in the top bar (src/engage.jsx NotificationBell): today's alerts grouped as Urgent, Needs attention and
 // For information, each opening its page; the count on the bell (red when something is urgent); sounds on this device.
+import 'package:rxpos/core/theme/themes.dart' show TonesOfContext;
 import 'package:flutter/material.dart';
 import '../../../core/presentation/app_dialog.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,8 +13,8 @@ import '../domain/alerts.dart';
 
 Color toneColor(BuildContext context, String tone) => switch (tone) {
       'danger' => Theme.of(context).colorScheme.error,
-      'warn' => Colors.orange.shade800,
-      'ok' => Colors.green.shade700,
+      'warn' => context.tones.warn,
+      'ok' => context.tones.ok,
       _ => Theme.of(context).colorScheme.primary,
     };
 
@@ -30,7 +31,7 @@ class NotificationBell extends ConsumerWidget {
       onPressed: () => showAppDialog<void>(context: context, builder: (_) => const _BellMenu()),
       icon: Badge(
         isLabelVisible: alerts.isNotEmpty,
-        backgroundColor: urgent > 0 ? Theme.of(context).colorScheme.error : Colors.orange.shade800,
+        backgroundColor: urgent > 0 ? Theme.of(context).colorScheme.error : context.tones.warn,
         label: Text('${alerts.length}'),
         child: const Icon(Icons.notifications_outlined),
       ),

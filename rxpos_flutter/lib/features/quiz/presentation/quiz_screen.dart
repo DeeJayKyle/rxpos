@@ -1,6 +1,7 @@
 // Drug quiz (src/pages/Quiz.jsx): a quick quiz made offline from the medicine list, or the AI quiz (uses, side
 // effects, counselling) when the pharmacy has AI; one question at a time, the score saved to quizResults, and the
 // team board for this month.
+import 'package:rxpos/core/theme/themes.dart' show TonesOfContext;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -100,7 +101,7 @@ class _QuizScreenState extends ConsumerState<QuizScreen> {
     final t = Theme.of(context);
     final q = quiz.questions[quiz.i];
     final picked = quiz.picked[quiz.i];
-    final right = Colors.green.shade700, wrong = t.colorScheme.error;
+    final right = context.tones.ok, wrong = t.colorScheme.error;
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
       Row(children: [
         Text('Question ${quiz.i + 1} of ${quiz.questions.length}', style: t.textTheme.bodySmall),
@@ -160,7 +161,7 @@ class _QuizScreenState extends ConsumerState<QuizScreen> {
         Container(
           margin: const EdgeInsets.only(top: 6),
           padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(border: Border(left: BorderSide(width: 3, color: quiz.picked[i] == x.answer ? Colors.green : t.colorScheme.error))),
+          decoration: BoxDecoration(border: Border(left: BorderSide(width: 3, color: quiz.picked[i] == x.answer ? context.tones.ok : t.colorScheme.error))),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text('${i + 1}. ${x.q}', style: const TextStyle(fontWeight: FontWeight.w700)),
             Text('Right answer: ${x.options[x.answer]}${quiz.picked[i] != x.answer && quiz.picked[i] != null ? ' · you chose ${x.options[quiz.picked[i]!]}' : ''}'),

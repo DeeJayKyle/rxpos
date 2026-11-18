@@ -151,7 +151,7 @@ class _PeopleScreenState extends ConsumerState<PeopleScreen> {
                       Text(or(widget.suppliers ? r['contact'] : r['type'])),
                       if (!widget.suppliers) Text(or(r['allergies']), maxLines: 2, overflow: TextOverflow.ellipsis),
                       Text((bought['${r['id']}'] ?? 0) == 0 ? '—' : settings.money(bought['${r['id']}']!)),
-                      Text(bal.abs() > 0.5 ? settings.money(bal) : '—', style: TextStyle(fontWeight: FontWeight.w700, color: bal > 0.5 ? Colors.orange.shade800 : null)),
+                      Text(bal.abs() > 0.5 ? settings.money(bal) : '—', style: TextStyle(fontWeight: FontWeight.w700, color: bal > 0.5 ? context.tones.warn : null)),
                     ],
                   ));
                 }
@@ -161,7 +161,7 @@ class _PeopleScreenState extends ConsumerState<PeopleScreen> {
                   subtitle: Text([r['phone'], widget.suppliers ? r['contact'] : r['allergies'] == null || '${r['allergies']}'.isEmpty ? null : 'Allergies: ${r['allergies']}']
                       .where((x) => x != null && '$x'.isNotEmpty).join(' · ')),
                   trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                    if (bal.abs() > 0.5) Text(settings.money(bal), style: TextStyle(fontWeight: FontWeight.w700, color: Colors.orange.shade800)),
+                    if (bal.abs() > 0.5) Text(settings.money(bal), style: TextStyle(fontWeight: FontWeight.w700, color: context.tones.warn)),
                     if (bal > 0.5 && (can.contains('finance') || can.contains('customers')))
                       IconButton(tooltip: widget.suppliers ? 'Pay supplier' : 'Record payment', icon: const Icon(Icons.payments_outlined), onPressed: () => _pay(r, bal, settings)),
                     IconButton(tooltip: 'Edit', icon: const Icon(Icons.edit_outlined), onPressed: () => _edit(r)),

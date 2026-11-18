@@ -1,3 +1,4 @@
+import 'package:rxpos/core/theme/themes.dart' show TonesOfContext;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -174,7 +175,7 @@ class _ReceiptDialogState extends ConsumerState<_ReceiptDialog> {
     final text = receiptText(s, st);
     return AlertDialog(
       title: Row(children: [
-        Icon(Icons.check_circle, color: Colors.green.shade600),
+        Icon(Icons.check_circle, color: context.tones.ok),
         const SizedBox(width: 10),
         const Flexible(child: Text('Sale complete')),
       ]),
@@ -249,9 +250,9 @@ class _ReceiptDialogState extends ConsumerState<_ReceiptDialog> {
               ),
               if (_sent.isNotEmpty)
                 Row(children: [
-                  Icon(Icons.check_circle, size: 18, color: Colors.green.shade700),
+                  Icon(Icons.check_circle, size: 18, color: context.tones.ok),
                   const SizedBox(width: 6),
-                  Flexible(child: Text(_sent == 'sms' ? 'Sent by SMS' : 'Opened WhatsApp with the receipt', style: TextStyle(color: Colors.green.shade700))),
+                  Flexible(child: Text(_sent == 'sms' ? 'Sent by SMS' : 'Opened WhatsApp with the receipt', style: TextStyle(color: context.tones.ok))),
                 ]),
             ],
           ),
@@ -360,11 +361,11 @@ class SaleSavedNote extends ConsumerWidget {
     final st = ref.watch(syncControllerProvider);
     final waiting = st.state != SyncState.synced || st.pending > 0;
     final (text, icon, color) = st.state == SyncState.signedOut
-        ? ('Saved on this device.', Icons.check_circle_outline, Colors.green.shade700)
+        ? ('Saved on this device.', Icons.check_circle_outline, context.tones.ok)
         : waiting
             ? ('Saved on this device · not synced yet${st.state == SyncState.offline ? ' (offline)' : ''}. Other devices see this sale and its stock change once it syncs.',
-                Icons.cloud_upload_outlined, Colors.orange.shade800)
-            : ('Saved and synced to the cloud.', Icons.cloud_done_outlined, Colors.green.shade700);
+                Icons.cloud_upload_outlined, context.tones.warn)
+            : ('Saved and synced to the cloud.', Icons.cloud_done_outlined, context.tones.ok);
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Semantics(

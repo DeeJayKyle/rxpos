@@ -1,3 +1,4 @@
+import 'package:rxpos/core/theme/themes.dart' show TonesOfContext;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -93,11 +94,11 @@ class _SalesLinesViewState extends ConsumerState<SalesLinesView> {
       const SizedBox(height: 12),
       StatGrid(children: [
         StatCard(label: 'Amount', value: st.money(amount), sub: '${shown.length} lines · ${{for (final l in shown) l.saleId}.length} receipts'),
-        if (widget.money) StatCard(label: 'Profit', value: st.money(profit), sub: '${pct(profit, amount)} margin', color: Colors.deepPurple),
+        if (widget.money) StatCard(label: 'Profit', value: st.money(profit), sub: '${pct(profit, amount)} margin', color: context.tones.violet),
         StatCard(label: 'Quantity sold', value: formatQty(qty), sub: '${{for (final l in shown) l.name}.length} medicines'),
         if (widget.money)
           StatCard(label: 'Sold below cost', value: '$losses', sub: losses > 0 ? 'lines with a loss: check the price' : 'no line sold at a loss',
-              color: losses > 0 ? Theme.of(context).colorScheme.error : Colors.green.shade700),
+              color: losses > 0 ? Theme.of(context).colorScheme.error : context.tones.ok),
       ]),
       const SizedBox(height: 8),
       Text(filters.isEmpty ? title : '$title · $filters', style: Theme.of(context).textTheme.titleSmall),

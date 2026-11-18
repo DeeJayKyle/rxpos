@@ -207,8 +207,7 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
                       final momo = '${(s.raw['momo'] as Map?)?['txid'] ?? ''}';
                       if (MediaQuery.sizeOf(context).width >= 1100) {
                         final th = Theme.of(context);
-                        final dark = th.brightness == Brightness.dark;
-                        final green = Color(dark ? 0xFF34D399 : 0xFF047857), violet = Color(dark ? 0xFFC4B5FD : 0xFF6D28D9);
+                        final green = context.tones.ok, violet = context.tones.violet;
                         final credit = s.payment.toLowerCase() == 'credit' || (s.paid < s.total && !refunded);
                         final when = DateTime.tryParse(s.date)?.toLocal();
                         String two(int n) => n.toString().padLeft(2, '0');
@@ -398,11 +397,11 @@ class _Badge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = Theme.of(context).colorScheme;
-    final bg = error ? c.errorContainer : warn ? Colors.amber.shade100 : c.secondaryContainer;
+    final bg = error ? c.errorContainer : warn ? context.tones.warnSoft : c.secondaryContainer;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
       decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(6)),
-      child: Text(text, style: TextStyle(fontSize: 11, color: warn ? Colors.brown.shade800 : null)),
+      child: Text(text, style: TextStyle(fontSize: 11, color: warn ? context.tones.warn : null)),
     );
   }
 }
@@ -419,7 +418,7 @@ class EditHistoryView extends StatelessWidget {
     TableRow row(String k, String a, String b, bool changed) => TableRow(children: [
           Text(k, style: t.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w700)),
           Text(a, style: t.textTheme.bodySmall),
-          Text(b, style: t.textTheme.bodySmall?.copyWith(fontWeight: changed ? FontWeight.w800 : null, color: changed ? Colors.orange.shade900 : null)),
+          Text(b, style: t.textTheme.bodySmall?.copyWith(fontWeight: changed ? FontWeight.w800 : null, color: changed ? context.tones.warn : null)),
         ]);
     return Card(
       margin: EdgeInsets.zero,
