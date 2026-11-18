@@ -94,8 +94,11 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
     _keep = Timer(const Duration(milliseconds: 300), () {
       final has = lines(f).any((l) => '${l['productId'] ?? ''}'.isNotEmpty);
       ref.read(deviceValueProvider(_draftKey).notifier).set(has ? jsonEncode(f) : null).ignore();
+      if (mounted) setState(() => _draftAt = has ? DateTime.now() : null);
     });
   }
+  // D2: "Draft saved 10:42" under the title, each time the delivery is kept on this device
+  DateTime? _draftAt;
 
   void _setLine(String key, Map<String, Object?> patch) {
     final f = _form!;
@@ -452,6 +455,16 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
         }, icon: const Icon(Icons.auto_awesome), label: const Text('Scan Invoice with AI')),
         ]),
       ]),
+      if (_draftAt != null)
+        Padding(
+          key: const Key('draft-saved'),
+          padding: const EdgeInsets.only(bottom: 6),
+          child: Row(children: [
+            Container(width: 7, height: 7, decoration: BoxDecoration(shape: BoxShape.circle, color: context.tones.ok)),
+            const SizedBox(width: 6),
+            Text('Draft saved ${_draftAt!.hour.toString().padLeft(2, '0')}:${_draftAt!.minute.toString().padLeft(2, '0')}', style: Theme.of(context).textTheme.bodySmall),
+          ]),
+        ),
       const PageTip(
         id: 'add-stock',
         title: 'Receiving a delivery',

@@ -4,6 +4,9 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' show Tristate;
 
+import 'package:rxpos/core/presentation/list_controls.dart' show ListControls;
+import 'package:rxpos/core/presentation/form_kit.dart' show HelpTip, SyncMark;
+import 'package:rxpos/core/theme/line_colors.dart' show ColourTableHead;
 import 'package:crypto/crypto.dart';
 
 import 'package:drift/native.dart';
@@ -593,7 +596,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('tick-c0')));
     await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
     await settle(tester);
-    expect(find.text('3 ticked'), findsOneWidget);
+    expect(find.text('3 selected'), findsOneWidget);
     await keys([LogicalKeyboardKey.escape]);
     expect(find.byKey(const Key('bulk-bar')), findsNothing);
     // a key changed on this device
@@ -769,6 +772,166 @@ void main() {
     await done(tester);
   });
 
+  testWidgets('UI batch 3 tables: 100 rows then more, columns kept, the receipt beside the list, ticks in a bottom bar, price edited in the table and audited, stock bars, swipe on a phone', (tester) async {
+    await tester.runAsync(signedIn);
+    final now = DateTime.now();
+    await tester.runAsync(() => RecordStore(db).update((d) {
+          for (var i = 0; i < 130; i++) {
+            d.put('sales', {'id': 'ts$i', 'number': 'R-${1000 + i}', 'date': now.subtract(Duration(hours: i)).toUtc().toIso8601String(), 'type': 'retail', 'branchId': 'main', 'items': [], 'subtotal': 1000,
+              'discount': 0, 'tax': 0, 'total': 1000, 'paid': 1000, 'payment': 'Cash', 'customerName': 'Walk-in Customer', 'cashier': 'Tia Admin', 'status': 'completed'});
+          }
+          d.put('customers', {'id': 'c-g', 'name': 'Grace Sample', 'phone': '0700111222'});
+          d.put('products', {'id': 'p1', 'name': 'Calmex 500mg Tabs', 'generic': 'Calmex', 'form': 'Tablets', 'unit': 'Tablet', 'barcode': '7010001', 'price': 500, 'cost': 300, 'reorder': 150});
+        }));
+    await start(tester);
+    void go(String to) => GoRouter.of(tester.element(find.byType(Scaffold).first)).go(to);
+    go('/sales');
+    await settle(tester);
+    // C7: 100 rows, then more as the list scrolls
+    expect(tester.widget<ListControls>(find.byType(ListControls)).ids.length, 100);
+    await tester.drag(find.text('R-1000'), const Offset(0, -9000));
+    await settle(tester);
+    await tester.drag(find.byType(ListView).last, const Offset(0, -9000));
+    await settle(tester);
+    expect(tester.widget<ListControls>(find.byType(ListControls)).ids.length, 130);
+    await tester.drag(find.byType(ListView).last, const Offset(0, 20000));
+    await settle(tester);
+    // C1: the total pinned under the list
+    expect(find.descendant(of: find.byKey(const Key('sales-total')), matching: find.textContaining('130 sales')), findsOneWidget);
+    // C2: Columns: Phone hidden, kept on this device
+    await tester.tap(find.byKey(const Key('columns-sales')));
+    await settle(tester);
+    await tester.tap(find.descendant(of: find.byKey(const Key('col-Phone')), matching: find.byType(Checkbox)));
+    await settle(tester);
+    await tester.tap(find.text('Done'));
+    await settle(tester);
+    expect(tester.widget<ColourTableHead>(find.byType(ColourTableHead)).columns.any((c) => c.title == 'Phone'), isFalse);
+    final saved = (await tester.runAsync(() => (db.select(db.kv)..where((x) => x.k.equals('device:columns:sales'))).getSingleOrNull()))?.v ?? '';
+    expect(saved, contains('Phone'));
+    // C8: the receipt beside the list on a wide screen
+    await tester.tap(find.text('R-1000'));
+    await settle(tester);
+    expect(find.byKey(const Key('side-panel')), findsOneWidget);
+    expect(tester.getRect(find.byType(AlertDialog)).right, greaterThan(1300));
+    Navigator.of(tester.element(find.byType(AlertDialog))).pop();
+    await settle(tester);
+    // C4: ticks: the bar at the bottom with what can be done
+    await tester.tap(find.byKey(const ValueKey('tick-ts0')));
+    await tester.tap(find.byKey(const ValueKey('tick-ts1')));
+    await settle(tester);
+    expect(find.text('2 selected'), findsOneWidget);
+    expect(find.descendant(of: find.byKey(const Key('bulk-bar')), matching: find.text('Print receipts')), findsOneWidget);
+    expect(tester.getRect(find.byKey(const Key('bulk-bar'))).bottom, greaterThan(800));
+    // inventory: C9 the stock bar (100 of a 150 reorder level: low), C5 the price edited in the table
+    go('/inventory');
+    await settle(tester);
+    expect(find.byKey(const Key('health-low')), findsWidgets);
+    await tester.tap(find.descendant(of: find.byKey(const ValueKey('price-p1')), matching: find.text('UGX 500')));
+    await settle(tester);
+    await tester.enterText(find.byKey(const Key('cell-edit-Retail price of Calmex 500mg Tabs')), '650');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await settle(tester);
+    final p1 = (await tester.runAsync(() => RecordStore(db).get('products', 'p1')))!;
+    expect(p1['price'], 650);
+    final audit = (await tester.runAsync(() => RecordStore(db).rows('audit')))!;
+    expect(audit.any((a) => a['action'] == 'Price changed' && '${a['details']}'.contains('(in the table)')), isTrue);
+    expect(find.byKey(const Key('inventory-total')), findsOneWidget);
+    await done(tester);
+    // a phone: swipe a client for Call / WhatsApp; pull a list down to sync
+    await start(tester, size: const Size(400, 800));
+    go('/customers');
+    await settle(tester);
+    expect(find.byKey(const Key('pull-to-sync')), findsOneWidget);
+    await tester.drag(find.text('Grace Sample'), const Offset(-200, 0));
+    await settle(tester);
+    expect(find.descendant(of: find.byKey(const Key('swipe-actions')), matching: find.text('Call')), findsOneWidget);
+    expect(find.descendant(of: find.byKey(const Key('swipe-actions')), matching: find.text('WhatsApp')), findsOneWidget);
+    await done(tester);
+  });
+
+  testWidgets('UI batch 3 forms: the first field ready, Enter to the next, phone and money formatted, checks on leaving a field, Ctrl+Enter saves with a cloud mark, help, danger effects, draft saved, phone sheets', (tester) async {
+    await tester.runAsync(signedIn);
+    await start(tester);
+    void go(String to) => GoRouter.of(tester.element(find.byType(Scaffold).first)).go(to);
+    EditableText edit(String key) => tester.widget<EditableText>(find.descendant(of: find.byKey(ValueKey('field-$key')), matching: find.byType(EditableText)));
+    go('/customers');
+    await settle(tester);
+    await tester.tap(find.text('Add client'));
+    await settle(tester);
+    // D7: the cursor in the first field; Enter goes to the next
+    expect(edit('name').focusNode.hasFocus, isTrue);
+    await tester.enterText(find.byKey(const ValueKey('field-name')), 'Grace Sample');
+    await tester.testTextInput.receiveAction(TextInputAction.next);
+    await settle(tester, 2);
+    expect(edit('phone').focusNode.hasFocus, isTrue);
+    // D6: the phone formats as it is typed, with a tick
+    await tester.enterText(find.byKey(const ValueKey('field-phone')), '0772123456');
+    await settle(tester, 2);
+    expect(edit('phone').controller.text, '0772 123 456');
+    expect(find.byKey(const ValueKey('phone-ok-phone')), findsOneWidget);
+    // D1: a field is checked when it is left
+    await tester.enterText(find.byKey(const ValueKey('field-email')), 'not-an-email');
+    await tester.testTextInput.receiveAction(TextInputAction.next);
+    await settle(tester, 2);
+    expect(find.text('Not an email address'), findsOneWidget);
+    await tester.enterText(find.byKey(const ValueKey('field-email')), 'grace@sample.rx');
+    await settle(tester, 2);
+    // D5: commas while typing, the currency in front; D3: a (?)
+    await tester.enterText(find.byKey(const ValueKey('field-creditLimit')), '1500000');
+    await settle(tester, 2);
+    expect(edit('creditLimit').controller.text, '1,500,000');
+    expect(find.descendant(of: find.byKey(const ValueKey('field-creditLimit')), matching: find.byType(HelpTip)), findsOneWidget);
+    // D7 / D4: Ctrl+Enter saves; the form closes at once, a mark follows the cloud
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await settle(tester);
+    expect(find.byType(AlertDialog), findsNothing);
+    expect(find.byType(SyncMark), findsOneWidget);
+    final grace = (await tester.runAsync(() => RecordStore(db).rows('customers')))!.firstWhere((c) => c['name'] == 'Grace Sample');
+    expect((grace['creditLimit'], grace['phone']), (1500000, '0772 123 456'));
+    noSnackBars(tester);
+    // a medicine: a barcode another medicine has; D10: deleting says what goes, Cancel first, the red button
+    go('/medicines');
+    await settle(tester);
+    await tester.tap(find.text('Add medicine').first);
+    await settle(tester);
+    await tester.enterText(find.byKey(const ValueKey('field-barcode')), '7010001');
+    await tester.testTextInput.receiveAction(TextInputAction.next);
+    await settle(tester, 2);
+    expect(find.textContaining('Another medicine has this barcode (Calmex'), findsOneWidget);
+    Navigator.of(tester.element(find.byType(AlertDialog))).pop();
+    await settle(tester);
+    final yes = confirmAction(tester.element(find.byType(Scaffold).first), 'Delete this medicine?', 'This cannot be undone.', 'Delete', danger: true, effects: ['1 medicine removed on every device', '2 batches and their history']);
+    await settle(tester);
+    expect(find.byKey(const Key('dialog-effect')), findsNWidgets(2));
+    expect(tester.widget<FilledButton>(find.byKey(const Key('confirm-yes'))).style?.backgroundColor?.resolve({}), isNotNull);
+    await tester.tap(find.text('Cancel'));
+    await settle(tester);
+    expect(await yes, isFalse);
+    // D2: Add Stock: "Draft saved hh:mm"
+    await tester.sendKeyEvent(LogicalKeyboardKey.f4);
+    await settle(tester);
+    await tester.enterText(find.byKey(const Key('stock-search')), 'Calmex');
+    await settle(tester, 3);
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await settle(tester);
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 400)));
+    await settle(tester);
+    expect(find.textContaining(RegExp(r'^Draft saved \d\d:\d\d$')), findsOneWidget);
+    await done(tester);
+    // D8: a phone: the pop-up rises from the bottom as a sheet across the screen
+    await start(tester, size: const Size(400, 800));
+    go('/customers');
+    await settle(tester);
+    await tester.tap(find.text('Add client'));
+    await settle(tester);
+    expect(find.byKey(const Key('phone-sheet')), findsOneWidget);
+    final r = tester.getRect(find.byType(AlertDialog));
+    expect((r.width, r.bottom), (400.0, 800.0));
+    await done(tester);
+  });
+
   testWidgets('safer refunds: a pharmacist refunding over UGX 100,000 needs a manager\'s PIN or password; the approver is kept', (tester) async {
     await tester.runAsync(signedIn);
     await tester.runAsync(() async {
@@ -885,7 +1048,7 @@ void main() {
     await done(tester);
   });
 
-  testWidgets('inventory: more than 300 matches are counted and exported in full, drawn page by page; per-batch expiry filters', (tester) async {
+  testWidgets('inventory: hundreds of matches are counted and exported in full, drawn 100 at a time as the list scrolls; per-batch expiry filters', (tester) async {
     await tester.runAsync(signedIn);
     String day(int n) => DateTime.now().add(Duration(days: n)).toIso8601String().substring(0, 10);
     await tester.runAsync(() => RecordStore(db).update((d) {
@@ -906,13 +1069,14 @@ void main() {
     await settle(tester);
     await tester.enterText(find.byType(TextField).first, 'Bulkmed');
     await settle(tester);
-    expect(find.textContaining('Showing 300 of 320 items'), findsOneWidget);
-    await tester.scrollUntilVisible(find.byKey(const Key('inventory-more')), 600, scrollable: find.byType(Scrollable).last);
-    expect(find.textContaining('20 not shown; totals and exports include them'), findsOneWidget);
-    await tester.tap(find.byKey(const Key('inventory-more')));
-    await settle(tester);
+    // UI batch 3, C7: 100 drawn, more as the list scrolls; the count covers all 320
+    expect(find.textContaining('Showing 100 of 320 items'), findsOneWidget);
+    for (var k = 0; k < 6; k++) {
+      await tester.drag(find.byType(ListView).last, const Offset(0, -6000));
+      await settle(tester, 4);
+    }
     expect(find.textContaining('Showing'), findsNothing);
-    expect(find.textContaining('320 items'), findsOneWidget);
+    expect(find.textContaining('320 items'), findsWidgets);
     await tester.enterText(find.byType(TextField).first, '');
     await settle(tester);
     await tester.tap(find.widgetWithText(ChoiceChip, 'Expired'));

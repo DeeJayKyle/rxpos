@@ -251,29 +251,39 @@ class _ListControlsState extends ConsumerState<ListControls> {
     final rows = _tickedRows;
     final bulk = rows.isEmpty ? const <(String, IconData, void Function(List<int>, VoidCallback))>[] : widget.bulk?.call(rows) ?? const [];
     void done() => setState(_ticked.clear);
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+    final list = Focus(
+      focusNode: _focus,
+      autofocus: true,
+      onKeyEvent: (_, e) => _onKey(e) ? KeyEventResult.handled : KeyEventResult.ignored,
+      child: widget.builder(context, _row),
+    );
+    // the ticked rows' actions in a bar at the bottom of the list (UI batch 3, C4)
+    return Stack(children: [
+      Positioned.fill(child: list),
       if (rows.isNotEmpty)
-        Container(
-          key: const Key('bulk-bar'),
-          margin: const EdgeInsets.only(bottom: 8),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(color: Theme.of(context).colorScheme.primaryContainer, borderRadius: BorderRadius.circular(10)),
-          child: Wrap(spacing: 8, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
-            Text('${rows.length} ticked', style: const TextStyle(fontWeight: FontWeight.w700)),
-            for (final (label, icon, run) in bulk) OutlinedButton.icon(onPressed: () => run(rows, done), icon: Icon(icon, size: 16), label: Text(label)),
-            if (widget.onDelete != null)
-              OutlinedButton.icon(onPressed: () => widget.onDelete!(rows), icon: const Icon(Icons.delete_outline, size: 16), label: const Text('Delete')),
-            TextButton(onPressed: done, child: const Text('Untick all (Esc)')),
-          ]),
+        Positioned(
+          left: 12,
+          right: 12,
+          bottom: 12,
+          child: Center(
+            child: Material(
+              key: const Key('bulk-bar'),
+              elevation: 8,
+              borderRadius: BorderRadius.circular(14),
+              color: Theme.of(context).colorScheme.surface,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 6, 6, 6),
+                child: Wrap(spacing: 8, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
+                  Text('${rows.length} selected', style: const TextStyle(fontWeight: FontWeight.w700)),
+                  for (final (label, icon, run) in bulk) OutlinedButton.icon(onPressed: () => run(rows, done), icon: Icon(icon, size: 16), label: Text(label)),
+                  if (widget.onDelete != null)
+                    OutlinedButton.icon(onPressed: () => widget.onDelete!(rows), icon: const Icon(Icons.delete_outline, size: 16), label: const Text('Delete')),
+                  IconButton(tooltip: 'Untick all (Esc)', onPressed: done, icon: const Icon(Icons.close)),
+                ]),
+              ),
+            ),
+          ),
         ),
-      Expanded(
-        child: Focus(
-          focusNode: _focus,
-          autofocus: true,
-          onKeyEvent: (_, e) => _onKey(e) ? KeyEventResult.handled : KeyEventResult.ignored,
-          child: widget.builder(context, _row),
-        ),
-      ),
     ]);
   }
 }

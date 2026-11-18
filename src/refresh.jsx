@@ -16,7 +16,7 @@ function result(r) {
   if (r.state === 'offline') return toast('Offline: your work is saved and goes up when the internet is back', 'warn');
   if (r.state === 'error') return toast(r.error || 'Could not reach the cloud', 'error');
   const n = (r.pulled || 0) + (r.pushed || 0);
-  toast(n ? `Up to date · ${r.pulled || 0} in, ${r.pushed || 0} out` : 'Up to date', 'success');
+  toast(n ? `Synced just now · ${r.pulled || 0} in, ${r.pushed || 0} out` : 'Synced just now', 'success');
 }
 
 /** <RefreshHost refresh={syncNow} />: adds pull-to-refresh (touch apps) and F5 / Ctrl+R (Windows app) */

@@ -690,6 +690,8 @@ export function StoreProvider({ children }) {
       },
       onStatus: (st) => {
         setSyncStatus(st);
+        // the save marks on toasts (UI batch 3, D4) follow the cloud from here
+        try { window.dispatchEvent(new CustomEvent('rxpos-sync', { detail: { state: st.state, pending: st.pending } })); } catch { /* no window (tests) */ }
         if (typeof st.pending === 'number') setPending(st.pending);
         if (st.state === 'ok' && !st.pending) sentAt.current = Date.now();
       },

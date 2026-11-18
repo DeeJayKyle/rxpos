@@ -186,7 +186,7 @@ class _PayrollScreenState extends ConsumerState<PayrollScreen> {
         FilledButton.icon(onPressed: staff.isEmpty ? null : () async {
           final v = await editRecord(context, title: 'Salary advance', save: 'Give advance', initial: {'date': today(), 'bankId': cashDrawer, 'method': 'Cash'}, fields: [
             FormFieldSpec('employeeId', 'To', kind: FieldKind.choice, required: true, options: [for (final e in staff) if (e.active) (e.id, e.name)]),
-            const FormFieldSpec('amount', 'Amount', kind: FieldKind.number, required: true),
+            const FormFieldSpec('amount', 'Amount', kind: FieldKind.money, required: true),
             const FormFieldSpec('date', 'Date', kind: FieldKind.date, required: true),
             FormFieldSpec('method', 'Payment method', kind: FieldKind.choice, options: [for (final m in payMethods) (m, m)]),
             FormFieldSpec('bankId', 'Paid from', kind: FieldKind.choice, options: banks),

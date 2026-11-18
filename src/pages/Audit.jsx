@@ -41,7 +41,7 @@ export default function Audit() {
                 {db.branches.length > 1 && <td>{branch(a.branchId)}</td>}
               </tr>
             ))}
-            {!rows.length && <Empty colSpan={5}>No activity recorded yet</Empty>}
+            {!rows.length && <Empty colSpan={5}>Nothing recorded yet. Sign-ins, refunds, price changes and other changes are listed here as they happen.</Empty>}
           </tbody>
         </table>
       </div>

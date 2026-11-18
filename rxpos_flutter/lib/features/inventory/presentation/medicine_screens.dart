@@ -250,6 +250,8 @@ class _Tag extends StatelessWidget {
 }
 
 /// Add or edit a medicine (the Medicine List form).
+String? _notPast(String v, Map<String, Object?> _) => v.compareTo(today()) < 0 ? 'This expiry date has passed' : null;
+
 Future<void> editMedicine(BuildContext context, WidgetRef ref, Product? p) async {
   final d = await ref.read(pharmacyProvider.future);
   final forms = (await ref.read(recordStoreProvider).rows('formulations')).map((f) => '${f['name']}').toList()..sort();
@@ -262,16 +264,22 @@ Future<void> editMedicine(BuildContext context, WidgetRef ref, Product? p) async
     FormFieldSpec('form', 'Formulation', kind: FieldKind.choice, options: [for (final f in {...forms, if (p != null && p.form.isNotEmpty) p.form}) (f, f)]),
     const FormFieldSpec('strength', 'Strength'),
     FormFieldSpec('unit', 'Selling unit', kind: FieldKind.choice, options: [for (final u in {...sellingUnits, if (p != null && p.unit.isNotEmpty) p.unit}) (u, u)]),
-    const FormFieldSpec('barcode', 'Barcode / SKU (blank = generate)'),
-    const FormFieldSpec('cost', 'Cost price', kind: FieldKind.number, required: true),
-    FormFieldSpec('price', 'Retail price (blank = cost +${formatQty(s.retailMarkup)}%)', kind: FieldKind.number),
-    FormFieldSpec('wholesale', 'Wholesale price (blank = cost +${formatQty(s.wholesaleMarkup)}%)', kind: FieldKind.number),
-    const FormFieldSpec('reorder', 'Reorder level', kind: FieldKind.number),
+    // D1: checked as each field is left: a barcode another medicine has, a price under the cost, an expiry gone by
+    FormFieldSpec('barcode', 'Barcode / SKU (blank = generate)', validate: (v, _) {
+      final other = d.products.where((x) => x.barcode == v.trim() && x.id != p?.id).firstOrNull;
+      return other == null ? null : 'Another medicine has this barcode (${other.name})';
+    }),
+    const FormFieldSpec('cost', 'Cost price', kind: FieldKind.money, required: true),
+    FormFieldSpec('price', 'Retail price (blank = cost +${formatQty(s.retailMarkup)}%)', kind: FieldKind.money,
+        validate: (v, all) => moneyValue(v) > 0 && moneyValue('${all['cost'] ?? ''}') > moneyValue(v) ? 'The retail price is below the cost' : null),
+    FormFieldSpec('wholesale', 'Wholesale price (blank = cost +${formatQty(s.wholesaleMarkup)}%)', kind: FieldKind.money, help: helpTexts['wholesale'],
+        validate: (v, all) => moneyValue(v) > 0 && moneyValue('${all['cost'] ?? ''}') > moneyValue(v) ? 'The wholesale price is below the cost' : null),
+    FormFieldSpec('reorder', 'Reorder level', kind: FieldKind.number, help: helpTexts['reorder']),
     const FormFieldSpec('shelf', 'Shelf / location'),
     if (p == null) ...const [
       FormFieldSpec('openingStock', 'Opening stock (quantity)', kind: FieldKind.number),
       FormFieldSpec('openingBatch', 'Opening stock batch no.'),
-      FormFieldSpec('openingExpiry', 'Opening stock expiry', kind: FieldKind.date),
+      FormFieldSpec('openingExpiry', 'Opening stock expiry', kind: FieldKind.date, validate: _notPast),
     ],
     const FormFieldSpec('rx', 'Prescription only (Rx)', kind: FieldKind.flag),
     const FormFieldSpec('chronic', 'Chronic medicine (refill reminders)', kind: FieldKind.flag),

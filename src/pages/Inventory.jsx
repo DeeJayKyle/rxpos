@@ -1,13 +1,15 @@
 import { useState, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Download, Barcode as BarcodeIcon, SlidersHorizontal, Save, Undo2, Pencil, ScrollText, Boxes } from 'lucide-react';
-import { CrudPage, Tabs, Modal, SearchBox, Empty, PdfButton, useProgressive, FilterChips } from '../ui.jsx';
-import { useStore, daysUntil, put, move, addBatch, audit, downloadFile, toCSV, batchValue, stockValue, markupPrice, MAIN_BRANCH, putMany } from '../store.jsx';
+import { Download, Barcode as BarcodeIcon, SlidersHorizontal, Save, Undo2, Pencil, ScrollText, Boxes, Tag } from 'lucide-react';
+import { CrudPage, Tabs, Modal, SearchBox, Empty, PdfButton, FilterChips } from '../ui.jsx';
+import { useStore, today, daysUntil, put, move, addBatch, audit, downloadFile, toCSV, batchValue, stockValue, markupPrice, MAIN_BRANCH, putMany } from '../store.jsx';
 import { ask, askText, toast } from '../feedback.jsx';
 import { formatQty } from '../money.js';
 import { removalSplit } from '../fefo.js';
 import { newInternalBarcode } from '../barcode.jsx';
-import { useHoverCard } from '../listcontrols.jsx';
+import { useHoverCard, useListControls } from '../listcontrols.jsx';
+import { HELP } from '../forms.jsx';
+import { useLoadMore, useColumns, BulkBar, useWide, DetailsPane, HealthBar } from '../tablekit.jsx';
 import { ProductArt } from '../idleart.jsx';
 import { useMedicineOrder, MedicineOrderPicker, groupedRows, useFolded, GroupHeadingRow } from '../medgroups.jsx';
 
@@ -88,15 +90,16 @@ export function MedicineList() {
     { key: 'form', label: 'Formulation', type: 'select', options: db.formulations.map((f) => f.name) },
     { key: 'strength', label: 'Strength' },
     { key: 'unit', label: 'Selling unit', type: 'select', options: UNITS },
-    { key: 'barcode', label: 'Barcode / SKU (blank = generate)' },
-    { key: 'cost', label: 'Cost price', type: 'number', required: true },
-    { key: 'price', label: `Retail price (blank = cost +${s.retailMarkup}%)`, type: 'number' },
-    { key: 'wholesale', label: `Wholesale price (blank = cost +${s.wholesaleMarkup}%)`, type: 'number' },
-    { key: 'reorder', label: 'Reorder level', type: 'number' },
+    // D1: checked as each field is left: a barcode another medicine has, a price under the cost, an expiry gone by
+    { key: 'barcode', label: 'Barcode / SKU (blank = generate)', validate: (v, r) => (v && db.products.some((x) => x.barcode === String(v).trim() && x.id !== r.id) ? `Another medicine has this barcode (${db.products.find((x) => x.barcode === String(v).trim() && x.id !== r.id).name})` : '') },
+    { key: 'cost', label: 'Cost price', type: 'money', required: true },
+    { key: 'price', label: `Retail price (blank = cost +${s.retailMarkup}%)`, type: 'money', validate: (v, r) => (Number(v) > 0 && Number(r.cost) > Number(v) ? 'The retail price is below the cost' : '') },
+    { key: 'wholesale', label: `Wholesale price (blank = cost +${s.wholesaleMarkup}%)`, type: 'money', help: HELP.wholesale, validate: (v, r) => (Number(v) > 0 && Number(r.cost) > Number(v) ? 'The wholesale price is below the cost' : '') },
+    { key: 'reorder', label: 'Reorder level', type: 'number', help: HELP.reorder },
     { key: 'shelf', label: 'Shelf / location' },
     { key: 'openingStock', label: 'Opening stock (quantity)', type: 'number', hidden: (r) => !r._new },
     { key: 'openingBatch', label: 'Opening stock batch no.', hidden: (r) => !r._new },
-    { key: 'openingExpiry', label: 'Opening stock expiry', type: 'date', hidden: (r) => !r._new },
+    { key: 'openingExpiry', label: 'Opening stock expiry', type: 'date', hidden: (r) => !r._new, validate: (v) => (v && v < today() ? 'This expiry date has passed' : '') },
     { key: 'rx', label: 'Prescription only (Rx)', type: 'checkbox' },
     { key: 'chronic', label: 'Chronic medicine (refill reminders)', type: 'checkbox' },
     { key: 'controlled', label: 'Controlled drug (register: patient & prescriber recorded at sale)', type: 'checkbox' },
@@ -125,6 +128,7 @@ export function MedicineList() {
     {packsFor && <PacksEditor product={packsFor} onClose={() => setPacksFor(null)} />}
     <CrudPage
       title="Medicine List" singular="Medicine" table="products" rows={products} fields={fields} onSave={onSave} readOnly={!manage}
+      deleteEffects={(rs) => { const n = rs.reduce((a, p) => a + db.batches.filter((b) => b.productId === p.id).length, 0); return n ? [`${n} batch${n === 1 ? '' : 'es'} and their history no longer listed under ${rs.length === 1 ? 'it' : 'them'}`] : []; }}
       subtitle={review ? `${issueCount.toLocaleString()} records need a look. Open one to fix it; nothing is changed automatically.` : `${products.length.toLocaleString()} medicines and items`}
       filter={review ? (p) => recordIssues(p, dupBarcodes).length > 0 : undefined}
       headExtra={<button type="button" className={'btn ' + (review ? 'primary' : 'ghost')} aria-pressed={review} onClick={() => setReview((r) => !r)} title="Records with missing or inconsistent details">Needs review{issueCount ? ` (${issueCount})` : ''}</button>}
@@ -169,7 +173,7 @@ export function Formulations() {
 }
 
 export function StockLevels() {
-  const { db, products, fmt, batchesOf, branch, can } = useStore();
+  const { db, products, fmt, batchesOf, branch, branchId, can, update, user } = useStore();
   const location = useLocation();
   const [q, setQ] = useState('');
   const [filter, setFilter] = useState(location.state?.filter || 'instock');
@@ -190,56 +194,132 @@ export function StockLevels() {
   // step 26 (from the Flutter app): sorted and grouped by class, therapeutic area, form or shelf, per device
   const [order, setOrder] = useMedicineOrder();
   const [folded, toggleFold] = useFolded();
-  const drawn = useProgressive(Math.min(rows.length, 500)); // the first rows at once, the rest just after
-  const shownRows = useMemo(() => groupedRows(rows.slice(0, drawn), order, folded), [rows, drawn, order, folded]);
-  const cols = 8 + (multi ? 1 : 0) + (can('inventory.edit') ? 1 : 0);
+  // UI batch 3 (C): 100 rows then more (C7), columns (C2), ticks and a bottom bar (C4), edit in place (C5), arrow
+  // keys (C6), the batches beside the list on wide screens (C8), a stock bar (C9)
+  const page = useLoadMore(rows, { resetKey: q + '|' + filter + '|' + order });
+  const shownRows = useMemo(() => groupedRows(page.rows, order, folded), [page.rows, order, folded]);
+  const flat = useMemo(() => shownRows.filter((r) => r.heading === undefined).map((r) => r.p), [shownRows]);
+  const searchRef = useRef(null);
+  const wide = useWide();
+  const lc = useListControls({ rows: flat, onOpen: (p) => setOpen(p), onEdit: can('inventory.edit') ? (p) => setEditing(p) : null, searchRef, onClearSearch: () => setQ('') });
+  const colsK = useColumns('inventory', [{ id: 'name', label: 'Medicine', fixed: true }, { id: 'batch', label: 'Next batch' }, { id: 'expiry', label: 'Expiry' }, { id: 'shelf', label: 'Shelf' },
+    { id: 'reorder', label: 'Reorder at' }, { id: 'stock', label: 'In stock' }, ...(multi ? [{ id: 'all', label: 'All branches' }] : []), { id: 'price', label: 'Retail price' }, { id: 'value', label: 'Value (cost)' }]);
+  const cols = colsK.shown.length + 2 + (can('inventory.edit') ? 1 : 0);
+  // C5: price (medicines.manage) and reorder level (inventory.edit) edited in the table; Enter saves, Esc cancels;
+  // audited like the form
+  const [cellEdit, setCellEdit] = useState(null); // { id, k, v }
+  const canCell = (k) => (k === 'price' ? can('medicines.manage') : can('inventory.edit'));
+  const saveCell = () => {
+    const c = cellEdit; setCellEdit(null);
+    if (!c) return;
+    const v = Number(String(c.v).replace(/,/g, ''));
+    if (!isFinite(v) || v < 0) return toast('Type a number of 0 or more', 'warn');
+    update((d) => {
+      const cur = d.products.find((x) => x.id === c.id);
+      if (!cur || Number(cur[c.k] || 0) === v) return;
+      put(d, 'products', { ...cur, [c.k]: v });
+      audit(d, user, c.k === 'price' ? 'Price changed' : 'Inventory edited', c.k === 'price' ? `${cur.name}: ${fmt(cur.price)} → ${fmt(v)} (in the table)` : `${cur.name}: reorder level ${cur.reorder || 0} → ${v} (in the table)`, branchId);
+    });
+  };
+  const cellFor = (p, k, text) => {
+    if (cellEdit?.id === p.id && cellEdit.k === k) return (
+      <span className="cell-edit"><input autoFocus inputMode="decimal" aria-label={k === 'price' ? `Retail price of ${p.name}` : `Reorder level of ${p.name}`} value={cellEdit.v} onClick={(e) => e.stopPropagation()}
+        onChange={(e) => setCellEdit({ ...cellEdit, v: e.target.value })} onBlur={() => setCellEdit(null)}
+        onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Enter') { e.preventDefault(); saveCell(); } else if (e.key === 'Escape') { e.preventDefault(); setCellEdit(null); } }} /></span>
+    );
+    if (!canCell(k)) return text;
+    return <span className="cell-editable" role="button" tabIndex={0} title="Click to change (Enter saves, Esc cancels)" data-cell={k}
+      onClick={(e) => { e.stopPropagation(); setCellEdit({ id: p.id, k, v: String(p[k] || 0) }); }}
+      onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); e.preventDefault(); setCellEdit({ id: p.id, k, v: String(p[k] || 0) }); } }}>{text}</span>;
+  };
+  // C4: ticked medicines: labels, export, a new price
+  const navigate = useNavigate();
+  const changePrices = async () => {
+    const list = lc.tickedRows;
+    const t = await askText({ title: `New retail price for ${list.length} medicine${list.length === 1 ? '' : 's'}`, message: 'An amount (e.g. 1500), or a change in percent (e.g. +10% or -5%).', placeholder: '+10%', confirmText: 'Change prices' });
+    if (t == null || !String(t).trim()) return;
+    const m = String(t).trim().match(/^([+-]?\d+(?:\.\d+)?)\s*%$/), amount = Number(String(t).replace(/,/g, ''));
+    if (!m && !(isFinite(amount) && amount >= 0)) return toast('Type an amount or a percent like +10%', 'warn');
+    const dec = Number(db.settings.decimals ?? 0), f10 = 10 ** dec;
+    update((d) => {
+      for (const x of list) {
+        const cur = d.products.find((y) => y.id === x.id);
+        if (!cur) continue;
+        const next = m ? Math.round((cur.price || 0) * (1 + Number(m[1]) / 100) * f10) / f10 : amount;
+        if (next === cur.price) continue;
+        put(d, 'products', { ...cur, price: next });
+        audit(d, user, 'Price changed', `${cur.name}: ${fmt(cur.price)} → ${fmt(next)} (several at once)`, branchId);
+      }
+    });
+    lc.clear();
+    toast(`Prices changed for ${list.length} medicine${list.length === 1 ? '' : 's'}`);
+  };
+  const csvOf = (list) => toCSV(list.flatMap((p) => batchesOf(p.id).filter((b) => b.qty).map((b) => ({ name: p.name, generic: p.generic, form: p.form, batch: b.batch, expiry: b.expiry, qty: b.qty, cost: b.cost || p.cost, price: p.price, value: b.qty * (b.cost || p.cost) }))));
+  const cellOf = (p) => ({
+    batch: <td key="batch" data-label="Next batch" className="batch-cell">{p.batch || '—'}</td>,
+    expiry: <td key="expiry" data-label="Expiry" className={'nowrap ' + expiryClass(p.expiry, warn)}>{p.expiry || '—'}</td>,
+    shelf: <td key="shelf" data-label="Shelf">{p.shelf}</td>,
+    reorder: <td key="reorder" data-label="Reorder at" className="num">{cellFor(p, 'reorder', p.reorder || 0)}</td>,
+    stock: <td key="stock" data-label="In stock" className="num"><span className={'stock-pill badge ' + (p.stock <= 0 ? 'danger' : p.stock <= (p.reorder || 0) ? 'warn' : 'ok')}>{formatQty(p.stock)}</span><HealthBar stock={p.stock} reorder={p.reorder} /></td>,
+    all: <td key="all" data-label="All branches" className="num muted">{p.totalStock}</td>,
+    price: <td key="price" data-label="Retail price" className="num">{cellFor(p, 'price', fmt(p.price))}</td>,
+    value: <td key="value" data-label="Value (cost)" className="num">{(() => { const v = batchValue(p, batchesOf); return <>{fmt(v.value)}{v.expired > 0 && <><br /><small className="text-danger">+ {fmt(v.expired)} expired</small></>}</>; })()}</td>,
+  });
+  const batchesTable = open && (
+    <table>
+      <thead><tr><th>Batch</th><th>Expiry</th><th>Received</th><th className="num">Cost</th><th className="num">Qty</th></tr></thead>
+      <tbody>
+        {batchesOf(open.id).filter((b) => b.qty !== 0).map((b, i) => (
+          <tr key={b.id}><td>{b.batch} {i === 0 && b.qty > 0 && <span className="badge ok">Sells next</span>}</td><td className={'nowrap ' + expiryClass(b.expiry, warn)}>{b.expiry || '—'}</td><td>{b.received || '—'}</td><td className="num">{fmt(b.cost || open.cost)}</td><td className="num">{formatQty(b.qty)}</td></tr>
+        ))}
+        {!batchesOf(open.id).some((b) => b.qty) && <Empty colSpan={5} action={can('stock.receive') ? { label: 'Add stock', to: '/add-stock' } : undefined}>No stock of this medicine at this branch. Receive it with Add Stock.</Empty>}
+      </tbody>
+    </table>
+  );
   return (
     <div className="page">
       <div className="page-head">
         <div><h1>Inventory</h1><div className="sub">{branch?.name} · {rows.length.toLocaleString()} items · {fmt(total)} at cost · {fmt(retail)} at retail{sv.expired > 0 && <> · <span className="text-danger">{fmt(sv.expired)} expired (not included)</span></>}</div></div>
         <div className="row gap">
           <MedicineOrderPicker value={order} onChange={setOrder} />
-          <SearchBox value={q} onChange={setQ} />
-          <button className="btn ghost" onClick={() => downloadFile('inventory.csv', toCSV(rows.flatMap((p) => batchesOf(p.id).filter((b) => b.qty).map((b) => ({ name: p.name, generic: p.generic, form: p.form, batch: b.batch, expiry: b.expiry, qty: b.qty, cost: b.cost || p.cost, price: p.price, value: b.qty * (b.cost || p.cost) })))), 'text/csv')}><Download size={16} />CSV</button>
+          <SearchBox value={q} onChange={setQ} inputRef={searchRef} />
+          {colsK.button}
+          <button className="btn ghost" onClick={() => downloadFile('inventory.csv', csvOf(rows), 'text/csv')}><Download size={16} />CSV</button>
           <PdfButton target={listRef} title={{ instock: 'Stock in hand', low: 'Low stock', out: 'Out of stock', all: 'All medicines' }[filter]} subtitle={`${branch?.name || ''} · ${rows.length} items · ${fmt(total)} at cost · ${fmt(retail)} at retail${sv.expired > 0 ? ` · ${fmt(sv.expired)} expired (not included)` : ''}`} />
         </div>
       </div>
       <div className="list-filters">
         <FilterChips label="Show" value={filter} onChange={setFilter} options={[['instock', 'In stock', counts.instock], ['low', 'Low stock', counts.low], ['out', 'Out of stock', counts.out], ['all', 'All', products.length]]} />
       </div>
+      <div className={'list-and-details' + (open && wide ? ' with-details' : '')}>
       <div className="card table-wrap" ref={listRef}>
         <table className="phone-rows">
-          <thead><tr><th>Medicine</th><th>Next batch</th><th>Expiry</th><th>Shelf</th><th className="num">Reorder at</th><th className="num">In stock</th>{multi && <th className="num">All branches</th>}<th className="num">Value (cost)</th>{can('inventory.edit') && <th />}</tr></thead>
+          <thead><tr><th className="tick"><input {...lc.allProps} /></th>{colsK.shown.map((id) => <th key={id} className={['reorder', 'stock', 'all', 'price', 'value'].includes(id) ? 'num' : ''}>{{ name: 'Medicine', batch: 'Next batch', expiry: 'Expiry', shelf: 'Shelf', reorder: 'Reorder at', stock: 'In stock', all: 'All branches', price: 'Retail price', value: 'Value (cost)' }[id]}</th>)}{can('inventory.edit') && <th />}</tr></thead>
           <tbody>
-            {shownRows.map((r) => r.heading !== undefined ? <GroupHeadingRow key={'g:' + r.heading} row={r} colSpan={cols} onToggle={() => toggleFold(r.heading)} /> : (({ p }) => (
-              <tr key={p.id} onClick={() => setOpen(p)} style={{ cursor: 'pointer' }}>
-                <td className="row-title"><strong>{p.name}</strong><br /><small className="muted">{p.form}</small><StockStatus p={p} warn={warn} /></td><td data-label="Next batch" className="batch-cell">{p.batch || '—'}</td>
-                <td data-label="Expiry" className={'nowrap ' + expiryClass(p.expiry, warn)}>{p.expiry || '—'}</td><td data-label="Shelf">{p.shelf}</td>
-                <td data-label="Reorder at" className="num">{p.reorder}</td>
-                <td data-label="In stock" className="num"><span className={'stock-pill badge ' + (p.stock <= 0 ? 'danger' : p.stock <= (p.reorder || 0) ? 'warn' : 'ok')}>{formatQty(p.stock)}</span></td>
-                {multi && <td data-label="All branches" className="num muted">{p.totalStock}</td>}
-                <td data-label="Value (cost)" className="num">{(() => { const v = batchValue(p, batchesOf); return <>{fmt(v.value)}{v.expired > 0 && <><br /><small className="text-danger">+ {fmt(v.expired)} expired</small></>}</>; })()}</td>
+            {shownRows.map((r) => r.heading !== undefined ? <GroupHeadingRow key={'g:' + r.heading} row={r} colSpan={cols} onToggle={() => toggleFold(r.heading)} /> : (({ p }) => { const i = flat.indexOf(p); const rp = lc.rowProps(p, i); const c = cellOf(p); return (
+              <tr key={p.id} {...rp} className={[rp.className, open?.id === p.id && wide ? 'row-open' : ''].filter(Boolean).join(' ')} onClick={(e) => { rp.onClick(e); if (!e.target.closest('button, a, input, select, label, .cell-editable')) setOpen(p); }} style={{ cursor: 'pointer' }}>
+                <td className="tick" onClick={(e) => e.stopPropagation()}><input {...lc.tickProps(p, i)} /></td>
+                <td className="row-title"><strong>{p.name}</strong><br /><small className="muted">{p.form}</small><StockStatus p={p} warn={warn} /></td>
+                {colsK.shown.filter((id) => id !== 'name').map((id) => c[id])}
                 {can('inventory.edit') && <td className="actions"><button className="btn sm ghost" onClick={(e) => { e.stopPropagation(); setEditing(p); }}><Pencil size={14} />Edit</button></td>}
               </tr>
-            ))(r))}
-            {!rows.length && <Empty colSpan={8}>Nothing here</Empty>}
+            ); })(r))}
+            {!rows.length && <Empty colSpan={cols} action={!products.length && can('medicines.manage') ? { label: 'Add a medicine', to: '/medicines' } : can('stock.receive') && filter !== 'low' ? { label: 'Add stock', to: '/add-stock' } : undefined}>
+              {q ? `Nothing matches “${q}”. Try the generic name or the barcode.` : { instock: 'No medicines in stock yet. Stock you receive with Add Stock shows here with its batches and value.', low: 'Nothing is low on stock: every medicine is above its reorder level.', out: 'Nothing is out of stock.', all: 'No medicines yet. Add your medicines, then receive stock.' }[filter]}</Empty>}
           </tbody>
+          {rows.length > 0 && colsK.has('value') && <tfoot><tr className="total-row"><td colSpan={colsK.shown.indexOf('value') + 1}>Inventory value · {rows.length.toLocaleString()} items</td><td className="num">{fmt(total)}</td><td colSpan={Math.max(1, cols - colsK.shown.indexOf('value') - 2)} /></tr></tfoot>}
         </table>
+        {page.footer}
       </div>
+      {open && wide && <DetailsPane wide title={`${open.name} – batches at ${branch?.name}`} onClose={() => setOpen(null)}>{batchesTable}</DetailsPane>}
+      </div>
+      <BulkBar count={lc.ticked.size} onClear={lc.clear} actions={[
+        can('medicines.manage') && { label: 'Print labels', Icon: BarcodeIcon, run: () => navigate('/labels', { state: { productIds: lc.tickedRows.map((p) => p.id) } }) },
+        { label: 'Export', Icon: Download, run: () => downloadFile('inventory.csv', csvOf(lc.tickedRows), 'text/csv') },
+        can('medicines.manage') && { label: 'Change price', Icon: Tag, run: changePrices },
+      ]} />
       {editing && <InventoryEditor product={editing} onClose={() => setEditing(null)} />}
-      {open && (
-        <Modal title={`${open.name} – batches at ${branch?.name}`} onClose={() => setOpen(null)} wide>
-          <table>
-            <thead><tr><th>Batch</th><th>Expiry</th><th>Received</th><th className="num">Cost</th><th className="num">Qty</th></tr></thead>
-            <tbody>
-              {batchesOf(open.id).filter((b) => b.qty !== 0).map((b, i) => (
-                <tr key={b.id}><td>{b.batch} {i === 0 && b.qty > 0 && <span className="badge ok">Sells next</span>}</td><td className={'nowrap ' + expiryClass(b.expiry, warn)}>{b.expiry || '—'}</td><td>{b.received || '—'}</td><td className="num">{fmt(b.cost || open.cost)}</td><td className="num">{formatQty(b.qty)}</td></tr>
-              ))}
-              {!batchesOf(open.id).some((b) => b.qty) && <Empty colSpan={5}>No stock at this branch</Empty>}
-            </tbody>
-          </table>
-        </Modal>
-      )}
+      {open && !wide && <DetailsPane title={`${open.name} – batches at ${branch?.name}`} onClose={() => setOpen(null)}>{batchesTable}</DetailsPane>}
     </div>
   );
 }
@@ -258,7 +338,7 @@ export function Expiry() {
   const [busy, setBusy] = useState(''); // the batch being written off (its button is disabled until it is saved)
   const writeOff = async (r) => {
     if (busy) return;
-    if (!(await ask({ title: 'Write off expired stock?', message: `${r.qty} × ${r.p.name} (batch ${r.batch}) will be removed from stock.`, confirmText: 'Write off', danger: true }))) return;
+    if (!(await ask({ title: 'Write off expired stock?', message: `${r.qty} × ${r.p.name} (batch ${r.batch}) will be removed from stock.`, effects: [`${r.qty} taken off batch ${r.batch}`, `a write-off of ${fmt(r.qty * (r.cost || r.p.cost || 0))} at cost in the stock card and the audit log`], confirmText: 'Write off', danger: true }))) return;
     setBusy(r.p.id + r.id);
     try {
       await update((d) => {

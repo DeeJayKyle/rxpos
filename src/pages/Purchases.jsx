@@ -11,7 +11,9 @@ import { isWeb } from '../platform.js';
 import { useStore, useSyncState, uid, today, now, put, del, move, addBatch, audit, downloadFile, toCSV, markupPrice, daysUntil, supplierPrices, MAIN_BRANCH } from '../store.jsx';
 import { CASH } from '../finance.js';
 import { round } from '../money.js';
-import { Modal, PdfButton, Empty, PageTip, usePages, Pager, useSort, SortTh, SubViews } from '../ui.jsx';
+import { Modal, PdfButton, Empty, PageTip, useSort, SortTh, SubViews } from '../ui.jsx';
+import { useLoadMore, useColumns } from '../tablekit.jsx';
+import { useListControls } from '../listcontrols.jsx';
 import { ask, toast } from '../feedback.jsx';
 import { newInternalBarcode } from '../barcode.jsx';
 import { invoicePages, readInvoice, matchProduct, matchSupplier, normDate, pageBlob } from '../invoiceScan.js';
@@ -201,12 +203,14 @@ export function AddStock() {
     if (pendingDraft.current && !form.lines.some((l) => l.productId)) return; // still waiting for the medicines: keep the draft
     const t = setTimeout(() => {
       try {
-        if (form.lines.some((l) => l.productId)) localStorage.setItem(draftKey, JSON.stringify(form));
-        else localStorage.removeItem(draftKey);
+        if (form.lines.some((l) => l.productId)) { localStorage.setItem(draftKey, JSON.stringify(form)); setDraftAt(new Date()); }
+        else { localStorage.removeItem(draftKey); setDraftAt(null); }
       } catch { /* storage full or blocked: the panel still works */ }
     }, 300);
     return () => clearTimeout(t);
   }, [form, draftKey]);
+  // D2: "Draft saved 10:42" under the title, each time the delivery is kept on this device
+  const [draftAt, setDraftAt] = useState(null);
   const [restored, setRestored] = useState(restoredDraft.current);
   const [q, setQ] = useState('');
   const [saved, setSaved] = useState(null);
@@ -431,7 +435,7 @@ export function AddStock() {
 
   return (
     <div className="page">
-      <div className="page-head"><h1>Add Stock</h1><div className="row gap wrap">
+      <div className="page-head"><div><h1>Add Stock</h1>{draftAt && <div className="sub draft-saved" role="status" title="This delivery is kept on this device while you work; Save as draft keeps it for other devices too">Draft saved {draftAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>}</div><div className="row gap wrap">
         <button type="button" className="btn primary" onClick={() => setAiScan(true)}><Sparkles size={16} />Scan Invoice with AI</button>
         <button type="button" className="btn ghost" onClick={() => setScanOpen(true)}><ScanText size={16} />Scan invoice</button>
       </div></div>
@@ -607,7 +611,7 @@ export function AddStock() {
                         {p?.price > 0 && String(l.price) !== String(p.price) && <button type="button" className="link-btn small" title="Back to today's price" onClick={() => setLine(l.key, { price: '' })}><RotateCcw size={10} /> undo</button>}
                         {/* the owner's choice: the price is only what the person types; cost + markup is offered, not applied */}
                         {cost > 0 && priceFor(cost) !== price && <button type="button" className="link-btn small" title={`Cost + ${form.markup || 0}% markup`} onClick={() => setLine(l.key, { price: String(priceFor(cost)) })}>Use {fmt(priceFor(cost))}</button>}
-                        {markup !== null && <span className={markup < 0 ? 'text-danger' : 'muted'}> {markup < 0 ? 'below cost' : `margin ${markup}%`}</span>}
+                        {markup !== null && <span className={markup < 0 ? 'field-error inline' : 'muted'} role={markup < 0 ? 'alert' : undefined}> {markup < 0 ? 'below the cost' : `margin ${markup}%`}</span>}
                         {p && price !== p.price && p.price > 0 && <span className="muted"> · was {fmt(p.price)}</span>}
                       </small>
                     </td>
@@ -616,7 +620,9 @@ export function AddStock() {
                     <td key="batch" data-label="Batch"><input value={l.batch} placeholder="Batch no." onChange={(e) => replaceLine(l.key, { ...l, batch: e.target.value })} aria-label="Batch number" /></td>
                     ),
                     expiry: (
-                    <td key="expiry" data-label="Expiry"><DateInput value={l.expiry} min={today()} monthYear onChange={(v) => replaceLine(l.key, { ...l, expiry: v })} aria-label="Expiry date" /></td>
+                    <td key="expiry" data-label="Expiry" className={l.expiry && daysUntil(l.expiry) < 0 ? 'has-error' : ''}><DateInput value={l.expiry} min={today()} monthYear onChange={(v) => replaceLine(l.key, { ...l, expiry: v })} aria-label="Expiry date" />
+                      {/* D1: said at once, not only when receiving */}
+                      {l.expiry && daysUntil(l.expiry) < 0 && <small className="field-error" role="alert">This date has passed</small>}</td>
                     ),
                   };
                   return (
@@ -685,15 +691,20 @@ export default function Purchases() {
   const rows = db.purchases.filter((p) => (!q || [p.supplierName, p.invoice, p.number, p.notes, p.receivedBy].join(' ').toLowerCase().includes(q.toLowerCase()))
     && (!pf.from || p.date >= pf.from) && (!pf.to || p.date <= pf.to) && (!pf.supplier || p.supplierName === pf.supplier));
   const sorted = useSort(rows, { date: (p) => p.date + (p.number || ''), number: (p) => p.number || '', supplier: (p) => p.supplierName || '', invoice: (p) => p.invoice || '', total: (p) => p.total, by: (p) => p.receivedBy || '' }, 'date');
-  const page = usePages(sorted.rows, 25);
+  // UI batch 3: 100 rows then more (C7), columns (C2), arrow keys / Enter (C6)
+  const page = useLoadMore(sorted.rows, { resetKey: [q, pf.from, pf.to, pf.supplier, sorted.by, sorted.dir].join('|') });
   const histRef = useRef(null);
+  const searchRef = useRef(null);
+  const lc = useListControls({ rows: page.rows, onOpen: (p) => setView(p), onEdit: can('purchases.edit') ? (p) => !p.imported && setEditing(p) : null, searchRef, onClearSearch: () => setQ(''), enabled: tab === 'history' });
+  const colsK = useColumns('purchases', [{ id: 'date', label: 'Date', fixed: true }, { id: 'number', label: 'GRN' }, { id: 'supplier', label: 'Supplier' }, { id: 'pay', label: 'Payment type' }, { id: 'invoice', label: 'Invoice' }, { id: 'items', label: 'Items' }, { id: 'by', label: 'Received by' }, { id: 'notes', label: 'Notes' }, { id: 'total', label: 'Total' }, { id: 'unpaid', label: 'Unpaid' }]);
   return (
     <div className="page">
       <div className="page-head">
         <h1>Purchase History</h1>
         <div className="row gap">
           <PdfButton target={histRef} title="Purchase history" subtitle={`${rows.length} deliveries · ${fmt(rows.reduce((a, p) => a + (p.total || 0), 0))}`} />
-          <input className="search" placeholder="Search…" value={q} onChange={(e) => setQ(e.target.value)} />
+          <input className="search" placeholder="Search…" value={q} ref={searchRef} onChange={(e) => setQ(e.target.value)} />
+          {tab === 'history' && colsK.button}
           <button className="btn ghost" onClick={() => downloadFile('purchases.csv', toCSV(rows.map((p) => ({ date: p.date, number: p.number, supplier: p.supplierName, invoice: p.invoice, paymentType: payType(p), items: p.items.length, total: p.total, paid: p.paid ?? p.total, receivedBy: p.receivedBy, notes: p.notes || '' }))), 'text/csv')}>Export CSV</button>
         </div>
       </div>
@@ -707,21 +718,26 @@ export default function Purchases() {
       </div>}
       {tab === 'history' && <div className="card table-wrap" ref={histRef}>
         <table>
-          <thead><tr><SortTh s={sorted} k="date">Date</SortTh><SortTh s={sorted} k="number">GRN</SortTh><SortTh s={sorted} k="supplier">Supplier</SortTh><th>Payment type</th><SortTh s={sorted} k="invoice">Invoice</SortTh><th>Items</th><SortTh s={sorted} k="by">Received by</SortTh><th>Notes</th><SortTh s={sorted} k="total" className="num">Total</SortTh><th className="num">Unpaid</th><th /></tr></thead>
+          <thead><tr>{colsK.shown.map((id) => ({ date: <SortTh key={id} s={sorted} k="date">Date</SortTh>, number: <SortTh key={id} s={sorted} k="number">GRN</SortTh>, supplier: <SortTh key={id} s={sorted} k="supplier">Supplier</SortTh>, pay: <th key={id}>Payment type</th>,
+            invoice: <SortTh key={id} s={sorted} k="invoice">Invoice</SortTh>, items: <th key={id}>Items</th>, by: <SortTh key={id} s={sorted} k="by">Received by</SortTh>, notes: <th key={id}>Notes</th>, total: <SortTh key={id} s={sorted} k="total" className="num">Total</SortTh>, unpaid: <th key={id} className="num">Unpaid</th> }[id]))}<th /></tr></thead>
           <tbody>
-            {page.rows.map((p) => (
-              <tr key={p.id}>
-                <td>{p.date}</td><td>{p.number}</td><td>{p.supplierName}</td><td>{payType(p)}</td><td>{p.invoice}</td><td>{p.items.length}</td><td>{p.receivedBy}</td>
-                <td className="muted notes-cell" title={p.notes || undefined}>{p.notes || '—'}</td>
-                <td className="num"><strong>{fmt(p.total)}</strong></td><td className="num">{p.total - (p.paid ?? p.total) > 0 ? <span className="text-warn">{fmt(p.total - p.paid)}</span> : '—'}</td>
-                <td className="actions"><div className="row-acts"><button className="btn sm ghost" onClick={() => setView(p)}>View</button>{can('purchases.edit') && !p.imported && <button className="btn sm ghost act-edit" onClick={() => setEditing(p)}><Pencil size={14} />Edit</button>}</div>{p.editedAt && <small className="muted">edited</small>}</td>
+            {page.rows.map((p, i) => { const c = {
+              date: <td key="date">{p.date}</td>, number: <td key="number">{p.number}</td>, supplier: <td key="supplier">{p.supplierName}</td>, pay: <td key="pay">{payType(p)}</td>, invoice: <td key="invoice">{p.invoice}</td>, items: <td key="items">{p.items.length}</td>, by: <td key="by">{p.receivedBy}</td>,
+              notes: <td key="notes" className="muted notes-cell" title={p.notes || undefined}>{p.notes || '—'}</td>,
+              total: <td key="total" className="num"><strong>{fmt(p.total)}</strong></td>, unpaid: <td key="unpaid" className="num">{p.total - (p.paid ?? p.total) > 0 ? <span className="text-warn">{fmt(p.total - p.paid)}</span> : '—'}</td>,
+            }; return (
+              <tr key={p.id} {...lc.rowProps(p, i)}>
+                {colsK.shown.map((id) => c[id])}
+                <td className="actions"><div className="row-acts"><button className="btn sm ghost" onClick={() => setView(p)}>View</button>{can('purchases.edit') && !p.imported && <button className="btn sm ghost act-edit" onClick={() => setEditing(p)}><Pencil size={14} />Edit</button>}</div></td>
               </tr>
-            ))}
-            {!rows.length && (db.purchases.length ? <Empty colSpan={11}>No deliveries match</Empty> : <Empty colSpan={11} action={{ label: 'Add stock', to: '/add-stock' }}>No deliveries yet. Each delivery you receive in Add Stock is kept here with its invoice, to view or correct.</Empty>)}
-            {rows.length > 0 && <tr className="total-row"><td colSpan={8}>Total · {rows.length.toLocaleString()} deliveries</td><td className="num">{fmt(rows.reduce((a, p) => a + (p.total || 0), 0))}</td><td className="num">{fmt(rows.reduce((a, p) => a + Math.max(0, p.total - (p.paid ?? p.total)), 0))}</td><td /></tr>}
+            ); })}
+            {!rows.length && (db.purchases.length ? <Empty colSpan={colsK.shown.length + 1}>No deliveries match. Try another supplier, invoice number or dates.</Empty> : <Empty colSpan={colsK.shown.length + 1} action={{ label: 'Add stock', to: '/add-stock' }}>No deliveries yet. Each delivery you receive in Add Stock is kept here with its invoice, to view, correct or pay.</Empty>)}
           </tbody>
+          {rows.length > 0 && <tfoot><tr className="total-row">{colsK.shown.map((id, k) => (id === 'total' ? <td key={id} className="num">{fmt(rows.reduce((a, p) => a + (p.total || 0), 0))}</td>
+            : id === 'unpaid' ? <td key={id} className="num">{fmt(rows.reduce((a, p) => a + Math.max(0, (p.total || 0) - (p.paid ?? p.total)), 0))}</td>
+              : <td key={id}>{k === 0 ? `Total · ${rows.length.toLocaleString()} deliveries` : ''}</td>))}<td /></tr></tfoot>}
         </table>
-        <Pager p={page} />
+        {page.footer}
       </div>}
       {editing && <PurchaseEditor purchase={editing} onClose={() => setEditing(null)} />}
       {view && (

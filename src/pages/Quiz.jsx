@@ -119,7 +119,7 @@ export default function Quiz() {
             <thead><tr><th>#</th><th>Name</th><th className="num">Quizzes</th><th className="num">Score</th></tr></thead>
             <tbody>
               {board.map((b, i) => <tr key={b.name + i}><td>{i + 1}</td><td>{b.name}</td><td className="num">{b.n}</td><td className="num">{Math.round((b.score / b.total) * 100)}%</td></tr>)}
-              {!board.length && <Empty colSpan={4}>No quizzes yet this month</Empty>}
+              {!board.length && <Empty colSpan={4}>No quizzes yet this month. Take a quick quiz and your score goes on the team board.</Empty>}
             </tbody>
           </table>
         </div>

@@ -1,24 +1,54 @@
 import { useNavigate } from 'react-router-dom';
 import { useEffect, useMemo, useRef, useState, useId, startTransition } from 'react';
 import { useLocation } from 'react-router-dom';
-import { X, Search, Download, Plus, Pencil, Trash2, Inbox, Lightbulb, FileDown, Loader2, Copy, CheckSquare, Columns3, Ellipsis, ChevronLeft } from 'lucide-react';
+import { X, Search, Download, Plus, Pencil, Trash2, Inbox, Lightbulb, FileDown, Loader2, Copy, CheckSquare, Ellipsis, ChevronLeft } from 'lucide-react';
 import { ViewSwitch, BoardView, GalleryView, savedView, saveView } from './components/DataViews.jsx';
 import { pagePdf, receiptPdf } from './pdf.js';
 import { useStore, uid, downloadFile, toCSV, del as del1 } from './store.jsx';
 import { useListControls, useContextMenu } from './listcontrols.jsx';
 import { keyOf, showKey } from './keymap.js';
-import { deviceSettings, setDevice } from './device.js';
+import { deviceSettings } from './device.js';
 import { ask, toast } from './feedback.jsx';
 import { useFocusTrap } from './focustrap.js';
+import { useLoadMore, useColumns, BulkBar, useSwipe, useWide, DetailsPane } from './tablekit.jsx';
+import { MoneyInput, PhoneInput, Help, checkField } from './forms.jsx';
 
-export function Modal({ title, onClose, children, wide }) {
+/** D7: in a pop-up's form, Enter moves to the next field (the last one sends the form) and Ctrl+Enter sends it at once;
+ *  a text area keeps Enter for new lines */
+export function enterNext(e) {
+  if (e.key !== 'Enter' || e.defaultPrevented || e.isComposing) return;
+  const t = e.target, form = t.form || t.closest?.('form');
+  if (!form || !t.matches?.('input, select, textarea')) return;
+  if (e.ctrlKey || e.metaKey) { e.preventDefault(); form.requestSubmit?.(); return; }
+  if (t.matches('textarea, [data-enter], input[type=checkbox], input[type=radio], input[type=submit], input[type=button]') || e.shiftKey || e.altKey) return;
+  const fields = [...form.querySelectorAll('input, select, textarea')].filter((x) => !x.disabled && !x.readOnly && x.type !== 'hidden' && x.offsetParent !== null && !x.closest('[data-enter-skip]'));
+  const next = fields[fields.indexOf(t) + 1];
+  if (!next) return; // the last field: Enter sends the form
+  e.preventDefault();
+  next.focus(); next.select?.();
+}
+
+/** A pop-up. size: sm 420 · md 640 · lg 960 px (UI batch 3, D9; `wide` is lg). On phones it rises as a sheet with its
+ *  main button fixed at the bottom (D8); it opens with the cursor in its first field (D7). */
+export function Modal({ title, onClose, children, wide, size }) {
   // focus kept inside, Escape closes only the top dialog, focus goes back on close (src/focustrap.js)
   const ref = useRef(null);
   const titleId = useId();
   useFocusTrap(ref, onClose);
+  // D7: the cursor in the first field, not on the close button (an autoFocus field keeps it)
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const el = ref.current, at = document.activeElement;
+      if (!el || (el.contains(at) && at.matches('input, select, textarea'))) return;
+      const first = [...el.querySelectorAll('input:not([type=hidden]):not([disabled]):not([readonly]), select:not([disabled]), textarea:not([disabled])')].find((x) => x.offsetParent !== null && !x.closest('[data-no-autofocus]'));
+      first?.focus();
+    }, 30);
+    return () => clearTimeout(t);
+  }, []);
+  const sz = size || (wide ? 'lg' : 'md');
   return (
     <div className="modal-bg" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div ref={ref} tabIndex={-1} className={'modal' + (wide ? ' wide' : '')} role="dialog" aria-modal="true" aria-labelledby={titleId}>
+      <div ref={ref} tabIndex={-1} className={'modal size-' + sz + (sz === 'lg' ? ' wide' : '')} role="dialog" aria-modal="true" aria-labelledby={titleId} onKeyDown={enterNext}>
         <div className="modal-head">
           <h3 id={titleId}>{title}</h3>
           <button className="icon-btn" onClick={onClose} aria-label="Close"><X size={18} /></button>
@@ -29,11 +59,13 @@ export function Modal({ title, onClose, children, wide }) {
   );
 }
 
-export function Field({ f, value, onChange }) {
+export function Field({ f, value, onChange, error, onBlur }) {
   // A unique id per field instance (1.10): f.key alone collides when two forms on a page share a key, which breaks
   // the label-to-input link and aria wiring.
-  const id = useId();
-  const common = { id, required: f.required, value: value ?? '', onChange: (e) => onChange(e.target.value), placeholder: f.placeholder, autoFocus: f.autoFocus };
+  const id = useId(), errId = useId();
+  const { db } = useStore() || {};
+  const aria = error ? { 'aria-invalid': true, 'aria-describedby': errId } : {};
+  const common = { id, required: f.required, value: value ?? '', onChange: (e) => onChange(e.target.value), placeholder: f.placeholder, autoFocus: f.autoFocus, onBlur, ...aria };
   let input;
   if (f.type === 'checkbox')
     input = <input id={id} type="checkbox" autoFocus={f.autoFocus} checked={!!value} onChange={(e) => onChange(e.target.checked)} />;
@@ -45,28 +77,42 @@ export function Field({ f, value, onChange }) {
       </select>
     );
   else if (f.type === 'textarea') input = <textarea rows={3} {...common} />;
+  // D5 / D6: amounts with the currency and commas; phone numbers formatted with a tick when they can take WhatsApp
+  else if (f.type === 'money') input = <MoneyInput {...aria} id={id} required={f.required} autoFocus={f.autoFocus} placeholder={f.placeholder} onBlur={onBlur} currency={db?.settings?.currency || ''} value={value ?? ''} onChange={onChange} />;
+  else if (f.type === 'phone') input = <PhoneInput {...aria} id={id} required={f.required} autoFocus={f.autoFocus} placeholder={f.placeholder || '0772 123 456'} onBlur={onBlur} value={value ?? ''} onChange={onChange} />;
   else input = <input type={f.type || 'text'} step={f.type === 'number' ? 'any' : undefined} min={f.type === 'number' ? f.min ?? 0 : undefined} {...common} />;
   return (
-    <label className={'field' + (f.type === 'checkbox' ? ' check' : '') + (f.full ? ' full' : '')} htmlFor={id}>
-      <span>{f.label}{f.required && <b className="text-danger"> *</b>}</span>
+    <label className={'field' + (f.type === 'checkbox' ? ' check' : '') + (f.full ? ' full' : '') + (error ? ' has-error' : '')} htmlFor={id}>
+      <span>{f.label}{f.required && <b className="text-danger"> *</b>}{f.help && <Help text={f.help} />}</span>
       {input}
+      {error && <small className="field-error" id={errId} role="alert">{error}</small>}
     </label>
   );
 }
 
 export function RecordForm({ fields, initial, onSave, onCancel, saveLabel = 'Save' }) {
   const [rec, setRec] = useState(initial);
+  // D1: each field is checked when it is left, and again as it is typed once it has shown an error
+  const [errors, setErrors] = useState({});
+  const shownFields = fields.filter((f) => !f.hidden?.(rec));
+  const check = (f, r = rec) => setErrors((e) => ({ ...e, [f.key]: checkField(f, r[f.key], r) }));
   const submit = (e) => {
     e.preventDefault();
+    const all = Object.fromEntries(shownFields.map((f) => [f.key, checkField(f, rec[f.key], rec)]));
+    setErrors(all);
+    const bad = shownFields.find((f) => all[f.key]);
+    if (bad) { e.currentTarget.querySelector(`[aria-invalid=true], label.has-error input, label.has-error select`)?.focus(); setTimeout(() => e.target.querySelector?.('[aria-invalid=true]')?.focus(), 0); return; }
     const out = { ...rec };
-    fields.forEach((f) => { if (f.type === 'number') out[f.key] = Number(out[f.key] || 0); });
+    fields.forEach((f) => { if (f.type === 'number' || f.type === 'money') out[f.key] = Number(String(out[f.key] ?? '').replace(/,/g, '') || 0); });
     onSave(out);
   };
   return (
-    <form onSubmit={submit}>
+    <form onSubmit={submit} noValidate>
       <div className="form-grid">
-        {fields.filter((f) => !f.hidden?.(rec)).map((f, i) => (
-          <Field key={f.key} f={i === 0 ? { ...f, autoFocus: true } : f} value={rec[f.key]} onChange={(v) => setRec({ ...rec, [f.key]: v })} />
+        {shownFields.map((f, i) => (
+          <Field key={f.key} f={i === 0 ? { ...f, autoFocus: true } : f} value={rec[f.key]} error={errors[f.key]}
+            onBlur={() => check(f)}
+            onChange={(v) => { const r = { ...rec, [f.key]: v }; setRec(r); if (errors[f.key]) check(f, r); }} />
         ))}
       </div>
       <div className="form-actions">
@@ -106,7 +152,7 @@ export function Empty({ children = 'Nothing here yet', colSpan, action, icon: Ic
  * together; the columns shown chosen per device; the search kept while the app is open. `bulk(rows)` adds page actions
  * for the ticked rows ([{ label, run }]); `rowMenu(r)` adds items to a row's menu.
  */
-export function CrudPage({ title, subtitle, singular, table, fields, columns, blank = {}, extraActions, rowClass, rows: rowsProp, onSave, headExtra, canDelete = true, filter, readOnly = false, rowLocked, bulk, rowMenu, card, board }) {
+export function CrudPage({ title, subtitle, singular, table, fields, columns, blank = {}, extraActions, rowClass, rows: rowsProp, onSave, headExtra, canDelete = true, filter, readOnly = false, rowLocked, bulk, rowMenu, card, board, swipeActions, sideDetails, emptyText, totals, deleteEffects }) {
   const { db, upsert, remove, update } = useStore();
   const location = useLocation();
   const qKey = 'rxpos-q:' + table + ':' + location.pathname;
@@ -117,17 +163,19 @@ export function CrudPage({ title, subtitle, singular, table, fields, columns, bl
   const all = rowsProp || db[table];
   const ql = q.toLowerCase();
   const rows = useMemo(() => all.filter((r) => (!filter || filter(r)) && (!q || JSON.stringify(r).toLowerCase().includes(ql))), [all, filter, q, ql]);
-  const shown = rows.slice(0, 500);
+  // UI batch 3: 100 rows then more as the list scrolls (C7)
+  const more = useLoadMore(rows, { resetKey: q });
+  const shown = more.rows;
   const name = singular || title.replace(/s$/, '');
   const startNew = () => !readOnly && setEditing({ ...blank, id: uid(), _new: true });
   const editRow = (r) => !readOnly && !rowLocked?.(r) && setEditing(r);
   // a command from Ctrl+K ("Add a customer") opens the form at once
   useEffect(() => { if (location.state?.create) startNew(); }, [location.state]); // eslint-disable-line react-hooks/exhaustive-deps
-  // the columns shown, per device (the first is always shown)
-  const [hidden, setHidden] = useState(() => new Set(deviceSettings().hiddenCols?.[table] || []));
-  const [chooser, setChooser] = useState(false);
-  const setColumn = (label, on) => { const h = new Set(hidden); on ? h.delete(label) : h.add(label); setHidden(h); setDevice({ hiddenCols: { ...(deviceSettings().hiddenCols || {}), [table]: [...h] } }); };
-  const cols = columns.filter((c, i) => i === 0 || !hidden.has(c.label));
+  // the columns shown and their order, per device (the first is always shown; UI batch 3, C2)
+  const colsK = useColumns('crud:' + table, columns.map((c, i) => ({ id: c.label, label: c.label, fixed: i === 0 })), deviceSettings().hiddenCols?.[table]);
+  const cols = colsK.shown.map((id) => columns.find((c) => c.label === id)).filter(Boolean);
+  const wide = useWide(); // C8: the record beside the list on wide screens (pages that ask for it)
+  const swipe = useSwipe(); // C10: phones: a row swiped shows its actions (pages that give them)
   // Table / Board / Gallery (pages that describe a card), per page on this device
   const viewKey = table + ':' + location.pathname;
   const [view, setViewState] = useState(() => (card ? savedView(viewKey) : 'table'));
@@ -139,7 +187,9 @@ export function CrudPage({ title, subtitle, singular, table, fields, columns, bl
     const rs = list.filter(deletable);
     if (!rs.length) return toast(list.length ? 'These rows can\'t be deleted (a closed day, or not allowed)' : 'Nothing to delete', 'warn');
     const one = rs.length === 1;
-    if (!(await ask({ title: one ? `Delete this ${name.toLowerCase()}?` : `Delete ${rs.length} ${title.toLowerCase()}?`, message: `${one ? '' : rs.slice(0, 5).map((r) => r.name || r.description || r.number || r.id).join(', ') + (rs.length > 5 ? '…' : '') + '. '}This cannot be undone.`, confirmText: 'Delete', danger: true }))) return;
+    if (!(await ask({ title: one ? `Delete this ${name.toLowerCase()}?` : `Delete ${rs.length} ${title.toLowerCase()}?`, message: `${one ? '' : rs.slice(0, 5).map((r) => r.name || r.description || r.number || r.id).join(', ') + (rs.length > 5 ? '…' : '') + '. '}This cannot be undone.`,
+      // D10: what goes, in counts, beside the red button
+      effects: [`${rs.length} ${one ? name.toLowerCase() : title.toLowerCase()} removed on every device`, ...(deleteEffects?.(rs) || [])], confirmText: 'Delete', danger: true }))) return;
     if (one) remove(table, rs[0].id); else update((d) => { for (const r of rs) del1(d, table, r.id); });
     lc.clear();
     toast(one ? `${name} deleted` : `${rs.length} ${title.toLowerCase()} deleted`);
@@ -165,30 +215,19 @@ export function CrudPage({ title, subtitle, singular, table, fields, columns, bl
           {headExtra}
           <SearchBox value={q} onChange={setQ} inputRef={searchRef} hint={`Search (${showKey(keyOf('list:search'))})`} />
           {card && <ViewSwitch value={shownView} onChange={setView} board={!!board} />}
-          {shownView === 'table' && <span className="col-chooser-wrap" style={{ position: 'relative' }}>
-            <button className="btn ghost" aria-expanded={chooser} onClick={() => setChooser((c) => !c)} title="Choose the columns shown on this device"><Columns3 size={16} />Columns</button>
-            {chooser && (
-              <div className="col-chooser" role="group" aria-label="Columns shown" onMouseLeave={() => setChooser(false)}>
-                {columns.map((c, i) => <label key={c.label} className="field check"><input type="checkbox" disabled={i === 0} checked={i === 0 || !hidden.has(c.label)} onChange={(e) => setColumn(c.label, e.target.checked)} /><span>{c.label}</span></label>)}
-              </div>
-            )}
-          </span>}
+          {shownView === 'table' && colsK.button}
           <button className="btn ghost" title="Export CSV (the ticked rows, or all shown)" onClick={() => exportRows(lc.tickedRows.length ? lc.tickedRows : rows)}><Download size={16} />CSV</button>
           {!readOnly && <button className="btn primary" onClick={startNew} title={`Add ${name.toLowerCase()} (${showKey(keyOf('list:new'))})`}><Plus size={16} />Add {name.toLowerCase()}</button>}
         </div>
       </div>
-      {lc.ticked.size > 0 && (
-        <div className="bulk-bar" role="region" aria-label="Ticked rows">
-          <strong>{lc.ticked.size} ticked</strong>
-          <button className="btn sm" onClick={() => exportRows(lc.tickedRows)}><Download size={14} />Export</button>
-          {(bulk?.(lc.tickedRows) || []).map((b) => <button key={b.label} className="btn sm" onClick={() => b.run(lc.tickedRows, lc.clear)}>{b.label}</button>)}
-          {canDelete && !readOnly && <button className="btn sm danger" onClick={() => del(lc.tickedRows)}><Trash2 size={14} />Delete</button>}
-          <button className="btn sm ghost" onClick={lc.clear}>Untick all <kbd>Esc</kbd></button>
-        </div>
-      )}
+      <BulkBar count={lc.ticked.size} onClear={lc.clear} actions={[
+        { label: 'Export', Icon: Download, run: () => exportRows(lc.tickedRows) },
+        ...(bulk?.(lc.tickedRows) || []).map((b) => ({ ...b, run: () => b.run(lc.tickedRows, lc.clear) })),
+        canDelete && !readOnly && { label: 'Delete', Icon: Trash2, danger: true, run: () => del(lc.tickedRows) },
+      ]} />
       {shownView === 'board' && <BoardView rows={rows} board={board} card={card} onOpen={readOnly ? null : editRow} onMenu={(e, r) => rowMenuFor(e, r, shown.indexOf(r))} />}
       {shownView === 'gallery' && <GalleryView rows={rows} card={card} onOpen={readOnly ? null : editRow} onMenu={(e, r) => rowMenuFor(e, r, shown.indexOf(r))} />}
-      {shownView === 'table' && <div className="card table-wrap">
+      {shownView === 'table' && <div className={'list-and-details' + (sideDetails && wide && editing && !editing._new ? ' with-details' : '')}><div className="card table-wrap">
         <table className="phone-rows">
           <thead>
             <tr><th className="tick"><input {...lc.allProps} /></th>{cols.map((c) => <th key={c.label} className={c.num ? 'num' : ''}>{c.label}</th>)}<th /></tr>
@@ -197,7 +236,7 @@ export function CrudPage({ title, subtitle, singular, table, fields, columns, bl
             {shown.map((r, i) => {
               const rp = lc.rowProps(r, i, rowMenuFor);
               return (
-              <tr key={r.id} {...rp} className={[rowClass?.(r), rp.className].filter(Boolean).join(' ')}>
+              <tr key={r.id} {...rp} {...(swipeActions ? swipe.props(r.id) : {})} className={[rowClass?.(r), rp.className, sideDetails && wide && editing?.id === r.id ? 'row-open' : ''].filter(Boolean).join(' ')}>
                 <td className="tick"><input {...lc.tickProps(r, i)} /></td>
                 {cols.map((c, ci) => <td key={c.label} data-label={ci ? c.label : undefined} className={[c.num ? 'num' : '', ci ? '' : 'row-title'].filter(Boolean).join(' ')}>{c.render ? c.render(r) : r[c.key]}</td>)}
                 <td className="actions">
@@ -206,23 +245,35 @@ export function CrudPage({ title, subtitle, singular, table, fields, columns, bl
                   {!readOnly && !rowLocked?.(r) && <button className="btn sm ghost" onClick={() => setEditing(r)}><Pencil size={14} />Edit</button>}
                   {deletable(r) && <button className="btn sm danger" title="Delete" aria-label="Delete" onClick={() => del([r])}><Trash2 size={14} /></button>}
                   <button type="button" className="icon-btn sm row-more" title="More actions" aria-label="More actions" onClick={(e) => rowMenuFor(e, r, i)}><Ellipsis size={16} /></button>
+                  {swipeActions && swipe.openId === r.id && <span className="swipe-acts">{swipeActions(r).filter(Boolean).map((a) => (a.href
+                    ? <a key={a.label} className="btn sm" href={a.href} target={a.href.startsWith('http') ? '_blank' : undefined} rel="noreferrer" onClick={swipe.close}>{a.Icon && <a.Icon size={14} />}{a.label}</a>
+                    : <button key={a.label} type="button" className="btn sm" onClick={() => { swipe.close(); a.run(); }}>{a.Icon && <a.Icon size={14} />}{a.label}</button>))}</span>}
                 </td>
               </tr>
               );
             })}
-            {!rows.length && <Empty colSpan={cols.length + 2}>{q ? `No ${title.toLowerCase()} match “${q}”` : `No ${title.toLowerCase()} yet.${readOnly ? '' : ` Click “Add ${name.toLowerCase()}” to create one.`}`}</Empty>}
-            {rows.length > 500 && <tr><td colSpan={cols.length + 2} className="empty">Showing 500 of {rows.length}. Use search to narrow down.</td></tr>}
+            {!rows.length && <Empty colSpan={cols.length + 2} action={!q && !readOnly ? { label: `Add ${name.toLowerCase()}`, onClick: startNew } : undefined}>{q ? `No ${title.toLowerCase()} match “${q}”. Try fewer letters or another word.` : emptyText || `No ${title.toLowerCase()} yet.${readOnly ? '' : ` Add the first one and it shows here.`}`}</Empty>}
           </tbody>
+          {/* C1: a money total pinned at the bottom (totals: { [column label]: (rows) => text }) */}
+          {totals && rows.length > 0 && <tfoot><tr className="total-row"><td />{cols.map((c, ci) => <td key={c.label} className={c.num ? 'num' : ''}>{totals[c.label] ? totals[c.label](rows) : ci === 0 ? `Total · ${rows.length.toLocaleString()}` : ''}</td>)}<td /></tr></tfoot>}
         </table>
+        {more.footer}
+      </div>
+      {sideDetails && wide && editing && !editing._new && (
+        <DetailsPane wide title={'Edit ' + name.toLowerCase()} onClose={() => setEditing(null)}>
+          <RecordForm key={editing.id} fields={fields} initial={editing} onCancel={() => setEditing(null)}
+            onSave={({ _new, stock, ...rec }) => { onSave ? onSave(rec, _new, editing) : upsert(table, rec); setEditing(null); toast(`${name} saved`, 'success', { sync: true }); }} />
+        </DetailsPane>
+      )}
       </div>}
       {menu.node}
-      {editing && (
+      {editing && !(sideDetails && wide && !editing._new && shownView === 'table') && (
         <Modal title={(editing._new ? 'Add ' : 'Edit ') + name.toLowerCase()} onClose={() => setEditing(null)} wide>
           <RecordForm fields={fields} initial={editing} onCancel={() => setEditing(null)}
             onSave={({ _new, stock, ...rec }) => {
               onSave ? onSave(rec, _new, editing) : upsert(table, rec);
               setEditing(null);
-              toast(`${name} ${_new ? 'added' : 'saved'}`);
+              toast(`${name} ${_new ? 'added' : 'saved'}`, 'success', { sync: true });
             }} />
         </Modal>
       )}

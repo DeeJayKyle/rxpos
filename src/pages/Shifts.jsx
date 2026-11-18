@@ -106,7 +106,7 @@ export default function Shifts() {
                 <td className="actions">{s.closedAt && <button className="btn sm ghost" onClick={() => setReport(s)}><Printer size={14} />Report</button>}</td>
               </tr>
             ))}
-            {!list.length && <Empty colSpan={9}>No shifts yet</Empty>}
+            {!list.length && <Empty colSpan={9}>No shifts yet. Open a shift at the start of the day; closing it counts the cash against the sales.</Empty>}
           </tbody>
         </table>
       </div>

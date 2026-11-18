@@ -311,7 +311,7 @@ function ProfitReport({ sales }) {
           <thead><tr><th>{by === 'product' ? 'Medicine' : 'Category'}</th><th className="num">Qty</th><th className="num">Sales</th><th className="num">Cost</th><th className="num">Profit</th><th className="num">Margin</th></tr></thead>
           <tbody>
             {rows.slice(0, 300).map((r) => <tr key={r.key}><td>{r.name}</td><td className="num">{formatQty(r.qty)}</td><td className="num">{fmt(r.revenue)}</td><td className="num">{fmt(r.cost)}</td><td className={'num ' + (r.profit < 0 ? 'text-danger' : '')}>{fmt(r.profit)}</td><td className={'num ' + low(r.margin)}>{Math.round(r.margin)}%</td></tr>)}
-            {!rows.length && <Empty colSpan={6}>No sales in this period</Empty>}
+            {!rows.length && <Empty colSpan={6}>No sales in this period. Choose other dates, or sell at the POS and they show here.</Empty>}
           </tbody>
         </table>
       </div>

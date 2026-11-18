@@ -1,6 +1,9 @@
+import { Phone, MessageCircle } from 'lucide-react';
 import { CrudPage } from '../ui.jsx';
+import { HELP } from '../forms.jsx';
+import { whatsappLink } from '../cloud.js';
 import { CallMenu } from '../calls.jsx';
-import { useStore, customerBalance, supplierBalance } from '../store.jsx';
+import { useStore, customerBalance, supplierBalance, normalizePhone } from '../store.jsx';
 
 const initials = (n = '') => n.split(/\s+/).filter(Boolean).map((w) => w[0]).slice(0, 2).join('').toUpperCase() || '?';
 
@@ -9,17 +12,20 @@ export function Customers() {
   const spent = (id) => db.sales.filter((s) => s.customerId === id && s.status !== 'refunded').reduce((a, s) => a + s.total, 0);
   return (
     <CrudPage
-      title="Customers" table="customers" canDelete={false}
+      title="Customers" table="customers" canDelete={false} sideDetails
+      emptyText="No clients yet. Add a client to keep their phone, allergies and what they owe; the till finds them by name or phone."
+      // UI batch 3, C10: phones: swipe a client for Call or WhatsApp
+      swipeActions={(c) => (c.phone ? [{ label: 'Call', Icon: Phone, href: 'tel:' + String(c.phone).replace(/[^\d+]/g, '') }, { label: 'WhatsApp', Icon: MessageCircle, href: whatsappLink(normalizePhone(c.phone) || c.phone, '') }] : [])}
       fields={[
         { key: 'name', label: 'Full name / company', required: true },
-        { key: 'phone', label: 'Phone' },
+        { key: 'phone', label: 'Phone', type: 'phone' },
         { key: 'email', label: 'Email', type: 'email' },
         { key: 'address', label: 'Address' },
-        { key: 'dob', label: 'Date of birth', type: 'date' },
+        { key: 'dob', label: 'Date of birth', type: 'date', validate: (v) => (v && v > new Date().toISOString().slice(0, 10) ? 'A date of birth can’t be in the future' : '') },
         { key: 'type', label: 'Type', type: 'select', options: ['Retail', 'Wholesale', 'Clinic / Hospital', 'Insurance'] },
         { key: 'insurance', label: 'Insurance / HMO' },
         { key: 'insuranceNo', label: 'Policy number' },
-        { key: 'creditLimit', label: 'Credit limit', type: 'number' },
+        { key: 'creditLimit', label: 'Credit limit', type: 'money', help: HELP.credit },
         { key: 'allergies', label: 'Allergies', type: 'textarea', full: true },
         { key: 'notes', label: 'Notes', type: 'textarea', full: true },
       ]}
@@ -47,7 +53,7 @@ export function Suppliers() {
       fields={[
         { key: 'name', label: 'Company name', required: true },
         { key: 'contact', label: 'Contact person' },
-        { key: 'phone', label: 'Phone' },
+        { key: 'phone', label: 'Phone', type: 'phone' },
         { key: 'email', label: 'Email', type: 'email' },
         { key: 'tin', label: 'TIN / tax number' },
         { key: 'address', label: 'Address', type: 'textarea', full: true },

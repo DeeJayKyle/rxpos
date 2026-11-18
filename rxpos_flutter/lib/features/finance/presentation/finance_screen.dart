@@ -176,7 +176,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
         const FormFieldSpec('date', 'Date', kind: FieldKind.date, required: true),
         FormFieldSpec('categoryId', 'Category', kind: FieldKind.choice, required: true, options: cats),
         const FormFieldSpec('description', 'What for', required: true),
-        const FormFieldSpec('amount', 'Amount', kind: FieldKind.number, required: true),
+        const FormFieldSpec('amount', 'Amount', kind: FieldKind.money, required: true),
         FormFieldSpec('method', 'Payment method', kind: FieldKind.choice, options: [for (final m in payMethods) (m, m)]),
         FormFieldSpec('bankId', 'Paid from', kind: FieldKind.choice, options: bankOpts),
         const FormFieldSpec('payee', 'Paid to'),
@@ -246,7 +246,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
         FormFieldSpec('bankId', 'Bank account (deposit / withdrawal)', kind: FieldKind.choice, options: bankOpts),
         FormFieldSpec('fromId', 'From account (transfer)', kind: FieldKind.choice, options: bankOpts),
         FormFieldSpec('toId', 'To account (transfer)', kind: FieldKind.choice, options: bankOpts),
-        const FormFieldSpec('amount', 'Amount', kind: FieldKind.number, required: true),
+        const FormFieldSpec('amount', 'Amount', kind: FieldKind.money, required: true),
         const FormFieldSpec('ref', 'Slip / reference'),
         const FormFieldSpec('note', 'Note'),
       ]);
@@ -276,7 +276,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
     if (!mounted) return;
     final v = await editRecord(context, title: '$title (outstanding ${st.money(max)})', save: 'Record payment', initial: {'date': today(), 'amount': max > 0 ? max : 0, 'method': 'Cash', 'bankId': cashDrawer}, fields: [
       const FormFieldSpec('date', 'Date', kind: FieldKind.date, required: true),
-      const FormFieldSpec('amount', 'Amount', kind: FieldKind.number, required: true),
+      const FormFieldSpec('amount', 'Amount', kind: FieldKind.money, required: true),
       FormFieldSpec('method', 'Method', kind: FieldKind.choice, options: [for (final m in payMethods) (m, m)]),
       FormFieldSpec('bankId', kind == 'customer' || kind == 'insurer' ? 'Received into' : 'Paid from', kind: FieldKind.choice, options: bankOpts),
       const FormFieldSpec('note', 'Note'),
@@ -290,7 +290,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
       final v = await editRecord(context, title: l == null ? 'New loan' : 'Edit loan', delete: l == null ? null : 'loan', initial: l ?? {'date': today(), 'bankId': cashDrawer, 'interestRate': 0}, fields: [
         const FormFieldSpec('lender', 'Lender', required: true),
         const FormFieldSpec('date', 'Date received', kind: FieldKind.date, required: true),
-        const FormFieldSpec('amount', 'Amount', kind: FieldKind.number, required: true),
+        const FormFieldSpec('amount', 'Amount', kind: FieldKind.money, required: true),
         const FormFieldSpec('interestRate', 'Total interest (%)', kind: FieldKind.number),
         const FormFieldSpec('dueDate', 'Due date', kind: FieldKind.date),
         FormFieldSpec('bankId', 'Received into', kind: FieldKind.choice, options: bankOpts),

@@ -24,6 +24,7 @@ import { CASH } from '../finance.js';
 import { cartSubtotal, taxOf, round, formatQty } from '../money.js';
 import { searchProducts, searchKey } from '../search.js';
 import { Modal, SearchBox, ReceiptPdfButton, PageTip } from '../ui.jsx';
+import { MoneyInput } from '../forms.jsx';
 import { toast, ask, askText } from '../feedback.jsx';
 import { payRequest, payStatus, guessNetwork, cloudConfig, whatsappLink, sendSms } from '../cloud.js';
 import { Receipt, receiptText } from './Sales.jsx';
@@ -1067,7 +1068,7 @@ export default function POS({ mode = 'retail' }) {
         <div className="totals">
           {resizable && <div className="pay-handle" role="separator" aria-orientation="horizontal" aria-label="Drag to make the payment area taller or shorter (double-click: standard size)" title="Drag to size the payment area · double-click: standard size" onPointerDown={dragTo('h')} onDoubleClick={() => resetSize('h')} />}
           <div className="row between gap"><span className="muted">Subtotal <b className="num">{fmt(subtotal)}</b></span>
-            <span className="row gap"><span className="muted">Discount</span><input ref={discRef} aria-label="Discount" type="number" min="0" step="any" className="small-input" value={discount} onChange={(e) => setDiscount(e.target.value)} disabled={!can('pos.discount')} title={can('pos.discount') ? undefined : 'Giving discounts needs the "Give discounts" permission'} /></span></div>
+            <span className="row gap"><span className="muted">Discount</span><MoneyInput inputRef={discRef} aria-label="Discount" className="small-input" value={discount} onChange={(v) => setDiscount(v)} disabled={!can('pos.discount')} title={can('pos.discount') ? undefined : 'Giving discounts needs the "Give discounts" permission'} /></span></div>
           {layout !== 'classic' && disc > 0 && <div className="row between promo-row"><span className="muted">Promos / member discount</span><span className="num">− {fmt(disc)}</span></div>}
           {tax > 0 && <div className="row between"><span className="muted">Tax ({db.settings.taxRate}%)</span><span className="num">{fmt(tax)}</span></div>}
           <div className="row between grand"><span>Total{layout !== 'classic' && <small className="grand-sub">Net balance due</small>}</span><span className="num bump" key={total}>{fmt(total)}</span></div>
@@ -1090,7 +1091,7 @@ export default function POS({ mode = 'retail' }) {
         {(ptype === 'cash' || ptype === 'credit') && (
           <div className={'row between tender-row' + (tendered !== '' ? ' typing' : '')}>
             <label className="field grow"><span>{ptype === 'credit' ? 'Paid now (rest on credit)' : 'Amount tendered'}</span>
-              <input type="number" step="any" value={tendered} onChange={(e) => setTendered(e.target.value)} /></label>
+              <MoneyInput currency={db.settings.currency || ''} value={tendered} onChange={(v) => setTendered(v === '' ? '' : String(v))} /></label>
             {ptype === 'cash'
               ? <div className={'change' + (tendered !== '' ? ' live' : '') + (tendered !== '' && change < 0 ? ' short' : '')}>{tendered !== '' && change < 0 ? 'Still due' : 'Change'}<br /><strong className="num">{fmt(Math.abs(change) * (tendered === '' ? 0 : 1))}</strong></div>
               : <div className="change">On credit<br /><strong className="text-warn">{fmt(Math.max(due - (Number(tendered) || 0), 0))}</strong></div>}
@@ -1159,7 +1160,7 @@ export default function POS({ mode = 'retail' }) {
       )}
 
       {newClient && (
-        <Modal title={<><UserPlus size={18} /> New client</>} onClose={() => setNewClient(null)}>
+        <Modal title={<><UserPlus size={18} /> New client</>} onClose={() => setNewClient(null)} size="sm">
           <form className="stack" onSubmit={(e) => {
             e.preventDefault();
             const c = { id: uid(), name: newClient.name.trim(), phone: newClient.phone.trim(), whatsapp: newClient.phone.trim(), allergies: newClient.allergies.trim() };
@@ -1269,7 +1270,7 @@ export default function POS({ mode = 'retail' }) {
       )}
 
       {cdForm && (
-        <Modal title={<><ClipboardList size={18} /> Controlled drug: register details</>} onClose={() => setCdForm(null)}>
+        <Modal title={<><ClipboardList size={18} /> Controlled drug: register details</>} onClose={() => setCdForm(null)} size="sm">
           <form className="stack" onSubmit={(e) => {
             e.preventDefault();
             cdRef.current = { patient: cdForm.patient.trim(), idNo: cdForm.idNo.trim(), prescriber: cdForm.prescriber.trim(), prescriberReg: cdForm.prescriberReg.trim(), rxNo: cdForm.rxNo.trim() };

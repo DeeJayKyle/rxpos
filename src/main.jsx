@@ -17,6 +17,8 @@ import './styles/compact.css';
 import './styles/linecolors.css';
 import './styles/pagecolors.css';
 import './styles/kits.css';
+import './styles/tables.css';
+import './styles/forms.css';
 import './styles/duotone.css'; // last: every page in its theme's two colours
 import { applyTheme, startupTheme, savedAccent } from './themes.js';
 import { applyStyle, savedStyle } from './surface.js';

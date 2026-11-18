@@ -252,3 +252,14 @@ Every feature of the React app (`src/pages/*.jsx`, `src/*.jsx`), screen by scree
 - ✅ B6 Short money on figure cards (UGX 1.2M / 350K; `shortMoney` / `formatMoneyShort`), the full amount in the tooltip
 - ✅ B7 Setup checklist of a new pharmacy, ticked from the data; Hide on this device
 - ✅ B8 What's new once after an update (`src/whatsnew.js` = `core/config/whats_new.dart`)
+- ✅ C1 Sticky headings; money totals pinned under Sales, Purchases, Expenses and Inventory
+- ✅ C2 Columns: show / hide and order on Sales and Inventory (React also Purchases and every CrudPage list), per device
+- ✅ C3 Empty lists say what goes there, with the one button that fills them
+- ✅ C4 Ticked rows: a bar at the bottom, "N selected", actions by page (Sales: print / export; Inventory: labels / export / price)
+- ✅ C5 Inventory: retail price and reorder level edited in the table, Enter saves, Esc cancels, audited
+- ✅ C6 Arrow keys, Enter, Space, Home / End on the lists (`useListControls` / `ListControls`)
+- ✅ C7 Load more: 100 rows, more as the list scrolls ("Showing 100 of N"), no page buttons
+- ✅ C8 ≥ 1280 px: Sales, Clients, Inventory details beside the list (React pane; Flutter right-hand panel)
+- ✅ C9 Stock bar on inventory rows (2 × reorder = full)
+- ✅ C10 Phones: swipe a client for Call / WhatsApp, a sale for Print / Refund (the refund sheet and approval as before)
+- ✅ C11 Pull to refresh on phones: "Synced just now" (classic: Android app; Flutter: every page)

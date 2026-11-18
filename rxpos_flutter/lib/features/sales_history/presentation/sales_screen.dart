@@ -21,6 +21,8 @@ import '../../../core/rules/money.dart';
 import '../../../core/rules/search.dart';
 import '../../../core/rules/stock.dart';
 import '../../../core/presentation/list_controls.dart';
+import '../../../core/presentation/table_kit.dart';
+import 'dart:convert' show utf8;
 import '../../auth/application/session_controller.dart';
 import '../../auth/domain/session.dart';
 import '../../sales_pos/domain/cart.dart' show walkIn;
@@ -49,6 +51,8 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
   late String _from = widget.from, _to = widget.to;
   String _cashier = '', _payment = '', _customer = '', _status = '', _tab = 'sales';
   String? _branch;
+  // UI batch 3: 100 rows then more as the list scrolls (C7)
+  late final _more = LoadMore(() => setState(() {}));
 
   @override
   Widget build(BuildContext context) {
@@ -84,6 +88,17 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
     final valid = sales.where((s) => s.status != 'refunded').toList();
     final sum = valid.fold(0.0, (a, s) => a + s.total);
     final held = data == null ? const <Draft>[] : _draftsFor(data.drafts, session, all: false);
+    final cols = ColumnsChoice.of(ref, 'sales', [for (final c in _saleCols) c.title]);
+    final shownN = _more.shown(sales.length, [_q, _from, _to, branch, _cashier, _payment, _customer, _status].join('|'));
+    List<Map<String, Object?>> csvOf(Iterable<Sale> list) => [
+          for (final s in list)
+            {
+              'receipt': s.number, 'date': s.date, 'branch': branchName(s.branchId), 'type': s.type.isEmpty ? 'retail' : s.type, 'customer': s.customerName,
+              'cashier': s.cashier, 'payment': s.payment, 'momoRef': '${(s.raw['momo'] as Map?)?['txid'] ?? ''}', 'items': s.items.length, 'discount': s.discount,
+              'tax': s.tax, 'total': s.total, 'paid': s.paid, 'status': s.status,
+            },
+        ];
+    bool canRefund(Sale s) => s.status != 'refunded' && '${s.raw['imported'] ?? ''}'.isEmpty && session?.role != 'cashier' && _can('sales.refund');
 
     Widget pick(String label, String value, List<String> options, ValueChanged<String> set, {List<(String, String)>? labelled}) => SizedBox(
           width: 170,
@@ -165,8 +180,14 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
             return Wrap(spacing: 8, runSpacing: 8, children: filters);
           }(),
           const SizedBox(height: 8),
-          // a computer: the React app's table, each column heading its own colour (src/pages/Sales.jsx)
-          if (MediaQuery.sizeOf(context).width >= 1100 && sales.isNotEmpty) const ColourTableHead(columns: _saleCols, trailing: _saleActions),
+          // a computer: the React app's table, each column heading its own colour (src/pages/Sales.jsx); the columns
+          // chosen and ordered on this device (UI batch 3, C2)
+          if (MediaQuery.sizeOf(context).width >= 1100 && sales.isNotEmpty)
+            Row(children: [
+              Expanded(child: Padding(padding: const EdgeInsets.only(left: 40), child: ColourTableHead(columns: [for (final k in cols.shown) _saleCols[k]], trailing: _saleActions))),
+              const SizedBox(width: 6),
+              cols.button(context, ref),
+            ]),
           Expanded(
             child: sales.isEmpty
                 ? EmptyState(rows.isEmpty
@@ -174,8 +195,19 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
                     : 'No sales match. Try another receipt number, customer, filter or date.')
                 // the owner's request: keys, double-click and right-click on the sales too (list_controls.dart)
                 : ListControls(
-                    ids: [for (final s in sales) s.id],
-                    selectable: false,
+                    ids: [for (final s in sales.take(shownN)) s.id],
+                    // C4: ticked sales: print their receipts, export them
+                    bulk: (rs) => [
+                      ('Print receipts', Icons.print_outlined, (rs, done) async {
+                        for (final i in rs) {
+                          await Printing.layoutPdf(onLayout: (_) => receiptPdf(sales[i], st), name: sales[i].number);
+                        }
+                      }),
+                      ('Export', Icons.download_outlined, (rs, done) async {
+                        final f = await saveDownload('sales.csv', utf8.encode(toCsv(csvOf([for (final i in rs) sales[i]]))));
+                        if (context.mounted) say(context, 'Saved ${f.path}');
+                      }),
+                    ],
                     onOpen: (i) => _open(sales[i], st),
                     onEdit: (i) {
                       final s = sales[i];
@@ -191,16 +223,12 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
                         RowAction('Copy the receipt number', Icons.copy, () => Clipboard.setData(ClipboardData(text: s.number))),
                       ];
                     },
-                    builder: (context, row) => ListView.separated(
-                    itemCount: sales.length + 1,
+                    builder: (context, row) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                    Expanded(child: _more.listen(total: sales.length, child: ListView.separated(
+                    itemCount: shownN + 1,
                     separatorBuilder: (_, _) => const Divider(height: 1),
                     itemBuilder: hued((_, i) {
-                      if (i == sales.length) {
-                        return ListTile(
-                          title: Text('Total (excl. refunds) · ${valid.length} sales', style: const TextStyle(fontWeight: FontWeight.w700)),
-                          trailing: Text(st.money(sum), style: const TextStyle(fontWeight: FontWeight.w800)),
-                        );
-                      }
+                      if (i == shownN) return _more.footer(context, sales.length);
                       final s = sales[i];
                       final refunded = s.status == 'refunded';
                       final n = ((s.raw['edits'] as List?) ?? const []).length;
@@ -211,8 +239,8 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
                         final credit = s.payment.toLowerCase() == 'credit' || (s.paid < s.total && !refunded);
                         final when = DateTime.tryParse(s.date)?.toLocal();
                         String two(int n) => n.toString().padLeft(2, '0');
-                        return row(i).wrap(ColourTableRow(
-                          columns: _saleCols,
+                        return row(i).wrap(Row(children: [row(i).tickBox, Expanded(child: ColourTableRow(
+                          columns: [for (final k in cols.shown) _saleCols[k]],
                           onTap: () => _open(s, st),
                           trailingWidth: _saleActions,
                           trailing: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -233,7 +261,7 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
                               ],
                             ),
                           ]),
-                          cells: [
+                          cells: _pick(cols.shown, [
                             Wrap(spacing: 6, runSpacing: 2, crossAxisAlignment: WrapCrossAlignment.center, children: [
                               Text(s.number, style: TextStyle(fontWeight: FontWeight.w700, decoration: refunded ? TextDecoration.lineThrough : null)),
                               Text(s.type.isEmpty || s.type == 'retail' ? 'Retail' : 'Wholesale', style: th.textTheme.bodySmall),
@@ -250,10 +278,15 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
                               if (s.paid < s.total && !refunded) Text('${st.money(s.total - s.paid)} on credit', style: th.textTheme.bodySmall?.copyWith(color: violet)),
                             ]),
                             Text(s.cashier, maxLines: 2, overflow: TextOverflow.ellipsis),
-                          ],
-                        ));
+                          ]),
+                        ))]));
                       }
-                      return row(i).wrap(ListTile(
+                      // C10: a phone: swipe a sale for Print or Refund (the refund still asks why and, over the limit, a manager)
+                      return SwipeRow(key: ValueKey('swipe-${s.id}'), actions: [
+                        ('Print', Icons.print_outlined, () => Printing.layoutPdf(onLayout: (_) => receiptPdf(s, st), name: s.number)),
+                        if (canRefund(s)) ('Refund', Icons.undo, () => _refund(s, st, session)),
+                      ], child: row(i).wrap(ListTile(
+                        leading: row(i).tickBox,
                         title: Wrap(spacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
                           Text('${s.number} · ${s.customerName}', style: TextStyle(fontWeight: FontWeight.w700, decoration: refunded ? TextDecoration.lineThrough : null)),
                           if (refunded) _Badge('refunded', error: true),
@@ -285,9 +318,20 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
                           ),
                         ]),
                         onTap: () => _open(s, st),
-                      ));
+                      )));
                     }),
-                  ),
+                  ))),
+                    // C1: the total stays pinned under the list
+                    Material(
+                      key: const Key('sales-total'),
+                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                      child: ListTile(
+                        dense: true,
+                        title: Text('Total (excl. refunds) · ${valid.length} sales', style: const TextStyle(fontWeight: FontWeight.w700)),
+                        trailing: Text(st.money(sum), style: const TextStyle(fontWeight: FontWeight.w800)),
+                      ),
+                    ),
+                  ]),
                   ),
           ),
         ],
@@ -310,6 +354,7 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
     final changes = editHistory(s);
     await showAppDialog<void>(
       context: context,
+      side: true, // C8: beside the list on a wide screen
       builder: (c) => AlertDialog(
         title: Text('Receipt ${s.number}'),
         content: SizedBox(
@@ -350,29 +395,7 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
           if (s.status != 'refunded' && '${s.raw['imported'] ?? ''}'.isEmpty && session?.role != 'cashier' && _can('sales.refund'))
             TextButton.icon(
               style: TextButton.styleFrom(foregroundColor: Theme.of(c).colorScheme.error),
-              onPressed: () async {
-                // the refund sheet: what goes back to stock and to the customer, and why (refund_sheet.dart)
-                // safer refunds (2026-11-18): over the limit, someone who isn't a manager needs a manager's PIN or password
-                final limit = (st.raw['refundApproveAbove'] as num?)?.toDouble() ?? refundApproveAbove;
-                RefundApproval? approval;
-                if (limit > 0 && !isApproverRole(session?.role ?? '') && refundMoney(s).back > limit) {
-                  final users = ref.read(tableProvider('users')).value ?? const [];
-                  approval = RefundApproval(
-                    limit: limit,
-                    approvers: [for (final u in users) if (isApproverRole('${u['role']}') && u['id'] != session?.userId && u['disabled'] != true && u['active'] != false) ('${u['id']}', '${u['name']}')],
-                    verify: (id, secret) => ref.read(authRepositoryProvider).approve(session?.tenant ?? '', id, secret),
-                  );
-                }
-                final choice = await showRefundSheet(c, s, st, batches: ref.read(tableProvider('batches')).value ?? const [], closedDay: _locked(s), approval: approval);
-                if (choice == null) return;
-                try {
-                  await refundSale(ref.read(recordStoreProvider), s, user: session?.userName ?? '', settings: st, reason: choice.why, approvedBy: choice.approvedBy);
-                  if (c.mounted) Navigator.pop(c);
-                  if (mounted) say(context, '${s.number} refunded and items returned to stock');
-                } catch (e) {
-                  if (mounted) say(context, '$e', error: true);
-                }
-              },
+              onPressed: () => _refund(s, st, session, c),
               icon: const Icon(Icons.undo),
               label: const Text('Refund'),
             ),
@@ -385,6 +408,32 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
     );
   }
 
+  /// The refund sheet: what goes back to stock and to the customer, and why (refund_sheet.dart); safer refunds
+  /// (2026-11-18): over the limit, someone who isn't a manager needs a manager's PIN or password. From the receipt, or
+  /// from a sale swiped on a phone (UI batch 3, C10): the same checks either way.
+  Future<void> _refund(Sale s, PharmacySettings st, Session? session, [BuildContext? dialog]) async {
+    final c = dialog ?? context;
+    final limit = (st.raw['refundApproveAbove'] as num?)?.toDouble() ?? refundApproveAbove;
+    RefundApproval? approval;
+    if (limit > 0 && !isApproverRole(session?.role ?? '') && refundMoney(s).back > limit) {
+      final users = ref.read(tableProvider('users')).value ?? const [];
+      approval = RefundApproval(
+        limit: limit,
+        approvers: [for (final u in users) if (isApproverRole('${u['role']}') && u['id'] != session?.userId && u['disabled'] != true && u['active'] != false) ('${u['id']}', '${u['name']}')],
+        verify: (id, secret) => ref.read(authRepositoryProvider).approve(session?.tenant ?? '', id, secret),
+      );
+    }
+    final choice = await showRefundSheet(c, s, st, batches: ref.read(tableProvider('batches')).value ?? const [], closedDay: _locked(s), approval: approval);
+    if (choice == null) return;
+    try {
+      await refundSale(ref.read(recordStoreProvider), s, user: session?.userName ?? '', settings: st, reason: choice.why, approvedBy: choice.approvedBy);
+      if (dialog != null && dialog.mounted) Navigator.pop(dialog);
+      if (mounted) say(context, '${s.number} refunded and items returned to stock');
+    } catch (e) {
+      if (mounted) say(context, '$e', error: true);
+    }
+  }
+
   Future<void> _edit(Sale s, PharmacySettings st) async {
     final saved = await showAppDialog<bool>(context: context, builder: (_) => SaleEditor(sale: s));
     if (saved == true && mounted) say(context, s.raw['imported'] != null ? '${s.number} corrected (record only)' : '${s.number} updated; stock adjusted');
@@ -394,6 +443,9 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
 const _saleCols = [ColourCol('Receipt', flex: 3), ColourCol('Date', flex: 2), ColourCol('Customer', flex: 3), ColourCol('Phone', flex: 2), ColourCol('Payment', flex: 2),
   ColourCol('Status', flex: 2), ColourCol('Total', flex: 2, numeric: true), ColourCol('Cashier', flex: 2)];
 const _saleActions = 156.0;
+
+/// the cells of the columns shown, in their order (UI batch 3, C2)
+List<Widget> _pick(List<int> shown, List<Widget> all) => [for (final k in shown) all[k]];
 
 String _when(String iso) {
   final d = DateTime.tryParse(iso)?.toLocal();

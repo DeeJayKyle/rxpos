@@ -4,7 +4,7 @@
 // shelf. It writes each medicine's "Shelf / location", the same field in both apps.
 import { useMemo, useState } from 'react';
 import { Archive, CheckCheck, Download } from 'lucide-react';
-import { Modal, SearchBox, useProgressive } from '../ui.jsx';
+import { Modal, SearchBox, useProgressive, Empty } from '../ui.jsx';
 import { useStore, putMany, audit, isUntouchedBase, downloadFile, toCSV } from '../store.jsx';
 import { toast } from '../feedback.jsx';
 import { searchProducts } from '../search.js';
@@ -98,7 +98,7 @@ export default function Shelves() {
                 </tr>
               );
             })())}
-            {!rows.length && <tr><td colSpan={5} className="empty">No medicines here</td></tr>}
+            {!rows.length && <Empty colSpan={5}>No medicines on this shelf. Set a medicine's shelf in the Medicine List and it shows here.</Empty>}
           </tbody>
         </table>
       </div>

@@ -337,7 +337,7 @@ function RecentSales({ sales, branchId, fmt }) {
               <td className="num"><b>{fmt(s.total)}</b></td>
             </tr>
           ); })}
-          {!recent.length && <Empty colSpan={5}>No sales yet</Empty>}
+          {!recent.length && <Empty colSpan={5} action={{ label: 'New sale', to: '/pos' }}>No sales yet. Your latest sales show here as you sell.</Empty>}
         </tbody>
       </table>
     </div>
@@ -349,7 +349,7 @@ function EditWidgets({ layout, onClose }) {
   const move = (i, d) => { const o = [...layout.order]; [o[i], o[i + d]] = [o[i + d], o[i]]; saveDash({ order: o }); };
   const toggle = (id) => { const s = new Set(layout.shown); s.has(id) ? s.delete(id) : s.add(id); saveDash({ shown: [...s] }); };
   return (
-    <Modal title="Edit widgets" onClose={onClose}>
+    <Modal title="Edit widgets" onClose={onClose} size="sm">
       <p className="muted small">Choose the cards on your dashboard and their order. Only this device changes.</p>
       <ul className="widget-list">
         {layout.order.map((id, i) => { const w = WIDGETS.find((x) => x.id === id); return (

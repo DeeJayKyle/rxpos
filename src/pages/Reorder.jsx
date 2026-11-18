@@ -253,7 +253,7 @@ export default function Reorder() {
                   </td>
                 </tr>
               ))}
-              {!orders.length && <Empty colSpan={7}>No purchase orders yet. Create them from Reorder suggestions.</Empty>}
+              {!orders.length && <Empty colSpan={7} action={{ label: 'See what to reorder', onClick: () => setTab('reorder') }}>No purchase orders yet. Create them from the reorder suggestions and send them to your suppliers.</Empty>}
             </tbody>
           </table>
         </div>

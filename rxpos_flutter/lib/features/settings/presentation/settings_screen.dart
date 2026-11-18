@@ -202,9 +202,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         keyboardType: number ? const TextInputType.numberWithOptions(decimal: true) : null,
         minLines: lines,
         maxLines: lines,
-        decoration: InputDecoration(labelText: label, hintText: hint, border: const OutlineInputBorder(), isDense: true),
+        // D3: a (?) beside the tricky ones, with one sentence on what it does
+        decoration: InputDecoration(labelText: label, hintText: hint, border: const OutlineInputBorder(), isDense: true,
+            suffixIcon: _help[k] == null ? null : HelpTip(helpTexts[_help[k]]!, key: ValueKey('help-$k'))),
         onChanged: (v) => _set(k, v),
       );
+  static const _help = {'taxRate': 'tax', 'wholesaleMarkup': 'wholesale', 'retailMarkup': 'markup', 'expiryWarnDays': 'expiryWarn', 'refundApproveAbove': 'refundApprove'};
 
   Widget _choice<T>(String k, String label, T value, List<(T, String)> options) => DropdownButtonFormField<T>(
         key: ValueKey('set-$k-$_gen'),
@@ -218,7 +221,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget _check(String k, String label, {bool onByDefault = true}) => CheckboxListTile(
         contentPadding: EdgeInsets.zero,
         controlAffinity: ListTileControlAffinity.leading,
-        title: Text(label),
+        title: k == 'blindCashUp' ? Text.rich(TextSpan(children: [TextSpan(text: label), WidgetSpan(alignment: PlaceholderAlignment.middle, child: HelpTip(helpTexts['blind']!))])) : Text(label),
         value: onByDefault ? _s[k] != false : _s[k] == true,
         onChanged: (v) => _set(k, v == true),
       );

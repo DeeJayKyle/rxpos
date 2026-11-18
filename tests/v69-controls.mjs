@@ -80,7 +80,7 @@ await key('g', 'c'); await focusBody();
 await key('ArrowDown', 'ArrowDown', 'ArrowDown'); // (the walk-in customer is first)
 check('↓ highlights rows', await p.evaluate(() => /Bwire Paul/.test(document.querySelector('tr.row-active')?.innerText || '')), await p.evaluate(() => document.querySelector('tr.row-active')?.innerText));
 await key('Enter');
-check('Enter opens the highlighted row', /Edit customer/.test(await p.evaluate(() => document.querySelector('.modal')?.innerText || '')));
+check('Enter opens the highlighted row (beside the list on a wide screen, UI batch 3 C8)', /Edit customer/.test(await p.evaluate(() => document.querySelector('.modal, .details-pane')?.innerText || '')));
 await key('Escape'); await focusBody();
 await key('n');
 check('N adds a new one', /Add customer/.test(await p.evaluate(() => document.querySelector('.modal')?.innerText || '')));
@@ -96,7 +96,7 @@ check('Esc in the search clears it', (await rows()).length === 6, JSON.stringify
 // mouse: double-click, right-click
 const cell = async (name) => (await p.$$('.page table tbody tr')).find(async () => true) && p.evaluateHandle((n) => [...document.querySelectorAll('.page table tbody tr')].find((r) => r.innerText.includes(n))?.querySelector('td:nth-child(2)'), name);
 await (await cell('Kato Sam')).click({ count: 2 }); await wait(400);
-check('double-click opens a row', /Edit customer/.test(await p.evaluate(() => document.querySelector('.modal')?.innerText || '')) && (await p.evaluate(() => [...document.querySelectorAll('.modal input')].some((i) => i.value === 'Kato Sam'))), await p.evaluate(() => document.querySelector('.modal')?.innerText?.slice(0, 80)));
+check('double-click opens a row', /Edit customer/.test(await p.evaluate(() => document.querySelector('.modal, .details-pane')?.innerText || '')) && (await p.evaluate(() => [...document.querySelectorAll('.modal input, .details-pane input')].some((i) => i.value === 'Kato Sam'))), await p.evaluate(() => document.querySelector('.modal')?.innerText?.slice(0, 80)));
 await key('Escape');
 await (await cell('Nabirye Ruth')).click({ button: 'right' }); await wait(300);
 const menuText = await p.evaluate(() => document.querySelector('.ctx-menu')?.innerText || '');
@@ -113,7 +113,7 @@ await key('Escape');
 const tick = (n, shift) => p.evaluate((i, s) => { const r = document.querySelectorAll('.page table tbody tr')[i]; r.querySelector('td.tick input').dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: s })); }, n, !!shift);
 const at = (n) => p.evaluate((x) => [...document.querySelectorAll('.page table tbody tr')].findIndex((r) => r.querySelector('td:nth-child(2)')?.innerText.trim() === x), n);
 await tick(await at('Aerosol')); await wait(150); await tick(await at('Cream'), true); await wait(300);
-check('Shift+click ticks the rows in between (3 ticked)', /3 ticked/.test(await p.evaluate(() => document.querySelector('.bulk-bar')?.innerText || '')));
+check('Shift+click ticks the rows in between (3 ticked)', /3 selected/.test(await p.evaluate(() => document.querySelector('.bulk-bar')?.innerText || '')));
 await p.evaluate(() => [...document.querySelectorAll('.bulk-bar button')].find((x) => /Delete/.test(x.textContent))?.click()); await wait(300);
 check('…delete asks once for all of them', /Delete 3 formulations/.test(await p.evaluate(() => document.querySelector('.modal, .dialog')?.innerText || '')), await p.evaluate(() => document.querySelector('.modal, .dialog')?.innerText));
 await p.evaluate(() => [...document.querySelectorAll('.modal button, .dialog button')].find((x) => x.textContent.trim() === 'Delete')?.click()); await wait(800);
@@ -122,7 +122,7 @@ await until(p, () => /^Synced/.test(document.querySelector('.pill.clock .clock-s
 check('…in the cloud too', (await recs(tid, 'formulations')).length === 1, (await recs(tid, 'formulations')).map((x) => x.name).join(', '));
 const shownN = (await rows()).length;
 await focusBody(); await p.keyboard.down('Control'); await p.keyboard.press('a'); await p.keyboard.up('Control'); await wait(300);
-check('Ctrl+A ticks all shown', new RegExp(`^${shownN} ticked`).test(await p.evaluate(() => document.querySelector('.bulk-bar')?.innerText || '')));
+check('Ctrl+A ticks all shown', new RegExp(`^${shownN} selected`).test(await p.evaluate(() => document.querySelector('.bulk-bar')?.innerText || '')));
 await key('Escape');
 check('Esc unticks', !(await p.$('.bulk-bar')));
 
@@ -137,7 +137,7 @@ check('a column hidden stays hidden on this device', !(await p.evaluate(() => [.
 // Sales History: double-click and right-click
 await key('F6'); await wait(400);
 await p.evaluate(() => { const r = document.querySelector('.page table tbody tr'); r.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })); }); await wait(400);
-check('Sales: double-click opens the sale', /R-KEY1/.test(await p.evaluate(() => document.querySelector('.modal')?.innerText || '')));
+check('Sales: double-click opens the sale', /R-KEY1/.test(await p.evaluate(() => document.querySelector('.modal, .details-pane')?.innerText || '')));
 await key('Escape');
 await p.evaluate(() => { const r = document.querySelector('.page table tbody tr td:nth-child(2)'); const b = r.getBoundingClientRect(); r.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: b.x + 5, clientY: b.y + 5 })); }); await wait(300);
 check('Sales: right-click offers print, copy and refund', /Print the receipt/.test(await p.evaluate(() => document.querySelector('.ctx-menu')?.innerText || '')) && /Refund/.test(await p.evaluate(() => document.querySelector('.ctx-menu')?.innerText || '')));
