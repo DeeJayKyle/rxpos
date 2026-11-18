@@ -268,6 +268,7 @@ Future<void> editMedicine(BuildContext context, WidgetRef ref, Product? p) async
     FormFieldSpec('wholesale', 'Wholesale price (blank = cost +${formatQty(s.wholesaleMarkup)}%)', kind: FieldKind.number),
     const FormFieldSpec('reorder', 'Reorder level', kind: FieldKind.number),
     const FormFieldSpec('shelf', 'Shelf / location'),
+    const FormFieldSpec('image', 'Photo of the pack (optional)', kind: FieldKind.photo),
     if (p == null) ...const [
       FormFieldSpec('openingStock', 'Opening stock (quantity)', kind: FieldKind.number),
       FormFieldSpec('openingBatch', 'Opening stock batch no.'),

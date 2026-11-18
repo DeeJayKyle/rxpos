@@ -29,6 +29,23 @@ export function Modal({ title, onClose, children, wide }) {
   );
 }
 
+/** A photo made small enough to keep inside a record (longest side `max` px, WebP, or JPEG where WebP isn't made) */
+export function smallPhoto(src, max = 192) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const k = Math.min(1, max / Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(img.width * k)); c.height = Math.max(1, Math.round(img.height * k));
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      const webp = c.toDataURL('image/webp', 0.8);
+      resolve(webp.startsWith('data:image/webp') ? webp : c.toDataURL('image/jpeg', 0.8));
+    };
+    img.onerror = () => reject(new Error('not a photo'));
+    img.src = src;
+  });
+}
+
 export function Field({ f, value, onChange }) {
   // A unique id per field instance (1.10): f.key alone collides when two forms on a page share a key, which breaks
   // the label-to-input link and aria wiring.
@@ -45,6 +62,17 @@ export function Field({ f, value, onChange }) {
       </select>
     );
   else if (f.type === 'textarea') input = <textarea rows={3} {...common} />;
+  else if (f.type === 'photo') {
+    // a small photo kept with the record (192 px WebP, a few KB): the pack, so the right strength is picked
+    const pick = (file) => { if (!file) return; const r = new FileReader(); r.onload = () => smallPhoto(r.result).then(onChange).catch(() => toast('That file is not a photo', 'error')); r.readAsDataURL(file); };
+    input = (
+      <span className="photo-field">
+        {value ? <img src={value} alt="" /> : <span className="photo-empty" aria-hidden="true">No photo</span>}
+        <input id={id} type="file" accept="image/*" capture="environment" onChange={(e) => pick(e.target.files?.[0])} />
+        {value && <button type="button" className="link-btn small" onClick={() => onChange('')}>Remove</button>}
+      </span>
+    );
+  }
   else input = <input type={f.type || 'text'} step={f.type === 'number' ? 'any' : undefined} min={f.type === 'number' ? f.min ?? 0 : undefined} {...common} />;
   return (
     <label className={'field' + (f.type === 'checkbox' ? ' check' : '') + (f.full ? ' full' : '')} htmlFor={id}>

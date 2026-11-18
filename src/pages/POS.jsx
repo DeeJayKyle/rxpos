@@ -920,7 +920,8 @@ export default function POS({ mode = 'retail' }) {
             );
             return (
               <div key={p.id} className="product-wrap">
-              <button className={'product' + (p.stock <= 0 ? ' disabled' : '') + (i === active && !touch ? ' active' : '')} onClick={() => add(p)} onMouseEnter={() => setActive(i)}>
+              <button className={'product' + (p.stock <= 0 ? ' disabled' : '') + (p.image ? ' has-photo' : '') + (i === active && !touch ? ' active' : '')} onClick={() => add(p)} onMouseEnter={() => setActive(i)}>
+                {p.image && <img className="tile-photo" src={p.image} alt="" loading="lazy" />}
                 <strong>{p.name.replace(/\//g, '/\u200b')}</strong>
                 <small className="muted">{[p.generic, p.form].filter(Boolean).join(' · ')}</small>
                 <div className="row between">

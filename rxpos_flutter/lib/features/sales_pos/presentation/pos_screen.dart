@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'customer_display.dart';
+import '../../../core/network/files.dart' show dataUrlBytes;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:rxpos/core/platform.dart';
@@ -1134,6 +1135,15 @@ class _ProductPanel extends StatelessWidget {
                                         style: const TextStyle(fontWeight: FontWeight.w700),
                                       ),
                                     ),
+                                    // a photo of the pack, when the medicine has one (UI batch 3)
+                                    if ('${p.raw['image'] ?? ''}'.startsWith('data:image'))
+                                      Padding(
+                                        padding: const EdgeInsets.only(left: 6),
+                                        child: ClipRRect(
+                                          borderRadius: BorderRadius.circular(8),
+                                          child: Image.memory(dataUrlBytes('${p.raw['image']}'), key: Key('tile-photo-${p.id}'), width: 40, height: 40, fit: BoxFit.cover, gaplessPlayback: true),
+                                        ),
+                                      ),
                                     // step 24: a screen reader (and the tooltip) says what the star does; a full 48 px target
                                     IconButton(
                                       key: Key('star-${p.id}'),

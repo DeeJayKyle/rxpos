@@ -6,6 +6,7 @@ import '../entities/settings.dart';
 import '../theme/themes.dart';
 import '../rules/money.dart';
 import 'app_dialog.dart';
+import '../network/files.dart' show pickFiles, shrinkPhoto, dataUrlBytes;
 
 export 'app_dialog.dart';
 
@@ -298,7 +299,8 @@ class FormFieldSpec {
   final String? hint;
 }
 
-enum FieldKind { text, number, multiline, choice, flag, date }
+/// photo: a small picture kept with the record (192 px JPEG data URL, a few KB)
+enum FieldKind { text, number, multiline, choice, flag, date, photo }
 
 /// What [editRecord] returns when its Delete button is pressed (and the deletion confirmed).
 const deleteRecord = {'_delete': true};
@@ -308,7 +310,7 @@ const deleteRecord = {'_delete': true};
 Future<Map<String, Object?>?> editRecord(BuildContext context, {required String title, required List<FormFieldSpec> fields,
     Map<String, Object?> initial = const {}, String save = 'Save', String? delete}) {
   final values = Map<String, Object?>.of(initial);
-  final ctl = {for (final f in fields) if (f.kind != FieldKind.choice && f.kind != FieldKind.flag) f.key: TextEditingController(text: _show(initial[f.key]))};
+  final ctl = {for (final f in fields) if (f.kind != FieldKind.choice && f.kind != FieldKind.flag && f.kind != FieldKind.photo) f.key: TextEditingController(text: _show(initial[f.key]))};
   final formKey = GlobalKey<FormState>();
   return showAppDialog<Map<String, Object?>>(
     context: context,
@@ -326,6 +328,33 @@ Future<Map<String, Object?>?> editRecord(BuildContext context, {required String 
                     padding: const EdgeInsets.only(bottom: 8),
                     child: switch (f.kind) {
                       FieldKind.flag => SwitchListTile(contentPadding: EdgeInsets.zero, title: Text(f.label), value: values[f.key] == true, onChanged: (v) => set(() => values[f.key] = v)),
+                      FieldKind.photo => Row(key: Key('photo-${f.key}'), children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: SizedBox.square(
+                              dimension: 64,
+                              child: '${values[f.key] ?? ''}'.startsWith('data:image')
+                                  ? Image.memory(dataUrlBytes('${values[f.key]}'), fit: BoxFit.cover)
+                                  : ColoredBox(color: Theme.of(c).colorScheme.surfaceContainerHighest, child: const Center(child: Text('No photo', style: TextStyle(fontSize: 11)))),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(child: Text(f.label)),
+                          TextButton(
+                            onPressed: () async {
+                              final files = await pickFiles(extensions: const ['jpg', 'jpeg', 'png', 'webp'], multiple: false);
+                              if (files.isEmpty) return;
+                              try {
+                                final small = shrinkPhoto(files.first.bytes, max: 192, quality: 80);
+                                set(() => values[f.key] = small);
+                              } catch (_) {
+                                if (c.mounted) ScaffoldMessenger.maybeOf(c)?.showSnackBar(const SnackBar(content: Text('That file is not a photo')));
+                              }
+                            },
+                            child: const Text('Choose'),
+                          ),
+                          if ('${values[f.key] ?? ''}'.isNotEmpty) TextButton(onPressed: () => set(() => values[f.key] = ''), child: const Text('Remove')),
+                        ]),
                       FieldKind.choice => DropdownButtonFormField<String>(
                           initialValue: f.options.any((o) => o.$1 == values[f.key]) ? values[f.key] as String : null,
                           decoration: InputDecoration(labelText: f.label),

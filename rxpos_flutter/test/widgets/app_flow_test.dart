@@ -340,6 +340,20 @@ void main() {
     await done(tester);
   });
 
+  testWidgets('a medicine with a photo of its pack shows it on its till tile', (tester) async {
+    await tester.runAsync(signedIn);
+    await tester.runAsync(() async {
+      final store = RecordStore(db);
+      final p1 = (await store.rows('products')).firstWhere((x) => x['id'] == 'p1');
+      await store.update((d) => d.put('products', {...p1, 'image': 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='}));
+    });
+    await start(tester);
+    await toTill(tester);
+    expect(find.byKey(const Key('tile-photo-p1')), findsOneWidget);
+    expect(find.byKey(const Key('tile-photo-p2')), findsNothing, reason: 'no photo, no picture');
+    await done(tester);
+  });
+
   testWidgets('phone till: the bottom bar keeps the total and Charge in reach', (tester) async {
     await tester.runAsync(signedIn);
     await start(tester, size: const Size(400, 860));

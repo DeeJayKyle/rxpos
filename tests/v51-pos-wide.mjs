@@ -21,7 +21,7 @@ const day = new Date(Date.now() - 86400000).toISOString();
 const sale = (id, cust, total, paid) => ({ t: 'sales', id, rec: { number: id, date: day, type: 'retail', branchId: 'main', items: [], subtotal: total, discount: 0, tax: 0, total, paid, payment: 'Cash', customerId: cust, customerName: cust, cashier: 'Wren Admin', status: 'completed' } });
 await owner('/tenants/' + tid + '/records', { records: [
   { t: 'products', id: 'wt-a', rec: { name: 'Calmex 500mg Tabs', generic: 'Calmex', form: 'Tablets', unit: 'Tablet', barcode: '7010001', price: 500, cost: 300, reorder: 0 } },
-  { t: 'products', id: 'wt-b', rec: { name: 'Zinco Syrup 100ml', generic: 'Zinco', form: 'Syrups', unit: 'Bottle', barcode: '7010002', price: 6000, cost: 4000, reorder: 0 } },
+  { t: 'products', id: 'wt-b', rec: { name: 'Zinco Syrup 100ml', generic: 'Zinco', form: 'Syrups', unit: 'Bottle', barcode: '7010002', price: 6000, cost: 4000, reorder: 0, image: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==' } },
   { t: 'batches', id: 'wt-ba', rec: { productId: 'wt-a', batch: 'C1', expiry: '2029-01-31', cost: 300, received: day.slice(0, 10) } },
   { t: 'batches', id: 'wt-bb', rec: { productId: 'wt-b', batch: 'Z1', expiry: '2029-01-31', cost: 4000, received: day.slice(0, 10) } },
   { t: 'movements', id: 'wt-ma', rec: { productId: 'wt-a', batchId: 'wt-ba', qty: 100, type: 'Opening stock', date: day, branchId: 'main', user: 'Wren Admin' } },
@@ -120,6 +120,7 @@ await p.setViewport({ width: 1280, height: 800 }); await wait(500);
 check('at exactly 1280px: two sides, nothing spills sideways', await p.evaluate(() => getComputedStyle(document.querySelector('.pos')).gridTemplateColumns.split(' ').length === 2 && document.documentElement.scrollWidth <= 1280));
 await p.screenshot({ path: path.join(out, 'pos-1280.png') });
 
+check('a medicine with a photo of its pack shows it on its till tile', await p.evaluate(() => [...document.querySelectorAll('.product.has-photo')].some((x) => /Zinco/.test(x.innerText) && x.querySelector('img.tile-photo')?.src.startsWith('data:image'))));
 // the customer display: a second window that follows the till (items, total) and needs no sign-in
 const disp = await p.browserContext().newPage(); await disp.setViewport({ width: 1024, height: 720 });
 await disp.goto(p.url().replace(/#.*$/, '') + '#/display', { waitUntil: 'networkidle2' }); await wait(800);

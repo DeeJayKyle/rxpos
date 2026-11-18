@@ -94,6 +94,7 @@ export function MedicineList() {
     { key: 'wholesale', label: `Wholesale price (blank = cost +${s.wholesaleMarkup}%)`, type: 'number' },
     { key: 'reorder', label: 'Reorder level', type: 'number' },
     { key: 'shelf', label: 'Shelf / location' },
+    { key: 'image', label: 'Photo of the pack (optional)', type: 'photo' },
     { key: 'openingStock', label: 'Opening stock (quantity)', type: 'number', hidden: (r) => !r._new },
     { key: 'openingBatch', label: 'Opening stock batch no.', hidden: (r) => !r._new },
     { key: 'openingExpiry', label: 'Opening stock expiry', type: 'date', hidden: (r) => !r._new },

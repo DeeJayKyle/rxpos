@@ -234,3 +234,7 @@
 .cust-display .cd-thanks { font-size: 2.2em; font-weight: 800; color: var(--primary-text); }
 .cust-display .cd-idle { display: grid; place-items: center; color: var(--muted); }
 .cust-display .num { font-variant-numeric: tabular-nums; }
+/* A5: a photo of the pack on the till tile and in the medicine form */
+.product .tile-photo { width: 44px; height: 44px; object-fit: cover; border-radius: 8px; float: right; margin: 0 22px 4px 8px; background: var(--surface-2); }
+.photo-field { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.photo-field img, .photo-field .photo-empty { width: 64px; height: 64px; border-radius: 12px; object-fit: cover; background: var(--surface-2); display: grid; place-items: center; font-size: 11px; color: var(--muted); }
