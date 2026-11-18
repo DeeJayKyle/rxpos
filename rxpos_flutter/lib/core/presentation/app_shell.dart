@@ -153,8 +153,7 @@ class AppShell extends ConsumerWidget {
       EngageWatchers(location: location),
       const CallOverlay(),
     ]);
-    // F4 (UI batch 3): offline, a slim banner over the page; back online, "All sent" for 3 s
-    final body = Column(children: [const OfflineBanner(), Expanded(child: body0)]);
+    final body = body0;
     return CallbackShortcuts(
       bindings: {
         // the page keys, Ctrl+K, ?, back / forward and pin are the keyboard map's (keys_host.dart), changeable per device
@@ -774,50 +773,6 @@ class _Crumbs extends ConsumerWidget {
         onPressed: () => showKeysHelp(context, map, screens),
       ),
     ]));
-  }
-}
-
-/// F4 (as src/App.jsx OfflineBanner): "Offline · 3 changes waiting to send" while offline; "All sent" for 3 s once the
-/// internet is back and everything has gone
-class OfflineBanner extends ConsumerStatefulWidget {
-  const OfflineBanner({super.key});
-  @override
-  ConsumerState<OfflineBanner> createState() => _OfflineBannerState();
-}
-
-class _OfflineBannerState extends ConsumerState<OfflineBanner> {
-  bool _wasOff = false, _back = false;
-  @override
-  Widget build(BuildContext context) {
-    final st = ref.watch(syncControllerProvider);
-    final off = st.state == SyncState.offline;
-    if (off) {
-      _wasOff = true;
-      _back = false;
-    } else if (_wasOff) {
-      _wasOff = false;
-      _back = true;
-    }
-    if (_back && st.state == SyncState.synced && st.pending == 0) {
-      Future.delayed(const Duration(seconds: 3), () {
-        if (mounted) setState(() => _back = false);
-      });
-    }
-    if (!off && !_back) return const SizedBox.shrink();
-    final tones = context.tones;
-    final sent = !off && st.pending == 0;
-    return Material(
-      key: const Key('offline-banner'),
-      color: (off ? tones.warn : sent ? tones.ok : Theme.of(context).colorScheme.primary).withValues(alpha: .16),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 12),
-        child: Text(
-          off ? 'Offline · ${st.pending > 0 ? '${st.pending} change${st.pending == 1 ? '' : 's'} waiting to send' : 'your work is kept on this device'}' : sent ? 'All sent' : 'Back online · sending ${st.pending}…',
-          textAlign: TextAlign.center,
-          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: off ? tones.warn : sent ? tones.ok : null),
-        ),
-      ),
-    );
   }
 }
 

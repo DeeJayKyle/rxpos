@@ -111,13 +111,52 @@ class _ClockPillState extends ConsumerState<ClockPill> {
   }
 }
 
-/// A strip under the top bar while the internet is down: the work is saved here and goes up later.
-class OfflineBanner extends ConsumerWidget {
+/// A strip under the top bar while the internet is down: the work is saved here and goes up later. Back online, it
+/// says "All sent" for 3 s once everything has gone (UI batch 3, F4, as src/App.jsx OfflineBanner).
+class OfflineBanner extends ConsumerStatefulWidget {
   const OfflineBanner({super.key});
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<OfflineBanner> createState() => _OfflineBannerState();
+}
+
+class _OfflineBannerState extends ConsumerState<OfflineBanner> {
+  bool _wasOff = false, _back = false;
+  Timer? _hide;
+  @override
+  void dispose() {
+    _hide?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final s = ref.watch(syncControllerProvider);
-    if (s.state != SyncState.offline) return const SizedBox.shrink();
+    if (s.state == SyncState.offline) {
+      _wasOff = true;
+      _back = false;
+    } else if (_wasOff) {
+      _wasOff = false;
+      _back = true;
+    }
+    if (s.state != SyncState.offline) {
+      if (!_back) return const SizedBox.shrink();
+      final sent = s.state == SyncState.synced && s.pending == 0;
+      if (sent && _hide == null) {
+        _hide = Timer(const Duration(seconds: 3), () {
+          _hide = null;
+          if (mounted) setState(() => _back = false);
+        });
+      }
+      return Material(
+        key: const Key('all-sent-banner'),
+        color: (sent ? context.tones.ok : context.tones.info).withValues(alpha: .14),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+          child: Text(sent ? 'All sent' : 'Back online · sending ${s.pending} change${s.pending == 1 ? '' : 's'}…',
+              textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.w700, color: sent ? context.tones.ok : null)),
+        ),
+      );
+    }
     return Material(
       key: const Key('offline-banner'),
       color: context.tones.warnSoft,
