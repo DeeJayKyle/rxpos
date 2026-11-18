@@ -260,7 +260,33 @@ export function CountUp({ value, ms = 700 }) {
   return str.replace(m[0], m[0].includes(',') ? txt : txt.replace(/,/g, ''));
 }
 
-export function Stat({ label, value, sub, tone, icon: Icon, delta, to, state, goodDown }) {
+/** A page's shape while it loads (2026-11-18: skeletons, not a spinner or a blank page) */
+export function PageSkeleton({ label = 'Loading' }) {
+  return (
+    <div className="page page-skeleton" role="status" aria-label={label}>
+      <div className="sk sk-title" /><div className="sk sk-sub" />
+      <div className="sk-row">{[0, 1, 2, 3].map((i) => <div key={i} className="sk sk-card" />)}</div>
+      <div className="sk sk-table">{Array.from({ length: 7 }, (_, i) => <div key={i} className="sk-line" />)}</div>
+    </div>
+  );
+}
+
+/** A tiny 7-day trend line for a figure card (2026-11-18); the last point is today */
+export function Spark({ data }) {
+  if (!data?.length || data.every((v) => !v)) return null;
+  const max = Math.max(...data), min = Math.min(...data), span = max - min || 1, w = 84, h = 26;
+  const pts = data.map((v, i) => [(i / (data.length - 1)) * w, h - 3 - ((v - min) / span) * (h - 6)]);
+  const line = pts.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
+  return (
+    <svg className="spark" viewBox={`0 0 ${w} ${h}`} width={w} height={h} aria-hidden="true">
+      <polygon points={`0,${h} ${line} ${w},${h}`} />
+      <polyline points={line} />
+      <circle cx={pts.at(-1)[0]} cy={pts.at(-1)[1]} r="2.6" />
+    </svg>
+  );
+}
+
+export function Stat({ label, value, sub, tone, icon: Icon, delta, to, state, goodDown, spark }) {
   const navigate = useNavigate();
   const go = to ? () => navigate(to, state ? { state } : undefined) : undefined;
   return (
@@ -268,6 +294,7 @@ export function Stat({ label, value, sub, tone, icon: Icon, delta, to, state, go
       {Icon && <span className="stat-icon"><Icon size={20} /></span>}
       <small>{label}</small>
       <strong><CountUp value={value} /></strong>
+      {spark && <Spark data={spark} />}
       <span className="muted small">
         {delta != null && isFinite(delta) && (
           <span className={'delta ' + (delta >= 0 ? 'up' : 'down') + (goodDown ? ' inverse' : '')}>{delta >= 0 ? '▲ +' : '▼ −'}{Math.abs(Math.round(delta))}% </span>
@@ -451,6 +478,8 @@ export function PageTip({ id, title, children }) {
   const key = 'rxpos-tip:' + id;
   const [gone, setGone] = useState(() => { try { return !!localStorage.getItem(key); } catch { return true; } });
   const [open, setOpen] = useState(false);
+  // shown once only (2026-11-18): the first visit marks it seen, so it is gone on the next visit even without "Got it"
+  useEffect(() => { if (!gone) try { localStorage.setItem(key, '1'); } catch { /* storage blocked */ } }, [gone, key]);
   if (gone) return null;
   const close = () => { try { localStorage.setItem(key, '1'); } catch { /* storage blocked */ } setGone(true); };
   if (!open) return <button type="button" className="tip-chip" onClick={() => setOpen(true)} aria-expanded="false"><Lightbulb size={14} />Tip: {title}</button>;

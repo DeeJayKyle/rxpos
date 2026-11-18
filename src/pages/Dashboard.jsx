@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Banknote, Wallet, CalendarClock, PackageX, Pill, Coins, Users, ShoppingCart, ReceiptText, Share2, Megaphone, Store, TrendingUp, ShieldAlert, PauseCircle, SearchCheck, Search, CalendarDays, SlidersHorizontal, ArrowUp, ArrowDown, ArrowRight, Sparkles, X } from 'lucide-react';
+import { Banknote, Wallet, CalendarClock, PackageX, Pill, Coins, Users, ShoppingCart, ReceiptText, Share2, Megaphone, Store, TrendingUp, ShieldAlert, PauseCircle, SearchCheck, CalendarDays, SlidersHorizontal, ArrowUp, ArrowDown, ArrowRight, Sparkles, X } from 'lucide-react';
 import { draftsFor, seesAllDrafts, isOld, ageText } from '../drafts.js';
 import { useStore, today, dayOf, isLowStock, expiryCounts, stockValue, MAIN_BRANCH, put, audit, now } from '../store.jsx';
 import { Stat, Empty, Modal } from '../ui.jsx';
@@ -10,7 +10,6 @@ import { useInsights, shareText } from '../engage.jsx';
 import { whatsappLink } from '../cloud.js';
 import { WeatherCard } from './Storage.jsx';
 import BentoDashboard, { saleStatus } from '../components/BentoDashboard.jsx';
-import { NotificationBell } from '../engage.jsx';
 import { deviceSettings, setDevice, onDevice } from '../device.js';
 import { PERIODS, PERIOD_WORDS, VS_WORDS, periodFigures, topMedicines, stockHealth } from '../dashboard.js';
 import { shortText } from '../kits.js';
@@ -87,6 +86,11 @@ export default function Dashboard() {
   // eslint-disable-next-line react-hooks/exhaustive-deps -- day: today's figures start again at midnight
   }, [db.sales, db.expenses, db.purchases, branchId, day]);
   const fig = useMemo(() => periodFigures(m.byDay, period), [m.byDay, period, day]); // eslint-disable-line react-hooks/exhaustive-deps
+  // the last 7 days of each figure, for the cards' small trend lines (2026-11-18)
+  const spark = useMemo(() => {
+    const days = Array.from({ length: 7 }, (_, i) => { const d = new Date(); d.setDate(d.getDate() - (6 - i)); return m.byDay[dayOf(d.toISOString())] || {}; });
+    return Object.fromEntries(['total', 'gp', 'exp', 'n'].map((k) => [k, days.map((x) => x[k] || 0)]));
+  }, [m.byDay, day]); // eslint-disable-line react-hooks/exhaustive-deps
   // the top medicines of the period (today's are few: this month's then)
   const topRange = period === 'today' ? { from: today().slice(0, 8) + '01', to: today(), words: 'this month' } : { from: fig.range.from, to: fig.range.to, words: PERIOD_WORDS[period] };
   const top = useMemo(() => topMedicines(m.valid, topRange.from, topRange.to, topBy, 5), [m.valid, topRange.from, topRange.to, topBy]);
@@ -116,10 +120,10 @@ export default function Dashboard() {
     figures: () => (
       <div className="stats kpis">
         {/* sales open Reports → Sales lines for the period (every medicine sold); staff without it get the sales list */}
-        <Stat {...salesTo} label={isToday ? "Today's sales" : 'Sales'} value={fmt(c.total)} sub={`${c.n} sale${c.n === 1 ? '' : 's'} · ${VS_WORDS[period]}`} delta={dl.total} tone="teal" icon={Banknote} />
-        {can('reports') && <Stat to="/reports" state={{ tab: 'profit', ...rangeState }} label={isToday ? 'Gross profit today' : 'Gross profit'} value={fmt(c.gp)} sub={`after cost of goods · ${VS_WORDS[period]}`} delta={dl.gp} tone="violet" icon={TrendingUp} />}
-        {(can('finance') || can('reports')) && <Stat to="/expenses" label={isToday ? "Today's expenses" : 'Expenses'} value={fmt(c.exp)} sub={db.branches.length > 1 ? `Whole pharmacy (expenses have no branch) · sales here − expenses: ${fmt(c.total - c.exp)}` : `Sales − expenses: ${fmt(c.total - c.exp)}`} delta={dl.exp} goodDown tone="orange" icon={Wallet} />}
-        <Stat to="/sales" state={rangeState} label="Transactions" value={c.n.toLocaleString()} sub={`receipts ${isToday ? 'today' : PERIOD_WORDS[period]} · ${VS_WORDS[period]}`} delta={dl.n} tone="blue" icon={ReceiptText} />
+        <Stat {...salesTo} label={isToday ? "Today's sales" : 'Sales'} value={fmt(c.total)} sub={`${c.n} sale${c.n === 1 ? '' : 's'} · ${VS_WORDS[period]}`} delta={dl.total} spark={spark.total} tone="teal" icon={Banknote} />
+        {can('reports') && <Stat to="/reports" state={{ tab: 'profit', ...rangeState }} label={isToday ? 'Gross profit today' : 'Gross profit'} value={fmt(c.gp)} sub={`after cost of goods · ${VS_WORDS[period]}`} delta={dl.gp} spark={spark.gp} tone="violet" icon={TrendingUp} />}
+        {(can('finance') || can('reports')) && <Stat to="/expenses" label={isToday ? "Today's expenses" : 'Expenses'} value={fmt(c.exp)} sub={db.branches.length > 1 ? `Whole pharmacy (expenses have no branch) · sales here − expenses: ${fmt(c.total - c.exp)}` : `Sales − expenses: ${fmt(c.total - c.exp)}`} delta={dl.exp} spark={spark.exp} goodDown tone="orange" icon={Wallet} />}
+        <Stat to="/sales" state={rangeState} label="Transactions" value={c.n.toLocaleString()} sub={`receipts ${isToday ? 'today' : PERIOD_WORDS[period]} · ${VS_WORDS[period]}`} delta={dl.n} spark={spark.n} tone="blue" icon={ReceiptText} />
       </div>
     ),
     chart: () => {
@@ -230,8 +234,6 @@ export default function Dashboard() {
           <div className="sub">Here&apos;s {db.branches.length > 1 ? (branch?.name || 'this branch') : 'your pharmacy'} {isToday ? 'today' : PERIOD_WORDS[period]} <span className="muted" title="Sales are completed receipts at this branch (refunds left out), including tax. Gross profit is sales less tax and the cost recorded on each line.">· sales incl. tax, refunds left out</span></div>
         </div>
         <div className="dash-tools">
-          <button type="button" className="dash-search" onClick={() => window.dispatchEvent(new Event('rxpos:search'))}><Search size={16} /><span>Search medicines, sales…</span></button>
-          <span className="dash-bell"><NotificationBell /></span>
           <Link className="date-pill" to="/calendar" title="Open the calendar"><CalendarDays size={16} />{new Date().toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}</Link>
           <Link className="btn primary" to="/pos"><ShoppingCart size={18} />New sale</Link>
         </div>
@@ -323,7 +325,7 @@ function RecentSales({ sales, branchId, fmt }) {
               <td><span className="avatar-sm" aria-hidden="true">{who.split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase()}</span>{who}</td>
               <td className="muted">{s.number}</td>
               <td className="muted">{ago(s.date)}</td>
-              <td><span className={'status-pill ' + cls}>{st}</span></td>
+              <td>{cls !== 'paid' && <span className={'status-pill ' + cls}>{st}</span>}</td>
               <td className="num"><b>{fmt(s.total)}</b></td>
             </tr>
           ); })}

@@ -51,7 +51,7 @@ const tiles = () => p.evaluate(() => Object.fromEntries([...document.querySelect
 const widgets = () => p.evaluate(() => [...document.querySelectorAll('.dash-cell')].map((c) => c.dataset.widget));
 
 check('clean layout: figures, the bento row, chart, health, top medicines, latest sales', JSON.stringify(await widgets()) === JSON.stringify(['figures', 'bento', 'chart', 'health', 'top', 'recent']), JSON.stringify(await widgets()));
-check('header: search, bell and today\'s date', await p.evaluate(() => !!document.querySelector('.dash-search') && !!document.querySelector('.dash-bell .icon-btn') && /\d{4}/.test(document.querySelector('.date-pill')?.innerText || '')));
+check('header: no repeated search or bell (they are in the top bar), today\'s date', await p.evaluate(() => !document.querySelector('.dash-search') && !document.querySelector('.dash-bell') && /\d{4}/.test(document.querySelector('.date-pill')?.innerText || '')));
 let t = await tiles();
 check('Today: today\'s sales 2,800 with ↑ against yesterday', /2,800/.test(t["Today's sales"]) && await p.evaluate(() => /up/.test(document.querySelector('.kpis .stat .delta')?.className || '')), JSON.stringify(t));
 await p.evaluate(() => [...document.querySelectorAll('.period-chips button')].find((x) => x.textContent === '1M').click()); await wait(900);
@@ -61,7 +61,7 @@ check('…the top medicines follow the period', /last 30 days/.test(await p.eval
 await p.reload({ waitUntil: 'networkidle2' }); await wait(2000);
 check('the period chip is kept on this device', await p.evaluate(() => document.querySelector('.period-chips [aria-checked=true]')?.textContent === '1M'));
 check('stock health: a gauge, an insight and what drives it (expiring Cipro)', await p.evaluate(() => /\d+%/.test(document.querySelector('.gauge-num')?.textContent || '') && /Expiring/.test(document.querySelector('.driven-by')?.innerText || '') && !!document.querySelector('.health-insight strong')));
-check('latest sales: a Paid and an Owing pill', await p.evaluate(() => { const t = document.querySelector('.recent-table').innerText; return /Paid/.test(t) && /Owing/.test(t); }));
+check('latest sales: an Owing pill', await p.evaluate(() => /Owing/.test(document.querySelector('.recent-table').innerText)));
 // chart tooltip and export
 const hit = await p.$$('.trend-hit');
 await hit[hit.length - 2].hover(); await wait(400);
@@ -100,6 +100,31 @@ check('…Pinned folds', await p.evaluate(() => document.querySelector('.nav-qui
 await p.screenshot({ path: path.join(out, 'sidebar-pinned-folded.png'), clip: { x: 0, y: 0, width: 260, height: 600 } });
 await p.evaluate(() => [...document.querySelectorAll('.nav-add')].find((x) => /Receive stock/.test(x.title))?.click()); await wait(800);
 check('the + of Medicine Inventory opens Add Stock', await p.evaluate(() => location.hash.includes('add-stock')));
+await p.evaluate(() => { location.hash = '#/'; }); await wait(1200);
+// UI batch 2 (2026-11-18)
+check('figure cards carry a 7-day trend line', await p.evaluate(() => document.querySelectorAll('.kpis .stat .spark polyline').length >= 3), await p.evaluate(() => document.querySelectorAll('.kpis .stat .spark').length));
+check('latest sales: only unusual states carry a pill (Owing, not Paid)', await p.evaluate(() => { const t = [...document.querySelectorAll('.recent-table .status-pill')].map((x) => x.innerText.trim()); return t.includes('Owing') && !t.includes('Paid'); }), await p.evaluate(() => [...document.querySelectorAll('.recent-table .status-pill')].map((x) => x.innerText).join()));
+await p.evaluate(() => document.querySelector('button[aria-label=Theme]').click()); await wait(300);
+const before = await p.evaluate(() => document.documentElement.dataset.palette);
+const other = await p.evaluate(() => [...document.querySelectorAll('.theme-item')].findIndex((x) => !x.classList.contains('on')));
+await (await p.$$('.theme-item'))[other].hover(); await wait(200);
+const previewed = await p.evaluate(() => document.documentElement.dataset.palette);
+check('theme menu: hovering a theme previews it', previewed !== before, previewed);
+await p.mouse.move(700, 900); await wait(200);
+check('...leaving the menu puts the chosen theme back', await p.evaluate((x) => document.documentElement.dataset.palette === x, before));
+await p.mouse.click(700, 980); await wait(300);
+check('...and closing keeps it', await p.evaluate((x) => document.documentElement.dataset.palette === x, before));
+const compact = () => p.evaluate(() => [...document.querySelectorAll('.toggle-row, label')].find((x) => /Compact tables/.test(x.innerText))?.querySelector('input')?.click());
+await p.evaluate(() => { location.hash = '#/device'; }); await wait(1200);
+await compact(); await wait(300);
+check('This device: Compact tables', await p.evaluate(() => document.documentElement.dataset.density === 'compact'));
+await p.evaluate(() => { location.hash = '#/sales'; }); await wait(1500);
+const rowH = await p.evaluate(() => Math.round(document.querySelector('table tbody tr')?.getBoundingClientRect().height || 0));
+check('...a sales row is about 36 px', rowH > 0 && rowH <= 44, rowH);
+check('Sales History: no "completed" pill on ordinary sales', await p.evaluate(() => ![...document.querySelectorAll('td[data-label=Status] .badge')].some((x) => /completed/i.test(x.innerText))));
+await p.evaluate(() => { location.hash = '#/device'; }); await wait(1000);
+await compact(); await wait(300);
+check('...and off again', await p.evaluate(() => !document.documentElement.dataset.density));
 await p.evaluate(() => { location.hash = '#/'; }); await wait(1200);
 // themes from the references
 for (const [id, side] of [['royal-purple', 'dark'], ['electric-blue', 'dark'], ['sage', 'dark'], ['charcoal-lime', 'light'], ['amber-gold', 'dark']]) {

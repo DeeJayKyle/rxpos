@@ -78,7 +78,7 @@ export default function BentoDashboard({ byDay, db, branchId, fmt, can, counts }
             {recent.map((s) => { const [st, cls] = saleStatus(s); return (
               <li key={s.id}>
                 <span className="grow"><strong>{s.customerName || 'Walk-in'}</strong><small className="muted">{s.number} · {new Date(s.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</small></span>
-                <span className={'status-pill ' + cls}>{st}</span>
+                {cls !== 'paid' && <span className={'status-pill ' + cls}>{st}</span>}
                 <b className="num">{fmt(s.total)}</b>
               </li>
             ); })}

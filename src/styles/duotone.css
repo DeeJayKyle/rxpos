@@ -129,3 +129,71 @@
   :root[data-palette] body { background-image: none; }
   :root[data-palette] .kit-icon { --kit: var(--primary) !important; }
 }
+
+/* UI batch 2 (the owner's choice, 18 Nov 2026) */
+@media screen {
+  /* three corner sizes: 8 for chips and pills, 12 for buttons and fields, 18 for cards; one spacing scale 4/8/12/16/24 */
+  :root[data-palette] { --r-chip: 8px; --r-ctl: 12px; --r-card: 18px; --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 24px; --radius: var(--r-card); --radius-sm: var(--r-ctl); --radius-xs: var(--r-chip); --radius-bento: var(--r-card); }
+  :root[data-palette] :is(.chip, .pill, .badge, .status-pill, .clinical-pill, .fefo-pill, .stock-tag, .tag, kbd) { border-radius: var(--r-chip); }
+  :root[data-palette] :is(.btn, input:not([type=checkbox]):not([type=radio]):not([type=range]), select, textarea, .icon-btn, .date-pill, .search-box) { border-radius: var(--r-ctl); }
+  :root[data-palette] :is(.card, .stat, .modal, .bento-hero, .product, .dv-card) { border-radius: var(--r-card); }
+  :root[data-palette] :is(.stats, .grid-2, .grid-3, .bento-grid, .device-top) { gap: var(--s-4); }
+
+  /* dark themes: a lighter card step and a hairline, so cards stand off the page */
+  :root[data-theme=dark][data-palette] :is(.card, .stat, .product, .modal) { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06), 0 0 0 1px var(--border); }
+
+  /* compact tables, chosen on This device: 36 px rows */
+  :root[data-density=compact] :is(th, td) { padding-top: 6px; padding-bottom: 6px; }
+  :root[data-density=compact] tbody tr { height: 36px; }
+  :root[data-density=compact] td > br { display: none; }
+  :root[data-density=compact] td > br + small { margin-left: 6px; }
+  :root[data-density=compact] td :is(.btn.sm, .icon-btn) { min-height: 26px; height: auto; padding-top: 2px; padding-bottom: 2px; }
+
+  /* the one real red (an exception to the two colours): only what blocks a sale */
+  :root[data-palette] .fefo-expired, :root[data-palette] .cart-line .badge.safety-expired, :root[data-palette] .product .stock-tag.out { color: var(--block); background: var(--block-soft); border-color: var(--block); }
+  :root[data-palette] .product .stock-tag.out { padding: 1px 7px; border: 1px solid; font-weight: 700; }
+
+  /* equal medicine tiles: names on up to two lines, the stock pill beside the expiry pill, one height per row */
+  :root[data-palette] .product-grid { grid-auto-rows: 1fr; }
+  :root[data-palette] .product-grid .product { display: flex; flex-direction: column; align-items: stretch; }
+  :root[data-palette] .product-grid .product > strong { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 2.4em; }
+  :root[data-palette] .product-grid .product .tags { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-top: auto; }
+  :root[data-palette] .product-grid .product .stock-tag { display: inline-flex; align-items: center; padding: 1px 7px; background: var(--surface-2); }
+
+  /* the till: a bigger total, and the total and change grow while cash is typed */
+  :root[data-palette] .pos-cart .grand .num { font-size: clamp(24px, 2.4vw, 30px); transition: font-size .15s; }
+  :root[data-palette] .pos-cart:has(.tender-row.typing) .grand .num { font-size: clamp(28px, 2.8vw, 34px); }
+  :root[data-palette] .change strong { transition: font-size .15s; }
+  :root[data-palette] .change.live strong { font-size: 26px; color: var(--ok); }
+  :root[data-palette] .change.short strong { color: var(--warn); }
+
+  /* the sale is done: a clear banner with the receipt number and the two next steps */
+  :root[data-palette] .sale-done-banner { display: flex; align-items: center; gap: var(--s-3); padding: var(--s-3) var(--s-4); margin: 0 0 var(--s-4); border-radius: var(--r-ctl); background: var(--ok-soft); color: var(--text); border: 1px solid color-mix(in srgb, var(--ok) 40%, transparent); }
+  :root[data-palette] .sale-done-banner > svg { color: var(--ok); flex: none; }
+  :root[data-palette] .sale-done-banner .btn { flex: none; }
+
+  /* keyboard focus: a clear ring in the theme's colour */
+  :root[data-palette] :focus-visible { outline: 2.5px solid var(--primary); outline-offset: 2px; }
+  :root[data-palette] :is(input, select, textarea):focus-visible { outline-offset: 0; box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 22%, transparent); }
+
+  /* small 7-day trend lines in the figure cards */
+  :root[data-palette] .stat .spark { display: block; margin: 2px 0 2px; overflow: visible; }
+  :root[data-palette] .stat .spark polyline { fill: none; stroke: var(--primary); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  :root[data-palette] .stat .spark polygon { fill: color-mix(in srgb, var(--primary) 14%, transparent); }
+  :root[data-palette] .stat .spark circle { fill: var(--primary); }
+
+  /* sales: only unusual states carry a pill */
+  :root[data-palette] .status-plain { text-transform: capitalize; }
+}
+
+/* loading: the page's shape, not a spinner */
+.page-skeleton, .loading-skeleton { display: grid; gap: 16px; align-content: start; }
+.loading-skeleton { min-height: 100vh; padding: 24px; background: var(--bg); }
+.sk { border-radius: 12px; background: linear-gradient(90deg, var(--surface) 25%, var(--surface-2) 50%, var(--surface) 75%); background-size: 200% 100%; animation: shimmer 1.2s infinite; }
+.sk-title { height: 30px; width: min(320px, 60%); }
+.sk-sub { height: 14px; width: min(460px, 80%); }
+.sk-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; }
+.sk-card { height: 112px; border-radius: 18px; }
+.sk-table { min-height: 300px; border-radius: 18px; padding: 16px; display: grid; gap: 12px; align-content: start; }
+.sk-line { height: 14px; border-radius: 8px; background: color-mix(in srgb, var(--text) 7%, transparent); }
+@media (prefers-reduced-motion: reduce) { .sk { animation: none; } }

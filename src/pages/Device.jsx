@@ -1,6 +1,6 @@
 // "This device": what each person can set for the phone, tablet or PC in front of them. Nothing here is shared.
 import { useEffect, useRef, useState } from 'react';
-import { CalendarDays, PanelLeft, PanelTop } from 'lucide-react';
+import { CalendarDays, PanelLeft, PanelTop, Rows3 } from 'lucide-react';
 import { DATE_FORMATS } from '../dateformat.js';
 import { RefreshCw, Download, MonitorSmartphone, Smartphone, Monitor, ZoomIn, RotateCw, Volume2, Upload, Play, BellRing, CheckCircle2, AlertTriangle, PanelBottom } from 'lucide-react';
 import { LABEL, onUpdate, updateNow } from '../update.js';
@@ -73,6 +73,7 @@ export default function Device() {
           <ToggleRow icon={Volume2} label="Sounds" desc="Alert and message sounds on this device" checked={sound} onChange={(v) => { setSounds(v); setSound(v); }} />
           {canSwitchView && <ToggleRow icon={MousePointerClick} label="Double-tap to zoom" desc="On an empty spot, and again to zoom out" checked={d.doubleTap} onChange={(v) => setDevice({ doubleTap: v })} />}
           <ToggleRow icon={BadgeCheck} label="Counts on the app icon" desc="Alerts and messages waiting" checked={d.badges !== false} onChange={(v) => setDevice({ badges: v })} />
+          <ToggleRow icon={Rows3} label="Compact tables" desc="Shorter table rows: more lines on the screen" checked={!!d.compactTables} onChange={(v) => setDevice({ compactTables: v })} />
         </SettingsGroup>
       </div>
       <div className="grid-2">

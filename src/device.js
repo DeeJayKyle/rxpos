@@ -32,6 +32,8 @@ export function applyDevice() {
   const meta = document.querySelector('meta[name=viewport]');
   if (meta) meta.setAttribute('content', VIEWPORT[s.view] || VIEWPORT.auto);
   document.documentElement.dataset.view = s.view;
+  // compact tables (2026-11-18): 36 px rows on every table, for long lists on a PC
+  if (s.compactTables) document.documentElement.dataset.density = 'compact'; else delete document.documentElement.dataset.density;
   setZoom(s.zoom);
   if (isAndroid) lockRotation(s.rotation);
   window.rxposShell?.setTray?.(s.tray !== false);
