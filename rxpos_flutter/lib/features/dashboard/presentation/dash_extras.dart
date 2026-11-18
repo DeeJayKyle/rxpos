@@ -49,8 +49,9 @@ class BusyHoursCard extends StatelessWidget {
         padding: const EdgeInsets.all(14),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
-            Expanded(child: Text('Busy hours', style: t.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700))),
-            Text('sales $words', style: t.textTheme.bodySmall),
+            Text('Busy hours', style: t.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
+            const SizedBox(width: 10),
+            Expanded(child: Text('sales $words', textAlign: TextAlign.right, maxLines: 1, overflow: TextOverflow.ellipsis, style: t.textTheme.bodySmall)),
           ]),
           const SizedBox(height: 10),
           if (g.max == 0)
@@ -127,7 +128,7 @@ class SetupChecklistCard extends ConsumerWidget {
           Row(children: [
             Icon(Icons.checklist, size: 18, color: t.colorScheme.primary),
             const SizedBox(width: 8),
-            Expanded(child: Text.rich(TextSpan(children: [
+            Expanded(child: Text.rich(maxLines: 2, overflow: TextOverflow.ellipsis, TextSpan(children: [
               TextSpan(text: 'Set up your pharmacy  ', style: t.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
               TextSpan(text: '$done of ${steps.length} done', style: t.textTheme.bodySmall),
             ]))),
@@ -139,8 +140,8 @@ class SetupChecklistCard extends ConsumerWidget {
           ),
           Wrap(spacing: 16, runSpacing: 4, children: [
             for (final (id, label, ok, to) in steps)
-              SizedBox(
-                width: 260,
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 260),
                 child: InkWell(
                   key: Key('setup-$id'),
                   onTap: ok ? null : () => context.go(to),

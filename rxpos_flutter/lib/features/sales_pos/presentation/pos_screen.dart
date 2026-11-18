@@ -1364,10 +1364,18 @@ class _SaleBar extends ConsumerWidget {
             children: [
               const Icon(Icons.shopping_cart_outlined),
               const SizedBox(width: 10),
-              Expanded(child: Text(s.lines.isEmpty ? 'No items yet' : '${s.lines.length} item${s.lines.length == 1 ? '' : 's'}')),
-              Text(
-                formatMoney(t.total, currency: data.settings.currency, decimals: data.settings.decimalPlaces),
-                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
+              Expanded(child: Text(s.lines.isEmpty ? 'No items yet' : '${s.lines.length} item${s.lines.length == 1 ? '' : 's'}', maxLines: 1, overflow: TextOverflow.ellipsis)),
+              // large text on a small phone: the total shrinks to fit rather than pushing Charge off the bar
+              Flexible(
+                flex: 2,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    formatMoney(t.total, currency: data.settings.currency, decimals: data.settings.decimalPlaces),
+                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
+                  ),
+                ),
               ),
               const SizedBox(width: 10),
               FilledButton(key: const Key('bar-charge'), onPressed: s.lines.isEmpty ? null : onCharge, child: const Text('Charge')),
