@@ -4,8 +4,6 @@
 //   HelpTip / helpTexts          D3: a small (?) with a one-sentence explanation
 //   SyncMark                     D4: a dot while a save goes to the cloud, a tick once the cloud has it
 //   dialog sizes                 D9: sm 420 · md 640 · lg 960
-import 'dart:convert' show base64Decode;
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,7 +11,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../features/sync_status/application/sync_controller.dart';
 import '../theme/themes.dart' show TonesOfContext;
 import '../network/cloud_api.dart' show cloudApiProvider;
-import '../data/pharmacy_providers.dart' show brandingProvider, settingsProvider;
 
 const dialogSm = 420.0, dialogMd = 640.0, dialogLg = 960.0;
 
@@ -152,31 +149,5 @@ class MedThumb extends ConsumerWidget {
       borderRadius: BorderRadius.circular(8),
       child: Image.network(ref.read(cloudApiProvider).fileUrl(photo), width: size, height: size, fit: BoxFit.cover, excludeFromSemantics: true, errorBuilder: (_, _, _) => initial),
     );
-  }
-}
-
-/// E6 (as src/logo.jsx pharmacyLogo): the owner's logo (branding), else the one the pharmacy uploaded in Settings
-/// (a file in its cloud, settings 'logo'); '' when none
-final pharmacyLogoProvider = Provider.autoDispose<String>((ref) {
-  final owner = '${ref.watch(brandingProvider)?['logo'] ?? ''}';
-  if (owner.isNotEmpty) return owner;
-  final path = '${ref.watch(settingsProvider).value?.raw['logo'] ?? ''}';
-  return path.isEmpty ? '' : ref.read(cloudApiProvider).fileUrl(path);
-});
-
-/// E6: the pharmacy's logo, or nothing when it has none
-class PharmacyLogo extends ConsumerWidget {
-  const PharmacyLogo({super.key, this.size = 34, this.fallback});
-  final double size;
-  final Widget? fallback;
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final url = ref.watch(pharmacyLogoProvider);
-    final none = fallback ?? const SizedBox.shrink();
-    if (url.isEmpty) return none;
-    final img = url.startsWith('data:image')
-        ? Image.memory(base64Decode(url.split(',').last), width: size, height: size, fit: BoxFit.contain, errorBuilder: (_, _, _) => none)
-        : Image.network(url, width: size, height: size, fit: BoxFit.contain, errorBuilder: (_, _, _) => none);
-    return ClipRRect(key: const Key('pharmacy-logo'), borderRadius: BorderRadius.circular(8), child: img);
   }
 }
