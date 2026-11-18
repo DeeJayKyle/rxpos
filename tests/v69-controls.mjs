@@ -169,7 +169,8 @@ check('…the old key no longer does', (await hash()) === '#/customers');
 // the F-key legend under the till (src/components/FKeyBar.jsx)
 await focusBody(); await key('F2'); await wait(800);
 const bar = await p.evaluate(() => document.querySelector('.fkey-bar')?.innerText || '');
-check('the till shows its function keys', /F9\s*Charge/.test(bar) && /F7\s*Inventory/.test(bar) && /F10\s*Proforma/.test(bar), bar.replace(/\n/g, ' '));
+check('the till shows its function keys (F8 and F9 are on the search box and Charge, not repeated)', /F7\s*Inventory/.test(bar) && /F10\s*Proforma/.test(bar) && !/F9\s*Charge/.test(bar), bar.replace(/\n/g, ' '));
+check('…the bar fits without scrolling', await p.evaluate(() => { const b = document.querySelector('.fkey-bar'); return !!b && b.scrollWidth <= b.clientWidth + 1; }));
 check('…and the till plus the bar fit the window (no page scroll)', await p.evaluate(() => document.scrollingElement.scrollHeight <= innerHeight + 1), await p.evaluate(() => [document.scrollingElement.scrollHeight, innerHeight].join('/')));
 await p.evaluate(() => [...document.querySelectorAll('.fkey')].find((x) => /Inventory/.test(x.innerText))?.click()); await wait(600);
 check('…a key in the bar can be clicked', (await hash()) === '#/inventory', await hash());

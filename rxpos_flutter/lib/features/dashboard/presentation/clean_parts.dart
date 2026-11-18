@@ -72,7 +72,7 @@ class RiseIn extends StatelessWidget {
 /// "▲ 12% vs yesterday" for a figure's line
 String deltaText(double now, double before, String vs) {
   final d = deltaPercent(now, before);
-  return d == null ? '' : ' · ${d >= 0 ? '▲' : '▼'} ${d.abs().toStringAsFixed(0)}% $vs';
+  return d == null ? '' : ' · ${d >= 0 ? '▲ +' : '▼ −'}${d.abs().toStringAsFixed(0)}% $vs';
 }
 
 /// Stock health: a gauge that fills, the biggest problem in words, what drives it and the stock figures

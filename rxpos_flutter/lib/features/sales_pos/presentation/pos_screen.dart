@@ -1106,8 +1106,8 @@ class _ProductPanel extends StatelessWidget {
                                           decimals: s.decimalPlaces,
                                         ),
                                         maxLines: 1,
-                                        // the brand colour made readable on this card (tertiary), on every look
-                                        style: TextStyle(color: t.colorScheme.tertiary, fontWeight: FontWeight.w800),
+                                        // in the text colour: solid colour is kept for Charge (one strong button per area, 18 Nov 2026)
+                                        style: TextStyle(color: t.colorScheme.onSurface, fontWeight: FontWeight.w800),
                                       ),
                                     if (p.controlled) const _Tag('CD · NDA', danger: true) else if (p.rx) const _Tag('Rx only'),
                                     Text(
@@ -1222,7 +1222,7 @@ class _KitTile extends StatelessWidget {
             const Spacer(),
             Wrap(alignment: WrapAlignment.spaceBetween, crossAxisAlignment: WrapCrossAlignment.center, spacing: 4, children: [
               Text('${formatMoney(wholesale ? v.wholesale : v.price, currency: settings.currency, decimals: settings.decimalPlaces)} / kit',
-                  style: TextStyle(color: t.colorScheme.tertiary, fontWeight: FontWeight.w800)),
+                  style: TextStyle(color: t.colorScheme.onSurface, fontWeight: FontWeight.w800)),
               if (v.controlled) const _Tag('CD · NDA', danger: true) else if (v.rx) const _Tag('Rx only'),
               Text(v.canMake == null ? 'Services only' : out ? "Can't be made" : 'Can make ${formatQty(v.stock)}',
                   style: t.textTheme.bodySmall?.copyWith(color: out ? t.colorScheme.error : v.stock <= 3 ? context.tones.warn : null)),

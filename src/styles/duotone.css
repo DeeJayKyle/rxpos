@@ -39,7 +39,7 @@
   /* the till: quick actions, accents and customer tags */
   :root[data-palette] :is(.q-void, :root[data-palette] .q-hold, :root[data-palette] .q-disc, :root[data-palette] .q-receipt, :root[data-palette] .q-proforma, :root[data-palette] .q-keys) { --q: var(--primary-text); color: var(--primary-text); }
   :root[data-palette] .q-void { --q: var(--warn); color: var(--warn); }
-  :root[data-palette] .lay-std .pos-side :is(.accent-teal, :root[data-palette] .accent-blue), :root[data-palette] .lay-adv .pos-side .accent-teal { border-color: var(--primary); }
+  :root[data-palette] .lay-std .pos-side :is(.accent-teal, .accent-blue), :root[data-palette] .lay-adv .pos-side .accent-teal { border-color: var(--primary); }
   :root[data-palette] .lay-std .pos-side .accent-teal h3 svg { color: var(--primary-text); }
   :root[data-palette] .lay-adv .pos-pay .pay-row .btn.primary { background: var(--accent-grad); color: var(--on-accent); }
   :root[data-palette] .cust-loyal { background: var(--primary-soft); color: var(--primary-ink); }
@@ -81,6 +81,7 @@
 
   :root[data-palette][data-sidebar='light'] .bento-hero { background: radial-gradient(120% 90% at 100% 0%, color-mix(in srgb, var(--sidebar) 30%, transparent), transparent 60%), linear-gradient(160deg, var(--primary), color-mix(in srgb, var(--primary) 70%, #000)); }
   :root[data-palette] .bento-hero :is(.bento-delta, .bento-delta.up, .bento-delta.down) { background: rgba(255, 255, 255, .2); color: #fff; }
+  :root[data-palette] .bento-hero .bento-delta.down { background: #fff; color: var(--sidebar); font-weight: 750; }
   /* the menu (the owner's review, 17 Nov 2026, after Charcoal Lime): a deep menu, its pages as light soft-glass buttons,
      the open page a solid pill in the theme's bright colour with the button text colour on it */
   :root[data-palette] .sidebar nav a { margin: 0 4px 4px; border-radius: 12px; background: rgba(255, 255, 255, .07); border: 1px solid rgba(255, 255, 255, .10);
@@ -100,6 +101,29 @@
 
   /* the grey line under an open tab's name (Settings): nearer the text colour on the tinted tab, so it stays readable */
   :root[data-palette] .tab.active .settings-text small { color: color-mix(in srgb, var(--text) 75%, var(--muted)); }
+
+  /* every menu label on one line (the owner's review, 18 Nov 2026): a long one ends in … and shows in full on hover */
+  :root[data-palette] .sidebar nav a > .grow { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  :root[data-palette] .sidebar nav a kbd { flex: none; }
+
+  /* the daily sales bars: the theme's colour at full strength, today a deeper shade (they were a pale tint) */
+  :root[data-palette] .bento-bar i { background: var(--primary); opacity: .85; }
+  :root[data-palette] .bento-bar:hover i { opacity: 1; }
+  :root[data-palette] .bento-bar.now i { background: var(--c1-deep); opacity: 1; }
+
+  /* rises and falls (the owner's review, 18 Nov 2026): ▲ + / ▼ − in words, and a fall drawn in the strong shade with
+     an edge, so it never looks like a rise under the two colours */
+  :root[data-palette] .delta.down:not(.inverse), :root[data-palette] .delta.up.inverse { color: var(--danger); background: var(--danger-soft); box-shadow: inset 0 0 0 1.5px var(--danger); font-weight: 750; }
+
+  /* one strong button per area at the till (the owner's review, 18 Nov 2026): solid colour only for Charge, the open
+     payment method and New sale; the Retail / Wholesale switch and the filter chips are soft, the client box and prices
+     plain, so the eye goes to Charge */
+  :root[data-palette] .mode-switch a.on { background: var(--primary-soft); color: var(--primary-ink); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--primary) 45%, transparent); }
+  :root[data-palette] .mode-switch a.on kbd { color: inherit; border-color: currentColor; }
+  :root[data-palette] .chips-row .chip.active { background: var(--primary-soft); color: var(--primary-ink); border-color: color-mix(in srgb, var(--primary) 45%, transparent); box-shadow: none; }
+  :root[data-palette] .lay-std .pos-side .pos-client, :root[data-palette] .lay-std .pos-client.accent-teal { border-color: var(--border); border-top: 1px solid var(--border); }
+  :root[data-palette] .product .price { color: var(--text); }
+  :root[data-palette] .pos-cart .pay-row .btn.primary:not(:disabled) { box-shadow: 0 10px 22px -10px color-mix(in srgb, var(--primary) 80%, transparent); font-size: 17px; }
 
   /* the page and its cards: colour 2 under, white cards over */
   :root[data-palette] body { background-image: none; }

@@ -18,10 +18,9 @@ export function fkeyItems({ can = () => true, features = {}, wholesale = false }
     page('go:/add-stock', 'Add stock', can('stock.receive')),
     page('go:/sales', 'Sales', can('sales.view')),
     page('go:/inventory', 'Inventory', can('inventory.view')),
-    { key: 'F8', label: 'Search', run: 'search' },
-    { key: 'F9', label: 'Charge', run: 'charge' },
+    // F8 Search, F9 Charge and ? are left out (? is the keyboard button in the top bar): the search box and the Charge button show their keys (the owner's review,
+    // 18 Nov 2026: the bar ran out of room at 1440 px)
     { key: 'F10', label: 'Proforma', run: 'proforma' },
-    { key: '?', label: 'All keys', run: 'help' },
   ].filter((x) => x && x.key);
 }
 

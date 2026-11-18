@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { useEffect, useMemo, useRef, useState, useId, startTransition } from 'react';
 import { useLocation } from 'react-router-dom';
-import { X, Search, Download, Plus, Pencil, Trash2, Inbox, Lightbulb, TrendingUp, TrendingDown, FileDown, Loader2, Copy, CheckSquare, Columns3, Ellipsis, ChevronLeft } from 'lucide-react';
+import { X, Search, Download, Plus, Pencil, Trash2, Inbox, Lightbulb, FileDown, Loader2, Copy, CheckSquare, Columns3, Ellipsis, ChevronLeft } from 'lucide-react';
 import { ViewSwitch, BoardView, GalleryView, savedView, saveView } from './components/DataViews.jsx';
 import { pagePdf, receiptPdf } from './pdf.js';
 import { useStore, uid, downloadFile, toCSV, del as del1 } from './store.jsx';
@@ -270,7 +270,7 @@ export function Stat({ label, value, sub, tone, icon: Icon, delta, to, state, go
       <strong><CountUp value={value} /></strong>
       <span className="muted small">
         {delta != null && isFinite(delta) && (
-          <span className={'delta ' + (delta >= 0 ? 'up' : 'down') + (goodDown ? ' inverse' : '')}>{delta >= 0 ? <TrendingUp size={13} /> : <TrendingDown size={13} />}{Math.abs(Math.round(delta))}% </span>
+          <span className={'delta ' + (delta >= 0 ? 'up' : 'down') + (goodDown ? ' inverse' : '')}>{delta >= 0 ? '▲ +' : '▼ −'}{Math.abs(Math.round(delta))}% </span>
         )}
         {sub}
       </span>
