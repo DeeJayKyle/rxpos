@@ -233,3 +233,6 @@
 .trend-key.profit { border-top-style: double; }
 .bar-fill.s2, .viz-swatch.s2 { background-image: repeating-linear-gradient(45deg, rgba(255, 255, 255, .55) 0 2px, transparent 2px 6px); }
 .bar-fill.s3, .viz-swatch.s3 { background-image: radial-gradient(rgba(255, 255, 255, .6) 1px, transparent 1.5px); background-size: 5px 5px; }
+/* the busy-hours table scrolls inside its card on a phone: its screen-reader labels (absolutely placed) are held by
+   the scroll area too, or those past the edge widened the whole page (ui-fit: the bottom bar ran off the screen) */
+.busy-scroll { position: relative; }
