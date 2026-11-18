@@ -69,6 +69,17 @@ check('a wrong PIN is rejected with tries remaining', await P.evaluate(() => /Wr
 await setVal(P, 'input[aria-label="Device PIN"]', '2468'); await clickSignIn(P);
 check('0.2 the correct PIN signs in offline', await until(P, () => !!document.querySelector('.sidebar'), 12000));
 await P.screenshot({ path: out + '/02-pin-signin.png' });
+
+// ----- UI batch 3: E7 the PIN pad, E9 this device's recent staff -----
+await logout(P); await wait(500);
+const chips = await P.evaluate(() => [...document.querySelectorAll('.recent-staff .staff-avatar')].map((x) => x.innerText.trim()));
+check('E9 the people who signed in here show as avatars (only them)', chips.length === 1 && /Al/.test(chips[0]), JSON.stringify(chips));
+await P.evaluate(() => document.querySelector('.recent-staff .staff-avatar').click()); await wait(500);
+check('E9 a tap on one opens their PIN (this device has it)', await P.evaluate(() => !!document.querySelector('input[aria-label="Device PIN"]') && !!document.querySelector('.pin-pad')));
+for (const k of '2468') await P.evaluate((d) => [...document.querySelectorAll('.pin-pad .pin-key')].find((x) => x.textContent === d).click(), k);
+check('E7 the PIN pad types the digits', await P.evaluate(() => document.querySelector('input[aria-label="Device PIN"]').value === '2468'));
+await clickSignIn(P);
+check('E7 …and signs in', await until(P, () => !!document.querySelector('.sidebar'), 12000));
 await P.setOfflineMode(false);
 
 await b.close();

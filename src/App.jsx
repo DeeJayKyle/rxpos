@@ -794,6 +794,8 @@ function Gate() {
   const { user } = useStore();
   const location = useLocation();
   // The owner console is web-only and works without signing in to a pharmacy (it has its own owner key)
+  // tests/v85-look.mjs: the error page on purpose (only with this tab's test flag set)
+  if (location.pathname === '/__crash' && sessionStorage.getItem('rxpos-test-crash') === '1') throw new Error('A test crash');
   if (location.pathname === '/owner' && isWeb) return <Suspense fallback={<PageSkeleton />}><OwnerConsole /></Suspense>;
   return user ? <Shell /> : <Auth />;
 }

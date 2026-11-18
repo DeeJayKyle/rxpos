@@ -1,5 +1,6 @@
 // Settings (src/pages/Settings.jsx): Pharmacy (this device's overrides of the Owner's details), Payment methods,
 // Receipts & stock, Messages & recovery, Alerts & storage, Online & Mobile Money, Data & backup.
+import '../../../core/presentation/pharmacy_logo.dart' show LogoField;
 import 'package:rxpos/core/theme/themes.dart' show TonesOfContext;
 import 'dart:convert';
 
@@ -237,6 +238,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       _card('Pharmacy details · this device', Icons.store_outlined, save: false, [
         _muted('Owner sets the shared defaults for every device. Edits here override them only on this device until you reset them.'),
         _muted('${over.length} local override(s) · Owner pharmacy name: ${shared['name'] ?? 'My Pharmacy'}'),
+        const SizedBox(height: 10),
+        const LogoField(), // E6
         const SizedBox(height: 10),
         _grid([
           for (final (k, label, number, _) in pharmacyFieldSpecs.where((f) => f.$1 != 'priceRound' && f.$1 != 'nonCashBankId')) _field(k, label, number: number),

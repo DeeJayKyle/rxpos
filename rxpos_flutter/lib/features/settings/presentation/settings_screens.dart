@@ -324,7 +324,7 @@ class AuditScreen extends ConsumerStatefulWidget {
 }
 
 class _AuditScreenState extends ConsumerState<AuditScreen> {
-  String _q = '', _who = '', _action = '', _from = '';
+  String _q = '', _who = '', _action = '', _from = '', _to = '';
   @override
   Widget build(BuildContext context) {
     final rows = ref.watch(tableProvider('audit')).value;
@@ -336,7 +336,7 @@ class _AuditScreenState extends ConsumerState<AuditScreen> {
     String branch(Object? id) => '${branches.where((b) => b['id'] == ('${id ?? ''}'.isEmpty ? 'main' : id)).firstOrNull?['name'] ?? ''}';
     final q = _q.trim().toLowerCase();
     final list = rows
-        .where((a) => (_who.isEmpty || a['user'] == _who) && (_action.isEmpty || a['action'] == _action) && (_from.isEmpty || dayOf('${a['date']}').compareTo(_from) >= 0) &&
+        .where((a) => (_who.isEmpty || a['user'] == _who) && (_action.isEmpty || a['action'] == _action) && (_from.isEmpty || dayOf('${a['date']}').compareTo(_from) >= 0) && (_to.isEmpty || dayOf('${a['date']}').compareTo(_to) <= 0) &&
             (q.isEmpty || '${a['user']} ${a['action']} ${a['details']}'.toLowerCase().contains(q)))
         .toList()
       ..sort((a, b) => '${b['date']}'.compareTo('${a['date']}'));
@@ -354,7 +354,7 @@ class _AuditScreenState extends ConsumerState<AuditScreen> {
           items: [const DropdownMenuItem(value: '', child: Text('All actions')), for (final a in actions) DropdownMenuItem(value: a, child: Text(a))],
           onChanged: (v) => setState(() => _action = v ?? ''),
         ),
-        DateBox(label: 'From date', value: _from, onChanged: (v) => setState(() => _from = v)),
+        DateRangeBox(from: _from, to: _to, onChanged: (f, t) => setState(() { _from = f; _to = t; })), // E5
         SearchField(onChanged: (v) => setState(() => _q = v), hint: 'Person, action, details…', width: 220),
         ExportButtons(
           name: 'audit-log',

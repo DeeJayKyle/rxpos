@@ -5,7 +5,6 @@ import 'dart:io';
 import 'dart:ui' show Tristate;
 
 import 'package:rxpos/core/presentation/list_controls.dart' show ListControls;
-import 'package:rxpos/core/presentation/form_kit.dart' show HelpTip, SyncMark;
 import 'package:image/image.dart' as img;
 import 'package:rxpos/features/inventory/presentation/medicine_screens.dart' show medicinePhotoPicker;
 import 'package:rxpos/core/theme/line_colors.dart' show ColourTableHead;
@@ -57,7 +56,9 @@ import 'package:rxpos/features/storage/application/weather_controller.dart';
 import 'package:rxpos/features/sync_status/application/sync_controller.dart';
 
 import 'package:dio/dio.dart';
-import 'package:rxpos/features/auth/application/session_controller.dart' show keyVaultProvider, systemCheckProvider;
+import 'package:rxpos/features/auth/application/session_controller.dart' show keyVaultProvider, systemCheckProvider, recentStaffKey;
+import 'package:rxpos/core/presentation/charts.dart' show dashed;
+import 'package:rxpos/features/auth/presentation/sign_in_screen.dart' show PinPad;
 import 'package:rxpos/features/auth/data/auth_repository.dart' show AuthRepository;
 import 'package:rxpos/features/auth/domain/device_unlock.dart';
 
@@ -2123,6 +2124,76 @@ void main() {
     expect(shared['name'], 'Sample Pharmacy', reason: 'pharmacy details are kept');
     await done(tester);
   });
+  testWidgets('UI batch 3 look (E): one type scale, text presets, chart patterns, one date control, the logo, sign-in PIN pad and recent staff, the error page', (tester) async {
+    await tester.runAsync(signedIn);
+    await tester.runAsync(() => RecordStore(db).update((d) async => d.saveSettings({...await RecordStore(db).settingsRecord(), 'logo': '/api/files/t1/logo1234/abcdefghijklmnopqrstuvwx'})));
+    await start(tester);
+    Future<String?> kv(String k) async => (await tester.runAsync(() => (db.select(db.kv)..where((x) => x.k.equals('device:$k'))).getSingleOrNull()))?.v;
+    // E1: the five sizes
+    final tt = Theme.of(tester.element(find.byType(Scaffold).first)).textTheme;
+    for (final st in [tt.headlineMedium, tt.titleLarge, tt.titleMedium, tt.bodyMedium, tt.bodySmall, tt.labelSmall]) {
+      expect(const <double>[28, 20, 16, 14, 12].any((x) => (st!.fontSize! - x).abs() < .01 || (st.fontSize! / x - 1).abs() < .2), isTrue, reason: '${st?.fontSize}');
+    }
+    // E6: the pharmacy's logo at the top of the menu
+    expect(find.byKey(const Key('pharmacy-logo')), findsWidgets);
+    // E3: a dashed line is cut into pieces, a solid one is not
+    final line = Path()..moveTo(0, 0)..lineTo(100, 0);
+    expect((dashed(line, const []).computeMetrics().length, dashed(line, const [7, 4]).computeMetrics().length > 5), (1, true));
+    // E5: one date control with presets (Sales History)
+    void go(String to) => GoRouter.of(tester.element(find.byType(Scaffold).first)).go(to);
+    go('/sales');
+    await settle(tester);
+    expect(find.byKey(const Key('date-range')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('date-range-all')));
+    await settle(tester);
+    await tester.tap(find.text('Yesterday').last);
+    await settle(tester);
+    final y = DateTime.now().subtract(const Duration(days: 1));
+    final ys = '${y.year}-${y.month.toString().padLeft(2, '0')}-${y.day.toString().padLeft(2, '0')}';
+    expect(tester.widget<TextField>(find.byKey(const Key('date-From'))).controller!.text, ys);
+    // E2: text size presets
+    await navTo(tester, 'This device');
+    await tester.ensureVisible(find.byKey(const Key('text-size-Large')));
+    await settle(tester, 2);
+    await tester.tap(find.byKey(const Key('text-size-Large')));
+    await settle(tester);
+    expect(await kv('zoom'), '1.15');
+    await tester.tap(find.byKey(const Key('text-size-Normal')));
+    await settle(tester);
+    await done(tester);
+    // E10: the error page
+    await tester.pumpWidget(ProviderScope(child: MaterialApp(home: CrashScreen(error: Exception('a test crash')))));
+    await tester.pump();
+    expect(find.text('Something went wrong on this page'), findsOneWidget);
+    for (final l in ['Try again', 'Go to the dashboard']) {
+      expect(find.text(l), findsOneWidget);
+    }
+    expect(find.byKey(const Key('send-report')), findsOneWidget);
+    // E7: the PIN pad types digits
+    final typed = <String>[];
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: PinPad(onKey: typed.add, canSubmit: false))));
+    for (final k in ['2', '4', 'del']) {
+      await tester.tap(find.byKey(Key('pin-$k')));
+    }
+    expect(typed, ['2', '4', 'del']);
+    expect(tester.widget<FilledButton>(find.byKey(const Key('pin-ok'))).onPressed, isNull, reason: 'no sign-in before 4 digits');
+    await done(tester);
+    // E9: this device's recent staff on the sign-in page; a tap picks them
+    await tester.runAsync(() => db.into(db.kv).insertOnConflictUpdate(KvCompanion.insert(k: 'device:${recentStaffKey('t1')}', v: '[{"id":"u1","name":"Tia Admin","login":"tia@test.rx"}]')));
+    // signed out as the apps sign out: the pharmacy's link stays on the device
+    await tester.runAsync(() => db.into(db.kv).insertOnConflictUpdate(KvCompanion.insert(k: 'link', v: '{"tenant":"t1","slug":"t1","pharmacy":"Sample Pharmacy"}')));
+    await tester.runAsync(() => (db.delete(db.kv)..where((x) => x.k.equals('session'))).go());
+    await start(tester);
+    await settle(tester);
+    expect(find.byKey(const Key('recent-u1')), findsOneWidget);
+    expect(find.byKey(const Key('auth-pharmacy')), findsOneWidget, reason: 'the pharmacy\'s name with a welcome');
+    await tester.tap(find.byKey(const Key('recent-u1')));
+    await settle(tester);
+    expect(find.widgetWithText(TextField, 'tia@test.rx'), findsOneWidget);
+    expect(find.byKey(const Key('another-account')), findsOneWidget);
+    await done(tester);
+  });
+
   testWidgets('This device: date format, sounds, text size; phone layout fits', (tester) async {
     await tester.runAsync(signedIn);
     await start(tester);

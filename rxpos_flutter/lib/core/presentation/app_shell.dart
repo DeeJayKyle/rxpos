@@ -1,3 +1,4 @@
+import 'pharmacy_logo.dart' show PharmacyLogo;
 import 'dart:convert';
 import 'dart:ui' show ImageFilter;
 
@@ -574,11 +575,11 @@ class _SideHeader extends StatelessWidget {
         ? null
         : IconButton(key: const Key('sidebar-toggle'), tooltip: rail ? 'Show the menu (Ctrl+B)' : 'Fold the menu to icons (Ctrl+B)', onPressed: onToggle,
             icon: Icon(rail ? Icons.menu : Icons.view_sidebar_outlined, size: 20, color: sc.text));
-    if (rail) return Padding(padding: const EdgeInsets.only(top: 12, bottom: 4), child: Column(children: [const RxMark(), ?toggle]));
+    if (rail) return Padding(padding: const EdgeInsets.only(top: 12, bottom: 4), child: Column(children: [const PharmacyLogo(fallback: RxMark()), ?toggle]));
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 14, 6, 10),
       child: Row(children: [
-        const RxMark(),
+        const PharmacyLogo(fallback: RxMark()), // E6: the pharmacy's logo when it has one
         const SizedBox(width: 10),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [

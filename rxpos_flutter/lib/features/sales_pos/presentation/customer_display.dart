@@ -2,6 +2,7 @@
 // client, with the pharmacy's name and logo. It only shows; it can change nothing. In the browser it is a second
 // window fed by the till over a BroadcastChannel (no sign-in); in the Windows and Android apps it is a page showing the
 // retail till's sale (for a second screen mirroring this one, or a tablet turned to the client).
+import '../../../core/presentation/pharmacy_logo.dart' show pharmacyLogoProvider;
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -67,7 +68,7 @@ class _CustomerDisplayState extends ConsumerState<CustomerDisplayScreen> {
     var m = _msg;
     if (!displayChannelAvailable) {
       final d = ref.watch(pharmacyProvider).value;
-      if (d != null) m = displayMessage(ref.watch(saleControllerProvider(false)), d.settings, logo: '${ref.watch(brandingProvider)?['logo'] ?? ''}');
+      if (d != null) m = displayMessage(ref.watch(saleControllerProvider(false)), d.settings, logo: ref.watch(pharmacyLogoProvider) ?? '');
     }
     final t = Theme.of(context);
     final big = t.textTheme.headlineMedium;
@@ -88,7 +89,9 @@ class _CustomerDisplayState extends ConsumerState<CustomerDisplayScreen> {
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               Row(children: [
                 if (logo.startsWith('data:image'))
-                  Padding(padding: const EdgeInsets.only(right: 14), child: Image.memory(base64Decode(logo.split(',').last), height: 52)),
+                  Padding(padding: const EdgeInsets.only(right: 14), child: Image.memory(base64Decode(logo.split(',').last), height: 52))
+                else if (logo.startsWith('http'))
+                  Padding(padding: const EdgeInsets.only(right: 14), child: Image.network(logo, height: 52, errorBuilder: (_, _, _) => const SizedBox.shrink())),
                 Expanded(child: Text(v('pharmacy').isEmpty ? 'Welcome' : v('pharmacy'), style: big?.copyWith(fontWeight: FontWeight.w800))),
               ]),
               const SizedBox(height: 20),

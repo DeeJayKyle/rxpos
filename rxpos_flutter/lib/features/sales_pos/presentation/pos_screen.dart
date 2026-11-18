@@ -1,3 +1,4 @@
+import '../../../core/presentation/pharmacy_logo.dart' show pharmacyLogoProvider;
 import 'dart:async';
 import 'dart:convert';
 
@@ -393,7 +394,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     }
     try {
       final sale = await _sale.complete(controlled: cd, momo: momo?.momo, rxChecked: rx, creditOver: creditOver);
-      if (displayChannelAvailable) displaySend(_lastDisplay = displayDone(sale, d.settings, logo: '${ref.read(brandingProvider)?['logo'] ?? ''}'));
+      if (displayChannelAvailable) displaySend(_lastDisplay = displayDone(sale, d.settings, logo: ref.read(pharmacyLogoProvider) ?? ''));
       if (!mounted) return;
       rxScanFor.remove(widget.wholesale);
       await showReceipt(context, sale, d.settings, phone: client?.phone ?? '', autoPrint: d.settings.autoPrint);
@@ -436,7 +437,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     if (displayChannelAvailable) {
       ref.listen(saleControllerProvider(widget.wholesale), (_, s) {
         final d = data.value;
-        if (d != null) displaySend(_lastDisplay = displayMessage(s, d.settings, logo: '${ref.read(brandingProvider)?['logo'] ?? ''}'));
+        if (d != null) displaySend(_lastDisplay = displayMessage(s, d.settings, logo: ref.read(pharmacyLogoProvider) ?? ''));
       });
     }
     return data.when(

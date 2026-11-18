@@ -2,6 +2,7 @@
 // 30 days", offline with this device's own verifier, the quick PIN for this device, two-step sign-in, a choice when
 // one email works at several pharmacies, a question before switching this device to another pharmacy, and the
 // forgotten password (a code by email or SMS, Google on the web page, or the administrator on WhatsApp).
+import '../../../core/presentation/pharmacy_logo.dart' show PharmacyLogo;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -72,7 +73,8 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   bool get _codeReady => _useRc ? _totp.text.replaceAll('-', '').length == 10 : _totp.text.length == 6;
   _Stage _stage = _Stage.main;
   bool _busy = false, _needsCode = false, _remember = false, _google = false;
-  String? _error, _pharmacy, _held, _channel, _forgotNote;
+  String? _error, _pharmacy, _held, _channel, _forgotNote, _tenant;
+  bool _picked = false; // E9: someone was picked from this device's recent staff
   String _adminPhone = '', _pharmacyName = '';
   Map<String, Object?>? _pinUser;
   Map<String, Object?>? _unlockUser; // the typed account has device unlock (fingerprint / face / Windows Hello) here
@@ -92,6 +94,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
       if (!mounted) return;
       setState(() {
         _held = link == null ? null : '${link['pharmacy'] ?? link['slug'] ?? ''}';
+        _tenant = link == null ? null : '${link['tenant'] ?? ''}';
         _remember = remember == '1';
         _pharmacyName = '${st['name'] ?? ''}';
         _adminPhone = normalizePhone('${st['adminWhatsApp'] ?? st['phone'] ?? ''}');
@@ -275,6 +278,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   List<Widget> _main(ThemeData t) {
     final isUsername = _email.text.trim().isNotEmpty && !_email.text.contains('@');
     return [
+      if (!kIsWeb && _tenant != null) ..._recentStaff(t),
       // "Welcome back" (the owner's references, Nov 2026), with the pharmacy this device holds under it
       Text('Welcome back', textAlign: TextAlign.center, style: t.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -.8)),
       const SizedBox(height: 4),
@@ -388,6 +392,43 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
         Text('No recovery codes? Your administrator can switch two-step sign-in off for you (Users & Roles).', textAlign: TextAlign.center, style: t.textTheme.bodySmall),
       ];
 
+  /// E9: this device's recent staff as avatars; a tap picks them (their PIN when this device has it)
+  List<Widget> _recentStaff(ThemeData t) {
+    final list = recentStaffOf(ref.watch(deviceValueProvider(recentStaffKey(_tenant!))).value);
+    if (list.isEmpty) return const [];
+    String ini(String n) => n.trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).map((w) => w[0]).take(2).join().toUpperCase();
+    return [
+      Text('Recent on this device', style: t.textTheme.bodySmall),
+      const SizedBox(height: 6),
+      Wrap(spacing: 8, runSpacing: 8, children: [
+        for (final u in list)
+          ChoiceChip(
+            key: Key('recent-${u['id']}'),
+            avatar: CircleAvatar(backgroundColor: t.colorScheme.primary, child: Text(ini('${u['name']}'), style: TextStyle(color: t.colorScheme.onPrimary, fontSize: 11, fontWeight: FontWeight.w800))),
+            label: Text('${u['name']}'.split(' ').first),
+            selected: _email.text == u['login'],
+            onSelected: (_) async {
+              _email.text = '${u['login'] ?? ''}';
+              _password.clear();
+              await _findPin();
+              if (!mounted) return;
+              setState(() {
+                _error = null;
+                _picked = true;
+                if (_pinUser != null) {
+                  _stage = _Stage.pin;
+                  _pin.clear();
+                }
+              });
+            },
+          ),
+      ]),
+      // shown once someone was picked here (typing an email never moves the form)
+      if (_picked) Align(alignment: Alignment.centerLeft, child: TextButton(key: const Key('another-account'), onPressed: () => setState(() { _picked = false; _email.clear(); _password.clear(); }), child: const Text('Use another account'))),
+      const SizedBox(height: 14),
+    ];
+  }
+
   List<Widget> _pinStage(ThemeData t) => [
         _back('Use password instead', () => setState(() => _stage = _Stage.main)),
         const Icon(Icons.lock_outline, size: 28),
@@ -395,6 +436,17 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
         Text('Enter the PIN set on this device${_pinUser?['name'] != null ? ' for ${_pinUser!['name']}' : ''}', textAlign: TextAlign.center, style: t.textTheme.bodySmall),
         const SizedBox(height: 12),
         _otpBox(_pin, 'PIN', 'pin', max: 8, onDone: () => _pin.text.length >= 4 ? _signInPin() : null),
+        const SizedBox(height: 12),
+        // E7: a clear PIN pad (the keyboard works too)
+        PinPad(onKey: (k) => setState(() {
+              if (k == 'del') {
+                if (_pin.text.isNotEmpty) _pin.text = _pin.text.substring(0, _pin.text.length - 1);
+              } else if (k == 'ok') {
+                if (_pin.text.length >= 4 && !_busy) _signInPin();
+              } else if (_pin.text.length < 8) {
+                _pin.text += k;
+              }
+            }), canSubmit: _pin.text.length >= 4 && !_busy),
         _errorText(t),
         const SizedBox(height: 12),
         FilledButton(onPressed: _busy || _pin.text.length < 4 ? null : _signInPin, child: Padding(padding: const EdgeInsets.all(12), child: Text(_busy ? 'Checking…' : 'Sign in'))),
@@ -455,7 +507,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
             if (!wide) ...[
               Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.asset('assets/icon.png', width: 36, height: 36)),
+                PharmacyLogo(size: 36, fallback: ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.asset('assets/icon.png', width: 36, height: 36))),
                 const SizedBox(width: 10),
                 Text('RxPOS', style: t.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
               ]),
@@ -492,10 +544,21 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
           padding: const EdgeInsets.fromLTRB(40, 76, 40, 32),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
             Row(children: [
-              ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.asset('assets/icon.png', width: 34, height: 34)),
+              PharmacyLogo(size: 34, fallback: ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.asset('assets/icon.png', width: 34, height: 34))),
               const SizedBox(width: 10),
               Text('RxPOS', style: t.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
             ]),
+            // E7: the pharmacy's own name, with a short welcome
+            if ((_held ?? _pharmacyName).isNotEmpty)
+              Container(
+                key: const Key('auth-pharmacy'),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(color: cs.surface.withValues(alpha: .8), borderRadius: BorderRadius.circular(16), border: Border.all(color: cs.outlineVariant)),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+                  Text(_held?.isNotEmpty == true ? _held! : _pharmacyName, style: t.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+                  Text('${_greeting()}, welcome back', style: t.textTheme.bodySmall),
+                ]),
+              ),
             Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text.rich(TextSpan(children: [
                 const TextSpan(text: 'Your pharmacy,\n'),
@@ -562,4 +625,36 @@ class _WavePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_WavePainter old) => old.color != color;
+}
+
+String _greeting() {
+  final h = DateTime.now().hour;
+  return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+}
+
+/// E7 (1.13; src/components/PinPad.jsx): big digit keys for the quick PIN. [onKey] gets '0'..'9', 'del' or 'ok'.
+class PinPad extends StatelessWidget {
+  const PinPad({super.key, required this.onKey, required this.canSubmit});
+  final ValueChanged<String> onKey;
+  final bool canSubmit;
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    Widget key(String k) => Padding(
+          padding: const EdgeInsets.all(4),
+          child: SizedBox(
+            height: 56,
+            child: k == 'ok'
+                ? FilledButton(key: const Key('pin-ok'), onPressed: canSubmit ? () => onKey(k) : null, child: const Icon(Icons.check, semanticLabel: 'Sign in'))
+                : OutlinedButton(
+                    key: Key('pin-$k'),
+                    onPressed: () => onKey(k),
+                    child: k == 'del' ? Icon(Icons.backspace_outlined, color: cs.onSurface, semanticLabel: 'Delete the last digit') : Text(k, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+                  ),
+          ),
+        );
+    return Column(children: [
+      for (final row in const [['1', '2', '3'], ['4', '5', '6'], ['7', '8', '9'], ['del', '0', 'ok']]) Row(children: [for (final k in row) Expanded(child: key(k))]),
+    ]);
+  }
 }

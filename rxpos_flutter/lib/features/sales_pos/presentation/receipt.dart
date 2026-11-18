@@ -1,3 +1,4 @@
+import '../../../core/presentation/pharmacy_logo.dart' show pharmacyLogoBytes;
 import 'package:rxpos/core/theme/themes.dart' show TonesOfContext;
 import 'dart:typed_data';
 
@@ -80,6 +81,7 @@ Future<Uint8List> receiptPdf(Sale s, PharmacySettings st) async {
       build: (_) => pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.stretch,
         children: [
+          if (pharmacyLogoBytes != null) pw.Center(child: pw.Image(pw.MemoryImage(pharmacyLogoBytes!), height: 36)), // E6
           pw.Text(
             st.name,
             textAlign: pw.TextAlign.center,
@@ -314,6 +316,7 @@ Future<Uint8List> invoicePdf(Sale s, PharmacySettings st, {String customerPhone 
       build: (_) => [
         pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
           pw.Expanded(child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+            if (pharmacyLogoBytes != null) pw.Image(pw.MemoryImage(pharmacyLogoBytes!), height: 44), // E6
             pw.Text(st.name, style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
             if (st.address.isNotEmpty) pw.Text(st.address),
             if (st.phone.isNotEmpty) pw.Text('Tel: ${st.phone}'),
