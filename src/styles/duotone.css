@@ -212,3 +212,11 @@
   .training-banner { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 14px; border-radius: var(--r-ctl, 12px); color: var(--warn); border: 1.5px dashed var(--warn);
     background: repeating-linear-gradient(135deg, var(--warn-soft) 0 14px, transparent 14px 28px); }
 }
+@media screen {
+  /* A8: the guided tour: a card beside the part, which gets a ring; nothing else is covered */
+  .tour-card { position: fixed; z-index: 1200; display: grid; gap: 6px; padding: 14px 16px; border-radius: var(--r-card, 18px); background: var(--surface); color: var(--text);
+    border: 1px solid var(--border-strong); box-shadow: 0 18px 40px -16px rgba(0, 0, 0, .35); }
+  .tour-card p { margin: 0; }
+  .tour-card .tour-x { position: absolute; top: 6px; right: 6px; }
+  .tour-lit { outline: 3px solid var(--primary) !important; outline-offset: 3px; border-radius: var(--r-ctl, 12px); }
+}

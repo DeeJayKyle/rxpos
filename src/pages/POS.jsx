@@ -2,6 +2,7 @@ import { mainPack, packPrice, sellInPacks } from '../packs.js';
 import { useState, useRef, useEffect, useMemo, useDeferredValue } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import FKeyBar, { fkeyItems, fkeysShown, showFkeys } from '../components/FKeyBar.jsx';
+import Tour, { knewPage } from '../components/Tour.jsx';
 import { ShoppingCart, Trash2, X, ScanText, FileText, Printer, AlertTriangle, ScanBarcode, Smartphone, Loader2, CheckCircle2, UserPlus, Tag, BookMarked, Repeat, PauseCircle, Keyboard, Plus, ClipboardList, MessageCircle, MessageSquareText, Star, Search, Command, LayoutGrid, Users, GraduationCap } from 'lucide-react';
 import { DrugInfoPanel, genericKey } from './DrugInfo.jsx';
 import { useStore, useSyncState, uid, now, daysUntil, put, del, move, allocate, audit, normalizePhone, customerBalance, DEFAULT_PAYMENT_METHODS } from '../store.jsx';
@@ -837,6 +838,14 @@ export default function POS({ mode = 'retail' }) {
             <button className="icon-btn" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts" onClick={() => setHelp(true)}><Keyboard size={19} /></button>
           </div>
         </div>
+        {/* the first visit: a 5-step tour (people who already saw the till's tip know it) */}
+        <Tour id="pos" user={user?.id} skipIf={knewPage('pos')} steps={[
+          { sel: '.pos-products input.search', title: 'Find or scan', text: 'Type a medicine’s name, or scan its barcode: it goes straight on the sale.' },
+          { sel: '.pos-cart select[aria-label="Client"]', title: 'The client', text: 'Choose the client for loyalty, credit, allergies and their history. Walk-in is fine too.' },
+          { sel: '.pay-methods', title: 'How they pay', text: 'Pick Cash, Mobile Money, Card… For cash, type what they give you to see the change.' },
+          { sel: '.pay-row .btn.primary', title: 'Charge', text: 'Charge (F9) records the sale and takes it from stock. The receipt comes next.' },
+          { sel: '.sale-tab.add', title: 'Hold', text: 'Serving someone else? Hold this sale and pick it up again from its tab.' },
+        ]} />
         <PageTip id="pos" title="Selling quickly">
           {touch ? 'Tap a medicine to add it. The sale waits at the bottom with the total and Charge; tap it to see the lines, swipe a line left to remove it. The camera button scans barcodes.'
             : 'Type or scan to add, ↑↓←→ and Enter to pick. Alt+H holds a sale while you serve the next customer, F9 charges. Press ? for every shortcut.'}

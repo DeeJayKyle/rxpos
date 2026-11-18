@@ -3572,6 +3572,28 @@ void main() {
       await done(tester);
     });
 
+    testWidgets('the till tour on the first visit: Next through 5 steps, Done, not shown again', (tester) async {
+      await tester.runAsync(signedIn);
+      await start(tester, tips: true);
+      await toTill(tester);
+      expect(find.byKey(const Key('tour-pos')), findsOneWidget);
+      expect(find.text('1 of 5'), findsOneWidget);
+      expect(find.text('Find or scan'), findsOneWidget);
+      for (var i = 0; i < 4; i++) {
+        await tester.tap(find.text('Next'));
+        await settle(tester, 2);
+      }
+      expect(find.text('5 of 5'), findsOneWidget);
+      await tester.tap(find.text('Done'));
+      await settle(tester);
+      expect(find.byKey(const Key('tour-pos')), findsNothing);
+      await done(tester);
+      await start(tester, tips: true);
+      await toTill(tester);
+      expect(find.byKey(const Key('tour-pos')), findsNothing, reason: 'once only');
+      await done(tester);
+    });
+
     testWidgets('a tip seen once is not shown again, "Got it" or not', (tester) async {
       await tester.runAsync(signedIn);
       await start(tester, tips: true);

@@ -120,6 +120,18 @@ await p.setViewport({ width: 1280, height: 800 }); await wait(500);
 check('at exactly 1280px: two sides, nothing spills sideways', await p.evaluate(() => getComputedStyle(document.querySelector('.pos')).gridTemplateColumns.split(' ').length === 2 && document.documentElement.scrollWidth <= 1280));
 await p.screenshot({ path: path.join(out, 'pos-1280.png') });
 
+// the first visit's tour: a card beside each part, Next / Done, once per person on this device; it never takes the cursor
+await p.setViewport({ width: 1440, height: 900 });
+await p.evaluate(() => { for (const k of Object.keys(localStorage)) if (/^rxpos-(tour|tip):/.test(k)) localStorage.removeItem(k); });
+await p.reload({ waitUntil: 'networkidle2' }); await wait(2500);
+check('first visit: the till tour starts at "Find or scan"', await p.evaluate(() => /1 of \d[\s\S]*Find or scan/.test(document.querySelector('.tour-card')?.innerText || '') && !!document.querySelector('.pos-products input.search.tour-lit')), await p.evaluate(() => JSON.stringify({ card: document.querySelector('.tour-card')?.innerText, keys: Object.keys(localStorage).filter((k) => /tour|tip/.test(k)), hash: location.hash })));
+check('…and the search keeps the cursor (a scanner still types there)', await p.evaluate(() => document.activeElement === document.querySelector('.pos-products input.search')));
+await p.screenshot({ path: path.join(out, 'pos-tour.png') });
+for (let i = 0; i < 6 && await p.$('.tour-card'); i++) { await p.evaluate(() => [...document.querySelectorAll('.tour-card button')].pop().click()); await wait(200); }
+check('…Next through the steps, then Done closes it', await p.evaluate(() => !document.querySelector('.tour-card') && !document.querySelector('.tour-lit')));
+await p.reload({ waitUntil: 'networkidle2' }); await wait(2500);
+check('…and it is not shown again', await p.evaluate(() => !document.querySelector('.tour-card')));
+
 await b.close();
 await owner('/tenants/' + tid + '/delete', { confirm: T.tenant.slug });
 console.log(`\n${pass} passed, ${fail} failed`);

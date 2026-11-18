@@ -505,6 +505,17 @@ class _PosScreenState extends ConsumerState<PosScreen> {
         );
         final touch = Theme.of(context).platform == TargetPlatform.android;
         final products = Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          // the first visit: a 5-step tour, then the tip
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+            child: PageTour(id: 'pos', userId: ref.watch(sessionControllerProvider).value?.userId ?? '', steps: const [
+              ('Find or scan', 'Type a medicine\'s name, or scan its barcode: it goes straight on the sale.'),
+              ('The client', 'Choose the client for loyalty, credit, allergies and their history. Walk-in is fine too.'),
+              ('How they pay', 'Pick Cash, Mobile Money, Card… For cash, type what they give you to see the change.'),
+              ('Charge', 'Charge (F9) records the sale and takes it from stock. The receipt comes next.'),
+              ('Hold', 'Serving someone else? Hold this sale (Alt+H) and pick it up again from its tab.'),
+            ]),
+          ),
           Padding(
             padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
             child: PageTip(

@@ -52,3 +52,60 @@ class _PageTipState extends ConsumerState<PageTip> {
     );
   }
 }
+
+/// A short guided tour (src/components/Tour.jsx): step cards with Next / Skip, shown once per person on this device,
+/// before the page's tip. It never takes the cursor (a scanner still types into the search).
+class PageTour extends ConsumerStatefulWidget {
+  const PageTour({super.key, required this.id, required this.userId, required this.steps});
+  final String id, userId;
+  final List<(String title, String text)> steps;
+  @override
+  ConsumerState<PageTour> createState() => _PageTourState();
+}
+
+class _PageTourState extends ConsumerState<PageTour> {
+  int _i = 0;
+  bool _closed = false;
+  bool? _show;
+
+  String get _key => 'tour:${widget.id}:${widget.userId}';
+
+  void _close() {
+    ref.read(deviceValueProvider(_key).notifier).set('1');
+    setState(() => _closed = true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!ref.watch(pageTipsOnProvider) || _closed) return const SizedBox.shrink();
+    // decided once, as the page opens: someone who already saw this page's tip (or the tour) knows the page (the tip
+    // marks itself seen as it shows, so it is not watched after that)
+    if (_show == null) {
+      final seen = ref.watch(deviceValueProvider(_key));
+      final tipSeen = ref.watch(deviceValueProvider('tip:${widget.id}'));
+      if (!seen.hasValue || !tipSeen.hasValue) return const SizedBox.shrink();
+      _show = seen.value == null && tipSeen.value == null;
+    }
+    if (_show != true) return const SizedBox.shrink();
+    final scheme = Theme.of(context).colorScheme;
+    final (title, text) = widget.steps[_i];
+    final last = _i == widget.steps.length - 1;
+    return Card(
+      key: Key('tour-${widget.id}'),
+      margin: const EdgeInsets.only(bottom: 8),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18), side: BorderSide(color: scheme.primary, width: 1.5)),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 10, 8, 8),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('${_i + 1} of ${widget.steps.length}', style: Theme.of(context).textTheme.bodySmall),
+          Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
+          Text(text),
+          Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+            TextButton(onPressed: _close, child: const Text('Skip')),
+            FilledButton(onPressed: last ? _close : () => setState(() => _i++), child: Text(last ? 'Done' : 'Next')),
+          ]),
+        ]),
+      ),
+    );
+  }
+}
