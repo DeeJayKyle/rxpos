@@ -16,6 +16,7 @@ import '../../../core/presentation/charts.dart';
 import '../domain/figures.dart';
 import '../domain/insights.dart';
 import 'bento_row.dart';
+import 'dash_extras.dart';
 import 'dashboard_panels.dart';
 import 'sale_checks.dart';
 import 'clean_parts.dart';
@@ -80,13 +81,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
     Widget? card(String id) => switch (id) {
           'figures' => StatGrid(children: [
-              StatCard(label: isToday ? 'Today\'s sales' : 'Sales', value: s.money(c.total), sub: '${c.count} sale${c.count == 1 ? '' : 's'}${deltaText(c.total, pv.total, vs)}', icon: Icons.payments_outlined, spark: spark((d) => d.total),
+              StatCard(label: isToday ? 'Today\'s sales' : 'Sales', value: s.moneyShort(c.total), full: s.money(c.total), sub: '${c.count} sale${c.count == 1 ? '' : 's'}${deltaText(c.total, pv.total, vs)}', icon: Icons.payments_outlined, spark: spark((d) => d.total),
                   onTap: can.contains('sales.view') ? () => context.go('/sales?from=${range.from}&to=${range.to}') : null),
               if (can.contains('reports'))
-                StatCard(label: isToday ? 'Gross profit today' : 'Gross profit', value: s.money(c.grossProfit), sub: 'after cost of goods${deltaText(c.grossProfit, pv.grossProfit, vs)}', icon: Icons.trending_up, color: context.tones.violet, spark: spark((d) => d.grossProfit),
+                StatCard(label: isToday ? 'Gross profit today' : 'Gross profit', value: s.moneyShort(c.grossProfit), full: s.money(c.grossProfit), sub: 'after cost of goods${deltaText(c.grossProfit, pv.grossProfit, vs)}', icon: Icons.trending_up, color: context.tones.violet, spark: spark((d) => d.grossProfit),
                     onTap: () => context.go('/reports?tab=profit&from=${range.from}&to=${range.to}')),
               if (can.contains('finance') || can.contains('reports'))
-                StatCard(label: isToday ? 'Today\'s expenses' : 'Expenses', value: s.money(c.expenses), sub: '${multiBranch ? 'Whole pharmacy (expenses have no branch) · sales here − expenses' : 'Sales − expenses'}: ${s.money(c.total - c.expenses)}', icon: Icons.account_balance_wallet_outlined, color: context.tones.warn, spark: spark((d) => d.expenses),
+                StatCard(label: isToday ? 'Today\'s expenses' : 'Expenses', value: s.moneyShort(c.expenses), full: s.money(c.expenses), sub: '${multiBranch ? 'Whole pharmacy (expenses have no branch) · sales here − expenses' : 'Sales − expenses'}: ${s.money(c.total - c.expenses)}', icon: Icons.account_balance_wallet_outlined, color: context.tones.warn, spark: spark((d) => d.expenses),
                     onTap: () => context.go(can.contains('finance') ? '/finance?tab=expenses' : '/reports?tab=expenses&from=${range.from}&to=${range.to}')),
               StatCard(label: 'Transactions', value: '${c.count}', sub: 'receipts ${isToday ? 'today' : periodWords[period]}${deltaText(c.count.toDouble(), pv.count.toDouble(), vs)}', icon: Icons.receipt_long_outlined, color: context.tones.info, spark: spark((d) => d.count.toDouble()),
                   onTap: can.contains('sales.view') ? () => context.go('/sales?from=${range.from}&to=${range.to}') : null),
@@ -122,7 +123,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               ? RecentSalesCard(sales: (saleList.where((x) => x.branchId == data.branch && x.status != 'refunded').toList()..sort((a, b) => b.date.compareTo(a.date))).take(5).toList(), settings: s)
               : null,
           'checks' => checks ? SaleChecksCard(branch: data.branch, money: s.money) : null,
-          'bento' => BentoRow(byDay: f.byDay, sales: saleList, branch: data.branch, money: s.money, expiring: soonN + expiredN, low: low, can: can),
+          'busy' => () {
+              final w7 = localDate(DateTime.now().subtract(const Duration(days: 6)));
+              final from = range.from.compareTo(w7) < 0 ? range.from : w7;
+              final pw = periodWords[period]!;
+              return BusyHoursCard(sales: saleList, branch: data.branch, from: from, words: from == range.from && !isToday ? (pw.startsWith('last') ? 'in the $pw' : pw) : 'in the last 7 days');
+            }(),
+          'bento' => BentoRow(byDay: f.byDay, sales: saleList, branch: data.branch, money: s.money, moneyShort: s.moneyShort, expiring: soonN + expiredN, low: low, can: can),
           'alerts' => StatGrid(children: [
               StatCard(label: 'Low stock', value: '$low', sub: 'in stock, at or below reorder level', icon: Icons.inventory_2_outlined, color: low > 0 ? context.tones.warn : null, onTap: () => context.go('/inventory?filter=low')),
               StatCard(label: 'Soon expiring', value: '$soonN', sub: 'within $warn days', icon: Icons.event_outlined, color: soonN > 0 ? context.tones.warn : null, onTap: () => context.go('/inventory?filter=expiring')),
@@ -149,7 +156,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           'totals' => StatGrid(children: [
               StatCard(label: 'Products', value: '${data.products.length}', icon: Icons.medication_outlined, onTap: () => context.go('/medicines')),
               StatCard(label: 'Customers', value: '${data.customers.where((x) => x.id != 'walk-in').length}', icon: Icons.people_outline, onTap: () => context.go('/customers')),
-              StatCard(label: 'This month', value: s.money(m.total), sub: '${m.count} sales', icon: Icons.calendar_month_outlined),
+              StatCard(label: 'This month', value: s.moneyShort(m.total), full: s.money(m.total), sub: '${m.count} sales', icon: Icons.calendar_month_outlined),
             ]),
           _ => null,
         };
@@ -186,6 +193,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           child: Text('$branchName${isToday ? 'today' : periodWords[period]} · sales incl. tax, refunds left out · gross profit = sales less tax and cost of goods',
               key: const Key('dash-scope'), style: Theme.of(context).textTheme.bodySmall),
         ),
+        // UI batch 3: What's new after an update (B8), the setup checklist of a new pharmacy (B7)
+        WhatsNewCard(usedBefore: saleList.any((x) => x.date.length >= 10 && localDate(DateTime.tryParse(x.date)?.toLocal() ?? DateTime.now()).compareTo(day) < 0)),
+        if (can.contains('settings.manage') && saleList.length < 100)
+          SetupChecklistCard(steps: setupSteps(products: data.products.length, stocked: stocked.isNotEmpty, users: (ref.watch(tableProvider('users')).value ?? const []).length,
+              settings: s, tills: (ref.watch(tableProvider('counters')).value ?? const []).length)),
         // recommendation 6 (1.10, as src/pages/Dashboard.jsx): kits that can be made 3 times or fewer, with what holds them back
         if ([for (final k in data.tillKits) if (k.canMake != null && k.canMake! <= 3) k] case final low when low.isNotEmpty)
           Padding(

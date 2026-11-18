@@ -13,6 +13,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:rxpos/features/dashboard/presentation/dash_extras.dart' show resetWhatsNewVisit;
 import 'package:rxpos/core/presentation/data_views.dart';
 import 'package:go_router/go_router.dart';
 import 'package:rxpos/core/theme/fonts.dart';
@@ -713,6 +714,58 @@ void main() {
     expect(find.text('refunded'), findsOneWidget);
     final moves = (await tester.runAsync(() => RecordStore(db).rows('movements')))!;
     expect(moves.where((m) => m['type'] == 'Refund').single['qty'], 1);
+    await done(tester);
+  });
+
+  testWidgets('UI batch 3 dashboard: bars with values and an average, short figures, best day and busy hours, the setup checklist, what\'s new once', (tester) async {
+    await tester.runAsync(signedIn);
+    resetWhatsNewVisit();
+    final now = DateTime.now();
+    String at(int daysAgo) => DateTime(now.year, now.month, now.day - daysAgo, 10, 15).toUtc().toIso8601String();
+    await tester.runAsync(() async {
+      await RecordStore(db).update((d) {
+        Map<String, Object?> sale(String id, int daysAgo, num total, {num? paid, String who = ''}) =>
+            {'id': id, 'number': id, 'date': at(daysAgo), 'type': 'retail', 'branchId': 'main', 'items': [], 'subtotal': total, 'discount': 0, 'tax': 0, 'total': total, 'paid': paid ?? total, 'payment': 'Cash', 'customerName': who, 'status': 'completed'};
+        d.put('sales', sale('R-1', 0, 1250000, who: 'Grace Sample'));
+        d.put('sales', sale('R-2', 0, 800, paid: 0, who: 'Henry Example'));
+        d.put('sales', sale('R-3', 1, 2000));
+      });
+      // this device last saw 1.12.0's highlights, so 1.13.0 is an update to it
+      await db.into(db.kv).insertOnConflictUpdate(KvCompanion.insert(k: 'device:whatsNewSeen', v: '1.12.0'));
+    });
+    await start(tester);
+    // B6: a long amount is said short on the figure card; the whole amount in its tooltip
+    expect(find.descendant(of: find.byType(StatCard), matching: find.text('UGX 1.3M')), findsWidgets);
+    expect(tester.widget<Tooltip>(find.byKey(const Key('stat-full')).first).message, 'UGX 1,250,800');
+    // B2: the change and "vs yesterday" stay on one line
+    expect(tester.widgetList<Text>(find.byKey(const Key('stat-sub'))).every((t) => t.maxLines == 1 && t.overflow == TextOverflow.ellipsis), isTrue);
+    // B1: today's amount above its bar and a dashed average line
+    expect(find.byKey(const Key('bento-today-value')), findsOneWidget);
+    expect(find.byKey(const Key('bento-avg')), findsOneWidget);
+    // B4: the busiest hour in the hero card
+    expect(find.descendant(of: find.byKey(const Key('bento-busiest')), matching: find.text('10:00 · 3 sales')), findsOneWidget);
+    expect(find.byKey(const Key('bento-best-day')), findsOneWidget);
+    // B3: the amounts end on one right edge
+    final rights = tester.widgetList(find.byKey(const Key('bento-amount'))).map((w) => tester.getRect(find.byWidget(w)).right.round()).toSet();
+    expect(rights.length, 1);
+    // B5: the busy hours grid has today's 10:00 cell
+    final wd = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][now.weekday - 1];
+    expect(find.byKey(Key('busy-$wd-10')), findsOneWidget);
+    // B8: what's new once
+    expect(find.byKey(const Key('whats-new')), findsOneWidget);
+    expect(find.text("What's new in 1.13.0"), findsOneWidget);
+    // B7: the setup checklist, ticked from the data
+    expect(find.byKey(const Key('setup-checklist')), findsOneWidget);
+    expect(find.textContaining('2 of 6 done', findRichText: true), findsOneWidget);
+    await tester.tap(find.byKey(const Key('setup-hide')));
+    await settle(tester);
+    expect(find.byKey(const Key('setup-checklist')), findsNothing);
+    await done(tester);
+    // a restart: what's new is not shown again, the checklist stays hidden
+    resetWhatsNewVisit();
+    await start(tester);
+    expect(find.byKey(const Key('whats-new')), findsNothing);
+    expect(find.byKey(const Key('setup-checklist')), findsNothing);
     await done(tester);
   });
 

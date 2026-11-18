@@ -428,10 +428,11 @@ export default function POS({ mode = 'retail' }) {
   const displayRef = useRef({ ch: null, last: null });
   useEffect(() => {
     let ch = null;
+    const box = displayRef.current;
     try { ch = new BroadcastChannel(DISPLAY_CHANNEL); } catch { return undefined; }
-    ch.onmessage = (e) => { if (e.data?.hello && displayRef.current.last) ch.postMessage(displayRef.current.last); };
-    displayRef.current.ch = ch;
-    return () => { ch.close(); displayRef.current.ch = null; };
+    ch.onmessage = (e) => { if (e.data?.hello && box.last) ch.postMessage(box.last); };
+    box.ch = ch;
+    return () => { ch.close(); box.ch = null; };
   }, []);
   useEffect(() => {
     const base = { pharmacy: db.settings.name, logo: db.license?.[0]?.branding?.logo || '' };

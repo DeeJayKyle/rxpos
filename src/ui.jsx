@@ -286,19 +286,21 @@ export function Spark({ data }) {
   );
 }
 
-export function Stat({ label, value, sub, tone, icon: Icon, delta, to, state, goodDown, spark }) {
+/** A figure card. full: the whole amount when value is said short (UGX 1.2M, UI batch 3 B6): it is the card's tooltip
+ *  and what screen readers say. The change and the "vs yesterday" line stay on one line (B2), the rest in the tooltip. */
+export function Stat({ label, value, full, sub, tone, icon: Icon, delta, to, state, goodDown, spark }) {
   const navigate = useNavigate();
   const go = to ? () => navigate(to, state ? { state } : undefined) : undefined;
+  const short = full && full !== value;
+  const d = delta != null && isFinite(delta) ? `${delta >= 0 ? '▲ +' : '▼ −'}${Math.abs(Math.round(delta))}%` : '';
   return (
     <div className={'card stat ' + (tone || '') + (to ? ' link' : '') + (/\balert\b/.test(tone || '') && Number(value) > 0 ? ' flagged' : '')} onClick={go} role={to ? 'link' : undefined} tabIndex={to ? 0 : undefined} onKeyDown={to ? (e) => e.key === 'Enter' && go() : undefined}>
       {Icon && <span className="stat-icon"><Icon size={20} /></span>}
       <small>{label}</small>
-      <strong><CountUp value={value} /></strong>
+      <strong title={short ? full : undefined} aria-label={short ? full : undefined} data-full={short ? full : undefined}>{short ? value : <CountUp value={value} />}</strong>
       {spark && <Spark data={spark} />}
-      <span className="muted small">
-        {delta != null && isFinite(delta) && (
-          <span className={'delta ' + (delta >= 0 ? 'up' : 'down') + (goodDown ? ' inverse' : '')}>{delta >= 0 ? '▲ +' : '▼ −'}{Math.abs(Math.round(delta))}% </span>
-        )}
+      <span className="muted small stat-sub" title={typeof sub === 'string' ? (d ? d + ' ' : '') + sub : undefined}>
+        {d && <span className={'delta ' + (delta >= 0 ? 'up' : 'down') + (goodDown ? ' inverse' : '')}>{d} </span>}
         {sub}
       </span>
     </div>

@@ -11,6 +11,8 @@ export 'app_dialog.dart';
 
 extension Money on PharmacySettings {
   String money(num n) => formatMoney(n, currency: currency, decimals: decimalPlaces, locale: locale);
+  /// UGX 1.2M / UGX 350K on figure cards (UI batch 3, B6)
+  String moneyShort(num n) => formatMoneyShort(n, currency: currency, decimals: decimalPlaces, locale: locale);
 }
 
 /// A screen's frame: title (and a line under it), actions on the right, then the content.
@@ -102,8 +104,11 @@ class _SparkPainter extends CustomPainter {
 
 /// A figure with its label (and a line under it); tappable when [onTap] is set.
 class StatCard extends StatelessWidget {
-  const StatCard({super.key, required this.label, required this.value, this.sub, this.icon, this.color, this.onTap, this.spark});
+  const StatCard({super.key, required this.label, required this.value, this.full, this.sub, this.icon, this.color, this.onTap, this.spark});
   final String label, value;
+  /// the whole amount when [value] is said short (UGX 1.2M, UI batch 3 B6): the figure's tooltip and what screen
+  /// readers say
+  final String? full;
   /// the last 7 days of this figure, drawn as a small trend line (2026-11-18)
   final List<double>? spark;
   final String? sub;
@@ -159,13 +164,17 @@ class StatCard extends StatelessWidget {
                 fit: BoxFit.scaleDown,
                 alignment: Alignment.centerLeft,
                 // the figure in the text colour, as React (the colour is in the band and the icon tile)
-                child: Text(value, maxLines: 1, style: t.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -.3, color: ink ?? (tinted ? shown : null))),
+                child: () {
+                  final txt = Text(value, maxLines: 1, semanticsLabel: full, style: t.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -.3, color: ink ?? (tinted ? shown : null)));
+                  return full != null && full != value ? Tooltip(key: const Key('stat-full'), message: full!, child: txt) : txt;
+                }(),
               ),
               if (spark != null && spark!.any((v) => v != 0))
                 Padding(padding: const EdgeInsets.symmetric(vertical: 2), child: Spark(key: const Key('spark'), data: spark!, color: ink ?? t.colorScheme.primary)),
               if (sub != null || onTap != null)
                 Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                  Expanded(child: Text(sub ?? '', style: t.textTheme.bodySmall?.copyWith(color: ink?.withValues(alpha: .9)))),
+                  // the change and "vs yesterday" on one line (UI batch 3, B2); the whole line in the tooltip
+                  Expanded(child: Tooltip(message: sub ?? '', child: Text(sub ?? '', key: const Key('stat-sub'), maxLines: 1, overflow: TextOverflow.ellipsis, style: t.textTheme.bodySmall?.copyWith(color: ink?.withValues(alpha: .9))))),
                   // a card that opens a page says so
                   if (onTap != null) Icon(Icons.arrow_outward, size: 16, color: (ink ?? shown ?? t.colorScheme.primary).withValues(alpha: .8)),
                 ]),

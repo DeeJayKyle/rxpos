@@ -41,6 +41,9 @@ await p.setViewport({ width: 1440, height: 1000 });
 const errors = []; p.on('pageerror', (e) => errors.push(e.message));
 await p.goto(base + '/' + slug, { waitUntil: 'networkidle2' }); await wait(500);
 await p.evaluate(() => { for (const id of ['pos', 'dashboard']) localStorage.setItem('rxpos-tip:' + id, '1'); });
+// B8: this device last saw 1.12.0's highlights, so 1.13.0 is an update to it
+await p.evaluate(() => localStorage.setItem('rxpos-device', JSON.stringify({ ...JSON.parse(localStorage.getItem('rxpos-device') || '{}'), whatsNewSeen: '1.12.0' })));
+await p.reload({ waitUntil: 'networkidle2' }); await wait(500);
 await p.type('input[autocomplete=username]', 'dana@clean.rx'); await p.type('input[type=password]', 'dana-pass-1234');
 await p.evaluate(() => [...document.querySelectorAll('form button')].find((x) => /^Sign in/.test(x.textContent.trim()))?.click());
 await p.waitForSelector('.sidebar', { timeout: 20000 });
@@ -50,8 +53,24 @@ await wait(1500);
 const tiles = () => p.evaluate(() => Object.fromEntries([...document.querySelectorAll('.kpis .stat')].map((s) => [s.querySelector('small').textContent.trim(), s.querySelector('strong').innerText.trim()])));
 const widgets = () => p.evaluate(() => [...document.querySelectorAll('.dash-cell')].map((c) => c.dataset.widget));
 
-check('clean layout: figures, the bento row, chart, health, top medicines, latest sales', JSON.stringify(await widgets()) === JSON.stringify(['figures', 'bento', 'chart', 'health', 'top', 'recent']), JSON.stringify(await widgets()));
+check('clean layout: figures, the bento row, chart, health, top medicines, latest sales, busy hours', JSON.stringify(await widgets()) === JSON.stringify(['figures', 'bento', 'chart', 'health', 'top', 'recent', 'busy']), JSON.stringify(await widgets()));
 check('header: no repeated search or bell (the top bar\'s show), today\'s date', await p.evaluate(() => !document.querySelector('.dash-search') && !document.querySelector('.dash-bell') && !!document.querySelector('.topbar .search-trigger')?.offsetParent && !!document.querySelector('.topbar > .bell button[aria-label^=Notifications]')?.offsetParent && /\d{4}/.test(document.querySelector('.date-pill')?.innerText || '')));
+// UI batch 3, B1-B8
+check('B8 what\'s new: shown once after an update', await p.evaluate(() => /What.s new in 1\.13\.0/.test(document.querySelector('.whats-new')?.innerText || '') && !!document.querySelector('.whats-new a')), await p.evaluate(() => localStorage.getItem('rxpos-device')));
+check('B7 setup checklist: medicines and stock ticked from the data, staff not yet', await p.evaluate(() => { const st = (id) => document.querySelector(`.setup-steps [data-step=${id}]`)?.classList.contains('done'); return st('medicines') && st('stock') && st('staff') === false && /of 6 done/.test(document.querySelector('.setup-card').innerText); }));
+check('B1 bars: a dashed average line and today\'s amount above its bar', await p.evaluate(() => !!document.querySelector('.bento-avg') && /2,800/.test(document.querySelector('.bento-bar.now .bento-val')?.innerText || '') && /Average/.test(document.querySelector('.bento-avg-key')?.innerText || '')));
+await (await p.$('.bento-bar.now')).hover(); await wait(300);
+check('B1 …pointing at a bar shows its day and amount', await p.evaluate(() => { const t = document.querySelector('.bento-bar.now .bento-tip'); return getComputedStyle(t).opacity === '1' && /2,800/.test(t.innerText); }));
+await p.mouse.move(5, 5);
+check('B2 figure cards: the change and "vs yesterday" on one line', await p.evaluate(() => [...document.querySelectorAll('.kpis .stat .stat-sub')].every((x) => x.getBoundingClientRect().height < 30 && getComputedStyle(x).whiteSpace === 'nowrap')), await p.evaluate(() => [...document.querySelectorAll('.kpis .stat .stat-sub')].map((x) => x.getBoundingClientRect().height + getComputedStyle(x).whiteSpace).join()));
+check('B3 latest sales: the amounts in one right column, the Owing pill beside the name', await p.evaluate(() => { const r = [...document.querySelectorAll('.bento-recent .bento-amt')].map((x) => Math.round(x.getBoundingClientRect().right)); const pill = document.querySelector('.bento-recent .bento-who .status-pill'); return r.length >= 5 && new Set(r).size === 1 && !!pill; }));
+check('B4 the hero card shows the busiest hour (10:00, as the samples) and the best day', await p.evaluate(() => /Busiest hour\s*10:00 · \d+ sales?/.test(document.querySelector('.bento-facts')?.innerText || '') && /Best day/.test(document.querySelector('.bento-facts').innerText)));
+check('B5 busy hours: a day × hour grid with "Day 10:00 · n sales" on the cells', await p.evaluate(() => { const c = [...document.querySelectorAll('.busy-grid td')].filter((x) => +x.dataset.v > 0); return c.length >= 1 && c.every((x) => /^\w{3} 10:00 · \d+ sales?$/.test(x.title)); }));
+check('B6 small amounts stay in full (no short form below 100,000)', await p.evaluate(() => !document.querySelector('.kpis .stat strong[data-full]') && /2,800/.test(document.querySelector('.kpis .stat strong').innerText)));
+await p.evaluate(() => [...document.querySelectorAll('.setup-card button')].find((x) => /Hide/.test(x.textContent)).click()); await wait(300);
+check('B7 Hide puts the checklist away', await p.evaluate(() => !document.querySelector('.setup-card')));
+await p.reload({ waitUntil: 'networkidle2' }); await wait(2000);
+check('B7/B8 …kept on this device, and what\'s new is not shown again', await p.evaluate(() => !document.querySelector('.setup-card') && !document.querySelector('.whats-new') && !!document.querySelector('.kpis')));
 let t = await tiles();
 check('Today: today\'s sales 2,800 with ↑ against yesterday', /2,800/.test(t["Today's sales"]) && await p.evaluate(() => /up/.test(document.querySelector('.kpis .stat .delta')?.className || '')), JSON.stringify(t));
 await p.evaluate(() => [...document.querySelectorAll('.period-chips button')].find((x) => x.textContent === '1M').click()); await wait(900);
@@ -85,7 +104,7 @@ check('…kept on this device after a reload', w.includes('alerts') && !w.includ
 await p.evaluate(() => [...document.querySelectorAll('button')].find((x) => /Edit widgets/.test(x.textContent)).click()); await wait(300);
 await p.evaluate(() => [...document.querySelectorAll('.modal button')].find((x) => /standard dashboard/.test(x.textContent)).click()); await wait(300);
 await p.keyboard.press('Escape'); await wait(400);
-check('…and "Back to the standard dashboard" restores the clean layout', JSON.stringify(await widgets()) === JSON.stringify(['figures', 'bento', 'chart', 'health', 'top', 'recent']));
+check('…and "Back to the standard dashboard" restores the clean layout', JSON.stringify(await widgets()) === JSON.stringify(['figures', 'bento', 'chart', 'health', 'top', 'recent', 'busy']));
 // sidebar groups: a count, a + quick add, opening and closing
 check('sidebar groups show how many pages they hold', await p.evaluate(() => [...document.querySelectorAll('.nav-title .nav-count')].length >= 4));
 await p.evaluate(() => [...document.querySelectorAll('.nav-title')].find((x) => /Finance/.test(x.textContent))?.click()); await wait(500);

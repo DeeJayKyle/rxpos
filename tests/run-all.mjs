@@ -65,6 +65,7 @@ const SUITES = [
   ['balances as dated entries, brought forward (unit)', 'unit-balances.mjs', []],
   ['the history window keep rule, shared with the Flutter app (unit)', 'unit-historywindow.mjs', []],
   ['theme choice (unit)', 'unit-theme.mjs', []],
+  ['what\'s new, the same in both apps (unit)', 'unit-whatsnew.mjs', []],
   ['theme contrast', 'contrast-test.mjs', []],
   ['owner sign-in', 'owner-auth-test.mjs', []],
   ['cloud rules', 'v14-api.mjs', []],

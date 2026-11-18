@@ -58,3 +58,15 @@ String formatMoney(num n, {String currency = '', int decimals = 0, String locale
   final f = NumberFormat.decimalPatternDigits(locale: loc, decimalDigits: decimals);
   return '$currency ${f.format(n)}'.trim();
 }
+
+/// A long amount said short for a figure card (UI batch 3, B6; src/money.js shortMoney): "UGX 1.2M", "UGX 350K".
+/// Below 100,000 the amount is shown in full. The full amount stays in the card's tooltip and for screen readers.
+String formatMoneyShort(num n, {String currency = '', int decimals = 0, String locale = 'en'}) {
+  final v = n.toDouble(), a = v.abs();
+  if (a < 100000) return formatMoney(v, currency: currency, decimals: decimals, locale: locale);
+  final (d, s) = a >= 1e9 ? (1e9, 'B') : a >= 1e6 ? (1e6, 'M') : (1e3, 'K');
+  final x = a / d;
+  final r = x >= 100 ? x.roundToDouble() : (x * 10).round() / 10;
+  final txt = r == r.roundToDouble() ? r.round().toString() : r.toString();
+  return '$currency ${v < 0 ? '−' : ''}$txt$s'.trim();
+}

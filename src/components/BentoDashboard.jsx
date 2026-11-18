@@ -19,7 +19,19 @@ export function saleStatus(s) {
   return ['Paid', 'paid'];
 }
 
-export default function BentoDashboard({ byDay, db, branchId, fmt, can, counts }) {
+/** The busiest hour of the sales from day key `from` on: [hour, count] or null (UI batch 3, B4) */
+export function busiestHour(sales, branchId, from) {
+  const h = new Array(24).fill(0);
+  for (const s of sales) {
+    if (s.status === 'refunded' || (s.branchId || MAIN_BRANCH) !== branchId || localDate(new Date(s.date)) < from) continue;
+    h[new Date(s.date).getHours()]++;
+  }
+  const best = h.reduce((b, v, i) => (v > h[b] ? i : b), 0);
+  return h[best] ? [best, h[best]] : null;
+}
+const hourText = (h) => `${String(h).padStart(2, '0')}:00`;
+
+export default function BentoDashboard({ byDay, db, branchId, fmt, fmtShort = fmt, can, counts }) {
   const [period, setPeriod] = useState('7');
   const navigate = useNavigate();
   const n = Number(period);
@@ -29,6 +41,12 @@ export default function BentoDashboard({ byDay, db, branchId, fmt, can, counts }
   // bars: the last 7 days for Today and 7 days, the last 30 for 30 days; today picked out
   const bars = Array.from({ length: n === 30 ? 30 : 7 }, (_, i) => { const k = keyFor((n === 30 ? 29 : 6) - i); return { k, v: byDay[k]?.total || 0 }; });
   const max = Math.max(1, ...bars.map((b) => b.v));
+  // B1: a faint dashed line at the average of the bars shown (days with no sales count as nothing sold)
+  const barAvg = bars.reduce((a, b) => a + b.v, 0) / bars.length;
+  // B4: the best day and the busiest hour of the period, in the hero card's middle
+  const from = keyFor(n - 1);
+  const bestDay = Array.from({ length: n }, (_, i) => keyFor(i)).reduce((b, k) => ((byDay[k]?.total || 0) > (byDay[b]?.total || 0) ? k : b), keyFor(0));
+  const peak = useMemo(() => busiestHour(db.sales, branchId, from), [db.sales, branchId, from]);
   const recent = useMemo(() => {
     const out = [];
     for (const s of db.sales) {
@@ -55,6 +73,12 @@ export default function BentoDashboard({ byDay, db, branchId, fmt, can, counts }
             {delta != null && <span className={'bento-delta ' + (delta >= 0 ? 'up' : 'down')}>{delta >= 0 ? '▲ +' : '▼ −'}{Math.abs(delta).toFixed(1)}%</span>}
             <small>{delta != null ? `vs the ${n === 1 ? 'day' : n + ' days'} before` : 'nothing to compare with yet'}</small>
           </span>
+          {cur.count > 0 && (
+            <span className="bento-facts">
+              {n > 1 && byDay[bestDay]?.total > 0 && <span><small>Best day</small><b>{shortDay(bestDay)} · <span className="num">{fmtShort(byDay[bestDay].total)}</span></b></span>}
+              {peak && <span><small>Busiest hour</small><b>{hourText(peak[0])} · {peak[1]} sale{peak[1] === 1 ? '' : 's'}</b></span>}
+            </span>
+          )}
           <span className="bento-mini">
             <span><small>Receipts</small><b className="num">{cur.count.toLocaleString()}</b></span>
             <span><small>Average sale</small><b className="num">{fmt(avg)}</b></span>
@@ -62,24 +86,27 @@ export default function BentoDashboard({ byDay, db, branchId, fmt, can, counts }
         </Link>
         <div className="bento-chart card" role="group" aria-label={`Daily sales, the last ${bars.length} days`}>
           <div className="card-head"><h3>Daily sales</h3><small className="muted">{shortDay(bars[0].k)} – today</small></div>
-          <div className="bento-bars">
+          <div className={'bento-bars' + (bars.length <= 7 ? ' labelled' : '')} style={{ '--avg': barAvg / max }}>
+            {barAvg > 0 && <span className="bento-avg" aria-hidden="true" title={`Average ${fmt(barAvg)} a day`} />}
             {bars.map((b) => (
-              <button key={b.k} type="button" className={'bento-bar' + (b.k === today() ? ' now' : '')} title={`${shortDay(b.k)}: ${fmt(b.v)}`} aria-label={`${shortDay(b.k)}: ${fmt(b.v)}`}
+              <button key={b.k} type="button" className={'bento-bar' + (b.k === today() ? ' now' : '')} style={{ '--h': Math.max(0.03, b.v / max) }}
                 onClick={() => navigate('/sales', { state: { from: b.k, to: b.k } })}>
-                <i style={{ height: `${Math.max(3, (b.v / max) * 100)}%` }} />
-                {bars.length <= 7 && <small>{new Date(b.k + 'T12:00').toLocaleDateString(undefined, { weekday: 'short' })}</small>}
+                <i>{b.k === today() && b.v > 0 && <em className="bento-val num" aria-hidden="true">{fmtShort(b.v)}</em>}</i>
+                <span className="bento-tip">{shortDay(b.k)} · {fmt(b.v)}</span>
+                {bars.length <= 7 && <small aria-hidden="true">{new Date(b.k + 'T12:00').toLocaleDateString(undefined, { weekday: 'short' })}</small>}
               </button>
             ))}
           </div>
+          {barAvg > 0 && <small className="muted bento-avg-key"><span aria-hidden="true" className="bento-avg-dash" />Average {fmt(barAvg)} a day</small>}
         </div>
         <div className="bento-recent card">
           <div className="card-head"><h3><ReceiptText size={16} />Latest sales</h3><Link to="/sales" className="link-btn small">All</Link></div>
           <ul>
             {recent.map((s) => { const [st, cls] = saleStatus(s); return (
               <li key={s.id}>
-                <span className="grow"><strong>{s.customerName || 'Walk-in'}</strong><small className="muted">{s.number} · {new Date(s.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</small></span>
-                {cls !== 'paid' && <span className={'status-pill ' + cls}>{st}</span>}
-                <b className="num">{fmt(s.total)}</b>
+                <span className="bento-who"><strong title={s.customerName || 'Walk-in'}>{s.customerName || 'Walk-in'}</strong>{cls !== 'paid' && <span className={'status-pill ' + cls}>{st}</span>}</span>
+                <b className="num bento-amt">{fmt(s.total)}</b>
+                <small className="muted bento-when">{s.number} · {new Date(s.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</small>
               </li>
             ); })}
             {!recent.length && <li className="muted">No sales yet</li>}

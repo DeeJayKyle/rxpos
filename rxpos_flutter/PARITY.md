@@ -234,3 +234,21 @@ Every feature of the React app (`src/pages/*.jsx`, `src/*.jsx`), screen by scree
 
 ## Owner console (OwnerConsole.jsx)
 - Stays on the website (rxposug.com): it manages every pharmacy, not one.
+
+## UI batch 3 (1.13.0, docs/plans/1.13-ui-batch-3.md)
+- ✅ A1 Undo on the till instead of a confirm (line remove, clear, held sale): toast / SnackBar with Undo
+- ✅ A2 Phones: total and Charge pinned at the bottom, the sale as a pull-up sheet
+- ✅ A3 Quantity stepper on sale lines, 44 px on touch; Enter in the quantity returns to search
+- ✅ A4 Add-to-sale pulse and a light vibration (reduced motion respected)
+- ✅ A6 Customer display (`#/display` / `/display`): items, total, paid, change in large text, read-only
+- ✅ A7 Training mode on the till: TRAINING receipt, nothing saved
+- ✅ A8 Guided till tour (5 steps, once per person per device)
+- ✅ A9 Safer refunds: reason, large amount, a manager's approval over the limit
+- ✅ B1 Daily bars: amount on hover / focus / long-press and above today's bar, a dashed average line
+- ✅ B2 Figure cards: the change and "vs yesterday" on one line (ellipsis, the whole line in the tooltip)
+- ✅ B3 Latest sales: amounts in one right column, the Owing pill beside the name, no wrapping
+- ✅ B4 The sales hero card: best day and busiest hour
+- ✅ B5 Busy hours widget: 7 days × opening hours, shade = number of sales (Edit widgets can hide it)
+- ✅ B6 Short money on figure cards (UGX 1.2M / 350K; `shortMoney` / `formatMoneyShort`), the full amount in the tooltip
+- ✅ B7 Setup checklist of a new pharmacy, ticked from the data; Hide on this device
+- ✅ B8 What's new once after an update (`src/whatsnew.js` = `core/config/whats_new.dart`)
