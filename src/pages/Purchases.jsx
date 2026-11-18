@@ -12,7 +12,7 @@ import { useStore, useSyncState, uid, today, now, put, del, move, addBatch, audi
 import { CASH } from '../finance.js';
 import { round } from '../money.js';
 import { Modal, PdfButton, Empty, PageTip, useSort, SortTh, SubViews, WhoChanged } from '../ui.jsx';
-import { useLoadMore, useColumns } from '../tablekit.jsx';
+import { useLoadMore, useColumns, useWide } from '../tablekit.jsx';
 import { DateRange } from '../forms.jsx';
 import { useListControls } from '../listcontrols.jsx';
 import { ask, toast } from '../feedback.jsx';
@@ -25,6 +25,8 @@ import AiVisionScanner from '../components/AiVisionScanner.jsx';
 import { deliveryDraft, draftsFor, isOld, toCheck, checkText } from '../drafts.js';
 import DraftsList, { useDraftCount } from './Drafts.jsx';
 import { Link, useNavigate } from 'react-router-dom';
+import InvoiceView from '../components/InvoiceView.jsx';
+import { emptyCheck, scanInto, checkSummary } from '../deliverycheck.js';
 
 const NEW = '__new__'; // a line for a medicine that is not in the list yet
 const FORMS = ['Tablets', 'Capsules', 'Syrups', 'Suspensions', 'Injectables', 'Creams', 'Ointments', 'Drops', 'Sachets', 'Devices', 'Surgicals', 'Others'];
@@ -113,7 +115,9 @@ export function AddStock() {
       const p = matchProduct(it.name, products);
       const qty = it.qty || 1;
       const read = { name: it.name, unclear: !!it.unclear, matched: !!p, ...(it.check?.length ? { check: it.check } : {}), ...(it.alt ? { alt: it.alt } : {}), ...(it.why ? { why: it.why } : {}), ...(it.note ? { note: it.note } : {}), ...(it.page ? { page: it.page } : {}) };
-      const base = { qty, batch: it.batch || '', expiry: normDate(it.expiry), read };
+      // G1: where the line was on the invoice, when the reading gave it (page and x, y, w, h as fractions of the page)
+      const box = it.box && [it.box.x, it.box.y, it.box.w, it.box.h].every((v) => Number.isFinite(v) && v >= 0 && v <= 1) ? { page: Number(it.box.page) || 0, x: it.box.x, y: it.box.y, w: it.box.w, h: it.box.h } : undefined;
+      const base = { qty, batch: it.batch || '', expiry: normDate(it.expiry), read, ...(box ? { box } : {}) };
       const cost = it.unitCost || (it.lineTotal && qty ? it.lineTotal / qty : 0);
       // packs or single units? whichever makes the invoice's price nearest the medicine's known cost per unit
       const size = p && cost > 0 && p.cost > 0 ? [1, ...packsOf(p).map((k) => Number(k.size))].reduce((b, z) => (Math.abs(Math.log(cost / z / p.cost)) < Math.abs(Math.log(cost / b / p.cost)) ? z : b), 1) : 0;
@@ -229,6 +233,13 @@ export function AddStock() {
   // Enter in a line goes on to the next line, and on the last one adds a new line: it never receives the delivery
   const tableRef = useRef(null);
   const [focusLine, setFocusLine] = useState(null);
+  const [activeLine, setActiveLine] = useState(null); // G1: the line being edited, outlined on the invoice
+  // G2: an order checked by scanning each pack ({ counts, extra }, null until started) and the last scan's message
+  const [dcheck, setDcheck] = useState(null);
+  const [dmsg, setDmsg] = useState('');
+  const dScan = (code) => { const r = scanInto(dcheck || emptyCheck(), form.lines, products, code); setDcheck(r.state); setDmsg(r.text); if (r.line) setActiveLine(r.line.key); };
+  const wide = useWide(1280);
+  const split = wide && scanned?.pages?.length > 0;
   useEffect(() => {
     if (!focusLine) return;
     tableRef.current?.querySelector(`tr[data-line="${focusLine}"] .med-pick input, tr[data-line="${focusLine}"] .new-med input`)?.focus();
@@ -354,6 +365,12 @@ export function AddStock() {
     const lines = form.lines.filter((l) => l.productId && Number(l.qty) > 0);
     if (!lines.length) return toast('Add at least one medicine', 'warn');
     if (form.lines.some((l) => l.productId && !(Number(l.qty) > 0))) return toast('Every line needs a quantity above 0 (or remove the line)', 'warn');
+    // G2: a delivery checked by scan: what is missing or extra is said before anything is received
+    if (dcheck) {
+      const sum = checkSummary(dcheck, form.lines, (l) => products.find((p) => p.id === l.productId)?.name || l.name || 'A medicine');
+      const effects = [...sum.missing.map((x) => `${x.name}: ${x.got} of ${x.want} scanned`), ...sum.over.map((x) => `${x.name}: ${x.got} scanned, ${x.want} on the order`), ...sum.extra.map((x) => `Extra: ${x.name || x.code}`)];
+      if (effects.length && !(await ask({ title: 'Not everything matches the scan', message: 'Receive the quantities on the lines as they are? You can still change them first.', effects, confirmText: 'Receive stock' }))) return;
+    }
     // new medicines: a name that isn't already in the list (the same new name on two lines is one medicine)
     const freshIds = new Map();
     for (const l of lines.filter((x) => x.productId === NEW)) {
@@ -448,6 +465,23 @@ export function AddStock() {
         addNew('', code); setCam(false);
         return 'New barcode: type the medicine name';
       }} />}
+      {form.poId && (
+        // G2: receiving an order: scan each pack; its line ticks and counts up, anything not on the order is listed
+        <div className="card dcheck">
+          <div className="row between gap wrap">
+            <strong><ScanText size={15} /> Check the delivery by scan</strong>
+            {!dcheck ? <button type="button" className="btn sm ghost" onClick={() => { setDcheck(emptyCheck()); setDmsg('Scan each pack (or type its barcode and press Enter)'); }}>Start checking</button>
+              : <button type="button" className="link-btn small" onClick={() => { setDcheck(null); setDmsg(''); }}>Stop checking</button>}
+          </div>
+          {dcheck && <>
+            <input className="dcheck-input" aria-label="Scan a pack" placeholder="Scan a pack…" autoFocus onKeyDown={(e) => { if (e.key === 'Enter' && e.currentTarget.value.trim()) { e.preventDefault(); dScan(e.currentTarget.value); e.currentTarget.value = ''; } }} />
+            {dmsg && <div className="small" role="status">{dmsg}</div>}
+            {(() => { const sum = checkSummary(dcheck, form.lines, (l) => products.find((p) => p.id === l.productId)?.name || l.name); return (sum.missing.length > 0 || sum.extra.length > 0) && (
+              <div className="small muted dcheck-left">{sum.missing.length > 0 && <>Still to scan: {sum.missing.map((x) => `${x.name} (${x.want - x.got})`).join(', ')}. </>}{sum.extra.length > 0 && <span className="text-warn">Extra: {sum.extra.map((x) => x.name || x.code).join(', ')}</span>}</div>
+            ); })()}
+          </>}
+        </div>
+      )}
       {form.draftId && <div className="notice info-notice">Continuing a saved draft. Receiving it removes it from Drafts; "Save as draft" keeps your changes in it.</div>}
       {myDrafts.length > 0 && <div className="notice info-notice row gap wrap">You have {myDrafts.length} saved deliver{myDrafts.length === 1 ? 'y' : 'ies'}{myDrafts.some((x) => isOld(x)) ? ', one waiting over a day' : ''}.<Link to="/purchases" state={{ tab: 'drafts' }}>Open drafts</Link></div>}
       <PageTip id="add-stock" title="Receiving a delivery">Search or scan each medicine (not in the list? type its name and choose “Add as a new medicine”). Type the line total from the invoice: the unit cost is worked out from it. The retail price changes only when you type a new one (tap “Use” for cost + markup). Scan invoice reads a photo for you.</PageTip>
@@ -498,7 +532,10 @@ export function AddStock() {
         </div>
       )}
       {saved && <div className="notice">Received {saved.items.length} item(s) worth {fmt(saved.total)} from {saved.supplierName}{saved.items.some((i) => i.added) ? ` (${saved.items.filter((i) => i.added).length} new medicine${saved.items.filter((i) => i.added).length > 1 ? 's' : ''} added to the list)` : ''}. {saved.paid < saved.total && `${fmt(saved.total - saved.paid)} added to creditors.`}</div>}
-      <form className="card invoice-sheet" onSubmit={save}>
+      {/* G1: the invoice beside the form on a wide screen, the line being edited outlined on it */}
+      <div className={'addstock-split' + (split ? ' on' : '')}>
+      {split && <InvoiceView pages={scanned.pages} active={form.lines.find((l) => l.key === activeLine)} />}
+      <form className="card invoice-sheet" onSubmit={save} onFocus={(e) => { const k = e.target.closest?.('tr[data-line]')?.dataset.line; if (k) setActiveLine(k); }}>
         <div className="invoice-head">
           <div className="invoice-from">
           <label className="field"><span className="invoice-caption">Supplier</span>
@@ -628,7 +665,8 @@ export function AddStock() {
                   };
                   return (
                   <tr key={l.key} data-line={l.key} className={'hued' + (l.productId === NEW ? ' new-line' : '')} style={lineStyle(l, lineIndex)}>
-                    <td className="line-no" aria-hidden="true"><span className="line-badge">{lineIndex + 1}</span></td>
+                    <td className="line-no" aria-hidden="true"><span className="line-badge">{lineIndex + 1}</span>
+                      {dcheck && l.productId && <span className={'dcheck-count' + ((dcheck.counts[l.productId] || 0) >= Number(l.qty) ? ' done' : '')} data-testid="dcheck-count">{(dcheck.counts[l.productId] || 0) >= Number(l.qty) ? '✓ ' : ''}{dcheck.counts[l.productId] || 0}/{Number(l.qty) || 0}</span>}</td>
                     {cols.map((c) => cloneElement(cells[c], { className: `${cells[c].props.className || ''} col-${c}`.trim(), style: { '--col': COL_HUES[c] } }))}
                     <td key="x" className="line-x"><button type="button" className="icon-btn" title="Remove line" aria-label="Remove line" onClick={() => setForm((f) => ({ ...f, lines: f.lines.length > 1 ? f.lines.filter((x) => x.key !== l.key) : [blankLine()] }))}><X size={15} /></button></td>
                   </tr>
@@ -674,6 +712,7 @@ export function AddStock() {
           <button className="btn primary" disabled={(!!scanned && !checked) || receiving}>{receiving ? <><Loader2 size={16} className="spin" />Receiving…</> : 'Receive stock'}</button>
         </div>
       </form>
+      </div>
     </div>
   );
 }

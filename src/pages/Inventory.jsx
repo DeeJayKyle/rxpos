@@ -14,6 +14,7 @@ import { deviceSettings, setDevice } from '../device.js';
 import { useLoadMore, useColumns, BulkBar, useWide, DetailsPane, HealthBar } from '../tablekit.jsx';
 import { ProductArt } from '../idleart.jsx';
 import { useMedicineOrder, MedicineOrderPicker, groupedRows, useFolded, GroupHeadingRow } from '../medgroups.jsx';
+import { BranchStockList } from '../components/BranchStock.jsx';
 
 const expiryClass = (expiry, warn) => {
   if (!expiry) return '';
@@ -44,13 +45,15 @@ const recordIssues = (p, dupBarcodes) => [
 
 /** A medicine's stock and batches, shown while the pointer rests on its name (the owner's request: mouse functions) */
 function StockPeek({ p }) {
-  const { fmt, batchesOf } = useStore();
+  const { db, fmt, batchesOf } = useStore();
   const bs = (batchesOf(p.id) || []).filter((b) => b.qty > 0).sort((a, b) => String(a.expiry).localeCompare(String(b.expiry)));
   return (<>
     <strong>{p.name}</strong><br />
     <span className="muted">{formatQty(p.stock)} {(p.unit || 'unit').toLowerCase()}s in stock · {fmt(p.price)} each</span>
     {bs.length ? <table><tbody>{bs.slice(0, 6).map((b) => <tr key={b.id}><td>{b.batch || '—'}</td><td>{b.expiry || '—'}{b.expiry && daysUntil(b.expiry) < 0 ? ' (expired)' : ''}</td><td className="num">{formatQty(b.qty)}</td></tr>)}</tbody></table> : <div className="muted small">No batches in stock</div>}
     {bs.length > 6 && <div className="muted small">+{bs.length - 6} more batches</div>}
+    {/* G4: the same medicine in the other branches */}
+    {db.branches.length > 1 && <><div className="muted small" style={{ marginTop: 6 }}>In each branch</div><BranchStockList p={p} /></>}
   </>);
 }
 

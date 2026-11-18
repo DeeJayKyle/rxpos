@@ -33,6 +33,7 @@ import { deviceSettings, setDevice, onDevice } from '../device.js';
 import { kitView, basketDemand, shortText, stockParts } from '../kits.js';
 import KitIcon from '../components/KitIcon.jsx';
 import { pharmacyLogo } from '../logo.jsx';
+import { BranchStockButton } from '../components/BranchStock.jsx';
 
 // Receipt numbers must be unique across synced devices, so they are time-based rather than sequential
 
@@ -71,6 +72,7 @@ export default function POS({ mode = 'retail' }) {
   const [category, setCategory] = useState('');
   const [view, setView] = useState(''); // '' | 'instock' | 'recent' | 'fav'
   const favKey = `rxpos-pos-favs:${syncCfg.tenant || 'device'}`;
+  const multiBranch = db.branches.length > 1 && features.branches !== false; // G4
   const [favs, setFavs] = useState(() => { try { return new Set(JSON.parse(localStorage.getItem(favKey)) || []); } catch { return new Set(); } });
   const toggleFav = (id) => setFavs((f) => { const n = new Set(f); n.has(id) ? n.delete(id) : n.add(id); try { localStorage.setItem(favKey, JSON.stringify([...n])); } catch { /* storage blocked */ } return n; });
   const [cart, setCart] = useState([]);
@@ -937,6 +939,7 @@ export default function POS({ mode = 'retail' }) {
                 </div>
               </button>
               <button type="button" className={'fav-btn' + (favs.has(p.id) ? ' on' : '')} aria-pressed={favs.has(p.id)} aria-label={(favs.has(p.id) ? 'Remove ' : 'Add ') + p.name + (favs.has(p.id) ? ' from favourites' : ' to favourites')} title={favs.has(p.id) ? 'Favourite' : 'Add to favourites'} onClick={() => toggleFav(p.id)}><Star size={14} /></button>
+              {p.stock <= 0 && multiBranch && <BranchStockButton p={p} />}{/* G4: an out-of-stock medicine in the other branches */}
               </div>
             );
           })}

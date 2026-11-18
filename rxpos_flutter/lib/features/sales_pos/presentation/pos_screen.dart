@@ -1,3 +1,4 @@
+import '../../inventory/presentation/branch_stock.dart' show BranchStockButton;
 import '../../../core/presentation/pharmacy_logo.dart' show pharmacyLogoProvider;
 import 'dart:async';
 import 'dart:convert';
@@ -1169,6 +1170,7 @@ class _ProductPanel extends StatelessWidget {
                                   padding: const EdgeInsets.only(top: 4),
                                   child: Wrap(spacing: 4, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
                                     if (first != null) FefoBatchBadge(expiry: first.expiry, warnDays: data.settings.expiryWarnDays.round()),
+                                    if (out) BranchStockButton(product: p, label: false), // G4: out here: in the other branches?
                                     Container(
                                       key: Key('stock-pill-${p.id}'),
                                       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),

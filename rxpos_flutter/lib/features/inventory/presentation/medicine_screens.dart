@@ -1,5 +1,6 @@
 // Medicine List, Formulations, Quick Edit and Stock Card (src/pages/Inventory.jsx), with the pack sizes and inventory
 // editors used from the lists.
+import 'branch_stock.dart' show BranchStockButton;
 import '../../../core/theme/line_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -180,6 +181,7 @@ class _MedicineListScreenState extends ConsumerState<MedicineListScreen> {
                       Row(children: [
                         if (manage) ...[rs.tickBox, const SizedBox(width: 6)],
                         Expanded(child: Wrap(spacing: 6, runSpacing: 2, crossAxisAlignment: WrapCrossAlignment.center, children: [
+                          BranchStockButton(product: p, label: false), // G4: the same medicine in each branch
                           Text(p.name, style: const TextStyle(fontWeight: FontWeight.w700)),
                           if (p.rx) const _Tag('Rx'),
                           if (p.raw['chronic'] == true) const _Tag('Chronic'),
@@ -221,6 +223,7 @@ class _MedicineListScreenState extends ConsumerState<MedicineListScreen> {
                   isThreeLine: true,
                   trailing: Row(mainAxisSize: MainAxisSize.min, children: [
                     Text(formatQty(st), style: TextStyle(fontWeight: FontWeight.w700, color: st <= 0 ? Theme.of(context).colorScheme.error : isLowStock(p, st) ? context.tones.warn : null)),
+                    BranchStockButton(product: p, label: false), // G4
                     if (manage)
                       TextButton(
                         key: Key('packs-${p.id}'),

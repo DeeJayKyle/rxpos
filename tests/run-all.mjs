@@ -33,6 +33,7 @@ const SUITES = [
   ['idle promote (unit)', 'unit-promote.mjs', []],
   ['offline sign-in (unit)', 'unit-offline.mjs', []],
   ['money math (unit)', 'unit-money.mjs', []],
+  ['delivery check by scan (unit)', 'unit-deliverycheck.mjs', []],
   ['CSV export never a formula (unit)', 'unit-csv.mjs', []],
   ['server write policy (unit)', 'unit-policy.mjs', []],
   ['2026-11 audit fixes, against the real cloud code (unit)', 'unit-audit-2026-11.mjs', []],
@@ -156,6 +157,7 @@ const SUITES = [
   ['forms and dialogs (UI batch 3, D)', 'v84-forms.mjs', ['.output/v84']],
   ['look and readability (UI batch 3, E)', 'v85-look.mjs', ['.output/v85-look']],
   ['pages (UI batch 3, F)', 'v85-pages.mjs', ['.output/v85']],
+  ['buying stock (UI batch 3, G)', 'v86-buying.mjs', ['.output/v86']],
   // every page on a PC and a phone, for design review: only on request (`npm test -- shots-all`)
   ...(process.argv[2] === 'shots-all' ? [['every page, PC and phone screenshots', 'shots-all.mjs', ['.output/all']]] : []),
   // every theme on the dashboard and Sales History, for the owner's review: only on request (`npm test -- shots-themes`)

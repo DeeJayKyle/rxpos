@@ -647,13 +647,16 @@ class _ReorderScreenState extends ConsumerState<ReorderScreen> {
               subtitle: Wrap(crossAxisAlignment: WrapCrossAlignment.center, spacing: 8, children: [
                 if (r.why.isNotEmpty) SizedBox(width: double.infinity, child: Text(r.why, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.tertiary))),
                 Text('in stock ${formatQty(r.stock)} · sells ${r.perDay.toStringAsFixed(1)}/day · days left ${r.daysLeft.isFinite ? r.daysLeft.floor() : '—'} · buy from'),
+                // G3: each supplier's last price as a chip, the cheapest marked; a tap uses that supplier and price
                 if (r.options.length > 1)
-                  DropdownButton<String>(
-                    value: r.buy?.supplierId,
-                    isDense: true,
-                    items: [for (final (n, o) in r.options.indexed) DropdownMenuItem(value: o.supplierId, child: Text('${n == 0 ? '★ ' : ''}${o.supplierName} · ${st.money(o.cost)}'))],
-                    onChanged: (x) => setState(() => _chosen[r.p.id] = x ?? ''),
-                  )
+                  for (final (n, o) in r.options.indexed)
+                    ChoiceChip(
+                      key: Key('price-${r.p.id}-${o.supplierId}'),
+                      label: Text('${o.supplierName} · ${st.money(o.cost)}${n == 0 ? ' · cheapest' : ''}'),
+                      selected: r.buy?.supplierId == o.supplierId,
+                      tooltip: 'Last bought ${o.date.length >= 10 ? o.date.substring(0, 10) : o.date}',
+                      onSelected: (_) => setState(() => _chosen[r.p.id] = o.supplierId),
+                    )
                 else
                   Text(r.buy?.supplierName ?? '—'),
                 if (r.options.length > 1 && r.buy != null && r.buy!.cost > r.options.first.cost)

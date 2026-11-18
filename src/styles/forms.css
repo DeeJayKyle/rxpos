@@ -100,3 +100,27 @@
 }
 /* the till's "Promos / member discount" line is not the dashboard's "Promote today" row (which shares the class name) */
 .pos-cart .totals .promo-row { min-height: 0; padding: 0; border-bottom: 0; gap: 8px; }
+/* G1: the invoice beside the Add Stock form on a wide screen */
+.addstock-split.on { display: grid; grid-template-columns: minmax(320px, 2fr) 3fr; gap: 16px; align-items: start; }
+.invoice-view { position: sticky; top: 12px; display: grid; gap: 10px; max-height: calc(100vh - 24px); overflow: auto; }
+.invoice-page { position: relative; }
+.invoice-page img { display: block; width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--border); }
+.invoice-mark { position: absolute; border: 2.5px solid var(--primary); border-radius: 4px; background: color-mix(in srgb, var(--primary) 14%, transparent); pointer-events: none; }
+/* G2: checking a delivery by scan */
+.dcheck { display: grid; gap: 8px; margin-bottom: 12px; }
+.dcheck-input { max-width: 360px; font-size: var(--t-3); }
+.dcheck-count { display: block; margin-top: 2px; font-size: var(--t-5); font-weight: 700; color: var(--muted); white-space: nowrap; }
+.dcheck-count.done { color: var(--ok); }
+/* G3: supplier price chips on an order line */
+.price-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.price-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-size: var(--t-5); cursor: pointer; }
+.price-chip.on { border-color: var(--primary); background: var(--primary-soft); color: var(--primary-text); font-weight: 650; }
+.price-chip.cheapest small { color: var(--ok); font-weight: 700; }
+/* G4: stock in the other branches */
+.branch-stock { width: 100%; border-collapse: collapse; font-size: var(--t-5); }
+.branch-stock td { padding: 2px 0; }
+.branch-stock tr.here td { font-weight: 700; }
+.branch-stock-wrap { position: absolute; left: 8px; bottom: 8px; z-index: 2; }
+.branch-btn { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-size: var(--t-5); cursor: pointer; }
+.branch-pop { position: absolute; left: 0; bottom: calc(100% + 6px); min-width: 220px; padding: 10px 12px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border-strong); box-shadow: 0 12px 30px -12px rgba(0, 0, 0, .35); display: grid; gap: 6px; }
+.product-wrap { position: relative; }

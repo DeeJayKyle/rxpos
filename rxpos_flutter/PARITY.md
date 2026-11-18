@@ -273,3 +273,17 @@ Every feature of the React app (`src/pages/*.jsx`, `src/*.jsx`), screen by scree
 - ✅ D8 Phones: pop-ups as sheets from the bottom (React full height; Flutter sized to content)
 - ✅ D9 Three pop-up sizes 420 / 640 / 960
 - ✅ D10 Danger dialogs list what will happen, Cancel focused, the one red on the right
+- ✅ E1 One type scale 28 / 20 / 16 / 14 / 12, money in tabular figures (web `--t-1..5`, Flutter text theme)
+- ✅ E2 Text size presets Small / Normal / Large / Extra large above the slider (the same zoom setting)
+- ✅ E3 Chart series after the first dashed / dotted / dash-dot, the legend the same
+- ✅ E4 Touch screens: buttons, chips and icon buttons ≥ 44 px (Flutter: 48 on touch already)
+- ✅ E5 One date control with presets: Sales, Reports, Expenses, Cash Book, Audit, Purchases
+- ✅ E6 The pharmacy's logo (Settings → Pharmacy, a file in its cloud): menu, sign-in, receipts, invoices, customer display
+- ✅ E7 Branded sign-in: the pharmacy's name and logo, a welcome, a PIN pad
+- ✅ E8 Opening screen: the logo and "Getting your pharmacy ready"
+- ✅ E9 This device's recent staff on sign-in (apps only; the web version keeps nothing); "Use another account"
+- ✅ E10 Friendly error page: Try again, Go to the dashboard, Send report
+- ✅ G1 Add Stock ≥ 1280 px: the scanned invoice beside the form; the line being edited outlined when its place is known
+- ✅ G2 Receiving an order: check by scan, lines tick and count up, missing / extra said before "Receive stock"
+- ✅ G3 Order lines: each supplier's last price as a chip, the cheapest marked; a tap uses it
+- ✅ G4 Stock in each branch: on the medicine and on an out-of-stock till tile

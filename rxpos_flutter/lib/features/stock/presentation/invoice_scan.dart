@@ -145,7 +145,11 @@ int toCheck(List<Line> ls) => ls.where((l) {
       if ((it['check'] as List?)?.isNotEmpty ?? false) 'check': it['check'], if (it['alt'] != null) 'alt': it['alt'], if (it['why'] != null) 'why': it['why'],
       if (it['note'] != null) 'note': it['note'], if (it['page'] != null) 'page': it['page'],
     };
-    final base = {'qty': numOrBlank(qty), 'batch': '${it['batch'] ?? ''}', 'expiry': normDate(it['expiry']), 'read': read};
+    // G1: where the line was on the invoice, when the reading gave it (page and x, y, w, h as fractions)
+    final bx = it['box'] is Map ? (it['box'] as Map).cast<String, Object?>() : null;
+    final okBox = bx != null && ['x', 'y', 'w', 'h'].every((k) => bx[k] is num && (bx[k] as num) >= 0 && (bx[k] as num) <= 1);
+    final base = {'qty': numOrBlank(qty), 'batch': '${it['batch'] ?? ''}', 'expiry': normDate(it['expiry']), 'read': read,
+      if (okBox) 'box': {'page': (bx['page'] as num?)?.toInt() ?? 0, for (final k in ['x', 'y', 'w', 'h']) k: (bx[k] as num).toDouble()}};
     final cost = _n(it['lineTotal']) > 0 ? _n(it['lineTotal']) / qty : _n(it['unitCost']);
     var size = 0.0;
     Pack? k;

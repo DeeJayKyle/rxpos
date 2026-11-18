@@ -58,6 +58,7 @@ import 'package:rxpos/features/sync_status/application/sync_controller.dart';
 import 'package:dio/dio.dart';
 import 'package:rxpos/features/auth/application/session_controller.dart' show keyVaultProvider, systemCheckProvider, recentStaffKey;
 import 'package:rxpos/core/presentation/charts.dart' show dashed;
+import 'package:rxpos/features/stock/presentation/add_stock_screen.dart' show InvoicePane;
 import 'package:rxpos/features/auth/presentation/sign_in_screen.dart' show PinPad;
 import 'package:rxpos/features/auth/data/auth_repository.dart' show AuthRepository;
 import 'package:rxpos/features/auth/domain/device_unlock.dart';
@@ -2191,6 +2192,81 @@ void main() {
     await settle(tester);
     expect(find.widgetWithText(TextField, 'tia@test.rx'), findsOneWidget);
     expect(find.byKey(const Key('another-account')), findsOneWidget);
+    await done(tester);
+  });
+
+  testWidgets('UI batch 3 buying (G): supplier price chips, checking an order by scan, stock in other branches, the invoice beside the form', (tester) async {
+    await tester.runAsync(signedIn);
+    final day = DateTime.now().subtract(const Duration(days: 1)).toIso8601String();
+    await tester.runAsync(() => RecordStore(db).update((d) {
+          d.put('branches', {'id': 'main', 'name': 'Main branch'});
+          d.put('branches', {'id': 'br2', 'name': 'Kira Road'});
+          d.put('products', {'id': 'p1', 'name': 'Calmex 500mg Tabs', 'generic': 'Calmex', 'form': 'Tablets', 'unit': 'Tablet', 'barcode': '7010001', 'price': 500, 'cost': 300, 'reorder': 200});
+          d.put('batches', {'id': 'b2', 'productId': 'p2', 'batch': 'Z1', 'expiry': '2029-01-31', 'cost': 4000});
+          d.move(productId: 'p2', qty: 7, type: 'Opening stock', batchId: 'b2', branchId: 'br2');
+          d.put('suppliers', {'id': 's1', 'name': 'Alpha Wholesale'});
+          d.put('suppliers', {'id': 's2', 'name': 'Beta Medics'});
+          d.put('purchases', {'id': 'pu1', 'number': 'GRN-1', 'date': day, 'supplierId': 's1', 'supplierName': 'Alpha Wholesale', 'items': [{'productId': 'p1', 'name': 'Calmex 500mg Tabs', 'qty': 10, 'cost': 300}], 'total': 3000});
+          d.put('purchases', {'id': 'pu2', 'number': 'GRN-2', 'date': day, 'supplierId': 's2', 'supplierName': 'Beta Medics', 'items': [{'productId': 'p1', 'name': 'Calmex 500mg Tabs', 'qty': 10, 'cost': 250}], 'total': 2500});
+          d.put('purchaseOrders', {'id': 'po1', 'number': 'PO-1', 'date': day, 'status': 'Sent', 'supplierId': 's1', 'supplierName': 'Alpha Wholesale',
+            'items': [{'productId': 'p1', 'name': 'Calmex 500mg Tabs', 'qty': 2, 'cost': 300}, {'productId': 'p2', 'name': 'Zinco Syrup 100ml', 'qty': 1, 'cost': 4000}]});
+        }));
+    await start(tester);
+    void go(String to) => GoRouter.of(tester.element(find.byType(Scaffold).first)).go(to);
+    // G4: an out-of-stock till tile: the stock in each branch
+    await toTill(tester);
+    expect(find.byKey(const Key('branches-p2')), findsOneWidget);
+    expect(find.byKey(const Key('branches-p1')), findsNothing, reason: 'in stock here');
+    await tester.tap(find.byKey(const Key('branches-p2')));
+    await settle(tester);
+    expect(find.descendant(of: find.byKey(const Key('branch-br2')), matching: find.text('7')), findsOneWidget);
+    expect(find.descendant(of: find.byKey(const Key('branch-main')), matching: find.text('none')), findsOneWidget);
+    await tester.tap(find.text('Close'));
+    await settle(tester);
+    // G3: each supplier's last price on the order line, the cheapest chosen; a tap uses another
+    go('/reorder');
+    await settle(tester);
+    expect(find.textContaining('Beta Medics · UGX 250 · cheapest'), findsOneWidget);
+    expect(tester.widget<ChoiceChip>(find.byKey(const Key('price-p1-s2'))).selected, isTrue);
+    await tester.tap(find.byKey(const Key('price-p1-s1')));
+    await settle(tester);
+    expect(tester.widget<ChoiceChip>(find.byKey(const Key('price-p1-s1'))).selected, isTrue);
+    // G2: receiving the order, checked by scan
+    go('/add-stock?po=po1');
+    await settle(tester);
+    await tester.tap(find.byKey(const Key('dcheck-start')));
+    await settle(tester);
+    for (final c in ['7010001', '7010001', '999000']) {
+      await tester.enterText(find.byKey(const Key('dcheck-input')), c);
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await settle(tester, 2);
+    }
+    expect(find.textContaining('999000: not a medicine on this order'), findsOneWidget);
+    expect(find.text('✓2/2'), findsOneWidget);
+    expect(find.text('0/1'), findsOneWidget);
+    final moves = (await tester.runAsync(() => RecordStore(db).rows('movements')))!.length;
+    await tester.ensureVisible(find.widgetWithText(FilledButton, 'Receive stock'));
+    await settle(tester, 2);
+    await tester.tap(find.widgetWithText(FilledButton, 'Receive stock'));
+    await settle(tester);
+    if (find.text('Not everything matches the scan').evaluate().isEmpty) {
+      // the form asks for an invoice number first
+      await tester.enterText(find.widgetWithText(TextFormField, 'Invoice no.').first, 'INV-1');
+      await tester.tap(find.widgetWithText(FilledButton, 'Receive stock'));
+      await settle(tester);
+    }
+    expect(find.text('Not everything matches the scan'), findsOneWidget);
+    expect(find.textContaining('Zinco Syrup 100ml: 0 of 1 scanned'), findsOneWidget);
+    expect(find.textContaining('Extra: 999000'), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await settle(tester);
+    expect((await tester.runAsync(() => RecordStore(db).rows('movements')))!.length, moves, reason: 'nothing received');
+    await done(tester);
+    // G1: the invoice pane outlines the line's place on the page
+    final page = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEklEQVR4nGP4z8CAFWEXHbQSACj/P8Fu7N9hAAAAAElFTkSuQmCC';
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: SizedBox(width: 500, child: InvoicePane(pages: [page], box: const {'page': 0, 'x': .1, 'y': .4, 'w': .8, 'h': .06})))));
+    await tester.pump();
+    expect(find.byKey(const Key('invoice-mark')), findsOneWidget);
     await done(tester);
   });
 
