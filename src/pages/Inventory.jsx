@@ -9,6 +9,8 @@ import { removalSplit } from '../fefo.js';
 import { newInternalBarcode } from '../barcode.jsx';
 import { useHoverCard, useListControls } from '../listcontrols.jsx';
 import { HELP } from '../forms.jsx';
+import ExpiryCalendar from '../components/ExpiryCalendar.jsx';
+import { deviceSettings, setDevice } from '../device.js';
 import { useLoadMore, useColumns, BulkBar, useWide, DetailsPane, HealthBar } from '../tablekit.jsx';
 import { ProductArt } from '../idleart.jsx';
 import { useMedicineOrder, MedicineOrderPicker, groupedRows, useFolded, GroupHeadingRow } from '../medgroups.jsx';
@@ -337,6 +339,10 @@ export function Expiry() {
     .filter((r) => (tab === 'expired' ? r.days < 0 : r.days >= 0 && r.days <= warn))
     .sort((a, b) => a.expiry.localeCompare(b.expiry)), [products, batchesOf, tab, warn]);
   const [busy, setBusy] = useState(''); // the batch being written off (its button is disabled until it is saved)
+  // F1: List | Calendar, kept on this device; the calendar shows every batch in stock with an expiry
+  const [view, setViewState] = useState(() => deviceSettings().expiryView || 'list');
+  const setView = (v) => { setViewState(v); setDevice({ expiryView: v }); };
+  const allBatches = useMemo(() => products.filter((p) => p.stock > 0).flatMap((p) => batchesOf(p.id).filter((b) => b.qty > 0 && b.expiry).map((b) => ({ ...b, p, days: daysUntil(b.expiry) }))), [products, batchesOf]);
   const writeOff = async (r) => {
     if (busy) return;
     if (!(await ask({ title: 'Write off expired stock?', message: `${r.qty} × ${r.p.name} (batch ${r.batch}) will be removed from stock.`, effects: [`${r.qty} taken off batch ${r.batch}`, `a write-off of ${fmt(r.qty * (r.cost || r.p.cost || 0))} at cost in the stock card and the audit log`], confirmText: 'Write off', danger: true }))) return;
@@ -355,9 +361,11 @@ export function Expiry() {
       <div className="page-head"><div><h1>Expiring / Expired</h1><div className="sub">{rows.length} batches · {fmt(rows.reduce((a, r) => a + r.qty * (r.cost || r.p.cost), 0))} at cost</div></div>
         <PdfButton target={expRef} title={tab === 'expired' ? 'Expired stock' : `Expiring within ${warn} days`} subtitle={`${rows.length} batches in stock · ${fmt(rows.reduce((a, r) => a + r.qty * (r.cost || r.p.cost), 0))} at cost`} /></div>
       <div className="list-filters">
-        <FilterChips label="Show" value={tab} onChange={setTab} options={[['soon', `Expiring within ${warn} days`], ['expired', 'Expired']]} />
+        {view === 'list' && <FilterChips label="Show" value={tab} onChange={setTab} options={[['soon', `Expiring within ${warn} days`], ['expired', 'Expired']]} />}
+        <div className="seg" role="radiogroup" aria-label="View">{[['list', 'List'], ['calendar', 'Calendar']].map(([k, l]) => <button key={k} type="button" role="radio" aria-checked={view === k} className={view === k ? 'on' : ''} onClick={() => setView(k)}>{l}</button>)}</div>
       </div>
-      <div className="card table-wrap" ref={expRef}>
+      {view === 'calendar' && <ExpiryCalendar batches={allBatches} warn={warn} onOpen={(b) => navigate('/stock-card', { state: { productId: b.p.id } })} />}
+      {view === 'list' && <div className="card table-wrap" ref={expRef}>
         <table className="phone-rows">
           <thead><tr><th>Medicine</th><th>Batch</th><th>Expiry</th><th>When</th><th className="num">Qty</th><th className="num">Value</th><th /></tr></thead>
           <tbody>
@@ -375,7 +383,7 @@ export function Expiry() {
             {!rows.length && <Empty colSpan={7}>{tab === 'expired' ? 'No expired stock 🎉' : 'Nothing expiring soon 🎉'}</Empty>}
           </tbody>
         </table>
-      </div>
+      </div>}
     </div>
   );
 }

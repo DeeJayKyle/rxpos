@@ -12,6 +12,7 @@ import { ask, toast } from './feedback.jsx';
 import { useFocusTrap } from './focustrap.js';
 import { useLoadMore, useColumns, BulkBar, useSwipe, useWide, DetailsPane } from './tablekit.jsx';
 import { MoneyInput, PhoneInput, Help, checkField, PhotoField } from './forms.jsx';
+import { lastChangeOf, ago } from './auditText.js';
 
 /** D7: in a pop-up's form, Enter moves to the next field (the last one sends the form) and Ctrl+Enter sends it at once;
  *  a text area keeps Enter for new lines */
@@ -135,6 +136,18 @@ export function SearchBox({ value, onChange, placeholder = 'Search…', big, inp
   );
 }
 
+/** F5 (UI batch 3): "Edited by Amina · 2 h ago" under a record's title, from the audit log, opening its entries */
+export function WhoChanged({ keyText, by, at }) {
+  const { db } = useStore();
+  const navigate = useNavigate();
+  const last = by ? { user: by, date: at } : lastChangeOf(db.audit, keyText);
+  if (!last?.user) return null;
+  return (
+    <small className="who-changed" data-testid="who-changed">Edited by {last.user}{last.date ? ` · ${ago(last.date)}` : ''} ·{' '}
+      <a href="#/audit" onClick={(e) => { e.preventDefault(); navigate('/audit', { state: { q: keyText } }); }}>history</a></small>
+  );
+}
+
 /** An empty page or table: what belongs here and, when given, the one thing to do next */
 export function Empty({ children = 'Nothing here yet', colSpan, action, icon: Icon = Inbox }) {
   const navigate = useNavigate();
@@ -155,8 +168,10 @@ export function Empty({ children = 'Nothing here yet', colSpan, action, icon: Ic
  * together; the columns shown chosen per device; the search kept while the app is open. `bulk(rows)` adds page actions
  * for the ticked rows ([{ label, run }]); `rowMenu(r)` adds items to a row's menu.
  */
-export function CrudPage({ title, subtitle, singular, table, fields, columns, blank = {}, extraActions, rowClass, rows: rowsProp, onSave, headExtra, canDelete = true, filter, readOnly = false, rowLocked, bulk, rowMenu, card, board, swipeActions, sideDetails, emptyText, totals, deleteEffects }) {
-  const { db, upsert, remove, update } = useStore();
+export function CrudPage({ title, subtitle, singular, table, fields, columns, blank = {}, extraActions, rowClass, rows: rowsProp, onSave, headExtra, canDelete = true, filter, readOnly = false, rowLocked, bulk, rowMenu, card, board, swipeActions, sideDetails, emptyText, totals, deleteEffects, modalSize }) {
+  const { db, upsert, remove, update, user } = useStore();
+  // F5: an edit says who made it and when (shown as "Edited by …" when the record opens again)
+  const stamp = (rec, isNew) => (isNew ? rec : { ...rec, editedBy: user?.name || '', editedAt: new Date().toISOString() });
   const location = useLocation();
   const qKey = 'rxpos-q:' + table + ':' + location.pathname;
   const [q, setQState] = useState(() => { if (location.state?.q) return location.state.q; try { return sessionStorage.getItem(qKey) || ''; } catch { return ''; } });
@@ -264,16 +279,19 @@ export function CrudPage({ title, subtitle, singular, table, fields, columns, bl
       </div>
       {sideDetails && wide && editing && !editing._new && (
         <DetailsPane wide title={'Edit ' + name.toLowerCase()} onClose={() => setEditing(null)}>
+          <WhoChanged keyText={editing.name || editing.number || editing.description} by={editing.editedBy} at={editing.editedAt} />
           <RecordForm key={editing.id} fields={fields} initial={editing} onCancel={() => setEditing(null)}
-            onSave={({ _new, stock, ...rec }) => { onSave ? onSave(rec, _new, editing) : upsert(table, rec); setEditing(null); toast(`${name} saved`, 'success', { sync: true }); }} />
+            onSave={({ _new, stock, ...raw }) => { const rec = stamp(raw, _new); onSave ? onSave(rec, _new, editing) : upsert(table, rec); setEditing(null); toast(`${name} saved`, 'success', { sync: true }); }} />
         </DetailsPane>
       )}
       </div>}
       {menu.node}
       {editing && !(sideDetails && wide && !editing._new && shownView === 'table') && (
-        <Modal title={(editing._new ? 'Add ' : 'Edit ') + name.toLowerCase()} onClose={() => setEditing(null)} wide>
+        <Modal title={(editing._new ? 'Add ' : 'Edit ') + name.toLowerCase()} onClose={() => setEditing(null)} size={modalSize || (fields.length > 12 ? 'lg' : 'md')}>
+          {!editing._new && <WhoChanged keyText={editing.name || editing.number || editing.description} by={editing.editedBy} at={editing.editedAt} />}
           <RecordForm fields={fields} initial={editing} onCancel={() => setEditing(null)}
-            onSave={({ _new, stock, ...rec }) => {
+            onSave={({ _new, stock, ...raw }) => {
+              const rec = stamp(raw, _new);
               onSave ? onSave(rec, _new, editing) : upsert(table, rec);
               setEditing(null);
               toast(`${name} ${_new ? 'added' : 'saved'}`, 'success', { sync: true });

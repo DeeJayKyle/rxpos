@@ -6,7 +6,7 @@ import { useStore, dayOf, downloadFile, toCSV, put, move, now, audit, allocate, 
 import { useOlderHistory, olderNote } from '../history.js';
 import { ViewSwitch, BoardView, GalleryView, savedView, saveView } from '../components/DataViews.jsx';
 import { saleStatus } from '../components/BentoDashboard.jsx';
-import { Modal, SearchBox, Empty, PdfButton, ReceiptPdfButton, PayChip, useSort, SortTh, SubViews } from '../ui.jsx';
+import { Modal, SearchBox, Empty, PdfButton, ReceiptPdfButton, PayChip, useSort, SortTh, SubViews, WhoChanged } from '../ui.jsx';
 import { useLoadMore, useColumns, BulkBar, useSwipe, useWide, DetailsPane } from '../tablekit.jsx';
 import { DateRange } from '../forms.jsx';
 import { toast } from '../feedback.jsx';
@@ -246,6 +246,7 @@ export default function Sales() {
   // C8: the receipt and its actions, beside the list on wide screens or as a pop-up
   const saleDetails = () => (
     <DetailsPane title={`Receipt ${view.number}`} onClose={() => setView(null)} wide={wide && dv === 'table' && tab === 'sales'}>
+          <WhoChanged keyText={view.number} by={view.editedBy || view.refundedBy} at={view.edits?.at(-1)?.at || view.refundedAt} />
           <Receipt sale={view} />
           <EditHistory sale={view} />
           <div className="form-actions no-print">

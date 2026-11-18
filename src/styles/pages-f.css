@@ -1,0 +1,52 @@
+/* UI batch 3, F: page additions */
+
+/* F1: the expiry calendar */
+.exp-cal .card-head { gap: 8px; }
+.exp-cal .card-head h3 { flex: 1; text-align: center; }
+.exp-cal-grid { display: grid; gap: 4px; overflow-x: auto; }
+.exp-cal-row { display: grid; grid-template-columns: repeat(7, minmax(84px, 1fr)); gap: 4px; }
+.exp-cal-row.head > div { font-size: var(--t-5, 12px); font-weight: 650; color: var(--muted); text-align: center; }
+.exp-cal-day { min-height: 84px; border-radius: 10px; background: var(--surface-2); padding: 4px; display: grid; align-content: start; gap: 3px; min-width: 0; }
+.exp-cal-day.empty { background: none; }
+.exp-cal-num { font-size: var(--t-5, 12px); font-weight: 700; color: var(--muted); }
+.exp-chip { display: block; width: 100%; text-align: left; border: 0; border-radius: 6px; padding: 2px 6px; font: inherit; font-size: 11.5px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer;
+  background: color-mix(in srgb, var(--primary) 18%, var(--surface)); color: var(--text); }
+.exp-chip.soon { background: color-mix(in srgb, var(--primary) 40%, var(--surface)); }
+.exp-chip.urgent { background: var(--warn-soft); color: var(--warn); box-shadow: inset 3px 0 0 var(--warn); }
+.exp-chip.expired { background: var(--block-soft, var(--danger-soft)); color: var(--block, var(--danger)); box-shadow: inset 3px 0 0 var(--block, var(--danger)); }
+.exp-cal-key { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 10px; }
+.exp-cal-key span { display: inline-flex; align-items: center; gap: 6px; }
+.exp-cal-key i.exp-chip { width: 16px; height: 10px; padding: 0; display: inline-block; }
+
+/* F2: the shelf map */
+.shelf-map { display: grid; gap: 6px; overflow-x: auto; margin-bottom: 12px; }
+.shelf-row { display: grid; grid-template-columns: 24px repeat(var(--cols, 1), minmax(64px, 1fr)); gap: 6px; align-items: stretch; }
+.shelf-row.other { grid-template-columns: 24px repeat(auto-fill, minmax(90px, 1fr)); }
+.shelf-row-name { font-weight: 800; color: var(--muted); display: grid; place-items: center; }
+.shelf-cell { min-height: 52px; border-radius: 10px; border: 1px solid var(--border); background: color-mix(in srgb, var(--primary) 12%, var(--surface)); display: grid; place-items: center; gap: 0; padding: 4px; cursor: pointer; font: inherit; color: var(--text); }
+.shelf-cell small { color: var(--muted); font-size: 11px; }
+.shelf-cell.on { background: var(--primary); color: var(--on-primary, #fff); border-color: var(--primary); }
+.shelf-cell.on small { color: inherit; opacity: .85; }
+.shelf-cell.gap { border-style: dashed; background: none; cursor: default; }
+
+/* F4: offline, then "All sent" */
+.offline-banner { position: sticky; top: 0; z-index: 19; padding: 6px 16px; text-align: center; font-size: var(--t-5, 12px); font-weight: 700; background: var(--warn-soft); color: var(--warn); border-bottom: 1px solid color-mix(in srgb, var(--warn) 30%, transparent); }
+.offline-banner.sending { background: color-mix(in srgb, var(--primary) 14%, var(--surface)); color: var(--text); }
+.offline-banner.sent { background: var(--ok-soft); color: var(--ok); border-color: color-mix(in srgb, var(--ok) 30%, transparent); }
+
+/* F6: the audit log as sentences */
+.audit-chips { display: grid; gap: 6px; }
+.audit-list ul { list-style: none; margin: 0; padding: 0; }
+.audit-row { display: grid; gap: 2px; padding: 10px 2px; border-bottom: 1px solid var(--border); }
+.audit-row:last-child { border-bottom: 0; }
+.audit-row.kind-sales { border-left: 3px solid var(--primary); padding-left: 10px; }
+.audit-sentence { overflow-wrap: anywhere; }
+/* F5: who changed a record */
+.who-changed { display: block; margin: -4px 0 10px; font-size: var(--t-5, 12px); color: var(--muted); }
+.who-changed a { color: inherit; text-decoration: underline; }
+
+/* F9: the report's one plain line */
+.report-summary { font-size: var(--t-3, 16px); font-weight: 650; margin: 4px 0 6px; }
+
+/* F7: someone typing */
+.typing-now { color: var(--primary-text, var(--primary)); font-style: italic; }
