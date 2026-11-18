@@ -273,3 +273,12 @@ Every feature of the React app (`src/pages/*.jsx`, `src/*.jsx`), screen by scree
 - ✅ D8 Phones: pop-ups as sheets from the bottom (React full height; Flutter sized to content)
 - ✅ D9 Three pop-up sizes 420 / 640 / 960
 - ✅ D10 Danger dialogs list what will happen, Cancel focused, the one red on the right
+- ✅ F1 Expiry: List | Calendar (month grid, shaded by urgency, a batch opens its stock card)
+- ✅ F2 Shelves: a shelf map from the shelf codes; tap a shelf for its medicines
+- ✅ F3 Ctrl+K: recent searches and suggested actions before typing
+- ✅ F4 Offline banner under the top bar; "All sent" for 3 s when back
+- ✅ F5 "Edited by … · 2 h ago" on records (clients, suppliers, medicines, sales; React also purchases and every list record)
+- ✅ F6 Audit log as sentences, chips by person and kind of action
+- ✅ F7 Chat: ✓ / ✓✓ and reactions (already), "… is typing" over the live connection
+- ✅ F8 This device: the four pages of the phone's bottom bar
+- ✅ F9 A one-line summary on each report

@@ -32,6 +32,7 @@ import '../../sales_pos/presentation/receipt.dart';
 import '../domain/refund.dart';
 import 'refund_sheet.dart';
 import '../domain/sale_edit.dart';
+import '../../../core/rules/audit_text.dart' show agoText;
 
 /// Sales History (src/pages/Sales.jsx): every sale, newest first; search, dates, branch, cashier, payment, client and
 /// status (completed / refunded / edited); CSV and PDF; open a sale to see its receipt and change history, print the
@@ -363,6 +364,10 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
           width: 460,
           child: SingleChildScrollView(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text('${_when(s.date)} · ${s.cashier}'),
+            // F5: who last changed it
+            if ('${s.raw['editedBy'] ?? s.raw['refundedBy'] ?? ''}'.isNotEmpty)
+              Text('${s.raw['editedBy'] != null ? 'Edited' : 'Refunded'} by ${s.raw['editedBy'] ?? s.raw['refundedBy']}${'${s.raw['refundedAt'] ?? ''}'.isNotEmpty && s.raw['editedBy'] == null ? ' · ${agoText('${s.raw['refundedAt']}')}' : ''}',
+                  key: const Key('who-changed'), style: Theme.of(c).textTheme.bodySmall),
             Text('Client: ${s.customerName} · ${s.type}'),
             const Divider(),
             for (final (n, i) in s.items.indexed) ...[

@@ -353,7 +353,7 @@ const deleteRecord = {'_delete': true};
 /// A dialog that edits a record's fields and returns the edited values (null when cancelled). With [delete] (the
 /// record's name, e.g. 'medicine'), a Delete button asks "Delete this medicine?" and then returns [deleteRecord].
 Future<Map<String, Object?>?> editRecord(BuildContext context, {required String title, required List<FormFieldSpec> fields,
-    Map<String, Object?> initial = const {}, String save = 'Save', String? delete, bool side = false, String currency = 'UGX', Future<String?> Function()? pickPhoto}) {
+    Map<String, Object?> initial = const {}, String save = 'Save', String? delete, bool side = false, String currency = 'UGX', Future<String?> Function()? pickPhoto, String note = ''}) {
   final values = Map<String, Object?>.of(initial);
   final ctl = {
     for (final f in fields)
@@ -384,7 +384,11 @@ Future<Map<String, Object?>?> editRecord(BuildContext context, {required String 
           // D7: Ctrl+Enter saves from any field
           bindings: {const SingleActivator(LogicalKeyboardKey.enter, control: true): submit, const SingleActivator(LogicalKeyboardKey.enter, meta: true): submit},
           child: AlertDialog(
-            title: Text(title),
+            // F5: "Edited by Amina · 2 h ago" under the title
+            title: note.isEmpty ? Text(title) : Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+                Text(title),
+                Text(note, key: const Key('who-changed'), style: Theme.of(c).textTheme.bodySmall),
+              ]),
             content: SizedBox(
               width: dialogMd, // D9: the middle of the three sizes
               child: Form(

@@ -139,7 +139,7 @@ class AppShell extends ConsumerWidget {
         const SizedBox(width: 8),
       ],
     );
-    final body = Stack(children: [
+    final body0 = Stack(children: [
       // the Hardware Diagnostic HUD design: a status bar (printer, scanner, connection, alerts) over every page
       Column(children: [
         if (tokensOf(context).hud) const HardwareHud(),
@@ -153,6 +153,8 @@ class AppShell extends ConsumerWidget {
       EngageWatchers(location: location),
       const CallOverlay(),
     ]);
+    // F4 (UI batch 3): offline, a slim banner over the page; back online, "All sent" for 3 s
+    final body = Column(children: [const OfflineBanner(), Expanded(child: body0)]);
     return CallbackShortcuts(
       bindings: {
         // the page keys, Ctrl+K, ?, back / forward and pin are the keyboard map's (keys_host.dart), changeable per device
@@ -403,7 +405,11 @@ class TabBarBottom extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final t = Theme.of(context);
     bool open((String, String, IconData, IconData) x) => screens.any((s) => s.path == x.$1);
-    final tabs = [..._left.where(open).take(2), if (open(_sell)) _sell, ..._right.where(open).take(1)];
+    // F8 (UI batch 3): the four pages this device chose (This device → Phone bottom bar), two either side of Sell
+    final chosen = barChoice(ref.watch(deviceValueProvider('bottomBar')).value).map((p) => barChoices.where((c) => c.$1 == p).firstOrNull).nonNulls.where(open).take(4).toList();
+    final tabs = chosen.isNotEmpty
+        ? [...chosen.take(2), if (open(_sell)) _sell, ...chosen.skip(2)]
+        : [..._left.where(open).take(2), if (open(_sell)) _sell, ..._right.where(open).take(1)];
     final glass = t.appBarTheme.backgroundColor ?? t.colorScheme.surface;
     final on = t.colorScheme.tertiary, off = t.colorScheme.onSurfaceVariant;
     Widget item({required Key key, required String label, required String tip, required IconData icon, required bool selected, required VoidCallback onTap}) => Expanded(
@@ -772,3 +778,59 @@ class _Crumbs extends ConsumerWidget {
     ]));
   }
 }
+
+/// F4 (as src/App.jsx OfflineBanner): "Offline · 3 changes waiting to send" while offline; "All sent" for 3 s once the
+/// internet is back and everything has gone
+class OfflineBanner extends ConsumerStatefulWidget {
+  const OfflineBanner({super.key});
+  @override
+  ConsumerState<OfflineBanner> createState() => _OfflineBannerState();
+}
+
+class _OfflineBannerState extends ConsumerState<OfflineBanner> {
+  bool _wasOff = false, _back = false;
+  @override
+  Widget build(BuildContext context) {
+    final st = ref.watch(syncControllerProvider);
+    final off = st.state == SyncState.offline;
+    if (off) {
+      _wasOff = true;
+      _back = false;
+    } else if (_wasOff) {
+      _wasOff = false;
+      _back = true;
+    }
+    if (_back && st.state == SyncState.synced && st.pending == 0) {
+      Future.delayed(const Duration(seconds: 3), () {
+        if (mounted) setState(() => _back = false);
+      });
+    }
+    if (!off && !_back) return const SizedBox.shrink();
+    final tones = context.tones;
+    final sent = !off && st.pending == 0;
+    return Material(
+      key: const Key('offline-banner'),
+      color: (off ? tones.warn : sent ? tones.ok : Theme.of(context).colorScheme.primary).withValues(alpha: .16),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 12),
+        child: Text(
+          off ? 'Offline · ${st.pending > 0 ? '${st.pending} change${st.pending == 1 ? '' : 's'} waiting to send' : 'your work is kept on this device'}' : sent ? 'All sent' : 'Back online · sending ${st.pending}…',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: off ? tones.warn : sent ? tones.ok : null),
+        ),
+      ),
+    );
+  }
+}
+
+/// F8 (as src/landing.js BAR_CHOICES): the pages a person may put in the phone's bottom bar
+const barChoices = [
+  ('/', 'Home', Icons.home_outlined, Icons.home_rounded), ('/inventory', 'Stock', Icons.inventory_2_outlined, Icons.inventory_2),
+  ('/customers', 'Clients', Icons.people_outline, Icons.people), ('/prescriptions', 'Rx', Icons.medication_outlined, Icons.medication),
+  ('/sales', 'Sales', Icons.receipt_long_outlined, Icons.receipt_long), ('/shifts', 'Shift', Icons.schedule_outlined, Icons.schedule),
+  ('/expiry', 'Expiry', Icons.event_busy_outlined, Icons.event_busy), ('/add-stock', 'Add stock', Icons.add_box_outlined, Icons.add_box),
+  ('/chat', 'Chat', Icons.forum_outlined, Icons.forum), ('/reports', 'Reports', Icons.insights_outlined, Icons.insights),
+];
+
+/// This device's chosen bottom-bar pages (deviceValueProvider 'bottomBar', a comma list); empty: the standard bar
+List<String> barChoice(String? raw) => [for (final p in (raw ?? '').split(',')) if (p.trim().isNotEmpty) p.trim()];

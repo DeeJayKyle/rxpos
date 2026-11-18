@@ -17,6 +17,7 @@ import '../../../core/presentation/list_controls.dart';
 import '../../../core/presentation/table_kit.dart';
 import '../../extras/domain/extras.dart' show normalizePhone;
 import 'package:url_launcher/url_launcher.dart';
+import '../../../core/rules/audit_text.dart';
 
 String? _positive(String v, Map<String, Object?> _) => moneyValue(v) > 0 ? null : 'More than 0';
 String? _notFuture(String v, Map<String, Object?> _) => v.compareTo(today()) > 0 ? 'A date of birth can’t be in the future' : null;
@@ -191,9 +192,11 @@ class _PeopleScreenState extends ConsumerState<PeopleScreen> {
   }
 
   Future<void> _edit(Map<String, Object?>? r) async {
-    final v = await editRecord(context, title: r == null ? (widget.suppliers ? 'New supplier' : 'New client') : 'Edit ${r['name']}', fields: _fields, initial: r ?? const {}, side: r != null);
+    final v = await editRecord(context, title: r == null ? (widget.suppliers ? 'New supplier' : 'New client') : 'Edit ${r['name']}', fields: _fields, initial: r ?? const {}, side: r != null, note: editedLine(r));
     if (v == null) return;
-    await ref.read(recordStoreProvider).update((d) => d.put(_t, {...?r, ...v, 'id': r?['id'] ?? uid()}));
+    final who = (await ref.read(sessionControllerProvider.future))?.userName ?? '';
+    // F5: an edit says who made it and when
+    await ref.read(recordStoreProvider).update((d) => d.put(_t, {...?r, ...v, 'id': r?['id'] ?? uid(), if (r != null) ...editStamp(who)}));
     if (mounted) saySaved(context, '${v['name']} saved'); // D4: saved here at once, the mark follows the cloud
   }
 

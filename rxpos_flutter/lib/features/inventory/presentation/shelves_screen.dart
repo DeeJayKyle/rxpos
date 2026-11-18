@@ -78,6 +78,8 @@ class _ShelvesScreenState extends ConsumerState<ShelvesScreen> {
         ),
       ],
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        // F2: the shelves as a picture; tap one for its medicines
+        if (shelves.isNotEmpty) ShelfMap(counts: shelves, value: _shelf, onPick: (s) => setState(() => _shelf = s)),
         Wrap(spacing: 6, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
           ChoiceChip(label: Text('All (${mine.length})'), selected: _shelf.isEmpty, onSelected: (_) => setState(() => _shelf = '')),
           ChoiceChip(key: const Key('shelf-none'), label: Text('No shelf ($unshelved)'), selected: _shelf == '-', onSelected: (_) => setState(() => _shelf = '-')),
@@ -184,5 +186,73 @@ class _ShelvesScreenState extends ConsumerState<ShelvesScreen> {
     if (!mounted) return;
     setState(_picked.clear);
     say(context, shelf.trim().isEmpty ? '$n taken off their shelf' : '$n put on shelf ${shelf.trim()}');
+  }
+}
+
+/// F2 (as src/components/ShelfMap.jsx shelfGrid): codes → rows of a grid (A3 is row A, column 3; "B-12", "c 4" too);
+/// codes that are not letter + number (Fridge) go in a row of their own
+({List<(String, List<String?>)> rows, List<String> other}) shelfGrid(Iterable<String> codes) {
+  final at = <String, Map<int, String>>{}, other = <String>[];
+  var cols = 0;
+  for (final code in codes) {
+    final m = RegExp(r'^\s*([A-Za-z]{1,2})\s*[-\s.]?\s*(\d{1,2})\s*$').firstMatch(code);
+    if (m == null) {
+      other.add(code);
+      continue;
+    }
+    final c = int.parse(m[2]!);
+    (at[m[1]!.toUpperCase()] ??= {})[c] = code;
+    if (c > cols) cols = c;
+  }
+  final keys = at.keys.toList()..sort();
+  return (rows: [for (final r in keys) (r, [for (var i = 1; i <= cols; i++) at[r]![i]])], other: other..sort());
+}
+
+class ShelfMap extends StatelessWidget {
+  const ShelfMap({super.key, required this.counts, required this.value, required this.onPick});
+  final Map<String, int> counts;
+  final String value;
+  final ValueChanged<String> onPick;
+  @override
+  Widget build(BuildContext context) {
+    final g = shelfGrid(counts.keys);
+    final t = Theme.of(context);
+    Widget cell(String code) => Padding(
+          padding: const EdgeInsets.all(3),
+          child: Material(
+            color: value == code ? t.colorScheme.primary : t.colorScheme.primary.withValues(alpha: .12),
+            borderRadius: BorderRadius.circular(10),
+            child: InkWell(
+              key: ValueKey('shelf-cell-$code'),
+              borderRadius: BorderRadius.circular(10),
+              onTap: () => onPick(value == code ? '' : code),
+              child: SizedBox(
+                width: 64,
+                height: 48,
+                child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  Text(code, style: TextStyle(fontWeight: FontWeight.w800, color: value == code ? t.colorScheme.onPrimary : null)),
+                  Text('${counts[code]}', style: TextStyle(fontSize: 11, color: value == code ? t.colorScheme.onPrimary : t.hintColor)),
+                ]),
+              ),
+            ),
+          ),
+        );
+    return Card(
+      key: const Key('shelf-map'),
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            for (final (r, cells) in g.rows)
+              Row(children: [
+                SizedBox(width: 24, child: Text(r, style: const TextStyle(fontWeight: FontWeight.w800))),
+                for (final c in cells) c == null ? const SizedBox(width: 70, height: 54) : cell(c),
+              ]),
+            if (g.other.isNotEmpty) Row(children: [const SizedBox(width: 24), for (final c in g.other) cell(c)]),
+          ]),
+        ),
+      ),
+    );
   }
 }

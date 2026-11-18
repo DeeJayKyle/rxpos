@@ -5,6 +5,7 @@ import 'dart:io';
 import 'dart:ui' show Tristate;
 
 import 'package:rxpos/core/presentation/list_controls.dart' show ListControls;
+import 'package:rxpos/core/presentation/app_shell.dart' show TabBarBottom;
 import 'package:rxpos/core/presentation/form_kit.dart' show HelpTip, SyncMark;
 import 'package:image/image.dart' as img;
 import 'package:rxpos/features/inventory/presentation/medicine_screens.dart' show medicinePhotoPicker;
@@ -966,6 +967,86 @@ void main() {
     await settle(tester);
     expect(find.descendant(of: find.byKey(const ValueKey('thumb-p1')), matching: find.byKey(const Key('med-photo'))), findsOneWidget);
     expect(find.descendant(of: find.byKey(const ValueKey('thumb-p2')), matching: find.byKey(const Key('med-initial'))), findsOneWidget);
+    await done(tester);
+  });
+
+  testWidgets('UI batch 3 pages: expiry calendar, shelf map, Ctrl+K recent and suggested, Edited by, the audit log as sentences, the report line, the phone bar chosen here', (tester) async {
+    await tester.runAsync(signedIn);
+    String day(int n) => DateTime.now().add(Duration(days: n)).toIso8601String().substring(0, 10);
+    await tester.runAsync(() => RecordStore(db).update((d) {
+          d.put('batches', {'id': 'b1', 'productId': 'p1', 'batch': 'C1', 'expiry': day(10), 'cost': 300});
+          d.put('products', {'id': 'p1', 'name': 'Calmex 500mg Tabs', 'generic': 'Calmex', 'form': 'Tablets', 'unit': 'Tablet', 'barcode': '7010001', 'price': 500, 'cost': 300, 'shelf': 'A1'});
+          d.put('products', {'id': 'p2', 'name': 'Zinco Syrup 100ml', 'unit': 'Bottle', 'barcode': '7010002', 'price': 6000, 'cost': 4000, 'shelf': 'B2'});
+          d.put('customers', {'id': 'c-g', 'name': 'Grace Sample', 'phone': '0700111222'});
+          d.put('audit', {'id': 'a1', 'date': DateTime.now().toUtc().toIso8601String(), 'user': 'Amina Sample', 'action': 'Refund', 'details': 'R102 · UGX 5,000 · wrong item', 'branchId': 'main'});
+          d.put('sales', {'id': 's1', 'number': 'R-9001', 'date': DateTime.now().toUtc().toIso8601String(), 'type': 'retail', 'branchId': 'main', 'items': [{'id': 'p1', 'name': 'Calmex 500mg Tabs', 'qty': 4, 'price': 500, 'cost': 300}],
+            'subtotal': 2000, 'discount': 0, 'tax': 0, 'total': 2000, 'paid': 2000, 'payment': 'Cash', 'customerName': 'Walk-in Customer', 'cashier': 'Tia Admin', 'status': 'completed'});
+        }));
+    await start(tester);
+    void go(String to) => GoRouter.of(tester.element(find.byType(Scaffold).first)).go(to);
+    // F1
+    go('/expiry');
+    await settle(tester);
+    await tester.tap(find.text('Calendar'));
+    await settle(tester);
+    expect(find.byKey(const Key('expiry-calendar')), findsOneWidget);
+    expect(find.byKey(const ValueKey('exp-p1-C1')), findsOneWidget);
+    // F2
+    go('/shelves');
+    await settle(tester);
+    expect(find.byKey(const Key('shelf-map')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('shelf-cell-A1')));
+    await settle(tester);
+    expect(find.text('Zinco Syrup 100ml'), findsNothing);
+    // F6
+    go('/audit');
+    await settle(tester);
+    expect(find.text('Amina Sample refunded R102, UGX 5,000 · reason: wrong item'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('audit-kind-people')));
+    await settle(tester);
+    expect(find.textContaining('refunded R102'), findsNothing);
+    // F9
+    go('/reports');
+    await settle(tester);
+    expect(find.byKey(const Key('report-summary')), findsOneWidget);
+    expect(tester.widget<Text>(find.byKey(const Key('report-summary'))).data, contains('Calmex 500mg Tabs sold most'));
+    // F5: an edited client says who changed it
+    go('/customers');
+    await settle(tester);
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Edit').first);
+    await settle(tester);
+    await tester.tap(find.text('Save'));
+    await settle(tester);
+    noSnackBars(tester);
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Edit').first);
+    await settle(tester);
+    expect(tester.widget<Text>(find.byKey(const Key('who-changed'))).data, startsWith('Edited by Tia Admin'));
+    Navigator.of(tester.element(find.byType(AlertDialog))).pop();
+    await settle(tester);
+    // F3: Ctrl+K: a search is remembered and offered before typing, with the suggested actions
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyK);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await settle(tester);
+    await tester.enterText(find.byKey(const Key('palette-input')), 'calmex');
+    await settle(tester);
+    await tester.tap(find.text('Calmex 500mg Tabs').last);
+    await settle(tester);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyK);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await settle(tester);
+    expect(find.text('Recent searches'), findsOneWidget);
+    expect(find.text('calmex'), findsWidgets);
+    expect(find.text('Suggested'), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await settle(tester);
+    // F8: this device's bottom bar
+    await tester.runAsync(() => db.into(db.kv).insertOnConflictUpdate(KvCompanion.insert(k: 'device:bottomBar', v: '/expiry,/sales')));
+    await done(tester);
+    await start(tester, size: const Size(400, 800));
+    final tabs = tester.widgetList<Semantics>(find.descendant(of: find.byType(TabBarBottom), matching: find.byType(Semantics))).map((x) => x.properties.label).whereType<String>().toList();
+    expect(tabs.first, 'Expiry');
     await done(tester);
   });
 
