@@ -124,3 +124,4 @@
 .branch-btn { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-size: var(--t-5); cursor: pointer; }
 .branch-pop { position: absolute; left: 0; bottom: calc(100% + 6px); min-width: 220px; padding: 10px 12px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border-strong); box-shadow: 0 12px 30px -12px rgba(0, 0, 0, .35); display: grid; gap: 6px; }
 .product-wrap { position: relative; }
+.med-thumb.initial::before { content: attr(data-initial); }

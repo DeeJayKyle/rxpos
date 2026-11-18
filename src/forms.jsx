@@ -109,7 +109,8 @@ export function MedThumb({ p, base, size = 36 }) {
   const url = p?.photo ? safeFileUrl(base, p.photo) : null;
   const [broken, setBroken] = useState(false);
   if (url && !broken) return <img className="med-thumb" src={url} alt="" width={size} height={size} loading="lazy" onError={() => setBroken(true)} style={{ '--sz': size + 'px' }} />;
-  return <span className="med-thumb initial" aria-hidden="true" style={{ '--sz': size + 'px' }}>{String(p?.name || '?').trim().charAt(0).toUpperCase()}</span>;
+  // the letter is drawn by CSS (data-initial): it stays out of the tile's text and what screen readers say
+  return <span className="med-thumb initial" aria-hidden="true" data-initial={String(p?.name || '?').trim().charAt(0).toUpperCase()} style={{ '--sz': size + 'px' }} />;
 }
 
 /** A5: the Photo field of the medicine form: take one with the camera or choose a file; kept small, stored with the

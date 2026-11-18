@@ -64,7 +64,7 @@ const sales = (await owner('/tenants/' + tid + '/records?t=sales').catch(() => n
 check('…and it reached the cloud', sales?.total >= 1, JSON.stringify(sales)?.slice(0, 80));
 const stored = await p.evaluate(async () => ({ db: (await indexedDB.databases?.() || []).map((d) => d.name), keys: Object.keys(window.localStorage), caches: (await caches.keys()).length }));
 check('after working: no on-device database and no caches', !stored.db.includes('pharmapos') && stored.caches === 0, JSON.stringify(stored));
-check('after working: localStorage holds appearance preferences only', stored.keys.every((k) => /^(pharmapos-theme|rxpos-theme-mode|rxpos-accent|rxpos-surface-style|rxpos-rail|pharmapos-nav|rxpos-tip:|rxpos-device|rxpos-sound|rxpos-pos-favs:|rxpos-weekly-|rxpos-announced)/.test(k)), stored.keys.join(','));
+check('after working: localStorage holds appearance preferences only', stored.keys.every((k) => /^(pharmapos-theme|rxpos-theme-mode|rxpos-accent|rxpos-surface-style|rxpos-rail|pharmapos-nav|rxpos-tip:|rxpos-tour:|rxpos-splash$|rxpos-device|rxpos-sound|rxpos-pos-favs:|rxpos-weekly-|rxpos-announced)/.test(k)), stored.keys.join(','));
 
 // ---- the session is this tab only ----
 await p.reload({ waitUntil: 'networkidle2' });
@@ -86,7 +86,7 @@ check('back online: the screen goes away', await until(p, () => !document.queryS
 await p.evaluate(() => document.querySelector('button[title="Log out"]')?.click());
 await p.waitForSelector('input[type=password]', { timeout: 15000 }); await wait(1000);
 const after = await p.evaluate(() => ({ session: window.sessionStorage.length, keys: Object.keys(window.localStorage) }));
-check('sign-out clears this tab and keeps only appearance preferences', after.session === 0 && after.keys.every((k) => /^(pharmapos-theme|rxpos-theme-mode|rxpos-accent|rxpos-surface-style|rxpos-rail|pharmapos-nav|rxpos-tip:|rxpos-device|rxpos-sound|rxpos-pos-favs:|rxpos-weekly-|rxpos-announced)/.test(k)), JSON.stringify(after));
+check('sign-out clears this tab and keeps only appearance preferences', after.session === 0 && after.keys.every((k) => /^(pharmapos-theme|rxpos-theme-mode|rxpos-accent|rxpos-surface-style|rxpos-rail|pharmapos-nav|rxpos-tip:|rxpos-tour:|rxpos-splash$|rxpos-device|rxpos-sound|rxpos-pos-favs:|rxpos-weekly-|rxpos-announced)/.test(k)), JSON.stringify(after));
 
 // ---- the Windows app still keeps the pharmacy for offline work ----
 const a = await ctx.newPage(); await a.setViewport({ width: 1280, height: 860 }); await asDesktopApp(a, base);
