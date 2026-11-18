@@ -40,7 +40,7 @@ const label = () => p.evaluate(() => document.activeElement?.closest('label')?.q
 await p.evaluate(() => { location.hash = '#/customers'; }); await wait(1200);
 await p.evaluate(() => [...document.querySelectorAll('.page-head button')].find((x) => /Add customer/.test(x.textContent)).click()); await wait(400);
 check('D7 the form opens with the cursor in its first field', /Full name/.test(await label() || ''), await label());
-check('D9 a pop-up has one of the three sizes (a record form: lg, 960 px)', await p.evaluate(() => { const m = document.querySelector('.modal'); const w = Math.round(m.getBoundingClientRect().width); return [...m.classList].some((c) => /^size-(sm|md|lg)$/.test(c)) && [420, 640, 960].includes(w); }), await p.evaluate(() => document.querySelector('.modal').className + ' ' + Math.round(document.querySelector('.modal').getBoundingClientRect().width)));
+check('D9 a pop-up has one of the three sizes', await p.evaluate(() => { const m = document.querySelector('.modal'); const w = Math.round(m.getBoundingClientRect().width); return [...m.classList].some((c) => /^size-(sm|md|lg)$/.test(c)) && [420, 640, 960].includes(w); }), await p.evaluate(() => document.querySelector('.modal').className + ' ' + Math.round(document.querySelector('.modal').getBoundingClientRect().width)));
 await p.keyboard.type('Grace Sample'); await p.keyboard.press('Enter'); await wait(150);
 check('D7 Enter moves to the next field (not a save)', /Phone/.test(await label() || '') && await p.evaluate(() => !!document.querySelector('.modal')), await label());
 await p.keyboard.type('0772123456'); await wait(150);
@@ -79,7 +79,7 @@ await p.keyboard.press('Escape'); await wait(300);
 
 // A5: a medicine's photo: chosen in the form, made small, stored with the pharmacy's files, shown on the till's tile
 await p.evaluate(() => { location.hash = '#/medicines'; }); await wait(1000);
-await p.evaluate(() => [...document.querySelectorAll('table tbody tr')].find((r) => /Calmex/.test(r.innerText)).querySelector('td.actions .btn.ghost').click()); await wait(400);
+await p.evaluate(() => [...[...document.querySelectorAll('table tbody tr')].find((r) => /Calmex/.test(r.innerText)).querySelectorAll('td.actions button')].find((b) => /^Edit$/.test(b.textContent.trim())).click()); await wait(400);
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEklEQVR4nGP4z8CAFWEXHbQSACj/P8Fu7N9hAAAAAElFTkSuQmCC', 'base64');
 fs.writeFileSync(path.join(out, 'pill.png'), png);
 await (await p.$('.modal input[type=file]')).uploadFile(path.join(out, 'pill.png'));

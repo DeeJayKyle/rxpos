@@ -155,7 +155,7 @@ export function Empty({ children = 'Nothing here yet', colSpan, action, icon: Ic
  * together; the columns shown chosen per device; the search kept while the app is open. `bulk(rows)` adds page actions
  * for the ticked rows ([{ label, run }]); `rowMenu(r)` adds items to a row's menu.
  */
-export function CrudPage({ title, subtitle, singular, table, fields, columns, blank = {}, extraActions, rowClass, rows: rowsProp, onSave, headExtra, canDelete = true, filter, readOnly = false, rowLocked, bulk, rowMenu, card, board, swipeActions, sideDetails, emptyText, totals, deleteEffects }) {
+export function CrudPage({ title, subtitle, singular, table, fields, columns, blank = {}, extraActions, rowClass, rows: rowsProp, onSave, headExtra, canDelete = true, filter, readOnly = false, rowLocked, bulk, rowMenu, card, board, swipeActions, sideDetails, emptyText, totals, deleteEffects, modalSize }) {
   const { db, upsert, remove, update } = useStore();
   const location = useLocation();
   const qKey = 'rxpos-q:' + table + ':' + location.pathname;
@@ -271,7 +271,7 @@ export function CrudPage({ title, subtitle, singular, table, fields, columns, bl
       </div>}
       {menu.node}
       {editing && !(sideDetails && wide && !editing._new && shownView === 'table') && (
-        <Modal title={(editing._new ? 'Add ' : 'Edit ') + name.toLowerCase()} onClose={() => setEditing(null)} wide>
+        <Modal title={(editing._new ? 'Add ' : 'Edit ') + name.toLowerCase()} onClose={() => setEditing(null)} size={modalSize || (fields.length > 12 ? 'lg' : 'md')}>
           <RecordForm fields={fields} initial={editing} onCancel={() => setEditing(null)}
             onSave={({ _new, stock, ...rec }) => {
               onSave ? onSave(rec, _new, editing) : upsert(table, rec);

@@ -92,3 +92,11 @@
 /* E8: the opening screen with the pharmacy's logo and name */
 #splash .splash-pharmacy { display: flex; align-items: center; gap: 10px; color: #e2e8f0; font-weight: 650; font-size: 15px; }
 #splash .splash-pharmacy img { width: 36px; height: 36px; object-fit: contain; border-radius: 8px; background: #fff; }
+/* the till's discount and tendered amounts keep the compact height they had as plain inputs (7 sale lines in view) */
+.money-input.small-input input { padding: 6px 10px; }
+@media (min-width: 1280px) {
+  .lay-std .pos-cart .totals .money-input.small-input input { padding-top: 2px; padding-bottom: 2px; }
+  .lay-std .pos-cart .field > .money-input > input { padding-top: 6px; padding-bottom: 6px; }
+}
+/* the till's "Promos / member discount" line is not the dashboard's "Promote today" row (which shares the class name) */
+.pos-cart .totals .promo-row { min-height: 0; padding: 0; border-bottom: 0; gap: 8px; }

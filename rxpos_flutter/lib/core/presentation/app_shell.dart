@@ -36,6 +36,7 @@ import 'top_bar.dart';
 import '../../features/calls/presentation/call_overlay.dart';
 import '../update/update_pill.dart';
 import '../../theme/rxpos_theme.dart' show WindowClass, windowClass;
+import 'form_kit.dart' show PharmacyLogo;
 
 /// The frame around every screen: the sidebar with its groups (Sales, People, Medicine inventory, Finance, Insights,
 /// System) on Windows and tablets, a drawer on phones; the pharmacy, who is signed in, the sync status, the Premium UI
@@ -579,6 +580,8 @@ class _SideHeader extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 14, 6, 10),
       child: Row(children: [
         const RxMark(),
+        // E6: the pharmacy's own logo beside the RxPOS mark
+        const Padding(padding: EdgeInsets.only(left: 6), child: PharmacyLogo(size: 30)),
         const SizedBox(width: 10),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [

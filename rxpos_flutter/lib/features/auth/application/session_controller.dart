@@ -11,6 +11,8 @@ import '../data/auth_repository.dart';
 import '../data/platform_unlock.dart';
 import '../domain/device_unlock.dart';
 import '../domain/session.dart';
+import 'dart:convert';
+import '../../../core/data/device_settings.dart' show deviceValueProvider;
 
 part 'session_controller.g.dart';
 
@@ -44,6 +46,7 @@ class SessionController extends _$SessionController {
       markTabSignedIn(); // a browser keeps this sign-in for the tab
       ref.read(authTokenProvider.notifier).set(out.session.token);
       state = AsyncData(out.session);
+      rememberStaff(ref, out.session.tenant, out.session.userId).ignore(); // E9: the sign-in page's recent staff
     }
     return out;
   }
@@ -64,4 +67,21 @@ Stream<Set<String>> permissions(Ref ref) async* {
     return;
   }
   yield* ref.watch(recordStoreProvider).watch('roles').map((rows) => permissionsOf(rows.map(Role.fromRecord), session.role));
+}
+
+/// UI batch 3, E9 (as src/offline.js rememberStaff): the staff who signed in on this device lately, ids only, newest
+/// first, at most 6. Nobody who never signed in here is ever shown.
+Future<void> rememberStaff(Ref ref, String tenant, String userId) async {
+  if (userId.isEmpty) return;
+  final key = 'recent-staff:$tenant';
+  final cur = recentStaffOf(await ref.read(deviceValueProvider(key).future));
+  await ref.read(deviceValueProvider(key).notifier).set(jsonEncode([userId, ...cur.where((x) => x != userId)].take(6).toList()));
+}
+
+List<String> recentStaffOf(String? raw) {
+  try {
+    return [for (final x in (jsonDecode(raw ?? '[]') as List)) '$x'];
+  } catch (_) {
+    return const [];
+  }
 }

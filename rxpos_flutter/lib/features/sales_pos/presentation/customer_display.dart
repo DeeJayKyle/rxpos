@@ -14,6 +14,7 @@ import '../../../core/rules/money.dart';
 import '../../../core/web/display_channel_stub.dart' if (dart.library.js_interop) '../../../core/web/display_channel_web.dart';
 import '../application/sale_controller.dart';
 import '../domain/cart.dart';
+import '../../../core/presentation/form_kit.dart' show pharmacyLogoProvider;
 
 export '../../../core/web/display_channel_stub.dart' if (dart.library.js_interop) '../../../core/web/display_channel_web.dart';
 
@@ -67,7 +68,7 @@ class _CustomerDisplayState extends ConsumerState<CustomerDisplayScreen> {
     var m = _msg;
     if (!displayChannelAvailable) {
       final d = ref.watch(pharmacyProvider).value;
-      if (d != null) m = displayMessage(ref.watch(saleControllerProvider(false)), d.settings, logo: '${ref.watch(brandingProvider)?['logo'] ?? ''}');
+      if (d != null) m = displayMessage(ref.watch(saleControllerProvider(false)), d.settings, logo: ref.watch(pharmacyLogoProvider));
     }
     final t = Theme.of(context);
     final big = t.textTheme.headlineMedium;
@@ -88,7 +89,9 @@ class _CustomerDisplayState extends ConsumerState<CustomerDisplayScreen> {
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               Row(children: [
                 if (logo.startsWith('data:image'))
-                  Padding(padding: const EdgeInsets.only(right: 14), child: Image.memory(base64Decode(logo.split(',').last), height: 52)),
+                  Padding(padding: const EdgeInsets.only(right: 14), child: Image.memory(base64Decode(logo.split(',').last), height: 52))
+                else if (logo.startsWith('http'))
+                  Padding(padding: const EdgeInsets.only(right: 14), child: Image.network(logo, height: 52, errorBuilder: (_, _, _) => const SizedBox.shrink())),
                 Expanded(child: Text(v('pharmacy').isEmpty ? 'Welcome' : v('pharmacy'), style: big?.copyWith(fontWeight: FontWeight.w800))),
               ]),
               const SizedBox(height: 20),
