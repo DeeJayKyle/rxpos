@@ -84,6 +84,15 @@ const seen = await p.evaluate(() => { const box = document.querySelector('.cart-
 await p.screenshot({ path: path.join(out, 'pos-lines.png') });
 check('at 1440 × 900 at least 7 sale lines are in view at once', seen >= 7, seen);
 await p.screenshot({ path: path.join(out, 'pos-many.png') });
+const linesBefore = await p.evaluate(() => document.querySelectorAll('.cart-line').length);
+await p.evaluate(() => [...document.querySelectorAll('.pos-cart button')].find((x) => /Clear all/.test(x.textContent)).click()); await wait(300);
+check('Clear all empties the sale at once, with Undo (no confirm)', await p.evaluate(() => !document.querySelector('.cart-line') && !document.querySelector('.modal') && !!document.querySelector('.toast .toast-action')));
+await p.evaluate(() => document.querySelector('.toast .toast-action').click()); await wait(300);
+check('…Undo puts every line back', await p.evaluate((n) => document.querySelectorAll('.cart-line').length === n, linesBefore));
+await p.evaluate(() => document.querySelector('.cart-line .line-remove').click()); await wait(300);
+check('removing one line: gone at once, Undo offered', await p.evaluate((n) => document.querySelectorAll('.cart-line').length === n - 1 && /Removed/.test(document.querySelector('.toast')?.innerText || ''), linesBefore));
+await p.evaluate(() => [...document.querySelectorAll('.toast .toast-action')].pop().click()); await wait(300);
+check('…and Undo brings it back in its place', await p.evaluate((n) => document.querySelectorAll('.cart-line').length === n, linesBefore));
 await p.evaluate(() => [...document.querySelectorAll('.pos-cart button')].find((x) => /Clear all/.test(x.textContent)).click()); await wait(300);
 for (const code of ['7010001', '7010002']) { await p.focus('.pos-products input.search'); await p.keyboard.type(code); await p.keyboard.press('Enter'); await wait(300); }
 check('no quick actions panel', await p.evaluate(() => !document.querySelector('.quick-tile')));

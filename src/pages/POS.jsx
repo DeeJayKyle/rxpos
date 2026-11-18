@@ -70,9 +70,22 @@ export default function POS({ mode = 'retail' }) {
   const [favs, setFavs] = useState(() => { try { return new Set(JSON.parse(localStorage.getItem(favKey)) || []); } catch { return new Set(); } });
   const toggleFav = (id) => setFavs((f) => { const n = new Set(f); n.has(id) ? n.delete(id) : n.add(id); try { localStorage.setItem(favKey, JSON.stringify([...n])); } catch { /* storage blocked */ } return n; });
   const [cart, setCart] = useState([]);
+  const cartNow = useRef(cart); cartNow.current = cart; // the lines as they are now, for Undo
   const [picked, setPicked] = useState(() => new Set()); // lines ticked on the current sale
   const togglePick = (id) => setPicked((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
-  const removeLines = (ids) => { const drop = new Set(ids); setCart((c) => c.filter((l) => !drop.has(l.id))); setPicked((s) => new Set([...s].filter((id) => !drop.has(id)))); };
+  // removed at once, with Undo for a few seconds (2026-11-18: undo instead of confirm); the lines go back where they were
+  const removeLines = (ids, { quiet = false } = {}) => {
+    const drop = new Set(ids);
+    const gone = cartNow.current.map((l, i) => [i, l]).filter(([, l]) => drop.has(l.id));
+    if (!gone.length) return;
+    setCart((c) => c.filter((l) => !drop.has(l.id))); setPicked((s) => new Set([...s].filter((id) => !drop.has(id))));
+    if (quiet) return;
+    toast(gone.length === 1 ? `Removed ${gone[0][1].name}` : `Removed ${gone.length} items`, 'info', { action: { label: 'Undo', run: () => setCart((c) => {
+      const out = c.filter((l) => !drop.has(l.id));
+      for (const [i, l] of gone) out.splice(Math.min(i, out.length), 0, l);
+      return out;
+    }) } });
+  };
   useEffect(() => { if (!cart.length && picked.size) setPicked(new Set()); }, [cart.length]); // eslint-disable-line react-hooks/exhaustive-deps
   const [customerId, setCustomerId] = useState('walk-in');
   const [discount, setDiscount] = useState(0);
@@ -303,6 +316,7 @@ export default function POS({ mode = 'retail' }) {
       if (k && Number(k.size) <= p.stock) { const pp = packPrice(k, priceOf(p), wholesale), size = Number(k.size); return [...c, { ...first, pack: { name: k.name, size, price: pp }, price: pp / size, qty: size }]; }
       return [...c, first];
     });
+    try { if (touch) navigator.vibrate?.(15); } catch { /* not allowed */ } // a light tap on phones: it was added
     setQ('');
     focusSearch();
   };
@@ -911,7 +925,7 @@ export default function POS({ mode = 'retail' }) {
               {cart.length > 1 && <label className="check small" title="Tick every line"><input type="checkbox" checked={picked.size === cart.length} onChange={(e) => setPicked(e.target.checked ? new Set(cart.map((l) => l.id)) : new Set())} /><span>All</span></label>}
               {picked.size > 0
                 ? <button className="btn sm danger" onClick={() => removeLines([...picked])}><Trash2 size={14} />Remove {picked.size === 1 ? 'item' : `${picked.size} items`}</button>
-                : <button className="btn sm ghost" onClick={async () => { if (await ask({ title: 'Clear the sale?', message: `${cart.length} line${cart.length === 1 ? '' : 's'} · ${fmt(total)} will be removed.`, confirmText: 'Clear all', danger: true })) { setCart([]); setPicked(new Set()); } }}><Trash2 size={14} />Clear all</button>}
+                : <button className="btn sm ghost" onClick={() => { const was = cart; setCart([]); setPicked(new Set()); toast(`Sale cleared · ${was.length} line${was.length === 1 ? '' : 's'}`, 'info', { action: { label: 'Undo', run: () => setCart(was) } }); }}><Trash2 size={14} />Clear all</button>}
             </div>
           )}
         </div>
@@ -991,7 +1005,7 @@ export default function POS({ mode = 'retail' }) {
               </div>
               <div className="qty">
                 <button onClick={() => (l.qty > stepOf(l) ? setCount(l, l.qty / stepOf(l) - 1) : removeLines([l.id]))} aria-label="Less">−</button>
-                <input type="number" min="1" value={l.qty / stepOf(l)} onChange={(e) => setCount(l, e.target.value)} aria-label="Quantity" />
+                <input type="number" min="1" value={l.qty / stepOf(l)} onChange={(e) => setCount(l, e.target.value)} aria-label="Quantity" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); focusSearch(); } }} />
                 <button onClick={() => setCount(l, l.qty / stepOf(l) + 1)} aria-label="More">+</button>
               </div>
               <span className="num line-total">{fmt(l.price * l.qty)}</span>

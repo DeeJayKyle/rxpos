@@ -9,9 +9,10 @@ let listener = null;
 let seq = 0;
 const emit = (ev) => listener?.(ev);
 
-/** toast('Saved'), toast('Out of stock', 'error'), tone: success | error | warn | info */
-export function toast(message, tone = 'success') {
-  emit({ type: 'toast', item: { id: ++seq, message, tone } });
+/** toast('Saved'), toast('Out of stock', 'error'), tone: success | error | warn | info;
+ *  { action: { label: 'Undo', run } } adds a button (and keeps the toast 6 s) */
+export function toast(message, tone = 'success', { action } = {}) {
+  emit({ type: 'toast', item: { id: ++seq, message, tone, action } });
 }
 
 /** await ask({ title, message, confirmText, cancelText, danger, focusCancel }) → true/false. focusCancel: Cancel has the
@@ -36,7 +37,7 @@ function Toast({ t, onClose }) {
   useEffect(() => {
     if (sticky) return undefined;
     let id;
-    const arm = () => { id = setTimeout(() => { if (paused.current) arm(); else onClose(); }, 3500); };
+    const arm = () => { id = setTimeout(() => { if (paused.current) arm(); else onClose(); }, t.action ? 6000 : 3500); };
     arm();
     return () => clearTimeout(id);
   }, [sticky]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -46,6 +47,7 @@ function Toast({ t, onClose }) {
       onMouseEnter={() => { paused.current = true; }} onMouseLeave={() => { paused.current = false; }}
       onFocus={() => { paused.current = true; }} onBlur={() => { paused.current = false; }}>
       <Icon size={18} /><span>{t.message}</span>
+      {t.action && <button type="button" className="btn sm toast-action" onClick={() => { t.action.run(); onClose(); }}>{t.action.label}</button>}
       <button className="icon-btn" aria-label="Dismiss" onClick={onClose}><X size={16} /></button>
     </div>
   );

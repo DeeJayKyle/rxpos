@@ -136,6 +136,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
   Future<void> _add(Product p) => _try(() async {
     try {
       await _sale.add(p);
+      HapticFeedback.lightImpact(); // a light tap on phones: it was added (2026-11-18)
     } on OnlyExpiredLeft {
       if (!mounted) return;
       final why = await askExpiredReason(context, p.name);
@@ -561,7 +562,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                 : Column(
                     children: [
                       Expanded(child: products),
-                      _SaleBar(wholesale: widget.wholesale, data: d, open: () => _openSale(sale)),
+                      _SaleBar(wholesale: widget.wholesale, data: d, open: () => _openSale(sale), onCharge: _charge),
                     ],
                   ),
           ),
@@ -1263,12 +1264,21 @@ class _Tag extends StatelessWidget {
   }
 }
 
-/// Phones: the sale's count and total, tap to open it.
+/// Removed at once, with Undo for a few seconds (2026-11-18: undo instead of confirm); the lines go back as they were.
+void withUndo(BuildContext context, SaleController c, String message, VoidCallback action) {
+  final before = c.lines;
+  action();
+  ScaffoldMessenger.of(context)
+    ..hideCurrentSnackBar()
+    ..showSnackBar(SnackBar(content: Text(message), duration: const Duration(seconds: 6), action: SnackBarAction(label: 'Undo', onPressed: () => c.restoreLines(before))));
+}
+
+/// Phones: the sale's count and total, tap to open it; Charge always in reach (2026-11-18).
 class _SaleBar extends ConsumerWidget {
-  const _SaleBar({required this.wholesale, required this.data, required this.open});
+  const _SaleBar({required this.wholesale, required this.data, required this.open, required this.onCharge});
   final bool wholesale;
   final PharmacyData data;
-  final VoidCallback open;
+  final VoidCallback open, onCharge;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final s = ref.watch(saleControllerProvider(wholesale));
@@ -1288,6 +1298,8 @@ class _SaleBar extends ConsumerWidget {
                 formatMoney(t.total, currency: data.settings.currency, decimals: data.settings.decimalPlaces),
                 style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
               ),
+              const SizedBox(width: 10),
+              FilledButton(key: const Key('bar-charge'), onPressed: s.lines.isEmpty ? null : onCharge, child: const Text('Charge')),
             ],
           ),
         ),
@@ -1371,8 +1383,8 @@ class _SalePanel extends ConsumerWidget {
                 // a phone: the bin alone, so the title, the safety badge and Scan Rx keep their room
                 if (s.lines.isNotEmpty)
                   narrow
-                      ? IconButton(onPressed: c.clear, icon: const Icon(Icons.delete_outline), tooltip: 'Clear all')
-                      : TextButton.icon(onPressed: c.clear, icon: const Icon(Icons.delete_outline, size: 18), label: const Text('Clear all')),
+                      ? IconButton(onPressed: () => withUndo(context, c, 'Sale cleared', c.clear), icon: const Icon(Icons.delete_outline), tooltip: 'Clear all')
+                      : TextButton.icon(onPressed: () => withUndo(context, c, 'Sale cleared', c.clear), icon: const Icon(Icons.delete_outline, size: 18), label: const Text('Clear all')),
               ],
             ),
             if (s.lines.isNotEmpty)
@@ -1508,7 +1520,7 @@ class _SalePanel extends ConsumerWidget {
                             padding: const EdgeInsets.only(right: 16),
                             child: const Icon(Icons.delete_outline),
                           ),
-                          onDismissed: (_) => c.remove(l.id),
+                          onDismissed: (_) => withUndo(context, c, 'Removed ${l.name}', () => c.remove(l.id)),
                           child: Container(
                             key: chosen ? const Key('line-chosen') : null,
                             // a kit line in its own colour, with a stripe (src/styles/kits.css .kit-line)
@@ -1648,7 +1660,7 @@ class _SalePanel extends ConsumerWidget {
                                   ),
                                 ),
                                 if (!narrow) ...qtyAndTotal(),
-                                IconButton(onPressed: () => c.remove(l.id), icon: const Icon(Icons.close, size: 18), tooltip: 'Remove ${l.name}', color: th.colorScheme.onSurfaceVariant),
+                                IconButton(onPressed: () => withUndo(context, c, 'Removed ${l.name}', () => c.remove(l.id)), icon: const Icon(Icons.close, size: 18), tooltip: 'Remove ${l.name}', color: th.colorScheme.onSurfaceVariant),
                               ],
                             ),
                           ),

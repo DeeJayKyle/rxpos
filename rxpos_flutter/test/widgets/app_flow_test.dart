@@ -276,6 +276,43 @@ void main() {
     await done(tester);
   });
 
+  testWidgets('till: removing a line is at once, with Undo (no confirm); Clear all too', (tester) async {
+    await tester.runAsync(signedIn);
+    await start(tester);
+    await toTill(tester);
+    await tester.enterText(find.widgetWithText(TextField, 'Search medicine or scan barcode…  (F8)'), '7010001');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await settle(tester);
+    expect(find.text('Calmex 500mg Tabs'), findsNWidgets(2));
+    await tester.tap(find.byTooltip('Remove Calmex 500mg Tabs'));
+    await settle(tester);
+    expect(find.text('Calmex 500mg Tabs'), findsOneWidget, reason: 'gone from the sale at once');
+    expect(find.text('Removed Calmex 500mg Tabs'), findsOneWidget);
+    await tester.tap(find.text('Undo'));
+    await settle(tester);
+    expect(find.text('Calmex 500mg Tabs'), findsNWidgets(2), reason: 'back in the sale');
+    await tester.tap(find.text('Clear all'));
+    await settle(tester);
+    expect(find.text('Calmex 500mg Tabs'), findsOneWidget);
+    await tester.tap(find.text('Undo'));
+    await settle(tester);
+    expect(find.text('Calmex 500mg Tabs'), findsNWidgets(2));
+    await done(tester);
+  });
+
+  testWidgets('phone till: the bottom bar keeps the total and Charge in reach', (tester) async {
+    await tester.runAsync(signedIn);
+    await start(tester, size: const Size(400, 860));
+    await toTill(tester);
+    expect(tester.widget<FilledButton>(find.byKey(const Key('bar-charge'))).onPressed, isNull, reason: 'nothing to charge yet');
+    await tester.tap(find.text('Calmex 500mg Tabs'));
+    await settle(tester, 4);
+    await tester.tap(find.byKey(const Key('bar-charge')));
+    await settle(tester);
+    expect(find.text('Sale complete'), findsOneWidget);
+    await done(tester);
+  });
+
   testWidgets('1.10 kits: a kit on the till (warning, tick, charge) leaves its medicines\' stock; a new kit is built on the Kits screen', (tester) async {
     await tester.runAsync(signedIn);
     final store = RecordStore(db);

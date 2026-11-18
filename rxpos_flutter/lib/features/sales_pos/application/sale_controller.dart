@@ -383,6 +383,10 @@ class SaleController extends _$SaleController {
   );
 
   void remove(String id) => state = state.copyWith(lines: state.lines.where((l) => l.id != id).toList(), cursor: -1);
+  /// the sale's lines now (for Undo)
+  List<CartLine> get lines => state.lines;
+  /// Undo: put back the lines as they were before a remove or a clear
+  void restoreLines(List<CartLine> lines) => state = state.copyWith(lines: lines, cursor: -1);
   void clear() => state = SaleState(method: state.method);
   void customer(String id, String name) => state = state.copyWith(customerId: id, customerName: name);
   void discount(double v) => state = state.copyWith(discount: v < 0 ? 0 : v);
