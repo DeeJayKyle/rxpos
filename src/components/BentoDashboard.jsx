@@ -4,7 +4,7 @@
 // Dashboard already worked out (one pass over the sales), so it adds no work of its own beyond the last receipts.
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowUpRight, ArrowDownRight, ArrowRight, Sparkles, ReceiptText } from 'lucide-react';
+import { ArrowRight, Sparkles, ReceiptText } from 'lucide-react';
 import { localDate, MAIN_BRANCH, today } from '../store.jsx';
 import { featuredAction } from './NavMenus.jsx';
 
@@ -52,7 +52,7 @@ export default function BentoDashboard({ byDay, db, branchId, fmt, can, counts }
           <span className="micro">Sales · {label}</span>
           <strong className="bento-big num">{fmt(cur.total)}</strong>
           <span className="bento-delta-row">
-            {delta != null && <span className={'bento-delta ' + (delta >= 0 ? 'up' : 'down')}>{delta >= 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}{Math.abs(delta).toFixed(1)}%</span>}
+            {delta != null && <span className={'bento-delta ' + (delta >= 0 ? 'up' : 'down')}>{delta >= 0 ? '▲ +' : '▼ −'}{Math.abs(delta).toFixed(1)}%</span>}
             <small>{delta != null ? `vs the ${n === 1 ? 'day' : n + ' days'} before` : 'nothing to compare with yet'}</small>
           </span>
           <span className="bento-mini">
@@ -78,7 +78,7 @@ export default function BentoDashboard({ byDay, db, branchId, fmt, can, counts }
             {recent.map((s) => { const [st, cls] = saleStatus(s); return (
               <li key={s.id}>
                 <span className="grow"><strong>{s.customerName || 'Walk-in'}</strong><small className="muted">{s.number} · {new Date(s.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</small></span>
-                <span className={'status-pill ' + cls}>{st}</span>
+                {cls !== 'paid' && <span className={'status-pill ' + cls}>{st}</span>}
                 <b className="num">{fmt(s.total)}</b>
               </li>
             ); })}

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../core/rules/fefo.dart';
 import '../theme/rxpos_theme.dart';
 import 'glow_status_chip.dart';
+import '../core/theme/themes.dart' show TonesOfContext;
 
 class FefoBatchBadge extends StatelessWidget {
   const FefoBatchBadge({super.key, required this.expiry, this.batch = '', this.warnDays = 90, this.today});
@@ -17,7 +18,9 @@ class FefoBatchBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final level = expiryLevel(expiry, today: today);
     if (level.isEmpty) return const SizedBox.shrink();
-    final (fg, bg) = statusTone(context, level == 'ok' ? 'ok' : level == 'expired' ? 'error' : 'warn');
+    final tones = context.tones;
+    // expired stock blocks the sale: the one real red (2026-11-18)
+    final (fg, bg) = level == 'expired' ? (tones.block, tones.blockSoft) : statusTone(context, level == 'ok' ? 'ok' : 'warn');
     final e = DateTime.parse(expiry);
     final t = today ?? DateTime.now();
     final days = DateTime.utc(e.year, e.month, e.day).difference(DateTime.utc(t.year, t.month, t.day)).inDays;

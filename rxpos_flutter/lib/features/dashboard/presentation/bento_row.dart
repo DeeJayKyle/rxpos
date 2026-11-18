@@ -91,7 +91,7 @@ class _BentoRowState extends State<BentoRow> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(borderRadius: BorderRadius.circular(99), color: Colors.white.withValues(alpha: .2)),
-                child: Text('${delta >= 0 ? '↗' : '↘'} ${delta.abs().toStringAsFixed(1)}%', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12)),
+                child: Text('${delta >= 0 ? '▲ +' : '▼ −'}${delta.abs().toStringAsFixed(1)}%', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12)),
               ),
             Text(delta != null ? 'vs the ${_n == 1 ? 'day' : '$_n days'} before' : 'nothing to compare with yet', style: TextStyle(color: white.withValues(alpha: .7), fontSize: 12)),
           ]),
@@ -140,7 +140,8 @@ class _BentoRowState extends State<BentoRow> {
                                 key: k == today() ? const Key('bento-bar-today') : null,
                                 decoration: BoxDecoration(
                                   borderRadius: const BorderRadius.vertical(top: Radius.circular(8), bottom: Radius.circular(4)),
-                                  color: k == today() ? t.colorScheme.primary : t.colorScheme.primary.withValues(alpha: .22),
+                                  // the theme's colour at full strength, today a deeper shade (the owner's review, 18 Nov 2026)
+                                  color: k == today() ? Color.lerp(t.colorScheme.primary, Colors.black, .25) : t.colorScheme.primary.withValues(alpha: .85),
                                 ),
                               ),
                             ),
@@ -181,6 +182,8 @@ class _BentoRowState extends State<BentoRow> {
                 ),
                 Builder(builder: (_) {
                   final st = saleStatusOf(s);
+                  // only unusual states carry a pill (2026-11-18)
+                  if (st == 'paid') return const SizedBox.shrink();
                   return Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(borderRadius: BorderRadius.circular(99), color: pill(st).withValues(alpha: .14)),

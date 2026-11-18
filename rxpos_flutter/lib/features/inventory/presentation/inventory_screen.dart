@@ -59,7 +59,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
         ),
       );
     }
-    if (d == null) return const Center(child: CircularProgressIndicator());
+    if (d == null) return const PageSkeleton();
     final s = d.settings;
     final warn = s.expiryWarnDays.round();
     int? soonest(Product p) {

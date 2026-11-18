@@ -283,7 +283,9 @@ check('price check lists a medicine below the 20% target margin (Cipro 500 → 5
   await fill("Patient's name", 'Jane Nakato'); await fill("Patient's ID", 'CM90012345'); await fill('Prescriber', 'Dr Okello'); await fill("Prescriber's registration", 'UMDPC-4411'); await fill('Prescription no.', 'RX-2201');
   await clickText('.modal button', /Record & continue/); await wait(1500);
   check('…then the sale completes', /Sale complete/.test(await A.evaluate(() => document.querySelector('.modal h3')?.innerText || '')));
+  check('…with a "Sale complete · Receipt" banner holding Print and New sale', await A.evaluate(() => { const b = document.querySelector('.modal .sale-done-banner'); return !!b && /Sale complete · Receipt \S+/.test(b.innerText) && /Print/.test(b.innerText) && /New sale/.test(b.innerText); }));
   await clickText('.modal button', /New sale/); await wait(300);
+  check('…the medicine tiles carry the stock pill with the other pills', await A.evaluate(() => { const t = document.querySelector('.product-grid .product .tags .stock-tag'); return !!t; }));
   await go('/controlled'); await wait(500);
   const reg = await A.evaluate(() => document.querySelector('tbody')?.innerText.replace(/\s+/g, ' ') || '');
   check('the register shows the sale with patient, ID, prescriber and prescription, and the running balance', /Sale/.test(reg) && /Jane Nakato/.test(reg) && /CM90012345/.test(reg) && /Dr Okello \(UMDPC-4411\)/.test(reg) && /Rx RX-2201/.test(reg), reg.slice(0, 200));

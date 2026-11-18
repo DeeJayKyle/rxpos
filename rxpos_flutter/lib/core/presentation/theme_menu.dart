@@ -8,14 +8,15 @@ import '../data/pharmacy_providers.dart';
 import '../theme/theme_choice.dart';
 import '../theme/themes.dart';
 
-class ThemeMenuButton extends StatelessWidget {
+class ThemeMenuButton extends ConsumerWidget {
   const ThemeMenuButton({super.key});
   @override
-  Widget build(BuildContext context) => IconButton(
+  Widget build(BuildContext context, WidgetRef ref) => IconButton(
         key: const Key('theme-menu'),
         tooltip: 'Theme',
         icon: const Icon(Icons.palette_outlined),
-        onPressed: () => showAppDialog<void>(context: context, builder: (_) => const ThemeMenu()),
+        // closing the menu, however it closes, puts the chosen theme back
+        onPressed: () => showAppDialog<void>(context: context, builder: (_) => const ThemeMenu()).whenComplete(() => ref.read(themePreviewProvider.notifier).show(null)),
       );
 }
 
@@ -71,7 +72,11 @@ class ThemeMenu extends ConsumerWidget {
                 if (allowed.any((p) => (p.group.isEmpty ? 'Light' : p.group) == g)) ...[
               head(g),
               for (final p in allowed.where((p) => (p.group.isEmpty ? 'Light' : p.group) == g))
-                ListTile(
+                // the pointer on a theme previews it (2026-11-18); leaving it puts the chosen one back
+                MouseRegion(
+                  onEnter: (_) => ref.read(themePreviewProvider.notifier).show(p.id),
+                  onExit: (_) => ref.read(themePreviewProvider.notifier).show(null),
+                  child: ListTile(
                   key: ValueKey('theme-${p.id}'),
                   dense: true,
                   selected: p.id == look.theme && !look.system,
@@ -83,6 +88,7 @@ class ThemeMenu extends ConsumerWidget {
                     ctl.pick(p.id);
                     close();
                   },
+                ),
                 ),
                 ],
               head('Colour'),

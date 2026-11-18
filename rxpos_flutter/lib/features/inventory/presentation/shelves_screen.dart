@@ -33,7 +33,7 @@ class _ShelvesScreenState extends ConsumerState<ShelvesScreen> {
   Widget build(BuildContext context) {
     final d = ref.watch(pharmacyProvider).value;
     final can = ref.watch(permissionsProvider).value ?? const <String>{};
-    if (d == null) return const Center(child: CircularProgressIndicator());
+    if (d == null) return const PageSkeleton();
     final edit = can.contains('medicines.manage');
     // the pharmacy's own medicines and any with stock here (the standard catalogue's 9,000+ others only when asked)
     final mine = d.products.where((p) => _all || !p.isCatalog || d.stockOf(p.id) > 0 || shelfLabel(p).isNotEmpty).toList();

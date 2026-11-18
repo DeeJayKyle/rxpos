@@ -55,7 +55,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     final cats = ref.watch(tableProvider('expenseCategories')).value ?? const [];
     final moves = ref.watch(tableProvider('movements')).value ?? const [];
     final branches = ref.watch(tableProvider('branches')).value ?? const [];
-    if (d == null || sales == null) return const Center(child: CircularProgressIndicator());
+    if (d == null || sales == null) return const PageSkeleton();
     final st = d.settings;
     final per = Period(from: _from, to: _to, branch: _branch, sales: sales.map(Sale.fromRecord), purchases: purchases, expenses: expenses, movements: moves.map(Movement.fromRecord));
     String catName(Object? id) => '${cats.where((c) => c['id'] == id).firstOrNull?['name'] ?? 'Other'}';

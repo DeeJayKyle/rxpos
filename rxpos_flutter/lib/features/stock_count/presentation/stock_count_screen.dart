@@ -36,7 +36,7 @@ class _StockCountScreenState extends ConsumerState<StockCountScreen> {
     final items = ref.watch(tableProvider('countItems')).value ?? const [];
     final d = ref.watch(pharmacyProvider).value;
     final can = ref.watch(permissionsProvider).value ?? const <String>{};
-    if (counts == null || d == null) return const Center(child: CircularProgressIndicator());
+    if (counts == null || d == null) return const PageSkeleton();
     final here = counts.where((c) => (c['branchId'] ?? 'main') == d.branch).toList();
     final count = here.where((c) => c['id'] == _open).firstOrNull;
     if (count != null) return _CountSheet(count: count, onBack: () => setState(() => _open = null));
@@ -215,7 +215,7 @@ class _CountSheetState extends ConsumerState<_CountSheet> {
     final d = ref.watch(pharmacyProvider).value;
     final rows = ref.watch(tableProvider('countItems')).value ?? const [];
     final can = ref.watch(permissionsProvider).value ?? const <String>{};
-    if (d == null) return const Center(child: CircularProgressIndicator());
+    if (d == null) return const PageSkeleton();
     final count = widget.count;
     final st = d.settings;
     final readOnly = count['status'] != 'open';

@@ -32,7 +32,7 @@ import { homeFor, bottomTabs } from './landing.js';
 import { setBadge } from './badges.js';
 import { ACTIONS, keyOf, keyMatcher, showKey, typing } from './keymap.js';
 import { deviceSettings, setDevice, onDevice } from './device.js';
-import { Modal } from './ui.jsx';
+import { Modal, PageSkeleton } from './ui.jsx';
 import { MegaMenu, TopNav } from './components/NavMenus.jsx';
 import { BackButton, markNav, usePageMotion, useEdgeSwipeBack, useKeyboardFit } from './mobilenav.jsx';
 import AiOmnibar from './components/AiOmnibar.jsx';
@@ -243,6 +243,8 @@ function ThemePicker({ theme, setTheme, mode, setMode, style, setStyle }) {
   const pickBase = (base) => { setMode(''); if (current?.base !== base) setTheme(paletteFor(base, list, branding?.defaultTheme)); };
   const MODES = [['light', 'Light', Sun], ['dark', 'Dark', Moon], ['system', 'System', MonitorSmartphone]];
   const activeMode = mode === 'system' ? 'system' : current?.base;
+  // a theme is previewed while the pointer is on it (2026-11-18); closing the menu puts the chosen one back
+  useEffect(() => { if (!open) applyTheme(theme); }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!open) return;
     const off = (e) => !ref.current?.contains(e.target) && setOpen(false);
@@ -253,7 +255,7 @@ function ThemePicker({ theme, setTheme, mode, setMode, style, setStyle }) {
     <div className="bell" ref={ref}>
       <button className="icon-btn" title="Theme" aria-label="Theme" aria-expanded={open} onClick={() => setOpen((o) => !o)}><Palette size={19} /></button>
       {open && (
-        <div className="bell-menu theme-menu">
+        <div className="bell-menu theme-menu" onMouseLeave={() => applyTheme(theme)}>
           <div className="bell-head">Appearance</div>
           <div className="mode-toggle" role="radiogroup" aria-label="Appearance">
             {MODES.map(([id, label, Icon]) => (
@@ -266,7 +268,8 @@ function ThemePicker({ theme, setTheme, mode, setMode, style, setStyle }) {
             <div key={g} className="theme-group" role="group" aria-label={g}>
               <div className="bell-head">{g}</div>
               {ts.map((t) => (
-                <button key={t.id} className={'theme-item' + (t.id === theme ? ' on' : '')} onClick={() => { setMode(''); setTheme(t.id); setOpen(false); }}>
+                <button key={t.id} className={'theme-item' + (t.id === theme ? ' on' : '')} onClick={() => { setMode(''); setTheme(t.id); setOpen(false); }}
+                  onMouseEnter={() => applyTheme(t.id)} onFocus={() => applyTheme(t.id)}>
                   <span className="swatch" style={{ background: `linear-gradient(135deg, ${t.c.sidebar} 0 30%, ${t.c.surface} 30% 55%, ${t.c.primary} 55% 78%, ${t.c.primary2} 78%)`, borderColor: t.c.borderStrong }} />
                   <span className="grow">{t.name}{t.inspired && t.inspired !== t.name && <small className="muted"> · {t.inspired}</small>}</span>
                   {t.base === 'dark' ? <Moon size={13} /> : <Sun size={13} />}
@@ -624,7 +627,7 @@ function Shell() {
                 {add && <button type="button" className="nav-add" title={add[0]} aria-label={add[0]} onClick={() => navigate(add[1], add[3] ? { state: add[3] } : undefined)}><Plus size={14} /></button>}
               </div>}
               {g.items.map(([to, label, Icon, , badge], n) => { const key = keyOf('go:' + to) && showKey(keyOf('go:' + to)); return (
-                <NavLink key={to} to={to} end style={{ '--i': n }} title={rail ? label + (key ? ` (${key})` : '') : undefined} hidden={!rail && collapsed[g.group] && !g.items.some(([t]) => t === location.pathname) && !(badge && counts[badge] > 0)}>
+                <NavLink key={to} to={to} end style={{ '--i': n }} title={label + (key ? ` (${key})` : '')} hidden={!rail && collapsed[g.group] && !g.items.some(([t]) => t === location.pathname) && !(badge && counts[badge] > 0)}>
                   <Icon size={17} /><span className="grow">{label}</span>
                   {badge && counts[badge] > 0 && <span className="count">{counts[badge]}</span>}
                   {key && <kbd>{key}</kbd>}
@@ -673,7 +676,7 @@ function Shell() {
           </div>
         </header>
         <main className="content" ref={contentRef} data-page={here}>
-          <Suspense fallback={<div className="page"><div className="skeleton" /><div className="skeleton" style={{ height: 280 }} /></div>}>
+          <Suspense fallback={<PageSkeleton />}>
             <Routes>
               {groups.flatMap((g) => g.items).map(([to, , , , , el]) => <Route key={to} path={to} element={el} />)}
               <Route path="*" element={<Navigate to="/" />} />
@@ -787,7 +790,7 @@ function Gate() {
   const { user } = useStore();
   const location = useLocation();
   // The owner console is web-only and works without signing in to a pharmacy (it has its own owner key)
-  if (location.pathname === '/owner' && isWeb) return <Suspense fallback={<div className="loading"><div className="spinner" /></div>}><OwnerConsole /></Suspense>;
+  if (location.pathname === '/owner' && isWeb) return <Suspense fallback={<PageSkeleton />}><OwnerConsole /></Suspense>;
   return user ? <Shell /> : <Auth />;
 }
 

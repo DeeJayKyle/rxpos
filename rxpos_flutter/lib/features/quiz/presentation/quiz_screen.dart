@@ -177,7 +177,7 @@ class _QuizScreenState extends ConsumerState<QuizScreen> {
   Widget build(BuildContext context) {
     final d = ref.watch(pharmacyProvider).value;
     final results = ref.watch(tableProvider('quizResults')).value;
-    if (d == null || results == null) return const Center(child: CircularProgressIndicator());
+    if (d == null || results == null) return const PageSkeleton();
     final quiz = _quiz;
     final t = Theme.of(context);
     final board = teamBoard(results);

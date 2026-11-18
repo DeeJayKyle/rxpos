@@ -28,7 +28,7 @@ class ShiftsScreen extends ConsumerWidget {
     final st = ref.watch(settingsProvider).value ?? const PharmacySettings();
     final session = ref.watch(sessionControllerProvider).value;
     final can = ref.watch(permissionsProvider).value ?? const <String>{};
-    if (rows == null || session == null) return const Center(child: CircularProgressIndicator());
+    if (rows == null || session == null) return const PageSkeleton();
     final shifts = rows.map(Shift.fromRecord).where((s) => can.contains('shifts.all') || s.userId == session.userId).toList()
       ..sort((a, b) => b.openedAt.compareTo(a.openedAt));
     final open = shifts.where((s) => s.userId == session.userId && s.isOpen).firstOrNull;

@@ -864,9 +864,9 @@ export default function POS({ mode = 'retail' }) {
                 <small className="muted">{[p.generic, p.form].filter(Boolean).join(' · ')}</small>
                 <div className="row between">
                   <span className="price">{fmt(priceOf(p))}<small className="per-unit"> / {(p.unit || 'unit').toLowerCase()}</small></span>
-                  <span className={'small stock-tag ' + (p.stock <= 0 ? 'text-danger out' : p.stock <= (p.reorder || 0) ? 'text-warn low' : 'muted')}>{p.stock <= 0 ? 'Out of stock' : `${formatQty(p.stock)} left`}</span>
                 </div>
                 <div className="tags">
+                  <span className={'small stock-tag ' + (p.stock <= 0 ? 'text-danger out' : p.stock <= (p.reorder || 0) ? 'text-warn low' : 'muted')}>{p.stock <= 0 ? 'Out of stock' : `${formatQty(p.stock)} left`}</span>
                   {p.controlled ? <span className="clinical-pill cd" title="Controlled drug (NDA register)">CD · NDA</span> : p.rx && <span className="clinical-pill rx" title="Prescription only">Rx only</span>}
                   {p.expiry && p.stock > 0 && <FefoPill level={expiryLevel(p.expiry)} expiry={p.expiry} days={d <= warn ? d : undefined} />}
                   {packsOf(p.id).length > 0 && <span className="badge pack-badge">{packsOf(p.id).map((k) => `1 ${k.name.toLowerCase()} = ${k.size} ${(p.unit || 'unit').toLowerCase()}s`).join(' · ')}</span>}
@@ -1026,11 +1026,11 @@ export default function POS({ mode = 'retail' }) {
           {methods.map((m, i) => <button key={m.id} className={'chip pay-' + (m.type || 'other') + (payment === m.name ? ' active' : '')} onClick={() => setPayment(m.name)} title={i < 9 ? `Alt+${i + 1}` : undefined}>{m.name}{i < 9 && !touch && <kbd>{i + 1}</kbd>}</button>)}
         </div>
         {(ptype === 'cash' || ptype === 'credit') && (
-          <div className="row between tender-row">
+          <div className={'row between tender-row' + (tendered !== '' ? ' typing' : '')}>
             <label className="field grow"><span>{ptype === 'credit' ? 'Paid now (rest on credit)' : 'Amount tendered'}</span>
               <input type="number" step="any" value={tendered} onChange={(e) => setTendered(e.target.value)} /></label>
             {ptype === 'cash'
-              ? <div className="change">Change<br /><strong>{fmt(Math.max(change, 0))}</strong></div>
+              ? <div className={'change' + (tendered !== '' ? ' live' : '') + (tendered !== '' && change < 0 ? ' short' : '')}>{tendered !== '' && change < 0 ? 'Still due' : 'Change'}<br /><strong className="num">{fmt(Math.abs(change) * (tendered === '' ? 0 : 1))}</strong></div>
               : <div className="change">On credit<br /><strong className="text-warn">{fmt(Math.max(due - (Number(tendered) || 0), 0))}</strong></div>}
           </div>
         )}
@@ -1251,13 +1251,22 @@ export default function POS({ mode = 'retail' }) {
               <strong className="num">{fmt(done.total)}</strong>
             </div>
           )}
+          {/* a clear "done" moment (2026-11-18): what happened, and the two next steps, at the top */}
+          {!done.proforma && !done.reprint && (
+            <div className="sale-done-banner no-print" role="status">
+              <CheckCircle2 size={22} aria-hidden="true" />
+              <span className="grow"><strong>Sale complete</strong> · Receipt {done.number}{done.payment === 'Cash' && done.tendered > done.total ? <> · change <b className="num">{fmt(done.tendered - done.total)}</b></> : null}</span>
+              <button className="btn primary" onClick={() => window.print()}><Printer size={16} />Print</button>
+              <button className="btn ghost" autoFocus onClick={() => { setDone(null); focusSearch(); }}>New sale</button>
+            </div>
+          )}
           {!done.proforma && !done.reprint && <SaleSaved />}
           <Receipt sale={done} />
           {!done.proforma && <SendReceipt sale={done} />}
           <div className="form-actions no-print">
-            <button className="btn ghost" onClick={() => { setDone(null); focusSearch(); }}>New sale</button>
+            {(done.proforma || done.reprint) && <button className="btn ghost" onClick={() => { setDone(null); focusSearch(); }}>New sale</button>}
             <ReceiptPdfButton sale={done} />
-            <button className="btn primary" onClick={() => window.print()}><Printer size={16} />Print</button>
+            {(done.proforma || done.reprint) && <button className="btn primary" onClick={() => window.print()}><Printer size={16} />Print</button>}
           </div>
         </Modal>
       )}

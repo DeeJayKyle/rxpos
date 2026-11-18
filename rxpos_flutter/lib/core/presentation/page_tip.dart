@@ -8,15 +8,28 @@ import '../data/device_settings.dart';
 /// Whether page tips are shown (switched off in tests that don't look at them).
 final pageTipsOnProvider = Provider<bool>((_) => true);
 
-class PageTip extends ConsumerWidget {
+class PageTip extends ConsumerStatefulWidget {
   const PageTip({super.key, required this.id, required this.title, required this.text});
   final String id, title, text;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    if (!ref.watch(pageTipsOnProvider)) return const SizedBox.shrink();
+  ConsumerState<PageTip> createState() => _PageTipState();
+}
+
+/// Shown once only (2026-11-18): the first visit marks the tip seen, so it stays for this visit and is gone on the next.
+class _PageTipState extends ConsumerState<PageTip> {
+  bool _showing = false, _closed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final id = widget.id, title = widget.title, text = widget.text;
+    if (!ref.watch(pageTipsOnProvider) || _closed) return const SizedBox.shrink();
     final seen = ref.watch(deviceValueProvider('tip:$id'));
-    if (!seen.hasValue || seen.value != null) return const SizedBox.shrink();
+    if (!_showing) {
+      if (!seen.hasValue || seen.value != null) return const SizedBox.shrink();
+      _showing = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) { if (mounted) ref.read(deviceValueProvider('tip:$id').notifier).set('1'); });
+    }
     final scheme = Theme.of(context).colorScheme;
     return Card(
       key: Key('tip-$id'),
@@ -33,7 +46,7 @@ class PageTip extends ConsumerWidget {
               Text(text, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSecondaryContainer)),
             ]),
           ),
-          TextButton(onPressed: () => ref.read(deviceValueProvider('tip:$id').notifier).set('1'), child: const Text('Got it')),
+          TextButton(onPressed: () => setState(() => _closed = true), child: const Text('Got it')),
         ]),
       ),
     );

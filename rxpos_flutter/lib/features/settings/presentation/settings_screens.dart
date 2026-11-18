@@ -163,6 +163,15 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
           onChanged: (v) => ref.read(deviceValueProvider(zoomKey).notifier).set(v.toStringAsFixed(2)),
         ),
         if (zoom != 1) TextButton(onPressed: () => ref.read(deviceValueProvider(zoomKey).notifier).set(null), child: const Text('Back to 100%')),
+        SwitchListTile(
+          key: const Key('compact-tables'),
+          contentPadding: EdgeInsets.zero,
+          secondary: const Icon(Icons.table_rows_outlined),
+          title: const Text('Compact tables'),
+          subtitle: const Text('Shorter table rows: more lines on the screen'),
+          value: ref.watch(deviceValueProvider(compactTablesKey)).value == '1',
+          onChanged: (v) => ref.read(deviceValueProvider(compactTablesKey).notifier).set(v ? '1' : null),
+        ),
         if (onAndroid) ...[
           const SizedBox(height: 8),
           const Text('Rotation'),
@@ -310,7 +319,7 @@ class _AuditScreenState extends ConsumerState<AuditScreen> {
     final rows = ref.watch(tableProvider('audit')).value;
     final branches = ref.watch(tableProvider('branches')).value ?? const [];
     final st = ref.watch(settingsProvider).value;
-    if (rows == null || st == null) return const Center(child: CircularProgressIndicator());
+    if (rows == null || st == null) return const PageSkeleton();
     final users = {for (final a in rows) if ('${a['user'] ?? ''}'.isNotEmpty) '${a['user']}'}.toList()..sort();
     final actions = {for (final a in rows) '${a['action'] ?? ''}'}.toList()..sort();
     String branch(Object? id) => '${branches.where((b) => b['id'] == ('${id ?? ''}'.isEmpty ? 'main' : id)).firstOrNull?['name'] ?? ''}';

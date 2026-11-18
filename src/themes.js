@@ -36,9 +36,10 @@ const duo = (id, name, group, { c1, c2, side = c1, sideText, base = 'light', ins
   return T(id, name, base, {
     c1, c2,
     bg: c2,
-    surface: dark ? mix(c2, '#ffffff', 0.05) : '#ffffff',
-    surface2: dark ? mix(c2, '#ffffff', 0.09) : mix(c2, '#ffffff', 0.5),
-    border: dark ? 'rgba(255, 255, 255, 0.10)' : rgba(mix(c1, '#000000', 0.4), 0.12),
+    // dark cards a clearer step above the page, with a hairline (2026-11-18)
+    surface: dark ? mix(c2, '#ffffff', 0.08) : '#ffffff',
+    surface2: dark ? mix(c2, '#ffffff', 0.13) : mix(c2, '#ffffff', 0.5),
+    border: dark ? 'rgba(255, 255, 255, 0.14)' : rgba(mix(c1, '#000000', 0.4), 0.12),
     borderStrong: dark ? 'rgba(255, 255, 255, 0.20)' : rgba(mix(c1, '#000000', 0.4), 0.24),
     text,
     muted: dark ? mix(text, c2, 0.38) : mix(text, '#ffffff', 0.4),
@@ -157,6 +158,8 @@ function duoVars(c, dark) {
   return {
     '--ok': ok, '--ok-soft': soft(0.14), '--warn': warn, '--warn-soft': soft(0.2), '--danger': danger, '--danger-soft': soft(0.26),
     '--violet': shade(0.2), '--violet-soft': soft(0.16), '--info': shade(0.12), '--info-soft': soft(0.14), '--blue': shade(0.1), '--blue-soft': soft(0.14),
+    // the one exception to two colours (2026-11-18): a real red, only for what blocks a sale (expired stock)
+    '--block': readable(dark ? '#f87171' : '#c62828', on, toward), '--block-soft': dark ? 'rgba(248, 113, 113, 0.16)' : '#fdecec',
     '--c2': c.c2 || c.bg, '--c1-deep': shade(0.25), '--logo-2': logo2(c), '--menu-lit': readable(c.primary, ['#ffffff'], '#000000'), ...menuPill(c), '--menu-ink': readable(mix(lightMenu(c.sidebar) || c.sidebar === c.primary ? c.primary : c.sidebar, '#000000', 0.62), ['#ffffff', '#f1f4f8'], '#000000', 7), '--row-tint': `${c.rowTint ?? 7}%`, '--row-hover': `${(c.rowTint ?? 7) + 4}%`, '--head-tint': `${c.headTint ?? 16}%`,
     // charts, the till's actions and the Vivid tiles: the same two colours
     '--viz-1': c.primary, '--viz-2': c.sidebar === c.primary ? mix(c.primary, toward, 0.45) : c.sidebar,

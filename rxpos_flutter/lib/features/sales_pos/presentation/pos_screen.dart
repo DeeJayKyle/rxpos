@@ -1089,7 +1089,27 @@ class _ProductPanel extends StatelessWidget {
                                   overflow: TextOverflow.ellipsis,
                                   style: t.textTheme.bodySmall,
                                 ),
-                                if (first != null) Padding(padding: const EdgeInsets.only(top: 4), child: FefoBatchBadge(expiry: first.expiry, warnDays: data.settings.expiryWarnDays.round())),
+                                // the stock pill beside the expiry pill (2026-11-18); out of stock in the one real red
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 4),
+                                  child: Wrap(spacing: 4, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
+                                    if (first != null) FefoBatchBadge(expiry: first.expiry, warnDays: data.settings.expiryWarnDays.round()),
+                                    Container(
+                                      key: Key('stock-pill-${p.id}'),
+                                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(8),
+                                        color: out ? context.tones.blockSoft : t.colorScheme.surfaceContainerHighest,
+                                        border: out ? Border.all(color: context.tones.block) : null,
+                                      ),
+                                      child: Text(
+                                        out ? 'Out of stock' : '${formatQty(stock)} left',
+                                        maxLines: 1,
+                                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: out ? context.tones.block : low ? context.tones.warn : t.colorScheme.onSurfaceVariant),
+                                      ),
+                                    ),
+                                  ]),
+                                ),
                                 const Spacer(),
                                 // the price is never cut: when the stock note doesn't fit beside it, it goes under it
                                 SizedBox(
@@ -1106,21 +1126,10 @@ class _ProductPanel extends StatelessWidget {
                                           decimals: s.decimalPlaces,
                                         ),
                                         maxLines: 1,
-                                        // the brand colour made readable on this card (tertiary), on every look
-                                        style: TextStyle(color: t.colorScheme.tertiary, fontWeight: FontWeight.w800),
+                                        // in the text colour: solid colour is kept for Charge (one strong button per area, 18 Nov 2026)
+                                        style: TextStyle(color: t.colorScheme.onSurface, fontWeight: FontWeight.w800),
                                       ),
                                     if (p.controlled) const _Tag('CD · NDA', danger: true) else if (p.rx) const _Tag('Rx only'),
-                                    Text(
-                                      out ? 'Out of stock' : '${formatQty(stock)} left',
-                                      maxLines: 1,
-                                      style: t.textTheme.bodySmall?.copyWith(
-                                        color: out
-                                            ? t.colorScheme.error
-                                            : low
-                                            ? context.tones.warn
-                                            : null,
-                                      ),
-                                    ),
                                   ],
                                 ),
                                 ),
@@ -1222,7 +1231,7 @@ class _KitTile extends StatelessWidget {
             const Spacer(),
             Wrap(alignment: WrapAlignment.spaceBetween, crossAxisAlignment: WrapCrossAlignment.center, spacing: 4, children: [
               Text('${formatMoney(wholesale ? v.wholesale : v.price, currency: settings.currency, decimals: settings.decimalPlaces)} / kit',
-                  style: TextStyle(color: t.colorScheme.tertiary, fontWeight: FontWeight.w800)),
+                  style: TextStyle(color: t.colorScheme.onSurface, fontWeight: FontWeight.w800)),
               if (v.controlled) const _Tag('CD · NDA', danger: true) else if (v.rx) const _Tag('Rx only'),
               Text(v.canMake == null ? 'Services only' : out ? "Can't be made" : 'Can make ${formatQty(v.stock)}',
                   style: t.textTheme.bodySmall?.copyWith(color: out ? t.colorScheme.error : v.stock <= 3 ? context.tones.warn : null)),
@@ -1716,7 +1725,12 @@ class _SalePanel extends ConsumerWidget {
                       alignment: Alignment.centerRight,
                       child: FittedBox(
                         fit: BoxFit.scaleDown,
-                        child: Text(fmt(t.total), style: th.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900, color: th.colorScheme.primary)),
+                        // bigger, and bigger still while cash is typed (2026-11-18)
+                        child: AnimatedDefaultTextStyle(
+                          duration: const Duration(milliseconds: 150),
+                          style: (s.tendered != null ? th.textTheme.headlineLarge : th.textTheme.headlineMedium)!.copyWith(fontWeight: FontWeight.w900, color: th.colorScheme.primary),
+                          child: Text(fmt(t.total), key: const Key('till-total')),
+                        ),
                       ),
                     ),
                   ),
@@ -1791,9 +1805,18 @@ class _SalePanel extends ConsumerWidget {
                     ),
                     const SizedBox(width: 12),
                     if (method.type == 'cash')
-                      Text(
-                        'Change ${fmt((s.tendered ?? due) - due < 0 ? 0 : (s.tendered ?? due) - due)}',
-                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      // the change grows while cash is typed; short of the total it says what is still due
+                      AnimatedDefaultTextStyle(
+                        duration: const Duration(milliseconds: 150),
+                        style: th.textTheme.titleMedium!.copyWith(
+                          fontWeight: FontWeight.w800,
+                          fontSize: s.tendered != null ? 22 : 14,
+                          color: s.tendered == null ? th.colorScheme.onSurface : s.tendered! < due ? context.tones.warn : context.tones.ok,
+                        ),
+                        child: Text(
+                          s.tendered != null && s.tendered! < due ? 'Still due ${fmt(due - s.tendered!)}' : 'Change ${fmt((s.tendered ?? due) - due < 0 ? 0 : (s.tendered ?? due) - due)}',
+                          key: const Key('till-change'),
+                        ),
                       )
                     else
                       Text(

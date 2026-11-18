@@ -140,7 +140,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final hidden = _hiddenSet(ref.watch(deviceValueProvider('chat-hidden')).value);
     final can = ref.watch(permissionsProvider).value ?? const <String>{};
     final smsReady = ref.watch(smsReadyProvider).value ?? false;
-    if (rows == null || me == null) return const Center(child: CircularProgressIndicator());
+    if (rows == null || me == null) return const PageSkeleton();
 
     final marks = <String, List<Map<String, Object?>>>{};
     for (final k in marksRows) {

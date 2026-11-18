@@ -28,7 +28,7 @@ class _ProformasScreenState extends ConsumerState<ProformasScreen> {
   Widget build(BuildContext context) {
     final rows = ref.watch(tableProvider('proformas')).value;
     final st = ref.watch(settingsProvider).value ?? const PharmacySettings();
-    if (rows == null) return const Center(child: CircularProgressIndicator());
+    if (rows == null) return const PageSkeleton();
     final q = _q.trim().toLowerCase();
     final list = rows.where((p) => q.isEmpty || '${p['number']} ${p['customerName']}'.toLowerCase().contains(q)).toList()..sort((a, b) => '${b['date']}'.compareTo('${a['date']}'));
     return PageFrame(

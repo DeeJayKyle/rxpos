@@ -87,7 +87,7 @@ class _NotesScreenState extends ConsumerState<NotesScreen> {
     final session = ref.watch(sessionControllerProvider).value;
     final favKey = 'noteFavs:${session?.userId ?? ''}';
     final favs = [for (final x in (jsonDecode(ref.watch(deviceValueProvider(favKey)).value ?? '[]') as List)) '$x'];
-    if (notes == null) return const Center(child: CircularProgressIndicator());
+    if (notes == null) return const PageSkeleton();
     if (!_started) {
       _started = true;
       if (widget.create) WidgetsBinding.instance.addPostFrameCallback((_) => _create());

@@ -39,7 +39,7 @@
   /* the till: quick actions, accents and customer tags */
   :root[data-palette] :is(.q-void, :root[data-palette] .q-hold, :root[data-palette] .q-disc, :root[data-palette] .q-receipt, :root[data-palette] .q-proforma, :root[data-palette] .q-keys) { --q: var(--primary-text); color: var(--primary-text); }
   :root[data-palette] .q-void { --q: var(--warn); color: var(--warn); }
-  :root[data-palette] .lay-std .pos-side :is(.accent-teal, :root[data-palette] .accent-blue), :root[data-palette] .lay-adv .pos-side .accent-teal { border-color: var(--primary); }
+  :root[data-palette] .lay-std .pos-side :is(.accent-teal, .accent-blue), :root[data-palette] .lay-adv .pos-side .accent-teal { border-color: var(--primary); }
   :root[data-palette] .lay-std .pos-side .accent-teal h3 svg { color: var(--primary-text); }
   :root[data-palette] .lay-adv .pos-pay .pay-row .btn.primary { background: var(--accent-grad); color: var(--on-accent); }
   :root[data-palette] .cust-loyal { background: var(--primary-soft); color: var(--primary-ink); }
@@ -81,6 +81,7 @@
 
   :root[data-palette][data-sidebar='light'] .bento-hero { background: radial-gradient(120% 90% at 100% 0%, color-mix(in srgb, var(--sidebar) 30%, transparent), transparent 60%), linear-gradient(160deg, var(--primary), color-mix(in srgb, var(--primary) 70%, #000)); }
   :root[data-palette] .bento-hero :is(.bento-delta, .bento-delta.up, .bento-delta.down) { background: rgba(255, 255, 255, .2); color: #fff; }
+  :root[data-palette] .bento-hero .bento-delta.down { background: #fff; color: var(--sidebar); font-weight: 750; }
   /* the menu (the owner's review, 17 Nov 2026, after Charcoal Lime): a deep menu, its pages as light soft-glass buttons,
      the open page a solid pill in the theme's bright colour with the button text colour on it */
   :root[data-palette] .sidebar nav a { margin: 0 4px 4px; border-radius: 12px; background: rgba(255, 255, 255, .07); border: 1px solid rgba(255, 255, 255, .10);
@@ -101,7 +102,98 @@
   /* the grey line under an open tab's name (Settings): nearer the text colour on the tinted tab, so it stays readable */
   :root[data-palette] .tab.active .settings-text small { color: color-mix(in srgb, var(--text) 75%, var(--muted)); }
 
+  /* every menu label on one line (the owner's review, 18 Nov 2026): a long one ends in … and shows in full on hover */
+  :root[data-palette] .sidebar nav a > .grow { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  :root[data-palette] .sidebar nav a kbd { flex: none; }
+
+  /* the daily sales bars: the theme's colour at full strength, today a deeper shade (they were a pale tint) */
+  :root[data-palette] .bento-bar i { background: var(--primary); opacity: .85; }
+  :root[data-palette] .bento-bar:hover i { opacity: 1; }
+  :root[data-palette] .bento-bar.now i { background: var(--c1-deep); opacity: 1; }
+
+  /* rises and falls (the owner's review, 18 Nov 2026): ▲ + / ▼ − in words, and a fall drawn in the strong shade with
+     an edge, so it never looks like a rise under the two colours */
+  :root[data-palette] .delta.down:not(.inverse), :root[data-palette] .delta.up.inverse { color: var(--danger); background: var(--danger-soft); box-shadow: inset 0 0 0 1.5px var(--danger); font-weight: 750; }
+
+  /* one strong button per area at the till (the owner's review, 18 Nov 2026): solid colour only for Charge, the open
+     payment method and New sale; the Retail / Wholesale switch and the filter chips are soft, the client box and prices
+     plain, so the eye goes to Charge */
+  :root[data-palette] .mode-switch a.on { background: var(--primary-soft); color: var(--primary-ink); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--primary) 45%, transparent); }
+  :root[data-palette] .mode-switch a.on kbd { color: inherit; border-color: currentColor; }
+  :root[data-palette] .chips-row .chip.active { background: var(--primary-soft); color: var(--primary-ink); border-color: color-mix(in srgb, var(--primary) 45%, transparent); box-shadow: none; }
+  :root[data-palette] .lay-std .pos-side .pos-client, :root[data-palette] .lay-std .pos-client.accent-teal { border-color: var(--border); border-top: 1px solid var(--border); }
+  :root[data-palette] .product .price { color: var(--text); }
+  :root[data-palette] .pos-cart .pay-row .btn.primary:not(:disabled) { box-shadow: 0 10px 22px -10px color-mix(in srgb, var(--primary) 80%, transparent); font-size: 17px; }
+
   /* the page and its cards: colour 2 under, white cards over */
   :root[data-palette] body { background-image: none; }
   :root[data-palette] .kit-icon { --kit: var(--primary) !important; }
 }
+
+/* UI batch 2 (the owner's choice, 18 Nov 2026) */
+@media screen {
+  /* three corner sizes: 8 for chips and pills, 12 for buttons and fields, 18 for cards; one spacing scale 4/8/12/16/24 */
+  :root[data-palette] { --r-chip: 8px; --r-ctl: 12px; --r-card: 18px; --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 24px; --radius: var(--r-card); --radius-sm: var(--r-ctl); --radius-xs: var(--r-chip); --radius-bento: var(--r-card); }
+  :root[data-palette] :is(.chip, .pill, .badge, .status-pill, .clinical-pill, .fefo-pill, .stock-tag, .tag, kbd) { border-radius: var(--r-chip); }
+  :root[data-palette] :is(.btn, input:not([type=checkbox]):not([type=radio]):not([type=range]), select, textarea, .icon-btn, .date-pill, .search-box) { border-radius: var(--r-ctl); }
+  :root[data-palette] :is(.card, .stat, .modal, .bento-hero, .product, .dv-card) { border-radius: var(--r-card); }
+  :root[data-palette] :is(.stats, .grid-2, .grid-3, .bento-grid, .device-top) { gap: var(--s-4); }
+
+  /* dark themes: a lighter card step and a hairline, so cards stand off the page */
+  :root[data-theme=dark][data-palette] :is(.card, .stat, .product, .modal) { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06), 0 0 0 1px var(--border); }
+
+  /* compact tables, chosen on This device: 36 px rows */
+  :root[data-density=compact] :is(th, td) { padding-top: 6px; padding-bottom: 6px; }
+  :root[data-density=compact] tbody tr { height: 36px; }
+  :root[data-density=compact] td > br { display: none; }
+  :root[data-density=compact] td > br + small { margin-left: 6px; }
+  :root[data-density=compact] td :is(.btn.sm, .icon-btn) { min-height: 26px; height: auto; padding-top: 2px; padding-bottom: 2px; }
+
+  /* the one real red (an exception to the two colours): only what blocks a sale */
+  :root[data-palette] .fefo-expired, :root[data-palette] .cart-line .badge.safety-expired, :root[data-palette] .product .stock-tag.out { color: var(--block); background: var(--block-soft); border-color: var(--block); }
+  :root[data-palette] .product .stock-tag.out { padding: 1px 7px; border: 1px solid; font-weight: 700; }
+
+  /* equal medicine tiles: names on up to two lines, the stock pill beside the expiry pill, one height per row */
+  :root[data-palette] .product-grid { grid-auto-rows: 1fr; }
+  :root[data-palette] .product-grid .product { display: flex; flex-direction: column; align-items: stretch; }
+  :root[data-palette] .product-grid .product > strong { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 2.4em; }
+  :root[data-palette] .product-grid .product .tags { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-top: auto; }
+  :root[data-palette] .product-grid .product .stock-tag { display: inline-flex; align-items: center; padding: 1px 7px; background: var(--surface-2); }
+
+  /* the till: a bigger total, and the total and change grow while cash is typed */
+  :root[data-palette] .pos-cart .grand .num { font-size: clamp(24px, 2.4vw, 30px); transition: font-size .15s; }
+  :root[data-palette] .pos-cart:has(.tender-row.typing) .grand .num { font-size: clamp(28px, 2.8vw, 34px); }
+  :root[data-palette] .change strong { transition: font-size .15s; }
+  :root[data-palette] .change.live strong { font-size: 26px; color: var(--ok); }
+  :root[data-palette] .change.short strong { color: var(--warn); }
+
+  /* the sale is done: a clear banner with the receipt number and the two next steps */
+  :root[data-palette] .sale-done-banner { display: flex; align-items: center; gap: var(--s-3); padding: var(--s-3) var(--s-4); margin: 0 0 var(--s-4); border-radius: var(--r-ctl); background: var(--ok-soft); color: var(--text); border: 1px solid color-mix(in srgb, var(--ok) 40%, transparent); }
+  :root[data-palette] .sale-done-banner > svg { color: var(--ok); flex: none; }
+  :root[data-palette] .sale-done-banner .btn { flex: none; }
+
+  /* keyboard focus: a clear ring in the theme's colour */
+  :root[data-palette] :focus-visible { outline: 2.5px solid var(--primary); outline-offset: 2px; }
+  :root[data-palette] :is(input, select, textarea):focus-visible { outline-offset: 0; box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 22%, transparent); }
+
+  /* small 7-day trend lines in the figure cards */
+  :root[data-palette] .stat svg.spark { display: block; width: 84px !important; height: 26px !important; margin: 4px 0 2px; overflow: visible; flex: none; position: static; opacity: 1; }
+  :root[data-palette] .stat .spark polyline { fill: none; stroke: var(--primary); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  :root[data-palette] .stat .spark polygon { fill: color-mix(in srgb, var(--primary) 14%, transparent); }
+  :root[data-palette] .stat .spark circle { fill: var(--primary); }
+
+  /* sales: only unusual states carry a pill */
+  :root[data-palette] .status-plain { text-transform: capitalize; }
+}
+
+/* loading: the page's shape, not a spinner */
+.page-skeleton, .loading-skeleton { display: grid; gap: 16px; align-content: start; }
+.loading-skeleton { min-height: 100vh; padding: 24px; background: var(--bg); }
+.sk { border-radius: 12px; background: linear-gradient(90deg, var(--surface) 25%, var(--surface-2) 50%, var(--surface) 75%); background-size: 200% 100%; animation: shimmer 1.2s infinite; }
+.sk-title { height: 30px; width: min(320px, 60%); }
+.sk-sub { height: 14px; width: min(460px, 80%); }
+.sk-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; }
+.sk-card { height: 112px; border-radius: 18px; }
+.sk-table { min-height: 300px; border-radius: 18px; padding: 16px; display: grid; gap: 12px; align-content: start; }
+.sk-line { height: 14px; border-radius: 8px; background: color-mix(in srgb, var(--text) 7%, transparent); }
+@media (prefers-reduced-motion: reduce) { .sk { animation: none; } }

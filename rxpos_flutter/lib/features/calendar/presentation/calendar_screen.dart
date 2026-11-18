@@ -102,7 +102,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     final events = ref.watch(tableProvider('events')).value;
     final rx = ref.watch(tableProvider('prescriptions')).value;
     final d = ref.watch(pharmacyProvider).value;
-    if (events == null || rx == null || d == null) return const Center(child: CircularProgressIndicator());
+    if (events == null || rx == null || d == null) return const PageSkeleton();
     final t = Theme.of(context);
     final now = today();
     final auto = autoEvents(

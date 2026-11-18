@@ -64,7 +64,7 @@ export function WeeklyMini({ w, fmt }) {
   return (
     <div className="weekly-mini">
       <div className="row between"><span className="muted small">{w.start} → {w.end}</span>
-        <span className={'delta ' + (w.total >= w.prevTotal ? 'up' : 'down')}>{w.total >= w.prevTotal ? <TrendingUp size={13} /> : <TrendingDown size={13} />}{Math.abs(Math.round(pct(w.total, w.prevTotal)))}%</span></div>
+        <span className={'delta ' + (w.total >= w.prevTotal ? 'up' : 'down')}>{w.total >= w.prevTotal ? '▲ +' : '▼ −'}{Math.abs(Math.round(pct(w.total, w.prevTotal)))}%</span></div>
       <strong className="weekly-total">{fmt(w.total)}</strong>
       <span className="muted small">{w.count} sales · best day {w.best?.label}</span>
       <div className="mini-bars">{w.byDay.map((d) => <i key={d.label} title={`${d.label} ${fmt(d.values[0])}`} style={{ height: `${Math.max(4, (d.values[0] / Math.max(1, ...w.byDay.map((x) => x.values[0]))) * 100)}%` }} />)}</div>

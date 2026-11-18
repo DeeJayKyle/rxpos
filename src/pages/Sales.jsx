@@ -179,7 +179,7 @@ export default function Sales() {
   const [dv, setDv] = useState(() => savedView('sales'));
   const pickView = (v) => { setDv(v); saveView('sales', v); };
   const saleCard = (s) => { const [st, cls] = saleStatus(s); return { title: s.number + ' · ' + (s.customerName || 'Walk-in'), sub: `${new Date(s.date).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })} · ${s.cashier || ''}`, value: fmt(s.total),
-    chips: [[st, cls === 'paid' ? 'ok' : cls === 'owing' ? 'warn' : 'danger'], s.payment && [s.payment], s.edits?.length && ['Edited', 'warn'], [`${s.items.length} item${s.items.length === 1 ? '' : 's'}`]].filter(Boolean) }; };
+    chips: [cls !== 'paid' && [st, cls === 'owing' ? 'warn' : 'danger'], s.payment && [s.payment], s.edits?.length && ['Edited', 'warn'], [`${s.items.length} item${s.items.length === 1 ? '' : 's'}`]].filter(Boolean) }; };
   const saleMenu = (e, x) => menu.open(e, [
     { label: 'View', Icon: Eye, keyId: 'list:open', run: () => setView(x) },
     { label: 'Print the receipt', Icon: Printer, run: () => printSale(x, 'receipt') },
@@ -262,7 +262,7 @@ export default function Sales() {
                 {db.branches.length > 1 && <td data-label="Branch">{branchName(s.branchId)}</td>}
                 <td data-label="Customer">{s.customerName}</td><td data-label="Phone" className="muted">{phoneOf(s) || '—'}</td>
                 <td data-label="Payment"><PayChip name={s.payment} />{s.momo?.txid ? <><br /><small className="muted">{s.momo.txid}</small></> : null}</td>
-                <td data-label="Status"><span className={'badge ' + (s.status === 'refunded' ? 'danger' : 'ok')}>{s.status}</span>{s.edits?.length > 0 && <><br /><button type="button" className="badge warn edited-badge" onClick={() => setView(s)} title="See what was changed and by whom"><History size={11} /> Edited{s.edits.length > 1 ? ` ×${s.edits.length}` : ''}</button></>}</td>
+                <td data-label="Status">{s.status === 'refunded' ? <span className="badge danger">refunded</span> : <span className="muted small status-plain">{s.status}</span>}{s.edits?.length > 0 && <><br /><button type="button" className="badge warn edited-badge" onClick={() => setView(s)} title="See what was changed and by whom"><History size={11} /> Edited{s.edits.length > 1 ? ` ×${s.edits.length}` : ''}</button></>}</td>
                 <td data-label="Total" className="num"><strong>{fmt(s.total)}</strong></td>
                 <td data-label="Cashier">{s.cashier}</td>
                 <td className="actions"><div className="row-acts">

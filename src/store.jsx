@@ -832,7 +832,8 @@ export function StoreProvider({ children }) {
     branchId, branch, setBranchId, numberFor, syncCfg, saveSyncCfg, syncNow, pullAll, linkPharmacy, features, can, day]);
   const syncValue = useMemo(() => ({ syncStatus, pending, storageIssue }), [syncStatus, pending, storageIssue]);
 
-  if (!value) return <div className="loading"><div className="spinner" />Loading RxPOS…</div>;
+  // the page's shape while the data opens (2026-11-18): no spinner
+  if (!value) return <div className="loading loading-skeleton" role="status" aria-label="Loading RxPOS"><div className="sk sk-title" /><div className="sk-row">{[0, 1, 2, 3].map((i) => <div key={i} className="sk sk-card" />)}</div><div className="sk sk-table" /></div>;
 
   return (
     <Ctx.Provider value={value}>

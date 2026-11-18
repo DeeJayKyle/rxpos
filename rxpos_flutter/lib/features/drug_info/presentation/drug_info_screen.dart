@@ -244,7 +244,7 @@ class _DrugInfoScreenState extends ConsumerState<DrugInfoScreen> {
   @override
   Widget build(BuildContext context) {
     final d = ref.watch(pharmacyProvider).value;
-    if (d == null) return const Center(child: CircularProgressIndicator());
+    if (d == null) return const PageSkeleton();
     final q = _q.text.trim();
     final matches = q.length < 2 || _picked != null ? const <Product>[] : searchProducts(d.products, q, stockOf: (p) => d.stockOf(p.id)).take(12).toList();
     final picked = _picked;

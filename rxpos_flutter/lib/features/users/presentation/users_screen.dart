@@ -32,7 +32,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
     final roleRows = ref.watch(tableProvider('roles')).value ?? const [];
     final branches = ref.watch(tableProvider('branches')).value ?? const [];
     final me = ref.watch(sessionControllerProvider).value;
-    if (users == null) return const Center(child: CircularProgressIndicator());
+    if (users == null) return const PageSkeleton();
     final roles = rolesOf(roleRows.map(Role.fromRecord));
     String roleName(Object? id) => roles.where((r) => r.id == id).firstOrNull?.name ?? '$id';
     bool adminRow(Map<String, Object?> u) => u['role'] == 'admin' && u['id'] != me?.userId;

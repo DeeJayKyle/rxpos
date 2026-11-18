@@ -112,7 +112,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final shared = ref.watch(settingsProvider).value;
     final overStored = ref.watch(deviceValueProvider(overridesKey));
     final d = ref.watch(pharmacyProvider).value;
-    if (shared == null || d == null || overStored.isLoading) return const Center(child: CircularProgressIndicator());
+    if (shared == null || d == null || overStored.isLoading) return const PageSkeleton();
     final over = readOverrides(overStored.value);
     final merged = {...shared.raw, ...over};
     for (final e in merged.entries) {

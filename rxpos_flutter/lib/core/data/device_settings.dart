@@ -49,3 +49,5 @@ class DeviceValue extends _$DeviceValue {
 
 /// Device keys for the screen (Settings → This device).
 const zoomKey = 'zoom', rotationKey = 'rotation';
+/// compact tables (2026-11-18): 36 px rows, chosen on This device
+const compactTablesKey = 'compactTables';

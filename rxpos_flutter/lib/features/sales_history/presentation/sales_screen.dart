@@ -59,7 +59,7 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
     final session = ref.watch(sessionControllerProvider).value;
     final deviceBranch = ref.watch(deviceBranchProvider).value ?? mainBranch;
     final data = ref.watch(pharmacyProvider).value;
-    if (rows == null) return const Center(child: CircularProgressIndicator());
+    if (rows == null) return const PageSkeleton();
     final cashier = session?.role == 'cashier';
     final branch = _branch ?? (cashier ? deviceBranch : 'all');
     String branchName(String id) => '${branches.where((b) => b['id'] == (id.isEmpty ? mainBranch : id)).firstOrNull?['name'] ?? '—'}';
@@ -243,7 +243,8 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
                             Text(s.customerName, maxLines: 2, overflow: TextOverflow.ellipsis),
                             Text((phoneOf[s.customerId] ?? '').isEmpty ? '—' : phoneOf[s.customerId]!),
                             TonePill('${s.payment}${momo.isEmpty ? '' : ' $momo'}', color: credit ? violet : green, dot: false),
-                            TonePill(refunded ? 'refunded' : s.status, color: refunded ? th.colorScheme.error : green, dot: false),
+                            // only unusual states carry a pill (2026-11-18): an ordinary sale's status is plain text
+                            refunded ? TonePill('refunded', color: th.colorScheme.error, dot: false) : Text(s.status, style: th.textTheme.bodySmall),
                             Column(crossAxisAlignment: CrossAxisAlignment.end, mainAxisSize: MainAxisSize.min, children: [
                               Text(st.money(s.total), style: const TextStyle(fontWeight: FontWeight.w800)),
                               if (s.paid < s.total && !refunded) Text('${st.money(s.total - s.paid)} on credit', style: th.textTheme.bodySmall?.copyWith(color: violet)),
@@ -255,7 +256,7 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
                       return row(i).wrap(ListTile(
                         title: Wrap(spacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
                           Text('${s.number} · ${s.customerName}', style: TextStyle(fontWeight: FontWeight.w700, decoration: refunded ? TextDecoration.lineThrough : null)),
-                          _Badge(refunded ? 'refunded' : s.status, error: refunded),
+                          if (refunded) _Badge('refunded', error: true),
                           if (n > 0)
                             InkWell(onTap: () => _open(s, st), child: _Badge('Edited${n > 1 ? ' ×$n' : ''}', warn: true)),
                         ]),
@@ -465,7 +466,7 @@ class _SaleEditorState extends ConsumerState<SaleEditor> {
   @override
   Widget build(BuildContext context) {
     final d = ref.watch(pharmacyProvider).value;
-    if (d == null) return const Center(child: CircularProgressIndicator());
+    if (d == null) return const PageSkeleton();
     final s = widget.sale, st = d.settings;
     final methods = d.settings.methods;
     final type = methods.where((m) => m.name == _payment).firstOrNull?.type ?? (_payment == 'Credit' ? 'credit' : 'cash');

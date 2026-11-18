@@ -54,7 +54,7 @@ class _PurchasesScreenState extends ConsumerState<PurchasesScreen> {
     final can = ref.watch(permissionsProvider).value ?? const <String>{};
     final d = ref.watch(pharmacyProvider).value;
     final session = ref.watch(sessionControllerProvider).value;
-    if (rows == null || d == null) return const Center(child: CircularProgressIndicator());
+    if (rows == null || d == null) return const PageSkeleton();
     String payType(Purchase p) {
       if (p.paid <= 0) return 'Credit';
       return '${banks.where((b) => b['id'] == p.bankId).firstOrNull?['name'] ?? 'Cash'}${p.paid < p.total ? ' + credit' : ''}';
@@ -506,7 +506,7 @@ class _ReorderScreenState extends ConsumerState<ReorderScreen> {
     final purchases = ref.watch(tableProvider('purchases')).value;
     final pos = ref.watch(tableProvider('purchaseOrders')).value ?? const [];
     final can = ref.watch(permissionsProvider).value ?? const <String>{};
-    if (d == null || sales == null || purchases == null) return const Center(child: CircularProgressIndicator());
+    if (d == null || sales == null || purchases == null) return const PageSkeleton();
     final st = d.settings;
     int setting(String k, int def) => (st.raw[k] as num?)?.round() ?? def;
     final lead = _lead ?? setting('leadDays', 7), cover = _cover ?? setting('coverDays', 30), deadDays = _dead ?? setting('deadDays', 90);
@@ -924,7 +924,7 @@ class _ExpiryScreenState extends ConsumerState<ExpiryScreen> {
     final d = ref.watch(pharmacyProvider).value;
     final can = ref.watch(permissionsProvider).value ?? const <String>{};
     final session = ref.watch(sessionControllerProvider).value;
-    if (d == null) return const Center(child: CircularProgressIndicator());
+    if (d == null) return const PageSkeleton();
     final st = d.settings;
     final warn = st.expiryWarnDays.round();
     final e = expiryBatches(d.products.where((p) => d.stockOf(p.id) > 0), d.stock.batchesOf, d.stockOf, warn);

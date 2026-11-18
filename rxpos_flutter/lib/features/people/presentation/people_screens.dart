@@ -67,7 +67,7 @@ class _PeopleScreenState extends ConsumerState<PeopleScreen> {
     final returns = ref.watch(tableProvider('supplierReturns')).value ?? const [];
     final settings = ref.watch(settingsProvider).value ?? const PharmacySettings();
     final can = ref.watch(permissionsProvider).value ?? const <String>{};
-    if (rows == null) return const Center(child: CircularProgressIndicator());
+    if (rows == null) return const PageSkeleton();
     final saleList = sales.map(Sale.fromRecord).toList();
     final purchaseList = purchases.map(Purchase.fromRecord).toList();
     final win = ref.watch(balanceWindowProvider).value; // stage 4: a device keeping recent history

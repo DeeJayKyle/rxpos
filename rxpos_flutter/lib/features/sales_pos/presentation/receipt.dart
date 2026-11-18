@@ -185,8 +185,34 @@ class _ReceiptDialogState extends ConsumerState<_ReceiptDialog> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // a clear "done" moment (2026-11-18): what happened, and the two next steps, at the top
+              Container(
+                key: const Key('sale-done-banner'),
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+                decoration: BoxDecoration(
+                  color: context.tones.okSoft,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: context.tones.ok.withValues(alpha: .4)),
+                ),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Row(children: [
+                    Icon(Icons.check_circle, color: context.tones.ok, size: 22),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text('Sale complete · Receipt ${s.number}', style: const TextStyle(fontWeight: FontWeight.w800))),
+                  ]),
+                  const SizedBox(height: 8),
+                  Wrap(spacing: 8, runSpacing: 6, children: [
+                    FilledButton.icon(
+                      onPressed: () async => Printing.layoutPdf(onLayout: (_) => receiptPdf(s, st)),
+                      icon: const Icon(Icons.print, size: 18),
+                      label: const Text('Print'),
+                    ),
+                    OutlinedButton(autofocus: true, onPressed: () => Navigator.pop(context), child: const Text('New sale')),
+                  ]),
+                ]),
+              ),
               const SaleSavedNote(),
-              Text('Receipt ${s.number}', style: const TextStyle(fontWeight: FontWeight.w700)),
               const Divider(),
               for (final (n, i) in s.items.indexed) ...[
                 Row(
@@ -260,16 +286,10 @@ class _ReceiptDialogState extends ConsumerState<_ReceiptDialog> {
       ),
       actions: [
         TextButton.icon(
-          onPressed: () async => Printing.layoutPdf(onLayout: (_) => receiptPdf(s, st)),
-          icon: const Icon(Icons.print),
-          label: const Text('Print'),
-        ),
-        TextButton.icon(
           onPressed: () async => Printing.sharePdf(bytes: await receiptPdf(s, st), filename: '${s.number}.pdf'),
           icon: const Icon(Icons.picture_as_pdf),
           label: const Text('PDF'),
         ),
-        FilledButton(onPressed: () => Navigator.pop(context), child: const Text('New sale')),
       ],
     );
   }

@@ -45,13 +45,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final can = ref.watch(permissionsProvider).value ?? const <String>{};
     final layout = DashLayout.parse(ref.watch(deviceValueProvider('dash')).value);
     void save(String v) => ref.read(deviceValueProvider('dash').notifier).set(v);
-    if (data == null || sales == null || expenses == null) return const Center(child: CircularProgressIndicator());
+    if (data == null || sales == null || expenses == null) return const PageSkeleton();
     final s = data.settings;
     final saleList = sales.map(Sale.fromRecord).toList();
     final f = Figures.of(saleList, expenses, branch: data.branch, purchases: purchases);
     final period = layout.period;
     final pf = periodFigures(f.byDay, period);
     final c = pf.cur, pv = pf.prev, vs = vsWords[period]!;
+    // the last 7 days of each figure, for the cards' small trend lines (2026-11-18)
+    final week = [for (var i = 6; i >= 0; i--) f.day(localDate(DateTime.now().subtract(Duration(days: i))))];
+    List<double> spark(double Function(DayFigures d) of) => [for (final d in week) of(d)];
     final isToday = period == 'today';
     final branchRows = ref.watch(tableProvider('branches')).value ?? const [];
     final multiBranch = branchRows.length > 1; // expenses are pharmacy-wide
@@ -77,15 +80,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
     Widget? card(String id) => switch (id) {
           'figures' => StatGrid(children: [
-              StatCard(label: isToday ? 'Today\'s sales' : 'Sales', value: s.money(c.total), sub: '${c.count} sale${c.count == 1 ? '' : 's'}${deltaText(c.total, pv.total, vs)}', icon: Icons.payments_outlined,
+              StatCard(label: isToday ? 'Today\'s sales' : 'Sales', value: s.money(c.total), sub: '${c.count} sale${c.count == 1 ? '' : 's'}${deltaText(c.total, pv.total, vs)}', icon: Icons.payments_outlined, spark: spark((d) => d.total),
                   onTap: can.contains('sales.view') ? () => context.go('/sales?from=${range.from}&to=${range.to}') : null),
               if (can.contains('reports'))
-                StatCard(label: isToday ? 'Gross profit today' : 'Gross profit', value: s.money(c.grossProfit), sub: 'after cost of goods${deltaText(c.grossProfit, pv.grossProfit, vs)}', icon: Icons.trending_up, color: context.tones.violet,
+                StatCard(label: isToday ? 'Gross profit today' : 'Gross profit', value: s.money(c.grossProfit), sub: 'after cost of goods${deltaText(c.grossProfit, pv.grossProfit, vs)}', icon: Icons.trending_up, color: context.tones.violet, spark: spark((d) => d.grossProfit),
                     onTap: () => context.go('/reports?tab=profit&from=${range.from}&to=${range.to}')),
               if (can.contains('finance') || can.contains('reports'))
-                StatCard(label: isToday ? 'Today\'s expenses' : 'Expenses', value: s.money(c.expenses), sub: '${multiBranch ? 'Whole pharmacy (expenses have no branch) · sales here − expenses' : 'Sales − expenses'}: ${s.money(c.total - c.expenses)}', icon: Icons.account_balance_wallet_outlined, color: context.tones.warn,
+                StatCard(label: isToday ? 'Today\'s expenses' : 'Expenses', value: s.money(c.expenses), sub: '${multiBranch ? 'Whole pharmacy (expenses have no branch) · sales here − expenses' : 'Sales − expenses'}: ${s.money(c.total - c.expenses)}', icon: Icons.account_balance_wallet_outlined, color: context.tones.warn, spark: spark((d) => d.expenses),
                     onTap: () => context.go(can.contains('finance') ? '/finance?tab=expenses' : '/reports?tab=expenses&from=${range.from}&to=${range.to}')),
-              StatCard(label: 'Transactions', value: '${c.count}', sub: 'receipts ${isToday ? 'today' : periodWords[period]}${deltaText(c.count.toDouble(), pv.count.toDouble(), vs)}', icon: Icons.receipt_long_outlined, color: context.tones.info,
+              StatCard(label: 'Transactions', value: '${c.count}', sub: 'receipts ${isToday ? 'today' : periodWords[period]}${deltaText(c.count.toDouble(), pv.count.toDouble(), vs)}', icon: Icons.receipt_long_outlined, color: context.tones.info, spark: spark((d) => d.count.toDouble()),
                   onTap: can.contains('sales.view') ? () => context.go('/sales?from=${range.from}&to=${range.to}') : null),
             ]),
           'chart' => Card(child: Padding(padding: const EdgeInsets.all(12), child: () {

@@ -13,10 +13,8 @@ List<FKey> fkeyItems({required bool Function(String) can, bool wholesale = false
       if (can('stock.receive')) (key: 'F4', label: 'Add stock', go: '/add-stock', run: null),
       if (can('sales.view')) (key: 'F6', label: 'Sales', go: '/sales', run: null),
       if (can('inventory.view')) (key: 'F7', label: 'Inventory', go: '/inventory', run: null),
-      (key: 'F8', label: 'Search', go: null, run: 'search'),
-      (key: 'F9', label: 'Charge', go: null, run: 'charge'),
       (key: 'F10', label: 'Proforma', go: null, run: 'proforma'),
-      (key: 'F1', label: 'All keys', go: null, run: 'help'),
+      // F8 Search, F9 Charge and F1 keys are left out: the search box and Charge show their keys (src/components/FKeyBar.jsx)
     ];
 
 class FKeyBar extends StatelessWidget {
