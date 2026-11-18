@@ -2,7 +2,7 @@ import { mainPack, packPrice, sellInPacks } from '../packs.js';
 import { useState, useRef, useEffect, useMemo, useDeferredValue } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import FKeyBar, { fkeyItems, fkeysShown, showFkeys } from '../components/FKeyBar.jsx';
-import { ShoppingCart, Trash2, X, ScanText, FileText, Printer, AlertTriangle, ScanBarcode, Smartphone, Loader2, CheckCircle2, UserPlus, Tag, BookMarked, Repeat, PauseCircle, Keyboard, Plus, ClipboardList, MessageCircle, MessageSquareText, Star, Search, Command, LayoutGrid, Users } from 'lucide-react';
+import { ShoppingCart, Trash2, X, ScanText, FileText, Printer, AlertTriangle, ScanBarcode, Smartphone, Loader2, CheckCircle2, UserPlus, Tag, BookMarked, Repeat, PauseCircle, Keyboard, Plus, ClipboardList, MessageCircle, MessageSquareText, Star, Search, Command, LayoutGrid, Users, GraduationCap } from 'lucide-react';
 import { DrugInfoPanel, genericKey } from './DrugInfo.jsx';
 import { useStore, useSyncState, uid, now, daysUntil, put, del, move, allocate, audit, normalizePhone, customerBalance, DEFAULT_PAYMENT_METHODS } from '../store.jsx';
 import { overLimit } from '../credit.js';
@@ -70,6 +70,10 @@ export default function POS({ mode = 'retail' }) {
   const [favs, setFavs] = useState(() => { try { return new Set(JSON.parse(localStorage.getItem(favKey)) || []); } catch { return new Set(); } });
   const toggleFav = (id) => setFavs((f) => { const n = new Set(f); n.has(id) ? n.delete(id) : n.add(id); try { localStorage.setItem(favKey, JSON.stringify([...n])); } catch { /* storage blocked */ } return n; });
   const [cart, setCart] = useState([]);
+  // training mode (2026-11-18): practise on the real till; a training sale is never saved (no sale, stock, money, audit
+  // or sync), only kept on this device as practice
+  const [training, setTraining] = useState(() => { try { return sessionStorage.getItem('rxpos-training') === '1'; } catch { return false; } });
+  useEffect(() => { try { if (training) sessionStorage.setItem('rxpos-training', '1'); else sessionStorage.removeItem('rxpos-training'); } catch { /* blocked */ } }, [training]);
   const cartNow = useRef(cart); cartNow.current = cart; // the lines as they are now, for Undo
   const [picked, setPicked] = useState(() => new Set()); // lines ticked on the current sale
   const togglePick = (id) => setPicked((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -440,6 +444,7 @@ export default function POS({ mode = 'retail' }) {
   }
   const clearSale = () => loadSale({});
   const holdSale = async () => {
+    if (training) return toast('Training mode: sales are not held. Turn training off to hold a real sale.', 'info');
     if (!cart.length) return toast('Nothing to hold: the sale is empty', 'info');
     try { await changeHeld([], [snapshot()]); } catch { return; }
     clearSale(); focusSearch();
@@ -601,7 +606,7 @@ export default function POS({ mode = 'retail' }) {
         creditOver = { ...over, reason };
       }
     }
-    if (ptype === 'momo' && due > 0) {
+    if (ptype === 'momo' && due > 0 && !training) { // training never asks a real phone to pay
       const phone = normalizePhone(customer?.phone || '');
       if (syncCfg.url && navigator.onLine) cloudConfig(syncCfg).then(setPayCfg).catch(() => setPayCfg({}));
       return setMomo({ phone: customer?.phone || '', network: phone ? guessNetwork(phone) : 'mtn', stage: 'enter', ref: '', manualRef: '' });
@@ -646,6 +651,15 @@ export default function POS({ mode = 'retail' }) {
     };
     const expiredLines = cart.filter((l) => l.allowExpired); // 1.6
     const safetyAck = safetyRef.current;
+    if (training) {
+      // nothing is written: no sale, no stock movement, no cash, no audit, nothing to sync. The practice receipt says so.
+      let n = 1;
+      try { const list = JSON.parse(localStorage.getItem('rxpos-training-sales') || '[]'); n = list.length + 1; localStorage.setItem('rxpos-training-sales', JSON.stringify([...list.slice(-19), { at: sale.date, total: sale.total, items: sale.items.length, by: user.name }])); } catch { /* storage blocked: still practice */ }
+      setDone({ ...sale, number: 'TRAINING-' + n, training: true });
+      setSheet(false);
+      clearSale();
+      return true;
+    }
     saving.current = true;
     try {
     await update((d) => {
@@ -714,6 +728,7 @@ export default function POS({ mode = 'retail' }) {
   };
 
   const saveProforma = async () => {
+    if (training) return toast('Training mode: proformas are not saved. Turn training off to make a real one.', 'info');
     if (!cart.length) return;
     if (!(await ask({ title: 'Save as a proforma?', message: 'The sale is saved as a quotation and the till is cleared.', confirmText: 'Save proforma' }))) return;
     const pf = {
@@ -800,6 +815,7 @@ export default function POS({ mode = 'retail' }) {
         )}
       </aside>
       )}
+      {training && <div className="training-banner" role="status"><GraduationCap size={16} aria-hidden="true" /> <strong>Training mode</strong> · practice only: nothing is saved (no sale, stock, money or sync) <button type="button" className="link-btn small" onClick={() => { setTraining(false); setTimeout(focusSearch, 0); }}>Stop training</button></div>}
       <section className="pos-products">
         <div className="row between gap">
           <h2 className="pos-title"><ShoppingCart size={22} /> Point of sale</h2>
@@ -816,6 +832,7 @@ export default function POS({ mode = 'retail' }) {
                 {POS_LAYOUTS.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
               </select>
             </label>
+            <button type="button" className={'pos-training' + (training ? ' on' : '')} aria-pressed={training} title="Practise on the till: nothing is saved" onClick={() => { setTraining((t) => !t); setTimeout(focusSearch, 0); }}><GraduationCap size={15} aria-hidden="true" />Training</button>
             {useAdvancedLayout && <button className="icon-btn" title="Command bar (Ctrl+K)" aria-label="Command bar" onClick={() => setOmni(true)}><Command size={18} /></button>}
             <button className="icon-btn" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts" onClick={() => setHelp(true)}><Keyboard size={19} /></button>
           </div>
@@ -1257,7 +1274,7 @@ export default function POS({ mode = 'retail' }) {
 
       {omni && <Omnibar cart={cart} products={products} onAdd={(p) => add(p)} run={runCommand} onClose={() => { setOmni(false); focusSearch(); }} fmt={fmt} />}
       {done && (
-        <Modal title={done.proforma ? 'Proforma saved' : done.reprint ? 'Last receipt' : 'Sale complete ✓'} onClose={() => { setDone(null); focusSearch(); }}>
+        <Modal title={done.training ? 'Training sale (not saved)' : done.proforma ? 'Proforma saved' : done.reprint ? 'Last receipt' : 'Sale complete ✓'} onClose={() => { setDone(null); focusSearch(); }}>
           {/* shown only here, after finalize() has recorded the sale */}
           {!done.proforma && (
             <div className="sale-success" aria-hidden="true">
@@ -1269,14 +1286,14 @@ export default function POS({ mode = 'retail' }) {
           {!done.proforma && !done.reprint && (
             <div className="sale-done-banner no-print" role="status">
               <CheckCircle2 size={22} aria-hidden="true" />
-              <span className="grow"><strong>Sale complete</strong> · Receipt {done.number}{done.payment === 'Cash' && done.tendered > done.total ? <> · change <b className="num">{fmt(done.tendered - done.total)}</b></> : null}</span>
+              <span className="grow"><strong>{done.training ? 'Practice sale done' : 'Sale complete'}</strong> · {done.training ? 'nothing was saved' : `Receipt ${done.number}`}{done.payment === 'Cash' && done.tendered > done.total ? <> · change <b className="num">{fmt(done.tendered - done.total)}</b></> : null}</span>
               <button className="btn primary" onClick={() => window.print()}><Printer size={16} />Print</button>
               <button className="btn ghost" autoFocus onClick={() => { setDone(null); focusSearch(); }}>New sale</button>
             </div>
           )}
-          {!done.proforma && !done.reprint && <SaleSaved />}
+          {!done.proforma && !done.reprint && !done.training && <SaleSaved />}
           <Receipt sale={done} />
-          {!done.proforma && <SendReceipt sale={done} />}
+          {!done.proforma && !done.training && <SendReceipt sale={done} />}
           <div className="form-actions no-print">
             {(done.proforma || done.reprint) && <button className="btn ghost" onClick={() => { setDone(null); focusSearch(); }}>New sale</button>}
             <ReceiptPdfButton sale={done} />

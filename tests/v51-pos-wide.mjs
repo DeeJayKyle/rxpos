@@ -93,7 +93,18 @@ await p.evaluate(() => document.querySelector('.cart-line .line-remove').click()
 check('removing one line: gone at once, Undo offered', await p.evaluate((n) => document.querySelectorAll('.cart-line').length === n - 1 && /Removed/.test(document.querySelector('.toast')?.innerText || ''), linesBefore));
 await p.evaluate(() => [...document.querySelectorAll('.toast .toast-action')].pop().click()); await wait(300);
 check('…and Undo brings it back in its place', await p.evaluate((n) => document.querySelectorAll('.cart-line').length === n, linesBefore));
-await p.evaluate(() => [...document.querySelectorAll('.pos-cart button')].find((x) => /Clear all/.test(x.textContent)).click()); await wait(300);
+// training mode: practise a whole sale; nothing is saved or synced (no sale, no stock movement)
+const counts = async () => { const r = (t) => owner(`/tenants/${tid}/records?t=${t}`).then((x) => x.total); return { sales: await r('sales'), moves: await r('movements') }; };
+const before = await counts();
+await p.evaluate(() => document.querySelector('.pos-training').click()); await wait(300);
+check('Training: a striped banner says nothing is saved', await p.evaluate(() => /Training mode/.test(document.querySelector('.training-banner')?.innerText || '')));
+await p.evaluate(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'F9', bubbles: true }))); await wait(1200);
+check('…Charge gives a practice receipt marked TRAINING – NOT A SALE', await p.evaluate(() => /Training sale \(not saved\)/.test(document.querySelector('.modal')?.innerText || '') && /TRAINING – NOT A SALE/.test(document.querySelector('.modal .receipt')?.innerText || '')));
+await p.keyboard.press('Escape'); await wait(4000);
+const after = await counts();
+check('…and no sale or stock movement reaches the cloud', JSON.stringify(after) === JSON.stringify(before), JSON.stringify({ before, after }));
+await p.evaluate(() => document.querySelector('.pos-training').click()); await wait(300);
+check('…Stop training: the banner goes', await p.evaluate(() => !document.querySelector('.training-banner')));
 for (const code of ['7010001', '7010002']) { await p.focus('.pos-products input.search'); await p.keyboard.type(code); await p.keyboard.press('Enter'); await wait(300); }
 check('no quick actions panel', await p.evaluate(() => !document.querySelector('.quick-tile')));
 await p.evaluate(() => [...document.querySelectorAll('.pos-cart button')].find((x) => /^Hold$/.test(x.textContent.trim())).click()); await wait(800);

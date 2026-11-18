@@ -89,6 +89,7 @@ Future<Uint8List> receiptPdf(Sale s, PharmacySettings st) async {
           if (st.phone.isNotEmpty) pw.Text('Tel: ${st.phone}', textAlign: pw.TextAlign.center),
           if (tin.isNotEmpty) pw.Text('TIN: $tin', textAlign: pw.TextAlign.center),
           if (proforma) pw.Text('PROFORMA INVOICE', textAlign: pw.TextAlign.center, style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+          if (s.raw['training'] == true) pw.Text('TRAINING - NOT A SALE', textAlign: pw.TextAlign.center, style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
           pw.SizedBox(height: 6),
           pw.Text('${proforma ? 'Proforma' : 'Receipt'} ${s.number}'),
           pw.Text(s.date.replaceFirst('T', ' ').split('.').first),
@@ -177,7 +178,7 @@ class _ReceiptDialogState extends ConsumerState<_ReceiptDialog> {
       title: Row(children: [
         Icon(Icons.check_circle, color: context.tones.ok),
         const SizedBox(width: 10),
-        const Flexible(child: Text('Sale complete')),
+        Flexible(child: Text(s.raw['training'] == true ? 'Training sale (not saved)' : 'Sale complete')),
       ]),
       content: SizedBox(
         width: 380,
@@ -199,7 +200,7 @@ class _ReceiptDialogState extends ConsumerState<_ReceiptDialog> {
                   Row(children: [
                     Icon(Icons.check_circle, color: context.tones.ok, size: 22),
                     const SizedBox(width: 8),
-                    Expanded(child: Text('Sale complete · Receipt ${s.number}', style: const TextStyle(fontWeight: FontWeight.w800))),
+                    Expanded(child: Text(s.raw['training'] == true ? 'Practice sale done · nothing was saved · TRAINING – NOT A SALE' : 'Sale complete · Receipt ${s.number}', style: const TextStyle(fontWeight: FontWeight.w800))),
                   ]),
                   const SizedBox(height: 8),
                   Wrap(spacing: 8, runSpacing: 6, children: [
@@ -212,7 +213,7 @@ class _ReceiptDialogState extends ConsumerState<_ReceiptDialog> {
                   ]),
                 ]),
               ),
-              const SaleSavedNote(),
+              if (s.raw['training'] != true) const SaleSavedNote(),
               const Divider(),
               for (final (n, i) in s.items.indexed) ...[
                 Row(

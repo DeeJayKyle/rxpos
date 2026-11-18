@@ -280,8 +280,10 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     final d = await ref.read(pharmacyProvider.future);
     final can = ref.read(permissionsProvider).value ?? const <String>{};
     if (!can.contains('proformas') || d.features['proformas'] == false || ref.read(saleControllerProvider(widget.wholesale)).lines.isEmpty) return;
-    final pf = await _sale.proformaNow();
-    if (mounted) _say('Proforma ${pf['number']} saved (see Proformas)');
+    await _try(() async {
+      final pf = await _sale.proformaNow();
+      if (mounted) _say('Proforma ${pf['number']} saved (see Proformas)');
+    });
   }
 
   /// Alt+D: the discount (staff who may).
@@ -350,6 +352,14 @@ class _PosScreenState extends ConsumerState<PosScreen> {
       if (!rx) return;
     }
     final due = dueOf(ins, totalsOf(s.lines, discount: s.discount, settings: d.settings).total, d.settings);
+    // training mode: a practice receipt, nothing saved, no phone ever asked to pay
+    if (ref.read(tillTrainingProvider)) {
+      final rec = await _sale.practice(method: method.name, paid: due, tendered: s.tendered);
+      if (!mounted) return;
+      await showReceipt(context, rec, d.settings);
+      _focusSearch();
+      return;
+    }
     if (method.type == 'momo' && due > 0 && mounted) {
       final total = due; // the client's part of an insured sale
       final phone = d.customers.where((x) => x.id == s.customerId && x.id != walkIn).firstOrNull?.phone ?? '';
@@ -529,7 +539,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
               const SingleActivator(LogicalKeyboardKey.f8): _searchFocus.requestFocus,
               const SingleActivator(LogicalKeyboardKey.f9): _charge,
               const SingleActivator(LogicalKeyboardKey.enter, control: true): _charge,
-              const SingleActivator(LogicalKeyboardKey.keyH, alt: true): () => _sale.hold(),
+              const SingleActivator(LogicalKeyboardKey.keyH, alt: true): () => _try(_sale.hold),
               const SingleActivator(LogicalKeyboardKey.keyC, alt: true): _clientFocus.requestFocus,
               const SingleActivator(LogicalKeyboardKey.keyD, alt: true): _discountKey,
               const SingleActivator(LogicalKeyboardKey.keyR, alt: true): _lastReceipt,
@@ -936,6 +946,21 @@ class _ProductPanel extends StatelessWidget {
               ),
               // with large text in a narrow panel the count and the layout menu shrink instead of running off the side
               Flexible(child: Text('${data.products.length} medicines', maxLines: 1, overflow: TextOverflow.ellipsis, style: t.textTheme.bodySmall)),
+              Consumer(builder: (context, ref, _) {
+                final on = ref.watch(tillTrainingProvider);
+                return Padding(
+                  padding: const EdgeInsets.only(left: 6),
+                  child: FilterChip(
+                    key: const Key('pos-training'),
+                    avatar: const Icon(Icons.school_outlined, size: 16),
+                    label: const Text('Training'),
+                    tooltip: 'Practise on the till: nothing is saved',
+                    selected: on,
+                    showCheckmark: false,
+                    onSelected: (v) => ref.read(tillTrainingProvider.notifier).set(v),
+                  ),
+                );
+              }),
               if (onCommand != null) IconButton(tooltip: 'Command bar (Ctrl+K)', icon: const Icon(Icons.keyboard_command_key), onPressed: onCommand),
               if (layout != null) ...[
                 const SizedBox(width: 8),
@@ -956,6 +981,20 @@ class _ProductPanel extends StatelessWidget {
               ],
             ],
           ),
+          Consumer(builder: (context, ref, _) => !ref.watch(tillTrainingProvider)
+              ? const SizedBox.shrink()
+              : Container(
+                  key: const Key('training-banner'),
+                  margin: const EdgeInsets.only(top: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(color: context.tones.warnSoft, borderRadius: BorderRadius.circular(12), border: Border.all(color: context.tones.warn, width: 1.5)),
+                  child: Row(children: [
+                    Icon(Icons.school_outlined, size: 18, color: context.tones.warn),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text('Training mode · practice only: nothing is saved (no sale, stock, money or sync)', style: TextStyle(color: context.tones.warn, fontWeight: FontWeight.w600))),
+                    TextButton(onPressed: () => ref.read(tillTrainingProvider.notifier).set(false), child: const Text('Stop training')),
+                  ]),
+                )),
           const SizedBox(height: 10),
           Row(
             children: [
@@ -1670,14 +1709,15 @@ class _SalePanel extends ConsumerWidget {
             ),
             () {
               final buttons = () {
+              final training = ref.watch(tillTrainingProvider); // no hold or proforma while practising
               final hold = OutlinedButton.icon(
-                onPressed: s.lines.isEmpty ? null : () => c.hold(),
+                onPressed: s.lines.isEmpty || training ? null : () => c.hold(),
                 icon: const Icon(Icons.pause_circle_outline),
                 label: const Text('Hold'),
               );
               final proforma = can.contains('proformas') && data.features['proformas'] != false
                   ? OutlinedButton.icon(
-                      onPressed: s.lines.isEmpty
+                      onPressed: s.lines.isEmpty || training
                           ? null
                           : () async {
                               final pf = await c.proformaNow();

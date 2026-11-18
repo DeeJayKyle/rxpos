@@ -300,6 +300,31 @@ void main() {
     await done(tester);
   });
 
+  testWidgets('training mode: a practice sale gives a TRAINING receipt and saves nothing (no sale, no stock movement)', (tester) async {
+    await tester.runAsync(signedIn);
+    await start(tester);
+    await toTill(tester);
+    await tester.tap(find.byKey(const Key('pos-training')));
+    await settle(tester);
+    expect(find.byKey(const Key('training-banner')), findsOneWidget);
+    await tester.tap(find.text('Calmex 500mg Tabs'));
+    await settle(tester);
+    await tester.tap(find.text('Charge UGX 500   [F9]'));
+    await settle(tester);
+    expect(find.text('Training sale (not saved)'), findsOneWidget);
+    final store = RecordStore(db);
+    expect((await tester.runAsync(() => store.rows('sales')))!, isEmpty, reason: 'no sale saved');
+    expect((await tester.runAsync(() => store.rows('movements')))!.where((m) => m['type'] == 'Sale'), isEmpty, reason: 'no stock taken');
+    expect((await tester.runAsync(() => db.select(db.outbox).get()))!.where((o) => o.toString().contains('sales')), isEmpty, reason: 'nothing to sync');
+    await tester.tap(find.text('New sale'));
+    await settle(tester);
+    expect(find.text('100 left'), findsOneWidget, reason: 'stock unchanged');
+    await tester.tap(find.text('Stop training'));
+    await settle(tester);
+    expect(find.byKey(const Key('training-banner')), findsNothing);
+    await done(tester);
+  });
+
   testWidgets('phone till: the bottom bar keeps the total and Charge in reach', (tester) async {
     await tester.runAsync(signedIn);
     await start(tester, size: const Size(400, 860));

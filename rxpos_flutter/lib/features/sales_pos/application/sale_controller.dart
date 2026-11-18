@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/data/device_settings.dart';
 
@@ -24,6 +25,16 @@ import '../domain/cart.dart';
 part 'sale_controller.g.dart';
 
 /// The sale being rung up on one till (retail or wholesale).
+/// Training mode (2026-11-18): practise on the real till. A training sale is never saved: no sale, stock movement, cash,
+/// audit or sync; hold and proforma are off while it is on.
+class TillTraining extends Notifier<bool> {
+  @override
+  bool build() => false;
+  void set(bool on) => state = on;
+}
+
+final tillTrainingProvider = NotifierProvider<TillTraining, bool>(TillTraining.new);
+
 class SaleState {
   const SaleState({
     this.lines = const [],
@@ -400,6 +411,7 @@ class SaleController extends _$SaleController {
 
   /// Put the sale on hold (a draft, on every device) and start a new one.
   Future<void> hold() async {
+    if (ref.read(tillTrainingProvider)) throw CartProblem('Training mode: sales are not held. Turn training off to hold a real sale.');
     if (state.lines.isEmpty) return;
     final session = await ref.read(sessionControllerProvider.future);
     final data = await _data;
@@ -466,7 +478,26 @@ class SaleController extends _$SaleController {
     return overLimit(limit: limit, owed: owed, total: dueOf(state.insured, total, d.settings), tendered: state.tendered);
   }
 
+  /// A practice sale: the receipt's record only. Nothing is written anywhere; the till is cleared.
+  Future<Map<String, Object?>> practice({required String method, required double paid, double? tendered}) async {
+    final d = await _data;
+    final session = await ref.read(sessionControllerProvider.future);
+    final t = totalsOf(state.lines, discount: state.discount, settings: d.settings);
+    _practiceCount++;
+    final rec = <String, Object?>{
+      'id': 'training-$_practiceCount', 'number': 'TRAINING-$_practiceCount', 'date': DateTime.now().toIso8601String(), 'training': true,
+      'items': [for (final l in state.lines) {'id': l.id, 'name': l.name, 'qty': l.qty, 'price': l.price}],
+      'subtotal': t.subtotal, 'discount': t.discount, 'tax': t.tax, 'total': t.total, 'paid': paid, 'tendered': tendered ?? paid,
+      'payment': method, 'customerId': state.customerId, 'customerName': state.customerName, 'cashier': session?.userName ?? '', 'status': 'completed',
+    };
+    clear();
+    return rec;
+  }
+
+  static int _practiceCount = 0;
+
   Future<Map<String, Object?>> complete({ControlledEntry? controlled, String? momoRef, Map<String, Object?>? momo, bool rxChecked = false, Map<String, Object?>? creditOver}) async {
+    if (ref.read(tillTrainingProvider)) throw CartProblem('Training mode is on: this sale would not be real.'); // never saved while training
     // the sale as it is now: a line scanned while the sale is being saved is not part of it, and stays on the till
     final s = state;
     final d = await _data;
@@ -505,6 +536,7 @@ class SaleController extends _$SaleController {
 
   /// Save the sale as a proforma (quotation) and start a new one.
   Future<Map<String, Object?>> proformaNow() async {
+    if (ref.read(tillTrainingProvider)) throw CartProblem('Training mode: proformas are not saved. Turn training off to make a real one.');
     final d = await _data;
     final session = await ref.read(sessionControllerProvider.future);
     final pf = await saveProforma(

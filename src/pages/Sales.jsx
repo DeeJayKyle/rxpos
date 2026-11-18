@@ -38,6 +38,7 @@ export function Receipt({ sale }) {
         {s.phone && <div>Tel: {s.phone}</div>}
         {s.tin && <div>TIN: {s.tin}</div>}
         {isProforma && <div className="receipt-tag">PROFORMA INVOICE</div>}
+        {sale.training && <div className="receipt-tag">TRAINING – NOT A SALE</div>}
         <div>{sale.number} · {new Date(sale.date).toLocaleString()}</div>
         <div>{isProforma ? 'Prepared by' : 'Served by'}: {sale.cashier || sale.createdBy}</div>
         {sale.customerName && sale.customerName !== 'Walk-in Customer' && <div>Customer: {sale.customerName}</div>}
