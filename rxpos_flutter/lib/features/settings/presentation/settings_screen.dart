@@ -250,31 +250,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final banks = ref.watch(tableProvider('banks')).value ?? const [];
     final branches = ref.watch(tableProvider('branches')).value ?? const [];
     return [
-      // E6: the pharmacy's own logo, for every device: the menu, sign-in, the customer display
-      _card('Pharmacy logo', Icons.image_outlined, save: false, [
-        Row(key: const Key('logo-card'), children: [
-          const PharmacyLogo(size: 64, fallback: SizedBox(width: 64, height: 64, child: Center(child: Text('No logo yet', textAlign: TextAlign.center, style: TextStyle(fontSize: 12))))),
-          const SizedBox(width: 12),
-          OutlinedButton.icon(
-            key: const Key('logo-upload'),
-            onPressed: () async {
-              try {
-                final files = await (logoPicker ?? () => pickFiles(extensions: const ['jpg', 'jpeg', 'png', 'webp'], multiple: false))();
-                if (files.isEmpty) return;
-                final up = await uploadFile(ref.read(cloudApiProvider), dataUrlBytes(shrinkPhoto(files.first.bytes, max: 512)), 'logo.jpg', type: 'image/jpeg');
-                await _saveShared('logo', '${up['path'] ?? ''}');
-                if (mounted) saySaved(context, 'Logo saved for every device');
-              } catch (e) {
-                if (mounted) say(context, 'The logo could not be saved: $e', error: true);
-              }
-            },
-            icon: const Icon(Icons.upload_outlined),
-            label: Text('${shared['logo'] ?? ''}'.isEmpty ? 'Upload a logo' : 'Change logo'),
-          ),
-          if ('${shared['logo'] ?? ''}'.isNotEmpty) TextButton(onPressed: () => _saveShared('logo', ''), child: const Text('Remove')),
-        ]),
-        _muted('Shown on the sign-in page, at the top of the menu and on the customer display.'),
-      ]),
       _card('Pharmacy details · this device', Icons.store_outlined, save: false, [
         _muted('Owner sets the shared defaults for every device. Edits here override them only on this device until you reset them.'),
         _muted('${over.length} local override(s) · Owner pharmacy name: ${shared['name'] ?? 'My Pharmacy'}'),
@@ -316,6 +291,31 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
           FilledButton(onPressed: _save, child: const Text('Save for this device')),
         ]),
+      ]),
+      // E6: the pharmacy's own logo, for every device: the menu, sign-in, the customer display
+      _card('Pharmacy logo', Icons.image_outlined, save: false, [
+        Row(key: const Key('logo-card'), children: [
+          const PharmacyLogo(size: 64, fallback: SizedBox(width: 64, height: 64, child: Center(child: Text('No logo yet', textAlign: TextAlign.center, style: TextStyle(fontSize: 12))))),
+          const SizedBox(width: 12),
+          OutlinedButton.icon(
+            key: const Key('logo-upload'),
+            onPressed: () async {
+              try {
+                final files = await (logoPicker ?? () => pickFiles(extensions: const ['jpg', 'jpeg', 'png', 'webp'], multiple: false))();
+                if (files.isEmpty) return;
+                final up = await uploadFile(ref.read(cloudApiProvider), dataUrlBytes(shrinkPhoto(files.first.bytes, max: 512)), 'logo.jpg', type: 'image/jpeg');
+                await _saveShared('logo', '${up['path'] ?? ''}');
+                if (mounted) saySaved(context, 'Logo saved for every device');
+              } catch (e) {
+                if (mounted) say(context, 'The logo could not be saved: $e', error: true);
+              }
+            },
+            icon: const Icon(Icons.upload_outlined),
+            label: Text('${shared['logo'] ?? ''}'.isEmpty ? 'Upload a logo' : 'Change logo'),
+          ),
+          if ('${shared['logo'] ?? ''}'.isNotEmpty) TextButton(onPressed: () => _saveShared('logo', ''), child: const Text('Remove')),
+        ]),
+        _muted('Shown on the sign-in page, at the top of the menu and on the customer display.'),
       ]),
     ];
   }
