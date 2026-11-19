@@ -77,10 +77,11 @@ export function useListControls({ rows, onOpen, onEdit, onDelete, onNew, searchR
   // the highlighted row stays in view
   useLayoutEffect(() => { if (active >= 0) document.querySelector('tr.row-active')?.scrollIntoView({ block: 'nearest' }); }, [active]);
 
-  /** props for row i: highlight on click, open on double-click, the menu on right-click (menu(e, row)) */
+  /** props for row i: a click highlights and opens it (1.16.0, the owner's clean-up: no View button needed), double-click
+   *  opens it too, the menu on right-click (menu(e, row)) */
   const rowProps = (r, i, menu) => ({
     className: [i === active ? 'row-active' : '', ticked.has(r.id) ? 'row-ticked' : ''].filter(Boolean).join(' '),
-    onClick: (e) => { if (!e.target.closest('button, a, input, select, label')) setActive(i); },
+    onClick: (e) => { if (e.target.closest('button, a, input, select, label, textarea')) return; setActive(i); if ((onOpen || onEdit) && !window.getSelection?.()?.toString()) (onOpen || onEdit)(r); },
     onDoubleClick: (e) => { if (!e.target.closest('button, a, input, select') && (onOpen || onEdit)) { window.getSelection?.()?.removeAllRanges(); (onOpen || onEdit)(r); } },
     onContextMenu: menu ? (e) => { setActive(i); menu(e, r, i); } : undefined,
     'aria-selected': i === active || undefined,

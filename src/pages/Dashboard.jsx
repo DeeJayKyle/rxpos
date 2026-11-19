@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Banknote, Wallet, CalendarClock, PackageX, Pill, Coins, Users, ShoppingCart, ReceiptText, Share2, Megaphone, Store, TrendingUp, ShieldAlert, PauseCircle, SearchCheck, CalendarDays, SlidersHorizontal, ArrowUp, ArrowDown, ArrowRight, Sparkles, X } from 'lucide-react';
+import { Banknote, Wallet, CalendarClock, PackageX, Pill, Coins, Users, ShoppingCart, ReceiptText, Share2, Megaphone, TrendingUp, ShieldAlert, PauseCircle, SearchCheck, SlidersHorizontal, ArrowUp, ArrowDown, ArrowRight, Sparkles, X } from 'lucide-react';
 import { draftsFor, seesAllDrafts, isOld, ageText } from '../drafts.js';
 import { useStore, today, dayOf, isLowStock, expiryCounts, stockValue, MAIN_BRANCH, put, audit, now } from '../store.jsx';
 import { Stat, Empty, Modal } from '../ui.jsx';
@@ -22,6 +22,14 @@ const TOP_BY = [['amount', 'Amount'], ['qty', 'Quantity'], ['profit', 'Profit']]
 // The dashboard's cards. The owner's choice (2026-11-15): a clean dashboard shows the figures, one sales chart, stock
 // health, the top medicines and the latest sales; the rest are widgets that can be switched back on (Edit widgets).
 // span: of 12 columns on wide screens
+/** The daily chart's days for the dashboard's period (1.16.0: one period picker for the whole dashboard) */
+const chartDays = (period) => {
+  if (period === '1m') return 30;
+  if (period === '6m') return 182;
+  if (period === '12m') return 365;
+  if (period === 'ytd') { const n = new Date(), j = new Date(n.getFullYear(), 0, 1); return Math.max(7, Math.round((n - j) / 864e5) + 1); }
+  return 7;
+};
 const WIDGETS = [
   { id: 'figures', name: 'Figures for the period', span: 12, on: true },
   // the bento row stays (the owner's request, 2026-11-15: "Maintain the bento UI")
@@ -128,9 +136,9 @@ export default function Dashboard() {
       <div className="stats kpis">
         {/* sales open Reports → Sales lines for the period (every medicine sold); staff without it get the sales list */}
         <Stat {...salesTo} label={isToday ? "Today's sales" : 'Sales'} value={fmtShort(c.total)} full={fmt(c.total)} sub={`${c.n} sale${c.n === 1 ? '' : 's'} · ${VS_WORDS[period]}`} delta={dl.total} spark={spark.total} tone="teal" icon={Banknote} ring={{ pct: share(c.total, pv.total), title: `of the sales ${vsWords}` }} />
-        {can('reports') && <Stat to="/reports" state={{ tab: 'profit', ...rangeState }} label={isToday ? 'Gross profit today' : 'Gross profit'} value={fmtShort(c.gp)} full={fmt(c.gp)} sub={`after cost of goods · ${VS_WORDS[period]}`} delta={dl.gp} spark={spark.gp} tone="violet" icon={TrendingUp} ring={{ pct: share(c.gp, c.total), title: 'gross margin (profit ÷ sales)' }} />}
+        {can('reports') && <Stat to="/reports" state={{ tab: 'profit', ...rangeState }} label={isToday ? 'Gross profit today' : 'Gross profit'} value={fmtShort(c.gp)} full={fmt(c.gp)} sub={VS_WORDS[period]} delta={dl.gp} spark={spark.gp} tone="violet" icon={TrendingUp} ring={{ pct: share(c.gp, c.total), title: 'gross margin (profit ÷ sales)' }} />}
         {(can('finance') || can('reports')) && <Stat to="/expenses" label={isToday ? "Today's expenses" : 'Expenses'} value={fmtShort(c.exp)} full={fmt(c.exp)} sub={db.branches.length > 1 ? `Whole pharmacy (expenses have no branch) · sales here − expenses: ${fmt(c.total - c.exp)}` : `Sales − expenses: ${fmt(c.total - c.exp)}`} delta={dl.exp} spark={spark.exp} goodDown tone="orange" icon={Wallet} ring={{ pct: share(c.exp, c.total), title: 'of sales spent on expenses' }} />}
-        <Stat to="/sales" state={rangeState} label="Transactions" value={c.n.toLocaleString()} sub={`receipts ${isToday ? 'today' : PERIOD_WORDS[period]} · ${VS_WORDS[period]}`} delta={dl.n} spark={spark.n} tone="blue" icon={ReceiptText} ring={{ pct: share(c.n, pv.n), title: `of the receipts ${vsWords}` }} />
+        <Stat to="/sales" state={rangeState} label="Transactions" value={c.n.toLocaleString()} sub={VS_WORDS[period]} delta={dl.n} spark={spark.n} tone="blue" icon={ReceiptText} ring={{ pct: share(c.n, pv.n), title: `of the receipts ${vsWords}` }} />
       </div>
     ),
     chart: () => {
@@ -142,8 +150,8 @@ export default function Dashboard() {
       return (
         <div className="card chart-card">
           {chart === 'daily'
-            ? <DailyTrend byDay={m.byDay} fmt={fmt} extra={pick} onDay={(k) => navigate('/sales', { state: { from: k, to: k } })} />
-            : <MonthLines fmt={fmt} extra={pick} series={[
+            ? <DailyTrend byDay={m.byDay} fmt={fmt} extra={pick} days={chartDays(period)} onDay={(k) => navigate('/sales', { state: { from: k, to: k } })} />
+            : <MonthLines fmt={fmt} extra={pick} months={period === '12m' || period === 'ytd' ? 12 : 6} series={[
               { name: 'Sales', cls: 'in', values: perMonth('total') },
               ...(can('reports') ? [{ name: 'Purchases', cls: 'purch', values: perMonth('purch') }] : []),
               ...((can('finance') || can('reports')) ? [{ name: 'Expenses', cls: 'exp', values: perMonth('exp') }] : []),
@@ -238,12 +246,11 @@ export default function Dashboard() {
     <div className="page dash-page">
       <section className="page-head welcome" aria-label="Welcome">
         <div className="welcome-text">
-          <span className="welcome-store"><Store size={14} />{db.settings.name}</span>
+          {/* 1.16.0 (the owner's clean-up): the pharmacy's name is in the menu; today's date is in the line under the greeting */}
           <h1>{greet}, {user.name.split(' ')[0]}</h1>
-          <div className="sub">Here&apos;s {db.branches.length > 1 ? (branch?.name || 'this branch') : 'your pharmacy'} {isToday ? 'today' : PERIOD_WORDS[period]} <span className="muted" title="Sales are completed receipts at this branch (refunds left out), including tax. Gross profit is sales less tax and the cost recorded on each line.">· sales incl. tax, refunds left out</span></div>
+          <div className="sub"><Link className="date-pill" to="/calendar" title="Open the calendar">{new Date().toLocaleDateString(dateLocale(), { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' })}</Link> · Here&apos;s {db.branches.length > 1 ? (branch?.name || 'this branch') : 'your pharmacy'} {isToday ? 'today' : PERIOD_WORDS[period]} <span className="muted" title="Sales are completed receipts at this branch (refunds left out), including tax. Gross profit is sales less tax and the cost recorded on each line.">· sales incl. tax, refunds left out</span></div>
         </div>
         <div className="dash-tools">
-          <Link className="date-pill" to="/calendar" title="Open the calendar"><CalendarDays size={16} />{new Date().toLocaleDateString(dateLocale(), { day: 'numeric', month: 'short', year: 'numeric' })}</Link>
           <Link className="btn primary" to="/pos"><ShoppingCart size={18} />New sale</Link>
         </div>
       </section>

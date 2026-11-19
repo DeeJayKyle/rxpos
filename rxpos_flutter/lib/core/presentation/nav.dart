@@ -19,4 +19,5 @@ class Screen {
 }
 
 // 1.14.0: the medicine pages in two short groups (as the web app), so the menu is easier to scan and its headings fit
-const navGroups = ['Sales', 'People', 'Stock', 'Medicines', 'Finance', 'Insights', 'System'];
+// 1.16.0 (the owner's clean-up): pages used now and then under More, so the groups above stay short
+const navGroups = ['Sales', 'People', 'Stock', 'Medicines', 'Finance', 'Insights', 'More', 'System'];

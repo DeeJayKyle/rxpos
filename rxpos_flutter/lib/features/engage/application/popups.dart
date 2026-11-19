@@ -35,6 +35,8 @@ class Popup {
 }
 
 const routinePopups = {'weekly', 'hour', 'greet'};
+/// shown on the dashboard only, and not on phones (1.16.0)
+const dashboardOnlyPopups = {'alerts', 'weekly', 'hour', 'greet'};
 
 class PopupController extends Notifier<List<Popup>> {
   final _timers = <Popup, Timer>{};
@@ -79,7 +81,13 @@ class PopupHost extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final all = ref.watch(popupsProvider);
     final selling = location.startsWith('/pos');
-    final shown = selling ? all.where((p) => !routinePopups.contains(p.id) || p.tone == 'danger').toList() : all;
+    // 1.16.0 (the owner's clean-up, src/notify.jsx): stock alerts and the routine cards never cover a page: they show on
+    // the dashboard only, and never on a phone (the bell keeps them); messages and calls still show everywhere
+    final phone = MediaQuery.sizeOf(context).width < 600;
+    final shown = [
+      for (final p in all)
+        if ((!dashboardOnlyPopups.contains(p.id) || (location == '/' && !phone)) && (!selling || !routinePopups.contains(p.id) || p.tone == 'danger')) p,
+    ];
     if (shown.isEmpty) return const SizedBox.shrink();
     final t = Theme.of(context);
     final narrow = MediaQuery.sizeOf(context).width < 600;

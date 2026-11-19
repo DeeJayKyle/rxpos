@@ -77,15 +77,21 @@ export function SetupChecklist({ db, products, can }) {
   const steps = setupSteps(db, products);
   const left = steps.filter((x) => !x.done).length;
   // a new pharmacy only: one that already sold a lot has set itself up its own way
+  // 1.16.0 (the owner's clean-up): once half is done it folds to one slim line; Continue opens the steps
+  const [open, setOpen] = useState(() => left > steps.length / 2);
   if (!can('settings.manage') || !left || deviceSettings().setupHidden || (db.sales || []).length >= 100) return null;
+  const next = steps.find((x) => !x.done);
   return (
-    <section className="card setup-card" aria-label="Set up your pharmacy">
+    <section className={'card setup-card' + (open ? '' : ' folded')} aria-label="Set up your pharmacy">
       <div className="card-head">
         <h3><ListChecks size={17} />Set up your pharmacy <small className="muted">{steps.length - left} of {steps.length} done</small></h3>
+        {!open && <div className="setup-meter inline" aria-hidden="true"><i style={{ width: `${((steps.length - left) / steps.length) * 100}%` }} /></div>}
+        {!open && next && <Link className="btn sm" to={next.to} state={next.state}>Continue: {next.label} <ArrowRight size={13} aria-hidden="true" /></Link>}
+        <button type="button" className="btn sm ghost" aria-expanded={open} onClick={() => setOpen((o) => !o)}>{open ? 'Fewer' : 'All steps'}</button>
         <button type="button" className="btn sm ghost" onClick={() => { setDevice({ setupHidden: true }); }}><X size={15} />Hide</button>
       </div>
-      <div className="setup-meter" aria-hidden="true"><i style={{ width: `${((steps.length - left) / steps.length) * 100}%` }} /></div>
-      <ul className="setup-steps">
+      {open && <div className="setup-meter" aria-hidden="true"><i style={{ width: `${((steps.length - left) / steps.length) * 100}%` }} /></div>}
+      <ul className="setup-steps" hidden={!open}>
         {steps.map((x) => (
           <li key={x.id} className={x.done ? 'done' : ''} data-step={x.id}>
             {x.done ? <CheckCircle2 size={18} aria-hidden="true" /> : <Circle size={18} aria-hidden="true" />}

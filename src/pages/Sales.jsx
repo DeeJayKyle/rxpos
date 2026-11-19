@@ -1,12 +1,12 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { closedSet, inClosedDay } from '../dayclose.js';
 import { useLocation } from 'react-router-dom';
-import { Download, Printer, Undo2, Eye, Pencil, Trash2, Plus, History, FileText, PauseCircle } from 'lucide-react';
+import { Download, Printer, Undo2, Eye, Pencil, Trash2, Plus, History, FileText, PauseCircle, SlidersHorizontal, Ellipsis } from 'lucide-react';
 import { useStore, dayOf, downloadFile, toCSV, put, move, now, audit, allocate, MAIN_BRANCH, DEFAULT_PAYMENT_METHODS } from '../store.jsx';
 import { useOlderHistory, olderNote } from '../history.js';
 import { ViewSwitch, BoardView, GalleryView, savedView, saveView } from '../components/DataViews.jsx';
 import { saleStatus } from '../components/BentoDashboard.jsx';
-import { Modal, SearchBox, Empty, PdfButton, ReceiptPdfButton, PayChip, useSort, SortTh, SubViews, WhoChanged } from '../ui.jsx';
+import { Modal, SearchBox, Empty, PdfButton, ReceiptPdfButton, PayChip, useSort, SortTh, SubViews, WhoChanged, ExportMenu, moneyCell } from '../ui.jsx';
 import { useLoadMore, useColumns, BulkBar, useSwipe, useWide, DetailsPane } from '../tablekit.jsx';
 import { DateRange } from '../forms.jsx';
 import { toast } from '../feedback.jsx';
@@ -163,6 +163,10 @@ export default function Sales() {
   const draftCount = useDraftCount('sale');
   const [f, setF] = useState({ cashier: '', payment: '', customer: '', status: '' });
   const setFilter = (k) => (e) => setF({ ...f, [k]: e.target.value });
+  // 1.16.0 (the owner's clean-up): cashier, payment, customer and status behind one Filters button
+  const [showFilters, setShowFilters] = useState(false);
+  const cur = db.settings?.currency || '';
+  const activeFilters = Object.values(f).filter(Boolean).length;
   const onlyEdited = f.status === 'edited';
   const [printNode, printSale] = usePrintSale();
   const phoneOf = (s) => db.customers.find((c) => c.id === s.customerId)?.phone || '';
@@ -276,17 +280,20 @@ export default function Sales() {
           {dv === 'table' && colsK.button}
           <SearchBox value={q} onChange={setQ} placeholder="Receipt, customer, medicine…" inputRef={searchRef} />
           <DateRange from={from} to={to} onChange={(r) => { setFrom(r.from); setTo(r.to); }} />
+          {tab === 'sales' && <button type="button" className={'btn ghost filters-btn' + (activeFilters ? ' on' : '')} aria-expanded={showFilters} onClick={() => setShowFilters((x) => !x)}><SlidersHorizontal size={16} />Filters{activeFilters > 0 && <span className="badge-count">{activeFilters}</span>}</button>}
+          <ExportMenu>
           <button className="btn ghost" onClick={() => downloadFile('sales.csv', toCSV(exportRows), 'text/csv')}><Download size={16} />CSV</button>
           <PdfButton title="Sales history" subtitle={[from || to ? `${from || 'start'} to ${to || 'today'}` : 'All dates', q && `search "${q}"`, onlyEdited && 'edited sales only', `${valid.length} sales · ${fmt(valid.reduce((a, s) => a + s.total, 0))}`].filter(Boolean).join(' · ')}
             data={() => [{ head: ['Receipt', 'Date', 'Customer', 'Cashier', 'Payment', 'Status', 'Total'], numeric: [6],
               body: rows.map((s) => [s.number, new Date(s.date).toLocaleString(dateLocale(), { dateStyle: 'medium', timeStyle: 'short' }), s.customerName, s.cashier, s.payment, s.status + (s.edits?.length ? ' (edited)' : ''), fmt(s.total)]),
               foot: ['', '', '', '', '', 'Total (excl. refunds)', fmt(valid.reduce((a, s) => a + s.total, 0))] }]} />
+          </ExportMenu>
         </div>
       </div>
       <SubViews value={tab} onChange={setTab} main="sales" mainLabel="All sales" views={[['drafts', 'Held sales', draftCount, PauseCircle]]} />
       {tab === 'drafts' && <DraftsList kind="sale" />}
       {tab === 'sales' && <>
-      <div className="report-filters">
+      <div className="report-filters" hidden={!showFilters}>
         <label>Cashier<select value={f.cashier} onChange={setFilter('cashier')}><option value="">All</option>{opts('cashier').map((x) => <option key={x}>{x}</option>)}</select></label>
         <label>Payment<select value={f.payment} onChange={setFilter('payment')}><option value="">All</option>{opts('payment').map((x) => <option key={x}>{x}</option>)}</select></label>
         <label>Customer<select value={f.customer} onChange={setFilter('customer')}><option value="">All</option>{opts('customerName').map((x) => <option key={x}>{x}</option>)}</select></label>
@@ -300,7 +307,7 @@ export default function Sales() {
           <thead><tr><th className="tick"><input {...lc.allProps} /></th>{colsK.shown.map((id) => ({
             number: <SortTh key={id} s={sorted} k="number">Receipt</SortTh>, date: <SortTh key={id} s={sorted} k="date">Date</SortTh>, branch: <th key={id}>Branch</th>,
             customer: <SortTh key={id} s={sorted} k="customer">Customer</SortTh>, phone: <th key={id}>Phone</th>, payment: <SortTh key={id} s={sorted} k="payment">Payment</SortTh>,
-            status: <th key={id}>Status</th>, total: <SortTh key={id} s={sorted} k="total" className="num">Total</SortTh>, cashier: <SortTh key={id} s={sorted} k="cashier">Cashier</SortTh> }[id]))}<th /></tr></thead>
+            status: <th key={id}>Status</th>, total: <SortTh key={id} s={sorted} k="total" className="num">Total{cur && <small className="th-cur"> ({cur})</small>}</SortTh>, cashier: <SortTh key={id} s={sorted} k="cashier">Cashier</SortTh> }[id]))}<th /></tr></thead>
           <tbody>
             {page.rows.map((s, i) => { const rp = lc.rowProps(s, i, saleMenu); const cell = {
               number: <td key="number" className="row-title"><strong>{s.number}</strong> <small className="muted cap">{s.type || 'retail'}</small></td>,
@@ -310,7 +317,7 @@ export default function Sales() {
               phone: <td key="phone" data-label="Phone" className="muted">{phoneOf(s) || '—'}</td>,
               payment: <td key="payment" data-label="Payment"><PayChip name={s.payment} />{s.momo?.txid ? <><br /><small className="muted">{s.momo.txid}</small></> : null}</td>,
               status: <td key="status" data-label="Status">{s.status === 'refunded' ? <span className="badge danger">refunded</span> : <span className="muted small status-plain">{s.status}</span>}{s.edits?.length > 0 && <><br /><button type="button" className="badge warn edited-badge" onClick={() => setView(s)} title="See what was changed and by whom"><History size={11} /> Edited{s.edits.length > 1 ? ` ×${s.edits.length}` : ''}</button></>}</td>,
-              total: <td key="total" data-label="Total" className="num"><strong>{fmt(s.total)}</strong></td>,
+              total: <td key="total" data-label="Total" className="num"><strong>{moneyCell(fmt(s.total), cur)}</strong></td>,
               cashier: <td key="cashier" data-label="Cashier">{s.cashier}</td>,
             }; return (
               <tr key={s.id} {...rp} {...swipe.props(s.id)} className={[(s.status === 'refunded' ? 'dim' : ''), (s.edits?.length ? 'edited-row' : ''), (view?.id === s.id && wide ? 'row-open' : ''), rp.className].filter(Boolean).join(' ')} title={s.edits?.length ? `Edited ${s.edits.length}× · last by ${s.editedBy || s.edits.at(-1).by}` : undefined}>
@@ -321,6 +328,7 @@ export default function Sales() {
                   <button className="btn sm ghost act-print" onClick={() => printSale(s, 'receipt')} title="Print the till receipt"><Printer size={14} />Receipt</button>
                   <button className="btn sm ghost act-invoice" onClick={() => printSale(s, 'invoice')} title="Print a full-page invoice"><FileText size={14} />Invoice</button>
                   {s.status !== 'refunded' && can('sales.edit') && !locked(s) && <button className="btn sm ghost act-edit" onClick={() => setEditing(s)}><Pencil size={14} />Edit</button>}
+                  <button type="button" className="icon-btn sm row-more" title="More actions" aria-label="More actions" onClick={(e) => saleMenu(e, s)}><Ellipsis size={16} /></button>
                 </div>
                 {swipe.openId === s.id && <div className="swipe-acts">
                   <button type="button" className="btn sm" onClick={() => { swipe.close(); printSale(s, 'receipt'); }}><Printer size={14} />Print</button>

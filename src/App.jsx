@@ -5,7 +5,7 @@ import { MessageCircle,
   Boxes, PackagePlus, History, CalendarClock, PencilRuler, ScrollText, Wallet, Tags, Landmark, ArrowLeftRight, HandCoins,
   ArrowDownLeft, ArrowUpRight, ClipboardCheck, RefreshCw, Undo2, ShieldPlus, BookOpen, BarChart3, Settings as SettingsIcon, Search, Sun, Moon, Menu, LogOut, ChevronDown,
   BellRing, Plus, ShoppingBag, Tag, FileUp, Building2, Send, ShieldCheck, Clock, BookMarked, MessagesSquare, UserCog, KeyRound, CalendarDays, Thermometer, Palette, MonitorSmartphone, ScanText, GraduationCap, Megaphone, CalendarRange, LockKeyhole, NotebookPen, PanelLeftClose, PanelLeftOpen, WifiOff,
-  Sparkles, Pin, Keyboard, UserPlus, Archive, BadgeCheck, BriefcaseMedical,
+  Pin, Keyboard, UserPlus, Archive, BadgeCheck, BriefcaseMedical,
 } from 'lucide-react';
 import { endOtherSessions, setPersonGuard, borrowedToken, cloudLogin } from './cloud.js';
 import { useStore, useSyncState, makePassword, put, audit, isLowStock, expiryCounts } from './store.jsx';
@@ -22,7 +22,7 @@ import { AutoReorder } from './reorder.js';
 import { isWeb, isNative } from './platform.js';
 import { keepsData } from './webpolicy.js';
 import RefreshHost from './refresh.jsx';
-import { startUpdates, onUpdate, applyUpdate, justUpdated, LABEL } from './update.js';
+import { startUpdates, onUpdate, applyUpdate, justUpdated, LABEL, VERSION } from './update.js';
 import { applyTheme, saveTheme, allowedThemes, THEME_GROUPS, currentThemeId, savedMode, saveMode, systemDark, paletteFor, startupTheme, savedAccent, saveAccent } from './themes.js';
 import { STYLES, applyStyle, savedStyle, saveStyle } from './surface.js';
 import { LEVELS, applyLevel, savedLevel, saveLevel } from './vivid.js';
@@ -108,9 +108,7 @@ const NAV = [
     ['/shifts', 'Shifts & Cash-up', Clock, null, null, <P.Shifts />, 'shifts', 'shifts'],
     ['/proformas', 'Proformas', FileText, null, null, <P.Proformas />, 'proformas', 'proformas'],
     ['/prescriptions', 'Prescriptions & Refills', ClipboardPlus, null, null, <P.Prescriptions />, 'prescriptions', 'prescriptions'],
-    ['/scan', 'Scan Prescription', ScanText, null, null, <P.Scan />, 'prescriptions', 'ai'],
     ['/drug-info', 'Drug Information', BookMarked, null, null, <P.DrugInfo />, null, 'drugInfo'],
-    ['/quiz', 'Drug Quiz', GraduationCap, null, null, <P.Quiz />, null, 'drugInfo'],
   ] },
   { group: 'People', items: [
     ['/customers', 'Customers', Users, null, null, <P.Customers />, 'customers'],
@@ -128,7 +126,6 @@ const NAV = [
     ['/add-stock', 'Add Stock', PackagePlus, 'F4', null, <P.AddStock />, 'stock.receive'],
     ['/returns', 'Returns to Supplier', Undo2, null, null, <P.Returns />, ['stock.receive', 'stock.adjust']],
     ['/purchases', 'Purchase History', History, null, null, <P.Purchases />, 'stock.receive'],
-    ['/shelves', 'Shelves', Archive, null, null, <P.Shelves />, 'inventory.view'],
     ['/stock-count', 'Stock Count', ClipboardCheck, null, null, <P.StockCount />, ['stock.count', 'stock.adjust']],
     ['/expiry', 'Expiring / Expired', CalendarClock, null, 'expiry', <P.Expiry />, 'inventory.view'],
     ['/reorder', 'Reorder & Dead Stock', ShoppingBag, null, null, <P.Reorder />, 'stock.receive', 'reorder'],
@@ -137,8 +134,6 @@ const NAV = [
   ] },
   { group: 'Medicines', items: [
     ['/medicines', 'Medicine List', Pill, null, null, <P.MedicineList />, 'inventory.view'],
-    ['/formulations', 'Formulations', FlaskConical, null, null, <P.Formulations />, 'medicines.manage'],
-    ['/kits', 'Kits', BriefcaseMedical, null, 'kits', <P.Kits />, 'inventory.view'],
     ['/controlled', 'Controlled Drugs & Recalls', ShieldPlus, null, null, <P.Controlled />, 'inventory.view'],
     ['/quick-edit', 'Quick Edit', PencilRuler, null, null, <P.QuickEdit />, 'medicines.manage'],
     ['/labels', 'Barcode Labels', Tag, null, null, <P.Labels />, 'medicines.manage', 'labels'],
@@ -160,6 +155,14 @@ const NAV = [
     ['/payroll', 'Payroll & HR', BadgeCheck, null, null, <P.Payroll />, 'payroll', 'finance'],
   ] },
   { group: 'Insights', items: [['/weekly', 'Weekly Summary', CalendarRange, null, null, <P.Weekly />, 'reports', 'reports'], ['/reports', 'Reports', BarChart3, null, null, <P.Reports />, ['reports', 'reports.lines'], 'reports']] },
+  // 1.16.0 (the owner's clean-up): pages used now and then, so the groups above stay short
+  { group: 'More', items: [
+    ['/kits', 'Kits', BriefcaseMedical, null, 'kits', <P.Kits />, 'inventory.view'],
+    ['/formulations', 'Formulations', FlaskConical, null, null, <P.Formulations />, 'medicines.manage'],
+    ['/shelves', 'Shelves', Archive, null, null, <P.Shelves />, 'inventory.view'],
+    ['/scan', 'Scan Prescription', ScanText, null, null, <P.Scan />, 'prescriptions', 'ai'],
+    ['/quiz', 'Drug Quiz', GraduationCap, null, null, <P.Quiz />, null, 'drugInfo'],
+  ] },
   { group: 'System', items: [
     ['/users', 'Users & Roles', UserCog, null, null, <P.Users />, 'users.manage'],
     ['/settings', 'Settings', SettingsIcon, null, null, <P.Settings />, 'settings.manage'],
@@ -199,32 +202,8 @@ function ColourLevel({ onPick }) {
   ));
 }
 
-/** One switch between this device's usual theme and the premium dark look (Midnight Pro). The setting is kept on the
- *  device; switching only repaints, so the sale on the till, its client and totals stay exactly as they are. */
-const PREMIUM = 'navy-teal', PREMIUM_PREV = 'rxpos-premium-prev', PREMIUM_KEY = 'rxpos-advanced-ui';
-function PremiumToggle({ theme, setTheme, setMode }) {
-  const { db } = useStore();
-  const list = allowedThemes(db.license?.[0]?.branding);
-  if (!list.some((t) => t.id === PREMIUM)) return null;
-  const useAdvancedUI = theme === PREMIUM;
-  const toggle = () => {
-    try {
-      if (useAdvancedUI) {
-        const prev = localStorage.getItem(PREMIUM_PREV);
-        setTheme(prev && prev !== PREMIUM && list.some((t) => t.id === prev) ? prev : paletteFor('light', list));
-        localStorage.setItem(PREMIUM_KEY, '0');
-      } else {
-        localStorage.setItem(PREMIUM_PREV, theme); localStorage.setItem(PREMIUM_KEY, '1');
-        setMode(''); setTheme(PREMIUM);
-      }
-    } catch { setTheme(useAdvancedUI ? paletteFor('light', list) : PREMIUM); }
-  };
-  return (
-    <button type="button" role="switch" aria-checked={useAdvancedUI} className={'premium-toggle' + (useAdvancedUI ? ' on' : '')} aria-label="Premium UI" onClick={toggle} title={useAdvancedUI ? 'Premium UI is on: back to your usual theme' : 'Premium UI: the dark Midnight Pro look'}>
-      <Sparkles size={15} /><span>Premium UI</span><span className="premium-knob" aria-hidden="true" />
-    </button>
-  );
-}
+/** The theme menu's shortlist (1.16.0, the owner's clean-up): the rest are under All themes */
+const RECOMMENDED = ['pharmacy-green', 'mint-teal', 'pharmacy-blue', 'navy-teal', 'cool-crisp', 'neon-indigo'];
 
 function ThemePicker({ theme, setTheme, mode, setMode, style, setStyle }) {
   const { db } = useStore();
@@ -245,6 +224,17 @@ function ThemePicker({ theme, setTheme, mode, setMode, style, setStyle }) {
     return () => mq.removeEventListener?.('change', follow);
   }, [mode, branding]); // eslint-disable-line react-hooks/exhaustive-deps
   const pickBase = (base) => { setMode(''); if (current?.base !== base) setTheme(paletteFor(base, list, branding?.defaultTheme)); };
+  const [all, setAll] = useState(false);
+  const rec = RECOMMENDED.map((id) => list.find((t) => t.id === id)).filter(Boolean);
+  const short = list.length > 8 && rec.length >= 3;
+  const item = (t) => (
+    <button key={t.id} className={'theme-item' + (t.id === theme ? ' on' : '')} onClick={() => { setMode(''); setTheme(t.id); setOpen(false); }}
+      onMouseEnter={() => applyTheme(t.id)} onFocus={() => applyTheme(t.id)}>
+      <span className="swatch" style={{ background: `linear-gradient(135deg, ${t.c.sidebar} 0 30%, ${t.c.surface} 30% 55%, ${t.c.primary} 55% 78%, ${t.c.primary2} 78%)`, borderColor: t.c.borderStrong }} />
+      <span className="grow">{t.name}{t.inspired && t.inspired !== t.name && <small className="muted"> · {t.inspired}</small>}</span>
+      {t.base === 'dark' ? <Moon size={13} /> : <Sun size={13} />}
+    </button>
+  );
   const MODES = [['light', 'Light', Sun], ['dark', 'Dark', Moon], ['system', 'System', MonitorSmartphone]];
   const activeMode = mode === 'system' ? 'system' : current?.base;
   // a theme is previewed while the pointer is on it (2026-11-18); closing the menu puts the chosen one back
@@ -267,20 +257,25 @@ function ThemePicker({ theme, setTheme, mode, setMode, style, setStyle }) {
                 onClick={() => (id === 'system' ? setMode('system') : pickBase(id))}><Icon size={14} />{label}</button>
             ))}
           </div>
-          {/* themes by group (src/themes.js THEME_GROUPS): Clinical, Colourful, Dashboard looks, Dark, High contrast */}
+          {/* 1.16.0 (the owner's clean-up): six recommended themes first; every theme, by set, under "All themes" */}
+          {short && (
+            <div className="theme-group" role="group" aria-label="Recommended">
+              <div className="bell-head">Recommended</div>
+              {rec.map(item)}
+              <button type="button" className="style-item all-themes" aria-expanded={all} onClick={() => setAll((x) => !x)}>
+                <ChevronDown size={14} className={all ? 'flip' : ''} aria-hidden="true" /><span className="grow">All themes ({list.length})</span>
+              </button>
+            </div>
+          )}
+          {/* themes by group (src/themes.js THEME_GROUPS) */}
+          <div className="theme-all" hidden={short && !all}>
           {THEME_GROUPS.map((g) => [g, list.filter((t) => (t.group || 'Clinical') === g)]).filter(([, ts]) => ts.length).map(([g, ts]) => (
             <div key={g} className="theme-group" role="group" aria-label={g}>
               <div className="bell-head">{g}</div>
-              {ts.map((t) => (
-                <button key={t.id} className={'theme-item' + (t.id === theme ? ' on' : '')} onClick={() => { setMode(''); setTheme(t.id); setOpen(false); }}
-                  onMouseEnter={() => applyTheme(t.id)} onFocus={() => applyTheme(t.id)}>
-                  <span className="swatch" style={{ background: `linear-gradient(135deg, ${t.c.sidebar} 0 30%, ${t.c.surface} 30% 55%, ${t.c.primary} 55% 78%, ${t.c.primary2} 78%)`, borderColor: t.c.borderStrong }} />
-                  <span className="grow">{t.name}{t.inspired && t.inspired !== t.name && <small className="muted"> · {t.inspired}</small>}</span>
-                  {t.base === 'dark' ? <Moon size={13} /> : <Sun size={13} />}
-                </button>
-              ))}
+              {ts.map(item)}
             </div>
           ))}
+          </div>
           <div className="bell-head">Colour</div>
           <ColourLevel onPick={() => setOpen(false)} />
           <div className="bell-head">Style</div>
@@ -329,7 +324,7 @@ function SideStatus() {
   return (
     <div className={'side-status' + (off ? ' off' : '')} role="status" title={off ? 'Offline: your work is kept on this device' : 'Online'}>
       <span className="dot" aria-hidden="true" />
-      <span>{off ? 'Offline' : 'Online'}<small>{pending ? `${pending} change${pending === 1 ? '' : 's'} to send · ` : ''}RxPOS {LABEL}</small></span>
+      <span>{off ? 'Offline' : 'Online'}<small>{pending ? `${pending} change${pending === 1 ? '' : 's'} to send · ` : ''}RxPOS {VERSION}</small></span>
     </div>
   );
 }
@@ -553,8 +548,16 @@ function Shell() {
     return () => { clearTimeout(t); box?.removeEventListener('scroll', save); };
   }, [here]);
 
+  // the page's own group opens when it is reached (from a link, a key or the search), the others fold (1.16.0)
+  useEffect(() => {
+    const g = NAV.find((x) => x.group && x.items.some(([t]) => t === location.pathname))?.group;
+    if (!g) return;
+    setCollapsed((c) => (c[g] === false ? c : { ...Object.fromEntries(NAV.filter((x) => x.group).map((x) => [x.group, true])), Pinned: c.Pinned, [g]: false }));
+  }, [location.pathname]);
+  // one group open at a time (1.16.0): opening a group folds the others; Pinned folds on its own
   const toggleGroup = (g) => setCollapsed((c) => {
-    const next = { ...c, [g]: !c[g] };
+    const opening = c[g] !== false && !!c[g];
+    const next = g === 'Pinned' || !opening ? { ...c, [g]: !c[g] } : { ...Object.fromEntries(NAV.filter((x) => x.group).map((x) => [x.group, true])), Pinned: c.Pinned, [g]: false };
     try { localStorage.setItem('pharmapos-nav', JSON.stringify(next)); } catch {}
     return next;
   });
@@ -661,7 +664,7 @@ function Shell() {
             const shut = !rail && collapsed.Pinned;
             return pinned.length > 0 && (
               <div className={'nav-group nav-quick' + (shut ? ' collapsed' : ' open')}>
-                <div className="nav-title-row"><button className="nav-title" aria-expanded={!shut} onClick={() => toggleGroup('Pinned')}><ChevronDown size={13} className="nav-chev" />Pinned<span className="nav-count">{pinned.length}</span></button></div>
+                <div className="nav-title-row"><button className="nav-title" aria-expanded={!shut} onClick={() => toggleGroup('Pinned')}><ChevronDown size={13} className="nav-chev" />Pinned</button></div>
                 {pinned.map((pg, n) => <NavLink key={'pin' + pg.to} to={pg.to} end style={{ '--i': n }} hidden={shut && pg.to !== location.pathname} title={rail ? pg.label : undefined} className="nav-pin"><pg.Icon size={17} /><span className="grow">{pg.label}</span></NavLink>)}
               </div>
             );
@@ -670,7 +673,7 @@ function Shell() {
             <div key={i} className={'nav-group' + (collapsed[g.group] ? ' collapsed' : ' open')}>
               {g.group && <div className="nav-title-row">
                 <button className="nav-title" aria-expanded={!collapsed[g.group]} onClick={() => toggleGroup(g.group)}>
-                  <ChevronDown size={13} className="nav-chev" /><span className="nav-name">{g.group}</span><span className="nav-count" title={`${g.items.length} pages`}>{g.items.length}</span>
+                  <ChevronDown size={13} className="nav-chev" /><span className="nav-name">{g.group}</span>
                   {collapsed[g.group] && alerts > 0 && <span className="count">{alerts}</span>}
                 </button>
                 {add && <button type="button" className="nav-add" title={add[0]} aria-label={add[0]} onClick={() => navigate(add[1], add[3] ? { state: add[3] } : undefined)}><Plus size={14} /></button>}
@@ -690,16 +693,13 @@ function Shell() {
       <div className="main">
         <header className="topbar">
           {here === '/' ? <button className="icon-btn menu-btn" aria-label="Menu" onClick={() => setDrawer(true)}><Menu size={20} /></button> : <BackButton />}
-          <button className="search-trigger" onClick={() => setPalette(true)}><Search size={16} /><span>Search or ask AI…</span><kbd>Ctrl K</kbd></button>
+          <button className="search-trigger" title="Search or ask AI (Ctrl K)" onClick={() => setPalette(true)}><Search size={16} /><span>Search or ask AI…</span><kbd>Ctrl K</kbd></button>
           {(() => {
             const g = groups.find((x) => x.items.some(([t]) => t === here));
             const pg = pages.find((x) => x.to === here);
             return pg ? (
               <nav className="crumbs" aria-label="You are here">
                 {g?.group && <button type="button" className="link-btn muted crumb-group" title={`Every page under ${g.group}`} onClick={() => setMega(true)}>{g.group}</button>}{g?.group && <span className="muted" aria-hidden="true">›</span>}<strong>{pg.label}</strong>
-                {here !== '/' && <button className={'icon-btn sm' + (nav.pins.includes(here) ? ' on' : '')} aria-pressed={nav.pins.includes(here)} onClick={() => togglePin(here)}
-                  title={`${nav.pins.includes(here) ? 'Unpin this page from' : 'Pin this page to'} the top of the menu (${showKey(keyOf('pin'))})`} aria-label={nav.pins.includes(here) ? 'Unpin this page' : 'Pin this page'}><Pin size={14} /></button>}
-                <button className="icon-btn sm" onClick={() => setHelp(true)} title={`Keyboard and mouse (${showKey(keyOf('help'))})`} aria-label="Keyboard and mouse help"><Keyboard size={14} /></button>
               </nav>
             ) : null;
           })()}
@@ -708,7 +708,6 @@ function Shell() {
           {db.branches.length > 1 && <NavLink to="/branches" className="pill branch-pill" title="Branch this device works as"><Building2 size={14} />{branch?.name}</NavLink>}
           <ClockPill />
           <NotificationBell />
-          <PremiumToggle theme={theme} setTheme={setTheme} setMode={setThemeMode} />
           <ThemePicker theme={theme} setTheme={setTheme} mode={themeMode} setMode={setThemeMode} accent={accent} setAccent={setAccent} style={surface} setStyle={setSurface} />
           {/* the signed-in person: top right beside the theme, a drop-down (the owner's request, 17 Nov 2026) */}
           <div className="account-menu" ref={accountMenuRef}>
@@ -720,6 +719,8 @@ function Shell() {
               <button className="menu-item" role="menuitem" title="Change my password" onClick={() => changePassword(false)}><KeyRound size={16} />Change my password</button>
               {isNative && <button className={'menu-item' + (pinSet ? ' text-ok' : '')} role="menuitem" title={pinSet ? 'Quick PIN is set for this device' : 'Set a quick PIN for this device'} onClick={manageDevicePin}><LockKeyhole size={16} />{pinSet ? 'Quick PIN is set for this device' : 'Set a quick PIN for this device'}</button>}{/* web: nothing is kept on the computer, so no device PIN */}
               {syncCfg?.key?.startsWith('u.') && <button className={'menu-item' + (me?.twoFactor ? ' text-ok' : '')} role="menuitem" title={me?.twoFactor ? 'Two-step sign-in is on' : 'Two-step sign-in'} onClick={() => setTwoStepOpen(true)}><ShieldCheck size={16} />{me?.twoFactor ? 'Two-step sign-in is on' : 'Two-step sign-in'}</button>}
+              {here !== '/' && pages.some((x) => x.to === here) && <button className={'menu-item' + (nav.pins.includes(here) ? ' text-ok' : '')} role="menuitem" aria-pressed={nav.pins.includes(here)} title={`${nav.pins.includes(here) ? 'Unpin this page from' : 'Pin this page to'} the top of the menu (${showKey(keyOf('pin'))})`} onClick={() => togglePin(here)}><Pin size={16} />{nav.pins.includes(here) ? 'Unpin this page' : 'Pin this page'}</button>}
+              <button className="menu-item" role="menuitem" title={`Keyboard and mouse (${showKey(keyOf('help'))})`} aria-label="Keyboard and mouse help" onClick={() => setHelp(true)}><Keyboard size={16} />Keyboard &amp; mouse</button>
               <button className="menu-item" role="menuitem" title="Sync now (F5)" onClick={() => syncNow()}><RefreshCw size={16} />Sync now</button>
               <button className="menu-item danger" role="menuitem" title="Log out" onClick={signOut}><LogOut size={16} />Log out</button>
             </div>

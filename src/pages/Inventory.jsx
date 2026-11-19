@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Download, Barcode as BarcodeIcon, SlidersHorizontal, Save, Undo2, Pencil, ScrollText, Boxes, Tag } from 'lucide-react';
-import { CrudPage, Tabs, Modal, SearchBox, Empty, PdfButton, FilterChips } from '../ui.jsx';
+import { CrudPage, Tabs, Modal, SearchBox, Empty, PdfButton, FilterChips, ExportMenu } from '../ui.jsx';
 import { useStore, today, daysUntil, put, move, addBatch, audit, downloadFile, toCSV, batchValue, stockValue, markupPrice, MAIN_BRANCH, putMany } from '../store.jsx';
 import { ask, askText, toast } from '../feedback.jsx';
 import { formatQty } from '../money.js';
@@ -27,7 +27,8 @@ const expiryClass = (expiry, warn) => {
 const StockStatus = ({ p, warn }) => {
   const d = p.expiry ? daysUntil(p.expiry) : null;
   const tags = [
-    p.stock <= 0 ? ['danger', 'Out of stock'] : p.stock <= (p.reorder || 0) ? ['warn', 'Low stock'] : ['ok', 'In stock'],
+    // 1.16.0 (the owner's clean-up): only what needs a look gets a tag; a medicine in stock and in date has none
+    p.stock <= 0 ? ['danger', 'Out of stock'] : p.stock <= (p.reorder || 0) ? ['warn', 'Low stock'] : null,
     d != null && p.stock > 0 && (d < 0 ? ['danger', 'Expired'] : d <= warn ? ['warn', 'Expiring soon'] : null),
   ].filter(Boolean);
   return <span className="status-tags">{tags.map(([tone, label]) => <span key={label} className={'status ' + tone}><i aria-hidden="true" />{label}</span>)}</span>;
@@ -153,12 +154,12 @@ export function MedicineList() {
       columns={[
         { label: 'Medicine', render: (p) => <><strong {...peek.bind(p)}>{p.name}</strong> {p.rx && <span className="badge">Rx</span>}{p.chronic && <span className="badge ok">Chronic</span>}{p.controlled && <span className="badge danger">CD</span>}<br /><small className="muted">{[p.generic, p.barcode].filter(Boolean).join(' · ')}</small>
           {review && <span className="status-tags">{recordIssues(p, dupBarcodes).map((x) => <span key={x} className="status warn"><i aria-hidden="true" />{x}</span>)}</span>}</> },
-        { label: 'Strength', render: (p) => p.strength || <span className="muted">—</span> },
+        { label: 'Strength', empty: (p) => !p.strength, render: (p) => p.strength || <span className="muted">—</span> },
         { label: 'Formulation', key: 'form' },
-        { label: 'Category / class', render: (p) => p.category || <span className="muted">—</span> },
+        { label: 'Category / class', empty: (p) => !p.category, render: (p) => p.category || <span className="muted">—</span> },
         { label: 'Sold as', render: (p) => <>{p.unit || <span className="muted">—</span>}{p.packs?.filter((k) => k.name && Number(k.size) > 1).map((k) => <small key={k.name} className="muted nowrap"><br />1 {k.name.toLowerCase()} = {k.size}</small>)}</> },
         { label: 'Cost', num: true, render: (p) => fmt(p.cost) },
-        { label: 'Wholesale', num: true, render: (p) => fmt(p.wholesale) },
+        { label: 'Wholesale', num: true, empty: (p) => !Number(p.wholesale), render: (p) => fmt(p.wholesale) },
         { label: 'Retail', num: true, render: (p) => fmt(p.price) },
         { label: 'Stock', num: true, render: (p) => <span className={p.stock <= 0 ? 'badge danger' : p.stock <= (p.reorder || 0) ? 'badge warn' : ''}>{formatQty(p.stock)}</span> },
       ]}
@@ -292,8 +293,10 @@ export function StockLevels() {
           <MedicineOrderPicker value={order} onChange={setOrder} />
           <SearchBox value={q} onChange={setQ} inputRef={searchRef} />
           {colsK.button}
+          <ExportMenu>
           <button className="btn ghost" onClick={() => downloadFile('inventory.csv', csvOf(rows), 'text/csv')}><Download size={16} />CSV</button>
           <PdfButton target={listRef} title={{ instock: 'Stock in hand', low: 'Low stock', out: 'Out of stock', all: 'All medicines' }[filter]} subtitle={`${branch?.name || ''} · ${rows.length} items · ${fmt(total)} at cost · ${fmt(retail)} at retail${sv.expired > 0 ? ` · ${fmt(sv.expired)} expired (not included)` : ''}`} />
+          </ExportMenu>
         </div>
       </div>
       <div className="list-filters">

@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { useEffect, useMemo, useRef, useState, useId, startTransition } from 'react';
 import { useLocation } from 'react-router-dom';
-import { X, Search, Download, Plus, Pencil, Trash2, Inbox, Lightbulb, FileDown, Loader2, Copy, CheckSquare, Ellipsis, ChevronLeft } from 'lucide-react';
+import { X, Search, Download, Plus, Pencil, Trash2, Inbox, Lightbulb, FileDown, Loader2, Copy, CheckSquare, Ellipsis, ChevronLeft, HelpCircle, ChevronDown } from 'lucide-react';
 import { ViewSwitch, BoardView, GalleryView, savedView, saveView } from './components/DataViews.jsx';
 import { pagePdf, receiptPdf } from './pdf.js';
 import { useStore, uid, downloadFile, toCSV, del as del1 } from './store.jsx';
@@ -11,7 +11,7 @@ import { deviceSettings } from './device.js';
 import { ask, toast } from './feedback.jsx';
 import { useFocusTrap } from './focustrap.js';
 import { useLoadMore, useColumns, BulkBar, useSwipe, useWide, DetailsPane } from './tablekit.jsx';
-import { MoneyInput, PhoneInput, Help, checkField, PhotoField } from './forms.jsx';
+import { MoneyInput, PhoneInput, checkField, PhotoField } from './forms.jsx';
 import { lastChangeOf, ago } from './auditText.js';
 import { DateInput } from './fields.jsx';
 
@@ -90,8 +90,10 @@ export function Field({ f, value, onChange, error, onBlur }) {
   else input = <input type={f.type || 'text'} step={f.type === 'number' ? 'any' : undefined} min={f.type === 'number' ? f.min ?? 0 : undefined} {...common} />;
   return (
     <label className={'field' + (f.type === 'checkbox' ? ' check' : '') + (f.full ? ' full' : '') + (error ? ' has-error' : '')} htmlFor={id}>
-      <span>{f.label}{f.required && <b className="text-danger"> *</b>}{f.help && <Help text={f.help} />}</span>
+      <span>{f.label}{f.required && <b className="text-danger"> *</b>}</span>
       {input}
+      {/* 1.16.0 (the owner's clean-up): a field's help always in the same place, under it (no hover needed) */}
+      {f.help && !error && <small className="field-help muted">{f.help}</small>}
       {error && <small className="field-error" id={errId} role="alert">{error}</small>}
     </label>
   );
@@ -194,7 +196,9 @@ export function CrudPage({ title, subtitle, singular, table, fields, columns, bl
   useEffect(() => { if (location.state?.create) startNew(); }, [location.state]); // eslint-disable-line react-hooks/exhaustive-deps
   // the columns shown and their order, per device (the first is always shown; UI batch 3, C2)
   const colsK = useColumns('crud:' + table, columns.map((c, i) => ({ id: c.label, label: c.label, fixed: i === 0 })), deviceSettings().hiddenCols?.[table]);
-  const cols = colsK.shown.map((id) => columns.find((c) => c.label === id)).filter(Boolean);
+  // 1.16.0 (the owner's clean-up): a column marked empty(row) is left out while it is empty on every row in the list
+  const cols = colsK.shown.map((id) => columns.find((c) => c.label === id)).filter(Boolean).filter((c) => !c.empty || rows.some((r) => !c.empty(r)));
+  const cur = db.settings?.currency || '';
   const wide = useWide(); // C8: the record beside the list on wide screens (pages that ask for it)
   const swipe = useSwipe(); // C10: phones: a row swiped shows its actions (pages that give them)
   // Table / Board / Gallery (pages that describe a card), per page on this device
@@ -237,7 +241,7 @@ export function CrudPage({ title, subtitle, singular, table, fields, columns, bl
           <SearchBox value={q} onChange={setQ} inputRef={searchRef} hint={`Search (${showKey(keyOf('list:search'))})`} />
           {card && <ViewSwitch value={shownView} onChange={setView} board={!!board} />}
           {shownView === 'table' && colsK.button}
-          <button className="btn ghost" title="Export CSV (the ticked rows, or all shown)" onClick={() => exportRows(lc.tickedRows.length ? lc.tickedRows : rows)}><Download size={16} />CSV</button>
+          <ExportMenu><button className="btn ghost" title="Export CSV (the ticked rows, or all shown)" onClick={() => exportRows(lc.tickedRows.length ? lc.tickedRows : rows)}><Download size={16} />CSV</button></ExportMenu>
           {!readOnly && <button className="btn primary" onClick={startNew} title={`Add ${name.toLowerCase()} (${showKey(keyOf('list:new'))})`}><Plus size={16} />Add {name.toLowerCase()}</button>}
         </div>
       </div>
@@ -251,7 +255,7 @@ export function CrudPage({ title, subtitle, singular, table, fields, columns, bl
       {shownView === 'table' && <div className={'list-and-details' + (sideDetails && wide && editing && !editing._new ? ' with-details' : '')}><div className="card table-wrap">
         <table className="phone-rows">
           <thead>
-            <tr><th className="tick"><input {...lc.allProps} /></th>{cols.map((c) => <th key={c.label} className={c.num ? 'num' : ''}>{c.label}</th>)}<th /></tr>
+            <tr><th className="tick"><input {...lc.allProps} /></th>{cols.map((c) => <th key={c.label} className={c.num ? 'num' : ''}>{c.label}{c.num && cur && shown.some((r) => isMoney(c.render ? c.render(r) : r[c.key], cur)) && <small className="th-cur"> ({cur})</small>}</th>)}<th /></tr>
           </thead>
           <tbody>
             {shown.map((r, i) => {
@@ -259,7 +263,7 @@ export function CrudPage({ title, subtitle, singular, table, fields, columns, bl
               return (
               <tr key={r.id} {...rp} {...(swipeActions ? swipe.props(r.id) : {})} className={[rowClass?.(r), rp.className, sideDetails && wide && editing?.id === r.id ? 'row-open' : ''].filter(Boolean).join(' ')}>
                 <td className="tick"><input {...lc.tickProps(r, i)} /></td>
-                {cols.map((c, ci) => <td key={c.label} data-label={ci ? c.label : undefined} className={[c.num ? 'num' : '', ci ? '' : 'row-title'].filter(Boolean).join(' ')}>{c.render ? c.render(r) : r[c.key]}</td>)}
+                {cols.map((c, ci) => <td key={c.label} data-label={ci ? c.label : undefined} className={[c.num ? 'num' : '', ci ? '' : 'row-title'].filter(Boolean).join(' ')}>{c.num ? moneyCell(c.render ? c.render(r) : r[c.key], cur) : c.render ? c.render(r) : r[c.key]}</td>)}
                 <td className="actions">
                   {extraActions?.(r)}
                   {!readOnly && rowLocked?.(r) && <span className="muted" title="This day is closed: it can't be changed">Day closed</span>}
@@ -307,11 +311,15 @@ export function CrudPage({ title, subtitle, singular, table, fields, columns, bl
 
 /** Numbers on the dashboard roll up to their value when they first appear, and glide to a new value when the data
  * changes (text stays as given; the last frame is always the exact value; off with reduced motion) */
+// 1.16.0 (the owner's clean-up, less motion): numbers roll up the first time a page shows them in a session, not on
+// every visit; a change after that still glides
+let rolledOnce = false;
 export function CountUp({ value, ms = 700 }) {
   const str = String(value ?? '');
   const m = str.match(/-?[\d,]*\.?\d+/);
   const target = m ? Number(m[0].replace(/,/g, '')) : NaN;
-  const still = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const still = () => rolledOnce || matchMedia('(prefers-reduced-motion: reduce)').matches;
+  useEffect(() => { const t = setTimeout(() => { rolledOnce = true; }, ms + 200); return () => clearTimeout(t); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [shown, setShown] = useState(() => (isFinite(target) && !still() ? 0 : target));
   const from = useRef(isFinite(target) && !still() ? 0 : target);
   useEffect(() => {
@@ -561,23 +569,48 @@ export function ReceiptPdfButton({ sale, className = 'btn ghost', label = 'PDF' 
   return <button type="button" className={className} onClick={go} disabled={busy} title="Download the receipt as a PDF">{busy ? <Loader2 size={16} className="spin" /> : <FileDown size={16} />}{label}</button>;
 }
 
-/** A tip shown the first time someone opens a page; dismissed once, remembered on this device */
-export function PageTip({ id, title, children }) {
-  // a small "Tip" chip that opens the tip (the owner's choice, 2026-11-15: pages stay uncluttered); "Got it" hides both
-  const key = 'rxpos-tip:' + id;
-  const [gone, setGone] = useState(() => { try { return !!localStorage.getItem(key); } catch { return true; } });
+/** 1.16.0 (the owner's clean-up, P): in tables the currency goes in the column heading ("Total (UGX)"); in each cell it
+ *  stays in the text (read out, copied, printed) but out of sight, so the numbers stand alone and line up */
+export const isMoney = (v, cur) => typeof v === 'string' && !!cur && v.startsWith(cur + ' ');
+export function moneyCell(v, cur) {
+  return isMoney(v, cur) ? <><span className="cur">{cur} </span>{v.slice(cur.length + 1)}</> : v;
+}
+
+/** 1.16.0 (the owner's clean-up): a page's CSV, PDF and other downloads behind one "Export" button. The choices stay in
+ *  the page (hidden until opened), so a key or a script can still reach them. */
+export function ExportMenu({ children, label = 'Export' }) {
   const [open, setOpen] = useState(false);
-  // shown once only (2026-11-18): the first visit marks it seen, so it is gone on the next visit even without "Got it"
-  useEffect(() => { if (!gone) try { localStorage.setItem(key, '1'); } catch { /* storage blocked */ } }, [gone, key]);
-  if (gone) return null;
-  const close = () => { try { localStorage.setItem(key, '1'); } catch { /* storage blocked */ } setGone(true); };
-  if (!open) return <button type="button" className="tip-chip" onClick={() => setOpen(true)} aria-expanded="false"><Lightbulb size={14} />Tip: {title}</button>;
+  const box = useRef(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    const off = (e) => { if (!box.current?.contains(e.target)) setOpen(false); };
+    const esc = (e) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', off); document.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('mousedown', off); document.removeEventListener('keydown', esc); };
+  }, [open]);
   return (
-    <div className="page-tip" role="note">
-      <Lightbulb size={18} />
-      <div className="grow"><strong>{title}</strong><div className="small">{children}</div></div>
-      <button type="button" className="btn sm ghost" onClick={close}>Got it</button>
+    <div className="export-menu" ref={box}>
+      <button type="button" className="btn ghost export-btn" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}><Download size={16} />{label}<ChevronDown size={14} aria-hidden="true" /></button>
+      <div className="export-drop" role="menu" hidden={!open} onClick={() => setOpen(false)}>{children}</div>
     </div>
+  );
+}
+
+/** A page's tip behind a small "?" (1.16.0, the owner's clean-up): nothing shows on its own; the "?" is always there,
+ *  and opens the tip under it until it is closed */
+export function PageTip({ id, title, children }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <span className="page-help" data-tip={id}>
+      <button type="button" className="help-q" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-label={`Help: ${title}`} title={`Help: ${title}`}><HelpCircle size={16} /></button>
+      {open && (
+        <div className="page-tip" role="note">
+          <Lightbulb size={18} />
+          <div className="grow"><strong>{title}</strong><div className="small">{children}</div></div>
+          <button type="button" className="btn sm ghost" onClick={() => setOpen(false)}>Close</button>
+        </div>
+      )}
+    </span>
   );
 }
 

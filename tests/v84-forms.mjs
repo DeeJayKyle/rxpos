@@ -50,8 +50,9 @@ check('D1 a field is checked when it is left (email)', /Not an email address/.te
 await p.evaluate(() => { const i = [...document.querySelectorAll('.modal input')].find((x) => x.type === 'email'); i.focus(); });
 await p.keyboard.down('Control'); await p.keyboard.press('a'); await p.keyboard.up('Control'); await p.keyboard.type('grace@sample.rx'); await wait(150);
 check('D1 …and again as it is typed: the message goes once it is right', await p.evaluate(() => !document.querySelector('.modal .field-error')));
-const cl = await p.evaluate(() => { const l = [...document.querySelectorAll('.modal label')].find((x) => /Credit limit/.test(x.innerText)); return { money: !!l?.querySelector('.money-input'), help: !!l?.querySelector('.help-btn') }; });
-check('D5 / D3 the credit limit is an amount with the currency, and has a (?)', cl.money && cl.help, JSON.stringify(cl));
+const cl = await p.evaluate(() => { const l = [...document.querySelectorAll('.modal label')].find((x) => /Credit limit/.test(x.innerText)); return { money: !!l?.querySelector('.money-input'), help: !!l?.querySelector('.field-help') }; });
+// 1.16.0 (the owner's clean-up): a field's help is always under it, not behind a (?)
+check('D5 / D3 the credit limit is an amount with the currency, with its help under it', cl.money && cl.help, JSON.stringify(cl));
 await p.evaluate(() => { const l = [...document.querySelectorAll('.modal label')].find((x) => /Credit limit/.test(x.innerText)); l.querySelector('input').focus(); });
 await p.keyboard.type('1500000'); await wait(100);
 check('D5 thousand commas while typing', await p.evaluate(() => document.activeElement.value === '1,500,000'), await p.evaluate(() => document.activeElement.value));
@@ -71,8 +72,7 @@ await fieldIn('^Barcode'); await p.keyboard.type('7010001'); await fieldIn('^Cos
 check('D1 a barcode another medicine has is said on leaving the field', /Another medicine has this barcode \(Calmex/.test(await p.evaluate(() => [...document.querySelectorAll('.modal .field-error')].map((x) => x.innerText).join(' | '))), await p.evaluate(() => (document.querySelector('.modal')?.innerText || 'no modal: ' + [...document.querySelectorAll('.page-head button')].map((x) => x.textContent).join('|')).slice(0, 300)));
 await p.keyboard.type('800'); await fieldIn('^Retail price'); await p.keyboard.type('600'); await fieldIn('^Reorder level'); await wait(150);
 check('D1 a retail price under the cost is said', await p.evaluate(() => [...document.querySelectorAll('.modal .field-error')].some((x) => /below the cost/.test(x.innerText))));
-await p.evaluate(() => [...document.querySelectorAll('.modal label')].find((x) => /Reorder level/.test(x.innerText)).querySelector('.help-btn').focus()); await wait(150);
-check('D3 the (?) beside the reorder level explains it', /goes on the reorder list/.test(await p.evaluate(() => document.querySelector('.help-pop')?.innerText || '')));
+check('D3 the help under the reorder level explains it', /goes on the reorder list/.test(await p.evaluate(() => [...document.querySelectorAll('.modal label')].find((x) => /Reorder level/.test(x.innerText))?.querySelector('.field-help')?.innerText || '')));
 await p.evaluate(() => [...document.querySelectorAll('.modal button')].find((x) => /^Save$/.test(x.textContent.trim())).click()); await wait(300);
 check('D1 Save with problems keeps the form open', await p.evaluate(() => !!document.querySelector('.modal')));
 await p.keyboard.press('Escape'); await wait(300);

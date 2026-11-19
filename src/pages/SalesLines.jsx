@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { Banknote, TrendingUp, Package, AlertTriangle, Download, Printer } from 'lucide-react';
 import { useStore, dayOf, downloadFile, toCSV, MAIN_BRANCH } from '../store.jsx';
 import { formatQty } from '../money.js';
-import { Stat, PdfButton, PayChip, usePages, Pager, useSort, SortTh } from '../ui.jsx';
+import { Stat, PdfButton, PayChip, usePages, Pager, useSort, SortTh, ExportMenu } from '../ui.jsx';
 import { dateLocale } from '../showdate.js';
 
 const ALL = '';
@@ -64,10 +64,12 @@ export default function SalesLines({ from, to, branch, initial = {}, money = tru
         <label>Medicine<input list="lines-meds" placeholder="Any (type to search)" value={f.medicine} onChange={set('medicine')} /></label>
         <datalist id="lines-meds">{opts('name').map((x) => <option key={x} value={x} />)}</datalist>
         <span className="grow" />
+        <ExportMenu>
         <PdfButton title={title} subtitle={filtersText || 'All sales lines'} data={() => [{ head: ['Date & time', 'Customer', 'Dispenser', 'Receipt', 'Trade name', 'Generic name', 'Qty', 'Payment', 'Amount', ...(money ? ['Profit'] : [])], numeric: money ? [6, 8, 9] : [6, 8],
           body: s.rows.map((l) => [when(l.date), l.customer, l.cashier, l.number, l.name, l.generic, formatQty(l.qty), l.payment, fmt(l.amount), ...(money ? [fmt(l.profit)] : [])]),
           foot: ['Total', '', '', '', '', '', formatQty(sum.qty), '', fmt(sum.amount), ...(money ? [fmt(sum.profit)] : [])] }]} />
         <button className="btn ghost" onClick={csv}><Download size={16} />CSV</button>
+        </ExportMenu>
         <button className="btn ghost" onClick={() => window.print()}><Printer size={16} />Print</button>
       </div>
       <div className="stats kpis">

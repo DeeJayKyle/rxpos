@@ -21,7 +21,8 @@ import './styles/tables.css';
 import './styles/forms.css';
 import './styles/pages-f.css';
 import './styles/duotone.css'; // every page in its theme's two colours
-import './styles/glossy.css'; // last: the Pharmacy themes' glossy dashboard
+import './styles/glossy.css'; // the glossy dashboard (every theme since 1.15.0)
+import './styles/cleanup.css'; // last: the 1.16.0 clean-up
 import { applyTheme, startupTheme, savedAccent } from './themes.js';
 import { applyStyle, savedStyle } from './surface.js';
 import { applyLevel, savedLevel } from './vivid.js';

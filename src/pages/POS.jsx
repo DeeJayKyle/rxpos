@@ -4,7 +4,7 @@ import { useLocation, useNavigate, Link } from 'react-router-dom';
 import FKeyBar, { fkeyItems, fkeysShown, showFkeys } from '../components/FKeyBar.jsx';
 import Tour, { knewPage } from '../components/Tour.jsx';
 import { DISPLAY_CHANNEL } from '../components/CustomerDisplay.jsx';
-import { ShoppingCart, Trash2, X, ScanText, FileText, Printer, AlertTriangle, ScanBarcode, Smartphone, Loader2, CheckCircle2, UserPlus, Tag, BookMarked, Repeat, PauseCircle, Keyboard, Plus, ClipboardList, MessageCircle, MessageSquareText, Star, Search, Command, LayoutGrid, Users, GraduationCap, Monitor } from 'lucide-react';
+import { Settings2, ShoppingCart, Trash2, X, ScanText, FileText, Printer, AlertTriangle, ScanBarcode, Smartphone, Loader2, CheckCircle2, UserPlus, Tag, BookMarked, Repeat, PauseCircle, Keyboard, Plus, ClipboardList, MessageCircle, MessageSquareText, Star, Search, Command, LayoutGrid, Users, GraduationCap, Monitor } from 'lucide-react';
 import { DrugInfoPanel, genericKey } from './DrugInfo.jsx';
 import { useStore, useSyncState, uid, now, daysUntil, put, del, move, allocate, audit, normalizePhone, customerBalance, DEFAULT_PAYMENT_METHODS } from '../store.jsx';
 import { overLimit } from '../credit.js';
@@ -119,6 +119,14 @@ export default function POS({ mode = 'retail' }) {
   const [active, setActive] = useState(0);  // highlighted medicine card (arrow keys)
   const [help, setHelp] = useState(false);
   const [fkeys, setFkeys] = useState(fkeysShown); // the F-key legend under the till (src/components/FKeyBar.jsx)
+  const [tillMenu, setTillMenu] = useState(false);
+  const tillMenuRef = useRef(null);
+  useEffect(() => {
+    if (!tillMenu) return undefined;
+    const off = (e) => { if (!tillMenuRef.current?.contains(e.target)) setTillMenu(false); };
+    document.addEventListener('mousedown', off);
+    return () => document.removeEventListener('mousedown', off);
+  }, [tillMenu]);
   const [cam, setCam] = useState(false); // camera barcode scanner
   // Phones and tablets: the sale is a sheet docked at the bottom (total and Charge always in reach), slid up to edit it
   const [narrow, setNarrow] = useState(() => typeof matchMedia === 'function' && matchMedia('(max-width: 900px)').matches);
@@ -853,16 +861,22 @@ export default function POS({ mode = 'retail' }) {
                 <Link to="/pos/wholesale" className={wholesale ? 'on' : ''}>Wholesale <kbd>F3</kbd></Link>
               </div>
             )}
-            <label className="pos-layout" title="How the till is laid out on this device (wide screens)">
-              <LayoutGrid size={15} aria-hidden="true" />
-              <select value={layout} onChange={(e) => setLayout(e.target.value)} aria-label="Till layout">
-                {POS_LAYOUTS.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
-              </select>
-            </label>
-            <button type="button" className="icon-btn pos-display-btn" title="Customer display: a second window or screen facing the client" aria-label="Customer display" onClick={openDisplay}><Monitor size={18} /></button>
-            <button type="button" className={'pos-training' + (training ? ' on' : '')} aria-pressed={training} title="Practise on the till: nothing is saved" onClick={() => { setTraining((t) => !t); setTimeout(focusSearch, 0); }}><GraduationCap size={15} aria-hidden="true" />Training</button>
-            {useAdvancedLayout && <button className="icon-btn" title="Command bar (Ctrl+K)" aria-label="Command bar" onClick={() => setOmni(true)}><Command size={18} /></button>}
-            <button className="icon-btn" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts" onClick={() => setHelp(true)}><Keyboard size={19} /></button>
+            {/* 1.16.0 (the owner's clean-up): the till's layout, the customer display, training and the keys in one menu */}
+            <div className={'till-menu' + (training ? ' training' : '')} ref={tillMenuRef}>
+              <button type="button" className="icon-btn till-menu-btn" aria-haspopup="menu" aria-expanded={tillMenu} title="Till options" aria-label="Till options" onClick={() => setTillMenu((o) => !o)}><Settings2 size={19} />{training && <span className="dot" aria-hidden="true" />}</button>
+              <div className="till-drop" role="menu" hidden={!tillMenu}>
+              <label className="pos-layout" title="How the till is laid out on this device (wide screens)">
+                <LayoutGrid size={15} aria-hidden="true" />
+                <select value={layout} onChange={(e) => setLayout(e.target.value)} aria-label="Till layout">
+                  {POS_LAYOUTS.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+                </select>
+              </label>
+              <button type="button" className="icon-btn pos-display-btn" title="Customer display: a second window or screen facing the client" aria-label="Customer display" onClick={openDisplay}><Monitor size={18} /></button>
+              <button type="button" className={'pos-training' + (training ? ' on' : '')} aria-pressed={training} title="Practise on the till: nothing is saved" onClick={() => { setTraining((t) => !t); setTimeout(focusSearch, 0); }}><GraduationCap size={15} aria-hidden="true" />Training</button>
+              {useAdvancedLayout && <button className="icon-btn" title="Command bar (Ctrl+K)" aria-label="Command bar" onClick={() => setOmni(true)}><Command size={18} /></button>}
+              <button className="icon-btn" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts" onClick={() => setHelp(true)}><Keyboard size={19} /></button>
+              </div>
+            </div>
           </div>
         </div>
         {/* the first visit: a 5-step tour (people who already saw the till's tip know it) */}

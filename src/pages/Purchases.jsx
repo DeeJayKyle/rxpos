@@ -11,7 +11,7 @@ import { isWeb } from '../platform.js';
 import { useStore, useSyncState, uid, today, now, put, del, move, addBatch, audit, downloadFile, toCSV, markupPrice, daysUntil, supplierPrices, MAIN_BRANCH } from '../store.jsx';
 import { CASH } from '../finance.js';
 import { round } from '../money.js';
-import { Modal, PdfButton, Empty, PageTip, useSort, SortTh, SubViews, WhoChanged } from '../ui.jsx';
+import { Modal, PdfButton, Empty, PageTip, useSort, SortTh, SubViews, WhoChanged, ExportMenu } from '../ui.jsx';
 import { useLoadMore, useColumns, useWide } from '../tablekit.jsx';
 import { DateRange } from '../forms.jsx';
 import { useListControls } from '../listcontrols.jsx';
@@ -742,10 +742,12 @@ export default function Purchases() {
       <div className="page-head">
         <h1>Purchase History</h1>
         <div className="row gap">
-          <PdfButton target={histRef} title="Purchase history" subtitle={`${rows.length} deliveries · ${fmt(rows.reduce((a, p) => a + (p.total || 0), 0))}`} />
           <input className="search" placeholder="Search…" value={q} ref={searchRef} onChange={(e) => setQ(e.target.value)} />
           {tab === 'history' && colsK.button}
+          <ExportMenu>
+          <PdfButton target={histRef} title="Purchase history" subtitle={`${rows.length} deliveries · ${fmt(rows.reduce((a, p) => a + (p.total || 0), 0))}`} />
           <button className="btn ghost" onClick={() => downloadFile('purchases.csv', toCSV(rows.map((p) => ({ date: p.date, number: p.number, supplier: p.supplierName, invoice: p.invoice, paymentType: payType(p), items: p.items.length, total: p.total, paid: p.paid ?? p.total, receivedBy: p.receivedBy, notes: p.notes || '' }))), 'text/csv')}>Export CSV</button>
+          </ExportMenu>
         </div>
       </div>
       <SubViews value={tab} onChange={setTab} main="history" mainLabel="All deliveries" views={[['drafts', 'Drafts', draftCount, PauseCircle], ['prices', 'Supplier prices', 0, Tags]]} />

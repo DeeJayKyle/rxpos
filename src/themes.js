@@ -29,7 +29,7 @@ export const lightMenu = (side) => lum(side) > 0.22;
 /** A two-colour theme: [c1] strong (buttons, active, headings), [c2] the soft page tint, [side] the menu (c1 by default) */
 /** [c3] a second accent (the second chart series), [series] chart colours (the Multi-colour set), [pill] the open page's
  *  colour on the menu, [card] / [ink] / [soft] / [line] the palette's own card, text, soft tint and border (19 Nov 2026) */
-const duo = (id, name, group, { c1, c2, side = c1, sideText, base = 'light', inspired = '', strong = false, glossy = null, c3, series, pill, card, ink, soft, line }) => {
+const duo = (id, name, group, { c1, c2, side = c1, sideText, base = 'light', inspired = '', strong: _strong = false, glossy = null, c3, series, pill, card, ink, soft, line }) => {
   const dark = base === 'dark';
   const lightSide = lightMenu(side);
   // a coloured menu with white text: deepened just enough for AA
@@ -39,7 +39,9 @@ const duo = (id, name, group, { c1, c2, side = c1, sideText, base = 'light', ins
   glossy = glossy || neonCards(c1);
   return T(id, name, base, {
     c1, c2,
-    bg: c2,
+    // 1.16.0 (the owner's clean-up, fewer colours): light themes sit on a near-white page with only a breath of colour 2;
+    // the colour is kept for the menu, headings, the main button, status and the figure cards
+    bg: dark ? c2 : mix(c2, '#ffffff', 0.6),
     // dark cards a clearer step above the page, with a hairline (2026-11-18)
     surface: card || (dark ? mix(c2, '#ffffff', 0.08) : '#ffffff'),
     surface2: soft || (dark ? mix(card || mix(c2, '#ffffff', 0.08), '#ffffff', 0.06) : mix(c2, '#ffffff', 0.5)),
@@ -54,7 +56,8 @@ const duo = (id, name, group, { c1, c2, side = c1, sideText, base = 'light', ins
     sidebarText: sideText || (lightSide ? mix(side, '#000000', 0.78) : lum(side) > 0.03 ? '#ffffff' : undefined),
     // stronger colour (the owner's review, 17 Nov 2026): deeper table row and heading tints
     // table stripes kept light (the owner's review, 17 Nov 2026): a soft wash of the row colour, the headings stronger
-    rowTint: strong ? 6 : 4, headTint: strong ? 22 : 16,
+    // 1.16.0: quieter tables: a faint row stripe, a light heading tint
+    rowTint: 3, headTint: 10,
     flat: true,
     ...(series || c3 ? { series: series || [c1, c3] } : {}), ...(pill ? { pill } : {}),
   }, inspired, group, glossy);
@@ -165,7 +168,8 @@ export function themeVars(t) {
     '--bg': c.bg, '--surface': c.surface, '--surface-2': c.surface2, '--border': c.border, '--border-strong': c.borderStrong,
     '--text': c.text, '--muted': readable(c.muted, [c.bg, c.surface, c.surface2], dark ? '#ffffff' : '#000000'), '--primary': c.primary, '--primary-2': c.primary2,
     // links and brand text: readable on cards and on the tinted page itself (links sit on it)
-    '--primary-text': readable(c.primary, [c.surface, c.surface2, c.bg], dark ? '#ffffff' : '#000000'),
+    // …and on the soft colour 2 itself (totals and headings sit on it; 1.16.0: the page is lighter than colour 2 now)
+    '--primary-text': readable(c.primary, [c.surface, c.surface2, c.bg, c.c2 || c.bg], dark ? '#ffffff' : '#000000'),
     '--on-accent': btn.on, '--primary-solid': btn.a, '--accent-grad': `linear-gradient(135deg, ${btn.a} 0%, ${btn.b} 100%)`,
     '--primary-dark': dark ? mix(c.primary, '#000000', 0.12) : mix(c.primary, '#000000', 0.18),
     '--primary-soft': dark ? rgba(c.primary, 0.14) : mix(c.primary, '#ffffff', 0.84),

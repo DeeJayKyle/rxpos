@@ -115,9 +115,10 @@ await p.select('select[aria-label=Branch]', 'br2'); await wait(500);
 const sc = await p.evaluate(() => document.querySelector('[data-testid=report-scope]').innerText);
 check('…for a branch other than main, Expenses says none are counted there and why', /Ntinda branch/.test(sc) && /whole pharmacy, not per branch, so none are counted for this branch/.test(sc), sc);
 await p.screenshot({ path: path.join(out, 'reports-scope.png') });
-// quick report cards: one tap sets the dates and the report
+// 1.16.0 (the owner's clean-up): no shortcut cards; the Sales group and the dates' Today choice give the same report
 await p.select('select[aria-label=Branch]', 'all'); await wait(300);
-await p.evaluate(() => [...document.querySelectorAll('.quick-report')].find((x) => /Today's sales/.test(x.textContent)).click()); await wait(600);
+await p.evaluate(() => [...document.querySelectorAll('.report-groups button')].find((x) => x.textContent === 'Sales').click()); await wait(300);
+await p.evaluate(() => document.querySelector('.date-range [data-range="today"]').click()); await wait(600);
 const todayIso = await p.evaluate(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; });
 check("quick report: Today's sales shows the Sales Report for today only", await p.evaluate((t) => new RegExp(`Sales Report · All branches · ${t} to ${t}`).test(document.querySelector('[data-testid=report-scope]').innerText), todayIso));
 await p.screenshot({ path: path.join(out, 'reports-quick.png') });

@@ -58,7 +58,9 @@ void _text(Canvas c, String s, Offset at, {Color? color, double size = 10, TextA
 
 /// Daily sales over the last [days] (keys oldest first, the last one is today). Tap a day to open it.
 class DailyTrend extends StatefulWidget {
-  const DailyTrend({super.key, required this.byDay, required this.keysFor, required this.money, this.onDay, this.extra, this.counts});
+  const DailyTrend({super.key, required this.byDay, required this.keysFor, required this.money, this.onDay, this.extra, this.counts, this.days});
+  /// set by the dashboard's period (1.16.0: one period picker for the whole dashboard): no picker of its own then
+  final int? days;
   /// the number of sales each day: a line over the bars, on its own axis at the right (1.15.0, the owner's reference)
   final Map<String, double>? counts;
   /// shown beside the title (the dashboard's Daily / Monthly switch)
@@ -79,7 +81,8 @@ class _DailyTrendState extends State<DailyTrend> {
   @override
   Widget build(BuildContext context) {
     _axisFrom(context);
-    final keys = widget.keysFor(_range);
+    final range = widget.days ?? _range;
+    final keys = widget.keysFor(range);
     final vals = [for (final k in keys) widget.byDay[k] ?? 0.0];
     final counts = widget.counts == null ? null : [for (final k in keys) widget.counts![k] ?? 0.0];
     final done = vals.sublist(0, vals.length - 1);
@@ -92,10 +95,10 @@ class _DailyTrendState extends State<DailyTrend> {
     final th = Theme.of(context);
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       Wrap(spacing: 8, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
-        Text('Daily sales · last $_range days', style: th.textTheme.titleMedium),
+        Text('Daily sales · last $range days', style: th.textTheme.titleMedium),
         ?widget.extra,
-        ChartExportButton(name: 'daily-sales-$_range-days', rows: () => [for (final (i, k) in keys.indexed) {'date': k, 'sales': vals[i]}]),
-        SegmentedButton<int>(
+        ChartExportButton(name: 'daily-sales-$range-days', rows: () => [for (final (i, k) in keys.indexed) {'date': k, 'sales': vals[i]}]),
+        if (widget.days == null) SegmentedButton<int>(
           showSelectedIcon: false,
           style: const ButtonStyle(visualDensity: VisualDensity.compact),
           segments: const [ButtonSegment(value: 7, label: Text('7 days')), ButtonSegment(value: 30, label: Text('30 days')), ButtonSegment(value: 90, label: Text('90 days'))],
@@ -123,7 +126,7 @@ class _DailyTrendState extends State<DailyTrend> {
             onTapUp: (e) => widget.onDay?.call(keys[indexAt(e.localPosition.dx)]),
             // the bars grow in when the range changes
             child: TweenAnimationBuilder<double>(
-              key: ValueKey(_range),
+              key: ValueKey(range),
               tween: Tween(begin: 0, end: 1),
               duration: const Duration(milliseconds: 420),
               curve: Curves.easeOutCubic,

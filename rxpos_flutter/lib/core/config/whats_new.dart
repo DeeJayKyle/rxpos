@@ -1,7 +1,11 @@
 // What's new (UI batch 3, B8): the same list as src/whatsnew.js (tests/unit-whatsnew.mjs checks they match). Shown
 // once on each device after an update, as a small card on the dashboard.
-const whatsNewVersion = '1.15.0';
+const whatsNewVersion = '1.16.0';
 const whatsNewItems = <(String, String)>[
+  ('A tidier screen: one menu group open at a time, rarely used pages under More, no Premium switch', '/'),
+  ('Notices never cover a page: they show on the dashboard (and in the bell), never on phones', '/'),
+  ('One period picker on the dashboard, one date button on every list, CSV and PDF under Export', '/sales'),
+  ('Click a row to open it; the till’s options in one ⚙ menu', '/pos'),
   ('41 themes: new palettes in every colour set, and the glossy Pharmacy themes', '/device'),
   ('A Multi-colour set: Cool & Crisp, Vibrant Neon and Neon Indigo, with five-colour charts', '/device'),
   ('Whole amounts on the dashboard, or short ones (UGX 152K) in This device → Amounts', '/device'),

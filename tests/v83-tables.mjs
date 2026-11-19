@@ -53,7 +53,8 @@ await p.evaluate(() => document.querySelector('.load-more').scrollIntoView()); a
 check('C7 …the rest as the list scrolls', await rowsN() === 130, await rowsN());
 check('C1 the total is pinned at the bottom of the sales list', await p.evaluate(() => { const td = document.querySelector('table.phone-rows tfoot tr.total-row td'); return !!td && getComputedStyle(td).position === 'sticky' && /130 sales/.test(td.innerText); }));
 check('C1 the headings stay while scrolling', await p.evaluate(() => getComputedStyle(document.querySelector('table.phone-rows thead th')).position === 'sticky'));
-const heads = () => p.evaluate(() => [...document.querySelectorAll('table.phone-rows thead th')].map((x) => x.textContent.replace(/[▲▼↕\s]+$/g, '').trim()).filter(Boolean));
+// 1.16.0: a money column's heading carries the currency ("Total (UGX)"); the name is what is compared
+const heads = () => p.evaluate(() => [...document.querySelectorAll('table.phone-rows thead th')].map((x) => x.textContent.replace(/[▲▼↕\s]+$/g, '').replace(/\s*\([A-Z]{3}\)$/, '').trim()).filter(Boolean));
 await p.evaluate(() => [...document.querySelectorAll('.page-head button')].find((x) => /Columns/.test(x.textContent)).click()); await wait(200);
 await p.evaluate(() => document.querySelector('.col-row[data-col=phone] input').click()); await wait(150);
 await p.evaluate(() => document.querySelector('.col-row[data-col=total] button[aria-label^="Move Total up"]').click()); await wait(150);
@@ -77,7 +78,8 @@ await p.keyboard.press('Escape'); await wait(200);
 check('C4 …Esc unticks and the bar goes', await p.evaluate(() => !document.querySelector('.bulk-dock')));
 
 // Inventory
-await p.evaluate(() => { location.hash = '#/inventory'; }); await until(p, () => document.querySelectorAll('table.phone-rows tbody tr').length >= 2);
+// wait for Inventory's own rows: Sales History's table (100+ rows) is still there for a moment after the switch
+await p.evaluate(() => { location.hash = '#/inventory'; }); await until(p, () => /Inventory/.test(document.querySelector('.page-head h1')?.innerText || '') && [...document.querySelectorAll('table.phone-rows tbody tr')].some((r) => /Calmex/.test(r.innerText)) && !!document.querySelector('table.phone-rows .health-bar'));
 check('C9 a stock bar on each row: Calmex low (30 of 50), Zinco good', await p.evaluate(() => { const bars = Object.fromEntries([...document.querySelectorAll('table.phone-rows tbody tr')].map((r) => [r.querySelector('.row-title strong').innerText, r.querySelector('.health-bar')?.className])); return /low/.test(bars['Calmex 500mg Tabs']) && /ok/.test(bars['Zinco Syrup 100ml']); }));
 check('C1 the inventory value total is pinned', await p.evaluate(() => /Inventory value/.test(document.querySelector('table.phone-rows tfoot .total-row')?.innerText || '')));
 const calmexRow = '[...document.querySelectorAll("table.phone-rows tbody tr")].find((r) => /Calmex/.test(r.innerText))';
@@ -91,7 +93,8 @@ await p.keyboard.type('9'); await p.keyboard.press('Escape'); await wait(300);
 check('C5 Esc cancels (the reorder level stays 50)', await p.evaluate(`${calmexRow}.querySelector('[data-cell=reorder]').innerText.trim() === '50'`));
 await p.evaluate(() => { location.hash = '#/audit'; }); await wait(1500);
 check('C5 …the price change is in the audit log', await p.evaluate(() => /Calmex 500mg Tabs: UGX 500 → UGX 650 \(in the table\)/.test(document.querySelector('.page')?.innerText || '')));
-await p.evaluate(() => { location.hash = '#/inventory'; }); await until(p, () => document.querySelectorAll('table.phone-rows tbody tr').length >= 2);
+// wait for Inventory's own rows: Sales History's table (100+ rows) is still there for a moment after the switch
+await p.evaluate(() => { location.hash = '#/inventory'; }); await until(p, () => /Inventory/.test(document.querySelector('.page-head h1')?.innerText || '') && [...document.querySelectorAll('table.phone-rows tbody tr')].some((r) => /Calmex/.test(r.innerText)) && !!document.querySelector('table.phone-rows .health-bar'));
 await p.evaluate(() => document.querySelector('table.phone-rows thead th.tick input').click()); await wait(300);
 check('C4 inventory: all ticked → Print labels, Export, Change price', await p.evaluate(() => /2 selected/.test(document.querySelector('.bulk-dock')?.innerText || '') && ['Print labels', 'Export', 'Change price'].every((x) => document.querySelector('.bulk-dock').innerText.includes(x))));
 await p.evaluate(() => [...document.querySelectorAll('.bulk-dock button')].find((x) => /Change price/.test(x.textContent)).click()); await wait(300);

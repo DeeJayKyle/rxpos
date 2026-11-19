@@ -1,0 +1,155 @@
+/* 1.16.0, the owner's clean-up (19 Nov 2026): fewer things competing on each page. Loaded last. Screen only. */
+@media screen {
+  /* ---- a page's help: a small "?" whose tip opens under it ---- */
+  .page-help { position: relative; display: inline-flex; align-self: flex-start; }
+  .help-q { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--border); background: var(--surface); color: var(--muted); cursor: pointer; }
+  .help-q:hover, .help-q[aria-expanded='true'] { color: var(--primary-text); border-color: var(--primary); }
+  .page-help .page-tip { position: absolute; z-index: 40; top: 34px; left: 0; width: min(380px, 86vw); box-shadow: var(--shadow-lg, 0 18px 40px -18px rgba(0, 0, 0, .35)); background: var(--surface); border: 1px solid var(--border); }
+}
+
+/* ---- the dashboard (A) ---- */
+@media screen {
+  /* a shorter banner: the date in its line, one button */
+  :root[data-look='glossy'] .welcome { min-height: 96px; padding-top: var(--space-4, 16px); padding-bottom: var(--space-4, 16px); }
+  :root[data-look='glossy'] .welcome h1 { font-size: 24px; }
+  .welcome .sub .date-pill { display: inline; padding: 0; border: 0; background: none !important; color: inherit; font-weight: 700; text-decoration: none; min-height: 0; }
+  .welcome .sub .date-pill:hover { text-decoration: underline; }
+  /* the week at a glance and the next step, side by side */
+  .bento-dash.slim .bento-grid { grid-template-columns: minmax(0, 2fr) minmax(220px, 1fr); }
+  .bento-dash.slim .bento-facts { display: flex; flex-wrap: wrap; gap: 8px 24px; }
+  @media (max-width: 720px) { .bento-dash.slim .bento-grid { grid-template-columns: 1fr; } }
+  /* figure cards: each label on one line */
+  .stats.kpis .stat small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  :root[data-look='glossy']:not([data-colour='vivid']) .stats.kpis .stat small { font-size: 13px; }
+  /* the setup checklist folded to one line */
+  .setup-card.folded { padding-top: 10px; padding-bottom: 10px; }
+  .setup-card.folded .card-head { margin: 0; gap: 12px; flex-wrap: wrap; }
+  .setup-card.folded .card-head h3 { margin-right: auto; }
+  .setup-meter.inline { flex: 0 1 160px; height: 6px; margin: 0; }
+}
+
+/* ---- one date-range button (O) ---- */
+@media screen {
+  .date-range { position: relative; display: inline-flex; }
+  .date-range .range-btn { gap: 8px; min-height: 38px; font-weight: 600; white-space: nowrap; }
+  .date-range .range-pop { position: absolute; z-index: 45; top: calc(100% + 6px); left: 0; display: grid; gap: 10px; width: max-content; max-width: min(420px, 92vw);
+    padding: 12px; border-radius: 14px; background: var(--surface); border: 1px solid var(--border); box-shadow: 0 18px 40px -18px rgba(0, 0, 0, .35); }
+  .date-range .range-pop[hidden] { display: none; }
+  .range-presets { display: flex; flex-wrap: wrap; gap: 6px; }
+  .range-presets button { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 999px; padding: 6px 12px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .range-presets button:hover { border-color: var(--primary); }
+  .range-presets button.on { background: var(--accent-grad); color: var(--on-accent); border-color: transparent; }
+  .range-custom { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; border-top: 1px solid var(--border); padding-top: 10px; }
+  .range-custom .date-input input[type=text] { width: 130px; }
+}
+
+/* ---- list pages (H, C): one Export button, one Filters button; hidden parts stay hidden whatever their layout ---- */
+:is(.report-filters, .export-drop, .setup-steps, .range-pop, .page-tip)[hidden] { display: none !important; }
+@media screen {
+  .export-menu { position: relative; display: inline-flex; }
+  .export-btn svg:last-child { margin-left: -2px; opacity: .7; }
+  .export-drop { position: absolute; z-index: 45; top: calc(100% + 6px); right: 0; min-width: 190px; display: grid; gap: 2px; padding: 6px;
+    border-radius: 12px; background: var(--surface); border: 1px solid var(--border); box-shadow: 0 18px 40px -18px rgba(0, 0, 0, .35); }
+  .export-drop > :is(button, a, .btn) { justify-content: flex-start; width: 100%; border: 0 !important; background: none !important; box-shadow: none !important; border-radius: 8px; color: var(--text); }
+  .export-drop > :is(button, a, .btn):hover { background: var(--primary-soft) !important; }
+  .filters-btn.on { border-color: var(--primary); color: var(--primary-text); }
+  .filters-btn .badge-count { margin-left: 4px; }
+  /* the page head: the title and its line on the left, the tools on the right, on one line where there is room */
+  .page-head { align-items: center; gap: 12px 16px; }
+  .page-head > .row.gap { margin-left: auto; flex-wrap: wrap; justify-content: flex-end; }
+}
+
+/* ---- quieter rows (I): at rest only the ⋯; pointing at a row (or reaching it with the keys) shows its actions as icons
+   (their words stay for screen readers and in the tooltip); a click on the row opens it ---- */
+@media screen and (min-width: 900px) and (hover: hover) {
+  tbody tr td.actions > .btn, tbody tr td.actions .row-acts > .btn { font-size: 0; gap: 0; padding: 6px 8px; min-height: 30px; opacity: 0; transition: opacity .12s; }
+  tbody tr td.actions > .btn svg, tbody tr td.actions .row-acts > .btn svg { width: 15px; height: 15px; }
+  tbody tr:is(:hover, :focus-within, .row-active) td.actions > .btn, tbody tr:is(:hover, :focus-within, .row-active) td.actions .row-acts > .btn { opacity: 1; }
+  tbody tr td.actions .row-more { opacity: .6; }
+  tbody tr:hover td.actions .row-more { opacity: 1; }
+  .page table tbody tr[aria-selected], .page table tbody tr { cursor: pointer; }
+}
+
+/* ---- money in tables (P): the currency in the heading; in the cells only the number shows (the currency stays in the
+   text: read out, copied and printed) ---- */
+@media screen {
+  table td .cur { font-size: 0; }
+  th .th-cur { font-weight: 600; opacity: .7; text-transform: none; letter-spacing: 0; }
+}
+
+/* ---- one search per page (U): where the page has its own search, the top bar's shrinks to its icon ---- */
+@media screen and (min-width: 721px) {
+  .shell:has(.content .page-head :is(.search-box, input.search)) .topbar .search-trigger { width: auto; min-width: 0; flex: 0 0 auto; padding: 0 10px; }
+  .shell:has(.content .page-head :is(.search-box, input.search)) .topbar .search-trigger kbd { display: none; }
+  /* its words stay for screen readers, out of sight */
+  .shell:has(.content .page-head :is(.search-box, input.search)) .topbar .search-trigger span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+}
+
+/* ---- the till's options in one menu (J) ---- */
+@media screen {
+  .till-menu { position: relative; display: inline-flex; }
+  .till-menu-btn { position: relative; }
+  .till-menu-btn .dot { position: absolute; top: 4px; right: 4px; width: 8px; height: 8px; border-radius: 50%; background: var(--warn); }
+  .till-drop { position: absolute; z-index: 50; top: calc(100% + 6px); right: 0; min-width: 240px; display: grid; gap: 4px; padding: 8px;
+    border-radius: 14px; background: var(--surface); border: 1px solid var(--border); box-shadow: 0 18px 40px -18px rgba(0, 0, 0, .35); }
+  .till-drop[hidden] { display: none; }
+  .till-drop > * { width: 100%; justify-content: flex-start; }
+  .till-drop .icon-btn { width: 100%; height: auto; padding: 8px 10px; gap: 10px; justify-content: flex-start; border-radius: 10px; display: flex; }
+  .till-drop .icon-btn::after { content: attr(aria-label); font-size: 14px; font-weight: 600; }
+  .till-drop .pos-training { width: 100%; justify-content: flex-start; }
+  .till-drop .pos-layout { display: flex; align-items: center; gap: 8px; padding: 4px 6px; }
+  .till-drop .pos-layout select { flex: 1; }
+}
+
+/* ---- Reports: the groups and their reports on one row (K) ---- */
+@media screen {
+  .report-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin-bottom: var(--space-3, 12px); }
+  .report-nav > * { margin: 0 !important; }
+}
+
+/* ---- This device: Log out as a normal button, not a red bar (L) ---- */
+@media screen {
+  .account-logout { width: auto !important; align-self: flex-start; display: inline-flex !important; align-items: center; gap: 8px; padding: 8px 14px !important;
+    background: var(--surface) !important; color: var(--danger) !important; border: 1px solid color-mix(in srgb, var(--danger) 45%, var(--border)) !important; border-radius: 10px !important; font-weight: 600; box-shadow: none !important; }
+  .account-logout:hover { background: var(--danger-soft) !important; }
+  /* Settings: the section list a little narrower, the section given the room */
+  .settings-layout { gap: 20px; }
+}
+
+/* ---- forms (W): help under the field; the buttons stay in view at the foot of a long form ---- */
+@media screen {
+  .field .field-help { display: block; margin-top: 4px; font-size: 12px; line-height: 1.4; font-weight: 400; }
+  .modal form > .form-actions { position: sticky; bottom: 0; z-index: 2; background: var(--surface); padding-top: 10px; margin-top: 8px; border-top: 1px solid var(--border); }
+  @media (min-width: 900px) { .modal .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .modal .form-grid > .field.full { grid-column: 1 / -1; } }
+}
+
+/* ---- phones (M): a compact banner; no tips or extras on top of the first screen ---- */
+@media screen and (max-width: 720px) {
+  .welcome { min-height: 0 !important; padding: 12px 14px !important; }
+  .welcome h1 { font-size: 19px !important; }
+  .welcome .sub { font-size: 12px; }
+  .welcome::before, .welcome::after { display: none !important; }
+  .bento-dash.slim .bento-action { display: none; }
+  .page-head > .row.gap { width: 100%; justify-content: flex-start; }
+}
+
+/* ---- one spacing scale, one card radius, three heading sizes (D); three button kinds (Q); less motion (T) ---- */
+:root { --r-card: 18px; }
+@media screen {
+  .page { gap: var(--space-4, 16px); }
+  .page-head h1, .page > h1 { font-size: 24px; line-height: 1.2; letter-spacing: -.02em; }
+  .page h2, .subview-bar h2, .settings-section-head h2 { font-size: 18px; line-height: 1.3; }
+  :is(.card-head h3, .card > h3, .modal-head h3) { font-size: 16px; line-height: 1.35; }
+  :is(.card, .stat, .modal) { border-radius: var(--r-card); }
+  :is(.grid-2, .grid-3, .stats, .dash-grid) { gap: var(--space-4, 16px); }
+  /* three kinds of button: Primary (solid, one per page), Secondary (outlined) and Quiet (text only) */
+  .btn { border-radius: 10px; font-weight: 600; }
+  .btn.ghost { background: var(--surface); border: 1px solid var(--border-strong); box-shadow: none; }
+  .btn.ghost:hover { border-color: var(--primary); color: var(--primary-text); }
+  .btn.link, .link-btn { background: none; border: 0; box-shadow: none; }
+  .btn.danger:not(.sm) { background: var(--surface); color: var(--danger); border: 1px solid color-mix(in srgb, var(--danger) 45%, var(--border)); }
+  /* less motion: pages and cards appear without rising in; the chart still draws */
+  .page, .dash-cell, .card, .stat { animation: none !important; }
+  .theme-all[hidden] { display: none; }
+  .all-themes .flip { transform: rotate(180deg); }
+}
