@@ -3570,14 +3570,15 @@ void main() {
     await done(tester);
   });
 
-  testWidgets('the idle screen and the pop-ups on a phone fit the screen', (tester) async {
+  testWidgets('the idle screen fits a phone, and no pop-up covers it', (tester) async {
     final day = today();
     await tester.runAsync(signedIn);
     await tester.runAsync(() => RecordStore(db).update((d) => d.saveSettings({'name': 'Sample Pharmacy', 'idleMinutes': 0.5})));
     await start(tester, size: const Size(400, 800), engage: true, extra: [engageClockProvider.overrideWithValue(() => DateTime.parse('${day}T08:00:01'))]);
     await tester.runAsync(() => tester.state<EngageWatchersState>(find.byType(EngageWatchers)).fireHour());
     await settle(tester);
-    expect(find.text('Share on WhatsApp'), findsOneWidget, reason: 'the greeting card');
+    // 1.16.0 (the owner's clean-up): no pop-ups on a phone (the bell keeps them), so the greeting card waits
+    expect(find.text('Share on WhatsApp'), findsNothing, reason: 'no greeting pop-up on a phone');
     await tester.pump(const Duration(seconds: 31));
     await settle(tester);
     expect(find.byKey(const Key('spotlight')), findsOneWidget);

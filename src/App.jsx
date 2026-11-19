@@ -693,7 +693,7 @@ function Shell() {
       <div className="main">
         <header className="topbar">
           {here === '/' ? <button className="icon-btn menu-btn" aria-label="Menu" onClick={() => setDrawer(true)}><Menu size={20} /></button> : <BackButton />}
-          <button className="search-trigger" aria-label="Search or ask AI" title="Search or ask AI (Ctrl K)" onClick={() => setPalette(true)}><Search size={16} /><span>Search or ask AI…</span><kbd>Ctrl K</kbd></button>
+          <button className="search-trigger" title="Search or ask AI (Ctrl K)" onClick={() => setPalette(true)}><Search size={16} /><span>Search or ask AI…</span><kbd>Ctrl K</kbd></button>
           {(() => {
             const g = groups.find((x) => x.items.some(([t]) => t === here));
             const pg = pages.find((x) => x.to === here);

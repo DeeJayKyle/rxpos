@@ -168,7 +168,8 @@ export function themeVars(t) {
     '--bg': c.bg, '--surface': c.surface, '--surface-2': c.surface2, '--border': c.border, '--border-strong': c.borderStrong,
     '--text': c.text, '--muted': readable(c.muted, [c.bg, c.surface, c.surface2], dark ? '#ffffff' : '#000000'), '--primary': c.primary, '--primary-2': c.primary2,
     // links and brand text: readable on cards and on the tinted page itself (links sit on it)
-    '--primary-text': readable(c.primary, [c.surface, c.surface2, c.bg], dark ? '#ffffff' : '#000000'),
+    // …and on the soft colour 2 itself (totals and headings sit on it; 1.16.0: the page is lighter than colour 2 now)
+    '--primary-text': readable(c.primary, [c.surface, c.surface2, c.bg, c.c2 || c.bg], dark ? '#ffffff' : '#000000'),
     '--on-accent': btn.on, '--primary-solid': btn.a, '--accent-grad': `linear-gradient(135deg, ${btn.a} 0%, ${btn.b} 100%)`,
     '--primary-dark': dark ? mix(c.primary, '#000000', 0.12) : mix(c.primary, '#000000', 0.18),
     '--primary-soft': dark ? rgba(c.primary, 0.14) : mix(c.primary, '#ffffff', 0.84),

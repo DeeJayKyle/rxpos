@@ -77,7 +77,7 @@ await key('Escape');
 
 // list keys on Customers
 await key('g', 'c'); await focusBody();
-await key('ArrowDown', 'ArrowDown', 'ArrowDown'); // (the walk-in customer is first)
+await key('ArrowDown', 'ArrowDown'); // (1.16.0: the walk-in customer is no longer in the list)
 check('↓ highlights rows', await p.evaluate(() => /Bwire Paul/.test(document.querySelector('tr.row-active')?.innerText || '')), await p.evaluate(() => document.querySelector('tr.row-active')?.innerText));
 await key('Enter');
 check('Enter opens the highlighted row (beside the list on a wide screen, UI batch 3 C8)', /Edit customer/.test(await p.evaluate(() => document.querySelector('.modal, .details-pane')?.innerText || '')));
@@ -91,7 +91,7 @@ check('/ goes to the search', (await rows()).length === 1 && /Okello/.test((awai
 await key('F6'); await key('g', 'c');
 check('the search is kept when you come back', (await p.evaluate(() => document.querySelector('.page .search')?.value)) === 'okel');
 await p.evaluate(() => document.querySelector('.page .search')?.focus()); await key('Escape');
-check('Esc in the search clears it', (await rows()).length === 6, JSON.stringify(await rows()));
+check('Esc in the search clears it', (await rows()).length === 5, JSON.stringify(await rows()));
 
 // mouse: double-click, right-click
 const cell = async (name) => (await p.$$('.page table tbody tr')).find(async () => true) && p.evaluateHandle((n) => [...document.querySelectorAll('.page table tbody tr')].find((r) => r.innerText.includes(n))?.querySelector('td:nth-child(2)'), name);
