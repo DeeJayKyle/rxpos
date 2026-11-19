@@ -65,27 +65,27 @@
   @media (max-width: 1180px) { :root[data-look='glossy'] .welcome::before { display: none; } }
   @media (max-width: 720px) { :root[data-look='glossy'] .welcome h1 { font-size: 21px; } }
 
-  /* ---- the four figure cards, each in its own colour ---- */
-  :root[data-look='glossy'] .stats.kpis .stat:nth-child(1) { --k-a: var(--kpi-1-a); --k-b: var(--kpi-1-b); --k-on: var(--kpi-1-on); --k-sub: var(--kpi-1-sub); --k-icon: var(--kpi-1-icon); --k-glyph: var(--kpi-1-glyph); }
-  :root[data-look='glossy'] .stats.kpis .stat:nth-child(2) { --k-a: var(--kpi-2-a); --k-b: var(--kpi-2-b); --k-on: var(--kpi-2-on); --k-sub: var(--kpi-2-sub); --k-icon: var(--kpi-2-icon); --k-glyph: var(--kpi-2-glyph); }
-  :root[data-look='glossy'] .stats.kpis .stat:nth-child(3) { --k-a: var(--kpi-3-a); --k-b: var(--kpi-3-b); --k-on: var(--kpi-3-on); --k-sub: var(--kpi-3-sub); --k-icon: var(--kpi-3-icon); --k-glyph: var(--kpi-3-glyph); }
-  :root[data-look='glossy'] .stats.kpis .stat:nth-child(4) { --k-a: var(--kpi-4-a); --k-b: var(--kpi-4-b); --k-on: var(--kpi-4-on); --k-sub: var(--kpi-4-sub); --k-icon: var(--kpi-4-icon); --k-glyph: var(--kpi-4-glyph); }
-  :root[data-look='glossy'] .stats.kpis .stat {
+  /* ---- the four figure cards, each in its own colour (Calm, the standard; Vivid keeps its meaning-coloured tiles) ---- */
+  :root[data-look='glossy']:not([data-colour='vivid']) .stats.kpis .stat:nth-child(1) { --k-a: var(--kpi-1-a); --k-b: var(--kpi-1-b); --k-on: var(--kpi-1-on); --k-sub: var(--kpi-1-sub); --k-icon: var(--kpi-1-icon); --k-glyph: var(--kpi-1-glyph); }
+  :root[data-look='glossy']:not([data-colour='vivid']) .stats.kpis .stat:nth-child(2) { --k-a: var(--kpi-2-a); --k-b: var(--kpi-2-b); --k-on: var(--kpi-2-on); --k-sub: var(--kpi-2-sub); --k-icon: var(--kpi-2-icon); --k-glyph: var(--kpi-2-glyph); }
+  :root[data-look='glossy']:not([data-colour='vivid']) .stats.kpis .stat:nth-child(3) { --k-a: var(--kpi-3-a); --k-b: var(--kpi-3-b); --k-on: var(--kpi-3-on); --k-sub: var(--kpi-3-sub); --k-icon: var(--kpi-3-icon); --k-glyph: var(--kpi-3-glyph); }
+  :root[data-look='glossy']:not([data-colour='vivid']) .stats.kpis .stat:nth-child(4) { --k-a: var(--kpi-4-a); --k-b: var(--kpi-4-b); --k-on: var(--kpi-4-on); --k-sub: var(--kpi-4-sub); --k-icon: var(--kpi-4-icon); --k-glyph: var(--kpi-4-glyph); }
+  :root[data-look='glossy']:not([data-colour='vivid']) .stats.kpis .stat {
     background: radial-gradient(90% 80% at 100% 100%, rgba(255, 255, 255, .18), transparent 60%), linear-gradient(135deg, var(--k-a) 0%, var(--k-b) 100%);
     color: var(--k-on); border: 0 !important; overflow: hidden;
   }
-  :root[data-look='glossy'] .stats.kpis .stat :is(small, strong, .stat-sub, .stat-sub.muted) { color: var(--k-on); }
-  :root[data-look='glossy'] .stats.kpis .stat .stat-sub { color: var(--k-sub); }
-  :root[data-look='glossy'] .stats.kpis .stat .stat-icon { background: var(--k-icon); color: var(--k-glyph); box-shadow: 0 8px 18px -10px rgba(0, 0, 0, .45); }
+  :root[data-look='glossy']:not([data-colour='vivid']) .stats.kpis .stat :is(small, strong, .stat-sub, .stat-sub.muted) { color: var(--k-on); }
+  :root[data-look='glossy']:not([data-colour='vivid']) .stats.kpis .stat .stat-sub { color: var(--k-sub); }
+  :root[data-look='glossy']:not([data-colour='vivid']) .stats.kpis .stat .stat-icon { background: var(--k-icon); color: var(--k-glyph); box-shadow: 0 8px 18px -10px rgba(0, 0, 0, .45); }
   /* the neon reference: the icon in a round badge with a ring */
-  :root[data-look='glossy'] .stats.kpis .stat .stat-icon { border-radius: 50%; outline: 3px solid color-mix(in srgb, var(--k-on) 22%, transparent); outline-offset: 2px; }
-  :root[data-look='glossy'] .stats.kpis .stat .delta { background: var(--k-on); color: var(--k-a); padding: 1px 7px; border-radius: 999px; font-weight: 700; }
-  :root[data-look='glossy'] .stats.kpis .stat .spark polyline { stroke: var(--k-on); opacity: .8; }
-  :root[data-look='glossy'] .stats.kpis .stat .spark polygon { fill: color-mix(in srgb, var(--k-on) 14%, transparent); }
-  :root[data-look='glossy'] .stats.kpis .stat .spark circle { fill: var(--k-on); }
-  :root[data-look='glossy'] .stats.kpis .stat.link:hover { transform: translateY(-2px); box-shadow: 0 16px 30px -16px var(--k-a); }
+  :root[data-look='glossy']:not([data-colour='vivid']) .stats.kpis .stat .stat-icon { border-radius: 50%; outline: 3px solid color-mix(in srgb, var(--k-on) 22%, transparent); outline-offset: 2px; }
+  :root[data-look='glossy']:not([data-colour='vivid']) .stats.kpis .stat .delta { background: var(--k-on); color: var(--k-a); padding: 1px 7px; border-radius: 999px; font-weight: 700; }
+  :root[data-look='glossy']:not([data-colour='vivid']) .stats.kpis .stat .spark polyline { stroke: var(--k-on); opacity: .8; }
+  :root[data-look='glossy']:not([data-colour='vivid']) .stats.kpis .stat .spark polygon { fill: color-mix(in srgb, var(--k-on) 14%, transparent); }
+  :root[data-look='glossy']:not([data-colour='vivid']) .stats.kpis .stat .spark circle { fill: var(--k-on); }
+  :root[data-look='glossy']:not([data-colour='vivid']) .stats.kpis .stat.link:hover { transform: translateY(-2px); box-shadow: 0 16px 30px -16px var(--k-a); }
 
   /* ---- charts: the line in the theme's colour over a soft fill ---- */
   :root[data-look='glossy'] .chart-card { overflow: hidden; }
 }
-@media screen and (prefers-reduced-motion: reduce) { :root[data-look='glossy'] .stats.kpis .stat.link:hover { transform: none; } }
+@media screen and (prefers-reduced-motion: reduce) { :root[data-look='glossy']:not([data-colour='vivid']) .stats.kpis .stat.link:hover { transform: none; } }
