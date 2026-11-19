@@ -46,7 +46,7 @@ check('E1 amounts line up (tabular figures)', await p.evaluate(() => { const c =
 // E5: one date control with presets
 check('E5 Sales: the date control with presets', await p.evaluate(() => { const s = document.querySelector('.date-range select'); return !!s && ['All dates', 'Today', 'Yesterday', '7 days', 'This month', 'Last month', 'Custom'].every((l) => [...s.options].some((o) => o.text === l)); }));
 await p.select('.date-range select', '7d'); await wait(400);
-check('E5 "7 days" fills From and To', await p.evaluate((f, t) => document.querySelector('.date-range input[aria-label=From]').value === f && document.querySelector('.date-range input[aria-label=To]').value === t, localDay(-6), localDay(0)));
+check('E5 "7 days" fills From and To', await p.evaluate((f, t) => document.querySelector('.date-range input[aria-label=From]').closest('.date-input').querySelector('input[type=date]').value === f && document.querySelector('.date-range input[aria-label=To]').closest('.date-input').querySelector('input[type=date]').value === t, localDay(-6), localDay(0)));
 for (const [h, name] of [['#/reports', 'Reports'], ['#/expenses', 'Expenses'], ['#/audit', 'Audit log'], ['#/purchases', 'Purchases']]) {
   await p.evaluate((x) => { location.hash = x; }, h); await wait(1200);
   check(`E5 ${name}: the same date control`, await p.evaluate(() => !!document.querySelector('.date-range select')));

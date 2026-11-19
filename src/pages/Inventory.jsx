@@ -620,7 +620,7 @@ function InventoryEditor({ product, onClose }) {
                 <td><input value={r.newBatch} disabled={r.legacy} onChange={(e) => setRow(k, { newBatch: e.target.value })} /></td>
                 <td><DateInput monthYear value={r.newExpiry} disabled={r.legacy} onChange={(v) => setRow(k, { newExpiry: v })} /></td>
                 <td className="num">{r.qty}</td>
-                <td><input type="number" min="0" value={r.newQty} onChange={(e) => setRow(k, { newQty: e.target.value })} /></td>
+                <td><input type="number" min="0" aria-label="Actual qty" value={r.newQty} onChange={(e) => setRow(k, { newQty: e.target.value })} /></td>
               </tr>
             ))}
             {!rows.length && <Empty colSpan={4}>No stock at this branch. Use Add Stock to receive it.</Empty>}
