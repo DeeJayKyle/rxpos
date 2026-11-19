@@ -221,4 +221,4 @@ final class PharmacyProvider
   }
 }
 
-String _$pharmacyHash() => r'db8e953009866f4ded0a3adf45b1af91b1dbfdbb';
+String _$pharmacyHash() => r'435527d440a0626b4202dde6df83d8134f414de0';
