@@ -59,18 +59,11 @@ await p.screenshot({ path: path.join(out, 'pos.png') });
 await p.select('select[aria-label="Till layout"]', 'advanced'); await wait(500);
 await p.screenshot({ path: path.join(out, 'pos-advanced.png') });
 
-// the Premium UI switch: back to the usual look and on again, the sale untouched; F9 charges and F5 never does (step 4)
+// 1.16.0 (the owner's clean-up): no Premium UI switch in the top bar; every theme has the glossy look and Navy Teal is
+// one of them in the theme menu
 await p.select('select[aria-label="Till layout"]', 'standard'); await wait(400);
 const saleNow = () => p.evaluate(() => [...document.querySelectorAll('.cart-line')].map((l) => l.innerText.replace(/\s+/g, ' ')).join(' | ') + ' || ' + document.querySelector('.totals .grand')?.innerText.replace(/\s+/g, ' '));
-const before = await saleNow();
-check('the top bar has a "Premium UI" switch, on', await p.evaluate(() => document.querySelector('.premium-toggle')?.getAttribute('aria-checked') === 'true'));
-await p.click('.premium-toggle'); await wait(500);
-check('switching it off goes back to a usual theme and keeps the sale exactly', (await p.evaluate(() => document.documentElement.dataset.palette)) !== 'navy-teal' && (await saleNow()) === before, await saleNow());
-check('…with Charge as before ([F9])', /\[F9\]/.test(await p.evaluate(() => document.querySelector('.pos-cart .pay-row .btn.primary').innerText)));
-await p.click('.premium-toggle'); await wait(500);
-check('on again: Navy Teal, same sale', (await p.evaluate(() => document.documentElement.dataset.palette)) === 'navy-teal' && (await saleNow()) === before);
-await p.reload({ waitUntil: 'networkidle2' }); await wait(2500);
-check('the switch is remembered after a reload', (await p.evaluate(() => document.documentElement.dataset.palette)) === 'navy-teal' && await p.evaluate(() => localStorage.getItem('rxpos-advanced-ui') === '1'));
+check('the top bar has no Premium UI switch', await p.evaluate(() => !document.querySelector('.premium-toggle')));
 check('Charge shows [F9], as on every theme', /\[F9\]/.test(await p.evaluate(() => document.querySelector('.pos-cart .pay-row .btn.primary').innerText)));
 const lines = await saleNow();
 await p.focus('.pos-products input.search'); await p.keyboard.press('F5'); await wait(1500);

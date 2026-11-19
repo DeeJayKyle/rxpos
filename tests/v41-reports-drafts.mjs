@@ -100,8 +100,9 @@ await wait(2500); await A.screenshot({ path: `${out}/dashboard-vivid.png`, fullP
 
 // ---- dashboard charts ----
 check('daily sales chart with total, average and best day', /Daily average/.test(await text(A)) && /Best day/.test(await text(A)) && await A.evaluate(() => document.querySelectorAll('.trend-svg').length >= 1));
-await clickText(A, '.seg button', /^90 days$/); await wait(300);
-check('…switches to 90 days (with real dates and "Today")', /last 90 days/.test(await text(A)) && await A.evaluate(() => [...document.querySelectorAll('.trend-axis')].some((x) => x.textContent === 'Today')));
+// 1.16.0: the chart follows the dashboard's one period picker (6M: the last 182 days)
+await clickText(A, '.period-chips button', /^6M$/); await wait(300);
+check('…follows the period picker to 6 months (with real dates and "Today")', /last 182 days/.test(await text(A)) && await A.evaluate(() => [...document.querySelectorAll('.trend-axis')].some((x) => x.textContent === 'Today')));
 // one sales chart with a Daily / Monthly switch (the clean dashboard, 2026-11-15)
 await clickText(A, '.chart-card .seg button', /^Monthly$/); await wait(400);
 check('money in & out month by month: sales, purchases, expenses, gross profit', await A.evaluate(() => ['in', 'purch', 'exp', 'profit'].every((c) => document.querySelector('.trend-series.' + c))));

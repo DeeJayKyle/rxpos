@@ -98,6 +98,7 @@ export const setSounds = (on) => { try { localStorage.setItem('rxpos-sound', on 
 export function systemNotify(title, body, opts) { notifyOS(title, body, opts); }
 
 const ROUTINE = new Set(['weekly', 'hour', 'greet']);
+const DASH_ONLY = new Set(['alerts', 'weekly', 'hour', 'greet']);
 export function PopupHost() {
   const [items, setItems] = useState([]);
   const navigate = useNavigate();
@@ -105,15 +106,17 @@ export function PopupHost() {
     listener = (p) => setItems((list) => (p.close ? list.filter((x) => x.id !== p.id) : [...list.filter((x) => x.id !== p.id), p].slice(-4)));
     return () => { listener = null; };
   }, []);
+  const here = useLocation().pathname, selling = here.startsWith('/pos');
+  // 1.16.0 (the owner's clean-up): stock alerts and the routine notices never cover a page: they show on the dashboard
+  // only, and never on a phone (the bell keeps them); messages and calls still show everywhere
+  const phone = typeof matchMedia === 'function' && matchMedia('(max-width: 720px)').matches;
+  const shown = items.filter((p) => !DASH_ONLY.has(p.id) || (here === '/' && !phone)).filter((p) => !selling || !ROUTINE.has(p.id) || p.tone === 'danger');
+  // a notice waiting for the dashboard keeps its time until it is shown
   useEffect(() => {
-    const timers = items.filter((p) => !p.sticky).map((p) => setTimeout(() => setItems((l) => l.filter((x) => x !== p)), Math.max(1000, (p.ttl || 15000) - (Date.now() - p.at))));
+    const timers = shown.filter((p) => !p.sticky).map((p) => setTimeout(() => setItems((l) => l.filter((x) => x !== p)), Math.max(1000, (p.ttl || 15000) - (Date.now() - (p.shownAt ??= Date.now())))));
     return () => timers.forEach(clearTimeout);
-  }, [items]);
+  }, [items, here]); // eslint-disable-line react-hooks/exhaustive-deps
   const close = (p) => setItems((l) => l.filter((x) => x !== p));
-  // at the till, routine notices (weekly summary, hourly reminder, greeting) wait until the POS is left; urgent alerts
-  // and messages from colleagues still show
-  const selling = useLocation().pathname.startsWith('/pos');
-  const shown = selling ? items.filter((p) => !ROUTINE.has(p.id) || p.tone === 'danger') : items;
   if (!shown.length) return null;
   return (
     <div className="popups" role="status" aria-live="polite">

@@ -54,16 +54,15 @@ const tiles = () => p.evaluate(() => Object.fromEntries([...document.querySelect
 const widgets = () => p.evaluate(() => [...document.querySelectorAll('.dash-cell')].map((c) => c.dataset.widget));
 
 check('clean layout: figures, the bento row, chart, health, top medicines, latest sales, busy hours', JSON.stringify(await widgets()) === JSON.stringify(['figures', 'bento', 'chart', 'health', 'top', 'recent', 'busy']), JSON.stringify(await widgets()));
-check('header: no repeated search or bell (the top bar\'s show), today\'s date', await p.evaluate(() => !document.querySelector('.dash-search') && !document.querySelector('.dash-bell') && !!document.querySelector('.topbar .search-trigger')?.offsetParent && !!document.querySelector('.topbar > .bell button[aria-label^=Notifications]')?.offsetParent && /\d{4}/.test(document.querySelector('.date-pill')?.innerText || '')));
+check('header: no repeated search or bell (the top bar\'s show), today\'s date in the greeting\'s line', await p.evaluate(() => !document.querySelector('.dash-search') && !document.querySelector('.dash-bell') && !!document.querySelector('.topbar .search-trigger')?.offsetParent && !!document.querySelector('.topbar > .bell button[aria-label^=Notifications]')?.offsetParent && /\d{4}/.test(document.querySelector('.welcome .sub .date-pill')?.innerText || '')));
 // UI batch 3, B1-B8
 check('B8 what\'s new: shown once after an update', await p.evaluate(() => /What.s new in 1\.15\.0/.test(document.querySelector('.whats-new')?.innerText || '') && !!document.querySelector('.whats-new a')), await p.evaluate(() => localStorage.getItem('rxpos-device')));
 check('B7 setup checklist: medicines and stock ticked from the data, staff not yet', await p.evaluate(() => { const st = (id) => document.querySelector(`.setup-steps [data-step=${id}]`)?.classList.contains('done'); return st('medicines') && st('stock') && st('staff') === false && /of 6 done/.test(document.querySelector('.setup-card').innerText); }));
-check('B1 bars: a dashed average line and today\'s amount above its bar', await p.evaluate(() => !!document.querySelector('.bento-avg') && /2,800/.test(document.querySelector('.bento-bar.now .bento-val')?.innerText || '') && /Average/.test(document.querySelector('.bento-avg-key')?.innerText || '')));
-await (await p.$('.bento-bar.now')).hover(); await wait(300);
-check('B1 …pointing at a bar shows its day and amount', await p.evaluate(() => { const t = document.querySelector('.bento-bar.now .bento-tip'); return getComputedStyle(t).opacity === '1' && /2,800/.test(t.innerText); }));
-await p.mouse.move(5, 5);
+// 1.16.0 (the owner's clean-up): the bento row keeps the week at a glance and the next step; the daily chart and the
+// latest sales are the dashboard's own (no copies), and there is one period picker
+check('B1 one daily chart (none in the bento row), with a dashed average line', await p.evaluate(() => !document.querySelector('.bento-bar, .bento-chart') && !!document.querySelector('.chart-card .trend-avg') && document.querySelectorAll('[role=radiogroup][aria-label=Period]').length === 1));
 check('B2 figure cards: the change and "vs yesterday" on one line', await p.evaluate(() => [...document.querySelectorAll('.kpis .stat .stat-sub')].every((x) => x.getBoundingClientRect().height < 30 && getComputedStyle(x).whiteSpace === 'nowrap')), await p.evaluate(() => [...document.querySelectorAll('.kpis .stat .stat-sub')].map((x) => x.getBoundingClientRect().height + getComputedStyle(x).whiteSpace).join()));
-check('B3 latest sales: the amounts in one right column, the Owing pill beside the name', await p.evaluate(() => { const r = [...document.querySelectorAll('.bento-recent .bento-amt')].map((x) => Math.round(x.getBoundingClientRect().right)); const pill = document.querySelector('.bento-recent .bento-who .status-pill'); return r.length >= 5 && new Set(r).size === 1 && !!pill; }));
+check('B3 one latest-sales list (the table), none in the bento row', await p.evaluate(() => !document.querySelector('.bento-recent') && !!document.querySelector('.recent-table')));
 check('B4 the hero card shows the busiest hour (10:00, as the samples) and the best day', await p.evaluate(() => /Busiest hour\s*10:00 · \d+ sales?/.test(document.querySelector('.bento-facts')?.innerText || '') && /Best day/.test(document.querySelector('.bento-facts').innerText)));
 check('B5 busy hours: a day × hour grid with "Day 10:00 · n sales" on the cells', await p.evaluate(() => { const c = [...document.querySelectorAll('.busy-grid td')].filter((x) => +x.dataset.v > 0); return c.length >= 1 && c.every((x) => /^\w{3} 10:00 · \d+ sales?$/.test(x.title)); }));
 check('B6 small amounts stay in full (no short form below 100,000)', await p.evaluate(() => !document.querySelector('.kpis .stat strong[data-full]') && /2,800/.test(document.querySelector('.kpis .stat strong').innerText)));
@@ -113,9 +112,12 @@ await p.evaluate(() => [...document.querySelectorAll('.modal button')].find((x) 
 await p.keyboard.press('Escape'); await wait(400);
 check('…and "Back to the standard dashboard" restores the clean layout', JSON.stringify(await widgets()) === JSON.stringify(['figures', 'bento', 'chart', 'health', 'top', 'recent', 'busy']));
 // sidebar groups: a count, a + quick add, opening and closing
-check('sidebar groups show how many pages they hold', await p.evaluate(() => [...document.querySelectorAll('.nav-title .nav-count')].length >= 4));
+// 1.16.0 (the owner's clean-up): group titles carry alert counts only, no page counts; one group open at a time
+check('sidebar group titles show no page counts', await p.evaluate(() => document.querySelectorAll('.nav-title .nav-count').length === 0 && document.querySelectorAll('.nav-title').length >= 4));
 await p.evaluate(() => [...document.querySelectorAll('.nav-title')].find((x) => /Finance/.test(x.textContent))?.click()); await wait(500);
 check('a group opens with its pages', await p.evaluate(() => { const g = [...document.querySelectorAll('.nav-group')].find((x) => /Finance/.test(x.querySelector('.nav-title')?.textContent || '')); return g.classList.contains('open') && [...g.querySelectorAll('a')].some((a) => !a.hidden); }));
+check('…and the other groups fold (one open at a time)', await p.evaluate(() => [...document.querySelectorAll('.nav-group:not(.nav-quick)')].filter((g) => g.querySelector('.nav-title') && g.classList.contains('open')).length === 1));
+check('rarely used pages sit under More', await p.evaluate(() => { const g = [...document.querySelectorAll('.nav-group')].find((x) => /^More/.test(x.querySelector('.nav-title')?.textContent.trim() || '')); return !!g && /Kits/.test(g.textContent) && /Shelves/.test(g.textContent); }));
 await p.evaluate(() => { location.hash = '#/customers'; }); await wait(900);
 await p.evaluate(() => document.activeElement?.blur()); await p.keyboard.press('g'); await p.keyboard.press('g'); await wait(500);
 await p.evaluate(() => { location.hash = '#/'; }); await wait(900);

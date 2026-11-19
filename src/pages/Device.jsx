@@ -79,8 +79,6 @@ export default function Device() {
         </SettingsGroup>
       </div>
       <div className="grid-2">
-        <Updates />
-        <AiSystemDoctor />
         <SyncStorage />
         <section className="card">
           <h3><MonitorSmartphone size={18} />Screen</h3>
@@ -137,6 +135,9 @@ export default function Device() {
         <Sounds d={d} />
         <Notices d={d} />
         <KeyboardCard d={d} />
+        {/* 1.16.0 (the owner's clean-up): the app version and the doctor at the end, the everyday choices first */}
+        <Updates />
+        <AiSystemDoctor />
       </div>
       <DangerZone actions={[
         Object.keys(d.keymap || {}).length > 0 && { icon: RotateCcw, label: 'Reset all keyboard shortcuts', desc: 'Every key back to the standard one', title: 'Put every key back as it was?', text: 'All the shortcuts you changed on this device go back to the standard keys.', confirm: 'Reset the keys', run: () => { resetKeys(); toast('Keyboard shortcuts reset'); } },

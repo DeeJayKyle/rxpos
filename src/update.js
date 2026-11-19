@@ -7,9 +7,11 @@
 import { DEFAULT_CLOUD } from './cloud.js';
 import { isElectron, isAndroid, isWeb } from './platform.js';
 
-/* global __RXPOS_BUILD__, __RXPOS_LABEL__ */
+/* global __RXPOS_BUILD__, __RXPOS_LABEL__, __RXPOS_VERSION__ */
 export const BUILD = typeof __RXPOS_BUILD__ !== 'undefined' ? __RXPOS_BUILD__ : 0;
 export const LABEL = typeof __RXPOS_LABEL__ !== 'undefined' ? __RXPOS_LABEL__ : '1.0 (development)';
+/** The release number (package.json), as people read it: 1.16.0 */
+export const VERSION = typeof __RXPOS_VERSION__ !== 'undefined' ? __RXPOS_VERSION__ : 'dev';
 const SHELL = 1; // must match the `shell` in version.json that this installer / APK can run (scripts/release-files.mjs)
 const CHECK_EVERY = 10 * 60e3;
 const DOWNLOAD_LIMIT = 4 * 60e3; // the archive is about 2 MB

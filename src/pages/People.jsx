@@ -13,6 +13,8 @@ export function Customers() {
   return (
     <CrudPage
       title="Customers" table="customers" canDelete={false} sideDetails
+      // 1.16.0 (the owner's clean-up): the till's Walk-in Customer is not a client, so it is not in the list
+      filter={(c) => c.id !== 'walk-in'}
       emptyText="No clients yet. Add a client to keep their phone, allergies and what they owe; the till finds them by name or phone."
       // UI batch 3, C10: phones: swipe a client for Call or WhatsApp
       swipeActions={(c) => (c.phone ? [{ label: 'Call', Icon: Phone, href: 'tel:' + String(c.phone).replace(/[^\d+]/g, '') }, { label: 'WhatsApp', Icon: MessageCircle, href: whatsappLink(normalizePhone(c.phone) || c.phone, '') }] : [])}

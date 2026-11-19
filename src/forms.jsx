@@ -4,11 +4,12 @@
 //   Help        D3: a small (?) beside a tricky field with a one-sentence popover
 //   checkField  D1: the checks a field gets when it is left (and on typing after its first error)
 import { useEffect, useId, useRef, useState } from 'react';
-import { HelpCircle, Check } from 'lucide-react';
+import { HelpCircle, Check, CalendarDays, ChevronDown } from 'lucide-react';
 import { normalizePhone } from './store.jsx';
 import { safeFileUrl } from './safeurl.js';
 import { uploadAttachment } from './attach.jsx';
-import { DateInput } from './fields.jsx';
+import { DateInput, useDateFormat } from './fields.jsx';
+import { formatDate } from './dateformat.js';
 
 /** 1234567.5 → "1,234,567.5" while typing (the decimals typed are kept as typed) */
 export function groupDigits(text) {
@@ -146,28 +147,47 @@ export function rangePresets(now = new Date()) {
     ['month', 'This month', ymd(first), day(0)], ['last', 'Last month', ymd(lastStart), ymd(lastEnd)]];
 }
 
-/** E5: one date-range control everywhere: Today, Yesterday, 7 days, This month, Last month, Custom (two dates), and
- *  All when the page allows no range. value { from, to } ('' = open); onChange({ from, to }) */
+/** E5: one date-range control everywhere; 1.16.0 (the owner's clean-up): one button that says the dates ("This month",
+ *  "1 Nov – 19 Nov 2026") and opens the choices: All, Today, Yesterday, 7 days, This month, Last month, and the two
+ *  dates of a custom range. value { from, to } ('' = open); onChange({ from, to }) */
 export function DateRange({ from = '', to = '', onChange, allowAll = true, label = 'Dates' }) {
   const presets = rangePresets();
   const hit = presets.find(([, , f, t]) => f === from && t === to);
   const cur = hit ? hit[0] : !from && !to && allowAll ? 'all' : 'custom';
+  const fmt = useDateFormat();
+  const [open, setOpen] = useState(false);
+  const box = useRef(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    const off = (e) => { if (!box.current?.contains(e.target)) setOpen(false); };
+    const esc = (e) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', off); document.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('mousedown', off); document.removeEventListener('keydown', esc); };
+  }, [open]);
+  const shown = hit ? hit[1] : cur === 'all' ? 'All dates' : `${from ? formatDate(from, fmt) : '…'} – ${to ? formatDate(to, fmt) : '…'}`;
+  const pick = (k) => {
+    if (k === 'all') onChange({ from: '', to: '' });
+    else { const p = presets.find(([x]) => x === k); onChange({ from: p[2], to: p[3] }); }
+    setOpen(false);
+  };
   return (
-    <div className="date-range" role="group" aria-label={label}>
-      <select aria-label={label + ': quick choice'} value={cur} onChange={(e) => {
-        const v = e.target.value;
-        if (v === 'custom') return;
-        if (v === 'all') onChange({ from: '', to: '' });
-        else { const p = presets.find(([k]) => k === v); onChange({ from: p[2], to: p[3] }); }
-      }}>
-        {allowAll && <option value="all">All dates</option>}
-        {presets.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-        <option value="custom">Custom</option>
-      </select>
-      {/* Custom: the two dates, always there to type or pick */}
-      <DateInput aria-label="From" title="From" value={from} max={to || undefined} onChange={(v) => onChange({ from: v, to })} />
-      <span className="muted" aria-hidden="true">–</span>
-      <DateInput aria-label="To" title="To" value={to} min={from || undefined} onChange={(v) => onChange({ from, to: v })} />
+    <div className="date-range" role="group" aria-label={label} ref={box}>
+      <button type="button" className="btn range-btn" aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen((o) => !o)} title={label}>
+        <CalendarDays size={16} aria-hidden="true" /><span>{shown}</span><ChevronDown size={15} aria-hidden="true" />
+      </button>
+      <div className="range-pop" hidden={!open} role="dialog" aria-label={label}>
+        <div className="range-presets" role="listbox" aria-label={label + ': quick choice'}>
+          {allowAll && <button type="button" role="option" aria-selected={cur === 'all'} className={cur === 'all' ? 'on' : ''} data-range="all" onClick={() => pick('all')}>All dates</button>}
+          {presets.map(([k, l]) => <button key={k} type="button" role="option" aria-selected={cur === k} className={cur === k ? 'on' : ''} data-range={k} onClick={() => pick(k)}>{l}</button>)}
+        </div>
+        {/* Custom: the two dates, to type or pick */}
+        <div className="range-custom">
+          <span className="muted small">Custom</span>
+          <DateInput aria-label="From" title="From" value={from} max={to || undefined} onChange={(v) => onChange({ from: v, to })} />
+          <span className="muted" aria-hidden="true">–</span>
+          <DateInput aria-label="To" title="To" value={to} min={from || undefined} onChange={(v) => onChange({ from, to: v })} />
+        </div>
+      </div>
     </div>
   );
 }

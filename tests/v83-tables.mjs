@@ -53,7 +53,8 @@ await p.evaluate(() => document.querySelector('.load-more').scrollIntoView()); a
 check('C7 …the rest as the list scrolls', await rowsN() === 130, await rowsN());
 check('C1 the total is pinned at the bottom of the sales list', await p.evaluate(() => { const td = document.querySelector('table.phone-rows tfoot tr.total-row td'); return !!td && getComputedStyle(td).position === 'sticky' && /130 sales/.test(td.innerText); }));
 check('C1 the headings stay while scrolling', await p.evaluate(() => getComputedStyle(document.querySelector('table.phone-rows thead th')).position === 'sticky'));
-const heads = () => p.evaluate(() => [...document.querySelectorAll('table.phone-rows thead th')].map((x) => x.textContent.replace(/[▲▼↕\s]+$/g, '').trim()).filter(Boolean));
+// 1.16.0: a money column's heading carries the currency ("Total (UGX)"); the name is what is compared
+const heads = () => p.evaluate(() => [...document.querySelectorAll('table.phone-rows thead th')].map((x) => x.textContent.replace(/[▲▼↕\s]+$/g, '').replace(/\s*\([A-Z]{3}\)$/, '').trim()).filter(Boolean));
 await p.evaluate(() => [...document.querySelectorAll('.page-head button')].find((x) => /Columns/.test(x.textContent)).click()); await wait(200);
 await p.evaluate(() => document.querySelector('.col-row[data-col=phone] input').click()); await wait(150);
 await p.evaluate(() => document.querySelector('.col-row[data-col=total] button[aria-label^="Move Total up"]').click()); await wait(150);

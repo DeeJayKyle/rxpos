@@ -22,7 +22,7 @@ const releaseFiles = () => ({
 export default defineConfig({
   base: './',
   plugins: [react(), releaseFiles()],
-  define: { __RXPOS_BUILD__: JSON.stringify(info.build), __RXPOS_LABEL__: JSON.stringify(info.label) },
+  define: { __RXPOS_BUILD__: JSON.stringify(info.build), __RXPOS_LABEL__: JSON.stringify(info.label), __RXPOS_VERSION__: JSON.stringify(version) },
   // pdf.js ships its worker as .mjs; some app servers (Android WebView) don't serve .mjs as JavaScript, so emit it as .js
   build: { chunkSizeWarningLimit: 900, rollupOptions: { output: {
     // React in its own file: it rarely changes, so devices keep it cached across RxPOS updates

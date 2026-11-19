@@ -20,8 +20,10 @@ const dateLabel = (k, opt = { day: 'numeric', month: 'short' }) => new Date(k + 
 /**
  * Daily sales for the last 7, 30 or 90 days. byDay: { 'YYYY-MM-DD': { total } }. onDay(key) opens that day's sales.
  */
-export function DailyTrend({ byDay, fmt, onDay, extra }) {
-  const [range, setRange] = useState(30);
+export function DailyTrend({ byDay, fmt, onDay, extra, days }) {
+  // [days] set by the dashboard's period (1.16.0): no picker of its own then
+  const [own, setRange] = useState(30);
+  const range = days || own;
   const svg = useRef(null);
   const [hover, setHover] = useState(null);
   const keys = Array.from({ length: range }, (_, i) => dayKey(range - 1 - i));
@@ -40,7 +42,7 @@ export function DailyTrend({ byDay, fmt, onDay, extra }) {
   const yn = (v) => H - B - (v / maxN) * (H - T - B);
   const bw = Math.max(2, slot * (range <= 7 ? 0.5 : 0.62));
   const n = range - 1;
-  const every = range <= 7 ? 1 : range <= 30 ? 5 : 15;
+  const every = range <= 7 ? 1 : range <= 30 ? 5 : range <= 90 ? 15 : Math.ceil(range / 7);
   const line = counts.slice(0, -1).map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${yn(v).toFixed(1)}`).join(' ');
   // a count's badge on the line: each day with sales over a week or a month, none over 90 days
   const badge = (i) => range <= 30 && counts[i] > 0;
@@ -51,9 +53,9 @@ export function DailyTrend({ byDay, fmt, onDay, extra }) {
         <h3>Daily sales · last {range} days</h3>
         <div className="chart-tools">
           {extra}
-          <div className="seg" role="radiogroup" aria-label="Chart period">
+          {!days && <div className="seg" role="radiogroup" aria-label="Chart period">
             {[7, 30, 90].map((d) => <button key={d} role="radio" aria-checked={range === d} className={range === d ? 'on' : ''} onClick={() => { setRange(d); setHover(null); }}>{d} days</button>)}
-          </div>
+          </div>}
           <ChartExport svg={svg} name={`daily-sales-${range}-days`} rows={() => keys.map((k, i) => ({ date: k, sales: vals[i], receipts: counts[i] }))} />
         </div>
       </div>
@@ -94,8 +96,9 @@ export function DailyTrend({ byDay, fmt, onDay, extra }) {
 /**
  * Month by month: several series as lines over the last 6 or 12 months. series: [{ name, cls, values: {YYYY-MM: n} }]
  */
-export function MonthLines({ series, fmt, extra }) {
-  const [months, setMonths] = useState(6);
+export function MonthLines({ series, fmt, extra, months: fixed }) {
+  const [own, setMonths] = useState(6);
+  const months = fixed || own;
   const [hover, setHover] = useState(null);
   const svg = useRef(null);
   const keys = Array.from({ length: months }, (_, i) => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - (months - 1) + i); return localDate(d).slice(0, 7); });
@@ -110,9 +113,9 @@ export function MonthLines({ series, fmt, extra }) {
         <h3>Money in &amp; out, month by month</h3>
         <div className="chart-tools">
           {extra}
-          <div className="seg" role="radiogroup" aria-label="Chart period">
+          {!fixed && <div className="seg" role="radiogroup" aria-label="Chart period">
             {[6, 12].map((m) => <button key={m} role="radio" aria-checked={months === m} className={months === m ? 'on' : ''} onClick={() => { setMonths(m); setHover(null); }}>{m} months</button>)}
-          </div>
+          </div>}
           <ChartExport svg={svg} name={`money-in-out-${months}-months`} rows={() => keys.map((k) => ({ month: k, ...Object.fromEntries(series.map((s) => [s.name, s.values[k] || 0])) }))} />
         </div>
       </div>
@@ -181,7 +184,7 @@ export function ChartExport({ svg, name, rows }) {
   };
   return (
     <div className="chart-export">
-      <button type="button" className="btn sm ghost" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}><Download size={14} />Export</button>
+      <button type="button" className="icon-btn sm" aria-haspopup="menu" aria-expanded={open} title="Export the chart" onClick={() => setOpen((o) => !o)}><Download size={15} /><span className="sr-only">Export</span></button>
       {open && (
         <div className="chart-export-menu" role="menu" onMouseLeave={() => setOpen(false)}>
           <button type="button" role="menuitem" onClick={csv}>Figures (CSV)</button>
