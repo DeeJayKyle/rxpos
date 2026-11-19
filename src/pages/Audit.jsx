@@ -5,6 +5,7 @@ import { auditSentence, auditKind, AUDIT_KINDS } from '../auditText.js';
 import { Download, ShieldCheck } from 'lucide-react';
 import { useStore, dayOf, downloadFile, toCSV, MAIN_BRANCH } from '../store.jsx';
 import { SearchBox, Empty, useProgressive } from '../ui.jsx';
+import { dateLocale } from '../showdate.js';
 
 /** Who did what, when and where. Entries sync from every device and cannot be edited in the app. */
 export default function Audit() {
@@ -52,7 +53,7 @@ export default function Audit() {
           {rows.slice(0, drawn).map((a) => (
             <li key={a.id} className={'audit-row kind-' + auditKind(a)}>
               <span className="audit-sentence">{auditSentence(a)}</span>
-              <small className="muted"><span className="badge">{a.action}</span> {new Date(a.date).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}{db.branches.length > 1 && branch(a.branchId) ? ' · ' + branch(a.branchId) : ''}</small>
+              <small className="muted"><span className="badge">{a.action}</span> {new Date(a.date).toLocaleString(dateLocale(), { dateStyle: 'medium', timeStyle: 'short' })}{db.branches.length > 1 && branch(a.branchId) ? ' · ' + branch(a.branchId) : ''}</small>
             </li>
           ))}
         </ul>

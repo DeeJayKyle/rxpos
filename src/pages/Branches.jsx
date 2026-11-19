@@ -3,6 +3,7 @@ import { Building2, Truck, PackageCheck, Send, MapPin } from 'lucide-react';
 import { useStore, today, dayOf, uid, now, put, move, audit, allocate, batchValue, MAIN_BRANCH } from '../store.jsx';
 import { Modal, Tabs, Empty, SearchBox, Stat } from '../ui.jsx';
 import { toast, ask } from '../feedback.jsx';
+import { dateLocale } from '../showdate.js';
 
 /** Every branch side by side. Branches themselves are added and removed by the RxPOS owner (owner console). */
 export default function Branches() {
@@ -129,7 +130,7 @@ export function Transfers() {
             {list.map((t) => (
               <tr key={t.id}>
                 <td><strong>{t.number}</strong><br /><small className="muted">by {t.sentBy}</small></td>
-                <td>{new Date(t.date).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</td>
+                <td>{new Date(t.date).toLocaleString(dateLocale(), { dateStyle: 'medium', timeStyle: 'short' })}</td>
                 <td>{name(tab === 'incoming' ? t.fromId : t.toId)}</td>
                 <td>{t.items.map((i) => `${i.name} ×${i.qty}`).join(', ')}</td>
                 <td><span className={'badge ' + (t.status === 'In transit' ? 'warn' : t.status === 'Received' ? 'ok' : 'danger')}>{t.status}</span></td>

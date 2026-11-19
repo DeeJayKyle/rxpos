@@ -195,7 +195,11 @@ class _SalesScreenState extends ConsumerState<SalesScreen> {
             child: sales.isEmpty
                 ? EmptyState(rows.isEmpty
                     ? 'No sales yet. Every sale rung up at the POS appears here with its receipt, to reprint, refund or correct.'
-                    : 'No sales match. Try another receipt number, customer, filter or date.')
+                    : 'No sales match. Try another receipt number, customer, filter or date.',
+                    icon: Icons.receipt_long_outlined,
+                    actionLabel: rows.isEmpty ? 'Open the till' : null,
+                    actionIcon: Icons.point_of_sale,
+                    onAction: () => context.go('/pos'))
                 // the owner's request: keys, double-click and right-click on the sales too (list_controls.dart)
                 : ListControls(
                     ids: [for (final s in sales.take(shownN)) s.id],

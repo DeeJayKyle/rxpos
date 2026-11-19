@@ -404,7 +404,7 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
                 InkWell(onTap: () {
                   _setLine(key, {'price': ''});
                   setState(() => _round++);
-                }, child: Text('↺ undo', style: TextStyle(color: th.colorScheme.primary, fontSize: 12))),
+                }, child: Text('↺ undo', style: TextStyle(color: th.colorScheme.tertiary, fontSize: 12))),
               // cost + markup is offered, applied only when tapped
               if (suggested > 0 && suggested != price)
                 InkWell(
@@ -413,7 +413,7 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
                     _setLine(key, {'price': formatQty(suggested)});
                     setState(() => _round++);
                   },
-                  child: Text('Use ${s.money(suggested)} (+${f['markup']}%)', style: TextStyle(color: th.colorScheme.primary, fontSize: 12)),
+                  child: Text('Use ${s.money(suggested)} (+${f['markup']}%)', style: TextStyle(color: th.colorScheme.tertiary, fontSize: 12)),
                 ),
               if (cost > 0 && price > 0)
                 Text(price < cost ? 'below cost' : 'margin ${((price - cost) / cost * 100).round()}%', style: TextStyle(fontSize: 12, color: price < cost ? th.colorScheme.error : null)),

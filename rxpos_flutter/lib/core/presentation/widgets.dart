@@ -190,7 +190,7 @@ class StatCard extends StatelessWidget {
                   !vivid
                       ? Container(padding: const EdgeInsets.all(9), decoration: BoxDecoration(color: tone.withValues(alpha: .14), borderRadius: BorderRadius.circular(12)),
                           child: Icon(icon, size: 20, color: shown ?? t.colorScheme.tertiary))
-                      : Icon(icon, size: 20, color: ink ?? shown ?? t.colorScheme.primary),
+                      : Icon(icon, size: 20, color: ink ?? shown ?? t.colorScheme.tertiary),
               ]),
               const SizedBox(height: 6),
               FittedBox(
@@ -203,13 +203,13 @@ class StatCard extends StatelessWidget {
                 }(),
               ),
               if (spark != null && spark!.any((v) => v != 0))
-                Padding(padding: const EdgeInsets.symmetric(vertical: 2), child: Spark(key: const Key('spark'), data: spark!, color: ink ?? t.colorScheme.primary)),
+                Padding(padding: const EdgeInsets.symmetric(vertical: 2), child: Spark(key: const Key('spark'), data: spark!, color: ink ?? t.colorScheme.tertiary)),
               if (sub != null || onTap != null)
                 Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
                   // the change and "vs yesterday" on one line (UI batch 3, B2); the whole line in the tooltip
                   Expanded(child: Tooltip(message: sub ?? '', child: Text(sub ?? '', key: const Key('stat-sub'), maxLines: 1, overflow: TextOverflow.ellipsis, style: t.textTheme.bodySmall?.copyWith(color: ink?.withValues(alpha: .9))))),
                   // a card that opens a page says so
-                  if (onTap != null) Icon(Icons.arrow_outward, size: 16, color: (ink ?? shown ?? t.colorScheme.primary).withValues(alpha: .8)),
+                  if (onTap != null) Icon(Icons.arrow_outward, size: 16, color: (ink ?? shown ?? t.colorScheme.tertiary).withValues(alpha: .8)),
                 ]),
             ]),
           ),
@@ -315,18 +315,43 @@ class _DateBoxState extends State<DateBox> {
       );
 }
 
+/// An empty page or list: what goes here and, with [actionLabel] and [onAction], the one step that fills it (1.14.0: a
+/// clear picture and words instead of a small grey line in a big blank page).
 class EmptyState extends StatelessWidget {
-  const EmptyState(this.text, {super.key, this.icon = Icons.inbox_outlined});
+  const EmptyState(this.text, {super.key, this.icon = Icons.inbox_outlined, this.actionLabel, this.actionIcon, this.onAction});
   final String text;
   final IconData icon;
+  final String? actionLabel;
+  final IconData? actionIcon;
+  final VoidCallback? onAction;
   @override
   // scrolls when there is little room (a phone with large text) rather than running off the bottom
-  Widget build(BuildContext context) => Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(32),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [Icon(icon, size: 40, color: Theme.of(context).disabledColor), const SizedBox(height: 8), Text(text, textAlign: TextAlign.center)]),
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    final cs = t.colorScheme;
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(32),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 440),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(color: cs.tertiaryContainer, shape: BoxShape.circle),
+              child: Icon(icon, size: 34, color: cs.onTertiaryContainer),
+            ),
+            const SizedBox(height: 14),
+            Text(text, textAlign: TextAlign.center, style: t.textTheme.bodyLarge?.copyWith(color: cs.onSurfaceVariant, height: 1.4)),
+            if (actionLabel != null && onAction != null) ...[
+              const SizedBox(height: 16),
+              FilledButton.tonalIcon(onPressed: onAction, icon: Icon(actionIcon ?? Icons.add), label: Text(actionLabel!)),
+            ],
+          ]),
         ),
-      );
+      ),
+    );
+  }
 }
 
 /// One field of a [RecordForm].

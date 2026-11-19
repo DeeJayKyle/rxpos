@@ -12,6 +12,7 @@ import { THEMES, currentThemeId } from '../themes.js';
 import { PHARMACY_FIELDS, pharmacyDefaults } from '../pharmacy-settings.js';
 import { PasswordInput } from '../password.jsx';
 import AiSystemDoctor from '../components/AiSystemDoctor.jsx';
+import { showDate, showDateTime, dateLocale } from '../showdate.js';
 
 const KEY = 'rxpos-owner-key';
 /** GitHub mark (brand icons are not in lucide) */
@@ -103,7 +104,7 @@ export default function OwnerConsole() {
               <div className="kv"><span>Staff · branches</span><strong>{t.stats.users} · {t.stats.branches || 1}</strong></div>
               <div className="kv"><span>Sales recorded</span><strong>{t.stats.sales.toLocaleString()}</strong></div>
               {t.stats.anomalies > 0 && <div className="kv" title="Sales the cloud found something wrong with (not yet marked checked in the pharmacy)"><span>Sales to check</span><strong className="warn-text"><b>{t.stats.anomalies.toLocaleString()}</b></strong></div>}
-              <div className="kv"><span>Last activity</span><strong>{t.stats.lastActivity ? new Date(t.stats.lastActivity).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : '—'}</strong></div>
+              <div className="kv"><span>Last activity</span><strong>{t.stats.lastActivity ? new Date(t.stats.lastActivity).toLocaleString(dateLocale(), { dateStyle: 'medium', timeStyle: 'short' }) : '—'}</strong></div>
               {t.notes && <p className="muted small">{t.notes}</p>}
               <button className="btn sm primary">Manage <ArrowLeft size={14} style={{ transform: 'rotate(180deg)' }} /></button>
             </div>
@@ -246,7 +247,7 @@ function TenantAdmin({ id, api, url, onBack }) {
               <Stat label="Sales" value={t.stats.sales.toLocaleString()} tone="violet" />
               {t.stats.anomalies > 0 && <Stat label="Sales to check" value={t.stats.anomalies.toLocaleString()} sub="marked checked in the pharmacy's dashboard" tone="amber" />}
               <Stat label="Records" value={t.stats.records.toLocaleString()} />
-              <Stat label="Last activity" value={t.stats.lastActivity ? new Date(t.stats.lastActivity).toLocaleDateString() : '—'} sub={t.stats.lastActivity ? new Date(t.stats.lastActivity).toLocaleTimeString() : ''} />
+              <Stat label="Last activity" value={t.stats.lastActivity ? showDate(t.stats.lastActivity) : '—'} sub={t.stats.lastActivity ? new Date(t.stats.lastActivity).toLocaleTimeString() : ''} />
             </div>
             <form className="card" onSubmit={(e) => { e.preventDefault(); doing(() => api('/tenants/' + t.id, { ...info, settings: pharmacyDefaults(info) }), 'Owner defaults saved. Devices receive them at the next sync.'); }}>
               <h3><Pencil size={17} />Shared pharmacy defaults</h3>
@@ -483,7 +484,7 @@ function DataBrowser({ t, tables, api, onChanged }) {
               <tr key={r.id}>
                 <td><strong>{label(r.rec) || r.id}</strong><br /><small className="muted">{r.id}</small></td>
                 {cols.map((c) => <td key={c} className="clip">{typeof r.rec?.[c] === 'object' ? JSON.stringify(r.rec[c]).slice(0, 40) : String(r.rec?.[c] ?? '')}</td>)}
-                <td><small>{new Date(r.at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</small></td>
+                <td><small>{new Date(r.at).toLocaleString(dateLocale(), { dateStyle: 'short', timeStyle: 'short' })}</small></td>
                 <td className="actions">
                   <button className="btn sm ghost" onClick={() => { const { hash, salt, algo, iter, ...rest } = r.rec || {}; setEdit({ id: r.id, text: JSON.stringify(table === 'users' ? rest : r.rec, null, 2), hidden: table === 'users' ? { hash, salt, algo, iter } : null }); }}><Eye size={14} />Open</button>
                   <button className="btn sm danger" onClick={() => deleteRecord(r)}><Trash2 size={14} /></button>
@@ -740,7 +741,7 @@ function DeviceErrors({ t, api }) {
               <td><strong>{e.message}</strong><br /><small className="muted">{e.kind} · build {e.build || '—'}</small>
                 {open === e.k && <pre className="error-stack">{e.stack || 'No stack'}</pre>}</td>
               <td>{e.page}</td><td>{e.platform}</td><td className="num">{e.count}</td>
-              <td>{new Date(e.last_at).toLocaleString()}<br /><small className="muted">first {new Date(e.first_at).toLocaleDateString()}</small></td>
+              <td>{showDateTime(e.last_at)}<br /><small className="muted">first {showDate(e.first_at)}</small></td>
               <td className="actions"><button className="btn sm ghost" onClick={() => setOpen(open === e.k ? null : e.k)}>{open === e.k ? 'Hide' : 'Details'}</button><button className="btn sm ghost" onClick={() => clear(e.k)}>Fixed</button></td>
             </tr>
           ))}

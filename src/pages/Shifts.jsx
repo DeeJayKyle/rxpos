@@ -5,6 +5,7 @@ import { useStore, uid, now, put, audit, MAIN_BRANCH, today, dayOf } from '../st
 import { closeId, daySnapshot } from '../dayclose.js';
 import { Modal, Stat, Empty, Tabs } from '../ui.jsx';
 import { toast, ask, askText } from '../feedback.jsx';
+import { showDateTime, dateLocale } from '../showdate.js';
 
 const NOTES = [50000, 20000, 10000, 5000, 2000, 1000, 500, 200, 100, 50];
 
@@ -97,7 +98,7 @@ export default function Shifts() {
           <tbody>
             {list.map((s) => (
               <tr key={s.id}>
-                <td>{s.user}</td><td>{new Date(s.openedAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</td>
+                <td>{s.user}</td><td>{new Date(s.openedAt).toLocaleString(dateLocale(), { dateStyle: 'medium', timeStyle: 'short' })}</td>
                 <td>{s.closedAt ? new Date(s.closedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : <span className="badge warn">open</span>}</td>
                 {db.branches.length > 1 && <td>{db.branches.find((b) => b.id === s.branchId)?.name}</td>}
                 <td className="num">{s.summary ? fmt(s.summary.total) : '—'}</td>
@@ -152,7 +153,7 @@ export default function Shifts() {
         <Modal title="Close-of-day report" onClose={() => setReport(null)}>
           <div className="receipt print-area paper-80">
             <div className="center"><strong className="receipt-title">{db.settings.name}</strong><div>SHIFT REPORT (Z)</div><div>{report.user}</div>
-              <div>{new Date(report.openedAt).toLocaleString()} – {new Date(report.closedAt).toLocaleTimeString()}</div></div>
+              <div>{showDateTime(report.openedAt)} – {new Date(report.closedAt).toLocaleTimeString()}</div></div>
             <div className="receipt-rule" />
             <div className="row between"><span>Sales ({report.summary.count})</span><span>{fmt(report.summary.total)}</span></div>
             {Object.entries(report.summary.byMethod).map(([k, v]) => <div key={k} className="row between"><span>  {k}</span><span>{fmt(v)}</span></div>)}

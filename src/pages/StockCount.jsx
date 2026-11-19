@@ -6,6 +6,8 @@ import { ask, toast } from '../feedback.jsx';
 import { CameraButton, CameraScanner } from '../camscan.jsx';
 import { useMedicineOrder, MedicineOrderPicker, groupedRows, useFolded } from '../medgroups.jsx';
 import { ChevronDown } from 'lucide-react';
+import { showDate, showDateTime, dateLocale } from '../showdate.js';
+import { DateInput } from '../fields.jsx';
 
 /*
  * Stock take: count what is physically on the shelves and make RxPOS match it.
@@ -81,7 +83,7 @@ function CountList({ onOpen }) {
           return (
             <button key={c.id} className="card count-card" onClick={() => onOpen(c.id)}>
               <div className="row between"><strong>{c.name}</strong>{c.blind && <span className="badge"><EyeOff size={11} />Blind</span>}</div>
-              <small className="muted">{c.scopeLabel} · started by {c.startedBy} {new Date(c.startedAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</small>
+              <small className="muted">{c.scopeLabel} · started by {c.startedBy} {new Date(c.startedAt).toLocaleString(dateLocale(), { dateStyle: 'medium', timeStyle: 'short' })}</small>
               <div className="progress"><i style={{ width: pct + '%' }} /></div>
               <div className="row between small"><span>{n} of {of} counted</span><span className="row gap"><Play size={13} />Continue</span></div>
             </button>
@@ -97,7 +99,7 @@ function CountList({ onOpen }) {
               <tr key={c.id}>
                 <td><strong>{c.name}</strong><br /><small className="muted">{c.scopeLabel}</small></td>
                 <td>{c.status === 'posted' ? <span className="badge ok">Posted</span> : <span className="badge warn">Cancelled</span>}</td>
-                <td>{c.postedAt ? <>{new Date(c.postedAt).toLocaleDateString()}<br /><small className="muted">{c.postedBy}</small></> : '—'}</td>
+                <td>{c.postedAt ? <>{showDate(c.postedAt)}<br /><small className="muted">{c.postedBy}</small></> : '—'}</td>
                 <td className="num">{c.summary?.counted ?? '—'}</td><td className="num">{c.summary?.matched ?? '—'}</td>
                 <td className="num">{c.summary ? <span className={c.summary.short ? 'text-danger' : ''}>{c.summary.short}</span> : '—'}</td>
                 <td className="num">{c.summary?.over ?? '—'}</td>
@@ -120,7 +122,7 @@ function NewCount({ onClose, onStarted }) {
   const shelves = useMemo(() => [...new Set(stocked.map((p) => (p.shelf || '').trim()).filter(Boolean))].sort(), [stocked]);
   const forms = useMemo(() => [...new Set(stocked.map((p) => p.form).filter(Boolean))].sort(), [stocked]);
   const warn = db.settings.expiryWarnDays || 90;
-  const [f, setF] = useState({ name: `Stock count ${new Date().toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' })}`, scope: 'all', shelf: shelves[0] || '', form: forms[0] || '', size: 20, blind: true });
+  const [f, setF] = useState({ name: `Stock count ${new Date().toLocaleDateString(dateLocale(), { day: 'numeric', month: 'short', year: 'numeric' })}`, scope: 'all', shelf: shelves[0] || '', form: forms[0] || '', size: 20, blind: true });
   const value = (p) => batchesOf(p.id).reduce((a, b) => a + Math.max(0, b.qty) * (b.cost || p.cost || 0), 0);
   const pickList = () => {
     switch (f.scope) {
@@ -281,7 +283,7 @@ function CountSheet({ count, onBack }) {
         <div>
           <button className="link-btn small" onClick={onBack}><ArrowLeft size={13} />All counts</button>
           <h1>{count.name}</h1>
-          <div className="sub">{count.scopeLabel} · {readOnly ? (count.status === 'posted' ? `posted by ${count.postedBy} ${new Date(count.postedAt).toLocaleString()}` : 'cancelled') : `started by ${count.startedBy}`}</div>
+          <div className="sub">{count.scopeLabel} · {readOnly ? (count.status === 'posted' ? `posted by ${count.postedBy} ${showDateTime(count.postedAt)}` : 'cancelled') : `started by ${count.startedBy}`}</div>
         </div>
         <div className="row gap">
           {count.blind && !readOnly && can('stock.adjust') && <button className="btn ghost" onClick={() => setReveal((r) => !r)}>{reveal ? <><EyeOff size={16} />Hide system qty</> : <><Eye size={16} />Show system qty</>}</button>}
@@ -426,7 +428,7 @@ function CountRow({ p, item, blind, readOnly, onSave, focusNext }) {
       {adding && (
         <form className="found-batch" onSubmit={addFound}>
           <input placeholder="Batch no." value={adding.batch} onChange={(e) => setAdding({ ...adding, batch: e.target.value })} aria-label="Batch number" />
-          <input type="date" value={adding.expiry} onChange={(e) => setAdding({ ...adding, expiry: e.target.value })} aria-label="Expiry" />
+          <DateInput monthYear value={adding.expiry} onChange={(v) => setAdding({ ...adding, expiry: v })} aria-label="Expiry" />
           <input type="number" min="0" inputMode="numeric" placeholder="Qty" value={adding.qty} onChange={(e) => setAdding({ ...adding, qty: e.target.value })} aria-label="Quantity found" required />
           <button className="btn sm primary">Add</button>
           <button type="button" className="btn sm ghost" onClick={() => setAdding(null)}>Cancel</button>

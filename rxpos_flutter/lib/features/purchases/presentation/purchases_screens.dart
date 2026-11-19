@@ -118,7 +118,8 @@ class _PurchasesScreenState extends ConsumerState<PurchasesScreen> {
           if (MediaQuery.sizeOf(context).width >= 1100 && list.isNotEmpty) ColourTableHead(columns: _buyCols, trailing: can.contains('purchases.edit') ? 160 : 90),
           Expanded(
             child: list.isEmpty
-                ? EmptyState(all.isEmpty ? 'No deliveries yet. Each delivery you receive in Add Stock is kept here with its invoice, to view or correct.' : 'No deliveries match')
+                ? EmptyState(all.isEmpty ? 'No deliveries yet. Each delivery you receive in Add Stock is kept here with its invoice, to view or correct.' : 'No deliveries match',
+                    icon: Icons.local_shipping_outlined, actionLabel: all.isEmpty ? 'Receive stock' : null, onAction: () => context.go('/add-stock'))
                 : ListView.separated(
                     itemCount: list.length + 1,
                     separatorBuilder: (_, _) => const Divider(height: 1),

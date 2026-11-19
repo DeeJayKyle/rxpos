@@ -118,7 +118,7 @@ await p.evaluate(() => document.querySelector('.nav-quick .nav-title').click());
 check('…Pinned folds', await p.evaluate(() => document.querySelector('.nav-quick').classList.contains('collapsed')));
 await p.screenshot({ path: path.join(out, 'sidebar-pinned-folded.png'), clip: { x: 0, y: 0, width: 260, height: 600 } });
 await p.evaluate(() => [...document.querySelectorAll('.nav-add')].find((x) => /Receive stock/.test(x.title))?.click()); await wait(800);
-check('the + of Medicine Inventory opens Add Stock', await p.evaluate(() => location.hash.includes('add-stock')));
+check('the + of Stock opens Add Stock', await p.evaluate(() => location.hash.includes('add-stock')));
 await p.evaluate(() => { location.hash = '#/'; }); await wait(1200);
 // UI batch 2 (2026-11-18)
 check('figure cards carry a small 7-day trend line', await p.evaluate(() => document.querySelectorAll('.kpis .stat .spark polyline').length >= 3 && [...document.querySelectorAll('.kpis .stat .spark')].every((s) => s.getBoundingClientRect().width <= 100 && s.getBoundingClientRect().height <= 30)), await p.evaluate(() => document.querySelectorAll('.kpis .stat .spark').length));

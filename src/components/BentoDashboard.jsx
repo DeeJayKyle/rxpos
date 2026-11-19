@@ -7,10 +7,11 @@ import { Link, useNavigate } from 'react-router-dom';
 import { ArrowRight, Sparkles, ReceiptText } from 'lucide-react';
 import { localDate, MAIN_BRANCH, today } from '../store.jsx';
 import { featuredAction } from './NavMenus.jsx';
+import { dateLocale } from '../showdate.js';
 
 const PERIODS = [['1', 'Today'], ['7', '7 days'], ['30', '30 days']];
 const keyFor = (offset) => { const d = new Date(); d.setDate(d.getDate() - offset); return localDate(d); };
-const shortDay = (k) => new Date(k + 'T12:00').toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' });
+const shortDay = (k) => new Date(k + 'T12:00').toLocaleDateString(dateLocale(), { weekday: 'short', day: 'numeric' });
 
 /** The sale's status as a pill: paid, owing (on credit or part-paid), refunded */
 export function saleStatus(s) {
@@ -93,7 +94,7 @@ export default function BentoDashboard({ byDay, db, branchId, fmt, fmtShort = fm
                 onClick={() => navigate('/sales', { state: { from: b.k, to: b.k } })}>
                 <i>{b.k === today() && b.v > 0 && <em className="bento-val num" aria-hidden="true">{fmtShort(b.v)}</em>}</i>
                 <span className="bento-tip">{shortDay(b.k)} · {fmt(b.v)}</span>
-                {bars.length <= 7 && <small aria-hidden="true">{new Date(b.k + 'T12:00').toLocaleDateString(undefined, { weekday: 'short' })}</small>}
+                {bars.length <= 7 && <small aria-hidden="true">{new Date(b.k + 'T12:00').toLocaleDateString(dateLocale(), { weekday: 'short' })}</small>}
               </button>
             ))}
           </div>

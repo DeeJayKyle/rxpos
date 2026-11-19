@@ -97,7 +97,7 @@ class _CustomerDisplayState extends ConsumerState<CustomerDisplayScreen> {
               const SizedBox(height: 20),
               Expanded(
                 child: m?['done'] == true
-                    ? Center(child: Text('Thank you!', style: t.textTheme.displayMedium?.copyWith(fontWeight: FontWeight.w800, color: t.colorScheme.primary)))
+                    ? Center(child: Text('Thank you!', style: t.textTheme.displayMedium?.copyWith(fontWeight: FontWeight.w800, color: t.colorScheme.tertiary)))
                     : lines.isEmpty
                         ? Center(child: Text('Welcome. Your items will show here.', style: TextStyle(color: t.hintColor)))
                         : ListView(children: [
@@ -113,7 +113,7 @@ class _CustomerDisplayState extends ConsumerState<CustomerDisplayScreen> {
                   padding: const EdgeInsets.all(20),
                   child: Column(children: [
                     if (v('discount').isNotEmpty) row('Discount', '− ${v('discount')}'),
-                    row('Total', v('total'), style: big?.copyWith(fontWeight: FontWeight.w900, color: t.colorScheme.primary)),
+                    row('Total', v('total'), style: big?.copyWith(fontWeight: FontWeight.w900, color: t.colorScheme.tertiary)),
                     if (v('paid').isNotEmpty) row('Paid', v('paid')),
                     if (v('change').isNotEmpty) row('Change', v('change'), style: t.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
                   ]),

@@ -11,6 +11,7 @@ import { invoicePages, matchProduct } from '../invoiceScan.js';
 import { matchMedicine } from '../pages/Scan.jsx';
 import { expiryLevel } from '../fefo.js';
 import { FefoPill } from './FefoPill.jsx';
+import { DateInput } from '../fields.jsx';
 
 const TITLES = { invoice: 'Scan Invoice with AI', prescription: 'Scan Prescription (Rx)' };
 
@@ -97,7 +98,7 @@ export default function AiVisionScanner({ mode, onClose, onConfirm }) {
                     {mode === 'invoice' ? (
                       <div className="ai-fields">
                         <label><span className="micro">Batch</span><input value={l.batch} onChange={(e) => setLine(l.key, { batch: e.target.value })} /></label>
-                        <label><span className="micro">Expiry</span><input type="date" value={l.expiry} onChange={(e) => setLine(l.key, { expiry: e.target.value })} /></label>
+                        <label><span className="micro">Expiry</span><DateInput monthYear value={l.expiry} onChange={(v) => setLine(l.key, { expiry: v })} /></label>
                         <label><span className="micro">Boxes</span><input type="number" min="0" className="num" value={l.boxes} onChange={(e) => setLine(l.key, { boxes: Number(e.target.value) || 0 })} /></label>
                         <label><span className="micro">Units / box</span><input type="number" min="1" className="num" value={l.unitsPerBox} onChange={(e) => setLine(l.key, { unitsPerBox: Math.max(1, Number(e.target.value) || 1) })} /></label>
                         <label><span className="micro">Unit cost (UGX)</span><input type="number" min="0" className="num" value={l.unitCostUGX} onChange={(e) => setLine(l.key, { unitCostUGX: Number(e.target.value) || 0 })} /></label>

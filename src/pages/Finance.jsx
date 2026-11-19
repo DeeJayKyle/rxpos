@@ -4,6 +4,7 @@ import { closedSet, inClosedDay } from '../dayclose.js';
 import { CrudPage, Modal, RecordForm, Empty } from '../ui.jsx';
 import { useStore, today, dayOf, uid, put, customerBalance, supplierBalance, downloadFile, toCSV } from '../store.jsx';
 import { CASH, ledger, accountBalances, loanBalance } from '../finance.js';
+import { showDate } from '../showdate.js';
 
 const METHODS = ['Cash', 'Mobile Money', 'Bank Transfer', 'Cheque', 'Card'];
 const bankOptions = (db) => db.banks.map((b) => ({ value: b.id, label: b.name }));
@@ -36,7 +37,7 @@ export function Expenses() {
         { key: 'description', label: 'Description', full: true },
       ]}
       columns={[
-        { label: 'Date', key: 'date' },
+        { label: 'Date', key: 'date', render: (r) => showDate(r.date) },
         { label: 'Category', render: (e) => db.expenseCategories.find((c) => c.id === e.categoryId)?.name },
         { label: 'Description', key: 'description' },
         { label: 'Paid to', key: 'payee' },
@@ -98,7 +99,7 @@ export function BankTx() {
         { key: 'note', label: 'Note', full: true },
       ]}
       columns={[
-        { label: 'Date', key: 'date' },
+        { label: 'Date', key: 'date', render: (r) => showDate(r.date) },
         { label: 'Type', render: (t) => <span className={'badge ' + (t.type === 'Deposit' ? 'ok' : t.type === 'Withdrawal' ? 'warn' : '')}>{t.type}</span> },
         { label: 'Account', render: (t) => (t.type === 'Transfer' ? `${name(t.fromId)} → ${name(t.toId)}` : t.type === 'Deposit' ? `Cash → ${name(t.bankId)}` : `${name(t.bankId)} → Cash`) },
         { label: 'Reference', key: 'ref' },
@@ -194,7 +195,7 @@ export function Loans() {
           { key: 'purpose', label: 'Purpose', full: true },
         ]}
         columns={[
-          { label: 'Lender', key: 'lender' }, { label: 'Date', key: 'date' }, { label: 'Due', key: 'dueDate' },
+          { label: 'Lender', key: 'lender' }, { label: 'Date', key: 'date', render: (r) => showDate(r.date) }, { label: 'Due', key: 'dueDate', render: (r) => showDate(r.dueDate) },
           { label: 'Amount', num: true, render: (l) => fmt(l.amount) },
           { label: 'Total due', num: true, render: (l) => fmt(loanBalance(db, l).total) },
           { label: 'Repaid', num: true, render: (l) => fmt(loanBalance(db, l).repaid) },
@@ -233,7 +234,7 @@ export function CashBook() {
           <tbody>
             <tr className="dim"><td colSpan={5}>Opening balance</td><td className="num">{fmt(opening)}</td></tr>
             {rows.map((e, i) => (
-              <tr key={i}><td>{new Date(e.date).toLocaleDateString()}</td><td>{e.desc}</td><td>{e.kind}</td>
+              <tr key={i}><td>{showDate(e.date)}</td><td>{e.desc}</td><td>{e.kind}</td>
                 <td className="num text-ok">{e.in ? fmt(e.in) : ''}</td><td className="num text-danger">{e.out ? fmt(e.out) : ''}</td><td className="num"><strong>{fmt(e.bal)}</strong></td></tr>
             ))}
             <tr><td colSpan={3}><strong>Totals</strong></td><td className="num"><strong>{fmt(rows.reduce((a, e) => a + e.in, 0))}</strong></td><td className="num"><strong>{fmt(rows.reduce((a, e) => a + e.out, 0))}</strong></td><td className="num"><strong>{fmt(rows.length ? rows[rows.length - 1].bal : opening)}</strong></td></tr>

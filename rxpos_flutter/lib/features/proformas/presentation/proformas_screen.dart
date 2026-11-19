@@ -36,7 +36,8 @@ class _ProformasScreenState extends ConsumerState<ProformasScreen> {
       subtitle: 'Create a proforma from the POS with the "Proforma" button. Convert it to a sale when the customer pays.',
       actions: [SearchField(onChanged: (v) => setState(() => _q = v))],
       child: list.isEmpty
-          ? EmptyState(rows.isEmpty ? 'No proformas yet. Build a sale at the POS and press Proforma to give a customer a quotation; sell it later in one tap.' : 'No proformas match')
+          ? EmptyState(rows.isEmpty ? 'No proformas yet. Build a sale at the POS and press Proforma to give a customer a quotation; sell it later in one tap.' : 'No proformas match',
+              icon: Icons.request_quote_outlined, actionLabel: rows.isEmpty ? 'Open the till' : null, actionIcon: Icons.point_of_sale, onAction: () => context.go('/pos'))
           : ListView.separated(
               itemCount: list.length,
               separatorBuilder: (_, _) => const Divider(height: 1),

@@ -1,12 +1,12 @@
 // What's new (UI batch 3, B8): the same list as src/whatsnew.js (tests/unit-whatsnew.mjs checks they match). Shown
 // once on each device after an update, as a small card on the dashboard.
-const whatsNewVersion = '1.13.0';
+const whatsNewVersion = '1.14.0';
 const whatsNewItems = <(String, String)>[
-  ('Undo on the till: removed lines and cleared sales come back with one tap', '/pos'),
-  ('Training mode on the till: practise sales that save nothing', '/pos'),
-  ('A customer display for a second screen facing the client', '/pos'),
-  ('Refunds over a set amount need a manager', '/sales'),
-  ('Busy hours on the dashboard: when your pharmacy sells most', '/'),
+  ('Dates in your chosen format everywhere (This device → Date format), on every computer', '/device'),
+  ('Warnings in real colours in every theme: OK green, low amber, expired and out of stock red', '/inventory'),
+  ('Four dark themes: Midnight Blue, Dark Forest and Graphite Amber join Navy Teal', '/device'),
+  ('A shorter menu: the medicine pages in two groups, Stock and Medicines', '/'),
+  ('Clearer words and pages: nothing cut off on phones, empty pages say what to do next', '/'),
 ];
 
 /// The list's release is newer than the one this device last saw. A device that never saw one shows it only if it

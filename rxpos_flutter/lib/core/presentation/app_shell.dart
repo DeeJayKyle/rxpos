@@ -38,7 +38,7 @@ import '../../features/calls/presentation/call_overlay.dart';
 import '../update/update_pill.dart';
 import '../../theme/rxpos_theme.dart' show WindowClass, windowClass;
 
-/// The frame around every screen: the sidebar with its groups (Sales, People, Medicine inventory, Finance, Insights,
+/// The frame around every screen: the sidebar with its groups (Sales, People, Stock, Medicines, Finance, Insights,
 /// System) on Windows and tablets, a drawer on phones; the pharmacy, who is signed in, the sync status, the Premium UI
 /// switch; the shortcut keys (F2 retail, F3 wholesale, F4 Add Stock, F6 Sales History, F7 Inventory).
 class AppShell extends ConsumerWidget {

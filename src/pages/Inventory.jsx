@@ -15,6 +15,8 @@ import { useLoadMore, useColumns, BulkBar, useWide, DetailsPane, HealthBar } fro
 import { ProductArt } from '../idleart.jsx';
 import { useMedicineOrder, MedicineOrderPicker, groupedRows, useFolded, GroupHeadingRow } from '../medgroups.jsx';
 import { BranchStockList } from '../components/BranchStock.jsx';
+import { dateLocale } from '../showdate.js';
+import { DateInput } from '../fields.jsx';
 
 const expiryClass = (expiry, warn) => {
   if (!expiry) return '';
@@ -534,7 +536,7 @@ export function StockCard() {
           <tbody>
             {lines.slice().reverse().slice(0, 500).map((m) => (
               <tr key={m.id}>
-                <td>{new Date(m.date).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</td><td>{m.type}</td><td>{m.batchId ? batchName[m.batchId] || '—' : p?.batch || '—'}</td>
+                <td>{new Date(m.date).toLocaleString(dateLocale(), { dateStyle: 'medium', timeStyle: 'short' })}</td><td>{m.type}</td><td>{m.batchId ? batchName[m.batchId] || '—' : p?.batch || '—'}</td>
                 <td>{m.ref}{m.note ? ` (${m.note})` : ''}</td><td>{m.user}</td>
                 <td className="num text-ok">{m.qty > 0 ? formatQty(m.qty) : ''}</td><td className="num text-danger">{m.qty < 0 ? formatQty(-m.qty) : ''}</td><td className="num"><strong>{formatQty(m.bal)}</strong></td>
               </tr>
@@ -556,7 +558,7 @@ export function StockCard() {
             {adjust.mode === 'add' && adjust.batchId === 'new' && (
               <div className="form-grid">
                 <label className="field"><span>Batch no.</span><input value={adjust.newBatch} onChange={(e) => setAdjust({ ...adjust, newBatch: e.target.value })} required /></label>
-                <label className="field"><span>Expiry</span><input type="date" value={adjust.newExpiry} onChange={(e) => setAdjust({ ...adjust, newExpiry: e.target.value })} required /></label>
+                <label className="field"><span>Expiry</span><DateInput monthYear value={adjust.newExpiry} onChange={(v) => setAdjust({ ...adjust, newExpiry: v })} required /></label>
               </div>
             )}
             {adjust.mode === 'count'
@@ -616,7 +618,7 @@ function InventoryEditor({ product, onClose }) {
             {rows.map((r, k) => (
               <tr key={r.id}>
                 <td><input value={r.newBatch} disabled={r.legacy} onChange={(e) => setRow(k, { newBatch: e.target.value })} /></td>
-                <td><input type="date" value={r.newExpiry} disabled={r.legacy} onChange={(e) => setRow(k, { newExpiry: e.target.value })} /></td>
+                <td><DateInput monthYear value={r.newExpiry} disabled={r.legacy} onChange={(v) => setRow(k, { newExpiry: v })} /></td>
                 <td className="num">{r.qty}</td>
                 <td><input type="number" min="0" value={r.newQty} onChange={(e) => setRow(k, { newQty: e.target.value })} /></td>
               </tr>

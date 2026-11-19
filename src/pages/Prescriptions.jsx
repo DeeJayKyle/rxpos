@@ -3,6 +3,7 @@ import { CrudPage } from '../ui.jsx';
 import { canRecordRefill } from '../rxrules.js';
 import { useStore, today, audit } from '../store.jsx';
 import { toast, ask } from '../feedback.jsx';
+import { showDate } from '../showdate.js';
 
 const addDays = (date, n) => new Date(new Date(date).getTime() + n * 864e5).toISOString().slice(0, 10);
 
@@ -45,7 +46,7 @@ export default function Prescriptions() {
         { key: 'notes', label: 'Pharmacist notes / counselling', type: 'textarea', full: true },
       ]}
       columns={[
-        { label: 'Date', key: 'date' },
+        { label: 'Date', key: 'date', render: (r) => showDate(r.date) },
         { label: 'Patient', render: (r) => db.customers.find((c) => c.id === r.customerId)?.name || '—' },
         { label: 'Prescriber', key: 'doctor' },
         { label: 'Medications', render: (r) => <span className="clip">{r.medications}</span> },

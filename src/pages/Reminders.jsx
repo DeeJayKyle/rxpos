@@ -5,6 +5,7 @@ import { reminderActive } from '../rxrules.js';
 import { Tabs, Empty } from '../ui.jsx';
 import { toast, ask } from '../feedback.jsx';
 import { cloudConfig, sendSms, whatsappLink } from '../cloud.js';
+import { showDate } from '../showdate.js';
 
 const addDays = (date, n) => new Date(new Date(date).getTime() + n * 864e5).toISOString().slice(0, 10);
 
@@ -52,7 +53,7 @@ export default function Reminders() {
 
   const rows = tab === 'refills' ? refills : debts;
   const message = (r) => fillTemplate(tab === 'refills' ? s.smsRefill : s.smsDebt, {
-    name: r.customer.name.split(' ')[0], pharmacy: s.name, medicine: r.medicine, date: r.due && new Date(r.due).toLocaleDateString(), amount: fmt(r.amount), phone: s.phone,
+    name: r.customer.name.split(' ')[0], pharmacy: s.name, medicine: r.medicine, date: r.due && showDate(r.due), amount: fmt(r.amount), phone: s.phone,
   });
 
   const markSent = (list, channel) => update((d) => {
@@ -106,7 +107,7 @@ export default function Reminders() {
                   <td>{tab === 'refills'
                     ? <>{r.medicine}<br /><small className={r.days < 0 ? 'text-danger' : 'text-warn'}>{r.days < 0 ? `${-r.days} days overdue` : r.days === 0 ? 'due today' : `due in ${r.days} days`}</small></>
                     : <strong className="text-warn">{fmt(r.amount)}</strong>}</td>
-                  <td className="muted small">{r.customer.lastReminderAt ? new Date(r.customer.lastReminderAt).toLocaleDateString() : '—'}</td>
+                  <td className="muted small">{r.customer.lastReminderAt ? showDate(r.customer.lastReminderAt) : '—'}</td>
                   <td className="actions">
                     <a className={'btn sm ghost' + (phone.length < 12 ? ' disabled-link' : '')} href={phone.length >= 12 ? whatsappLink(phone, message(r)) : undefined} target="_blank" rel="noreferrer" onClick={() => phone.length >= 12 && markSent([r], 'WhatsApp')}><MessageCircle size={14} />WhatsApp</a>
                     <button className="btn sm ghost" disabled={!smsReady || sending || phone.length < 12} onClick={() => smsTo([r])}><MessageSquareText size={14} />SMS</button>

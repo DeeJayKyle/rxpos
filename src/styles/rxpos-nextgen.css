@@ -187,7 +187,7 @@ h1, .page-head h1, .pos-title { font-family: var(--font-display); letter-spacing
   .bottom-nav a, .bottom-nav button { position: relative; border-radius: 999px; }
   .bottom-nav a.active:not(.fab)::after { content: ''; position: absolute; bottom: 1px; left: 50%; width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%; background: var(--primary); }
   .bottom-nav .fab { border-radius: 999px; margin: -18px 6px 0; }
-  .page, .pos { padding-bottom: calc(100px + env(safe-area-inset-bottom)); }
+  .page, .pos { padding-bottom: calc(108px + env(safe-area-inset-bottom)); }
   .toasts { bottom: calc(92px + env(safe-area-inset-bottom)); }
 }
 

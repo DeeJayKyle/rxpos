@@ -7,7 +7,7 @@ import { LOGO_SVG } from './logomark.js';
 
 const T = (id, name, base, c, inspired = '', group = '') => ({ id, name, base, c, inspired, group });
 /** The groups of the theme menu, in order */
-export const THEME_GROUPS = ['Blues', 'Greens', 'Purples', 'Warm & Lime', 'Dark & Calm'];
+export const THEME_GROUPS = ['Blues', 'Greens', 'Purples', 'Warm & Lime', 'Dark'];
 
 const hexToRgb = (h) => { const n = parseInt(h.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
 const rgba = (h, a) => `rgba(${hexToRgb(h).join(', ')}, ${a})`;
@@ -60,22 +60,25 @@ export const THEMES = [
   duo('electric-blue', 'Electric Blue', 'Blues', { c1: '#0a4dff', c2: '#dfe8ff', side: '#101a3a', strong: true, inspired: 'Deep blue menu, bright blue pills' }),
   duo('sky-blue', 'Sky Blue', 'Blues', { c1: '#38bdf8', c2: '#e8f5fd', side: '#0c1b2b', strong: true, inspired: 'Deep navy menu, sky-blue pills' }),
   duo('ocean-cyan', 'Ocean Cyan', 'Blues', { c1: '#06b6d4', c2: '#e3f6fa', side: '#0b2530', strong: true, inspired: 'Deep ocean menu, cyan pills' }),
+  duo('steel-blue', 'Steel Blue', 'Blues', { c1: '#4f7cac', c2: '#edf1f6', side: '#161c26', strong: true, inspired: 'Slate menu, steel-blue pills: calm for long shifts' }),
   // Greens
   duo('forest-green', 'Forest Green', 'Greens', { c1: '#1e8c4e', c2: '#dcefe3', side: '#0f2419', strong: true, inspired: 'Deep green menu, green pills' }),
   duo('emerald-mint', 'Emerald Mint', 'Greens', { c1: '#10b981', c2: '#e4f7ef', side: '#0b221a', strong: true, inspired: 'Deep green menu, emerald pills' }),
   duo('mint-teal', 'Mint Teal', 'Greens', { c1: '#0f8a8a', c2: '#cfe6e6', side: '#0f2222', strong: true, inspired: 'Teal on mint, the RxPOS colour' }),
+  duo('sage', 'Sage', 'Greens', { c1: '#2f6b45', c2: '#e3eee1', side: '#18241b', strong: true, inspired: 'Deep sage menu, green pills' }),
   // Purples
   duo('royal-purple', 'Royal Purple', 'Purples', { c1: '#6d4ae8', c2: '#f4f1fd', side: '#1e1433', inspired: 'Deep purple menu, violet pills' }),
   duo('lavender', 'Lavender', 'Purples', { c1: '#7451eb', c2: '#e4dcff', side: '#1f1a33', strong: true, inspired: 'Violet on lavender' }),
   duo('midnight-indigo', 'Midnight Indigo', 'Purples', { c1: '#5b5bf0', c2: '#e6e6fb', side: '#1b1d2e', strong: true, inspired: 'Midnight menu, indigo pills' }),
   // Warm & Lime
   duo('amber-gold', 'Amber Gold', 'Warm & Lime', { c1: '#f5b301', c2: '#fdf6e3', side: '#241c0a', strong: true, inspired: 'Deep brown menu, gold pills with dark words' }),
-  duo('night-lime', 'Charcoal Lime', 'Warm & Lime', { c1: '#c8f169', c2: '#f4f4f0', side: '#1f1f2a', inspired: 'Charcoal menu, lime pills and buttons with dark words' }),
-  duo('charcoal-lime', 'Lime Charcoal', 'Warm & Lime', { c1: '#1f1f2a', c2: '#eef7d6', side: '#c8f169', sideText: '#1f1f2a', strong: true, inspired: 'Lime menu, charcoal pills' }),
-  // Dark & Calm
-  duo('navy-teal', 'RxPOS Navy Teal', 'Dark & Calm', { c1: '#14b8a6', c2: '#0a2233', side: '#0f2a44', base: 'dark', strong: true, inspired: 'Navy and teal: the RxPOS till' }),
-  duo('steel-blue', 'Steel Blue', 'Dark & Calm', { c1: '#4f7cac', c2: '#edf1f6', side: '#161c26', strong: true, inspired: 'Slate menu, steel-blue pills: calm for long shifts' }),
-  duo('sage', 'Sage', 'Dark & Calm', { c1: '#2f6b45', c2: '#e3eee1', side: '#18241b', strong: true, inspired: 'Deep sage menu, green pills' }),
+  duo('night-lime', 'Lime on Charcoal', 'Warm & Lime', { c1: '#c8f169', c2: '#f4f4f0', side: '#1f1f2a', inspired: 'Charcoal menu, lime pills and buttons with dark words' }),
+  duo('charcoal-lime', 'Charcoal on Lime', 'Warm & Lime', { c1: '#1f1f2a', c2: '#eef7d6', side: '#c8f169', sideText: '#1f1f2a', strong: true, inspired: 'Lime menu, charcoal pills' }),
+  // Dark (1.14.0: four dark themes; Steel Blue and Sage, both light, moved to Blues and Greens)
+  duo('navy-teal', 'RxPOS Navy Teal', 'Dark', { c1: '#14b8a6', c2: '#0a2233', side: '#0f2a44', base: 'dark', strong: true, inspired: 'Navy and teal: the RxPOS till' }),
+  duo('midnight-blue', 'Midnight Blue', 'Dark', { c1: '#60a5fa', c2: '#0b1324', side: '#0a1a33', base: 'dark', strong: true, inspired: 'Night-blue page, bright blue pills' }),
+  duo('dark-forest', 'Dark Forest', 'Dark', { c1: '#34d399', c2: '#0b1a14', side: '#0c2a1d', base: 'dark', strong: true, inspired: 'Deep green page, mint pills' }),
+  duo('graphite-amber', 'Graphite Amber', 'Dark', { c1: '#fbbf24', c2: '#16161b', side: '#24242c', base: 'dark', strong: true, inspired: 'Graphite page, amber pills with dark words' }),
 ];
 /** Themes retired → the new theme closest to each, so a saved choice or an owner's list keeps working */
 export const RETIRED = {
@@ -142,21 +145,27 @@ const logo2 = (c) => (c.sidebar.toLowerCase() !== c.primary.toLowerCase() && !li
 /** The RxPOS mark in a theme's colours (the browser tab's icon follows the theme too) */
 export const themedLogo = (c) => LOGO_SVG.replace(/#0f766e|#0d9488|#10b981/g, c.primary).replace('#f59e0b', logo2(c));
 
-/** Two colours only (the owner's choice, 17 Nov 2026): warnings, pills and table colours are shades of the theme's
- *  strong colour, each readable (AA) on the page; their words and icons tell them apart. */
+/** Two colours (the owner's choice, 17 Nov 2026): pills, tables and charts are shades of the theme's strong colour,
+ *  each readable (AA) on the page. Status is the exception since 1.14.0: OK, warning and danger are green, amber and red. */
 function duoVars(c, dark) {
   const toward = dark ? '#ffffff' : '#000000';
   // readable on the page, on cards and on the soft tinted pills they sit in (status pills, badges)
   const on = [c.surface, c.surface2, c.bg, dark ? mix(c.surface, c.primary, 0.26) : mix(c.primary, '#ffffff', 0.74)];
   const shade = (t) => readable(dark ? mix(c.primary, '#ffffff', t) : mix(c.primary, '#000000', t), on, toward);
   const soft = (t) => (dark ? rgba(c.primary, t) : mix(c.primary, '#ffffff', 1 - t));
-  const ok = shade(0.05), warn = shade(dark ? 0.3 : 0.4), danger = shade(dark ? 0.6 : 0.7);
+  // 1.14.0 (the owner's review, 19 Nov 2026): status keeps its meaning in every theme: OK green, warnings amber,
+  // danger red (expired, out of stock, errors), each made readable on the page, the cards and its own soft pill
+  const status = (light, night, a) => {
+    const soft = dark ? rgba(night, a) : mix(light, '#ffffff', 1 - a);
+    return [readable(dark ? night : light, dark ? on : [...on, soft], toward), soft];
+  };
+  const [ok, okSoft] = status('#047857', '#34d399', 0.14), [warn, warnSoft] = status('#b45309', '#fbbf24', 0.18), [danger, dangerSoft] = status('#be123c', '#f87171', 0.16);
   // eight table colours, all from the theme: the strong colour, the menu colour and shades between
   // (deep enough for the white numbers on Add Stock's line badges)
   const hues = [c.primary, c.sidebar, mix(c.primary, '#000000', 0.3), mix(c.sidebar, c.primary, 0.5), mix(c.primary, '#000000', 0.15), mix(c.sidebar, '#000000', 0.2), mix(c.primary, '#000000', 0.45), mix(c.primary, c.sidebar, 0.3)]
     .map((h) => readable(h, ['#ffffff'], '#000000'));
   return {
-    '--ok': ok, '--ok-soft': soft(0.14), '--warn': warn, '--warn-soft': soft(0.2), '--danger': danger, '--danger-soft': soft(0.26),
+    '--ok': ok, '--ok-soft': okSoft, '--warn': warn, '--warn-soft': warnSoft, '--danger': danger, '--danger-soft': dangerSoft,
     '--violet': shade(0.2), '--violet-soft': soft(0.16), '--info': shade(0.12), '--info-soft': soft(0.14), '--blue': shade(0.1), '--blue-soft': soft(0.14),
     // the one exception to two colours (2026-11-18): a real red, only for what blocks a sale (expired stock)
     '--block': readable(dark ? '#f87171' : '#c62828', on, toward), '--block-soft': dark ? 'rgba(248, 113, 113, 0.16)' : '#fdecec',

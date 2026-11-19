@@ -4,6 +4,7 @@ import { useStore } from '../store.jsx';
 import { Modal, ReceiptPdfButton, Empty } from '../ui.jsx';
 import { Receipt } from './Sales.jsx';
 import { ask } from '../feedback.jsx';
+import { showDate } from '../showdate.js';
 
 export default function Proformas() {
   const { db, remove, fmt } = useStore();
@@ -27,7 +28,7 @@ export default function Proformas() {
           <tbody>
             {rows.map((p) => (
               <tr key={p.id}>
-                <td>{p.number}</td><td>{new Date(p.date).toLocaleDateString()}</td><td>{p.customerName}</td><td>{p.items.length}</td>
+                <td>{p.number}</td><td>{showDate(p.date)}</td><td>{p.customerName}</td><td>{p.items.length}</td>
                 <td><span className={'badge ' + (p.status === 'Converted' ? 'ok' : 'warn')}>{p.status}{p.saleNumber ? ' → ' + p.saleNumber : ''}</span></td>
                 <td className="num">{fmt(p.total)}</td>
                 <td className="actions">

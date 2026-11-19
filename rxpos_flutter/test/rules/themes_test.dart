@@ -1,4 +1,4 @@
-// Colour themes (src/themes.js): the 15 two-colour palettes in five sets, readable everywhere (WCAG AA), the owner's choice, light / dark.
+// Colour themes (src/themes.js): the 18 two-colour palettes in five sets (four dark since 1.14.0), readable everywhere (WCAG AA), the owner's choice, light / dark.
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -9,11 +9,12 @@ import 'package:rxpos/core/theme/themes.dart';
 int argb(Color c) => c.toARGB32();
 
 void main() {
-  test('the 15 two-colour themes in five sets of three, every one readable with every accent', () {
-    expect(palettes, hasLength(15));
-    expect(palettes.where((p) => p.dark), hasLength(1));
+  test('the 18 two-colour themes in five sets of three or four, every one readable with every accent', () {
+    expect(palettes, hasLength(18));
+    expect(palettes.where((p) => p.dark), hasLength(4));
+    expect(palettes.where((p) => p.group == 'Dark').every((p) => p.dark), isTrue);
     expect(paletteGroups, hasLength(5));
-    expect(paletteGroups.every((g) => palettes.where((p) => p.group == g).length == 3), isTrue);
+    expect(paletteGroups.every((g) => [3, 4].contains(palettes.where((p) => p.group == g).length)), isTrue);
     expect(palettes.every((p) => paletteGroups.contains(p.group) && p.duo != null), isTrue);
     // a retired theme opens as the kept one closest to it (the same map as src/themes.js RETIRED)
     expect((paletteById('tokyo-night').id, paletteById('mint').id, paletteById('light').id, paletteById('daylight-clinical').id, paletteById('oled').id),
@@ -50,10 +51,10 @@ void main() {
     final some = allowedPalettes({'themes': ['light', 'dracula', 'nord']});
     expect(some.map((p) => p.id), ['mint-teal', 'navy-teal']);
     expect(paletteFor(true, some, 'nord'), 'navy-teal');
-    expect(allowedPalettes(null), hasLength(15));
+    expect(allowedPalettes(null), hasLength(18));
   });
 
-  test('only the 15 themes (the owner\'s choice): no accent presets, no design systems; old saved looks fall back to them', () {
+  test('only the 18 themes (the owner\'s choice): no accent presets, no design systems; old saved looks fall back to them', () {
     expect(accents, isEmpty);
     expect(designSystems, isEmpty);
     expect(designPalettes, isEmpty);

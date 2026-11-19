@@ -31,7 +31,7 @@ class ClassicGate extends ConsumerWidget {
             child: Padding(
               padding: const EdgeInsets.all(24),
               child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                Icon(Icons.cloud_upload_outlined, size: 48, color: th.colorScheme.primary),
+                Icon(Icons.cloud_upload_outlined, size: 48, color: th.colorScheme.tertiary),
                 const SizedBox(height: 12),
                 Text('Send your earlier work first', style: th.textTheme.headlineSmall, textAlign: TextAlign.center),
                 const SizedBox(height: 8),

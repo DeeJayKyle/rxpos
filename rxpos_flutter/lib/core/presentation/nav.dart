@@ -18,4 +18,5 @@ class Screen {
       (permission == null || permission!.split('|').any(can.contains)) && (feature == null || features[feature] != false);
 }
 
-const navGroups = ['Sales', 'People', 'Medicine inventory', 'Finance', 'Insights', 'System'];
+// 1.14.0: the medicine pages in two short groups (as the web app), so the menu is easier to scan and its headings fit
+const navGroups = ['Sales', 'People', 'Stock', 'Medicines', 'Finance', 'Insights', 'System'];

@@ -189,7 +189,7 @@
 
 /* B2: tighter figure cards: the change and "vs yesterday" on one line */
 .stats.kpis .stat { min-height: 104px; }
-.stat > .stat-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+.stat > .stat-sub { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; } /* 1.14.0: two lines, not cut off */
 
 @media (prefers-reduced-motion: reduce) { .bento-tip { transition: none; } }
 

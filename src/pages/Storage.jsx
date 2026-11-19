@@ -4,6 +4,7 @@ import { useStore, uid, put, del, audit, now, today, dayOf } from '../store.jsx'
 import { Modal, Empty, Stat } from '../ui.jsx';
 import { toast, ask } from '../feedback.jsx';
 import { useWeather, describe, storageLimits, storageAdvice } from '../weather.js';
+import { showDateTime, dateLocale } from '../showdate.js';
 
 const PLACES = [['Room', Warehouse], ['Fridge', Snowflake], ['Store', Warehouse], ['Outside', SunIcon]];
 
@@ -55,7 +56,7 @@ function Sparkline({ points, min, max, lo, hi }) {
     <svg className="spark" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label="Temperature trend">
       {lo != null && hi != null && <rect x="0" width={W} y={y(hi)} height={Math.max(y(lo) - y(hi), 0)} className="spark-band" />}
       <path d={path} className="spark-line" />
-      {points.map((p, i) => <circle key={i} cx={x(i)} cy={y(p.temp)} r="3.5" className={p.bad ? 'spark-bad' : 'spark-dot'}><title>{`${new Date(p.at).toLocaleString()} · ${p.temp}°C`}</title></circle>)}
+      {points.map((p, i) => <circle key={i} cx={x(i)} cy={y(p.temp)} r="3.5" className={p.bad ? 'spark-bad' : 'spark-dot'}><title>{`${showDateTime(p.at)} · ${p.temp}°C`}</title></circle>)}
     </svg>
   );
 }
@@ -90,7 +91,7 @@ export default function Storage() {
       <div className="grid2">
         <WeatherCard />
         <div className="stats tight">
-          {PLACES.map(([p, Icon]) => { const r = last(p); return <Stat key={p} label={`${p} · last reading`} value={r ? `${r.temp}°C` : '—'} sub={r ? `${new Date(r.at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}${r.humidity != null ? ` · ${r.humidity}% RH` : ''}` : 'no readings yet'} tone={r && !inRange(r) ? 'red' : 'teal'} icon={Icon} />; })}
+          {PLACES.map(([p, Icon]) => { const r = last(p); return <Stat key={p} label={`${p} · last reading`} value={r ? `${r.temp}°C` : '—'} sub={r ? `${new Date(r.at).toLocaleString(dateLocale(), { dateStyle: 'short', timeStyle: 'short' })}${r.humidity != null ? ` · ${r.humidity}% RH` : ''}` : 'no readings yet'} tone={r && !inRange(r) ? 'red' : 'teal'} icon={Icon} />; })}
           <Stat label="Readings today" value={todays.length} sub={bad ? `${bad} out of range in total` : 'all within range'} tone={bad ? 'amber' : 'violet'} icon={Thermometer} />
         </div>
       </div>
@@ -107,7 +108,7 @@ export default function Storage() {
           <tbody>
             {[...logs].reverse().slice(0, 200).map((r) => (
               <tr key={r.id} className={inRange(r) ? '' : 'row-bad'}>
-                <td>{new Date(r.at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</td><td>{r.place}</td>
+                <td>{new Date(r.at).toLocaleString(dateLocale(), { dateStyle: 'medium', timeStyle: 'short' })}</td><td>{r.place}</td>
                 <td className="num">{r.temp}°C</td><td className="num">{r.humidity != null ? r.humidity + '%' : '—'}</td><td>{r.by}</td><td>{r.note}</td>
                 <td className="actions"><button className="icon-btn" title="Delete" onClick={async () => (await ask({ title: 'Delete this reading?', danger: true, confirmText: 'Delete' })) && update((d) => del(d, 'tempLogs', r.id))}><Trash2 size={15} /></button></td>
               </tr>

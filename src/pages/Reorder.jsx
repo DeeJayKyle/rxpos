@@ -9,6 +9,7 @@ import { computeReorderLevels, applyReorderLevels, reorderSettings } from '../re
 import { validQty, roundToPack, supplierRule, planOrders, nextStatus } from '../poPlan.js';
 import { mainPack } from '../packs.js';
 import { unitsUsed } from '../kits.js';
+import { showDate, showDateTime } from '../showdate.js';
 
 /** '3 boxes of 10' */
 const packCount = (q, pk) => { const n = Math.ceil(q / pk.size), w = pk.name.toLowerCase(); return `${n} ${n === 1 ? w : /(s|x|ch|sh)$/.test(w) ? w + 'es' : w + 's'} of ${pk.size}`; };
@@ -234,7 +235,7 @@ export default function Reorder() {
               <thead><tr><th>Medicine</th><th>Last sold</th><th className="num">In stock</th><th>Next expiry</th><th className="num">Value (cost)</th></tr></thead>
               <tbody>
                 {dead.map((r) => (
-                  <tr key={r.p.id}><td><strong>{r.p.name}</strong></td><td>{r.last ? `${new Date(r.last).toLocaleDateString()} (${r.idle} days)` : 'Never'}</td><td className="num">{r.p.stock}</td><td>{r.p.expiry || '—'}</td><td className="num">{fmt(r.value)}</td></tr>
+                  <tr key={r.p.id}><td><strong>{r.p.name}</strong></td><td>{r.last ? `${showDate(r.last)} (${r.idle} days)` : 'Never'}</td><td className="num">{r.p.stock}</td><td>{r.p.expiry || '—'}</td><td className="num">{fmt(r.value)}</td></tr>
                 ))}
                 {!dead.length && <Empty colSpan={5}>No dead stock. Everything is moving.</Empty>}
               </tbody>
@@ -250,7 +251,7 @@ export default function Reorder() {
             <tbody>
               {orders.map((po) => (
                 <tr key={po.id}>
-                  <td><strong>{po.number}</strong></td><td>{new Date(po.date).toLocaleDateString()}</td><td>{po.supplierName}</td><td>{po.items.length}</td>
+                  <td><strong>{po.number}</strong></td><td>{showDate(po.date)}</td><td>{po.supplierName}</td><td>{po.items.length}</td>
                   <td><StatusPill status={po.status} /></td>
                   <td className="num">{fmt(po.items.reduce((a, i) => a + i.qty * (i.cost || 0), 0))}</td>
                   <td className="actions">
@@ -281,14 +282,14 @@ export default function Reorder() {
           <Modal title={`Purchase order ${viewPo.number}`} onClose={() => setViewPo(null)} wide>
             <div className="print-area po-doc">
               <h2>{s.name}</h2>
-              <p>Purchase order <strong>{viewPo.number}</strong> · {new Date(viewPo.date).toLocaleDateString()}<br />To: {viewPo.supplierName}</p>
+              <p>Purchase order <strong>{viewPo.number}</strong> · {showDate(viewPo.date)}<br />To: {viewPo.supplierName}</p>
               <table>
                 <thead><tr><th>#</th><th>Medicine</th><th className="num">Qty</th><th className="num">Last cost</th><th className="num">Total</th></tr></thead>
                 <tbody>{viewPo.items.map((i, n) => <tr key={n}><td>{n + 1}</td><td>{i.name}</td><td className="num">{i.qty}</td><td className="num">{fmt(i.cost)}</td><td className="num">{fmt(i.qty * i.cost)}</td></tr>)}</tbody>
               </table>
               <p className="num"><strong>Estimated total {fmt(viewPo.items.reduce((a, i) => a + i.qty * i.cost, 0))}</strong></p>
             </div>
-            <p className="muted small no-print">Status: <StatusPill status={viewPo.status} />{viewPo.sentAt ? ` · marked sent ${new Date(viewPo.sentAt).toLocaleString()}${viewPo.sentBy ? ' by ' + viewPo.sentBy : ''}` : ''}. Printing or opening WhatsApp does not change the status.</p>
+            <p className="muted small no-print">Status: <StatusPill status={viewPo.status} />{viewPo.sentAt ? ` · marked sent ${showDateTime(viewPo.sentAt)}${viewPo.sentBy ? ' by ' + viewPo.sentBy : ''}` : ''}. Printing or opening WhatsApp does not change the status.</p>
             <div className="form-actions no-print">
               {viewPo.status !== 'Received' && <button className="btn danger" onClick={async () => (await ask({ title: 'Delete this purchase order?', danger: true, confirmText: 'Delete' })) && (update((d) => del(d, 'purchaseOrders', viewPo.id)), setViewPo(null))}>Delete</button>}
               <a className={'btn ghost' + (phone.length < 12 ? ' disabled-link' : '')} href={phone.length >= 12 ? whatsappLink(phone, poText(viewPo)) : undefined} target="_blank" rel="noreferrer" title={phone.length < 12 ? 'Add the supplier’s phone number first' : ''}><MessageCircle size={16} />WhatsApp to supplier</a>

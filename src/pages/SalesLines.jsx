@@ -7,6 +7,7 @@ import { Banknote, TrendingUp, Package, AlertTriangle, Download, Printer } from 
 import { useStore, dayOf, downloadFile, toCSV, MAIN_BRANCH } from '../store.jsx';
 import { formatQty } from '../money.js';
 import { Stat, PdfButton, PayChip, usePages, Pager, useSort, SortTh } from '../ui.jsx';
+import { dateLocale } from '../showdate.js';
 
 const ALL = '';
 
@@ -48,7 +49,7 @@ export default function SalesLines({ from, to, branch, initial = {}, money = tru
   const losses = rows.filter((l) => l.profit < 0 && l.cost > 0).length;
   const receipts = new Set(rows.map((l) => l.saleId)).size;
   const pct = (x, of) => (of ? Math.round((x / of) * 100) + '%' : '—');
-  const when = (d) => new Date(d).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+  const when = (d) => new Date(d).toLocaleString(dateLocale(), { dateStyle: 'medium', timeStyle: 'short' });
   const title = `Sales lines from ${from} to ${to}`;
   const filtersText = [f.cashier && `dispenser ${f.cashier}`, f.type && f.type, f.payment && `paid by ${f.payment}`, f.customer && `customer ${f.customer}`, med && `medicine "${f.medicine}"`].filter(Boolean).join(' · ');
   const csv = () => downloadFile(`sales-lines-${from}-${to}.csv`, toCSV(s.rows.map((l) => ({ date: when(l.date), customer: l.customer, dispenser: l.cashier, receipt: l.number, trade_name: l.name, generic_name: l.generic, qty: l.qty, payment: l.payment, amount: Math.round(l.amount), ...(money ? { profit: Math.round(l.profit), margin: pct(l.profit, l.amount) } : {}) }))), 'text/csv');

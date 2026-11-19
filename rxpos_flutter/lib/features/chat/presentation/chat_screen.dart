@@ -346,7 +346,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   Row(mainAxisSize: MainAxisSize.min, children: [
                     Flexible(
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        if (!mine && peer == null) Text('${m['fromName']}', style: TextStyle(fontWeight: FontWeight.w700, color: scheme.primary, fontSize: 12)),
+                        if (!mine && peer == null) Text('${m['fromName']}', style: TextStyle(fontWeight: FontWeight.w700, color: scheme.tertiary, fontSize: 12)),
                         if (m['forwarded'] == true && !deleted)
                           const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.forward, size: 12), SizedBox(width: 4), Text('Forwarded', style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic))]),
                         if (m['replyTo'] is Map && !deleted)
@@ -441,7 +441,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
           subtitle: _typingNow.isEmpty
               ? Text(subtitle)
-              : Text('${_typingNow.join(', ')} ${_typingNow.length == 1 ? 'is' : 'are'} typing…', key: const Key('typing-now'), style: TextStyle(fontStyle: FontStyle.italic, color: Theme.of(context).colorScheme.primary)),
+              : Text('${_typingNow.join(', ')} ${_typingNow.length == 1 ? 'is' : 'are'} typing…', key: const Key('typing-now'), style: TextStyle(fontStyle: FontStyle.italic, color: Theme.of(context).colorScheme.tertiary)),
           trailing: Row(mainAxisSize: MainAxisSize.min, children: [
             if (client == null)
               IconButton(tooltip: 'Search this chat', isSelected: _find != null, onPressed: () => setState(() => _find = _find == null ? '' : null), icon: const Icon(Icons.search)),

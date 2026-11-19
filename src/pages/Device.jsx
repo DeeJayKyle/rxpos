@@ -23,6 +23,7 @@ import AiSystemDoctor from '../components/AiSystemDoctor.jsx';
 import { SettingsSearch, SettingsGroup, ToggleRow, DangerZone, useFindSetting } from '../components/SettingsKit.jsx';
 import { MousePointerClick, BadgeCheck, RotateCcw, Eraser, KeyRound, LockKeyhole, ShieldCheck, LogOut } from 'lucide-react';
 import { BAR_CHOICES } from '../landing.js';
+import { showDateTime } from '../showdate.js';
 
 const account = (action) => window.dispatchEvent(new CustomEvent('rxpos:account', { detail: action }));
 
@@ -261,7 +262,7 @@ function SyncStorage() {
       <p className="small">{app ? 'This app keeps the pharmacy on this device and works without internet; changes go to the cloud when it is reachable.'
         : 'The web version is online only: it keeps nothing on this computer. For offline work, use the Windows or Android app.'}</p>
       <ul className="sync-facts">
-        <li><b>{pending}</b> change{pending === 1 ? '' : 's'} waiting for the cloud{syncStatus.lastSync ? ` · last synced ${new Date(syncStatus.lastSync).toLocaleString()}` : ''}</li>
+        <li><b>{pending}</b> change{pending === 1 ? '' : 's'} waiting for the cloud{syncStatus.lastSync ? ` · last synced ${showDateTime(syncStatus.lastSync)}` : ''}</li>
         {est?.usage != null && <li>Using {mb(est.usage)}{est.quota ? ` of ${mb(est.quota)} available` : ''}</li>}
       </ul>
       {storageIssue && <div className="error">{storageIssue}</div>}
@@ -275,7 +276,7 @@ function SyncStorage() {
         <div className="notice warn-notice">
           <strong>{rejected.length} change{rejected.length === 1 ? ' was' : 's were'} not applied by the cloud</strong>
           <p className="small">They are kept here so nothing disappears silently. Usually the person who made them didn't have permission (ask an administrator to make the change), the record was too large, or the cloud already had a newer copy (then the cloud's copy is now on this device, and the owner can see the version that was not applied under sale checks).</p>
-          <ul className="small">{rejected.slice(-8).map((r, i) => <li key={i}>{r.t} · {r.id} · {new Date(r.at || Date.now()).toLocaleString()} — {r.reason}</li>)}</ul>
+          <ul className="small">{rejected.slice(-8).map((r, i) => <li key={i}>{r.t} · {r.id} · {showDateTime(r.at || Date.now())} — {r.reason}</li>)}</ul>
           <button className="btn sm ghost" onClick={() => run(async () => { if (await ask({ title: 'Clear the refused changes?', message: 'Only clear them once someone has made them again with the right permission. They are not sent anywhere.', confirmText: 'Clear' })) { await storage().clearRejected(); setRejected([]); } })}>Reviewed: clear the list</button>
         </div>
       )}

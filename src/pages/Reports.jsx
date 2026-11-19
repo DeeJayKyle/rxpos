@@ -9,6 +9,7 @@ import { useStore, today, dayOf, localDate, downloadFile, toCSV, daysUntil, stoc
 import { Stat, Tabs, BarChart, PdfButton } from '../ui.jsx';
 import { useOlderHistory, olderNote } from '../history.js';
 import { reportSummary } from '../reportSummary.js';
+import { showDate } from '../showdate.js';
 
 const sumBy = (arr, key, val) => {
   const m = {};
@@ -95,7 +96,7 @@ export default function Reports() {
   // what the figures cover, said in words on the page and on the PDF (the report itself is unchanged)
   const multi = db.branches.length > 1;
   const branchWords = !multi ? '' : branch === 'all' ? 'All branches' : db.branches.find((b) => b.id === branch)?.name || 'Main branch';
-  const scopeWords = [branchWords, tab === 'stock' ? `As at ${new Date().toLocaleDateString()} (this device's branch stock)` : `${from} to ${to}`].filter(Boolean).join(' · ');
+  const scopeWords = [branchWords, tab === 'stock' ? `As at ${showDate(new Date())} (this device's branch stock)` : `${from} to ${to}`].filter(Boolean).join(' · ');
   // expenses are kept for the whole pharmacy (no branch): a branch's report counts them under the main branch only
   const expenseNote = multi && branch !== 'all' && ['expenses', 'income'].includes(tab)
     ? (branch === MAIN_BRANCH ? 'Expenses are recorded for the whole pharmacy, not per branch; all of them are counted under the main branch.' : 'Expenses are recorded for the whole pharmacy, not per branch, so none are counted for this branch. Choose All branches or the main branch to see them.')

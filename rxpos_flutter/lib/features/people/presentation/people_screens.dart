@@ -96,7 +96,10 @@ class _PeopleScreenState extends ConsumerState<PeopleScreen> {
               ? 'No one matches “${_q.trim()}”. Try fewer letters or the phone number.'
               : widget.suppliers
                   ? 'No suppliers yet. Add the companies you buy from: deliveries, prices and what you owe them are kept together.'
-                  : 'No clients yet. Add a client to keep their phone, allergies and what they owe; the till finds them by name or phone.')
+                  : 'No clients yet. Add a client to keep their phone, allergies and what they owe; the till finds them by name or phone.',
+              icon: widget.suppliers ? Icons.local_shipping_outlined : Icons.people_outline,
+              actionLabel: q.isNotEmpty ? null : (widget.suppliers ? 'Add supplier' : 'Add client'),
+              onAction: () => _edit(null))
           : ListControls(
               ids: [for (final r in list) '${r['id']}'],
               search: _searchFocus,

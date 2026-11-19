@@ -93,7 +93,7 @@ const navChoice = async (label) => {
 await navChoice('Top bar');
 await P.waitForSelector('.top-nav .top-pill', { timeout: 15000 }).catch(() => {});
 check('wide screen, top bar chosen: pill navbar shown, sidebar hidden', await P.evaluate(() => !!document.querySelector('.top-nav') && getComputedStyle(document.querySelector('.top-nav')).display === 'flex' && getComputedStyle(document.querySelector('.sidebar')).display === 'none'));
-await P.evaluate(() => [...document.querySelectorAll('.top-group .top-pill')].find((x) => /Medicine Inventory/.test(x.textContent))?.click()); await wait(300);
+await P.evaluate(() => [...document.querySelectorAll('.top-group .top-pill')].find((x) => /Stock/.test(x.textContent))?.click()); await wait(300);
 check('a group pill opens its pages as a dropdown', await P.evaluate(() => document.querySelectorAll('.top-panel .mega-item').length > 3));
 await P.screenshot({ path: path.join(out, 'desktop-gold-night-topnav.png') });
 await P.keyboard.press('Escape');
