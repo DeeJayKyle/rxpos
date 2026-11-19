@@ -45,7 +45,11 @@ Future<List<Product>> catalog(Ref ref) => loadCatalog();
 /// The pharmacy as the till and Add Stock see it.
 class PharmacyData {
   PharmacyData({required this.settings, required this.products, required this.stock, required this.customers,
-      required this.suppliers, required this.drafts, required this.features, this.branch = mainBranch, this.kits = const []});
+      required this.suppliers, required this.drafts, required this.features, this.branch = mainBranch, this.kits = const [],
+      Map<String, Product>? byId, Map<String, Product>? byBarcode})
+      // ignore: prefer_initializing_formals (a named parameter cannot be private)
+      : _byId = byId, _byBarcode = byBarcode;
+  final Map<String, Product>? _byId, _byBarcode;
 
   final PharmacySettings settings;
   final List<Product> products;
@@ -57,7 +61,7 @@ class PharmacyData {
   /// the branch this device works as
   final String branch;
 
-  late final Map<String, Product> byId = {for (final p in products) p.id: p};
+  late final Map<String, Product> byId = _byId ?? {for (final p in products) p.id: p};
   /// 1.10 kits (core/rules/kits.dart): their stored records, kept out of [products] (they have no stock of their own)
   final List<Map<String, Object?>> kits;
   late final _kitMeds = {
@@ -69,7 +73,7 @@ class PharmacyData {
   KitView kitNow(Map<String, Object?> rec, {Map<String, String> swaps = const {}}) => kitView(rec, _kitMeds, (id) => sellable(stock.batchesOf(id)), swaps: swaps);
   /// The kits on the till (switched on), as they are now
   late final List<KitView> tillKits = [for (final k in kits) if (kitActive(k)) kitNow(k)];
-  late final Map<String, Product> byBarcode = {for (final p in products) if (p.barcode.isNotEmpty) p.barcode: p};
+  late final Map<String, Product> byBarcode = _byBarcode ?? {for (final p in products) if (p.barcode.isNotEmpty) p.barcode: p};
   /// step 21: the medicine whose barcode is this product number (a GTIN-14 from a pack's 2D code, or its EAN-13)
   Product? byGtin(String gtin) => products.where((p) => sameGtin(p.barcode, gtin)).firstOrNull;
 
@@ -79,10 +83,19 @@ class PharmacyData {
   List<PaymentMethod> get methods => settings.methods.where((m) => m.type != 'momo' || features['momo'] != false).toList();
 }
 
-@riverpod
-Future<PharmacyData> pharmacy(Ref ref) async {
-  final settings = await ref.watch(settingsProvider.future);
-  final branch = await ref.watch(deviceBranchProvider.future);
+/// The medicine list with its lookups (1.14.1, speed): the pharmacy's own medicines merged with the built-in catalogue,
+/// sorted by name. Worked out only when medicines, the hidden catalogue entries or the licence change, never because of
+/// a sale (a sale changes stock, not medicines), so the till does not decode, merge and sort ~12,700 medicines each time.
+class MedicineList {
+  MedicineList({required this.products, required this.kits, required this.features});
+  final List<Product> products;
+  final List<Map<String, Object?>> kits;
+  final Map<String, bool> features;
+  late final Map<String, Product> byId = {for (final p in products) p.id: p};
+  late final Map<String, Product> byBarcode = {for (final p in products) if (p.barcode.isNotEmpty) p.barcode: p};
+}
+
+final medicineListProvider = FutureProvider<MedicineList>((ref) async {
   // kits (1.10.0) are recipes sold by the React app, not stock: kept out of this app's medicine lists (rules/kits.dart)
   final rows = await ref.watch(tableProvider('products').future);
   final own = rows.where((r) => !isKitRecord(r)).map(Product.fromRecord).toList();
@@ -94,21 +107,38 @@ Future<PharmacyData> pharmacy(Ref ref) async {
   // sorted by name, lower case worked out once per medicine (not twice per comparison: ~350,000 for 12,700 medicines)
   final merged = withCatalog(own, cat, hidden: hidden, on: features['catalog'] != false);
   final keyed = [for (final p in merged) (p.name.toLowerCase(), p)]..sort((a, b) => a.$1.compareTo(b.$1));
-  final products = [for (final k in keyed) k.$2];
+  return MedicineList(products: [for (final k in keyed) k.$2], kits: kits, features: features);
+});
+
+/// The batches by medicine, worked out when batches change (receiving stock), not on every sale (1.14.1, speed)
+final batchesByProductProvider = FutureProvider<Map<String, List<Batch>>>(
+    (ref) async => StockView.groupBatches((await ref.watch(tableProvider('batches').future)).map(Batch.fromRecord)));
+
+/// Clients (walk-in first, then A–Z) and suppliers (A–Z), worked out when they change, not on every sale (1.14.1)
+final customerListProvider = FutureProvider<List<Customer>>((ref) async => (await ref.watch(tableProvider('customers').future)).map(Customer.fromRecord).toList()
+  ..sort((a, b) => a.id == 'walk-in' ? -1 : b.id == 'walk-in' ? 1 : a.name.compareTo(b.name)));
+final supplierListProvider = FutureProvider<List<Supplier>>(
+    (ref) async => (await ref.watch(tableProvider('suppliers').future)).map(Supplier.fromRecord).toList()..sort((a, b) => a.name.compareTo(b.name)));
+
+@riverpod
+Future<PharmacyData> pharmacy(Ref ref) async {
+  final settings = await ref.watch(settingsProvider.future);
+  final branch = await ref.watch(deviceBranchProvider.future);
+  final meds = await ref.watch(medicineListProvider.future);
   final stockIndex = await ref.watch(stockIndexProvider.future);
-  final batches = (await ref.watch(tableProvider('batches').future)).map(Batch.fromRecord);
-  final customers = (await ref.watch(tableProvider('customers').future)).map(Customer.fromRecord).toList()
-    ..sort((a, b) => a.id == 'walk-in' ? -1 : b.id == 'walk-in' ? 1 : a.name.compareTo(b.name));
+  final batches = await ref.watch(batchesByProductProvider.future);
   return PharmacyData(
     settings: settings,
-    products: products,
-    stock: StockView(products: products, batches: batches, index: stockIndex, branch: branch),
+    products: meds.products,
+    byId: meds.byId,
+    byBarcode: meds.byBarcode,
+    stock: StockView(products: const [], batches: const [], index: stockIndex, branch: branch, productsById: meds.byId, batchesByProduct: batches),
     branch: branch,
-    customers: customers,
-    suppliers: (await ref.watch(tableProvider('suppliers').future)).map(Supplier.fromRecord).toList()..sort((a, b) => a.name.compareTo(b.name)),
+    customers: await ref.watch(customerListProvider.future),
+    suppliers: await ref.watch(supplierListProvider.future),
     drafts: (await ref.watch(tableProvider('drafts').future)).map(Draft.fromRecord).where((x) => (x.branchId.isEmpty ? mainBranch : x.branchId) == branch).toList()..sort((a, b) => b.order.compareTo(a.order)),
-    features: features,
-    kits: kits,
+    features: meds.features,
+    kits: meds.kits,
   );
 }
 
