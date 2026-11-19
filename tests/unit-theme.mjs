@@ -12,7 +12,24 @@ check('restricted: light prefers the owner\'s default when it is light (a retire
 check('restricted: light falls back to the first allowed light palette', paletteFor('light', restricted) === 'sky-blue');
 check('restricted: dark → the only allowed dark palette', paletteFor('dark', restricted, 'mint') === 'navy-teal');
 check('no palette of that base: falls back to the first allowed', paletteFor('dark', allowedThemes({ themes: ['mint', 'clinic-blue', 'sunrise'] })) === 'sky-blue');
-check('the 18 two-colour themes in 5 sets of 3 or 4, each one in a group; the Dark set is all dark (1.14.0)', THEMES.length === 18 && THEME_GROUPS.length === 5 && THEME_GROUPS.every((g) => [3, 4].includes(THEMES.filter((t) => t.group === g).length)) && THEMES.every((t) => THEME_GROUPS.includes(t.group)) && THEMES.filter((t) => t.group === 'Dark').every((t) => t.base === 'dark') && THEMES.filter((t) => t.base === 'dark').length === 4);
+check('the 23 two-colour themes in 5 sets of 4 or 5, each one in a group; the Dark set is all dark (1.14.0)', THEMES.length === 23 && THEME_GROUPS.length === 5 && THEME_GROUPS.every((g) => [4, 5].includes(THEMES.filter((t) => t.group === g).length)) && THEMES.every((t) => THEME_GROUPS.includes(t.group)) && THEMES.filter((t) => t.group === 'Dark').every((t) => t.base === 'dark') && THEMES.filter((t) => t.base === 'dark').length === 5);
+// the Pharmacy themes (19 Nov 2026): one glossy theme in every set, its figure cards, banner and menu readable (AA)
+{
+  const glossy = THEMES.filter((t) => t.glossy);
+  check('one Pharmacy (glossy) theme in every set, each with four figure-card colours', THEME_GROUPS.every((g) => glossy.filter((t) => t.group === g).length === 1) && glossy.every((t) => t.glossy.kpi.length === 4));
+  const bad = [];
+  for (const t of glossy) {
+    const v = themeVars(t);
+    for (let n = 1; n <= 4; n++) for (const bg of [v[`--kpi-${n}-a`], v[`--kpi-${n}-b`]]) {
+      if (contrast(v[`--kpi-${n}-on`], bg) < 4.5) bad.push(`${t.id} card ${n} words`);
+      if (contrast(v[`--kpi-${n}-sub`], bg) < 4.5) bad.push(`${t.id} card ${n} line`);
+    }
+    for (const bg of [v['--hero-a'], v['--hero-b']]) if (contrast(v['--hero-on'], bg) < 4.5) bad.push(`${t.id} banner`);
+    if (contrast(t.c.sidebarText || '#ffffff', v['--side-top']) < 4.5) bad.push(`${t.id} menu top`);
+  }
+  check('Pharmacy themes: the figure cards, the welcome banner and the menu read at AA', bad.length === 0, bad.join(', '));
+  check('other themes keep their look (no glossy colours)', THEMES.filter((t) => !t.glossy).every((t) => !('--kpi-1-a' in themeVars(t))));
+}
 check('every retired id resolves to a kept theme (saved preferences keep working)', Object.entries(RETIRED).every(([o, n]) => !THEMES.some((t) => t.id === o) && themeById(o).id === n) && themeById('daylight-clinical').id === 'mint-teal' && themeById('midnight-pro').id === 'navy-teal' && themeById('oled').id === 'navy-teal');
 check('every theme is flat (no page gradient)', THEMES.every((t) => themeVars(t)['--bg-grad'] === 'none'));
 

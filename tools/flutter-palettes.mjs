@@ -19,6 +19,10 @@ const argb = (c) => {
 };
 const q = (s) => "'" + s.replace(/'/g, "\\'") + "'";
 
+/** A Pharmacy theme's glossy colours (src/themes.js glossyVars): the four figure cards (a, b, words, line, icon tile,
+ *  icon), the welcome banner (a, b, words) and the menu's top and bottom */
+const glossy = (t, v) => !t.glossy ? '' : `, glossy: Glossy(kpi: [${[1, 2, 3, 4].flatMap((n) => ['a', 'b', 'on', 'sub', 'icon', 'glyph'].map((k) => argb(v[`--kpi-${n}-${k}`]))).join(', ')}], hero: [${argb(v['--hero-a'])}, ${argb(v['--hero-b'])}, ${argb(v['--hero-on'])}], sideTop: ${argb(v['--side-top'])}, sideBottom: ${argb(v['--side-bottom'])})`;
+
 /** The Dart source of the palette list and the groups */
 export function dartPalettes() {
   const lines = [];
@@ -26,7 +30,7 @@ export function dartPalettes() {
     const c = t.c, v = themeVars(t);
     const side = c.sidebarText && c.sidebarText.toLowerCase() !== '#ffffff' ? `, sidebarText: ${argb(c.sidebarText)}` : '';
     lines.push(`  Palette(${q(t.id)}, ${q(t.name)}, ${t.base === 'dark'}, bg: ${argb(c.bg)}, surface: ${argb(c.surface)}, surface2: ${argb(c.surface2)}, border: ${argb(c.border)}, borderStrong: ${argb(c.borderStrong)}, text: ${argb(c.text)}, muted: ${argb(c.muted)}, primary: ${argb(c.primary)}, primary2: ${argb(c.primary2)}, sidebar: ${argb(c.sidebar)}, sidebar2: ${argb(c.sidebar2)}, flat: true, inspired: ${q(t.inspired)}${side}, group: ${q(t.group)},`);
-    lines.push(`      duo: Duo(ok: ${argb(v['--ok'])}, warn: ${argb(v['--warn'])}, danger: ${argb(v['--danger'])}, info: ${argb(v['--info'])}, violet: ${argb(v['--violet'])}, pill: ${argb(v['--pill'])}, pillOn: ${argb(v['--pill-on'])}, logo2: ${argb(v['--logo-2'])}, rowTint: ${c.rowTint}, headTint: ${c.headTint}, hues: [${Array.from({ length: 8 }, (_, i) => argb(v[`--hue-${i}`])).join(', ')}])),`);
+    lines.push(`      duo: Duo(ok: ${argb(v['--ok'])}, warn: ${argb(v['--warn'])}, danger: ${argb(v['--danger'])}, info: ${argb(v['--info'])}, violet: ${argb(v['--violet'])}, pill: ${argb(v['--pill'])}, pillOn: ${argb(v['--pill-on'])}, logo2: ${argb(v['--logo-2'])}, rowTint: ${c.rowTint}, headTint: ${c.headTint}, hues: [${Array.from({ length: 8 }, (_, i) => argb(v[`--hue-${i}`])).join(', ')}])${glossy(t, v)}),`);
   }
   return { groups: `const paletteGroups = [${THEME_GROUPS.map(q).join(', ')}];`, list: `const palettes = [\n${lines.join('\n')}\n];` };
 }

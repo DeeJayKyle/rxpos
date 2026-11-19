@@ -1,7 +1,7 @@
 // Dashboard panels: the greeting card (pharmacy, greeting, date, New sale), stock alerts (low stock and expiring
 // batches, each with a way to act on it) and the most recent sales as a table. Colours come from the theme, so
 // every look and design system draws them its own way.
-import 'package:rxpos/core/theme/themes.dart' show TonesOfContext;
+import 'package:rxpos/core/theme/themes.dart' show TonesOfContext, Glossy;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -33,26 +33,31 @@ class GreetingCard extends StatelessWidget {
     final first = name.trim().split(' ').first;
     final r = tokensOf(context).radius + 4;
     final phone = MediaQuery.sizeOf(context).width < 600;
+    // a Pharmacy theme: the welcome banner in the menu's colour into the theme's, with its own readable words (glossy.css)
+    final g = th.extension<Glossy>();
+    final on = g == null ? null : Color(g.hero[2]);
     final chip = pharmacy.isEmpty
         ? null
         : Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-            decoration: BoxDecoration(color: cs.primary.withValues(alpha: .14), borderRadius: BorderRadius.circular(10)),
+            decoration: BoxDecoration(color: on?.withValues(alpha: .16) ?? cs.primary.withValues(alpha: .14), borderRadius: BorderRadius.circular(10)),
             // the pharmacy's name in full: it wraps rather than being cut off
             child: Row(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Padding(padding: const EdgeInsets.only(top: 1), child: Icon(Icons.storefront_outlined, size: 14, color: cs.tertiary)),
+              Padding(padding: const EdgeInsets.only(top: 1), child: Icon(Icons.storefront_outlined, size: 14, color: on ?? cs.tertiary)),
               const SizedBox(width: 6),
-              Flexible(child: Text(pharmacy, key: const Key('greeting-pharmacy'), style: th.textTheme.labelMedium?.copyWith(color: cs.tertiary, fontWeight: FontWeight.w800))),
+              Flexible(child: Text(pharmacy, key: const Key('greeting-pharmacy'), style: th.textTheme.labelMedium?.copyWith(color: on ?? cs.tertiary, fontWeight: FontWeight.w800))),
             ]),
           );
     final text = Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-      Text('$greet${first.isEmpty ? '' : ', $first'} 👋', style: (phone ? th.textTheme.titleLarge : th.textTheme.headlineMedium)?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -.5)),
-      Text('${_days[t.weekday - 1]}, ${_months[t.month - 1]} ${t.day}, ${t.year}', style: th.textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+      Text('$greet${first.isEmpty ? '' : ', $first'} 👋', style: (phone ? th.textTheme.titleLarge : th.textTheme.headlineMedium)?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -.5, color: on)),
+      Text('${_days[t.weekday - 1]}, ${_months[t.month - 1]} ${t.day}, ${t.year}', style: th.textTheme.bodySmall?.copyWith(color: on ?? cs.onSurfaceVariant)),
     ]);
     final sale = canSell
         ? FilledButton.icon(
             key: const Key('greeting-new-sale'),
-            style: FilledButton.styleFrom(minimumSize: const Size(0, 46), padding: EdgeInsets.symmetric(horizontal: phone ? 14 : 20)),
+            style: FilledButton.styleFrom(minimumSize: const Size(0, 46), padding: EdgeInsets.symmetric(horizontal: phone ? 14 : 20),
+                // on the banner: a white button in the banner's colour
+                backgroundColor: g == null ? null : Colors.white, foregroundColor: g == null ? null : Color(g.hero[0]), shape: g == null ? null : const StadiumBorder()),
             onPressed: () => context.go('/pos'),
             icon: const Icon(Icons.shopping_cart_outlined),
             label: const Text('New sale'),
@@ -62,8 +67,11 @@ class GreetingCard extends StatelessWidget {
       key: const Key('greeting'),
       margin: EdgeInsets.zero,
       clipBehavior: Clip.antiAlias,
+      shape: g == null ? null : RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       child: Container(
-        decoration: BoxDecoration(
+        decoration: g != null
+            ? BoxDecoration(gradient: LinearGradient(colors: [Color(g.hero[0]), Color(g.hero[1])], begin: Alignment.centerLeft, end: Alignment.centerRight), borderRadius: BorderRadius.circular(24))
+            : BoxDecoration(
           // as the React app's hero (src/styles/dashboard.css .dash-hero): a white card with a soft brand glow at its right
           gradient: RadialGradient(center: const Alignment(.95, -1.1), radius: 1.6, colors: [cs.primary.withValues(alpha: .16), cs.primary.withValues(alpha: .04), cs.surface.withValues(alpha: 0)], stops: const [0, .35, .7]),
           borderRadius: BorderRadius.circular(r),

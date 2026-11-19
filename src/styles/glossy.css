@@ -1,0 +1,88 @@
+/* The Pharmacy themes (the owner's references, 19 Nov 2026): Pharmacy Blue, Green, Purple, Amber and Night, one per set
+   of src/themes.js. A glossy dashboard on top of the two-colour look: a gradient menu with a bright pill, a welcome
+   banner, rounder cards with soft shadows, and the dashboard's four figure cards each in its own colour (sales in the
+   theme's colour). Every colour comes from themeVars (glossyVars), made readable (AA) there. Screen only; loaded last. */
+@media screen {
+  :root[data-look='glossy'] { --r-card: 20px; --glossy-shadow: 0 1px 2px rgba(15, 40, 25, .05), 0 10px 28px -14px rgba(15, 40, 25, .22); }
+  :root[data-look='glossy'][data-theme='dark'] { --glossy-shadow: 0 1px 0 rgba(255, 255, 255, .05) inset, 0 14px 34px -16px rgba(0, 0, 0, .7); }
+
+  /* ---- the menu: a deep gradient with a glow of the theme's colour, a bright rounded pill for the open page ---- */
+  :root[data-look='glossy'] .sidebar {
+    background: radial-gradient(130% 40% at 0% 0%, color-mix(in srgb, var(--primary) 30%, transparent), transparent 70%),
+      linear-gradient(180deg, var(--side-top) 0%, var(--sidebar) 45%, var(--side-bottom) 100%);
+    border-right: 0; box-shadow: 4px 0 24px -12px rgba(0, 0, 0, .35);
+  }
+  :root[data-look='glossy'] .sidebar .brand { font-size: 20px; }
+  :root[data-look='glossy'] .sidebar .brand .logo-mark:not(.logo-img) { box-shadow: 0 0 0 2px rgba(255, 255, 255, .8), 0 8px 20px -8px rgba(0, 0, 0, .5); }
+  :root[data-look='glossy'] .sidebar nav a { background: transparent; border-color: transparent; border-radius: 14px; }
+  :root[data-look='glossy'] .sidebar nav a:hover { background: rgba(255, 255, 255, .10); }
+  :root[data-look='glossy'][data-sidebar] .sidebar nav a.active {
+    background: linear-gradient(135deg, var(--pill), color-mix(in srgb, var(--pill) 82%, #000)); border-color: transparent;
+    box-shadow: 0 8px 20px -10px var(--pill), inset 0 1px 0 rgba(255, 255, 255, .25);
+  }
+  /* the connection and version at the foot of the menu (App.jsx SideStatus); only these themes show it */
+  .side-status { display: none; }
+  :root[data-look='glossy'] .side-status {
+    display: flex; align-items: center; gap: 10px; margin: 10px 4px 0; padding: 10px 12px; border-radius: 14px;
+    background: rgba(0, 0, 0, .22); border: 1px solid rgba(255, 255, 255, .10); color: #fff; font-size: 13px; line-height: 1.25;
+  }
+  :root[data-look='glossy'] .side-status small { display: block; font-size: 11px; opacity: .85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  :root[data-look='glossy'] .side-status > span:not(.dot) { min-width: 0; }
+  :root[data-look='glossy'] .side-status .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; background: #4ade80; box-shadow: 0 0 0 3px rgba(74, 222, 128, .25); }
+  :root[data-look='glossy'] .side-status.off .dot { background: #fbbf24; box-shadow: 0 0 0 3px rgba(251, 191, 36, .25); }
+  :root[data-look='glossy'] .shell.rail .side-status > span:not(.dot) { display: none; }
+
+  /* ---- cards: rounder, soft shadows, no hard borders ---- */
+  :root[data-look='glossy'] :is(.card, .stat, .modal) { border-radius: var(--r-card); box-shadow: var(--glossy-shadow); }
+  :root[data-look='glossy']:not([data-theme='dark']) :is(.card, .stat) { border-color: transparent; }
+  :root[data-look='glossy'] .seg { border-radius: 999px; padding: 3px; }
+  :root[data-look='glossy'] .seg button { border-radius: 999px; }
+  :root[data-look='glossy'] .seg button.on { background: var(--accent-grad); color: var(--on-accent); box-shadow: 0 4px 12px -6px var(--primary); }
+  :root[data-look='glossy'] .btn.primary { border-radius: 999px; box-shadow: 0 8px 20px -10px var(--primary); }
+
+  /* ---- the welcome banner ---- */
+  :root[data-look='glossy'] .welcome {
+    background: radial-gradient(60% 120% at 100% 0%, rgba(255, 255, 255, .16), transparent 60%),
+      linear-gradient(120deg, var(--hero-a) 0%, var(--hero-b) 100%);
+    color: var(--hero-on); border: 0; border-radius: 24px; box-shadow: var(--glossy-shadow); overflow: hidden; min-height: 132px;
+  }
+  /* a capsule and a leaf drawn in CSS: decoration only, kept off the words */
+  :root[data-look='glossy'] .welcome::before {
+    content: ''; position: absolute; right: 36%; bottom: -26px; top: auto; width: 150px; height: 56px; border-radius: 999px; transform: rotate(-28deg);
+    background: linear-gradient(90deg, rgba(255, 255, 255, .92) 0 50%, color-mix(in srgb, var(--primary) 70%, #fff) 50% 100%);
+    box-shadow: 0 14px 30px -12px rgba(0, 0, 0, .45), inset 0 -6px 10px rgba(0, 0, 0, .12); opacity: .9;
+  }
+  :root[data-look='glossy'] .welcome::after {
+    content: ''; position: absolute; inset: auto -40px -60px auto; width: 260px; height: 260px; border-radius: 0 60% 0 60%; transform: rotate(18deg);
+    background: linear-gradient(135deg, rgba(255, 255, 255, .22), rgba(255, 255, 255, .04)); pointer-events: none;
+  }
+  :root[data-look='glossy'] .welcome :is(h1, .sub, .sub .muted) { color: var(--hero-on); }
+  :root[data-look='glossy'] .welcome h1 { font-size: 28px; letter-spacing: -.02em; }
+  :root[data-look='glossy'] .welcome-store { background: rgba(255, 255, 255, .16); color: var(--hero-on); border: 1px solid rgba(255, 255, 255, .25); }
+  :root[data-look='glossy'] .welcome .date-pill { background: var(--hero-b); color: var(--hero-on); border-color: rgba(255, 255, 255, .35); }
+  :root[data-look='glossy'] .welcome .btn.primary { background: #fff; color: var(--hero-a); box-shadow: 0 10px 24px -12px rgba(0, 0, 0, .5); }
+  @media (max-width: 1180px) { :root[data-look='glossy'] .welcome::before { display: none; } }
+  @media (max-width: 720px) { :root[data-look='glossy'] .welcome h1 { font-size: 21px; } }
+
+  /* ---- the four figure cards, each in its own colour ---- */
+  :root[data-look='glossy'] .stats.kpis .stat:nth-child(1) { --k-a: var(--kpi-1-a); --k-b: var(--kpi-1-b); --k-on: var(--kpi-1-on); --k-sub: var(--kpi-1-sub); --k-icon: var(--kpi-1-icon); --k-glyph: var(--kpi-1-glyph); }
+  :root[data-look='glossy'] .stats.kpis .stat:nth-child(2) { --k-a: var(--kpi-2-a); --k-b: var(--kpi-2-b); --k-on: var(--kpi-2-on); --k-sub: var(--kpi-2-sub); --k-icon: var(--kpi-2-icon); --k-glyph: var(--kpi-2-glyph); }
+  :root[data-look='glossy'] .stats.kpis .stat:nth-child(3) { --k-a: var(--kpi-3-a); --k-b: var(--kpi-3-b); --k-on: var(--kpi-3-on); --k-sub: var(--kpi-3-sub); --k-icon: var(--kpi-3-icon); --k-glyph: var(--kpi-3-glyph); }
+  :root[data-look='glossy'] .stats.kpis .stat:nth-child(4) { --k-a: var(--kpi-4-a); --k-b: var(--kpi-4-b); --k-on: var(--kpi-4-on); --k-sub: var(--kpi-4-sub); --k-icon: var(--kpi-4-icon); --k-glyph: var(--kpi-4-glyph); }
+  :root[data-look='glossy'] .stats.kpis .stat {
+    background: radial-gradient(90% 80% at 100% 100%, rgba(255, 255, 255, .18), transparent 60%), linear-gradient(135deg, var(--k-a) 0%, var(--k-b) 100%);
+    color: var(--k-on); border: 0 !important; overflow: hidden;
+  }
+  :root[data-look='glossy'] .stats.kpis .stat :is(small, strong, .stat-sub, .stat-sub.muted) { color: var(--k-on); }
+  :root[data-look='glossy'] .stats.kpis .stat .stat-sub { color: var(--k-sub); }
+  :root[data-look='glossy'] .stats.kpis .stat .stat-icon { background: var(--k-icon); color: var(--k-glyph); box-shadow: 0 8px 18px -10px rgba(0, 0, 0, .45); }
+  :root[data-look='glossy'] .stats.kpis .stat .delta { background: var(--k-on); color: var(--k-a); padding: 1px 7px; border-radius: 999px; font-weight: 700; }
+  :root[data-look='glossy'] .stats.kpis .stat .spark polyline { stroke: var(--k-on); opacity: .8; }
+  :root[data-look='glossy'] .stats.kpis .stat .spark polygon { fill: color-mix(in srgb, var(--k-on) 14%, transparent); }
+  :root[data-look='glossy'] .stats.kpis .stat .spark circle { fill: var(--k-on); }
+  :root[data-look='glossy'] .stats.kpis .stat.link:hover { transform: translateY(-2px); box-shadow: 0 16px 30px -16px var(--k-a); }
+
+  /* ---- charts: the line in the theme's colour over a soft fill ---- */
+  :root[data-look='glossy'] .chart-card { overflow: hidden; }
+}
+@media screen and (prefers-reduced-motion: reduce) { :root[data-look='glossy'] .stats.kpis .stat.link:hover { transform: none; } }

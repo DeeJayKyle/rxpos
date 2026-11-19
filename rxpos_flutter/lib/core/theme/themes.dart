@@ -22,10 +22,30 @@ class Duo {
   final List<int> hues;
 }
 
+/// A Pharmacy theme's glossy dashboard (src/themes.js glossyVars, src/styles/glossy.css): the four figure cards each in
+/// its own colour, the welcome banner and the menu's gradient, each readable (AA). Read with `Theme.of(context).extension<Glossy>()`.
+class Glossy extends ThemeExtension<Glossy> {
+  const Glossy({required this.kpi, required this.hero, required this.sideTop, required this.sideBottom});
+  /// six colours per figure card, four cards: gradient a, b, the words, the line under the figure, the icon's tile, the icon
+  final List<int> kpi;
+  /// the welcome banner: gradient a, b and its words
+  final List<int> hero;
+  final int sideTop, sideBottom;
+  /// figure card [slot] (0–3; later ones take the colours again)
+  ({Color a, Color b, Color on, Color sub, Color tile, Color icon}) card(int slot) {
+    final i = (slot % 4) * 6;
+    return (a: Color(kpi[i]), b: Color(kpi[i + 1]), on: Color(kpi[i + 2]), sub: Color(kpi[i + 3]), tile: Color(kpi[i + 4]), icon: Color(kpi[i + 5]));
+  }
+  @override
+  Glossy copyWith() => this;
+  @override
+  Glossy lerp(Glossy? other, double t) => t < .5 ? this : (other ?? this);
+}
+
 class Palette {
   const Palette(this.id, this.name, this.dark,
       {required this.bg, required this.surface, required this.surface2, required this.border, required this.borderStrong, required this.text,
-      required this.muted, required this.primary, required this.primary2, required this.sidebar, required this.sidebar2, this.flat = false, this.inspired = '', this.sidebarText, this.group = '', this.duo});
+      required this.muted, required this.primary, required this.primary2, required this.sidebar, required this.sidebar2, this.flat = false, this.inspired = '', this.sidebarText, this.group = '', this.duo, this.glossy});
   final String id, name, inspired;
   /// the theme menu's group (paletteGroups)
   final String group;
@@ -35,13 +55,15 @@ class Palette {
   final int bg, surface, surface2, border, borderStrong, text, muted, primary, primary2, sidebar, sidebar2;
   /// the two-colour shades (src/themes.js duoVars): warnings, table colours and tints, the menu's pill
   final Duo? duo;
+  /// the Pharmacy themes' glossy dashboard (null for the others)
+  final Glossy? glossy;
 
   Palette withPrimary(int p1, int p2) => Palette(id, name, dark,
       bg: bg, surface: surface, surface2: surface2, border: border, borderStrong: borderStrong, text: text, muted: muted, primary: p1, primary2: p2,
-      sidebar: sidebar, sidebar2: sidebar2, flat: flat, inspired: inspired, sidebarText: sidebarText, group: group, duo: duo);
+      sidebar: sidebar, sidebar2: sidebar2, flat: flat, inspired: inspired, sidebarText: sidebarText, group: group, duo: duo, glossy: glossy);
 }
 
-/// The 18 two-colour themes in five sets (17 Nov 2026, the owner's review; four dark ones and real status colours since
+/// The 23 two-colour themes in five sets (17 Nov 2026, the owner's review; four dark ones and real status colours since
 /// 1.14.0). Generated from src/themes.js by `node tools/flutter-palettes.mjs`, so both apps show the same colours:
 /// colour 1 strong (the menu's pill, buttons, headings), colour 2 the soft page; OK, warnings and danger green, amber, red.
 const paletteGroups = ['Blues', 'Greens', 'Purples', 'Warm & Lime', 'Dark'];
@@ -54,6 +76,8 @@ const palettes = [
       duo: Duo(ok: 0xFF047152, warn: 0xFF9F4908, danger: 0xFFBE123C, info: 0xFF056F81, violet: 0xFF056B7D, pill: 0xFF06B6D4, pillOn: 0xFF0B1220, logo2: 0xFF0B2530, rowTint: 6, headTint: 22, hues: [0xFF067D92, 0xFF0B2530, 0xFF047F94, 0xFF096E82, 0xFF058195, 0xFF091E26, 0xFF036475, 0xFF087B90])),
   Palette('steel-blue', 'Steel Blue', false, bg: 0xFFEDF1F6, surface: 0xFFFFFFFF, surface2: 0xFFF6F8FB, border: 0x1F2F4A67, borderStrong: 0x3D2F4A67, text: 0xFF0D141C, muted: 0xFF6E7277, primary: 0xFF4F7CAC, primary2: 0xFF446B94, sidebar: 0xFF161C26, sidebar2: 0xFF131821, flat: true, inspired: 'Slate menu, steel-blue pills: calm for long shifts', group: 'Blues',
       duo: Duo(ok: 0xFF046A4D, warn: 0xFF954508, danger: 0xFFBE123C, info: 0xFF3E6085, violet: 0xFF3F638A, pill: 0xFF4A75A2, pillOn: 0xFFFFFFFF, logo2: 0xFF161C26, rowTint: 6, headTint: 22, hues: [0xFF4A75A2, 0xFF161C26, 0xFF375778, 0xFF334C69, 0xFF436992, 0xFF12161E, 0xFF2B445F, 0xFF3E5F84])),
+  Palette('pharmacy-blue', 'Pharmacy Blue', false, bg: 0xFFEAF1FC, surface: 0xFFFFFFFF, surface2: 0xFFF5F8FE, border: 0x1F163B8D, borderStrong: 0x3D163B8D, text: 0xFF061026, muted: 0xFF6A707D, primary: 0xFF2563EB, primary2: 0xFF2055CA, sidebar: 0xFF0B2A5C, sidebar2: 0xFF09244F, flat: true, inspired: 'Glossy dashboard: deep blue menu, four-colour figure cards', group: 'Blues',
+      duo: Duo(ok: 0xFF046A4D, warn: 0xFF954508, danger: 0xFFB31138, info: 0xFF1F52C3, violet: 0xFF1E4FBC, pill: 0xFF4A7DEE, pillOn: 0xFF0B1220, logo2: 0xFF0B2A5C, rowTint: 6, headTint: 22, hues: [0xFF2563EB, 0xFF0B2A5C, 0xFF1A45A5, 0xFF1847A4, 0xFF1F54C8, 0xFF09224A, 0xFF143681, 0xFF1D52C0]), glossy: Glossy(kpi: [0xFF2563EB, 0xFF1B47A9, 0xFFFFFFFF, 0xFFFFFFFF, 0x2EFFFFFF, 0xFFFFFFFF, 0xFFE3F4E9, 0xFFC7E9D4, 0xFF083E1C, 0xFF0D5F2B, 0xFF16A34A, 0xFFFFFFFF, 0xFFEFE7FD, 0xFFE0D0FB, 0xFF2F165A, 0xFF482289, 0xFF7C3AED, 0xFFFFFFFF, 0xFFFEF3E2, 0xFFFDE8C4, 0xFF5D3C04, 0xFF8E5C06, 0xFFCB8408, 0xFFFFFFFF], hero: [0xFF0B2A5C, 0xFF215AD6, 0xFFFFFFFF], sideTop: 0xFF123A84, sideBottom: 0xFF071B3C)),
   Palette('forest-green', 'Forest Green', false, bg: 0xFFDCEFE3, surface: 0xFFFFFFFF, surface2: 0xFFEEF7F1, border: 0x1F12542F, borderStrong: 0x3D12542F, text: 0xFF05160C, muted: 0xFF69736D, primary: 0xFF1E8C4E, primary2: 0xFF1A7843, sidebar: 0xFF0F2419, sidebar2: 0xFF0D1F16, flat: true, inspired: 'Deep green menu, green pills', group: 'Greens',
       duo: Duo(ok: 0xFF046A4D, warn: 0xFF954508, danger: 0xFFBE123C, info: 0xFF176D3D, violet: 0xFF17693A, pill: 0xFF2C9359, pillOn: 0xFF0B1220, logo2: 0xFF0F2419, rowTint: 6, headTint: 22, hues: [0xFF1C8449, 0xFF0F2419, 0xFF156237, 0xFF175834, 0xFF1A7742, 0xFF0C1D14, 0xFF114D2B, 0xFF1A6D3E])),
   Palette('emerald-mint', 'Emerald Mint', false, bg: 0xFFE4F7EF, surface: 0xFFFFFFFF, surface2: 0xFFF2FBF7, border: 0x1F0A6F4D, borderStrong: 0x3D0A6F4D, text: 0xFF031E15, muted: 0xFF687873, primary: 0xFF10B981, primary2: 0xFF0E9F6F, sidebar: 0xFF0B221A, sidebar2: 0xFF091D16, flat: true, inspired: 'Deep green menu, emerald pills', group: 'Greens',
@@ -62,18 +86,24 @@ const palettes = [
       duo: Duo(ok: 0xFF046A4D, warn: 0xFF954508, danger: 0xFFBE123C, info: 0xFF0B6B6B, violet: 0xFF0B6767, pill: 0xFF1D9191, pillOn: 0xFF0B1220, logo2: 0xFF0F2222, rowTint: 6, headTint: 22, hues: [0xFF0E8282, 0xFF0F2222, 0xFF0B6161, 0xFF0F5656, 0xFF0D7575, 0xFF0C1B1B, 0xFF084C4C, 0xFF0F6B6B])),
   Palette('sage', 'Sage', false, bg: 0xFFE3EEE1, surface: 0xFFFFFFFF, surface2: 0xFFF1F7F0, border: 0x1F1C4029, borderStrong: 0x3D1C4029, text: 0xFF08110B, muted: 0xFF6B706D, primary: 0xFF2F6B45, primary2: 0xFF285C3B, sidebar: 0xFF18241B, sidebar2: 0xFF151F17, flat: true, inspired: 'Deep sage menu, green pills', group: 'Greens',
       duo: Duo(ok: 0xFF046A4D, warn: 0xFF954508, danger: 0xFFB31138, info: 0xFF295E3D, violet: 0xFF265637, pill: 0xFF477C5B, pillOn: 0xFFFFFFFF, logo2: 0xFF18241B, rowTint: 6, headTint: 22, hues: [0xFF2F6B45, 0xFF18241B, 0xFF214B30, 0xFF244830, 0xFF285B3B, 0xFF131D16, 0xFF1A3B26, 0xFF285638])),
+  Palette('pharmacy-green', 'Pharmacy Green', false, bg: 0xFFEEF6F0, surface: 0xFFFFFFFF, surface2: 0xFFF7FBF8, border: 0x1F0D622C, borderStrong: 0x3D0D622C, text: 0xFF041A0C, muted: 0xFF68766D, primary: 0xFF16A34A, primary2: 0xFF138C40, sidebar: 0xFF0B3D24, sidebar2: 0xFF09341F, flat: true, inspired: 'Glossy dashboard: deep green menu, four-colour figure cards', group: 'Greens',
+      duo: Duo(ok: 0xFF046A4D, warn: 0xFF9F4908, danger: 0xFFBE123C, info: 0xFF0F6F33, violet: 0xFF0F6C31, pill: 0xFF16A34A, pillOn: 0xFF0B1220, logo2: 0xFF0B3D24, rowTint: 6, headTint: 22, hues: [0xFF13873E, 0xFF0B3D24, 0xFF0F7234, 0xFF117037, 0xFF12833B, 0xFF09311D, 0xFF0C5A29, 0xFF13843F]), glossy: Glossy(kpi: [0xFF12853D, 0xFF107535, 0xFFFFFFFF, 0xFFFFFFFF, 0x2EFFFFFF, 0xFFFFFFFF, 0xFFE5ECFD, 0xFFCBDAFA, 0xFF0E2659, 0xFF153988, 0xFF2563EB, 0xFFFFFFFF, 0xFFEFE7FD, 0xFFE0D0FB, 0xFF2F165A, 0xFF482289, 0xFF7C3AED, 0xFFFFFFFF, 0xFFFEF3E2, 0xFFFDE8C4, 0xFF5D3C04, 0xFF8E5C06, 0xFFCB8408, 0xFFFFFFFF], hero: [0xFF0B3D24, 0xFF12863E, 0xFFFFFFFF], sideTop: 0xFF0E5A2F, sideBottom: 0xFF072817)),
   Palette('royal-purple', 'Royal Purple', false, bg: 0xFFF4F1FD, surface: 0xFFFFFFFF, surface2: 0xFFFAF8FE, border: 0x1F412C8B, borderStrong: 0x3D412C8B, text: 0xFF110C25, muted: 0xFF706D7C, primary: 0xFF6D4AE8, primary2: 0xFF5E40C8, sidebar: 0xFF1E1433, sidebar2: 0xFF1A112C, flat: true, inspired: 'Deep purple menu, violet pills', group: 'Purples',
       duo: Duo(ok: 0xFF046A4D, warn: 0xFF954508, danger: 0xFFB31138, info: 0xFF6041CC, violet: 0xFF573BBA, pill: 0xFF6D4AE8, pillOn: 0xFFFFFFFF, logo2: 0xFF1E1433, rowTint: 4, headTint: 16, hues: [0xFF6D4AE8, 0xFF1E1433, 0xFF4C34A2, 0xFF462F8E, 0xFF5D3FC5, 0xFF181029, 0xFF3C2980, 0xFF553AB2])),
   Palette('lavender', 'Lavender', false, bg: 0xFFE4DCFF, surface: 0xFFFFFFFF, surface2: 0xFFF2EEFF, border: 0x1F46318D, borderStrong: 0x3D46318D, text: 0xFF130D26, muted: 0xFF716E7D, primary: 0xFF7451EB, primary2: 0xFF6446CA, sidebar: 0xFF1F1A33, sidebar2: 0xFF1B162C, flat: true, inspired: 'Violet on lavender', group: 'Purples',
       duo: Duo(ok: 0xFF046A4D, warn: 0xFF954508, danger: 0xFFB31138, info: 0xFF6043C3, violet: 0xFF5D41BC, pill: 0xFF7451EB, pillOn: 0xFFFFFFFF, logo2: 0xFF1F1A33, rowTint: 6, headTint: 22, hues: [0xFF7451EB, 0xFF1F1A33, 0xFF5139A5, 0xFF4A368F, 0xFF6345C8, 0xFF191529, 0xFF402D81, 0xFF5B41B4])),
   Palette('midnight-indigo', 'Midnight Indigo', false, bg: 0xFFE6E6FB, surface: 0xFFFFFFFF, surface2: 0xFFF3F3FD, border: 0x1F373790, borderStrong: 0x3D373790, text: 0xFF0F0F26, muted: 0xFF6F6F7D, primary: 0xFF5B5BF0, primary2: 0xFF4E4ECE, sidebar: 0xFF1B1D2E, sidebar2: 0xFF171928, flat: true, inspired: 'Midnight menu, indigo pills', group: 'Purples',
       duo: Duo(ok: 0xFF046A4D, warn: 0xFF954508, danger: 0xFFB31138, info: 0xFF4B4BC6, violet: 0xFF4949C0, pill: 0xFF5B5BF0, pillOn: 0xFFFFFFFF, logo2: 0xFF1B1D2E, rowTint: 6, headTint: 22, hues: [0xFF5B5BF0, 0xFF1B1D2E, 0xFF4040A8, 0xFF3B3C8F, 0xFF4D4DCC, 0xFF161725, 0xFF323284, 0xFF4848B6])),
+  Palette('pharmacy-purple', 'Pharmacy Purple', false, bg: 0xFFF3EFFD, surface: 0xFFFFFFFF, surface2: 0xFFF9F7FE, border: 0x1F4A238E, borderStrong: 0x3D4A238E, text: 0xFF140926, muted: 0xFF726B7D, primary: 0xFF7C3AED, primary2: 0xFF6B32CC, sidebar: 0xFF2A1257, sidebar2: 0xFF240F4B, flat: true, inspired: 'Glossy dashboard: deep purple menu, four-colour figure cards', group: 'Purples',
+      duo: Duo(ok: 0xFF046448, warn: 0xFF8C4108, danger: 0xFFB31138, info: 0xFF6D33D1, violet: 0xFF632EBE, pill: 0xFF8446EE, pillOn: 0xFFFFFFFF, logo2: 0xFF2A1257, rowTint: 6, headTint: 22, hues: [0xFF7C3AED, 0xFF2A1257, 0xFF5729A6, 0xFF5326A2, 0xFF6931C9, 0xFF220E46, 0xFF442082, 0xFF632EC0]), glossy: Glossy(kpi: [0xFF7C3AED, 0xFF592AAB, 0xFFFFFFFF, 0xFFFFFFFF, 0x2EFFFFFF, 0xFFFFFFFF, 0xFFE5ECFD, 0xFFCBDAFA, 0xFF0E2659, 0xFF153988, 0xFF2563EB, 0xFFFFFFFF, 0xFFE3F4E9, 0xFFC7E9D4, 0xFF083E1C, 0xFF0D5F2B, 0xFF16A34A, 0xFFFFFFFF, 0xFFFEF3E2, 0xFFFDE8C4, 0xFF5D3C04, 0xFF8E5C06, 0xFFCB8408, 0xFFFFFFFF], hero: [0xFF2A1257, 0xFF7034D7, 0xFFFFFFFF], sideTop: 0xFF411D81, sideBottom: 0xFF1B0C39)),
   Palette('amber-gold', 'Amber Gold', false, bg: 0xFFFDF6E3, surface: 0xFFFFFFFF, surface2: 0xFFFEFBF1, border: 0x1F936B01, borderStrong: 0x3D936B01, text: 0xFF271D00, muted: 0xFF7D7766, primary: 0xFFF5B301, primary2: 0xFFD39A01, sidebar: 0xFF241C0A, sidebar2: 0xFF1F1809, flat: true, inspired: 'Deep brown menu, gold pills with dark words', group: 'Warm & Lime',
       duo: Duo(ok: 0xFF047152, warn: 0xFF9F4908, danger: 0xFFBE123C, info: 0xFF846101, violet: 0xFF876201, pill: 0xFFF5B301, pillOn: 0xFF0B1220, logo2: 0xFF241C0A, rowTint: 6, headTint: 22, hues: [0xFF956E01, 0xFF241C0A, 0xFF986F01, 0xFF8D6806, 0xFF996F01, 0xFF1D1608, 0xFF876201, 0xFF976F04])),
   Palette('night-lime', 'Lime on Charcoal', false, bg: 0xFFF4F4F0, surface: 0xFFFFFFFF, surface2: 0xFFFAFAF8, border: 0x1F78913F, borderStrong: 0x3D78913F, text: 0xFF202711, muted: 0xFF797D70, primary: 0xFFC8F169, primary2: 0xFFACCF5A, sidebar: 0xFF1F1F2A, sidebar2: 0xFF1B1B24, flat: true, inspired: 'Charcoal menu, lime pills and buttons with dark words', group: 'Warm & Lime',
       duo: Duo(ok: 0xFF047152, warn: 0xFF9F4908, danger: 0xFFBE123C, info: 0xFF5F7231, violet: 0xFF627634, pill: 0xFFC8F169, pillOn: 0xFF0B1220, logo2: 0xFF1F1F2A, rowTint: 4, headTint: 16, hues: [0xFF667A35, 0xFF1F1F2A, 0xFF677C37, 0xFF667842, 0xFF687D37, 0xFF191922, 0xFF677D37, 0xFF677B3B])),
   Palette('charcoal-lime', 'Charcoal on Lime', false, bg: 0xFFEEF7D6, surface: 0xFFFFFFFF, surface2: 0xFFF7FBEB, border: 0x1F131319, borderStrong: 0x3D131319, text: 0xFF050507, muted: 0xFF69696A, primary: 0xFF1F1F2A, primary2: 0xFF1B1B24, sidebar: 0xFFC8F169, sidebar2: 0xFFBCE363, flat: true, inspired: 'Lime menu, charcoal pills', sidebarText: 0xFF1F1F2A, group: 'Warm & Lime',
       duo: Duo(ok: 0xFF045E44, warn: 0xFF843D08, danger: 0xFF9E0F32, info: 0xFF1B1B25, violet: 0xFF191922, pill: 0xFF1F1F2A, pillOn: 0xFFFFFFFF, logo2: 0xFF14141B, rowTint: 6, headTint: 22, hues: [0xFF1F1F2A, 0xFF667A35, 0xFF16161D, 0xFF667842, 0xFF1A1A24, 0xFF687D37, 0xFF111117, 0xFF525E3D])),
+  Palette('pharmacy-amber', 'Pharmacy Amber', false, bg: 0xFFFDF6E8, surface: 0xFFFFFFFF, surface2: 0xFFFEFBF4, border: 0x1F935F07, borderStrong: 0x3D935F07, text: 0xFF271902, muted: 0xFF7D7567, primary: 0xFFF59E0B, primary2: 0xFFD38809, sidebar: 0xFF3B2606, sidebar2: 0xFF332105, flat: true, inspired: 'Glossy dashboard: deep brown menu, four-colour figure cards', group: 'Warm & Lime',
+      duo: Duo(ok: 0xFF047152, warn: 0xFF9F4908, danger: 0xFFBE123C, info: 0xFF8C5A08, violet: 0xFF905C08, pill: 0xFFF59E0B, pillOn: 0xFF0B1220, logo2: 0xFF3B2606, rowTint: 6, headTint: 22, hues: [0xFF9F6708, 0xFF3B2606, 0xFFA26808, 0xFF986209, 0xFFA36808, 0xFF2F1E05, 0xFF875706, 0xFF9D6608]), glossy: Glossy(kpi: [0xFFF59E0B, 0xFFB07208, 0xFF0B1220, 0xFF0B1220, 0x2E000000, 0xFF0B1220, 0xFFE3F4E9, 0xFFC7E9D4, 0xFF083E1C, 0xFF0D5F2B, 0xFF16A34A, 0xFFFFFFFF, 0xFFE5ECFD, 0xFFCBDAFA, 0xFF0E2659, 0xFF153988, 0xFF2563EB, 0xFFFFFFFF, 0xFFEFE7FD, 0xFFE0D0FB, 0xFF2F165A, 0xFF482289, 0xFF7C3AED, 0xFFFFFFFF], hero: [0xFF3B2606, 0xFFA0670A, 0xFFFFFFFF], sideTop: 0xFF6F4807, sideBottom: 0xFF261904)),
   Palette('navy-teal', 'RxPOS Navy Teal', true, bg: 0xFF0A2233, surface: 0xFF1E3443, surface2: 0xFF2A3F4E, border: 0x24FFFFFF, borderStrong: 0x33FFFFFF, text: 0xFFE7E9EB, muted: 0xFF939DA5, primary: 0xFF14B8A6, primary2: 0xFF119E8F, sidebar: 0xFF0F2A44, sidebar2: 0xFF0D243A, flat: true, inspired: 'Navy and teal: the RxPOS till', group: 'Dark',
       duo: Duo(ok: 0xFF4BD8A5, warn: 0xFFFBBF24, danger: 0xFFF8AEAE, info: 0xFF67D1C6, violet: 0xFF6CD2C8, pill: 0xFF14B8A6, pillOn: 0xFF0B1220, logo2: 0xFF0F2A44, rowTint: 6, headTint: 22, hues: [0xFF0E7F73, 0xFF0F2A44, 0xFF0E8174, 0xFF127175, 0xFF0E8276, 0xFF0C2236, 0xFF0B655B, 0xFF117D79])),
   Palette('midnight-blue', 'Midnight Blue', true, bg: 0xFF0B1324, surface: 0xFF1F2636, surface2: 0xFF2B3240, border: 0x24FFFFFF, borderStrong: 0x33FFFFFF, text: 0xFFE7E7E9, muted: 0xFF93969E, primary: 0xFF60A5FA, primary2: 0xFF538ED7, sidebar: 0xFF0A1A33, sidebar2: 0xFF09162C, flat: true, inspired: 'Night-blue page, bright blue pills', group: 'Dark',
@@ -82,6 +112,8 @@ const palettes = [
       duo: Duo(ok: 0xFF4BD8A5, warn: 0xFFFBBF24, danger: 0xFFF8AEAE, info: 0xFF4CD8A5, violet: 0xFF5DDCAD, pill: 0xFF34D399, pillOn: 0xFF0B1220, logo2: 0xFF0C2A1D, rowTint: 6, headTint: 22, hues: [0xFF20815D, 0xFF0C2A1D, 0xFF20835F, 0xFF207F5B, 0xFF218460, 0xFF0A2217, 0xFF1D7454, 0xFF228560])),
   Palette('graphite-amber', 'Graphite Amber', true, bg: 0xFF16161B, surface: 0xFF29292D, surface2: 0xFF343439, border: 0x24FFFFFF, borderStrong: 0x33FFFFFF, text: 0xFFE8E8E8, muted: 0xFF98989A, primary: 0xFFFBBF24, primary2: 0xFFD8A41F, sidebar: 0xFF24242C, sidebar2: 0xFF1F1F26, flat: true, inspired: 'Graphite page, amber pills with dark words', group: 'Dark',
       duo: Duo(ok: 0xFF60DCAF, warn: 0xFFFBBF24, danger: 0xFFF8B3B3, info: 0xFFFBC73E, violet: 0xFFFCCC50, pill: 0xFFFBBF24, pillOn: 0xFF0B1220, logo2: 0xFF24242C, rowTint: 6, headTint: 22, hues: [0xFF906E15, 0xFF24242C, 0xFF926F16, 0xFF907228, 0xFF936F16, 0xFF1D1D23, 0xFF8A6914, 0xFF92711E])),
+  Palette('pharmacy-night', 'Pharmacy Night', true, bg: 0xFF06130D, surface: 0xFF1A2620, surface2: 0xFF26322C, border: 0x24FFFFFF, borderStrong: 0x33FFFFFF, text: 0xFFE6E7E7, muted: 0xFF919694, primary: 0xFF22C55E, primary2: 0xFF1DA951, sidebar: 0xFF0A2A1A, sidebar2: 0xFF092416, flat: true, inspired: 'Glossy dashboard at night: deep green, four-colour figure cards', group: 'Dark',
+      duo: Duo(ok: 0xFF34D399, warn: 0xFFFBBF24, danger: 0xFFF89E9E, info: 0xFF3DCC71, violet: 0xFF4ED17E, pill: 0xFF22C55E, pillOn: 0xFF0B1220, logo2: 0xFF0A2A1A, rowTint: 6, headTint: 22, hues: [0xFF178841, 0xFF0A2A1A, 0xFF17823E, 0xFF16783C, 0xFF17833F, 0xFF082215, 0xFF136C34, 0xFF188542]), glossy: Glossy(kpi: [0xFF0F7234, 0xFF09441F, 0xFFFFFFFF, 0xFFFFFFFF, 0x2EFFFFFF, 0xFFFFFFFF, 0xFF1A45A5, 0xFF102A63, 0xFFFFFFFF, 0xFFFFFFFF, 0x2EFFFFFF, 0xFFFFFFFF, 0xFF5729A6, 0xFF341864, 0xFFFFFFFF, 0xFFFFFFFF, 0x2EFFFFFF, 0xFFFFFFFF, 0xFFA36908, 0xFF674205, 0xFFFFFFFF, 0xFFFFFFFF, 0x2EFFFFFF, 0xFFFFFFFF], hero: [0xFF0A2A1A, 0xFF198843, 0xFFFFFFFF], sideTop: 0xFF11552D, sideBottom: 0xFF071B11)),
 ];
 /// Themes retired → the new theme closest to each (a saved choice or an owner's list keeps working).
 const retiredPalettes = {
@@ -310,10 +342,12 @@ class SideColors extends ThemeExtension<SideColors> {
 SideColors sideColorsOf(Palette p) {
   // a menu takes white words unless it is light (orange, lime, sage: src/themes.js lightMenu)
   final dark = _lum(p.sidebar) <= .22;
-  final text = p.sidebarText ?? (dark ? readable(0xFFAAB6CA, [p.sidebar, p.sidebar2], 0xFFFFFFFF) : p.text);
+  final g = p.glossy;
+  final text = p.sidebarText ?? (dark ? readable(0xFFAAB6CA, [p.sidebar, p.sidebar2, if (g != null) ...[g.sideTop, g.sideBottom]], 0xFFFFFFFF) : p.text);
   final active = readable(p.primary, [p.sidebar, p.sidebar2], dark ? 0xFFFFFFFF : 0xFF000000, 3);
   final d = p.duo;
-  return SideColors(top: Color(p.sidebar), bottom: Color(p.sidebar2), text: Color(text), active: Color(active), dark: dark,
+  // the Pharmacy themes: a glow of the theme's colour at the top, deepening down (src/styles/glossy.css)
+  return SideColors(top: Color(g?.sideTop ?? p.sidebar), bottom: Color(g?.sideBottom ?? p.sidebar2), text: Color(text), active: Color(active), dark: dark,
       pill: d == null ? null : Color(d.pill), pillOn: d == null ? null : Color(d.pillOn));
 }
 
@@ -479,7 +513,7 @@ ThemeData buildTheme(Palette base, {String accent = '', String surface = 'flat',
     // a finger needs room (Android); a mouse is precise (Windows)
     visualDensity: tk.touch ? VisualDensity.standard : const VisualDensity(horizontal: 0, vertical: -.5),
     materialTapTargetSize: tk.touch ? MaterialTapTargetSize.padded : MaterialTapTargetSize.shrinkWrap,
-    extensions: [LookLevel(vivid: vivid), tk.copyWith(backdrop: tk.backdrop, glows: tk.glows), sideColorsOf(p), tonesOf(p)],
+    extensions: [LookLevel(vivid: vivid), tk.copyWith(backdrop: tk.backdrop, glows: tk.glows), sideColorsOf(p), tonesOf(p), if (p.glossy != null) p.glossy!],
     scaffoldBackgroundColor: Color(p.bg),
     dividerColor: Color(p.border),
     cardTheme: CardThemeData(

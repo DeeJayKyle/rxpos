@@ -137,7 +137,9 @@ class PullToSync extends ConsumerWidget {
 
 /// A figure with its label (and a line under it); tappable when [onTap] is set.
 class StatCard extends StatelessWidget {
-  const StatCard({super.key, required this.label, required this.value, this.full, this.sub, this.icon, this.color, this.onTap, this.spark});
+  const StatCard({super.key, required this.label, required this.value, this.full, this.sub, this.icon, this.color, this.onTap, this.spark, this.slot});
+  /// the dashboard's figure cards in order (0–3): the Pharmacy themes give each its own colour (src/styles/glossy.css)
+  final int? slot;
   final String label, value;
   /// the whole amount when [value] is said short (UGX 1.2M, UI batch 3 B6): the figure's tooltip and what screen
   /// readers say
@@ -155,11 +157,13 @@ class StatCard extends StatelessWidget {
     // Vivid (This device → Theme → Colour): a solid tile of the figure's colour with white text
     final vivid = t.extension<LookLevel>()?.vivid ?? false;
     final (va, vb) = vividFor(color);
-    final ink = vivid ? Colors.white : null;
+    // a Pharmacy theme: the figure card in its own colour (glossy), words and icon readable on it (src/themes.js glossyVars)
+    final g = vivid || slot == null ? null : t.extension<Glossy>()?.card(slot!);
+    final ink = vivid ? Colors.white : g?.on;
     // a figure's colour (purple, orange, blue…) is lifted until it reads on this card: AA on light and dark themes
     final dark = t.brightness == Brightness.dark;
     // RxPOS Green: the card washed in its figure's colour, the icon in a tile of it
-    final tinted = !vivid && (t.extension<DesignTokens>()?.tintedStats ?? false);
+    final tinted = !vivid && g == null && (t.extension<DesignTokens>()?.tintedStats ?? false);
     final tone = color ?? t.colorScheme.primary;
     final wash = Color.alphaBlend(tone.withValues(alpha: dark ? .16 : .08), t.cardTheme.color ?? t.colorScheme.surface);
     final shown = color == null ? null : Color(readable(color!.toARGB32(), [(tinted ? wash : t.cardTheme.color ?? t.colorScheme.surface).toARGB32()], dark ? 0xFFFFFFFF : 0xFF000000));
@@ -170,11 +174,13 @@ class StatCard extends StatelessWidget {
         margin: EdgeInsets.zero,
         clipBehavior: Clip.antiAlias,
         color: tinted ? wash : null,
-        shape: tinted ? RoundedRectangleBorder(borderRadius: BorderRadius.circular(t.extension<DesignTokens>()!.radius), side: BorderSide(color: tone.withValues(alpha: .28))) : null,
+        shape: g != null
+            ? RoundedRectangleBorder(borderRadius: BorderRadius.circular(20))
+            : tinted ? RoundedRectangleBorder(borderRadius: BorderRadius.circular(t.extension<DesignTokens>()!.radius), side: BorderSide(color: tone.withValues(alpha: .28))) : null,
         child: Ink(
           // as the React app's figure cards (src/styles/dashboard.css .kpi): a 3 px band of the figure's colour on top
-          decoration: vivid
-              ? BoxDecoration(gradient: LinearGradient(colors: [va, vb], begin: Alignment.topLeft, end: Alignment.bottomRight))
+          decoration: vivid || g != null
+              ? BoxDecoration(gradient: LinearGradient(colors: g == null ? [va, vb] : [g.a, g.b], begin: Alignment.topLeft, end: Alignment.bottomRight))
               : tinted
                   ? null
                   : BoxDecoration(border: Border(top: BorderSide(color: tone, width: 3))),
@@ -187,7 +193,9 @@ class StatCard extends StatelessWidget {
               Row(children: [
                 Expanded(child: Text(label.toUpperCase(), style: t.textTheme.labelSmall?.copyWith(letterSpacing: .6, fontWeight: FontWeight.w700, color: ink))),
                 if (icon != null)
-                  !vivid
+                  g != null
+                      ? Container(padding: const EdgeInsets.all(9), decoration: BoxDecoration(color: g.tile, borderRadius: BorderRadius.circular(12)), child: Icon(icon, size: 20, color: g.icon))
+                  : !vivid
                       ? Container(padding: const EdgeInsets.all(9), decoration: BoxDecoration(color: tone.withValues(alpha: .14), borderRadius: BorderRadius.circular(12)),
                           child: Icon(icon, size: 20, color: shown ?? t.colorScheme.tertiary))
                       : Icon(icon, size: 20, color: ink ?? shown ?? t.colorScheme.tertiary),
@@ -207,7 +215,7 @@ class StatCard extends StatelessWidget {
               if (sub != null || onTap != null)
                 Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
                   // the change and "vs yesterday" on one line (UI batch 3, B2); the whole line in the tooltip
-                  Expanded(child: Tooltip(message: sub ?? '', child: Text(sub ?? '', key: const Key('stat-sub'), maxLines: 1, overflow: TextOverflow.ellipsis, style: t.textTheme.bodySmall?.copyWith(color: ink?.withValues(alpha: .9))))),
+                  Expanded(child: Tooltip(message: sub ?? '', child: Text(sub ?? '', key: const Key('stat-sub'), maxLines: 1, overflow: TextOverflow.ellipsis, style: t.textTheme.bodySmall?.copyWith(color: g?.sub ?? ink?.withValues(alpha: .9))))),
                   // a card that opens a page says so
                   if (onTap != null) Icon(Icons.arrow_outward, size: 16, color: (ink ?? shown ?? t.colorScheme.tertiary).withValues(alpha: .8)),
                 ]),

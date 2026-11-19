@@ -5,7 +5,7 @@ import { LOGO_SVG } from './logomark.js';
 // pills use shades of the same two colours (themeVars), with their words and icons, so every page keeps to two colours.
 // Older themes map to the closest new one (RETIRED). The owner chooses which themes each pharmacy may use.
 
-const T = (id, name, base, c, inspired = '', group = '') => ({ id, name, base, c, inspired, group });
+const T = (id, name, base, c, inspired = '', group = '', glossy = null) => ({ id, name, base, c, inspired, group, ...(glossy ? { glossy } : {}) });
 /** The groups of the theme menu, in order */
 export const THEME_GROUPS = ['Blues', 'Greens', 'Purples', 'Warm & Lime', 'Dark'];
 
@@ -27,7 +27,7 @@ function readable(fg, bgs, toward, min = 4.5) {
 export const lightMenu = (side) => lum(side) > 0.22;
 
 /** A two-colour theme: [c1] strong (buttons, active, headings), [c2] the soft page tint, [side] the menu (c1 by default) */
-const duo = (id, name, group, { c1, c2, side = c1, sideText, base = 'light', inspired = '', strong = false }) => {
+const duo = (id, name, group, { c1, c2, side = c1, sideText, base = 'light', inspired = '', strong = false, glossy = null }) => {
   const dark = base === 'dark';
   const lightSide = lightMenu(side);
   // a coloured menu with white text: deepened just enough for AA
@@ -52,8 +52,13 @@ const duo = (id, name, group, { c1, c2, side = c1, sideText, base = 'light', ins
     // table stripes kept light (the owner's review, 17 Nov 2026): a soft wash of the row colour, the headings stronger
     rowTint: strong ? 6 : 4, headTint: strong ? 22 : 16,
     flat: true,
-  }, inspired, group);
+  }, inspired, group, glossy);
 };
+
+// The Pharmacy themes (the owner's references, 19 Nov 2026): one per set, a glossy dashboard look (styles/glossy.css):
+// a gradient menu, a welcome banner, and the four figure cards each in its own colour (sales in the theme's colour first)
+const K = { green: '#16a34a', blue: '#2563eb', purple: '#7c3aed', amber: '#f59e0b' };
+const kpis = (...ks) => ({ kpi: ks.map((k) => K[k]) });
 
 export const THEMES = [
   // Blues
@@ -61,24 +66,29 @@ export const THEMES = [
   duo('sky-blue', 'Sky Blue', 'Blues', { c1: '#38bdf8', c2: '#e8f5fd', side: '#0c1b2b', strong: true, inspired: 'Deep navy menu, sky-blue pills' }),
   duo('ocean-cyan', 'Ocean Cyan', 'Blues', { c1: '#06b6d4', c2: '#e3f6fa', side: '#0b2530', strong: true, inspired: 'Deep ocean menu, cyan pills' }),
   duo('steel-blue', 'Steel Blue', 'Blues', { c1: '#4f7cac', c2: '#edf1f6', side: '#161c26', strong: true, inspired: 'Slate menu, steel-blue pills: calm for long shifts' }),
+  duo('pharmacy-blue', 'Pharmacy Blue', 'Blues', { c1: '#2563eb', c2: '#eaf1fc', side: '#0b2a5c', strong: true, glossy: kpis('blue', 'green', 'purple', 'amber'), inspired: 'Glossy dashboard: deep blue menu, four-colour figure cards' }),
   // Greens
   duo('forest-green', 'Forest Green', 'Greens', { c1: '#1e8c4e', c2: '#dcefe3', side: '#0f2419', strong: true, inspired: 'Deep green menu, green pills' }),
   duo('emerald-mint', 'Emerald Mint', 'Greens', { c1: '#10b981', c2: '#e4f7ef', side: '#0b221a', strong: true, inspired: 'Deep green menu, emerald pills' }),
   duo('mint-teal', 'Mint Teal', 'Greens', { c1: '#0f8a8a', c2: '#cfe6e6', side: '#0f2222', strong: true, inspired: 'Teal on mint, the RxPOS colour' }),
   duo('sage', 'Sage', 'Greens', { c1: '#2f6b45', c2: '#e3eee1', side: '#18241b', strong: true, inspired: 'Deep sage menu, green pills' }),
+  duo('pharmacy-green', 'Pharmacy Green', 'Greens', { c1: '#16a34a', c2: '#eef6f0', side: '#0b3d24', strong: true, glossy: kpis('green', 'blue', 'purple', 'amber'), inspired: 'Glossy dashboard: deep green menu, four-colour figure cards' }),
   // Purples
   duo('royal-purple', 'Royal Purple', 'Purples', { c1: '#6d4ae8', c2: '#f4f1fd', side: '#1e1433', inspired: 'Deep purple menu, violet pills' }),
   duo('lavender', 'Lavender', 'Purples', { c1: '#7451eb', c2: '#e4dcff', side: '#1f1a33', strong: true, inspired: 'Violet on lavender' }),
   duo('midnight-indigo', 'Midnight Indigo', 'Purples', { c1: '#5b5bf0', c2: '#e6e6fb', side: '#1b1d2e', strong: true, inspired: 'Midnight menu, indigo pills' }),
+  duo('pharmacy-purple', 'Pharmacy Purple', 'Purples', { c1: '#7c3aed', c2: '#f3effd', side: '#2a1257', strong: true, glossy: kpis('purple', 'blue', 'green', 'amber'), inspired: 'Glossy dashboard: deep purple menu, four-colour figure cards' }),
   // Warm & Lime
   duo('amber-gold', 'Amber Gold', 'Warm & Lime', { c1: '#f5b301', c2: '#fdf6e3', side: '#241c0a', strong: true, inspired: 'Deep brown menu, gold pills with dark words' }),
   duo('night-lime', 'Lime on Charcoal', 'Warm & Lime', { c1: '#c8f169', c2: '#f4f4f0', side: '#1f1f2a', inspired: 'Charcoal menu, lime pills and buttons with dark words' }),
   duo('charcoal-lime', 'Charcoal on Lime', 'Warm & Lime', { c1: '#1f1f2a', c2: '#eef7d6', side: '#c8f169', sideText: '#1f1f2a', strong: true, inspired: 'Lime menu, charcoal pills' }),
+  duo('pharmacy-amber', 'Pharmacy Amber', 'Warm & Lime', { c1: '#f59e0b', c2: '#fdf6e8', side: '#3b2606', strong: true, glossy: kpis('amber', 'green', 'blue', 'purple'), inspired: 'Glossy dashboard: deep brown menu, four-colour figure cards' }),
   // Dark (1.14.0: four dark themes; Steel Blue and Sage, both light, moved to Blues and Greens)
   duo('navy-teal', 'RxPOS Navy Teal', 'Dark', { c1: '#14b8a6', c2: '#0a2233', side: '#0f2a44', base: 'dark', strong: true, inspired: 'Navy and teal: the RxPOS till' }),
   duo('midnight-blue', 'Midnight Blue', 'Dark', { c1: '#60a5fa', c2: '#0b1324', side: '#0a1a33', base: 'dark', strong: true, inspired: 'Night-blue page, bright blue pills' }),
   duo('dark-forest', 'Dark Forest', 'Dark', { c1: '#34d399', c2: '#0b1a14', side: '#0c2a1d', base: 'dark', strong: true, inspired: 'Deep green page, mint pills' }),
   duo('graphite-amber', 'Graphite Amber', 'Dark', { c1: '#fbbf24', c2: '#16161b', side: '#24242c', base: 'dark', strong: true, inspired: 'Graphite page, amber pills with dark words' }),
+  duo('pharmacy-night', 'Pharmacy Night', 'Dark', { c1: '#22c55e', c2: '#06130d', side: '#0a2a1a', base: 'dark', strong: true, glossy: kpis('green', 'blue', 'purple', 'amber'), inspired: 'Glossy dashboard at night: deep green, four-colour figure cards' }),
 ];
 /** Themes retired → the new theme closest to each, so a saved choice or an owner's list keeps working */
 export const RETIRED = {
@@ -127,7 +137,32 @@ export function themeVars(t) {
     '--bg-grad': c.flat ? 'none' : `radial-gradient(1100px 560px at 100% -10%, ${rgba(c.primary, dark ? 0.12 : 0.13)} 0%, transparent 60%), radial-gradient(850px 500px at -10% 110%, ${rgba(c.primary2, dark ? 0.1 : 0.1)} 0%, transparent 55%)`,
     '--sidebar': c.sidebar, '--sidebar-2': c.sidebar2, ...(c.sidebarText ? { '--sidebar-text': c.sidebarText } : {}),
     ...duoVars(c, dark),
+    ...(t.glossy ? glossyVars(t.glossy, c, dark) : {}),
   };
+}
+
+/** The Pharmacy themes' extra colours (styles/glossy.css), each readable (AA): the four figure cards (the first solid,
+ *  the others soft in light themes; all four deep at night), the welcome banner and the menu's gradient */
+function glossyVars(g, c, dark) {
+  const v = {};
+  g.kpi.forEach((h, i) => {
+    const n = i + 1;
+    if (dark || i === 0) {
+      const btn = dark ? accent(mix(h, '#000000', 0.3), mix(h, '#000000', 0.58)) : accent(h, mix(h, '#000000', 0.28));
+      Object.assign(v, { [`--kpi-${n}-a`]: btn.a, [`--kpi-${n}-b`]: btn.b, [`--kpi-${n}-on`]: btn.on, [`--kpi-${n}-sub`]: btn.on, [`--kpi-${n}-icon`]: rgba(btn.on === '#ffffff' ? '#ffffff' : '#000000', 0.18), [`--kpi-${n}-glyph`]: btn.on });
+    } else {
+      const a = mix(h, '#ffffff', 0.88), b = mix(h, '#ffffff', 0.76);
+      const ink = readable(mix(h, '#000000', 0.62), [a, b], '#000000', 7);
+      const sub = readable(mix(h, '#000000', 0.42), [a, b], '#000000');
+      const glyph = readable(h, ['#ffffff'], '#000000', 3);
+      Object.assign(v, { [`--kpi-${n}-a`]: a, [`--kpi-${n}-b`]: b, [`--kpi-${n}-on`]: ink, [`--kpi-${n}-sub`]: sub, [`--kpi-${n}-icon`]: glyph, [`--kpi-${n}-glyph`]: '#ffffff' });
+    }
+  });
+  // the welcome banner: the menu colour into the theme's colour, deepened until white words read on both ends
+  const hero = accent(c.sidebar, mix(c.primary, c.sidebar, dark ? 0.35 : 0.15));
+  // the menu: a glow of the theme's colour at the top, deepening down; white words read on its lightest part
+  const top = readable(mix(c.sidebar, c.primary, 0.28), [c.sidebarText || '#ffffff'], '#000000');
+  return { ...v, '--hero-a': hero.a, '--hero-b': hero.b, '--hero-on': hero.on, '--side-top': top, '--side-bottom': mix(c.sidebar, '#000000', 0.35) };
 }
 
 /** The open page's pill on the menu: the brand colour, brightened (or deepened on a light menu) until it stands out from
@@ -207,6 +242,7 @@ export function applyTheme(id, accentId = '') {
   root.dataset.theme = t.base;
   root.dataset.palette = t.id;
   root.dataset.sidebar = lightMenu(c.sidebar) ? 'light' : 'dark'; // light sidebars use dark text (styles/themes-ref.css)
+  if (t.glossy) root.dataset.look = 'glossy'; else delete root.dataset.look; // the Pharmacy themes (styles/glossy.css)
   if (!c.sidebarText) root.style.removeProperty('--sidebar-text');
   if (ACCENTS.some((a) => a.id === accentId)) root.dataset.accent = accentId; else delete root.dataset.accent;
   for (const [k, val] of Object.entries(themeVars(t))) root.style.setProperty(k, val);

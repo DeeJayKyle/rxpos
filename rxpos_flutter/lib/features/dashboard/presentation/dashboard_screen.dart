@@ -82,17 +82,20 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final promote = data.features['promos'] == false ? const <Insight>[] : promoteToday(insights(data.products, data.stockOf, data.stock.batchesOf, saleList, s));
     final checks = can.contains('audit');
 
+    // the figure cards' places (the Pharmacy themes colour each by its place: src/styles/glossy.css)
+    final gpShown = can.contains('reports'), expShown = can.contains('finance') || can.contains('reports');
+    final expSlot = gpShown ? 2 : 1, txSlot = 1 + (gpShown ? 1 : 0) + (expShown ? 1 : 0);
     Widget? card(String id) => switch (id) {
           'figures' => StatGrid(children: [
-              StatCard(label: isToday ? 'Today\'s sales' : 'Sales', value: cardAmount(c.total), full: s.money(c.total), sub: '${c.count} sale${c.count == 1 ? '' : 's'}${deltaText(c.total, pv.total, vs)}', icon: Icons.payments_outlined, spark: spark((d) => d.total),
+              StatCard(slot: 0, label: isToday ? 'Today\'s sales' : 'Sales', value: cardAmount(c.total), full: s.money(c.total), sub: '${c.count} sale${c.count == 1 ? '' : 's'}${deltaText(c.total, pv.total, vs)}', icon: Icons.payments_outlined, spark: spark((d) => d.total),
                   onTap: can.contains('sales.view') ? () => context.go('/sales?from=${range.from}&to=${range.to}') : null),
               if (can.contains('reports'))
-                StatCard(label: isToday ? 'Gross profit today' : 'Gross profit', value: cardAmount(c.grossProfit), full: s.money(c.grossProfit), sub: 'after cost of goods${deltaText(c.grossProfit, pv.grossProfit, vs)}', icon: Icons.trending_up, color: context.tones.violet, spark: spark((d) => d.grossProfit),
+                StatCard(slot: 1, label: isToday ? 'Gross profit today' : 'Gross profit', value: cardAmount(c.grossProfit), full: s.money(c.grossProfit), sub: 'after cost of goods${deltaText(c.grossProfit, pv.grossProfit, vs)}', icon: Icons.trending_up, color: context.tones.violet, spark: spark((d) => d.grossProfit),
                     onTap: () => context.go('/reports?tab=profit&from=${range.from}&to=${range.to}')),
               if (can.contains('finance') || can.contains('reports'))
-                StatCard(label: isToday ? 'Today\'s expenses' : 'Expenses', value: cardAmount(c.expenses), full: s.money(c.expenses), sub: '${multiBranch ? 'Whole pharmacy (expenses have no branch) · sales here − expenses' : 'Sales − expenses'}: ${s.money(c.total - c.expenses)}', icon: Icons.account_balance_wallet_outlined, color: context.tones.warn, spark: spark((d) => d.expenses),
+                StatCard(slot: expSlot, label: isToday ? 'Today\'s expenses' : 'Expenses', value: cardAmount(c.expenses), full: s.money(c.expenses), sub: '${multiBranch ? 'Whole pharmacy (expenses have no branch) · sales here − expenses' : 'Sales − expenses'}: ${s.money(c.total - c.expenses)}', icon: Icons.account_balance_wallet_outlined, color: context.tones.warn, spark: spark((d) => d.expenses),
                     onTap: () => context.go(can.contains('finance') ? '/finance?tab=expenses' : '/reports?tab=expenses&from=${range.from}&to=${range.to}')),
-              StatCard(label: 'Transactions', value: '${c.count}', sub: 'receipts ${isToday ? 'today' : periodWords[period]}${deltaText(c.count.toDouble(), pv.count.toDouble(), vs)}', icon: Icons.receipt_long_outlined, color: context.tones.info, spark: spark((d) => d.count.toDouble()),
+              StatCard(slot: txSlot, label: 'Transactions', value: '${c.count}', sub: 'receipts ${isToday ? 'today' : periodWords[period]}${deltaText(c.count.toDouble(), pv.count.toDouble(), vs)}', icon: Icons.receipt_long_outlined, color: context.tones.info, spark: spark((d) => d.count.toDouble()),
                   onTap: can.contains('sales.view') ? () => context.go('/sales?from=${range.from}&to=${range.to}') : null),
             ]),
           'chart' => Card(child: Padding(padding: const EdgeInsets.all(12), child: () {
