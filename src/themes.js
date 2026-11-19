@@ -199,7 +199,10 @@ function glossyVars(g, c, dark) {
   const hero = accent(c.sidebar, mix(c.primary, c.sidebar, dark ? 0.35 : 0.15));
   // the menu: a glow of the theme's colour at the top, deepening down; white words read on its lightest part
   const top = readable(mix(c.sidebar, c.primary, 0.28), [c.sidebarText || '#ffffff'], '#000000');
-  return { ...v, '--hero-a': hero.a, '--hero-b': hero.b, '--hero-on': hero.on, '--side-top': top, '--side-bottom': mix(c.sidebar, '#000000', 0.35) };
+  // the daily chart's line (the number of sales): the fourth card's colour, readable (AA) on the cards; its badges' words
+  // are the card colour on it
+  const line = readable(g.kpi[3], [c.surface, c.surface2], dark ? '#ffffff' : '#000000');
+  return { ...v, '--hero-a': hero.a, '--hero-b': hero.b, '--hero-on': hero.on, '--side-top': top, '--side-bottom': mix(c.sidebar, '#000000', 0.35), '--chart-line': line };
 }
 
 /** The open page's pill on the menu: the brand colour, brightened (or deepened on a light menu) until it stands out from

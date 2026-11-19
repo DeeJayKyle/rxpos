@@ -26,8 +26,9 @@ check('the 41 themes in 6 sets of 3 to 9, each one in a group; the Dark set is a
     }
     for (const bg of [v['--hero-a'], v['--hero-b']]) if (contrast(v['--hero-on'], bg) < 4.5) bad.push(`${t.id} banner`);
     if (contrast(t.c.sidebarText || '#ffffff', v['--side-top']) < 4.5) bad.push(`${t.id} menu top`);
+    if (contrast(v['--chart-line'], v['--surface']) < 4.5) bad.push(`${t.id} chart line / badge words`);
   }
-  check('Pharmacy themes: the figure cards, the welcome banner and the menu read at AA', bad.length === 0, bad.join(', '));
+  check('every theme: the figure cards, the welcome banner, the menu and the chart\'s count line read at AA', bad.length === 0, bad.join(', '));
   check('the palettes keep their own colours: a second series, the card, the ink and Royal Iris\'s yellow pill', (() => { const v = (id) => themeVars(themeById(id)); return v('alabaster-indigo-coral')['--viz-2'] === '#ff4d6b' && v('deep-ocean-cyan')['--surface'] === '#1e293b' && v('porcelain-signal')['--text'] === '#1e293b' && v('royal-iris-butter')['--pill'] === '#fff275' && v('cool-crisp')['--hue-8'] === undefined && v('vibrant-neon')['--viz-1'] === '#22d3ee'; })());
 }
 check('every retired id resolves to a kept theme (saved preferences keep working)', Object.entries(RETIRED).every(([o, n]) => !THEMES.some((t) => t.id === o) && themeById(o).id === n) && themeById('daylight-clinical').id === 'mint-teal' && themeById('midnight-pro').id === 'navy-teal' && themeById('oled').id === 'navy-teal');

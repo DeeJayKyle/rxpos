@@ -45,7 +45,7 @@ for (const [i, th] of THEMES.entries()) {
   await P.reload({ waitUntil: 'networkidle2' }); await wait(2200);
   await P.evaluate(() => document.querySelectorAll('.popups button, .popup button').forEach((x) => /close|dismiss|later|×/i.test(x.textContent + x.ariaLabel) && x.click()));
   const n = String(i + 1).padStart(2, '0');
-  await P.screenshot({ path: path.join(out, `${n}-${th.id}-dashboard.png`) });
+  await P.screenshot({ path: path.join(out, `${n}-${th.id}-dashboard.png`), fullPage: true }); // the whole dashboard: figure cards and charts
   await P.evaluate(() => { location.hash = '#/sales'; }); await wait(1500);
   await P.screenshot({ path: path.join(out, `${n}-${th.id}-sales.png`) });
 }

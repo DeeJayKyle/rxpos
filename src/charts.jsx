@@ -1,4 +1,5 @@
-// Dashboard charts (1.7). Plain SVG, no chart library. One colour per meaning (src/vivid.js): money in teal, purchases
+// Dashboard charts (1.7). Plain SVG, no chart library. Daily sales since 1.15.0: bars of money with the number of
+// sales as a line over them (the owner's reference). One colour per meaning (src/vivid.js): money in teal, purchases
 // orange, expenses red, gross profit violet. The value axis always starts at 0, days carry real dates, and today is
 // drawn as "so far" (a dashed end), so an unfinished day never looks like a collapse.
 import { useRef, useState } from 'react';
@@ -25,17 +26,24 @@ export function DailyTrend({ byDay, fmt, onDay, extra }) {
   const [hover, setHover] = useState(null);
   const keys = Array.from({ length: range }, (_, i) => dayKey(range - 1 - i));
   const vals = keys.map((k) => byDay[k]?.total || 0);
+  // the number of sales each day: a line over the bars, on its own axis at the right (the owner's reference, 1.15.0)
+  const counts = keys.map((k) => byDay[k]?.n || 0);
   const done = vals.slice(0, -1); // every day but today
   const total = vals.reduce((a, v) => a + v, 0);
   const avg = done.length ? done.reduce((a, v) => a + v, 0) / done.length : 0;
   const best = done.reduce((b, v, i) => (v > done[b] ? i : b), 0);
-  const W = 640, H = 230, L = 46, R = 14, T = 14, B = 28;
-  const max = niceMax(Math.max(...vals));
-  const x = (i) => L + (i * (W - L - R)) / Math.max(1, range - 1);
+  const W = 640, H = 240, L = 46, R = 34, T = 22, B = 28;
+  const max = niceMax(Math.max(...vals)), maxN = niceMax(Math.max(...counts));
+  const slot = (W - L - R) / range;
+  const x = (i) => L + (i + 0.5) * slot;
   const y = (v) => H - B - (v / max) * (H - T - B);
-  const line = done.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+  const yn = (v) => H - B - (v / maxN) * (H - T - B);
+  const bw = Math.max(2, slot * (range <= 7 ? 0.5 : 0.62));
   const n = range - 1;
   const every = range <= 7 ? 1 : range <= 30 ? 5 : 15;
+  const line = counts.slice(0, -1).map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${yn(v).toFixed(1)}`).join(' ');
+  // a count's badge on the line: each day with sales over a week or a month, none over 90 days
+  const badge = (i) => range <= 30 && counts[i] > 0;
   const h = hover ?? null;
   return (
     <div className="trend">
@@ -46,7 +54,7 @@ export function DailyTrend({ byDay, fmt, onDay, extra }) {
           <div className="seg" role="radiogroup" aria-label="Chart period">
             {[7, 30, 90].map((d) => <button key={d} role="radio" aria-checked={range === d} className={range === d ? 'on' : ''} onClick={() => { setRange(d); setHover(null); }}>{d} days</button>)}
           </div>
-          <ChartExport svg={svg} name={`daily-sales-${range}-days`} rows={() => keys.map((k, i) => ({ date: k, sales: vals[i] }))} />
+          <ChartExport svg={svg} name={`daily-sales-${range}-days`} rows={() => keys.map((k, i) => ({ date: k, sales: vals[i], receipts: counts[i] }))} />
         </div>
       </div>
       <div className="trend-facts">
@@ -54,30 +62,30 @@ export function DailyTrend({ byDay, fmt, onDay, extra }) {
         <span>Daily average <b>{fmt(Math.round(avg))}</b></span>
         {done[best] > 0 && <span>Best day <b>{dateLabel(keys[best], { weekday: 'short', day: 'numeric', month: 'short' })} · {fmt(done[best])}</b></span>}
       </div>
+      <div className="trend-legend"><span><i className="trend-key bar" />Sales (left)</span><span><i className="trend-key count" />Number of sales (right)</span></div>
       <div className="chart-wrap">
-      <svg ref={svg} key={range} className="trend-svg" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Daily sales, last ${range} days, total ${fmt(total)}`} onMouseLeave={() => setHover(null)}>
-        <defs><linearGradient id="trendFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor="var(--m-in)" stopOpacity=".28" /><stop offset="1" stopColor="var(--m-in)" stopOpacity="0" /></linearGradient></defs>
-        {keys.map((k, i) => new Date(k + 'T12:00').getDay() === 0 && <rect key={k} className="trend-sun" x={x(i) - (W - L - R) / n / 2} y={T} width={(W - L - R) / n} height={H - T - B} />)}
-        {[0, 0.25, 0.5, 0.75, 1].map((f) => <g key={f}><line className="trend-grid" x1={L} x2={W - R} y1={y(max * f)} y2={y(max * f)} /><text className="trend-axis" x={L - 6} y={y(max * f) + 3} textAnchor="end">{compact(max * f)}</text></g>)}
+      <svg ref={svg} key={range} className="trend-svg combo" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Daily sales and number of sales, last ${range} days, total ${fmt(total)}`} onMouseLeave={() => setHover(null)}>
+        {keys.map((k, i) => new Date(k + 'T12:00').getDay() === 0 && <rect key={k} className="trend-sun" x={x(i) - slot / 2} y={T} width={slot} height={H - T - B} />)}
+        {[0, 0.25, 0.5, 0.75, 1].map((f) => <g key={f}><line className="trend-grid" x1={L} x2={W - R} y1={y(max * f)} y2={y(max * f)} /><text className="trend-axis" x={L - 6} y={y(max * f) + 3} textAnchor="end">{compact(max * f)}</text>{Number.isInteger(maxN * f) && <text className="trend-axis count" x={W - R + 6} y={y(max * f) + 3} textAnchor="start">{maxN * f}</text>}</g>)}
         {keys.map((k, i) => (i % every === 0 || i === n) && <text key={k} className="trend-axis" x={x(i)} y={H - 8} textAnchor={i === n ? 'end' : i === 0 ? 'start' : 'middle'}>{i === n ? 'Today' : dateLabel(k)}</text>)}
-        {done.length > 1 && <path d={`${line} L${x(done.length - 1)},${y(0)} L${x(0)},${y(0)} Z`} fill="url(#trendFill)" />}
-        {done.length > 1 && <path className="trend-line" d={line} pathLength="1" />}
-        <line className="trend-today" x1={x(n - 1)} y1={y(vals[n - 1])} x2={x(n)} y2={y(vals[n])} />
-        <circle className="trend-today-dot" cx={x(n)} cy={y(vals[n])} r="4" />
-        {avg > 0 && <><line className="trend-avg" x1={L} x2={W - R} y1={y(avg)} y2={y(avg)} /><text className="trend-avg-label" x={W - R} y={y(avg) - 5} textAnchor="end">average</text></>}
-        {done[best] > 0 && <circle className="trend-best" cx={x(best)} cy={y(done[best])} r="4.5" />}
-        {h != null && <><line className="trend-cross" x1={x(h)} x2={x(h)} y1={T} y2={H - B} /><circle className="trend-hover" cx={x(h)} cy={y(vals[h])} r="4.5" /></>}
+        {vals.map((v, i) => v > 0 && <rect key={keys[i]} className={'trend-bar' + (i === n ? ' today' : '') + (i === best && done[best] > 0 ? ' best' : '') + (i === h ? ' on' : '')} x={x(i) - bw / 2} y={y(v)} width={bw} height={y(0) - y(v)} rx={Math.min(4, bw / 2)} />)}
+        {avg > 0 && <><line className="trend-avg" x1={L} x2={W - R} y1={y(avg)} y2={y(avg)} /><text className="trend-avg-label" x={L + 4} y={y(avg) - 5} textAnchor="start">average</text></>}
+        {n > 0 && <path className="trend-count" d={line} pathLength="1" />}
+        {n > 0 && <line className="trend-count today" x1={x(n - 1)} y1={yn(counts[n - 1])} x2={x(n)} y2={yn(counts[n])} />}
+        {counts.map((v, i) => <circle key={keys[i]} className="trend-count-dot" cx={x(i)} cy={yn(v)} r={range <= 30 ? 3.2 : 2} />)}
+        {counts.map((v, i) => badge(i) && <g key={keys[i]} className="trend-badge" transform={`translate(${x(i)},${yn(v) - 12})`}><rect x={-11} y={-8} width={22} height={15} rx={4} /><text y={3} textAnchor="middle">{v}</text></g>)}
+        {h != null && <line className="trend-cross" x1={x(h)} x2={x(h)} y1={T} y2={H - B} />}
         {keys.map((k, i) => (
-          <rect key={k} className="trend-hit" x={x(i) - (W - L - R) / n / 2} y={T} width={(W - L - R) / n} height={H - T - B}
+          <rect key={k} className="trend-hit" x={x(i) - slot / 2} y={T} width={slot} height={H - T - B}
             onMouseEnter={() => setHover(i)} onClick={() => onDay?.(k)}>
-            <title>{`${dateLabel(k, { weekday: 'short', day: 'numeric', month: 'short' })}${i === n ? ' (so far)' : ''}: ${fmt(vals[i])}`}</title>
+            <title>{`${dateLabel(k, { weekday: 'short', day: 'numeric', month: 'short' })}${i === n ? ' (so far)' : ''}: ${fmt(vals[i])} · ${counts[i]} sale${counts[i] === 1 ? '' : 's'}`}</title>
           </rect>
         ))}
       </svg>
-      {h != null && <ChartTip x={x(h) / W} y={y(vals[h]) / H} title={dateLabel(keys[h], { weekday: 'short', day: 'numeric', month: 'short' }) + (h === n ? ' (so far)' : '')} rows={[['Sales', fmt(vals[h]), 'in'], ...(avg > 0 ? [['vs average', `${vals[h] >= avg ? '+' : '−'}${Math.abs(Math.round(((vals[h] - avg) / avg) * 100))}%`]] : [])]} />}
+      {h != null && <ChartTip x={x(h) / W} y={y(vals[h]) / H} title={dateLabel(keys[h], { weekday: 'short', day: 'numeric', month: 'short' }) + (h === n ? ' (so far)' : '')} rows={[['Sales', fmt(vals[h]), 'in'], ['Number of sales', String(counts[h]), 'count'], ...(avg > 0 ? [['vs average', `${vals[h] >= avg ? '+' : '−'}${Math.abs(Math.round(((vals[h] - avg) / avg) * 100))}%`]] : [])]} />}
       </div>
       <div className="trend-tip muted small" aria-live="polite">
-        {h != null ? <><b>{dateLabel(keys[h], { weekday: 'long', day: 'numeric', month: 'long' })}{h === n ? ' (so far)' : ''}</b> · {fmt(vals[h])} · click to open that day&apos;s sales</> : 'Point at a day to see it; click to open its sales. Shaded columns are Sundays.'}
+        {h != null ? <><b>{dateLabel(keys[h], { weekday: 'long', day: 'numeric', month: 'long' })}{h === n ? ' (so far)' : ''}</b> · {fmt(vals[h])} · {counts[h]} sale{counts[h] === 1 ? '' : 's'} · click to open that day&apos;s sales</> : 'Point at a day to see it; click to open its sales. Shaded columns are Sundays.'}
       </div>
     </div>
   );

@@ -89,3 +89,45 @@
   :root[data-look='glossy'] .chart-card { overflow: hidden; }
 }
 @media screen and (prefers-reduced-motion: reduce) { :root[data-look='glossy']:not([data-colour='vivid']) .stats.kpis .stat.link:hover { transform: none; } }
+
+/* ---- 1.15.0, the owner's reference: a percentage ring on each figure card, and the daily chart as bars of money with
+   the number of sales as a line (with its values in badges) over them ---- */
+@media screen {
+  .stat-ring { position: absolute; right: 14px; bottom: 14px; width: 52px; height: 52px; display: grid; place-items: center; flex: none; }
+  .stat-ring svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .stat-ring .ring-track { fill: none; stroke: color-mix(in srgb, currentColor 20%, transparent); stroke-width: 5; }
+  .stat-ring .ring-arc { fill: none; stroke: currentColor; stroke-width: 5; stroke-linecap: round; transition: stroke-dasharray .8s ease; }
+  .stat-ring b { position: relative; font-size: 11px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .stats.kpis .stat:has(.stat-ring) .stat-sub { padding-right: 60px; }
+  .stats.kpis .stat .stat-ring { color: var(--primary-text); }
+
+  /* the reference's card: the icon in a circle beside the label, the big figure, the ring at the right */
+  :root[data-look='glossy']:not([data-colour='vivid']) .stats.kpis .stat {
+    display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: 'icon label ring' 'value value ring' 'spark spark ring' 'sub sub sub';
+    column-gap: 12px; row-gap: 4px; align-items: center;
+  }
+  :root[data-look='glossy']:not([data-colour='vivid']) .stats.kpis .stat .stat-icon { grid-area: icon; position: static; width: 40px; height: 40px; }
+  :root[data-look='glossy']:not([data-colour='vivid']) .stats.kpis .stat small { grid-area: label; padding-right: 0; text-transform: none; letter-spacing: 0; font-size: 14px; font-weight: 600; }
+  :root[data-look='glossy']:not([data-colour='vivid']) .stats.kpis .stat strong { grid-area: value; padding-right: 0; font-size: clamp(24px, 2.4vw, 32px); font-weight: 800; }
+  :root[data-look='glossy']:not([data-colour='vivid']) .stats.kpis .stat svg.spark { grid-area: spark; margin: 0; }
+  :root[data-look='glossy']:not([data-colour='vivid']) .stats.kpis .stat .stat-sub { grid-area: sub; padding-right: 0; }
+  :root[data-look='glossy']:not([data-colour='vivid']) .stats.kpis .stat .stat-ring { grid-area: ring; position: relative; right: auto; bottom: auto; color: var(--k-on); }
+  :root[data-look='glossy']:not([data-colour='vivid']) .stats.kpis .stat .stat-ring .ring-track { stroke: color-mix(in srgb, var(--k-on) 24%, transparent); }
+  :root[data-look='glossy']:not([data-colour='vivid']) .stats.kpis .stat:has(.stat-ring) .stat-sub { padding-right: 0; }
+  :root[data-colour='vivid'] .stats.kpis .stat .stat-ring { color: #fff; }
+
+  /* the daily chart */
+  .trend-bar { fill: var(--m-in); opacity: .85; transition: opacity .15s; }
+  .trend-bar.today { opacity: .45; }
+  .trend-bar.best, .trend-bar.on { opacity: 1; }
+  .trend-count { fill: none; stroke: var(--chart-line, var(--m-profit)); stroke-width: 2.2; stroke-linejoin: round; stroke-linecap: round; }
+  path.trend-count { stroke-dasharray: 1; animation: draw-line 1.1s cubic-bezier(.3, .7, .2, 1) both; }
+  .trend-count.today { stroke-dasharray: 3 4; }
+  .trend-count-dot { fill: var(--surface); stroke: var(--chart-line, var(--m-profit)); stroke-width: 2; }
+  .trend-badge rect { fill: var(--chart-line, var(--m-profit)); }
+  .trend-badge text { fill: var(--surface); font-size: 9.5px; font-weight: 800; }
+  .trend-axis.count { fill: var(--chart-line, var(--m-profit)); }
+  .trend-key.bar { height: 10px !important; width: 10px; border: 0 !important; border-radius: 3px; background: var(--m-in) !important; }
+  .trend-key.count { color: var(--chart-line, var(--m-profit)); }
+  @media (prefers-reduced-motion: reduce) { path.trend-count { animation: none; stroke-dasharray: none; } }
+}

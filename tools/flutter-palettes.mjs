@@ -21,7 +21,7 @@ const q = (s) => "'" + s.replace(/'/g, "\\'") + "'";
 
 /** A Pharmacy theme's glossy colours (src/themes.js glossyVars): the four figure cards (a, b, words, line, icon tile,
  *  icon), the welcome banner (a, b, words) and the menu's top and bottom */
-const glossy = (t, v) => !t.glossy ? '' : `, glossy: Glossy(kpi: [${[1, 2, 3, 4].flatMap((n) => ['a', 'b', 'on', 'sub', 'icon', 'glyph'].map((k) => argb(v[`--kpi-${n}-${k}`]))).join(', ')}], hero: [${argb(v['--hero-a'])}, ${argb(v['--hero-b'])}, ${argb(v['--hero-on'])}], sideTop: ${argb(v['--side-top'])}, sideBottom: ${argb(v['--side-bottom'])})`;
+const glossy = (t, v) => !t.glossy ? '' : `, glossy: Glossy(kpi: [${[1, 2, 3, 4].flatMap((n) => ['a', 'b', 'on', 'sub', 'icon', 'glyph'].map((k) => argb(v[`--kpi-${n}-${k}`]))).join(', ')}], hero: [${argb(v['--hero-a'])}, ${argb(v['--hero-b'])}, ${argb(v['--hero-on'])}], sideTop: ${argb(v['--side-top'])}, sideBottom: ${argb(v['--side-bottom'])}, chartLine: ${argb(v['--chart-line'])})`;
 
 /** The Dart source of the palette list and the groups */
 export function dartPalettes() {

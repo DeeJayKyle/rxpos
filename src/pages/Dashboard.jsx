@@ -116,7 +116,10 @@ export default function Dashboard() {
   const hour = new Date().getHours();
   const greet = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
   const isToday = period === 'today';
-  const c = fig.cur, dl = fig.delta;
+  const c = fig.cur, dl = fig.delta, pv = fig.prev;
+  // each figure's ring (1.15.0): sales and receipts against the period before, profit and expenses as a share of sales
+  const share = (a, b) => (b > 0 ? Math.round((a / b) * 100) : null);
+  const vsWords = VS_WORDS[period].replace(/^vs /, '');
   const rangeState = { from: fig.range.from, to: fig.range.to };
   const salesTo = can('reports') || can('reports.lines') ? { to: '/reports', state: { tab: 'lines', ...rangeState } } : { to: '/sales', state: rangeState };
 
@@ -124,10 +127,10 @@ export default function Dashboard() {
     figures: () => (
       <div className="stats kpis">
         {/* sales open Reports → Sales lines for the period (every medicine sold); staff without it get the sales list */}
-        <Stat {...salesTo} label={isToday ? "Today's sales" : 'Sales'} value={fmtShort(c.total)} full={fmt(c.total)} sub={`${c.n} sale${c.n === 1 ? '' : 's'} · ${VS_WORDS[period]}`} delta={dl.total} spark={spark.total} tone="teal" icon={Banknote} />
-        {can('reports') && <Stat to="/reports" state={{ tab: 'profit', ...rangeState }} label={isToday ? 'Gross profit today' : 'Gross profit'} value={fmtShort(c.gp)} full={fmt(c.gp)} sub={`after cost of goods · ${VS_WORDS[period]}`} delta={dl.gp} spark={spark.gp} tone="violet" icon={TrendingUp} />}
-        {(can('finance') || can('reports')) && <Stat to="/expenses" label={isToday ? "Today's expenses" : 'Expenses'} value={fmtShort(c.exp)} full={fmt(c.exp)} sub={db.branches.length > 1 ? `Whole pharmacy (expenses have no branch) · sales here − expenses: ${fmt(c.total - c.exp)}` : `Sales − expenses: ${fmt(c.total - c.exp)}`} delta={dl.exp} spark={spark.exp} goodDown tone="orange" icon={Wallet} />}
-        <Stat to="/sales" state={rangeState} label="Transactions" value={c.n.toLocaleString()} sub={`receipts ${isToday ? 'today' : PERIOD_WORDS[period]} · ${VS_WORDS[period]}`} delta={dl.n} spark={spark.n} tone="blue" icon={ReceiptText} />
+        <Stat {...salesTo} label={isToday ? "Today's sales" : 'Sales'} value={fmtShort(c.total)} full={fmt(c.total)} sub={`${c.n} sale${c.n === 1 ? '' : 's'} · ${VS_WORDS[period]}`} delta={dl.total} spark={spark.total} tone="teal" icon={Banknote} ring={{ pct: share(c.total, pv.total), title: `of the sales ${vsWords}` }} />
+        {can('reports') && <Stat to="/reports" state={{ tab: 'profit', ...rangeState }} label={isToday ? 'Gross profit today' : 'Gross profit'} value={fmtShort(c.gp)} full={fmt(c.gp)} sub={`after cost of goods · ${VS_WORDS[period]}`} delta={dl.gp} spark={spark.gp} tone="violet" icon={TrendingUp} ring={{ pct: share(c.gp, c.total), title: 'gross margin (profit ÷ sales)' }} />}
+        {(can('finance') || can('reports')) && <Stat to="/expenses" label={isToday ? "Today's expenses" : 'Expenses'} value={fmtShort(c.exp)} full={fmt(c.exp)} sub={db.branches.length > 1 ? `Whole pharmacy (expenses have no branch) · sales here − expenses: ${fmt(c.total - c.exp)}` : `Sales − expenses: ${fmt(c.total - c.exp)}`} delta={dl.exp} spark={spark.exp} goodDown tone="orange" icon={Wallet} ring={{ pct: share(c.exp, c.total), title: 'of sales spent on expenses' }} />}
+        <Stat to="/sales" state={rangeState} label="Transactions" value={c.n.toLocaleString()} sub={`receipts ${isToday ? 'today' : PERIOD_WORDS[period]} · ${VS_WORDS[period]}`} delta={dl.n} spark={spark.n} tone="blue" icon={ReceiptText} ring={{ pct: share(c.n, pv.n), title: `of the receipts ${vsWords}` }} />
       </div>
     ),
     chart: () => {

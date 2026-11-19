@@ -137,7 +137,10 @@ class PullToSync extends ConsumerWidget {
 
 /// A figure with its label (and a line under it); tappable when [onTap] is set.
 class StatCard extends StatelessWidget {
-  const StatCard({super.key, required this.label, required this.value, this.full, this.sub, this.icon, this.color, this.onTap, this.spark, this.slot});
+  const StatCard({super.key, required this.label, required this.value, this.full, this.sub, this.icon, this.color, this.onTap, this.spark, this.slot, this.ring, this.ringTitle = ''});
+  /// a percentage shown as a ring at the right of the figure (1.15.0, the owner's reference), and what it is
+  final int? ring;
+  final String ringTitle;
   /// the dashboard's figure cards in order (0–3): the Pharmacy themes give each its own colour (src/styles/glossy.css)
   final int? slot;
   final String label, value;
@@ -201,15 +204,20 @@ class StatCard extends StatelessWidget {
                       : Icon(icon, size: 20, color: ink ?? shown ?? t.colorScheme.tertiary),
               ]),
               const SizedBox(height: 6),
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerLeft,
-                // the figure in the text colour, as React (the colour is in the band and the icon tile)
-                child: () {
-                  final txt = Text(value, maxLines: 1, semanticsLabel: full, style: t.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -.3, color: ink ?? (tinted ? shown : null)));
-                  return full != null && full != value ? Tooltip(key: const Key('stat-full'), message: full!, child: txt) : txt;
-                }(),
-              ),
+              Row(children: [
+                Expanded(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    // the figure in the text colour, as React (the colour is in the band and the icon tile)
+                    child: () {
+                      final txt = Text(value, maxLines: 1, semanticsLabel: full, style: t.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -.3, color: ink ?? (tinted ? shown : null)));
+                      return full != null && full != value ? Tooltip(key: const Key('stat-full'), message: full!, child: txt) : txt;
+                    }(),
+                  ),
+                ),
+                if (ring != null) ...[const SizedBox(width: 8), StatRing(key: const Key('stat-ring'), pct: ring!, title: ringTitle, color: ink ?? shown ?? t.colorScheme.tertiary)],
+              ]),
               if (spark != null && spark!.any((v) => v != 0))
                 Padding(padding: const EdgeInsets.symmetric(vertical: 2), child: Spark(key: const Key('spark'), data: spark!, color: ink ?? t.colorScheme.tertiary)),
               if (sub != null || onTap != null)
@@ -226,6 +234,44 @@ class StatCard extends StatelessWidget {
       ),
     );
   }
+}
+
+/// A figure's percentage as a ring (src/ui.jsx StatRing): drawn up to 100%, the number in the middle.
+class StatRing extends StatelessWidget {
+  const StatRing({super.key, required this.pct, required this.title, required this.color});
+  final int pct;
+  final String title;
+  final Color color;
+  @override
+  Widget build(BuildContext context) => Tooltip(
+        message: '$pct% $title',
+        child: Semantics(
+          label: '$pct% $title',
+          child: SizedBox.square(
+            dimension: 48,
+            child: CustomPaint(
+              painter: _RingPainter(pct.clamp(0, 100) / 100, color),
+              child: Center(child: Text('$pct%', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: color))),
+            ),
+          ),
+        ),
+      );
+}
+
+class _RingPainter extends CustomPainter {
+  _RingPainter(this.f, this.color);
+  final double f;
+  final Color color;
+  @override
+  void paint(Canvas c, Size s) {
+    final r = Rect.fromCircle(center: s.center(Offset.zero), radius: s.width / 2 - 3);
+    final p = Paint()..style = PaintingStyle.stroke..strokeWidth = 5..strokeCap = StrokeCap.round;
+    c.drawArc(r, 0, 6.2832, false, p..color = color.withValues(alpha: .22));
+    if (f > 0) c.drawArc(r, -1.5708, 6.2832 * f, false, p..color = color);
+  }
+
+  @override
+  bool shouldRepaint(_RingPainter o) => o.f != f || o.color != color;
 }
 
 /// Figures side by side that fill the row: each [StatCard] gets an equal share of the width (at least [minWidth]),
