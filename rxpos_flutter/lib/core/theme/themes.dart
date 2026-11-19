@@ -381,7 +381,8 @@ SideColors sideColorsOf(Palette p) {
   // a menu takes white words unless it is light (orange, lime, sage: src/themes.js lightMenu)
   final dark = _lum(p.sidebar) <= .22;
   final g = p.glossy;
-  final text = p.sidebarText ?? (dark ? readable(0xFFAAB6CA, [p.sidebar, p.sidebar2, if (g != null) ...[g.sideTop, g.sideBottom]], 0xFFFFFFFF) : p.text);
+  // the glossy menu's lighter top and the items' own tint: its words get headroom over AA (5.5:1), so they still read on them
+  final text = p.sidebarText ?? (dark ? readable(0xFFAAB6CA, [p.sidebar, p.sidebar2, if (g != null) ...[g.sideTop, g.sideBottom]], 0xFFFFFFFF, g == null ? 4.5 : 5.5) : p.text);
   final active = readable(p.primary, [p.sidebar, p.sidebar2], dark ? 0xFFFFFFFF : 0xFF000000, 3);
   final d = p.duo;
   // the Pharmacy themes: a glow of the theme's colour at the top, deepening down (src/styles/glossy.css)
