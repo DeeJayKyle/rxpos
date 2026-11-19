@@ -1,7 +1,9 @@
 // What's new (UI batch 3, B8): the same list as src/whatsnew.js (tests/unit-whatsnew.mjs checks they match). Shown
 // once on each device after an update, as a small card on the dashboard.
-const whatsNewVersion = '1.14.1';
+const whatsNewVersion = '1.15.0';
 const whatsNewItems = <(String, String)>[
+  ('41 themes: new palettes in every colour set, and the glossy Pharmacy themes', '/device'),
+  ('A Multi-colour set: Cool & Crisp, Vibrant Neon and Neon Indigo, with five-colour charts', '/device'),
   ('Whole amounts on the dashboard, or short ones (UGX 152K) in This device → Amounts', '/device'),
   ('Dates in your chosen format everywhere (This device → Date format), on every computer', '/device'),
   ('Warnings in real colours in every theme: OK green, low amber, expired and out of stock red', '/inventory'),

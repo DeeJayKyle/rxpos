@@ -1,5 +1,4 @@
-/* The Pharmacy themes (the owner's references, 19 Nov 2026): Pharmacy Blue, Green, Purple, Amber and Night, one per set
-   of src/themes.js. A glossy dashboard on top of the two-colour look: a gradient menu with a bright pill, a welcome
+/* The glossy dashboard, in every theme since 1.15.0 (the owner's references, 19 Nov 2026; the Pharmacy themes first). A glossy dashboard on top of the two-colour look: a gradient menu with a bright pill, a welcome
    banner, rounder cards with soft shadows, and the dashboard's four figure cards each in its own colour (sales in the
    theme's colour). Every colour comes from themeVars (glossyVars), made readable (AA) there. Screen only; loaded last. */
 @media screen {
@@ -35,6 +34,8 @@
   /* ---- cards: rounder, soft shadows, no hard borders ---- */
   :root[data-look='glossy'] :is(.card, .stat, .modal) { border-radius: var(--r-card); box-shadow: var(--glossy-shadow); }
   :root[data-look='glossy']:not([data-theme='dark']) :is(.card, .stat) { border-color: transparent; }
+  /* at night: a fine outline round each card, as the neon reference */
+  :root[data-look='glossy'][data-theme='dark'] :is(.card, .stat):not(.kpis .stat) { box-shadow: var(--glossy-shadow), 0 0 0 1px color-mix(in srgb, var(--primary) 22%, rgba(255, 255, 255, .06)); }
   :root[data-look='glossy'] .seg { border-radius: 999px; padding: 3px; }
   :root[data-look='glossy'] .seg button { border-radius: 999px; }
   :root[data-look='glossy'] .seg button.on { background: var(--accent-grad); color: var(--on-accent); box-shadow: 0 4px 12px -6px var(--primary); }
@@ -76,6 +77,8 @@
   :root[data-look='glossy'] .stats.kpis .stat :is(small, strong, .stat-sub, .stat-sub.muted) { color: var(--k-on); }
   :root[data-look='glossy'] .stats.kpis .stat .stat-sub { color: var(--k-sub); }
   :root[data-look='glossy'] .stats.kpis .stat .stat-icon { background: var(--k-icon); color: var(--k-glyph); box-shadow: 0 8px 18px -10px rgba(0, 0, 0, .45); }
+  /* the neon reference: the icon in a round badge with a ring */
+  :root[data-look='glossy'] .stats.kpis .stat .stat-icon { border-radius: 50%; outline: 3px solid color-mix(in srgb, var(--k-on) 22%, transparent); outline-offset: 2px; }
   :root[data-look='glossy'] .stats.kpis .stat .delta { background: var(--k-on); color: var(--k-a); padding: 1px 7px; border-radius: 999px; font-weight: 700; }
   :root[data-look='glossy'] .stats.kpis .stat .spark polyline { stroke: var(--k-on); opacity: .8; }
   :root[data-look='glossy'] .stats.kpis .stat .spark polygon { fill: color-mix(in srgb, var(--k-on) 14%, transparent); }

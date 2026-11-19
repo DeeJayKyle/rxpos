@@ -1,5 +1,19 @@
 # RxPOS release notes
 
+## React (classic) app 1.15.0 · Flutter app (next build) · November 2026 (themes)
+
+- **41 themes in six sets** (both apps). Every set has new palettes: Blues (Porcelain & Signal Blue, Midnight Navy &
+  Sky, Cobalt & Warm Amber, Deep Ocean & Cyan), Greens (Mist Gray, Teal & Lilac, Sage & Forest Emerald, Graphite & Lime
+  Spark, Mint & Warm Coral), Purples (Obsidian, Purple & Mint, Alabaster, Indigo & Coral, Royal Iris & Butter Yellow,
+  Twilight Slate & Soft Violet), and Warm & Neutral, renamed from Warm & Lime (Sandstone & Terracotta, Pure Monochrome &
+  Scarlet, Charcoal & Gold). The dark ones stay in their own set. A palette's second colour is the second chart line.
+- **The glossy Pharmacy themes**: Pharmacy Blue, Green, Purple, Amber and Night. They have a gradient menu with an
+  online chip, a welcome banner, and the four figure cards each in its own colour.
+- **A Multi-colour set**: Cool & Crisp, Vibrant Neon and Neon Indigo (a neon indigo dashboard). Charts and tables use
+  five colours.
+- Every colour is checked for readability (WCAG AA) in both apps. Warnings keep their meaning: OK is green, low stock
+  amber, expired red.
+
 ## Flutter app (next build) · November 2026 (speed)
 
 - **A faster till after each sale**: a sale changes stock, not medicines, so the app keeps its medicine list (the

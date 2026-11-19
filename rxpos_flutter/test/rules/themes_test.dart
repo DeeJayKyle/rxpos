@@ -1,4 +1,4 @@
-// Colour themes (src/themes.js): the 23 two-colour palettes in five sets (five dark; a glossy Pharmacy theme in each set since 19 Nov 2026), readable everywhere (WCAG AA), the owner's choice, light / dark.
+// Colour themes (src/themes.js): the 41 palettes in six sets (twelve dark; a glossy theme in each set, the Multi-colour set all glossy, since 1.15.0), readable everywhere (WCAG AA), the owner's choice, light / dark.
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -9,12 +9,12 @@ import 'package:rxpos/core/theme/themes.dart';
 int argb(Color c) => c.toARGB32();
 
 void main() {
-  test('the 23 two-colour themes in five sets of four or five, every one readable with every accent', () {
-    expect(palettes, hasLength(23));
-    expect(palettes.where((p) => p.dark), hasLength(5));
+  test('the 41 themes in six sets of three to nine, every one readable with every accent', () {
+    expect(palettes, hasLength(41));
+    expect(palettes.where((p) => p.dark), hasLength(12));
     expect(palettes.where((p) => p.group == 'Dark').every((p) => p.dark), isTrue);
-    expect(paletteGroups, hasLength(5));
-    expect(paletteGroups.every((g) => [4, 5].contains(palettes.where((p) => p.group == g).length)), isTrue);
+    expect(paletteGroups, hasLength(6));
+    expect(paletteGroups.every((g) => palettes.where((p) => p.group == g).length >= 3 && palettes.where((p) => p.group == g).length <= 9), isTrue);
     expect(palettes.every((p) => paletteGroups.contains(p.group) && p.duo != null), isTrue);
     // a retired theme opens as the kept one closest to it (the same map as src/themes.js RETIRED)
     expect((paletteById('tokyo-night').id, paletteById('mint').id, paletteById('light').id, paletteById('daylight-clinical').id, paletteById('oled').id),
@@ -29,10 +29,8 @@ void main() {
     }
   });
 
-  test('one glossy Pharmacy theme in every set: its figure cards, banner and menu read at AA, and only it is glossy', () {
-    for (final g in paletteGroups) {
-      expect(palettes.where((p) => p.group == g && p.glossy != null), hasLength(1), reason: g);
-    }
+  test('every theme is glossy (1.15.0): its figure cards, banner and menu read at AA', () {
+    expect(palettes.every((p) => p.glossy != null), isTrue);
     for (final p in palettes.where((p) => p.glossy != null)) {
       final g = p.glossy!;
       expect(g.kpi, hasLength(24));
@@ -51,7 +49,6 @@ void main() {
       final side = t.extension<SideColors>()!;
       expect(contrast(argb(side.text), argb(side.top)), greaterThanOrEqualTo(4.5), reason: '${p.id} menu top');
     }
-    expect(buildTheme(paletteById('forest-green')).extension<Glossy>(), isNull);
   });
 
   test('containers and the inverse surface (snack bars) are readable at AA in every theme, light and dark', () {
@@ -76,10 +73,10 @@ void main() {
     final some = allowedPalettes({'themes': ['light', 'dracula', 'nord']});
     expect(some.map((p) => p.id), ['mint-teal', 'navy-teal']);
     expect(paletteFor(true, some, 'nord'), 'navy-teal');
-    expect(allowedPalettes(null), hasLength(23));
+    expect(allowedPalettes(null), hasLength(41));
   });
 
-  test('only the 23 themes (the owner\'s choice): no accent presets, no design systems; old saved looks fall back to them', () {
+  test('only the 41 themes (the owner\'s choice): no accent presets, no design systems; old saved looks fall back to them', () {
     expect(accents, isEmpty);
     expect(designSystems, isEmpty);
     expect(designPalettes, isEmpty);

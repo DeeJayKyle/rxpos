@@ -3,8 +3,10 @@
 // its highlights go here too. The Flutter app keeps the same list in rxpos_flutter/lib/core/config/whats_new.dart
 // (tests/unit-whatsnew.mjs checks they match).
 export const WHATS_NEW = {
-  version: '1.14.1',
+  version: '1.15.0',
   items: [
+    { text: '41 themes: new palettes in every colour set, and the glossy Pharmacy themes', to: '/device' },
+    { text: 'A Multi-colour set: Cool & Crisp, Vibrant Neon and Neon Indigo, with five-colour charts', to: '/device' },
     { text: 'Whole amounts on the dashboard, or short ones (UGX 152K) in This device → Amounts', to: '/device' },
     { text: 'Dates in your chosen format everywhere (This device → Date format), on every computer', to: '/device' },
     { text: 'Warnings in real colours in every theme: OK green, low amber, expired and out of stock red', to: '/inventory' },
