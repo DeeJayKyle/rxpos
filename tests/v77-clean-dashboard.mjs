@@ -41,8 +41,8 @@ await p.setViewport({ width: 1440, height: 1000 });
 const errors = []; p.on('pageerror', (e) => errors.push(e.message));
 await p.goto(base + '/' + slug, { waitUntil: 'networkidle2' }); await wait(500);
 await p.evaluate(() => { for (const id of ['pos', 'dashboard']) localStorage.setItem('rxpos-tip:' + id, '1'); });
-// B8: this device last saw 1.12.0's highlights, so 1.13.0 is an update to it
-await p.evaluate(() => localStorage.setItem('rxpos-device', JSON.stringify({ ...JSON.parse(localStorage.getItem('rxpos-device') || '{}'), whatsNewSeen: '1.12.0' })));
+// B8: this device last saw 1.13.0's highlights, so 1.14.0 is an update to it
+await p.evaluate(() => localStorage.setItem('rxpos-device', JSON.stringify({ ...JSON.parse(localStorage.getItem('rxpos-device') || '{}'), whatsNewSeen: '1.13.0' })));
 await p.reload({ waitUntil: 'networkidle2' }); await wait(500);
 await p.type('input[autocomplete=username]', 'dana@clean.rx'); await p.type('input[type=password]', 'dana-pass-1234');
 await p.evaluate(() => [...document.querySelectorAll('form button')].find((x) => /^Sign in/.test(x.textContent.trim()))?.click());
@@ -56,7 +56,7 @@ const widgets = () => p.evaluate(() => [...document.querySelectorAll('.dash-cell
 check('clean layout: figures, the bento row, chart, health, top medicines, latest sales, busy hours', JSON.stringify(await widgets()) === JSON.stringify(['figures', 'bento', 'chart', 'health', 'top', 'recent', 'busy']), JSON.stringify(await widgets()));
 check('header: no repeated search or bell (the top bar\'s show), today\'s date', await p.evaluate(() => !document.querySelector('.dash-search') && !document.querySelector('.dash-bell') && !!document.querySelector('.topbar .search-trigger')?.offsetParent && !!document.querySelector('.topbar > .bell button[aria-label^=Notifications]')?.offsetParent && /\d{4}/.test(document.querySelector('.date-pill')?.innerText || '')));
 // UI batch 3, B1-B8
-check('B8 what\'s new: shown once after an update', await p.evaluate(() => /What.s new in 1\.13\.0/.test(document.querySelector('.whats-new')?.innerText || '') && !!document.querySelector('.whats-new a')), await p.evaluate(() => localStorage.getItem('rxpos-device')));
+check('B8 what\'s new: shown once after an update', await p.evaluate(() => /What.s new in 1\.14\.0/.test(document.querySelector('.whats-new')?.innerText || '') && !!document.querySelector('.whats-new a')), await p.evaluate(() => localStorage.getItem('rxpos-device')));
 check('B7 setup checklist: medicines and stock ticked from the data, staff not yet', await p.evaluate(() => { const st = (id) => document.querySelector(`.setup-steps [data-step=${id}]`)?.classList.contains('done'); return st('medicines') && st('stock') && st('staff') === false && /of 6 done/.test(document.querySelector('.setup-card').innerText); }));
 check('B1 bars: a dashed average line and today\'s amount above its bar', await p.evaluate(() => !!document.querySelector('.bento-avg') && /2,800/.test(document.querySelector('.bento-bar.now .bento-val')?.innerText || '') && /Average/.test(document.querySelector('.bento-avg-key')?.innerText || '')));
 await (await p.$('.bento-bar.now')).hover(); await wait(300);
@@ -118,7 +118,7 @@ await p.evaluate(() => document.querySelector('.nav-quick .nav-title').click());
 check('…Pinned folds', await p.evaluate(() => document.querySelector('.nav-quick').classList.contains('collapsed')));
 await p.screenshot({ path: path.join(out, 'sidebar-pinned-folded.png'), clip: { x: 0, y: 0, width: 260, height: 600 } });
 await p.evaluate(() => [...document.querySelectorAll('.nav-add')].find((x) => /Receive stock/.test(x.title))?.click()); await wait(800);
-check('the + of Medicine Inventory opens Add Stock', await p.evaluate(() => location.hash.includes('add-stock')));
+check('the + of Stock opens Add Stock', await p.evaluate(() => location.hash.includes('add-stock')));
 await p.evaluate(() => { location.hash = '#/'; }); await wait(1200);
 // UI batch 2 (2026-11-18)
 check('figure cards carry a small 7-day trend line', await p.evaluate(() => document.querySelectorAll('.kpis .stat .spark polyline').length >= 3 && [...document.querySelectorAll('.kpis .stat .spark')].every((s) => s.getBoundingClientRect().width <= 100 && s.getBoundingClientRect().height <= 30)), await p.evaluate(() => document.querySelectorAll('.kpis .stat .spark').length));

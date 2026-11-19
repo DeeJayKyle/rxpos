@@ -4,6 +4,8 @@ import { useStore, today, uid, put, del, audit, downloadFile } from '../store.js
 import { Modal, Empty } from '../ui.jsx';
 import { toast, ask } from '../feedback.jsx';
 import { calendarLink, calendarPrivacy } from '../cloud.js';
+import { dateLocale } from '../showdate.js';
+import { DateInput } from '../fields.jsx';
 
 const WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -112,7 +114,7 @@ export default function Calendar() {
         <div className="card cal">
           <div className="row between cal-nav">
             <button className="icon-btn" onClick={() => shift(-1)} aria-label="Previous month"><ChevronLeft size={18} /></button>
-            <h3>{first.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</h3>
+            <h3>{first.toLocaleDateString(dateLocale(), { month: 'long', year: 'numeric' })}</h3>
             <div className="row gap"><button className="btn sm ghost" onClick={() => { setMonth(today().slice(0, 7)); setDay(today()); }}>Today</button>
               <button className="icon-btn" onClick={() => shift(1)} aria-label="Next month"><ChevronRight size={18} /></button></div>
           </div>
@@ -132,7 +134,7 @@ export default function Calendar() {
         </div>
         <div className="stack">
           <div className="card">
-            <h3>{new Date(day + 'T00:00').toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}</h3>
+            <h3>{new Date(day + 'T00:00').toLocaleDateString(dateLocale(), { weekday: 'long', day: 'numeric', month: 'long' })}</h3>
             <div className="agenda">
               {agenda.map((e) => (
                 <div key={e.id} className={'agenda-item ' + KINDS[e.kind][1]}>
@@ -173,7 +175,7 @@ export default function Calendar() {
           <form onSubmit={save}>
             <div className="form-grid">
               <label className="field full"><span>What</span><input required autoFocus value={edit.title} onChange={(e) => setEdit({ ...edit, title: e.target.value })} placeholder="e.g. NDA inspection, supplier delivery, staff meeting" /></label>
-              <label className="field"><span>Date</span><input type="date" required value={edit.date} onChange={(e) => setEdit({ ...edit, date: e.target.value })} /></label>
+              <label className="field"><span>Date</span><DateInput required value={edit.date} onChange={(v) => setEdit({ ...edit, date: v })} /></label>
               <label className="field"><span>Repeats</span><select value={edit.repeat || 'none'} onChange={(e) => setEdit({ ...edit, repeat: e.target.value })}>
                 <option value="none">Does not repeat</option><option value="daily">Every day</option><option value="weekly">Every week</option><option value="monthly">Every month</option><option value="yearly">Every year</option></select></label>
               <label className="field"><span>Starts (optional)</span><input type="time" value={edit.time || ''} onChange={(e) => setEdit({ ...edit, time: e.target.value })} /></label>

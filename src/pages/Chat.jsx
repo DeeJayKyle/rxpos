@@ -7,6 +7,7 @@ import { sendSms, whatsappLink, cloudConfig } from '../cloud.js';
 import { CallMenu, startCall } from '../calls.jsx';
 import { liveUp, liveSend, onLive } from '../live.js';
 import { uploadAttachment, Attachment, VoiceRecorder, ATTACH_ACCEPT } from '../attach.jsx';
+import { dateLocale } from '../showdate.js';
 
 const READ_KEY = 'rxpos-chat-read';
 const HIDDEN_KEY = 'rxpos-chat-hidden'; // "Delete for me": only this device stops showing it
@@ -39,8 +40,8 @@ const dayLabel = (iso) => {
   const diff = Math.round((t - new Date(d.getFullYear(), d.getMonth(), d.getDate())) / 864e5);
   if (diff === 0) return 'Today';
   if (diff === 1) return 'Yesterday';
-  if (diff < 7) return d.toLocaleDateString([], { weekday: 'long' });
-  return d.toLocaleDateString([], { day: 'numeric', month: 'short', year: d.getFullYear() === t.getFullYear() ? undefined : 'numeric' });
+  if (diff < 7) return d.toLocaleDateString(dateLocale(), { weekday: 'long' });
+  return d.toLocaleDateString(dateLocale(), { day: 'numeric', month: 'short', year: d.getFullYear() === t.getFullYear() ? undefined : 'numeric' });
 };
 
 export default function Chat() {
@@ -357,7 +358,7 @@ export default function Chat() {
       {infoFor && (
         <Modal title="Message info" onClose={() => setInfoFor(null)}>
           <p className="muted small">{messagePreview(infoFor).slice(0, 200)}</p>
-          <p className="small">Sent {new Date(infoFor.date).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })} by {infoFor.fromName}{infoFor.editedAt ? ` · edited ${new Date(infoFor.editedAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}` : ''}</p>
+          <p className="small">Sent {new Date(infoFor.date).toLocaleString(dateLocale(), { dateStyle: 'medium', timeStyle: 'short' })} by {infoFor.fromName}{infoFor.editedAt ? ` · edited ${new Date(infoFor.editedAt).toLocaleString(dateLocale(), { dateStyle: 'short', timeStyle: 'short' })}` : ''}</p>
           {infoFor.fromId === user.id && <><h4><CheckCheck size={15} className="tick read" /> Read by</h4><ul className="info-list">{seenBy(infoFor).map((r) => <li key={r.id}>{db.users.find((u) => u.id === r.userId)?.name || 'Colleague'}</li>)}{!seenBy(infoFor).length && <li className="muted">Nobody yet</li>}</ul></>}
           {(marks.get(infoFor.id) || []).some((k) => k.emoji) && <><h4>Reactions</h4><ul className="info-list">{(marks.get(infoFor.id) || []).filter((k) => k.emoji).map((k) => <li key={k.id}>{k.emoji} {k.userId === user.id ? 'You' : k.userName}</li>)}</ul></>}
         </Modal>

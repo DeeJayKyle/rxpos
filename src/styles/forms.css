@@ -76,6 +76,9 @@
 /* E5: one date-range control */
 .date-range { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .date-range select { min-width: 130px; }
+/* 1.14.0: the typed date boxes share the row and shrink to fit a phone with large text */
+.date-range { max-width: 100%; }
+.date-range .date-input { min-width: 0; flex: 1 1 8.5em; max-width: 100%; }
 /* E6: the pharmacy's logo in Settings */
 .logo-preview { width: 72px; height: 72px; object-fit: contain; border-radius: 12px; background: var(--surface-2); display: inline-grid; place-items: center; }
 

@@ -530,7 +530,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     Widget chip(IconData i, String s) => Container(
           padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
           decoration: BoxDecoration(color: cs.surface.withValues(alpha: .8), borderRadius: BorderRadius.circular(99), border: Border.all(color: cs.primary.withValues(alpha: .18))),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(i, size: 14, color: cs.primary), const SizedBox(width: 6), Text(s, style: t.textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600))]),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(i, size: 14, color: cs.tertiary), const SizedBox(width: 6), Text(s, style: t.textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600))]),
         );
     final hero = Container(
       color: Color.alphaBlend(cs.primary.withValues(alpha: .07), cs.surface),

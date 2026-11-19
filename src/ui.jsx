@@ -13,6 +13,7 @@ import { useFocusTrap } from './focustrap.js';
 import { useLoadMore, useColumns, BulkBar, useSwipe, useWide, DetailsPane } from './tablekit.jsx';
 import { MoneyInput, PhoneInput, Help, checkField, PhotoField } from './forms.jsx';
 import { lastChangeOf, ago } from './auditText.js';
+import { DateInput } from './fields.jsx';
 
 /** D7: in a pop-up's form, Enter moves to the next field (the last one sends the form) and Ctrl+Enter sends it at once;
  *  a text area keeps Enter for new lines */
@@ -84,6 +85,8 @@ export function Field({ f, value, onChange, error, onBlur }) {
   // A5: a medicine's photo (camera or file, made small, stored with the pharmacy's files)
   else if (f.type === 'photo') input = <PhotoField value={value || ''} onChange={onChange} cfg={store?.syncCfg} name={f.name} />;
   else if (f.type === 'phone') input = <PhoneInput {...aria} id={id} required={f.required} autoFocus={f.autoFocus} placeholder={f.placeholder || '0772 123 456'} onBlur={onBlur} value={value ?? ''} onChange={onChange} />;
+  // 1.14.0: dates typed and shown in the chosen format (This device → Date format), not the browser's locale
+  else if (f.type === 'date') input = <DateInput {...aria} id={id} required={f.required} autoFocus={f.autoFocus} onBlur={onBlur} value={value ?? ''} onChange={onChange} />;
   else input = <input type={f.type || 'text'} step={f.type === 'number' ? 'any' : undefined} min={f.type === 'number' ? f.min ?? 0 : undefined} {...common} />;
   return (
     <label className={'field' + (f.type === 'checkbox' ? ' check' : '') + (f.full ? ' full' : '') + (error ? ' has-error' : '')} htmlFor={id}>

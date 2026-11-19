@@ -2,6 +2,7 @@ import { useState, useMemo, useRef } from 'react';
 import { ShieldAlert, Search } from 'lucide-react';
 import { useStore, MAIN_BRANCH, downloadFile, toCSV } from '../store.jsx';
 import { Tabs, Empty, PdfButton, SearchBox, useProgressive } from '../ui.jsx';
+import { showDate, dateLocale } from '../showdate.js';
 
 /**
  * Controlled drugs register: every movement of each controlled medicine at this branch with a running balance, and
@@ -54,7 +55,7 @@ function Register() {
               const c = m.sale?.controlled;
               return (
                 <tr key={m.id}>
-                  <td>{new Date(m.date).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</td><td>{m.type}</td><td>{m.ref}{m.note ? ` (${m.note})` : ''}</td><td>{batchName.get(m.batchId) || '—'}</td>
+                  <td>{new Date(m.date).toLocaleString(dateLocale(), { dateStyle: 'medium', timeStyle: 'short' })}</td><td>{m.type}</td><td>{m.ref}{m.note ? ` (${m.note})` : ''}</td><td>{batchName.get(m.batchId) || '—'}</td>
                   <td>{c ? <>{c.patient}<br /><small className="muted">{c.idNo}</small></> : m.type === 'Sale' ? <span className="text-warn small">not recorded</span> : ''}</td>
                   <td>{c ? <>{c.prescriber}{c.prescriberReg ? ` (${c.prescriberReg})` : ''}<br /><small className="muted">Rx {c.rxNo}</small></> : ''}</td>
                   <td className="num text-ok">{m.qty > 0 ? m.qty : ''}</td><td className="num text-danger">{m.qty < 0 ? -m.qty : ''}</td><td className="num"><strong>{m.bal}</strong></td><td>{m.user}</td>
@@ -96,7 +97,7 @@ function Recall() {
             <table>
               <thead><tr><th>Date</th><th>Receipt</th><th>Customer</th><th>Phone / ID</th><th>Medicine</th><th className="num">Qty</th><th className="num">Value</th></tr></thead>
               <tbody>
-                {sold.map((r, n) => <tr key={n}><td>{new Date(r.s.date).toLocaleDateString()}</td><td>{r.s.number}</td><td>{r.s.controlled?.patient || r.s.customerName}</td><td>{r.phone}</td><td>{r.i.name}{r.i.kit ? ' (kit)' : ''}</td><td className="num">{r.qty}</td><td className="num">{r.i.kit ? '—' : fmt(r.qty * r.i.price)}</td></tr>)}
+                {sold.map((r, n) => <tr key={n}><td>{showDate(r.s.date)}</td><td>{r.s.number}</td><td>{r.s.controlled?.patient || r.s.customerName}</td><td>{r.phone}</td><td>{r.i.name}{r.i.kit ? ' (kit)' : ''}</td><td className="num">{r.qty}</td><td className="num">{r.i.kit ? '—' : fmt(r.qty * r.i.price)}</td></tr>)}
                 {!sold.length && <Empty colSpan={7}>Nothing sold from this batch</Empty>}
               </tbody>
             </table>

@@ -4,6 +4,7 @@
 import { useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { formatQty } from '../money.js';
+import { dateLocale } from '../showdate.js';
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const pad = (n) => String(n).padStart(2, '0');
@@ -34,7 +35,7 @@ export default function ExpiryCalendar({ batches, warn, onOpen }) {
     return out;
   }, [batches]);
   const go = (k) => setYm(([yy, mm]) => { const d = new Date(yy, mm + k, 1); return [d.getFullYear(), d.getMonth()]; });
-  const title = new Date(y, m, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+  const title = new Date(y, m, 1).toLocaleDateString(dateLocale(), { month: 'long', year: 'numeric' });
   const inMonth = batches.filter((b) => b.expiry.slice(0, 7) === `${y}-${pad(m + 1)}`).length;
   return (
     <div className="card exp-cal" aria-label="Expiry calendar">

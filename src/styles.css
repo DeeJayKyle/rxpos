@@ -414,9 +414,10 @@ table.lines input, table.lines select { width: 100%; min-width: 80px; padding: 7
   .search-trigger { flex: 0; }
   .search-trigger kbd { display: none; }
   .topbar .spacer { flex: 1; }
-  .page { padding: 16px 16px 90px; }
+  /* 1.14.0: room for the bottom bar, the raised Sell button and the phone's home bar, so nothing ends under them */
+  .page { padding: 16px 16px calc(108px + env(safe-area-inset-bottom)); }
   .grid2 { grid-template-columns: 1fr; }
-  .pos { grid-template-columns: 1fr; height: auto; padding: 12px 16px 90px; }
+  .pos { grid-template-columns: 1fr; height: auto; padding: 12px 16px calc(108px + env(safe-area-inset-bottom)); }
   .product-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); max-height: 46vh; }
   .search { width: 100%; }
   .bottom-nav {
@@ -857,7 +858,7 @@ tr.row-bad td { color: var(--danger); }
 .pos-cart .field span { font-size: 12px; }
 @media (max-width: 1300px) { .pos { grid-template-columns: minmax(0, 1fr) 450px; } }
 @media (max-width: 1100px) { .pos { grid-template-columns: minmax(0, 1fr) 400px; } }
-@media (max-width: 900px) { .pos { grid-template-columns: 1fr; padding: 12px 16px 90px; } .line-tools { display: flex; margin-left: 0; } }
+@media (max-width: 900px) { .pos { grid-template-columns: 1fr; padding: 12px 16px calc(108px + env(safe-area-inset-bottom)); } .line-tools { display: flex; margin-left: 0; } }
 
 .stat.link { cursor: pointer; transition: transform .12s ease, box-shadow .12s ease, border-color .12s; }
 .stat.link:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-color: var(--primary); }
@@ -2963,3 +2964,10 @@ tr.group-head > td { background: var(--surface-2); padding: 6px 10px; }
 
 /* the sync pill shows only when something needs the person (offline, refused changes, sign in again) */
 .pill.clock[hidden] { display: none; }
+
+/* 1.14.0: no cut-off words. Chips in a scrolling row keep their whole word (the row scrolls instead); a figure card's
+   line under the figure may take two lines; the menu's shortcut keys show when the item is pointed at or focused (and
+   in its tooltip), so the page names have the whole width. */
+.chips-row > * { flex: none; }
+.sidebar nav a kbd { display: none; }
+.sidebar nav a:is(:hover, :focus-visible) kbd { display: inline-block; }

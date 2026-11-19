@@ -24,6 +24,7 @@ import DraftsList, { useDraftCount } from './Drafts.jsx';
 import { useListControls, useContextMenu } from '../listcontrols.jsx';
 import { Copy } from 'lucide-react';
 import { pharmacyLogo } from '../logo.jsx';
+import { showDateTime, dateLocale } from '../showdate.js';
 
 /** Thermal-printer friendly receipt (58 mm or 80 mm, set in Settings). */
 export function Receipt({ sale }) {
@@ -42,7 +43,7 @@ export function Receipt({ sale }) {
         {s.tin && <div>TIN: {s.tin}</div>}
         {isProforma && <div className="receipt-tag">PROFORMA INVOICE</div>}
         {sale.training && <div className="receipt-tag">TRAINING – NOT A SALE</div>}
-        <div>{sale.number} · {new Date(sale.date).toLocaleString()}</div>
+        <div>{sale.number} · {showDateTime(sale.date)}</div>
         <div>{isProforma ? 'Prepared by' : 'Served by'}: {sale.cashier || sale.createdBy}</div>
         {sale.customerName && sale.customerName !== 'Walk-in Customer' && <div>Customer: {sale.customerName}</div>}
       </div>
@@ -70,7 +71,7 @@ export function Receipt({ sale }) {
       {sale.momo?.txid && <div className="row between"><span>{sale.momo.provider === 'airtel' ? 'Airtel' : 'MoMo'} Ref</span><span>{sale.momo.txid}</span></div>}
       {sale.momo && <div className="small muted">{sale.momo.confirmed ? 'Payment confirmed by the mobile network' : sale.momo.manual ? 'Payment recorded by staff (transaction ID from the customer; not confirmed by the network)' : ''}</div>}
       {sale.status === 'refunded' && <div className="center receipt-tag">REFUNDED</div>}
-      {sale.status === 'refunded' && (sale.refundedAt || sale.refundReason) && <div className="center small muted no-print">{[sale.refundedAt && `On ${new Date(sale.refundedAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}`, sale.refundedBy && `by ${sale.refundedBy}`, sale.refundReason].filter(Boolean).join(' · ')}</div>}
+      {sale.status === 'refunded' && (sale.refundedAt || sale.refundReason) && <div className="center small muted no-print">{[sale.refundedAt && `On ${new Date(sale.refundedAt).toLocaleString(dateLocale(), { dateStyle: 'medium', timeStyle: 'short' })}`, sale.refundedBy && `by ${sale.refundedBy}`, sale.refundReason].filter(Boolean).join(' · ')}</div>}
       <div className="receipt-barcode"><Barcode value={sale.number} height={34} module={1.6} /></div>
       <p className="center">{isProforma ? 'Prices valid for 7 days.' : s.receiptFooter}</p>
     </div>
@@ -98,7 +99,7 @@ export function SaleInvoice({ sale }) {
         <div className="invoice-meta">
           <h2>INVOICE</h2>
           <div>No. <b>{sale.number}</b></div>
-          <div>Date: {new Date(sale.date).toLocaleString([], { dateStyle: 'long', timeStyle: 'short' })}</div>
+          <div>Date: {new Date(sale.date).toLocaleString(dateLocale(), { dateStyle: 'long', timeStyle: 'short' })}</div>
           <div>Served by: {sale.cashier}</div>
           {sale.status === 'refunded' && <div className="receipt-tag">REFUNDED</div>}
         </div>
@@ -188,7 +189,7 @@ export default function Sales() {
   const menu = useContextMenu();
   const [dv, setDv] = useState(() => savedView('sales'));
   const pickView = (v) => { setDv(v); saveView('sales', v); };
-  const saleCard = (s) => { const [st, cls] = saleStatus(s); return { title: s.number + ' · ' + (s.customerName || 'Walk-in'), sub: `${new Date(s.date).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })} · ${s.cashier || ''}`, value: fmt(s.total),
+  const saleCard = (s) => { const [st, cls] = saleStatus(s); return { title: s.number + ' · ' + (s.customerName || 'Walk-in'), sub: `${new Date(s.date).toLocaleString(dateLocale(), { dateStyle: 'medium', timeStyle: 'short' })} · ${s.cashier || ''}`, value: fmt(s.total),
     chips: [cls !== 'paid' && [st, cls === 'owing' ? 'warn' : 'danger'], s.payment && [s.payment], s.edits?.length && ['Edited', 'warn'], [`${s.items.length} item${s.items.length === 1 ? '' : 's'}`]].filter(Boolean) }; };
   const saleMenu = (e, x) => menu.open(e, [
     { label: 'View', Icon: Eye, keyId: 'list:open', run: () => setView(x) },
@@ -278,7 +279,7 @@ export default function Sales() {
           <button className="btn ghost" onClick={() => downloadFile('sales.csv', toCSV(exportRows), 'text/csv')}><Download size={16} />CSV</button>
           <PdfButton title="Sales history" subtitle={[from || to ? `${from || 'start'} to ${to || 'today'}` : 'All dates', q && `search "${q}"`, onlyEdited && 'edited sales only', `${valid.length} sales · ${fmt(valid.reduce((a, s) => a + s.total, 0))}`].filter(Boolean).join(' · ')}
             data={() => [{ head: ['Receipt', 'Date', 'Customer', 'Cashier', 'Payment', 'Status', 'Total'], numeric: [6],
-              body: rows.map((s) => [s.number, new Date(s.date).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }), s.customerName, s.cashier, s.payment, s.status + (s.edits?.length ? ' (edited)' : ''), fmt(s.total)]),
+              body: rows.map((s) => [s.number, new Date(s.date).toLocaleString(dateLocale(), { dateStyle: 'medium', timeStyle: 'short' }), s.customerName, s.cashier, s.payment, s.status + (s.edits?.length ? ' (edited)' : ''), fmt(s.total)]),
               foot: ['', '', '', '', '', 'Total (excl. refunds)', fmt(valid.reduce((a, s) => a + s.total, 0))] }]} />
         </div>
       </div>
@@ -303,7 +304,7 @@ export default function Sales() {
           <tbody>
             {page.rows.map((s, i) => { const rp = lc.rowProps(s, i, saleMenu); const cell = {
               number: <td key="number" className="row-title"><strong>{s.number}</strong> <small className="muted cap">{s.type || 'retail'}</small></td>,
-              date: <td key="date" data-label="Date" className="nowrap">{new Date(s.date).toLocaleDateString([], { dateStyle: 'medium' })}<br /><small className="muted">{new Date(s.date).toLocaleTimeString([], { timeStyle: 'short' })}</small></td>,
+              date: <td key="date" data-label="Date" className="nowrap">{new Date(s.date).toLocaleDateString(dateLocale(), { dateStyle: 'medium' })}<br /><small className="muted">{new Date(s.date).toLocaleTimeString([], { timeStyle: 'short' })}</small></td>,
               branch: <td key="branch" data-label="Branch">{branchName(s.branchId)}</td>,
               customer: <td key="customer" data-label="Customer">{s.customerName}</td>,
               phone: <td key="phone" data-label="Phone" className="muted">{phoneOf(s) || '—'}</td>,
@@ -483,7 +484,7 @@ export function EditHistory({ sale, bare }) {
     <ol className="edit-history">
       {rows.map((x, n) => (
         <li key={n}>
-          <div className="row between gap wrap"><strong>{x.by || 'Unknown'}{x.role ? <small className="muted cap"> · {x.role}</small> : null}</strong><small className="muted">{new Date(x.at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</small></div>
+          <div className="row between gap wrap"><strong>{x.by || 'Unknown'}{x.role ? <small className="muted cap"> · {x.role}</small> : null}</strong><small className="muted">{new Date(x.at).toLocaleString(dateLocale(), { dateStyle: 'medium', timeStyle: 'short' })}</small></div>
           {x.reason && <div className="small">Reason: {x.reason}</div>}
           {x.recordOnly && <div className="small muted">Record only (stock not moved)</div>}
           <table className="small edit-diff"><tbody>
@@ -506,7 +507,7 @@ export function receiptText(sale, s, fmt) {
   L.push(`*${s.name || 'Pharmacy'}*`);
   if (s.address) L.push(s.address);
   if (s.phone) L.push('Tel: ' + s.phone);
-  L.push(`Receipt ${sale.number} · ${new Date(sale.date).toLocaleString()}`);
+  L.push(`Receipt ${sale.number} · ${showDateTime(sale.date)}`);
   if (sale.customerName && sale.customerName !== 'Walk-in Customer') L.push('Customer: ' + sale.customerName);
   L.push('--------------------------------');
   for (const i of sale.items) { L.push(`${i.qty} × ${i.name} — ${fmt(i.qty * i.price)}`); if (i.kit) L.push('  ' + kitContents(i)); }

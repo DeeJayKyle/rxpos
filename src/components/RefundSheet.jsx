@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { Undo2, AlertTriangle, PackageCheck } from 'lucide-react';
 import { Modal } from '../ui.jsx';
 import { stockParts } from '../kits.js';
+import { dateLocale } from '../showdate.js';
 
 export const REFUND_REASONS = ['Customer returned it', 'Wrong medicine or strength', 'Wrong price or quantity', 'Side effect or reaction', 'Sold twice by mistake', 'Other'];
 
@@ -59,7 +60,7 @@ export default function RefundSheet({ sale, fmt, batches = [], closedDay = false
   return (
     <Modal title={`Refund ${sale.number}`} onClose={onCancel} wide>
       <form className="stack refund-sheet" onSubmit={go}>
-        <div className="muted small">{new Date(sale.date).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })} · {sale.customerName || 'Walk-in'} · sold by {sale.cashier || '—'}</div>
+        <div className="muted small">{new Date(sale.date).toLocaleString(dateLocale(), { dateStyle: 'medium', timeStyle: 'short' })} · {sale.customerName || 'Walk-in'} · sold by {sale.cashier || '—'}</div>
         {closedDay && <div className="notice warn" role="alert"><AlertTriangle size={16} /> This sale is in a closed day. The refund counts today, and the owner sees it among the sales to check.</div>}
         <div className="table-wrap">
           <table className="table">

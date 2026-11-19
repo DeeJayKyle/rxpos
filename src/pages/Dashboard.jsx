@@ -14,6 +14,7 @@ import { BusyHours, SetupChecklist, WhatsNewCard } from '../components/DashExtra
 import { deviceSettings, setDevice, onDevice } from '../device.js';
 import { PERIODS, PERIOD_WORDS, VS_WORDS, periodFigures, topMedicines, stockHealth } from '../dashboard.js';
 import { shortText } from '../kits.js';
+import { dateLocale } from '../showdate.js';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const TOP_BY = [['amount', 'Amount'], ['qty', 'Quantity'], ['profit', 'Profit']];
@@ -239,7 +240,7 @@ export default function Dashboard() {
           <div className="sub">Here&apos;s {db.branches.length > 1 ? (branch?.name || 'this branch') : 'your pharmacy'} {isToday ? 'today' : PERIOD_WORDS[period]} <span className="muted" title="Sales are completed receipts at this branch (refunds left out), including tax. Gross profit is sales less tax and the cost recorded on each line.">· sales incl. tax, refunds left out</span></div>
         </div>
         <div className="dash-tools">
-          <Link className="date-pill" to="/calendar" title="Open the calendar"><CalendarDays size={16} />{new Date().toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}</Link>
+          <Link className="date-pill" to="/calendar" title="Open the calendar"><CalendarDays size={16} />{new Date().toLocaleDateString(dateLocale(), { day: 'numeric', month: 'short', year: 'numeric' })}</Link>
           <Link className="btn primary" to="/pos"><ShoppingCart size={18} />New sale</Link>
         </div>
       </section>
@@ -321,7 +322,7 @@ function RecentSales({ sales, branchId, fmt }) {
     }
     return out;
   }, [sales, branchId]);
-  const ago = (d) => { const mins = Math.round((Date.now() - Date.parse(d)) / 60000); return mins < 1 ? 'just now' : mins < 60 ? `${mins} min ago` : mins < 1440 ? `${Math.round(mins / 60)} h ago` : new Date(d).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }); };
+  const ago = (d) => { const mins = Math.round((Date.now() - Date.parse(d)) / 60000); return mins < 1 ? 'just now' : mins < 60 ? `${mins} min ago` : mins < 1440 ? `${Math.round(mins / 60)} h ago` : new Date(d).toLocaleDateString(dateLocale(), { day: 'numeric', month: 'short' }); };
   return (
     <div className="card recent-card">
       <div className="card-head"><h3>Latest sales</h3><Link to="/sales" className="card-head-link">View all <ArrowRight size={14} /></Link></div>

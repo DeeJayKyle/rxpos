@@ -34,6 +34,7 @@ import { kitView, basketDemand, shortText, stockParts } from '../kits.js';
 import KitIcon from '../components/KitIcon.jsx';
 import { pharmacyLogo } from '../logo.jsx';
 import { BranchStockButton } from '../components/BranchStock.jsx';
+import { showDate } from '../showdate.js';
 
 // Receipt numbers must be unique across synced devices, so they are time-based rather than sequential
 
@@ -1244,7 +1245,7 @@ export default function POS({ mode = 'retail' }) {
               <div className="dl-drug">{line.name} <span>× {line.qty}</span></div>
               <div className="dl-dir">{text || 'Directions…'}</div>
               {d.notes.length > 0 && <div className="dl-notes">{d.notes.join(' · ')}</div>}
-              <div className="dl-foot"><span>{d.patient || 'Patient'}</span><span>{new Date().toLocaleDateString()}</span></div>
+              <div className="dl-foot"><span>{d.patient || 'Patient'}</span><span>{showDate(new Date())}</span></div>
             </div>
             <div className="form-actions">
               <button className="btn ghost" onClick={() => { setLine(line.id, { directions: undefined }); setLabelFor(null); }}>Clear</button>

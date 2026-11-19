@@ -99,7 +99,7 @@ class _PackTile extends StatelessWidget {
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
               Expanded(child: Text(pack.name, style: TextStyle(fontFamily: fam(pack.heading), fontWeight: FontWeight.w700, fontSize: 16))),
-              if (selected) Icon(Icons.check_circle, size: 18, color: t.colorScheme.primary),
+              if (selected) Icon(Icons.check_circle, size: 18, color: t.colorScheme.tertiary),
             ]),
             Text(pack.id == 'system' ? 'Nothing to download' : pair, style: t.textTheme.labelSmall),
             const SizedBox(height: 4),

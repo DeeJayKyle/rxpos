@@ -8,6 +8,7 @@ import { HelpCircle, Check } from 'lucide-react';
 import { normalizePhone } from './store.jsx';
 import { safeFileUrl } from './safeurl.js';
 import { uploadAttachment } from './attach.jsx';
+import { DateInput } from './fields.jsx';
 
 /** 1234567.5 → "1,234,567.5" while typing (the decimals typed are kept as typed) */
 export function groupDigits(text) {
@@ -164,9 +165,9 @@ export function DateRange({ from = '', to = '', onChange, allowAll = true, label
         <option value="custom">Custom</option>
       </select>
       {/* Custom: the two dates, always there to type or pick */}
-      <input type="date" aria-label="From" title="From" value={from} max={to || undefined} onChange={(e) => onChange({ from: e.target.value, to })} />
+      <DateInput aria-label="From" title="From" value={from} max={to || undefined} onChange={(v) => onChange({ from: v, to })} />
       <span className="muted" aria-hidden="true">–</span>
-      <input type="date" aria-label="To" title="To" value={to} min={from || undefined} onChange={(e) => onChange({ from, to: e.target.value })} />
+      <DateInput aria-label="To" title="To" value={to} min={from || undefined} onChange={(v) => onChange({ from, to: v })} />
     </div>
   );
 }

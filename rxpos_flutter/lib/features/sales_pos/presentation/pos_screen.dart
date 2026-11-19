@@ -545,8 +545,10 @@ class _PosScreenState extends ConsumerState<PosScreen> {
           ),
           Expanded(child: productPanel),
         ]);
-        final sale = _SalePanel(wholesale: widget.wholesale, data: d, onCharge: _charge, charging: _charging, onError: (m) => _say(m, error: true), advanced: advanced);
-        final client = wide && layout != 'classic' && d.settings.clientCapture != 'off'
+        final hasStrip = wide && layout != 'classic' && d.settings.clientCapture != 'off';
+        // 1.14.0: one place to choose the client: with the client strip on screen the sale panel has no second picker
+        final sale = _SalePanel(wholesale: widget.wholesale, data: d, onCharge: _charge, charging: _charging, onError: (m) => _say(m, error: true), advanced: advanced, clientStrip: hasStrip);
+        final client = hasStrip
             ? _ClientStrip(wholesale: widget.wholesale, data: d, focus: _clientFocus, onDone: _focusSearch)
             : null;
         final till = Focus(
@@ -742,7 +744,7 @@ class _ClientStripState extends ConsumerState<_ClientStrip> {
                 focusNode: widget.focus,
                 onChanged: (_) => setState(() {}),
                 onSubmitted: (_) => found.isEmpty ? null : _pick(found.first.id, found.first.name),
-                decoration: const InputDecoration(isDense: true, prefixIcon: Icon(Icons.search, size: 18), hintText: 'Find client: name or phone  (Alt+C)'),
+                decoration: InputDecoration(isDense: true, prefixIcon: const Icon(Icons.search, size: 18), hintText: windowClass(context) == WindowClass.compact ? 'Find client: name or phone' : 'Find client: name or phone  (Alt+C)'),
               ),
             ),
           ]),
@@ -756,6 +758,19 @@ class _ClientStripState extends ConsumerState<_ClientStrip> {
             if (c != null && sales >= 3) const Chip(label: Text('Loyal client'), visualDensity: VisualDensity.compact),
             if (c != null && c.allergies.isNotEmpty) Chip(label: Text('Allergies: ${c.allergies}'), backgroundColor: th.colorScheme.errorContainer, visualDensity: VisualDensity.compact),
             if (c != null) TextButton(onPressed: () => _pick(walkIn, 'Walk-in Customer'), child: const Text('Back to walk-in')),
+            // 1.14.0: the one place to choose the client on this layout, so adding a new one is here too
+            if ((ref.watch(permissionsProvider).value ?? const <String>{}).contains('customers'))
+              TextButton.icon(
+                key: const Key('strip-add-client'),
+                icon: const Icon(Icons.person_add_alt, size: 18),
+                label: const Text('New client'),
+                onPressed: () async {
+                  final rec = await askNewClient(context);
+                  if (rec == null) return;
+                  final saved = await ref.read(recordStoreProvider).update((d) => d.put('customers', rec));
+                  _pick(saved['id'] as String, saved['name'] as String);
+                },
+              ),
           ]),
         ]),
       ),
@@ -958,6 +973,7 @@ class _ProductPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = Theme.of(context);
     final s = data.settings;
+    final phone = windowClass(context) == WindowClass.compact;
     return Padding(
       padding: const EdgeInsets.all(12),
       child: Column(
@@ -972,9 +988,10 @@ class _ProductPanel extends StatelessWidget {
                   style: t.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
                 ),
               ),
-              // with large text in a narrow panel the count and the layout menu shrink instead of running off the side
-              Flexible(child: Text('${data.products.length} medicines', maxLines: 1, overflow: TextOverflow.ellipsis, style: t.textTheme.bodySmall)),
-              IconButton(
+              // with large text in a narrow panel the count and the layout menu shrink instead of running off the side;
+              // on a phone (1.14.0) the count and the second-screen button make way so the title is not cut off
+              if (!phone) Flexible(child: Text('${data.products.length} medicines', maxLines: 1, overflow: TextOverflow.ellipsis, style: t.textTheme.bodySmall)),
+              if (!phone) IconButton(
                 key: const Key('pos-display'),
                 tooltip: 'Customer display: a second window or screen facing the client',
                 icon: const Icon(Icons.connected_tv_outlined),
@@ -1038,9 +1055,10 @@ class _ProductPanel extends StatelessWidget {
                   focusNode: focus,
                   onChanged: onChanged,
                   onSubmitted: (_) => onSubmit(),
-                  decoration: const InputDecoration(
-                    prefixIcon: Icon(Icons.search),
-                    hintText: 'Search medicine or scan barcode…  (F8)',
+                  // the keyboard shortcut only where there is a keyboard-sized screen (1.14.0: not on phones)
+                  decoration: InputDecoration(
+                    prefixIcon: const Icon(Icons.search),
+                    hintText: windowClass(context) == WindowClass.compact ? 'Search medicine or scan barcode…' : 'Search medicine or scan barcode…  (F8)',
                     border: OutlineInputBorder(),
                   ),
                 ),
@@ -1097,7 +1115,7 @@ class _ProductPanel extends StatelessWidget {
                       maxCrossAxisExtent: tokensOf(context).tileWidth,
                       // + a row for the FEFO expiry badge, + 8 for the React look's roomier card padding (#66: the price,
                       // a tag and the stock note wrapping to two lines overflowed by 6 px)
-                      mainAxisExtent: MediaQuery.textScalerOf(context).scale(tokensOf(context).tileHeight + 32),
+                      mainAxisExtent: MediaQuery.textScalerOf(context).scale(tokensOf(context).tileHeight + 32 + 20), // + a third line for a long name (1.14.0)
                       crossAxisSpacing: tokensOf(context).gap,
                       mainAxisSpacing: tokensOf(context).gap,
                     ),
@@ -1133,7 +1151,7 @@ class _ProductPanel extends StatelessWidget {
                                     Expanded(
                                       child: Text(
                                         p.name,
-                                        maxLines: 2,
+                                        maxLines: 3, // 1.14.0: the tile has room for a long name's third line
                                         overflow: TextOverflow.ellipsis,
                                         style: const TextStyle(fontWeight: FontWeight.w700),
                                       ),
@@ -1371,8 +1389,9 @@ class _SaleBar extends ConsumerWidget {
               const SizedBox(width: 10),
               Expanded(child: Text(s.lines.isEmpty ? 'No items yet' : '${s.lines.length} item${s.lines.length == 1 ? '' : 's'}', maxLines: 1, overflow: TextOverflow.ellipsis)),
               // large text on a small phone: the total shrinks to fit rather than pushing Charge off the bar
+              // (1.14.0: at most half the room, and only what it needs, so "No items yet" is not cut off; large text
+              // still shrinks it to fit)
               Flexible(
-                flex: 2,
                 child: FittedBox(
                   fit: BoxFit.scaleDown,
                   alignment: Alignment.centerRight,
@@ -1409,7 +1428,9 @@ Future<void> _scanRx(BuildContext context, WidgetRef ref, {bool wholesale = fals
 final rxScanFor = <bool, ({String patient, String prescriber})>{};
 
 class _SalePanel extends ConsumerWidget {
-  const _SalePanel({required this.wholesale, required this.data, required this.onCharge, required this.charging, required this.onError, this.advanced = false});
+  const _SalePanel({required this.wholesale, required this.data, required this.onCharge, required this.charging, required this.onError, this.advanced = false, this.clientStrip = false});
+  /// the client strip is on screen (Standard and Advanced layouts on a wide screen): no second client picker here
+  final bool clientStrip;
   /// Advanced UI: numbered lines (for the command bar) and "Process checkout"
   final bool advanced;
   final bool wholesale;
@@ -1451,7 +1472,7 @@ class _SalePanel extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (s.proforma != null) Text('Selling proforma ${s.proforma!['number']}', style: TextStyle(color: th.colorScheme.primary)),
+            if (s.proforma != null) Text('Selling proforma ${s.proforma!['number']}', style: TextStyle(color: th.colorScheme.tertiary)),
             Row(
               children: [
                 Flexible(child: Text('Current sale', maxLines: 1, overflow: TextOverflow.ellipsis, style: th.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700))),
@@ -1518,7 +1539,7 @@ class _SalePanel extends ConsumerWidget {
                   ],
                 ),
               ),
-            if (st.clientCapture != 'off')
+            if (st.clientCapture != 'off' && !clientStrip)
               Row(
                 children: [
                   Expanded(
@@ -1825,7 +1846,7 @@ class _SalePanel extends ConsumerWidget {
                         // bigger, and bigger still while cash is typed (2026-11-18)
                         child: AnimatedDefaultTextStyle(
                           duration: const Duration(milliseconds: 150),
-                          style: (s.tendered != null ? th.textTheme.headlineLarge : th.textTheme.headlineMedium)!.copyWith(fontWeight: FontWeight.w900, color: th.colorScheme.primary),
+                          style: (s.tendered != null ? th.textTheme.headlineLarge : th.textTheme.headlineMedium)!.copyWith(fontWeight: FontWeight.w900, color: th.colorScheme.tertiary),
                           child: Text(fmt(t.total), key: const Key('till-total')),
                         ),
                       ),
@@ -1942,7 +1963,7 @@ class _SalePanel extends ConsumerWidget {
                     Expanded(
                       child: Align(
                         alignment: Alignment.centerRight,
-                        child: FittedBox(fit: BoxFit.scaleDown, child: Text(fmt(due), style: th.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900, color: th.colorScheme.primary))),
+                        child: FittedBox(fit: BoxFit.scaleDown, child: Text(fmt(due), style: th.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900, color: th.colorScheme.tertiary))),
                       ),
                     ),
                   ]),
@@ -1960,7 +1981,7 @@ class _SalePanel extends ConsumerWidget {
                     Text('Total', style: th.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
                     const Spacer(),
                     Text('${method.name} · ', style: th.textTheme.bodySmall),
-                    Text(fmt(t.total), style: th.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900, color: th.colorScheme.primary)),
+                    Text(fmt(t.total), style: th.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900, color: th.colorScheme.tertiary)),
                   ]),
                   const SizedBox(height: 6),
                   buttons,

@@ -37,6 +37,7 @@ import { MegaMenu, TopNav } from './components/NavMenus.jsx';
 import { BackButton, markNav, usePageMotion, useEdgeSwipeBack, useKeyboardFit } from './mobilenav.jsx';
 import AiOmnibar from './components/AiOmnibar.jsx';
 import { warmSearchKeys } from './search.js';
+import { dateLocale } from './showdate.js';
 const OwnerConsole = lazy(() => import('./pages/OwnerConsole.jsx'));
 
 // Pages load on demand so the app opens fast, even on low-end PCs and phones; once it is open and idle every page's
@@ -121,24 +122,27 @@ const NAV = [
     ['/calendar', 'Calendar', CalendarDays, null, null, <P.Calendar />, null, 'calendar'],
     ['/notes', 'Notes & SOPs', NotebookPen, null, null, <P.Notes />, null, 'notes'],
   ] },
-  { group: 'Medicine Inventory', items: [
-    ['/medicines', 'Medicine List', Pill, null, null, <P.MedicineList />, 'inventory.view'],
-    ['/formulations', 'Formulations', FlaskConical, null, null, <P.Formulations />, 'medicines.manage'],
+  // 1.14.0: the 17 medicine pages split in two short groups, so the menu is easier to scan and its headings fit
+  { group: 'Stock', items: [
     ['/inventory', 'Inventory', Boxes, 'F7', 'low', <P.StockLevels />, 'inventory.view'],
     ['/add-stock', 'Add Stock', PackagePlus, 'F4', null, <P.AddStock />, 'stock.receive'],
-    ['/kits', 'Kits', BriefcaseMedical, null, 'kits', <P.Kits />, 'inventory.view'],
     ['/returns', 'Returns to Supplier', Undo2, null, null, <P.Returns />, ['stock.receive', 'stock.adjust']],
     ['/purchases', 'Purchase History', History, null, null, <P.Purchases />, 'stock.receive'],
     ['/shelves', 'Shelves', Archive, null, null, <P.Shelves />, 'inventory.view'],
     ['/stock-count', 'Stock Count', ClipboardCheck, null, null, <P.StockCount />, ['stock.count', 'stock.adjust']],
-    ['/controlled', 'Controlled Drugs & Recalls', ShieldPlus, null, null, <P.Controlled />, 'inventory.view'],
     ['/expiry', 'Expiring / Expired', CalendarClock, null, 'expiry', <P.Expiry />, 'inventory.view'],
     ['/reorder', 'Reorder & Dead Stock', ShoppingBag, null, null, <P.Reorder />, 'stock.receive', 'reorder'],
-    ['/quick-edit', 'Quick Edit', PencilRuler, null, null, <P.QuickEdit />, 'medicines.manage'],
     ['/stock-card', 'Stock Card', ScrollText, null, null, <P.StockCard />, 'inventory.view'],
+    ['/storage', 'Weather & Storage', Thermometer, null, null, <P.Storage />, 'inventory.view', 'weather'],
+  ] },
+  { group: 'Medicines', items: [
+    ['/medicines', 'Medicine List', Pill, null, null, <P.MedicineList />, 'inventory.view'],
+    ['/formulations', 'Formulations', FlaskConical, null, null, <P.Formulations />, 'medicines.manage'],
+    ['/kits', 'Kits', BriefcaseMedical, null, 'kits', <P.Kits />, 'inventory.view'],
+    ['/controlled', 'Controlled Drugs & Recalls', ShieldPlus, null, null, <P.Controlled />, 'inventory.view'],
+    ['/quick-edit', 'Quick Edit', PencilRuler, null, null, <P.QuickEdit />, 'medicines.manage'],
     ['/labels', 'Barcode Labels', Tag, null, null, <P.Labels />, 'medicines.manage', 'labels'],
     ['/import', 'Import Medicines', FileUp, null, null, <P.Import />, 'medicines.manage', 'import'],
-    ['/storage', 'Weather & Storage', Thermometer, null, null, <P.Storage />, 'inventory.view', 'weather'],
   ] },
   { group: 'Branches', items: [
     ['/branches', 'All Branches', Building2, null, null, <P.Branches />, 'branches.view', 'branches'],
@@ -351,7 +355,7 @@ function ClockPill() {
     : syncStatus.lastSync ? (pending ? `${pending} change(s) on their way · ` : '') + 'Up to date ' + new Date(syncStatus.lastSync).toLocaleTimeString() : 'Connecting…');
   const label = s === 'off' && !pending ? 'On this device' : storageIssue ? 'Needs attention' : syncStatus.expired ? 'Sign in again' : attention ? 'Needs attention'
     : !online || s === 'offline' ? ['Offline', waiting].filter(Boolean).join(' · ') : s === 'syncing' ? 'Syncing…' : waiting || 'Synced';
-  const clockTime = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }), clockDate = now.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' });
+  const clockTime = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }), clockDate = now.toLocaleDateString(dateLocale(), { weekday: 'short', day: 'numeric', month: 'short' });
   const click = () => (syncStatus.expired ? setUser(null) : storageIssue || syncStatus.rejected > 0 ? navigate('/device') : syncNow());
   return (
     // step 24: the spoken name starts with the words on the pill (axe label-content-name-mismatch), then the detail
@@ -833,7 +837,8 @@ function Gate() {
 const QUICK_ADD = {
   Sales: ['New sale', '/pos', 'pos.sell'],
   People: ['Add a customer', '/customers', 'customers', { create: true }],
-  'Medicine Inventory': ['Receive stock', '/add-stock', 'stock.receive'],
+  Stock: ['Receive stock', '/add-stock', 'stock.receive'],
+  Medicines: ['Add a medicine', '/medicines', 'medicines.manage', { create: true }],
   Finance: ['Add an expense', '/expenses', 'finance', { create: true }],
 };
 

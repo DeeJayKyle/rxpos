@@ -65,7 +65,7 @@ Widget _icon(BuildContext context, IconData icon, {bool danger = false}) {
     width: 34,
     height: 34,
     decoration: BoxDecoration(color: (danger ? cs.error : cs.primary).withValues(alpha: .12), borderRadius: BorderRadius.circular(10)),
-    child: Icon(icon, size: 18, color: danger ? cs.error : cs.primary),
+    child: Icon(icon, size: 18, color: danger ? cs.error : cs.tertiary),
   );
 }
 

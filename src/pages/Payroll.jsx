@@ -10,6 +10,7 @@ import { useStore, uid, put, audit, today, now, downloadFile, toCSV } from '../s
 import { toast } from '../feedback.jsx';
 import { CASH } from '../finance.js';
 import { ATTENDANCE_KINDS, SALARIES_CATEGORY, payLine, payrollTotals } from '../payroll.js';
+import { DateInput } from '../fields.jsx';
 
 const METHODS = ['Cash', 'Mobile Money', 'Bank Transfer', 'Cheque'];
 const month0 = () => today().slice(0, 7);
@@ -114,7 +115,7 @@ export default function Payroll() {
       {tab === 'attendance' && (
         <div className="card">
           <div className="row gap wrap pad">
-            <label className="field inline"><span>Day</span><input type="date" aria-label="Attendance day" value={day} onChange={(e) => e.target.value && setDay(e.target.value)} /></label>
+            <label className="field inline"><span>Day</span><DateInput aria-label="Attendance day" value={day} onChange={(v) => v && setDay(v)} /></label>
             <button className="btn" onClick={everyonePresent} disabled={!active.length}>Everyone else present</button>
           </div>
           {active.map((e) => (

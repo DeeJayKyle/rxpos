@@ -141,7 +141,7 @@ class MedThumb extends ConsumerWidget {
       height: size,
       alignment: Alignment.center,
       decoration: BoxDecoration(color: t.colorScheme.primary.withValues(alpha: .14), borderRadius: BorderRadius.circular(8)),
-      child: Text(name.trim().isEmpty ? '?' : name.trim()[0].toUpperCase(), style: TextStyle(fontWeight: FontWeight.w800, fontSize: size * .45, color: t.colorScheme.primary)),
+      child: Text(name.trim().isEmpty ? '?' : name.trim()[0].toUpperCase(), style: TextStyle(fontWeight: FontWeight.w800, fontSize: size * .45, color: t.colorScheme.tertiary)),
     );
     if (photo.isEmpty) return ExcludeSemantics(child: initial);
     return ClipRRect(

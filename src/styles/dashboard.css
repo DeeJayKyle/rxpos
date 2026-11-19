@@ -189,7 +189,7 @@
 
 /* B2: tighter figure cards: the change and "vs yesterday" on one line */
 .stats.kpis .stat { min-height: 104px; }
-.stat > .stat-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+.stat > .stat-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; } /* one line (B2); its whole words in the tooltip (1.14.0) */
 
 @media (prefers-reduced-motion: reduce) { .bento-tip { transition: none; } }
 

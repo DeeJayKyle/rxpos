@@ -5,6 +5,7 @@ import { idbGet, idbSet } from '../idb.js';
 import { Empty } from '../ui.jsx';
 import { createDrugLookup, genericKey, lookupKeys } from '../druglabel.js';
 import { searchProducts } from '../search.js';
+import { showDate } from '../showdate.js';
 
 // Dispensing information: from the U.S. FDA drug label database (openFDA, public domain), kept on the device for
 // offline use (src/druglabel.js does the fast, cached, retried lookup), plus links to clinical references (Medscape,
@@ -69,7 +70,7 @@ export function DrugInfoPanel({ name, generic, compact }) {
         <>
           <div className="row between">
             <div><strong className="druginfo-title">{info.title || key}</strong><div className="muted small">{[info.form, info.route].filter(Boolean).join(' · ')}</div></div>
-            {state.cached && <span className="badge" title="Saved on this device, works offline">{state.refreshing ? 'updating…' : `saved ${new Date(info.fetchedAt).toLocaleDateString()}`}</span>}
+            {state.cached && <span className="badge" title="Saved on this device, works offline">{state.refreshing ? 'updating…' : `saved ${showDate(info.fetchedAt)}`}</span>}
           </div>
           <div className="druginfo-sections">
             {(compact ? info.sections.filter(([l]) => ['Uses', 'Dosage & administration', 'Do not use when', 'Warnings & precautions', 'Warnings', 'Side effects', 'Interactions'].includes(l)) : info.sections).map(([label, text]) => (

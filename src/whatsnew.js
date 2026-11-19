@@ -3,13 +3,13 @@
 // its highlights go here too. The Flutter app keeps the same list in rxpos_flutter/lib/core/config/whats_new.dart
 // (tests/unit-whatsnew.mjs checks they match).
 export const WHATS_NEW = {
-  version: '1.13.0',
+  version: '1.14.0',
   items: [
-    { text: 'Undo on the till: removed lines and cleared sales come back with one tap', to: '/pos' },
-    { text: 'Training mode on the till: practise sales that save nothing', to: '/pos' },
-    { text: 'A customer display for a second screen facing the client', to: '/pos' },
-    { text: 'Refunds over a set amount need a manager', to: '/sales' },
-    { text: 'Busy hours on the dashboard: when your pharmacy sells most', to: '/' },
+    { text: 'Dates in your chosen format everywhere (This device → Date format), on every computer', to: '/device' },
+    { text: 'Warnings in real colours in every theme: OK green, low amber, expired and out of stock red', to: '/inventory' },
+    { text: 'Four dark themes: Midnight Blue, Dark Forest and Graphite Amber join Navy Teal', to: '/device' },
+    { text: 'A shorter menu: the medicine pages in two groups, Stock and Medicines', to: '/' },
+    { text: 'Clearer words and pages: nothing cut off on phones, empty pages say what to do next', to: '/' },
   ],
 };
 

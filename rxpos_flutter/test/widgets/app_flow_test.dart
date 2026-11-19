@@ -48,6 +48,7 @@ import 'package:rxpos/features/calls/domain/rtc_peer.dart';
 import 'package:rxpos/features/engage/presentation/watchers.dart';
 import 'package:rxpos/features/reports/domain/weekly.dart';
 import 'package:rxpos/core/presentation/widgets.dart';
+import 'package:rxpos/core/presentation/top_bar.dart' show CommandPalette;
 import 'package:rxpos/core/theme/themes.dart';
 import 'package:rxpos/features/auth/domain/offline_secrets.dart';
 import 'package:rxpos/features/calendar/domain/calendar.dart';
@@ -738,8 +739,8 @@ void main() {
         d.put('sales', sale('R-2', 0, 800, paid: 0, who: 'Henry Example'));
         d.put('sales', sale('R-3', 1, 2000));
       });
-      // this device last saw 1.12.0's highlights, so 1.13.0 is an update to it
-      await db.into(db.kv).insertOnConflictUpdate(KvCompanion.insert(k: 'device:whatsNewSeen', v: '1.12.0'));
+      // this device last saw 1.13.0's highlights, so 1.14.0 is an update to it
+      await db.into(db.kv).insertOnConflictUpdate(KvCompanion.insert(k: 'device:whatsNewSeen', v: '1.13.0'));
     });
     await start(tester);
     // B6: a long amount is said short on the figure card; the whole amount in its tooltip
@@ -761,7 +762,7 @@ void main() {
     expect(find.byKey(Key('busy-$wd-10')), findsOneWidget);
     // B8: what's new once
     expect(find.byKey(const Key('whats-new')), findsOneWidget);
-    expect(find.text("What's new in 1.13.0"), findsOneWidget);
+    expect(find.text("What's new in 1.14.0"), findsOneWidget);
     // B7: the setup checklist, ticked from the data
     expect(find.byKey(const Key('setup-checklist')), findsOneWidget);
     expect(find.textContaining('2 of 6 done', findRichText: true), findsOneWidget);
@@ -1765,7 +1766,8 @@ void main() {
     await tester.enterText(find.byKey(const Key('palette-input')), '/note');
     await settle(tester);
     expect(find.text('New note page'), findsOneWidget);
-    expect(find.text('Medicines'), findsNothing, reason: 'no medicines, customers or AI rows after "/"');
+    // (inside the palette: "Medicines" is also a menu heading since 1.14.0)
+    expect(find.descendant(of: find.byType(CommandPalette), matching: find.text('Medicines')), findsNothing, reason: 'no medicines, customers or AI rows after "/"');
     // (opening Notes from here starts a page whose save runs on the database's own thread, which a widget test cannot
     // wait for: test/features/notes_test.dart covers the editor and its saving)
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);

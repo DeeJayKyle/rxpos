@@ -4,6 +4,7 @@ import { isAndroid } from './platform.js';
 import { downloadFile, localDate } from './store.jsx';
 import { kitContents } from './kits.js';
 import { pharmacyLogo } from './logo.jsx';
+import { showDateTime } from './showdate.js';
 
 const load = async () => {
   const [{ jsPDF }, { autoTable }] = await Promise.all([import('jspdf'), import('jspdf-autotable')]);
@@ -42,7 +43,7 @@ export async function receiptPdf(sale, { db, fmt }) {
     ...(((db.branches.length > 1 && branch?.address) ? branch.address : s.address) ? [(db.branches.length > 1 && branch?.address) ? branch.address : s.address] : []),
     ...(s.phone ? ['Tel: ' + s.phone] : []), ...(s.tin ? ['TIN: ' + s.tin] : []),
     ...(isProforma ? ['PROFORMA INVOICE'] : []),
-    `${sale.number} · ${new Date(sale.date).toLocaleString()}`,
+    `${sale.number} · ${showDateTime(sale.date)}`,
     `${isProforma ? 'Prepared by' : 'Served by'}: ${sale.cashier || sale.createdBy || ''}`,
     ...(sale.customerName && sale.customerName !== 'Walk-in Customer' ? ['Customer: ' + sale.customerName] : []),
   ];
@@ -124,7 +125,7 @@ export async function pagePdf(root, { title, subtitle = '', db, file, landscape,
   doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.text(s.name || 'RxPOS', M, y + 4);
   doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(100);
   doc.text([s.address, s.phone && 'Tel: ' + s.phone].filter(Boolean).join(' · '), M, y + 9);
-  doc.text(`Printed ${new Date().toLocaleString()}`, W - M, y + 4, { align: 'right' });
+  doc.text(`Printed ${showDateTime(new Date())}`, W - M, y + 4, { align: 'right' });
   doc.setTextColor(0); doc.setFont('helvetica', 'bold'); doc.setFontSize(12);
   y += 17; doc.text(title || 'Report', M, y);
   if (subtitle) { doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(90); y += 5; doc.text(subtitle, M, y); doc.setTextColor(0); }

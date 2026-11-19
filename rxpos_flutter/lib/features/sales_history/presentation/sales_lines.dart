@@ -109,7 +109,7 @@ class _SalesLinesViewState extends ConsumerState<SalesLinesView> {
           title: Text('${l.name}${l.generic.isEmpty ? '' : ' · ${l.generic}'}', style: const TextStyle(fontWeight: FontWeight.w700)),
           subtitle: Wrap(spacing: 6, children: [
             Text('${l.date.replaceFirst('T', ' ').split('.').first} · ${l.customer} · ${l.cashier} · ${l.payment} ·'),
-            InkWell(onTap: () => context.go('/sales?q=${Uri.encodeQueryComponent(l.number)}'), child: Text(l.number, style: TextStyle(color: Theme.of(context).colorScheme.primary, decoration: TextDecoration.underline))),
+            InkWell(onTap: () => context.go('/sales?q=${Uri.encodeQueryComponent(l.number)}'), child: Text(l.number, style: TextStyle(color: Theme.of(context).colorScheme.tertiary, decoration: TextDecoration.underline))),
           ]),
           trailing: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.end, children: [
             Text('${formatQty(l.qty)} · ${st.money(l.amount)}', style: const TextStyle(fontWeight: FontWeight.w700)),

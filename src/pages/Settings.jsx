@@ -14,6 +14,7 @@ import { isWeb, platformName } from '../platform.js';
 import { pharmacyDefaults, validatePharmacyDefaults } from '../pharmacy-settings.js';
 import { Updates } from './Device.jsx';
 import ReportEmails from './ReportEmails.jsx';
+import { showDateTime } from '../showdate.js';
 
 export default function Settings() {
   const { syncStatus } = useSyncState();
@@ -309,7 +310,7 @@ export default function Settings() {
             <div className="sync-info">
               <span>Pharmacy: <strong>{syncCfg.pharmacy || db.settings.name}</strong>{syncCfg.slug && isWeb && <> · web address <strong>{location.origin}/{syncCfg.slug}</strong></>}</span>
               <span>Signed in as {syncCfg.account || user.email} · {platformName}</span>
-              <span>Status: <strong className={syncStatus.state === 'error' ? 'text-danger' : syncStatus.state === 'ok' ? 'text-ok' : ''}>{syncStatus.state}</strong>{syncCfg.lastSync && <> · last sync {new Date(syncCfg.lastSync).toLocaleString()}</>}</span>
+              <span>Status: <strong className={syncStatus.state === 'error' ? 'text-danger' : syncStatus.state === 'ok' ? 'text-ok' : ''}>{syncStatus.state}</strong>{syncCfg.lastSync && <> · last sync {showDateTime(syncCfg.lastSync)}</>}</span>
               {syncStatus.error && <span className="text-danger">{syncStatus.error}</span>}
             </div>
             <div className="form-actions"><button type="button" className="btn primary" onClick={syncNow}>Sync now</button></div>

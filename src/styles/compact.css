@@ -97,7 +97,7 @@ td small, td .small { font-size: 11.5px; }
 /* ---- phones and small tablets: same rhythm, touch-sized controls ---- */
 @media (max-width: 640px) {
   :root { --ctl: 40px; }
-  .page { padding: 12px 12px 96px; gap: 12px; }
+  .page { padding: 12px 12px calc(108px + env(safe-area-inset-bottom)); gap: 12px; } /* 1.14.0: clear of the bottom bar and Sell */
   .page-head h1, h1 { font-size: 20px; }
   .card { padding: 14px; }
   .stats { gap: 10px; }

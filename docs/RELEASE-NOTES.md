@@ -1,5 +1,28 @@
 # RxPOS release notes
 
+## React (classic) app 1.14.0 · Flutter app (next build) · November 2026 (look and clarity review)
+
+Nothing to do on the tills: they update by themselves. Every change is in both apps unless it says otherwise.
+
+- **Dates** (classic app): every date is shown and typed in the format chosen in This device → Date format (DD/MM/YYYY
+  by default). A computer set to US English no longer shows 2 November as 11/2/2026, the date boxes no longer show
+  mm/dd/yyyy, and Expenses, Deposits, Debtors and Prescriptions show their dates instead of a raw time stamp.
+- **Nothing cut off**: the till's title, medicine names (three lines on a tile) and "No items yet" on phones; the menu's
+  headings and page names (shortcut keys show when you point at an item); the line under each figure card (two lines);
+  the Audit Log's filter chips.
+- **Readable colours**: on the light-coloured themes (Sky Blue, Ocean Cyan, Emerald Mint, Amber Gold, Lime on
+  Charcoal) links, totals and names on the Flutter app's screens use the theme's readable shade, not the pale button
+  colour.
+- **Status colours**: OK is green, warnings amber, and danger (expired, out of stock, errors) red in every theme, each
+  readable on its own pill. The rest of each theme keeps its two colours.
+- **Themes**: four dark themes (RxPOS Navy Teal plus Midnight Blue, Dark Forest and Graphite Amber) in a Dark set;
+  Steel Blue moved to Blues and Sage to Greens; "Charcoal Lime" and "Lime Charcoal" are now "Lime on Charcoal" and
+  "Charcoal on Lime". Both apps' themes come from one list (tools/flutter-palettes.mjs).
+- **Nothing in the way**: the raised Sell button no longer covers the end of a page on phones; one place to choose the
+  client on the Flutter till (with New client on it); no keyboard hints such as (F8) on phones.
+- **Shorter menu**: the 17 medicine pages are in two groups, Stock and Medicines.
+- **Empty pages**: a clear picture and words, and the next step as a button (Open the till, Add client, Receive stock).
+
 ## React (classic) app 1.13.0 · Flutter app (next build) · November 2026 (UI batch 3: 61 improvements, both apps)
 
 Nothing to do on the tills: they update by themselves. Every change is in both apps.

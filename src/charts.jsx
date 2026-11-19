@@ -5,6 +5,7 @@ import { useRef, useState } from 'react';
 import { Download } from 'lucide-react';
 import { localDate, downloadFile, toCSV } from './store.jsx';
 import { compact } from './ui.jsx';
+import { dateLocale } from './showdate.js';
 
 const dayKey = (offset) => { const d = new Date(); d.setDate(d.getDate() - offset); return localDate(d); };
 /** A round axis maximum (0, 1, 2, 2.5, 5 × 10ⁿ above the largest value) */
@@ -13,7 +14,7 @@ const niceMax = (v) => {
   const p = 10 ** Math.floor(Math.log10(v));
   return [1, 2, 2.5, 5, 10].map((m) => m * p).find((m) => m >= v);
 };
-const dateLabel = (k, opt = { day: 'numeric', month: 'short' }) => new Date(k + 'T12:00').toLocaleDateString(undefined, opt);
+const dateLabel = (k, opt = { day: 'numeric', month: 'short' }) => new Date(k + 'T12:00').toLocaleDateString(dateLocale(), opt);
 
 /**
  * Daily sales for the last 7, 30 or 90 days. byDay: { 'YYYY-MM-DD': { total } }. onDay(key) opens that day's sales.

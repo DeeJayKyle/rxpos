@@ -126,7 +126,7 @@ class SetupChecklistCard extends ConsumerWidget {
         padding: const EdgeInsets.all(14),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
-            Icon(Icons.checklist, size: 18, color: t.colorScheme.primary),
+            Icon(Icons.checklist, size: 18, color: t.colorScheme.tertiary),
             const SizedBox(width: 8),
             Expanded(child: Text.rich(maxLines: 2, overflow: TextOverflow.ellipsis, TextSpan(children: [
               TextSpan(text: 'Set up your pharmacy  ', style: t.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
@@ -150,7 +150,7 @@ class SetupChecklistCard extends ConsumerWidget {
                     child: Row(children: [
                       Icon(ok ? Icons.check_circle : Icons.radio_button_unchecked, size: 18, color: ok ? context.tones.ok : t.hintColor, semanticLabel: ok ? 'done' : 'to do'),
                       const SizedBox(width: 8),
-                      Flexible(child: Text(label, style: TextStyle(decoration: ok ? TextDecoration.lineThrough : null, color: ok ? t.hintColor : t.colorScheme.primary, fontWeight: ok ? null : FontWeight.w600))),
+                      Flexible(child: Text(label, style: TextStyle(decoration: ok ? TextDecoration.lineThrough : null, color: ok ? t.hintColor : t.colorScheme.tertiary, fontWeight: ok ? null : FontWeight.w600))),
                     ]),
                   ),
                 ),
@@ -193,7 +193,7 @@ class _WhatsNewCardState extends ConsumerState<WhatsNewCard> {
         padding: const EdgeInsets.fromLTRB(14, 8, 8, 10),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
-            Icon(Icons.auto_awesome, size: 18, color: t.colorScheme.primary),
+            Icon(Icons.auto_awesome, size: 18, color: t.colorScheme.tertiary),
             const SizedBox(width: 8),
             Expanded(child: Text("What's new in $whatsNewVersion", style: t.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700))),
             IconButton(key: const Key('whats-new-close'), tooltip: "Close what's new", onPressed: close, icon: const Icon(Icons.close, size: 18)),

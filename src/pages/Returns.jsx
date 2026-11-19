@@ -5,6 +5,7 @@ import { useStore, uid, now, today, put, move, audit, downloadFile, toCSV, daysU
 import { CASH } from '../finance.js';
 import { Modal, Empty, PdfButton, SearchBox } from '../ui.jsx';
 import { toast } from '../feedback.jsx';
+import { DateInput } from '../fields.jsx';
 
 const REASONS = ['Expired', 'Short expiry', 'Damaged', 'Wrong item delivered', 'Recall', 'Other'];
 
@@ -125,7 +126,7 @@ function ReturnForm({ pre, onClose }) {
       <form className="stack" onSubmit={save}>
         <div className="form-grid">
           <label className="field"><span>Supplier</span><select value={f.supplierId} onChange={(e) => setF({ ...f, supplierId: e.target.value })} required><option value="">—</option>{db.suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
-          <label className="field"><span>Date</span><input type="date" value={f.date} max={today()} onChange={(e) => setF({ ...f, date: e.target.value })} /></label>
+          <label className="field"><span>Date</span><DateInput value={f.date} max={today()} onChange={(v) => setF({ ...f, date: v })} /></label>
           <label className="field"><span>Settled by</span><select value={f.settle} onChange={(e) => setF({ ...f, settle: e.target.value })}><option value="credit">Credit note (we owe them less)</option><option value="cash">Refund (money back)</option></select></label>
           {f.settle === 'credit'
             ? <label className="field"><span>Credit note no. (if you have it)</span><input value={f.creditNote} onChange={(e) => setF({ ...f, creditNote: e.target.value })} /></label>
