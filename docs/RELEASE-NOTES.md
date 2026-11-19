@@ -1,5 +1,38 @@
 # RxPOS release notes
 
+## React (classic) app 1.13.0 · Flutter app (next build) · November 2026 (UI batch 3: 61 improvements, both apps)
+
+Nothing to do on the tills: they update by themselves. Every change is in both apps.
+
+- **The till**
+  - Undo instead of "Are you sure?" when removing a line, clearing the sale or a held sale (money and stock that are
+    already saved still ask first).
+  - Phones: the total and Charge always in view; the sale opens as a pull-up sheet.
+  - Bigger − / + on each line; Enter in a quantity goes back to the search; a short pulse and a light tap on add.
+  - Medicine photos on the tiles (camera or file in the medicine form), the first letter when there is none.
+  - A customer display for a second screen; training mode that saves nothing; a short tour on the first visit.
+  - Refunds over a set amount need a manager's PIN or password; the approver is kept with the refund.
+- **The dashboard**
+  - Daily bars with their amounts and an average line; tighter figure cards with short amounts (UGX 1.2M);
+    the best day and busiest hour; a busy-hours chart; a setup checklist for a new pharmacy; "What's new" after an update.
+- **Tables and lists**
+  - Sticky headings and totals, columns to choose, a bar for ticked rows, editing price and reorder level in the table
+    (audited), arrow keys, "load more", details beside the list on wide screens, stock bars, swipe actions and pull to
+    refresh on phones, and empty lists that say what goes there.
+- **Forms**
+  - Checks as you leave a field, "Draft saved" times, (?) help on tricky fields, instant saves with a cloud tick, amounts
+    with commas, phone numbers that format, the first field ready, phone-sized pop-ups, clear "this will delete…" dialogs.
+- **Look**
+  - One text scale, text-size presets, patterned chart lines, 44 px touch targets, one date control with presets,
+    the pharmacy's own logo everywhere (Settings → Pharmacy), a branded sign-in with a PIN pad and recent staff,
+    an opening screen and a friendly error page.
+- **Pages**
+  - Expiry calendar, shelf map, Ctrl+K suggestions, a clear offline banner, "Edited by" on records, the audit log in
+    sentences, chat typing and read ticks, the phone's bottom bar chosen on the device, a summary line on each report.
+- **Buying stock**
+  - The supplier's invoice beside the Add Stock form; checking an order by scanning each pack (missing and extra said
+    before receiving); each supplier's last price on an order line; stock in the other branches.
+
 ## React (classic) app 1.12.0 · Flutter app (next build) · November 2026 (a cleaner, calmer look; safer till)
 
 Nothing to do on the tills: they update by themselves. Every change is in both apps.
