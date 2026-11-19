@@ -26,6 +26,7 @@ import 'package:rxpos/core/theme/line_colors.dart' show TableDensity;
 import 'package:rxpos/core/router/app_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:rxpos/app.dart';
+import 'package:rxpos/core/data/device_settings.dart' show deviceValueProvider, amountStyleKey;
 import 'package:rxpos/core/data/pharmacy_providers.dart';
 import 'package:rxpos/core/data/record_store.dart';
 import 'package:rxpos/core/database/app_database.dart';
@@ -739,11 +740,17 @@ void main() {
         d.put('sales', sale('R-2', 0, 800, paid: 0, who: 'Henry Example'));
         d.put('sales', sale('R-3', 1, 2000));
       });
-      // this device last saw 1.13.0's highlights, so 1.14.0 is an update to it
+      // this device last saw 1.13.0's highlights, so 1.14.1 is an update to it
       await db.into(db.kv).insertOnConflictUpdate(KvCompanion.insert(k: 'device:whatsNewSeen', v: '1.13.0'));
     });
     await start(tester);
-    // B6: a long amount is said short on the figure card; the whole amount in its tooltip
+    // 1.14.1: the whole amount on the figure card by default (the owner's choice); B6's short form is a setting
+    expect(find.descendant(of: find.byType(StatCard), matching: find.text('UGX 1,250,800')), findsWidgets);
+    expect(find.descendant(of: find.byType(StatCard), matching: find.text('UGX 1.3M')), findsNothing);
+    expect(find.byKey(const Key('stat-full')), findsNothing, reason: 'the whole amount is on the card: no tooltip needed');
+    // B6 as a setting: This device → Amounts → Short says it short, the whole amount in its tooltip
+    await tester.runAsync(() => ProviderScope.containerOf(tester.element(find.byType(StatCard).first)).read(deviceValueProvider(amountStyleKey).notifier).set('short'));
+    await settle(tester, 4);
     expect(find.descendant(of: find.byType(StatCard), matching: find.text('UGX 1.3M')), findsWidgets);
     expect(tester.widget<Tooltip>(find.byKey(const Key('stat-full')).first).message, 'UGX 1,250,800');
     // B2: the change and "vs yesterday" stay on one line
@@ -762,7 +769,7 @@ void main() {
     expect(find.byKey(Key('busy-$wd-10')), findsOneWidget);
     // B8: what's new once
     expect(find.byKey(const Key('whats-new')), findsOneWidget);
-    expect(find.text("What's new in 1.14.0"), findsOneWidget);
+    expect(find.text("What's new in 1.14.1"), findsOneWidget);
     // B7: the setup checklist, ticked from the data
     expect(find.byKey(const Key('setup-checklist')), findsOneWidget);
     expect(find.textContaining('2 of 6 done', findRichText: true), findsOneWidget);

@@ -41,7 +41,7 @@ await p.setViewport({ width: 1440, height: 1000 });
 const errors = []; p.on('pageerror', (e) => errors.push(e.message));
 await p.goto(base + '/' + slug, { waitUntil: 'networkidle2' }); await wait(500);
 await p.evaluate(() => { for (const id of ['pos', 'dashboard']) localStorage.setItem('rxpos-tip:' + id, '1'); });
-// B8: this device last saw 1.13.0's highlights, so 1.14.0 is an update to it
+// B8: this device last saw 1.13.0's highlights, so 1.14.1 is an update to it
 await p.evaluate(() => localStorage.setItem('rxpos-device', JSON.stringify({ ...JSON.parse(localStorage.getItem('rxpos-device') || '{}'), whatsNewSeen: '1.13.0' })));
 await p.reload({ waitUntil: 'networkidle2' }); await wait(500);
 await p.type('input[autocomplete=username]', 'dana@clean.rx'); await p.type('input[type=password]', 'dana-pass-1234');
@@ -56,7 +56,7 @@ const widgets = () => p.evaluate(() => [...document.querySelectorAll('.dash-cell
 check('clean layout: figures, the bento row, chart, health, top medicines, latest sales, busy hours', JSON.stringify(await widgets()) === JSON.stringify(['figures', 'bento', 'chart', 'health', 'top', 'recent', 'busy']), JSON.stringify(await widgets()));
 check('header: no repeated search or bell (the top bar\'s show), today\'s date', await p.evaluate(() => !document.querySelector('.dash-search') && !document.querySelector('.dash-bell') && !!document.querySelector('.topbar .search-trigger')?.offsetParent && !!document.querySelector('.topbar > .bell button[aria-label^=Notifications]')?.offsetParent && /\d{4}/.test(document.querySelector('.date-pill')?.innerText || '')));
 // UI batch 3, B1-B8
-check('B8 what\'s new: shown once after an update', await p.evaluate(() => /What.s new in 1\.14\.0/.test(document.querySelector('.whats-new')?.innerText || '') && !!document.querySelector('.whats-new a')), await p.evaluate(() => localStorage.getItem('rxpos-device')));
+check('B8 what\'s new: shown once after an update', await p.evaluate(() => /What.s new in 1\.14\.1/.test(document.querySelector('.whats-new')?.innerText || '') && !!document.querySelector('.whats-new a')), await p.evaluate(() => localStorage.getItem('rxpos-device')));
 check('B7 setup checklist: medicines and stock ticked from the data, staff not yet', await p.evaluate(() => { const st = (id) => document.querySelector(`.setup-steps [data-step=${id}]`)?.classList.contains('done'); return st('medicines') && st('stock') && st('staff') === false && /of 6 done/.test(document.querySelector('.setup-card').innerText); }));
 check('B1 bars: a dashed average line and today\'s amount above its bar', await p.evaluate(() => !!document.querySelector('.bento-avg') && /2,800/.test(document.querySelector('.bento-bar.now .bento-val')?.innerText || '') && /Average/.test(document.querySelector('.bento-avg-key')?.innerText || '')));
 await (await p.$('.bento-bar.now')).hover(); await wait(300);
@@ -67,6 +67,13 @@ check('B3 latest sales: the amounts in one right column, the Owing pill beside t
 check('B4 the hero card shows the busiest hour (10:00, as the samples) and the best day', await p.evaluate(() => /Busiest hour\s*10:00 · \d+ sales?/.test(document.querySelector('.bento-facts')?.innerText || '') && /Best day/.test(document.querySelector('.bento-facts').innerText)));
 check('B5 busy hours: a day × hour grid with "Day 10:00 · n sales" on the cells', await p.evaluate(() => { const c = [...document.querySelectorAll('.busy-grid td')].filter((x) => +x.dataset.v > 0); return c.length >= 1 && c.every((x) => /^\w{3} 10:00 · \d+ sales?$/.test(x.title)); }));
 check('B6 small amounts stay in full (no short form below 100,000)', await p.evaluate(() => !document.querySelector('.kpis .stat strong[data-full]') && /2,800/.test(document.querySelector('.kpis .stat strong').innerText)));
+// 1.14.1 (the owner's choice): figure cards show the whole amount unless This device → Amounts on the dashboard says Short
+await p.evaluate(() => { location.hash = '#/device'; }); await wait(900);
+check('1.14.1 This device: "Amounts on the dashboard", Whole by default', await p.evaluate(() => { const g = document.querySelector('[role=radiogroup][aria-label="Amounts on the dashboard"]'); return !!g && /Whole/.test(g.querySelector('[aria-checked=true]')?.textContent || ''); }));
+await p.evaluate(() => [...document.querySelectorAll('[role=radiogroup][aria-label="Amounts on the dashboard"] button')].find((x) => /Short/.test(x.textContent)).click()); await wait(300);
+check('1.14.1 …Short is kept on this device', await p.evaluate(() => JSON.parse(localStorage.getItem('rxpos-device') || '{}').amountStyle === 'short'));
+await p.evaluate(() => [...document.querySelectorAll('[role=radiogroup][aria-label="Amounts on the dashboard"] button')].find((x) => /Whole/.test(x.textContent)).click()); await wait(300);
+await p.evaluate(() => { location.hash = '#/'; }); await wait(900);
 await p.evaluate(() => [...document.querySelectorAll('.setup-card button')].find((x) => /Hide/.test(x.textContent)).click()); await wait(300);
 check('B7 Hide puts the checklist away', await p.evaluate(() => !document.querySelector('.setup-card')));
 await p.reload({ waitUntil: 'networkidle2' }); await wait(2000);

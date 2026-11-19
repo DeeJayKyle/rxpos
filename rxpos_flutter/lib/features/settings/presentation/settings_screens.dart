@@ -66,6 +66,7 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
     final zoom = double.tryParse(ref.watch(deviceValueProvider(zoomKey)).value ?? '') ?? 1;
     final rotation = ref.watch(deviceValueProvider(rotationKey)).value ?? 'auto';
     final dateFormat = ref.watch(deviceValueProvider('dateFormat')).value ?? 'dmy';
+    final amountStyle = ref.watch(deviceValueProvider(amountStyleKey)).value ?? 'full';
     final sounds = SoundPrefs.parse(ref.watch(deviceValueProvider(soundPrefsKey)).value);
     final sync = ref.watch(syncControllerProvider);
     final db = ref.watch(appDatabaseProvider);
@@ -216,6 +217,13 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
             style: Theme.of(context).textTheme.bodySmall),
         const SizedBox(height: 8),
         _choice(dateFormat, dateFormats, (v) => ref.read(deviceValueProvider('dateFormat').notifier).set(v)),
+      ]),
+      // 1.14.1 (the owner's choice): the whole amount on the dashboard's figure cards unless Short is chosen here
+      _section('Amounts', Icons.payments_outlined, [
+        Text('How amounts are shown on the dashboard\'s figure cards on this device. Receipts, reports and lists always show the whole amount.',
+            style: Theme.of(context).textTheme.bodySmall),
+        const SizedBox(height: 8),
+        _choice(amountStyle, amountStyles, (v) => ref.read(deviceValueProvider(amountStyleKey).notifier).set(v)),
       ]),
       _section('Notification sounds', Icons.volume_up_outlined, [
         CheckboxListTile(

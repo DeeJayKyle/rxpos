@@ -79,6 +79,7 @@ export const now = () => new Date().toISOString();
 // Date helpers live in dates.js (pure, unit-tested); imported for use here and re-exported so existing imports from
 // store.jsx keep working.
 import { localDate, today, dayOf, monthOf, daysUntil, daysSince } from './dates.js';
+import { deviceSettings, onDevice } from './device.js';
 export { localDate, today, dayOf, monthOf, daysUntil, daysSince };
 
 // ---------- pricing ----------
@@ -800,11 +801,15 @@ export function StoreProvider({ children }) {
     // The pharmacy's own locale (default en-UG), not the device's, so grouping/decimals are the same on every device (1.5)
     return formatMoney(n, { currency: s.currency || '', decimals: Number(s.decimals ?? 0), locale: s.locale || 'en-UG' });
   }, [effectiveSettings]);
-  // UGX 1.2M / UGX 350K on figure cards (UI batch 3, B6); the full amount goes in their tooltip
+  // The figure cards' amounts: the whole amount by default (UGX 152,000; the owner's choice, 1.14.1), or short (UGX 152K,
+  // UGX 1.2M: UI batch 3, B6) when This device → Amounts on the dashboard says so; the whole amount is always in the tooltip
+  const [amountStyle, setAmountStyle] = useState(() => deviceSettings().amountStyle || 'full');
+  useEffect(() => onDevice((d) => setAmountStyle(d.amountStyle || 'full')), []);
   const fmtShort = useCallback((n) => {
     const s = effectiveSettings || {};
+    if (amountStyle !== 'short') return fmt(n);
     return shortMoney(n, { currency: s.currency || '', decimals: Number(s.decimals ?? 0), locale: s.locale || 'en-UG' });
-  }, [effectiveSettings]);
+  }, [effectiveSettings, amountStyle, fmt]);
 
   const branch = db?.branches.find((b) => b.id === branchId) || db?.branches[0];
   // step 7: document numbers (src/docnumbers.js). Called inside update(): the count is saved with the document.

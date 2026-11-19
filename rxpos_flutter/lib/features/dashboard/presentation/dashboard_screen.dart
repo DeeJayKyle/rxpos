@@ -48,6 +48,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     void save(String v) => ref.read(deviceValueProvider('dash').notifier).set(v);
     if (data == null || sales == null || expenses == null) return const PageSkeleton();
     final s = data.settings;
+    // the figure cards: the whole amount, or short (UGX 152K) when This device → Amounts says so (1.14.1)
+    final shortAmounts = ref.watch(deviceValueProvider(amountStyleKey)).value == 'short';
+    String cardAmount(num v) => shortAmounts ? s.moneyShort(v) : s.money(v);
     final saleList = sales.map(Sale.fromRecord).toList();
     final f = Figures.of(saleList, expenses, branch: data.branch, purchases: purchases);
     final period = layout.period;
@@ -81,13 +84,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
     Widget? card(String id) => switch (id) {
           'figures' => StatGrid(children: [
-              StatCard(label: isToday ? 'Today\'s sales' : 'Sales', value: s.moneyShort(c.total), full: s.money(c.total), sub: '${c.count} sale${c.count == 1 ? '' : 's'}${deltaText(c.total, pv.total, vs)}', icon: Icons.payments_outlined, spark: spark((d) => d.total),
+              StatCard(label: isToday ? 'Today\'s sales' : 'Sales', value: cardAmount(c.total), full: s.money(c.total), sub: '${c.count} sale${c.count == 1 ? '' : 's'}${deltaText(c.total, pv.total, vs)}', icon: Icons.payments_outlined, spark: spark((d) => d.total),
                   onTap: can.contains('sales.view') ? () => context.go('/sales?from=${range.from}&to=${range.to}') : null),
               if (can.contains('reports'))
-                StatCard(label: isToday ? 'Gross profit today' : 'Gross profit', value: s.moneyShort(c.grossProfit), full: s.money(c.grossProfit), sub: 'after cost of goods${deltaText(c.grossProfit, pv.grossProfit, vs)}', icon: Icons.trending_up, color: context.tones.violet, spark: spark((d) => d.grossProfit),
+                StatCard(label: isToday ? 'Gross profit today' : 'Gross profit', value: cardAmount(c.grossProfit), full: s.money(c.grossProfit), sub: 'after cost of goods${deltaText(c.grossProfit, pv.grossProfit, vs)}', icon: Icons.trending_up, color: context.tones.violet, spark: spark((d) => d.grossProfit),
                     onTap: () => context.go('/reports?tab=profit&from=${range.from}&to=${range.to}')),
               if (can.contains('finance') || can.contains('reports'))
-                StatCard(label: isToday ? 'Today\'s expenses' : 'Expenses', value: s.moneyShort(c.expenses), full: s.money(c.expenses), sub: '${multiBranch ? 'Whole pharmacy (expenses have no branch) · sales here − expenses' : 'Sales − expenses'}: ${s.money(c.total - c.expenses)}', icon: Icons.account_balance_wallet_outlined, color: context.tones.warn, spark: spark((d) => d.expenses),
+                StatCard(label: isToday ? 'Today\'s expenses' : 'Expenses', value: cardAmount(c.expenses), full: s.money(c.expenses), sub: '${multiBranch ? 'Whole pharmacy (expenses have no branch) · sales here − expenses' : 'Sales − expenses'}: ${s.money(c.total - c.expenses)}', icon: Icons.account_balance_wallet_outlined, color: context.tones.warn, spark: spark((d) => d.expenses),
                     onTap: () => context.go(can.contains('finance') ? '/finance?tab=expenses' : '/reports?tab=expenses&from=${range.from}&to=${range.to}')),
               StatCard(label: 'Transactions', value: '${c.count}', sub: 'receipts ${isToday ? 'today' : periodWords[period]}${deltaText(c.count.toDouble(), pv.count.toDouble(), vs)}', icon: Icons.receipt_long_outlined, color: context.tones.info, spark: spark((d) => d.count.toDouble()),
                   onTap: can.contains('sales.view') ? () => context.go('/sales?from=${range.from}&to=${range.to}') : null),
@@ -129,7 +132,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               final pw = periodWords[period]!;
               return BusyHoursCard(sales: saleList, branch: data.branch, from: from, words: from == range.from && !isToday ? (pw.startsWith('last') ? 'in the $pw' : pw) : 'in the last 7 days');
             }(),
-          'bento' => BentoRow(byDay: f.byDay, sales: saleList, branch: data.branch, money: s.money, moneyShort: s.moneyShort, expiring: soonN + expiredN, low: low, can: can),
+          'bento' => BentoRow(byDay: f.byDay, sales: saleList, branch: data.branch, money: s.money, moneyShort: cardAmount, expiring: soonN + expiredN, low: low, can: can),
           'alerts' => StatGrid(children: [
               StatCard(label: 'Low stock', value: '$low', sub: 'in stock, at or below reorder level', icon: Icons.inventory_2_outlined, color: low > 0 ? context.tones.warn : null, onTap: () => context.go('/inventory?filter=low')),
               StatCard(label: 'Soon expiring', value: '$soonN', sub: 'within $warn days', icon: Icons.event_outlined, color: soonN > 0 ? context.tones.warn : null, onTap: () => context.go('/inventory?filter=expiring')),
@@ -156,7 +159,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           'totals' => StatGrid(children: [
               StatCard(label: 'Products', value: '${data.products.length}', icon: Icons.medication_outlined, onTap: () => context.go('/medicines')),
               StatCard(label: 'Customers', value: '${data.customers.where((x) => x.id != 'walk-in').length}', icon: Icons.people_outline, onTap: () => context.go('/customers')),
-              StatCard(label: 'This month', value: s.moneyShort(m.total), full: s.money(m.total), sub: '${m.count} sales', icon: Icons.calendar_month_outlined),
+              StatCard(label: 'This month', value: cardAmount(m.total), full: s.money(m.total), sub: '${m.count} sales', icon: Icons.calendar_month_outlined),
             ]),
           _ => null,
         };

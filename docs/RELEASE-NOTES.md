@@ -1,5 +1,11 @@
 # RxPOS release notes
 
+## React (classic) app 1.14.1 · Flutter app (next build) · November 2026
+
+- **Whole amounts on the dashboard** (the owner's choice): the figure cards show UGX 152,000 rather than UGX 152K.
+  Short amounts are a setting: This device → Amounts → Short (UGX 152K). Both apps; receipts, reports and lists always
+  show the whole amount.
+
 ## React (classic) app 1.14.0 · Flutter app (next build) · November 2026 (look and clarity review)
 
 Nothing to do on the tills: they update by themselves. Every change is in both apps unless it says otherwise.

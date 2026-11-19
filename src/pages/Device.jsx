@@ -1,6 +1,6 @@
 // "This device": what each person can set for the phone, tablet or PC in front of them. Nothing here is shared.
 import { useEffect, useRef, useState } from 'react';
-import { CalendarDays, PanelLeft, PanelTop, Rows3 } from 'lucide-react';
+import { Banknote, CalendarDays, PanelLeft, PanelTop, Rows3 } from 'lucide-react';
 import { DATE_FORMATS } from '../dateformat.js';
 import { RefreshCw, Download, MonitorSmartphone, Smartphone, Monitor, ZoomIn, RotateCw, Volume2, Upload, Play, BellRing, CheckCircle2, AlertTriangle, PanelBottom } from 'lucide-react';
 import { LABEL, onUpdate, updateNow } from '../update.js';
@@ -128,6 +128,11 @@ export default function Device() {
           <h3><CalendarDays size={18} />Dates</h3>
           <p className="muted small">How dates are typed and shown in Add Stock and when correcting deliveries on this device. An expiry can also be typed as month and year (06/2028 = 30 June 2028).</p>
           <Choice label="Date format" value={d.dateFormat || 'dmy'} onChange={(dateFormat) => setDevice({ dateFormat })} options={DATE_FORMATS.map(([k, label]) => [k, label])} />
+        </section>
+        <section className="card">
+          <h3><Banknote size={18} />Amounts</h3>
+          <p className="muted small">How amounts are shown on the dashboard's figure cards on this device. Receipts, reports and lists always show the whole amount.</p>
+          <Choice label="Amounts on the dashboard" value={d.amountStyle || 'full'} onChange={(amountStyle) => setDevice({ amountStyle })} options={[['full', 'Whole (UGX 152,000)'], ['short', 'Short (UGX 152K)']]} />
         </section>
         <Sounds d={d} />
         <Notices d={d} />
