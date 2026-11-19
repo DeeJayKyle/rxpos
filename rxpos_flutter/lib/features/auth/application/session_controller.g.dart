@@ -78,7 +78,7 @@ final class SessionControllerProvider
   SessionController create() => SessionController();
 }
 
-String _$sessionControllerHash() => r'e6956dfd38a1bf82c552cec2b9775bde7d27ada2';
+String _$sessionControllerHash() => r'02447f6875f3ffa3cdc054bb48f7fb03f58e1c5b';
 
 /// The signed-in session (restored from the device at start-up, so the till opens without internet).
 
