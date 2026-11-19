@@ -20,7 +20,8 @@ import './styles/kits.css';
 import './styles/tables.css';
 import './styles/forms.css';
 import './styles/pages-f.css';
-import './styles/duotone.css'; // last: every page in its theme's two colours
+import './styles/duotone.css'; // every page in its theme's two colours
+import './styles/glossy.css'; // last: the Pharmacy themes' glossy dashboard
 import { applyTheme, startupTheme, savedAccent } from './themes.js';
 import { applyStyle, savedStyle } from './surface.js';
 import { applyLevel, savedLevel } from './vivid.js';

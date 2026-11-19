@@ -1,7 +1,7 @@
 // Charts drawn by hand (src/charts.jsx, the bar chart and donut of src/ui.jsx / Reports): one colour per meaning (money
 // in teal, purchases orange, expenses red, gross profit violet), the value axis always starts at 0, and today is
 // drawn as "so far" (a dashed end), so an unfinished day never looks like a collapse.
-import 'package:rxpos/core/theme/themes.dart' show TonesOfContext;
+import 'package:rxpos/core/theme/themes.dart' show TonesOfContext, Glossy;
 import 'dart:math';
 
 import 'dart:convert';
@@ -58,7 +58,9 @@ void _text(Canvas c, String s, Offset at, {Color? color, double size = 10, TextA
 
 /// Daily sales over the last [days] (keys oldest first, the last one is today). Tap a day to open it.
 class DailyTrend extends StatefulWidget {
-  const DailyTrend({super.key, required this.byDay, required this.keysFor, required this.money, this.onDay, this.extra});
+  const DailyTrend({super.key, required this.byDay, required this.keysFor, required this.money, this.onDay, this.extra, this.counts});
+  /// the number of sales each day: a line over the bars, on its own axis at the right (1.15.0, the owner's reference)
+  final Map<String, double>? counts;
   /// shown beside the title (the dashboard's Daily / Monthly switch)
   final Widget? extra;
   final Map<String, double> byDay;
@@ -79,6 +81,7 @@ class _DailyTrendState extends State<DailyTrend> {
     _axisFrom(context);
     final keys = widget.keysFor(_range);
     final vals = [for (final k in keys) widget.byDay[k] ?? 0.0];
+    final counts = widget.counts == null ? null : [for (final k in keys) widget.counts![k] ?? 0.0];
     final done = vals.sublist(0, vals.length - 1);
     final total = vals.fold<double>(0, (a, v) => a + v);
     final avg = done.isEmpty ? 0.0 : done.fold<double>(0, (a, v) => a + v) / done.length;
@@ -127,13 +130,14 @@ class _DailyTrendState extends State<DailyTrend> {
               builder: (_, grow, _) => Stack(clipBehavior: Clip.none, children: [
                 CustomPaint(
                   size: Size(w, h),
-                  painter: _DailyBarsPainter(keys, vals, avg, done.isNotEmpty && done[best] > 0 ? best : null, _hover, th.dividerColor, grow, th.colorScheme.onSurface)),
+                  painter: _DailyBarsPainter(keys, vals, avg, done.isNotEmpty && done[best] > 0 ? best : null, _hover, th.dividerColor, grow, th.colorScheme.onSurface,
+                      counts: counts, line: Color(th.extension<Glossy>()?.chartLine ?? th.colorScheme.tertiary.toARGB32()), card: th.cardTheme.color ?? th.colorScheme.surface)),
                 // a tooltip over the day pointed at (the reference video)
                 if (_hover != null)
                   Positioned(
                     left: (46 + (w - 60) / keys.length * (_hover! + .5)).clamp(0, w - 150).toDouble(),
                     top: 4,
-                    child: ChartTip(title: '${_day(keys[_hover!])}${_hover == keys.length - 1 ? ' (so far)' : ''}', rows: [('Sales', widget.money(vals[_hover!]), moneyInOf(context))]),
+                    child: ChartTip(title: '${_day(keys[_hover!])}${_hover == keys.length - 1 ? ' (so far)' : ''}', rows: [('Sales', widget.money(vals[_hover!]), moneyInOf(context)), if (counts != null) ('Number of sales', '${counts[_hover!].round()}', Color(th.extension<Glossy>()?.chartLine ?? th.colorScheme.tertiary.toARGB32()))]),
                   ),
               ]),
             ),
@@ -151,7 +155,10 @@ class _DailyTrendState extends State<DailyTrend> {
 /// Daily sales as bars: a gradient bar a day, today's lighter (so far), the best day in the profit colour, the one
 /// pointed at outlined, and the daily average as a dashed line. [grow] (0 → 1) animates the bars in.
 class _DailyBarsPainter extends CustomPainter {
-  _DailyBarsPainter(this.keys, this.vals, this.avg, this.best, this.hover, this.grid, this.grow, this.ink);
+  _DailyBarsPainter(this.keys, this.vals, this.avg, this.best, this.hover, this.grid, this.grow, this.ink, {this.counts, this.line = Colors.pink, this.card = Colors.white});
+  /// the number of sales each day, drawn as a line with its values in badges (null: bars only)
+  final List<double>? counts;
+  final Color line, card;
   final List<String> keys;
   final List<double> vals;
   final double avg, grow;
@@ -160,7 +167,8 @@ class _DailyBarsPainter extends CustomPainter {
 
   @override
   void paint(Canvas c, Size s) {
-    const l = 46.0, r = 14.0, t = 10.0, b = 24.0;
+    const l = 46.0, t = 18.0, b = 24.0;
+    final r = counts == null ? 14.0 : 34.0;
     final n = keys.length;
     final top = niceMax(vals.fold<double>(0, max));
     final slot = (s.width - l - r) / n;
@@ -200,10 +208,41 @@ class _DailyBarsPainter extends CustomPainter {
       }
       _text(c, 'average', Offset(s.width - r, y(avg) - 8), align: TextAlign.right);
     }
+    // the number of sales: a line on its own axis at the right, its values in badges on each day with sales (up to a
+    // month); today's part dashed, so far
+    final cs = counts;
+    if (cs != null && n > 1) {
+      final topN = niceMax(cs.fold<double>(0, max));
+      double yn(double v) => s.height - b - v * grow / topN * (s.height - t - b);
+      for (final f in [0, .5, 1.0]) {
+        if ((topN * f) % 1 == 0) _text(c, '${(topN * f).round()}', Offset(s.width - r + 6, y(top * f)));
+      }
+      final lp = Paint()..color = line..strokeWidth = 2.2..style = PaintingStyle.stroke..strokeJoin = StrokeJoin.round..strokeCap = StrokeCap.round;
+      final path = Path()..moveTo(cx(0), yn(cs[0]));
+      for (var i = 1; i < n - 1; i++) {
+        path.lineTo(cx(i), yn(cs[i]));
+      }
+      c.drawPath(path, lp);
+      final a = Offset(cx(n - 2), yn(cs[n - 2])), z = Offset(cx(n - 1), yn(cs[n - 1]));
+      for (var f = 0.0; f < 1; f += .2) {
+        c.drawLine(Offset.lerp(a, z, f)!, Offset.lerp(a, z, min(1, f + .1))!, lp);
+      }
+      for (var i = 0; i < n; i++) {
+        final p = Offset(cx(i), yn(cs[i]));
+        c.drawCircle(p, n <= 30 ? 3.2 : 2, Paint()..color = card);
+        c.drawCircle(p, n <= 30 ? 3.2 : 2, Paint()..color = line..style = PaintingStyle.stroke..strokeWidth = 2);
+        if (n <= 30 && cs[i] > 0) {
+          final box = RRect.fromRectAndRadius(Rect.fromCenter(center: p - const Offset(0, 13), width: 22, height: 15), const Radius.circular(4));
+          c.drawRRect(box, Paint()..color = line);
+          final tp = TextPainter(text: TextSpan(text: '${cs[i].round()}', style: TextStyle(color: card, fontSize: 9.5, fontWeight: FontWeight.w800)), textDirection: TextDirection.ltr)..layout();
+          tp.paint(c, box.center - Offset(tp.width / 2, tp.height / 2));
+        }
+      }
+    }
   }
 
   @override
-  bool shouldRepaint(_DailyBarsPainter o) => o.vals != vals || o.hover != hover || o.grow != grow || o.best != best;
+  bool shouldRepaint(_DailyBarsPainter o) => o.vals != vals || o.counts != counts || o.hover != hover || o.grow != grow || o.best != best;
 }
 
 /// One line per series over the last 6 or 12 months. [series]: (name, colour, month key → value).

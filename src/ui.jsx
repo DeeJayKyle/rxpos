@@ -363,7 +363,18 @@ export function Spark({ data }) {
 
 /** A figure card. full: the whole amount when value is said short (UGX 1.2M, UI batch 3 B6): it is the card's tooltip
  *  and what screen readers say. The change and the "vs yesterday" line stay on one line (B2), the rest in the tooltip. */
-export function Stat({ label, value, full, sub, tone, icon: Icon, delta, to, state, goodDown, spark }) {
+/** A figure's percentage as a ring (the owner's reference, 1.15.0): [pct] the share, drawn up to 100%, [title] what it is */
+export function StatRing({ pct, title }) {
+  const c = 2 * Math.PI * 18, f = Math.max(0, Math.min(100, pct)) / 100;
+  return (
+    <span className="stat-ring" title={title} role="img" aria-label={`${pct}% ${title}`}>
+      <svg viewBox="0 0 44 44" aria-hidden="true"><circle className="ring-track" cx="22" cy="22" r="18" />{f > 0 && <circle className="ring-arc" cx="22" cy="22" r="18" strokeDasharray={`${(c * f).toFixed(1)} ${c.toFixed(1)}`} transform="rotate(-90 22 22)" />}</svg>
+      <b>{pct}%</b>
+    </span>
+  );
+}
+
+export function Stat({ label, value, full, sub, tone, icon: Icon, delta, to, state, goodDown, spark, ring }) {
   const navigate = useNavigate();
   const go = to ? () => navigate(to, state ? { state } : undefined) : undefined;
   const short = full && full !== value;
@@ -374,6 +385,7 @@ export function Stat({ label, value, full, sub, tone, icon: Icon, delta, to, sta
       <small>{label}</small>
       <strong title={short ? full : undefined} aria-label={short ? full : undefined} data-full={short ? full : undefined}>{short ? value : <CountUp value={value} />}</strong>
       {spark && <Spark data={spark} />}
+      {ring && ring.pct != null && <StatRing {...ring} />}
       <span className="muted small stat-sub" title={typeof sub === 'string' ? (d ? d + ' ' : '') + sub : undefined}>
         {d && <span className={'delta ' + (delta >= 0 ? 'up' : 'down') + (goodDown ? ' inverse' : '')}>{d} </span>}
         {sub}

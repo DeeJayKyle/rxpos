@@ -87,13 +87,14 @@ const calm = await A.evaluate(() => getComputedStyle(document.querySelector('.st
 await A.click('button[aria-label="Theme"]'); await wait(300);
 await clickText(A, '.style-item', /^Vivid/); await wait(500);
 const now = await A.evaluate(() => ({ attr: document.documentElement.dataset.colour, bg: getComputedStyle(document.querySelector('.stat.teal')).backgroundImage }));
-check('appearance menu → Colour → Vivid takes effect at once', now.attr === 'vivid' && /gradient/.test(now.bg), JSON.stringify(now));
+check('appearance menu → Colour → Vivid takes effect at once', now.attr === 'vivid' && /linear-gradient/.test(now.bg) && !/radial-gradient/.test(now.bg), JSON.stringify(now));
 await A.reload({ waitUntil: 'networkidle2' }); await A.waitForSelector('.sidebar', { timeout: 20000 }); await wait(1200);
 await A.evaluate(() => { window.print = () => { window.__printed = (window.__printed || 0) + 1; }; });
 const vivid = await A.evaluate(() => ({ attr: document.documentElement.dataset.colour, bg: getComputedStyle(document.querySelector('.stat.teal')).backgroundImage, color: getComputedStyle(document.querySelector('.stat.teal strong')).color }));
 check('…and is kept after a restart', vivid.attr === 'vivid');
-check('Calm is the standard look (no solid tile)', !/gradient/.test(calm), calm);
-check('Vivid fills the toned tiles with their colour and white text', vivid.attr === 'vivid' && /gradient/.test(vivid.bg) && vivid.color === 'rgb(255, 255, 255)', JSON.stringify(vivid));
+// 1.15.0 (the owner's choice): in Calm, the standard, the figure cards take the theme's glossy style (styles/glossy.css)
+check('Calm is the standard look: the figure cards in the theme\'s glossy style, not Vivid\'s tiles', /radial-gradient/.test(calm) && /linear-gradient/.test(calm), calm);
+check('Vivid fills the toned tiles with their colour and white text', vivid.attr === 'vivid' && /linear-gradient/.test(vivid.bg) && !/radial-gradient/.test(vivid.bg) && vivid.color === 'rgb(255, 255, 255)', JSON.stringify(vivid));
 check('tiles carry their meaning: expenses orange, profit violet', await A.evaluate(() => [...document.querySelectorAll('.stat')].some((s) => /expenses/i.test(s.innerText) && s.classList.contains('orange')) && [...document.querySelectorAll('.stat')].some((s) => /Gross profit/i.test(s.innerText) && s.classList.contains('violet'))));
 await wait(2500); await A.screenshot({ path: `${out}/dashboard-vivid.png`, fullPage: true });
 

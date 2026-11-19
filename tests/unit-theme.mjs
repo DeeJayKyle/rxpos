@@ -5,14 +5,32 @@ const check = (n, ok, x = '') => { ok ? pass++ : fail++; console.log(`${ok ? 'PA
 
 check('all themes allowed: light → Mint Teal', paletteFor('light') === 'mint-teal');
 check('all themes allowed: dark → RxPOS Navy Teal', paletteFor('dark') === 'navy-teal');
-check('without the defaults: the first palette of that base', paletteFor('light', THEMES.filter((t) => t.id !== 'mint-teal')) === 'electric-blue' && paletteFor('dark', THEMES.filter((t) => t.id !== 'navy-teal')) === 'midnight-blue');
+check('without the defaults: the first palette of that base', paletteFor('light', THEMES.filter((t) => t.id !== 'mint-teal')) === 'electric-blue' && paletteFor('dark', THEMES.filter((t) => t.id !== 'navy-teal')) === 'deep-ocean-cyan');
 check('Navy Teal: the navy page, teal actions; Mint Teal: white cards on the mint page', (() => { const o = themeVars(THEMES.find((t) => t.id === 'navy-teal')), d = themeVars(THEMES.find((t) => t.id === 'mint-teal')); return o['--bg'] === '#0a2233' && o['--primary'] === '#14b8a6' && d['--bg'] === '#cfe6e6' && d['--surface'] === '#ffffff' && d['--primary'] === '#0f8a8a'; })());
 const restricted = allowedThemes({ themes: ['tokyo-night', 'mint', 'clinic-blue'] }); // retired ids: navy-teal, emerald-mint, sky-blue
 check('restricted: light prefers the owner\'s default when it is light (a retired id counts as its replacement)', paletteFor('light', restricted, 'mint') === 'emerald-mint');
 check('restricted: light falls back to the first allowed light palette', paletteFor('light', restricted) === 'sky-blue');
 check('restricted: dark → the only allowed dark palette', paletteFor('dark', restricted, 'mint') === 'navy-teal');
 check('no palette of that base: falls back to the first allowed', paletteFor('dark', allowedThemes({ themes: ['mint', 'clinic-blue', 'sunrise'] })) === 'sky-blue');
-check('the 18 two-colour themes in 5 sets of 3 or 4, each one in a group; the Dark set is all dark (1.14.0)', THEMES.length === 18 && THEME_GROUPS.length === 5 && THEME_GROUPS.every((g) => [3, 4].includes(THEMES.filter((t) => t.group === g).length)) && THEMES.every((t) => THEME_GROUPS.includes(t.group)) && THEMES.filter((t) => t.group === 'Dark').every((t) => t.base === 'dark') && THEMES.filter((t) => t.base === 'dark').length === 4);
+check('the 41 themes in 6 sets of 3 to 9, each one in a group; the Dark set is all dark (1.15.0)', THEMES.length === 41 && THEME_GROUPS.length === 6 && THEME_GROUPS.every((g) => { const n = THEMES.filter((t) => t.group === g).length; return n >= 3 && n <= 9; }) && THEMES.every((t) => THEME_GROUPS.includes(t.group)) && THEMES.filter((t) => t.group === 'Dark').every((t) => t.base === 'dark') && THEMES.filter((t) => t.base === 'dark').length === 12);
+// the Pharmacy themes (19 Nov 2026): one glossy theme in every set, its figure cards, banner and menu readable (AA)
+{
+  const glossy = THEMES.filter((t) => t.glossy);
+  check('every theme is glossy (1.15.0: the neon reference), each with four figure-card colours, its own colour first', glossy.length === THEMES.length && glossy.every((t) => t.glossy.kpi.length === 4 && new Set(t.glossy.kpi).size === 4) && THEMES.filter((t) => !t.id.startsWith('pharmacy-') && !t.c.series).every((t) => t.glossy.kpi[0] === t.c.c1));
+  const bad = [];
+  for (const t of glossy) {
+    const v = themeVars(t);
+    for (let n = 1; n <= 4; n++) for (const bg of [v[`--kpi-${n}-a`], v[`--kpi-${n}-b`]]) {
+      if (contrast(v[`--kpi-${n}-on`], bg) < 4.5) bad.push(`${t.id} card ${n} words`);
+      if (contrast(v[`--kpi-${n}-sub`], bg) < 4.5) bad.push(`${t.id} card ${n} line`);
+    }
+    for (const bg of [v['--hero-a'], v['--hero-b']]) if (contrast(v['--hero-on'], bg) < 4.5) bad.push(`${t.id} banner`);
+    if (contrast(t.c.sidebarText || '#ffffff', v['--side-top']) < 4.5) bad.push(`${t.id} menu top`);
+    if (contrast(v['--chart-line'], v['--surface']) < 4.5) bad.push(`${t.id} chart line / badge words`);
+  }
+  check('every theme: the figure cards, the welcome banner, the menu and the chart\'s count line read at AA', bad.length === 0, bad.join(', '));
+  check('the palettes keep their own colours: a second series, the card, the ink and Royal Iris\'s yellow pill', (() => { const v = (id) => themeVars(themeById(id)); return v('alabaster-indigo-coral')['--viz-2'] === '#ff4d6b' && v('deep-ocean-cyan')['--surface'] === '#1e293b' && v('porcelain-signal')['--text'] === '#1e293b' && v('royal-iris-butter')['--pill'] === '#fff275' && v('cool-crisp')['--hue-8'] === undefined && v('vibrant-neon')['--viz-1'] === '#22d3ee'; })());
+}
 check('every retired id resolves to a kept theme (saved preferences keep working)', Object.entries(RETIRED).every(([o, n]) => !THEMES.some((t) => t.id === o) && themeById(o).id === n) && themeById('daylight-clinical').id === 'mint-teal' && themeById('midnight-pro').id === 'navy-teal' && themeById('oled').id === 'navy-teal');
 check('every theme is flat (no page gradient)', THEMES.every((t) => themeVars(t)['--bg-grad'] === 'none'));
 
@@ -30,8 +48,8 @@ const hue = (h) => { const [r, g, b] = [1, 3, 5].map((i) => parseInt(h.slice(i, 
 const near = (h, list) => hue(h) === null || list.some((x) => hue(x) !== null && Math.abs(((hue(h) - hue(x) + 540) % 360) - 180) <= 22);
 const keys = ['--violet', '--info', '--blue', ...Array.from({ length: 8 }, (_, i) => `--hue-${i}`), '--viz-1', '--viz-2', '--m-in', '--m-purch', '--m-profit', '--pos-action'];
 const off = [];
-for (const t of THEMES) { const v = themeVars(t); for (const k of keys) if (!near(v[k], [t.c.primary, t.c.sidebar])) off.push(`${t.id} ${k} ${v[k]}`); }
-check('every theme: table, chart and till colours are shades of its two colours', off.length === 0, off.slice(0, 6).join(', '));
+for (const t of THEMES) { const v = themeVars(t); for (const k of keys) if (!near(v[k], [t.c.primary, t.c.sidebar, ...(t.c.series || [])])) off.push(`${t.id} ${k} ${v[k]}`); }
+check('every theme: table, chart and till colours are shades of its two colours (and its own chart series)', off.length === 0, off.slice(0, 6).join(', '));
 // 1.14.0 (the owner's review, 19 Nov 2026): status keeps its meaning in every theme: OK is green, warnings amber, danger
 // (expired, out of stock, errors, the till's stop) red; each reads on its own soft pill too
 const inRange = (h, a, b) => hue(h) !== null && (a <= b ? hue(h) >= a && hue(h) <= b : hue(h) >= a || hue(h) <= b);

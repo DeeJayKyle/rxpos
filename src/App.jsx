@@ -321,6 +321,19 @@ function OfflineBanner() {
   );
 }
 
+/** The connection and version at the foot of the menu; shown by the Pharmacy themes only (styles/glossy.css) */
+function SideStatus() {
+  const online = useOnline();
+  const { pending = 0, syncStatus } = useSyncState() || {};
+  const off = !online || syncStatus?.state === 'offline';
+  return (
+    <div className={'side-status' + (off ? ' off' : '')} role="status" title={off ? 'Offline: your work is kept on this device' : 'Online'}>
+      <span className="dot" aria-hidden="true" />
+      <span>{off ? 'Offline' : 'Online'}<small>{pending ? `${pending} change${pending === 1 ? '' : 's'} to send · ` : ''}RxPOS {LABEL}</small></span>
+    </div>
+  );
+}
+
 function useOnline() {
   const [online, setOnline] = useState(navigator.onLine);
   useEffect(() => {
@@ -672,6 +685,7 @@ function Shell() {
             </div>
           ); })}
         </nav>
+        <SideStatus />
       </aside>
       <div className="main">
         <header className="topbar">
