@@ -97,9 +97,8 @@ class _PeopleScreenState extends ConsumerState<PeopleScreen> {
               : widget.suppliers
                   ? 'No suppliers yet. Add the companies you buy from: deliveries, prices and what you owe them are kept together.'
                   : 'No clients yet. Add a client to keep their phone, allergies and what they owe; the till finds them by name or phone.',
-              icon: widget.suppliers ? Icons.local_shipping_outlined : Icons.people_outline,
-              actionLabel: q.isNotEmpty ? null : (widget.suppliers ? 'Add supplier' : 'Add client'),
-              onAction: () => _edit(null))
+              // (the Add button is already at the top of the page: one per page)
+              icon: widget.suppliers ? Icons.local_shipping_outlined : Icons.people_outline)
           : ListControls(
               ids: [for (final r in list) '${r['id']}'],
               search: _searchFocus,

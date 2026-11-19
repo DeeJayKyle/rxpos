@@ -48,6 +48,7 @@ import 'package:rxpos/features/calls/domain/rtc_peer.dart';
 import 'package:rxpos/features/engage/presentation/watchers.dart';
 import 'package:rxpos/features/reports/domain/weekly.dart';
 import 'package:rxpos/core/presentation/widgets.dart';
+import 'package:rxpos/core/presentation/top_bar.dart' show CommandPalette;
 import 'package:rxpos/core/theme/themes.dart';
 import 'package:rxpos/features/auth/domain/offline_secrets.dart';
 import 'package:rxpos/features/calendar/domain/calendar.dart';
@@ -1765,7 +1766,8 @@ void main() {
     await tester.enterText(find.byKey(const Key('palette-input')), '/note');
     await settle(tester);
     expect(find.text('New note page'), findsOneWidget);
-    expect(find.text('Medicines'), findsNothing, reason: 'no medicines, customers or AI rows after "/"');
+    // (inside the palette: "Medicines" is also a menu heading since 1.14.0)
+    expect(find.descendant(of: find.byType(CommandPalette), matching: find.text('Medicines')), findsNothing, reason: 'no medicines, customers or AI rows after "/"');
     // (opening Notes from here starts a page whose save runs on the database's own thread, which a widget test cannot
     // wait for: test/features/notes_test.dart covers the editor and its saving)
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);

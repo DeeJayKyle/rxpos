@@ -1115,7 +1115,7 @@ class _ProductPanel extends StatelessWidget {
                       maxCrossAxisExtent: tokensOf(context).tileWidth,
                       // + a row for the FEFO expiry badge, + 8 for the React look's roomier card padding (#66: the price,
                       // a tag and the stock note wrapping to two lines overflowed by 6 px)
-                      mainAxisExtent: MediaQuery.textScalerOf(context).scale(tokensOf(context).tileHeight + 32),
+                      mainAxisExtent: MediaQuery.textScalerOf(context).scale(tokensOf(context).tileHeight + 32 + 20), // + a third line for a long name (1.14.0)
                       crossAxisSpacing: tokensOf(context).gap,
                       mainAxisSpacing: tokensOf(context).gap,
                     ),
@@ -1389,9 +1389,9 @@ class _SaleBar extends ConsumerWidget {
               const SizedBox(width: 10),
               Expanded(child: Text(s.lines.isEmpty ? 'No items yet' : '${s.lines.length} item${s.lines.length == 1 ? '' : 's'}', maxLines: 1, overflow: TextOverflow.ellipsis)),
               // large text on a small phone: the total shrinks to fit rather than pushing Charge off the bar
-              // (1.14.0: only the room it needs, so "No items yet" is not cut off)
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 170),
+              // (1.14.0: at most half the room, and only what it needs, so "No items yet" is not cut off; large text
+              // still shrinks it to fit)
+              Flexible(
                 child: FittedBox(
                   fit: BoxFit.scaleDown,
                   alignment: Alignment.centerRight,
