@@ -61,7 +61,7 @@
   :root[data-look='glossy'] .welcome h1 { font-size: 28px; letter-spacing: -.02em; }
   :root[data-look='glossy'] .welcome-store { background: rgba(255, 255, 255, .16); color: var(--hero-on); border: 1px solid rgba(255, 255, 255, .25); }
   :root[data-look='glossy'] .welcome .date-pill { background: var(--hero-b); color: var(--hero-on); border-color: rgba(255, 255, 255, .35); }
-  :root[data-look='glossy'] .welcome .btn.primary { background: #fff; color: var(--hero-a); box-shadow: 0 10px 24px -12px rgba(0, 0, 0, .5); }
+  :root[data-look='glossy'] .welcome .btn.primary { background: var(--hero-on); color: var(--hero-a); box-shadow: 0 10px 24px -12px rgba(0, 0, 0, .5); }
   @media (max-width: 1180px) { :root[data-look='glossy'] .welcome::before { display: none; } }
   @media (max-width: 720px) { :root[data-look='glossy'] .welcome h1 { font-size: 21px; } }
 

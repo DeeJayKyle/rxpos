@@ -56,8 +56,8 @@ class GreetingCard extends StatelessWidget {
         ? FilledButton.icon(
             key: const Key('greeting-new-sale'),
             style: FilledButton.styleFrom(minimumSize: const Size(0, 46), padding: EdgeInsets.symmetric(horizontal: phone ? 14 : 20),
-                // on the banner: a white button in the banner's colour
-                backgroundColor: g == null ? null : Colors.white, foregroundColor: g == null ? null : Color(g.hero[0]), shape: g == null ? null : const StadiumBorder()),
+                // on the banner: a button in the banner's words colour, its words in the banner's colour
+                backgroundColor: on, foregroundColor: g == null ? null : Color(g.hero[0]), shape: g == null ? null : const StadiumBorder()),
             onPressed: () => context.go('/pos'),
             icon: const Icon(Icons.shopping_cart_outlined),
             label: const Text('New sale'),
