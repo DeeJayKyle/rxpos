@@ -66,7 +66,7 @@ export default function Labels() {
               {items.map((i, n) => (
                 <tr key={i.p.id}><td>{i.p.name}</td><td className="muted small">{i.p.barcode}</td>
                   <td><input type="number" min="0" value={i.qty} onChange={(e) => setItems((l) => l.map((x, j) => (j === n ? { ...x, qty: e.target.value } : x)))} /></td>
-                  <td><button className="icon-btn" onClick={() => setItems((l) => l.filter((_, j) => j !== n))}>×</button></td></tr>
+                  <td><button className="icon-btn" aria-label="Remove this line" title="Remove this line" onClick={() => setItems((l) => l.filter((_, j) => j !== n))}>×</button></td></tr>
               ))}
               {!items.length && <Empty colSpan={4}>Search above to add medicines</Empty>}
             </tbody>

@@ -202,6 +202,9 @@ function ColourLevel({ onPick }) {
   ));
 }
 
+/** The theme menu's shortlist (1.16.0, the owner's clean-up): the rest are under All themes */
+const RECOMMENDED = ['pharmacy-green', 'mint-teal', 'pharmacy-blue', 'navy-teal', 'cool-crisp', 'neon-indigo'];
+
 function ThemePicker({ theme, setTheme, mode, setMode, style, setStyle }) {
   const { db } = useStore();
   const branding = db.license?.[0]?.branding;
@@ -221,6 +224,17 @@ function ThemePicker({ theme, setTheme, mode, setMode, style, setStyle }) {
     return () => mq.removeEventListener?.('change', follow);
   }, [mode, branding]); // eslint-disable-line react-hooks/exhaustive-deps
   const pickBase = (base) => { setMode(''); if (current?.base !== base) setTheme(paletteFor(base, list, branding?.defaultTheme)); };
+  const [all, setAll] = useState(false);
+  const rec = RECOMMENDED.map((id) => list.find((t) => t.id === id)).filter(Boolean);
+  const short = list.length > 8 && rec.length >= 3;
+  const item = (t) => (
+    <button key={t.id} className={'theme-item' + (t.id === theme ? ' on' : '')} onClick={() => { setMode(''); setTheme(t.id); setOpen(false); }}
+      onMouseEnter={() => applyTheme(t.id)} onFocus={() => applyTheme(t.id)}>
+      <span className="swatch" style={{ background: `linear-gradient(135deg, ${t.c.sidebar} 0 30%, ${t.c.surface} 30% 55%, ${t.c.primary} 55% 78%, ${t.c.primary2} 78%)`, borderColor: t.c.borderStrong }} />
+      <span className="grow">{t.name}{t.inspired && t.inspired !== t.name && <small className="muted"> · {t.inspired}</small>}</span>
+      {t.base === 'dark' ? <Moon size={13} /> : <Sun size={13} />}
+    </button>
+  );
   const MODES = [['light', 'Light', Sun], ['dark', 'Dark', Moon], ['system', 'System', MonitorSmartphone]];
   const activeMode = mode === 'system' ? 'system' : current?.base;
   // a theme is previewed while the pointer is on it (2026-11-18); closing the menu puts the chosen one back
@@ -243,20 +257,25 @@ function ThemePicker({ theme, setTheme, mode, setMode, style, setStyle }) {
                 onClick={() => (id === 'system' ? setMode('system') : pickBase(id))}><Icon size={14} />{label}</button>
             ))}
           </div>
-          {/* themes by group (src/themes.js THEME_GROUPS): Clinical, Colourful, Dashboard looks, Dark, High contrast */}
+          {/* 1.16.0 (the owner's clean-up): six recommended themes first; every theme, by set, under "All themes" */}
+          {short && (
+            <div className="theme-group" role="group" aria-label="Recommended">
+              <div className="bell-head">Recommended</div>
+              {rec.map(item)}
+              <button type="button" className="style-item all-themes" aria-expanded={all} onClick={() => setAll((x) => !x)}>
+                <ChevronDown size={14} className={all ? 'flip' : ''} aria-hidden="true" /><span className="grow">All themes ({list.length})</span>
+              </button>
+            </div>
+          )}
+          {/* themes by group (src/themes.js THEME_GROUPS) */}
+          <div className="theme-all" hidden={short && !all}>
           {THEME_GROUPS.map((g) => [g, list.filter((t) => (t.group || 'Clinical') === g)]).filter(([, ts]) => ts.length).map(([g, ts]) => (
             <div key={g} className="theme-group" role="group" aria-label={g}>
               <div className="bell-head">{g}</div>
-              {ts.map((t) => (
-                <button key={t.id} className={'theme-item' + (t.id === theme ? ' on' : '')} onClick={() => { setMode(''); setTheme(t.id); setOpen(false); }}
-                  onMouseEnter={() => applyTheme(t.id)} onFocus={() => applyTheme(t.id)}>
-                  <span className="swatch" style={{ background: `linear-gradient(135deg, ${t.c.sidebar} 0 30%, ${t.c.surface} 30% 55%, ${t.c.primary} 55% 78%, ${t.c.primary2} 78%)`, borderColor: t.c.borderStrong }} />
-                  <span className="grow">{t.name}{t.inspired && t.inspired !== t.name && <small className="muted"> · {t.inspired}</small>}</span>
-                  {t.base === 'dark' ? <Moon size={13} /> : <Sun size={13} />}
-                </button>
-              ))}
+              {ts.map(item)}
             </div>
           ))}
+          </div>
           <div className="bell-head">Colour</div>
           <ColourLevel onPick={() => setOpen(false)} />
           <div className="bell-head">Style</div>

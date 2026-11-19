@@ -6,7 +6,9 @@ const check = (n, ok, x = '') => { ok ? pass++ : fail++; console.log(`${ok ? 'PA
 check('all themes allowed: light → Mint Teal', paletteFor('light') === 'mint-teal');
 check('all themes allowed: dark → RxPOS Navy Teal', paletteFor('dark') === 'navy-teal');
 check('without the defaults: the first palette of that base', paletteFor('light', THEMES.filter((t) => t.id !== 'mint-teal')) === 'electric-blue' && paletteFor('dark', THEMES.filter((t) => t.id !== 'navy-teal')) === 'deep-ocean-cyan');
-check('Navy Teal: the navy page, teal actions; Mint Teal: white cards on the mint page', (() => { const o = themeVars(THEMES.find((t) => t.id === 'navy-teal')), d = themeVars(THEMES.find((t) => t.id === 'mint-teal')); return o['--bg'] === '#0a2233' && o['--primary'] === '#14b8a6' && d['--bg'] === '#cfe6e6' && d['--surface'] === '#ffffff' && d['--primary'] === '#0f8a8a'; })());
+// 1.16.0 (the owner's clean-up): light themes on a near-white page with a breath of their soft colour
+check('Navy Teal: the navy page, teal actions; Mint Teal: white cards on a near-white mint page', (() => { const o = themeVars(THEMES.find((t) => t.id === 'navy-teal')), d = themeVars(THEMES.find((t) => t.id === 'mint-teal')); return o['--bg'] === '#0a2233' && o['--primary'] === '#14b8a6' && d['--bg'] === '#ecf5f5' && d['--surface'] === '#ffffff' && d['--primary'] === '#0f8a8a'; })());
+check('light pages are near white (1.16.0)', THEMES.filter((t) => t.base === 'light').every((t) => { const [r, g, b] = [1, 3, 5].map((i) => parseInt(themeVars(t)['--bg'].slice(i, i + 2), 16)); return Math.min(r, g, b) >= 0xd8; }));
 const restricted = allowedThemes({ themes: ['tokyo-night', 'mint', 'clinic-blue'] }); // retired ids: navy-teal, emerald-mint, sky-blue
 check('restricted: light prefers the owner\'s default when it is light (a retired id counts as its replacement)', paletteFor('light', restricted, 'mint') === 'emerald-mint');
 check('restricted: light falls back to the first allowed light palette', paletteFor('light', restricted) === 'sky-blue');

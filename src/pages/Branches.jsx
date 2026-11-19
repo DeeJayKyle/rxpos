@@ -163,7 +163,7 @@ export function Transfers() {
               {creating.lines.map((l, i) => (
                 <tr key={l.productId}><td>{l.name}</td><td>{products.find((p) => p.id === l.productId)?.stock}</td>
                   <td><input type="number" min="1" value={l.qty} onChange={(e) => setCreating((c) => ({ ...c, lines: c.lines.map((x, j) => (j === i ? { ...x, qty: e.target.value } : x)) }))} /></td>
-                  <td><button className="icon-btn" onClick={() => setCreating((c) => ({ ...c, lines: c.lines.filter((_, j) => j !== i) }))}>×</button></td></tr>
+                  <td><button className="icon-btn" aria-label="Remove this line" title="Remove this line" onClick={() => setCreating((c) => ({ ...c, lines: c.lines.filter((_, j) => j !== i) }))}>×</button></td></tr>
               ))}
               {!creating.lines.length && <Empty colSpan={4}>Search above to add medicines</Empty>}
             </tbody>

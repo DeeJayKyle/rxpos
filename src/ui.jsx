@@ -311,11 +311,15 @@ export function CrudPage({ title, subtitle, singular, table, fields, columns, bl
 
 /** Numbers on the dashboard roll up to their value when they first appear, and glide to a new value when the data
  * changes (text stays as given; the last frame is always the exact value; off with reduced motion) */
+// 1.16.0 (the owner's clean-up, less motion): numbers roll up the first time a page shows them in a session, not on
+// every visit; a change after that still glides
+let rolledOnce = false;
 export function CountUp({ value, ms = 700 }) {
   const str = String(value ?? '');
   const m = str.match(/-?[\d,]*\.?\d+/);
   const target = m ? Number(m[0].replace(/,/g, '')) : NaN;
-  const still = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const still = () => rolledOnce || matchMedia('(prefers-reduced-motion: reduce)').matches;
+  useEffect(() => { const t = setTimeout(() => { rolledOnce = true; }, ms + 200); return () => clearTimeout(t); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [shown, setShown] = useState(() => (isFinite(target) && !still() ? 0 : target));
   const from = useRef(isFinite(target) && !still() ? 0 : target);
   useEffect(() => {
