@@ -1,5 +1,11 @@
 # RxPOS release notes
 
+## Flutter app (next build) · November 2026 (speed)
+
+- **A faster till after each sale**: a sale changes stock, not medicines, so the app keeps its medicine list (the
+  pharmacy's medicines with the 9,710-medicine catalogue, sorted) and its lookups, and only the stock figures update.
+  The list is built again only when a medicine, batch, client or supplier changes.
+
 ## React (classic) app 1.14.1 · Flutter app (next build) · November 2026
 
 - **Whole amounts on the dashboard** (the owner's choice): the figure cards show UGX 152,000 rather than UGX 152K.

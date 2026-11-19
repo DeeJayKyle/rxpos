@@ -48,17 +48,26 @@ class StockIndex {
 
 /// The pharmacy's stock as one branch sees it.
 class StockView {
-  StockView({required Iterable<Product> products, required Iterable<Batch> batches, required this.index, this.branch = mainBranch})
-      : _products = {for (final p in products) p.id: p} {
+  /// [productsById] and [batchesByProduct], when given, are lookups made once and kept while the medicines and batches
+  /// are unchanged (1.14.1, speed): a sale changes only the stock [index], so the till need not rebuild them.
+  StockView({required Iterable<Product> products, required Iterable<Batch> batches, required this.index, this.branch = mainBranch,
+      Map<String, Product>? productsById, Map<String, List<Batch>>? batchesByProduct})
+      : _products = productsById ?? {for (final p in products) p.id: p},
+        _batches = batchesByProduct ?? groupBatches(batches);
+
+  /// A medicine's batches by its id
+  static Map<String, List<Batch>> groupBatches(Iterable<Batch> batches) {
+    final out = <String, List<Batch>>{};
     for (final b in batches) {
-      (_batches[b.productId] ??= []).add(b);
+      (out[b.productId] ??= []).add(b);
     }
+    return out;
   }
 
   final StockIndex index;
   final String branch;
   final Map<String, Product> _products;
-  final Map<String, List<Batch>> _batches = {};
+  final Map<String, List<Batch>> _batches;
 
   /// A medicine's batches with their quantities here, earliest expiry first (no expiry last).
   List<BatchStock> batchesOf(String productId, {String? atBranch}) {
