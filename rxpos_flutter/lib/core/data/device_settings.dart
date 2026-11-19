@@ -49,5 +49,9 @@ class DeviceValue extends _$DeviceValue {
 
 /// Device keys for the screen (Settings → This device).
 const zoomKey = 'zoom', rotationKey = 'rotation';
+/// How the dashboard's figure cards show amounts on this device (1.14.1): 'full' (UGX 152,000, the default) or 'short'
+/// (UGX 152K); the same key as the web app's This device setting
+const amountStyleKey = 'amountStyle';
+const amountStyles = [('full', 'Whole (UGX 152,000)'), ('short', 'Short (UGX 152K)')];
 /// compact tables (2026-11-18): 36 px rows, chosen on This device
 const compactTablesKey = 'compactTables';
