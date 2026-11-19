@@ -15,7 +15,6 @@ import '../../features/alerts/application/alerts_provider.dart';
 import '../../features/alerts/presentation/notification_bell.dart';
 import '../data/device_settings.dart';
 import '../data/pharmacy_providers.dart';
-import '../theme/theme_choice.dart';
 import '../crash/crash_reports.dart';
 import '../crash/crash_screen.dart';
 import '../../features/sync_status/application/sync_controller.dart';
@@ -55,7 +54,6 @@ class AppShell extends ConsumerWidget {
     final session = ref.watch(sessionControllerProvider).value;
     final can = ref.watch(permissionsProvider).value ?? const <String>{};
     final features = ref.watch(pharmacyProvider).value?.features ?? const {};
-    final premium = ref.watch(premiumUiProvider).value ?? false;
     final visible = screens.where((s) => s.allowed(can, features)).toList();
     final size = windowClass(context);
     final wide = size == WindowClass.expanded;
@@ -117,22 +115,7 @@ class AppShell extends ConsumerWidget {
         ClockPill(compact: !wide, date: MediaQuery.sizeOf(context).width >= 1280),
         const UpdatePill(),
         const NotificationBell(),
-        if (wide && allowedPalettes(ref.watch(brandingProvider)).any((p) => p.id == premiumTheme))
-          Tooltip(
-            message: 'Premium UI: the dark Midnight Pro look',
-            // a pill as the React app's: the sparkle, the words and the switch
-            child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 4),
-              padding: const EdgeInsets.only(left: 12),
-              decoration: BoxDecoration(color: Theme.of(context).colorScheme.surface, borderRadius: BorderRadius.circular(99), border: Border.all(color: Theme.of(context).dividerColor)),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                Icon(Icons.auto_awesome, size: 16, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                const SizedBox(width: 6),
-                Text('Premium UI', style: Theme.of(context).textTheme.labelLarge?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-                Transform.scale(scale: .78, child: Switch(value: premium, onChanged: (v) => ref.read(premiumUiProvider.notifier).set(v))),
-              ]),
-            ),
-          ),
+        // 1.16.0 (the owner's clean-up): no Premium UI switch; Navy Teal is one of the themes in the theme menu
         const ThemeMenuButton(),
         // the signed-in person: top right beside the theme, a drop-down (the owner's request, 17 Nov 2026)
         if (session != null) AccountMenu(session: session, showName: false, card: wide),
@@ -252,7 +235,14 @@ class _Sidebar extends ConsumerWidget {
     } catch (_) {
       collapsed = const {};
     }
-    void toggle(String g) => ref.read(deviceValueProvider(navCollapsedKey).notifier).set(jsonEncode({...collapsed, g: !(collapsed[g] ?? false)}));
+    // one group open at a time (1.16.0, the owner's clean-up): opening a group folds the others; Pinned folds on its own
+    void toggle(String g) {
+      final opening = collapsed[g] ?? false;
+      final next = g == 'Pinned' || !opening
+          ? {...collapsed, g: !(collapsed[g] ?? false)}
+          : {for (final x in navGroups) x: x != g, 'Pinned': collapsed['Pinned'] ?? false};
+      ref.read(deviceValueProvider(navCollapsedKey).notifier).set(jsonEncode(next));
+    }
     int badge(Screen s) => counts[_badges[s.path]] ?? 0;
 
     if (rail) {
@@ -622,12 +612,7 @@ class _GroupHead extends StatelessWidget {
         ),
         const SizedBox(width: 6),
         Flexible(child: Text(title.toUpperCase(), maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11, letterSpacing: .9, fontWeight: FontWeight.w700, color: dim))),
-        const SizedBox(width: 8),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-          decoration: BoxDecoration(color: sc.text.withValues(alpha: .14), borderRadius: BorderRadius.circular(99)),
-          child: Text('$count', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: dim)),
-        ),
+        // 1.16.0 (the owner's clean-up): no page counts on the group titles; alert counts stay on the pages
         const Spacer(),
       ]),
     );

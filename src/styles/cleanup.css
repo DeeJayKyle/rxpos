@@ -62,9 +62,9 @@
 /* ---- quieter rows (I): at rest only the ⋯; pointing at a row (or reaching it with the keys) shows its actions as icons
    (their words stay for screen readers and in the tooltip); a click on the row opens it ---- */
 @media screen and (min-width: 900px) and (hover: hover) {
-  tbody tr td.actions :is(.row-acts > .btn, > .btn) { font-size: 0; gap: 0; padding: 6px 8px; min-height: 30px; opacity: 0; transition: opacity .12s; }
-  tbody tr td.actions :is(.row-acts > .btn, > .btn) svg { width: 15px; height: 15px; }
-  tbody tr:is(:hover, :focus-within, .row-active) td.actions :is(.row-acts > .btn, > .btn) { opacity: 1; }
+  tbody tr td.actions > .btn, tbody tr td.actions .row-acts > .btn { font-size: 0; gap: 0; padding: 6px 8px; min-height: 30px; opacity: 0; transition: opacity .12s; }
+  tbody tr td.actions > .btn svg, tbody tr td.actions .row-acts > .btn svg { width: 15px; height: 15px; }
+  tbody tr:is(:hover, :focus-within, .row-active) td.actions > .btn, tbody tr:is(:hover, :focus-within, .row-active) td.actions .row-acts > .btn { opacity: 1; }
   tbody tr td.actions .row-more { opacity: .6; }
   tbody tr:hover td.actions .row-more { opacity: 1; }
   .page table tbody tr[aria-selected], .page table tbody tr { cursor: pointer; }

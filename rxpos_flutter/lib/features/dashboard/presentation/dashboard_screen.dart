@@ -112,7 +112,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 onSelectionChanged: (v) => setState(() => _chart = v.first),
               );
               return _chart == 'daily'
-                  ? DailyTrend(byDay: {for (final e in f.byDay.entries) e.key: e.value.total}, counts: {for (final e in f.byDay.entries) e.key: e.value.count.toDouble()}, keysFor: (n) => lastDays(n), money: s.money, extra: pick, onDay: (k) => context.go('/sales?from=$k&to=$k'))
+                  ? DailyTrend(days: chartDays(period), byDay: {for (final e in f.byDay.entries) e.key: e.value.total}, counts: {for (final e in f.byDay.entries) e.key: e.value.count.toDouble()}, keysFor: (n) => lastDays(n), money: s.money, extra: pick, onDay: (k) => context.go('/sales?from=$k&to=$k'))
                   : MonthLines(money: s.money, monthKeys: (n) => lastMonths(n), extra: pick, series: [
                       ('Sales', moneyInOf(context), {for (final e in f.byMonth.entries) e.key: e.value.total}),
                       if (can.contains('reports')) ('Purchases', purchasesColorOf(context), f.purchasesByMonth),
@@ -257,4 +257,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       ]),
     );
   }
+}
+
+/// The daily chart's days for the dashboard's period (1.16.0, src/pages/Dashboard.jsx chartDays)
+int chartDays(String period, [DateTime? now]) {
+  final n = now ?? DateTime.now();
+  return switch (period) {
+    '1m' => 30,
+    '6m' => 182,
+    '12m' => 365,
+    'ytd' => n.difference(DateTime(n.year)).inDays + 1 < 7 ? 7 : n.difference(DateTime(n.year)).inDays + 1,
+    _ => 7,
+  };
 }

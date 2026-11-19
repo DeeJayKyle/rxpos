@@ -1,5 +1,42 @@
 # RxPOS release notes
 
+## React (classic) app 1.16.0 · Flutter app (next build) · November 2026 (the clean-up)
+
+The owner's clean-up list (19 Nov 2026): fewer things competing on each page.
+- **Menu and top bar**:
+  - One menu group open at a time, and pages used now and then (Kits, Formulations, Shelves, Scan Prescription, Drug
+    Quiz) sit under **More**.
+  - No page counts on the group titles (alert counts stay), a short "Online · RxPOS 1.16.0" chip, and no Premium UI
+    switch (Navy Teal is in the theme menu).
+  - Pin this page and Keyboard & mouse are in the account menu.
+  - Where a page has its own search, the top bar's search shrinks to its icon.
+- **Notices**: "Needs attention", the weekly summary and the reminders show on the dashboard only, and never on a
+  phone; the bell keeps them. Messages and calls still show everywhere.
+- **Tips**: a small "?" on the page opens its tip; nothing opens on its own (the till's tour still runs once).
+- **Dashboard**:
+  - One period picker for the whole page, which the daily chart follows.
+  - The bento row keeps the week at a glance and the next step, with no copies of the chart or the latest sales.
+  - A shorter banner with the date in it.
+  - The setup checklist folds to one line once half is done.
+  - The figure cards' labels fit on one line.
+- **Lists**:
+  - One date button everywhere: Today, Yesterday, 7 days, This month, Last month or your own dates.
+  - CSV and PDF are under **Export**, and Sales History's filters are behind a **Filters** button.
+  - A click on a row opens it. At rest only the ⋯ shows; the actions appear as icons when you point at the row.
+  - Columns empty on every row are left out (Medicine List: Strength, Category, Wholesale).
+  - Inventory tags only what needs a look, and the Walk-in Customer is not in Customers.
+  - Money columns carry the currency in their heading.
+- **Till**: the layout, the customer display, Training and the keys are in one ⚙ menu.
+- **Reports**: the groups and their reports sit on one row, with no shortcut cards.
+- **This device**: Log out is a normal button, and the app version and the AI doctor are at the end.
+- **Forms**: help sits under each field, the buttons stay in view, and dialogs use two columns on a PC.
+- **Everywhere**:
+  - One spacing scale, three heading sizes and three kinds of button.
+  - Light themes sit on a near-white page, and tables have quieter tints.
+  - Numbers roll up once per session, and pages no longer rise in.
+  - The theme menu shows six recommended themes, with every theme under "All themes".
+  - Icon-only buttons are labelled.
+
 ## React (classic) app 1.15.0 · Flutter app (next build) · November 2026 (themes)
 
 - **41 themes in six sets** (both apps). Every set has new palettes: Blues (Porcelain & Signal Blue, Midnight Navy &

@@ -755,21 +755,21 @@ void main() {
     expect(tester.widget<Tooltip>(find.byKey(const Key('stat-full')).first).message, 'UGX 1,250,800');
     // B2: the change and "vs yesterday" stay on one line
     expect(tester.widgetList<Text>(find.byKey(const Key('stat-sub'))).every((t) => t.maxLines == 1 && t.overflow == TextOverflow.ellipsis), isTrue);
-    // B1: today's amount above its bar and a dashed average line
-    expect(find.byKey(const Key('bento-today-value')), findsOneWidget);
-    expect(find.byKey(const Key('bento-avg')), findsOneWidget);
+    // 1.16.0 (the owner's clean-up): the bento row keeps the week at a glance and the next step; no chart, latest
+    // sales or period picker of its own (the dashboard has them)
+    expect(find.byKey(const Key('bento-today-value')), findsNothing);
+    expect(find.byKey(const Key('bento-period')), findsNothing);
+    expect(find.byKey(const Key('bento-hero')), findsOneWidget);
     // B4: the busiest hour in the hero card
     expect(find.descendant(of: find.byKey(const Key('bento-busiest')), matching: find.text('10:00 · 3 sales')), findsOneWidget);
     expect(find.byKey(const Key('bento-best-day')), findsOneWidget);
-    // B3: the amounts end on one right edge
-    final rights = tester.widgetList(find.byKey(const Key('bento-amount'))).map((w) => tester.getRect(find.byWidget(w)).right.round()).toSet();
-    expect(rights.length, 1);
+    expect(find.byKey(const Key('bento-amount')), findsNothing);
     // B5: the busy hours grid has today's 10:00 cell
     final wd = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][now.weekday - 1];
     expect(find.byKey(Key('busy-$wd-10')), findsOneWidget);
     // B8: what's new once
     expect(find.byKey(const Key('whats-new')), findsOneWidget);
-    expect(find.text("What's new in 1.15.0"), findsOneWidget);
+    expect(find.text("What's new in 1.16.0"), findsOneWidget);
     // B7: the setup checklist, ticked from the data
     expect(find.byKey(const Key('setup-checklist')), findsOneWidget);
     expect(find.textContaining('2 of 6 done', findRichText: true), findsOneWidget);
@@ -3329,14 +3329,8 @@ void main() {
     Navigator.of(tester.element(find.text('Appearance'))).pop();
     await settle(tester, 3);
 
-    // Premium UI: RxPOS Navy Teal (the dark theme), then back to the theme from before
-    await tester.tap(find.byType(Switch).first);
-    await settle(tester, 4);
-    expect((await look())['theme'], 'navy-teal');
-    expect(brightness(tester), Brightness.dark);
-    await tester.tap(find.byType(Switch).first);
-    await settle(tester, 4);
-    expect((await look())['theme'], 'royal-purple');
+    // 1.16.0 (the owner's clean-up): no Premium UI switch in the top bar; RxPOS Navy Teal is in the theme menu
+    expect(find.text('Premium UI'), findsNothing);
     await done(tester);
   });
 
@@ -3356,7 +3350,7 @@ void main() {
     await done(tester);
     await tester.runAsync(() => RecordStore(db).update((d) => d.put('license', {'id': 'lic', 'branding': {'themes': ['mint-teal', 'amber-gold', 'sky-blue']}})));
     await start(tester);
-    expect(find.byType(Switch), findsNothing, reason: 'RxPOS Navy Teal is not among the allowed themes');
+    expect(find.text('Premium UI'), findsNothing, reason: 'no Premium switch since 1.16.0');
     await done(tester);
   });
 
@@ -4367,6 +4361,8 @@ void main() {
     await settle(tester);
     expect(item('Customers'), findsOneWidget);
     expect(tester.getSemantics(people).flagsCollection.isExpanded, Tristate.isTrue);
+    // 1.16.0 (the owner's clean-up): one group open at a time, so opening People folded Sales
+    expect(item('POS – Retail'), findsNothing);
     await tester.tap(item('Customers'));
     await settle(tester);
     await tester.tap(people);
@@ -4375,12 +4371,14 @@ void main() {
     expect(item('Suppliers'), findsNothing);
     await tester.tap(find.byKey(const ValueKey('nav-group-Sales')));
     await settle(tester);
-    expect(item('POS – Retail'), findsNothing);
+    expect(item('POS – Retail'), findsOneWidget);
+    expect(item('Suppliers'), findsNothing);
     final saved = (await tester.runAsync(() => db.select(db.kv).get()))!.firstWhere((k) => k.k == 'device:navCollapsed').v;
-    expect(jsonDecode(saved), containsPair('Sales', true));
+    expect(jsonDecode(saved), allOf(containsPair('Sales', false), containsPair('People', true)));
     await done(tester);
     await start(tester, foldedNav: true);
-    expect(item('POS – Retail'), findsNothing, reason: 'remembered on this device');
+    expect(item('POS – Retail'), findsOneWidget, reason: 'remembered on this device');
+    expect(item('Customers'), findsNothing);
     expect(item('Dashboard'), findsOneWidget, reason: 'the page you are on');
     await done(tester);
   });
