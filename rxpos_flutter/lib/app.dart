@@ -30,7 +30,7 @@ class RxposApp extends ConsumerWidget {
     final look = ref.watch(lookProvider).value ?? const Look();
     final allowed = allowedPalettes(ref.watch(brandingProvider));
     final preview = ref.watch(themePreviewProvider);
-    final chosen = preview != null && allowed.any((p) => p.id == preview) ? preview : allowed.any((p) => p.id == look.theme) ? look.theme : (allowed.firstOrNull ?? palettes.first).id;
+    final chosen = preview != null && allowed.any((p) => p.id == preview) ? preview : allowed.any((p) => p.id == look.theme || '${p.id}-dark' == look.theme) ? look.theme : (allowed.firstOrNull ?? palettes.first).id; // a twin is allowed with its theme
     final zoom = double.tryParse(ref.watch(deviceValueProvider(zoomKey)).value ?? '') ?? 1;
     final rotation = ref.watch(deviceValueProvider(rotationKey)).value ?? 'auto';
     if (!kIsWeb && onAndroid) {
@@ -51,7 +51,7 @@ class RxposApp extends ConsumerWidget {
         : onAndroid || Platform.isIOS;
     var theme = design != null
         ? buildTheme(paletteById(design.palette), surface: design.surface, vivid: look.level == 'vivid', tokens: design.tokens, touch: touch, headingFont: headingFont, bodyFont: bodyFont)
-        : buildTheme(paletteById(look.system && preview == null ? paletteFor(false, allowed) : chosen), accent: look.accent, surface: look.surface, vivid: look.level == 'vivid', touch: touch,
+        : buildTheme(paletteById(look.system && preview == null ? (twinOf(chosen, false) ?? paletteFor(false, allowed)) : chosen), accent: look.accent, surface: look.surface, vivid: look.level == 'vivid', gradient: look.gradient, touch: touch,
             headingFont: headingFont, bodyFont: bodyFont);
     // compact tables (This device): 36 px rows in lists and tables
     final compact = ref.watch(deviceValueProvider(compactTablesKey)).value == '1';
@@ -69,7 +69,8 @@ class RxposApp extends ConsumerWidget {
       debugShowCheckedModeBanner: false,
       // following the system: its light and dark themes, live when it changes
       theme: theme,
-      darkTheme: followSystem ? dense(buildTheme(paletteById(paletteFor(true, allowed)), accent: look.accent, surface: look.surface, vivid: look.level == 'vivid', touch: touch,
+      // 1.17.0: the chosen theme's own dark twin at night, else the pharmacy's dark theme
+      darkTheme: followSystem ? dense(buildTheme(paletteById(twinOf(chosen, true) ?? paletteFor(true, allowed)), accent: look.accent, surface: look.surface, vivid: look.level == 'vivid', gradient: look.gradient, touch: touch,
           headingFont: headingFont, bodyFont: bodyFont)) : null,
       themeMode: followSystem ? ThemeMode.system : ThemeMode.light,
       routerConfig: ref.watch(appRouterProvider),

@@ -79,18 +79,30 @@ class ThemeMenu extends ConsumerWidget {
                   child: ListTile(
                   key: ValueKey('theme-${p.id}'),
                   dense: true,
-                  selected: p.id == look.theme && !look.system,
+                  selected: (p.id == look.theme || '${p.id}-dark' == look.theme) && !look.system,
                   leading: swatch(p),
                   title: Text(p.name),
                   subtitle: p.inspired.isNotEmpty && p.inspired != p.name ? Text(p.inspired) : null,
                   trailing: Icon(p.dark ? Icons.dark_mode_outlined : Icons.light_mode_outlined, size: 14),
                   onTap: () {
-                    ctl.pick(p.id);
+                    // 1.17.0: while in Dark, a theme opens as its dark twin
+                    ctl.pick(current.dark && !p.dark ? (twinOf(p.id, true) ?? p.id) : p.id);
                     close();
                   },
                 ),
                 ),
                 ],
+              head('Gradient'),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: SegmentedButton<String>(
+                  key: const Key('gradient-choice'),
+                  showSelectedIcon: false,
+                  segments: const [ButtonSegment(value: 'off', label: Text('Off')), ButtonSegment(value: 'soft', label: Text('Soft')), ButtonSegment(value: 'bold', label: Text('Bold'))],
+                  selected: {look.gradient},
+                  onSelectionChanged: (v) => ctl.gradient(v.first),
+                ),
+              ),
               head('Colour'),
               for (final (id, name, hint) in colourLevels)
                 ListTile(

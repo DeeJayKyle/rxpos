@@ -3,8 +3,12 @@
 // its highlights go here too. The Flutter app keeps the same list in rxpos_flutter/lib/core/config/whats_new.dart
 // (tests/unit-whatsnew.mjs checks they match).
 export const WHATS_NEW = {
-  version: '1.16.0',
+  version: '1.17.0',
   items: [
+    { text: 'Gradients: a soft or bold background, gradient accents, and six presets for the menu (theme menu → Gradient)', to: '/device' },
+    { text: 'Dark keeps your theme: every theme has its own dark twin', to: '/device' },
+    { text: 'New styles: GNOME, KDE Plasma, elementary OS, Ubuntu, iOS and Liquid Glass (theme menu → Style)', to: '/device' },
+    { text: 'Two new themes: Terminal and Ubuntu Yaru', to: '/device' },
     { text: 'A tidier screen: one menu group open at a time, rarely used pages under More, no Premium switch', to: '/' },
     { text: 'Notices never cover a page: they show on the dashboard (and in the bell), never on phones', to: '/' },
     { text: 'One period picker on the dashboard, one date button on every list, CSV and PDF under Export', to: '/sales' },

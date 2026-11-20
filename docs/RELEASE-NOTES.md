@@ -1,5 +1,24 @@
 # RxPOS release notes
 
+## React (classic) app 1.17.0 · Flutter app (next build) · November 2026 (looks)
+
+The owner's choices (20 Nov 2026):
+- **Gradients** (theme menu → Gradient, on each device):
+  - A page background of the theme's own colours: Off, Soft or Bold. Cards stay solid, so words read.
+  - Gradient accents on the main buttons, the open menu item, card headings and toggles.
+  - Six presets for the menu and the banner: Sunrise, Ocean, Forest, Berry, Dusk and Neon. Their words are made
+    readable on both ends of each gradient.
+- **A dark twin for every theme**: Dark and System keep the pharmacy's colours (Pharmacy Green stays green at night)
+  instead of switching to Navy Teal. The twins are not in the list; Light and Dark move between them.
+- **Styles** (theme menu → Style), each in the theme's colours, light or dark, with matching icon weights:
+  - **Linux**: GNOME (Adwaita: rounded cards, centred title, pill buttons), KDE Plasma (Breeze: crisp, compact, blue
+    focus), elementary OS (airy, gentle shadows) and Ubuntu (a dock of coloured icons, rounded window cards).
+  - **Apple**: iOS (big titles, frosted bars, grouped lists, segmented controls, springy) and Liquid Glass (iOS 26:
+    clear glass and capsule bars).
+- **Themes**: Terminal (green on black, fixed-width type, a blinking caret) and Ubuntu Yaru (orange on aubergine).
+- **Flutter apps**: the dark twins, the six styles and the gradient background. The gradient accents and presets
+  follow with 1.18.0.
+
 ## React (classic) app 1.16.0 · Flutter app (next build) · November 2026 (the clean-up)
 
 The owner's clean-up list (19 Nov 2026): fewer things competing on each page.

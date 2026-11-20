@@ -4,7 +4,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { THEMES, THEME_GROUPS, themeVars } from '../src/themes.js';
+import { THEMES, THEME_TWINS, THEME_GROUPS, themeVars } from '../src/themes.js';
 
 const DART = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'rxpos_flutter', 'lib', 'core', 'theme', 'themes.dart');
 
@@ -24,21 +24,26 @@ const q = (s) => "'" + s.replace(/'/g, "\\'") + "'";
 const glossy = (t, v) => !t.glossy ? '' : `, glossy: Glossy(kpi: [${[1, 2, 3, 4].flatMap((n) => ['a', 'b', 'on', 'sub', 'icon', 'glyph'].map((k) => argb(v[`--kpi-${n}-${k}`]))).join(', ')}], hero: [${argb(v['--hero-a'])}, ${argb(v['--hero-b'])}, ${argb(v['--hero-on'])}], sideTop: ${argb(v['--side-top'])}, sideBottom: ${argb(v['--side-bottom'])}, chartLine: ${argb(v['--chart-line'])})`;
 
 /** The Dart source of the palette list and the groups */
-export function dartPalettes() {
+const linesOf = (list) => {
   const lines = [];
-  for (const t of THEMES) {
+  for (const t of list) {
     const c = t.c, v = themeVars(t);
     const side = c.sidebarText && c.sidebarText.toLowerCase() !== '#ffffff' ? `, sidebarText: ${argb(c.sidebarText)}` : '';
     lines.push(`  Palette(${q(t.id)}, ${q(t.name)}, ${t.base === 'dark'}, bg: ${argb(c.bg)}, surface: ${argb(c.surface)}, surface2: ${argb(c.surface2)}, border: ${argb(c.border)}, borderStrong: ${argb(c.borderStrong)}, text: ${argb(c.text)}, muted: ${argb(c.muted)}, primary: ${argb(c.primary)}, primary2: ${argb(c.primary2)}, sidebar: ${argb(c.sidebar)}, sidebar2: ${argb(c.sidebar2)}, flat: true, inspired: ${q(t.inspired)}${side}, group: ${q(t.group)},`);
     lines.push(`      duo: Duo(ok: ${argb(v['--ok'])}, warn: ${argb(v['--warn'])}, danger: ${argb(v['--danger'])}, info: ${argb(v['--info'])}, violet: ${argb(v['--violet'])}, pill: ${argb(v['--pill'])}, pillOn: ${argb(v['--pill-on'])}, logo2: ${argb(v['--logo-2'])}, rowTint: ${c.rowTint}, headTint: ${c.headTint}, hues: [${Array.from({ length: 8 }, (_, i) => argb(v[`--hue-${i}`])).join(', ')}])${glossy(t, v)}),`);
   }
-  return { groups: `const paletteGroups = [${THEME_GROUPS.map(q).join(', ')}];`, list: `const palettes = [\n${lines.join('\n')}\n];` };
+  return lines;
+};
+export function dartPalettes() {
+  return { groups: `const paletteGroups = [${THEME_GROUPS.map(q).join(', ')}];`, list: `const palettes = [\n${linesOf(THEMES).join('\n')}\n];`,
+    // 1.17.0: each light theme's dark twin (src/themes.js THEME_TWINS), reached with Dark / System, not in the list
+    twins: `const paletteTwins = [\n${linesOf(THEME_TWINS).join('\n')}\n];` };
 }
 
 /** themes.dart with its palette list and groups replaced */
 export function withPalettes(src) {
-  const { groups, list } = dartPalettes();
-  return src.replace(/const paletteGroups = \[[^\]]*\];/, groups).replace(/const palettes = \[\n[\s\S]*?\n\];/, list);
+  const { groups, list, twins } = dartPalettes();
+  return src.replace(/const paletteGroups = \[[^\]]*\];/, groups).replace(/const palettes = \[\n[\s\S]*?\n\];/, list).replace(/const paletteTwins = \[\n[\s\S]*?\n\];/, twins);
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

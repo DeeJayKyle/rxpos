@@ -9,9 +9,9 @@ import 'package:rxpos/core/theme/themes.dart';
 int argb(Color c) => c.toARGB32();
 
 void main() {
-  test('the 41 themes in six sets of three to nine, every one readable with every accent', () {
-    expect(palettes, hasLength(41));
-    expect(palettes.where((p) => p.dark), hasLength(12));
+  test('the 43 themes in six sets of three to nine, every one readable with every accent', () {
+    expect(palettes, hasLength(43));
+    expect(palettes.where((p) => p.dark), hasLength(13));
     expect(palettes.where((p) => p.group == 'Dark').every((p) => p.dark), isTrue);
     expect(paletteGroups, hasLength(6));
     expect(paletteGroups.every((g) => palettes.where((p) => p.group == g).length >= 3 && palettes.where((p) => p.group == g).length <= 9), isTrue);
@@ -51,6 +51,24 @@ void main() {
     }
   });
 
+  test('1.17.0: a dark twin for every light theme, readable; Dark moves to it and Light back; the six new styles', () {
+    expect(paletteTwins.length, palettes.where((p) => !p.dark).length);
+    expect(paletteTwins.every((p) => p.dark && p.id.endsWith('-dark') && palettes.any((x) => '${x.id}-dark' == p.id && x.group == p.group)), isTrue);
+    expect((twinOf('pharmacy-green', true), twinOf('pharmacy-green-dark', false), twinOf('navy-teal', false)), ('pharmacy-green-dark', 'pharmacy-green', null));
+    expect(paletteById('pharmacy-green-dark').primary, paletteById('pharmacy-green').primary);
+    for (final p in paletteTwins) {
+      final t = buildTheme(p).colorScheme;
+      expect(contrast(argb(t.onPrimary), argb(t.primary)), greaterThanOrEqualTo(4.5), reason: '${p.id} button');
+      expect(contrast(argb(t.onSurfaceVariant), argb(t.surface)), greaterThanOrEqualTo(4.5), reason: '${p.id} muted text');
+    }
+    for (final s in ['gnome', 'kde', 'elementary', 'ubuntu', 'ios', 'liquid']) {
+      expect(surfaceStyles.any((x) => x.$1 == s), isTrue, reason: s);
+    }
+    expect(buildTheme(paletteById('mint-teal'), gradient: 'bold').extension<DesignTokens>()!.glows, hasLength(3));
+    expect(Look.parse('{"theme":"pharmacy-green-dark","gradient":"soft"}').theme, 'pharmacy-green-dark');
+    expect(Look.parse('{"theme":"pharmacy-green-dark","gradient":"soft"}').gradient, 'soft');
+  });
+
   test('containers and the inverse surface (snack bars) are readable at AA in every theme, light and dark', () {
     for (final p in palettes) {
       final t = buildTheme(p).colorScheme;
@@ -73,10 +91,10 @@ void main() {
     final some = allowedPalettes({'themes': ['light', 'dracula', 'nord']});
     expect(some.map((p) => p.id), ['mint-teal', 'navy-teal']);
     expect(paletteFor(true, some, 'nord'), 'navy-teal');
-    expect(allowedPalettes(null), hasLength(41));
+    expect(allowedPalettes(null), hasLength(43));
   });
 
-  test('only the 41 themes (the owner\'s choice): no accent presets, no design systems; old saved looks fall back to them', () {
+  test('only the 43 themes (the owner\'s choice): no accent presets, no design systems; old saved looks fall back to them', () {
     expect(accents, isEmpty);
     expect(designSystems, isEmpty);
     expect(designPalettes, isEmpty);
