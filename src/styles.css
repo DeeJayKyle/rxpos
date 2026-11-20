@@ -389,6 +389,11 @@ table.lines input, table.lines select { width: 100%; min-width: 80px; padding: 7
 .picker-list { position: absolute; z-index: 5; left: 0; right: 0; top: calc(100% + 4px); background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-lg); overflow: hidden; }
 .picker-list button { display: block; width: 100%; text-align: left; font: inherit; color: var(--text); padding: 10px 14px; background: none; border: 0; border-bottom: 1px solid var(--border); cursor: pointer; }
 .picker-list button:hover { background: var(--primary-soft); }
+.picker-list.drop { max-height: min(55vh, 380px); overflow: auto; overscroll-behavior: contain; z-index: 30; }
+.picker-list.drop button { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; padding: 8px 12px; }
+.picker-list.drop button.hi { background: var(--primary-soft); box-shadow: inset 3px 0 0 var(--primary); }
+.picker-list.drop .pick-name { font-weight: 600; }
+.picker-list.drop .stock-in { color: var(--ok, #15803d); }
 .statement { max-width: 680px; }
 .statement .indent { padding-left: 28px; color: var(--muted); }
 .statement tr.sub td { font-weight: 700; border-top: 2px solid var(--border); }
@@ -909,6 +914,9 @@ tr.edited-row > td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
 .draft-scan img { height: 44px; border-radius: 4px; border: 1px solid var(--border, #e2e8f0); background: #fff; }
 td.scan-check { background: var(--warn-soft); }
 .scan-read { display: flex; align-items: center; gap: 3px; margin-top: 3px; line-height: 1.25; }
+.scan-suggest { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 4px; color: var(--muted); }
+.scan-suggest .chip-btn { font: inherit; font-size: 12px; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--border); background: var(--primary-soft); color: var(--primary-ink); cursor: pointer; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scan-suggest .chip-btn:hover { border-color: var(--primary); }
 .text-warn { color: var(--warn); }
 .scan-confirm { margin-top: 12px; }
 
@@ -2117,7 +2125,7 @@ tr.total-row td { font-weight: 750; background: var(--surface-2); border-top: 2p
 .med-pick { position: relative; flex: 1; min-width: 12em; }
 .med-pick input { width: 100%; padding-left: 28px; }
 .med-pick-icon { position: absolute; left: 9px; top: 50%; transform: translateY(-50%); opacity: .55; pointer-events: none; }
-.med-pick-list { z-index: 60; max-height: 320px; overflow: auto; background: var(--card, #fff); border: 1px solid var(--border, #e2e8f0); border-radius: 10px; box-shadow: 0 12px 32px rgba(0,0,0,.18); padding: 4px; }
+.med-pick-list { z-index: 90; max-height: 320px; overflow: auto; overscroll-behavior: contain; background: var(--surface, #fff); color: var(--text); border: 1px solid var(--border, #e2e8f0); border-radius: 10px; box-shadow: 0 12px 32px rgba(0,0,0,.18); padding: 4px; }
 .med-pick-row { display: flex; width: 100%; justify-content: space-between; gap: 10px; align-items: baseline; text-align: left; padding: 7px 9px; border: 0; background: none; border-radius: 7px; cursor: pointer; color: inherit; font: inherit; }
 .med-pick-row.hi, .med-pick-row:hover { background: color-mix(in srgb, var(--primary, #0f766e) 12%, transparent); }
 .med-pick-row.on { font-weight: 600; }

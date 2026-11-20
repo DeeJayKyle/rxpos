@@ -1950,8 +1950,8 @@ class _SalePanel extends ConsumerWidget {
               // on a phone, and with Split-Pane (the sale and payment always in full view), the payment area is not resized
               // a phone with large text or a short screen: the payment details fold behind one row so the sale's lines keep
               // their room; the total and Charge always stay in view (the method shown is the one Charge uses)
-              final mq = MediaQuery.of(context);
-              final tight = narrow && (mq.textScaler.scale(10) >= 12.5 || mq.size.height < 700);
+              // every phone (the owner's choice, 2026-11-20): folded by default, so the cart's lines get the room
+              final tight = narrow;
               if (tight) {
                 return _FoldablePay(
                   key: const Key('pay-fold'),
@@ -2000,7 +2000,7 @@ extension on String {
   String ifBlank(String other) => trim().isEmpty ? other : this;
 }
 
-/// A phone's payment area when space is tight: the total and Charge always shown; discount, method, amount tendered
+/// A phone's payment area (folded by default): the total and Charge always shown; discount, method, amount tendered
 /// and the rest behind "Payment options" (scrolls when open, so it never pushes Charge off the screen).
 class _FoldablePay extends StatefulWidget {
   const _FoldablePay({super.key, required this.summary, required this.details, required this.buttons});

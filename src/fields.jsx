@@ -1,6 +1,7 @@
 // Inputs shared by the stock screens: a date box in the pharmacy's chosen format (This device → Dates) and a medicine
 // picker you can type into (in-stock medicines first).
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { CalendarDays, Plus, Search } from 'lucide-react';
 import { deviceSettings, onDevice } from './device.js';
 import { formatDate, parseDate, parseExpiry, datePlaceholder } from './dateformat.js';
@@ -79,7 +80,16 @@ export function MedicinePicker({ products, value, onPick, placeholder = 'Search 
   }, [open, q, products, az]);
   const rows = [...list.map((p) => ({ p })), ...(onNew ? [{ add: true }] : [])];
   useEffect(() => setHi(0), [q]);
-  const place = () => { const r = box.current?.getBoundingClientRect(); if (r) setPos({ left: r.left, top: r.bottom + 2, width: Math.max(r.width, 340) }); };
+  // drops down from the line's own box; where there's more room above (a line near the bottom of a phone's screen),
+  // it opens upwards instead, and it is never wider or taller than the screen
+  const place = () => {
+    const r = box.current?.getBoundingClientRect();
+    if (!r) return;
+    const vw = window.innerWidth, vh = window.visualViewport?.height || window.innerHeight;
+    const width = Math.min(Math.max(r.width, 420), vw - 16), left = Math.max(8, Math.min(r.left, vw - width - 8));
+    const below = vh - r.bottom - 8, above = r.top - 8, up = below < 220 && above > below;
+    setPos({ left, width, ...(up ? { bottom: vh - r.top + 2, maxHeight: Math.min(320, above) } : { top: r.bottom + 2, maxHeight: Math.min(320, Math.max(140, below)) }) });
+  };
   useEffect(() => {
     if (!open) return undefined;
     place();
@@ -99,8 +109,11 @@ export function MedicinePicker({ products, value, onPick, placeholder = 'Search 
       <Search size={14} className="med-pick-icon" aria-hidden="true" />
       <input role="combobox" aria-expanded={open} aria-autocomplete="list" aria-label="Medicine" placeholder={current ? current.name : placeholder}
         value={open ? q : current ? current.name : ''} onFocus={() => { setOpen(true); setQ(''); }} onChange={(e) => { setQ(e.target.value); setOpen(true); }} onKeyDown={key} />
-      {open && pos && (
-        <div className="med-pick-list" role="listbox" style={{ position: 'fixed', left: pos.left, top: pos.top, width: pos.width }}>
+      {/* the list is drawn on the page itself (a portal), placed at the line's box: inside a card with a glass blur
+          (backdrop-filter) or a scrolling table, a fixed list was placed against the card and cut off, so typing on a
+          line seemed to show nothing */}
+      {open && pos && createPortal(
+        <div className="med-pick-list" role="listbox" style={{ position: 'fixed', ...pos }}>
           {rows.map((r, i) => r.add ? (
             <button type="button" key="add" role="option" aria-selected={i === hi} className={'med-pick-row add' + (i === hi ? ' hi' : '')} onMouseDown={(e) => { e.preventDefault(); choose(r); }}>
               <Plus size={14} /> {newLabel ? newLabel(q.trim()) : `New medicine${q.trim() ? `: “${q.trim()}”` : ''}`}
@@ -112,7 +125,8 @@ export function MedicinePicker({ products, value, onPick, placeholder = 'Search 
             </button>
           ))}
           {!list.length && <div className="med-pick-empty muted small">No medicine matches “{q}”.</div>}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

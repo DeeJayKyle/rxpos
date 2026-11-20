@@ -397,10 +397,10 @@ export function Stat({ label, value, full, sub, tone, icon: Icon, delta, to, sta
       <strong title={short ? full : undefined} aria-label={short ? full : undefined} data-full={short ? full : undefined}>{short ? value : <CountUp value={value} />}</strong>
       {spark && <Spark data={spark} />}
       {ring && ring.pct != null && <StatRing {...ring} />}
-      <span className="muted small stat-sub" title={typeof sub === 'string' ? (d ? d + ' ' : '') + sub : undefined}>
+      {(d || sub) && <span className="muted small stat-sub" title={typeof sub === 'string' ? (d ? d + ' ' : '') + sub : undefined}>
         {d && <span className={'delta ' + (delta >= 0 ? 'up' : 'down') + (goodDown ? ' inverse' : '')}>{d} </span>}
         {sub}
-      </span>
+      </span>}
     </div>
   );
 }

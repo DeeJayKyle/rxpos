@@ -622,7 +622,7 @@ void main() {
     await done(tester);
   });
 
-  testWidgets('phone with large text: payment options fold so the lines keep their room; Charge stays in view and charges', (tester) async {
+  testWidgets('phone: payment options start folded so the cart\'s lines keep their room; Charge stays in view and charges', (tester) async {
     await tester.runAsync(signedIn);
     tester.platformDispatcher.textScaleFactorTestValue = 1.5;
     addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
@@ -679,8 +679,6 @@ void main() {
     await tester.runAsync(signedIn);
     await start(tester, size: const Size(400, 800));
     await tester.tap(find.byTooltip('Open navigation menu'));
-    await settle(tester);
-    await tester.tap(find.byKey(const Key('page-sheet-menu'))); // More opens the page sheet; its Account & menu, the drawer
     await settle(tester);
     await tester.tap(find.text('POS – Retail'));
     await settle(tester);
@@ -2429,8 +2427,6 @@ void main() {
     Future<void> open(String label) async {
       await tester.tap(find.byTooltip('Open navigation menu'));
       await settle(tester);
-      await tester.tap(find.byKey(const Key('page-sheet-menu'))); // More opens the page sheet; its Account & menu, the drawer
-      await settle(tester);
       final list = find.descendant(of: find.byType(Drawer), matching: find.byType(Scrollable)).first;
       await tester.scrollUntilVisible(find.descendant(of: find.byType(Drawer), matching: find.text(label)), 150, scrollable: list);
       await settle(tester, 2);
@@ -2530,20 +2526,10 @@ void main() {
     await settle(tester);
     expect(whereNow(tester), '/');
     expect(find.byKey(const Key('nav-back')), findsNothing);
-    // More opens every page as a sheet (a line on each and the next step); Android's back closes it
+    // More opens the full menu (the "All pages" sheet was taken out, 2026-11-20)
     await tester.tap(find.byKey(const Key('tab-more')));
     await settle(tester);
-    expect(find.byKey(const Key('page-sheet')), findsOneWidget);
-    expect(find.byKey(const Key('page-sheet-featured')), findsOneWidget);
-    expect(find.text('Quotations for clients'), findsOneWidget, reason: 'what each page is for');
-    await systemBack();
     expect(find.byKey(const Key('page-sheet')), findsNothing);
-    expect(whereNow(tester), '/');
-    // its Account & menu opens the full menu
-    await tester.tap(find.byKey(const Key('tab-more')));
-    await settle(tester);
-    await tester.tap(find.byKey(const Key('page-sheet-menu')));
-    await settle(tester);
     expect(find.byType(Drawer), findsOneWidget);
     // Android's back button closes the menu first, and stays on the page
     await systemBack();
@@ -2700,8 +2686,6 @@ void main() {
     await start(tester, size: const Size(400, 800));
     await tester.tap(find.byTooltip('Open navigation menu'));
     await settle(tester);
-    await tester.tap(find.byKey(const Key('page-sheet-menu'))); // More opens the page sheet; its Account & menu, the drawer
-    await settle(tester);
     final list = find.descendant(of: find.byType(Drawer), matching: find.byType(Scrollable)).first;
     await tester.scrollUntilVisible(find.descendant(of: find.byType(Drawer), matching: find.text('Drug quiz')), 150, scrollable: list);
     await settle(tester, 2);
@@ -2787,8 +2771,6 @@ void main() {
     await tester.runAsync(signedIn);
     await start(tester, size: const Size(400, 800));
     await tester.tap(find.byTooltip('Open navigation menu'));
-    await settle(tester);
-    await tester.tap(find.byKey(const Key('page-sheet-menu'))); // More opens the page sheet; its Account & menu, the drawer
     await settle(tester);
     final list = find.descendant(of: find.byType(Drawer), matching: find.byType(Scrollable)).first;
     await tester.scrollUntilVisible(find.descendant(of: find.byType(Drawer), matching: find.text('Weather & Storage')), 150, scrollable: list);
@@ -2888,8 +2870,6 @@ void main() {
     await tester.runAsync(signedIn);
     await start(tester, size: const Size(400, 800));
     await tester.tap(find.byTooltip('Open navigation menu'));
-    await settle(tester);
-    await tester.tap(find.byKey(const Key('page-sheet-menu'))); // More opens the page sheet; its Account & menu, the drawer
     await settle(tester);
     final list = find.descendant(of: find.byType(Drawer), matching: find.byType(Scrollable)).first;
     await tester.scrollUntilVisible(find.descendant(of: find.byType(Drawer), matching: find.text('Calendar')), 150, scrollable: list);
@@ -4412,8 +4392,6 @@ void main() {
       await shot(tester, 'phone-01-dashboard');
       await tester.tap(find.byTooltip('Open navigation menu'));
       await settle(tester);
-      await tester.tap(find.byKey(const Key('page-sheet-menu'))); // More opens the page sheet; its Account & menu, the drawer
-      await settle(tester);
       await shot(tester, 'phone-02-menu');
       await tester.tap(find.text('POS – Retail'));
       await settle(tester);
@@ -4427,8 +4405,6 @@ void main() {
       await start(tester, size: const Size(375, 812));
       await shot(tester, 'phone-04-large-text-dashboard');
       await tester.tap(find.byTooltip('Open navigation menu'));
-      await settle(tester);
-      await tester.tap(find.byKey(const Key('page-sheet-menu'))); // More opens the page sheet; its Account & menu, the drawer
       await settle(tester);
       await tester.tap(find.text('POS – Retail'));
       await settle(tester);
@@ -4526,13 +4502,14 @@ void main() {
     expect(osNotify.asked, 1);
     await done(tester);
   });
-  testWidgets('This device: Compact tables gives 36 px rows; the dashboard figures carry a 7-day trend line', (tester) async {
+  testWidgets('This device: Compact tables gives 36 px rows; the dashboard figures show the figure alone (no trend line, no line under it)', (tester) async {
     await tester.runAsync(signedIn);
     await tester.runAsync(() => RecordStore(db).update((d) => d.put('sales', {'id': 's-today', 'number': 'R-T1', 'date': today(), 'branchId': 'main', 'type': 'retail',
           'items': [{'id': 'p1', 'name': 'Calmex 500mg Tabs', 'qty': 1, 'price': 500}], 'subtotal': 500, 'discount': 0, 'tax': 0, 'total': 500, 'paid': 500,
           'payment': 'Cash', 'customerId': 'walk-in', 'customerName': 'Walk-in Customer', 'status': 'completed'})));
     await start(tester);
-    expect(find.byKey(const Key('spark')), findsWidgets, reason: 'sales were made this week');
+    expect(find.byKey(const Key('spark')), findsNothing, reason: 'the owner took the trend line off the figure cards (2026-11-20)');
+    expect(find.descendant(of: find.byType(StatCard).first, matching: find.byIcon(Icons.arrow_outward)), findsNothing);
     await navTo(tester, 'This device');
     await tester.ensureVisible(find.byKey(const Key('compact-tables')));
     await settle(tester, 2);

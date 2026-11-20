@@ -7,16 +7,16 @@ import { Camera, FileUp, Loader2, CheckCircle2, AlertTriangle, WifiOff } from 'l
 import { Modal } from '../ui.jsx';
 import { useStore, daysUntil } from '../store.jsx';
 import { aiVision } from '../cloud.js';
-import { invoicePages, matchProduct } from '../invoiceScan.js';
+import { invoicePages, rankProducts, learnedNames } from '../invoiceScan.js';
 import { matchMedicine } from '../pages/Scan.jsx';
 import { expiryLevel } from '../fefo.js';
 import { FefoPill } from './FefoPill.jsx';
-import { DateInput } from '../fields.jsx';
+import { DateInput, MedicinePicker } from '../fields.jsx';
 
 const TITLES = { invoice: 'Scan Invoice with AI', prescription: 'Scan Prescription (Rx)' };
 
 export default function AiVisionScanner({ mode, onClose, onConfirm }) {
-  const { syncCfg, products, batchesOf, fmt } = useStore();
+  const { syncCfg, products, batchesOf, fmt, db } = useStore();
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [drag, setDrag] = useState(false);
@@ -44,7 +44,10 @@ export default function AiVisionScanner({ mode, onClose, onConfirm }) {
   };
   // each line matched to one of this pharmacy's medicines; ticked when it matched
   const withMatches = (r) => (mode === 'invoice'
-    ? { lines: r.lines.map((l, i) => { const p = matchProduct(l.name, products); return { ...l, key: i, productId: p?.id || '', use: true }; }) }
+    ? { lines: (() => { const learned = learnedNames(db.purchases); return r.lines.map((l, i) => {
+      const ranked = rankProducts(l.name, products, { learned }), p = ranked[0]?.sure ? ranked[0].p : null;
+      return { ...l, key: i, productId: p?.id || '', suggest: ranked.filter((x) => x.p.id !== p?.id).slice(0, 3).map((x) => x.p.id), use: true };
+    }); })() }
     : { patient: r.patient || '', prescriber: r.prescriber || '', items: (r.items || []).map((it, i) => { const m = matchMedicine({ name: it.name }, products); const p = m.inStock[0] || m.alternatives?.[0]; return { ...it, key: i, productId: p?.id || '', use: !!p }; }) });
   const setLine = (key, patch) => setRead((r) => (mode === 'invoice' ? { ...r, lines: r.lines.map((l) => (l.key === key ? { ...l, ...patch } : l)) } : { ...r, items: r.items.map((l) => (l.key === key ? { ...l, ...patch } : l)) }));
   const rows = read ? (mode === 'invoice' ? read.lines : read.items) : [];
@@ -90,11 +93,12 @@ export default function AiVisionScanner({ mode, onClose, onConfirm }) {
                   <label className="check"><input type="checkbox" checked={l.use} onChange={(e) => setLine(l.key, { use: e.target.checked })} aria-label={`Use ${l.name}`} /></label>
                   <div className="grow">
                     <span className="micro">Read: {l.name}</span>
-                    <select value={l.productId} onChange={(e) => setLine(l.key, { productId: e.target.value })} aria-label={`Medicine for ${l.name}`}>
-                      <option value="">{mode === 'invoice' ? '— new medicine (add it in Add Stock) —' : '— not matched —'}</option>
-                      {p && <option value={p.id}>{p.name}</option>}
-                      {products.filter((x) => x.id !== l.productId && (x.name.toLowerCase().includes(l.name.toLowerCase().split(' ')[0]) || (x.generic || '').toLowerCase().includes(l.name.toLowerCase().split(' ')[0]))).slice(0, 12).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
-                    </select>
+                    {/* a searchable list that drops down from the line itself */}
+                    <MedicinePicker products={products} value={l.productId} onPick={(id) => setLine(l.key, { productId: id })} placeholder={`Search: ${l.name}`}
+                      onNew={() => setLine(l.key, { productId: '' })} newLabel={() => (mode === 'invoice' ? 'New medicine (add it in Add Stock)' : 'Not matched')} />
+                    {!l.productId && (l.suggest || []).length > 0 && (
+                      <span className="scan-suggest small">Is it: {l.suggest.map((id) => products.find((x) => x.id === id)).filter(Boolean).map((x) => <button key={x.id} type="button" className="chip-btn" onClick={() => setLine(l.key, { productId: x.id })}>{x.name}</button>)}</span>
+                    )}
                     {mode === 'invoice' ? (
                       <div className="ai-fields">
                         <label><span className="micro">Batch</span><input value={l.batch} onChange={(e) => setLine(l.key, { batch: e.target.value })} /></label>

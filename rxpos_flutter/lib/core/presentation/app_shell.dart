@@ -27,7 +27,6 @@ import 'hardware_hud.dart';
 import 'keymap.dart';
 import 'keys_host.dart';
 import 'nav.dart';
-import 'page_sheet.dart';
 import 'nav_history.dart';
 import 'screens.dart';
 import 'theme_menu.dart';
@@ -477,8 +476,8 @@ class TabBarBottom extends ConsumerWidget {
                     tip: 'Open navigation menu',
                     icon: Icons.menu_rounded,
                     selected: false,
-                    // every page as a bento sheet; its Account & menu opens the full menu
-                    onTap: () => showPageSheet(context, screens: screens, onFullMenu: () => Scaffold.of(context).openDrawer()),
+                    // the full menu (the "All pages" sheet was taken out, the owner's choice 2026-11-20)
+                    onTap: () => Scaffold.of(context).openDrawer(),
                   ),
                 ]),
               ),

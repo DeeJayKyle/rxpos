@@ -18,6 +18,7 @@ const SUITES = [
   ['role-based landing and bottom bar (unit)', 'unit-landing.mjs', []],
   ['a borrowed sign-in confirms before a personal cloud call (unit)', 'unit-person-guard.mjs', []],
   ['invoice reading cross-check (unit)', 'unit-invoice-read.mjs', []],
+  ['invoice lines matched to medicines, photo clean-up (unit)', 'unit-invoice-match.mjs', []],
   ['AI copilot and vision routes, mocked Workers AI (unit)', 'unit-ai-routes.mjs', []],
   ['date formats (unit)', 'unit-dateformat.mjs', []],
   ['packs (unit)', 'unit-packs.mjs', []],

@@ -56,9 +56,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final period = layout.period;
     final pf = periodFigures(f.byDay, period);
     final c = pf.cur, pv = pf.prev, vs = vsWords[period]!;
-    // the last 7 days of each figure, for the cards' small trend lines (2026-11-18)
-    final week = [for (var i = 6; i >= 0; i--) f.day(localDate(DateTime.now().subtract(Duration(days: i))))];
-    List<double> spark(double Function(DayFigures d) of) => [for (final d in week) of(d)];
     final isToday = period == 'today';
     final branchRows = ref.watch(tableProvider('branches')).value ?? const [];
     final multiBranch = branchRows.length > 1; // expenses are pharmacy-wide
@@ -91,15 +88,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final vsRing = vs.replaceFirst(RegExp(r'^\s*·?\s*vs '), '');
     Widget? card(String id) => switch (id) {
           'figures' => StatGrid(children: [
-              StatCard(slot: 0, ring: share(c.total, pv.total), ringTitle: 'of the sales $vsRing', label: isToday ? 'Today\'s sales' : 'Sales', value: cardAmount(c.total), full: s.money(c.total), sub: '${c.count} sale${c.count == 1 ? '' : 's'}${deltaText(c.total, pv.total, vs)}', icon: Icons.payments_outlined, spark: spark((d) => d.total),
+              StatCard(slot: 0, ring: share(c.total, pv.total), ringTitle: 'of the sales $vsRing', label: isToday ? 'Today\'s sales' : 'Sales', value: cardAmount(c.total), full: s.money(c.total), icon: Icons.payments_outlined, foot: false,
                   onTap: can.contains('sales.view') ? () => context.go('/sales?from=${range.from}&to=${range.to}') : null),
               if (can.contains('reports'))
-                StatCard(slot: 1, ring: share(c.grossProfit, c.total), ringTitle: 'gross margin (profit ÷ sales)', label: isToday ? 'Gross profit today' : 'Gross profit', value: cardAmount(c.grossProfit), full: s.money(c.grossProfit), sub: 'after cost of goods${deltaText(c.grossProfit, pv.grossProfit, vs)}', icon: Icons.trending_up, color: context.tones.violet, spark: spark((d) => d.grossProfit),
+                StatCard(slot: 1, ring: share(c.grossProfit, c.total), ringTitle: 'gross margin (profit ÷ sales)', label: isToday ? 'Gross profit today' : 'Gross profit', value: cardAmount(c.grossProfit), full: s.money(c.grossProfit), icon: Icons.trending_up, color: context.tones.violet, foot: false,
                     onTap: () => context.go('/reports?tab=profit&from=${range.from}&to=${range.to}')),
               if (can.contains('finance') || can.contains('reports'))
-                StatCard(slot: expSlot, ring: share(c.expenses, c.total), ringTitle: 'of sales spent on expenses', label: isToday ? 'Today\'s expenses' : 'Expenses', value: cardAmount(c.expenses), full: s.money(c.expenses), sub: '${multiBranch ? 'Whole pharmacy (expenses have no branch) · sales here − expenses' : 'Sales − expenses'}: ${s.money(c.total - c.expenses)}', icon: Icons.account_balance_wallet_outlined, color: context.tones.warn, spark: spark((d) => d.expenses),
+                StatCard(slot: expSlot, ring: share(c.expenses, c.total), ringTitle: 'of sales spent on expenses', label: isToday ? 'Today\'s expenses' : 'Expenses', value: cardAmount(c.expenses), full: s.money(c.expenses), icon: Icons.account_balance_wallet_outlined, color: context.tones.warn, foot: false,
                     onTap: () => context.go(can.contains('finance') ? '/finance?tab=expenses' : '/reports?tab=expenses&from=${range.from}&to=${range.to}')),
-              StatCard(slot: txSlot, ring: share(c.count.toDouble(), pv.count.toDouble()), ringTitle: 'of the receipts $vsRing', label: 'Transactions', value: '${c.count}', sub: 'receipts ${isToday ? 'today' : periodWords[period]}${deltaText(c.count.toDouble(), pv.count.toDouble(), vs)}', icon: Icons.receipt_long_outlined, color: context.tones.info, spark: spark((d) => d.count.toDouble()),
+              StatCard(slot: txSlot, ring: share(c.count.toDouble(), pv.count.toDouble()), ringTitle: 'of the receipts $vsRing', label: 'Transactions', value: '${c.count}', icon: Icons.receipt_long_outlined, color: context.tones.info, foot: false,
                   onTap: can.contains('sales.view') ? () => context.go('/sales?from=${range.from}&to=${range.to}') : null),
             ]),
           'chart' => Card(child: Padding(padding: const EdgeInsets.all(12), child: () {
@@ -178,25 +175,18 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         RiseIn(index: 0, child: SizedBox(width: double.infinity, child: GreetingCard(pharmacy: s.name, name: session?.userName ?? '', canSell: can.contains('pos.sell')))),
         const SizedBox(height: 12),
-        LayoutBuilder(builder: (context, box) {
-          // the period chips share the row; on a phone Edit widgets is an icon so all five chips fit
-          final narrow = box.maxWidth < 520;
-          final chips = SegmentedButton<String>(
+        // the period chips across the width (Edit widgets moved to This device, the owner's choice 2026-11-20)
+        SizedBox(
+          width: double.infinity,
+          child: SegmentedButton<String>(
             key: const Key('period-chips'),
             style: const ButtonStyle(visualDensity: VisualDensity.compact),
             showSelectedIcon: false,
-            segments: [for (final (k, l) in periods) ButtonSegment(value: k, label: Text(l))],
+            segments: [for (final (k, l) in periods) ButtonSegment(value: k, label: Text(l, maxLines: 1, softWrap: false))],
             selected: {period},
             onSelectionChanged: (v) => save(layout.encode(period: v.first)),
-          );
-          return Row(children: [
-            if (narrow) Expanded(child: chips) else Expanded(child: Align(alignment: Alignment.centerLeft, child: SingleChildScrollView(scrollDirection: Axis.horizontal, child: chips))),
-            const SizedBox(width: 6),
-            narrow
-                ? IconButton.outlined(key: const Key('edit-widgets-open'), tooltip: 'Edit widgets', onPressed: () => showEditWidgets(context, layout, save), icon: const Icon(Icons.tune, size: 18))
-                : TextButton.icon(key: const Key('edit-widgets-open'), onPressed: () => showEditWidgets(context, layout, save), icon: const Icon(Icons.tune, size: 18), label: const Text('Edit widgets')),
-          ]);
-        }),
+          ),
+        ),
         // what the figures cover, in words
         Padding(
           padding: const EdgeInsets.only(top: 4),

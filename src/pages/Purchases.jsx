@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useMemo, cloneElement } from 'react';
+import { searchProducts } from '../search.js';
 import { nextHue, lineStyle, COL_VARS as COL_HUES } from '../linecolors.js';
 import { parseGs1, findByGtin } from '../gs1.js';
 import { useLocation } from 'react-router-dom';
@@ -17,7 +18,7 @@ import { DateRange } from '../forms.jsx';
 import { useListControls } from '../listcontrols.jsx';
 import { ask, toast } from '../feedback.jsx';
 import { newInternalBarcode } from '../barcode.jsx';
-import { invoicePages, readInvoice, matchProduct, matchSupplier, normDate, pageBlob } from '../invoiceScan.js';
+import { invoicePages, readInvoice, rankProducts, learnedNames, matchSupplier, normDate, pageBlob } from '../invoiceScan.js';
 import { uploadAttachment } from '../attach.jsx';
 import { safeFileUrl } from '../safeurl.js';
 import { CameraButton, CameraScanner } from '../camscan.jsx';
@@ -111,10 +112,15 @@ export function AddStock() {
   // What was read off an invoice → Add Stock lines (medicines matched, costs and prices worked out) and a summary
   const fromScan = (r, markup) => {
     const sup = matchSupplier(r.supplier, db.suppliers);
+    const learned = learnedNames(db.purchases);
     const lines = r.items.map((it) => {
-      const p = matchProduct(it.name, products);
+      // the medicines it could be, best first: only a safe match is put on the line (same strength, nothing as likely,
+      // or received as this before); the others are offered as "Is it …?" on the line
+      const ranked = rankProducts(it.name, products, { learned, alt: it.alt?.name });
+      const p = ranked[0]?.sure ? ranked[0].p : null;
+      const suggest = ranked.filter((x) => x.p.id !== p?.id).slice(0, 3).map((x) => ({ id: x.p.id, why: x.why }));
       const qty = it.qty || 1;
-      const read = { name: it.name, unclear: !!it.unclear, matched: !!p, ...(it.check?.length ? { check: it.check } : {}), ...(it.alt ? { alt: it.alt } : {}), ...(it.why ? { why: it.why } : {}), ...(it.note ? { note: it.note } : {}), ...(it.page ? { page: it.page } : {}) };
+      const read = { name: it.name, unclear: !!it.unclear, matched: !!p, ...(p ? { matchWhy: ranked[0].why } : {}), ...(suggest.length ? { suggest } : {}), ...(it.check?.length ? { check: it.check } : {}), ...(it.alt ? { alt: it.alt } : {}), ...(it.why ? { why: it.why } : {}), ...(it.note ? { note: it.note } : {}), ...(it.page ? { page: it.page } : {}) };
       // G1: where the line was on the invoice, when the reading gave it (page and x, y, w, h as fractions of the page)
       const box = it.box && [it.box.x, it.box.y, it.box.w, it.box.h].every((v) => Number.isFinite(v) && v >= 0 && v <= 1) ? { page: Number(it.box.page) || 0, x: it.box.x, y: it.box.y, w: it.box.w, h: it.box.h } : undefined;
       const base = { qty, batch: it.batch || '', expiry: normDate(it.expiry), read, ...(box ? { box } : {}) };
@@ -289,7 +295,11 @@ export function AddStock() {
   // rounded once to the currency's precision (a pack-split cost leaves no floating tail on the stored total)
   const total = round(form.lines.reduce((a, l) => a + (l.productId ? lineTotal(l) : 0), 0), Number(s.decimals ?? 0));
   const ql = q.trim().toLowerCase();
-  const matches = ql ? products.filter((p) => [p.name, p.generic, p.barcode].join(' ').toLowerCase().includes(ql)).sort((a, b) => (b.stock > 0) - (a.stock > 0)).slice(0, 8) : [];
+  // ranked as the till's search (name starts with it first, spelling variants allowed), in stock first
+  const matches = useMemo(() => (ql ? searchProducts(products, q).slice(0, 12) : []), [ql, products]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [hi, setHi] = useState(0); // the highlighted match (↑ ↓, Enter adds it)
+  useEffect(() => setHi(0), [ql]);
+  useEffect(() => { document.querySelector('.search-row .picker-list.drop .hi')?.scrollIntoView({ block: 'nearest' }); }, [hi]);
   const exactName = ql && products.some((p) => p.name.trim().toLowerCase() === ql);
 
   const placeLine = (line) => {
@@ -314,13 +324,15 @@ export function AddStock() {
     return null;
   };
   const onSearchKey = (e) => {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); setHi((h) => Math.max(0, Math.min(matches.length - (exactName || ql.length < 2 ? 1 : 0), h + (e.key === 'ArrowDown' ? 1 : -1)))); return; }
+    if (e.key === 'Escape') { setQ(''); return; }
     if (e.key !== 'Enter') return;
     e.preventDefault();
     if (!ql) return;
     const g = parseGs1(q);
     if (g) { receivePack(g); return; }
     const code = products.find((p) => p.barcode && p.barcode.toLowerCase() === ql);
-    if (code || matches[0]) pick(code || matches[0]);
+    if (code || matches[hi]) pick(code || matches[hi]);
     else if (ql.length > 1) addNew(q);
   };
   const chooseProduct = (l, id) => {
@@ -403,7 +415,8 @@ export function AddStock() {
     const purchase = {
       id: uid(), number: '', supplierId: form.supplierId, supplierName: supplier?.name || '—',
       invoice: form.invoice.trim(), notes: (form.notes || '').trim(), date: form.date || today(), receivedBy: user.name, total, paid, bankId: form.bankId, branchId,
-      items: lines.map((l) => ({ productId: idOf(l), name: nameOf(l), qty: Number(l.qty) * (Number(l.recvSize) || 1), cost: baseCost(l), batch: l.batch.trim(), expiry: l.expiry, ...(l.productId === NEW ? { added: true } : {}),
+      // invoiceName: the words on the supplier's invoice, so the next invoice with them is matched at once (invoiceMatch.js)
+      items: lines.map((l) => ({ productId: idOf(l), name: nameOf(l), ...(l.read?.name ? { invoiceName: l.read.name } : {}), qty: Number(l.qty) * (Number(l.recvSize) || 1), cost: baseCost(l), batch: l.batch.trim(), expiry: l.expiry, ...(l.productId === NEW ? { added: true } : {}),
         ...(Number(l.recvSize) > 1 ? { pack: { name: l.recvPack, size: Number(l.recvSize), count: Number(l.qty), cost: unitCost(l) } } : {}) })),
       ...(scanned ? { scanned: true } : {}),
     };
@@ -561,11 +574,13 @@ export function AddStock() {
         </div>
         <div className="picker row gap search-row">
           <CameraButton className="btn ghost cam-btn" onClick={() => setCam(true)} />
-          <input ref={searchRef} className="search big" placeholder="Search or scan a medicine to add… (Enter adds the first match)" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onSearchKey} />
+          <input ref={searchRef} className="search big" role="combobox" aria-expanded={!!ql} aria-autocomplete="list" placeholder="Search or scan a medicine to add… (↑ ↓ to choose, Enter adds it)" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onSearchKey} />
+          {/* drops down from the search line itself, over the page (scrolls inside; never pushes the lines down) */}
           {ql && (
-            <div className="picker-list">
-              {matches.map((p) => <button type="button" key={p.id} onClick={() => pick(p)}>{p.name} <small className="muted">{p.stock} in stock · cost {fmt(p.cost)} · retail {fmt(p.price)}</small></button>)}
-              {!exactName && ql.length > 1 && <button type="button" className="picker-new" onClick={() => addNew(q)}><Plus size={14} /> Add <strong>“{q.trim()}”</strong> as a new medicine</button>}
+            <div className="picker-list drop" role="listbox">
+              {matches.map((p, i) => <button type="button" role="option" aria-selected={i === hi} className={i === hi ? 'hi' : ''} key={p.id} onMouseEnter={() => setHi(i)} onClick={() => pick(p)}><span className="pick-name">{p.name}</span> <small className={p.stock > 0 ? 'stock-in' : 'muted'}>{p.stock > 0 ? `${p.stock} in stock` : 'none in stock'} · cost {fmt(p.cost)} · retail {fmt(p.price)}</small></button>)}
+              {!matches.length && <div className="med-pick-empty muted small">No medicine matches “{q.trim()}”.</div>}
+              {!exactName && ql.length > 1 && <button type="button" className={'picker-new' + (hi === matches.length ? ' hi' : '')} onClick={() => addNew(q)}><Plus size={14} /> Add <strong>“{q.trim()}”</strong> as a new medicine</button>}
             </div>
           )}
         </div>
@@ -600,6 +615,12 @@ export function AddStock() {
                         </div>
                       )}
                       {l.read && <small className={'scan-read' + (!l.productId || l.read.unclear ? ' text-warn' : ' muted')}>{!l.productId || l.read.unclear ? <AlertTriangle size={11} /> : <CheckCircle2 size={11} />} Invoice{l.read.page > 1 ? ` p.${l.read.page}` : ''}: {l.read.name}{checkText(l.read) ? ` · check ${checkText(l.read)}` : ''}{l.read.note ? ` · ${l.read.note}` : ''}</small>}
+                      {l.read && l.productId !== NEW && (() => {
+                        const opts = (l.read.suggest || []).filter((x) => x.id !== l.productId).map((x) => ({ ...x, p: products.find((y) => y.id === x.id) })).filter((x) => x.p);
+                        return opts.length > 0 && (!l.productId || l.read.unclear) ? (
+                          <span className="scan-suggest small" role="group" aria-label="Medicines it could be">{l.productId ? 'Or is it' : 'Is it'}: {opts.map((x) => <button key={x.id} type="button" className="chip-btn" title={x.why} onClick={() => chooseProduct(l, x.id)}>{x.p.name}</button>)}</span>
+                        ) : null;
+                      })()}
                     </td>
                     ),
                     qty: (
@@ -974,10 +995,10 @@ function InvoiceScanner({ cfg, onClose, onRead, onDrafts }) {
   // Keep the pages in the pharmacy's cloud (whoever reviews the draft compares with them), then read them
   const readOne = async (inv, k) => {
     const label = invoices.length > 1 ? `Invoice ${k + 1} of ${invoices.length}: ` : '';
-    setBusy(label + 'saving the pages…');
-    const pagePaths = [];
-    for (let n = 0; n < inv.pages.length; n++) pagePaths.push((await uploadAttachment(cfg, pageBlob(inv.pages[n]), `invoice-${today()}-${n + 1}.jpg`)).path);
-    const r = await readInvoice(cfg, inv.pages, (n, of) => setBusy(`${label}reading${of > 1 ? ` page ${n} of ${of}` : ''} with two AI readings…`));
+    setBusy(label + 'reading with two AI readings…');
+    // the pages are kept in the cloud while they are read (side by side, not one after the other)
+    const saving = Promise.all(inv.pages.map(async (pg, n) => (await uploadAttachment(cfg, pageBlob(pg), `invoice-${today()}-${n + 1}.jpg`)).path));
+    const [pagePaths, r] = await Promise.all([saving, readInvoice(cfg, inv.pages, (n, of) => setBusy(`${label}reading${of > 1 ? ` page ${n} of ${of}` : ''} with two AI readings…`))]);
     if (!r.items.length) throw new Error('No medicine lines could be read. Try a sharper, straighter photo in good light.');
     return { r, pagePaths, pages: inv.pages };
   };

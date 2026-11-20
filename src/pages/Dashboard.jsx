@@ -111,11 +111,6 @@ export default function Dashboard() {
   // eslint-disable-next-line react-hooks/exhaustive-deps -- day: today's figures start again at midnight
   }, [db.sales, db.expenses, db.purchases, branchId, day]);
   const fig = useMemo(() => periodFigures(m.byDay, period), [m.byDay, period, day]); // eslint-disable-line react-hooks/exhaustive-deps
-  // the last 7 days of each figure, for the cards' small trend lines (2026-11-18)
-  const spark = useMemo(() => {
-    const days = Array.from({ length: 7 }, (_, i) => { const d = new Date(); d.setDate(d.getDate() - (6 - i)); return m.byDay[dayOf(d.toISOString())] || {}; });
-    return Object.fromEntries(['total', 'gp', 'exp', 'n'].map((k) => [k, days.map((x) => x[k] || 0)]));
-  }, [m.byDay, day]); // eslint-disable-line react-hooks/exhaustive-deps
   // the top medicines of the period (today's are few: this month's then)
   const topRange = period === 'today' ? { from: today().slice(0, 8) + '01', to: today(), words: 'this month' } : { from: fig.range.from, to: fig.range.to, words: PERIOD_WORDS[period] };
   const top = useMemo(() => topMedicines(m.valid, topRange.from, topRange.to, topBy, 5), [m.valid, topRange.from, topRange.to, topBy]);
@@ -137,7 +132,7 @@ export default function Dashboard() {
   const hour = new Date().getHours();
   const greet = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
   const isToday = period === 'today';
-  const c = fig.cur, dl = fig.delta, pv = fig.prev;
+  const c = fig.cur, pv = fig.prev;
   // each figure's ring (1.15.0): sales and receipts against the period before, profit and expenses as a share of sales
   const share = (a, b) => (b > 0 ? Math.round((a / b) * 100) : null);
   const vsWords = VS_WORDS[period].replace(/^vs /, '');
@@ -148,10 +143,10 @@ export default function Dashboard() {
     figures: () => (
       <div className="stats kpis">
         {/* sales open Reports → Sales lines for the period (every medicine sold); staff without it get the sales list */}
-        <Stat {...salesTo} label={isToday ? "Today's sales" : 'Sales'} value={fmtShort(c.total)} full={fmt(c.total)} sub={`${c.n} sale${c.n === 1 ? '' : 's'} · ${VS_WORDS[period]}`} delta={dl.total} spark={spark.total} tone="teal" icon={Banknote} ring={{ pct: share(c.total, pv.total), title: `of the sales ${vsWords}` }} />
-        {can('reports') && <Stat to="/reports" state={{ tab: 'profit', ...rangeState }} label={isToday ? 'Gross profit today' : 'Gross profit'} value={fmtShort(c.gp)} full={fmt(c.gp)} sub={VS_WORDS[period]} delta={dl.gp} spark={spark.gp} tone="violet" icon={TrendingUp} ring={{ pct: share(c.gp, c.total), title: 'gross margin (profit ÷ sales)' }} />}
-        {(can('finance') || can('reports')) && <Stat to="/expenses" label={isToday ? "Today's expenses" : 'Expenses'} value={fmtShort(c.exp)} full={fmt(c.exp)} sub={db.branches.length > 1 ? `Whole pharmacy (expenses have no branch) · sales here − expenses: ${fmt(c.total - c.exp)}` : `Sales − expenses: ${fmt(c.total - c.exp)}`} delta={dl.exp} spark={spark.exp} goodDown tone="orange" icon={Wallet} ring={{ pct: share(c.exp, c.total), title: 'of sales spent on expenses' }} />}
-        <Stat to="/sales" state={rangeState} label="Transactions" value={c.n.toLocaleString()} sub={VS_WORDS[period]} delta={dl.n} spark={spark.n} tone="blue" icon={ReceiptText} ring={{ pct: share(c.n, pv.n), title: `of the receipts ${vsWords}` }} />
+        <Stat {...salesTo} label={isToday ? "Today's sales" : 'Sales'} value={fmtShort(c.total)} full={fmt(c.total)} tone="teal" icon={Banknote} ring={{ pct: share(c.total, pv.total), title: `of the sales ${vsWords}` }} />
+        {can('reports') && <Stat to="/reports" state={{ tab: 'profit', ...rangeState }} label={isToday ? 'Gross profit today' : 'Gross profit'} value={fmtShort(c.gp)} full={fmt(c.gp)} tone="violet" icon={TrendingUp} ring={{ pct: share(c.gp, c.total), title: 'gross margin (profit ÷ sales)' }} />}
+        {(can('finance') || can('reports')) && <Stat to="/expenses" label={isToday ? "Today's expenses" : 'Expenses'} value={fmtShort(c.exp)} full={fmt(c.exp)} tone="orange" icon={Wallet} ring={{ pct: share(c.exp, c.total), title: 'of sales spent on expenses' }} />}
+        <Stat to="/sales" state={rangeState} label="Transactions" value={c.n.toLocaleString()} tone="blue" icon={ReceiptText} ring={{ pct: share(c.n, pv.n), title: `of the receipts ${vsWords}` }} />
       </div>
     ),
     chart: () => {
