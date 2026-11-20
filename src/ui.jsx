@@ -8,6 +8,7 @@ import { useStore, uid, downloadFile, toCSV, del as del1 } from './store.jsx';
 import { useListControls, useContextMenu } from './listcontrols.jsx';
 import { keyOf, showKey } from './keymap.js';
 import { deviceSettings } from './device.js';
+import { useSheetDrag } from './sheet.js';
 import { ask, toast } from './feedback.jsx';
 import { useFocusTrap } from './focustrap.js';
 import { useLoadMore, useColumns, BulkBar, useSwipe, useWide, DetailsPane } from './tablekit.jsx';
@@ -37,6 +38,7 @@ export function Modal({ title, onClose, children, wide, size }) {
   const ref = useRef(null);
   const titleId = useId();
   useFocusTrap(ref, onClose);
+  useSheetDrag(ref, onClose); // 1.18.0: with sheets on, drag it down to close
   // D7: the cursor in the first field, not on the close button (an autoFocus field keeps it)
   useEffect(() => {
     const t = setTimeout(() => {
@@ -51,6 +53,7 @@ export function Modal({ title, onClose, children, wide, size }) {
   return (
     <div className="modal-bg" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div ref={ref} tabIndex={-1} className={'modal size-' + sz + (sz === 'lg' ? ' wide' : '')} role="dialog" aria-modal="true" aria-labelledby={titleId} onKeyDown={enterNext}>
+        <div className="sheet-grab" aria-hidden="true" />
         <div className="modal-head">
           <h3 id={titleId}>{title}</h3>
           <button className="icon-btn" onClick={onClose} aria-label="Close"><X size={18} /></button>
