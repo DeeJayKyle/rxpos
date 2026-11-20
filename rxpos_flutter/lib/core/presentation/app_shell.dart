@@ -31,6 +31,7 @@ import 'nav_history.dart';
 import 'screens.dart';
 import '../rules/seen.dart';
 import '../../features/shifts/presentation/shift_prompts.dart' show ShiftOnSignIn;
+import 'page_menu.dart' show PageOptions;
 import 'theme_menu.dart';
 import '../theme/themes.dart';
 import 'top_bar.dart';
@@ -132,7 +133,7 @@ class AppShell extends ConsumerWidget {
         if (tokensOf(context).hud) const HardwareHud(),
         const OfflineBanner(),
         // a finger from the screen's left edge pulls the page back (not on the dashboard, where it opens the menu)
-        Expanded(child: EdgeSwipeBack(enabled: !wide && !home, onBack: (f) => history.back(GoRouter.of(context), from: f), child: ShiftOnSignIn(child: child))),
+        Expanded(child: EdgeSwipeBack(enabled: !wide && !home, onBack: (f) => history.back(GoRouter.of(context), from: f), child: ShiftOnSignIn(child: PageOptions(location: location, screens: visible, child: child)))),
       ]),
       const FirstDownload(),
       const HistoryLoading(),

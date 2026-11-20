@@ -23,6 +23,7 @@ import 'clean_parts.dart';
 import '../domain/clean_dashboard.dart';
 import '../../../core/data/device_settings.dart';
 import '../../storage/presentation/storage_screen.dart';
+import '../../../core/presentation/page_menu.dart' show registerPageMenu;
 
 /// Home, the clean dashboard (src/pages/Dashboard.jsx; the owner's choice, 2026-11-15): period chips, the four figures
 /// against the period before, one sales chart (Daily / Monthly), stock health, the top medicines and the latest sales.
@@ -168,6 +169,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           _ => null,
         };
     final spans = {for (final w in dashWidgets) w.$1: w.$3};
+    registerPageMenu('/', () => [
+          (label: 'Edit widgets…', icon: Icons.tune, onTap: () => showEditWidgets(context, layout, save)),
+          if (layout.sizes.isNotEmpty) (label: 'Cards back to their usual sizes', icon: Icons.restart_alt, onTap: () => save(layout.encode(sizes: const {}))),
+          (label: 'New sale', icon: Icons.point_of_sale, onTap: () => context.go('/pos')),
+        ]);
 
     return PageFrame(
       title: '',
@@ -238,10 +244,32 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             return w.floorToDouble();
           }
           var i = 0;
+          final shownIds = [for (final id in layout.order) if (layout.shown.contains(id)) id];
+          // cards moved by their grip, resized by their right edge (wide screens) and with a menu (the owner's request,
+          // 2026-11-20); kept on this device
           return Wrap(spacing: gap, runSpacing: gap, children: [
-            for (final id in layout.order)
-              if (layout.shown.contains(id))
-                if (card(id) case final Widget w) SizedBox(key: ValueKey('widget-$id'), width: width(spans[id]!), child: RiseIn(index: ++i, child: w)),
+            for (final id in shownIds)
+              if (card(id) case final Widget w)
+                DashCard(
+                  key: ValueKey('widget-$id'),
+                  id: id,
+                  name: dashWidgets.firstWhere((x) => x.$1 == id).$2,
+                  span: layout.sizes[id] ?? spans[id]!,
+                  width: width,
+                  colWidth: cols == 12 ? (box.maxWidth + gap) / 12 : 0,
+                  first: shownIds.first == id,
+                  last: shownIds.last == id,
+                  onMove: (from, before) => save(layout.encode(order: layout.moved(from, before))),
+                  onStep: (d) {
+                    final k = shownIds.indexOf(id) + d;
+                    if (k < 0 || k >= shownIds.length) return;
+                    save(layout.encode(order: layout.moved(id, d < 0 ? shownIds[k] : (k + 1 < shownIds.length ? shownIds[k + 1] : null))));
+                  },
+                  onSize: (sp) => save(layout.encode(sizes: {...layout.sizes, id: sp})),
+                  onHide: () => save(layout.encode(shown: {...layout.shown}..remove(id))),
+                  onEdit: () => showEditWidgets(context, layout, save),
+                  child: RiseIn(index: ++i, child: w),
+                ),
           ]);
         }),
       ]),

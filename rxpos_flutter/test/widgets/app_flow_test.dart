@@ -681,6 +681,54 @@ void main() {
     await done(tester);
   });
 
+  testWidgets('dashboard cards: a card menu sizes them, the right edge resizes, the grip moves; a right-click or long press opens options on every page', (tester) async {
+    await tester.runAsync(signedIn);
+    await start(tester);
+    Map<String, Object?> dash() => (jsonDecode(ProviderScope.containerOf(tester.element(find.byType(Scaffold).first)).read(deviceValueProvider('dash')).value ?? '{}') as Map).cast<String, Object?>();
+    // a right-click on the chart card: its sizes, move, hide
+    final chart = find.byKey(const ValueKey('widget-chart'));
+    await tester.ensureVisible(chart);
+    await settle(tester);
+    await tester.tapAt(tester.getTopLeft(chart) + const Offset(60, 60), buttons: kSecondaryButton);
+    await settle(tester);
+    expect(find.text('Move earlier'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('size-12')));
+    await settle(tester, 4);
+    expect((dash()['sizes'] as Map)['chart'], 12, reason: 'Full width from the menu');
+    // its right edge dragged back to about half the row
+    final edge = find.byKey(const ValueKey('resize-chart'));
+    await tester.ensureVisible(edge);
+    await settle(tester);
+    final w = tester.getSize(chart).width;
+    await tester.drag(edge, Offset(-w / 2, 0));
+    await settle(tester, 4);
+    expect((dash()['sizes'] as Map)['chart'], inInclusiveRange(5, 7), reason: 'snapped to the grid near half');
+    // the health card's grip dropped on the figures card: it goes first
+    await tester.ensureVisible(find.byKey(const ValueKey('widget-figures')));
+    await settle(tester);
+    final g = await tester.startGesture(tester.getCenter(find.byKey(const ValueKey('grip-health'))));
+    await tester.pump(const Duration(milliseconds: 50));
+    await g.moveTo(tester.getCenter(find.byKey(const ValueKey('widget-figures'))));
+    await tester.pump(const Duration(milliseconds: 50));
+    await g.up();
+    await settle(tester, 4);
+    expect((dash()['order'] as List).first, 'health');
+    // options on another page: a right-click and a long press
+    GoRouter.of(tester.element(find.byType(Scaffold).first)).go('/customers');
+    await settle(tester, 4);
+    final heading = find.descendant(of: find.byKey(const Key('page-options')), matching: find.text('Customers')).first;
+    await tester.tapAt(tester.getCenter(heading), buttons: kSecondaryButton);
+    await settle(tester);
+    expect(find.byKey(const ValueKey('page-option-Search or ask AI')), findsOneWidget);
+    expect(find.byKey(const ValueKey('page-option-Pin this page')), findsOneWidget);
+    await tester.tapAt(const Offset(5, 895));
+    await settle(tester);
+    await tester.longPressAt(tester.getCenter(heading));
+    await settle(tester);
+    expect(find.byKey(const ValueKey('page-option-Back')), findsOneWidget);
+    await done(tester);
+  });
+
   testWidgets('a sale can be held and resumed', (tester) async {
     await tester.runAsync(signedIn);
     await start(tester);
@@ -3385,7 +3433,15 @@ void main() {
     expect(find.byKey(const Key('app-library')), findsNothing);
 
     // gradient buttons and a preset in the theme menu
+    // the theme panel's sections fold (2026-11-20): open one before using what is in it
+    Future<void> openSec(String id) async {
+      final sec = find.byKey(ValueKey('theme-sec-$id'));
+      await tester.scrollUntilVisible(sec, 120, scrollable: find.descendant(of: find.byKey(const Key('theme-list')), matching: find.byType(Scrollable)));
+      await tester.tap(sec);
+      await settle(tester);
+    }
     await openThemes(tester);
+    await openSec('gradient');
     await tester.scrollUntilVisible(find.byKey(const ValueKey('preset-ocean')), 120, scrollable: find.descendant(of: find.byKey(const Key('theme-list')), matching: find.byType(Scrollable)));
     await tester.tap(find.byKey(const Key('grad-accents')));
     await settle(tester, 3);
@@ -3428,6 +3484,13 @@ void main() {
   });
 
   testWidgets('theme menu: dark, a theme from the list, accent, Vivid tiles, a style, the system; Premium UI and back', (tester) async {
+    // the theme panel's sections fold (2026-11-20): open one before using what is in it
+    Future<void> openSec(String id) async {
+      final sec = find.byKey(ValueKey('theme-sec-$id'));
+      await tester.scrollUntilVisible(sec, 120, scrollable: find.descendant(of: find.byKey(const Key('theme-list')), matching: find.byType(Scrollable)));
+      await tester.tap(sec);
+      await settle(tester);
+    }
     tester0 = tester;
     await tester.runAsync(signedIn);
     await start(tester);
@@ -3438,6 +3501,7 @@ void main() {
     expect((await look())['theme'], 'mint-teal-dark', reason: '1.17.0: Dark keeps the theme, as its dark twin');
     expect(brightness(tester), Brightness.dark);
     final list = find.byKey(const Key('theme-list'));
+    await openSec('set:Purples');
     await tester.scrollUntilVisible(find.byKey(const ValueKey('theme-royal-purple')), 120, scrollable: find.descendant(of: list, matching: find.byType(Scrollable)));
     await tester.ensureVisible(find.byKey(const ValueKey('theme-royal-purple')));
     await settle(tester);
@@ -3456,6 +3520,7 @@ void main() {
     await openThemes(tester);
     expect(find.byKey(const ValueKey('accent-ocean')), findsNothing, reason: 'no accent presets: only the 15 themes');
     expect(find.byKey(const Key('design-systems')), findsNothing, reason: 'no design systems');
+    await openSec('colour');
     await tester.scrollUntilVisible(find.byKey(const ValueKey('level-vivid')), 120, scrollable: find.descendant(of: list, matching: find.byType(Scrollable)));
     await tester.ensureVisible(find.byKey(const ValueKey('level-vivid')));
     await settle(tester);
@@ -3466,6 +3531,7 @@ void main() {
     expect(find.descendant(of: find.byType(StatCard).first, matching: find.byWidgetPredicate((w) => w is Ink && w.decoration is BoxDecoration && (w.decoration! as BoxDecoration).gradient != null)), findsOneWidget,
         reason: 'figure tiles are solid colour');
     await openThemes(tester);
+    await openSec('style');
     await tester.scrollUntilVisible(find.byKey(const ValueKey('style-glass')), 120, scrollable: find.descendant(of: list, matching: find.byType(Scrollable)));
     await tester.ensureVisible(find.byKey(const ValueKey('style-glass')));
     await settle(tester);

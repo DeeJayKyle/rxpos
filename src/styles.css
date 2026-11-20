@@ -3004,3 +3004,10 @@ tr.group-head > td { background: var(--surface-2); padding: 6px 10px; }
   .stock-lines tr:not(.show-more) td.more-cell { display: none; }
   .stock-lines tr { display: block; border: 1px solid var(--border); border-radius: 12px; margin-bottom: 8px; padding: 6px 8px; }
 }
+
+/* the theme panel's sections fold (2026-11-20) */
+.theme-sec .sec-body[hidden] { display: none !important; }
+.theme-sec .sec-head { display: flex; align-items: center; gap: 6px; width: 100%; background: none; border: 0; font: inherit; cursor: pointer; text-align: left; color: inherit; }
+.theme-sec .sec-head:hover { color: var(--primary); }
+.theme-sec .sec-chev { transition: transform .15s; }
+.theme-sec .sec-chev.shut { transform: rotate(-90deg); }

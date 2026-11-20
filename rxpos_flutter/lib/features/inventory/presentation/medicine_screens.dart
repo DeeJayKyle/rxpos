@@ -30,6 +30,7 @@ import '../../auth/application/session_controller.dart';
 import '../domain/adjust.dart';
 import '../domain/medicines.dart';
 import '../../../core/rules/audit_text.dart';
+import '../../../core/presentation/page_menu.dart' show registerPageMenu;
 
 Future<String> _user(WidgetRef ref) async => (await ref.read(sessionControllerProvider.future))?.userName ?? '';
 
@@ -116,6 +117,7 @@ class _MedicineListScreenState extends ConsumerState<MedicineListScreen> {
       ]);
     }
 
+    if (manage) registerPageMenu('/medicines', () => [(label: 'Tidy names and merge look-alikes…', icon: Icons.auto_fix_high, onTap: () => showNameCheck(context)), (label: 'Add medicine', icon: Icons.add, onTap: () => editMedicine(context, ref, null))]);
     return PageFrame(
       title: 'Medicine List',
       subtitle: _review ? '$issues records need a look. Open one to fix it; nothing is changed automatically.' : '${d.products.length} medicines and items',

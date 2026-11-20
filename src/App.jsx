@@ -5,7 +5,7 @@ import { MessageCircle,
   Boxes, PackagePlus, History, CalendarClock, PencilRuler, ScrollText, Wallet, Tags, Landmark, ArrowLeftRight, HandCoins,
   ArrowDownLeft, ArrowUpRight, ClipboardCheck, RefreshCw, Undo2, ShieldPlus, BookOpen, BarChart3, Settings as SettingsIcon, Search, Sun, Moon, Menu, LogOut, ChevronDown,
   BellRing, Plus, ShoppingBag, Tag, FileUp, Building2, Send, ShieldCheck, Clock, BookMarked, MessagesSquare, UserCog, KeyRound, CalendarDays, Thermometer, Palette, MonitorSmartphone, ScanText, GraduationCap, Megaphone, CalendarRange, LockKeyhole, NotebookPen, PanelLeftClose, PanelLeftOpen, WifiOff, X,
-  Pin, Keyboard, UserPlus, Archive, BadgeCheck, BriefcaseMedical,
+  Pin, Keyboard, UserPlus, Archive, BadgeCheck, BriefcaseMedical, ArrowLeft, Printer,
 } from 'lucide-react';
 import { endOtherSessions, setPersonGuard, borrowedToken, cloudLogin } from './cloud.js';
 import { useStore, useSyncState, makePassword, put, audit, isLowStock, expiryCounts } from './store.jsx';
@@ -29,6 +29,8 @@ import { LEVELS, applyLevel, savedLevel, saveLevel } from './vivid.js';
 import { GRADIENT_BACKGROUNDS, GRADIENT_PRESETS, savedGradient, saveGradient, applyGradient } from './gradients.js';
 import { TwoStepModal } from './twostep.jsx';
 import { startShift, openShiftOf, shiftQuestions } from './shiftstart.js';
+import { pageMenuFor, keepsNativeMenu, longPressToContextMenu } from './pagemenu.js';
+import { useContextMenu } from './listcontrols.jsx';
 import { seenMap, unreadCount as newCount, markCounts, settleCounts, NAV_SEEN } from './seen.js';
 import { setCrashCloud } from './crash.js';
 import { homeFor, chosenTabs } from './landing.js';
@@ -275,6 +277,19 @@ function ThemePicker({ theme, setTheme, mode, setMode, style, setStyle }) {
       {t.base === 'dark' ? <Moon size={13} /> : <Sun size={13} />}
     </button>
   );
+  // every section of the panel folds (the owner's request, 2026-11-20): at first only Recommended and the set with the
+  // theme in use are open; what the person opens or folds is kept on this device
+  const [folds, setFolds] = useState(() => { try { return JSON.parse(localStorage.getItem('rxpos-theme-folds') || '{}'); } catch { return {}; } });
+  const isOpenSec = (id, dflt) => folds[id] ?? dflt;
+  const flip = (id, dflt) => setFolds((f) => { const n = { ...f, [id]: !(f[id] ?? dflt) }; try { localStorage.setItem('rxpos-theme-folds', JSON.stringify(n)); } catch { /* blocked */ } return n; });
+  const sec = (id, title, dflt, body) => (
+    <div className={'theme-sec' + (isOpenSec(id, dflt) ? ' open' : '')} key={id}>
+      <button type="button" className="bell-head sec-head" aria-expanded={isOpenSec(id, dflt)} onClick={() => flip(id, dflt)}>
+        <ChevronDown size={13} className={'sec-chev' + (isOpenSec(id, dflt) ? '' : ' shut')} aria-hidden="true" /><span className="grow">{title}</span>
+      </button>
+      <div className="sec-body" hidden={!isOpenSec(id, dflt)}>{body}</div>
+    </div>
+  );
   const MODES = [['light', 'Light', Sun], ['dark', 'Dark', Moon], ['system', 'System', MonitorSmartphone]];
   const activeMode = mode === 'system' ? 'system' : current?.base;
   // a theme is previewed while the pointer is on it (2026-11-18); closing the menu puts the chosen one back
@@ -298,36 +313,31 @@ function ThemePicker({ theme, setTheme, mode, setMode, style, setStyle }) {
             ))}
           </div>
           {/* 1.16.0 (the owner's clean-up): six recommended themes first; every theme, by set, under "All themes" */}
-          {short && (
+          {short && sec('recommended', 'Recommended', true, (
             <div className="theme-group" role="group" aria-label="Recommended">
-              <div className="bell-head">Recommended</div>
               {rec.map(item)}
               <button type="button" className="style-item all-themes" aria-expanded={all} onClick={() => setAll((x) => !x)}>
                 <ChevronDown size={14} className={all ? 'flip' : ''} aria-hidden="true" /><span className="grow">All themes ({shownList.length})</span>
               </button>
             </div>
-          )}
+          ))}
           {/* themes by group (src/themes.js THEME_GROUPS) */}
           <div className="theme-all" hidden={short && !all}>
-          {THEME_GROUPS.map((g) => [g, shownList.filter((t) => (t.group || 'Clinical') === g)]).filter(([, ts]) => ts.length).map(([g, ts]) => (
-            <div key={g} className="theme-group" role="group" aria-label={g}>
-              <div className="bell-head">{g}</div>
+          {THEME_GROUPS.map((g) => [g, shownList.filter((t) => (t.group || 'Clinical') === g)]).filter(([, ts]) => ts.length).map(([g, ts]) => sec('set:' + g, `${g} (${ts.length})`, ts.some(isOn) || !short, (
+            <div className="theme-group" role="group" aria-label={g}>
               {ts.map(item)}
             </div>
-          ))}
+          )))}
           </div>
-          <div className="bell-head">Colour</div>
-          <ColourLevel onPick={() => setOpen(false)} />
-          <div className="bell-head">Gradient</div>
-          <GradientChoice />
-          <div className="bell-head">Style</div>
-          {STYLES.map((s, i) => (<Fragment key={s.id}>
+          {sec('colour', 'Colour', false, <ColourLevel onPick={() => setOpen(false)} />)}
+          {sec('gradient', 'Gradient', false, <GradientChoice />)}
+          {sec('style', 'Style', false, STYLES.map((s, i) => (<Fragment key={s.id}>
             {s.group && s.group !== STYLES[i - 1]?.group && <div className="bell-sub">{s.group}</div>}
             <button className={'style-item' + (s.id === style ? ' on' : '')} onClick={() => { setStyle(s.id); setOpen(false); }}>
               <span className={'swatch style-swatch surface-' + s.id} />
               <span className="grow">{s.name}<small className="muted"> · {s.hint}</small></span>
             </button>
-          </Fragment>))}
+          </Fragment>)))}
         </div>
       )}
     </div>
@@ -577,6 +587,23 @@ function Shell() {
     setTheme(tw && list.some((t) => t.id === tw) ? tw : paletteFor(base, list, db.license?.[0]?.branding?.defaultTheme));
   };
   useEffect(() => setMega(false), [location.pathname]);
+  // options on every page (the owner's request, 2026-11-20): a right-click, or a long press on a phone or tablet,
+  // opens what this page can do (its own options, src/pagemenu.js) and what every page can do. A row, card or field
+  // with its own menu keeps it; typing boxes keep the browser's (copy, paste).
+  const pageMenu = useContextMenu();
+  useEffect(() => longPressToContextMenu(document), []);
+  const openPageMenu = (e) => {
+    if (e.defaultPrevented || keepsNativeMenu(e.target)) return;
+    const own = pageMenuFor(location.pathname);
+    pageMenu.open(e, [
+      ...own, ...(own.length ? ['-'] : []),
+      here !== '/' && { label: 'Back', Icon: ArrowLeft, run: () => navigate(-1) },
+      { label: 'Search or ask AI', Icon: Search, keyId: 'palette', run: () => setPalette(true) },
+      { label: 'Sync now', Icon: RefreshCw, run: () => syncNow() },
+      here !== '/' && pages.some((x) => x.to === here) && { label: nav.pins.includes(here) ? 'Unpin this page' : 'Pin this page', Icon: Pin, run: () => togglePin(here) },
+      { label: 'Print this page', Icon: Printer, run: () => window.print() },
+    ]);
+  };
   const togglePin = (to) => { const pins = nav.pins.includes(to) ? nav.pins.filter((x) => x !== to) : [...nav.pins, to].slice(-8); setDevice({ navPins: pins }); toast(nav.pins.includes(to) ? 'Unpinned from the menu' : 'Pinned to the top of the menu'); };
   const here = location.pathname;
   const pinRef = useRef(); pinRef.current = () => togglePin(here);
@@ -829,9 +856,10 @@ function Shell() {
           </div>
         </header>
         <OfflineBanner />
+        {pageMenu.node}
         {(() => {
           const content = (
-            <main className="content" ref={contentRef} data-page={here}>
+            <main className="content" ref={contentRef} data-page={here} onContextMenu={openPageMenu}>
               <Suspense fallback={<PageSkeleton />}>
                 <Routes>
                   {groups.flatMap((g) => g.items).map(([to, , , , , el]) => <Route key={to} path={to} element={el} />)}

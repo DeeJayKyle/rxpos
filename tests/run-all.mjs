@@ -166,6 +166,7 @@ const SUITES = [
   ['buying stock (UI batch 3, G)', 'v86-buying.mjs', ['.output/v86']],
   ['1.18.0 behaviours: Control Centre, sheets, Dynamic Island, home screen, App Library, tiling, lock screen', 'v87-behaviours.mjs', ['.output/v87']],
   ['the owner\'s rules: shift questions, past sales into shifts, the till in stock A–Z, tidy names', 'v88-owner-rules.mjs', ['.output/v88']],
+  ['dashboard cards resized and moved, options on every page, the theme panel folds', 'v89-layout.mjs', ['.output/v89']],
   // every page on a PC and a phone, for design review: only on request (`npm test -- shots-all`)
   ...(process.argv[2] === 'shots-all' ? [['every page, PC and phone screenshots', 'shots-all.mjs', ['.output/all']]] : []),
   // every theme on the dashboard and Sales History, for the owner's review: only on request (`npm test -- shots-themes`)

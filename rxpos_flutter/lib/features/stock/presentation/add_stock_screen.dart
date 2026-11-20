@@ -28,6 +28,7 @@ import '../domain/stock_form.dart';
 import 'invoice_scan.dart';
 import '../../../screens/ai_vision_scanner_screen.dart';
 import '../../../core/presentation/page_tip.dart';
+import '../../../core/presentation/page_menu.dart' show registerPageMenu;
 
 /// Add Stock (src/pages/Purchases.jsx AddStock): a delivery laid out like the supplier's invoice. Search or scan each
 /// medicine (not in the list? add it as new); type the line total (the unit cost is shown, worked out as total ÷ qty,
@@ -435,6 +436,7 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
     }
 
     late final Future<void> Function() scanNow;
+    registerPageMenu('/add-stock', () => [(label: 'Scan invoice', icon: Icons.document_scanner_outlined, onTap: () => scanNow()), (label: 'New medicine', icon: Icons.auto_awesome, onTap: () => _addNew(''))]);
     final list = ListView(padding: const EdgeInsets.all(16), children: [
       // the title, then the two scan buttons beside it (or under it on a phone)
       Wrap(spacing: 8, runSpacing: 8, alignment: WrapAlignment.spaceBetween, crossAxisAlignment: WrapCrossAlignment.center, children: [

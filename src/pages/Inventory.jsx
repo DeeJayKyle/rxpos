@@ -18,6 +18,7 @@ import { BranchStockList } from '../components/BranchStock.jsx';
 import { dateLocale } from '../showdate.js';
 import { DateInput } from '../fields.jsx';
 import NameCheck from '../components/NameCheck.jsx';
+import { usePageMenu } from '../pagemenu.js';
 
 const expiryClass = (expiry, warn) => {
   if (!expiry) return '';
@@ -88,7 +89,8 @@ export function MedicineList() {
   // the list is open to anyone who may see stock; changing it needs medicines.manage (the cloud enforces the same)
   const manage = can('medicines.manage');
   const [packsFor, setPacksFor] = useState(null);
-  const [tidy, setTidy] = useState(false); // Tidy names: suggestions approved one by one (components/NameCheck.jsx)
+  const [tidy, setTidy] = useState(false);
+  usePageMenu([manage && { label: 'Tidy names and merge look-alikes…', Icon: Wand2, run: () => setTidy(true) }, { label: 'Stock card', Icon: ScrollText, run: () => navigate('/stock-card') }]); // Tidy names: suggestions approved one by one (components/NameCheck.jsx)
   const [review, setReview] = useState(false);
   const dupBarcodes = useMemo(() => { const seen = new Set(), dup = new Set(); for (const p of products) if (p.barcode) (seen.has(p.barcode) ? dup : seen).add(p.barcode); return dup; }, [products]);
   const issueCount = useMemo(() => products.filter((p) => recordIssues(p, dupBarcodes).length).length, [products, dupBarcodes]);

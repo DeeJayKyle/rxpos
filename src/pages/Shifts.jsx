@@ -9,6 +9,7 @@ import { closeId, daySnapshot } from '../dayclose.js';
 import { Modal, Stat, Empty, Tabs } from '../ui.jsx';
 import { toast, ask, askText } from '../feedback.jsx';
 import { showDateTime, dateLocale } from '../showdate.js';
+import { usePageMenu } from '../pagemenu.js';
 
 const NOTES = [50000, 20000, 10000, 5000, 2000, 1000, 500, 200, 100, 50];
 
@@ -39,6 +40,7 @@ export default function Shifts() {
   const [report, setReport] = useState(null);
   const open = openShiftOf(db, user, branchId);
   const location = useLocation(), navigate = useNavigate();
+  usePageMenu([open ? { label: 'Close shift and count cash', Icon: StopCircle, run: () => setClosing({ mode: 'close', counts: {}, note: '' }) } : { label: 'Start my shift', Icon: PlayCircle, run: () => openShift() }]);
   // signing out with a shift open: "End shift" brings the person here to count the cash, then signs them out
   const thenSignOut = location.state?.close === 'signout';
   useEffect(() => {

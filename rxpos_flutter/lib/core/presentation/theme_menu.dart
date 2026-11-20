@@ -4,6 +4,9 @@ import 'package:flutter/material.dart';
 import 'app_dialog.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'dart:convert';
+
+import '../data/device_settings.dart';
 import '../data/pharmacy_providers.dart';
 import '../theme/theme_choice.dart';
 import '../theme/themes.dart';
@@ -33,6 +36,30 @@ class ThemeMenu extends ConsumerWidget {
     final current = paletteById(look.theme);
     final mode = look.system ? 'system' : current.dark ? 'dark' : 'light';
     Widget head(String s) => Padding(padding: const EdgeInsets.fromLTRB(16, 12, 16, 6), child: Text(s, style: t.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800)));
+    // every section folds (the owner's request, 2026-11-20): at first only the set with the theme in use is open;
+    // what the person opens or folds is kept on this device (src/App.jsx ThemePicker)
+    Map<String, Object?> folds;
+    try {
+      folds = (jsonDecode(ref.watch(deviceValueProvider('theme-folds')).value ?? '{}') as Map).cast<String, Object?>();
+    } catch (_) {
+      folds = {};
+    }
+    bool isOpen(String id, bool dflt) => folds[id] is bool ? folds[id]! as bool : dflt;
+    List<Widget> sec(String id, String title, bool dflt, List<Widget> body) => [
+          InkWell(
+            key: ValueKey('theme-sec-$id'),
+            onTap: () => ref.read(deviceValueProvider('theme-folds').notifier).set(jsonEncode({...folds, id: !isOpen(id, dflt)})),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(10, 10, 16, 6),
+              child: Row(children: [
+                AnimatedRotation(turns: isOpen(id, dflt) ? 0 : -.25, duration: const Duration(milliseconds: 150), child: const Icon(Icons.expand_more, size: 18)),
+                const SizedBox(width: 4),
+                Expanded(child: Text(title, style: t.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800))),
+              ]),
+            ),
+          ),
+          if (isOpen(id, dflt)) ...body,
+        ];
     Widget swatch(Palette p) => Container(
           width: 34,
           height: 22,
@@ -69,8 +96,7 @@ class ThemeMenu extends ConsumerWidget {
               ),
               // the themes by group (themes.dart paletteGroups): Light, Dashboard looks, Dark
               for (final g in paletteGroups)
-                if (allowed.any((p) => (p.group.isEmpty ? 'Light' : p.group) == g)) ...[
-              head(g),
+                if (allowed.any((p) => (p.group.isEmpty ? 'Light' : p.group) == g)) ...sec('set:$g', g, allowed.length <= 8 || allowed.any((p) => (p.group.isEmpty ? 'Light' : p.group) == g && (p.id == look.theme || '${p.id}-dark' == look.theme)), [
               for (final p in allowed.where((p) => (p.group.isEmpty ? 'Light' : p.group) == g))
                 // the pointer on a theme previews it (2026-11-18); leaving it puts the chosen one back
                 MouseRegion(
@@ -91,8 +117,8 @@ class ThemeMenu extends ConsumerWidget {
                   },
                 ),
                 ),
-                ],
-              head('Gradient'),
+                ]),
+              ...sec('gradient', 'Gradient', false, [
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 child: SegmentedButton<String>(
@@ -126,7 +152,8 @@ class ThemeMenu extends ConsumerWidget {
                     ),
                 ]),
               ),
-              head('Colour'),
+              ]),
+              ...sec('colour', 'Colour', false, [
               for (final (id, name, hint) in colourLevels)
                 ListTile(
                   key: ValueKey('level-$id'),
@@ -140,7 +167,8 @@ class ThemeMenu extends ConsumerWidget {
                     close();
                   },
                 ),
-              head('Style'),
+              ]),
+              ...sec('style', 'Style', false, [
               for (final (id, name, hint) in surfaceStyles)
                 ListTile(
                   key: ValueKey('style-$id'),
@@ -154,6 +182,7 @@ class ThemeMenu extends ConsumerWidget {
                     close();
                   },
                 ),
+              ]),
             ]),
           ),
         ),

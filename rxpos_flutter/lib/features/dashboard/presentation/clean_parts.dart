@@ -31,10 +31,12 @@ const dashWidgets = [
 
 /// This device's dashboard (deviceValueProvider 'dash'): the period chip, the cards' order and which are shown
 class DashLayout {
-  const DashLayout({this.period = 'today', required this.order, required this.shown});
+  const DashLayout({this.period = 'today', required this.order, required this.shown, this.sizes = const {}});
   final String period;
   final List<String> order;
   final Set<String> shown;
+  /// each card's width in the 12-column grid, changed by dragging its edge or from its menu (2026-11-20)
+  final Map<String, int> sizes;
 
   factory DashLayout.parse(String? raw) {
     Map<String, Object?> j = const {};
@@ -45,11 +47,19 @@ class DashLayout {
     final saved = [for (final x in (j['order'] as List? ?? const [])) if (ids.contains('$x')) '$x'];
     final shown = j['shown'] is List ? {for (final x in j['shown'] as List) '$x'} : {for (final w in dashWidgets) if (w.$4) w.$1};
     final p = '${j['period'] ?? 'today'}';
-    return DashLayout(period: periods.any((x) => x.$1 == p) ? p : 'today', order: [...saved, ...ids.where((i) => !saved.contains(i))], shown: shown);
+    final sizes = {for (final e in ((j['sizes'] as Map?) ?? const {}).entries) if (e.value is num) '${e.key}': (e.value as num).toInt().clamp(3, 12)};
+    return DashLayout(period: periods.any((x) => x.$1 == p) ? p : 'today', order: [...saved, ...ids.where((i) => !saved.contains(i))], shown: shown, sizes: sizes);
   }
 
-  String encode({String? period, List<String>? order, Set<String>? shown}) =>
-      jsonEncode({'period': period ?? this.period, 'order': order ?? this.order, 'shown': [...(shown ?? this.shown)]});
+  String encode({String? period, List<String>? order, Set<String>? shown, Map<String, int>? sizes}) =>
+      jsonEncode({'period': period ?? this.period, 'order': order ?? this.order, 'shown': [...(shown ?? this.shown)], 'sizes': sizes ?? this.sizes});
+
+  /// [id] moved to just before [before] (to the end when null)
+  List<String> moved(String id, String? before) {
+    final o = [...order]..remove(id);
+    o.insert(before == null ? o.length : o.indexOf(before), id);
+    return o;
+  }
 }
 
 /// A card rising in with a soft fade, one after another by [index] (off with reduced motion)
@@ -290,3 +300,117 @@ Future<void> showEditWidgets(BuildContext context, DashLayout layout, ValueChang
         );
       }),
     );
+
+/// A dashboard card that can be moved (drag its grip onto another card), resized (drag its right edge on a wide
+/// screen; it snaps to the 12-column grid) and has a menu (right-click or a long press): src/pages/Dashboard.jsx DashGrid.
+class DashCard extends StatefulWidget {
+  const DashCard({super.key, required this.id, required this.name, required this.span, required this.width, required this.colWidth, required this.child,
+      required this.onMove, required this.onStep, required this.onSize, required this.onHide, required this.onEdit, this.first = false, this.last = false});
+  final String id, name;
+  final int span;
+  final double Function(int span) width;
+  /// one column's width with its gap; 0 when the screen is too narrow to resize
+  final double colWidth;
+  final Widget child;
+  final void Function(String id, String? before) onMove;
+  final void Function(int d) onStep;
+  final void Function(int span) onSize;
+  final VoidCallback onHide, onEdit;
+  final bool first, last;
+  @override
+  State<DashCard> createState() => _DashCardState();
+}
+
+class _DashCardState extends State<DashCard> {
+  double? _live; // the width while the edge is dragged
+  static const _sizes = [(4, 'Small (a third)'), (6, 'Half'), (8, 'Large (two thirds)'), (12, 'Full width')];
+
+  int get _liveSpan => _live == null ? widget.span : (_live! / widget.colWidth).round().clamp(3, 12);
+
+  Future<void> _menu(Offset at) async {
+    final size = MediaQuery.sizeOf(context);
+    final pick = await showMenu<VoidCallback>(
+      context: context,
+      position: RelativeRect.fromLTRB(at.dx, at.dy, size.width - at.dx, size.height - at.dy),
+      items: [
+        for (final (sp, label) in _sizes) PopupMenuItem(key: ValueKey('size-$sp'), value: () => widget.onSize(sp), child: Text('${widget.span == sp ? '✓ ' : ''}$label')),
+        const PopupMenuDivider(),
+        PopupMenuItem(enabled: !widget.first, value: () => widget.onStep(-1), child: const Text('Move earlier')),
+        PopupMenuItem(enabled: !widget.last, value: () => widget.onStep(1), child: const Text('Move later')),
+        PopupMenuItem(value: widget.onHide, child: Text('Hide ${widget.name}')),
+        const PopupMenuDivider(),
+        PopupMenuItem(value: widget.onEdit, child: const Text('Edit widgets…')),
+      ],
+    );
+    pick?.call();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context);
+    final w = _live ?? widget.width(widget.span);
+    return SizedBox(
+      width: w,
+      child: DragTarget<String>(
+        onWillAcceptWithDetails: (d) => d.data != widget.id,
+        onAcceptWithDetails: (d) => widget.onMove(d.data, widget.id),
+        builder: (context, candidates, _) => GestureDetector(
+          onSecondaryTapUp: (d) => _menu(d.globalPosition),
+          onLongPressStart: (d) => _menu(d.globalPosition),
+          child: Stack(clipBehavior: Clip.none, children: [
+            DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                border: candidates.isNotEmpty ? Border(left: BorderSide(color: t.colorScheme.primary, width: 4)) : null,
+              ),
+              child: widget.child,
+            ),
+            Positioned(
+              top: 6,
+              left: 6,
+              child: Draggable<String>(
+                data: widget.id,
+                feedback: Material(
+                  elevation: 8,
+                  borderRadius: BorderRadius.circular(12),
+                  child: Padding(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10), child: Text(widget.name, style: t.textTheme.titleSmall)),
+                ),
+                child: Tooltip(
+                  message: 'Drag to move ${widget.name}',
+                  child: Container(
+                    key: ValueKey('grip-${widget.id}'),
+                    padding: const EdgeInsets.all(2),
+                    decoration: BoxDecoration(color: t.colorScheme.surface.withValues(alpha: .8), borderRadius: BorderRadius.circular(7)),
+                    child: Icon(Icons.drag_indicator, size: 16, color: t.colorScheme.onSurfaceVariant),
+                  ),
+                ),
+              ),
+            ),
+            if (widget.colWidth > 0)
+              Positioned(
+                top: 12,
+                bottom: 12,
+                right: 0, // inside the card: Flutter only finds touches within a widget's own box
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.resizeLeftRight,
+                  child: GestureDetector(
+                    key: ValueKey('resize-${widget.id}'),
+                    behavior: HitTestBehavior.opaque,
+                    onHorizontalDragUpdate: (d) => setState(() => _live = ((_live ?? widget.width(widget.span)) + d.delta.dx).clamp(widget.colWidth * 3, widget.colWidth * 12)),
+                    onHorizontalDragEnd: (_) {
+                      final sp = _liveSpan;
+                      setState(() => _live = null);
+                      widget.onSize(sp);
+                    },
+                    child: SizedBox(width: 14, child: Center(child: Container(width: 4, height: 36, decoration: BoxDecoration(color: t.colorScheme.primary.withValues(alpha: .6), borderRadius: BorderRadius.circular(4))))),
+                  ),
+                ),
+              ),
+            if (_live != null)
+              Positioned(top: 8, right: 16, child: Chip(label: Text('$_liveSpan of 12'), visualDensity: VisualDensity.compact)),
+          ]),
+        ),
+      ),
+    );
+  }
+}

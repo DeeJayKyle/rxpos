@@ -4,7 +4,7 @@ import { showDate } from '../showdate.js';
 import { nextHue, lineStyle, COL_VARS as COL_HUES } from '../linecolors.js';
 import { parseGs1, findByGtin } from '../gs1.js';
 import { useLocation } from 'react-router-dom';
-import { Pencil, Trash2, ScanText, Camera, FileUp, Loader2, AlertTriangle, CheckCircle2, X, Plus, RotateCcw, Sparkles, GripVertical, ChevronLeft, ChevronRight, PauseCircle, Tags } from 'lucide-react';
+import { Pencil, Trash2, ScanText, Camera, FileUp, Loader2, AlertTriangle, CheckCircle2, X, Plus, RotateCcw, Sparkles, GripVertical, ChevronLeft, ChevronRight, PauseCircle, Tags, Save } from 'lucide-react';
 import { DateInput, MedicinePicker, useDateFormat } from '../fields.jsx';
 import { DATE_FORMATS } from '../dateformat.js';
 import { mainPack, packsOf, receiveInPacks } from '../packs.js';
@@ -29,6 +29,7 @@ import DraftsList, { useDraftCount } from './Drafts.jsx';
 import { Link, useNavigate } from 'react-router-dom';
 import InvoiceView from '../components/InvoiceView.jsx';
 import { emptyCheck, scanInto, checkSummary } from '../deliverycheck.js';
+import { usePageMenu } from '../pagemenu.js';
 
 const NEW = '__new__'; // a line for a medicine that is not in the list yet
 const FORMS = ['Tablets', 'Capsules', 'Syrups', 'Suspensions', 'Injectables', 'Creams', 'Ointments', 'Drops', 'Sachets', 'Devices', 'Surgicals', 'Others'];
@@ -341,6 +342,13 @@ export function AddStock() {
     return k && Number(k.size) > 1 && (p.packs || []).some((x) => x.name === k.name && Number(x.size) === Number(k.size)) ? { recvPack: k.name, recvSize: Number(k.size), ...(p.cost ? { cost: numOrBlank(p.cost * Number(k.size)) } : {}) } : {};
   };
   const pick = (p) => placeLine(lineFor(p, habitPack(p), form.markup));
+  usePageMenu([
+    { label: 'Scan invoice', Icon: ScanText, run: () => setScanOpen(true) },
+    { label: 'Scan invoice with AI', Icon: Sparkles, run: () => setAiScan(true) },
+    { label: 'New medicine', Icon: Plus, run: () => addNew('') },
+    { label: 'Save as draft', Icon: Save, run: () => saveDraft() },
+    form.supplierId && { label: 'Change supplier, invoice no., date', Icon: Pencil, run: () => setHeadOpen(true) },
+  ]);
   const addNew = (name, barcode = '') => {
     const key = placeLine({ ...blankLine(), productId: NEW, name: name.trim(), ...(barcode ? { barcode } : {}) });
     setTimeout(() => nameRefs.current[key]?.focus(), 30);
