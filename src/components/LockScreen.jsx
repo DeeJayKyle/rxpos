@@ -6,7 +6,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { LockKeyhole, LogOut, Delete, MessagesSquare, CalendarClock, PackageX } from 'lucide-react';
 import { hasPin, verifyPin, hasOffline, verifyOffline } from '../offline.js';
-import { cloudLogin } from '../cloud.js';
+import { cloudLogin, cloudLogout } from '../cloud.js';
 import { useFocusTrap } from '../focustrap.js';
 import { dateLocale } from '../showdate.js';
 
@@ -57,7 +57,12 @@ export function LockScreen({ user, pharmacy, syncCfg, counts, onUnlock, onSignOu
     if (hasOffline(tenant, user.id)) { if (await verifyOffline(tenant, user.id, secret)) return; throw new Error('Wrong password.'); }
     // the web keeps nothing on the computer: the cloud checks the password
     if (!syncCfg?.url || !user.email) throw new Error('This device cannot check your password. Sign out and sign in again.');
-    try { await cloudLogin(syncCfg.url, user.email, secret, tenant); } catch (e) {
+    try {
+      const r = await cloudLogin(syncCfg.url, user.email, secret, tenant);
+      if (r?.user?.id && r.user.id !== user.id) throw new Error('That is not your password.');
+      // the check's own sign-in is closed again at once (as the Flutter app's approve)
+      if (r?.token) cloudLogout({ url: syncCfg.url, key: r.token }).catch(() => {});
+    } catch (e) {
       if (/code|two-step|otp/i.test(e.message || '')) throw new Error('You use two-step sign-in: sign out and sign in again to open the till.', { cause: e });
       throw new Error(e.message || 'Could not check the password.', { cause: e }); // the cloud's own words (wrong password, tries left)
     }

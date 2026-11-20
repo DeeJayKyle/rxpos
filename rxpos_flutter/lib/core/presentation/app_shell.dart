@@ -35,6 +35,7 @@ import '../theme/themes.dart';
 import 'top_bar.dart';
 import '../../features/calls/presentation/call_overlay.dart';
 import '../update/update_pill.dart';
+import 'control_centre.dart';
 import '../../theme/rxpos_theme.dart' show WindowClass, windowClass;
 
 /// The frame around every screen: the sidebar with its groups (Sales, People, Stock, Medicines, Finance, Insights,
@@ -116,6 +117,8 @@ class AppShell extends ConsumerWidget {
         const UpdatePill(),
         const NotificationBell(),
         // 1.16.0 (the owner's clean-up): no Premium UI switch; Navy Teal is one of the themes in the theme menu
+        // 1.18.0: Control Centre (the device's quick switches, the App Library, lock the till)
+        ControlCentreButton(screens: visible),
         const ThemeMenuButton(),
         // the signed-in person: top right beside the theme, a drop-down (the owner's request, 17 Nov 2026)
         if (session != null) AccountMenu(session: session, showName: false, card: wide),
@@ -137,7 +140,7 @@ class AppShell extends ConsumerWidget {
       const CallOverlay(),
     ]);
     final body = body0;
-    return CallbackShortcuts(
+    return TillLockGuard(child: CallbackShortcuts(
       bindings: {
         // the page keys, Ctrl+K, ?, back / forward and pin are the keyboard map's (keys_host.dart), changeable per device
         if (wide) const SingleActivator(LogicalKeyboardKey.keyB, control: true): toggleRail,
@@ -198,7 +201,7 @@ class AppShell extends ConsumerWidget {
         ),
       ),
       ),
-    );
+    ));
   }
 }
 

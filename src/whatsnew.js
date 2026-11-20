@@ -3,8 +3,14 @@
 // its highlights go here too. The Flutter app keeps the same list in rxpos_flutter/lib/core/config/whats_new.dart
 // (tests/unit-whatsnew.mjs checks they match).
 export const WHATS_NEW = {
-  version: '1.17.0',
+  version: '1.18.0',
   items: [
+    { text: 'Control Centre (top bar): dark mode, gradient, sync, the App Library and lock the till in one panel', to: '/' },
+    { text: 'Lock the till (Ctrl+Shift+L or by itself after 2, 5 or 15 idle minutes); open it with your PIN or password', to: '/' },
+    { text: 'A home screen for the dashboard: widgets in three sizes, a clock and a dock (Control Centre → Home screen)', to: '/' },
+    { text: 'App Library: every page as app icons in folders, with a search', to: '/' },
+    { text: 'Dynamic Island messages, and pop-ups as sheets you drag down to close (Control Centre)', to: '/' },
+    { text: 'Tiling: a second page beside the one you work on, on wide screens (Control Centre → Tiling)', to: '/sales' },
     { text: 'Gradients: a soft or bold background, gradient accents, and six presets for the menu (theme menu → Gradient)', to: '/device' },
     { text: 'Dark keeps your theme: every theme has its own dark twin', to: '/device' },
     { text: 'New styles: GNOME, KDE Plasma, elementary OS, Ubuntu, iOS and Liquid Glass (theme menu → Style)', to: '/device' },

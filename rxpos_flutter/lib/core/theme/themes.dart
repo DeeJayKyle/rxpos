@@ -491,8 +491,24 @@ DesignTokens surfaceTokens(String surface, Palette p) => switch (surface) {
 /// The Flutter theme for a palette, an accent, a surface style, the colour level and the design tokens ([tokens]: a
 /// design system's; otherwise the surface style's), laid out for a finger ([touch], Android) or a mouse (Windows).
 /// [headingFont] and [bodyFont]: this device's chosen fonts (fonts.dart), once they are ready; null keeps the look's own.
+/// 1.18.0 gradient presets for the menu and the page bands (src/gradients.js GRADIENT_PRESETS): id, name, from, to
+const gradientPresets = [
+  ('sunrise', 'Sunrise', 0xFFFF7E5F, 0xFFFEB47B),
+  ('ocean', 'Ocean', 0xFF2193B0, 0xFF6DD5ED),
+  ('forest', 'Forest', 0xFF134E5E, 0xFF71B280),
+  ('berry', 'Berry', 0xFF8E2DE2, 0xFF4A00E0),
+  ('dusk', 'Dusk', 0xFF2C3E50, 0xFFFD746C),
+  ('neon', 'Neon', 0xFF7F00FF, 0xFFE100FF),
+];
+
+/// A preset's two colours, each deepened until white words read on it (AA), as the web app's presetColours
+(int, int)? presetColours(String id) {
+  final p = gradientPresets.where((x) => x.$1 == id).firstOrNull;
+  return p == null ? null : (readable(p.$3, const [0xFFFFFFFF], 0xFF000000), readable(p.$4, const [0xFFFFFFFF], 0xFF000000));
+}
+
 ThemeData buildTheme(Palette base, {String accent = '', String surface = 'flat', bool vivid = false, DesignTokens? tokens, bool touch = false,
-    String? headingFont, String? bodyFont, String gradient = 'off'}) {
+    String? headingFont, String? bodyFont, String gradient = 'off', bool gradAccents = false, String preset = '', bool island = false}) {
   final p = withAccent(base, accent);
   // the next-gen palettes keep their flat bento cards whatever surface style is chosen (no glow on OLED black)
   // the two default themes keep their flat bento cards; the others follow the chosen surface style (as the React app)
@@ -600,7 +616,7 @@ ThemeData buildTheme(Palette base, {String accent = '', String surface = 'flat',
   final label = text.labelLarge;
   final aurora = surface == 'aurora' && tokens == null;
   // the main buttons are a gradient of the two brand colours on the gradient looks (iOS / GNOME style), flat when disabled
-  final gradientFill = !(glass || aurora)
+  final gradientFill = !(glass || aurora || gradAccents)
       ? null
       : (BuildContext _, Set<WidgetState> st, Widget? child) => st.contains(WidgetState.disabled)
           ? child!
@@ -620,7 +636,11 @@ ThemeData buildTheme(Palette base, {String accent = '', String surface = 'flat',
     visualDensity: tk.touch ? VisualDensity.standard : const VisualDensity(horizontal: 0, vertical: -.5),
     materialTapTargetSize: tk.touch ? MaterialTapTargetSize.padded : MaterialTapTargetSize.shrinkWrap,
     // 1.17.0 gradients (src/gradients.js): Soft or Bold glows of the theme's own colours behind the pages
-    extensions: [LookLevel(vivid: vivid), tk.copyWith(backdrop: tk.backdrop, glows: gradient == 'off' ? tk.glows : [
+    extensions: [LookLevel(vivid: vivid), tk.copyWith(backdrop: tk.backdrop,
+        // 1.18.0: a preset paints the menu and the page bands (white words on it, AA)
+        sidebarFill: presetColours(preset) == null ? null : [Color(presetColours(preset)!.$1), Color(presetColours(preset)!.$2)],
+        heroBand: presetColours(preset) == null ? null : [Color(presetColours(preset)!.$1), Color(presetColours(preset)!.$2)],
+        glows: gradient == 'off' ? tk.glows : [
           Color(p.primary).withValues(alpha: gradient == 'bold' ? .34 : .16),
           Color(p.glossy != null ? p.glossy!.kpi[6] : p.primary2).withValues(alpha: gradient == 'bold' ? .30 : .14),
           Color(p.glossy != null ? p.glossy!.kpi[18] : p.primary2).withValues(alpha: gradient == 'bold' ? .16 : .07),
@@ -715,7 +735,18 @@ ThemeData buildTheme(Palette base, {String accent = '', String surface = 'flat',
     ),
     popupMenuTheme: PopupMenuThemeData(color: Color(p.surface), surfaceTintColor: Colors.transparent, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(tk.controlRadius), side: BorderSide(color: tk.ink ?? Color(p.border), width: tk.borderWidth))),
     menuTheme: MenuThemeData(style: MenuStyle(backgroundColor: WidgetStatePropertyAll(Color(p.surface)), surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent))),
-    snackBarTheme: SnackBarThemeData(
+    // 1.18.0 Dynamic Island (behaviour.dart): messages in a black pill
+    snackBarTheme: island
+        ? SnackBarThemeData(
+            behavior: SnackBarBehavior.floating,
+            width: tk.touch ? null : 460,
+            backgroundColor: Colors.black,
+            elevation: 10,
+            contentTextStyle: text.bodyMedium?.copyWith(color: Colors.white, fontWeight: FontWeight.w600),
+            actionTextColor: Color(readable(mix(p.primary, 0xFFFFFFFF, .45), const [0xFF000000], 0xFFFFFFFF)),
+            shape: const StadiumBorder(),
+          )
+        : SnackBarThemeData(
       behavior: SnackBarBehavior.floating,
       width: tk.touch ? null : 520,
       backgroundColor: Color(p.dark ? mix(p.surface2, 0xFFFFFFFF, .12) : _ink(p)),

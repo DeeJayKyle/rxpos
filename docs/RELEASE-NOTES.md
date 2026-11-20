@@ -1,5 +1,27 @@
 # RxPOS release notes
 
+## React (classic) app 1.18.0 · Flutter app (next build) · November 2026 (behaviour)
+
+The owner's choices (20 Nov 2026), the iPhone and Linux way, each switched on per device:
+- **Control Centre** (the sliders button in the top bar): dark mode, the gradient, Sheets & gestures, Dynamic Island,
+  Home screen, Tiling, the compact menu, Sync now, the App Library, Lock the till, and auto-lock (Never, 2, 5 or 15
+  idle minutes).
+- **Till lock screen**: the time, the date and what is waiting (messages, expiring and low stock) over a screen that
+  hides the page. It opens with the person's quick PIN or password: checked on the device, else by the cloud's own
+  sign-in (with its limit on wrong tries), which is closed again at once. Ctrl+Shift+L locks; a reload or restart keeps
+  it locked; page keys and the scanner do nothing behind it; someone else can sign out instead.
+- **Home screen**: the dashboard's widgets in three sizes, plus a clock and small figures (today's sales, low stock,
+  expiring), and a dock of the main pages. Press and hold (or Edit home screen) to remove, resize, move and add
+  widgets; kept on the device.
+- **App Library**: every page this person may open as app icons in folders by menu group, Suggestions first, and a
+  search that lists pages A to Z.
+- **Dynamic Island**: messages in a black pill at the top centre that grows to show them.
+- **Sheets & gestures**: pop-ups rise from the bottom with a grab handle; drag down to close.
+- **Tiling** (wide screens): a second page (lists and look-ups, never the till) tiled beside the one in use.
+- **Flutter apps**: Control Centre, the till lock screen (also after a restart), the App Library, Dynamic Island
+  messages, sheets you drag to close, and the 1.17.0 gradient buttons and six presets for the menu and page bands
+  (white words on them, AA). The home screen and tiling are in the classic (React) app for now.
+
 ## React (classic) app 1.17.0 · Flutter app (next build) · November 2026 (looks)
 
 The owner's choices (20 Nov 2026):

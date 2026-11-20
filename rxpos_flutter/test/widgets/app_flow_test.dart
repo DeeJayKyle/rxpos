@@ -769,7 +769,7 @@ void main() {
     expect(find.byKey(Key('busy-$wd-10')), findsOneWidget);
     // B8: what's new once
     expect(find.byKey(const Key('whats-new')), findsOneWidget);
-    expect(find.text("What's new in 1.17.0"), findsOneWidget);
+    expect(find.text("What's new in 1.18.0"), findsOneWidget);
     // B7: the setup checklist, ticked from the data
     expect(find.byKey(const Key('setup-checklist')), findsOneWidget);
     expect(find.textContaining('2 of 6 done', findRichText: true), findsOneWidget);
@@ -3278,6 +3278,109 @@ void main() {
     await tester.tap(find.byKey(const Key('theme-menu')));
     await settle(tester, 4);
   }
+
+  // 1.18.0 (the owner's choice, as the web app's v87): Control Centre, the App Library, the Dynamic Island, sheets,
+  // gradient buttons and presets, and the till lock screen opened with the password (and kept after a restart)
+  testWidgets('Control Centre: dark, island, sheets, App Library, presets, lock the till and open it again', (tester) async {
+    tester0 = tester;
+    await tester.runAsync(signedIn);
+    await tester.runAsync(() => RecordStore(db).update((d) => d.put('users', {'id': 'u1', 'name': 'Tia Admin', 'email': 'tia@test.rx', 'username': 'tia', 'role': 'admin'})));
+    await start(tester);
+    Future<Map<String, Object?>> behaviour() async {
+      final r = await tester.runAsync(() => (db.select(db.kv)..where((x) => x.k.equals('device:behaviour'))).getSingleOrNull());
+      return r == null ? {} : (jsonDecode(r.v) as Map).cast<String, Object?>();
+    }
+
+    Future<void> openCC() async {
+      await tester.tap(find.byKey(const Key('control-centre')));
+      await settle(tester, 4);
+      expect(find.byKey(const Key('control-centre-panel')), findsOneWidget);
+    }
+
+    await openCC();
+    for (final k in ['cc-dark', 'cc-gradient', 'cc-sheets', 'cc-island', 'cc-sync', 'cc-library', 'cc-lock']) {
+      expect(find.byKey(Key(k)), findsOneWidget, reason: k);
+    }
+    await tester.tap(find.byKey(const Key('cc-dark')));
+    await settle(tester, 4);
+    expect((await look())['theme'], 'mint-teal-dark', reason: 'Dark mode keeps the theme as its twin');
+    await tester.tap(find.byKey(const Key('cc-dark')));
+    await tester.tap(find.byKey(const Key('cc-gradient')));
+    await tester.tap(find.byKey(const Key('cc-island')));
+    await tester.tap(find.byKey(const Key('cc-sheets')));
+    await settle(tester, 4);
+    expect((await look())['theme'], 'mint-teal');
+    expect((await look())['gradient'], 'soft', reason: 'the gradient tile goes Off → Soft → Bold');
+    expect(await behaviour(), containsPair('island', true));
+    expect(await behaviour(), containsPair('sheets', true));
+    // the island's messages: a black pill (once the theme's change has finished)
+    await settle(tester, 6);
+    final snack = Theme.of(tester.element(find.byKey(const Key('control-centre')))).snackBarTheme;
+    expect(snack.backgroundColor, Colors.black);
+    expect(snack.shape, isA<StadiumBorder>());
+    await tester.tap(find.text('5 min'));
+    await settle(tester, 3);
+    expect(await behaviour(), containsPair('lock', 5));
+
+    // App Library: folders by group; a search lists pages A to Z; picking one opens it
+    await tester.tap(find.byKey(const Key('cc-library')));
+    await settle(tester, 4);
+    expect(find.byKey(const Key('app-library')), findsOneWidget);
+    expect(find.byKey(const Key('sheet-grab')), findsOneWidget, reason: 'with sheets on, the library rises as a sheet with a grab handle');
+    expect(find.byKey(const ValueKey('lib-folder-Stock')), findsOneWidget);
+    await tester.enterText(find.byKey(const Key('lib-search')), 'stock');
+    await settle(tester, 2);
+    final rows = tester.widgetList<ListTile>(find.descendant(of: find.byKey(const Key('app-library')), matching: find.byType(ListTile))).map((t) => ((t.title as Text).data ?? '')).toList();
+    expect(rows.length, greaterThanOrEqualTo(3));
+    expect(rows, [...rows]..sort());
+    expect(rows.every((x) => x.toLowerCase().contains('stock')), isTrue, reason: '$rows');
+    // a sheet closes when dragged down
+    await tester.drag(find.byKey(const Key('sheet-grab')), const Offset(0, 300));
+    await settle(tester, 4);
+    expect(find.byKey(const Key('app-library')), findsNothing);
+
+    // gradient buttons and a preset in the theme menu
+    await openThemes(tester);
+    await tester.scrollUntilVisible(find.byKey(const ValueKey('preset-ocean')), 120, scrollable: find.descendant(of: find.byKey(const Key('theme-list')), matching: find.byType(Scrollable)));
+    await tester.tap(find.byKey(const Key('grad-accents')));
+    await settle(tester, 3);
+    await tester.tap(find.byKey(const ValueKey('preset-ocean')));
+    await settle(tester, 3);
+    expect((await look())['gradAccents'], true);
+    expect((await look())['preset'], 'ocean');
+    final tk = tokensOf(tester.element(find.byKey(const Key('control-centre'))));
+    expect(tk.sidebarFill, hasLength(2), reason: 'the preset paints the menu');
+    for (final c in tk.sidebarFill) {
+      expect(contrast(0xFFFFFFFF, c.toARGB32()), greaterThanOrEqualTo(4.5), reason: 'white words read on the preset');
+    }
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await settle(tester, 3);
+
+    // lock the till: the lock screen covers the app; a wrong password keeps it shut, the right one opens it
+    await openCC();
+    await tester.tap(find.byKey(const Key('cc-lock')));
+    await settle(tester, 6);
+    expect(find.byKey(const Key('lock-screen')), findsOneWidget);
+    expect(find.textContaining('locked by Tia Admin'), findsOneWidget);
+    await tester.enterText(find.byKey(const Key('lock-secret')), 'wrong-one');
+    await tester.tap(find.byKey(const Key('lock-unlock')));
+    await settle(tester, 8);
+    expect(find.byKey(const Key('lock-screen')), findsOneWidget);
+    expect(find.byKey(const Key('lock-error')), findsOneWidget);
+    // a restart keeps it locked
+    await done(tester);
+    await start(tester);
+    await settle(tester, 4);
+    expect(find.byKey(const Key('lock-screen')), findsOneWidget, reason: 'a restart keeps the till locked');
+    await tester.enterText(find.byKey(const Key('lock-secret')), 'tia-pass');
+    await tester.tap(find.byKey(const Key('lock-unlock')));
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 400)));
+    await settle(tester, 8);
+    expect(cloud.logins.last['password'], 'tia-pass', reason: 'checked by the cloud\'s sign-in (no password verifier on this device), closed again at once');
+    expect(find.byKey(const Key('lock-screen')), findsNothing);
+    expect(find.byKey(const Key('control-centre')), findsOneWidget);
+    await done(tester);
+  });
 
   testWidgets('theme menu: dark, a theme from the list, accent, Vivid tiles, a style, the system; Premium UI and back', (tester) async {
     tester0 = tester;
