@@ -4,7 +4,7 @@ import { MessageCircle,
   LayoutDashboard, ShoppingCart, PackageOpen, ReceiptText, FileText, ClipboardPlus, Users, Truck, Pill, FlaskConical,
   Boxes, PackagePlus, History, CalendarClock, PencilRuler, ScrollText, Wallet, Tags, Landmark, ArrowLeftRight, HandCoins,
   ArrowDownLeft, ArrowUpRight, ClipboardCheck, RefreshCw, Undo2, ShieldPlus, BookOpen, BarChart3, Settings as SettingsIcon, Search, Sun, Moon, Menu, LogOut, ChevronDown,
-  BellRing, Plus, ShoppingBag, Tag, FileUp, Building2, Send, ShieldCheck, Clock, BookMarked, MessagesSquare, UserCog, KeyRound, CalendarDays, Thermometer, Palette, MonitorSmartphone, ScanText, GraduationCap, Megaphone, CalendarRange, LockKeyhole, NotebookPen, PanelLeftClose, PanelLeftOpen, WifiOff,
+  BellRing, Plus, ShoppingBag, Tag, FileUp, Building2, Send, ShieldCheck, Clock, BookMarked, MessagesSquare, UserCog, KeyRound, CalendarDays, Thermometer, Palette, MonitorSmartphone, ScanText, GraduationCap, Megaphone, CalendarRange, LockKeyhole, NotebookPen, PanelLeftClose, PanelLeftOpen, WifiOff, X,
   Pin, Keyboard, UserPlus, Archive, BadgeCheck, BriefcaseMedical,
 } from 'lucide-react';
 import { endOtherSessions, setPersonGuard, borrowedToken, cloudLogin } from './cloud.js';
@@ -23,7 +23,7 @@ import { isWeb, isNative } from './platform.js';
 import { keepsData } from './webpolicy.js';
 import RefreshHost from './refresh.jsx';
 import { startUpdates, onUpdate, applyUpdate, justUpdated, LABEL, VERSION } from './update.js';
-import { applyTheme, saveTheme, allowedThemes, THEME_GROUPS, currentThemeId, savedMode, saveMode, systemDark, paletteFor, startupTheme, savedAccent, saveAccent, twinFor } from './themes.js';
+import { applyTheme, saveTheme, allowedThemes, THEME_GROUPS, currentThemeId, savedMode, saveMode, systemDark, paletteFor, startupTheme, savedAccent, saveAccent, twinFor, themeById } from './themes.js';
 import { STYLES, applyStyle, savedStyle, saveStyle } from './surface.js';
 import { LEVELS, applyLevel, savedLevel, saveLevel } from './vivid.js';
 import { GRADIENT_BACKGROUNDS, GRADIENT_PRESETS, savedGradient, saveGradient, applyGradient } from './gradients.js';
@@ -35,6 +35,10 @@ import { ACTIONS, keyOf, keyMatcher, showKey, typing } from './keymap.js';
 import { deviceSettings, setDevice, onDevice } from './device.js';
 import { Modal, PageSkeleton } from './ui.jsx';
 import { MegaMenu, TopNav } from './components/NavMenus.jsx';
+import { ControlCentre, useBehaviour } from './components/ControlCentre.jsx';
+import { AppLibrary } from './components/AppLibrary.jsx';
+import { LockScreen, lockedFor, setLocked, useAutoLock } from './components/LockScreen.jsx';
+import { saveBehaviour } from './behaviour.js';
 import { BackButton, markNav, usePageMotion, useEdgeSwipeBack, useKeyboardFit } from './mobilenav.jsx';
 import AiOmnibar from './components/AiOmnibar.jsx';
 import { warmSearchKeys } from './search.js';
@@ -539,6 +543,25 @@ function Shell() {
   const [navStyle, setNavStyle] = useState(() => deviceSettings().navStyle || 'sidebar');
   useEffect(() => onDevice((d) => { setNav({ pins: d.navPins || [], recent: d.navRecent || [] }); setNavStyle(d.navStyle || 'sidebar'); }), []);
   const [mega, setMega] = useState(false); // every page as a bento sheet (phones: More; top navbar: All)
+  // 1.18.0 (the owner's choice): Control Centre, the App Library, the till lock screen and tiling (src/behaviour.js)
+  const behaviour = useBehaviour();
+  const [library, setLibrary] = useState(false);
+  useEffect(() => setLibrary(false), [location.pathname]);
+  const [locked, setLockedState] = useState(() => lockedFor() === user.id);
+  const lockTill = () => { setLocked(user.id); setLockedState(true); setLibrary(false); setMega(false); };
+  useAutoLock(locked ? 0 : behaviour.lock, lockTill);
+  useEffect(() => {
+    const k = (e) => { if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'L' || e.key === 'l')) { e.preventDefault(); lockTill(); } };
+    window.addEventListener('keydown', k);
+    return () => window.removeEventListener('keydown', k);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const darkNow = themeById(theme)?.base === 'dark';
+  const setDark = (on) => {
+    const list = allowedThemes(db.license?.[0]?.branding), base = on ? 'dark' : 'light';
+    setThemeMode('');
+    const tw = twinFor(theme, base);
+    setTheme(tw && list.some((t) => t.id === tw) ? tw : paletteFor(base, list, db.license?.[0]?.branding?.defaultTheme));
+  };
   useEffect(() => setMega(false), [location.pathname]);
   const togglePin = (to) => { const pins = nav.pins.includes(to) ? nav.pins.filter((x) => x !== to) : [...nav.pins, to].slice(-8); setDevice({ navPins: pins }); toast(nav.pins.includes(to) ? 'Unpinned from the menu' : 'Pinned to the top of the menu'); };
   const here = location.pathname;
@@ -745,6 +768,7 @@ function Shell() {
           {db.branches.length > 1 && <NavLink to="/branches" className="pill branch-pill" title="Branch this device works as"><Building2 size={14} />{branch?.name}</NavLink>}
           <ClockPill />
           <NotificationBell />
+          <ControlCentre dark={darkNow} onDark={setDark} rail={rail} onRail={toggleRail} onSync={() => syncNow()} onLock={lockTill} onLibrary={() => setLibrary(true)} />
           <ThemePicker theme={theme} setTheme={setTheme} mode={themeMode} setMode={setThemeMode} accent={accent} setAccent={setAccent} style={surface} setStyle={setSurface} />
           {/* the signed-in person: top right beside the theme, a drop-down (the owner's request, 17 Nov 2026) */}
           <div className="account-menu" ref={accountMenuRef}>
@@ -764,14 +788,19 @@ function Shell() {
           </div>
         </header>
         <OfflineBanner />
-        <main className="content" ref={contentRef} data-page={here}>
-          <Suspense fallback={<PageSkeleton />}>
-            <Routes>
-              {groups.flatMap((g) => g.items).map(([to, , , , , el]) => <Route key={to} path={to} element={el} />)}
-              <Route path="*" element={<Navigate to="/" />} />
-            </Routes>
-          </Suspense>
-        </main>
+        {(() => {
+          const content = (
+            <main className="content" ref={contentRef} data-page={here}>
+              <Suspense fallback={<PageSkeleton />}>
+                <Routes>
+                  {groups.flatMap((g) => g.items).map(([to, , , , , el]) => <Route key={to} path={to} element={el} />)}
+                  <Route path="*" element={<Navigate to="/" />} />
+                </Routes>
+              </Suspense>
+            </main>
+          );
+          return behaviour.tiling ? <div className="work-tiles">{content}<TilePane groups={groups} here={here} tile={behaviour.tile} /></div> : content;
+        })()}
       </div>
       <nav className="bottom-nav" aria-label="Main">
         {/* the pages this role may open (src/landing.js) */}
@@ -810,7 +839,38 @@ function Shell() {
       <UpdateHost />
       <WebOffline />
       {twoStepOpen && <TwoStepModal onClose={() => setTwoStepOpen(false)} />}
+      {library && <AppLibrary groups={groups} counts={counts} pins={nav.pins} recent={nav.recent} onClose={() => setLibrary(false)} />}
+      {locked && <LockScreen user={user} pharmacy={db.settings.name} syncCfg={syncCfg} counts={counts} onUnlock={() => setLockedState(false)} onSignOut={() => { setLocked(''); setLockedState(false); signOut(); }} />}
     </div>
+  );
+}
+
+// 1.18.0 Tiling: the pages that make sense beside another (lists and look-ups; never the till, which owns the keys)
+const TILEABLE = ['/sales', '/inventory', '/expiry', '/medicines', '/stock-card', '/customers', '/prescriptions', '/chat', '/reminders', '/calendar', '/notes', '/drug-info', '/weekly', '/reports', '/purchases', '/debtors', '/cash-book'];
+
+/** A second page tiled beside the one in use (wide screens; Control Centre → Tiling). Its links still open in the main tile. */
+function TilePane({ groups, here, tile }) {
+  const items = groups.flatMap((g) => g.items).filter(([to]) => TILEABLE.includes(to) && to !== here);
+  const pick = items.find(([to]) => to === tile) || items[0];
+  if (!pick) return null;
+  const [to, label, Icon, , , el] = pick;
+  return (
+    <aside className="tile-pane" aria-label={`Tiled: ${label}`}>
+      <div className="tile-head">
+        <Icon size={16} aria-hidden="true" />
+        <select aria-label="Page in this tile" value={to} onChange={(e) => saveBehaviour({ tile: e.target.value })}>
+          {items.map(([t, l]) => <option key={t} value={t}>{l}</option>)}
+        </select>
+        <button type="button" className="icon-btn" aria-label="Close the tile" title="Close the tile" onClick={() => saveBehaviour({ tiling: false })}><X size={16} /></button>
+      </div>
+      <div className="tile-body content">
+        <Suspense fallback={<PageSkeleton />}>
+          <Routes location={{ pathname: to, search: '', hash: '', state: null, key: 'tile' }}>
+            <Route path={to} element={el} />
+          </Routes>
+        </Suspense>
+      </div>
+    </aside>
   );
 }
 

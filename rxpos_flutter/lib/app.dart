@@ -17,6 +17,7 @@ import 'core/data/pharmacy_providers.dart';
 import 'core/theme/themes.dart';
 import 'core/theme/fonts.dart';
 import 'core/theme/theme_choice.dart';
+import 'core/theme/behaviour.dart';
 import 'features/sync_status/application/sync_controller.dart';
 import 'features/auth/application/session_controller.dart';
 
@@ -41,6 +42,9 @@ class RxposApp extends ConsumerWidget {
       });
     }
     final crash = ref.watch(appCrashProvider);
+    // 1.18.0 behaviours on this device (behaviour.dart): the island's messages, sheets for the pop-ups
+    final behaviour = ref.watch(behaviourProvider);
+    sheetsOn.value = behaviour.sheets;
     // a design system's palette is always allowed with it; the layout fits the device: a finger on Android, a mouse on Windows
     final design = look.designSystem;
     // this device's fonts (This device → Fonts), used once they are ready
@@ -50,8 +54,8 @@ class RxposApp extends ConsumerWidget {
         ? defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS
         : onAndroid || Platform.isIOS;
     var theme = design != null
-        ? buildTheme(paletteById(design.palette), surface: design.surface, vivid: look.level == 'vivid', tokens: design.tokens, touch: touch, headingFont: headingFont, bodyFont: bodyFont)
-        : buildTheme(paletteById(look.system && preview == null ? (twinOf(chosen, false) ?? paletteFor(false, allowed)) : chosen), accent: look.accent, surface: look.surface, vivid: look.level == 'vivid', gradient: look.gradient, touch: touch,
+        ? buildTheme(paletteById(design.palette), surface: design.surface, vivid: look.level == 'vivid', tokens: design.tokens, island: behaviour.island, touch: touch, headingFont: headingFont, bodyFont: bodyFont)
+        : buildTheme(paletteById(look.system && preview == null ? (twinOf(chosen, false) ?? paletteFor(false, allowed)) : chosen), accent: look.accent, surface: look.surface, vivid: look.level == 'vivid', gradient: look.gradient, gradAccents: look.gradAccents, preset: look.preset, island: behaviour.island, touch: touch,
             headingFont: headingFont, bodyFont: bodyFont);
     // compact tables (This device): 36 px rows in lists and tables
     final compact = ref.watch(deviceValueProvider(compactTablesKey)).value == '1';
@@ -70,7 +74,7 @@ class RxposApp extends ConsumerWidget {
       // following the system: its light and dark themes, live when it changes
       theme: theme,
       // 1.17.0: the chosen theme's own dark twin at night, else the pharmacy's dark theme
-      darkTheme: followSystem ? dense(buildTheme(paletteById(twinOf(chosen, true) ?? paletteFor(true, allowed)), accent: look.accent, surface: look.surface, vivid: look.level == 'vivid', gradient: look.gradient, touch: touch,
+      darkTheme: followSystem ? dense(buildTheme(paletteById(twinOf(chosen, true) ?? paletteFor(true, allowed)), accent: look.accent, surface: look.surface, vivid: look.level == 'vivid', gradient: look.gradient, gradAccents: look.gradAccents, preset: look.preset, island: behaviour.island, touch: touch,
           headingFont: headingFont, bodyFont: bodyFont)) : null,
       themeMode: followSystem ? ThemeMode.system : ThemeMode.light,
       routerConfig: ref.watch(appRouterProvider),

@@ -1,7 +1,13 @@
 // What's new (UI batch 3, B8): the same list as src/whatsnew.js (tests/unit-whatsnew.mjs checks they match). Shown
 // once on each device after an update, as a small card on the dashboard.
-const whatsNewVersion = '1.17.0';
+const whatsNewVersion = '1.18.0';
 const whatsNewItems = <(String, String)>[
+  ('Control Centre (top bar): dark mode, gradient, sync, the App Library and lock the till in one panel', '/'),
+  ('Lock the till (Ctrl+Shift+L or by itself after 2, 5 or 15 idle minutes); open it with your PIN or password', '/'),
+  ('A home screen for the dashboard: widgets in three sizes, a clock and a dock (Control Centre → Home screen)', '/'),
+  ('App Library: every page as app icons in folders, with a search', '/'),
+  ('Dynamic Island messages, and pop-ups as sheets you drag down to close (Control Centre)', '/'),
+  ('Tiling: a second page beside the one you work on, on wide screens (Control Centre → Tiling)', '/sales'),
   ('Gradients: a soft or bold background, gradient accents, and six presets for the menu (theme menu → Gradient)', '/device'),
   ('Dark keeps your theme: every theme has its own dark twin', '/device'),
   ('New styles: GNOME, KDE Plasma, elementary OS, Ubuntu, iOS and Liquid Glass (theme menu → Style)', '/device'),

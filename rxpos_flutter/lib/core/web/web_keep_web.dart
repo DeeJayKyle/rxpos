@@ -4,8 +4,8 @@
 //   - appearance and layout preferences (localStorage: no pharmacy or personal data in them)
 import 'package:web/web.dart' as web;
 
-const _tab = {'session', 'link'};
-final _prefs = RegExp(r'^device:(look|fonts|navCollapsed|navRail|medicineOrder|orderMethod|zoom|pos-layout|pos-sale-w|pos-pay-h(-fold)?|pos-favs|tip:.*|sound.*)$');
+const _tab = {'session', 'link', 'device:locked'}; // 1.18.0: a reload keeps the till locked
+final _prefs = RegExp(r'^device:(look|behaviour|fonts|navCollapsed|navRail|medicineOrder|orderMethod|zoom|pos-layout|pos-sale-w|pos-pay-h(-fold)?|pos-favs|tip:.*|sound.*)$');
 
 web.Storage? _where(String key) => _tab.contains(key) ? web.window.sessionStorage : _prefs.hasMatch(key) ? web.window.localStorage : null;
 

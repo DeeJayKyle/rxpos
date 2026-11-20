@@ -158,6 +158,7 @@ const SUITES = [
   ['look and readability (UI batch 3, E)', 'v85-look.mjs', ['.output/v85-look']],
   ['pages (UI batch 3, F)', 'v85-pages.mjs', ['.output/v85']],
   ['buying stock (UI batch 3, G)', 'v86-buying.mjs', ['.output/v86']],
+  ['1.18.0 behaviours: Control Centre, sheets, Dynamic Island, home screen, App Library, tiling, lock screen', 'v87-behaviours.mjs', ['.output/v87']],
   // every page on a PC and a phone, for design review: only on request (`npm test -- shots-all`)
   ...(process.argv[2] === 'shots-all' ? [['every page, PC and phone screenshots', 'shots-all.mjs', ['.output/all']]] : []),
   // every theme on the dashboard and Sales History, for the owner's review: only on request (`npm test -- shots-themes`)

@@ -20,10 +20,13 @@ part 'theme_choice.g.dart';
 class Look {
   // the React app's look from the start (src/themes.js startupTheme): Daylight Clinical, or OLED Black when the system is
   // dark, with no design system on top
-  const Look({this.theme = daylightClinicalPaletteId, this.system = true, this.accent = '', this.surface = 'flat', this.level = 'calm', this.beforePremium = '', this.design = '', this.gradient = 'off'});
+  const Look({this.theme = daylightClinicalPaletteId, this.system = true, this.accent = '', this.surface = 'flat', this.level = 'calm', this.beforePremium = '', this.design = '', this.gradient = 'off', this.gradAccents = false, this.preset = ''});
   final String theme, accent, surface, level, beforePremium;
   /// the page background's gradient (1.17.0): off, soft or bold
   final String gradient;
+  /// 1.18.0 (src/gradients.js): the main buttons in a two-tone sweep; a ready gradient for the menu and page bands
+  final bool gradAccents;
+  final String preset;
   /// the design system in use ('' for none)
   final String design;
   final bool system;
@@ -31,13 +34,14 @@ class Look {
   /// The design system in use, or null.
   DesignSystem? get designSystem => design.isEmpty ? null : designById(design);
 
-  Look copyWith({String? theme, bool? system, String? accent, String? surface, String? level, String? beforePremium, String? design, String? gradient}) => Look(
+  Look copyWith({String? theme, bool? system, String? accent, String? surface, String? level, String? beforePremium, String? design, String? gradient, bool? gradAccents, String? preset}) => Look(
         theme: theme ?? this.theme, system: system ?? this.system, accent: accent ?? this.accent, surface: surface ?? this.surface,
         level: level ?? this.level, beforePremium: beforePremium ?? this.beforePremium, design: design ?? this.design, gradient: gradient ?? this.gradient,
+        gradAccents: gradAccents ?? this.gradAccents, preset: preset ?? this.preset,
       );
 
   Map<String, Object?> toJson() => {'v': 4, 'theme': theme, 'mode': system ? 'system' : '', 'accent': accent, 'surface': surface, 'level': level,
-    'beforePremium': beforePremium, if (design.isNotEmpty) 'design': design, if (gradient != 'off') 'gradient': gradient};
+    'beforePremium': beforePremium, if (design.isNotEmpty) 'design': design, if (gradient != 'off') 'gradient': gradient, if (gradAccents) 'gradAccents': true, if (preset.isNotEmpty) 'preset': preset};
 
   static Look parse(String? v) {
     try {
@@ -57,6 +61,8 @@ class Look {
         beforePremium: '${j['beforePremium'] ?? ''}',
         design: designById('${j['design'] ?? ''}') != null && !oldGreen ? '${j['design']}' : '',
         gradient: j['gradient'] == 'soft' || j['gradient'] == 'bold' ? '${j['gradient']}' : 'off',
+        gradAccents: j['gradAccents'] == true,
+        preset: gradientPresets.any((x) => x.$1 == j['preset']) ? '${j['preset']}' : '',
       );
     } catch (_) {
       return const Look();
@@ -112,6 +118,8 @@ class LookController extends AsyncNotifier<Look> {
   Future<void> surface(String id) async => save((await _now()).copyWith(surface: id, design: ''));
   Future<void> level(String id) async => save((await _now()).copyWith(level: id));
   Future<void> gradient(String id) async => save((await _now()).copyWith(gradient: id));
+  Future<void> gradAccents(bool on) async => save((await _now()).copyWith(gradAccents: on));
+  Future<void> preset(String id) async => save((await _now()).copyWith(preset: id));
 
   /// Premium UI on: Midnight Pro (remembering the theme before); off: back to that theme.
   Future<void> premium(bool on, List<Palette> allowed) async {

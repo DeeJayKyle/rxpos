@@ -24,9 +24,11 @@ import './styles/duotone.css'; // every page in its theme's two colours
 import './styles/glossy.css'; // the glossy dashboard (every theme since 1.15.0)
 import './styles/cleanup.css'; // the 1.16.0 clean-up
 import './styles/os-styles.css'; // the 1.17.0 Linux and Apple styles and the Terminal theme
-import './styles/gradients.css'; // last: the 1.17.0 gradient choices
+import './styles/gradients.css';
+import './styles/behaviour.css'; // last: the 1.17.0 gradient choices, then the 1.18.0 behaviours
 import { applyTheme, startupTheme, savedAccent } from './themes.js';
 import { applyStyle, savedStyle } from './surface.js';
+import { applyBehaviour } from './behaviour.js';
 import { applyLevel, savedLevel } from './vivid.js';
 import { applyGradient } from './gradients.js';
 import { isAndroid, isNative, isTouch } from './platform.js';
@@ -65,6 +67,7 @@ applyTheme(startupTheme(), savedAccent());
 applyStyle(savedStyle());
 applyLevel(savedLevel());
 applyGradient();
+applyBehaviour();
 
 class ErrorBoundary extends React.Component {
   state = { error: null };

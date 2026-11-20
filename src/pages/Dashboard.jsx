@@ -15,6 +15,8 @@ import { deviceSettings, setDevice, onDevice } from '../device.js';
 import { PERIODS, PERIOD_WORDS, VS_WORDS, periodFigures, topMedicines, stockHealth } from '../dashboard.js';
 import { shortText } from '../kits.js';
 import { dateLocale } from '../showdate.js';
+import { HomeScreen, ClockWidget, FigureWidget } from '../components/HomeScreen.jsx';
+import { useBehaviour } from '../components/ControlCentre.jsx';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const TOP_BY = [['amount', 'Amount'], ['qty', 'Quantity'], ['profit', 'Profit']];
@@ -47,6 +49,16 @@ const WIDGETS = [
   { id: 'totals', name: 'Medicines, stock value, customers, this month', span: 12, on: false },
   { id: 'monthly', name: 'Monthly sales table', span: 6, on: false },
 ];
+// 1.18.0 Home screen: every widget with its starting size there, and the small ones made for it (clock, figures)
+const HOME_SIZES = { figures: 'l', bento: 'l', chart: 'l', health: 'm', top: 'm', recent: 'm', busy: 'l', checks: 'l', alerts: 'l', promote: 'm', weather: 'm', totals: 'l', monthly: 'm' };
+const HOME_ON = ['clock', 'w-sales', 'w-low', 'w-expiry', 'chart', 'health', 'top', 'recent'];
+const HOME_WIDGETS = [
+  { id: 'clock', name: 'Clock', size: 's' },
+  { id: 'w-sales', name: "Today's sales", size: 's' },
+  { id: 'w-low', name: 'Low stock', size: 's' },
+  { id: 'w-expiry', name: 'Expiring', size: 's' },
+  ...WIDGETS.map((w) => ({ id: w.id, name: w.name, size: HOME_SIZES[w.id] || 'm' })),
+].map((w) => ({ ...w, home: HOME_ON.includes(w.id) }));
 /** This device's dashboard: the period chip, the cards' order and which are hidden */
 export function dashLayout(d = deviceSettings()) {
   const saved = d.dash || {};
@@ -67,6 +79,7 @@ export default function Dashboard() {
   const [editing, setEditing] = useState(false);
   const [chart, setChart] = useState('daily');
   const navigate = useNavigate();
+  const behaviour = useBehaviour();
   const ins = useInsights();
   const promote = [ins.shortExpiry[0], ins.highMargin[0], ins.slow[0], ins.highMargin[1], ins.shortExpiry[1]].filter(Boolean).filter((x, i, a) => a.findIndex((y) => y.p.id === x.p.id) === i).slice(0, 4);
   const warn = db.settings.expiryWarnDays || 90;
@@ -239,6 +252,15 @@ export default function Dashboard() {
       </div>
     ),
   };
+  const td = m.byDay[today()] || { n: 0, total: 0 };
+  Object.assign(cards, {
+    clock: () => <ClockWidget />,
+    'w-sales': () => <FigureWidget to="/sales" state={{ from: today(), to: today() }} label="Today's sales" value={fmtShort(td.total)} sub={`${td.n} sale${td.n === 1 ? '' : 's'}`} tone="teal" Icon={Banknote} />,
+    'w-low': () => <FigureWidget to="/inventory" state={{ filter: 'low' }} label="Low stock" value={lowStock.length} sub="at or below reorder level" tone={lowStock.length ? 'amber' : 'ok'} Icon={PackageX} />,
+    'w-expiry': () => <FigureWidget to="/expiry" label="Expiring" value={exp.soon + exp.expired} sub={`${exp.expired} already expired`} tone={exp.expired ? 'red' : exp.soon ? 'amber' : 'ok'} Icon={CalendarClock} />,
+  });
+  const dock = [['/pos', 'Sell', ShoppingCart, 'pos.sell'], ['/inventory', 'Inventory', Pill, 'inventory.view'], ['/sales', 'Sales', ReceiptText, 'sales.view'], ['/customers', 'Customers', Users, 'customers'], ['/reports', 'Reports', TrendingUp, 'reports']]
+    .filter(([, , , perm]) => can(perm)).map(([to, label, Icon]) => ({ to, label, Icon }));
   const spans = Object.fromEntries(WIDGETS.map((w) => [w.id, w.span]));
   let n = 0;
 
@@ -259,7 +281,7 @@ export default function Dashboard() {
         <div className="seg period-chips" role="radiogroup" aria-label="Period">
           {PERIODS.map(([k, l]) => <button key={k} type="button" role="radio" aria-checked={period === k} className={period === k ? 'on' : ''} onClick={() => saveDash({ period: k })}>{l}</button>)}
         </div>
-        <button type="button" className="btn sm ghost" onClick={() => setEditing(true)}><SlidersHorizontal size={15} />Edit widgets</button>
+        {!behaviour.home && <button type="button" className="btn sm ghost" onClick={() => setEditing(true)}><SlidersHorizontal size={15} />Edit widgets</button>}
       </div>
 
       <WhatsNewCard db={db} />
@@ -273,13 +295,13 @@ export default function Dashboard() {
         </div>
       )}
 
-      <div className="dash-grid">
+      {behaviour.home ? <HomeScreen catalogue={HOME_WIDGETS} cards={cards} dock={dock} /> : <div className="dash-grid">
         {layout.order.filter((id) => layout.shown.has(id)).map((id) => {
           const el = cards[id]();
           if (!el) return null;
           return <div key={id} className={'dash-cell span-' + spans[id]} data-widget={id} style={{ '--i': n++ }}>{el}</div>;
         })}
-      </div>
+      </div>}
       {editing && <EditWidgets layout={layout} onClose={() => setEditing(false)} />}
     </div>
   );

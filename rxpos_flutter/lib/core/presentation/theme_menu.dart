@@ -103,6 +103,29 @@ class ThemeMenu extends ConsumerWidget {
                   onSelectionChanged: (v) => ctl.gradient(v.first),
                 ),
               ),
+              // 1.18.0 (src/gradients.js): gradient buttons, and a ready gradient for the menu and the page bands
+              SwitchListTile(
+                key: const Key('grad-accents'),
+                dense: true,
+                title: const Text('Gradient buttons'),
+                subtitle: const Text('The main buttons in the theme\'s two colours'),
+                value: look.gradAccents,
+                onChanged: ctl.gradAccents,
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+                child: Wrap(spacing: 6, runSpacing: 6, children: [
+                  ChoiceChip(key: const Key('preset-none'), label: const Text('No preset'), selected: look.preset.isEmpty, onSelected: (_) => ctl.preset('')),
+                  for (final (id, name, a, b) in gradientPresets)
+                    ChoiceChip(
+                      key: ValueKey('preset-$id'),
+                      avatar: Container(width: 16, height: 16, decoration: BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: [Color(a), Color(b)]))),
+                      label: Text(name),
+                      selected: look.preset == id,
+                      onSelected: (_) => ctl.preset(id),
+                    ),
+                ]),
+              ),
               head('Colour'),
               for (final (id, name, hint) in colourLevels)
                 ListTile(
