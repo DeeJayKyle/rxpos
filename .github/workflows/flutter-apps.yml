@@ -74,7 +74,7 @@ jobs:
           sed 's/^\s*"ai":.*$//' wrangler.jsonc > wrangler.test.jsonc
           node node_modules/wrangler/bin/wrangler.js dev -c wrangler.test.jsonc --port 8791 --persist-to "$RUNNER_TEMP/cloud" \
             --var DB_BACKEND: --var SYNC_KEY:ci-sync-key-0123456789abcdef0123 --var OWNER_KEY:ci-owner-key-0123456789abcdef0123 \
-            --var PUBLIC_URL:http://127.0.0.1:8791 > "$RUNNER_TEMP/wrangler.log" 2>&1 &
+            --var PUBLIC_URL:http://127.0.0.1:8791 --var TEST_CLOUD:1 > "$RUNNER_TEMP/wrangler.log" 2>&1 & # TEST_CLOUD: fictional data, no owner approval needed (worker/ownerlaw.js)
           for i in $(seq 1 60); do curl -sf http://127.0.0.1:8791/api/health && exit 0; sleep 2; done
           cat "$RUNNER_TEMP/wrangler.log"; exit 1
       - name: Tests against the real cloud code
