@@ -343,4 +343,10 @@ export const DEFAULT_PALETTE = { light: 'mint-teal', dark: 'navy-teal' };
 export const paletteFor = (base, list = THEMES, preferred) =>
   (list.find((t) => t.id === DEFAULT_PALETTE[base]) || list.find((t) => t.id === currentThemeId(preferred) && t.base === base) || list.find((t) => t.base === base) || list[0] || THEMES[0]).id;
 /** The theme to paint at start-up: the saved palette, or the system's light / dark when following it (or nothing is saved yet) */
-export const startupTheme = () => (savedMode() === 'system' || !savedTheme() ? paletteFor(systemDark() ? 'dark' : 'light') : savedTheme());
+export const startupTheme = () => {
+  if (!savedTheme()) return paletteFor(systemDark() ? 'dark' : 'light');
+  if (savedMode() !== 'system') return savedTheme();
+  // 1.17.0: following the system keeps this device's theme in the system's light or dark (its twin), as a live switch does
+  const base = systemDark() ? 'dark' : 'light';
+  return twinFor(savedTheme(), base) || paletteFor(base);
+};
