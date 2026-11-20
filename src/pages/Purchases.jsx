@@ -18,7 +18,7 @@ import { DateRange } from '../forms.jsx';
 import { useListControls } from '../listcontrols.jsx';
 import { ask, toast } from '../feedback.jsx';
 import { newInternalBarcode } from '../barcode.jsx';
-import { invoicePages, readInvoice, rankProducts, learnedNames, matchSupplier, normDate, pageBlob } from '../invoiceScan.js';
+import { invoicePages, readInvoice, rankProducts, learnedNames, matchSupplier, normDate, pageBlob, lastBatchOf, fillFromLast } from '../invoiceScan.js';
 import { uploadAttachment } from '../attach.jsx';
 import { safeFileUrl } from '../safeurl.js';
 import { CameraButton, CameraScanner } from '../camscan.jsx';
@@ -109,6 +109,15 @@ export function AddStock() {
       ...(k ? { recvPack: k.name, recvSize: Number(k.size) } : {}), ...extra };
     return { ...l, total: l.cost !== '' ? numOrBlank(Number(l.cost) * Number(l.qty || 0)) : '' };
   };
+  // A scanned line whose batch or expiry was missing or doubtful: the medicine's last delivery's batch and expiry, marked
+  // for the person to check (the owner's rule, 2026-11-20); nothing is taken when they were read well
+  const withLast = (x, productId) => {
+    if (!x.read || !productId || productId === NEW) return x;
+    const f = fillFromLast({ batch: x.batch, expiry: x.expiry, check: x.read.check || [] }, lastBatchOf(db.batches, productId), today());
+    if (!f.used.length) return x;
+    const check = [...new Set([...(x.read.check || []), ...f.used])];
+    return { ...x, batch: f.batch, expiry: f.expiry, read: { ...x.read, check, fromLast: f.used, note: [x.read.note, `${f.used.join(' and ')} from the last delivery: check against the pack`].filter(Boolean).join(' · ') } };
+  };
   // What was read off an invoice → Add Stock lines (medicines matched, costs and prices worked out) and a summary
   const fromScan = (r, markup) => {
     const sup = matchSupplier(r.supplier, db.suppliers);
@@ -123,7 +132,7 @@ export function AddStock() {
       const read = { name: it.name, unclear: !!it.unclear, matched: !!p, ...(p ? { matchWhy: ranked[0].why } : {}), ...(suggest.length ? { suggest } : {}), ...(it.check?.length ? { check: it.check } : {}), ...(it.alt ? { alt: it.alt } : {}), ...(it.why ? { why: it.why } : {}), ...(it.note ? { note: it.note } : {}), ...(it.page ? { page: it.page } : {}) };
       // G1: where the line was on the invoice, when the reading gave it (page and x, y, w, h as fractions of the page)
       const box = it.box && [it.box.x, it.box.y, it.box.w, it.box.h].every((v) => Number.isFinite(v) && v >= 0 && v <= 1) ? { page: Number(it.box.page) || 0, x: it.box.x, y: it.box.y, w: it.box.w, h: it.box.h } : undefined;
-      const base = { qty, batch: it.batch || '', expiry: normDate(it.expiry), read, ...(box ? { box } : {}) };
+      const base = withLast({ qty, batch: it.batch || '', expiry: normDate(it.expiry), read, ...(box ? { box } : {}) }, p?.id);
       const cost = it.unitCost || (it.lineTotal && qty ? it.lineTotal / qty : 0);
       // packs or single units? whichever makes the invoice's price nearest the medicine's known cost per unit
       const size = p && cost > 0 && p.cost > 0 ? [1, ...packsOf(p).map((k) => Number(k.size))].reduce((b, z) => (Math.abs(Math.log(cost / z / p.cost)) < Math.abs(Math.log(cost / b / p.cost)) ? z : b), 1) : 0;
@@ -340,7 +349,7 @@ export function AddStock() {
     const p = products.find((x) => x.id === id);
     if (!p) return replaceLine(l.key, { ...l, productId: '' });
     // a scanned line keeps the cost read off the invoice
-    const next = lineFor(p, { qty: l.qty, batch: l.batch, expiry: l.expiry, read: l.read }, form.markup);
+    const next = lineFor(p, withLast({ qty: l.qty, batch: l.batch, expiry: l.expiry, read: l.read }, p.id), form.markup);
     replaceLine(l.key, l.read && (l.cost !== '' || l.total !== '') ? editLine(next, l.by === 'total' ? { total: l.total } : { cost: l.cost }, priceFor) : next);
   };
   const discard = () => { setForm(blank()); setScanned(null); setChecked(false); setRestored(false); try { localStorage.removeItem(draftKey); } catch { /* ignore */ } };

@@ -16,6 +16,7 @@ import '../../../core/presentation/widgets.dart';
 import '../../auth/application/session_controller.dart';
 import '../domain/shifts.dart';
 import 'day_close_card.dart';
+import 'shift_prompts.dart' show PastSalesShifts;
 
 /// Shifts & cash-up: open a shift with a float, see it live, close it by counting the drawer; past shifts.
 class ShiftsScreen extends ConsumerWidget {
@@ -47,7 +48,7 @@ class ShiftsScreen extends ConsumerWidget {
                 branchId: (await ref.read(pharmacyProvider.future)).branch);
           }, icon: const Icon(Icons.play_arrow), label: const Text('Open shift'))
         else
-          FilledButton.icon(onPressed: () => _close(context, ref, open, sales, st), icon: const Icon(Icons.lock_outline), label: const Text('Close shift')),
+          FilledButton.icon(onPressed: () => closeShiftFlow(context, ref, open, sales, st), icon: const Icon(Icons.lock_outline), label: const Text('Close shift')),
       ],
       scroll: true,
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -66,14 +67,17 @@ class ShiftsScreen extends ConsumerWidget {
           const SizedBox(height: 16),
         ],
         if (can.contains('day.close') || session.role == 'admin') ...[const DayCloseCard(), const SizedBox(height: 16)],
+        if (session.role == 'admin') PastSalesShifts(sales: sales, shifts: rows.map(Shift.fromRecord).toList(), approvedBy: session.userName),
         Text('Shifts', style: Theme.of(context).textTheme.titleMedium),
         if (shifts.isEmpty) const Text('No shifts yet.'),
         for (final x in shifts)
           ListTile(
             title: Text('${x.user} · ${x.openedAt.replaceFirst('T', ' ').split('.').first}${x.isOpen ? ' · OPEN' : ''}'),
-            subtitle: Text(x.isOpen ? 'Float ${st.money(x.float)}' : 'Counted ${st.money(x.counted)} · expected ${st.money(x.expected)}'),
+            subtitle: Text(x.isOpen ? 'Float ${st.money(x.float)}' : x.raw['rebuilt'] == true ? 'Rebuilt from sales (no cash count) · ${st.money(x.expected)} expected' : 'Counted ${st.money(x.counted)} · expected ${st.money(x.expected)}'),
             trailing: x.isOpen
                 ? null
+                : x.raw['rebuilt'] == true
+                ? TextButton.icon(onPressed: () => Printing.layoutPdf(name: 'Shift report', onLayout: (_) => shiftReportPdf(x, st)), icon: const Icon(Icons.print_outlined, size: 18), label: const Text('Report'))
                 : Row(mainAxisSize: MainAxisSize.min, children: [
                     Text(x.variance == 0 ? 'Balanced' : '${x.variance >= 0 ? '+' : ''}${st.money(x.variance)}',
                         style: TextStyle(fontWeight: FontWeight.w700, color: x.variance.abs() < 1 ? context.tones.ok : x.variance < 0 ? Theme.of(context).colorScheme.error : context.tones.warn)),
@@ -83,18 +87,20 @@ class ShiftsScreen extends ConsumerWidget {
       ]),
     );
   }
+}
 
-  Future<void> _close(BuildContext context, WidgetRef ref, Shift open, List<Sale> sales, PharmacySettings st) async {
-    final v = await editRecord(context, title: 'Count the drawer', save: 'Close shift', fields: [
-      for (final n in notes) FormFieldSpec('$n', '${st.money(n)} notes / coins (how many)', kind: FieldKind.number),
-      const FormFieldSpec('coins', 'Other coins (amount)', kind: FieldKind.number),
-      const FormFieldSpec('note', 'Note'),
-    ]);
-    if (v == null) return;
-    final rec = await closeShift(ref.read(recordStoreProvider), open, sales,
-        counts: {for (final e in v.entries) if (e.value is num) e.key: e.value as num}, note: '${v['note'] ?? ''}', blind: st.raw['blindCashUp'] == true);
-    if (context.mounted) say(context, 'Shift closed: counted ${st.money(rec['counted'] as num)}, ${((rec['variance'] as num) >= 0) ? 'over' : 'short'} ${st.money((rec['variance'] as num).abs())}');
-  }
+/// Close a shift by counting the drawer (the Shifts page, and "End shift" on signing out); true once it is closed.
+Future<bool> closeShiftFlow(BuildContext context, WidgetRef ref, Shift open, List<Sale> sales, PharmacySettings st) async {
+  final v = await editRecord(context, title: 'Count the drawer', save: 'Close shift', fields: [
+    for (final n in notes) FormFieldSpec('$n', '${st.money(n)} notes / coins (how many)', kind: FieldKind.number),
+    const FormFieldSpec('coins', 'Other coins (amount)', kind: FieldKind.number),
+    const FormFieldSpec('note', 'Note'),
+  ]);
+  if (v == null) return false;
+  final rec = await closeShift(ref.read(recordStoreProvider), open, sales,
+      counts: {for (final e in v.entries) if (e.value is num) e.key: e.value as num}, note: '${v['note'] ?? ''}', blind: st.raw['blindCashUp'] == true);
+  if (context.mounted) say(context, 'Shift closed: counted ${st.money(rec['counted'] as num)}, ${((rec['variance'] as num) >= 0) ? 'over' : 'short'} ${st.money((rec['variance'] as num).abs())}');
+  return true;
 }
 
 /// The close-of-day (Z) report of a closed shift, on an 80 mm roll (src/pages/Shifts.jsx).
@@ -123,8 +129,12 @@ Future<Uint8List> shiftReportPdf(Shift x, PharmacySettings st) {
         pw.Divider(),
         row('Opening float', st.money(x.float)),
         row('Expected cash', st.money(x.expected)),
-        row('Counted cash', st.money(x.counted)),
-        row(x.variance == 0 ? 'BALANCED' : x.variance > 0 ? 'OVER' : 'SHORT', st.money(x.variance.abs()), bold: true),
+        if (x.raw['rebuilt'] == true)
+          row('Cash count', 'none (rebuilt from sales)')
+        else ...[
+          row('Counted cash', st.money(x.counted)),
+          row(x.variance == 0 ? 'BALANCED' : x.variance > 0 ? 'OVER' : 'SHORT', st.money(x.variance.abs()), bold: true),
+        ],
         if (x.note.isNotEmpty) pw.Text('Note: ${x.note}'),
         pw.SizedBox(height: 16),
         pw.Text('Cashier signature ____________', textAlign: pw.TextAlign.center),

@@ -67,8 +67,7 @@ check('POS: sulphate is found as sulfate', await p.evaluate(() => /Ferrous Sulph
 await setVal(p, '.search-row input', ''); await wait(200);
 await p.evaluate(() => [...document.querySelectorAll('.view-chip')].find((x) => x.textContent.trim() === 'In stock')?.click()); await wait(300);
 check('POS: "In stock" hides medicines with no stock', await p.evaluate(() => ![...document.querySelectorAll('.product')].some((x) => /Ferrous/.test(x.innerText))));
-await p.evaluate(() => [...document.querySelectorAll('.view-chip')].find((x) => x.textContent.trim() === 'Recent')?.click()); await wait(300);
-check('POS: "Recent" lists what sold recently at this branch', (await p.evaluate(() => [...document.querySelectorAll('.product')].map((x) => x.innerText.split('\n')[0]).join(','))) === 'Zinc 20mg');
+check('POS: no "Recent" filter (the owner\'s rule, 2026-11-20)', await p.evaluate(() => ![...document.querySelectorAll('.view-chip')].some((x) => x.textContent.trim() === 'Recent')));
 await p.evaluate(() => [...document.querySelectorAll('.view-chip')].find((x) => x.textContent.trim() === 'All')?.click()); await wait(200);
 await p.evaluate(() => document.querySelector('.product-wrap .fav-btn')?.click()); await wait(200);
 await p.evaluate(() => [...document.querySelectorAll('.view-chip')].find((x) => x.textContent.includes('Favourites'))?.click()); await wait(300);

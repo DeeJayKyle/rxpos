@@ -26,7 +26,7 @@ export const setPersonGuard = (fn) => { personGuard = fn; };
 /** Does the device's token belong to someone other than the person signed in? (a pharmacy sync key never does) */
 export const borrowedToken = (cfg, userId) => !!cfg?.key && String(cfg.key).startsWith('u.') && !!userId && cfg.keyUser !== userId;
 
-async function call(cfg, path, { method = 'GET', body, timeout = 20000, personal = false } = {}) {
+async function call(cfg, path, { method = 'GET', body, timeout = 20000, personal = false, headers: extra } = {}) {
   if (personal && personGuard) cfg = await personGuard(cfg); // throws when the person does not confirm
   if (!cfg?.url) throw new Error('This device is not connected to the RxPOS cloud. Set it up in Settings → Online sync.');
   if (plainHttpToInternet(cfg.url)) throw new Error(INSECURE_LINK); // 2026-11 audit: no secrets over plain http to the internet
@@ -36,7 +36,7 @@ async function call(cfg, path, { method = 'GET', body, timeout = 20000, personal
   try {
     const res = await fetch(cfg.url + path, {
       method, signal: ctl.signal,
-      headers: { 'Content-Type': 'application/json', ...(cfg.key ? { Authorization: 'Bearer ' + cfg.key } : {}) },
+      headers: { 'Content-Type': 'application/json', ...(cfg.key ? { Authorization: 'Bearer ' + cfg.key } : {}), ...extra },
       body: body ? JSON.stringify(body) : undefined,
     });
     const j = await res.json().catch(() => ({}));
@@ -56,7 +56,8 @@ export const resetPassword = (url, body) => call({ url: cleanUrl(url) }, '/api/p
 export const googleClient = (url) => call({ url: cleanUrl(url) }, '/api/google-client', { timeout: 10000 });
 export const resetWithGoogle = (url, body) => call({ url: cleanUrl(url) }, '/api/password/google', { method: 'POST', body, timeout: 30000 });
 // Owner console (RxPOS vendor): the owner key is sent as the bearer token
-export const ownerApi = (url, ownerKey, path, body) => call({ url: cleanUrl(url), key: ownerKey }, '/api/owner' + path, { method: body ? 'POST' : 'GET', body, timeout: 60000 });
+// the owner's console: the owner, signed in and clicking, is the approval the owner's law asks for (worker/ownerlaw.js)
+export const ownerApi = (url, ownerKey, path, body) => call({ url: cleanUrl(url), key: ownerKey }, '/api/owner' + path, { method: body ? 'POST' : 'GET', body, timeout: 60000, headers: body ? { 'X-Owner-Approved': 'yes' } : undefined });
 // Owner sign-in (password / master key, Google, GitHub)
 export const ownerAuthConfig = (url) => call({ url: cleanUrl(url) }, '/api/owner-auth/config', { timeout: 15000 });
 export const ownerLogin = (url, password) => call({ url: cleanUrl(url) }, '/api/owner-auth/login', { method: 'POST', body: { password }, timeout: 30000 });
@@ -77,6 +78,7 @@ export const dailyStockLink = (cfg, renew = false) => call(cfg, '/api/daily-stoc
 // AI (Cloudflare Workers AI): read a prescription photo; make a drug quiz
 export const aiPrescription = (cfg, image) => call(cfg, '/api/ai/prescription', { method: 'POST', body: { image }, timeout: 90000 });
 export const aiInvoice = (cfg, image) => call(cfg, '/api/ai/invoice', { method: 'POST', body: { image }, timeout: 120000 });
+export const aiNames = (cfg, items) => call(cfg, '/api/ai/names', { method: 'POST', body: { items }, timeout: 90000 });
 export const aiQuiz = (cfg, drugs, count = 8) => call(cfg, '/api/ai/quiz', { method: 'POST', body: { drugs, count }, timeout: 90000 });
 export const cloudConfig = (cfg) => call(cfg, '/api/config', { timeout: 8000 });
 export const payRequest = (cfg, body) => call(cfg, '/api/pay/request', { method: 'POST', body, timeout: 30000 });

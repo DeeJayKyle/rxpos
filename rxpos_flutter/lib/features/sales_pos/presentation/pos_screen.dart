@@ -116,8 +116,9 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     });
   }
 
-  /// '' all, 'instock', 'recent', 'fav', or 'cat:' + a category (like the React till's filters)
-  String _view = '';
+  /// 'instock' (the default: the owner's rule 2026-11-20), '' all, 'fav', 'kits' or 'cat:' + a category (like the
+  /// React till's filters); no Recent list
+  String _view = 'instock';
 
   SaleController get _sale => ref.read(saleControllerProvider(widget.wholesale).notifier);
 
@@ -447,19 +448,21 @@ class _PosScreenState extends ConsumerState<PosScreen> {
       error: (e, _) => Center(child: Text('Could not open the pharmacy on this device: $e')),
       data: (d) {
         final favs = _favs(ref.watch(deviceValueProvider('pos-favs')).value);
-        final recent = recentIds(ref.watch(tableProvider('sales')).value ?? const [], d.branch);
-        final pool = filterProducts(d, _view, favs: favs, recent: recent);
+        // a typed search looks through every medicine (an out-of-stock one is found and says so); before typing, the
+        // list follows the chip, A–Z
+        final pool = filterProducts(d, _view, favs: favs);
+        final searchPool = _view == 'instock' ? filterProducts(d, '', favs: favs) : pool;
         final results = _view == 'kits'
             ? const <Product>[]
             : _q.trim().isEmpty
-            ? (_view == 'recent' ? pool : ([...pool]..sort((a, b) => (d.stockOf(b.id) > 0 ? 1 : 0) - (d.stockOf(a.id) > 0 ? 1 : 0)))).take(120).toList()
-            : searchProducts(pool, _q, stockOf: (p) => d.stockOf(p.id)).take(120).toList();
+            ? ([...pool]..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()))).take(120).toList()
+            : searchProducts(searchPool, _q, stockOf: (p) => d.stockOf(p.id)).take(120).toList();
         // 1.10 kits first (all, in stock and the Kits filter), matched by name, what they hold or their barcode
         final ql = _q.trim().toLowerCase();
         final kits = _view == '' || _view == 'instock' || _view == 'kits'
             ? [
                 for (final k in d.tillKits)
-                  if ((ql.isEmpty || '${k.name} ${k.contents} ${k.barcode}'.toLowerCase().contains(ql)) && (_view != 'instock' || k.stock > 0)) k,
+                  if ((ql.isEmpty || '${k.name} ${k.contents} ${k.barcode}'.toLowerCase().contains(ql)) && (_view != 'instock' || ql.isNotEmpty || k.stock > 0)) k,
               ]
             : const <KitView>[];
         final wide = windowClass(context) == WindowClass.expanded;
@@ -484,7 +487,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
             }
             setState(() => _q = q);
             _submitSearch(
-                d, _view == 'kits' || q.trim().isEmpty ? const <Product>[] : searchProducts(pool, q, stockOf: (p) => d.stockOf(p.id)).take(120).toList());
+                d, _view == 'kits' || q.trim().isEmpty ? const <Product>[] : searchProducts(searchPool, q, stockOf: (p) => d.stockOf(p.id)).take(120).toList());
           },
           onPick: _add,
           kits: kits,
@@ -916,10 +919,9 @@ List<String> categoriesOf(List<Product> products) {
   return out;
 }
 
-List<Product> filterProducts(PharmacyData d, String view, {required Set<String> favs, required List<String> recent}) {
+List<Product> filterProducts(PharmacyData d, String view, {required Set<String> favs}) {
   if (view == 'instock') return d.products.where((p) => d.stockOf(p.id) > 0).toList();
   if (view == 'fav') return d.products.where((p) => favs.contains(p.id)).toList();
-  if (view == 'recent') return [for (final id in recent) ?d.byId[id]];
   if (view.startsWith('cat:')) return d.products.where((p) => p.category.trim() == view.substring(4)).toList();
   return d.products;
 }
@@ -1077,9 +1079,8 @@ class _ProductPanel extends StatelessWidget {
               scrollDirection: Axis.horizontal,
               children: [
                 for (final (v, label) in [
-                  ('', 'All'),
                   ('instock', 'In stock'),
-                  ('recent', 'Recent'),
+                  ('', 'All'),
                   ('fav', 'Favourites'),
                   if (data.tillKits.isNotEmpty) ('kits', 'Kits'),
                   for (final c in categories) ('cat:$c', c),
@@ -1103,8 +1104,8 @@ class _ProductPanel extends StatelessWidget {
                     child: Text(
                       view == 'fav'
                           ? 'No favourites yet. Tap the star on a medicine to keep it here.'
-                          : view == 'recent'
-                          ? 'Nothing sold here yet'
+                          : view == 'instock'
+                          ? 'Nothing in stock here yet'
                           : 'No medicines here',
                     ),
                   )

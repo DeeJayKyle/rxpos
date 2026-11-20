@@ -1,8 +1,9 @@
 // Matching invoice lines (printed or handwritten) to the pharmacy's medicines (src/invoiceMatch.js) and cleaning up
 // a photo of an invoice before it is read (src/pageenhance.js). Fictional medicines and suppliers.
 import assert from 'node:assert/strict';
-import { nameWords, strengthsOf, wordLike, rankProducts, matchProduct, matchSupplier, learnedNames } from '../src/invoiceMatch.js';
+import { nameWords, strengthsOf, wordLike, rankProducts, matchProduct, matchSupplier, learnedNames, lastBatchOf, fillFromLast } from '../src/invoiceMatch.js';
 import { enhancePixels } from '../src/pageenhance.js';
+import { normDate } from '../src/invoicedates.js';
 let passed = 0;
 const ok = (name, fn) => { fn(); passed++; console.log('PASS ', name); };
 
@@ -101,5 +102,17 @@ ok('photo clean-up: a blank page is left as it is', () => {
   const px = new Uint8ClampedArray(20 * 20 * 4).fill(200);
   enhancePixels(px, 20, 20);
   assert.ok(px[0] >= 200);
+});
+ok('an expiry with a month only is the 30th, the 28th in February (leap years too); a written day is kept', () => {
+  assert.deepEqual(['01/2028', 'Feb 2028', '2027-02', 'Dec-27', '06/2028', '31/01/2028'].map((x) => normDate(x)), ['2028-01-30', '2028-02-28', '2027-02-28', '2027-12-30', '2028-06-30', '2028-01-31']);
+});
+ok('batch or expiry not read well: the last delivery\'s, to be checked; read well: kept', () => {
+  const B = [{ productId: 'pcm', batch: 'OLD1', expiry: '2027-01-30', received: '2026-01-02' }, { productId: 'pcm', batch: 'PC2405', expiry: '2028-03-30', received: '2026-10-01' }, { productId: 'mtz', batch: 'M9', expiry: '2029-01-30', received: '2026-11-01' }];
+  assert.equal(lastBatchOf(B, 'pcm').batch, 'PC2405');
+  assert.equal(lastBatchOf(B, 'none'), null);
+  assert.deepEqual(fillFromLast({ batch: '', expiry: '' }, lastBatchOf(B, 'pcm'), '2026-11-20'), { batch: 'PC2405', expiry: '2028-03-30', used: ['batch', 'expiry'] });
+  assert.deepEqual(fillFromLast({ batch: 'PC24O5', expiry: '2028-03-30', check: ['batch'] }, lastBatchOf(B, 'pcm'), '2026-11-20'), { batch: 'PC2405', expiry: '2028-03-30', used: ['batch'] });
+  assert.deepEqual(fillFromLast({ batch: 'NEW77', expiry: '2029-05-30' }, lastBatchOf(B, 'pcm'), '2026-11-20').used, [], 'read well: nothing taken');
+  assert.deepEqual(fillFromLast({ batch: 'X', expiry: '' }, { batch: 'Y', expiry: '2025-01-30' }, '2026-11-20').used, [], 'an expiry that has passed is not offered');
 });
 console.log(`\n${passed} passed, 0 failed`);

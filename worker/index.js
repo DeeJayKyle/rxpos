@@ -44,6 +44,8 @@ import { snapshotList, snapshotChunk, pruneSnapshots } from './snapshot.js';
 import { dmHidden } from './policy.js';
 import { balancesAt, validWindow, pruneWindows } from './window.js';
 import { keeps as keepsInWindow, WINDOWED } from '../src/historywindow.js';
+import { OWNER_LAW, writesData, ownerApproved } from './ownerlaw.js';
+import { safeRename } from '../src/medname.js';
 // The built-in roles (cashier, dispenser, pharmacist, manager) live only in the app; they aren't stored as records.
 // The server needs their permissions too, so a permission check doesn't wrongly refuse a built-in role (1.1/1.9).
 const DEFAULT_ROLE_PERMS = Object.fromEntries(DEFAULT_ROLES.map((r) => [r.id, new Set(r.permissions)]));
@@ -196,7 +198,7 @@ function ensureSchema(db) {
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'Authorization, Content-Type',
+  'Access-Control-Allow-Headers': 'Authorization, Content-Type, X-Owner-Approved',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
   'Access-Control-Max-Age': '86400', // browsers remember the permission check for a day: one round trip less per sync
 };
@@ -1256,6 +1258,8 @@ async function owner(env, req, url, body) {
   if (backupOnly && !((parts[0] === 'backup' && req.method === 'GET') || (parts[0] === 'heartbeat' && req.method === 'POST'))) throw httpError(403, 'The backup key can only download backups.');
   if (!backupOnly && !(await isOwner(env, bearer, safeEqual))) throw httpError(401, 'Owner sign-in expired or wrong. Sign in again.');
   const db = env.DB;
+  // the owner's law (worker/ownerlaw.js): no data written around the apps without the owner's approval
+  if (writesData(parts, req.method) && !ownerApproved(req, env)) return json({ error: 'Not done: the owner has not approved this change. ' + OWNER_LAW, law: true }, 428);
   if (parts[0] === 'move-to-turso') return moveToTurso(env, req, body);
   if (parts[0] === 'backup' && req.method === 'GET') return backup(env, url, json);
   if (parts[0] === 'restore' && req.method === 'POST') return restore(env, body, json);
@@ -1714,7 +1718,7 @@ async function ai(env, path, body, who) {
   if (lic.ai === false) return json({ error: 'AI features are switched off for this pharmacy.' }, 403);
   // 2026-11 audit: AI costs the cloud's allowance on every call (an invoice page runs two models), and any signed-in
   // pass could call it without limit: now an hourly allowance per pharmacy, and the permission of the screen using it
-  const need = { '/api/ai/prescription': ['pos.sell', 'prescriptions'], '/api/ai/invoice': ['stock.receive', 'purchases.edit'] }[path];
+  const need = { '/api/ai/prescription': ['pos.sell', 'prescriptions'], '/api/ai/invoice': ['stock.receive', 'purchases.edit'], '/api/ai/names': ['medicines.manage'] }[path];
   if (need && !(await anyPerm(env, who, need))) return json({ error: need.includes('stock.receive') ? 'Only staff who receive stock can read invoices.' : 'Only staff who sell or dispense can read prescriptions.' }, 403);
   const quota = Number(env.AI_PER_HOUR) || 400;
   if (!(await takeHourly(env, '__ai__:' + who.tenant, quota))) return json({ error: 'The AI has been used a lot in the last hour at this pharmacy. Try again a little later.' }, 429);
@@ -1745,6 +1749,26 @@ async function ai(env, path, body, who) {
     const second = a.status === 'fulfilled' && b.status === 'fulfilled' ? b.value : null;
     const r = finishInvoice(first, second);
     return json({ ...r, models: INVOICE_MODELS.filter((x, i) => [a, b][i].status === 'fulfilled') });
+  }
+  if (path === '/api/ai/names') {
+    // consistent medicine names (the owner's request, 2026-11-20): SUGGESTIONS only, never saved here; the app shows
+    // each one for a person to tick and approve (components/NameCheck.jsx). A suggestion that changes a number
+    // (strength, pack) or turns the name into another medicine is dropped (src/medname.js safeRename).
+    const items = (Array.isArray(body.items) ? body.items : []).filter((x) => x && x.id && x.name).slice(0, 60)
+      .map((x) => ({ id: String(x.id).slice(0, 60), name: String(x.name).slice(0, 120), generic: String(x.generic || '').slice(0, 120), form: String(x.form || '').slice(0, 40) }));
+    if (!items.length) return json({ suggestions: [] });
+    const prompt = 'You tidy the medicine list of a pharmacy in Uganda so every name follows one consistent style: "Brand or generic name, strength, form, pack", ' +
+      'e.g. "Paracetamol 500mg Tablets", "Amoxil 250mg/5ml Suspension 100ml", "Coartem 80/480 Tablets 6x30". Rules: Title Case words (keep short codes like DS, SR, ORS, AL in capitals); ' +
+      'strengths joined and lower case (500mg, 5ml, 1g); form words written out (Tablets, Capsules, Syrup, Suspension, Injection, Cream, Ointment); fix obvious spelling mistakes of well-known medicines. ' +
+      'NEVER change, add or remove a number, a strength or the medicine itself; never merge two items. If a name is already fine, leave it out. ' +
+      'Reply with ONLY a JSON array, no other text: [{"id":"","name":"the suggested name","why":"a few words"}].\n' + JSON.stringify(items);
+    const out = await runAi(env, TEXT, { messages: [{ role: 'user', content: prompt }], max_tokens: 2500, temperature: 0.1 });
+    const byId = new Map(items.map((x) => [x.id, x]));
+    let list;
+    try { list = firstJson(out.response ?? out, '['); } catch { list = []; }
+    const suggestions = (Array.isArray(list) ? list : []).map((x) => ({ id: String(x?.id || ''), name: String(x?.name || '').replace(/\s+/g, ' ').trim().slice(0, 120), why: String(x?.why || '').slice(0, 120) }))
+      .filter((x) => byId.has(x.id) && safeRename(byId.get(x.id).name, x.name));
+    return json({ suggestions, model: TEXT });
   }
   if (path === '/api/ai/quiz') {
     const drugs = (Array.isArray(body.drugs) ? body.drugs : []).map((d) => String(d).slice(0, 60)).filter(Boolean).slice(0, 10);
@@ -1873,6 +1897,8 @@ export default {
     if (!path.startsWith('/api/')) return rawEnv.ASSETS.fetch(req);
     let env;
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
+    // the owner's law for AI agents and scripts, published where an agent looks (worker/ownerlaw.js)
+    if ((path === '/ai-policy.txt' || path === '/.well-known/ai-policy.txt') && req.method === 'GET') return new Response(OWNER_LAW, { headers: { ...cors, 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'public, max-age=3600' } });
     // Public: the current app build, for devices updating themselves (src/update.js); needs no database
     if (path === '/api/version') {
       const r = await rawEnv.ASSETS.fetch(new URL('/version.json', url));

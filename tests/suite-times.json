@@ -6,6 +6,9 @@
  "unit-person-guard.mjs":0,
  "unit-invoice-read.mjs":0,
  "unit-invoice-match.mjs":0,
+ "unit-shifts-from-sales.mjs":0,
+ "unit-owner-law.mjs":0,
+ "unit-medname.mjs":0,
  "unit-ai-routes.mjs":0,
  "unit-dateformat.mjs":0,
  "unit-packs.mjs":0,
@@ -140,4 +143,4 @@
  "electron-update.mjs":43,
  "v85-look.mjs":25,
  "v86-buying.mjs":30,
- "v87-behaviours.mjs":30,"unit-deliverycheck.mjs":0}
+ "v87-behaviours.mjs":30,"v88-owner-rules.mjs":30,"unit-deliverycheck.mjs":0}

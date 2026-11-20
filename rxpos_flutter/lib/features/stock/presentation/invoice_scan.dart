@@ -23,11 +23,12 @@ import '../../auth/application/session_controller.dart';
 import '../domain/stock_form.dart';
 
 const _months = {'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6, 'jul': 7, 'aug': 8, 'sep': 9, 'sept': 9, 'oct': 10, 'nov': 11, 'dec': 12};
-String _lastDay(int y, int m) => localDate(DateTime(y, m + 1, 0));
+/// a month and year on an invoice (06/2028, Jun-28): the 30th, the 28th in February (the owner's rule, 2026-11-20)
+String _lastDay(int y, int m) => '$y-${_p2(m)}-${m == 2 ? 28 : 30}';
 int _year4(String y) => y.length == 2 ? 2000 + int.parse(y) : int.parse(y);
 String _p2(Object v) => '$v'.padLeft(2, '0');
 
-/// Dates as written on invoices → YYYY-MM-DD ('' when it can't be read); a month and year means the month's end.
+/// Dates as written on invoices → YYYY-MM-DD ('' when it can't be read); a month and year means the 30th (28th in February).
 String normDate(Object? v, {bool endOfMonth = true}) {
   final s = '${v ?? ''}'.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
   if (s.isEmpty) return '';
@@ -130,6 +131,29 @@ int toCheck(List<Line> ls) => ls.where((l) {
       return r != null && ('${l['productId'] ?? ''}'.isEmpty || ((r['check'] as List?)?.isNotEmpty ?? false) || r['unclear'] == true);
     }).length;
 
+/// A scanned line whose batch or expiry was missing or doubtful (listed in `check`): the medicine's last delivery's,
+/// for the person to check (an expiry that has passed is not used). As src/invoiceMatch.js fillFromLast.
+({String batch, String expiry, List<String> used}) fillFromLast({required String batch, required String expiry, List<Object?> check = const [], String? lastBatch, String? lastExpiry, String? today}) {
+  final used = <String>[];
+  bool weak(String f, String v) => v.isEmpty || check.contains(f);
+  if (weak('batch', batch) && (lastBatch ?? '').isNotEmpty) { batch = lastBatch!; used.add('batch'); }
+  if (weak('expiry', expiry) && (lastExpiry ?? '').isNotEmpty && (today == null || lastExpiry!.compareTo(today) >= 0)) { expiry = lastExpiry!; used.add('expiry'); }
+  return (batch: batch, expiry: expiry, used: used);
+}
+
+/// The batch and expiry of a scanned line, from its medicine's last delivery when they weren't read well; the line's
+/// `read` then lists them to check.
+Map<String, Object?> withLast(Map<String, Object?> base, String? productId, PharmacyData d) {
+  final read = base['read'] as Map?;
+  if (read == null || productId == null || productId.isEmpty || productId == newMedicine) return base;
+  final last = d.stock.lastReceived(productId);
+  final f = fillFromLast(batch: '${base['batch'] ?? ''}', expiry: '${base['expiry'] ?? ''}', check: (read['check'] as List?) ?? const [], lastBatch: last?.batch, lastExpiry: last?.expiry, today: today());
+  if (f.used.isEmpty) return base;
+  final check = {...((read['check'] as List?) ?? const []), ...f.used}.toList();
+  final note = [if ('${read['note'] ?? ''}'.isNotEmpty) '${read['note']}', '${f.used.join(' and ')} from the last delivery: check against the pack'].join(' · ');
+  return {...base, 'batch': f.batch, 'expiry': f.expiry, 'read': {...read, 'check': check, 'fromLast': f.used, 'note': note}};
+}
+
 /// What was read off an invoice → Add Stock lines (medicines matched, packs or units chosen by the nearest cost,
 /// the invoice's line total preferred over its unit cost; retail prices are not touched: a medicine already in the list
 /// keeps its price, a new one waits for the person to type one) and a summary.
@@ -148,8 +172,8 @@ int toCheck(List<Line> ls) => ls.where((l) {
     // G1: where the line was on the invoice, when the reading gave it (page and x, y, w, h as fractions)
     final bx = it['box'] is Map ? (it['box'] as Map).cast<String, Object?>() : null;
     final okBox = bx != null && ['x', 'y', 'w', 'h'].every((k) => bx[k] is num && (bx[k] as num) >= 0 && (bx[k] as num) <= 1);
-    final base = {'qty': numOrBlank(qty), 'batch': '${it['batch'] ?? ''}', 'expiry': normDate(it['expiry']), 'read': read,
-      if (okBox) 'box': {'page': (bx['page'] as num?)?.toInt() ?? 0, for (final k in ['x', 'y', 'w', 'h']) k: (bx[k] as num).toDouble()}};
+    final base = withLast({'qty': numOrBlank(qty), 'batch': '${it['batch'] ?? ''}', 'expiry': normDate(it['expiry']), 'read': read,
+      if (okBox) 'box': {'page': (bx['page'] as num?)?.toInt() ?? 0, for (final k in ['x', 'y', 'w', 'h']) k: (bx[k] as num).toDouble()}}, p?.id, d);
     final cost = _n(it['lineTotal']) > 0 ? _n(it['lineTotal']) / qty : _n(it['unitCost']);
     var size = 0.0;
     Pack? k;

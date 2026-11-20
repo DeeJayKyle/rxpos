@@ -165,3 +165,25 @@ export function matchSupplier(name, suppliers) {
   }
   return best?.s || null;
 }
+
+/** The most recently received batch of a medicine ({ batch, expiry } or null): offered when an invoice's batch or
+ *  expiry could not be read well, for the person to check. Batches carry `received` (YYYY-MM-DD); later in the list
+ *  wins a tie. */
+export function lastBatchOf(batches, productId) {
+  let best = null, at = '';
+  (batches || []).forEach((b, i) => { if (b && b.productId === productId && (b.batch || b.expiry)) { const k = `${b.received || ''}#${String(i).padStart(7, '0')}`; if (k > at) { at = k; best = b; } } });
+  return best;
+}
+
+/**
+ * A scanned line whose batch or expiry was missing or doubtful (`check` lists it): take them from the medicine's last
+ * delivery (an expiry that has passed is not used). Returns { batch, expiry, used: ['batch', 'expiry'] }; `used` must be
+ * checked by the person (the line stays marked).
+ */
+export function fillFromLast({ batch, expiry, check = [] }, last, today) {
+  const used = [];
+  const weak = (f, v) => !v || check.includes(f);
+  if (last && weak('batch', batch) && last.batch) { batch = last.batch; used.push('batch'); }
+  if (last && weak('expiry', expiry) && last.expiry && (!today || last.expiry >= today)) { expiry = last.expiry; used.push('expiry'); }
+  return { batch, expiry, used };
+}

@@ -19,6 +19,9 @@ const SUITES = [
   ['a borrowed sign-in confirms before a personal cloud call (unit)', 'unit-person-guard.mjs', []],
   ['invoice reading cross-check (unit)', 'unit-invoice-read.mjs', []],
   ['invoice lines matched to medicines, photo clean-up (unit)', 'unit-invoice-match.mjs', []],
+  ['past sales into shifts (unit)', 'unit-shifts-from-sales.mjs', []],
+  ['consistent medicine names (unit)', 'unit-medname.mjs', []],
+  ['the owner\'s law: no cloud data change without approval (unit)', 'unit-owner-law.mjs', []],
   ['AI copilot and vision routes, mocked Workers AI (unit)', 'unit-ai-routes.mjs', []],
   ['date formats (unit)', 'unit-dateformat.mjs', []],
   ['packs (unit)', 'unit-packs.mjs', []],
@@ -160,6 +163,7 @@ const SUITES = [
   ['pages (UI batch 3, F)', 'v85-pages.mjs', ['.output/v85']],
   ['buying stock (UI batch 3, G)', 'v86-buying.mjs', ['.output/v86']],
   ['1.18.0 behaviours: Control Centre, sheets, Dynamic Island, home screen, App Library, tiling, lock screen', 'v87-behaviours.mjs', ['.output/v87']],
+  ['the owner\'s rules: shift questions, past sales into shifts, the till in stock A–Z, tidy names', 'v88-owner-rules.mjs', ['.output/v88']],
   // every page on a PC and a phone, for design review: only on request (`npm test -- shots-all`)
   ...(process.argv[2] === 'shots-all' ? [['every page, PC and phone screenshots', 'shots-all.mjs', ['.output/all']]] : []),
   // every theme on the dashboard and Sales History, for the owner's review: only on request (`npm test -- shots-themes`)
@@ -214,9 +218,12 @@ if (!process.env.CLOUDFLARE_API_TOKEN) {
 }
 const cloud = HUB
   ? spawn(process.execPath, ['--no-warnings', path.join(root, 'server', 'hub.mjs'), '--port', '8790', '--data', state, '--web', path.join(root, 'dist')], { cwd: root, stdio: 'ignore',
-    env: { ...process.env, RXPOS_SYNC_KEY: 'local-test-sync-key-0123456789abcdef', RXPOS_OWNER_KEY: OWNER, PUBLIC_URL: BASE, PBKDF2_ITER: '150000', RXPOS_TRUST_PROXY: '1' } })
+    env: { ...process.env, RXPOS_TEST_CLOUD: '1', RXPOS_SYNC_KEY: 'local-test-sync-key-0123456789abcdef', RXPOS_OWNER_KEY: OWNER, PUBLIC_URL: BASE, PBKDF2_ITER: '150000', RXPOS_TRUST_PROXY: '1' } })
   : spawn(process.execPath, [bin('wrangler/bin/wrangler.js'), 'dev', ...cfgArgs, '--port', '8790', '--persist-to', state, '--var', 'DB_BACKEND:', '--var', 'SYNC_KEY:local-test-sync-key-0123456789abcdef',
   '--var', `OWNER_KEY:${OWNER}`, '--var', `PUBLIC_URL:${BASE}`,
+  // a throw-away local cloud: its made-up pharmacies are written by the tests without the owner's approval header
+  // (worker/ownerlaw.js); a real cloud never sets TEST_CLOUD
+  '--var', 'TEST_CLOUD:1',
   // faster sync stage 3: small ready-made chunks so the tests cut a small pharmacy into several (the benchmark: the real size)
   '--var', `SNAPSHOT_CHUNK:${process.argv[2] === 'bench' ? 20000 : 40}`,
   // step 5: a raised password-rounds setting, so every suite signs in through the re-hash path

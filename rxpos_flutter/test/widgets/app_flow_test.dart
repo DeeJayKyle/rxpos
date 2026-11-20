@@ -68,6 +68,7 @@ import 'package:rxpos/features/auth/domain/device_unlock.dart';
 
 import '../auth/device_unlock_test.dart' show FakeCheck;
 import '../sync/fake_cloud.dart';
+import 'package:rxpos/features/shifts/presentation/shift_prompts.dart' show shiftQuestions;
 
 void main() {
   setUpAll(() {
@@ -255,6 +256,9 @@ void main() {
     await start(tester);
     await toTill(tester);
     expect(find.text('Point of sale'), findsOneWidget);
+    // the till opens on In stock (the owner's rule, 2026-11-20): out-of-stock medicines show under All
+    await tester.tap(find.widgetWithText(ChoiceChip, 'All'));
+    await settle(tester);
     expect(find.text('100 left'), findsOneWidget);
     expect(find.text('Out of stock'), findsOneWidget, reason: 'Zinco has no stock');
     // the stock pill sits with the expiry pill; out of stock in the one real red
@@ -976,6 +980,9 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.f2);
     await settle(tester);
     expect(find.descendant(of: find.byKey(const ValueKey('thumb-p1')), matching: find.byKey(const Key('med-photo'))), findsOneWidget);
+    // the till opens on In stock (the owner's rule, 2026-11-20): Zinco has none, so it shows under All
+    await tester.tap(find.widgetWithText(ChoiceChip, 'All'));
+    await settle(tester);
     expect(find.descendant(of: find.byKey(const ValueKey('thumb-p2')), matching: find.byKey(const Key('med-initial'))), findsOneWidget);
     await done(tester);
   });
@@ -2305,6 +2312,9 @@ void main() {
     void go(String to) => GoRouter.of(tester.element(find.byType(Scaffold).first)).go(to);
     // G4: an out-of-stock till tile: the stock in each branch
     await toTill(tester);
+    // the till opens on In stock (the owner's rule, 2026-11-20): out-of-stock medicines show under All
+    await tester.tap(find.widgetWithText(ChoiceChip, 'All'));
+    await settle(tester);
     expect(find.byKey(const Key('branches-p2')), findsOneWidget);
     expect(find.byKey(const Key('branches-p1')), findsNothing, reason: 'in stock here');
     await tester.tap(find.byKey(const Key('branches-p2')));
@@ -2536,12 +2546,13 @@ void main() {
     expect(find.byType(Drawer), findsNothing);
     expect(whereNow(tester), '/');
     expect(leftApp, 0);
-    // a page opened from the sheet, then Android's back goes back to the dashboard
+    // a page opened from the menu (More), then Android's back goes back to the dashboard
     await tester.tap(find.byKey(const Key('tab-more')));
     await settle(tester);
-    await tester.ensureVisible(find.byKey(const ValueKey('sheet-/proformas')));
+    final proformas = find.descendant(of: find.byType(Drawer), matching: find.text('Proformas'));
+    await tester.ensureVisible(proformas);
     await settle(tester);
-    await tester.tap(find.byKey(const ValueKey('sheet-/proformas')));
+    await tester.tap(proformas);
     await settle(tester);
     expect(whereNow(tester), '/proformas');
     // a dialog open: Android's back closes it, the page stays
@@ -2912,6 +2923,29 @@ void main() {
     await tester.tap(find.text(item));
     await settle(tester, 4);
   }
+
+  testWidgets('shift questions (the owner\'s rules): "Start your shift?" on signing in; "End your shift?" on signing out counts the cash, then signs out', (tester) async {
+    shiftQuestions = true;
+    addTearDown(() => shiftQuestions = false);
+    await tester.runAsync(signedIn);
+    await start(tester);
+    await untilShown(tester, find.text('Start your shift?'));
+    await tester.tap(find.text('Start shift'));
+    await settle(tester, 4);
+    final opened = (await tester.runAsync(() => RecordStore(db).rows('shifts')))!;
+    expect(opened.where((x) => x['closedAt'] == null), hasLength(1), reason: 'yes starts the shift');
+    await menu(tester, 'Log out');
+    expect(find.text('End your shift?'), findsOneWidget);
+    await tester.tap(find.text('End shift and count cash'));
+    await settle(tester, 4);
+    expect(find.text('Count the drawer'), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, 'Close shift'));
+    await settle(tester, 6);
+    final after = (await tester.runAsync(() => RecordStore(db).rows('shifts')))!;
+    expect(after.where((x) => x['closedAt'] == null), isEmpty, reason: 'closed with the count');
+    expect(find.byKey(const Key('account-menu')), findsNothing, reason: 'then signed out');
+    await done(tester);
+  });
 
   Future<void> typeSecret(WidgetTester tester, String v, String button) async {
     await tester.enterText(find.descendant(of: find.byKey(const Key('secret')), matching: find.byType(EditableText)), v);

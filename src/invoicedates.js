@@ -1,7 +1,9 @@
 // Dates as written on invoices → YYYY-MM-DD, used by the app and the cloud (worker/invoiceread.js). The AI copies
-// expiry and invoice dates exactly as written; this turns them into dates (month ends and leap years included).
+// expiry and invoice dates exactly as written; this turns them into dates (a month alone: the 30th, the 28th in February).
 const MONTHS = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, sept: 9, oct: 10, nov: 11, dec: 12 };
-const lastDay = (y, m) => new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+// an expiry written as a month and year (06/2028, Jun-28) is taken as the 30th of that month, the 28th in February
+// (the owner's rule, 2026-11-20: never later than the month's end, the same day every month)
+const lastDay = (y, m) => `${y}-${String(m).padStart(2, '0')}-${m === 2 ? 28 : 30}`;
 const year4 = (y) => (String(y).length === 2 ? 2000 + Number(y) : Number(y));
 /** Expiry / invoice dates as written on invoices → YYYY-MM-DD ('' when it can't be read) */
 export function normDate(v, { endOfMonth = true } = {}) {

@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Download, Barcode as BarcodeIcon, SlidersHorizontal, Save, Undo2, Pencil, ScrollText, Boxes, Tag } from 'lucide-react';
+import { Download, Barcode as BarcodeIcon, SlidersHorizontal, Save, Undo2, Pencil, ScrollText, Boxes, Tag, Wand2 } from 'lucide-react';
 import { CrudPage, Tabs, Modal, SearchBox, Empty, PdfButton, FilterChips, ExportMenu } from '../ui.jsx';
 import { useStore, today, daysUntil, put, move, addBatch, audit, downloadFile, toCSV, batchValue, stockValue, markupPrice, MAIN_BRANCH, putMany } from '../store.jsx';
 import { ask, askText, toast } from '../feedback.jsx';
@@ -17,6 +17,7 @@ import { useMedicineOrder, MedicineOrderPicker, groupedRows, useFolded, GroupHea
 import { BranchStockList } from '../components/BranchStock.jsx';
 import { dateLocale } from '../showdate.js';
 import { DateInput } from '../fields.jsx';
+import NameCheck from '../components/NameCheck.jsx';
 
 const expiryClass = (expiry, warn) => {
   if (!expiry) return '';
@@ -87,6 +88,7 @@ export function MedicineList() {
   // the list is open to anyone who may see stock; changing it needs medicines.manage (the cloud enforces the same)
   const manage = can('medicines.manage');
   const [packsFor, setPacksFor] = useState(null);
+  const [tidy, setTidy] = useState(false); // Tidy names: suggestions approved one by one (components/NameCheck.jsx)
   const [review, setReview] = useState(false);
   const dupBarcodes = useMemo(() => { const seen = new Set(), dup = new Set(); for (const p of products) if (p.barcode) (seen.has(p.barcode) ? dup : seen).add(p.barcode); return dup; }, [products]);
   const issueCount = useMemo(() => products.filter((p) => recordIssues(p, dupBarcodes).length).length, [products, dupBarcodes]);
@@ -135,12 +137,16 @@ export function MedicineList() {
   return (
     <>
     {packsFor && <PacksEditor product={packsFor} onClose={() => setPacksFor(null)} />}
+    {tidy && <NameCheck onClose={() => setTidy(false)} />}
     <CrudPage
       title="Medicine List" singular="Medicine" table="products" rows={products} fields={fields} onSave={onSave} readOnly={!manage}
       deleteEffects={(rs) => { const n = rs.reduce((a, p) => a + db.batches.filter((b) => b.productId === p.id).length, 0); return n ? [`${n} batch${n === 1 ? '' : 'es'} and their history no longer listed under ${rs.length === 1 ? 'it' : 'them'}`] : []; }}
       subtitle={review ? `${issueCount.toLocaleString()} records need a look. Open one to fix it; nothing is changed automatically.` : `${products.length.toLocaleString()} medicines and items`}
       filter={review ? (p) => recordIssues(p, dupBarcodes).length > 0 : undefined}
-      headExtra={<button type="button" className={'btn ' + (review ? 'primary' : 'ghost')} aria-pressed={review} onClick={() => setReview((r) => !r)} title="Records with missing or inconsistent details">Needs review{issueCount ? ` (${issueCount})` : ''}</button>}
+      headExtra={<>
+        <button type="button" className={'btn ' + (review ? 'primary' : 'ghost')} aria-pressed={review} onClick={() => setReview((r) => !r)} title="Records with missing or inconsistent details">Needs review{issueCount ? ` (${issueCount})` : ''}</button>
+        {manage && <button type="button" className="btn ghost" onClick={() => setTidy(true)} title="Suggestions for consistent names (house style and AI); nothing changes until you approve"><Wand2 size={16} />Tidy names</button>}
+      </>}
       blank={{ form: 'Tablets', unit: 'Piece', reorder: 10, rx: false }}
       extraActions={(p) => manage && <button className="btn sm ghost" title="Sell or receive by strip, box…" onClick={() => setPacksFor(p)}>Packs{p.packs?.length ? ` (${p.packs.length})` : ''}</button>}
       bulk={manage ? () => [{ label: 'Change price…', run: bulkPrice }, { label: 'Set category…', run: bulkField('category', 'Category') }, { label: 'Set reorder level…', run: bulkField('reorder', 'Reorder level') }] : undefined}

@@ -6,6 +6,8 @@ import 'package:rxpos/core/theme/themes.dart' show TonesOfContext;
 import 'package:barcode/barcode.dart';
 import 'package:flutter/foundation.dart' show compute;
 import 'package:flutter/material.dart';
+
+import '../../shifts/presentation/shift_prompts.dart' show endShiftBeforeSignOut, forgetShiftQuestion;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -291,6 +293,9 @@ mixin _AccountActions<T extends ConsumerStatefulWidget> on ConsumerState<T> {
   }
 
   Future<void> _signOut() async {
+    // the owner's rule (2026-11-20): someone who started a shift is asked whether to end it (counting the cash)
+    if (!await endShiftBeforeSignOut(context, ref) || !mounted) return;
+    forgetShiftQuestion(s.userId);
     final messenger = ScaffoldMessenger.of(context);
     final repo = ref.read(authRepositoryProvider);
     final unsent = await repo.unsent();

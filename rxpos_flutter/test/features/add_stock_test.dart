@@ -95,6 +95,15 @@ void main() {
       expect([normDate('2028-06'), normDate('06/28'), normDate('Jun 2028'), normDate('30 Jun 2028'), normDate('15/07/2027'), normDate('2028-6-3'), normDate('')],
           ['2028-06-30', '2028-06-30', '2028-06-30', '2028-06-30', '2027-07-15', '2028-06-03', '']);
     });
+    test('batch or expiry not read well: the last delivery\'s, to check; read well: kept', () {
+      final f = fillFromLast(batch: 'PC24O5', expiry: '', check: ['batch'], lastBatch: 'PC2405', lastExpiry: '2028-03-30', today: '2026-11-20');
+      expect([f.batch, f.expiry, f.used], ['PC2405', '2028-03-30', ['batch', 'expiry']]);
+      expect(fillFromLast(batch: 'NEW77', expiry: '2029-05-30', lastBatch: 'PC2405', lastExpiry: '2028-03-30').used, isEmpty);
+      expect(fillFromLast(batch: 'X', expiry: '', lastBatch: 'Y', lastExpiry: '2025-01-30', today: '2026-11-20').used, isEmpty, reason: 'an expiry that has passed');
+    });
+    test('an expiry with a month only: the 30th, the 28th in February (leap year too), never the 31st', () {
+      expect([normDate('01/2028'), normDate('Feb 2028'), normDate('2027-02'), normDate('Dec-27'), normDate('31/01/2028')], ['2028-01-30', '2028-02-28', '2027-02-28', '2027-12-30', '2028-01-31']);
+    });
     test('names matched to the pharmacy\'s medicines and suppliers', () {
       expect(matchProduct('PARAMOL 500MG TABLETS x100', [para, zinc], (_) => 1)?.id, 'p1');
       expect(matchProduct('Paramol 250mg', [para], (_) => 1), isNull, reason: 'another strength');
@@ -113,7 +122,7 @@ void main() {
       final x = applyScan(r, blankForm(s), d, user: 'Tia');
       final ls = lines(x.form);
       expect((x.form['supplierId'], x.form['invoice'], x.form['date']), ('s1', 'INV-9', '2026-11-05'));
-      expect((ls[0]['productId'], ls[0]['recvPack'], ls[0]['cost'], ls[0]['expiry'], ls[0]['price']), ('p1', 'Box', '3100', '2027-12-31', '60'));
+      expect((ls[0]['productId'], ls[0]['recvPack'], ls[0]['cost'], ls[0]['expiry'], ls[0]['price']), ('p1', 'Box', '3100', '2027-12-30', '60'));
       expect((ls[1]['price'], ls[2]['by'], ls[2]['total'], ls[2]['cost'], ls[2]['price']), ('', 'total', '6000', '3000', '60'),
           reason: 'no price from the invoice for a new medicine; the line total preferred over the unit cost');
       expect((ls[1]['productId'], ls[1]['total'], checkTextOf(ls[1]['read'] as Map)), ('', '3100', 'quantity (other reading: 2)'));

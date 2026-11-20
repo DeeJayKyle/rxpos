@@ -28,6 +28,7 @@ import { STYLES, applyStyle, savedStyle, saveStyle } from './surface.js';
 import { LEVELS, applyLevel, savedLevel, saveLevel } from './vivid.js';
 import { GRADIENT_BACKGROUNDS, GRADIENT_PRESETS, savedGradient, saveGradient, applyGradient } from './gradients.js';
 import { TwoStepModal } from './twostep.jsx';
+import { startShift, openShiftOf, shiftQuestions } from './shiftstart.js';
 import { setCrashCloud } from './crash.js';
 import { homeFor, chosenTabs } from './landing.js';
 import { setBadge } from './badges.js';
@@ -451,7 +452,7 @@ function KeysHelp({ onClose, pages }) {
 }
 
 function Shell() {
-  const { db, products, user, setUser, branchId, branch, update, syncNow, syncCfg, saveSyncCfg } = useStore();
+  const { db, products, user, setUser, branchId, branch, update, syncNow, syncCfg, saveSyncCfg, fmt } = useStore();
   // Audit P2-7, option 1: before a call that acts as a person in the cloud, someone who signed in with a PIN or offline
   // password on a device holding another person's token confirms with their own password (src/cloud.js personGuard).
   // The device then keeps their token; syncing and selling never wait for this.
@@ -677,9 +678,17 @@ function Shell() {
   // the web version keeps nothing, so it asks before letting it go
   const { db: dbNow } = useStore();
   const { pending: unsent } = useSyncState();
-  const signOut = async () => {
+  const signOut = async (keepShift = false) => {
+    // the owner's rule (2026-11-20): someone who started a shift is asked whether to end it; ending it counts the cash
+    // on the Shifts page first, then signs them out (Shifts.jsx sends rxpos:signout)
+    const shiftOpen = openShiftOf(dbNow, user, branchId);
+    if (keepShift !== true && shiftOpen && shiftQuestions() && (await ask({ title: 'End your shift?', message: `You started a shift at ${new Date(shiftOpen.openedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}. Ending it means counting the cash in the drawer now; or sign out and leave it open for later.`, confirmText: 'End shift and count cash', cancelText: 'Sign out, keep it open' }))) {
+      navigate('/shifts', { state: { close: 'signout' } });
+      return;
+    }
     const mine = (dbNow.drafts || []).filter((d) => d.userId === user.id).length;
     const out = await setUser(null, { confirmLoss: (n) => ask({ title: `${n} change(s) haven't reached the cloud`, message: 'This browser keeps nothing on the computer, so signing out now loses them. Stay signed in until the internet is back, or sign out anyway.', confirmText: 'Sign out anyway', cancelText: 'Stay signed in', danger: true }) });
+    if (out) { try { sessionStorage.removeItem('rxpos-shift-asked:' + user.id); } catch { /* blocked */ } }
     if (out && keepsData() && unsent) toast(`${unsent} change(s) are kept on this device and will be sent when someone signs in again.`, 'info');
     else if (out && mine) toast(`Your ${mine} held sale${mine === 1 ? '' : 's'}/draft${mine === 1 ? '' : 's'} stay saved: continue ${mine === 1 ? 'it' : 'them'} after signing in, on any device.`, 'info');
   };
@@ -693,6 +702,23 @@ function Shell() {
     try { await endOtherSessions(syncCfg); toast('Signed out everywhere else'); } catch (e) { toast(e.message, 'error'); }
   };
   accountRef.current = { password: () => changePassword(false), pin: manageDevicePin, twostep: () => setTwoStepOpen(true), logout: signOut, others: signOutOthers };
+  const signOutRef = useRef(signOut);
+  signOutRef.current = signOut;
+  useEffect(() => { const after = () => signOutRef.current(true); window.addEventListener('rxpos:signout', after); return () => window.removeEventListener('rxpos:signout', after); }, []);
+  // the owner's rule (2026-11-20): on signing in, someone who works shifts and has none open here is asked whether to
+  // start one (with the cash already in the drawer); asked once per sign-in
+  useEffect(() => {
+    if (!user?.id || !can('shifts') || features.shifts === false || openShiftOf(dbNow, user, branchId) || !shiftQuestions()) return;
+    const key = 'rxpos-shift-asked:' + user.id;
+    try { if (sessionStorage.getItem(key)) return; sessionStorage.setItem(key, '1'); } catch { /* blocked: ask anyway */ }
+    const t = setTimeout(async () => {
+      const float = await askText({ title: 'Start your shift?', message: 'Your sales are then counted in your shift. Type the cash already in the drawer (the float), or leave it empty for none.', type: 'number', placeholder: 'Opening float, e.g. 50000', minLength: 0, confirmText: 'Start shift', cancelText: 'Not now' });
+      if (float == null) return;
+      startShift(update, user, branchId, float, fmt);
+      toast('Shift started');
+    }, 1200);
+    return () => clearTimeout(t);
+  }, [user?.id, branchId]); // eslint-disable-line react-hooks/exhaustive-deps
   const [accountOpen, setAccountOpen] = useState(false);
   const accountMenuRef = useRef(null);
   useEffect(() => {

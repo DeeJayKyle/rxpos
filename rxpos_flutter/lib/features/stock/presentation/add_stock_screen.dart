@@ -252,7 +252,8 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
     final picked = await showAppDialog<Object>(context: context, builder: (_) => _MedicinePicker(data: d, hint: (l['read'] as Map?)?['name'] as String?));
     if (picked == null) return;
     if (picked is Product) {
-      final next = lineFor(picked, d.settings, extra: {'qty': l['qty'], 'batch': l['batch'], 'expiry': l['expiry'], if (l['read'] != null) 'read': l['read']});
+      // a scanned line's batch / expiry not read well: the chosen medicine's last delivery's, to check (invoice_scan.dart withLast)
+      final next = lineFor(picked, d.settings, extra: withLast({'qty': l['qty'], 'batch': l['batch'], 'expiry': l['expiry'], if (l['read'] != null) 'read': l['read']}, picked.id, d));
       final read = l['read'] != null && ('${l['cost'] ?? ''}'.isNotEmpty || '${l['total'] ?? ''}'.isNotEmpty);
       _replaceLine('${l['key']}', read ? editLine(next, l['by'] == 'total' ? {'total': l['total']} : {'cost': l['cost']}) : next);
     } else {

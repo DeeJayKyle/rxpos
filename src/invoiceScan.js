@@ -73,7 +73,7 @@ import { normDate } from './invoicedates.js';
 export { normDate };
 
 // matching what was read to the pharmacy's medicines and suppliers (pure, tested): src/invoiceMatch.js
-export { matchProduct, matchSupplier, rankProducts, learnedNames } from './invoiceMatch.js';
+export { matchProduct, matchSupplier, rankProducts, learnedNames, lastBatchOf, fillFromLast } from './invoiceMatch.js';
 
 /** Read every page and merge them into one invoice. The pages are read side by side (two at a time: each page is
  *  already two AI readings in the cloud), and put back in page order. */
