@@ -1,6 +1,8 @@
 // Every colour theme must stay readable (WCAG AA 4.5:1): body and muted text, links, text on buttons, badges.
 // The theme engine adjusts colours when a theme is applied (src/themes.js → themeVars); this checks the result.
-import { THEMES, themeVars, contrast } from '../src/themes.js';
+import { THEMES as LISTED, THEME_TWINS, themeVars, contrast } from '../src/themes.js';
+// 1.17.0: the dark twins are checked as every theme is
+const THEMES = [...LISTED, ...THEME_TWINS];
 import { VIVID, VIVID_TEXT } from '../src/vivid.js';
 import { LINE_HUES, COL_HUES, ROW_TINT, HEAD_TINT, LABEL_MIX } from '../src/linecolors.js';
 import { KIT_COLORS } from '../src/kits.js';

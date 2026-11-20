@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { HashRouter, Routes, Route, NavLink, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { MessageCircle,
   LayoutDashboard, ShoppingCart, PackageOpen, ReceiptText, FileText, ClipboardPlus, Users, Truck, Pill, FlaskConical,
@@ -23,9 +23,10 @@ import { isWeb, isNative } from './platform.js';
 import { keepsData } from './webpolicy.js';
 import RefreshHost from './refresh.jsx';
 import { startUpdates, onUpdate, applyUpdate, justUpdated, LABEL, VERSION } from './update.js';
-import { applyTheme, saveTheme, allowedThemes, THEME_GROUPS, currentThemeId, savedMode, saveMode, systemDark, paletteFor, startupTheme, savedAccent, saveAccent } from './themes.js';
+import { applyTheme, saveTheme, allowedThemes, THEME_GROUPS, currentThemeId, savedMode, saveMode, systemDark, paletteFor, startupTheme, savedAccent, saveAccent, twinFor } from './themes.js';
 import { STYLES, applyStyle, savedStyle, saveStyle } from './surface.js';
 import { LEVELS, applyLevel, savedLevel, saveLevel } from './vivid.js';
+import { GRADIENT_BACKGROUNDS, GRADIENT_PRESETS, savedGradient, saveGradient, applyGradient } from './gradients.js';
 import { TwoStepModal } from './twostep.jsx';
 import { setCrashCloud } from './crash.js';
 import { homeFor, chosenTabs } from './landing.js';
@@ -189,6 +190,30 @@ function useSurface() {
   return [style, setStyle];
 }
 
+/** Gradients on this device (1.17.0, src/gradients.js): the page background, the accents and a preset for the menu */
+function GradientChoice() {
+  const [g, setG] = useState(savedGradient);
+  const set = (patch) => { const next = { ...g, ...patch }; setG(next); applyGradient(next); saveGradient(next); };
+  return (
+    <div className="gradient-choice">
+      <div className="seg grad-bg" role="radiogroup" aria-label="Gradient background">
+        {GRADIENT_BACKGROUNDS.map(([id, label]) => <button key={id} type="button" role="radio" aria-checked={g.background === id} className={g.background === id ? 'on' : ''} onClick={() => set({ background: id })}>{label}</button>)}
+      </div>
+      <button type="button" role="switch" aria-checked={!!g.accents} className={'style-item grad-accents' + (g.accents ? ' on' : '')} onClick={() => set({ accents: !g.accents })}>
+        <span className="swatch grad-swatch accents" /><span className="grow">Gradient accents<small className="muted"> · buttons, the menu and card headings</small></span>
+      </button>
+      <div className="grad-presets" role="radiogroup" aria-label="Gradient preset for the menu and banner">
+        <button type="button" role="radio" aria-checked={!g.preset} className={'grad-preset none' + (!g.preset ? ' on' : '')} title="No preset: the theme's own menu" onClick={() => set({ preset: '' })}><span aria-hidden="true">✕</span><small>Theme</small></button>
+        {GRADIENT_PRESETS.map(([id, name, a, b]) => (
+          <button key={id} type="button" role="radio" aria-checked={g.preset === id} className={'grad-preset' + (g.preset === id ? ' on' : '')} title={`${name}: the menu and the banner`} onClick={() => set({ preset: id })}>
+            <span style={{ background: `linear-gradient(135deg, ${a}, ${b})` }} aria-hidden="true" /><small>{name}</small>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /** The device's colour level: Calm (standard) or Vivid (src/vivid.js). Applied and saved on the click itself: picking
  *  closes the menu, which removes this list, so a later effect would never run. */
 function ColourLevel({ onPick }) {
@@ -217,19 +242,28 @@ function ThemePicker({ theme, setTheme, mode, setMode, style, setStyle }) {
   // Follow system: light or dark with the operating system, live when it changes
   useEffect(() => {
     if (mode !== 'system') return;
-    const follow = () => setTheme(paletteFor(systemDark() ? 'dark' : 'light', list, branding?.defaultTheme));
+    // 1.17.0: the theme's own twin first (Pharmacy Green → its dark twin at night), else the pharmacy's default
+    const follow = () => setTheme((cur) => { const b = systemDark() ? 'dark' : 'light', tw = twinFor(cur, b); return tw && list.some((t) => t.id === tw) ? tw : paletteFor(b, list, branding?.defaultTheme); });
     follow();
     const mq = matchMedia('(prefers-color-scheme: dark)');
     mq.addEventListener?.('change', follow);
     return () => mq.removeEventListener?.('change', follow);
   }, [mode, branding]); // eslint-disable-line react-hooks/exhaustive-deps
-  const pickBase = (base) => { setMode(''); if (current?.base !== base) setTheme(paletteFor(base, list, branding?.defaultTheme)); };
+  const pickBase = (base) => {
+    setMode('');
+    if (current?.base === base) return;
+    const tw = twinFor(theme, base); // 1.17.0: Dark keeps this theme's colours (its dark twin), Light goes back
+    setTheme(tw && list.some((t) => t.id === tw) ? tw : paletteFor(base, list, branding?.defaultTheme));
+  };
   const [all, setAll] = useState(false);
-  const rec = RECOMMENDED.map((id) => list.find((t) => t.id === id)).filter(Boolean);
-  const short = list.length > 8 && rec.length >= 3;
+  // the list shows each theme once; its dark twin is reached with Dark (1.17.0)
+  const shownList = list.filter((t) => !t.twinOf);
+  const isOn = (t) => t.id === theme || t.id + '-dark' === theme;
+  const rec = RECOMMENDED.map((id) => shownList.find((t) => t.id === id)).filter(Boolean);
+  const short = shownList.length > 8 && rec.length >= 3;
   const item = (t) => (
-    <button key={t.id} className={'theme-item' + (t.id === theme ? ' on' : '')} onClick={() => { setMode(''); setTheme(t.id); setOpen(false); }}
-      onMouseEnter={() => applyTheme(t.id)} onFocus={() => applyTheme(t.id)}>
+    <button key={t.id} className={'theme-item' + (isOn(t) ? ' on' : '')} onClick={() => { setMode(''); setTheme(current?.base === 'dark' && twinFor(t.id, 'dark') ? twinFor(t.id, 'dark') : t.id); setOpen(false); }}
+      onMouseEnter={() => applyTheme(current?.base === 'dark' && twinFor(t.id, 'dark') ? twinFor(t.id, 'dark') : t.id)} onFocus={() => applyTheme(t.id)}>
       <span className="swatch" style={{ background: `linear-gradient(135deg, ${t.c.sidebar} 0 30%, ${t.c.surface} 30% 55%, ${t.c.primary} 55% 78%, ${t.c.primary2} 78%)`, borderColor: t.c.borderStrong }} />
       <span className="grow">{t.name}{t.inspired && t.inspired !== t.name && <small className="muted"> · {t.inspired}</small>}</span>
       {t.base === 'dark' ? <Moon size={13} /> : <Sun size={13} />}
@@ -263,13 +297,13 @@ function ThemePicker({ theme, setTheme, mode, setMode, style, setStyle }) {
               <div className="bell-head">Recommended</div>
               {rec.map(item)}
               <button type="button" className="style-item all-themes" aria-expanded={all} onClick={() => setAll((x) => !x)}>
-                <ChevronDown size={14} className={all ? 'flip' : ''} aria-hidden="true" /><span className="grow">All themes ({list.length})</span>
+                <ChevronDown size={14} className={all ? 'flip' : ''} aria-hidden="true" /><span className="grow">All themes ({shownList.length})</span>
               </button>
             </div>
           )}
           {/* themes by group (src/themes.js THEME_GROUPS) */}
           <div className="theme-all" hidden={short && !all}>
-          {THEME_GROUPS.map((g) => [g, list.filter((t) => (t.group || 'Clinical') === g)]).filter(([, ts]) => ts.length).map(([g, ts]) => (
+          {THEME_GROUPS.map((g) => [g, shownList.filter((t) => (t.group || 'Clinical') === g)]).filter(([, ts]) => ts.length).map(([g, ts]) => (
             <div key={g} className="theme-group" role="group" aria-label={g}>
               <div className="bell-head">{g}</div>
               {ts.map(item)}
@@ -278,13 +312,16 @@ function ThemePicker({ theme, setTheme, mode, setMode, style, setStyle }) {
           </div>
           <div className="bell-head">Colour</div>
           <ColourLevel onPick={() => setOpen(false)} />
+          <div className="bell-head">Gradient</div>
+          <GradientChoice />
           <div className="bell-head">Style</div>
-          {STYLES.map((s) => (
-            <button key={s.id} className={'style-item' + (s.id === style ? ' on' : '')} onClick={() => { setStyle(s.id); setOpen(false); }}>
+          {STYLES.map((s, i) => (<Fragment key={s.id}>
+            {s.group && s.group !== STYLES[i - 1]?.group && <div className="bell-sub">{s.group}</div>}
+            <button className={'style-item' + (s.id === style ? ' on' : '')} onClick={() => { setStyle(s.id); setOpen(false); }}>
               <span className={'swatch style-swatch surface-' + s.id} />
               <span className="grow">{s.name}<small className="muted"> · {s.hint}</small></span>
             </button>
-          ))}
+          </Fragment>))}
         </div>
       )}
     </div>

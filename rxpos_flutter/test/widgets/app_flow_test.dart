@@ -769,10 +769,12 @@ void main() {
     expect(find.byKey(Key('busy-$wd-10')), findsOneWidget);
     // B8: what's new once
     expect(find.byKey(const Key('whats-new')), findsOneWidget);
-    expect(find.text("What's new in 1.16.0"), findsOneWidget);
+    expect(find.text("What's new in 1.17.0"), findsOneWidget);
     // B7: the setup checklist, ticked from the data
     expect(find.byKey(const Key('setup-checklist')), findsOneWidget);
     expect(find.textContaining('2 of 6 done', findRichText: true), findsOneWidget);
+    await tester.ensureVisible(find.byKey(const Key('setup-hide'))); // the longer What's new may push it below the fold
+    await settle(tester);
     await tester.tap(find.byKey(const Key('setup-hide')));
     await settle(tester);
     expect(find.byKey(const Key('setup-checklist')), findsNothing);
@@ -3285,7 +3287,7 @@ void main() {
     await openThemes(tester);
     await tester.tap(find.text('Dark').first); // the mode button (the Dark group's heading comes after it)
     await settle(tester, 4);
-    expect((await look())['theme'], 'navy-teal');
+    expect((await look())['theme'], 'mint-teal-dark', reason: '1.17.0: Dark keeps the theme, as its dark twin');
     expect(brightness(tester), Brightness.dark);
     final list = find.byKey(const Key('theme-list'));
     await tester.scrollUntilVisible(find.byKey(const ValueKey('theme-royal-purple')), 120, scrollable: find.descendant(of: list, matching: find.byType(Scrollable)));
@@ -3302,7 +3304,7 @@ void main() {
     await mouse.removePointer();
     await tester.tap(find.byKey(const ValueKey('theme-royal-purple')));
     await settle(tester, 4);
-    expect((await look())['theme'], 'royal-purple');
+    expect((await look())['theme'], 'royal-purple-dark', reason: '1.17.0: picked in Dark, its dark twin');
     await openThemes(tester);
     expect(find.byKey(const ValueKey('accent-ocean')), findsNothing, reason: 'no accent presets: only the 15 themes');
     expect(find.byKey(const Key('design-systems')), findsNothing, reason: 'no design systems');
@@ -3346,7 +3348,7 @@ void main() {
     expect(find.byKey(const ValueKey('theme-royal-purple')), findsNothing);
     await tester.tap(find.text('Dark').first); // the mode button, not the Dark & Calm group's heading
     await settle(tester, 4);
-    expect((await look())['theme'], 'navy-teal', reason: 'the only dark theme allowed');
+    expect((await look())['theme'], 'mint-teal-dark', reason: '1.17.0: the allowed theme\'s own dark twin');
     await done(tester);
     await tester.runAsync(() => RecordStore(db).update((d) => d.put('license', {'id': 'lic', 'branding': {'themes': ['mint-teal', 'amber-gold', 'sky-blue']}})));
     await start(tester);

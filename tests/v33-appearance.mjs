@@ -54,15 +54,16 @@ await p.screenshot({ path: `${out}/dashboard-light.png` });
 // ---- Light / Dark / System ----
 await openMenu(p); await wait(200);
 await pickMode(p, 'Dark'); await wait(300);
-check('Dark switches to RxPOS Navy Teal', (await html(p)).palette === 'navy-teal' && (await html(p)).theme === 'dark', JSON.stringify(await html(p)));
+// 1.17.0 (the owner's choice): Dark keeps the theme's colours: Mint Teal's own dark twin, not Navy Teal
+check('Dark switches to the theme\'s dark twin (Mint Teal → Mint Teal dark)', (await html(p)).palette === 'mint-teal-dark' && (await html(p)).theme === 'dark', JSON.stringify(await html(p)));
 await openMenu(p); await wait(200);
 await pickMode(p, 'System'); await wait(300);
 check('System follows the OS (light)', (await html(p)).palette === 'mint-teal');
 check('System mode is remembered', (await p.evaluate(() => localStorage.getItem('rxpos-theme-mode'))) === 'system');
 await p.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'dark' }, { name: 'prefers-reduced-motion', value: 'reduce' }]); await wait(400);
-check('System switches live when the OS goes dark', (await html(p)).palette === 'navy-teal', JSON.stringify(await html(p)));
+check('System switches live when the OS goes dark (to the theme\'s twin)', (await html(p)).palette === 'mint-teal-dark', JSON.stringify(await html(p)));
 await p.reload({ waitUntil: 'networkidle2' }); await wait(1500);
-check('System mode survives a reload (dark OS → dark)', (await html(p)).palette === 'navy-teal');
+check('System mode survives a reload (dark OS → the same twin)', (await html(p)).palette === 'mint-teal-dark', JSON.stringify(await html(p)));
 await p.screenshot({ path: `${out}/dashboard-dark.png` });
 
 // ---- picking a palette leaves System mode ----

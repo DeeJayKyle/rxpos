@@ -77,7 +77,8 @@ check('dashboard has no Add stock button', !(await A.evaluate(() => [...document
 await A.evaluate(() => document.querySelector('button[title="Theme"]').click()); await wait(300);
 const themes = await A.evaluate(() => [...document.querySelectorAll('.theme-item')].map((x) => x.innerText.split('\n')[0]));
 check('theme picker offers exactly the 3 themes the owner allowed', themes.length === 3, themes.join(', '));
-check('device starts on the owner\'s default theme (Forest Green)', await A.evaluate(() => document.documentElement.dataset.palette === 'forest-green'));
+// 1.17.0: Forest Green was merged into Pharmacy Green: an owner's saved default opens as the theme it joined
+check('device starts on the owner\'s default theme (Forest Green, now Pharmacy Green)', await A.evaluate(() => document.documentElement.dataset.palette === 'pharmacy-green'));
 await A.evaluate(() => [...document.querySelectorAll('.theme-item')].find((x) => x.textContent.includes('RxPOS Navy Teal')).click()); await wait(300);
 check('switching theme applies it', await A.evaluate(() => document.documentElement.dataset.palette === 'navy-teal' && document.documentElement.dataset.theme === 'dark'));
 await A.screenshot({ path: out + '/01-midnight-dashboard.png' });
@@ -164,7 +165,7 @@ await O.goto(base + '/#/owner', { waitUntil: 'networkidle2' }); await wait(800);
 await O.type('input[type=password]', ownerKey); await O.evaluate(() => [...document.querySelectorAll('button')].find((x) => x.textContent.includes('Sign in')).click()); await wait(2000);
 await O.evaluate(() => [...document.querySelectorAll('.tenant-card')].find((c) => c.textContent.includes('Bugolobi')).click()); await wait(1500);
 await O.evaluate(() => [...document.querySelectorAll('.tab')].find((x) => x.textContent.includes('Look')).click()); await wait(500);
-check('owner Look & logo tab lists all 41 themes', (await O.evaluate(() => document.querySelectorAll('.theme-card').length)) === 41);
+check('owner Look & logo tab lists all 31 themes', (await O.evaluate(() => document.querySelectorAll('.theme-card').length)) === 31);
 await O.screenshot({ path: out + '/10-owner-look.png' });
 
 // phone width

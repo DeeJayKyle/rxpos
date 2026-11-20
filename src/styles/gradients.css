@@ -1,0 +1,55 @@
+/* Gradients (1.17.0, the owner's choice; src/gradients.js). Each is a choice on this device, on top of any theme and style.
+   Screen only: receipts and labels print as before. */
+@media screen {
+  /* ---- 1. page backgrounds: a mesh of the theme's own colours; cards stay solid so words keep their contrast ---- */
+  :root[data-grad='soft'] body {
+    background-image:
+      radial-gradient(1100px 620px at 100% -8%, color-mix(in srgb, var(--primary) 16%, transparent), transparent 62%),
+      radial-gradient(900px 560px at -8% 108%, color-mix(in srgb, var(--kpi-2-a, var(--primary)) 14%, transparent), transparent 58%),
+      radial-gradient(700px 420px at 45% 40%, color-mix(in srgb, var(--kpi-3-a, var(--primary)) 7%, transparent), transparent 70%);
+  }
+  :root[data-grad='bold'] body {
+    background-image:
+      radial-gradient(1100px 680px at 100% -10%, color-mix(in srgb, var(--primary) 34%, transparent), transparent 62%),
+      radial-gradient(1000px 640px at -10% 110%, color-mix(in srgb, var(--kpi-2-a, var(--primary)) 30%, transparent), transparent 60%),
+      radial-gradient(800px 520px at 50% 45%, color-mix(in srgb, var(--kpi-4-a, var(--primary)) 16%, transparent), transparent 70%);
+  }
+  :root:is([data-grad='soft'], [data-grad='bold']) body { background-attachment: fixed; }
+  /* the page's own tinted panels let the mesh through a little; cards, tables and dialogs stay solid */
+  :root:is([data-grad='soft'], [data-grad='bold']) :is(.welcome, .bento-hero) { box-shadow: 0 18px 40px -22px color-mix(in srgb, var(--primary) 60%, transparent); }
+
+  /* ---- 2. accents: the theme's own two-tone sweep (already readable for the button words, themes.js accent()) ---- */
+  :root[data-grad-accents] .btn.primary { background: var(--accent-grad); border-color: transparent; }
+  :root[data-grad-accents] .seg button.on, :root[data-grad-accents] .range-presets button.on { background: var(--accent-grad); color: var(--on-accent); }
+  :root[data-grad-accents][data-sidebar] .sidebar nav a.active { background: var(--accent-grad); color: var(--on-accent); border-color: transparent; }
+  :root[data-grad-accents][data-sidebar] .sidebar nav a.active svg { color: var(--on-accent); }
+  :root[data-grad-accents] :is(.card-head, .card > h3) { position: relative; }
+  :root[data-grad-accents] .card:has(> .card-head)::before, :root[data-grad-accents] .card:has(> h3)::before {
+    content: ''; position: absolute; left: 0; right: 0; top: 0; height: 3px; border-radius: var(--r-card, 16px) var(--r-card, 16px) 0 0; background: var(--accent-grad); pointer-events: none;
+  }
+  :root[data-grad-accents] .card { position: relative; }
+
+  /* ---- 3. presets: a ready gradient for the menu and the welcome banner, its words readable on both ends ---- */
+  :root[data-grad-preset] .sidebar { background: linear-gradient(180deg, var(--gp-a) 0%, var(--gp-b) 100%) !important; }
+  :root[data-grad-preset] .sidebar :is(nav a, .nav-title, .brand, .store-name, .side-status, kbd, .icon-btn) { color: var(--gp-on) !important; }
+  :root[data-grad-preset] .sidebar nav a svg { color: var(--gp-on) !important; }
+  :root[data-grad-preset][data-sidebar] .sidebar nav a.active { background: var(--gp-on) !important; color: var(--gp-a) !important; border-color: transparent !important; }
+  :root[data-grad-preset][data-sidebar] .sidebar nav a.active svg { color: var(--gp-a) !important; }
+  :root[data-grad-preset] .sidebar nav a:not(.active) { background: transparent; border-color: transparent; }
+  :root[data-grad-preset] .welcome { background: radial-gradient(60% 120% at 100% 0%, rgba(255, 255, 255, .14), transparent 60%), linear-gradient(120deg, var(--gp-a), var(--gp-b)) !important; color: var(--gp-on); }
+  :root[data-grad-preset] .welcome :is(h1, .sub, .sub .muted, .date-pill) { color: var(--gp-on) !important; }
+  :root[data-grad-preset] .welcome .btn.primary { background: var(--gp-on) !important; color: var(--gp-a) !important; }
+}
+
+/* the theme menu's Gradient choices */
+.gradient-choice { display: grid; gap: 8px; padding: 4px 8px 8px; }
+.gradient-choice .grad-bg { width: 100%; }
+.gradient-choice .grad-bg button { flex: 1; }
+.grad-swatch.accents { background: var(--accent-grad); }
+.grad-presets { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.grad-preset { display: grid; justify-items: center; gap: 3px; padding: 4px 2px; border: 1px solid transparent; border-radius: 10px; background: none; cursor: pointer; color: var(--text); font: inherit; }
+.grad-preset > span { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .12); }
+.grad-preset.none > span { background: var(--surface-2); color: var(--muted); font-size: 12px; }
+.grad-preset small { font-size: 10.5px; }
+.grad-preset.on { border-color: var(--primary); background: var(--primary-soft); }
+.bell-sub { padding: 6px 12px 2px; font-size: 10.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }

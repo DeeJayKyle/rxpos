@@ -20,8 +20,10 @@ part 'theme_choice.g.dart';
 class Look {
   // the React app's look from the start (src/themes.js startupTheme): Daylight Clinical, or OLED Black when the system is
   // dark, with no design system on top
-  const Look({this.theme = daylightClinicalPaletteId, this.system = true, this.accent = '', this.surface = 'flat', this.level = 'calm', this.beforePremium = '', this.design = ''});
+  const Look({this.theme = daylightClinicalPaletteId, this.system = true, this.accent = '', this.surface = 'flat', this.level = 'calm', this.beforePremium = '', this.design = '', this.gradient = 'off'});
   final String theme, accent, surface, level, beforePremium;
+  /// the page background's gradient (1.17.0): off, soft or bold
+  final String gradient;
   /// the design system in use ('' for none)
   final String design;
   final bool system;
@@ -29,13 +31,13 @@ class Look {
   /// The design system in use, or null.
   DesignSystem? get designSystem => design.isEmpty ? null : designById(design);
 
-  Look copyWith({String? theme, bool? system, String? accent, String? surface, String? level, String? beforePremium, String? design}) => Look(
+  Look copyWith({String? theme, bool? system, String? accent, String? surface, String? level, String? beforePremium, String? design, String? gradient}) => Look(
         theme: theme ?? this.theme, system: system ?? this.system, accent: accent ?? this.accent, surface: surface ?? this.surface,
-        level: level ?? this.level, beforePremium: beforePremium ?? this.beforePremium, design: design ?? this.design,
+        level: level ?? this.level, beforePremium: beforePremium ?? this.beforePremium, design: design ?? this.design, gradient: gradient ?? this.gradient,
       );
 
   Map<String, Object?> toJson() => {'v': 4, 'theme': theme, 'mode': system ? 'system' : '', 'accent': accent, 'surface': surface, 'level': level,
-    'beforePremium': beforePremium, if (design.isNotEmpty) 'design': design};
+    'beforePremium': beforePremium, if (design.isNotEmpty) 'design': design, if (gradient != 'off') 'gradient': gradient};
 
   static Look parse(String? v) {
     try {
@@ -46,7 +48,7 @@ class Look {
       final oldGreen = ver < 4 && (j['design'] == 'rxpos-green' || j['design'] == null);
       return Look(
         // a theme retired in Nov 2026 → the kept one closest to it (themes.dart retiredPalettes)
-        theme: palettes.any((p) => p.id == currentPaletteId(theme)) ? currentPaletteId(theme) : daylightClinicalPaletteId,
+        theme: palettes.any((p) => p.id == currentPaletteId(theme)) || paletteTwins.any((p) => p.id == theme) ? currentPaletteId(theme) : daylightClinicalPaletteId,
         system: j['mode'] == 'system',
         accent: accents.any((a) => a.$1 == j['accent']) ? '${j['accent']}' : '',
         // Aurora is the standard look from version 2 of the saved look; a device still on the old standard (Flat) moves to it once
@@ -54,6 +56,7 @@ class Look {
         level: j['level'] == 'vivid' ? 'vivid' : 'calm',
         beforePremium: '${j['beforePremium'] ?? ''}',
         design: designById('${j['design'] ?? ''}') != null && !oldGreen ? '${j['design']}' : '',
+        gradient: j['gradient'] == 'soft' || j['gradient'] == 'bold' ? '${j['gradient']}' : 'off',
       );
     } catch (_) {
       return const Look();
@@ -98,13 +101,17 @@ class LookController extends AsyncNotifier<Look> {
   Future<void> base(bool dark, List<Palette> allowed, {String? preferred}) async {
     final l = await _now();
     final cur = paletteById(l.theme);
-    await save(l.copyWith(design: '', system: false, theme: cur.dark == dark && allowed.any((p) => p.id == cur.id) ? cur.id : paletteFor(dark, allowed, preferred)));
+    // 1.17.0: Dark keeps this theme's colours (its dark twin), Light goes back to it
+    final twin = twinOf(cur.id, dark);
+    final ok = twin != null && (allowed.any((p) => p.id == twin) || allowed.any((p) => '${p.id}-dark' == twin));
+    await save(l.copyWith(design: '', system: false, theme: cur.dark == dark && allowed.any((p) => p.id == cur.id) ? cur.id : ok ? twin : paletteFor(dark, allowed, preferred)));
   }
 
   Future<void> followSystem() async => save((await _now()).copyWith(system: true, design: ''));
   Future<void> accent(String id) async => save((await _now()).copyWith(accent: id));
   Future<void> surface(String id) async => save((await _now()).copyWith(surface: id, design: ''));
   Future<void> level(String id) async => save((await _now()).copyWith(level: id));
+  Future<void> gradient(String id) async => save((await _now()).copyWith(gradient: id));
 
   /// Premium UI on: Midnight Pro (remembering the theme before); off: back to that theme.
   Future<void> premium(bool on, List<Palette> allowed) async {
