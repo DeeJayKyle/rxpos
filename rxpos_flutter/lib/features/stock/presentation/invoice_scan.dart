@@ -18,6 +18,7 @@ import '../../../core/network/files.dart';
 import '../../../core/presentation/widgets.dart';
 import '../../../core/rules/dates.dart';
 import '../../../core/rules/ids.dart';
+import '../../../core/rules/invoice_match.dart' show rankProducts;
 import '../../../core/rules/packs.dart';
 import '../../auth/application/session_controller.dart';
 import '../domain/stock_form.dart';
@@ -52,30 +53,13 @@ String normDate(Object? v, {bool endOfMonth = true}) {
 const _stop = {'tablet', 'tablets', 'tabs', 'tab', 'capsule', 'capsules', 'caps', 'cap', 'syrup', 'suspension', 'susp', 'cream', 'injection', 'inj', 'drops', 'the', 'and',
   'with', 'for', 'pack', 'pcs', 'box', 'bottle', 'btl'};
 List<String> _tokens(String s) => s.toLowerCase().replaceAll(RegExp(r'[^a-z0-9.]+'), ' ').split(' ').where((w) => w.isNotEmpty && !_stop.contains(w)).toList();
-List<String> _strengths(String s) => RegExp(r'\d+(\.\d+)?\s*(mg|mcg|g|ml|iu|%)').allMatches(s.toLowerCase()).map((m) => m[0]!.replaceAll(RegExp(r'\s+'), '')).toList();
 
 /// Best match for a name read off an invoice among this pharmacy's medicines (null when nothing is close).
-Product? matchProduct(String name, Iterable<Product> products, double Function(String) stockOf) {
-  final want = _tokens(name);
-  if (want.isEmpty) return null;
-  final wantStr = _strengths(name);
-  final words = want.where((w) => !RegExp(r'^\d').hasMatch(w)).toList();
-  if (words.isEmpty) return null;
-  Product? best;
-  var bestScore = 0.0;
-  for (final p in products) {
-    final have = _tokens('${p.name} ${p.generic}').toSet();
-    final hit = words.where((w) => have.contains(w) || have.any((h) => h.length >= 5 && (h.startsWith(w) || w.startsWith(h)))).length / words.length;
-    if (hit < 0.5) continue;
-    final pStr = _strengths(p.name);
-    final strengthOk = wantStr.isEmpty || pStr.isEmpty || wantStr.any(pStr.contains);
-    final score = hit + (strengthOk ? 0.3 : -0.6) + (_tokens(p.name).firstOrNull == want.first ? 0.2 : 0) + (stockOf(p.id) > 0 ? 0.05 : 0);
-    if (best == null || score > bestScore) {
-      best = p;
-      bestScore = score;
-    }
-  }
-  return best != null && bestScore >= 0.75 ? best : null;
+/// Best match for a name read off an invoice among this pharmacy's medicines, only when it is safe to choose (same
+/// strength, nothing as likely): core/rules/invoice_match.dart, as the web app.
+Product? matchProduct(String name, Iterable<Product> products, double Function(String) stockOf, {Map<String, String>? learned, String? alt}) {
+  final r = rankProducts(name, products.toList(), stockOf: (p) => stockOf(p.id), learned: learned, alt: alt);
+  return r.isNotEmpty && r.first.sure ? r.first.p : null;
 }
 
 /// The supplier named on the invoice → one of the pharmacy's suppliers (or null).
@@ -126,10 +110,14 @@ String checkTextOf(Map read) {
 }
 
 /// How many lines of a scanned delivery still need a person's eye.
-int toCheck(List<Line> ls) => ls.where((l) {
-      final r = l['read'] as Map?;
-      return r != null && ('${l['productId'] ?? ''}'.isEmpty || ((r['check'] as List?)?.isNotEmpty ?? false) || r['unclear'] == true);
-    }).length;
+int toCheck(List<Line> ls) => ls.where(needsCheck).length;
+
+/// A scanned line still to check (src/drafts.js needsCheck): no medicine yet, or something to check, until the person
+/// ticks "Checked" (read.ok).
+bool needsCheck(Line l) {
+  final r = l['read'] as Map?;
+  return r != null && r['ok'] != true && ('${l['productId'] ?? ''}'.isEmpty || ((r['check'] as List?)?.isNotEmpty ?? false) || r['unclear'] == true);
+}
 
 /// A scanned line whose batch or expiry was missing or doubtful (listed in `check`): the medicine's last delivery's,
 /// for the person to check (an expiry that has passed is not used). As src/invoiceMatch.js fillFromLast.
@@ -201,7 +189,8 @@ Map<String, Object?> withLast(Map<String, Object?> base, String? productId, Phar
   return (
     form: {
       ...form, 'supplierId': x.sup?.id ?? form['supplierId'], 'invoice': x.invoice.isEmpty ? form['invoice'] : x.invoice, 'date': x.date.isEmpty ? form['date'] : x.date,
-      'lines': keep.isEmpty && x.lines.isEmpty ? [blankLine()] : [...keep, ...x.lines],
+      // the lines to check first (2026-11-20), then the lines read well
+      'lines': keep.isEmpty && x.lines.isEmpty ? [blankLine()] : [...keep, ...x.lines.where(needsCheck), ...x.lines.where((l) => !needsCheck(l))],
     },
     summary: x.summary,
   );

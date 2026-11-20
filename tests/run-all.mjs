@@ -21,6 +21,8 @@ const SUITES = [
   ['invoice lines matched to medicines, photo clean-up (unit)', 'unit-invoice-match.mjs', []],
   ['past sales into shifts (unit)', 'unit-shifts-from-sales.mjs', []],
   ['consistent medicine names (unit)', 'unit-medname.mjs', []],
+  ['the same item under different names, merged on approval (unit)', 'unit-medmerge.mjs', []],
+  ['menu counts and notifications highlight only while new (unit)', 'unit-seen.mjs', []],
   ['the owner\'s law: no cloud data change without approval (unit)', 'unit-owner-law.mjs', []],
   ['AI copilot and vision routes, mocked Workers AI (unit)', 'unit-ai-routes.mjs', []],
   ['date formats (unit)', 'unit-dateformat.mjs', []],

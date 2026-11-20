@@ -144,7 +144,7 @@ input[type='checkbox'] { accent-color: var(--primary); width: 16px; height: 16px
 .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 18px; color: #fff; padding: 0 8px; letter-spacing: -.02em; }
 .brand.big { font-size: 28px; color: var(--text); justify-content: center; }
 .logo { width: 34px; height: 34px; border-radius: 10px; background: var(--accent-grad); color: var(--on-accent); display: grid; place-items: center; box-shadow: 0 6px 18px -6px rgba(20, 184, 166, .8); flex-shrink: 0; }
-.store-name { font-size: 12px; opacity: .65; padding: 2px 8px 14px 52px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.store-name { font-size: 16px; font-weight: 700; letter-spacing: -.01em; opacity: .95; /* bigger: the owner's request, 2026-11-20 */ padding: 2px 8px 14px 52px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sidebar nav { display: flex; flex-direction: column; flex: 1; overflow-y: auto; margin: 0 -4px; padding: 0 4px; scrollbar-width: thin; scrollbar-color: #26324a transparent; }
 .nav-group { display: flex; flex-direction: column; gap: 1px; margin-bottom: 10px; }
 .nav-title { font-size: 10.5px; text-transform: uppercase; letter-spacing: .1em; opacity: .5; padding: 8px 10px 4px; font-weight: 700; display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; background: none; border: 0; color: inherit; font-family: inherit; }
@@ -917,6 +917,11 @@ td.scan-check { background: var(--warn-soft); }
 .scan-suggest { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 4px; color: var(--muted); }
 .scan-suggest .chip-btn { font: inherit; font-size: 12px; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--border); background: var(--primary-soft); color: var(--primary-ink); cursor: pointer; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .scan-suggest .chip-btn:hover { border-color: var(--primary); }
+.merge-groups { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 10px; }
+.merge-groups h4 { margin: 0 0 4px; }
+.merge-group { display: flex; gap: 12px; align-items: flex-start; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; margin-top: 6px; }
+.merge-group.on { border-color: var(--primary); background: var(--primary-soft); }
+.merge-item { display: block; padding: 2px 0; cursor: pointer; }
 .text-warn { color: var(--warn); }
 .scan-confirm { margin-top: 12px; }
 
@@ -2979,3 +2984,23 @@ tr.group-head > td { background: var(--surface-2); padding: 6px 10px; }
 .chips-row > * { flex: none; }
 .sidebar nav a kbd { display: none; }
 .sidebar nav a:is(:hover, :focus-visible) kbd { display: inline-block; }
+
+/* Add Stock (the owner's request, 2026-11-20): start with the scan, the details folded to a line, the next box
+   outlined, the lines to check marked, and on a phone each line a card with its batch, expiry and price behind a tap */
+.scan-first { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; border: 2px dashed color-mix(in srgb, var(--primary) 45%, transparent); background: var(--primary-soft); }
+.scan-first strong { display: flex; align-items: center; gap: 6px; font-size: 16px; }
+.invoice-summary { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline; width: 100%; text-align: left; font: inherit; color: var(--text); background: var(--surface-2, var(--surface)); border: 1px solid var(--border); border-radius: 12px; padding: 10px 14px; margin-bottom: 10px; cursor: pointer; }
+.invoice-summary span:not(.link-btn) { color: var(--muted); }
+.invoice-summary .link-btn { margin-left: auto; }
+.invoice-fold { align-self: flex-end; }
+.stock-lines td.next-field :is(input, select, .date-input) { outline: 2px solid var(--primary); outline-offset: 1px; border-radius: 8px; animation: next-pulse 1.6s ease-in-out 2; }
+@keyframes next-pulse { 50% { outline-color: transparent; } }
+@media (prefers-reduced-motion: reduce) { .stock-lines td.next-field :is(input, select, .date-input) { animation: none; } }
+.stock-lines tr.to-check { box-shadow: inset 4px 0 0 var(--warn, #d97706); }
+.line-checked { margin-top: 4px; }
+.more-toggle { display: none; }
+@media (max-width: 700px) {
+  .more-toggle { display: inline-block; margin-top: 4px; }
+  .stock-lines tr:not(.show-more) td.more-cell { display: none; }
+  .stock-lines tr { display: block; border: 1px solid var(--border); border-radius: 12px; margin-bottom: 8px; padding: 6px 8px; }
+}

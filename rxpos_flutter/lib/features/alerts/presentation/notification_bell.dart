@@ -1,6 +1,9 @@
 // The bell in the top bar (src/engage.jsx NotificationBell): today's alerts grouped as Urgent, Needs attention and
 // For information, each opening its page; the count on the bell (red when something is urgent); sounds on this device.
+import 'dart:convert';
+
 import 'package:rxpos/core/theme/themes.dart' show TonesOfContext;
+import '../../../core/rules/seen.dart';
 import 'package:flutter/material.dart';
 import '../../../core/presentation/app_dialog.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -24,15 +27,21 @@ class NotificationBell extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final alerts = ref.watch(alertsProvider);
-    final urgent = alerts.where((a) => a.tone == 'danger').length;
+    // opening the bell marks what it shows as read; only new alerts light it again (the owner's request, 2026-11-20)
+    final seen = seenOf(ref.watch(deviceValueProvider(bellSeenKey)).value);
+    final unread = alerts.where((a) => alertUnread(a.key, a.text, seen)).toList();
+    final urgent = unread.where((a) => a.tone == 'danger').length;
     return IconButton(
       key: const Key('bell'),
-      tooltip: 'Notifications${alerts.isEmpty ? '' : ': ${alerts.length}${urgent > 0 ? ', $urgent urgent' : ''}'}',
-      onPressed: () => showAppDialog<void>(context: context, builder: (_) => const _BellMenu()),
+      tooltip: 'Notifications${unread.isEmpty ? (alerts.isEmpty ? '' : ' (${alerts.length}, all read)') : ': ${unread.length} new${urgent > 0 ? ', $urgent urgent' : ''}'}',
+      onPressed: () {
+        ref.read(deviceValueProvider(bellSeenKey).notifier).set(jsonEncode({for (final a in alerts) a.key: a.text}));
+        showAppDialog<void>(context: context, builder: (_) => const _BellMenu());
+      },
       icon: Badge(
-        isLabelVisible: alerts.isNotEmpty,
+        isLabelVisible: unread.isNotEmpty,
         backgroundColor: urgent > 0 ? Theme.of(context).colorScheme.error : context.tones.warn,
-        label: Text('${alerts.length}'),
+        label: Text('${unread.length}'),
         child: const Icon(Icons.notifications_outlined),
       ),
     );

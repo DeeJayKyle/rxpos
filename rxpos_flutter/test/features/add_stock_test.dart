@@ -122,10 +122,13 @@ void main() {
       final x = applyScan(r, blankForm(s), d, user: 'Tia');
       final ls = lines(x.form);
       expect((x.form['supplierId'], x.form['invoice'], x.form['date']), ('s1', 'INV-9', '2026-11-05'));
-      expect((ls[0]['productId'], ls[0]['recvPack'], ls[0]['cost'], ls[0]['expiry'], ls[0]['price']), ('p1', 'Box', '3100', '2027-12-30', '60'));
-      expect((ls[1]['price'], ls[2]['by'], ls[2]['total'], ls[2]['cost'], ls[2]['price']), ('', 'total', '6000', '3000', '60'),
+      // the line to check comes first (2026-11-20), then the lines read well in invoice order
+      expect((ls[1]['productId'], ls[1]['recvPack'], ls[1]['cost'], ls[1]['expiry'], ls[1]['price']), ('p1', 'Box', '3100', '2027-12-30', '60'));
+      expect((ls[0]['price'], ls[2]['by'], ls[2]['total'], ls[2]['cost'], ls[2]['price']), ('', 'total', '6000', '3000', '60'),
           reason: 'no price from the invoice for a new medicine; the line total preferred over the unit cost');
-      expect((ls[1]['productId'], ls[1]['total'], checkTextOf(ls[1]['read'] as Map)), ('', '3100', 'quantity (other reading: 2)'));
+      expect((ls[0]['productId'], ls[0]['total'], checkTextOf(ls[0]['read'] as Map)), ('', '3100', 'quantity (other reading: 2)'));
+      expect(needsCheck(ls[0]), isTrue);
+      expect(needsCheck({...ls[0], 'productId': 'p1', 'read': {...(ls[0]['read'] as Map), 'ok': true}}), isFalse, reason: 'ticked Checked');
       expect((x.summary['unmatched'], x.summary['unclear'], x.summary['supplierMatched']), (1, 1, true));
     });
   });

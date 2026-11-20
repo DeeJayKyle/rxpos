@@ -29,6 +29,7 @@ import 'keys_host.dart';
 import 'nav.dart';
 import 'nav_history.dart';
 import 'screens.dart';
+import '../rules/seen.dart';
 import '../../features/shifts/presentation/shift_prompts.dart' show ShiftOnSignIn;
 import 'theme_menu.dart';
 import '../theme/themes.dart';
@@ -246,7 +247,13 @@ class _Sidebar extends ConsumerWidget {
           : {for (final x in navGroups) x: x != g, 'Pinned': collapsed['Pinned'] ?? false};
       ref.read(deviceValueProvider(navCollapsedKey).notifier).set(jsonEncode(next));
     }
-    int badge(Screen s) => counts[_badges[s.path]] ?? 0;
+    // counts already seen on this device (core/rules/seen.dart): the page open now marks its count read, so it stops
+    // highlighting and its folded group closes again; a higher count shows again (the owner's request, 2026-11-20)
+    final seen = seenOf(ref.watch(deviceValueProvider(navSeenKey)).value);
+    final here = screens.where((s) => s.path == location && _badges[s.path] != null).firstOrNull;
+    final upd = nextSeen(seen, {for (final e in _badges.entries) e.value: counts[e.value] ?? 0}, read: here == null ? null : _badges[here.path]);
+    if (upd != null) WidgetsBinding.instance.addPostFrameCallback((_) => ref.read(deviceValueProvider(navSeenKey).notifier).set(jsonEncode(upd)));
+    int badge(Screen s) => _badges[s.path] == null ? 0 : unreadCount(counts[_badges[s.path]] ?? 0, seen[_badges[s.path]]);
 
     if (rail) {
       return ListView(key: const Key('sidebar'), padding: const EdgeInsets.symmetric(vertical: 8), children: [
@@ -586,7 +593,8 @@ class _SideHeader extends StatelessWidget {
               TextSpan(text: 'POS', style: TextStyle(color: sc.active)),
             ]), style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, letterSpacing: -.3, height: 1.2)),
             if (pharmacy.isNotEmpty)
-              Text(pharmacy, key: const Key('sidebar-pharmacy'), maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12.5, color: sc.text, height: 1.3)),
+              // bigger (the owner's request, 2026-11-20)
+              Text(pharmacy, key: const Key('sidebar-pharmacy'), maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: sc.text, height: 1.25)),
           ]),
         ),
         ?toggle,

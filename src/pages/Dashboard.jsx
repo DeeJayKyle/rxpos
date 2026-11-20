@@ -145,7 +145,7 @@ export default function Dashboard() {
         {/* sales open Reports → Sales lines for the period (every medicine sold); staff without it get the sales list */}
         <Stat {...salesTo} label={isToday ? "Today's sales" : 'Sales'} value={fmtShort(c.total)} full={fmt(c.total)} tone="teal" icon={Banknote} ring={{ pct: share(c.total, pv.total), title: `of the sales ${vsWords}` }} />
         {can('reports') && <Stat to="/reports" state={{ tab: 'profit', ...rangeState }} label={isToday ? 'Gross profit today' : 'Gross profit'} value={fmtShort(c.gp)} full={fmt(c.gp)} tone="violet" icon={TrendingUp} ring={{ pct: share(c.gp, c.total), title: 'gross margin (profit ÷ sales)' }} />}
-        {(can('finance') || can('reports')) && <Stat to="/expenses" label={isToday ? "Today's expenses" : 'Expenses'} value={fmtShort(c.exp)} full={fmt(c.exp)} tone="orange" icon={Wallet} ring={{ pct: share(c.exp, c.total), title: 'of sales spent on expenses' }} />}
+        {(can('finance') || can('reports')) && <Stat to="/expenses" label={isToday ? "Today's expenses" : 'Expenses'} value={fmtShort(c.exp)} full={fmt(c.exp)} tone="orange" icon={Wallet} hint={db.branches.length > 1 ? 'Whole pharmacy: expenses have no branch' : undefined} ring={{ pct: share(c.exp, c.total), title: 'of sales spent on expenses' }} />}
         <Stat to="/sales" state={rangeState} label="Transactions" value={c.n.toLocaleString()} tone="blue" icon={ReceiptText} ring={{ pct: share(c.n, pv.n), title: `of the receipts ${vsWords}` }} />
       </div>
     ),

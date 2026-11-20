@@ -385,13 +385,13 @@ export function StatRing({ pct, title }) {
   );
 }
 
-export function Stat({ label, value, full, sub, tone, icon: Icon, delta, to, state, goodDown, spark, ring }) {
+export function Stat({ label, value, full, sub, tone, icon: Icon, delta, to, state, goodDown, spark, ring, hint }) {
   const navigate = useNavigate();
   const go = to ? () => navigate(to, state ? { state } : undefined) : undefined;
   const short = full && full !== value;
   const d = delta != null && isFinite(delta) ? `${delta >= 0 ? '▲ +' : '▼ −'}${Math.abs(Math.round(delta))}%` : '';
   return (
-    <div className={'card stat ' + (tone || '') + (to ? ' link' : '') + (/\balert\b/.test(tone || '') && Number(value) > 0 ? ' flagged' : '')} onClick={go} role={to ? 'link' : undefined} tabIndex={to ? 0 : undefined} onKeyDown={to ? (e) => e.key === 'Enter' && go() : undefined}>
+    <div className={'card stat ' + (tone || '') + (to ? ' link' : '') + (/\balert\b/.test(tone || '') && Number(value) > 0 ? ' flagged' : '')} onClick={go} role={to ? 'link' : undefined} tabIndex={to ? 0 : undefined} onKeyDown={to ? (e) => e.key === 'Enter' && go() : undefined} title={hint}>
       {Icon && <span className="stat-icon"><Icon size={20} /></span>}
       <small>{label}</small>
       <strong title={short ? full : undefined} aria-label={short ? full : undefined} data-full={short ? full : undefined}>{short ? value : <CountUp value={value} />}</strong>

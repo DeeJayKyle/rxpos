@@ -650,6 +650,37 @@ void main() {
     await done(tester);
   });
 
+  testWidgets('Tidy names: the same item under two names is merged only after approval; its stock moves to the kept one', (tester) async {
+    await tester.runAsync(signedIn);
+    await tester.runAsync(() => RecordStore(db).update((d) {
+          d.put('products', {'id': 'p9', 'name': 'CALMEX 500 MG TABLETS', 'unit': 'Tablet', 'barcode': '7019999', 'price': 500, 'cost': 300});
+          d.put('batches', {'id': 'b9', 'productId': 'p9', 'batch': 'C9', 'expiry': '2029-06-30', 'cost': 300});
+          d.move(productId: 'p9', qty: 5, type: 'Opening stock', batchId: 'b9');
+        }));
+    await start(tester);
+    GoRouter.of(tester.element(find.byType(Scaffold).first)).go('/medicines');
+    await settle(tester, 4);
+    await tester.tap(find.byKey(const Key('tidy-names')));
+    await settle(tester, 4);
+    expect(find.byKey(const Key('merge-groups')), findsOneWidget);
+    expect(tester.widget<FilledButton>(find.byKey(const Key('merge-apply'))).onPressed, isNull, reason: 'nothing ticked: nothing to merge');
+    await tester.tap(find.text('Merge these'));
+    await settle(tester);
+    await tester.tap(find.byKey(const Key('merge-apply')));
+    await settle(tester);
+    expect(find.textContaining('Merge 1 group'), findsOneWidget, reason: 'asks for approval first');
+    await tester.tap(find.byKey(const Key('confirm-yes')));
+    await settle(tester, 6);
+    final store = RecordStore(db);
+    final products = (await tester.runAsync(() => store.rows('products')))!;
+    expect(products.any((x) => x['id'] == 'p9'), isFalse, reason: 'the other name is removed');
+    final kept = products.firstWhere((x) => x['id'] == 'p1');
+    expect(kept['aliases'], contains('CALMEX 500 MG TABLETS'));
+    final moves = (await tester.runAsync(() => store.rows('movements')))!.where((m) => m['type'] == 'Merge').toList();
+    expect(moves.map((m) => '${m['productId']} ${m['qty']}').toSet(), {'p9 -5', 'p1 5'});
+    await done(tester);
+  });
+
   testWidgets('a sale can be held and resumed', (tester) async {
     await tester.runAsync(signedIn);
     await start(tester);

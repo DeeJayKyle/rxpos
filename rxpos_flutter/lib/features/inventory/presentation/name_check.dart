@@ -9,6 +9,8 @@ import '../../../core/data/record_store.dart';
 import '../../../core/network/cloud_api.dart' show cloudApiProvider;
 import '../../../core/presentation/widgets.dart';
 import '../../../core/rules/medname.dart';
+import '../../../core/rules/invoice_match.dart' show mergeGroups, mergedRecord;
+import '../../../core/entities/product.dart';
 import '../../auth/application/session_controller.dart';
 
 class _Row {
@@ -26,8 +28,16 @@ class _NameCheck extends ConsumerStatefulWidget {
   ConsumerState<_NameCheck> createState() => _NameCheckState();
 }
 
+class _Group {
+  _Group(this.items, this.keep);
+  final List<Product> items;
+  String keep;
+  bool on = false;
+}
+
 class _NameCheckState extends ConsumerState<_NameCheck> {
   List<_Row>? _rows;
+  List<_Group>? _groups;
   String _busy = '';
   int _aiFrom = 0;
 
@@ -36,7 +46,11 @@ class _NameCheckState extends ConsumerState<_NameCheck> {
     final d = ref.watch(pharmacyProvider).value;
     if (d == null) return const AlertDialog(content: SizedBox(height: 80, child: Center(child: CircularProgressIndicator())));
     _rows ??= [for (final s in nameSuggestions(d.products.map((p) => (id: p.id, name: p.name)))) _Row(s.id, s.from, s.to, 'house style')];
+    _groups ??= [for (final g in mergeGroups(d.products, (p) => d.stockOf(p.id))) _Group(g.items, g.keep)];
+    final can = ref.watch(permissionsProvider).value ?? const <String>{};
+    final canMerge = can.contains('medicines.manage') && can.contains('stock.adjust');
     final rows = _rows!, ticked = rows.where((r) => r.on && safeRename(r.from, r.to)).toList();
+    final groups = _groups!;
     return AlertDialog(
       key: const Key('name-check'),
       title: const Text('Tidy medicine names'),
@@ -53,9 +67,34 @@ class _NameCheckState extends ConsumerState<_NameCheck> {
           ]),
           const SizedBox(height: 8),
           Expanded(
-            child: rows.isEmpty
+            child: rows.isEmpty && groups.isEmpty
                 ? const Center(child: Text('The names already follow the house style.'))
                 : ListView(children: [
+                    if (groups.isNotEmpty) ...[
+                      Text('The same item under different names (${groups.length})', key: const Key('merge-groups'), style: Theme.of(context).textTheme.titleSmall),
+                      Text('Same words, strength and form. Choose the name to keep and tick the groups to merge; nothing is merged until you approve.${canMerge ? '' : ' Merging needs the permissions to manage medicines and adjust stock.'}',
+                          style: Theme.of(context).textTheme.bodySmall),
+                      for (final g in groups)
+                        Card(
+                          child: Column(children: [
+                            CheckboxListTile(dense: true, value: g.on, onChanged: canMerge ? (v) => setState(() => g.on = v ?? false) : null, title: const Text('Merge these')),
+                            RadioGroup<String>(
+                              groupValue: g.keep,
+                              onChanged: (v) => setState(() => g.keep = v ?? g.keep),
+                              child: Column(children: [
+                                for (final p in g.items)
+                                  RadioListTile<String>(dense: true, value: p.id, title: Text(p.name), subtitle: Text('${d.stockOf(p.id)} in stock${p.barcode.isEmpty ? '' : ' · ${p.barcode}'}${g.keep == p.id ? ' · kept' : ''}')),
+                              ]),
+                            ),
+                          ]),
+                        ),
+                      if (canMerge)
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: FilledButton(key: const Key('merge-apply'), onPressed: groups.any((g) => g.on) ? () => _merge(d) : null, child: Text('Approve and merge ${groups.where((g) => g.on).length}')),
+                        ),
+                      const Divider(),
+                    ],
                     for (final r in rows)
                       CheckboxListTile(
                         key: ValueKey('tidy-${r.id}'),
@@ -76,6 +115,43 @@ class _NameCheckState extends ConsumerState<_NameCheck> {
         FilledButton(key: const Key('name-check-apply'), onPressed: ticked.isEmpty ? null : () => _apply(ticked), child: Text('Approve and rename ${ticked.isEmpty ? '' : ticked.length}')),
       ],
     );
+  }
+
+  /// The kept medicine takes over the others' stock (Merge moves, batch by batch, in every branch), their names as
+  /// aliases, barcode and packs; the others are removed. Past sales and deliveries are not changed.
+  Future<void> _merge(PharmacyData d) async {
+    final chosen = _groups!.where((g) => g.on).toList();
+    String line(_Group g) => '${g.items.where((p) => p.id != g.keep).map((p) => p.name).join(', ')} → ${g.items.firstWhere((p) => p.id == g.keep).name}';
+    if (!await confirmAction(context, 'Merge ${chosen.length} group${chosen.length == 1 ? '' : 's'} of the same item?',
+        'The kept medicine takes over the others\' stock (in every branch, recorded as "Merge" stock moves), their barcode and packs, and keeps their names so searches and invoices still find it. The others are then removed. Past sales and deliveries are not changed.',
+        'Approve and merge', effects: [for (final g in chosen.take(8)) line(g), if (chosen.length > 8) 'and ${chosen.length - 8} more'])) { return; }
+    final who = ref.read(sessionControllerProvider).value?.userName ?? '';
+    final branches = [for (final b in await ref.read(recordStoreProvider).rows('branches')) '${b['id']}'];
+    if (branches.isEmpty) branches.add(d.branch);
+    await ref.read(recordStoreProvider).update((db) async {
+      for (final g in chosen) {
+        final keep = g.items.firstWhere((p) => p.id == g.keep);
+        final gone = g.items.where((p) => p.id != g.keep).toList();
+        for (final o in gone) {
+          for (final br in branches) {
+            for (final b in d.stock.batchesOf(o.id, atBranch: br)) {
+              if (b.qty <= 0) continue;
+              final nb = await db.addBatch(productId: keep.id, batch: b.batch == '—' ? '' : b.batch, expiry: b.expiry, cost: b.cost);
+              db.move(productId: o.id, qty: -b.qty, type: 'Merge', ref: 'into ${keep.name}', user: who, batchId: b.legacy ? null : b.id, branchId: br);
+              db.move(productId: keep.id, qty: b.qty, type: 'Merge', ref: 'from ${o.name}', user: who, batchId: '${nb['id']}', branchId: br);
+            }
+          }
+        }
+        db.put('products', mergedRecord(keep.toRecord(), [for (final o in gone) o.toRecord()]));
+        for (final o in gone) {
+          db.del('products', o.id);
+        }
+        db.audit(who, 'Medicines merged (approved)', '${gone.map((o) => o.name).join(', ')} → ${keep.name}');
+      }
+    });
+    if (!mounted) return;
+    setState(() => _groups!.removeWhere((g) => g.on));
+    say(context, '${chosen.length} group${chosen.length == 1 ? '' : 's'} merged');
   }
 
   Future<void> _askAi(PharmacyData d) async {

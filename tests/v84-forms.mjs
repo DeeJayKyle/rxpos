@@ -89,6 +89,8 @@ await p.evaluate(() => [...document.querySelectorAll('.modal button')].find((x) 
 const calmex = (await recs(tid, 'products')).find((x) => x.id === 'fp1');
 check('A5 the record keeps only the photo\'s address, not the picture', /^\/api\/files\//.test(calmex?.photo || '') && JSON.stringify(calmex).length < 2000, String(calmex?.photo));
 await p.evaluate(() => { location.hash = '#/pos'; }); await wait(1500);
+// the till opens on In stock (the owner's rule, 2026-11-20): the medicines here have none, so they show under All
+await p.evaluate(() => [...document.querySelectorAll('.view-chip')].find((x) => x.textContent.trim() === 'All')?.click()); await wait(400);
 check('A5 the till tile shows the photo; one without a photo shows its first letter', await p.evaluate(() => { const t = [...document.querySelectorAll('.product')].find((x) => /Calmex/.test(x.innerText)); return !!t?.querySelector('img.med-thumb'); }));
 
 // Add Stock: draft saved, an expiry that has passed

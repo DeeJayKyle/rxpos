@@ -29,6 +29,7 @@ import { LEVELS, applyLevel, savedLevel, saveLevel } from './vivid.js';
 import { GRADIENT_BACKGROUNDS, GRADIENT_PRESETS, savedGradient, saveGradient, applyGradient } from './gradients.js';
 import { TwoStepModal } from './twostep.jsx';
 import { startShift, openShiftOf, shiftQuestions } from './shiftstart.js';
+import { seenMap, unreadCount as newCount, markCounts, settleCounts, NAV_SEEN } from './seen.js';
 import { setCrashCloud } from './crash.js';
 import { homeFor, chosenTabs } from './landing.js';
 import { setBadge } from './badges.js';
@@ -363,6 +364,9 @@ function SideStatus() {
   const online = useOnline();
   const { pending = 0, syncStatus } = useSyncState() || {};
   const off = !online || syncStatus?.state === 'offline';
+  // the owner's request (2026-11-20): no "Online" card; it shows only when the device is offline (the clock in the top
+  // bar keeps saying how the sync stands)
+  if (!off) return null;
   return (
     <div className={'side-status' + (off ? ' off' : '')} role="status" title={off ? 'Offline: your work is kept on this device' : 'Online'}>
       <span className="dot" aria-hidden="true" />
@@ -521,6 +525,9 @@ function Shell() {
   }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const [updReady, setUpdReady] = useState(false);
   useEffect(() => onUpdate((u) => setUpdReady(u.status === 'ready')), []);
+  // menu counts already seen on this device (src/seen.js): opening a page marks its count read, so it stops
+  // highlighting and its folded group closes again; a higher count shows again (the owner's request, 2026-11-20)
+  const [navSeen, setNavSeen] = useState(() => seenMap(NAV_SEEN));
   const counts = useMemo(() => ({
     update: updReady ? 1 : 0,
     expiry: (() => { const c = expiryCounts(products, batchesOf, db.settings.expiryWarnDays || 90); return c.soon + c.expired; })(),
@@ -530,6 +537,12 @@ function Shell() {
     chat: unreadCount(db, user),
   }), [products, kits, batchesOf, db.settings.expiryWarnDays, db.transfers, db.messages, branchId, user, day, updReady]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => setBadge(counts.chat + counts.transfers), [counts.chat, counts.transfers]); // the number on the app / taskbar icon
+  // the page open now: its menu count is read; counts that fell are lowered so the next rise shows (src/seen.js)
+  const countsNow = JSON.stringify(counts);
+  useEffect(() => {
+    const here = NAV.flatMap((g) => g.items).find(([to, , , , badge]) => badge && to === location.pathname);
+    setNavSeen((seen) => { const settled = settleCounts(NAV_SEEN, seen, counts); return here ? markCounts(NAV_SEEN, settled, { [here[4]]: counts[here[4]] }) : settled; });
+  }, [location.pathname, countsNow]); // eslint-disable-line react-hooks/exhaustive-deps -- the counts' values
 
   useEffect(() => setDrawer(false), [location.pathname]);
   // phones: gliding page transitions, swipe from the left edge to go back, room for the on-screen keyboard
@@ -710,8 +723,10 @@ function Shell() {
   useEffect(() => {
     if (!user?.id || !can('shifts') || features.shifts === false || openShiftOf(dbNow, user, branchId) || !shiftQuestions()) return;
     const key = 'rxpos-shift-asked:' + user.id;
-    try { if (sessionStorage.getItem(key)) return; sessionStorage.setItem(key, '1'); } catch { /* blocked: ask anyway */ }
+    try { if (sessionStorage.getItem(key)) return; } catch { /* blocked: ask anyway */ }
     const t = setTimeout(async () => {
+      // marked as asked only when the question is shown (the screen can be rebuilt in the first second after signing in)
+      try { sessionStorage.setItem(key, '1'); } catch { /* blocked */ }
       const float = await askText({ title: 'Start your shift?', message: 'Your sales are then counted in your shift. Type the cash already in the drawer (the float), or leave it empty for none.', type: 'number', placeholder: 'Opening float, e.g. 50000', minLength: 0, confirmText: 'Start shift', cancelText: 'Not now' });
       if (float == null) return;
       startShift(update, user, branchId, float, fmt);
@@ -755,7 +770,7 @@ function Shell() {
               </div>
             );
           })()}
-          {groups.map((g, i) => { const add = QUICK_ADD[g.group] && can(QUICK_ADD[g.group][2]) ? QUICK_ADD[g.group] : null; const alerts = g.items.reduce((a, it) => a + (it[4] && counts[it[4]] > 0 ? counts[it[4]] : 0), 0); return (
+          {groups.map((g, i) => { const add = QUICK_ADD[g.group] && can(QUICK_ADD[g.group][2]) ? QUICK_ADD[g.group] : null; const alerts = g.items.reduce((a, it) => a + (it[4] ? newCount(counts[it[4]], navSeen[it[4]]) : 0), 0); return (
             <div key={i} className={'nav-group' + (collapsed[g.group] ? ' collapsed' : ' open')}>
               {g.group && <div className="nav-title-row">
                 <button className="nav-title" aria-expanded={!collapsed[g.group]} onClick={() => toggleGroup(g.group)}>
@@ -765,9 +780,9 @@ function Shell() {
                 {add && <button type="button" className="nav-add" title={add[0]} aria-label={add[0]} onClick={() => navigate(add[1], add[3] ? { state: add[3] } : undefined)}><Plus size={14} /></button>}
               </div>}
               {g.items.map(([to, label, Icon, , badge], n) => { const key = keyOf('go:' + to) && showKey(keyOf('go:' + to)); return (
-                <NavLink key={to} to={to} end style={{ '--i': n }} title={label + (key ? ` (${key})` : '')} hidden={!rail && collapsed[g.group] && !g.items.some(([t]) => t === location.pathname) && !(badge && counts[badge] > 0)}>
+                <NavLink key={to} to={to} end style={{ '--i': n }} title={label + (key ? ` (${key})` : '')} hidden={!rail && collapsed[g.group] && !g.items.some(([t]) => t === location.pathname) && !(badge && newCount(counts[badge], navSeen[badge]) > 0)}>
                   <Icon size={17} /><span className="grow">{label}</span>
-                  {badge && counts[badge] > 0 && <span className="count">{counts[badge]}</span>}
+                  {badge && newCount(counts[badge], navSeen[badge]) > 0 && <span className="count">{counts[badge]}</span>}
                   {key && <kbd>{key}</kbd>}
                 </NavLink>
               ); })}

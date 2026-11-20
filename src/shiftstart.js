@@ -14,8 +14,8 @@ export const openShiftOf = (db, user, branchId) => (db.shifts || []).find((s) =>
 
 
 /** Ask the shift questions on signing in and out? Always for people; a test robot (navigator.webdriver) only when a
- *  test asks for them (localStorage rxpos-shift-questions = 1), so the other suites aren't stopped by the question */
+ *  test asks for them (rxpos-shift-questions = 1 in sessionStorage, which signing in keeps), so the other suites aren't stopped by the question */
 export function shiftQuestions() {
-  try { if (localStorage.getItem('rxpos-shift-questions') === '1') return true; } catch { /* blocked */ }
+  try { if (sessionStorage.getItem('rxpos-shift-questions') === '1' || localStorage.getItem('rxpos-shift-questions') === '1') return true; } catch { /* blocked */ }
   return !(typeof navigator !== 'undefined' && navigator.webdriver);
 }

@@ -83,7 +83,7 @@ function prep(p) {
   let v = prepared.get(p);
   if (!v) {
     const own = nameWords(p.name);
-    const all = [...new Set([...own, ...nameWords(`${p.generic || ''} ${p.ingredients || ''} ${p.brand || ''}`)])];
+    const all = [...new Set([...own, ...nameWords(`${p.generic || ''} ${p.ingredients || ''} ${p.brand || ''} ${(p.aliases || []).join(' ')}`)])];
     v = { own, all, first: own[0] || all[0] || '', str: strengthsOf(`${p.name} ${p.strength || ''}`) };
     prepared.set(p, v);
   }

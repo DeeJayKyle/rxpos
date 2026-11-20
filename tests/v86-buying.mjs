@@ -90,6 +90,8 @@ await p.setViewport({ width: 1440, height: 900 }); await wait(300);
 
 // G4: stock in the other branches: on an out-of-stock till tile and on the medicine
 await p.evaluate(() => { location.hash = '#/pos'; }); await wait(1500);
+// the till opens on In stock (the owner's rule, 2026-11-20): an out-of-stock medicine shows under All
+await p.evaluate(() => [...document.querySelectorAll('.view-chip')].find((x) => x.textContent.trim() === 'All')?.click()); await wait(400);
 await p.evaluate(() => [...document.querySelectorAll('.product-wrap')].find((w) => /Zinco/.test(w.innerText))?.querySelector('.branch-btn')?.click()); await wait(300);
 const pop = await p.evaluate(() => document.querySelector('.branch-pop')?.innerText || '');
 check('G4 an out-of-stock till tile shows the stock in each branch', /Main[\s\S]*none[\s\S]*Kira Road[\s\S]*7/.test(pop) || /Kira Road[\s\S]*7/.test(pop), pop);

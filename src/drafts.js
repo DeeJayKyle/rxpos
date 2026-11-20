@@ -51,7 +51,9 @@ export function deliveryDraft(form, { id, user, branchId, supplierName, total, s
 }
 
 /** How many lines of a scanned delivery still need a person's eye: not matched to a medicine, or flagged when read */
-export const toCheck = (lines) => lines.filter((l) => l.read && (!l.productId || l.read.check?.length || l.read.unclear)).length;
+// a line ticked "Checked" by the person (read.ok) no longer counts (Add Stock: the lines still to check)
+export const needsCheck = (l) => !!l.read && !l.read.ok && (!l.productId || !!l.read.check?.length || !!l.read.unclear);
+export const toCheck = (lines) => lines.filter(needsCheck).length;
 /** "quantity (other reading 24), batch (MTZO931)": what to check on a scanned line, in plain words */
 const FIELD = { qty: 'quantity', unitCost: 'cost', batch: 'batch', expiry: 'expiry', name: 'medicine name' };
 export function checkText(read) {

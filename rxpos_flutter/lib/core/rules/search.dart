@@ -27,7 +27,8 @@ String fold(String? s) {
 /// One searchable string per medicine (built once, reused for every keystroke).
 String searchKey(Product p) {
   final ingredients = p.raw['ingredients'];
-  return fold([p.name, p.generic, if (ingredients is String) ingredients, p.strength, p.form, p.category, p.barcode]
+  // aliases: the names (and barcodes) of medicines merged into this one, so they are still found
+  return fold([p.name, p.generic, if (ingredients is String) ingredients, p.strength, p.form, p.category, p.barcode, for (final a in (p.raw['aliases'] as List?) ?? const []) '$a']
       .where((x) => x.isNotEmpty)
       .join(' '));
 }

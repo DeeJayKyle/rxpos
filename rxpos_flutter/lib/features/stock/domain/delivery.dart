@@ -22,7 +22,10 @@ String unitForForm(String form) =>
 /// [unitCost] is per received unit or pack; [price] is the new retail price per single unit (0: keep the current one).
 class DeliveryLine {
   const DeliveryLine({this.productId, this.newName = '', this.qty = 0, this.recvPack = '', this.recvSize = 1, this.unitCost = 0,
-      this.price = 0, this.batch = '', this.expiry = '', this.form = 'Others', this.barcode = '', this.newPack = false});
+      this.price = 0, this.batch = '', this.expiry = '', this.form = 'Others', this.barcode = '', this.newPack = false, this.invoiceName = ''});
+
+  /// the words on the supplier's invoice (a scanned line): kept so the next invoice with them is matched at once
+  final String invoiceName;
 
   /// received by a pack size typed on the line ("Boxes / packs of…"): its size must be given
   final bool newPack;
@@ -44,7 +47,7 @@ class DeliveryLine {
           double? price, String? batch, String? expiry}) =>
       DeliveryLine(productId: productId ?? this.productId, newName: newName ?? this.newName, qty: qty ?? this.qty,
           recvPack: recvPack ?? this.recvPack, recvSize: recvSize ?? this.recvSize, unitCost: unitCost ?? this.unitCost,
-          price: price ?? this.price, batch: batch ?? this.batch, expiry: expiry ?? this.expiry, form: form, barcode: barcode, newPack: newPack);
+          price: price ?? this.price, batch: batch ?? this.batch, expiry: expiry ?? this.expiry, form: form, barcode: barcode, newPack: newPack, invoiceName: invoiceName);
 }
 
 class DeliveryProblem implements Exception {
@@ -107,7 +110,7 @@ Future<Map<String, Object?>> receiveDelivery(RecordStore store, {required List<D
       'items': [
         for (final l in use)
           {
-            'productId': idOf(l), 'name': nameOf(l), 'qty': numOut(l.units), 'cost': numOut(l.baseCost), 'batch': l.batch.trim(), 'expiry': l.expiry,
+            'productId': idOf(l), 'name': nameOf(l), if (l.invoiceName.isNotEmpty) 'invoiceName': l.invoiceName, 'qty': numOut(l.units), 'cost': numOut(l.baseCost), 'batch': l.batch.trim(), 'expiry': l.expiry,
             if (l.isNew) 'added': true,
             if (l.recvSize > 1) 'pack': {'name': l.recvPack, 'size': numOut(l.recvSize), 'count': numOut(l.qty), 'cost': numOut(l.unitCost)},
           },

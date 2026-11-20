@@ -25,7 +25,8 @@ await owner('/tenants/' + tid + '/records', { records: [
   { t: 'products', id: 'p1', rec: { name: 'Zinc 20mg', form: 'Tablets', price: 300, cost: 100, unit: 'Unit' } },
   { t: 'products', id: 'p2', rec: { name: 'AMOXIL 500 MG CAPS', form: 'Capsules', price: 500, cost: 200, unit: 'Unit' } },
   { t: 'products', id: 'p3', rec: { name: 'Atenolol 50mg', form: 'Tablets', price: 200, cost: 80, unit: 'Unit' } },
-  ...['p1', 'p3'].flatMap((id) => [{ t: 'batches', id: 'b' + id, rec: { productId: id, batch: 'B' + id, expiry: day(400), cost: 100 } }, { t: 'movements', id: 'm' + id, rec: { productId: id, qty: 20, type: 'Opening stock', batchId: 'b' + id, branchId: 'main', date: ago(10, 8) } }]),
+  { t: 'products', id: 'p4', rec: { name: 'ZINC 20 MG TABS', form: 'Tablets', price: 300, cost: 100, unit: 'Unit', barcode: '7004' } },
+  ...['p1', 'p3', 'p4'].flatMap((id) => [{ t: 'batches', id: 'b' + id, rec: { productId: id, batch: 'B' + id, expiry: day(400), cost: 100 } }, { t: 'movements', id: 'm' + id, rec: { productId: id, qty: 20, type: 'Opening stock', batchId: 'b' + id, branchId: 'main', date: ago(10, 8) } }]),
   sale('S1', 'Ivy', ago(3, 9), 300), sale('S2', 'Ivy', ago(3, 15), 600), sale('S3', 'Henry Example', ago(2, 10), 900),
 ] });
 await owner('/tenants/' + tid, { features: { catalog: false } });
@@ -33,7 +34,7 @@ await owner('/tenants/' + tid, { features: { catalog: false } });
 const b = await puppeteer.launch({ executablePath: CHROME, headless: true });
 const p = await (await b.createBrowserContext()).newPage();
 // a test robot sees the shift questions only when it asks for them (src/shiftstart.js)
-await p.evaluateOnNewDocument(() => { try { localStorage.setItem('rxpos-shift-questions', '1'); } catch { /* */ } });
+await p.evaluateOnNewDocument(() => { try { sessionStorage.setItem('rxpos-shift-questions', '1'); } catch { /* */ } });
 await p.setViewport({ width: 1366, height: 900 });
 await p.goto(base + '/' + slug, { waitUntil: 'networkidle2' }); await wait(700);
 await setVal(p, 'input[autocomplete=username]', 'ivy88@test.rx'); await setVal(p, 'input[type=password]', 'ivy-pass-12345');
@@ -70,7 +71,7 @@ await go(p, '/pos'); await wait(800);
 const chips = await p.evaluate(() => [...document.querySelectorAll('.view-chip')].map((x) => x.textContent.trim() + (x.classList.contains('active') ? '*' : '')));
 check('the till opens on In stock; no Recent filter', chips[0] === 'In stock*' && !chips.some((x) => /Recent/.test(x)), chips.join(','));
 const names = await p.evaluate(() => [...document.querySelectorAll('.product')].map((x) => x.innerText.split('\n')[0]));
-check('…medicines in stock, A–Z', JSON.stringify(names) === JSON.stringify(['Atenolol 50mg', 'Zinc 20mg']), names.join(','));
+check('…medicines in stock, A–Z', JSON.stringify(names) === JSON.stringify(['Atenolol 50mg', 'ZINC 20 MG TABS', 'Zinc 20mg']), names.join(','));
 await setVal(p, '.search-row input', 'amoxil'); await wait(600);
 check('…a typed search still finds a medicine that is out of stock', await p.evaluate(() => [...document.querySelectorAll('.product')].some((x) => /AMOXIL/.test(x.innerText))));
 await setVal(p, '.search-row input', ''); await wait(300);
@@ -87,6 +88,21 @@ check('…approving asks once more, listing the change', /Rename 1 medicine/.tes
 await clickText(p, '.modal.dialog button', /^Approve and rename$/); await wait(2000);
 const prods = await owner('/tenants/' + tid + '/records?t=products');
 check('…then renamed, and audited', prods.rows.some((r) => r.id === 'p2' && r.rec.name === 'Amoxil 500mg Capsules'), JSON.stringify(prods.rows.map((r) => r.rec.name)));
+
+// ---- the same item under different names: merged only after approval ----
+const grp = await p.evaluate(() => [...document.querySelectorAll('[data-testid=merge-groups] .merge-group')].map((g) => g.innerText.replace(/\s+/g, ' ')));
+check('the same item under two names is found (Zinc 20mg / ZINC 20 MG TABS)', grp.length === 1 && /Zinc 20mg/.test(grp[0]) && /ZINC 20 MG TABS/.test(grp[0]), grp.join(' | '));
+await p.evaluate(() => [...document.querySelectorAll('.merge-item')].find((l) => /^\s*Zinc 20mg/.test(l.textContent))?.querySelector('input').click()); // keep "Zinc 20mg"
+await p.evaluate(() => document.querySelector('.merge-group input[type=checkbox]').click()); await wait(200);
+await clickText(p, '[data-testid=merge-groups] button', /^Approve and merge/); await wait(500);
+check('…merging asks for approval first', /Merge 1 group/.test(await dialogTitle(p)));
+await clickText(p, '.modal.dialog button', /^Approve and merge$/); await wait(2500);
+const after = await owner('/tenants/' + tid + '/records?t=products');
+const kept = after.rows.find((r) => r.id === 'p1')?.rec;
+const moves = (await owner('/tenants/' + tid + '/records?t=movements')).rows.map((r) => r.rec).filter((m) => m.type === 'Merge');
+check('…merged: one Zinc, the other name and barcode kept on it, its stock moved in', !after.rows.some((r) => r.id === 'p4') && kept?.aliases?.includes('ZINC 20 MG TABS') && kept?.barcode === '7004' && moves.some((m) => m.productId === 'p4' && m.qty === -20) && moves.some((m) => m.productId === 'p1' && m.qty === 20), JSON.stringify({ kept, moves }));
+await go(p, '/pos');
+check('…the till shows one Zinc with all the stock, found by its old name', await p.evaluate(() => [...document.querySelectorAll('.product')].filter((x) => /zinc/i.test(x.innerText)).length === 1));
 await p.keyboard.press('Escape'); await wait(300);
 
 // ---- signing out: "End your shift?" ----
