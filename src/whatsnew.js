@@ -8,7 +8,7 @@ export const WHATS_NEW = {
     { text: 'Gradients: a soft or bold background, gradient accents, and six presets for the menu (theme menu → Gradient)', to: '/device' },
     { text: 'Dark keeps your theme: every theme has its own dark twin', to: '/device' },
     { text: 'New styles: GNOME, KDE Plasma, elementary OS, Ubuntu, iOS and Liquid Glass (theme menu → Style)', to: '/device' },
-    { text: 'Two new themes: Terminal and Ubuntu Yaru', to: '/device' },
+    { text: 'Fewer, clearer themes: look-alikes merged into 31 in seven sets, plus Terminal and Ubuntu Yaru', to: '/device' },
     { text: 'A tidier screen: one menu group open at a time, rarely used pages under More, no Premium switch', to: '/' },
     { text: 'Notices never cover a page: they show on the dashboard (and in the bell), never on phones', to: '/' },
     { text: 'One period picker on the dashboard, one date button on every list, CSV and PDF under Export', to: '/sales' },

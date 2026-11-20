@@ -7,7 +7,9 @@ import { LOGO_SVG } from './logomark.js';
 
 const T = (id, name, base, c, inspired = '', group = '', glossy = null) => ({ id, name, base, c, inspired, group, ...(glossy ? { glossy } : {}) });
 /** The groups of the theme menu, in order */
-export const THEME_GROUPS = ['Blues', 'Greens', 'Purples', 'Warm & Neutral', 'Dark', 'Multi-colour'];
+// 1.17.0 (the owner's choice): look-alike themes merged and the sets regrouped; every dark theme in Dark (each light
+// theme has its own dark twin too)
+export const THEME_GROUPS = ['Blues', 'Greens & Teals', 'Purples', 'Warm', 'Neutral & Lime', 'Dark', 'Multi-colour'];
 
 const hexToRgb = (h) => { const n = parseInt(h.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
 const rgba = (h, a) => `rgba(${hexToRgb(h).join(', ')}, ${a})`;
@@ -90,45 +92,33 @@ export const THEMES = [
   duo('ocean-cyan', 'Ocean Cyan', 'Blues', { c1: '#06b6d4', c2: '#e3f6fa', side: '#0b2530', strong: true, inspired: 'Deep ocean menu, cyan pills' }),
   duo('steel-blue', 'Steel Blue', 'Blues', { c1: '#4f7cac', c2: '#edf1f6', side: '#161c26', strong: true, inspired: 'Slate menu, steel-blue pills: calm for long shifts' }),
   duo('pharmacy-blue', 'Pharmacy Blue', 'Blues', { c1: '#2563eb', c2: '#eaf1fc', side: '#0b2a5c', strong: true, glossy: kpis('blue', 'green', 'purple', 'amber'), inspired: 'Glossy dashboard: deep blue menu, four-colour figure cards' }),
-  duo('porcelain-signal', 'Porcelain & Signal Blue', 'Blues', { c1: '#0057ff', c2: '#f8f7f4', side: '#1e293b', ink: '#1e293b', strong: true, inspired: 'Porcelain page, signal-blue actions, slate words: banking and B2B' }),
   duo('navy-sky', 'Midnight Navy & Sky', 'Blues', { c1: '#288cfa', c2: '#f1f5f9', side: '#103766', c3: '#38bdf8', strong: true, inspired: 'Midnight navy menu, blue and sky charts' }),
-  duo('cobalt-amber', 'Cobalt & Warm Amber', 'Blues', { c1: '#2563eb', c2: '#ffffff', side: '#172554', c3: '#f59e0b', line: '#e2e8f0', strong: true, inspired: 'White page, cobalt figures, amber comparisons' }),
-  duo('deep-ocean-cyan', 'Deep Ocean & Cyan', 'Blues', { c1: '#06b6d4', c2: '#0f172a', card: '#1e293b', ink: '#f8fafc', side: '#0b1222', base: 'dark', strong: true, inspired: 'Dark: deep ocean page, cyan glow, crisp words' }),
   // Greens
-  duo('forest-green', 'Forest Green', 'Greens', { c1: '#1e8c4e', c2: '#dcefe3', side: '#0f2419', strong: true, inspired: 'Deep green menu, green pills' }),
-  duo('emerald-mint', 'Emerald Mint', 'Greens', { c1: '#10b981', c2: '#e4f7ef', side: '#0b221a', strong: true, inspired: 'Deep green menu, emerald pills' }),
-  duo('mint-teal', 'Mint Teal', 'Greens', { c1: '#0f8a8a', c2: '#cfe6e6', side: '#0f2222', strong: true, inspired: 'Teal on mint, the RxPOS colour' }),
-  duo('sage', 'Sage', 'Greens', { c1: '#2f6b45', c2: '#e3eee1', side: '#18241b', strong: true, inspired: 'Deep sage menu, green pills' }),
-  duo('mist-teal-lilac', 'Mist Gray, Teal & Lilac', 'Greens', { c1: '#14b8a6', c2: '#f3f4f6', side: '#134e4a', c3: '#818cf8', strong: true, inspired: 'Mist page, teal figures, lilac comparisons' }),
-  duo('sage-emerald', 'Sage & Forest Emerald', 'Greens', { c1: '#10b981', c2: '#f6f8f7', side: '#064e3b', soft: '#d1fae5', strong: true, inspired: 'Forest menu, emerald figures, a warm mint tint' }),
-  duo('graphite-lime', 'Graphite & Lime Spark', 'Greens', { c1: '#b6ff2e', c2: '#1a1d24', card: '#23262f', ink: '#f8fafc', side: '#14161c', base: 'dark', strong: true, inspired: 'Dark: graphite page, high-visibility lime' }),
-  duo('mint-coral', 'Mint & Warm Coral', 'Greens', { c1: '#0d9488', c2: '#f8fafc', side: '#0f3b38', c3: '#fb7185', strong: true, inspired: 'Teal figures, coral comparisons' }),
-  duo('pharmacy-green', 'Pharmacy Green', 'Greens', { c1: '#16a34a', c2: '#eef6f0', side: '#0b3d24', strong: true, glossy: kpis('green', 'blue', 'purple', 'amber'), inspired: 'Glossy dashboard: deep green menu, four-colour figure cards' }),
+  duo('emerald-mint', 'Emerald Mint', 'Greens & Teals', { c1: '#10b981', c2: '#e4f7ef', side: '#0b221a', strong: true, inspired: 'Deep green menu, emerald pills' }),
+  duo('mint-teal', 'Mint Teal', 'Greens & Teals', { c1: '#0f8a8a', c2: '#cfe6e6', side: '#0f2222', strong: true, inspired: 'Teal on mint, the RxPOS colour' }),
+  duo('sage', 'Sage', 'Greens & Teals', { c1: '#2f6b45', c2: '#e3eee1', side: '#18241b', strong: true, inspired: 'Deep sage menu, green pills' }),
+  duo('mist-teal-lilac', 'Mist Gray, Teal & Lilac', 'Greens & Teals', { c1: '#14b8a6', c2: '#f3f4f6', side: '#134e4a', c3: '#818cf8', strong: true, inspired: 'Mist page, teal figures, lilac comparisons' }),
+  duo('pharmacy-green', 'Pharmacy Green', 'Greens & Teals', { c1: '#16a34a', c2: '#eef6f0', side: '#0b3d24', strong: true, glossy: kpis('green', 'blue', 'purple', 'amber'), inspired: 'Glossy dashboard: deep green menu, four-colour figure cards' }),
   // Purples
   duo('royal-purple', 'Royal Purple', 'Purples', { c1: '#6d4ae8', c2: '#f4f1fd', side: '#1e1433', inspired: 'Deep purple menu, violet pills' }),
-  duo('lavender', 'Lavender', 'Purples', { c1: '#7451eb', c2: '#e4dcff', side: '#1f1a33', strong: true, inspired: 'Violet on lavender' }),
-  duo('midnight-indigo', 'Midnight Indigo', 'Purples', { c1: '#5b5bf0', c2: '#e6e6fb', side: '#1b1d2e', strong: true, inspired: 'Midnight menu, indigo pills' }),
   duo('pharmacy-purple', 'Pharmacy Purple', 'Purples', { c1: '#7c3aed', c2: '#f3effd', side: '#2a1257', strong: true, glossy: kpis('purple', 'blue', 'green', 'amber'), inspired: 'Glossy dashboard: deep purple menu, four-colour figure cards' }),
-  duo('obsidian-purple-mint', 'Obsidian, Purple & Mint', 'Purples', { c1: '#8e32e9', c2: '#181824', card: '#222232', side: '#12121c', c3: '#38ce3c', base: 'dark', strong: true, inspired: 'Dark: obsidian page, electric-purple trends, mint growth' }),
   duo('alabaster-indigo-coral', 'Alabaster, Indigo & Coral', 'Purples', { c1: '#4f46e5', c2: '#faf9f6', side: '#1e1b4b', c3: '#ff4d6b', strong: true, inspired: 'Alabaster page, indigo figures, coral series' }),
   duo('royal-iris-butter', 'Royal Iris & Butter Yellow', 'Purples', { c1: '#3a0ca3', c2: '#ffffff', side: '#3a0ca3', pill: '#fff275', c3: '#e0c400', ink: '#111827', line: '#e5e7eb', strong: true, inspired: 'Royal iris menu, butter-yellow badges, dark ink' }),
-  duo('twilight-violet', 'Twilight Slate & Soft Violet', 'Purples', { c1: '#8b5cf6', c2: '#13111c', card: '#1e1b2e', side: '#0e0c16', c3: '#ec4899', base: 'dark', strong: true, inspired: 'Dark: twilight page, soft violet, pink series' }),
   // Warm & Lime
-  duo('amber-gold', 'Amber Gold', 'Warm & Neutral', { c1: '#f5b301', c2: '#fdf6e3', side: '#241c0a', strong: true, inspired: 'Deep brown menu, gold pills with dark words' }),
-  duo('night-lime', 'Lime on Charcoal', 'Warm & Neutral', { c1: '#c8f169', c2: '#f4f4f0', side: '#1f1f2a', inspired: 'Charcoal menu, lime pills and buttons with dark words' }),
-  duo('charcoal-lime', 'Charcoal on Lime', 'Warm & Neutral', { c1: '#1f1f2a', c2: '#eef7d6', side: '#c8f169', sideText: '#1f1f2a', strong: true, inspired: 'Lime menu, charcoal pills' }),
-  duo('pharmacy-amber', 'Pharmacy Amber', 'Warm & Neutral', { c1: '#f59e0b', c2: '#fdf6e8', side: '#3b2606', strong: true, glossy: kpis('amber', 'green', 'blue', 'purple'), inspired: 'Glossy dashboard: deep brown menu, four-colour figure cards' }),
-  duo('sandstone-terracotta', 'Sandstone & Terracotta', 'Warm & Neutral', { c1: '#ea580c', c2: '#f5f3ef', side: '#292524', ink: '#292524', strong: true, inspired: 'Sandstone page, espresso menu, terracotta accents' }),
-  duo('mono-scarlet', 'Pure Monochrome & Scarlet', 'Warm & Neutral', { c1: '#18181b', c2: '#fafafa', side: '#18181b', c3: '#ef4444', strong: true, inspired: 'Black and white, a scarlet second series' }),
-  duo('charcoal-gold', 'Charcoal & Gold', 'Warm & Neutral', { c1: '#facc15', c2: '#121212', card: '#1e1e1e', side: '#0c0c0c', c3: '#a1a1aa', base: 'dark', strong: true, inspired: 'Dark: charcoal page, gold accents, silver series' }),
-  duo('ubuntu-yaru', 'Ubuntu Yaru', 'Warm & Neutral', { c1: '#e95420', c2: '#f7f2f0', side: '#2c001e', strong: true, inspired: 'Ubuntu orange on an aubergine menu (pairs with the Ubuntu style)' }),
+  duo('night-lime', 'Lime on Charcoal', 'Neutral & Lime', { c1: '#c8f169', c2: '#f4f4f0', side: '#1f1f2a', inspired: 'Charcoal menu, lime pills and buttons with dark words' }),
+  duo('charcoal-lime', 'Charcoal on Lime', 'Neutral & Lime', { c1: '#1f1f2a', c2: '#eef7d6', side: '#c8f169', sideText: '#1f1f2a', strong: true, inspired: 'Lime menu, charcoal pills' }),
+  duo('pharmacy-amber', 'Pharmacy Amber', 'Warm', { c1: '#f59e0b', c2: '#fdf6e8', side: '#3b2606', strong: true, glossy: kpis('amber', 'green', 'blue', 'purple'), inspired: 'Glossy dashboard: deep brown menu, four-colour figure cards' }),
+  duo('sandstone-terracotta', 'Sandstone & Terracotta', 'Warm', { c1: '#ea580c', c2: '#f5f3ef', side: '#292524', ink: '#292524', strong: true, inspired: 'Sandstone page, espresso menu, terracotta accents' }),
+  duo('mono-scarlet', 'Pure Monochrome & Scarlet', 'Neutral & Lime', { c1: '#18181b', c2: '#fafafa', side: '#18181b', c3: '#ef4444', strong: true, inspired: 'Black and white, a scarlet second series' }),
+  duo('ubuntu-yaru', 'Ubuntu Yaru', 'Warm', { c1: '#e95420', c2: '#f7f2f0', side: '#2c001e', strong: true, inspired: 'Ubuntu orange on an aubergine menu (pairs with the Ubuntu style)' }),
   // Dark (1.14.0: four dark themes; Steel Blue and Sage, both light, moved to Blues and Greens)
   duo('navy-teal', 'RxPOS Navy Teal', 'Dark', { c1: '#14b8a6', c2: '#0a2233', side: '#0f2a44', base: 'dark', strong: true, inspired: 'Navy and teal: the RxPOS till' }),
   duo('midnight-blue', 'Midnight Blue', 'Dark', { c1: '#60a5fa', c2: '#0b1324', side: '#0a1a33', base: 'dark', strong: true, inspired: 'Night-blue page, bright blue pills' }),
-  duo('dark-forest', 'Dark Forest', 'Dark', { c1: '#34d399', c2: '#0b1a14', side: '#0c2a1d', base: 'dark', strong: true, inspired: 'Deep green page, mint pills' }),
   duo('graphite-amber', 'Graphite Amber', 'Dark', { c1: '#fbbf24', c2: '#16161b', side: '#24242c', base: 'dark', strong: true, inspired: 'Graphite page, amber pills with dark words' }),
   duo('pharmacy-night', 'Pharmacy Night', 'Dark', { c1: '#22c55e', c2: '#06130d', side: '#0a2a1a', base: 'dark', strong: true, glossy: kpis('green', 'blue', 'purple', 'amber'), inspired: 'Glossy dashboard at night: deep green, four-colour figure cards' }),
   duo('terminal', 'Terminal', 'Dark', { c1: '#33ff66', c2: '#050805', card: '#0a120a', ink: '#c8ffd4', side: '#000000', base: 'dark', strong: true, inspired: 'Green on black, fixed-width type, a blinking caret (1.17.0)' }),
+  duo('twilight-violet', 'Twilight Slate & Soft Violet', 'Dark', { c1: '#8b5cf6', c2: '#13111c', card: '#1e1b2e', side: '#0e0c16', c3: '#ec4899', base: 'dark', strong: true, inspired: 'Dark: twilight page, soft violet, pink series' }),
+  duo('graphite-lime', 'Graphite & Lime Spark', 'Dark', { c1: '#b6ff2e', c2: '#1a1d24', card: '#23262f', ink: '#f8fafc', side: '#14161c', base: 'dark', strong: true, inspired: 'Dark: graphite page, high-visibility lime' }),
   // Multi-colour (19 Nov 2026): a quiet shell with a five-colour chart palette, and the neon dashboard reference
   duo('cool-crisp', 'Cool & Crisp', 'Multi-colour', { c1: '#3b82f6', c2: '#f8fafc', side: '#0f172a', strong: true, series: ['#3b82f6', '#14b8a6', '#6366f1', '#f59e0b', '#f43f5e'], glossy: kpis('#3b82f6', '#14b8a6', '#6366f1', '#f59e0b'), inspired: 'Light shell, blue, teal, indigo, amber and rose charts' }),
   duo('vibrant-neon', 'Vibrant Neon', 'Multi-colour', { c1: '#22d3ee', c2: '#0f172a', side: '#0b1222', base: 'dark', strong: true, series: ['#22d3ee', '#a78bfa', '#34d399', '#f472b6', '#fde047'], glossy: { ...kpis('#22d3ee', '#a78bfa', '#34d399', '#f472b6'), vivid: true }, inspired: 'Dark shell, cyan, violet, emerald, pink and yellow charts' }),
@@ -136,10 +126,12 @@ export const THEMES = [
 ];
 /** Themes retired → the new theme closest to each, so a saved choice or an owner's list keeps working */
 export const RETIRED = {
-  'daylight-clinical': 'mint-teal', cobalt: 'electric-blue', 'royal-violet': 'royal-purple', sunrise: 'amber-gold', 'charcoal-sky': 'steel-blue',
-  'lime-studio': 'charcoal-lime', 'aqua-navy': 'ocean-cyan', 'cobalt-blue': 'electric-blue', 'sunny-orange': 'amber-gold', oled: 'navy-teal', 'midnight-pro': 'navy-teal',
+  // 1.17.0: look-alikes merged into the closest kept theme (the owner's choice)
+  'cobalt-amber': 'pharmacy-blue', 'porcelain-signal': 'electric-blue', 'deep-ocean-cyan': 'vibrant-neon', 'lavender': 'royal-purple', 'midnight-indigo': 'royal-purple', 'obsidian-purple-mint': 'twilight-violet', 'sage-emerald': 'emerald-mint', 'mint-coral': 'mint-teal', 'forest-green': 'pharmacy-green', 'amber-gold': 'pharmacy-amber', 'charcoal-gold': 'graphite-amber', 'dark-forest': 'pharmacy-night',
+  'daylight-clinical': 'mint-teal', cobalt: 'electric-blue', 'royal-violet': 'royal-purple', sunrise: 'pharmacy-amber', 'charcoal-sky': 'steel-blue',
+  'lime-studio': 'charcoal-lime', 'aqua-navy': 'ocean-cyan', 'cobalt-blue': 'electric-blue', 'sunny-orange': 'pharmacy-amber', oled: 'navy-teal', 'midnight-pro': 'navy-teal',
   light: 'mint-teal', 'hybrid-light': 'mint-teal', 'solarized-light': 'mint-teal', 'clinic-blue': 'sky-blue', mint: 'emerald-mint',
-  'rose-dawn': 'amber-gold', sand: 'amber-gold', coral: 'amber-gold', 'github-light': 'steel-blue', 'nord-snow': 'electric-blue',
+  'rose-dawn': 'pharmacy-amber', sand: 'pharmacy-amber', coral: 'pharmacy-amber', 'github-light': 'steel-blue', 'nord-snow': 'electric-blue',
   'soft-grey': 'steel-blue', 'teal-glass': 'mint-teal', paper: 'mint-teal',
   dark: 'navy-teal', 'hybrid-dark': 'navy-teal', 'tokyo-night': 'navy-teal', nord: 'navy-teal', dracula: 'navy-teal', mocha: 'navy-teal',
   'solarized-dark': 'navy-teal', 'one-dark': 'navy-teal', 'rose-pine': 'navy-teal', forest: 'navy-teal', ocean: 'navy-teal',

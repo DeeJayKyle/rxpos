@@ -16,6 +16,13 @@ The owner's choices (20 Nov 2026):
   - **Apple**: iOS (big titles, frosted bars, grouped lists, segmented controls, springy) and Liquid Glass (iOS 26:
     clear glass and capsule bars).
 - **Themes**: Terminal (green on black, fixed-width type, a blinking caret) and Ubuntu Yaru (orange on aubergine).
+- **Fewer, clearer themes**: look-alikes merged, 31 themes in seven sets: Blues, Greens & Teals, Purples, Warm,
+  Neutral & Lime, Dark (every dark theme) and Multi-colour. A device or an owner's list using a merged theme opens the
+  one it joined:
+  - Cobalt & Warm Amber → Pharmacy Blue; Porcelain & Signal Blue → Electric Blue; Deep Ocean & Cyan → Vibrant Neon.
+  - Lavender and Midnight Indigo → Royal Purple; Obsidian, Purple & Mint → Twilight Slate & Soft Violet.
+  - Sage & Forest Emerald → Emerald Mint; Mint & Warm Coral → Mint Teal; Forest Green → Pharmacy Green.
+  - Amber Gold → Pharmacy Amber; Charcoal & Gold → Graphite Amber; Dark Forest → Pharmacy Night.
 - **Flutter apps**: the dark twins, the six styles and the gradient background. The gradient accents and presets
   follow with 1.18.0.
 

@@ -9,11 +9,12 @@ import 'package:rxpos/core/theme/themes.dart';
 int argb(Color c) => c.toARGB32();
 
 void main() {
-  test('the 43 themes in six sets of three to nine, every one readable with every accent', () {
-    expect(palettes, hasLength(43));
-    expect(palettes.where((p) => p.dark), hasLength(13));
+  test('the 31 themes in seven sets of three to seven (look-alikes merged, 1.17.0), every one readable with every accent', () {
+    expect(palettes, hasLength(31));
+    expect(palettes.where((p) => p.dark), hasLength(9));
     expect(palettes.where((p) => p.group == 'Dark').every((p) => p.dark), isTrue);
-    expect(paletteGroups, hasLength(6));
+    expect((paletteById('forest-green').id, paletteById('amber-gold').id, paletteById('lavender').id), ('pharmacy-green', 'pharmacy-amber', 'royal-purple'), reason: 'merged look-alikes open as the theme they joined');
+    expect(paletteGroups, hasLength(7));
     expect(paletteGroups.every((g) => palettes.where((p) => p.group == g).length >= 3 && palettes.where((p) => p.group == g).length <= 9), isTrue);
     expect(palettes.every((p) => paletteGroups.contains(p.group) && p.duo != null), isTrue);
     // a retired theme opens as the kept one closest to it (the same map as src/themes.js RETIRED)
@@ -91,10 +92,10 @@ void main() {
     final some = allowedPalettes({'themes': ['light', 'dracula', 'nord']});
     expect(some.map((p) => p.id), ['mint-teal', 'navy-teal']);
     expect(paletteFor(true, some, 'nord'), 'navy-teal');
-    expect(allowedPalettes(null), hasLength(43));
+    expect(allowedPalettes(null), hasLength(31));
   });
 
-  test('only the 43 themes (the owner\'s choice): no accent presets, no design systems; old saved looks fall back to them', () {
+  test('only the 31 themes (the owner\'s choice): no accent presets, no design systems; old saved looks fall back to them', () {
     expect(accents, isEmpty);
     expect(designSystems, isEmpty);
     expect(designPalettes, isEmpty);

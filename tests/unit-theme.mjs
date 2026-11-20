@@ -5,7 +5,7 @@ const check = (n, ok, x = '') => { ok ? pass++ : fail++; console.log(`${ok ? 'PA
 
 check('all themes allowed: light → Mint Teal', paletteFor('light') === 'mint-teal');
 check('all themes allowed: dark → RxPOS Navy Teal', paletteFor('dark') === 'navy-teal');
-check('without the defaults: the first palette of that base', paletteFor('light', THEMES.filter((t) => t.id !== 'mint-teal')) === 'electric-blue' && paletteFor('dark', THEMES.filter((t) => t.id !== 'navy-teal')) === 'deep-ocean-cyan');
+check('without the defaults: the first palette of that base', paletteFor('light', THEMES.filter((t) => t.id !== 'mint-teal')) === 'electric-blue' && paletteFor('dark', THEMES.filter((t) => t.id !== 'navy-teal')) === 'midnight-blue');
 // 1.16.0 (the owner's clean-up): light themes on a near-white page with a breath of their soft colour
 check('Navy Teal: the navy page, teal actions; Mint Teal: white cards on a near-white mint page', (() => { const o = themeVars(THEMES.find((t) => t.id === 'navy-teal')), d = themeVars(THEMES.find((t) => t.id === 'mint-teal')); return o['--bg'] === '#0a2233' && o['--primary'] === '#14b8a6' && d['--bg'] === '#ecf5f5' && d['--surface'] === '#ffffff' && d['--primary'] === '#0f8a8a'; })());
 check('light pages are near white (1.16.0)', THEMES.filter((t) => t.base === 'light').every((t) => { const [r, g, b] = [1, 3, 5].map((i) => parseInt(themeVars(t)['--bg'].slice(i, i + 2), 16)); return Math.min(r, g, b) >= 0xd8; }));
@@ -15,7 +15,8 @@ check('restricted: light falls back to the first allowed light palette', palette
 check('restricted: dark → the only allowed dark palette', paletteFor('dark', restricted, 'mint') === 'navy-teal');
 // 1.17.0: an owner's light themes bring their dark twins, so Dark has one of them rather than falling back to a light one
 check('only light themes allowed: Dark takes the first one\'s dark twin', paletteFor('dark', allowedThemes({ themes: ['mint', 'clinic-blue', 'sunrise'] })) === 'sky-blue-dark');
-check('the 43 themes in 6 sets of 3 to 9, each one in a group; the Dark set is all dark (1.17.0: Ubuntu Yaru and Terminal)', THEMES.length === 43 && THEME_GROUPS.length === 6 && THEME_GROUPS.every((g) => { const n = THEMES.filter((t) => t.group === g).length; return n >= 3 && n <= 9; }) && THEMES.every((t) => THEME_GROUPS.includes(t.group)) && THEMES.filter((t) => t.group === 'Dark').every((t) => t.base === 'dark') && THEMES.filter((t) => t.base === 'dark').length === 13);
+check('a merged look-alike opens as the theme it joined (Forest Green → Pharmacy Green, Amber Gold → Pharmacy Amber)', themeById('forest-green').id === 'pharmacy-green' && themeById('amber-gold').id === 'pharmacy-amber' && themeById('lavender').id === 'royal-purple');
+check('the 31 themes in 7 sets of 3 to 7, each one in a group; every dark theme in Dark or Multi-colour (1.17.0: look-alikes merged)', THEMES.length === 31 && THEME_GROUPS.length === 7 && THEME_GROUPS.every((g) => { const n = THEMES.filter((t) => t.group === g).length; return n >= 3 && n <= 9; }) && THEMES.every((t) => THEME_GROUPS.includes(t.group)) && THEMES.filter((t) => t.group === 'Dark').every((t) => t.base === 'dark') && THEMES.filter((t) => t.base === 'dark').length === 9 && THEMES.filter((t) => t.base === 'dark').every((t) => ['Dark', 'Multi-colour'].includes(t.group)));
 // the Pharmacy themes (19 Nov 2026): one glossy theme in every set, its figure cards, banner and menu readable (AA)
 {
   const glossy = THEMES.filter((t) => t.glossy);
@@ -32,7 +33,7 @@ check('the 43 themes in 6 sets of 3 to 9, each one in a group; the Dark set is a
     if (contrast(v['--chart-line'], v['--surface']) < 4.5) bad.push(`${t.id} chart line / badge words`);
   }
   check('every theme: the figure cards, the welcome banner, the menu and the chart\'s count line read at AA', bad.length === 0, bad.join(', '));
-  check('the palettes keep their own colours: a second series, the card, the ink and Royal Iris\'s yellow pill', (() => { const v = (id) => themeVars(themeById(id)); return v('alabaster-indigo-coral')['--viz-2'] === '#ff4d6b' && v('deep-ocean-cyan')['--surface'] === '#1e293b' && v('porcelain-signal')['--text'] === '#1e293b' && v('royal-iris-butter')['--pill'] === '#fff275' && v('cool-crisp')['--hue-8'] === undefined && v('vibrant-neon')['--viz-1'] === '#22d3ee'; })());
+  check('the palettes keep their own colours: a second series, the card, the ink and Royal Iris\'s yellow pill', (() => { const v = (id) => themeVars(themeById(id)); return v('alabaster-indigo-coral')['--viz-2'] === '#ff4d6b' && v('terminal')['--surface'] === '#0a120a' && v('sandstone-terracotta')['--text'] === '#292524' && v('royal-iris-butter')['--pill'] === '#fff275' && v('cool-crisp')['--hue-8'] === undefined && v('vibrant-neon')['--viz-1'] === '#22d3ee'; })());
 }
 check('every retired id resolves to a kept theme (saved preferences keep working)', Object.entries(RETIRED).every(([o, n]) => !THEMES.some((t) => t.id === o) && themeById(o).id === n) && themeById('daylight-clinical').id === 'mint-teal' && themeById('midnight-pro').id === 'navy-teal' && themeById('oled').id === 'navy-teal');
 check('every theme is flat (no page gradient)', THEMES.every((t) => themeVars(t)['--bg-grad'] === 'none'));
