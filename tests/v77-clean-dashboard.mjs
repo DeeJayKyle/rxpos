@@ -41,7 +41,7 @@ await p.setViewport({ width: 1440, height: 1000 });
 const errors = []; p.on('pageerror', (e) => errors.push(e.message));
 await p.goto(base + '/' + slug, { waitUntil: 'networkidle2' }); await wait(500);
 await p.evaluate(() => { for (const id of ['pos', 'dashboard']) localStorage.setItem('rxpos-tip:' + id, '1'); });
-// B8: this device last saw 1.13.0's highlights, so 1.18.0 is an update to it
+// B8: this device last saw 1.13.0's highlights, so 1.19.0 is an update to it
 await p.evaluate(() => localStorage.setItem('rxpos-device', JSON.stringify({ ...JSON.parse(localStorage.getItem('rxpos-device') || '{}'), whatsNewSeen: '1.13.0' })));
 await p.reload({ waitUntil: 'networkidle2' }); await wait(500);
 await p.type('input[autocomplete=username]', 'dana@clean.rx'); await p.type('input[type=password]', 'dana-pass-1234');
@@ -56,7 +56,7 @@ const widgets = () => p.evaluate(() => [...document.querySelectorAll('.dash-cell
 check('clean layout: figures, the bento row, chart, health, top medicines, latest sales, busy hours', JSON.stringify(await widgets()) === JSON.stringify(['figures', 'bento', 'chart', 'health', 'top', 'recent', 'busy']), JSON.stringify(await widgets()));
 check('header: no repeated search or bell (the top bar\'s show), today\'s date in the greeting\'s line', await p.evaluate(() => !document.querySelector('.dash-search') && !document.querySelector('.dash-bell') && !!document.querySelector('.topbar .search-trigger')?.offsetParent && !!document.querySelector('.topbar > .bell button[aria-label^=Notifications]')?.offsetParent && /\d{4}/.test(document.querySelector('.welcome .sub .date-pill')?.innerText || '')));
 // UI batch 3, B1-B8
-check('B8 what\'s new: shown once after an update', await p.evaluate(() => /What.s new in 1\.18\.0/.test(document.querySelector('.whats-new')?.innerText || '') && !!document.querySelector('.whats-new a')), await p.evaluate(() => localStorage.getItem('rxpos-device')));
+check('B8 what\'s new: shown once after an update', await p.evaluate(() => /What.s new in 1\.19\.0/.test(document.querySelector('.whats-new')?.innerText || '') && !!document.querySelector('.whats-new a')), await p.evaluate(() => localStorage.getItem('rxpos-device')));
 check('B7 setup checklist: medicines and stock ticked from the data, staff not yet', await p.evaluate(() => { const st = (id) => document.querySelector(`.setup-steps [data-step=${id}]`)?.classList.contains('done'); return st('medicines') && st('stock') && st('staff') === false && /of 6 done/.test(document.querySelector('.setup-card').innerText); }));
 // 1.16.0 (the owner's clean-up): the bento row keeps the week at a glance and the next step; the daily chart and the
 // latest sales are the dashboard's own (no copies), and there is one period picker

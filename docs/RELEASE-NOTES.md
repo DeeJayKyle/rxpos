@@ -1,5 +1,30 @@
 # RxPOS release notes
 
+## React (classic) app 1.19.0 · Flutter app (next build) · November 2026 (the owner's rules)
+
+**The owner's law:** no AI agent or script changes a pharmacy's data in the cloud without the owner's approval
+(CLAUDE.md, AGENTS.md). The cloud refuses direct record writes, restores and database moves without
+`X-Owner-Approved: yes` (HTTP 428) and publishes the law at `/ai-policy.txt`. In the apps, AI only suggests.
+
+- **Scanning invoices**: photos are evened out and sharpened before reading; pages read side by side; handwriting
+  conventions ("/=", ditto marks) in the instructions. Lines are matched allowing misread letters, abbreviations
+  (PCM, Amox), generic names, barcodes and names learned from earlier deliveries; a different strength is never chosen
+  by itself, only offered ("Is it …?"). A month-only expiry is the 30th (28th in February). A batch or expiry not read
+  well is taken from the medicine's last delivery, marked to check.
+- **Add Stock**: start with the scan; the invoice details fold to one line; lines to check come first and are each
+  ticked "Checked" before Receive; on a phone each line is a card; the supplier's last markup and each medicine's pack
+  are offered again; the next box to fill is outlined; the search drops down from its own line (fixed in glass themes).
+- **Medicines**: Tidy names (house style and AI suggestions, approved one by one); the same item under different names
+  merged on approval (stock moved by "Merge" stock moves, the old name kept as an alias, nothing rewritten).
+- **Shifts**: "Start your shift?" on signing in, "End your shift?" on signing out (count the cash, then sign out);
+  past sales outside any shift become rebuilt shifts (no float, no cash count) once the owner approves the list.
+- **The till** opens on In stock, A–Z; no Recent filter; a typed search still finds everything.
+- **Dashboard**: cards moved by dragging their grip, resized by their right edge, and a card menu; no trend line or
+  change line on the figure cards; Edit widgets in This device (Flutter).
+- **Everywhere**: a right-click or long press opens the page's options; menu counts and the bell highlight only what
+  is new; the theme panel's sections fold; no "Online" card; the pharmacy's name bigger; the phone till's payment
+  details start folded; the "All pages" sheet removed (Flutter).
+
 ## React (classic) app 1.18.0 · Flutter app (next build) · November 2026 (behaviour)
 
 The owner's choices (20 Nov 2026), the iPhone and Linux way, each switched on per device:
