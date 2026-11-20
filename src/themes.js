@@ -23,13 +23,16 @@ function readable(fg, bgs, toward, min = 4.5) {
   for (let i = 0; i < 30 && Math.min(...bgs.map((b) => contrast(c, b))) < min; i++) c = mix(c, toward, 0.06);
   return c;
 }
+/** A colour moved towards black or white until [on] reads on it (4.5:1): for backgrounds behind words (gradients.js) */
+export const readableOn = (bg, on) => readable(bg, [on], on === '#ffffff' ? '#000000' : '#ffffff');
 /** A menu colour that takes dark text (orange, sage) rather than white: the one that reads better */
 export const lightMenu = (side) => lum(side) > 0.22;
 
 /** A two-colour theme: [c1] strong (buttons, active, headings), [c2] the soft page tint, [side] the menu (c1 by default) */
 /** [c3] a second accent (the second chart series), [series] chart colours (the Multi-colour set), [pill] the open page's
  *  colour on the menu, [card] / [ink] / [soft] / [line] the palette's own card, text, soft tint and border (19 Nov 2026) */
-const duo = (id, name, group, { c1, c2, side = c1, sideText, base = 'light', inspired = '', strong: _strong = false, glossy = null, c3, series, pill, card, ink, soft, line }) => {
+const duo = (id, name, group, opts) => {
+  let { c1, c2, side = c1, sideText, base = 'light', inspired = '', glossy = null, c3, series, pill, card, ink, soft, line } = opts;
   const dark = base === 'dark';
   const lightSide = lightMenu(side);
   // a coloured menu with white text: deepened just enough for AA
@@ -37,7 +40,7 @@ const duo = (id, name, group, { c1, c2, side = c1, sideText, base = 'light', ins
   const text = ink || (dark ? mix(c2, '#ffffff', 0.9) : mix(c1, '#000000', 0.84));
   // every theme takes the glossy dashboard (the owner's reference, 19 Nov 2026): bright figure cards in four colours
   glossy = glossy || neonCards(c1);
-  return T(id, name, base, {
+  return { ...T(id, name, base, {
     c1, c2,
     // 1.16.0 (the owner's clean-up, fewer colours): light themes sit on a near-white page with only a breath of colour 2;
     // the colour is kept for the menu, headings, the main button, status and the figure cards
@@ -60,7 +63,7 @@ const duo = (id, name, group, { c1, c2, side = c1, sideText, base = 'light', ins
     rowTint: 3, headTint: 10,
     flat: true,
     ...(series || c3 ? { series: series || [c1, c3] } : {}), ...(pill ? { pill } : {}),
-  }, inspired, group, glossy);
+  }, inspired, group, glossy), args: opts };
 };
 
 // The Pharmacy themes (the owner's references, 19 Nov 2026): one per set, a glossy dashboard look (styles/glossy.css):
@@ -118,12 +121,14 @@ export const THEMES = [
   duo('sandstone-terracotta', 'Sandstone & Terracotta', 'Warm & Neutral', { c1: '#ea580c', c2: '#f5f3ef', side: '#292524', ink: '#292524', strong: true, inspired: 'Sandstone page, espresso menu, terracotta accents' }),
   duo('mono-scarlet', 'Pure Monochrome & Scarlet', 'Warm & Neutral', { c1: '#18181b', c2: '#fafafa', side: '#18181b', c3: '#ef4444', strong: true, inspired: 'Black and white, a scarlet second series' }),
   duo('charcoal-gold', 'Charcoal & Gold', 'Warm & Neutral', { c1: '#facc15', c2: '#121212', card: '#1e1e1e', side: '#0c0c0c', c3: '#a1a1aa', base: 'dark', strong: true, inspired: 'Dark: charcoal page, gold accents, silver series' }),
+  duo('ubuntu-yaru', 'Ubuntu Yaru', 'Warm & Neutral', { c1: '#e95420', c2: '#f7f2f0', side: '#2c001e', strong: true, inspired: 'Ubuntu orange on an aubergine menu (pairs with the Ubuntu style)' }),
   // Dark (1.14.0: four dark themes; Steel Blue and Sage, both light, moved to Blues and Greens)
   duo('navy-teal', 'RxPOS Navy Teal', 'Dark', { c1: '#14b8a6', c2: '#0a2233', side: '#0f2a44', base: 'dark', strong: true, inspired: 'Navy and teal: the RxPOS till' }),
   duo('midnight-blue', 'Midnight Blue', 'Dark', { c1: '#60a5fa', c2: '#0b1324', side: '#0a1a33', base: 'dark', strong: true, inspired: 'Night-blue page, bright blue pills' }),
   duo('dark-forest', 'Dark Forest', 'Dark', { c1: '#34d399', c2: '#0b1a14', side: '#0c2a1d', base: 'dark', strong: true, inspired: 'Deep green page, mint pills' }),
   duo('graphite-amber', 'Graphite Amber', 'Dark', { c1: '#fbbf24', c2: '#16161b', side: '#24242c', base: 'dark', strong: true, inspired: 'Graphite page, amber pills with dark words' }),
   duo('pharmacy-night', 'Pharmacy Night', 'Dark', { c1: '#22c55e', c2: '#06130d', side: '#0a2a1a', base: 'dark', strong: true, glossy: kpis('green', 'blue', 'purple', 'amber'), inspired: 'Glossy dashboard at night: deep green, four-colour figure cards' }),
+  duo('terminal', 'Terminal', 'Dark', { c1: '#33ff66', c2: '#050805', card: '#0a120a', ink: '#c8ffd4', side: '#000000', base: 'dark', strong: true, inspired: 'Green on black, fixed-width type, a blinking caret (1.17.0)' }),
   // Multi-colour (19 Nov 2026): a quiet shell with a five-colour chart palette, and the neon dashboard reference
   duo('cool-crisp', 'Cool & Crisp', 'Multi-colour', { c1: '#3b82f6', c2: '#f8fafc', side: '#0f172a', strong: true, series: ['#3b82f6', '#14b8a6', '#6366f1', '#f59e0b', '#f43f5e'], glossy: kpis('#3b82f6', '#14b8a6', '#6366f1', '#f59e0b'), inspired: 'Light shell, blue, teal, indigo, amber and rose charts' }),
   duo('vibrant-neon', 'Vibrant Neon', 'Multi-colour', { c1: '#22d3ee', c2: '#0f172a', side: '#0b1222', base: 'dark', strong: true, series: ['#22d3ee', '#a78bfa', '#34d399', '#f472b6', '#fde047'], glossy: { ...kpis('#22d3ee', '#a78bfa', '#34d399', '#f472b6'), vivid: true }, inspired: 'Dark shell, cyan, violet, emerald, pink and yellow charts' }),
@@ -142,11 +147,33 @@ export const RETIRED = {
 };
 /** A theme id as it is now (a retired one → its replacement) */
 export const currentThemeId = (id) => RETIRED[id] || id;
-export const themeById = (id) => THEMES.find((t) => t.id === currentThemeId(id)) || THEMES[0];
+/** 1.17.0 (the owner's choice): every light theme has a dark twin made from its own colours, so Dark keeps the
+ *  pharmacy's colours (Pharmacy Green stays green at night) instead of jumping to Navy Teal. The twins are not in the
+ *  theme list: Light / Dark / System move between a theme and its twin. Id: the light theme's id + "-dark". */
+const darkTwin = (t) => {
+  const a = t.args;
+  const c1 = lum(a.c1) < 0.05 ? mix(a.c1, '#ffffff', 0.55) : a.c1; // a near-black brand colour lightens to read at night
+  const side0 = a.side || a.c1;
+  return duo(t.id + '-dark', t.name + ' (dark)', t.group, {
+    ...a, c1, c2: mix(c1, '#000000', 0.88), base: 'dark', card: undefined, soft: undefined, line: undefined, ink: undefined,
+    side: lightMenu(side0) ? side0 : mix(side0, '#000000', 0.3),
+    inspired: 'The dark twin of ' + t.name,
+  });
+};
+export const THEME_TWINS = THEMES.filter((t) => t.base === 'light' && t.args).map((t) => ({ ...darkTwin(t), twinOf: t.id }));
+const ALL_THEMES = [...THEMES, ...THEME_TWINS];
+/** The same theme in the other base: a light theme's dark twin, a twin's light theme ('' when it has none) */
+export const twinFor = (id, base) => {
+  const t = ALL_THEMES.find((x) => x.id === currentThemeId(id));
+  if (!t || t.base === base) return t?.id || '';
+  if (base === 'dark') return THEME_TWINS.find((x) => x.twinOf === t.id)?.id || '';
+  return t.twinOf || '';
+};
+export const themeById = (id) => ALL_THEMES.find((t) => t.id === currentThemeId(id)) || THEMES[0];
 /** Themes a pharmacy may use (set by the owner); everything when the owner hasn't restricted it */
 export const allowedThemes = (branding) => {
   const ids = branding?.themes?.length ? branding.themes.map(currentThemeId) : THEMES.map((t) => t.id);
-  return THEMES.filter((t) => ids.includes(t.id));
+  return [...THEMES.filter((t) => ids.includes(t.id)), ...THEME_TWINS.filter((t) => ids.includes(t.twinOf))];
 };
 
 /** Button gradient and its text colour: white or dark ink, whichever reads better; the colours deepen until it passes */

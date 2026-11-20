@@ -1,0 +1,94 @@
+/* Linux and Apple styles (1.17.0, the owner's choice; src/surface.js). Each is a [data-surface] style, so it works with
+   every theme and in light and dark: shapes, type, borders, shadows, blur and the icons' weight change; the colours stay
+   the theme's (their contrast is checked in themes.js). Screen only. */
+@media screen {
+  /* ======================= GNOME (Adwaita) ======================= */
+  :root[data-surface='gnome'] { --r-card: 12px; font-family: Cantarell, 'Inter', 'Noto Sans', system-ui, sans-serif; }
+  :root[data-surface='gnome'] :is(.card, .stat, .modal) { border: 1px solid color-mix(in srgb, var(--text) 9%, transparent) !important; box-shadow: 0 1px 2px rgba(0, 0, 0, .06), 0 2px 8px -4px rgba(0, 0, 0, .12) !important; }
+  :root[data-surface='gnome'] .topbar { background: var(--surface); border-bottom: 1px solid var(--border); box-shadow: none; }
+  :root[data-surface='gnome'] .topbar .crumbs { margin-inline: auto; font-weight: 700; } /* the header bar's title, centred */
+  :root[data-surface='gnome'] :is(.btn, .seg, .search-trigger, .pill) { border-radius: 999px; }
+  :root[data-surface='gnome'] .btn.ghost { background: color-mix(in srgb, var(--text) 8%, var(--surface)); border-color: transparent; }
+  :root[data-surface='gnome'] .pill { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 10%, transparent); }
+  :root[data-surface='gnome'] .sidebar nav a { border-radius: 10px; }
+  :root[data-surface='gnome'] svg.lucide { stroke-width: 1.6; }
+
+  /* ======================= KDE Plasma (Breeze) ======================= */
+  :root[data-surface='kde'] { --r-card: 6px; font-family: 'Noto Sans', 'Inter', system-ui, sans-serif; --kde-focus: #3daee9; }
+  :root[data-surface='kde'] :is(.card, .stat, .modal) { border: 1px solid var(--border-strong) !important; box-shadow: 0 1px 1px rgba(0, 0, 0, .05) !important; }
+  :root[data-surface='kde'] :is(.btn, .seg, .pill, input, select, textarea, .search-trigger) { border-radius: 4px; }
+  :root[data-surface='kde'] .pill { box-shadow: 0 1px 0 rgba(0, 0, 0, .08), inset 0 0 0 1px var(--border-strong); }
+  :root[data-surface='kde'] :is(button, a, input, select, textarea):focus-visible { outline: 2px solid var(--kde-focus); outline-offset: 1px; box-shadow: 0 0 0 3px color-mix(in srgb, var(--kde-focus) 25%, transparent); }
+  :root[data-surface='kde'] table tbody td { padding-top: 6px; padding-bottom: 6px; }
+  :root[data-surface='kde'] .sidebar nav a { border-radius: 4px; margin-bottom: 1px; }
+  :root[data-surface='kde'] .sidebar nav a:hover { background: color-mix(in srgb, var(--kde-focus) 22%, transparent) !important; }
+  :root[data-surface='kde'] svg.lucide { stroke-width: 1.4; }
+
+  /* ======================= elementary OS (Pantheon) ======================= */
+  :root[data-surface='elementary'] { --r-card: 10px; font-family: Inter, 'Open Sans', system-ui, sans-serif; }
+  :root[data-theme='light'][data-surface='elementary'] body { background-color: #fafafa; }
+  :root[data-surface='elementary'] :is(.card, .stat, .modal) { border: 0 !important; box-shadow: 0 0 0 1px rgba(0, 0, 0, .05), 0 3px 4px rgba(0, 0, 0, .06), 0 14px 28px -12px rgba(0, 0, 0, .18) !important; }
+  :root[data-surface='elementary'] .topbar { min-height: 46px; padding-block: 4px; background: linear-gradient(var(--surface), color-mix(in srgb, var(--surface) 92%, #000)); border-bottom: 1px solid var(--border); }
+  :root[data-surface='elementary'] .btn { border-radius: 8px; background-image: linear-gradient(rgba(255, 255, 255, .14), rgba(255, 255, 255, 0)); box-shadow: 0 1px 2px rgba(0, 0, 0, .1), inset 0 1px 0 rgba(255, 255, 255, .2); }
+  :root[data-surface='elementary'] .pill { box-shadow: 0 1px 3px rgba(0, 0, 0, .12), inset 0 1px 0 rgba(255, 255, 255, .25); }
+  :root[data-surface='elementary'] .sidebar nav svg.lucide { width: 19px; height: 19px; }
+  :root[data-surface='elementary'] svg.lucide { stroke-width: 1.75; }
+
+  /* ======================= Ubuntu (Yaru) ======================= */
+  :root[data-surface='ubuntu'] { --r-card: 14px; font-family: Ubuntu, 'Inter', system-ui, sans-serif; }
+  :root[data-surface='ubuntu'] :is(.card, .stat, .modal) { border: 1px solid var(--border) !important; box-shadow: 0 4px 14px -8px rgba(0, 0, 0, .25) !important; }
+  /* the menu as a dock: each page's icon in a coloured rounded square */
+  :root[data-surface='ubuntu'] .sidebar nav a > svg:first-child { box-sizing: content-box; padding: 6px; border-radius: 9px; background: color-mix(in srgb, var(--primary) 70%, #000); color: #fff !important; }
+  :root[data-surface='ubuntu'] .sidebar nav a.active > svg:first-child { background: #fff; color: var(--primary) !important; }
+  :root[data-surface='ubuntu'] .btn { border-radius: 8px; }
+  :root[data-surface='ubuntu'] .pill { box-shadow: 0 2px 6px -2px rgba(0, 0, 0, .25); }
+  :root[data-surface='ubuntu'] svg.lucide { stroke-width: 2; }
+
+  /* ======================= iOS ======================= */
+  :root[data-surface='ios'] { --r-card: 14px; font-family: -apple-system, 'SF Pro Text', 'Inter', system-ui, sans-serif; }
+  :root[data-theme='light'][data-surface='ios'] body { background-color: #f2f2f7; }
+  :root[data-surface='ios'] .page-head h1, :root[data-surface='ios'] .welcome h1 { font-size: 34px; font-weight: 800; letter-spacing: -.03em; }
+  :root[data-surface='ios'] :is(.card, .stat, .modal) { border: 0 !important; box-shadow: none !important; }
+  :root[data-surface='ios'] .topbar { position: sticky; top: 0; z-index: 20; background: color-mix(in srgb, var(--surface) 72%, transparent); -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px); border-bottom: .5px solid var(--border); }
+  :root[data-surface='ios'] .bottom-nav { background: color-mix(in srgb, var(--surface) 72%, transparent); -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px); }
+  :root[data-surface='ios'] table tbody tr td { border-bottom: .5px solid var(--border); }
+  /* segmented controls: a grey track and a raised white thumb */
+  :root[data-surface='ios'] .seg { background: color-mix(in srgb, var(--text) 8%, transparent); border-radius: 9px; padding: 2px; border: 0; }
+  :root[data-surface='ios'] .seg button { border-radius: 7px; }
+  :root[data-surface='ios'] .seg button.on { background: var(--surface) !important; color: var(--text) !important; box-shadow: 0 3px 8px rgba(0, 0, 0, .12), 0 3px 1px rgba(0, 0, 0, .04); }
+  :root[data-surface='ios'] .btn { border-radius: 12px; }
+  :root[data-surface='ios'] .pill { box-shadow: 0 0 0 .5px var(--border), 0 1px 2px rgba(0, 0, 0, .06); }
+  :root[data-surface='ios'] :is(.card, .modal, .page, .btn, .seg button) { transition: transform .35s cubic-bezier(.2, 1.4, .4, 1), box-shadow .2s; }
+  :root[data-surface='ios'] .btn:active { transform: scale(.96); }
+  :root[data-surface='ios'] svg.lucide { stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* ======================= Liquid Glass (iOS 26) ======================= */
+  :root[data-surface='liquid'] { --r-card: 24px; --lg-fill: color-mix(in srgb, var(--surface) 55%, transparent); --lg-edge: rgba(255, 255, 255, .55); font-family: -apple-system, 'SF Pro Text', 'Inter', system-ui, sans-serif; }
+  :root[data-theme='dark'][data-surface='liquid'] { --lg-fill: color-mix(in srgb, var(--surface) 50%, transparent); --lg-edge: rgba(255, 255, 255, .18); }
+  :root[data-surface='liquid'] body { background-image: radial-gradient(900px 600px at 90% -10%, color-mix(in srgb, var(--primary) 26%, transparent), transparent 60%), radial-gradient(800px 600px at 0% 110%, color-mix(in srgb, var(--kpi-2-a, var(--primary)) 22%, transparent), transparent 60%); background-attachment: fixed; }
+  /* the figure cards keep their own solid colours (their words are made readable on them), so glass is for the rest */
+  :root[data-surface='liquid'] :is(.card, .modal):not(.kpis .stat) { background: var(--lg-fill) !important; -webkit-backdrop-filter: blur(24px) saturate(170%); backdrop-filter: blur(24px) saturate(170%); border: 1px solid var(--lg-edge) !important; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .5), 0 18px 40px -20px rgba(0, 0, 0, .35) !important; }
+  /* capsule toolbars: the top bar floats as a glass capsule */
+  :root[data-surface='liquid'] .topbar { margin: 10px 12px 0; border-radius: 999px; background: var(--lg-fill); -webkit-backdrop-filter: blur(24px) saturate(170%); backdrop-filter: blur(24px) saturate(170%); border: 1px solid var(--lg-edge); box-shadow: 0 10px 30px -18px rgba(0, 0, 0, .4); }
+  :root[data-surface='liquid'] :is(.btn, .seg, .pill, .search-trigger) { border-radius: 999px; }
+  :root[data-surface='liquid'] .pill { background: var(--lg-fill); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .45), 0 6px 16px -10px rgba(0, 0, 0, .35); }
+  /* a gentle shimmer where the pointer is */
+  :root[data-surface='liquid'] :is(.card, .btn):not(.kpis .stat):hover { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .7), 0 0 0 1px var(--lg-edge), 0 22px 46px -22px rgba(0, 0, 0, .4) !important; }
+  :root[data-surface='liquid'] svg.lucide { stroke-width: 1.8; stroke-linecap: round; }
+}
+@media screen and (prefers-reduced-motion: reduce) { :root[data-surface='ios'] :is(.card, .modal, .page, .btn, .seg button) { transition: none; } }
+@media screen and (prefers-reduced-transparency: reduce) {
+  :root:is([data-surface='ios'], [data-surface='liquid']) :is(.topbar, .bottom-nav, .card:not(.kpis .stat), .modal, .pill) { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; background: var(--surface) !important; }
+}
+
+/* ======================= the Terminal theme (L5): fixed-width type and a blinking caret ======================= */
+@media screen {
+  :root[data-palette^='terminal'] { font-family: 'JetBrains Mono', 'Fira Code', 'DejaVu Sans Mono', ui-monospace, monospace; }
+  :root[data-palette^='terminal'] :is(.card, .stat, .modal, .btn, .seg, .pill, input, select) { border-radius: 2px !important; }
+  :root[data-palette^='terminal'] :is(.card, .stat, .modal) { box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary) 35%, transparent) !important; }
+  :root[data-palette^='terminal'] :is(h1, h2, h3) { text-shadow: 0 0 8px color-mix(in srgb, var(--primary) 45%, transparent); }
+  :root[data-palette^='terminal'] input:focus { caret-color: var(--primary); }
+  :root[data-palette^='terminal'] .page-head h1::after { content: '_'; margin-left: 4px; color: var(--primary); animation: term-blink 1s steps(1) infinite; }
+}
+@keyframes term-blink { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { :root[data-palette^='terminal'] .page-head h1::after { animation: none; } }

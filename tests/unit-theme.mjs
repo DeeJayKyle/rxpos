@@ -13,8 +13,9 @@ const restricted = allowedThemes({ themes: ['tokyo-night', 'mint', 'clinic-blue'
 check('restricted: light prefers the owner\'s default when it is light (a retired id counts as its replacement)', paletteFor('light', restricted, 'mint') === 'emerald-mint');
 check('restricted: light falls back to the first allowed light palette', paletteFor('light', restricted) === 'sky-blue');
 check('restricted: dark → the only allowed dark palette', paletteFor('dark', restricted, 'mint') === 'navy-teal');
-check('no palette of that base: falls back to the first allowed', paletteFor('dark', allowedThemes({ themes: ['mint', 'clinic-blue', 'sunrise'] })) === 'sky-blue');
-check('the 41 themes in 6 sets of 3 to 9, each one in a group; the Dark set is all dark (1.15.0)', THEMES.length === 41 && THEME_GROUPS.length === 6 && THEME_GROUPS.every((g) => { const n = THEMES.filter((t) => t.group === g).length; return n >= 3 && n <= 9; }) && THEMES.every((t) => THEME_GROUPS.includes(t.group)) && THEMES.filter((t) => t.group === 'Dark').every((t) => t.base === 'dark') && THEMES.filter((t) => t.base === 'dark').length === 12);
+// 1.17.0: an owner's light themes bring their dark twins, so Dark has one of them rather than falling back to a light one
+check('only light themes allowed: Dark takes the first one\'s dark twin', paletteFor('dark', allowedThemes({ themes: ['mint', 'clinic-blue', 'sunrise'] })) === 'sky-blue-dark');
+check('the 43 themes in 6 sets of 3 to 9, each one in a group; the Dark set is all dark (1.17.0: Ubuntu Yaru and Terminal)', THEMES.length === 43 && THEME_GROUPS.length === 6 && THEME_GROUPS.every((g) => { const n = THEMES.filter((t) => t.group === g).length; return n >= 3 && n <= 9; }) && THEMES.every((t) => THEME_GROUPS.includes(t.group)) && THEMES.filter((t) => t.group === 'Dark').every((t) => t.base === 'dark') && THEMES.filter((t) => t.base === 'dark').length === 13);
 // the Pharmacy themes (19 Nov 2026): one glossy theme in every set, its figure cards, banner and menu readable (AA)
 {
   const glossy = THEMES.filter((t) => t.glossy);
@@ -76,6 +77,27 @@ check('every menu reads (its text on the menu colour ≥ 4.5:1)', THEMES.every((
   const { withPalettes } = await import('../tools/flutter-palettes.mjs');
   const dart = fs.readFileSync(new URL('../rxpos_flutter/lib/core/theme/themes.dart', import.meta.url), 'utf8');
   check('the Flutter apps have exactly the web app\'s themes (node tools/flutter-palettes.mjs)', withPalettes(dart) === dart);
+}
+// 1.17.0 (the owner's choice): every light theme has a dark twin of its own colours; Dark goes to it, Light comes back
+{
+  const { THEME_TWINS, twinFor } = await import('../src/themes.js');
+  check('a dark twin for every light theme, each dark, in its theme\'s set and not in the list', THEME_TWINS.length === THEMES.filter((t) => t.base === 'light').length && THEME_TWINS.every((t) => t.base === 'dark' && THEMES.find((x) => x.id === t.twinOf)?.group === t.group && !THEMES.includes(t)));
+  check('Dark keeps the theme (Pharmacy Green → its twin), Light comes back; a dark theme has no twin', twinFor('pharmacy-green', 'dark') === 'pharmacy-green-dark' && twinFor('pharmacy-green-dark', 'light') === 'pharmacy-green' && twinFor('navy-teal', 'light') === '');
+  check('a twin keeps its theme\'s brand colour', themeVars(themeById('pharmacy-green-dark'))['--primary'] === themeVars(themeById('pharmacy-green'))['--primary']);
+  const bad = [];
+  for (const t of THEME_TWINS) {
+    const v = themeVars(t);
+    if (contrast(v['--text'], v['--bg']) < 7) bad.push(`${t.id} text`);
+    if (contrast(v['--on-accent'], v['--primary-solid']) < 4.5) bad.push(`${t.id} button`);
+    for (let n = 1; n <= 4; n++) if (contrast(v[`--kpi-${n}-on`], v[`--kpi-${n}-a`]) < 4.5) bad.push(`${t.id} card ${n}`);
+  }
+  check('every twin reads at AA: words, buttons and figure cards', bad.length === 0, bad.slice(0, 6).join(', '));
+}
+// 1.17.0 gradients: every preset's words read at AA on both ends of its gradient (the menu and the banner)
+{
+  const { GRADIENT_PRESETS, presetColours } = await import('../src/gradients.js');
+  const bad = GRADIENT_PRESETS.filter(([id]) => { const c = presetColours(id); return contrast(c.on, c.a) < 4.5 || contrast(c.on, c.b) < 4.5; }).map(([id]) => id);
+  check('the six gradient presets, each readable at AA on both ends', GRADIENT_PRESETS.length === 6 && bad.length === 0, bad.join(', '));
 }
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

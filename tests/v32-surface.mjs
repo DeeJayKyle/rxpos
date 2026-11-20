@@ -17,7 +17,8 @@ const pillShadow = (p) => p.evaluate(() => { const el = document.querySelector('
 const openMenu = (p) => p.evaluate(() => document.querySelector('button[title="Theme"]')?.click());
 const pickStyle = (p, name) => p.evaluate((name) => { const b = [...document.querySelectorAll('.theme-menu .style-item')].find((x) => x.textContent.includes(name)); b?.click(); return !!b; }, name);
 
-const STYLES = [['Glassmorphism', 'glass'], ['Claymorphism', 'clay'], ['Skeuomorphism', 'skeuomorphism'], ['Neumorphism', 'neumorphism']];
+// 1.17.0: the Linux and Apple styles too (the last one picked is the one checked after the reload)
+const STYLES = [['Glassmorphism', 'glass'], ['Claymorphism', 'clay'], ['Skeuomorphism', 'skeuomorphism'], ['GNOME', 'gnome'], ['KDE Plasma', 'kde'], ['elementary OS', 'elementary'], ['Ubuntu', 'ubuntu'], ['iOS', 'ios'], ['Liquid Glass', 'liquid'], ['Neumorphism', 'neumorphism']];
 
 const t = await owner('/tenants', { name: 'Style Pharmacy', admin: { name: 'Stella', email: 'stella@test.rx', password: 'stella-pass-12' } });
 const slug = t.tenant.slug, tid = t.tenant.id;

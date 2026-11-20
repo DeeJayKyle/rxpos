@@ -8,6 +8,13 @@ export const STYLES = [
   { id: 'clay', name: 'Claymorphism', hint: 'Soft, puffy, rounded' },
   { id: 'skeuomorphism', name: 'Skeuomorphism', hint: 'Tactile, with depth and bevels' },
   { id: 'neumorphism', name: 'Neumorphism', hint: 'Soft extruded, low contrast' },
+  // 1.17.0 (the owner's choice): the feel of Linux desktops and of Apple's iPhone, in the theme's own colours
+  { id: 'gnome', name: 'GNOME', hint: 'Linux Adwaita: clean rounded cards, centred title, pill buttons', group: 'Linux' },
+  { id: 'kde', name: 'KDE Plasma', hint: 'Linux Breeze: crisp, compact, thin borders, blue focus', group: 'Linux' },
+  { id: 'elementary', name: 'elementary OS', hint: 'Linux Pantheon: airy, warm greys, gentle shadows', group: 'Linux' },
+  { id: 'ubuntu', name: 'Ubuntu', hint: 'Linux Yaru: a dock of big icons, rounded window cards', group: 'Linux' },
+  { id: 'ios', name: 'iOS', hint: 'iPhone: big titles, frosted bars, grouped lists, springy', group: 'Apple' },
+  { id: 'liquid', name: 'Liquid Glass', hint: 'iOS 26: clear glass tinted by what is behind, capsule bars', group: 'Apple' },
 ];
 export const styleById = (id) => STYLES.find((s) => s.id === id) || STYLES[0];
 

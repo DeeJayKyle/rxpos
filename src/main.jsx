@@ -22,10 +22,13 @@ import './styles/forms.css';
 import './styles/pages-f.css';
 import './styles/duotone.css'; // every page in its theme's two colours
 import './styles/glossy.css'; // the glossy dashboard (every theme since 1.15.0)
-import './styles/cleanup.css'; // last: the 1.16.0 clean-up
+import './styles/cleanup.css'; // the 1.16.0 clean-up
+import './styles/os-styles.css'; // the 1.17.0 Linux and Apple styles and the Terminal theme
+import './styles/gradients.css'; // last: the 1.17.0 gradient choices
 import { applyTheme, startupTheme, savedAccent } from './themes.js';
 import { applyStyle, savedStyle } from './surface.js';
 import { applyLevel, savedLevel } from './vivid.js';
+import { applyGradient } from './gradients.js';
 import { isAndroid, isNative, isTouch } from './platform.js';
 // E4: a touch screen gets bigger targets (src/styles/forms.css :root[data-touch])
 if (isTouch) document.documentElement.dataset.touch = '';
@@ -61,6 +64,7 @@ if (isAndroid) document.documentElement.classList.add('is-android');
 applyTheme(startupTheme(), savedAccent());
 applyStyle(savedStyle());
 applyLevel(savedLevel());
+applyGradient();
 
 class ErrorBoundary extends React.Component {
   state = { error: null };
