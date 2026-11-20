@@ -87,6 +87,7 @@ check('it cannot be received before someone confirms they checked', await p.eval
 // the reviewer removes the line the invoice didn't really have, ticks the box and receives
 await p.evaluate(() => { const row = [...document.querySelectorAll('tr')].find((r) => /Zinc Sulphate/.test(r.innerText)); row?.querySelector('button[aria-label="Remove line"]')?.click(); });
 await wait(500);
+await p.evaluate(() => document.querySelectorAll('.line-checked').forEach((b) => b.click())); await wait(300); // each line to check: compared and ticked
 await p.evaluate(() => { const c = document.querySelector('.scan-confirm input'); c?.click(); });
 await wait(300);
 await click(p, /^Receive stock/);

@@ -23,6 +23,7 @@ import 'clean_parts.dart';
 import '../domain/clean_dashboard.dart';
 import '../../../core/data/device_settings.dart';
 import '../../storage/presentation/storage_screen.dart';
+import '../../../core/presentation/page_menu.dart' show registerPageMenu;
 
 /// Home, the clean dashboard (src/pages/Dashboard.jsx; the owner's choice, 2026-11-15): period chips, the four figures
 /// against the period before, one sales chart (Daily / Monthly), stock health, the top medicines and the latest sales.
@@ -56,9 +57,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final period = layout.period;
     final pf = periodFigures(f.byDay, period);
     final c = pf.cur, pv = pf.prev, vs = vsWords[period]!;
-    // the last 7 days of each figure, for the cards' small trend lines (2026-11-18)
-    final week = [for (var i = 6; i >= 0; i--) f.day(localDate(DateTime.now().subtract(Duration(days: i))))];
-    List<double> spark(double Function(DayFigures d) of) => [for (final d in week) of(d)];
     final isToday = period == 'today';
     final branchRows = ref.watch(tableProvider('branches')).value ?? const [];
     final multiBranch = branchRows.length > 1; // expenses are pharmacy-wide
@@ -91,15 +89,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final vsRing = vs.replaceFirst(RegExp(r'^\s*·?\s*vs '), '');
     Widget? card(String id) => switch (id) {
           'figures' => StatGrid(children: [
-              StatCard(slot: 0, ring: share(c.total, pv.total), ringTitle: 'of the sales $vsRing', label: isToday ? 'Today\'s sales' : 'Sales', value: cardAmount(c.total), full: s.money(c.total), sub: '${c.count} sale${c.count == 1 ? '' : 's'}${deltaText(c.total, pv.total, vs)}', icon: Icons.payments_outlined, spark: spark((d) => d.total),
+              StatCard(slot: 0, ring: share(c.total, pv.total), ringTitle: 'of the sales $vsRing', label: isToday ? 'Today\'s sales' : 'Sales', value: cardAmount(c.total), full: s.money(c.total), icon: Icons.payments_outlined, foot: false,
                   onTap: can.contains('sales.view') ? () => context.go('/sales?from=${range.from}&to=${range.to}') : null),
               if (can.contains('reports'))
-                StatCard(slot: 1, ring: share(c.grossProfit, c.total), ringTitle: 'gross margin (profit ÷ sales)', label: isToday ? 'Gross profit today' : 'Gross profit', value: cardAmount(c.grossProfit), full: s.money(c.grossProfit), sub: 'after cost of goods${deltaText(c.grossProfit, pv.grossProfit, vs)}', icon: Icons.trending_up, color: context.tones.violet, spark: spark((d) => d.grossProfit),
+                StatCard(slot: 1, ring: share(c.grossProfit, c.total), ringTitle: 'gross margin (profit ÷ sales)', label: isToday ? 'Gross profit today' : 'Gross profit', value: cardAmount(c.grossProfit), full: s.money(c.grossProfit), icon: Icons.trending_up, color: context.tones.violet, foot: false,
                     onTap: () => context.go('/reports?tab=profit&from=${range.from}&to=${range.to}')),
               if (can.contains('finance') || can.contains('reports'))
-                StatCard(slot: expSlot, ring: share(c.expenses, c.total), ringTitle: 'of sales spent on expenses', label: isToday ? 'Today\'s expenses' : 'Expenses', value: cardAmount(c.expenses), full: s.money(c.expenses), sub: '${multiBranch ? 'Whole pharmacy (expenses have no branch) · sales here − expenses' : 'Sales − expenses'}: ${s.money(c.total - c.expenses)}', icon: Icons.account_balance_wallet_outlined, color: context.tones.warn, spark: spark((d) => d.expenses),
+                StatCard(slot: expSlot, ring: share(c.expenses, c.total), ringTitle: 'of sales spent on expenses', label: isToday ? 'Today\'s expenses' : 'Expenses', value: cardAmount(c.expenses), full: s.money(c.expenses), icon: Icons.account_balance_wallet_outlined, color: context.tones.warn, foot: false,
                     onTap: () => context.go(can.contains('finance') ? '/finance?tab=expenses' : '/reports?tab=expenses&from=${range.from}&to=${range.to}')),
-              StatCard(slot: txSlot, ring: share(c.count.toDouble(), pv.count.toDouble()), ringTitle: 'of the receipts $vsRing', label: 'Transactions', value: '${c.count}', sub: 'receipts ${isToday ? 'today' : periodWords[period]}${deltaText(c.count.toDouble(), pv.count.toDouble(), vs)}', icon: Icons.receipt_long_outlined, color: context.tones.info, spark: spark((d) => d.count.toDouble()),
+              StatCard(slot: txSlot, ring: share(c.count.toDouble(), pv.count.toDouble()), ringTitle: 'of the receipts $vsRing', label: 'Transactions', value: '${c.count}', icon: Icons.receipt_long_outlined, color: context.tones.info, foot: false,
                   onTap: can.contains('sales.view') ? () => context.go('/sales?from=${range.from}&to=${range.to}') : null),
             ]),
           'chart' => Card(child: Padding(padding: const EdgeInsets.all(12), child: () {
@@ -171,6 +169,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           _ => null,
         };
     final spans = {for (final w in dashWidgets) w.$1: w.$3};
+    registerPageMenu('/', () => [
+          (label: 'Edit widgets…', icon: Icons.tune, onTap: () => showEditWidgets(context, layout, save)),
+          if (layout.sizes.isNotEmpty) (label: 'Cards back to their usual sizes', icon: Icons.restart_alt, onTap: () => save(layout.encode(sizes: const {}))),
+          (label: 'New sale', icon: Icons.point_of_sale, onTap: () => context.go('/pos')),
+        ]);
 
     return PageFrame(
       title: '',
@@ -178,25 +181,18 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         RiseIn(index: 0, child: SizedBox(width: double.infinity, child: GreetingCard(pharmacy: s.name, name: session?.userName ?? '', canSell: can.contains('pos.sell')))),
         const SizedBox(height: 12),
-        LayoutBuilder(builder: (context, box) {
-          // the period chips share the row; on a phone Edit widgets is an icon so all five chips fit
-          final narrow = box.maxWidth < 520;
-          final chips = SegmentedButton<String>(
+        // the period chips across the width (Edit widgets moved to This device, the owner's choice 2026-11-20)
+        SizedBox(
+          width: double.infinity,
+          child: SegmentedButton<String>(
             key: const Key('period-chips'),
             style: const ButtonStyle(visualDensity: VisualDensity.compact),
             showSelectedIcon: false,
-            segments: [for (final (k, l) in periods) ButtonSegment(value: k, label: Text(l))],
+            segments: [for (final (k, l) in periods) ButtonSegment(value: k, label: Text(l, maxLines: 1, softWrap: false))],
             selected: {period},
             onSelectionChanged: (v) => save(layout.encode(period: v.first)),
-          );
-          return Row(children: [
-            if (narrow) Expanded(child: chips) else Expanded(child: Align(alignment: Alignment.centerLeft, child: SingleChildScrollView(scrollDirection: Axis.horizontal, child: chips))),
-            const SizedBox(width: 6),
-            narrow
-                ? IconButton.outlined(key: const Key('edit-widgets-open'), tooltip: 'Edit widgets', onPressed: () => showEditWidgets(context, layout, save), icon: const Icon(Icons.tune, size: 18))
-                : TextButton.icon(key: const Key('edit-widgets-open'), onPressed: () => showEditWidgets(context, layout, save), icon: const Icon(Icons.tune, size: 18), label: const Text('Edit widgets')),
-          ]);
-        }),
+          ),
+        ),
         // what the figures cover, in words
         Padding(
           padding: const EdgeInsets.only(top: 4),
@@ -248,10 +244,32 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             return w.floorToDouble();
           }
           var i = 0;
+          final shownIds = [for (final id in layout.order) if (layout.shown.contains(id)) id];
+          // cards moved by their grip, resized by their right edge (wide screens) and with a menu (the owner's request,
+          // 2026-11-20); kept on this device
           return Wrap(spacing: gap, runSpacing: gap, children: [
-            for (final id in layout.order)
-              if (layout.shown.contains(id))
-                if (card(id) case final Widget w) SizedBox(key: ValueKey('widget-$id'), width: width(spans[id]!), child: RiseIn(index: ++i, child: w)),
+            for (final id in shownIds)
+              if (card(id) case final Widget w)
+                DashCard(
+                  key: ValueKey('widget-$id'),
+                  id: id,
+                  name: dashWidgets.firstWhere((x) => x.$1 == id).$2,
+                  span: layout.sizes[id] ?? spans[id]!,
+                  width: width,
+                  colWidth: cols == 12 ? (box.maxWidth + gap) / 12 : 0,
+                  first: shownIds.first == id,
+                  last: shownIds.last == id,
+                  onMove: (from, before) => save(layout.encode(order: layout.moved(from, before))),
+                  onStep: (d) {
+                    final k = shownIds.indexOf(id) + d;
+                    if (k < 0 || k >= shownIds.length) return;
+                    save(layout.encode(order: layout.moved(id, d < 0 ? shownIds[k] : (k + 1 < shownIds.length ? shownIds[k + 1] : null))));
+                  },
+                  onSize: (sp) => save(layout.encode(sizes: {...layout.sizes, id: sp})),
+                  onHide: () => save(layout.encode(shown: {...layout.shown}..remove(id))),
+                  onEdit: () => showEditWidgets(context, layout, save),
+                  child: RiseIn(index: ++i, child: w),
+                ),
           ]);
         }),
       ]),

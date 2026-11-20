@@ -26,7 +26,8 @@ function foldNow(s) {
 
 /** One searchable string per medicine (built once, reused for every keystroke) */
 export function searchKey(p) {
-  return fold([p.name, p.generic, p.ingredients, p.strength, p.form, p.category, p.barcode].filter(Boolean).join(' '));
+  // aliases: the names (and barcodes) of medicines merged into this one, so they are still found
+  return fold([p.name, p.generic, p.ingredients, p.strength, p.form, p.category, p.barcode, ...(Array.isArray(p.aliases) ? p.aliases : [])].filter(Boolean).join(' '));
 }
 
 /** Medicines matching the query, best first: name starts with it, then a word starts with it, then anywhere; in stock first within each */

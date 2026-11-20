@@ -4,6 +4,8 @@
 //   reads   <data-folder>/*.json (a path, or a name under %LOCALAPPDATA%/Temp/rxm) saved by receiver.cjs — see README.md
 //   writes  the RxPOS cloud (RXPOS_API) through the owner API. Owner key: OWNER_KEY, or Documents/RxPOS-Data/RxPOS-OWNER-KEY.txt
 // Optional files (used when present): saleheads, creditnotes, purchaselines, purchaseheads, debitnotes, extra, stockcount-N (Rxtera's logo is never copied)
+// The owner's law (worker/ownerlaw.js): this writes pharmacy data, so the cloud refuses it unless the owner approved
+// this run: OWNER_APPROVED=yes is set by the owner (or by an agent ONLY after asking the owner and getting their yes).
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -44,7 +46,7 @@ const local = (s) => { s = String(s).trim(); if (/^\d{4}-\d{2}-\d{2}$/.test(s)) 
 const call = async (url, o = {}) => {
   for (let tries = 0; ; tries++) {
     try {
-      const r = await fetch(url, { ...o, headers: { Authorization: 'Bearer ' + KEY, 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(120000) });
+      const r = await fetch(url, { ...o, headers: { Authorization: 'Bearer ' + KEY, 'Content-Type': 'application/json', ...(process.env.OWNER_APPROVED === 'yes' ? { 'X-Owner-Approved': 'yes' } : {}) }, signal: AbortSignal.timeout(120000) });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || 'HTTP ' + r.status);
       return j;

@@ -137,7 +137,9 @@ class PullToSync extends ConsumerWidget {
 
 /// A figure with its label (and a line under it); tappable when [onTap] is set.
 class StatCard extends StatelessWidget {
-  const StatCard({super.key, required this.label, required this.value, this.full, this.sub, this.icon, this.color, this.onTap, this.spark, this.slot, this.ring, this.ringTitle = ''});
+  const StatCard({super.key, required this.label, required this.value, this.full, this.sub, this.icon, this.color, this.onTap, this.spark, this.slot, this.ring, this.ringTitle = '', this.foot = true});
+  /// false: the figure alone, with no line under it (the dashboard's figure cards, the owner's choice 2026-11-20)
+  final bool foot;
   /// a percentage shown as a ring at the right of the figure (1.15.0, the owner's reference), and what it is
   final int? ring;
   final String ringTitle;
@@ -220,7 +222,7 @@ class StatCard extends StatelessWidget {
               ]),
               if (spark != null && spark!.any((v) => v != 0))
                 Padding(padding: const EdgeInsets.symmetric(vertical: 2), child: Spark(key: const Key('spark'), data: spark!, color: ink ?? t.colorScheme.tertiary)),
-              if (sub != null || onTap != null)
+              if (foot && (sub != null || onTap != null))
                 Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
                   // the change and "vs yesterday" on one line (UI batch 3, B2); the whole line in the tooltip
                   Expanded(child: Tooltip(message: sub ?? '', child: Text(sub ?? '', key: const Key('stat-sub'), maxLines: 1, overflow: TextOverflow.ellipsis, style: t.textTheme.bodySmall?.copyWith(color: g?.sub ?? ink?.withValues(alpha: .9))))),

@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useContextMenu } from '../listcontrols.jsx';
+import { usePageMenu } from '../pagemenu.js';
 import { Link, useNavigate } from 'react-router-dom';
-import { Banknote, Wallet, CalendarClock, PackageX, Pill, Coins, Users, ShoppingCart, ReceiptText, Share2, Megaphone, TrendingUp, ShieldAlert, PauseCircle, SearchCheck, SlidersHorizontal, ArrowUp, ArrowDown, ArrowRight, Sparkles, X } from 'lucide-react';
+import { Banknote, Wallet, CalendarClock, PackageX, Pill, Coins, Users, ShoppingCart, ReceiptText, Share2, Megaphone, TrendingUp, ShieldAlert, PauseCircle, SearchCheck, SlidersHorizontal, ArrowUp, ArrowDown, ArrowRight, Sparkles, X, GripVertical, EyeOff, Maximize2, Minimize2, RotateCcw } from 'lucide-react';
 import { draftsFor, seesAllDrafts, isOld, ageText } from '../drafts.js';
 import { useStore, today, dayOf, isLowStock, expiryCounts, stockValue, MAIN_BRANCH, put, audit, now } from '../store.jsx';
 import { Stat, Empty, Modal } from '../ui.jsx';
@@ -65,7 +67,8 @@ export function dashLayout(d = deviceSettings()) {
   const ids = WIDGETS.map((w) => w.id);
   const order = [...(saved.order || []).filter((id) => ids.includes(id)), ...ids.filter((id) => !(saved.order || []).includes(id))];
   const shown = new Set(saved.shown || WIDGETS.filter((w) => w.on).map((w) => w.id));
-  return { period: PERIODS.some(([k]) => k === saved.period) ? saved.period : 'today', order, shown };
+  // sizes: each card's width in the 12-column grid, changed by dragging its edge or from its menu (2026-11-20)
+  return { period: PERIODS.some(([k]) => k === saved.period) ? saved.period : 'today', order, shown, sizes: saved.sizes || {} };
 }
 const saveDash = (patch) => setDevice({ dash: { ...(deviceSettings().dash || {}), ...patch } });
 
@@ -111,11 +114,6 @@ export default function Dashboard() {
   // eslint-disable-next-line react-hooks/exhaustive-deps -- day: today's figures start again at midnight
   }, [db.sales, db.expenses, db.purchases, branchId, day]);
   const fig = useMemo(() => periodFigures(m.byDay, period), [m.byDay, period, day]); // eslint-disable-line react-hooks/exhaustive-deps
-  // the last 7 days of each figure, for the cards' small trend lines (2026-11-18)
-  const spark = useMemo(() => {
-    const days = Array.from({ length: 7 }, (_, i) => { const d = new Date(); d.setDate(d.getDate() - (6 - i)); return m.byDay[dayOf(d.toISOString())] || {}; });
-    return Object.fromEntries(['total', 'gp', 'exp', 'n'].map((k) => [k, days.map((x) => x[k] || 0)]));
-  }, [m.byDay, day]); // eslint-disable-line react-hooks/exhaustive-deps
   // the top medicines of the period (today's are few: this month's then)
   const topRange = period === 'today' ? { from: today().slice(0, 8) + '01', to: today(), words: 'this month' } : { from: fig.range.from, to: fig.range.to, words: PERIOD_WORDS[period] };
   const top = useMemo(() => topMedicines(m.valid, topRange.from, topRange.to, topBy, 5), [m.valid, topRange.from, topRange.to, topBy]);
@@ -137,7 +135,7 @@ export default function Dashboard() {
   const hour = new Date().getHours();
   const greet = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
   const isToday = period === 'today';
-  const c = fig.cur, dl = fig.delta, pv = fig.prev;
+  const c = fig.cur, pv = fig.prev;
   // each figure's ring (1.15.0): sales and receipts against the period before, profit and expenses as a share of sales
   const share = (a, b) => (b > 0 ? Math.round((a / b) * 100) : null);
   const vsWords = VS_WORDS[period].replace(/^vs /, '');
@@ -148,10 +146,10 @@ export default function Dashboard() {
     figures: () => (
       <div className="stats kpis">
         {/* sales open Reports → Sales lines for the period (every medicine sold); staff without it get the sales list */}
-        <Stat {...salesTo} label={isToday ? "Today's sales" : 'Sales'} value={fmtShort(c.total)} full={fmt(c.total)} sub={`${c.n} sale${c.n === 1 ? '' : 's'} · ${VS_WORDS[period]}`} delta={dl.total} spark={spark.total} tone="teal" icon={Banknote} ring={{ pct: share(c.total, pv.total), title: `of the sales ${vsWords}` }} />
-        {can('reports') && <Stat to="/reports" state={{ tab: 'profit', ...rangeState }} label={isToday ? 'Gross profit today' : 'Gross profit'} value={fmtShort(c.gp)} full={fmt(c.gp)} sub={VS_WORDS[period]} delta={dl.gp} spark={spark.gp} tone="violet" icon={TrendingUp} ring={{ pct: share(c.gp, c.total), title: 'gross margin (profit ÷ sales)' }} />}
-        {(can('finance') || can('reports')) && <Stat to="/expenses" label={isToday ? "Today's expenses" : 'Expenses'} value={fmtShort(c.exp)} full={fmt(c.exp)} sub={db.branches.length > 1 ? `Whole pharmacy (expenses have no branch) · sales here − expenses: ${fmt(c.total - c.exp)}` : `Sales − expenses: ${fmt(c.total - c.exp)}`} delta={dl.exp} spark={spark.exp} goodDown tone="orange" icon={Wallet} ring={{ pct: share(c.exp, c.total), title: 'of sales spent on expenses' }} />}
-        <Stat to="/sales" state={rangeState} label="Transactions" value={c.n.toLocaleString()} sub={VS_WORDS[period]} delta={dl.n} spark={spark.n} tone="blue" icon={ReceiptText} ring={{ pct: share(c.n, pv.n), title: `of the receipts ${vsWords}` }} />
+        <Stat {...salesTo} label={isToday ? "Today's sales" : 'Sales'} value={fmtShort(c.total)} full={fmt(c.total)} tone="teal" icon={Banknote} ring={{ pct: share(c.total, pv.total), title: `of the sales ${vsWords}` }} />
+        {can('reports') && <Stat to="/reports" state={{ tab: 'profit', ...rangeState }} label={isToday ? 'Gross profit today' : 'Gross profit'} value={fmtShort(c.gp)} full={fmt(c.gp)} tone="violet" icon={TrendingUp} ring={{ pct: share(c.gp, c.total), title: 'gross margin (profit ÷ sales)' }} />}
+        {(can('finance') || can('reports')) && <Stat to="/expenses" label={isToday ? "Today's expenses" : 'Expenses'} value={fmtShort(c.exp)} full={fmt(c.exp)} tone="orange" icon={Wallet} hint={db.branches.length > 1 ? 'Whole pharmacy: expenses have no branch' : undefined} ring={{ pct: share(c.exp, c.total), title: 'of sales spent on expenses' }} />}
+        <Stat to="/sales" state={rangeState} label="Transactions" value={c.n.toLocaleString()} tone="blue" icon={ReceiptText} ring={{ pct: share(c.n, pv.n), title: `of the receipts ${vsWords}` }} />
       </div>
     ),
     chart: () => {
@@ -262,7 +260,11 @@ export default function Dashboard() {
   const dock = [['/pos', 'Sell', ShoppingCart, 'pos.sell'], ['/inventory', 'Inventory', Pill, 'inventory.view'], ['/sales', 'Sales', ReceiptText, 'sales.view'], ['/customers', 'Customers', Users, 'customers'], ['/reports', 'Reports', TrendingUp, 'reports']]
     .filter(([, , , perm]) => can(perm)).map(([to, label, Icon]) => ({ to, label, Icon }));
   const spans = Object.fromEntries(WIDGETS.map((w) => [w.id, w.span]));
-  let n = 0;
+  usePageMenu([
+    !behaviour.home && { label: 'Edit widgets…', Icon: SlidersHorizontal, run: () => setEditing(true) },
+    !behaviour.home && Object.keys(layout.sizes || {}).length > 0 && { label: 'Cards back to their usual sizes', Icon: RotateCcw, run: () => saveDash({ sizes: undefined }) },
+    { label: 'New sale', Icon: ShoppingCart, run: () => navigate('/pos') },
+  ]);
 
   return (
     <div className="page dash-page">
@@ -295,13 +297,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      {behaviour.home ? <HomeScreen catalogue={HOME_WIDGETS} cards={cards} dock={dock} /> : <div className="dash-grid">
-        {layout.order.filter((id) => layout.shown.has(id)).map((id) => {
-          const el = cards[id]();
-          if (!el) return null;
-          return <div key={id} className={'dash-cell span-' + spans[id]} data-widget={id} style={{ '--i': n++ }}>{el}</div>;
-        })}
-      </div>}
+      {behaviour.home ? <HomeScreen catalogue={HOME_WIDGETS} cards={cards} dock={dock} /> : <DashGrid layout={layout} spans={spans} cards={cards} onEdit={() => setEditing(true)} />}
       {editing && <EditWidgets layout={layout} onClose={() => setEditing(false)} />}
     </div>
   );
@@ -377,6 +373,74 @@ function RecentSales({ sales, branchId, fmt }) {
   );
 }
 
+const SIZES = [[4, 'Small (a third)'], [6, 'Half'], [8, 'Large (two thirds)'], [12, 'Full width']];
+/**
+ * The dashboard's cards (the owner's request, 2026-11-20): each card is moved by dragging its grip onto another card,
+ * resized by dragging its right edge (it snaps to the 12-column grid), and has a menu (right-click or a long press)
+ * to size, move or hide it. Everything is kept on this device; "Back to the standard dashboard" undoes it.
+ */
+function DashGrid({ layout, spans, cards, onEdit }) {
+  const gridRef = useRef(null);
+  const [drag, setDrag] = useState(null); // the card being moved
+  const [over, setOver] = useState(null); // the card it would go before
+  const [live, setLive] = useState(null); // { id, span } while a card is being resized
+  const menu = useContextMenu();
+  const ids = layout.order.filter((id) => layout.shown.has(id));
+  const spanOf = (id) => (live?.id === id ? live.span : layout.sizes[id] || spans[id]);
+  const moveBefore = (id, target) => {
+    if (!id || id === target) return;
+    const o = layout.order.filter((x) => x !== id);
+    o.splice(target ? o.indexOf(target) : o.length, 0, id);
+    saveDash({ order: o });
+  };
+  const step = (id, d) => { const i = ids.indexOf(id), j = i + d; if (j < 0 || j >= ids.length) return; moveBefore(id, d < 0 ? ids[j] : ids[j + 1]); };
+  const setSize = (id, span) => saveDash({ sizes: { ...layout.sizes, [id]: span } });
+  const hide = (id) => { const sh = new Set(layout.shown); sh.delete(id); saveDash({ shown: [...sh] }); };
+  // resizing: the right edge follows the pointer; the width snaps to whole columns (at least a quarter of the row)
+  const startResize = (e, id) => {
+    e.preventDefault(); e.stopPropagation();
+    const cell = e.currentTarget.parentElement, grid = gridRef.current.getBoundingClientRect(), left = cell.getBoundingClientRect().left;
+    const col = grid.width / 12;
+    let span = spanOf(id);
+    const mv = (ev) => { span = Math.max(3, Math.min(12, Math.round((ev.clientX - left) / col))); setLive({ id, span }); };
+    const up = () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up); setLive(null); setSize(id, span); };
+    window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up);
+  };
+  const cardMenu = (e, id, name) => menu.open(e, [
+    ...SIZES.map(([sp, label]) => ({ label: `${spanOf(id) === sp ? '✓ ' : ''}${label}`, Icon: sp === 12 ? Maximize2 : Minimize2, run: () => setSize(id, sp) })),
+    '-',
+    { label: 'Move earlier', Icon: ArrowUp, disabled: ids[0] === id, run: () => step(id, -1) },
+    { label: 'Move later', Icon: ArrowDown, disabled: ids.at(-1) === id, run: () => step(id, 1) },
+    { label: `Hide ${name}`, Icon: EyeOff, run: () => hide(id) },
+    '-',
+    { label: 'Edit widgets…', Icon: SlidersHorizontal, run: onEdit },
+  ]);
+  let n = 0;
+  return (
+    <div className={'dash-grid' + (drag ? ' dragging' : '')} ref={gridRef} onDragOver={(e) => drag && e.preventDefault()} onDrop={(e) => { e.preventDefault(); if (drag && !over) moveBefore(drag, null); setDrag(null); setOver(null); }}>
+      {ids.map((id) => {
+        const el = cards[id]();
+        if (!el) return null;
+        const name = WIDGETS.find((w) => w.id === id)?.name || 'card';
+        return (
+          <div key={id} className={'dash-cell span-' + spanOf(id) + (drag === id ? ' is-dragged' : '') + (over === id && drag !== id ? ' drop-before' : '') + (live?.id === id ? ' resizing' : '')} data-widget={id} style={{ '--i': n++ }}
+            onDragOver={(e) => { if (!drag) return; e.preventDefault(); e.stopPropagation(); setOver(id); }}
+            onDrop={(e) => { e.preventDefault(); e.stopPropagation(); moveBefore(drag, id); setDrag(null); setOver(null); }}
+            onContextMenu={(e) => { if (e.target.closest('input, textarea, select')) return; cardMenu(e, id, name); }}>
+            <button type="button" className="dash-grip" draggable title={`Drag to move ${name}`} aria-label={`Move ${name}: drag, or use its menu`}
+              onDragStart={(e) => { setDrag(id); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', id); e.dataTransfer.setDragImage(e.currentTarget.parentElement, 20, 20); }}
+              onDragEnd={() => { setDrag(null); setOver(null); }} onClick={(e) => cardMenu(e, id, name)}><GripVertical size={14} /></button>
+            {el}
+            <span className="dash-resize" role="separator" aria-orientation="vertical" aria-label={`Resize ${name}`} title="Drag to make it wider or narrower" onPointerDown={(e) => startResize(e, id)} />
+            {live?.id === id && <span className="dash-size-tip">{live.span} of 12</span>}
+          </div>
+        );
+      })}
+      {menu.node}
+    </div>
+  );
+}
+
 /** Edit widgets: show or hide each card and move it up or down; kept on this device */
 function EditWidgets({ layout, onClose }) {
   const move = (i, d) => { const o = [...layout.order]; [o[i], o[i + d]] = [o[i + d], o[i]]; saveDash({ order: o }); };
@@ -394,7 +458,7 @@ function EditWidgets({ layout, onClose }) {
         ); })}
       </ul>
       <div className="form-actions">
-        <button type="button" className="btn ghost" onClick={() => saveDash({ order: undefined, shown: undefined })}><X size={15} />Back to the standard dashboard</button>
+        <button type="button" className="btn ghost" onClick={() => saveDash({ order: undefined, shown: undefined, sizes: undefined })}><X size={15} />Back to the standard dashboard</button>
         <button type="button" className="btn primary" onClick={onClose}><Sparkles size={15} />Done</button>
       </div>
     </Modal>

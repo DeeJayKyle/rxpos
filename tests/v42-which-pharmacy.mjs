@@ -39,7 +39,8 @@ const pick = (name) => p.evaluate((n) => { const b = [...document.querySelectorA
 const dialog = (re) => p.evaluate((src) => { const b = [...document.querySelectorAll('.modal button, .dialog button')].find((x) => new RegExp(src).test(x.textContent.trim())); b?.click(); return !!b; }, re.source);
 const device = () => p.evaluate(() => new Promise((res) => { const q = indexedDB.open('pharmapos'); q.onsuccess = () => { const g = q.result.transaction('kv').objectStore('kv').get('sync'); g.onsuccess = () => { res(g.result?.slug || ''); q.result.close(); }; }; q.onerror = () => res(''); }));
 const signOut = async () => { await p.evaluate(() => document.querySelector('button[title="Log out"]')?.click()); await wait(800); await dialog(/^Sign out/); await p.waitForSelector('input[type=password]', { timeout: 15000 }); await wait(500); };
-const products = async () => { await p.evaluate(() => { location.hash = '#/pos'; }); await wait(1500); return p.evaluate(() => document.querySelector('.product-grid')?.innerText || ''); }; // the till: every role has it
+// the till opens on In stock (the owner's rule, 2026-11-20): All lists every medicine of the pharmacy
+const products = async () => { await p.evaluate(() => { location.hash = '#/pos'; }); await wait(1500); await p.evaluate(() => [...document.querySelectorAll('.view-chip')].find((x) => x.textContent.trim() === 'All')?.click()); await wait(400); return p.evaluate(() => document.querySelector('.product-grid')?.innerText || ''); }; // the till: every role has it
 
 // 1. someone at two pharmacies on a new device: asked which one
 await fill('pat@test.rx', 'pat-pass-1234');

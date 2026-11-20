@@ -69,6 +69,17 @@ class StockView {
   final Map<String, Product> _products;
   final Map<String, List<Batch>> _batches;
 
+  /// A medicine's most recently received batch with a batch number or expiry (null when none): offered on a scanned
+  /// invoice line whose batch or expiry could not be read well (src/invoiceMatch.js lastBatchOf).
+  Batch? lastReceived(String productId) {
+    Batch? best;
+    for (final b in _batches[productId] ?? const <Batch>[]) {
+      if (b.batch.isEmpty && b.expiry.isEmpty) continue;
+      if (best == null || b.received.compareTo(best.received) >= 0) best = b;
+    }
+    return best;
+  }
+
   /// A medicine's batches with their quantities here, earliest expiry first (no expiry last).
   List<BatchStock> batchesOf(String productId, {String? atBranch}) {
     final br = atBranch ?? branch;

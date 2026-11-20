@@ -8,6 +8,8 @@
 //     stock-out it should have made is recorded, from the batches the receipt itself chose (its "alloc").
 // Reports (no automatic fix, they need a decision): receipts made in RxPOS since stock tracking began whose stock was
 // not taken out, and duplicated stock changes. Prints stock figures only, never customer details.
+// The owner's law (worker/ownerlaw.js): this writes pharmacy data, so the cloud refuses it unless the owner approved
+// this run: OWNER_APPROVED=yes is set by the owner (or by an agent ONLY after asking the owner and getting their yes).
 import { pathToFileURL } from 'node:url';
 import { fetchAll, inputFor, ugDay } from './stock-audit.mjs';
 import { catalogCost } from '../worker/dailystock.js';
@@ -89,7 +91,7 @@ if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
     }
     if (APPLY && plan.moves.length) {
       for (let i = 0; i < plan.moves.length; i += 400) {
-        const r = await fetch(`${API}/api/owner/tenants/${t.id}/records`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + process.env.OWNER_KEY },
+        const r = await fetch(`${API}/api/owner/tenants/${t.id}/records`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + process.env.OWNER_KEY, ...(process.env.OWNER_APPROVED === 'yes' ? { 'X-Owner-Approved': 'yes' } : {}) },
           body: JSON.stringify({ records: plan.moves.slice(i, i + 400).map((m) => ({ t: 'movements', id: m.id, rec: m })) }) });
         const j = await r.json(); if (!r.ok) throw new Error(j.error || r.status);
         console.log(`  written: ${j.written}`);

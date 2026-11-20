@@ -48,6 +48,8 @@ const POS_LAYOUTS = [['classic', 'Classic'], ['standard', 'Standard'], ['advance
 const TILL_SLASH = [['pay', 'Charge this sale'], ['hold', 'Put this sale on hold'], ['disc 10', 'Discount the sale by 10%'], ['disc 2 10', 'Line 2: 10% off'],
   ['void 2', 'Remove line 2'], ['qty 2 5', 'Line 2: quantity 5'], ['+qty 2', 'One more of line 2'], ['-qty 2', 'One less of line 2']];
 
+const AZ = new Intl.Collator(undefined, { sensitivity: 'base', numeric: true });
+
 export default function POS({ mode = 'retail' }) {
   const { db, products, kits, update, user, fmt, batchesOf, branchId, syncCfg, features, can, numberFor } = useStore();
   // Kits (1.10.0, src/kits.js): sold at the till next to the medicines; their stock is what their components make
@@ -71,7 +73,8 @@ export default function POS({ mode = 'retail' }) {
   const priceOf = (p) => (wholesale ? p.wholesale || p.price : p.price);
   const [q, setQ] = useState('');
   const [category, setCategory] = useState('');
-  const [view, setView] = useState(''); // '' | 'instock' | 'recent' | 'fav'
+  // the owner's rule (2026-11-20): the till opens on the medicines in stock, A–Z; no Recent list
+  const [view, setView] = useState('instock'); // '' (all) | 'instock' | 'fav'
   const favKey = `rxpos-pos-favs:${syncCfg.tenant || 'device'}`;
   const multiBranch = db.branches.length > 1 && features.branches !== false; // G4
   const [favs, setFavs] = useState(() => { try { return new Set(JSON.parse(localStorage.getItem(favKey)) || []); } catch { return new Set(); } });
@@ -231,29 +234,17 @@ export default function POS({ mode = 'retail' }) {
   const categories = useMemo(() => [...new Set(products.map((p) => p.category).filter(Boolean))].sort().slice(0, 14), [products]);
   // one folded search string per medicine, rebuilt only when the medicine list changes (src/search.js)
   const keys = useMemo(() => new Map(catalog.map((p) => [p.id, searchKey(p)])), [catalog]);
-  // medicines sold most recently at this branch (newest first), for the "Recent" filter
-  const recent = useMemo(() => {
-    const seen = new Map();
-    // db.sales is kept newest first (put() unshifts), so walk it from the front
-    for (let i = 0; i < db.sales.length && seen.size < 40; i++) {
-      const s = db.sales[i];
-      if ((s.branchId || 'main') !== branchId) continue;
-      for (const it of s.items) if (!seen.has(it.id)) seen.set(it.id, seen.size);
-    }
-    return seen;
-  }, [db.sales, branchId]);
   // the search box shows each key at once; the matching medicines follow a moment later without holding up typing
   const dq = useDeferredValue(q);
   const resultsFor = (query) => {
-    let list = catalog.filter((p) => (!category || p.category === category) && (view !== 'instock' || p.stock > 0)
-      && (view !== 'fav' || favs.has(p.id)) && (view !== 'recent' || recent.has(p.id)));
+    // a typed search looks through every medicine (an out-of-stock one is found and says so); the list shown before
+    // typing follows the chip: in stock (the default), all, or favourites
+    let list = catalog.filter((p) => (!category || p.category === category) && (query || view !== 'instock' || p.stock > 0) && (view !== 'fav' || favs.has(p.id)));
     if (query) return searchProducts(list, query, (p) => keys.get(p.id) || searchKey(p)).slice(0, 80);
-    if (view === 'recent') list = [...list].sort((a, b) => recent.get(a.id) - recent.get(b.id));
-    else list = [...list].sort((a, b) => (b.stock > 0) - (a.stock > 0));
-    return list.slice(0, 80);
+    return [...list].sort((a, b) => AZ.compare(a.name || '', b.name || '')).slice(0, 80);
   };
   // eslint-disable-next-line react-hooks/exhaustive-deps -- resultsFor reads exactly these
-  const results = useMemo(() => resultsFor(dq), [catalog, category, dq, keys, view, favs, recent]);
+  const results = useMemo(() => resultsFor(dq), [catalog, category, dq, keys, view, favs]);
   useEffect(() => setActive(0), [q, category, view]);
   // how many cards fit across the grid, so ↑/↓ move by a whole row
   const gridCols = () => { const el = gridRef.current; return el ? Math.max(1, getComputedStyle(el).gridTemplateColumns.split(' ').length) : 1; };
@@ -906,7 +897,7 @@ export default function POS({ mode = 'retail' }) {
           {features.ai !== false && (can('pos.sell') || can('prescriptions')) && <button type="button" className="btn ghost big rx-scan-btn" title="Scan Prescription (Rx)" onClick={() => setRxScan(true)}><ScanText size={18} /><span>Scan Rx</span></button>}
         </div>
         <div className="chips-row" role="toolbar" aria-label="Filter medicines">
-          {[['', 'All'], ['instock', 'In stock'], ['recent', 'Recent'], ['fav', `Favourites${favs.size ? ` · ${favs.size}` : ''}`]].map(([k, label]) => (
+          {[['instock', 'In stock'], ['', 'All'], ['fav', `Favourites${favs.size ? ` · ${favs.size}` : ''}`]].map(([k, label]) => (
             <button key={k || 'all'} className={'chip view-chip' + (view === k ? ' active' : '')} aria-pressed={view === k} onClick={() => setView(k)}>{k === 'fav' && <Star size={12} />}{label}</button>
           ))}
         </div>
@@ -959,7 +950,7 @@ export default function POS({ mode = 'retail' }) {
             );
           })}
           {!results.length && (
-            <div className="cart-empty" style={{ gridColumn: '1/-1' }}><ScanBarcode size={36} /><span>{q ? `No medicines match “${q}”` : view === 'fav' ? 'No favourites yet: tap the star on a medicine to keep it here' : view === 'recent' ? 'Nothing sold at this branch yet' : 'No medicines here'}</span></div>
+            <div className="cart-empty" style={{ gridColumn: '1/-1' }}><ScanBarcode size={36} /><span>{q ? `No medicines match “${q}”` : view === 'fav' ? 'No favourites yet: tap the star on a medicine to keep it here' : view === 'instock' ? 'Nothing in stock here yet' : 'No medicines here'}</span></div>
           )}
         </div>
       {fkeys && !touch && <FKeyBar items={fkeyItems({ can, features, wholesale })} onGo={(to) => navigate(to)} onHide={() => { showFkeys(false); setFkeys(false); }}

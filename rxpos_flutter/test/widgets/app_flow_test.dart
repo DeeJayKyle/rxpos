@@ -68,6 +68,7 @@ import 'package:rxpos/features/auth/domain/device_unlock.dart';
 
 import '../auth/device_unlock_test.dart' show FakeCheck;
 import '../sync/fake_cloud.dart';
+import 'package:rxpos/features/shifts/presentation/shift_prompts.dart' show shiftQuestions;
 
 void main() {
   setUpAll(() {
@@ -255,6 +256,9 @@ void main() {
     await start(tester);
     await toTill(tester);
     expect(find.text('Point of sale'), findsOneWidget);
+    // the till opens on In stock (the owner's rule, 2026-11-20): out-of-stock medicines show under All
+    await tester.tap(find.widgetWithText(ChoiceChip, 'All'));
+    await settle(tester);
     expect(find.text('100 left'), findsOneWidget);
     expect(find.text('Out of stock'), findsOneWidget, reason: 'Zinco has no stock');
     // the stock pill sits with the expiry pill; out of stock in the one real red
@@ -622,7 +626,7 @@ void main() {
     await done(tester);
   });
 
-  testWidgets('phone with large text: payment options fold so the lines keep their room; Charge stays in view and charges', (tester) async {
+  testWidgets('phone: payment options start folded so the cart\'s lines keep their room; Charge stays in view and charges', (tester) async {
     await tester.runAsync(signedIn);
     tester.platformDispatcher.textScaleFactorTestValue = 1.5;
     addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
@@ -643,6 +647,85 @@ void main() {
     await tester.tap(find.textContaining('Charge UGX'));
     await settle(tester);
     expect(find.text('Sale complete'), findsOneWidget);
+    await done(tester);
+  });
+
+  testWidgets('Tidy names: the same item under two names is merged only after approval; its stock moves to the kept one', (tester) async {
+    await tester.runAsync(signedIn);
+    await tester.runAsync(() => RecordStore(db).update((d) {
+          d.put('products', {'id': 'p9', 'name': 'CALMEX 500 MG TABLETS', 'unit': 'Tablet', 'barcode': '7019999', 'price': 500, 'cost': 300});
+          d.put('batches', {'id': 'b9', 'productId': 'p9', 'batch': 'C9', 'expiry': '2029-06-30', 'cost': 300});
+          d.move(productId: 'p9', qty: 5, type: 'Opening stock', batchId: 'b9');
+        }));
+    await start(tester);
+    GoRouter.of(tester.element(find.byType(Scaffold).first)).go('/medicines');
+    await settle(tester, 4);
+    await tester.tap(find.byKey(const Key('tidy-names')));
+    await settle(tester, 4);
+    expect(find.byKey(const Key('merge-groups')), findsOneWidget);
+    expect(tester.widget<FilledButton>(find.byKey(const Key('merge-apply'))).onPressed, isNull, reason: 'nothing ticked: nothing to merge');
+    await tester.tap(find.text('Merge these'));
+    await settle(tester);
+    await tester.tap(find.byKey(const Key('merge-apply')));
+    await settle(tester);
+    expect(find.textContaining('Merge 1 group'), findsOneWidget, reason: 'asks for approval first');
+    await tester.tap(find.byKey(const Key('confirm-yes')));
+    await settle(tester, 6);
+    final store = RecordStore(db);
+    final products = (await tester.runAsync(() => store.rows('products')))!;
+    expect(products.any((x) => x['id'] == 'p9'), isFalse, reason: 'the other name is removed');
+    final kept = products.firstWhere((x) => x['id'] == 'p1');
+    expect(kept['aliases'], contains('CALMEX 500 MG TABLETS'));
+    final moves = (await tester.runAsync(() => store.rows('movements')))!.where((m) => m['type'] == 'Merge').toList();
+    expect(moves.map((m) => '${m['productId']} ${m['qty']}').toSet(), {'p9 -5', 'p1 5'});
+    await done(tester);
+  });
+
+  testWidgets('dashboard cards: a card menu sizes them, the right edge resizes, the grip moves; a right-click or long press opens options on every page', (tester) async {
+    await tester.runAsync(signedIn);
+    await start(tester);
+    Map<String, Object?> dash() => (jsonDecode(ProviderScope.containerOf(tester.element(find.byType(Scaffold).first)).read(deviceValueProvider('dash')).value ?? '{}') as Map).cast<String, Object?>();
+    // a right-click on the chart card: its sizes, move, hide
+    final chart = find.byKey(const ValueKey('widget-chart'));
+    await tester.ensureVisible(chart);
+    await settle(tester);
+    await tester.tapAt(tester.getTopLeft(chart) + const Offset(60, 60), buttons: kSecondaryButton);
+    await settle(tester);
+    expect(find.text('Move earlier'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('size-12')));
+    await settle(tester, 4);
+    expect((dash()['sizes'] as Map)['chart'], 12, reason: 'Full width from the menu');
+    // its right edge dragged back to about half the row
+    final edge = find.byKey(const ValueKey('resize-chart'));
+    await tester.ensureVisible(edge);
+    await settle(tester);
+    final w = tester.getSize(chart).width;
+    await tester.drag(edge, Offset(-w / 2, 0));
+    await settle(tester, 4);
+    expect((dash()['sizes'] as Map)['chart'], inInclusiveRange(5, 7), reason: 'snapped to the grid near half');
+    // the health card's grip dropped on the figures card: it goes first
+    await tester.ensureVisible(find.byKey(const ValueKey('widget-figures')));
+    await settle(tester);
+    final g = await tester.startGesture(tester.getCenter(find.byKey(const ValueKey('grip-health'))));
+    await tester.pump(const Duration(milliseconds: 50));
+    await g.moveTo(tester.getCenter(find.byKey(const ValueKey('widget-figures'))));
+    await tester.pump(const Duration(milliseconds: 50));
+    await g.up();
+    await settle(tester, 4);
+    expect((dash()['order'] as List).first, 'health');
+    // options on another page: a right-click and a long press
+    GoRouter.of(tester.element(find.byType(Scaffold).first)).go('/customers');
+    await settle(tester, 4);
+    final heading = find.descendant(of: find.byKey(const Key('page-options')), matching: find.text('Customers')).first;
+    await tester.tapAt(tester.getCenter(heading), buttons: kSecondaryButton);
+    await settle(tester);
+    expect(find.byKey(const ValueKey('page-option-Search or ask AI')), findsOneWidget);
+    expect(find.byKey(const ValueKey('page-option-Pin this page')), findsOneWidget);
+    await tester.tapAt(const Offset(5, 895));
+    await settle(tester);
+    await tester.longPressAt(tester.getCenter(heading));
+    await settle(tester);
+    expect(find.byKey(const ValueKey('page-option-Back')), findsOneWidget);
     await done(tester);
   });
 
@@ -679,8 +762,6 @@ void main() {
     await tester.runAsync(signedIn);
     await start(tester, size: const Size(400, 800));
     await tester.tap(find.byTooltip('Open navigation menu'));
-    await settle(tester);
-    await tester.tap(find.byKey(const Key('page-sheet-menu'))); // More opens the page sheet; its Account & menu, the drawer
     await settle(tester);
     await tester.tap(find.text('POS – Retail'));
     await settle(tester);
@@ -769,7 +850,7 @@ void main() {
     expect(find.byKey(Key('busy-$wd-10')), findsOneWidget);
     // B8: what's new once
     expect(find.byKey(const Key('whats-new')), findsOneWidget);
-    expect(find.text("What's new in 1.18.0"), findsOneWidget);
+    expect(find.text("What's new in 1.19.0"), findsOneWidget);
     // B7: the setup checklist, ticked from the data
     expect(find.byKey(const Key('setup-checklist')), findsOneWidget);
     expect(find.textContaining('2 of 6 done', findRichText: true), findsOneWidget);
@@ -978,6 +1059,9 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.f2);
     await settle(tester);
     expect(find.descendant(of: find.byKey(const ValueKey('thumb-p1')), matching: find.byKey(const Key('med-photo'))), findsOneWidget);
+    // the till opens on In stock (the owner's rule, 2026-11-20): Zinco has none, so it shows under All
+    await tester.tap(find.widgetWithText(ChoiceChip, 'All'));
+    await settle(tester);
     expect(find.descendant(of: find.byKey(const ValueKey('thumb-p2')), matching: find.byKey(const Key('med-initial'))), findsOneWidget);
     await done(tester);
   });
@@ -2307,6 +2391,9 @@ void main() {
     void go(String to) => GoRouter.of(tester.element(find.byType(Scaffold).first)).go(to);
     // G4: an out-of-stock till tile: the stock in each branch
     await toTill(tester);
+    // the till opens on In stock (the owner's rule, 2026-11-20): out-of-stock medicines show under All
+    await tester.tap(find.widgetWithText(ChoiceChip, 'All'));
+    await settle(tester);
     expect(find.byKey(const Key('branches-p2')), findsOneWidget);
     expect(find.byKey(const Key('branches-p1')), findsNothing, reason: 'in stock here');
     await tester.tap(find.byKey(const Key('branches-p2')));
@@ -2429,8 +2516,6 @@ void main() {
     Future<void> open(String label) async {
       await tester.tap(find.byTooltip('Open navigation menu'));
       await settle(tester);
-      await tester.tap(find.byKey(const Key('page-sheet-menu'))); // More opens the page sheet; its Account & menu, the drawer
-      await settle(tester);
       final list = find.descendant(of: find.byType(Drawer), matching: find.byType(Scrollable)).first;
       await tester.scrollUntilVisible(find.descendant(of: find.byType(Drawer), matching: find.text(label)), 150, scrollable: list);
       await settle(tester, 2);
@@ -2530,32 +2615,23 @@ void main() {
     await settle(tester);
     expect(whereNow(tester), '/');
     expect(find.byKey(const Key('nav-back')), findsNothing);
-    // More opens every page as a sheet (a line on each and the next step); Android's back closes it
+    // More opens the full menu (the "All pages" sheet was taken out, 2026-11-20)
     await tester.tap(find.byKey(const Key('tab-more')));
     await settle(tester);
-    expect(find.byKey(const Key('page-sheet')), findsOneWidget);
-    expect(find.byKey(const Key('page-sheet-featured')), findsOneWidget);
-    expect(find.text('Quotations for clients'), findsOneWidget, reason: 'what each page is for');
-    await systemBack();
     expect(find.byKey(const Key('page-sheet')), findsNothing);
-    expect(whereNow(tester), '/');
-    // its Account & menu opens the full menu
-    await tester.tap(find.byKey(const Key('tab-more')));
-    await settle(tester);
-    await tester.tap(find.byKey(const Key('page-sheet-menu')));
-    await settle(tester);
     expect(find.byType(Drawer), findsOneWidget);
     // Android's back button closes the menu first, and stays on the page
     await systemBack();
     expect(find.byType(Drawer), findsNothing);
     expect(whereNow(tester), '/');
     expect(leftApp, 0);
-    // a page opened from the sheet, then Android's back goes back to the dashboard
+    // a page opened from the menu (More), then Android's back goes back to the dashboard
     await tester.tap(find.byKey(const Key('tab-more')));
     await settle(tester);
-    await tester.ensureVisible(find.byKey(const ValueKey('sheet-/proformas')));
+    final proformas = find.descendant(of: find.byType(Drawer), matching: find.text('Proformas'));
+    await tester.ensureVisible(proformas);
     await settle(tester);
-    await tester.tap(find.byKey(const ValueKey('sheet-/proformas')));
+    await tester.tap(proformas);
     await settle(tester);
     expect(whereNow(tester), '/proformas');
     // a dialog open: Android's back closes it, the page stays
@@ -2700,8 +2776,6 @@ void main() {
     await start(tester, size: const Size(400, 800));
     await tester.tap(find.byTooltip('Open navigation menu'));
     await settle(tester);
-    await tester.tap(find.byKey(const Key('page-sheet-menu'))); // More opens the page sheet; its Account & menu, the drawer
-    await settle(tester);
     final list = find.descendant(of: find.byType(Drawer), matching: find.byType(Scrollable)).first;
     await tester.scrollUntilVisible(find.descendant(of: find.byType(Drawer), matching: find.text('Drug quiz')), 150, scrollable: list);
     await settle(tester, 2);
@@ -2787,8 +2861,6 @@ void main() {
     await tester.runAsync(signedIn);
     await start(tester, size: const Size(400, 800));
     await tester.tap(find.byTooltip('Open navigation menu'));
-    await settle(tester);
-    await tester.tap(find.byKey(const Key('page-sheet-menu'))); // More opens the page sheet; its Account & menu, the drawer
     await settle(tester);
     final list = find.descendant(of: find.byType(Drawer), matching: find.byType(Scrollable)).first;
     await tester.scrollUntilVisible(find.descendant(of: find.byType(Drawer), matching: find.text('Weather & Storage')), 150, scrollable: list);
@@ -2889,8 +2961,6 @@ void main() {
     await start(tester, size: const Size(400, 800));
     await tester.tap(find.byTooltip('Open navigation menu'));
     await settle(tester);
-    await tester.tap(find.byKey(const Key('page-sheet-menu'))); // More opens the page sheet; its Account & menu, the drawer
-    await settle(tester);
     final list = find.descendant(of: find.byType(Drawer), matching: find.byType(Scrollable)).first;
     await tester.scrollUntilVisible(find.descendant(of: find.byType(Drawer), matching: find.text('Calendar')), 150, scrollable: list);
     await settle(tester, 2);
@@ -2932,6 +3002,29 @@ void main() {
     await tester.tap(find.text(item));
     await settle(tester, 4);
   }
+
+  testWidgets('shift questions (the owner\'s rules): "Start your shift?" on signing in; "End your shift?" on signing out counts the cash, then signs out', (tester) async {
+    shiftQuestions = true;
+    addTearDown(() => shiftQuestions = false);
+    await tester.runAsync(signedIn);
+    await start(tester);
+    await untilShown(tester, find.text('Start your shift?'));
+    await tester.tap(find.text('Start shift'));
+    await settle(tester, 4);
+    final opened = (await tester.runAsync(() => RecordStore(db).rows('shifts')))!;
+    expect(opened.where((x) => x['closedAt'] == null), hasLength(1), reason: 'yes starts the shift');
+    await menu(tester, 'Log out');
+    expect(find.text('End your shift?'), findsOneWidget);
+    await tester.tap(find.text('End shift and count cash'));
+    await settle(tester, 4);
+    expect(find.text('Count the drawer'), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, 'Close shift'));
+    await settle(tester, 6);
+    final after = (await tester.runAsync(() => RecordStore(db).rows('shifts')))!;
+    expect(after.where((x) => x['closedAt'] == null), isEmpty, reason: 'closed with the count');
+    expect(find.byKey(const Key('account-menu')), findsNothing, reason: 'then signed out');
+    await done(tester);
+  });
 
   Future<void> typeSecret(WidgetTester tester, String v, String button) async {
     await tester.enterText(find.descendant(of: find.byKey(const Key('secret')), matching: find.byType(EditableText)), v);
@@ -3340,7 +3433,15 @@ void main() {
     expect(find.byKey(const Key('app-library')), findsNothing);
 
     // gradient buttons and a preset in the theme menu
+    // the theme panel's sections fold (2026-11-20): open one before using what is in it
+    Future<void> openSec(String id) async {
+      final sec = find.byKey(ValueKey('theme-sec-$id'));
+      await tester.scrollUntilVisible(sec, 120, scrollable: find.descendant(of: find.byKey(const Key('theme-list')), matching: find.byType(Scrollable)));
+      await tester.tap(sec);
+      await settle(tester);
+    }
     await openThemes(tester);
+    await openSec('gradient');
     await tester.scrollUntilVisible(find.byKey(const ValueKey('preset-ocean')), 120, scrollable: find.descendant(of: find.byKey(const Key('theme-list')), matching: find.byType(Scrollable)));
     await tester.tap(find.byKey(const Key('grad-accents')));
     await settle(tester, 3);
@@ -3383,6 +3484,13 @@ void main() {
   });
 
   testWidgets('theme menu: dark, a theme from the list, accent, Vivid tiles, a style, the system; Premium UI and back', (tester) async {
+    // the theme panel's sections fold (2026-11-20): open one before using what is in it
+    Future<void> openSec(String id) async {
+      final sec = find.byKey(ValueKey('theme-sec-$id'));
+      await tester.scrollUntilVisible(sec, 120, scrollable: find.descendant(of: find.byKey(const Key('theme-list')), matching: find.byType(Scrollable)));
+      await tester.tap(sec);
+      await settle(tester);
+    }
     tester0 = tester;
     await tester.runAsync(signedIn);
     await start(tester);
@@ -3393,6 +3501,7 @@ void main() {
     expect((await look())['theme'], 'mint-teal-dark', reason: '1.17.0: Dark keeps the theme, as its dark twin');
     expect(brightness(tester), Brightness.dark);
     final list = find.byKey(const Key('theme-list'));
+    await openSec('set:Purples');
     await tester.scrollUntilVisible(find.byKey(const ValueKey('theme-royal-purple')), 120, scrollable: find.descendant(of: list, matching: find.byType(Scrollable)));
     await tester.ensureVisible(find.byKey(const ValueKey('theme-royal-purple')));
     await settle(tester);
@@ -3411,6 +3520,7 @@ void main() {
     await openThemes(tester);
     expect(find.byKey(const ValueKey('accent-ocean')), findsNothing, reason: 'no accent presets: only the 15 themes');
     expect(find.byKey(const Key('design-systems')), findsNothing, reason: 'no design systems');
+    await openSec('colour');
     await tester.scrollUntilVisible(find.byKey(const ValueKey('level-vivid')), 120, scrollable: find.descendant(of: list, matching: find.byType(Scrollable)));
     await tester.ensureVisible(find.byKey(const ValueKey('level-vivid')));
     await settle(tester);
@@ -3421,6 +3531,7 @@ void main() {
     expect(find.descendant(of: find.byType(StatCard).first, matching: find.byWidgetPredicate((w) => w is Ink && w.decoration is BoxDecoration && (w.decoration! as BoxDecoration).gradient != null)), findsOneWidget,
         reason: 'figure tiles are solid colour');
     await openThemes(tester);
+    await openSec('style');
     await tester.scrollUntilVisible(find.byKey(const ValueKey('style-glass')), 120, scrollable: find.descendant(of: list, matching: find.byType(Scrollable)));
     await tester.ensureVisible(find.byKey(const ValueKey('style-glass')));
     await settle(tester);
@@ -4412,8 +4523,6 @@ void main() {
       await shot(tester, 'phone-01-dashboard');
       await tester.tap(find.byTooltip('Open navigation menu'));
       await settle(tester);
-      await tester.tap(find.byKey(const Key('page-sheet-menu'))); // More opens the page sheet; its Account & menu, the drawer
-      await settle(tester);
       await shot(tester, 'phone-02-menu');
       await tester.tap(find.text('POS – Retail'));
       await settle(tester);
@@ -4427,8 +4536,6 @@ void main() {
       await start(tester, size: const Size(375, 812));
       await shot(tester, 'phone-04-large-text-dashboard');
       await tester.tap(find.byTooltip('Open navigation menu'));
-      await settle(tester);
-      await tester.tap(find.byKey(const Key('page-sheet-menu'))); // More opens the page sheet; its Account & menu, the drawer
       await settle(tester);
       await tester.tap(find.text('POS – Retail'));
       await settle(tester);
@@ -4526,13 +4633,14 @@ void main() {
     expect(osNotify.asked, 1);
     await done(tester);
   });
-  testWidgets('This device: Compact tables gives 36 px rows; the dashboard figures carry a 7-day trend line', (tester) async {
+  testWidgets('This device: Compact tables gives 36 px rows; the dashboard figures show the figure alone (no trend line, no line under it)', (tester) async {
     await tester.runAsync(signedIn);
     await tester.runAsync(() => RecordStore(db).update((d) => d.put('sales', {'id': 's-today', 'number': 'R-T1', 'date': today(), 'branchId': 'main', 'type': 'retail',
           'items': [{'id': 'p1', 'name': 'Calmex 500mg Tabs', 'qty': 1, 'price': 500}], 'subtotal': 500, 'discount': 0, 'tax': 0, 'total': 500, 'paid': 500,
           'payment': 'Cash', 'customerId': 'walk-in', 'customerName': 'Walk-in Customer', 'status': 'completed'})));
     await start(tester);
-    expect(find.byKey(const Key('spark')), findsWidgets, reason: 'sales were made this week');
+    expect(find.byKey(const Key('spark')), findsNothing, reason: 'the owner took the trend line off the figure cards (2026-11-20)');
+    expect(find.descendant(of: find.byType(StatCard).first, matching: find.byIcon(Icons.arrow_outward)), findsNothing);
     await navTo(tester, 'This device');
     await tester.ensureVisible(find.byKey(const Key('compact-tables')));
     await settle(tester, 2);

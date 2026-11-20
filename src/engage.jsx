@@ -15,6 +15,7 @@ import { isFeaturable } from './promote.js';
 import { ProductArt, TipArt } from './idleart.jsx';
 import { useIdleAi, productSubject, tipTopic } from './components/idleAi.js';
 import { messagePreview } from './pages/Chat.jsx';
+import { seenMap, alertUnread, markAlerts, BELL_SEEN } from './seen.js';
 
 const addDays = (date, n) => new Date(new Date(date).getTime() + n * 864e5).toISOString().slice(0, 10); // plain dates: UTC arithmetic is exact
 
@@ -256,11 +257,16 @@ export function NotificationBell() {
     window.addEventListener('pointerdown', off);
     return () => window.removeEventListener('pointerdown', off);
   }, [open]);
-  const urgent = alerts.filter((a) => a.tone === 'danger').length;
+  // the owner's request (2026-11-20): opening the bell marks what it shows as read; only new alerts light it again
+  const [seen, setSeen] = useState(() => seenMap(BELL_SEEN));
+  const unread = alerts.filter((a) => alertUnread(a, seen));
+  const shownNow = alerts.map((a) => a.key + '=' + a.text).join('|');
+  useEffect(() => { if (open) setSeen(markAlerts(BELL_SEEN, alerts)); }, [open, shownNow]); // eslint-disable-line react-hooks/exhaustive-deps -- the alerts' keys and texts
+  const urgent = unread.filter((a) => a.tone === 'danger').length;
   return (
     <div className="bell" ref={ref}>
-      <button className="icon-btn" title="Notifications" aria-label={`Notifications${alerts.length ? `: ${alerts.length}${urgent ? `, ${urgent} urgent` : ''}` : ''}`} aria-expanded={open} onClick={() => setOpen((o) => !o)}>
-        <Bell size={19} />{alerts.length > 0 && <span className={'bell-dot' + (urgent ? ' danger' : '')}>{alerts.length}</span>}
+      <button className="icon-btn" title="Notifications" aria-label={`Notifications${unread.length ? `: ${unread.length} new${urgent ? `, ${urgent} urgent` : ''}` : alerts.length ? ` (${alerts.length}, all read)` : ''}`} aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+        <Bell size={19} />{unread.length > 0 && <span className={'bell-dot' + (urgent ? ' danger' : '')}>{unread.length}</span>}
       </button>
       {open && (
         <div className="bell-menu">

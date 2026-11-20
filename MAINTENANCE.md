@@ -1,5 +1,7 @@
 # RxPOS maintenance handbook
 
+> **The owner's law (2026-11-20):** no AI agent or script changes a pharmacy's data in the cloud without the owner's approval. See CLAUDE.md and AGENTS.md; the cloud enforces it (worker/ownerlaw.js, `X-Owner-Approved`, `/ai-policy.txt`).
+
 Everything needed to keep RxPOS running, change it and recover it, without depending on any one person or tool.
 RxPOS itself needs nothing but the accounts below: apps, sync and the cloud keep working on their own.
 

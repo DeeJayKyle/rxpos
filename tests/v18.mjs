@@ -201,7 +201,8 @@ await A.keyboard.down('Alt'); await A.keyboard.press('h'); await A.keyboard.up('
 check('Alt+H puts the sale on hold and starts an empty one', (await cartNames()).length === 0 && (await A.evaluate(() => document.querySelectorAll('.sale-tab-wrap').length)) === 1);
 await A.focus('.pos-products input.search'); await A.keyboard.type('6001003'); await A.keyboard.press('Enter'); await wait(400);
 await A.keyboard.down('Alt'); await A.keyboard.press('ArrowRight'); await A.keyboard.up('Alt'); await wait(400);
-check('Alt+→ switches to the held sale, and the other one goes on hold', (await cartNames()).includes('Panadol Extra tabs') && !(await cartNames()).includes('Ciprofloxacin 500mg tabs') && (await A.evaluate(() => document.querySelectorAll('.sale-tab-wrap').length)) === 1);
+// the held sale comes back as it was (what the arrow keys added depends on the till's A–Z list, so compare with it)
+check('Alt+→ switches to the held sale, and the other one goes on hold', JSON.stringify((await cartNames()).sort()) === JSON.stringify([...first].sort()) && (await A.evaluate(() => document.querySelectorAll('.sale-tab-wrap').length)) === 1, JSON.stringify([await cartNames(), first]));
 await A.keyboard.down('Alt'); await A.keyboard.press('2'); await A.keyboard.up('Alt'); await wait(200);
 check('Alt+2 picks the second payment method', /Mobile Money/.test(await A.evaluate(() => document.querySelector('.pay-methods .chip.active')?.innerText || '')));
 await wait(500);

@@ -7,6 +7,8 @@
 // touching any cloud — the weekly restore drill uses it on the real off-site backup. --restore writes every row
 // back exactly as it was (same ids, same sequence numbers). With --tenant only that pharmacy is put back. Devices
 // pull the restored data on their next sync.
+// The owner's law (worker/ownerlaw.js): this writes pharmacy data, so the cloud refuses it unless the owner approved
+// this run: OWNER_APPROVED=yes is set by the owner (or by an agent ONLY after asking the owner and getting their yes).
 import fs from 'node:fs';
 import zlib from 'node:zlib';
 import crypto from 'node:crypto';
@@ -52,7 +54,7 @@ if (flag('--restore')) {
   console.log(`Restoring into ${API}${only ? ` (pharmacy ${only} only)` : ' (every pharmacy)'}`);
   const send = async (part, rows, size = 500) => {
     for (let i = 0; i < rows.length; i += size) {
-      const r = await fetch(`${API}/api/owner/restore`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + KEY }, body: JSON.stringify({ confirm: 'RESTORE', part, rows: rows.slice(i, i + size) }) });
+      const r = await fetch(`${API}/api/owner/restore`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + KEY, ...(process.env.OWNER_APPROVED === 'yes' ? { 'X-Owner-Approved': 'yes' } : {}) }, body: JSON.stringify({ confirm: 'RESTORE', part, rows: rows.slice(i, i + size) }) });
       const j = await r.json();
       if (!r.ok) throw new Error(`${part}: ${j.error || r.status}`);
     }

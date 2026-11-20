@@ -93,6 +93,7 @@ const env = {
   TOKEN_SECRET: tokenSecretFile(),
   ...(process.env.RXPOS_OWNER_KEY ? { OWNER_KEY: process.env.RXPOS_OWNER_KEY } : {}),
   ...(process.env.PBKDF2_ITER ? { PBKDF2_ITER: process.env.PBKDF2_ITER } : {}),
+  ...(process.env.RXPOS_TEST_CLOUD === '1' ? { TEST_CLOUD: '1' } : {}), // tests/run-all.mjs only (worker/ownerlaw.js)
   ...(process.env.PUBLIC_URL ? { PUBLIC_URL: process.env.PUBLIC_URL } : {}),
   ASSETS,
 };

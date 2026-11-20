@@ -1,4 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { shiftsFromSales, rebuiltShift } from '../shiftsfromsales.js';
+import { startShift, openShiftOf } from '../shiftstart.js';
 import { clientOwes, insurerShare } from '../insurance.js';
 import { Clock, PlayCircle, StopCircle, Printer, Coins, Lock, LockOpen } from 'lucide-react';
 import { useStore, uid, now, put, audit, MAIN_BRANCH, today, dayOf } from '../store.jsx';
@@ -6,6 +9,7 @@ import { closeId, daySnapshot } from '../dayclose.js';
 import { Modal, Stat, Empty, Tabs } from '../ui.jsx';
 import { toast, ask, askText } from '../feedback.jsx';
 import { showDateTime, dateLocale } from '../showdate.js';
+import { usePageMenu } from '../pagemenu.js';
 
 const NOTES = [50000, 20000, 10000, 5000, 2000, 1000, 500, 200, 100, 50];
 
@@ -34,7 +38,14 @@ export default function Shifts() {
   const [tab, setTab] = useState('mine');
   const [closing, setClosing] = useState(null);
   const [report, setReport] = useState(null);
-  const open = db.shifts.find((s) => s.userId === user.id && !s.closedAt && (s.branchId || MAIN_BRANCH) === branchId);
+  const open = openShiftOf(db, user, branchId);
+  const location = useLocation(), navigate = useNavigate();
+  usePageMenu([open ? { label: 'Close shift and count cash', Icon: StopCircle, run: () => setClosing({ mode: 'close', counts: {}, note: '' }) } : { label: 'Start my shift', Icon: PlayCircle, run: () => openShift() }]);
+  // signing out with a shift open: "End shift" brings the person here to count the cash, then signs them out
+  const thenSignOut = location.state?.close === 'signout';
+  useEffect(() => {
+    if (location.state?.close && open && !closing) setClosing({ mode: 'close', counts: {}, note: '' });
+  }, [location.state?.close, open?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const live = useMemo(() => (open ? shiftSummary(db, open) : null), [db, open]);
   // step 20: blind cash-up (Settings): staff count the cash before they see what the drawer should hold, so while a
   // shift is open its money figures are hidden from whoever may not see everyone's shifts
@@ -45,10 +56,7 @@ export default function Shifts() {
   const openShift = async () => {
     const f = await new Promise((resolve) => setClosing({ mode: 'open', float: '', resolve }));
     if (f == null) return;
-    update((d) => {
-      put(d, 'shifts', { id: uid(), userId: user.id, user: user.name, branchId, openedAt: now(), float: Number(f) || 0, date: now() });
-      audit(d, user, 'Shift opened', `Float ${fmt(Number(f) || 0)}`, branchId);
-    });
+    startShift(update, user, branchId, f, fmt);
     toast('Shift started');
   };
 
@@ -62,7 +70,25 @@ export default function Shifts() {
       audit(d, user, blindCount ? 'Shift closed (blind count)' : 'Shift closed', `Expected ${fmt(summary.expectedCash)}, counted ${fmt(counted)}, ${counted - summary.expectedCash >= 0 ? 'over' : 'short'} ${fmt(Math.abs(counted - summary.expectedCash))}`, branchId);
     });
     setClosing(null);
+    if (thenSignOut) { navigate('.', { replace: true, state: null }); window.dispatchEvent(new Event('rxpos:signout')); return; }
     setReport(closed);
+  };
+  // the owner's request (2026-11-20): past sales made outside any shift become their people's shifts, but only once
+  // the owner has looked at the list and approved it (the owner's law: no change to the data without their approval)
+  const isOwner = user.role === 'admin';
+  const [backfill, setBackfill] = useState(null); // the planned shifts, while the owner reviews them
+  const missing = useMemo(() => (isOwner ? shiftsFromSales(db.sales, db.shifts, db.users) : []), [isOwner, db.sales, db.shifts, db.users]);
+  const approveBackfill = async () => {
+    const plan = backfill;
+    if (!(await ask({ title: `Create ${plan.length} shift${plan.length === 1 ? '' : 's'} from past sales?`, message: 'Each person\'s sales on each day become one shift (no float, no cash count: shown as "rebuilt"). No sale changes. You can see each one under All staff.', confirmText: 'Approve and create' }))) return;
+    try {
+      await update((d) => {
+        for (const g of plan) { const rec = rebuiltShift(g, uid()); const summary = shiftSummary(d, rec); put(d, 'shifts', { ...rec, summary, expected: summary.expectedCash }); }
+        audit(d, user, 'Shifts rebuilt from past sales (approved by the owner)', `${plan.length} shift(s): ${plan.slice(0, 20).map((g) => `${g.user} ${g.day}`).join('; ')}${plan.length > 20 ? '…' : ''}`, branchId);
+      });
+      toast(`${plan.length} shift${plan.length === 1 ? '' : 's'} created from past sales`, 'success');
+      setBackfill(null); setTab('all');
+    } catch (e) { toast('Nothing was changed: ' + e.message, 'error'); }
   };
 
   return (
@@ -91,6 +117,21 @@ export default function Shifts() {
         </>
       )}
       {(can('day.close') || user.role === 'admin') && <DayClose />}
+      {isOwner && missing.length > 0 && (
+        <div className="notice info-notice row between gap wrap" data-testid="shift-backfill">
+          <span>{missing.reduce((a, g) => a + g.sales, 0)} past sale{missing.length === 1 && missing[0].sales === 1 ? ' was' : 's were'} made outside any shift ({missing.length} day{missing.length === 1 ? '' : 's'} of work by {new Set(missing.map((g) => g.user)).size} {new Set(missing.map((g) => g.user)).size === 1 ? 'person' : 'people'}). Nothing changes until you approve.</span>
+          <button type="button" className="btn sm" onClick={() => setBackfill(missing)}>Review and turn into shifts</button>
+        </div>
+      )}
+      {backfill && (
+        <Modal wide title="Past sales → shifts (needs your approval)" onClose={() => setBackfill(null)}>
+          <p className="muted small">One shift per person, branch and day, from their first sale to their last. These shifts have no float and no cash count, so they never show as balanced or short. Sales are not changed.</p>
+          <div className="table-wrap" style={{ maxHeight: '50vh', overflow: 'auto' }}><table><thead><tr><th>Day</th><th>Cashier</th>{db.branches.length > 1 && <th>Branch</th>}<th>From – to</th><th className="num">Sales</th><th className="num">Total</th></tr></thead><tbody>
+            {backfill.map((g) => <tr key={g.key}><td>{g.day}</td><td>{g.user}{!g.userId && <small className="muted"> (no longer a user)</small>}</td>{db.branches.length > 1 && <td>{db.branches.find((b) => b.id === g.branchId)?.name || g.branchId}</td>}<td>{new Date(g.openedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} – {new Date(g.closedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td><td className="num">{g.sales}</td><td className="num">{fmt(g.total)}</td></tr>)}
+          </tbody></table></div>
+          <div className="form-actions"><button type="button" className="btn ghost" onClick={() => setBackfill(null)}>Not now</button><button type="button" className="btn primary" onClick={approveBackfill}>Approve and create {backfill.length} shift{backfill.length === 1 ? '' : 's'}</button></div>
+        </Modal>
+      )}
       {can('shifts.all') && <Tabs tabs={[['mine', 'My shifts'], ['all', 'All staff']]} value={tab} onChange={setTab} />}
       <div className="card table-wrap">
         <table>
@@ -102,8 +143,9 @@ export default function Shifts() {
                 <td>{s.closedAt ? new Date(s.closedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : <span className="badge warn">open</span>}</td>
                 {db.branches.length > 1 && <td>{db.branches.find((b) => b.id === s.branchId)?.name}</td>}
                 <td className="num">{s.summary ? fmt(s.summary.total) : '—'}</td>
-                <td className="num">{s.closedAt ? fmt(s.expected) : '—'}</td><td className="num">{s.closedAt ? fmt(s.counted) : '—'}</td>
-                <td className={'num ' + (s.variance < 0 ? 'text-danger' : s.variance > 0 ? 'text-warn' : 'text-ok')}>{s.closedAt ? (s.variance === 0 ? 'Balanced' : (s.variance > 0 ? '+' : '') + fmt(s.variance)) : '—'}</td>
+                <td className="num">{s.closedAt ? fmt(s.expected) : '—'}</td><td className="num">{s.closedAt && !s.rebuilt ? fmt(s.counted) : '—'}</td>
+                {s.rebuilt ? <td className="num muted small" title={s.note}>rebuilt from sales</td>
+                  : <td className={'num ' + (s.variance < 0 ? 'text-danger' : s.variance > 0 ? 'text-warn' : 'text-ok')}>{s.closedAt ? (s.variance === 0 ? 'Balanced' : (s.variance > 0 ? '+' : '') + fmt(s.variance)) : '—'}</td>}
                 <td className="actions">{s.closedAt && <button className="btn sm ghost" onClick={() => setReport(s)}><Printer size={14} />Report</button>}</td>
               </tr>
             ))}
@@ -164,8 +206,10 @@ export default function Shifts() {
             <div className="receipt-rule" />
             <div className="row between"><span>Opening float</span><span>{fmt(report.float)}</span></div>
             <div className="row between"><span>Expected cash</span><span>{fmt(report.expected)}</span></div>
+            {report.rebuilt ? <div className="row between"><span>Cash count</span><span>none (rebuilt from sales)</span></div> : <>
             <div className="row between"><span>Counted cash</span><span>{fmt(report.counted)}</span></div>
             <div className="row between grand"><span>{report.variance === 0 ? 'BALANCED' : report.variance > 0 ? 'OVER' : 'SHORT'}</span><span>{fmt(Math.abs(report.variance))}</span></div>
+            </>}
             {report.note && <p>Note: {report.note}</p>}
             <p className="center">Cashier signature ____________<br /><br />Supervisor ____________</p>
           </div>

@@ -123,7 +123,8 @@ const todayIso = await p.evaluate(() => { const d = new Date(); return `${d.getF
 check("quick report: Today's sales shows the Sales Report for today only", await p.evaluate((t) => new RegExp(`Sales Report · All branches · ${t} to ${t}`).test(document.querySelector('[data-testid=report-scope]').innerText), todayIso));
 await p.screenshot({ path: path.join(out, 'reports-quick.png') });
 await go('#/');
-check('dashboard: the expenses card says expenses are for the whole pharmacy', await until(p, () => /Whole pharmacy \(expenses have no branch\)/.test(document.body.innerText), 8000));
+// the card's line under the figure was taken off (the owner's choice, 2026-11-20): its ring says it
+check('dashboard: the expenses card says expenses are for the whole pharmacy', await until(p, () => [...document.querySelectorAll('.kpis .stat')].some((r) => /Whole pharmacy: expenses have no branch/.test(r.getAttribute('title') || '')), 8000));
 
 // phone
 await p.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true, deviceScaleFactor: 1 });

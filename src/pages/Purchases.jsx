@@ -1,8 +1,10 @@
 import { useState, useRef, useEffect, useMemo, cloneElement } from 'react';
+import { searchProducts } from '../search.js';
+import { showDate } from '../showdate.js';
 import { nextHue, lineStyle, COL_VARS as COL_HUES } from '../linecolors.js';
 import { parseGs1, findByGtin } from '../gs1.js';
 import { useLocation } from 'react-router-dom';
-import { Pencil, Trash2, ScanText, Camera, FileUp, Loader2, AlertTriangle, CheckCircle2, X, Plus, RotateCcw, Sparkles, GripVertical, ChevronLeft, ChevronRight, PauseCircle, Tags } from 'lucide-react';
+import { Pencil, Trash2, ScanText, Camera, FileUp, Loader2, AlertTriangle, CheckCircle2, X, Plus, RotateCcw, Sparkles, GripVertical, ChevronLeft, ChevronRight, PauseCircle, Tags, Save } from 'lucide-react';
 import { DateInput, MedicinePicker, useDateFormat } from '../fields.jsx';
 import { DATE_FORMATS } from '../dateformat.js';
 import { mainPack, packsOf, receiveInPacks } from '../packs.js';
@@ -17,16 +19,17 @@ import { DateRange } from '../forms.jsx';
 import { useListControls } from '../listcontrols.jsx';
 import { ask, toast } from '../feedback.jsx';
 import { newInternalBarcode } from '../barcode.jsx';
-import { invoicePages, readInvoice, matchProduct, matchSupplier, normDate, pageBlob } from '../invoiceScan.js';
+import { invoicePages, readInvoice, rankProducts, learnedNames, matchSupplier, normDate, pageBlob, lastBatchOf, fillFromLast } from '../invoiceScan.js';
 import { uploadAttachment } from '../attach.jsx';
 import { safeFileUrl } from '../safeurl.js';
 import { CameraButton, CameraScanner } from '../camscan.jsx';
 import AiVisionScanner from '../components/AiVisionScanner.jsx';
-import { deliveryDraft, draftsFor, isOld, toCheck, checkText } from '../drafts.js';
+import { deliveryDraft, draftsFor, isOld, toCheck, checkText, needsCheck } from '../drafts.js';
 import DraftsList, { useDraftCount } from './Drafts.jsx';
 import { Link, useNavigate } from 'react-router-dom';
 import InvoiceView from '../components/InvoiceView.jsx';
 import { emptyCheck, scanInto, checkSummary } from '../deliverycheck.js';
+import { usePageMenu } from '../pagemenu.js';
 
 const NEW = '__new__'; // a line for a medicine that is not in the list yet
 const FORMS = ['Tablets', 'Capsules', 'Syrups', 'Suspensions', 'Injectables', 'Creams', 'Ointments', 'Drops', 'Sachets', 'Devices', 'Surgicals', 'Others'];
@@ -80,6 +83,9 @@ function DateFormatChoice({ fmt }) {
 }
 
 /** Receive stock from a supplier: every line becomes a batch (number + expiry) at this branch. */
+/** "Box" → "Boxes", "Strip" → "Strips" */
+const plural = (w) => (/(s|x|z|ch|sh)$/i.test(w) ? w + 'es' : w + 's');
+
 export function AddStock() {
   const { db, products, update, fmt, user, branchId, syncCfg, can, numberFor } = useStore();
   const { syncStatus } = useSyncState();
@@ -108,16 +114,30 @@ export function AddStock() {
       ...(k ? { recvPack: k.name, recvSize: Number(k.size) } : {}), ...extra };
     return { ...l, total: l.cost !== '' ? numOrBlank(Number(l.cost) * Number(l.qty || 0)) : '' };
   };
+  // A scanned line whose batch or expiry was missing or doubtful: the medicine's last delivery's batch and expiry, marked
+  // for the person to check (the owner's rule, 2026-11-20); nothing is taken when they were read well
+  const withLast = (x, productId) => {
+    if (!x.read || !productId || productId === NEW) return x;
+    const f = fillFromLast({ batch: x.batch, expiry: x.expiry, check: x.read.check || [] }, lastBatchOf(db.batches, productId), today());
+    if (!f.used.length) return x;
+    const check = [...new Set([...(x.read.check || []), ...f.used])];
+    return { ...x, batch: f.batch, expiry: f.expiry, read: { ...x.read, check, fromLast: f.used, note: [x.read.note, `${f.used.join(' and ')} from the last delivery: check against the pack`].filter(Boolean).join(' · ') } };
+  };
   // What was read off an invoice → Add Stock lines (medicines matched, costs and prices worked out) and a summary
   const fromScan = (r, markup) => {
     const sup = matchSupplier(r.supplier, db.suppliers);
+    const learned = learnedNames(db.purchases);
     const lines = r.items.map((it) => {
-      const p = matchProduct(it.name, products);
+      // the medicines it could be, best first: only a safe match is put on the line (same strength, nothing as likely,
+      // or received as this before); the others are offered as "Is it …?" on the line
+      const ranked = rankProducts(it.name, products, { learned, alt: it.alt?.name });
+      const p = ranked[0]?.sure ? ranked[0].p : null;
+      const suggest = ranked.filter((x) => x.p.id !== p?.id).slice(0, 3).map((x) => ({ id: x.p.id, why: x.why }));
       const qty = it.qty || 1;
-      const read = { name: it.name, unclear: !!it.unclear, matched: !!p, ...(it.check?.length ? { check: it.check } : {}), ...(it.alt ? { alt: it.alt } : {}), ...(it.why ? { why: it.why } : {}), ...(it.note ? { note: it.note } : {}), ...(it.page ? { page: it.page } : {}) };
+      const read = { name: it.name, unclear: !!it.unclear, matched: !!p, ...(p ? { matchWhy: ranked[0].why } : {}), ...(suggest.length ? { suggest } : {}), ...(it.check?.length ? { check: it.check } : {}), ...(it.alt ? { alt: it.alt } : {}), ...(it.why ? { why: it.why } : {}), ...(it.note ? { note: it.note } : {}), ...(it.page ? { page: it.page } : {}) };
       // G1: where the line was on the invoice, when the reading gave it (page and x, y, w, h as fractions of the page)
       const box = it.box && [it.box.x, it.box.y, it.box.w, it.box.h].every((v) => Number.isFinite(v) && v >= 0 && v <= 1) ? { page: Number(it.box.page) || 0, x: it.box.x, y: it.box.y, w: it.box.w, h: it.box.h } : undefined;
-      const base = { qty, batch: it.batch || '', expiry: normDate(it.expiry), read, ...(box ? { box } : {}) };
+      const base = withLast({ qty, batch: it.batch || '', expiry: normDate(it.expiry), read, ...(box ? { box } : {}) }, p?.id);
       const cost = it.unitCost || (it.lineTotal && qty ? it.lineTotal / qty : 0);
       // packs or single units? whichever makes the invoice's price nearest the medicine's known cost per unit
       const size = p && cost > 0 && p.cost > 0 ? [1, ...packsOf(p).map((k) => Number(k.size))].reduce((b, z) => (Math.abs(Math.log(cost / z / p.cost)) < Math.abs(Math.log(cost / b / p.cost)) ? z : b), 1) : 0;
@@ -134,7 +154,9 @@ export function AddStock() {
     const { sup, lines, summary, invoice, date } = fromScan(r, form.markup);
     setForm((f) => {
       const keep = f.lines.filter((l) => l.productId);
-      return { ...f, supplierId: sup?.id || f.supplierId, invoice: invoice || f.invoice, date: date || f.date, lines: keep.length || lines.length ? [...keep, ...lines] : [blankLine()] };
+      // the lines to check first (2026-11-20): the person sees what needs them before the lines read well
+      const ordered = [...lines.filter(needsCheck), ...lines.filter((l) => !needsCheck(l))];
+      return { ...f, supplierId: sup?.id || f.supplierId, invoice: invoice || f.invoice, date: date || f.date, lines: keep.length || ordered.length ? [...keep, ...ordered] : [blankLine()] };
     });
     setScanned({ ...summary, pages, pagePaths });
     setChecked(false);
@@ -234,6 +256,8 @@ export function AddStock() {
   const tableRef = useRef(null);
   const [focusLine, setFocusLine] = useState(null);
   const [activeLine, setActiveLine] = useState(null); // G1: the line being edited, outlined on the invoice
+  const [headOpen, setHeadOpen] = useState(null); // 2: the invoice details folded to one line once a supplier is chosen (null: automatic)
+  const [moreOpen, setMoreOpen] = useState(() => new Set()); // 4: on a phone, the lines whose batch, expiry and price are shown
   // G2: an order checked by scanning each pack ({ counts, extra }, null until started) and the last scan's message
   const [dcheck, setDcheck] = useState(null);
   const [dmsg, setDmsg] = useState('');
@@ -289,7 +313,11 @@ export function AddStock() {
   // rounded once to the currency's precision (a pack-split cost leaves no floating tail on the stored total)
   const total = round(form.lines.reduce((a, l) => a + (l.productId ? lineTotal(l) : 0), 0), Number(s.decimals ?? 0));
   const ql = q.trim().toLowerCase();
-  const matches = ql ? products.filter((p) => [p.name, p.generic, p.barcode].join(' ').toLowerCase().includes(ql)).sort((a, b) => (b.stock > 0) - (a.stock > 0)).slice(0, 8) : [];
+  // ranked as the till's search (name starts with it first, spelling variants allowed), in stock first
+  const matches = useMemo(() => (ql ? searchProducts(products, q).slice(0, 12) : []), [ql, products]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [hi, setHi] = useState(0); // the highlighted match (↑ ↓, Enter adds it)
+  useEffect(() => setHi(0), [ql]);
+  useEffect(() => { document.querySelector('.search-row .picker-list.drop .hi')?.scrollIntoView({ block: 'nearest' }); }, [hi]);
   const exactName = ql && products.some((p) => p.name.trim().toLowerCase() === ql);
 
   const placeLine = (line) => {
@@ -299,7 +327,28 @@ export function AddStock() {
     setQ('');
     return empty?.key || line.key;
   };
-  const pick = (p) => placeLine(lineFor(p, {}, form.markup));
+  // 5: what was done last time with this supplier: the pack this medicine came in, and the markup used
+  const lastFrom = (supplierId, productId) => {
+    for (const pu of db.purchases) { // newest first
+      if (!supplierId || pu.supplierId !== supplierId) continue;
+      const it = productId ? (pu.items || []).find((x) => x.productId === productId) : null;
+      if (!productId || it) return { pack: it?.pack, markup: pu.markup };
+    }
+    return null;
+  };
+  const habitPack = (p) => {
+    const k = lastFrom(form.supplierId, p.id)?.pack;
+    // the cost then per pack too (the medicine's cost is per single unit)
+    return k && Number(k.size) > 1 && (p.packs || []).some((x) => x.name === k.name && Number(x.size) === Number(k.size)) ? { recvPack: k.name, recvSize: Number(k.size), ...(p.cost ? { cost: numOrBlank(p.cost * Number(k.size)) } : {}) } : {};
+  };
+  const pick = (p) => placeLine(lineFor(p, habitPack(p), form.markup));
+  usePageMenu([
+    { label: 'Scan invoice', Icon: ScanText, run: () => setScanOpen(true) },
+    { label: 'Scan invoice with AI', Icon: Sparkles, run: () => setAiScan(true) },
+    { label: 'New medicine', Icon: Plus, run: () => addNew('') },
+    { label: 'Save as draft', Icon: Save, run: () => saveDraft() },
+    form.supplierId && { label: 'Change supplier, invoice no., date', Icon: Pencil, run: () => setHeadOpen(true) },
+  ]);
   const addNew = (name, barcode = '') => {
     const key = placeLine({ ...blankLine(), productId: NEW, name: name.trim(), ...(barcode ? { barcode } : {}) });
     setTimeout(() => nameRefs.current[key]?.focus(), 30);
@@ -314,13 +363,15 @@ export function AddStock() {
     return null;
   };
   const onSearchKey = (e) => {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); setHi((h) => Math.max(0, Math.min(matches.length - (exactName || ql.length < 2 ? 1 : 0), h + (e.key === 'ArrowDown' ? 1 : -1)))); return; }
+    if (e.key === 'Escape') { setQ(''); return; }
     if (e.key !== 'Enter') return;
     e.preventDefault();
     if (!ql) return;
     const g = parseGs1(q);
     if (g) { receivePack(g); return; }
     const code = products.find((p) => p.barcode && p.barcode.toLowerCase() === ql);
-    if (code || matches[0]) pick(code || matches[0]);
+    if (code || matches[hi]) pick(code || matches[hi]);
     else if (ql.length > 1) addNew(q);
   };
   const chooseProduct = (l, id) => {
@@ -328,7 +379,7 @@ export function AddStock() {
     const p = products.find((x) => x.id === id);
     if (!p) return replaceLine(l.key, { ...l, productId: '' });
     // a scanned line keeps the cost read off the invoice
-    const next = lineFor(p, { qty: l.qty, batch: l.batch, expiry: l.expiry, read: l.read }, form.markup);
+    const next = lineFor(p, withLast({ qty: l.qty, batch: l.batch, expiry: l.expiry, read: l.read }, p.id), form.markup);
     replaceLine(l.key, l.read && (l.cost !== '' || l.total !== '') ? editLine(next, l.by === 'total' ? { total: l.total } : { cost: l.cost }, priceFor) : next);
   };
   const discard = () => { setForm(blank()); setScanned(null); setChecked(false); setRestored(false); try { localStorage.removeItem(draftKey); } catch { /* ignore */ } };
@@ -361,6 +412,7 @@ export function AddStock() {
     if (badDate) { badDate.focus(); return toast(`${badDate.getAttribute('aria-label') || 'A date'}: ${badDate.title.replace(/^This date is in the past$/, 'that date has already passed')}. Fix the box marked in red; nothing was received.`, 'error'); }
     const unpicked = form.lines.filter((l) => l.read && !l.productId && Number(l.qty) > 0);
     if (unpicked.length) return toast(`Choose the medicine for ${unpicked.length} line${unpicked.length > 1 ? 's' : ''} read from the invoice, add ${unpicked.length > 1 ? 'them' : 'it'} as new, or remove ${unpicked.length > 1 ? 'them' : 'it'}`, 'warn');
+    if (toCheck(form.lines) > 0) return toast(`${toCheck(form.lines)} line${toCheck(form.lines) === 1 ? '' : 's'} still to check: compare ${toCheck(form.lines) === 1 ? 'it' : 'each'} with the invoice and tap “Checked”`, 'warn');
     if (scanned && !checked) return toast('Tick "I have checked every line against the invoice" before saving', 'warn');
     const lines = form.lines.filter((l) => l.productId && Number(l.qty) > 0);
     if (!lines.length) return toast('Add at least one medicine', 'warn');
@@ -403,9 +455,11 @@ export function AddStock() {
     const purchase = {
       id: uid(), number: '', supplierId: form.supplierId, supplierName: supplier?.name || '—',
       invoice: form.invoice.trim(), notes: (form.notes || '').trim(), date: form.date || today(), receivedBy: user.name, total, paid, bankId: form.bankId, branchId,
-      items: lines.map((l) => ({ productId: idOf(l), name: nameOf(l), qty: Number(l.qty) * (Number(l.recvSize) || 1), cost: baseCost(l), batch: l.batch.trim(), expiry: l.expiry, ...(l.productId === NEW ? { added: true } : {}),
+      // invoiceName: the words on the supplier's invoice, so the next invoice with them is matched at once (invoiceMatch.js)
+      items: lines.map((l) => ({ productId: idOf(l), name: nameOf(l), ...(l.read?.name ? { invoiceName: l.read.name } : {}), qty: Number(l.qty) * (Number(l.recvSize) || 1), cost: baseCost(l), batch: l.batch.trim(), expiry: l.expiry, ...(l.productId === NEW ? { added: true } : {}),
         ...(Number(l.recvSize) > 1 ? { pack: { name: l.recvPack, size: Number(l.recvSize), count: Number(l.qty), cost: unitCost(l) } } : {}) })),
       ...(scanned ? { scanned: true } : {}),
+      markup: Number(form.markup) || 0, // 5: offered again next time with this supplier
     };
     try { await update((d) => {
       purchase.number = numberFor(d, 'GRN'); // step 7: counted with the delivery
@@ -509,6 +563,16 @@ export function AddStock() {
       )}
       {aiScan && <AiVisionScanner mode="invoice" onClose={() => setAiScan(false)} onConfirm={applyVision} />}
       {scanOpen && <InvoiceScanner cfg={syncCfg} onClose={() => setScanOpen(false)} onRead={applyScan} onDrafts={saveScanDrafts} />}
+      {/* 1 (2026-11-20): start with the supplier's invoice; typing the lines is the other way */}
+      {!scanned && !form.poId && !form.lines.some((l) => l.productId) && (
+        <div className="card scan-first" data-testid="scan-first">
+          <div className="grow"><strong><ScanText size={18} /> Start with the supplier's invoice</strong><div className="small">Take a photo or choose a PDF: the lines are read and matched to your medicines for you to check. Or search below to type them.</div></div>
+          <div className="row gap wrap">
+            <button type="button" className="btn primary big" onClick={() => setScanOpen(true)}><ScanText size={18} />Scan invoice</button>
+            <button type="button" className="btn ghost" onClick={() => setAiScan(true)}><Sparkles size={16} />Scan with AI</button>
+          </div>
+        </div>
+      )}
       {restored && !scanned && (
         <div className="notice info-notice row between gap wrap">
           <span><RotateCcw size={15} /> Your unfinished delivery was kept on this device. Carry on, or start again.</span>
@@ -536,10 +600,23 @@ export function AddStock() {
       <div className={'addstock-split' + (split ? ' on' : '')}>
       {split && <InvoiceView pages={scanned.pages} active={form.lines.find((l) => l.key === activeLine)} />}
       <form className="card invoice-sheet" onSubmit={save} onFocus={(e) => { const k = e.target.closest?.('tr[data-line]')?.dataset.line; if (k) setActiveLine(k); }}>
-        <div className="invoice-head">
+        {(() => {
+          const open = headOpen ?? !form.supplierId;
+          const sup = db.suppliers.find((x) => x.id === form.supplierId);
+          return !open && (
+            <button type="button" className="invoice-summary" data-testid="invoice-summary" onClick={() => setHeadOpen(true)} title="Change the supplier, invoice number, date or markup">
+              <strong>{sup?.name || 'No supplier'}</strong>
+              <span>{form.invoice ? `Invoice ${form.invoice}` : 'no invoice number'}</span>
+              <span>{showDate(form.date)}</span>
+              <span>markup {form.markup || 0}%</span>
+              <span className="link-btn small"><Pencil size={12} /> Change</span>
+            </button>
+          );
+        })()}
+        <div className="invoice-head" style={headOpen ?? !form.supplierId ? undefined : { display: 'none' }}>
           <div className="invoice-from">
           <label className="field"><span className="invoice-caption">Supplier</span>
-            <select value={form.supplierId} onChange={(e) => (e.target.value === NEW_SUPPLIER ? setNewSupplier({ name: '', phone: '', contact: '', email: '' }) : setForm({ ...form, supplierId: e.target.value }))} required>
+            <select value={form.supplierId} onChange={(e) => { if (e.target.value === NEW_SUPPLIER) return setNewSupplier({ name: '', phone: '', contact: '', email: '' }); const m = lastFrom(e.target.value)?.markup; setForm({ ...form, supplierId: e.target.value, ...(m != null && m !== '' ? { markup: m } : {}) }); }} required>
               <option value="">—</option>
               {[...db.suppliers].sort((a, b) => a.name.localeCompare(b.name)).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
               {(can('suppliers') || can('stock.receive')) && <option value={NEW_SUPPLIER}>➕ New supplier…</option>}
@@ -556,16 +633,19 @@ export function AddStock() {
             <div className="invoice-title">Purchase invoice<small>Goods received{branchId !== MAIN_BRANCH ? ` · ${db.branches.find((x) => x.id === branchId)?.name || ''}` : ''}</small></div>
             <label className="invoice-meta-row"><span>Invoice no.</span><input value={form.invoice} placeholder="as on the invoice" onChange={(e) => setForm({ ...form, invoice: e.target.value })} aria-label="Invoice number" /></label>
             <label className="invoice-meta-row"><span>Date <DateFormatChoice fmt={dateFmt} /></span><DateInput value={form.date} max={today()} onChange={(v) => setForm((f) => ({ ...f, date: v || today() }))} aria-label="Delivery date" /></label>
+            {form.supplierId && <button type="button" className="link-btn small invoice-fold" onClick={() => setHeadOpen(false)}>Done: fold these details</button>}
             <label className="invoice-meta-row"><span>Retail markup %</span><input type="number" min="0" step="any" value={form.markup} onChange={(e) => setMarkup(e.target.value)} aria-label="Retail markup for worked-out prices (%)" title="Only for the suggested price (tap “Use” on a line); no price changes by itself" /></label>
           </div>
         </div>
         <div className="picker row gap search-row">
           <CameraButton className="btn ghost cam-btn" onClick={() => setCam(true)} />
-          <input ref={searchRef} className="search big" placeholder="Search or scan a medicine to add… (Enter adds the first match)" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onSearchKey} />
+          <input ref={searchRef} className="search big" role="combobox" aria-expanded={!!ql} aria-autocomplete="list" placeholder="Search or scan a medicine to add… (↑ ↓ to choose, Enter adds it)" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onSearchKey} />
+          {/* drops down from the search line itself, over the page (scrolls inside; never pushes the lines down) */}
           {ql && (
-            <div className="picker-list">
-              {matches.map((p) => <button type="button" key={p.id} onClick={() => pick(p)}>{p.name} <small className="muted">{p.stock} in stock · cost {fmt(p.cost)} · retail {fmt(p.price)}</small></button>)}
-              {!exactName && ql.length > 1 && <button type="button" className="picker-new" onClick={() => addNew(q)}><Plus size={14} /> Add <strong>“{q.trim()}”</strong> as a new medicine</button>}
+            <div className="picker-list drop" role="listbox">
+              {matches.map((p, i) => <button type="button" role="option" aria-selected={i === hi} className={i === hi ? 'hi' : ''} key={p.id} onMouseEnter={() => setHi(i)} onClick={() => pick(p)}><span className="pick-name">{p.name}</span> <small className={p.stock > 0 ? 'stock-in' : 'muted'}>{p.stock > 0 ? `${p.stock} in stock` : 'none in stock'} · cost {fmt(p.cost)} · retail {fmt(p.price)}</small></button>)}
+              {!matches.length && <div className="med-pick-empty muted small">No medicine matches “{q.trim()}”.</div>}
+              {!exactName && ql.length > 1 && <button type="button" className={'picker-new' + (hi === matches.length ? ' hi' : '')} onClick={() => addNew(q)}><Plus size={14} /> Add <strong>“{q.trim()}”</strong> as a new medicine</button>}
             </div>
           )}
         </div>
@@ -600,6 +680,15 @@ export function AddStock() {
                         </div>
                       )}
                       {l.read && <small className={'scan-read' + (!l.productId || l.read.unclear ? ' text-warn' : ' muted')}>{!l.productId || l.read.unclear ? <AlertTriangle size={11} /> : <CheckCircle2 size={11} />} Invoice{l.read.page > 1 ? ` p.${l.read.page}` : ''}: {l.read.name}{checkText(l.read) ? ` · check ${checkText(l.read)}` : ''}{l.read.note ? ` · ${l.read.note}` : ''}</small>}
+                      {l.read && l.productId !== NEW && (() => {
+                        const opts = (l.read.suggest || []).filter((x) => x.id !== l.productId).map((x) => ({ ...x, p: products.find((y) => y.id === x.id) })).filter((x) => x.p);
+                        return opts.length > 0 && (!l.productId || l.read.unclear) ? (
+                          <span className="scan-suggest small" role="group" aria-label="Medicines it could be">{l.productId ? 'Or is it' : 'Is it'}: {opts.map((x) => <button key={x.id} type="button" className="chip-btn" title={x.why} onClick={() => chooseProduct(l, x.id)}>{x.p.name}</button>)}</span>
+                        ) : null;
+                      })()}
+                      {needsCheck(l) && l.productId && <button type="button" className="btn sm ghost line-checked" onClick={() => replaceLine(l.key, { ...l, read: { ...l.read, ok: true } })} title="I compared this line with the invoice">✓ Checked</button>}
+                      {l.read?.ok && <small className="muted"> · checked</small>}
+                      {l.productId && <button type="button" className="link-btn small more-toggle" aria-expanded={moreOpen.has(l.key)} onClick={() => setMoreOpen((m) => { const n = new Set(m); n.has(l.key) ? n.delete(l.key) : n.add(l.key); return n; })}>{moreOpen.has(l.key) ? 'Fewer details' : 'Batch, expiry, price…'}</button>}
                     </td>
                     ),
                     qty: (
@@ -616,7 +705,7 @@ export function AddStock() {
                             setLine(l.key, { newPack: false, recvPack: k?.name || '', recvSize: size, ...(baseCost(l) > 0 ? { cost: numOrBlank(baseCost(l) * size) } : {}) });
                           }}>
                             <option value="">{unit}s</option>
-                            {packs.map((k) => <option key={k.name} value={k.name}>{k.name}s of {k.size}</option>)}
+                            {packs.map((k) => <option key={k.name} value={k.name}>{plural(k.name)} of {k.size}</option>)}
                             <option value={NEW_PACK}>{packs.length ? 'Other pack size…' : 'Boxes / packs of…'}</option>
                           </select>
                           {choice === NEW_PACK && (
@@ -663,11 +752,15 @@ export function AddStock() {
                       {l.expiry && daysUntil(l.expiry) < 0 && <small className="field-error" role="alert">This date has passed</small>}</td>
                     ),
                   };
+                  // 7 (2026-11-20): on the line being worked on, the next box to fill is outlined
+                  const nextField = l.productId && (activeLine ? l.key === activeLine : lineIndex === form.lines.length - 1)
+                    ? ['qty', 'total', 'batch', 'expiry'].find((f) => (f === 'total' ? l.total === '' && l.cost === '' : !String(l[f] ?? '').trim()))
+                    : null;
                   return (
-                  <tr key={l.key} data-line={l.key} className={'hued' + (l.productId === NEW ? ' new-line' : '')} style={lineStyle(l, lineIndex)}>
+                  <tr key={l.key} data-line={l.key} className={'hued' + (l.productId === NEW ? ' new-line' : '') + (moreOpen.has(l.key) ? ' show-more' : '') + (needsCheck(l) ? ' to-check' : '')} style={lineStyle(l, lineIndex)}>
                     <td className="line-no" aria-hidden="true"><span className="line-badge">{lineIndex + 1}</span>
                       {dcheck && l.productId && <span className={'dcheck-count' + ((dcheck.counts[l.productId] || 0) >= Number(l.qty) ? ' done' : '')} data-testid="dcheck-count">{(dcheck.counts[l.productId] || 0) >= Number(l.qty) ? '✓ ' : ''}{dcheck.counts[l.productId] || 0}/{Number(l.qty) || 0}</span>}</td>
-                    {cols.map((c) => cloneElement(cells[c], { className: `${cells[c].props.className || ''} col-${c}`.trim(), style: { '--col': COL_HUES[c] } }))}
+                    {cols.map((c) => cloneElement(cells[c], { className: `${cells[c].props.className || ''} col-${c}${c === nextField ? ' next-field' : ''}${['batch', 'expiry', 'price', 'cost'].includes(c) ? ' more-cell' : ''}`.trim(), style: { '--col': COL_HUES[c] } }))}
                     <td key="x" className="line-x"><button type="button" className="icon-btn" title="Remove line" aria-label="Remove line" onClick={() => setForm((f) => ({ ...f, lines: f.lines.length > 1 ? f.lines.filter((x) => x.key !== l.key) : [blankLine()] }))}><X size={15} /></button></td>
                   </tr>
                 );
@@ -678,7 +771,7 @@ export function AddStock() {
         <div className="row gap">
           <button type="button" className="btn sm ghost" onClick={() => setForm((f) => ({ ...f, lines: [...f.lines, blankLine()] }))}>+ Add line</button>
           <button type="button" className="btn sm ghost" onClick={() => addNew('')}><Sparkles size={14} />New medicine</button>
-          <small className="muted grow line-help">Type the quantity and the line total from the invoice; the unit cost is worked out (total ÷ quantity). The retail price stays as it is unless you type a new one or tap “Use” for cost + markup. Enter goes to the next line (a new one on the last line). Drag a column heading (or use its arrows) to move it{cols.join() !== COLS.join() ? <> · <button type="button" className="link-btn small" onClick={resetCols}>reset column order</button></> : null}.</small>
+          <small className="muted grow line-help">Quantity and line total from the invoice; the unit cost is worked out. Enter: next line.{cols.join() !== COLS.join() ? <> · <button type="button" className="link-btn small" onClick={resetCols}>reset column order</button></> : null}</small>
         </div>
         <div className="invoice-foot">
           <div className="invoice-notes">
@@ -709,7 +802,7 @@ export function AddStock() {
         <div className="form-actions">
           <div className="grow muted small">{form.lines.some((l) => l.productId) ? 'Check the lines against the supplier\'s invoice, then receive.' : 'Add the medicines on the invoice.'}</div>
           <button type="button" className="btn ghost" onClick={saveDraft} title="Keep this delivery to finish later (also from another device)">Save as draft</button>
-          <button className="btn primary" disabled={(!!scanned && !checked) || receiving}>{receiving ? <><Loader2 size={16} className="spin" />Receiving…</> : 'Receive stock'}</button>
+          <button className="btn primary" disabled={(!!scanned && !checked) || toCheck(form.lines) > 0 || receiving} title={toCheck(form.lines) > 0 ? 'Check the marked lines first' : undefined}>{receiving ? <><Loader2 size={16} className="spin" />Receiving…</> : toCheck(form.lines) > 0 ? `Receive stock · ${toCheck(form.lines)} of ${form.lines.filter((l) => l.read).length} to check` : 'Receive stock'}</button>
         </div>
       </form>
       </div>
@@ -974,10 +1067,10 @@ function InvoiceScanner({ cfg, onClose, onRead, onDrafts }) {
   // Keep the pages in the pharmacy's cloud (whoever reviews the draft compares with them), then read them
   const readOne = async (inv, k) => {
     const label = invoices.length > 1 ? `Invoice ${k + 1} of ${invoices.length}: ` : '';
-    setBusy(label + 'saving the pages…');
-    const pagePaths = [];
-    for (let n = 0; n < inv.pages.length; n++) pagePaths.push((await uploadAttachment(cfg, pageBlob(inv.pages[n]), `invoice-${today()}-${n + 1}.jpg`)).path);
-    const r = await readInvoice(cfg, inv.pages, (n, of) => setBusy(`${label}reading${of > 1 ? ` page ${n} of ${of}` : ''} with two AI readings…`));
+    setBusy(label + 'reading with two AI readings…');
+    // the pages are kept in the cloud while they are read (side by side, not one after the other)
+    const saving = Promise.all(inv.pages.map(async (pg, n) => (await uploadAttachment(cfg, pageBlob(pg), `invoice-${today()}-${n + 1}.jpg`)).path));
+    const [pagePaths, r] = await Promise.all([saving, readInvoice(cfg, inv.pages, (n, of) => setBusy(`${label}reading${of > 1 ? ` page ${n} of ${of}` : ''} with two AI readings…`))]);
     if (!r.items.length) throw new Error('No medicine lines could be read. Try a sharper, straighter photo in good light.');
     return { r, pagePaths, pages: inv.pages };
   };

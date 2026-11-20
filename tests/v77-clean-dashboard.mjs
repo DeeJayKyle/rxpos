@@ -41,7 +41,7 @@ await p.setViewport({ width: 1440, height: 1000 });
 const errors = []; p.on('pageerror', (e) => errors.push(e.message));
 await p.goto(base + '/' + slug, { waitUntil: 'networkidle2' }); await wait(500);
 await p.evaluate(() => { for (const id of ['pos', 'dashboard']) localStorage.setItem('rxpos-tip:' + id, '1'); });
-// B8: this device last saw 1.13.0's highlights, so 1.18.0 is an update to it
+// B8: this device last saw 1.13.0's highlights, so 1.19.0 is an update to it
 await p.evaluate(() => localStorage.setItem('rxpos-device', JSON.stringify({ ...JSON.parse(localStorage.getItem('rxpos-device') || '{}'), whatsNewSeen: '1.13.0' })));
 await p.reload({ waitUntil: 'networkidle2' }); await wait(500);
 await p.type('input[autocomplete=username]', 'dana@clean.rx'); await p.type('input[type=password]', 'dana-pass-1234');
@@ -56,7 +56,7 @@ const widgets = () => p.evaluate(() => [...document.querySelectorAll('.dash-cell
 check('clean layout: figures, the bento row, chart, health, top medicines, latest sales, busy hours', JSON.stringify(await widgets()) === JSON.stringify(['figures', 'bento', 'chart', 'health', 'top', 'recent', 'busy']), JSON.stringify(await widgets()));
 check('header: no repeated search or bell (the top bar\'s show), today\'s date in the greeting\'s line', await p.evaluate(() => !document.querySelector('.dash-search') && !document.querySelector('.dash-bell') && !!document.querySelector('.topbar .search-trigger')?.offsetParent && !!document.querySelector('.topbar > .bell button[aria-label^=Notifications]')?.offsetParent && /\d{4}/.test(document.querySelector('.welcome .sub .date-pill')?.innerText || '')));
 // UI batch 3, B1-B8
-check('B8 what\'s new: shown once after an update', await p.evaluate(() => /What.s new in 1\.18\.0/.test(document.querySelector('.whats-new')?.innerText || '') && !!document.querySelector('.whats-new a')), await p.evaluate(() => localStorage.getItem('rxpos-device')));
+check('B8 what\'s new: shown once after an update', await p.evaluate(() => /What.s new in 1\.19\.0/.test(document.querySelector('.whats-new')?.innerText || '') && !!document.querySelector('.whats-new a')), await p.evaluate(() => localStorage.getItem('rxpos-device')));
 check('B7 setup checklist: medicines and stock ticked from the data, staff not yet', await p.evaluate(() => { const st = (id) => document.querySelector(`.setup-steps [data-step=${id}]`)?.classList.contains('done'); return st('medicines') && st('stock') && st('staff') === false && /of 6 done/.test(document.querySelector('.setup-card').innerText); }));
 // 1.16.0 (the owner's clean-up): the bento row keeps the week at a glance and the next step; the daily chart and the
 // latest sales are the dashboard's own (no copies), and there is one period picker
@@ -78,10 +78,10 @@ check('B7 Hide puts the checklist away', await p.evaluate(() => !document.queryS
 await p.reload({ waitUntil: 'networkidle2' }); await wait(2000);
 check('B7/B8 …kept on this device, and what\'s new is not shown again', await p.evaluate(() => !document.querySelector('.setup-card') && !document.querySelector('.whats-new') && !!document.querySelector('.kpis')));
 let t = await tiles();
-check('Today: today\'s sales 2,800 with ↑ against yesterday', /2,800/.test(t["Today's sales"]) && await p.evaluate(() => /up/.test(document.querySelector('.kpis .stat .delta')?.className || '')), JSON.stringify(t));
+check('Today: today\'s sales 2,800, the figure alone (no change line under it, the owner\'s choice 2026-11-20)', /2,800/.test(t["Today's sales"]) && await p.evaluate(() => !document.querySelector('.kpis .stat .delta') && !document.querySelector('.kpis .stat .stat-sub')), JSON.stringify(t));
 await p.evaluate(() => [...document.querySelectorAll('.period-chips button')].find((x) => x.textContent === '1M').click()); await wait(900);
 t = await tiles();
-check('1M: sales of the last 30 days (6,200) compared with the 30 days before', /6,200/.test(t.Sales) && /vs the 30 days before/.test(await p.evaluate(() => document.querySelector('.kpis .stat').innerText)), JSON.stringify(t));
+check('1M: sales of the last 30 days (6,200), the ring against the 30 days before', /6,200/.test(t.Sales) && /the 30 days before/.test(await p.evaluate(() => document.querySelector('.kpis .stat .stat-ring')?.getAttribute('title') || '')), JSON.stringify(t));
 check('…the top medicines follow the period', /last 30 days/.test(await p.evaluate(() => document.querySelector('[data-widget=top] h3').innerText)) && /Amoxil/.test(await p.evaluate(() => document.querySelector('.top-list').innerText)));
 await p.reload({ waitUntil: 'networkidle2' }); await wait(2000);
 check('the period chip is kept on this device', await p.evaluate(() => document.querySelector('.period-chips [aria-checked=true]')?.textContent === '1M'));
@@ -130,7 +130,7 @@ await p.evaluate(() => [...document.querySelectorAll('.nav-add')].find((x) => /R
 check('the + of Stock opens Add Stock', await p.evaluate(() => location.hash.includes('add-stock')));
 await p.evaluate(() => { location.hash = '#/'; }); await wait(1200);
 // UI batch 2 (2026-11-18)
-check('figure cards carry a small 7-day trend line', await p.evaluate(() => document.querySelectorAll('.kpis .stat .spark polyline').length >= 3 && [...document.querySelectorAll('.kpis .stat .spark')].every((s) => s.getBoundingClientRect().width <= 100 && s.getBoundingClientRect().height <= 30)), await p.evaluate(() => document.querySelectorAll('.kpis .stat .spark').length));
+check('figure cards carry no trend line (the owner took it off, 2026-11-20)', await p.evaluate(() => !document.querySelector('.kpis .stat .spark')), await p.evaluate(() => document.querySelectorAll('.kpis .stat .spark').length));
 check('latest sales: only unusual states carry a pill (Owing, not Paid)', await p.evaluate(() => { const t = [...document.querySelectorAll('.recent-table .status-pill')].map((x) => x.innerText.trim()); return t.includes('Owing') && !t.includes('Paid'); }), await p.evaluate(() => [...document.querySelectorAll('.recent-table .status-pill')].map((x) => x.innerText).join()));
 await p.evaluate(() => document.querySelector('button[aria-label=Theme]').click()); await wait(300);
 const before = await p.evaluate(() => document.documentElement.dataset.palette);

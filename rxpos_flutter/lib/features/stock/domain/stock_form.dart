@@ -147,6 +147,7 @@ List<DeliveryLine> deliveryLines(Map<String, Object?> form) => [
             newName: l['productId'] == newMedicine ? '${l['name'] ?? ''}' : '',
             qty: _n(l['qty']), recvPack: '${l['recvPack'] ?? ''}', recvSize: _n(l['recvSize']) > 0 ? _n(l['recvSize']) : 1, unitCost: unitCost(l), newPack: l['newPack'] == true,
             price: _n(l['price']), batch: '${l['batch'] ?? ''}', expiry: '${l['expiry'] ?? ''}', form: '${l['form'] ?? 'Others'}', barcode: '${l['barcode'] ?? ''}',
+            invoiceName: '${(l['read'] as Map?)?['name'] ?? ''}',
           ),
     ];
 

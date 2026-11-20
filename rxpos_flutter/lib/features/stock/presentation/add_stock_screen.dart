@@ -28,6 +28,7 @@ import '../domain/stock_form.dart';
 import 'invoice_scan.dart';
 import '../../../screens/ai_vision_scanner_screen.dart';
 import '../../../core/presentation/page_tip.dart';
+import '../../../core/presentation/page_menu.dart' show registerPageMenu;
 
 /// Add Stock (src/pages/Purchases.jsx AddStock): a delivery laid out like the supplier's invoice. Search or scan each
 /// medicine (not in the list? add it as new); type the line total (the unit cost is shown, worked out as total ÷ qty,
@@ -252,7 +253,8 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
     final picked = await showAppDialog<Object>(context: context, builder: (_) => _MedicinePicker(data: d, hint: (l['read'] as Map?)?['name'] as String?));
     if (picked == null) return;
     if (picked is Product) {
-      final next = lineFor(picked, d.settings, extra: {'qty': l['qty'], 'batch': l['batch'], 'expiry': l['expiry'], if (l['read'] != null) 'read': l['read']});
+      // a scanned line's batch / expiry not read well: the chosen medicine's last delivery's, to check (invoice_scan.dart withLast)
+      final next = lineFor(picked, d.settings, extra: withLast({'qty': l['qty'], 'batch': l['batch'], 'expiry': l['expiry'], if (l['read'] != null) 'read': l['read']}, picked.id, d));
       final read = l['read'] != null && ('${l['cost'] ?? ''}'.isNotEmpty || '${l['total'] ?? ''}'.isNotEmpty);
       _replaceLine('${l['key']}', read ? editLine(next, l['by'] == 'total' ? {'total': l['total']} : {'cost': l['cost']}) : next);
     } else {
@@ -433,12 +435,14 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
       };
     }
 
+    late final Future<void> Function() scanNow;
+    registerPageMenu('/add-stock', () => [(label: 'Scan invoice', icon: Icons.document_scanner_outlined, onTap: () => scanNow()), (label: 'New medicine', icon: Icons.auto_awesome, onTap: () => _addNew(''))]);
     final list = ListView(padding: const EdgeInsets.all(16), children: [
       // the title, then the two scan buttons beside it (or under it on a phone)
       Wrap(spacing: 8, runSpacing: 8, alignment: WrapAlignment.spaceBetween, crossAxisAlignment: WrapCrossAlignment.center, children: [
         Text('Add Stock', style: th.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
         Wrap(spacing: 8, runSpacing: 8, children: [
-        OutlinedButton.icon(onPressed: () async {
+        OutlinedButton.icon(onPressed: scanNow = () async {
           final r = await scanInvoices(context, ref);
           if (r == null || !mounted) return;
           if (r.drafts) {
@@ -484,6 +488,25 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
             const SizedBox(width: 6),
             Text('Draft saved ${_draftAt!.hour.toString().padLeft(2, '0')}:${_draftAt!.minute.toString().padLeft(2, '0')}', style: Theme.of(context).textTheme.bodySmall),
           ]),
+        ),
+      // 1 (2026-11-20): start with the supplier's invoice; typing the lines is the other way
+      if (scanned == null && !lines(f).any((l) => '${l['productId'] ?? ''}'.isNotEmpty) && '${f['poId'] ?? ''}'.isEmpty)
+        Card(
+          key: const Key('scan-first'),
+          color: tint(th.colorScheme.primary, th.colorScheme.surface, 10),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Wrap(spacing: 12, runSpacing: 10, crossAxisAlignment: WrapCrossAlignment.center, children: [
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 460),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text("Start with the supplier's invoice", style: th.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+                  Text('Take a photo or choose a PDF: the lines are read and matched to your medicines for you to check. Or search below to type them.', style: th.textTheme.bodySmall),
+                ]),
+              ),
+              FilledButton.icon(onPressed: () => scanNow(), icon: const Icon(Icons.document_scanner_outlined), label: const Text('Scan invoice')),
+            ]),
+          ),
         ),
       const PageTip(
         id: 'add-stock',
@@ -708,15 +731,19 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
                     ]),
                   ),
                 for (final l in lines(f).where((l) => l['read'] != null))
-                  Text('Line ${lines(f).indexOf(l) + 1} on the invoice: ${(l['read'] as Map)['name']}${checkTextOf(l['read'] as Map).isEmpty ? '' : ' · check ${checkTextOf(l['read'] as Map)}'}',
-                      style: TextStyle(fontSize: 12, color: '${l['productId'] ?? ''}'.isEmpty || (l['read'] as Map)['unclear'] == true ? context.tones.warn : null)),
+                  Wrap(crossAxisAlignment: WrapCrossAlignment.center, spacing: 6, children: [
+                    Text('Line ${lines(f).indexOf(l) + 1} on the invoice: ${(l['read'] as Map)['name']}${checkTextOf(l['read'] as Map).isEmpty ? '' : ' · check ${checkTextOf(l['read'] as Map)}'}${(l['read'] as Map)['ok'] == true ? ' · checked' : ''}',
+                        style: TextStyle(fontSize: 12, color: needsCheck(l) ? context.tones.warn : null)),
+                    if (needsCheck(l) && '${l['productId'] ?? ''}'.isNotEmpty)
+                      TextButton(key: ValueKey('checked-${l['key']}'), onPressed: () => _set({...f, 'lines': [for (final x in lines(f)) x['key'] == l['key'] ? {...x, 'read': {...(x['read'] as Map), 'ok': true}} : x]}), child: const Text('✓ Checked')),
+                  ]),
               ]),
             ),
             Wrap(spacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
               TextButton(onPressed: () => _set({...f, 'lines': [...lines(f), blankLine()]}), child: const Text('+ Add line')),
               TextButton.icon(onPressed: () => _addNew(''), icon: const Icon(Icons.auto_awesome, size: 16), label: const Text('New medicine')),
               if (cols.join() != stockColumns.keys.join()) TextButton(onPressed: () => ref.read(deviceValueProvider('stock-cols').notifier).set(null), child: const Text('reset column order')),
-              Text('Type the line total from the invoice; the unit cost is worked out (total ÷ qty). Retail prices change only when you type one (or tap Use for cost + markup); a new medicine needs one.', style: th.textTheme.bodySmall),
+              Text('Quantity and line total from the invoice; the unit cost is worked out.', style: th.textTheme.bodySmall),
             ]),
             const Divider(),
             Wrap(spacing: 24, runSpacing: 12, alignment: WrapAlignment.spaceBetween, children: [
@@ -757,7 +784,9 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
               final note = Text(lines(f).any((l) => '${l['productId'] ?? ''}'.isNotEmpty) ? "Check the lines against the supplier's invoice, then receive." : 'Add the medicines on the invoice.',
                   style: th.textTheme.bodySmall);
               final keep = OutlinedButton(onPressed: () => _saveDraft(d), child: const Text('Save as draft'));
-              final receive = FilledButton(onPressed: _busy || (scanned != null && !_checked) ? null : () => _receive(d), child: const Text('Receive stock'));
+              final left = toCheck(lines(f));
+              final receive = FilledButton(onPressed: _busy || left > 0 || (scanned != null && !_checked) ? null : () => _receive(d),
+                  child: Text(left > 0 ? '$left of ${lines(f).where((l) => l['read'] != null).length} still to check' : 'Receive stock'));
               // a phone: the note above, the two buttons sharing the width under it
               if (MediaQuery.sizeOf(context).width < 600) {
                 return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [

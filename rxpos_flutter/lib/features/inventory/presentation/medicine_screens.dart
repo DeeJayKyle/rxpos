@@ -1,6 +1,7 @@
 // Medicine List, Formulations, Quick Edit and Stock Card (src/pages/Inventory.jsx), with the pack sizes and inventory
 // editors used from the lists.
 import 'branch_stock.dart' show BranchStockButton;
+import 'name_check.dart' show showNameCheck;
 import '../../../core/theme/line_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -29,6 +30,7 @@ import '../../auth/application/session_controller.dart';
 import '../domain/adjust.dart';
 import '../domain/medicines.dart';
 import '../../../core/rules/audit_text.dart';
+import '../../../core/presentation/page_menu.dart' show registerPageMenu;
 
 Future<String> _user(WidgetRef ref) async => (await ref.read(sessionControllerProvider.future))?.userName ?? '';
 
@@ -115,6 +117,7 @@ class _MedicineListScreenState extends ConsumerState<MedicineListScreen> {
       ]);
     }
 
+    if (manage) registerPageMenu('/medicines', () => [(label: 'Tidy names and merge look-alikes…', icon: Icons.auto_fix_high, onTap: () => showNameCheck(context)), (label: 'Add medicine', icon: Icons.add, onTap: () => editMedicine(context, ref, null))]);
     return PageFrame(
       title: 'Medicine List',
       subtitle: _review ? '$issues records need a look. Open one to fix it; nothing is changed automatically.' : '${d.products.length} medicines and items',
@@ -122,6 +125,7 @@ class _MedicineListScreenState extends ConsumerState<MedicineListScreen> {
         ViewSwitch(value: view, onChanged: (v) => ref.read(deviceValueProvider('view:medicines').notifier).set(v == 'list' ? null : v)),
         SearchField(controller: _search, focusNode: _searchFocus, onChanged: (v) => setState(() => _q = v), hint: 'Medicine, generic, barcode…'),
         FilterChip(label: Text('Needs review${issues > 0 ? ' ($issues)' : ''}'), selected: _review, onSelected: (v) => setState(() => _review = v)),
+        if (manage) OutlinedButton.icon(key: const Key('tidy-names'), onPressed: () => showNameCheck(context), icon: const Icon(Icons.auto_fix_high, size: 18), label: const Text('Tidy names')),
         if (manage) FilledButton.icon(onPressed: () => editMedicine(context, ref, null), icon: const Icon(Icons.add), label: const Text('Add medicine')),
       ],
       child: list.isEmpty

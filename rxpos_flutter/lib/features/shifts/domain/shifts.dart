@@ -59,3 +59,49 @@ Future<Map<String, Object?>> closeShift(RecordStore store, Shift open, Iterable<
     return rec;
   });
 }
+
+/// A day of a person's work with sales outside any shift: one shift to create (src/shiftsfromsales.js).
+class PlannedShift {
+  PlannedShift({required this.user, required this.userId, required this.branchId, required this.day, required this.openedAt, required this.closedAt});
+  final String user, userId, branchId, day;
+  String openedAt, closedAt;
+  int sales = 0;
+  double total = 0;
+}
+
+String _localDay(String iso) {
+  final d = DateTime.tryParse(iso)?.toLocal();
+  return d == null ? (iso.length >= 10 ? iso.substring(0, 10) : iso) : '${d.year}-${'${d.month}'.padLeft(2, '0')}-${'${d.day}'.padLeft(2, '0')}';
+}
+
+/// Past sales made outside any shift → one shift per person, branch and day, first sale to last (the owner's request,
+/// 2026-11-20). Writes nothing: the owner reviews the list and approves it (the owner's law: no change without approval).
+List<PlannedShift> shiftsFromSales(Iterable<Sale> sales, Iterable<Shift> shifts, Map<String, String> userIdByName, {String? now}) {
+  final end = now ?? DateTime.now().toUtc().toIso8601String();
+  String br(String b) => b.isEmpty ? mainBranch : b;
+  final list = shifts.toList();
+  bool covered(Sale s) => list.any((sh) => sh.user == s.cashier && br(sh.branchId) == br(s.branchId) && s.date.compareTo(sh.openedAt) >= 0 && s.date.compareTo(sh.closedAt ?? end) <= 0);
+  final groups = <String, PlannedShift>{};
+  for (final s in sales) {
+    if (s.date.isEmpty || s.cashier.isEmpty || s.raw['training'] == true || covered(s)) continue;
+    final day = _localDay(s.date), key = '${s.cashier}|${br(s.branchId)}|$day';
+    final g = groups.putIfAbsent(key, () => PlannedShift(user: s.cashier, userId: '${s.raw['cashierId'] ?? userIdByName[s.cashier.trim().toLowerCase()] ?? ''}', branchId: br(s.branchId), day: day, openedAt: s.date, closedAt: s.date));
+    if (s.date.compareTo(g.openedAt) < 0) g.openedAt = s.date;
+    if (s.date.compareTo(g.closedAt) > 0) g.closedAt = s.date;
+    g.sales++;
+    if (s.status != 'refunded') g.total += s.total;
+  }
+  return groups.values.toList()..sort((a, b) => a.openedAt.compareTo(b.openedAt) != 0 ? a.openedAt.compareTo(b.openedAt) : a.user.compareTo(b.user));
+}
+
+/// Save the approved shifts: no float, no cash count ("rebuilt"), each with what its sales add up to; one audit line.
+Future<void> createRebuiltShifts(RecordStore store, List<PlannedShift> plan, Iterable<Sale> sales, {required String approvedBy}) => store.update((d) {
+      for (final g in plan) {
+        final rec = {'id': uid(), 'userId': g.userId, 'user': g.user, 'branchId': g.branchId, 'openedAt': g.openedAt, 'closedAt': g.closedAt, 'date': g.openedAt, 'float': 0,
+          'rebuilt': true, 'counts': const <String, Object?>{}, 'counted': null, 'variance': null, 'note': 'Rebuilt from past sales (no cash count)'};
+        final sum = shiftSummary(Shift.fromRecord(rec), sales);
+        d.put('shifts', {...rec, 'summary': sum.toJson(), 'expected': sum.expectedCash});
+      }
+      d.audit(approvedBy, 'Shifts rebuilt from past sales (approved by the owner)',
+          '${plan.length} shift(s): ${plan.take(20).map((g) => '${g.user} ${g.day}').join('; ')}${plan.length > 20 ? '…' : ''}', mainBranch);
+    });

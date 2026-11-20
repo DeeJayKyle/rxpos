@@ -5,7 +5,7 @@ import { MessageCircle,
   Boxes, PackagePlus, History, CalendarClock, PencilRuler, ScrollText, Wallet, Tags, Landmark, ArrowLeftRight, HandCoins,
   ArrowDownLeft, ArrowUpRight, ClipboardCheck, RefreshCw, Undo2, ShieldPlus, BookOpen, BarChart3, Settings as SettingsIcon, Search, Sun, Moon, Menu, LogOut, ChevronDown,
   BellRing, Plus, ShoppingBag, Tag, FileUp, Building2, Send, ShieldCheck, Clock, BookMarked, MessagesSquare, UserCog, KeyRound, CalendarDays, Thermometer, Palette, MonitorSmartphone, ScanText, GraduationCap, Megaphone, CalendarRange, LockKeyhole, NotebookPen, PanelLeftClose, PanelLeftOpen, WifiOff, X,
-  Pin, Keyboard, UserPlus, Archive, BadgeCheck, BriefcaseMedical,
+  Pin, Keyboard, UserPlus, Archive, BadgeCheck, BriefcaseMedical, ArrowLeft, Printer,
 } from 'lucide-react';
 import { endOtherSessions, setPersonGuard, borrowedToken, cloudLogin } from './cloud.js';
 import { useStore, useSyncState, makePassword, put, audit, isLowStock, expiryCounts } from './store.jsx';
@@ -28,6 +28,10 @@ import { STYLES, applyStyle, savedStyle, saveStyle } from './surface.js';
 import { LEVELS, applyLevel, savedLevel, saveLevel } from './vivid.js';
 import { GRADIENT_BACKGROUNDS, GRADIENT_PRESETS, savedGradient, saveGradient, applyGradient } from './gradients.js';
 import { TwoStepModal } from './twostep.jsx';
+import { startShift, openShiftOf, shiftQuestions } from './shiftstart.js';
+import { pageMenuFor, keepsNativeMenu, longPressToContextMenu } from './pagemenu.js';
+import { useContextMenu } from './listcontrols.jsx';
+import { seenMap, unreadCount as newCount, markCounts, settleCounts, NAV_SEEN } from './seen.js';
 import { setCrashCloud } from './crash.js';
 import { homeFor, chosenTabs } from './landing.js';
 import { setBadge } from './badges.js';
@@ -273,6 +277,19 @@ function ThemePicker({ theme, setTheme, mode, setMode, style, setStyle }) {
       {t.base === 'dark' ? <Moon size={13} /> : <Sun size={13} />}
     </button>
   );
+  // every section of the panel folds (the owner's request, 2026-11-20): at first only Recommended and the set with the
+  // theme in use are open; what the person opens or folds is kept on this device
+  const [folds, setFolds] = useState(() => { try { return JSON.parse(localStorage.getItem('rxpos-theme-folds') || '{}'); } catch { return {}; } });
+  const isOpenSec = (id, dflt) => folds[id] ?? dflt;
+  const flip = (id, dflt) => setFolds((f) => { const n = { ...f, [id]: !(f[id] ?? dflt) }; try { localStorage.setItem('rxpos-theme-folds', JSON.stringify(n)); } catch { /* blocked */ } return n; });
+  const sec = (id, title, dflt, body) => (
+    <div className={'theme-sec' + (isOpenSec(id, dflt) ? ' open' : '')} key={id}>
+      <button type="button" className="bell-head sec-head" aria-expanded={isOpenSec(id, dflt)} onClick={() => flip(id, dflt)}>
+        <ChevronDown size={13} className={'sec-chev' + (isOpenSec(id, dflt) ? '' : ' shut')} aria-hidden="true" /><span className="grow">{title}</span>
+      </button>
+      <div className="sec-body" hidden={!isOpenSec(id, dflt)}>{body}</div>
+    </div>
+  );
   const MODES = [['light', 'Light', Sun], ['dark', 'Dark', Moon], ['system', 'System', MonitorSmartphone]];
   const activeMode = mode === 'system' ? 'system' : current?.base;
   // a theme is previewed while the pointer is on it (2026-11-18); closing the menu puts the chosen one back
@@ -296,36 +313,31 @@ function ThemePicker({ theme, setTheme, mode, setMode, style, setStyle }) {
             ))}
           </div>
           {/* 1.16.0 (the owner's clean-up): six recommended themes first; every theme, by set, under "All themes" */}
-          {short && (
+          {short && sec('recommended', 'Recommended', true, (
             <div className="theme-group" role="group" aria-label="Recommended">
-              <div className="bell-head">Recommended</div>
               {rec.map(item)}
               <button type="button" className="style-item all-themes" aria-expanded={all} onClick={() => setAll((x) => !x)}>
                 <ChevronDown size={14} className={all ? 'flip' : ''} aria-hidden="true" /><span className="grow">All themes ({shownList.length})</span>
               </button>
             </div>
-          )}
+          ))}
           {/* themes by group (src/themes.js THEME_GROUPS) */}
           <div className="theme-all" hidden={short && !all}>
-          {THEME_GROUPS.map((g) => [g, shownList.filter((t) => (t.group || 'Clinical') === g)]).filter(([, ts]) => ts.length).map(([g, ts]) => (
-            <div key={g} className="theme-group" role="group" aria-label={g}>
-              <div className="bell-head">{g}</div>
+          {THEME_GROUPS.map((g) => [g, shownList.filter((t) => (t.group || 'Clinical') === g)]).filter(([, ts]) => ts.length).map(([g, ts]) => sec('set:' + g, `${g} (${ts.length})`, ts.some(isOn) || !short, (
+            <div className="theme-group" role="group" aria-label={g}>
               {ts.map(item)}
             </div>
-          ))}
+          )))}
           </div>
-          <div className="bell-head">Colour</div>
-          <ColourLevel onPick={() => setOpen(false)} />
-          <div className="bell-head">Gradient</div>
-          <GradientChoice />
-          <div className="bell-head">Style</div>
-          {STYLES.map((s, i) => (<Fragment key={s.id}>
+          {sec('colour', 'Colour', false, <ColourLevel onPick={() => setOpen(false)} />)}
+          {sec('gradient', 'Gradient', false, <GradientChoice />)}
+          {sec('style', 'Style', false, STYLES.map((s, i) => (<Fragment key={s.id}>
             {s.group && s.group !== STYLES[i - 1]?.group && <div className="bell-sub">{s.group}</div>}
             <button className={'style-item' + (s.id === style ? ' on' : '')} onClick={() => { setStyle(s.id); setOpen(false); }}>
               <span className={'swatch style-swatch surface-' + s.id} />
               <span className="grow">{s.name}<small className="muted"> · {s.hint}</small></span>
             </button>
-          </Fragment>))}
+          </Fragment>)))}
         </div>
       )}
     </div>
@@ -362,6 +374,9 @@ function SideStatus() {
   const online = useOnline();
   const { pending = 0, syncStatus } = useSyncState() || {};
   const off = !online || syncStatus?.state === 'offline';
+  // the owner's request (2026-11-20): no "Online" card; it shows only when the device is offline (the clock in the top
+  // bar keeps saying how the sync stands)
+  if (!off) return null;
   return (
     <div className={'side-status' + (off ? ' off' : '')} role="status" title={off ? 'Offline: your work is kept on this device' : 'Online'}>
       <span className="dot" aria-hidden="true" />
@@ -451,7 +466,7 @@ function KeysHelp({ onClose, pages }) {
 }
 
 function Shell() {
-  const { db, products, user, setUser, branchId, branch, update, syncNow, syncCfg, saveSyncCfg } = useStore();
+  const { db, products, user, setUser, branchId, branch, update, syncNow, syncCfg, saveSyncCfg, fmt } = useStore();
   // Audit P2-7, option 1: before a call that acts as a person in the cloud, someone who signed in with a PIN or offline
   // password on a device holding another person's token confirms with their own password (src/cloud.js personGuard).
   // The device then keeps their token; syncing and selling never wait for this.
@@ -520,6 +535,9 @@ function Shell() {
   }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const [updReady, setUpdReady] = useState(false);
   useEffect(() => onUpdate((u) => setUpdReady(u.status === 'ready')), []);
+  // menu counts already seen on this device (src/seen.js): opening a page marks its count read, so it stops
+  // highlighting and its folded group closes again; a higher count shows again (the owner's request, 2026-11-20)
+  const [navSeen, setNavSeen] = useState(() => seenMap(NAV_SEEN));
   const counts = useMemo(() => ({
     update: updReady ? 1 : 0,
     expiry: (() => { const c = expiryCounts(products, batchesOf, db.settings.expiryWarnDays || 90); return c.soon + c.expired; })(),
@@ -529,6 +547,12 @@ function Shell() {
     chat: unreadCount(db, user),
   }), [products, kits, batchesOf, db.settings.expiryWarnDays, db.transfers, db.messages, branchId, user, day, updReady]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => setBadge(counts.chat + counts.transfers), [counts.chat, counts.transfers]); // the number on the app / taskbar icon
+  // the page open now: its menu count is read; counts that fell are lowered so the next rise shows (src/seen.js)
+  const countsNow = JSON.stringify(counts);
+  useEffect(() => {
+    const here = NAV.flatMap((g) => g.items).find(([to, , , , badge]) => badge && to === location.pathname);
+    setNavSeen((seen) => { const settled = settleCounts(NAV_SEEN, seen, counts); return here ? markCounts(NAV_SEEN, settled, { [here[4]]: counts[here[4]] }) : settled; });
+  }, [location.pathname, countsNow]); // eslint-disable-line react-hooks/exhaustive-deps -- the counts' values
 
   useEffect(() => setDrawer(false), [location.pathname]);
   // phones: gliding page transitions, swipe from the left edge to go back, room for the on-screen keyboard
@@ -563,6 +587,23 @@ function Shell() {
     setTheme(tw && list.some((t) => t.id === tw) ? tw : paletteFor(base, list, db.license?.[0]?.branding?.defaultTheme));
   };
   useEffect(() => setMega(false), [location.pathname]);
+  // options on every page (the owner's request, 2026-11-20): a right-click, or a long press on a phone or tablet,
+  // opens what this page can do (its own options, src/pagemenu.js) and what every page can do. A row, card or field
+  // with its own menu keeps it; typing boxes keep the browser's (copy, paste).
+  const pageMenu = useContextMenu();
+  useEffect(() => longPressToContextMenu(document), []);
+  const openPageMenu = (e) => {
+    if (e.defaultPrevented || keepsNativeMenu(e.target)) return;
+    const own = pageMenuFor(location.pathname);
+    pageMenu.open(e, [
+      ...own, ...(own.length ? ['-'] : []),
+      here !== '/' && { label: 'Back', Icon: ArrowLeft, run: () => navigate(-1) },
+      { label: 'Search or ask AI', Icon: Search, keyId: 'palette', run: () => setPalette(true) },
+      { label: 'Sync now', Icon: RefreshCw, run: () => syncNow() },
+      here !== '/' && pages.some((x) => x.to === here) && { label: nav.pins.includes(here) ? 'Unpin this page' : 'Pin this page', Icon: Pin, run: () => togglePin(here) },
+      { label: 'Print this page', Icon: Printer, run: () => window.print() },
+    ]);
+  };
   const togglePin = (to) => { const pins = nav.pins.includes(to) ? nav.pins.filter((x) => x !== to) : [...nav.pins, to].slice(-8); setDevice({ navPins: pins }); toast(nav.pins.includes(to) ? 'Unpinned from the menu' : 'Pinned to the top of the menu'); };
   const here = location.pathname;
   const pinRef = useRef(); pinRef.current = () => togglePin(here);
@@ -677,9 +718,17 @@ function Shell() {
   // the web version keeps nothing, so it asks before letting it go
   const { db: dbNow } = useStore();
   const { pending: unsent } = useSyncState();
-  const signOut = async () => {
+  const signOut = async (keepShift = false) => {
+    // the owner's rule (2026-11-20): someone who started a shift is asked whether to end it; ending it counts the cash
+    // on the Shifts page first, then signs them out (Shifts.jsx sends rxpos:signout)
+    const shiftOpen = openShiftOf(dbNow, user, branchId);
+    if (keepShift !== true && shiftOpen && shiftQuestions() && (await ask({ title: 'End your shift?', message: `You started a shift at ${new Date(shiftOpen.openedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}. Ending it means counting the cash in the drawer now; or sign out and leave it open for later.`, confirmText: 'End shift and count cash', cancelText: 'Sign out, keep it open' }))) {
+      navigate('/shifts', { state: { close: 'signout' } });
+      return;
+    }
     const mine = (dbNow.drafts || []).filter((d) => d.userId === user.id).length;
     const out = await setUser(null, { confirmLoss: (n) => ask({ title: `${n} change(s) haven't reached the cloud`, message: 'This browser keeps nothing on the computer, so signing out now loses them. Stay signed in until the internet is back, or sign out anyway.', confirmText: 'Sign out anyway', cancelText: 'Stay signed in', danger: true }) });
+    if (out) { try { sessionStorage.removeItem('rxpos-shift-asked:' + user.id); } catch { /* blocked */ } }
     if (out && keepsData() && unsent) toast(`${unsent} change(s) are kept on this device and will be sent when someone signs in again.`, 'info');
     else if (out && mine) toast(`Your ${mine} held sale${mine === 1 ? '' : 's'}/draft${mine === 1 ? '' : 's'} stay saved: continue ${mine === 1 ? 'it' : 'them'} after signing in, on any device.`, 'info');
   };
@@ -693,6 +742,25 @@ function Shell() {
     try { await endOtherSessions(syncCfg); toast('Signed out everywhere else'); } catch (e) { toast(e.message, 'error'); }
   };
   accountRef.current = { password: () => changePassword(false), pin: manageDevicePin, twostep: () => setTwoStepOpen(true), logout: signOut, others: signOutOthers };
+  const signOutRef = useRef(signOut);
+  signOutRef.current = signOut;
+  useEffect(() => { const after = () => signOutRef.current(true); window.addEventListener('rxpos:signout', after); return () => window.removeEventListener('rxpos:signout', after); }, []);
+  // the owner's rule (2026-11-20): on signing in, someone who works shifts and has none open here is asked whether to
+  // start one (with the cash already in the drawer); asked once per sign-in
+  useEffect(() => {
+    if (!user?.id || !can('shifts') || features.shifts === false || openShiftOf(dbNow, user, branchId) || !shiftQuestions()) return;
+    const key = 'rxpos-shift-asked:' + user.id;
+    try { if (sessionStorage.getItem(key)) return; } catch { /* blocked: ask anyway */ }
+    const t = setTimeout(async () => {
+      // marked as asked only when the question is shown (the screen can be rebuilt in the first second after signing in)
+      try { sessionStorage.setItem(key, '1'); } catch { /* blocked */ }
+      const float = await askText({ title: 'Start your shift?', message: 'Your sales are then counted in your shift. Type the cash already in the drawer (the float), or leave it empty for none.', type: 'number', placeholder: 'Opening float, e.g. 50000', minLength: 0, confirmText: 'Start shift', cancelText: 'Not now' });
+      if (float == null) return;
+      startShift(update, user, branchId, float, fmt);
+      toast('Shift started');
+    }, 1200);
+    return () => clearTimeout(t);
+  }, [user?.id, branchId]); // eslint-disable-line react-hooks/exhaustive-deps
   const [accountOpen, setAccountOpen] = useState(false);
   const accountMenuRef = useRef(null);
   useEffect(() => {
@@ -729,7 +797,7 @@ function Shell() {
               </div>
             );
           })()}
-          {groups.map((g, i) => { const add = QUICK_ADD[g.group] && can(QUICK_ADD[g.group][2]) ? QUICK_ADD[g.group] : null; const alerts = g.items.reduce((a, it) => a + (it[4] && counts[it[4]] > 0 ? counts[it[4]] : 0), 0); return (
+          {groups.map((g, i) => { const add = QUICK_ADD[g.group] && can(QUICK_ADD[g.group][2]) ? QUICK_ADD[g.group] : null; const alerts = g.items.reduce((a, it) => a + (it[4] ? newCount(counts[it[4]], navSeen[it[4]]) : 0), 0); return (
             <div key={i} className={'nav-group' + (collapsed[g.group] ? ' collapsed' : ' open')}>
               {g.group && <div className="nav-title-row">
                 <button className="nav-title" aria-expanded={!collapsed[g.group]} onClick={() => toggleGroup(g.group)}>
@@ -739,9 +807,9 @@ function Shell() {
                 {add && <button type="button" className="nav-add" title={add[0]} aria-label={add[0]} onClick={() => navigate(add[1], add[3] ? { state: add[3] } : undefined)}><Plus size={14} /></button>}
               </div>}
               {g.items.map(([to, label, Icon, , badge], n) => { const key = keyOf('go:' + to) && showKey(keyOf('go:' + to)); return (
-                <NavLink key={to} to={to} end style={{ '--i': n }} title={label + (key ? ` (${key})` : '')} hidden={!rail && collapsed[g.group] && !g.items.some(([t]) => t === location.pathname) && !(badge && counts[badge] > 0)}>
+                <NavLink key={to} to={to} end style={{ '--i': n }} title={label + (key ? ` (${key})` : '')} hidden={!rail && collapsed[g.group] && !g.items.some(([t]) => t === location.pathname) && !(badge && newCount(counts[badge], navSeen[badge]) > 0)}>
                   <Icon size={17} /><span className="grow">{label}</span>
-                  {badge && counts[badge] > 0 && <span className="count">{counts[badge]}</span>}
+                  {badge && newCount(counts[badge], navSeen[badge]) > 0 && <span className="count">{counts[badge]}</span>}
                   {key && <kbd>{key}</kbd>}
                 </NavLink>
               ); })}
@@ -788,9 +856,10 @@ function Shell() {
           </div>
         </header>
         <OfflineBanner />
+        {pageMenu.node}
         {(() => {
           const content = (
-            <main className="content" ref={contentRef} data-page={here}>
+            <main className="content" ref={contentRef} data-page={here} onContextMenu={openPageMenu}>
               <Suspense fallback={<PageSkeleton />}>
                 <Routes>
                   {groups.flatMap((g) => g.items).map(([to, , , , , el]) => <Route key={to} path={to} element={el} />)}

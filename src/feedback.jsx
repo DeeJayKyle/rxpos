@@ -92,7 +92,7 @@ export function FeedbackHost() {
   useEffect(() => { if (dialog?.input) setTimeout(() => inputRef.current?.focus(), 30); }, [dialog]);
 
   const close = (result) => { dialog.resolve(result); setDialog(null); };
-  const tooShort = dialog?.input && value.length < (dialog.minLength || 1);
+  const tooShort = dialog?.input && value.length < (dialog.minLength ?? 1); // minLength: 0 allows an empty answer
 
   return (
     <>

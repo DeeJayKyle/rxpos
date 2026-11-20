@@ -260,22 +260,28 @@ const form = await A.evaluate(() => ({
   notice: document.querySelector('.scan-notice')?.innerText.replace(/\s+/g, ' '),
 }));
 check('#4 supplier, invoice no. and date are filled from the invoice', filled && form.supplier === 'Kampala Medics' && form.invoice === 'KM-5521' && form.date === '2026-10-15', JSON.stringify({ s: form.supplier, i: form.invoice, d: form.date }));
-check('#4 lines matched to the pharmacy\'s medicines with qty, cost, batch and expiry', form.lines[0]?.med === 'Amoxyl 500mg caps' && form.lines[0].qty === '20' && form.lines[0].cost === '450' && form.lines[0].batch === 'AX77' && form.lines[0].exp === '2028-06-30' && form.lines[1]?.med === 'Panadol Extra tabs' && form.lines[1].exp === '2029-06-30', JSON.stringify(form.lines.slice(0, 2)));
-check('#4 an unknown medicine is flagged for the person to decide (cost worked out from the line total)', form.lines[2]?.med === '' /* no medicine chosen yet (the picker is empty) */ && form.lines[2].cost === '1200' && form.lines[2].exp === '2030-01-31' && /QWERTAZOL/.test(form.lines[2].read || ''), JSON.stringify(form.lines[2]));
+// the lines to check come first (2026-11-20): found by what they hold, not where they are
+const byMed = (m) => form.lines.find((x) => x.med === m) || {};
+const unknownLine = form.lines.find((x) => /QWERTAZOL/.test(x.read || '')) || {};
+check('#4 lines matched to the pharmacy\'s medicines with qty, cost, batch and expiry', byMed('Amoxyl 500mg caps')?.med === 'Amoxyl 500mg caps' && byMed('Amoxyl 500mg caps').qty === '20' && byMed('Amoxyl 500mg caps').cost === '450' && byMed('Amoxyl 500mg caps').batch === 'AX77' && byMed('Amoxyl 500mg caps').exp === '2028-06-30' && byMed('Panadol Extra tabs').exp === '2029-06-30', JSON.stringify(form.lines));
+check('#4 an unknown medicine is flagged for the person to decide (cost worked out from the line total)', unknownLine.med === '' /* no medicine chosen yet (the picker is empty) */ && unknownLine.cost === '1200' && unknownLine.exp === '2030-01-30' /* a month only: the 30th */ && form.lines[0] === unknownLine /* to check: first */, JSON.stringify(form.lines));
 check('#4 nothing can be saved until the person ticks that they checked it', form.saveDisabled === true && /check every line/i.test(form.notice || ''), form.notice);
 await A.screenshot({ path: path.join(out, '4-scanned-invoice.png'), fullPage: true });
 // the person corrects the scan: unknown line becomes a new medicine, Panadol qty fixed to 12
-await A.focus('table.lines tbody tr:nth-child(3) .med-pick input'); await wait(300); // the medicine picker: "New medicine" is its last row
+const unknownAt = await A.evaluate(() => [...document.querySelectorAll('table.lines tbody tr')].findIndex((tr) => /QWERTAZOL/.test(tr.innerText)) + 1);
+await A.focus(`table.lines tbody tr:nth-child(${unknownAt}) .med-pick input`); await wait(300); // the medicine picker: "New medicine" is its last row
 await A.evaluate(() => document.querySelector('.med-pick-row.add')?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })));
 await wait(300);
-const newLine = await A.evaluate(() => { const tr = document.querySelectorAll('table.lines tbody tr')[2]; return { name: tr.querySelector('input[aria-label="New medicine name"]')?.value, price: tr.querySelector('input[aria-label="New retail price"]')?.value }; });
+const newLine = await A.evaluate(() => { const tr = [...document.querySelectorAll('table.lines tbody tr')].find((r) => r.querySelector('input[aria-label="New medicine name"]')); return { name: tr.querySelector('input[aria-label="New medicine name"]')?.value, price: tr.querySelector('input[aria-label="New retail price"]')?.value }; });
 check('#4 "New medicine" keeps the name read off the invoice; its retail price is left for the person to type (not worked out)', /QWERTAZOL/.test(newLine.name || '') && newLine.price === '', JSON.stringify(newLine));
 await A.evaluate(() => {
-  const rows = document.querySelectorAll('table.lines tbody tr');
+  const rows = [...document.querySelectorAll('table.lines tbody tr')];
   const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
-  const q = rows[1].querySelector('input[aria-label="Quantity"]'); set.call(q, '12'); q.dispatchEvent(new Event('input', { bubbles: true }));
-  const p = rows[2].querySelector('input[aria-label="New retail price"]'); set.call(p, '2500'); p.dispatchEvent(new Event('input', { bubbles: true }));
+  const q = rows.find((r) => r.querySelector('.med-pick input')?.value === 'Panadol Extra tabs').querySelector('input[aria-label="Quantity"]'); set.call(q, '12'); q.dispatchEvent(new Event('input', { bubbles: true }));
+  const p = rows.find((r) => r.querySelector('input[aria-label="New medicine name"]')).querySelector('input[aria-label="New retail price"]'); set.call(p, '2500'); p.dispatchEvent(new Event('input', { bubbles: true }));
 });
+// each line to check is ticked "Checked" after comparing it with the invoice (2026-11-20)
+await A.evaluate(() => document.querySelectorAll('.line-checked').forEach((b) => b.click())); await wait(300);
 await A.evaluate(() => document.querySelector('.scan-confirm input').click()); await wait(300);
 await clickText(A, 'button', /Receive stock/); await wait(1500);
 const savedMsg = await A.evaluate(() => document.querySelector('.notice')?.innerText || '');

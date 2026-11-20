@@ -19,8 +19,23 @@
 .dash-cell > .card, .dash-cell > .stats, .dash-cell > .bento-dash { flex: 1; margin: 0; }
 .dash-cell > .stats { margin-bottom: 0; }
 .span-12 { grid-column: span 12; } .span-8 { grid-column: span 8; } .span-6 { grid-column: span 6; } .span-4 { grid-column: span 4; }
-@media (max-width: 1100px) { .span-8, .span-4 { grid-column: span 12; } }
+/* any width a card was dragged to (2026-11-20) */
+.span-3 { grid-column: span 3; } .span-5 { grid-column: span 5; } .span-7 { grid-column: span 7; } .span-9 { grid-column: span 9; } .span-10 { grid-column: span 10; } .span-11 { grid-column: span 11; }
+@media (max-width: 1100px) { .span-8, .span-4, .span-3, .span-5, .span-7, .span-9, .span-10, .span-11 { grid-column: span 12; } }
 @media (max-width: 860px) { .span-6 { grid-column: span 12; } }
+/* moving and resizing cards: a grip at the top left and the right edge, shown on hover (always on touch screens) */
+.dash-cell { position: relative; }
+.dash-grip { position: absolute; top: 6px; left: 6px; z-index: 3; width: 24px; height: 24px; display: grid; place-items: center; padding: 0; border-radius: 7px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); cursor: grab; opacity: 0; transition: opacity .15s; }
+.dash-resize { position: absolute; top: 12px; bottom: 12px; right: -9px; width: 12px; z-index: 3; cursor: ew-resize; border-radius: 6px; opacity: 0; transition: opacity .15s; touch-action: none; }
+.dash-resize::after { content: ''; position: absolute; left: 4px; top: 50%; height: 36px; margin-top: -18px; width: 4px; border-radius: 4px; background: var(--primary); }
+.dash-cell:hover > .dash-grip, .dash-cell:focus-within > .dash-grip, .dash-cell:hover > .dash-resize, .dash-cell.resizing > .dash-resize { opacity: 1; }
+@media (pointer: coarse) { .dash-grip { opacity: .7; } }
+@media (max-width: 860px) { .dash-resize { display: none; } }
+.dash-grid.dragging .dash-cell { transition: transform .15s; }
+.dash-cell.is-dragged { opacity: .45; }
+.dash-cell.drop-before { box-shadow: -4px 0 0 0 var(--primary); border-radius: 14px; }
+.dash-cell.resizing { outline: 2px dashed var(--primary); outline-offset: 3px; border-radius: 14px; }
+.dash-size-tip { position: absolute; right: 14px; top: 8px; z-index: 4; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--primary); color: #fff; }
 
 /* ---- cards ---- */
 .card-foot-link, .card-head-link { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 650; color: var(--primary-text); text-decoration: none; }

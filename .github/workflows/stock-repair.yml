@@ -30,5 +30,7 @@ jobs:
           RXPOS_API: https://api.rxposug.com
           OWNER_KEY: ${{ secrets.OWNER_KEY }}
           APPLY: ${{ inputs.apply }}
+          # the owner's law (worker/ownerlaw.js): the owner running this with apply = yes is the approval to write
+          OWNER_APPROVED: ${{ inputs.apply == 'yes' && 'yes' || 'no' }}
           ONLY: ${{ inputs.pharmacies }}
         run: node tools/stock-repair.mjs $ONLY

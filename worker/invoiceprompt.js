@@ -12,4 +12,6 @@ export const INVOICE_PROMPT = 'You are an expert at reading supplier invoices an
   '- Check each line: qty x unitCost should equal lineTotal. If they disagree, look again at the digits (1/7, 3/8, 5/6, 0/6 are often confused in handwriting) and set "unclear": true if it still does not add up.\n' +
   '- Dates: copy "date" and "expiry" EXACTLY as written (e.g. "28/10/2026", "06/2028", "Nov-27", "Feb 2028"); do not convert them.\n' +
   '- "batch": letters and digits exactly as written. Look closely at each character: O or 0, I or 1, S or 5, B or 8, Z or 2. Batch codes usually start with letters and end with digits.\n' +
+  '- Handwriting: if a word is hard to read, still write your best reading of it letter by letter (the pharmacy matches it to its medicine list) and set "unclear": true; never leave a name empty.\n' +
+  '- Amounts are often written with "/=" or "/-" at the end ("18,500/=" is 18500). Ditto marks (" or do.) under a value repeat the value above. A quantity like "10 x 100" or "10 btls" means qty 10.\n' +
   '- "unclear": true for any line where you are not sure of the name, quantity, price, batch or expiry. Leave unknown fields "" or 0 rather than guessing.';

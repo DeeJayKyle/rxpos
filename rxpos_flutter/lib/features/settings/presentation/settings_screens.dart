@@ -22,6 +22,7 @@ import '../../sync_status/application/sync_controller.dart';
 import '../../../core/update/app_updates.dart';
 import '../../auth/application/session_controller.dart' show sessionControllerProvider;
 import '../../auth/presentation/account_menu.dart' show AccountCard;
+import '../../dashboard/presentation/clean_parts.dart' show DashLayout, showEditWidgets;
 import 'font_picker.dart';
 import 'keyboard_settings.dart';
 import '../../../widgets/ai_system_doctor_card.dart';
@@ -203,6 +204,16 @@ class _DeviceScreenState extends ConsumerState<DeviceScreen> {
           subtitle: const Text('Shorter table rows: more lines on the screen'),
           value: ref.watch(deviceValueProvider(compactTablesKey)).value == '1',
           onChanged: (v) => ref.read(deviceValueProvider(compactTablesKey).notifier).set(v ? '1' : null),
+        ),
+        // the dashboard's Edit widgets lives here (the owner's choice, 2026-11-20): the dashboard keeps only its period chips
+        ListTile(
+          key: const Key('edit-widgets-open'),
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.tune),
+          title: const Text('Dashboard widgets'),
+          subtitle: const Text('Choose the cards on the dashboard and their order'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => showEditWidgets(context, DashLayout.parse(ref.read(deviceValueProvider('dash')).value), (v) => ref.read(deviceValueProvider('dash').notifier).set(v)),
         ),
         if (onAndroid) ...[
           const SizedBox(height: 8),
