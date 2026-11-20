@@ -251,7 +251,7 @@ class _AppLibraryState extends State<AppLibrary> {
                                             key: ValueKey('lib-more-$g'),
                                             borderRadius: BorderRadius.circular(12),
                                             onTap: () => setState(() => _open = g),
-                                            child: Center(child: Wrap(spacing: 2, runSpacing: 2, children: [for (final s in of(g).skip(3).take(4)) Icon(s.icon, size: 14, color: t.colorScheme.primary)])),
+                                            child: Center(child: Wrap(spacing: 2, runSpacing: 2, children: [for (final s in of(g).skip(3).take(4)) Icon(s.icon, size: 14, color: t.colorScheme.tertiary)])),
                                           ),
                                       ]),
                                     ),
