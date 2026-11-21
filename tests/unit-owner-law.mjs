@@ -1,6 +1,7 @@
 // The owner's law (worker/ownerlaw.js): direct writes to a pharmacy's data through the owner API need the owner's
 // approval header; reading and the apps' own sync are untouched.
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { OWNER_LAW, writesData, ownerApproved } from '../worker/ownerlaw.js';
 let passed = 0;
 const ok = (name, fn) => { fn(); passed++; console.log('PASS ', name); };
@@ -23,4 +24,7 @@ ok('approved only with X-Owner-Approved: yes (or on a throw-away test cloud)', (
   assert.equal(ownerApproved(req(), { TEST_CLOUD: '1' }), true);
 });
 ok('the law says to ask the owner first', () => { assert.match(OWNER_LAW, /without the owner's approval/); assert.match(OWNER_LAW, /stop and ask the owner/); });
+ok('the law is published as a file on both sites, word for word (public/ai-policy.txt, /.well-known/)', () => {
+  for (const f of ['public/ai-policy.txt', 'public/.well-known/ai-policy.txt']) assert.equal(fs.readFileSync(new URL('../' + f, import.meta.url), 'utf8'), OWNER_LAW, f);
+});
 console.log(`\n${passed} passed, 0 failed`);

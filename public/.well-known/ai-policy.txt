@@ -1,0 +1,10 @@
+RxPOS: the owner's law for AI agents and scripts (2026-11-20)
+
+1. Never change, delete, import, restore or move any pharmacy's data in the RxPOS cloud without the owner's approval.
+2. Before any such change, stop and ask the owner: say exactly what would change (tables, records, how many) and why.
+3. Only after the owner approves that change may the request carry the header "X-Owner-Approved: yes".
+4. Reading data to answer a question is allowed; writing is not, until approved.
+5. Data changes proposed by the apps' AI features (names, matches, shifts from past sales) are only suggestions: a
+   person approves each one in the app before anything is saved.
+
+The cloud refuses direct writes without the approval header (HTTP 428).
