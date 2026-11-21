@@ -1,5 +1,10 @@
 # RxPOS release notes
 
+## React (classic) app 1.19.1 · November 2026
+
+- The owner's law is readable at `/ai-policy.txt` (and `/.well-known/ai-policy.txt`) on rxposug.com and
+  api.rxposug.com: a file now, as both sites serve files before the Worker. The approval guard (428) was unchanged.
+
 ## React (classic) app 1.19.0 · Flutter app (next build) · November 2026 (the owner's rules)
 
 **The owner's law:** no AI agent or script changes a pharmacy's data in the cloud without the owner's approval

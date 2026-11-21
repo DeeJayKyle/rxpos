@@ -31,7 +31,7 @@ export const keepsNativeMenu = (target) => !!target?.closest?.('input, textarea,
  * already sends one on a long press are left to do so (no second menu). Returns the function that removes it.
  */
 export function longPressToContextMenu(root = document, ms = 550) {
-  let timer = 0, start = null, fired = false;
+  let timer = 0, start = null, fired = false, liftAt = 0;
   const cancel = () => { clearTimeout(timer); timer = 0; };
   const down = (e) => {
     if (e.pointerType !== 'touch' || keepsNativeMenu(e.target)) return;
@@ -47,10 +47,17 @@ export function longPressToContextMenu(root = document, ms = 550) {
   const move = (e) => { if (timer && start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > 10) cancel(); };
   const native = (e) => { if (timer && e.isTrusted) cancel(); }; // the browser opened its own long-press menu event
   // the lift after a long press is not a tap on what was pressed (a click elsewhere goes through)
-  const click = (e) => { if (fired && start?.target && (start.target === e.target || start.target.contains?.(e.target) || e.target.contains?.(start.target))) { e.preventDefault(); e.stopPropagation(); } fired = false; };
+  // the click the lift makes is not a tap: not on what was pressed, and not on the menu that just opened under the
+  // finger (it lands there at once; it was choosing "Back" when a slow swipe counted as a long press). A click a moment
+  // later, or anywhere else, goes through.
+  const click = (e) => {
+    const onPressed = start?.target && (start.target === e.target || start.target.contains?.(e.target) || e.target.contains?.(start.target));
+    if (fired && (onPressed || performance.now() - liftAt < 150)) { e.preventDefault(); e.stopPropagation(); }
+    fired = false;
+  };
   root.addEventListener('pointerdown', down, true); root.addEventListener('pointermove', move, true);
   // the click that follows the lift is swallowed; a later click (a while after) is never touched
-  const up = () => { cancel(); if (fired) setTimeout(() => { fired = false; }, 400); };
+  const up = () => { cancel(); if (fired) { liftAt = performance.now(); setTimeout(() => { fired = false; }, 400); } };
   root.addEventListener('pointerup', up, true); root.addEventListener('pointercancel', up, true);
   root.addEventListener('contextmenu', native, true); root.addEventListener('click', click, true);
   return () => {

@@ -4,7 +4,8 @@
 // The cloud enforces it where data can be written around the apps (the owner API's direct record writes, restore and
 // database moves): those calls are refused (428) unless they carry `X-Owner-Approved: yes`, which the owner's own
 // console sends when the owner clicks, and which a script or agent may send ONLY after the owner has approved that
-// change. The law is published at /ai-policy.txt and /.well-known/ai-policy.txt for any agent that looks.
+// change. The law is published at /ai-policy.txt and /.well-known/ai-policy.txt for any agent that looks: as files
+// (public/, checked word for word by tests/unit-owner-law.mjs), since the sites serve files before the Worker.
 // Staff working in the apps are not affected: their changes are their own work, under their roles' permissions.
 export const OWNER_LAW = `RxPOS: the owner's law for AI agents and scripts (2026-11-20)
 

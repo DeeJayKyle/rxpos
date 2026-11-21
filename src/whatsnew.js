@@ -3,7 +3,7 @@
 // its highlights go here too. The Flutter app keeps the same list in rxpos_flutter/lib/core/config/whats_new.dart
 // (tests/unit-whatsnew.mjs checks they match).
 export const WHATS_NEW = {
-  version: '1.19.0',
+  version: '1.19.1',
   items: [
     { text: "Scan invoices better: photos cleaned up, handwriting and abbreviations matched, lines to check first", to: '/add-stock' },
     { text: "Add Stock: start with the scan, details fold to one line, each line ticked “Checked”, the supplier’s pack and markup remembered", to: '/add-stock' },

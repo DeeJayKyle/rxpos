@@ -77,8 +77,16 @@ check('a typing box keeps the browser\'s menu', kept === 'native' && !(await p.e
 await p.evaluate(() => { const h = document.querySelector('.page h1'); const r = h.getBoundingClientRect(); h.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerType: 'touch', clientX: r.left + 5, clientY: r.top + 5 })); });
 await wait(800);
 check('a long press on a touch screen opens the same options', (await menuItems(p)).includes('Search or ask AI'));
-await p.evaluate(() => document.querySelector('.page h1').dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerType: 'touch' })));
-await p.keyboard.press('Escape'); await wait(150);
+// the lift's own click lands on the menu that opened under the finger: it must not choose an item (a slow swipe on a
+// slow phone counted as a long press, and the lift chose "Back")
+const hashBefore = await p.evaluate(() => location.hash);
+await p.evaluate(() => {
+  document.querySelector('.page h1').dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerType: 'touch' }));
+  [...document.querySelectorAll('.ctx-menu button')].find((b) => /^Back/.test(b.textContent.trim()))?.click();
+});
+await wait(400);
+check('…lifting the finger does not choose an item of the menu that opened under it', (await p.evaluate(() => location.hash)) === hashBefore && (await menuItems(p)).includes('Back'), await p.evaluate(() => location.hash));
+await p.keyboard.press('Escape'); await wait(500);
 
 // ---- the theme panel's sections fold ----
 await p.evaluate(() => document.querySelector('button[title="Theme"]').click()); await wait(300);

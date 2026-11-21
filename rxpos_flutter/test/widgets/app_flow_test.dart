@@ -850,7 +850,7 @@ void main() {
     expect(find.byKey(Key('busy-$wd-10')), findsOneWidget);
     // B8: what's new once
     expect(find.byKey(const Key('whats-new')), findsOneWidget);
-    expect(find.text("What's new in 1.19.0"), findsOneWidget);
+    expect(find.text("What's new in 1.19.1"), findsOneWidget);
     // B7: the setup checklist, ticked from the data
     expect(find.byKey(const Key('setup-checklist')), findsOneWidget);
     expect(find.textContaining('2 of 6 done', findRichText: true), findsOneWidget);
