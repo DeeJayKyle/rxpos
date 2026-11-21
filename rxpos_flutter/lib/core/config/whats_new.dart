@@ -1,6 +1,6 @@
 // What's new (UI batch 3, B8): the same list as src/whatsnew.js (tests/unit-whatsnew.mjs checks they match). Shown
 // once on each device after an update, as a small card on the dashboard.
-const whatsNewVersion = '1.19.0';
+const whatsNewVersion = '1.19.1';
 const whatsNewItems = <(String, String)>[
   ('Scan invoices better: photos cleaned up, handwriting and abbreviations matched, lines to check first', '/add-stock'),
   ('Add Stock: start with the scan, details fold to one line, each line ticked “Checked”, the supplier’s pack and markup remembered', '/add-stock'),
