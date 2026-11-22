@@ -138,6 +138,19 @@ String? checkForm(Map<String, Object?> form, {bool scanned = false, bool checked
 List<String> belowCost(Map<String, Object?> form, Map<String, Product> byId) =>
     [for (final l in lines(form)) if (!_blank(l['productId']) && _n(l['price']) > 0 && _n(l['price']) < baseCost(l)) lineName(l, byId)];
 
+/// Days a delivery date lies before [todayStr] when that is more than [days] (0 otherwise, or for an unreadable date),
+/// as src/invoicedates.js oldDeliveryDays: a wrong date (often read off a scanned invoice) files the delivery away
+/// from today's, so Add Stock asks before receiving with it.
+const oldDeliveryDaysLimit = 3;
+int oldDeliveryDays(String date, String todayStr, {int days = oldDeliveryDaysLimit}) {
+  final re = RegExp(r'^\d{4}-\d{2}-\d{2}$');
+  if (!re.hasMatch(date) || !re.hasMatch(todayStr)) return 0;
+  final a = DateTime.tryParse('${date}T00:00:00Z'), b = DateTime.tryParse('${todayStr}T00:00:00Z');
+  if (a == null || b == null) return 0;
+  final n = b.difference(a).inDays;
+  return n > days ? n : 0;
+}
+
 /// The form's lines as delivery lines.
 List<DeliveryLine> deliveryLines(Map<String, Object?> form) => [
       for (final l in lines(form))

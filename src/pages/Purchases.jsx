@@ -28,6 +28,7 @@ import { deliveryDraft, draftsFor, isOld, toCheck, checkText, needsCheck } from 
 import DraftsList, { useDraftCount } from './Drafts.jsx';
 import { Link, useNavigate } from 'react-router-dom';
 import InvoiceView from '../components/InvoiceView.jsx';
+import { oldDeliveryDays } from '../invoicedates.js';
 import { emptyCheck, scanInto, checkSummary } from '../deliverycheck.js';
 import { usePageMenu } from '../pagemenu.js';
 
@@ -446,6 +447,9 @@ export function AddStock() {
     if (noExpiry) return toast(`Enter the expiry date for ${nameOf(noExpiry)} (needed for first-expiry-first-out)`, 'warn');
     const expired = lines.find((l) => daysUntil(l.expiry) < 0);
     if (expired) return toast(`${nameOf(expired)}: the expiry date ${expired.expiry} has already passed. Check the date on the pack.`, 'error');
+    // a delivery dated days ago (often the date read off a scanned invoice) is filed away from today's deliveries
+    const daysOld = oldDeliveryDays(form.date, today());
+    if (daysOld && !(await ask({ title: 'Is the delivery date right?', message: `This delivery is dated ${showDate(form.date)}, ${daysOld} days ago${scanned ? ' (the date read from the invoice)' : ''}. Purchase history and reports will list it on that day, not today. Receive it with this date?`, confirmText: 'Keep this date' }))) return;
     const below = lines.filter((l) => Number(l.price) > 0 && Number(l.price) < baseCost(l));
     if (below.length && !(await ask({ title: 'Selling below cost?', message: `${below.map(nameOf).slice(0, 5).join(', ')}${below.length > 5 ? '…' : ''}: the retail price is lower than the cost. Receive anyway?`, confirmText: 'Receive anyway' }))) return;
 

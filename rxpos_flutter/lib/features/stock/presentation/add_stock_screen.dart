@@ -178,6 +178,18 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
       }
       if (!mounted) return;
     }
+    // a delivery dated days ago (often the date read off a scanned invoice) is filed away from today's deliveries
+    final date = '${f['date'] ?? ''}';
+    final daysOld = oldDeliveryDays(date, today());
+    if (daysOld > 0) {
+      final fmt = ref.read(deviceValueProvider('dateFormat')).value ?? 'dmy';
+      if (!await confirmAction(context, 'Is the delivery date right?',
+          'This delivery is dated ${showDate(date, fmt)}, $daysOld days ago${_scanned != null ? ' (the date read from the invoice)' : ''}. Purchase history and reports will list it on that day, not today. Receive it with this date?',
+          'Keep this date')) {
+        return;
+      }
+      if (!mounted) return;
+    }
     final below = belowCost(f, d.byId);
     if (below.isNotEmpty &&
         !await confirmAction(context, 'Selling below cost?', '${below.take(5).join(', ')}${below.length > 5 ? '…' : ''}: the retail price is lower than the cost. Receive anyway?', 'Receive anyway')) {

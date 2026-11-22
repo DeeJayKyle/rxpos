@@ -91,6 +91,9 @@ await p.evaluate(() => document.querySelectorAll('.line-checked').forEach((b) =>
 await p.evaluate(() => { const c = document.querySelector('.scan-confirm input'); c?.click(); });
 await wait(300);
 await click(p, /^Receive stock/);
+// the invoice is dated 2026-10-28: receiving with a date weeks old is asked about first (2026-11-22)
+check('a delivery dated weeks ago is asked about before receiving', await until(p, () => /Is the delivery date right\?/.test(document.body.innerText), 5000));
+await click(p, /^Keep this date$/);
 check('received: the stock is in and the draft is gone', await until(p, () => /Received 2 item/.test(document.body.innerText), 15000), await text(p).then((t) => t.slice(0, 300)));
 await p.evaluate(() => { location.hash = '#/purchases'; }); await wait(1500);
 await click(p, /^Drafts/, 'button, [role=tab]'); await wait(800);

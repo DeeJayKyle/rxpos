@@ -283,7 +283,10 @@ await A.evaluate(() => {
 // each line to check is ticked "Checked" after comparing it with the invoice (2026-11-20)
 await A.evaluate(() => document.querySelectorAll('.line-checked').forEach((b) => b.click())); await wait(300);
 await A.evaluate(() => document.querySelector('.scan-confirm input').click()); await wait(300);
-await clickText(A, 'button', /Receive stock/); await wait(1500);
+await clickText(A, 'button', /Receive stock/); await wait(800);
+// the invoice is dated 15/10/2026, weeks ago: asked about before receiving (2026-11-22)
+check('#4 a delivery dated weeks ago is asked about first', await A.evaluate(() => /Is the delivery date right\?/.test(document.body.innerText)));
+await clickText(A, 'button', /^Keep this date$/); await wait(1500);
 const savedMsg = await A.evaluate(() => document.querySelector('.notice')?.innerText || '');
 check('#4 after checking and ticking, "Receive stock" saves it', /Received 3 item/.test(savedMsg), savedMsg);
 await go(A, '/inventory');

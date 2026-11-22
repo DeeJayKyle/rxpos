@@ -82,6 +82,10 @@ void main() {
       expect(checkForm({...blankForm(s)}, scanned: true), contains('Tick'));
       expect(belowCost({...blankForm(s), 'lines': [{...lineFor(zinc, s), 'price': '100'}]}, {'p2': zinc}), ['Zinco Syrup 100ml']);
     });
+    test('a delivery dated more than 3 days ago is asked about (as src/invoicedates.js)', () {
+      expect([oldDeliveryDays('2026-11-12', '2026-11-22'), oldDeliveryDays('2026-11-19', '2026-11-22'), oldDeliveryDays('2026-11-18', '2026-11-22'),
+        oldDeliveryDays('2026-11-22', '2026-11-22'), oldDeliveryDays('', '2026-11-22'), oldDeliveryDays('2025-11-22', '2026-11-22')], [10, 0, 4, 0, 0, 365]);
+    });
   });
 
   test('dates typed in the device format; month/year is the end of the month', () {

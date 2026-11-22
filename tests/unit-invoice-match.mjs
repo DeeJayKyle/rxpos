@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { nameWords, strengthsOf, wordLike, rankProducts, matchProduct, matchSupplier, learnedNames, lastBatchOf, fillFromLast } from '../src/invoiceMatch.js';
 import { enhancePixels } from '../src/pageenhance.js';
-import { normDate } from '../src/invoicedates.js';
+import { normDate, oldDeliveryDays } from '../src/invoicedates.js';
 let passed = 0;
 const ok = (name, fn) => { fn(); passed++; console.log('PASS ', name); };
 
@@ -114,5 +114,9 @@ ok('batch or expiry not read well: the last delivery\'s, to be checked; read wel
   assert.deepEqual(fillFromLast({ batch: 'PC24O5', expiry: '2028-03-30', check: ['batch'] }, lastBatchOf(B, 'pcm'), '2026-11-20'), { batch: 'PC2405', expiry: '2028-03-30', used: ['batch'] });
   assert.deepEqual(fillFromLast({ batch: 'NEW77', expiry: '2029-05-30' }, lastBatchOf(B, 'pcm'), '2026-11-20').used, [], 'read well: nothing taken');
   assert.deepEqual(fillFromLast({ batch: 'X', expiry: '' }, { batch: 'Y', expiry: '2025-01-30' }, '2026-11-20').used, [], 'an expiry that has passed is not offered');
+});
+ok('a delivery dated more than 3 days ago is asked about before receiving', () => {
+  assert.deepEqual([oldDeliveryDays('2026-11-12', '2026-11-22'), oldDeliveryDays('2026-11-19', '2026-11-22'), oldDeliveryDays('2026-11-18', '2026-11-22'),
+    oldDeliveryDays('2026-11-22', '2026-11-22'), oldDeliveryDays('', '2026-11-22'), oldDeliveryDays('2025-11-22', '2026-11-22')], [10, 0, 4, 0, 0, 365]);
 });
 console.log(`\n${passed} passed, 0 failed`);
