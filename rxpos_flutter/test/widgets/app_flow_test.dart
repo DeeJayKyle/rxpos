@@ -2125,6 +2125,10 @@ void main() {
     await settle(tester, 2);
     await tester.tap(find.text('Receive stock'));
     await settle(tester);
+    // the review before receiving (2026-11-22): the summary, then receive
+    expect(find.textContaining('1 line, 10 units, total UGX 2,800'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('confirm-yes')));
+    await settle(tester);
     expect(find.textContaining('Received 1 item(s) worth UGX 2,800'), findsOneWidget);
     final purchase = (await tester.runAsync(() => store.rows('purchases')))!.single;
     final item = (purchase['items'] as List).single as Map;
@@ -2190,6 +2194,9 @@ void main() {
     await tester.ensureVisible(find.text('Receive stock'));
     await settle(tester, 2);
     await tester.tap(find.text('Receive stock'));
+    await settle(tester);
+    expect(find.textContaining('1 new medicine'), findsOneWidget, reason: 'the review says what is new');
+    await tester.tap(find.byKey(const Key('confirm-yes')));
     await settle(tester);
     final created = (await tester.runAsync(() => store.rows('products')))!.where((p) => p['name'] == 'Brandnew Syrup 60ml').single;
     expect((created['cost'], created['price']), (2000, num.parse(hint)));

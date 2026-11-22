@@ -24,6 +24,7 @@ import '../../auth/application/session_controller.dart';
 import '../../purchases/domain/reorder.dart' show supplierPrices, SupplierPrice;
 import '../../sales_pos/presentation/camera_scan.dart';
 import '../domain/delivery.dart';
+import '../domain/delivery_checks.dart';
 import '../domain/stock_form.dart';
 import 'invoice_scan.dart';
 import '../../../screens/ai_vision_scanner_screen.dart';
@@ -178,23 +179,43 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
       }
       if (!mounted) return;
     }
-    // a delivery dated days ago (often the date read off a scanned invoice) is filed away from today's deliveries
-    final date = '${f['date'] ?? ''}';
-    final daysOld = oldDeliveryDays(date, today());
-    if (daysOld > 0) {
-      final fmt = ref.read(deviceValueProvider('dateFormat')).value ?? 'dmy';
-      if (!await confirmAction(context, 'Is the delivery date right?',
-          'This delivery is dated ${showDate(date, fmt)}, $daysOld days ago${_scanned != null ? ' (the date read from the invoice)' : ''}. Purchase history and reports will list it on that day, not today. Receive it with this date?',
-          'Keep this date')) {
-        return;
-      }
-      if (!mounted) return;
+    // the review before receiving (domain/delivery_checks.dart, the owner's request 2026-11-22): what is about to go in,
+    // and anything worth a second look (the date, the same invoice again, the invoice total, costs, quantities, expiry)
+    final fmt = ref.read(deviceValueProvider('dateFormat')).value ?? 'dmy';
+    final purchases = ref.read(tableProvider('purchases')).value ?? const <Map<String, Object?>>[];
+    final supplierId = '${f['supplierId'] ?? ''}';
+    // what would refuse it is said first, so the review is only for a delivery that can be received
+    final List<DeliveryLine> use;
+    try {
+      use = checkDelivery(deliveryLines(f), d.byId).use;
+    } on DeliveryProblem catch (e) {
+      return say(context, e.message, error: true);
     }
-    final below = belowCost(f, d.byId);
-    if (below.isNotEmpty &&
-        !await confirmAction(context, 'Selling below cost?', '${below.take(5).join(', ')}${below.length > 5 ? '…' : ''}: the retail price is lower than the cost. Receive anyway?', 'Receive anyway')) {
+    final review = deliveryReview(
+      lines: [
+        for (final l in use)
+          ReviewLine(productId: l.isNew ? null : l.productId, name: l.isNew ? l.newName.trim().replaceAll(RegExp(r'\s+'), ' ') : (d.byId[l.productId]?.name ?? ''),
+              qty: l.units, cost: l.baseCost, price: l.price, expiry: l.expiry),
+      ],
+      known: {for (final p in d.products) p.id: (cost: p.cost, price: p.price)},
+      purchases: purchases,
+      supplierId: supplierId,
+      supplierName: d.suppliers.where((x) => x.id == supplierId).firstOrNull?.name ?? '',
+      invoice: '${f['invoice'] ?? ''}',
+      date: '${f['date'] ?? ''}'.isEmpty ? today() : '${f['date']}',
+      today: today(),
+      total: formTotal(f),
+      invoiceTotal: f['invoiceTotal'],
+      dateRead: f['dateRead'] == true,
+      money: d.settings.money,
+      showDate: (x) => showDate(x, fmt),
+    );
+    final n = review.warnings.length;
+    if (!await confirmAction(context, n > 0 ? 'Check before receiving: $n thing${n == 1 ? '' : 's'} to look at' : 'Receive this delivery?', review.summary.join('\n'),
+        n > 0 ? 'Receive anyway' : 'Yes, receive', effects: review.warnings)) {
       return;
     }
+    if (!mounted) return;
     setState(() => _busy = true);
     try {
       final user = (await ref.read(sessionControllerProvider.future))?.userName ?? '';
@@ -612,8 +633,15 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
                   Text('Purchase invoice', style: th.textTheme.titleLarge),
                   Text('Goods received', style: th.textTheme.bodySmall),
                   box('invoice', 'Invoice no.', f['invoice'], (v) => _set({...f, 'invoice': v}), w: 320, number: false, hint: 'as on the invoice'),
+                  box('invoiceTotal', 'Invoice total', f['invoiceTotal'], (v) => _set({...f, 'invoiceTotal': v}), w: 320, hint: 'as printed on the invoice'),
+                  if ((double.tryParse('${f['invoiceTotal'] ?? ''}') ?? 0) > 0 && ((double.tryParse('${f['invoiceTotal']}') ?? 0) - total).abs() >= 1)
+                    Text(
+                      'The lines add up to ${s.money(total)}: ${s.money(((double.tryParse('${f['invoiceTotal']}') ?? 0) - total).abs())} ${(double.tryParse('${f['invoiceTotal']}') ?? 0) > total ? 'short of' : 'over'} the invoice',
+                      key: const Key('invoice-total-diff'),
+                      style: TextStyle(color: context.tones.warn, fontSize: 12),
+                    ),
                   Row(children: [
-                    Expanded(child: _DateCell(key: Key('date-$_round-$dateFmt'), label: 'Date', value: '${f['date'] ?? ''}', format: dateFmt, onChanged: (v) => _set({...f, 'date': v.isEmpty ? today() : v}))),
+                    Expanded(child: _DateCell(key: Key('date-$_round-$dateFmt'), label: 'Date', value: '${f['date'] ?? ''}', format: dateFmt, onChanged: (v) => _set({...f, 'date': v.isEmpty ? today() : v, 'dateRead': false}))),
                     DropdownButton<String>(
                       value: dateFmt,
                       items: [for (final (k, l) in dateFormats) DropdownMenuItem(value: k, child: Text(l))],
@@ -623,6 +651,19 @@ class _AddStockScreenState extends ConsumerState<AddStockScreen> {
                       },
                     ),
                   ]),
+                  if ('${f['date'] ?? ''}'.isNotEmpty && f['date'] != today())
+                    Row(key: const Key('date-note'), children: [
+                      Text(f['dateRead'] == true ? 'Read from the invoice: check it' : 'Not today',
+                          style: TextStyle(fontSize: 12, color: f['dateRead'] == true ? context.tones.warn : th.textTheme.bodySmall?.color)),
+                      TextButton(
+                        key: const Key('use-today'),
+                        onPressed: () {
+                          _set({...f, 'date': today(), 'dateRead': false});
+                          setState(() => _round++);
+                        },
+                        child: const Text('Use today'),
+                      ),
+                    ]),
                   // only the offered cost + markup price follows it; no retail price changes on its own
                   box('markup', 'Retail markup %', f['markup'], (v) => _set({...f, 'markup': v}), w: 320),
                 ]),

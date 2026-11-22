@@ -2,6 +2,7 @@
 // received in packs of a size typed on the line. The medicine is sold by the tablet/capsule, keeps the pack for next
 // time, and its stock is counted in units. Fictional data only.   node v68-packs.mjs <base> <ownerKey>
 import puppeteer from 'puppeteer-core';
+import { confirmReview } from './review.mjs';
 import { CHROME } from './chrome.mjs';
 const [base, ownerKey] = process.argv.slice(2);
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -63,7 +64,7 @@ await setVal(`${row(2)} input[aria-label="Batch number"]`, 'PM1');
 await setVal(`${row(2)} input[aria-label="Expiry date"]`, '06/2030'); await wait(300);
 check('Paramol keeps its retail price (100) when received by the carton', (await val(`${row(2)} input[aria-label="New retail price"]`)) === '100', await val(`${row(2)} input[aria-label="New retail price"]`));
 await setVal('form.card select', 's1');
-await p.evaluate(() => [...document.querySelectorAll('button')].find((x) => /^Receive stock/.test(x.textContent.trim()))?.click()); await wait(1500);
+await p.evaluate(() => [...document.querySelectorAll('button')].find((x) => /^Receive stock/.test(x.textContent.trim()))?.click()); await confirmReview(p); await wait(1500);
 check('received', /Received 2 item/.test(await p.evaluate(() => document.body.innerText)), await p.evaluate(() => [...document.querySelectorAll('.toast, .notice')].map((x) => x.innerText).join(' | ')));
 await synced();
 

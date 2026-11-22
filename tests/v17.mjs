@@ -3,6 +3,7 @@
 //   node v17.mjs <base> <ownerKey> <outDir>
 import puppeteer from 'puppeteer-core';
 import { CHROME } from './chrome.mjs';
+import { confirmReview } from './review.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 const [base, ownerKey, out] = process.argv.slice(2);
@@ -283,10 +284,10 @@ await A.evaluate(() => {
 // each line to check is ticked "Checked" after comparing it with the invoice (2026-11-20)
 await A.evaluate(() => document.querySelectorAll('.line-checked').forEach((b) => b.click())); await wait(300);
 await A.evaluate(() => document.querySelector('.scan-confirm input').click()); await wait(300);
-await clickText(A, 'button', /Receive stock/); await wait(800);
-// the invoice is dated 15/10/2026, weeks ago: asked about before receiving (2026-11-22)
-check('#4 a delivery dated weeks ago is asked about first', await A.evaluate(() => /Is the delivery date right\?/.test(document.body.innerText)));
-await clickText(A, 'button', /^Keep this date$/); await wait(1500);
+await clickText(A, 'button', /Receive stock/);
+// the review before receiving: the invoice is dated 15/10/2026, weeks ago, so that is listed (2026-11-22)
+const review4 = await confirmReview(A); await wait(1500);
+check('#4 the review before receiving lists the old invoice date', /Check before receiving/.test(review4) && /Dated 15\/10\/2026, \d+ days ago \(the date read from the invoice\)/.test(review4), review4.slice(0, 400));
 const savedMsg = await A.evaluate(() => document.querySelector('.notice')?.innerText || '');
 check('#4 after checking and ticking, "Receive stock" saves it', /Received 3 item/.test(savedMsg), savedMsg);
 await go(A, '/inventory');

@@ -6,6 +6,7 @@
 // delivery saved as a draft continues and is received once, and no draft changes stock.
 //   node v41-reports-drafts.mjs <base> <ownerKey> <outDir>
 import puppeteer from 'puppeteer-core';
+import { confirmReview } from './review.mjs';
 import fs from 'node:fs';
 import { CHROME } from './chrome.mjs';
 import { asDesktopApp, APP_ARGS } from './appmode.mjs';
@@ -198,7 +199,7 @@ await go(B, '#/purchases'); await clickText(B, '.subview-btn', /^Drafts/); await
 await clickText(B, '.draft-card button', /^Continue$/);
 check('…Purchase History → Drafts → Continue brings it back into Add Stock (with its supplier)', await until(B, () => /Continuing a saved draft/.test(document.body.innerText) && document.querySelector('.page form select')?.value === 's1' && document.querySelectorAll('.page table tbody tr').length >= 1, 15000));
 await B.evaluate(() => { const i = document.querySelector('.page table input[type=date]'); if (i) { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(i, new Date(Date.now() + 400 * 864e5).toISOString().slice(0, 10)); i.dispatchEvent(new Event('input', { bubbles: true })); i.dispatchEvent(new Event('change', { bubbles: true })); } }); await wait(200);
-await clickText(B, 'button', /^Receive stock$/); await wait(1500);
+await clickText(B, 'button', /^Receive stock$/); await confirmReview(B); await wait(1500);
 check('…receiving it adds the stock once and removes the draft', await untilNode(async () => (await owner(`/tenants/${tid}/records?t=drafts`)).total === 0) && (await stock(B, 'p1')) === s0 + 1, `${s0} → ${await stock(B, 'p1')}`);
 await B.screenshot({ path: `${out}/add-stock.png`, fullPage: true });
 

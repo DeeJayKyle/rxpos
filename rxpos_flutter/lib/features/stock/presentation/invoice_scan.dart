@@ -189,6 +189,8 @@ Map<String, Object?> withLast(Map<String, Object?> base, String? productId, Phar
   return (
     form: {
       ...form, 'supplierId': x.sup?.id ?? form['supplierId'], 'invoice': x.invoice.isEmpty ? form['invoice'] : x.invoice, 'date': x.date.isEmpty ? form['date'] : x.date,
+      if (x.date.isNotEmpty) 'dateRead': true, // shown as "read from the invoice" until changed (2026-11-22)
+      if (_n(r['total']) > 0) 'invoiceTotal': '${r['total']}',
       // the lines to check first (2026-11-20), then the lines read well
       'lines': keep.isEmpty && x.lines.isEmpty ? [blankLine()] : [...keep, ...x.lines.where(needsCheck), ...x.lines.where((l) => !needsCheck(l))],
     },
@@ -203,7 +205,8 @@ Future<List<Map<String, Object?>>> scansToDrafts(RecordStore store, List<({Map<S
     for (final x in results)
       () {
         final f = fromScan(x.r, d, userName);
-        final form = {...blankForm(d.settings), 'supplierId': f.sup?.id ?? '', 'invoice': f.invoice, 'date': f.date.isEmpty ? today() : f.date, 'lines': f.lines};
+        final form = {...blankForm(d.settings), 'supplierId': f.sup?.id ?? '', 'invoice': f.invoice, 'date': f.date.isEmpty ? today() : f.date,
+          if (f.date.isNotEmpty) 'dateRead': true, if (_n(x.r['total']) > 0) 'invoiceTotal': '${x.r['total']}', 'lines': f.lines};
         final sum = f.lines.fold<double>(0, (a, l) => a + ('${l['productId']}'.isNotEmpty ? lineTotal(l) : _n(l['total'])));
         return deliveryDraft(form, id: uid(), userId: userId, userName: userName, branchId: d.branch, supplierName: f.sup?.name ?? '${x.r['supplier'] ?? ''}', total: sum,
             scan: {...f.summary, 'pages': x.pagePaths});

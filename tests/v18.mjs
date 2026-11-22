@@ -3,6 +3,7 @@
 //   node v18.mjs <base> <ownerKey> <outDir>
 import puppeteer from 'puppeteer-core';
 import { CHROME } from './chrome.mjs';
+import { confirmReview } from './review.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 const [base, ownerKey, out] = process.argv.slice(2);
@@ -109,7 +110,9 @@ await clickText('button', /Receive stock/); await wait(500);
 const pastRefused = /already passed/.test(await toastText()) || await A.evaluate(() => document.querySelectorAll('table.lines tbody tr')[1].querySelector('input[aria-label="Expiry date"]').validity.rangeUnderflow);
 check('an expiry date that has passed is refused (and nothing is saved)', pastRefused && !/Received/.test(await A.evaluate(() => document.body.innerText)), await toastText());
 await setVal('table.lines tbody tr:nth-child(2) input[aria-label="Expiry date"]', '2028-06-30');
-await clickText('button', /Receive stock/); await wait(1500);
+await clickText('button', /Receive stock/);
+const review18 = await confirmReview(A); await wait(1500);
+check('Receive stock first shows the review: supplier, lines, 1 new medicine', /Receive this delivery\?|Check before receiving/.test(review18) && /2 lines/.test(review18) && /1 new medicine/.test(review18), review18.slice(0, 300));
 const savedMsg = await A.evaluate(() => [...document.querySelectorAll('.notice')].map((x) => x.innerText).join(' '));
 check('Receive stock saves the new medicine and the delivery', /Received 2 item/.test(savedMsg) && /1 new medicine/.test(savedMsg), savedMsg);
 await A.type('.picker input', 'amoxyl 500mg caps');
@@ -335,7 +338,7 @@ check('price check lists a medicine below the 20% target margin (Cipro 500 → 5
   await setVal('table.lines tbody tr:nth-child(1) input[aria-label="Batch number"]', 'B-CIP');
   await setVal('table.lines tbody tr:nth-child(1) input[aria-label="Expiry date"]', '2028-06-30'); await wait(200);
   check('Add Stock receives by the strip and shows the tablets (2 strips = 20)', /= 20 units/.test(await A.evaluate(() => document.querySelector('table.lines tbody tr')?.innerText || '')));
-  await clickText('button', /Receive stock/); await wait(1500);
+  await clickText('button', /Receive stock/); await confirmReview(A); await wait(1500);
   const after = (await stockOf())['Ciprofloxacin 500mg tabs'];
   check('received strips add tablets to stock (+20)', after === mid + 20, `${mid} → ${after}`);
 }

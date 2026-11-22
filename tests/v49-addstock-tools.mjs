@@ -7,6 +7,7 @@ import puppeteer from 'puppeteer-core';
 import fs from 'node:fs';
 import path from 'node:path';
 import { CHROME } from './chrome.mjs';
+import { confirmReview } from './review.mjs';
 const [base, ownerKey, out] = process.argv.slice(2);
 fs.mkdirSync(out, { recursive: true });
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -131,6 +132,7 @@ check('on a phone each line is a card with its colour stripe', await p.evaluate(
 await p.screenshot({ path: path.join(out, 'add-stock-phone.png'), fullPage: true });
 await p.setViewport({ width: 1366, height: 900, deviceScaleFactor: 1 }); await wait(500);
 await p.evaluate(() => [...document.querySelectorAll('button')].find((x) => /^Receive stock/.test(x.textContent.trim()))?.click());
+await confirmReview(p);
 check('the delivery is received', await until(p, () => /Received 2 item/.test(document.body.innerText)));
 let st = await (async () => { for (let k = 0; k < 20; k++) { const r = await stock(); if (r.s['tl-alsy'] === 4) return r.s; await wait(500); } return (await stock()).s; })();
 check('stock: Alpha 40 → 50, Alphamol 0 → 4', st['tl-alpha'] === 50 && st['tl-alsy'] === 4, JSON.stringify(st));
@@ -171,6 +173,45 @@ await p.evaluate(() => { const i = [...document.querySelectorAll('.modal input')
 await p.evaluate(() => [...document.querySelectorAll('.modal button')].find((x) => /Save changes/.test(x.textContent))?.click()); await wait(1200);
 st = await (async () => { for (let k = 0; k < 20; k++) { const r = await stock(); if (r.s['tl-beta'] === 0) return r; await wait(500); } return stock(); })();
 check('the cream\'s 6 went back out and 6 syrups came in', st.s['tl-beta'] === 0 && st.s['tl-alsy'] === 6, JSON.stringify(st.s));
+
+// 9. the review before receiving (2026-11-22): the invoice total, "Use today", the same invoice twice
+const setIn = (sel, v) => p.evaluate((x, y) => { const i = document.querySelector(x); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(i, y); i.dispatchEvent(new Event('input', { bubbles: true })); }, sel, v);
+const dmy = (d) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+const fillBeta = async (invoice, qty) => {
+  await p.evaluate(() => { location.hash = '#/purchases'; }); await wait(800);
+  await p.evaluate(() => { location.hash = '#/add-stock'; }); await wait(1500);
+  await p.select('form.card select', 'tl-sup'); await wait(300);
+  await p.evaluate(() => document.querySelector('[data-testid=invoice-summary]')?.click()); await wait(200); // unfold the invoice details
+  await setIn('input[aria-label="Invoice number"]', invoice);
+  await p.focus('table.stock-lines tbody tr:first-child .med-pick input'); await p.keyboard.type('beta'); await wait(400); await p.keyboard.press('Enter'); await wait(300);
+  await setIn('table.stock-lines tbody tr:first-child input[aria-label="Quantity"]', String(qty));
+  await p.click('table.stock-lines tbody tr:first-child input[aria-label="Expiry date"]'); await p.keyboard.type('12/2031'); await p.keyboard.press('Tab'); await wait(300);
+};
+await fillBeta('INV-9', 2);
+await setIn('input[aria-label="Invoice total"]', '9999'); await wait(200);
+check('the invoice total is compared with the lines as you type', /UGX 2,999 short of the invoice/.test(await p.evaluate(() => document.querySelector('[data-testid=invoice-total-diff]')?.innerText || '')), await p.evaluate(() => document.querySelector('[data-testid=invoice-total-diff]')?.innerText || '(none)'));
+await setIn('input[aria-label="Invoice total"]', '7000'); await wait(200);
+check('…and the note goes when they match', await p.evaluate(() => !document.querySelector('[data-testid=invoice-total-diff]')));
+await p.evaluate(() => { const i = document.querySelector('input[aria-label="Delivery date"]'); i.focus(); i.select(); }); await p.keyboard.type(dmy(new Date(Date.now() - 10 * 864e5))); await p.keyboard.press('Tab'); await wait(300);
+check('a date that is not today says so, with "Use today"', /Not today/.test(await p.evaluate(() => document.querySelector('[data-testid=date-note]')?.innerText || '')), await p.evaluate(() => document.querySelector('input[aria-label="Delivery date"]').value + ' | ' + (document.querySelector('[data-testid=date-note]')?.innerText || '(no note)') + ' | ' + [...document.querySelectorAll('.toast')].map((x) => x.innerText).join(' / ')));
+await p.evaluate(() => [...document.querySelectorAll('[data-testid=date-note] button')].find((x) => /Use today/.test(x.textContent))?.click()); await wait(300);
+check('…"Use today" puts today back', (await p.evaluate(() => document.querySelector('input[aria-label="Delivery date"]').value)) === dmy(new Date()) && await p.evaluate(() => !document.querySelector('[data-testid=date-note]')));
+await p.evaluate(() => [...document.querySelectorAll('button')].find((x) => /^Receive stock/.test(x.textContent.trim()))?.click());
+const plain = await confirmReview(p);
+check('nothing unusual: the review is the summary only', /Receive this delivery\?/.test(plain) && /Sample Wholesalers Ltd · invoice INV-9/.test(plain) && /1 line, 2 units, total UGX 7,000/.test(plain), plain.slice(0, 300));
+check('…and receiving goes ahead', await until(p, () => /Received 1 item/.test(document.body.innerText)));
+const purchasesNow = async () => { for (let k = 0; k < 20; k++) { const n = ((await stock()).ex.purchases || []).length; if (n >= 2) return n; await wait(500); } return ((await stock()).ex.purchases || []).length; };
+const before = await purchasesNow();
+await fillBeta('inv 9', 1);
+await p.evaluate(() => [...document.querySelectorAll('button')].find((x) => /^Receive stock/.test(x.textContent.trim()))?.click());
+await until(p, () => /Check before receiving/.test(document.querySelector('.modal.dialog')?.innerText || ''), 5000);
+const twice = await p.evaluate(() => document.querySelector('.modal.dialog')?.innerText || '');
+check('the same invoice from the same supplier again is flagged', /Check before receiving: 1 thing to look at/.test(twice) && /Invoice inv 9 from Sample Wholesalers Ltd was already received on \d\d\/\d\d\/\d{4} \(GRN/.test(twice), twice.slice(0, 400));
+await p.screenshot({ path: path.join(out, 'receive-review.png') });
+await p.evaluate(() => [...document.querySelectorAll('.modal.dialog button')].find((x) => /Go back and fix/.test(x.textContent))?.click()); await wait(1200);
+await setIn('input[aria-label="Invoice total"]', '9999'); await wait(200);
+await p.screenshot({ path: path.join(out, 'invoice-details.png') });
+check('…"Go back and fix" receives nothing', (((await stock()).ex.purchases || []).length) === before && await p.evaluate(() => document.querySelectorAll('table.stock-lines tbody tr').length === 1));
 
 await b.close();
 await owner('/tenants/' + tid + '/delete', { confirm: T.tenant.slug });

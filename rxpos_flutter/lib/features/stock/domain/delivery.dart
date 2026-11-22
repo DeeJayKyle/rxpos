@@ -61,11 +61,9 @@ double deliveryTotal(List<DeliveryLine> lines) => lines.fold(0.0, (a, l) => a + 
 
 String _clean(String s) => s.trim().replaceAll(RegExp(r'\s+'), ' ');
 
-/// Receive the delivery. Returns the delivery record. Throws [DeliveryProblem] with what to fix (nothing is saved).
-Future<Map<String, Object?>> receiveDelivery(RecordStore store, {required List<DeliveryLine> lines, required Map<String, Product> products,
-    required PharmacySettings settings, required String receivedBy, String supplierId = '', String supplierName = '',
-    String invoice = '', String notes = '', String? date, double? paid, String bankId = 'cash-drawer', String branchId = mainBranch, DateTime? now,
-    String? poId, String? draftId, bool scanned = false}) async {
+/// What would stop a delivery being received, said before anything is saved (and before the review before receiving,
+/// delivery_checks.dart): throws [DeliveryProblem] with what to fix. Returns the lines to receive and each new medicine's id.
+({List<DeliveryLine> use, Map<String, String> freshIds}) checkDelivery(List<DeliveryLine> lines, Map<String, Product> products, {DateTime? now}) {
   final use = lines.where((l) => (l.productId != null || l.newName.trim().isNotEmpty) && l.qty > 0).toList();
   if (use.isEmpty) throw DeliveryProblem('Add at least one medicine');
   if (lines.any((l) => (l.productId != null || l.newName.trim().isNotEmpty) && !(l.qty > 0))) {
@@ -81,7 +79,6 @@ Future<Map<String, Object?>> receiveDelivery(RecordStore store, {required List<D
     freshIds.putIfAbsent(name.toLowerCase(), uid);
   }
   String nameOf(DeliveryLine l) => l.isNew ? _clean(l.newName) : (products[l.productId]?.name ?? '');
-  String idOf(DeliveryLine l) => l.isNew ? freshIds[_clean(l.newName).toLowerCase()]! : l.productId!;
   // received by a pack: its size is whole units (2 or more); a new size is added to the medicine, under a name it doesn't use yet
   for (final l in use.where((x) => x.newPack || x.recvSize > 1)) {
     final unit = (l.isNew ? unitForForm(l.form) : (products[l.productId]?.unit ?? '')).toLowerCase();
@@ -99,6 +96,18 @@ Future<Map<String, Object?>> receiveDelivery(RecordStore store, {required List<D
     if (l.expiry.isEmpty) throw DeliveryProblem('Enter the expiry date for ${nameOf(l)} (needed for first-expiry-first-out)');
     if (daysUntil(l.expiry, now: now) < 0) throw DeliveryProblem('${nameOf(l)}: the expiry date ${l.expiry} has already passed. Check the date on the pack.');
   }
+  return (use: use, freshIds: freshIds);
+}
+
+/// Receive the delivery. Returns the delivery record. Throws [DeliveryProblem] with what to fix (nothing is saved).
+Future<Map<String, Object?>> receiveDelivery(RecordStore store, {required List<DeliveryLine> lines, required Map<String, Product> products,
+    required PharmacySettings settings, required String receivedBy, String supplierId = '', String supplierName = '',
+    String invoice = '', String notes = '', String? date, double? paid, String bankId = 'cash-drawer', String branchId = mainBranch, DateTime? now,
+    String? poId, String? draftId, bool scanned = false}) async {
+  final checked = checkDelivery(lines, products, now: now);
+  final use = checked.use, freshIds = checked.freshIds;
+  String nameOf(DeliveryLine l) => l.isNew ? _clean(l.newName) : (products[l.productId]?.name ?? '');
+  String idOf(DeliveryLine l) => l.isNew ? freshIds[_clean(l.newName).toLowerCase()]! : l.productId!;
   final total = round(deliveryTotal(use), settings.decimalPlaces);
   final paidNow = paid == null ? total : max(0.0, min(paid, total));
   return store.update((d) async {

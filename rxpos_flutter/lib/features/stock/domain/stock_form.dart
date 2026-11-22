@@ -1,6 +1,6 @@
 // The Add Stock form, ported from src/pages/Purchases.jsx. The form and its lines are kept as plain maps with the React
 // app's field names, so a delivery draft saved on one app can be carried on in the other:
-//   form  { supplierId, invoice, date, paid, bankId, notes, markup, lines, draftId?, draftStartedAt?, poId? }
+//   form  { supplierId, invoice, invoiceTotal?, date, dateRead?, paid, bankId, notes, markup, lines, draftId?, draftStartedAt?, poId? }
 //   line  { key, productId ('' | '__new__' | id), name, form, qty, cost, total, price, auto, by ('unit' | 'total'),
 //           batch, expiry, recvPack?, recvSize?, basePrice?, derived?, kept?, read?, barcode? }
 // Numbers typed in the boxes are kept as text (as typed), like the React inputs.
@@ -50,7 +50,7 @@ List<Line> lines(Map<String, Object?> form) => [for (final l in (form['lines'] a
 Line blankLine() => {'key': uid(), 'hue': nextHue(), 'productId': '', 'name': '', 'form': 'Tablets', 'qty': '1', 'cost': '', 'total': '', 'price': '', 'auto': true, 'by': 'unit', 'batch': '', 'expiry': ''};
 
 Map<String, Object?> blankForm(PharmacySettings s) => {
-      'supplierId': '', 'invoice': '', 'date': today(), 'paid': '', 'bankId': 'cash-drawer', 'notes': '', 'markup': _txt(s.retailMarkup), 'lines': [blankLine()],
+      'supplierId': '', 'invoice': '', 'invoiceTotal': '', 'date': today(), 'paid': '', 'bankId': 'cash-drawer', 'notes': '', 'markup': _txt(s.retailMarkup), 'lines': [blankLine()],
     };
 
 /// "New pack size…" in Received as.
