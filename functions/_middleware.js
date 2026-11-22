@@ -3,11 +3,17 @@
 //   sends people there permanently; /api keeps working on the old address so devices that haven't installed the new
 //   release yet keep syncing until they do. The preview of the next site (web-preview.rxpos.pages.dev) is the one
 //   exception, so it can be checked before it goes live.
+// - WEB_APP below picks the app the site opens. With 'classic' (now) the home page and pharmacies' addresses open the
+//   classic app (React) and the new app's page addresses go to the home page. With 'new':
 // - The site is the RxPOS app (Flutter, its files under /app/): the home page and the app's own pages
 //   (/pos, /inventory, …) open it. Everything else is served as before: the classic app's files at the root (the
 //   installed classic apps update from them), the classic app itself at /classic/ and its owner console (/owner sends you to /classic/#/owner). A
 //   pharmacy's own address (rxposug.com/<pharmacy>, as bookmarked from the classic app) opens the new app too.
 import { FLUTTER_ROUTES } from './flutter-routes.js';
+
+// Which app the website opens: 'classic' (React) or 'new' (Flutter). The owner's choice (2026-11-22): the web version
+// stays on React. Flutter's files stay at /app/, so work left unsent in a browser that used it can still go up.
+export const WEB_APP = 'classic';
 
 const HOME = 'https://rxposug.com';
 export const OWNER_CONSOLE = '/classic/#/owner';
@@ -27,6 +33,15 @@ export async function onRequest({ request, next, env }) {
   }
   // the owner console is a page of the classic app: rxposug.com/owner is the easy address to remember
   if (url.pathname === '/owner' || url.pathname === '/owner/') return Response.redirect(url.origin + OWNER_CONSOLE, 302);
+  if (WEB_APP === 'classic' && request.method === 'GET' && isAppPage(url.pathname)) {
+    // the home page is the classic app's own page; a pharmacy's address serves it too (it reads the pharmacy from the
+    // address); the new app's page addresses (/pos, /inventory/…) go to the home page, the classic app's pages being
+    // after the # (#/pos)
+    if (url.pathname === '/') return next();
+    if (!pharmacyAddress(url.pathname)) return Response.redirect(url.origin + '/', 302);
+    const page = await env.ASSETS.fetch(new URL('/', url));
+    return new Response(page.body, { status: 200, headers: page.headers });
+  }
   if (request.method === 'GET' && isAppPage(url.pathname)) {
     // a pharmacy the owner keeps on the classic app (owner console → "New RxPOS app on the web" off): its address opens
     // the classic app, which reads the pharmacy from the address
