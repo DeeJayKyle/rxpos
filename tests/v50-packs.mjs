@@ -3,6 +3,7 @@
 // Stock is checked in the cloud's own records.
 //   node v50-packs.mjs <base> <ownerKey> <outDir>
 import puppeteer from 'puppeteer-core';
+import { confirmReview } from './review.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { CHROME } from './chrome.mjs';
@@ -60,6 +61,7 @@ await setVal('table.stock-lines tbody tr:first-child input[aria-label="Line tota
 await setVal('table.stock-lines tbody tr:first-child input[aria-label="Batch number"]', 'PM2');
 await p.click('table.stock-lines tbody tr:first-child input[aria-label="Expiry date"]'); await p.keyboard.type('31/12/2030'); await p.keyboard.press('Tab'); await wait(300);
 await p.evaluate(() => [...document.querySelectorAll('button')].find((x) => /^Receive stock/.test(x.textContent.trim()))?.click());
+await confirmReview(p);
 check('the delivery is received', await until(p, () => /Received 1 item/.test(document.body.innerText)));
 let st = 0; for (let k = 0; k < 20 && st !== 350; k++) { st = await stockOf(); if (st !== 350) await wait(500); }
 check('stock 150 → 350 tablets', st === 350, st);

@@ -26,3 +26,14 @@ export function normDate(v, { endOfMonth = true } = {}) {
   return isNaN(d) ? '' : d.toISOString().slice(0, 10);
 }
 
+
+/** Days a delivery date lies before [todayStr] when that is more than [days] (0 otherwise, or for an unreadable date).
+ * A wrong date (often read off a scanned invoice) files the delivery away from today's in Purchase history and
+ * the day's reports, so Add Stock asks before receiving with it (2026-11-22). */
+export const OLD_DELIVERY_DAYS = 3;
+export function oldDeliveryDays(date, todayStr, days = OLD_DELIVERY_DAYS) {
+  const re = /^\d{4}-\d{2}-\d{2}$/;
+  if (!re.test(String(date || '')) || !re.test(String(todayStr || ''))) return 0;
+  const n = Math.round((Date.parse(todayStr) - Date.parse(date)) / 864e5);
+  return n > days ? n : 0;
+}

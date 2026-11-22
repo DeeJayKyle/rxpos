@@ -4,6 +4,7 @@
 // the upload of the pages, the drafts, the review and receiving the stock are the real thing.
 //   node v47-scan-drafts.mjs <base> <ownerKey> <outDir>
 import puppeteer from 'puppeteer-core';
+import { confirmReview } from './review.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { CHROME } from './chrome.mjs';
@@ -91,6 +92,9 @@ await p.evaluate(() => document.querySelectorAll('.line-checked').forEach((b) =>
 await p.evaluate(() => { const c = document.querySelector('.scan-confirm input'); c?.click(); });
 await wait(300);
 await click(p, /^Receive stock/);
+// the review before receiving: the invoice is dated 2026-10-28, weeks ago, so that is listed (2026-11-22)
+const review = await confirmReview(p);
+check('the review before receiving lists the old invoice date', /Check before receiving/.test(review) && /days ago \(the date read from the invoice\)/.test(review), review.slice(0, 400));
 check('received: the stock is in and the draft is gone', await until(p, () => /Received 2 item/.test(document.body.innerText), 15000), await text(p).then((t) => t.slice(0, 300)));
 await p.evaluate(() => { location.hash = '#/purchases'; }); await wait(1500);
 await click(p, /^Drafts/, 'button, [role=tab]'); await wait(800);

@@ -19,6 +19,7 @@ const SUITES = [
   ['a borrowed sign-in confirms before a personal cloud call (unit)', 'unit-person-guard.mjs', []],
   ['invoice reading cross-check (unit)', 'unit-invoice-read.mjs', []],
   ['invoice lines matched to medicines, photo clean-up (unit)', 'unit-invoice-match.mjs', []],
+  ['the review before a delivery is received (unit)', 'unit-delivery-checks.mjs', []],
   ['past sales into shifts (unit)', 'unit-shifts-from-sales.mjs', []],
   ['consistent medicine names (unit)', 'unit-medname.mjs', []],
   ['the same item under different names, merged on approval (unit)', 'unit-medmerge.mjs', []],

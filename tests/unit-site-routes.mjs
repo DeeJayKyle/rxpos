@@ -1,6 +1,6 @@
 // Which addresses of rxposug.com open the RxPOS app (functions/_middleware.js isAppPage).
 //   node unit-site-routes.mjs
-import { isAppPage, onRequest, pharmacyAddress, webAppFor } from '../functions/_middleware.js';
+import { isAppPage, onRequest, pharmacyAddress, webAppFor, WEB_APP } from '../functions/_middleware.js';
 let pass = 0, fail = 0;
 const check = (n, ok, x = '') => { ok ? pass++ : fail++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${n}${x !== '' ? '  ' + x : ''}`); };
 
@@ -24,5 +24,18 @@ globalThis.fetch = reply(200, { app: 'classic' });
 const page = await onRequest({ request: new Request('https://rxposug.com/oldpharm'), next: () => new Response('next'), env: classicSite });
 globalThis.fetch = realFetch;
 check('its address then serves the classic page', (await page.text()) === 'classic');
+// the owner's choice (2026-11-22): the website opens the classic app (React), whatever a pharmacy's setting says
+check('the website opens the classic app', WEB_APP === 'classic');
+const site = { ASSETS: { fetch: async (u) => new Response(new URL(u).pathname === '/' ? 'classic' : 'flutter') } };
+const home = await onRequest({ request: new Request('https://rxposug.com/'), next: () => new Response('classic root'), env: site });
+check('the home page is the classic page', (await home.text()) === 'classic root');
+globalThis.fetch = reply(200, { app: 'new' });
+const own = await onRequest({ request: new Request('https://rxposug.com/newpharm'), next: () => new Response('next'), env: site });
+globalThis.fetch = realFetch;
+check("a pharmacy's address serves the classic page, even one set to the new app", (await own.text()) === 'classic');
+const pos = await onRequest({ request: new Request('https://rxposug.com/inventory/x'), next: () => new Response('next'), env: site });
+check("the new app's page addresses go to the home page", pos.status === 302 && pos.headers.get('location') === 'https://rxposug.com/', `${pos.status} ${pos.headers.get('location')}`);
+const files = await onRequest({ request: new Request('https://rxposug.com/app/main.dart.js'), next: () => new Response('next'), env: site });
+check("the new app's files are still served (/app/)", (await files.text()) === 'next');
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

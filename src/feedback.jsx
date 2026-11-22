@@ -117,7 +117,7 @@ function Dialog({ dialog, value, setValue, inputRef, tooShort, close }) {
             onSubmit={(e) => { e.preventDefault(); if (!tooShort) close(dialog.input ? value : true); }}>
             <div className={'dialog-icon ' + (dialog.danger ? 'danger' : 'info')}>{dialog.danger ? <AlertTriangle size={22} /> : <Info size={22} />}</div>
             <h3 id={titleId}>{dialog.title || (dialog.danger ? 'Are you sure?' : 'Please confirm')}</h3>
-            {dialog.message && <p className="muted" id={msgId}>{dialog.message}</p>}
+            {dialog.message && <p className="muted" id={msgId} style={{ whiteSpace: 'pre-line' }}>{dialog.message}</p>}
             {/* D10: what a danger dialog will do, in counts ("3 batches and their history") */}
             {dialog.effects?.length > 0 && <ul className="dialog-effects">{dialog.effects.filter(Boolean).map((x) => <li key={x}>{x}</li>)}</ul>}
             {dialog.input && (dialog.type === 'password'

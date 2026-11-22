@@ -82,6 +82,10 @@ void main() {
       expect(checkForm({...blankForm(s)}, scanned: true), contains('Tick'));
       expect(belowCost({...blankForm(s), 'lines': [{...lineFor(zinc, s), 'price': '100'}]}, {'p2': zinc}), ['Zinco Syrup 100ml']);
     });
+    test('a delivery dated more than 3 days ago is asked about (as src/invoicedates.js)', () {
+      expect([oldDeliveryDays('2026-11-12', '2026-11-22'), oldDeliveryDays('2026-11-19', '2026-11-22'), oldDeliveryDays('2026-11-18', '2026-11-22'),
+        oldDeliveryDays('2026-11-22', '2026-11-22'), oldDeliveryDays('', '2026-11-22'), oldDeliveryDays('2025-11-22', '2026-11-22')], [10, 0, 4, 0, 0, 365]);
+    });
   });
 
   test('dates typed in the device format; month/year is the end of the month', () {
@@ -122,6 +126,7 @@ void main() {
       final x = applyScan(r, blankForm(s), d, user: 'Tia');
       final ls = lines(x.form);
       expect((x.form['supplierId'], x.form['invoice'], x.form['date']), ('s1', 'INV-9', '2026-11-05'));
+      expect((x.form['invoiceTotal'], x.form['dateRead']), ('9300', true), reason: 'the invoice total to compare with, the date marked as read (2026-11-22)');
       // the line to check comes first (2026-11-20), then the lines read well in invoice order
       expect((ls[1]['productId'], ls[1]['recvPack'], ls[1]['cost'], ls[1]['expiry'], ls[1]['price']), ('p1', 'Box', '3100', '2027-12-30', '60'));
       expect((ls[0]['price'], ls[2]['by'], ls[2]['total'], ls[2]['cost'], ls[2]['price']), ('', 'total', '6000', '3000', '60'),

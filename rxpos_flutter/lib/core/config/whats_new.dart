@@ -1,7 +1,9 @@
 // What's new (UI batch 3, B8): the same list as src/whatsnew.js (tests/unit-whatsnew.mjs checks they match). Shown
 // once on each device after an update, as a small card on the dashboard.
-const whatsNewVersion = '1.19.1';
+const whatsNewVersion = '1.20.0';
 const whatsNewItems = <(String, String)>[
+  ('Add Stock: a review before Receive stock lists anything to check: an old date, the same invoice twice, a total that doesn’t match, cost jumps, very large quantities, short expiry', '/add-stock'),
+  ('Add Stock: an Invoice total box compared with the lines, and “Use today” when the date isn’t today', '/add-stock'),
   ('Scan invoices better: photos cleaned up, handwriting and abbreviations matched, lines to check first', '/add-stock'),
   ('Add Stock: start with the scan, details fold to one line, each line ticked “Checked”, the supplier’s pack and markup remembered', '/add-stock'),
   ('The same medicine under two names: merged when you approve (Medicine List → Tidy names)', '/medicines'),

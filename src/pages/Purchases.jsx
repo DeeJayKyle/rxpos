@@ -28,6 +28,7 @@ import { deliveryDraft, draftsFor, isOld, toCheck, checkText, needsCheck } from 
 import DraftsList, { useDraftCount } from './Drafts.jsx';
 import { Link, useNavigate } from 'react-router-dom';
 import InvoiceView from '../components/InvoiceView.jsx';
+import { deliveryReview } from '../deliverychecks.js';
 import { emptyCheck, scanInto, checkSummary } from '../deliverycheck.js';
 import { usePageMenu } from '../pagemenu.js';
 
@@ -104,7 +105,7 @@ export function AddStock() {
   const pageUrls = (paths) => (paths || []).map((x) => safeFileUrl(syncCfg.url, x)).filter(Boolean);
   const [scanned, setScanned] = useState(() => (resumed?.scan ? { ...resumed.scan, pagePaths: resumed.scan.pages || [], pages: pageUrls(resumed.scan.pages) } : null)); // { pages, pagePaths, supplier, invoiceNo, total, … } after an invoice was read
   const [checked, setChecked] = useState(false); // the person confirms they checked the scanned lines
-  const blank = () => ({ supplierId: '', invoice: '', date: today(), paid: '', bankId: CASH, notes: '', markup: s.retailMarkup ?? 50, lines: [blankLine()] });
+  const blank = () => ({ supplierId: '', invoice: '', invoiceTotal: '', date: today(), paid: '', bankId: CASH, notes: '', markup: s.retailMarkup ?? 50, lines: [blankLine()] });
   const priceAt = (markup) => (cost) => markupPrice(cost, markup, s.priceRound);
   // A line for a medicine already in the list: its current cost and price, with the totals worked out
   const lineFor = (p, extra = {}) => {
@@ -156,7 +157,8 @@ export function AddStock() {
       const keep = f.lines.filter((l) => l.productId);
       // the lines to check first (2026-11-20): the person sees what needs them before the lines read well
       const ordered = [...lines.filter(needsCheck), ...lines.filter((l) => !needsCheck(l))];
-      return { ...f, supplierId: sup?.id || f.supplierId, invoice: invoice || f.invoice, date: date || f.date, lines: keep.length || ordered.length ? [...keep, ...ordered] : [blankLine()] };
+      return { ...f, supplierId: sup?.id || f.supplierId, invoice: invoice || f.invoice, date: date || f.date, ...(date ? { dateRead: true } : {}),
+        ...(Number(r.total) > 0 ? { invoiceTotal: String(r.total) } : {}), lines: keep.length || ordered.length ? [...keep, ...ordered] : [blankLine()] };
     });
     setScanned({ ...summary, pages, pagePaths });
     setChecked(false);
@@ -177,7 +179,7 @@ export function AddStock() {
   const saveScanDrafts = async (results) => {
     const recs = results.map(({ r, pagePaths }) => {
       const { sup, lines, summary, invoice, date } = fromScan(r, s.retailMarkup ?? 50);
-      const f = { ...blank(), supplierId: sup?.id || '', invoice, date: date || today(), lines };
+      const f = { ...blank(), supplierId: sup?.id || '', invoice, date: date || today(), ...(date ? { dateRead: true } : {}), ...(Number(r.total) > 0 ? { invoiceTotal: String(r.total) } : {}), lines };
       const sum = lines.reduce((a, l) => a + (l.productId ? lineTotal(l) : Number(l.total) || 0), 0);
       return deliveryDraft(f, { id: uid(), user, branchId, supplierName: sup?.name || r.supplier, total: sum, scan: { ...summary, pages: pagePaths } });
     });
@@ -446,8 +448,16 @@ export function AddStock() {
     if (noExpiry) return toast(`Enter the expiry date for ${nameOf(noExpiry)} (needed for first-expiry-first-out)`, 'warn');
     const expired = lines.find((l) => daysUntil(l.expiry) < 0);
     if (expired) return toast(`${nameOf(expired)}: the expiry date ${expired.expiry} has already passed. Check the date on the pack.`, 'error');
-    const below = lines.filter((l) => Number(l.price) > 0 && Number(l.price) < baseCost(l));
-    if (below.length && !(await ask({ title: 'Selling below cost?', message: `${below.map(nameOf).slice(0, 5).join(', ')}${below.length > 5 ? '…' : ''}: the retail price is lower than the cost. Receive anyway?`, confirmText: 'Receive anyway' }))) return;
+    // the review before receiving (src/deliverychecks.js, the owner's request 2026-11-22): what is about to go in, and
+    // anything worth a second look (the date, the same invoice again, the invoice total, costs, quantities, expiry, price)
+    const review = deliveryReview({
+      lines: lines.map((l) => ({ productId: l.productId === NEW ? null : l.productId, name: nameOf(l), qty: Number(l.qty) * (Number(l.recvSize) || 1), cost: baseCost(l), price: Number(l.price) || 0, expiry: l.expiry })),
+      products: new Map(products.map((p) => [p.id, p])), purchases: db.purchases, supplierId: form.supplierId, supplierName: db.suppliers.find((x) => x.id === form.supplierId)?.name || '',
+      invoice: form.invoice, date: form.date || today(), today: today(), total, invoiceTotal: form.invoiceTotal, dateRead: !!form.dateRead,
+    }, { money: fmt, date: showDate });
+    const n = review.warnings.length;
+    if (!(await ask({ title: n ? `Check before receiving: ${n} thing${n === 1 ? '' : 's'} to look at` : 'Receive this delivery?', message: review.summary.join('\n'),
+      effects: review.warnings, confirmText: n ? 'Receive anyway' : 'Yes, receive', cancelText: 'Go back and fix' }))) return;
 
     const supplier = db.suppliers.find((x) => x.id === form.supplierId);
     const paid = form.paid === '' ? total : Math.max(0, Math.min(Number(form.paid) || 0, total));
@@ -632,7 +642,10 @@ export function AddStock() {
           <div className="invoice-meta">
             <div className="invoice-title">Purchase invoice<small>Goods received{branchId !== MAIN_BRANCH ? ` · ${db.branches.find((x) => x.id === branchId)?.name || ''}` : ''}</small></div>
             <label className="invoice-meta-row"><span>Invoice no.</span><input value={form.invoice} placeholder="as on the invoice" onChange={(e) => setForm({ ...form, invoice: e.target.value })} aria-label="Invoice number" /></label>
-            <label className="invoice-meta-row"><span>Date <DateFormatChoice fmt={dateFmt} /></span><DateInput value={form.date} max={today()} onChange={(v) => setForm((f) => ({ ...f, date: v || today() }))} aria-label="Delivery date" /></label>
+            <label className="invoice-meta-row"><span>Invoice total</span><input type="number" min="0" step="any" value={form.invoiceTotal ?? ''} placeholder="as printed on the invoice" onChange={(e) => setForm({ ...form, invoiceTotal: e.target.value })} aria-label="Invoice total" /></label>
+            {Number(form.invoiceTotal) > 0 && Math.abs(Number(form.invoiceTotal) - total) >= 1 && <div className="invoice-meta-note small text-warn" data-testid="invoice-total-diff">The lines add up to {fmt(total)}: {fmt(Math.abs(Number(form.invoiceTotal) - total))} {Number(form.invoiceTotal) > total ? 'short of' : 'over'} the invoice</div>}
+            <label className="invoice-meta-row"><span>Date <DateFormatChoice fmt={dateFmt} /></span><DateInput value={form.date} max={today()} onChange={(v) => setForm((f) => ({ ...f, date: v || today(), dateRead: false }))} aria-label="Delivery date" /></label>
+            {form.date && form.date !== today() && <div className="invoice-meta-note small" data-testid="date-note"><span className={form.dateRead ? 'text-warn' : 'muted'}>{form.dateRead ? 'Read from the invoice: check it' : 'Not today'}</span> <button type="button" className="link-btn small" onClick={() => setForm((f) => ({ ...f, date: today(), dateRead: false }))}>Use today</button></div>}
             {form.supplierId && <button type="button" className="link-btn small invoice-fold" onClick={() => setHeadOpen(false)}>Done: fold these details</button>}
             <label className="invoice-meta-row"><span>Retail markup %</span><input type="number" min="0" step="any" value={form.markup} onChange={(e) => setMarkup(e.target.value)} aria-label="Retail markup for worked-out prices (%)" title="Only for the suggested price (tap “Use” on a line); no price changes by itself" /></label>
           </div>

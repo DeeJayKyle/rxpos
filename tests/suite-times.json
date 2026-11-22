@@ -6,6 +6,7 @@
  "unit-person-guard.mjs":0,
  "unit-invoice-read.mjs":0,
  "unit-invoice-match.mjs":0,
+ "unit-delivery-checks.mjs":0,
  "unit-shifts-from-sales.mjs":0,
  "unit-owner-law.mjs":0,
  "unit-medname.mjs":0,
