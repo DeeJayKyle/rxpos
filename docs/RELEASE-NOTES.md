@@ -1,5 +1,17 @@
 # RxPOS release notes
 
+## React (classic) app 1.20.0 · Flutter app (next build) · November 2026 (fewer mistakes in Add Stock)
+
+- **The review before receiving** (both apps): Receive stock first sums the delivery up (supplier, invoice, date,
+  lines, units, total, new medicines, price changes) and lists what is worth a second look: a date more than 3 days
+  ago (often read off a scanned invoice), the same supplier's invoice number already received, an invoice total that
+  doesn't match the lines, a unit cost twice or half the last one, a quantity 5 times the most received before, stock
+  expiring within 6 months, a retail price below cost. Nothing is refused by it: "Receive anyway" or "Go back and fix".
+- **Invoice total** box on the delivery (filled in from a scan), compared with the lines as you type; a date that is
+  not today says so ("Read from the invoice: check it" after a scan), with **Use today**.
+- **The website** (rxposug.com and each pharmacy's address) opens the classic (React) app again, the owner's choice;
+  the Flutter web app stays at rxposug.com/app/ so work left unsent in it can still go up.
+
 ## React (classic) app 1.19.1 · November 2026
 
 - The owner's law is readable at `/ai-policy.txt` (and `/.well-known/ai-policy.txt`) on rxposug.com and
