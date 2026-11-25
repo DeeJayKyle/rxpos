@@ -7,6 +7,7 @@ import puppeteer from 'puppeteer-core';
 import fs from 'node:fs';
 import path from 'node:path';
 import { CHROME } from './chrome.mjs';
+import { WHATS_NEW } from '../src/whatsnew.js';
 const [base, ownerKey, out = '.output/v77'] = process.argv.slice(2);
 fs.mkdirSync(out, { recursive: true });
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -56,7 +57,7 @@ const widgets = () => p.evaluate(() => [...document.querySelectorAll('.dash-cell
 check('clean layout: figures, the bento row, chart, health, top medicines, latest sales, busy hours', JSON.stringify(await widgets()) === JSON.stringify(['figures', 'bento', 'chart', 'health', 'top', 'recent', 'busy']), JSON.stringify(await widgets()));
 check('header: no repeated search or bell (the top bar\'s show), today\'s date in the greeting\'s line', await p.evaluate(() => !document.querySelector('.dash-search') && !document.querySelector('.dash-bell') && !!document.querySelector('.topbar .search-trigger')?.offsetParent && !!document.querySelector('.topbar > .bell button[aria-label^=Notifications]')?.offsetParent && /\d{4}/.test(document.querySelector('.welcome .sub .date-pill')?.innerText || '')));
 // UI batch 3, B1-B8
-check('B8 what\'s new: shown once after an update', await p.evaluate(() => /What.s new in 1\.20\.0/.test(document.querySelector('.whats-new')?.innerText || '') && !!document.querySelector('.whats-new a')), await p.evaluate(() => localStorage.getItem('rxpos-device')));
+check('B8 what\'s new: shown once after an update', await p.evaluate((v) => (document.querySelector('.whats-new')?.innerText || '').includes(`new in ${v}`) && !!document.querySelector('.whats-new a'), WHATS_NEW.version), await p.evaluate(() => localStorage.getItem('rxpos-device')));
 check('B7 setup checklist: medicines and stock ticked from the data, staff not yet', await p.evaluate(() => { const st = (id) => document.querySelector(`.setup-steps [data-step=${id}]`)?.classList.contains('done'); return st('medicines') && st('stock') && st('staff') === false && /of 6 done/.test(document.querySelector('.setup-card').innerText); }));
 // 1.16.0 (the owner's clean-up): the bento row keeps the week at a glance and the next step; the daily chart and the
 // latest sales are the dashboard's own (no copies), and there is one period picker
