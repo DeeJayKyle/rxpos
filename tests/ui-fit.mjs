@@ -158,12 +158,18 @@ await P.screenshot({ path: path.join(out, 'small-phone-owner.png') });
 await P.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true }); await P.goto(base + '/' + slug + '#/', { waitUntil: 'domcontentloaded' }); await wait(2000);
 const hash = () => P.evaluate(() => location.hash);
 // a tab, then wait for its page (a slow runner can drop a tap made while the previous page change is finishing: tap once more)
-const tabTo = async (label, path) => {
+const tabTo = async (label, page) => {
   // a slow CI machine can still be finishing the last page's glide: try up to 4 times, 5 s each
   for (let attempt = 0; attempt < 4; attempt++) {
     await P.evaluate((l) => [...document.querySelectorAll('.bottom-nav a')].find((a) => a.textContent.trim() === l)?.click(), label);
-    for (let t = 0; t < 50; t++) { if ((await hash()) === '#' + path) break; await wait(100); }
-    if ((await hash()) === '#' + path) break;
+    for (let t = 0; t < 50; t++) { if ((await hash()) === '#' + page) break; await wait(100); }
+    if ((await hash()) === '#' + page) break;
+  }
+  // say so here, with what was on screen, rather than letting the checks after it fail on the wrong page
+  if ((await hash()) !== '#' + page) {
+    await P.screenshot({ path: path.join(out, `phone-tab-${label}-not-opened.png`) }).catch(() => {});
+    const seen = await P.evaluate(() => ({ dialog: document.querySelector('[role=dialog], .modal')?.innerText?.slice(0, 120) || '', tabs: [...document.querySelectorAll('.bottom-nav a')].map((a) => a.textContent.trim()) }));
+    check(`phone: the ${label} tab opens its page`, false, `${await hash()} ${JSON.stringify(seen)}`);
   }
   await wait(500);
 };
