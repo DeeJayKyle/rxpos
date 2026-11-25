@@ -96,7 +96,8 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "RxPOS"
+      "shortcutName": "RxPOS",
+      "artifactName": "RxPOS-Setup.exe"
     },
     "portable": {
       "artifactName": "RxPOS-Portable-${version}.exe"

@@ -271,9 +271,11 @@ async function readTicket(env, ticket) {
 // ---------- tenants ----------
 const DEFAULT_FEATURES = { catalog: true, branches: true, wholesale: true, proformas: true, prescriptions: true, finance: true, reports: true, reminders: true,
   chat: true, labels: true, import: true, reorder: true, transfers: true, momo: true, drugInfo: true, shifts: true,
-  promos: true, hourly: true, calendar: true, weather: true, ai: true, aiPremium: true, newApp: true };
-/** Which web app a pharmacy uses (owner console → features → "New RxPOS app on the web"): 'new' or 'classic' */
-const webAppOf = (t) => (JSON.parse(t?.features || '{}').newApp === false ? 'classic' : 'new');
+  promos: true, hourly: true, calendar: true, weather: true, ai: true, aiPremium: true };
+/** Which web app a pharmacy uses: always the React app ('classic'), the owner's decision (25 Nov 2026: the Flutter app is
+ *  retired, archive/README.md). A browser still on the old Flutter web app is sent to it at sign-in. A stored
+ *  features.newApp is no longer read. */
+const webAppOf = () => 'classic';
 
 /** The original single-pharmacy deployment becomes tenant "main", keyed by the SYNC_KEY secret. */
 let mainChecked = false; // once per Worker instance; writes only if the main pharmacy's sync key changed

@@ -1,5 +1,5 @@
-// Web sign-in (2026-11-15): "Browser or app?" says what each is for and links the newest Windows and Android apps
-// the cloud serves (falls back to the release page); the visitor's own device comes first; iPhone / Mac get a note;
+// Web sign-in (2026-11-15): "Browser or app?" says what each is for and links the React app's Windows installer and
+// Android app in the newest release (the Flutter apps are retired, 2026-11-25); the visitor's own device comes first; iPhone / Mac get a note;
 // the installed apps don't show it. Fictional data only.
 //   node v81-app-downloads.mjs <base> <ownerKey> <outDir>
 import puppeteer from 'puppeteer-core';
@@ -21,20 +21,12 @@ const AND = 'Mozilla/5.0 (Linux; Android 14; SM-A146P) AppleWebKit/537.36 (KHTML
 const IOS = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1';
 const b = await puppeteer.launch({ executablePath: CHROME, headless: true, args: APP_ARGS });
 const errors = [];
-async function open({ ua, w = 1280, h = 860, manifests = true, app = false }) {
+async function open({ ua, w = 1280, h = 860, app = false }) {
   const p = await (await b.createBrowserContext()).newPage();
   p.on('pageerror', (e) => errors.push(e.message));
   await p.setUserAgent(ua);
   await p.setViewport({ width: w, height: h, isMobile: w < 600, hasTouch: w < 600 });
   if (app) await asDesktopApp(p, base);
-  if (!app) await p.setRequestInterception(true);
-  if (!app) p.on('request', (r) => {
-    const u = r.url();
-    if (manifests && u.endsWith('/api/app/flutter-windows.json')) return r.respond({ status: 200, contentType: 'application/json', body: JSON.stringify({ build: 154, label: '2.1.154', file: 'RxPOS-New-154.exe', size: 89128960 }) });
-    if (manifests && u.endsWith('/api/app/flutter-android.json')) return r.respond({ status: 200, contentType: 'application/json', body: JSON.stringify({ build: 154, label: '2.1.154', file: 'RxPOS-New-154.apk', size: 31457280 }) });
-    if (!manifests && /\/api\/app\/flutter-/.test(u)) return r.respond({ status: 404, contentType: 'application/json', body: '{"error":"Not found"}' });
-    r.continue();
-  });
   await p.goto(base + '/' + slug, { waitUntil: 'networkidle2' }); await wait(800);
   return p;
 }
@@ -46,8 +38,8 @@ const txt = await p.evaluate(() => document.querySelector('.app-downloads').inne
 check('…says what the browser is for (online only, nothing kept) and what the app adds (offline, devices, updates)', /Needs the internet the whole time/.test(txt) && /keeps nothing on this computer/.test(txt) && /keeps selling when the internet drops/.test(txt) && /updates itself/.test(txt));
 check('…same account and data in the app', /Same account and data/.test(txt));
 let l = await links(p);
-check('Windows browser: Windows first and highlighted, with version and size', l[0].k === 'windows' && l[0].primary && /this device/.test(l[0].text) && /v2\.1\.154/.test(l[0].text) && /85 MB/.test(l[0].text), JSON.stringify(l[0]));
-check('…direct links to the newest apps the cloud serves', l.find((x) => x.k === 'windows').href.endsWith('/api/app/RxPOS-New-154.exe') && l.find((x) => x.k === 'android').href.endsWith('/api/app/RxPOS-New-154.apk'), JSON.stringify(l));
+check('Windows browser: Windows first and highlighted', l[0].k === 'windows' && l[0].primary && /this device/.test(l[0].text) && /newest release/.test(l[0].text), JSON.stringify(l[0]));
+check('…direct links to the React app\'s installer and Android app in the newest release', l.find((x) => x.k === 'windows').href === 'https://github.com/DeeJayKyle/rxpos/releases/latest/download/RxPOS-Setup.exe' && l.find((x) => x.k === 'android').href === 'https://github.com/DeeJayKyle/rxpos/releases/latest/download/RxPOS-Android.apk', JSON.stringify(l));
 await p.screenshot({ path: path.join(out, 'signin-windows.png') });
 await p.close();
 
@@ -61,11 +53,6 @@ await p.close();
 
 p = await open({ ua: IOS, w: 390, h: 844 });
 check('iPhone: says there is no iPhone / Mac app yet', /no RxPOS app for iPhone, iPad or Mac yet/.test(await p.evaluate(() => document.querySelector('.app-downloads')?.innerText || '')));
-await p.close();
-
-p = await open({ ua: WIN, manifests: false });
-l = await links(p);
-check('cloud has no app files: both buttons open the release page', l.every((x) => /github\.com\/DeeJayKyle\/rxpos\/releases\/latest$/.test(x.href)), JSON.stringify(l));
 await p.close();
 
 p = await open({ ua: WIN, app: true });

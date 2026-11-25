@@ -51,15 +51,13 @@ check('owner creates a second admin', s === 200 && j.user.role === 'admin' && !j
 check('owner edits web address and features', s === 200 && j.tenant.slug === 'testrx' && j.tenant.features.promos === false);
 [s, j] = await call('/api/login', { body: { email: 'two@test.rx', password: 'second-pass-1', tenant: 'testrx' } });
 check('sign-in works at the new address', s === 200, j.error);
-check('a pharmacy is on the new web app unless the owner says otherwise', j.app === 'new', j.app);
-[s, j] = await call(`/api/owner/tenants/${tid}`, { auth: ownerKey, body: { features: { chat: true, promos: false, newApp: false } } });
+check('every pharmacy is on the React web app (the Flutter app is retired)', j.app === 'classic', j.app);
 [s, j] = await call('/api/pharmacy/testrx');
-check('owner keeps a pharmacy on the classic app: its address says so', s === 200 && j.app === 'classic', j.app);
-[s, j] = await call('/api/login', { body: { email: 'two@test.rx', password: 'second-pass-1', tenant: 'testrx' } });
-check('…and so does its sign-in', s === 200 && j.app === 'classic', j.app);
+check('…its address says so', s === 200 && j.app === 'classic', j.app);
+// an old stored "New RxPOS app on the web" setting no longer sends anyone to the retired Flutter app
 await call(`/api/owner/tenants/${tid}`, { auth: ownerKey, body: { features: { chat: true, promos: false, newApp: true } } });
 [s, j] = await call('/api/login', { body: { email: 'two@test.rx', password: 'second-pass-1', tenant: 'testrx' } });
-check('back on the new app', s === 200 && j.app === 'new', j.app);
+check('…whatever an old newApp setting says', s === 200 && j.app === 'classic', j.app);
 // payroll: only people with the Payroll permission may change staff pay records or download them
 const hrTok = j.token;
 [s, j] = await call(`/api/owner/tenants/${tid}/users`, { auth: ownerKey, body: { user: { name: 'Cal Cashier', email: 'cal@test.rx', role: 'cashier', password: 'cal-pass-1234' } } });
