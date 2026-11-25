@@ -1,6 +1,6 @@
 // ESLint for the React app, the cloud, the hub, the Windows shell, tests and scripts (workplan step 17).
 //   npm run lint        (CI runs it on every push and pull request: .github/workflows/build.yml)
-// The Flutter app has its own analyzer (rxpos_flutter/analysis_options.yaml).
+// archive/ (the retired Flutter app and its tooling) is not linted: it is kept only for reference.
 import js from '@eslint/js';
 import reactHooks from 'eslint-plugin-react-hooks';
 import globals from 'globals';
@@ -10,7 +10,7 @@ const unused = ['error', { args: 'after-used', argsIgnorePattern: '^_', caughtEr
 const base = { 'no-unused-vars': unused, 'no-empty': ['error', { allowEmptyCatch: true }] };
 
 export default [
-  { ignores: ['dist/**', 'release/**', 'android/**', 'rxpos_flutter/**', 'node_modules/**', 'tests/.state/**', 'tests/.output/**', '.output/**', 'server/hub-core.mjs', 'hub-data/**', '.harness*/**', 'site/**', 'out/**'] },
+  { ignores: ['dist/**', 'release/**', 'android/**', 'archive/**', 'node_modules/**', 'tests/.state/**', 'tests/.output/**', '.output/**', 'server/hub-core.mjs', 'hub-data/**', '.harness*/**', 'site/**', 'out/**'] },
   js.configs.recommended,
   {
     // the app (browser, Electron renderer, Android WebView)

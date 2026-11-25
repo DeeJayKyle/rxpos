@@ -16,4 +16,9 @@ The owner's standing rule (20 Nov 2026), above every other rule here, for every 
 5. In the apps, AI only suggests (medicine names, invoice matches, shifts from past sales): a person approves each
    change before it is saved. Never add an AI feature that writes without that approval.
 
+## One app: the React app
+
+The owner's rule (25 Nov 2026): all work and upgrades go into the React app (`src/`, the cloud in `worker/`). The
+Flutter app is retired and kept read-only in `archive/`: never change, build or release it.
+
 Everything else about working on RxPOS (the shortest way, tests, releases) is in CLAUDE.md and MAINTENANCE.md.
