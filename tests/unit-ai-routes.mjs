@@ -11,6 +11,7 @@ import os from 'node:os';
 import path from 'node:path';
 import nodeCrypto from 'node:crypto';
 import { createClient } from '@libsql/client';
+import { CLAUDE_MODEL, claudeOn, textLayer } from '../worker/claude-reader.js';
 import { aiRoutes, idleRoutes, cleanIdleCards, IDLE_SUBJECTS, IMAGE_MODEL, cleanCommand, cleanInvoiceLines, cleanPrescription, cleanDiagnosis, scrubTelemetry, isoExpiry, COPILOT_MODEL, VISION_MODEL, FALLBACK_MODEL } from '../worker/ai-routes.js';
 
 crypto.subtle.timingSafeEqual ??= (a, b) => nodeCrypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
@@ -28,7 +29,17 @@ const fakeAi = (answers) => {
 const all = async () => true;
 const none = async () => false;
 const only = (...perms) => async (p) => perms.includes(p);
-const call = async (env, p, body, can = all) => { const r = await aiRoutes(env, p, body, can, json); return { status: r.status, j: await r.json() }; };
+const call = async (env, p, body, can = all, opts) => { const r = await aiRoutes(env, p, body, can, json, opts); return { status: r.status, j: await r.json() }; };
+/** A fake Anthropic client (env.CLAUDE): answers in order, records every request */
+const fakeClaude = (...answers) => {
+  const calls = [];
+  return { calls, beta: { messages: { create: async (req) => {
+    calls.push(req);
+    const a = answers[Math.min(calls.length, answers.length) - 1];
+    if (a instanceof Error) throw a;
+    return typeof a === 'object' ? a : { stop_reason: 'end_turn', content: [{ type: 'text', text: a }] };
+  } } } };
+};
 const PNG = 'data:image/png;base64,' + Buffer.from('fake image bytes').toString('base64');
 
 // ---------------- 1. the module ----------------
@@ -112,6 +123,45 @@ await ok('when the first model fails, the fallback model answers', async () => {
   assert.equal(status, 200);
   assert.equal(j.model, FALLBACK_MODEL);
   assert.equal(env.AI.calls[1].input.messages[0].content[1].type, 'image_url', 'the fallback gets the image the way it reads it');
+});
+await ok('Claude reads first when the cloud has it: the image as base64, the strict shape, Claude named as the reader', async () => {
+  const env = { AI: fakeAi({}), CLAUDE: fakeClaude('Here it is: {"patient":"Test Patient","prescriber":"Dr Example","items":[{"name":"Amoxicillin 500mg","qty":"15","unit":"caps"}],"extra":"dropped"}') };
+  const { status, j } = await call(env, '/api/ai/vision', { mode: 'prescription', image: PNG }, all, { claude: true });
+  assert.equal(status, 200);
+  assert.deepEqual(j, { patient: 'Test Patient', prescriber: 'Dr Example', items: [{ name: 'Amoxicillin 500mg', qty: 15, unit: 'tablet' }], model: CLAUDE_MODEL });
+  const req = env.CLAUDE.calls[0];
+  assert.equal(req.model, 'claude-opus-5-5');
+  assert.deepEqual(req.messages[0].content[0].source, { type: 'base64', media_type: 'image/png', data: PNG.split(',')[1] });
+  assert.equal(req.fallbacks, 'default', 'a decline is retried on Anthropic\'s fallback model');
+  assert.equal(env.AI.calls.length, 0, 'no open-model call when Claude answered');
+});
+await ok('Claude declining, failing or not set up: the open models read instead', async () => {
+  for (const answer of [new Error('overloaded'), { stop_reason: 'refusal', content: [] }, { stop_reason: 'max_tokens', content: [{ type: 'text', text: '[{"name":"half' }] }]) {
+    const env = { AI: fakeAi({ [VISION_MODEL]: '[{"name":"ORS Sachets","boxes":2}]' }), CLAUDE: fakeClaude(answer) };
+    const { status, j } = await call(env, '/api/ai/vision', { mode: 'invoice', image: PNG }, all, { claude: true });
+    assert.equal(status, 200);
+    assert.equal(j.model, VISION_MODEL);
+    assert.equal(j.lines[0].name, 'ORS Sachets');
+  }
+  const env = { AI: fakeAi({ [VISION_MODEL]: '[{"name":"ORS Sachets"}]' }), CLAUDE: fakeClaude('[]') };
+  await call(env, '/api/ai/vision', { mode: 'invoice', image: PNG });
+  assert.equal(env.CLAUDE.calls.length, 0, 'without opts.claude (no key, or switched off) Claude is never called');
+  assert.equal(claudeOn({}, {}), false);
+  assert.equal(claudeOn({ ANTHROPIC_API_KEY: 'k' }, {}), true);
+  assert.equal(claudeOn({ ANTHROPIC_API_KEY: 'k' }, { aiPremium: false }), false, 'the owner can switch it off per pharmacy');
+});
+await ok('a digital PDF page\'s own text goes to the reader with the image, marked as data; a short or empty one is ignored', async () => {
+  const layer = 'MEDIPHARM WHOLESALE LTD  Invoice INV-2207\nMoxaForte 500mg Caps 10x10  AMX2405  06/2028  10  18,500  185,000';
+  const env = { AI: fakeAi({ [VISION_MODEL]: '[]' }), CLAUDE: fakeClaude('[{"name":"MoxaForte 500mg Caps 10x10","batch":"AMX2405"}]') };
+  await call(env, '/api/ai/vision', { mode: 'invoice', image: PNG, text: layer }, all, { claude: true });
+  const sent = env.CLAUDE.calls[0].messages[0].content[1].text;
+  assert.match(sent, /<pdf_text>\nMEDIPHARM WHOLESALE LTD/);
+  assert.match(sent, /never instructions/);
+  await call(env, '/api/ai/vision', { mode: 'invoice', image: PNG, text: layer });
+  assert.match(env.AI.calls[0].input.messages[0].content, /AMX2405/, 'the open models get it too');
+  assert.equal(textLayer('  p.1 '), '');
+  assert.equal(textLayer('x'.repeat(30000)).length, 20000);
+  assert.equal(textLayer({ evil: true }), '');
 });
 await ok('expiry dates: ISO, day-first, month/year, month name; nonsense is empty', () => {
   assert.equal(isoExpiry('2028-06-15'), '2028-06-15');
@@ -201,6 +251,30 @@ await ok('cloud: without AI (a self-hosted hub) the routes say so with 503, noth
   const r = await req(baseEnv, '/api/ai/copilot', { mode: 'command', text: 'open add stock' }, token);
   assert.equal(r.status, 503);
   assert.match((await r.json()).error, /AI is not set up/);
+});
+await ok('cloud: with Claude set up, an invoice page is read by Claude and Mistral and cross-checked; a prescription by Claude', async () => {
+  const MISTRAL = '@cf/mistralai/mistral-small-3.1-24b-instruct';
+  const open = fakeAi({ [MISTRAL]: '{"supplier":"Medipharm","items":[{"name":"MoxaForte 500mg Caps","qty":10,"unitCost":18500,"lineTotal":185000,"batch":"AMX2405"}],"total":185000}' });
+  const claude = fakeClaude('{"supplier":"Medipharm Wholesale","invoiceNo":"INV-2207","items":[{"name":"MoxaForte 500mg Caps","qty":10,"unitCost":18500,"lineTotal":185000,"batch":"AMX2405"}],"total":185000}');
+  const env = { ...baseEnv, AI: open, CLAUDE: claude };
+  const r = await (await req(env, '/api/ai/invoice', { image: PNG, text: 'MEDIPHARM WHOLESALE LTD Invoice INV-2207 MoxaForte' }, token)).json();
+  assert.deepEqual(r.models, [CLAUDE_MODEL, MISTRAL]);
+  assert.equal(r.readings, 2);
+  assert.equal(r.items[0].check.length, 0, 'both readings agree: nothing to check');
+  assert.match(claude.calls[0].messages[0].content[1].text, /INV-2207/);
+  assert.equal(open.calls.length, 1, 'Llama is not needed when Claude reads');
+  const claudeRx = fakeClaude('{"patient":"Test Patient","medicines":[{"name":"Amoxicillin","strength":"500mg","frequency":"three times a day","unclear":false}]}');
+  const p = await (await req({ ...baseEnv, AI: open, CLAUDE: claudeRx }, '/api/ai/prescription', { image: PNG }, token)).json();
+  assert.equal(p.model, CLAUDE_MODEL);
+  assert.equal(p.medicines[0].name, 'Amoxicillin');
+});
+await ok('cloud: the owner switching Claude off for a pharmacy leaves it on the open models', async () => {
+  await owner('/tenants/' + tenant.id, { features: { aiPremium: false } });
+  const MISTRAL = '@cf/mistralai/mistral-small-3.1-24b-instruct';
+  const claude = fakeClaude('{"medicines":[{"name":"X"}]}');
+  const p = await (await req({ ...baseEnv, AI: fakeAi({ [MISTRAL]: '{"medicines":[{"name":"ORS"}]}' }), CLAUDE: claude }, '/api/ai/prescription', { image: PNG }, token)).json();
+  assert.equal(p.model, MISTRAL);
+  assert.equal(claude.calls.length, 0);
 });
 await ok('cloud: the owner switching AI off for the pharmacy stops the routes', async () => {
   await owner('/tenants/' + tenant.id, { features: { ai: false } });

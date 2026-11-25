@@ -28,6 +28,7 @@ import { dailyStockFor, toCsv } from './dailystock.js';
 import { clean as cleanInvoice, finish as finishInvoice } from './invoiceread.js';
 import { INVOICE_PROMPT } from './invoiceprompt.js';
 import { aiRoutes, idleRoutes, firstJson, runAi } from './ai-routes.js';
+import { CLAUDE_MODEL, claudeOn, claudeRead, textLayer, withTextLayer } from './claude-reader.js';
 import { twoStepDdl, twoStepOf, totpCheck, markUsed, twoStepRoutes, looksLikeRecovery, useRecoveryCode } from './twostep.js';
 import { tokenSecret, purposeLabel } from './secret.js';
 import { pharmacyChanged, validatePharmacyDefaults } from '../src/pharmacy-settings.js';
@@ -270,7 +271,7 @@ async function readTicket(env, ticket) {
 // ---------- tenants ----------
 const DEFAULT_FEATURES = { catalog: true, branches: true, wholesale: true, proformas: true, prescriptions: true, finance: true, reports: true, reminders: true,
   chat: true, labels: true, import: true, reorder: true, transfers: true, momo: true, drugInfo: true, shifts: true,
-  promos: true, hourly: true, calendar: true, weather: true, ai: true, newApp: true };
+  promos: true, hourly: true, calendar: true, weather: true, ai: true, aiPremium: true, newApp: true };
 /** Which web app a pharmacy uses (owner console → features → "New RxPOS app on the web"): 'new' or 'classic' */
 const webAppOf = (t) => (JSON.parse(t?.features || '{}').newApp === false ? 'classic' : 'new');
 
@@ -1728,10 +1729,19 @@ async function ai(env, path, body, who) {
     const prompt = 'You are helping a pharmacist in Uganda read a medical prescription (typed or handwritten). Read every medicine on it. ' +
       'Reply with ONLY this JSON, no other text: {"patient":"","prescriber":"","facility":"","date":"","diagnosis":"","medicines":[{"name":"","strength":"","form":"","dose":"","frequency":"","duration":"","quantity":"","unclear":false}],"notes":""}. ' +
       'Use generic or brand names exactly as written; expand common abbreviations (tds = three times a day, bd = twice a day, od = once a day, prn = when needed, stat = immediately). Set "unclear": true for anything hard to read. Leave unknown fields empty.';
-    const out = await runAi(env, VISION, { messages: [{ role: 'user', content: [{ type: 'text', text: prompt }, { type: 'image_url', image_url: { url: body.image } }] }], max_tokens: 900, temperature: 0.1 });
-    const parsed = firstJson(out.response);
+    // Claude reads handwriting best (worker/claude-reader.js); the open model when it isn't set up or can't answer
+    const text = textLayer(body.text);
+    let parsed = null, model = VISION;
+    if (claudeOn(env, lic)) {
+      try { parsed = firstJson(await claudeRead(env, { prompt, image: body.image, text, maxTokens: 4000 })); model = CLAUDE_MODEL; }
+      catch { parsed = null; }
+    }
+    if (!parsed) {
+      const out = await runAi(env, VISION, { messages: [{ role: 'user', content: [{ type: 'text', text: withTextLayer(prompt, text) }, { type: 'image_url', image_url: { url: body.image } }] }], max_tokens: 900, temperature: 0.1 });
+      parsed = firstJson(out.response);
+    }
     parsed.medicines = (Array.isArray(parsed.medicines) ? parsed.medicines : []).filter((x) => x && x.name).slice(0, 15);
-    return json({ ...parsed, model: VISION });
+    return json({ ...parsed, model });
   }
   if (path === '/api/ai/invoice') {
     // one page of a supplier's invoice / delivery note (PDF pages are turned into images on the device). Two models
@@ -1739,16 +1749,21 @@ async function ai(env, path, body, who) {
     // confident, where they disagree, don't add up or only one saw a line, it is flagged for the person to check.
     const m = /^data:image\/(jpeg|png|webp);base64,(.+)$/.exec(String(body.image || ''));
     if (!m || m[2].length > 2_800_000) return json({ error: 'Send a JPG or PNG image under 2 MB.' }, 400);
+    // With Claude set up (worker/claude-reader.js) it is the first reading and Mistral the second; else the two open
+    // models. A digital PDF's own text layer (sent by the device) goes to both readers with the image.
+    const text = textLayer(body.text), prompt = withTextLayer(INVOICE_PROMPT, text);
+    const models = claudeOn(env, lic) ? [CLAUDE_MODEL, VISION] : INVOICE_MODELS;
     const readWith = async (model) => {
-      const out = await runAi(env, model, { messages: [{ role: 'user', content: [{ type: 'text', text: INVOICE_PROMPT }, { type: 'image_url', image_url: { url: body.image } }] }], max_tokens: 3000, temperature: 0.1 });
+      if (model === CLAUDE_MODEL) return cleanInvoice(firstJson(await claudeRead(env, { prompt: INVOICE_PROMPT, image: body.image, text, maxTokens: 12000 })));
+      const out = await runAi(env, model, { messages: [{ role: 'user', content: [{ type: 'text', text: prompt }, { type: 'image_url', image_url: { url: body.image } }] }], max_tokens: 3000, temperature: 0.1 });
       return cleanInvoice(firstJson(out.response ?? out));
     };
-    const [a, b] = await Promise.allSettled([readWith(INVOICE_MODELS[0]), readWith(INVOICE_MODELS[1])]);
+    const [a, b] = await Promise.allSettled([readWith(models[0]), readWith(models[1])]);
     const first = a.status === 'fulfilled' ? a.value : b.status === 'fulfilled' ? b.value : null;
     if (!first) throw new Error('The invoice could not be read. Try again in a moment.');
     const second = a.status === 'fulfilled' && b.status === 'fulfilled' ? b.value : null;
     const r = finishInvoice(first, second);
-    return json({ ...r, models: INVOICE_MODELS.filter((x, i) => [a, b][i].status === 'fulfilled') });
+    return json({ ...r, models: models.filter((x, i) => [a, b][i].status === 'fulfilled') });
   }
   if (path === '/api/ai/names') {
     // consistent medicine names (the owner's request, 2026-11-20): SUGGESTIONS only, never saved here; the app shows
@@ -1783,7 +1798,7 @@ async function ai(env, path, body, who) {
     return json({ questions: qs, model: TEXT });
   }
   // the copilot (till commands, owner questions, device diagnosis) and vision (invoice / prescription) routes
-  const r = await aiRoutes(env, path, body, (perm) => (who.viaKey ? true : roleCan(env, who.tenant, who.role, perm)), json);
+  const r = await aiRoutes(env, path, body, (perm) => (who.viaKey ? true : roleCan(env, who.tenant, who.role, perm)), json, { claude: claudeOn(env, lic) });
   if (r) return r;
   // the idle screen's AI cards and pictures (any signed-in person: the screen shows on every till)
   const idle = await idleRoutes(env, path, body, json);

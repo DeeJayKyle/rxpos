@@ -29,12 +29,12 @@ export default function AiVisionScanner({ mode, onClose, onConfirm }) {
     setError(''); setRead(null);
     try {
       setBusy('Preparing the image…');
-      const { pages } = await invoicePages(file);
+      const { pages, texts = [] } = await invoicePages(file);
       const use = mode === 'invoice' ? pages.slice(0, 6) : pages.slice(0, 1);
       const out = mode === 'invoice' ? { lines: [] } : null;
       for (let i = 0; i < use.length; i++) {
         setBusy(use.length > 1 ? `Reading page ${i + 1} of ${use.length}…` : 'Reading with AI…');
-        const r = await aiVision(syncCfg, mode, use[i]);
+        const r = await aiVision(syncCfg, mode, use[i], texts[i]);
         if (mode === 'invoice') out.lines.push(...(r.lines || []));
         else { setRead(withMatches(r)); setBusy(''); return; }
       }

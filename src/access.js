@@ -77,6 +77,7 @@ export const FEATURES = [
   ['calendar', 'Calendar & calendar sync', 'Google / Outlook / phone'],
   ['weather', 'Weather & storage temperature log'],
   ['ai', 'AI prescription reading & drug quizzes', 'Cloudflare Workers AI'],
+  ['aiPremium', 'High-accuracy reading of invoices & prescriptions (Claude)', 'Printed, scanned or handwritten pages; used only when the cloud has an Anthropic key, and pages are then sent to Anthropic'],
   ['newApp', 'New RxPOS app on the web', 'Off = rxposug.com/<pharmacy> and signing in on the website open the classic app'],
 ];
 export const DEFAULT_FEATURES = Object.fromEntries(FEATURES.map(([k]) => [k, true]));

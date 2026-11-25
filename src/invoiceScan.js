@@ -7,13 +7,31 @@ import { enhancePixels } from './pageenhance.js';
 const MAX_PAGES = 6;
 const PAGE_PX = 2000; // small print and handwriting need the detail; the cloud takes pages up to 2 MB
 
+/** A digital PDF page's own text layer, line by line (exact characters: the cloud gives it to the reader with the
+ *  image). '' for a scanned PDF, which has only a picture: the AI reads the image then. */
+async function pageText(page) {
+  try {
+    const { items } = await page.getTextContent();
+    let s = '', lastY = null;
+    for (const it of items) {
+      if (typeof it.str !== 'string') continue;
+      const y = Math.round(it.transform?.[5] ?? 0);
+      if (lastY !== null && Math.abs(y - lastY) > 2) s += '\n'; else if (s && !s.endsWith(' ')) s += ' ';
+      s += it.str; lastY = y;
+      if (it.hasEOL) { s += '\n'; lastY = null; }
+    }
+    s = s.replace(/[ \t]+/g, ' ').replace(/\n\s*\n+/g, '\n').trim();
+    return s.length >= 20 ? s.slice(0, 20000) : '';
+  } catch { return ''; }
+}
+
 /** PDF → one JPEG per page (first few pages), using pdf.js (Apache-2.0), loaded only when needed */
 async function pdfPages(file) {
   const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
   const { default: workerUrl } = await import('pdfjs-dist/legacy/build/pdf.worker.min.mjs?url');
   pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
   const pdf = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
-  const out = [];
+  const out = [], texts = [];
   for (let n = 1; n <= Math.min(pdf.numPages, MAX_PAGES); n++) {
     const page = await pdf.getPage(n);
     const base = page.getViewport({ scale: 1 });
@@ -24,8 +42,9 @@ async function pdfPages(file) {
     ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
     await page.render({ canvasContext: ctx, viewport, canvas }).promise;
     out.push(await preparePage(canvas));
+    texts.push(await pageText(page));
   }
-  return { pages: out, total: pdf.numPages };
+  return { pages: out, texts, total: pdf.numPages };
 }
 
 /** An image (data URL or canvas) → a page ready to read: no bigger than PAGE_PX, small photos enlarged (the models
@@ -54,7 +73,7 @@ export function preparePage(src) {
 
 const readAsDataUrl = (file) => new Promise((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(r.result); r.onerror = () => reject(new Error('That file could not be opened')); r.readAsDataURL(file); });
 
-/** A chosen file (photo or PDF) → page images ready to read */
+/** A chosen file (photo or PDF) → page images ready to read, and for a digital PDF each page's own text (`texts`) */
 export async function invoicePages(file) {
   if (!file) return { pages: [], total: 0 };
   if (file.type === 'application/pdf' || /\.pdf$/i.test(file.name)) return pdfPages(file);
@@ -77,7 +96,7 @@ export { matchProduct, matchSupplier, rankProducts, learnedNames, lastBatchOf, f
 
 /** Read every page and merge them into one invoice. The pages are read side by side (two at a time: each page is
  *  already two AI readings in the cloud), and put back in page order. */
-export async function readInvoice(cfg, pages, onPage) {
+export async function readInvoice(cfg, pages, onPage, texts = []) {
   const merged = { supplier: '', invoiceNo: '', date: '', total: 0, items: [], linesTotal: 0, readings: 0 };
   const results = new Array(pages.length);
   let next = 0, done = 0;
@@ -85,7 +104,7 @@ export async function readInvoice(cfg, pages, onPage) {
   const worker = async () => {
     while (next < pages.length) {
       const i = next++;
-      results[i] = await aiInvoice(cfg, pages[i]);
+      results[i] = await aiInvoice(cfg, pages[i], texts[i]);
       done++; if (done < pages.length) onPage?.(done + 1, pages.length);
     }
   };
