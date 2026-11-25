@@ -1,5 +1,18 @@
 # RxPOS release notes
 
+## RxPOS 1.21.0 · November 2026 (one app: React; sharper reading of invoices and prescriptions)
+
+- **One app.** RxPOS is the React app from now on. The Flutter app is retired (kept read-only in `archive/`): the
+  cloud sends every pharmacy to the React app, a browser still on the Flutter web app moves to it at sign-in, and the
+  owner console's "New RxPOS app on the web" switch is gone. Installed Flutter apps keep working but get no updates:
+  install the RxPOS app from the sign-in page instead.
+- **Downloads** on the web sign-in page are the RxPOS Windows installer (now always `RxPOS-Setup.exe`) and Android
+  app from the newest release.
+- **High-accuracy reading** of invoices and prescriptions, printed, scanned or handwritten: when the cloud has an
+  Anthropic key, Claude reads each page first and the open models check it or take over (owner console → Features →
+  "High-accuracy reading (Claude)" switches it off per pharmacy). Nothing is saved until a person checks it.
+- **Digital PDFs**: each page's own text goes with its picture, so names, numbers and batch codes are copied exactly.
+
 ## React (classic) app 1.20.0 · Flutter app (next build) · November 2026 (fewer mistakes in Add Stock)
 
 - **The review before receiving** (both apps): Receive stock first sums the delivery up (supplier, invoice, date,

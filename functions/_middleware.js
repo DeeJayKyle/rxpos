@@ -11,7 +11,8 @@
 //   pharmacy's own address (rxposug.com/<pharmacy>, as bookmarked from the classic app) opens the new app too.
 import { FLUTTER_ROUTES } from './flutter-routes.js';
 
-// Which app the website opens: 'classic' (React) or 'new' (Flutter). The owner's choice (2026-11-22): the web version
+// Which app the website opens: 'classic' (React) or 'new' (Flutter). The owner's choice (2026-11-22, and 2026-11-25: the
+// Flutter app is retired, archive/README.md): React. The cloud tells every pharmacy 'classic' too. The web version
 // stays on React. Flutter's files stay at /app/, so work left unsent in a browser that used it can still go up.
 export const WEB_APP = 'classic';
 

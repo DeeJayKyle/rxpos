@@ -1,32 +1,20 @@
-// Web sign-in: continue in the browser, or download the Windows / Android app (src/appDownloads.js).
+// Web sign-in: continue in the browser, or download the RxPOS Windows / Android app (src/appDownloads.js).
 // The browser version needs the internet the whole time and keeps nothing on the computer; the apps keep the
 // pharmacy on the device and keep selling offline. Same account and data either way.
-import { useEffect, useState } from 'react';
 import { Download, Globe, Monitor, Smartphone, WifiOff, Info } from 'lucide-react';
-import { cloudUrl } from '../cloud.js';
 import { deviceOf, downloadLinks, RELEASES_PAGE } from '../appDownloads.js';
 
-const getJson = (url) => fetch(url, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
-
 export default function AppDownloads() {
-  const base = cloudUrl().replace(/\/+$/, '');
-  const [links, setLinks] = useState(() => downloadLinks(base, null, null));
+  const links = downloadLinks();
   const device = deviceOf(typeof navigator === 'undefined' ? '' : navigator.userAgent);
-  useEffect(() => {
-    let live = true;
-    Promise.all([getJson(`${base}/api/app/flutter-windows.json`), getJson(`${base}/api/app/flutter-android.json`)])
-      .then(([w, a]) => live && setLinks(downloadLinks(base, w, a)));
-    return () => { live = false; };
-  }, [base]);
   const order = device === 'android' ? ['android', 'windows'] : ['windows', 'android'];
   const btn = (k) => {
     const l = links[k], mine = device === k;
     return (
-      <a key={k} className={'btn block app-dl ' + (mine ? 'primary' : 'ghost')} href={l.url} target={l.direct ? undefined : '_blank'} rel="noreferrer" data-platform={k}
-        download={l.direct ? '' : undefined} >
+      <a key={k} className={'btn block app-dl ' + (mine ? 'primary' : 'ghost')} href={l.url} rel="noreferrer" data-platform={k}>
         {k === 'windows' ? <Monitor size={16} /> : <Smartphone size={16} />}
         <span className="grow app-dl-label"><span>Download for {l.name}</span>
-          <small>{[mine && 'this device', l.version && `v${l.version}`, l.size].filter(Boolean).join(' · ') || 'release page'}</small></span>
+          <small>{[mine && 'this device', 'newest release'].filter(Boolean).join(' · ')}</small></span>
       </a>
     );
   };

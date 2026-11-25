@@ -56,7 +56,7 @@ Every device keeps itself on the newest version published at rxposug.com (deploy
 
 ## Installing the desktop app (Windows)
 
-Download the latest `RxPOS Setup x.y.z.exe` (installer) or `RxPOS-Portable-x.y.z.exe` from this repository's **Releases** page (or from the latest **Actions** run → *RxPOS-Windows* artifact).
+Download the latest `RxPOS-Setup.exe` (installer) or `RxPOS-Portable-x.y.z.exe` from this repository's **Releases** page (or from the latest **Actions** run → *RxPOS-Windows* artifact).
 If Windows SmartScreen warns about an unknown publisher, choose *More info → Run anyway* (the app isn't code-signed).
 
 ## Running the Hub (for sync and online browser access)

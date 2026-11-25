@@ -1,9 +1,10 @@
-// Download links for the RxPOS apps, shown on the web sign-in page (both web versions say the same).
-// The cloud already serves the latest released Windows and Android apps for the installed apps' own updates
-// (scripts/publish-flutter-update.sh → /api/app/flutter-<platform>.json → /api/app/<file>), so the links always
-// point at the newest release without a new web build. If the cloud can't answer, the release page is offered.
+// Download links for the RxPOS apps, shown on the web sign-in page: the React app's own Windows installer and Android
+// app from the newest GitHub release (.github/workflows/build.yml publishes RxPOS-Setup.exe and RxPOS-Android.apk
+// under these fixed names), so the links always point at the newest release without a new web build.
 
 export const RELEASES_PAGE = 'https://github.com/DeeJayKyle/rxpos/releases/latest';
+export const WINDOWS_FILE = 'RxPOS-Setup.exe';
+export const ANDROID_FILE = 'RxPOS-Android.apk';
 
 /** Which device the browser runs on: 'windows' | 'android' | 'apple' (iPhone, iPad, Mac: no app yet) | 'other' */
 export function deviceOf(ua = '') {
@@ -13,17 +14,8 @@ export function deviceOf(ua = '') {
   return 'other';
 }
 
-/** "85 MB" */
-export const sizeText = (bytes) => (bytes > 0 ? `${Math.max(1, Math.round(bytes / 1048576))} MB` : '');
-
-/**
- * The two downloads from the cloud's version files ({ build, label, file, size }), or the release page when a file
- * is missing or its name is not one the cloud serves. base: the cloud's address (no trailing slash).
- */
-export function downloadLinks(base, windows, android) {
-  const ok = (m, ext) => m && typeof m.file === 'string' && new RegExp(`^[A-Za-z0-9][A-Za-z0-9._-]{0,120}\\.${ext}$`).test(m.file);
-  const one = (m, ext, name) => ok(m, ext)
-    ? { name, url: `${base}/api/app/${m.file}`, version: String(m.label || ''), size: sizeText(Number(m.size)), direct: true }
-    : { name, url: RELEASES_PAGE, version: '', size: '', direct: false };
-  return { windows: one(windows, 'exe', 'Windows'), android: one(android, 'apk', 'Android') };
+/** The two downloads: direct links to the newest release's files */
+export function downloadLinks(releases = RELEASES_PAGE) {
+  const one = (file, name) => ({ name, url: `${releases}/download/${file}`, direct: true });
+  return { windows: one(WINDOWS_FILE, 'Windows'), android: one(ANDROID_FILE, 'Android') };
 }

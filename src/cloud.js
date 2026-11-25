@@ -76,8 +76,8 @@ export const tillNumber = (cfg) => call(cfg, '/api/till', { method: 'POST', body
 /** The pharmacy's daily stock sheet link for a Google Sheet (=IMPORTDATA); renew = a new link, the old one stops */
 export const dailyStockLink = (cfg, renew = false) => call(cfg, '/api/daily-stock-link', { method: renew ? 'POST' : 'GET', body: renew ? {} : undefined, timeout: 15000, personal: true });
 // AI (Cloudflare Workers AI): read a prescription photo; make a drug quiz
-export const aiPrescription = (cfg, image) => call(cfg, '/api/ai/prescription', { method: 'POST', body: { image }, timeout: 90000 });
-export const aiInvoice = (cfg, image) => call(cfg, '/api/ai/invoice', { method: 'POST', body: { image }, timeout: 120000 });
+export const aiPrescription = (cfg, image, text) => call(cfg, '/api/ai/prescription', { method: 'POST', body: { image, ...(text ? { text } : {}) }, timeout: 90000 });
+export const aiInvoice = (cfg, image, text) => call(cfg, '/api/ai/invoice', { method: 'POST', body: { image, ...(text ? { text } : {}) }, timeout: 120000 });
 export const aiNames = (cfg, items) => call(cfg, '/api/ai/names', { method: 'POST', body: { items }, timeout: 90000 });
 export const aiQuiz = (cfg, drugs, count = 8) => call(cfg, '/api/ai/quiz', { method: 'POST', body: { drugs, count }, timeout: 90000 });
 export const cloudConfig = (cfg) => call(cfg, '/api/config', { timeout: 8000 });
@@ -104,7 +104,7 @@ export const daySummary = (cfg, send = false) => call(cfg, '/api/summary', { met
 export const twoStep = (cfg, path = '', body) => call(cfg, '/api/2fa' + path, { method: body ? 'POST' : 'GET', body, personal: true });
 // AI copilot (till commands, owner questions, device diagnosis) and vision (invoice / prescription photo → strict JSON)
 export const aiCopilot = (cfg, body) => call(cfg, '/api/ai/copilot', { method: 'POST', body, timeout: 60000 });
-export const aiVision = (cfg, mode, image) => call(cfg, '/api/ai/vision', { method: 'POST', body: { mode, image }, timeout: 120000 });
+export const aiVision = (cfg, mode, image, text) => call(cfg, '/api/ai/vision', { method: 'POST', body: { mode, image, ...(text ? { text } : {}) }, timeout: 120000 });
 // The idle screen: today's AI-picked cards and wording, and a topic illustration (worker/ai-routes.js idleRoutes)
 export const aiIdleCards = (cfg, body) => call(cfg, '/api/ai/idle-cards', { method: 'POST', body, timeout: 60000 });
 export const aiIdleImage = (cfg, subject, tone) => call(cfg, '/api/ai/idle-image', { method: 'POST', body: { subject, tone }, timeout: 60000 });

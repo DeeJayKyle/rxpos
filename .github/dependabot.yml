@@ -9,10 +9,6 @@ updates:
     groups:
       security-and-patches:
         update-types: [patch, minor]
-  - package-ecosystem: pub
-    directory: /rxpos_flutter
-    schedule: { interval: weekly }
-    open-pull-requests-limit: 3
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: weekly }

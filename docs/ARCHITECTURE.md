@@ -214,6 +214,13 @@ is one invoice; "Another invoice" starts the next). For each invoice the app kee
 - Two different open vision models on Workers AI (`INVOICE_MODELS`) read the page independently with the same
   instructions (`worker/invoiceprompt.js`): printed and handwritten text, crossed-out values replaced by handwriting,
   batch characters that look alike, dates copied exactly as written.
+- When the cloud has an Anthropic key (`ANTHROPIC_API_KEY`) and the owner hasn't switched off "High-accuracy
+  reading (Claude)" for the pharmacy (`features.aiPremium`), Claude (`worker/claude-reader.js`) is the first reading
+  and Mistral the second; Claude also reads prescriptions (`/api/ai/prescription`, `/api/ai/vision`) first. If Claude
+  declines, fails or is busy, the open models read as before.
+- A digital PDF's own text layer (pdf.js `getTextContent`, `src/invoiceScan.js`) is sent with each page image as
+  `text`, so the readers have the exact printed characters (spelling, numbers, batches); a scanned PDF has none and is
+  read from the image alone.
 - `worker/invoiceread.js` cross-checks them: where the readings agree a line is confident; where they disagree (with
   the other value kept in `alt`), where qty × unit cost ≠ line total, or where only one reading saw a line, the
   fields to check are listed in `check`. Dates are turned into YYYY-MM-DD by RxPOS (`src/invoicedates.js`: an expiry

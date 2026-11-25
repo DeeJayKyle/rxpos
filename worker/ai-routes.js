@@ -6,8 +6,10 @@
 //   POST /api/ai/copilot  { mode: 'command', text }                 → { action: 'ADD_ITEMS', items } | { action: 'NAVIGATE', to } | { action: 'NONE', reply }
 //                         { mode: 'ask', text, facts }              → { answer, reorder: [{ name, qty }] }   (facts: worked out on the device)
 //                         { mode: 'diagnose', text?, telemetry }    → { summary, causes: [], actions: [] }  (telemetry is scrubbed here)
-//   POST /api/ai/vision   { mode: 'invoice', image }                → { lines: [{ name, batch, expiry, boxes, unitsPerBox, unitCostUGX }] }
-//                         { mode: 'prescription', image }           → { patient, prescriber, items: [{ name, qty, unit }] }
+//   POST /api/ai/vision   { mode: 'invoice', image, text? }                → { lines: [{ name, batch, expiry, boxes, unitsPerBox, unitCostUGX }] }
+//                         { mode: 'prescription', image, text? }         → { patient, prescriber, items: [{ name, qty, unit }] }
+
+import { CLAUDE_MODEL, claudeRead, textLayer, withTextLayer } from './claude-reader.js';
 
 export const COPILOT_MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
 export const VISION_MODEL = '@cf/meta/llama-3.2-11b-vision-instruct';
@@ -176,8 +178,10 @@ const bytesOf = (b64) => { const s = atob(b64); const a = new Array(s.length); f
 /**
  * The copilot and vision routes. Returns a Response, or null for any other path.
  * can(perm) → Promise<boolean>: the signed-in person's permission (worker/index.js roleCan, or true for the sync key).
+ * opts.claude: Claude reads images first (worker/claude-reader.js), the open models when it can't answer.
+ * A vision request's optional `text` is a digital PDF page's own text layer, given to the reader with the image.
  */
-export async function aiRoutes(env, path, body, can, json) {
+export async function aiRoutes(env, path, body, can, json, opts = {}) {
   if (path === '/api/ai/copilot') {
     const mode = String(body?.mode || 'command');
     const text = str(body?.text, 600);
@@ -209,7 +213,15 @@ export async function aiRoutes(env, path, body, can, json) {
     if (mode === 'invoice' ? !(await can('stock.receive')) : !((await can('pos.sell')) || (await can('prescriptions')))) return json({ error: mode === 'invoice' ? 'Only staff who receive stock can read invoices.' : 'Only staff who sell or dispense can read prescriptions.' }, 403);
     const m = IMAGE.exec(String(body?.image || ''));
     if (!m || m[2].length > 2_800_000) return json({ error: 'Send a JPG, PNG or WebP image under 2 MB.' }, 400);
-    const prompt = mode === 'invoice' ? INVOICE_VISION_PROMPT : RX_VISION_PROMPT;
+    const text = textLayer(body?.text);
+    const prompt = withTextLayer(mode === 'invoice' ? INVOICE_VISION_PROMPT : RX_VISION_PROMPT, text);
+    if (opts.claude) {
+      try {
+        const answer = await claudeRead(env, { prompt: mode === 'invoice' ? INVOICE_VISION_PROMPT : RX_VISION_PROMPT, image: body.image, text, maxTokens: mode === 'invoice' ? 12000 : 4000 });
+        if (mode === 'invoice') return json({ lines: cleanInvoiceLines(firstJson(answer, answer.trim().startsWith('{') ? '{' : '[')), model: CLAUDE_MODEL });
+        return json({ ...cleanPrescription(firstJson(answer)), model: CLAUDE_MODEL });
+      } catch { /* the open models below */ }
+    }
     const { out, model } = await runWithFallback(env, VISION_MODEL,
       { messages: [{ role: 'user', content: prompt }], image: bytesOf(m[2]), max_tokens: mode === 'invoice' ? 3000 : 900, temperature: 0.1 },
       { messages: [{ role: 'user', content: [{ type: 'text', text: prompt }, { type: 'image_url', image_url: { url: body.image } }] }], max_tokens: mode === 'invoice' ? 3000 : 900, temperature: 0.1 });

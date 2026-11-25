@@ -1,7 +1,7 @@
 {
   "name": "rxpos",
   "productName": "RxPOS",
-  "version": "1.20.0",
+  "version": "1.21.0",
   "description": "RxPOS - pharmacy point of sale and inventory management",
   "author": "RxPOS",
   "license": "MIT",
@@ -24,6 +24,7 @@
     "lint": "eslint . --max-warnings 0"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "1.14.0",
     "@capacitor/android": "6.2.2",
     "@capacitor/core": "6.2.2",
     "@capacitor/filesystem": "6.0.4",
@@ -95,7 +96,8 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "RxPOS"
+      "shortcutName": "RxPOS",
+      "artifactName": "RxPOS-Setup.exe"
     },
     "portable": {
       "artifactName": "RxPOS-Portable-${version}.exe"

@@ -1062,7 +1062,7 @@ function InvoiceScanner({ cfg, onClose, onRead, onDrafts }) {
       const pdfs = files.filter((f) => f.type === 'application/pdf' || /\.pdf$/i.test(f.name)), photos = files.filter((f) => !pdfs.includes(f));
       const next = [...invoices];
       // a PDF is one invoice; photos chosen together are the pages of one invoice (added to the open one, if any)
-      for (const f of pdfs) { const r = await invoicePages(f); next.push({ id: uid(), pages: r.pages, note: r.total > r.pages.length ? `Only the first ${r.pages.length} of ${r.total} pages will be read.` : '' }); }
+      for (const f of pdfs) { const r = await invoicePages(f); next.push({ id: uid(), pages: r.pages, texts: r.texts || [], note: r.total > r.pages.length ? `Only the first ${r.pages.length} of ${r.total} pages will be read.` : '' }); }
       if (photos.length) {
         const pages = []; for (const f of photos) pages.push(...(await invoicePages(f)).pages);
         if (!asNew && next[cur] && !pdfs.length) next[cur] = { ...next[cur], pages: [...next[cur].pages, ...pages] };
@@ -1074,7 +1074,7 @@ function InvoiceScanner({ cfg, onClose, onRead, onDrafts }) {
     finally { setBusy(''); }
   };
   const removeInvoice = (id) => { setInvoices((l) => l.filter((x) => x.id !== id)); setCur(0); };
-  const removePage = (inv, n) => setInvoices((l) => l.map((x) => (x.id === inv.id ? { ...x, pages: x.pages.filter((_, k) => k !== n) } : x)).filter((x) => x.pages.length));
+  const removePage = (inv, n) => setInvoices((l) => l.map((x) => (x.id === inv.id ? { ...x, pages: x.pages.filter((_, k) => k !== n), texts: (x.texts || []).filter((_, k) => k !== n) } : x)).filter((x) => x.pages.length));
   const pageCount = invoices.reduce((a, x) => a + x.pages.length, 0);
   const setStatus = (id, patch) => setInvoices((l) => l.map((x) => (x.id === id ? { ...x, ...patch } : x)));
   // Keep the pages in the pharmacy's cloud (whoever reviews the draft compares with them), then read them
@@ -1083,7 +1083,7 @@ function InvoiceScanner({ cfg, onClose, onRead, onDrafts }) {
     setBusy(label + 'reading with two AI readings…');
     // the pages are kept in the cloud while they are read (side by side, not one after the other)
     const saving = Promise.all(inv.pages.map(async (pg, n) => (await uploadAttachment(cfg, pageBlob(pg), `invoice-${today()}-${n + 1}.jpg`)).path));
-    const [pagePaths, r] = await Promise.all([saving, readInvoice(cfg, inv.pages, (n, of) => setBusy(`${label}reading${of > 1 ? ` page ${n} of ${of}` : ''} with two AI readings…`))]);
+    const [pagePaths, r] = await Promise.all([saving, readInvoice(cfg, inv.pages, (n, of) => setBusy(`${label}reading${of > 1 ? ` page ${n} of ${of}` : ''} with two AI readings…`), inv.texts)]);
     if (!r.items.length) throw new Error('No medicine lines could be read. Try a sharper, straighter photo in good light.');
     return { r, pagePaths, pages: inv.pages };
   };
