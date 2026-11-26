@@ -4,6 +4,7 @@
 // last 7 days) or monthly (on the last day: the month). Sheets: summary, sales, sales by medicine, expenses, and stock
 // that needs attention. Sent through Brevo like the daily summary. The workbook is written here, with no dependency.
 import { eatDay, summarise, attention, refundedOn, REFUNDS_SQL } from './summary.js';
+import { breakdownLabel } from '../src/tax.js';
 /** A sale's time on the pharmacy's clock (East Africa, UTC+3), 'YYYY-MM-DD HH:MM' (2026-11-17 audit: it showed UTC) */
 const eatClock = (d) => { const ms = Date.parse(d); return Number.isFinite(ms) ? new Date(ms + 3 * 3600e3).toISOString().replace('T', ' ').slice(0, 16) : String(d || ''); };
 
@@ -133,6 +134,7 @@ export function reportSheets({ kinds, sales, refunds = sales.filter((s) => s.sta
       { figure: 'Sales after refunds', value: f.total },
       ...f.byPay.map(([k, v]) => ({ figure: `  paid by ${k}`, value: v })), { figure: 'On credit', value: f.credit },
       { figure: 'Discounts', value: f.discounts }, { figure: 'Tax', value: f.tax },
+      ...f.vat.flatMap((r) => [{ figure: `  ${breakdownLabel(r)}: sales before VAT`, value: r.net }, ...(r.category === 'standard' || r.tax ? [{ figure: `  ${breakdownLabel(r)}: VAT`, value: r.tax }] : [])]),
       { figure: 'Cost of medicines sold', value: f.cost }, { figure: 'Gross profit', value: f.profit }, { figure: 'Expenses', value: f.expenses },
       { figure: 'Net', value: f.net }, ...f.byBranch.map(([k, v]) => ({ figure: `Sales at ${k}`, value: v })),
     ] });

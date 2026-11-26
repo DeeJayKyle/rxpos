@@ -17,6 +17,7 @@ import RefundSheet, { refundMoney, REFUND_APPROVE_ABOVE, isApprover } from '../c
 import { hasPin, verifyPin, verifyOffline } from '../offline.js';
 import { cloudLogin, cloudLogout } from '../cloud.js';
 import { cartSubtotal, lineTotal, taxOf, round } from '../money.js';
+import { receiptVatRows, lineMark, showsVat, saleTax, categoryOf } from '../tax.js';
 // step 22: what the client still owes on a sale (an insurer's share is billed to the insurer); shown on the receipt
 // even after a refund, as before
 const billed = (s) => (s.insurance ? Math.max(0, Number(s.insurance.share) || 0) : 0);
@@ -54,7 +55,7 @@ export function Receipt({ sale }) {
           {sale.items.map((i) => (
             <tr key={i.id}>
               <td>{i.name}<br /><small>{i.pack ? `${i.pack.count} × ${i.pack.name} (${i.pack.size}) @ ${fmt(i.pack.price)}` : `${i.qty} × ${fmt(i.price)}`}{i.alloc?.length === 1 && i.alloc[0].batch ? ` · B/N ${i.alloc[0].batch}` : ''}{i.alloc?.[0]?.expiry ? ` · Exp ${i.alloc[0].expiry}` : ''}</small>{i.kit && <><br /><small className="receipt-kit">KIT · {kitContents(i)}</small></>}{i.directions && <><br /><small className="receipt-dir">{[i.directions.dose, i.directions.freq, i.directions.days && `for ${i.directions.days} days`].filter(Boolean).join(' ')}{i.directions.notes?.length ? ` · ${i.directions.notes.join(', ')}` : ''}</small></>}</td>
-              <td className="num">{fmt(i.qty * i.price)}</td>
+              <td className="num">{fmt(i.qty * i.price)}{lineMark(sale, i) && <small className="vat-mark"> {lineMark(sale, i)}</small>}</td>
             </tr>
           ))}
         </tbody>
@@ -62,7 +63,7 @@ export function Receipt({ sale }) {
       <div className="receipt-rule" />
       <div className="row between"><span>Subtotal</span><span>{fmt(sale.subtotal)}</span></div>
       {sale.discount > 0 && <div className="row between"><span>Discount</span><span>-{fmt(sale.discount)}</span></div>}
-      {sale.tax > 0 && <div className="row between"><span>Tax</span><span>{fmt(sale.tax)}</span></div>}
+      {receiptVatRows(sale, fmt).map(([k, v]) => <div key={k} className="row between"><span>{k}</span><span>{v}</span></div>)}
       <div className="row between grand"><span>TOTAL</span><span>{fmt(sale.total)}</span></div>
       {!isProforma && <div className="row between"><span>Paid ({sale.payment})</span><span>{fmt(sale.payment === 'Cash' ? sale.tendered : sale.paid ?? sale.total)}</span></div>}
       {!isProforma && sale.payment === 'Cash' && sale.tendered > (sale.paid ?? sale.total) && <div className="row between"><span>Change</span><span>{fmt(sale.tendered - (sale.paid ?? sale.total))}</span></div>}
@@ -107,15 +108,15 @@ export function SaleInvoice({ sale }) {
       </div>
       <div className="invoice-to"><small>Bill to</small><b>{sale.customerName || 'Walk-in customer'}</b>{cust?.phone && <span>Tel: {cust.phone}</span>}{cust?.address && <span>{cust.address}</span>}</div>
       <table className="invoice-lines">
-        <thead><tr><th>#</th><th>Description</th><th>Batch / expiry</th><th className="num">Qty</th><th className="num">Unit price</th><th className="num">Amount</th></tr></thead>
+        <thead><tr><th>#</th><th>Description</th><th>Batch / expiry</th><th className="num">Qty</th><th className="num">Unit price</th>{showsVat(sale) && <th>VAT</th>}<th className="num">Amount</th></tr></thead>
         <tbody>{sale.items.map((i, n) => (
-          <tr key={n}><td>{n + 1}</td><td>{i.name}{i.kit && <><br /><small>{kitContents(i)}</small></>}</td><td>{(i.kit ? i.kit.components.flatMap((c) => c.alloc || []) : i.alloc || []).map((a) => [a.batch, a.expiry].filter(Boolean).join(' · ')).filter(Boolean).join(', ') || '—'}</td><td className="num">{i.qty}</td><td className="num">{fmt(i.price)}</td><td className="num">{fmt(i.qty * i.price)}</td></tr>
+          <tr key={n}><td>{n + 1}</td><td>{i.name}{i.kit && <><br /><small>{kitContents(i)}</small></>}</td><td>{(i.kit ? i.kit.components.flatMap((c) => c.alloc || []) : i.alloc || []).map((a) => [a.batch, a.expiry].filter(Boolean).join(' · ')).filter(Boolean).join(', ') || '—'}</td><td className="num">{i.qty}</td><td className="num">{fmt(i.price)}</td>{showsVat(sale) && <td>{lineMark(sale, i)}</td>}<td className="num">{fmt(i.qty * i.price)}</td></tr>
         ))}</tbody>
       </table>
       <div className="invoice-totals">
         <div><span>Subtotal</span><span>{fmt(sale.subtotal)}</span></div>
         {sale.discount > 0 && <div><span>Discount</span><span>-{fmt(sale.discount)}</span></div>}
-        {sale.tax > 0 && <div><span>Tax</span><span>{fmt(sale.tax)}</span></div>}
+        {receiptVatRows(sale, fmt).map(([k, v]) => <div key={k}><span>{k}</span><span>{v}</span></div>)}
         <div className="grand"><span>Total</span><span>{fmt(sale.total)}</span></div>
         <div><span>Paid ({sale.payment}{sale.momo?.txid ? ` · ref ${sale.momo.txid}` : ''})</span><span>{fmt(sale.paid ?? sale.total)}</span></div>
         {sale.insurance && <div><span>Billed to {sale.insurance.insurer} ({sale.insurance.scheme} · member {sale.insurance.memberNo})</span><span>{fmt(billed(sale))}</span></div>}
@@ -372,7 +373,11 @@ function SaleEditor({ sale, onClose }) {
   const money = Number(db.settings.decimals ?? 0);
   const subtotal = cartSubtotal(f.items, money);
   const disc = Math.max(0, Math.min(round(Number(f.discount) || 0, money), subtotal));
-  const tax = taxOf(subtotal - disc, rate * 100, { decimals: money });
+  // a sale made with per-item VAT (src/tax.js) is re-taxed line by line at the rate it was sold at; an older sale
+  // keeps its one rate, worked out from what it charged
+  const perItem = Array.isArray(sale.taxBreakdown);
+  const vat = perItem ? saleTax(f.items.map((i) => ({ ...i, taxCategory: i.taxCategory || categoryOf(products.find((p) => p.id === i.id), db.settings) })), { discount: disc, standardRate: sale.taxRate, decimals: money }) : null;
+  const tax = vat ? vat.tax : taxOf(subtotal - disc, rate * 100, { decimals: money });
   const total = round(subtotal - disc + tax, money);
   const ptype = methods.find((m) => m.name === f.payment)?.type || (f.payment === 'Credit' ? 'credit' : 'cash');
   const setItem = (k, patch) => setF((x) => ({ ...x, items: x.items.map((i, n) => (n === k ? { ...i, ...patch } : i)) }));
@@ -429,7 +434,8 @@ function SaleEditor({ sale, onClose }) {
         for (const a of stockParts(o)) move(d, { productId: a.productId, qty: a.qty, type: 'Sale edit', ref: sale.number, user: user.name, batchId: a.batchId, branchId: br });
       }
       const paid = ptype === 'credit' ? Math.min(Number(f.paid) || 0, total) : total;
-      put(d, 'sales', { ...sale, items, subtotal, discount: disc, tax, total, payment: f.payment, paid, tendered: ptype === 'cash' ? Math.max(sale.tendered || 0, total) : paid,
+      if (vat) { const byId = new Map(f.items.map((i, k) => [i.id, vat.lines[k]])); for (const i of items) Object.assign(i, { taxCategory: byId.get(i.id)?.taxCategory, tax: byId.get(i.id)?.tax || 0 }); }
+      put(d, 'sales', { ...sale, items, subtotal, discount: disc, tax, ...(vat ? { taxBreakdown: vat.breakdown } : {}), total, payment: f.payment, paid, tendered: ptype === 'cash' ? Math.max(sale.tendered || 0, total) : paid,
         customerId: f.customerId, customerName: customer?.name || 'Walk-in Customer', editedBy: user.name, editedAt: now(),
         edits: [...(sale.edits || []), { at: now(), by: user.name, role: user.role, reason: f.reason.trim(), recordOnly, before: saleSnapshot(sale), after: saleSnapshot({ items, total, payment: f.payment, discount: disc, customerName: customer?.name || 'Walk-in Customer', paid }) }] });
       audit(d, user, 'Sale edited', `${sale.number}: ${fmt(sale.total)} → ${fmt(total)} (${f.reason.trim()})`, br);
@@ -524,11 +530,11 @@ export function receiptText(sale, s, fmt) {
   L.push(`Receipt ${sale.number} · ${showDateTime(sale.date)}`);
   if (sale.customerName && sale.customerName !== 'Walk-in Customer') L.push('Customer: ' + sale.customerName);
   L.push('--------------------------------');
-  for (const i of sale.items) { L.push(`${i.qty} × ${i.name} — ${fmt(i.qty * i.price)}`); if (i.kit) L.push('  ' + kitContents(i)); }
+  for (const i of sale.items) { L.push(`${i.qty} × ${i.name} — ${fmt(i.qty * i.price)}${lineMark(sale, i) ? ' ' + lineMark(sale, i) : ''}`); if (i.kit) L.push('  ' + kitContents(i)); }
   L.push('--------------------------------');
   if (sale.discount > 0) L.push(`Subtotal: ${fmt(sale.subtotal)}`);
   if (sale.discount > 0) L.push(`Discount: -${fmt(sale.discount)}`);
-  if (sale.tax > 0) L.push(`Tax: ${fmt(sale.tax)}`);
+  for (const [k, v] of receiptVatRows(sale, fmt)) L.push(`${k}: ${v}`);
   L.push(`*TOTAL: ${fmt(sale.total)}*`);
   L.push(`Paid (${sale.payment}): ${fmt(sale.paid ?? sale.total)}`);
   if (sale.insurance) L.push(`${sale.insurance.insurer} (${sale.insurance.scheme}, member ${sale.insurance.memberNo}): ${fmt(billed(sale))}`);

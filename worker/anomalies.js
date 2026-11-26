@@ -48,6 +48,15 @@ export async function saleFindings(sale, products, can, ctx = {}) {
     out.push({ kind: 'totals', detail: `The lines add up to ${money(linesSum)} but the sale says ${money(subtotal)}`, amount: Math.abs(linesSum - subtotal) });
   if (Math.abs(subtotal - discount + tax - total) > 1)
     out.push({ kind: 'totals', detail: `${money(subtotal)} − discount ${money(discount)} + tax ${money(tax)} is ${money(subtotal - discount + tax)}, but the total says ${money(total)}`, amount: Math.abs(subtotal - discount + tax - total) });
+  // VAT per item (src/tax.js): the categories' VAT adds up to the sale's, each at its own rate (exempt and zero-rated
+  // carry none), so a receipt can't show one VAT and charge another
+  if (Array.isArray(sale.taxBreakdown) && sale.taxBreakdown.length) {
+    const rows = sale.taxBreakdown, std = num(sale.taxRate);
+    const sumTax = rows.reduce((a, r) => a + num(r.tax), 0);
+    const off = rows.filter((r) => Math.abs(num(r.tax) - (r.category === 'standard' ? (num(r.net) * std) / 100 : 0)) > slack || (r.category === 'standard' && num(r.rate) !== std));
+    if (Math.abs(sumTax - tax) > 1 || off.length)
+      out.push({ kind: 'totals', detail: `The VAT by category (${rows.map((r) => `${r.category} ${money(r.tax)}`).join(', ')}) does not match the sale's VAT ${money(tax)} at ${std}%`, amount: Math.abs(sumTax - tax) + off.reduce((a, r) => a + num(r.tax), 0) });
+  }
   if (paid > total + 1)
     out.push({ kind: 'paid', detail: `Paid ${money(paid)} is more than the total ${money(total)}`, amount: paid - total });
   // step 22: an insured sale: the insurer's share and what the patient paid can't come to more than the sale

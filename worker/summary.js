@@ -3,6 +3,8 @@
 // best sellers, and stock that needs attention. The same text is shown in the app (Weekly Summary → Today) with a
 // WhatsApp share button. Sent through Brevo (BREVO_API_KEY), like password emails.
 
+import { sumBreakdowns } from '../src/tax.js';
+
 const EAT = 3 * 3600e3; // Uganda is UTC+3 all year
 const pad = (n) => String(n).padStart(2, '0');
 /** The local (EAT) day of a moment, YYYY-MM-DD, and that day's start / end as UTC ISO strings */
@@ -30,6 +32,8 @@ export function summarise({ sales, refunds = sales.filter((s) => s.status === 'r
   const total = gross - refundValue;
   const cost = sum(sales, costOf) - sum(refunds, costOf);
   const tax = sum(sales, (s) => s.tax) - sum(refunds, (s) => s.tax);
+  // VAT by category (src/tax.js), after the refunds made in the period
+  const vat = sumBreakdowns([...sales.map((s) => [s, 1]), ...refunds.map((s) => [s, -1])]).filter((r) => r.net || r.tax);
   // takings by payment and by branch, after the refunds paid back from them
   const net = (key) => { const m = {}; for (const [list, sign] of [[sales, 1], [refunds, -1]]) for (const s of list) { const k = key(s); m[k] = (m[k] || 0) + sign * (Number(s.total) || 0); } return m; };
   const byPay = net((s) => s.payment || 'Cash'), byBranch = net((s) => s.branchId || 'main');
@@ -41,7 +45,7 @@ export function summarise({ sales, refunds = sales.filter((s) => s.status === 'r
   }
   const exp = sum(expenses, (e) => e.amount);
   return {
-    count: sales.length, gross, total, cost, profit: total - tax - cost, tax, expenses: exp, net: total - tax - cost - exp,
+    count: sales.length, gross, total, cost, profit: total - tax - cost, tax, vat, expenses: exp, net: total - tax - cost - exp,
     discounts: sum(sales, (s) => s.discount), refunds: refunds.length, refundValue, credit,
     byPay: Object.entries(byPay).filter(([, v]) => v).sort((a, b) => b[1] - a[1]),
     byBranch: Object.entries(byBranch).map(([id, v]) => [branches.find((b) => b.id === id)?.name || (id === 'main' ? 'Main branch' : id), v]).sort((a, b) => b[1] - a[1]),

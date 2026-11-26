@@ -6,6 +6,7 @@ import { ChevronLeft, Printer as PrinterIcon, ScanBarcode, Repeat, Clock, Monito
 import { SettingsSearch, SettingsGroup, SettingsRow, ToggleRow, DangerZone, useFindSetting } from '../components/SettingsKit.jsx';
 import { ask, toast } from '../feedback.jsx';
 import { Help, HELP, smallPicture } from '../forms.jsx';
+import { categoryOf, categoryOptions } from '../tax.js';
 import { pharmacyLogo } from '../logo.jsx';
 import { uploadAttachment } from '../attach.jsx';
 import { cloudConfig, daySummary, dailyStockLink } from '../cloud.js';
@@ -141,7 +142,11 @@ export default function Settings() {
             {field('tin', 'TIN')}
             {field('currency', 'Currency (e.g. UGX, KES, $)')}
             {field('decimals', 'Decimal places', 'number')}
-            {field('taxRate', 'Tax / VAT rate (%)', 'number')}
+            {field('taxRate', 'VAT standard rate (%)', 'number')}
+            <label className="field"><span>VAT category of medicines not yet classified<Help text={HELP.defaultTax} /></span>
+              <select value={categoryOf(null, s)} onChange={(e) => setS({ ...s, defaultTaxCategory: e.target.value })}>
+                {categoryOptions(s.taxRate).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select></label>
             {field('retailMarkup', 'Default retail markup (%)', 'number')}
             {field('wholesaleMarkup', 'Default wholesale markup (%)', 'number')}
             {field('minMargin', 'Target margin (%): lower margins are flagged', 'number')}

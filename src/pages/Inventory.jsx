@@ -5,6 +5,7 @@ import { CrudPage, Tabs, Modal, SearchBox, Empty, PdfButton, FilterChips, Export
 import { useStore, today, daysUntil, put, move, addBatch, audit, downloadFile, toCSV, batchValue, stockValue, markupPrice, MAIN_BRANCH, putMany } from '../store.jsx';
 import { ask, askText, toast } from '../feedback.jsx';
 import { formatQty } from '../money.js';
+import { TAX_CATEGORIES, taxCategory, categoryOf, categoryOptions } from '../tax.js';
 import { removalSplit } from '../fefo.js';
 import { newInternalBarcode } from '../barcode.jsx';
 import { useHoverCard, useListControls } from '../listcontrols.jsx';
@@ -87,6 +88,13 @@ export function MedicineList() {
     await update((d) => { const byId = new Map(d.products.map((x) => [x.id, x])); putMany(d, 'products', rows.map((p) => ({ ...byId.get(p.id) || p, [key]: val }))); audit(d, user, 'Medicines changed', `${label} set to "${val}" for ${rows.length}: ${rows.slice(0, 5).map((p) => p.name).join(', ')}${rows.length > 5 ? '…' : ''}`, branchId); });
     toast(`${label} saved for ${rows.length}`); done();
   };
+  // VAT per item (src/tax.js): the ticked medicines put in one tax category, after a yes
+  const bulkTax = (cat) => async (rows, done) => {
+    const label = taxCategory(cat).label;
+    if (!(await ask({ title: `${label} for ${rows.length} medicine${rows.length > 1 ? 's' : ''}?`, message: cat === 'standard' ? `VAT at ${s.taxRate || 0}% is added to these at the till.` : 'No VAT is added to these at the till.', confirmText: 'Save' }))) return;
+    await update((d) => { const byId = new Map(d.products.map((x) => [x.id, x])); putMany(d, 'products', rows.map((p) => ({ ...byId.get(p.id) || p, taxCategory: cat }))); audit(d, user, 'Medicines changed', `VAT category set to ${label} for ${rows.length}: ${rows.slice(0, 5).map((p) => p.name).join(', ')}${rows.length > 5 ? '…' : ''}`, branchId); });
+    toast(`VAT category saved for ${rows.length}`); done();
+  };
   // the list is open to anyone who may see stock; changing it needs medicines.manage (the cloud enforces the same)
   const manage = can('medicines.manage');
   const [packsFor, setPacksFor] = useState(null);
@@ -109,6 +117,7 @@ export function MedicineList() {
     { key: 'cost', label: 'Cost price', type: 'money', required: true },
     { key: 'price', label: `Retail price (blank = cost +${s.retailMarkup}%)`, type: 'money', validate: (v, r) => (Number(v) > 0 && Number(r.cost) > Number(v) ? 'The retail price is below the cost' : '') },
     { key: 'wholesale', label: `Wholesale price (blank = cost +${s.wholesaleMarkup}%)`, type: 'money', help: HELP.wholesale, validate: (v, r) => (Number(v) > 0 && Number(r.cost) > Number(v) ? 'The wholesale price is below the cost' : '') },
+    { key: 'taxCategory', label: `VAT category (blank = ${taxCategory(categoryOf(null, s)).label.toLowerCase()})`, type: 'select', options: categoryOptions(s.taxRate), help: HELP.taxCategory },
     { key: 'reorder', label: 'Reorder level', type: 'number', help: HELP.reorder },
     { key: 'shelf', label: 'Shelf / location' },
     { key: 'photo', label: 'Photo', type: 'photo', full: true },
@@ -153,7 +162,7 @@ export function MedicineList() {
       </>}
       blank={{ form: 'Tablets', unit: 'Piece', reorder: 10, rx: false }}
       extraActions={(p) => manage && <button className="btn sm ghost" title="Sell by tablet, pair, half strip, strip, box…" onClick={() => setPacksFor(p)}>Selling units{p.packs?.length ? ` (${p.packs.length})` : ''}</button>}
-      bulk={manage ? () => [{ label: 'Change price…', run: bulkPrice }, { label: 'Set category…', run: bulkField('category', 'Category') }, { label: 'Set reorder level…', run: bulkField('reorder', 'Reorder level') }] : undefined}
+      bulk={manage ? () => [{ label: 'Change price…', run: bulkPrice }, { label: 'Set category…', run: bulkField('category', 'Category') }, { label: 'Set reorder level…', run: bulkField('reorder', 'Reorder level') }, ...TAX_CATEGORIES.map((c) => ({ label: `VAT: ${c.label.toLowerCase()}…`, run: bulkTax(c.id) }))] : undefined}
       rowMenu={(p) => [
         { label: 'Stock card', Icon: ScrollText, run: () => navigate('/stock-card', { state: { productId: p.id } }) },
         manage && { label: 'Selling units (pair, strip, box…)', Icon: Boxes, run: () => setPacksFor(p) },
@@ -167,6 +176,7 @@ export function MedicineList() {
         { label: 'Strength', empty: (p) => !p.strength, render: (p) => p.strength || <span className="muted">—</span> },
         { label: 'Formulation', key: 'form' },
         { label: 'Category / class', empty: (p) => !p.category, render: (p) => p.category || <span className="muted">—</span> },
+        { label: 'VAT', empty: (p) => !p.taxCategory, render: (p) => (p.taxCategory ? taxCategory(p.taxCategory).label : <span className="muted" title="Not classified yet: the pharmacy's default applies">{taxCategory(categoryOf(p, s)).label}*</span>) },
         { label: 'Sold as', render: (p) => <>{p.unit || <span className="muted">—</span>}{p.loose === false && <small className="muted"> (not loose)</small>}{p.packs?.filter((k) => k.name && Number(k.size) > 1).map((k) => <small key={k.name} className="muted nowrap"><br />1 {k.name.toLowerCase()} = {k.size}</small>)}</> },
         { label: 'Cost', num: true, render: (p) => fmt(p.cost) },
         { label: 'Wholesale', num: true, empty: (p) => !Number(p.wholesale), render: (p) => fmt(p.wholesale) },
