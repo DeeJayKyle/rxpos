@@ -46,3 +46,6 @@ a.style-item { text-decoration: none; color: inherit; }
 .lead-center { font-size: 16px; line-height: 1.7; text-align: center; }
 .spinner.sm { margin: 0; width: 22px; height: 22px; }
 .sub-label { margin: var(--s-3) 0 6px; }
+
+/* 1.22.1: the theme menu has grouped sections; it scrolls on short screens */
+.theme-menu { max-height: min(78vh, 640px); overflow-y: auto; }

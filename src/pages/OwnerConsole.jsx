@@ -696,7 +696,7 @@ function BrandingTab({ t, onSave, busy }) {
       </div>
       <div className="card">
         <div className="row between"><h3>Themes this pharmacy can use</h3>
-          <button className="btn sm ghost" onClick={() => setThemes(all ? new Set(['mint-teal', 'navy-teal', 'electric-blue']) : new Set(THEMES.map((x) => x.id)))}>{all ? 'Choose a few' : 'Allow all'}</button></div>
+          <button className="btn sm ghost" onClick={() => setThemes(all ? new Set(['mint-teal', 'navy-teal', 'high-contrast']) : new Set(THEMES.map((x) => x.id)))}>{all ? 'Choose a few' : 'Allow all'}</button></div>
         <p className="muted small">Staff pick from these with the palette button. Allow at least 3. {themes.size} of {THEMES.length} allowed.</p>
         <div className="theme-grid">
           {THEMES.map((x) => (
