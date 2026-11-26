@@ -1,7 +1,13 @@
 # RxPOS release notes
 
-## Next release · November 2026 (a tidier app)
+## RxPOS 1.22.0 · November 2026 (selling units; a tidier app)
 
+- **Selling units**: each medicine can be sold by the tablet, pair, half strip, strip or box (Medicine List → Selling
+  units), each with its own retail and wholesale price and the unit the till starts on. A medicine marked "not sold
+  loose" never sells single tablets at the till.
+- **Change unit of issue** (needs Adjust stock and Medicines): e.g. 1 box = 100 tablets multiplies every batch in
+  every branch, divides prices and costs, keeps the old unit as a pack at its old price and records the change.
+  Reports, refunds and the daily stock report count earlier sales in the new unit. Audited.
 - **Six menu headings**: Sell, Stock, People, Money, Reports and Settings. Pages that overlapped share one menu entry
   and open with tabs at the top: **Medicines** (Inventory, Medicine List, Quick Edit, Stock Card, Formulations),
   **Messages** (Chat, Messages & SMS, Reminders), **Expenses** (with Expense Categories), **Banks** (with Deposits &
@@ -15,6 +21,9 @@
 - **Four themes**: Light, Dark, High contrast and Brand colour (the pharmacy's colour, set in Settings → Receipts &
   stock). A retired theme opens as Light or Dark. Colour level, gradient and surface style moved to This device → Look.
 - **One style** for buttons, spacing and tables (styles/system.css).
+- **Updates arrive whole**: a file missing from the website is now a plain "not found" that Cloudflare never keeps,
+  and each deploy clears Cloudflare's old copies, so a Windows till is never handed a wrong update file (1.21.0's
+  deploy check caught one Cloudflare location keeping 9 of its files wrong).
 
 ## RxPOS 1.21.0 · November 2026 (one app: React; sharper reading of invoices and prescriptions)
 

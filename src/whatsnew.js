@@ -2,11 +2,11 @@
 // small card on the dashboard. Kept next to the release notes (docs/RELEASE-NOTES.md): when a release is written up,
 // its highlights go here too.
 export const WHATS_NEW = {
-  version: '1.21.0',
+  version: '1.22.0',
   items: [
-    { text: 'Scan invoices and prescriptions: sharper reading of handwriting, scans and photos; every line still checked by you', to: '/add-stock' },
-    { text: 'Invoice PDFs: names, numbers and batch codes copied exactly from the PDF', to: '/add-stock' },
-    { text: 'One RxPOS app: this one, on the web, Windows and Android', to: '/' },
+    { text: 'Sell by the tablet, pair, half strip, strip or box, each at its own price (Medicines → Selling units)', to: '/medicines' },
+    { text: 'A tidier menu: six headings, related pages together with tabs at the top', to: '/' },
+    { text: 'Four themes: Light, Dark, High contrast and your pharmacy\'s colour', to: '/device' },
   ],
 };
 
