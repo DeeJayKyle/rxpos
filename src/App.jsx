@@ -220,8 +220,8 @@ function HubTabs({ groups, here }) {
   const tabs = hub[2].map((to) => all.find(([t]) => t === to)).filter(Boolean);
   if (tabs.length < 2) return null;
   return (
-    <nav className="tabs hub-tabs" aria-label={`${hub[0]} pages`}>
-      {tabs.map(([to, label, Icon]) => <NavLink key={to} to={to} end className="tab"><Icon size={15} aria-hidden="true" />{label}</NavLink>)}
+    <nav className="hub-tabs" aria-label={`${hub[0]} pages`}>
+      {tabs.map(([to, label, Icon]) => <NavLink key={to} to={to} end className="hub-tab"><Icon size={15} aria-hidden="true" />{label}</NavLink>)}
     </nav>
   );
 }

@@ -17,7 +17,12 @@ th, td { padding: var(--cell-y) var(--cell-x); }
 
 /* the tabs of pages that share one menu entry (Medicines, Messages, Reports…) */
 .hub-tabs { margin: 20px 24px -6px; }
-.hub-tabs .tab { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
+/* the same look as a page's own tabs (.tabs / .tab), kept apart so a page's tabs stay its own */
+.hub-tabs { display: flex; gap: 4px; flex-wrap: wrap; background: var(--surface); border: 1px solid var(--border); padding: 4px; border-radius: 12px; width: fit-content; max-width: calc(100% - 48px); box-shadow: var(--shadow-sm); }
+.hub-tab { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; min-height: 34px; border-radius: 9px; color: var(--muted); font-weight: 600; font-size: 13px; text-decoration: none; white-space: nowrap; }
+.hub-tab:hover { color: var(--text); }
+.hub-tab.active { background: var(--primary-soft); color: var(--primary-ink); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 30%, transparent); }
+@media (max-width: 640px) { .hub-tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; max-width: calc(100% - 24px); } .hub-tab { flex: none; } }
 @media (max-width: 640px) { .hub-tabs { margin: 12px 12px -4px; } }
 a.style-item { text-decoration: none; color: inherit; }
 @media print { .hub-tabs { display: none; } }
