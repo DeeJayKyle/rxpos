@@ -52,6 +52,8 @@ jobs:
         run: |
           scripts/site-with-app.sh dist site
           npx wrangler pages deploy site --project-name rxpos --branch main --commit-dirty=true
+      - name: Cloudflare forgets its old copies of the website (no location keeps a wrong update file)
+        run: node scripts/purge-site-cache.mjs rxposug.com
       - name: Verify production build and health
         run: |
           node --input-type=module <<'JS'
