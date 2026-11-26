@@ -65,18 +65,88 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      # Optional: add repo secrets WINDOWS_CERT_B64 (.pfx as base64) + WINDOWS_CERT_PASSWORD to sign the installer
-      - name: Code-signing certificate (only when configured)
+      # Code signing (MAINTENANCE.md "Signing the Windows app"): with neither option configured, the build is unsigned.
+      # * SSL.com eSigner (cloud OV certificate, secrets ESIGNER_USERNAME, ESIGNER_PASSWORD, ESIGNER_CREDENTIAL_ID,
+      #   ESIGNER_TOTP_SECRET): release runs only, because each signing is paid for (about 4 files per release).
+      # * A .pfx file (WINDOWS_CERT_B64 as base64 + WINDOWS_CERT_PASSWORD): every build, as before.
+      - name: Code signing (only when configured)
+        id: signing
         shell: bash
         env:
+          RELEASE: ${{ startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.release != '') }}
+          ES_USER: ${{ secrets.ESIGNER_USERNAME }}
+          ES_PASS: ${{ secrets.ESIGNER_PASSWORD }}
+          ES_CRED: ${{ secrets.ESIGNER_CREDENTIAL_ID }}
+          ES_TOTP: ${{ secrets.ESIGNER_TOTP_SECRET }}
           CERT: ${{ secrets.WINDOWS_CERT_B64 }}
           CERT_PASS: ${{ secrets.WINDOWS_CERT_PASSWORD }}
         run: |
-          if [ -n "$CERT" ]; then
+          if [ -n "$ES_USER" ] && [ -n "$ES_PASS" ] && [ -n "$ES_CRED" ] && [ -n "$ES_TOTP" ]; then
+            if [ "$RELEASE" = "true" ]; then echo "mode=esigner" >> "$GITHUB_OUTPUT"; echo "Signing with SSL.com eSigner (release run)"
+            else echo "mode=none" >> "$GITHUB_OUTPUT"; echo "eSigner is set up; this is not a release run, so nothing is signed (saves paid signings)"; fi
+          elif [ -n "$ES_USER$ES_PASS$ES_CRED$ES_TOTP" ]; then
+            echo "::error::Only some of ESIGNER_USERNAME, ESIGNER_PASSWORD, ESIGNER_CREDENTIAL_ID, ESIGNER_TOTP_SECRET are set. Add all four or remove them."
+            exit 1
+          elif [ -n "$CERT" ]; then
             echo "CSC_LINK=$CERT" >> "$GITHUB_ENV"
             echo "CSC_KEY_PASSWORD=$CERT_PASS" >> "$GITHUB_ENV"
+            echo "mode=pfx" >> "$GITHUB_OUTPUT"; echo "Signing with the .pfx certificate"
+          else
+            echo "mode=none" >> "$GITHUB_OUTPUT"; echo "No code-signing secrets: building unsigned"
           fi
-      - run: npm run dist:win
+      - name: Set up SSL.com CodeSignTool
+        if: steps.signing.outputs.mode == 'esigner'
+        shell: pwsh
+        env:
+          TOOL_SHA256: ${{ vars.CODESIGNTOOL_SHA256 }} # optional pin: the hash this step prints on the first signed release
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $zip = Join-Path $env:RUNNER_TEMP 'CodeSignTool.zip'
+          Invoke-WebRequest -Uri 'https://github.com/SSLcom/CodeSignTool/releases/download/v1.3.0/CodeSignTool-v1.3.0-windows.zip' -OutFile $zip
+          $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
+          Write-Host "CodeSignTool-v1.3.0-windows.zip SHA-256: $hash"
+          if ($env:TOOL_SHA256 -and $hash -ne $env:TOOL_SHA256.ToLower()) { Write-Host "::error::CodeSignTool download does not match the CODESIGNTOOL_SHA256 variable"; exit 1 }
+          $dest = Join-Path $env:RUNNER_TEMP 'codesigntool'
+          Expand-Archive $zip -DestinationPath $dest -Force
+          $dir = (Get-ChildItem $dest -Recurse -Directory -Filter jar | Select-Object -First 1).Parent.FullName
+          if (-not $dir) { Write-Host "::error::CodeSignTool jar folder not found"; exit 1 }
+          # SSL.com's production settings (the same file their esigner-codesign action writes)
+          New-Item -ItemType Directory -Force (Join-Path $dir 'conf') | Out-Null
+          Set-Content (Join-Path $dir 'conf/code_sign_tool.properties') -Encoding ascii -Value @(
+            'CLIENT_ID=kaXTRACNijSWsFdRKg_KAfD3fqrBlzMbWs6TwWHwAn8',
+            'OAUTH2_ENDPOINT=https://login.ssl.com/oauth2/token',
+            'CSC_API_ENDPOINT=https://cs.ssl.com',
+            'TSA_URL=http://ts.ssl.com',
+            'TSA_LEGACY_URL=http://ts.ssl.com/legacy')
+          $java = if ($env:JAVA_HOME_17_X64) { $env:JAVA_HOME_17_X64 } elseif ($env:JAVA_HOME_21_X64) { $env:JAVA_HOME_21_X64 } else { $env:JAVA_HOME }
+          "CODESIGNTOOL_DIR=$dir" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "JAVA_HOME=$java" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Build the installer
+        shell: bash
+        env:
+          MODE: ${{ steps.signing.outputs.mode }}
+          ESIGNER_USERNAME: ${{ steps.signing.outputs.mode == 'esigner' && secrets.ESIGNER_USERNAME || '' }}
+          ESIGNER_PASSWORD: ${{ steps.signing.outputs.mode == 'esigner' && secrets.ESIGNER_PASSWORD || '' }}
+          ESIGNER_CREDENTIAL_ID: ${{ steps.signing.outputs.mode == 'esigner' && secrets.ESIGNER_CREDENTIAL_ID || '' }}
+          ESIGNER_TOTP_SECRET: ${{ steps.signing.outputs.mode == 'esigner' && secrets.ESIGNER_TOTP_SECRET || '' }}
+        run: |
+          if [ "$MODE" = "esigner" ]; then
+            # one sha256 signature per file (each eSigner signing is paid for); scripts/win-sign.cjs fails the build on any error
+            npm run dist:win -- -c.win.sign=./scripts/win-sign.cjs -c.win.signingHashAlgorithms=sha256
+          else
+            npm run dist:win
+          fi
+      - name: Every installer is signed
+        if: steps.signing.outputs.mode != 'none'
+        shell: pwsh
+        run: |
+          $bad = 0
+          foreach ($f in Get-ChildItem release/*.exe, release/win-unpacked/RxPOS.exe) {
+            $s = Get-AuthenticodeSignature $f.FullName
+            Write-Host "$($f.Name): $($s.Status) $($s.SignerCertificate.Subject)"
+            if ($s.Status -ne 'Valid') { $bad++ }
+          }
+          if ($bad) { Write-Host "::error::$bad file(s) are not validly signed"; exit 1 }
       - name: Upload installer
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:

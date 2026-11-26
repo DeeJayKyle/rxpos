@@ -32,7 +32,8 @@ Keep every login in a password manager (e.g. Bitwarden, free and open source): G
 | `TURSO_URL`, `TURSO_AUTH_TOKEN` | The Worker reaching the database | Worker secrets only (make a new token at app.turso.tech if needed) |
 | `SYNC_KEY` | Legacy key of the first pharmacy | Worker secret |
 | Android keystore (`ANDROID_KEYSTORE_B64`, password, alias) | Signing every Android build, **required for every Google Play update** | GitHub secrets. **Keep an offline copy**: losing it means the Play app can never be updated |
-| `WINDOWS_CERT_B64`, `WINDOWS_CERT_PASSWORD` | Optional Windows code signing | GitHub secrets (not set yet) |
+| `ESIGNER_USERNAME`, `ESIGNER_PASSWORD`, `ESIGNER_CREDENTIAL_ID`, `ESIGNER_TOTP_SECRET` | Signing the Windows app with an SSL.com OV certificate in their cloud (eSigner), on release runs: section 6b | GitHub → Settings → Environments → **production** secrets (not set yet) |
+| `WINDOWS_CERT_B64`, `WINDOWS_CERT_PASSWORD` | Optional older way to sign the Windows app with a .pfx file (new certificates can no longer be exported as .pfx): section 6b | GitHub secrets (not set yet) |
 | Owner password, Google client ID, GitHub OAuth app | Owner console sign-in | Owner console → Account (stored in the database) |
 | `BREVO_API_KEY` | Password-reset emails from no-reply@rxposug.com (Brevo free plan, 300/day; account herbjay8@gmail.com) | Worker secret. Brevo disables keys unused for 90 days: a weekly Worker cron (Mondays) keeps it active. If emails stop, make a new key in Brevo → SMTP & API and replace the secret |
 | MoMo / Airtel / Africa's Talking keys | Payments and SMS per pharmacy | Owner console → pharmacy → Payments & SMS |
@@ -106,6 +107,58 @@ git tag -f v1.0.0 && git push origin v1.0.0
 GitHub Actions then builds and attaches `RxPOS-Setup.exe`, `RxPOS-Portable-1.0.0.exe`, `RxPOS-Android.apk`,
 `RxPOS-GooglePlay.aab` and `RxPOS-Hub.zip` (about 10 minutes: GitHub → Actions). Install them on the pharmacy devices.
 For a real new version instead, change `"version"` in `package.json` and tag `v1.8.0` (the next number after the last release).
+
+## 6b. Signing the Windows app
+
+Without a signature, Windows SmartScreen says "Windows protected your PC" and "Unknown publisher" when someone installs
+RxPOS. The Build RxPOS workflow signs `RxPOS.exe`, the uninstaller, `RxPOS-Setup.exe` and the portable `.exe` once the
+secrets below exist, checks every signature, and builds unsigned (as now) while they don't.
+
+**Which option.** Since June 2023 every code-signing key must live on a hardware token or in a cloud HSM, so a plain
+`.pfx` file is no longer sold. For a business in Uganda:
+
+| Option | Cost | Works for RxPOS? |
+|---|---|---|
+| **SSL.com OV certificate + eSigner** (chosen) | $129 a year for the certificate (less per year for 2 to 5 years) + eSigner Tier 1 $20 a month for 20 signings ($180 a year paid yearly). A release uses about 4 signings, so 20 covers about 5 releases a month; the first 30 days are free | Yes: signs in the cloud from GitHub Actions, no USB token. Organisation validation from business registration documents |
+| Azure Artifact Signing (formerly Trusted Signing) | $9.99 a month | **Not yet**: open only to organisations in the USA, Canada, the EU, the UK and Australia (and individuals in the USA and Canada) |
+| Other OV certificates on a USB token (e.g. Certum, Sectigo resellers) | Often cheaper per year | The key stays on a token plugged into one PC, so GitHub Actions can't sign; every release would be signed by hand |
+| EV certificate | Several times the OV price, eSigner EV from $100 a month | Not needed: since 2024 EV no longer skips SmartScreen's reputation check |
+
+Note: an OV signature shows your registered company name instead of "Unknown publisher" straight away, but
+SmartScreen may still warn for the first downloads of a new certificate until it builds reputation (usually days to
+a few weeks of installs). Keep signing with the same certificate so the reputation carries over.
+
+**Getting it (SSL.com).**
+1. Have ready: the company's registration certificate (URSB), its registered address and a phone number listed in a
+   public directory or on the registration (SSL.com calls it to confirm), and an ID for the person ordering.
+2. On ssl.com buy **OV Code Signing** (Software Integrity → Code Signing → OV). At checkout choose **eSigner cloud
+   signing** (not a YubiKey).
+3. Complete the validation SSL.com emails you (upload the documents, answer the call). It takes a few working days.
+4. When the order is issued, in the SSL.com account open the order → **eSigner** → set a PIN and choose **OTP App**.
+   It shows a QR code and the **secret code** under it: save that secret code (it is `ESIGNER_TOTP_SECRET`) and also
+   scan the QR code with an authenticator app as a backup.
+5. Subscribe to an **eSigner** plan (Tier 1 is enough).
+6. Find the **credential ID**: in the order's details ("Signing credentials"), a long id like `8b072e22-7685-...`.
+
+**Adding the secrets.** GitHub → the rxpos repository → Settings → Environments → **production** → Add environment
+secret (the Windows build gets secrets only from this environment on `main`):
+
+| Secret | Value |
+|---|---|
+| `ESIGNER_USERNAME` | the SSL.com account username |
+| `ESIGNER_PASSWORD` | the SSL.com account password |
+| `ESIGNER_CREDENTIAL_ID` | the credential ID from step 6 |
+| `ESIGNER_TOTP_SECRET` | the secret code from step 4 |
+
+Then release as usual (Actions → Build RxPOS → Run workflow with a *release* tag, section 5). Only release runs sign,
+so the paid signings aren't used on every push; a release pushed as a bare `v*` tag gets no secrets and stays unsigned.
+The log line "Signing with SSL.com eSigner" and the step **Every installer is signed** confirm it. That run also prints
+`CodeSignTool-v1.3.0-windows.zip SHA-256: …`: put that value in Settings → Secrets and variables → Actions →
+**Variables** → `CODESIGNTOOL_SHA256` so later runs refuse a changed download.
+
+If signing fails (wrong password, no signings left, SSL.com down) the Windows build fails and nothing is released:
+fix it, or remove the four secrets to release unsigned. The certificate must be renewed every year (or the term
+bought); signed installers stay valid after it expires because each signature is time-stamped.
 
 ## 7. Backups and restoring
 
