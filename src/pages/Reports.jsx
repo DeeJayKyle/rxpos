@@ -10,6 +10,7 @@ import { Stat, Tabs, BarChart, PdfButton } from '../ui.jsx';
 import { useOlderHistory, olderNote } from '../history.js';
 import { reportSummary } from '../reportSummary.js';
 import { showDate } from '../showdate.js';
+import { unitScaleAt } from '../packs.js';
 
 const sumBy = (arr, key, val) => {
   const m = {};
@@ -64,8 +65,9 @@ export default function Reports() {
   const tax = sales.reduce((a, s) => a + s.tax, 0);
   const cogs = sales.reduce((a, s) => a + s.items.reduce((b, i) => b + (i.cost || 0) * i.qty, 0), 0);
   const expTotal = expenses.reduce((a, e) => a + e.amount, 0);
+  const productsById = new Map(products.map((p) => [p.id, p]));
   const writeOffs = db.movements.filter((m) => inRange(m) && m.type === 'Expired write-off')
-    .reduce((a, m) => a + -m.qty * (products.find((p) => p.id === m.productId)?.cost || 0), 0);
+    .reduce((a, m) => { const p = productsById.get(m.productId); return a + -m.qty * unitScaleAt(p, m.date) * (p?.cost || 0); }, 0);
 
   const days = [];
   for (let d = new Date(from); d <= new Date(to) && days.length < 366; d = new Date(d.getTime() + 864e5)) {
@@ -74,9 +76,11 @@ export default function Reports() {
   }
 
   const byProduct = {};
+  // quantities from before a medicine's unit of issue changed are counted in its unit of today (src/packs.js)
+  const unitNow = (i, s) => i.qty * (i.kit ? 1 : unitScaleAt(productsById.get(i.id), s.date));
   sales.forEach((s) => s.items.forEach((i) => {
     byProduct[i.name] ??= { product: i.name, qty: 0, revenue: 0, cost: 0 };
-    byProduct[i.name].qty += i.qty; byProduct[i.name].revenue += i.qty * i.price; byProduct[i.name].cost += i.qty * (i.cost || 0);
+    byProduct[i.name].qty += unitNow(i, s); byProduct[i.name].revenue += i.qty * i.price; byProduct[i.name].cost += i.qty * (i.cost || 0);
   }));
   const productRows = Object.values(byProduct).sort((a, b) => b.revenue - a.revenue).map((r) => ({ ...r, profit: r.revenue - r.cost }));
 
@@ -278,7 +282,7 @@ function ProfitReport({ sales }) {
       const r = m.get(key) || { key, name: by === 'product' ? i.name : key, qty: 0, revenue: 0, cost: 0 };
       // the line's share of a sale discount comes off its revenue
       const share = s.subtotal > 0 ? (i.qty * i.price) / s.subtotal : 0;
-      r.qty += i.qty; r.revenue += i.qty * i.price - (s.discount || 0) * share; r.cost += i.qty * (i.cost || 0);
+      r.qty += i.kit ? i.qty : i.qty * unitScaleAt(p, s.date); r.revenue += i.qty * i.price - (s.discount || 0) * share; r.cost += i.qty * (i.cost || 0);
       m.set(key, r);
     }
     return [...m.values()].map((r) => ({ ...r, profit: r.revenue - r.cost, margin: r.revenue > 0 ? ((r.revenue - r.cost) / r.revenue) * 100 : 0 })).sort((a, b) => b.profit - a.profit);
@@ -342,7 +346,7 @@ function ConsumptionReport({ sales, from, to }) {
       const p = byId.get(i.id);
       const key = i.id || i.name;
       const r = m.get(key) || { id: i.id, name: i.name, form: p?.form || '', qty: 0, revenue: 0, cost: p?.cost || i.cost || 0, stock: p?.stock ?? null };
-      r.qty += i.qty; r.revenue += i.qty * i.price;
+      r.qty += i.qty * unitScaleAt(p, s.date); r.revenue += i.qty * i.price; // in today's unit, valued at today's cost
       if (p?.cost) r.cost = p.cost;
       m.set(key, r);
     }

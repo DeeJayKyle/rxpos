@@ -1,4 +1,4 @@
-import { mainPack, packPrice, sellInPacks } from '../packs.js';
+import { packPrice, startPack, soldLoose } from '../packs.js';
 import { useState, useRef, useEffect, useMemo, useDeferredValue } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import FKeyBar, { fkeyItems, fkeysShown, showFkeys } from '../components/FKeyBar.jsx';
@@ -315,12 +315,15 @@ export default function POS({ mode = 'retail' }) {
       allowExpired = true;
       expiredReason = reason;
     }
+    // not sold loose (Selling units): only whole packs, so none to sell when the stock is less than the smallest one
+    if (!inCart && !soldLoose(p) && packsOf(p.id).length && !startPack(p, db.settings, wholesale)) return toast(`${p.name} is sold only by ${packsOf(p.id).map((k) => k.name.toLowerCase()).join(' or ')}: not a whole one in stock (${p.stock} ${(p.unit || 'unit').toLowerCase()}s)`, 'warn');
     setCart((c) => {
       const line = c.find((l) => l.id === p.id);
       if (line) return c.map((l) => (l.id === p.id ? { ...l, allowExpired, expiredReason, qty: Math.min(l.qty + (l.pack?.size || 1), p.stock) } : l));
       const first = { id: p.id, name: p.name, price: priceOf(p), cost: p.cost, qty: 1, max: p.stock, rx: p.rx, controlled: !!p.controlled, allowExpired, expiredReason };
-      // retail sells single units and wholesale whole packs by default (Settings → Receipts & stock); the line can be switched
-      const k = sellInPacks(db.settings, wholesale) ? mainPack(p) : null;
+      // the unit set for this medicine in Selling units (a strip, a pair…), else retail sells single units and wholesale
+      // whole packs (Settings → Receipts & stock); a medicine not sold loose starts on its smallest pack. Switchable.
+      const k = startPack(p, db.settings, wholesale);
       if (k && Number(k.size) <= p.stock) { const pp = packPrice(k, priceOf(p), wholesale), size = Number(k.size); return [...c, { ...first, pack: { name: k.name, size, price: pp }, price: pp / size, qty: size }]; }
       return [...c, first];
     });
@@ -398,6 +401,7 @@ export default function POS({ mode = 'retail' }) {
   // each medicine's packs, looked up by id (a search through every medicine per tile made the grid slow)
   const packsById = useMemo(() => { const m = new Map(); for (const p of products) if (p.packs?.length) m.set(p.id, p.packs.filter((k) => k.name && Number(k.size) > 1)); return m; }, [products]);
   const packsOf = (id) => packsById.get(id) || NO_PACKS;
+  const looseOf = (id) => { const p = products.find((x) => x.id === id); return !p || !packsOf(id).length || soldLoose(p); }; // single units offered?
   const stepOf = (l) => l.pack?.size || 1;
   const setCount = (l, n) => {
     const size = stepOf(l), most = Math.floor(l.max / size);
@@ -407,6 +411,7 @@ export default function POS({ mode = 'retail' }) {
   const choosePack = (l, name) => {
     const p = products.find((x) => x.id === l.id);
     const k = packsOf(l.id).find((x) => x.name === name);
+    if (!k && !soldLoose(p)) return toast(`${p.name} isn't sold as single ${(p.unit || 'unit').toLowerCase()}s (Selling units)`, 'warn');
     if (!k) return setLine(l.id, { pack: null, price: priceOf(p), qty: Math.max(1, Math.min(l.qty, l.max)) });
     const size = Number(k.size);
     if (size > l.max) return toast(`Not a whole ${k.name.toLowerCase()} in stock (${l.max} left)`, 'warn');
@@ -1023,15 +1028,15 @@ export default function POS({ mode = 'retail' }) {
                 {l.allowExpired && <span className="badge safety-expired" title={`Expired stock, reason: ${l.expiredReason || '—'}`}><AlertTriangle size={11} aria-hidden="true" /> Expired stock · reason recorded</span>}
                 {Number(l.price) < (l.cost || 0) && <small className="text-danger below-cost"> below cost{can('reports') ? ` (${fmt(l.cost)})` : ''}</small>}
                 <small className="muted">
-                  {packsOf(l.id).length > 0 && packsOf(l.id).length <= 2 ? (
+                  {packsOf(l.id).length > 0 && packsOf(l.id).length <= 3 ? (
                     <span className="unit-toggle" role="radiogroup" aria-label={`Sell ${l.name} by`}>
-                      {[['', products.find((p) => p.id === l.id)?.unit || 'Unit'], ...packsOf(l.id).map((k) => [k.name, k.name])].map(([v, text]) => (
+                      {[...(looseOf(l.id) ? [['', products.find((p) => p.id === l.id)?.unit || 'Unit']] : []), ...packsOf(l.id).map((k) => [k.name, k.name])].map(([v, text]) => (
                         <button key={v || 'unit'} type="button" role="radio" data-value={v} aria-checked={(l.pack?.name || '') === v} className={(l.pack?.name || '') === v ? 'on' : ''} onClick={() => choosePack(l, v)}>{text}</button>
                       ))}
                     </span>
                   ) : packsOf(l.id).length > 0 && (
                     <select className="pack-select" value={l.pack?.name || ''} onChange={(e) => choosePack(l, e.target.value)} aria-label="Sell by">
-                      <option value="">{products.find((p) => p.id === l.id)?.unit || 'Unit'}</option>
+                      {looseOf(l.id) && <option value="">{products.find((p) => p.id === l.id)?.unit || 'Unit'}</option>}
                       {packsOf(l.id).map((k) => <option key={k.name} value={k.name}>{k.name} ({k.size})</option>)}
                     </select>
                   )}

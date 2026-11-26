@@ -50,6 +50,7 @@ export const MOVEMENT_RULES = {
   'Expired write-off': ['stock.adjust'],
   'Stock count': ['stock.adjust'],
   Adjustment: ['stock.adjust'], // the Adjust stock dialog in both apps
+  'Unit change': ['stock.adjust'], // Selling units → Change unit of issue (src/packs.js): stock re-counted in a smaller unit
   'Supplier return': ['stock.receive', 'stock.adjust'],
   'Transfer in': ['transfers'],
   'Transfer out': ['transfers'],

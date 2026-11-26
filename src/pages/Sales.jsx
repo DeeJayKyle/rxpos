@@ -12,6 +12,7 @@ import { DateRange } from '../forms.jsx';
 import { toast } from '../feedback.jsx';
 import { Barcode } from '../barcode.jsx';
 import { stockParts, kitContents } from '../kits.js';
+import { unitScaleAt, unitChangedSince } from '../packs.js';
 import RefundSheet, { refundMoney, REFUND_APPROVE_ABOVE, isApprover } from '../components/RefundSheet.jsx';
 import { hasPin, verifyPin, verifyOffline } from '../offline.js';
 import { cloudLogin, cloudLogout } from '../cloud.js';
@@ -235,7 +236,8 @@ export default function Sales() {
         put(d, 'sales', { ...cur, status: 'refunded', refundedBy: user.name, refundedAt: now(), ...(why ? { refundReason: String(why).slice(0, 240) } : {}), ...(approvedBy ? { refundApprovedBy: approvedBy } : {}) });
         for (const i of cur.items) {
           // a kit line returns each of its medicines to the batches they came from (src/kits.js)
-          for (const a of stockParts(i)) move(d, { productId: a.productId, qty: a.qty, type: 'Refund', ref: cur.number, user: user.name, batchId: a.batchId, branchId: cur.branchId || MAIN_BRANCH });
+          // a medicine whose unit of issue changed since the sale goes back in its new unit (src/packs.js)
+          for (const a of stockParts(i)) move(d, { productId: a.productId, qty: a.qty * unitScaleAt(d.products.find((x) => x.id === a.productId), cur.date), type: 'Refund', ref: cur.number, user: user.name, batchId: a.batchId, branchId: cur.branchId || MAIN_BRANCH });
         }
         audit(d, user, 'Refund', `${cur.number} · ${fmt(cur.total)}${why ? ' · ' + why : ''}${approvedBy ? ' · approved by ' + approvedBy : ''}`, cur.branchId || MAIN_BRANCH);
       });
@@ -380,6 +382,10 @@ function SaleEditor({ sale, onClose }) {
     e.preventDefault();
     if (!f.items.some((i) => Number(i.qty) > 0)) return toast('A sale needs at least one item. To cancel the whole sale, refund it.', 'warn');
     if (!f.reason.trim()) return toast('Say why the sale is being changed', 'warn');
+    // a medicine counted in another unit since this sale (Change unit of issue): its old quantities can't be moved
+    // line by line; refund the sale and sell it again instead
+    const changed = recordOnly ? null : sale.items.find((i) => stockParts(i).some((a) => unitChangedSince(db.products.find((x) => x.id === a.productId), sale.date)));
+    if (changed) return toast(`${changed.name} has been counted in another unit since this sale. Refund the sale and sell it again instead of editing it.`, 'warn');
     if (!recordOnly) for (const i of f.items) {
       const o = sale.items.find((x) => x.id === i.id);
       const extra = Number(i.qty) - (o?.qty || 0);

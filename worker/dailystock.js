@@ -9,6 +9,7 @@
 // Other is everything else that moved the value: write-offs, stock counts, adjustments, transfers, batches that
 // expired, stock loaded at the start. A Google Sheet reads it with =IMPORTDATA(<link>) (Settings → Data & backup).
 import catalog from '../src/data/catalog.json' with { type: 'json' };
+import { unitScaleAt, UNIT_CHANGE } from '../src/packs.js';
 
 const EAT = 3 * 3600e3; // Uganda is UTC+3 all year
 const WEEKDAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thur', 'Fri', 'Sat']; // as the pharmacy's sheet writes them
@@ -63,7 +64,9 @@ export function dailyStock({ movements, batches, products, sales, expenses, from
     for (const l of lots.values()) if (!l.gone && l.qty > 0 && !(l.expiry && l.expiry < day)) v += l.qty * l.cost;
     return v;
   };
-  const moves = movements.map((m) => ({ ...m, day: localDay(m.date) })).sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  // a medicine whose unit of issue changed (src/packs.js): its earlier movements count in today's unit, valued at today's
+  // cost, and the Unit change movements themselves are then already counted (stock value is unchanged by them)
+  const moves = movements.filter((m) => m.type !== UNIT_CHANGE).map((m) => { const f = unitScaleAt(P.get(m.productId), m.date); return { ...m, qty: f === 1 ? m.qty : (Number(m.qty) || 0) * f, day: localDay(m.date) }; }).sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
   let i = 0;
   const apply = (until) => { while (i < moves.length && moves[i].day <= until) { const m = moves[i++]; lotOf(m).qty += Number(m.qty) || 0; } };
   // stock before the first day

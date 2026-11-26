@@ -4,7 +4,7 @@
 const VERBS = {
   'Refund': 'refunded', 'Signed in': 'signed in', 'Price changed': 'changed a price:', 'Expired write-off': 'wrote off expired stock:',
   'Settings changed': 'changed a setting:', 'Sale edited': 'edited a sale:', 'Sale check reviewed': 'checked a sale:', 'Inventory edited': 'edited stock:',
-  'Stock adjusted': 'adjusted stock:', 'Shelf assigned': 'put medicines on a shelf:', 'Medicines changed': 'changed medicines:', 'Draft discarded': 'discarded a draft:',
+  'Stock adjusted': 'adjusted stock:', 'Unit of issue changed': 'changed the unit stock is counted in:', 'Selling units changed': 'set the units a medicine is sold in:', 'Shelf assigned': 'put medicines on a shelf:', 'Medicines changed': 'changed medicines:', 'Draft discarded': 'discarded a draft:',
   'Purchase orders created': 'created purchase orders:', 'Purchase order marked sent': 'sent a purchase order:', 'Invoices scanned': 'scanned invoices:',
 };
 /** "Amina refunded R102, UGX 5,000 · reason: wrong item" */

@@ -19,6 +19,7 @@ import { dateLocale } from '../showdate.js';
 import { DateInput } from '../fields.jsx';
 import NameCheck from '../components/NameCheck.jsx';
 import { usePageMenu } from '../pagemenu.js';
+import { packsOf, soldLoose, unitPresets, unitChange } from '../packs.js';
 
 const expiryClass = (expiry, warn) => {
   if (!expiry) return '';
@@ -101,7 +102,8 @@ export function MedicineList() {
     { key: 'category', label: 'Category / class' },
     { key: 'form', label: 'Formulation', type: 'select', options: db.formulations.map((f) => f.name) },
     { key: 'strength', label: 'Strength' },
-    { key: 'unit', label: 'Selling unit', type: 'select', options: UNITS },
+    // the unit stock is counted in; once there is stock, a different unit converts it (Selling units → Change unit of issue)
+    { key: 'unit', label: 'Stock unit (smallest sold)', type: 'select', options: UNITS, validate: (v, r) => { const was = products.find((x) => x.id === r.id); return was && was.unit && v !== was.unit && (was.totalStock || 0) !== 0 ? `${was.name} has stock counted in ${was.unit}s. To count it in ${v}s, use Selling units → Change unit of issue (it converts the stock and prices)` : ''; } },
     // D1: checked as each field is left: a barcode another medicine has, a price under the cost, an expiry gone by
     { key: 'barcode', label: 'Barcode / SKU (blank = generate)', validate: (v, r) => (v && db.products.some((x) => x.barcode === String(v).trim() && x.id !== r.id) ? `Another medicine has this barcode (${db.products.find((x) => x.barcode === String(v).trim() && x.id !== r.id).name})` : '') },
     { key: 'cost', label: 'Cost price', type: 'money', required: true },
@@ -150,11 +152,11 @@ export function MedicineList() {
         {manage && <button type="button" className="btn ghost" onClick={() => setTidy(true)} title="Suggestions for consistent names (house style and AI); nothing changes until you approve"><Wand2 size={16} />Tidy names</button>}
       </>}
       blank={{ form: 'Tablets', unit: 'Piece', reorder: 10, rx: false }}
-      extraActions={(p) => manage && <button className="btn sm ghost" title="Sell or receive by strip, box…" onClick={() => setPacksFor(p)}>Packs{p.packs?.length ? ` (${p.packs.length})` : ''}</button>}
+      extraActions={(p) => manage && <button className="btn sm ghost" title="Sell by tablet, pair, half strip, strip, box…" onClick={() => setPacksFor(p)}>Selling units{p.packs?.length ? ` (${p.packs.length})` : ''}</button>}
       bulk={manage ? () => [{ label: 'Change price…', run: bulkPrice }, { label: 'Set category…', run: bulkField('category', 'Category') }, { label: 'Set reorder level…', run: bulkField('reorder', 'Reorder level') }] : undefined}
       rowMenu={(p) => [
         { label: 'Stock card', Icon: ScrollText, run: () => navigate('/stock-card', { state: { productId: p.id } }) },
-        manage && { label: 'Packs (strip, box…)', Icon: Boxes, run: () => setPacksFor(p) },
+        manage && { label: 'Selling units (pair, strip, box…)', Icon: Boxes, run: () => setPacksFor(p) },
       ].filter(Boolean)}
       board={{ groups: [['out', 'Out of stock', 'danger'], ['low', 'Running low', 'warn'], ['ok', 'In stock', 'ok']], of: (p) => (p.stock <= 0 ? 'out' : p.stock <= (p.reorder || 0) ? 'low' : 'ok') }}
       card={(p) => ({ title: p.name, sub: [p.generic, p.strength, p.form].filter(Boolean).join(' · '), value: fmt(p.price), art: <ProductArt p={p} size={56} />,
@@ -165,7 +167,7 @@ export function MedicineList() {
         { label: 'Strength', empty: (p) => !p.strength, render: (p) => p.strength || <span className="muted">—</span> },
         { label: 'Formulation', key: 'form' },
         { label: 'Category / class', empty: (p) => !p.category, render: (p) => p.category || <span className="muted">—</span> },
-        { label: 'Sold as', render: (p) => <>{p.unit || <span className="muted">—</span>}{p.packs?.filter((k) => k.name && Number(k.size) > 1).map((k) => <small key={k.name} className="muted nowrap"><br />1 {k.name.toLowerCase()} = {k.size}</small>)}</> },
+        { label: 'Sold as', render: (p) => <>{p.unit || <span className="muted">—</span>}{p.loose === false && <small className="muted"> (not loose)</small>}{p.packs?.filter((k) => k.name && Number(k.size) > 1).map((k) => <small key={k.name} className="muted nowrap"><br />1 {k.name.toLowerCase()} = {k.size}</small>)}</> },
         { label: 'Cost', num: true, render: (p) => fmt(p.cost) },
         { label: 'Wholesale', num: true, empty: (p) => !Number(p.wholesale), render: (p) => fmt(p.wholesale) },
         { label: 'Retail', num: true, render: (p) => fmt(p.price) },
@@ -197,6 +199,7 @@ export function StockLevels() {
   const listRef = useRef(null);
   const [open, setOpen] = useState(null);
   const [editing, setEditing] = useState(null);
+  const [unitsFor, setUnitsFor] = useState(null);
   const warn = db.settings.expiryWarnDays || 90;
   const multi = db.branches.length > 1;
   const ql = q.toLowerCase();
@@ -221,7 +224,7 @@ export function StockLevels() {
   const lc = useListControls({ rows: flat, onOpen: (p) => setOpen(p), onEdit: can('inventory.edit') ? (p) => setEditing(p) : null, searchRef, onClearSearch: () => setQ('') });
   const colsK = useColumns('inventory', [{ id: 'name', label: 'Medicine', fixed: true }, { id: 'batch', label: 'Next batch' }, { id: 'expiry', label: 'Expiry' }, { id: 'shelf', label: 'Shelf' },
     { id: 'reorder', label: 'Reorder at' }, { id: 'stock', label: 'In stock' }, ...(multi ? [{ id: 'all', label: 'All branches' }] : []), { id: 'price', label: 'Retail price' }, { id: 'value', label: 'Value (cost)' }]);
-  const cols = colsK.shown.length + 2 + (can('inventory.edit') ? 1 : 0);
+  const cols = colsK.shown.length + 2 + (can('inventory.edit') || can('medicines.manage') ? 1 : 0);
   // C5: price (medicines.manage) and reorder level (inventory.edit) edited in the table; Enter saves, Esc cancels;
   // audited like the form
   const [cellEdit, setCellEdit] = useState(null); // { id, k, v }
@@ -313,14 +316,14 @@ export function StockLevels() {
       <div className={'list-and-details' + (open && wide ? ' with-details' : '')}>
       <div className="card table-wrap" ref={listRef}>
         <table className="phone-rows">
-          <thead><tr><th className="tick"><input {...lc.allProps} /></th>{colsK.shown.map((id) => <th key={id} className={['reorder', 'stock', 'all', 'price', 'value'].includes(id) ? 'num' : ''}>{{ name: 'Medicine', batch: 'Next batch', expiry: 'Expiry', shelf: 'Shelf', reorder: 'Reorder at', stock: 'In stock', all: 'All branches', price: 'Retail price', value: 'Value (cost)' }[id]}</th>)}{can('inventory.edit') && <th />}</tr></thead>
+          <thead><tr><th className="tick"><input {...lc.allProps} /></th>{colsK.shown.map((id) => <th key={id} className={['reorder', 'stock', 'all', 'price', 'value'].includes(id) ? 'num' : ''}>{{ name: 'Medicine', batch: 'Next batch', expiry: 'Expiry', shelf: 'Shelf', reorder: 'Reorder at', stock: 'In stock', all: 'All branches', price: 'Retail price', value: 'Value (cost)' }[id]}</th>)}{(can('inventory.edit') || can('medicines.manage')) && <th />}</tr></thead>
           <tbody>
             {shownRows.map((r) => r.heading !== undefined ? <GroupHeadingRow key={'g:' + r.heading} row={r} colSpan={cols} onToggle={() => toggleFold(r.heading)} /> : (({ p }) => { const i = flat.indexOf(p); const rp = lc.rowProps(p, i); const c = cellOf(p); return (
               <tr key={p.id} {...rp} className={[rp.className, open?.id === p.id && wide ? 'row-open' : ''].filter(Boolean).join(' ')} onClick={(e) => { rp.onClick(e); if (!e.target.closest('button, a, input, select, label, .cell-editable')) setOpen(p); }} style={{ cursor: 'pointer' }}>
                 <td className="tick" onClick={(e) => e.stopPropagation()}><input {...lc.tickProps(p, i)} /></td>
                 <td className="row-title"><strong>{p.name}</strong><br /><small className="muted">{p.form}</small><StockStatus p={p} warn={warn} /></td>
                 {colsK.shown.filter((id) => id !== 'name').map((id) => c[id])}
-                {can('inventory.edit') && <td className="actions"><button className="btn sm ghost" onClick={(e) => { e.stopPropagation(); setEditing(p); }}><Pencil size={14} />Edit</button></td>}
+                {(can('inventory.edit') || can('medicines.manage')) && <td className="actions">{can('inventory.edit') && <button className="btn sm ghost" onClick={(e) => { e.stopPropagation(); setEditing(p); }}><Pencil size={14} />Edit</button>}{can('medicines.manage') && <button className="btn sm ghost" title="Sell by tablet, pair, half strip, strip, box…" onClick={(e) => { e.stopPropagation(); setUnitsFor(p); }}><Boxes size={14} />Units</button>}</td>}
               </tr>
             ); })(r))}
             {!rows.length && <Empty colSpan={cols} action={!products.length && can('medicines.manage') ? { label: 'Add a medicine', to: '/medicines' } : can('stock.receive') && filter !== 'low' ? { label: 'Add stock', to: '/add-stock' } : undefined}>
@@ -338,6 +341,7 @@ export function StockLevels() {
         can('medicines.manage') && { label: 'Change price', Icon: Tag, run: changePrices },
       ]} />
       {editing && <InventoryEditor product={editing} onClose={() => setEditing(null)} />}
+      {unitsFor && <PacksEditor product={unitsFor} onClose={() => setUnitsFor(null)} />}
       {open && !wide && <DetailsPane title={`${open.name} – batches at ${branch?.name}`} onClose={() => setOpen(null)}>{batchesTable}</DetailsPane>}
     </div>
   );
@@ -645,46 +649,136 @@ function InventoryEditor({ product, onClose }) {
 }
 
 /**
- * Pack sizes for a medicine: stock is always kept in its smallest unit (e.g. tablets); a pack is a number of those
- * units with its own price (blank = unit price × size). The POS can sell, and Add Stock receive, by pack.
+ * Selling units for a medicine (Nov 2026, the owner's request): stock is always kept in its smallest unit (e.g.
+ * tablets); a selling unit is a number of those (a pair, a half strip, a strip, a box) with its own retail and wholesale
+ * price (blank = unit price × size). The admin also chooses which unit the till starts on and whether single units are
+ * sold at all ("sold loose"). The till offers every unit set here; Add Stock can receive by them.
  */
 export function PacksEditor({ product, onClose }) {
-  const { update, user, branchId, fmt } = useStore();
-  const [rows, setRows] = useState(() => (product.packs?.length ? product.packs : [{ name: 'Strip', size: 10, price: '' }]).map((k) => ({ ...k, price: k.price ?? '' })));
+  const { update, user, branchId, fmt, can } = useStore();
+  const [rows, setRows] = useState(() => (product.packs?.length ? product.packs : []).map((k) => ({ ...k, price: k.price ?? '', wholesale: k.wholesale ?? '' })));
+  const [sellAs, setSellAs] = useState(product.sellAs ?? null); // null = as Settings → Receipts & stock says
+  const [loose, setLoose] = useState(soldLoose(product));
+  const [changing, setChanging] = useState(false);
   const unit = product.unit || 'Unit';
   const set = (n, patch) => setRows((r) => r.map((x, i) => (i === n ? { ...x, ...patch } : x)));
+  const presets = unitPresets({ packs: rows });
+  const addPreset = (k) => setRows((r) => (r.some((x) => x.name.trim().toLowerCase() === k.name.toLowerCase()) ? r : [...r, { name: k.name, size: k.size, price: '', wholesale: '' }]));
   const save = (e) => {
     e.preventDefault();
-    const packs = rows.filter((k) => k.name.trim() && Number(k.size) > 1).map((k) => ({ name: k.name.trim(), size: Math.round(Number(k.size)), price: k.price === '' ? null : Number(k.price) || null }));
-    if (new Set(packs.map((k) => k.name.toLowerCase())).size !== packs.length) return toast('Each pack needs its own name', 'warn');
+    const named = rows.filter((k) => String(k.name).trim());
+    const bad = named.find((k) => !(Number(k.size) >= 2) || !Number.isInteger(Number(k.size)));
+    if (bad) return toast(`${bad.name}: how many ${unit.toLowerCase()}s are in it? A whole number, 2 or more`, 'warn');
+    const amt = (v) => (v === '' || v == null ? null : Number(v) || null);
+    const packs = named.map((k) => ({ name: String(k.name).trim(), size: Number(k.size), price: amt(k.price), ...(amt(k.wholesale) ? { wholesale: amt(k.wholesale) } : {}) })).sort((a, b) => a.size - b.size); // smallest first, as the till lists them
+    if (new Set(packs.map((k) => k.name.toLowerCase())).size !== packs.length) return toast('Each selling unit needs its own name', 'warn');
+    if (packs.some((k) => k.name.toLowerCase() === unit.toLowerCase())) return toast(`"${unit}" is the stock unit itself; name the pack differently`, 'warn');
+    const start = sellAs && !packs.some((k) => k.name === sellAs) ? null : sellAs;
+    if (!loose && !packs.length) return toast(`Add the units it is sold in, or tick "Sold loose" so single ${unit.toLowerCase()}s can be sold`, 'warn');
+    if (!loose && start === '') return toast(`It isn't sold as single ${unit.toLowerCase()}s, so the till can't start on one`, 'warn');
     update((d) => {
       const cur = d.products.find((x) => x.id === product.id) || product;
       const { stock, totalStock, ...rest } = cur;
-      put(d, 'products', { ...rest, packs });
-      audit(d, user, 'Pack sizes changed', `${product.name}: ${packs.map((k) => `${k.name} = ${k.size} ${unit}`).join(', ') || 'none'}`, branchId);
+      put(d, 'products', { ...rest, packs, sellAs: start, loose });
+      const words = [...(loose ? [`${unit} (single)`] : []), ...packs.map((k) => `${k.name} = ${k.size} ${unit}`)].join(', ');
+      audit(d, user, 'Selling units changed', `${product.name}: ${words || 'none'}; the till starts on ${start === null ? 'the settings default' : start || unit}${loose ? '' : '; not sold loose'}`, branchId);
     });
-    toast(`${product.name}: pack sizes saved`);
+    toast(`${product.name}: selling units saved`);
     onClose();
   };
+  if (changing) return <UnitChange product={product} onClose={onClose} />;
   return (
-    <Modal title={`Pack sizes – ${product.name}`} onClose={onClose}>
+    <Modal title={`Selling units – ${product.name}`} onClose={onClose} size="lg">
       <form className="stack" onSubmit={save}>
-        <p className="muted small">Stock is counted in <strong>{unit}</strong>s ({fmt(product.price)} each). Add the packs you sell or receive, e.g. Strip = 10, Box = 100. Leave the price blank for {unit.toLowerCase()} price × size.</p>
+        <p className="muted small">Stock is counted in <strong>{unit}s</strong> ({fmt(product.price)} each). Add every unit the till may sell it by: a pair, a half strip, a strip, a box. Leave a price blank for {unit.toLowerCase()} price × size.</p>
+        <div className="row gap wrap" role="group" aria-label="Add a ready-made unit">
+          {presets.map((k) => <button key={k.name} type="button" className="btn sm ghost" disabled={rows.some((x) => String(x.name).trim().toLowerCase() === k.name.toLowerCase())} title={k.note || (k.size ? `${k.size} ${unit.toLowerCase()}s` : 'Set the strip first')} onClick={() => addPreset(k)}>+ {k.name}{k.size ? ` (${k.size})` : ''}</button>)}
+          <button type="button" className="btn sm ghost" onClick={() => setRows((r) => [...r, { name: '', size: '', price: '', wholesale: '' }])}>+ Other</button>
+        </div>
         <table className="lines">
-          <thead><tr><th>Pack name</th><th>{unit}s in it</th><th>Pack price</th><th /></tr></thead>
+          <thead><tr><th>Till starts on</th><th>Unit</th><th>{unit}s in it</th><th>Retail price</th><th>Wholesale price</th><th /></tr></thead>
           <tbody>
+            <tr>
+              <td><input type="radio" name="sellAs" checked={sellAs === ''} disabled={!loose} onChange={() => setSellAs('')} aria-label={`Till starts on one ${unit}`} /></td>
+              <td><label style={{ display: 'flex', alignItems: 'center', gap: 6 }}><input type="checkbox" checked={loose} onChange={(e) => { setLoose(e.target.checked); if (!e.target.checked && sellAs === '') setSellAs(null); }} />{unit} <span className="muted small">(sold loose)</span></label></td>
+              <td>1</td><td>{fmt(product.price)}</td><td>{Number(product.wholesale) > 0 ? fmt(product.wholesale) : '—'}</td><td />
+            </tr>
             {rows.map((k, n) => (
               <tr key={n}>
-                <td><input value={k.name} onChange={(e) => set(n, { name: e.target.value })} placeholder="Strip / Box / Bottle" aria-label="Pack name" /></td>
-                <td><input type="number" min="2" value={k.size} onChange={(e) => set(n, { size: e.target.value })} aria-label="Units in the pack" /></td>
-                <td><input type="number" min="0" step="any" value={k.price} placeholder={String((product.price || 0) * (Number(k.size) || 0))} onChange={(e) => set(n, { price: e.target.value })} aria-label="Pack price" /></td>
-                <td><button type="button" className="icon-btn" aria-label="Remove pack" onClick={() => setRows((r) => r.filter((_, i) => i !== n))}>×</button></td>
+                <td><input type="radio" name="sellAs" checked={!!k.name && sellAs === String(k.name).trim()} disabled={!String(k.name).trim()} onChange={() => setSellAs(String(k.name).trim())} aria-label={`Till starts on ${k.name || 'this unit'}`} /></td>
+                <td><input value={k.name} onChange={(e) => { if (sellAs && sellAs === String(k.name).trim()) setSellAs(e.target.value.trim()); set(n, { name: e.target.value }); }} placeholder="Strip / Pair / Box" aria-label="Unit name" /></td>
+                <td><input type="number" min="2" step="1" value={k.size} onChange={(e) => set(n, { size: e.target.value })} aria-label={`${unit}s in it`} /></td>
+                <td><input type="number" min="0" step="any" value={k.price} placeholder={String((product.price || 0) * (Number(k.size) || 0))} onChange={(e) => set(n, { price: e.target.value })} aria-label="Retail price" /></td>
+                <td><input type="number" min="0" step="any" value={k.wholesale} placeholder={String((product.wholesale || product.price || 0) * (Number(k.size) || 0))} onChange={(e) => set(n, { wholesale: e.target.value })} aria-label="Wholesale price" /></td>
+                <td><button type="button" className="icon-btn" aria-label={`Remove ${k.name || 'unit'}`} onClick={() => { if (sellAs === String(k.name).trim()) setSellAs(null); setRows((r) => r.filter((_, i) => i !== n)); }}>×</button></td>
               </tr>
             ))}
           </tbody>
         </table>
-        <button type="button" className="btn sm ghost" onClick={() => setRows((r) => [...r, { name: '', size: '', price: '' }])}>+ Add pack</button>
-        <div className="form-actions"><button type="button" className="btn ghost" onClick={onClose}>Cancel</button><button className="btn primary">Save packs</button></div>
+        <label className="row gap small"><input type="radio" name="sellAs" checked={sellAs === null} onChange={() => setSellAs(null)} />Till starts as Settings → Receipts & stock says (single units in retail, the largest pack in wholesale)</label>
+        {can('stock.adjust') && <p className="muted small">Counted in the wrong unit (e.g. boxes when you sell tablets)? <button type="button" className="btn sm ghost" onClick={() => setChanging(true)}>Change unit of issue…</button></p>}
+        <div className="form-actions"><button type="button" className="btn ghost" onClick={onClose}>Cancel</button><button className="btn primary">Save selling units</button></div>
+      </form>
+    </Modal>
+  );
+}
+
+/**
+ * Change the unit of issue (the unit stock is counted in), e.g. from Box to Tablet with 1 box = 100 tablets. Unlike
+ * picking another "Stock unit" in the medicine form (a rename only), this converts: every batch in every branch gets
+ * a "Unit change" movement, prices and cost are divided, the reorder level and pack sizes multiplied, the old unit is
+ * kept as a pack at its old price, and the change is recorded so earlier sales count in the new unit (src/packs.js).
+ * Needs Adjust stock (and Medicines); written to the audit log.
+ */
+export function UnitChange({ product, onClose }) {
+  const { db, update, user, branchId, fmt, can, batchesOf } = useStore();
+  const from = product.unit || 'Unit';
+  const [to, setTo] = useState(from === 'Tablet' ? '' : 'Tablet');
+  const [factor, setFactor] = useState('');
+  const [busy, setBusy] = useState(false);
+  const f = Number(factor);
+  const okFactor = Number.isInteger(f) && f >= 2;
+  const lots = useMemo(() => (db.branches || []).flatMap((b) => batchesOf(product.id, b.id).filter((x) => x.qty).map((x) => ({ branchId: b.id, branch: b.name, batchId: x.legacy ? null : x.id, batch: x.batch, qty: x.qty }))), [db.branches, batchesOf, product.id]);
+  const held = lots.reduce((a, l) => a + l.qty, 0);
+  const allowed = can('stock.adjust') && can('medicines.manage');
+  const go = async (e) => {
+    e.preventDefault();
+    if (!allowed) return toast('Changing the unit of issue needs the Adjust stock and Medicines permissions', 'warn');
+    if (!String(to).trim()) return toast('Name the new unit', 'warn');
+    if (!okFactor) return toast(`How many ${to || 'new unit'}s are in one ${from}? A whole number, 2 or more`, 'warn');
+    if (!(await ask({ title: `Count ${product.name} in ${to}s?`, message: `1 ${from} = ${f} ${to}s. Stock ${formatQty(held)} ${from.toLowerCase()}s becomes ${formatQty(held * f)} ${to.toLowerCase()}s in ${new Set(lots.map((l) => l.branchId)).size || 0} branch(es); the price ${fmt(product.price)} per ${from.toLowerCase()} becomes ${fmt(Number(product.price) / f)} per ${to.toLowerCase()}. Make sure every till has synced first: a sale still waiting on another device would be taken in the old unit.`, confirmText: 'Change unit' }))) return;
+    setBusy(true);
+    try {
+      await update((d) => {
+        const cur = d.products.find((x) => x.id === product.id) || product;
+        const { stock, totalStock, ...rest } = cur;
+        const at = new Date().toISOString();
+        const r = unitChange(rest, { to: String(to).trim(), factor: f, lots, batches: d.batches, at, by: user.name, decimals: db.settings.decimals ?? 0 });
+        put(d, 'products', r.product);
+        for (const b of r.batches) put(d, 'batches', b);
+        for (const m of r.moves) move(d, { ...m, ref: 'unit:' + product.id, user: user.name });
+        audit(d, user, 'Unit of issue changed', `${product.name}: 1 ${from} = ${f} ${r.product.unit}; stock ${formatQty(held)} → ${formatQty(held * f)}; retail ${fmt(product.price)} → ${fmt(r.product.price)}; cost ${fmt(product.cost)} → ${fmt(r.product.cost)}; reorder ${product.reorder || 0} → ${r.product.reorder || 0}`, branchId);
+      });
+      toast(`${product.name} is now counted in ${to}s`, 'success', { sync: true });
+      onClose();
+    } catch (err) { toast(`Not changed: ${err.message}`, 'error'); } finally { setBusy(false); }
+  };
+  return (
+    <Modal title={`Change unit of issue – ${product.name}`} onClose={onClose}>
+      <form className="stack" onSubmit={go}>
+        <p className="muted small">Now counted in <strong>{from}s</strong>: {formatQty(held)} in stock, {fmt(product.price)} each. To sell single {to ? to.toLowerCase() : 'tablet'}s, convert the stock: each batch is multiplied, the prices and cost divided, and the {from.toLowerCase()} stays on sale as a pack at its old price.</p>
+        <div className="form-grid">
+          <label className="field"><span>New unit</span><input value={to} onChange={(e) => setTo(e.target.value)} list="unit-names" placeholder="Tablet" required /></label>
+          <label className="field"><span>{to || 'New unit'}s in one {from}</span><input type="number" min="2" step="1" value={factor} onChange={(e) => setFactor(e.target.value)} placeholder="e.g. 100" required /></label>
+        </div>
+        <datalist id="unit-names">{UNITS.map((u) => <option key={u} value={u} />)}</datalist>
+        {okFactor && to && <div className="card small">
+          <div>Stock: {formatQty(held)} {from.toLowerCase()}s → <strong>{formatQty(held * f)} {to.toLowerCase()}s</strong></div>
+          <div>Retail: {fmt(product.price)} → <strong>{fmt(Number(product.price) / f)}</strong> per {to.toLowerCase()} · cost {fmt(product.cost)} → {fmt(Number(product.cost) / f)}</div>
+          <div>Reorder level: {product.reorder || 0} → {(Number(product.reorder) || 0) * f} · packs: {[...packsOf(product).map((k) => `${k.name} ${k.size} → ${k.size * f}`), `${from} = ${f} (new)`].join(', ')}</div>
+        </div>}
+        {!allowed && <p className="text-warn small">Needs the Adjust stock and Medicines permissions.</p>}
+        <div className="form-actions"><button type="button" className="btn ghost" onClick={onClose}>Cancel</button><button className="btn primary" disabled={busy || !allowed}>{busy ? 'Changing…' : 'Change unit'}</button></div>
       </form>
     </Modal>
   );
