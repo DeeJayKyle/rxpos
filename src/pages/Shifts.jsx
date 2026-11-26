@@ -126,7 +126,7 @@ export default function Shifts() {
       {backfill && (
         <Modal wide title="Past sales → shifts (needs your approval)" onClose={() => setBackfill(null)}>
           <p className="muted small">One shift per person, branch and day, from their first sale to their last. These shifts have no float and no cash count, so they never show as balanced or short. Sales are not changed.</p>
-          <div className="table-wrap" style={{ maxHeight: '50vh', overflow: 'auto' }}><table><thead><tr><th>Day</th><th>Cashier</th>{db.branches.length > 1 && <th>Branch</th>}<th>From – to</th><th className="num">Sales</th><th className="num">Total</th></tr></thead><tbody>
+          <div className="table-wrap scroll-50"><table><thead><tr><th>Day</th><th>Cashier</th>{db.branches.length > 1 && <th>Branch</th>}<th>From – to</th><th className="num">Sales</th><th className="num">Total</th></tr></thead><tbody>
             {backfill.map((g) => <tr key={g.key}><td>{g.day}</td><td>{g.user}{!g.userId && <small className="muted"> (no longer a user)</small>}</td>{db.branches.length > 1 && <td>{db.branches.find((b) => b.id === g.branchId)?.name || g.branchId}</td>}<td>{new Date(g.openedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} – {new Date(g.closedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td><td className="num">{g.sales}</td><td className="num">{fmt(g.total)}</td></tr>)}
           </tbody></table></div>
           <div className="form-actions"><button type="button" className="btn ghost" onClick={() => setBackfill(null)}>Not now</button><button type="button" className="btn primary" onClick={approveBackfill}>Approve and create {backfill.length} shift{backfill.length === 1 ? '' : 's'}</button></div>
@@ -175,13 +175,13 @@ export default function Shifts() {
               ))}
               <label className="field"><span>Other coins (total)</span><input type="number" min="0" disabled={blind && closing.revealed} value={closing.counts.coins || ''} onChange={(e) => setClosing({ ...closing, counts: { ...closing.counts, coins: e.target.value } })} /></label>
             </div>
-            <div className="totals" style={{ marginTop: 12 }}>
+            <div className="totals mt-3">
               {shown && <div className="row between"><span className="muted">Expected cash</span><span className="num">{fmt(live.expectedCash)}</span></div>}
               <div className="row between"><span className="muted">Counted</span><span className="num">{fmt(counted)}</span></div>
               {shown && <div className={'row between grand ' + (diff < 0 ? 'text-danger' : diff > 0 ? 'text-warn' : 'text-ok')}><span>{diff === 0 ? 'Balanced' : diff > 0 ? 'Over' : 'Short'}</span><span className="num">{fmt(Math.abs(diff))}</span></div>}
               {!shown && <small className="muted">Blind cash-up: enter what you counted, then see what the drawer should hold. The count can't be changed after that.</small>}
             </div>
-            <label className="field" style={{ marginTop: 12 }}><span>Note (explain any difference)</span><input value={closing.note} onChange={(e) => setClosing({ ...closing, note: e.target.value })} /></label>
+            <label className="field mt-3"><span>Note (explain any difference)</span><input value={closing.note} onChange={(e) => setClosing({ ...closing, note: e.target.value })} /></label>
             <div className="form-actions">
               <button className="btn ghost" onClick={() => setClosing(null)}>Cancel</button>
               {!shown ? <button className="btn primary" onClick={() => setClosing({ ...closing, revealed: true })}>Show the difference</button> : <>

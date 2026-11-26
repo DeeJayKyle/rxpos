@@ -19,6 +19,8 @@ export function useBehaviour() {
 /** The top-bar button and its panel */
 export function ControlCentre({ dark, onDark, rail, onRail, onSync, onLock, onLibrary }) {
   const [open, setOpen] = useState(false);
+  const b = useBehaviour();
+  if (!b.cc) return null; // 1.22.0: off until switched on in This device → Extras
   return (
     <>
       <button type="button" className="icon-btn cc-btn" aria-label="Control Centre" title="Control Centre" aria-expanded={open} onClick={() => setOpen(true)}><SlidersHorizontal size={18} /></button>
@@ -57,7 +59,7 @@ function ControlPanel({ onClose, dark, onDark, rail, onRail, onSync, onLock, onL
           ); })}
           <button type="button" className={'cc-tile' + (rail ? ' on' : '')} aria-pressed={rail} title="The menu as icons only" onClick={onRail}><PanelLeftClose size={20} /><small>Compact menu</small></button>
           <button type="button" className="cc-tile" onClick={then(onSync)}><RefreshCw size={20} /><small>Sync now</small></button>
-          <button type="button" className="cc-tile" onClick={then(onLibrary)}><LayoutGrid size={20} /><small>App Library</small></button>
+          {b.library && <button type="button" className="cc-tile" onClick={then(onLibrary)}><LayoutGrid size={20} /><small>App Library</small></button>}
           <button type="button" className="cc-tile cc-lock" onClick={then(onLock)}><LockKeyhole size={20} /><small>Lock the till</small></button>
         </div>
         <div className="cc-row">

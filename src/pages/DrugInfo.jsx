@@ -109,7 +109,7 @@ export default function DrugInfo() {
         <div className="search-wrap"><Search size={16} /><input className="search big" placeholder="Medicine or generic name, e.g. amoxicillin" value={q} onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && q.trim() && setPicked({ name: q.trim(), generic: q.trim() })} /></div>
         {matches.length > 0 && !picked && (
-          <div className="ref-links" style={{ marginTop: 10 }}>
+          <div className="ref-links mt-3">
             {matches.map((p) => <button key={p.id} className="chip" onClick={() => { setPicked(p); setQ(p.name); }}>{p.name}</button>)}
             <button className="chip" onClick={() => setPicked({ name: q.trim(), generic: q.trim() })}>Search “{q.trim()}”</button>
           </div>

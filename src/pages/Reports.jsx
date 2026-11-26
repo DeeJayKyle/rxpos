@@ -174,7 +174,7 @@ export default function Reports() {
             <div className="card"><h3>By cashier</h3><table><tbody>
               {sumBy(sales, (s) => s.cashier, (s) => s.total).map(([k, v]) => <tr key={k}><td>{k}</td><td className="num">{fmt(v)}</td></tr>)}
             </tbody></table>
-            <h3 style={{ marginTop: 16 }}>Retail vs wholesale</h3><table><tbody>
+            <h3 className="mt-4">Retail vs wholesale</h3><table><tbody>
               {sumBy(sales, (s) => s.type || 'retail', (s) => s.total).map(([k, v]) => <tr key={k}><td className="cap">{k}</td><td className="num">{fmt(v)}</td></tr>)}
             </tbody></table></div>
           </div>

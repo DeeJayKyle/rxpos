@@ -1031,7 +1031,7 @@ function PurchaseEditor({ purchase, onClose }) {
                   {i.removed ? <span className="muted">removed</span> : <output className="unit-cost num" aria-label="Unit cost" title="Line total ÷ quantity">{costOf(i) > 0 ? fmt(costOf(i)) : '—'}</output>}</td>
                 <td data-label="Line total" className="col-total"><input type="number" min="0" step="any" inputMode="decimal" placeholder="Total amount" className={i.by === 'total' ? 'typed' : ''} value={i.total} disabled={i.removed} onChange={(e) => setItem(i.key, { total: e.target.value })} aria-label="Line total" /></td>
                 <td className="line-x">{i.removed
-                  ? <button type="button" className="btn sm ghost nowrap" style={{ whiteSpace: 'nowrap' }} onClick={() => setItem(i.key, { removed: false })}><RotateCcw size={13} />Undo</button>
+                  ? <button type="button" className="btn sm ghost nowrap" onClick={() => setItem(i.key, { removed: false })}><RotateCcw size={13} />Undo</button>
                   : <button type="button" className="icon-btn" title="Remove this line" aria-label="Remove line" onClick={() => (i.orig == null ? setF((x) => ({ ...x, items: x.items.filter((y) => y.key !== i.key) })) : setItem(i.key, { removed: true }))}><Trash2 size={15} /></button>}</td>
               </tr>
             ))}

@@ -187,7 +187,7 @@ export default function Dashboard() {
                 onClick={can('reports') ? () => navigate('/reports', { state: { tab: 'lines', medicine: x.name, from: topRange.from, to: topRange.to } }) : undefined}>
                 <td className="rank">{i + 1}</td>
                 <td className="name"><strong>{x.name}</strong><small>{x.qty.toLocaleString()} sold{can('reports') && x.amount > 0 ? ` · profit ${fmt(x.profit)} (${Math.round((x.profit / x.amount) * 100)}%)` : ''}</small></td>
-                <td style={{ width: '28%' }}><div className={'meter ' + topBy}><i style={{ width: `${Math.max(0, (x[topBy] / topMax) * 100)}%` }} /></div></td>
+                <td className="w-28"><div className={'meter ' + topBy}><i style={{ width: `${Math.max(0, (x[topBy] / topMax) * 100)}%` }} /></div></td>
                 <td className="num"><strong>{topBy === 'qty' ? x.qty.toLocaleString() : fmt(x[topBy])}</strong></td>
               </tr>
             ))}
@@ -244,7 +244,7 @@ export default function Dashboard() {
         <table className="month-table">
           <thead><tr><th>Month</th><th className="num">Sales</th><th className="num">Total</th><th /></tr></thead>
           <tbody>
-            {monthRows.map(({ name, k }) => <tr key={k}><td>{name}</td><td className="num">{(m.byMonth[k]?.n || 0).toLocaleString()}</td><td className="num">{fmt(m.byMonth[k]?.total)}</td><td style={{ width: '28%' }}><div className="meter"><i style={{ width: `${((m.byMonth[k]?.total || 0) / monthMax) * 100}%` }} /></div></td></tr>)}
+            {monthRows.map(({ name, k }) => <tr key={k}><td>{name}</td><td className="num">{(m.byMonth[k]?.n || 0).toLocaleString()}</td><td className="num">{fmt(m.byMonth[k]?.total)}</td><td className="w-28"><div className="meter"><i style={{ width: `${((m.byMonth[k]?.total || 0) / monthMax) * 100}%` }} /></div></td></tr>)}
           </tbody>
         </table>
       </div>

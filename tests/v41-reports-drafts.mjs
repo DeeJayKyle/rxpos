@@ -84,11 +84,12 @@ const A = await device('robin@test.rx', 'robin-pass-1234');
 // ---- Vivid ----
 await go(A, '#/');
 const calm = await A.evaluate(() => getComputedStyle(document.querySelector('.stat.teal')).backgroundImage);
-// switched on the way a person does it: appearance menu → Colour → Vivid
-await A.click('button[aria-label="Theme"]'); await wait(300);
-await clickText(A, '.style-item', /^Vivid/); await wait(500);
+// switched on the way a person does it: This device → Look → Colour → Vivid (1.22.0: moved from the theme menu)
+await go(A, '#/device');
+await clickText(A, '.look-card .style-item', /^Vivid/); await wait(500);
+await go(A, '#/');
 const now = await A.evaluate(() => ({ attr: document.documentElement.dataset.colour, bg: getComputedStyle(document.querySelector('.stat.teal')).backgroundImage }));
-check('appearance menu → Colour → Vivid takes effect at once', now.attr === 'vivid' && /linear-gradient/.test(now.bg) && !/radial-gradient/.test(now.bg), JSON.stringify(now));
+check('This device → Look → Colour → Vivid takes effect at once', now.attr === 'vivid' && /linear-gradient/.test(now.bg) && !/radial-gradient/.test(now.bg), JSON.stringify(now));
 await A.reload({ waitUntil: 'networkidle2' }); await A.waitForSelector('.sidebar', { timeout: 20000 }); await wait(1200);
 await A.evaluate(() => { window.print = () => { window.__printed = (window.__printed || 0) + 1; }; });
 const vivid = await A.evaluate(() => ({ attr: document.documentElement.dataset.colour, bg: getComputedStyle(document.querySelector('.stat.teal')).backgroundImage, color: getComputedStyle(document.querySelector('.stat.teal strong')).color }));

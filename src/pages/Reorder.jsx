@@ -140,7 +140,7 @@ export default function Reorder() {
           {levels && (() => { const c = reorderSettings(db.settings); return (
             <Modal title="Reorder levels from sales" onClose={() => setLevels(null)} wide>
               <p className="muted small">Level = average daily sales over the last {c.days} days × (lead time {c.lead} + safety {c.safety} days). Only medicines that sold are changed. {c.on ? 'RxPOS also does this automatically every week.' : 'Weekly automatic updates are off (Settings → Receipts & stock).'}</p>
-              <div className="table-wrap" style={{ maxHeight: '50vh' }}>
+              <div className="table-wrap max-h-50">
                 <table>
                   <thead><tr><th>Medicine</th><th className="num">Sold ({c.days} d)</th><th className="num">Per day</th><th className="num">Now</th><th className="num">New level</th></tr></thead>
                   <tbody>
@@ -155,7 +155,7 @@ export default function Reorder() {
           {plan && (
             <Modal title={`Review ${plan.length} purchase order${plan.length === 1 ? '' : 's'}`} onClose={() => setPlan(null)} wide>
               <p className="muted small">Grouped by {supplierRule(from, handPicked)}. Costs are estimates from past purchases; confirm prices with each supplier. The orders are saved as drafts and are not sent to anyone.</p>
-              <div className="po-plan" style={{ maxHeight: '55vh', overflow: 'auto' }}>
+              <div className="po-plan scroll-55">
                 {plan.map((o) => (
                   <section key={o.supplierId || 'none'} className="card po-plan-group" aria-label={`Order for ${o.supplierName}`}>
                     <div className="row gap"><strong className="grow">{o.supplierName}</strong><span className="muted small">{o.lines.length} line{o.lines.length === 1 ? '' : 's'}</span><strong>{fmt(o.total)}</strong></div>

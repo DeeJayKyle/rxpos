@@ -80,7 +80,7 @@ export default function Notes() {
       <aside className="notes-side card">
         <div className="notes-side-head"><h1><NotebookPen size={20} />Notes &amp; SOPs</h1></div>
         <label className="notes-search"><Search size={14} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search pages" aria-label="Search pages" /></label>
-        <div className="row gap" style={{ flexWrap: 'wrap' }}>
+        <div className="row gap flex-wrap">
           <button type="button" className="btn sm primary" onClick={() => create()}><FilePlus size={15} />New page</button>
           <button type="button" className="btn sm ghost" aria-expanded={tplOpen} onClick={() => setTplOpen((o) => !o)}><LayoutTemplate size={15} />Templates</button>
         </div>
