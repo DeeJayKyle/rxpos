@@ -156,7 +156,7 @@ export function ColTh({ cols, id, children, sort, k, className = '', style, titl
       <span className="col-head">
         {!fixed && <GripVertical size={12} className="col-grip" aria-hidden="true" />}
         {sort && k
-          ? <button type="button" className="th-sort" onClick={() => sort.sort(k)}>{children}<span aria-hidden="true">{on ? (sort.dir > 0 ? ' ▲' : ' ▼') : ' ↕'}</span></button>
+          ? <button type="button" className="th-sort" data-sort={on ? (sort.dir > 0 ? 'asc' : 'desc') : 'none'} onClick={() => sort.sort(k)}>{children}</button>
           : children}
         {!fixed && (
           <span className="col-arrows">

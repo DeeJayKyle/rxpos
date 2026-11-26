@@ -7,7 +7,8 @@ import { useNavigate } from 'react-router-dom';
 import { Banknote, TrendingUp, Package, AlertTriangle, Download, Printer } from 'lucide-react';
 import { useStore, dayOf, downloadFile, toCSV, MAIN_BRANCH } from '../store.jsx';
 import { formatQty } from '../money.js';
-import { Stat, PdfButton, PayChip, usePages, Pager, useSort, SortTh, ExportMenu } from '../ui.jsx';
+import { Stat, PdfButton, PayChip, ExportMenu } from '../ui.jsx';
+import { DataTable } from '../datatable.jsx';
 import { dateLocale } from '../showdate.js';
 
 const ALL = '';
@@ -44,8 +45,8 @@ export default function SalesLines({ from, to, branch, initial = {}, money = tru
   const med = f.medicine.trim().toLowerCase();
   const rows = lines.filter((l) => (!f.cashier || l.cashier === f.cashier) && (!f.type || l.type === f.type) && (!f.payment || l.payment === f.payment)
     && (!f.customer || l.customer === f.customer) && (!med || `${l.name} ${l.generic}`.toLowerCase().includes(med)));
-  const s = useSort(rows, { date: (l) => l.date, customer: (l) => l.customer, cashier: (l) => l.cashier, number: (l) => l.number, name: (l) => l.name, qty: (l) => l.qty, amount: (l) => l.amount, profit: (l) => l.profit, margin: (l) => (l.amount ? l.profit / l.amount : 0) }, 'date');
-  const p = usePages(s.rows, 50);
+  // the PDF and CSV list the lines newest first (the table sorts on its own)
+  const s = { rows: [...rows].sort((a, b) => String(b.date).localeCompare(String(a.date))) };
   const sum = rows.reduce((a, l) => ({ qty: a.qty + l.qty, amount: a.amount + l.amount, profit: a.profit + l.profit }), { qty: 0, amount: 0, profit: 0 });
   const losses = rows.filter((l) => l.profit < 0 && l.cost > 0).length;
   const receipts = new Set(rows.map((l) => l.saleId)).size;
@@ -79,31 +80,26 @@ export default function SalesLines({ from, to, branch, initial = {}, money = tru
         <Stat label="Quantity sold" value={formatQty(sum.qty)} sub={`${new Set(rows.map((l) => l.name)).size} medicines`} tone="blue" icon={Package} />
         {money && <Stat label="Sold below cost" value={losses} sub={losses ? 'lines with a loss: check the price' : 'no line sold at a loss'} tone={losses ? 'red' : 'green'} icon={AlertTriangle} />}
       </div>
-      <div className="card table-wrap">
-        <div className="report-title">{title}{filtersText && <small className="muted"> · {filtersText}</small>}</div>
-        <table className="lines-table">
-          <thead><tr>
-            <SortTh s={s} k="date">Date &amp; time</SortTh><SortTh s={s} k="customer">Customer</SortTh><SortTh s={s} k="cashier">Dispenser</SortTh><SortTh s={s} k="number">Receipt</SortTh>
-            <SortTh s={s} k="name">Trade name</SortTh><th>Generic name</th><SortTh s={s} k="qty" className="num">Qty</SortTh><th>Payment</th>
-            <SortTh s={s} k="amount" className="num">Amount</SortTh>{money && <><SortTh s={s} k="profit" className="num">Profit</SortTh><SortTh s={s} k="margin" className="num">Margin</SortTh></>}
-          </tr></thead>
-          <tbody>
-            {p.rows.map((l) => (
-              <tr key={l.key}>
-                <td>{when(l.date)}</td><td>{l.customer}</td><td>{l.cashier}</td>
-                <td><button type="button" className="link-btn" title="Open this sale" onClick={() => navigate('/sales', { state: { q: l.number } })}>{l.number}</button></td>
-                <td><strong>{l.name}</strong></td><td className="muted">{l.generic || '—'}</td><td className="num">{formatQty(l.qty)}</td><td><PayChip name={l.payment} /></td>
-                <td className="num">{fmt(l.amount)}</td>
-                {money && <><td className={'num' + (l.profit < 0 ? ' loss' : '')}>{fmt(l.profit)}</td>
-                <td className="num">{l.profit < 0 && l.cost > 0 ? <span className="status danger"><i />loss</span> : pct(l.profit, l.amount)}</td></>}
-              </tr>
-            ))}
-            {!rows.length && <tr><td colSpan={money ? 11 : 9} className="empty">No sales lines match these filters in this period</td></tr>}
-            {rows.length > 0 && <tr className="total-row"><td colSpan={6}>Total{p.pages > 1 ? ` (all ${rows.length.toLocaleString()} lines)` : ''}</td><td className="num">{formatQty(sum.qty)}</td><td /><td className="num">{fmt(sum.amount)}</td>{money && <><td className="num">{fmt(sum.profit)}</td><td className="num">{pct(sum.profit, sum.amount)}</td></>}</tr>}
-          </tbody>
-        </table>
-        <Pager p={p} sizes={[50, 100, 250]} />
-      </div>
+      <div className="report-title">{title}{filtersText && <small className="muted"> · {filtersText}</small>}</div>
+      {/* the shared table (2026-11-26): 100 lines, then more as the list scrolls (no page buttons); the total is of every line */}
+      <DataTable id="sales-lines" className="lines-table" rows={rows} rowKey={(l) => l.key} sort={['date', -1]} csv={false} resetKey={[from, to, branch, f.cashier, f.type, f.payment, f.customer, med].join('|')}
+        empty="No sales lines match these filters in this period"
+        foot={(id, all, i) => (i === 0 ? `Total · ${all.length.toLocaleString()} lines` : id === 'qty' ? formatQty(sum.qty) : id === 'amount' ? fmt(sum.amount) : id === 'profit' ? fmt(sum.profit) : id === 'margin' ? pct(sum.profit, sum.amount) : '')}
+        columns={[
+          { id: 'date', label: 'Date & time', sortBy: (l) => l.date, render: (l) => when(l.date) },
+          { id: 'customer', label: 'Customer', key: 'customer' },
+          { id: 'cashier', label: 'Dispenser', key: 'cashier' },
+          { id: 'number', label: 'Receipt', sortBy: (l) => l.number, render: (l) => <button type="button" className="link-btn" title="Open this sale" onClick={() => navigate('/sales', { state: { q: l.number } })}>{l.number}</button> },
+          { id: 'name', label: 'Trade name', sortBy: (l) => l.name, render: (l) => <strong>{l.name}</strong> },
+          { id: 'generic', label: 'Generic name', sortBy: (l) => l.generic, className: 'muted', render: (l) => l.generic || '—' },
+          { id: 'qty', label: 'Qty', num: true, sortBy: (l) => l.qty, render: (l) => formatQty(l.qty) },
+          { id: 'payment', label: 'Payment', sortBy: (l) => l.payment, render: (l) => <PayChip name={l.payment} /> },
+          { id: 'amount', label: 'Amount', num: true, sortBy: (l) => l.amount, render: (l) => fmt(l.amount) },
+          ...(money ? [
+            { id: 'profit', label: 'Profit', num: true, sortBy: (l) => l.profit, tdClass: (l) => (l.profit < 0 ? 'loss' : ''), render: (l) => fmt(l.profit) },
+            { id: 'margin', label: 'Margin', num: true, sortBy: (l) => (l.amount ? l.profit / l.amount : 0), render: (l) => (l.profit < 0 && l.cost > 0 ? <span className="status danger"><i />loss</span> : pct(l.profit, l.amount)) },
+          ] : []),
+        ]} />
     </div>
   );
 }

@@ -12,6 +12,7 @@ import { HELP } from '../forms.jsx';
 import ExpiryCalendar from '../components/ExpiryCalendar.jsx';
 import { deviceSettings, setDevice } from '../device.js';
 import { useLoadMore, useColumns, ColTh, BulkBar, useWide, DetailsPane, HealthBar } from '../tablekit.jsx';
+import { DataTable } from '../datatable.jsx';
 import { ProductArt } from '../idleart.jsx';
 import { useMedicineOrder, MedicineOrderPicker, groupedRows, useFolded, GroupHeadingRow } from '../medgroups.jsx';
 import { BranchStockList } from '../components/BranchStock.jsx';
@@ -357,7 +358,6 @@ export function Expiry() {
   const navigate = useNavigate();
   const location = useLocation();
   const [tab, setTab] = useState(location.state?.tab === 'expired' ? 'expired' : 'soon');
-  const expRef = useRef(null);
   const warn = db.settings.expiryWarnDays || 90;
   const rows = useMemo(() => products.filter((p) => p.stock > 0).flatMap((p) => batchesOf(p.id).filter((b) => b.qty > 0 && b.expiry).map((b) => ({ ...b, p, days: daysUntil(b.expiry) })))
     .filter((r) => (tab === 'expired' ? r.days < 0 : r.days >= 0 && r.days <= warn))
@@ -390,31 +390,26 @@ export function Expiry() {
   return (
     <div className="page">
       <div className="page-head"><div><h1>Expiring / Expired</h1><div className="sub">{rows.length} batches · {fmt(rows.reduce((a, r) => a + r.qty * (r.cost || r.p.cost), 0))} at cost</div></div>
-        <PdfButton target={expRef} title={tab === 'expired' ? 'Expired stock' : `Expiring within ${warn} days`} subtitle={`${rows.length} batches in stock · ${fmt(rows.reduce((a, r) => a + r.qty * (r.cost || r.p.cost), 0))} at cost`} /></div>
+</div>
       <div className="list-filters">
         {view === 'list' && <FilterChips label="Show" value={tab} onChange={setTab} options={[['soon', `Expiring within ${warn} days`], ['expired', 'Expired']]} />}
         <div className="seg" role="radiogroup" aria-label="View">{[['list', 'List'], ['calendar', 'Calendar']].map(([k, l]) => <button key={k} type="button" role="radio" aria-checked={view === k} className={view === k ? 'on' : ''} onClick={() => setView(k)}>{l}</button>)}</div>
       </div>
       {view === 'calendar' && <ExpiryCalendar batches={allBatches} warn={warn} onOpen={(b) => navigate('/stock-card', { state: { productId: b.p.id } })} />}
-      {view === 'list' && <div className="card table-wrap" ref={expRef}>
-        <table className="phone-rows">
-          <thead><tr><th>Medicine</th><th>Batch</th><th>Expiry</th><th>When</th><th className="num">Qty</th><th className="num">Value</th><th /></tr></thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.p.id + r.id}>
-                <td className="row-title"><strong>{r.p.name}</strong></td><td data-label="Batch" className="batch-cell">{r.batch}</td><td data-label="Expiry" className={'nowrap ' + expiryClass(r.expiry, warn)}>{r.expiry}</td>
-                <td data-label="When" className={'nowrap ' + expiryClass(r.expiry, warn)}>{r.days < 0 ? `${-r.days} days ago` : r.days === 0 ? 'today' : `in ${r.days} days`}</td>
-                <td data-label="Qty" className="num">{formatQty(r.qty)}</td><td data-label="Value" className="num">{fmt(r.qty * (r.cost || r.p.cost))}</td>
-                <td className="actions">
-                  {(can('stock.receive') || can('stock.adjust')) && <button className="btn sm ghost" title="Send it back to the supplier for a credit note or refund" onClick={() => navigate('/returns', { state: { returnBatch: { productId: r.p.id, batchId: r.id, reason: r.days < 0 ? 'Expired' : 'Short expiry' } } })}>Return</button>}
-                  {tab === 'expired' && can('stock.adjust') && <button className="btn sm danger" disabled={!!busy} onClick={() => writeOff(r)}>{busy === r.p.id + r.id ? 'Writing off…' : 'Write off'}</button>}
-                </td>
-              </tr>
-            ))}
-            {!rows.length && <Empty colSpan={7}>{tab === 'expired' ? 'No expired stock 🎉' : 'Nothing expiring soon 🎉'}</Empty>}
-          </tbody>
-        </table>
-      </div>}
+      {view === 'list' && <DataTable id="expiry" className="phone-rows" rows={rows} rowKey={(r) => r.p.id + r.id} sort={['expiry', 1]} resetKey={tab}
+        pdf={{ title: tab === 'expired' ? 'Expired stock' : `Expiring within ${warn} days`, subtitle: `${rows.length} batches in stock · ${fmt(rows.reduce((a, r) => a + r.qty * (r.cost || r.p.cost), 0))} at cost` }}
+        empty={tab === 'expired' ? 'No expired stock 🎉' : 'Nothing expiring soon 🎉'} columns={[
+          { id: 'name', label: 'Medicine', className: 'row-title', sortBy: (r) => r.p.name, render: (r) => <strong>{r.p.name}</strong> },
+          { id: 'batch', label: 'Batch', key: 'batch', className: 'batch-cell' },
+          { id: 'expiry', label: 'Expiry', key: 'expiry', tdClass: (r) => 'nowrap ' + expiryClass(r.expiry, warn) },
+          { id: 'when', label: 'When', sortBy: (r) => r.days, csv: (r) => r.days, tdClass: (r) => 'nowrap ' + expiryClass(r.expiry, warn), render: (r) => (r.days < 0 ? `${-r.days} days ago` : r.days === 0 ? 'today' : `in ${r.days} days`) },
+          { id: 'qty', label: 'Qty', num: true, sortBy: (r) => r.qty, render: (r) => formatQty(r.qty) },
+          { id: 'value', label: 'Value', num: true, sortBy: (r) => r.qty * (r.cost || r.p.cost || 0), render: (r) => fmt(r.qty * (r.cost || r.p.cost)) },
+          { id: 'actions', label: 'Actions', noExport: true, className: 'actions', render: (r) => <>
+            {(can('stock.receive') || can('stock.adjust')) && <button className="btn sm ghost" title="Send it back to the supplier for a credit note or refund" onClick={() => navigate('/returns', { state: { returnBatch: { productId: r.p.id, batchId: r.id, reason: r.days < 0 ? 'Expired' : 'Short expiry' } } })}>Return</button>}
+            {tab === 'expired' && can('stock.adjust') && <button className="btn sm danger" disabled={!!busy} onClick={() => writeOff(r)}>{busy === r.p.id + r.id ? 'Writing off…' : 'Write off'}</button>}
+          </> },
+        ]} />}
     </div>
   );
 }
@@ -424,14 +419,18 @@ export function QuickEdit() {
   const { db, products, update, fmt, user, branchId } = useStore();
   const [q, setQ] = useState('');
   const [edits, setEdits] = useState({});
+  // the shared table (2026-11-26): every medicine, no limit (100 rows, then more as the list scrolls); "In stock" first
+  const [show, setShow] = useState('instock');
   const ql = q.toLowerCase();
-  // Only medicines this pharmacy actually has (not the whole built-in catalog)
-  const stocked = products.filter((p) => p.stock > 0 || p.totalStock > 0);
-  const rows = stocked.filter((p) => !q || `${p.name} ${p.generic} ${p.barcode}`.toLowerCase().includes(ql)).slice(0, 300);
+  const stocked = useMemo(() => products.filter((p) => p.stock > 0 || p.totalStock > 0), [products]);
+  const base = show === 'instock' ? stocked : products;
+  const rows = useMemo(() => base.filter((p) => !q || `${p.name} ${p.generic || ''} ${p.barcode || ''}`.toLowerCase().includes(ql)), [base, q, ql]);
   const val = (p, k) => edits[p.id]?.[k] ?? p[k] ?? '';
   const set = (p, k, v) => setEdits((e) => ({ ...e, [p.id]: { ...e[p.id], [k]: v } }));
   const count = Object.keys(edits).length;
-  const save = () => {
+  const save = async () => {
+    // many changes at once are checked first: a slip in a long list must not change hundreds of prices
+    if (count > 50 && !(await ask({ title: `Save ${count} changes?`, message: 'Prices, costs and reorder levels of these medicines change on every device.', effects: [`${count} medicines changed`], confirmText: 'Save' }))) return;
     update((d) => {
       const changes = [];
       for (const [id, patch] of Object.entries(edits)) {
@@ -454,11 +453,23 @@ export function QuickEdit() {
     update((d) => { for (const p of missing) { const code = newInternalBarcode(used); used.add(code); put(d, 'products', { ...d.products.find((x) => x.id === p.id), barcode: code }); } });
     toast(`Generated ${missing.length} barcodes`);
   };
-  const cols = [['cost', 'Cost', 'number'], ['wholesale', 'Wholesale', 'number'], ['price', 'Retail', 'number'], ['reorder', 'Reorder', 'number'], ['shelf', 'Shelf', 'text'], ['barcode', 'Barcode', 'text']];
+  const input = (k, type, label) => ({
+    id: k, label, sortBy: (p) => (type === 'number' ? Number(p[k]) || 0 : String(p[k] ?? '')), csv: (p) => val(p, k),
+    render: (p) => <input type={type} step="any" inputMode={type === 'number' ? 'decimal' : undefined} aria-label={`${label} of ${p.name}`} value={val(p, k)} onChange={(e) => set(p, k, e.target.value)} />,
+  });
+  const margin = (p) => { const price = Number(val(p, 'price')), cost = Number(val(p, 'cost')); return price ? (price - cost) / price : null; };
+  const columns = [
+    { id: 'name', label: 'Medicine', sortBy: (p) => p.name, csv: (p) => p.name, render: (p) => <>{p.name}<br /><small className="muted">{formatQty(p.stock)} in stock</small></> },
+    { id: 'stock', label: 'In stock', num: true, sortBy: (p) => Number(p.stock) || 0, render: (p) => formatQty(p.stock) },
+    input('cost', 'number', 'Cost'), input('wholesale', 'number', 'Wholesale'), input('price', 'number', 'Retail'), input('reorder', 'number', 'Reorder'),
+    input('shelf', 'text', 'Shelf'), input('barcode', 'text', 'Barcode'),
+    { id: 'margin', label: 'Margin', num: true, sortBy: (p) => margin(p) ?? -Infinity, csv: (p) => (margin(p) == null ? '' : Math.round(margin(p) * 100) + '%'),
+      render: (p) => { const m = margin(p); return <>{m == null ? '—' : Math.round(m * 100) + '%'}<br /><small className="muted">{fmt(Number(val(p, 'price')) - Number(val(p, 'cost')))}</small></>; } },
+  ];
   return (
     <div className="page">
       <div className="page-head">
-        <div><h1>Quick Edit</h1><div className="sub">{stocked.length.toLocaleString()} medicines in stock · edit many prices at once, then save</div></div>
+        <div><h1>Quick Edit</h1><div className="sub">{stocked.length.toLocaleString()} in stock · {products.length.toLocaleString()} medicines · edit many prices at once, then save</div></div>
         <div className="row gap">
           <SearchBox value={q} onChange={setQ} />
           <button className="btn ghost" onClick={fillBarcodes}><BarcodeIcon size={16} />Generate missing barcodes</button>
@@ -466,24 +477,10 @@ export function QuickEdit() {
           <button className="btn primary" disabled={!count} onClick={save}><Save size={16} />Save {count || ''} change{count === 1 ? '' : 's'}</button>
         </div>
       </div>
-      <div className="card table-wrap">
-        <table className="lines">
-          <thead><tr><th>Medicine</th>{cols.map(([k, l]) => <th key={k}>{l}</th>)}<th className="num">Margin</th></tr></thead>
-          <tbody>
-            {!rows.length && <Empty colSpan={8}>{stocked.length ? 'Nothing matches' : 'No medicines in stock yet. Receive stock with Add Stock first.'}</Empty>}
-            {rows.map((p) => {
-              const price = Number(val(p, 'price')), cost = Number(val(p, 'cost'));
-              return (
-                <tr key={p.id} className={edits[p.id] ? 'edited' : ''}>
-                  <td>{p.name}<br /><small className="muted">{p.stock} in stock</small></td>
-                  {cols.map(([k, , type]) => <td key={k}><input type={type} step="any" value={val(p, k)} onChange={(e) => set(p, k, e.target.value)} /></td>)}
-                  <td className="num">{price ? Math.round(((price - cost) / price) * 100) + '%' : '—'}<br /><small className="muted">{fmt(price - cost)}</small></td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      <DataTable id="quick-edit" className="lines quick-edit" columns={columns} rows={rows} resetKey={q + '|' + show} sort={['name', 1]}
+        caption={<FilterChips label="Show" value={show} onChange={setShow} options={[['instock', 'In stock', stocked.length], ['all', 'All medicines', products.length]]} />}
+        rowProps={(p) => ({ className: edits[p.id] ? 'edited' : undefined })}
+        empty={q ? `Nothing matches “${q}”.` : show === 'instock' ? 'No medicines in stock yet. Receive stock with Add Stock, or show all medicines.' : 'No medicines yet.'} />
     </div>
   );
 }
@@ -504,9 +501,11 @@ export function StockCard() {
     return db.movements.filter((m) => m.productId === id && (m.branchId || MAIN_BRANCH) === branchId)
       .sort((a, b) => a.date.localeCompare(b.date)).map((m) => ({ ...m, bal: (bal += m.qty) }));
   }, [db.movements, id, branchId]);
+
   const ql = q.toLowerCase();
-  // Only medicines in stock (plus the one opened from elsewhere), not the whole built-in catalog
-  const options = stocked.filter((x) => !q || `${x.name} ${x.generic || ''} ${x.barcode || ''}`.toLowerCase().includes(ql)).slice(0, 300);
+  // Only medicines in stock (plus the one opened from elsewhere), not the whole built-in catalog; every one of them
+  // (no longer cut at 300: the shared table, 2026-11-26)
+  const options = stocked.filter((x) => !q || `${x.name} ${x.generic || ''} ${x.barcode || ''}`.toLowerCase().includes(ql));
   if (p && !options.some((x) => x.id === p.id)) options.unshift(p);
 
   const unitName = String(p?.unit || 'unit').toLowerCase();
@@ -557,21 +556,18 @@ export function StockCard() {
           ))}
         </div>
       )}
-      <div className="card table-wrap">
-        <table>
-          <thead><tr><th>Date</th><th>Type</th><th>Batch</th><th>Reference</th><th>By</th><th className="num">In</th><th className="num">Out</th><th className="num">Balance</th></tr></thead>
-          <tbody>
-            {lines.slice().reverse().slice(0, 500).map((m) => (
-              <tr key={m.id}>
-                <td>{new Date(m.date).toLocaleString(dateLocale(), { dateStyle: 'medium', timeStyle: 'short' })}</td><td>{m.type}</td><td>{m.batchId ? batchName[m.batchId] || '—' : p?.batch || '—'}</td>
-                <td>{m.ref}{m.note ? ` (${m.note})` : ''}</td><td>{m.user}</td>
-                <td className="num text-ok">{m.qty > 0 ? formatQty(m.qty) : ''}</td><td className="num text-danger">{m.qty < 0 ? formatQty(-m.qty) : ''}</td><td className="num"><strong>{formatQty(m.bal)}</strong></td>
-              </tr>
-            ))}
-            {!lines.length && <Empty colSpan={8}>No stock movements at this branch</Empty>}
-          </tbody>
-        </table>
-      </div>
+      {/* the shared table (2026-11-26): every movement, newest first, 100 at a time (no longer cut at 500) */}
+      <DataTable id="stock-card" rows={lines} sort={['date', -1]} resetKey={id + '|' + branchId} csv={`stock-card-${(p?.name || 'medicine').replace(/\W+/g, '-')}`}
+        empty="No stock movements at this branch" columns={[
+          { id: 'date', label: 'Date', sortBy: (m) => m.date, csv: (m) => m.date, render: (m) => new Date(m.date).toLocaleString(dateLocale(), { dateStyle: 'medium', timeStyle: 'short' }) },
+          { id: 'type', label: 'Type', key: 'type' },
+          { id: 'batch', label: 'Batch', sortBy: (m) => (m.batchId ? batchName[m.batchId] || '' : p?.batch || ''), render: (m) => (m.batchId ? batchName[m.batchId] || '—' : p?.batch || '—') },
+          { id: 'ref', label: 'Reference', sortBy: (m) => `${m.ref || ''}${m.note ? ` (${m.note})` : ''}`, render: (m) => <>{m.ref}{m.note ? ` (${m.note})` : ''}</> },
+          { id: 'user', label: 'By', key: 'user' },
+          { id: 'in', label: 'In', num: true, className: 'text-ok', sortBy: (m) => (m.qty > 0 ? m.qty : 0), render: (m) => (m.qty > 0 ? formatQty(m.qty) : '') },
+          { id: 'out', label: 'Out', num: true, className: 'text-danger', sortBy: (m) => (m.qty < 0 ? -m.qty : 0), render: (m) => (m.qty < 0 ? formatQty(-m.qty) : '') },
+          { id: 'bal', label: 'Balance', num: true, sortBy: (m) => m.bal, render: (m) => <strong>{formatQty(m.bal)}</strong> },
+        ]} />
       {adjust && (
         <Modal title={`Count / adjust – ${p.name}`} onClose={() => setAdjust(null)}>
           <form onSubmit={saveAdjust} className="stack">

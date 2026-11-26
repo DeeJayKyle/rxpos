@@ -68,3 +68,14 @@ table:not(.stock-lines) th.col-move .col-grip { position: absolute; left: 1px; t
 table:not(.stock-lines) th.col-move .col-arrows { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); background: var(--surface); border-radius: 6px; box-shadow: 0 1px 4px rgba(15, 23, 42, .18); z-index: 4; }
 table:not(.stock-lines) th.col-move:hover .col-grip { opacity: .5; }
 @media (hover: none) { table:not(.stock-lines) th.col-move .col-arrows { display: none; } }
+
+/* DataTable (src/datatable.jsx): the Columns and CSV buttons above a table */
+.dt-tools { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; margin: 0 0 8px; }
+.dt-tools .dt-caption { margin-right: auto; }
+.card > .dt-tools { margin-top: 4px; }
+/* the sort mark is drawn here (a heading's text stays its name): ▲ ▼ on the sorted column, ↕ over the edge on hover */
+th.col-move .th-sort[data-sort=asc]::after { content: ' ▲'; color: var(--muted); font-size: .85em; }
+th.col-move .th-sort[data-sort=desc]::after { content: ' ▼'; color: var(--muted); font-size: .85em; }
+th.col-move .th-sort[data-sort=none] { position: relative; }
+th.col-move .th-sort[data-sort=none]::after { content: '↕'; position: absolute; left: 100%; margin-left: 2px; color: var(--muted); font-size: .85em; opacity: 0; transition: opacity .15s; }
+th.col-move:hover .th-sort[data-sort=none]::after, th.col-move .th-sort:focus-visible::after { opacity: 1; }
