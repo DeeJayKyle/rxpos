@@ -1,7 +1,8 @@
 import { useState, useMemo, useRef } from 'react';
 import { ShieldAlert, Search } from 'lucide-react';
 import { useStore, MAIN_BRANCH, downloadFile, toCSV } from '../store.jsx';
-import { Tabs, Empty, PdfButton, SearchBox, useProgressive } from '../ui.jsx';
+import { Tabs, Empty, PdfButton, SearchBox } from '../ui.jsx';
+import { DataTable } from '../datatable.jsx';
 import { showDate, dateLocale } from '../showdate.js';
 
 /**
@@ -24,7 +25,6 @@ function Register() {
   const { db, products, branchId, branch } = useStore();
   const list = useMemo(() => products.filter((p) => p.controlled).sort((a, b) => a.name.localeCompare(b.name)), [products]);
   const [id, setId] = useState(list[0]?.id || '');
-  const ref = useRef(null);
   const p = list.find((x) => x.id === id);
   const saleBy = useMemo(() => new Map(db.sales.map((s) => [s.number, s])), [db.sales]);
   const batchName = useMemo(() => new Map(db.batches.map((b) => [b.id, b.batch])), [db.batches]);
@@ -33,9 +33,7 @@ function Register() {
     return db.movements.filter((m) => m.productId === id && (m.branchId || MAIN_BRANCH) === branchId)
       .sort((a, b) => a.date.localeCompare(b.date)).map((m) => ({ ...m, bal: (bal += m.qty), sale: m.type === 'Sale' ? saleBy.get(m.ref) : null }));
   }, [db.movements, id, branchId, saleBy]);
-  const drawn = useProgressive(Math.min(lines.length, 500));
   if (!list.length) return <div className="card"><Empty>No medicine is marked as a controlled drug. Tick "Controlled drug" on a medicine in the Medicine List.</Empty></div>;
-  const rows = lines.slice().reverse();
   const csv = () => downloadFile(`register-${(p?.name || '').replace(/\W+/g, '-')}.csv`, toCSV(lines.map((m) => ({ date: m.date, type: m.type, reference: m.ref, batch: batchName.get(m.batchId) || '', in: m.qty > 0 ? m.qty : '', out: m.qty < 0 ? -m.qty : '', balance: m.bal,
     patient: m.sale?.controlled?.patient || '', patientId: m.sale?.controlled?.idNo || '', prescriber: m.sale?.controlled?.prescriber || '', prescriberReg: m.sale?.controlled?.prescriberReg || '', prescriptionNo: m.sale?.controlled?.rxNo || '', by: m.user }))), 'text/csv');
   return (
@@ -45,27 +43,23 @@ function Register() {
         <span className="muted small">{branch?.name} · balance now <strong>{p?.stock ?? 0}</strong></span>
         <span className="grow" />
         <button className="btn ghost" onClick={csv}>CSV</button>
-        <PdfButton target={ref} title={`Controlled drugs register – ${p?.name || ''}`} subtitle={`${branch?.name || ''} · balance ${p?.stock ?? 0}`} />
       </div>
-      <div className="card table-wrap" ref={ref}>
-        <table>
-          <thead><tr><th>Date</th><th>Type</th><th>Reference</th><th>Batch</th><th>Patient · ID</th><th>Prescriber · prescription</th><th className="num">In</th><th className="num">Out</th><th className="num">Balance</th><th>By</th></tr></thead>
-          <tbody>
-            {rows.slice(0, drawn).map((m) => {
-              const c = m.sale?.controlled;
-              return (
-                <tr key={m.id}>
-                  <td>{new Date(m.date).toLocaleString(dateLocale(), { dateStyle: 'medium', timeStyle: 'short' })}</td><td>{m.type}</td><td>{m.ref}{m.note ? ` (${m.note})` : ''}</td><td>{batchName.get(m.batchId) || '—'}</td>
-                  <td>{c ? <>{c.patient}<br /><small className="muted">{c.idNo}</small></> : m.type === 'Sale' ? <span className="text-warn small">not recorded</span> : ''}</td>
-                  <td>{c ? <>{c.prescriber}{c.prescriberReg ? ` (${c.prescriberReg})` : ''}<br /><small className="muted">Rx {c.rxNo}</small></> : ''}</td>
-                  <td className="num text-ok">{m.qty > 0 ? m.qty : ''}</td><td className="num text-danger">{m.qty < 0 ? -m.qty : ''}</td><td className="num"><strong>{m.bal}</strong></td><td>{m.user}</td>
-                </tr>
-              );
-            })}
-            {!rows.length && <Empty colSpan={10}>No movements of this medicine at this branch yet</Empty>}
-          </tbody>
-        </table>
-      </div>
+      {/* the shared table (2026-11-26): every movement, 100 at a time as it scrolls; the PDF has all of them */}
+      <DataTable id="controlled-register" rows={lines} sort={['date', -1]} resetKey={id + '|' + branchId} csv={false} empty="No movements of this medicine at this branch yet"
+        pdf={{ title: `Controlled drugs register – ${p?.name || ''}`, subtitle: `${branch?.name || ''} · balance ${p?.stock ?? 0}` }} columns={[
+          { id: 'date', label: 'Date', key: 'date', csv: (m) => new Date(m.date).toLocaleString(dateLocale(), { dateStyle: 'medium', timeStyle: 'short' }), render: (m) => new Date(m.date).toLocaleString(dateLocale(), { dateStyle: 'medium', timeStyle: 'short' }) },
+          { id: 'type', label: 'Type', key: 'type' },
+          { id: 'ref', label: 'Reference', sortBy: (m) => `${m.ref || ''}${m.note ? ` (${m.note})` : ''}`, render: (m) => <>{m.ref}{m.note ? ` (${m.note})` : ''}</> },
+          { id: 'batch', label: 'Batch', sortBy: (m) => batchName.get(m.batchId) || '', render: (m) => batchName.get(m.batchId) || '—' },
+          { id: 'patient', label: 'Patient · ID', sortBy: (m) => m.sale?.controlled?.patient || '', csv: (m) => (m.sale?.controlled ? `${m.sale.controlled.patient} · ${m.sale.controlled.idNo || ''}` : m.type === 'Sale' ? 'not recorded' : ''),
+            render: (m) => { const c = m.sale?.controlled; return c ? <>{c.patient}<br /><small className="muted">{c.idNo}</small></> : m.type === 'Sale' ? <span className="text-warn small">not recorded</span> : ''; } },
+          { id: 'prescriber', label: 'Prescriber · prescription', sortBy: (m) => m.sale?.controlled?.prescriber || '', csv: (m) => { const c = m.sale?.controlled; return c ? `${c.prescriber}${c.prescriberReg ? ` (${c.prescriberReg})` : ''} · Rx ${c.rxNo || ''}` : ''; },
+            render: (m) => { const c = m.sale?.controlled; return c ? <>{c.prescriber}{c.prescriberReg ? ` (${c.prescriberReg})` : ''}<br /><small className="muted">Rx {c.rxNo}</small></> : ''; } },
+          { id: 'in', label: 'In', num: true, className: 'text-ok', sortBy: (m) => (m.qty > 0 ? m.qty : 0), csv: (m) => (m.qty > 0 ? m.qty : ''), render: (m) => (m.qty > 0 ? m.qty : '') },
+          { id: 'out', label: 'Out', num: true, className: 'text-danger', sortBy: (m) => (m.qty < 0 ? -m.qty : 0), csv: (m) => (m.qty < 0 ? -m.qty : ''), render: (m) => (m.qty < 0 ? -m.qty : '') },
+          { id: 'bal', label: 'Balance', num: true, sortBy: (m) => m.bal, render: (m) => <strong>{m.bal}</strong> },
+          { id: 'user', label: 'By', key: 'user' },
+        ]} />
     </>
   );
 }

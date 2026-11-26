@@ -7,6 +7,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Pencil, Trash2, Tag, Sparkles, AlertTriangle, Power, Wrench } from 'lucide-react';
+import { DataTable } from '../datatable.jsx';
 import { useStore, uid, put, del, audit, now } from '../store.jsx';
 import { Modal, Empty, PageTip } from '../ui.jsx';
 import { MedicinePicker } from '../fields.jsx';
@@ -113,14 +114,13 @@ export default function Kits() {
         <div className="card">
           <div className="row between gap wrap"><h3>Kit sales</h3>
             <select value={days} onChange={(e) => setDays(Number(e.target.value))} aria-label="Period">{[7, 30, 90, 365].map((n) => <option key={n} value={n}>Last {n} days</option>)}</select></div>
-          <table>
-            <thead><tr><th>Kit</th><th className="num">Sold</th><th className="num">Takings</th><th className="num">Profit</th></tr></thead>
-            <tbody>
-              {kits.filter((k) => sold.has(k.id)).map((k) => { const s = sold.get(k.id); return <tr key={k.id}><td>{k.name}</td><td className="num">{s.n}</td><td className="num">{fmt(s.takings)}</td><td className="num">{fmt(s.profit)}</td></tr>; })}
-              {!sold.size && <Empty colSpan={4}>No kits sold in this period</Empty>}
-              {sold.size > 0 && <tr className="total-row"><td>Total</td><td className="num">{totals.n}</td><td className="num">{fmt(totals.takings)}</td><td className="num">{fmt(totals.profit)}</td></tr>}
-            </tbody>
-          </table>
+          <DataTable id="kit-sales" wrapClass="dt-inner" rows={kits.filter((k) => sold.has(k.id))} sort={['takings', -1]} empty="No kits sold in this period"
+            foot={(id, all, i) => (i === 0 ? 'Total' : id === 'n' ? totals.n : id === 'takings' ? fmt(totals.takings) : id === 'profit' ? fmt(totals.profit) : '')} columns={[
+              { id: 'name', label: 'Kit', key: 'name' },
+              { id: 'n', label: 'Sold', num: true, sortBy: (k) => sold.get(k.id).n, render: (k) => sold.get(k.id).n },
+              { id: 'takings', label: 'Takings', num: true, sortBy: (k) => sold.get(k.id).takings, render: (k) => fmt(sold.get(k.id).takings) },
+              { id: 'profit', label: 'Profit', num: true, sortBy: (k) => sold.get(k.id).profit, render: (k) => fmt(sold.get(k.id).profit) },
+            ]} />
           <small className="muted">Profit is the kit's price less what its medicines cost when it was sold.</small>
         </div>
       )}

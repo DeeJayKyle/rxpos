@@ -6,6 +6,7 @@
 import { useMemo, useState } from 'react';
 import { UserPlus, Calculator, CheckCircle2, Download, HandCoins } from 'lucide-react';
 import { Modal, RecordForm, Tabs } from '../ui.jsx';
+import { DataTable } from '../datatable.jsx';
 import { useStore, uid, put, audit, today, now, downloadFile, toCSV } from '../store.jsx';
 import { toast } from '../feedback.jsx';
 import { CASH } from '../finance.js';
@@ -95,20 +96,15 @@ export default function Payroll() {
           <div className="row between pad"><span className="muted">The people paid by the pharmacy (they need not use the app).</span>
             <span className="row gap"><button className="btn ghost" onClick={() => downloadFile('staff.csv', toCSV(staff.map(({ updatedAt, ...e }) => e)), 'text/csv')}><Download size={16} />CSV</button>
               <button className="btn primary" onClick={() => setEdit({ _new: true, id: uid(), name: '', jobTitle: '', basicSalary: 0, allowances: 0, overtimeRate: 0, paye: true, nssf: true, active: true, paymentMethod: 'Cash' })}><UserPlus size={16} />Add staff member</button></span></div>
-          <table>
-            <thead><tr><th>Name</th><th>Job</th><th className="num">Basic</th><th className="num">Allowances</th><th>Deductions</th><th /></tr></thead>
-            <tbody>
-              {staff.map((e) => (
-                <tr key={e.id} className={e.active === false ? 'dim' : ''} onDoubleClick={() => setEdit(e)}>
-                  <td><strong>{e.name}</strong>{e.active === false && <small> · left</small>}<br /><small className="muted">{e.phone}</small></td><td>{e.jobTitle}</td>
-                  <td className="num">{fmt(e.basicSalary)}</td><td className="num">{fmt(e.allowances || 0)}</td>
-                  <td className="muted">{[e.paye !== false && 'PAYE', e.nssf !== false && 'NSSF'].filter(Boolean).join(' · ') || 'none'}</td>
-                  <td className="actions"><button className="btn sm ghost" onClick={() => setEdit(e)}>Edit</button></td>
-                </tr>
-              ))}
-              {!staff.length && <tr><td colSpan={6} className="empty">No staff yet. Add the people the pharmacy pays.</td></tr>}
-            </tbody>
-          </table>
+          <DataTable id="staff" wrapClass="dt-inner" rows={staff} csv={false} empty="No staff yet. Add the people the pharmacy pays."
+            rowProps={(e) => ({ className: e.active === false ? 'dim' : undefined, onDoubleClick: () => setEdit(e) })} columns={[
+              { id: 'name', label: 'Name', key: 'name', render: (e) => <><strong>{e.name}</strong>{e.active === false && <small> · left</small>}<br /><small className="muted">{e.phone}</small></> },
+              { id: 'job', label: 'Job', key: 'jobTitle' },
+              { id: 'basic', label: 'Basic', num: true, sortBy: (e) => Number(e.basicSalary) || 0, render: (e) => fmt(e.basicSalary) },
+              { id: 'allowances', label: 'Allowances', num: true, sortBy: (e) => Number(e.allowances) || 0, render: (e) => fmt(e.allowances || 0) },
+              { id: 'deductions', label: 'Deductions', className: 'muted', sortBy: (e) => [e.paye !== false && 'PAYE', e.nssf !== false && 'NSSF'].filter(Boolean).join(' · '), render: (e) => [e.paye !== false && 'PAYE', e.nssf !== false && 'NSSF'].filter(Boolean).join(' · ') || 'none' },
+              { id: 'actions', label: 'Actions', noExport: true, className: 'actions', render: (e) => <button className="btn sm ghost" onClick={() => setEdit(e)}>Edit</button> },
+            ]} />
         </div>
       )}
 
@@ -134,15 +130,13 @@ export default function Payroll() {
         <div className="card table-wrap">
           <div className="row between pad"><span className="muted">An advance is paid now (an expense) and taken back from the next payroll.</span>
             <button className="btn primary" disabled={!active.length} onClick={() => setForm({ kind: 'advance' })}><HandCoins size={16} />Give an advance</button></div>
-          <table>
-            <thead><tr><th>Date</th><th>To</th><th>Note</th><th className="num">Amount</th><th>Taken back</th></tr></thead>
-            <tbody>
-              {[...advances].sort((a, b) => String(b.date).localeCompare(a.date)).map((a) => (
-                <tr key={a.id}><td>{a.date}</td><td>{nameOf(a.employeeId)}</td><td className="muted">{a.note}</td><td className="num">{fmt(a.amount)}</td><td>{a.payrollId ? runs.find((r) => r.id === a.payrollId)?.month || 'yes' : <span className="badge warn">open</span>}</td></tr>
-              ))}
-              {!advances.length && <tr><td colSpan={5} className="empty">No advances</td></tr>}
-            </tbody>
-          </table>
+          <DataTable id="salary-advances" wrapClass="dt-inner" rows={advances} sort={['date', -1]} csv="salary-advances" empty="No advances" columns={[
+            { id: 'date', label: 'Date', key: 'date' },
+            { id: 'to', label: 'To', sortBy: (a) => nameOf(a.employeeId), render: (a) => nameOf(a.employeeId) },
+            { id: 'note', label: 'Note', key: 'note', className: 'muted' },
+            { id: 'amount', label: 'Amount', num: true, sortBy: (a) => Number(a.amount) || 0, render: (a) => fmt(a.amount) },
+            { id: 'back', label: 'Taken back', sortBy: (a) => (a.payrollId ? runs.find((r) => r.id === a.payrollId)?.month || 'yes' : ''), render: (a) => (a.payrollId ? runs.find((r) => r.id === a.payrollId)?.month || 'yes' : <span className="badge warn">open</span>) },
+          ]} />
         </div>
       )}
 

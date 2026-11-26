@@ -36,11 +36,11 @@ export function Customers() {
         chips: [c.type && [c.type], c.allergies && ['Allergies: ' + c.allergies, 'danger'], c.creditLimit > 0 && ['Credit ' + fmt(c.creditLimit)]].filter(Boolean) })}
       columns={[
         { label: 'Name', key: 'name' },
-        { label: 'Phone', render: (c) => (c.phone ? <span className="row gap">{c.phone}<CallMenu compact person={c} /></span> : '—') },
+        { label: 'Phone', sortBy: (c) => c.phone, render: (c) => (c.phone ? <span className="row gap">{c.phone}<CallMenu compact person={c} /></span> : '—') },
         { label: 'Type', key: 'type' },
-        { label: 'Allergies', render: (c) => (c.allergies ? <span className="text-danger">{c.allergies}</span> : '—') },
-        { label: 'Total bought', num: true, render: (c) => fmt(spent(c.id)) },
-        { label: 'Owes', num: true, render: (c) => { const b = customerBalance(db, c.id); return b > 0 ? <span className="text-warn">{fmt(b)}</span> : '—'; } },
+        { label: 'Allergies', sortBy: (c) => c.allergies, render: (c) => (c.allergies ? <span className="text-danger">{c.allergies}</span> : '—') },
+        { label: 'Total bought', num: true, sortBy: (c) => spent(c.id), render: (c) => fmt(spent(c.id)) },
+        { label: 'Owes', num: true, sortBy: (c) => customerBalance(db, c.id), render: (c) => { const b = customerBalance(db, c.id); return b > 0 ? <span className="text-warn">{fmt(b)}</span> : '—'; } },
       ]}
     />
   );
@@ -64,9 +64,9 @@ export function Suppliers() {
       columns={[
         { label: 'Company', key: 'name' },
         { label: 'Contact', key: 'contact' },
-        { label: 'Phone', render: (s) => (s.phone ? <span className="row gap">{s.phone}<CallMenu compact person={s} /></span> : '—') },
-        { label: 'Total purchased', num: true, render: (s) => fmt(purchased(s.id)) },
-        { label: 'We owe', num: true, render: (s) => { const b = supplierBalance(db, s.id); return b > 0 ? <span className="text-warn">{fmt(b)}</span> : '—'; } },
+        { label: 'Phone', sortBy: (s) => s.phone, render: (s) => (s.phone ? <span className="row gap">{s.phone}<CallMenu compact person={s} /></span> : '—') },
+        { label: 'Total purchased', num: true, sortBy: (s) => purchased(s.id), render: (s) => fmt(purchased(s.id)) },
+        { label: 'We owe', num: true, sortBy: (s) => supplierBalance(db, s.id), render: (s) => { const b = supplierBalance(db, s.id); return b > 0 ? <span className="text-warn">{fmt(b)}</span> : '—'; } },
       ]}
     />
   );

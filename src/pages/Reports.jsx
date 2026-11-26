@@ -4,8 +4,9 @@ import { useState, useRef, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import SalesLines from './SalesLines.jsx';
 import { AlertTriangle, Boxes, Crown, TrendingDown, PackageX, Banknote, Receipt, Percent, Undo2 } from 'lucide-react';
-import { Empty, PageTip } from '../ui.jsx';
+import { PageTip } from '../ui.jsx';
 import { formatQty } from '../money.js';
+import { DataTable } from '../datatable.jsx';
 import { useStore, today, dayOf, localDate, downloadFile, toCSV, daysUntil, stockValue, batchValue, MAIN_BRANCH } from '../store.jsx';
 import { Stat, Tabs, BarChart, PdfButton } from '../ui.jsx';
 import { useOlderHistory, olderNote } from '../history.js';
@@ -308,14 +309,14 @@ function ProfitReport({ sales }) {
       {check.length > 0 && (
         <div className="card table-wrap">
           <h3><AlertTriangle size={17} /> Price check: {check.length} medicine{check.length === 1 ? '' : 's'} below the {target}% margin</h3>
-          <table>
-            <thead><tr><th>Medicine</th><th className="num">Cost</th><th className="num">Retail</th><th className="num">Margin</th><th className="num">Price for {target}%</th><th className="num">In stock</th></tr></thead>
-            <tbody>{check.slice(0, 100).map(({ p, margin }) => (
-              <tr key={p.id}><td><strong>{p.name}</strong></td><td className="num">{fmt(p.cost)}</td><td className="num">{fmt(p.price)}</td>
-                <td className={'num ' + low(margin)}><strong>{margin < 0 ? 'below cost' : Math.round(margin) + '%'}</strong></td>
-                <td className="num">{fmt(Math.ceil(p.cost / (1 - target / 100)))}</td><td className="num">{p.stock}</td></tr>
-            ))}</tbody>
-          </table>
+          <DataTable id="report-price-check" wrapClass="dt-inner" rows={check} rowKey={(r) => r.p.id} sort={['margin', 1]} csv="price-check" columns={[
+            { id: 'name', label: 'Medicine', sortBy: (r) => r.p.name, render: (r) => <strong>{r.p.name}</strong> },
+            { id: 'cost', label: 'Cost', num: true, sortBy: (r) => r.p.cost, render: (r) => fmt(r.p.cost) },
+            { id: 'price', label: 'Retail', num: true, sortBy: (r) => r.p.price, render: (r) => fmt(r.p.price) },
+            { id: 'margin', label: 'Margin', num: true, sortBy: (r) => r.margin, tdClass: (r) => low(r.margin), render: (r) => <strong>{r.margin < 0 ? 'below cost' : Math.round(r.margin) + '%'}</strong> },
+            { id: 'target', label: `Price for ${target}%`, num: true, sortBy: (r) => Math.ceil(r.p.cost / (1 - target / 100)), render: (r) => fmt(Math.ceil(r.p.cost / (1 - target / 100))) },
+            { id: 'stock', label: 'In stock', num: true, sortBy: (r) => r.p.stock, render: (r) => r.p.stock },
+          ]} />
           <p className="muted small">Change prices in Quick Edit. The margin here is profit as a share of the selling price.</p>
         </div>
       )}
@@ -323,13 +324,15 @@ function ProfitReport({ sales }) {
         <div className="row between gap"><h3>Profit by {by === 'product' ? 'medicine' : 'category'}</h3>
           <div className="row gap"><Tabs tabs={[['product', 'Medicine'], ['category', 'Category']]} value={by} onChange={setBy} />
             <button className="btn sm ghost" onClick={() => downloadFile(`profit-by-${by}.csv`, toCSV(rows.map((r) => ({ [by]: r.name, qty: r.qty, revenue: Math.round(r.revenue), cost: Math.round(r.cost), profit: Math.round(r.profit), marginPct: r.margin.toFixed(1) }))), 'text/csv')}>Export CSV</button></div></div>
-        <table>
-          <thead><tr><th>{by === 'product' ? 'Medicine' : 'Category'}</th><th className="num">Qty</th><th className="num">Sales</th><th className="num">Cost</th><th className="num">Profit</th><th className="num">Margin</th></tr></thead>
-          <tbody>
-            {rows.slice(0, 300).map((r) => <tr key={r.key}><td>{r.name}</td><td className="num">{formatQty(r.qty)}</td><td className="num">{fmt(r.revenue)}</td><td className="num">{fmt(r.cost)}</td><td className={'num ' + (r.profit < 0 ? 'text-danger' : '')}>{fmt(r.profit)}</td><td className={'num ' + low(r.margin)}>{Math.round(r.margin)}%</td></tr>)}
-            {!rows.length && <Empty colSpan={6}>No sales in this period. Choose other dates, or sell at the POS and they show here.</Empty>}
-          </tbody>
-        </table>
+        <DataTable id={'report-profit-' + by} wrapClass="dt-inner" rows={rows} rowKey={(r) => r.key} sort={['profit', -1]} csv={false}
+          empty="No sales in this period. Choose other dates, or sell at the POS and they show here." columns={[
+            { id: 'name', label: by === 'product' ? 'Medicine' : 'Category', key: 'name' },
+            { id: 'qty', label: 'Qty', num: true, sortBy: (r) => r.qty, render: (r) => formatQty(r.qty) },
+            { id: 'revenue', label: 'Sales', num: true, sortBy: (r) => r.revenue, render: (r) => fmt(r.revenue) },
+            { id: 'cost', label: 'Cost', num: true, sortBy: (r) => r.cost, render: (r) => fmt(r.cost) },
+            { id: 'profit', label: 'Profit', num: true, sortBy: (r) => r.profit, tdClass: (r) => (r.profit < 0 ? 'text-danger' : ''), render: (r) => fmt(r.profit) },
+            { id: 'margin', label: 'Margin', num: true, sortBy: (r) => r.margin, tdClass: (r) => low(r.margin), render: (r) => Math.round(r.margin) + '%' },
+          ]} />
       </div>
     </>
   );
@@ -401,22 +404,16 @@ function ConsumptionReport({ sales, from, to }) {
           <h3>Consumption by medicine (A/B/C by value)</h3>
           <button className="btn sm ghost" onClick={() => downloadFile(`consumption-abc-${from}-to-${to}.csv`, toCSV(exportRows), 'text/csv')}>Export CSV</button>
         </div>
-        <table>
-          <thead><tr><th>Class</th><th>Medicine</th><th className="num">Used</th><th className="num">Per day</th><th className="num">Value (cost)</th><th className="num">Share</th><th className="num">In stock</th><th className="num">Days left</th></tr></thead>
-          <tbody>
-            {rows.slice(0, 500).map((r) => (
-              <tr key={r.id || r.name}>
-                <td><span className={'abc ' + r.cls.toLowerCase()}>{r.cls}</span></td>
-                <td><strong>{r.name}</strong>{r.form ? <><br /><small className="muted">{r.form}</small></> : null}</td>
-                <td className="num">{formatQty(r.qty)}</td><td className="num">{r.perDay.toFixed(1)}</td>
-                <td className="num">{fmt(r.value)}</td><td className="num muted">{(r.value / (totalValue || 1) * 100).toFixed(1)}%</td>
-                <td className="num">{r.stock ?? '—'}</td>
-                <td className="num">{r.daysLeft == null ? '—' : <span className={r.daysLeft < 14 ? 'text-warn' : ''}>{Math.round(r.daysLeft)}</span>}</td>
-              </tr>
-            ))}
-            {!rows.length && <Empty colSpan={8}>Nothing was sold in this period</Empty>}
-          </tbody>
-        </table>
+        <DataTable id="report-consumption" wrapClass="dt-inner" rows={rows} rowKey={(r) => r.id || r.name} sort={['value', -1]} csv={false} empty="Nothing was sold in this period" columns={[
+          { id: 'cls', label: 'Class', key: 'cls', render: (r) => <span className={'abc ' + r.cls.toLowerCase()}>{r.cls}</span> },
+          { id: 'name', label: 'Medicine', key: 'name', render: (r) => <><strong>{r.name}</strong>{r.form ? <><br /><small className="muted">{r.form}</small></> : null}</> },
+          { id: 'qty', label: 'Used', num: true, sortBy: (r) => r.qty, render: (r) => formatQty(r.qty) },
+          { id: 'perDay', label: 'Per day', num: true, sortBy: (r) => r.perDay, render: (r) => r.perDay.toFixed(1) },
+          { id: 'value', label: 'Value (cost)', num: true, sortBy: (r) => r.value, render: (r) => fmt(r.value) },
+          { id: 'share', label: 'Share', num: true, sortBy: (r) => r.value, className: 'muted', render: (r) => (r.value / (totalValue || 1) * 100).toFixed(1) + '%' },
+          { id: 'stock', label: 'In stock', num: true, sortBy: (r) => r.stock, render: (r) => r.stock ?? '—' },
+          { id: 'daysLeft', label: 'Days left', num: true, sortBy: (r) => r.daysLeft, render: (r) => (r.daysLeft == null ? '—' : <span className={r.daysLeft < 14 ? 'text-warn' : ''}>{Math.round(r.daysLeft)}</span>) },
+        ]} />
         <p className="muted small">Class <b>A</b> is the top 80% of consumption value — few items, most of the money, so watch them closely. <b>B</b> is the next 15%, <b>C</b> the last 5%. Value is units used × cost.</p>
       </div>
 
@@ -425,10 +422,11 @@ function ConsumptionReport({ sales, from, to }) {
           <div className="row between pad gap"><h3><PackageX size={17} /> In stock but not sold this period ({idle.length})</h3>
             <button className="btn sm ghost" onClick={() => setShowIdle((v) => !v)}>{showIdle ? 'Hide' : 'Show'}</button></div>
           {showIdle && (
-            <table>
-              <thead><tr><th>Medicine</th><th className="num">In stock</th><th className="num">Tied up (cost)</th></tr></thead>
-              <tbody>{idle.slice(0, 300).map((r) => <tr key={r.id}><td>{r.name}{r.form ? <> · <small className="muted">{r.form}</small></> : null}</td><td className="num">{r.stock}</td><td className="num">{fmt(r.value)}</td></tr>)}</tbody>
-            </table>
+            <DataTable id="report-idle" wrapClass="dt-inner" rows={idle} sort={['value', -1]} csv="not-sold" columns={[
+              { id: 'name', label: 'Medicine', key: 'name', render: (r) => <>{r.name}{r.form ? <> · <small className="muted">{r.form}</small></> : null}</> },
+              { id: 'stock', label: 'In stock', num: true, key: 'stock' },
+              { id: 'value', label: 'Tied up (cost)', num: true, sortBy: (r) => r.value, render: (r) => fmt(r.value) },
+            ]} />
           )}
         </div>
       )}

@@ -4,6 +4,7 @@ import { shiftsFromSales, rebuiltShift } from '../shiftsfromsales.js';
 import { startShift, openShiftOf } from '../shiftstart.js';
 import { clientOwes, insurerShare } from '../insurance.js';
 import { Clock, PlayCircle, StopCircle, Printer, Coins, Lock, LockOpen } from 'lucide-react';
+import { DataTable } from '../datatable.jsx';
 import { useStore, uid, now, put, audit, MAIN_BRANCH, today, dayOf } from '../store.jsx';
 import { closeId, daySnapshot } from '../dayclose.js';
 import { byMethod } from '../tenders.js';
@@ -165,26 +166,19 @@ export default function Shifts() {
         </Modal>
       )}
       {can('shifts.all') && <Tabs tabs={[['mine', 'My shifts'], ['all', 'All staff']]} value={tab} onChange={setTab} />}
-      <div className="card table-wrap">
-        <table>
-          <thead><tr><th>Cashier</th><th>Opened</th><th>Closed</th>{db.branches.length > 1 && <th>Branch</th>}<th className="num">Sales</th><th className="num">Expected cash</th><th className="num">Counted</th><th className="num">Over / short</th><th /></tr></thead>
-          <tbody>
-            {list.map((s) => (
-              <tr key={s.id}>
-                <td>{s.user}</td><td>{new Date(s.openedAt).toLocaleString(dateLocale(), { dateStyle: 'medium', timeStyle: 'short' })}</td>
-                <td>{s.closedAt ? new Date(s.closedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : <span className="badge warn">open</span>}</td>
-                {db.branches.length > 1 && <td>{db.branches.find((b) => b.id === s.branchId)?.name}</td>}
-                <td className="num">{s.summary ? fmt(s.summary.total) : '—'}</td>
-                <td className="num">{s.closedAt ? fmt(s.expected) : '—'}</td><td className="num">{s.closedAt && !s.rebuilt ? fmt(s.counted) : '—'}</td>
-                {s.rebuilt ? <td className="num muted small" title={s.note}>rebuilt from sales</td>
-                  : <td className={'num ' + (s.variance < 0 ? 'text-danger' : s.variance > 0 ? 'text-warn' : 'text-ok')}>{s.closedAt ? (s.variance === 0 ? 'Balanced' : (s.variance > 0 ? '+' : '') + fmt(s.variance)) : '—'}</td>}
-                <td className="actions">{s.closedAt && <button className="btn sm ghost" onClick={() => setReport(s)}><Printer size={14} />Report</button>}</td>
-              </tr>
-            ))}
-            {!list.length && <Empty colSpan={9}>No shifts yet. Open a shift at the start of the day; closing it counts the cash against the sales.</Empty>}
-          </tbody>
-        </table>
-      </div>
+      <DataTable id="shifts" rows={list} sort={['opened', -1]} resetKey={tab} csv="shifts" empty="No shifts yet. Open a shift at the start of the day; closing it counts the cash against the sales." columns={[
+        { id: 'user', label: 'Cashier', key: 'user' },
+        { id: 'opened', label: 'Opened', sortBy: (x) => x.openedAt, render: (x) => new Date(x.openedAt).toLocaleString(dateLocale(), { dateStyle: 'medium', timeStyle: 'short' }) },
+        { id: 'closed', label: 'Closed', sortBy: (x) => x.closedAt || '', render: (x) => (x.closedAt ? new Date(x.closedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : <span className="badge warn">open</span>) },
+        ...(db.branches.length > 1 ? [{ id: 'branch', label: 'Branch', sortBy: (x) => db.branches.find((b) => b.id === x.branchId)?.name || '', render: (x) => db.branches.find((b) => b.id === x.branchId)?.name }] : []),
+        { id: 'sales', label: 'Sales', num: true, sortBy: (x) => x.summary?.total ?? 0, render: (x) => (x.summary ? fmt(x.summary.total) : '—') },
+        { id: 'expected', label: 'Expected cash', num: true, sortBy: (x) => (x.closedAt ? x.expected : 0), render: (x) => (x.closedAt ? fmt(x.expected) : '—') },
+        { id: 'counted', label: 'Counted', num: true, sortBy: (x) => (x.closedAt && !x.rebuilt ? x.counted : 0), render: (x) => (x.closedAt && !x.rebuilt ? fmt(x.counted) : '—') },
+        { id: 'variance', label: 'Over / short', num: true, sortBy: (x) => (x.closedAt && !x.rebuilt ? x.variance : 0),
+          tdClass: (x) => (x.rebuilt ? 'muted small' : x.variance < 0 ? 'text-danger' : x.variance > 0 ? 'text-warn' : 'text-ok'),
+          render: (x) => (x.rebuilt ? <span title={x.note}>rebuilt from sales</span> : x.closedAt ? (x.variance === 0 ? 'Balanced' : (x.variance > 0 ? '+' : '') + fmt(x.variance)) : '—') },
+        { id: 'actions', label: 'Actions', noExport: true, className: 'actions', render: (x) => x.closedAt && <button className="btn sm ghost" onClick={() => setReport(x)}><Printer size={14} />Report</button> },
+      ]} />
 
       {closing?.mode === 'open' && (
         <Modal title="Start shift" onClose={() => { closing.resolve(null); setClosing(null); }}>

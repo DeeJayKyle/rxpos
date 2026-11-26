@@ -47,12 +47,12 @@ export default function Prescriptions() {
       ]}
       columns={[
         { label: 'Date', key: 'date', render: (r) => showDate(r.date) },
-        { label: 'Patient', render: (r) => db.customers.find((c) => c.id === r.customerId)?.name || '—' },
+        { label: 'Patient', sortBy: (r) => db.customers.find((c) => c.id === r.customerId)?.name, render: (r) => db.customers.find((c) => c.id === r.customerId)?.name || '—' },
         { label: 'Prescriber', key: 'doctor' },
-        { label: 'Medications', render: (r) => <span className="clip">{r.medications}</span> },
-        { label: 'Status', render: (r) => <span className={'badge ' + (statusClass[r.status] ?? '')}>{r.status}</span> },
+        { label: 'Medications', sortBy: (r) => r.medications, render: (r) => <span className="clip">{r.medications}</span> },
+        { label: 'Status', sortBy: (r) => r.status, render: (r) => <span className={'badge ' + (statusClass[r.status] ?? '')}>{r.status}</span> },
         { label: 'Refills', render: (r) => (Number(r.refillsAllowed) ? `${r.refillsUsed || 0} / ${r.refillsAllowed}` : r.refillsUsed ? `${r.refillsUsed}` : '—') },
-        { label: 'Next due', render: (r) => { const n = nextDue(r); return n ? <span className={n <= today() ? 'text-warn' : ''}>{n}</span> : '—'; } },
+        { label: 'Next due', sortBy: (r) => nextDue(r), render: (r) => { const n = nextDue(r); return n ? <span className={n <= today() ? 'text-warn' : ''}>{n}</span> : '—'; } },
       ]}
       extraActions={(r) => (
         <>

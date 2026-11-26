@@ -1,7 +1,8 @@
 import { DateRange } from '../forms.jsx';
 import { useState, useMemo } from 'react';
 import { closedSet, inClosedDay } from '../dayclose.js';
-import { CrudPage, Modal, RecordForm, Empty } from '../ui.jsx';
+import { CrudPage, Modal, RecordForm } from '../ui.jsx';
+import { DataTable } from '../datatable.jsx';
 import { useStore, today, dayOf, uid, put, customerBalance, supplierBalance, downloadFile, toCSV } from '../store.jsx';
 import { CASH, ledger, accountBalances, loanBalance } from '../finance.js';
 import { showDate } from '../showdate.js';
@@ -38,11 +39,11 @@ export function Expenses() {
       ]}
       columns={[
         { label: 'Date', key: 'date', render: (r) => showDate(r.date) },
-        { label: 'Category', render: (e) => db.expenseCategories.find((c) => c.id === e.categoryId)?.name },
+        { label: 'Category', sortBy: (e) => db.expenseCategories.find((c) => c.id === e.categoryId)?.name, render: (e) => db.expenseCategories.find((c) => c.id === e.categoryId)?.name },
         { label: 'Description', key: 'description' },
         { label: 'Paid to', key: 'payee' },
-        { label: 'From', render: (e) => db.banks.find((b) => b.id === e.bankId)?.name },
-        { label: 'Amount', num: true, render: (e) => fmt(e.amount) },
+        { label: 'From', sortBy: (e) => db.banks.find((b) => b.id === e.bankId)?.name, render: (e) => db.banks.find((b) => b.id === e.bankId)?.name },
+        { label: 'Amount', num: true, sortBy: (e) => Number(e.amount) || 0, render: (e) => fmt(e.amount) },
       ]}
     />
   );
@@ -54,7 +55,7 @@ export function ExpenseCategories() {
     <CrudPage
       title="Expense Categories" singular="Category" table="expenseCategories"
       fields={[{ key: 'name', label: 'Name', required: true }]}
-      columns={[{ label: 'Name', key: 'name' }, { label: 'Total spent', num: true, render: (c) => fmt(db.expenses.filter((e) => e.categoryId === c.id).reduce((a, e) => a + e.amount, 0)) }]}
+      columns={[{ label: 'Name', key: 'name' }, { label: 'Total spent', num: true, sortBy: (c) => db.expenses.filter((e) => e.categoryId === c.id).reduce((a, e) => a + e.amount, 0), render: (c) => fmt(db.expenses.filter((e) => e.categoryId === c.id).reduce((a, e) => a + e.amount, 0)) }]}
     />
   );
 }
@@ -74,7 +75,7 @@ export function Banks() {
       ]}
       columns={[
         { label: 'Account', key: 'name' }, { label: 'Number', key: 'account' }, { label: 'Branch', key: 'branch' },
-        { label: 'Balance', num: true, render: (b) => <strong className={bal[b.id] < 0 ? 'text-danger' : ''}>{fmt(bal[b.id])}</strong> },
+        { label: 'Balance', num: true, sortBy: (b) => bal[b.id] || 0, render: (b) => <strong className={bal[b.id] < 0 ? 'text-danger' : ''}>{fmt(bal[b.id])}</strong> },
       ]}
     />
   );
@@ -100,10 +101,10 @@ export function BankTx() {
       ]}
       columns={[
         { label: 'Date', key: 'date', render: (r) => showDate(r.date) },
-        { label: 'Type', render: (t) => <span className={'badge ' + (t.type === 'Deposit' ? 'ok' : t.type === 'Withdrawal' ? 'warn' : '')}>{t.type}</span> },
+        { label: 'Type', sortBy: (t) => t.type, render: (t) => <span className={'badge ' + (t.type === 'Deposit' ? 'ok' : t.type === 'Withdrawal' ? 'warn' : '')}>{t.type}</span> },
         { label: 'Account', render: (t) => (t.type === 'Transfer' ? `${name(t.fromId)} → ${name(t.toId)}` : t.type === 'Deposit' ? `Cash → ${name(t.bankId)}` : `${name(t.bankId)} → Cash`) },
         { label: 'Reference', key: 'ref' },
-        { label: 'Amount', num: true, render: (t) => fmt(t.amount) },
+        { label: 'Amount', num: true, sortBy: (t) => Number(t.amount) || 0, render: (t) => fmt(t.amount) },
       ]}
     />
   );
@@ -141,26 +142,24 @@ function BalancesPage({ title, kind, parties, balanceOf, note }) {
       <div className="page-head"><h1>{title}</h1><span className="muted">Total {fmt(rows.reduce((a, r) => a + r.bal, 0))}</span></div>
       <p className="muted">{note}</p>
       <div className="card table-wrap">
-        <table>
-          <thead><tr><th>Name</th><th>Phone</th><th className="num">Balance</th><th /></tr></thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.id}><td>{r.name}</td><td>{r.phone}</td><td className="num"><strong>{fmt(r.bal)}</strong></td>
-                <td className="actions"><button className="btn sm primary" onClick={() => setPay(r)}>{kind === 'customer' ? 'Receive payment' : 'Pay'}</button></td></tr>
-            ))}
-            {!rows.length && <Empty colSpan={4}>{kind === 'customer' ? 'Nobody owes the pharmacy money. Sales on credit show here until they are paid.' : 'The pharmacy owes no supplier. Deliveries on credit show here until they are paid.'}</Empty>}
-          </tbody>
-        </table>
+        <DataTable id={'balances-' + kind} wrapClass="dt-inner" rows={rows} sort={['bal', -1]} csv={kind === 'customer' ? 'debtors' : 'creditors'}
+          empty={kind === 'customer' ? 'Nobody owes the pharmacy money. Sales on credit show here until they are paid.' : 'The pharmacy owes no supplier. Deliveries on credit show here until they are paid.'} columns={[
+            { id: 'name', label: 'Name', key: 'name' },
+            { id: 'phone', label: 'Phone', key: 'phone' },
+            { id: 'bal', label: 'Balance', num: true, sortBy: (r) => r.bal, render: (r) => <strong>{fmt(r.bal)}</strong> },
+            { id: 'actions', label: 'Actions', noExport: true, className: 'actions', render: (r) => <button className="btn sm primary" onClick={() => setPay(r)}>{kind === 'customer' ? 'Receive payment' : 'Pay'}</button> },
+          ]} />
       </div>
       <div className="card table-wrap">
         <h3 className="pad">Payment history</h3>
-        <table>
-          <thead><tr><th>Date</th><th>Name</th><th>Method</th><th>Note</th><th className="num">Amount</th></tr></thead>
-          <tbody>
-            {history.slice(0, 200).map((p) => <tr key={p.id}><td>{p.date}</td><td>{parties.find((x) => x.id === p.partyId)?.name}</td><td>{p.method}</td><td>{p.note}</td><td className="num">{fmt(p.amount)}</td></tr>)}
-            {!history.length && <Empty colSpan={5}>No payments yet. Payments you receive or make on a balance are listed here.</Empty>}
-          </tbody>
-        </table>
+        {/* every payment (no longer the first 200: the shared table, 2026-11-26) */}
+        <DataTable id={'payments-' + kind} wrapClass="dt-inner" rows={history} sort={['date', -1]} csv={'payments-' + kind} empty="No payments yet. Payments you receive or make on a balance are listed here." columns={[
+          { id: 'date', label: 'Date', key: 'date' },
+          { id: 'name', label: 'Name', sortBy: (p) => parties.find((x) => x.id === p.partyId)?.name || '', render: (p) => parties.find((x) => x.id === p.partyId)?.name },
+          { id: 'method', label: 'Method', key: 'method' },
+          { id: 'note', label: 'Note', key: 'note' },
+          { id: 'amount', label: 'Amount', num: true, sortBy: (p) => Number(p.amount) || 0, render: (p) => fmt(p.amount) },
+        ]} />
       </div>
       {pay && <PaymentModal title={`${kind === 'customer' ? 'Payment from' : 'Payment to'} ${pay.name}`} kind={kind} partyId={pay.id} max={pay.bal} onClose={() => setPay(null)} />}
     </div>
@@ -196,10 +195,10 @@ export function Loans() {
         ]}
         columns={[
           { label: 'Lender', key: 'lender' }, { label: 'Date', key: 'date', render: (r) => showDate(r.date) }, { label: 'Due', key: 'dueDate', render: (r) => showDate(r.dueDate) },
-          { label: 'Amount', num: true, render: (l) => fmt(l.amount) },
-          { label: 'Total due', num: true, render: (l) => fmt(loanBalance(db, l).total) },
-          { label: 'Repaid', num: true, render: (l) => fmt(loanBalance(db, l).repaid) },
-          { label: 'Balance', num: true, render: (l) => <strong>{fmt(loanBalance(db, l).balance)}</strong> },
+          { label: 'Amount', num: true, sortBy: (l) => Number(l.amount) || 0, render: (l) => fmt(l.amount) },
+          { label: 'Total due', num: true, sortBy: (l) => loanBalance(db, l).total, render: (l) => fmt(loanBalance(db, l).total) },
+          { label: 'Repaid', num: true, sortBy: (l) => loanBalance(db, l).repaid, render: (l) => fmt(loanBalance(db, l).repaid) },
+          { label: 'Balance', num: true, sortBy: (l) => loanBalance(db, l).balance, render: (l) => <strong>{fmt(loanBalance(db, l).balance)}</strong> },
         ]}
         extraActions={(l) => loanBalance(db, l).balance > 0 && <button className="btn sm primary" onClick={() => setPay(l)}>Repay</button>}
       />
@@ -229,17 +228,17 @@ export function CashBook() {
         </div>
       </div>
       <div className="card table-wrap">
-        <table>
-          <thead><tr><th>Date</th><th>Description</th><th>Type</th><th className="num">Money in</th><th className="num">Money out</th><th className="num">Balance</th></tr></thead>
-          <tbody>
-            <tr className="dim"><td colSpan={5}>Opening balance</td><td className="num">{fmt(opening)}</td></tr>
-            {rows.map((e, i) => (
-              <tr key={i}><td>{showDate(e.date)}</td><td>{e.desc}</td><td>{e.kind}</td>
-                <td className="num text-ok">{e.in ? fmt(e.in) : ''}</td><td className="num text-danger">{e.out ? fmt(e.out) : ''}</td><td className="num"><strong>{fmt(e.bal)}</strong></td></tr>
-            ))}
-            <tr><td colSpan={3}><strong>Totals</strong></td><td className="num"><strong>{fmt(rows.reduce((a, e) => a + e.in, 0))}</strong></td><td className="num"><strong>{fmt(rows.reduce((a, e) => a + e.out, 0))}</strong></td><td className="num"><strong>{fmt(rows.length ? rows[rows.length - 1].bal : opening)}</strong></td></tr>
-          </tbody>
-        </table>
+        <DataTable id="cash-book" wrapClass="dt-inner" rows={rows} rowKey={(e, i) => e.id || `${e.date}|${e.desc}|${e.bal}|${i}`} csv={false} resetKey={[account, from, to].join('|')}
+          caption={<>Opening balance <strong>{fmt(opening)}</strong></>} empty="No money in or out in this period"
+          foot={(id, all, i) => (i === 0 ? <strong>Totals</strong> : id === 'in' ? <strong>{fmt(rows.reduce((a, e) => a + e.in, 0))}</strong> : id === 'out' ? <strong>{fmt(rows.reduce((a, e) => a + e.out, 0))}</strong> : id === 'bal' ? <strong>{fmt(rows.length ? rows[rows.length - 1].bal : opening)}</strong> : '')}
+          columns={[
+            { id: 'date', label: 'Date', key: 'date', render: (e) => showDate(e.date) },
+            { id: 'desc', label: 'Description', key: 'desc' },
+            { id: 'kind', label: 'Type', key: 'kind' },
+            { id: 'in', label: 'Money in', num: true, className: 'text-ok', sortBy: (e) => e.in || 0, render: (e) => (e.in ? fmt(e.in) : '') },
+            { id: 'out', label: 'Money out', num: true, className: 'text-danger', sortBy: (e) => e.out || 0, render: (e) => (e.out ? fmt(e.out) : '') },
+            { id: 'bal', label: 'Balance', num: true, sortBy: (e) => e.bal, render: (e) => <strong>{fmt(e.bal)}</strong> },
+          ]} />
       </div>
     </div>
   );

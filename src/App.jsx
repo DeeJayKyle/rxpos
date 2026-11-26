@@ -9,6 +9,8 @@ import { MessageCircle,
 } from 'lucide-react';
 import { endOtherSessions, setPersonGuard, borrowedToken, cloudLogin } from './cloud.js';
 import { endRenewal } from './session.js';
+import { useTabOrder } from './tablekit.jsx';
+import { LayoutSync } from './layoutsync.jsx';
 import { useStore, useSyncState, makePassword, put, audit, isLowStock, expiryCounts } from './store.jsx';
 import { askText, ask, toast } from './feedback.jsx';
 import { hasPin, setPin, clearPin, verifyOffline } from './offline.js';
@@ -216,13 +218,15 @@ export function menuOf(groups, can) {
 /** The tabs at the top of a page that shares its menu entry with others (HUBS) */
 function HubTabs({ groups, here }) {
   const hub = hubOf(here);
-  if (!hub) return null;
   const all = groups.flatMap((g) => g.items);
-  const tabs = hub[2].map((to) => all.find(([t]) => t === to)).filter(Boolean);
-  if (tabs.length < 2) return null;
+  const tabs = hub ? hub[2].map((to) => all.find(([t]) => t === to)).filter(Boolean) : [];
+  const order = useTabOrder('hub:' + (hub?.[0] || ''), tabs.map(([to]) => to), here);
+  if (!hub || tabs.length < 2) return null;
+  const byTo = Object.fromEntries(tabs.map((t) => [t[0], t]));
   return (
     <nav className="hub-tabs" aria-label={`${hub[0]} pages`}>
-      {tabs.map(([to, label, Icon]) => <NavLink key={to} to={to} end className="hub-tab"><Icon size={15} aria-hidden="true" />{label}</NavLink>)}
+      {order.keys.map((to) => { const [, label, Icon] = byTo[to]; const p = order.props(to, label); return <NavLink key={to} to={to} end {...p} className={({ isActive }) => ['hub-tab', isActive ? 'active' : '', p.className].filter(Boolean).join(' ')}><Icon size={15} aria-hidden="true" />{label}</NavLink>; })}
+      {order.menu}
     </nav>
   );
 }
@@ -840,6 +844,7 @@ function Shell() {
           const content = (
             <main className="content" ref={contentRef} data-page={here} onContextMenu={openPageMenu}>
               <HubTabs groups={groups} here={here} />
+              <LayoutSync />
               <Suspense fallback={<PageSkeleton />}>
                 <Routes>
                   {groups.flatMap((g) => g.items).map(([to, , , , , el]) => <Route key={to} path={to} element={el} />)}

@@ -176,6 +176,7 @@ const SUITES = [
   ['the owner\'s rules: shift questions, past sales into shifts, the till in stock A–Z, tidy names', 'v88-owner-rules.mjs', ['.output/v88']],
   ['dashboard cards resized and moved, options on every page, the theme panel folds', 'v89-layout.mjs', ['.output/v89']],
   ['split payments at the till, returning part of a sale, cash paid out of the drawer', 'v90-split-returns.mjs', []],
+  ['shared table and tabs: every row, sort, move, resize, hide, layout on every device', 'v91-shared-table.mjs', ['.output/v91']],
   // every page on a PC and a phone, for design review: only on request (`npm test -- shots-all`)
   ...(process.argv[2] === 'shots-all' ? [['every page, PC and phone screenshots', 'shots-all.mjs', ['.output/all']]] : []),
   // every theme on the dashboard and Sales History, for the owner's review: only on request (`npm test -- shots-themes`)

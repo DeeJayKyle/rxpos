@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { MessageCircle, MessageSquareText, Send, BellRing } from 'lucide-react';
+import { DataTable } from '../datatable.jsx';
 import { useStore, customerBalance, fillTemplate, normalizePhone, put, audit, daysUntil, now } from '../store.jsx';
 import { reminderActive } from '../rxrules.js';
-import { Tabs, Empty } from '../ui.jsx';
+import { Tabs } from '../ui.jsx';
 import { toast, ask } from '../feedback.jsx';
 import { cloudConfig, sendSms, whatsappLink } from '../cloud.js';
 import { showDate } from '../showdate.js';
@@ -90,35 +91,22 @@ export default function Reminders() {
       </div>
       {!smsReady && <div className="notice info-notice">WhatsApp reminders work now. To send SMS automatically, add your Africa’s Talking keys to the cloud (see README → SMS).</div>}
       <Tabs tabs={[['refills', `Refills due (${refills.length})`], ['debts', `Debtors (${debts.length})`]]} value={tab} onChange={(t) => { setTab(t); setSelected({}); }} />
-      <div className="card table-wrap">
-        <table>
-          <thead><tr>
-            <th><input type="checkbox" aria-label="Select all" checked={rows.length > 0 && chosen.length === rows.length} onChange={(e) => setSelected(e.target.checked ? Object.fromEntries(rows.map((r) => [r.key, true])) : {})} /></th>
-            <th>Customer</th><th>Phone</th><th>{tab === 'refills' ? 'Medicine · due' : 'Owes'}</th><th>Last reminded</th><th />
-          </tr></thead>
-          <tbody>
-            {rows.map((r) => {
-              const phone = normalizePhone(r.customer.phone);
-              return (
-                <tr key={r.key}>
-                  <td><input type="checkbox" checked={!!selected[r.key]} onChange={(e) => setSelected({ ...selected, [r.key]: e.target.checked })} /></td>
-                  <td><strong>{r.customer.name}</strong></td>
-                  <td>{r.customer.phone || <span className="muted">no phone</span>}</td>
-                  <td>{tab === 'refills'
-                    ? <>{r.medicine}<br /><small className={r.days < 0 ? 'text-danger' : 'text-warn'}>{r.days < 0 ? `${-r.days} days overdue` : r.days === 0 ? 'due today' : `due in ${r.days} days`}</small></>
-                    : <strong className="text-warn">{fmt(r.amount)}</strong>}</td>
-                  <td className="muted small">{r.customer.lastReminderAt ? showDate(r.customer.lastReminderAt) : '—'}</td>
-                  <td className="actions">
+      <DataTable id={'reminders-' + tab} rows={rows} rowKey={(r) => r.key} resetKey={tab} csv={false}
+        empty={tab === 'refills' ? 'No refills due in the next 7 days. Mark medicines as “Chronic” or set a refill interval on prescriptions.' : 'Nobody owes you money 🎉'}
+        tools={<label className="field check inline"><input type="checkbox" aria-label="Select all" checked={rows.length > 0 && chosen.length === rows.length} onChange={(e) => setSelected(e.target.checked ? Object.fromEntries(rows.map((r) => [r.key, true])) : {})} /><span>Select all</span></label>}
+        columns={[
+          { id: 'pick', label: 'Pick', fixed: true, noExport: true, render: (r) => <input type="checkbox" aria-label={`Select ${r.customer.name}`} checked={!!selected[r.key]} onChange={(e) => setSelected({ ...selected, [r.key]: e.target.checked })} /> },
+          { id: 'customer', label: 'Customer', sortBy: (r) => r.customer.name, render: (r) => <strong>{r.customer.name}</strong> },
+          { id: 'phone', label: 'Phone', sortBy: (r) => r.customer.phone || '', render: (r) => r.customer.phone || <span className="muted">no phone</span> },
+          tab === 'refills'
+            ? { id: 'due', label: 'Medicine · due', sortBy: (r) => r.days, csv: (r) => `${r.medicine} · ${r.days}`, render: (r) => <>{r.medicine}<br /><small className={r.days < 0 ? 'text-danger' : 'text-warn'}>{r.days < 0 ? `${-r.days} days overdue` : r.days === 0 ? 'due today' : `due in ${r.days} days`}</small></> }
+            : { id: 'owes', label: 'Owes', num: true, sortBy: (r) => r.amount, render: (r) => <strong className="text-warn">{fmt(r.amount)}</strong> },
+          { id: 'last', label: 'Last reminded', className: 'muted small', sortBy: (r) => r.customer.lastReminderAt || '', render: (r) => (r.customer.lastReminderAt ? showDate(r.customer.lastReminderAt) : '—') },
+          { id: 'actions', label: 'Actions', noExport: true, className: 'actions', render: (r) => { const phone = normalizePhone(r.customer.phone); return <>
                     <a className={'btn sm ghost' + (phone.length < 12 ? ' disabled-link' : '')} href={phone.length >= 12 ? whatsappLink(phone, message(r)) : undefined} target="_blank" rel="noreferrer" onClick={() => phone.length >= 12 && markSent([r], 'WhatsApp')}><MessageCircle size={14} />WhatsApp</a>
                     <button className="btn sm ghost" disabled={!smsReady || sending || phone.length < 12} onClick={() => smsTo([r])}><MessageSquareText size={14} />SMS</button>
-                  </td>
-                </tr>
-              );
-            })}
-            {!rows.length && <Empty colSpan={6}>{tab === 'refills' ? 'No refills due in the next 7 days. Mark medicines as “Chronic” or set a refill interval on prescriptions.' : 'Nobody owes you money 🎉'}</Empty>}
-          </tbody>
-        </table>
-      </div>
+          </>; } },
+        ]} />
       <p className="muted small">Edit the message wording in Settings → Messages. Placeholders: {'{name} {pharmacy} {medicine} {date} {amount}'}.</p>
     </div>
   );

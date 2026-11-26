@@ -6,8 +6,8 @@ import { useStore, uid, dayOf, downloadFile, toCSV, put, move, now, audit, alloc
 import { useOlderHistory, olderNote } from '../history.js';
 import { ViewSwitch, BoardView, GalleryView, savedView, saveView } from '../components/DataViews.jsx';
 import { saleStatus } from '../components/BentoDashboard.jsx';
-import { Modal, SearchBox, Empty, PdfButton, ReceiptPdfButton, PayChip, useSort, SortTh, SubViews, WhoChanged, ExportMenu, moneyCell } from '../ui.jsx';
-import { useLoadMore, useColumns, BulkBar, useSwipe, useWide, DetailsPane } from '../tablekit.jsx';
+import { Modal, SearchBox, Empty, PdfButton, ReceiptPdfButton, PayChip, useSort, SubViews, WhoChanged, ExportMenu, moneyCell } from '../ui.jsx';
+import { useLoadMore, useColumns, ColTh, BulkBar, useSwipe, useWide, DetailsPane } from '../tablekit.jsx';
 import { DateRange } from '../forms.jsx';
 import { toast } from '../feedback.jsx';
 import { Barcode } from '../barcode.jsx';
@@ -210,7 +210,7 @@ export default function Sales() {
     (!f.status || (f.status === 'edited' ? s.edits?.length > 0 : f.status === 'refunded' ? s.status === 'refunded' : s.status !== 'refunded')));
   const valid = rows.filter((s) => s.status !== 'refunded'); // returns of part of a sale (negative) included: the total is net of them
   const saleCount = valid.filter((s) => !s.returnOf).length;
-  const sorted = useSort(rows, { number: (s) => s.number, date: (s) => s.date, customer: (s) => s.customerName || '', cashier: (s) => s.cashier || '', payment: (s) => payLabel(s), total: (s) => s.total }, 'date');
+  const sorted = useSort(rows, { number: (s) => s.number, date: (s) => s.date, customer: (s) => s.customerName || '', cashier: (s) => s.cashier || '', payment: (s) => payLabel(s), total: (s) => s.total, branch: (s) => db.branches.find((b) => b.id === (s.branchId || MAIN_BRANCH))?.name || '', phone: (s) => phoneOf(s) || '', status: (s) => (s.status === 'refunded' ? 'refunded' : s.returnOf ? 'return' : s.status || '') }, 'date', -1, 'sales');
   // UI batch 3: 100 rows then more as the list scrolls (C7), columns chosen and ordered on this device (C2)
   const page = useLoadMore(sorted.rows, { resetKey: [q, from, to, branch, f.cashier, f.payment, f.customer, f.status, sorted.by, sorted.dir].join('|') });
   const colsK = useColumns('sales', [{ id: 'number', label: 'Receipt', fixed: true }, { id: 'date', label: 'Date' }, ...(db.branches.length > 1 ? [{ id: 'branch', label: 'Branch' }] : []), { id: 'customer', label: 'Customer' }, { id: 'phone', label: 'Phone' }, { id: 'payment', label: 'Payment' }, { id: 'status', label: 'Status' }, { id: 'total', label: 'Total' }, { id: 'cashier', label: 'Cashier' }]);
@@ -364,9 +364,9 @@ export default function Sales() {
       {dv === 'table' && <div className={'list-and-details' + (view && wide ? ' with-details' : '')}><div className="card table-wrap">
         <table className="phone-rows">
           <thead><tr><th className="tick"><input {...lc.allProps} /></th>{colsK.shown.map((id) => ({
-            number: <SortTh key={id} s={sorted} k="number">Receipt</SortTh>, date: <SortTh key={id} s={sorted} k="date">Date</SortTh>, branch: <th key={id}>Branch</th>,
-            customer: <SortTh key={id} s={sorted} k="customer">Customer</SortTh>, phone: <th key={id}>Phone</th>, payment: <SortTh key={id} s={sorted} k="payment">Payment</SortTh>,
-            status: <th key={id}>Status</th>, total: <SortTh key={id} s={sorted} k="total" className="num">Total{cur && <small className="th-cur"> ({cur})</small>}</SortTh>, cashier: <SortTh key={id} s={sorted} k="cashier">Cashier</SortTh> }[id]))}<th /></tr></thead>
+            number: <ColTh key={id} cols={colsK} id={id} sort={sorted} k="number">Receipt</ColTh>, date: <ColTh key={id} cols={colsK} id={id} sort={sorted} k="date">Date</ColTh>, branch: <ColTh key={id} cols={colsK} id={id} sort={sorted} k="branch">Branch</ColTh>,
+            customer: <ColTh key={id} cols={colsK} id={id} sort={sorted} k="customer">Customer</ColTh>, phone: <ColTh key={id} cols={colsK} id={id} sort={sorted} k="phone">Phone</ColTh>, payment: <ColTh key={id} cols={colsK} id={id} sort={sorted} k="payment">Payment</ColTh>,
+            status: <ColTh key={id} cols={colsK} id={id} sort={sorted} k="status">Status</ColTh>, total: <ColTh key={id} cols={colsK} id={id} sort={sorted} k="total" className="num">Total{cur && <small className="th-cur"> ({cur})</small>}</ColTh>, cashier: <ColTh key={id} cols={colsK} id={id} sort={sorted} k="cashier">Cashier</ColTh> }[id]))}<th /></tr></thead>
           <tbody>
             {page.rows.map((s, i) => { const rp = lc.rowProps(s, i, saleMenu); const cell = {
               number: <td key="number" className="row-title"><strong>{s.number}</strong> <small className="muted cap">{s.type || 'retail'}</small></td>,

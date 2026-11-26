@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Undo2, Plus, X, FileDown } from 'lucide-react';
+import { DataTable } from '../datatable.jsx';
 import { useStore, uid, now, today, put, move, audit, downloadFile, toCSV, daysUntil } from '../store.jsx';
 import { CASH } from '../finance.js';
 import { Modal, Empty, PdfButton, SearchBox } from '../ui.jsx';
@@ -35,22 +36,16 @@ export default function Returns() {
           <button className="btn primary" onClick={() => setOpen(true)}><Plus size={16} />New return</button>
         </div>
       </div>
-      <div className="card table-wrap" ref={ref}>
-        <table>
-          <thead><tr><th>Date</th><th>Return</th><th>Supplier</th><th>Items</th><th>Settled by</th><th className="num">Value</th><th /></tr></thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.id}>
-                <td>{r.date}</td><td>{r.number}</td><td>{r.supplierName}</td>
-                <td>{r.items.map((i) => i.name).slice(0, 2).join(', ')}{r.items.length > 2 ? ` +${r.items.length - 2}` : ''}</td>
-                <td>{r.settle === 'cash' ? <span className="badge ok">Refund</span> : <span className="badge">Credit note{r.creditNote ? ' ' + r.creditNote : ''}</span>}</td>
-                <td className="num">{fmt(r.total)}</td>
-                <td className="actions"><button className="btn sm ghost" onClick={() => setView(r)}>View</button></td>
-              </tr>
-            ))}
-            {!rows.length && <Empty colSpan={7}>No returns yet. Expired or damaged stock can go back to the supplier for a credit note or refund.</Empty>}
-          </tbody>
-        </table>
+      <div ref={ref}>
+        <DataTable id="supplier-returns" rows={rows} sort={['date', -1]} csv={false} empty="No returns yet. Expired or damaged stock can go back to the supplier for a credit note or refund." columns={[
+          { id: 'date', label: 'Date', key: 'date' },
+          { id: 'number', label: 'Return', key: 'number' },
+          { id: 'supplier', label: 'Supplier', key: 'supplierName' },
+          { id: 'items', label: 'Items', sortBy: (r) => r.items.length, csv: (r) => r.items.map((i) => i.name).join(', '), render: (r) => <>{r.items.map((i) => i.name).slice(0, 2).join(', ')}{r.items.length > 2 ? ` +${r.items.length - 2}` : ''}</> },
+          { id: 'settle', label: 'Settled by', sortBy: (r) => (r.settle === 'cash' ? 'Refund' : 'Credit note'), render: (r) => (r.settle === 'cash' ? <span className="badge ok">Refund</span> : <span className="badge">Credit note{r.creditNote ? ' ' + r.creditNote : ''}</span>) },
+          { id: 'total', label: 'Value', num: true, sortBy: (r) => r.total || 0, render: (r) => fmt(r.total) },
+          { id: 'actions', label: 'Actions', noExport: true, className: 'actions', render: (r) => <button className="btn sm ghost" onClick={() => setView(r)}>View</button> },
+        ]} />
       </div>
       {open && <ReturnForm pre={pre} onClose={() => { setOpen(false); window.history.replaceState({}, ''); }} />}
       {view && (
