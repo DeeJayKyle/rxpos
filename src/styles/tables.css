@@ -79,3 +79,8 @@ th.col-move .th-sort[data-sort=desc]::after { content: ' ▼'; color: var(--mute
 th.col-move .th-sort[data-sort=none] { position: relative; }
 th.col-move .th-sort[data-sort=none]::after { content: '↕'; position: absolute; left: 100%; margin-left: 2px; color: var(--muted); font-size: .85em; opacity: 0; transition: opacity .15s; }
 th.col-move:hover .th-sort[data-sort=none]::after, th.col-move .th-sort:focus-visible::after { opacity: 1; }
+
+/* tabs move like columns (useTabOrder): the tab being dragged fades, the one it will land before is marked */
+.tab-dragging { opacity: .45; }
+.tab-drop { box-shadow: inset 3px 0 0 var(--primary); }
+.tabs .tab[draggable="true"], .hub-tab[draggable="true"] { cursor: pointer; }

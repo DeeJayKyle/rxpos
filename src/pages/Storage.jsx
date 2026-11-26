@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { Thermometer, Droplets, Wind, RefreshCw, Plus, MapPin, Snowflake, Warehouse, Sun as SunIcon, AlertTriangle, Trash2 } from 'lucide-react';
+import { DataTable } from '../datatable.jsx';
 import { useStore, uid, put, del, audit, now, today, dayOf } from '../store.jsx';
-import { Modal, Empty, Stat } from '../ui.jsx';
+import { Modal, Stat } from '../ui.jsx';
 import { toast, ask } from '../feedback.jsx';
 import { useWeather, describe, storageLimits, storageAdvice } from '../weather.js';
 import { showDateTime, dateLocale } from '../showdate.js';
@@ -102,21 +103,17 @@ export default function Storage() {
           lo={place === 'Fridge' ? limits.fridgeMin : limits.roomMin} hi={place === 'Fridge' ? limits.fridgeMax : limits.roomMax} />
         <p className="muted small">Safe range shaded: fridge {limits.fridgeMin}–{limits.fridgeMax}°C, room {limits.roomMin}–{limits.roomMax}°C, humidity up to {limits.humidityMax}%. Change these in Settings → Alerts & storage. Outside temperature and humidity are logged automatically every 6 hours (00:00, 06:00, 12:00, 18:00); RxPOS reminds you to record the room and fridge at 06:00, 12:00 and 18:00.</p>
       </div>
-      <div className="card table-wrap">
-        <table>
-          <thead><tr><th>When</th><th>Where</th><th className="num">Temp</th><th className="num">Humidity</th><th>By</th><th>Note</th><th /></tr></thead>
-          <tbody>
-            {[...logs].reverse().slice(0, 200).map((r) => (
-              <tr key={r.id} className={inRange(r) ? '' : 'row-bad'}>
-                <td>{new Date(r.at).toLocaleString(dateLocale(), { dateStyle: 'medium', timeStyle: 'short' })}</td><td>{r.place}</td>
-                <td className="num">{r.temp}°C</td><td className="num">{r.humidity != null ? r.humidity + '%' : '—'}</td><td>{r.by}</td><td>{r.note}</td>
-                <td className="actions"><button className="icon-btn" title="Delete" onClick={async () => (await ask({ title: 'Delete this reading?', danger: true, confirmText: 'Delete' })) && update((d) => del(d, 'tempLogs', r.id))}><Trash2 size={15} /></button></td>
-              </tr>
-            ))}
-            {!logs.length && <Empty colSpan={7}>No readings yet. Record the fridge and room temperature twice a day.</Empty>}
-          </tbody>
-        </table>
-      </div>
+      {/* every reading, newest first (no longer the newest 200: the shared table, 2026-11-26) */}
+      <DataTable id="temp-logs" rows={logs} sort={['at', -1]} csv="temperature-log" empty="No readings yet. Record the fridge and room temperature twice a day."
+        rowProps={(r) => ({ className: inRange(r) ? undefined : 'row-bad' })} columns={[
+          { id: 'at', label: 'When', key: 'at', render: (r) => new Date(r.at).toLocaleString(dateLocale(), { dateStyle: 'medium', timeStyle: 'short' }) },
+          { id: 'place', label: 'Where', key: 'place' },
+          { id: 'temp', label: 'Temp', num: true, sortBy: (r) => Number(r.temp), render: (r) => `${r.temp}°C` },
+          { id: 'humidity', label: 'Humidity', num: true, sortBy: (r) => r.humidity ?? null, render: (r) => (r.humidity != null ? r.humidity + '%' : '—') },
+          { id: 'by', label: 'By', key: 'by' },
+          { id: 'note', label: 'Note', key: 'note' },
+          { id: 'actions', label: 'Actions', noExport: true, className: 'actions', render: (r) => <button className="icon-btn" title="Delete" onClick={async () => (await ask({ title: 'Delete this reading?', danger: true, confirmText: 'Delete' })) && update((d) => del(d, 'tempLogs', r.id))}><Trash2 size={15} /></button> },
+        ]} />
       {adding && (
         <Modal title="Record a temperature reading" onClose={() => setAdding(null)}>
           <form onSubmit={save}>

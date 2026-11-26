@@ -11,7 +11,7 @@ import { deviceSettings, setDevice } from './device.js';
 import { useSheetDrag } from './sheet.js';
 import { ask, toast } from './feedback.jsx';
 import { useFocusTrap } from './focustrap.js';
-import { useLoadMore, useColumns, ColTh, BulkBar, useSwipe, useWide, DetailsPane } from './tablekit.jsx';
+import { useLoadMore, useColumns, ColTh, useTabOrder, BulkBar, useSwipe, useWide, DetailsPane } from './tablekit.jsx';
 import { MoneyInput, PhoneInput, checkField, PhotoField } from './forms.jsx';
 import { lastChangeOf, ago } from './auditText.js';
 import { DateInput } from './fields.jsx';
@@ -439,7 +439,12 @@ export function FilterChips({ options, value, onChange, label = 'Show' }) {
   );
 }
 
-export function Tabs({ tabs, value, onChange }) {
+export function Tabs({ tabs, value, onChange, id }) {
+  // each set of tabs moves and hides like columns (useTabOrder); named by its page and its tabs unless given an id
+  const { pathname } = useLocation();
+  const keys = tabs.map(([k]) => k);
+  const order = useTabOrder(id || pathname.split('/')[1] + ':' + keys.join(','), keys, value);
+  const byKey = Object.fromEntries(tabs);
   // phones show the tabs as one sideways-scrolling strip: keep the chosen one in view
   const ref = useRef(null);
   useEffect(() => {
@@ -450,7 +455,8 @@ export function Tabs({ tabs, value, onChange }) {
   }, [value]);
   return (
     <div className="tabs" role="tablist" ref={ref}>
-      {tabs.map(([k, label]) => <button key={k} role="tab" aria-selected={value === k} className={'tab' + (value === k ? ' active' : '')} onClick={() => onChange(k)}>{label}</button>)}
+      {order.keys.map((k) => { const p = order.props(k, typeof byKey[k] === 'string' ? byKey[k] : 'this tab'); return <button key={k} type="button" role="tab" aria-selected={value === k} {...p} className={['tab', value === k ? 'active' : '', p.className].filter(Boolean).join(' ')} onClick={() => onChange(k)}>{byKey[k]}</button>; })}
+      {order.menu}
     </div>
   );
 }

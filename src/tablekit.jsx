@@ -7,10 +7,11 @@
 //   useSwipe      C10: on phones, a row swiped to the left shows its actions (Call, WhatsApp, Print, Refund…)
 //   DetailsPane   C8: on screens 1280 px and wider a row's details open beside the list; narrower, a pop-up
 //   HealthBar     C9: a thin bar of stock against the reorder level (2 × reorder = full)
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { Columns3, ArrowUp, ArrowDown, X, GripVertical, ChevronLeft, ChevronRight } from 'lucide-react';
 import { deviceSettings, setDevice } from './device.js';
 import { Modal } from './ui.jsx';
+import { useContextMenu } from './listcontrols.jsx';
 
 /** C7: the first `step` rows, then `step` more each time the end of the list comes into view. Sorting and filtering
  *  stay over the whole list (the caller passes the whole, sorted list). resetKey: start again (a new search). */
@@ -47,6 +48,8 @@ export function useColumns(key, defs, legacyHidden) {
   const read = () => deviceSettings().columns?.[key] || (legacyHidden?.length ? { hidden: legacyHidden } : {});
   const [saved, setSaved] = useState(read);
   const save = (v) => { setSaved(v); setDevice({ columns: { ...(deviceSettings().columns || {}), [key]: v } }); };
+  // a layout from the person's other device (LayoutSync) shows at once
+  useEffect(() => { const on = () => setSaved(read()); window.addEventListener('rxpos-layout', on); return () => window.removeEventListener('rxpos-layout', on); }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
   const ids = defs.map((d) => d.id);
   const order = [...(saved.order || []).filter((id) => ids.includes(id)), ...ids.filter((id) => !(saved.order || []).includes(id))];
   const fixed = defs.filter((d) => d.fixed).map((d) => d.id);
@@ -241,4 +244,58 @@ export function HealthBar({ stock, reorder }) {
   const k = Math.min(1, s / full);
   const state = s <= 0 ? 'out' : r > 0 && s <= r ? 'low' : 'ok';
   return <span className={'health-bar ' + state} role="img" aria-label={`Stock ${state === 'out' ? 'out' : state === 'low' ? 'low' : 'good'}: ${s} of a ${r} reorder level`}><i style={{ width: `${Math.max(k * 100, s > 0 ? 4 : 0)}%` }} /></span>;
+}
+
+/**
+ * Tabs that move and hide like columns (the owner's request, 2026-11-26), kept per device under tabs[id] (and with the
+ * person's layout on every device, see LayoutSync): drag a tab onto another to move it there, or right-click it (Shift
+ * + F10) for Move left / Move right / Hide / Show all / Standard order, or Ctrl + Shift + ← →. The open tab is never hidden.
+ * const t = useTabOrder(id, keys, active); t.keys: the tabs to draw, in order; t.props(key): spread on each tab button;
+ * t.menu: draw once.
+ */
+export function useTabOrder(id, keys, active) {
+  // read again when the tabs change (one hub to another) or a layout arrives from the person's other device
+  const [tick, setTick] = useState(0);
+  useEffect(() => { const on = () => setTick((t) => t + 1); window.addEventListener('rxpos-layout', on); return () => window.removeEventListener('rxpos-layout', on); }, []);
+  const saved = useMemo(() => deviceSettings().tabs?.[id] || {}, [id, tick]); // eslint-disable-line react-hooks/exhaustive-deps
+  const save = (v) => { setDevice({ tabs: { ...(deviceSettings().tabs || {}), [id]: v } }); setTick((t) => t + 1); };
+  const order = [...(saved.order || []).filter((k) => keys.includes(k)), ...keys.filter((k) => !(saved.order || []).includes(k))];
+  const hidden = new Set((saved.hidden || []).filter((k) => keys.includes(k) && k !== active));
+  const shown = order.filter((k) => !hidden.has(k));
+  const [drag, setDrag] = useState(null);
+  const [over, setOver] = useState(null);
+  const ctx = useContextMenu();
+  const moveTo = (k, before) => {
+    if (k === before) return;
+    const o = order.filter((x) => x !== k);
+    const from = order.indexOf(k), to = order.indexOf(before);
+    o.splice(o.indexOf(before) + (from < to ? 1 : 0), 0, k);
+    save({ ...saved, order: o });
+  };
+  const step = (k, d) => { const i = shown.indexOf(k), j = i + d; if (j >= 0 && j < shown.length) moveTo(k, shown[j]); };
+  const changed = !!(saved.order?.length || saved.hidden?.length);
+  const menuFor = (k, label) => [
+    { label: 'Move left', disabled: shown.indexOf(k) <= 0, run: () => step(k, -1) },
+    { label: 'Move right', disabled: shown.indexOf(k) >= shown.length - 1, run: () => step(k, 1) },
+    { label: `Hide ${label}`, disabled: k === active || shown.length < 2, run: () => save({ ...saved, hidden: [...new Set([...(saved.hidden || []), k])] }) },
+    hidden.size ? { label: `Show hidden tabs (${hidden.size})`, run: () => save({ ...saved, hidden: [] }) } : null,
+    { label: 'Standard order', disabled: !changed, run: () => save({}) },
+  ];
+  const props = (k, label) => ({
+    draggable: true,
+    'data-tab': k,
+    className: [drag === k ? 'tab-dragging' : '', over === k && drag && drag !== k ? 'tab-drop' : ''].filter(Boolean).join(' '),
+    onDragStart: (e) => { setDrag(k); e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', k); } catch { /* old browsers */ } },
+    onDragOver: (e) => { if (drag && drag !== k) { e.preventDefault(); setOver(k); } },
+    onDragLeave: () => setOver((o) => (o === k ? null : o)),
+    onDrop: (e) => { e.preventDefault(); if (drag) moveTo(drag, k); setDrag(null); setOver(null); },
+    onDragEnd: () => { setDrag(null); setOver(null); },
+    onContextMenu: (e) => { e.stopPropagation(); ctx.open(e, menuFor(k, label)); },
+    onKeyDown: (e) => {
+      if (e.ctrlKey && e.shiftKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) { e.preventDefault(); e.stopPropagation(); step(k, e.key === 'ArrowLeft' ? -1 : 1); }
+      else if (e.shiftKey && e.key === 'F10') { const r = e.currentTarget.getBoundingClientRect(); ctx.open({ preventDefault() {}, clientX: r.left, clientY: r.bottom }, menuFor(k, label)); }
+    },
+    title: 'Drag to move · right-click to move or hide · Ctrl + Shift + ← → moves',
+  });
+  return { keys: shown, props, menu: ctx.node, changed, reset: () => save({}) };
 }

@@ -80,7 +80,7 @@ export default function Labels() {
         <div className="card">
           <h3>Preview</h3>
           <div className={'label-sheet print-area labels-' + size} style={{ '--lw': sz.w + 'mm', '--lh': sz.h + 'mm' }}>
-            {labels.slice(0, 200).map((p, n) => (
+            {labels.map((p, n) => ( // every label is printed (no longer cut at 200: 2026-11-26)
               <div key={n} className="label">
                 {show.pharmacy && <div className="label-shop">{db.settings.name}</div>}
                 <div className="label-name">{p.isKit && <b>KIT · </b>}{p.name}</div>

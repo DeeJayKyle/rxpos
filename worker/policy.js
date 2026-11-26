@@ -69,7 +69,7 @@ export const KNOWN_TABLES = new Set([
   'batches', 'branches', 'transfers', 'audit', 'purchaseOrders', 'roles', 'messages', 'shifts', 'license', 'events', 'tempLogs',
   'catalogHidden', 'quizResults', 'stockCounts', 'countItems', 'supplierReturns', 'chatMarks', 'chatPins', 'chatReads', 'drafts',
   'anomalies', 'dayCloses', 'counters', 'insurers', 'employees', 'attendance', 'salaryAdvances', 'payrolls', 'reportSchedules',
-  'notes', 'settings', 'controlled', 'cashMoves',
+  'notes', 'settings', 'controlled', 'cashMoves', 'prefs',
 ]);
 
 // 2026-11 audit: who RECEIVES which records. Before, every staff role downloaded every table except payroll and the
@@ -216,8 +216,14 @@ export async function decide(ch, old, role, can) {
 // of a chat table in a direct conversation now reaches its two participants only (the pharmacy key sees everything).
 const DM_TABLES = new Set(['messages', 'chatReads', 'chatPins', 'chatMarks']);
 export function dmHidden(t, recText, uid) {
-  if (!uid || !DM_TABLES.has(t)) return false;
+  if (!uid) return false;
+  // 2026-11-26: a person's own table layouts (prefs "u:<uid>", src/layoutsync.jsx) reach that person only
+  if (t === 'prefs') { try { return String(JSON.parse(recText || 'null')?.userId || '') !== String(uid); } catch { return true; } }
+  if (!DM_TABLES.has(t)) return false;
   let conv;
   try { conv = String(JSON.parse(recText || 'null')?.conv || ''); } catch { return true; }
   return conv.startsWith('dm:') && !conv.slice(3).split(':').includes(String(uid));
 }
+
+/** 2026-11-26: a staff device writes only its own person's layout record (prefs "u:<uid>", for that uid) */
+export const prefsRefused = (ch, uid) => ch.t === 'prefs' && (String(ch.id) !== 'u:' + uid || (!ch.deleted && String(ch.rec?.userId || '') !== String(uid)));

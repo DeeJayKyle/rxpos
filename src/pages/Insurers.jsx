@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { Modal } from '../ui.jsx';
+import { DataTable } from '../datatable.jsx';
 import { useStore, uid, put, audit } from '../store.jsx';
 import { toast } from '../feedback.jsx';
 import { insurerBalance, insurerShare } from '../insurance.js';
@@ -19,7 +20,7 @@ export default function Insurers() {
   const [show, setShow] = useState('');
   const insurers = useMemo(() => db.insurers || [], [db.insurers]);
   const rows = useMemo(() => insurers.map((i) => ({ ...i, owed: insurerBalance(db.sales, db.payments, i.id, windowSums(db)) })).sort((a, b) => (a.archived ? 1 : 0) - (b.archived ? 1 : 0) || b.owed - a.owed || String(a.name).localeCompare(b.name)), [insurers, db]);
-  const billed = useMemo(() => db.sales.filter((s) => s.insurance && (!show || s.insurance.insurerId === show)).sort((a, b) => String(b.date).localeCompare(a.date)).slice(0, 200), [db.sales, show]);
+  const billed = useMemo(() => db.sales.filter((s) => s.insurance && (!show || s.insurance.insurerId === show)).sort((a, b) => String(b.date).localeCompare(a.date)), [db.sales, show]); // every one (no longer the newest 200: the shared table, 2026-11-26)
   const editable = can('customers') || can('finance');
 
   const save = async () => {
@@ -45,40 +46,28 @@ export default function Insurers() {
         {editable && <button className="btn primary" onClick={() => setEdit({ _new: true, id: uid(), name: '', phone: '', email: '', schemes: [blankScheme()] })}><Plus size={16} />Add insurer</button>}
       </div>
       <div className="card table-wrap">
-        <table>
-          <thead><tr><th>Insurer</th><th>Schemes</th><th className="num">Owes</th><th /></tr></thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.id} className={r.archived ? 'muted' : ''}>
-                <td><strong>{r.name}</strong>{r.archived && <small> · archived</small>}<br /><small className="muted">{[r.phone, r.email].filter(Boolean).join(' · ')}</small></td>
-                <td>{(r.schemes || []).map((s) => <div key={s.id}>{s.name}: <span className="muted">{describe(s, fmt)}{s.limit > 0 ? ` · cover up to ${fmt(s.limit)}` : ''}</span></div>)}</td>
-                <td className="num"><strong className={r.owed > 0.5 ? 'text-warn' : ''}>{fmt(r.owed)}</strong></td>
-                <td className="actions">
-                  <button className="btn sm" onClick={() => setShow(show === r.id ? '' : r.id)}>{show === r.id ? 'All sales' : 'Sales'}</button>
-                  {editable && <button className="btn sm" onClick={() => setEdit({ ...r, schemes: (r.schemes || []).map((s) => ({ ...s })) })}>Edit</button>}
-                  {r.owed > 0.5 && (can('finance') || can('customers')) && <button className="btn sm primary" onClick={() => setPay(r)}>Receive payment</button>}
-                </td>
-              </tr>
-            ))}
-            {!rows.length && <tr><td colSpan={4} className="empty">No insurers yet. Add one to bill insured clients at the till.</td></tr>}
-          </tbody>
-        </table>
+        <DataTable id="insurers" wrapClass="dt-inner" rows={rows} csv="insurers" empty="No insurers yet. Add one to bill insured clients at the till." rowProps={(r) => ({ className: r.archived ? 'muted' : undefined })} columns={[
+          { id: 'name', label: 'Insurer', key: 'name', render: (r) => <><strong>{r.name}</strong>{r.archived && <small> · archived</small>}<br /><small className="muted">{[r.phone, r.email].filter(Boolean).join(' · ')}</small></> },
+          { id: 'schemes', label: 'Schemes', sortBy: (r) => (r.schemes || []).length, csv: (r) => (r.schemes || []).map((x) => x.name).join(', '), render: (r) => (r.schemes || []).map((x) => <div key={x.id}>{x.name}: <span className="muted">{describe(x, fmt)}{x.limit > 0 ? ` · cover up to ${fmt(x.limit)}` : ''}</span></div>) },
+          { id: 'owed', label: 'Owes', num: true, sortBy: (r) => r.owed, render: (r) => <strong className={r.owed > 0.5 ? 'text-warn' : ''}>{fmt(r.owed)}</strong> },
+          { id: 'actions', label: 'Actions', noExport: true, className: 'actions', render: (r) => <>
+            <button className="btn sm" onClick={() => setShow(show === r.id ? '' : r.id)}>{show === r.id ? 'All sales' : 'Sales'}</button>
+            {editable && <button className="btn sm" onClick={() => setEdit({ ...r, schemes: (r.schemes || []).map((x) => ({ ...x })) })}>Edit</button>}
+            {r.owed > 0.5 && (can('finance') || can('customers')) && <button className="btn sm primary" onClick={() => setPay(r)}>Receive payment</button>}
+          </> },
+        ]} />
       </div>
       <div className="card table-wrap">
         <h3 className="pad">Sales billed to {show ? insurers.find((i) => i.id === show)?.name : 'insurers'}</h3>
-        <table>
-          <thead><tr><th>Date</th><th>Receipt</th><th>Client</th><th>Scheme · member</th><th className="num">Patient paid</th><th className="num">Insurer</th></tr></thead>
-          <tbody>
-            {billed.map((s) => (
-              <tr key={s.id} className={s.status === 'refunded' ? 'muted' : ''}>
-                <td>{String(s.date).slice(0, 10)}</td><td>{s.number}{s.status === 'refunded' && <small> · refunded</small>}</td><td>{s.customerName}</td>
-                <td>{s.insurance.insurer} · {s.insurance.scheme} · {s.insurance.memberNo}</td>
-                <td className="num">{fmt(s.paid ?? 0)}</td><td className="num">{fmt(insurerShare(s))}</td>
-              </tr>
-            ))}
-            {!billed.length && <tr><td colSpan={6} className="empty">No insured sales yet</td></tr>}
-          </tbody>
-        </table>
+        <DataTable id="insured-sales" wrapClass="dt-inner" rows={billed} sort={['date', -1]} resetKey={show} csv="insured-sales" empty="No insured sales yet"
+          rowProps={(x) => ({ className: x.status === 'refunded' ? 'muted' : undefined })} columns={[
+            { id: 'date', label: 'Date', key: 'date', render: (x) => String(x.date).slice(0, 10) },
+            { id: 'number', label: 'Receipt', key: 'number', render: (x) => <>{x.number}{x.status === 'refunded' && <small> · refunded</small>}</> },
+            { id: 'client', label: 'Client', key: 'customerName' },
+            { id: 'scheme', label: 'Scheme · member', sortBy: (x) => `${x.insurance.insurer} · ${x.insurance.scheme} · ${x.insurance.memberNo}`, render: (x) => `${x.insurance.insurer} · ${x.insurance.scheme} · ${x.insurance.memberNo}` },
+            { id: 'paid', label: 'Patient paid', num: true, sortBy: (x) => x.paid ?? 0, render: (x) => fmt(x.paid ?? 0) },
+            { id: 'insurer', label: 'Insurer', num: true, sortBy: (x) => insurerShare(x), render: (x) => fmt(insurerShare(x)) },
+          ]} />
       </div>
       {pay && <PaymentModal title={`Payment from ${pay.name}`} kind="insurer" partyId={pay.id} max={pay.owed} onClose={() => setPay(null)} />}
       {edit && (

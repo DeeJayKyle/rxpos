@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ShoppingBag, PackageX, ClipboardList, MessageCircle, Printer, PackageCheck, Download, Wand2 } from 'lucide-react';
+import { DataTable } from '../datatable.jsx';
 import { useStore, daysSince, uid, now, put, del, audit, downloadFile, toCSV, normalizePhone, supplierPrices, MAIN_BRANCH } from '../store.jsx';
 import { Tabs, Empty, Modal, Stat, StatusPill } from '../ui.jsx';
 import { toast, ask } from '../feedback.jsx';
@@ -186,15 +187,13 @@ export default function Reorder() {
             <label className="check small"><input type="checkbox" checked={roundPacks} onChange={(e) => setRoundPacks(e.target.checked)} /> Round up to whole packs</label>
           </div>
           <div className="card table-wrap">
-            <table>
-              <thead><tr><th /><th>Medicine</th><th className="num">In stock</th><th className="num">Sells / day</th><th className="num">Days left</th><th>Buy from</th><th className="num">Order qty</th><th className="num">Est. cost</th></tr></thead>
-              <tbody>
-                {suggestions.map((r) => (
-                  <tr key={r.p.id}>
-                    <td><input type="checkbox" checked={picked[r.p.id] ?? true} onChange={(e) => setPicked({ ...picked, [r.p.id]: e.target.checked })} /></td>
-                    <td><strong>{r.p.name}</strong></td><td className="num">{r.p.stock}</td><td className="num">{r.perDay.toFixed(1)}</td>
-                    <td className={'num ' + (r.daysLeft <= Number(lead) ? 'text-danger' : 'text-warn')}>{isFinite(r.daysLeft) ? Math.floor(r.daysLeft) : '—'}</td>
-                    <td>
+            <DataTable id="reorder" wrapClass="dt-inner" rows={suggestions} rowKey={(r) => r.p.id} csv={false} empty="Stock levels look healthy. Nothing needs ordering." columns={[
+              { id: 'pick', label: 'Order', fixed: true, noExport: true, render: (r) => <input type="checkbox" aria-label={`Order ${r.p.name}`} checked={picked[r.p.id] ?? true} onChange={(e) => setPicked({ ...picked, [r.p.id]: e.target.checked })} /> },
+              { id: 'name', label: 'Medicine', sortBy: (r) => r.p.name, render: (r) => <strong>{r.p.name}</strong> },
+              { id: 'stock', label: 'In stock', num: true, sortBy: (r) => r.p.stock, render: (r) => r.p.stock },
+              { id: 'perDay', label: 'Sells / day', num: true, sortBy: (r) => r.perDay, render: (r) => r.perDay.toFixed(1) },
+              { id: 'daysLeft', label: 'Days left', num: true, sortBy: (r) => (isFinite(r.daysLeft) ? r.daysLeft : 1e9), tdClass: (r) => (r.daysLeft <= Number(lead) ? 'text-danger' : 'text-warn'), render: (r) => (isFinite(r.daysLeft) ? Math.floor(r.daysLeft) : '—') },
+              { id: 'buy', label: 'Buy from', sortBy: (r) => r.buy?.supplierName || '', render: (r) => <>
                       {/* G3: each supplier's last price as a chip, the cheapest marked; a tap uses that supplier and price */}
                       {r.options.length > 1 ? (
                         <div className="price-chips" role="radiogroup" aria-label={`Supplier for ${r.p.name}`}>
@@ -207,19 +206,15 @@ export default function Reorder() {
                         </div>
                       ) : r.buy?.supplierName || <span className="muted">—</span>}
                       {r.options.length > 1 && r.buy && r.buy.cost > r.options[0].cost && <small className="text-warn"> {fmt(r.buy.cost - r.options[0].cost)} more than {r.options[0].supplierName}</small>}
-                    </td>
-                    <td className="num">{(() => { const q = qtyOf(r), pk = mainPack(r.p); return (<>
+              </> },
+              { id: 'qty', label: 'Order qty', num: true, sortBy: (r) => qtyOf(r) ?? 0, render: (r) => (() => { const q = qtyOf(r), pk = mainPack(r.p); return (<>
                       <input type="number" inputMode="numeric" min="1" step="1" className={'qty-input' + (q == null ? ' invalid' : '')} aria-invalid={q == null} aria-label={`Order quantity for ${r.p.name}`}
                         value={qtyEdit[r.p.id] ?? r.qty} onChange={(e) => setQtyEdit({ ...qtyEdit, [r.p.id]: e.target.value })} />
                       {q == null ? <small className="text-danger block">Whole number, 1 or more</small>
                         : <small className="muted block">{q !== r.qty ? `suggested ${r.qty}` : ''}{pk && q !== r.qty ? ' · ' : ''}{pk ? packCount(q, pk) : ''}</small>}
-                    </>); })()}</td>
-                    <td className="num">{qtyOf(r) == null ? '—' : fmt(qtyOf(r) * (r.buy?.cost || r.p.cost || 0))}</td>
-                  </tr>
-                ))}
-                {!suggestions.length && <Empty colSpan={8}>Stock levels look healthy. Nothing needs ordering.</Empty>}
-              </tbody>
-            </table>
+                    </>); })() },
+              { id: 'cost', label: 'Est. cost', num: true, sortBy: (r) => (qtyOf(r) ?? 0) * (r.buy?.cost || r.p.cost || 0), render: (r) => (qtyOf(r) == null ? '—' : fmt(qtyOf(r) * (r.buy?.cost || r.p.cost || 0))) },
+            ]} />
           </div>
         </>
       )}
@@ -231,38 +226,32 @@ export default function Reorder() {
             <p className="muted grow">Consider returning these to the supplier, discounting them, or moving them to a branch where they sell.</p>
           </div>
           <div className="card table-wrap">
-            <table>
-              <thead><tr><th>Medicine</th><th>Last sold</th><th className="num">In stock</th><th>Next expiry</th><th className="num">Value (cost)</th></tr></thead>
-              <tbody>
-                {dead.map((r) => (
-                  <tr key={r.p.id}><td><strong>{r.p.name}</strong></td><td>{r.last ? `${showDate(r.last)} (${r.idle} days)` : 'Never'}</td><td className="num">{r.p.stock}</td><td>{r.p.expiry || '—'}</td><td className="num">{fmt(r.value)}</td></tr>
-                ))}
-                {!dead.length && <Empty colSpan={5}>No dead stock. Everything is moving.</Empty>}
-              </tbody>
-            </table>
+            <DataTable id="dead-stock" wrapClass="dt-inner" rows={dead} rowKey={(r) => r.p.id} csv="dead-stock" empty="No dead stock. Everything is moving." columns={[
+              { id: 'name', label: 'Medicine', sortBy: (r) => r.p.name, render: (r) => <strong>{r.p.name}</strong> },
+              { id: 'last', label: 'Last sold', sortBy: (r) => r.last || '', csv: (r) => r.last || 'Never', render: (r) => (r.last ? `${showDate(r.last)} (${r.idle} days)` : 'Never') },
+              { id: 'stock', label: 'In stock', num: true, sortBy: (r) => r.p.stock, render: (r) => r.p.stock },
+              { id: 'expiry', label: 'Next expiry', sortBy: (r) => r.p.expiry || '', render: (r) => r.p.expiry || '—' },
+              { id: 'value', label: 'Value (cost)', num: true, sortBy: (r) => r.value, render: (r) => fmt(r.value) },
+            ]} />
           </div>
         </>
       )}
 
       {tab === 'orders' && (
         <div className="card table-wrap">
-          <table>
-            <thead><tr><th>Order</th><th>Date</th><th>Supplier</th><th>Lines</th><th>Status</th><th className="num">Est. value</th><th /></tr></thead>
-            <tbody>
-              {orders.map((po) => (
-                <tr key={po.id}>
-                  <td><strong>{po.number}</strong></td><td>{showDate(po.date)}</td><td>{po.supplierName}</td><td>{po.items.length}</td>
-                  <td><StatusPill status={po.status} /></td>
-                  <td className="num">{fmt(po.items.reduce((a, i) => a + i.qty * (i.cost || 0), 0))}</td>
-                  <td className="actions">
-                    <button className="btn sm ghost" onClick={() => setViewPo(po)}>Open</button>
-                    {po.status !== 'Received' && <button className="btn sm primary" onClick={() => navigate('/add-stock', { state: { po } })}><PackageCheck size={14} />Receive</button>}
-                  </td>
-                </tr>
-              ))}
-              {!orders.length && <Empty colSpan={7} action={{ label: 'See what to reorder', onClick: () => setTab('reorder') }}>No purchase orders yet. Create them from the reorder suggestions and send them to your suppliers.</Empty>}
-            </tbody>
-          </table>
+          <DataTable id="purchase-orders" wrapClass="dt-inner" rows={orders} csv="purchase-orders"
+            empty={<>No purchase orders yet. Create them from the reorder suggestions and send them to your suppliers. <button type="button" className="link-btn" onClick={() => setTab('reorder')}>See what to reorder</button></>} columns={[
+              { id: 'number', label: 'Order', key: 'number', render: (po) => <strong>{po.number}</strong> },
+              { id: 'date', label: 'Date', key: 'date', render: (po) => showDate(po.date) },
+              { id: 'supplier', label: 'Supplier', key: 'supplierName' },
+              { id: 'lines', label: 'Lines', num: true, sortBy: (po) => po.items.length, render: (po) => po.items.length },
+              { id: 'status', label: 'Status', key: 'status', render: (po) => <StatusPill status={po.status} /> },
+              { id: 'value', label: 'Est. value', num: true, sortBy: (po) => po.items.reduce((a, i) => a + i.qty * (i.cost || 0), 0), render: (po) => fmt(po.items.reduce((a, i) => a + i.qty * (i.cost || 0), 0)) },
+              { id: 'actions', label: 'Actions', noExport: true, className: 'actions', render: (po) => <>
+                <button className="btn sm ghost" onClick={() => setViewPo(po)}>Open</button>
+                {po.status !== 'Received' && <button className="btn sm primary" onClick={() => navigate('/add-stock', { state: { po } })}><PackageCheck size={14} />Receive</button>}
+              </> },
+            ]} />
         </div>
       )}
 

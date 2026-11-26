@@ -42,7 +42,7 @@ import { LOCKED_TABLES, DOCUMENT_MOVES, closedSet, inClosedDay, recordDay } from
 import { isRefundOnly } from './policy.js';
 import { localDay } from './dailystock.js';
 import { snapshotList, snapshotChunk, pruneSnapshots } from './snapshot.js';
-import { dmHidden } from './policy.js';
+import { dmHidden, prefsRefused } from './policy.js';
 import { balancesAt, validWindow, pruneWindows } from './window.js';
 import { keeps as keepsInWindow, WINDOWED } from '../src/historywindow.js';
 import { OWNER_LAW, writesData, ownerApproved } from './ownerlaw.js';
@@ -873,6 +873,7 @@ async function sync(env, body, who, ctx) {
     if (typeof ch.op === 'string' && seen.has(ch.op)) { dupes++; continue; } // already applied: a repeat
     if (SERVER_ONLY.has(ch.t) && !who.viaKey) { refuse(ch); continue; }
     if (!who.viaKey) {
+      if (prefsRefused(ch, who.uid)) { refuse(ch); continue; }
       const key = ch.t + '|' + ch.id;
       const verdict = await decide(ch, current.get(key) || null, who.role, can);
       if (!verdict.ok) { refuse(ch); continue; }

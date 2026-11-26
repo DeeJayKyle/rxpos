@@ -4,7 +4,8 @@
 // shelf. It writes each medicine's "Shelf / location", the same field in both apps.
 import { useMemo, useState } from 'react';
 import { Archive, CheckCheck, Download } from 'lucide-react';
-import { Modal, SearchBox, useProgressive, Empty } from '../ui.jsx';
+import { Modal, SearchBox, Empty } from '../ui.jsx';
+import { useLoadMore } from '../tablekit.jsx';
 import { useStore, putMany, audit, isUntouchedBase, downloadFile, toCSV } from '../store.jsx';
 import { toast } from '../feedback.jsx';
 import ShelfMap from '../components/ShelfMap.jsx';
@@ -33,8 +34,9 @@ export default function Shelves() {
   const unshelved = mine.filter((p) => !shelfOf(p)).length;
   let list = q.trim() ? searchProducts(mine, q) : mine;
   if (shelf === '-') list = list.filter((p) => !shelfOf(p)); else if (shelf) list = list.filter((p) => shelfOf(p) === shelf);
-  const drawn = useProgressive(Math.min(list.length, 1500));
-  const rows = groupedRows(list.slice(0, drawn), by, folded);
+  // the shared table (2026-11-26): 100 medicines, then more as the list scrolls ("Showing 100 of 9,800"), never cut off
+  const more = useLoadMore(list, { resetKey: [q, shelf, all, by].join('|') });
+  const rows = groupedRows(more.rows, by, folded);
   const tickedList = list.filter((p) => picked.has(p.id));
 
   const save = async (ps, to, what = '') => {
@@ -104,6 +106,7 @@ export default function Shelves() {
             {!rows.length && <Empty colSpan={5}>No medicines on this shelf. Set a medicine's shelf in the Medicine List and it shows here.</Empty>}
           </tbody>
         </table>
+        {more.footer}
       </div>
       {ask && (
         <Modal title={`Put ${ask.what ? `all of ${ask.what}` : `${ask.ps.length} medicine${ask.ps.length === 1 ? '' : 's'}`} on a shelf`} onClose={() => setAsk(null)}>

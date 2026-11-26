@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Building2, Truck, PackageCheck, Send, MapPin } from 'lucide-react';
+import { DataTable } from '../datatable.jsx';
 import { useStore, today, dayOf, uid, now, put, move, audit, allocate, batchValue, MAIN_BRANCH } from '../store.jsx';
 import { Modal, Tabs, Empty, SearchBox, Stat } from '../ui.jsx';
 import { toast, ask } from '../feedback.jsx';
@@ -129,24 +130,14 @@ export function Transfers() {
       </div>
       {!others.length && <div className="notice">Transfers need a second branch. Ask your RxPOS provider to add one.</div>}
       <Tabs tabs={[['incoming', 'Incoming'], ['outgoing', 'Sent']]} value={tab} onChange={setTab} />
-      <div className="card table-wrap">
-        <table>
-          <thead><tr><th>Transfer</th><th>Date</th><th>{tab === 'incoming' ? 'From' : 'To'}</th><th>Items</th><th>Status</th><th /></tr></thead>
-          <tbody>
-            {list.map((t) => (
-              <tr key={t.id}>
-                <td><strong>{t.number}</strong><br /><small className="muted">by {t.sentBy}</small></td>
-                <td>{new Date(t.date).toLocaleString(dateLocale(), { dateStyle: 'medium', timeStyle: 'short' })}</td>
-                <td>{name(tab === 'incoming' ? t.fromId : t.toId)}</td>
-                <td>{t.items.map((i) => `${i.name} ×${i.qty}`).join(', ')}</td>
-                <td><span className={'badge ' + (t.status === 'In transit' ? 'warn' : t.status === 'Received' ? 'ok' : 'danger')}>{t.status}</span></td>
-                <td className="actions">{tab === 'incoming' && t.status === 'In transit' && <button className="btn sm primary" onClick={() => receive(t)}><PackageCheck size={14} />Receive</button>}</td>
-              </tr>
-            ))}
-            {!list.length && <Empty colSpan={6}>No {tab} transfers</Empty>}
-          </tbody>
-        </table>
-      </div>
+      <DataTable id={'transfers-' + tab} rows={list} sort={['date', -1]} resetKey={tab} empty={`No ${tab} transfers`} columns={[
+        { id: 'number', label: 'Transfer', key: 'number', render: (t) => <><strong>{t.number}</strong><br /><small className="muted">by {t.sentBy}</small></> },
+        { id: 'date', label: 'Date', key: 'date', render: (t) => new Date(t.date).toLocaleString(dateLocale(), { dateStyle: 'medium', timeStyle: 'short' }) },
+        { id: 'branch', label: tab === 'incoming' ? 'From' : 'To', sortBy: (t) => name(tab === 'incoming' ? t.fromId : t.toId), render: (t) => name(tab === 'incoming' ? t.fromId : t.toId) },
+        { id: 'items', label: 'Items', sortBy: (t) => t.items.length, csv: (t) => t.items.map((i) => `${i.name} ×${i.qty}`).join(', '), render: (t) => t.items.map((i) => `${i.name} ×${i.qty}`).join(', ') },
+        { id: 'status', label: 'Status', key: 'status', render: (t) => <span className={'badge ' + (t.status === 'In transit' ? 'warn' : t.status === 'Received' ? 'ok' : 'danger')}>{t.status}</span> },
+        { id: 'actions', label: 'Actions', noExport: true, className: 'actions', render: (t) => tab === 'incoming' && t.status === 'In transit' && <button className="btn sm primary" onClick={() => receive(t)}><PackageCheck size={14} />Receive</button> },
+      ]} />
 
       {creating && (
         <Modal title={<><Truck size={18} /> New stock transfer</>} onClose={() => setCreating(null)} wide>

@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { UserPlus, ShieldCheck, KeyRound, Trash2, Plus, Copy, LogOut } from 'lucide-react';
+import { DataTable } from '../datatable.jsx';
 import { useStore, makePassword, uid, put, del, audit, normalizePhone } from '../store.jsx';
 import { PERMISSIONS, rolesOf, DEFAULT_ROLES } from '../access.js';
-import { Modal, Tabs, Empty } from '../ui.jsx';
+import { Modal, Tabs } from '../ui.jsx';
 import { ask, askText, toast } from '../feedback.jsx';
 import { twoStep, endSessionsOf } from '../cloud.js';
 import { PasswordInput } from '../password.jsx';
@@ -90,19 +91,15 @@ export default function Users() {
       <Tabs tabs={[['users', `Users (${db.users.length})`], ['roles', `Roles & permissions (${allRoles.length})`]]} value={tab} onChange={setTab} />
 
       {tab === 'users' && (
-        <div className="card table-wrap">
-          <table>
-            <thead><tr><th>Name</th><th>Email (sign-in & recovery)</th><th>Phone / WhatsApp</th><th>Role</th>{db.branches.length > 1 && <th>Branch</th>}<th>Status</th><th /></tr></thead>
-            <tbody>
-              {db.users.map((u) => (
-                <tr key={u.id} className={u.disabled ? 'dim' : ''}>
-                  <td><strong>{u.name}</strong>{u.id === user.id && <span className="badge">you</span>}{u.twoFactor && <span className="badge ok" title="Two-step sign-in is on"><ShieldCheck size={11} />2-step</span>}</td>
-                  <td>{u.email}</td>
-                  <td>{u.phone || '—'}{u.whatsapp && u.whatsapp !== u.phone ? <><br /><small className="muted">WA {u.whatsapp}</small></> : null}</td>
-                  <td><span className="badge">{roleName(u.role)}</span></td>
-                  {db.branches.length > 1 && <td>{db.branches.find((b) => b.id === u.branchId)?.name || 'Any'}</td>}
-                  <td>{u.disabled ? 'Disabled' : 'Active'}</td>
-                  <td className="actions">
+        <DataTable id="users" rows={db.users} csv="users" empty="No staff accounts yet. Add each person who uses RxPOS, so their sales and changes carry their name."
+          rowProps={(u) => ({ className: u.disabled ? 'dim' : undefined })} columns={[
+            { id: 'name', label: 'Name', key: 'name', render: (u) => <><strong>{u.name}</strong>{u.id === user.id && <span className="badge">you</span>}{u.twoFactor && <span className="badge ok" title="Two-step sign-in is on"><ShieldCheck size={11} />2-step</span>}</> },
+            { id: 'email', label: 'Email (sign-in & recovery)', key: 'email' },
+            { id: 'phone', label: 'Phone / WhatsApp', key: 'phone', render: (u) => <>{u.phone || '—'}{u.whatsapp && u.whatsapp !== u.phone ? <><br /><small className="muted">WA {u.whatsapp}</small></> : null}</> },
+            { id: 'role', label: 'Role', sortBy: (u) => roleName(u.role), render: (u) => <span className="badge">{roleName(u.role)}</span> },
+            ...(db.branches.length > 1 ? [{ id: 'branch', label: 'Branch', sortBy: (u) => db.branches.find((b) => b.id === u.branchId)?.name || 'Any', render: (u) => db.branches.find((b) => b.id === u.branchId)?.name || 'Any' }] : []),
+            { id: 'status', label: 'Status', sortBy: (u) => (u.disabled ? 'Disabled' : 'Active'), render: (u) => (u.disabled ? 'Disabled' : 'Active') },
+            { id: 'actions', label: 'Actions', noExport: true, className: 'actions', render: (u) => <>
                     {isAdminRow(u) ? <small className="muted">Managed by RxPOS provider</small> : <>
                     <button className="btn sm ghost" onClick={() => setEdit({ ...u, password: '' })}>Edit</button>
                     <button className="btn sm ghost" onClick={() => resetPassword(u)}><KeyRound size={14} />Password</button>
@@ -111,13 +108,8 @@ export default function Users() {
                     {u.id !== user.id && syncCfg?.key?.startsWith('u.') && (!isAdminRow(u) || user.role === 'admin') && <button className="btn sm ghost" title="Sign out on every device" onClick={() => signOutEverywhere(u)}><LogOut size={14} /></button>}
                     {u.twoFactor && u.id !== user.id && (!isAdminRow(u) || user.role === 'admin') && <button className="btn sm ghost" title="They lost their phone: switch two-step sign-in off so they can sign in with the password, then set it up again" onClick={() => resetTwoStep(u)}>Reset 2-step</button>}
                     {u.id !== user.id && !isAdminRow(u) && <button className="btn sm danger" title="Delete" onClick={() => removeUser(u)}><Trash2 size={14} /></button>}
-                  </td>
-                </tr>
-              ))}
-              {!db.users.length && <Empty colSpan={7}>No staff accounts yet. Add each person who uses RxPOS, so their sales and changes carry their name.</Empty>}
-            </tbody>
-          </table>
-        </div>
+            </> },
+          ]} />
       )}
 
       {tab === 'roles' && (

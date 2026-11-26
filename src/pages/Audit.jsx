@@ -4,7 +4,8 @@ import { useLocation } from 'react-router-dom';
 import { auditSentence, auditKind, AUDIT_KINDS } from '../auditText.js';
 import { Download, ShieldCheck } from 'lucide-react';
 import { useStore, dayOf, downloadFile, toCSV, MAIN_BRANCH } from '../store.jsx';
-import { SearchBox, Empty, useProgressive } from '../ui.jsx';
+import { SearchBox, Empty } from '../ui.jsx';
+import { useLoadMore } from '../tablekit.jsx';
 import { dateLocale } from '../showdate.js';
 
 /** Who did what, when and where. Entries sync from every device and cannot be edited in the app. */
@@ -23,7 +24,8 @@ export default function Audit() {
   const ql = q.toLowerCase();
   const rows = db.audit.filter((a) => (!who || a.user === who) && (!action || a.action === action) && (!kind || auditKind(a) === kind) && (!from || dayOf(a.date) >= from) && (!to || dayOf(a.date) <= to) &&
     (!q || `${a.user} ${a.action} ${a.details}`.toLowerCase().includes(ql)));
-  const drawn = useProgressive(Math.min(rows.length, 1000));
+  // every entry, 100 at a time as the list scrolls (no longer cut at 1,000: the shared table, 2026-11-26)
+  const more = useLoadMore(rows, { resetKey: [q, who, action, kind, from, to].join('|') });
 
   return (
     <div className="page">
@@ -50,13 +52,14 @@ export default function Audit() {
       </div>
       <div className="card audit-list">
         <ul>
-          {rows.slice(0, drawn).map((a) => (
+          {more.rows.map((a) => (
             <li key={a.id} className={'audit-row kind-' + auditKind(a)}>
               <span className="audit-sentence">{auditSentence(a)}</span>
               <small className="muted"><span className="badge">{a.action}</span> {new Date(a.date).toLocaleString(dateLocale(), { dateStyle: 'medium', timeStyle: 'short' })}{db.branches.length > 1 && branch(a.branchId) ? ' · ' + branch(a.branchId) : ''}</small>
             </li>
           ))}
         </ul>
+        {more.footer}
         {!rows.length && <Empty>Nothing recorded yet. Sign-ins, refunds, price changes and other changes are listed here as they happen.</Empty>}
       </div>
     </div>

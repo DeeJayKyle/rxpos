@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { ClipboardCheck, Plus, Minus, ArrowLeft, Check, EyeOff, Eye, ScanLine, Trash2, PackagePlus, Download, CheckCircle2, AlertTriangle, Play, Ban } from 'lucide-react';
+import { DataTable } from '../datatable.jsx';
 import { useStore, uid, now, today, put, del, move, addBatch, audit, downloadFile, toCSV, daysUntil } from '../store.jsx';
 import { Modal, Tabs, Empty, PdfButton } from '../ui.jsx';
 import { ask, toast } from '../feedback.jsx';
@@ -122,26 +123,17 @@ function CountList({ onOpen }) {
         })}
       </div>
       <h3>History</h3>
-      <div className="card table-wrap">
-        <table>
-          <thead><tr><th>Count</th><th>Status</th><th>Posted</th><th className="num">Counted</th><th className="num">Matched</th><th className="num">Short</th><th className="num">Extra</th><th className="num">Net value</th><th /></tr></thead>
-          <tbody>
-            {done.map((c) => (
-              <tr key={c.id}>
-                <td><strong>{c.name}</strong><br /><small className="muted">{c.scopeLabel}</small></td>
-                <td>{c.status === 'posted' ? <span className="badge ok">Posted</span> : <span className="badge warn">Cancelled</span>}</td>
-                <td>{c.postedAt ? <>{showDate(c.postedAt)}<br /><small className="muted">{c.postedBy}</small></> : '—'}</td>
-                <td className="num">{c.summary?.counted ?? '—'}</td><td className="num">{c.summary?.matched ?? '—'}</td>
-                <td className="num">{c.summary ? <span className={c.summary.short ? 'text-danger' : ''}>{c.summary.short}</span> : '—'}</td>
-                <td className="num">{c.summary?.over ?? '—'}</td>
-                <td className="num">{c.summary ? <span className={c.summary.net < 0 ? 'text-danger' : c.summary.net > 0 ? 'text-ok' : ''}>{fmt(c.summary.net)}</span> : '—'}</td>
-                <td className="actions"><button className="btn sm ghost" onClick={() => onOpen(c.id)}>View</button></td>
-              </tr>
-            ))}
-            {!done.length && <Empty colSpan={9}>No finished counts yet. A stock count you post shows here with what was found over or short.</Empty>}
-          </tbody>
-        </table>
-      </div>
+      <DataTable id="stock-counts" rows={done} sort={['posted', -1]} csv="stock-counts" empty="No finished counts yet. A stock count you post shows here with what was found over or short." columns={[
+        { id: 'name', label: 'Count', key: 'name', render: (c) => <><strong>{c.name}</strong><br /><small className="muted">{c.scopeLabel}</small></> },
+        { id: 'status', label: 'Status', key: 'status', render: (c) => (c.status === 'posted' ? <span className="badge ok">Posted</span> : <span className="badge warn">Cancelled</span>) },
+        { id: 'posted', label: 'Posted', sortBy: (c) => c.postedAt || '', render: (c) => (c.postedAt ? <>{showDate(c.postedAt)}<br /><small className="muted">{c.postedBy}</small></> : '—') },
+        { id: 'counted', label: 'Counted', num: true, sortBy: (c) => c.summary?.counted ?? null, render: (c) => c.summary?.counted ?? '—' },
+        { id: 'matched', label: 'Matched', num: true, sortBy: (c) => c.summary?.matched ?? null, render: (c) => c.summary?.matched ?? '—' },
+        { id: 'short', label: 'Short', num: true, sortBy: (c) => c.summary?.short ?? null, render: (c) => (c.summary ? <span className={c.summary.short ? 'text-danger' : ''}>{c.summary.short}</span> : '—') },
+        { id: 'over', label: 'Extra', num: true, sortBy: (c) => c.summary?.over ?? null, render: (c) => c.summary?.over ?? '—' },
+        { id: 'net', label: 'Net value', num: true, sortBy: (c) => c.summary?.net ?? null, render: (c) => (c.summary ? <span className={c.summary.net < 0 ? 'text-danger' : c.summary.net > 0 ? 'text-ok' : ''}>{fmt(c.summary.net)}</span> : '—') },
+        { id: 'actions', label: 'Actions', noExport: true, className: 'actions', render: (c) => <button className="btn sm ghost" onClick={() => onOpen(c.id)}>View</button> },
+      ]} />
       {starting && <NewCount onClose={() => setStarting(false)} onStarted={(id) => { setStarting(false); onOpen(id); }} />}
     </div>
   );
