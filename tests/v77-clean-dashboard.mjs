@@ -158,7 +158,7 @@ await compact(); await wait(300);
 check('...and off again', await p.evaluate(() => !document.documentElement.dataset.density));
 await p.evaluate(() => { location.hash = '#/'; }); await wait(1200);
 // themes from the references
-for (const [id, side] of [['royal-purple', 'dark'], ['electric-blue', 'dark'], ['sage', 'dark'], ['charcoal-lime', 'light'], ['pharmacy-amber', 'dark']]) {
+for (const [id, side] of [['navy-teal', 'dark'], ['high-contrast', 'dark'], ['brand', 'dark'], ['mint-teal', 'dark']]) {
   await p.evaluate((x) => { localStorage.setItem('pharmapos-theme', x); }, id);
   await p.reload({ waitUntil: 'networkidle2' }); await wait(1800);
   const got = await p.evaluate(() => [document.documentElement.dataset.palette, document.documentElement.dataset.sidebar]);

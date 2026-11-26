@@ -121,7 +121,7 @@ check('after a reload: the behaviours and the arrangement are kept', (await attr
 // ---- Tiling ----
 await openCC(p); await click(p, '.cc-tile[data-cc="tiling"]'); await p.keyboard.press('Escape'); await wait(1200);
 const tile = await p.evaluate(() => { const t = document.querySelector('.tile-pane'); return t && { label: t.getAttribute('aria-label'), w: Math.round(t.getBoundingClientRect().width), h1: t.querySelector('h1')?.textContent || '' }; });
-check('tiling: a second page beside this one (Sales History first)', tile && tile.label === 'Tiled: Sales History' && tile.w > 300 && /Sales/.test(tile.h1), JSON.stringify(tile));
+check('tiling: a second page beside this one (the first tileable page, Prescriptions)', tile && tile.label === 'Tiled: Prescriptions & Refills' && tile.w > 300 && /Prescriptions/.test(tile.h1), JSON.stringify(tile));
 await p.select('.tile-pane select', '/inventory'); await wait(1200);
 check('the tile\'s page can be changed (Inventory)', /Inventory/.test(await p.evaluate(() => document.querySelector('.tile-pane h1')?.textContent || '')) && (await p.evaluate(() => location.hash)) === '#/');
 await p.screenshot({ path: `${out}/tiling.png` });
