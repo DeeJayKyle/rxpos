@@ -28,6 +28,7 @@ const SUITES = [
   ['AI copilot and vision routes, mocked Workers AI (unit)', 'unit-ai-routes.mjs', []],
   ['date formats (unit)', 'unit-dateformat.mjs', []],
   ['packs (unit)', 'unit-packs.mjs', []],
+  ['stock audit: counts, packs, receiving, returns (unit)', 'unit-stock-audit.mjs', []],
   ['purchase order plan (unit)', 'unit-poplan.mjs', []],
   ['app downloads on the web sign-in (unit)', 'unit-appdownloads.mjs', []],
   ['GS1 pack codes (unit)', 'unit-gs1.mjs', []],

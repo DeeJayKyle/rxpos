@@ -4,6 +4,7 @@
 // (rxpos_flutter/lib/features/stock/domain/delivery_checks.dart is the same rules; tests/unit-delivery-checks.mjs).
 import { oldDeliveryDays } from './invoicedates.js';
 
+const PRICE_JUMP = 10; // a retail price this many times the unit cost is checked
 export const COST_JUMP = 2; // a unit cost at least twice, or at most half, the medicine's last cost
 export const BIG_QTY = 5; // a quantity at least 5 times the most received of that medicine before…
 export const BIG_QTY_MIN = 20; // …and at least this many units (small numbers are not worth asking about)
@@ -68,6 +69,9 @@ export function deliveryReview(d, show) {
     }
     // 7. selling below cost
     if (price > 0 && cost > 0 && price < cost) warnings.push(`${l.name}: the retail price ${show.money(price)} is below the cost ${show.money(cost)}.`);
+    // 8. (stock audit, 26 Nov 2026) a retail price many times the cost of one unit: a pack's price typed as the price of
+    // one tablet (the retail price is always per stock unit; a pack's own price is set in Selling units)
+    else if (price > 0 && cost > 0 && price >= cost * PRICE_JUMP && (!p || Number(p.price) !== price)) warnings.push(`${l.name}: the retail price ${show.money(price)} is ${Math.round(price / cost)} times the cost of one unit (${show.money(cost)}). The retail price is for ONE unit: is it the price of a whole pack?`);
   }
   const fresh = new Set(lines.filter((l) => !l.productId).map((l) => String(l.name).trim().toLowerCase())).size;
   const priced = lines.filter((l) => { const p = product(l.productId); return p && Number(l.price) > 0 && Number(l.price) !== Number(p.price); }).length;

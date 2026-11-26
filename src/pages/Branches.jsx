@@ -96,7 +96,12 @@ export function Transfers() {
   const receive = async (t) => {
     const received = await new Promise((resolve) => setReceiving({ t, qty: Object.fromEntries(t.items.map((i, n) => [n, i.qty])), resolve }));
     if (!received) return;
-    update((d) => {
+    // received once only (stock audit, 26 Nov 2026): a second press, or a second device at this branch receiving the
+    // same transfer, put the stock in twice. The transfer as it is now decides.
+    let already = false;
+    await update((d) => {
+      const cur = d.transfers.find((x) => x.id === t.id);
+      if (!cur || cur.status !== 'In transit') { already = true; return; }
       t.items.forEach((i, n) => {
         let left = Number(received[n]) || 0;
         for (const a of i.alloc) { // receive into the same batches that were sent (same expiry)
@@ -109,6 +114,7 @@ export function Transfers() {
       put(d, 'transfers', { ...t, status: short > 0 ? 'Received (short)' : 'Received', receivedBy: user.name, receivedAt: now(), receivedQty: received });
       audit(d, user, 'Stock transfer received', `${t.number} from ${name(t.fromId)}${short > 0 ? ` – ${short} units short` : ''}`, branchId);
     });
+    if (already) return toast(`${t.number} was already received; nothing was added`, 'warn');
     toast(`${t.number} received into stock`);
   };
   const [receiving, setReceiving] = useState(null);

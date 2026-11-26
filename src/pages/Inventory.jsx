@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Download, Barcode as BarcodeIcon, SlidersHorizontal, Save, Undo2, Pencil, ScrollText, Boxes, Tag, Wand2 } from 'lucide-react';
 import { CrudPage, Tabs, Modal, SearchBox, Empty, PdfButton, FilterChips, ExportMenu } from '../ui.jsx';
@@ -20,6 +20,7 @@ import { DateInput } from '../fields.jsx';
 import NameCheck from '../components/NameCheck.jsx';
 import { usePageMenu } from '../pagemenu.js';
 import { packsOf, soldLoose, unitPresets, unitChange } from '../packs.js';
+import { packSlip, packText } from '../stockcount.js';
 
 const expiryClass = (expiry, warn) => {
   if (!expiry) return '';
@@ -498,6 +499,7 @@ export function StockCard() {
   const options = stocked.filter((x) => !q || `${x.name} ${x.generic || ''} ${x.barcode || ''}`.toLowerCase().includes(ql)).slice(0, 300);
   if (p && !options.some((x) => x.id === p.id)) options.unshift(p);
 
+  const unitName = String(p?.unit || 'unit').toLowerCase();
   const saving = useRef(false); // a second tap on Save while it is being saved must not record it twice
   const saveAdjust = (e) => {
     e.preventDefault();
@@ -577,8 +579,15 @@ export function StockCard() {
               </div>
             )}
             {adjust.mode === 'count'
-              ? <label className="field"><span>Counted quantity (system says {batches.find((b) => b.id === adjust.batchId)?.qty || 0})</span><input type="number" min="0" value={adjust.counted} onChange={(e) => setAdjust({ ...adjust, counted: e.target.value })} required /></label>
-              : <label className="field"><span>Quantity to {adjust.mode}</span><input type="number" min="1" value={adjust.qty} onChange={(e) => setAdjust({ ...adjust, qty: e.target.value })} required /></label>}
+              ? <label className="field"><span>Counted quantity in {unitName}s (system says {batches.find((b) => b.id === adjust.batchId)?.qty || 0})</span><input type="number" min="0" value={adjust.counted} onChange={(e) => setAdjust({ ...adjust, counted: e.target.value })} required />
+                {(() => {
+                  // stock audit (26 Nov 2026): stock is in single units; a count typed in boxes set 300 tablets to 3
+                  const sys = batches.find((b) => b.id === adjust.batchId)?.qty || 0, slip = packSlip(p, adjust.counted, sys), txt = packText(p, adjust.counted);
+                  if (slip) return <small className="text-warn">Counted by the {slip.pack.name.toLowerCase()}? {adjust.counted} × {slip.pack.size} = {slip.units} {unitName}s. <button type="button" className="link-btn small" onClick={() => setAdjust({ ...adjust, counted: String(slip.units) })}>Use {slip.units}</button></small>;
+                  return txt ? <small className="muted">= {txt}</small> : null;
+                })()}</label>
+              : <label className="field"><span>Quantity to {adjust.mode} ({unitName}s)</span><input type="number" min="1" value={adjust.qty} onChange={(e) => setAdjust({ ...adjust, qty: e.target.value })} required />
+                {packText(p, adjust.qty) && <small className="muted">= {packText(p, adjust.qty)}</small>}</label>}
             <label className="field"><span>Reason</span><input value={adjust.reason} onChange={(e) => setAdjust({ ...adjust, reason: e.target.value })} placeholder="e.g. damaged, stock take, sample" required /></label>
             <div className="form-actions"><button type="button" className="btn ghost" onClick={() => setAdjust(null)}>Cancel</button><button className="btn primary">Save</button></div>
           </form>
@@ -590,14 +599,19 @@ export function StockCard() {
 
 /** Admin & manager: edit an item's details and its batches (number, expiry, quantity) in one place */
 function InventoryEditor({ product, onClose }) {
-  const { fmt, update, user, batchesOf, branchId } = useStore();
+  const { fmt, update, user, batchesOf, branchId, syncNow } = useStore();
+  // stock audit (26 Nov 2026): the latest sales from the other tills first, and the "actual quantity" typed is what the
+  // batch is set to, against its stock when saved (not when this was opened: a sale made meanwhile was counted twice)
+  useEffect(() => { if (navigator.onLine) Promise.resolve(syncNow?.()).catch(() => {}); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const qtyNow = (r) => (batchesOf(product.id).find((b) => b.id === r.id)?.qty ?? r.qty);
   const [p, setP] = useState(() => ({ name: product.name, generic: product.generic || '', form: product.form || '', cost: product.cost || 0, wholesale: product.wholesale || 0, price: product.price || 0, reorder: product.reorder || 0, shelf: product.shelf || '' }));
   const [rows, setRows] = useState(() => batchesOf(product.id).filter((b) => b.qty !== 0).map((b) => ({ ...b, newQty: b.qty, newBatch: b.batch, newExpiry: b.expiry || '' })));
   const [reason, setReason] = useState('');
   const setRow = (k, patch) => setRows((r) => r.map((x, n) => (n === k ? { ...x, ...patch } : x)));
+  const unitName = String(product.unit || 'unit').toLowerCase();
   const save = (e) => {
     e.preventDefault();
-    const qtyChanges = rows.filter((r) => Number(r.newQty) !== r.qty);
+    const qtyChanges = rows.filter((r) => r.touched && Math.round(Number(r.newQty) || 0) !== qtyNow(r)).map((r) => ({ ...r, qty: qtyNow(r) }));
     if (qtyChanges.length && !reason.trim()) return toast('Give a reason for the quantity change', 'warn');
     update((d) => {
       const cur = d.products.find((x) => x.id === product.id) || product;
@@ -610,7 +624,7 @@ function InventoryEditor({ product, onClose }) {
           const b = d.batches.find((x) => x.id === r.id);
           if (b) put(d, 'batches', { ...b, batch: r.newBatch.trim() || b.batch, expiry: r.newExpiry });
         }
-        const diff = Math.round(Number(r.newQty) || 0) - r.qty;
+        const diff = r.touched ? Math.round(Number(r.newQty) || 0) - qtyNow(r) : 0;
         if (diff) move(d, { productId: product.id, qty: diff, type: 'Inventory edit', note: reason.trim(), user: user.name, batchId: r.legacy ? null : r.id, branchId });
       }
       audit(d, user, 'Inventory edited', `${next.name}${qtyChanges.length ? `: ${qtyChanges.map((r) => `${r.batch} ${r.qty}→${r.newQty}`).join(', ')} (${reason.trim()})` : ''}`, branchId);
@@ -634,8 +648,14 @@ function InventoryEditor({ product, onClose }) {
               <tr key={r.id}>
                 <td><input value={r.newBatch} disabled={r.legacy} onChange={(e) => setRow(k, { newBatch: e.target.value })} /></td>
                 <td><DateInput monthYear value={r.newExpiry} disabled={r.legacy} onChange={(v) => setRow(k, { newExpiry: v })} /></td>
-                <td className="num">{r.qty}</td>
-                <td><input type="number" min="0" aria-label="Actual qty" value={r.newQty} onChange={(e) => setRow(k, { newQty: e.target.value })} /></td>
+                <td className="num">{formatQty(qtyNow(r))} <small className="muted">{unitName}s</small></td>
+                <td><input type="number" min="0" aria-label={`Actual qty in ${unitName}s`} value={r.newQty} onChange={(e) => setRow(k, { newQty: e.target.value, touched: true })} />
+                  {(() => {
+                    // stock is in single units: catch a figure typed in boxes, and say what a figure is in packs
+                    const slip = r.touched && packSlip(product, r.newQty, qtyNow(r)), txt = packText(product, r.newQty);
+                    if (slip) return <small className="text-warn">Counted by the {slip.pack.name.toLowerCase()}? {r.newQty} × {slip.pack.size} = {slip.units} {unitName}s. <button type="button" className="link-btn small" onClick={() => setRow(k, { newQty: String(slip.units) })}>Use {slip.units}</button></small>;
+                    return txt ? <small className="muted">= {txt}</small> : null;
+                  })()}</td>
               </tr>
             ))}
             {!rows.length && <Empty colSpan={4}>No stock at this branch. Use Add Stock to receive it.</Empty>}
