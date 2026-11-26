@@ -312,9 +312,10 @@ check('price check lists a medicine below the 20% target margin (Cipro 500 → 5
 // ---------- pack sizes: sell and receive by the strip ----------
 {
   await go('/medicines'); await A.type('.page-head input.search', 'Ciprofloxacin'); await wait(400);
-  await clickText('tbody button', /^Packs/); await wait(300);
-  await setVal('.modal input[aria-label="Pack name"]', 'Strip'); await setVal('.modal input[aria-label="Units in the pack"]', 10); await setVal('.modal input[aria-label="Pack price"]', 4800);
-  await clickText('.modal button', /Save packs/); await wait(600);
+  await clickText('tbody button', /^Selling units/); await wait(300);
+  await clickText('.modal button', /^\+ Strip/); await wait(200); // a ready-made unit: Strip = 10
+  await setVal('.modal input[aria-label="Retail price"]', 4800);
+  await clickText('.modal button', /Save selling units/); await wait(600);
   const before = (await stockOf())['Ciprofloxacin 500mg tabs'];
   await go('/pos'); await wait(500);
   await A.focus('.pos-products input.search'); await A.keyboard.type('6001003'); await A.keyboard.press('Enter'); await wait(400);
