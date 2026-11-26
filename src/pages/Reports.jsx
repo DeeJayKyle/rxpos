@@ -67,13 +67,13 @@ export default function Reports() {
   // VAT by category (src/tax.js): the taxable value and VAT of each category, for the VAT return (and EFRIS later)
   const vatRows = sumBreakdowns(sales.map((s) => [s]));
   const vatTable = (
-    <table className="vat-table" data-testid="vat-breakdown">
+    <div style={{ overflowX: 'auto' }}><table className="vat-table" data-testid="vat-breakdown">
       <thead><tr><th>VAT category</th><th className="num">Sales before VAT</th><th className="num">VAT</th></tr></thead>
       <tbody>
         {vatRows.map((r) => <tr key={r.category ?? 'older'}><td>{breakdownLabel(r)}</td><td className="num">{fmt(r.net)}</td><td className="num">{fmt(r.tax)}</td></tr>)}
         {!vatRows.length && <tr><td colSpan={3} className="empty">No sales in this period</td></tr>}
       </tbody>
-    </table>
+    </table></div>
   );
   const cogs = sales.reduce((a, s) => a + s.items.reduce((b, i) => b + (i.cost || 0) * i.qty, 0), 0);
   const expTotal = expenses.reduce((a, e) => a + e.amount, 0);
