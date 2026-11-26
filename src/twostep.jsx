@@ -52,7 +52,7 @@ export function TwoStepModal({ onClose }) {
       {state.stage === 'codes' && (
         <div className="stack">
           <p className="notice"><ShieldCheck size={15} /> Two-step sign-in is on. Keep these recovery codes somewhere safe (print them or write them down): each one signs you in once if you lose your phone. They are shown only now.</p>
-          <pre className="keybox" style={{ fontSize: 16, lineHeight: 1.7, textAlign: 'center' }} aria-label="Recovery codes">{(state.codes || []).join('\n')}</pre>
+          <pre className="keybox lead-center" aria-label="Recovery codes">{(state.codes || []).join('\n')}</pre>
           <div className="form-actions">
             <button type="button" className="btn ghost" onClick={() => navigator.clipboard?.writeText((state.codes || []).join('\n')).then(() => toast('Recovery codes copied'), () => {})}>Copy</button>
             <button type="button" className="btn primary" onClick={() => setState({ stage: 'on', left: (state.codes || []).length })}>I have kept them</button>

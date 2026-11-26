@@ -115,10 +115,12 @@ check('…and "Back to the standard dashboard" restores the clean layout', JSON.
 // sidebar groups: a count, a + quick add, opening and closing
 // 1.16.0 (the owner's clean-up): group titles carry alert counts only, no page counts; one group open at a time
 check('sidebar group titles show no page counts', await p.evaluate(() => document.querySelectorAll('.nav-title .nav-count').length === 0 && document.querySelectorAll('.nav-title').length >= 4));
-await p.evaluate(() => [...document.querySelectorAll('.nav-title')].find((x) => /Finance/.test(x.textContent))?.click()); await wait(500);
-check('a group opens with its pages', await p.evaluate(() => { const g = [...document.querySelectorAll('.nav-group')].find((x) => /Finance/.test(x.querySelector('.nav-title')?.textContent || '')); return g.classList.contains('open') && [...g.querySelectorAll('a')].some((a) => !a.hidden); }));
+await p.evaluate(() => [...document.querySelectorAll('.nav-title')].find((x) => /Money/.test(x.textContent))?.click()); await wait(500);
+check('a group opens with its pages', await p.evaluate(() => { const g = [...document.querySelectorAll('.nav-group')].find((x) => /Money/.test(x.querySelector('.nav-title')?.textContent || '')); return g.classList.contains('open') && [...g.querySelectorAll('a')].some((a) => !a.hidden); }));
 check('…and the other groups fold (one open at a time)', await p.evaluate(() => [...document.querySelectorAll('.nav-group:not(.nav-quick)')].filter((g) => g.querySelector('.nav-title') && g.classList.contains('open')).length === 1));
-check('rarely used pages sit under More', await p.evaluate(() => { const g = [...document.querySelectorAll('.nav-group')].find((x) => /^More/.test(x.querySelector('.nav-title')?.textContent.trim() || '')); return !!g && /Kits/.test(g.textContent) && /Shelves/.test(g.textContent); }));
+// 1.22.0 (the owner's clean-up): six headings; overlapping pages share one entry and open with tabs
+check('six headings: Sell, Stock, People, Money, Reports, Settings', await p.evaluate(() => [...document.querySelectorAll('.nav-group:not(.nav-quick) .nav-name')].map((x) => x.textContent).join() === 'Sell,Stock,People,Money,Reports,Settings'), await p.evaluate(() => [...document.querySelectorAll('.nav-group:not(.nav-quick) .nav-name')].map((x) => x.textContent).join()));
+check('Kits and Shelves sit under Stock; Medicines is one entry', await p.evaluate(() => { const g = [...document.querySelectorAll('.nav-group')].find((x) => /^Stock/.test(x.querySelector('.nav-title')?.textContent.trim() || '')); const names = [...g.querySelectorAll('a .grow')].map((x) => x.textContent); return names.includes('Kits') && names.includes('Shelves') && names.includes('Medicines') && !names.includes('Quick Edit'); }));
 await p.evaluate(() => { location.hash = '#/customers'; }); await wait(900);
 await p.evaluate(() => document.activeElement?.blur()); await p.keyboard.press('g'); await p.keyboard.press('g'); await wait(500);
 await p.evaluate(() => { location.hash = '#/'; }); await wait(900);
@@ -156,7 +158,7 @@ await compact(); await wait(300);
 check('...and off again', await p.evaluate(() => !document.documentElement.dataset.density));
 await p.evaluate(() => { location.hash = '#/'; }); await wait(1200);
 // themes from the references
-for (const [id, side] of [['royal-purple', 'dark'], ['electric-blue', 'dark'], ['sage', 'dark'], ['charcoal-lime', 'light'], ['pharmacy-amber', 'dark']]) {
+for (const [id, side] of [['navy-teal', 'dark'], ['high-contrast', 'dark'], ['brand', 'dark'], ['mint-teal', 'dark']]) {
   await p.evaluate((x) => { localStorage.setItem('pharmapos-theme', x); }, id);
   await p.reload({ waitUntil: 'networkidle2' }); await wait(1800);
   const got = await p.evaluate(() => [document.documentElement.dataset.palette, document.documentElement.dataset.sidebar]);

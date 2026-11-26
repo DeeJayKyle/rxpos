@@ -52,7 +52,7 @@ const dlg = async (v) => { await p.type('.dialog input', v); await p.evaluate(()
 await dlg('grace-own-pass-1'); await dlg('grace-own-pass-1');
 check('password changed, dashboard shown', await until(p, () => /Password changed/.test(document.body.innerText) && /Good (morning|afternoon|evening)/.test(document.body.innerText), 10000));
 let m = await menu(p);
-check('new menu: Calendar and Weather & Storage', m.includes('Calendar') && m.includes('Weather & Storage'), m.length + ' items');
+check('new menu: Calendar (with Notes, 1.22.0) and Weather & Storage', m.includes('Notes & Calendar') && m.includes('Weather & Storage'), m.length + ' items');
 await p.screenshot({ path: out + '/03-dashboard.png' });
 
 await p.goto(base + '/mukono-health-pharmacy#/settings', { waitUntil: 'networkidle2' }); await wait(800);

@@ -126,11 +126,11 @@ export default function WeeklyReport() {
       <div className="grid2">
         <div className="card"><h3><Star size={17} />Items that stood out</h3>
           {w.risers.length ? <HBars rows={w.risers} fmt={fmt} note={(r) => (r.before ? `↑ ${Math.round(r.growth)}%` : '· new')} /> : <Empty>Nothing stood out</Empty>}
-          {w.fallers.length > 0 && <><h3 style={{ marginTop: 14 }}><TrendingDown size={17} />Slowed down</h3><HBars rows={w.fallers} fmt={fmt} value={(r) => r.now} note={(r) => `↓ ${Math.abs(Math.round(r.growth))}%`} /></>}
+          {w.fallers.length > 0 && <><h3 className="mt-3"><TrendingDown size={17} />Slowed down</h3><HBars rows={w.fallers} fmt={fmt} value={(r) => r.now} note={(r) => `↓ ${Math.abs(Math.round(r.growth))}%`} /></>}
         </div>
         <div className="card"><h3><Users size={17} />Team performance</h3>
           {w.staff.length ? <HBars rows={w.staff} fmt={fmt} note={(r) => `· ${r.n} sales`} /> : <Empty>No sales</Empty>}
-          {w.payments.length > 0 && <><h3 style={{ marginTop: 14 }}>Payment methods</h3><HBars rows={w.payments.map(([name, amount]) => ({ name, amount }))} fmt={fmt} /></>}
+          {w.payments.length > 0 && <><h3 className="mt-3">Payment methods</h3><HBars rows={w.payments.map(([name, amount]) => ({ name, amount }))} fmt={fmt} /></>}
         </div>
       </div>
       <p className="muted small">The summary pops up at the start of each week. More detail in <Link to="/reports">Reports</Link>.</p>

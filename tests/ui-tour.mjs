@@ -77,7 +77,7 @@ await P.waitForSelector('.bottom-nav button', { timeout: 10000 });
 await P.evaluate(() => [...document.querySelectorAll('.bottom-nav button')].find((x) => /More/.test(x.textContent))?.click());
 check('phone: More opens the page sheet with every group', await P.waitForSelector('.mega-sheet', { timeout: 5000 }).then(() => P.evaluate(() => document.querySelectorAll('.mega-group').length >= 4), () => false));
 await wait(500); await P.screenshot({ path: path.join(out, 'phone-mega-menu.png') });
-await P.evaluate(() => [...document.querySelectorAll('.mega-item')].find((x) => /Inventory/.test(x.textContent))?.click()); await wait(600);
+await P.evaluate(() => [...document.querySelectorAll('.mega-item')].find((x) => /^Medicines/.test(x.textContent.trim()))?.click()); await wait(600);
 check('phone: a page picked in the sheet opens and the sheet closes', await P.evaluate(() => location.hash.includes('/inventory') && !document.querySelector('.mega-sheet')));
 await P.setViewport({ width: 1440, height: 900 });
 await P.evaluate(() => localStorage.setItem('pharmapos-theme', 'gold-night'));

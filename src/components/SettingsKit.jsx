@@ -73,7 +73,7 @@ export function SettingsSearch({ can = () => true }) {
       {q && (
         <ul className="settings-hits" role="listbox">
           {hits.map((h) => <li key={h[0] + h[2]} role="option" aria-selected="false"><button type="button" onClick={() => go(h)}><strong>{h[0]}</strong><small>{h[1]} · {h[2] === '/device' ? 'This device' : 'Settings'}</small></button></li>)}
-          {!hits.length && <li className="muted small" style={{ padding: 10 }}>No setting matches “{q}”</li>}
+          {!hits.length && <li className="muted small p-3">No setting matches “{q}”</li>}
         </ul>
       )}
     </div>
