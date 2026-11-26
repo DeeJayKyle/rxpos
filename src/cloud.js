@@ -40,7 +40,7 @@ async function call(cfg, path, { method = 'GET', body, timeout = 20000, personal
       body: body ? JSON.stringify(body) : undefined,
     });
     const j = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(j.error || `Cloud replied ${res.status}`);
+    if (!res.ok) throw Object.assign(new Error(j.error || `Cloud replied ${res.status}`), { status: res.status });
     return j;
   } catch (e) {
     throw e.name === 'AbortError' ? new Error('The cloud took too long to answer. Check the internet connection.') : e;
@@ -83,6 +83,10 @@ export const aiQuiz = (cfg, drugs, count = 8) => call(cfg, '/api/ai/quiz', { met
 export const cloudConfig = (cfg) => call(cfg, '/api/config', { timeout: 8000 });
 export const payRequest = (cfg, body) => call(cfg, '/api/pay/request', { method: 'POST', body, timeout: 30000 });
 export const payStatus = (cfg, provider, ref) => call(cfg, `/api/pay/status?provider=${provider}&ref=${encodeURIComponent(ref)}`);
+// 2026-11-26 (worker/payments.js): payments received and not recorded as a sale, on any till of this pharmacy; and
+// linking a payment to its sale ({ saleId, saleNumber }) or marking it handled ({ note }). One payment, one sale (409).
+export const payOpen = (cfg) => call(cfg, '/api/pay/open', { timeout: 20000 });
+export const payLink = (cfg, body) => call(cfg, '/api/pay/link', { method: 'POST', body, timeout: 20000 });
 export const sendSms = (cfg, to, message) => call(cfg, '/api/sms', { method: 'POST', body: { to, message } });
 
 /** Guess the mobile network from a Ugandan number: MTN 076/077/078/079/039, Airtel 070/074/075/020 */
