@@ -8,6 +8,7 @@ import fs from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import catalog from '../src/data/catalog.json' with { type: 'json' };
 import { catalogCost } from '../worker/dailystock.js';
+import { stockParts } from '../src/kits.js';
 
 const EAT = 3 * 3600e3; // Uganda, UTC+3
 export const ugDay = (iso) => new Date(new Date(iso).getTime() + EAT).toISOString().slice(0, 10);
@@ -87,7 +88,8 @@ export function auditTenant({ products = [], batches = [], movements = [], sales
     if (copied(s)) { sx.copiedAfter = (sx.copiedAfter || 0) + 1; }
     sx.checked++;
     const want = new Map();
-    for (const i of s.items || []) { want.set(i.id, (want.get(i.id) || 0) + (Number(i.qty) || 0)); if (!(Number(i.cost) > 0)) sx.noCost++; sx.costVsNow.lines++; sx.costVsNow.recorded += (Number(i.cost) || 0) * (Number(i.qty) || 0); sx.costVsNow.atNow += cost(i.id) * (Number(i.qty) || 0); }
+    // a kit line moves its medicines' stock, not its own (src/kits.js stockParts)
+    for (const i of s.items || []) { for (const x of stockParts(i)) want.set(x.productId, (want.get(x.productId) || 0) + x.qty); if (!(Number(i.cost) > 0)) sx.noCost++; sx.costVsNow.lines++; sx.costVsNow.recorded += (Number(i.cost) || 0) * (Number(i.qty) || 0); sx.costVsNow.atNow += cost(i.id) * (Number(i.qty) || 0); }
     const got = moveBySale.get(s.number) || new Map();
     let fine = true;
     for (const pid of new Set([...want.keys(), ...got.keys()])) {
@@ -172,6 +174,7 @@ export function auditTenant({ products = [], batches = [], movements = [], sales
   }
   sxs.units = r0(sxs.units); sxs.value = r0(sxs.value); sxs.top = sxs.top.sort((a, b) => Math.abs(b.value) - Math.abs(a.value)).slice(0, 15);
   out.stale = sxs;
+  Object.assign(out, packAndDoubles({ movements, sales, P, cost, name }));
 
   // ---- daily reconciliation (Uganda days), stock at today's cost like the app ----
   const lotsD = new Map();
@@ -213,6 +216,69 @@ export function auditTenant({ products = [], batches = [], movements = [], sales
     opening = closing;
   }
   return out;
+}
+
+/**
+ * Stock audit of 26 Nov 2026: the mistakes the app made possible until then, found in the ledger.
+ *  packSlips   a count or inventory edit that left a batch at what looks like its stock in BOXES (300 tablets → 3): the
+ *              count was typed, or scanned, in packs while stock is in single units. `fix` is the change that would put
+ *              the batch back to counted × pack size (a suggestion: someone checks the shelf before it is booked).
+ *  transfers   a transfer received more often than it was sent (pressed twice, or received on two devices).
+ *  refunds     a sale refunded in full after part of it had been returned: the returned stock went back twice.
+ */
+export function packAndDoubles({ movements = [], sales = [], P = new Map(), cost = () => 0, name = (x) => x }) {
+  const sorted = [...movements].sort((a, b) => (String(a.date) < String(b.date) ? -1 : 1));
+  const bal = new Map(), packSlips = { n: 0, units: 0, value: 0, top: [] };
+  for (const m of sorted) {
+    const k = (m.branchId || 'main') + '|' + (m.batchId || 'lb-' + m.productId);
+    const before = bal.get(k) || 0, after = before + (Number(m.qty) || 0);
+    bal.set(k, after);
+    if (!COUNTISH.has(m.type) || !(Number(m.qty) < 0) || !(after > 0)) continue;
+    const packs = (P.get(m.productId)?.packs || []).filter((x) => x && Number(x.size) > 1);
+    let best = null;
+    for (const p of packs) {
+      const size = Number(p.size), units = after * size;
+      if (before < size || after * 2 > before) continue;
+      const off = Math.abs(units - before);
+      if (off <= Math.max(size, before * 0.25) && (!best || off < best.off)) best = { pack: p, units, off };
+    }
+    if (!best) continue;
+    const fix = best.units - after;
+    packSlips.n++; packSlips.units += fix; packSlips.value += fix * cost(m.productId);
+    packSlips.top.push({ id: m.id, day: ugDay(m.date), type: m.type, medicine: name(m.productId), branch: m.branchId || 'main', batchId: m.batchId || null, before: r0(before * 100) / 100, after, pack: `${best.pack.name} of ${best.pack.size}`, fix, value: r0(fix * cost(m.productId)), by: m.user || '' });
+  }
+  packSlips.units = r0(packSlips.units); packSlips.value = r0(packSlips.value);
+  packSlips.top.sort((a, b) => b.value - a.value);
+  // transfers: "TR-12 → Kampala" out, "TR-12 ← Main" in
+  const tr = new Map(), num = (ref) => String(ref || '').split(' ')[0];
+  for (const m of movements) {
+    if (m.type !== 'Transfer out' && m.type !== 'Transfer in') continue;
+    const k = num(m.ref) + '|' + m.productId, x = tr.get(k) || { ref: num(m.ref), pid: m.productId, out: 0, in: 0, branch: '' };
+    if (m.type === 'Transfer out') x.out -= Number(m.qty) || 0; else { x.in += Number(m.qty) || 0; x.branch = m.branchId || 'main'; }
+    tr.set(k, x);
+  }
+  const transfers = { n: 0, units: 0, value: 0, top: [] };
+  for (const x of tr.values()) if (x.in > x.out + 1e-6) {
+    const extra = x.in - x.out;
+    transfers.n++; transfers.units += extra; transfers.value += extra * cost(x.pid);
+    transfers.top.push({ transfer: x.ref, medicine: name(x.pid), branch: x.branch, sent: x.out, received: x.in, extra, value: r0(extra * cost(x.pid)) });
+  }
+  transfers.units = r0(transfers.units); transfers.value = r0(transfers.value);
+  // refunded in full after a part return
+  const retBy = new Map();
+  for (const s of sales) if (s.returnOf) (retBy.get(s.returnOf) || retBy.set(s.returnOf, []).get(s.returnOf)).push(s);
+  const refunds = { n: 0, units: 0, value: 0, top: [] };
+  for (const s of sales) {
+    const rets = retBy.get(s.id);
+    if (s.status !== 'refunded' || !rets?.length) continue;
+    for (const r of rets) for (const i of r.items || []) {
+      const q = -(Number(i.qty) || 0); if (!(q > 0)) continue;
+      refunds.n++; refunds.units += q; refunds.value += q * cost(i.id);
+      refunds.top.push({ receipt: s.number, return: r.number, medicine: name(i.id), backTwice: q, value: r0(q * cost(i.id)) });
+    }
+  }
+  refunds.units = r0(refunds.units); refunds.value = r0(refunds.value);
+  return { packSlips, transfers, refunds };
 }
 
 const money = (n) => (n < 0 ? '-' : '') + Math.abs(Math.round(n)).toLocaleString('en-US');
@@ -257,6 +323,17 @@ export function formatReport(title, a) {
   h('Counts / edits made on a device missing earlier changes (applied twice)');
   L.push(`  counts/adjustments/edits: ${z.counts}; affected: ${z.affected}; net effect ${money(z.units)} units, ${money(z.value)} (negative = stock lost)`);
   for (const t of z.top) L.push(`      ${t.day} ${t.type} ${t.medicine}: recorded ${t.countedDiff}, earlier change applied twice ${t.appliedTwice} (${money(t.value)})`);
+  if (a.packSlips) {
+    h('Counts / edits that look typed or scanned in BOXES (stock is in single units)');
+    L.push(`  ${a.packSlips.n} found; putting them back to counted × pack size would add ${money(a.packSlips.units)} units, ${money(a.packSlips.value)} (check the shelf first)`);
+    for (const t of a.packSlips.top.slice(0, 25)) L.push(`      ${t.day} ${t.type} ${t.medicine} (${t.branch}): ${t.before} → ${t.after}, ${t.pack}: probably ${t.after + t.fix} (${t.fix > 0 ? '+' : ''}${t.fix}, ${money(t.value)})${t.by ? ' by ' + t.by : ''}`);
+    h('Transfers received more than sent (pressed twice / two devices)');
+    L.push(`  ${a.transfers.n} lines, ${money(a.transfers.units)} units too many, ${money(a.transfers.value)}`);
+    for (const t of a.transfers.top.slice(0, 15)) L.push(`      ${t.transfer} ${t.medicine} at ${t.branch}: sent ${t.sent}, received ${t.received} (+${t.extra}, ${money(t.value)})`);
+    h('Sales refunded in full after part was returned (returned stock put back twice)');
+    L.push(`  ${a.refunds.n} lines, ${money(a.refunds.units)} units too many, ${money(a.refunds.value)}`);
+    for (const t of a.refunds.top.slice(0, 15)) L.push(`      ${t.receipt} (return ${t.return}) ${t.medicine}: +${t.backTwice} (${money(t.value)})`);
+  }
   h(`Daily stock value (last ${a.daily.length} days, at today's costs)`);
   L.push('  drop = opening − closing; sales-moves = stock taken out by sales at today\'s cost; receipt-cost = cost saved on the receipts (no-cost = lines saved with none);');
   L.push('  hidden = change explained by batches passing expiry or going negative (both left out of the value); negative/expired = what is left out at day end');
