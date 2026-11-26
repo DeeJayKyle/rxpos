@@ -1,5 +1,20 @@
 # RxPOS release notes
 
+## Next release (not yet released): split payments, returning part of a sale, the drawer's cash
+
+- **Split pay** at the till: one sale paid part in cash, part by card, Mobile Money or bank, part on credit. Each part
+  is booked to its own account; only cash gives change. Receipts, Sales History, Shifts, Close the day, Finance and
+  the report emails show each part. (Mobile Money in a split sale is recorded by hand; the phone request is for a
+  sale paid wholly by Mobile Money.)
+- **Return part of a sale** (Sales History → Refund or return): choose how many of each line come back, in whole
+  packs and kits. A credit note (CN-…) records it; stock goes back to the batch it came from; the insurer's share,
+  then any debt on the sale, comes off first and the rest is paid back the way the sale was paid. The sale itself is
+  not changed, so a closed day stays closed. Returning the rest later brings the sale to exactly zero. The cloud
+  checks each return against its sale. A whole sale is still refunded as before.
+- **Cash in the drawer** counts everything: cash sales (and cash parts), refunds and returns, debts paid in cash,
+  expenses and payments made from Cash at hand, and new **Pay cash in / Pay cash out** at Shifts. A sale made and
+  refunded in the same shift is no longer taken off twice. Close the day shows the day's cash in and out.
+
 ## RxPOS 1.22.0 · November 2026 (selling units; a tidier app)
 
 - **Selling units**: each medicine can be sold by the tablet, pair, half strip, strip or box (Medicine List → Selling

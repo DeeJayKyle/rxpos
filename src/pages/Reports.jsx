@@ -1,4 +1,5 @@
 import { DateRange } from '../forms.jsx';
+import { totalByMethod } from '../tenders.js';
 import { useState, useRef, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import SalesLines from './SalesLines.jsx';
@@ -59,6 +60,10 @@ export default function Reports() {
 
   const sales = db.sales.filter((s) => s.status !== 'refunded' && inRange(s));
   const refunds = db.sales.filter((s) => s.status === 'refunded' && inRange(s));
+  // Nov 2026: returns of part of a sale (src/returns.js) are in `sales` with negative figures, so every sum is net of them
+  const receipts = sales.filter((s) => !s.returnOf).length;
+  const rets = sales.filter((s) => s.returnOf);
+  const payParts = sales.flatMap((s) => totalByMethod(s).map(([m, v]) => ({ m, v }))); // a split sale under each method
   const purchases = db.purchases.filter(inRange);
   const expenses = db.expenses.filter(inRange);
   const revenue = sales.reduce((a, s) => a + s.total - s.tax, 0);
@@ -137,7 +142,7 @@ export default function Reports() {
         const inStock = tab === 'stock' ? products.filter((p) => p.stock > 0) : [];
         const sv = tab === 'stock' ? stockValue(inStock, batchesOf) : { value: 0, expired: 0 };
         const line = reportSummary(tab, {
-          sales: salesTotal, prevSales: prevSales.reduce((a, x) => a + x.total, 0), receipts: sales.length, topProduct: productRows[0]?.product,
+          sales: salesTotal, prevSales: prevSales.reduce((a, x) => a + x.total, 0), receipts, topProduct: productRows[0]?.product,
           topProductShare: productRows[0] && revenue ? Math.round((productRows[0].revenue / revenue) * 100) : null,
           lines: sales.reduce((a, x) => a + x.items.length, 0),
           purchases: purchases.reduce((a, x) => a + (x.total || 0), 0), topSupplier: top(sumBy(purchases, (x) => x.supplierName, (x) => x.total)),
@@ -155,17 +160,17 @@ export default function Reports() {
       {tab === 'sales' && (
         <>
           <div className="stats kpis">
-            <Stat label="Sales" value={fmt(revenue + tax)} sub={`${sales.length} receipts`} tone="teal" icon={Banknote} />
-            <Stat label="Average sale" value={fmt(sales.length ? (revenue + tax) / sales.length : 0)} tone="blue" icon={Receipt} />
+            <Stat label="Sales" value={fmt(revenue + tax)} sub={`${receipts} receipts`} tone="teal" icon={Banknote} />
+            <Stat label="Average sale" value={fmt(receipts ? (revenue + tax) / receipts : 0)} tone="blue" icon={Receipt} />
             <Stat label="Discounts given" value={fmt(sales.reduce((a, s) => a + (s.discount || 0), 0))} tone="violet" icon={Percent} />
-            <Stat label="Refunds" value={fmt(refunds.reduce((a, s) => a + s.total, 0))} sub={`${refunds.length} receipts`} tone="red" icon={Undo2} />
+            <Stat label="Refunds" value={fmt(refunds.reduce((a, s) => a + s.total, 0) - rets.reduce((a, s) => a + s.total, 0))} sub={`${refunds.length + rets.length} receipts`} tone="red" icon={Undo2} />
           </div>
           <div className="card"><h3>Daily sales</h3><BarChart key={from + to + branch} fmt={fmt} data={days} series={[{ name: 'Sales' }]} /></div>
           <div className="grid2">
             <div className="card"><h3>By payment method</h3>
-              <Donut parts={sumBy(sales, (s) => s.payment, (s) => s.total)} fmt={fmt} />
+              <Donut parts={sumBy(payParts, (x) => x.m, (x) => x.v)} fmt={fmt} />
               <table className="share-table"><tbody>
-              {(() => { const all = sales.reduce((a, s) => a + s.total, 0); return sumBy(sales, (s) => s.payment, (s) => s.total).map(([k, v], i) => (
+              {(() => { const all = sales.reduce((a, s) => a + s.total, 0); return sumBy(payParts, (x) => x.m, (x) => x.v).map(([k, v], i) => (
                 <tr key={k}><td>{k}</td>
                   <td className="share"><span className="share-bar" aria-hidden="true"><i className={'c' + (i % 5)} style={{ width: `${all ? (v / all) * 100 : 0}%` }} /></span><span className="share-pct">{all ? Math.round((v / all) * 100) : 0}%</span></td>
                   <td className="num">{fmt(v)}</td></tr>

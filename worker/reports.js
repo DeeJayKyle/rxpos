@@ -4,6 +4,7 @@
 // last 7 days) or monthly (on the last day: the month). Sheets: summary, sales, sales by medicine, expenses, and stock
 // that needs attention. Sent through Brevo like the daily summary. The workbook is written here, with no dependency.
 import { eatDay, summarise, attention, refundedOn, REFUNDS_SQL } from './summary.js';
+import { payLabel } from '../src/tenders.js';
 /** A sale's time on the pharmacy's clock (East Africa, UTC+3), 'YYYY-MM-DD HH:MM' (2026-11-17 audit: it showed UTC) */
 const eatClock = (d) => { const ms = Date.parse(d); return Number.isFinite(ms) ? new Date(ms + 3 * 3600e3).toISOString().replace('T', ' ').slice(0, 16) : String(d || ''); };
 
@@ -138,15 +139,17 @@ export function reportSheets({ kinds, sales, refunds = sales.filter((s) => s.sta
     ] });
   }
   if (want.has('sales')) {
-    out.push({ name: 'Sales', rows: [...sales].sort((a, b) => String(a.date).localeCompare(String(b.date))).map((s) => ({
+    const rets = sales.filter((s) => s.returnOf); // Nov 2026: returns of part of a sale (src/returns.js), listed with the refunds
+    out.push({ name: 'Sales', rows: sales.filter((s) => !s.returnOf).sort((a, b) => String(a.date).localeCompare(String(b.date))).map((s) => ({
       date: eatClock(s.date), number: s.number || '', customer: s.customerName || '', cashier: s.cashier || '', branch: branch(s.branchId),
-      payment: s.payment || 'Cash', items: (s.items || []).length, discount: n(s.discount), total: n(s.total), paid: n(s.paid ?? s.total), status: s.status || 'completed',
+      payment: payLabel(s) || 'Cash', items: (s.items || []).length, discount: n(s.discount), total: n(s.total), paid: n(s.paid ?? s.total), status: s.status || 'completed',
       refundedOn: s.status === 'refunded' ? eatClock(refundedOn(s)) : '',
     })) });
     out.push({ name: 'Refunds', rows: [...refunds].sort((a, b) => String(refundedOn(a)).localeCompare(String(refundedOn(b)))).map((s) => ({
       refundedOn: eatClock(refundedOn(s)), number: s.number || '', soldOn: eatClock(s.date), customer: s.customerName || '', refundedBy: s.refundedBy || '',
       branch: branch(s.branchId), payment: s.payment || 'Cash', total: n(s.total),
-    })) });
+    })).concat(rets.map((s) => ({ refundedOn: eatClock(s.date), number: `${s.number || ''} (part of ${s.returnOfNumber || ''})`, soldOn: '', customer: s.customerName || '', refundedBy: s.cashier || '',
+      branch: branch(s.branchId), payment: payLabel(s) || 'Cash', total: -n(s.total) }))).sort((a, b) => String(a.refundedOn).localeCompare(String(b.refundedOn))) });
   }
   if (want.has('items')) {
     const by = new Map();

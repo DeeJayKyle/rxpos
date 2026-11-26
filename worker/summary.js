@@ -3,6 +3,8 @@
 // best sellers, and stock that needs attention. The same text is shown in the app (Weekly Summary → Today) with a
 // WhatsApp share button. Sent through Brevo (BREVO_API_KEY), like password emails.
 
+import { totalByMethod } from '../src/tenders.js';
+
 const EAT = 3 * 3600e3; // Uganda is UTC+3 all year
 const pad = (n) => String(n).padStart(2, '0');
 /** The local (EAT) day of a moment, YYYY-MM-DD, and that day's start / end as UTC ISO strings */
@@ -23,26 +25,32 @@ export const REFUNDS_SQL = "SELECT rec FROM records WHERE tenant = ?1 AND t = 's
  * or not; [refunds] are the refunds MADE in the period, whenever their sale was (Nov 2026: a refund counts on the day
  * it happens, as in Finance and Shifts, not on its sale's day). Without [refunds], the refunded ones among [sales].
  */
-export function summarise({ sales, refunds = sales.filter((s) => s.status === 'refunded'), expenses, branches = [], lowStock = [], expiring = [] }) {
+export function summarise({ sales: all, refunds = all.filter((s) => s.status === 'refunded'), expenses, branches = [], lowStock = [], expiring = [] }) {
   const sum = (a, f) => a.reduce((x, y) => x + (Number(f(y)) || 0), 0);
   const costOf = (s) => sum(s.items || [], (i) => (i.cost || 0) * i.qty);
-  const gross = sum(sales, (s) => s.total), refundValue = sum(refunds, (s) => s.total);
+  // Nov 2026: a return of part of a sale (src/returns.js) is a refund made on its own day; its figures are negative
+  const sales = all.filter((s) => !s.returnOf), rets = all.filter((s) => s.returnOf);
+  const gross = sum(sales, (s) => s.total), refundValue = sum(refunds, (s) => s.total) - sum(rets, (s) => s.total);
   const total = gross - refundValue;
-  const cost = sum(sales, costOf) - sum(refunds, costOf);
-  const tax = sum(sales, (s) => s.tax) - sum(refunds, (s) => s.tax);
-  // takings by payment and by branch, after the refunds paid back from them
-  const net = (key) => { const m = {}; for (const [list, sign] of [[sales, 1], [refunds, -1]]) for (const s of list) { const k = key(s); m[k] = (m[k] || 0) + sign * (Number(s.total) || 0); } return m; };
-  const byPay = net((s) => s.payment || 'Cash'), byBranch = net((s) => s.branchId || 'main');
+  const cost = sum(sales, costOf) - sum(refunds, costOf) + sum(rets, costOf);
+  const tax = sum(sales, (s) => s.tax) - sum(refunds, (s) => s.tax) + sum(rets, (s) => s.tax);
+  // takings by payment (a split sale under each of its parts, src/tenders.js) and by branch, after the refunds
+  const lists = [[sales, 1], [refunds, -1], [rets, 1]];
+  const byPay = {}, byBranch = {};
+  for (const [list, sign] of lists) for (const s of list) {
+    for (const [k, v] of totalByMethod(s)) byPay[k] = (byPay[k] || 0) + sign * (Number(v) || 0);
+    const b = s.branchId || 'main'; byBranch[b] = (byBranch[b] || 0) + sign * (Number(s.total) || 0);
+  }
   // still owed: the period's sales on credit that were not refunded
-  const credit = sum(sales.filter((s) => s.status !== 'refunded'), (s) => s.total - (s.paid ?? s.total));
+  const credit = sum([...sales.filter((s) => s.status !== 'refunded'), ...rets], (s) => s.total - (s.paid ?? s.total));
   const items = {};
-  for (const [list, sign] of [[sales, 1], [refunds, -1]]) for (const s of list) for (const i of s.items || []) {
+  for (const [list, sign] of lists) for (const s of list) for (const i of s.items || []) {
     const r = (items[i.name] ||= { name: i.name, qty: 0, value: 0 }); r.qty += sign * i.qty; r.value += sign * i.qty * i.price;
   }
   const exp = sum(expenses, (e) => e.amount);
   return {
     count: sales.length, gross, total, cost, profit: total - tax - cost, tax, expenses: exp, net: total - tax - cost - exp,
-    discounts: sum(sales, (s) => s.discount), refunds: refunds.length, refundValue, credit,
+    discounts: sum(sales, (s) => s.discount) + sum(rets, (s) => s.discount), refunds: refunds.length + rets.length, refundValue, credit,
     byPay: Object.entries(byPay).filter(([, v]) => v).sort((a, b) => b[1] - a[1]),
     byBranch: Object.entries(byBranch).map(([id, v]) => [branches.find((b) => b.id === id)?.name || (id === 'main' ? 'Main branch' : id), v]).sort((a, b) => b[1] - a[1]),
     top: Object.values(items).filter((t) => t.qty > 0).sort((a, b) => b.value - a.value).slice(0, 5), lowStock, expiring,

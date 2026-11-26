@@ -10,6 +10,7 @@ import { lineTotal } from '../src/money.js';
 import { packPrice } from '../src/packs.js';
 import { overLimit } from '../src/credit.js';
 import { isKit, kitExpectedPrice, unitsUsed } from '../src/kits.js';
+import { returnFindings } from '../src/returns.js';
 
 const num = (v) => Number(v) || 0;
 const money = (n) => Math.round(num(n)).toLocaleString('en-US');
@@ -34,6 +35,9 @@ function expectedUnitPrice(p, item, wholesale, products) {
 export async function saleFindings(sale, products, can, ctx = {}) {
   const out = [];
   if (!sale || sale.status === 'refunded') return out; // a refund changes no money (step 2 makes sure of that)
+  // Nov 2026: a return of part of a sale (src/returns.js) is checked against that sale and its other returns.
+  // ctx.returned: { sale (null when the cloud has none), others: its other returns }; undefined when not looked up
+  if (sale.returnOf) return ctx.returned ? returnFindings(sale, ctx.returned.sale, ctx.returned.others) : out;
   const items = Array.isArray(sale.items) ? sale.items : [];
   // one currency unit of slack per line, and one for the tax and total: per-line rounding and pack-split prices
   // (a box of 3 at 2,000 → 666.67 each) may differ by that much between the two apps; anything more is not rounding
@@ -50,6 +54,14 @@ export async function saleFindings(sale, products, can, ctx = {}) {
     out.push({ kind: 'totals', detail: `${money(subtotal)} − discount ${money(discount)} + tax ${money(tax)} is ${money(subtotal - discount + tax)}, but the total says ${money(total)}`, amount: Math.abs(subtotal - discount + tax - total) });
   if (paid > total + 1)
     out.push({ kind: 'paid', detail: `Paid ${money(paid)} is more than the total ${money(total)}`, amount: paid - total });
+  // Nov 2026: a split sale: its parts (credit included) come to what the client pays, and `paid` is the parts taken now
+  if (Array.isArray(sale.payments) && sale.payments.length) {
+    const parts = sale.payments.reduce((a, p) => a + num(p?.amount), 0);
+    const now = sale.payments.filter((p) => p?.type !== 'credit').reduce((a, p) => a + num(p?.amount), 0);
+    const due = total - Math.max(0, num(sale.insurance?.share));
+    if (sale.payments.some((p) => num(p?.amount) < 0) || Math.abs(parts - due) > 1 || Math.abs(now - paid) > 1)
+      out.push({ kind: 'paid', detail: `The payment parts (${sale.payments.map((p) => `${p?.method} ${money(p?.amount)}`).join(', ')}) don't match what was due (${money(due)}) and paid (${money(paid)})`, amount: Math.abs(parts - due) });
+  }
   // step 22: an insured sale: the insurer's share and what the patient paid can't come to more than the sale
   if (sale.insurance) {
     const share = num(sale.insurance.share);
@@ -126,7 +138,7 @@ export function stockFindings(ref, moves, sale) {
   // a kit line's stock is its components' (src/kits.js unitsUsed)
   const sold = units((Array.isArray(sale.items) ? sale.items : []).flatMap(unitsUsed).map(([id, qty]) => ({ id, qty })));
   const refund = moves.filter((x) => x.type === 'Refund');
-  if (refund.length && sale.status !== 'refunded') out.push({ kind: 'stock', detail: `Stock was returned for ${ref}, but that sale is not refunded`, amount: 0 });
+  if (refund.length && sale.status !== 'refunded' && !sale.returnOf) out.push({ kind: 'stock', detail: `Stock was returned for ${ref}, but that sale is not refunded`, amount: 0 });
   for (const [type, list] of [['Sale', moves.filter((x) => x.type === 'Sale')], ['Refund', refund]]) {
     for (const [pid, q] of units(list)) {
       const max = sold.get(pid) || 0;

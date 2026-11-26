@@ -1,6 +1,7 @@
 // PDF downloads: receipts and reports. jsPDF + jspdf-autotable (MIT), loaded only when someone asks for a PDF.
 // Web / Windows: the file downloads. Android: it is saved and the share sheet opens (WhatsApp, Drive, Files…).
 import { isAndroid } from './platform.js';
+import { isSplit, payLabel } from './tenders.js';
 import { downloadFile, localDate } from './store.jsx';
 import { kitContents } from './kits.js';
 import { pharmacyLogo } from './logo.jsx';
@@ -52,9 +53,12 @@ export async function receiptPdf(sale, { db, fmt }) {
     ...(sale.discount > 0 ? [['Discount', '-' + money(fmt, sale.discount)]] : []),
     ...(sale.tax > 0 ? [['Tax', money(fmt, sale.tax)]] : []),
     ['TOTAL', money(fmt, sale.total), true],
-    ...(!isProforma ? [[`Paid (${sale.payment || 'Cash'})`, money(fmt, sale.payment === 'Cash' ? sale.tendered ?? sale.total : sale.paid ?? sale.total)]] : []),
-    ...(!isProforma && sale.payment === 'Cash' && sale.tendered > sale.total ? [['Change', money(fmt, sale.tendered - sale.total)]] : []),
-    ...(!isProforma && (sale.paid ?? sale.total) < sale.total ? [['Balance on credit', money(fmt, sale.total - sale.paid)]] : []),
+    ...(!isProforma && sale.returnOf ? [[`Return of ${sale.returnOfNumber || ''}`, ''], [`Paid back (${payLabel(sale) || 'Cash'})`, money(fmt, -(sale.paid ?? sale.total))]] : []),
+    // a split sale (src/tenders.js): each part, and the change from the cash
+    ...(!isProforma && !sale.returnOf && isSplit(sale) ? [...sale.payments.map((p) => [p.type === 'credit' ? 'On credit' : `Paid (${p.method})`, money(fmt, p.amount)]), ...(sale.tendered > sale.paid ? [['Change', money(fmt, sale.tendered - sale.paid)]] : [])] : []),
+    ...(!isProforma && !sale.returnOf && !isSplit(sale) ? [[`Paid (${sale.payment || 'Cash'})`, money(fmt, sale.payment === 'Cash' ? sale.tendered ?? sale.total : sale.paid ?? sale.total)]] : []),
+    ...(!isProforma && !sale.returnOf && sale.payment === 'Cash' && sale.tendered > sale.total ? [['Change', money(fmt, sale.tendered - sale.total)]] : []),
+    ...(!isProforma && !sale.returnOf && !isSplit(sale) && (sale.paid ?? sale.total) < sale.total ? [['Balance on credit', money(fmt, sale.total - sale.paid)]] : []),
     ...(sale.momo?.txid ? [[sale.momo.provider === 'airtel' ? 'Airtel Ref' : 'MoMo Ref', sale.momo.txid]] : []),
   ];
   const footer = isProforma ? 'Prices valid for 7 days.' : s.receiptFooter || '';

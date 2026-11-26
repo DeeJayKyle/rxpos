@@ -930,6 +930,18 @@ async function sync(env, body, who, ctx) {
       const { results } = await db.prepare("SELECT id, rec FROM records WHERE tenant = ?1 AND t = 'proformas' AND deleted = 0 AND id IN (SELECT value FROM json_each(?2))").bind(tenant, JSON.stringify(missing)).all();
       for (const r of results || []) { try { pfs.set(r.id, JSON.parse(r.rec)); } catch { /* unreadable */ } }
     }
+    // Nov 2026 (src/returns.js): each return of part of a sale, with that sale and its other returns (cloud + this push)
+    const retOf = [...new Set([...toCheck.values()].filter((x) => x.returnOf).map((x) => String(x.returnOf)))];
+    const returned = new Map(retOf.map((id) => [id, { sale: current.get('sales|' + id) ?? null, others: [] }]));
+    if (retOf.length) {
+      const { results } = await db.prepare("SELECT id, rec FROM records WHERE tenant = ?1 AND t = 'sales' AND deleted = 0 AND (id IN (SELECT value FROM json_each(?2)) OR json_extract(rec, '$.returnOf') IN (SELECT value FROM json_each(?2)))").bind(tenant, JSON.stringify(retOf)).all();
+      for (const r of results || []) {
+        let x; try { x = JSON.parse(r.rec); } catch { continue; }
+        if (returned.has(String(r.id)) && !x.returnOf) { if (!returned.get(String(r.id)).sale) returned.get(String(r.id)).sale = x; }
+        else if (x.returnOf && returned.has(String(x.returnOf)) && !toCheck.has('sales|' + r.id)) returned.get(String(x.returnOf)).others.push({ ...x, id: r.id });
+      }
+      for (const x of toCheck.values()) if (x.returnOf && returned.has(String(x.returnOf))) returned.get(String(x.returnOf)).others.push(x);
+    }
     for (const sale of toCheck.values()) {
       // step 8: a sale left partly unpaid, to a client with a credit limit: what they owed before it, from the cloud's
       // own records (the Debtors figure: unpaid credit sales not refunded, less their payments; an insurer's share is
@@ -947,7 +959,7 @@ async function sync(env, body, who, ctx) {
         }
       }
       const proforma = sale.proformaId ? pfs.get(String(sale.proformaId)) ?? null : undefined;
-      const found = await saleFindings(sale, products, can, { credit, maxDiscount, proforma });
+      const found = await saleFindings(sale, products, can, { credit, maxDiscount, proforma, returned: sale.returnOf ? returned.get(String(sale.returnOf)) : undefined });
       const fp = fingerprint(moneyView(sale));
       found.forEach((f, n) => finding({ id: `${sale.id}~${f.kind}${n}~${fp}`, saleId: sale.id, saleNumber: sale.number || '', saleDate: sale.date || '', branchId: sale.branchId || '', cashier: sale.cashier || '',
         pushedBy: who.name || '', kind: f.kind, detail: f.detail, amount: f.amount, reviewed: false, createdAt: nowIso, updatedAt: nowIso }));

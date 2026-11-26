@@ -20,6 +20,7 @@ import { maxDiscountOf } from '../access.js';
 import { draftsFor, saleDraft } from '../drafts.js';
 import { keepsData } from '../webpolicy.js';
 import { CASH } from '../finance.js';
+import { SPLIT, settleSplit } from '../tenders.js';
 import { cartSubtotal, taxOf, round, formatQty } from '../money.js';
 import { searchProducts, searchKey } from '../search.js';
 import { Modal, SearchBox, ReceiptPdfButton, PageTip } from '../ui.jsx';
@@ -163,8 +164,18 @@ export default function POS({ mode = 'retail' }) {
   // Payment methods come from Settings → Payment methods; their type decides the behaviour
   const methods = (db.settings.paymentMethods?.length ? db.settings.paymentMethods : DEFAULT_PAYMENT_METHODS).filter((m) => m.type !== 'momo' || features.momo !== false);
   const [payment, setPayment] = useState(methods[0]?.name || 'Cash');
-  const ptype = methods.find((m) => m.name === payment)?.type || 'other';
+  const ptype = payment === SPLIT ? 'split' : methods.find((m) => m.name === payment)?.type || 'other';
   const [tendered, setTendered] = useState('');
+  // Nov 2026 audit item 5: one sale paid several ways (src/tenders.js): the parts as typed, while "Split" is chosen
+  const [parts, setParts] = useState([]);
+  const typeOf = (name) => methods.find((m) => m.name === name)?.type || 'other';
+  const bankOf = (type) => (type === 'cash' || type === 'credit' ? CASH : db.settings.nonCashBankId || CASH);
+  const startSplit = () => {
+    const cash = methods.find((m) => m.type === 'cash')?.name || methods[0]?.name || 'Cash';
+    const other = methods.find((m) => m.name !== cash && m.type !== 'momo')?.name || methods.find((m) => m.name !== cash)?.name || cash;
+    setPayment(SPLIT);
+    setParts((p) => (p.length ? p : [{ key: uid(), method: cash, amount: '' }, { key: uid(), method: other, amount: '' }]));
+  };
   // step 22: the insurer and scheme billed for this sale ('' = not insured) and the patient's member number
   const [insKey, setInsKey] = useState('');
   const [memberNo, setMemberNo] = useState('');
@@ -431,6 +442,8 @@ export default function POS({ mode = 'retail' }) {
   const split = insured ? copayOf(insured.scheme, total, money) : null;
   const due = split ? split.copay : total; // what is paid at the till
   const change = (Number(tendered) || 0) - due;
+  const settled = ptype === 'split' ? settleSplit(parts.map((p) => ({ ...p, type: typeOf(p.method), bankId: bankOf(typeOf(p.method)) })), due, money, fmt) : null;
+  const partsGiven = parts.reduce((a, p) => a + (Number(p.amount) || 0), 0);
   // the customer display (a second window facing the client): the sale as it is now, sent over a BroadcastChannel
   const displayRef = useRef({ ch: null, last: null });
   useEffect(() => {
@@ -446,10 +459,10 @@ export default function POS({ mode = 'retail' }) {
     const msg = done && !done.proforma && !done.reprint
       ? { ...base, done: true, total: fmt(done.total), paid: done.tendered ? fmt(done.tendered) : '', change: done.tendered > done.total ? fmt(done.tendered - done.total) : '' }
       : { ...base, lines: cart.map((l) => ({ name: l.name, qty: l.pack ? `${l.qty / l.pack.size} ${l.pack.name}` : String(l.qty), amount: fmt(l.price * l.qty) })),
-        discount: disc > 0 ? fmt(disc) : '', total: fmt(due), paid: tendered !== '' && ptype === 'cash' ? fmt(Number(tendered) || 0) : '', change: tendered !== '' && ptype === 'cash' && change > 0 ? fmt(change) : '' };
+        discount: disc > 0 ? fmt(disc) : '', total: fmt(due), paid: tendered !== '' && ptype === 'cash' ? fmt(Number(tendered) || 0) : settled?.ok ? fmt(settled.tendered) : '', change: tendered !== '' && ptype === 'cash' && change > 0 ? fmt(change) : settled?.ok && settled.change > 0 ? fmt(settled.change) : '' };
     displayRef.current.last = msg;
     try { displayRef.current.ch?.postMessage(msg); } catch { /* closed */ }
-  }, [cart, disc, due, tendered, ptype, change, done, db.settings.name]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [cart, disc, due, tendered, ptype, change, done, db.settings.name, settled?.tendered]); // eslint-disable-line react-hooks/exhaustive-deps
   const openDisplay = () => window.open(location.pathname + '#/display', 'rxpos-display', 'popup,width=1024,height=720');
   const customer = db.customers.find((c) => c.id === customerId);
   const items = cart.reduce((a, l) => a + l.qty, 0);
@@ -463,12 +476,13 @@ export default function POS({ mode = 'retail' }) {
   }, [total, items, cart.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---- sales on hold: serve the next customer while one is still deciding, then switch back ----
-  const snapshot = () => ({ id: uid(), at: now(), cart, customerId, discount, payment, tendered, insKey, memberNo });
+  const snapshot = () => ({ id: uid(), at: now(), cart, customerId, discount, payment, tendered, insKey, memberNo, ...(payment === SPLIT ? { parts } : {}) });
   function loadSale(x) {
     cdRef.current = null; rxRef.current = null; safetyRef.current = null;
     // stock may have moved while the sale was on hold: each line's limit is today's stock
     setCart((x.cart || []).map((l) => { const p = catalog.find((y) => y.id === l.id); return p ? { ...l, max: p.stock, qty: Math.min(l.qty, Math.max(1, p.stock)) } : l; })); setCustomerId(x.customerId || 'walk-in'); setDiscount(x.discount || 0);
-    setPayment(methods.some((m) => m.name === x.payment) ? x.payment : methods[0]?.name || 'Cash'); setTendered(x.tendered || ''); setPicked(new Set()); setCursor(-1);
+    setPayment(methods.some((m) => m.name === x.payment) || (x.payment === SPLIT && x.parts?.length) ? x.payment : methods[0]?.name || 'Cash'); setTendered(x.tendered || ''); setPicked(new Set()); setCursor(-1);
+    setParts(x.payment === SPLIT && Array.isArray(x.parts) ? x.parts.filter((p) => methods.some((m) => m.name === p.method)) : []);
     setInsKey(x.insKey || ''); setMemberNo(x.memberNo || '');
   }
   const clearSale = () => loadSale({});
@@ -596,7 +610,8 @@ export default function POS({ mode = 'retail' }) {
     if (unticked) return toast(`${unticked.name}: tick that the client was given the warning before charging`, 'warn');
     const short = basketShort();
     if (short) return toast(short, 'error');
-    const credit = ptype === 'credit';
+    if (ptype === 'split' && !settled.ok) return toast(settled.error, 'error');
+    const credit = ptype === 'credit' || (ptype === 'split' && settled.credit > 0);
     if (credit && customerId === 'walk-in') return toast('Select a registered customer for a credit sale', 'warn');
     if (capture === 'required' && customerId === 'walk-in') return toast('Choose or add the client for this sale', 'warn');
     if (insured && customerId === 'walk-in') return toast('Choose the insured client for this sale', 'warn');
@@ -627,7 +642,7 @@ export default function POS({ mode = 'retail' }) {
     // step 8: a credit sale over the client's limit: Finance roles go on; others give a reason (audited, flagged)
     let creditOver = null;
     if (credit) {
-      const over = overLimit({ limit: customer?.creditLimit, owed: customerBalance(db, customerId), total: due, tendered });
+      const over = overLimit({ limit: customer?.creditLimit, owed: customerBalance(db, customerId), total: due, tendered: ptype === 'split' ? settled.paid : tendered });
       if (over && can('finance')) creditOver = { ...over, finance: true };
       else if (over) {
         const reason = await askText({ title: 'Over the credit limit', message: `${customer.name} owes ${fmt(over.owed)}. This sale adds ${fmt(over.adds)} on credit, over the limit of ${fmt(over.limit)}. Why sell on credit anyway? The reason is recorded in the audit log and the owner is told.`, confirmText: 'Sell on credit', minLength: 3 });
@@ -650,7 +665,7 @@ export default function POS({ mode = 'retail' }) {
   const finalize = async (extra = {}) => {
     if (saving.current) return false;
     const credit = ptype === 'credit';
-    const paid = credit ? Math.min(Number(tendered) || 0, due) : due;
+    const paid = ptype === 'split' ? settled.paid : credit ? Math.min(Number(tendered) || 0, due) : due;
     // Split each line across batches, earliest expiry first. What one line takes from a batch is not offered to the next
     // (a kit and a plain line, or two kits, may share a medicine).
     const used = new Map();
@@ -673,8 +688,10 @@ export default function POS({ mode = 'retail' }) {
     const sale = {
       id: uid(), number: '', date: now(), type: mode, branchId, // numbered in the commit below (step 7)
       items, subtotal, discount: disc, tax, total, payment, paid,
-      tendered: ptype === 'cash' ? Number(tendered) || due : paid,
-      bankId: ptype === 'cash' || credit ? CASH : db.settings.nonCashBankId || CASH,
+      tendered: ptype === 'cash' ? Number(tendered) || due : ptype === 'split' ? settled.tendered : paid,
+      // a split sale: each part into its own account (src/tenders.js); the sale's own account is its first part's
+      ...(ptype === 'split' ? { payments: settled.payments, bankId: settled.payments.find((p) => p.bankId)?.bankId || CASH }
+        : { bankId: ptype === 'cash' || credit ? CASH : db.settings.nonCashBankId || CASH }),
       customerId, customerName: customer?.name || 'Walk-in Customer', cashier: user.name, status: 'completed', ...(location.state?.proforma?.id ? { proformaId: location.state.proforma.id } : {}), ...(cart.some(isCd) && cdRef.current ? { controlled: cdRef.current } : {}), ...(cart.some((l) => l.allowExpired) ? { expiredOverride: true } : {}),
       ...(split ? { insurance: { insurerId: insured.insurer.id, insurer: insured.insurer.name, schemeId: insured.scheme.id, scheme: insured.scheme.name, memberNo: memberNo.trim(), share: split.insurer } } : {}), ...extra,
     };
@@ -1100,6 +1117,26 @@ export default function POS({ mode = 'retail' }) {
         <div className="pay-methods">
           {methods.map((m, i) => <button key={m.id} className={'chip pay-' + (m.type || 'other') + (payment === m.name ? ' active' : '')} onClick={() => setPayment(m.name)} title={i < 9 ? `Alt+${i + 1}` : undefined}>{m.name}{i < 9 && !touch && <kbd>{i + 1}</kbd>}</button>)}
         </div>
+        {ptype === 'split' && (
+          <div className="split-parts" data-testid="split-parts">
+            {parts.map((p, n) => (
+              <div key={p.key} className="row gap split-part">
+                <select aria-label={`Part ${n + 1} method`} value={p.method} onChange={(e) => setParts(parts.map((x) => (x.key === p.key ? { ...x, method: e.target.value } : x)))}>
+                  {methods.map((m) => <option key={m.id} value={m.name}>{m.name}</option>)}
+                </select>
+                <MoneyInput aria-label={`Part ${n + 1} amount`} currency={db.settings.currency || ''} value={p.amount} onChange={(v) => setParts(parts.map((x) => (x.key === p.key ? { ...x, amount: v === '' ? '' : String(v) } : x)))} />
+                <button type="button" className="btn sm ghost" title="The rest of what is due" onClick={() => { const rest = Math.max(0, due - parts.filter((x) => x.key !== p.key).reduce((a, x) => a + (Number(x.amount) || 0), 0)); setParts(parts.map((x) => (x.key === p.key ? { ...x, amount: String(rest) } : x))); }}>Rest</button>
+                {parts.length > 2 && <button type="button" className="icon-btn sm" aria-label={`Remove part ${n + 1}`} onClick={() => setParts(parts.filter((x) => x.key !== p.key))}><X size={14} /></button>}
+              </div>
+            ))}
+            <div className="row between gap">
+              <button type="button" className="btn sm ghost" onClick={() => setParts([...parts, { key: uid(), method: methods.find((m) => !parts.some((x) => x.method === m.name))?.name || methods[0].name, amount: String(Math.max(0, due - partsGiven)) }])}><Plus size={14} />Add a part</button>
+              {settled?.ok
+                ? <span className="small">{settled.change > 0 ? <>Change <strong className="num">{fmt(settled.change)}</strong></> : 'Paid in full'}{settled.credit > 0 && <> · <span className="text-warn">on credit {fmt(settled.credit)}</span></>}</span>
+                : <span className="small text-warn">{partsGiven < due ? `Still due ${fmt(due - partsGiven)}` : settled?.error}</span>}
+            </div>
+          </div>
+        )}
         {(ptype === 'cash' || ptype === 'credit') && (
           <div className={'row between tender-row' + (tendered !== '' ? ' typing' : '')}>
             <label className="field grow"><span>{ptype === 'credit' ? 'Paid now (rest on credit)' : 'Amount tendered'}</span>
@@ -1112,6 +1149,7 @@ export default function POS({ mode = 'retail' }) {
         <div className="row gap pay-row">
           <button className="btn ghost" onClick={saveProforma} disabled={!cart.length} title="F10"><FileText size={16} />Proforma</button>
           <button className="btn ghost" onClick={holdSale} disabled={!cart.length} title="Alt+H"><PauseCircle size={16} />Hold</button>
+          {methods.length > 1 && <button type="button" className={'btn ghost split-btn' + (payment === SPLIT ? ' active' : '')} aria-pressed={payment === SPLIT} onClick={payment === SPLIT ? () => setPayment(methods[0].name) : startSplit} title="Pay part one way and part another (cash and card, part on credit…)">Split pay</button>}
           <button ref={chargeRef} className={'btn primary grow big' + (narrow ? ' charge-dup' : '')} onClick={checkout} disabled={!cart.length} title="F9"><span>{useAdvancedLayout ? 'Process checkout' : 'Charge'} {fmt(due)}{!touch && (layout !== 'classic' || premium) && <small className="kbd-sub">[F9]</small>}</span></button>
         </div>
         </div>
@@ -1329,7 +1367,7 @@ export default function POS({ mode = 'retail' }) {
           {!done.proforma && !done.reprint && (
             <div className="sale-done-banner no-print" role="status">
               <CheckCircle2 size={22} aria-hidden="true" />
-              <span className="grow"><strong>{done.training ? 'Practice sale done' : 'Sale complete'}</strong> · {done.training ? 'nothing was saved' : `Receipt ${done.number}`}{done.payment === 'Cash' && done.tendered > done.total ? <> · change <b className="num">{fmt(done.tendered - done.total)}</b></> : null}</span>
+              <span className="grow"><strong>{done.training ? 'Practice sale done' : 'Sale complete'}</strong> · {done.training ? 'nothing was saved' : `Receipt ${done.number}`}{done.payment === 'Cash' && done.tendered > done.total ? <> · change <b className="num">{fmt(done.tendered - done.total)}</b></> : done.payment === SPLIT && done.tendered > done.paid ? <> · change <b className="num">{fmt(done.tendered - done.paid)}</b></> : null}</span>
               <button className="btn primary" onClick={() => window.print()}><Printer size={16} />Print</button>
               <button className="btn ghost" autoFocus onClick={() => { setDone(null); focusSearch(); }}>New sale</button>
             </div>

@@ -94,11 +94,11 @@ export default function Dashboard() {
     const byDay = {}, byMonth = {};
     for (const s of valid) {
       const d = dayOf(s.date), mo = d.slice(0, 7);
-      (byDay[d] ??= { n: 0, total: 0, exp: 0, gp: 0 }); byDay[d].n++; byDay[d].total += s.total;
+      (byDay[d] ??= { n: 0, total: 0, exp: 0, gp: 0 }); if (!s.returnOf) byDay[d].n++; byDay[d].total += s.total;
       // gross profit as in Reports → Profit: sales less tax, less each line's cost
       const gp = s.total - (s.tax || 0) - s.items.reduce((a, i) => a + (i.cost || 0) * i.qty, 0);
       byDay[d].gp += gp;
-      (byMonth[mo] ??= { n: 0, total: 0, exp: 0, gp: 0, purch: 0 }); byMonth[mo].n++; byMonth[mo].total += s.total; byMonth[mo].gp += gp;
+      (byMonth[mo] ??= { n: 0, total: 0, exp: 0, gp: 0, purch: 0 }); if (!s.returnOf) byMonth[mo].n++; byMonth[mo].total += s.total; byMonth[mo].gp += gp;
     }
     for (const e of db.expenses) {
       const d = dayOf(e.date), mo = d.slice(0, 7);

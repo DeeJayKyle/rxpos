@@ -1,6 +1,7 @@
 // Money ledger derived from the records: every inflow/outflow with the account it hit.
 // Accounts are the `banks` table; "cash-drawer" (Cash at hand) is the default.
 import { windowSums } from './balances.js';
+import { tendersOf } from './tenders.js';
 
 export const CASH = 'cash-drawer';
 
@@ -10,8 +11,10 @@ export function ledger(db) {
   for (const s of db.sales) {
     if (s.imported) continue; // history copied from the old system: its money was handled there
     const paid = s.paid ?? s.total;
-    if (paid > 0) e.push({ date: s.date, desc: `Sale ${s.number}${s.customerName ? ' – ' + s.customerName : ''}`, in: paid, out: 0, account: acct(s.bankId), kind: 'Sales' });
-    if (s.status === 'refunded') e.push({ date: s.refundedAt || s.date, desc: `Refund ${s.number}`, in: 0, out: paid, account: acct(s.bankId), kind: 'Refunds' });
+    // each tender into its own account (a split sale, src/tenders.js)
+    if (s.returnOf) { for (const t of tendersOf(s)) e.push({ date: s.date, desc: `Return ${s.number} of ${s.returnOfNumber || 'a sale'}${tendersOf(s).length > 1 ? ` (${t.method})` : ''}`, in: 0, out: -t.amount, account: acct(t.bankId), kind: 'Refunds' }); continue; }
+    if (paid > 0) for (const t of tendersOf(s)) e.push({ date: s.date, desc: `Sale ${s.number}${s.customerName ? ' – ' + s.customerName : ''}${tendersOf(s).length > 1 ? ` (${t.method})` : ''}`, in: t.amount, out: 0, account: acct(t.bankId), kind: 'Sales' });
+    if (s.status === 'refunded' && paid > 0) for (const t of tendersOf(s)) e.push({ date: s.refundedAt || s.date, desc: `Refund ${s.number}`, in: 0, out: t.amount, account: acct(t.bankId), kind: 'Refunds' });
   }
   for (const p of db.purchases) {
     if (p.imported) continue;
@@ -34,6 +37,7 @@ export function ledger(db) {
     const label = { customer: 'Payment from', insurer: 'Payment from', supplier: 'Payment to', loan: 'Loan repayment to' }[p.kind];
     e.push({ date: p.date, desc: `${label} ${who || ''}`, in: incoming ? p.amount : 0, out: incoming ? 0 : p.amount, account: acct(p.bankId), kind: 'Payments' });
   }
+  for (const m of db.cashMoves || []) e.push({ date: m.date, desc: `Cash ${m.kind === 'out' ? 'paid out of' : 'paid into'} the till: ${m.reason || ''}${m.note ? ' – ' + m.note : ''} (${m.user || ''})`, in: m.kind === 'out' ? 0 : Number(m.amount) || 0, out: m.kind === 'out' ? Number(m.amount) || 0 : 0, account: CASH, kind: 'Till cash in/out' });
   for (const l of db.loans) e.push({ date: l.date, desc: `Loan received from ${l.lender}`, in: l.amount, out: 0, account: acct(l.bankId), kind: 'Loans' });
   for (const t of db.bankTx) {
     // deposit: cash → bank; withdrawal: bank → cash; transfer: from → to

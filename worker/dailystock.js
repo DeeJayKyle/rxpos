@@ -78,7 +78,7 @@ export function dailyStock({ movements, batches, products, sales, expenses, from
   // Refund movement puts the stock back, so each day's Profit matches its Cost of stock sold
   for (const s of sales) {
     const d = localDay(s.date), r = salesBy.get(d) || { total: 0, n: 0 };
-    r.total += Number(s.total) || 0; r.n++; salesBy.set(d, r);
+    r.total += Number(s.total) || 0; if (!s.returnOf) r.n++; salesBy.set(d, r); // a return of part of a sale (src/returns.js): negative, on its day
     if (s.status === 'refunded') { const rd = localDay(s.refundedAt || s.date), x = salesBy.get(rd) || { total: 0, n: 0 }; x.total -= Number(s.total) || 0; salesBy.set(rd, x); }
   }
   for (const e of expenses) { const d = localDay(e.date); expBy.set(d, (expBy.get(d) || 0) + (Number(e.amount) || 0)); }

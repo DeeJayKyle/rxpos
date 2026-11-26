@@ -36,6 +36,7 @@ export const TABLES = [
   // step 26 (from the Flutter app): Payroll & HR (the cloud sends them only to roles with Payroll) and report emails
   'employees', 'attendance', 'salaryAdvances', 'payrolls', 'reportSchedules',
   'notes', // 2026-11-14: Notes & SOP pages (src/notes.js)
+  'cashMoves', // Nov 2026 audit item 7: cash paid into or out of the till during a shift (src/cashmoves.js)
 ];
 // What is persisted on the device, one IndexedDB key per part
 const PARTS = [...TABLES, 'settings', '_tomb'];
@@ -362,7 +363,7 @@ export function mergeRemote(db, changes) {
   // newest first, like local inserts (only the lists that received something: re-sorting 40,000 sales on every
   // small sync made phones lag)
   const touched = new Set(changes.map((c) => c.t));
-  ['sales', 'purchases', 'expenses', 'payments', 'bankTx', 'proformas', 'prescriptions', 'transfers', 'audit', 'purchaseOrders', 'stockCounts', 'supplierReturns'].forEach((t) => {
+  ['sales', 'purchases', 'expenses', 'payments', 'bankTx', 'proformas', 'prescriptions', 'transfers', 'audit', 'purchaseOrders', 'stockCounts', 'supplierReturns', 'cashMoves'].forEach((t) => {
     if (touched.has(t)) d[t].sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
   });
   return d;
@@ -373,7 +374,7 @@ export function mergeRemote(db, changes) {
 const skipRecord = (r) => isUntouchedBase(r);
 /** Built-in defaults nobody changed (walk-in customer, cash drawer…) are stored but every device already has them */
 const noSync = (r) => r.updatedAt === BASE_AT;
-const DATED = ['sales', 'purchases', 'expenses', 'payments', 'bankTx', 'proformas', 'prescriptions', 'transfers', 'audit', 'purchaseOrders', 'stockCounts', 'supplierReturns', 'movements', 'messages'];
+const DATED = ['sales', 'purchases', 'expenses', 'payments', 'bankTx', 'proformas', 'prescriptions', 'transfers', 'audit', 'purchaseOrders', 'stockCounts', 'supplierReturns', 'movements', 'messages', 'cashMoves'];
 // newest first. ISO times compare correctly as plain strings; localeCompare is far slower on 50,000 rows at start-up
 const desc = (x, y) => (x < y ? 1 : x > y ? -1 : 0);
 const byDate = (a, b) => desc(String(a.date || ''), String(b.date || ''));

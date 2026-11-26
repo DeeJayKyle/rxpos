@@ -13,6 +13,7 @@
 // ENTRY, not of each record, keeps every balance exact: an old sale refunded today has its sale entry before W and
 // its refund entry after.
 import { clientOwes, insurerShare } from './insurance.js';
+import { tendersOf } from './tenders.js';
 
 export const CASH = 'cash-drawer'; // finance.js CASH
 const n = (x) => Number(x) || 0;
@@ -20,7 +21,7 @@ const acct = (x) => x || CASH;
 const MAIN = 'main'; // store.jsx MAIN_BRANCH
 
 /** The tables whose records make entries */
-export const ENTRY_TABLES = ['movements', 'sales', 'purchases', 'supplierReturns', 'expenses', 'payments', 'loans', 'bankTx'];
+export const ENTRY_TABLES = ['movements', 'sales', 'purchases', 'supplierReturns', 'expenses', 'payments', 'loans', 'bankTx', 'cashMoves'];
 
 /** The entries one record of table t makes (an empty list for a deleted record or a table that makes none) */
 export function entriesOf(t, r) {
@@ -38,9 +39,10 @@ export function entriesOf(t, r) {
       const share = r.insurance?.insurerId ? insurerShare(r) : 0;
       if (share) out.push({ kind: 'insurer', key: r.insurance.insurerId, date: r.date || '', amount: share });
       if (!r.imported) {
+        // each tender into its own account (a split sale, src/tenders.js); a return (negative) takes money back out
         const paid = r.paid ?? r.total;
-        if (paid > 0) money(r.bankId, r.date || '', n(paid));
-        if (r.status === 'refunded') money(r.bankId, r.refundedAt || r.date || '', -n(paid));
+        if (paid > 0 || r.returnOf) for (const t of tendersOf(r)) money(t.bankId, r.date || '', t.amount);
+        if (r.status === 'refunded' && paid > 0) for (const t of tendersOf(r)) money(t.bankId, r.refundedAt || r.date || '', -t.amount);
       }
       break;
     }
@@ -64,6 +66,8 @@ export function entriesOf(t, r) {
       break;
     }
     case 'loans': money(r.bankId, r.date || '', n(r.amount)); break;
+    // cash paid into or out of the till drawer during a shift (src/cashmoves.js): the cash account
+    case 'cashMoves': money(CASH, r.date || '', r.kind === 'out' ? -n(r.amount) : n(r.amount)); break;
     case 'bankTx': {
       const from = r.type === 'Deposit' ? CASH : r.fromId || r.bankId;
       const to = r.type === 'Withdrawal' ? CASH : r.type === 'Deposit' ? r.bankId : r.toId;
