@@ -35,6 +35,7 @@ const SUITES = [
   ['expiry dates in any format (unit)', 'unit-expiry.mjs', []],
   ['payroll: PAYE, NSSF, a month\'s pay (unit)', 'unit-payroll.mjs', []],
   ['safe file urls (unit)', 'unit-safeurl.mjs', []],
+  ['in-app calls ring a closed app by push; relay and push status (unit)', 'unit-callpush.mjs', []],
   ['refill rules (unit)', 'unit-rxrules.mjs', []],
   ['crash scrub (unit)', 'unit-scrub.mjs', []],
   ['idle promote (unit)', 'unit-promote.mjs', []],

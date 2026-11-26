@@ -184,6 +184,7 @@ jobs:
           public class MainActivity extends BridgeActivity {
               @Override
               public void onCreate(Bundle savedInstanceState) {
+                  registerPlugin(RxPOSNative.class); // tells the app whether this build has Firebase (src/callpush.js)
                   super.onCreate(savedInstanceState);
                   WebSettings s = getBridge().getWebView().getSettings();
                   s.setSupportZoom(true);            // pinch to zoom
@@ -195,6 +196,36 @@ jobs:
           }
           JAVA
           cat $A
+          # RxPOSNative: whether this build carries Firebase. Asking Firebase for a push token in a build without it
+          # crashes the app, so src/callpush.js asks this first (older builds lack the plugin and answer "no")
+          cat > $(dirname $A)/RxPOSNative.java <<JAVA
+          package $PKG;
+
+          import com.getcapacitor.JSObject;
+          import com.getcapacitor.Plugin;
+          import com.getcapacitor.PluginCall;
+          import com.getcapacitor.PluginMethod;
+          import com.getcapacitor.annotation.CapacitorPlugin;
+
+          @CapacitorPlugin(name = "RxPOSNative")
+          public class RxPOSNative extends Plugin {
+              @PluginMethod
+              public void firebase(PluginCall call) {
+                  int id = getContext().getResources().getIdentifier("google_app_id", "string", getContext().getPackageName());
+                  JSObject r = new JSObject();
+                  r.put("firebase", id != 0);
+                  call.resolve(r);
+              }
+          }
+          JAVA
+      - name: Firebase for incoming-call notifications (GitHub secret GOOGLE_SERVICES_JSON; optional)
+        env:
+          GS_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -z "$GS_JSON" ]; then echo "::notice::GOOGLE_SERVICES_JSON is not set: this Android build cannot ring for calls while the app is closed"; exit 0; fi
+          printf '%s' "$GS_JSON" > android/app/google-services.json
+          node -e "const j=require('./android/app/google-services.json'); if(!j.client?.some(c=>c.client_info?.android_client_info?.package_name==='io.github.rxpos')) { console.error('google-services.json has no Android app io.github.rxpos'); process.exit(1) }"
+          grep -n "google-services" android/build.gradle android/app/build.gradle
       - name: App icon
         run: |
           command -v convert || (sudo apt-get update && sudo apt-get install -y imagemagick)

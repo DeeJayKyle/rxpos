@@ -8,6 +8,7 @@ import { whatsappLink } from './cloud.js';
 import { playSound } from './notify.jsx';
 import { notifyOS } from './badges.js';
 import { toast } from './feedback.jsx';
+import { setupCallPush } from './callpush.js';
 
 /** Start a call to a colleague from anywhere: startCall({ id, name }) */
 export const startCall = (peer) => window.dispatchEvent(new CustomEvent('rxpos-call', { detail: peer }));
@@ -64,6 +65,14 @@ const gathered = (pc) => new Promise((resolve) => {
   pc.addEventListener('icegatheringstatechange', done);
   setTimeout(resolve, 700); // the first candidates go inside the offer; later ones (relay, mobile data) follow as 'ice' messages
 });
+/** Why a call didn't connect, in words staff can act on. relay: the cloud has a TURN relay (mobile data needs it) */
+export function failReason({ relay, started }) {
+  if (started) return 'The call dropped: the network went away. Call back, or use WhatsApp or a normal phone call.';
+  if (relay === false) return 'The call could not connect. Phones on mobile data (MTN, Airtel) need the call relay, which is not set up on this RxPOS cloud yet. Use WhatsApp or a normal phone call for now.';
+  return 'The call could not connect on this network. Try again on Wi-Fi, or use WhatsApp or a normal phone call.';
+}
+/** Still ringing or talking (a finished call may stay on screen with its reason; that is not "busy") */
+const active = (c) => !!c && ['calling', 'ringing', 'connecting', 'live'].includes(c.status);
 const fmtSecs = (secs) => `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
 
 export function CallManager() {
@@ -71,7 +80,8 @@ export function CallManager() {
   const [call, setCall] = useState(null); // { id, peer, dir, status, muted, startedAt, offer }
   const [, tick] = useState(0);
   const pcRef = useRef(null), streamRef = useRef(null), audioRef = useRef(null), sinceRef = useRef(0), callRef = useRef(null), ringRef = useRef(null), iceRef = useRef(null), acceptRef = useRef(false);
-  const pendingIce = useRef([]), dropRef = useRef(null), wakeRef = useRef(null), noAnswerRef = useRef(null);
+  const pendingIce = useRef([]), dropRef = useRef(null), wakeRef = useRef(null), noAnswerRef = useRef(null), connectRef = useRef(null);
+  const doneIds = useRef(new Set()); // calls already over: a late copy of their ring (live line and HTTP both carry it) never rings again
   callRef.current = call;
   const can = !!(syncCfg?.url && syncCfg?.key?.startsWith('u.'));
 
@@ -82,21 +92,30 @@ export function CallManager() {
     const conv = 'dm:' + [user.id, c.peer.id].sort().join(':');
     update((d) => { put(d, 'messages', { id: 'call-' + c.id, date: new Date().toISOString(), fromId: user.id, fromName: user.name, conv, branchId, channel: 'team', call: { status: secs ? 'done' : status, secs } }); });
   };
-  const cleanup = (status = 'ended') => {
+  const cleanup = (status = 'ended', reason = '') => {
     clearInterval(ringRef.current); ringRef.current = null;
-    clearTimeout(dropRef.current); clearTimeout(noAnswerRef.current);
+    clearTimeout(dropRef.current); clearTimeout(noAnswerRef.current); clearTimeout(connectRef.current);
+    if (callRef.current) doneIds.current.add(callRef.current.id);
     pcRef.current?.close(); pcRef.current = null;
     streamRef.current?.getTracks().forEach((t) => t.stop()); streamRef.current = null;
     pendingIce.current = []; acceptRef.current = false;
     wakeRef.current?.release().catch(() => {}); wakeRef.current = null;
     if (callRef.current) logCall(callRef.current, status);
-    setCall((c) => (c ? { ...c, status } : c));
-    setTimeout(() => setCall((c) => (c && c.status === status ? null : c)), 1800);
+    setCall((c) => (c ? { ...c, status, reason } : c));
+    // a failed call stays on screen with the reason and the other ways to reach the person, until closed
+    if (!reason) setTimeout(() => setCall((c) => (c && c.status === status ? null : c)), 1800);
+  };
+  /** The call could not connect, or dropped: tell the other side, then show why and offer WhatsApp / a phone call */
+  const fail = (c) => {
+    signal(syncCfg, { type: 'hangup', to: c.peer.id, callId: c.id }).catch(() => {});
+    cleanup('failed', failReason({ relay: iceRef.current?.relay, started: !!callRef.current?.startedAt }));
   };
   const ice = async () => {
     if (iceRef.current && iceRef.current.at > Date.now() - 6 * 3600e3) return iceRef.current.servers;
-    const j = await fetch(syncCfg.url + '/api/rtc/config', { headers: { Authorization: 'Bearer ' + syncCfg.key } }).then((r) => r.json());
-    iceRef.current = { servers: j.iceServers, at: Date.now() };
+    const r = await fetch(syncCfg.url + '/api/rtc/config', { headers: { Authorization: 'Bearer ' + syncCfg.key } });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !Array.isArray(j.iceServers)) throw new Error(j.error || 'The call service did not answer. Check the internet and try again.');
+    iceRef.current = { servers: j.iceServers, relay: j.relay, push: j.push, at: Date.now() };
     return j.iceServers;
   };
   useEffect(() => { if (can) ice().catch(() => { iceRef.current = null; }); }, [can]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -116,7 +135,7 @@ export function CallManager() {
       const st = pc.connectionState;
       if (pcRef.current !== pc) return;
       if (st === 'connected') {
-        clearTimeout(dropRef.current);
+        clearTimeout(dropRef.current); clearTimeout(connectRef.current);
         setCall((x) => (x ? { ...x, status: 'live', startedAt: x.startedAt || Date.now(), weak: false } : x));
         navigator.wakeLock?.request('screen').then((w) => { wakeRef.current = w; }).catch(() => {}); // keep the screen on during the call
       }
@@ -128,8 +147,7 @@ export function CallManager() {
       }
       if (st === 'failed' && callRef.current?.id === c.id) {
         if (!c.restarted) return restart(c);
-        toast(callRef.current.startedAt ? 'The call dropped: the network went away.' : 'The call could not connect on this network. Try WhatsApp or a normal phone call.', 'warn');
-        signal(syncCfg, { type: 'hangup', to: c.peer.id, callId: c.id }).catch(() => {}); cleanup();
+        fail(c);
       }
     };
     pcRef.current = pc;
@@ -140,7 +158,7 @@ export function CallManager() {
     const pc = pcRef.current;
     if (!pc || callRef.current?.id !== c.id || pc.connectionState === 'connected') return;
     c.restarted = true;
-    dropRef.current = setTimeout(() => { if (pcRef.current === pc && pc.connectionState !== 'connected') { toast('The call dropped: the network went away.', 'warn'); signal(syncCfg, { type: 'hangup', to: c.peer.id, callId: c.id }).catch(() => {}); cleanup(); } }, 12000);
+    dropRef.current = setTimeout(() => { if (pcRef.current === pc && pc.connectionState !== 'connected') fail(c); }, 12000);
     if (c.dir !== 'out') return;
     try {
       await pc.setLocalDescription(await pc.createOffer({ iceRestart: true }));
@@ -153,11 +171,16 @@ export function CallManager() {
     const onStart = async (e) => {
       const peer = e.detail;
       if (!can) return toast('Calls need the internet and your own sign-in.', 'warn');
-      if (callRef.current) return toast('You are already on a call', 'warn');
+      if (active(callRef.current)) return toast('You are already on a call', 'warn');
       if (!navigator.mediaDevices?.getUserMedia) return toast('This device cannot make in-app calls', 'error');
       const c = { id: uid(), peer, dir: 'out', status: 'calling', muted: false };
       callRef.current = c; setCall(c);
-      signal(syncCfg, { type: 'ring', to: peer.id, callId: c.id }).catch(() => {}); // rings straight away
+      // rings straight away: over the live line, and through the cloud, which also wakes the callee's phone by push
+      // when their app is closed (the callee ignores the second copy)
+      liveSend({ type: 'rtc', kind: 'ring', to: peer.id, callId: c.id });
+      httpSignal(syncCfg, { type: 'ring', to: peer.id, callId: c.id }).then((j) => {
+        if (callRef.current?.id === c.id) setCall((x) => (x?.id === c.id ? { ...x, pushed: !!j.push } : x));
+      }).catch(() => {});
       try {
         const pc = await newPc(c);
         await pc.setLocalDescription(await pc.createOffer());
@@ -166,8 +189,14 @@ export function CallManager() {
         await signal(syncCfg, { type: 'offer', to: peer.id, callId: c.id, data: pc.localDescription });
         playSound('ringback');
         ringRef.current = setInterval(() => playSound('ringback'), 3000);
-        noAnswerRef.current = setTimeout(() => { if (callRef.current?.id === c.id && callRef.current.status === 'calling') { signal(syncCfg, { type: 'hangup', to: peer.id, callId: c.id }).catch(() => {}); toast(`${peer.name} didn't pick up`, 'info'); cleanup('no answer'); } }, 45000);
-      } catch (err) { toast(err.name === 'NotAllowedError' ? 'Allow the microphone to make calls' : err.message, 'error'); cleanup('failed'); }
+        noAnswerRef.current = setTimeout(() => {
+          const x = callRef.current;
+          if (x?.id !== c.id || x.status !== 'calling') return;
+          signal(syncCfg, { type: 'hangup', to: peer.id, callId: c.id }).catch(() => {});
+          if (x.offline && !x.pushed) cleanup('no answer', `${peer.name} is not online in RxPOS (the app is closed or the phone has no internet), so the call did not reach them. Try WhatsApp or a normal phone call.`);
+          else { toast(`${peer.name} didn't pick up`, 'info'); cleanup('no answer'); }
+        }, 45000);
+      } catch (err) { cleanup('failed', err.name === 'NotAllowedError' ? 'Allow the microphone to make calls (phone Settings → Apps → RxPOS → Permissions).' : err.message || 'The call could not start.'); }
     };
     window.addEventListener('rxpos-call', onStart);
     return () => window.removeEventListener('rxpos-call', onStart);
@@ -178,28 +207,36 @@ export function CallManager() {
     if (!can) return;
     return onLive((m) => {
       if (m.type === 'rtc') onMessage({ type: m.kind, call_id: m.call_id, from_uid: m.from_uid, from_name: m.from_name, data: m.data, at: m.at });
-      if (m.type === 'rtc-offline') { // that colleague isn't on the live line (older app or poor network): send by HTTP instead
+      if (m.type === 'rtc-offline') { // that colleague isn't on the live line (app closed, older app or poor network): send by HTTP instead
         for (const [k, body] of lastSent) if (k.startsWith(m.call_id + ':')) { httpSignal(syncCfg, body).catch(() => {}); lastSent.delete(k); }
+        setCall((x) => (x?.id === m.call_id && x.dir === 'out' && !x.offline ? { ...x, offline: true } : x));
       }
     });
   }, [can, syncCfg?.key]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // … and by polling only while the live line is down
+  // … by polling while the live line is down, and with one look at once when the app opens, comes back on screen or
+  // a call push arrives: a ring sent while this phone was asleep waits in the cloud for 2 minutes
   useEffect(() => {
     if (!can) return;
-    let stop = false, t;
-    const poll = async () => {
-      if (liveUp()) { if (!stop) t = setTimeout(poll, 4000); return; }
+    let stop = false, t, busy = false;
+    const fetchWaiting = async () => {
+      if (busy) return; busy = true;
       try {
         const r = await fetch(`${syncCfg.url}/api/rtc?since=${sinceRef.current}`, { headers: { Authorization: 'Bearer ' + syncCfg.key } });
         const j = await r.json();
         if (r.ok) { for (const m of j.messages) await onMessage(m); sinceRef.current = j.last || sinceRef.current; }
-      } catch {}
-      if (!stop && document.visibilityState !== 'hidden') t = setTimeout(poll, callRef.current ? 600 : 1500);
-      else if (!stop) t = setTimeout(poll, 8000);
+      } catch {} finally { busy = false; }
     };
-    poll();
-    return () => { stop = true; clearTimeout(t); };
+    const poll = async () => {
+      if (!liveUp()) await fetchWaiting();
+      if (stop) return;
+      t = setTimeout(poll, liveUp() ? 4000 : document.visibilityState !== 'hidden' ? (callRef.current ? 600 : 1500) : 8000);
+    };
+    const onShow = () => { if (document.visibilityState === 'visible') fetchWaiting(); };
+    fetchWaiting().then(() => { if (!stop) t = setTimeout(poll, 1500); });
+    document.addEventListener('visibilitychange', onShow);
+    setupCallPush(syncCfg, fetchWaiting).catch(() => {});
+    return () => { stop = true; clearTimeout(t); document.removeEventListener('visibilitychange', onShow); };
   }, [can, syncCfg?.url, syncCfg?.key]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onMessage = async (m) => {
@@ -213,7 +250,8 @@ export function CallManager() {
       return;
     }
     if (m.type === 'ring' || m.type === 'offer') {
-      if (c) return c.id === m.call_id ? undefined : signal(syncCfg, { type: 'busy', to: m.from_uid, callId: m.call_id }).catch(() => {});
+      if (doneIds.current.has(m.call_id)) return;
+      if (active(c)) return c.id === m.call_id ? undefined : signal(syncCfg, { type: 'busy', to: m.from_uid, callId: m.call_id }).catch(() => {});
       if (Date.now() - m.at > 40000) return;
       const name = m.from_name || db.users.find((u) => u.id === m.from_uid)?.name || 'Colleague';
       const next = { id: m.call_id, peer: { id: m.from_uid, name }, dir: 'in', status: 'ringing', offer: m.type === 'offer' ? m.data : null, muted: false };
@@ -226,7 +264,7 @@ export function CallManager() {
       return;
     }
     if (!c || c.id !== m.call_id) return;
-    if (m.type === 'answer') { clearInterval(ringRef.current); setCall((x) => ({ ...x, status: 'connecting' })); await pcRef.current?.setRemoteDescription(m.data).catch(() => {}); await drainIce(); }
+    if (m.type === 'answer') { clearInterval(ringRef.current); clearTimeout(noAnswerRef.current); setCall((x) => ({ ...x, status: 'connecting' })); watchConnect(c); await pcRef.current?.setRemoteDescription(m.data).catch(() => {}); await drainIce(); }
     if (m.type === 'reoffer' && pcRef.current) { // the caller found a new route after a network change
       const pc = pcRef.current;
       await pc.setRemoteDescription(m.data).catch(() => {});
@@ -238,11 +276,20 @@ export function CallManager() {
     if (m.type === 'hangup') cleanup(c.status === 'ringing' ? 'missed' : 'ended');
   };
 
+  /** Answered but no sound path after 25 s (a blocked network, or no relay on mobile data): stop and say why */
+  const watchConnect = (c) => {
+    clearTimeout(connectRef.current);
+    connectRef.current = setTimeout(() => {
+      const x = callRef.current;
+      if (x?.id === c.id && x.status === 'connecting' && pcRef.current?.connectionState !== 'connected') fail(x);
+    }, 25000);
+  };
   const accept = () => {
     const c = callRef.current;
     clearInterval(ringRef.current); clearTimeout(noAnswerRef.current);
     const next = { ...c, status: 'connecting' };
     callRef.current = next; setCall(next);
+    watchConnect(next);
     if (!c.offer) { acceptRef.current = true; return; } // answered before the details arrived: connect as soon as they do
     answer(next);
   };
@@ -254,7 +301,10 @@ export function CallManager() {
       await pc.setLocalDescription(await pc.createAnswer());
       await gathered(pc);
       await signal(syncCfg, { type: 'answer', to: c.peer.id, callId: c.id, data: pc.localDescription });
-    } catch (err) { toast(err.name === 'NotAllowedError' ? 'Allow the microphone to answer calls' : err.message, 'error'); hangup(); }
+    } catch (err) {
+      signal(syncCfg, { type: 'hangup', to: c.peer.id, callId: c.id }).catch(() => {});
+      cleanup('failed', err.name === 'NotAllowedError' ? 'Allow the microphone to answer calls (phone Settings → Apps → RxPOS → Permissions).' : err.message || 'The call could not connect.');
+    }
   };
   const decline = () => { const c = callRef.current; signal(syncCfg, { type: 'decline', to: c.peer.id, callId: c.id }).catch(() => {}); cleanup('declined'); };
   const hangup = () => { const c = callRef.current; if (c) signal(syncCfg, { type: 'hangup', to: c.peer.id, callId: c.id }).catch(() => {}); cleanup(); };
@@ -263,6 +313,10 @@ export function CallManager() {
 
   const secs = call?.startedAt ? Math.floor((Date.now() - call.startedAt) / 1000) : 0;
   const label = call && ({ calling: 'Ringing…', ringing: 'Incoming call', connecting: 'Connecting…', live: call.weak ? 'Reconnecting…' : fmtSecs(secs), ended: secs ? `Call ended · ${fmtSecs(secs)}` : 'Call ended', declined: 'Busy right now', busy: 'On another call', 'no answer': 'No answer', missed: 'Missed call', failed: 'Call failed' }[call.status] || call.status);
+  const peerRec = call ? db.users?.find((u) => u.id === call.peer.id) : null;
+  const peerPhone = peerRec?.phone || peerRec?.whatsapp || '';
+  const peerWa = normalizePhone(peerRec?.whatsapp || peerRec?.phone || '');
+  const close = () => setCall(null);
   const initials = call?.peer.name.split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
   // one <audio> element for the whole life of the app, so the voice never cuts when the screen changes
   return (
@@ -275,6 +329,17 @@ export function CallManager() {
             <strong>{call.peer.name}</strong>
             <span className="muted call-status">{call.dir === 'in' && call.status === 'ringing' ? <><PhoneIncoming size={14} /> {label}</> : label}</span>
             {call.status === 'live' && <span className="call-wave" aria-hidden="true"><i /><i /><i /><i /><i /></span>}
+            {call.status === 'calling' && call.offline && !call.pushed && <span className="muted call-hint">{call.peer.name} is not online in RxPOS right now: the call reaches them only if they open the app.</span>}
+            {call.reason && (
+              <div className="call-reason" role="alert">
+                <span>{call.reason}</span>
+                <div className="row gap call-fallback">
+                  {peerWa.length >= 12 && <a className="btn sm" href={whatsappLink(peerWa, '')} target="_blank" rel="noreferrer" onClick={close}><MessageCircle size={15} /> WhatsApp</a>}
+                  {peerPhone && <a className="btn sm" href={telLink(peerPhone)} onClick={close}><Phone size={15} /> Phone call</a>}
+                  <button type="button" className="btn sm ghost" onClick={close}>Close</button>
+                </div>
+              </div>
+            )}
             <div className="row gap call-actions">
               {call.status === 'ringing' && call.dir === 'in' ? (
                 <><button className="call-btn end" onClick={decline} aria-label="Decline"><PhoneOff size={22} /></button><button className="call-btn accept" onClick={accept} aria-label="Answer"><Phone size={22} /></button></>

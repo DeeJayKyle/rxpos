@@ -31,6 +31,7 @@ import { aiRoutes, idleRoutes, firstJson, runAi } from './ai-routes.js';
 import { CLAUDE_MODEL, claudeOn, claudeRead, textLayer, withTextLayer } from './claude-reader.js';
 import { twoStepDdl, twoStepOf, totpCheck, markUsed, twoStepRoutes, looksLikeRecovery, useRecoveryCode } from './twostep.js';
 import { tokenSecret, purposeLabel } from './secret.js';
+import { serviceAccount, pushRing, saveToken, dropToken } from './callpush.js';
 import { pharmacyChanged, validatePharmacyDefaults } from '../src/pharmacy-settings.js';
 import { DEFAULT_ROLES } from '../src/access.js';
 import { decide, NEEDS_OLD, moneyView, readView, widestView, legacyView } from './policy.js';
@@ -182,6 +183,9 @@ function ensureSchema(db) {
     if (!have.has('login_throttle')) ddl.push('CREATE TABLE login_throttle (k TEXT PRIMARY KEY, n INTEGER NOT NULL, last_at INTEGER NOT NULL)');
     if (!have.has('rtc')) ddl.push('CREATE TABLE rtc (id INTEGER PRIMARY KEY AUTOINCREMENT, tenant TEXT NOT NULL, to_uid TEXT NOT NULL, from_uid TEXT NOT NULL, from_name TEXT, type TEXT NOT NULL, call_id TEXT NOT NULL, data TEXT, at INTEGER NOT NULL)');
     if (!have.has('rtc_to')) ddl.push('CREATE INDEX rtc_to ON rtc(tenant, to_uid, id)'); // instant look-up of calls waiting for a person
+    // the Android phones each person is signed in on, so a call rings them even with the app closed (worker/callpush.js)
+    if (!have.has('push_tokens')) ddl.push('CREATE TABLE push_tokens (token TEXT PRIMARY KEY, tenant TEXT NOT NULL, uid TEXT NOT NULL, platform TEXT, at INTEGER NOT NULL)');
+    if (!have.has('push_tokens_to')) ddl.push('CREATE INDEX push_tokens_to ON push_tokens(tenant, uid)');
     if (!have.has('file_chunks')) ddl.push('CREATE TABLE file_chunks (tenant TEXT NOT NULL, id TEXT NOT NULL, n INTEGER NOT NULL, data BLOB NOT NULL, PRIMARY KEY (tenant, id, n))');
     if (!have.has('files')) ddl.push('CREATE TABLE files (tenant TEXT NOT NULL, id TEXT NOT NULL, name TEXT, type TEXT, size INTEGER, chunks INTEGER, by_uid TEXT, at INTEGER, sha256 TEXT, PRIMARY KEY (tenant, id))');
     // 2026-11 audit: each file's SHA-256 (added: older files have none), and uploads still arriving, with their sender
@@ -1395,7 +1399,7 @@ async function owner(env, req, url, body) {
     // its chat attachments go too (personal data must not outlive the pharmacy)
     await db.batch([db.prepare('DELETE FROM file_chunks WHERE tenant = ?1').bind(t.id), db.prepare('DELETE FROM files WHERE tenant = ?1').bind(t.id), db.prepare('DELETE FROM file_uploads WHERE tenant = ?1').bind(t.id)]).catch(() => {});
     // 2026-11 audit: everything else kept per pharmacy goes too (two-step secrets, devices, crash reports, calls…)
-    await db.batch(['twofa', 'sync_ops', 'client_errors', 'client_error_devices', 'snapshot_bounds', 'rtc', 'device_views'].map((x) => db.prepare(`DELETE FROM ${x} WHERE tenant = ?1`).bind(t.id))).catch((e) => console.warn('pharmacy clean-up incomplete', e.message));
+    await db.batch(['twofa', 'sync_ops', 'client_errors', 'client_error_devices', 'snapshot_bounds', 'rtc', 'push_tokens', 'device_views'].map((x) => db.prepare(`DELETE FROM ${x} WHERE tenant = ?1`).bind(t.id))).catch((e) => console.warn('pharmacy clean-up incomplete', e.message));
     // 2026-11-17 audit: its ready-made downloads and brought-forward figures in R2 too. They were keyed by the pharmacy's
     // address, so a new pharmacy given the same address was served the deleted one's balances.
     if (env.APPS) {
@@ -1680,8 +1684,17 @@ async function cloudflareTurn(env) {
 }
 
 // ---------- in-app voice calls between staff (WebRTC; the cloud only passes the call set-up messages) ----------
-async function rtc(env, req, url, body, who) {
+/** What in-app calls can count on from this cloud: a relay for mobile data, push to ring closed apps (also on /api/health) */
+const callSetup = (env) => ({ relay: !!((env.TURN_KEY_ID && env.TURN_KEY_API_TOKEN) || env.TURN_URLS), push: !!serviceAccount(env) });
+
+async function rtc(env, req, url, body, who, ctx) {
   const db = env.DB;
+  if (url.pathname.endsWith('/push')) { // this phone's Firebase token, so calls ring it with the app closed
+    if (!who.uid) return json({ error: 'Sign in with your own account to receive calls.' }, 403);
+    if (req.method !== 'POST') return json({ error: 'Not found' }, 404);
+    if (body?.off) { await dropToken(db, who, body?.token); return json({ ok: true }); } // signing out of this phone
+    return (await saveToken(db, who, body?.token, body?.platform)) ? json({ ok: true }) : json({ error: 'Bad push token' }, 400);
+  }
   if (url.pathname.endsWith('/config')) {
     const ice = [{ urls: ['stun:stun.cloudflare.com:3478', 'stun:stun.l.google.com:19302'] }];
     // A relay (TURN) is what makes calls work between phones on mobile data and strict office networks.
@@ -1689,7 +1702,7 @@ async function rtc(env, req, url, body, who) {
     const relay = await cloudflareTurn(env).catch(() => null);
     if (relay) ice.push(...relay);
     if (env.TURN_URLS) ice.push({ urls: env.TURN_URLS.split(','), username: env.TURN_USERNAME, credential: env.TURN_CREDENTIAL });
-    return json({ iceServers: ice, relay: !!(relay || env.TURN_URLS) });
+    return json({ iceServers: ice, relay: !!(relay || env.TURN_URLS), push: callSetup(env).push });
   }
   if (!who.uid) return json({ error: 'Sign in with your own account to make calls.' }, 403);
   if (req.method === 'POST') {
@@ -1698,6 +1711,12 @@ async function rtc(env, req, url, body, who) {
     const data = body.data ? JSON.stringify(body.data).slice(0, 60000) : null;
     await db.prepare('INSERT INTO rtc (tenant, to_uid, from_uid, from_name, type, call_id, data, at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)')
       .bind(who.tenant, String(body.to), who.uid, who.name || '', type, String(body.callId).slice(0, 60), data, Date.now()).run();
+    if (type === 'ring') { // wake the callee's phones too: an app that is closed or asleep has no live line
+      const pushed = pushRing(env, db, { tenant: who.tenant, to: body.to, callId: String(body.callId).slice(0, 60), fromName: who.name }).catch((e) => { console.log('call push failed', e.message); return 0; });
+      if (ctx?.waitUntil) ctx.waitUntil(pushed);
+      const phones = await db.prepare('SELECT COUNT(*) n FROM push_tokens WHERE tenant = ?1 AND uid = ?2').bind(who.tenant, String(body.to)).first('n').catch(() => 0);
+      return json({ ok: true, push: callSetup(env).push && phones > 0 });
+    }
     return json({ ok: true });
   }
   // GET: messages for me since an id (kept 2 minutes)
@@ -1935,7 +1954,7 @@ export default {
         // 2026-11 audit: which secret signs the passes. "sync-key" means TOKEN_SECRET is not set and the main pharmacy's
         // sync key signs them: whoever holds that key could make a pass for anyone. It tells only which, never the value.
         const tokenSecretSource = !signing ? 'none' : (env.TOKEN_SECRET || '').length >= 32 ? 'dedicated' : 'sync-key';
-        return json({ ok: signing, app: 'rxpos-cloud', configured: (env.SYNC_KEY || '').length >= 12, signing, tokenSecret: tokenSecretSource, multiPharmacy: true, version: 5, database: env.DB_BACKEND === 'turso' ? 'turso' : 'd1' });
+        return json({ ok: signing, app: 'rxpos-cloud', configured: (env.SYNC_KEY || '').length >= 12, signing, tokenSecret: tokenSecretSource, multiPharmacy: true, version: 5, calls: callSetup(env), database: env.DB_BACKEND === 'turso' ? 'turso' : 'd1' });
       }
       // Public: latest WHO Disease Outbreak News (cached 3 h); outbreaks in or near Uganda are flagged
       if (path === '/api/health-alerts') return await healthAlerts();
@@ -2095,7 +2114,7 @@ export default {
         const [r] = await scheduledReports(env, { tenantId: who.tenant, scheduleId: id, dry: req.method !== 'POST' });
         return r ? json({ period: r.period, to: r.to, sent: r.sent, error: r.error, file: r.file, sheets: r.sheets }) : json({ error: 'No such report schedule' }, 404);
       }
-      if (path === '/api/rtc' || path === '/api/rtc/config') return await rtc(env, req, url, body, who);
+      if (path === '/api/rtc' || path === '/api/rtc/config' || path === '/api/rtc/push') return await rtc(env, req, url, body, who, ctx);
       if (path === '/api/files' && req.method === 'POST') return await uploadChunk(env, body, who);
       if (path.startsWith('/api/ai/') && req.method === 'POST') return await ai(env, path, body, who);
       if (path === '/api/daily-stock-link') {
