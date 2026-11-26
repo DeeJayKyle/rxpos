@@ -4,6 +4,7 @@
 // Phones and sleeping PCs often leave a socket that looks open but is dead, so it is pinged every 20 s and replaced if
 // no answer comes back within 15 s; coming back to the app (or the internet returning) reconnects straight away.
 import { LIVE_CLOUD, OWN_SITES } from './cloud.js';
+import { freshCfg } from './session.js';
 
 const PING_EVERY = 20000;
 const DEAD_AFTER = 15000;
@@ -21,7 +22,8 @@ export function liveSend(obj) {
 }
 
 export function connectLive(cfg) {
-  const key = cfg?.url && cfg?.key?.startsWith('u.') ? cfg.url + '|' + cfg.key + '|' + cfg.deviceId : '';
+  // a renewed pass of the same sign-in (sid) keeps the line open; another sign-in opens a new one
+  const key = cfg?.url && cfg?.key?.startsWith('u.') ? cfg.url + '|' + (cfg.sid || cfg.key) + '|' + cfg.deviceId : '';
   if (key === cfgKey && (ws || timer)) return;
   disconnectLive();
   cfgKey = key;
@@ -33,9 +35,11 @@ export function connectLive(cfg) {
     if (!navigator.onLine) { timer = setTimeout(open, 5000); return; }
     // Open with a short-lived ticket so the long-lived sign-in token never appears in the ws:// URL (1.2).
     // An older cloud without the ticket endpoint still works: fall back to the token.
-    let auth = `token=${encodeURIComponent(cfg.key)}`;
+    const c = await freshCfg(cfg); // the short pass, renewed if it is about to run out (src/session.js)
+    if (!wanted) return;
+    let auth = `token=${encodeURIComponent(c.key)}`;
     try {
-      const r = await fetch(`${cfg.url}/api/live-ticket`, { method: 'POST', headers: { Authorization: 'Bearer ' + cfg.key } });
+      const r = await fetch(`${c.url}/api/live-ticket`, { method: 'POST', headers: { Authorization: 'Bearer ' + c.key } });
       if (r.ok) { const j = await r.json().catch(() => ({})); if (j.ticket) auth = `ticket=${encodeURIComponent(j.ticket)}`; }
     } catch { /* offline or old cloud: use the token below */ }
     if (!wanted) return;

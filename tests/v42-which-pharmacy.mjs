@@ -7,6 +7,7 @@ import puppeteer from 'puppeteer-core';
 import fs from 'node:fs';
 import { CHROME } from './chrome.mjs';
 import { asDesktopApp, APP_ARGS } from './appmode.mjs';
+import { deviceKv } from './devicedata.mjs';
 const [base, ownerKey, out] = process.argv.slice(2);
 fs.mkdirSync(out, { recursive: true });
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -37,7 +38,7 @@ const fill = async (email, pw) => {
 };
 const pick = (name) => p.evaluate((n) => { const b = [...document.querySelectorAll('.pharmacy-choice')].find((x) => x.innerText.includes(n)); b?.click(); return !!b; }, name);
 const dialog = (re) => p.evaluate((src) => { const b = [...document.querySelectorAll('.modal button, .dialog button')].find((x) => new RegExp(src).test(x.textContent.trim())); b?.click(); return !!b; }, re.source);
-const device = () => p.evaluate(() => new Promise((res) => { const q = indexedDB.open('pharmapos'); q.onsuccess = () => { const g = q.result.transaction('kv').objectStore('kv').get('sync'); g.onsuccess = () => { res(g.result?.slug || ''); q.result.close(); }; }; q.onerror = () => res(''); }));
+const device = async () => (await deviceKv(p, 'sync').catch(() => null))?.slug || ''; // sealed (tests/devicedata.mjs)
 const signOut = async () => { await p.evaluate(() => document.querySelector('button[title="Log out"]')?.click()); await wait(800); await dialog(/^Sign out/); await p.waitForSelector('input[type=password]', { timeout: 15000 }); await wait(500); };
 // the till opens on In stock (the owner's rule, 2026-11-20): All lists every medicine of the pharmacy
 const products = async () => { await p.evaluate(() => { location.hash = '#/pos'; }); await wait(1500); await p.evaluate(() => [...document.querySelectorAll('.view-chip')].find((x) => x.textContent.trim() === 'All')?.click()); await wait(400); return p.evaluate(() => document.querySelector('.product-grid')?.innerText || ''); }; // the till: every role has it

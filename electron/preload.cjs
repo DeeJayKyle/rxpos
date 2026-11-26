@@ -13,4 +13,7 @@ contextBridge.exposeInMainWorld('rxposShell', {
   printers: () => ipcRenderer.invoke('rxpos:printers'),
   printRaw: (job) => ipcRenderer.invoke('rxpos:print-raw', job),
   onUpdateReady: (fn) => ipcRenderer.on('rxpos:update-ready', (_e, info) => fn(info)),
+  // the key that encrypts the pharmacy on this PC, kept with Windows' protection (src/vault.js)
+  protect: (s) => ipcRenderer.invoke('rxpos:protect', s),
+  unprotect: (s) => ipcRenderer.invoke('rxpos:unprotect', s),
 });

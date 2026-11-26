@@ -9,23 +9,28 @@ import { hasPin, verifyPin, hasOffline, verifyOffline } from '../offline.js';
 import { cloudLogin, cloudLogout } from '../cloud.js';
 import { useFocusTrap } from '../focustrap.js';
 import { dateLocale } from '../showdate.js';
+import { isNative } from '../platform.js';
 
 const KEY = 'rxpos-locked';
 export const lockedFor = () => { try { return localStorage.getItem(KEY) || ''; } catch { return ''; } };
 export const setLocked = (userId) => { try { if (userId) localStorage.setItem(KEY, userId); else localStorage.removeItem(KEY); } catch { /* storage blocked */ } };
 
-/** Lock after `minutes` without a touch, a click or a key (0: never) */
+/** Lock after `minutes` without a touch, a click or a key (0: not now, e.g. already locked). A phone or PC that slept
+ *  (timers stop) locks as it wakes when the idle time passed meanwhile. */
 export function useAutoLock(minutes, lock) {
   const fire = useRef(lock);
   fire.current = lock;
   useEffect(() => {
     if (!minutes) return undefined;
-    let t;
-    const arm = () => { clearTimeout(t); t = setTimeout(() => fire.current(), minutes * 60000); };
+    let t, last = Date.now();
+    const ms = minutes * 60000;
+    const arm = () => { last = Date.now(); clearTimeout(t); t = setTimeout(() => fire.current(), ms); };
+    const wake = () => { if (document.visibilityState === 'visible' && Date.now() - last >= ms) fire.current(); };
     const evs = ['pointerdown', 'keydown', 'wheel', 'touchstart'];
     for (const e of evs) window.addEventListener(e, arm, { passive: true, capture: true });
+    document.addEventListener('visibilitychange', wake);
     arm();
-    return () => { clearTimeout(t); for (const e of evs) window.removeEventListener(e, arm, { capture: true }); };
+    return () => { clearTimeout(t); document.removeEventListener('visibilitychange', wake); for (const e of evs) window.removeEventListener(e, arm, { capture: true }); };
   }, [minutes]);
 }
 
@@ -108,6 +113,7 @@ export function LockScreen({ user, pharmacy, syncCfg, counts, onUnlock, onSignOu
           {!usePin && <button type="submit" className="btn primary" disabled={!value || busy}>{busy ? 'Checking…' : 'Unlock'}</button>}
         </form>
         <div className="lock-foot">
+          {isNative && !hasPin(tenant, user.id) && <p className="lock-tip">Open the till faster: account menu → Set a quick PIN for this device.</p>}
           {hasPin(tenant, user.id) && <button type="button" className="link-btn" onClick={() => { setUsePin((p) => !p); setValue(''); setErr(''); }}>{usePin ? 'Use my password' : 'Use my PIN'}</button>}
           <button type="button" className="link-btn" onClick={onSignOut}><LogOut size={14} />Not {user.name.split(' ')[0]}? Sign out</button>
         </div>

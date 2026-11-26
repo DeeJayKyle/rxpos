@@ -28,6 +28,12 @@ if (HUB_MODE) {
   const fs = require('fs');
   const stateFile = path.join(app.getPath('userData'), 'window-state.json');
   const readState = () => { try { return JSON.parse(fs.readFileSync(stateFile, 'utf8')); } catch { return {}; } };
+  // 2026-11-26 (on-device data security, src/vault.js): the key that encrypts the pharmacy on this PC is itself kept
+  // with Windows' own protection (DPAPI, through safeStorage), tied to this Windows account, so a copy of the data
+  // folder can't be opened on another PC or by another account. null: not available here (the page keeps its own key).
+  const { safeStorage } = require('electron');
+  ipcMain.handle('rxpos:protect', (_e, s) => (safeStorage.isEncryptionAvailable() ? safeStorage.encryptString(String(s)).toString('base64') : null));
+  ipcMain.handle('rxpos:unprotect', (_e, s) => safeStorage.decryptString(Buffer.from(String(s), 'base64')));
   function createWindow() {
     const st = readState();
     win = new BrowserWindow({
