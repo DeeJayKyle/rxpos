@@ -34,7 +34,7 @@ A refund becomes a credit note application to URA. It is off until a pharmacy sw
    category codes for medicines, another address (an Offline Mode Enabler). The main pharmacy uses Worker secrets of
    the same names (`EFRIS_TIN`, `EFRIS_DEVICE_NO`, `EFRIS_PRIVATE_KEY`, `EFRIS_ENV`, …). A hub reads them from its
    environment (`EFRIS_PRIVATE_KEY_FILE` may point at the key file).
-2. **The pharmacy's Settings → Receipts → URA EFRIS → Test the connection.** It asks URA for the time (T101) and for
+2. **The pharmacy's Settings → Receipts & stock → URA EFRIS → Test the connection.** It asks URA for the time (T101) and for
    the session key (T104), which proves the TIN, device number and key.
 3. **Switch on.** Sales from that moment on are fiscalised.
 4. When the test environment works, set the environment to `production`.

@@ -51,7 +51,7 @@ await p.keyboard.down('Alt'); await p.keyboard.press('ArrowLeft'); await p.keybo
 check('Alt+← goes back', (await hash()) === '#/customers', await hash());
 await p.keyboard.down('Alt'); await p.keyboard.press('ArrowRight'); await p.keyboard.up('Alt'); await wait(600);
 check('Alt+→ goes forward', (await hash()) === '#/sales', await hash());
-check('breadcrumbs show where you are', /Sales\s*›\s*Sales History/.test(await p.evaluate(() => document.querySelector('.crumbs')?.innerText || '')), await p.evaluate(() => document.querySelector('.crumbs')?.innerText));
+check('breadcrumbs show where you are', /Reports\s*›\s*Sales History/.test(await p.evaluate(() => document.querySelector('.crumbs')?.innerText || '')), await p.evaluate(() => document.querySelector('.crumbs')?.innerText));
 
 // ? on any page
 await focusBody(); await key('?');

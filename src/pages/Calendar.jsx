@@ -155,7 +155,7 @@ export default function Calendar() {
               <>
                 <p className="muted small">Subscribe once and all events, refills and expiries appear in your calendar and update by themselves (Google checks every few hours).</p>
                 <div className="row gap"><code className="keybox grow">{link}</code><button className="btn ghost" onClick={() => copy(link)}><Copy size={16} />Copy</button></div>
-                <div className="row gap" style={{ marginTop: 10 }}>
+                <div className="row gap mt-3">
                   <a className="btn sm primary" target="_blank" rel="noreferrer" href={`https://calendar.google.com/calendar/render?cid=${encodeURIComponent(link.replace(/^https:/, 'webcal:'))}`}><CalendarPlus size={14} />Add to Google Calendar</a>
                   <a className="btn sm ghost" href={link.replace(/^https:/, 'webcal:')}>Apple / Outlook / phone</a>
                 </div>

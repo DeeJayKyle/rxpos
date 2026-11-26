@@ -94,8 +94,10 @@ function useIdle(ms, enabled) {
  *  picture. Browse with the arrows, a swipe, the thumbnails or the keyboard; it moves on by itself every 8 seconds. */
 export function Spotlight() {
   const { db, fmt, features } = useStore();
-  const minutes = Number(db.settings.idleMinutes ?? 3);
-  const [idle, wake] = useIdle(Math.max(minutes, 0.5) * 60000, features.promos !== false && minutes > 0);
+  // 1.22.0 (the owner's clean-up): off until the pharmacy sets the minutes in Settings, and never over the till
+  const minutes = Number(db.settings.idleMinutes ?? 0);
+  const onTill = useLocation().pathname.startsWith('/pos');
+  const [idle, wake] = useIdle(Math.max(minutes, 0.5) * 60000, features.promos !== false && minutes > 0 && !onTill);
   const ins = useInsights();
   // the medicines the screen may show (customer-safe only), mixed: what the AI picks from
   const candidates = useMemo(() => {
@@ -307,7 +309,8 @@ export function AlertWatcher() {
   useEffect(() => {
     if (quietNow(db.settings) || !alerts.length) return;
     const seen = announced();
-    const fresh = alerts.filter((a) => (seen.keys[a.key] ?? -1) < a.n && (!selling || a.tone === 'danger'));
+    // 1.22.0 (the owner's clean-up): weather never pops up over the till
+    const fresh = alerts.filter((a) => (seen.keys[a.key] ?? -1) < a.n && (!selling || (a.tone === 'danger' && !['hot', 'rain', 'rain-tomorrow'].includes(a.key))));
     if (!fresh.length) return;
     const t = setTimeout(() => {
       for (const a of fresh) seen.keys[a.key] = a.n;

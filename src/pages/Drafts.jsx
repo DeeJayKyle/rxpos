@@ -37,7 +37,7 @@ export default function DraftsList({ kind }) {
   return (
     <div>
       {seesAllDrafts(user) && (
-        <div className="seg" role="radiogroup" aria-label="Whose drafts" style={{ marginBottom: 12 }}>
+        <div className="seg mb-3" role="radiogroup" aria-label="Whose drafts">
           <button role="radio" aria-checked={!all} className={!all ? 'on' : ''} onClick={() => setAll(false)}>Mine</button>
           <button role="radio" aria-checked={all} className={all ? 'on' : ''} onClick={() => setAll(true)}>Everyone at this branch</button>
         </div>
@@ -55,7 +55,7 @@ export default function DraftsList({ kind }) {
                   {n > 0 ? <span className="text-warn"><AlertTriangle size={11} /> {n} line{n === 1 ? '' : 's'} to check</span> : <span className="muted">every line read clearly</span>}
                   {d.scan.total > 0 && d.scan.totalMatches === false ? <span className="text-warn"> · lines don&apos;t add up to the invoice total</span> : null}</span>
               </div>); })()}
-            <div className="row-acts" style={{ justifyContent: 'flex-start', marginTop: 10 }}>
+            <div className="row-acts justify-start mt-3">
               <button className="btn sm primary act-edit" onClick={() => carryOn(d)}><Play size={14} />{isMine(d, user) ? 'Continue' : 'Take over'}</button>
               <button className="btn sm ghost" onClick={() => setView(d)}><Eye size={14} />View</button>
               <button className="btn sm ghost act-danger" onClick={() => discard(d)}><Trash2 size={14} />Discard</button>

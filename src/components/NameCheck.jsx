@@ -91,7 +91,7 @@ export default function NameCheck({ onClose }) {
         {rows.length > 0 && <button type="button" className="btn ghost" onClick={() => setRows((r) => r.map((x) => ({ ...x, on: true })))}>Tick all</button>}
         {rows.some((x) => x.on) && <button type="button" className="btn ghost" onClick={() => setRows((r) => r.map((x) => ({ ...x, on: false })))}>Untick all</button>}
       </div>
-      <div className="table-wrap" style={{ maxHeight: '55vh', overflow: 'auto', marginTop: 10 }}>
+      <div className="table-wrap scroll-55 mt-3">
         <table className="name-check">
           <thead><tr><th /><th>Now</th><th>Suggested</th><th>Why</th></tr></thead>
           <tbody>

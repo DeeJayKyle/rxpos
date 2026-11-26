@@ -1,6 +1,6 @@
 // "This device": what each person can set for the phone, tablet or PC in front of them. Nothing here is shared.
 import { useEffect, useRef, useState } from 'react';
-import { Banknote, CalendarDays, PanelLeft, PanelTop, Rows3 } from 'lucide-react';
+import { Banknote, CalendarDays, PanelLeft, PanelTop, Rows3, SlidersHorizontal, LayoutGrid, LayoutDashboard, Palette } from 'lucide-react';
 import { DATE_FORMATS } from '../dateformat.js';
 import { RefreshCw, Download, MonitorSmartphone, Smartphone, Monitor, ZoomIn, RotateCw, Volume2, Upload, Play, BellRing, CheckCircle2, AlertTriangle, PanelBottom } from 'lucide-react';
 import { LABEL, onUpdate, updateNow } from '../update.js';
@@ -20,6 +20,9 @@ import { Database, WifiOff, Undo2, Keyboard } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import { ACTIONS, keyOf, isDefault, setKey, resetKeys, showKey, comboOf } from '../keymap.js';
 import AiSystemDoctor from '../components/AiSystemDoctor.jsx';
+import { EXTRAS, saveBehaviour } from '../behaviour.js';
+import { ColourLevel, GradientChoice, SurfaceStyle } from '../components/LookExtras.jsx';
+import { useBehaviour } from '../components/ControlCentre.jsx';
 import { SettingsSearch, SettingsGroup, ToggleRow, DangerZone, useFindSetting } from '../components/SettingsKit.jsx';
 import { MousePointerClick, BadgeCheck, RotateCcw, Eraser, KeyRound, LockKeyhole, ShieldCheck, LogOut } from 'lucide-react';
 import { BAR_CHOICES } from '../landing.js';
@@ -28,6 +31,8 @@ import { showDateTime } from '../showdate.js';
 const account = (action) => window.dispatchEvent(new CustomEvent('rxpos:account', { detail: action }));
 
 /** Who is signed in here, how they sign in on this device, and Log out (the owner's reference, 2026-11-16) */
+const EXTRA_ICONS = { cc: SlidersHorizontal, library: LayoutGrid, home: LayoutDashboard };
+
 function AccountCard() {
   const { user, syncCfg, db } = useStore();
   const me = db.users?.find((u) => u.id === user?.id);
@@ -62,7 +67,12 @@ const Choice = ({ value, onChange, options, label }) => (
 export default function Device() {
   const [d, setD] = useState(deviceSettings);
   useEffect(() => onDevice(setD), []);
+  const b = useBehaviour();
   const { can } = useStore();
+  // the theme menu's "Colour, gradient and style" opens this page at the Look card
+  const lookRef = useRef(null);
+  const loc = useLocation();
+  useEffect(() => { if (loc.state?.tab === 'look') setTimeout(() => lookRef.current?.scrollIntoView({ block: 'start' }), 100); }, [loc.state]);
   const [sound, setSound] = useState(soundsOn);
   useFindSetting(true);
   return (
@@ -71,12 +81,18 @@ export default function Device() {
       <AccountCard />
       <div className="device-top">
         <SettingsSearch can={can} />
+        <div className="device-switches">
         <SettingsGroup label="Quick switches">
           <ToggleRow icon={Volume2} label="Sounds" desc="Alert and message sounds on this device" checked={sound} onChange={(v) => { setSounds(v); setSound(v); }} />
           {canSwitchView && <ToggleRow icon={MousePointerClick} label="Double-tap to zoom" desc="On an empty spot, and again to zoom out" checked={d.doubleTap} onChange={(v) => setDevice({ doubleTap: v })} />}
           <ToggleRow icon={BadgeCheck} label="Counts on the app icon" desc="Alerts and messages waiting" checked={d.badges !== false} onChange={(v) => setDevice({ badges: v })} />
           <ToggleRow icon={Rows3} label="Compact tables" desc="Shorter table rows: more lines on the screen" checked={!!d.compactTables} onChange={(v) => setDevice({ compactTables: v })} />
         </SettingsGroup>
+        {/* 1.22.0 (the owner's clean-up): the extras are off on a new device */}
+        <SettingsGroup label="Extras">
+          {EXTRAS.map(([id, label, desc]) => <ToggleRow key={id} icon={EXTRA_ICONS[id]} label={label} desc={desc} checked={!!b[id]} onChange={(v) => saveBehaviour({ [id]: v })} />)}
+        </SettingsGroup>
+        </div>
       </div>
       <div className="grid-2">
         <SyncStorage />
@@ -87,7 +103,7 @@ export default function Device() {
             <Choice label="Layout" value={d.view} onChange={(view) => setDevice({ view })} options={[['auto', 'Automatic', MonitorSmartphone], ['phone', 'Phone view', Smartphone], ['desktop', 'Desktop view', Monitor]]} />
           </>}
           {/* F8: the four pages of the phone's bottom bar (Sell in the middle, More always last) */}
-          <fieldset className="bar-pick" style={{ marginTop: 14 }}>
+          <fieldset className="bar-pick mt-3">
             <legend className="small"><strong>Phone bottom bar</strong> <span className="muted">· four pages, two either side of Sell; More is always last</span></legend>
             <div className="row gap wrap">
               {[0, 1, 2, 3].map((i) => {
@@ -105,17 +121,27 @@ export default function Device() {
             </div>
           </fieldset>
           {/* E2: four sizes at a tap, the slider for anything between */}
-          <div className="seg text-size-presets" role="radiogroup" aria-label="Text size" style={{ marginTop: 14 }}>
+          <div className="seg text-size-presets mt-3" role="radiogroup" aria-label="Text size">
             {[[0.9, 'Small'], [1, 'Normal'], [1.15, 'Large'], [1.3, 'Extra large']].map(([z, l]) => <button key={l} type="button" role="radio" aria-checked={Math.abs(d.zoom - z) < 0.001} className={Math.abs(d.zoom - z) < 0.001 ? 'on' : ''} onClick={() => setDevice({ zoom: z })}>{l}<small> {Math.round(z * 100)}%</small></button>)}
           </div>
-          <label className="field" style={{ marginTop: 10 }}><span><ZoomIn size={14} /> Text and button size · {Math.round(d.zoom * 100)}%</span>
+          <label className="field mt-3"><span><ZoomIn size={14} /> Text and button size · {Math.round(d.zoom * 100)}%</span>
             <input type="range" min="0.8" max="1.6" step="0.05" value={d.zoom} onChange={(e) => setDevice({ zoom: Number(e.target.value) })} /></label>
           {canSwitchView && <label className="field check"><input type="checkbox" checked={d.doubleTap} onChange={(e) => setDevice({ doubleTap: e.target.checked })} /><span>Double-tap an empty spot to zoom in, and again to zoom out</span></label>}
           {canRotate && <>
-            <p className="small" style={{ margin: '14px 0 6px' }}><RotateCw size={14} /> Rotation</p>
+            <p className="small sub-label"><RotateCw size={14} /> Rotation</p>
             <Choice label="Rotation" value={d.rotation} onChange={(rotation) => setDevice({ rotation })} options={[['auto', 'Turns with the phone'], ['portrait', 'Stay upright'], ['landscape', 'Stay sideways']]} />
           </>}
           {d.zoom !== 1 && <button className="link-btn small" onClick={() => setDevice({ zoom: 1 })}>Back to 100%</button>}
+        </section>
+        <section className="card look-card" ref={lookRef}>
+          <h3><Palette size={18} />Look</h3>
+          <p className="muted small">The theme is in the top bar. These change how it looks on this device only.</p>
+          <div className="bell-sub">Colour</div>
+          <ColourLevel />
+          <div className="bell-sub">Gradient</div>
+          <GradientChoice />
+          <div className="bell-sub">Style</div>
+          <SurfaceStyle />
         </section>
         <section className="card">
           <h3><PanelLeft size={18} />Navigation</h3>
@@ -231,7 +257,7 @@ function Notices({ d }) {
       {perm === 'granted'
         ? <div className="status-line ok"><CheckCircle2 size={16} />Notifications are allowed</div>
         : <button className="btn ghost" onClick={async () => setPerm(await askNotifyPermission())}><BellRing size={16} />{perm === 'denied' ? 'Notifications are blocked: allow them in the system settings' : 'Allow notifications'}</button>}
-      <label className="field check" style={{ marginTop: 12 }}><input type="checkbox" checked={d.badges} onChange={(e) => setDevice({ badges: e.target.checked })} /><span>Show the unread count on the app icon</span></label>
+      <label className="field check mt-3"><input type="checkbox" checked={d.badges} onChange={(e) => setDevice({ badges: e.target.checked })} /><span>Show the unread count on the app icon</span></label>
       {hasTray && <label className="field check"><input type="checkbox" checked={d.tray} onChange={(e) => setDevice({ tray: e.target.checked })} /><span><PanelBottom size={14} /> Keep running in the system tray when the window is closed, so messages and calls still come through</span></label>}
     </section>
   );
@@ -288,7 +314,7 @@ function SyncStorage() {
       )}
       {app && (
         <>
-          <h4 className="small" style={{ margin: '12px 0 6px' }}>{ready ? <><CheckCircle2 size={14} className="text-ok" /> Ready to work offline</> : <><AlertTriangle size={14} className="text-warn" /> Not ready to work offline yet</>}</h4>
+          <h4 className="small sub-label">{ready ? <><CheckCircle2 size={14} className="text-ok" /> Ready to work offline</> : <><AlertTriangle size={14} className="text-warn" /> Not ready to work offline yet</>}</h4>
           <ul className="sync-check">
             <Row ok={data}>{data ? `Pharmacy downloaded (${db.products.length.toLocaleString()} medicines)` : 'Downloading the pharmacy… keep the internet on'}</Row>
             <Row ok={signIn}>{signIn ? `You can sign in here offline for ${OFFLINE_DAYS} days after each online sign-in` : 'Sign out and sign in once with the internet so you can sign in here offline'}</Row>
@@ -297,7 +323,7 @@ function SyncStorage() {
         </>
       )}
       {app && syncCfg?.url && (
-        <div className="row gap" style={{ marginTop: 12 }}>
+        <div className="row gap mt-3">
           <button className="btn ghost" disabled={busy || syncStatus?.state === 'syncing'} onClick={() => run(async () => {
             if (!(await ask({ title: 'Download everything again?', message: 'This device downloads the whole pharmacy from the cloud again and adds anything it is missing. Nothing is deleted and unsent sales are sent first. It can take a few minutes and uses about as much data as the first download, so use Wi-Fi on a phone.', confirmText: 'Download everything' }))) return;
             const r = await pullAll();
@@ -308,7 +334,7 @@ function SyncStorage() {
       )}
       {app && syncCfg?.url && (
         // stage 4 of the faster sync (docs/SYNC-HISTORY-WINDOW.md): how much history this device keeps
-        <label className="field" style={{ marginTop: 12, maxWidth: 520 }}>
+        <label className="field mt-3 max-w-520">
           <span>History kept on this device</span>
           <select aria-label="History kept on this device" value={String(historyMonthsOf(syncCfg))} disabled={syncStatus?.state === 'syncing'}
             onChange={async (e) => { await saveSyncCfg({ ...syncCfg, historyMonths: Number(e.target.value) }); syncNow(); }}>

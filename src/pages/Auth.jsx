@@ -161,7 +161,7 @@ export default function Auth() {
 
   const forgotPanel = () => (
     <div className="stack">
-      <button type="button" className="btn sm ghost" style={{ alignSelf: 'flex-start' }} onClick={() => { setForgot(null); setError(''); }}><ArrowLeft size={14} />Back to sign in</button>
+      <button type="button" className="btn sm ghost self-start" onClick={() => { setForgot(null); setError(''); }}><ArrowLeft size={14} />Back to sign in</button>
       {forgot.stage === 'ask' ? (
         <>
           <p className="muted center">We'll send a 6-digit code to the email or phone saved on your account.</p>
@@ -210,7 +210,7 @@ export default function Auth() {
           <div className="brand big"><BrandLogo src={pharmacy?.logo} size={44} /> <span className="wordmark">Rx<span className="brand-accent">POS</span></span></div>
           {choices ? (
             <div className="stack">
-              <button type="button" className="btn sm ghost" style={{ alignSelf: 'flex-start' }} onClick={() => { setChoices(null); setError(''); }} disabled={busy}><ArrowLeft size={14} />Back</button>
+              <button type="button" className="btn sm ghost self-start" onClick={() => { setChoices(null); setError(''); }} disabled={busy}><ArrowLeft size={14} />Back</button>
               <p className="center auth-title"><strong>{choices.some((c) => c.code === '__owner__') ? 'Where to?' : 'Which pharmacy?'}</strong><br /><span className="muted small">{choices.some((c) => c.code === '__owner__') ? `Choose where to sign in as ${form.email}` : `${form.email} works at ${choices.length} pharmacies`}</span></p>
               <div className="pharmacy-choices">
                 {choices.map((c) => (
@@ -226,7 +226,7 @@ export default function Auth() {
             </div>
           ) : twoStep ? (
             <form onSubmit={signIn} className="stack">
-              <button type="button" className="btn sm ghost" style={{ alignSelf: 'flex-start' }} onClick={() => { setTwoStep(null); setError(''); }} disabled={busy}><ArrowLeft size={14} />Back</button>
+              <button type="button" className="btn sm ghost self-start" onClick={() => { setTwoStep(null); setError(''); }} disabled={busy}><ArrowLeft size={14} />Back</button>
               <div className="center twostep-head"><ShieldCheck size={26} /><strong>Two-step sign-in</strong><span className="muted small">{useRc ? 'Type one of the recovery codes you kept when you switched two-step sign-in on (each works once)' : 'Type the 6-digit code from the authenticator app on your phone'}</span></div>
               {useRc
                 ? <input className="otp-input" key="rc" value={totp} onChange={(e) => setTotp(e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 11))} autoComplete="off" autoCapitalize="characters" placeholder="XXXXX-XXXXX" autoFocus aria-label="Recovery code" required />
@@ -238,7 +238,7 @@ export default function Auth() {
             </form>
           ) : forgot ? forgotPanel() : pinMode ? (
             <form onSubmit={signInPin} className="stack">
-              <button type="button" className="btn sm ghost" style={{ alignSelf: 'flex-start' }} onClick={() => { setPinMode(false); setPin(''); setError(''); }} disabled={busy}><ArrowLeft size={14} />Use password instead</button>
+              <button type="button" className="btn sm ghost self-start" onClick={() => { setPinMode(false); setPin(''); setError(''); }} disabled={busy}><ArrowLeft size={14} />Use password instead</button>
               <div className="center twostep-head"><ShieldCheck size={26} /><strong>Quick PIN</strong><span className="muted small">Enter the PIN set on this device{pinUser?.name ? ` for ${pinUser.name}` : ''}</span></div>
               <input className="otp-input" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 8))} inputMode="numeric" autoComplete="off" placeholder="PIN" autoFocus aria-label="Device PIN" required minLength={4} />
               {/* E7: a clear PIN pad for touch screens (the keyboard still types) */}

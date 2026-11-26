@@ -86,3 +86,4 @@ details.advanced > .form-grid { margin-top: 10px; animation: fade-up .25s ease-o
 .device-page > .danger-zone-box { margin-top: 18px; max-width: 640px; }
 @media (max-width: 899px) { .device-top { grid-template-columns: minmax(0, 1fr); } }
 .settings-side > * { flex-shrink: 0; }
+.device-switches { display: grid; gap: 16px; }

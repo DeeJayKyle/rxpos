@@ -14,8 +14,9 @@ const setVal = (p, sel, val) => p.evaluate((sel, val) => { const i = document.qu
 const clickSignIn = (p) => p.evaluate(() => [...document.querySelectorAll('form button')].find((x) => /^Sign in/.test(x.textContent.trim()))?.click());
 const surfaceAttr = (p) => p.evaluate(() => document.documentElement.getAttribute('data-surface'));
 const pillShadow = (p) => p.evaluate(() => { const el = document.querySelector('.pill'); return el ? getComputedStyle(el).boxShadow : ''; });
-const openMenu = (p) => p.evaluate(() => document.querySelector('button[title="Theme"]')?.click());
-const pickStyle = (p, name) => p.evaluate((name) => { const b = [...document.querySelectorAll('.theme-menu .style-item')].find((x) => x.textContent.includes(name)); b?.click(); return !!b; }, name);
+// 1.22.0: the styles are in This device → Look (the theme menu has only the four themes)
+const openMenu = async (p) => { await p.evaluate(() => { location.hash = '#/device'; }); await wait(700); };
+const pickStyle = (p, name) => p.evaluate((name) => { const b = [...document.querySelectorAll('.look-card .style-item')].find((x) => x.textContent.includes(name)); b?.click(); return !!b; }, name);
 
 // 1.17.0: the Linux and Apple styles too (the last one picked is the one checked after the reload)
 const STYLES = [['Glassmorphism', 'glass'], ['Claymorphism', 'clay'], ['Skeuomorphism', 'skeuomorphism'], ['GNOME', 'gnome'], ['KDE Plasma', 'kde'], ['elementary OS', 'elementary'], ['Ubuntu', 'ubuntu'], ['iOS', 'ios'], ['Liquid Glass', 'liquid'], ['Neumorphism', 'neumorphism']];
@@ -40,6 +41,7 @@ for (const [name, id] of STYLES) {
   check(`${name}: option exists and is selectable`, clicked);
   check(`${name}: sets data-surface="${id}"`, (await surfaceAttr(p)) === id, String(await surfaceAttr(p)));
   check(`${name}: is remembered in localStorage`, (await p.evaluate(() => localStorage.getItem('rxpos-surface-style'))) === id);
+  await p.evaluate(() => { location.hash = '#/'; }); await wait(700);
   const shadow = await pillShadow(p);
   check(`${name}: actually restyles a surface (box-shadow changed from flat)`, !!shadow && shadow !== 'none' && shadow !== flatShadow, shadow);
   await p.screenshot({ path: `${out}/${id}.png` });

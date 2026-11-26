@@ -26,6 +26,7 @@ import './styles/cleanup.css'; // the 1.16.0 clean-up
 import './styles/os-styles.css'; // the 1.17.0 Linux and Apple styles and the Terminal theme
 import './styles/gradients.css';
 import './styles/behaviour.css'; // last: the 1.17.0 gradient choices, then the 1.18.0 behaviours
+import './styles/system.css'; // 1.22.0: one style for buttons, spacing and tables (last)
 import { applyTheme, startupTheme, savedAccent } from './themes.js';
 import { applyStyle, savedStyle } from './surface.js';
 import { applyBehaviour } from './behaviour.js';

@@ -1,11 +1,24 @@
 # RxPOS release notes
 
-## Next release
+## Next release · November 2026 (a tidier app)
 
+- **Six menu headings**: Sell, Stock, People, Money, Reports and Settings. Pages that overlapped share one menu entry
+  and open with tabs at the top: **Medicines** (Inventory, Medicine List, Quick Edit, Stock Card, Formulations),
+  **Messages** (Chat, Messages & SMS, Reminders), **Expenses** (with Expense Categories), **Banks** (with Deposits &
+  Withdrawals), **Reports** (with Sales History and Weekly Summary), and Prescriptions, Drug Information, Notes &
+  Calendar and Branches. Every page keeps its address, F-keys and Ctrl+K entry. Each role sees only what it can use;
+  This device is in the account menu for staff who can't change settings.
+- **Extras off by default**: Control Centre, the App Library and the home screen are switched on in This device →
+  Extras; the idle shop window in Settings → Alerts & storage (minutes; it never covers the till).
+- **A quieter till**: search, the sale, the total and pay. Scan Rx moved to Sell → Prescriptions → Scan Prescription
+  (open to anyone who sells); weather alerts wait until you leave the till.
+- **Four themes**: Light, Dark, High contrast and Brand colour (the pharmacy's colour, set in Settings → Receipts &
+  stock). A retired theme opens as Light or Dark. Colour level, gradient and surface style moved to This device → Look.
+- **One style** for buttons, spacing and tables (styles/system.css).
 - **URA EFRIS fiscal receipts** (off until switched on; docs/EFRIS.md): the cloud fiscalises each sale with URA and the
   receipt (printed, PDF, WhatsApp/SMS) carries the fiscal document number, verification code and QR code. A sale made
   offline is fiscalised when its till is back online. A refund becomes a credit note application; its number appears
-  on the receipt once URA approves it. Keys are added in the Owner console; Settings → Receipts tests and switches it on.
+  on the receipt once URA approves it. Keys are added in the Owner console; Settings → Receipts & stock tests and switches it on.
 
 ## RxPOS 1.21.0 · November 2026 (one app: React; sharper reading of invoices and prescriptions)
 
