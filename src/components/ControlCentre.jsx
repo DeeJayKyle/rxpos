@@ -3,7 +3,8 @@
 // Everything here is per device (it changes nothing for the pharmacy) and is also in the theme menu or This device.
 import { useEffect, useRef, useState } from 'react';
 import { Moon, Sun, Rows3, MessageSquareDot, LayoutGrid, Columns2, PanelLeftClose, RefreshCw, LockKeyhole, Blend, X, SlidersHorizontal } from 'lucide-react';
-import { BEHAVIOURS, LOCK_AFTER, savedBehaviour, saveBehaviour, onBehaviour } from '../behaviour.js';
+import { BEHAVIOURS, LOCK_AFTER, savedBehaviour, saveBehaviour, onBehaviour, idleLockMinutes } from '../behaviour.js';
+import { useStore } from '../store.jsx';
 import { GRADIENT_BACKGROUNDS, savedGradient, saveGradient, applyGradient } from '../gradients.js';
 import { useFocusTrap } from '../focustrap.js';
 
@@ -33,6 +34,8 @@ function ControlPanel({ onClose, dark, onDark, rail, onRail, onSync, onLock, onL
   const ref = useRef(null);
   useFocusTrap(ref, onClose);
   const b = useBehaviour();
+  const { db } = useStore();
+  const lockNow = idleLockMinutes(db?.settings, b), lockOff = lockNow === 0; // the pharmacy's Till lock (Settings)
   const [g, setG] = useState(savedGradient);
   const nextGrad = () => {
     const ids = GRADIENT_BACKGROUNDS.map(([id]) => id);
@@ -64,9 +67,11 @@ function ControlPanel({ onClose, dark, onDark, rail, onRail, onSync, onLock, onL
         </div>
         <div className="cc-row">
           <span className="small">Lock by itself after</span>
-          <div className="seg" role="radiogroup" aria-label="Lock by itself after">
-            {LOCK_AFTER.map(([m, l]) => <button key={m} type="button" role="radio" aria-checked={b.lock === m} className={b.lock === m ? 'on' : ''} onClick={() => saveBehaviour({ lock: m })}>{l}</button>)}
-          </div>
+          {lockOff
+            ? <span className="small muted">Off for this pharmacy (Settings → Alerts &amp; storage → Till lock)</span>
+            : <div className="seg" role="radiogroup" aria-label="Lock by itself after">
+              {LOCK_AFTER.map(([m, l]) => <button key={m} type="button" role="radio" aria-checked={lockNow === m} className={lockNow === m ? 'on' : ''} onClick={() => saveBehaviour({ lock: m })}>{l}</button>)}
+            </div>}
         </div>
       </div>
     </div>

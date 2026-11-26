@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { Store, Printer, MessageSquareText, Cloud, DatabaseBackup, Sheet, Copy, CheckCircle2, XCircle, Smartphone, CreditCard, Plus, Trash2, RotateCcw, BellRing, MapPin, Search, Thermometer, RefreshCw } from 'lucide-react';
+import { Store, Printer, MessageSquareText, Cloud, DatabaseBackup, Sheet, Copy, CheckCircle2, XCircle, Smartphone, CreditCard, Plus, Trash2, RotateCcw, BellRing, LockKeyhole, MapPin, Search, Thermometer, RefreshCw } from 'lucide-react';
 import { useStore, useSyncState, uid, audit, downloadFile, today, defaultSettings, DEFAULT_PAYMENT_METHODS } from '../store.jsx';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ChevronLeft, Printer as PrinterIcon, ScanBarcode, Repeat, Clock, MonitorSmartphone, UserCog } from 'lucide-react';
@@ -15,6 +15,7 @@ import { pharmacyDefaults, validatePharmacyDefaults } from '../pharmacy-settings
 import { Updates } from './Device.jsx';
 import ReportEmails from './ReportEmails.jsx';
 import { showDateTime } from '../showdate.js';
+import { IDLE_LOCK_CHOICES } from '../behaviour.js';
 
 export default function Settings() {
   const { syncStatus } = useSyncState();
@@ -45,7 +46,8 @@ export default function Settings() {
     const num = (k, d = 0) => (s[k] === '' || s[k] == null ? d : Number(s[k]) || 0);
     const next = { ...s, taxRate: num('taxRate'), decimals: num('decimals'), retailMarkup: num('retailMarkup', 50), wholesaleMarkup: num('wholesaleMarkup', 25), priceRound: num('priceRound'), minMargin: num('minMargin', 20),
       expiryWarnDays: num('expiryWarnDays', 90), paperWidth: num('paperWidth', 80), leadDays: num('leadDays', 7), coverDays: num('coverDays', 30), deadDays: num('deadDays', 90),
-      idleMinutes: num('idleMinutes', 0), quietFrom: num('quietFrom', 21), quietTo: num('quietTo', 7) };
+      idleMinutes: num('idleMinutes', 0), quietFrom: num('quietFrom', 21), quietTo: num('quietTo', 7),
+      ...(s.idleLock != null && s.idleLock !== '' ? { idleLock: Number(s.idleLock) } : {}) };
     try {
       await saveSettings(tab === 'general' ? { ...db.settings, ...validatePharmacyDefaults(next) } : next);
       if (tab !== 'general') await update((d) => audit(d, user, 'Settings changed', tab, branchId));
@@ -227,6 +229,20 @@ export default function Settings() {
         </form>
       )}
 
+      {tab === 'alerts' && (
+        <form className="card" onSubmit={submitSettings} data-setting="till-lock">
+          <h3><LockKeyhole size={18} />Till lock</h3>
+          <div className="form-grid">
+            <label className="field"><span>Lock the till by itself when nobody uses it</span>
+              <select value={String(s.idleLock ?? 5)} onChange={(e) => setS({ ...s, idleLock: Number(e.target.value) })}>
+                {IDLE_LOCK_CHOICES.map(([m, l]) => <option key={m} value={m}>{l}</option>)}
+              </select>
+            </label>
+          </div>
+          <p className="muted small">For every device of the pharmacy. The person opens it again with their quick PIN or password; the sale behind it waits. Off: the till never locks by itself (Ctrl+Shift+L still locks it). A device can pick its own time in Control Centre unless this is Off.</p>
+          <div className="form-actions"><button className="btn primary">Save</button></div>
+        </form>
+      )}
       {tab === 'alerts' && <DailySummary s={s} setS={setS} onSave={submitSettings} />}
       {tab === 'alerts' && <ReportEmails />}
       {tab === 'alerts' && (

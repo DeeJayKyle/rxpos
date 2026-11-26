@@ -41,7 +41,7 @@ import { MegaMenu, TopNav } from './components/NavMenus.jsx';
 import { ControlCentre, useBehaviour } from './components/ControlCentre.jsx';
 import { AppLibrary } from './components/AppLibrary.jsx';
 import { LockScreen, lockedFor, setLocked, useAutoLock } from './components/LockScreen.jsx';
-import { saveBehaviour } from './behaviour.js';
+import { saveBehaviour, idleLockMinutes } from './behaviour.js';
 import { BackButton, markNav, usePageMotion, useEdgeSwipeBack, useKeyboardFit } from './mobilenav.jsx';
 import AiOmnibar from './components/AiOmnibar.jsx';
 import { warmSearchKeys } from './search.js';
@@ -551,7 +551,7 @@ function Shell() {
   useEffect(() => setLibrary(false), [location.pathname]);
   const [locked, setLockedState] = useState(() => lockedFor() === user.id);
   const lockTill = () => { setLocked(user.id); setLockedState(true); setLibrary(false); setMega(false); };
-  useAutoLock(locked ? 0 : behaviour.lock, lockTill);
+  useAutoLock(locked ? 0 : idleLockMinutes(db.settings, behaviour), lockTill); // Off: Settings → Alerts & storage → Till lock
   useEffect(() => {
     const k = (e) => { if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'L' || e.key === 'l')) { e.preventDefault(); lockTill(); } };
     window.addEventListener('keydown', k);

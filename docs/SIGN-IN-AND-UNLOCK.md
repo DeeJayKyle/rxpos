@@ -87,7 +87,8 @@ phone numbers, prescriptions, sales) was kept on Windows and Android devices as 
   password on the device. A key used twice (copied) ends the whole sign-in. The cloud keeps only a hash of each key
   (`sign_ins` table). Apps from before keep their 30-day pass until they update, then swap it once for a renewable one.
 - **Idle lock, opened with the quick PIN.** The till locks itself after **5 minutes** without a touch by default
-  (2 or 15 minutes in Control Centre; "Never" is gone), also when a sleeping PC or phone wakes after that time. The
+  (an administrator can change it for the whole pharmacy, or turn it **Off**, in Settings → Alerts & storage →
+  Till lock; a device can still pick 2, 5 or 15 minutes in Control Centre unless it is Off), also when a sleeping PC or phone wakes after that time. The
   person opens it with their quick PIN (or password), so the work behind it stays as it was: no full sign-out.
   "Remember me" lasts 7 days (was 30) and reopens the app on the lock screen.
 - **The pharmacy sealed on the device.** Every stored record bucket, the daily copies, backups, the 1.0–1.5 tables and
