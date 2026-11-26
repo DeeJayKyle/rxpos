@@ -1,5 +1,24 @@
 # RxPOS release notes
 
+## RxPOS 1.24.0 · November 2026 (every table works like Add Stock; layouts follow you; stock kept right)
+
+- **Every table works the way Add Stock's lines do.** Drag a heading to move its column (or use its ← → arrows), drag
+  its right edge to make it wider or narrower (double-click the edge: as wide as its content), click it to sort, and
+  choose the columns shown from the **Columns** button. Each table keeps its layout, and **Standard columns** puts it
+  back. Sales, Purchases, Inventory, Quick Edit, Stock Card, Expiring, Reports, Reorder, Returns, Kits, Transfers,
+  Quotations, Insurers, Finance, the Controlled register, Shifts, Payroll, Users, Reminders, Storage and Stock Count
+  all work the same, with CSV (and PDF where there was one) of the rows as shown.
+- **No more hidden rows.** Lists show the first 100 rows and more as you scroll, always saying "Showing 100 of 2,340".
+  **Quick Edit shows every medicine** (filter: In stock or All medicines), and Stock Card lists every medicine.
+- **Tabs move and hide**: drag a tab, or right-click it for Move left, Move right, Hide, Show hidden tabs and Standard
+  order (Ctrl + Shift + ← → moves the tab in focus).
+- **Your layout follows you**: the columns, sorting and tabs you set are kept with your sign-in and show on every
+  device you use. Only you receive your layout.
+- **Stock stays right** (stock audit): a count no longer takes off a sale twice, Scan & count adds a box per scan,
+  counts typed in boxes are caught, a transfer is received once, a delivery edit can't be applied twice, part-returned
+  sales can't also be refunded in full, and expired write-offs stop at what the batch holds.
+- **Administrators can turn the till's idle lock off** (Settings), for a till that should stay open.
+
 ## RxPOS 1.23.0 · November 2026 (split payments, part returns, receipt printer and cash drawer, safer sign-ins, 17 themes)
 
 - **Receipts print straight to the thermal receipt printer** (ESC/POS, USB, network or Bluetooth) and the **cash
