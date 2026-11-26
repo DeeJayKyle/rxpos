@@ -23,7 +23,7 @@ import { isWeb, isNative } from './platform.js';
 import { keepsData } from './webpolicy.js';
 import RefreshHost from './refresh.jsx';
 import { startUpdates, onUpdate, applyUpdate, justUpdated, LABEL, VERSION } from './update.js';
-import { applyTheme, saveTheme, allowedThemes, currentThemeId, setBrandColor, savedMode, saveMode, systemDark, paletteFor, startupTheme, savedAccent, saveAccent, twinFor, themeById } from './themes.js';
+import { applyTheme, saveTheme, allowedThemes, THEME_GROUPS, currentThemeId, setBrandColor, savedMode, saveMode, systemDark, paletteFor, startupTheme, savedAccent, saveAccent, twinFor, themeById } from './themes.js';
 import { applyStyle, savedStyle, saveStyle } from './surface.js';
 import { TwoStepModal } from './twostep.jsx';
 import { startShift, openShiftOf, shiftQuestions } from './shiftstart.js';
@@ -297,8 +297,10 @@ function ThemePicker({ theme, setTheme, mode, setMode }) {
                 onClick={() => (id === 'system' ? setMode('system') : pickBase(id))}><Icon size={14} />{label}</button>
             ))}
           </div>
-          <div className="theme-group" role="group" aria-label="Themes">
-            {shownList.map((t) => (
+          {THEME_GROUPS.map((g) => [g, shownList.filter((t) => t.group === g)]).filter(([, ts]) => ts.length).map(([g, ts]) => (
+          <div key={g} className="theme-group" role="group" aria-label={g}>
+            <div className="bell-sub">{g}</div>
+            {ts.map((t) => (
               <button key={t.id} className={'theme-item' + (isOn(t) ? ' on' : '')} onClick={() => { setMode(''); setTheme(pick(t)); setOpen(false); }}
                 onMouseEnter={() => applyTheme(pick(t))} onFocus={() => applyTheme(pick(t))}>
                 <span className="swatch" style={{ background: `linear-gradient(135deg, ${t.c.sidebar} 0 30%, ${t.c.surface} 30% 55%, ${t.c.primary} 55% 78%, ${t.c.primary2} 78%)`, borderColor: t.c.borderStrong }} />
@@ -307,6 +309,7 @@ function ThemePicker({ theme, setTheme, mode, setMode }) {
               </button>
             ))}
           </div>
+          ))}
           <NavLink className="style-item" to="/device" state={{ tab: 'look' }} onClick={() => setOpen(false)}><SlidersHorizontal size={14} /><span className="grow">Colour, gradient and style<small className="muted"> · This device → Look</small></span></NavLink>
         </div>
       )}

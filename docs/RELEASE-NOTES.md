@@ -1,5 +1,13 @@
 # RxPOS release notes
 
+## Next release · November 2026 (themes in groups)
+
+- **17 themes in four groups**: the theme menu lists themes by how alike they look: **Light** (Light, Pharmacy Blue,
+  Pharmacy Green, Royal Purple, Sandstone & Terracotta), **Dark** (Dark, Midnight Blue, Pharmacy Night, Twilight
+  Violet, Graphite Amber), **High contrast** (High contrast, Monochrome & Scarlet, Graphite & Lime) and **Colourful**
+  (Brand colour, Cool & Crisp, Royal Iris & Butter, Vibrant Neon). Look-alikes stay retired and open as the closest
+  theme in their group. The owner still chooses which themes each pharmacy may use.
+
 ## RxPOS 1.22.0 · November 2026 (selling units; a tidier app)
 
 - **Selling units**: each medicine can be sold by the tablet, pair, half strip, strip or box (Medicine List → Selling
