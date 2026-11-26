@@ -1,11 +1,11 @@
-import { Fragment, lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { HashRouter, Routes, Route, NavLink, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { MessageCircle,
   LayoutDashboard, ShoppingCart, PackageOpen, ReceiptText, FileText, ClipboardPlus, Users, Truck, Pill, FlaskConical,
   Boxes, PackagePlus, History, CalendarClock, PencilRuler, ScrollText, Wallet, Tags, Landmark, ArrowLeftRight, HandCoins,
   ArrowDownLeft, ArrowUpRight, ClipboardCheck, RefreshCw, Undo2, ShieldPlus, BookOpen, BarChart3, Settings as SettingsIcon, Search, Sun, Moon, Menu, LogOut, ChevronDown,
   BellRing, Plus, ShoppingBag, Tag, FileUp, Building2, Send, ShieldCheck, Clock, BookMarked, MessagesSquare, UserCog, KeyRound, CalendarDays, Thermometer, Palette, MonitorSmartphone, ScanText, GraduationCap, Megaphone, CalendarRange, LockKeyhole, NotebookPen, PanelLeftClose, PanelLeftOpen, WifiOff, X,
-  Pin, Keyboard, UserPlus, Archive, BadgeCheck, BriefcaseMedical, ArrowLeft, Printer,
+  Pin, Keyboard, UserPlus, Archive, BadgeCheck, BriefcaseMedical, ArrowLeft, Printer, SlidersHorizontal,
 } from 'lucide-react';
 import { endOtherSessions, setPersonGuard, borrowedToken, cloudLogin } from './cloud.js';
 import { useStore, useSyncState, makePassword, put, audit, isLowStock, expiryCounts } from './store.jsx';
@@ -23,10 +23,8 @@ import { isWeb, isNative } from './platform.js';
 import { keepsData } from './webpolicy.js';
 import RefreshHost from './refresh.jsx';
 import { startUpdates, onUpdate, applyUpdate, justUpdated, LABEL, VERSION } from './update.js';
-import { applyTheme, saveTheme, allowedThemes, THEME_GROUPS, currentThemeId, savedMode, saveMode, systemDark, paletteFor, startupTheme, savedAccent, saveAccent, twinFor, themeById } from './themes.js';
-import { STYLES, applyStyle, savedStyle, saveStyle } from './surface.js';
-import { LEVELS, applyLevel, savedLevel, saveLevel } from './vivid.js';
-import { GRADIENT_BACKGROUNDS, GRADIENT_PRESETS, savedGradient, saveGradient, applyGradient } from './gradients.js';
+import { applyTheme, saveTheme, allowedThemes, currentThemeId, setBrandColor, savedMode, saveMode, systemDark, paletteFor, startupTheme, savedAccent, saveAccent, twinFor, themeById } from './themes.js';
+import { applyStyle, savedStyle, saveStyle } from './surface.js';
 import { TwoStepModal } from './twostep.jsx';
 import { startShift, openShiftOf, shiftQuestions } from './shiftstart.js';
 import { pageMenuFor, keepsNativeMenu, longPressToContextMenu } from './pagemenu.js';
@@ -108,51 +106,53 @@ const P = {
 
 // [path, label, Icon, shortcut, badge, element, permission, feature]
 const TAB_ICONS = { '/': LayoutDashboard, '/inventory': Boxes, '/customers': Users, '/prescriptions': ClipboardPlus, '/sales': ReceiptText, '/shifts': Clock, '/expiry': CalendarClock, '/add-stock': PackagePlus, '/chat': MessageCircle, '/reports': BarChart3, '/expenses': Wallet };
+// 1.22.0 (the owner's clean-up, 26 Nov 2026): six headings (Sell, Stock, People, Money, Reports, Settings). Pages that
+// overlap share one menu entry and show as tabs at the top of the page (HUBS); every page keeps its own address, keys
+// and Ctrl+K entry, so nothing was taken away, only moved.
 const NAV = [
   { items: [['/', 'Dashboard', LayoutDashboard, null, null, <P.Dashboard />]] },
-  { group: 'Sales', items: [
+  { group: 'Sell', items: [
     ['/pos', 'POS – Retail', ShoppingCart, 'F2', null, <P.POS mode="retail" />, 'pos.sell'],
     ['/pos/wholesale', 'POS – Wholesale', PackageOpen, 'F3', null, <P.POS mode="wholesale" key="w" />, 'pos.wholesale', 'wholesale'],
-    ['/sales', 'Sales History', ReceiptText, 'F6', null, <P.Sales />, 'sales.view'],
     ['/shifts', 'Shifts & Cash-up', Clock, null, null, <P.Shifts />, 'shifts', 'shifts'],
     ['/proformas', 'Proformas', FileText, null, null, <P.Proformas />, 'proformas', 'proformas'],
     ['/prescriptions', 'Prescriptions & Refills', ClipboardPlus, null, null, <P.Prescriptions />, 'prescriptions', 'prescriptions'],
+    ['/scan', 'Scan Prescription', ScanText, null, null, <P.Scan />, ['prescriptions', 'pos.sell'], 'ai'], // 1.22.0: moved off the till
     ['/drug-info', 'Drug Information', BookMarked, null, null, <P.DrugInfo />, null, 'drugInfo'],
+    ['/quiz', 'Drug Quiz', GraduationCap, null, null, <P.Quiz />, null, 'drugInfo'],
+  ] },
+  { group: 'Stock', items: [
+    ['/inventory', 'Inventory', Boxes, 'F7', 'low', <P.StockLevels />, 'inventory.view'],
+    ['/medicines', 'Medicine List', Pill, null, null, <P.MedicineList />, 'inventory.view'],
+    ['/quick-edit', 'Quick Edit', PencilRuler, null, null, <P.QuickEdit />, 'medicines.manage'],
+    ['/stock-card', 'Stock Card', ScrollText, null, null, <P.StockCard />, 'inventory.view'],
+    ['/formulations', 'Formulations', FlaskConical, null, null, <P.Formulations />, 'medicines.manage'],
+    ['/add-stock', 'Add Stock', PackagePlus, 'F4', null, <P.AddStock />, 'stock.receive'],
+    ['/purchases', 'Purchase History', History, null, null, <P.Purchases />, 'stock.receive'],
+    ['/returns', 'Returns to Supplier', Undo2, null, null, <P.Returns />, ['stock.receive', 'stock.adjust']],
+    ['/stock-count', 'Stock Count', ClipboardCheck, null, null, <P.StockCount />, ['stock.count', 'stock.adjust']],
+    ['/expiry', 'Expiring / Expired', CalendarClock, null, 'expiry', <P.Expiry />, 'inventory.view'],
+    ['/reorder', 'Reorder & Dead Stock', ShoppingBag, null, null, <P.Reorder />, 'stock.receive', 'reorder'],
+    ['/controlled', 'Controlled Drugs & Recalls', ShieldPlus, null, null, <P.Controlled />, 'inventory.view'],
+    ['/kits', 'Kits', BriefcaseMedical, null, 'kits', <P.Kits />, 'inventory.view'],
+    ['/shelves', 'Shelves', Archive, null, null, <P.Shelves />, 'inventory.view'],
+    ['/labels', 'Barcode Labels', Tag, null, null, <P.Labels />, 'medicines.manage', 'labels'],
+    ['/import', 'Import Medicines', FileUp, null, null, <P.Import />, 'medicines.manage', 'import'],
+    ['/storage', 'Weather & Storage', Thermometer, null, null, <P.Storage />, 'inventory.view', 'weather'],
+    ['/branches', 'All Branches', Building2, null, null, <P.Branches />, 'branches.view', 'branches'],
+    ['/transfers', 'Stock Transfers', Send, null, 'transfers', <P.Transfers />, 'transfers', 'branches'],
   ] },
   { group: 'People', items: [
     ['/customers', 'Customers', Users, null, null, <P.Customers />, 'customers'],
     ['/suppliers', 'Suppliers', Truck, null, null, <P.Suppliers />, 'suppliers'],
     ['/insurers', 'Insurers', ShieldCheck, null, null, <P.Insurers />, ['customers', 'finance']],
-    ['/chat', 'Chat & Messages', MessagesSquare, null, 'chat', <P.Chat />, 'chat', 'chat'],
-    ['/reminders', 'Reminders', BellRing, null, null, <P.Reminders />, 'reminders', 'reminders'],
+    ['/chat', 'Chat', MessagesSquare, null, 'chat', <P.Chat />, 'chat', 'chat'],
     ['/messages', 'Messages & SMS', Megaphone, null, null, <P.Messages />, 'reminders', 'reminders'],
-    ['/calendar', 'Calendar', CalendarDays, null, null, <P.Calendar />, null, 'calendar'],
+    ['/reminders', 'Reminders', BellRing, null, null, <P.Reminders />, 'reminders', 'reminders'],
     ['/notes', 'Notes & SOPs', NotebookPen, null, null, <P.Notes />, null, 'notes'],
+    ['/calendar', 'Calendar', CalendarDays, null, null, <P.Calendar />, null, 'calendar'],
   ] },
-  // 1.14.0: the 17 medicine pages split in two short groups, so the menu is easier to scan and its headings fit
-  { group: 'Stock', items: [
-    ['/inventory', 'Inventory', Boxes, 'F7', 'low', <P.StockLevels />, 'inventory.view'],
-    ['/add-stock', 'Add Stock', PackagePlus, 'F4', null, <P.AddStock />, 'stock.receive'],
-    ['/returns', 'Returns to Supplier', Undo2, null, null, <P.Returns />, ['stock.receive', 'stock.adjust']],
-    ['/purchases', 'Purchase History', History, null, null, <P.Purchases />, 'stock.receive'],
-    ['/stock-count', 'Stock Count', ClipboardCheck, null, null, <P.StockCount />, ['stock.count', 'stock.adjust']],
-    ['/expiry', 'Expiring / Expired', CalendarClock, null, 'expiry', <P.Expiry />, 'inventory.view'],
-    ['/reorder', 'Reorder & Dead Stock', ShoppingBag, null, null, <P.Reorder />, 'stock.receive', 'reorder'],
-    ['/stock-card', 'Stock Card', ScrollText, null, null, <P.StockCard />, 'inventory.view'],
-    ['/storage', 'Weather & Storage', Thermometer, null, null, <P.Storage />, 'inventory.view', 'weather'],
-  ] },
-  { group: 'Medicines', items: [
-    ['/medicines', 'Medicine List', Pill, null, null, <P.MedicineList />, 'inventory.view'],
-    ['/controlled', 'Controlled Drugs & Recalls', ShieldPlus, null, null, <P.Controlled />, 'inventory.view'],
-    ['/quick-edit', 'Quick Edit', PencilRuler, null, null, <P.QuickEdit />, 'medicines.manage'],
-    ['/labels', 'Barcode Labels', Tag, null, null, <P.Labels />, 'medicines.manage', 'labels'],
-    ['/import', 'Import Medicines', FileUp, null, null, <P.Import />, 'medicines.manage', 'import'],
-  ] },
-  { group: 'Branches', items: [
-    ['/branches', 'All Branches', Building2, null, null, <P.Branches />, 'branches.view', 'branches'],
-    ['/transfers', 'Stock Transfers', Send, null, 'transfers', <P.Transfers />, 'transfers', 'branches'],
-  ] },
-  { group: 'Finance', items: [
+  { group: 'Money', items: [
     ['/expenses', 'Expenses', Wallet, null, null, <P.Expenses />, 'finance', 'finance'],
     ['/expense-categories', 'Expense Categories', Tags, null, null, <P.ExpenseCategories />, 'finance', 'finance'],
     ['/banks', 'Banks', Landmark, null, null, <P.Banks />, 'finance', 'finance'],
@@ -163,27 +163,74 @@ const NAV = [
     ['/cash-book', 'Cash Book', BookOpen, null, null, <P.CashBook />, 'finance', 'finance'],
     ['/payroll', 'Payroll & HR', BadgeCheck, null, null, <P.Payroll />, 'payroll', 'finance'],
   ] },
-  { group: 'Insights', items: [['/weekly', 'Weekly Summary', CalendarRange, null, null, <P.Weekly />, 'reports', 'reports'], ['/reports', 'Reports', BarChart3, null, null, <P.Reports />, ['reports', 'reports.lines'], 'reports']] },
-  // 1.16.0 (the owner's clean-up): pages used now and then, so the groups above stay short
-  { group: 'More', items: [
-    ['/kits', 'Kits', BriefcaseMedical, null, 'kits', <P.Kits />, 'inventory.view'],
-    ['/formulations', 'Formulations', FlaskConical, null, null, <P.Formulations />, 'medicines.manage'],
-    ['/shelves', 'Shelves', Archive, null, null, <P.Shelves />, 'inventory.view'],
-    ['/scan', 'Scan Prescription', ScanText, null, null, <P.Scan />, 'prescriptions', 'ai'],
-    ['/quiz', 'Drug Quiz', GraduationCap, null, null, <P.Quiz />, null, 'drugInfo'],
-  ] },
-  { group: 'System', items: [
-    ['/users', 'Users & Roles', UserCog, null, null, <P.Users />, 'users.manage'],
-    ['/settings', 'Settings', SettingsIcon, null, null, <P.Settings />, 'settings.manage'],
+  { group: 'Reports', items: [
+    ['/reports', 'Reports', BarChart3, null, null, <P.Reports />, ['reports', 'reports.lines'], 'reports'],
+    ['/sales', 'Sales History', ReceiptText, 'F6', null, <P.Sales />, 'sales.view'],
+    ['/weekly', 'Weekly Summary', CalendarRange, null, null, <P.Weekly />, 'reports', 'reports'],
     ['/audit', 'Audit Log', ShieldCheck, null, null, <P.Audit />, 'audit'],
+  ] },
+  { group: 'Settings', items: [
+    ['/settings', 'Settings', SettingsIcon, null, null, <P.Settings />, 'settings.manage'],
+    ['/users', 'Users & Roles', UserCog, null, null, <P.Users />, 'users.manage'],
     ['/device', 'This Device & Updates', MonitorSmartphone, null, 'update', <P.Device />],
   ] },
 ];
 
+/** Pages that share one menu entry and show as tabs on one page: [menu name, icon, pages]. The entry opens the first
+ *  page this person may use; the tabs show only the pages they may use. */
+export const HUBS = [
+  ['Prescriptions', ClipboardPlus, ['/prescriptions', '/scan']],
+  ['Drug Information', BookMarked, ['/drug-info', '/quiz']],
+  ['Medicines', Pill, ['/inventory', '/medicines', '/quick-edit', '/stock-card', '/formulations']],
+  ['Branches', Building2, ['/branches', '/transfers']],
+  ['Messages', MessagesSquare, ['/chat', '/messages', '/reminders']],
+  ['Notes & Calendar', NotebookPen, ['/notes', '/calendar']],
+  ['Expenses', Wallet, ['/expenses', '/expense-categories']],
+  ['Banks', Landmark, ['/banks', '/bank-tx']],
+  ['Reports', BarChart3, ['/reports', '/sales', '/weekly']],
+];
+const hubOf = (to) => HUBS.find(([, , list]) => list.includes(to));
+/** The pages only the account menu lists for someone who can't change the pharmacy's settings (Ctrl+K still finds them) */
+const ACCOUNT_ONLY = ['/device'];
+
+/** The menu: each hub folded into one entry (its first page this person may use), in the place of its first page.
+ *  An entry is the item with a ninth field, the hub's pages. */
+export function menuOf(groups, can) {
+  return groups.map((g) => {
+    const items = [];
+    for (const it of g.items) {
+      if (ACCOUNT_ONLY.includes(it[0]) && !can('settings.manage')) continue;
+      const hub = hubOf(it[0]);
+      if (!hub) { items.push(it); continue; }
+      const mine = hub[2].filter((to) => g.items.some(([t]) => t === to));
+      if (it[0] !== mine[0]) continue;
+      if (mine.length === 1) { items.push(it); continue; }
+      const badge = mine.map((to) => g.items.find(([t]) => t === to)[4]).find(Boolean) || null;
+      items.push([it[0], hub[0], hub[1], it[3], badge, it[5], it[6], it[7], mine]);
+    }
+    return { ...g, items };
+  }).filter((g) => g.items.length);
+}
+
+/** The tabs at the top of a page that shares its menu entry with others (HUBS) */
+function HubTabs({ groups, here }) {
+  const hub = hubOf(here);
+  if (!hub) return null;
+  const all = groups.flatMap((g) => g.items);
+  const tabs = hub[2].map((to) => all.find(([t]) => t === to)).filter(Boolean);
+  if (tabs.length < 2) return null;
+  return (
+    <nav className="tabs hub-tabs" aria-label={`${hub[0]} pages`}>
+      {tabs.map(([to, label, Icon]) => <NavLink key={to} to={to} end className="tab"><Icon size={15} aria-hidden="true" />{label}</NavLink>)}
+    </nav>
+  );
+}
 
 /** The device's colour theme (any theme the owner allows for this pharmacy) and whether it follows the system */
-function useTheme() {
+function useTheme(brandColor) {
   const [theme, setTheme] = useState(startupTheme);
+  // the Brand colour theme in the pharmacy's colour (Settings → Receipts & stock), repainted when it changes
+  useEffect(() => { setBrandColor(brandColor); if (themeById(theme).id.startsWith('brand')) applyTheme(theme); }, [brandColor]); // eslint-disable-line react-hooks/exhaustive-deps
   const [mode, setMode] = useState(savedMode);
   const [accent, setAccent] = useState(savedAccent);
   useEffect(() => { applyTheme(theme, accent); saveTheme(theme); saveAccent(accent); }, [theme, accent]);
@@ -198,59 +245,20 @@ function useSurface() {
   return [style, setStyle];
 }
 
-/** Gradients on this device (1.17.0, src/gradients.js): the page background, the accents and a preset for the menu */
-function GradientChoice() {
-  const [g, setG] = useState(savedGradient);
-  const set = (patch) => { const next = { ...g, ...patch }; setG(next); applyGradient(next); saveGradient(next); };
-  return (
-    <div className="gradient-choice">
-      <div className="seg grad-bg" role="radiogroup" aria-label="Gradient background">
-        {GRADIENT_BACKGROUNDS.map(([id, label]) => <button key={id} type="button" role="radio" aria-checked={g.background === id} className={g.background === id ? 'on' : ''} onClick={() => set({ background: id })}>{label}</button>)}
-      </div>
-      <button type="button" role="switch" aria-checked={!!g.accents} className={'style-item grad-accents' + (g.accents ? ' on' : '')} onClick={() => set({ accents: !g.accents })}>
-        <span className="swatch grad-swatch accents" /><span className="grow">Gradient accents<small className="muted"> · buttons, the menu and card headings</small></span>
-      </button>
-      <div className="grad-presets" role="radiogroup" aria-label="Gradient preset for the menu and banner">
-        <button type="button" role="radio" aria-checked={!g.preset} className={'grad-preset none' + (!g.preset ? ' on' : '')} title="No preset: the theme's own menu" onClick={() => set({ preset: '' })}><span aria-hidden="true">✕</span><small>Theme</small></button>
-        {GRADIENT_PRESETS.map(([id, name, a, b]) => (
-          <button key={id} type="button" role="radio" aria-checked={g.preset === id} className={'grad-preset' + (g.preset === id ? ' on' : '')} title={`${name}: the menu and the banner`} onClick={() => set({ preset: id })}>
-            <span style={{ background: `linear-gradient(135deg, ${a}, ${b})` }} aria-hidden="true" /><small>{name}</small>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/** The device's colour level: Calm (standard) or Vivid (src/vivid.js). Applied and saved on the click itself: picking
- *  closes the menu, which removes this list, so a later effect would never run. */
-function ColourLevel({ onPick }) {
-  const level = savedLevel();
-  const pick = (id) => { applyLevel(id); saveLevel(id); onPick(); };
-  return LEVELS.map((l) => (
-    <button key={l.id} className={'style-item' + (l.id === level ? ' on' : '')} onClick={() => pick(l.id)}>
-      <span className={'swatch level-swatch level-' + l.id} />
-      <span className="grow">{l.name}<small className="muted"> · {l.hint}</small></span>
-    </button>
-  ));
-}
-
-/** The theme menu's shortlist (1.16.0, the owner's clean-up): the rest are under All themes */
-const RECOMMENDED = ['pharmacy-green', 'mint-teal', 'pharmacy-blue', 'navy-teal', 'cool-crisp', 'neon-indigo'];
-
-function ThemePicker({ theme, setTheme, mode, setMode, style, setStyle }) {
+/** The theme menu (1.22.0, the owner's clean-up): Light / Dark / System and the four themes. The colour level, gradient
+ *  and surface style moved to This device → Look (src/components/LookExtras.jsx). */
+function ThemePicker({ theme, setTheme, mode, setMode }) {
   const { db } = useStore();
   const branding = db.license?.[0]?.branding;
   const list = allowedThemes(branding);
   const [open, setOpen] = useState(false);
   const ref = useRef();
-  const current = list.find((t) => t.id === theme);
+  const current = themeById(theme);
   // Keep within what the owner allows for this pharmacy
   useEffect(() => { if (list.length && !list.some((t) => t.id === theme)) { const d = currentThemeId(branding?.defaultTheme || ''); setTheme(d && list.some((t) => t.id === d) ? d : list[0].id); } }, [branding]); // eslint-disable-line react-hooks/exhaustive-deps
   // Follow system: light or dark with the operating system, live when it changes
   useEffect(() => {
     if (mode !== 'system') return;
-    // 1.17.0: the theme's own twin first (Pharmacy Green → its dark twin at night), else the pharmacy's default
     const follow = () => setTheme((cur) => { const b = systemDark() ? 'dark' : 'light', tw = twinFor(cur, b); return tw && list.some((t) => t.id === tw) ? tw : paletteFor(b, list, branding?.defaultTheme); });
     follow();
     const mq = matchMedia('(prefers-color-scheme: dark)');
@@ -260,39 +268,16 @@ function ThemePicker({ theme, setTheme, mode, setMode, style, setStyle }) {
   const pickBase = (base) => {
     setMode('');
     if (current?.base === base) return;
-    const tw = twinFor(theme, base); // 1.17.0: Dark keeps this theme's colours (its dark twin), Light goes back
+    const tw = twinFor(theme, base); // Dark keeps this theme's colours (its dark twin), Light goes back
     setTheme(tw && list.some((t) => t.id === tw) ? tw : paletteFor(base, list, branding?.defaultTheme));
   };
-  const [all, setAll] = useState(false);
-  // the list shows each theme once; its dark twin is reached with Dark (1.17.0)
+  // the list shows each theme once; its dark twin is reached with Dark
   const shownList = list.filter((t) => !t.twinOf);
   const isOn = (t) => t.id === theme || t.id + '-dark' === theme;
-  const rec = RECOMMENDED.map((id) => shownList.find((t) => t.id === id)).filter(Boolean);
-  const short = shownList.length > 8 && rec.length >= 3;
-  const item = (t) => (
-    <button key={t.id} className={'theme-item' + (isOn(t) ? ' on' : '')} onClick={() => { setMode(''); setTheme(current?.base === 'dark' && twinFor(t.id, 'dark') ? twinFor(t.id, 'dark') : t.id); setOpen(false); }}
-      onMouseEnter={() => applyTheme(current?.base === 'dark' && twinFor(t.id, 'dark') ? twinFor(t.id, 'dark') : t.id)} onFocus={() => applyTheme(t.id)}>
-      <span className="swatch" style={{ background: `linear-gradient(135deg, ${t.c.sidebar} 0 30%, ${t.c.surface} 30% 55%, ${t.c.primary} 55% 78%, ${t.c.primary2} 78%)`, borderColor: t.c.borderStrong }} />
-      <span className="grow">{t.name}{t.inspired && t.inspired !== t.name && <small className="muted"> · {t.inspired}</small>}</span>
-      {t.base === 'dark' ? <Moon size={13} /> : <Sun size={13} />}
-    </button>
-  );
-  // every section of the panel folds (the owner's request, 2026-11-20): at first only Recommended and the set with the
-  // theme in use are open; what the person opens or folds is kept on this device
-  const [folds, setFolds] = useState(() => { try { return JSON.parse(localStorage.getItem('rxpos-theme-folds') || '{}'); } catch { return {}; } });
-  const isOpenSec = (id, dflt) => folds[id] ?? dflt;
-  const flip = (id, dflt) => setFolds((f) => { const n = { ...f, [id]: !(f[id] ?? dflt) }; try { localStorage.setItem('rxpos-theme-folds', JSON.stringify(n)); } catch { /* blocked */ } return n; });
-  const sec = (id, title, dflt, body) => (
-    <div className={'theme-sec' + (isOpenSec(id, dflt) ? ' open' : '')} key={id}>
-      <button type="button" className="bell-head sec-head" aria-expanded={isOpenSec(id, dflt)} onClick={() => flip(id, dflt)}>
-        <ChevronDown size={13} className={'sec-chev' + (isOpenSec(id, dflt) ? '' : ' shut')} aria-hidden="true" /><span className="grow">{title}</span>
-      </button>
-      <div className="sec-body" hidden={!isOpenSec(id, dflt)}>{body}</div>
-    </div>
-  );
+  const pick = (t) => current?.base === 'dark' && twinFor(t.id, 'dark') ? twinFor(t.id, 'dark') : t.id;
   const MODES = [['light', 'Light', Sun], ['dark', 'Dark', Moon], ['system', 'System', MonitorSmartphone]];
   const activeMode = mode === 'system' ? 'system' : current?.base;
-  // a theme is previewed while the pointer is on it (2026-11-18); closing the menu puts the chosen one back
+  // a theme is previewed while the pointer is on it; closing the menu puts the chosen one back
   useEffect(() => { if (!open) applyTheme(theme); }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!open) return;
@@ -312,32 +297,17 @@ function ThemePicker({ theme, setTheme, mode, setMode, style, setStyle }) {
                 onClick={() => (id === 'system' ? setMode('system') : pickBase(id))}><Icon size={14} />{label}</button>
             ))}
           </div>
-          {/* 1.16.0 (the owner's clean-up): six recommended themes first; every theme, by set, under "All themes" */}
-          {short && sec('recommended', 'Recommended', true, (
-            <div className="theme-group" role="group" aria-label="Recommended">
-              {rec.map(item)}
-              <button type="button" className="style-item all-themes" aria-expanded={all} onClick={() => setAll((x) => !x)}>
-                <ChevronDown size={14} className={all ? 'flip' : ''} aria-hidden="true" /><span className="grow">All themes ({shownList.length})</span>
+          <div className="theme-group" role="group" aria-label="Themes">
+            {shownList.map((t) => (
+              <button key={t.id} className={'theme-item' + (isOn(t) ? ' on' : '')} onClick={() => { setMode(''); setTheme(pick(t)); setOpen(false); }}
+                onMouseEnter={() => applyTheme(pick(t))} onFocus={() => applyTheme(pick(t))}>
+                <span className="swatch" style={{ background: `linear-gradient(135deg, ${t.c.sidebar} 0 30%, ${t.c.surface} 30% 55%, ${t.c.primary} 55% 78%, ${t.c.primary2} 78%)`, borderColor: t.c.borderStrong }} />
+                <span className="grow">{t.name}<small className="muted"> · {t.inspired}</small></span>
+                {t.base === 'dark' ? <Moon size={13} /> : <Sun size={13} />}
               </button>
-            </div>
-          ))}
-          {/* themes by group (src/themes.js THEME_GROUPS) */}
-          <div className="theme-all" hidden={short && !all}>
-          {THEME_GROUPS.map((g) => [g, shownList.filter((t) => (t.group || 'Clinical') === g)]).filter(([, ts]) => ts.length).map(([g, ts]) => sec('set:' + g, `${g} (${ts.length})`, ts.some(isOn) || !short, (
-            <div className="theme-group" role="group" aria-label={g}>
-              {ts.map(item)}
-            </div>
-          )))}
+            ))}
           </div>
-          {sec('colour', 'Colour', false, <ColourLevel onPick={() => setOpen(false)} />)}
-          {sec('gradient', 'Gradient', false, <GradientChoice />)}
-          {sec('style', 'Style', false, STYLES.map((s, i) => (<Fragment key={s.id}>
-            {s.group && s.group !== STYLES[i - 1]?.group && <div className="bell-sub">{s.group}</div>}
-            <button className={'style-item' + (s.id === style ? ' on' : '')} onClick={() => { setStyle(s.id); setOpen(false); }}>
-              <span className={'swatch style-swatch surface-' + s.id} />
-              <span className="grow">{s.name}<small className="muted"> · {s.hint}</small></span>
-            </button>
-          </Fragment>)))}
+          <NavLink className="style-item" to="/device" state={{ tab: 'look' }} onClick={() => setOpen(false)}><SlidersHorizontal size={14} /><span className="grow">Colour, gradient and style<small className="muted"> · This device → Look</small></span></NavLink>
         </div>
       )}
     </div>
@@ -493,8 +463,8 @@ function Shell() {
   useEffect(() => warmSearchKeys(products), [products.length]); // eslint-disable-line react-hooks/exhaustive-deps -- once per new medicine count
   const navigate = useNavigate();
   const location = useLocation();
-  const [theme, setTheme, themeMode, setThemeMode, accent, setAccent] = useTheme();
-  const [surface, setSurface] = useSurface();
+  const [theme, setTheme, themeMode, setThemeMode] = useTheme(db.settings.brandColor);
+  useSurface(); // the surface style saved on this device, painted at start (chosen in This device → Look)
   const [drawer, setDrawer] = useState(false);
   // compact navigation rail (icons only) for more working width, e.g. at the POS; remembered on this device
   const [rail, setRail] = useState(() => {
@@ -513,13 +483,15 @@ function Shell() {
   // ~45 pages don't all compete for attention; their own choices are remembered after that
   const [collapsed, setCollapsed] = useState(() => {
     try { const saved = JSON.parse(localStorage.getItem('pharmapos-nav')); if (saved) return saved; } catch { /* first visit */ }
-    return Object.fromEntries(NAV.filter((g) => g.group && g.group !== 'Sales').map((g) => [g.group, true]));
+    return Object.fromEntries(NAV.filter((g) => g.group && g.group !== 'Sell').map((g) => [g.group, true]));
   });
 
   const { can, features, batchesOf, day, kits } = useStore();
   // Show only what this person's role may use and what is switched on for this pharmacy
   const groups = NAV.map((g) => ({ ...g, items: g.items.filter(([, , , , , , perm, feat]) => (!perm || [].concat(perm).some(can)) && (!feat || features[feat] !== false)) })).filter((g) => g.items.length);
   const pages = groups.flatMap((g) => g.items.map(([to, label, Icon, key]) => ({ to, label, Icon, key })));
+  // the menu: overlapping pages folded into one entry with tabs (HUBS), the account menu's pages left out
+  const menu = menuOf(groups, can);
   // F8: the four pages this device chose for the phone's bottom bar (This device), else the role's standard bar
   const [barPick, setBarPick] = useState(() => deviceSettings().bottomBar || null);
   useEffect(() => onDevice((d) => setBarPick(d.bottomBar || null)), []);
@@ -797,7 +769,7 @@ function Shell() {
               </div>
             );
           })()}
-          {groups.map((g, i) => { const add = QUICK_ADD[g.group] && can(QUICK_ADD[g.group][2]) ? QUICK_ADD[g.group] : null; const alerts = g.items.reduce((a, it) => a + (it[4] ? newCount(counts[it[4]], navSeen[it[4]]) : 0), 0); return (
+          {menu.map((g, i) => { const add = QUICK_ADD[g.group] && can(QUICK_ADD[g.group][2]) ? QUICK_ADD[g.group] : null; const alerts = g.items.reduce((a, it) => a + (it[4] ? newCount(counts[it[4]], navSeen[it[4]]) : 0), 0); return (
             <div key={i} className={'nav-group' + (collapsed[g.group] ? ' collapsed' : ' open')}>
               {g.group && <div className="nav-title-row">
                 <button className="nav-title" aria-expanded={!collapsed[g.group]} onClick={() => toggleGroup(g.group)}>
@@ -806,8 +778,8 @@ function Shell() {
                 </button>
                 {add && <button type="button" className="nav-add" title={add[0]} aria-label={add[0]} onClick={() => navigate(add[1], add[3] ? { state: add[3] } : undefined)}><Plus size={14} /></button>}
               </div>}
-              {g.items.map(([to, label, Icon, , badge], n) => { const key = keyOf('go:' + to) && showKey(keyOf('go:' + to)); return (
-                <NavLink key={to} to={to} end style={{ '--i': n }} title={label + (key ? ` (${key})` : '')} hidden={!rail && collapsed[g.group] && !g.items.some(([t]) => t === location.pathname) && !(badge && newCount(counts[badge], navSeen[badge]) > 0)}>
+              {g.items.map(([to, label, Icon, , badge, , , , hub], n) => { const key = keyOf('go:' + to) && showKey(keyOf('go:' + to)); const on = hub ? hub.includes(here) : to === here; return (
+                <NavLink key={to} to={to} end style={{ '--i': n }} className={on ? 'active' : undefined} aria-current={on ? 'page' : undefined} title={label + (key ? ` (${key})` : '')} hidden={!rail && collapsed[g.group] && !g.items.some(([t, , , , , , , , h]) => t === here || h?.includes(here)) && !(badge && newCount(counts[badge], navSeen[badge]) > 0)}>
                   <Icon size={17} /><span className="grow">{label}</span>
                   {badge && newCount(counts[badge], navSeen[badge]) > 0 && <span className="count">{counts[badge]}</span>}
                   {key && <kbd>{key}</kbd>}
@@ -831,13 +803,13 @@ function Shell() {
               </nav>
             ) : null;
           })()}
-          {navStyle === 'top' && <TopNav groups={groups} counts={counts} can={can} here={here} onAll={() => setMega(true)} />}
+          {navStyle === 'top' && <TopNav groups={menu} counts={counts} can={can} here={here} onAll={() => setMega(true)} />}
           <div className="spacer grow" />
           {db.branches.length > 1 && <NavLink to="/branches" className="pill branch-pill" title="Branch this device works as"><Building2 size={14} />{branch?.name}</NavLink>}
           <ClockPill />
           <NotificationBell />
           <ControlCentre dark={darkNow} onDark={setDark} rail={rail} onRail={toggleRail} onSync={() => syncNow()} onLock={lockTill} onLibrary={() => setLibrary(true)} />
-          <ThemePicker theme={theme} setTheme={setTheme} mode={themeMode} setMode={setThemeMode} accent={accent} setAccent={setAccent} style={surface} setStyle={setSurface} />
+          <ThemePicker theme={theme} setTheme={setTheme} mode={themeMode} setMode={setThemeMode} />
           {/* the signed-in person: top right beside the theme, a drop-down (the owner's request, 17 Nov 2026) */}
           <div className="account-menu" ref={accountMenuRef}>
             <button className="account-btn" aria-haspopup="menu" aria-expanded={accountOpen} title="My account" onClick={() => setAccountOpen((o) => !o)}>
@@ -849,6 +821,7 @@ function Shell() {
               {isNative && <button className={'menu-item' + (pinSet ? ' text-ok' : '')} role="menuitem" title={pinSet ? 'Quick PIN is set for this device' : 'Set a quick PIN for this device'} onClick={manageDevicePin}><LockKeyhole size={16} />{pinSet ? 'Quick PIN is set for this device' : 'Set a quick PIN for this device'}</button>}{/* web: nothing is kept on the computer, so no device PIN */}
               {syncCfg?.key?.startsWith('u.') && <button className={'menu-item' + (me?.twoFactor ? ' text-ok' : '')} role="menuitem" title={me?.twoFactor ? 'Two-step sign-in is on' : 'Two-step sign-in'} onClick={() => setTwoStepOpen(true)}><ShieldCheck size={16} />{me?.twoFactor ? 'Two-step sign-in is on' : 'Two-step sign-in'}</button>}
               {here !== '/' && pages.some((x) => x.to === here) && <button className={'menu-item' + (nav.pins.includes(here) ? ' text-ok' : '')} role="menuitem" aria-pressed={nav.pins.includes(here)} title={`${nav.pins.includes(here) ? 'Unpin this page from' : 'Pin this page to'} the top of the menu (${showKey(keyOf('pin'))})`} onClick={() => togglePin(here)}><Pin size={16} />{nav.pins.includes(here) ? 'Unpin this page' : 'Pin this page'}</button>}
+              <NavLink className="menu-item" role="menuitem" to="/device" title="This device and updates"><MonitorSmartphone size={16} />This device &amp; updates{counts.update > 0 && <span className="count">1</span>}</NavLink>
               <button className="menu-item" role="menuitem" title={`Keyboard and mouse (${showKey(keyOf('help'))})`} aria-label="Keyboard and mouse help" onClick={() => setHelp(true)}><Keyboard size={16} />Keyboard &amp; mouse</button>
               <button className="menu-item" role="menuitem" title="Sync now (F5)" onClick={() => syncNow()}><RefreshCw size={16} />Sync now</button>
               <button className="menu-item danger" role="menuitem" title="Log out" onClick={signOut}><LogOut size={16} />Log out</button>
@@ -860,6 +833,7 @@ function Shell() {
         {(() => {
           const content = (
             <main className="content" ref={contentRef} data-page={here} onContextMenu={openPageMenu}>
+              <HubTabs groups={groups} here={here} />
               <Suspense fallback={<PageSkeleton />}>
                 <Routes>
                   {groups.flatMap((g) => g.items).map(([to, , , , , el]) => <Route key={to} path={to} element={el} />)}
@@ -878,7 +852,7 @@ function Shell() {
         {tabs.right.map(([to, label]) => <NavLink key={to} to={to} onClick={() => markNav('tab')}>{(() => { const I = TAB_ICONS[to]; return <I size={20} />; })()}<span>{label}</span></NavLink>)}
         <button onClick={() => setMega(true)} aria-expanded={mega}><Menu size={20} /><span>More</span></button>
       </nav>
-      <MegaMenu open={mega} onClose={() => setMega(false)} groups={groups} counts={counts} can={can} onFullMenu={() => setDrawer(true)} />
+      <MegaMenu open={mega} onClose={() => setMega(false)} groups={menu} counts={counts} can={can} onFullMenu={() => setDrawer(true)} />
       <AiOmnibar open={palette} onClose={() => setPalette(false)} pages={pages} commands={[
         ...(can('pos.sell') ? [{ label: 'New sale', words: 'sell till pos', Icon: ShoppingCart, hint: showKey(keyOf('go:/pos')), go: () => navigate('/pos') }] : []),
         ...(can('stock.receive') ? [{ label: 'Receive stock', words: 'add stock delivery invoice purchase', Icon: PackagePlus, hint: showKey(keyOf('go:/add-stock')), go: () => navigate('/add-stock') }] : []),
@@ -955,7 +929,7 @@ function WebOffline() {
         <h3 id="web-offline-title">No internet connection</h3>
         <p className="muted">The web version of RxPOS works online only and keeps nothing on this computer, so it waits here until the connection is back. Anything you already did goes up as soon as it reconnects.</p>
         <p className="muted small">To keep selling without internet, use the RxPOS Windows or Android app.</p>
-        <div className="row gap" style={{ justifyContent: 'center' }}><span className="spinner" style={{ margin: 0, width: 22, height: 22 }} /><span className="small">Waiting for the connection…</span></div>
+        <div className="row gap justify-center"><span className="spinner sm" /><span className="small">Waiting for the connection…</span></div>
       </div>
     </div>
   );
@@ -1016,11 +990,10 @@ function Gate() {
 
 // The + beside a menu group: its most common "new …" (the sidebar groups from the owner's references, 2026-11-15)
 const QUICK_ADD = {
-  Sales: ['New sale', '/pos', 'pos.sell'],
+  Sell: ['New sale', '/pos', 'pos.sell'],
   People: ['Add a customer', '/customers', 'customers', { create: true }],
   Stock: ['Receive stock', '/add-stock', 'stock.receive'],
-  Medicines: ['Add a medicine', '/medicines', 'medicines.manage', { create: true }],
-  Finance: ['Add an expense', '/expenses', 'finance', { create: true }],
+  Money: ['Add an expense', '/expenses', 'finance', { create: true }],
 };
 
 /** Whose sign-in pass this is (the person it was issued to); '' for a pharmacy key */

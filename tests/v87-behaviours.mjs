@@ -37,6 +37,14 @@ await p.evaluate(() => [...document.querySelectorAll('form button')].find((x) =>
 await p.waitForSelector('.sidebar', { timeout: 20000 }); await wait(2500);
 await p.evaluate(() => { location.hash = '#/'; }); await wait(800);
 
+// ---- 1.22.0 (the owner's clean-up): the extras are off on a new device, switched on in This device → Extras ----
+check('no Control Centre button on a new device', !(await p.$('.cc-btn')));
+await p.evaluate(() => { location.hash = '#/device'; }); await wait(900);
+const flip = (re) => p.evaluate((r) => { const row = [...document.querySelectorAll('label.settings-row')].find((x) => new RegExp(r).test(x.textContent)); row?.querySelector('input')?.click(); return !!row; }, re.source);
+check('This device → Extras switches on Control Centre and the App Library', (await flip(/^Control Centre/)) && (await flip(/^App Library/)));
+await p.evaluate(() => { location.hash = '#/'; }); await wait(600);
+check('…and the Control Centre button shows', !!(await p.$('.cc-btn')));
+
 // ---- Control Centre ----
 check('everything is off on a new device', !(await attr(p, 'sheets')) && !(await attr(p, 'island')) && !(await attr(p, 'home')) && !(await attr(p, 'tiling')));
 await openCC(p);
@@ -77,7 +85,7 @@ check('dragging the sheet down closes it', !(await p.$('.modal')));
 // ---- App Library ----
 await openCC(p); await clickText(p, '.cc-tile', /App Library/); await p.waitForSelector('.lib-sheet', { timeout: 5000 });
 const folders = await p.evaluate(() => [...document.querySelectorAll('.lib-folder')].map((f) => f.getAttribute('aria-label')));
-check('the App Library has Suggestions and a folder per menu group', folders[0] === 'Suggestions' && ['Sales', 'Stock', 'System'].every((x) => folders.includes(x)), folders.join(', '));
+check('the App Library has Suggestions and a folder per menu group', folders[0] === 'Suggestions' && ['Sell', 'Stock', 'Settings'].every((x) => folders.includes(x)), folders.join(', '));
 await p.screenshot({ path: `${out}/app-library.png` });
 await setVal(p, '.lib-search input', 'stock');
 const found = await p.evaluate(() => [...document.querySelectorAll('.lib-list a .grow')].map((x) => x.textContent));

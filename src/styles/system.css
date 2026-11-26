@@ -1,0 +1,43 @@
+/* 1.22.0 (the owner's clean-up, 26 Nov 2026): one style for buttons, spacing and tables, loaded last.
+   Spacing comes from one scale (4, 8, 12, 16, 24 px); buttons come in three heights; tables share one cell padding
+   and heading look. The surface styles in This device → Look still restyle them on purpose. Pages use the helper
+   classes below instead of inline styles. */
+:root { --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 24px; --btn-h: 38px; --btn-h-sm: 30px; --btn-h-big: 46px; }
+
+/* buttons: one height and weight; sm and big are the only other sizes */
+.btn { min-height: var(--btn-h); font-weight: 600; }
+.btn.sm { min-height: var(--btn-h-sm); }
+.btn.big { min-height: var(--btn-h-big); }
+
+/* tables: one cell padding and heading look, from the tokens (compact density changes the tokens) */
+:root { --cell-y: 9px; --cell-x: 12px; }
+:root[data-density="compact"] { --cell-y: 6px; }
+@media (max-width: 640px) { :root { --cell-y: 8px; --cell-x: 10px; } }
+th, td { padding: var(--cell-y) var(--cell-x); }
+
+/* the tabs of pages that share one menu entry (Medicines, Messages, Reports…) */
+.hub-tabs { margin: 20px 24px -6px; }
+.hub-tabs .tab { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
+@media (max-width: 640px) { .hub-tabs { margin: 12px 12px -4px; } }
+a.style-item { text-decoration: none; color: inherit; }
+@media print { .hub-tabs { display: none; } }
+
+/* helpers (were inline styles) */
+.mt-2 { margin-top: var(--s-2); } .mt-3 { margin-top: var(--s-3); } .mt-4 { margin-top: var(--s-4); }
+.mb-2 { margin-bottom: var(--s-2); } .mb-3 { margin-bottom: var(--s-3); } .m-0 { margin: 0; }
+.p-3 { padding: var(--s-3); }
+.self-start { align-self: flex-start; }
+.span-all { grid-column: 1 / -1; }
+.justify-center { justify-content: center; } .justify-start { justify-content: flex-start; }
+.flex-wrap { flex-wrap: wrap; }
+.pre-line { white-space: pre-line; }
+.text-ink { color: var(--text); }
+.scroll-50 { max-height: 50vh; overflow: auto; } .scroll-55 { max-height: 55vh; overflow: auto; } .max-h-50 { max-height: 50vh; }
+.max-w-520 { max-width: 520px; }
+.w-28 { width: 28%; }
+.h-64 { height: 64px; }
+.flip-180 { transform: rotate(180deg); }
+.break-all { display: block; word-break: break-all; margin: var(--s-2) 0; }
+.lead-center { font-size: 16px; line-height: 1.7; text-align: center; }
+.spinner.sm { margin: 0; width: 22px; height: 22px; }
+.sub-label { margin: var(--s-3) 0 6px; }

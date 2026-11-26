@@ -50,7 +50,7 @@ export default function OwnerConsole() {
   };
 
   if (!isWeb) return (
-    <div className="auth-bg owner-login"><div className="auth-side" style={{ gridColumn: '1 / -1' }}><div className="auth-card">
+    <div className="auth-bg owner-login"><div className="auth-side span-all"><div className="auth-card">
       <div className="brand big"><Logo size={40} /> RxPOS</div>
       <p className="muted center">The owner console is available on the web version only.</p>
       <a className="btn ghost block" href="#/">← Back to RxPOS</a>
@@ -106,7 +106,7 @@ export default function OwnerConsole() {
               {t.stats.anomalies > 0 && <div className="kv" title="Sales the cloud found something wrong with (not yet marked checked in the pharmacy)"><span>Sales to check</span><strong className="warn-text"><b>{t.stats.anomalies.toLocaleString()}</b></strong></div>}
               <div className="kv"><span>Last activity</span><strong>{t.stats.lastActivity ? new Date(t.stats.lastActivity).toLocaleString(dateLocale(), { dateStyle: 'medium', timeStyle: 'short' }) : '—'}</strong></div>
               {t.notes && <p className="muted small">{t.notes}</p>}
-              <button className="btn sm primary">Manage <ArrowLeft size={14} style={{ transform: 'rotate(180deg)' }} /></button>
+              <button className="btn sm primary">Manage <ArrowLeft size={14} className="flip-180" /></button>
             </div>
           ))}
           {tenants && !tenants.length && <Empty>No pharmacies yet</Empty>}
@@ -163,7 +163,7 @@ export default function OwnerConsole() {
 function OwnerBar({ busy, onRefresh, onLock, children }) {
   return (
     <header className="topbar">
-      <div className="brand" style={{ color: 'var(--text)' }}><Logo size={30} /> RxPOS <span className="badge"><Crown size={12} /> Owner</span></div>
+      <div className="brand text-ink"><Logo size={30} /> RxPOS <span className="badge"><Crown size={12} /> Owner</span></div>
       {children}
       <div className="spacer grow" />
       {onRefresh && <button className="btn ghost" onClick={onRefresh} disabled={busy}><RefreshCw size={16} />Refresh</button>}
@@ -496,7 +496,7 @@ function DataBrowser({ t, tables, api, onChanged }) {
           </tbody>
         </table>
         {res && res.total > 50 && (
-          <div className="row between" style={{ padding: 10 }}>
+          <div className="row between p-3">
             <span className="muted small">{offset + 1}–{Math.min(offset + 50, res.total)} of {res.total.toLocaleString()}</span>
             <div className="row gap"><button className="btn sm ghost" disabled={!offset} onClick={() => setOffset(Math.max(0, offset - 50))}>Previous</button><button className="btn sm ghost" disabled={offset + 50 >= res.total} onClick={() => setOffset(offset + 50)}>Next</button></div>
           </div>
@@ -556,7 +556,7 @@ function OwnerSignIn({ url, onSignedIn }) {
   };
   return (
     <div className="auth-bg owner-login">
-      <div className="auth-side" style={{ gridColumn: '1 / -1' }}>
+      <div className="auth-side span-all">
         <form className="auth-card" onSubmit={submit}>
           <div className="brand big"><Logo size={40} /> RxPOS</div>
           <p className="muted center"><Crown size={14} /> Owner console: create and manage the pharmacies using RxPOS</p>

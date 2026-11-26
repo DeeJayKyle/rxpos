@@ -56,7 +56,7 @@ export default function Labels() {
             <SearchBox value={q} onChange={setQ} placeholder="Search medicine or scan barcode…" />
             {matches.length > 0 && <div className="picker-list">{matches.map((p) => <button key={p.id} onClick={() => add(p)}>{p.isKit && <span className="kit-badge" style={{ '--kit': p.kit.color }}>KIT</span>} {p.name} <small className="muted">{fmt(p.price)} · {p.barcode || 'no barcode yet'}</small></button>)}</div>}
           </div>
-          <div className="row gap" style={{ marginBottom: 10 }}>
+          <div className="row gap mb-3">
             <button className="btn sm ghost" onClick={addLowStock}>Add all in-stock items</button>
             {items.length > 0 && <button className="btn sm ghost" onClick={() => setItems([])}><Trash2 size={14} />Clear</button>}
           </div>
@@ -71,7 +71,7 @@ export default function Labels() {
               {!items.length && <Empty colSpan={4}>Search above to add medicines</Empty>}
             </tbody>
           </table>
-          <div className="row gap" style={{ marginTop: 14 }}>
+          <div className="row gap mt-3">
             {[['price', 'Show price'], ['expiry', 'Show expiry'], ['pharmacy', 'Show pharmacy name']].map(([k, l]) => (
               <label key={k} className="field check"><input type="checkbox" checked={show[k]} onChange={(e) => setShow({ ...show, [k]: e.target.checked })} /><span>{l}</span></label>
             ))}

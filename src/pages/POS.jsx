@@ -4,7 +4,7 @@ import { useLocation, useNavigate, Link } from 'react-router-dom';
 import FKeyBar, { fkeyItems, fkeysShown, showFkeys } from '../components/FKeyBar.jsx';
 import Tour, { knewPage } from '../components/Tour.jsx';
 import { DISPLAY_CHANNEL } from '../components/CustomerDisplay.jsx';
-import { Settings2, ShoppingCart, Trash2, X, ScanText, FileText, Printer, AlertTriangle, ScanBarcode, Smartphone, Loader2, CheckCircle2, UserPlus, Tag, BookMarked, Repeat, PauseCircle, Keyboard, Plus, ClipboardList, MessageCircle, MessageSquareText, Star, Search, Command, LayoutGrid, Users, GraduationCap, Monitor } from 'lucide-react';
+import { Settings2, ShoppingCart, Trash2, X, FileText, Printer, AlertTriangle, ScanBarcode, Smartphone, Loader2, CheckCircle2, UserPlus, Tag, BookMarked, Repeat, PauseCircle, Keyboard, Plus, ClipboardList, MessageCircle, MessageSquareText, Star, Search, Command, LayoutGrid, Users, GraduationCap, Monitor } from 'lucide-react';
 import { DrugInfoPanel, genericKey } from './DrugInfo.jsx';
 import { useStore, useSyncState, uid, now, daysUntil, put, del, move, allocate, audit, normalizePhone, customerBalance, DEFAULT_PAYMENT_METHODS } from '../store.jsx';
 import { overLimit } from '../credit.js';
@@ -12,7 +12,6 @@ import { parseGs1, findByGtin } from '../gs1.js';
 import { preferFirst, expiryLevel } from '../fefo.js';
 import ClinicalSafetyPill, { SafetyBadge } from '../components/ClinicalSafetyPill.jsx';
 import { safetyCheck } from '../clinical.js';
-import AiVisionScanner from '../components/AiVisionScanner.jsx';
 import { FefoPill } from '../components/FefoPill.jsx';
 import { takeStaged, onStaged } from '../components/aiStage.js';
 import { matchProduct } from '../invoiceScan.js';
@@ -161,7 +160,6 @@ export default function POS({ mode = 'retail' }) {
   const cdRef = useRef(null); // the details for this sale, once given
   const rxRef = useRef(null); // a scanned prescription's patient and prescriber: fills the register when it is asked
   const safetyRef = useRef(null); // a major allergy / interaction the pharmacist acknowledged at this checkout, with the reason
-  const [rxScan, setRxScan] = useState(false);
   // Payment methods come from Settings → Payment methods; their type decides the behaviour
   const methods = (db.settings.paymentMethods?.length ? db.settings.paymentMethods : DEFAULT_PAYMENT_METHODS).filter((m) => m.type !== 'momo' || features.momo !== false);
   const [payment, setPayment] = useState(methods[0]?.name || 'Cash');
@@ -894,7 +892,6 @@ export default function POS({ mode = 'retail' }) {
             )}
           </div>
           <CameraButton className="btn ghost big cam-btn" onClick={() => setCam(true)} />
-          {features.ai !== false && (can('pos.sell') || can('prescriptions')) && <button type="button" className="btn ghost big rx-scan-btn" title="Scan Prescription (Rx)" onClick={() => setRxScan(true)}><ScanText size={18} /><span>Scan Rx</span></button>}
         </div>
         <div className="chips-row" role="toolbar" aria-label="Filter medicines">
           {[['instock', 'In stock'], ['', 'All'], ['fav', `Favourites${favs.size ? ` · ${favs.size}` : ''}`]].map(([k, label]) => (
@@ -1267,7 +1264,6 @@ export default function POS({ mode = 'retail' }) {
         </Modal>
       )}
 
-      {rxScan && <AiVisionScanner mode="prescription" onClose={() => setRxScan(false)} onConfirm={(r) => { stageLines(r.items.map((x) => ({ productId: x.productId, qty: x.qty, unit: x.unit })), r); if (r.patient && customerId === 'walk-in') toast(`Prescription for ${r.patient}: choose or add the client if you keep their records`, 'info'); }} />}
       {cam && (
         <CameraScanner title="Scan items into the sale" onClose={() => { setCam(false); focusSearch(); }} onCode={(code) => {
           const g = parseGs1(code);
