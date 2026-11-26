@@ -146,7 +146,7 @@ export function ColTh({ cols, id, children, sort, k, className = '', style, titl
   const on = sort && k && sort.by === k;
   const sized = w ? { width: w, minWidth: w, maxWidth: w } : null;
   return (
-    <th ref={ref} data-col={id} className={[className, 'col-move', sort && k ? 'sortable' : '', cols.dragId === id ? 'dragging' : '', w ? 'col-sized' : ''].filter(Boolean).join(' ')}
+    <th ref={ref} data-col={id} className={['col-move', sort && k ? 'sortable' : '', cols.dragId === id ? 'dragging' : '', w ? 'col-sized' : '', className].filter(Boolean).join(' ')}
       style={{ ...style, ...sized }} aria-sort={sort && k ? (on ? (sort.dir > 0 ? 'ascending' : 'descending') : 'none') : undefined}
       draggable={!fixed} title={title || (fixed ? undefined : 'Drag to move this column; drag its right edge to resize it')}
       onDragStart={fixed ? undefined : (e) => { if (e.target.closest?.('.col-resize')) { e.preventDefault(); return; } cols.setDragId(id); e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', id); } catch { /* old browsers */ } }}

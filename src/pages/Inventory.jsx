@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Download, Barcode as BarcodeIcon, SlidersHorizontal, Save, Undo2, Pencil, ScrollText, Boxes, Tag, Wand2 } from 'lucide-react';
-import { CrudPage, Tabs, Modal, SearchBox, Empty, PdfButton, FilterChips, ExportMenu } from '../ui.jsx';
+import { CrudPage, Tabs, Modal, SearchBox, Empty, PdfButton, FilterChips, ExportMenu, useSort } from '../ui.jsx';
 import { useStore, today, daysUntil, put, move, addBatch, audit, downloadFile, toCSV, batchValue, stockValue, markupPrice, MAIN_BRANCH, putMany } from '../store.jsx';
 import { ask, askText, toast } from '../feedback.jsx';
 import { formatQty } from '../money.js';
@@ -11,7 +11,7 @@ import { useHoverCard, useListControls } from '../listcontrols.jsx';
 import { HELP } from '../forms.jsx';
 import ExpiryCalendar from '../components/ExpiryCalendar.jsx';
 import { deviceSettings, setDevice } from '../device.js';
-import { useLoadMore, useColumns, BulkBar, useWide, DetailsPane, HealthBar } from '../tablekit.jsx';
+import { useLoadMore, useColumns, ColTh, BulkBar, useWide, DetailsPane, HealthBar } from '../tablekit.jsx';
 import { ProductArt } from '../idleart.jsx';
 import { useMedicineOrder, MedicineOrderPicker, groupedRows, useFolded, GroupHeadingRow } from '../medgroups.jsx';
 import { BranchStockList } from '../components/BranchStock.jsx';
@@ -217,7 +217,10 @@ export function StockLevels() {
   const [folded, toggleFold] = useFolded();
   // UI batch 3 (C): 100 rows then more (C7), columns (C2), ticks and a bottom bar (C4), edit in place (C5), arrow
   // keys (C6), the batches beside the list on wide screens (C8), a stock bar (C9)
-  const page = useLoadMore(rows, { resetKey: q + '|' + filter + '|' + order });
+  // the shared table (2026-11-26): click a heading to sort by it (inside each group when grouped); kept on this device
+  const sorted = useSort(rows, { name: (p) => p.name, batch: (p) => p.batch || '', expiry: (p) => p.expiry || '', shelf: (p) => p.shelf || '', reorder: (p) => Number(p.reorder) || 0,
+    stock: (p) => Number(p.stock) || 0, all: (p) => Number(p.totalStock) || 0, price: (p) => Number(p.price) || 0, value: (p) => batchValue(p, batchesOf).value }, null, 1, 'inventory');
+  const page = useLoadMore(sorted.rows, { resetKey: q + '|' + filter + '|' + order + '|' + sorted.by + '|' + sorted.dir });
   const shownRows = useMemo(() => groupedRows(page.rows, order, folded), [page.rows, order, folded]);
   const flat = useMemo(() => shownRows.filter((r) => r.heading === undefined).map((r) => r.p), [shownRows]);
   const searchRef = useRef(null);
@@ -317,7 +320,7 @@ export function StockLevels() {
       <div className={'list-and-details' + (open && wide ? ' with-details' : '')}>
       <div className="card table-wrap" ref={listRef}>
         <table className="phone-rows">
-          <thead><tr><th className="tick"><input {...lc.allProps} /></th>{colsK.shown.map((id) => <th key={id} className={['reorder', 'stock', 'all', 'price', 'value'].includes(id) ? 'num' : ''}>{{ name: 'Medicine', batch: 'Next batch', expiry: 'Expiry', shelf: 'Shelf', reorder: 'Reorder at', stock: 'In stock', all: 'All branches', price: 'Retail price', value: 'Value (cost)' }[id]}</th>)}{(can('inventory.edit') || can('medicines.manage')) && <th />}</tr></thead>
+          <thead><tr><th className="tick"><input {...lc.allProps} /></th>{colsK.shown.map((id) => <ColTh key={id} cols={colsK} id={id} sort={sorted} k={id} className={['reorder', 'stock', 'all', 'price', 'value'].includes(id) ? 'num' : ''}>{{ name: 'Medicine', batch: 'Next batch', expiry: 'Expiry', shelf: 'Shelf', reorder: 'Reorder at', stock: 'In stock', all: 'All branches', price: 'Retail price', value: 'Value (cost)' }[id]}</ColTh>)}{(can('inventory.edit') || can('medicines.manage')) && <th />}</tr></thead>
           <tbody>
             {shownRows.map((r) => r.heading !== undefined ? <GroupHeadingRow key={'g:' + r.heading} row={r} colSpan={cols} onToggle={() => toggleFold(r.heading)} /> : (({ p }) => { const i = flat.indexOf(p); const rp = lc.rowProps(p, i); const c = cellOf(p); return (
               <tr key={p.id} {...rp} className={[rp.className, open?.id === p.id && wide ? 'row-open' : ''].filter(Boolean).join(' ')} onClick={(e) => { rp.onClick(e); if (!e.target.closest('button, a, input, select, label, .cell-editable')) setOpen(p); }} style={{ cursor: 'pointer' }}>
