@@ -83,6 +83,12 @@ export const aiQuiz = (cfg, drugs, count = 8) => call(cfg, '/api/ai/quiz', { met
 export const cloudConfig = (cfg) => call(cfg, '/api/config', { timeout: 8000 });
 export const payRequest = (cfg, body) => call(cfg, '/api/pay/request', { method: 'POST', body, timeout: 30000 });
 export const payStatus = (cfg, provider, ref) => call(cfg, `/api/pay/status?provider=${provider}&ref=${encodeURIComponent(ref)}`);
+// URA EFRIS (worker/efris.js): fiscalise a sale the cloud has, apply for / check a refunded sale's credit note, test the keys
+export const efrisSale = (cfg, id) => call(cfg, '/api/efris/sale', { method: 'POST', body: { id }, timeout: 45000 });
+export const efrisRefund = (cfg, id) => call(cfg, '/api/efris/refund', { method: 'POST', body: { id }, timeout: 45000 });
+export const efrisCredit = (cfg, id) => call(cfg, '/api/efris/credit', { method: 'POST', body: { id }, timeout: 45000 });
+export const efrisStatus = (cfg) => call(cfg, '/api/efris/status', { timeout: 10000 });
+export const efrisTest = (cfg) => call(cfg, '/api/efris/test', { method: 'POST', body: {}, timeout: 45000 });
 export const sendSms = (cfg, to, message) => call(cfg, '/api/sms', { method: 'POST', body: { to, message } });
 
 /** Guess the mobile network from a Ugandan number: MTN 076/077/078/079/039, Airtel 070/074/075/020 */

@@ -26,7 +26,9 @@ import { Modal, SearchBox, ReceiptPdfButton, PageTip } from '../ui.jsx';
 import { MoneyInput, MedThumb } from '../forms.jsx';
 import { toast, ask, askText } from '../feedback.jsx';
 import { payRequest, payStatus, guessNetwork, cloudConfig, whatsappLink, sendSms } from '../cloud.js';
-import { Receipt, receiptText } from './Sales.jsx';
+import { Receipt, receiptText, fiscalOf } from './Sales.jsx';
+import { efrisOn } from '../efris.js';
+import { kickEfris } from '../efrisqueue.jsx';
 import { CameraButton, CameraScanner } from '../camscan.jsx';
 import { deviceSettings, setDevice, onDevice } from '../device.js';
 import { kitView, basketDemand, shortText, stockParts } from '../kits.js';
@@ -646,6 +648,16 @@ export default function POS({ mode = 'retail' }) {
   // 1.6 a sale is only "complete" once it is saved on the device (sale, stock movements, audit and the note to send it
   // to the cloud, in one transaction); a second press while it is being saved is ignored
   const saving = useRef(false);
+  // URA EFRIS: an automatic print waits (at most 15 s) for the fiscal number, so the slip carries FDN and QR; offline it
+  // prints at once and says the fiscal receipt is pending (reprint it later from Sales)
+  const dbRef = useRef(db);
+  dbRef.current = db;
+  const printWhenFiscal = (id) => {
+    if (!efrisOn(db.settings) || !navigator.onLine) return setTimeout(() => window.print(), 350);
+    const until = Date.now() + 15000;
+    const tick = () => (dbRef.current.fiscal?.some((f) => f.id === id) || Date.now() > until ? window.print() : setTimeout(tick, 500));
+    setTimeout(tick, 350);
+  };
   // Returns true once the sale is saved, false when it was not (the basket is then kept)
   const finalize = async (extra = {}) => {
     if (saving.current) return false;
@@ -720,7 +732,8 @@ export default function POS({ mode = 'retail' }) {
     setMomo(null);
     setSheet(false);
     clearSale();
-    if (db.settings.autoPrint) setTimeout(() => window.print(), 350);
+    if (efrisOn(db.settings)) kickEfris(); // URA EFRIS: the receipt gets its fiscal number (src/efrisqueue.jsx)
+    if (db.settings.autoPrint) printWhenFiscal(sale.id);
     return true;
   };
 
@@ -1410,7 +1423,7 @@ function SendReceipt({ sale }) {
   const [smsReady, setSmsReady] = useState(false);
   const [sent, setSent] = useState('');
   useEffect(() => { if (syncCfg?.url && navigator.onLine) cloudConfig(syncCfg).then((c) => setSmsReady(!!c.sms)).catch(() => {}); }, [syncCfg]);
-  const text = receiptText(sale, db.settings, fmt);
+  const text = receiptText(sale, db.settings, fmt, fiscalOf(db, sale));
   const wa = normalizePhone(phone);
   const sms = async () => {
     try { await sendSms(syncCfg, [wa], text); setSent('sms'); toast('Receipt sent by SMS'); } catch (e) { toast(e.message, 'error'); }

@@ -25,6 +25,7 @@ const SUITES = [
   ['the same item under different names, merged on approval (unit)', 'unit-medmerge.mjs', []],
   ['menu counts and notifications highlight only while new (unit)', 'unit-seen.mjs', []],
   ['the owner\'s law: no cloud data change without approval (unit)', 'unit-owner-law.mjs', []],
+  ['URA EFRIS fiscal receipts and credit notes, against a pretend URA (unit)', 'unit-efris.mjs', []],
   ['AI copilot and vision routes, mocked Workers AI (unit)', 'unit-ai-routes.mjs', []],
   ['date formats (unit)', 'unit-dateformat.mjs', []],
   ['packs (unit)', 'unit-packs.mjs', []],

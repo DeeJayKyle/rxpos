@@ -15,6 +15,10 @@
 - **Four themes**: Light, Dark, High contrast and Brand colour (the pharmacy's colour, set in Settings → Receipts &
   stock). A retired theme opens as Light or Dark. Colour level, gradient and surface style moved to This device → Look.
 - **One style** for buttons, spacing and tables (styles/system.css).
+- **URA EFRIS fiscal receipts** (off until switched on; docs/EFRIS.md): the cloud fiscalises each sale with URA and the
+  receipt (printed, PDF, WhatsApp/SMS) carries the fiscal document number, verification code and QR code. A sale made
+  offline is fiscalised when its till is back online. A refund becomes a credit note application; its number appears
+  on the receipt once URA approves it. Keys are added in the Owner console; Settings → Receipts & stock tests and switches it on.
 
 ## RxPOS 1.21.0 · November 2026 (one app: React; sharper reading of invoices and prescriptions)
 

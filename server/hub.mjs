@@ -95,6 +95,10 @@ const env = {
   ...(process.env.PBKDF2_ITER ? { PBKDF2_ITER: process.env.PBKDF2_ITER } : {}),
   ...(process.env.RXPOS_TEST_CLOUD === '1' ? { TEST_CLOUD: '1' } : {}), // tests/run-all.mjs only (worker/ownerlaw.js)
   ...(process.env.PUBLIC_URL ? { PUBLIC_URL: process.env.PUBLIC_URL } : {}),
+  // URA EFRIS for the hub's own pharmacy (worker/efris.js): EFRIS_TIN, EFRIS_DEVICE_NO, EFRIS_ENV, EFRIS_URL (e.g. URA's
+  // Offline Mode Enabler on this PC) and the private key, EFRIS_PRIVATE_KEY (PEM text) or EFRIS_PRIVATE_KEY_FILE (a path)
+  ...Object.fromEntries(Object.entries(process.env).filter(([k]) => /^EFRIS_[A-Z_]+$/.test(k) && k !== 'EFRIS_PRIVATE_KEY_FILE')),
+  ...(process.env.EFRIS_PRIVATE_KEY_FILE ? { EFRIS_PRIVATE_KEY: fs.readFileSync(process.env.EFRIS_PRIVATE_KEY_FILE, 'utf8') } : {}),
   ASSETS,
 };
 const ctx = { waitUntil: (p) => Promise.resolve(p).catch((e) => console.warn('background task:', e?.message || e)), passThroughOnException() {} };

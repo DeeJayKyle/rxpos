@@ -9,6 +9,7 @@
  "unit-delivery-checks.mjs":0,
  "unit-shifts-from-sales.mjs":0,
  "unit-owner-law.mjs":0,
+ "unit-efris.mjs":1,
  "unit-medname.mjs":0,
  "unit-medmerge.mjs":0,
  "unit-seen.mjs":0,
