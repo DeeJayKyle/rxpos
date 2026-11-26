@@ -1,20 +1,13 @@
 // Switch two-step sign-in on or off for yourself: scan a QR code with an authenticator app, confirm with a code.
 import { useEffect, useState } from 'react';
 import { ShieldCheck, ShieldOff, Loader2 } from 'lucide-react';
-import qrcode from 'qrcode-generator';
+import { Qr as QrCode } from './qr.jsx';
 import { Modal } from './ui.jsx';
 import { useStore } from './store.jsx';
 import { toast } from './feedback.jsx';
 import { twoStep } from './cloud.js';
 
-/** QR code as an inline SVG (qrcode-generator, MIT) */
-function Qr({ text }) {
-  const q = qrcode(0, 'M');
-  q.addData(text); q.make();
-  const n = q.getModuleCount(), cells = [];
-  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (q.isDark(r, c)) cells.push(`M${c + 4},${r + 4}h1v1h-1z`);
-  return <svg className="qr" viewBox={`0 0 ${n + 8} ${n + 8}`} role="img" aria-label="QR code to scan with the authenticator app"><rect width="100%" height="100%" fill="#fff" /><path d={cells.join('')} fill="#000" /></svg>;
-}
+const Qr = ({ text }) => <QrCode text={text} label="QR code to scan with the authenticator app" />;
 
 export function TwoStepModal({ onClose }) {
   const { syncCfg, user } = useStore();

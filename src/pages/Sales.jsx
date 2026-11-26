@@ -25,6 +25,9 @@ import DraftsList, { useDraftCount } from './Drafts.jsx';
 import { useListControls, useContextMenu } from '../listcontrols.jsx';
 import { Copy } from 'lucide-react';
 import { pharmacyLogo } from '../logo.jsx';
+import { Qr } from '../qr.jsx';
+import { efrisOn, fiscalText } from '../efris.js';
+import { kickEfris } from '../efrisqueue.jsx';
 import { showDateTime, dateLocale } from '../showdate.js';
 
 /** Thermal-printer friendly receipt (58 mm or 80 mm, set in Settings). */
@@ -73,8 +76,29 @@ export function Receipt({ sale }) {
       {sale.momo && <div className="small muted">{sale.momo.confirmed ? 'Payment confirmed by the mobile network' : sale.momo.manual ? 'Payment recorded by staff (transaction ID from the customer; not confirmed by the network)' : ''}</div>}
       {sale.status === 'refunded' && <div className="center receipt-tag">REFUNDED</div>}
       {sale.status === 'refunded' && (sale.refundedAt || sale.refundReason) && <div className="center small muted no-print">{[sale.refundedAt && `On ${new Date(sale.refundedAt).toLocaleString(dateLocale(), { dateStyle: 'medium', timeStyle: 'short' })}`, sale.refundedBy && `by ${sale.refundedBy}`, sale.refundReason].filter(Boolean).join(' · ')}</div>}
+      {!isProforma && !sale.training && <FiscalBlock sale={sale} />}
       <div className="receipt-barcode"><Barcode value={sale.number} height={34} module={1.6} /></div>
       <p className="center">{isProforma ? 'Prices valid for 7 days.' : s.receiptFooter}</p>
+    </div>
+  );
+}
+
+/** The sale's URA EFRIS fiscal receipt (src/efris.js): FDN, verification code and QR, or that it is still to come */
+export const fiscalOf = (db, sale) => (db.fiscal || []).find((f) => f.id === sale?.id) || null;
+export function FiscalBlock({ sale }) {
+  const { db } = useStore();
+  const f = fiscalOf(db, sale);
+  if (!f && !efrisOn(db.settings)) return null;
+  if (f?.status !== 'issued') {
+    return <div className="receipt-fiscal center small">{f?.status === 'failed' ? <><b>Not fiscalised:</b> {f.error}<span className="no-print"> (tried again later)</span></> : 'URA EFRIS fiscal receipt pending: reprint this receipt once the till is online.'}</div>;
+  }
+  return (
+    <div className="receipt-fiscal center">
+      <div className="receipt-rule" />
+      <div className="receipt-tag">URA EFRIS e-receipt{f.env === 'test' ? ' (TEST)' : ''}</div>
+      {fiscalText(f).map((l) => <div key={l} className="small">{l}</div>)}
+      {f.creditNote && !f.creditNote.fdn && <div className="small">Credit note: {f.creditNote.status === 'pending' ? 'waiting for URA approval' : f.creditNote.status}{f.creditNote.error ? ' · ' + f.creditNote.error : ''}</div>}
+      {f.qr && <div className="receipt-qr"><Qr text={f.qr} label="URA EFRIS verification QR code" /></div>}
     </div>
   );
 }
@@ -245,6 +269,7 @@ export default function Sales() {
     setView(null); setRefunding(null);
     if (already) return toast(`${sale.number} was already refunded; nothing was changed`, 'warn');
     toast(`${sale.number} refunded and items returned to stock`);
+    if (efrisOn(localDb.settings) && localDb.fiscal?.some((f) => f.id === sale.id && f.status === 'issued')) kickEfris(); // the credit note to URA (src/efrisqueue.jsx)
   };
 
   const branchName = (id) => db.branches.find((b) => b.id === (id || MAIN_BRANCH))?.name || '—';
@@ -516,7 +541,7 @@ export function EditHistory({ sale, bare }) {
 }
 
 /** A plain-text receipt for sending to the customer on WhatsApp or SMS */
-export function receiptText(sale, s, fmt) {
+export function receiptText(sale, s, fmt, fiscal = null) {
   const L = [];
   L.push(`*${s.name || 'Pharmacy'}*`);
   if (s.address) L.push(s.address);
@@ -533,6 +558,7 @@ export function receiptText(sale, s, fmt) {
   L.push(`Paid (${sale.payment}): ${fmt(sale.paid ?? sale.total)}`);
   if (sale.insurance) L.push(`${sale.insurance.insurer} (${sale.insurance.scheme}, member ${sale.insurance.memberNo}): ${fmt(billed(sale))}`);
   if (unpaid(sale) > 0.005) L.push(`Balance: ${fmt(unpaid(sale))}`);
+  if (fiscal) { L.push(''); L.push('URA EFRIS e-receipt'); for (const l of fiscalText(fiscal)) L.push(l); }
   L.push('');
   L.push(s.receiptFooter || 'Thank you. Get well soon!');
   return L.join('\n');

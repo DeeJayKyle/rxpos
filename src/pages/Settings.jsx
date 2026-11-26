@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { Store, Printer, MessageSquareText, Cloud, DatabaseBackup, Sheet, Copy, CheckCircle2, XCircle, Smartphone, CreditCard, Plus, Trash2, RotateCcw, BellRing, MapPin, Search, Thermometer, RefreshCw } from 'lucide-react';
+import { Store, Printer, MessageSquareText, Cloud, DatabaseBackup, Sheet, Copy, CheckCircle2, XCircle, Smartphone, CreditCard, Plus, Trash2, RotateCcw, BellRing, MapPin, Search, Thermometer, RefreshCw, ReceiptText } from 'lucide-react';
 import { useStore, useSyncState, uid, audit, downloadFile, today, defaultSettings, DEFAULT_PAYMENT_METHODS } from '../store.jsx';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ChevronLeft, Printer as PrinterIcon, ScanBarcode, Repeat, Clock, MonitorSmartphone, UserCog } from 'lucide-react';
@@ -8,7 +8,7 @@ import { ask, toast } from '../feedback.jsx';
 import { Help, HELP, smallPicture } from '../forms.jsx';
 import { pharmacyLogo } from '../logo.jsx';
 import { uploadAttachment } from '../attach.jsx';
-import { cloudConfig, daySummary, dailyStockLink } from '../cloud.js';
+import { cloudConfig, daySummary, dailyStockLink, efrisStatus, efrisTest } from '../cloud.js';
 import { searchPlaces, DEFAULT_PLACE, storageLimits } from '../weather.js';
 import { isWeb, platformName } from '../platform.js';
 import { pharmacyDefaults, validatePharmacyDefaults } from '../pharmacy-settings.js';
@@ -329,6 +329,7 @@ export default function Settings() {
         </>
       )}
 
+      {tab === 'receipts' && can('settings.manage') && <EfrisSettings />}
       {tab === 'backup' && <Updates />}
       {tab === 'backup' && (
         <div className="card">
@@ -405,6 +406,47 @@ function DailyStockSheet({ syncCfg }) {
           </div>
         </>
       ) : <button type="button" className="btn primary" disabled={busy} onClick={renew}><Sheet size={16} />Create the link</button>}
+    </div>
+  );
+}
+
+/**
+ * Settings → Receipts: URA EFRIS fiscal receipts (src/efris.js, worker/efris.js). The TIN, device number and key are
+ * kept in the cloud only (Owner console); here the pharmacy switches it on and tests the connection.
+ */
+function EfrisSettings() {
+  const { db, saveSettings, update, user, branchId, syncCfg } = useStore();
+  const [st, setSt] = useState(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { if (syncCfg?.url) efrisStatus(syncCfg).then(setSt).catch((e) => setSt({ error: e.message })); }, [syncCfg?.url, syncCfg?.tenant]); // eslint-disable-line react-hooks/exhaustive-deps
+  const on = !!db.settings.efrisOn;
+  const toggle = async () => {
+    if (!on && !(await ask({ title: 'Issue URA EFRIS fiscal receipts?', message: `From now on every sale is sent to URA${st?.env === 'production' ? '' : ' (TEST environment)'} and gets a fiscal document number, verification code and QR code on its receipt. Refunds become credit notes, which URA approves.`, confirmText: 'Switch on' }))) return;
+    setBusy(true);
+    try {
+      await saveSettings({ ...db.settings, efrisOn: !on, ...(!on ? { efrisFrom: new Date().toISOString() } : {}) });
+      await update((d) => audit(d, user, 'Settings changed', `URA EFRIS ${on ? 'switched off' : 'switched on'}`, branchId));
+      toast(on ? 'URA EFRIS is off: new receipts are not fiscalised.' : 'URA EFRIS is on.');
+    } catch (e) { toast(e.message, 'error'); } finally { setBusy(false); }
+  };
+  const test = async () => {
+    setBusy(true);
+    try { const r = await efrisTest(syncCfg); toast(`EFRIS answered (${r.env}): the TIN, device number and key work. URA time ${r.serverTime}.`, 'success'); }
+    catch (e) { toast(e.message, 'error'); } finally { setBusy(false); }
+  };
+  return (
+    <div className="card" style={{ marginTop: 16 }}>
+      <h3><ReceiptText size={18} />URA EFRIS fiscal receipts</h3>
+      <p className="muted small">VAT-registered pharmacies must issue EFRIS e-receipts. With this on, the cloud sends each sale to URA and the receipt carries its fiscal document number (FDN), verification code and QR code. A sale made offline is fiscalised once the till is back online (reprint it from Sales). A refund becomes a credit note application to URA.</p>
+      {!syncCfg?.url ? <p className="notice small">Connect this device to the RxPOS cloud first (Online sync).</p>
+        : st?.error ? <p className="notice warn small">{st.error}</p>
+        : st && !st.ready ? <p className="notice small">Not set up yet: your RxPOS provider adds the pharmacy&apos;s TIN, EFRIS device number and private key in the Owner console (Payments &amp; keys).</p>
+        : st ? <p className="small">Keys are set ({st.env === 'production' ? 'live URA EFRIS' : st.env === 'custom' ? 'offline enabler / custom address' : 'URA TEST environment'}).</p> : <p className="muted small">Checking…</p>}
+      <div className="row gap">
+        <button type="button" className={'btn ' + (on ? 'ghost' : 'primary')} disabled={busy || (!on && !st?.ready)} onClick={toggle}>{on ? 'Switch off' : 'Switch on'}</button>
+        <button type="button" className="btn ghost" disabled={busy || !st?.ready} onClick={test}>Test the connection</button>
+      </div>
+      {on && <p className="small">On since {showDateTime(db.settings.efrisFrom)}.</p>}
     </div>
   );
 }

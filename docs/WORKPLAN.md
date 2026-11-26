@@ -49,7 +49,7 @@ Server-side steps (Worker, `worker/`) protect **both** apps at once. Client-side
 | 20 | Selling: loyalty points, promotions engine, customer display, cash-up with blind counts, per-role discount ceiling | 4.3 | ✅ discount ceiling + blind cash-up (owner's choice); the rest not done |
 | 21 | Stock: GS1 DataMatrix scan, scheduled draft POs, expiry markdowns, branch rebalancing | 4.4 | ✅ GS1 pack scanning (the recommended part; the owner said continue without picking); the rest not done |
 | 22 | Insurance: insurers/schemes, member check, co-pay at the till, monthly claim batches | 4.1 | ✅ insurers, schemes and the co-pay at the till (the recommended part; the owner had no preference); pre-authorisation, claim batches and member checks not done |
-| 23 | URA EFRIS e-invoicing (fiscal number + QR on receipts, offline queue) | 4.1 | ⏸ skipped until URA EFRIS sandbox credentials are available |
+| 23 | URA EFRIS e-invoicing (fiscal number + QR on receipts, offline queue) | 4.1 | ✅ built behind a setting (docs/EFRIS.md): fiscal receipts, offline queue, credit notes; to be confirmed in URA's sandbox once the pharmacy has its EFRIS credentials |
 | 24 | Interface: one till layout with density setting, 4 themes, single payment panel, accessibility audit (axe), translations | 4.6 | ✅ accessibility audit (the recommended part); then the owner's controls request (keyboard map, mouse, selection, navigation) |
 | 25 | React → Flutter cut-over plan and retirement of the React client (if chosen in step 0) | 3 | ⏳ (not chosen yet: both apps are kept) |
 

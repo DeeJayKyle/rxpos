@@ -45,6 +45,7 @@ import { snapshotList, snapshotChunk, pruneSnapshots } from './snapshot.js';
 import { dmHidden } from './policy.js';
 import { balancesAt, validWindow, pruneWindows } from './window.js';
 import { keeps as keepsInWindow, WINDOWED } from '../src/historywindow.js';
+import { efrisRoutes, efrisReady, EFRIS_FIELDS } from './efris.js';
 import { OWNER_LAW, writesData, ownerApproved } from './ownerlaw.js';
 import { safeRename } from '../src/medname.js';
 // The built-in roles (cashier, dispenser, pharmacist, manager) live only in the app; they aren't stored as records.
@@ -1215,7 +1216,7 @@ async function sendSms(env, { to, message }) {
 // ---------- owner console (vendor) ----------
 // Only the RxPOS owner (OWNER_KEY) creates pharmacies, their administrators and branches, sets their features and
 // web address, and can open, edit, export, import, reset or delete any pharmacy's data.
-const SECRET_FIELDS = ['MTN_SUBSCRIPTION_KEY', 'MTN_API_USER', 'MTN_API_KEY', 'MTN_ENV', 'MTN_TARGET', 'AIRTEL_CLIENT_ID', 'AIRTEL_CLIENT_SECRET', 'AIRTEL_ENV', 'AT_USERNAME', 'AT_API_KEY', 'AT_SENDER_ID'];
+const SECRET_FIELDS = ['MTN_SUBSCRIPTION_KEY', 'MTN_API_USER', 'MTN_API_KEY', 'MTN_ENV', 'MTN_TARGET', 'AIRTEL_CLIENT_ID', 'AIRTEL_CLIENT_SECRET', 'AIRTEL_ENV', 'AT_USERNAME', 'AT_API_KEY', 'AT_SENDER_ID', ...EFRIS_FIELDS];
 const KEEP_ON_RESET = "('products','formulations','expenseCategories','license','roles','branches','users','settings')";
 const TABLE_RE = /^[A-Za-z]{2,30}$/;
 const publicUser = ({ hash, salt, algo, iter, ...u }) => u;
@@ -1279,7 +1280,7 @@ async function owner(env, req, url, body) {
     const secrets = JSON.parse(t.secrets || '{}');
     return { id: t.id, slug: t.slug || t.id, name: t.name, status: t.status, notes: t.notes || '', created: t.created_at, features: { ...DEFAULT_FEATURES, ...JSON.parse(t.features || '{}') }, branding: brandingOf(t),
       stats: { records: s.n || 0, products: s.products || 0, users: s.users || 0, sales: s.sales || 0, branches: s.branches || 0, anomalies: s.anomalies || 0, lastActivity: s.last || null },
-      payments: { mtn: t.id === MAIN ? mtn.enabled(env) : mtn.enabled(secrets), airtel: t.id === MAIN ? airtel.enabled(env) : airtel.enabled(secrets), sms: t.id === MAIN ? !!env.AT_API_KEY : !!secrets.AT_API_KEY } };
+      payments: { mtn: t.id === MAIN ? mtn.enabled(env) : mtn.enabled(secrets), airtel: t.id === MAIN ? airtel.enabled(env) : airtel.enabled(secrets), sms: t.id === MAIN ? !!env.AT_API_KEY : !!secrets.AT_API_KEY, efris: efrisReady(t.id === MAIN ? env : secrets), efrisEnv: (t.id === MAIN ? env : secrets).EFRIS_ENV || 'test' } };
   };
 
   // ----- list & create -----
@@ -2143,6 +2144,10 @@ export default {
         const ref = url.searchParams.get('ref');
         if (!p || !ref) return json({ error: 'provider and ref required' }, 400);
         return json(await p.status(penv, ref));
+      }
+      // URA EFRIS fiscal receipts and credit notes (worker/efris.js)
+      if (path.startsWith('/api/efris/') && (req.method === 'POST' || path === '/api/efris/status')) {
+        return await efrisRoutes(env, path, body || {}, who, penv, { json, write: serverWriteMany, can: (perm) => (who.viaKey ? true : roleCan(env, who.tenant, who.role, perm)) });
       }
       if (path === '/api/sms' && req.method === 'POST') {
         if (!who.viaKey && !(await roleCan(env, who.tenant, who.role, 'reminders'))) return json({ error: 'You are not allowed to send messages.' }, 403); // 1.9

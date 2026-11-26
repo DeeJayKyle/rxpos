@@ -36,6 +36,7 @@ export const TABLE_RULES = {
   bankTx: { write: ['finance'], delete: ['finance'] },
   loans: { write: ['finance'], delete: ['finance'] },
   anomalies: { write: ['audit'], delete: ['audit'] }, // step 3 sale findings: marking one checked
+  fiscal: { write: [], delete: [] }, // URA EFRIS fiscal receipts: written by the cloud only (worker/efris.js), never by a device
 };
 
 /** Stock movement type → who may record it. Any other type needs stock.adjust. */
@@ -68,7 +69,7 @@ export const KNOWN_TABLES = new Set([
   'batches', 'branches', 'transfers', 'audit', 'purchaseOrders', 'roles', 'messages', 'shifts', 'license', 'events', 'tempLogs',
   'catalogHidden', 'quizResults', 'stockCounts', 'countItems', 'supplierReturns', 'chatMarks', 'chatPins', 'chatReads', 'drafts',
   'anomalies', 'dayCloses', 'counters', 'insurers', 'employees', 'attendance', 'salaryAdvances', 'payrolls', 'reportSchedules',
-  'notes', 'settings', 'controlled',
+  'notes', 'fiscal', 'settings', 'controlled',
 ]);
 
 // 2026-11 audit: who RECEIVES which records. Before, every staff role downloaded every table except payroll and the

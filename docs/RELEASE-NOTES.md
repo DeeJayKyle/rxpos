@@ -1,5 +1,12 @@
 # RxPOS release notes
 
+## Next release
+
+- **URA EFRIS fiscal receipts** (off until switched on; docs/EFRIS.md): the cloud fiscalises each sale with URA and the
+  receipt (printed, PDF, WhatsApp/SMS) carries the fiscal document number, verification code and QR code. A sale made
+  offline is fiscalised when its till is back online. A refund becomes a credit note application; its number appears
+  on the receipt once URA approves it. Keys are added in the Owner console; Settings → Receipts tests and switches it on.
+
 ## RxPOS 1.21.0 · November 2026 (one app: React; sharper reading of invoices and prescriptions)
 
 - **One app.** RxPOS is the React app from now on. The Flutter app is retired (kept read-only in `archive/`): the

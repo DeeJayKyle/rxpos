@@ -36,6 +36,7 @@ export const TABLES = [
   // step 26 (from the Flutter app): Payroll & HR (the cloud sends them only to roles with Payroll) and report emails
   'employees', 'attendance', 'salaryAdvances', 'payrolls', 'reportSchedules',
   'notes', // 2026-11-14: Notes & SOP pages (src/notes.js)
+  'fiscal', // URA EFRIS fiscal receipts, one per sale, written by the cloud only (worker/efris.js, src/efris.js)
 ];
 // What is persisted on the device, one IndexedDB key per part
 const PARTS = [...TABLES, 'settings', '_tomb'];

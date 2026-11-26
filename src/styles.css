@@ -484,6 +484,9 @@ details input { width: 100%; }
 .receipt-rule { border-top: 1px dashed var(--border-strong); margin: 4px 0; }
 .receipt-barcode { display: flex; justify-content: center; margin-top: 8px; }
 .receipt-barcode .barcode { width: 75%; max-width: 260px; height: 46px; }
+.receipt-qr { display: flex; justify-content: center; margin-top: 6px; }
+.receipt-qr .qr { width: 42%; max-width: 160px; height: auto; }
+.receipt-fiscal { margin-top: 6px; word-break: break-all; }
 .receipt p { margin: 6px 0 0; }
 
 /* Barcode labels */

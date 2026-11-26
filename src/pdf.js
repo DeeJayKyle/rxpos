@@ -5,6 +5,11 @@ import { downloadFile, localDate } from './store.jsx';
 import { kitContents } from './kits.js';
 import { pharmacyLogo } from './logo.jsx';
 import { showDateTime } from './showdate.js';
+import qrcode from 'qrcode-generator';
+import { fiscalText } from './efris.js';
+
+/** A URA EFRIS QR code as a GIF data URL for jsPDF */
+const qrGif = (text) => { const q = qrcode(0, 'M'); q.addData(String(text)); q.make(); return q.createDataURL(4, 4); };
 
 const load = async () => {
   const [{ jsPDF }, { autoTable }] = await Promise.all([import('jspdf'), import('jspdf-autotable')]);
@@ -94,6 +99,9 @@ export async function receiptPdf(sale, { db, fmt }) {
       if (big) { doc.setFont('helvetica', 'normal'); doc.setFontSize(fs); }
     }
     if (sale.status === 'refunded') { y += 1; doc.setFont('helvetica', 'bold'); doc.text('REFUNDED', W / 2, y + 2.5, { align: 'center' }); doc.setFont('helvetica', 'normal'); y += lh; }
+    const fiscal = (db.fiscal || []).find((f) => f.id === sale.id);
+    if (fiscal && !isProforma) { rule(); for (const l of fiscal.status === 'issued' ? ['URA EFRIS e-receipt', ...fiscalText(fiscal)] : fiscalText(fiscal)) for (const t of doc.splitTextToSize(l, inner)) { doc.text(t, W / 2, y + 2.5, { align: 'center' }); y += lh; } }
+    if (fiscal?.qr) { const n = Math.min(inner * 0.5, 30); try { doc.addImage(qrGif(fiscal.qr), 'GIF', W / 2 - n / 2, y + 1, n, n); y += n + 2; } catch { /* no image: the codes above are enough */ } }
     if (footer) { y += 2; for (const t of doc.splitTextToSize(footer, inner)) { doc.text(t, W / 2, y + 2.5, { align: 'center' }); y += lh; } }
     return y + M;
   };

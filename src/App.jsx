@@ -19,6 +19,7 @@ import { PopupHost } from './notify.jsx';
 import { CallManager } from './calls.jsx';
 import { WeeklyPopup } from './pages/Weekly.jsx';
 import { AutoReorder } from './reorder.js';
+import { EfrisQueue } from './efrisqueue.jsx';
 import { isWeb, isNative } from './platform.js';
 import { keepsData } from './webpolicy.js';
 import RefreshHost from './refresh.jsx';
@@ -903,6 +904,7 @@ function Shell() {
       <CallManager />
       <WeeklyPopup />
       <AutoReorder />
+      <EfrisQueue />
       <FirstDownload />
       <HistoryLoading />
       <UpdateHost />
