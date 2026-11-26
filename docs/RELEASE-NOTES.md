@@ -1,7 +1,11 @@
 # RxPOS release notes
 
-## Next release (not released yet): safer sign-ins, the pharmacy encrypted on the device, split payments, returning part of a sale, the drawer's cash
+## RxPOS 1.23.0 · November 2026 (split payments, part returns, receipt printer and cash drawer, safer sign-ins, 17 themes)
 
+- **Receipts print straight to the thermal receipt printer** (ESC/POS, USB, network or Bluetooth) and the **cash
+  drawer opens** on a cash sale. Set it up at **This device → Receipt printer**, then press **Test print** to check the
+  printer and the drawer before the first sale. A device with no printer set up prints as before.
+- **The Windows app is signed** (SSL.com eSigner), so Windows shows RxPOS as the publisher when it is installed.
 - **Sign-ins renew themselves every 15 minutes** instead of lasting 30 days; a sign-out, a new password or "Sign out
   everywhere" ends them in the cloud at once (docs/SIGN-IN-AND-UNLOCK.md).
 - **The till locks after 5 idle minutes** and opens with the quick PIN; "Remember me" is 7 days and reopens locked.

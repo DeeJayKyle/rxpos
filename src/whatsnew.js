@@ -2,11 +2,13 @@
 // small card on the dashboard. Kept next to the release notes (docs/RELEASE-NOTES.md): when a release is written up,
 // its highlights go here too.
 export const WHATS_NEW = {
-  version: '1.22.0',
+  version: '1.23.0',
   items: [
-    { text: 'Sell by the tablet, pair, half strip, strip or box, each at its own price (Medicines → Selling units)', to: '/medicines' },
-    { text: 'A tidier menu: six headings, related pages together with tabs at the top', to: '/' },
-    { text: 'Four themes: Light, Dark, High contrast and your pharmacy\'s colour', to: '/device' },
+    { text: 'Split pay: one sale paid part in cash, card, Mobile Money, bank or credit', to: '/pos' },
+    { text: 'Return part of a sale with a credit note (Sales History → Refund or return)', to: '/sales' },
+    { text: 'Receipts print to the thermal printer and the cash drawer opens: set it up, then press Test print', to: '/device' },
+    { text: 'Pay cash in or out at Shifts; the drawer counts all its cash', to: '/shifts' },
+    { text: '17 themes in four groups: Light, Dark, High contrast and Colourful', to: '/device' },
   ],
 };
 
