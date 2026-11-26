@@ -20,7 +20,8 @@ import { maxDiscountOf } from '../access.js';
 import { draftsFor, saleDraft } from '../drafts.js';
 import { keepsData } from '../webpolicy.js';
 import { CASH } from '../finance.js';
-import { cartSubtotal, taxOf, round, formatQty } from '../money.js';
+import { cartSubtotal, round, formatQty } from '../money.js';
+import { saleTax, categoryOf, breakdownLabel } from '../tax.js';
 import { searchProducts, searchKey } from '../search.js';
 import { Modal, SearchBox, ReceiptPdfButton, PageTip } from '../ui.jsx';
 import { MoneyInput, MedThumb } from '../forms.jsx';
@@ -419,11 +420,15 @@ export default function POS({ mode = 'retail' }) {
     setLine(l.id, { pack: { name: k.name, size, price: pp }, price: pp / size, qty: size });
   };
   // Integer-shilling money math (1.5): each line rounds, then they sum, so a pack-split price can't leave a floating
-  // tail on the stored total, and tax rounds once.
+  // tail on the stored total. VAT per line by each medicine's tax category (src/tax.js): exempt, zero-rated or standard.
   const money = Number(db.settings.decimals ?? 0);
   const subtotal = cartSubtotal(cart, money);
   const disc = Math.max(0, Math.min(round(Number(discount) || 0, money), subtotal)); // a negative discount would raise the total
-  const tax = taxOf(subtotal - disc, db.settings.taxRate, { decimals: money });
+  const vat = useMemo(() => {
+    const byId = new Map(products.map((p) => [p.id, p]));
+    return saleTax(cart.map((l) => ({ ...l, taxCategory: categoryOf(byId.get(l.id), db.settings) })), { discount: disc, standardRate: db.settings.taxRate, decimals: money });
+  }, [cart, products, disc, db.settings, money]);
+  const tax = vat.tax;
   const total = round(subtotal - disc + tax, money);
   // step 22 (src/insurance.js): an insured sale is split; the patient pays the co-pay now, the insurer owes the rest
   const schemes = useMemo(() => schemeChoices(db.insurers), [db.insurers]);
@@ -660,7 +665,7 @@ export default function POS({ mode = 'retail' }) {
       for (const a of alloc) if (a.batchId) used.set(a.batchId, (used.get(a.batchId) || 0) + a.qty);
       return alloc;
     };
-    const items = cart.map((l) => ({ ...l, controlled: isCd(l) })).map(({ id, name, price, cost, qty, allowExpired, directions, controlled, pack, preferBatch, kit, acked }) => (kit ? {
+    const items = cart.map((l, k) => ({ ...l, controlled: isCd(l), taxCategory: vat.lines[k].taxCategory, tax: vat.lines[k].tax })).map(({ id, name, price, cost, qty, allowExpired, directions, controlled, pack, preferBatch, kit, acked, taxCategory, tax: lineTax }) => ({ taxCategory, tax: lineTax, ...(kit ? {
       // a kit: one line on the receipt; its medicines leave stock from their own batches (src/kits.js)
       id, name, price: Number(price), cost, qty, ...(controlled ? { controlled: true } : {}), alloc: [],
       kit: { icon: kit.icon, color: kit.color, ...(kit.ack ? { warning: kit.warning, acked: !!acked } : {}), services: kit.services || [],
@@ -669,10 +674,10 @@ export default function POS({ mode = 'retail' }) {
       id, name, price: Number(price), cost, qty, ...(directions ? { directions } : {}), ...(controlled ? { controlled: true } : {}),
       ...(pack ? { pack: { name: pack.name, size: pack.size, count: qty / pack.size, price: Number(price) * pack.size } } : {}),
       alloc: take(id, qty, { allowExpired }, preferBatch),
-    }));
+    }) }));
     const sale = {
       id: uid(), number: '', date: now(), type: mode, branchId, // numbered in the commit below (step 7)
-      items, subtotal, discount: disc, tax, total, payment, paid,
+      items, subtotal, discount: disc, tax, taxRate: Number(db.settings.taxRate) || 0, taxBreakdown: vat.breakdown, total, payment, paid,
       tendered: ptype === 'cash' ? Number(tendered) || due : paid,
       bankId: ptype === 'cash' || credit ? CASH : db.settings.nonCashBankId || CASH,
       customerId, customerName: customer?.name || 'Walk-in Customer', cashier: user.name, status: 'completed', ...(location.state?.proforma?.id ? { proformaId: location.state.proforma.id } : {}), ...(cart.some(isCd) && cdRef.current ? { controlled: cdRef.current } : {}), ...(cart.some((l) => l.allowExpired) ? { expiredOverride: true } : {}),
@@ -762,8 +767,8 @@ export default function POS({ mode = 'retail' }) {
     if (!(await ask({ title: 'Save as a proforma?', message: 'The sale is saved as a quotation and the till is cleared.', confirmText: 'Save proforma' }))) return;
     const pf = {
       id: uid(), number: '', date: now(), type: mode, status: 'Open',
-      items: cart.map(({ id, name, price, cost, qty, kit, swaps }) => ({ id, name, price: Number(price), cost, qty, ...(kit ? { kit, swaps } : {}) })),
-      subtotal, discount: disc, tax, total, customerId, customerName: customer?.name || 'Walk-in Customer', createdBy: user.name,
+      items: cart.map(({ id, name, price, cost, qty, kit, swaps }, k) => ({ id, name, price: Number(price), cost, qty, taxCategory: vat.lines[k].taxCategory, tax: vat.lines[k].tax, ...(kit ? { kit, swaps } : {}) })),
+      subtotal, discount: disc, tax, taxRate: Number(db.settings.taxRate) || 0, taxBreakdown: vat.breakdown, total, customerId, customerName: customer?.name || 'Walk-in Customer', createdBy: user.name,
     };
     try { await update((d) => { pf.number = numberFor(d, 'PF'); put(d, 'proformas', pf); }); } catch (e) { return toast('The proforma was not saved: ' + e.message, 'error'); }
     setDone({ ...pf, proforma: true });
@@ -1082,7 +1087,7 @@ export default function POS({ mode = 'retail' }) {
           <div className="row between gap"><span className="muted">Subtotal <b className="num">{fmt(subtotal)}</b></span>
             <span className="row gap"><span className="muted">Discount</span><MoneyInput inputRef={discRef} aria-label="Discount" className="small-input" value={discount} onChange={(v) => setDiscount(v)} disabled={!can('pos.discount')} title={can('pos.discount') ? undefined : 'Giving discounts needs the "Give discounts" permission'} /></span></div>
           {layout !== 'classic' && disc > 0 && <div className="row between promo-row"><span className="muted">Promos / member discount</span><span className="num">− {fmt(disc)}</span></div>}
-          {tax > 0 && <div className="row between"><span className="muted">Tax ({db.settings.taxRate}%)</span><span className="num">{fmt(tax)}</span></div>}
+          {tax > 0 && <div className="row between" title={vat.breakdown.map((r) => `${breakdownLabel(r)}: ${fmt(r.net)}${r.tax ? ' → VAT ' + fmt(r.tax) : ''}`).join('\n')}><span className="muted">VAT ({db.settings.taxRate}% on {fmt(vat.breakdown.find((r) => r.category === 'standard')?.net || 0)})</span><span className="num">{fmt(tax)}</span></div>}
           <div className="row between grand"><span>Total{layout !== 'classic' && <small className="grand-sub">Net balance due</small>}</span><span className="num bump" key={total}>{fmt(total)}</span></div>
           {schemes.length > 0 && (
             <div className="row gap insure-row">

@@ -11,6 +11,7 @@ import { useOlderHistory, olderNote } from '../history.js';
 import { reportSummary } from '../reportSummary.js';
 import { showDate } from '../showdate.js';
 import { unitScaleAt } from '../packs.js';
+import { sumBreakdowns, breakdownLabel } from '../tax.js';
 
 const sumBy = (arr, key, val) => {
   const m = {};
@@ -63,6 +64,17 @@ export default function Reports() {
   const expenses = db.expenses.filter(inRange);
   const revenue = sales.reduce((a, s) => a + s.total - s.tax, 0);
   const tax = sales.reduce((a, s) => a + s.tax, 0);
+  // VAT by category (src/tax.js): the taxable value and VAT of each category, for the VAT return (and EFRIS later)
+  const vatRows = sumBreakdowns(sales.map((s) => [s]));
+  const vatTable = (
+    <div style={{ overflowX: 'auto' }}><table className="vat-table" data-testid="vat-breakdown">
+      <thead><tr><th>VAT category</th><th className="num">Sales before VAT</th><th className="num">VAT</th></tr></thead>
+      <tbody>
+        {vatRows.map((r) => <tr key={r.category ?? 'older'}><td>{breakdownLabel(r)}</td><td className="num">{fmt(r.net)}</td><td className="num">{fmt(r.tax)}</td></tr>)}
+        {!vatRows.length && <tr><td colSpan={3} className="empty">No sales in this period</td></tr>}
+      </tbody>
+    </table></div>
+  );
   const cogs = sales.reduce((a, s) => a + s.items.reduce((b, i) => b + (i.cost || 0) * i.qty, 0), 0);
   const expTotal = expenses.reduce((a, e) => a + e.amount, 0);
   const productsById = new Map(products.map((p) => [p.id, p]));
@@ -178,6 +190,7 @@ export default function Reports() {
               {sumBy(sales, (s) => s.type || 'retail', (s) => s.total).map(([k, v]) => <tr key={k}><td className="cap">{k}</td><td className="num">{fmt(v)}</td></tr>)}
             </tbody></table></div>
           </div>
+          <div className="card"><h3>VAT by category</h3>{vatTable}</div>
         </>
       )}
 
@@ -262,6 +275,7 @@ export default function Reports() {
             <tr className="grand"><td>Net profit</td><td className="num">{fmt(revenue - cogs - expTotal - writeOffs)}</td></tr>
             <tr><td className="muted">Tax collected (not income)</td><td className="num muted">{fmt(tax)}</td></tr>
           </tbody></table>
+          <h3 style={{ marginTop: 16 }}>VAT by category</h3>{vatTable}
         </div>
       )}
     </div>

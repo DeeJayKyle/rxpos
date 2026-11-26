@@ -123,6 +123,9 @@ export function moneyView(s) {
     (Array.isArray(s?.items) ? s.items : []).map((i) => [String(i?.id ?? ''), num(i?.qty), num(i?.price)]),
     // step 22: who is billed what (only on insured sales, so the view of every other sale is as it was)
     ...(s?.insurance ? [[String(s.insurance.insurerId ?? ''), num(s.insurance.share)]] : []),
+    // VAT per item (src/tax.js): each line's VAT category and the rate (only on sales made with it, so older ones keep
+    // the view they had)
+    ...(Array.isArray(s?.taxBreakdown) ? [[num(s.taxRate), (Array.isArray(s?.items) ? s.items : []).map((i) => String(i?.taxCategory ?? ''))]] : []),
   ]);
 }
 // 2026-11 audit: the money view alone let anyone who sells move a sale to another day or shift, renumber it or put

@@ -5,6 +5,7 @@ import { downloadFile, localDate } from './store.jsx';
 import { kitContents } from './kits.js';
 import { pharmacyLogo } from './logo.jsx';
 import { showDateTime } from './showdate.js';
+import { receiptVatRows, lineMark } from './tax.js';
 
 const load = async () => {
   const [{ jsPDF }, { autoTable }] = await Promise.all([import('jspdf'), import('jspdf-autotable')]);
@@ -50,7 +51,7 @@ export async function receiptPdf(sale, { db, fmt }) {
   const totals = [
     ['Subtotal', money(fmt, sale.subtotal ?? sale.total)],
     ...(sale.discount > 0 ? [['Discount', '-' + money(fmt, sale.discount)]] : []),
-    ...(sale.tax > 0 ? [['Tax', money(fmt, sale.tax)]] : []),
+    ...receiptVatRows(sale, (n) => money(fmt, n)),
     ['TOTAL', money(fmt, sale.total), true],
     ...(!isProforma ? [[`Paid (${sale.payment || 'Cash'})`, money(fmt, sale.payment === 'Cash' ? sale.tendered ?? sale.total : sale.paid ?? sale.total)]] : []),
     ...(!isProforma && sale.payment === 'Cash' && sale.tendered > sale.total ? [['Change', money(fmt, sale.tendered - sale.total)]] : []),
@@ -72,7 +73,7 @@ export async function receiptPdf(sale, { db, fmt }) {
     const rule = () => { y += 1.5; doc.setLineDashPattern([0.6, 0.6], 0); doc.line(M, y, W - M, y); doc.setLineDashPattern([], 0); y += 2.5; };
     rule();
     for (const i of sale.items || []) {
-      const amt = money(fmt, i.qty * i.price);
+      const amt = money(fmt, i.qty * i.price) + (lineMark(sale, i) ? ' ' + lineMark(sale, i) : '');
       const nameLines = doc.splitTextToSize(i.name || '', inner - doc.getTextWidth(amt) - 2);
       nameLines.forEach((t, n) => { doc.text(t, M, y + 2.5); if (!n) doc.text(amt, W - M, y + 2.5, { align: 'right' }); y += lh; });
       const meta = [i.pack ? `${i.pack.count} × ${i.pack.name} (${i.pack.size}) @ ${money(fmt, i.pack.price)}` : `${i.qty} × ${money(fmt, i.price)}`, i.alloc?.length === 1 && i.alloc[0].batch ? 'B/N ' + i.alloc[0].batch : '', i.alloc?.[0]?.expiry ? 'Exp ' + i.alloc[0].expiry : ''].filter(Boolean).join(' · ');

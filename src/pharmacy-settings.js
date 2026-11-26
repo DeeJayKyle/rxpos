@@ -5,7 +5,7 @@ export const PHARMACY_FIELDS = [
   ['phone', 'Phone', 'text', ''], ['address', 'Address', 'text', ''],
   ['license', 'NDA licence / registration no.', 'text', ''], ['tin', 'TIN', 'text', ''],
   ['currency', 'Currency (e.g. UGX, KES, $)', 'text', 'UGX'], ['decimals', 'Decimal places', 'number', 0],
-  ['taxRate', 'Tax / VAT rate (%)', 'number', 0], ['retailMarkup', 'Default retail markup (%)', 'number', 50],
+  ['taxRate', 'VAT standard rate (%)', 'number', 0], ['retailMarkup', 'Default retail markup (%)', 'number', 50],
   ['wholesaleMarkup', 'Default wholesale markup (%)', 'number', 25], ['minMargin', 'Target margin (%)', 'number', 20],
   ['priceRound', 'Round worked-out prices', 'number', 0], ['nonCashBankId', 'Non-cash sales go to', 'text', 'cash-drawer'],
 ];

@@ -11,7 +11,7 @@ import { ask } from '../feedback.jsx';
 export const SETTINGS_INDEX = [
   ['Pharmacy name', 'Shown on receipts', '/settings', 'general'], ['Phone', 'Pharmacy phone number', '/settings', 'general'], ['Address', 'Pharmacy address', '/settings', 'general'],
   ['NDA licence / registration no.', 'Licence number on receipts', '/settings', 'general'], ['TIN', 'Tax number', '/settings', 'general'], ['Currency', 'UGX, KES, $…', '/settings', 'general'],
-  ['Decimal places', 'Rounding of amounts', '/settings', 'general'], ['Tax / VAT rate', 'Tax added to sales', '/settings', 'general'],
+  ['Decimal places', 'Rounding of amounts', '/settings', 'general'], ['Tax / VAT rate', 'Standard VAT rate; VAT category per medicine', '/settings', 'general'],
   ['Default retail markup', 'Suggested retail prices', '/settings', 'general'], ['Default wholesale markup', 'Suggested wholesale prices', '/settings', 'general'],
   ['Target margin', 'Lower margins are flagged', '/settings', 'general'], ['Round worked-out prices', 'Round prices up', '/settings', 'general'],
   ['Non-cash sales go to', 'Bank for mobile money and card sales', '/settings', 'general'], ['This device works as branch', 'Which branch this device sells for', '/settings', 'general'],
