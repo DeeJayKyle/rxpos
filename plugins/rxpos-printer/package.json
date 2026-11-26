@@ -1,0 +1,16 @@
+{
+  "name": "rxpos-printer",
+  "version": "1.0.0",
+  "description": "RxPOS receipt printer bridge for Android: Bluetooth, USB and network ESC/POS printers (src/printer.js)",
+  "private": true,
+  "license": "MIT",
+  "files": [
+    "android/src/main/",
+    "android/build.gradle"
+  ],
+  "capacitor": {
+    "android": {
+      "src": "android"
+    }
+  }
+}

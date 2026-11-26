@@ -5,6 +5,7 @@
 import puppeteer from 'puppeteer-core';
 import { CHROME } from './chrome.mjs';
 import { asDesktopApp, APP_ARGS } from './appmode.mjs';
+import { deviceRecords } from './devicedata.mjs';
 import { stampFields } from '../src/fieldmerge.js';
 const [base, ownerKey] = process.argv.slice(2);
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -23,7 +24,7 @@ await owner('/tenants/' + tid + '/records', { records: [
   { t: 'movements', id: 'm2', rec: { productId: 'p2', qty: 30, type: 'Opening stock', batchId: 'b2', branchId: 'main', date: new Date().toISOString() } },
 ] });
 const cloudP2 = async () => (await owner(`/tenants/${tid}/records?t=products`)).rows?.find((r) => r.id === 'p2')?.rec;
-const deviceP2 = (p) => p.evaluate(() => new Promise((res) => { const q = indexedDB.open('pharmapos'); q.onsuccess = () => { const g = q.result.transaction('records').objectStore('records').getAll(); g.onsuccess = () => { res(g.result.filter((x) => x.t === 'products').flatMap((x) => x.rs).find((r) => r.id === 'p2') || null); q.result.close(); }; }; q.onerror = () => res(null); }));
+const deviceP2 = async (p) => (await deviceRecords(p).catch(() => [])).filter((x) => x.t === 'products').flatMap((x) => x.rs).find((r) => r.id === 'p2') || null; // sealed buckets
 
 const b = await puppeteer.launch({ executablePath: CHROME, headless: true, args: APP_ARGS });
 const p = await (await b.createBrowserContext()).newPage();

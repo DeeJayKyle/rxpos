@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { FileText, FileSpreadsheet, FileVideo, FileAudio, File as FileIcon, Download, Mic, Square, Send, X, Trash2 } from 'lucide-react';
 import { safeFileUrl } from './safeurl.js';
+import { freshCfg } from './session.js';
 
 export const ATTACH_ACCEPT = 'image/*,video/*,audio/*,application/pdf,.csv,.xls,.xlsx,.ods,.doc,.docx,.ppt,.pptx';
 export const MAX_FILE = 15 * 1024 * 1024;
@@ -25,7 +26,7 @@ export async function uploadAttachment(cfg, file, name = file.name, onProgress) 
   // the whole file's SHA-256 with the last piece: the cloud checks the pieces it put together are this file (2026-11 audit)
   const sha256 = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map((x) => x.toString(16).padStart(2, '0')).join('');
   for (let n = 0; n < chunks; n++) {
-    const r = await fetch(cfg.url + '/api/files', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + cfg.key },
+    const r = await fetch(cfg.url + '/api/files', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (await freshCfg(cfg)).key },
       body: JSON.stringify({ id, n, chunks, size: bytes.length, name, type, data: b64(bytes.subarray(n * PIECE, (n + 1) * PIECE)), ...(n === chunks - 1 ? { sha256 } : {}) }) });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(j.error || 'Upload failed');

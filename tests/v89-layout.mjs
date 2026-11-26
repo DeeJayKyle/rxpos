@@ -88,10 +88,12 @@ await wait(400);
 check('…lifting the finger does not choose an item of the menu that opened under it', (await p.evaluate(() => location.hash)) === hashBefore && (await menuItems(p)).includes('Back'), await p.evaluate(() => location.hash));
 await p.keyboard.press('Escape'); await wait(500);
 
-// ---- 1.22.0 (the owner's clean-up): the theme panel has four themes; colour, gradient and style are in This device → Look ----
+// ---- 1.22.0 (the owner's clean-up): colour, gradient and style are in This device → Look; 1.22.1: the themes in four groups ----
 await p.evaluate(() => document.querySelector('button[title="Theme"]').click()); await wait(300);
 const themes = await p.evaluate(() => [...document.querySelectorAll('.theme-menu .theme-item .grow')].map((x) => x.firstChild.textContent.trim()));
-check('the theme panel: Light, Dark, High contrast and Brand colour', themes.join() === 'Light,Dark,High contrast,Brand colour', themes.join(' | '));
+const groups = await p.evaluate(() => [...document.querySelectorAll('.theme-menu .theme-group')].map((g) => g.querySelector('.bell-sub')?.textContent + ':' + g.querySelectorAll('.theme-item').length));
+check('the theme panel groups look-alike themes: Light, Dark, High contrast, Colourful', groups.join() === 'Light:5,Dark:5,High contrast:3,Colourful:4', groups.join(' | '));
+check('each group starts with its plain theme (Light, Dark, High contrast, Brand colour)', ['Light', 'Dark', 'High contrast', 'Brand colour'].every((n) => themes.includes(n)) && themes[0] === 'Light', themes.join(' | '));
 await p.screenshot({ path: `${out}/themes.png` });
 await clickText(p, '.theme-menu a.style-item', /Colour, gradient and style/); await wait(900);
 const look = await p.evaluate(() => ({ at: location.hash, subs: [...document.querySelectorAll('.look-card .bell-sub')].map((x) => x.textContent) }));

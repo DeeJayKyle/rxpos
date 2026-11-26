@@ -1,12 +1,13 @@
 import { createContext, useContext, useEffect, useState, useCallback, useMemo, useRef, startTransition } from 'react';
-import { idbGet, idbSet, idbDel, idbKeys } from './idb.js';
+import { idbGet, idbSet, idbDel, idbKeys, sealKvAtRest } from './idb.js';
 import { createSync, collectChanges } from './sync.js';
-import { storage, diff, storageError, STORAGE_VERSION } from './storage.js';
+import { storage, diff, storageError, STORAGE_VERSION, openBuckets } from './storage.js';
 import { featureSet, permissionsOf } from './access.js';
 import { platformName } from './platform.js';
 import { endWebSession, isLeaving, keepsData } from './webpolicy.js';
 import { connectLive, disconnectLive, onLive } from './live.js';
 import { DEFAULT_CLOUD, tillNumber, cloudLogout } from './cloud.js';
+import { registerSession, endRenewal } from './session.js';
 import { nextNumber } from './docnumbers.js';
 import { clientOwes } from './insurance.js';
 import { windowSums } from './balances.js';
@@ -19,9 +20,11 @@ import { pharmacyDefaults, overrideKey, readOverrides, writeOverrides, editOverr
 import { isKit, kitView } from './kits.js';
 
 const SESSION_KEY = 'pharmapos-session';
-// "Remember me": the sign-in survives closing the app on this device for 30 days (otherwise it ends with the session)
+// "Remember me": the sign-in survives closing the app on this device for 7 days (otherwise it ends with the session).
+// 2026-11-26 (sign-in audit): it was 30 days, and the app reopened unlocked as that person; now it reopens on the lock
+// screen (their quick PIN or password), and the cloud sign-in behind it renews itself (src/session.js)
 const REMEMBER_KEY = 'rxpos-remember';
-const REMEMBER_DAYS = 30;
+const REMEMBER_DAYS = 7;
 
 // Every synced table. Records carry `updatedAt`; deletions leave a tombstone in `_tomb`.
 export const TABLES = [
@@ -51,7 +54,7 @@ export async function loadSnapshot(date) {
   const s = await idbGet('snap:' + date);
   if (s?.v !== 2) return s;
   const tables = {};
-  for (const { t, rs } of s.rows || []) { const list = (tables[t] ??= []); for (const r of rs) list.push(r); }
+  for (const { t, rs } of await openBuckets(s.rows)) { const list = (tables[t] ??= []); for (const r of rs) list.push(r); } // sealed buckets (src/vault.js)
   return fromRecords({ tables, settings: s.settings, tomb: s.tomb });
 }
 
@@ -471,7 +474,7 @@ export function StoreProvider({ children }) {
       const s = JSON.parse(sessionStorage.getItem(SESSION_KEY));
       if (s) return s;
       const r = JSON.parse(localStorage.getItem(REMEMBER_KEY));
-      if (r?.user && r.until > Date.now()) return r.user;
+      if (r?.user && r.until > Date.now()) { localStorage.setItem('rxpos-locked', r.user.id); return r.user; } // LockScreen.jsx lockedFor
       localStorage.removeItem(REMEMBER_KEY);
     } catch { /* storage blocked */ }
     return null;
@@ -497,8 +500,9 @@ export function StoreProvider({ children }) {
         return d;
       };
       try {
+        await sealKvAtRest({ only: 'sync' }).catch(console.error); // the sign-in, sealed before anything reads it (src/vault.js)
         cfg = await idbGet('sync');
-        const rec = await storage().load();
+        const rec = await storage().load(); // seals records still stored as plain text (storage.js)
         if (rec) loaded = fill(fromRecords(rec));
         else {
           loaded = await migrateLegacy(base, fill, cfg);
@@ -521,6 +525,8 @@ export function StoreProvider({ children }) {
       const fresh = !keepsData() && cfg ? { deviceId: uid(), cursor: 0, pushedAt: '', lastSync: '', epoch: undefined, outboxV2: true } : {};
       setSyncCfgState({ deviceId: uid(), url: '', key: '', pushedAt: '', cursor: 0, branchId: MAIN_BRANCH, ...(cfg || {}), ...moved, ...fresh });
       removeOldTableCopies().catch(console.error);
+      // the one-time move to sealed copies (daily copies, backups, old tables): in the background, once
+      if (keepsData()) whenQuiet(5000).then(() => sealKvAtRest()).catch(console.error);
     })();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -564,6 +570,8 @@ export function StoreProvider({ children }) {
     // the caller is told too (a sign-in must not report it is linked when the link was not saved)
     return idbSet('sync', cfg).catch((e) => { console.error(e); const err = storageError(e); setStorageIssue(err.message); throw err; });
   }, []);
+  // renewable sign-ins (src/session.js): a renewed pass is saved with the device's link
+  useEffect(() => { registerSession({ get: () => cfgRef.current, save: saveSyncCfg }); return () => registerSession(null); }, [saveSyncCfg]);
 
   // Every local change is pushed to the cloud almost at once (0.4 s, so a burst of edits goes up together; never
   // later than 1.5 s after the first one), and other devices are told over the live connection to pull it
@@ -642,6 +650,7 @@ export function StoreProvider({ children }) {
       if (left && !(await (confirmLoss || (() => Promise.resolve(window.confirm(`${left} change(s) have not reached the cloud yet. This browser keeps nothing, so signing out now loses them. Sign out anyway?`))))(left))) return false;
     }
     try {
+      localStorage.removeItem('rxpos-locked'); // a sign-in (or sign-out) just proved who is at the till: not locked
       if (u) {
         sessionStorage.setItem(SESSION_KEY, JSON.stringify(u));
         if (remember) localStorage.setItem(REMEMBER_KEY, JSON.stringify({ user: u, until: Date.now() + REMEMBER_DAYS * 864e5 }));
@@ -726,7 +735,7 @@ export function StoreProvider({ children }) {
    * Changes another pharmacy's sign-in hasn't sent yet are never carried over to this one: they are sent first (with
    * that pharmacy's own sign-in), and if they can't be, switching is refused with the reason.
    */
-  const linkPharmacy = useCallback(async ({ url, token, account, tenant, slug, pharmacy, keyUser }) => {
+  const linkPharmacy = useCallback(async ({ url, token, refresh, sid, account, tenant, slug, pharmacy, keyUser }) => {
     const cur = cfgRef.current || {};
     const other = cur.tenant ? cur.tenant !== tenant : (dbRef.current?.users.length || 0) > 0;
     if (other && cur.tenant) {
@@ -748,7 +757,9 @@ export function StoreProvider({ children }) {
     }
     // a new link (another pharmacy, another cloud, or device-only data joining one) sends everything it holds once
     // keyUser: whose sign-in token this is (audit P2-7: someone else unlocking with a PIN confirms before a personal call)
-    const next = { ...cur, url, key: token, keyUser: keyUser || '', account, tenant, slug, pharmacy, ...(other || cur.url !== url ? { cursor: 0, pushedAt: '', lastSync: '', outboxV2: false, till: undefined } : {}) };
+    // the sign-in this device held before ends in the cloud (its renewal key would otherwise stay valid for 14 days)
+    if (cur.refresh && cur.sid !== sid) endRenewal(cur);
+    const next = { ...cur, url, key: token, refresh: refresh || '', sid: sid || '', swapTried: false, keyUser: keyUser || '', account, tenant, slug, pharmacy, ...(other || cur.url !== url ? { cursor: 0, pushedAt: '', lastSync: '', outboxV2: false, till: undefined } : {}) };
     await saveSyncCfg(next);
     return other || !cur.lastSync;
   }, [saveSyncCfg, persist, setState]);
@@ -819,7 +830,7 @@ export function StoreProvider({ children }) {
   useEffect(() => {
     if (!user || !syncCfg?.url || !syncCfg?.key || syncCfg?.till) return;
     let gone = false;
-    const ask = () => tillNumber(syncCfg).then((r) => { if (!gone && r?.till > 0 && cfgRef.current?.key === syncCfg.key) saveSyncCfg({ ...cfgRef.current, till: r.till }); }).catch(() => {});
+    const ask = () => tillNumber(syncCfg).then((r) => { if (!gone && r?.till > 0 && (cfgRef.current?.sid || cfgRef.current?.key) === (syncCfg.sid || syncCfg.key)) saveSyncCfg({ ...cfgRef.current, till: r.till }); }).catch(() => {});
     ask();
     const again = setInterval(ask, 60000); // offline or an older cloud: keep the old-style numbers and ask again later
     return () => { gone = true; clearInterval(again); };

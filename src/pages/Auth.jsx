@@ -117,7 +117,7 @@ export default function Auth() {
       message: `This device holds ${syncCfg.pharmacy || syncCfg.slug || 'another pharmacy'}. Signing in to ${r.pharmacy || r.slug} downloads that pharmacy instead (it needs the internet). ${syncCfg.pharmacy || 'The other pharmacy'} stays safe in the cloud, a copy is kept on this device, and changes it has not sent yet are sent first. Its staff sign in again to switch back.`,
       confirmText: `Switch to ${r.pharmacy || r.slug}`, cancelText: 'Cancel',
     }))) return;
-    await linkPharmacy({ url, token: r.token, account: email, tenant: r.tenant, slug: r.slug, pharmacy: r.pharmacy, keyUser: r.user?.id });
+    await linkPharmacy({ url, token: r.token, refresh: r.refresh, sid: r.sid, account: email, tenant: r.tenant, slug: r.slug, pharmacy: r.pharmacy, keyUser: r.user?.id });
     if (isNative) await rememberOffline(r.tenant, r.user.id, form.password); // the Windows / Android app can now sign this person in offline
     if (twoStep) try { localStorage.setItem(trustKey(r.tenant, r.user.id), '1'); } catch { /* storage blocked */ }
     setTwoStep(null);
@@ -271,7 +271,7 @@ export default function Auth() {
               {(needCode || (isUsername && !slug)) && codeField}
               <div className="row between remember-row">
                 {isNative
-                  ? <label className="check small"><input type="checkbox" checked={remember} onChange={(e) => keepChoice(e.target.checked)} /><span>Remember me for 30 days</span></label>
+                  ? <label className="check small"><input type="checkbox" checked={remember} onChange={(e) => keepChoice(e.target.checked)} /><span>Remember me for 7 days</span></label>
                   : <span className="muted small web-note">Online only · nothing is kept on this computer</span>}
                 <button type="button" className="link-btn small" onClick={() => { setForgot({ stage: 'ask' }); setError(''); }}>Forgot password?</button>
               </div>

@@ -4,13 +4,16 @@
 //   island   messages appear in a Dynamic Island: a black pill at the top that grows to show them
 //   home     the dashboard as a home screen: widgets in three sizes, a dock of pages, long-press to arrange
 //   tiling   a second page tiled beside the one you work on (wide screens), like a tiling window manager
-//   lock     the till locks itself after this many idle minutes (0: never); the lock screen asks for the PIN or password
+//   lock     the till locks itself after this many idle minutes; the lock screen asks for the PIN or password.
+//            2026-11-26 (sign-in audit): always on, 5 minutes unless chosen otherwise (a shared till must not stay open
+//            as the last person for hours); "Never" is gone, and a device that had it gets the 5 minutes
 // 1.22.0 (the owner's clean-up): the extras are off on a new device and switched on in This device → Extras:
 //   cc       the Control Centre button in the top bar (the switches above, sync, lock)
 //   library  the App Library tile in Control Centre
 const KEY = 'rxpos-behaviour';
-export const LOCK_AFTER = [[0, 'Never'], [2, '2 min'], [5, '5 min'], [15, '15 min']];
-export const DEFAULTS = { sheets: false, island: false, home: false, tiling: false, tile: '', lock: 0, cc: false, library: false };
+export const LOCK_AFTER = [[2, '2 min'], [5, '5 min'], [15, '15 min']];
+export const LOCK_DEFAULT = 5;
+export const DEFAULTS = { sheets: false, island: false, home: false, tiling: false, tile: '', lock: LOCK_DEFAULT, cc: false, library: false };
 export const BEHAVIOURS = [
   ['sheets', 'Sheets & gestures', 'Pop-ups rise from the bottom; drag them down to close'],
   ['island', 'Dynamic Island', 'Messages in a black pill at the top that grows to show them'],
@@ -27,7 +30,7 @@ export const EXTRAS = [
 export function savedBehaviour() {
   try {
     const v = JSON.parse(localStorage.getItem(KEY)) || {};
-    const lock = LOCK_AFTER.some(([m]) => m === v.lock) ? v.lock : 0;
+    const lock = LOCK_AFTER.some(([m]) => m === v.lock) ? v.lock : LOCK_DEFAULT;
     return { ...DEFAULTS, ...Object.fromEntries(Object.entries(v).filter(([k]) => k in DEFAULTS)), lock };
   } catch { return { ...DEFAULTS }; }
 }

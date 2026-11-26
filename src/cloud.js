@@ -3,6 +3,7 @@
 import { isNative } from './platform.js';
 
 import { plainHttpToInternet, INSECURE_LINK } from '../server/netaddr.js';
+import { freshCfg, renewable, SESSION_VERSION } from './session.js';
 
 export const DEFAULT_CLOUD = 'https://rxposug.com';
 /** The Worker itself (live connection). The website addresses below only forward normal requests to it. */
@@ -31,6 +32,11 @@ async function call(cfg, path, { method = 'GET', body, timeout = 20000, personal
   if (!cfg?.url) throw new Error('This device is not connected to the RxPOS cloud. Set it up in Settings → Online sync.');
   if (plainHttpToInternet(cfg.url)) throw new Error(INSECURE_LINK); // 2026-11 audit: no secrets over plain http to the internet
   if (!navigator.onLine) throw new Error('No internet connection right now.');
+  if (cfg.key) cfg = await freshCfg(cfg); // a short pass about to run out is renewed first (src/session.js)
+  return send(cfg, path, { method, body, timeout, extra, retry: renewable(cfg) });
+}
+
+async function send(cfg, path, { method, body, timeout, extra, retry }) {
   const ctl = new AbortController();
   const t = setTimeout(() => ctl.abort(), timeout);
   try {
@@ -40,7 +46,11 @@ async function call(cfg, path, { method = 'GET', body, timeout = 20000, personal
       body: body ? JSON.stringify(body) : undefined,
     });
     const j = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(j.error || `Cloud replied ${res.status}`);
+    if (res.status === 401 && retry) { // the pass ended early (the clock, a sleep): renew once and try again
+      const next = await freshCfg(cfg, { force: true });
+      if (next.key !== cfg.key) return send(next, path, { method, body, timeout, extra, retry: false });
+    }
+    if (!res.ok) throw Object.assign(new Error(j.error || `Cloud replied ${res.status}`), { status: res.status });
     return j;
   } catch (e) {
     throw e.name === 'AbortError' ? new Error('The cloud took too long to answer. Check the internet connection.') : e;
@@ -50,7 +60,7 @@ async function call(cfg, path, { method = 'GET', body, timeout = 20000, personal
 }
 
 /** Sign in to the cloud with a staff account → { token, user } */
-export const cloudLogin = (url, email, password, tenant, otp) => call({ url: cleanUrl(url) }, '/api/login', { method: 'POST', body: { email, password, tenant: tenant || undefined, otp: otp || undefined } });
+export const cloudLogin = (url, email, password, tenant, otp) => call({ url: cleanUrl(url) }, '/api/login', { method: 'POST', body: { email, password, tenant: tenant || undefined, otp: otp || undefined, session: SESSION_VERSION } });
 export const forgotPassword = (url, body) => call({ url: cleanUrl(url) }, '/api/password/forgot', { method: 'POST', body });
 export const resetPassword = (url, body) => call({ url: cleanUrl(url) }, '/api/password/reset', { method: 'POST', body });
 export const googleClient = (url) => call({ url: cleanUrl(url) }, '/api/google-client', { timeout: 10000 });

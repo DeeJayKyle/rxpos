@@ -65,7 +65,13 @@ const HISTORY_SQL = `t IN (${HISTORY_TABLES.map((x) => `'${x}'`).join(', ')}) OR
   AND COALESCE(json_extract(rec, '$.date'), '') < ?6)`;
 const MAX_PAGE = 10000; // what an app may ask for with `limit` (stage 1: fewer round trips; about 250 KB compressed)
 const MAX_PUSH = 500;
-const TOKEN_DAYS = 30;
+const TOKEN_DAYS = 30; // the old long pass, still given to apps from before sign-in renewal (they ask without `session: 2`)
+// 2026-11-26 (sign-in audit): an app that renews its sign-in gets a short pass and a renewal key. The pass works for
+// ACCESS_MINUTES; the renewal key (one use: each renewal hands out the next one) for REFRESH_IDLE_DAYS without use and
+// REFRESH_MAX_DAYS at most after the password, and it ends at once on sign-out, a new password or "sign out everywhere".
+const ACCESS_MINUTES = 15;
+const REFRESH_IDLE_DAYS = 14;
+const REFRESH_MAX_DAYS = 30;
 const MAIN = 'main';
 // Tables only some roles may change; the server enforces it whatever a device sends
 const GUARDED = { users: 'users.manage', roles: 'users.manage', settings: 'settings.manage',
@@ -190,6 +196,8 @@ function ensureSchema(db) {
     if (!have.has('owner_config')) ddl.push('CREATE TABLE owner_config (k TEXT PRIMARY KEY, v TEXT NOT NULL)');
     // 2026-11 audit: who synced from which device, so a shared till keeps what each of its users needs (deviceView)
     if (!have.has('device_views')) ddl.push('CREATE TABLE device_views (tenant TEXT NOT NULL, device TEXT NOT NULL, uid TEXT NOT NULL, view TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (tenant, device, uid))');
+    // 2026-11-26: each renewable sign-in (sid) and the hash of its current and previous renewal key (never the key)
+    if (!have.has('sign_ins')) ddl.push('CREATE TABLE sign_ins (sid TEXT PRIMARY KEY, tenant TEXT NOT NULL, uid TEXT NOT NULL, created INTEGER NOT NULL, last INTEGER NOT NULL, cur TEXT NOT NULL, prev TEXT, revoked INTEGER NOT NULL DEFAULT 0)');
     if (!have.has('reset_codes')) ddl.push('CREATE TABLE reset_codes (k TEXT PRIMARY KEY, code_hash TEXT NOT NULL, expires INTEGER NOT NULL, tries INTEGER NOT NULL DEFAULT 0, sent INTEGER NOT NULL DEFAULT 0, window_start INTEGER NOT NULL DEFAULT 0)');
     // dropping an old index is optional: never let it block the API (e.g. when the daily write limit is reached)
     for (const sql of ddl) await db.prepare(sql).run().catch((e) => { if (!sql.startsWith('DROP')) throw e; });
@@ -302,7 +310,7 @@ async function authenticate(req, env) {
   let pass = null;
   if (got.startsWith('u.')) {
     const p = await readToken(env, got).catch(() => null);
-    if (p) { who = { tenant: p.tn || MAIN, role: p.role, name: p.name, uid: p.sub, sig: sigOf(got) }; pass = p; }
+    if (p) { who = { tenant: p.tn || MAIN, role: p.role, name: p.name, uid: p.sub, sig: sigOf(got), sid: p.sid || '', from: p.from }; pass = p; }
   } else {
     const t = await env.DB.prepare('SELECT id FROM tenants WHERE key_hash = ?1').bind(await sha256(got)).first();
     if (t) who = { tenant: t.id, role: 'admin', name: 'sync key', viaKey: true };
@@ -379,12 +387,83 @@ const sigOf = (token) => String(token || '').split('.')[2]?.slice(0, 22) || '';
 const issuedAt = (p) => Number(p?.iat) || (Number(p?.exp) || 0) - TOKEN_DAYS * 864e5;
 export function sessionOk(rec, p, sig) {
   if (!p) return true; // the pharmacy key: not a person's pass
-  if (rec.sessionsFrom && issuedAt(p) < Number(rec.sessionsFrom) && !(rec.sessionKeep && rec.sessionKeep === sig)) return false;
-  if (Array.isArray(rec.revoked) && rec.revoked.some((x) => x && x.s === sig)) return false;
+  // a renewable sign-in (sid) counts from when the password was typed, whatever pass of it this is
+  const kept = !!rec.sessionKeep && (rec.sessionKeep === sig || (!!p.sid && rec.sessionKeep === 'sid:' + p.sid));
+  if (rec.sessionsFrom && (p.sid && p.from ? Number(p.from) : issuedAt(p)) < Number(rec.sessionsFrom) && !kept) return false;
+  if (Array.isArray(rec.revoked) && rec.revoked.some((x) => x && (x.s === sig || (!!p.sid && x.sid === p.sid)))) return false;
   return true;
+}
+/** What stays when a person ends their other sign-ins: this sign-in (renewable) or this pass (an old long one) */
+const keepOf = (who) => (who.sid ? 'sid:' + who.sid : who.sig || '');
+
+// ---------- renewable sign-ins (2026-11-26) ----------
+const newRefresh = (sid) => 'r.' + sid + '.' + b64url(crypto.getRandomValues(new Uint8Array(32)));
+const sidOfRefresh = (r) => { const m = /^r\.([A-Za-z0-9_-]{8,64})\.[A-Za-z0-9_-]{20,}$/.exec(String(r || '')); return m ? m[1] : ''; };
+/** A short pass for a renewable sign-in. `from`: when the password was typed (a new password or sign-out everywhere ends it) */
+const shortPass = (env, u, tenant, sid, from) => signToken(env, { sub: u.id, tn: tenant, name: u.name, role: u.role, sid, from, iat: Date.now(), exp: Date.now() + ACCESS_MINUTES * 60000 });
+/** Start a renewable sign-in after the password (and two-step code) was right → { token, refresh, sid, exp } */
+async function startSignIn(env, u, tenant, from = Date.now()) {
+  const sid = b64url(crypto.getRandomValues(new Uint8Array(16)));
+  const refresh = newRefresh(sid), now = Date.now();
+  await env.DB.prepare('INSERT INTO sign_ins (sid, tenant, uid, created, last, cur) VALUES (?1, ?2, ?3, ?4, ?5, ?6)').bind(sid, tenant, u.id, from, now, await sha256(refresh)).run();
+  return { token: await shortPass(env, u, tenant, sid, from), refresh, sid, exp: now + ACCESS_MINUTES * 60000 };
+}
+/** POST /api/token/refresh { refresh } → a new short pass and the next renewal key; the one sent is used up.
+ *  { refresh, end: true } ends that sign-in instead.
+ *  An app from before renewal sends its old long pass instead (Authorization, no refresh): it is swapped once for a
+ *  renewable sign-in and the old pass ends. */
+async function renewSignIn(env, req, body) {
+  const now = Date.now();
+  const refresh = String(body.refresh || '');
+  if (!refresh) {
+    const got = (req.headers.get('Authorization') || '').replace(/^Bearer /, '');
+    const who = got.startsWith('u.') ? await authenticate(req, env) : null;
+    if (!who?.uid || who.sid) return json({ error: 'Sign in again.' }, 401);
+    const u = await existingRec(env.DB, who.tenant, 'users', who.uid);
+    if (!u) return json({ error: 'Sign in again.' }, 401);
+    const p = await readToken(env, got).catch(() => null);
+    const out = await startSignIn(env, u, who.tenant, issuedAt(p));
+    const live = (Array.isArray(u.revoked) ? u.revoked : []).filter((x) => x && x.exp > now).slice(-199);
+    await serverWrite(env, who.tenant, 'users', who.uid, { ...u, revoked: [...live, { s: who.sig, exp: Number(p?.exp) || now + TOKEN_DAYS * 864e5 }] });
+    return json(out);
+  }
+  const sid = sidOfRefresh(refresh);
+  const row = sid && (await env.DB.prepare('SELECT * FROM sign_ins WHERE sid = ?1').bind(sid).first());
+  if (!row || row.revoked) return json({ error: 'This sign-in has ended. Sign in again.' }, 401);
+  const h = await sha256(refresh);
+  if (!safeEqual(h, row.cur)) {
+    // an older key of this sign-in: another window of the same app renewed a moment ago (it holds the new key), or
+    // the key was copied and used elsewhere. A minute's grace for the first; after that the whole sign-in ends.
+    if (row.prev && safeEqual(h, row.prev) && now - Number(row.last) < 60000) return json({ error: 'Already renewed on this device.', renewed: true }, 409);
+    if (row.prev && safeEqual(h, row.prev)) await env.DB.prepare('UPDATE sign_ins SET revoked = 1 WHERE sid = ?1').bind(sid).run();
+    return json({ error: 'This sign-in has ended. Sign in again.' }, 401);
+  }
+  if (body.end) { // the device signs this sign-in out (another person signed in on it with their password)
+    await env.DB.prepare('UPDATE sign_ins SET revoked = 1 WHERE sid = ?1').bind(sid).run();
+    return json({ ok: true });
+  }
+  if (now - Number(row.last) > REFRESH_IDLE_DAYS * 864e5 || now - Number(row.created) > REFRESH_MAX_DAYS * 864e5) {
+    await env.DB.prepare('UPDATE sign_ins SET revoked = 1 WHERE sid = ?1').bind(sid).run();
+    return json({ error: 'This sign-in has expired. Sign in again with your password.' }, 401);
+  }
+  const t = await tenantById(env, row.tenant);
+  if (!t || t.status !== 'active') return json({ error: 'This pharmacy account is suspended. Please contact your RxPOS provider.' }, 403);
+  const u = await existingRec(env.DB, row.tenant, 'users', row.uid);
+  if (!u || u.disabled || !sessionOk(u, { sid, from: row.created, iat: row.created }, '')) {
+    await env.DB.prepare('UPDATE sign_ins SET revoked = 1 WHERE sid = ?1').bind(sid).run();
+    return json({ error: 'This sign-in has ended. Sign in again.' }, 401);
+  }
+  const next = newRefresh(sid);
+  // compare-and-set on the current key: two renewals with the same key can't both win
+  const r = await env.DB.prepare('UPDATE sign_ins SET prev = cur, cur = ?2, last = ?3 WHERE sid = ?1 AND cur = ?4 AND revoked = 0').bind(sid, await sha256(next), now, row.cur).run();
+  if (!(r.meta?.changes > 0)) return json({ error: 'Already renewed on this device.', renewed: true }, 409);
+  return json({ token: await shortPass(env, u, row.tenant, sid, Number(row.created)), refresh: next, sid, exp: now + ACCESS_MINUTES * 60000 });
 }
 /** The user's fields that end every pass issued until now, except `keep` (a pass's sigOf) */
 const endSessions = (keep = '') => ({ sessionsFrom: Date.now(), sessionKeep: keep || undefined, revoked: [] });
+/** End renewable sign-ins in the sign_ins table too (their renewal keys stop at once), all of a person's but `keepSid` */
+const endSignIns = (env, tenant, uid, keepSid = '') => env.DB.prepare('UPDATE sign_ins SET revoked = 1 WHERE tenant = ?1 AND uid = ?2 AND sid != ?3').bind(tenant, uid, keepSid).run()
+  .catch((e) => console.warn('sign-ins not ended', e.message));
 /** 2026-11-17 audit: end these people's open live connections (calls, change pushes); never fails the caller */
 const closeLive = (env, tenant, uids) => (env.HUB && uids.length ? env.HUB.get(env.HUB.idFromName(tenant)).fetch('https://hub/close', { method: 'POST', body: JSON.stringify({ uids }), signal: AbortSignal.timeout(5000) })
   .catch((e) => console.warn('closing live connections failed', e.message)) : null);
@@ -435,6 +514,7 @@ export async function pruneSignInTables(db) {
   await db.batch([
     db.prepare('DELETE FROM login_fail WHERE until = 0 OR until < ?1').bind(now),
     db.prepare('DELETE FROM login_throttle WHERE last_at < ?1').bind(now - 24 * 3600e3),
+    db.prepare('DELETE FROM sign_ins WHERE revoked = 1 OR last < ?1 OR created < ?2').bind(now - REFRESH_IDLE_DAYS * 864e5, now - REFRESH_MAX_DAYS * 864e5),
   ]);
 }
 
@@ -567,8 +647,10 @@ async function pharmacyLogin(env, body, ownerToken, ip = 'noip') {
     const next = await upgradeHash(u, String(body.password || ''), env);
     if (next) await serverWrite(env, match.tenant, 'users', u.id, { ...u, ...next });
   } catch (e) { console.warn('password re-hash skipped:', e.message); }
-  const token = await signToken(env, { sub: u.id, tn: match.tenant, name: u.name, role: u.role, iat: Date.now(), exp: Date.now() + TOKEN_DAYS * 864e5 });
-  return json({ token, tenant: match.tenant, slug: t.slug || match.tenant, pharmacy: t.name, app: webAppOf(t), user: { id: u.id, name: u.name, email: u.email, role: u.role } });
+  // an app that renews its sign-in (session: 2) gets a short pass and a renewal key; an older app the long pass
+  const pass = Number(body.session) >= 2 ? await startSignIn(env, u, match.tenant)
+    : { token: await signToken(env, { sub: u.id, tn: match.tenant, name: u.name, role: u.role, iat: Date.now(), exp: Date.now() + TOKEN_DAYS * 864e5 }) };
+  return json({ ...pass, tenant: match.tenant, slug: t.slug || match.tenant, pharmacy: t.name, app: webAppOf(t), user: { id: u.id, name: u.name, email: u.email, role: u.role } });
 }
 
 /** The caller's IP (Cloudflare sets CF-Connecting-IP); a fixed fallback keeps local/dev working. */
@@ -820,7 +902,7 @@ async function sync(env, body, who, ctx) {
         // a new password from a device (the person's own change, or an administrator's reset): every other pass of
         // theirs ends; the device of a person changing their own password stays signed in
         const fresh = !old || old.hash !== rec.hash;
-        if (fresh && old) { Object.assign(rec, endSessions(String(who.uid) === id ? who.sig : '')); liveEnd.push(id); }
+        if (fresh && old) { Object.assign(rec, endSessions(String(who.uid) === id ? keepOf(who) : '')); liveEnd.push(id); }
         else if (old) for (const f of ['sessionsFrom', 'sessionKeep', 'revoked']) if (old[f] !== undefined) rec[f] = old[f];
       }
     }
@@ -1407,7 +1489,7 @@ async function owner(env, req, url, body) {
     // its chat attachments go too (personal data must not outlive the pharmacy)
     await db.batch([db.prepare('DELETE FROM file_chunks WHERE tenant = ?1').bind(t.id), db.prepare('DELETE FROM files WHERE tenant = ?1').bind(t.id), db.prepare('DELETE FROM file_uploads WHERE tenant = ?1').bind(t.id)]).catch(() => {});
     // 2026-11 audit: everything else kept per pharmacy goes too (two-step secrets, devices, crash reports, calls…)
-    await db.batch(['twofa', 'sync_ops', 'client_errors', 'client_error_devices', 'snapshot_bounds', 'rtc', 'device_views'].map((x) => db.prepare(`DELETE FROM ${x} WHERE tenant = ?1`).bind(t.id))).catch((e) => console.warn('pharmacy clean-up incomplete', e.message));
+    await db.batch(['twofa', 'sync_ops', 'client_errors', 'client_error_devices', 'snapshot_bounds', 'rtc', 'device_views', 'sign_ins'].map((x) => db.prepare(`DELETE FROM ${x} WHERE tenant = ?1`).bind(t.id))).catch((e) => console.warn('pharmacy clean-up incomplete', e.message));
     // 2026-11-17 audit: its ready-made downloads and brought-forward figures in R2 too. They were keyed by the pharmacy's
     // address, so a new pharmacy given the same address was served the deleted one's balances.
     if (env.APPS) {
@@ -1996,7 +2078,7 @@ export default {
           // 2026-11-17 audit: the person must still exist, be enabled and not signed out since (authenticate's checks)
           const u = p && await env.DB.prepare('SELECT rec FROM records WHERE tenant = ?1 AND k = ?2 AND deleted = 0').bind(p.tn, 'users|' + p.sub).first();
           const rec = u ? JSON.parse(u.rec || '{}') : null;
-          if (p && rec && !rec.disabled && (await tenantById(env, p.tn))?.status === 'active' && sessionOk(rec, { iat: p.iat || 0 }, p.s)) who = { tenant: p.tn, uid: p.sub, name: p.name };
+          if (p && rec && !rec.disabled && (await tenantById(env, p.tn))?.status === 'active' && sessionOk(rec, { iat: p.iat || 0, sid: p.sid || '', from: p.from }, p.s)) who = { tenant: p.tn, uid: p.sub, name: p.name };
         }
         else { const fake = new Request(req.url, { headers: { Authorization: 'Bearer ' + (url.searchParams.get('token') || '') } }); who = await authenticate(fake, env); }
         if (!who?.uid) return json({ error: 'Not signed in' }, 401);
@@ -2007,6 +2089,7 @@ export default {
       const body = req.method === 'POST' ? await req.json().catch(() => null) : null;
       if (req.method === 'POST' && !body) return json({ error: 'Bad request' }, 400);
       if (path === '/api/login' && req.method === 'POST') return await login(env, body, clientIp(req));
+      if (path === '/api/token/refresh' && req.method === 'POST') return await renewSignIn(env, req, body);
       if (path === '/api/password/forgot' && req.method === 'POST') return await forgotPassword(env, body, clientIp(req));
       if (path === '/api/password/reset' && req.method === 'POST') return await resetPassword(env, body);
       if (path === '/api/google-client') { const c = await getConfig(env.DB); return json({ clientId: c.google_client_id || null }); }
@@ -2040,7 +2123,7 @@ export default {
       // A short-lived ticket to open the live WebSocket without putting the sign-in token in the URL (1.2)
       if (path === '/api/live-ticket' && req.method === 'POST') {
         if (!who.uid) return json({ error: 'Not available for this connection' }, 400);
-        return json({ ticket: await signTicket(env, { sub: who.uid, tn: who.tenant, name: who.name || '', s: who.sig, iat: Date.now(), exp: Date.now() + LIVE_TICKET_MS }) });
+        return json({ ticket: await signTicket(env, { sub: who.uid, tn: who.tenant, name: who.name || '', s: who.sig, ...(who.sid ? { sid: who.sid, from: who.from } : {}), iat: Date.now(), exp: Date.now() + LIVE_TICKET_MS }) });
       }
       // 2026-11 audit: sign-ins that can be ended. /api/logout ends this pass (the web version signing out);
       // /api/sessions/others ends every other pass of this person ("Sign out everywhere else");
@@ -2057,8 +2140,12 @@ export default {
         let next;
         if (path === '/api/logout') {
           const live = (Array.isArray(u.revoked) ? u.revoked : []).filter((x) => x && x.exp > Date.now()).slice(-199);
-          next = { ...u, revoked: [...live, { s: who.sig, exp: Date.now() + TOKEN_DAYS * 864e5 }] };
-        } else next = { ...u, ...endSessions(path === '/api/sessions/others' ? who.sig : '') };
+          next = { ...u, revoked: [...live, { s: who.sig, ...(who.sid ? { sid: who.sid } : {}), exp: Date.now() + (who.sid ? ACCESS_MINUTES * 60000 : TOKEN_DAYS * 864e5) }] };
+          if (who.sid) await env.DB.prepare('UPDATE sign_ins SET revoked = 1 WHERE sid = ?1').bind(who.sid).run();
+        } else {
+          next = { ...u, ...endSessions(path === '/api/sessions/others' ? keepOf(who) : '') };
+          await endSignIns(env, who.tenant, target, path === '/api/sessions/others' ? who.sid : '');
+        }
         const what = path === '/api/logout' ? 'Signed out (this sign-in ended)' : path === '/api/sessions/others' ? 'Signed out everywhere else' : `Signed out on every device by ${who.name || 'an administrator'}`;
         await serverWriteMany(env, who.tenant, [{ t: 'users', id: target, rec: next },
           { t: 'audit', id: crypto.randomUUID(), rec: { date: new Date().toISOString(), user: who.name || '', action: what, details: u.name || '', branchId: 'main' } }]);

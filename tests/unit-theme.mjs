@@ -5,7 +5,7 @@ const check = (n, ok, x = '') => { ok ? pass++ : fail++; console.log(`${ok ? 'PA
 
 check('all themes allowed: light → Mint Teal', paletteFor('light') === 'mint-teal');
 check('all themes allowed: dark → RxPOS Navy Teal', paletteFor('dark') === 'navy-teal');
-check('without the defaults: the first palette of that base', paletteFor('light', THEMES.filter((t) => t.id !== 'mint-teal')) === 'high-contrast');
+check('without the defaults: the first palette of that base', paletteFor('light', THEMES.filter((t) => t.id !== 'mint-teal')) === 'pharmacy-blue' && paletteFor('dark', THEMES.filter((t) => t.id !== 'navy-teal')) === 'midnight-blue');
 // 1.16.0 (the owner's clean-up): light themes on a near-white page with a breath of their soft colour
 check('Navy Teal: the navy page, teal actions; Mint Teal: white cards on a near-white mint page', (() => { const o = themeVars(THEMES.find((t) => t.id === 'navy-teal')), d = themeVars(THEMES.find((t) => t.id === 'mint-teal')); return o['--bg'] === '#0a2233' && o['--primary'] === '#14b8a6' && d['--bg'] === '#ecf5f5' && d['--surface'] === '#ffffff' && d['--primary'] === '#0f8a8a'; })());
 check('light pages are near white (1.16.0)', THEMES.filter((t) => t.base === 'light').every((t) => { const [r, g, b] = [1, 3, 5].map((i) => parseInt(themeVars(t)['--bg'].slice(i, i + 2), 16)); return Math.min(r, g, b) >= 0xd8; }));
@@ -14,8 +14,12 @@ check('restricted: light falls back to the first allowed light palette', palette
 check('restricted: dark → the only allowed dark palette (a retired id counts as its replacement)', paletteFor('dark', restricted) === 'navy-teal');
 // an owner's light themes bring their dark twins, so Dark has one of them rather than falling back to a light one
 check('only light themes allowed: Dark takes the first one\'s dark twin', paletteFor('dark', allowedThemes({ themes: ['high-contrast', 'brand'] })) === 'high-contrast-dark');
-check('a retired theme opens as Light or Dark, its dark twin as Light\'s twin (1.22.0)', themeById('forest-green').id === 'mint-teal' && themeById('pharmacy-amber').id === 'mint-teal' && themeById('terminal').id === 'navy-teal' && themeById('pharmacy-green-dark').id === 'mint-teal-dark' && themeById('cobalt-amber').id === 'mint-teal');
-check('four themes (1.22.0, the owner\'s clean-up): Light, Dark, High contrast and Brand colour', THEMES.map((t) => t.name).join() === 'Light,Dark,High contrast,Brand colour' && THEME_GROUPS.length === 1 && THEMES.every((t) => t.group === THEME_GROUPS[0]));
+check('a retired theme opens as the closest kept one in its group, its dark twin as that one\'s twin (1.22.1)', themeById('forest-green').id === 'pharmacy-green' && themeById('pharmacy-amber').id === 'sandstone-terracotta' && themeById('terminal').id === 'pharmacy-night' && themeById('emerald-mint-dark').id === 'pharmacy-green-dark' && themeById('cobalt-amber').id === 'pharmacy-blue' && themeById('pharmacy-green').id === 'pharmacy-green');
+check('themes in four groups by look (1.22.1): Light, Dark, High contrast, Colourful, each theme in one', THEME_GROUPS.join() === 'Light,Dark,High contrast,Colourful' && THEMES.every((t) => THEME_GROUPS.includes(t.group)) && THEME_GROUPS.every((g) => THEMES.some((t) => t.group === g)));
+check('the plain four stay: Light, Dark, High contrast and Brand colour', ['mint-teal:Light', 'navy-teal:Dark', 'high-contrast:High contrast', 'brand:Brand colour'].every((x) => { const [id, n] = x.split(':'); return themeById(id).id === id && themeById(id).name === n; }));
+check('Light themes are light and Dark themes dark', THEMES.filter((t) => t.group === 'Light').every((t) => t.base === 'light') && THEMES.filter((t) => t.group === 'Dark').every((t) => t.base === 'dark'));
+{ const near = []; for (const g of THEME_GROUPS) { const ts = THEMES.filter((t) => t.group === g); for (const a of ts) for (const b of ts) if (a.id < b.id && a.base === b.base && contrast(a.c.primary, b.c.primary) < 1.06 && contrast(a.c.bg, b.c.bg) < 1.06 && contrast(a.c.sidebar, b.c.sidebar) < 1.06) near.push(a.id + '~' + b.id); }
+  check('no near-duplicates within a group', near.length === 0, near.join(', ')); }
 {
   const { setBrandColor } = await import('../src/themes.js');
   setBrandColor('#7c3aed');
@@ -26,7 +30,7 @@ check('four themes (1.22.0, the owner\'s clean-up): Light, Dark, High contrast a
 // the Pharmacy themes (19 Nov 2026): one glossy theme in every set, its figure cards, banner and menu readable (AA)
 {
   const glossy = THEMES.filter((t) => t.glossy);
-  check('every theme is glossy (1.15.0: the neon reference), each with four figure-card colours, its own colour first', glossy.length === THEMES.length && glossy.every((t) => t.glossy.kpi.length === 4 && new Set(t.glossy.kpi).size === 4) && THEMES.every((t) => t.glossy.kpi[0] === t.c.c1));
+  check('every theme is glossy (1.15.0: the neon reference), each with four figure-card colours, its own colour first', glossy.length === THEMES.length && glossy.every((t) => t.glossy.kpi.length === 4 && new Set(t.glossy.kpi).size === 4) && THEMES.filter((t) => !t.id.startsWith('pharmacy-') && !t.c.series).every((t) => t.glossy.kpi[0] === t.c.c1));
   const bad = [];
   for (const t of glossy) {
     const v = themeVars(t);

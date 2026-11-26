@@ -9,7 +9,9 @@ const T = (id, name, base, c, inspired = '', group = '', glossy = null) => ({ id
 /** The groups of the theme menu, in order */
 // 1.17.0 (the owner's choice): look-alike themes merged and the sets regrouped; every dark theme in Dark (each light
 // theme has its own dark twin too)
-export const THEME_GROUPS = ['Themes'];
+// 1.22.1 (the owner's request, 26 Nov 2026): some themes back, clustered by how alike they look (light or dark page,
+// contrast, how many colours) so look-alikes sit together; near-duplicates in a group stay retired
+export const THEME_GROUPS = ['Light', 'Dark', 'High contrast', 'Colourful'];
 
 const hexToRgb = (h) => { const n = parseInt(h.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
 const rgba = (h, a) => `rgba(${hexToRgb(h).join(', ')}, ${a})`;
@@ -70,6 +72,8 @@ const duo = (id, name, group, opts) => {
 
 // The Pharmacy themes (the owner's references, 19 Nov 2026): one per set, a glossy dashboard look (styles/glossy.css):
 // a gradient menu, a welcome banner, and the four figure cards each in its own colour (sales in the theme's colour first)
+const K = { green: '#16a34a', blue: '#2563eb', purple: '#7c3aed', amber: '#f59e0b' };
+const kpis = (...ks) => ({ kpi: ks.map((k) => K[k] || k) });
 const hueOf = (h) => { const [r, g, b] = hexToRgb(h).map((x) => x / 255), mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
   if (d < 0.08) return null; const x = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; return (x * 60 + 360) % 360; };
 const hueGap = (a, b) => (a === null || b === null ? 180 : Math.abs(((a - b + 540) % 360) - 180));
@@ -83,48 +87,44 @@ function neonCards(c1) {
   return { kpi: out, vivid: true };
 }
 
-// 1.22.0 (the owner's clean-up, 26 Nov 2026): four themes. Light, Dark, High contrast and the pharmacy's Brand colour
-// (Settings → Pharmacy). Every other theme opens as Light or Dark (RETIRED), so a saved choice keeps working.
+// 1.22.0 (the owner's clean-up, 26 Nov 2026): Light, Dark, High contrast and the pharmacy's Brand colour (Settings →
+// Receipts & stock); 1.22.1 brought back 13 more, one per look in each group. Every other theme opens as the closest
+// kept one (RETIRED), so a saved choice keeps working.
 const BRAND_DEFAULT = '#16a34a';
-const brandTheme = (c1) => duo('brand', 'Brand colour', 'Themes', { c1, c2: mix(c1, '#ffffff', 0.88), side: mix(c1, '#000000', 0.6), strong: true, inspired: 'The pharmacy\'s own colour (Settings → Receipts & stock)' });
+const brandTheme = (c1) => duo('brand', 'Brand colour', 'Colourful', { c1, c2: mix(c1, '#ffffff', 0.88), side: mix(c1, '#000000', 0.6), strong: true, inspired: 'The pharmacy\'s own colour (Settings → Receipts & stock)' });
 export const THEMES = [
-  duo('mint-teal', 'Light', 'Themes', { c1: '#0f8a8a', c2: '#cfe6e6', side: '#0f2222', strong: true, inspired: 'Teal on a near-white page, the RxPOS colour' }),
-  duo('navy-teal', 'Dark', 'Themes', { c1: '#14b8a6', c2: '#0a2233', side: '#0f2a44', base: 'dark', strong: true, inspired: 'Navy and teal, easy on the eyes at night' }),
-  duo('high-contrast', 'High contrast', 'Themes', { c1: '#0036a8', c2: '#ffffff', side: '#000000', ink: '#000000', line: '#3a3a3a', strong: true, inspired: 'Black words on white with strong borders: easiest to read in bright light' }),
+  // Light: a pale page, one strong colour (one per hue)
+  duo('mint-teal', 'Light', 'Light', { c1: '#0f8a8a', c2: '#cfe6e6', side: '#0f2222', strong: true, inspired: 'Teal on a near-white page, the RxPOS colour' }),
+  duo('pharmacy-blue', 'Pharmacy Blue', 'Light', { c1: '#2563eb', c2: '#eaf1fc', side: '#0b2a5c', strong: true, glossy: kpis('blue', 'green', 'purple', 'amber'), inspired: 'Deep blue menu, four-colour figure cards' }),
+  duo('pharmacy-green', 'Pharmacy Green', 'Light', { c1: '#16a34a', c2: '#eef6f0', side: '#0b3d24', strong: true, glossy: kpis('green', 'blue', 'purple', 'amber'), inspired: 'Deep green menu, four-colour figure cards' }),
+  duo('royal-purple', 'Royal Purple', 'Light', { c1: '#6d4ae8', c2: '#f4f1fd', side: '#1e1433', inspired: 'Deep purple menu, violet pills' }),
+  duo('sandstone-terracotta', 'Sandstone & Terracotta', 'Light', { c1: '#ea580c', c2: '#f5f3ef', side: '#292524', ink: '#292524', strong: true, inspired: 'Sandstone page, espresso menu, terracotta accents' }),
+  // Dark: a dark page, one bright colour (one per hue)
+  duo('navy-teal', 'Dark', 'Dark', { c1: '#14b8a6', c2: '#0a2233', side: '#0f2a44', base: 'dark', strong: true, inspired: 'Navy and teal, easy on the eyes at night' }),
+  duo('midnight-blue', 'Midnight Blue', 'Dark', { c1: '#60a5fa', c2: '#0b1324', side: '#0a1a33', base: 'dark', strong: true, inspired: 'Night-blue page, bright blue pills' }),
+  duo('pharmacy-night', 'Pharmacy Night', 'Dark', { c1: '#22c55e', c2: '#06130d', side: '#0a2a1a', base: 'dark', strong: true, glossy: kpis('green', 'blue', 'purple', 'amber'), inspired: 'Deep green at night, four-colour figure cards' }),
+  duo('twilight-violet', 'Twilight Violet', 'Dark', { c1: '#8b5cf6', c2: '#13111c', card: '#1e1b2e', side: '#0e0c16', c3: '#ec4899', base: 'dark', strong: true, inspired: 'Twilight page, soft violet, pink series' }),
+  duo('graphite-amber', 'Graphite Amber', 'Dark', { c1: '#fbbf24', c2: '#16161b', side: '#24242c', base: 'dark', strong: true, inspired: 'Graphite page, amber pills with dark words' }),
+  // High contrast: black, white and one loud colour, for bright shops and tired eyes
+  duo('high-contrast', 'High contrast', 'High contrast', { c1: '#0036a8', c2: '#ffffff', side: '#000000', ink: '#000000', line: '#3a3a3a', strong: true, inspired: 'Black words on white with strong borders: easiest to read in bright light' }),
+  duo('mono-scarlet', 'Monochrome & Scarlet', 'High contrast', { c1: '#18181b', c2: '#fafafa', side: '#18181b', c3: '#ef4444', strong: true, inspired: 'Black and white, a scarlet second series' }),
+  duo('graphite-lime', 'Graphite & Lime', 'High contrast', { c1: '#b6ff2e', c2: '#1a1d24', card: '#23262f', ink: '#f8fafc', side: '#14161c', base: 'dark', strong: true, inspired: 'Dark graphite page, high-visibility lime' }),
+  // Colourful: several colours at once, and the pharmacy's own
   brandTheme(BRAND_DEFAULT),
+  duo('cool-crisp', 'Cool & Crisp', 'Colourful', { c1: '#3b82f6', c2: '#f8fafc', side: '#0f172a', strong: true, series: ['#3b82f6', '#14b8a6', '#6366f1', '#f59e0b', '#f43f5e'], glossy: kpis('#3b82f6', '#14b8a6', '#6366f1', '#f59e0b'), inspired: 'Light shell, blue, teal, indigo, amber and rose charts' }),
+  duo('royal-iris-butter', 'Royal Iris & Butter', 'Colourful', { c1: '#3a0ca3', c2: '#ffffff', side: '#3a0ca3', pill: '#fff275', c3: '#e0c400', ink: '#111827', line: '#e5e7eb', strong: true, inspired: 'Royal iris menu, butter-yellow badges' }),
+  duo('vibrant-neon', 'Vibrant Neon', 'Colourful', { c1: '#22d3ee', c2: '#0f172a', side: '#0b1222', base: 'dark', strong: true, series: ['#22d3ee', '#a78bfa', '#34d399', '#f472b6', '#fde047'], glossy: { ...kpis('#22d3ee', '#a78bfa', '#34d399', '#f472b6'), vivid: true }, inspired: 'Dark shell, cyan, violet, emerald, pink and yellow charts' }),
 ];
 /** Themes retired → Light or Dark (or the theme an older one was merged into), so a saved choice or an owner's list
  *  keeps working */
 export const RETIRED = {
-  'electric-blue': 'mint-teal',
-  'sky-blue': 'mint-teal',
-  'ocean-cyan': 'mint-teal',
-  'steel-blue': 'mint-teal',
-  'pharmacy-blue': 'mint-teal',
-  'navy-sky': 'mint-teal',
-  'emerald-mint': 'mint-teal',
-  'sage': 'mint-teal',
-  'mist-teal-lilac': 'mint-teal',
-  'pharmacy-green': 'mint-teal',
-  'royal-purple': 'mint-teal',
-  'pharmacy-purple': 'mint-teal',
-  'alabaster-indigo-coral': 'mint-teal',
-  'royal-iris-butter': 'mint-teal',
-  'night-lime': 'mint-teal',
-  'charcoal-lime': 'mint-teal',
-  'pharmacy-amber': 'mint-teal',
-  'sandstone-terracotta': 'mint-teal',
-  'mono-scarlet': 'mint-teal',
-  'ubuntu-yaru': 'mint-teal',
-  'cool-crisp': 'mint-teal',
-  'midnight-blue': 'navy-teal',
-  'graphite-amber': 'navy-teal',
-  'pharmacy-night': 'navy-teal',
-  'terminal': 'navy-teal',
-  'twilight-violet': 'navy-teal',
-  'graphite-lime': 'navy-teal',
-  'vibrant-neon': 'navy-teal',
-  'neon-indigo': 'navy-teal',
+  // 1.22.1: near-duplicates → the closest theme kept in the same group
+  'electric-blue': 'pharmacy-blue', 'sky-blue': 'pharmacy-blue', 'ocean-cyan': 'pharmacy-blue', 'steel-blue': 'pharmacy-blue', 'navy-sky': 'pharmacy-blue',
+  'emerald-mint': 'pharmacy-green', 'sage': 'pharmacy-green', 'mist-teal-lilac': 'mint-teal',
+  'pharmacy-purple': 'royal-purple', 'alabaster-indigo-coral': 'royal-purple',
+  'pharmacy-amber': 'sandstone-terracotta', 'ubuntu-yaru': 'sandstone-terracotta',
+  'night-lime': 'mono-scarlet', 'charcoal-lime': 'mono-scarlet',
+  'terminal': 'pharmacy-night', 'neon-indigo': 'vibrant-neon',
   // older retirements (1.14.0 to 1.17.0), now resolved through the list above
   // 1.17.0: look-alikes merged into the closest kept theme (the owner's choice)
   'cobalt-amber': 'pharmacy-blue', 'porcelain-signal': 'electric-blue', 'deep-ocean-cyan': 'vibrant-neon', 'lavender': 'royal-purple', 'midnight-indigo': 'royal-purple', 'obsidian-purple-mint': 'twilight-violet', 'sage-emerald': 'emerald-mint', 'mint-coral': 'mint-teal', 'forest-green': 'pharmacy-green', 'amber-gold': 'pharmacy-amber', 'charcoal-gold': 'graphite-amber', 'dark-forest': 'pharmacy-night',

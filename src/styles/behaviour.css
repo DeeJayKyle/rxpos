@@ -85,6 +85,7 @@ html[data-island="on"] .toast.info svg:first-child { color: #7dd3fc; }
 .pin-pad .pin-ok { font-size: 16px; font-weight: 700; background: #fff; color: #0f172a; }
 .pin-pad .pin-ok:disabled { opacity: .45; }
 .lock-foot { display: flex; flex-wrap: wrap; gap: 14px; justify-content: center; margin-top: 12px; }
+.lock-tip { flex-basis: 100%; margin: 0; text-align: center; font-size: .85rem; color: #fff; opacity: .8; }
 .lock-foot .link-btn { color: #fff; display: inline-flex; align-items: center; gap: 6px; opacity: .9; }
 
 /* ---------- Home screen ---------- */

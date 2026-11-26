@@ -27,7 +27,8 @@ import { Modal, SearchBox, ReceiptPdfButton, PageTip } from '../ui.jsx';
 import { MoneyInput, MedThumb } from '../forms.jsx';
 import { toast, ask, askText } from '../feedback.jsx';
 import { payRequest, payStatus, guessNetwork, cloudConfig, whatsappLink, sendSms } from '../cloud.js';
-import { Receipt, receiptText } from './Sales.jsx';
+import { Receipt, receiptText, useReceiptPrinter } from './Sales.jsx';
+import { openDrawer } from '../printer.js';
 import { CameraButton, CameraScanner } from '../camscan.jsx';
 import { deviceSettings, setDevice, onDevice } from '../device.js';
 import { kitView, basketDemand, shortText, stockParts } from '../kits.js';
@@ -52,6 +53,7 @@ const AZ = new Intl.Collator(undefined, { sensitivity: 'base', numeric: true });
 
 export default function POS({ mode = 'retail' }) {
   const { db, products, kits, update, user, fmt, batchesOf, branchId, syncCfg, features, can, numberFor } = useStore();
+  const printReceiptNow = useReceiptPrinter();
   // Kits (1.10.0, src/kits.js): sold at the till next to the medicines; their stock is what their components make
   const catalog = useMemo(() => [...kits.filter((k) => k.active !== false), ...products], [kits, products]);
   const prodById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
@@ -737,7 +739,10 @@ export default function POS({ mode = 'retail' }) {
     setMomo(null);
     setSheet(false);
     clearSale();
-    if (db.settings.autoPrint) setTimeout(() => window.print(), 350);
+    // the receipt straight to the thermal printer (This device → Receipt printer), and the cash drawer opens on a cash sale
+    const cash = ptype === 'cash';
+    if (db.settings.autoPrint) setTimeout(() => printReceiptNow(sale, { cash }), 350);
+    else if (cash) openDrawer().catch((e) => toast(`Cash drawer: ${e.message}`, 'warn'));
     return true;
   };
 
@@ -1368,7 +1373,7 @@ export default function POS({ mode = 'retail' }) {
             <div className="sale-done-banner no-print" role="status">
               <CheckCircle2 size={22} aria-hidden="true" />
               <span className="grow"><strong>{done.training ? 'Practice sale done' : 'Sale complete'}</strong> · {done.training ? 'nothing was saved' : `Receipt ${done.number}`}{done.payment === 'Cash' && done.tendered > done.total ? <> · change <b className="num">{fmt(done.tendered - done.total)}</b></> : done.payment === SPLIT && done.tendered > done.paid ? <> · change <b className="num">{fmt(done.tendered - done.paid)}</b></> : null}</span>
-              <button className="btn primary" onClick={() => window.print()}><Printer size={16} />Print</button>
+              <button className="btn primary" onClick={() => printReceiptNow(done)}><Printer size={16} />Print</button>
               <button className="btn ghost" autoFocus onClick={() => { setDone(null); focusSearch(); }}>New sale</button>
             </div>
           )}
@@ -1378,7 +1383,7 @@ export default function POS({ mode = 'retail' }) {
           <div className="form-actions no-print">
             {(done.proforma || done.reprint) && <button className="btn ghost" onClick={() => { setDone(null); focusSearch(); }}>New sale</button>}
             <ReceiptPdfButton sale={done} />
-            {(done.proforma || done.reprint) && <button className="btn primary" onClick={() => window.print()}><Printer size={16} />Print</button>}
+            {(done.proforma || done.reprint) && <button className="btn primary" onClick={() => printReceiptNow(done)}><Printer size={16} />Print</button>}
           </div>
         </Modal>
       )}
