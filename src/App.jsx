@@ -8,6 +8,7 @@ import { MessageCircle,
   Pin, Keyboard, UserPlus, Archive, BadgeCheck, BriefcaseMedical, ArrowLeft, Printer, SlidersHorizontal,
 } from 'lucide-react';
 import { endOtherSessions, setPersonGuard, borrowedToken, cloudLogin } from './cloud.js';
+import { endRenewal } from './session.js';
 import { useStore, useSyncState, makePassword, put, audit, isLowStock, expiryCounts } from './store.jsx';
 import { askText, ask, toast } from './feedback.jsx';
 import { hasPin, setPin, clearPin, verifyOffline } from './offline.js';
@@ -452,10 +453,12 @@ function Shell() {
       const r = await cloudLogin(cfg.url, me.email || me.username || '', pw, cfg.tenant);
       if (r.twoFactor) throw new Error('You use two-step sign-in: sign out, then sign in with your password and code to do this.');
       if (!r.token || r.user?.id !== u.id) throw new Error('That password signed in a different account. Nothing was done.');
-      const next = { ...(sc || cfg), key: r.token, keyUser: r.user.id };
-      await save(next);
+      const prev = sc || cfg;
+      if (prev.refresh && prev.sid !== r.sid) endRenewal(prev); // the other person's sign-in ends on this device
+      const mine = { key: r.token, refresh: r.refresh || '', sid: r.sid || '', swapTried: false, keyUser: r.user.id };
+      await save({ ...prev, ...mine });
       toast('Signed in to the cloud as you on this device');
-      return { ...cfg, key: r.token, keyUser: r.user.id };
+      return { ...cfg, ...mine };
     });
     return () => setPersonGuard(null);
   }, []);

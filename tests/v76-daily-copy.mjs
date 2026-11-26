@@ -5,6 +5,7 @@
 import puppeteer from 'puppeteer-core';
 import { CHROME } from './chrome.mjs';
 import { asDesktopApp, APP_ARGS } from './appmode.mjs';
+import { deviceKv, deviceRaw } from './devicedata.mjs';
 const [base, ownerKey] = process.argv.slice(2);
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 let pass = 0, fail = 0;
@@ -33,25 +34,19 @@ check('signed in as the Windows app', await until(P, () => !!document.querySelec
 await until(P, () => /Synced/.test(document.querySelector('.pill.clock .clock-state')?.innerText || ''), 30000);
 
 // nobody touches the app: after the quiet half-minute the worker writes today's copy
-const readCopies = () => P.evaluate(() => new Promise((res) => {
-  const q = indexedDB.open('pharmapos');
-  q.onsuccess = () => {
-    const kv = q.result.transaction('kv').objectStore('kv');
-    const k = kv.getAllKeys();
-    k.onsuccess = () => {
-      const keys = k.result.map(String).filter((x) => x.startsWith('snap:'));
-      if (!keys.length) { q.result.close(); return res({ keys }); }
-      const g = kv.get(keys.sort().at(-1));
-      g.onsuccess = () => { const v = g.result; q.result.close(); res({ keys, v: v?.v, ids: (v?.rows || []).flatMap((r) => (r.t === 'products' ? r.rs.map((x) => x.id) : [])), settings: !!v?.settings, tomb: Array.isArray(v?.tomb) }); };
-    };
-  };
-  q.onerror = () => res({ keys: [] });
-}));
+const readCopies = async () => {
+  const keys = Object.keys((await deviceRaw(P).catch(() => ({ kv: {} }))).kv).filter((x) => x.startsWith('snap:'));
+  if (!keys.length) return { keys };
+  const raw = (await deviceRaw(P)).kv[keys.sort().at(-1)];
+  const v = await deviceKv(P, keys.sort().at(-1)); // its record buckets stay sealed in the copy (src/vault.js)
+  return { keys, v: v?.v, ids: (v?.rows || []).flatMap((r) => (r.t === 'products' ? r.rs.map((x) => x.id) : [])), settings: !!v?.settings, tomb: Array.isArray(v?.tomb), sealed: (raw?.rows || []).length > 0 && raw.rows.every((b) => b.__enc === 1) };
+};
 let copy = { keys: [] };
 for (let i = 0; i < 40 && !copy.keys.length; i++) { await wait(2000); copy = await readCopies(); }
 check('a quiet moment after sign-in, today\'s copy is written', copy.keys.length === 1, JSON.stringify(copy.keys));
 check('…by the worker, from the saved records (format 2)', copy.v === 2, copy.v);
 check('…with the pharmacy\'s medicines, settings and deletions', ['p1', 'p2'].every((id) => copy.ids?.includes(id)) && copy.settings && copy.tomb, JSON.stringify(copy));
+check('…and the medicines in the copy are sealed, as on the device (src/vault.js)', copy.sealed === true);
 // another reload the same day: still one copy
 await P.reload({ waitUntil: 'networkidle2' }); await wait(40000);
 check('one copy a day', (await readCopies()).keys.length === 1);

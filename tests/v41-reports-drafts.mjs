@@ -10,6 +10,7 @@ import { confirmReview } from './review.mjs';
 import fs from 'node:fs';
 import { CHROME } from './chrome.mjs';
 import { asDesktopApp, APP_ARGS } from './appmode.mjs';
+import { deviceRecords } from './devicedata.mjs';
 const [base, ownerKey, out] = process.argv.slice(2);
 fs.mkdirSync(out, { recursive: true });
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -74,10 +75,7 @@ const select = (p, label, value) => p.evaluate((l, v) => {
   Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(s, v); s.dispatchEvent(new Event('change', { bubbles: true })); return true;
 }, label, value);
 const setDate = (p, sel, v) => p.evaluate((s, val) => { const i = document.querySelector(s); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(i, val); i.dispatchEvent(new Event('input', { bubbles: true })); i.dispatchEvent(new Event('change', { bubbles: true })); }, sel, v);
-const stock = (p, id) => p.evaluate((pid) => new Promise((res) => {
-  const q = indexedDB.open('pharmapos');
-  q.onsuccess = () => { const g = q.result.transaction('records').objectStore('records').getAll(); g.onsuccess = () => { let n = 0; for (const x of g.result) if (x.t === 'movements') for (const m of x.rs) if (m.productId === pid) n += m.qty; q.result.close(); res(n); }; };
-}), id);
+const stock = async (p, id) => { let n = 0; for (const x of await deviceRecords(p)) if (x.t === 'movements') for (const m of x.rs) if (m.productId === id) n += m.qty; return n; }; // sealed buckets
 
 const A = await device('robin@test.rx', 'robin-pass-1234');
 

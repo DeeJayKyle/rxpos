@@ -1,5 +1,13 @@
 # RxPOS release notes
 
+## Next release (not released yet): safer sign-ins, the pharmacy encrypted on the device
+
+- **Sign-ins renew themselves every 15 minutes** instead of lasting 30 days; a sign-out, a new password or "Sign out
+  everywhere" ends them in the cloud at once (docs/SIGN-IN-AND-UNLOCK.md).
+- **The till locks after 5 idle minutes** and opens with the quick PIN; "Remember me" is 7 days and reopens locked.
+- **Patients' data is encrypted on Windows and Android devices** (each device its own key; Windows keeps it with
+  DPAPI). Existing data is encrypted in place at the first start, nothing lost, offline sync unchanged.
+
 ## RxPOS 1.22.0 · November 2026 (selling units; a tidier app)
 
 - **Selling units**: each medicine can be sold by the tablet, pair, half strip, strip or box (Medicine List → Selling

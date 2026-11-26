@@ -6,6 +6,7 @@ import puppeteer from 'puppeteer-core';
 import fs from 'node:fs';
 import { CHROME } from './chrome.mjs';
 import { asDesktopApp, APP_ARGS } from './appmode.mjs';
+import { deviceRecords, deviceKv, deviceRaw } from './devicedata.mjs';
 const [base, ownerKey, out] = process.argv.slice(2);
 fs.mkdirSync(out, { recursive: true });
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -56,6 +57,7 @@ await p.evaluate(async ({ legacy, cfg, user }) => {
 
 await p.goto(base + '/' + slug + '#/sales', { waitUntil: 'networkidle2' }); await wait(2500);
 const st = await p.evaluate(async () => new Promise((res) => { const q = indexedDB.open('pharmapos'); q.onsuccess = () => { const db = q.result; const tx = db.transaction(['records', 'kv', 'outbox'], 'readonly'); const out = {}; const g = (s, m, k, f) => { const r = tx.objectStore(s)[m](k); r.onsuccess = () => { out[f] = r.result; }; }; g('records', 'getAll', undefined, 'records'); g('kv', 'get', 'storage-version', 'version'); g('kv', 'get', 't:sales', 'legacySales'); g('kv', 'get', 'migrated-v1-counts', 'counts'); g('outbox', 'getAll', undefined, 'outbox'); tx.oncomplete = () => { db.close(); res(out); }; }; }));
+st.records = await deviceRecords(p); st.legacySales = await deviceKv(p, 't:sales'); // sealed since 2026-11-26 (src/vault.js)
 const recs = (st.records || []).flatMap((x) => x.rs.map((r) => x.t + '|' + r.id)); // buckets (src/storage.js)
 check('every 1.5 record is in the 1.6 record store', ['products|lg1', 'sales|sale-unsent', 'sales|sale-sent', 'movements|mv-unsent', 'users|' + login.user.id].every((k) => recs.includes(k)), recs.join(','));
 check('the storage version is 2', st.version === 2, st.version);
@@ -78,6 +80,14 @@ await p.goto('about:blank'); await p.goto(base + '/' + slug + '#/sales', { waitU
 check('after a restart the device opens from the new store', await until(p, () => /RUNSENT1/.test(document.querySelector('.page tbody')?.innerText || ''), 10000));
 const ob = await p.evaluate(async () => new Promise((res) => { const q = indexedDB.open('pharmapos'); q.onsuccess = () => { const g = q.result.transaction('outbox').objectStore('outbox').count(); g.onsuccess = () => { res(g.result); q.result.close(); }; }; }));
 check('…and nothing is queued twice', ob === 0, ob);
+
+// 2026-11-26: the pharmacy is sealed on the device (src/vault.js): no record and no copy is stored as plain text
+const raw = await deviceRaw(p);
+check('every stored record bucket is sealed', raw.records.length > 0 && raw.records.every((x) => x.__enc === 1 && !x.rs), raw.records.length);
+check('…and no sale number can be read from the stored records', !raw.records.some((x) => /RUNSENT1|RSENT01/.test(JSON.stringify(x))));
+check('the sign-in kept on the device is sealed', raw.kv.sync?.__enc === 1);
+check('the 1.5 copy kept for recovery is sealed too (in the background)', await until(p, async () => { const q = await new Promise((r) => { const o = indexedDB.open('pharmapos'); o.onsuccess = () => r(o.result); }); const v = await new Promise((r) => { const g = q.transaction('kv').objectStore('kv').get('t:sales'); g.onsuccess = () => r(g.result); }); q.close(); return v?.__enc === 1; }, 30000));
+check('…and still opens with every sale', (await deviceKv(p, 't:sales'))?.length === 2);
 
 await b.close();
 await owner('/tenants/' + tid + '/delete', { confirm: slug });

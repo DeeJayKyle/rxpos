@@ -4,6 +4,7 @@
 // data is included: only the error message, where it happened in code, the page, the app build and the device type.
 import { BUILD } from './update.js';
 import { platformName } from './platform.js';
+import { freshCfg } from './session.js';
 
 const QUEUE = 'rxpos-crash-queue';
 const SENT = 'rxpos-crash-sent';
@@ -41,7 +42,7 @@ export async function flush() {
   if (flushing || !q.length || !cfg?.url || !cfg?.key || !navigator.onLine) return;
   flushing = true;
   try {
-    const r = await fetch(cfg.url + '/api/errors', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + cfg.key }, body: JSON.stringify({ errors: q }) });
+    const r = await fetch(cfg.url + '/api/errors', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (await freshCfg(cfg)).key }, body: JSON.stringify({ errors: q }) });
     if (r.ok) {
       const sent = read(SENT, {}), today = new Date().toISOString().slice(0, 10);
       for (const e of q) sent[e.key] = today;
