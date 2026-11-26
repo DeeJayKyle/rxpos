@@ -6,6 +6,8 @@ import { clientOwes, insurerShare } from '../insurance.js';
 import { Clock, PlayCircle, StopCircle, Printer, Coins, Lock, LockOpen } from 'lucide-react';
 import { useStore, uid, now, put, audit, MAIN_BRANCH, today, dayOf } from '../store.jsx';
 import { closeId, daySnapshot } from '../dayclose.js';
+import { byMethod } from '../tenders.js';
+import { shiftCash, PAY_IN_REASONS, PAY_OUT_REASONS } from '../cashmoves.js';
 import { Modal, Stat, Empty, Tabs } from '../ui.jsx';
 import { toast, ask, askText } from '../feedback.jsx';
 import { showDateTime, dateLocale } from '../showdate.js';
@@ -17,18 +19,18 @@ const NOTES = [50000, 20000, 10000, 5000, 2000, 1000, 500, 200, 100, 50];
 export function shiftSummary(db, shift) {
   const end = shift.closedAt || now();
   const inShift = (x) => x.date >= shift.openedAt && x.date <= end && (x.branchId || MAIN_BRANCH) === (shift.branchId || MAIN_BRANCH) && (x.cashier === shift.user || x.refundedBy === shift.user);
-  const sales = db.sales.filter((s) => s.cashier === shift.user && inShift(s));
+  const all = db.sales.filter((s) => s.cashier === shift.user && inShift(s));
+  const sales = all.filter((s) => !s.returnOf);
+  const returns = all.filter((s) => s.returnOf); // Nov 2026: returns of part of a sale (src/returns.js), negative
   const valid = sales.filter((s) => s.status !== 'refunded');
-  const byMethod = {};
-  for (const s of valid) byMethod[s.payment] = (byMethod[s.payment] || 0) + (s.paid ?? s.total);
   const refunds = db.sales.filter((s) => s.status === 'refunded' && s.refundedBy === shift.user && s.refundedAt >= shift.openedAt && s.refundedAt <= end);
-  const cashRefunds = refunds.filter((s) => s.payment === 'Cash').reduce((a, s) => a + (s.paid ?? s.total), 0);
-  const cashSales = valid.filter((s) => s.payment === 'Cash').reduce((a, s) => a + (s.paid ?? s.total), 0);
-  const insured = valid.reduce((a, s) => a + insurerShare(s), 0);
+  const insured = [...valid, ...returns].reduce((a, s) => a + insurerShare(s), 0);
+  // Nov 2026 audit item 7 (src/cashmoves.js): cash in and out of the drawer for anything, not only sales
+  const cash = shiftCash(db, shift, end, dayOf);
   return {
-    count: valid.length, total: valid.reduce((a, s) => a + s.total, 0), byMethod,
-    discounts: valid.reduce((a, s) => a + (s.discount || 0), 0), refunds: refunds.length, refundTotal: refunds.reduce((a, s) => a + s.total, 0),
-    expectedCash: Number(shift.float || 0) + cashSales - cashRefunds, credit: valid.reduce((a, s) => a + clientOwes(s), 0),
+    count: valid.length, total: valid.reduce((a, s) => a + s.total, 0), byMethod: byMethod([...valid, ...returns]), // a split sale under each method
+    discounts: valid.reduce((a, s) => a + (s.discount || 0), 0), refunds: refunds.length + returns.length, refundTotal: refunds.reduce((a, s) => a + s.total, 0) - returns.reduce((a, s) => a + s.total, 0),
+    expectedCash: cash.expected, cash, credit: [...valid, ...returns].reduce((a, s) => a + clientOwes(s), 0),
     ...(insured > 0 ? { insured } : {}), // step 22: billed to insurers (owed by them, not the clients)
   };
 }
@@ -38,6 +40,7 @@ export default function Shifts() {
   const [tab, setTab] = useState('mine');
   const [closing, setClosing] = useState(null);
   const [report, setReport] = useState(null);
+  const [cashMove, setCashMove] = useState(null); // { kind: 'in' | 'out', amount, reason, note } while paying in or out
   const open = openShiftOf(db, user, branchId);
   const location = useLocation(), navigate = useNavigate();
   usePageMenu([open ? { label: 'Close shift and count cash', Icon: StopCircle, run: () => setClosing({ mode: 'close', counts: {}, note: '' }) } : { label: 'Start my shift', Icon: PlayCircle, run: () => openShift() }]);
@@ -59,6 +62,27 @@ export default function Shifts() {
     startShift(update, user, branchId, f, fmt);
     toast('Shift started');
   };
+
+  // Nov 2026 audit item 7: cash paid into or out of the drawer during the shift (src/cashmoves.js)
+  const saveCashMove = async (e) => {
+    e.preventDefault();
+    const m = cashMove, amount = Number(m.amount) || 0;
+    if (!(amount > 0)) return toast('Enter an amount more than 0', 'warn');
+    if (!m.reason) return toast('Choose a reason', 'warn');
+    if (m.reason === 'Other' && !m.note.trim()) return toast('Say what the cash was for', 'warn');
+    try {
+      await update((d) => {
+        put(d, 'cashMoves', { id: uid(), date: now(), branchId, shiftId: open.id, user: user.name, kind: m.kind, amount, reason: m.reason, note: m.note.trim().slice(0, 200) });
+        audit(d, user, m.kind === 'out' ? 'Cash paid out' : 'Cash paid in', `${fmt(amount)} · ${m.reason}${m.note.trim() ? ' · ' + m.note.trim() : ''}`, branchId);
+      });
+    } catch (err) { return toast('Nothing was recorded: ' + err.message, 'error'); }
+    toast(m.kind === 'out' ? `${fmt(amount)} paid out of the drawer` : `${fmt(amount)} paid into the drawer`);
+    setCashMove(null);
+  };
+  const cashRows = (c) => [
+    ['Opening float', c.float], ['Cash sales', c.sales], ['Cash refunds and returns', -(c.refunds + c.returns)],
+    ['Debts paid in cash', c.debts], ['Paid in', c.paidIn], ['Paid out', -c.paidOut], ['Expenses and payments in cash', -c.spent],
+  ].filter(([, v], i) => i < 2 || v);
 
   const closeShift = (counts, note) => {
     const counted = NOTES.reduce((a, n) => a + n * (Number(counts[n]) || 0), 0) + (Number(counts.coins) || 0);
@@ -105,7 +129,7 @@ export default function Shifts() {
           {hideMoney ? <div className="notice">Blind cash-up: count the cash when you close the shift; what the drawer should hold is shown after you count. {live.count} sale{live.count === 1 ? '' : 's'} so far.</div> : <>
           <div className="stats">
             <Stat label="Sales this shift" value={fmt(live.total)} sub={`${live.count} sales`} tone="teal" icon={Coins} />
-            <Stat label="Cash expected in drawer" value={fmt(live.expectedCash)} sub="float + cash sales − cash refunds" />
+            <Stat label="Cash expected in drawer" value={fmt(live.expectedCash)} sub="float + cash in − cash out" />
             <Stat label="Refunds" value={fmt(live.refundTotal)} sub={`${live.refunds} receipts`} tone="red" />
             <Stat label="Discounts given" value={fmt(live.discounts)} tone="amber" />
           </div>
@@ -113,7 +137,15 @@ export default function Shifts() {
             {Object.entries(live.byMethod).map(([k, v]) => <tr key={k}><td>{k}</td><td className="num">{fmt(v)}</td></tr>)}
             {!Object.keys(live.byMethod).length && <Empty colSpan={2}>No sales yet this shift</Empty>}
           </tbody></table></div>
+          <div className="card" data-testid="drawer-cash"><h3>Cash in the drawer</h3><table><tbody>
+            {cashRows(live.cash).map(([k, v]) => <tr key={k}><td>{k}</td><td className="num">{fmt(v)}</td></tr>)}
+            <tr className="total-row"><td>Expected in the drawer</td><td className="num">{fmt(live.expectedCash)}</td></tr>
+          </tbody></table></div>
           </>}
+          <div className="row gap">
+            <button type="button" className="btn ghost" onClick={() => setCashMove({ kind: 'in', amount: '', reason: '', note: '' })}><Coins size={16} />Pay cash in</button>
+            <button type="button" className="btn ghost" onClick={() => setCashMove({ kind: 'out', amount: '', reason: '', note: '' })}><Coins size={16} />Pay cash out</button>
+          </div>
         </>
       )}
       {(can('day.close') || user.role === 'admin') && <DayClose />}
@@ -191,6 +223,18 @@ export default function Shifts() {
           </Modal>
         );
       })()}
+      {cashMove && (
+        <Modal title={cashMove.kind === 'out' ? 'Pay cash out of the drawer' : 'Pay cash into the drawer'} onClose={() => setCashMove(null)}>
+          <form className="stack" onSubmit={saveCashMove}>
+            <label className="field"><span>Amount</span><input autoFocus type="number" min="0" step="any" value={cashMove.amount} onChange={(e) => setCashMove({ ...cashMove, amount: e.target.value })} required /></label>
+            <label className="field"><span>Reason</span><select value={cashMove.reason} onChange={(e) => setCashMove({ ...cashMove, reason: e.target.value })} required>
+              <option value="">Choose…</option>{(cashMove.kind === 'out' ? PAY_OUT_REASONS : PAY_IN_REASONS).map((r) => <option key={r}>{r}</option>)}</select></label>
+            <label className="field"><span>{cashMove.reason === 'Other' ? 'What was it for?' : 'Note (optional)'}</span><input value={cashMove.note} maxLength={200} onChange={(e) => setCashMove({ ...cashMove, note: e.target.value })} required={cashMove.reason === 'Other'} /></label>
+            <small className="muted">Counted in the cash this drawer should hold, and in Cash at hand. An expense or a supplier payment recorded in Finance from Cash at hand is counted too, so record each one only once.</small>
+            <div className="form-actions"><button type="button" className="btn ghost" onClick={() => setCashMove(null)}>Cancel</button><button className="btn primary">{cashMove.kind === 'out' ? 'Pay out' : 'Pay in'}</button></div>
+          </form>
+        </Modal>
+      )}
       {report && (
         <Modal title="Close-of-day report" onClose={() => setReport(null)}>
           <div className="receipt print-area paper-80">
@@ -204,7 +248,8 @@ export default function Shifts() {
             <div className="row between"><span>Discounts</span><span>{fmt(report.summary.discounts)}</span></div>
             <div className="row between"><span>Refunds ({report.summary.refunds})</span><span>{fmt(report.summary.refundTotal)}</span></div>
             <div className="receipt-rule" />
-            <div className="row between"><span>Opening float</span><span>{fmt(report.float)}</span></div>
+            {report.summary.cash ? cashRows(report.summary.cash).map(([k, v]) => <div key={k} className="row between"><span>{k}</span><span>{fmt(v)}</span></div>)
+              : <div className="row between"><span>Opening float</span><span>{fmt(report.float)}</span></div>}
             <div className="row between"><span>Expected cash</span><span>{fmt(report.expected)}</span></div>
             {report.rebuilt ? <div className="row between"><span>Cash count</span><span>none (rebuilt from sales)</span></div> : <>
             <div className="row between"><span>Counted cash</span><span>{fmt(report.counted)}</span></div>
@@ -229,7 +274,7 @@ function DayClose() {
   const closes = new Map((db.dayCloses || []).filter((c) => (c.branchId || MAIN_BRANCH) === branchId).map((c) => [c.day, c]));
   const close = async (day) => {
     const snap = daySnapshot(db, branchId, day, dayOf);
-    if (!(await ask({ title: `Close ${day}?`, message: `${snap.sales} sale${snap.sales === 1 ? '' : 's'}, ${fmt(snap.total)}${snap.expenses ? `, expenses ${fmt(snap.expenses)}` : ''}. After closing, this day's sales, expenses, payments and stock can't be changed on any device. Anything recorded for it later is shown to the owner.`, confirmText: 'Close the day' }))) return;
+    if (!(await ask({ title: `Close ${day}?`, message: `${snap.sales} sale${snap.sales === 1 ? '' : 's'}, ${fmt(snap.total)}${snap.expenses ? `, expenses ${fmt(snap.expenses)}` : ''}. Cash in the drawers on top of the floats: ${fmt(snap.cash.net)} (cash sales ${fmt(snap.cash.sales)}${snap.cash.refunds + snap.cash.returns ? `, refunds ${fmt(snap.cash.refunds + snap.cash.returns)}` : ''}${snap.cash.debts ? `, debts paid ${fmt(snap.cash.debts)}` : ''}${snap.cash.paidIn ? `, paid in ${fmt(snap.cash.paidIn)}` : ''}${snap.cash.paidOut + snap.cash.spent ? `, paid out ${fmt(snap.cash.paidOut + snap.cash.spent)}` : ''}). After closing, this day's sales, expenses, payments and stock can't be changed on any device. Anything recorded for it later is shown to the owner.`, confirmText: 'Close the day' }))) return;
     await update((d) => {
       put(d, 'dayCloses', { id: closeId(branchId, day), branchId, day, open: false, closedBy: user.name, closedAt: now(), snapshot: snap });
       audit(d, user, 'Day closed', `${day}: ${snap.sales} sales, ${fmt(snap.total)}`, branchId);
@@ -256,7 +301,7 @@ function DayClose() {
             <tr key={day} className={shut ? 'closed-day' : ''}>
               <td><strong>{day}</strong>{day === today() && <small className="muted"> · today</small>}</td>
               <td>{shut ? <><span className="badge ok"><Lock size={12} /> Closed</span> <small className="muted">by {c.closedBy} · {String(c.closedAt).slice(11, 16)}</small></> : c?.open ? <small className="muted">Reopened by {c.reopenedBy}: {c.reason}</small> : <small className="muted">Open</small>}</td>
-              <td className="num">{shut && c.snapshot ? <small>{c.snapshot.sales} sales · {fmt(c.snapshot.total)}</small> : ''}</td>
+              <td className="num">{shut && c.snapshot ? <small>{c.snapshot.sales} sales · {fmt(c.snapshot.total)}{c.snapshot.cash ? ` · cash ${fmt(c.snapshot.cash.net)}` : ''}</small> : ''}</td>
               <td className="actions">
                 {!shut && <button className="btn sm" onClick={() => close(day)}><Lock size={14} />Close</button>}
                 {shut && user.role === 'admin' && <button className="btn sm ghost" onClick={() => reopen(c)}><LockOpen size={14} />Reopen</button>}

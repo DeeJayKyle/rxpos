@@ -21,7 +21,7 @@ const other = { counters: [] };
 check('another till starts its own count (never the same number)', nextNumber(other, put, 'R', { till: 4, branch: ctx.branch }) === 'R-NTD-04-000001');
 check('a device that downloads its counter again carries on', nextNumber({ counters: [{ id: 'till-3', till: 3, R: 41 }] }, put, 'R', ctx) === 'R-NTD-03-000042');
 check('no till yet: the old style, nothing counted', /^R[0-9A-Z]{7}$/.test(nextNumber(d, put, 'R', {})) && d.counters[0].R === 2);
-check('every kind the apps use', DOC_KINDS.join() === 'R,PF,GRN,PO,TR,SC,RT');
+check('every kind the apps use', DOC_KINDS.join() === 'R,PF,GRN,PO,TR,SC,RT,CN');
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

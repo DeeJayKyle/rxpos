@@ -12,7 +12,7 @@ import { clientOwes } from './insurance.js';
 
 /** The tables that only keep their recent part on a device with a window: the ones that grow every day */
 export const WINDOWED = new Set(['sales', 'movements', 'payments', 'purchases', 'expenses', 'bankTx', 'supplierReturns', 'transfers',
-  'audit', 'messages', 'events', 'tempLogs', 'quizResults', 'anomalies', 'attendance', 'payrolls', 'salaryAdvances', 'proformas', 'shifts']);
+  'audit', 'messages', 'events', 'tempLogs', 'quizResults', 'anomalies', 'attendance', 'payrolls', 'salaryAdvances', 'proformas', 'shifts', 'cashMoves']);
 
 /** The date a record belongs to (its own date, or when it was made) */
 export const recordDate = (r) => String(r?.date || r?.at || r?.startedAt || r?.createdAt || '');

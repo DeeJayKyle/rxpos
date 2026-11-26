@@ -23,7 +23,7 @@ export function saleStatus(s) {
 export function busiestHour(sales, branchId, from) {
   const h = new Array(24).fill(0);
   for (const s of sales) {
-    if (s.status === 'refunded' || (s.branchId || MAIN_BRANCH) !== branchId || localDate(new Date(s.date)) < from) continue;
+    if (s.status === 'refunded' || s.returnOf || (s.branchId || MAIN_BRANCH) !== branchId || localDate(new Date(s.date)) < from) continue;
     h[new Date(s.date).getHours()]++;
   }
   const best = h.reduce((b, v, i) => (v > h[b] ? i : b), 0);

@@ -2,6 +2,7 @@
 // Filters combine and apply as they change. Amount is the line after its share of the sale's discount; profit is that
 // amount less the cost saved with the sale (the cost at the moment it was sold, not today's).
 import { useMemo, useRef, useState } from 'react';
+import { payLabel } from '../tenders.js';
 import { useNavigate } from 'react-router-dom';
 import { Banknote, TrendingUp, Package, AlertTriangle, Download, Printer } from 'lucide-react';
 import { useStore, dayOf, downloadFile, toCSV, MAIN_BRANCH } from '../store.jsx';
@@ -21,7 +22,7 @@ export function saleLines(sales, products) {
     s.items.forEach((i, n) => {
       const amount = i.qty * i.price * keep, cost = i.qty * (i.cost || 0);
       out.push({ key: s.id + ':' + n, saleId: s.id, number: s.number, date: s.date, customer: s.customerName || 'Walk-in', customerId: s.customerId || '',
-        cashier: s.cashier || '', payment: s.payment || '', type: s.type || 'retail', name: i.name, generic: byId.get(i.id)?.generic || '',
+        cashier: s.cashier || '', payment: payLabel(s), type: s.type || 'retail', name: i.name, generic: byId.get(i.id)?.generic || '',
         productId: i.id, qty: i.qty, amount, cost, profit: amount - cost });
     });
   }

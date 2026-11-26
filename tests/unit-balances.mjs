@@ -92,7 +92,7 @@ for (let seed = 41; seed <= 70; seed++) {
     for (const mv of full.movements) if (String(mv.date) < W) { const br = mv.branchId || 'main', b = mv.batchId || 'lb-' + mv.productId; const x = stock.find((y) => y.branch === br && y.batch === b && y.product === mv.productId); if (x) x.qty += mv.qty; else stock.push({ branch: br, batch: b, product: mv.productId, qty: mv.qty }); }
     const win = { W, stock, ...Object.fromEntries(['customer', 'supplier', 'insurer', 'account', 'loan'].map((k) => [k, Object.fromEntries(bf[k])])) };
     const device = { ...full, _window: win };
-    for (const t of B.ENTRY_TABLES.filter((x) => x !== 'loans')) device[t] = full[t].filter((rec) => B.hasEntryFrom(t, rec, W) || r() < 0.15);
+    for (const t of B.ENTRY_TABLES.filter((x) => x !== 'loans')) device[t] = (full[t] || []).filter((rec) => B.hasEntryFrom(t, rec, W) || r() < 0.15);
     const want = (name, a, b) => { if (!close(a, b)) { dev = false; devWorst ||= `${name} seed ${seed} ${W}: ${a} vs ${b}`; } };
     for (const c of full.customers) want('customer ' + c.id, B.customerBalance(device, c.id), B.customerBalance(full, c.id));
     for (const c of full.suppliers) want('supplier ' + c.id, B.supplierBalance(device, c.id), B.supplierBalance(full, c.id));

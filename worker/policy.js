@@ -36,6 +36,7 @@ export const TABLE_RULES = {
   bankTx: { write: ['finance'], delete: ['finance'] },
   loans: { write: ['finance'], delete: ['finance'] },
   anomalies: { write: ['audit'], delete: ['audit'] }, // step 3 sale findings: marking one checked
+  cashMoves: { write: ['shifts', 'shifts.all'], delete: ['shifts.all'] }, // cash paid into / out of the till (src/cashmoves.js)
 };
 
 /** Stock movement type → who may record it. Any other type needs stock.adjust. */
@@ -68,7 +69,7 @@ export const KNOWN_TABLES = new Set([
   'batches', 'branches', 'transfers', 'audit', 'purchaseOrders', 'roles', 'messages', 'shifts', 'license', 'events', 'tempLogs',
   'catalogHidden', 'quizResults', 'stockCounts', 'countItems', 'supplierReturns', 'chatMarks', 'chatPins', 'chatReads', 'drafts',
   'anomalies', 'dayCloses', 'counters', 'insurers', 'employees', 'attendance', 'salaryAdvances', 'payrolls', 'reportSchedules',
-  'notes', 'settings', 'controlled',
+  'notes', 'settings', 'controlled', 'cashMoves',
 ]);
 
 // 2026-11 audit: who RECEIVES which records. Before, every staff role downloaded every table except payroll and the
@@ -123,6 +124,9 @@ export function moneyView(s) {
     (Array.isArray(s?.items) ? s.items : []).map((i) => [String(i?.id ?? ''), num(i?.qty), num(i?.price)]),
     // step 22: who is billed what (only on insured sales, so the view of every other sale is as it was)
     ...(s?.insurance ? [[String(s.insurance.insurerId ?? ''), num(s.insurance.share)]] : []),
+    // Nov 2026: a split sale's tenders, and what a return gives back (only on those, so every other view is as it was)
+    ...(Array.isArray(s?.payments) && s.payments.length ? [s.payments.map((p) => [String(p?.method ?? ''), num(p?.amount), String(p?.bankId ?? '')])] : []),
+    ...(s?.returnOf ? [['return', String(s.returnOf)]] : []),
   ]);
 }
 // 2026-11 audit: the money view alone let anyone who sells move a sale to another day or shift, renumber it or put
@@ -158,6 +162,8 @@ export async function decide(ch, old, role, can) {
   const { t, rec, deleted } = ch;
   if (t === 'sales') {
     if (deleted) return role === 'admin' ? { ok: true } : { ok: false, need: 'admin' }; // owner's choice: admins only
+    // Nov 2026: a return of part of a sale (src/returns.js) is a refund: it needs "Refund sales" (or "Edit sales")
+    if (!old && rec?.returnOf) return (await anyOf(can, ['sales.refund', 'sales.edit'])) ? { ok: true } : { ok: false, need: 'sales.refund' };
     if (!old) return (await anyOf(can, SELL)) ? { ok: true } : { ok: false, need: SELL.join('|') };
     if (await can('sales.edit')) return { ok: true };
     if (isRefundOnly(old, rec) && (await can('sales.refund'))) return { ok: true };

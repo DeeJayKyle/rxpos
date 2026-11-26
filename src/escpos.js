@@ -2,6 +2,7 @@
 // straight to the printer by src/printer.js: no print dialog, and the cash drawer opens through the printer's drawer port.
 // Pure: no browser, no store, so the same bytes are tested in Node (tests/unit-escpos.mjs).
 import { kitContents } from './kits.js';
+import { isSplit } from './tenders.js';
 
 const ESC = 0x1b, GS = 0x1d, LF = 0x0a;
 
@@ -119,8 +120,13 @@ export function receiptBytes(sale, { settings: s = {}, branchName = '', address 
   if (sale.tax > 0) row('Tax', fmt(sale.tax));
   e.bold(true); row('TOTAL', fmt(sale.total)); e.bold(false);
   if (!isProforma) {
-    row(`Paid (${sale.payment || ''})`, fmt(sale.payment === 'Cash' ? sale.tendered : sale.paid ?? sale.total));
-    if (sale.payment === 'Cash' && sale.tendered > (sale.paid ?? sale.total)) row('Change', fmt(sale.tendered - (sale.paid ?? sale.total)));
+    if (isSplit(sale)) {
+      for (const p of sale.payments) row(`Paid (${p.method})`, fmt(p.amount));
+      if (sale.tendered > sale.paid) row('Change', fmt(sale.tendered - sale.paid));
+    } else {
+      row(`Paid (${sale.payment || ''})`, fmt(sale.payment === 'Cash' ? sale.tendered : sale.paid ?? sale.total));
+      if (sale.payment === 'Cash' && sale.tendered > (sale.paid ?? sale.total)) row('Change', fmt(sale.tendered - (sale.paid ?? sale.total)));
+    }
     if (sale.insurance) { row(`${sale.insurance.insurer} (${sale.insurance.scheme})`, fmt(billed(sale))); e.line('Member no. ' + sale.insurance.memberNo); }
     if (unpaid(sale) > 0.005) row('Balance on credit', fmt(unpaid(sale)));
   }
@@ -129,6 +135,7 @@ export function receiptBytes(sale, { settings: s = {}, branchName = '', address 
   else if (sale.momo?.manual) for (const l of wrap('Payment recorded by staff (transaction ID from the customer; not confirmed by the network)', W)) e.line(l);
   e.align('center');
   if (sale.status === 'refunded') e.bold(true).line('REFUNDED').bold(false);
+  if (sale.returnOf) e.bold(true).line('CREDIT NOTE for ' + (sale.returnOfNumber || '')).bold(false);
   e.feed(1);
   if (sale.number) e.barcode(sale.number);
   const footer = isProforma ? 'Prices valid for 7 days.' : s.receiptFooter || '';

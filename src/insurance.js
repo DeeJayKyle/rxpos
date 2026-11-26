@@ -24,8 +24,8 @@ export function copayOf(scheme, total, decimals = 0) {
   return { copay, insurer };
 }
 
-/** What the insurer owes on this sale (0 for an uninsured or refunded sale) */
-export const insurerShare = (s) => (s && s.status !== 'refunded' && s.insurance ? Math.max(0, num(s.insurance.share)) : 0);
+/** What the insurer owes on this sale (0 for an uninsured or refunded sale; less than 0 for a return, src/returns.js) */
+export const insurerShare = (s) => (s && s.status !== 'refunded' && s.insurance ? (s.returnOf ? Math.min(0, num(s.insurance.share)) : Math.max(0, num(s.insurance.share))) : 0);
 
 /** What the client still owes on this sale: the total less what they paid and less the insurer's share */
 export const clientOwes = (s) => (s && s.status !== 'refunded' ? num(s.total) - num(s.paid ?? s.total) - insurerShare(s) : 0);

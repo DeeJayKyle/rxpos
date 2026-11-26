@@ -32,6 +32,7 @@ const SUITES = [
   ['app downloads on the web sign-in (unit)', 'unit-appdownloads.mjs', []],
   ['GS1 pack codes (unit)', 'unit-gs1.mjs', []],
   ['insurance co-pay and balances (unit)', 'unit-insurance.mjs', []],
+  ['split payments, returns of part of a sale, drawer cash (unit)', 'unit-split-returns.mjs', []],
   ['expiry dates in any format (unit)', 'unit-expiry.mjs', []],
   ['payroll: PAYE, NSSF, a month\'s pay (unit)', 'unit-payroll.mjs', []],
   ['safe file urls (unit)', 'unit-safeurl.mjs', []],
@@ -172,6 +173,7 @@ const SUITES = [
   ['1.18.0 behaviours: Control Centre, sheets, Dynamic Island, home screen, App Library, tiling, lock screen', 'v87-behaviours.mjs', ['.output/v87']],
   ['the owner\'s rules: shift questions, past sales into shifts, the till in stock A–Z, tidy names', 'v88-owner-rules.mjs', ['.output/v88']],
   ['dashboard cards resized and moved, options on every page, the theme panel folds', 'v89-layout.mjs', ['.output/v89']],
+  ['split payments at the till, returning part of a sale, cash paid out of the drawer', 'v90-split-returns.mjs', []],
   // every page on a PC and a phone, for design review: only on request (`npm test -- shots-all`)
   ...(process.argv[2] === 'shots-all' ? [['every page, PC and phone screenshots', 'shots-all.mjs', ['.output/all']]] : []),
   // every theme on the dashboard and Sales History, for the owner's review: only on request (`npm test -- shots-themes`)

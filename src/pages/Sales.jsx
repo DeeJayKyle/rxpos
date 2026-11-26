@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { closedSet, inClosedDay } from '../dayclose.js';
 import { useLocation } from 'react-router-dom';
 import { Download, Printer, Undo2, Eye, Pencil, Trash2, Plus, History, FileText, PauseCircle, SlidersHorizontal, Ellipsis } from 'lucide-react';
-import { useStore, dayOf, downloadFile, toCSV, put, move, now, audit, allocate, MAIN_BRANCH, DEFAULT_PAYMENT_METHODS } from '../store.jsx';
+import { useStore, uid, dayOf, downloadFile, toCSV, put, move, now, audit, allocate, MAIN_BRANCH, DEFAULT_PAYMENT_METHODS } from '../store.jsx';
 import { useOlderHistory, olderNote } from '../history.js';
 import { ViewSwitch, BoardView, GalleryView, savedView, saveView } from '../components/DataViews.jsx';
 import { saleStatus } from '../components/BentoDashboard.jsx';
@@ -13,10 +13,12 @@ import { toast } from '../feedback.jsx';
 import { Barcode } from '../barcode.jsx';
 import { stockParts, kitContents } from '../kits.js';
 import { unitScaleAt, unitChangedSince } from '../packs.js';
-import RefundSheet, { refundMoney, REFUND_APPROVE_ABOVE, isApprover } from '../components/RefundSheet.jsx';
+import RefundSheet, { REFUND_APPROVE_ABOVE, isApprover } from '../components/RefundSheet.jsx';
 import { hasPin, verifyPin, verifyOffline } from '../offline.js';
 import { cloudLogin, cloudLogout } from '../cloud.js';
 import { cartSubtotal, lineTotal, taxOf, round } from '../money.js';
+import { isSplit, payLabel, paidWith } from '../tenders.js';
+import { returnsOf, planReturn, returnRecord, fullyReturned } from '../returns.js';
 // step 22: what the client still owes on a sale (an insurer's share is billed to the insurer); shown on the receipt
 // even after a refund, as before
 const billed = (s) => (s.insurance ? Math.max(0, Number(s.insurance.share) || 0) : 0);
@@ -45,6 +47,8 @@ export function Receipt({ sale }) {
         {s.tin && <div>TIN: {s.tin}</div>}
         {isProforma && <div className="receipt-tag">PROFORMA INVOICE</div>}
         {sale.training && <div className="receipt-tag">TRAINING – NOT A SALE</div>}
+        {sale.returnOf && <div className="receipt-tag">RETURN · CREDIT NOTE</div>}
+        {sale.returnOf && <div>Return of {sale.returnOfNumber}</div>}
         <div>{sale.number} · {showDateTime(sale.date)}</div>
         <div>{isProforma ? 'Prepared by' : 'Served by'}: {sale.cashier || sale.createdBy}</div>
         {sale.customerName && sale.customerName !== 'Walk-in Customer' && <div>Customer: {sale.customerName}</div>}
@@ -65,11 +69,16 @@ export function Receipt({ sale }) {
       {sale.discount > 0 && <div className="row between"><span>Discount</span><span>-{fmt(sale.discount)}</span></div>}
       {sale.tax > 0 && <div className="row between"><span>Tax</span><span>{fmt(sale.tax)}</span></div>}
       <div className="row between grand"><span>TOTAL</span><span>{fmt(sale.total)}</span></div>
-      {!isProforma && <div className="row between"><span>Paid ({sale.payment})</span><span>{fmt(sale.payment === 'Cash' ? sale.tendered : sale.paid ?? sale.total)}</span></div>}
-      {!isProforma && sale.payment === 'Cash' && sale.tendered > (sale.paid ?? sale.total) && <div className="row between"><span>Change</span><span>{fmt(sale.tendered - (sale.paid ?? sale.total))}</span></div>}
+      {!isProforma && sale.returnOf && (isSplit(sale) ? sale.payments : [{ method: sale.payment, amount: sale.paid ?? sale.total }]).filter((p) => p.amount && p.type !== 'credit').map((p, k) => <div key={k} className="row between"><span>Paid back ({p.method})</span><span>{fmt(-p.amount)}</span></div>)}
+      {!isProforma && sale.returnOf && unpaid(sale) < -0.005 && <div className="row between"><span>Taken off the balance on credit</span><span>{fmt(-unpaid(sale))}</span></div>}
+      {!isProforma && !sale.returnOf && isSplit(sale) && sale.payments.map((p, k) => <div key={k} className="row between"><span>{p.type === 'credit' ? 'On credit' : `Paid (${p.method})`}</span><span>{fmt(p.amount)}</span></div>)}
+      {!isProforma && !sale.returnOf && isSplit(sale) && sale.tendered > sale.paid && <div className="row between"><span>Change</span><span>{fmt(sale.tendered - sale.paid)}</span></div>}
+      {!isProforma && !sale.returnOf && !isSplit(sale) && <div className="row between"><span>Paid ({sale.payment})</span><span>{fmt(sale.payment === 'Cash' ? sale.tendered : sale.paid ?? sale.total)}</span></div>}
+      {!isProforma && !sale.returnOf && sale.payment === 'Cash' && sale.tendered > (sale.paid ?? sale.total) && <div className="row between"><span>Change</span><span>{fmt(sale.tendered - (sale.paid ?? sale.total))}</span></div>}
       {!isProforma && sale.insurance && <div className="row between"><span>{sale.insurance.insurer} ({sale.insurance.scheme})</span><span>{fmt(billed(sale))}</span></div>}
       {!isProforma && sale.insurance && <div className="small">Member no. {sale.insurance.memberNo}</div>}
-      {!isProforma && unpaid(sale) > 0.005 && <div className="row between"><span>Balance on credit</span><span>{fmt(unpaid(sale))}</span></div>}
+      {!isProforma && !isSplit(sale) && unpaid(sale) > 0.005 && <div className="row between"><span>Balance on credit</span><span>{fmt(unpaid(sale))}</span></div>}
+      {!isProforma && !sale.returnOf && returnsOf(sale, db.sales).map((r) => <div key={r.id} className="row between small"><span>Returned {r.number}{r.date ? ` · ${new Date(r.date).toLocaleDateString(dateLocale(), { dateStyle: 'medium' })}` : ''}</span><span>{fmt(r.total)}</span></div>)}
       {sale.momo?.txid && <div className="row between"><span>{sale.momo.provider === 'airtel' ? 'Airtel' : 'MoMo'} Ref</span><span>{sale.momo.txid}</span></div>}
       {sale.momo && <div className="small muted">{sale.momo.confirmed ? 'Payment confirmed by the mobile network' : sale.momo.manual ? 'Payment recorded by staff (transaction ID from the customer; not confirmed by the network)' : ''}</div>}
       {sale.status === 'refunded' && <div className="center receipt-tag">REFUNDED</div>}
@@ -135,7 +144,7 @@ export function SaleInvoice({ sale }) {
         {sale.discount > 0 && <div><span>Discount</span><span>-{fmt(sale.discount)}</span></div>}
         {sale.tax > 0 && <div><span>Tax</span><span>{fmt(sale.tax)}</span></div>}
         <div className="grand"><span>Total</span><span>{fmt(sale.total)}</span></div>
-        <div><span>Paid ({sale.payment}{sale.momo?.txid ? ` · ref ${sale.momo.txid}` : ''})</span><span>{fmt(sale.paid ?? sale.total)}</span></div>
+        <div><span>Paid ({payLabel(sale)}{sale.momo?.txid ? ` · ref ${sale.momo.txid}` : ''})</span><span>{fmt(sale.paid ?? sale.total)}</span></div>
         {sale.insurance && <div><span>Billed to {sale.insurance.insurer} ({sale.insurance.scheme} · member {sale.insurance.memberNo})</span><span>{fmt(billed(sale))}</span></div>}
         {due > 0 && <div className="grand"><span>Balance due</span><span>{fmt(due)}</span></div>}
       </div>
@@ -164,7 +173,7 @@ export function usePrintSale() {
 const STATUSES = [['', 'All statuses'], ['completed', 'Completed'], ['refunded', 'Refunded'], ['edited', 'Edited']];
 
 export default function Sales() {
-  const { db: localDb, syncCfg, update, fmt, user, branchId, can } = useStore();
+  const { db: localDb, syncCfg, update, fmt, user, branchId, can, numberFor } = useStore();
   // step 18: a closed day's sales can't be edited (a refund still can, and the owner is told)
   const location = useLocation();
   const [q, setQ] = useState(location.state?.q || '');
@@ -194,13 +203,14 @@ export default function Sales() {
 
   const ql = q.toLowerCase();
   const inScope = db.sales.filter((s) => (branch === 'all' || (s.branchId || MAIN_BRANCH) === branch) && (!from || dayOf(s.date) >= from) && (!to || dayOf(s.date) <= to));
-  const opts = (k) => [...new Set(inScope.map((s) => s[k]).filter(Boolean))].sort();
+  const opts = (k) => (k === 'payment' ? [...new Set(inScope.flatMap((s) => (isSplit(s) ? s.payments.map((p) => p.method) : [s.payment])).filter(Boolean))].sort() : [...new Set(inScope.map((s) => s[k]).filter(Boolean))].sort());
   const rows = inScope.filter((s) =>
-    (!q || [s.number, s.customerName, s.cashier, s.payment, s.type, s.momo?.txid, ...s.items.map((i) => i.name)].join(' ').toLowerCase().includes(ql)) &&
-    (!f.cashier || s.cashier === f.cashier) && (!f.payment || s.payment === f.payment) && (!f.customer || s.customerName === f.customer) &&
+    (!q || [s.number, s.customerName, s.cashier, payLabel(s), s.type, s.returnOfNumber, s.momo?.txid, ...s.items.map((i) => i.name)].join(' ').toLowerCase().includes(ql)) &&
+    (!f.cashier || s.cashier === f.cashier) && (!f.payment || paidWith(s, f.payment)) && (!f.customer || s.customerName === f.customer) &&
     (!f.status || (f.status === 'edited' ? s.edits?.length > 0 : f.status === 'refunded' ? s.status === 'refunded' : s.status !== 'refunded')));
-  const valid = rows.filter((s) => s.status !== 'refunded');
-  const sorted = useSort(rows, { number: (s) => s.number, date: (s) => s.date, customer: (s) => s.customerName || '', cashier: (s) => s.cashier || '', payment: (s) => s.payment || '', total: (s) => s.total }, 'date');
+  const valid = rows.filter((s) => s.status !== 'refunded'); // returns of part of a sale (negative) included: the total is net of them
+  const saleCount = valid.filter((s) => !s.returnOf).length;
+  const sorted = useSort(rows, { number: (s) => s.number, date: (s) => s.date, customer: (s) => s.customerName || '', cashier: (s) => s.cashier || '', payment: (s) => payLabel(s), total: (s) => s.total }, 'date');
   // UI batch 3: 100 rows then more as the list scrolls (C7), columns chosen and ordered on this device (C2)
   const page = useLoadMore(sorted.rows, { resetKey: [q, from, to, branch, f.cashier, f.payment, f.customer, f.status, sorted.by, sorted.dir].join('|') });
   const colsK = useColumns('sales', [{ id: 'number', label: 'Receipt', fixed: true }, { id: 'date', label: 'Date' }, ...(db.branches.length > 1 ? [{ id: 'branch', label: 'Branch' }] : []), { id: 'customer', label: 'Customer' }, { id: 'phone', label: 'Phone' }, { id: 'payment', label: 'Payment' }, { id: 'status', label: 'Status' }, { id: 'total', label: 'Total' }, { id: 'cashier', label: 'Cashier' }]);
@@ -208,14 +218,15 @@ export default function Sales() {
   const swipe = useSwipe(); // C10: phones: swipe a sale for Print / Refund
   // the owner's request: keys, double-click and right-click on the sales too (src/listcontrols.jsx)
   const searchRef = useRef(null);
-  const canEditSale = (x) => x.status !== 'refunded' && can('sales.edit') && !locked(x);
-  const canRefund = (x) => x.status !== 'refunded' && !x.imported && user.role !== 'cashier' && can('sales.refund');
+  // Nov 2026: a return (credit note), a sale paid several ways or one with returns is refunded or returned, not edited
+  const canEditSale = (x) => x.status !== 'refunded' && !x.returnOf && !isSplit(x) && !returnsOf(x, db.sales).length && can('sales.edit') && !locked(x);
+  const canRefund = (x) => x.status !== 'refunded' && !x.returnOf && !x.imported && user.role !== 'cashier' && can('sales.refund') && !fullyReturned(x, returnsOf(x, db.sales));
   const lc = useListControls({ rows: page.rows, onOpen: (x) => setView(x), onEdit: (x) => canEditSale(x) && setEditing(x), searchRef, onClearSearch: () => setQ(''), enabled: tab === 'sales' });
   const menu = useContextMenu();
   const [dv, setDv] = useState(() => savedView('sales'));
   const pickView = (v) => { setDv(v); saveView('sales', v); };
   const saleCard = (s) => { const [st, cls] = saleStatus(s); return { title: s.number + ' · ' + (s.customerName || 'Walk-in'), sub: `${new Date(s.date).toLocaleString(dateLocale(), { dateStyle: 'medium', timeStyle: 'short' })} · ${s.cashier || ''}`, value: fmt(s.total),
-    chips: [cls !== 'paid' && [st, cls === 'owing' ? 'warn' : 'danger'], s.payment && [s.payment], s.edits?.length && ['Edited', 'warn'], [`${s.items.length} item${s.items.length === 1 ? '' : 's'}`]].filter(Boolean) }; };
+    chips: [cls !== 'paid' && [st, cls === 'owing' ? 'warn' : 'danger'], s.returnOf && [`Return of ${s.returnOfNumber}`, 'warn'], s.payment && [payLabel(s)], s.edits?.length && ['Edited', 'warn'], [`${s.items.length} item${s.items.length === 1 ? '' : 's'}`]].filter(Boolean) }; };
   const saleMenu = (e, x) => menu.open(e, [
     { label: 'View', Icon: Eye, keyId: 'list:open', run: () => setView(x) },
     { label: 'Print the receipt', Icon: Printer, run: () => printSale(x, 'receipt') },
@@ -231,9 +242,9 @@ export default function Sales() {
   const refund = (sale) => setRefunding(sale);
   // safer refunds (2026-11-18): over the limit, someone who isn't a manager needs a manager's PIN or password (checked on
   // this device, as at sign-in); the approver is kept on the sale and in the audit log
-  const approvalFor = (sale) => {
+  const approvalFor = () => {
     const limit = Number(localDb.settings.refundApproveAbove ?? REFUND_APPROVE_ABOVE) || 0;
-    if (!limit || isApprover(user) || refundMoney(sale).back <= limit) return null;
+    if (!limit || isApprover(user)) return null; // the sheet asks only when this refund gives back more than the limit
     const approvers = localDb.users.filter((u) => isApprover(u) && u.id !== user.id && u.active !== false).map((u) => ({ id: u.id, name: u.name }));
     return { limit, approvers, verify: async (id, secret) => {
       // this device first (a quick PIN, or a password remembered by the Windows / Android app), then the cloud: a
@@ -245,7 +256,29 @@ export default function Sales() {
       try { const r = await cloudLogin(syncCfg.url, email, secret, syncCfg.tenant); cloudLogout({ url: syncCfg.url, key: r.token }).catch(() => {}); return !!r.token; } catch { return false; }
     } };
   };
-  const doRefund = async (sale, why, approvedBy = null) => {
+  // Nov 2026 audit item 6 (src/returns.js): part of a sale comes back. A credit note of its own: the lines and money
+  // given back (negative), stock back into the batches it came from; the sale itself is not changed.
+  const doReturn = async (sale, why, approvedBy, picks) => {
+    let ret = null, err = '';
+    try {
+      await update((d) => {
+        const cur = d.sales.find((x) => x.id === sale.id);
+        if (!cur || cur.status === 'refunded') { err = `${sale.number} was already refunded; nothing was changed`; return; }
+        const plan = planReturn(cur, returnsOf(cur, d.sales), picks, Number(d.settings.decimals ?? 0));
+        if (!plan.ok) { err = plan.error; return; }
+        const branch = cur.branchId || MAIN_BRANCH;
+        ret = { id: uid(), number: numberFor(d, 'CN'), date: now(), branchId: branch, cashier: user.name, ...returnRecord(cur, plan, { reason: why, approvedBy }) };
+        put(d, 'sales', ret);
+        for (const i of ret.items) for (const a of stockParts(i)) move(d, { productId: a.productId, qty: -a.qty * unitScaleAt(d.products.find((x) => x.id === a.productId), cur.date), type: 'Refund', ref: ret.number, user: user.name, batchId: a.batchId, branchId: branch });
+        audit(d, user, 'Return', `${ret.number} of ${cur.number}: ${ret.items.map((i) => `${-i.qty} × ${i.name}`).join(', ')} · ${fmt(-ret.total)} back${why ? ' · ' + why : ''}${approvedBy ? ' · approved by ' + approvedBy : ''}`, branch);
+      });
+    } catch (e) { return toast(`Nothing was returned: ${e.message}`, 'error'); }
+    if (err) return toast(err, 'warn');
+    setRefunding(null); setView(ret);
+    toast(`${ret.number}: returned and put back into stock`);
+  };
+  const doRefund = async (sale, why, approvedBy = null, picks = null) => {
+    if (picks) return doReturn(sale, why, approvedBy, picks);
     // the sale as it is now (another device, or a second click, may have refunded or edited it since this list was
     // drawn): refunded once only, and what goes back to stock is what the sale holds now
     let already = false;
@@ -268,7 +301,7 @@ export default function Sales() {
   };
 
   const branchName = (id) => db.branches.find((b) => b.id === (id || MAIN_BRANCH))?.name || '—';
-  const exportRows = rows.map((s) => ({ receipt: s.number, date: s.date, branch: branchName(s.branchId), type: s.type || 'retail', customer: s.customerName, cashier: s.cashier, payment: s.payment, momoRef: s.momo?.txid || '', items: s.items.length, discount: s.discount, tax: s.tax, total: s.total, paid: s.paid ?? s.total, status: s.status }));
+  const exportRows = rows.map((s) => ({ receipt: s.number, date: s.date, branch: branchName(s.branchId), type: s.type || 'retail', customer: s.customerName, cashier: s.cashier, payment: payLabel(s), returnOf: s.returnOfNumber || '', momoRef: s.momo?.txid || '', items: s.items.length, discount: s.discount, tax: s.tax, total: s.total, paid: s.paid ?? s.total, status: s.status }));
 
   // C8: the receipt and its actions, beside the list on wide screens or as a pop-up
   const saleDetails = () => (
@@ -277,9 +310,9 @@ export default function Sales() {
           <Receipt sale={view} />
           <EditHistory sale={view} />
           <div className="form-actions no-print">
-            {view.status !== 'refunded' && can('sales.edit') && !locked(view) && <button className="btn ghost" onClick={() => { setEditing(view); setView(null); }}><Pencil size={16} />Edit sale</button>}
+            {canEditSale(view) && <button className="btn ghost" onClick={() => { setEditing(view); setView(null); }}><Pencil size={16} />Edit sale</button>}
             {view.imported && <small className="muted">Copied from {view.imported}</small>}
-            {view.status !== 'refunded' && !view.imported && user.role !== 'cashier' && can('sales.refund') && <button className="btn danger" onClick={() => refund(view)}><Undo2 size={16} />Refund</button>}
+            {canRefund(view) && <button className="btn danger" onClick={() => refund(view)}><Undo2 size={16} />{returnsOf(view, db.sales).length ? 'Return more' : 'Refund or return'}</button>}
             <ReceiptPdfButton sale={view} />
             <button className="btn ghost act-invoice" onClick={() => { printSale(view, 'invoice'); }}><FileText size={16} />Invoice</button>
             <button className="btn primary" onClick={() => printReceiptNow(view)}><Printer size={16} />Print</button>
@@ -290,7 +323,7 @@ export default function Sales() {
   return (
     <div className="page">
       <div className="page-head">
-        <div><h1>Sales History</h1><div className="sub">{valid.length} sales · {fmt(valid.reduce((a, s) => a + s.total, 0))}{older.W && !from ? ` · this device keeps sales from ${older.W}; choose an earlier "From" date for older ones` : olderNote(older) ? ' · ' + olderNote(older) : ''}</div></div>
+        <div><h1>Sales History</h1><div className="sub">{saleCount} sales · {fmt(valid.reduce((a, s) => a + s.total, 0))}{older.W && !from ? ` · this device keeps sales from ${older.W}; choose an earlier "From" date for older ones` : olderNote(older) ? ' · ' + olderNote(older) : ''}</div></div>
         <div className="row gap">
           {db.branches.length > 1 && user.role !== 'cashier' && (
             <select value={branch} onChange={(e) => setBranch(e.target.value)} aria-label="Branch">
@@ -305,9 +338,9 @@ export default function Sales() {
           {tab === 'sales' && <button type="button" className={'btn ghost filters-btn' + (activeFilters ? ' on' : '')} aria-expanded={showFilters} onClick={() => setShowFilters((x) => !x)}><SlidersHorizontal size={16} />Filters{activeFilters > 0 && <span className="badge-count">{activeFilters}</span>}</button>}
           <ExportMenu>
           <button className="btn ghost" onClick={() => downloadFile('sales.csv', toCSV(exportRows), 'text/csv')}><Download size={16} />CSV</button>
-          <PdfButton title="Sales history" subtitle={[from || to ? `${from || 'start'} to ${to || 'today'}` : 'All dates', q && `search "${q}"`, onlyEdited && 'edited sales only', `${valid.length} sales · ${fmt(valid.reduce((a, s) => a + s.total, 0))}`].filter(Boolean).join(' · ')}
+          <PdfButton title="Sales history" subtitle={[from || to ? `${from || 'start'} to ${to || 'today'}` : 'All dates', q && `search "${q}"`, onlyEdited && 'edited sales only', `${saleCount} sales · ${fmt(valid.reduce((a, s) => a + s.total, 0))}`].filter(Boolean).join(' · ')}
             data={() => [{ head: ['Receipt', 'Date', 'Customer', 'Cashier', 'Payment', 'Status', 'Total'], numeric: [6],
-              body: rows.map((s) => [s.number, new Date(s.date).toLocaleString(dateLocale(), { dateStyle: 'medium', timeStyle: 'short' }), s.customerName, s.cashier, s.payment, s.status + (s.edits?.length ? ' (edited)' : ''), fmt(s.total)]),
+              body: rows.map((s) => [s.number, new Date(s.date).toLocaleString(dateLocale(), { dateStyle: 'medium', timeStyle: 'short' }), s.customerName, s.cashier, payLabel(s), (s.returnOf ? `return of ${s.returnOfNumber}` : s.status) + (s.edits?.length ? ' (edited)' : ''), fmt(s.total)]),
               foot: ['', '', '', '', '', 'Total (excl. refunds)', fmt(valid.reduce((a, s) => a + s.total, 0))] }]} />
           </ExportMenu>
         </div>
@@ -337,8 +370,8 @@ export default function Sales() {
               branch: <td key="branch" data-label="Branch">{branchName(s.branchId)}</td>,
               customer: <td key="customer" data-label="Customer">{s.customerName}</td>,
               phone: <td key="phone" data-label="Phone" className="muted">{phoneOf(s) || '—'}</td>,
-              payment: <td key="payment" data-label="Payment"><PayChip name={s.payment} />{s.momo?.txid ? <><br /><small className="muted">{s.momo.txid}</small></> : null}</td>,
-              status: <td key="status" data-label="Status">{s.status === 'refunded' ? <span className="badge danger">refunded</span> : <span className="muted small status-plain">{s.status}</span>}{s.edits?.length > 0 && <><br /><button type="button" className="badge warn edited-badge" onClick={() => setView(s)} title="See what was changed and by whom"><History size={11} /> Edited{s.edits.length > 1 ? ` ×${s.edits.length}` : ''}</button></>}</td>,
+              payment: <td key="payment" data-label="Payment"><PayChip name={payLabel(s)} />{s.momo?.txid ? <><br /><small className="muted">{s.momo.txid}</small></> : null}</td>,
+              status: <td key="status" data-label="Status">{s.status === 'refunded' ? <span className="badge danger">refunded</span> : s.returnOf ? <span className="badge warn">return of {s.returnOfNumber}</span> : <span className="muted small status-plain">{s.status}</span>}{s.edits?.length > 0 && <><br /><button type="button" className="badge warn edited-badge" onClick={() => setView(s)} title="See what was changed and by whom"><History size={11} /> Edited{s.edits.length > 1 ? ` ×${s.edits.length}` : ''}</button></>}</td>,
               total: <td key="total" data-label="Total" className="num"><strong>{moneyCell(fmt(s.total), cur)}</strong></td>,
               cashier: <td key="cashier" data-label="Cashier">{s.cashier}</td>,
             }; return (
@@ -349,7 +382,7 @@ export default function Sales() {
                   <button className="btn sm ghost" onClick={() => setView(s)}><Eye size={14} />View</button>
                   <button className="btn sm ghost act-print" onClick={() => printSale(s, 'receipt')} title="Print the till receipt"><Printer size={14} />Receipt</button>
                   <button className="btn sm ghost act-invoice" onClick={() => printSale(s, 'invoice')} title="Print a full-page invoice"><FileText size={14} />Invoice</button>
-                  {s.status !== 'refunded' && can('sales.edit') && !locked(s) && <button className="btn sm ghost act-edit" onClick={() => setEditing(s)}><Pencil size={14} />Edit</button>}
+                  {canEditSale(s) && <button className="btn sm ghost act-edit" onClick={() => setEditing(s)}><Pencil size={14} />Edit</button>}
                   <button type="button" className="icon-btn sm row-more" title="More actions" aria-label="More actions" onClick={(e) => saleMenu(e, s)}><Ellipsis size={16} /></button>
                 </div>
                 {swipe.openId === s.id && <div className="swipe-acts">
@@ -360,7 +393,7 @@ export default function Sales() {
             ); })}
             {!rows.length && (db.sales.length ? <Empty colSpan={colsK.shown.length + 2}>No sales match. Try another receipt number, customer, filter or date.</Empty> : <Empty colSpan={colsK.shown.length + 2} action={{ label: 'Open the POS', to: '/pos' }}>No sales yet. Every sale rung up at the POS appears here with its receipt, to reprint, refund or correct.</Empty>)}
           </tbody>
-          {rows.length > 0 && <tfoot><tr className="total-row"><td colSpan={Math.max(1, colsK.shown.indexOf('total') + 1)}>Total (excl. refunds) · {valid.length.toLocaleString()} sales</td>{colsK.has('total') && <td className="num">{fmt(valid.reduce((a, s) => a + s.total, 0))}</td>}<td colSpan={Math.max(1, colsK.shown.length - colsK.shown.indexOf('total'))} /></tr></tfoot>}
+          {rows.length > 0 && <tfoot><tr className="total-row"><td colSpan={Math.max(1, colsK.shown.indexOf('total') + 1)}>Total (excl. refunds) · {saleCount.toLocaleString()} sales</td>{colsK.has('total') && <td className="num">{fmt(valid.reduce((a, s) => a + s.total, 0))}</td>}<td colSpan={Math.max(1, colsK.shown.length - colsK.shown.indexOf('total'))} /></tr></tfoot>}
         </table>
         {menu.node}
         {page.footer}
@@ -374,7 +407,7 @@ export default function Sales() {
       </>}
       {printNode}
       {editing && <SaleEditor sale={editing} onClose={() => setEditing(null)} />}
-      {refunding && <RefundSheet sale={refunding} fmt={fmt} batches={db.batches} closedDay={locked(refunding)} onCancel={() => setRefunding(null)} approval={approvalFor(refunding)} onConfirm={(why, by) => doRefund(refunding, why, by)} />}
+      {refunding && <RefundSheet sale={refunding} returns={returnsOf(refunding, db.sales)} decimals={Number(db.settings.decimals ?? 0)} fmt={fmt} batches={db.batches} closedDay={locked(refunding)} onCancel={() => setRefunding(null)} approval={approvalFor()} onConfirm={(why, by, picks) => doRefund(refunding, why, by, picks)} />}
       {view && !(wide && dv === 'table' && tab === 'sales') && saleDetails()}
     </div>
   );
@@ -550,7 +583,7 @@ export function receiptText(sale, s, fmt) {
   if (sale.discount > 0) L.push(`Discount: -${fmt(sale.discount)}`);
   if (sale.tax > 0) L.push(`Tax: ${fmt(sale.tax)}`);
   L.push(`*TOTAL: ${fmt(sale.total)}*`);
-  L.push(`Paid (${sale.payment}): ${fmt(sale.paid ?? sale.total)}`);
+  L.push(sale.returnOf ? `Return of ${sale.returnOfNumber} · paid back (${payLabel(sale)}): ${fmt(-(sale.paid ?? sale.total))}` : `Paid (${payLabel(sale)}): ${fmt(sale.paid ?? sale.total)}`);
   if (sale.insurance) L.push(`${sale.insurance.insurer} (${sale.insurance.scheme}, member ${sale.insurance.memberNo}): ${fmt(billed(sale))}`);
   if (unpaid(sale) > 0.005) L.push(`Balance: ${fmt(unpaid(sale))}`);
   L.push('');

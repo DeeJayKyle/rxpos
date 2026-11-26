@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { totalByMethod } from '../tenders.js';
 import { Link, useLocation } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Trophy, Star, BarChart3, Users, Receipt, Coins } from 'lucide-react';
 import { useStore, MAIN_BRANCH } from '../store.jsx';
@@ -24,6 +25,7 @@ export function weeklyStats(db, start, branch = 'all') {
   // by the sale's local day, not its UTC time (a late-evening sale belongs to the day it was made)
   const cur = sales.filter((x) => dayOf(x.date) >= s && dayOf(x.date) < e), prev = sales.filter((x) => dayOf(x.date) >= ps && dayOf(x.date) < s);
   const sum = (list) => list.reduce((a, x) => a + x.total, 0);
+  const n = (list) => list.filter((x) => !x.returnOf).length; // a return of part of a sale is not a sale (src/returns.js)
   const profit = (list) => list.reduce((a, x) => a + x.items.reduce((b, i) => b + i.qty * (i.price - (i.cost || 0)), 0) - (x.discount || 0), 0);
   const byDay = DAY.map((label, i) => { const d = iso(new Date(start.getTime() + i * 864e5)); const pd = iso(new Date(start.getTime() + (i - 7) * 864e5)); return { label, values: [sum(cur.filter((x) => dayOf(x.date) === d)), sum(prev.filter((x) => dayOf(x.date) === pd))] }; });
   const items = (list) => { const m = new Map(); for (const x of list) for (const i of x.items) { const r = m.get(i.id) || { id: i.id, name: i.name, qty: 0, amount: 0 }; r.qty += i.qty; r.amount += i.qty * i.price; m.set(i.id, r); } return m; };
@@ -33,13 +35,13 @@ export function weeklyStats(db, start, branch = 'all') {
     .sort((a, b) => b.growth - a.growth).slice(0, 4);
   const fallers = [...pi.values()].map((r) => ({ ...r, now: ci.get(r.id)?.amount || 0 })).map((r) => ({ ...r, growth: pct(r.now, r.amount) })).filter((r) => r.growth < -30).sort((a, b) => a.growth - b.growth).slice(0, 4);
   const staff = new Map();
-  for (const x of cur) { const k = x.cashier || x.createdBy || '—'; const r = staff.get(k) || { name: k, n: 0, amount: 0 }; r.n++; r.amount += x.total; staff.set(k, r); }
+  for (const x of cur) { const k = x.cashier || x.createdBy || '—'; const r = staff.get(k) || { name: k, n: 0, amount: 0 }; if (!x.returnOf) r.n++; r.amount += x.total; staff.set(k, r); }
   const pay = new Map();
-  for (const x of cur) pay.set(x.payment || 'Cash', (pay.get(x.payment || 'Cash') || 0) + x.total);
+  for (const x of cur) for (const [m, v] of totalByMethod(x)) pay.set(m || 'Cash', (pay.get(m || 'Cash') || 0) + v); // a split sale under each method
   const best = byDay.reduce((a, d) => (d.values[0] > a.values[0] ? d : a), byDay[0]);
   return {
-    start: s, end: iso(new Date(start.getTime() + 6 * 864e5)), total: sum(cur), prevTotal: sum(prev), count: cur.length, prevCount: prev.length,
-    basket: cur.length ? sum(cur) / cur.length : 0, profit: profit(cur), prevProfit: profit(prev), byDay, top, risers, fallers, best,
+    start: s, end: iso(new Date(start.getTime() + 6 * 864e5)), total: sum(cur), prevTotal: sum(prev), count: n(cur), prevCount: n(prev),
+    basket: n(cur) ? sum(cur) / n(cur) : 0, profit: profit(cur), prevProfit: profit(prev), byDay, top, risers, fallers, best,
     staff: [...staff.values()].sort((a, b) => b.amount - a.amount), payments: [...pay.entries()].sort((a, b) => b[1] - a[1]),
   };
 }

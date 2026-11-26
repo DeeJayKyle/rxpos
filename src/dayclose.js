@@ -8,9 +8,12 @@
 // Used by the React app, the cloud (worker/index.js) and, in Dart, rxpos_flutter/lib/core/rules/day_close.dart.
 
 /** Records a closed day protects. A stock movement that belongs to a document (a sale, a delivery…) follows it. */
-export const LOCKED_TABLES = new Set(['sales', 'expenses', 'payments', 'bankTx', 'purchases', 'supplierReturns', 'movements']);
+export const LOCKED_TABLES = new Set(['sales', 'expenses', 'payments', 'bankTx', 'purchases', 'supplierReturns', 'movements', 'cashMoves']);
 /** Movements with their own document: flagged through that document, not one by one */
 export const DOCUMENT_MOVES = new Set(['Sale', 'Sale edit', 'Refund', 'Purchase', 'Purchase edit', 'Supplier return', 'Transfer in', 'Transfer out']);
+
+import { totalByMethod } from './tenders.js';
+import { dayCash } from './cashmoves.js';
 
 const MAIN = 'main';
 export const closeId = (branchId, day) => `${branchId || MAIN}:${day}`;
@@ -34,18 +37,25 @@ export const inClosedDay = (rec, closed, dayOf) => {
   return !!day && closed.has(closeId(rec.branchId, day));
 };
 
-/** The day's totals at closing, kept on the close record: sales, by payment method, refunds, expenses */
+/**
+ * The day's totals at closing, kept on the close record: sales, by payment method (a split sale under each part),
+ * refunds, returns of part of a sale (src/returns.js, negative, on their own day), expenses, and the day's cash in and
+ * out of the drawers (src/cashmoves.js: `cash.net` is what the drawers should hold on top of their floats)
+ */
 export function daySnapshot(db, branchId, day, dayOf) {
   const at = (r) => (r.branchId || MAIN) === (branchId || MAIN) && recordDay(r, dayOf) === day;
-  const sales = (db.sales || []).filter(at);
-  const done = sales.filter((s) => s.status !== 'refunded');
+  const all = (db.sales || []).filter(at);
+  const sales = all.filter((s) => !s.returnOf), returns = all.filter((s) => s.returnOf);
+  const done = [...sales.filter((s) => s.status !== 'refunded'), ...returns];
   const byPayment = {};
-  for (const s of done) byPayment[s.payment || 'Other'] = (byPayment[s.payment || 'Other'] || 0) + (Number(s.total) || 0);
+  for (const s of done) for (const [k, v] of totalByMethod(s)) byPayment[k || 'Other'] = (byPayment[k || 'Other'] || 0) + (Number(v) || 0);
   return {
-    sales: done.length,
+    sales: sales.length - sales.filter((s) => s.status === 'refunded').length,
     total: done.reduce((a, s) => a + (Number(s.total) || 0), 0),
     byPayment,
-    refunded: sales.length - done.length,
+    refunded: sales.filter((s) => s.status === 'refunded').length,
+    ...(returns.length ? { returns: returns.length } : {}),
     expenses: (db.expenses || []).filter(at).reduce((a, e) => a + (Number(e.amount) || 0), 0),
+    cash: dayCash(db, branchId, day, dayOf),
   };
 }

@@ -8,8 +8,9 @@
 // that has not synced since, a hub without /api/till) the old style is used, so a sale is never held up.
 // Same rules in the Flutter app: rxpos_flutter/lib/core/rules/doc_numbers.dart.
 
-/** The kinds: receipts, proformas, deliveries, purchase orders, transfers, stock counts, returns to supplier */
-export const DOC_KINDS = ['R', 'PF', 'GRN', 'PO', 'TR', 'SC', 'RT'];
+/** The kinds: receipts, proformas, deliveries, purchase orders, transfers, stock counts, returns to supplier, and
+ * credit notes (a client returning part of a sale, src/returns.js) */
+export const DOC_KINDS = ['R', 'PF', 'GRN', 'PO', 'TR', 'SC', 'RT', 'CN'];
 
 /** A branch's code: its own `code` (set in the owner console), else the first three letters/digits of its name */
 export function branchCode(branch) {
