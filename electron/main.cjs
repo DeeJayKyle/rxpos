@@ -109,6 +109,8 @@ if (HUB_MODE) {
   });
   ipcMain.on('rxpos:attention', () => { if (win && !win.isFocused()) win.flashFrame(true); });
   ipcMain.on('rxpos:show', showWindow);
+  // receipts straight to the thermal printer, and the cash drawer (src/printer.js, electron/printer.cjs)
+  require('./printer.cjs').register(ipcMain, () => win);
 
   Menu.setApplicationMenu(
     Menu.buildFromTemplate([

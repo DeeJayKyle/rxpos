@@ -75,6 +75,7 @@ const SUITES = [
   ['theme choice (unit)', 'unit-theme.mjs', []],
   ['what\'s new, the same in both apps (unit)', 'unit-whatsnew.mjs', []],
   ['report summary sentences (unit)', 'unit-report-summary.mjs', []],
+  ['receipts straight to the thermal printer, cash drawer kick (unit)', 'unit-escpos.mjs', []],
   ['theme contrast', 'contrast-test.mjs', []],
   ['owner sign-in', 'owner-auth-test.mjs', []],
   ['cloud rules', 'v14-api.mjs', []],

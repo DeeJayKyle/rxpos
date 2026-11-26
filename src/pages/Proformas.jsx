@@ -2,12 +2,13 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store.jsx';
 import { Modal, ReceiptPdfButton, Empty } from '../ui.jsx';
-import { Receipt } from './Sales.jsx';
+import { Receipt, useReceiptPrinter } from './Sales.jsx';
 import { ask } from '../feedback.jsx';
 import { showDate } from '../showdate.js';
 
 export default function Proformas() {
   const { db, remove, fmt } = useStore();
+  const printReceiptNow = useReceiptPrinter();
   const navigate = useNavigate();
   const [view, setView] = useState(null);
   const [q, setQ] = useState('');
@@ -45,7 +46,7 @@ export default function Proformas() {
       {view && (
         <Modal title={`Proforma ${view.number}`} onClose={() => setView(null)}>
           <Receipt sale={{ ...view, proforma: true }} />
-          <div className="form-actions no-print"><ReceiptPdfButton sale={{ ...view, proforma: true }} /><button className="btn primary" onClick={() => window.print()}>Print</button></div>
+          <div className="form-actions no-print"><ReceiptPdfButton sale={{ ...view, proforma: true }} /><button className="btn primary" onClick={() => printReceiptNow({ ...view, proforma: true })}>Print</button></div>
         </Modal>
       )}
     </div>
