@@ -33,7 +33,7 @@ const click = (re, sel = 'button') => p.evaluate((s, src) => { const el = [...do
 const blocks = () => p.evaluate(() => [...document.querySelectorAll('.note-block')].map((x) => [x.className.match(/nb-(\w+)/)[1], x.querySelector('textarea')?.value ?? '']));
 
 await p.evaluate(() => { location.hash = '#/notes'; }); await wait(1200);
-check('Notes & SOPs is in the menu and opens', await p.evaluate(() => !!document.querySelector('.notes-page') && [...document.querySelectorAll('.sidebar a')].some((a) => /Notes & SOPs/.test(a.textContent))));
+check('Notes & SOPs is in the menu (Notes & Calendar, 1.22.0) and opens', await p.evaluate(() => !!document.querySelector('.notes-page') && [...document.querySelectorAll('.sidebar a')].some((a) => /Notes & Calendar/.test(a.textContent)) && /Notes & SOPs/.test(document.querySelector('.hub-tabs')?.textContent || '')));
 await click(/^Templates$/); await wait(200);
 check('a template makes a page', await click(/Opening checklist/, '.notes-templates button') && await until(p, () => document.querySelector('.note-title')?.value === 'Opening checklist'));
 const tpl = await blocks();

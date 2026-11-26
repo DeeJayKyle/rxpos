@@ -68,7 +68,7 @@ await p.screenshot({ path: `${out}/dashboard-dark.png` });
 
 // ---- picking a palette leaves System mode ----
 await openMenu(p); await wait(200);
-await p.evaluate(() => [...document.querySelectorAll('.theme-item')].find((x) => x.textContent.includes('RxPOS Navy Teal'))?.click()); await wait(300);
+await p.evaluate(() => [...document.querySelectorAll('.theme-item')].find((x) => /^Dark/.test(x.textContent.trim()))?.click()); await wait(300);
 check('picking a palette applies it and stops following the system', (await html(p)).palette === 'navy-teal' && (await p.evaluate(() => localStorage.getItem('rxpos-theme-mode'))) === null);
 await openMenu(p); await wait(200);
 await pickMode(p, 'Light'); await wait(300);

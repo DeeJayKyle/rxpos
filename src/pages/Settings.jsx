@@ -45,7 +45,7 @@ export default function Settings() {
     const num = (k, d = 0) => (s[k] === '' || s[k] == null ? d : Number(s[k]) || 0);
     const next = { ...s, taxRate: num('taxRate'), decimals: num('decimals'), retailMarkup: num('retailMarkup', 50), wholesaleMarkup: num('wholesaleMarkup', 25), priceRound: num('priceRound'), minMargin: num('minMargin', 20),
       expiryWarnDays: num('expiryWarnDays', 90), paperWidth: num('paperWidth', 80), leadDays: num('leadDays', 7), coverDays: num('coverDays', 30), deadDays: num('deadDays', 90),
-      idleMinutes: num('idleMinutes', 3), quietFrom: num('quietFrom', 21), quietTo: num('quietTo', 7) };
+      idleMinutes: num('idleMinutes', 0), quietFrom: num('quietFrom', 21), quietTo: num('quietTo', 7) };
     try {
       await saveSettings(tab === 'general' ? { ...db.settings, ...validatePharmacyDefaults(next) } : next);
       if (tab !== 'general') await update((d) => audit(d, user, 'Settings changed', tab, branchId));
@@ -169,6 +169,8 @@ export default function Settings() {
         <form className="card" onSubmit={submitSettings}>
           <h3><Printer size={18} />Receipts, expiry & reordering</h3>
           <div className="form-grid">
+            {/* 1.22.0: the Brand colour theme (the theme menu in the top bar) takes this colour on every device */}
+            <label className="field"><span>Brand colour (the Brand colour theme)</span><input type="color" value={/^#[0-9a-f]{6}$/i.test(s.brandColor || '') ? s.brandColor : '#16a34a'} onChange={(e) => setS({ ...s, brandColor: e.target.value })} /></label>
             <label className="field"><span>Receipt printer paper</span>
               <select value={s.paperWidth || 80} onChange={(e) => setS({ ...s, paperWidth: Number(e.target.value) })}><option value={80}>80 mm thermal</option><option value={58}>58 mm thermal</option><option value={210}>A4 / normal printer</option></select>
             </label>
@@ -211,7 +213,7 @@ export default function Settings() {
           <p className="muted small">Placeholders: {'{name} {pharmacy} {medicine} {date} {amount}'}. Keep SMS under 160 characters to pay for one message.</p>
           <label className="field full"><span>Refill reminder</span><textarea rows={3} value={s.smsRefill || ''} onChange={(e) => setS({ ...s, smsRefill: e.target.value })} /><small className="muted">{(s.smsRefill || '').length} characters</small></label>
           <label className="field full"><span>Payment reminder</span><textarea rows={3} value={s.smsDebt || ''} onChange={(e) => setS({ ...s, smsDebt: e.target.value })} /><small className="muted">{(s.smsDebt || '').length} characters</small></label>
-          <h3 style={{ marginTop: 18 }}>Password recovery & client details</h3>
+          <h3 className="mt-4">Password recovery & client details</h3>
           <div className="form-grid">
             <label className="field"><span>Administrator's WhatsApp (staff who forget their password message this number)</span><input inputMode="tel" placeholder="07XX XXX XXX" value={s.adminWhatsApp || ''} onChange={(e) => setS({ ...s, adminWhatsApp: e.target.value })} /></label>
             <label className="field"><span>Client details at the POS</span>
@@ -231,7 +233,7 @@ export default function Settings() {
         <form className="card" onSubmit={submitSettings}>
           <h3><BellRing size={18} />Idle promotions & reminders</h3>
           <div className="form-grid">
-            {features.promos !== false && <label className="field"><span>Show product promotions after the app is idle for (minutes, 0 = never)</span><input type="number" min="0" step="0.5" value={s.idleMinutes ?? 3} onChange={(e) => setS({ ...s, idleMinutes: e.target.value })} /></label>}
+            {features.promos !== false && <label className="field"><span>Show product promotions after the app is idle for (minutes, 0 = never)</span><input type="number" min="0" step="0.5" value={s.idleMinutes ?? 0} onChange={(e) => setS({ ...s, idleMinutes: e.target.value })} /></label>}
             {features.hourly !== false && <>
               <label className="field check"><input type="checkbox" checked={s.hourlyChime !== false} onChange={(e) => setS({ ...s, hourlyChime: e.target.checked })} /><span>Hourly time reminder with today's to-dos</span></label>
               <label className="field check"><input type="checkbox" checked={s.hourlySound !== false} onChange={(e) => setS({ ...s, hourlySound: e.target.checked })} /><span>Play a soft chime</span></label>
@@ -246,7 +248,7 @@ export default function Settings() {
               {Notification.permission === 'default' && <> · <button type="button" className="link-btn" onClick={() => Notification.requestPermission().then(() => setS({ ...s }))}>Turn on</button></>}</p>
           )}
           {features.weather !== false && <>
-            <h3 style={{ marginTop: 18 }}><MapPin size={18} />Weather location</h3>
+            <h3 className="mt-4"><MapPin size={18} />Weather location</h3>
             <label className="field"><span>Weather location</span>
               <select value={s.weatherMode || 'device'} onChange={(e) => setS({ ...s, weatherMode: e.target.value })}>
                 <option value="device">Where each device is (GPS, or its internet connection)</option>
@@ -258,7 +260,7 @@ export default function Settings() {
               <button type="button" className="btn ghost" onClick={findPlace}><Search size={16} />Find</button>
             </div>
             {places && <div className="picker-list">{places.map((p) => <button type="button" key={p.name + p.lat} onClick={() => { setS({ ...s, weatherPlace: p }); setPlaces(null); setPlaceQ(''); }}>{p.name}</button>)}{!places.length && <span className="muted small">No place found</span>}</div>}</div>}
-            <h3 style={{ marginTop: 18 }}><Thermometer size={18} />Storage limits</h3>
+            <h3 className="mt-4"><Thermometer size={18} />Storage limits</h3>
             <div className="form-grid">
               <label className="field"><span>Room: lowest (°C)</span><input type="number" value={s.roomMin ?? lim.roomMin} onChange={(e) => setS({ ...s, roomMin: e.target.value })} /></label>
               <label className="field"><span>Room: highest (°C)</span><input type="number" value={s.roomMax ?? lim.roomMax} onChange={(e) => setS({ ...s, roomMax: e.target.value })} /></label>
@@ -293,7 +295,7 @@ export default function Settings() {
                 ))}
               </tbody>
             </table>
-            <div className="row gap" style={{ marginTop: 10 }}>
+            <div className="row gap mt-3">
               <button type="button" className="btn sm ghost" onClick={() => setMethods([...methods, { id: uid(), name: '', type: 'other' }])}><Plus size={14} />Add payment method</button>
               <button type="button" className="btn sm ghost" onClick={() => setMethods(DEFAULT_PAYMENT_METHODS)}><RotateCcw size={14} />Defaults</button>
             </div>
@@ -393,12 +395,12 @@ function DailyStockSheet({ syncCfg }) {
     try { setLink((await dailyStockLink(syncCfg, true)).url); } catch (e) { toast(e.message, 'error'); } finally { setBusy(false); }
   };
   return (
-    <div className="card" style={{ marginTop: 16 }}>
+    <div className="card mt-4">
       <h3><Sheet size={18} />Daily stock sheet (Google Sheets)</h3>
       <p className="muted small">Every day&apos;s sales, opening and closing stock value, purchases (stock added at cost), cost of stock sold, profit and expenses, worked out by the cloud from all your devices. Paste the formula into an empty tab of your Google Sheet: it refreshes by itself, and a day corrects itself if a till sends its sales late. Anyone who can open the sheet can read these daily totals (nothing else).</p>
       {link === undefined ? <p className="muted small">Loading…</p> : link ? (
         <>
-          <code className="small" style={{ display: 'block', wordBreak: 'break-all', margin: '8px 0' }}>{formula}</code>
+          <code className="small break-all">{formula}</code>
           <div className="row gap">
             <button type="button" className="btn primary" onClick={() => copy(formula, 'Formula')}><Copy size={16} />Copy formula</button>
             <button type="button" className="btn ghost" disabled={busy} onClick={renew}><RefreshCw size={16} />Make a new link</button>

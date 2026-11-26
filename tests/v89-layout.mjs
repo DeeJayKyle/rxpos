@@ -1,5 +1,5 @@
 // The owner's requests of 2026-11-20: dashboard cards resized (drag the edge, or the card's menu) and moved (drag and
-// drop); a right-click or a long press opens options on every page; the theme panel's sections fold.
+// drop); a right-click or a long press opens options on every page; the theme panel lists the four themes.
 //   node v89-layout.mjs <base> <ownerKey> <outDir>
 import puppeteer from 'puppeteer-core';
 import fs from 'node:fs';
@@ -88,17 +88,14 @@ await wait(400);
 check('…lifting the finger does not choose an item of the menu that opened under it', (await p.evaluate(() => location.hash)) === hashBefore && (await menuItems(p)).includes('Back'), await p.evaluate(() => location.hash));
 await p.keyboard.press('Escape'); await wait(500);
 
-// ---- the theme panel's sections fold ----
+// ---- 1.22.0 (the owner's clean-up): the theme panel has four themes; colour, gradient and style are in This device → Look ----
 await p.evaluate(() => document.querySelector('button[title="Theme"]').click()); await wait(300);
-const secs = await p.evaluate(() => [...document.querySelectorAll('.theme-sec')].map((x) => x.querySelector('.sec-head').textContent.trim() + (x.querySelector('.sec-body').hidden ? ':shut' : ':open')));
-check('the theme panel: Recommended open; Colour, Gradient and Style folded', secs.some((x) => x === 'Recommended:open') && ['Colour:shut', 'Gradient:shut', 'Style:shut'].every((x) => secs.includes(x)), secs.join(' | '));
-await clickText(p, '.theme-sec .sec-head', /^Style$/); await wait(200);
-check('…a folded section opens', await p.evaluate(() => [...document.querySelectorAll('.theme-sec')].find((x) => /^Style$/.test(x.querySelector('.sec-head').textContent.trim()))?.querySelector('.sec-body').hidden === false));
+const themes = await p.evaluate(() => [...document.querySelectorAll('.theme-menu .theme-item .grow')].map((x) => x.firstChild.textContent.trim()));
+check('the theme panel: Light, Dark, High contrast and Brand colour', themes.join() === 'Light,Dark,High contrast,Brand colour', themes.join(' | '));
 await p.screenshot({ path: `${out}/themes.png` });
-await p.keyboard.press('Escape');
-await p.reload({ waitUntil: 'networkidle2' }); await wait(1500);
-await p.evaluate(() => document.querySelector('button[title="Theme"]').click()); await wait(300);
-check('…and stays open on this device', await p.evaluate(() => [...document.querySelectorAll('.theme-sec')].find((x) => /^Style$/.test(x.querySelector('.sec-head').textContent.trim()))?.querySelector('.sec-body').hidden === false));
+await clickText(p, '.theme-menu a.style-item', /Colour, gradient and style/); await wait(900);
+const look = await p.evaluate(() => ({ at: location.hash, subs: [...document.querySelectorAll('.look-card .bell-sub')].map((x) => x.textContent) }));
+check('…its last line opens This device → Look with Colour, Gradient and Style', look.at === '#/device' && ['Colour', 'Gradient', 'Style'].every((x) => look.subs.includes(x)), JSON.stringify(look));
 
 await b.close();
 console.log(`\n${pass} passed, ${fail} failed`);
