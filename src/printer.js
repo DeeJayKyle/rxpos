@@ -7,6 +7,7 @@
 import { deviceSettings, setDevice } from './device.js';
 import { isAndroid, isElectron } from './platform.js';
 import { receiptBytes, testPageBytes, drawerKick, toBase64 } from './escpos.js';
+import { showDateTime } from './showdate.js';
 
 export const PRINTER_DEFAULTS = { mode: 'dialog', name: '', host: '', port: 9100, address: '', usb: '', paper: 0, kick: true, kickPin: 2, cut: true };
 
@@ -106,5 +107,5 @@ export async function openDrawer({ always = false } = {}) {
 export async function testPrint({ withDrawer = false, settings } = {}) {
   const p = printerSettings();
   const label = { windows: p.name, network: `${p.host}:${p.port || 9100}`, bluetooth: p.address, usb: p.usb || 'USB' }[p.mode] || '';
-  await sendBytes(testPageBytes({ paper: paperOf(p, settings), detail: `${label} - ${new Date().toLocaleString()}`, kick: withDrawer ? Number(p.kickPin) || 2 : false }), p);
+  await sendBytes(testPageBytes({ paper: paperOf(p, settings), detail: `${label} - ${showDateTime(new Date())}`, kick: withDrawer ? Number(p.kickPin) || 2 : false }), p);
 }
