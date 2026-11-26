@@ -56,6 +56,7 @@
     "eslint-plugin-react-hooks": "7.1.1",
     "globals": "17.13.0",
     "puppeteer-core": "25.12.0",
+    "rxpos-printer": "file:plugins/rxpos-printer",
     "typescript": "5.6.3",
     "vite": "5.4.8",
     "wrangler": "4.142.0"
