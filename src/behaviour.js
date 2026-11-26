@@ -30,9 +30,21 @@ export const EXTRAS = [
 export function savedBehaviour() {
   try {
     const v = JSON.parse(localStorage.getItem(KEY)) || {};
-    const lock = LOCK_AFTER.some(([m]) => m === v.lock) ? v.lock : LOCK_DEFAULT;
-    return { ...DEFAULTS, ...Object.fromEntries(Object.entries(v).filter(([k]) => k in DEFAULTS)), lock };
+    const chosen = LOCK_AFTER.some(([m]) => m === v.lock);
+    // lockChosen: this device picked its own time in Control Centre (else the pharmacy's, see idleLockMinutes)
+    return { ...DEFAULTS, ...Object.fromEntries(Object.entries(v).filter(([k]) => k in DEFAULTS)), lock: chosen ? v.lock : LOCK_DEFAULT, lockChosen: chosen };
   } catch { return { ...DEFAULTS }; }
+}
+
+/** The pharmacy's idle lock (Settings → Alerts & storage → Till lock, administrators): 0 = off, else minutes */
+export const IDLE_LOCK_CHOICES = [[0, 'Off'], [2, 'After 2 minutes'], [5, 'After 5 minutes'], [15, 'After 15 minutes'], [30, 'After 30 minutes'], [60, 'After 1 hour']];
+/** Minutes before the till locks by itself on this device: off when the pharmacy turned it off, else this device's own
+ *  choice in Control Centre, else the pharmacy's time (5 minutes until an administrator changes it) */
+export function idleLockMinutes(settings, b = savedBehaviour()) {
+  const p = settings?.idleLock;
+  if (p === 0 || p === '0') return 0;
+  if (b.lockChosen) return b.lock;
+  return IDLE_LOCK_CHOICES.some(([m]) => m === Number(p)) ? Number(p) : LOCK_DEFAULT;
 }
 
 const listeners = new Set();

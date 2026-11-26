@@ -48,6 +48,7 @@ const SUITES = [
   ['2026-11-17 audit fixes, against the real cloud code (unit)', 'unit-audit-2026-11-17.mjs', []],
   ['renewable sign-ins in the cloud: short pass, one-use key, revoked (unit)', 'unit-sessions.mjs', []],
   ['renewable sign-ins in the app: renewed once, kept offline (unit)', 'unit-session-client.mjs', []],
+  ['the idle lock: off for the pharmacy, or each device\'s time (unit)', 'unit-idle-lock.mjs', []],
   ['sale checks (unit)', 'unit-anomalies.mjs', []],
   ['password hashing (unit)', 'unit-passwords.mjs', []],
   ['sign-in slowdown (unit)', 'unit-throttle.mjs', []],
