@@ -20,7 +20,7 @@ import { DateInput } from '../fields.jsx';
 import NameCheck from '../components/NameCheck.jsx';
 import { usePageMenu } from '../pagemenu.js';
 import { packsOf, soldLoose, unitPresets, unitChange } from '../packs.js';
-import { packSlip, packText } from '../stockcount.js';
+import { packSlip, packText, lotChange } from '../stockcount.js';
 
 const expiryClass = (expiry, warn) => {
   if (!expiry) return '';
@@ -368,13 +368,20 @@ export function Expiry() {
     if (busy) return;
     if (!(await ask({ title: 'Write off expired stock?', message: `${r.qty} × ${r.p.name} (batch ${r.batch}) will be removed from stock.`, effects: [`${r.qty} taken off batch ${r.batch}`, `a write-off of ${fmt(r.qty * (r.cost || r.p.cost || 0))} at cost in the stock card and the audit log`], confirmText: 'Write off', danger: true }))) return;
     setBusy(r.p.id + r.id);
+    let gone = false;
     try {
       await update((d) => {
-        move(d, { productId: r.p.id, qty: -r.qty, type: 'Expired write-off', ref: r.batch, user: user.name, batchId: r.legacy ? null : r.id, branchId });
-        audit(d, user, 'Expired write-off', `${r.p.name} batch ${r.batch}: ${r.qty} units (${fmt(r.qty * (r.cost || r.p.cost))})`, branchId);
+        // stock audit (26 Nov 2026): only what the batch still holds. Written off on two devices (or written off again
+        // before the list caught up), a batch went below zero: Monticope 38 → −38. What changed on the batch since this
+        // list was drawn is taken into account, and nothing is written off when it is already empty.
+        const qty = Math.round((r.qty + lotChange(d.movements, db.movements, { branchId, productId: r.p.id, batchId: r.legacy ? null : r.id })) * 1e6) / 1e6;
+        if (!(qty > 0)) { gone = true; return; }
+        move(d, { productId: r.p.id, qty: -qty, type: 'Expired write-off', ref: r.batch, user: user.name, batchId: r.legacy ? null : r.id, branchId });
+        audit(d, user, 'Expired write-off', `${r.p.name} batch ${r.batch}: ${qty} units (${fmt(qty * (r.cost || r.p.cost))})`, branchId);
       });
     } catch (e) { return toast(`${r.p.name} batch ${r.batch} was NOT written off: ${e.message}`, 'error'); }
     finally { setBusy(''); }
+    if (gone) return toast(`${r.p.name} batch ${r.batch} was already written off; nothing was changed`, 'warn');
     toast(`${r.p.name} batch ${r.batch} written off`);
   };
   return (

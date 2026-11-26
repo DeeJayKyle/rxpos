@@ -2,7 +2,8 @@
 // wrong when adding, editing or counting stock, and checks the fix. The ledger is replayed with the app's own counter
 // (src/stockindex.js countAll), so "stock" here is exactly what the app shows.
 import assert from 'node:assert/strict';
-import { countDiff, movedAfter, packSlip, packText, scanStep, repack, lotKey } from '../src/stockcount.js';
+import { countDiff, movedAfter, packSlip, packText, scanStep, repack, lotKey, lotChange } from '../src/stockcount.js';
+import { auditTenant } from '../tools/stock-audit.mjs';
 import { countAll } from '../src/stockindex.js';
 import { deliveryReview } from '../src/deliverychecks.js';
 import { planReturn, returnsOf } from '../src/returns.js';
@@ -112,6 +113,14 @@ ok('a sale with a part returned can only return what is left', () => {
   assert.equal(-rest.items[0].alloc.reduce((a, x) => a + x.qty, 0), 6);
 });
 
+ok('an expired batch written off twice no longer goes below zero (Monticope 38 → −38)', () => {
+  const then = [mv(38, 'Opening stock', 0)];
+  const now = [...then, mv(-38, 'Expired write-off', 5)]; // the other device's write-off arrived first
+  const qty = 38 + lotChange(now, then, { branchId: 'main', productId: 'para', batchId: 'b1' });
+  assert.equal(qty, 0, 'nothing left to write off');
+  assert.equal(lotChange([...then, mv(3, 'Refund', 6)], then, { branchId: 'main', productId: 'para', batchId: 'b1' }), 3);
+});
+
 // ---- 4. finding what the old mistakes left in a pharmacy's records (tools/stock-audit.mjs, read-only) ----
 ok('the audit finds counts typed in boxes, transfers received twice and refunds after a return', () => {
   const P = new Map([['para', para]]);
@@ -128,6 +137,13 @@ ok('the audit finds counts typed in boxes, transfers received twice and refunds 
   assert.equal(a.packSlips.top[0].by, 'Amina');
   assert.equal(a.transfers.n, 1); assert.equal(a.transfers.top[0].extra, 20);
   assert.equal(a.refunds.n, 1); assert.equal(a.refunds.units, 4);
+});
+
+ok('the audit counts a kit sale against its medicines, not the kit', () => {
+  const a = auditTenant({ today: '2026-11-26', days: 1, products: [para, { id: 'kit', name: 'HIV kit', kit: {} }], batches: [{ id: 'b1', productId: 'para' }],
+    movements: [mv(10, 'Opening stock', 0), mv(-2, 'Sale', 5, { ref: 'R-7' })],
+    sales: [{ id: 's7', number: 'R-7', date: T(5), status: 'completed', items: [{ id: 'kit', name: 'HIV kit', qty: 1, cost: 10, kit: { components: [{ id: 'para', qty: 2, alloc: [{ batchId: 'b1', qty: 2 }] }] } }] }] });
+  assert.equal(a.sales.missing.n, 0); assert.equal(a.sales.extra.n, 0); assert.equal(a.sales.ok, 1);
 });
 
 console.log(`\n${passed} passed`);

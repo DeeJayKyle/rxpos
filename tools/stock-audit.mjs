@@ -8,6 +8,7 @@ import fs from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import catalog from '../src/data/catalog.json' with { type: 'json' };
 import { catalogCost } from '../worker/dailystock.js';
+import { stockParts } from '../src/kits.js';
 
 const EAT = 3 * 3600e3; // Uganda, UTC+3
 export const ugDay = (iso) => new Date(new Date(iso).getTime() + EAT).toISOString().slice(0, 10);
@@ -87,7 +88,8 @@ export function auditTenant({ products = [], batches = [], movements = [], sales
     if (copied(s)) { sx.copiedAfter = (sx.copiedAfter || 0) + 1; }
     sx.checked++;
     const want = new Map();
-    for (const i of s.items || []) { want.set(i.id, (want.get(i.id) || 0) + (Number(i.qty) || 0)); if (!(Number(i.cost) > 0)) sx.noCost++; sx.costVsNow.lines++; sx.costVsNow.recorded += (Number(i.cost) || 0) * (Number(i.qty) || 0); sx.costVsNow.atNow += cost(i.id) * (Number(i.qty) || 0); }
+    // a kit line moves its medicines' stock, not its own (src/kits.js stockParts)
+    for (const i of s.items || []) { for (const x of stockParts(i)) want.set(x.productId, (want.get(x.productId) || 0) + x.qty); if (!(Number(i.cost) > 0)) sx.noCost++; sx.costVsNow.lines++; sx.costVsNow.recorded += (Number(i.cost) || 0) * (Number(i.qty) || 0); sx.costVsNow.atNow += cost(i.id) * (Number(i.qty) || 0); }
     const got = moveBySale.get(s.number) || new Map();
     let fine = true;
     for (const pid of new Set([...want.keys(), ...got.keys()])) {

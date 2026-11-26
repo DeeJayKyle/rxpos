@@ -88,3 +88,13 @@ export function repack(item, qty) {
   const n = num(qty) / Number(k.size);
   return Number.isInteger(n) && n > 0 ? { ...item, pack: { ...k, count: n } } : rest;
 }
+
+/**
+ * How much a batch changed between two copies of the movements list (the one a screen was drawn from, and the one being
+ * saved to): an action worked out on the screen's figure adds this so it acts on the batch as it is now.
+ */
+export function lotChange(nowMoves, thenMoves, { branchId, productId, batchId }) {
+  const key = lotKey(branchId, productId, batchId);
+  const sum = (list) => { let t = 0; for (const m of list || []) if (lotKey(m.branchId, m.productId, m.batchId) === key) t += num(m.qty); return t; };
+  return sum(nowMoves) - sum(thenMoves);
+}
