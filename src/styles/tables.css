@@ -49,3 +49,22 @@ td.num .health-bar { margin-left: auto; }
 .cell-editable { cursor: text; border-bottom: 1px dashed var(--border-strong); }
 .cell-editable:hover, .cell-editable:focus-visible { border-bottom-color: var(--primary); }
 td.tick input[type=checkbox], th.tick input[type=checkbox] { min-height: 0; height: 16px; width: 16px; margin: 0; padding: 0; }
+
+/* The shared table (2026-11-26): every heading moves like Add Stock's (drag, or ← →) and is resized by dragging its
+   right edge (src/tablekit.jsx, ColTh). On phones the headings are hidden and rows are cards, so neither shows. */
+th.col-move { position: relative; }
+th.col-move .col-resize { position: absolute; top: 0; right: -4px; width: 9px; height: 100%; cursor: col-resize; z-index: 3; touch-action: none; }
+th.col-move .col-resize::after { content: ''; position: absolute; top: 25%; bottom: 25%; left: 4px; width: 1px; background: var(--border-strong); opacity: 0; transition: opacity .15s; }
+th.col-move:hover .col-resize::after, th.col-move .col-resize:focus-visible::after, body.col-resizing th.col-move .col-resize::after { opacity: 1; }
+th.col-move .col-resize:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; border-radius: 3px; }
+body.col-resizing, body.col-resizing * { cursor: col-resize !important; user-select: none !important; }
+th.col-sized { overflow: hidden; }
+th.col-sized .col-head { max-width: 100%; overflow: hidden; }
+th.col-move[draggable=false] { cursor: default; }
+@media (hover: none) { th.col-move .col-resize { display: none; } }
+/* the grip and the ← → arrows sit over the heading's edges (shown on hover), so they never make a column wider or
+   squeeze its neighbours (Add Stock's line table keeps them inline) */
+table:not(.stock-lines) th.col-move .col-grip { position: absolute; left: 1px; top: 50%; transform: translateY(-50%); opacity: 0; transition: opacity .15s; }
+table:not(.stock-lines) th.col-move .col-arrows { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); background: var(--surface); border-radius: 6px; box-shadow: 0 1px 4px rgba(15, 23, 42, .18); z-index: 4; }
+table:not(.stock-lines) th.col-move:hover .col-grip { opacity: .5; }
+@media (hover: none) { table:not(.stock-lines) th.col-move .col-arrows { display: none; } }

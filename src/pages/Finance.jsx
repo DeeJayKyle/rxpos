@@ -38,11 +38,11 @@ export function Expenses() {
       ]}
       columns={[
         { label: 'Date', key: 'date', render: (r) => showDate(r.date) },
-        { label: 'Category', render: (e) => db.expenseCategories.find((c) => c.id === e.categoryId)?.name },
+        { label: 'Category', sortBy: (e) => db.expenseCategories.find((c) => c.id === e.categoryId)?.name, render: (e) => db.expenseCategories.find((c) => c.id === e.categoryId)?.name },
         { label: 'Description', key: 'description' },
         { label: 'Paid to', key: 'payee' },
-        { label: 'From', render: (e) => db.banks.find((b) => b.id === e.bankId)?.name },
-        { label: 'Amount', num: true, render: (e) => fmt(e.amount) },
+        { label: 'From', sortBy: (e) => db.banks.find((b) => b.id === e.bankId)?.name, render: (e) => db.banks.find((b) => b.id === e.bankId)?.name },
+        { label: 'Amount', num: true, sortBy: (e) => Number(e.amount) || 0, render: (e) => fmt(e.amount) },
       ]}
     />
   );
@@ -54,7 +54,7 @@ export function ExpenseCategories() {
     <CrudPage
       title="Expense Categories" singular="Category" table="expenseCategories"
       fields={[{ key: 'name', label: 'Name', required: true }]}
-      columns={[{ label: 'Name', key: 'name' }, { label: 'Total spent', num: true, render: (c) => fmt(db.expenses.filter((e) => e.categoryId === c.id).reduce((a, e) => a + e.amount, 0)) }]}
+      columns={[{ label: 'Name', key: 'name' }, { label: 'Total spent', num: true, sortBy: (c) => db.expenses.filter((e) => e.categoryId === c.id).reduce((a, e) => a + e.amount, 0), render: (c) => fmt(db.expenses.filter((e) => e.categoryId === c.id).reduce((a, e) => a + e.amount, 0)) }]}
     />
   );
 }
@@ -74,7 +74,7 @@ export function Banks() {
       ]}
       columns={[
         { label: 'Account', key: 'name' }, { label: 'Number', key: 'account' }, { label: 'Branch', key: 'branch' },
-        { label: 'Balance', num: true, render: (b) => <strong className={bal[b.id] < 0 ? 'text-danger' : ''}>{fmt(bal[b.id])}</strong> },
+        { label: 'Balance', num: true, sortBy: (b) => bal[b.id] || 0, render: (b) => <strong className={bal[b.id] < 0 ? 'text-danger' : ''}>{fmt(bal[b.id])}</strong> },
       ]}
     />
   );
@@ -100,10 +100,10 @@ export function BankTx() {
       ]}
       columns={[
         { label: 'Date', key: 'date', render: (r) => showDate(r.date) },
-        { label: 'Type', render: (t) => <span className={'badge ' + (t.type === 'Deposit' ? 'ok' : t.type === 'Withdrawal' ? 'warn' : '')}>{t.type}</span> },
+        { label: 'Type', sortBy: (t) => t.type, render: (t) => <span className={'badge ' + (t.type === 'Deposit' ? 'ok' : t.type === 'Withdrawal' ? 'warn' : '')}>{t.type}</span> },
         { label: 'Account', render: (t) => (t.type === 'Transfer' ? `${name(t.fromId)} → ${name(t.toId)}` : t.type === 'Deposit' ? `Cash → ${name(t.bankId)}` : `${name(t.bankId)} → Cash`) },
         { label: 'Reference', key: 'ref' },
-        { label: 'Amount', num: true, render: (t) => fmt(t.amount) },
+        { label: 'Amount', num: true, sortBy: (t) => Number(t.amount) || 0, render: (t) => fmt(t.amount) },
       ]}
     />
   );
@@ -196,10 +196,10 @@ export function Loans() {
         ]}
         columns={[
           { label: 'Lender', key: 'lender' }, { label: 'Date', key: 'date', render: (r) => showDate(r.date) }, { label: 'Due', key: 'dueDate', render: (r) => showDate(r.dueDate) },
-          { label: 'Amount', num: true, render: (l) => fmt(l.amount) },
-          { label: 'Total due', num: true, render: (l) => fmt(loanBalance(db, l).total) },
-          { label: 'Repaid', num: true, render: (l) => fmt(loanBalance(db, l).repaid) },
-          { label: 'Balance', num: true, render: (l) => <strong>{fmt(loanBalance(db, l).balance)}</strong> },
+          { label: 'Amount', num: true, sortBy: (l) => Number(l.amount) || 0, render: (l) => fmt(l.amount) },
+          { label: 'Total due', num: true, sortBy: (l) => loanBalance(db, l).total, render: (l) => fmt(loanBalance(db, l).total) },
+          { label: 'Repaid', num: true, sortBy: (l) => loanBalance(db, l).repaid, render: (l) => fmt(loanBalance(db, l).repaid) },
+          { label: 'Balance', num: true, sortBy: (l) => loanBalance(db, l).balance, render: (l) => <strong>{fmt(loanBalance(db, l).balance)}</strong> },
         ]}
         extraActions={(l) => loanBalance(db, l).balance > 0 && <button className="btn sm primary" onClick={() => setPay(l)}>Repay</button>}
       />

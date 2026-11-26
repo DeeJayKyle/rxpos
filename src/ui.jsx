@@ -7,11 +7,11 @@ import { pagePdf, receiptPdf } from './pdf.js';
 import { useStore, uid, downloadFile, toCSV, del as del1 } from './store.jsx';
 import { useListControls, useContextMenu } from './listcontrols.jsx';
 import { keyOf, showKey } from './keymap.js';
-import { deviceSettings } from './device.js';
+import { deviceSettings, setDevice } from './device.js';
 import { useSheetDrag } from './sheet.js';
 import { ask, toast } from './feedback.jsx';
 import { useFocusTrap } from './focustrap.js';
-import { useLoadMore, useColumns, BulkBar, useSwipe, useWide, DetailsPane } from './tablekit.jsx';
+import { useLoadMore, useColumns, ColTh, BulkBar, useSwipe, useWide, DetailsPane } from './tablekit.jsx';
 import { MoneyInput, PhoneInput, checkField, PhotoField } from './forms.jsx';
 import { lastChangeOf, ago } from './auditText.js';
 import { DateInput } from './fields.jsx';
@@ -189,8 +189,12 @@ export function CrudPage({ title, subtitle, singular, table, fields, columns, bl
   const all = rowsProp || db[table];
   const ql = q.toLowerCase();
   const rows = useMemo(() => all.filter((r) => (!filter || filter(r)) && (!q || JSON.stringify(r).toLowerCase().includes(ql))), [all, filter, q, ql]);
+  // the shared table (2026-11-26): click a heading to sort by it (a column with a key, or its own sortBy(row)); kept on
+  // this device; nothing is sorted until a heading is clicked, so each list keeps its own order
+  const sortKeys = useMemo(() => Object.fromEntries(columns.map((c) => [c.label, c.sortBy || (c.key ? (r) => r[c.key] : null)]).filter(([, f]) => f)), [columns]);
+  const sorted = useSort(rows, sortKeys, null, 1, 'crud:' + table);
   // UI batch 3: 100 rows then more as the list scrolls (C7)
-  const more = useLoadMore(rows, { resetKey: q });
+  const more = useLoadMore(sorted.rows, { resetKey: q + '|' + sorted.by + '|' + sorted.dir });
   const shown = more.rows;
   const name = singular || title.replace(/s$/, '');
   const startNew = () => !readOnly && setEditing({ ...blank, id: uid(), _new: true });
@@ -258,7 +262,7 @@ export function CrudPage({ title, subtitle, singular, table, fields, columns, bl
       {shownView === 'table' && <div className={'list-and-details' + (sideDetails && wide && editing && !editing._new ? ' with-details' : '')}><div className="card table-wrap">
         <table className="phone-rows">
           <thead>
-            <tr><th className="tick"><input {...lc.allProps} /></th>{cols.map((c) => <th key={c.label} className={c.num ? 'num' : ''}>{c.label}{c.num && cur && shown.some((r) => isMoney(c.render ? c.render(r) : r[c.key], cur)) && <small className="th-cur"> ({cur})</small>}</th>)}<th /></tr>
+            <tr><th className="tick"><input {...lc.allProps} /></th>{cols.map((c) => <ColTh key={c.label} cols={colsK} id={c.label} sort={sorted} k={sortKeys[c.label] ? c.label : undefined} className={c.num ? 'num' : ''}>{c.label}{c.num && cur && shown.some((r) => isMoney(c.render ? c.render(r) : r[c.key], cur)) && <small className="th-cur"> ({cur})</small>}</ColTh>)}<th /></tr>
           </thead>
           <tbody>
             {shown.map((r, i) => {
@@ -655,13 +659,27 @@ export function Pager({ p, sizes = [25, 50, 100] }) {
   );
 }
 
-/** Click-to-sort column headers: const s = useSort(rows, { date: (r) => r.date }, 'date'); <SortTh s={s} k="date">Date</SortTh> */
-export function useSort(rows, keys, initial, dir = -1) {
-  const [by, setBy] = useState(initial);
-  const [d, setD] = useState(dir);
+/** Click-to-sort column headers: const s = useSort(rows, { date: (r) => r.date }, 'date'); <SortTh s={s} k="date">Date</SortTh>
+ *  saveKey: the sort is kept on this device for that list (the shared table, 2026-11-26) */
+const SORT_TEXT = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+export const sortCompare = (x, y) => {
+  if (x == null || x === '') return y == null || y === '' ? 0 : 1; // blanks last either way round
+  if (y == null || y === '') return -1;
+  if (typeof x === 'number' && typeof y === 'number') return x - y;
+  return SORT_TEXT.compare(String(x), String(y));
+};
+export function useSort(rows, keys, initial, dir = -1, saveKey) {
+  const kept = saveKey ? deviceSettings().sorts?.[saveKey] : null;
+  const [by, setBy] = useState(kept && (keys[kept.by] || kept.by === null) ? kept.by : initial);
+  const [d, setD] = useState(kept?.dir === 1 || kept?.dir === -1 ? kept.dir : dir);
+  const keep = (b, x) => { if (saveKey) setDevice({ sorts: { ...(deviceSettings().sorts || {}), [saveKey]: { by: b, dir: x } } }); };
   const get = keys[by];
-  const sorted = get ? [...rows].sort((a, b) => { const x = get(a), y = get(b); return (x < y ? -1 : x > y ? 1 : 0) * d; }) : rows;
-  return { rows: sorted, by, dir: d, sort: (k) => { if (k === by) setD(-d); else { setBy(k); setD(k === initial ? dir : 1); } } };
+  const sorted = useMemo(() => (get ? [...rows].sort((a, b) => {
+    const x = get(a), y = get(b);
+    if ((x == null || x === '') !== (y == null || y === '')) return sortCompare(x, y); // blanks stay last
+    return sortCompare(x, y) * d;
+  }) : rows), [rows, get, d]);
+  return { rows: sorted, by, dir: d, sort: (k) => { if (k === by) { setD(-d); keep(by, -d); } else { const nd = k === initial ? dir : 1; setBy(k); setD(nd); keep(k, nd); } } };
 }
 export function SortTh({ s, k, children, className = '' }) {
   const on = s.by === k;

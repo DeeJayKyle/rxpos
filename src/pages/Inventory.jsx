@@ -162,16 +162,16 @@ export function MedicineList() {
       card={(p) => ({ title: p.name, sub: [p.generic, p.strength, p.form].filter(Boolean).join(' · '), value: fmt(p.price), art: <ProductArt p={p} size={56} />,
         chips: [[`${formatQty(p.stock)} in stock`, p.stock <= 0 ? 'danger' : p.stock <= (p.reorder || 0) ? 'warn' : 'ok'], p.rx && ['Rx'], p.controlled && ['CD', 'danger'], p.shelf && ['Shelf ' + p.shelf]].filter(Boolean) })}
       columns={[
-        { label: 'Medicine', render: (p) => <><strong {...peek.bind(p)}>{p.name}</strong> {p.rx && <span className="badge">Rx</span>}{p.chronic && <span className="badge ok">Chronic</span>}{p.controlled && <span className="badge danger">CD</span>}<br /><small className="muted">{[p.generic, p.barcode].filter(Boolean).join(' · ')}</small>
+        { label: 'Medicine', sortBy: (p) => p.name, render: (p) => <><strong {...peek.bind(p)}>{p.name}</strong> {p.rx && <span className="badge">Rx</span>}{p.chronic && <span className="badge ok">Chronic</span>}{p.controlled && <span className="badge danger">CD</span>}<br /><small className="muted">{[p.generic, p.barcode].filter(Boolean).join(' · ')}</small>
           {review && <span className="status-tags">{recordIssues(p, dupBarcodes).map((x) => <span key={x} className="status warn"><i aria-hidden="true" />{x}</span>)}</span>}</> },
-        { label: 'Strength', empty: (p) => !p.strength, render: (p) => p.strength || <span className="muted">—</span> },
+        { label: 'Strength', sortBy: (p) => p.strength, empty: (p) => !p.strength, render: (p) => p.strength || <span className="muted">—</span> },
         { label: 'Formulation', key: 'form' },
-        { label: 'Category / class', empty: (p) => !p.category, render: (p) => p.category || <span className="muted">—</span> },
-        { label: 'Sold as', render: (p) => <>{p.unit || <span className="muted">—</span>}{p.loose === false && <small className="muted"> (not loose)</small>}{p.packs?.filter((k) => k.name && Number(k.size) > 1).map((k) => <small key={k.name} className="muted nowrap"><br />1 {k.name.toLowerCase()} = {k.size}</small>)}</> },
-        { label: 'Cost', num: true, render: (p) => fmt(p.cost) },
-        { label: 'Wholesale', num: true, empty: (p) => !Number(p.wholesale), render: (p) => fmt(p.wholesale) },
-        { label: 'Retail', num: true, render: (p) => fmt(p.price) },
-        { label: 'Stock', num: true, render: (p) => <span className={p.stock <= 0 ? 'badge danger' : p.stock <= (p.reorder || 0) ? 'badge warn' : ''}>{formatQty(p.stock)}</span> },
+        { label: 'Category / class', sortBy: (p) => p.category, empty: (p) => !p.category, render: (p) => p.category || <span className="muted">—</span> },
+        { label: 'Sold as', sortBy: (p) => p.unit, render: (p) => <>{p.unit || <span className="muted">—</span>}{p.loose === false && <small className="muted"> (not loose)</small>}{p.packs?.filter((k) => k.name && Number(k.size) > 1).map((k) => <small key={k.name} className="muted nowrap"><br />1 {k.name.toLowerCase()} = {k.size}</small>)}</> },
+        { label: 'Cost', num: true, sortBy: (p) => Number(p.cost) || 0, render: (p) => fmt(p.cost) },
+        { label: 'Wholesale', num: true, sortBy: (p) => Number(p.wholesale) || 0, empty: (p) => !Number(p.wholesale), render: (p) => fmt(p.wholesale) },
+        { label: 'Retail', num: true, sortBy: (p) => Number(p.price) || 0, render: (p) => fmt(p.price) },
+        { label: 'Stock', num: true, sortBy: (p) => Number(p.stock) || 0, render: (p) => <span className={p.stock <= 0 ? 'badge danger' : p.stock <= (p.reorder || 0) ? 'badge warn' : ''}>{formatQty(p.stock)}</span> },
       ]}
     />
     {peek.node}
@@ -186,7 +186,7 @@ export function Formulations() {
     <CrudPage
       title="Formulations" singular="Formulation" table="formulations"
       fields={[{ key: 'name', label: 'Name', required: true }, { key: 'description', label: 'Description', full: true }]}
-      columns={[{ label: 'Name', key: 'name' }, { label: 'Description', key: 'description' }, { label: 'Medicines', num: true, render: (f) => count[f.name] || 0 }]}
+      columns={[{ label: 'Name', key: 'name' }, { label: 'Description', key: 'description' }, { label: 'Medicines', num: true, sortBy: (f) => count[f.name] || 0, render: (f) => count[f.name] || 0 }]}
     />
   );
 }
