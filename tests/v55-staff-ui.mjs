@@ -70,7 +70,7 @@ check('…and the bottom bar has only their pages', tabsDee.join() === 'Home,Sto
 await go(dee, '#/medicines');
 const med = await buttons(dee);
 check('a dispenser sees the medicine list', await dee.evaluate(() => /Sample Tabs/.test(document.querySelector('.page')?.innerText || '')));
-check('…without Add / Edit / Packs (needs medicines.manage)', !med.some((x) => /^Add medicine|^Edit$|^Packs/.test(x)), med.filter((x) => /Add|Edit|Packs/.test(x)).join(','));
+check('…without Add / Edit / Selling units (needs medicines.manage)', !med.some((x) => /^Add medicine|^Edit$|^Selling units/.test(x)), med.filter((x) => /Add|Edit|Selling units/.test(x)).join(','));
 await go(dee, '#/expiry');
 await dee.evaluate(() => [...document.querySelectorAll('.filter-chips button')].find((x) => /^Expired/.test(x.textContent.trim()))?.click()); await wait(500);
 check('a dispenser sees the expired batch', await dee.evaluate(() => /OLD/.test(document.querySelector('.page')?.innerText || '')));
