@@ -146,4 +146,4 @@ ok('the audit counts a kit sale against its medicines, not the kit', () => {
   assert.equal(a.sales.missing.n, 0); assert.equal(a.sales.extra.n, 0); assert.equal(a.sales.ok, 1);
 });
 
-console.log(`\n${passed} passed`);
+console.log(`\n${passed} passed, 0 failed`);

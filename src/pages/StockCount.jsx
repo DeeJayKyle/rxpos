@@ -284,7 +284,7 @@ function CountSheet({ count, onBack }) {
     for (const l of it?.lines || []) if (!lines.some((x) => x.batchId && x.batchId === l.batchId)) lines.push(l);
     saveItem(p, lines);
     const unit = String(p.unit || 'unit').toLowerCase();
-    return `${p.name}: +${k ? `1 ${k.name} (${step} ${unit}s)` : `1 ${unit}`} · ${lines[0].qty} counted (batch ${lines[0].batch})`;
+    return `${p.name}: ${lines[0].qty} counted (batch ${lines[0].batch}), +${k ? `1 ${k.name} of ${step} ${unit}s` : `1 ${unit}`}`;
   };
   const onCameraCode = (code) => {
     const p = products.find((x) => x.barcode && x.barcode === code);
