@@ -111,4 +111,4 @@ server.close();
 assert.deepEqual(got, [...bytes]); passed++; console.log('PASS  network printer: every byte arrives, the drawer kick first');
 await assert.rejects(sendNetwork('127.0.0.1', 1, Buffer.from([1])), /refused|reach/); passed++; console.log('PASS  network printer off: a message a cashier can act on');
 
-console.log(`\n${passed} passed`);
+console.log(`\n${passed} passed, 0 failed`);
