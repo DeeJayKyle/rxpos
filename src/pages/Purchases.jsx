@@ -1034,7 +1034,7 @@ function PurchaseEditor({ purchase, onClose }) {
                   {!i.removed && i.orig == null && <small className="muted">added on this edit</small>}</td>
                 <td data-label="Batch" className="col-batch"><input value={i.batch || ''} disabled={i.removed} onChange={(e) => setItem(i.key, { batch: e.target.value })} aria-label="Batch" /></td>
                 <td data-label="Expiry" className="col-expiry"><DateInput value={i.expiry || ''} monthYear disabled={i.removed} onChange={(v) => setItem(i.key, { expiry: v })} aria-label="Expiry" /></td>
-                <td data-label="Qty" className="col-qty"><input type="number" min="0" value={i.qty} disabled={i.removed} onChange={(e) => setItem(i.key, { qty: e.target.value })} aria-label={`Quantity in ${unitOf(i)}s`} />
+                <td data-label="Qty" className="col-qty"><input type="number" min="0" value={i.qty} disabled={i.removed} onChange={(e) => setItem(i.key, { qty: e.target.value })} aria-label="Quantity" />
                   {/* stock audit: the quantity is in single units (tablets), not the boxes on the invoice */}
                   {!i.removed && <small className="muted qty-unit">{unitOf(i)}s{packText(products.find((x) => x.id === i.productId), i.qty) ? ` = ${packText(products.find((x) => x.id === i.productId), i.qty)}` : ''}</small>}</td>
                 <td data-label="Unit cost" className="num col-cost">{/* worked out from the line total (total ÷ quantity): not typed, as in Add Stock */}

@@ -649,7 +649,7 @@ function InventoryEditor({ product, onClose }) {
                 <td><input value={r.newBatch} disabled={r.legacy} onChange={(e) => setRow(k, { newBatch: e.target.value })} /></td>
                 <td><DateInput monthYear value={r.newExpiry} disabled={r.legacy} onChange={(v) => setRow(k, { newExpiry: v })} /></td>
                 <td className="num">{formatQty(qtyNow(r))} <small className="muted">{unitName}s</small></td>
-                <td><input type="number" min="0" aria-label={`Actual qty in ${unitName}s`} value={r.newQty} onChange={(e) => setRow(k, { newQty: e.target.value, touched: true })} />
+                <td><input type="number" min="0" aria-label="Actual qty" value={r.newQty} onChange={(e) => setRow(k, { newQty: e.target.value, touched: true })} />
                   {(() => {
                     // stock is in single units: catch a figure typed in boxes, and say what a figure is in packs
                     const slip = r.touched && packSlip(product, r.newQty, qtyNow(r)), txt = packText(product, r.newQty);
