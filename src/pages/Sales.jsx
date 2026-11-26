@@ -281,11 +281,14 @@ export default function Sales() {
     if (picks) return doReturn(sale, why, approvedBy, picks);
     // the sale as it is now (another device, or a second click, may have refunded or edited it since this list was
     // drawn): refunded once only, and what goes back to stock is what the sale holds now
-    let already = false;
+    let already = false, partly = false;
     try {
       await update((d) => {
         const cur = d.sales.find((x) => x.id === sale.id);
         if (!cur || cur.status === 'refunded') { already = true; return; }
+        // stock audit (26 Nov 2026): part of it was returned since this was opened (on another device, say). Refunding the
+        // whole sale now would put the returned stock back a second time: return what is left instead.
+        if (returnsOf(cur, d.sales).length) { partly = true; return; }
         put(d, 'sales', { ...cur, status: 'refunded', refundedBy: user.name, refundedAt: now(), ...(why ? { refundReason: String(why).slice(0, 240) } : {}), ...(approvedBy ? { refundApprovedBy: approvedBy } : {}) });
         for (const i of cur.items) {
           // a kit line returns each of its medicines to the batches they came from (src/kits.js)
@@ -297,6 +300,7 @@ export default function Sales() {
     } catch (e) { return toast(`${sale.number} was NOT refunded: ${e.message}`, 'error'); }
     setView(null); setRefunding(null);
     if (already) return toast(`${sale.number} was already refunded; nothing was changed`, 'warn');
+    if (partly) return toast(`Part of ${sale.number} was returned in the meantime; nothing was changed. Open it again to return what is left.`, 'warn');
     toast(`${sale.number} refunded and items returned to stock`);
   };
 
@@ -451,7 +455,9 @@ function SaleEditor({ sale, onClose }) {
     let stale = false;
     try { await update((d) => {
       const cur = d.sales.find((x) => x.id === sale.id);
-      if (!cur || cur.status === 'refunded' || (cur.updatedAt || '') !== (sale.updatedAt || '')) { stale = true; return; }
+      // a part returned since (a return is a record of its own: the sale's updatedAt doesn't change) is stale too, or the
+      // stock it gave back would be given back again when a line is reduced (stock audit, 26 Nov 2026)
+      if (!cur || cur.status === 'refunded' || (cur.updatedAt || '') !== (sale.updatedAt || '') || returnsOf(cur, d.sales).length) { stale = true; return; }
       const old = new Map(sale.items.map((i) => [i.id, i]));
       const items = [];
       for (const it of f.items) {

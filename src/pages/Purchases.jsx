@@ -8,6 +8,7 @@ import { Pencil, Trash2, ScanText, Camera, FileUp, Loader2, AlertTriangle, Check
 import { DateInput, MedicinePicker, useDateFormat } from '../fields.jsx';
 import { DATE_FORMATS } from '../dateformat.js';
 import { mainPack, packsOf, receiveInPacks } from '../packs.js';
+import { packText, repack } from '../stockcount.js';
 import { deviceSettings, setDevice } from '../device.js';
 import { isWeb } from '../platform.js';
 import { useStore, useSyncState, uid, today, now, put, del, move, addBatch, audit, downloadFile, toCSV, markupPrice, daysUntil, supplierPrices, MAIN_BRANCH } from '../store.jsx';
@@ -914,6 +915,7 @@ function PurchaseEditor({ purchase, onClose }) {
   const [f, setF] = useState(() => ({ supplierId: purchase.supplierId || '', invoice: purchase.invoice || '', notes: purchase.notes || '', date: purchase.date, paid: purchase.paid ?? purchase.total, reason: '',
     items: purchase.items.map((i, n) => ({ ...i, key: uid(), hue: n % 8, orig: n, total: numOrBlank((Number(i.qty) || 0) * (Number(i.cost) || 0)), by: 'unit' })) }));
   const live = f.items.filter((i) => !i.removed);
+  const unitOf = (i) => String(products.find((x) => x.id === i.productId)?.unit || 'unit').toLowerCase();
   /** the line's cost: total ÷ quantity once a total was typed (unrounded, so quantity × cost = the invoice total) */
   const costOf = (i) => (i.by === 'total' && i.total !== '' && Number(i.qty) > 0 ? Number(i.total) / Number(i.qty) : Number(i.cost) || 0);
   const totalOf = (i) => (i.by === 'total' && i.total !== '' ? Number(i.total) || 0 : (Number(i.qty) || 0) * (Number(i.cost) || 0));
@@ -941,7 +943,7 @@ function PurchaseEditor({ purchase, onClose }) {
     const out = !i || i.removed || !(Number(i.qty) > 0) || i.productId !== o.productId;
     return { o, i, out };
   });
-  const save = (e) => {
+  const save = async (e) => {
     e.preventDefault();
     const badDate = e.currentTarget.querySelector('.date-input.bad input[type=text]');
     if (badDate) { badDate.focus(); return toast(`${badDate.getAttribute('aria-label') || 'A date'}: ${badDate.title}. Fix the box marked in red.`, 'error'); }
@@ -962,7 +964,12 @@ function PurchaseEditor({ purchase, onClose }) {
       if (need > 0 && need > have) return toast(`${o.name}: only ${have} of batch ${o.batch} left (some was already sold), so it can't be ${out ? 'removed' : 'reduced by more than ' + have}.`, 'error');
     }
     const supplier = db.suppliers.find((x) => x.id === f.supplierId);
-    update((d) => {
+    // stock audit (26 Nov 2026): the stock moves below are worked out from the delivery as it was opened. Saved twice (a
+    // second press) or edited on another device since, they were applied twice; now nothing is saved and it is reopened.
+    let stale = false;
+    try { await update((d) => {
+      const cur = d.purchases.find((x) => x.id === purchase.id);
+      if (!cur || (cur.updatedAt || '') !== (purchase.updatedAt || '')) { stale = true; return; }
       const items = [];
       const mv = (productId, qty, batchId, note) => move(d, { productId, qty, type: 'Purchase edit', ref: purchase.number, ...(note ? { note } : {}), user: user.name, batchId, branchId: br });
       for (const { o, i, out } of plan()) {
@@ -980,7 +987,7 @@ function PurchaseEditor({ purchase, onClose }) {
         }
         if (batchId && cost !== o.cost) { const b = d.batches.find((x) => x.id === batchId); if (b) put(d, 'batches', { ...b, cost }); }
         const { key, orig, removed, hue: _h, total: _t, by: _b, ...rest } = i;
-        items.push({ ...rest, qty, cost, batchId });
+        items.push(repack({ ...rest, qty, cost, batchId }, qty)); // "received as 5 Boxes" follows the new quantity
       }
       // lines added on this edit (or a line whose medicine was corrected): new stock into their batch
       for (const i of added) {
@@ -1000,7 +1007,8 @@ function PurchaseEditor({ purchase, onClose }) {
       if (addedN) changes.push(`${addedN} added`);
       if (swapped) changes.push(`${swapped} medicine${swapped > 1 ? 's' : ''} corrected`);
       audit(d, user, 'Purchase edited', `${purchase.number}: ${fmt(purchase.total)} → ${fmt(newTotal)}${changes.length ? ', ' + changes.join(', ') : ''} (${f.reason.trim()})`, br);
-    });
+    }); } catch (err) { return toast(`${purchase.number} was NOT changed: ${err.message}`, 'error'); }
+    if (stale) { onClose(); return toast(`${purchase.number} was changed since it was opened; nothing was saved. Open it again to edit it.`, 'warn'); }
     toast(`${purchase.number} updated; stock adjusted`);
     onClose();
   };
@@ -1026,7 +1034,9 @@ function PurchaseEditor({ purchase, onClose }) {
                   {!i.removed && i.orig == null && <small className="muted">added on this edit</small>}</td>
                 <td data-label="Batch" className="col-batch"><input value={i.batch || ''} disabled={i.removed} onChange={(e) => setItem(i.key, { batch: e.target.value })} aria-label="Batch" /></td>
                 <td data-label="Expiry" className="col-expiry"><DateInput value={i.expiry || ''} monthYear disabled={i.removed} onChange={(v) => setItem(i.key, { expiry: v })} aria-label="Expiry" /></td>
-                <td data-label="Qty" className="col-qty"><input type="number" min="0" value={i.qty} disabled={i.removed} onChange={(e) => setItem(i.key, { qty: e.target.value })} aria-label="Quantity" /></td>
+                <td data-label="Qty" className="col-qty"><input type="number" min="0" value={i.qty} disabled={i.removed} onChange={(e) => setItem(i.key, { qty: e.target.value })} aria-label="Quantity" />
+                  {/* stock audit: the quantity is in single units (tablets), not the boxes on the invoice */}
+                  {!i.removed && <small className="muted qty-unit">{unitOf(i)}s{packText(products.find((x) => x.id === i.productId), i.qty) ? ` = ${packText(products.find((x) => x.id === i.productId), i.qty)}` : ''}</small>}</td>
                 <td data-label="Unit cost" className="num col-cost">{/* worked out from the line total (total ÷ quantity): not typed, as in Add Stock */}
                   {i.removed ? <span className="muted">removed</span> : <output className="unit-cost num" aria-label="Unit cost" title="Line total ÷ quantity">{costOf(i) > 0 ? fmt(costOf(i)) : '—'}</output>}</td>
                 <td data-label="Line total" className="col-total"><input type="number" min="0" step="any" inputMode="decimal" placeholder="Total amount" className={i.by === 'total' ? 'typed' : ''} value={i.total} disabled={i.removed} onChange={(e) => setItem(i.key, { total: e.target.value })} aria-label="Line total" /></td>

@@ -8,6 +8,8 @@ import { useMedicineOrder, MedicineOrderPicker, groupedRows, useFolded } from '.
 import { ChevronDown } from 'lucide-react';
 import { showDate, showDateTime, dateLocale } from '../showdate.js';
 import { DateInput } from '../fields.jsx';
+import { countDiff, lotKey, CORRECTIONS, packSlip, packText, scanStep } from '../stockcount.js';
+import { mainPack } from '../packs.js';
 
 /*
  * Stock take: count what is physically on the shelves and make RxPOS match it.
@@ -16,6 +18,10 @@ import { DateInput } from '../fields.jsx';
  * counted, so several people can count different shelves at the same time on different devices without overwriting
  * each other. Each counted batch keeps the system quantity at the moment it was counted; posting books the difference
  * (counted − system then) as a "Stock count" movement. Sales made while the count is going on are therefore not lost.
+ * Stock audit (26 Nov 2026, src/stockcount.js): each counted batch also keeps WHEN it was counted (`at`), and the
+ * difference is worked out from the ledger as it is when shown and posted: counted + what really moved on that batch
+ * since − its stock now. A sale made on another till before the count but synced after it is no longer taken off
+ * twice, and a batch corrected by another count (or an inventory edit) in the meantime is not corrected twice.
  */
 
 const LEGACY = 'lb-'; // stock recorded before batches existed (see store.batchesOf)
@@ -25,19 +31,44 @@ const numOr = (v, d = 0) => (v === '' || v == null || !Number.isFinite(Number(v)
 /** System batches of a medicine at this branch that hold (or once held) stock, earliest expiry first */
 const systemBatches = (batchesOf, pid) => batchesOf(pid).filter((b) => b.qty !== 0);
 
-/** Differences of one counted medicine: [{ ...line, diff, value }] */
-function linesWithDiff(item, p) {
+/** Differences of one counted medicine: [{ ...line, diff, value }]; live (useLive) gives a timed line's stock now */
+function linesWithDiff(item, p, live) {
   return (item?.lines || []).map((l) => {
-    const diff = numOr(l.qty) - numOr(l.sys);
+    const diff = l.at && live ? countDiff(l, live(item.productId, l)) : numOr(l.qty) - numOr(l.sys);
     return { ...l, diff, value: diff * (numOr(l.cost) || p?.cost || 0) };
   });
 }
 
-function summarise(count, items, productById) {
+/**
+ * For counted lines with a time: { current, after } of their batch at this branch (src/stockcount.js countDiff). The
+ * real stock changes after the earliest counted time are grouped by batch once, so a full stock take stays quick.
+ */
+function useLive(items, open = true) {
+  const { db, stockIndex, branchId } = useStore();
+  return useMemo(() => {
+    if (!open) return null; // a posted count shows what was counted against the system then (its own posting is in stock now)
+    let first = null;
+    for (const it of items || []) for (const l of it.lines || []) if (l.at && (!first || l.at < first)) first = l.at;
+    const later = new Map();
+    if (first) for (const m of db.movements) {
+      if (String(m.date || '') <= first || CORRECTIONS.has(m.type)) continue;
+      const k = lotKey(m.branchId, m.productId, m.batchId);
+      (later.get(k) || later.set(k, []).get(k)).push(m);
+    }
+    return (productId, l) => {
+      if (!l.batchId) return { current: 0, after: 0 }; // a batch found on the shelf that RxPOS didn't have
+      const k = lotKey(branchId, productId, String(l.batchId).startsWith(LEGACY) ? null : l.batchId);
+      const after = (later.get(k) || []).reduce((a, m) => a + (String(m.date) > l.at ? Number(m.qty) || 0 : 0), 0);
+      return { current: stockIndex.batch.get(k) || 0, after };
+    };
+  }, [items, open, db.movements, stockIndex, branchId]);
+}
+
+function summarise(count, items, productById, live) {
   let counted = 0, matched = 0, short = 0, over = 0, shortValue = 0, overValue = 0;
   for (const it of items) {
     counted++;
-    const ls = linesWithDiff(it, productById.get(it.productId));
+    const ls = linesWithDiff(it, productById.get(it.productId), live);
     const d = ls.reduce((a, l) => a + l.diff, 0);
     const v = ls.reduce((a, l) => a + l.value, 0);
     if (ls.every((l) => l.diff === 0)) matched++;
@@ -197,15 +228,16 @@ function CountSheet({ count, onBack }) {
   const blind = count.blind && !reveal && !readOnly;
   const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
   const items = useMemo(() => db.countItems.filter((i) => i.countId === count.id), [db.countItems, count.id]);
+  const live = useLive(items, count.status === 'open');
   const itemBy = useMemo(() => new Map(items.map((i) => [i.productId, i])), [items]);
   const ids = useMemo(() => { const s = new Set(count.productIds || []); const extra = items.map((i) => i.productId).filter((id) => !s.has(id)); return [...(count.productIds || []), ...extra]; }, [count.productIds, items]);
   const all = useMemo(() => ids.map((id) => productById.get(id)).filter(Boolean), [ids, productById]);
   const shelves = useMemo(() => [...new Set(all.map((p) => (p.shelf || '').trim()).filter(Boolean))].sort(), [all]);
-  const hasDiff = (p) => linesWithDiff(itemBy.get(p.id), p).some((l) => l.diff !== 0);
+  const hasDiff = (p) => linesWithDiff(itemBy.get(p.id), p, live).some((l) => l.diff !== 0);
   const ql = q.trim().toLowerCase();
   const rows = all.filter((p) => (!shelf || (p.shelf || '').trim() === shelf) && (!ql || `${p.name} ${p.generic || ''} ${p.barcode || ''}`.toLowerCase().includes(ql)) &&
     (tab === 'all' || (tab === 'todo' ? !itemBy.has(p.id) : tab === 'done' ? itemBy.has(p.id) : itemBy.has(p.id) && hasDiff(p))));
-  const sum = useMemo(() => summarise(count, items, productById), [count, items, productById]);
+  const sum = useMemo(() => summarise(count, items, productById, live), [count, items, productById, live]);
   // step 26 (from the Flutter app): the sheet sorted and grouped by class, therapeutic area, form or shelf, per device
   const [order, setOrder] = useMedicineOrder();
   const [folded, toggleFold] = useFolded();
@@ -234,8 +266,11 @@ function CountSheet({ count, onBack }) {
     setTab('all'); setQ(code.barcode && code.barcode.toLowerCase() === ql ? code.name : q);
     setTimeout(() => { const el = document.querySelector(`[data-count-row="${code.id}"] [data-count-input]`); el?.focus(); el?.select?.(); el?.scrollIntoView({ block: 'center' }); }, 60);
   };
-  /** One more pack of this medicine, on its earliest-expiry batch (scan-to-count) */
+  /** One more pack of this medicine, on its earliest-expiry batch (scan-to-count). Stock is in single units (tablets),
+   *  so a scan adds the units of the medicine's largest pack (the box the barcode is on): it added ONE tablet per box
+   *  scanned before the stock audit of 26 Nov 2026, and posting such a count set 300 tablets to 3. */
   const tallyOne = (p) => {
+    const step = scanStep(p), k = step > 1 ? mainPack(p) : null;
     const bs = systemBatches(batchesOf, p.id);
     if (!bs.length) return `${p.name}: no batch recorded here. Add the batch you find on its card`;
     const it = itemBy.get(p.id);
@@ -243,11 +278,13 @@ function CountSheet({ count, onBack }) {
       const saved = it?.lines.find((l) => l.batchId === b.id);
       if (i > 0) return saved || { key: b.id, batchId: b.id, batch: b.batch, expiry: b.expiry || '', cost: b.cost || p.cost || 0, sys: b.qty, qty: b.qty, skipped: true };
       const counted = saved && !saved.skipped ? numOr(saved.qty) : 0;
-      return { key: b.id, batchId: b.id, batch: b.batch, expiry: b.expiry || '', cost: b.cost || p.cost || 0, sys: saved && !saved.skipped ? saved.sys : b.qty, qty: counted + 1 };
+      const kept = saved && !saved.skipped;
+      return { key: b.id, batchId: b.id, batch: b.batch, expiry: b.expiry || '', cost: b.cost || p.cost || 0, sys: kept ? saved.sys : b.qty, at: (kept && saved.at) || now(), qty: counted + step };
     });
     for (const l of it?.lines || []) if (!lines.some((x) => x.batchId && x.batchId === l.batchId)) lines.push(l);
     saveItem(p, lines);
-    return `${p.name}: ${lines[0].qty} counted (batch ${lines[0].batch})`;
+    const unit = String(p.unit || 'unit').toLowerCase();
+    return `${p.name}: ${lines[0].qty} counted (batch ${lines[0].batch}), +${k ? `1 ${k.name} of ${step} ${unit}s` : `1 ${unit}`}`;
   };
   const onCameraCode = (code) => {
     const p = products.find((x) => x.barcode && x.barcode === code);
@@ -272,7 +309,7 @@ function CountSheet({ count, onBack }) {
   const exportCsv = () => downloadFile(`${count.name.replace(/[^\w-]+/g, '-')}.csv`, toCSV(all.flatMap((p) => {
     const it = itemBy.get(p.id);
     if (!it) return [{ medicine: p.name, shelf: p.shelf || '', batch: '', expiry: '', ...(blindNow ? {} : { system: p.stock }), counted: '', ...(blindNow ? {} : { difference: '', value: '' }), countedBy: '' }];
-    return linesWithDiff(it, p).map((l) => ({ medicine: p.name, shelf: p.shelf || '', batch: l.batch, expiry: l.expiry, ...(blindNow ? {} : { system: l.sys }), counted: l.qty, ...(blindNow ? {} : { difference: l.diff, value: l.value }), countedBy: it.by }));
+    return linesWithDiff(it, p, live).map((l) => ({ medicine: p.name, shelf: p.shelf || '', batch: l.batch, expiry: l.expiry, ...(blindNow ? {} : { system: l.sys }), counted: l.qty, ...(blindNow ? {} : { difference: l.diff, value: l.value }), countedBy: it.by }));
   })), 'text/csv');
   const sheetData = () => [{ heading: `${count.name} – count sheet`, head: ['Medicine', 'Shelf', 'Batch', 'Expiry', ...(count.blind ? [] : ['System']), 'Counted'],
     body: all.flatMap((p) => { const bs = systemBatches(batchesOf, p.id); return (bs.length ? bs : [{ batch: '', expiry: '', qty: 0 }]).map((b, n) => [n ? '' : p.name, n ? '' : p.shelf || '', b.batch || '', b.expiry || '', ...(count.blind ? [] : [String(b.qty)]), '']); }) }];
@@ -329,7 +366,7 @@ function CountSheet({ count, onBack }) {
       <div className="count-list" ref={sheetRef}>
         {groupedRows(rows.slice(0, limit), order, folded).map((r) => (r.heading !== undefined
           ? <button key={'g:' + r.heading} type="button" className="count-group link-btn" aria-expanded={!r.folded} onClick={() => toggleFold(r.heading)}><ChevronDown size={14} style={{ transform: r.folded ? 'rotate(-90deg)' : '' }} /><strong>{r.heading}</strong> <span className="muted">({r.count})</span></button>
-          : <CountRow key={r.p.id} p={r.p} item={itemBy.get(r.p.id)} blind={blind} readOnly={readOnly} onSave={saveItem} focusNext={focusNext} />))}
+          : <CountRow key={r.p.id} p={r.p} item={itemBy.get(r.p.id)} blind={blind} readOnly={readOnly} onSave={saveItem} focusNext={focusNext} live={live} />))}
         {rows.length > limit && <button className="btn ghost block" onClick={() => setLimit((l) => l + 150)}>Show more ({rows.length - limit} left)</button>}
         {!rows.length && <div className="card"><Empty>{tab === 'todo' && all.length ? 'Everything here is counted 🎉 Review & post when ready.' : ql ? 'Nothing matches. Scan or type another name.' : 'Nothing here'}</Empty></div>}
       </div>
@@ -340,7 +377,7 @@ function CountSheet({ count, onBack }) {
 }
 
 /** One medicine on the count: a single box when it has one batch, a box per batch otherwise; extra batches can be added */
-function CountRow({ p, item, blind, readOnly, onSave, focusNext }) {
+function CountRow({ p, item, blind, readOnly, onSave, focusNext, live }) {
   const { batchesOf, db } = useStore();
   const sys = systemBatches(batchesOf, p.id);
   const warn = db.settings.expiryWarnDays || 90;
@@ -367,8 +404,11 @@ function CountRow({ p, item, blind, readOnly, onSave, focusNext }) {
       const skipped = l.typed === '';
       const qty = skipped ? l.sysNow : Math.max(0, Math.round(numOr(l.typed)));
       // a batch counted now records the system quantity now; one already counted with the same figure keeps what it had then
-      const sysAt = before && !before.skipped && !skipped && Number(before.qty) === qty ? before.sys : l.sysNow;
-      return { key: l.key, batchId: l.batchId || null, batch: l.batch, expiry: l.expiry, cost: l.cost, sys: sysAt, qty, ...(skipped ? { skipped: true } : {}), ...(l.found ? { found: true } : {}) };
+      const keep = before && !before.skipped && !skipped && Number(before.qty) === qty;
+      const sysAt = keep ? before.sys : l.sysNow;
+      // when it was counted (src/stockcount.js countDiff); a figure kept from an older count without a time keeps none
+      const at = keep ? before.at : skipped ? undefined : now();
+      return { key: l.key, batchId: l.batchId || null, batch: l.batch, expiry: l.expiry, cost: l.cost, sys: sysAt, qty, ...(at ? { at } : {}), ...(skipped ? { skipped: true } : {}), ...(l.found ? { found: true } : {}) };
     });
     onSave(p, [...out, ...extra]);
   };
@@ -378,14 +418,15 @@ function CountRow({ p, item, blind, readOnly, onSave, focusNext }) {
   const addFound = (e) => {
     e.preventDefault();
     if (!adding.expiry) return toast('Enter the expiry date on the pack', 'warn');
-    commit({}, [{ key: 'found-' + uid(), batchId: null, batch: adding.batch.trim(), expiry: adding.expiry, cost: p.cost || 0, sys: 0, qty: Math.max(0, Math.round(numOr(adding.qty))), found: true }]);
+    commit({}, [{ key: 'found-' + uid(), batchId: null, batch: adding.batch.trim(), expiry: adding.expiry, cost: p.cost || 0, sys: 0, at: now(), qty: Math.max(0, Math.round(numOr(adding.qty))), found: true }]);
     setAdding(null);
   };
 
   const counted = !!item;
-  const diffs = linesWithDiff(item, p);
+  const diffs = linesWithDiff(item, p, live);
   const diff = diffs.reduce((a, l) => a + l.diff, 0);
   const totalSys = lines.reduce((a, l) => a + l.sysNow, 0);
+  const unitName = String(p.unit || 'unit').toLowerCase();
   return (
     <div className={'card count-row' + (counted ? (diffs.some((l) => l.diff) && !blind ? ' off' : ' ok') : '')} data-count-row={p.id}>
       <div className="count-head">
@@ -409,10 +450,17 @@ function CountRow({ p, item, blind, readOnly, onSave, focusNext }) {
             {readOnly ? <strong className="num">{l.qty === '' ? '—' : l.qty}</strong> : (
               <div className="stepper">
                 <button type="button" aria-label="One less" onClick={() => step(l, -1)}><Minus size={16} /></button>
-                <input data-count-input type="number" inputMode="numeric" min="0" placeholder="Count" value={valOf(l)} onChange={(e) => setDraft((d) => ({ ...d, [l.key]: e.target.value }))} onBlur={() => (l.key in draft) && commit()} onKeyDown={onKey} aria-label={`Counted quantity of ${p.name} batch ${l.batch}`} />
+                <input data-count-input type="number" inputMode="numeric" min="0" placeholder={`Count (${unitName}s)`} value={valOf(l)} onChange={(e) => setDraft((d) => ({ ...d, [l.key]: e.target.value }))} onBlur={() => (l.key in draft) && commit()} onKeyDown={onKey} aria-label={`Counted quantity of ${p.name} batch ${l.batch}`} />
                 <button type="button" aria-label="One more" onClick={() => step(l, 1)}><Plus size={16} /></button>
               </div>
             )}
+            {!readOnly && (() => {
+              // stock is counted in single units: say what the figure is in packs, and catch a figure typed in packs
+              const v = valOf(l), slip = !blind && v !== '' && packSlip(p, v, l.sysNow), txt = v !== '' && packText(p, v);
+              if (slip) return <span className="small text-warn count-slip"><AlertTriangle size={12} /> Counted by the {slip.pack.name.toLowerCase()}? {v} × {slip.pack.size} = {slip.units} {unitName}s (stock is counted in {unitName}s).{' '}
+                <button type="button" className="link-btn small" onClick={() => { setDraft((d) => ({ ...d, [l.key]: String(slip.units) })); commit({ [l.key]: String(slip.units) }); }}>Use {slip.units}</button></span>;
+              return txt ? <small className="muted count-packs">= {txt}</small> : null;
+            })()}
           </div>
         ))}
         {!lines.length && !adding && <div className="small muted">No batch recorded here. If it is on the shelf, add the batch you find.</div>}
@@ -440,12 +488,15 @@ function CountRow({ p, item, blind, readOnly, onSave, focusNext }) {
 
 /** The differences, and posting them: stock becomes what was counted */
 function ReviewPost({ count, items, all, sum, onClose, onPosted }) {
-  const { products, batchesOf, update, user, branchId, fmt, can } = useStore();
+  const { products, batchesOf, update, user, branchId, fmt, can, syncNow } = useStore();
+  // the latest sales and deliveries from the other tills first, so the differences are worked out on all of them
+  useEffect(() => { if (navigator.onLine) Promise.resolve(syncNow?.()).catch(() => {}); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [zero, setZero] = useState(false);
   const [busy, setBusy] = useState(false);
   const ref = useRef(null);
   const byId = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
-  const diffRows = items.flatMap((it) => linesWithDiff(it, byId.get(it.productId)).filter((l) => l.diff !== 0).map((l) => ({ ...l, p: byId.get(it.productId), by: it.by })))
+  const live = useLive(items);
+  const diffRows = items.flatMap((it) => linesWithDiff(it, byId.get(it.productId), live).filter((l) => l.diff !== 0).map((l) => ({ ...l, p: byId.get(it.productId), by: it.by })))
     .filter((r) => r.p).sort((a, b) => a.value - b.value);
   const counted = new Set(items.map((i) => i.productId));
   const uncounted = all.filter((p) => !counted.has(p.id));
