@@ -25,7 +25,7 @@ import { searchProducts, searchKey } from '../search.js';
 import { Modal, SearchBox, ReceiptPdfButton, PageTip } from '../ui.jsx';
 import { MoneyInput, MedThumb } from '../forms.jsx';
 import { toast, ask, askText } from '../feedback.jsx';
-import { payRequest, payStatus, guessNetwork, cloudConfig, whatsappLink, sendSms } from '../cloud.js';
+import { payRequest, payStatus, payOpen, payLink, guessNetwork, cloudConfig, whatsappLink, sendSms } from '../cloud.js';
 import { Receipt, receiptText } from './Sales.jsx';
 import { CameraButton, CameraScanner } from '../camscan.jsx';
 import { deviceSettings, setDevice, onDevice } from '../device.js';
@@ -33,7 +33,7 @@ import { kitView, basketDemand, shortText, stockParts } from '../kits.js';
 import KitIcon from '../components/KitIcon.jsx';
 import { pharmacyLogo } from '../logo.jsx';
 import { BranchStockButton } from '../components/BranchStock.jsx';
-import { showDate } from '../showdate.js';
+import { showDate, showDateTime } from '../showdate.js';
 
 // Receipt numbers must be unique across synced devices, so they are time-based rather than sequential
 
@@ -163,6 +163,7 @@ export default function POS({ mode = 'retail' }) {
   // Payment methods come from Settings → Payment methods; their type decides the behaviour
   const methods = (db.settings.paymentMethods?.length ? db.settings.paymentMethods : DEFAULT_PAYMENT_METHODS).filter((m) => m.type !== 'momo' || features.momo !== false);
   const [payment, setPayment] = useState(methods[0]?.name || 'Cash');
+  const momoMethod = methods.find((m) => m.type === 'momo')?.name || '';
   const ptype = methods.find((m) => m.name === payment)?.type || 'other';
   const [tendered, setTendered] = useState('');
   // step 22: the insurer and scheme billed for this sale ('' = not insured) and the patient's member number
@@ -465,7 +466,7 @@ export default function POS({ mode = 'retail' }) {
   // ---- sales on hold: serve the next customer while one is still deciding, then switch back ----
   const snapshot = () => ({ id: uid(), at: now(), cart, customerId, discount, payment, tendered, insKey, memberNo });
   function loadSale(x) {
-    cdRef.current = null; rxRef.current = null; safetyRef.current = null;
+    cdRef.current = null; rxRef.current = null; safetyRef.current = null; recoverRef.current = null;
     // stock may have moved while the sale was on hold: each line's limit is today's stock
     setCart((x.cart || []).map((l) => { const p = catalog.find((y) => y.id === l.id); return p ? { ...l, max: p.stock, qty: Math.min(l.qty, Math.max(1, p.stock)) } : l; })); setCustomerId(x.customerId || 'walk-in'); setDiscount(x.discount || 0);
     setPayment(methods.some((m) => m.name === x.payment) ? x.payment : methods[0]?.name || 'Cash'); setTendered(x.tendered || ''); setPicked(new Set()); setCursor(-1);
@@ -635,6 +636,7 @@ export default function POS({ mode = 'retail' }) {
         creditOver = { ...over, reason };
       }
     }
+    if (ptype === 'momo' && due > 0 && !training && recoverRef.current) return recordRecovered(creditOver);
     if (ptype === 'momo' && due > 0 && !training) { // training never asks a real phone to pay
       const phone = normalizePhone(customer?.phone || '');
       if (syncCfg.url && navigator.onLine) cloudConfig(syncCfg).then(setPayCfg).catch(() => setPayCfg({}));
@@ -721,7 +723,82 @@ export default function POS({ mode = 'retail' }) {
     setSheet(false);
     clearSale();
     if (db.settings.autoPrint) setTimeout(() => window.print(), 350);
-    return true;
+    return sale; // saved (truthy): its id and number link a Mobile Money payment to it
+  };
+
+  // ---- 2026-11-26: Mobile Money received but not recorded (the till closed after the customer approved) ----
+  // The cloud keeps every request (worker/payments.js). Every 2 minutes the till asks for payments received with no
+  // sale: one this device already saved is linked to its sale; the rest are shown, and a person records the sale from
+  // the saved basket or marks the payment handled. One payment, one sale: the cloud refuses a second link.
+  const [unrec, setUnrec] = useState([]);
+  const [unrecOpen, setUnrecOpen] = useState(false);
+  const recoverRef = useRef(null); // the received payment the loaded basket is being recorded against
+  const linksKey = `rxpos-pay-links:${syncCfg.tenant || 'device'}`;
+  const queuedLinks = () => { try { return JSON.parse(localStorage.getItem(linksKey)) || []; } catch { return []; } };
+  const saveLinks = (list) => { try { localStorage.setItem(linksKey, JSON.stringify(list.slice(-50))); } catch { /* storage blocked */ } };
+  /** Tell the cloud which sale records a payment; kept on this device and sent again if the cloud can't be reached */
+  const linkPayment = (l) => payLink(syncCfg, l).catch((e) => {
+    if (e.status === 409) toast(`${e.message} Check Sales History for a second sale of the same payment.`, 'error');
+    else if (!e.status || e.status >= 500) saveLinks([...queuedLinks().filter((x) => x.ref !== l.ref), l]);
+  });
+  const salesNow = useRef(db.sales); salesNow.current = db.sales;
+  useEffect(() => {
+    if (!syncCfg.url || training || !momoMethod) return undefined;
+    let stop = false;
+    const run = async () => {
+      if (!navigator.onLine) return;
+      const queued = queuedLinks();
+      if (queued.length) {
+        const left = [];
+        for (const l of queued) await payLink(syncCfg, l).catch((e) => { if (!e.status || e.status >= 500) left.push(l); });
+        saveLinks(left);
+      }
+      let r;
+      try { r = await payOpen(syncCfg); } catch { return; } // offline, or a role that doesn't sell: nothing to show
+      const left = [];
+      for (const p of r.payments || []) {
+        const s = (salesNow.current || []).find((x) => x.momo?.ref === p.ref && x.momo?.provider === p.provider);
+        if (s) linkPayment({ provider: p.provider, ref: p.ref, saleId: s.id, saleNumber: s.number }); // recorded here, the link was lost
+        else left.push(p);
+      }
+      if (!stop) setUnrec(left);
+    };
+    run();
+    const t = setInterval(run, 120000);
+    return () => { stop = true; clearInterval(t); };
+  }, [syncCfg.url, syncCfg.key, training, momoMethod]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** Load a received payment's basket on the till; Charge then records it against that payment (no second request) */
+  const recoverPayment = (p) => {
+    if (cart.length) return toast('Finish or hold the sale on the till first.', 'warn');
+    if (!p.basket?.cart?.length) return toast('This payment has no saved basket. Ring up the sale, or mark the payment handled.', 'warn');
+    if ((p.basket.branchId && p.basket.branchId !== branchId) || (p.basket.mode && p.basket.mode !== mode)) toast(`This sale was rung up ${p.basket.mode && p.basket.mode !== mode ? `as ${p.basket.mode}` : 'at another branch'}. Check the basket before charging.`, 'warn');
+    loadSale({ ...p.basket, payment: momoMethod, tendered: '' });
+    recoverRef.current = { ...p, saleId: uid() };
+    setUnrecOpen(false);
+    toast(`Basket loaded for the ${fmt(p.amount)} payment. Check it, then Charge: the phone is not asked again.`, 'info');
+  };
+  const recordRecovered = async (creditOver) => {
+    const rec = recoverRef.current;
+    if (Math.round(due) !== Math.round(rec.amount)) return toast(`This sale comes to ${fmt(due)} but the payment received was ${fmt(rec.amount)}. Make the sale match the payment, or mark the payment handled instead.`, 'error');
+    // claim the payment for this sale first: if another till already recorded it, nothing is saved here
+    try { await payLink(syncCfg, { provider: rec.provider, ref: rec.ref, saleId: rec.saleId }); } catch (e) {
+      if (e.status === 409) { recoverRef.current = null; setUnrec((u) => u.filter((x) => x.ref !== rec.ref)); }
+      return toast(e.status ? e.message : `The cloud could not be reached to claim this payment: ${e.message}`, 'error');
+    }
+    const paid = { provider: rec.provider, phone: rec.phone, ref: rec.ref, txid: rec.txid || '', confirmed: true, recovered: true };
+    const saved = await finalize({ ...(creditOver ? { creditOver } : {}), id: rec.saleId, momo: paid });
+    if (!saved) return; // still claimed for this sale id: Charge again saves it
+    linkPayment({ provider: rec.provider, ref: rec.ref, saleId: saved.id, saleNumber: saved.number });
+    setUnrec((u) => u.filter((x) => x.ref !== rec.ref));
+    update((d) => audit(d, user, 'Mobile Money payment recorded later', `${saved.number}: ${rec.provider === 'airtel' ? 'Airtel Money' : 'MTN MoMo'} ${fmt(rec.amount)} from ${rec.phone}, paid ${showDateTime(rec.createdAt)}${rec.txid ? ', transaction ' + rec.txid : ''}`, branchId)).catch(() => {});
+  };
+  const handledElsewhere = async (p) => {
+    const note = await askText({ title: 'How was this payment handled?', message: `${fmt(p.amount)} from ${p.phone}. For example: refunded to the customer, or recorded by hand as sale R-…. This is kept with the payment and in the audit log.`, confirmText: 'Mark handled', minLength: 3 });
+    if (!note) return;
+    try { await payLink(syncCfg, { provider: p.provider, ref: p.ref, note }); } catch (e) { return toast(e.message, 'error'); }
+    setUnrec((u) => u.filter((x) => x.ref !== p.ref));
+    update((d) => audit(d, user, 'Mobile Money payment marked handled', `${p.provider === 'airtel' ? 'Airtel Money' : 'MTN MoMo'} ${fmt(p.amount)} from ${p.phone}${p.txid ? ', transaction ' + p.txid : ''}: ${note}`, branchId)).catch(() => {});
   };
 
   // Mobile Money: ask the customer's phone to approve the payment, then poll until approved/declined
@@ -733,7 +810,9 @@ export default function POS({ mode = 'retail' }) {
     const run = ++pollRef.current;
     try {
       const reference = 'PP' + Date.now().toString(36).toUpperCase();
-      const { ref } = await payRequest(syncCfg, { provider: momo.network, phone, amount: due, reference, note: `${db.settings.name} payment` });
+      // the basket goes with the request: if this till closes after the customer approves, the cloud still has the
+      // payment and any till of the pharmacy can record this sale from it (worker/payments.js)
+      const { ref } = await payRequest(syncCfg, { provider: momo.network, phone, amount: due, reference, note: `${db.settings.name} payment`, basket: { ...snapshot(), branchId, mode }, deviceId: syncCfg.deviceId });
       setMomo((m) => ({ ...m, ref }));
       for (let i = 0; i < 45 && run === pollRef.current; i++) {
         await new Promise((r) => setTimeout(r, 4000));
@@ -743,9 +822,13 @@ export default function POS({ mode = 'retail' }) {
           setMomo((m) => ({ ...m, stage: 'paid' }));
           toast('Mobile Money payment received');
           const paid = { provider: momo.network, phone, ref, txid: s.txid || '', confirmed: true }; // confirmed by the network
+          if (s.saleId) return setMomo((m) => ({ ...m, stage: 'enter', error: `This payment is already recorded as sale ${s.saleNumber || s.saleId} on another till.` }));
           // the customer has paid: if the sale could not be saved, keep the payment and offer to save it again,
-          // never a second charge to the phone
-          if (!(await finalize({ momo: paid }))) setMomo((m) => ({ ...m, stage: 'unsaved', paid }));
+          // never a second charge to the phone (the same sale id, so the payment links to one sale)
+          const saleId = uid();
+          const saved = await finalize({ id: saleId, momo: paid });
+          if (!saved) setMomo((m) => ({ ...m, stage: 'unsaved', paid, saleId }));
+          else linkPayment({ provider: paid.provider, ref, saleId, saleNumber: saved.number });
           return;
         }
         if (s.status === 'FAILED') return setMomo((m) => ({ ...m, stage: 'enter', error: 'The customer declined or the payment failed' + (s.reason ? `: ${s.reason}` : '') }));
@@ -885,6 +968,12 @@ export default function POS({ mode = 'retail' }) {
           {touch ? 'Tap a medicine to add it. The sale waits at the bottom with the total and Charge; tap it to see the lines, swipe a line left to remove it. The camera button scans barcodes.'
             : 'Type or scan to add, ↑↓←→ and Enter to pick. Alt+H holds a sale while you serve the next customer, F9 charges. Press ? for every shortcut.'}
         </PageTip>
+        {unrec.length > 0 && !training && (
+          <div className="error momo-unrec row between gap" role="alert">
+            <span><Smartphone size={16} aria-hidden="true" /> {unrec.length === 1 ? `A Mobile Money payment of ${fmt(unrec[0].amount)} was received but no sale was recorded.` : `${unrec.length} Mobile Money payments were received but no sale was recorded.`}</span>
+            <button type="button" className="btn sm" onClick={() => setUnrecOpen(true)}>Review</button>
+          </div>
+        )}
         <div className="row gap search-row">
           <div ref={searchRef} onKeyDown={onSearchKey} className="grow" style={{ position: 'relative' }}>
             <SearchBox big value={q} onChange={setQ} placeholder={touch ? "Search medicine or scan barcode…" : "Search medicine, scan, or / for commands  (F8)"} />
@@ -1117,6 +1206,23 @@ export default function POS({ mode = 'retail' }) {
         </div>
       </section>
 
+      {unrecOpen && (
+        <Modal title={<><Smartphone size={18} /> Received, not recorded</>} onClose={() => setUnrecOpen(false)}>
+          <p className="muted">The customer paid, but the till closed or lost its connection before the sale was saved. Record the sale from its basket (the phone is not asked again), or say how it was handled.</p>
+          {unrec.length === 0 && <p>Nothing waiting.</p>}
+          {unrec.map((p) => (
+            <div key={p.provider + p.ref} className="card stack" style={{ marginBottom: 10 }}>
+              <div className="row between gap"><strong>{fmt(p.amount)}</strong><span className="muted">{p.provider === 'airtel' ? 'Airtel Money' : 'MTN MoMo'} · {p.phone}</span></div>
+              <span className="muted">{showDateTime(p.createdAt)}{p.cashier ? ` · ${p.cashier}` : ''}{p.txid ? ` · transaction ${p.txid}` : ''}</span>
+              {p.basket?.cart?.length ? <span>{p.basket.cart.map((l) => `${l.qty} × ${l.name}`).join(', ')}</span> : <span className="muted">No basket was saved with this payment.</span>}
+              <div className="row gap">
+                <button type="button" className="btn primary" disabled={!p.basket?.cart?.length} onClick={() => recoverPayment(p)}>Load the basket to record the sale</button>
+                <button type="button" className="btn ghost" onClick={() => handledElsewhere(p)}>Handled another way…</button>
+              </div>
+            </div>
+          ))}
+        </Modal>
+      )}
       {momo && (
         <Modal title={<><Smartphone size={18} /> Mobile Money – {fmt(due)}</>} onClose={async () => {
           if (momo.stage === 'unsaved' && !(await ask({ title: 'The customer has already paid', message: `Payment ${momo.paid.ref || momo.paid.txid} was received but the sale is not saved. Close without saving it?`, confirmText: 'Close', danger: true }))) return;
@@ -1127,7 +1233,7 @@ export default function POS({ mode = 'retail' }) {
               <AlertTriangle size={40} className="text-danger" aria-hidden="true" />
               <strong>Payment received, but the sale was not saved</strong>
               <span className="muted">Reference {momo.paid.ref}{momo.paid.txid ? ` · transaction ${momo.paid.txid}` : ''}. Do not charge the customer again.</span>
-              <button className="btn primary" onClick={() => finalize({ momo: momo.paid })}>Retry saving this sale</button>
+              <button className="btn primary" onClick={async () => { const saved = await finalize({ id: momo.saleId, momo: momo.paid }); if (saved) linkPayment({ provider: momo.paid.provider, ref: momo.paid.ref, saleId: saved.id, saleNumber: saved.number }); }}>Retry saving this sale</button>
             </div>
           ) : momo.stage === 'waiting' ? (
             <div className="cart-empty">

@@ -4,7 +4,8 @@
 //   /api/password/forgot   send a 6-digit reset code by email (Brevo, works with Gmail addresses) or SMS
 //   /api/password/reset    set a new password with that code
 //   /api/config            which integrations are switched on for this pharmacy
-//   /api/pay/*             MTN MoMo + Airtel Money "request to pay" with THIS pharmacy's own merchant keys
+//   /api/pay/*             MTN MoMo + Airtel Money "request to pay" with THIS pharmacy's own merchant keys; every request
+//                          is kept in the cloud and settled by callback or reconciliation too (worker/payments.js)
 //   /api/sms               SMS via Africa's Talking
 //   /api/owner/*           owner console (vendor, web only): create pharmacies with their admin, web address, branches,
 //                          features and keys; open, edit, export, import, reset or delete any pharmacy's data
@@ -47,6 +48,7 @@ import { balancesAt, validWindow, pruneWindows } from './window.js';
 import { keeps as keepsInWindow, WINDOWED } from '../src/historywindow.js';
 import { OWNER_LAW, writesData, ownerApproved } from './ownerlaw.js';
 import { safeRename } from '../src/medname.js';
+import { PAY_DDL, recordRequest, getRow, applyStatus, openPayments, settle as settlePayment, callbackUrl, handleCallback, reconcile as reconcilePayments } from './payments.js';
 // The built-in roles (cashier, dispenser, pharmacist, manager) live only in the app; they aren't stored as records.
 // The server needs their permissions too, so a permission check doesn't wrongly refuse a built-in role (1.1/1.9).
 const DEFAULT_ROLE_PERMS = Object.fromEntries(DEFAULT_ROLES.map((r) => [r.id, new Set(r.permissions)]));
@@ -190,6 +192,8 @@ function ensureSchema(db) {
     if (!have.has('owner_config')) ddl.push('CREATE TABLE owner_config (k TEXT PRIMARY KEY, v TEXT NOT NULL)');
     // 2026-11 audit: who synced from which device, so a shared till keeps what each of its users needs (deviceView)
     if (!have.has('device_views')) ddl.push('CREATE TABLE device_views (tenant TEXT NOT NULL, device TEXT NOT NULL, uid TEXT NOT NULL, view TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (tenant, device, uid))');
+    // 2026-11-26: Mobile Money requests kept in the cloud, so a payment is never lost with the till (worker/payments.js)
+    if (!have.has('pay_requests')) ddl.push(...PAY_DDL);
     if (!have.has('reset_codes')) ddl.push('CREATE TABLE reset_codes (k TEXT PRIMARY KEY, code_hash TEXT NOT NULL, expires INTEGER NOT NULL, tries INTEGER NOT NULL DEFAULT 0, sent INTEGER NOT NULL DEFAULT 0, window_start INTEGER NOT NULL DEFAULT 0)');
     // dropping an old index is optional: never let it block the API (e.g. when the daily write limit is reached)
     for (const sql of ddl) await db.prepare(sql).run().catch((e) => { if (!sql.startsWith('DROP')) throw e; });
@@ -1125,12 +1129,14 @@ const mtn = {
       return { value: j.access_token, ttl: j.expires_in || 3000 };
     });
   },
-  async request(env, { phone, amount, reference, note }) {
+  newRef: () => crypto.randomUUID(),
+  currency: (env) => mtn.cfg(env).currency,
+  // ref: our X-Reference-Id, chosen (and kept in pay_requests) before MTN is asked; callback: where MTN reports back
+  async request(env, { ref, phone, amount, reference, note, callback }) {
     const c = mtn.cfg(env);
-    const ref = crypto.randomUUID();
     const r = await fetch(c.base + '/collection/v1_0/requesttopay', {
       method: 'POST',
-      headers: { Authorization: 'Bearer ' + (await mtn.token(env)), 'X-Reference-Id': ref, 'X-Target-Environment': c.target, 'Ocp-Apim-Subscription-Key': env.MTN_SUBSCRIPTION_KEY, 'Content-Type': 'application/json' },
+      headers: { Authorization: 'Bearer ' + (await mtn.token(env)), 'X-Reference-Id': ref, 'X-Target-Environment': c.target, 'Ocp-Apim-Subscription-Key': env.MTN_SUBSCRIPTION_KEY, 'Content-Type': 'application/json', ...(callback ? { 'X-Callback-Url': callback } : {}) },
       body: JSON.stringify({ amount: String(Math.round(amount)), currency: c.currency, externalId: reference, payer: { partyIdType: 'MSISDN', partyId: phone }, payerMessage: note.slice(0, 160), payeeNote: note.slice(0, 160) }),
     });
     if (r.status !== 202) throw new Error(`MTN refused the request (${r.status}) ${await r.text()}`.slice(0, 300));
@@ -1174,9 +1180,11 @@ const airtel = {
     });
   },
   headers: async (env, c) => ({ Authorization: 'Bearer ' + (await airtel.token(env)), 'Content-Type': 'application/json', Accept: '*/*', 'X-Country': c.country, 'X-Currency': c.currency }),
-  async request(env, { phone, amount, reference }) {
+  // the transaction id Airtel echoes in its callback: the till's reference + time + randomness (unique across pharmacies)
+  newRef: (reference) => String(reference || '').replace(/[^A-Za-z0-9]/g, '').slice(0, 16) + Date.now().toString(36).slice(-4).toUpperCase() + crypto.randomUUID().replace(/-/g, '').slice(0, 6).toUpperCase(),
+  currency: (env) => airtel.cfg(env).currency,
+  async request(env, { ref: id, phone, amount, reference }) {
     const c = airtel.cfg(env);
-    const id = reference.replace(/[^A-Za-z0-9]/g, '').slice(0, 20) + Date.now().toString(36).slice(-4).toUpperCase();
     const r = await airtelFetch(env, c.base + '/merchant/v1/payments/', {
       method: 'POST', headers: await airtel.headers(env, c),
       body: JSON.stringify({ reference: reference.slice(0, 64), subscriber: { country: c.country, currency: c.currency, msisdn: phone.replace(/^256/, '') }, transaction: { amount: Math.round(amount), country: c.country, currency: c.currency, id } }),
@@ -1194,6 +1202,13 @@ const airtel = {
   },
 };
 const PROVIDERS = { mtn, airtel };
+// what worker/payments.js needs from here: the networks, each pharmacy's keys, and signing for MTN's callback address
+const payDeps = (env) => ({
+  PROVIDERS,
+  penvFor: async (tenant) => { const t = await tenantById(env, tenant); return t ? providerEnv(env, t) : null; },
+  sign: async (s) => b64url(await crypto.subtle.sign('HMAC', await hmacKey(env, 'paycb'), te.encode(s))).slice(0, 32),
+  verify: async (s, sig) => safeEqual(b64url(await crypto.subtle.sign('HMAC', await hmacKey(env, 'paycb'), te.encode(s))).slice(0, 32), sig),
+});
 
 // ---------- SMS (Africa's Talking) ----------
 async function sendSms(env, { to, message }) {
@@ -1904,6 +1919,8 @@ export default {
     if (event.cron !== '0 6 * * 1') {
       ctx.waitUntil(uptimeCheck(withDatabase(env), { sync }).then((r) => console.log('uptime', JSON.stringify(r))).catch((e) => console.log('uptime check failed', e.message)));
       ctx.waitUntil(watchdog(withDatabase(env)).then((r) => console.log('watchdog', JSON.stringify(r))).catch((e) => console.log('watchdog failed', e.message)));
+      // Mobile Money requests still pending: ask the networks (worker/payments.js), so no payment waits on a till
+      ctx.waitUntil((async () => { const e = withDatabase(env); await ensureSchema(e.DB); return reconcilePayments(e.DB, payDeps(e)); })().then((r) => console.log('payments reconciled', JSON.stringify(r))).catch((e) => console.log('payment reconciliation failed', e.message)));
       return;
     }
     if (env.BREVO_API_KEY) ctx.waitUntil(fetch('https://api.brevo.com/v3/account', { headers: { 'api-key': env.BREVO_API_KEY, Accept: 'application/json' } }).then((r) => console.log('brevo keep-alive', r.status)).catch((e) => console.log('brevo keep-alive failed', e.message)));
@@ -1991,6 +2008,12 @@ export default {
         const u = new URL('https://hub/live');
         u.search = new URLSearchParams({ uid: who.uid, name: who.name || '', device: url.searchParams.get('device') || '' }).toString();
         return env.HUB.get(env.HUB.idFromName(who.tenant)).fetch(new Request(u, req));
+      }
+      // the networks' callbacks (MTN sends PUT or POST, Airtel POST): they only make the cloud ask the network itself
+      const pcb = path.match(/^\/api\/pay\/callback\/(mtn|airtel)$/);
+      if (pcb && (req.method === 'POST' || req.method === 'PUT')) {
+        const r = await handleCallback(env.DB, pcb[1], url, await req.json().catch(() => null), payDeps(env));
+        return json(r.body, r.status);
       }
       const body = req.method === 'POST' ? await req.json().catch(() => null) : null;
       if (req.method === 'POST' && !body) return json({ error: 'Bad request' }, 400);
@@ -2134,7 +2157,20 @@ export default {
         if (amount > MAX_PAY_UGX) return json({ error: 'That amount is above the single-payment limit.' }, 400); // 1.9 cap
         // 1.9 per-pharmacy hourly cap, taken in one statement (2026-11-17 audit)
         if (!(await takeHourly(env, '__pay__:' + who.tenant, PAY_PER_TENANT))) return json({ error: 'Too many payment requests right now. Please try again shortly.' }, 429);
-        const ref = await p.request(penv, { phone: String(body.phone).replace(/\D/g, ''), amount, reference: String(body.reference || 'RxPOS'), note: String(body.note || 'RxPOS payment') });
+        // 2026-11-26: the request is kept in the cloud BEFORE the network is asked, with the till's basket, so the
+        // payment is found again if the till closes after the customer approves (worker/payments.js)
+        const phone = String(body.phone).replace(/\D/g, ''), reference = String(body.reference || 'RxPOS');
+        const ref = p.newRef(reference);
+        await recordRequest(env.DB, { tenant: who.tenant, provider: body.provider, ref, phone, amount, currency: p.currency(penv), reference, basket: body.basket, device: body.deviceId, cashier: who.name || body.cashier });
+        const callback = body.provider === 'mtn' && env.PAY_CALLBACK_BASE ? await callbackUrl(env.PAY_CALLBACK_BASE, who.tenant, ref, payDeps(env).sign) : '';
+        try {
+          await p.request(penv, { ref, phone, amount, reference, note: String(body.note || 'RxPOS payment'), callback });
+        } catch (e) {
+          // refused before the phone was asked: nothing can arrive, the request is closed as failed
+          const row = await getRow(env.DB, who.tenant, body.provider, ref);
+          if (row) await applyStatus(env.DB, row, { status: 'FAILED', reason: String(e.message || 'Refused').slice(0, 200) });
+          throw httpError(502, e.message || 'The network refused the request.');
+        }
         return json({ ref, provider: body.provider });
       }
       if (path === '/api/pay/status') {
@@ -2142,7 +2178,23 @@ export default {
         const p = PROVIDERS[url.searchParams.get('provider')];
         const ref = url.searchParams.get('ref');
         if (!p || !ref) return json({ error: 'provider and ref required' }, 400);
-        return json(await p.status(penv, ref));
+        const row = await getRow(env.DB, who.tenant, url.searchParams.get('provider'), ref);
+        if (!row) return json(await p.status(penv, ref)); // a request made before 2026-11-26 (not kept in the cloud)
+        // settled already (by a callback or the reconciliation): no need to ask the network again
+        const cur = row.status === 'PENDING' ? await applyStatus(env.DB, row, await p.status(penv, ref)) : row;
+        return json({ status: cur.status === 'EXPIRED' ? 'FAILED' : cur.status, reason: cur.reason || '', txid: cur.txid || '', saleId: cur.sale_id || null, saleNumber: cur.sale_number || null });
+      }
+      // 2026-11-26: payments received and not yet recorded as a sale, for every till of this pharmacy
+      if (path === '/api/pay/open' && req.method === 'GET') {
+        if (!who.viaKey && !(await roleCan(env, who.tenant, who.role, 'pos.sell'))) return json({ error: 'You are not allowed to take payments.' }, 403);
+        return json(await openPayments(env.DB, who.tenant, payDeps(env)));
+      }
+      // link a payment to the sale that records it, or mark it handled with a note; one payment, one sale
+      if (path === '/api/pay/link' && req.method === 'POST') {
+        if (!who.viaKey && !(await roleCan(env, who.tenant, who.role, 'pos.sell'))) return json({ error: 'You are not allowed to take payments.' }, 403);
+        if (!PROVIDERS[body.provider] || !body.ref) return json({ error: 'provider and ref required' }, 400);
+        const r = await settlePayment(env.DB, who.tenant, { provider: body.provider, ref: String(body.ref), saleId: body.saleId, saleNumber: body.saleNumber, note: body.note, by: who.name || 'sync key' });
+        return json(r.body, r.status);
       }
       if (path === '/api/sms' && req.method === 'POST') {
         if (!who.viaKey && !(await roleCan(env, who.tenant, who.role, 'reminders'))) return json({ error: 'You are not allowed to send messages.' }, 403); // 1.9

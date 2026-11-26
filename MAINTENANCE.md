@@ -36,6 +36,7 @@ Keep every login in a password manager (e.g. Bitwarden, free and open source): G
 | Owner password, Google client ID, GitHub OAuth app | Owner console sign-in | Owner console → Account (stored in the database) |
 | `BREVO_API_KEY` | Password-reset emails from no-reply@rxposug.com (Brevo free plan, 300/day; account herbjay8@gmail.com) | Worker secret. Brevo disables keys unused for 90 days: a weekly Worker cron (Mondays) keeps it active. If emails stop, make a new key in Brevo → SMTP & API and replace the secret |
 | MoMo / Airtel / Africa's Talking keys | Payments and SMS per pharmacy | Owner console → pharmacy → Payments & SMS |
+| `PAY_CALLBACK_BASE` (optional setting, not secret) | Where MTN sends its payment callbacks, e.g. `https://api.rxposug.com`. Unset: no callback address is sent and the 5-minute reconciliation finds every payment instead (§9c) | Worker variable |
 
 Never put a secret in the code, a commit, a chat or a screenshot.
 
@@ -189,6 +190,26 @@ Renewal is yearly: turn on auto-renew in Cloudflare → Domain Registration.
 
 * **Receiving:** Cloudflare Email Routing forwards info@rxposug.com to herbjay8@gmail.com (dashboard → rxposug.com → Email → Email Routing).
 * **Sending (password codes):** Brevo, domain rxposug.com authenticated (DNS: brevo-code TXT, brevo1/brevo2._domainkey CNAMEs, _dmarc TXT; keep them). Sender "RxPOS" <no-reply@rxposug.com> (vars `BREVO_SENDER_EMAIL`, `BREVO_SENDER_NAME` in wrangler.jsonc). Delivery log: Brevo → Transactional → Logs.
+
+## 9c. Mobile Money: callbacks and reconciliation (worker/payments.js)
+
+Every payment request is kept in the cloud (`pay_requests`) before MTN or Airtel is asked, with the till's basket.
+It is settled three ways: the till's own polling, the network's callback, and a check every 5 minutes (the Worker's
+`*/5` cron) of every request still pending. A callback is never believed on its own word: it only makes the cloud ask
+the network for that request's status. A payment received with no sale shows on every till of the pharmacy
+("received, not recorded"): a person records the sale from the saved basket or marks it handled with a note. One
+payment can be linked to only one sale. A request with no answer after 2 days is closed as expired.
+
+Setup, once per merchant account:
+
+- **MTN MoMo**: the API user's callback host must be `api.rxposug.com` (the sandbox user made by
+  `deploy/setup-mobile-money.ps1` already is; for live, set "Callback host" to `api.rxposug.com` when the API user is
+  created in the MTN MoMo partner portal, or ask MTN to change it). Then set the Worker variable
+  `PAY_CALLBACK_BASE = https://api.rxposug.com`. Until it is set, payments are still found by the 5-minute check.
+- **Airtel Money**: in the Airtel Africa developer portal → the app → Callback URL, enter
+  `https://api.rxposug.com/api/pay/callback/airtel` (each pharmacy's own Airtel app, the same address). Callback
+  authentication (hash) can stay off: the cloud asks Airtel itself before trusting a callback.
+- Nothing else: the table is created by itself on the first request after a deploy.
 
 ## 10. Limits and health
 
