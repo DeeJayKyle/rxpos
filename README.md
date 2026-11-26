@@ -57,7 +57,7 @@ Every device keeps itself on the newest version published at rxposug.com (deploy
 ## Installing the desktop app (Windows)
 
 Download the latest `RxPOS-Setup.exe` (installer) or `RxPOS-Portable-x.y.z.exe` from this repository's **Releases** page (or from the latest **Actions** run → *RxPOS-Windows* artifact).
-If Windows SmartScreen warns about an unknown publisher, choose *More info → Run anyway* (the app isn't code-signed).
+If Windows SmartScreen warns about an unknown publisher, choose *More info → Run anyway*. Releases are code-signed once the signing secrets are added (MAINTENANCE.md §6b); until then, and for the first downloads of a new certificate, the warning can still appear.
 
 ## Running the Hub (for sync and online browser access)
 

@@ -12,6 +12,7 @@
 // Two back ends with the same contract: IndexedDB (Windows and Android apps) and memory (the web version, which keeps nothing).
 // Types: src/contracts.d.ts.
 import { conn, memoryOnly } from './idb.js';
+import { seal, unseal, isSealed } from './vault.js';
 
 /** @typedef {import('./contracts').Change} Change */
 /** @typedef {import('./contracts').OutboxEntry} OutboxEntry */
@@ -52,52 +53,123 @@ export function storageError(/** @type {any} */ e) {
 }
 
 // ---------------------------------------------------------------------------------------------------------------
+// 2026-11-26 (on-device data security, src/vault.js): each bucket is stored sealed, { t, __enc: 1, iv, ct }, never as
+// plain records. A commit can't open and re-seal a bucket inside its IndexedDB transaction (the browser ends a
+// transaction that waits for anything else), so the open buckets are kept in memory (`open`, filled by load()):
+// a commit builds and seals the new buckets first, then writes them with its outbox entries in ONE transaction, as
+// before. Inside that transaction each bucket is checked to be the one the commit started from (`tag`: its iv); if
+// another window changed it meanwhile, nothing is written and the commit starts again from what is stored.
+// Buckets stored before this (plain { t, rs }) are read as they are and sealed by load() at once (sealBuckets).
+const tagOf = (/** @type {any} */ v) => (!v ? '' : isSealed(v) ? Array.from(v.iv, (/** @type {number} */ b) => b.toString(16).padStart(2, '0')).join('') : 'plain');
+const recsOf = async (/** @type {IDBDatabase} */ db, /** @type {any} */ v) => (!v ? [] : isSealed(v) ? await unseal(db, v) : v.rs || []);
+
+/** The record buckets of a daily copy (snapshot.worker.js copies them as stored: sealed) as plain { t, rs } */
+export async function openBuckets(/** @type {any[]} */ rows) {
+  if (!rows?.some((b) => isSealed(b))) return rows || [];
+  const db = await conn();
+  return Promise.all(rows.map(async (b) => ({ t: b.t, rs: await recsOf(db, b) })));
+}
+
 function idbStorage() {
+  /** @type {Map<string, {t:string, rs:any[], tag:string}>} open buckets as stored (the whole store once `all`) */
+  const open = new Map();
+  let all = false;
+  let queue = Promise.resolve();
+  /** one write at a time on this page (the open buckets must follow the store) */
+  const serial = (/** @type {() => Promise<any>} */ fn) => { const p = queue.then(fn); queue = p.catch(() => {}); return p; };
+  /** A bucket as stored now: from memory, else read and opened */
+  const bucket = async (/** @type {IDBDatabase} */ db, /** @type {string} */ k) => {
+    const have = open.get(k);
+    if (have || all) return have || null;
+    const v = await req(db.transaction('records').objectStore('records').get(k));
+    if (!v) return null;
+    const b = { t: v.t, rs: await recsOf(db, v), tag: tagOf(v) };
+    open.set(k, b);
+    return b;
+  };
+  /** Seal the buckets still stored as plain records (one transaction; each only if unchanged since it was read) */
+  const sealBuckets = (/** @type {IDBDatabase} */ db, /** @type {string[]} */ plain) => serial(async () => {
+    const sealed = await Promise.all(plain.map(async (k) => { const b = /** @type {any} */ (open.get(k)); return [k, b, { t: b.t, ...(await seal(db, b.rs)) }]; }));
+    const tx = db.transaction('records', 'readwrite');
+    const finished = done(tx);
+    const st = tx.objectStore('records');
+    for (const [k, b, v] of sealed) {
+      const g = st.get(k);
+      g.onsuccess = () => { if (tagOf(g.result) === 'plain' && (g.result.rs || []).length === b.rs.length) { st.put(v, k); b.tag = tagOf(v); } };
+    }
+    await finished;
+  });
+
   return {
     kind: 'indexeddb',
     /** @returns {Promise<Loaded|null>} */
     async load() {
       const db = await conn();
       const tx = db.transaction(['records', 'kv'], 'readonly');
-      const [rows, settings, tomb, version] = await Promise.all([
-        req(tx.objectStore('records').getAll()), req(tx.objectStore('kv').get(KV_SETTINGS)), req(tx.objectStore('kv').get(KV_TOMB)), req(tx.objectStore('kv').get('storage-version')),
+      const [rows, keys, settings, tomb, version] = await Promise.all([
+        req(tx.objectStore('records').getAll()), req(tx.objectStore('records').getAllKeys()), req(tx.objectStore('kv').get(KV_SETTINGS)), req(tx.objectStore('kv').get(KV_TOMB)), req(tx.objectStore('kv').get('storage-version')),
       ]);
+      const opened = await Promise.all(rows.map((/** @type {any} */ v) => recsOf(db, v)));
+      open.clear();
+      /** @type {string[]} */ const plain = [];
+      rows.forEach((/** @type {any} */ v, /** @type {number} */ i) => { const k = String(keys[i]); open.set(k, { t: v.t, rs: opened[i], tag: tagOf(v) }); if (!isSealed(v)) plain.push(k); });
+      all = true;
+      // the one-time move: records stored before sealing are sealed now (a failure leaves them readable, and it is
+      // tried again at the next start)
+      if (plain.length) await sealBuckets(db, plain).catch((e) => console.warn('Sealing the stored records waits for the next start:', e?.message || e));
       if (version !== STORAGE_VERSION) return null;
       /** @type {Record<string, any[]>} */
       const tables = {};
-      for (const { t, rs } of rows) { const list = (tables[t] ??= []); for (const r of rs) list.push(r); }
+      for (const { t, rs } of open.values()) { const list = (tables[t] ??= []); for (const r of rs) list.push(r); }
       return { tables, settings, tomb: tomb || [] };
     },
     /** @param {Commit} c */
-    async commit(c) {
-      /** @type {Map<string, {t:string, put:Map<string, any>, del:Set<string>}>} changes grouped by bucket */
-      const touched = new Map();
-      const at = (/** @type {string} */ t, /** @type {any} */ id) => { const k = bucketOf(t, id); let b = touched.get(k); if (!b) touched.set(k, (b = { t, put: new Map(), del: new Set() })); return b; };
-      for (const { t, rec } of c.puts || []) { const b = at(t, rec.id); b.put.set(String(rec.id), rec); b.del.delete(String(rec.id)); }
-      for (const { t, id } of c.dels || []) { const b = at(t, id); b.del.add(String(id)); b.put.delete(String(id)); }
-      const db = await conn();
-      const tx = db.transaction(['records', 'kv', 'outbox'], 'readwrite');
-      const finished = done(tx);
-      try {
-        const rs = tx.objectStore('records'), kv = tx.objectStore('kv'), ob = tx.objectStore('outbox');
-        if (c.reset) rs.clear();
-        // read-modify-write of each touched bucket inside this transaction (requests run in order, after the clear)
-        for (const [k, b] of touched) {
-          const g = rs.get(k);
-          g.onsuccess = () => {
-            const recs = (g.result?.rs || []).filter((/** @type {any} */ r) => !b.put.has(String(r.id)) && !b.del.has(String(r.id)));
+    commit(c) {
+      return serial(async () => {
+        /** @type {Map<string, {t:string, put:Map<string, any>, del:Set<string>}>} changes grouped by bucket */
+        const touched = new Map();
+        const at = (/** @type {string} */ t, /** @type {any} */ id) => { const k = bucketOf(t, id); let b = touched.get(k); if (!b) touched.set(k, (b = { t, put: new Map(), del: new Set() })); return b; };
+        for (const { t, rec } of c.puts || []) { const b = at(t, rec.id); b.put.set(String(rec.id), rec); b.del.delete(String(rec.id)); }
+        for (const { t, id } of c.dels || []) { const b = at(t, id); b.del.add(String(id)); b.put.delete(String(id)); }
+        const db = await conn();
+        for (let attempt = 0; ; attempt++) {
+          // the new buckets, sealed before the transaction opens
+          /** @type {[string, {t:string, rs:any[]}, string, any][]} key, new bucket, the tag it was built on, stored value */
+          const next = [];
+          for (const [k, b] of touched) {
+            const cur = c.reset ? null : await bucket(db, k);
+            const recs = (cur?.rs || []).filter((/** @type {any} */ r) => !b.put.has(String(r.id)) && !b.del.has(String(r.id)));
             for (const r of b.put.values()) recs.push(r);
-            if (recs.length) rs.put({ t: b.t, rs: recs }, k); else rs.delete(k);
-          };
+            next.push([k, { t: b.t, rs: recs }, cur?.tag || '', recs.length ? { t: b.t, ...(await seal(db, recs)) } : null]);
+          }
+          const tx = db.transaction(['records', 'kv', 'outbox'], 'readwrite');
+          const finished = done(tx);
+          let moved = false; // a bucket changed under us (another window): start again from what is stored
+          try {
+            const rs = tx.objectStore('records'), kv = tx.objectStore('kv'), ob = tx.objectStore('outbox');
+            if (c.reset) rs.clear();
+            for (const [k, , tag, v] of next) {
+              const write = () => { if (v) rs.put(v, k); else rs.delete(k); };
+              if (c.reset) { write(); continue; }
+              const g = rs.get(k);
+              g.onsuccess = () => { if (tagOf(g.result) !== tag) { moved = true; try { tx.abort(); } catch { /* already over */ } } else write(); };
+            }
+            if (c.settings) kv.put(c.settings, KV_SETTINGS);
+            if (c.tomb) kv.put(c.tomb, KV_TOMB);
+            if (c.version) kv.put(c.version, 'storage-version');
+            for (const [k, v] of Object.entries(c.kv || {})) v === undefined ? kv.delete(k) : kv.put(v, k);
+            if (c.clearOutbox) ob.clear();
+            for (const op of c.ops || []) ob.add(op);
+          } catch (e) { try { tx.abort(); } catch { /* already finished */ } await finished.catch(() => {}); throw storageError(e); }
+          try { await finished; } catch (e) {
+            if (moved && attempt < 3) { open.clear(); all = false; continue; }
+            throw storageError(e);
+          }
+          if (c.reset) { open.clear(); all = true; }
+          for (const [k, b, , v] of next) { if (v) open.set(k, { ...b, tag: tagOf(v) }); else open.delete(k); }
+          return;
         }
-        if (c.settings) kv.put(c.settings, KV_SETTINGS);
-        if (c.tomb) kv.put(c.tomb, KV_TOMB);
-        if (c.version) kv.put(c.version, 'storage-version');
-        for (const [k, v] of Object.entries(c.kv || {})) v === undefined ? kv.delete(k) : kv.put(v, k);
-        if (c.clearOutbox) ob.clear();
-        for (const op of c.ops || []) ob.add(op);
-      } catch (e) { try { tx.abort(); } catch { /* already finished */ } await finished.catch(() => {}); throw storageError(e); }
-      await finished.catch((e) => { throw storageError(e); });
+      });
     },
     /** @returns {Promise<OutboxEntry[]>} */
     async outbox() {

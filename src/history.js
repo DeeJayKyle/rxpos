@@ -4,6 +4,7 @@
 // uses the device's own records exactly as before.
 import { useEffect, useMemo, useState } from 'react';
 import { LIVE_CLOUD, OWN_SITES } from './cloud.js';
+import { freshCfg } from './session.js';
 
 const base = (url) => { const u = String(url).replace(/\/+$/, ''); return OWN_SITES.includes(u) ? LIVE_CLOUD : u; };
 
@@ -12,7 +13,7 @@ export async function fetchOlder(cfg, t, from, to) {
   const out = [];
   let after = 0;
   for (let n = 0; n < 200; n++) {
-    const res = await fetch(base(cfg.url) + '/api/history', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + cfg.key }, body: JSON.stringify({ t, from, to, after, deviceId: cfg.deviceId }) });
+    const res = await fetch(base(cfg.url) + '/api/history', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (await freshCfg(cfg)).key }, body: JSON.stringify({ t, from, to, after, deviceId: cfg.deviceId }) });
     const j = await res.json().catch(() => ({}));
     if (!res.ok || !Array.isArray(j.records)) throw new Error(j.error || `Cloud replied ${res.status}`);
     out.push(...j.records);

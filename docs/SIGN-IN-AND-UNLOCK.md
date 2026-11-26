@@ -73,3 +73,28 @@ shows no device PIN or fingerprint option.
 - The session token is kept where it was (the app's local database on Windows / Android, the tab on the web). Moving
   it into the system's secure storage is a possible follow-up; it was not done here to avoid signing everyone out and
   changing offline start-up.
+
+## Sessions, the idle lock and data on the device (2026-11-26)
+
+An audit found that a sign-in lasted 30 days whatever happened on the device, and that the pharmacy (patients' names,
+phone numbers, prescriptions, sales) was kept on Windows and Android devices as plain text. Both are fixed:
+
+- **Short pass, renewed in the background.** A password sign-in now gives the device a pass for **15 minutes** and a
+  one-use renewal key (worker/index.js `startSignIn`, `renewSignIn`; src/session.js). Before a call the app renews a
+  pass about to run out; each renewal hands out the next key. Offline the till keeps working as before, and renews when
+  the internet is back. The key ends after **14 days unused** or **30 days after the password**, and at once on a
+  sign-out, a new password, "Sign out everywhere (else)", a disabled account, or another person signing in with their
+  password on the device. A key used twice (copied) ends the whole sign-in. The cloud keeps only a hash of each key
+  (`sign_ins` table). Apps from before keep their 30-day pass until they update, then swap it once for a renewable one.
+- **Idle lock, opened with the quick PIN.** The till locks itself after **5 minutes** without a touch by default
+  (2 or 15 minutes in Control Centre; "Never" is gone), also when a sleeping PC or phone wakes after that time. The
+  person opens it with their quick PIN (or password), so the work behind it stays as it was: no full sign-out.
+  "Remember me" lasts 7 days (was 30) and reopens the app on the lock screen.
+- **The pharmacy sealed on the device.** Every stored record bucket, the daily copies, backups, the 1.0–1.5 tables and
+  the sync link (pass and renewal key) are encrypted with AES-GCM-256 (src/vault.js). Each device has its own random
+  key: in the Windows app it is protected by Windows itself (DPAPI through Electron's safeStorage), so a copied data
+  folder can't be opened on another PC or account; elsewhere it is a non-extractable key, and the Android app is
+  excluded from phone backups. Data stored before is sealed in place at the first start of the new version (records
+  at once, copies in the background), each value only if it did not change meanwhile; nothing is deleted, and a value
+  that could not be sealed yet stays readable and is tried again at the next start. The outbox (only ids and times)
+  is unchanged, so offline sync works as before.

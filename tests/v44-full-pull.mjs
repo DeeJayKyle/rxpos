@@ -7,6 +7,7 @@
 import puppeteer from 'puppeteer-core';
 import { CHROME } from './chrome.mjs';
 import { asDesktopApp, APP_ARGS } from './appmode.mjs';
+import { deviceRecords, deviceKv } from './devicedata.mjs';
 const [base, ownerKey] = process.argv.slice(2);
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 let pass = 0, fail = 0;
@@ -28,9 +29,9 @@ await p.evaluate(() => { const set = (sel, v) => { const i = document.querySelec
 await p.evaluate(() => [...document.querySelectorAll('form button')].find((x) => /^Sign in/.test(x.textContent.trim()))?.click());
 check('signed in on the app', await until(p, () => !!document.querySelector('.sidebar'), 25000));
 
-const kv = (k) => p.evaluate((key) => new Promise((res) => { const q = indexedDB.open('pharmapos'); q.onsuccess = () => { const g = q.result.transaction('kv').objectStore('kv').get(key); g.onsuccess = () => { res(g.result); q.result.close(); }; }; }), k);
+const kv = (k) => deviceKv(p, k); // sealed since 2026-11-26 (tests/devicedata.mjs)
 const setKv = (k, v) => p.evaluate((key, val) => new Promise((res) => { const q = indexedDB.open('pharmapos'); q.onsuccess = () => { const tx = q.result.transaction('kv', 'readwrite'); tx.objectStore('kv').put(val, key); tx.oncomplete = () => { res(true); q.result.close(); }; }; }), k, v);
-const has = (id) => p.evaluate((pid) => new Promise((res) => { const q = indexedDB.open('pharmapos'); q.onsuccess = () => { const g = q.result.transaction('records').objectStore('records').getAll(); g.onsuccess = () => { res(g.result.some((x) => x.t === 'products' && x.rs.some((r) => r.id === pid))); q.result.close(); }; }; }), id);
+const has = async (id) => (await deviceRecords(p)).some((x) => x.t === 'products' && x.rs.some((r) => r.id === id));
 check('the first sync of an updated app is a full one, then marked done', await until(p, () => true, 100) && (await (async () => { for (let i = 0; i < 40; i++) { const c = await kv('sync'); if (c?.fullPull >= 1 && c.lastSync) return true; await wait(500); } return false; })()));
 check('…and it has the pharmacy', await has('fp-base'));
 

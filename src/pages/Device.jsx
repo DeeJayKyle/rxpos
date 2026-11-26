@@ -20,6 +20,7 @@ import { Database, WifiOff, Undo2, Keyboard } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import { ACTIONS, keyOf, isDefault, setKey, resetKeys, showKey, comboOf } from '../keymap.js';
 import AiSystemDoctor from '../components/AiSystemDoctor.jsx';
+import PrinterCard from '../components/PrinterCard.jsx';
 import { EXTRAS, saveBehaviour } from '../behaviour.js';
 import { ColourLevel, GradientChoice, SurfaceStyle } from '../components/LookExtras.jsx';
 import { useBehaviour } from '../components/ControlCentre.jsx';
@@ -133,6 +134,7 @@ export default function Device() {
           </>}
           {d.zoom !== 1 && <button className="link-btn small" onClick={() => setDevice({ zoom: 1 })}>Back to 100%</button>}
         </section>
+        <PrinterCard />
         <section className="card look-card" ref={lookRef}>
           <h3><Palette size={18} />Look</h3>
           <p className="muted small">The theme is in the top bar. These change how it looks on this device only.</p>

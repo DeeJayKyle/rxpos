@@ -15,6 +15,7 @@
 // Conflicts: sales, stock movements, audit and other records that are only ever added carry unique ids, so two
 // devices never overwrite each other's; stock is the sum of movements. Records that are edited (a medicine's price,
 // settings) follow last writer wins by change time, with the cloud clamping clocks that run ahead (docs/ARCHITECTURE.md).
+import { freshCfg, renewable } from './session.js';
 import { TABLES, now, isUntouchedBase, BASE_AT } from './store.jsx';
 import { liveUp } from './live.js';
 import { LIVE_CLOUD, OWN_SITES } from './cloud.js';
@@ -194,6 +195,14 @@ export function createSync({ getDb, getCfg, saveCfg, applyRemote, onStatus, stor
   let waiters = []; // callers waiting for the sync running now (and the extra round it may need)
   const counts = async () => ({ pending: await store.count().catch(() => 0), rejected: (await store.rejected().catch(() => [])).length });
 
+  /** A short pass about to run out (or refused: force) is renewed and saved first (src/session.js) */
+  const renewPass = async (force = false) => {
+    const cur = getCfg(), f = await freshCfg(cur, { force });
+    if (f.key !== getCfg().key || f.refresh !== getCfg().refresh) await saveCfg({ ...getCfg(), key: f.key, refresh: f.refresh, sid: f.sid, ...(f.swapTried ? { swapTried: true } : {}) });
+    return f.key !== cur.key;
+  };
+  let renewedAfter401 = false;
+
   /** Sync now. Resolves with the final status once this device is up to date (or the attempt failed). */
   async function run() {
     const cfg = getCfg();
@@ -205,7 +214,9 @@ export function createSync({ getDb, getCfg, saveCfg, applyRemote, onStatus, stor
     lastRun = Date.now();
     let result;
     onStatus({ state: 'syncing', lastSync: cfg.lastSync, first: !cfg.lastSync, ...(await counts()) });
+    let retryNow = false;
     try {
+      await renewPass();
       // once: changes made before the outbox existed (a 1.5 device), or everything a device holds when it is first
       // linked to a pharmacy, go into the outbox with the rule 1.5 used
       if (!getCfg().outboxV2) {
@@ -376,12 +387,14 @@ export function createSync({ getDb, getCfg, saveCfg, applyRemote, onStatus, stor
       }
       const next = { ...getCfg(), lastSync: now(), lastError: '', ...(full ? { fullPull: FULL_PULL, fullInProgress: false, phase: null } : {}) };
       await saveCfg(next);
-      failures = 0; retryAt = 0;
+      failures = 0; retryAt = 0; renewedAfter401 = false;
       const pendingBf = !!next.window && next.balances?.W !== next.window; // stage 4: balances not complete yet
       result = { state: 'ok', lastSync: next.lastSync, pushed: sent, pulled, refused, stale, clockSkew, ...(pendingBf ? { balancesPending: true } : {}), ...(await counts()) };
     } catch (e) {
       failures++;
-      const expired = e.status === 401;
+      let expired = e.status === 401;
+      // the pass was refused (it ran out while the device slept, or the clock is off): renew it once and go again
+      if (expired && !renewedAfter401 && renewable(getCfg())) { renewedAfter401 = true; retryNow = await renewPass(true).catch(() => false); if (retryNow) { failures--; expired = false; } }
       // the cloud can't be reached (no route, DNS, refused): that is "offline", not a fault to look into
       const unreachable = !e.status && (e instanceof TypeError || /fetch|network|took too long/i.test(e.message || ''));
       retryAt = expired ? 0 : Date.now() + backoff(failures);
@@ -391,6 +404,7 @@ export function createSync({ getDb, getCfg, saveCfg, applyRemote, onStatus, stor
     } finally {
       busy = false;
     }
+    if (retryNow && !stopped) return run();
     onStatus(result);
     if (again && !stopped && result.state === 'ok') { again = false; return run(); }
     again = false;

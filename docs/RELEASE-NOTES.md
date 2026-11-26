@@ -1,7 +1,12 @@
 # RxPOS release notes
 
-## Next release · November 2026 (themes in groups)
+## Next release (not released yet): safer sign-ins, the pharmacy encrypted on the device
 
+- **Sign-ins renew themselves every 15 minutes** instead of lasting 30 days; a sign-out, a new password or "Sign out
+  everywhere" ends them in the cloud at once (docs/SIGN-IN-AND-UNLOCK.md).
+- **The till locks after 5 idle minutes** and opens with the quick PIN; "Remember me" is 7 days and reopens locked.
+- **Patients' data is encrypted on Windows and Android devices** (each device its own key; Windows keeps it with
+  DPAPI). Existing data is encrypted in place at the first start, nothing lost, offline sync unchanged.
 - **17 themes in four groups**: the theme menu lists themes by how alike they look: **Light** (Light, Pharmacy Blue,
   Pharmacy Green, Royal Purple, Sandstone & Terracotta), **Dark** (Dark, Midnight Blue, Pharmacy Night, Twilight
   Violet, Graphite Amber), **High contrast** (High contrast, Monochrome & Scarlet, Graphite & Lime) and **Colourful**

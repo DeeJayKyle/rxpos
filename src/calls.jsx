@@ -8,6 +8,7 @@ import { whatsappLink } from './cloud.js';
 import { playSound } from './notify.jsx';
 import { notifyOS } from './badges.js';
 import { toast } from './feedback.jsx';
+import { freshCfg } from './session.js';
 
 /** Start a call to a colleague from anywhere: startCall({ id, name }) */
 export const startCall = (peer) => window.dispatchEvent(new CustomEvent('rxpos-call', { detail: peer }));
@@ -53,7 +54,7 @@ async function signal(cfg, body) {
 }
 const lastSent = new Map(); // in case the other device isn't on the live line: resend over HTTP
 async function httpSignal(cfg, body) {
-  const r = await fetch(cfg.url + '/api/rtc', { method: body ? 'POST' : 'GET', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + cfg.key }, body: body ? JSON.stringify(body) : undefined });
+  const r = await fetch(cfg.url + '/api/rtc', { method: body ? 'POST' : 'GET', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (await freshCfg(cfg)).key }, body: body ? JSON.stringify(body) : undefined });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(j.error || 'Call service unavailable');
   return j;
@@ -95,7 +96,7 @@ export function CallManager() {
   };
   const ice = async () => {
     if (iceRef.current && iceRef.current.at > Date.now() - 6 * 3600e3) return iceRef.current.servers;
-    const j = await fetch(syncCfg.url + '/api/rtc/config', { headers: { Authorization: 'Bearer ' + syncCfg.key } }).then((r) => r.json());
+    const j = await fetch(syncCfg.url + '/api/rtc/config', { headers: { Authorization: 'Bearer ' + (await freshCfg(syncCfg)).key } }).then((r) => r.json());
     iceRef.current = { servers: j.iceServers, at: Date.now() };
     return j.iceServers;
   };
@@ -191,7 +192,7 @@ export function CallManager() {
     const poll = async () => {
       if (liveUp()) { if (!stop) t = setTimeout(poll, 4000); return; }
       try {
-        const r = await fetch(`${syncCfg.url}/api/rtc?since=${sinceRef.current}`, { headers: { Authorization: 'Bearer ' + syncCfg.key } });
+        const r = await fetch(`${syncCfg.url}/api/rtc?since=${sinceRef.current}`, { headers: { Authorization: 'Bearer ' + (await freshCfg(syncCfg)).key } });
         const j = await r.json();
         if (r.ok) { for (const m of j.messages) await onMessage(m); sinceRef.current = j.last || sinceRef.current; }
       } catch {}

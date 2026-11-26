@@ -26,6 +26,7 @@ import { useListControls, useContextMenu } from '../listcontrols.jsx';
 import { Copy } from 'lucide-react';
 import { pharmacyLogo } from '../logo.jsx';
 import { showDateTime, dateLocale } from '../showdate.js';
+import { printReceipt, isDirect } from '../printer.js';
 
 /** Thermal-printer friendly receipt (58 mm or 80 mm, set in Settings). */
 export function Receipt({ sale }) {
@@ -77,6 +78,23 @@ export function Receipt({ sale }) {
       <p className="center">{isProforma ? 'Prices valid for 7 days.' : s.receiptFooter}</p>
     </div>
   );
+}
+
+/** Print a receipt the way This device → Receipt printer says: straight to the thermal printer (and the cash drawer on
+ * a cash sale), or the print dialog. A failed direct print opens the dialog instead, with a note why. */
+export function useReceiptPrinter() {
+  const { db, fmt } = useStore();
+  return (sale, { cash = false, dialog } = {}) => {
+    const s = db.settings;
+    const branch = db.branches.find((b) => b.id === (sale.branchId || MAIN_BRANCH));
+    const multi = db.branches.length > 1;
+    const sl = sale.proforma || String(sale.number).startsWith('PF') ? { ...sale, proforma: true } : sale;
+    return printReceipt(sl, {
+      settings: s, fmt, when: showDateTime(sale.date), cash,
+      branchName: multi && branch ? branch.name : '',
+      address: (multi && branch?.address ? branch.address : s.address) || '',
+    }, { dialog, onFallback: (e) => toast(`Receipt printer: ${e.message}. The print dialog opened instead.`, 'warn') });
+  };
 }
 
 /** Full-page (A4) invoice for a sale: for insurers, companies and anyone who needs more than a till slip */
@@ -139,7 +157,8 @@ export function usePrintSale() {
     return () => { clearTimeout(t); document.body.classList.remove('printing-job'); };
   }, [job]);
   const node = job ? <div className="print-stage">{job.kind === 'invoice' ? <SaleInvoice sale={job.sale} /> : <Receipt sale={job.sale} />}</div> : null;
-  return [node, (sale, kind) => setJob({ sale, kind })];
+  const direct = useReceiptPrinter();
+  return [node, (sale, kind) => (kind !== 'invoice' && isDirect() ? direct(sale, { dialog: () => setJob({ sale, kind }) }) : setJob({ sale, kind }))];
 }
 
 const STATUSES = [['', 'All statuses'], ['completed', 'Completed'], ['refunded', 'Refunded'], ['edited', 'Edited']];
@@ -170,6 +189,7 @@ export default function Sales() {
   const activeFilters = Object.values(f).filter(Boolean).length;
   const onlyEdited = f.status === 'edited';
   const [printNode, printSale] = usePrintSale();
+  const printReceiptNow = useReceiptPrinter();
   const phoneOf = (s) => db.customers.find((c) => c.id === s.customerId)?.phone || '';
 
   const ql = q.toLowerCase();
@@ -262,7 +282,7 @@ export default function Sales() {
             {view.status !== 'refunded' && !view.imported && user.role !== 'cashier' && can('sales.refund') && <button className="btn danger" onClick={() => refund(view)}><Undo2 size={16} />Refund</button>}
             <ReceiptPdfButton sale={view} />
             <button className="btn ghost act-invoice" onClick={() => { printSale(view, 'invoice'); }}><FileText size={16} />Invoice</button>
-            <button className="btn primary" onClick={() => window.print()}><Printer size={16} />Print</button>
+            <button className="btn primary" onClick={() => printReceiptNow(view)}><Printer size={16} />Print</button>
           </div>
     </DetailsPane>
   );
