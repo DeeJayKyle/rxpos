@@ -37,5 +37,17 @@ const pos = await onRequest({ request: new Request('https://rxposug.com/inventor
 check("the new app's page addresses go to the home page", pos.status === 302 && pos.headers.get('location') === 'https://rxposug.com/', `${pos.status} ${pos.headers.get('location')}`);
 const files = await onRequest({ request: new Request('https://rxposug.com/app/main.dart.js'), next: () => new Response('next'), env: site });
 check("the new app's files are still served (/app/)", (await files.text()) === 'next');
+// a missing file is a 404 nothing keeps, never the app's page kept for a year in place of a script (1.21.0's deploy)
+const spa = () => new Response('<!doctype html>', { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'public, max-age=31536000, immutable' } });
+for (const p of ['/assets/Kits-ByJwkjh_.js', '/assets/index-x.css', '/updates/web-1.zip', '/app/main.dart.js', '/version.json']) {
+  const m = await onRequest({ request: new Request('https://rxposug.com' + p), next: async () => spa(), env: site });
+  check(`missing ${p} is a 404 not kept`, m.status === 404 && /no-store/.test(m.headers.get('cache-control') || ''), `${m.status} ${m.headers.get('cache-control')}`);
+}
+const js = await onRequest({ request: new Request('https://rxposug.com/assets/Kits-ByJwkjh_.js'), next: async () => new Response('export{}', { headers: { 'Content-Type': 'application/javascript' } }), env: site });
+check('a file the site has is served as it is', js.status === 200 && (await js.text()) === 'export{}');
+const pageFile = await onRequest({ request: new Request('https://rxposug.com/classic/index.html'), next: async () => spa(), env: site });
+check('an .html file is still served', pageFile.status === 200);
+const noExt = await onRequest({ request: new Request('https://rxposug.com/classic/'), next: async () => spa(), env: site });
+check('a folder address still gets its page', noExt.status === 200);
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -54,8 +54,19 @@ export async function onRequest({ request, next, env }) {
     const page = await env.ASSETS.fetch(new URL('/app/index.html', url));
     return new Response(page.body, { status: 200, headers: page.headers });
   }
-  return next();
+  const res = await next();
+  return missingFile(url.pathname, res) ? notFound() : res;
 }
+
+/** A file the site does not have: Pages answers any unknown address with the app's page (200, text/html). For a file
+ * under /assets/ that page also carries "keep for a year" (_headers), so Cloudflare kept the page in place of the
+ * script. That is how 1.21.0's deploy check found 9 of its scripts "changed": it asked for them seconds after the
+ * deploy, before every Cloudflare location had the new files, and the location it asked kept the page for a year. A
+ * Windows till asking there would refuse the update. A missing file is now a 404 that nothing keeps. */
+export function missingFile(path, res) {
+  return /\.[a-z0-9]+$/i.test(path) && !/\.html?$/i.test(path) && /^text\/html/i.test(res.headers.get('content-type') || '');
+}
+const notFound = () => new Response('Not found', { status: 404, headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store, no-transform' } });
 
 // Not pharmacy addresses: the site's own folders and names the cloud never gives a pharmacy (worker RESERVED)
 const NOT_PHARMACY = new Set(['api', 'owner', 'assets', 'app', 'classic', 'updates', 'functions', 'index', 'sw', 'manifest', 'favicon', 'admin', 'login', 'www']);

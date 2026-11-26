@@ -221,6 +221,11 @@ Renewal is yearly: turn on auto-renew in Cloudflare → Domain Registration.
 * If `Documents/rxpos` disappears, clone it again from GitHub (nothing is lost: everything is pushed).
 * `package.json` must be saved without a BOM (don't edit it in Windows PowerShell; use an editor or Node).
 * Switching the database back to D1: set `"DB_BACKEND": ""` in `wrangler.jsonc` and deploy (D1 holds older data only).
+* *Every update file arrives exactly as listed* fails with files that come back as `text/html` (the check prints
+  what came back): a Cloudflare location kept the app's page in place of those files. Since 1.21.0's fix a missing
+  file is a 404 nothing keeps (`functions/_middleware.js`), so this should not recur; to clear one that was kept,
+  Cloudflare → rxposug.com → Caching → Configuration → *Custom Purge* those addresses (or *Purge Everything*: safe,
+  the files are only fetched again), then run *Cloud logs* or *Build RxPOS* with deploy *now*.
 
 ## 12. Copying a pharmacy from Rxtera
 
