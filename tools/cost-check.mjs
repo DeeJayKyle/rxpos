@@ -85,7 +85,14 @@ export function costHistory({ products = [], sales = [], purchases = [], audit =
     if (!last || Math.abs(n(p.cost) - last.cost) < 0.01) continue;
     now.push({ product: p.name, cost: n(p.cost), lastDelivery: last.cost, number: last.number, at: last.at, packRatio: packRatio(last.cost, n(p.cost), sizesOf(p)), costChangedAt: p._f?.cost || p.updatedAt || '' });
   }
-  return { changes, byCause, now, products: lines.size, medicines: products.length };
+  // many medicines' costs set in the same second: one bulk save (an import, a merge, a device re-sending its copy)
+  const sec = new Map();
+  for (const p of products) { const t = String(p._f?.cost || p.updatedAt || '').slice(0, 19); if (t) (sec.get(t) || sec.set(t, []).get(t)).push(p); }
+  const bulk = [...sec].filter(([, ps]) => ps.length >= 5).sort((a, b) => b[1].length - a[1].length).slice(0, 8).map(([t, ps]) => ({
+    at: t, n: ps.length, origins: [...new Set(ps.map((p) => p._origin).filter(Boolean))].slice(0, 3),
+    audit: (audit || []).filter((e) => Math.abs(new Date(e.date) - new Date(t + 'Z')) < 120e3).map((e) => `${e.date.slice(11, 19)} ${e.action} (${e.user}): ${String(e.details || '').slice(0, 80)}`).slice(0, 8),
+    sample: ps.slice(0, 5).map((p) => `${p.name} ${r2(n(p.cost))}`) }));
+  return { changes, byCause, now, bulk, products: lines.size, medicines: products.length };
 }
 
 export function formatCosts(title, h) {
@@ -96,6 +103,8 @@ export function formatCosts(title, h) {
   L.push(`  ${String(packs.length).padStart(5)}  of them about a pack size away (×/÷ the pack: pack and unit mixed up)`);
   L.push('\nLatest changes (newest first):');
   for (const c of h.changes.slice(0, 60)) L.push(`  ${ugTime(c.at)}  ${c.product}: ${r2(c.from)} → ${r2(c.to)}${c.packRatio ? `  [×${c.packRatio > 0 ? c.packRatio : '1/' + -c.packRatio}]` : ''}  — ${c.cause}${c.detail ? ': ' + c.detail : ''}`);
+  L.push('\nCosts set in the same second for many medicines (UTC):');
+  for (const b of h.bulk || []) L.push(`  ${b.at}  ${b.n} medicines${b.origins.length ? ' from ' + b.origins.join(', ') : ''}; e.g. ${b.sample.join(', ')}${b.audit.length ? '\n      audit then: ' + b.audit.join('\n                  ') : ''}`);
   L.push(`\n${h.now.length} medicines whose cost today differs from their last delivery's cost per unit:`);
   for (const x of h.now.slice(0, 40)) L.push(`  ${x.product}: today ${r2(x.cost)}, last delivery ${x.number} ${r2(x.lastDelivery)}${x.packRatio ? `  [×${x.packRatio > 0 ? x.packRatio : '1/' + -x.packRatio}]` : ''}; cost last set ${x.costChangedAt ? ugTime(x.costChangedAt) : '?'}`);
   return L;
@@ -118,6 +127,7 @@ if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
       if (!rec) continue;
       rec.id ??= r.id;
       if (r.t === 'sales') rec.origin = r.origin;
+      if (r.t === 'products') rec._origin = r.origin;
       (live[r.t] ||= []).push(rec);
     }
     console.log(formatCosts(`${t.name} (/${t.slug || t.id})`, costHistory({ ...live, since })).join('\n'));
