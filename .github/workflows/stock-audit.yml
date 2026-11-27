@@ -33,3 +33,9 @@ jobs:
           DAYS: ${{ inputs.days }}
           ONLY: ${{ inputs.pharmacies }}
         run: node tools/stock-audit.mjs $ONLY --days "${DAYS:-30}"
+      - name: Cost prices (when and why each changed)
+        env:
+          RXPOS_API: https://api.rxposug.com
+          OWNER_KEY: ${{ secrets.OWNER_KEY }}
+          ONLY: ${{ inputs.pharmacies }}
+        run: node tools/cost-check.mjs $ONLY --days 60
