@@ -61,7 +61,7 @@ export function planRepairs({ products = [], batches = [], movements = [], sales
 
 /**
  * Fixes that need the owner's decision first (stock review, 27 Nov 2026), run only when named in FIXES:
- *  • 'writeoff-twice': a batch below zero, with no other stock of it, that was written off as expired more than once:
+ *  • 'writeoff-twice': a batch below zero that was written off as expired more than once, short by no more than the last write-off:
  *    the shortfall is put back (the same expired stock was written off twice), bringing it to zero
  *  • 'duplicates': the same stock change recorded twice within 2 minutes: the second one is cancelled
  * Ids are fixed per problem, so running it again writes nothing new.
@@ -78,9 +78,10 @@ export function planDecided({ products = [], batches = [], movements = [] }, { f
     for (const [k, list] of lots) {
       const qty = list.reduce((a, m) => a + (Number(m.qty) || 0), 0), m0 = list[0];
       if (qty > -1e-9 || list.filter((m) => m.type === 'Expired write-off').length < 2) continue;
-      const other = [...lots].some(([k2, l2]) => k2 !== k && l2[0].productId === m0.productId && (l2[0].branchId || 'main') === (m0.branchId || 'main') && l2.reduce((a, m) => a + (Number(m.qty) || 0), 0) > 1e-9);
+      // the shortfall is no more than the last write-off: that write-off took stock the batch no longer held
+      const last = list.filter((m) => m.type === 'Expired write-off').sort((a, b) => (a.date < b.date ? -1 : 1)).pop();
       const id = `audit-wo2-${k}`;
-      if (other || have.has(id)) continue;
+      if (-qty > -(Number(last.qty) || 0) + 1e-9 || have.has(id)) continue;
       moves.push({ ...base(m0, 'Correction (stock audit, approved by the owner): this expired stock was written off twice; the second write-off is put back'), id, qty: -qty });
       lines.push(`${P.get(m0.productId)?.name || m0.productId} [${m0.batchId ? B.get(m0.batchId)?.batch : '(no batch)'}] ${qty} → 0 (written off twice), +${Math.round(-qty * cost(m0.productId)).toLocaleString('en-US')}`);
     }
