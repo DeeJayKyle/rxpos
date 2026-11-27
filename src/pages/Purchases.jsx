@@ -492,6 +492,7 @@ export function AddStock() {
         put(d, 'products', { id, name: nameOf(l), generic: '', form: l.form || 'Others', unit: unitForForm(l.form), price: Number(l.price), wholesale: markupPrice(cost, s.wholesaleMarkup, s.priceRound) || Number(l.price), cost, reorder: 0, barcode, ...(pack.length ? { packs: pack } : {}) });
         audit(d, user, 'Medicine added', `${nameOf(l)} (on receiving ${purchase.number})`, branchId);
       }
+      const costChanges = [];
       lines.forEach((l, n) => {
         const p = d.products.find((x) => x.id === idOf(l));
         if (!p) return;
@@ -507,8 +508,12 @@ export function AddStock() {
           put(d, 'products', { ...p, cost: cost || p.cost, price, ...(newPack ? { packs: [...(p.packs || []), { name: packName, size }] } : {}) });
           if (newPack) audit(d, user, 'Pack added', `${p.name}: ${packName} of ${size} (on receiving)`, branchId);
           if (price !== p.price && l.productId !== NEW) audit(d, user, 'Price changed', `${p.name}: ${fmt(p.price)} → ${fmt(price)} (on receiving)`, branchId);
+          // the medicine's cost becomes this delivery's cost of one stock unit: said in the audit log, so a cost that
+          // changed is never a mystery (the owner's report, 27 Nov 2026)
+          if (cost && cost !== p.cost && l.productId !== NEW) costChanges.push(`${p.name}: ${fmt(p.cost || 0)} → ${fmt(cost)} a ${String(p.unit || 'unit').toLowerCase()}`);
         }
       });
+      if (costChanges.length) audit(d, user, 'Cost changed', `${costChanges.join('; ')} (on receiving ${purchase.number})`.slice(0, 1000), branchId);
       if (form.poId) {
         const po = d.purchaseOrders.find((x) => x.id === form.poId);
         if (po) put(d, 'purchaseOrders', { ...po, status: 'Received', receivedAt: today(), purchaseId: purchase.id });

@@ -22,6 +22,12 @@ on:
       pharmacies:
         description: 'Pharmacy web addresses to audit, space-separated (empty = all)'
         default: ''
+      restore_costs_at:
+        description: 'Put back the costs one save changed: its UTC second, e.g. 2026-11-26T16:01:58 (one pharmacy above; empty = none)'
+        default: ''
+      restore_apply:
+        description: 'Write the restored costs? (yes only after the owner approved the list / no = dry run)'
+        default: 'no'
 
 permissions:
   contents: read
@@ -43,3 +49,20 @@ jobs:
           ONLY: ${{ inputs.pharmacies }}
           MAIL: ${{ github.event_name == 'schedule' && '--mail' || (inputs.mail && '--mail' || '') }}
         run: node tools/stock-audit.mjs $ONLY --days "${DAYS:-30}" $MAIL
+      - name: Cost prices (when and why each changed)
+        env:
+          RXPOS_API: https://api.rxposug.com
+          OWNER_KEY: ${{ secrets.OWNER_KEY }}
+          ONLY: ${{ inputs.pharmacies }}
+        run: node tools/cost-check.mjs $ONLY --days 60
+      - name: Put back costs (dry run unless restore_apply is yes)
+        if: ${{ inputs.restore_costs_at != '' }}
+        env:
+          RXPOS_API: https://api.rxposug.com
+          OWNER_KEY: ${{ secrets.OWNER_KEY }}
+          APPLY: ${{ inputs.restore_apply }}
+          # the owner's law (worker/ownerlaw.js): restore_apply = yes is given only after the owner approved the list
+          OWNER_APPROVED: ${{ inputs.restore_apply == 'yes' && 'yes' || 'no' }}
+          ONLY: ${{ inputs.pharmacies }}
+          AT: ${{ inputs.restore_costs_at }}
+        run: node tools/cost-restore.mjs $ONLY "$AT"
