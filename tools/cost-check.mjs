@@ -93,7 +93,7 @@ export function costHistory({ products = [], sales = [], purchases = [], audit =
     audit: (audit || []).filter((e) => Math.abs(new Date(e.date) - new Date(t + 'Z')) < 120e3).map((e) => `${e.date.slice(11, 19)} ${e.action} (${e.user}): ${String(e.details || '').slice(0, 80)}`).slice(0, 8),
     sample: ps.slice(0, 5).map((p) => `${p.name} ${r2(n(p.cost))}`),
     // each one's cost on its last sale before then → now (what the save changed; '=' when it did not change the cost)
-    was: ps.map((p) => { const prev = (lines.get(p.id) || []).filter((x) => String(x.at) < t).pop(); return prev ? `${p.name} ${r2(prev.cost)}${Math.abs(prev.cost - n(p.cost)) < 0.005 ? '=' : '→' + r2(n(p.cost))}` : null; }).filter(Boolean) }));
+    was: ps.map((p) => { const prev = (lines.get(p.id) || []).filter((x) => String(x.at) < t).pop(); return prev ? `${p.name} ${r2(prev.cost)}${Math.abs(prev.cost - n(p.cost)) < 0.005 ? '=' : '→' + r2(n(p.cost))} (w ${r2(n(p.wholesale))} r ${r2(n(p.price))}${p._f?.wholesale ? '' : ' w*'}${p._f?.price ? '' : ' r*'})` : null; }).filter(Boolean) }));
   return { changes, byCause, now, bulk, products: lines.size, medicines: products.length };
 }
 
