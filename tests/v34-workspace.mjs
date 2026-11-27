@@ -45,7 +45,7 @@ const go = async (hash) => { await p.goto(base + '/' + slug + '#' + hash, { wait
 
 // ---- save state beside the clock (no "sync" wording on the bar) ----
 const pill = await p.evaluate(() => document.querySelector('.pill.clock .clock-state')?.textContent || '');
-check('top bar says the sync state in plain words', /^(Synced|Syncing…|\d+ waiting|Offline.*|On this device)$/.test(pill.trim()), pill);
+check('top bar says the sync state in plain words', /^(Synced( \d{1,2}:\d{2}( ?[AP]M)?)?|Syncing…|\d+ waiting|Offline.*|On this device)$/.test(pill.trim()), pill);
 
 // ---- navigation rail ----
 const w0 = await p.evaluate(() => document.querySelector('.sidebar').getBoundingClientRect().width);

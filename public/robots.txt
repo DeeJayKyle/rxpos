@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /classic/
+Sitemap: https://rxposug.com/sitemap.xml

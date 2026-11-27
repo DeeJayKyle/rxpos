@@ -6,6 +6,7 @@ import Tour, { knewPage } from '../components/Tour.jsx';
 import { DISPLAY_CHANNEL } from '../components/CustomerDisplay.jsx';
 import { Settings2, ShoppingCart, Trash2, X, FileText, Printer, AlertTriangle, ScanBarcode, Smartphone, Loader2, CheckCircle2, UserPlus, Tag, BookMarked, Repeat, PauseCircle, Keyboard, Plus, ClipboardList, MessageCircle, MessageSquareText, Star, Search, Command, LayoutGrid, Users, GraduationCap, Monitor } from 'lucide-react';
 import { DrugInfoPanel, genericKey } from './DrugInfo.jsx';
+import { missedNote } from '../missed.js';
 import { useStore, useSyncState, uid, now, daysUntil, put, del, move, allocate, audit, normalizePhone, customerBalance, DEFAULT_PAYMENT_METHODS } from '../store.jsx';
 import { overLimit } from '../credit.js';
 import { parseGs1, findByGtin } from '../gs1.js';
@@ -17,7 +18,7 @@ import { takeStaged, onStaged } from '../components/aiStage.js';
 import { matchProduct } from '../invoiceScan.js';
 import { copayOf, schemeChoices } from '../insurance.js';
 import { maxDiscountOf } from '../access.js';
-import { draftsFor, saleDraft } from '../drafts.js';
+import { draftsFor, saleDraft, slipCode, asSlipCode, draftBySlip } from '../drafts.js';
 import { keepsData } from '../webpolicy.js';
 import { CASH } from '../finance.js';
 import { SPLIT, settleSplit } from '../tenders.js';
@@ -35,7 +36,7 @@ import { kitView, basketDemand, shortText, stockParts } from '../kits.js';
 import KitIcon from '../components/KitIcon.jsx';
 import { pharmacyLogo } from '../logo.jsx';
 import { BranchStockButton } from '../components/BranchStock.jsx';
-import { showDate } from '../showdate.js';
+import { showDate, showDateTime } from '../showdate.js';
 
 // Receipt numbers must be unique across synced devices, so they are time-based rather than sequential
 
@@ -305,13 +306,21 @@ export default function POS({ mode = 'retail' }) {
     if (to !== from) toast(`${prodById.get(to)?.name} instead of ${prodById.get(from)?.name} in this ${k.name}`, 'info');
   };
 
+  // "asked for, we had none" (src/missed.js): one tap notes the lost sale for Reorder
+  const noteMissed = (what) => {
+    try {
+      const rec = missedNote({ ...what, user: user.name, branchId });
+      update((d) => { put(d, 'missedSales', rec); });
+      toast(`Noted: a customer asked for ${rec.name || prodById.get(rec.productId)?.name || 'it'}. Reorder shows it.`, 'success');
+    } catch (e) { toast(e.message, 'warn'); }
+  };
   const add = async (p) => {
     if (p.isKit) return addKit(p);
     if (p.stock <= 0) {
       const g = genericKey(p.generic || p.name);
       const list = g ? products.filter((x) => x.id !== p.id && x.stock > 0 && genericKey(x.generic || x.name) === g).slice(0, 8) : [];
       if (list.length) return setSubs({ p, list });
-      return toast(`${p.name} is out of stock at ${branchName}`, 'error');
+      return toast(`${p.name} is out of stock at ${branchName}`, 'error', { action: { label: 'Customer asked: note it', run: () => noteMissed({ productId: p.id, name: p.name }) } });
     }
     // FEFO: sell from the earliest-expiring batch; expired batches are only used if the pharmacist confirms
     const sellable = batchesOf(p.id).filter((b) => b.qty > 0 && (!b.expiry || daysUntil(b.expiry) >= 0)).reduce((a, b) => a + b.qty, 0);
@@ -358,6 +367,8 @@ export default function POS({ mode = 'retail' }) {
     e.preventDefault();
     // "/" commands typed in the search box, as in the command bar: /hold, /pay, /disc 10, /void 2, /qty 2 5 …
     if (q.startsWith('/')) { e.preventDefault(); const err = runCommand(q.slice(1).trim().toLowerCase()); if (err) toast(err, 'warn'); else setQ(''); return; }
+    const slipQ = asSlipCode(q);
+    if (slipQ && draftBySlip(db, slipQ, branchId)) { setQ(''); openSlip(slipQ); return; }
     const g = parseGs1(q);
     if (g) { scanPack(g); setQ(''); return; }
     const exact = catalog.find((p) => p.barcode && p.barcode === q.trim()); // a kit's label scans too
@@ -491,10 +502,20 @@ export default function POS({ mode = 'retail' }) {
   const holdSale = async () => {
     if (training) return toast('Training mode: sales are not held. Turn training off to hold a real sale.', 'info');
     if (!cart.length) return toast('Nothing to hold: the sale is empty', 'info');
-    try { await changeHeld([], [snapshot()]); } catch { return; }
+    const snap = snapshot();
+    try { await changeHeld([], [snap]); } catch { return; }
     clearSale(); focusSearch();
-    toast('Sale on hold. Tap it above the sale to carry on (also in Sales History → Held sales).', 'info');
+    toast('Sale on hold. Tap it above the sale to carry on (also in Sales History → Held sales).', 'info', { action: { label: 'Print a slip', run: () => setSlip({ ...snap, code: slipCode(snap.id) }) } });
   };
+  // a slip from another counter: its code opens that held sale here (whoever held it), with today's stock
+  const openSlip = async (code) => {
+    const d = draftBySlip(db, code, branchId);
+    if (!d || (d.mode || 'retail') !== mode) { toast(d ? `Slip ${code} is a ${d.mode} sale: open it on the ${d.mode} till` : `No sale on hold here has the slip ${code} (already paid, or held at another branch?)`, 'warn'); return; }
+    try { await changeHeld([d.id], cart.length ? [snapshot()] : []); } catch { return; }
+    loadSale(d.data); focusSearch();
+    toast(`Slip ${code} opened: ${d.userName ? `held by ${d.userName}, ` : ''}check the items and charge it`, 'success');
+  };
+  const [slip, setSlip] = useState(null);
   const resumeSale = async (id) => {
     const x = held.find((h) => h.id === id);
     if (!x) return;
@@ -974,7 +995,7 @@ export default function POS({ mode = 'retail' }) {
             );
           })}
           {!results.length && (
-            <div className="cart-empty" style={{ gridColumn: '1/-1' }}><ScanBarcode size={36} /><span>{q ? `No medicines match “${q}”` : view === 'fav' ? 'No favourites yet: tap the star on a medicine to keep it here' : view === 'instock' ? 'Nothing in stock here yet' : 'No medicines here'}</span></div>
+            <div className="cart-empty" style={{ gridColumn: '1/-1' }}><ScanBarcode size={36} /><span>{q ? <>No medicines match “{q}”{q.trim().length > 2 && !/^\d{6,}$/.test(q.trim()) && <> · <button type="button" className="link-btn" onClick={() => noteMissed({ name: q.trim() })}>Customer asked for it? Note it</button></>}</> : view === 'fav' ? 'No favourites yet: tap the star on a medicine to keep it here' : view === 'instock' ? 'Nothing in stock here yet' : 'No medicines here'}</span></div>
           )}
         </div>
       {fkeys && !touch && <FKeyBar items={fkeyItems({ can, features, wholesale })} onGo={(to) => navigate(to)} onHide={() => { showFkeys(false); setFkeys(false); }}
@@ -1259,6 +1280,21 @@ export default function POS({ mode = 'retail' }) {
         );
       })()}
 
+      {slip && (
+        <Modal title={<><Printer size={18} /> Sales slip {slip.code}</>} onClose={() => setSlip(null)}>
+          <p className="muted small">The customer takes this slip to any counter at this branch. Typing or scanning {slip.code} in the till's search opens the sale there to charge it. Nothing is charged and no stock is taken until then.</p>
+          <div className={'receipt sale-slip print-area paper-' + (db.settings.paperWidth || 80)}>
+            <strong>{db.settings.name}</strong>
+            <div className="slip-code">{slip.code}</div>
+            <div className="small">Pay at any counter · {showDateTime(slip.at)}</div>
+            <table className="compact"><tbody>{slip.cart.map((l) => <tr key={l.id + (l.pack?.name || '')}><td>{l.name}</td><td className="num">× {l.qty}</td><td className="num">{fmt(l.price * l.qty)}</td></tr>)}</tbody></table>
+            <div className="row between"><strong>Total</strong><strong>{fmt(slip.cart.reduce((a, l) => a + l.price * l.qty, 0) - (Number(slip.discount) || 0))}</strong></div>
+            <div className="small">Not a receipt · prepared by {user.name}</div>
+          </div>
+          <div className="form-actions"><button className="btn ghost" onClick={() => setSlip(null)}>Close</button><button className="btn primary" onClick={() => window.print()}><Printer size={16} />Print slip</button></div>
+        </Modal>
+      )}
+
       {subs && (
         <Modal title={<><Repeat size={18} /> {subs.p.name} is out of stock</>} onClose={() => setSubs(null)}>
           <p className="muted">In-stock alternatives with the same active ingredient:</p>
@@ -1270,6 +1306,7 @@ export default function POS({ mode = 'retail' }) {
               </button>
             ))}
           </div>
+          <div className="form-actions"><button type="button" className="btn ghost" onClick={() => { noteMissed({ productId: subs.p.id, name: subs.p.name }); setSubs(null); }}>None of these: note that the customer asked for it</button></div>
         </Modal>
       )}
 

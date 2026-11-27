@@ -1,5 +1,21 @@
 # RxPOS release notes
 
+## RxPOS 1.27.0 · November 2026 (sale slips, branch requests, missed sales, oversold alert, commission, your data, website)
+
+- **Sale slips.** Hold a sale and print its slip with a code (S-XXXXXX); at any till, type the code to open it and
+  charge it. The held sale is removed once it is paid.
+- **A pharmacist's order is a request.** It goes to a manager, who approves it into an ordinary draft order. The
+  dashboard tells managers what is waiting.
+- **"Customer asked, we had none."** Note it from the till; Reorder counts it as demand and lists what customers ask
+  for that you don't stock.
+- **Sold below zero.** When two devices sell the last packs of a batch offline, the dashboard lists the batch, who
+  sold it, and links to Stock Count.
+- **Sync status always in sight**: a quiet "Synced 14:05" in the top bar.
+- **Commission and staff sales** in Reports; set the percentage in Settings → Receipts.
+- **Your data, as spreadsheets** in Settings → Data & backup, and an optional **7 am low-stock email**.
+- **rxposug.com** has a front page with a contact form, a features page, a help guide, articles and a page on moving
+  to RxPOS. Each pharmacy's own address still opens its sign-in.
+
 ## RxPOS 1.26.0 · November 2026 (hover tips on every control; no empty row buttons)
 
 - **Every control explains itself.** Rest the mouse on a button, tab, link, list or field and a tip says what it does:

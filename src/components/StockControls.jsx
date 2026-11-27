@@ -5,16 +5,26 @@
 //  • Sell these first: the batches in stock that expire soonest, with their shelf, for the counter staff
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { ShieldAlert, Truck, ClipboardList, CalendarClock, ArrowRight } from 'lucide-react';
-import { today } from '../store.jsx';
-import { shrinkage, weeklyBuySell, deliveryGap, deliveryGapDays, orderDue, costLookup, reasonLabel, SHRINK_TARGET } from '../stockcontrol.js';
+import { ShieldAlert, Truck, ClipboardList, CalendarClock, ArrowRight, PackageX } from 'lucide-react';
+import { today, useStore } from '../store.jsx';
+import { oversold, soldByText } from '../oversold.js';
+import { isApprover, shrinkage, weeklyBuySell, deliveryGap, deliveryGapDays, orderDue, costLookup, reasonLabel, SHRINK_TARGET } from '../stockcontrol.js';
 import { showDate } from '../showdate.js';
 import { formatQty } from '../money.js';
 
 const EXPIRY_CHECK_DAYS = 30; // a month with expired stock in hand and nothing written off or returned: remind
+const OVERSOLD_DAYS = 14; // a batch sold below zero in the last two weeks (src/oversold.js): ask for a count
 
 export function StockControlsCard({ db, branchId, fmt, exp, lowCount }) {
   const day = today();
+  const { stockIndex, user } = useStore();
+  const requests = isApprover(user) ? (db.purchaseOrders || []).filter((o) => o.status === 'Requested' && (o.branchId || 'main') === branchId) : [];
+  const short = useMemo(() => {
+    const since = new Date(Date.now() - OVERSOLD_DAYS * 864e5).toISOString();
+    const names = new Map(db.products.map((p) => [p.id, p.name])), lots = new Map(db.batches.map((b) => [b.id, b.batch]));
+    return oversold(db.movements, { branchId, since, balance: (k) => stockIndex?.batch.get(branchId + '|' + k) || 0 })
+      .map((o) => ({ ...o, name: names.get(o.productId) || 'A medicine', lot: o.batchId ? lots.get(o.batchId) : '' }));
+  }, [db.movements, db.products, db.batches, branchId, stockIndex]);
   const costOf = useMemo(() => costLookup(db.products, db.batches), [db.products, db.batches]);
   const month = day.slice(0, 7) + '-01';
   const sh = useMemo(() => shrinkage(db.movements, { from: month, costOf, branchId }), [db.movements, month, costOf, branchId]);
@@ -31,6 +41,16 @@ export function StockControlsCard({ db, branchId, fmt, exp, lowCount }) {
   return (
     <div className="card stock-controls" aria-label="Stock controls">
       <div className="card-head"><h3><ShieldAlert size={17} />Stock controls</h3><Link to="/stock-card" className="card-head-link">Stock card <ArrowRight size={14} /></Link></div>
+      {short.length > 0 && (
+        <div className="notice warn-notice small oversold" role="status">
+          <PackageX size={15} /> <span><strong>Sold more than was in stock</strong> ({short.length} batch{short.length === 1 ? '' : 'es'}). This happens when two devices sell the last packs while one of them is offline. Count {short.length === 1 ? 'it' : 'them'} to put the stock right.
+            <ul className="oversold-list">
+              {short.slice(0, 5).map((o) => <li key={o.productId + (o.batchId || '')}><strong>{o.name}</strong>{o.lot ? ` batch ${o.lot}` : ''} is at {formatQty(o.balance)}: {soldByText(o.sales)}</li>)}
+            </ul>
+            <Link to="/stock-count">Count stock</Link></span>
+        </div>
+      )}
+      {requests.length > 0 && <div className="notice info-notice small" role="status"><ClipboardList size={15} /> {requests.length} stock request{requests.length === 1 ? '' : 's'} waiting for your approval ({[...new Set(requests.map((r) => r.requestedBy).filter(Boolean))].join(', ') || 'staff'}). <Link to="/reorder" state={{ tab: 'orders' }}>Review</Link></div>}
       {gap && <div className="notice warn-notice small" role="status"><Truck size={15} /> {gap.never ? 'No delivery has been recorded' : `No delivery recorded since ${showDate(gap.since)}`} ({gap.days} days, {gap.sales} items sold since). Have all deliveries been entered? <Link to="/add-stock">Add Stock</Link></div>}
       {order && <div className="notice info-notice small" role="status"><ClipboardList size={15} /> This week's order is due: {lowCount} medicine{lowCount === 1 ? ' is' : 's are'} at or below the reorder level. <Link to="/reorder">Review and draft the orders</Link> (nothing is sent until you send it).</div>}
       {expiryDue && <div className="notice warn-notice small" role="status"><CalendarClock size={15} /> Monthly expiry check: {exp.expired} medicine{exp.expired === 1 ? ' has' : 's have'} expired stock on the shelf, and nothing was written off or returned in the last {EXPIRY_CHECK_DAYS} days. <Link to="/expiry" state={{ tab: 'expired' }}>Write off or return it</Link></div>}

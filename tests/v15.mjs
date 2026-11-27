@@ -71,7 +71,7 @@ await A.type('input[autocomplete=username]', 'bea@test.rx'); await A.type('input
 await A.evaluate(() => [...document.querySelectorAll('button')].find((x) => x.textContent.includes('Sign in')).click());
 await wait(6000);
 const top = await A.evaluate(() => document.querySelector('.topbar')?.innerText || '');
-check('top bar: no sync button while all is well (the owner\'s request, 17 Nov 2026); the pill is there, hidden, for when something needs attention', !/\d{1,2}:\d{2}:\d{2}/.test(top) && await A.evaluate(() => { const c = document.querySelector('.pill.clock'); return !!c && (c.hidden ? /Synced|Syncing|waiting/.test(c.textContent) : /Offline|Needs attention|Sign in again/.test(c.textContent)); }), top.replace(/\n/g, ' | '));
+check('top bar: the sync status stays in sight, quietly, while all is well (the owner\'s pick, 27 Nov 2026), never a clock with seconds', !/\d{1,2}:\d{2}:\d{2}/.test(top) && await A.evaluate(() => { const c = document.querySelector('.pill.clock'); return !!c && !c.hidden && (c.classList.contains('quiet') ? /Synced|Connecting/.test(c.textContent) : /Offline|Needs attention|Sign in again|waiting|Syncing/.test(c.textContent)); }), top.replace(/\n/g, ' | '));
 check('sidebar shows the pharmacy logo', await A.evaluate(() => !!document.querySelector('.sidebar .logo-img')));
 check('dashboard has no Add stock button', !(await A.evaluate(() => [...document.querySelectorAll('.page-head a, .page-head button')].some((x) => /add stock/i.test(x.textContent)))));
 await A.evaluate(() => document.querySelector('button[title="Theme"]').click()); await wait(300);

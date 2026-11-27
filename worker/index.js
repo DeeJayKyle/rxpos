@@ -22,7 +22,7 @@ import { backup, restore } from './backup.js';
 import { scrubText, scrubPage } from './crashscrub.js';
 import { uptimeCheck } from './uptime.js';
 import { watchdog } from './watchdog.js';
-import { dailySummaries } from './summary.js';
+import { dailySummaries, morningLowStock } from './summary.js';
 import { scheduledReports } from './reports.js';
 import { dailyStockFor, toCsv } from './dailystock.js';
 import { clean as cleanInvoice, finish as finishInvoice } from './invoiceread.js';
@@ -687,6 +687,33 @@ async function takeHourly(env, k, cap, units = 1) {
       window_start = CASE WHEN ?2 - window_start >= 3600000 THEN ?2 ELSE window_start END
     WHERE ?2 - window_start >= 3600000 OR sent + ?3 <= ?4 RETURNING sent`).bind(k, now, units, cap).first();
   return !!r && units <= cap;
+}
+
+// The website's "Talk to us" form (27 Nov 2026, src/pages/Welcome.jsx): a pharmacy asking about RxPOS. It is emailed to
+// the owner (worker/email.js alertRecipient) and stored nowhere else; it touches no pharmacy's data. At most 5 a hour
+// from one address and 30 a hour in all, so the form can't be used to flood the owner's inbox.
+export const CONTACT_PER_IP = 5, CONTACT_ALL = 30;
+export function contactText(b) {
+  /* eslint-disable no-control-regex -- control characters are what these take out */
+  const clip = (v, n) => String(v ?? '').replace(/[\u0000-\u001f\u007f]+/g, ' ').trim().slice(0, n);
+  const f = { name: clip(b?.name, 80), pharmacy: clip(b?.pharmacy, 120), phone: clip(b?.phone, 30), email: clip(b?.email, 120), town: clip(b?.town, 60), branches: clip(b?.branches, 10), message: String(b?.message ?? '').replace(/[\u0000-\u0008\u000b-\u001f\u007f]+/g, ' ').trim().slice(0, 1500) };
+  /* eslint-enable no-control-regex */
+  if (b?.website) return { error: 'spam' }; // a hidden field people never see: only robots fill it
+  if (f.name.length < 2 || f.pharmacy.length < 2) return { error: 'Please give your name and your pharmacy\'s name.' };
+  if (!/^\+?[\d\s-]{9,16}$/.test(f.phone)) return { error: 'Please give a phone number we can call or WhatsApp.' };
+  if (f.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email)) return { error: 'That email address doesn\'t look right (or leave it empty).' };
+  const text = [`${f.name} from ${f.pharmacy}${f.town ? ` (${f.town})` : ''} would like to hear about RxPOS.\n`, `Phone / WhatsApp: ${f.phone}`, f.email && `Email: ${f.email}`,
+    f.branches && `Branches: ${f.branches}`, f.message && `\nMessage:\n${f.message}`].filter(Boolean).join('\n');
+  return { subject: `RxPOS enquiry: ${f.pharmacy}`, text };
+}
+async function contactRequest(env, body, ip = 'noip') {
+  const c = contactText(body);
+  if (c.error === 'spam') return json({ sent: true });
+  if (c.error) return json({ error: c.error }, 400);
+  if (!(await takeHourly(env, '__contact_ip__:' + ip, CONTACT_PER_IP)) || !(await takeHourly(env, '__contact_all__', CONTACT_ALL))) return json({ error: 'Too many messages right now. Please try again in an hour, or call us.' }, 429);
+  const to = await alertRecipient(env);
+  if (!(await sendAlert({ ...env, BREVO_SENDER_NAME: 'RxPOS website' }, to, c.subject, c.text))) return json({ error: 'Your message could not be sent just now. Please try again later.' }, 503);
+  return json({ sent: true });
 }
 
 async function forgotPassword(env, body, ip = 'noip') {
@@ -2059,6 +2086,9 @@ export default {
       return;
     }
     if (event.cron !== '0 6 * * 1') {
+      // 04:00 UTC = 7 am in Uganda: the morning list of what to order, for pharmacies that switched it on (one 5-minute run)
+      const at = new Date(event.scheduledTime || Date.now());
+      if (at.getUTCHours() === 4 && at.getUTCMinutes() < 5) ctx.waitUntil(morningLowStock(withDatabase(env)).then((r) => console.log('morning lists', r.map((x) => `${x.tenant}:${x.sent ?? ''}${x.error ? ' ' + x.error : ''}`).join(', '))).catch((e) => console.log('morning lists failed', e.message)));
       ctx.waitUntil(uptimeCheck(withDatabase(env), { sync }).then((r) => console.log('uptime', JSON.stringify(r))).catch((e) => console.log('uptime check failed', e.message)));
       ctx.waitUntil(watchdog(withDatabase(env)).then((r) => console.log('watchdog', JSON.stringify(r))).catch((e) => console.log('watchdog failed', e.message)));
       return;
@@ -2155,6 +2185,7 @@ export default {
       if (path === '/api/token/refresh' && req.method === 'POST') return await renewSignIn(env, req, body);
       if (path === '/api/password/forgot' && req.method === 'POST') return await forgotPassword(env, body, clientIp(req));
       if (path === '/api/password/reset' && req.method === 'POST') return await resetPassword(env, body);
+      if (path === '/api/contact' && req.method === 'POST') return await contactRequest(env, body, clientIp(req));
       if (path === '/api/google-client') { const c = await getConfig(env.DB); return json({ clientId: c.google_client_id || null }); }
       if (path === '/api/password/google' && req.method === 'POST') return await resetWithGoogle(env, body);
       if (path.startsWith('/api/owner/')) return await owner(env, req, url, body);

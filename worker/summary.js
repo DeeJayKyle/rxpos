@@ -151,3 +151,48 @@ export async function dailySummaries(env, { now = new Date(), dry = false, tenan
   }
   return out;
 }
+
+/** The morning list (27 Nov 2026, from the SmarterPOS review): at 7 am in Uganda, for each pharmacy that switched it on
+ *  (settings.morningLowStock), what is at or below its reorder level and what expires within 30 days, to the same
+ *  addresses as the evening summary. Nothing is sent when nothing needs ordering. Never throws for one pharmacy. */
+export function morningText(name, day, att) {
+  const low = att.low.slice().sort((a, b) => a.left - b.left);
+  return [`${name}: to order this morning (${day})`, '',
+    low.length ? `At or below the reorder level (${low.length}):` : 'Nothing is at or below its reorder level.',
+    ...low.slice(0, 60).map((p) => `• ${p.medicine}: ${p.left <= 0 ? 'OUT OF STOCK' : `${p.left} left`} (reorder at ${p.reorder})`),
+    low.length > 60 ? `…and ${low.length - 60} more (Reorder page in RxPOS)` : '',
+    att.expiring.length ? `\nExpiring within 30 days (${att.expiring.length}): sell first or return` : '',
+    ...att.expiring.slice(0, 20).map((b) => `• ${b.medicine} batch ${b.batch}: ${b.left} left, expires ${b.expiry}`),
+    '', 'Draft the orders in RxPOS → Reorder. Nothing is ordered until you send it.'].filter((x) => x !== '').join('\n');
+}
+export async function morningLowStock(env, { now = new Date(), dry = false } = {}) {
+  const db = env.DB;
+  const { day } = eatDay(now);
+  const tenants = (await db.prepare("SELECT id, name FROM tenants WHERE status IS NULL OR status = 'active'").all()).results;
+  const out = [];
+  for (const t of tenants) {
+    try {
+      const r = await db.prepare("SELECT rec FROM records WHERE tenant = ?1 AND t = 'settings' AND id = 'settings' AND deleted = 0").bind(t.id).first();
+      const settings = r ? JSON.parse(r.rec || '{}') : {};
+      if (!settings.morningLowStock) continue;
+      const to = String(settings.summaryEmails || '').split(/[,;\s]+/).map((x) => x.trim()).filter((x) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x)).slice(0, 5);
+      if (!to.length) continue;
+      const att = await attention(db, t.id, day);
+      if (!att.low.length && !att.expiring.length) { out.push({ tenant: t.id, sent: 0, skipped: 'nothing to order' }); continue; }
+      const text = morningText(settings.name || t.name, day, att);
+      let sent = 0, error = '';
+      if (!dry) {
+        if (!env.BREVO_API_KEY || !env.BREVO_SENDER_EMAIL) error = 'email not set up';
+        else for (const email of to) {
+          const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+            method: 'POST', headers: { 'api-key': env.BREVO_API_KEY, 'Content-Type': 'application/json', Accept: 'application/json' },
+            body: JSON.stringify({ sender: { email: env.BREVO_SENDER_EMAIL, name: env.BREVO_SENDER_NAME || 'RxPOS' }, to: [{ email }], subject: `${settings.name || t.name}: ${att.low.length} to order this morning`, textContent: text }),
+          }).catch((e) => ({ ok: false, status: e.message }));
+          if (res.ok) sent++; else error = 'Brevo ' + res.status;
+        }
+      }
+      out.push({ tenant: t.id, sent, error, text });
+    } catch (e) { out.push({ tenant: t.id, error: e.message }); }
+  }
+  return out;
+}
