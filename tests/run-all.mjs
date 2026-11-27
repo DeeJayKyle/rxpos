@@ -28,6 +28,7 @@ const SUITES = [
   ['AI copilot and vision routes, mocked Workers AI (unit)', 'unit-ai-routes.mjs', []],
   ['date formats (unit)', 'unit-dateformat.mjs', []],
   ['packs (unit)', 'unit-packs.mjs', []],
+  ['hover tips on every control (unit)', 'unit-hovertips.mjs', []],
   ['cost check: why each cost price changed (unit)', 'unit-cost-check.mjs', []],
   ['stock audit: counts, packs, receiving, returns (unit)', 'unit-stock-audit.mjs', []],
   ['stock controls: reasons, approval, loss alerts, shrinkage, reminders (unit)', 'unit-stock-control.mjs', []],

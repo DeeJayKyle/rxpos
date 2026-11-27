@@ -2,13 +2,11 @@
 // small card on the dashboard. Kept next to the release notes (docs/RELEASE-NOTES.md): when a release is written up,
 // its highlights go here too.
 export const WHATS_NEW = {
-  version: '1.25.0',
+  version: '1.26.0',
   items: [
-    { text: 'Stock controls on the dashboard: shrinkage this month, why and by whom, and reminders for deliveries, orders and expiry', to: '/' },
-    { text: 'Taking stock off needs a reason, and a manager\'s approval above the limit', to: '/stock-card' },
-    { text: 'New report: Stock losses, with the reason and who approved each change', to: '/reports' },
-    { text: 'Sell these first: the batches that expire soonest, with their shelf', to: '/expiry' },
-    { text: 'Every cost price change is kept in the audit log', to: '/quick-edit' },
+    { text: 'Rest the mouse on any button, tab, list or field to see what it does', to: '/inventory' },
+    { text: 'Table headings say how to sort, move and resize them', to: '/sales' },
+    { text: 'The menu groups say which pages they hold', to: '/' },
   ],
 };
 

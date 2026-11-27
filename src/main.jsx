@@ -1,4 +1,5 @@
 import { startWebPolicy } from './webpolicy.js';
+import { startHoverTips } from './hovertips.js';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import '@fontsource-variable/inter';
@@ -52,6 +53,7 @@ import { startCrashReports, reportError, flush } from './crash.js';
 
 // The web version is online only and keeps nothing on the computer (src/webpolicy.js); runs before anything reads storage
 startWebPolicy();
+startHoverTips(); // every control says what it does on mouse hover (src/hovertips.js)
 
 // Pharmacy web addresses are /<pharmacy> with no trailing slash; drop a stray one for a clean URL.
 // (Kept here rather than as an inline <script> in index.html so the web Content-Security-Policy can forbid inline scripts.)
