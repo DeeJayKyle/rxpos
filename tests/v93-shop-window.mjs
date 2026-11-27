@@ -31,7 +31,7 @@ await p.goto(base + '/', { waitUntil: 'networkidle2' }); await wait(800);
 const front = await p.evaluate(() => document.querySelector('.front-page')?.innerText || '');
 check('the home address shows the front page, not the sign-in form', !!front && !(await p.$('input[type=password]')), front.slice(0, 120));
 check('…what RxPOS does for a pharmacy: 8 features, the steps, the apps and questions', await p.evaluate(() => document.querySelectorAll('.wl-card').length === 8 && document.querySelectorAll('.wl-steps li').length === 3 && document.querySelectorAll('.wl-faq details').length >= 6 && !!document.querySelector('.front-page .app-downloads')));
-check('…search engines get a description and the app\'s details', await p.evaluate(() => /pharmacy/i.test(document.querySelector('meta[name=description]')?.content || '') && /SoftwareApplication/.test(document.querySelector('script[type="application/ld+json"]')?.textContent || '')));
+check('…search engines and link previews get a description and title (no inline script: the CSP forbids it)', await p.evaluate(() => /pharmacy/i.test(document.querySelector('meta[name=description]')?.content || '') && /RxPOS/.test(document.querySelector('meta[property="og:title"]')?.content || '') && !!document.querySelector('link[rel=canonical]')));
 await p.type('.wl-form input[autocomplete=name]', 'Grace Test');
 await p.type('.wl-form input[autocomplete=organization]', 'Sample Hill Pharmacy');
 await p.type('.wl-form input[type=tel]', '0772 000 111');
