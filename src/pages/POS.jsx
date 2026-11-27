@@ -6,6 +6,7 @@ import Tour, { knewPage } from '../components/Tour.jsx';
 import { DISPLAY_CHANNEL } from '../components/CustomerDisplay.jsx';
 import { Settings2, ShoppingCart, Trash2, X, FileText, Printer, AlertTriangle, ScanBarcode, Smartphone, Loader2, CheckCircle2, UserPlus, Tag, BookMarked, Repeat, PauseCircle, Keyboard, Plus, ClipboardList, MessageCircle, MessageSquareText, Star, Search, Command, LayoutGrid, Users, GraduationCap, Monitor } from 'lucide-react';
 import { DrugInfoPanel, genericKey } from './DrugInfo.jsx';
+import { missedNote } from '../missed.js';
 import { useStore, useSyncState, uid, now, daysUntil, put, del, move, allocate, audit, normalizePhone, customerBalance, DEFAULT_PAYMENT_METHODS } from '../store.jsx';
 import { overLimit } from '../credit.js';
 import { parseGs1, findByGtin } from '../gs1.js';
@@ -305,13 +306,21 @@ export default function POS({ mode = 'retail' }) {
     if (to !== from) toast(`${prodById.get(to)?.name} instead of ${prodById.get(from)?.name} in this ${k.name}`, 'info');
   };
 
+  // "asked for, we had none" (src/missed.js): one tap notes the lost sale for Reorder
+  const noteMissed = (what) => {
+    try {
+      const rec = missedNote({ ...what, user: user.name, branchId });
+      update((d) => { put(d, 'missedSales', rec); });
+      toast(`Noted: a customer asked for ${rec.name || prodById.get(rec.productId)?.name || 'it'}. Reorder shows it.`, 'success');
+    } catch (e) { toast(e.message, 'warn'); }
+  };
   const add = async (p) => {
     if (p.isKit) return addKit(p);
     if (p.stock <= 0) {
       const g = genericKey(p.generic || p.name);
       const list = g ? products.filter((x) => x.id !== p.id && x.stock > 0 && genericKey(x.generic || x.name) === g).slice(0, 8) : [];
       if (list.length) return setSubs({ p, list });
-      return toast(`${p.name} is out of stock at ${branchName}`, 'error');
+      return toast(`${p.name} is out of stock at ${branchName}`, 'error', { action: { label: 'Customer asked: note it', run: () => noteMissed({ productId: p.id, name: p.name }) } });
     }
     // FEFO: sell from the earliest-expiring batch; expired batches are only used if the pharmacist confirms
     const sellable = batchesOf(p.id).filter((b) => b.qty > 0 && (!b.expiry || daysUntil(b.expiry) >= 0)).reduce((a, b) => a + b.qty, 0);
@@ -974,7 +983,7 @@ export default function POS({ mode = 'retail' }) {
             );
           })}
           {!results.length && (
-            <div className="cart-empty" style={{ gridColumn: '1/-1' }}><ScanBarcode size={36} /><span>{q ? `No medicines match “${q}”` : view === 'fav' ? 'No favourites yet: tap the star on a medicine to keep it here' : view === 'instock' ? 'Nothing in stock here yet' : 'No medicines here'}</span></div>
+            <div className="cart-empty" style={{ gridColumn: '1/-1' }}><ScanBarcode size={36} /><span>{q ? <>No medicines match “{q}”{q.trim().length > 2 && !/^\d{6,}$/.test(q.trim()) && <> · <button type="button" className="link-btn" onClick={() => noteMissed({ name: q.trim() })}>Customer asked for it? Note it</button></>}</> : view === 'fav' ? 'No favourites yet: tap the star on a medicine to keep it here' : view === 'instock' ? 'Nothing in stock here yet' : 'No medicines here'}</span></div>
           )}
         </div>
       {fkeys && !touch && <FKeyBar items={fkeyItems({ can, features, wholesale })} onGo={(to) => navigate(to)} onHide={() => { showFkeys(false); setFkeys(false); }}
@@ -1270,6 +1279,7 @@ export default function POS({ mode = 'retail' }) {
               </button>
             ))}
           </div>
+          <div className="form-actions"><button type="button" className="btn ghost" onClick={() => { noteMissed({ productId: subs.p.id, name: subs.p.name }); setSubs(null); }}>None of these: note that the customer asked for it</button></div>
         </Modal>
       )}
 

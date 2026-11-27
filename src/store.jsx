@@ -40,6 +40,7 @@ export const TABLES = [
   'employees', 'attendance', 'salaryAdvances', 'payrolls', 'reportSchedules',
   'notes', // 2026-11-14: Notes & SOP pages (src/notes.js)
   'cashMoves', // Nov 2026 audit item 7: cash paid into or out of the till during a shift (src/cashmoves.js)
+  'missedSales', // 2026-11-27: customers turned away because a medicine was out of stock (src/missed.js)
   'prefs', // 2026-11-26: each person's table and tab layouts, on every device they sign in on (src/layoutsync.jsx)
 ];
 // What is persisted on the device, one IndexedDB key per part

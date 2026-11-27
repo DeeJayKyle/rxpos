@@ -15,6 +15,7 @@ import { useStore, useSyncState, makePassword, put, audit, isLowStock, expiryCou
 import { askText, ask, toast } from './feedback.jsx';
 import { hasPin, setPin, clearPin, verifyOffline } from './offline.js';
 import Auth from './pages/Auth.jsx';
+import Welcome, { showsWelcome } from './pages/Welcome.jsx';
 import { BrandLogo, pharmacyLogo, setFileBase } from './logo.jsx';
 import { unreadCount } from './pages/Chat.jsx';
 import { Spotlight, HourlyReminder, NotificationBell, AlertWatcher, MessageWatcher, WeatherLogger } from './engage.jsx';
@@ -395,17 +396,22 @@ function ClockPill() {
     : s === 'error' ? `${syncStatus.error}${pending ? ` · ${pending} change(s) waiting, kept on this device` : ''}${syncStatus.retryAt ? ` · trying again at ${new Date(syncStatus.retryAt).toLocaleTimeString()}` : ''}`
     : !online || s === 'offline' ? (keepsData() ? `Offline: your work is saved on this device${pending ? ` (${pending} change(s) waiting)` : ''} and goes up when the internet is back` : 'Offline: the web version needs the internet')
     : syncStatus.lastSync ? (pending ? `${pending} change(s) on their way · ` : '') + 'Up to date ' + new Date(syncStatus.lastSync).toLocaleTimeString() : 'Connecting…');
+  // 27 Nov 2026 (the owner's pick from the SmarterPOS review, replacing 17 Nov's "hidden while all is well"): the status
+  // stays in sight, quietly: "Synced 14:05" with a green dot while all is well, never a clock with seconds; a routine
+  // pull every few seconds doesn't flash "Syncing…" unless changes from this device are on their way
+  const quiet = tone === 'ok' || (tone === 'syncing' && !pending);
+  const lastAt = syncStatus.lastSync ? new Date(syncStatus.lastSync).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
   const label = s === 'off' && !pending ? 'On this device' : storageIssue ? 'Needs attention' : syncStatus.expired ? 'Sign in again' : attention ? 'Needs attention'
-    : !online || s === 'offline' ? ['Offline', waiting].filter(Boolean).join(' · ') : s === 'syncing' ? 'Syncing…' : waiting || 'Synced';
+    : !online || s === 'offline' ? ['Offline', waiting].filter(Boolean).join(' · ') : quiet ? (lastAt ? `Synced ${lastAt}` : 'Connecting…') : s === 'syncing' ? 'Syncing…' : waiting || 'Synced';
   const clockTime = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }), clockDate = now.toLocaleDateString(dateLocale(), { weekday: 'short', day: 'numeric', month: 'short' });
   const click = () => (syncStatus.expired ? setUser(null) : storageIssue || syncStatus.rejected > 0 ? navigate('/device') : syncNow());
   return (
     // step 24: the spoken name starts with the words on the pill (axe label-content-name-mismatch), then the detail
     // shown only when something needs the person (offline, refused changes, sign in again, storage): the owner asked for
     // no sync button while all is well (17 Nov 2026); F5 still syncs, and the account menu has Sync now
-    <button className={'pill clock ' + tone} hidden={tone === 'ok' || tone === 'syncing'} title={tip} aria-label={`${label} ${clockTime} ${clockDate}. ${tip}`} onClick={click}>
-      <i /><span className="clock-state" aria-live="polite">{label}</span>{' '}<span className="clock-time">{clockTime}</span>{' '}
-      <span className="clock-date">{clockDate}</span>
+    <button className={'pill clock ' + (quiet ? 'ok quiet' : tone)} title={tip} aria-label={quiet ? `${label}. ${tip}` : `${label} ${clockTime} ${clockDate}. ${tip}`} onClick={click}>
+      <i /><span className="clock-state" aria-live="polite">{label}</span>
+      {!quiet && <>{' '}<span className="clock-time">{clockTime}</span>{' '}<span className="clock-date">{clockDate}</span></>}
     </button>
   );
 }
@@ -996,6 +1002,8 @@ function Gate() {
   // tests/v85-look.mjs: the error page on purpose (only with this tab's test flag set)
   if (location.pathname === '/__crash' && sessionStorage.getItem('rxpos-test-crash') === '1') throw new Error('A test crash');
   if (location.pathname === '/owner' && isWeb) return <Suspense fallback={<PageSkeleton />}><OwnerConsole /></Suspense>;
+  // the public front page of rxposug.com for someone not signed in (src/pages/Welcome.jsx); Sign in opens the sign-in
+  if (!user && location.pathname === '/' && showsWelcome()) return <Welcome onSignIn={() => { window.location.hash = '#/sign-in'; window.scrollTo(0, 0); }} />;
   return user ? <Shell /> : <Auth />;
 }
 

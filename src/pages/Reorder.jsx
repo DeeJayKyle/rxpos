@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ShoppingBag, PackageX, ClipboardList, MessageCircle, Printer, PackageCheck, Download, Wand2 } from 'lucide-react';
 import { DataTable } from '../datatable.jsx';
+import { lostDemand, unstockedAsks } from '../missed.js';
 import { useStore, daysSince, uid, now, put, del, audit, downloadFile, toCSV, normalizePhone, supplierPrices, MAIN_BRANCH } from '../store.jsx';
 import { Tabs, Empty, Modal, Stat, StatusPill } from '../ui.jsx';
 import { toast, ask } from '../feedback.jsx';
@@ -48,6 +49,10 @@ export default function Reorder() {
     }
     return { sold, lastSale };
   }, [db.sales, branchId, window_]);
+  // "asked for, we had none" notes from the till (src/missed.js): lost demand counts with the sales
+  const askedSince = new Date(Date.now() - window_ * 864e5).toISOString();
+  const asked = useMemo(() => lostDemand(db.missedSales, { since: askedSince, branchId }), [db.missedSales, branchId, window_]); // eslint-disable-line react-hooks/exhaustive-deps
+  const unstocked = useMemo(() => unstockedAsks(db.missedSales, { since: askedSince, branchId }), [db.missedSales, branchId, window_]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Last supplier & cost for each product (from purchases)
   const lastBuy = useMemo(() => {
@@ -65,13 +70,14 @@ export default function Reorder() {
   };
 
   const suggestions = useMemo(() => products.map((p) => {
-    const perDay = (velocity.sold.get(p.id) || 0) / window_;
+    const missed = asked.get(p.id);
+    const perDay = ((velocity.sold.get(p.id) || 0) + (missed?.qty || 0)) / window_;
     const daysLeft = perDay > 0 ? p.stock / perDay : Infinity;
     const target = Math.ceil(perDay * (Number(lead) + Number(cover)));
     const qty = Math.max(0, target - Math.max(p.stock, 0), p.stock <= (p.reorder || 0) && perDay === 0 && p.reorder ? p.reorder * 2 - p.stock : 0);
-    return { p, perDay, daysLeft, qty, buy: buyFor(p.id), options: prices.get(p.id) || [] };
+    return { p, perDay, daysLeft, qty, missed, buy: buyFor(p.id), options: prices.get(p.id) || [] };
   }).filter((r) => r.qty > 0 && (r.p.stock > 0 || r.perDay > 0) && (r.daysLeft <= Number(lead) + Number(cover) || r.p.stock <= (r.p.reorder || 0)))
-    .sort((a, b) => a.daysLeft - b.daysLeft), [products, velocity, window_, lead, cover, lastBuy, prices, from, chosenSup]); // eslint-disable-line react-hooks/exhaustive-deps
+    .sort((a, b) => a.daysLeft - b.daysLeft), [products, velocity, asked, window_, lead, cover, lastBuy, prices, from, chosenSup]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const dead = useMemo(() => products.filter((p) => p.stock > 0).map((p) => {
     const last = velocity.lastSale.get(p.id);
@@ -178,9 +184,17 @@ export default function Reorder() {
             <p>Two different signals: the <b>reorder level</b> is a fixed number set on each medicine (Medicine list or "Set reorder levels from sales"); it drives the
               "Low stock" alerts. The <b>suggestion</b> here is a forecast from real sales at this branch:</p>
             <p><b>Order qty</b> = sells per day (last {window_} days) × (lead time {Number(lead) || 0} + cover {Number(cover) || 0} days) − in stock, rounded up.
+              Sells per day includes customers turned away while it was out of stock ("Customer asked: note it" at the till).
               A medicine with no sales in that window but at or below its reorder level is suggested at 2 × reorder level − in stock. Listed when the stock lasts
               {' '}{Number(lead) + Number(cover)} days or less, or is at or below the reorder level.</p>
           </details>
+          {unstocked.length > 0 && (
+            <div className="card missed-asks" aria-label="Asked for, not stocked">
+              <div className="card-head"><h3><PackageX size={17} />Customers asked for these, which you don't stock</h3></div>
+              <small className="muted">Noted at the till in the last {window_} days. Add the ones worth stocking to the medicine list.</small>
+              <ul className="chip-list">{unstocked.slice(0, 20).map((x) => <li key={x.name} className="chip">{x.name} <b>× {x.times}</b></li>)}</ul>
+            </div>
+          )}
           <div className="row gap">
             <span className="muted small">Order each medicine from</span>
             <Tabs tabs={[['cheapest', 'Cheapest supplier'], ['last', 'Last supplier']]} value={from} onChange={(v) => { setFrom(v); setChosenSup({}); }} />
@@ -191,6 +205,7 @@ export default function Reorder() {
               { id: 'pick', label: 'Order', fixed: true, noExport: true, render: (r) => <input type="checkbox" aria-label={`Order ${r.p.name}`} checked={picked[r.p.id] ?? true} onChange={(e) => setPicked({ ...picked, [r.p.id]: e.target.checked })} /> },
               { id: 'name', label: 'Medicine', sortBy: (r) => r.p.name, render: (r) => <strong>{r.p.name}</strong> },
               { id: 'stock', label: 'In stock', num: true, sortBy: (r) => r.p.stock, render: (r) => r.p.stock },
+              { id: 'asked', label: 'Asked, none in stock', num: true, sortBy: (r) => r.missed?.qty || 0, render: (r) => (r.missed ? <span className="text-warn" title={`Customers asked ${r.missed.times} time${r.missed.times === 1 ? '' : 's'} while it was out of stock (last ${String(r.missed.last).slice(0, 10)}); counted in Sells / day`}>{r.missed.qty}</span> : <span className="muted">—</span>) },
               { id: 'perDay', label: 'Sells / day', num: true, sortBy: (r) => r.perDay, render: (r) => r.perDay.toFixed(1) },
               { id: 'daysLeft', label: 'Days left', num: true, sortBy: (r) => (isFinite(r.daysLeft) ? r.daysLeft : 1e9), tdClass: (r) => (r.daysLeft <= Number(lead) ? 'text-danger' : 'text-warn'), render: (r) => (isFinite(r.daysLeft) ? Math.floor(r.daysLeft) : '—') },
               { id: 'buy', label: 'Buy from', sortBy: (r) => r.buy?.supplierName || '', render: (r) => <>
