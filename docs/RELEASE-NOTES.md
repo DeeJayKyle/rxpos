@@ -1,5 +1,27 @@
 # RxPOS release notes
 
+## RxPOS 1.25.0 · November 2026 (stock controls: losses flagged, reasons, manager approval, shrinkage; cost changes logged)
+
+- **Stock taken off by hand is watched.** An adjustment, inventory edit or expired write-off needs a reason from a list
+  (damaged, expired, lost or stolen, count correction, entry mistake, sample, found, other). Above the limit (UGX 50,000
+  a line by default), someone who isn't a manager needs a manager's PIN or password, and the approver is kept on the
+  change. The owner sees each loss over the limit, and each day whose losses pass UGX 200,000, under **Sales and stock
+  to check**. Set the limits in **Settings → Stock controls**.
+- **Stock Count asks for a recount** of its big lines before the count is posted, and a count that takes off more than
+  the limit needs a manager's approval.
+- **Stock controls on the dashboard**: shrinkage this month (aim for 2% of the cost of sales or less), by reason and by
+  person, deliveries against the cost of sales for the last 8 weeks, and reminders when no delivery has been recorded
+  for a week, when the weekly order is due and when expired stock is still on the shelf. **Sell these first** lists the
+  batches that expire soonest, with their shelf.
+- **New report: Reports → Stock → Stock losses**, every change made by hand with its reason, who made it and who
+  approved it.
+- **Expired stock is caught on the way in**: Add Stock warns about an expiry date already passed, and an import asks
+  before adding expired stock. **Write off all expired** does the monthly clean-up in one step.
+- **Every cost price change is in the audit log**: Add Stock, Quick Edit and the inventory editor record the cost
+  before and after, and the weekly stock audit says when and why each cost changed.
+- **For the owner**: a weekly stock-audit email every Monday, the Owner Console shows which app version each device
+  runs, and the daily summary lists the day's stock losses.
+
 ## RxPOS 1.24.0 · November 2026 (every table works like Add Stock; layouts follow you; stock kept right)
 
 - **Every table works the way Add Stock's lines do.** Drag a heading to move its column (or use its ← → arrows), drag
