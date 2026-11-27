@@ -30,6 +30,7 @@ const SUITES = [
   ['packs (unit)', 'unit-packs.mjs', []],
   ['cost check: why each cost price changed (unit)', 'unit-cost-check.mjs', []],
   ['stock audit: counts, packs, receiving, returns (unit)', 'unit-stock-audit.mjs', []],
+  ['stock controls: reasons, approval, loss alerts, shrinkage, reminders (unit)', 'unit-stock-control.mjs', []],
   ['purchase order plan (unit)', 'unit-poplan.mjs', []],
   ['app downloads on the web sign-in (unit)', 'unit-appdownloads.mjs', []],
   ['GS1 pack codes (unit)', 'unit-gs1.mjs', []],
@@ -178,6 +179,7 @@ const SUITES = [
   ['dashboard cards resized and moved, options on every page, the theme panel folds', 'v89-layout.mjs', ['.output/v89']],
   ['split payments at the till, returning part of a sale, cash paid out of the drawer', 'v90-split-returns.mjs', []],
   ['shared table and tabs: every row, sort, move, resize, hide, layout on every device', 'v91-shared-table.mjs', ['.output/v91']],
+  ['stock controls: reason, manager approval, loss flagged, shrinkage, losses report, device versions', 'v92-stock-controls.mjs', []],
   // every page on a PC and a phone, for design review: only on request (`npm test -- shots-all`)
   ...(process.argv[2] === 'shots-all' ? [['every page, PC and phone screenshots', 'shots-all.mjs', ['.output/all']]] : []),
   // every theme on the dashboard and Sales History, for the owner's review: only on request (`npm test -- shots-themes`)
@@ -195,7 +197,7 @@ const only = process.argv[2];
 // the cloud's own database file) run there.
 const HUB = process.env.RXPOS_TEST_HUB === '1';
 const HUB_SUITES = new Set(['unit-policy.mjs', 'v14-api.mjs', 'v23-perms.mjs', 'v26-ratelimit.mjs', 'v27-secrets.mjs', 'v29-immutable.mjs', 'v38-sync-protocol.mjs',
-  'v55-write-policy.mjs', 'v55-staff-ui.mjs', 'v56-sale-checks.mjs', 'v57-passwords.mjs', 'v58-throttle.mjs', 'v59-doc-numbers.mjs', 'v60-credit-limit.mjs',
+  'v55-write-policy.mjs', 'v55-staff-ui.mjs', 'v56-sale-checks.mjs', 'v92-stock-controls.mjs', 'v57-passwords.mjs', 'v58-throttle.mjs', 'v59-doc-numbers.mjs', 'v60-credit-limit.mjs',
   'v61-field-merge.mjs', 'v61-field-merge-app.mjs', 'v37-reliability.mjs', 'hub-move.mjs', 'v63-day-close.mjs', 'v64-discount-blind.mjs', 'v65-gs1.mjs', 'v66-insurance.mjs', 'v71-sync-phases.mjs', 'v72-snapshot.mjs', 'v73-window.mjs']);
 // RXPOS_CI=1 (full-tests.yml): checks that need a service a CI machine can't reach are reported as skipped, not
 // failed, so the deploy gate isn't blocked by the outside world. Listed by exact check name: anything else that fails

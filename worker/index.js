@@ -34,18 +34,20 @@ import { tokenSecret, purposeLabel } from './secret.js';
 import { pharmacyChanged, validatePharmacyDefaults } from '../src/pharmacy-settings.js';
 import { DEFAULT_ROLES } from '../src/access.js';
 import { decide, NEEDS_OLD, moneyView, readView, widestView, legacyView } from './policy.js';
-import { saleFindings, fingerprint, stockFindings } from './anomalies.js';
+import { saleFindings, fingerprint, stockFindings, stockLossFindings } from './anomalies.js';
+import { CORRECTION_TYPES } from '../src/stockcontrol.js';
 import { verify as verifyPassword, hashNew, upgrade as upgradeHash } from './passwords.js';
 import { waitFor, waitText, WINDOW_MS, STEPS } from './throttle.js';
 import { FIELD_TABLES, mergeFields, clampFields, sameRecord } from '../src/fieldmerge.js';
 import { LOCKED_TABLES, DOCUMENT_MOVES, closedSet, inClosedDay, recordDay } from '../src/dayclose.js';
 import { isRefundOnly } from './policy.js';
-import { localDay } from './dailystock.js';
+import { localDay, catalogCost } from './dailystock.js';
 import { snapshotList, snapshotChunk, pruneSnapshots } from './snapshot.js';
 import { dmHidden, prefsRefused } from './policy.js';
 import { balancesAt, validWindow, pruneWindows } from './window.js';
 import { keeps as keepsInWindow, WINDOWED } from '../src/historywindow.js';
 import { OWNER_LAW, writesData, ownerApproved } from './ownerlaw.js';
+import { sendAlert, alertRecipient } from './email.js';
 import { safeRename } from '../src/medname.js';
 // The built-in roles (cashier, dispenser, pharmacist, manager) live only in the app; they aren't stored as records.
 // The server needs their permissions too, so a permission check doesn't wrongly refuse a built-in role (1.1/1.9).
@@ -197,6 +199,8 @@ function ensureSchema(db) {
     // 2026-11 audit: who synced from which device, so a shared till keeps what each of its users needs (deviceView)
     if (!have.has('device_views')) ddl.push('CREATE TABLE device_views (tenant TEXT NOT NULL, device TEXT NOT NULL, uid TEXT NOT NULL, view TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (tenant, device, uid))');
     // 2026-11-26: each renewable sign-in (sid) and the hash of its current and previous renewal key (never the key)
+    // stock review (27 Nov 2026): the app version each device last synced with, for the owner console
+    if (!have.has('device_builds')) ddl.push('CREATE TABLE device_builds (tenant TEXT NOT NULL, device TEXT NOT NULL, build INTEGER, version TEXT, platform TEXT, who TEXT, last_at TEXT NOT NULL, PRIMARY KEY (tenant, device))');
     if (!have.has('sign_ins')) ddl.push('CREATE TABLE sign_ins (sid TEXT PRIMARY KEY, tenant TEXT NOT NULL, uid TEXT NOT NULL, created INTEGER NOT NULL, last INTEGER NOT NULL, cur TEXT NOT NULL, prev TEXT, revoked INTEGER NOT NULL DEFAULT 0)');
     if (!have.has('reset_codes')) ddl.push('CREATE TABLE reset_codes (k TEXT PRIMARY KEY, code_hash TEXT NOT NULL, expires INTEGER NOT NULL, tries INTEGER NOT NULL DEFAULT 0, sent INTEGER NOT NULL DEFAULT 0, window_start INTEGER NOT NULL DEFAULT 0)');
     // dropping an old index is optional: never let it block the API (e.g. when the daily write limit is reached)
@@ -781,6 +785,14 @@ async function sync(env, body, who, ctx) {
   if (!deviceId) return json({ error: 'Missing deviceId' }, 400);
   if (!Array.isArray(changes)) return json({ error: 'changes must be a list' }, 400);
   if (changes.length > MAX_PUSH) return json({ error: `Send at most ${MAX_PUSH} changes per request` }, 413);
+  // stock review (27 Nov 2026): which version this device runs (older builds send nothing), shown in the owner console
+  const client = body.client && typeof body.client === 'object' ? body.client : null;
+  if (client) {
+    const clip = (v, n) => String(v ?? '').slice(0, n);
+    await db.prepare('INSERT INTO device_builds (tenant, device, build, version, platform, who, last_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) ON CONFLICT(tenant, device) DO UPDATE SET build = ?3, version = ?4, platform = ?5, who = ?6, last_at = ?7 WHERE device_builds.build IS NOT ?3 OR device_builds.who IS NOT ?6 OR device_builds.last_at < ?8')
+      .bind(tenant, clip(deviceId, 80), Math.floor(Number(client.build)) || 0, clip(client.version, 20), clip(client.platform, 30), clip(who.name, 80), new Date().toISOString(), new Date(Date.now() - 3600e3).toISOString()) // at most once an hour per device
+      .run().catch((e) => console.warn('device version not kept', e.message));
+  }
 
   // Last writer wins per record; every accepted write gets the next sequence number.
   const upsert = db.prepare(
@@ -864,6 +876,7 @@ async function sync(env, body, who, ctx) {
   const moves = new Map(); // receipt number → [movement]
   const liveEnd = []; // 2026-11-17 audit: people whose open live connections end (disabled, removed, new password)
   const saleByNumber = new Map(); // receipt number → sale pushed in this request
+  const lossMoves = []; // stock review (27 Nov 2026): hand changes that took stock off, checked after the loop
   const pfCheck = new Map(); // proforma key → a new quotation pushed by someone without the Proformas permission
   const upsertMerged = db.prepare(
     `INSERT INTO records (tenant, k, t, id, rec, deleted, at, origin, seq) VALUES (?1, ?2, ?3, ?4, ?5, 0, ?6, ?7, (SELECT COALESCE(MAX(seq), 0) + 1 FROM records))
@@ -969,6 +982,7 @@ async function sync(env, body, who, ctx) {
     if (!who.viaKey && !ch.deleted && rec) {
       if (ch.t === 'sales' && rec.number) saleByNumber.set(String(rec.number), rec);
       if (ch.t === 'movements' && (rec.type === 'Sale' || rec.type === 'Refund') && rec.ref) { const r = String(rec.ref); if (!moves.has(r)) moves.set(r, []); moves.get(r).push(rec); }
+      if (ch.t === 'movements' && CORRECTION_TYPES.has(rec.type) && Number(rec.qty) < 0) lossMoves.push({ ...rec, id });
       if (ch.t === 'proformas' && !prior && !(await can('proformas'))) pfCheck.set(k, rec);
     }
     if (typeof ch.op === 'string' && ch.op.length <= 64) { stmts.push(remember.bind(tenant, ch.op, nowIso)); ledger.add(stmts.length - 1); seen.add(ch.op); }
@@ -1072,6 +1086,41 @@ async function sync(env, body, who, ctx) {
       const fp = fingerprint(list.map((m) => m.id).sort().join(','));
       stockFindings(ref, list, sale).forEach((f, n) => finding({ id: `stock:${ref}~${n}~${fp}`, saleId: sale?.id || ref, saleNumber: ref, saleDate: sale?.date || list[0]?.date || '', branchId: list[0]?.branchId || '', table: 'movements',
         cashier: sale?.cashier || list[0]?.user || '', pushedBy: who.name || '', kind: f.kind, detail: f.detail, amount: f.amount, reviewed: false, createdAt: nowIso, updatedAt: nowIso }));
+    }
+  }
+  // stock review (27 Nov 2026): stock taken off by hand over the pharmacy's limits (worker/anomalies.js). The finding's
+  // id follows the movement (or the day and how many limits its total has passed), so a re-sent push adds nothing.
+  if (lossMoves.length) {
+    const fetchRecs = async (table, ids) => {
+      const m = new Map();
+      if (!ids.length) return m;
+      const { results } = await db.prepare("SELECT id, rec FROM records WHERE tenant = ?1 AND t = ?2 AND deleted = 0 AND id IN (SELECT value FROM json_each(?3))").bind(tenant, table, JSON.stringify(ids)).all();
+      for (const r of results || []) { try { m.set(r.id, JSON.parse(r.rec)); } catch { /* unreadable */ } }
+      return m;
+    };
+    const prods = await fetchRecs('products', [...new Set(lossMoves.map((m) => String(m.productId)))]);
+    const lots = await fetchRecs('batches', [...new Set(lossMoves.map((m) => m.batchId).filter(Boolean).map(String))]);
+    const settingsRec = await existingRec(db, tenant, 'settings', 'settings').catch(() => null);
+    const costOf = (m) => Number(lots.get(String(m.batchId))?.cost) || Number(prods.get(String(m.productId))?.cost) || catalogCost(String(m.productId));
+    const names = new Map([...prods].map(([id, p]) => [id, p?.name || id]));
+    for (const id of lossMoves.map((m) => String(m.productId))) if (!names.has(id) && /^cat-(\d+)$/.test(id)) names.set(id, CATALOG.rows[Number(id.slice(4)) - 1]?.[0] || id);
+    const pushedIds = JSON.stringify(lossMoves.map((m) => String(m.id)));
+    const dayBefore = async (branchId, day) => {
+      // the day in Uganda (UTC+3), as an ISO range; movements of this push are left out (they are counted by the caller)
+      const start = new Date(Date.parse(day + 'T00:00:00Z') - 3 * 3600e3).toISOString(), end = new Date(Date.parse(day + 'T00:00:00Z') + 21 * 3600e3).toISOString();
+      const { results } = await db.prepare("SELECT rec FROM records WHERE tenant = ?1 AND t = 'movements' AND deleted = 0 AND json_extract(rec, '$.date') >= ?2 AND json_extract(rec, '$.date') < ?3 AND json_extract(rec, '$.qty') < 0 AND json_extract(rec, '$.type') IN ('Adjustment', 'Inventory edit', 'Stock count', 'Expired write-off') AND id NOT IN (SELECT value FROM json_each(?4))").bind(tenant, start, end, pushedIds).all();
+      const before = [];
+      for (const r of results || []) { try { const x = JSON.parse(r.rec); if ((x.branchId || 'main') === branchId) before.push(x); } catch { /* unreadable */ } }
+      const more = await fetchRecs('batches', [...new Set(before.map((x) => x.batchId).filter((b) => b && !lots.has(String(b))).map(String))]);
+      const morep = await fetchRecs('products', [...new Set(before.map((x) => String(x.productId)).filter((p) => !prods.has(p)))]);
+      const cost = (x) => Number((lots.get(String(x.batchId)) || more.get(String(x.batchId)))?.cost) || Number((prods.get(String(x.productId)) || morep.get(String(x.productId)))?.cost) || catalogCost(String(x.productId));
+      return before.reduce((a, x) => a - Number(x.qty) * cost(x), 0);
+    };
+    const found = await stockLossFindings(lossMoves, { costOf, settings: settingsRec || {}, dayBefore, dayOf: localDay, names });
+    for (const f of found) {
+      const m = f.move;
+      finding({ id: m ? `loss:${m.id}` : `lossday:${f.branchId}:${f.day}~${f.step}`, saleId: m ? m.id : `${f.branchId}:${f.day}`, saleNumber: m ? m.ref || m.type : 'Stock losses', saleDate: m ? m.date || '' : f.day,
+        branchId: f.branchId, table: 'movements', cashier: m ? m.user || '' : '', pushedBy: who.name || '', kind: f.kind, detail: f.detail, amount: f.amount, reviewed: false, createdAt: nowIso, updatedAt: nowIso });
     }
   }
   // step 18: the closed-day findings, next to the records, for whoever may read the audit log (as the sale checks)
@@ -1369,6 +1418,14 @@ async function owner(env, req, url, body) {
   }
   if (parts[0] === 'account') return ownerAccount(env, req, url, body || {}, { json });
   if (parts[0] === 'uptime-test' && req.method === 'POST') return json(await uptimeCheck(env, { test: true, sync }));
+  // stock review (27 Nov 2026): the weekly stock audit (.github/workflows/stock-audit.yml) emails its summary to the
+  // owner through the same sender as every other alert. It reads nothing and writes no pharmacy data.
+  if (parts[0] === 'stock-audit-mail' && req.method === 'POST') {
+    const text = String(body?.text || '').slice(0, 100000), subject = String(body?.subject || 'RxPOS weekly stock audit').slice(0, 150);
+    if (!text.trim()) return json({ error: 'Nothing to send' }, 400);
+    const to = await alertRecipient(env);
+    return json({ mailed: !!to && (await sendAlert(env, to, subject, text)), to: to ? to.replace(/^(.{2}).*@/, '$1***@') : '' });
+  }
   const view = async (t) => {
     const s = await db.prepare("SELECT COUNT(*) n, MAX(at) last, SUM(t = 'products' AND deleted = 0) products, SUM(t = 'users' AND deleted = 0) users, SUM(t = 'sales' AND deleted = 0) sales, SUM(t = 'branches' AND deleted = 0) branches, SUM(t = 'anomalies' AND deleted = 0 AND COALESCE(json_extract(rec, '$.reviewed'), 0) = 0) anomalies FROM records WHERE tenant = ?1").bind(t.id).first();
     const secrets = JSON.parse(t.secrets || '{}');
@@ -1414,6 +1471,11 @@ async function owner(env, req, url, body) {
   if (parts[0] !== 'tenants' || !t) return json({ error: 'No such pharmacy.' }, 404);
   const sub = parts[2];
 
+  // ----- stock review (27 Nov 2026): the app version each device last synced with -----
+  if (sub === 'devices' && req.method === 'GET') {
+    const { results } = await db.prepare('SELECT device, build, version, platform, who, last_at FROM device_builds WHERE tenant = ?1 ORDER BY last_at DESC LIMIT 200').bind(t.id).all();
+    return json({ devices: results || [] });
+  }
   // ----- crash reports from this pharmacy's devices -----
   if (sub === 'errors' && req.method === 'GET') {
     const { results } = await db.prepare('SELECT k, message, stack, page, build, platform, kind, count, devices, first_at, last_at FROM client_errors WHERE tenant = ?1 ORDER BY last_at DESC LIMIT 200').bind(t.id).all();
@@ -1490,7 +1552,7 @@ async function owner(env, req, url, body) {
     // its chat attachments go too (personal data must not outlive the pharmacy)
     await db.batch([db.prepare('DELETE FROM file_chunks WHERE tenant = ?1').bind(t.id), db.prepare('DELETE FROM files WHERE tenant = ?1').bind(t.id), db.prepare('DELETE FROM file_uploads WHERE tenant = ?1').bind(t.id)]).catch(() => {});
     // 2026-11 audit: everything else kept per pharmacy goes too (two-step secrets, devices, crash reports, calls…)
-    await db.batch(['twofa', 'sync_ops', 'client_errors', 'client_error_devices', 'snapshot_bounds', 'rtc', 'device_views', 'sign_ins'].map((x) => db.prepare(`DELETE FROM ${x} WHERE tenant = ?1`).bind(t.id))).catch((e) => console.warn('pharmacy clean-up incomplete', e.message));
+    await db.batch(['twofa', 'sync_ops', 'client_errors', 'client_error_devices', 'snapshot_bounds', 'rtc', 'device_views', 'sign_ins', 'device_builds'].map((x) => db.prepare(`DELETE FROM ${x} WHERE tenant = ?1`).bind(t.id))).catch((e) => console.warn('pharmacy clean-up incomplete', e.message));
     // 2026-11-17 audit: its ready-made downloads and brought-forward figures in R2 too. They were keyed by the pharmacy's
     // address, so a new pharmacy given the same address was served the deleted one's balances.
     if (env.APPS) {

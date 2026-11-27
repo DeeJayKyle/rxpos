@@ -11,6 +11,8 @@ import { showDate, showDateTime, dateLocale } from '../showdate.js';
 import { DateInput } from '../fields.jsx';
 import { countDiff, lotKey, CORRECTIONS, packSlip, packText, scanStep } from '../stockcount.js';
 import { mainPack } from '../packs.js';
+import { useManagerApproval, useApprovalBox } from '../components/ManagerApproval.jsx';
+import { lossLimit, needsApproval } from '../stockcontrol.js';
 
 /*
  * Stock take: count what is physically on the shelves and make RxPOS match it.
@@ -480,7 +482,7 @@ function CountRow({ p, item, blind, readOnly, onSave, focusNext, live }) {
 
 /** The differences, and posting them: stock becomes what was counted */
 function ReviewPost({ count, items, all, sum, onClose, onPosted }) {
-  const { products, batchesOf, update, user, branchId, fmt, can, syncNow } = useStore();
+  const { db, products, batchesOf, update, user, branchId, fmt, can, syncNow } = useStore();
   // the latest sales and deliveries from the other tills first, so the differences are worked out on all of them
   useEffect(() => { if (navigator.onLine) Promise.resolve(syncNow?.()).catch(() => {}); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [zero, setZero] = useState(false);
@@ -496,8 +498,20 @@ function ReviewPost({ count, items, all, sum, onClose, onPosted }) {
   const zeroRows = zero ? zeroable : [];
   const zeroValue = zeroRows.reduce((a, r) => a + r.value, 0);
   const allowed = can('stock.adjust');
+  // stock review (27 Nov 2026): lines over the pharmacy's limit are recounted before posting, and a count that takes
+  // off more than the limit needs a manager's approval when someone else posts it (src/stockcontrol.js)
+  const limit = lossLimit(db.settings);
+  const big = limit > 0 ? diffRows.filter((r) => Math.abs(r.value) > limit) : [];
+  const [recounted, setRecounted] = useState(false);
+  const countLoss = -diffRows.filter((r) => r.value < 0).reduce((a, r) => a + r.value, 0) - zeroValue;
+  const approvalWith = useManagerApproval();
+  const approval = approvalWith(limit);
+  const ap = useApprovalBox(approval, needsApproval(countLoss, db.settings, user));
 
   const post = async () => {
+    if (big.length && !recounted) return toast(`Recount the ${big.length} line${big.length === 1 ? '' : 's'} over ${fmt(limit)} first, then tick that you did`, 'warn');
+    const approvedBy = ap.needed ? await ap.check() : null;
+    if (ap.needed && !approvedBy) return;
     if (!(await ask({ title: 'Post this stock count?', message: `${diffRows.length} batch quantities${zeroRows.length ? ` and ${zeroRows.length} uncounted batches (set to 0)` : ''} will be corrected so RxPOS matches what was counted. Net change ${fmt(sum.net + zeroValue)} at cost.`, confirmText: 'Post count' }))) return;
     setBusy(true);
     // the count as it is now: posted once only (a second press, or another device that posted or cancelled it)
@@ -509,12 +523,12 @@ function ReviewPost({ count, items, all, sum, onClose, onPosted }) {
       for (const r of diffRows) {
         let batchId = r.batchId && !String(r.batchId).startsWith(LEGACY) ? r.batchId : null;
         if (!r.batchId && r.found) batchId = addBatch(d, { productId: r.p.id, batch: r.batch, expiry: r.expiry, cost: r.cost || r.p.cost }).id;
-        move(d, { productId: r.p.id, qty: r.diff, type: 'Stock count', ref: ref2, note: count.name, user: user.name, batchId, branchId });
+        move(d, { productId: r.p.id, qty: r.diff, type: 'Stock count', ref: ref2, note: count.name, ...(approvedBy ? { approvedBy } : {}), user: user.name, batchId, branchId });
       }
-      for (const z of zeroRows) move(d, { productId: z.p.id, qty: -z.b.qty, type: 'Stock count', ref: ref2, note: `${count.name} (not found)`, user: user.name, batchId: z.b.legacy ? null : z.b.id, branchId });
+      for (const z of zeroRows) move(d, { productId: z.p.id, qty: -z.b.qty, type: 'Stock count', ref: ref2, note: `${count.name} (not found)`, ...(approvedBy ? { approvedBy } : {}), user: user.name, batchId: z.b.legacy ? null : z.b.id, branchId });
       const summary = { ...sum, zeroed: zeroRows.length, net: sum.net + zeroValue, shortValue: sum.shortValue - zeroValue };
-      put(d, 'stockCounts', { ...cur, status: 'posted', postedBy: user.name, postedAt: now(), postedOn: today(), summary });
-      audit(d, user, 'Stock count posted', `${count.name}: ${sum.counted} counted, ${sum.matched} matched, ${sum.short} short (${fmt(summary.shortValue)}), ${sum.over} extra (${fmt(sum.overValue)})${zeroRows.length ? `, ${zeroRows.length} uncounted batches set to 0` : ''}`, branchId);
+      put(d, 'stockCounts', { ...cur, status: 'posted', postedBy: user.name, postedAt: now(), postedOn: today(), summary, ...(approvedBy ? { approvedBy } : {}), ...(big.length ? { recounted: big.length } : {}) });
+      audit(d, user, 'Stock count posted', `${count.name}: ${sum.counted} counted, ${sum.matched} matched, ${sum.short} short (${fmt(summary.shortValue)}), ${sum.over} extra (${fmt(sum.overValue)})${zeroRows.length ? `, ${zeroRows.length} uncounted batches set to 0` : ''}${big.length ? `, ${big.length} big lines recounted` : ''}${approvedBy ? ` · approved by ${approvedBy}` : ''}`, branchId);
     }); } catch (e) { setBusy(false); return toast('The count was NOT posted; stock is unchanged. ' + e.message, 'error'); }
     setBusy(false);
     if (already) { toast('This count was already posted or cancelled; nothing was changed', 'warn'); return onPosted(); }
@@ -536,7 +550,7 @@ function ReviewPost({ count, items, all, sum, onClose, onPosted }) {
             <thead><tr><th>Medicine</th><th>Batch</th><th>Expiry</th><th className="num">System</th><th className="num">Counted</th><th className="num">Difference</th><th className="num">Value</th><th>By</th></tr></thead>
             <tbody>
               {diffRows.map((r, n) => (
-                <tr key={n}><td>{r.p.name}</td><td>{r.batch || '—'}{r.found && <span className="badge">found</span>}</td><td>{r.expiry || '—'}</td><td className="num">{r.sys}</td><td className="num">{r.qty}</td>
+                <tr key={n} className={limit > 0 && Math.abs(r.value) > limit ? 'row-warn' : undefined}><td>{r.p.name}{limit > 0 && Math.abs(r.value) > limit && <> <span className="badge warn">Recount</span></>}</td><td>{r.batch || '—'}{r.found && <span className="badge">found</span>}</td><td>{r.expiry || '—'}</td><td className="num">{r.sys}</td><td className="num">{r.qty}</td>
                   <td className={'num ' + (r.diff < 0 ? 'text-danger' : 'text-ok')}>{r.diff > 0 ? '+' : ''}{r.diff}</td><td className={'num ' + (r.value < 0 ? 'text-danger' : '')}>{fmt(r.value)}</td><td>{r.by}</td></tr>
               ))}
               {!diffRows.length && <Empty colSpan={8}>Everything counted matches the system 🎉</Empty>}
@@ -550,11 +564,18 @@ function ReviewPost({ count, items, all, sum, onClose, onPosted }) {
           <label className="field check"><input type="checkbox" checked={zero} onChange={(e) => setZero(e.target.checked)} /><span>…unless you tick this: not found on the shelf, set them to 0 ({fmt(-zeroable.reduce((x, r) => x + r.value, 0))} at cost)</span></label>
         </div>
       )}
+      {big.length > 0 && allowed && (
+        <div className="notice warn-notice">
+          <AlertTriangle size={15} /> {big.length} line{big.length === 1 ? ' is' : 's are'} over {fmt(limit)} each (marked Recount, biggest losses first). A slip of the hand or a box counted as a tablet looks like this.
+          <label className="field check"><input type="checkbox" checked={recounted} onChange={(e) => setRecounted(e.target.checked)} /><span>I had {big.length === 1 ? 'it' : 'them'} counted again and the figures are right</span></label>
+        </div>
+      )}
+      {allowed && ap.needed && ap.fields(`A manager must approve a count that takes off more than ${fmt(limit)} (this one: ${fmt(countLoss)})`)}
       <div className="form-actions">
         <PdfButton target={ref} title={`${count.name} – differences`} subtitle={`${sum.counted} counted · ${sum.short} short (${fmt(sum.shortValue)}) · ${sum.over} extra (${fmt(sum.overValue)})`} />
         <span className="grow" />
         <button type="button" className="btn ghost" onClick={onClose}>Keep counting</button>
-        {allowed ? <button type="button" className="btn primary" disabled={busy} onClick={post}><CheckCircle2 size={16} />Post count</button>
+        {allowed ? <button type="button" className="btn primary" disabled={busy || ap.blocked} onClick={post}><CheckCircle2 size={16} />Post count</button>
           : <span className="small text-warn">A manager or pharmacist with “Stock counts, adjustments” permission posts the count.</span>}
       </div>
     </Modal>

@@ -1,8 +1,8 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import { Download, Barcode as BarcodeIcon, SlidersHorizontal, Save, Undo2, Pencil, ScrollText, Boxes, Tag, Wand2 } from 'lucide-react';
+import { useLocation, useNavigate, Link } from 'react-router-dom';
+import { Download, Barcode as BarcodeIcon, SlidersHorizontal, Save, Undo2, Pencil, ScrollText, Boxes, Tag, Wand2, AlertTriangle } from 'lucide-react';
 import { CrudPage, Tabs, Modal, SearchBox, Empty, PdfButton, FilterChips, ExportMenu, useSort } from '../ui.jsx';
-import { useStore, today, daysUntil, put, move, addBatch, audit, downloadFile, toCSV, batchValue, stockValue, markupPrice, MAIN_BRANCH, putMany } from '../store.jsx';
+import { useStore, today, daysUntil, put, move, addBatch, audit, downloadFile, toCSV, batchValue, stockValue, markupPrice, MAIN_BRANCH, putMany, now } from '../store.jsx';
 import { ask, askText, toast } from '../feedback.jsx';
 import { formatQty } from '../money.js';
 import { removalSplit } from '../fefo.js';
@@ -22,6 +22,8 @@ import NameCheck from '../components/NameCheck.jsx';
 import { usePageMenu } from '../pagemenu.js';
 import { packsOf, soldLoose, unitPresets, unitChange } from '../packs.js';
 import { packSlip, packText, lotChange } from '../stockcount.js';
+import { useManagerApproval, useApprovalBox, ReasonFields } from '../components/ManagerApproval.jsx';
+import { lossLimit, lossOf, needsApproval, reasonReady, reasonNote, adjustmentBurst, BURST_ADJUSTMENTS } from '../stockcontrol.js';
 
 const expiryClass = (expiry, warn) => {
   if (!expiry) return '';
@@ -367,30 +369,39 @@ export function Expiry() {
   const [view, setViewState] = useState(() => deviceSettings().expiryView || 'list');
   const setView = (v) => { setViewState(v); setDevice({ expiryView: v }); };
   const allBatches = useMemo(() => products.filter((p) => p.stock > 0).flatMap((p) => batchesOf(p.id).filter((b) => b.qty > 0 && b.expiry).map((b) => ({ ...b, p, days: daysUntil(b.expiry) }))), [products, batchesOf]);
-  const writeOff = async (r) => {
-    if (busy) return;
-    if (!(await ask({ title: 'Write off expired stock?', message: `${r.qty} × ${r.p.name} (batch ${r.batch}) will be removed from stock.`, effects: [`${r.qty} taken off batch ${r.batch}`, `a write-off of ${fmt(r.qty * (r.cost || r.p.cost || 0))} at cost in the stock card and the audit log`], confirmText: 'Write off', danger: true }))) return;
-    setBusy(r.p.id + r.id);
-    let gone = false;
+  // stock review (27 Nov 2026): the monthly expiry check writes off every expired batch in one step (or one batch), and
+  // a write-off over the pharmacy's limit by someone who isn't a manager needs a manager's approval
+  const [writing, setWriting] = useState(null); // the batches about to be written off
+  const expiredRows = useMemo(() => allBatches.filter((r) => r.days < 0), [allBatches]);
+  const writeOff = (r) => setWriting([r]);
+  const doWriteOff = async (list, approvedBy) => {
+    setBusy('all');
+    let done = 0, gone = 0, value = 0;
     try {
       await update((d) => {
-        // stock audit (26 Nov 2026): only what the batch still holds. Written off on two devices (or written off again
-        // before the list caught up), a batch went below zero: Monticope 38 → −38. What changed on the batch since this
-        // list was drawn is taken into account, and nothing is written off when it is already empty.
-        const qty = Math.round((r.qty + lotChange(d.movements, db.movements, { branchId, productId: r.p.id, batchId: r.legacy ? null : r.id })) * 1e6) / 1e6;
-        if (!(qty > 0)) { gone = true; return; }
-        move(d, { productId: r.p.id, qty: -qty, type: 'Expired write-off', ref: r.batch, user: user.name, batchId: r.legacy ? null : r.id, branchId });
-        audit(d, user, 'Expired write-off', `${r.p.name} batch ${r.batch}: ${qty} units (${fmt(qty * (r.cost || r.p.cost))})`, branchId);
+        for (const r of list) {
+          // stock audit (26 Nov 2026): only what the batch still holds. Written off on two devices (or written off again
+          // before the list caught up), a batch went below zero: Monticope 38 → −38. What changed on the batch since this
+          // list was drawn is taken into account, and nothing is written off when it is already empty.
+          const qty = Math.round((r.qty + lotChange(d.movements, db.movements, { branchId, productId: r.p.id, batchId: r.legacy ? null : r.id })) * 1e6) / 1e6;
+          if (!(qty > 0)) { gone++; continue; }
+          move(d, { productId: r.p.id, qty: -qty, type: 'Expired write-off', ref: r.batch, reason: 'expired', ...(approvedBy ? { approvedBy } : {}), user: user.name, batchId: r.legacy ? null : r.id, branchId });
+          audit(d, user, 'Expired write-off', `${r.p.name} batch ${r.batch}: ${qty} units (${fmt(qty * (r.cost || r.p.cost))})${approvedBy ? ` · approved by ${approvedBy}` : ''}`, branchId);
+          done++; value += qty * (r.cost || r.p.cost || 0);
+        }
       });
-    } catch (e) { return toast(`${r.p.name} batch ${r.batch} was NOT written off: ${e.message}`, 'error'); }
+    } catch (e) { return toast(`Nothing was written off: ${e.message}`, 'error'); }
     finally { setBusy(''); }
-    if (gone) return toast(`${r.p.name} batch ${r.batch} was already written off; nothing was changed`, 'warn');
-    toast(`${r.p.name} batch ${r.batch} written off`);
+    setWriting(null);
+    if (!done) return toast('Already written off; nothing was changed', 'warn');
+    toast(`${done} batch${done === 1 ? '' : 'es'} written off (${fmt(value)} at cost)${gone ? `; ${gone} already empty` : ''}`);
   };
   return (
     <div className="page">
       <div className="page-head"><div><h1>Expiring / Expired</h1><div className="sub">{rows.length} batches · {fmt(rows.reduce((a, r) => a + r.qty * (r.cost || r.p.cost), 0))} at cost</div></div>
-</div>
+        {can('stock.adjust') && expiredRows.length > 0 && <div className="row gap"><button type="button" className="btn danger" disabled={!!busy} onClick={() => setWriting(expiredRows)} title="The monthly expiry check: every expired batch in stock here">Write off all expired ({expiredRows.length})</button></div>}
+      </div>
+      {writing && <WriteOffSheet rows={writing} busy={busy === 'all'} onCancel={() => setWriting(null)} onConfirm={doWriteOff} />}
       <div className="list-filters">
         {view === 'list' && <FilterChips label="Show" value={tab} onChange={setTab} options={[['soon', `Expiring within ${warn} days`], ['expired', 'Expired']]} />}
         <div className="seg" role="radiogroup" aria-label="View">{[['list', 'List'], ['calendar', 'Calendar']].map(([k, l]) => <button key={k} type="button" role="radio" aria-checked={view === k} className={view === k ? 'on' : ''} onClick={() => setView(k)}>{l}</button>)}</div>
@@ -407,10 +418,42 @@ export function Expiry() {
           { id: 'value', label: 'Value', num: true, sortBy: (r) => r.qty * (r.cost || r.p.cost || 0), render: (r) => fmt(r.qty * (r.cost || r.p.cost)) },
           { id: 'actions', label: 'Actions', noExport: true, className: 'actions', render: (r) => <>
             {(can('stock.receive') || can('stock.adjust')) && <button className="btn sm ghost" title="Send it back to the supplier for a credit note or refund" onClick={() => navigate('/returns', { state: { returnBatch: { productId: r.p.id, batchId: r.id, reason: r.days < 0 ? 'Expired' : 'Short expiry' } } })}>Return</button>}
-            {tab === 'expired' && can('stock.adjust') && <button className="btn sm danger" disabled={!!busy} onClick={() => writeOff(r)}>{busy === r.p.id + r.id ? 'Writing off…' : 'Write off'}</button>}
+            {tab === 'expired' && can('stock.adjust') && <button className="btn sm danger" disabled={!!busy} onClick={() => writeOff(r)}>Write off</button>}
           </> },
         ]} />}
     </div>
+  );
+}
+
+/** Writing off expired batches (one, or all of them in the monthly expiry check), with a manager's approval when the
+ *  value is over the pharmacy's limit and someone else does it (stock review, 27 Nov 2026) */
+function WriteOffSheet({ rows, busy, onCancel, onConfirm }) {
+  const { db, fmt, user } = useStore();
+  const value = rows.reduce((a, r) => a + r.qty * (Number(r.cost) || Number(r.p.cost) || 0), 0);
+  const approvalWith = useManagerApproval();
+  const approval = approvalWith(lossLimit(db.settings));
+  const ap = useApprovalBox(approval, needsApproval(value, db.settings, user));
+  const go = async (e) => {
+    e.preventDefault();
+    const by = ap.needed ? await ap.check() : null;
+    if (ap.needed && !by) return;
+    onConfirm(rows, by);
+  };
+  return (
+    <Modal title={rows.length === 1 ? `Write off ${rows[0].p.name}?` : `Write off ${rows.length} expired batches?`} onClose={onCancel} wide={rows.length > 1}>
+      <form className="stack" onSubmit={go}>
+        <p>{rows.length === 1 ? `${formatQty(rows[0].qty)} of batch ${rows[0].batch} will be taken off stock.` : 'Every batch below will be taken off stock. A batch can also be sent back to its supplier instead (Return), for a credit note.'} The write-off is {fmt(value)} at cost, in the stock card and the audit log.</p>
+        {rows.length > 1 && (
+          <div className="table-wrap" style={{ maxHeight: 280, overflow: 'auto' }}>
+            <table className="compact"><thead><tr><th>Medicine</th><th>Batch</th><th>Expired</th><th className="num">Qty</th><th className="num">Value</th></tr></thead><tbody>
+              {rows.map((r) => <tr key={r.p.id + r.id}><td>{r.p.name}</td><td>{r.batch}</td><td>{r.expiry}</td><td className="num">{formatQty(r.qty)}</td><td className="num">{fmt(r.qty * (Number(r.cost) || Number(r.p.cost) || 0))}</td></tr>)}
+            </tbody></table>
+          </div>
+        )}
+        {ap.needed && ap.fields(`A manager must approve a write-off over ${fmt(approval.limit)}`)}
+        <div className="form-actions"><button type="button" className="btn ghost" onClick={onCancel}>Cancel</button><button className="btn danger" disabled={busy || ap.blocked}>{busy ? 'Writing off…' : `Write off ${fmt(value)}`}</button></div>
+      </form>
+    </Modal>
   );
 }
 
@@ -491,7 +534,7 @@ export function QuickEdit() {
 
 /** Every stock movement for a medicine at this branch with running balance, plus counts/adjustments per batch. */
 export function StockCard() {
-  const { db, products, update, user, batchesOf, branchId, branch, can } = useStore();
+  const { db, products, update, user, batchesOf, branchId, branch, can, fmt } = useStore();
   const location = useLocation();
   const stocked = useMemo(() => products.filter((x) => x.stock > 0 || x.totalStock > 0), [products]);
   const [id, setId] = useState(location.state?.productId || stocked[0]?.id || '');
@@ -514,14 +557,23 @@ export function StockCard() {
 
   const unitName = String(p?.unit || 'unit').toLowerCase();
   const saving = useRef(false); // a second tap on Save while it is being saved must not record it twice
-  const saveAdjust = (e) => {
+  // stock review (27 Nov 2026, src/stockcontrol.js): a reason from a list, a manager's approval for a loss over the
+  // pharmacy's limit, and a nudge to Stock Count when a stock take is being typed in as many adjustments
+  const adjB = adjust ? batches.find((x) => x.id === adjust.batchId) : null;
+  const adjDiff = !adjust ? 0 : adjust.mode === 'count' ? Number(adjust.counted) - (adjB?.qty || 0) : (Number(adjust.qty) || 0) * (adjust.mode === 'remove' ? -1 : 1);
+  const adjLoss = Math.max(0, -adjDiff) * (Number(adjB?.cost) || Number(p?.cost) || 0);
+  const approvalWith = useManagerApproval();
+  const approval = approvalWith(lossLimit(db.settings));
+  const ap = useApprovalBox(approval, needsApproval(adjLoss, db.settings, user));
+  const [burst, setBurst] = useState(0);
+  const saveAdjust = async (e) => {
     e.preventDefault();
     if (saving.current) return;
-    const b = batches.find((x) => x.id === adjust.batchId);
+    const b = adjB;
     let batchId = b && !b.legacy ? b.id : null;
-    const counted = Number(adjust.counted);
-    const diff = adjust.mode === 'count' ? counted - (b?.qty || 0) : Number(adjust.qty) * (adjust.mode === 'remove' ? -1 : 1);
+    const diff = adjDiff;
     if (!diff) return setAdjust(null);
+    if (!reasonReady(adjust.reason, adjust.note)) return toast('Choose why the stock changed (and say why for “Other”)', 'warn');
     // Remove: never more than a batch holds (a batch going negative while others still have stock hides stock and value);
     // what the chosen batch doesn't have comes from the medicine's other batches, earliest expiry first
     let parts = null;
@@ -529,15 +581,20 @@ export function StockCard() {
       try { parts = removalSplit(batches, adjust.batchId, -diff); } catch (err) { toast(err.message, 'error'); return; }
     }
     saving.current = true;
+    const approvedBy = ap.needed ? await ap.check() : null;
+    if (ap.needed && !approvedBy) { saving.current = false; return; }
+    const note = reasonNote(adjust.reason, adjust.note);
+    const extra = { reason: adjust.reason, ...(approvedBy ? { approvedBy } : {}) };
     update((d) => {
       if (adjust.mode === 'add' && adjust.batchId === 'new') batchId = addBatch(d, { productId: p.id, batch: adjust.newBatch, expiry: adjust.newExpiry, cost: p.cost }).id;
       const type = adjust.mode === 'count' ? 'Stock count' : 'Adjustment';
-      if (parts) for (const x of parts) move(d, { productId: p.id, qty: -x.qty, type, note: adjust.reason, user: user.name, batchId: x.batchId, branchId });
-      else move(d, { productId: p.id, qty: diff, type, note: adjust.reason, user: user.name, batchId, branchId });
+      if (parts) for (const x of parts) move(d, { productId: p.id, qty: -x.qty, type, note, ...extra, user: user.name, batchId: x.batchId, branchId });
+      else move(d, { productId: p.id, qty: diff, type, note, ...extra, user: user.name, batchId, branchId });
       const where = parts ? parts.map((x) => `${x.batch || '—'} −${x.qty}`).join(', ') : b?.batch || adjust.newBatch || '';
-      audit(d, user, adjust.mode === 'count' ? 'Stock count' : 'Stock adjusted', `${p.name} ${where}: ${diff > 0 ? '+' : ''}${diff} (${adjust.reason})`, branchId);
+      audit(d, user, adjust.mode === 'count' ? 'Stock count' : 'Stock adjusted', `${p.name} ${where}: ${diff > 0 ? '+' : ''}${diff} (${note})${approvedBy ? ` · approved by ${approvedBy}` : ''}`, branchId);
     });
     toast('Stock updated');
+    if (adjust.mode !== 'count') setBurst(adjustmentBurst(db.movements, user.name, now()) + 1);
     setAdjust(null);
     setTimeout(() => { saving.current = false; }, 800);
   };
@@ -549,9 +606,16 @@ export function StockCard() {
         <div className="row gap">
           <SearchBox value={q} onChange={setQ} placeholder="Find medicine…" />
           <select value={id} onChange={(e) => setId(e.target.value)}>{options.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select>
-          {p && p.stock > 0 && can('stock.adjust') && <button className="btn primary" onClick={() => { const first = batches.find((x) => x.qty > 0) || batches[0]; setAdjust({ mode: 'count', batchId: first?.id || 'new', counted: first?.qty || 0, qty: 1, reason: '', newBatch: '', newExpiry: '' }); }}><SlidersHorizontal size={16} />Count / adjust</button>}
+          {p && p.stock > 0 && can('stock.adjust') && <button className="btn primary" onClick={() => { const first = batches.find((x) => x.qty > 0) || batches[0]; setAdjust({ mode: 'count', batchId: first?.id || 'new', counted: first?.qty || 0, qty: 1, reason: 'count', note: '', newBatch: '', newExpiry: '' }); }}><SlidersHorizontal size={16} />Count / adjust</button>}
         </div>
       </div>
+      {burst >= BURST_ADJUSTMENTS && (
+        <div className="notice warn-notice" role="status">
+          <AlertTriangle size={15} /> You have made {burst} adjustments in the last hour. For a stock take, a <Link to="/stock-count">Stock count</Link> is safer:
+          it gives a count sheet, can hide the system figures while counting, and shows every difference for review before anything changes.
+          <button type="button" className="link-btn small" onClick={() => setBurst(0)}>Hide</button>
+        </div>
+      )}
       {p && (
         <div className="stats">
           <div className="card stat"><small>In stock here</small><strong>{p.stock}</strong><span className="muted small">{p.unit || 'units'}</span></div>
@@ -598,8 +662,10 @@ export function StockCard() {
                 })()}</label>
               : <label className="field"><span>Quantity to {adjust.mode} ({unitName}s)</span><input type="number" min="1" value={adjust.qty} onChange={(e) => setAdjust({ ...adjust, qty: e.target.value })} required />
                 {packText(p, adjust.qty) && <small className="muted">= {packText(p, adjust.qty)}</small>}</label>}
-            <label className="field"><span>Reason</span><input value={adjust.reason} onChange={(e) => setAdjust({ ...adjust, reason: e.target.value })} placeholder="e.g. damaged, stock take, sample" required /></label>
-            <div className="form-actions"><button type="button" className="btn ghost" onClick={() => setAdjust(null)}>Cancel</button><button className="btn primary">Save</button></div>
+            <ReasonFields reason={adjust.reason} note={adjust.note} onChange={(patch) => setAdjust({ ...adjust, ...patch })} />
+            {adjLoss > 0 && <small className="muted">Takes {fmt(adjLoss)} of stock off, at cost.</small>}
+            {ap.needed && ap.fields(`A manager must approve taking off more than ${fmt(approval.limit)}`)}
+            <div className="form-actions"><button type="button" className="btn ghost" onClick={() => setAdjust(null)}>Cancel</button><button className="btn primary" disabled={ap.blocked}>Save</button></div>
           </form>
         </Modal>
       )}
@@ -609,20 +675,28 @@ export function StockCard() {
 
 /** Admin & manager: edit an item's details and its batches (number, expiry, quantity) in one place */
 function InventoryEditor({ product, onClose }) {
-  const { fmt, update, user, batchesOf, branchId, syncNow } = useStore();
+  const { db, fmt, update, user, batchesOf, branchId, syncNow } = useStore();
   // stock audit (26 Nov 2026): the latest sales from the other tills first, and the "actual quantity" typed is what the
   // batch is set to, against its stock when saved (not when this was opened: a sale made meanwhile was counted twice)
   useEffect(() => { if (navigator.onLine) Promise.resolve(syncNow?.()).catch(() => {}); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const qtyNow = (r) => (batchesOf(product.id).find((b) => b.id === r.id)?.qty ?? r.qty);
   const [p, setP] = useState(() => ({ name: product.name, generic: product.generic || '', form: product.form || '', cost: product.cost || 0, wholesale: product.wholesale || 0, price: product.price || 0, reorder: product.reorder || 0, shelf: product.shelf || '' }));
   const [rows, setRows] = useState(() => batchesOf(product.id).filter((b) => b.qty !== 0).map((b) => ({ ...b, newQty: b.qty, newBatch: b.batch, newExpiry: b.expiry || '' })));
-  const [reason, setReason] = useState('');
+  // stock review (27 Nov 2026): the reason is picked from a list, and a loss over the limit needs a manager's approval
+  const [why, setWhy] = useState({ reason: '', note: '' });
   const setRow = (k, patch) => setRows((r) => r.map((x, n) => (n === k ? { ...x, ...patch } : x)));
   const unitName = String(product.unit || 'unit').toLowerCase();
-  const save = (e) => {
+  const qtyChanges = rows.filter((r) => r.touched && Math.round(Number(r.newQty) || 0) !== qtyNow(r)).map((r) => ({ ...r, qty: qtyNow(r) }));
+  const editLoss = lossOf(qtyChanges.map((r) => ({ qty: Math.round(Number(r.newQty) || 0) - r.qty, cost: Number(r.cost) || Number(product.cost) || 0 })));
+  const approvalWith = useManagerApproval();
+  const approval = approvalWith(lossLimit(db.settings));
+  const ap = useApprovalBox(approval, needsApproval(editLoss, db.settings, user));
+  const save = async (e) => {
     e.preventDefault();
-    const qtyChanges = rows.filter((r) => r.touched && Math.round(Number(r.newQty) || 0) !== qtyNow(r)).map((r) => ({ ...r, qty: qtyNow(r) }));
-    if (qtyChanges.length && !reason.trim()) return toast('Give a reason for the quantity change', 'warn');
+    if (qtyChanges.length && !reasonReady(why.reason, why.note)) return toast('Choose why the quantity changed (and say why for “Other”)', 'warn');
+    const approvedBy = qtyChanges.length && ap.needed ? await ap.check() : null;
+    if (qtyChanges.length && ap.needed && !approvedBy) return;
+    const reason = reasonNote(why.reason, why.note);
     update((d) => {
       const cur = d.products.find((x) => x.id === product.id) || product;
       const num = (v) => Number(v) || 0;
@@ -636,9 +710,9 @@ function InventoryEditor({ product, onClose }) {
           if (b) put(d, 'batches', { ...b, batch: r.newBatch.trim() || b.batch, expiry: r.newExpiry });
         }
         const diff = r.touched ? Math.round(Number(r.newQty) || 0) - qtyNow(r) : 0;
-        if (diff) move(d, { productId: product.id, qty: diff, type: 'Inventory edit', note: reason.trim(), user: user.name, batchId: r.legacy ? null : r.id, branchId });
+        if (diff) move(d, { productId: product.id, qty: diff, type: 'Inventory edit', note: reason, reason: why.reason, ...(approvedBy ? { approvedBy } : {}), user: user.name, batchId: r.legacy ? null : r.id, branchId });
       }
-      audit(d, user, 'Inventory edited', `${next.name}${qtyChanges.length ? `: ${qtyChanges.map((r) => `${r.batch} ${r.qty}→${r.newQty}`).join(', ')} (${reason.trim()})` : ''}`, branchId);
+      audit(d, user, 'Inventory edited', `${next.name}${qtyChanges.length ? `: ${qtyChanges.map((r) => `${r.batch} ${r.qty}→${r.newQty}`).join(', ')} (${reason})${approvedBy ? ` · approved by ${approvedBy}` : ''}` : ''}`, branchId);
     });
     toast(`${p.name} saved`);
     onClose();
@@ -672,8 +746,12 @@ function InventoryEditor({ product, onClose }) {
             {!rows.length && <Empty colSpan={4}>No stock at this branch. Use Add Stock to receive it.</Empty>}
           </tbody>
         </table>
-        <label className="field"><span>Reason for quantity changes (kept in the audit log)</span><input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. stock take, damaged, found extra" /></label>
-        <div className="form-actions"><button type="button" className="btn ghost" onClick={onClose}>Cancel</button><button className="btn primary">Save</button></div>
+        {qtyChanges.length > 0 && <>
+          <ReasonFields reason={why.reason} note={why.note} onChange={(patch) => setWhy({ ...why, ...patch })} />
+          {editLoss > 0 && <small className="muted">The quantity changes take {fmt(editLoss)} of stock off, at cost. For a stock take, use Stock count instead: it shows every difference for review first.</small>}
+          {ap.needed && ap.fields(`A manager must approve taking off more than ${fmt(approval.limit)}`)}
+        </>}
+        <div className="form-actions"><button type="button" className="btn ghost" onClick={onClose}>Cancel</button><button className="btn primary" disabled={qtyChanges.length > 0 && ap.blocked}>Save</button></div>
       </form>
     </Modal>
   );

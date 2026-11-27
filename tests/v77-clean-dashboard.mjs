@@ -54,7 +54,7 @@ await wait(1500);
 const tiles = () => p.evaluate(() => Object.fromEntries([...document.querySelectorAll('.kpis .stat')].map((s) => [s.querySelector('small').textContent.trim(), s.querySelector('strong').innerText.trim()])));
 const widgets = () => p.evaluate(() => [...document.querySelectorAll('.dash-cell')].map((c) => c.dataset.widget));
 
-check('clean layout: figures, the bento row, chart, health, top medicines, latest sales, busy hours', JSON.stringify(await widgets()) === JSON.stringify(['figures', 'bento', 'chart', 'health', 'top', 'recent', 'busy']), JSON.stringify(await widgets()));
+check('clean layout: figures, the bento row, chart, health, top medicines, latest sales, busy hours, stock controls, sell these first', JSON.stringify(await widgets()) === JSON.stringify(['figures', 'bento', 'chart', 'health', 'top', 'recent', 'busy', 'stockctl', 'sellfirst']), JSON.stringify(await widgets()));
 check('header: no repeated search or bell (the top bar\'s show), today\'s date in the greeting\'s line', await p.evaluate(() => !document.querySelector('.dash-search') && !document.querySelector('.dash-bell') && !!document.querySelector('.topbar .search-trigger')?.offsetParent && !!document.querySelector('.topbar > .bell button[aria-label^=Notifications]')?.offsetParent && /\d{4}/.test(document.querySelector('.welcome .sub .date-pill')?.innerText || '')));
 // UI batch 3, B1-B8
 check('B8 what\'s new: shown once after an update', await p.evaluate((v) => (document.querySelector('.whats-new')?.innerText || '').includes(`new in ${v}`) && !!document.querySelector('.whats-new a'), WHATS_NEW.version), await p.evaluate(() => localStorage.getItem('rxpos-device')));
@@ -111,7 +111,7 @@ check('…kept on this device after a reload', w.includes('alerts') && !w.includ
 await p.evaluate(() => [...document.querySelectorAll('button')].find((x) => /Edit widgets/.test(x.textContent)).click()); await wait(300);
 await p.evaluate(() => [...document.querySelectorAll('.modal button')].find((x) => /standard dashboard/.test(x.textContent)).click()); await wait(300);
 await p.keyboard.press('Escape'); await wait(400);
-check('…and "Back to the standard dashboard" restores the clean layout', JSON.stringify(await widgets()) === JSON.stringify(['figures', 'bento', 'chart', 'health', 'top', 'recent', 'busy']));
+check('…and "Back to the standard dashboard" restores the clean layout', JSON.stringify(await widgets()) === JSON.stringify(['figures', 'bento', 'chart', 'health', 'top', 'recent', 'busy', 'stockctl', 'sellfirst']));
 // sidebar groups: a count, a + quick add, opening and closing
 // 1.16.0 (the owner's clean-up): group titles carry alert counts only, no page counts; one group open at a time
 check('sidebar group titles show no page counts', await p.evaluate(() => document.querySelectorAll('.nav-title .nav-count').length === 0 && document.querySelectorAll('.nav-title').length >= 4));

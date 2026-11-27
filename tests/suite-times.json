@@ -17,6 +17,7 @@
  "unit-packs.mjs":0,
  "unit-cost-check.mjs":0,
  "unit-stock-audit.mjs":0,
+ "unit-stock-control.mjs":0,
  "unit-poplan.mjs":0,
  "unit-appdownloads.mjs":0,
  "unit-gs1.mjs":0,
@@ -153,4 +154,4 @@
  "electron-update.mjs":43,
  "v85-look.mjs":25,
  "v86-buying.mjs":30,
- "v87-behaviours.mjs":30,"v88-owner-rules.mjs":30,"v89-layout.mjs":30,"v90-split-returns.mjs":40,"v91-shared-table.mjs":60,"unit-deliverycheck.mjs":0}
+ "v87-behaviours.mjs":30,"v88-owner-rules.mjs":30,"v89-layout.mjs":30,"v90-split-returns.mjs":40,"v91-shared-table.mjs":60,"v92-stock-controls.mjs":40,"unit-deliverycheck.mjs":0}

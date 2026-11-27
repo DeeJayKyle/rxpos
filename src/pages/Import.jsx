@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { FileSpreadsheet, Library, Upload, CheckCircle2, Download } from 'lucide-react';
-import { useStore, put, move, addBatch, audit, uid, downloadFile, toCSV } from '../store.jsx';
+import { useStore, put, move, addBatch, audit, uid, downloadFile, toCSV, today } from '../store.jsx';
+import { expiryState } from '../stockcontrol.js';
 import { Tabs, Empty } from '../ui.jsx';
 import { toast, ask } from '../feedback.jsx';
 import { newInternalBarcode } from '../barcode.jsx';
@@ -125,6 +126,10 @@ export default function Import() {
     if (map.name == null) return toast('Choose which column holds the medicine name', 'warn');
     const recs = sheet.rows.map(record).filter((r) => String(r.name ?? '').trim());
     if (!(await ask({ title: `Import ${recs.length.toLocaleString()} rows?`, message: mode === 'update' ? 'Existing medicines (same barcode or name) will be updated; new ones added.' : 'Existing medicines are skipped; only new ones are added.', confirmText: 'Import' }))) return;
+    // stock review (27 Nov 2026): stock already expired is not loaded as sellable opening stock without a word
+    const gone = recs.filter((r) => toNumber(r.stock) > 0 && expiryState(toDate(r.expiry), today()) === 'expired');
+    if (gone.length && !(await ask({ title: `${gone.length} row${gone.length === 1 ? ' is' : 's are'} already expired`, message: `${gone.slice(0, 5).map((r) => `${String(r.name).trim()} (${toDate(r.expiry)})`).join(', ')}${gone.length > 5 ? ` and ${gone.length - 5} more` : ''}. Their medicines are imported, but their stock is left out: expired stock can't be sold, and it would only have to be written off. Go back to fix the dates instead?`, confirmText: 'Import without their stock', cancelText: 'Go back' }))) return;
+    const skipStock = new Set(gone);
     const s = db.settings;
     let added = 0, updated = 0, skipped = 0, stocked = 0;
     update((d) => {
@@ -154,7 +159,7 @@ export default function Import() {
         used.add(p.barcode); byCode.set(p.barcode, p); byName.set(name.toLowerCase(), p);
         existing ? updated++ : added++;
         const qty = toNumber(r.stock);
-        if (qty > 0) {
+        if (qty > 0 && !skipStock.has(r)) {
           const b = addBatch(d, { productId: p.id, batch: r.batch ? String(r.batch).trim() : 'IMPORT', expiry: toDate(r.expiry), cost });
           move(d, { productId: p.id, qty, type: 'Opening stock (import)', ref: sheet.fileName, user: user.name, batchId: b.id, branchId });
           stocked++;

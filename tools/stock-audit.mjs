@@ -9,6 +9,7 @@ import { pathToFileURL } from 'node:url';
 import catalog from '../src/data/catalog.json' with { type: 'json' };
 import { catalogCost } from '../worker/dailystock.js';
 import { stockParts } from '../src/kits.js';
+import { CORRECTION_TYPES, shrinkage, reasonLabel } from '../src/stockcontrol.js';
 
 const EAT = 3 * 3600e3; // Uganda, UTC+3
 export const ugDay = (iso) => new Date(new Date(iso).getTime() + EAT).toISOString().slice(0, 10);
@@ -81,7 +82,7 @@ export function auditTenant({ products = [], batches = [], movements = [], sales
     if (m.type === 'Refund') x.back += Number(m.qty) || 0; else x.out -= Number(m.qty) || 0;
   }
   const saleNos = new Set(sales.map((s) => s.number));
-  const sx = { checked: 0, ok: 0, missing: { n: 0, units: 0, value: 0 }, extra: { n: 0, units: 0, value: 0 }, refundGap: { n: 0, units: 0, value: 0 }, top: [], orphan: { n: 0, units: 0, value: 0, top: [] }, noCost: 0, costVsNow: { lines: 0, recorded: 0, atNow: 0 } };
+  const sx = { checked: 0, ok: 0, missing: { n: 0, units: 0, value: 0 }, extra: { n: 0, units: 0, value: 0 }, refundGap: { n: 0, units: 0, value: 0 }, top: [], orphan: { n: 0, units: 0, value: 0, top: [] }, changeover: { n: 0, units: 0, value: 0 }, noCost: 0, costVsNow: { lines: 0, recorded: 0, atNow: 0 } };
   for (const s of sales) {
     if (s.proforma || String(s.number).startsWith('PF')) continue;
     if (s.date < stockStart) { sx.beforeStock = (sx.beforeStock || 0) + 1; continue; }
@@ -96,6 +97,9 @@ export function auditTenant({ products = [], batches = [], movements = [], sales
       const w = want.get(pid) || 0, g = got.get(pid) || { out: 0, back: 0 };
       const diff = g.out - w; // + = more taken out of stock than the receipt sold; − = less
       if (Math.abs(diff) > 1e-6) {
+        // stock review (27 Nov 2026): a receipt copied from Rxtera at the changeover was sold on the old system, whose
+        // stock was already in the opening count: expected, kept apart so real problems stand out
+        if (copied(s) && diff < 0) { sx.changeover.n++; sx.changeover.units += -diff; sx.changeover.value += -diff * cost(pid); continue; }
         fine = false;
         const bucket = diff < 0 ? sx.missing : sx.extra;
         bucket.n++; bucket.units += Math.abs(diff); bucket.value += Math.abs(diff) * cost(pid);
@@ -113,7 +117,7 @@ export function auditTenant({ products = [], batches = [], movements = [], sales
       sx.orphan.n++; sx.orphan.units += net; sx.orphan.value += net * cost(pid); sx.orphan.top.push({ receipt: ref, medicine: name(pid), stockOut: net, value: r0(net * cost(pid)) });
     }
   }
-  for (const k of ['missing', 'extra', 'refundGap', 'orphan']) { sx[k].units = r0(sx[k].units); sx[k].value = r0(sx[k].value); }
+  for (const k of ['missing', 'extra', 'refundGap', 'orphan', 'changeover']) { sx[k].units = r0(sx[k].units); sx[k].value = r0(sx[k].value); }
   sx.top = sx.top.sort((a, b) => Math.abs(b.value) - Math.abs(a.value)).slice(0, 15);
   sx.orphan.top = sx.orphan.top.sort((a, b) => Math.abs(b.value) - Math.abs(a.value)).slice(0, 10);
   sx.costVsNow.recorded = r0(sx.costVsNow.recorded); sx.costVsNow.atNow = r0(sx.costVsNow.atNow);
@@ -122,7 +126,7 @@ export function auditTenant({ products = [], batches = [], movements = [], sales
   // ---- purchases ↔ stock movements ----
   const pin = new Map();
   for (const m of movements) if (m.type === 'Purchase' || m.type === 'Purchase edit') { const k = m.ref + '|' + m.productId; pin.set(k, (pin.get(k) || 0) + (Number(m.qty) || 0)); }
-  const px = { checked: 0, missing: { n: 0, units: 0, value: 0 }, top: [] };
+  const px = { checked: 0, missing: { n: 0, units: 0, value: 0 }, changeover: { n: 0, units: 0, value: 0 }, top: [] };
   for (const p of purchases) {
     if (p.status === 'draft' || p.draft) continue;
     if (String(p.date) < stockStart.slice(0, 10)) { px.beforeStock = (px.beforeStock || 0) + 1; continue; }
@@ -132,12 +136,28 @@ export function auditTenant({ products = [], batches = [], movements = [], sales
     for (const i of p.items || []) { const pid = i.productId || i.id; if (pid) want.set(pid, (want.get(pid) || 0) + (Number(i.qty) || 0)); }
     for (const [pid, w] of want) {
       const g = (pin.get(ref + '|' + pid) || 0) + (pin.get(p.number + '|' + pid) || 0) * (ref !== p.number ? 1 : 0);
+      if (g + 1e-6 < w && copied(p)) { px.changeover.n++; px.changeover.units += w - g; px.changeover.value += (w - g) * cost(pid); continue; } // copied from Rxtera: see the sales above
       if (g + 1e-6 < w) { px.missing.n++; px.missing.units += w - g; px.missing.value += (w - g) * cost(pid); px.top.push({ purchase: ref + (copied(p) ? ' (copied from Rxtera)' : ''), day: ugDay(p.date), medicine: name(pid), bought: w, stockIn: g, value: r0((w - g) * cost(pid)) }); }
     }
   }
-  px.missing.units = r0(px.missing.units); px.missing.value = r0(px.missing.value);
+  px.missing.units = r0(px.missing.units); px.missing.value = r0(px.missing.value); px.changeover.units = r0(px.changeover.units); px.changeover.value = r0(px.changeover.value);
   px.top = px.top.sort((a, b) => b.value - a.value).slice(0, 12);
   out.purchases = px;
+
+  // ---- stock review (27 Nov 2026): hand changes (counts, adjustments, inventory edits, write-offs) in the last
+  // `days` days: the biggest lines with who, which device and why, and shrinkage against the cost of sales ----
+  const since = new Date(Date.parse((today || ugDay(new Date().toISOString())) + 'T00:00:00Z') - (days - 1) * 864e5 - EAT).toISOString();
+  const costOfMove = (m) => (m.batchId && B.get(m.batchId)?.cost) || cost(m.productId);
+  const hand = movements.filter((m) => CORRECTION_TYPES.has(m.type) && String(m.date) >= since);
+  const sh = shrinkage(movements, { from: since, costOf: costOfMove });
+  out.hand = {
+    since: ugDay(since), lost: r0(sh.lost), found: r0(sh.found), sold: r0(sh.sold), pct: sh.pct,
+    byType: Object.fromEntries(Object.entries(sh.byType).map(([k, v]) => [k, r0(v)])),
+    byReason: Object.fromEntries(Object.entries(sh.byReason).map(([k, v]) => [reasonLabel(k === 'none' ? '' : k), r0(v)])),
+    byPerson: Object.fromEntries(Object.entries(sh.byPerson).map(([k, v]) => [k, r0(v)])),
+    top: hand.map((m) => ({ day: ugDay(m.date), type: m.type, medicine: name(m.productId), qty: r0(Number(m.qty) * 100) / 100, value: r0(Number(m.qty) * costOfMove(m)), by: m.user || '', device: String(m.origin || '').slice(0, 8), why: m.reason ? reasonLabel(m.reason) + (m.note ? ': ' + m.note : '') : m.note || m.ref || '', approvedBy: m.approvedBy || '' }))
+      .sort((a, b) => a.value - b.value).slice(0, 20),
+  };
 
   // ---- duplicated movements (same change recorded twice within 2 minutes) ----
   const seen = new Map(); const dx = { n: 0, units: 0, value: 0, top: [] };
@@ -308,6 +328,7 @@ export function formatReport(title, a) {
   L.push(`  stock taken out for receipts that don't exist: ${x.orphan.n} lines, ${money(x.orphan.units)} units, ${money(x.orphan.value)}`);
   for (const t of x.top) L.push(`      ${t.receipt} ${t.day} ${t.medicine}: sold ${t.sold}, stock out ${t.stockOut} (${t.diff > 0 ? '+' : ''}${t.diff}, ${money(t.value)})`);
   for (const t of x.orphan.top) L.push(`      [no receipt] ${t.receipt} ${t.medicine}: ${t.stockOut} (${money(t.value)})`);
+  if (x.changeover?.n) L.push(`  receipts copied from Rxtera at the changeover (sold on the old system; expected, not a problem): ${x.changeover.n} lines, ${money(x.changeover.units)} units, ${money(x.changeover.value)}`);
   L.push(`  receipt lines with no cost recorded: ${x.noCost}`);
   L.push(`  cost of all sold items as recorded on receipts: ${money(x.costVsNow.recorded)}; at today's costs: ${money(x.costVsNow.atNow)}`);
   const p = a.purchases;
@@ -315,6 +336,16 @@ export function formatReport(title, a) {
   L.push(`  purchases before stock tracking began (not checked): ${p.beforeStock || 0}`);
   L.push(`  purchases checked: ${p.checked}; lines whose stock was not added: ${p.missing.n}, ${money(p.missing.units)} units, ${money(p.missing.value)}`);
   for (const t of p.top) L.push(`      ${t.purchase} ${t.day} ${t.medicine}: bought ${t.bought}, added ${t.stockIn} (${money(t.value)})`);
+  if (p.changeover?.n) L.push(`  deliveries copied from Rxtera at the changeover (expected, not a problem): ${p.changeover.n} lines, ${money(p.changeover.units)} units, ${money(p.changeover.value)}`);
+  if (a.hand) {
+    const hd = a.hand;
+    h(`Hand changes since ${hd.since} (counts, adjustments, inventory edits, write-offs)`);
+    L.push(`  taken off ${money(hd.lost)}, found ${money(hd.found)}, net ${money(hd.lost - hd.found)}; cost of sales ${money(hd.sold)}; shrinkage ${hd.pct == null ? '—' : hd.pct + '%'} (aim for 1–2%)`);
+    L.push(`  by type: ${Object.entries(hd.byType).map(([k, v]) => `${k} ${money(v)}`).join(', ') || 'none'}`);
+    L.push(`  by reason: ${Object.entries(hd.byReason).map(([k, v]) => `${k} ${money(v)}`).join(', ') || 'none'}`);
+    L.push(`  by person: ${Object.entries(hd.byPerson).sort((q, r) => q[1] - r[1]).map(([k, v]) => `${k} ${money(v)}`).join(', ') || 'none'}`);
+    for (const t of hd.top) L.push(`      ${t.day} ${t.type} ${t.medicine}: ${t.qty} (${money(t.value)})${t.by ? ' by ' + t.by : ''}${t.device ? ' on ' + t.device : ''}${t.why ? ' · ' + t.why : ''}${t.approvedBy ? ' · approved by ' + t.approvedBy : ''}`);
+  }
   const d = a.duplicates;
   h('Duplicated stock changes (same change twice within 2 minutes)');
   L.push(`  ${d.n} duplicates, ${money(d.units)} units, ${money(d.value)}`);
@@ -339,6 +370,22 @@ export function formatReport(title, a) {
   L.push('  hidden = change explained by batches passing expiry or going negative (both left out of the value); negative/expired = what is left out at day end');
   L.push('  day          opening     closing      drop  receipt-cost  no-cost  sales-moves  purchases   counts  writeoff  rx-sync  opening   hidden  negative   expired');
   for (const r of a.daily.filter((d) => d.opening || d.closing)) L.push(`  ${r.day} ${money(r.opening).padStart(11)} ${money(r.closing).padStart(11)} ${money(r.drop).padStart(9)} ${money(r.receiptCost).padStart(13)} ${money(r.receiptNoCost).padStart(8)} ${money(r.saleMoves).padStart(12)} ${money(r.purchases).padStart(10)} ${money(r.counts).padStart(8)} ${money(r.writeOff).padStart(9)} ${money(r.rxSync).padStart(8)} ${money(r.openingStock).padStart(8)} ${money(r.expiredOrHidden).padStart(8)} ${money(r.negativeNow).padStart(9)} ${money(r.expiredNow).padStart(9)}`);
+  return L;
+}
+
+/** Stock review (27 Nov 2026): the few lines the weekly email carries for one pharmacy (stock figures only) */
+export function headline(title, a) {
+  const L = [title];
+  const s = a.stock, x = a.sales, hd = a.hand;
+  L.push(`  stock now: ${money(s.units)} units, ${money(s.value)} at cost`);
+  if (s.negative.lots) L.push(`  NEGATIVE batches: ${s.negative.lots} (${money(s.negative.value)}): ${s.negative.top.slice(0, 3).map((t) => `${t.medicine} ${t.qty}`).join(', ')}`);
+  if (x.missing.n || x.extra.n || x.orphan.n) L.push(`  sales not matching their stock: ${x.missing.n} lines not taken out (${money(x.missing.value)}), ${x.extra.n} taken out twice (${money(x.extra.value)}), ${x.orphan.n} with no receipt`);
+  if (a.duplicates.n) L.push(`  duplicated stock changes: ${a.duplicates.n} (${money(a.duplicates.value)})`);
+  if (a.purchases.missing.n) L.push(`  delivery lines whose stock was not added: ${a.purchases.missing.n} (${money(a.purchases.missing.value)})`);
+  if (hd) {
+    L.push(`  hand changes since ${hd.since}: ${money(hd.lost)} taken off, ${money(hd.found)} found; shrinkage ${hd.pct == null ? '—' : hd.pct + '%'} of ${money(hd.sold)} cost of sales (aim for 1–2%)`);
+    for (const t of hd.top.slice(0, 5)) if (t.value < 0) L.push(`      ${t.day} ${t.type} ${t.medicine}: ${t.qty} (${money(t.value)})${t.by ? ' by ' + t.by : ''}${t.why ? ' · ' + t.why : ''}`);
+  }
   return L;
 }
 
@@ -380,9 +427,21 @@ if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
   const only = args.filter((a, n) => !a.startsWith('--') && (fi < 0 || n !== fi + 1) && (di < 0 || n !== di + 1));
   const data = fi >= 0 ? (() => { const j = JSON.parse(fs.readFileSync(args[fi + 1], 'utf8')); return { tenants: j.tenants, rows: j.records }; })() : await fetchAll();
   const today = ugDay(new Date().toISOString());
+  const mail = []; // --mail: the short version, emailed to the owner (the weekly run, stock-audit.yml)
   for (const t of data.tenants) {
     if (only.length && !only.includes(t.slug) && !only.includes(t.id)) continue;
-    const a = auditTenant({ ...inputFor(data.rows, t.id), today, days });
+    const input = inputFor(data.rows, t.id);
+    if (!input.movements.length) continue; // a pharmacy that has not started yet
+    const a = auditTenant({ ...input, today, days });
     console.log(formatReport(`${t.name} (/${t.slug || t.id})`, a).join('\n'));
+    mail.push(headline(`${t.name} (/${t.slug || t.id})`, a).join('\n'));
+  }
+  if (args.includes('--mail')) {
+    const API = (process.env.RXPOS_API || 'https://api.rxposug.com').replace(/\/+$/, '');
+    const text = [`RxPOS weekly stock audit, ${today} (last ${days} days). Read-only: nothing was changed.`, '', ...mail.flatMap((m) => [m, '']), 'The full report is in GitHub → Actions → Stock audit.', '— RxPOS'].join('\n');
+    const r = await fetch(`${API}/api/owner/stock-audit-mail`, { method: 'POST', headers: { Authorization: 'Bearer ' + process.env.OWNER_KEY, 'Content-Type': 'application/json' }, body: JSON.stringify({ subject: `RxPOS stock audit, ${today}`, text }) });
+    const j = await r.json().catch(() => ({}));
+    console.log(j.mailed ? `Summary emailed to ${j.to}` : `The summary was NOT emailed: ${j.error || 'set ALERT_EMAIL or the owner-console email, and Brevo'}`);
+    if (!j.mailed) process.exitCode = 1;
   }
 }

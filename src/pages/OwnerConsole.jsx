@@ -238,7 +238,7 @@ function TenantAdmin({ id, api, url, onBack }) {
             <button className="btn danger" onClick={deletePharmacy}><Trash2 size={16} />Delete</button>
           </div>
         </div>
-        <Tabs value={tab} onChange={setTab} tabs={[['overview', 'Overview'], ['features', 'Features'], ['brand', 'Look & logo'], ['staff', `Staff (${d.users.length})`], ['branches', `Branches (${d.branches.length})`], ['data', 'Data'], ['payments', 'Payments & SMS'], ['errors', 'Device errors'], ['danger', 'Reset / delete']]} />
+        <Tabs value={tab} onChange={setTab} tabs={[['overview', 'Overview'], ['features', 'Features'], ['brand', 'Look & logo'], ['staff', `Staff (${d.users.length})`], ['branches', `Branches (${d.branches.length})`], ['data', 'Data'], ['payments', 'Payments & SMS'], ['devices', 'Devices'], ['errors', 'Device errors'], ['danger', 'Reset / delete']]} />
 
         {tab === 'overview' && (
           <>
@@ -320,6 +320,7 @@ function TenantAdmin({ id, api, url, onBack }) {
           </>
         )}
 
+        {tab === 'devices' && <DeviceVersions t={t} api={api} />}
         {tab === 'errors' && <DeviceErrors t={t} api={api} />}
         {tab === 'data' && <DataBrowser t={t} tables={d.tables} api={api} onChanged={load} />}
 
@@ -715,6 +716,37 @@ function BrandingTab({ t, onSave, busy }) {
         </div>
         <div className="form-actions"><button className="btn primary" disabled={busy || themes.size < 3} onClick={() => onSave({ themes: all ? [] : [...themes], defaultTheme: themes.has(def) ? def : '' }, 'Themes saved')}>Save themes</button></div>
       </div>
+    </div>
+  );
+}
+
+/** Stock review (27 Nov 2026): the app version each of this pharmacy's devices last synced with, so the owner sees
+ *  whether every till has a release's fixes. Devices on builds before 1.25.0 don't report theirs. */
+function DeviceVersions({ t, api }) {
+  const [list, setList] = useState(null);
+  const [latest, setLatest] = useState(null);
+  useEffect(() => {
+    api('/tenants/' + t.id + '/devices').then((r) => setList(r.devices || [])).catch((e) => { toast(e.message, 'error'); setList([]); });
+    fetch('/version.json').then((r) => (r.ok ? r.json() : null)).then((v) => setLatest(v?.build ? v : null)).catch(() => {});
+  }, [t.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!list) return <div className="card"><div className="skeleton" /></div>;
+  const behind = latest ? list.filter((d) => Number(d.build) < Number(latest.build)).length : 0;
+  return (
+    <div className="card table-wrap">
+      <p className="muted small">The app version each device had the last time it synced (devices on versions before 1.25.0 don't report it).{latest ? ` The newest release is ${latest.label || latest.version || 'build ' + latest.build}${behind ? `; ${behind} device${behind === 1 ? ' is' : 's are'} on an older one` : '; every device listed has it'}.` : ''}</p>
+      <table>
+        <thead><tr><th>Device</th><th>Version</th><th>Type</th><th>Last signed in as</th><th>Last synced</th></tr></thead>
+        <tbody>
+          {list.map((d) => (
+            <tr key={d.device}>
+              <td><code>{String(d.device).slice(0, 12)}</code></td>
+              <td>{d.version || '—'} <small className="muted">build {d.build || '—'}</small>{latest && Number(d.build) < Number(latest.build) && <> <span className="badge warn">older</span></>}</td>
+              <td>{d.platform || '—'}</td><td>{d.who || '—'}</td><td>{showDateTime(d.last_at)}</td>
+            </tr>
+          ))}
+          {!list.length && <tr><td colSpan={5} className="empty">No device has reported its version yet. Devices report it once they run 1.25.0 or later.</td></tr>}
+        </tbody>
+      </table>
     </div>
   );
 }

@@ -9,6 +9,7 @@ import { Stat, Empty, Modal } from '../ui.jsx';
 import { DailyTrend, MonthLines } from '../charts.jsx';
 import { ProductArt } from '../idleart.jsx';
 import { useInsights, shareText } from '../engage.jsx';
+import { StockControlsCard, SellFirstCard } from '../components/StockControls.jsx';
 import { whatsappLink } from '../cloud.js';
 import { WeatherCard } from './Storage.jsx';
 import BentoDashboard, { saleStatus } from '../components/BentoDashboard.jsx';
@@ -44,7 +45,10 @@ const WIDGETS = [
   { id: 'recent', name: 'Latest sales', span: 6, on: true },
   // UI batch 3, B5: sales by weekday and hour
   { id: 'busy', name: 'Busy hours (sales by day and hour)', span: 12, on: true },
-  { id: 'checks', name: 'Sales to check (when there are some)', span: 12, on: true },
+  { id: 'checks', name: 'Sales and stock to check (when there are some)', span: 12, on: true },
+  // stock review (27 Nov 2026): shrinkage, deliveries against sales, reminders; and the batches to sell first
+  { id: 'stockctl', name: 'Stock controls (shrinkage, deliveries, reminders)', span: 8, on: true },
+  { id: 'sellfirst', name: 'Sell these first (expiring soonest)', span: 4, on: true },
   { id: 'alerts', name: 'Stock alert tiles', span: 12, on: false },
   { id: 'promote', name: 'Promote today', span: 6, on: false },
   { id: 'weather', name: 'Weather and storage', span: 6, on: false },
@@ -52,7 +56,7 @@ const WIDGETS = [
   { id: 'monthly', name: 'Monthly sales table', span: 6, on: false },
 ];
 // 1.18.0 Home screen: every widget with its starting size there, and the small ones made for it (clock, figures)
-const HOME_SIZES = { figures: 'l', bento: 'l', chart: 'l', health: 'm', top: 'm', recent: 'm', busy: 'l', checks: 'l', alerts: 'l', promote: 'm', weather: 'm', totals: 'l', monthly: 'm' };
+const HOME_SIZES = { stockctl: 'l', sellfirst: 'm', figures: 'l', bento: 'l', chart: 'l', health: 'm', top: 'm', recent: 'm', busy: 'l', checks: 'l', alerts: 'l', promote: 'm', weather: 'm', totals: 'l', monthly: 'm' };
 const HOME_ON = ['clock', 'w-sales', 'w-low', 'w-expiry', 'chart', 'health', 'top', 'recent'];
 const HOME_WIDGETS = [
   { id: 'clock', name: 'Clock', size: 's' },
@@ -67,6 +71,8 @@ export function dashLayout(d = deviceSettings()) {
   const ids = WIDGETS.map((w) => w.id);
   const order = [...(saved.order || []).filter((id) => ids.includes(id)), ...ids.filter((id) => !(saved.order || []).includes(id))];
   const shown = new Set(saved.shown || WIDGETS.filter((w) => w.on).map((w) => w.id));
+  // a card added in a later version (not in the saved order yet) shows when it is on by default (stock review, 27 Nov 2026)
+  if (saved.shown && saved.order) for (const w of WIDGETS) if (w.on && !saved.order.includes(w.id)) shown.add(w.id);
   // sizes: each card's width in the 12-column grid, changed by dragging its edge or from its menu (2026-11-20)
   return { period: PERIODS.some(([k]) => k === saved.period) ? saved.period : 'today', order, shown, sizes: saved.sizes || {} };
 }
@@ -199,6 +205,8 @@ export default function Dashboard() {
     ),
     recent: () => <RecentSales sales={db.sales} branchId={branchId} fmt={fmt} />,
     checks: () => (can('audit') && (db.anomalies || []).some((a) => !a.reviewed) ? <SaleChecks /> : null),
+    stockctl: () => (can('reports') || can('stock.adjust') ? <StockControlsCard db={db} branchId={branchId} fmt={fmt} exp={exp} lowCount={lowStock.length} /> : null),
+    sellfirst: () => <SellFirstCard exp={exp} warn={warn} fmt={fmt} />,
     busy: () => { const wk = new Date(); wk.setDate(wk.getDate() - 6); const w7 = dayOf(wk.toISOString()); const from = fig.range.from < w7 ? fig.range.from : w7;
       return <BusyHours sales={db.sales} branchId={branchId} from={from} words={from === fig.range.from && !isToday ? (PERIOD_WORDS[period].startsWith('last') ? 'in the ' : '') + PERIOD_WORDS[period] : 'in the last 7 days'} />; },
     bento: () => <BentoDashboard byDay={m.byDay} db={db} branchId={branchId} fmt={fmt} fmtShort={fmtShort} can={can} counts={{ expiry: exp.soon + exp.expired, low: lowStock.length }} />,
@@ -467,7 +475,7 @@ function EditWidgets({ layout, onClose }) {
 
 // Step 3: what the cloud found when it re-checked a sale (worker/anomalies.js). Only roles with the audit log receive
 // these records; the sale itself was kept as it was sold. "Checked" keeps the finding, marked, in the audit trail.
-const CHECK_KINDS = { proforma: 'Proforma doesn’t match', stock: 'Stock doesn’t match the sale', stale: 'Older change not applied', totals: 'Totals don’t add up', discount: 'Discount without permission', price: 'Sold below price', paid: 'Paid more than the total', invalid: 'Invalid amounts', credit: 'Over credit limit', late: 'Recorded after the day was closed', 'discount-limit': 'Discount above the role\'s limit', 'closed-refund': 'Refund from a closed day', insurance: 'Insurance split doesn’t add up' };
+const CHECK_KINDS = { proforma: 'Proforma doesn’t match', stock: 'Stock doesn’t match the sale', stale: 'Older change not applied', totals: 'Totals don’t add up', discount: 'Discount without permission', price: 'Sold below price', paid: 'Paid more than the total', invalid: 'Invalid amounts', credit: 'Over credit limit', late: 'Recorded after the day was closed', 'discount-limit': 'Discount above the role\'s limit', 'closed-refund': 'Refund from a closed day', insurance: 'Insurance split doesn’t add up', 'stock-loss': 'Big stock loss by hand', 'stock-loss-day': 'Day\'s stock losses over the limit' };
 function SaleChecks() {
   const { db, fmt, user, update, branchId } = useStore();
   const open = (db.anomalies || []).filter((a) => !a.reviewed).sort((a, b) => String(b.saleDate).localeCompare(String(a.saleDate)));
@@ -480,8 +488,8 @@ function SaleChecks() {
   });
   return (
     <div className="card sale-checks" aria-label="Sales to check">
-      <h3><SearchCheck size={17} />Sales to check <span className="badge warn">{open.length}</span></h3>
-      <small className="muted">The cloud re-checks every sale. These were kept as sold; look at each one and mark it checked.</small>
+      <h3><SearchCheck size={17} />Sales and stock to check <span className="badge warn">{open.length}</span></h3>
+      <small className="muted">The cloud re-checks every sale and every big stock loss. These were kept as they were made; look at each one and mark it checked.</small>
       <table className="compact"><tbody>
         {list.map((a) => (
           <tr key={a.id}>
