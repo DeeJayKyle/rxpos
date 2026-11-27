@@ -88,7 +88,7 @@ export function costHistory({ products = [], sales = [], purchases = [], audit =
   // many medicines' costs set in the same second: one bulk save (an import, a merge, a device re-sending its copy)
   const sec = new Map();
   for (const p of products) { const t = String(p._f?.cost || p.updatedAt || '').slice(0, 19); if (t) (sec.get(t) || sec.set(t, []).get(t)).push(p); }
-  const bulk = [...sec].filter(([, ps]) => ps.length >= 5).sort((a, b) => b[1].length - a[1].length).slice(0, 8).map(([t, ps]) => ({
+  const bulk = [...sec].filter(([, ps]) => ps.length >= 3).sort((a, b) => b[0].localeCompare(a[0])).slice(0, 10).map(([t, ps]) => ({
     at: t, n: ps.length, origins: [...new Set(ps.map((p) => p._origin).filter(Boolean))].slice(0, 3),
     audit: (audit || []).filter((e) => Math.abs(new Date(e.date) - new Date(t + 'Z')) < 120e3).map((e) => `${e.date.slice(11, 19)} ${e.action} (${e.user}): ${String(e.details || '').slice(0, 80)}`).slice(0, 8),
     sample: ps.slice(0, 5).map((p) => `${p.name} ${r2(n(p.cost))}`) }));
