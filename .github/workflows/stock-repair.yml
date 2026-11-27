@@ -12,6 +12,12 @@ on:
       pharmacies:
         description: 'Pharmacy web addresses, space-separated (empty = all)'
         default: ''
+      fixes:
+        description: 'Fixes the owner decided on (writeoff-twice duplicates); empty = the automatic fixes'
+        default: ''
+      expect:
+        description: 'With fixes: the number of movements the owner approved (anything else writes nothing)'
+        default: ''
 
 permissions:
   contents: read
@@ -21,8 +27,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 22
       - name: Repair stock
@@ -33,4 +39,6 @@ jobs:
           # the owner's law (worker/ownerlaw.js): the owner running this with apply = yes is the approval to write
           OWNER_APPROVED: ${{ inputs.apply == 'yes' && 'yes' || 'no' }}
           ONLY: ${{ inputs.pharmacies }}
+          FIXES: ${{ inputs.fixes }}
+          EXPECT: ${{ inputs.expect }}
         run: node tools/stock-repair.mjs $ONLY

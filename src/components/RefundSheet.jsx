@@ -37,7 +37,7 @@ export function howBack(tenders, fmt) {
 
 /** Refunds above this need a manager's approval (Settings: refundApproveAbove; 0 turns it off) unless a manager refunds */
 export const REFUND_APPROVE_ABOVE = 100000;
-export const isApprover = (u) => u && ['admin', 'manager'].includes(u.role);
+export { isApprover } from '../stockcontrol.js';
 
 export default function RefundSheet({ sale, returns = [], decimals = 0, fmt, batches = [], closedDay = false, onCancel, onConfirm, approval = null }) {
   // approval: { limit, approvers: [{ id, name }], verify(userId, secret) → Promise<boolean> } when a manager must approve

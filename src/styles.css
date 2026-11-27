@@ -3016,3 +3016,13 @@ tr.group-head > td { background: var(--surface-2); padding: 6px 10px; }
 .theme-sec .sec-head:hover { color: var(--primary); }
 .theme-sec .sec-chev { transition: transform .15s; }
 .theme-sec .sec-chev.shut { transform: rotate(-90deg); }
+
+/* stock review (27 Nov 2026): a count line over the pharmacy's limit, to be recounted before posting */
+tr.row-warn > td { background: color-mix(in srgb, var(--warn, #d97706) 10%, transparent); }
+.stock-controls .bars { display: flex; align-items: flex-end; gap: 6px; height: 90px; margin: 8px 0 4px; }
+.stock-controls .bars .wk { flex: 1; display: flex; gap: 2px; align-items: flex-end; height: 100%; }
+.stock-controls .bars i { flex: 1; display: block; min-height: 2px; border-radius: 3px 3px 0 0; }
+.stock-controls .bars i.in { background: var(--ok, #16a34a); }
+.stock-controls .bars i.out { background: var(--warn, #d97706); }
+.stock-controls .legend { display: flex; gap: 12px; font-size: 12px; }
+.stock-controls .legend b { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }

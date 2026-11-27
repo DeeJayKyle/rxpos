@@ -1,3 +1,4 @@
+import { LOSS_LIMIT, LOSS_DAY_LIMIT, DELIVERY_GAP_DAYS } from '../stockcontrol.js';
 import { useEffect, useState, useRef } from 'react';
 import { Store, Printer, MessageSquareText, Cloud, DatabaseBackup, Sheet, Copy, CheckCircle2, XCircle, Smartphone, CreditCard, Plus, Trash2, RotateCcw, BellRing, LockKeyhole, MapPin, Search, Thermometer, RefreshCw } from 'lucide-react';
 import { useStore, useSyncState, uid, audit, downloadFile, today, defaultSettings, DEFAULT_PAYMENT_METHODS } from '../store.jsx';
@@ -180,6 +181,19 @@ export default function Settings() {
             <label className="field check"><input type="checkbox" checked={!!s.blindCashUp} onChange={(e) => setS({ ...s, blindCashUp: e.target.checked })} /><span>Blind cash-up: staff count the cash before they see what the drawer should hold<Help text={HELP.blind} /></span></label>
             <label className="field"><span>Refunds above this need a manager (0 = never)<Help text={HELP.refundApprove} /></span>
               <input type="number" min="0" step="1000" value={s.refundApproveAbove ?? 100000} onChange={(e) => setS({ ...s, refundApproveAbove: Math.max(0, Number(e.target.value) || 0) })} /></label>
+            {/* stock review (27 Nov 2026, src/stockcontrol.js) */}
+            <h4 className="full">Stock controls</h4>
+            <label className="field"><span>One stock change losing more than this needs a manager, and the owner is told (0 = never)</span>
+              <input type="number" min="0" step="1000" value={s.stockLossLimit ?? LOSS_LIMIT} onChange={(e) => setS({ ...s, stockLossLimit: Math.max(0, Number(e.target.value) || 0) })} /></label>
+            <label className="field"><span>Tell the owner when a day's stock losses by hand pass (0 = never)</span>
+              <input type="number" min="0" step="10000" value={s.stockLossDayLimit ?? LOSS_DAY_LIMIT} onChange={(e) => setS({ ...s, stockLossDayLimit: Math.max(0, Number(e.target.value) || 0) })} /></label>
+            <label className="field"><span>Remind when no delivery is recorded for this many days (0 = never)</span>
+              <input type="number" min="0" step="1" value={s.deliveryGapDays ?? DELIVERY_GAP_DAYS} onChange={(e) => setS({ ...s, deliveryGapDays: Math.max(0, Math.floor(Number(e.target.value) || 0)) })} /></label>
+            <label className="field"><span>Weekly order day (a reminder on the dashboard to draft the orders)</span>
+              <select value={s.orderDay ?? ''} onChange={(e) => setS({ ...s, orderDay: e.target.value === '' ? '' : Number(e.target.value) })}>
+                <option value="">No weekly reminder</option>
+                {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((d, i) => <option key={d} value={i}>{d}</option>)}
+              </select></label>
             {field('receiptFooter', 'Receipt footer message')}
             <label className="field"><span>Add Stock receives medicines with packs in</span>
               <select value={s.receiveUnit || 'pack'} onChange={(e) => setS({ ...s, receiveUnit: e.target.value })}><option value="pack">Packs (the largest pack, e.g. boxes)</option><option value="unit">Single units</option></select>

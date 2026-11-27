@@ -11,6 +11,7 @@ import { packPrice } from '../src/packs.js';
 import { overLimit } from '../src/credit.js';
 import { isKit, kitExpectedPrice, unitsUsed } from '../src/kits.js';
 import { returnFindings } from '../src/returns.js';
+import { CORRECTION_TYPES, lossLimit, lossDayLimit } from '../src/stockcontrol.js';
 
 const num = (v) => Number(v) || 0;
 const money = (n) => Math.round(num(n)).toLocaleString('en-US');
@@ -153,4 +154,43 @@ export function fingerprint(s) {
   let h = 0x811c9dc5;
   for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); }
   return (h >>> 0).toString(36);
+}
+
+/**
+ * Stock review (27 Nov 2026): stock lost by hand. moves: the counts, adjustments, inventory edits and write-offs of
+ * one push · costOf(m): the cost of one unit it moved · settings: the pharmacy's (stockLossLimit, stockLossDayLimit) ·
+ * dayBefore(branch, day): what that branch's hand changes had already lost that day, before this push · dayOf(iso):
+ * the pharmacy's calendar day. → [{ kind, detail, amount, move?, branchId, day, step? }]. Nothing is refused: the change
+ * is the pharmacy's record of its shelf; the owner sees what is worth a look.
+ */
+export async function stockLossFindings(moves, { costOf, settings, dayBefore, dayOf, names = new Map() }) {
+  const line = lossLimit(settings), dayLimit = lossDayLimit(settings);
+  const out = [];
+  const perDay = new Map();
+  for (const m0 of moves) {
+    const m = Number.isFinite(Date.parse(m0.date)) ? m0 : { ...m0, date: new Date().toISOString() }; // an undated change counts today
+    if (!CORRECTION_TYPES.has(m.type) || !(num(m.qty) < 0)) continue;
+    const value = -num(m.qty) * costOf(m);
+    if (!(value > 0)) continue;
+    const k = (m.branchId || 'main') + '|' + dayOf(m.date);
+    perDay.set(k, (perDay.get(k) || 0) + value);
+    if (line > 0 && value > line) {
+      const what = names.get(String(m.productId)) || String(m.productId);
+      const why = m.type === 'Stock count' ? `stock count ${m.ref || m.note || ''}`.trim() : m.type === 'Expired write-off' ? 'expired write-off' : `${m.type.toLowerCase()}${m.note ? ': ' + m.note : ''}`;
+      out.push({ kind: 'stock-loss', move: m, branchId: m.branchId || 'main', day: dayOf(m.date), amount: Math.round(value),
+        detail: `${what}: ${Math.round(-num(m.qty) * 100) / 100} taken off by ${why} (${money(value)} at cost, over the limit of ${money(line)})${m.approvedBy ? `; approved by ${m.approvedBy}` : m.type === 'Stock count' || m.type === 'Expired write-off' ? '' : '; no manager approved it'}` });
+    }
+  }
+  if (dayLimit > 0) {
+    for (const [k, value] of perDay) {
+      const [branchId, day] = k.split('|');
+      const before = num(await dayBefore(branchId, day));
+      const total = before + value;
+      // flagged again each time the day's total passes another multiple of the limit
+      const step = Math.floor(total / dayLimit);
+      if (step >= 1 && step > Math.floor(before / dayLimit)) out.push({ kind: 'stock-loss-day', branchId, day, step, amount: Math.round(total),
+        detail: `Hand changes (counts, adjustments, edits, write-offs) took ${money(total)} of stock off on ${day}, over the day limit of ${money(dayLimit)}` });
+    }
+  }
+  return out;
 }

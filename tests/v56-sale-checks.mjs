@@ -76,11 +76,11 @@ const signIn = async (email) => {
 };
 const ann = await signIn('ann@chk.rx');
 await ann.evaluate(() => { location.hash = '#/'; }); await wait(1200);
-check('the admin\'s dashboard shows "Sales to check" with 3', await until(ann, () => /Sales to check\s*3/.test(document.querySelector('.sale-checks')?.innerText || ''), 10000),
+check('the admin\'s dashboard shows "Sales to check" with 3', await until(ann, () => /Sales and stock to check\s*3/.test(document.querySelector('.sale-checks')?.innerText || ''), 10000),
   await ann.evaluate(() => document.querySelector('.sale-checks')?.innerText.slice(0, 120) || 'no card'));
 check('…naming the sale and what was found', await ann.evaluate(() => /R-DISC/.test(document.querySelector('.sale-checks').innerText) && /Discount without permission/.test(document.querySelector('.sale-checks').innerText)));
 await ann.evaluate(() => [...document.querySelectorAll('.sale-checks button')].find((x) => x.textContent.trim() === 'Checked').click());
-check('"Checked" leaves 2', await until(ann, () => /Sales to check\s*2/.test(document.querySelector('.sale-checks')?.innerText || ''), 8000));
+check('"Checked" leaves 2', await until(ann, () => /Sales and stock to check\s*2/.test(document.querySelector('.sale-checks')?.innerText || ''), 8000));
 check('…and syncs: the owner console counts 2', await (async () => { for (let i = 0; i < 30; i++) { if ((await owner('/tenants')).tenants.find((x) => x.id === tid)?.stats.anomalies === 2) return true; await wait(500); } return false; })());
 check('…and the audit log records who checked it', (await owner(`/tenants/${tid}/records?t=audit`)).rows?.some((x) => x.rec?.action === 'Sale check reviewed'));
 

@@ -13,9 +13,8 @@ import { toast } from '../feedback.jsx';
 import { Barcode } from '../barcode.jsx';
 import { stockParts, kitContents } from '../kits.js';
 import { unitScaleAt, unitChangedSince } from '../packs.js';
-import RefundSheet, { REFUND_APPROVE_ABOVE, isApprover } from '../components/RefundSheet.jsx';
-import { hasPin, verifyPin, verifyOffline } from '../offline.js';
-import { cloudLogin, cloudLogout } from '../cloud.js';
+import RefundSheet, { REFUND_APPROVE_ABOVE } from '../components/RefundSheet.jsx';
+import { useManagerApproval } from '../components/ManagerApproval.jsx';
 import { cartSubtotal, lineTotal, taxOf, round } from '../money.js';
 import { isSplit, payLabel, paidWith } from '../tenders.js';
 import { returnsOf, planReturn, returnRecord, fullyReturned } from '../returns.js';
@@ -242,20 +241,8 @@ export default function Sales() {
   const refund = (sale) => setRefunding(sale);
   // safer refunds (2026-11-18): over the limit, someone who isn't a manager needs a manager's PIN or password (checked on
   // this device, as at sign-in); the approver is kept on the sale and in the audit log
-  const approvalFor = () => {
-    const limit = Number(localDb.settings.refundApproveAbove ?? REFUND_APPROVE_ABOVE) || 0;
-    if (!limit || isApprover(user)) return null; // the sheet asks only when this refund gives back more than the limit
-    const approvers = localDb.users.filter((u) => isApprover(u) && u.id !== user.id && u.active !== false).map((u) => ({ id: u.id, name: u.name }));
-    return { limit, approvers, verify: async (id, secret) => {
-      // this device first (a quick PIN, or a password remembered by the Windows / Android app), then the cloud: a
-      // sign-in as the manager that is closed again at once
-      if (hasPin(syncCfg.tenant, id) && /^\d{4,8}$/.test(secret) && (await verifyPin(syncCfg.tenant, id, secret)).ok) return true;
-      if (await verifyOffline(syncCfg.tenant, id, secret).catch(() => false)) return true;
-      const email = localDb.users.find((u) => u.id === id)?.email;
-      if (!email || !syncCfg.url || !navigator.onLine) return false;
-      try { const r = await cloudLogin(syncCfg.url, email, secret, syncCfg.tenant); cloudLogout({ url: syncCfg.url, key: r.token }).catch(() => {}); return !!r.token; } catch { return false; }
-    } };
-  };
+  const approvalWith = useManagerApproval();
+  const approvalFor = () => approvalWith(Number(localDb.settings.refundApproveAbove ?? REFUND_APPROVE_ABOVE) || 0); // the sheet asks only when this refund gives back more than the limit
   // Nov 2026 audit item 6 (src/returns.js): part of a sale comes back. A credit note of its own: the lines and money
   // given back (negative), stock back into the batches it came from; the sale itself is not changed.
   const doReturn = async (sale, why, approvedBy, picks) => {

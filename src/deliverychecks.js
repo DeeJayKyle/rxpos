@@ -66,6 +66,8 @@ export function deliveryReview(d, show) {
     if (plainDate(l.expiry) && plainDate(d.today)) {
       const left = days(d.today, l.expiry);
       if (left >= 0 && left < SHORT_EXPIRY_DAYS) warnings.push(`${l.name}: expires on ${show.date(l.expiry)}, in ${left} days: short-dated.`);
+      // stock review (27 Nov 2026): stock already expired was received as sellable (UGX 1.47M at one pharmacy's start)
+      else if (left < 0) warnings.push(`${l.name}: EXPIRED on ${show.date(l.expiry)}. Expired stock can't be sold: is the date right, or should it go back to the supplier?`);
     }
     // 7. selling below cost
     if (price > 0 && cost > 0 && price < cost) warnings.push(`${l.name}: the retail price ${show.money(price)} is below the cost ${show.money(cost)}.`);

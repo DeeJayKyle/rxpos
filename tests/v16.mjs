@@ -120,7 +120,8 @@ const i0 = await stockOf(invName);
 await A.evaluate(() => document.querySelector('tbody tr button').click()); await wait(600);
 check('Inventory has an Edit button for the admin', await A.evaluate(() => /Batches at this branch/.test(document.querySelector('.modal')?.innerText || '')));
 await A.evaluate((n) => { const q = [...document.querySelectorAll('.modal tbody tr')][0].querySelector('input[aria-label="Actual qty"]'); const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; set.call(q, String(n)); q.dispatchEvent(new Event('input', { bubbles: true })); }, i0 + 5);
-await A.type('.modal input[placeholder^="e.g. stock take"]', 'Stock take');
+// stock review (27 Nov 2026): the reason is picked from a list
+await A.evaluate(() => { const s = [...document.querySelectorAll('.modal select')].find((x) => [...x.options].some((o) => o.value === 'found')); s.value = 'found'; s.dispatchEvent(new Event('change', { bubbles: true })); }); await wait(200);
 await A.evaluate(() => [...document.querySelectorAll('.modal button')].find((x) => x.textContent.trim() === 'Save').click()); await wait(1000);
 check('inventory edit changes the stock', (await stockOf(invName)) === i0 + 5, `${i0} → ${await stockOf(invName)}`);
 

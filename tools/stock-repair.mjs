@@ -59,16 +59,67 @@ export function planRepairs({ products = [], batches = [], movements = [], sales
   return { moves, lines, unfixable, receipts };
 }
 
+/**
+ * Fixes that need the owner's decision first (stock review, 27 Nov 2026), run only when named in FIXES:
+ *  • 'writeoff-twice': a batch below zero, with no other stock of it, that was written off as expired more than once:
+ *    the shortfall is put back (the same expired stock was written off twice), bringing it to zero
+ *  • 'duplicates': the same stock change recorded twice within 2 minutes: the second one is cancelled
+ * Ids are fixed per problem, so running it again writes nothing new.
+ */
+export function planDecided({ products = [], batches = [], movements = [] }, { fixes = [], now = new Date().toISOString() } = {}) {
+  const P = new Map(products.map((p) => [p.id, p])), B = new Map(batches.map((b) => [b.id, b]));
+  const cost = (pid) => (P.has(pid) ? Number(P.get(pid).cost) || 0 : catalogCost(pid));
+  const have = new Set(movements.map((m) => m.id));
+  const moves = [], lines = [];
+  const base = (m, note) => ({ productId: m.productId, type: 'Adjustment', ref: 'AUDIT-' + ugDay(now).replace(/-/g, ''), note, user: 'Stock audit', batchId: m.batchId || null, branchId: m.branchId || 'main', date: now });
+  if (fixes.includes('writeoff-twice')) {
+    const lots = new Map();
+    for (const m of movements) { const k = (m.branchId || 'main') + '|' + (m.batchId || 'lb-' + m.productId); (lots.get(k) || lots.set(k, []).get(k)).push(m); }
+    for (const [k, list] of lots) {
+      const qty = list.reduce((a, m) => a + (Number(m.qty) || 0), 0), m0 = list[0];
+      if (qty > -1e-9 || list.filter((m) => m.type === 'Expired write-off').length < 2) continue;
+      const other = [...lots].some(([k2, l2]) => k2 !== k && l2[0].productId === m0.productId && (l2[0].branchId || 'main') === (m0.branchId || 'main') && l2.reduce((a, m) => a + (Number(m.qty) || 0), 0) > 1e-9);
+      const id = `audit-wo2-${k}`;
+      if (other || have.has(id)) continue;
+      moves.push({ ...base(m0, 'Correction (stock audit, approved by the owner): this expired stock was written off twice; the second write-off is put back'), id, qty: -qty });
+      lines.push(`${P.get(m0.productId)?.name || m0.productId} [${m0.batchId ? B.get(m0.batchId)?.batch : '(no batch)'}] ${qty} → 0 (written off twice), +${Math.round(-qty * cost(m0.productId)).toLocaleString('en-US')}`);
+    }
+  }
+  if (fixes.includes('duplicates')) {
+    const seen = new Map();
+    for (const m of [...movements].sort((a, b) => (a.date < b.date ? -1 : 1))) {
+      const k = [m.productId, m.batchId, m.branchId, m.type, m.ref, m.qty, m.note].join('|');
+      const prev = seen.get(k); seen.set(k, m);
+      if (!prev || Date.parse(m.date) - Date.parse(prev.date) >= 120e3 || m.type === 'Sale' || String(m.id).startsWith('audit-')) continue;
+      const id = `audit-dup-${m.id}`;
+      if (have.has(id)) continue;
+      moves.push({ ...base(m, `Correction (stock audit, approved by the owner): cancels a duplicate of the ${m.type} of ${ugDay(m.date)} (${m.qty})`), id, qty: -(Number(m.qty) || 0) });
+      lines.push(`${P.get(m.productId)?.name || m.productId}: duplicate ${m.type} of ${ugDay(m.date)} (${m.qty}) cancelled, ${Math.round(-(Number(m.qty) || 0) * cost(m.productId)).toLocaleString('en-US')}`);
+    }
+  }
+  return { moves, lines };
+}
+
 if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
   const only = process.argv.slice(2).filter((a) => !a.startsWith('--'));
   const APPLY = process.env.APPLY === 'yes';
   const API = (process.env.RXPOS_API || 'https://api.rxposug.com').replace(/\/+$/, '');
+  // decided fixes (planDecided) run alone, and only with the number of movements the owner approved (EXPECT)
+  const FIXES = (process.env.FIXES || '').split(/[\s,]+/).filter((f) => ['writeoff-twice', 'duplicates'].includes(f));
+  const EXPECT = Number(process.env.EXPECT);
+  if (APPLY && FIXES.length && !(only.length === 1 && EXPECT > 0)) throw new Error('Decided fixes need one pharmacy and the approved number of movements (expect)');
   const data = await fetchAll();
   for (const t of data.tenants) {
     if (only.length && !only.includes(t.slug) && !only.includes(t.id)) continue;
     const input = inputFor(data.rows, t.id);
-    const plan = planRepairs(input);
+    const plan = FIXES.length ? { ...planDecided(input, { fixes: FIXES }), unfixable: [], receipts: [] } : planRepairs(input);
     console.log(`\n### ${t.name} (/${t.slug || t.id}) — ${APPLY ? 'APPLYING' : 'dry run (nothing written)'}`);
+    if (FIXES.length) {
+      console.log(`decided fixes (${FIXES.join(', ')}): ${plan.moves.length} correcting movements`);
+      for (const l of plan.lines) console.log('  ' + l);
+      if (APPLY && EXPECT !== plan.moves.length) throw new Error(`The plan has ${plan.moves.length} movements but the owner approved ${EXPECT}: nothing written`);
+      plan.lines = [];
+    }
     console.log(`negative batches to correct: ${plan.lines.length}; correcting movements: ${plan.moves.length}`);
     for (const l of plan.lines) console.log(`  ${l.medicine} [${l.batch}] ${l.was} → 0, taken from ${l.movedFrom}${l.leftNegative ? ` (still ${l.leftNegative}: not enough stock elsewhere)` : ''}`);
     for (const u of plan.unfixable) console.log(`  CANNOT FIX (no other stock of it): ${u.medicine} ${u.qty}`);
