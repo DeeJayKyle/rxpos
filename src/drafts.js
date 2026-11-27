@@ -60,3 +60,20 @@ export function checkText(read) {
   if (!read?.check?.length) return read?.unclear ? 'hard to read' : '';
   return read.check.map((f) => FIELD[f] + (read.alt && read.alt[f] != null && read.alt[f] !== '' ? ` (other reading: ${read.alt[f]})` : '')).join(', ');
 }
+
+// Sales slips (27 Nov 2026, from the SmarterPOS review): a held sale printed as a slip with a short code. The customer
+// carries it to any counter of the branch; whoever is there types or scans the code and charges the sale. The code
+// comes from the held sale's own id, so nothing new is stored; stock is checked again when the slip is opened.
+const SLIP_ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ'; // no 0/O or 1/I to misread
+/** The slip code of a held sale: "S-" and 6 letters/digits from its id */
+export function slipCode(id) {
+  let h = 2166136261;
+  for (const ch of String(id)) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; }
+  let out = '';
+  for (let i = 0; i < 6; i++) { out += SLIP_ALPHABET[h % 32]; h = Math.floor(h / 32) || Math.imul(h + i + 7, 2654435761) >>> 0; }
+  return 'S-' + out;
+}
+/** Tidy what was typed or scanned into a slip code, or '' when it isn't one */
+export const asSlipCode = (q) => { const m = String(q || '').trim().toUpperCase().replace(/\s+/g, '').match(/^S-?([2-9A-HJ-NP-Z]{6})$/); return m ? 'S-' + m[1] : ''; };
+/** The held sale at this branch with this slip code, whoever held it */
+export const draftBySlip = (db, code, branchId) => (code ? (db.drafts || []).find((d) => d.kind === 'sale' && (!branchId || d.branchId === branchId) && slipCode(d.id) === code) || null : null);

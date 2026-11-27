@@ -8,7 +8,7 @@ import { Link } from 'react-router-dom';
 import { ShieldAlert, Truck, ClipboardList, CalendarClock, ArrowRight, PackageX } from 'lucide-react';
 import { today, useStore } from '../store.jsx';
 import { oversold, soldByText } from '../oversold.js';
-import { shrinkage, weeklyBuySell, deliveryGap, deliveryGapDays, orderDue, costLookup, reasonLabel, SHRINK_TARGET } from '../stockcontrol.js';
+import { isApprover, shrinkage, weeklyBuySell, deliveryGap, deliveryGapDays, orderDue, costLookup, reasonLabel, SHRINK_TARGET } from '../stockcontrol.js';
 import { showDate } from '../showdate.js';
 import { formatQty } from '../money.js';
 
@@ -17,7 +17,8 @@ const OVERSOLD_DAYS = 14; // a batch sold below zero in the last two weeks (src/
 
 export function StockControlsCard({ db, branchId, fmt, exp, lowCount }) {
   const day = today();
-  const { stockIndex } = useStore();
+  const { stockIndex, user } = useStore();
+  const requests = isApprover(user) ? (db.purchaseOrders || []).filter((o) => o.status === 'Requested' && (o.branchId || 'main') === branchId) : [];
   const short = useMemo(() => {
     const since = new Date(Date.now() - OVERSOLD_DAYS * 864e5).toISOString();
     const names = new Map(db.products.map((p) => [p.id, p.name])), lots = new Map(db.batches.map((b) => [b.id, b.batch]));
@@ -49,6 +50,7 @@ export function StockControlsCard({ db, branchId, fmt, exp, lowCount }) {
             <Link to="/stock-count">Count stock</Link></span>
         </div>
       )}
+      {requests.length > 0 && <div className="notice info-notice small" role="status"><ClipboardList size={15} /> {requests.length} stock request{requests.length === 1 ? '' : 's'} waiting for your approval ({[...new Set(requests.map((r) => r.requestedBy).filter(Boolean))].join(', ') || 'staff'}). <Link to="/reorder" state={{ tab: 'orders' }}>Review</Link></div>}
       {gap && <div className="notice warn-notice small" role="status"><Truck size={15} /> {gap.never ? 'No delivery has been recorded' : `No delivery recorded since ${showDate(gap.since)}`} ({gap.days} days, {gap.sales} items sold since). Have all deliveries been entered? <Link to="/add-stock">Add Stock</Link></div>}
       {order && <div className="notice info-notice small" role="status"><ClipboardList size={15} /> This week's order is due: {lowCount} medicine{lowCount === 1 ? ' is' : 's are'} at or below the reorder level. <Link to="/reorder">Review and draft the orders</Link> (nothing is sent until you send it).</div>}
       {expiryDue && <div className="notice warn-notice small" role="status"><CalendarClock size={15} /> Monthly expiry check: {exp.expired} medicine{exp.expired === 1 ? ' has' : 's have'} expired stock on the shelf, and nothing was written off or returned in the last {EXPIRY_CHECK_DAYS} days. <Link to="/expiry" state={{ tab: 'expired' }}>Write off or return it</Link></div>}

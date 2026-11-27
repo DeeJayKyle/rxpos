@@ -178,9 +178,16 @@ export default function Reports() {
                   <td className="num">{fmt(v)}</td></tr>
               )); })()}
             </tbody></table></div>
-            <div className="card"><h3>By cashier</h3><table><tbody>
-              {sumBy(sales, (s) => s.cashier, (s) => s.total).map(([k, v]) => <tr key={k}><td>{k}</td><td className="num">{fmt(v)}</td></tr>)}
-            </tbody></table>
+            <div className="card"><h3>By staff</h3>{(() => {
+              // 27 Nov 2026 (from the SmarterPOS review): sales, number of sales and, when set in Settings, commission per person
+              const pct = Number(db.settings.commissionPct) || 0;
+              const count = new Map(); for (const x of sales) count.set(x.cashier, (count.get(x.cashier) || 0) + 1);
+              const rows = sumBy(sales, (x) => x.cashier, (x) => x.total);
+              return (<><table className="by-staff"><thead><tr><th>Staff</th><th className="num">Sales</th><th className="num">Amount</th>{pct > 0 && <th className="num">Commission {pct}%</th>}</tr></thead><tbody>
+                {rows.map(([k, v]) => <tr key={k}><td>{k}</td><td className="num">{count.get(k) || 0}</td><td className="num">{fmt(v)}</td>{pct > 0 && <td className="num">{fmt(Math.round(v * pct) / 100)}</td>}</tr>)}
+              </tbody></table>
+              <button type="button" className="btn sm ghost mt-2" onClick={() => downloadFile('sales-by-staff.csv', toCSV(rows.map(([k, v]) => ({ staff: k, sales: count.get(k) || 0, amount: v, ...(pct > 0 ? { commission: Math.round(v * pct) / 100 } : {}) }))), 'text/csv')}>Export CSV</button></>);
+            })()}
             <h3 className="mt-4">Retail vs wholesale</h3><table><tbody>
               {sumBy(sales, (s) => s.type || 'retail', (s) => s.total).map(([k, v]) => <tr key={k}><td className="cap">{k}</td><td className="num">{fmt(v)}</td></tr>)}
             </tbody></table></div>

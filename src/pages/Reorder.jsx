@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { ShoppingBag, PackageX, ClipboardList, MessageCircle, Printer, PackageCheck, Download, Wand2 } from 'lucide-react';
 import { DataTable } from '../datatable.jsx';
 import { lostDemand, unstockedAsks } from '../missed.js';
@@ -12,6 +12,7 @@ import { validQty, roundToPack, supplierRule, planOrders, nextStatus } from '../
 import { mainPack } from '../packs.js';
 import { unitsUsed } from '../kits.js';
 import { showDate, showDateTime } from '../showdate.js';
+import { isApprover } from '../stockcontrol.js';
 
 /** '3 boxes of 10' */
 const packCount = (q, pk) => { const n = Math.ceil(q / pk.size), w = pk.name.toLowerCase(); return `${n} ${n === 1 ? w : /(s|x|ch|sh)$/.test(w) ? w + 'es' : w + 's'} of ${pk.size}`; };
@@ -21,7 +22,8 @@ export default function Reorder() {
   const { db, products, fmt, update, user, branchId, branch, can, numberFor } = useStore();
   const navigate = useNavigate();
   const s = db.settings;
-  const [tab, setTab] = useState('reorder');
+  const location = useLocation();
+  const [tab, setTab] = useState(() => (location.state?.tab === 'orders' ? 'orders' : 'reorder'));
   const [window_, setWindow] = useState(30);
   const [lead, setLead] = useState(s.leadDays || 7);
   const [cover, setCover] = useState(s.coverDays || 30);
@@ -99,22 +101,33 @@ export default function Reorder() {
     if (badQty.length) { toast(`Fix the order quantity for ${badQty[0].p.name}${badQty.length > 1 ? ` and ${badQty.length - 1} more` : ''}`, 'error'); return; }
     setPlan(planOrders(chosen.map((r) => ({ ...r, qty: qtyOf(r) })), db.suppliers));
   };
+  // Branch requests (27 Nov 2026, from the SmarterPOS review): someone who isn't a manager sends the orders as requests;
+  // a manager (or administrator) approves each one, which makes it an ordinary draft order. Nothing reaches a supplier
+  // until someone sends it.
+  const approver = isApprover(user);
   const createPOs = () => {
     if (!plan?.length) return;
     const lines = plan.reduce((a, o) => a + o.lines.length, 0);
     update((d) => {
       for (const o of plan) {
         put(d, 'purchaseOrders', {
-          id: uid(), number: numberFor(d, 'PO'), date: now(), status: 'Draft', branchId,
+          id: uid(), number: numberFor(d, 'PO'), date: now(), status: approver ? 'Draft' : 'Requested', branchId,
           supplierId: o.supplierId, supplierName: db.suppliers.find((x) => x.id === o.supplierId)?.name || 'Any supplier', createdBy: user.name,
+          ...(approver ? {} : { requestedBy: user.name }),
           items: o.lines.map((l) => ({ productId: l.productId, name: l.name, qty: l.qty, cost: l.cost })),
         });
       }
-      audit(d, user, 'Purchase orders created', `${plan.length} order(s), ${lines} lines`, branchId);
+      audit(d, user, approver ? 'Purchase orders created' : 'Stock requested', `${plan.length} order(s), ${lines} lines`, branchId);
     });
     setPlan(null);
-    toast(`${plan.length} draft purchase order${plan.length === 1 ? '' : 's'} created. Nothing was sent to suppliers.`);
+    toast(approver ? `${plan.length} draft purchase order${plan.length === 1 ? '' : 's'} created. Nothing was sent to suppliers.` : `${plan.length} request${plan.length === 1 ? '' : 's'} sent to the manager to approve. Nothing was sent to suppliers.`);
     setTab('orders');
+  };
+  const approvePo = (po) => {
+    const next = { ...po, status: 'Draft', approvedBy: user.name, approvedAt: now() };
+    update((d) => { put(d, 'purchaseOrders', next); audit(d, user, 'Stock request approved', `${po.number}${po.requestedBy ? ` from ${po.requestedBy}` : ''}`, branchId); });
+    setViewPo((v) => (v && v.id === po.id ? next : v));
+    toast(`${po.number} approved: it is now a draft order`);
   };
 
   const poText = (po) => `Purchase order ${po.number} from ${s.name}${branch && db.branches.length > 1 ? ' – ' + branch.name : ''}\n` +
@@ -142,7 +155,7 @@ export default function Reorder() {
             <div className="grow" />
             <button className="btn ghost" onClick={() => downloadFile('reorder.csv', toCSV(chosen.map((r) => ({ medicine: r.p.name, inStock: r.p.stock, soldPerDay: r.perDay.toFixed(2), daysLeft: isFinite(r.daysLeft) ? Math.floor(r.daysLeft) : '', orderQty: qtyOf(r) ?? '', supplier: r.buy?.supplierName || '', lastCost: r.buy?.cost || r.p.cost }))), 'text/csv')}><Download size={16} />CSV</button>
             {can('medicines.manage') && <button className="btn ghost" onClick={() => setLevels(computeReorderLevels(db, products, db.settings, branchId))}><Wand2 size={16} />Set reorder levels from sales</button>}
-            <button className="btn primary" disabled={!chosen.length} onClick={reviewPOs}><ClipboardList size={16} />Review orders ({chosen.length})</button>
+            <button className="btn primary" disabled={!chosen.length} onClick={reviewPOs}><ClipboardList size={16} />{approver ? 'Review orders' : 'Review the request'} ({chosen.length})</button>
           </div>
           {levels && (() => { const c = reorderSettings(db.settings); return (
             <Modal title="Reorder levels from sales" onClose={() => setLevels(null)} wide>
@@ -176,7 +189,7 @@ export default function Reorder() {
               </div>
               <p className="num"><strong>Estimated total {fmt(plan.reduce((a, o) => a + o.total, 0))}</strong></p>
               <div className="form-actions"><button className="btn ghost" onClick={() => setPlan(null)}>Back</button>
-                <button className="btn primary" onClick={createPOs}><ClipboardList size={16} />Create {plan.length} draft order{plan.length === 1 ? '' : 's'}</button></div>
+                <button className="btn primary" onClick={createPOs}><ClipboardList size={16} />{approver ? `Create ${plan.length} draft order${plan.length === 1 ? '' : 's'}` : `Send ${plan.length} request${plan.length === 1 ? '' : 's'} to the manager`}</button></div>
             </Modal>
           )}
           <details className="explain">
@@ -264,7 +277,8 @@ export default function Reorder() {
               { id: 'value', label: 'Est. value', num: true, sortBy: (po) => po.items.reduce((a, i) => a + i.qty * (i.cost || 0), 0), render: (po) => fmt(po.items.reduce((a, i) => a + i.qty * (i.cost || 0), 0)) },
               { id: 'actions', label: 'Actions', noExport: true, className: 'actions', render: (po) => <>
                 <button className="btn sm ghost" onClick={() => setViewPo(po)}>Open</button>
-                {po.status !== 'Received' && <button className="btn sm primary" onClick={() => navigate('/add-stock', { state: { po } })}><PackageCheck size={14} />Receive</button>}
+                {po.status === 'Requested' && approver && <button className="btn sm primary" onClick={() => approvePo(po)}>Approve</button>}
+                {po.status !== 'Received' && po.status !== 'Requested' && <button className="btn sm primary" onClick={() => navigate('/add-stock', { state: { po } })}><PackageCheck size={14} />Receive</button>}
               </> },
             ]} />
         </div>
@@ -293,11 +307,12 @@ export default function Reorder() {
               </table>
               <p className="num"><strong>Estimated total {fmt(viewPo.items.reduce((a, i) => a + i.qty * i.cost, 0))}</strong></p>
             </div>
-            <p className="muted small no-print">Status: <StatusPill status={viewPo.status} />{viewPo.sentAt ? ` · marked sent ${showDateTime(viewPo.sentAt)}${viewPo.sentBy ? ' by ' + viewPo.sentBy : ''}` : ''}. Printing or opening WhatsApp does not change the status.</p>
+            <p className="muted small no-print">Status: <StatusPill status={viewPo.status} />{viewPo.requestedBy ? ` · requested by ${viewPo.requestedBy}` : ''}{viewPo.approvedBy ? ` · approved by ${viewPo.approvedBy}` : ''}{viewPo.sentAt ? ` · marked sent ${showDateTime(viewPo.sentAt)}${viewPo.sentBy ? ' by ' + viewPo.sentBy : ''}` : ''}. Printing or opening WhatsApp does not change the status.</p>
             <div className="form-actions no-print">
               {viewPo.status !== 'Received' && <button className="btn danger" onClick={async () => (await ask({ title: 'Delete this purchase order?', danger: true, confirmText: 'Delete' })) && (update((d) => del(d, 'purchaseOrders', viewPo.id)), setViewPo(null))}>Delete</button>}
               <a className={'btn ghost' + (phone.length < 12 ? ' disabled-link' : '')} href={phone.length >= 12 ? whatsappLink(phone, poText(viewPo)) : undefined} target="_blank" rel="noreferrer" title={phone.length < 12 ? 'Add the supplier’s phone number first' : ''}><MessageCircle size={16} />WhatsApp to supplier</a>
               <button className="btn ghost" onClick={() => window.print()}><Printer size={16} />Print</button>
+              {viewPo.status === 'Requested' && approver && <button className="btn primary" onClick={() => approvePo(viewPo)}>Approve</button>}
               {next && <button className="btn primary" onClick={markSent}>Mark as sent</button>}
             </div>
           </Modal>

@@ -3,10 +3,11 @@
 // (worker/index.js contactRequest). Shown on the web only, at the site's home address, to someone not signed in;
 // "Sign in" opens the usual sign-in (#/sign-in). A pharmacy's own address (rxposug.com/<pharmacy>) and the apps go
 // straight to sign-in as before. The words are RxPOS's own; nothing here holds or sends pharmacy data.
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ArrowRight, CalendarClock, ShieldCheck, Smartphone, WifiOff, ClipboardCheck, ShoppingBag, Building2, BarChart3, Sparkles, Send, CheckCircle2, LogIn, MessageCircle } from 'lucide-react';
 import { Logo } from '../logo.jsx';
 import AppDownloads from '../components/AppDownloads.jsx';
+import Learn, { LEARN_PAGES } from './Learn.jsx';
 import { cloudUrl } from '../cloud.js';
 import { isWeb, pharmacySlugFromUrl } from '../platform.js';
 
@@ -16,7 +17,7 @@ export function showsWelcome(loc = typeof location === 'undefined' ? null : loca
   if (!isWeb || !loc) return false;
   if (pharmacySlugFromUrl()) return false;
   const home = /^(www\.)?rxposug\.com$/.test(loc.hostname) || flag();
-  return home && (loc.hash === '' || loc.hash === '#' || loc.hash === '#/');
+  return home && (loc.hash === '' || loc.hash === '#' || loc.hash === '#/' || loc.hash.startsWith('#/learn'));
 }
 
 export const FEATURES = [
@@ -47,7 +48,7 @@ export const FAQ = [
   ['How do we get help?', 'Use the form below or the button on this page. Each device can also send a private error report to us, without personal data.'],
 ];
 
-export default function Welcome({ onSignIn }) {
+export default function Welcome({ onSignIn, page = '' }) {
   const [form, setForm] = useState({ name: '', pharmacy: '', phone: '', email: '', town: '', branches: '', message: '', website: '' });
   const [state, setState] = useState({ busy: false, sent: false, error: '' });
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
@@ -63,7 +64,9 @@ export default function Welcome({ onSignIn }) {
       setState({ busy: false, sent: false, error: err.message === 'Failed to fetch' ? 'No internet connection. Please try again when you are online.' : err.message });
     }
   };
-  const go = (id) => (e) => { e.preventDefault(); document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
+  // on a #/learn page, the front page's links go back to the front page first
+  const go = (id) => (e) => { e.preventDefault(); if (page) { location.hash = ''; setTimeout(() => document.getElementById(id)?.scrollIntoView({ block: 'start' }), 60); } else document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
+  useEffect(() => { if (page && !/^guide\/\d/.test(page)) window.scrollTo(0, 0); }, [page]);
   return (
     <div className="front-page">
       <header className="wl-top">
@@ -72,12 +75,14 @@ export default function Welcome({ onSignIn }) {
           <a href="#wl-features" onClick={go('wl-features')}>Features</a>
           <a href="#wl-start" onClick={go('wl-start')}>Getting started</a>
           <a href="#wl-faq" onClick={go('wl-faq')}>Questions</a>
+          <a href="#/learn/guide">Help guide</a>
+          <a href="#/learn/articles">Articles</a>
           <a href="#wl-contact" onClick={go('wl-contact')}>Talk to us</a>
         </nav>
         <button type="button" className="btn primary sm" onClick={onSignIn}><LogIn size={16} />Sign in</button>
       </header>
 
-      <main>
+      {page ? <main><Learn page={page} key={page} /></main> : <main>
         <section className="wl-hero" id="wl-hero">
           <p className="wl-kicker">Pharmacy point of sale for Uganda</p>
           <h1>Safe dispensing, honest stock, clear money. <em>In every branch.</em></h1>
@@ -100,11 +105,12 @@ export default function Welcome({ onSignIn }) {
               <article key={title} className="wl-card"><Icon size={22} aria-hidden="true" /><h3>{title}</h3><p>{text}</p></article>
             ))}
           </div>
-          <p className="wl-more"><BarChart3 size={16} aria-hidden="true" /> Also: proformas and wholesale, refunds back into the same batches, customers with allergies and insurance, refill and debt reminders by WhatsApp or SMS, expenses and banks, payroll, a fridge temperature log, team chat, and reports that export to Excel.</p>
+          <p className="wl-more"><BarChart3 size={16} aria-hidden="true" /> <span><a href="#/learn/features">See everything RxPOS does</a>. Also: proformas and wholesale, refunds back into the same batches, customers with allergies and insurance, refill and debt reminders by WhatsApp or SMS, expenses and banks, payroll, a fridge temperature log, team chat, and reports that export to Excel.</span></p>
         </section>
 
         <section className="wl-section" id="wl-start" aria-labelledby="wl-s-title">
           <h2 id="wl-s-title">Getting started</h2>
+          <p className="muted">Moving from books, Excel or another system? <a href="#/learn/moving">Here is how it works</a>.</p>
           <ol className="wl-steps">
             {STEPS.map(([title, text]) => <li key={title}><h3>{title}</h3><p>{text}</p></li>)}
           </ol>
@@ -142,9 +148,10 @@ export default function Welcome({ onSignIn }) {
             </form>
           )}
         </section>
-      </main>
+      </main>}
 
       <footer className="wl-foot">
+        <nav aria-label="More about RxPOS" className="wl-foot-links">{LEARN_PAGES.map(([k, label]) => <a key={k} href={`#/learn/${k}`}>{label}</a>)}</nav>
         <span>© {new Date().getFullYear()} RxPOS · Pharmacy point of sale, made in Uganda</span>
         <button type="button" className="link-btn" onClick={onSignIn}>Sign in</button>
       </footer>

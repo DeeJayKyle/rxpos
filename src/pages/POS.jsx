@@ -18,7 +18,7 @@ import { takeStaged, onStaged } from '../components/aiStage.js';
 import { matchProduct } from '../invoiceScan.js';
 import { copayOf, schemeChoices } from '../insurance.js';
 import { maxDiscountOf } from '../access.js';
-import { draftsFor, saleDraft } from '../drafts.js';
+import { draftsFor, saleDraft, slipCode, asSlipCode, draftBySlip } from '../drafts.js';
 import { keepsData } from '../webpolicy.js';
 import { CASH } from '../finance.js';
 import { SPLIT, settleSplit } from '../tenders.js';
@@ -367,6 +367,8 @@ export default function POS({ mode = 'retail' }) {
     e.preventDefault();
     // "/" commands typed in the search box, as in the command bar: /hold, /pay, /disc 10, /void 2, /qty 2 5 …
     if (q.startsWith('/')) { e.preventDefault(); const err = runCommand(q.slice(1).trim().toLowerCase()); if (err) toast(err, 'warn'); else setQ(''); return; }
+    const slipQ = asSlipCode(q);
+    if (slipQ && draftBySlip(db, slipQ, branchId)) { setQ(''); openSlip(slipQ); return; }
     const g = parseGs1(q);
     if (g) { scanPack(g); setQ(''); return; }
     const exact = catalog.find((p) => p.barcode && p.barcode === q.trim()); // a kit's label scans too
@@ -500,10 +502,20 @@ export default function POS({ mode = 'retail' }) {
   const holdSale = async () => {
     if (training) return toast('Training mode: sales are not held. Turn training off to hold a real sale.', 'info');
     if (!cart.length) return toast('Nothing to hold: the sale is empty', 'info');
-    try { await changeHeld([], [snapshot()]); } catch { return; }
+    const snap = snapshot();
+    try { await changeHeld([], [snap]); } catch { return; }
     clearSale(); focusSearch();
-    toast('Sale on hold. Tap it above the sale to carry on (also in Sales History → Held sales).', 'info');
+    toast('Sale on hold. Tap it above the sale to carry on (also in Sales History → Held sales).', 'info', { action: { label: 'Print a slip', run: () => setSlip({ ...snap, code: slipCode(snap.id) }) } });
   };
+  // a slip from another counter: its code opens that held sale here (whoever held it), with today's stock
+  const openSlip = async (code) => {
+    const d = draftBySlip(db, code, branchId);
+    if (!d || (d.mode || 'retail') !== mode) { toast(d ? `Slip ${code} is a ${d.mode} sale: open it on the ${d.mode} till` : `No sale on hold here has the slip ${code} (already paid, or held at another branch?)`, 'warn'); return; }
+    try { await changeHeld([d.id], cart.length ? [snapshot()] : []); } catch { return; }
+    loadSale(d.data); focusSearch();
+    toast(`Slip ${code} opened: ${d.userName ? `held by ${d.userName}, ` : ''}check the items and charge it`, 'success');
+  };
+  const [slip, setSlip] = useState(null);
   const resumeSale = async (id) => {
     const x = held.find((h) => h.id === id);
     if (!x) return;
@@ -1267,6 +1279,21 @@ export default function POS({ mode = 'retail' }) {
           </Modal>
         );
       })()}
+
+      {slip && (
+        <Modal title={<><Printer size={18} /> Sales slip {slip.code}</>} onClose={() => setSlip(null)}>
+          <p className="muted small">The customer takes this slip to any counter at this branch. Typing or scanning {slip.code} in the till's search opens the sale there to charge it. Nothing is charged and no stock is taken until then.</p>
+          <div className={'receipt sale-slip print-area paper-' + (db.settings.paperWidth || 80)}>
+            <strong>{db.settings.name}</strong>
+            <div className="slip-code">{slip.code}</div>
+            <div className="small">Pay at any counter · {new Date(slip.at).toLocaleString()}</div>
+            <table className="compact"><tbody>{slip.cart.map((l) => <tr key={l.id + (l.pack?.name || '')}><td>{l.name}</td><td className="num">× {l.qty}</td><td className="num">{fmt(l.price * l.qty)}</td></tr>)}</tbody></table>
+            <div className="row between"><strong>Total</strong><strong>{fmt(slip.cart.reduce((a, l) => a + l.price * l.qty, 0) - (Number(slip.discount) || 0))}</strong></div>
+            <div className="small">Not a receipt · prepared by {user.name}</div>
+          </div>
+          <div className="form-actions"><button className="btn ghost" onClick={() => setSlip(null)}>Close</button><button className="btn primary" onClick={() => window.print()}><Printer size={16} />Print slip</button></div>
+        </Modal>
+      )}
 
       {subs && (
         <Modal title={<><Repeat size={18} /> {subs.p.name} is out of stock</>} onClose={() => setSubs(null)}>

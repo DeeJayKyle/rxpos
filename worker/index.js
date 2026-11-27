@@ -22,7 +22,7 @@ import { backup, restore } from './backup.js';
 import { scrubText, scrubPage } from './crashscrub.js';
 import { uptimeCheck } from './uptime.js';
 import { watchdog } from './watchdog.js';
-import { dailySummaries } from './summary.js';
+import { dailySummaries, morningLowStock } from './summary.js';
 import { scheduledReports } from './reports.js';
 import { dailyStockFor, toCsv } from './dailystock.js';
 import { clean as cleanInvoice, finish as finishInvoice } from './invoiceread.js';
@@ -2086,6 +2086,9 @@ export default {
       return;
     }
     if (event.cron !== '0 6 * * 1') {
+      // 04:00 UTC = 7 am in Uganda: the morning list of what to order, for pharmacies that switched it on (one 5-minute run)
+      const at = new Date(event.scheduledTime || Date.now());
+      if (at.getUTCHours() === 4 && at.getUTCMinutes() < 5) ctx.waitUntil(morningLowStock(withDatabase(env)).then((r) => console.log('morning lists', r.map((x) => `${x.tenant}:${x.sent ?? ''}${x.error ? ' ' + x.error : ''}`).join(', '))).catch((e) => console.log('morning lists failed', e.message)));
       ctx.waitUntil(uptimeCheck(withDatabase(env), { sync }).then((r) => console.log('uptime', JSON.stringify(r))).catch((e) => console.log('uptime check failed', e.message)));
       ctx.waitUntil(watchdog(withDatabase(env)).then((r) => console.log('watchdog', JSON.stringify(r))).catch((e) => console.log('watchdog failed', e.message)));
       return;

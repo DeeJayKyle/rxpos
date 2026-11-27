@@ -5,6 +5,8 @@ import { oversold, soldByText } from '../src/oversold.js';
 import { missedNote, lostDemand, unstockedAsks } from '../src/missed.js';
 import { contactText, CONTACT_PER_IP } from '../worker/index.js';
 import { KNOWN_TABLES, TABLE_RULES } from '../worker/policy.js';
+import { slipCode, asSlipCode, draftBySlip } from '../src/drafts.js';
+import { morningText } from '../worker/summary.js';
 let pass = 0, fail = 0;
 const check = (n, ok, x = '') => { ok ? pass++ : fail++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${n}${x !== '' ? '  ' + x : ''}`); };
 
@@ -51,6 +53,18 @@ const inj = contactText({ name: 'A\r\nBcc: x@y.z', pharmacy: 'P\u0000harm', phon
 check('line breaks and control characters cannot reach the subject', !/[\r\n]/.test(inj.subject) && !inj.subject.includes('\u0000') && !/\r/.test(inj.text), JSON.stringify(inj));
 check('long fields are cut', contactText({ name: 'N'.repeat(500), pharmacy: 'P'.repeat(500), phone: '0772123456' }).subject.length < 160);
 check('a few messages an hour from one address', CONTACT_PER_IP > 0 && CONTACT_PER_IP <= 10);
+
+// ---- sales slips ----
+const codes = new Set(Array.from({ length: 2000 }, (_, i) => slipCode('draft-' + i)));
+check('a slip code is S- and 6 easy-to-read characters', /^S-[2-9A-HJ-NP-Z]{6}$/.test(slipCode('x')) && slipCode('x') === slipCode('x'));
+check('2,000 held sales: no two share a code', codes.size === 2000, codes.size);
+check('typed codes are tidied (lower case, no dash, spaces)', asSlipCode(' s-7k3q9p ') === 'S-7K3Q9P' && asSlipCode('S7K3Q9P') === 'S-7K3Q9P' && asSlipCode('S-7K3Q9') === '' && asSlipCode('Amoxil') === '');
+const sdb = { drafts: [{ id: 'd1', kind: 'sale', branchId: 'main' }, { id: 'd2', kind: 'delivery', branchId: 'main' }, { id: 'd3', kind: 'sale', branchId: 'b2' }] };
+check('a slip opens the held sale at this branch only', draftBySlip(sdb, slipCode('d1'), 'main')?.id === 'd1' && !draftBySlip(sdb, slipCode('d3'), 'main') && !draftBySlip(sdb, slipCode('d2'), 'main'));
+
+// ---- the morning list ----
+const mt = morningText('Sample Pharmacy', '2026-11-28', { low: [{ medicine: 'A', left: 3, reorder: 10 }, { medicine: 'B', left: 0, reorder: 5 }], expiring: [{ medicine: 'C', batch: 'X1', left: 4, expiry: '2026-12-10' }] });
+check('the morning list puts what ran out first, then expiring stock', /OUT OF STOCK/.test(mt) && mt.indexOf('• B') < mt.indexOf('• A') && /C batch X1/.test(mt) && /Nothing is ordered until you send it/.test(mt), mt);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -1003,7 +1003,7 @@ function Gate() {
   if (location.pathname === '/__crash' && sessionStorage.getItem('rxpos-test-crash') === '1') throw new Error('A test crash');
   if (location.pathname === '/owner' && isWeb) return <Suspense fallback={<PageSkeleton />}><OwnerConsole /></Suspense>;
   // the public front page of rxposug.com for someone not signed in (src/pages/Welcome.jsx); Sign in opens the sign-in
-  if (!user && location.pathname === '/' && showsWelcome()) return <Welcome onSignIn={() => { window.location.hash = '#/sign-in'; window.scrollTo(0, 0); }} />;
+  if (!user && (location.pathname === '/' || location.pathname.startsWith('/learn')) && showsWelcome()) return <Welcome page={location.pathname.startsWith('/learn') ? location.pathname.slice(7) || 'features' : ''} onSignIn={() => { window.location.hash = '#/sign-in'; window.scrollTo(0, 0); }} />;
   return user ? <Shell /> : <Auth />;
 }
 

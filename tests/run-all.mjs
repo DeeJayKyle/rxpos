@@ -170,6 +170,7 @@ const SUITES = [
   ['purchase orders: review, quantities, mark as sent', 'v80-po-flow.mjs', ['.output/v80']],
   ['web sign-in: browser or app, download links', 'v81-app-downloads.mjs', ['.output/v81']],
   ['front page, oversold batches, missed sales, sync status', 'v93-shop-window.mjs', []],
+  ['sales slips, branch requests, commission, your data, website pages', 'v94-shop-window-2.mjs', []],
   ['kits: build, sell, swap, label, refund', 'v82-kits.mjs', ['.output/v82']],
   ['tables and lists (UI batch 3, C)', 'v83-tables.mjs', ['.output/v83']],
   ['forms and dialogs (UI batch 3, D)', 'v84-forms.mjs', ['.output/v84']],

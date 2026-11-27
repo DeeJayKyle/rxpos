@@ -1,7 +1,7 @@
 import { LOSS_LIMIT, LOSS_DAY_LIMIT, DELIVERY_GAP_DAYS } from '../stockcontrol.js';
 import { useEffect, useState, useRef } from 'react';
 import { Store, Printer, MessageSquareText, Cloud, DatabaseBackup, Sheet, Copy, CheckCircle2, XCircle, Smartphone, CreditCard, Plus, Trash2, RotateCcw, BellRing, LockKeyhole, MapPin, Search, Thermometer, RefreshCw } from 'lucide-react';
-import { useStore, useSyncState, uid, audit, downloadFile, today, defaultSettings, DEFAULT_PAYMENT_METHODS } from '../store.jsx';
+import { useStore, useSyncState, uid, audit, downloadFile, toCSV, today, defaultSettings, DEFAULT_PAYMENT_METHODS } from '../store.jsx';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ChevronLeft, Printer as PrinterIcon, ScanBarcode, Repeat, Clock, MonitorSmartphone, UserCog } from 'lucide-react';
 import { SettingsSearch, SettingsGroup, SettingsRow, ToggleRow, DangerZone, useFindSetting } from '../components/SettingsKit.jsx';
@@ -189,6 +189,8 @@ export default function Settings() {
               <input type="number" min="0" step="10000" value={s.stockLossDayLimit ?? LOSS_DAY_LIMIT} onChange={(e) => setS({ ...s, stockLossDayLimit: Math.max(0, Number(e.target.value) || 0) })} /></label>
             <label className="field"><span>Remind when no delivery is recorded for this many days (0 = never)</span>
               <input type="number" min="0" step="1" value={s.deliveryGapDays ?? DELIVERY_GAP_DAYS} onChange={(e) => setS({ ...s, deliveryGapDays: Math.max(0, Math.floor(Number(e.target.value) || 0)) })} /></label>
+            <label className="field"><span>Staff commission on their sales, % (0 = none; Reports → By staff)</span>
+              <input type="number" min="0" max="50" step="0.5" value={s.commissionPct ?? 0} onChange={(e) => setS({ ...s, commissionPct: Math.min(50, Math.max(0, Number(e.target.value) || 0)) })} /></label>
             <label className="field"><span>Weekly order day (a reminder on the dashboard to draft the orders)</span>
               <select value={s.orderDay ?? ''} onChange={(e) => setS({ ...s, orderDay: e.target.value === '' ? '' : Number(e.target.value) })}>
                 <option value="">No weekly reminder</option>
@@ -372,6 +374,7 @@ export default function Settings() {
           {can('settings.manage') && syncCfg?.url && <DailyStockSheet syncCfg={syncCfg} />}
         </div>
       )}
+      {tab === 'backup' && can('reports') && <YourData />}
         </div>
       </div>
     </div>
@@ -400,6 +403,7 @@ function DailySummary({ s, setS, onSave }) {
       <p className="muted small">Every evening at 9 pm: the day's sales and how they were paid, profit, expenses, refunds, each branch, best sellers, and stock expiring or running low.</p>
       <div className="form-grid">
         <label className="field full"><span>Email it to (up to 5 addresses, separated by commas)</span><input type="text" inputMode="email" value={s.summaryEmails || ''} onChange={(e) => setS({ ...s, summaryEmails: e.target.value })} placeholder="owner@example.com" /></label>
+        <label className="field check full"><input type="checkbox" checked={!!s.morningLowStock} onChange={(e) => setS({ ...s, morningLowStock: e.target.checked })} /><span>Also email the list of what to order every morning at 7 (medicines at or below their reorder level, and stock expiring within 30 days; nothing is sent on a day with nothing to order)</span></label>
       </div>
       <div className="row gap">
         <button className="btn primary">Save</button>
@@ -437,6 +441,28 @@ function DailyStockSheet({ syncCfg }) {
           </div>
         </>
       ) : <button type="button" className="btn primary" disabled={busy} onClick={renew}><Sheet size={16} />Create the link</button>}
+    </div>
+  );
+}
+
+/** Your data (27 Nov 2026, from the SmarterPOS review): every main list as a spreadsheet (CSV opens in Excel), any time.
+ *  Reads what this device holds; changes nothing. */
+const DATA_LISTS = [['products', 'Medicines'], ['batches', 'Batches'], ['movements', 'Stock movements'], ['sales', 'Sales'], ['purchases', 'Deliveries'],
+  ['customers', 'Customers'], ['suppliers', 'Suppliers'], ['prescriptions', 'Prescriptions'], ['expenses', 'Expenses'], ['transfers', 'Transfers'], ['missedSales', 'Asked for, none in stock']];
+export const flatRow = (r) => Object.fromEntries(Object.entries(r).filter(([k]) => !k.startsWith('_')).map(([k, v]) => [k, v && typeof v === 'object' ? JSON.stringify(v) : v]));
+function YourData() {
+  const { db, products } = useStore();
+  const stockOf = new Map(products.map((p) => [p.id, p.stock]));
+  const rowsOf = (t) => (db[t] || []).map((r) => flatRow(t === 'products' ? { ...r, stockHere: stockOf.get(r.id) ?? '' } : r));
+  return (
+    <div className="card your-data">
+      <h3><Sheet size={18} />Your data, as spreadsheets</h3>
+      <p className="muted">Your pharmacy's records belong to you. Download any list as a CSV file that opens in Excel, as often as you like. The backup above keeps everything in one file.</p>
+      <div className="row gap wrap">
+        {DATA_LISTS.map(([t, label]) => (
+          <button key={t} type="button" className="btn sm ghost" disabled={!(db[t] || []).length} onClick={() => downloadFile(`rxpos-${t}-${today()}.csv`, toCSV(rowsOf(t)), 'text/csv')}>{label} ({(db[t] || []).length})</button>
+        ))}
+      </div>
     </div>
   );
 }
