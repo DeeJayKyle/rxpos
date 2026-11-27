@@ -44,4 +44,4 @@ ok('the restored record\'s cost is new everywhere; its other fields keep their t
   const r = restoredRecord({ id: 'w', cost: 20, updatedAt: 'x', _f: { cost: 'a', price: 'b' } }, 15);
   assert.deepEqual(r, { id: 'w', cost: 15, _f: { price: 'b' } });
 });
-console.log(`\n${passed} passed`);
+console.log(`\n${passed} passed, 0 failed`);
