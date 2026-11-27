@@ -3,7 +3,7 @@
 Pharmacy point of sale and management system for all your branches: the **Windows and Android apps** work **offline and online**;
 the **web version** (any browser) is **online only** and keeps nothing on the computer.
 
-**Live:** https://rxposug.com. Each pharmacy has its own address, e.g. https://rxposug.com/citycare-ntinda.
+**Live:** https://rxposug.com (a public front page with a *Talk to us* form; *Sign in* opens the sign-in). Each pharmacy has its own address, e.g. https://rxposug.com/citycare-ntinda.
 The **owner** signs in on https://rxposug.com with the owner email and password (or the master key at https://rxposug.com/#/owner).
 
 ## Features
@@ -21,7 +21,7 @@ The **owner** signs in on https://rxposug.com with the owner email and password 
 | Support | **Private crash reports**: errors on any device reach the owner console (Device errors), without personal data; Windows app on a supported Electron (43) |
 | Chat & calls | Team and private chats with **reply, emoji reactions, edit, delete for everyone / for me, forward, copy, pin, star, search** and **blue read ticks**; photos, files and voice notes; swipe right to reply and long-press for the menu on phones; full-screen chats on phones like WhatsApp. **In-app voice calls** that keep trying through a weak signal and log "Missed voice call" / "Voice call · 2:31" in the chat |
 | This device | Every person's own page (menu → System → This device & Updates): **Update to the latest version** in one tap, phone / desktop layout, text size, double-tap zoom, screen rotation (Android), **a sound per kind of notice** (built-in tones or your own MP3), notifications with the **unread count on the app / taskbar icon**, and keeping the Windows app running in the tray |
-| Reorder | **Smart reorder suggestions** from real sales velocity, lead time and target cover; **dead-stock report**; purchase orders (print / WhatsApp to supplier) that receive straight into Add Stock |
+| Reorder | **Smart reorder suggestions** from real sales velocity plus **customers turned away** ("Customer asked: note it" at the till, for out-of-stock or not-stocked medicines), lead time and target cover; **dead-stock report**; purchase orders (print / WhatsApp to supplier) that receive straight into Add Stock |
 | Branches | Unlimited branches, stock per branch, **stock transfers** (in transit → received, shortages recorded), owner overview of every branch, branch filters in sales & reports |
 | People | Customers (allergies, insurance, credit limit), suppliers, prescriptions with refill intervals, **refill & debt reminders by WhatsApp or SMS** |
 | Finance | Expenses & categories, banks with live balances, deposits / withdrawals / transfers, loans, debtors, creditors, cash book |
@@ -30,7 +30,7 @@ The **owner** signs in on https://rxposug.com with the owner email and password 
 | Engagement | **Idle-screen shop window**: medicines worth recommending (short expiry, slow movers, high value, best margin) and health tips, each with a picture; browse with arrows, swipes, thumbnails or the keyboard, pause, or close; one-tap **WhatsApp sharing**, "Promote today" on the dashboard, **hourly reminders** with a soft chime, notification bell |
 | Planner | **Calendar** with team events, refills due and expiring stock; subscribe in **Google Calendar / Outlook / phone** (private ICS link) |
 | Storage | **Weather** for the pharmacy's town (Open-Meteo), storage advice, **fridge / room temperature log** with safe ranges and trend |
-| Reliability | Apps: work fully offline after the first sign-in, with 7 daily on-device snapshots. Web: online only, nothing stored on the computer. Everywhere: changes go up within seconds and come down every 10 s (instantly over the live connection), crash-recovery screen, dark mode, Ctrl+K search |
+| Reliability | The **sync status is always in sight** ("Synced 14:05", Offline · 3 waiting); a **batch sold below zero** by two devices offline is flagged on the dashboard for a count. Apps: work fully offline after the first sign-in, with 7 daily on-device snapshots. Web: online only, nothing stored on the computer. Everywhere: changes go up within seconds and come down every 10 s (instantly over the live connection), crash-recovery screen, dark mode, Ctrl+K search |
 
 ## Automatic updates
 
