@@ -13,6 +13,7 @@ import { useOlderHistory, olderNote } from '../history.js';
 import { reportSummary } from '../reportSummary.js';
 import { showDate } from '../showdate.js';
 import { unitScaleAt } from '../packs.js';
+import { shrinkage, costLookup, reasonLabel, CORRECTION_TYPES, SHRINK_TARGET } from '../stockcontrol.js';
 
 const sumBy = (arr, key, val) => {
   const m = {};
@@ -40,8 +41,8 @@ function Donut({ parts, fmt }) {
   );
 }
 
-const REPORT_GROUPS = [['sales', 'Sales', ['sales', 'lines', 'products', 'consumption']], ['money', 'Money', ['purchases', 'expenses', 'profit', 'income']], ['stock', 'Stock', ['stock']]];
-const VIEW_NAMES = { sales: 'Sales Report', lines: 'Sales lines', products: 'Sales by Product', consumption: 'Consumption (ABC)', purchases: 'Purchase Report', expenses: 'Expenses Report', profit: 'Profit & margins', stock: 'Stock Valuation', income: 'Income Statement' };
+const REPORT_GROUPS = [['sales', 'Sales', ['sales', 'lines', 'products', 'consumption']], ['money', 'Money', ['purchases', 'expenses', 'profit', 'income']], ['stock', 'Stock', ['stock', 'losses']]];
+const VIEW_NAMES = { sales: 'Sales Report', lines: 'Sales lines', products: 'Sales by Product', consumption: 'Consumption (ABC)', purchases: 'Purchase Report', expenses: 'Expenses Report', profit: 'Profit & margins', stock: 'Stock Valuation', income: 'Income Statement', losses: 'Stock losses' };
 
 export default function Reports() {
   const { db: localDb, syncCfg, products, fmt, batchesOf, can } = useStore();
@@ -49,7 +50,7 @@ export default function Reports() {
   const full = can('reports'); // otherwise 'reports.lines' only (e.g. cashiers): just the Sales lines tab, no profit
   const [tab, setTab] = useState(full ? location.state?.tab || 'sales' : 'lines');
   const pageRef = useRef(null);
-  const TAB_NAMES = { profit: 'Profit & Margins', sales: 'Sales Report', lines: 'Sales lines', products: 'Sales by Product', consumption: 'Consumption (ABC)', purchases: 'Purchase Report', expenses: 'Expenses Report', stock: 'Stock Valuation', income: 'Income Statement' };
+  const TAB_NAMES = { profit: 'Profit & Margins', sales: 'Sales Report', lines: 'Sales lines', products: 'Sales by Product', consumption: 'Consumption (ABC)', purchases: 'Purchase Report', expenses: 'Expenses Report', stock: 'Stock Valuation', income: 'Income Statement', losses: 'Stock losses' };
   const [from, setFrom] = useState(location.state?.from || today().slice(0, 8) + '01');
   const [to, setTo] = useState(location.state?.to || today());
   // stage 4 of the faster sync: dates before this device's window come from the cloud (src/history.js)
@@ -110,7 +111,7 @@ export default function Reports() {
   const expenseNote = multi && branch !== 'all' && ['expenses', 'income'].includes(tab)
     ? (branch === MAIN_BRANCH ? 'Expenses are recorded for the whole pharmacy, not per branch; all of them are counted under the main branch.' : 'Expenses are recorded for the whole pharmacy, not per branch, so none are counted for this branch. Choose All branches or the main branch to see them.')
     : '';
-  const DEFS = { sales: 'Sales include tax and exclude refunded receipts.', lines: 'Every medicine sold; refunded receipts left out.', products: 'Revenue is quantity × price per line, before receipt discounts.', profit: 'Gross profit = sales less tax, less the cost recorded on each line.', purchases: 'Deliveries received in the period, at invoice cost.', expenses: 'Expenses recorded in Finance in the period.', income: 'Sales less tax, cost of goods, expenses and expired write-offs.', consumption: 'Medicines ranked by sales value (A = top 80%).', stock: 'Each batch at its cost; expired batches shown apart.' };
+  const DEFS = { sales: 'Sales include tax and exclude refunded receipts.', lines: 'Every medicine sold; refunded receipts left out.', products: 'Revenue is quantity × price per line, before receipt discounts.', profit: 'Gross profit = sales less tax, less the cost recorded on each line.', purchases: 'Deliveries received in the period, at invoice cost.', expenses: 'Expenses recorded in Finance in the period.', income: 'Sales less tax, cost of goods, expenses and expired write-offs.', consumption: 'Medicines ranked by sales value (A = top 80%).', stock: 'Each batch at its cost; expired batches shown apart.', losses: 'Counts, adjustments, inventory edits and expired write-offs, at cost; shrinkage is the net loss as a share of the cost of sales.' };
 
 
   return (
@@ -252,6 +253,7 @@ export default function Reports() {
         );
       })()}
 
+      {tab === 'losses' && <LossReport db={db} from={from} to={to} branch={branch} fmt={fmt} />}
       {tab === 'profit' && <ProfitReport sales={sales} />}
       {tab === 'income' && (
         <div className="card statement">
@@ -430,6 +432,43 @@ function ConsumptionReport({ sales, from, to }) {
           )}
         </div>
       )}
+    </>
+  );
+}
+
+/** Stock review (27 Nov 2026): stock changed by hand in the period, with shrinkage by reason and person, and every line */
+function LossReport({ db, from, to, branch, fmt }) {
+  const costOf = useMemo(() => costLookup(db.products, db.batches), [db.products, db.batches]);
+  const toEnd = localDate(new Date(Date.parse(to) + 864e5));
+  const range = { from: new Date(from + 'T00:00:00').toISOString(), to: new Date(toEnd + 'T00:00:00').toISOString() };
+  const br = branch === 'all' ? null : branch;
+  const sh = useMemo(() => shrinkage(db.movements, { ...range, costOf, branchId: br }), [db.movements, range.from, range.to, costOf, br]); // eslint-disable-line react-hooks/exhaustive-deps
+  const names = useMemo(() => new Map(db.products.map((p) => [p.id, p.name])), [db.products]);
+  const rows = useMemo(() => db.movements.filter((m) => CORRECTION_TYPES.has(m.type) && m.date >= range.from && m.date < range.to && (!br || (m.branchId || MAIN_BRANCH) === br))
+    .map((m) => ({ ...m, medicine: names.get(m.productId) || m.productId, value: Number(m.qty) * costOf(m), why: m.type === 'Expired write-off' ? 'Expired' : m.type === 'Stock count' ? 'Count correction' : m.reason ? reasonLabel(m.reason) : 'No reason given' })), [db.movements, range.from, range.to, br, names, costOf]);  
+  const list = (o) => Object.entries(o).sort((a, b) => a[1] - b[1]);
+  return (
+    <>
+      <div className="stats">
+        <Stat label="Taken off by hand" value={fmt(sh.lost)} sub="counts, adjustments, edits, write-offs" tone="red" />
+        <Stat label="Found" value={fmt(sh.found)} sub="counted more than the system had" />
+        <Stat label="Cost of sales" value={fmt(sh.sold)} sub="stock sold, at cost" />
+        <Stat label="Shrinkage" value={sh.pct == null ? '—' : sh.pct + '%'} sub={`net loss ÷ cost of sales · aim for ${SHRINK_TARGET}% or less`} tone={sh.pct != null && sh.pct > SHRINK_TARGET ? 'red' : undefined} />
+      </div>
+      <div className="grid-2">
+        <div className="card"><h3>By reason</h3><table><tbody>{list(sh.byReason).map(([k, v]) => <tr key={k}><td>{reasonLabel(k === 'none' ? '' : k)}</td><td className="num">{fmt(v)}</td></tr>)}{!Object.keys(sh.byReason).length && <tr><td className="muted">No stock changed by hand in this period.</td></tr>}</tbody></table></div>
+        <div className="card"><h3>By person</h3><table><tbody>{list(sh.byPerson).map(([k, v]) => <tr key={k}><td>{k}</td><td className="num">{fmt(v)}</td></tr>)}</tbody></table></div>
+      </div>
+      <DataTable id="report-losses" rows={rows} sort={['value', 1]} csv="stock-losses" empty="No stock changed by hand in this period" columns={[
+        { id: 'date', label: 'Date', sortBy: (m) => m.date, csv: (m) => m.date, render: (m) => showDate(m.date) },
+        { id: 'type', label: 'Type', key: 'type' },
+        { id: 'medicine', label: 'Medicine', key: 'medicine' },
+        { id: 'qty', label: 'Qty', num: true, sortBy: (m) => Number(m.qty), render: (m) => formatQty(m.qty) },
+        { id: 'value', label: 'Value', num: true, sortBy: (m) => m.value, csv: (m) => Math.round(m.value), render: (m) => <span className={m.value < 0 ? 'text-danger' : ''}>{fmt(m.value)}</span> },
+        { id: 'why', label: 'Why', sortBy: (m) => m.why, csv: (m) => [m.why, m.note].filter(Boolean).join(': '), render: (m) => <>{m.why}{m.note && m.note !== m.why ? <><br /><small className="muted">{m.note}</small></> : null}</> },
+        { id: 'user', label: 'By', key: 'user' },
+        { id: 'approvedBy', label: 'Approved by', sortBy: (m) => m.approvedBy || '', render: (m) => m.approvedBy || '' },
+      ]} />
     </>
   );
 }

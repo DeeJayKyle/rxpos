@@ -4,6 +4,7 @@
 // WhatsApp share button. Sent through Brevo (BREVO_API_KEY), like password emails.
 
 import { totalByMethod } from '../src/tenders.js';
+import { catalogCost } from './dailystock.js';
 
 const EAT = 3 * 3600e3; // Uganda is UTC+3 all year
 const pad = (n) => String(n).padStart(2, '0');
@@ -70,8 +71,26 @@ export function summaryText(name, day, f, money) {
   if (f.top.length) L.push('', 'Best sellers:', ...f.top.map((t) => `  ${t.name}: ${t.qty} (${money(t.value)})`));
   if (f.expiring.length) L.push('', `Expiring within 30 days: ${f.expiring.length} batch${f.expiring.length === 1 ? '' : 'es'}`, ...f.expiring.slice(0, 5).map((e) => `  ${e}`));
   if (f.lowStock.length) L.push('', `Low stock: ${f.lowStock.length}`, ...f.lowStock.slice(0, 5).map((e) => `  ${e}`));
+  // stock review (27 Nov 2026): what hand changes took off today, with the biggest ones and who made them
+  if (f.handLoss?.value > 0) L.push('', `Stock taken off by counts, adjustments, edits and write-offs: ${money(f.handLoss.value)}`, ...f.handLoss.top.map((x) => `  ${x.medicine}: ${x.qty} (${money(x.value)}) · ${x.type}${x.by ? ' by ' + x.by : ''}`));
   L.push('', '— RxPOS');
   return L.join('\n');
+}
+
+/** Stock review (27 Nov 2026): what the day's hand changes (counts, adjustments, inventory edits, write-offs) took
+ *  off, at cost: { value, top: the five biggest [{ medicine, qty, value, type, by }] } */
+export async function handLosses(db, tenant, startIso, endIso) {
+  const all = (sql, ...a) => db.prepare(sql).bind(tenant, ...a).all().then((r) => (r.results || []).map((x) => { try { return JSON.parse(x.rec); } catch { return null; } }).filter(Boolean));
+  const moves = await all("SELECT rec FROM records WHERE tenant = ?1 AND t = 'movements' AND deleted = 0 AND json_extract(rec, '$.date') >= ?2 AND json_extract(rec, '$.date') < ?3 AND json_extract(rec, '$.qty') < 0 AND json_extract(rec, '$.type') IN ('Adjustment', 'Inventory edit', 'Stock count', 'Expired write-off')", startIso, endIso);
+  if (!moves.length) return { value: 0, top: [] };
+  const ids = (list) => JSON.stringify([...new Set(list.filter(Boolean).map(String))]);
+  const prods = new Map((await all("SELECT rec FROM records WHERE tenant = ?1 AND t = 'products' AND deleted = 0 AND id IN (SELECT value FROM json_each(?2))", ids(moves.map((m) => m.productId)))).map((p) => [String(p.id), p]));
+  const lots = new Map((await all("SELECT rec FROM records WHERE tenant = ?1 AND t = 'batches' AND deleted = 0 AND id IN (SELECT value FROM json_each(?2))", ids(moves.map((m) => m.batchId)))).map((b) => [String(b.id), b]));
+  const rows = moves.map((m) => {
+    const cost = Number(lots.get(String(m.batchId))?.cost) || Number(prods.get(String(m.productId))?.cost) || catalogCost(String(m.productId));
+    return { medicine: prods.get(String(m.productId))?.name || String(m.productId), qty: Math.round(-Number(m.qty) * 100) / 100, value: -Number(m.qty) * cost, type: m.type, by: m.user || '' };
+  });
+  return { value: Math.round(rows.reduce((a, r) => a + r.value, 0)), top: rows.sort((a, b) => b.value - a.value).slice(0, 5).map((r) => ({ ...r, value: Math.round(r.value) })) };
 }
 
 /** Stock that needs attention on [day]: batches with stock expiring within 30 days, medicines at or below their reorder level */
@@ -114,7 +133,7 @@ export async function dailySummaries(env, { now = new Date(), dry = false, tenan
     const att = await attention(db, t.id, day);
     const expiring = att.expiring.map((b) => `${b.medicine} batch ${b.batch}: ${b.left} left, expires ${b.expiry}`);
     const lowStock = att.low.map((p) => `${p.medicine}: ${p.left} left (reorder at ${p.reorder})`);
-    const f = summarise({ sales, refunds, expenses, branches, lowStock, expiring });
+    const f = { ...summarise({ sales, refunds, expenses, branches, lowStock, expiring }), handLoss: await handLosses(db, t.id, startIso, endIso) };
     const text = summaryText(settings.name || t.name, day, f, fmtMoney(settings));
     let sent = 0, error = '';
     if (!dry && to.length) {

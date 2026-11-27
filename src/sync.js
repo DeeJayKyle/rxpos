@@ -20,7 +20,11 @@ import { TABLES, now, isUntouchedBase, BASE_AT } from './store.jsx';
 import { liveUp } from './live.js';
 import { LIVE_CLOUD, OWN_SITES } from './cloud.js';
 import { WINDOWED, recordDate } from './historywindow.js';
-import { isWeb } from './platform.js';
+import { isWeb, platformName } from './platform.js';
+import { BUILD, VERSION } from './update.js';
+
+/** Which app this is, so the owner console can show the version each device runs (stock review, 27 Nov 2026) */
+const CLIENT = { build: BUILD, version: VERSION, platform: platformName };
 import { plainHttpToInternet, INSECURE_LINK } from '../server/netaddr.js';
 
 const ACTIVE = 5000; // no live connection, app in use
@@ -268,7 +272,7 @@ export function createSync({ getDb, getCfg, saveCfg, applyRemote, onStatus, stor
       const ask = (since, batch) => {
         const db = getDb();
         if (batch.length) missing = missingEntries(batch, db, new Set(batches.slice(i + 1).flat().map((e) => e.t + '|' + e.id)));
-        return post(c.url, c.key, { deviceId: c.deviceId, since, changes: toChanges(batch, db), v: PROTOCOL, limit: PULL_LIMIT, ...(full ? { all: true } : {}),
+        return post(c.url, c.key, { deviceId: c.deviceId, client: CLIENT, since, changes: toChanges(batch, db), v: PROTOCOL, limit: PULL_LIMIT, ...(full ? { all: true } : {}),
         ...(phase === 'core' || phase === 'history' ? { phase, cutoff: getCfg().cutoff } : {}), ...(full && getCfg().window ? { window: getCfg().window } : {}) });
       };
       const later = () => phase === 'history' || phase === 'tail'; // the core is in: the app can be used

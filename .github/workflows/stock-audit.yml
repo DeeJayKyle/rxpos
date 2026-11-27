@@ -4,12 +4,21 @@ name: Stock audit
 # stock added, duplicated changes, counts/edits made on a device missing earlier changes, negative / hidden stock, and a
 # day-by-day reconciliation of opening − closing stock value with the cost of sales. It changes nothing and prints stock
 # figures only (receipt numbers, medicines, quantities, values) — never customer details.
+# Stock review (27 Nov 2026): it also runs by itself every Monday at 07:00 in Uganda and emails the owner a short
+# summary (each pharmacy's stock, problems found, and the week's hand changes with who made them) through the cloud's
+# alert sender (/api/owner/stock-audit-mail, the ALERT_EMAIL or owner-console address). Reading only: nothing changes.
 on:
+  schedule:
+    - cron: '0 4 * * 1'
   workflow_dispatch:
     inputs:
       days:
         description: 'Days of daily reconciliation to show'
         default: '30'
+      mail:
+        description: 'Email the owner the summary'
+        type: boolean
+        default: false
       pharmacies:
         description: 'Pharmacy web addresses to audit, space-separated (empty = all)'
         default: ''
@@ -22,14 +31,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 22
       - name: Audit stock
         env:
           RXPOS_API: https://api.rxposug.com
           OWNER_KEY: ${{ secrets.OWNER_KEY }}
-          DAYS: ${{ inputs.days }}
+          DAYS: ${{ inputs.days || '7' }}
           ONLY: ${{ inputs.pharmacies }}
-        run: node tools/stock-audit.mjs $ONLY --days "${DAYS:-30}"
+          MAIL: ${{ github.event_name == 'schedule' && '--mail' || (inputs.mail && '--mail' || '') }}
+        run: node tools/stock-audit.mjs $ONLY --days "${DAYS:-30}" $MAIL

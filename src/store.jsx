@@ -223,8 +223,9 @@ export function eraseData(d, { keepMedicines = true, keepUserId } = {}) {
   return n;
 }
 /** Record a stock movement. Stock is always the sum of movements, so devices that worked offline merge safely. */
-export function move(d, { productId, qty, type, ref = '', note = '', user = '', batchId = null, branchId = MAIN_BRANCH }) {
-  return put(d, 'movements', { id: uid(), productId, qty: Number(qty), type, ref, note, user, batchId, branchId, date: now() });
+export function move(d, { productId, qty, type, ref = '', note = '', user = '', batchId = null, branchId = MAIN_BRANCH, reason, approvedBy }) {
+  // stock review (27 Nov 2026): a hand change keeps its reason code and the manager who approved it (src/stockcontrol.js)
+  return put(d, 'movements', { id: uid(), productId, qty: Number(qty), type, ref, note, user, batchId, branchId, date: now(), ...(reason ? { reason: String(reason) } : {}), ...(approvedBy ? { approvedBy: String(approvedBy) } : {}) });
 }
 /** Create a batch (lot) for a product; reuses an existing batch with the same number and expiry. */
 export function addBatch(d, { productId, batch, expiry, cost }) {
