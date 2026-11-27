@@ -28,7 +28,7 @@ export function packRatio(oldCost, newCost, sizes) {
  * Returns { changes: [...], byCause: {cause: count}, products: n, now: [...] } — each change is
  * { product, from, to, at, cause, detail, packRatio }.
  */
-export function costHistory({ products = [], sales = [], purchases = [], audit = [], since = '' }) {
+export function costHistory({ products = [], sales = [], purchases = [], audit = [], batches = [], since = '' }) {
   const P = new Map(products.map((p) => [p.id, p]));
   const byName = new Map(products.map((p) => [String(p.name || '').toLowerCase(), p]));
   const sizesOf = (p) => [...new Set([...(p?.packs || []).map((k) => n(k.size)), ...(p?.unitChanges || []).map((c) => n(c.factor))].filter((s) => s > 1))];
@@ -66,6 +66,12 @@ export function costHistory({ products = [], sales = [], purchases = [], audit =
       else if (bought.length) { cause = 'delivery received'; detail = bought.map((x) => `${x.number} at ${r2(x.cost)} per unit${x.pack ? ` (received as ${x.pack.count} ${x.pack.name} of ${x.pack.size} at ${r2(n(x.pack.cost))})` : ''}`).join('; '); }
       else if (logged.length) { cause = 'edited (audit log)'; detail = logged.map((e) => `${e.action} by ${e.user}`).join('; '); }
       else if (back) cause = 'two tills, one with an older copy';
+      if (cause === 'no recorded reason') {
+        // what else happened then: anything in the audit log in the window (its first 4), and the medicine's batch costs
+        const near = (audit || []).filter((e) => between(e.date)).slice(-4).map((e) => `${e.action}: ${String(e.details || '').slice(0, 70)}`);
+        const bs = batches.filter((x) => x.productId === pid).map((x) => `${x.batch} ${r2(n(x.cost))}${x.received ? ' rcvd ' + x.received : ''}`).slice(-4);
+        detail = `cost last set ${p._f?.cost || p.updatedAt || '?'}; batches ${bs.join(', ') || 'none'}${near.length ? '; meanwhile: ' + near.join(' | ') : ''}`;
+      }
       changes.push({ product: p.name, productId: pid, from: a.cost, to: b.cost, at: b.at, after: a.at, cause, detail, packRatio: packRatio(a.cost, b.cost, sizesOf(p)) });
     }
   }
@@ -107,7 +113,7 @@ if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
     const live = {};
     for (const r of data.rows) {
       if (r.tenant !== t.id || r.deleted || r.rec == null) continue;
-      if (!['products', 'sales', 'purchases', 'audit'].includes(r.t)) continue;
+      if (!['products', 'sales', 'purchases', 'audit', 'batches'].includes(r.t)) continue;
       let rec; try { rec = typeof r.rec === 'string' ? JSON.parse(r.rec) : r.rec; } catch { continue; }
       if (!rec) continue;
       rec.id ??= r.id;
