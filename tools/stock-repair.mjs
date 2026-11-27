@@ -119,6 +119,16 @@ if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
       for (const l of plan.lines) console.log('  ' + l);
       if (APPLY && EXPECT !== plan.moves.length) throw new Error(`The plan has ${plan.moves.length} movements but the owner approved ${EXPECT}: nothing written`);
       plan.lines = [];
+      // dry run: the other batches below zero, with their stock changes (types and quantities only), to see why
+      if (!APPLY) {
+        const lots = new Map();
+        for (const m of input.movements) { const k = (m.branchId || 'main') + '|' + (m.batchId || 'lb-' + m.productId); (lots.get(k) || lots.set(k, []).get(k)).push(m); }
+        const name = new Map(input.products.map((p) => [p.id, p.name]));
+        for (const [k, list] of lots) {
+          const q = list.reduce((a, m) => a + (Number(m.qty) || 0), 0);
+          if (q < -1e-9 && !plan.moves.some((m) => m.id === `audit-wo2-${k}`)) console.log(`  BELOW ZERO ${name.get(list[0].productId) || list[0].productId} ${k} ${q}: ${list.map((m) => `${m.type} ${m.qty} ${String(m.date).slice(0, 16)}`).join('; ')}`);
+        }
+      }
     }
     console.log(`negative batches to correct: ${plan.lines.length}; correcting movements: ${plan.moves.length}`);
     for (const l of plan.lines) console.log(`  ${l.medicine} [${l.batch}] ${l.was} → 0, taken from ${l.movedFrom}${l.leftNegative ? ` (still ${l.leftNegative}: not enough stock elsewhere)` : ''}`);
