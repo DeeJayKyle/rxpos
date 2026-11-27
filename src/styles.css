@@ -3033,7 +3033,9 @@ table.sell-first td:nth-child(2) { width: 32%; }
 table.sell-first td:nth-child(3) { width: 22%; }
 
 /* 27 Nov 2026: the sync status stays in sight while all is well, quietly (App.jsx ClockPill) */
-.pill.clock.quiet { background: transparent; border-color: transparent; box-shadow: none; padding-inline: 8px; }
+/* quiet only on the flat surface: the other surface styles keep restyling every pill (v32) */
+:root:not([data-surface]) .pill.clock.quiet, [data-surface="flat"] .pill.clock.quiet { background: transparent; border-color: transparent; box-shadow: none; }
+.pill.clock.quiet { padding-inline: 8px; }
 .pill.clock.quiet .clock-state { color: var(--muted); font-weight: 550; font-size: .92em; }
 .pill.clock.quiet i { background: var(--ok); }
 
