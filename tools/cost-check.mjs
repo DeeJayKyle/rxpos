@@ -103,6 +103,9 @@ export function formatCosts(title, h) {
   L.push(`  ${String(packs.length).padStart(5)}  of them about a pack size away (×/÷ the pack: pack and unit mixed up)`);
   L.push('\nLatest changes (newest first):');
   for (const c of h.changes.slice(0, 60)) L.push(`  ${ugTime(c.at)}  ${c.product}: ${r2(c.from)} → ${r2(c.to)}${c.packRatio ? `  [×${c.packRatio > 0 ? c.packRatio : '1/' + -c.packRatio}]` : ''}  — ${c.cause}${c.detail ? ': ' + c.detail : ''}`);
+  const odd = h.changes.filter((c) => c.cause === 'no recorded reason');
+  L.push(`\nAll ${odd.length} changes with no recorded reason (newest first):`);
+  for (const c of odd.slice(0, 150)) L.push(`  ${ugTime(c.at)} (prev sale ${ugTime(c.after)})  ${c.product}: ${r2(c.from)} → ${r2(c.to)} — ${c.detail.slice(0, 160)}`);
   L.push('\nCosts set in the same second for many medicines (UTC):');
   for (const b of h.bulk || []) L.push(`  ${b.at}  ${b.n} medicines${b.origins.length ? ' from ' + b.origins.join(', ') : ''}; e.g. ${b.sample.join(', ')}${b.audit.length ? '\n      audit then: ' + b.audit.join('\n                  ') : ''}`);
   L.push(`\n${h.now.length} medicines whose cost today differs from their last delivery's cost per unit:`);
