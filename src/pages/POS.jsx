@@ -36,7 +36,7 @@ import { kitView, basketDemand, shortText, stockParts } from '../kits.js';
 import KitIcon from '../components/KitIcon.jsx';
 import { pharmacyLogo } from '../logo.jsx';
 import { BranchStockButton } from '../components/BranchStock.jsx';
-import { showDate } from '../showdate.js';
+import { showDate, showDateTime } from '../showdate.js';
 
 // Receipt numbers must be unique across synced devices, so they are time-based rather than sequential
 
@@ -1286,7 +1286,7 @@ export default function POS({ mode = 'retail' }) {
           <div className={'receipt sale-slip print-area paper-' + (db.settings.paperWidth || 80)}>
             <strong>{db.settings.name}</strong>
             <div className="slip-code">{slip.code}</div>
-            <div className="small">Pay at any counter · {new Date(slip.at).toLocaleString()}</div>
+            <div className="small">Pay at any counter · {showDateTime(slip.at)}</div>
             <table className="compact"><tbody>{slip.cart.map((l) => <tr key={l.id + (l.pack?.name || '')}><td>{l.name}</td><td className="num">× {l.qty}</td><td className="num">{fmt(l.price * l.qty)}</td></tr>)}</tbody></table>
             <div className="row between"><strong>Total</strong><strong>{fmt(slip.cart.reduce((a, l) => a + l.price * l.qty, 0) - (Number(slip.discount) || 0))}</strong></div>
             <div className="small">Not a receipt · prepared by {user.name}</div>
