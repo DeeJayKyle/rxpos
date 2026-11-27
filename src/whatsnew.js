@@ -2,11 +2,12 @@
 // small card on the dashboard. Kept next to the release notes (docs/RELEASE-NOTES.md): when a release is written up,
 // its highlights go here too.
 export const WHATS_NEW = {
-  version: '1.26.0',
+  version: '1.27.0',
   items: [
-    { text: 'Rest the mouse on any button, tab, list or field to see what it does', to: '/inventory' },
-    { text: 'Table headings say how to sort, move and resize them', to: '/sales' },
-    { text: 'The menu groups say which pages they hold', to: '/' },
+    { text: 'Hold a sale and print a slip: any till charges it by its code', to: '/pos' },
+    { text: 'A pharmacist\'s order now goes to the manager to approve', to: '/reorder' },
+    { text: 'Note when a customer asks for something you don\'t have: Reorder counts it', to: '/reorder' },
+    { text: 'Sales and commission for each staff member', to: '/reports' },
   ],
 };
 
