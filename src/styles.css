@@ -3026,3 +3026,8 @@ tr.row-warn > td { background: color-mix(in srgb, var(--warn, #d97706) 10%, tran
 .stock-controls .bars i.out { background: var(--warn, #d97706); }
 .stock-controls .legend { display: flex; gap: 12px; font-size: 12px; }
 .stock-controls .legend b { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+/* Sell these first: fits a phone with large text (names and figures wrap instead of widening the card) */
+table.sell-first { width: 100%; table-layout: fixed; }
+table.sell-first td { overflow-wrap: anywhere; }
+table.sell-first td:nth-child(2) { width: 32%; }
+table.sell-first td:nth-child(3) { width: 22%; }

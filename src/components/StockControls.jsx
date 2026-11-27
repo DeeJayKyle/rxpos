@@ -70,7 +70,7 @@ export function SellFirstCard({ exp, warn, fmt }) {
     <div className="card" aria-label="Sell these first">
       <div className="card-head"><h3><CalendarClock size={17} />Sell these first</h3><Link to="/expiry" className="card-head-link">All <ArrowRight size={14} /></Link></div>
       <small className="muted">Expiring within {warn} days: put them at the front of the shelf and offer them first.</small>
-      <table className="compact"><tbody>
+      <table className="compact sell-first"><tbody>
         {list.map((b) => (
           <tr key={b.p.id + b.id}>
             <td><strong>{b.p.name}</strong><br /><small className="muted">batch {b.batch || '—'}{b.p.shelf ? ` · shelf ${b.p.shelf}` : ''}</small></td>
