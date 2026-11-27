@@ -91,7 +91,9 @@ export function costHistory({ products = [], sales = [], purchases = [], audit =
   const bulk = [...sec].filter(([, ps]) => ps.length >= 3).sort((a, b) => b[0].localeCompare(a[0])).slice(0, 10).map(([t, ps]) => ({
     at: t, n: ps.length, origins: [...new Set(ps.map((p) => p._origin).filter(Boolean))].slice(0, 3),
     audit: (audit || []).filter((e) => Math.abs(new Date(e.date) - new Date(t + 'Z')) < 120e3).map((e) => `${e.date.slice(11, 19)} ${e.action} (${e.user}): ${String(e.details || '').slice(0, 80)}`).slice(0, 8),
-    sample: ps.slice(0, 5).map((p) => `${p.name} ${r2(n(p.cost))}`) }));
+    sample: ps.slice(0, 5).map((p) => `${p.name} ${r2(n(p.cost))}`),
+    // each one's cost on its last sale before then → now (what the save changed; '=' when it did not change the cost)
+    was: ps.map((p) => { const prev = (lines.get(p.id) || []).filter((x) => String(x.at) < t).pop(); return prev ? `${p.name} ${r2(prev.cost)}${Math.abs(prev.cost - n(p.cost)) < 0.005 ? '=' : '→' + r2(n(p.cost))}` : null; }).filter(Boolean) }));
   return { changes, byCause, now, bulk, products: lines.size, medicines: products.length };
 }
 
@@ -107,7 +109,7 @@ export function formatCosts(title, h) {
   L.push(`\nAll ${odd.length} changes with no recorded reason (newest first):`);
   for (const c of odd.slice(0, 150)) L.push(`  ${ugTime(c.at)} (prev sale ${ugTime(c.after)})  ${c.product}: ${r2(c.from)} → ${r2(c.to)} — ${c.detail.slice(0, 160)}`);
   L.push('\nCosts set in the same second for many medicines (UTC):');
-  for (const b of h.bulk || []) L.push(`  ${b.at}  ${b.n} medicines${b.origins.length ? ' from ' + b.origins.join(', ') : ''}; e.g. ${b.sample.join(', ')}${b.audit.length ? '\n      audit then: ' + b.audit.join('\n                  ') : ''}`);
+  for (const b of h.bulk || []) L.push(`  ${b.at}  ${b.n} medicines${b.origins.length ? ' from ' + b.origins.join(', ') : ''}; e.g. ${b.sample.join(', ')}${b.audit.length ? '\n      audit then: ' + b.audit.join('\n                  ') : ''}\n      before → after: ${b.was.slice(0, 80).join('; ')}`);
   L.push(`\n${h.now.length} medicines whose cost today differs from their last delivery's cost per unit:`);
   for (const x of h.now.slice(0, 40)) L.push(`  ${x.product}: today ${r2(x.cost)}, last delivery ${x.number} ${r2(x.lastDelivery)}${x.packRatio ? `  [×${x.packRatio > 0 ? x.packRatio : '1/' + -x.packRatio}]` : ''}; cost last set ${x.costChangedAt ? ugTime(x.costChangedAt) : '?'}`);
   return L;
