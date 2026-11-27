@@ -30,7 +30,6 @@ export function packRatio(oldCost, newCost, sizes) {
  */
 export function costHistory({ products = [], sales = [], purchases = [], audit = [], batches = [], since = '' }) {
   const P = new Map(products.map((p) => [p.id, p]));
-  const byName = new Map(products.map((p) => [String(p.name || '').toLowerCase(), p]));
   const sizesOf = (p) => [...new Set([...(p?.packs || []).map((k) => n(k.size)), ...(p?.unitChanges || []).map((c) => n(c.factor))].filter((s) => s > 1))];
   const lines = new Map(); // productId → [{ at, cost, origin }]
   for (const s of sales) {
@@ -45,7 +44,7 @@ export function costHistory({ products = [], sales = [], purchases = [], audit =
     if (!i.productId) continue;
     (buys.get(i.productId) || buys.set(i.productId, []).get(i.productId)).push({ at: pu.createdAt || pu.updatedAt || pu.date, day: pu.date, cost: n(i.cost), pack: i.pack || null, number: pu.number || pu.invoice || '' });
   }
-  const edits = (audit || []).filter((a) => /Price changed|Unit of issue|Inventory edited|Selling units|Medicines changed|Medicine renamed|merged/i.test(a.action || ''));
+  const edits = (audit || []).filter((a) => /Price changed|Cost changed|Unit of issue|Inventory edited|Selling units|Medicines changed|Medicine renamed|merged/i.test(a.action || ''));
   const changes = [];
   for (const [pid, list] of lines) {
     const p = P.get(pid);

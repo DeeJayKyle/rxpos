@@ -432,7 +432,7 @@ export function QuickEdit() {
     // many changes at once are checked first: a slip in a long list must not change hundreds of prices
     if (count > 50 && !(await ask({ title: `Save ${count} changes?`, message: 'Prices, costs and reorder levels of these medicines change on every device.', effects: [`${count} medicines changed`], confirmText: 'Save' }))) return;
     update((d) => {
-      const changes = [];
+      const changes = [], costs = [];
       for (const [id, patch] of Object.entries(edits)) {
         const p = d.products.find((x) => x.id === id);
         if (!p) continue;
@@ -440,8 +440,12 @@ export function QuickEdit() {
         ['cost', 'wholesale', 'price', 'reorder'].forEach((k) => k in clean && (clean[k] = Number(clean[k]) || 0));
         put(d, 'products', { ...p, ...clean });
         if ('price' in clean && clean.price !== p.price) changes.push(`${p.name}: ${fmt(p.price)} → ${fmt(clean.price)}`);
+        // costs and wholesale prices too (27 Nov 2026: 67 costs saved here at once left no trace in the audit log)
+        const other = ['cost', 'wholesale'].filter((k) => k in clean && clean[k] !== (Number(p[k]) || 0)).map((k) => `${k} ${fmt(p[k] || 0)} → ${fmt(clean[k])}`);
+        if (other.length) costs.push(`${p.name}: ${other.join(', ')}`);
       }
       if (changes.length) audit(d, user, 'Price changed (quick edit)', changes.join('; ').slice(0, 1000), branchId);
+      if (costs.length) audit(d, user, 'Cost changed (quick edit)', `${costs.length} medicine${costs.length === 1 ? '' : 's'}: ${costs.join('; ')}`.slice(0, 1000), branchId);
     });
     toast(`${count} medicine${count === 1 ? '' : 's'} updated`);
     setEdits({});
@@ -625,6 +629,7 @@ function InventoryEditor({ product, onClose }) {
       const next = { ...cur, ...p, cost: num(p.cost), wholesale: num(p.wholesale), price: num(p.price), reorder: num(p.reorder) };
       put(d, 'products', next);
       if (next.price !== cur.price) audit(d, user, 'Price changed', `${cur.name}: ${fmt(cur.price)} → ${fmt(next.price)} (inventory edit)`, branchId);
+      if (next.cost !== (Number(cur.cost) || 0)) audit(d, user, 'Cost changed', `${cur.name}: ${fmt(cur.cost || 0)} → ${fmt(next.cost)} (inventory edit)`, branchId);
       for (const r of rows) {
         if (!r.legacy && (r.newBatch !== r.batch || r.newExpiry !== (r.expiry || ''))) {
           const b = d.batches.find((x) => x.id === r.id);
