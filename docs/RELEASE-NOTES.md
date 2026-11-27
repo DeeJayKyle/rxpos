@@ -1,5 +1,12 @@
 # RxPOS release notes
 
+## RxPOS 1.26.0 · November 2026 (hover tips on every control)
+
+- **Every control explains itself.** Rest the mouse on a button, tab, link, list or field and a tip says what it does:
+  Edit opens the record to change it, Columns chooses the columns shown, Low stock shows the medicines at or below
+  their reorder level, a table heading says how to sort, move and resize it, and each menu group names the pages it
+  holds. Controls that already had a tip keep theirs. Nothing changes on touch screens.
+
 ## RxPOS 1.25.0 · November 2026 (stock controls: losses flagged, reasons, manager approval, shrinkage; cost changes logged)
 
 - **Stock taken off by hand is watched.** An adjustment, inventory edit or expired write-off needs a reason from a list
