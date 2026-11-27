@@ -2,13 +2,13 @@
 // small card on the dashboard. Kept next to the release notes (docs/RELEASE-NOTES.md): when a release is written up,
 // its highlights go here too.
 export const WHATS_NEW = {
-  version: '1.24.0',
+  version: '1.25.0',
   items: [
-    { text: 'Every table works like Add Stock: drag headings to move them, drag their edge to resize, click to sort', to: '/sales' },
-    { text: 'Quick Edit shows every medicine, 100 at a time, with an In stock filter', to: '/quick-edit' },
-    { text: 'Tabs move and hide: drag a tab, or right-click it', to: '/reorder' },
-    { text: 'Your columns and tabs follow you to every device you sign in on', to: '/inventory' },
-    { text: 'Stock counts, transfers and returns keep stock right', to: '/stock-count' },
+    { text: 'Stock controls on the dashboard: shrinkage this month, why and by whom, and reminders for deliveries, orders and expiry', to: '/' },
+    { text: 'Taking stock off needs a reason, and a manager\'s approval above the limit', to: '/stock-card' },
+    { text: 'New report: Stock losses, with the reason and who approved each change', to: '/reports' },
+    { text: 'Sell these first: the batches that expire soonest, with their shelf', to: '/expiry' },
+    { text: 'Every cost price change is kept in the audit log', to: '/quick-edit' },
   ],
 };
 
