@@ -377,7 +377,7 @@ if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
   const args = process.argv.slice(2);
   const fi = args.indexOf('--file'), di = args.indexOf('--days');
   const days = di >= 0 ? Number(args[di + 1]) : 30;
-  const only = args.filter((a, n) => !a.startsWith('--') && n !== fi + 1 && n !== di + 1);
+  const only = args.filter((a, n) => !a.startsWith('--') && (fi < 0 || n !== fi + 1) && (di < 0 || n !== di + 1));
   const data = fi >= 0 ? (() => { const j = JSON.parse(fs.readFileSync(args[fi + 1], 'utf8')); return { tenants: j.tenants, rows: j.records }; })() : await fetchAll();
   const today = ugDay(new Date().toISOString());
   for (const t of data.tenants) {
