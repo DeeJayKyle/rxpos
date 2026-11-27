@@ -1,11 +1,13 @@
 # RxPOS release notes
 
-## RxPOS 1.26.0 · November 2026 (hover tips on every control)
+## RxPOS 1.26.0 · November 2026 (hover tips on every control; no empty row buttons)
 
 - **Every control explains itself.** Rest the mouse on a button, tab, link, list or field and a tip says what it does:
   Edit opens the record to change it, Columns chooses the columns shown, Low stock shows the medicines at or below
   their reorder level, a table heading says how to sort, move and resize it, and each menu group names the pages it
   holds. Controls that already had a tip keep theirs. Nothing changes on touch screens.
+- **No more empty buttons in table rows.** On a computer, a row's action buttons shrink to their icons; a button with
+  only words (View on Purchase History, Edit on Users and others) showed as an empty pill. Those now keep their words.
 
 ## RxPOS 1.25.0 · November 2026 (stock controls: losses flagged, reasons, manager approval, shrinkage; cost changes logged)
 
