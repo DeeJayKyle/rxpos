@@ -116,18 +116,28 @@ export const THEMES = [
   duo('cool-crisp', 'Cool & Crisp', 'Multi-colour', { c1: '#3b82f6', c2: '#f8fafc', side: '#0f172a', strong: true, series: ['#3b82f6', '#14b8a6', '#6366f1', '#f59e0b', '#f43f5e'], glossy: kpis('#3b82f6', '#14b8a6', '#6366f1', '#f59e0b'), inspired: 'Light shell, blue, teal, indigo, amber and rose charts' }),
   duo('royal-iris-butter', 'Royal Iris & Butter', 'Purples', { c1: '#3a0ca3', c2: '#ffffff', side: '#3a0ca3', pill: '#fff275', c3: '#e0c400', ink: '#111827', line: '#e5e7eb', strong: true, inspired: 'Royal iris menu, butter-yellow badges' }),
   duo('vibrant-neon', 'Vibrant Neon', 'Multi-colour', { c1: '#22d3ee', c2: '#0f172a', side: '#0b1222', base: 'dark', strong: true, series: ['#22d3ee', '#a78bfa', '#34d399', '#f472b6', '#fde047'], glossy: { ...kpis('#22d3ee', '#a78bfa', '#34d399', '#f472b6'), vivid: true }, inspired: 'Dark shell, cyan, violet, emerald, pink and yellow charts' }),
+  // 1.28.0 (the owner's request, 28 Nov 2026): the look-alikes retired in 1.22.1 back in their families, as in 1.17.0
+  duo('electric-blue', 'Electric Blue', 'Blues', { c1: '#0a4dff', c2: '#dfe8ff', side: '#101a3a', strong: true, inspired: 'Deep blue menu, bright blue pills' }),
+  duo('sky-blue', 'Sky Blue', 'Blues', { c1: '#38bdf8', c2: '#e8f5fd', side: '#0c1b2b', strong: true, inspired: 'Deep navy menu, sky-blue pills' }),
+  duo('ocean-cyan', 'Ocean Cyan', 'Blues', { c1: '#06b6d4', c2: '#e3f6fa', side: '#0b2530', strong: true, inspired: 'Deep ocean menu, cyan pills' }),
+  duo('steel-blue', 'Steel Blue', 'Blues', { c1: '#4f7cac', c2: '#edf1f6', side: '#161c26', strong: true, inspired: 'Slate menu, steel-blue pills: calm for long shifts' }),
+  duo('navy-sky', 'Midnight Navy & Sky', 'Blues', { c1: '#288cfa', c2: '#f1f5f9', side: '#103766', c3: '#38bdf8', strong: true, inspired: 'Midnight navy menu, blue and sky charts' }),
+  duo('emerald-mint', 'Emerald Mint', 'Greens & Teals', { c1: '#10b981', c2: '#e4f7ef', side: '#0b221a', strong: true, inspired: 'Deep green menu, emerald pills' }),
+  duo('sage', 'Sage', 'Greens & Teals', { c1: '#2f6b45', c2: '#e3eee1', side: '#18241b', strong: true, inspired: 'Deep sage menu, green pills' }),
+  duo('mist-teal-lilac', 'Mist Gray, Teal & Lilac', 'Greens & Teals', { c1: '#14b8a6', c2: '#f3f4f6', side: '#134e4a', c3: '#818cf8', strong: true, inspired: 'Mist page, teal figures, lilac comparisons' }),
+  duo('pharmacy-purple', 'Pharmacy Purple', 'Purples', { c1: '#7c3aed', c2: '#f3effd', side: '#2a1257', strong: true, glossy: kpis('purple', 'blue', 'green', 'amber'), inspired: 'Glossy dashboard: deep purple menu, four-colour figure cards' }),
+  duo('alabaster-indigo-coral', 'Alabaster, Indigo & Coral', 'Purples', { c1: '#4f46e5', c2: '#faf9f6', side: '#1e1b4b', c3: '#ff4d6b', strong: true, inspired: 'Alabaster page, indigo figures, coral series' }),
+  duo('pharmacy-amber', 'Pharmacy Amber', 'Warm', { c1: '#f59e0b', c2: '#fdf6e8', side: '#3b2606', strong: true, glossy: kpis('amber', 'green', 'blue', 'purple'), inspired: 'Glossy dashboard: deep brown menu, four-colour figure cards' }),
+  duo('ubuntu-yaru', 'Ubuntu Yaru', 'Warm', { c1: '#e95420', c2: '#f7f2f0', side: '#2c001e', strong: true, inspired: 'Ubuntu orange on an aubergine menu (pairs with the Ubuntu style)' }),
+  duo('night-lime', 'Lime on Charcoal', 'Neutral & Lime', { c1: '#c8f169', c2: '#f4f4f0', side: '#1f1f2a', inspired: 'Charcoal menu, lime pills and buttons with dark words' }),
+  duo('charcoal-lime', 'Charcoal on Lime', 'Neutral & Lime', { c1: '#1f1f2a', c2: '#eef7d6', side: '#c8f169', sideText: '#1f1f2a', strong: true, inspired: 'Lime menu, charcoal pills' }),
+  duo('terminal', 'Terminal', 'Dark', { c1: '#33ff66', c2: '#050805', card: '#0a120a', ink: '#c8ffd4', side: '#000000', base: 'dark', strong: true, inspired: 'Green on black, fixed-width type, a blinking caret (1.17.0)' }),
+  duo('neon-indigo', 'Neon Indigo', 'Multi-colour', { c1: '#6d5dfc', c2: '#17144d', card: '#221e66', side: '#1c1959', base: 'dark', strong: true, series: ['#5ccfe6', '#ec4899', '#8b5cf6', '#22d3ee', '#f59e0b'], glossy: { ...kpis('#4f46e5', '#14b8c4', '#a21caf', '#ec4899'), vivid: true }, inspired: 'Deep indigo dashboard, neon figure cards, cyan and pink charts' }),
 ];
 /** Themes retired → Light or Dark (or the theme an older one was merged into), so a saved choice or an owner's list
  *  keeps working */
 export const RETIRED = {
-  // 1.22.1: near-duplicates → the closest theme kept in the same group
-  'electric-blue': 'pharmacy-blue', 'sky-blue': 'pharmacy-blue', 'ocean-cyan': 'pharmacy-blue', 'steel-blue': 'pharmacy-blue', 'navy-sky': 'pharmacy-blue',
-  'emerald-mint': 'pharmacy-green', 'sage': 'pharmacy-green', 'mist-teal-lilac': 'mint-teal',
-  'pharmacy-purple': 'royal-purple', 'alabaster-indigo-coral': 'royal-purple',
-  'pharmacy-amber': 'sandstone-terracotta', 'ubuntu-yaru': 'sandstone-terracotta',
-  'night-lime': 'mono-scarlet', 'charcoal-lime': 'mono-scarlet',
-  'terminal': 'pharmacy-night', 'neon-indigo': 'vibrant-neon',
-  // older retirements (1.14.0 to 1.17.0), now resolved through the list above
+  // older retirements (1.14.0 to 1.17.0); the 1.22.1 ones are themes again (1.28.0)
   // 1.17.0: look-alikes merged into the closest kept theme (the owner's choice)
   'cobalt-amber': 'pharmacy-blue', 'porcelain-signal': 'electric-blue', 'deep-ocean-cyan': 'vibrant-neon', 'lavender': 'royal-purple', 'midnight-indigo': 'royal-purple', 'obsidian-purple-mint': 'twilight-violet', 'sage-emerald': 'emerald-mint', 'mint-coral': 'mint-teal', 'forest-green': 'pharmacy-green', 'amber-gold': 'pharmacy-amber', 'charcoal-gold': 'graphite-amber', 'dark-forest': 'pharmacy-night',
   'daylight-clinical': 'mint-teal', cobalt: 'electric-blue', 'royal-violet': 'royal-purple', sunrise: 'pharmacy-amber', 'charcoal-sky': 'steel-blue',

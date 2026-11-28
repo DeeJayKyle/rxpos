@@ -92,7 +92,7 @@ await p.keyboard.press('Escape'); await wait(500);
 await p.evaluate(() => document.querySelector('button[title="Theme"]').click()); await wait(300);
 const themes = await p.evaluate(() => [...document.querySelectorAll('.theme-menu .theme-item .grow')].map((x) => x.firstChild.textContent.trim()));
 const groups = await p.evaluate(() => [...document.querySelectorAll('.theme-menu .theme-group')].map((g) => g.querySelector('.bell-sub')?.textContent + ':' + g.querySelectorAll('.theme-item').length));
-check('the theme panel groups the themes by colour family (1.28.0, as 1.17.0)', groups.join() === 'Blues:1,Greens & Teals:2,Purples:2,Warm:1,Neutral & Lime:2,Dark:6,Multi-colour:3', groups.join(' | '));
+check('the theme panel groups the themes by colour family (1.28.0, as 1.17.0)', groups.join() === 'Blues:6,Greens & Teals:5,Purples:4,Warm:3,Neutral & Lime:4,Dark:7,Multi-colour:4', groups.join(' | '));
 check('the plain themes are all there (Light, Dark, High contrast, Brand colour), Pharmacy Blue first', ['Light', 'Dark', 'High contrast', 'Brand colour'].every((n) => themes.includes(n)) && themes[0] === 'Pharmacy Blue', themes.join(' | '));
 await p.screenshot({ path: `${out}/themes.png` });
 await clickText(p, '.theme-menu a.style-item', /Colour, gradient and style/); await wait(900);
