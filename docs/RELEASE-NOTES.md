@@ -1,5 +1,13 @@
 # RxPOS release notes
 
+## RxPOS 1.28.0 · November 2026 (theme families back, 33 themes)
+
+- **Themes grouped by colour again** in the theme menu (the palette in the top bar): Blues, Greens & Teals, Purples,
+  Warm, Neutral & Lime, Dark and Multi-colour, as in 1.17.
+- **16 themes back**: Electric Blue, Sky Blue, Ocean Cyan, Steel Blue, Midnight Navy & Sky, Emerald Mint, Sage, Mist
+  Gray Teal & Lilac, Pharmacy Purple, Alabaster Indigo & Coral, Pharmacy Amber, Ubuntu Yaru, Lime on Charcoal,
+  Charcoal on Lime, Terminal and Neon Indigo. Anyone who had one of them chosen gets it back.
+
 ## RxPOS 1.27.0 · November 2026 (sale slips, branch requests, missed sales, oversold alert, commission, your data, website)
 
 - **Sale slips.** Hold a sale and print its slip with a code (S-XXXXXX); at any till, type the code to open it and

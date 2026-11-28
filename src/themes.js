@@ -11,7 +11,9 @@ const T = (id, name, base, c, inspired = '', group = '', glossy = null) => ({ id
 // theme has its own dark twin too)
 // 1.22.1 (the owner's request, 26 Nov 2026): some themes back, clustered by how alike they look (light or dark page,
 // contrast, how many colours) so look-alikes sit together; near-duplicates in a group stay retired
-export const THEME_GROUPS = ['Light', 'Dark', 'High contrast', 'Colourful'];
+// 1.28.0 (the owner's request, 28 Nov 2026): the colour families back, as they were in 1.17.0 (Blues, Greens & Teals,
+// Purples, Warm, Neutral & Lime, Dark, Multi-colour); the themes added since sit in the family of their colour
+export const THEME_GROUPS = ['Blues', 'Greens & Teals', 'Purples', 'Warm', 'Neutral & Lime', 'Dark', 'Multi-colour'];
 
 const hexToRgb = (h) => { const n = parseInt(h.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
 const rgba = (h, a) => `rgba(${hexToRgb(h).join(', ')}, ${a})`;
@@ -91,41 +93,51 @@ function neonCards(c1) {
 // Receipts & stock); 1.22.1 brought back 13 more, one per look in each group. Every other theme opens as the closest
 // kept one (RETIRED), so a saved choice keeps working.
 const BRAND_DEFAULT = '#16a34a';
-const brandTheme = (c1) => duo('brand', 'Brand colour', 'Colourful', { c1, c2: mix(c1, '#ffffff', 0.88), side: mix(c1, '#000000', 0.6), strong: true, inspired: 'The pharmacy\'s own colour (Settings → Receipts & stock)' });
+const brandTheme = (c1) => duo('brand', 'Brand colour', 'Multi-colour', { c1, c2: mix(c1, '#ffffff', 0.88), side: mix(c1, '#000000', 0.6), strong: true, inspired: 'The pharmacy\'s own colour (Settings → Receipts & stock)' });
 export const THEMES = [
-  // Light: a pale page, one strong colour (one per hue)
-  duo('mint-teal', 'Light', 'Light', { c1: '#0f8a8a', c2: '#cfe6e6', side: '#0f2222', strong: true, inspired: 'Teal on a near-white page, the RxPOS colour' }),
-  duo('pharmacy-blue', 'Pharmacy Blue', 'Light', { c1: '#2563eb', c2: '#eaf1fc', side: '#0b2a5c', strong: true, glossy: kpis('blue', 'green', 'purple', 'amber'), inspired: 'Deep blue menu, four-colour figure cards' }),
-  duo('pharmacy-green', 'Pharmacy Green', 'Light', { c1: '#16a34a', c2: '#eef6f0', side: '#0b3d24', strong: true, glossy: kpis('green', 'blue', 'purple', 'amber'), inspired: 'Deep green menu, four-colour figure cards' }),
-  duo('royal-purple', 'Royal Purple', 'Light', { c1: '#6d4ae8', c2: '#f4f1fd', side: '#1e1433', inspired: 'Deep purple menu, violet pills' }),
-  duo('sandstone-terracotta', 'Sandstone & Terracotta', 'Light', { c1: '#ea580c', c2: '#f5f3ef', side: '#292524', ink: '#292524', strong: true, inspired: 'Sandstone page, espresso menu, terracotta accents' }),
-  // Dark: a dark page, one bright colour (one per hue)
+  // light pages, one strong colour each (the menu shows them by colour family, THEME_GROUPS)
+  duo('mint-teal', 'Light', 'Greens & Teals', { c1: '#0f8a8a', c2: '#cfe6e6', side: '#0f2222', strong: true, inspired: 'Teal on a near-white page, the RxPOS colour' }),
+  duo('pharmacy-blue', 'Pharmacy Blue', 'Blues', { c1: '#2563eb', c2: '#eaf1fc', side: '#0b2a5c', strong: true, glossy: kpis('blue', 'green', 'purple', 'amber'), inspired: 'Deep blue menu, four-colour figure cards' }),
+  duo('pharmacy-green', 'Pharmacy Green', 'Greens & Teals', { c1: '#16a34a', c2: '#eef6f0', side: '#0b3d24', strong: true, glossy: kpis('green', 'blue', 'purple', 'amber'), inspired: 'Deep green menu, four-colour figure cards' }),
+  duo('royal-purple', 'Royal Purple', 'Purples', { c1: '#6d4ae8', c2: '#f4f1fd', side: '#1e1433', inspired: 'Deep purple menu, violet pills' }),
+  duo('sandstone-terracotta', 'Sandstone & Terracotta', 'Warm', { c1: '#ea580c', c2: '#f5f3ef', side: '#292524', ink: '#292524', strong: true, inspired: 'Sandstone page, espresso menu, terracotta accents' }),
+  // dark pages, one bright colour each
   duo('navy-teal', 'Dark', 'Dark', { c1: '#14b8a6', c2: '#0a2233', side: '#0f2a44', base: 'dark', strong: true, inspired: 'Navy and teal, easy on the eyes at night' }),
   duo('midnight-blue', 'Midnight Blue', 'Dark', { c1: '#60a5fa', c2: '#0b1324', side: '#0a1a33', base: 'dark', strong: true, inspired: 'Night-blue page, bright blue pills' }),
   duo('pharmacy-night', 'Pharmacy Night', 'Dark', { c1: '#22c55e', c2: '#06130d', side: '#0a2a1a', base: 'dark', strong: true, glossy: kpis('green', 'blue', 'purple', 'amber'), inspired: 'Deep green at night, four-colour figure cards' }),
   duo('twilight-violet', 'Twilight Violet', 'Dark', { c1: '#8b5cf6', c2: '#13111c', card: '#1e1b2e', side: '#0e0c16', c3: '#ec4899', base: 'dark', strong: true, inspired: 'Twilight page, soft violet, pink series' }),
   duo('graphite-amber', 'Graphite Amber', 'Dark', { c1: '#fbbf24', c2: '#16161b', side: '#24242c', base: 'dark', strong: true, inspired: 'Graphite page, amber pills with dark words' }),
-  // High contrast: black, white and one loud colour, for bright shops and tired eyes
-  duo('high-contrast', 'High contrast', 'High contrast', { c1: '#0036a8', c2: '#ffffff', side: '#000000', ink: '#000000', line: '#3a3a3a', strong: true, inspired: 'Black words on white with strong borders: easiest to read in bright light' }),
-  duo('mono-scarlet', 'Monochrome & Scarlet', 'High contrast', { c1: '#18181b', c2: '#fafafa', side: '#18181b', c3: '#ef4444', strong: true, inspired: 'Black and white, a scarlet second series' }),
-  duo('graphite-lime', 'Graphite & Lime', 'High contrast', { c1: '#b6ff2e', c2: '#1a1d24', card: '#23262f', ink: '#f8fafc', side: '#14161c', base: 'dark', strong: true, inspired: 'Dark graphite page, high-visibility lime' }),
-  // Colourful: several colours at once, and the pharmacy's own
+  // high contrast: black, white and one loud colour, for bright shops and tired eyes
+  duo('high-contrast', 'High contrast', 'Neutral & Lime', { c1: '#0036a8', c2: '#ffffff', side: '#000000', ink: '#000000', line: '#3a3a3a', strong: true, inspired: 'Black words on white with strong borders: easiest to read in bright light' }),
+  duo('mono-scarlet', 'Monochrome & Scarlet', 'Neutral & Lime', { c1: '#18181b', c2: '#fafafa', side: '#18181b', c3: '#ef4444', strong: true, inspired: 'Black and white, a scarlet second series' }),
+  duo('graphite-lime', 'Graphite & Lime', 'Dark', { c1: '#b6ff2e', c2: '#1a1d24', card: '#23262f', ink: '#f8fafc', side: '#14161c', base: 'dark', strong: true, inspired: 'Dark graphite page, high-visibility lime' }),
+  // several colours at once, and the pharmacy's own
   brandTheme(BRAND_DEFAULT),
-  duo('cool-crisp', 'Cool & Crisp', 'Colourful', { c1: '#3b82f6', c2: '#f8fafc', side: '#0f172a', strong: true, series: ['#3b82f6', '#14b8a6', '#6366f1', '#f59e0b', '#f43f5e'], glossy: kpis('#3b82f6', '#14b8a6', '#6366f1', '#f59e0b'), inspired: 'Light shell, blue, teal, indigo, amber and rose charts' }),
-  duo('royal-iris-butter', 'Royal Iris & Butter', 'Colourful', { c1: '#3a0ca3', c2: '#ffffff', side: '#3a0ca3', pill: '#fff275', c3: '#e0c400', ink: '#111827', line: '#e5e7eb', strong: true, inspired: 'Royal iris menu, butter-yellow badges' }),
-  duo('vibrant-neon', 'Vibrant Neon', 'Colourful', { c1: '#22d3ee', c2: '#0f172a', side: '#0b1222', base: 'dark', strong: true, series: ['#22d3ee', '#a78bfa', '#34d399', '#f472b6', '#fde047'], glossy: { ...kpis('#22d3ee', '#a78bfa', '#34d399', '#f472b6'), vivid: true }, inspired: 'Dark shell, cyan, violet, emerald, pink and yellow charts' }),
+  duo('cool-crisp', 'Cool & Crisp', 'Multi-colour', { c1: '#3b82f6', c2: '#f8fafc', side: '#0f172a', strong: true, series: ['#3b82f6', '#14b8a6', '#6366f1', '#f59e0b', '#f43f5e'], glossy: kpis('#3b82f6', '#14b8a6', '#6366f1', '#f59e0b'), inspired: 'Light shell, blue, teal, indigo, amber and rose charts' }),
+  duo('royal-iris-butter', 'Royal Iris & Butter', 'Purples', { c1: '#3a0ca3', c2: '#ffffff', side: '#3a0ca3', pill: '#fff275', c3: '#e0c400', ink: '#111827', line: '#e5e7eb', strong: true, inspired: 'Royal iris menu, butter-yellow badges' }),
+  duo('vibrant-neon', 'Vibrant Neon', 'Multi-colour', { c1: '#22d3ee', c2: '#0f172a', side: '#0b1222', base: 'dark', strong: true, series: ['#22d3ee', '#a78bfa', '#34d399', '#f472b6', '#fde047'], glossy: { ...kpis('#22d3ee', '#a78bfa', '#34d399', '#f472b6'), vivid: true }, inspired: 'Dark shell, cyan, violet, emerald, pink and yellow charts' }),
+  // 1.28.0 (the owner's request, 28 Nov 2026): the look-alikes retired in 1.22.1 back in their families, as in 1.17.0
+  duo('electric-blue', 'Electric Blue', 'Blues', { c1: '#0a4dff', c2: '#dfe8ff', side: '#101a3a', strong: true, inspired: 'Deep blue menu, bright blue pills' }),
+  duo('sky-blue', 'Sky Blue', 'Blues', { c1: '#38bdf8', c2: '#e8f5fd', side: '#0c1b2b', strong: true, inspired: 'Deep navy menu, sky-blue pills' }),
+  duo('ocean-cyan', 'Ocean Cyan', 'Blues', { c1: '#06b6d4', c2: '#e3f6fa', side: '#0b2530', strong: true, inspired: 'Deep ocean menu, cyan pills' }),
+  duo('steel-blue', 'Steel Blue', 'Blues', { c1: '#4f7cac', c2: '#edf1f6', side: '#161c26', strong: true, inspired: 'Slate menu, steel-blue pills: calm for long shifts' }),
+  duo('navy-sky', 'Midnight Navy & Sky', 'Blues', { c1: '#288cfa', c2: '#f1f5f9', side: '#103766', c3: '#38bdf8', strong: true, inspired: 'Midnight navy menu, blue and sky charts' }),
+  duo('emerald-mint', 'Emerald Mint', 'Greens & Teals', { c1: '#10b981', c2: '#e4f7ef', side: '#0b221a', strong: true, inspired: 'Deep green menu, emerald pills' }),
+  duo('sage', 'Sage', 'Greens & Teals', { c1: '#2f6b45', c2: '#e3eee1', side: '#18241b', strong: true, inspired: 'Deep sage menu, green pills' }),
+  duo('mist-teal-lilac', 'Mist Gray, Teal & Lilac', 'Greens & Teals', { c1: '#14b8a6', c2: '#f3f4f6', side: '#134e4a', c3: '#818cf8', strong: true, inspired: 'Mist page, teal figures, lilac comparisons' }),
+  duo('pharmacy-purple', 'Pharmacy Purple', 'Purples', { c1: '#7c3aed', c2: '#f3effd', side: '#2a1257', strong: true, glossy: kpis('purple', 'blue', 'green', 'amber'), inspired: 'Glossy dashboard: deep purple menu, four-colour figure cards' }),
+  duo('alabaster-indigo-coral', 'Alabaster, Indigo & Coral', 'Purples', { c1: '#4f46e5', c2: '#faf9f6', side: '#1e1b4b', c3: '#ff4d6b', strong: true, inspired: 'Alabaster page, indigo figures, coral series' }),
+  duo('pharmacy-amber', 'Pharmacy Amber', 'Warm', { c1: '#f59e0b', c2: '#fdf6e8', side: '#3b2606', strong: true, glossy: kpis('amber', 'green', 'blue', 'purple'), inspired: 'Glossy dashboard: deep brown menu, four-colour figure cards' }),
+  duo('ubuntu-yaru', 'Ubuntu Yaru', 'Warm', { c1: '#e95420', c2: '#f7f2f0', side: '#2c001e', strong: true, inspired: 'Ubuntu orange on an aubergine menu (pairs with the Ubuntu style)' }),
+  duo('night-lime', 'Lime on Charcoal', 'Neutral & Lime', { c1: '#c8f169', c2: '#f4f4f0', side: '#1f1f2a', inspired: 'Charcoal menu, lime pills and buttons with dark words' }),
+  duo('charcoal-lime', 'Charcoal on Lime', 'Neutral & Lime', { c1: '#1f1f2a', c2: '#eef7d6', side: '#c8f169', sideText: '#1f1f2a', strong: true, inspired: 'Lime menu, charcoal pills' }),
+  duo('terminal', 'Terminal', 'Dark', { c1: '#33ff66', c2: '#050805', card: '#0a120a', ink: '#c8ffd4', side: '#000000', base: 'dark', strong: true, inspired: 'Green on black, fixed-width type, a blinking caret (1.17.0)' }),
+  duo('neon-indigo', 'Neon Indigo', 'Multi-colour', { c1: '#6d5dfc', c2: '#17144d', card: '#221e66', side: '#1c1959', base: 'dark', strong: true, series: ['#5ccfe6', '#ec4899', '#8b5cf6', '#22d3ee', '#f59e0b'], glossy: { ...kpis('#4f46e5', '#14b8c4', '#a21caf', '#ec4899'), vivid: true }, inspired: 'Deep indigo dashboard, neon figure cards, cyan and pink charts' }),
 ];
 /** Themes retired → Light or Dark (or the theme an older one was merged into), so a saved choice or an owner's list
  *  keeps working */
 export const RETIRED = {
-  // 1.22.1: near-duplicates → the closest theme kept in the same group
-  'electric-blue': 'pharmacy-blue', 'sky-blue': 'pharmacy-blue', 'ocean-cyan': 'pharmacy-blue', 'steel-blue': 'pharmacy-blue', 'navy-sky': 'pharmacy-blue',
-  'emerald-mint': 'pharmacy-green', 'sage': 'pharmacy-green', 'mist-teal-lilac': 'mint-teal',
-  'pharmacy-purple': 'royal-purple', 'alabaster-indigo-coral': 'royal-purple',
-  'pharmacy-amber': 'sandstone-terracotta', 'ubuntu-yaru': 'sandstone-terracotta',
-  'night-lime': 'mono-scarlet', 'charcoal-lime': 'mono-scarlet',
-  'terminal': 'pharmacy-night', 'neon-indigo': 'vibrant-neon',
-  // older retirements (1.14.0 to 1.17.0), now resolved through the list above
+  // older retirements (1.14.0 to 1.17.0); the 1.22.1 ones are themes again (1.28.0)
   // 1.17.0: look-alikes merged into the closest kept theme (the owner's choice)
   'cobalt-amber': 'pharmacy-blue', 'porcelain-signal': 'electric-blue', 'deep-ocean-cyan': 'vibrant-neon', 'lavender': 'royal-purple', 'midnight-indigo': 'royal-purple', 'obsidian-purple-mint': 'twilight-violet', 'sage-emerald': 'emerald-mint', 'mint-coral': 'mint-teal', 'forest-green': 'pharmacy-green', 'amber-gold': 'pharmacy-amber', 'charcoal-gold': 'graphite-amber', 'dark-forest': 'pharmacy-night',
   'daylight-clinical': 'mint-teal', cobalt: 'electric-blue', 'royal-violet': 'royal-purple', sunrise: 'pharmacy-amber', 'charcoal-sky': 'steel-blue',

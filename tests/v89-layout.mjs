@@ -88,12 +88,12 @@ await wait(400);
 check('…lifting the finger does not choose an item of the menu that opened under it', (await p.evaluate(() => location.hash)) === hashBefore && (await menuItems(p)).includes('Back'), await p.evaluate(() => location.hash));
 await p.keyboard.press('Escape'); await wait(500);
 
-// ---- 1.22.0 (the owner's clean-up): colour, gradient and style are in This device → Look; 1.22.1: the themes in four groups ----
+// ---- 1.22.0 (the owner's clean-up): colour, gradient and style are in This device → Look; 1.28.0: the themes in their colour families ----
 await p.evaluate(() => document.querySelector('button[title="Theme"]').click()); await wait(300);
 const themes = await p.evaluate(() => [...document.querySelectorAll('.theme-menu .theme-item .grow')].map((x) => x.firstChild.textContent.trim()));
 const groups = await p.evaluate(() => [...document.querySelectorAll('.theme-menu .theme-group')].map((g) => g.querySelector('.bell-sub')?.textContent + ':' + g.querySelectorAll('.theme-item').length));
-check('the theme panel groups look-alike themes: Light, Dark, High contrast, Colourful', groups.join() === 'Light:5,Dark:5,High contrast:3,Colourful:4', groups.join(' | '));
-check('each group starts with its plain theme (Light, Dark, High contrast, Brand colour)', ['Light', 'Dark', 'High contrast', 'Brand colour'].every((n) => themes.includes(n)) && themes[0] === 'Light', themes.join(' | '));
+check('the theme panel groups the themes by colour family (1.28.0, as 1.17.0)', groups.join() === 'Blues:6,Greens & Teals:5,Purples:4,Warm:3,Neutral & Lime:4,Dark:7,Multi-colour:4', groups.join(' | '));
+check('the plain themes are all there (Light, Dark, High contrast, Brand colour), Pharmacy Blue first', ['Light', 'Dark', 'High contrast', 'Brand colour'].every((n) => themes.includes(n)) && themes[0] === 'Pharmacy Blue', themes.join(' | '));
 await p.screenshot({ path: `${out}/themes.png` });
 await clickText(p, '.theme-menu a.style-item', /Colour, gradient and style/); await wait(900);
 const look = await p.evaluate(() => ({ at: location.hash, subs: [...document.querySelectorAll('.look-card .bell-sub')].map((x) => x.textContent) }));
